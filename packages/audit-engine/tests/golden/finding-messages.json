@@ -1,234 +1,234 @@
 {
  "a11y/accesskeys": {
-  "digest": "838cc8e82fe9f01456b81e555c78ec3263aad1fb",
+  "digest": "144640689319913",
   "lines": [
    "accesskeys|info|No access keys defined||"
   ]
  },
  "a11y/aria-allowed-attr": {
-  "digest": "dafc67b2e3cda295cfd5f1e5a7edc2fc1bbfe077",
+  "digest": "240777606390733",
   "lines": [
    "aria-allowed-attr|pass|All ARIA attributes are appropriate for their elements||"
   ]
  },
  "a11y/aria-command-name": {
-  "digest": "78e7233e5521329c5a0a71bd86d7bd654c22f8d2",
+  "digest": "132934124066081",
   "lines": [
    "aria-command-name|pass|All command elements have accessible names||"
   ]
  },
  "a11y/aria-deprecated-role": {
-  "digest": "70e717c81fcba290399f4db2bba93d57a9241b44",
+  "digest": "124137838747595",
   "lines": [
    "aria-deprecated-role|info|No ARIA roles found||"
   ]
  },
  "a11y/aria-dialog-name": {
-  "digest": "747efa5d352e664080858fb5566ed12b080be210",
+  "digest": "128088715113774",
   "lines": [
    "aria-dialog-name|info|No dialog elements found||"
   ]
  },
  "a11y/aria-hidden-body": {
-  "digest": "9a6e61cd15cc8de97c7a71cc50bbbccc0edb0ec1",
+  "digest": "169798877910476",
   "lines": [
    "aria-hidden-body|pass|Document body is not hidden from assistive technology||"
   ]
  },
  "a11y/aria-hidden-focus": {
-  "digest": "b4a889d78d2f0e8e97bd4d66fa55808d20116dc2",
+  "digest": "198635960110383",
   "lines": [
    "aria-hidden-focus|info|No aria-hidden elements found||"
   ]
  },
  "a11y/aria-input-field-name": {
-  "digest": "fcdce7c0c7639d87922a7dc53bee3814cda7d39d",
+  "digest": "278025711175523",
   "lines": [
    "aria-input-field-name|pass|All input fields have accessible names||"
   ]
  },
  "a11y/aria-meter-name": {
-  "digest": "bf4d3604a57a7ce049c1df9d8cd9c0b14af59047",
+  "digest": "210338339661178",
   "lines": [
    "aria-meter-name|info|No meter elements found||"
   ]
  },
  "a11y/aria-progressbar-name": {
-  "digest": "4ddc59d4e3695bd186e4f2fc5470501506c9c9a9",
+  "digest": "85608795267945",
   "lines": [
    "aria-progressbar-name|info|No progressbar elements found||"
   ]
  },
  "a11y/aria-required-attr": {
-  "digest": "b5af053868f71b6700e246d8c0c3ffaa6e9002fe",
+  "digest": "199763311487223",
   "lines": [
    "aria-required-attr|info|No elements with ARIA roles found||"
   ]
  },
  "a11y/aria-required-children": {
-  "digest": "187f5036634250dc0d2d0e51573906bd3074798a",
+  "digest": "26935085654850",
   "lines": [
    "aria-required-children|pass|All elements have required child roles||"
   ]
  },
  "a11y/aria-required-parent": {
-  "digest": "4f4a55ff4198c4038fe6c312dedf97b6756802d7",
+  "digest": "87180688966040",
   "lines": [
    "aria-required-parent|pass|All elements have required parent roles||"
   ]
  },
  "a11y/aria-roles": {
-  "digest": "d051876f815a82eed132d72080be1efb1a934727",
+  "digest": "229048583160154",
   "lines": [
    "aria-roles|info|No ARIA roles found||"
   ]
  },
  "a11y/aria-text": {
-  "digest": "996d9e32da45720075be159cb0351e5ca7a27f0c",
+  "digest": "168696084617797",
   "lines": [
    "aria-text|info|No elements with role=\"text\" found||"
   ]
  },
  "a11y/aria-toggle-field-name": {
-  "digest": "f6663950090facb09a91ced506f7a54fe87cb91d",
+  "digest": "270918908643599",
   "lines": [
    "aria-toggle-field-name|pass|All toggle fields have accessible names||"
   ]
  },
  "a11y/aria-tooltip-name": {
-  "digest": "93380026f9dd2c1024b32601a4805b49a0657b20",
+  "digest": "161868730005981",
   "lines": [
    "aria-tooltip-name|info|No tooltip elements found||"
   ]
  },
  "a11y/aria-treeitem-name": {
-  "digest": "afb5e0aa96297eb86a7ea6a3afcf434502299c5c",
+  "digest": "193195693217321",
   "lines": [
    "aria-treeitem-name|info|No treeitem elements found||"
   ]
  },
  "a11y/aria-valid-attr": {
-  "digest": "13edc7fc5efe52e24b82573f1788ce2c2e621c0b",
+  "digest": "21911983382270",
   "lines": [
    "aria-valid-attr|pass|All ARIA attributes are valid||"
   ]
  },
  "a11y/aria-valid-attr-value": {
-  "digest": "c5268b6a9e5e75baf9384de144cb2f8a49988506",
+  "digest": "216769338449502",
   "lines": [
    "aria-valid-attr-value|pass|All ARIA attribute values are valid||"
   ]
  },
  "a11y/autocomplete-tokens": {
-  "digest": "7faa09fa14cc09f1b402b0904ffc72a82a3d7867",
+  "digest": "140368288552140",
   "lines": [
    "autocomplete-tokens|skipped|No name, email, phone, address or payment fields found||"
   ]
  },
  "a11y/button-name": {
-  "digest": "f1e274493a71926e2cc09a0e18ffd6b0a41e1402",
+  "digest": "265954915859057",
   "lines": [
    "button-name|info|No buttons found||"
   ]
  },
  "a11y/color-contrast": {
-  "digest": "9c81cf4331a8c099dc5b17e098e252d3deffbaf4",
+  "digest": "172081342001576",
   "lines": [
    "color-contrast|pass|No obvious contrast issues detected||"
   ]
  },
  "a11y/definition-list": {
-  "digest": "ffe546a5499086614a9c9f1926def28e53e6f855",
+  "digest": "281360197831056",
   "lines": [
    "definition-list|info|No definition lists found||"
   ]
  },
  "a11y/dlitem": {
-  "digest": "9125610670ac36032067bd3e082e4e0f4008880b",
+  "digest": "159589727629484",
   "lines": [
    "dlitem|info|No dt/dd elements found||"
   ]
  },
  "a11y/duplicate-id-active": {
-  "digest": "c12f8865ade6e9a105c357018e06cb03c50d8d43",
+  "digest": "212409895988710",
   "lines": [
    "duplicate-id-active|info|No focusable elements with IDs found||"
   ]
  },
  "a11y/duplicate-id-aria": {
-  "digest": "c6f946506e8cbc8c543a9da5aa92116d37c733a2",
+  "digest": "218773928832652",
   "lines": [
    "duplicate-id-aria|info|No ARIA ID references found||"
   ]
  },
  "a11y/empty-heading": {
-  "digest": "ae56f142e937c03c55093f5d27d5a5784e72c688",
+  "digest": "191688438114615",
   "lines": [
    "empty-heading|pass|All headings have content||"
   ]
  },
  "a11y/focus-visible": {
-  "digest": "12a4488e80e0d58c3003173bf86233eda68f9963",
+  "digest": "20496801235168",
   "lines": [
    "focus-visible|info|Focus styles not analyzed (requires CSS inspection)||"
   ]
  },
  "a11y/form-field-multiple-labels": {
-  "digest": "f280d4e3156b12c3070ccd9d363fd8ee09ccd9bc",
+  "digest": "266635141387627",
   "lines": [
    "form-field-multiple-labels|info|No form inputs found||"
   ]
  },
  "a11y/form-labels": {
-  "digest": "db18c2bf659f06eabe92cc4a8072b8fd4a070de2",
+  "digest": "240899393021343",
   "lines": [
    "form-labels|info|No form inputs found||"
   ]
  },
  "a11y/frame-title": {
-  "digest": "b7d6c2dec5a56c2274ebbc5c683183b1f7b7fbf3",
+  "digest": "202133020263845",
   "lines": [
    "frame-title|info|No iframes found||"
   ]
  },
  "a11y/heading-order": {
-  "digest": "46f653487d76e1a8e31503ca58941c363a1e8edb",
+  "digest": "78023773158774",
   "lines": [
    "heading-order|pass|Heading levels follow correct order||"
   ]
  },
  "a11y/html-lang-valid": {
-  "digest": "fedee4f0ad0199826980dfe76211e4acf8e615f0",
+  "digest": "280233277172993",
   "lines": [
    "html-lang-valid|pass|Valid lang attribute: \"en\"|\"en\"|"
   ]
  },
  "a11y/html-xml-lang-mismatch": {
-  "digest": "2513b2dc5eb00f684119226b956a52855421b044",
+  "digest": "40766535392944",
   "lines": [
    "html-xml-lang-mismatch|info|Only lang attribute present (recommended for HTML#)||"
   ]
  },
  "a11y/identical-links-same-purpose": {
-  "digest": "5eae99c1e734bbe372d2c22f8abefeb7325b856a",
+  "digest": "104103996942132",
   "lines": [
    "identical-links-same-purpose|pass|Identical link texts go to same destinations||"
   ]
  },
  "a11y/image-redundant-alt": {
-  "digest": "3c35f4651cede07a6b5657d8103c0345a9f46ee0",
+  "digest": "66202431200493",
   "lines": [
    "image-redundant-alt|info|No images with alt text found||"
   ]
  },
  "a11y/input-image-alt": {
-  "digest": "67d59cbe86de30d16962a33d3917943e3058a7db",
+  "digest": "114167155427038",
   "lines": [
    "input-image-alt|info|No image inputs found||"
   ]
  },
  "a11y/input-types": {
-  "digest": "06439fbc41b22c0f23ca02ae098357d611a306c4",
+  "digest": "6887512490418",
   "lines": [
    "enterkeyhint|skipped|No forms with # or more fields found||",
    "form-novalidate|skipped|No forms set novalidate||",
@@ -236,19 +236,19 @@
   ]
  },
  "a11y/label-content-name-mismatch": {
-  "digest": "b4e4f29356308fb6a9067be4c0a80da1db47aa6f",
+  "digest": "198895415285296",
   "lines": [
    "label-content-name-mismatch|info|No elements with aria-label and visible text found||"
   ]
  },
  "a11y/landmark-one-main": {
-  "digest": "6f49ef7dd3da67f636cf4b4233e9492e57622888",
+  "digest": "122363341296602",
   "lines": [
    "landmark-one-main|pass|Page has exactly one main landmark||"
   ]
  },
  "a11y/landmark-regions": {
-  "digest": "e656ef7a7e89b246ac79f88f605b7f56e56b20de",
+  "digest": "253261059358345",
   "lines": [
    "landmark-footer|pass|Footer landmark present||",
    "landmark-main|pass|Main landmark present||",
@@ -256,248 +256,248 @@
   ]
  },
  "a11y/link-in-text-block": {
-  "digest": "fc833e1d67738737bba3503c00a5cdbc0eecb838",
+  "digest": "277640613029747",
   "lines": [
    "link-in-text-block|info|No links found in text blocks||"
   ]
  },
  "a11y/link-text": {
-  "digest": "e18906772299f5e48245e66712c4b4106b03ae90",
+  "digest": "247978635240089",
   "lines": [
    "link-text|pass|All links have descriptive text||"
   ]
  },
  "a11y/list-structure": {
-  "digest": "6c4dad03ca94f6545931c70a7cb8cb0a1b658b6a",
+  "digest": "119080870988436",
   "lines": [
    "list-structure|info|No ul/ol lists found||"
   ]
  },
  "a11y/listitem": {
-  "digest": "3866a98893892f88046768c5b59f91769bedbddc",
+  "digest": "62013582119817",
   "lines": [
    "listitem|info|No li elements found||"
   ]
  },
  "a11y/meta-refresh": {
-  "digest": "2df99ffdd25dba7ffacaf83e4c8313d8edcd1e4a",
+  "digest": "50550154318429",
   "lines": [
    "meta-refresh|pass|No meta refresh found||"
   ]
  },
  "a11y/object-alt": {
-  "digest": "aa8600bfa61a7efa121f0d001be4639ba06cd72a",
+  "digest": "187492514899482",
   "lines": [
    "object-alt|info|No object elements found||"
   ]
  },
  "a11y/paste-inputs": {
-  "digest": "9da542a263000906994f5827c3c27b67644828a4",
+  "digest": "173333113103104",
   "lines": [
    "paste-inputs|info|No text inputs found||"
   ]
  },
  "a11y/select-name": {
-  "digest": "75cb7e83f262779815881fd52255b0bfa327a50a",
+  "digest": "129516861387362",
   "lines": [
    "select-name|info|No select elements found||"
   ]
  },
  "a11y/skip-link": {
-  "digest": "41a7837b84a9805594f33e6b8d207c4b83d4e4a4",
+  "digest": "72187721254057",
   "lines": [
    "skip-link|pass|Bypass mechanism available via landmarks||"
   ]
  },
  "a11y/tabindex": {
-  "digest": "76945fabc634c509a48c7b30e7485a0ae83dba2f",
+  "digest": "130379632330292",
   "lines": [
    "tabindex|info|No tabindex attributes found||"
   ]
  },
  "a11y/table-duplicate-name": {
-  "digest": "8e82e673693228139a7fbec503435441e48a3cc4",
+  "digest": "156692863215922",
   "lines": [
    "table-duplicate-name|info|No data tables found||"
   ]
  },
  "a11y/table-headers": {
-  "digest": "6f9c484186d692407667597c91c3acb238efb6bb",
+  "digest": "122717017835222",
   "lines": [
    "table-headers|info|No data tables found||"
   ]
  },
  "a11y/td-headers-attr": {
-  "digest": "7bec4e676cc7d759ddb4c9bcdcff1ec1075beca6",
+  "digest": "136254857899207",
   "lines": [
    "td-headers-attr|info|No tables found||"
   ]
  },
  "a11y/th-has-data-cells": {
-  "digest": "b27543159c2ea6348d78ba48eb04cb98f246ad2d",
+  "digest": "196216706407470",
   "lines": [
    "th-has-data-cells|info|No data tables found||"
   ]
  },
  "a11y/touch-targets": {
-  "digest": "419ade18b50194252ae0ceaca5a4a05d3be7f638",
+  "digest": "72133406930177",
   "lines": [
    "touch-targets|info|Touch target sizes require CSS analysis|\"Verify buttons/links are at least #x#px\"|"
   ]
  },
  "a11y/valid-lang": {
-  "digest": "84e6c114b78c0d7fb94166c3d8ba6be74688b555",
+  "digest": "146126616704908",
   "lines": [
    "valid-lang|info|No additional lang attributes found||"
   ]
  },
  "a11y/video-captions": {
-  "digest": "d35c958c126bec1e17f03c270352969cf093468a",
+  "digest": "232394599436907",
   "lines": [
    "video-captions|info|No videos detected||"
   ]
  },
  "a11y/zoom-disabled": {
-  "digest": "4bce2e1e876d5e67815eadbc29e1107fca242a7d",
+  "digest": "83348909098861",
   "lines": [
    "zoom-disabled|info|No viewport meta tag found||"
   ]
  },
  "adblock/blocked-links": {
-  "digest": "f34f6c226d5160dbb7c8a8efc7a3797b5146851f",
+  "digest": "267522442161489",
   "lines": [
    "blocked-links|skipped|Ad-blocker link check skipped||"
   ]
  },
  "adblock/element-hiding": {
-  "digest": "97c83046683ae8ccd05ae6204cfd126bcbe2cb9e",
+  "digest": "166886059173946",
   "lines": [
    "adblock-elements|skipped|Adblock element-hiding check skipped||"
   ]
  },
  "adblock/privacy-blocked": {
-  "digest": "c0addfdf4c6c95cc7216faefd80d2eabb3203a03",
+  "digest": "211853017828460",
   "lines": [
    "privacy-blocked|skipped|Privacy filter check skipped||"
   ]
  },
  "ai/llm-parsability": {
-  "digest": "69a11f4701842420b362f8d1903ebf9275aa9024",
+  "digest": "116140735398276",
   "lines": [
    "llm-parsability|skipped|LLM parsability analysis skipped||"
   ]
  },
  "ai/page-type-match": {
-  "digest": "8d04ebeb4ad81569e1b721004705dd0eca2043de",
+  "digest": "155052277451480",
   "lines": [
    "page-type-match|skipped|Page type classification skipped||"
   ]
  },
  "ai/site-metadata": {
-  "digest": "dc033ad37a98123eff0c92d0272cf46b6ef5835a",
+  "digest": "241906429950616",
   "lines": [
    "site-metadata|skipped|Site profile resolution skipped||"
   ]
  },
  "analytics/consent-mode": {
-  "digest": "0a20fc860396194a6f9d3a9c0c2cbf207506315a",
+  "digest": "11136791872406",
   "lines": [
    "consent-mode|skipped|No Google tags detected (consent mode not applicable)||"
   ]
  },
  "analytics/gtm-present": {
-  "digest": "2fe14d8949d1a7d7818491e355198e272ca06461",
+  "digest": "52644714990033",
   "lines": [
    "gtm-present|info|No analytics tracking detected|\"Consider adding analytics to measure performance\"|"
   ]
  },
  "ax/agent-blocking": {
-  "digest": "80543a93a6fd4aba33eaa83c44336e4aa40c3b76",
+  "digest": "141099248363261",
   "lines": [
    "agent-blocking|skipped|Agent access not checked: the discovery probe was not sent|\"not-checked\"|"
   ]
  },
  "ax/agents-md": {
-  "digest": "91d975d5eb87e19a871a7eddc7f396a588dd0fd3",
+  "digest": "160363170884487",
   "lines": [
    "agents-md|info|AGENTS.md not checked: the discovery probe was not sent|\"not-checked\"|"
   ]
  },
  "ax/ai-crawlers": {
-  "digest": "1855f8fa10075d09695acf82ad172117df2f7085",
+  "digest": "26757528424455",
   "lines": [
    "ai-crawler-access|info|#/# known AI crawlers allowed|\"#/# allowed\"|"
   ]
  },
  "ax/api-discovery": {
-  "digest": "48e40eb01d46cbf5ceb0f66a53d5995b83d26671",
+  "digest": "80144336166214",
   "lines": [
    "api-discovery|info|API and OAuth discovery documents not checked: the discovery probe was not sent|\"not-checked\"|"
   ]
  },
  "ax/archive-indexing": {
-  "digest": "a1f4655a031aa29136dc5c6ecb4497364f523bd2",
+  "digest": "178071044490010",
   "lines": [
    "archive-indexing|skipped|Archive indexing check skipped||"
   ]
  },
  "ax/content-signals": {
-  "digest": "8c4de0193359c97d31776a3fee0ca7b6f58bddcc",
+  "digest": "154266100118361",
   "lines": [
    "content-signals|info|No Content-Signal declared in robots.txt (optional per-purpose AI policy)|\"absent\"|"
   ]
  },
  "ax/content-without-js": {
-  "digest": "9a615da62a03a1074d2746fb082a1146d177614e",
+  "digest": "169742973676035",
   "lines": [
    "content-without-js|skipped|Raw-vs-rendered content comparison skipped||"
   ]
  },
  "ax/llms-txt": {
-  "digest": "01cb49838924b7df8b1da3bf9eee6c25e4abd9f3",
+  "digest": "1972623345956",
   "lines": [
    "llms-txt|info|/llms.txt not checked: the discovery probe was not sent or got no answer|\"not-checked\"|"
   ]
  },
  "ax/markdown-response": {
-  "digest": "4ce7cc659255a1877e2d90ebcd77a0a0b4743f26",
+  "digest": "84558450365013",
   "lines": [
    "markdown-response|info|Markdown response not checked: the discovery probe was not sent or got no answer|\"not-checked\"|"
   ]
  },
  "ax/noai-signals": {
-  "digest": "8069900c713db8262f7ffebb7331b35ac4eec368",
+  "digest": "141190876655933",
   "lines": [
    "noai-signals|pass|No noai / noimageai / snippet-limit signals declared|\"none\"|"
   ]
  },
  "ax/pay-per-crawl": {
-  "digest": "a55e2a51b6ddafce738e0f0a8c94685e5edf9a6d",
+  "digest": "181823855507165",
   "lines": [
    "pay-per-crawl|info|Monetized agent access not checked: the discovery probe was not sent|\"not-checked\"|"
   ]
  },
  "ax/rsl-license": {
-  "digest": "52ac6d56cffde10c12198ae2c88d9ab521d06ac9",
+  "digest": "90900522258429",
   "lines": [
    "rsl-license|info|RSL licensing not checked: the discovery probe was not sent or got no answer|\"not-checked\"|"
   ]
  },
  "ax/token-weight": {
-  "digest": "7943f16c20591d2835058522f6b82481fee2c78a",
+  "digest": "133332720164953",
   "lines": [
    "token-weight-budget|pass|~#,# estimated tokens (#,# bytes), within budget|#|",
    "token-weight-ratio|pass|~#% of this page's HTML is visible text, above the #% floor|#|"
   ]
  },
  "ax/well-known-agent": {
-  "digest": "70cd9af276d91e758a321e276e7fa04e531fd3cf",
+  "digest": "124028370187993",
   "lines": [
    "well-known-agent|info|Agent manifests not checked: the discovery probe was not sent|\"not-checked\"|"
   ]
  },
  "content/article-links": {
-  "digest": "60ccb1b9145c46c8c392440643a146dc79f74045",
+  "digest": "106432271291484",
   "lines": [
    "article-links|info|Not an article page||",
    "external-links|warn|long article has # external links (min #)|#|#",
@@ -505,50 +505,50 @@
   ]
  },
  "content/author-info": {
-  "digest": "8d3e0c09ac172ac7b5b42d360a722f3fd947a8f7",
+  "digest": "155297629449239",
   "lines": [
    "author-info|info|No author information detected|\"Consider adding author attribution for E-E-A-T\"|"
   ]
  },
  "content/broken-html": {
-  "digest": "b888a59cfd7f7d40d18ca535e9df5c17ba8b39d2",
+  "digest": "202897033592191",
   "lines": [
    "broken-html|pass|HTML structure appears valid||"
   ]
  },
  "content/common-misspellings": {
-  "digest": "f7675ba0bdc442e0d347218a185f348aa6eaf96d",
+  "digest": "272023290953156",
   "lines": [
    "common-misspellings|pass|No known misspellings or doubled words on English pages||"
   ]
  },
  "content/dev-leakage": {
-  "digest": "c3911703c96e619fdebc090091c4f11ec8a2fae2",
+  "digest": "215027923798382",
   "lines": [
    "dev-leakage|pass|No development, private or preview hosts referenced||"
   ]
  },
  "content/duplicate-description": {
-  "digest": "3e45d0dc24ab297af7a77ce1716918514feed60b",
+  "digest": "68469577753771",
   "lines": [
    "duplicate-description|warn|# duplicate description(s) found across # pages||"
   ]
  },
  "content/duplicate-title": {
-  "digest": "a2313ca01d7c46c6a45ef5022b73665b1d585015",
+  "digest": "178332354223484",
   "lines": [
    "duplicate-title|warn|# duplicate title(s) found across # pages||"
   ]
  },
  "content/freshness": {
-  "digest": "ff5344f5ced3505339fd196ed4fbeac33e3d5b7f",
+  "digest": "280733104328403",
   "lines": [
    "freshness|info|No freshness signals detected|\"Consider adding date schema or Last-Modified header\"|",
    "time-elements|pass|# <time> element(s) found|\"#-#-#\"|"
   ]
  },
  "content/h1-title-alignment": {
-  "digest": "14e65711d8ecfb2ecb7894d55944afea7efde3da",
+  "digest": "22979535821036",
   "lines": [
    "content/h#-title-alignment|skipped|Skipped: page is set to noindex via robots meta tag||",
    "h#-title-alignment|info|The H# and the title share no meaningful word|\"Advanced dock ##\"|\"At least one content word in common with the title\"",
@@ -584,99 +584,99 @@
   ]
  },
  "content/heading-hierarchy": {
-  "digest": "005000480bce8e1c23dbe5a46525b2e99571ebb1",
+  "digest": "343602105294",
   "lines": [
    "heading-hierarchy|pass|Heading hierarchy is valid||",
    "long-headings|info|# heading(s) over # characters||"
   ]
  },
  "content/hidden-text": {
-  "digest": "1604ed98fef7407bd7febcdf8fe69716965e8ca3",
+  "digest": "24210421907191",
   "lines": [
    "hidden-text|pass|No hidden text or links detected||"
   ]
  },
  "content/keyword-stuffing": {
-  "digest": "016813e7a0eef0b96881b20f6b0f648c5b02207b",
+  "digest": "1546522173678",
   "lines": [
    "keyword-stuffing|warn|# word(s) may be overused||"
   ]
  },
  "content/meta-in-body": {
-  "digest": "595832b326b2378c40b306e8e08968d2cbb3077e",
+  "digest": "98235342595762",
   "lines": [
    "meta-in-body|pass|All meta tags correctly placed in <head>||"
   ]
  },
  "content/mime-type": {
-  "digest": "021ca0e4fbace27ca8369d20edb8b42152963fd6",
+  "digest": "2321981701036",
   "lines": [
    "mime-type|skipped|No file extension detected||"
   ]
  },
  "content/mojibake": {
-  "digest": "8a73dfa64ed66b1c6463a9507fb60ca38385bd12",
+  "digest": "152230278090454",
   "lines": [
    "encoding-corruption|pass|No encoding corruption in visible text||"
   ]
  },
  "content/placeholder-contact": {
-  "digest": "c508e5070cd8f45cea23fde5b324c6bd9b9e99f6",
+  "digest": "216641992854744",
   "lines": [
    "placeholder-contact|pass|No placeholder contact details in visible text or links||"
   ]
  },
  "content/placeholder-media": {
-  "digest": "fc76244c5cff3fa45797ce1598e5f5f3f3e35ba1",
+  "digest": "277584345324799",
   "lines": [
    "placeholder-media|skipped|No images on the page||"
   ]
  },
  "content/placeholder-text": {
-  "digest": "342a5927f67e527034adc027acc6801f2a8819df",
+  "digest": "57356489062014",
   "lines": [
    "placeholder-content|pass|No placeholder or template leftovers in visible text||"
   ]
  },
  "content/reading-level": {
-  "digest": "4ffc0d2a2f4c1fb353058496e91b2c56e4d30e33",
+  "digest": "87943971221324",
   "lines": [
    "reading-level|info|Readability: Very Difficult (Grade #.#)|\"Flesch score: #/#\"|"
   ]
  },
  "content/stale-copyright": {
-  "digest": "71136e90d35a824b5d074e9a42dd11f91594489c",
+  "digest": "124328273302362",
   "lines": [
    "footer-copyright-year|skipped|No copyright year in the footer||"
   ]
  },
  "content/thin-vs-site-norm": {
-  "digest": "5e7cf654261392410208c3184953a102922bb3b4",
+  "digest": "103890801665555",
   "lines": [
    "thin-vs-site-norm|pass|All # comparable page(s) sit within their page type's word-count norm (median words: article #, category #, product #)|#|"
   ]
  },
  "content/title-pattern-outlier": {
-  "digest": "30026bb2796fae8c3681cd901d9d8a025335b658",
+  "digest": "52786954926447",
   "lines": [
    "title-pattern-outlier|skipped|No title template reaches #% agreement across the crawled titles||"
   ]
  },
  "content/unrendered-markup": {
-  "digest": "093a8e7b097579c47d61b2b952c4625d613c7053",
+  "digest": "10147103181173",
   "lines": [
    "unrendered-markup|pass|No unrendered markup in visible text||"
   ]
  },
  "content/word-count": {
-  "digest": "530e501e7daa87e1dfe739b8428d19970f572be0",
+  "digest": "91320938823082",
   "lines": [
    "content/word-count|skipped|Skipped: page is set to noindex via robots meta tag||",
    "word-count|pass|Good content length: # words|#|"
   ]
  },
  "core/canonical": {
-  "digest": "53c3dd2db44d75f3abd9de78d671e87150466d2b",
+  "digest": "92100694488141",
   "lines": [
    "canonical|pass|Self-referential canonical present|\"http://synthetic.example.com/\"|",
    "canonical|pass|Self-referential canonical present|\"http://synthetic.example.com/blog/#\"|",
@@ -687,37 +687,37 @@
   ]
  },
  "core/canonical-form-drift": {
-  "digest": "61e0d502fc00661fd1d4ee150612b7b59f36cdac",
+  "digest": "107618274311168",
   "lines": [
    "canonical-form-drift|pass|All # comparable canonical(s) share one form (scheme http, host apex, trailing slash in /blog no trailing slash, trailing slash in /category no trailing slash, trailing slash in /landing no trailing slash, trailing slash in /product no trailing slash, trailing slash in /static no trailing slash, tracking params tracking params stripped)|#|"
   ]
  },
  "core/canonical-header": {
-  "digest": "1697c177c7a6a5680f094252e785461b6d5c0827",
+  "digest": "24841041725350",
   "lines": [
    "canonical-header|skipped|No Link header canonical found||"
   ]
  },
  "core/charset": {
-  "digest": "8f897eae4547a9e9d3351fd7746bb38b191452fb",
+  "digest": "157820698641735",
   "lines": [
    "charset|pass|UTF-# charset declared early in head|\"utf-#\"|"
   ]
  },
  "core/doctype": {
-  "digest": "3c95a44ad20dc84424594297fba739c1a2fb3478",
+  "digest": "66613404160525",
   "lines": [
    "doctype|pass|Valid HTML# doctype found|\"<!DOCTYPE html>\"|"
   ]
  },
  "core/favicon": {
-  "digest": "02329f2be7fd87fe23ac8f10b5a87c7ff1b9dc93",
+  "digest": "2416442075133",
   "lines": [
    "favicon|warn|No favicon found|\"Add <link rel='icon'> for brand recognition\"|"
   ]
  },
  "core/h1": {
-  "digest": "4ef2bd95a946fdab423ea73d0fe0806fa06a2119",
+  "digest": "86804469754182",
   "lines": [
    "core/h#|skipped|Skipped: page is set to noindex via robots meta tag||",
    "h#|pass|Single H# tag present|\"Advanced adapter ##\"|",
@@ -979,7 +979,7 @@
   ]
  },
  "core/meta-description": {
-  "digest": "7b28e124b46d5d44a1b7b2dfcf00b0ab1c9fa2f0",
+  "digest": "135415506187373",
   "lines": [
    "core/meta-description|skipped|Skipped: page is set to noindex via robots meta tag||",
    "meta-description|warn|Description too long|\"battery widget premium affordable protects versatile commercial powers shipping rugged cable compatibility warranty durability reduces durability cable filter versatile efficient powers reduces versatile wireless maintenance commercial versatile premium panel widget performance modular gizmo module streamlines performance sensor engine engine valve streamlines reliability dock modular versatile case shipping stand battery warranty durability engine shipping powers gizmo compatibility reliability durable supports modular\"|\"#-# characters\"",
@@ -1456,7 +1456,7 @@
   ]
  },
  "core/meta-title": {
-  "digest": "ee5402db2dfae86dd766b5fc81ffab5b4177db84",
+  "digest": "262044592582138",
   "lines": [
    "core/meta-title|skipped|Skipped: page is set to noindex via robots meta tag||",
    "meta-title|pass|Title length OK|\"Advanced battery — Category #\"|",
@@ -1867,13 +1867,13 @@
   ]
  },
  "core/nosnippet": {
-  "digest": "00a39ba367735c8ec5c13e326ac1fee1521eb415",
+  "digest": "702690846579",
   "lines": [
    "nosnippet|pass|No snippet restrictions found||"
   ]
  },
  "core/og-tags": {
-  "digest": "12c46727bb7a3a6fd21d83e8d1fff9160810d909",
+  "digest": "20634753547130",
   "lines": [
    "og-description|warn|Missing og:description|null|",
    "og-image|warn|Missing og:image - social shares will lack imagery|null|",
@@ -1882,87 +1882,87 @@
   ]
  },
  "core/robots-meta": {
-  "digest": "6e375961afbfb8a3cb97da1658d50f95e0eea519",
+  "digest": "121184001830847",
   "lines": [
    "robots-meta|pass|No robots meta tag (defaults to index, follow)|null|",
    "robots-meta|warn|Page is set to noindex via robots meta tag|\"noindex\"|"
   ]
  },
  "core/title-unique": {
-  "digest": "6c08632c81bb479c062fd541609f48ebfe9a7748",
+  "digest": "118783279399355",
   "lines": [
    "title-unique|warn|# duplicate title(s) affecting # pages||"
   ]
  },
  "core/twitter-cards": {
-  "digest": "11f489be984632fbb0c11e1af993f96576e63672",
+  "digest": "19741980661830",
   "lines": [
    "twitter-card|warn|No Twitter card or Open Graph tags for Twitter sharing|null|"
   ]
  },
  "crawl/all-noindex-pages": {
-  "digest": "3cc9ee7ab59df5d1afda681309f458127b0143f3",
+  "digest": "66837987112349",
   "lines": [
    "all-noindex|info|# page(s) blocked from indexing|\"/blog/# (meta:noindex)\\n/blog/# (meta:noindex)\\n/blog/# (meta:noindex)\\n/blog/# (meta:noindex)\\n/blog/# (meta:noindex)\\n/blog/# (meta:noindex)\\n/category/# (meta:noindex)\\n/category/# (meta:noindex)\\n/category/# (meta:noindex)\\n/landing/# (meta:noindex)\"|"
   ]
  },
  "crawl/canonical-chain": {
-  "digest": "d786c60c5bdd3c7bce4996f0ec488d739d708f91",
+  "digest": "236973848288221",
   "lines": [
    "canonical-chain|pass|Canonical URL appears direct||"
   ]
  },
  "crawl/html-size": {
-  "digest": "8b39afa47a39ab1473227a14f93d664ec1be97b2",
+  "digest": "153079876188729",
   "lines": [
    "html-size|pass|HTML size OK: #KB|#|"
   ]
  },
  "crawl/indexability": {
-  "digest": "5b1f52e216792690352ffa3e6451a21e4f628a72",
+  "digest": "100190092662393",
   "lines": [
    "indexability|info|Page is blocked from indexing via robots meta tag|\"not indexable\"|",
    "indexability|pass|Page is indexable|\"indexable\"|"
   ]
  },
  "crawl/indexability-conflicts": {
-  "digest": "35daeaaf6f5077ccda1ce1e4cd9b8023e650b469",
+  "digest": "59214356508496",
   "lines": [
    "conflicts|pass|No indexability conflicts detected||"
   ]
  },
  "crawl/noindex-in-sitemap": {
-  "digest": "f850f4943f658c8d013814d256c9f6ad97b3232c",
+  "digest": "273026584428389",
   "lines": [
    "noindex-in-sitemap|warn|# noindexed page(s) found in sitemap||"
   ]
  },
  "crawl/pagination": {
-  "digest": "58cae845db1ccafd6402f5189dda923fe80b8d4e",
+  "digest": "97628503530268",
   "lines": [
    "pagination|skipped|Page does not appear to be paginated||"
   ]
  },
  "crawl/pdf-size": {
-  "digest": "fed4b2c6e694174e3ca1dfc91788c7dd4ceceb8a",
+  "digest": "280189485901460",
   "lines": [
    "pdf-size|pass|No internal PDF links found||"
   ]
  },
  "crawl/redirect-chain": {
-  "digest": "1d821548dd73c1023214b91bc4f16c3e0a3aef42",
+  "digest": "32444540050803",
   "lines": [
    "redirect-chain|pass|No redirect chains exceed # hops||"
   ]
  },
  "crawl/robots-meta-conflict": {
-  "digest": "60bf36a191a8c0a36dd3e01765a598c2d88cd65c",
+  "digest": "106374371578280",
   "lines": [
    "robots-conflict|pass|No robots meta/robots.txt conflicts detected||"
   ]
  },
  "crawl/robots-txt": {
-  "digest": "d980bc60ddf6e875592f94d0ab009ebe3d2a83e0",
+  "digest": "239146939506166",
   "lines": [
    "robots-txt-disallow|pass|robots.txt does not block all crawling||",
    "robots-txt-exists|pass|robots.txt exists|\"http://synthetic.example.com/robots.txt\"|",
@@ -1971,31 +1971,31 @@
   ]
  },
  "crawl/schema-noindex-conflict": {
-  "digest": "5e58b597d1a29cb9aeaa8f85d4d1e279177b89af",
+  "digest": "103735096758690",
   "lines": [
    "schema-noindex|pass|No schema+noindex conflicts||"
   ]
  },
  "crawl/sitemap-4xx": {
-  "digest": "07dc06e90345111e3053415b4b1a23626dd0f335",
+  "digest": "8641590133573",
   "lines": [
    "sitemap-#xx|pass|No sitemap URL checks available||"
   ]
  },
  "crawl/sitemap-coverage": {
-  "digest": "b2ef3160ef6a8423e00f1426bdbee0e4bb117fa7",
+  "digest": "196740395364202",
   "lines": [
    "sitemap-coverage|pass|All indexable pages are in sitemap||"
   ]
  },
  "crawl/sitemap-domain": {
-  "digest": "f78c825ccecacf731246974c2551ee3539fd266c",
+  "digest": "272182854602442",
   "lines": [
    "sitemap-domain|pass|All sitemap URLs match site domain||"
   ]
  },
  "crawl/sitemap-exists": {
-  "digest": "f3301b532dc8abe36b74e04d5bad549d48f29932",
+  "digest": "267387942415816",
   "lines": [
    "sitemap-exists|pass|# sitemap(s) found||",
    "sitemap-in-robots|pass|Sitemap referenced in robots.txt|\"http://synthetic.example.com/sitemap.xml\"|",
@@ -2003,368 +2003,368 @@
   ]
  },
  "crawl/sitemap-lastmod-churn": {
-  "digest": "1ab2b8381e6d3acd1fa4f8822b8643ceeae9e541",
+  "digest": "29354897186413",
   "lines": [
    "sitemap-lastmod-churn|skipped|Only # sitemap URL(s) carry a lastmod; sitemap is too small to judge lastmod churn||"
   ]
  },
  "crawl/sitemap-lastmod-drift": {
-  "digest": "ed282690cc5dd43fa162aaff5b1c0d6430edd2e2",
+  "digest": "260756701498461",
   "lines": [
    "sitemap-lastmod-drift|skipped|No sitemap URL carries both a lastmod and a page-side date signal||"
   ]
  },
  "crawl/sitemap-valid": {
-  "digest": "3f87456db3f00744f6447407bb06e7bdef4921a1",
+  "digest": "69850217952240",
   "lines": [
    "sitemap-size|pass|All sitemaps within URL limits||",
    "sitemap-syntax|pass|Sitemap XML syntax is valid||"
   ]
  },
  "crawl/soft-404": {
-  "digest": "fb4aea9e9a0ae64056fee61fe24a6d0c4980eb5c",
+  "digest": "276299182414346",
   "lines": [
    "soft-#|pass|Page does not serve # content with a success status||"
   ]
  },
  "eeat/about-page": {
-  "digest": "ad1ac6a98af28306f21e33604899a3cd8cb98ee5",
+  "digest": "190330513754866",
   "lines": [
    "about-page|warn|No About page found|\"Create /about or /about-us page\"|"
   ]
  },
  "eeat/affiliate-disclosure": {
-  "digest": "5b5bde1e5752f7fb23b02877e4696d34a577bf3a",
+  "digest": "100450126681938",
   "lines": [
    "affiliate-disclosure|info|No affiliate links or disclosure page detected||"
   ]
  },
  "eeat/author-byline": {
-  "digest": "3f001fbe3d515ee74d6dbbfca85bd60d4bd913cc",
+  "digest": "69269765111121",
   "lines": [
    "author-byline|warn|No content pages have author attribution|\"Add author bylines to build E-E-A-T\"|"
   ]
  },
  "eeat/author-expertise": {
-  "digest": "6eea78c2fee1102171c7945631dddce8e7866392",
+  "digest": "121953327447777",
   "lines": [
    "author-expertise|info|Limited author expertise signals|\"Consider adding author pages with credentials\"|"
   ]
  },
  "eeat/authority-signals": {
-  "digest": "ae12cdac782c22781d42925c582920e1dcfa1e97",
+  "digest": "191395783276588",
   "lines": [
    "authority-signals|skipped|Authority signal analysis skipped||"
   ]
  },
  "eeat/citations": {
-  "digest": "cd53578984d7a9c9ba2c578a5f6c8f56f8f22ed4",
+  "digest": "225757834609879",
   "lines": [
    "citations|info|No authoritative citations detected|\"Consider citing .gov, .edu, or industry sources\"|"
   ]
  },
  "eeat/contact-page": {
-  "digest": "bd2b7f37db6ee157169b0782d53ecefe80a3c778",
+  "digest": "207994515610478",
   "lines": [
    "contact-page|warn|No Contact page found|\"Create /contact page\"|"
   ]
  },
  "eeat/content-dates": {
-  "digest": "aa72d1b67fa40448349b7beab056f99a07b4559a",
+  "digest": "187410121392036",
   "lines": [
    "content-dates|info|No article content detected for date analysis||"
   ]
  },
  "eeat/disclaimers": {
-  "digest": "c38b4a7c3aabc5ffdba3b1c17dbc2d0b7b1738f4",
+  "digest": "215003017525931",
   "lines": [
    "disclaimer-page|info|No dedicated disclaimer page found|\"Consider adding if you have YMYL or affiliate content\"|"
   ]
  },
  "eeat/editorial-policy": {
-  "digest": "40f412c05a40000fae5fc0016c482242ae35d692",
+  "digest": "71417030793792",
   "lines": [
    "editorial-policy|info|No editorial/content policy pages found|\"Consider adding for content-heavy sites\"|"
   ]
  },
  "eeat/physical-address": {
-  "digest": "bdd62dded4abe6c5653d9e7b7aff0643933cef26",
+  "digest": "208727590229163",
   "lines": [
    "physical-address|info|No address schema markup detected|\"Add PostalAddress schema if applicable\"|"
   ]
  },
  "eeat/privacy-policy": {
-  "digest": "b522d6d256c0a36b57727c4068608597d8945171",
+  "digest": "199161237624512",
   "lines": [
    "privacy-policy|warn|No Privacy Policy page found|\"Create /privacy-policy page\"|"
   ]
  },
  "eeat/terms-of-service": {
-  "digest": "7ef2d3b3031bca67779ba4ad31ba7cf8765e40b1",
+  "digest": "139581398909723",
   "lines": [
    "terms-of-service|info|No Terms of Service page found|\"Consider adding for e-commerce/SaaS sites\"|"
   ]
  },
  "eeat/trust-signals": {
-  "digest": "3b58653454ef7d3809817eb92a39fbac20f06f61",
+  "digest": "65250841089263",
   "lines": [
    "trust-signals|info|Limited trust signals detected|\"Consider adding reviews, testimonials, or certifications\"|"
   ]
  },
  "eeat/ymyl-detection": {
-  "digest": "90c90e2dd16fa59425f6e2d91d2e92854adaa1e9",
+  "digest": "159193200709999",
   "lines": [
    "ymyl-detection|pass|No obvious YMYL content detected||"
   ]
  },
  "i18n/hreflang": {
-  "digest": "55e97485b8ee39368f31c2c5cb15a2af151f484f",
+  "digest": "94461170661614",
   "lines": [
    "hreflang|info|No hreflang tags found (not required for single-language sites)|null|"
   ]
  },
  "i18n/lang-attribute": {
-  "digest": "aa22d59fc63ad44dc9551257ee4d3aeab64f5363",
+  "digest": "187066589627962",
   "lines": [
    "lang-attribute|pass|Lang attribute present: en|\"en\"|"
   ]
  },
  "images/alt-text": {
-  "digest": "b4a274dfcdc95c75af32f38248ec1b10a5fe9dbc",
+  "digest": "198609838525897",
   "lines": [
    "alt-text|pass|No images on page|#|"
   ]
  },
  "images/aspect-mismatch": {
-  "digest": "ae26a5ce1979c5964906ffe1e795c216361b2a9c",
+  "digest": "191481013737849",
   "lines": [
    "aspect-mismatch|pass|No conflicting image aspect ratios detected||"
   ]
  },
  "images/broken-images": {
-  "digest": "7d7ee82fc949c24104f42cd3641bda02ecfbf8b2",
+  "digest": "137984014797129",
   "lines": [
    "broken-images|pass|No obviously broken images detected||"
   ]
  },
  "images/dimensions": {
-  "digest": "e711f79ca1492e154df0d4f5d12d12a9cb6fc12f",
+  "digest": "254064354697545",
   "lines": [
    "image-dimensions|pass|No images on page|#|"
   ]
  },
  "images/figure-figcaption": {
-  "digest": "b1cde39757003e38b7ad97c19e6e6798133e76ec",
+  "digest": "195497844758272",
   "lines": [
    "figure-figcaption|skipped|No images or figures found||"
   ]
  },
  "images/filename-quality": {
-  "digest": "d3a5dfa9d08797a0e4e7474846d6aa7c19e4be4f",
+  "digest": "232709375512711",
   "lines": [
    "filename-quality|skipped|No images found||"
   ]
  },
  "images/hotlinked": {
-  "digest": "7518bb675dd1911d1f483c13d0ae06274603dbb7",
+  "digest": "128749083778513",
   "lines": [
    "hotlinked-images|info|No content images found||"
   ]
  },
  "images/image-file-size": {
-  "digest": "a7a12b066a47206bb4d1e405e0fe9d2267a9ffd2",
+  "digest": "184310653413959",
   "lines": [
    "image-file-size|pass|No image files detected||"
   ]
  },
  "images/lazy-loading": {
-  "digest": "90243b6b81798a262db5695e7c23f09ea99ff75d",
+  "digest": "158485290123641",
   "lines": [
    "lazy-loading|skipped|No images found||"
   ]
  },
  "images/modern-format": {
-  "digest": "79be6b5c4155bfd7601f41e9cd4ec5ca9677410a",
+  "digest": "133858751955285",
   "lines": [
    "modern-format|skipped|No images found||"
   ]
  },
  "images/offscreen-lazy": {
-  "digest": "3de38956c7d463f4f63aec034879d50cb65dcaa6",
+  "digest": "68047471036372",
   "lines": [
    "offscreen-lazy|info|No images found||"
   ]
  },
  "images/optimized": {
-  "digest": "45986979532df704f694dcf5b56703b6239298ca",
+  "digest": "76520906904365",
   "lines": [
    "image-optimization|info|No images found||"
   ]
  },
  "images/picture-element": {
-  "digest": "656ac945f02e3cca469c409daea8e00125e8f138",
+  "digest": "111509317742638",
   "lines": [
    "picture-element|skipped|No <picture> elements found||"
   ]
  },
  "images/responsive-size": {
-  "digest": "8d9b0bda5f3927497d6c63ed6655c40af2e375cc",
+  "digest": "155697058307897",
   "lines": [
    "responsive-size|info|No images found on page||"
   ]
  },
  "images/srcset": {
-  "digest": "342475617c75d9d254b795145642278a85b5fc70",
+  "digest": "57331192790133",
   "lines": [
    "srcset|skipped|No images found||"
   ]
  },
  "images/svg-inline": {
-  "digest": "d28360c6a26935a0cc00de4dabe3bf78f43cb3df",
+  "digest": "231461706179177",
   "lines": [
    "svg-inline|info|No inline SVGs found||"
   ]
  },
  "integrity/orphan-page": {
-  "digest": "aa31b53f70419d026592044bc9d4565dda087333",
+  "digest": "187130470953025",
   "lines": [
    "orphan-page|pass|No hidden pages (all crawled pages are linked or in a sitemap)||"
   ]
  },
  "integrity/template-discontinuity": {
-  "digest": "1ae635f3330cd0fc1930191a62dd5a4c654cf263",
+  "digest": "29576049931020",
   "lines": [
    "template-discontinuity|pass|All pages share the site's common template||"
   ]
  },
  "legal/cookie-consent": {
-  "digest": "077916095638376183408f6d8cf99fbe30cef2ab",
+  "digest": "8216642147896",
   "lines": [
    "cookie-consent|info|No cookie consent mechanism detected|\"Required for GDPR compliance if using cookies\"|"
   ]
  },
  "legal/privacy-policy": {
-  "digest": "955953eb1815c60166d49c1bd7f2258246d17d4f",
+  "digest": "164210892544021",
   "lines": [
    "privacy-policy|warn|No privacy policy link found across site|\"Add a link to your privacy policy\"|"
   ]
  },
  "legal/subprocessor-disclosure": {
-  "digest": "0067db93fa819c08392a500c89044a7b6cbdc4a1",
+  "digest": "446065539713",
   "lines": [
    "subprocessor-disclosure|skipped|No commercial offer found (pricing, plans, enterprise or trust page); sub-processor disclosure applies to data processors with customers||"
   ]
  },
  "legal/terms-of-service": {
-  "digest": "2cef1c5308b18cb074d1c7a0826aa41715cfcbdd",
+  "digest": "49405484009649",
   "lines": [
    "terms-of-service|info|No terms of service link found|\"Consider adding terms of service for legal protection\"|"
   ]
  },
  "links/anchor-text": {
-  "digest": "c051d7b046cc13f91e216f429ba4ff7b1ec81ff8",
+  "digest": "211457743537868",
   "lines": [
    "anchor-text|pass|Link anchor text is descriptive||"
   ]
  },
  "links/broken-anchors": {
-  "digest": "8e90d0979110222d1710c976f7045ac9294d7eea",
+  "digest": "156752626028816",
   "lines": [
    "broken-anchors|pass|No broken in-page anchor links detected||"
   ]
  },
  "links/broken-external-links": {
-  "digest": "3bc61ee6ed4c93937378468ed03299064edaa6f0",
+  "digest": "65722108013900",
   "lines": [
    "broken-external-links|pass|No external links found to check|#|"
   ]
  },
  "links/broken-links": {
-  "digest": "0e7c8e6c742d2b764d92a6af7c6ca0963e87ab06",
+  "digest": "15928128205869",
   "lines": [
    "broken-links|pass|No broken internal links detected||"
   ]
  },
  "links/dead-end-pages": {
-  "digest": "484a25e9d7ece5b770fca942e5875bb69b36608e",
+  "digest": "79483300861932",
   "lines": [
    "dead-end|pass|Page has outgoing internal links|#|"
   ]
  },
  "links/dead-links": {
-  "digest": "a5fe467b0e22f77dec84022111431c1e65009ba1",
+  "digest": "182511522745890",
   "lines": [
    "dead-links|info|No external links found to verify|#|#"
   ]
  },
  "links/external-links": {
-  "digest": "b0a7ce4ec6d994ddcf97e10d1f46b5741bf8c116",
+  "digest": "194234767296217",
   "lines": [
    "external-links|info|No external links on page|#|"
   ]
  },
  "links/https-downgrade": {
-  "digest": "fc1ce845d30a4338c3598908890ac1c213d9c588",
+  "digest": "277201086173962",
   "lines": [
    "https-downgrade|info|Page is not HTTPS, downgrade check not applicable||"
   ]
  },
  "links/internal-links": {
-  "digest": "4e6726d35afb22bb130525cc0c837e2627ac9c84",
+  "digest": "86204939983611",
   "lines": [
    "internal-links|pass|# internal link(s)|#|"
   ]
  },
  "links/invalid-links": {
-  "digest": "c9c89f34347f3ca23801dfe4916e97b8a5e0ca8d",
+  "digest": "221863501640831",
   "lines": [
    "invalid-links|pass|No invalid link formats found||"
   ]
  },
  "links/no-contextual-inbound": {
-  "digest": "e028c0a794ccd7fb8d78f2ad179a0411cdca8edb",
+  "digest": "246465635521740",
   "lines": [
    "no-contextual-inbound|pass|All pages have at least one contextual inbound link||"
   ]
  },
  "links/nofollow-internal": {
-  "digest": "208387f958bbad3d978234c06a65f92d69462de2",
+  "digest": "35749294069947",
   "lines": [
    "nofollow-internal|pass|No internal links with nofollow||"
   ]
  },
  "links/orphan-pages": {
-  "digest": "3f2125e5d5a747e9c2d7df599128015ac3050f6c",
+  "digest": "69411602290087",
   "lines": [
    "orphan-pages|warn|# orphan page(s) with <# incoming links|\"/blog/#\\n/blog/#\\n/blog/#\\n/blog/#\\n/blog/#\\n+# more\"|"
   ]
  },
  "links/redirect-chains": {
-  "digest": "fbf04aea88444c25d8b66f8c4c29cd7a44797e53",
+  "digest": "277009467607108",
   "lines": [
    "redirect-chains|pass|No redirects detected||"
   ]
  },
  "links/tel-mailto": {
-  "digest": "4983b08faaba8b7ad8691c3276f2be679b7808fc",
+  "digest": "80829951748794",
   "lines": [
    "tel-mailto|info|No tel: or mailto: links found||"
   ]
  },
  "links/weak-internal-links": {
-  "digest": "a76a2244630d496ae5c46c4834f8ad551a7de085",
+  "digest": "184074283279117",
   "lines": [
    "weak-internal-links|warn|# page(s) have only # internal link|\"/blog/#\\n/blog/#\\n/blog/#\\n/blog/#\\n/blog/#\\n+# more\"|"
   ]
  },
  "local/geo-meta": {
-  "digest": "bc0be551f3843b3d0d190f86243b1d86d89db096",
+  "digest": "206759278015364",
   "lines": [
    "geo-meta|info|No geo meta tags found|\"Consider adding for local businesses\"|"
   ]
  },
  "local/nap-consistency": {
-  "digest": "363bd8bfc40e2986714702bcc0edcf76939b85ec",
+  "digest": "59630667416590",
   "lines": [
    "address-consistency|skipped|No postal address declared on any page||",
    "local-business-schema|info|No LocalBusiness schema found|\"Add schema if this is a local business\"|",
@@ -2372,121 +2372,121 @@
   ]
  },
  "local/service-area": {
-  "digest": "9b6849e285817fdefe3551caee8a5821ece549fd",
+  "digest": "170872218486145",
   "lines": [
    "service-area|info|No dedicated location pages found|\"Consider adding for multi-location businesses\"|"
   ]
  },
  "mobile/font-size": {
-  "digest": "35a5686c1314732c211eecd49594dbb294dfb15f",
+  "digest": "58984537789204",
   "lines": [
    "font-size|info|No extremely small inline font sizes detected|\"Verify body text is at least #px\"|"
   ]
  },
  "mobile/horizontal-scroll": {
-  "digest": "d27e95d4820b70d77d34ca019606447b70065bfd",
+  "digest": "231441121444363",
   "lines": [
    "horizontal-scroll|pass|No obvious horizontal scroll issues detected||"
   ]
  },
  "mobile/interstitials": {
-  "digest": "d303c2f95d47de870f96e1b312738aa42d4fc708",
+  "digest": "232013109484871",
   "lines": [
    "interstitials|pass|No intrusive interstitial patterns detected||"
   ]
  },
  "mobile/tap-targets": {
-  "digest": "96982e3c1c292320fad49d8e8fa61949ae61c406",
+  "digest": "165580354886697",
   "lines": [
    "tap-targets|info|# interactive element(s) found|\"Ensure tap targets are at least #x#px\"|"
   ]
  },
  "mobile/viewport": {
-  "digest": "fc152fb71eacd8101114f63905ed54d0ead75187",
+  "digest": "277167925042860",
   "lines": [
    "viewport|fail|Missing viewport meta tag|\"Add: <meta name='viewport' content='width=device-width, initial-scale=#'>\"|"
   ]
  },
  "mobile/viewport-zoom": {
-  "digest": "88c672f2bfc1d164bf8e3140760414e7d595dac3",
+  "digest": "150385913413569",
   "lines": [
    "viewport-zoom|skipped|No viewport meta tag to check||"
   ]
  },
  "mobile/web-app-manifest": {
-  "digest": "6f3e642585d2bcd8b7d73b4b161f072855bfda90",
+  "digest": "122313758836178",
   "lines": [
    "web-app-manifest|info|Web app manifest not checked: the discovery probe was not sent or got no answer|\"not-checked\"|"
   ]
  },
  "perf/animated-content": {
-  "digest": "2d5cf492e1132d6ae4c2ec40b94f8e7653254e69",
+  "digest": "49877263507731",
   "lines": [
    "animated-content|pass|No GIF animations found||"
   ]
  },
  "perf/asset-compression": {
-  "digest": "e41b0b252915cd7eaf44aad2e73310d0633a70f4",
+  "digest": "250804802234645",
   "lines": [
    "asset-compression|skipped|No sub-resources were crawled||"
   ]
  },
  "perf/bad-caching": {
-  "digest": "f5a9a7d64252e74f16738fb29ce1220a77a4692d",
+  "digest": "270109014114898",
   "lines": [
    "bad-caching|skipped|No cacheable HTML responses with headers to evaluate||"
   ]
  },
  "perf/browser-required": {
-  "digest": "05749758c84cffd94c180c6e0ba7897b8e49813c",
+  "digest": "5998313523276",
   "lines": [
    "browser-required-audits|info|# audits require browser execution||"
   ]
  },
  "perf/cache-headers": {
-  "digest": "f3af49285e82a66e12791ea47324542f808aff71",
+  "digest": "267934172208770",
   "lines": [
    "cache-headers-missing|warn|No caching headers found||\"Cache-Control header recommended\""
   ]
  },
  "perf/carousel-hidden-eager": {
-  "digest": "0b31fcd6f6509dbac52b80f0dd58932af32aa48e",
+  "digest": "12309323249232",
   "lines": [
    "carousel-hidden-eager|pass|No eager images in hidden carousel slides||"
   ]
  },
  "perf/cls-hints": {
-  "digest": "a05fb2be92061756294f7cc9f76feb9c3395c860",
+  "digest": "176332881170950",
   "lines": [
    "cls-images|pass|All images have dimensions||"
   ]
  },
  "perf/compression": {
-  "digest": "861e7757ca26360a9af8d476ef8e1c1f6e51fcc2",
+  "digest": "147465409382950",
   "lines": [
    "compression|info|Content type may not benefit from compression|\"\"|"
   ]
  },
  "perf/content-in-js-bundle": {
-  "digest": "60ab1b7477b11e1ec967d40c735c35deb9685b09",
+  "digest": "106288016291761",
   "lines": [
    "content-in-js-bundle|pass|No JavaScript chunk large enough to hold page content||"
   ]
  },
  "perf/critical-request-chains": {
-  "digest": "bd4cb1a524297da289a77d94a9029d2a76a65d5d",
+  "digest": "208137095554089",
   "lines": [
    "critical-request-chains|pass|No critical request chains detected||"
   ]
  },
  "perf/css-file-size": {
-  "digest": "97c8b8e3bbd1b02261648b8cdd6479cb503c8830",
+  "digest": "166888351185873",
   "lines": [
    "css-file-size|pass|No CSS files detected||"
   ]
  },
  "perf/dom-size": {
-  "digest": "112d28a58b13583ca7ad72c2690def14ce048451",
+  "digest": "18885653138195",
   "lines": [
    "dom-depth|pass|DOM depth OK (# levels)|#|",
    "dom-max-children|warn|Element with # children found|#|\"≤ # children per element\"",
@@ -2494,527 +2494,527 @@
   ]
  },
  "perf/duplicate-js": {
-  "digest": "7642a4cd18ae377bb26faa38c59093f8a0ceee95",
+  "digest": "130028604823726",
   "lines": [
    "duplicate-js|pass|No duplicate JavaScript libraries detected||"
   ]
  },
  "perf/font-delivery": {
-  "digest": "13e3af1f1de43d296e0e7a6ab44007669ed29ac6",
+  "digest": "21868616556004",
   "lines": [
    "font-delivery|pass|No render-blocking third-party font stylesheets||"
   ]
  },
  "perf/font-loading": {
-  "digest": "5a3dfaa96ae42aaee782b9971a7882d70273b03f",
+  "digest": "99222244911844",
   "lines": [
    "font-display|pass|All fonts have font-display set||"
   ]
  },
  "perf/framework-data-payload": {
-  "digest": "482bf9522f34e5d2454eb83bd2ee2f0ed51b88a5",
+  "digest": "79353703706420",
   "lines": [
    "framework-data-payload|pass|No framework data payload in the page||"
   ]
  },
  "perf/http2": {
-  "digest": "146916f27685222b92663fc4e4ccc45901224496",
+  "digest": "22441589110405",
   "lines": [
    "http#-https-required|warn|HTTP/# requires HTTPS||\"Enable HTTPS to use HTTP/#\""
   ]
  },
  "perf/inp-hints": {
-  "digest": "f45b75b92a98c85d5956201e112603d82654c980",
+  "digest": "268673654270616",
   "lines": [
    "inp-third-party|pass|No third-party scripts detected||"
   ]
  },
  "perf/js-file-size": {
-  "digest": "b61bcf7c39f8dd82b1bb58162ba1336ec8039b72",
+  "digest": "200230561397240",
   "lines": [
    "js-file-size|pass|No JavaScript files detected||"
   ]
  },
  "perf/js-libraries": {
-  "digest": "e41b26efb4fe3d4e2298ecca8ba5d4fd26d376bf",
+  "digest": "250805268493566",
   "lines": [
    "js-libraries|info|No common JavaScript libraries detected||"
   ]
  },
  "perf/js-redirects": {
-  "digest": "fdf3f512cea3f0232018f6bbcf30684765752b90",
+  "digest": "279224230530723",
   "lines": [
    "js-redirects|skipped|No JavaScript resources available for analysis||"
   ]
  },
  "perf/lazy-above-fold": {
-  "digest": "0ef03cf71fa508b74b6079a3ab624dbb06326ba3",
+  "digest": "16424977768357",
   "lines": [
    "lazy-above-fold|pass|No lazy loading on above-fold images||"
   ]
  },
  "perf/lcp-fetchpriority": {
-  "digest": "cd44ee84ca2e4aff2cc09f07e5824661259339cf",
+  "digest": "225695943150126",
   "lines": [
    "lcp-fetchpriority|info|No eager hero image candidate found||"
   ]
  },
  "perf/lcp-hints": {
-  "digest": "dae70749dfdf71923f053f555c60e5d109e0397a",
+  "digest": "240685794582495",
   "lines": [
    "lcp-preload|pass|LCP images appear to be optimized||"
   ]
  },
  "perf/legacy-js": {
-  "digest": "0c7c372cd2672117da453c1db1e104edda7b2df9",
+  "digest": "13727641162343",
   "lines": [
    "legacy-js|info|No legacy JavaScript patterns detected||"
   ]
  },
  "perf/preconnect": {
-  "digest": "9b5fd669edb1f8c2d6b27374f1e154d606298b7e",
+  "digest": "170835921464753",
   "lines": [
    "preconnect-usage|info|No preconnect hints (may not be needed)||"
   ]
  },
  "perf/render-blocking": {
-  "digest": "879ba2eae839ec7ee7c8d5d685240c16c895e632",
+  "digest": "149102522984505",
   "lines": [
    "render-blocking|pass|No significant render-blocking resources||"
   ]
  },
  "perf/source-maps": {
-  "digest": "a22d0b222a307c3d64518a1bcee02a771ea254b7",
+  "digest": "178314344016432",
   "lines": [
    "source-maps|pass|No exposed source maps detected||"
   ]
  },
  "perf/total-byte-weight": {
-  "digest": "407d6ee7476310fd7f4301f1e9c82ae8d2936675",
+  "digest": "70907475740515",
   "lines": [
    "total-byte-weight|pass|Heaviest page: http://synthetic.example.com/product/# #KB (# over #KB, # over #KB). Not scored: site total #KB across # pages, shared files counted once; average page #KB|\"#KB\"|\"< #KB\""
   ]
  },
  "perf/ttfb": {
-  "digest": "e606544f554b833165343b39f499f04f1408379f",
+  "digest": "252914858677579",
   "lines": [
    "ttfb|skipped|TTFB not measured||"
   ]
  },
  "perf/unminified-css": {
-  "digest": "e5edb35ca9dc23f1fad735c69ec79a322e83e152",
+  "digest": "252809079204316",
   "lines": [
    "minified-css|pass|CSS appears to be minified||"
   ]
  },
  "perf/unminified-js": {
-  "digest": "89101ec2457dd67cff96d8ae0a3c21ff8bf9258e",
+  "digest": "150702328530301",
   "lines": [
    "minified-js|pass|JavaScript appears to be minified||"
   ]
  },
  "reliability/broken-forms": {
-  "digest": "32d4f2941a760543804575ac613e4abfe9f5fb3f",
+  "digest": "55890184247926",
   "lines": [
    "broken-forms|info|No forms detected||"
   ]
  },
  "reliability/broken-resources": {
-  "digest": "e1e340a182ef4ccd9d8c8d62a6ad89bec887f212",
+  "digest": "248366158152431",
   "lines": [
    "unchecked-resources|info|Partial check: fonts, third-party resources were not measured this audit||"
   ]
  },
  "schema/article": {
-  "digest": "4673d6347f7dccd61baa33cdd1e6978e2f5217c5",
+  "digest": "77463328948093",
   "lines": [
    "article-schema|info|No Article schema found|\"Consider adding for blog/news content\"|"
   ]
  },
  "schema/breadcrumb": {
-  "digest": "be384f1fa4675533d2eb31b639f1eb5df6c0b623",
+  "digest": "209149054919783",
   "lines": [
    "breadcrumb-schema|info|Homepage - breadcrumbs not typically needed||",
    "breadcrumb-schema|info|No BreadcrumbList schema found|\"Consider adding for non-homepage\"|"
   ]
  },
  "schema/coverage-outlier": {
-  "digest": "50b4fcafa9a909518fd04ef4b5bc13ad2cdc3aa2",
+  "digest": "88738263706025",
   "lines": [
    "coverage-outlier|skipped|No page type has #+ comparable pages sharing a structured-data pattern||"
   ]
  },
  "schema/entity-authors": {
-  "digest": "dde2b421891ffb69f94bc6a67607942a25adcc82",
+  "digest": "243965754444063",
   "lines": [
    "entity-authors|skipped|No entity map was built for this audit||"
   ]
  },
  "schema/entity-conflicts": {
-  "digest": "be3831f052a9fcea44bedd3260be4ea4253c8991",
+  "digest": "209148565279401",
   "lines": [
    "entity-conflicts|skipped|No entity map was built for this audit||"
   ]
  },
  "schema/entity-dangling": {
-  "digest": "a6cd17b62eb8259237ce8070fc15c4793bd8f4a5",
+  "digest": "183399796321976",
   "lines": [
    "entity-dangling|skipped|No entity map was built for this audit||"
   ]
  },
  "schema/entity-id-format": {
-  "digest": "b6783628fecbf6cd49800740a358147a337f5890",
+  "digest": "200627420987083",
   "lines": [
    "entity-id-format|skipped|No entity map was built for this audit||"
   ]
  },
  "schema/entity-identity": {
-  "digest": "892c1f251051fb4df60581506ad178b2f96798a4",
+  "digest": "150822594089041",
   "lines": [
    "entity-identity|skipped|No entity map was built for this audit||"
   ]
  },
  "schema/entity-local-business-per-page": {
-  "digest": "d078ef4f58d429e58f734a2ec9c401c1ea29c5eb",
+  "digest": "229217829607636",
   "lines": [
    "entity-local-business-per-page|skipped|No entity map was built for this audit||"
   ]
  },
  "schema/entity-organization-missing": {
-  "digest": "101b6237eca443a488657ab181d4fc7a9e04cf22",
+  "digest": "17709797993636",
   "lines": [
    "entity-organization-missing|skipped|No entity map was built for this audit||"
   ]
  },
  "schema/entity-orphan": {
-  "digest": "e01718aceebf5835c75f5d4250784c8c5628a8bf",
+  "digest": "246389802856127",
   "lines": [
    "entity-orphan|skipped|No entity map was built for this audit||"
   ]
  },
  "schema/entity-publisher-mismatch": {
-  "digest": "e0f2ef721d9ac52988dbca1e44c8632d8d5e0790",
+  "digest": "247334003940762",
   "lines": [
    "entity-publisher-mismatch|skipped|No entity map was built for this audit||"
   ]
  },
  "schema/entity-sameas-missing": {
-  "digest": "8cb766d30a5ee95d0c97ca9090e31a39c4736f6a",
+  "digest": "154719332010590",
   "lines": [
    "entity-sameas-missing|skipped|No entity map was built for this audit||"
   ]
  },
  "schema/entity-split-identity": {
-  "digest": "ee21adb0f5b7d55be1c7d03de903f0f52cad8e5a",
+  "digest": "261828415387063",
   "lines": [
    "entity-split-identity|skipped|No entity map was built for this audit||"
   ]
  },
  "schema/entity-type-drift": {
-  "digest": "ad7a20a48076579aa0df85bd076849d7c5803d2d",
+  "digest": "190740045267062",
   "lines": [
    "entity-type-drift|skipped|No entity map was built for this audit||"
   ]
  },
  "schema/entity-website-missing": {
-  "digest": "e0fbc2fad59a744be9fbd29be38e4c9a5bf110d1",
+  "digest": "247371912631706",
   "lines": [
    "entity-website-missing|skipped|No entity map was built for this audit||"
   ]
  },
  "schema/expected-type": {
-  "digest": "e77abc6c121da82ec6f86a5e25f4c97647ce9313",
+  "digest": "254514333225501",
   "lines": [
    "expected-type|info|Page type not classified with enough confidence to expect structured data||"
   ]
  },
  "schema/faq": {
-  "digest": "7f689372815aadb398fa68bcc72e4df55a920515",
+  "digest": "140087127081306",
   "lines": [
    "faq-schema|info|No FAQPage schema found||"
   ]
  },
  "schema/json-ld-valid": {
-  "digest": "da853dfeedb4ec5cffedc6ca40defc4ea839ccd4",
+  "digest": "240265805622708",
   "lines": [
    "json-ld|info|No JSON-LD structured data found|null|"
   ]
  },
  "schema/local-business": {
-  "digest": "36dc468fe4ec730300db7876fa1e2027b836df83",
+  "digest": "60319704540396",
   "lines": [
    "local-business-schema|info|No LocalBusiness schema found||"
   ]
  },
  "schema/organization": {
-  "digest": "0bbc900b5f4973bd8c4d4a6a75f471deedd2380f",
+  "digest": "12904498421577",
   "lines": [
    "organization-schema|info|No Organization schema found||"
   ]
  },
  "schema/product": {
-  "digest": "42f1f042420f50a8fd05762e24006d6b02c819bd",
+  "digest": "73606885425679",
   "lines": [
    "product-schema|info|No Product schema found||"
   ]
  },
  "schema/review": {
-  "digest": "1f32468bcbbf0d06a0913ba8585fbe9392b36010",
+  "digest": "34300792392639",
   "lines": [
    "review-schema|info|No Review or AggregateRating schema found||"
   ]
  },
  "schema/video": {
-  "digest": "3745271a0260973893e5d3d562364bb1801a3651",
+  "digest": "60770148287072",
   "lines": [
    "video-schema|info|No VideoObject schema found||"
   ]
  },
  "schema/website-search": {
-  "digest": "d889a3afde4a67294e15d6aa7ede8cbe7eeadf43",
+  "digest": "238085668331082",
   "lines": [
    "website-schema|info|No WebSite schema on homepage|\"Consider adding for sitelinks searchbox\"|"
   ]
  },
  "security/cookie-flags": {
-  "digest": "8176cb882f661b0ce47817ec1b285a1d01e75095",
+  "digest": "142347220823910",
   "lines": [
    "cookie-flags|pass|No cookies set on this page||"
   ]
  },
  "security/csp": {
-  "digest": "bd8b2c1febdde1fcf996f3c8ed886eb654488993",
+  "digest": "208405438393309",
   "lines": [
    "csp-missing|warn|No Content-Security-Policy header|\"Site vulnerable to XSS without CSP\"|\"Content-Security-Policy header with script-src directive\""
   ]
  },
  "security/csp-blocks-own-resources": {
-  "digest": "184ddf884e293e8dc16fb50227aa32f4a805d275",
+  "digest": "26722741800489",
   "lines": [
    "csp-blocks-own-resources|pass|No enforced Content-Security-Policy to check (security/csp covers a missing policy)||"
   ]
  },
  "security/form-captcha": {
-  "digest": "16c6e4a4cfddf0a9beefdef413b36135640a0be4",
+  "digest": "25043495342045",
   "lines": [
    "form-captcha|info|No forms on page||"
   ]
  },
  "security/form-https": {
-  "digest": "601cb0f8cb50ae23a181941ae09b86001d37bc3c",
+  "digest": "105676344445776",
   "lines": [
    "form-https|info|No forms detected||"
   ]
  },
  "security/graphql-get-mutations": {
-  "digest": "749dff79e6f1a577935df3393262a5d011a5a3a8",
+  "digest": "128221944866545",
   "lines": [
    "graphql-get-mutations|skipped|Probing is passive, so no GraphQL endpoint was probed. Run with --probe active to check whether mutations run over GET.||"
   ]
  },
  "security/graphql-introspection": {
-  "digest": "3bbb4601d39950d8932dafed04dc5c726d7d219c",
+  "digest": "65675519447961",
   "lines": [
    "graphql-introspection|skipped|Probing is passive, so no GraphQL endpoint was probed. Run with --probe active to check for open introspection.||"
   ]
  },
  "security/hsts": {
-  "digest": "5c179b744fe3ca9880bebba6fa029503f9a9129c",
+  "digest": "101256462094307",
   "lines": [
    "hsts|info|HSTS not applicable - site not served over HTTPS||"
   ]
  },
  "security/http-to-https": {
-  "digest": "e0876ab56a62b685cec67b9b964f40fd866e4f97",
+  "digest": "246872215480930",
   "lines": [
    "http-to-https|skipped|Base URL is not HTTPS||"
   ]
  },
  "security/https": {
-  "digest": "cfc0af3846bd64da36d6e9cb88a4e9e33bab4020",
+  "digest": "228426480371389",
   "lines": [
    "https|fail|Page not served over HTTPS|\"http:\"|\"https:\""
   ]
  },
  "security/leaked-secrets": {
-  "digest": "ad45cb58e04fd2224c9992e62121d98f5a59c892",
+  "digest": "190515275948111",
   "lines": [
    "leaked-secrets|pass|No leaked API keys or secrets detected||"
   ]
  },
  "security/mixed-content": {
-  "digest": "6a78ad8ad673e764addfb5bd4bda19f1378e3b9b",
+  "digest": "117066540177011",
   "lines": [
    "mixed-content|info|Mixed content check not applicable - page not HTTPS||"
   ]
  },
  "security/new-tab": {
-  "digest": "6d6670851ed297604864306b35172af4949151e5",
+  "digest": "120286741864146",
   "lines": [
    "new-tab-security|info|No external target=\"_blank\" links found||"
   ]
  },
  "security/permissions-policy": {
-  "digest": "b44e184da59f5bed15e672dd9daab360aacf9870",
+  "digest": "198247508190623",
   "lines": [
    "permissions-policy|info|No Permissions-Policy header|\"Consider restricting browser features\"|"
   ]
  },
  "security/referrer-policy": {
-  "digest": "2c5916785d539dd4b82ba78d4c154aa3d8b15da8",
+  "digest": "48761140698451",
   "lines": [
    "referrer-policy|info|No Referrer-Policy header (browser default applies)|\"Modern browsers default to strict-origin-when-cross-origin\"|"
   ]
  },
  "security/security-txt": {
-  "digest": "2dcf2602a3d52b176524369062391e1f2baa61b2",
+  "digest": "50367719187413",
   "lines": [
    "security-txt|info|security.txt not checked: the discovery probe was not sent|\"not-checked\"|"
   ]
  },
  "security/sri": {
-  "digest": "9dfb4ea09367ae60fe93e971a10a2a057199ae2d",
+  "digest": "173702681498471",
   "lines": [
    "sri|info|No cross-origin scripts or stylesheets on this page — SRI not applicable||"
   ]
  },
  "security/third-party-cookies": {
-  "digest": "3b88bf0a3ae72552d256ea234a9c5ee7834cdeef",
+  "digest": "65458506709735",
   "lines": [
    "third-party-cookies|pass|No third-party tracking resources detected||"
   ]
  },
  "security/tls-certificate": {
-  "digest": "a5cbe4d14e939b6ec2bff644792b13a09a7d62f5",
+  "digest": "182295135866515",
   "lines": [
    "tls-certificate|skipped|Not applicable: site not served over HTTPS (security/https covers it)||"
   ]
  },
  "security/token-storage": {
-  "digest": "2b04868aa373ba3de1b88f4dd3fbb20b27a1df22",
+  "digest": "47298437096307",
   "lines": [
    "token-storage|pass|No auth tokens written to localStorage or sessionStorage||"
   ]
  },
  "security/version-disclosure": {
-  "digest": "428953d8528c2d90dded895fa8de0be7dcc5ea13",
+  "digest": "73157584638604",
   "lines": [
    "version-disclosure-unrecorded|skipped|X-Powered-By, X-AspNet-Version, X-AspNetMvc-Version, X-Generator were not checked: this crawl's page records predate them. Re-run the audit with --refresh to check them||"
   ]
  },
  "security/x-content-type": {
-  "digest": "6ef696739e2640724b1ad220204e4259e3f6b3af",
+  "digest": "122005365169702",
   "lines": [
    "x-content-type|info|Missing X-Content-Type-Options header|\"Add: X-Content-Type-Options: nosniff\"|"
   ]
  },
  "security/x-frame-options": {
-  "digest": "7c032c6541380fbf6f3500e79d100c31a45feee7",
+  "digest": "136353071579448",
   "lines": [
    "x-frame-options|warn|No clickjacking protection|\"Add X-Frame-Options: DENY or CSP frame-ancestors\"|"
   ]
  },
  "social/asset-divergence": {
-  "digest": "7e0b3b696f69aa53901d9e6862c352e925d157f8",
+  "digest": "138586706505577",
   "lines": [
    "asset-divergence|skipped|No favicon, theme-color or default OG image is declared by # page(s) with #% agreement||"
   ]
  },
  "social/og-image-size": {
-  "digest": "961797070986134d7e11cc31bfc2105a11f9346b",
+  "digest": "165028062235014",
   "lines": [
    "og-image-size|info|No og:image tag found||"
   ]
  },
  "social/og-url-match": {
-  "digest": "edc52e0f88b14130211e684ad9d1a4adda653abe",
+  "digest": "261431137110193",
   "lines": [
    "og-url-match|info|No og:url tag found||"
   ]
  },
  "social/share-buttons": {
-  "digest": "1a833b2835cf0a9c4f565650b091ae0d1400a7d3",
+  "digest": "29150935528911",
   "lines": [
    "share-buttons|info|No share buttons on content page|\"Consider adding for better engagement\"|",
    "share-buttons|info|No social share buttons detected||"
   ]
  },
  "social/social-profiles": {
-  "digest": "1f8daf95d836a3f06baf8aa469d03ec855cf7c08",
+  "digest": "34693396682806",
   "lines": [
    "social-profiles|info|No social media profile links found|\"Consider adding to footer\"|"
   ]
  },
  "url/hyphens": {
-  "digest": "982d59e0e6cfc32e68c44f5f6acf3ad21ec8a19a",
+  "digest": "167320548861647",
   "lines": [
    "url-hyphens|info|URL has no word separators||"
   ]
  },
  "url/length": {
-  "digest": "7a69dfdf553b9cb9fd2f9ac132c60a636b671360",
+  "digest": "134595146110267",
   "lines": [
    "url-length|pass|URL length is optimal (# chars)||"
   ]
  },
  "url/lowercase": {
-  "digest": "ae66839984673da06a5558f27bf1f8b973c0299f",
+  "digest": "191755317773415",
   "lines": [
    "url-lowercase|pass|URL is lowercase||"
   ]
  },
  "url/parameters": {
-  "digest": "262116b57e820321bd1e7c45668273da9c52203e",
+  "digest": "41923556769410",
   "lines": [
    "url-parameters|pass|URL has no query parameters||"
   ]
  },
  "url/slug-convention": {
-  "digest": "33aae884e574525594426e69a8f0cf9984fd0a5b",
+  "digest": "56809138480500",
   "lines": [
    "slug-convention|pass|All # page(s) follow the site's own URL conventions (URL letter case all-lowercase #%, trailing slash no trailing slash #%, date in slug [article] no date in the slug #%, date in slug [category] no date in the slug #%, date in slug [product] no date in the slug #%, path depth [article] # path segment(s) #%, path depth [category] # path segment(s) #%, path depth [product] # path segment(s) #%)|#|"
   ]
  },
  "url/slug-keywords": {
-  "digest": "0a745e5027bbe4dbbe77316daaa0aa9b8de66cc6",
+  "digest": "11494914795451",
   "lines": [
    "slug-keywords|info|Root URL (no slug to analyze)||",
    "slug-keywords|warn|URL uses numeric/hash ID instead of descriptive slug|\"#\"|"
   ]
  },
  "url/special-chars": {
-  "digest": "5b3af0566edaa8582a5d7508a4b673956e947f8d",
+  "digest": "100308698427098",
   "lines": [
    "url-special-chars|pass|URL path uses clean characters||"
   ]
  },
  "url/stop-words": {
-  "digest": "1681f11ae87c5440c2ef6a82986383e361a4523c",
+  "digest": "24747351664764",
   "lines": [
    "url-stop-words|pass|URL has no stop words||"
   ]
  },
  "url/trailing-slash": {
-  "digest": "86d850f28bbf01d3766c3a8c2a5a69be77901b90",
+  "digest": "148263629130687",
   "lines": [
    "trailing-slash|info|Root URL (trailing slash check not applicable)||",
    "trailing-slash|info|URL has no trailing slash|\"Ensure consistency across site\"|"
   ]
  },
  "video/video-accessible": {
-  "digest": "bb89f055d2fe012b89624993b92f984ee4c00f7f",
+  "digest": "206201117070078",
   "lines": [
    "video-accessible|info|No HTML# video elements found||"
   ]
  },
  "video/video-schema": {
-  "digest": "572f5534051a3b818a3f90d482eedaa54ecbddd5",
+  "digest": "95860804551962",
   "lines": [
    "video-schema|info|No video content detected||"
   ]
  },
  "video/video-thumbnail": {
-  "digest": "ea83b29aca690eef84996326d831fff24ab037d5",
+  "digest": "257851358104169",
   "lines": [
    "video-thumbnail|info|No HTML# video elements found||"
   ]
