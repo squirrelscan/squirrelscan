@@ -39,6 +39,21 @@ export function inBundle(source: string, hint: string): Detector {
   return { type: "script-content", pattern: new RegExp(source), inCode: true, hint };
 }
 
+/**
+ * `source` in a fetched first-party bundle as code, in a bundle that ALSO matches
+ * `alsoSource` anywhere (a string included): the library's own strings and a
+ * value elsewhere in the file. `alsoHints` are literals the second pattern needs.
+ */
+export function inBundleWith(source: string, hint: string, alsoSource: string, alsoHints: string[]): Detector {
+  return {
+    type: "script-content",
+    pattern: new RegExp(source),
+    inCode: true,
+    hint,
+    also: { pattern: new RegExp(alsoSource), hints: alsoHints },
+  };
+}
+
 /** `bodySource` inside the body of a `<style>` element. */
 export function inStyle(bodySource: string, requires: string): Detector {
   return {

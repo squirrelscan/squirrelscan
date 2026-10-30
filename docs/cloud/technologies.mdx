@@ -37,9 +37,9 @@ A local scan can only match what the crawl fetched. When a run lists the server 
 
 ## Script bundles
 
-A single page app (Vite, Lovable, Bolt, Next.js) ships an almost empty HTML shell, and its libraries live in the script bundles. Detection reads up to 64 KB of each first-party bundle, so a backend or auth service that only a bundle calls is still found: Supabase (a project URL passed with a key), Firebase (the `authDomain` or `storageBucket` of the app config) and Clerk (the `publishableKey` handed to the provider).
+A single page app (Vite, Lovable, Bolt, Next.js) ships an almost empty HTML shell, and its libraries live in the script bundles. Detection reads up to 64 KB of each first-party bundle, so a backend or auth service that only a bundle calls is still found: Supabase (a project URL passed with a key, or a quoted project URL anywhere in a bundle that ships supabase-js, whatever the key format), Firebase (the `authDomain` or `storageBucket` of the app config) and Clerk (the `publishableKey` handed to the provider).
 
-A bundled app's own code sits after the framework it ships with, so a bundle bigger than its cap is not read from the top alone. Each bundle gets its first 16 KB, then the text around the vendor markers (a `.supabase.co` URL, a `.firebaseapp.com` domain, a `pk_` key) and the end of the file, then more of its start while the cap lasts.
+A bundled app's own code sits after the framework it ships with, so a bundle bigger than its cap is not read from the top alone. Each bundle gets its first 16 KB, then the text around the vendor markers (a `.supabase.co` URL or supabase-js's own notice and storage-key strings, a `.firebaseapp.com` domain, a `pk_` key) and the end of the file, then more of its start while the cap lasts.
 
 - It uses the bytes the crawl already fetched for the secret rules. No extra request is made, on the cloud or the local path.
 - A bundle counts only where it is real code. A product named in a comment, in a string, or as a placeholder (`your-project`) does not match.

@@ -1,5 +1,5 @@
 import { ALL_FINGERPRINTS } from "./fingerprints";
-import { scanJs, SEGMENT_SEPARATOR, skipEnd } from "./js-scan";
+import { scanJs, SEGMENT_SEPARATOR, skipEnd, skipStart } from "./js-scan";
 
 /** Chars kept before a hint hit: the longest key, URL or call prefix a detector reads. */
 const WINDOW_BEFORE = 160;
@@ -26,7 +26,9 @@ export function bundleHints(): string[] {
   const found = new Set<string>();
   for (const fp of ALL_FINGERPRINTS) {
     for (const d of fp.detectors) {
-      if (d.type === "script-content" && d.hint) found.add(d.hint);
+      if (d.type !== "script-content") continue;
+      if (d.hint) found.add(d.hint);
+      for (const h of d.also?.hints ?? []) found.add(h);
     }
   }
   hints = [...found];
@@ -80,7 +82,16 @@ export function sampleBundleExtras(content: string, headChars: number, maxChars:
       if (at === -1 || at >= limit) break;
       from = at + hint.length;
       const start = codeAfter(Math.max(lower, at - WINDOW_BEFORE));
-      if (start > at) continue; // the hit sits in a string that opened before the window
+      if (start > at) {
+        // The hit sits in a string that opened before the window: keep a short one
+        // whole (a library's own notice is a string), skip a long one.
+        const open = skipStart(skips, at);
+        const close = skipEnd(skips, at);
+        if (open === -1 || close - open > MAX_STRING_CARRY) continue;
+        const end = codeBefore(Math.min(limit, at + hint.length + WINDOW_AFTER), at);
+        if (end > open) spans.push([open, end]);
+        continue;
+      }
       const end = codeBefore(Math.min(limit, at + hint.length + WINDOW_AFTER), at);
       if (end > start) spans.push([start, end]);
     }
