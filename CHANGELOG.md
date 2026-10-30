@@ -12,19 +12,14 @@ How it works:
   A stable `## vX.Y.Z` matches any `## vX.Y.Z-<suffix>` heading (e.g. `-beta.N`,
   `-rc.1`), so a stable cut can reuse a pre-release section when no plain one exists.
 - Use `###` (or deeper) for sub-sections within an entry — a `## ` heading marks a new version.
-- A `## [Unreleased]
+- A `## [Unreleased]` section collects merged changes that have not been cut into
+  a release yet; rename it to the version when the release goes out.
+
+## [Unreleased]
 
 ### Added
 
 - **`[crawler] tls_proxy_resolves_names` lets a proxy that owns DNS resolve the TLS check's hosts.** Behind `HTTPS_PROXY`, `security/tls-certificate` resolves the name itself and asks the proxy for a tunnel to the vetted address, which a proxy that only allows connections by name refuses. With `tls_proxy_resolves_names = true` the audited host and its `www` or apex counterpart are requested by name with no local lookup, the hostname stays the SNI and verification name, and a refusing, hanging or garbled proxy still gives `not checked`. Off by default, because where those two names resolve becomes the proxy's decision; every other host is still resolved, vetted and pinned by squirrel, and an IP literal, a metadata name or a name the guard refuses on sight never take this path. See [Behind an HTTP proxy](https://docs.squirrelscan.com/rules/security/tls-certificate#behind-an-http-proxy). (#1317)
-
-### Fixed
-
-- **`perf/content-in-js-bundle` no longer passes an audit where every page was browser-rendered.** A rendered page's copy is in the script that rendered it, so the rule had nothing to search for and reported "No page content found", which read as clean although nothing was judged. It is now skipped with a message saying every page was rendered and that `--http` checks it. Audits with some rendered and some plain pages still search the plain ones. See [Page content in a JavaScript bundle](https://docs.squirrelscan.com/rules/perf/content-in-js-bundle). (#1329)
-- **Smart audits resolve old findings when a re-crawled page's rule now answers `info`.** A rule that used to fail a page (50 unlabeled form fields) and now reports `No form inputs found`, or reports only a different check of the same rule, left the old rows open as carried findings run after run, with the coverage line showing nothing carried. A plain `info` result now counts as the rule's verdict for the page (an `info` that says the rule could not judge, such as content too short or an unreadable page, is marked inconclusive and still carries), and a re-crawled page the rule evaluated is clean for the rule's other checks too, so their earlier findings resolve. A check explicitly skipped on the page still carries. Coverage gains `pagesWithStaleCarry` (re-crawled pages that still carry earlier findings), shown on the coverage line when above zero. See [Output](https://docs.squirrelscan.com/configuration/output). (#1031)
-
-### Added
-
 - `SQUIRREL_SKILLS_TEST_SOURCE`, a loopback-only test hook that lets `squirrel skills install` read from a local fixture server. Any non-loopback value is ignored with a warning (#590)
 
 ### Changed
@@ -33,6 +28,8 @@ How it works:
 
 ### Fixed
 
+- **`perf/content-in-js-bundle` no longer passes an audit where every page was browser-rendered.** A rendered page's copy is in the script that rendered it, so the rule had nothing to search for and reported "No page content found", which read as clean although nothing was judged. It is now skipped with a message saying every page was rendered and that `--http` checks it. Audits with some rendered and some plain pages still search the plain ones. See [Page content in a JavaScript bundle](https://docs.squirrelscan.com/rules/perf/content-in-js-bundle). (#1329)
+- **Smart audits resolve old findings when a re-crawled page's rule now answers `info`.** A rule that used to fail a page (50 unlabeled form fields) and now reports `No form inputs found`, or reports only a different check of the same rule, left the old rows open as carried findings run after run, with the coverage line showing nothing carried. A plain `info` result now counts as the rule's verdict for the page (an `info` that says the rule could not judge, such as content too short or an unreadable page, is marked inconclusive and still carries), and a re-crawled page the rule evaluated is clean for the rule's other checks too, so their earlier findings resolve. A check explicitly skipped on the page still carries. Coverage gains `pagesWithStaleCarry` (re-crawled pages that still carry earlier findings), shown on the coverage line when above zero. See [Output](https://docs.squirrelscan.com/configuration/output). (#1031)
 - **`content/keyword-stuffing` stops flagging German function words, menu chrome on short pages and product-card microcopy.** The German list now has the formal and informal address and common prepositions (`sie`, `für`, `dich`, `dir` and more), `out` is an English function word, blocks of mostly link text with several different labels and a real menu signal (`role="menu"`, `menubar` or `navigation`, or the `aria-haspopup`/`aria-expanded` of a dropdown; class names and plain lists do not count, and a block where one word is in 30% or more of the labels is a keyword cloud and still counts) are left out when a page has no main copy of its own, and rating and price text repeated once per card in a grid (an amount with a currency, a percentage, `4 of 5` or a star count that differs from card to card; bounded to 20% of the words, a 1.5% floor per word and never a word that is 10% of the page) no longer counts toward density. One anchor repeated many times and the same sentence repeated in one container still flag. See [Keyword stuffing](https://docs.squirrelscan.com/rules/content/keyword-stuffing). (#1315)
 
 ## v0.0.144 (2026-10-30)
