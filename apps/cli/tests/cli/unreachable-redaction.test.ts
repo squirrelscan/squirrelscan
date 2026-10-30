@@ -71,11 +71,15 @@ describe("unreachable outcome redaction", () => {
       "host.example/path?token=secret",
       "host.example/path#secret",
       "http://[bad:secret@host",
+      "http://user§ secret@host.example/".replace("§", COLON),
+      "http://user§pa ss@host.example/".replace("§", COLON),
+      "(http://user§) secret@host.example".replace("§", COLON),
     ];
     for (const input of cases) {
       const out = redactUrlsInText(`failed ${input} end`);
       expect(out).not.toContain("secret");
       expect(out).not.toContain("user:");
+      expect(out).not.toContain("//user");
       expect(out).not.toContain("token=");
       expect(out.startsWith("failed ") && out.endsWith(" end")).toBe(true);
     }

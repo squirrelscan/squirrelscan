@@ -198,23 +198,39 @@ function redactTokenCore(core: string): string {
 }
 
 /**
+ * An http(s) token whose authority may have been cut by whitespace: it ends in `:` straight after
+ * the authority (`http://user:`), or the next whitespace-separated token carries an `@`
+ * (`http://user:pa` then `ss@host`). Both tokens are then replaced whole.
+ */
+function authorityMayBeSplit(token: string, next: string | undefined): boolean {
+  if (!/^[("'`<[{]*https?:/i.test(token)) return false;
+  if (next !== undefined && next.includes("@")) return true;
+  const afterScheme = token.slice(token.indexOf("//") + 2);
+  return token.endsWith(":") && !afterScheme.includes("/");
+}
+
+/**
  * `text` with every URL-like whitespace-delimited token redacted, so error text that echoes a start
  * URL (a DNS, TLS or fetch failure) never carries userinfo, a query token or a fragment into a
  * report, a log or an agent's context. Fails closed: a token that is an http(s) URL the WHATWG
  * parser accepts goes through {@link redactUrl} (its own view of userinfo, so no differential);
  * any other token that looks like a URL (other scheme, `//` or `\\` prefix, `@`, a `?`/`#` tail
- * on a path) or that does not parse is replaced whole. Linear: one split, no backtracking.
+ * on a path) or that does not parse is replaced whole, as is an http(s) token whose authority
+ * looks cut by whitespace. Linear: one split, no backtracking.
  */
 export function redactUrlsInText(text: string): string {
-  return text
-    .split(/(\s+)/)
+  const parts = text.split(/(\s+)/);
+  return parts
     .map((token, index) => {
       if (index % 2 === 1 || token === "") return token;
       let start = 0;
       let end = token.length;
       while (start < end && TOKEN_LEAD.has(token[start]!)) start++;
       while (end > start && TOKEN_TRAIL.has(token[end - 1]!)) end--;
-      return token.slice(0, start) + redactTokenCore(token.slice(start, end)) + token.slice(end);
+      const core = authorityMayBeSplit(token, parts[index + 2])
+        ? URL_PLACEHOLDER
+        : redactTokenCore(token.slice(start, end));
+      return token.slice(0, start) + core + token.slice(end);
     })
     .join("");
 }
