@@ -266,6 +266,10 @@ describe("the body must corroborate a contact or legal label", () => {
     }
   });
 
+  test("Terms & Conditions, Privacy Notice and Cookie Policy count as policy phrases", async () => {
+    expect((await run1("Terms & Conditions. This privacy notice and our cookie policy apply.", "legal")).status).toBe("skipped");
+  });
+
   test("a year range or a price is not a phone number", async () => {
     expect((await run1(`${words(70)} Open 2019-2024 at price 1999.99`, "contact")).status).toBe("warn");
   });

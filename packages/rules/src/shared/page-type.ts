@@ -49,6 +49,9 @@ const LEGAL_PHRASES = [
   "terms of service",
   "terms of use",
   "terms and conditions",
+  "terms & conditions",
+  "privacy notice",
+  "cookie policy",
   "governing law",
   "limitation of liability",
   "data controller",
@@ -211,7 +214,17 @@ function textWithSpaces(node: Node): string {
  * and aside (and scripts and styles) taken out. Null without a document. Works on a copy, so the page
  * is not changed.
  */
+const mainContentCache = new WeakMap<ParsedPage, MainContent | null>();
+
 function mainContent(parsed: ParsedPage): MainContent | null {
+  // Built at most once per page: three rules ask, and a large page is slow to clone and flatten.
+  if (mainContentCache.has(parsed)) return mainContentCache.get(parsed) ?? null;
+  const built = buildMainContent(parsed);
+  mainContentCache.set(parsed, built);
+  return built;
+}
+
+function buildMainContent(parsed: ParsedPage): MainContent | null {
   const document = parsed.document;
   if (!document) return null;
   const root = document.querySelector("main, [role='main']") ?? document.body ?? document.documentElement;

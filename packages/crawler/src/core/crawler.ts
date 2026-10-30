@@ -314,21 +314,32 @@ export function discoveryBudgetMs(timeoutMs: number, discoveryDeadlineAt?: numbe
  * Whether a cached page was parsed by a different classifier than the one running now (pub#841).
  * The classification is stored inside the page's parsed data, so a page reused from the cache keeps
  * the label of the classifier that first read it; a new model or a change to the labelling rules
- * would never reach an unchanged page. The stamp is the parsed data's top-level `classifierVersion`
- * (a unique key, so a nested JSON-LD property cannot be mistaken for it), written whenever a
- * classifier ran, even if it answered nothing. A page with no parsed data (a non-HTML or error
- * page) has nothing to relabel. `want` is the running classifier's version, or undefined with the
- * classifier off: a stamped page then goes stale too, so a `--no-classifier` run does not hand rules
- * a label it did not ask for, and toggling the classifier re-fetches pages each time (accepted).
- * The first run after an upgrade re-fetches every unstamped page once, unconditionally.
+ * would never reach an unchanged page. The stamp is the parsed data's FIRST key,
+ * `classifierVersion` (see `parsePage`), written whenever a classifier ran, even if it answered
+ * nothing, and read as a prefix, so a property of the same name nested in the page's own data
+ * (JSON-LD) cannot be mistaken for it. A page with no parsed data (a non-HTML or error page) has
+ * nothing to relabel. `want` is the running classifier's version. With the classifier off (`want`
+ * undefined) a stamped page is stale, and so is an unstamped page that still carries a top-level
+ * `classification` (one parsed before stamps existed), so a `--no-classifier` run never hands rules
+ * a label it did not ask for; toggling the classifier re-fetches pages each time (accepted). The first
+ * run after an upgrade re-fetches every unstamped page once, unconditionally.
  */
 export function cachedClassificationIsStale(
   parsedData: string | null | undefined,
   want: string | undefined,
 ): boolean {
   if (!parsedData) return false;
-  const have = /"classifierVersion":"([^"]*)"/.exec(parsedData)?.[1];
-  return have !== want;
+  const have = /^\{"classifierVersion":"([^"]*)"/.exec(parsedData)?.[1];
+  if (want !== undefined) return have !== want;
+  if (have !== undefined) return true;
+  // Classifier off, page unstamped: stale only if it carries a top-level label. A cheap pre-check
+  // keeps the JSON parse to pages that mention the key at all.
+  if (!parsedData.includes('"classification"')) return false;
+  try {
+    return (JSON.parse(parsedData) as { classification?: unknown }).classification != null;
+  } catch {
+    return false;
+  }
 }
 
 /** The preamble's wall-clock allowance for a given per-request timeout. */

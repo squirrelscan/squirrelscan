@@ -215,6 +215,31 @@ describe("a cached page is reclassified when the classifier changed", () => {
     expect(r.hasClassification).toBe(false);
   }, 30000);
 
+  test("a page labelled before stamps existed is fetched again when the classifier is off", async () => {
+    // A hook with no version stores a label and no stamp, as v0.0.144 did.
+    const unversioned = Object.assign(hookFor("m1"), { version: undefined }) as PageClassifierHook;
+    const storage = await Effect.runPromise(createTestStorage());
+    const cfg1 = { ...baseConfig, incremental: false, useCacheControl: false };
+    const crawlId1 = await createCrawlRecord(storage, cfg1);
+    await seedFrontier(storage, crawlId1, [{ path: "/", source: "seed" }]);
+    const crawler1 = await Effect.runPromise(
+      createCrawler({ config: { ...cfg1, documentFetcher: fetcherFor([]) }, storage, classify: unversioned }),
+    );
+    await Effect.runPromise(crawler1.resumeFromStorage(crawlId1));
+    const fetched: string[] = [];
+    const cfg2 = { ...baseConfig, incremental: true, useCacheControl: true, maxStalenessSeconds: 999_999 };
+    const crawlId2 = await createCrawlRecord(storage, cfg2);
+    await seedFrontier(storage, crawlId2, [{ path: "/", source: "seed" }]);
+    const crawler2 = await Effect.runPromise(
+      createCrawler({ config: { ...cfg2, documentFetcher: fetcherFor(fetched) }, storage }),
+    );
+    await Effect.runPromise(crawler2.resumeFromStorage(crawlId2));
+    const stored = (await Effect.runPromise(storage.getPages(crawlId2))).find((p) => p.normalizedUrl === `${ORIGIN}/`)?.parsedData ?? "";
+    await Effect.runPromise(storage.close());
+    expect(fetched).toContain(`${ORIGIN}/`);
+    expect(stored.includes('"classification"')).toBe(false);
+  }, 30000);
+
   test("classifier switched on over a page cached without a label: fetched again and labelled", async () => {
     const r = await run(undefined, "m1");
     expect(r.fetched).toContain(`${ORIGIN}/`);
@@ -224,7 +249,8 @@ describe("a cached page is reclassified when the classifier changed", () => {
 
 describe("cachedClassificationIsStale", () => {
   const stamped = (version: string) =>
-    JSON.stringify({ meta: {}, classification: { pageType: { label: "x" }, degraded: "" }, classifierVersion: version });
+    JSON.stringify({ classifierVersion: version, meta: {}, classification: { pageType: { label: "x" }, degraded: "" } });
+  const unstampedWithLabel = JSON.stringify({ meta: {}, classification: { pageType: { label: "x" }, degraded: "" } });
   test("compares the stored stamp with the running classifier's", () => {
     expect(cachedClassificationIsStale(stamped("a"), "a")).toBe(false);
     expect(cachedClassificationIsStale(stamped("a"), "b")).toBe(true);
@@ -233,22 +259,31 @@ describe("cachedClassificationIsStale", () => {
     expect(cachedClassificationIsStale(JSON.stringify({ meta: {} }), undefined)).toBe(false);
   });
   test("a page the classifier answered nothing for is stamped, so it caches (no refetch every run)", () => {
-    expect(cachedClassificationIsStale(JSON.stringify({ meta: {}, classifierVersion: "a" }), "a")).toBe(false);
+    expect(cachedClassificationIsStale(JSON.stringify({ classifierVersion: "a", meta: {} }), "a")).toBe(false);
   });
-  test("a nested key named classification or model in the page's data is not mistaken for the stamp", () => {
-    const hostile = JSON.stringify({
-      schema: { all: [{ "@type": "Thing", classification: { model: "evil" }, classifierVersionX: "evil" }] },
-      classifierVersion: "a",
-    });
-    expect(cachedClassificationIsStale(hostile, "a")).toBe(false);
-    expect(cachedClassificationIsStale(hostile, "evil")).toBe(true);
+  test("a nested classifierVersion in the page's own data is not the stamp, before or after the real one", () => {
+    const nested = { schema: { all: [{ "@type": "Thing", classifierVersion: "evil", classification: { model: "evil" } }] } };
+    const real = JSON.stringify({ classifierVersion: "a", meta: {}, ...nested });
+    expect(cachedClassificationIsStale(real, "a")).toBe(false);
+    expect(cachedClassificationIsStale(real, "evil")).toBe(true);
+    // Unstamped page whose JSON-LD carries the exact key: it must read as unstamped, not as "evil".
+    const unstamped = JSON.stringify({ meta: {}, ...nested });
+    expect(cachedClassificationIsStale(unstamped, "evil")).toBe(true);
+    expect(cachedClassificationIsStale(unstamped, "a")).toBe(true);
+  });
+  test("classifier OFF: an unstamped page that carries a label is stale, so --no-classifier is honoured", () => {
+    expect(cachedClassificationIsStale(unstampedWithLabel, undefined)).toBe(true);
+  });
+  test("classifier OFF: an unstamped page with no label, or only a nested one, is not stale", () => {
+    expect(cachedClassificationIsStale(JSON.stringify({ meta: {} }), undefined)).toBe(false);
+    const nestedOnly = JSON.stringify({ meta: {}, schema: { all: [{ classification: "spam" }] } });
+    expect(cachedClassificationIsStale(nestedOnly, undefined)).toBe(false);
   });
   test("a page with no parsed data has nothing to relabel", () => {
     expect(cachedClassificationIsStale(null, "a")).toBe(false);
     expect(cachedClassificationIsStale("", "a")).toBe(false);
   });
   test("a label stored without a stamp (before it existed) is stale for any classifier", () => {
-    const old = JSON.stringify({ classification: { pageType: { label: "x" }, degraded: "" } });
-    expect(cachedClassificationIsStale(old, "a")).toBe(true);
+    expect(cachedClassificationIsStale(unstampedWithLabel, "a")).toBe(true);
   });
 });
