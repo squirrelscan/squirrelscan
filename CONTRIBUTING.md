@@ -42,6 +42,17 @@ page, a hub that does not link one of its rules, a category hub with a category
 155 characters, an em-dash, and two pages with the same title. Last, it runs the
 tests for both scripts (`docs/scripts/glossary.test.ts` and `check-links.test.ts`).
 
+## Declaring `verdictScope: "template"`
+
+A rule that sets `verdictScope: "template"` has one page's verdict copied to every page that shares its fan-out key (the stored chrome key, the page origin and `fanoutInputSignature` in `packages/audit-engine/src/template-fanout.ts`), so the rule only runs once per template. That is a claim that every input the rule reads is constant across the pages of a template. Declare it only for rules that read chrome (script and stylesheet lists, `<meta>` names, `<html>` attributes, icon links), never body content, response headers or per-page data. The `VerdictScope` doc in `packages/rules/src/types.ts` is the full rule.
+
+Two tests hold the declaration to that:
+
+- `packages/rules/tests/template-verdict-inputs.test.ts` scans the rule's source for the selectors, attributes and raw-HTML reads it uses and fails on any read that is not on its reviewed list. Add the new read to `REVIEWED` as keyed (the signature covers it) or unkeyed (it does not). If it is unkeyed, name the rule in the `VerdictScope` doc, or extend `fanoutInputSignature` so the read becomes keyed.
+- `packages/audit-engine/tests/template-fanout-parity-golden.test.ts` compares fanned-out verdicts with a full run over an authored multi-page corpus.
+
+If you cannot say why an input is constant across a template, leave the rule page-scoped.
+
 ## Issues
 
 Every issue carries a `## Acceptance Criteria` checklist: the observable outcomes that mean it is done. The issue templates include the section. If a report arrives without one, maintainers add it at triage.
