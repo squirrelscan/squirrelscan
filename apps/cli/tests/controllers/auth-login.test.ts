@@ -67,7 +67,7 @@ describe("auth/login — agent setup on the callback success page (#180)", () =>
     expect(page).toContain("Use squirrelscan with your AI agent");
     expect(page).toContain(">Copy prompt<");
     expect(page).toContain(`href="${AGENT_SETUP_URL}"`);
-    expect(page).toContain("view the agent setup");
+    expect(page).toContain("View the agent setup");
   });
 
   test("prints the prompt as a plain text node, copyable without JS at all", () => {
@@ -142,7 +142,7 @@ describe("auth/login — agent setup on the callback success page (#180)", () =>
       code: 410,
     });
     expect(renderCallbackPage({ status: "consumed" }).html).toContain(
-      "This login session was already used"
+      "This sign-in link was already used"
     );
     const pending = renderCallbackPage({ status: "pending" });
     expect(pending.code).toBe(202);
@@ -202,9 +202,10 @@ describe("auth/login - the branded callback pages (#1286)", () => {
         expect(csp).toContain("default-src 'none'");
         expect(csp).toContain("base-uri 'none'");
         if (name === "success") {
-          const hash = createHash("sha256")
-            .update(AUTH_SUCCESS_PAGE_SCRIPT)
-            .digest("base64");
+          // The hash of the bytes the page emits, not of the constant it was built from.
+          const emitted = /<script>([\s\S]*?)<\/script>/.exec(html)?.[1];
+          expect(emitted).toBeDefined();
+          const hash = createHash("sha256").update(emitted!).digest("base64");
           expect(csp).toContain(`script-src 'sha256-${hash}'`);
         } else {
           expect(csp).toContain("script-src 'none'");
@@ -251,6 +252,119 @@ describe("auth/login - the branded callback pages (#1286)", () => {
     expect(pages.pending).toContain('<meta http-equiv="refresh" content="1">');
     expect(pages.expired).not.toContain('http-equiv="refresh"');
     expect(pages.success).not.toContain('http-equiv="refresh"');
+  });
+});
+
+describe("auth/login - callback response headers (#1286)", () => {
+  const statuses: Array<[string, SessionStatusResponse]> = [
+    [
+      "success",
+      {
+        status: "completed",
+        token: "tok",
+        user: { id: "u1", email: "dev@example.com", name: null },
+      },
+    ],
+    ["expired", { status: "expired" }],
+    ["consumed", { status: "consumed" }],
+    ["pending", { status: "pending" }],
+  ];
+
+  for (const [name, status] of statuses) {
+    test(`${name}: security headers on the response`, () => {
+      const { html, headers } = renderCallbackPage(status);
+      expect(headers["Content-Type"]).toBe("text/html; charset=utf-8");
+      expect(headers["X-Frame-Options"]).toBe("DENY");
+      expect(headers["X-Content-Type-Options"]).toBe("nosniff");
+      expect(headers["Referrer-Policy"]).toBe("no-referrer");
+      expect(headers["Cache-Control"]).toBe("no-store");
+      const csp = headers["Content-Security-Policy"]!;
+      expect(csp).toContain("frame-ancestors 'none'");
+      expect(csp).toContain("default-src 'none'");
+      // The header and the page's meta policy agree on the script source, so
+      // both together allow exactly the page's own script (or none).
+      const meta =
+        /http-equiv="Content-Security-Policy" content="([^"]+)"/.exec(
+          html
+        )?.[1];
+      const scriptSrc = (policy: string) =>
+        /script-src [^;]+/.exec(policy)?.[0];
+      expect(scriptSrc(csp)).toBe(scriptSrc(meta!));
+      expect(meta).not.toContain("frame-ancestors");
+      expect(html).toContain('<meta name="referrer" content="no-referrer">');
+    });
+  }
+
+  test("the real loopback server sends them on 200, 410, 404 and 500 responses", async () => {
+    const { startCallbackServer } = await import("@/controllers/auth/login");
+    const { createServer } = await import("node:net");
+    const freePort = await new Promise<number>((resolve) => {
+      const probe = createServer().listen(0, "127.0.0.1", () => {
+        const port = (probe.address() as { port: number }).port;
+        probe.close(() => resolve(port));
+      });
+    });
+    let apiStatus: Record<string, unknown> | "down" = {
+      status: "completed",
+      token: "tok",
+      user: { id: "u1", email: "dev@example.com", name: null },
+    };
+    const api = Bun.serve({
+      port: 0,
+      hostname: "127.0.0.1",
+      fetch: () =>
+        apiStatus === "down"
+          ? new Response("nope", { status: 500 })
+          : Response.json(apiStatus),
+    });
+    const callback = startCallbackServer(
+      freePort,
+      "session",
+      "verifier",
+      `http://127.0.0.1:${api.port}`,
+      () => {},
+      () => {}
+    );
+    try {
+      const get = (path: string) =>
+        fetch(`http://127.0.0.1:${freePort}${path}`);
+      const expectHardened = (res: Response, type: string) => {
+        expect(res.headers.get("content-type")).toBe(type);
+        expect(res.headers.get("x-frame-options")).toBe("DENY");
+        expect(res.headers.get("x-content-type-options")).toBe("nosniff");
+        expect(res.headers.get("referrer-policy")).toBe("no-referrer");
+        expect(res.headers.get("cache-control")).toBe("no-store");
+        expect(res.headers.get("content-security-policy")).toContain(
+          "frame-ancestors 'none'"
+        );
+      };
+      const ok = await get("/callback");
+      expect(ok.status).toBe(200);
+      expectHardened(ok, "text/html; charset=utf-8");
+      // The script the CSP header allows is the one the page emits.
+      const html = await ok.text();
+      const emitted = /<script>([\s\S]*?)<\/script>/.exec(html)?.[1] ?? "";
+      expect(ok.headers.get("content-security-policy")).toContain(
+        `'sha256-${createHash("sha256").update(emitted).digest("base64")}'`
+      );
+
+      apiStatus = { status: "expired" };
+      const gone = await get("/callback");
+      expect(gone.status).toBe(410);
+      expectHardened(gone, "text/html; charset=utf-8");
+
+      expectHardened(await get("/elsewhere"), "text/plain; charset=utf-8");
+      const missing = await get("/elsewhere");
+      expect(missing.status).toBe(404);
+
+      apiStatus = "down";
+      const broken = await get("/callback");
+      expect(broken.status).toBe(500);
+      expectHardened(broken, "text/plain; charset=utf-8");
+    } finally {
+      callback.close();
+      void api.stop(true);
+    }
   });
 });
 

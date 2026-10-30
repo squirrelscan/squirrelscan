@@ -72,7 +72,8 @@ const STYLES = `
       --on-primary: #ffffff;
       --accent: #a5470f;
       --tile: #f6f4ee;
-      --grid: rgba(120, 110, 90, 0.12);
+      --tile-border: #ddd8cb;
+      --grid: rgba(214, 210, 201, 0.3);
       --focus: #2e7a3c;
     }
     @media (prefers-color-scheme: dark) {
@@ -87,6 +88,8 @@ const STYLES = `
         --on-primary: #10200f;
         --accent: #f0a070;
         --grid: rgba(239, 236, 228, 0.06);
+        --tile: #2c2820;
+        --tile-border: #4b4538;
         --focus: #6fcf84;
       }
     }
@@ -123,7 +126,7 @@ const STYLES = `
       width: 68px;
       height: 68px;
       background: var(--tile);
-      border: 1px solid var(--border);
+      border: 1px solid var(--tile-border);
       border-radius: 4px;
     }
     .mascot { display: block; image-rendering: pixelated; }
@@ -144,14 +147,9 @@ const STYLES = `
       font-weight: 600;
       color: var(--primary);
     }
-    .pill::before {
-      content: "";
-      width: 8px;
-      height: 8px;
-      background: currentColor;
-    }
     .pill.problem { color: var(--accent); }
     h1 {
+      text-wrap: balance;
       margin: 0 0 8px;
       font-size: 26px;
       line-height: 1.25;
@@ -199,7 +197,18 @@ const STYLES = `
       cursor: pointer;
     }
     .actions button:hover { filter: brightness(1.08); }
-    .actions a { color: var(--primary); font-size: 14px; }
+    .actions a {
+      font: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--primary);
+      text-decoration: none;
+      border: 1px solid var(--primary);
+      border-radius: 4px;
+      padding: 8px 16px;
+    }
+    .actions a:hover { background: var(--code-bg); }
+    .glyph { width: 20px; height: 20px; flex: none; }
     .status { font-size: 13px; color: var(--muted); }
     a:focus-visible, button:focus-visible {
       outline: 2px solid var(--focus);
@@ -223,6 +232,69 @@ const STYLES = `
     }
   `;
 
+/** Small pixel glyphs (5x5 grid, one colour) that tell the pages apart at a glance. */
+const GLYPHS = {
+  check: [
+    [0, 3],
+    [1, 4],
+    [2, 3],
+    [3, 2],
+    [4, 1],
+  ],
+  hourglass: [
+    [0, 0],
+    [1, 0],
+    [2, 0],
+    [3, 0],
+    [4, 0],
+    [1, 1],
+    [3, 1],
+    [2, 2],
+    [1, 3],
+    [3, 3],
+    [0, 4],
+    [1, 4],
+    [2, 4],
+    [3, 4],
+    [4, 4],
+  ],
+  lock: [
+    [1, 0],
+    [2, 0],
+    [3, 0],
+    [1, 1],
+    [3, 1],
+    [0, 2],
+    [1, 2],
+    [2, 2],
+    [3, 2],
+    [4, 2],
+    [0, 3],
+    [2, 3],
+    [4, 3],
+    [0, 4],
+    [1, 4],
+    [2, 4],
+    [3, 4],
+    [4, 4],
+  ],
+  dots: [
+    [0, 2],
+    [2, 2],
+    [4, 2],
+  ],
+} as const;
+
+export type CallbackGlyph = keyof typeof GLYPHS;
+
+function glyphSvg(name: CallbackGlyph): string {
+  // [column, row] cells of a 5x5 grid.
+  const rects = GLYPHS[name]
+    .map(([x, y]) => `<rect x="${x}" y="${y}" width="1" height="1" />`)
+    .join("");
+  return `<svg class="glyph" viewBox="0 0 5 5" fill="currentColor" shape-rendering="crispEdges" aria-hidden="true" focusable="false">${rects}</svg>`;
+}
+
 export interface CallbackPage {
   /** The document title. A constant: never interpolate untrusted text. */
   title: string;
@@ -230,6 +302,12 @@ export interface CallbackPage {
   body: string;
   /** An inline script, run only under its hash. Absent: no script runs. */
   script?: string;
+  /** The pill's glyph, so each state reads differently at a glance. */
+  glyph?: CallbackGlyph;
+  /** The pill's text. */
+  pill: string;
+  /** The pill is a problem (orange) rather than a success state (green). */
+  problem?: boolean;
   /** Adds a one second reload (the waiting page polls with it). */
   refresh?: boolean;
 }
@@ -257,6 +335,7 @@ export function renderCallbackShell(page: CallbackPage): string {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
+  <meta name="referrer" content="no-referrer">
   <meta http-equiv="Content-Security-Policy" content="${callbackPageCsp(page.script)}">${
     page.refresh ? '\n  <meta http-equiv="refresh" content="1">' : ""
   }
@@ -269,9 +348,28 @@ export function renderCallbackShell(page: CallbackPage): string {
     <span>squirrelscan</span>
   </header>
   <main>
+    <p class="pill${page.problem ? " problem" : ""}">${glyphSvg(page.glyph ?? "dots")}${page.pill}</p>
 ${page.body}
   </main>${page.script ? `\n  <script>${page.script}</script>` : ""}
 </body>
 </html>
 `;
+}
+
+/**
+ * The headers every response from the loopback server carries. The CSP here
+ * adds `frame-ancestors 'none'`, which a meta CSP cannot carry; the page's meta
+ * policy and this one agree on everything else, so the script hash is the same.
+ */
+export function callbackResponseHeaders(
+  options: { script?: string; contentType?: string } = {}
+): Record<string, string> {
+  return {
+    "Content-Type": options.contentType ?? "text/html; charset=utf-8",
+    "Content-Security-Policy": `${callbackPageCsp(options.script)}; frame-ancestors 'none'`,
+    "X-Frame-Options": "DENY",
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "no-referrer",
+    "Cache-Control": "no-store",
+  };
 }

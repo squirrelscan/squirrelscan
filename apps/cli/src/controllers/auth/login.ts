@@ -10,6 +10,7 @@ import { hostname } from "node:os";
 
 import { AGENT_SETUP_PROMPT, AGENT_SETUP_URL } from "@/constants";
 import {
+  callbackResponseHeaders,
   escapeHtml,
   renderCallbackShell,
 } from "@/controllers/auth/callback-page";
@@ -97,8 +98,9 @@ export function renderAuthSuccessPage(email: string): string {
   return renderCallbackShell({
     title: "Signed in to squirrelscan",
     script: AUTH_SUCCESS_PAGE_SCRIPT,
-    body: `    <p class="pill">Signed in</p>
-    <h1>You're in</h1>
+    glyph: "check",
+    pill: "Signed in",
+    body: `    <h1>You're in</h1>
     <p>Signed in as <strong>${escapeHtml(email)}</strong>.</p>
     <p>You can close this window and return to your terminal.</p>
     <div class="agent">
@@ -107,7 +109,7 @@ export function renderAuthSuccessPage(email: string): string {
       <code id="agent-prompt">${escapeHtml(AGENT_SETUP_PROMPT)}</code>
       <div class="actions">
         <button id="copy-prompt" type="button">Copy prompt</button>
-        <a href="${escapeHtml(AGENT_SETUP_URL)}">view the agent setup</a>
+        <a href="${escapeHtml(AGENT_SETUP_URL)}">View the agent setup</a>
         <span class="status" id="copy-status" role="status" aria-live="polite"></span>
       </div>
     </div>`,
@@ -209,6 +211,21 @@ export function fetchSessionStatus(
 export function renderCallbackPage(status: SessionStatusResponse): {
   code: number;
   html: string;
+  /** Response headers: content type, CSP with frame-ancestors, no framing, no sniffing, no referrer, no caching. */
+  headers: Record<string, string>;
+} {
+  const page = renderCallbackPageHtml(status);
+  return {
+    ...page,
+    headers: callbackResponseHeaders(
+      page.code === 200 ? { script: AUTH_SUCCESS_PAGE_SCRIPT } : {}
+    ),
+  };
+}
+
+function renderCallbackPageHtml(status: SessionStatusResponse): {
+  code: number;
+  html: string;
 } {
   if (status.status === "completed" && status.token && status.user) {
     return { code: 200, html: renderAuthSuccessPage(status.user.email) };
@@ -219,8 +236,10 @@ export function renderCallbackPage(status: SessionStatusResponse): {
       code: 410,
       html: renderCallbackShell({
         title: "Session expired",
-        body: `    <p class="pill problem">Session expired</p>
-    <h1>That sign-in timed out</h1>
+        glyph: "hourglass",
+        pill: "Session expired",
+        problem: true,
+        body: `    <h1>That sign-in timed out</h1>
     <p>Run <code class="inline">squirrel auth login</code> again to start a fresh one.</p>`,
       }),
     };
@@ -233,8 +252,10 @@ export function renderCallbackPage(status: SessionStatusResponse): {
       code: 410,
       html: renderCallbackShell({
         title: "Login session already used",
-        body: `    <p class="pill problem">Already used</p>
-    <h1>This login session was already used</h1>
+        glyph: "lock",
+        pill: "Already used",
+        problem: true,
+        body: `    <h1>This sign-in link was already used</h1>
     <p>Each sign-in link works once. Run <code class="inline">squirrel auth login</code> again to get a new one.</p>`,
       }),
     };
@@ -246,15 +267,16 @@ export function renderCallbackPage(status: SessionStatusResponse): {
     html: renderCallbackShell({
       title: "Waiting for sign-in",
       refresh: true,
-      body: `    <p class="pill">Waiting</p>
-    <h1>Waiting for authentication...</h1>
+      glyph: "dots",
+      pill: "Waiting",
+      body: `    <h1>Waiting for authentication...</h1>
     <p>Finish signing in in your browser. This page checks again every second.</p>`,
     }),
   };
 }
 
-/** Start a local HTTP server to receive the callback. */
-function startCallbackServer(
+/** Start a local HTTP server to receive the callback. Exported for the header tests. */
+export function startCallbackServer(
   port: number,
   sessionId: string,
   codeVerifier: string,
@@ -275,7 +297,7 @@ function startCallbackServer(
           const status = (await statusRes.json()) as SessionStatusResponse;
 
           const page = renderCallbackPage(status);
-          res.writeHead(page.code, { "Content-Type": "text/html" });
+          res.writeHead(page.code, page.headers);
           res.end(page.html);
 
           if (status.status === "completed" && status.token && status.user) {
@@ -290,12 +312,20 @@ function startCallbackServer(
             );
           }
         } catch (error) {
-          res.writeHead(500, { "Content-Type": "text/plain" });
+          res.writeHead(
+            500,
+            callbackResponseHeaders({
+              contentType: "text/plain; charset=utf-8",
+            })
+          );
           res.end("Internal error");
           onError(error instanceof Error ? error : new Error(String(error)));
         }
       } else {
-        res.writeHead(404);
+        res.writeHead(
+          404,
+          callbackResponseHeaders({ contentType: "text/plain; charset=utf-8" })
+        );
         res.end("Not found");
       }
     }
