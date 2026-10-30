@@ -32,6 +32,7 @@ import { lockedRulesMessage } from "../locked-rules";
 import { privateTargetLine, privateTargetSkippedRules } from "../private-target";
 import { notCheckedLine, notCheckedRules } from "../not-checked";
 import { editorSummaryView } from "../editor-summary";
+import { collectInfoChecks } from "../info-checks";
 import {
   ENTITY_FINDING_LIMIT,
   ENTITY_TABLE_LIMIT,
@@ -85,7 +86,18 @@ export interface LlmRenderOptions {
   version?: string;
   /** List the rules that passed after the issues (`--include-passed`). */
   includePassed?: boolean;
+  /**
+   * Add the `<info-checks>` block (`--include-info`, #669). Off by default: the
+   * LLM report is read against a token budget, and most info checks are "nothing to
+   * check" notes. The JSON report always has them.
+   */
+  includeInfo?: boolean;
 }
+
+/** Pages named per info check in the LLM output; the true count is in `pages`. */
+const INFO_CHECK_PAGES = 3;
+/** Info checks listed in the LLM output; the rest are counted, and all are in the JSON report. */
+const INFO_CHECKS_LISTED = 25;
 
 function escapeXml(str: string): string {
   return str
@@ -772,6 +784,24 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
       lines.push(`${indent(1)}<rule id="${escapeXml(rule.id)}" name="${escapeXml(rule.name)}"/>`);
     }
     lines.push("</not-applicable>");
+  }
+
+  // Info checks (#669), opt-in with `includeInfo`: notes a rule recorded that are
+  // neither findings nor skips. They never change the score. A few pages each,
+  // with the true count.
+  const infoChecks = options?.includeInfo ? collectInfoChecks(report.ruleResults) : [];
+  if (infoChecks.length > 0) {
+    lines.push(`<info-checks count="${infoChecks.length}">`);
+    for (const info of infoChecks.slice(0, INFO_CHECKS_LISTED)) {
+      const shown = info.pages.slice(0, INFO_CHECK_PAGES);
+      lines.push(
+        `${indent(1)}<check rule="${escapeXml(info.ruleId)}" name="${escapeXml(info.check)}" pages="${info.pagesCount}">${escapeXml(info.message)}${shown.length > 0 ? ` Pages: ${shown.map((p) => escapeXml(p)).join(", ")}${info.pagesCount > shown.length ? ", ..." : ""}` : ""}</check>`,
+      );
+    }
+    if (infoChecks.length > INFO_CHECKS_LISTED) {
+      lines.push(`${indent(1)}<more count="${infoChecks.length - INFO_CHECKS_LISTED}">Listed in full in the JSON report (infoChecks).</more>`);
+    }
+    lines.push("</info-checks>");
   }
 
   // Cloud-/Pro-gated rules that didn't run this audit (#780) — an agent must

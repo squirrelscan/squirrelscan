@@ -17,6 +17,11 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- **Info checks are in the JSON and LLM reports.** Notes a rule records with status `info` (for example `redundant-noindex`, or "No dialog elements found") were in the local database but never in `-f json` or `-f llm`. The JSON report now has a top-level `infoChecks` list (rule, check, message, up to 10 pages and the true page count), and the LLM report an `<info-checks>` block with `--include-info` (off by default, to keep the output small). They are not findings and never change the score. (#669)
+- **A rule that ran past its time budget is listed in `skippedChecks`** with reason `rule-timed-out` (or `rule-errored` when it threw), so the report no longer reads that rule as clean on the pages it did not finish. (#518)
+
 ## v0.0.143 (2026-10-30)
 
 Two new performance rules, `perf/content-in-js-bundle` and `perf/framework-data-payload`, find page content shipped inside JavaScript. Page weight now measures the srcset candidate a browser downloads and leaves lazy images out, `squirrel auth login` opens a branded page, parallel audits no longer fail with a locked database, and `store_scripts` no longer changes what an audit finds. A start URL the audit cannot run on is refused before any request, `security/tls-certificate` shows as not checked when it cannot run, and the about, contact and privacy rules take a `paths` option.

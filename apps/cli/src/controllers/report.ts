@@ -173,6 +173,8 @@ interface SlimJsonReport {
    * they are never rebuilt into `ruleResults`.
    */
   skippedChecks?: unknown[];
+  /** Info checks (#669). Not read back: they are notes, not findings. */
+  infoChecks?: unknown[];
   issues: Array<{
     ruleId: string;
     name: string;

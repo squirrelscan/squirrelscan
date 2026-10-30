@@ -1258,6 +1258,11 @@ export const audit = defineCommand({
       description:
         "Also list the rules that passed, with how many pages each passed on",
     },
+    includeInfo: {
+      type: "boolean",
+      description:
+        "Also list info checks (notes that are not findings) in the llm format. The JSON report always has them",
+    },
   },
   async run({ args, rawArgs }) {
     // Configure logging before any output
@@ -2970,6 +2975,7 @@ export const audit = defineCommand({
         );
       }
       const includePassed = args.includePassed ?? false;
+      const includeInfo = args.includeInfo ?? false;
       if (format === "console") {
         generateConsoleReport(report, {
           summaryOnly: args.summary,
@@ -3006,7 +3012,12 @@ export const audit = defineCommand({
           includePassed
         );
       } else if (format === "llm") {
-        generateLlmReport(report, options.outputPath, includePassed);
+        generateLlmReport(
+          report,
+          options.outputPath,
+          includePassed,
+          includeInfo
+        );
       }
 
       // Publish to the dashboard (auto when signed in + online, or forced with

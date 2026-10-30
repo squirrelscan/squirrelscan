@@ -237,6 +237,11 @@ export const report = defineCommand({
       description:
         "Also list the rules that passed, with how many pages each passed on",
     },
+    includeInfo: {
+      type: "boolean",
+      description:
+        "Also list info checks (notes that are not findings) in the llm format. The JSON report always has them",
+    },
   },
   async run({ args }) {
     // Loud warning for an unreadable/corrupt session (EACCES, corrupt JSON,
@@ -565,6 +570,14 @@ export const report = defineCommand({
       );
     }
     const includePassed = (args.includePassed ?? false) && !args.input;
+    // Same for --include-info: the slim JSON a report is read from does not carry
+    // the checks `infoChecks` was built from, so there is nothing to list.
+    if (args.includeInfo && args.input) {
+      console.error(
+        "--include-info lists no checks for a report read with --input: info checks are not read back from a JSON file"
+      );
+    }
+    const includeInfo = (args.includeInfo ?? false) && !args.input;
     if (formatResult.data === "console") {
       generateConsoleReport(reportData, {
         summaryOnly: args.summary,
@@ -583,7 +596,7 @@ export const report = defineCommand({
       generateXmlReport(reportData, args.output, undefined, includePassed);
     } else if (formatResult.data === "llm") {
       // stdout by default, file if -o provided
-      generateLlmReport(reportData, args.output, includePassed);
+      generateLlmReport(reportData, args.output, includePassed, includeInfo);
     } else if (formatResult.data === "html") {
       // file by default - HTML needs a browser
       const hostname = new URL(reportData.baseUrl).hostname;
