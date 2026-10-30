@@ -6,7 +6,7 @@ import { describe, expect, test } from "bun:test";
 import { parsePage } from "@squirrelscan/parser";
 
 import { withinDeadline } from "../src/adapter";
-import { runCloakingProbe, type SelectedProbe } from "../src/cloaking-probe";
+import { runCloakingProbe, selectCloakingPaths, type SelectedProbe } from "../src/cloaking-probe";
 import {
   confirmSoft404Candidates,
   hasSoft404FetchWork,
@@ -28,7 +28,7 @@ describe("withinDeadline", () => {
   test("a deadline already passed does not call the work", async () => {
     let called = 0;
     const r = await withinDeadline(async () => ++called, Date.now() - 1);
-    expect(r).toEqual({ timedOut: true });
+    expect(r).toEqual({ timedOut: true, started: false });
     expect(called).toBe(0);
   });
   test("work that outlives the deadline is cut and told to cancel", async () => {
@@ -41,13 +41,13 @@ describe("withinDeadline", () => {
         }),
       Date.now() + 30,
     );
-    expect(r).toEqual({ timedOut: true });
+    expect(r).toEqual({ timedOut: true, started: true });
     expect(cancelled).toBe(true);
   });
   test("work that finishes in time returns its value, and a late rejection is not unhandled", async () => {
     expect(await withinDeadline(async () => "ok", Date.now() + 1000)).toEqual({ timedOut: false, value: "ok" });
     const r = await withinDeadline(() => sleep(60).then(() => Promise.reject(new Error("late"))), Date.now() + 10);
-    expect(r).toEqual({ timedOut: true });
+    expect(r).toEqual({ timedOut: true, started: true });
     await sleep(100);
   });
 });
@@ -81,6 +81,29 @@ describe("soft-404 confirmation after the deadline", () => {
     // Every candidate has a verdict, none was dropped.
     markUnresolvedSoft404(pages);
     expect(pages.every((p) => p.parsed.soft404Confirmation === "unconfirmed")).toBe(true);
+  });
+
+  test("a deadline that falls inside the per-host delay stops the next re-fetch", async () => {
+    const pages = [shell("/a"), shell("/b"), shell("/c")];
+    const controller = new AbortController();
+    let sent = 0;
+    await confirmSoft404Candidates(
+      pages,
+      {
+        userAgent: "t",
+        signal: controller.signal,
+        concurrency: 1,
+        perHostDelayMs: 1000,
+        // The deadline passes while the pass waits out the politeness delay.
+        sleep: async () => controller.abort(),
+      },
+      async () => {
+        sent++;
+        return { status: 404, body: "" };
+      },
+    );
+    expect(sent).toBe(1);
+    expect(pages.map((p) => p.parsed.soft404Confirmation)).toEqual(["unconfirmed", "unconfirmed", "unconfirmed"]);
   });
 
   test("markUnresolvedSoft404 keeps a verdict already written and ignores non-candidates", () => {
@@ -127,5 +150,20 @@ describe("cloaking probe after the deadline", () => {
     });
     expect(out).toHaveLength(2);
     expect(sent).toBe(6);
+  });
+});
+
+describe("selectCloakingPaths", () => {
+  const page = (path: string, links: string[] = []) => ({
+    url: `https://example.com${path}`,
+    statusCode: 200,
+    parsed: { links: links.map((l) => ({ url: `https://example.com${l}`, isInternal: true })) },
+  });
+  test("a site with only its home page has nothing to probe", () => {
+    expect(selectCloakingPaths({ baseUrl: "https://example.com/", pages: [page("/")], sitemapUrls: [] }, { maxPages: 5, recentDays: 30 })).toEqual([]);
+  });
+  test("a zero cap selects nothing", () => {
+    const site = { baseUrl: "https://example.com/", pages: [page("/", ["/orphan"]), page("/orphan")], sitemapUrls: [{ loc: "https://example.com/orphan", lastmod: new Date().toISOString() }] };
+    expect(selectCloakingPaths(site, { maxPages: 0, recentDays: 30 })).toEqual([]);
   });
 });

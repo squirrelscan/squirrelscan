@@ -346,7 +346,14 @@ export async function confirmSoft404Candidates(
         continue;
       }
       // Honor the crawl's per-host delay between consecutive same-host requests.
-      if (i > 0 && perHostDelayMs > 0) await sleep(perHostDelayMs);
+      if (i > 0 && perHostDelayMs > 0) {
+        await sleep(perHostDelayMs);
+        // The delay can run past a deadline: re-check before dispatching.
+        if (opts.signal?.aborted) {
+          record(c, "unconfirmed");
+          continue;
+        }
+      }
       const verdict = await confirmOne(c, opts, fetchImpl).catch(
         (): Soft404Confirmation => "unconfirmed",
       );
