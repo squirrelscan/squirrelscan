@@ -222,7 +222,7 @@ describe("storeCrawlScripts", () => {
     const summary = await run(
       storage.storeCrawlScripts(CRAWL, [script("https://example.com/a.js", "a", [])], LIMITS)
     );
-    expect(summary).toEqual({ stored: 0, skipped: 0, distinct: 0, distinctBytes: 0 });
+    expect(summary).toEqual({ stored: 0, skipped: 0, skippedByReason: {}, distinct: 0, distinctBytes: 0 });
     expect(await run(storage.getCrawlScripts(CRAWL))).toEqual([]);
   });
 
