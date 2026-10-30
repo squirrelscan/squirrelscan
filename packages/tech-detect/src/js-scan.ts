@@ -177,6 +177,21 @@ export function inString(strings: number[], index: number): boolean {
   return false;
 }
 
+/** The start of the range in `skips` that has `index` inside it (`start < index <= end`), or -1. */
+export function skipStart(skips: number[], index: number): number {
+  let lo = 0;
+  let hi = skips.length / 2 - 1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    const start = skips[mid * 2]!;
+    const end = skips[mid * 2 + 1]!;
+    if (index <= start) hi = mid - 1;
+    else if (index > end) lo = mid + 1;
+    else return start;
+  }
+  return -1;
+}
+
 /** The end of the range in `skips` that has `index` inside it (`start < index <= end`), or -1. */
 export function skipEnd(skips: number[], index: number): number {
   let lo = 0;

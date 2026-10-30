@@ -91,7 +91,10 @@ function matchDetector(
       if (detector.inCode) {
         return (
           input.scripts?.some(
-            (s) => s.content && matchesInCode(detector.pattern, scriptView(views, s.content)),
+            (s) =>
+              s.content &&
+              matchesInCode(detector.pattern, scriptView(views, s.content)) &&
+              (!detector.also || detector.also.pattern.test(scriptView(views, s.content).head)),
           ) ?? false
         );
       }

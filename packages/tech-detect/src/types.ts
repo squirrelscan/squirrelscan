@@ -29,7 +29,17 @@ export type Detector =
   // An `inCode` detector reads fetched script bodies only, never the page HTML.
   // `hint`: a literal the match needs, searched across a whole bundle to pick
   // the windows worth sending when the body is too big to send whole.
-  | { type: "script-content"; pattern: RegExp; inCode?: boolean; hint?: string }
+  // `also`: a second pattern the SAME script body must match (anywhere, strings
+  // included) for the detector to fire, with the literals (`hints`) that locate it
+  // in a bundle too big to send whole. For a signature that sits far from the
+  // anchor it qualifies, e.g. a library's own strings and a project URL elsewhere.
+  | {
+      type: "script-content";
+      pattern: RegExp;
+      inCode?: boolean;
+      hint?: string;
+      also?: { pattern: RegExp; hints: string[] };
+    }
   // `requires`: literal that must appear in the html (case-sensitive) before the
   // pattern runs, a cheap gate for patterns that scan a bounded window per tag.
   | { type: "html"; pattern: RegExp; requires?: string }

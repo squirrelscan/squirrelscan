@@ -1,5 +1,5 @@
 import type { TechFingerprint } from "../types";
-import { inBundle, inScript, inStyle, resourceAttr, scriptSrc } from "./helpers";
+import { inBundle, inBundleWith, inScript, inStyle, resourceAttr, scriptSrc } from "./helpers";
 
 export const OTHER_FINGERPRINTS: TechFingerprint[] = [
   {
@@ -257,7 +257,7 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
       // whole (no path, an optional slash), so a link, a docs sentence or a
       // fetch to a path never matches, and the match must start in code.
       inBundle(
-        String.raw`["'\x60]https:\/\/(?!your)(?!([a-z0-9])\1{19}\.)[a-z0-9]{20}\.supabase\.co\/?["'\x60]\s*,\s*(?:[\w$]{1,20}\s*[:=]\s*)?["'\x60](?:eyJ[A-Za-z0-9_-]{10,}|sb_publishable_[A-Za-z0-9_-]{10,})`,
+        String.raw`["'\x60]https:\/\/(?!your)(?!([a-z0-9])\1{19}\.)[a-z0-9]{20}\.supabase\.co\/?["'\x60]\s*,\s*(?:[\w$]{1,20}\s*[:=]\s*)?["'\x60](?:eyJ[A-Za-z0-9_-]{10,}|sb_(?:publishable|secret)_[A-Za-z0-9_-]{10,})`,
         ".supabase.co",
       ),
       inBundle(
@@ -267,6 +267,20 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
       inBundle(
         String.raw`\bcreateClient\)?\(\s*["'\x60]https:\/\/(?!your)(?!([a-z0-9])\1{19}\.)[a-z0-9]{20}\.supabase\.co\/?["'\x60]\s*,`,
         ".supabase.co",
+      ),
+      // A bundle that ships supabase-js (its Node.js deprecation notice linking
+      // github.com/orgs/supabase/discussions/<n>, or its `sb-${ref}-auth-token`
+      // storage key) and quotes a project URL anywhere: the URL may sit in a
+      // variable with the key in another chunk, or the key may be a new-format
+      // one. The library strings are fixed text no other package ships, so the
+      // URL needs no key beside it.
+      ...[`"`, `'`].map((quote) =>
+        inBundleWith(
+          String.raw`${quote}https:\/\/(?!your)(?!([a-z0-9])\1{19}\.)[a-z0-9]{20}\.supabase\.co\/?${quote}`,
+          `.supabase.co${quote}`,
+          String.raw`github\.com\/orgs\/supabase\/discussions\/\d|["'\x60]sb-\$\{[^}]{1,40}\}-auth-token`,
+          ["github.com/orgs/supabase/discussions/", "-auth-token"],
+        ),
       ),
     ],
     ignoreComments: true,
