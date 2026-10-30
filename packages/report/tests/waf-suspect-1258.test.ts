@@ -6,6 +6,7 @@ import { describe, expect, test } from "bun:test";
 
 import type { AuditReport } from "../src/types";
 import { renderJson } from "../src/output/json";
+import { renderLlm } from "../src/output/llm";
 import { renderMarkdown } from "../src/output/markdown";
 import { renderText } from "../src/output/text";
 import { safeWafSuspect, wafSuspectLines } from "../src/waf-blocked";
@@ -42,6 +43,8 @@ describe("wafSuspectLines", () => {
   test("says the pages were audited and may describe the provider's page", () => {
     const [summary, ...listed] = wafSuspectLines(report({ wafSuspect: SUSPECT }));
     expect(summary).toContain("2 pages look like a refusal from Cloudflare but carry no block marker");
+    const one = wafSuspectLines(report({ wafSuspect: { ...SUSPECT, total: 1 } }))[0];
+    expect(one).toContain("1 page looks like a refusal from Cloudflare but carries no block marker");
     expect(summary).toContain("They were audited");
     expect(listed[0]).toBe(
       "https://example.com/denied: Cloudflare, HTTP 406 (refusal page from Cloudflare with no provider block marker)",
@@ -77,6 +80,13 @@ describe("renderers", () => {
     const r = report({ wafSuspect: SUSPECT });
     expect(renderText(r)).toContain("SUSPECT PAGES");
     expect(renderMarkdown(r)).toContain("Suspect pages:");
+  });
+
+  test("the LLM report carries a waf-suspect element, and none without suspects", () => {
+    const out = renderLlm(report({ wafSuspect: SUSPECT }));
+    expect(out).toContain('<waf-suspect pages="2" providers="Cloudflare">');
+    expect(out).toContain('url="https://example.com/denied"');
+    expect(renderLlm(report({}))).not.toContain("<waf-suspect");
   });
 
   test("JSON lists wafSuspect only when there is one", () => {

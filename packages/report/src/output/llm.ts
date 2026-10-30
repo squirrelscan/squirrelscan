@@ -77,7 +77,7 @@ import { formatSiteWideItem, siteWideContext, siteWideItem } from "../site-wide-
 import { stripControlChars } from "@squirrelscan/core-contracts/control-chars";
 import { AUDIT_FAILURE_NEXT_STEP_THIRD } from "@squirrelscan/core-contracts/failure-reason";
 import { refusedFetchLines, reportFailureReasonCode } from "../failure-notice";
-import { safeWafBlocked, wafBlockedSeedCopy } from "../waf-blocked";
+import { safeWafBlocked, safeWafSuspect, wafBlockedSeedCopy } from "../waf-blocked";
 
 export interface LlmRenderOptions {
   /** Roll up groups that are one repair (default true). */
@@ -310,6 +310,24 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
       );
     }
     lines.push("</waf-blocked>");
+  }
+
+  // #1258: pages that look like a provider's refusal but carry no block marker. They were audited,
+  // so say plainly that their findings may describe the provider's page, not the site's.
+  const wafSuspect = safeWafSuspect(report);
+  if (wafSuspect && report.status !== "failed" && report.status !== "blocked") {
+    const providers = escapeXml(wafSuspect.providers.join(", "));
+    lines.push(`<waf-suspect pages="${wafSuspect.total}" providers="${providers}">`);
+    lines.push(
+      `${indent(1)}${wafSuspect.total} page(s) look like a refusal from a WAF or bot manager but carry no block marker. They were audited like any page, so check that a finding on them describes the site and not the provider's page before reporting it.`,
+    );
+    for (const page of wafSuspect.pages) {
+      const by = page.provider ? ` provider="${escapeXml(page.provider)}"` : "";
+      lines.push(
+        `${indent(1)}<page url="${escapeXml(page.url)}" status="${page.status}"${by} signal="${escapeXml(page.signal)}"/>`,
+      );
+    }
+    lines.push("</waf-suspect>");
   }
 
   // Root fetches the site refused. Their absence is UNKNOWN, so an agent

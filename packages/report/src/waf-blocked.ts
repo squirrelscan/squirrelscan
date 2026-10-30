@@ -106,7 +106,7 @@ export function wafSuspectLines(
   if (!suspect || report.status === "failed" || report.status === "blocked") return [];
   const by = suspect.providers.length > 0 ? ` from ${suspect.providers.join(", ")}` : "";
   const lines = [
-    `${suspect.total} page${suspect.total === 1 ? "" : "s"} look${suspect.total === 1 ? "s" : ""} like a refusal${by} but carry no block marker. ${suspect.total === 1 ? "It was" : "They were"} audited, so ${suspect.total === 1 ? "its findings" : "their findings"} may describe the provider's page, not the site's.`,
+    `${suspect.total} page${suspect.total === 1 ? "" : "s"} look${suspect.total === 1 ? "s" : ""} like a refusal${by} but carr${suspect.total === 1 ? "ies" : "y"} no block marker. ${suspect.total === 1 ? "It was" : "They were"} audited, so ${suspect.total === 1 ? "its findings" : "their findings"} may describe the provider's page, not the site's.`,
   ];
   for (const page of suspect.pages.slice(0, MAX_LISTED)) {
     const who = page.provider ? `${page.provider}, ` : "";
