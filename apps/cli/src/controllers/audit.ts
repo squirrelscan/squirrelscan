@@ -909,6 +909,10 @@ export async function runAudit(
     return err(commandError(ErrorCodes.INVALID_URL, parsed.error));
   }
   const url = parsed.url;
+  const requested = options.requestedUrl
+    ? parseUserUrl(options.requestedUrl)
+    : parsed;
+  const requestedUrl = requested.ok ? requested.url : url;
 
   // Load config first (needed for TLS settings before reachability check)
   // Silent since CLI already logged the config path
@@ -1485,7 +1489,9 @@ export async function runAudit(
             logger.debug("starting new crawl (previous completed)");
           }
 
-          crawlId = await Effect.runPromise(crawler.start(finalUrl, url));
+          crawlId = await Effect.runPromise(
+            crawler.start(finalUrl, requestedUrl)
+          );
         }
       } finally {
         if (crawlPhaseTimer) clearTimeout(crawlPhaseTimer);

@@ -3207,12 +3207,16 @@ export function createCrawler(
           }
         }
 
-        // Put a deep URL the user named into the frontier before sitemap entries.
-        // Its source bonus already makes it the first page dispatched; inserting
-        // it first also means a sitemap copy cannot win frontier dedup (#1369).
-        // Root starts keep their existing sitemap accounting and insertion order.
-        const deepSeed = new URL(seedResolution.seedUrl).pathname !== "/";
-        if (deepSeed) {
+        // Put a deep URL the user named, or the deep destination it resolved to,
+        // into the frontier before sitemap entries. Its source bonus already
+        // makes it the first page dispatched; inserting it first also means a
+        // sitemap copy cannot win frontier dedup (#1369). A deep URL that
+        // redirects to the root still gives its destination this priority.
+        // Root-to-root starts keep their existing sitemap accounting and order.
+        const prioritizeSeed =
+          new URL(userProvidedUrl).pathname !== "/" ||
+          new URL(seedResolution.seedUrl).pathname !== "/";
+        if (prioritizeSeed) {
           yield* enqueueUrl(crawlId, seedResolution.seedUrl, 0, undefined, "seed");
         }
 
@@ -3257,7 +3261,7 @@ export function createCrawler(
 
         // Origin-only audits retain the old order; deep starts were seeded
         // before the sitemap loop above.
-        if (!deepSeed) {
+        if (!prioritizeSeed) {
           yield* enqueueUrl(crawlId, seedResolution.seedUrl, 0, undefined, "seed");
         }
 

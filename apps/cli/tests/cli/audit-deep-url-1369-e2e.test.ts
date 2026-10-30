@@ -13,7 +13,16 @@ const site = Bun.serve({
   port: 0,
   hostname: "127.0.0.1",
   fetch(req) {
-    const { pathname, origin } = new URL(req.url);
+    const { pathname, origin, searchParams } = new URL(req.url);
+    if (pathname === "/deep-to-root") {
+      return new Response(null, { status: 302, headers: { location: "/" } });
+    }
+    if (pathname === "/" && searchParams.has("to-deep")) {
+      return new Response(null, {
+        status: 302,
+        headers: { location: "/requested" },
+      });
+    }
     if (pathname === "/robots.txt") {
       return new Response(
         `User-agent: *\nAllow: /\nSitemap: ${origin}/sitemap.xml\n`
@@ -128,5 +137,35 @@ describe("deep audit start URL", () => {
       meta: { requestedUrl?: string };
     };
     expect(report.meta.requestedUrl).toBeUndefined();
+  }, 90_000);
+
+  test("a deep redirect reports the request and prioritizes its root destination", async () => {
+    const result = await audit("/deep-to-root", 1);
+    expect(result.code).toBe(0);
+    expect(result.err).toContain(
+      `Notice: requested ${site.url.origin}/deep-to-root; auditing the whole site at ${site.url.origin}.`
+    );
+    const report = JSON.parse(result.out) as {
+      meta: { requestedUrl?: string };
+      pages: Array<{ url: string }>;
+    };
+    expect(report.meta.requestedUrl).toBe(`${site.url.origin}/deep-to-root`);
+    expect(report.pages.map((page) => page.url)).toContain(
+      `${site.url.origin}/`
+    );
+  }, 90_000);
+
+  test("a root redirect to a deep page retains root-start reporting", async () => {
+    const result = await audit("/?to-deep=1", 1);
+    expect(result.code).toBe(0);
+    expect(result.err).not.toContain("Notice: requested");
+    const report = JSON.parse(result.out) as {
+      meta: { requestedUrl?: string };
+      pages: Array<{ url: string }>;
+    };
+    expect(report.meta.requestedUrl).toBeUndefined();
+    expect(report.pages.map((page) => page.url)).toContain(
+      `${site.url.origin}/requested`
+    );
   }, 90_000);
 });

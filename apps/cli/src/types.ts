@@ -726,6 +726,8 @@ export type { ProbeLevel };
 
 export interface AuditOptions {
   url: string;
+  /** The user-supplied start URL when a same-site redirect changed `url`. */
+  requestedUrl?: string;
   maxPages?: number;
   /**
    * What the caller asked for BEFORE `MAX_PAGES_CAP` was applied (#1909).

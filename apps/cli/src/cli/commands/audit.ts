@@ -212,13 +212,18 @@ const CLOUD_SERVICE_LABELS: Record<string, string> = {
 };
 
 export function deepAuditScope(
-  url: string
+  requestedUrl: string,
+  auditedUrl: string = requestedUrl
 ): { requestedUrl: string; origin: string } | null {
-  const parsed = parseUserUrl(url);
-  if (!parsed.ok) return null;
-  const requested = new URL(parsed.url);
+  const parsedRequested = parseUserUrl(requestedUrl);
+  const parsedAudited = parseUserUrl(auditedUrl);
+  if (!parsedRequested.ok || !parsedAudited.ok) return null;
+  const requested = new URL(parsedRequested.url);
   if (requested.pathname === "" || requested.pathname === "/") return null;
-  return { requestedUrl: redactStartUrl(parsed.url), origin: requested.origin };
+  return {
+    requestedUrl: redactStartUrl(parsedRequested.url),
+    origin: new URL(parsedAudited.url).origin,
+  };
 }
 
 /** Up-front estimate shown in the one-time cloud-consent prompt. */
@@ -1965,6 +1970,7 @@ export const audit = defineCommand({
       // estimated or crawled, so `squirrel audit bit.ly/x` audits where it goes
       // (with consent when that is another site) and never grades the shortener.
       let startRedirect: SeedRedirectRecord | undefined;
+      let sameSiteRequestedUrl: string | undefined;
       // Whether the start URL's project folder was there before this run's
       // store check created it, so an unreachable start URL can remove it (#1269).
       let projectDirPreexisting:
@@ -2021,7 +2027,14 @@ export const audit = defineCommand({
           process.exitCode = EXIT_CODE_REDIRECTED;
           return;
         }
-        if (resolved.url !== startParsed.url) args.url = resolved.url;
+        if (resolved.url !== startParsed.url) {
+          args.url = resolved.url;
+          // Cross-domain redirects have their own startRedirect disclosure. A
+          // same-site redirect is otherwise silent, so retain what the user
+          // named for deep-start reporting and frontier priority (#1369).
+          if (!resolved.record)
+            sameSiteRequestedUrl = redactStartUrl(startParsed.url);
+        }
         startRedirect = resolved.record;
       }
 
@@ -2049,6 +2062,7 @@ export const audit = defineCommand({
 
       const options: AuditOptions = {
         url: args.url,
+        ...(sameSiteRequestedUrl ? { requestedUrl: sameSiteRequestedUrl } : {}),
         maxPages,
         // Carried so the report can record the clamp; the controller stamps it.
         ...(pageLimit.clamped
@@ -2107,11 +2121,14 @@ export const audit = defineCommand({
       // Preamble — aligned key/value block (Account, and Dashboard when online,
       // already printed above during status resolution; kv defined there).
       kv("Auditing", fmt.bold(redactStartUrl(options.url)));
-      const deepScope = deepAuditScope(options.url);
+      const deepScope = deepAuditScope(
+        sameSiteRequestedUrl ?? options.url,
+        options.url
+      );
       if (deepScope) {
         log(
           fmt.yellow(
-            `Notice: requested ${deepScope.requestedUrl}; auditing the whole site at ${deepScope.origin}. The requested page is crawled first.`
+            `Notice: requested ${deepScope.requestedUrl}; auditing the whole site at ${deepScope.origin}. The requested URL's destination is crawled first.`
           )
         );
       }

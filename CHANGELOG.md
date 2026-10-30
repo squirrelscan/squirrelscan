@@ -19,7 +19,7 @@ How it works:
 
 ### Fixed
 
-- **A deep start URL is now explicit and guaranteed to be audited.** `squirrel audit https://example.com/blog/post` says that it will audit the whole origin, records the page as `meta.requestedUrl` beside `meta.baseUrl`, and seeds that page before sitemap URLs so a small page limit cannot omit it. Origin-only audits are unchanged. (#1369)
+- **A deep start URL is now explicit and guaranteed to be audited.** `squirrel audit https://example.com/blog/post` says that it will audit the whole origin, records the page as `meta.requestedUrl` beside `meta.baseUrl`, and seeds its resolved destination before sitemap URLs so a small page limit cannot omit it. Origin-only audits are unchanged. (#1369)
 
 ## v0.0.146 (2026-10-31)
 

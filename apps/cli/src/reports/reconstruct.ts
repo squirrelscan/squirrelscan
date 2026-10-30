@@ -59,8 +59,11 @@ function rateLimitedHosts(baseUrl: string, rateLimitedCount: number): string[] {
 }
 
 function requestedDeepUrl(
-  crawl: Pick<CrawlMetadata, "baseUrl" | "originalUrl">
+  crawl: Pick<CrawlMetadata, "originalUrl">
 ): string | undefined {
+  // CrawlMetadata.originalUrl is the user-supplied URL on every crawl. The
+  // report's originalUrl field is separate and only describes followed
+  // cross-site redirects.
   if (!crawl.originalUrl) return undefined;
   try {
     const requested = new URL(crawl.originalUrl);

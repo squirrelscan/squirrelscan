@@ -396,6 +396,8 @@ Only the scheme, host, port and path of each URL are printed or recorded, and on
 
 When a cross-domain redirect is followed, the report records where the audit began. The JSON report has `meta.originalUrl` and `meta.redirectChain` (every URL requested, each with the status it answered; the last is the destination), the text, markdown, LLM, XML and HTML reports say so in their scan notes, and the project, the cloud credit estimate and the crawl scope are the destination's. A same-site redirect leaves no record.
 
+The hops are requested before the credit check and before the run is registered: a balance that is too low, or a shutdown, still leaves those requests sent, but nothing is registered or charged. Every hop goes through the same egress guard as the crawl. A redirect into a private network, a link-local address or a cloud metadata address is refused and never requested, unless the start URL itself is on that private network. The hops are resolved even under [`--offline`](#fully-offline-audit): that is the one request per hop that reaches another site, and what it finds is audited offline. Redirects that a page, rather than the start URL, answers with (a meta refresh or a script) are not part of this chain.
+
 ### Deep start URLs
 
 `squirrel audit https://example.com/blog/post` audits the whole site at
@@ -403,10 +405,10 @@ When a cross-domain redirect is followed, the report records where the audit beg
 the requested page and the site-wide origin. The requested page is placed first
 in the crawl frontier, ahead of sitemap pages, so it is included even with a
 small `--max-pages` value. JSON reports keep the distinction as
-`meta.requestedUrl` alongside `meta.baseUrl`. An origin-only start URL such as
-`https://example.com/` has the existing behavior and prints no notice.
-
-The hops are requested before the credit check and before the run is registered: a balance that is too low, or a shutdown, still leaves those requests sent, but nothing is registered or charged. Every hop goes through the same egress guard as the crawl. A redirect into a private network, a link-local address or a cloud metadata address is refused and never requested, unless the start URL itself is on that private network. The hops are resolved even under [`--offline`](#fully-offline-audit): that is the one request per hop that reaches another site, and what it finds is audited offline. Redirects that a page, rather than the start URL, answers with (a meta refresh or a script) are not part of this chain.
+`meta.requestedUrl` alongside `meta.baseUrl`. If the requested URL redirects,
+its resolved destination receives that frontier priority. A root URL that
+redirects to a deep page retains root-start reporting. An origin-only start URL
+such as `https://example.com/` has the existing behavior and prints no notice.
 
 ### Fully offline audit
 
