@@ -153,4 +153,11 @@ describe("perf/framework-data-payload", () => {
     const result = frameworkDataPayloadRule.run(ctx);
     expect(result instanceof Promise ? [] : result.checks).toEqual([]);
   });
+
+  test("an empty document (no root element) passes without throwing", () => {
+    for (const html of ["", "   ", "just text", "<!-- only a comment -->"]) {
+      const checks = run(html);
+      expect(checks.every((c) => c.status === "pass")).toBe(true);
+    }
+  });
 });

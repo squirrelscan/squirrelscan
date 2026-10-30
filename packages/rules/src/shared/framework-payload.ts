@@ -159,9 +159,22 @@ export function measureInteractivity(doc: Doc): PageInteractivity {
   };
 }
 
+/**
+ * The document's body, or its root when it has none, or null for an empty
+ * document. linkedom's `doc.body` getter throws on a document with no root
+ * element (empty or text-only HTML), so the read is guarded.
+ */
+export function documentBody(doc: Doc): Element | null {
+  try {
+    return doc.body ?? doc.documentElement ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /** The visible text of the page, in characters, without scripts, styles and templates. */
 export function visibleTextLength(doc: Doc): number {
-  const body = doc.body ?? doc.documentElement;
+  const body = documentBody(doc);
   if (!body) return 0;
   let total = 0;
   // Text nodes only: no tag soup in the count, no regex over untrusted text.
