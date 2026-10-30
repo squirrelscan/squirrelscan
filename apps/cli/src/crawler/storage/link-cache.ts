@@ -4,6 +4,10 @@
 
 import type { Database } from "bun:sqlite";
 
+import {
+  OWNER_ONLY_DIR_MODE,
+  restrictToOwner,
+} from "@squirrelscan/crawler/file-mode";
 import { enableWal, openSqlite } from "@squirrelscan/crawler/sqlite-open";
 import { existsSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
@@ -65,9 +69,11 @@ export class LinkCacheStorage {
       // Ensure directory exists
       const dir = dirname(this.dbPath);
       if (!existsSync(dir)) {
-        mkdirSync(dir, { recursive: true });
+        mkdirSync(dir, { recursive: true, mode: OWNER_ONLY_DIR_MODE });
       }
 
+      // Owner-only before the first open, so the file never exists wider (#1268).
+      restrictToOwner(this.dbPath);
       // busy_timeout first, and IMMEDIATE write transactions (#1226).
       this.db = openSqlite(this.dbPath);
       enableWal(this.db);

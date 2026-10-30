@@ -16,7 +16,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { gunzipSync } from "node:zlib";
 
 import {
@@ -257,6 +257,10 @@ describe("#1255 stored scripts", () => {
         expect(statSync(file).mode & 0o077).toBe(0);
       }
     }
+    // The folders squirrel made for them are owner-only too.
+    for (const db of dbs.filter((p) => !p.endsWith("content-store.db"))) {
+      expect(statSync(dirname(db)).mode & 0o077).toBe(0);
+    }
   }, 120_000);
 
   test("off by default: no index rows and no script in the content store", async () => {
@@ -425,5 +429,20 @@ describe("#1268 the skipped scripts warning names each reason", () => {
     const warning = skippedScriptsWarning({ "memory-cap": 1 }, limits)!;
     expect(warning).not.toContain("store_scripts_max_bytes");
     expect(warning).not.toContain("store_scripts_total_bytes");
+  });
+});
+
+describe("#1268 restrictToOwner", () => {
+  test("a missing file is created 0600, so it never exists wider, and an existing one is tightened", async () => {
+    const { restrictToOwner } = await import("@squirrelscan/crawler/file-mode");
+    const { chmodSync, writeFileSync } = await import("node:fs");
+    const fresh = join(out, "fresh.db");
+    restrictToOwner(fresh);
+    expect(statSync(fresh).mode & 0o777).toBe(0o600);
+    const old = join(out, "old.db");
+    writeFileSync(old, "");
+    chmodSync(old, 0o644);
+    restrictToOwner(old);
+    expect(statSync(old).mode & 0o777).toBe(0o600);
   });
 });

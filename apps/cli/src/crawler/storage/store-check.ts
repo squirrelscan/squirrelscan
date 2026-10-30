@@ -234,7 +234,7 @@ export function checkStoreWritable(
   const dir = dirname(path);
   if (!existsSync(dir)) {
     try {
-      mkdirSync(dir, { recursive: true });
+      mkdirSync(dir, { recursive: true, mode: 0o700 });
     } catch (error) {
       // The nearest existing ancestor is the directory that refused.
       let parent = dir;

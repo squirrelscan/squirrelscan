@@ -91,7 +91,7 @@ export function getProjectDbPath(projectName: string): string {
   const projectDir = dirname(dbPath);
 
   if (!existsSync(projectDir)) {
-    mkdirSync(projectDir, { recursive: true });
+    mkdirSync(projectDir, { recursive: true, mode: 0o700 });
   }
 
   return dbPath;

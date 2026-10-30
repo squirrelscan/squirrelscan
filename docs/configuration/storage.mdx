@@ -149,7 +149,7 @@ with non-Latin1 text (CJK, Cyrillic, emoji), so peak memory can reach roughly 3
 times the 256 MB bound on such sites. The scripts a page only preloads are
 fetched by a separate pass with its own counters: it does not share the 256 MB
 or 120 second bounds, only the per-script size limit and the CSP condition above.
- Because the rules that read script bodies (secrets, file size,
+Because the rules that read script bodies (secrets, file size,
 minification) now see up to `store_scripts_max_scripts` scripts instead of 10 to
 50, an audit with `store_scripts` on can report more findings than the same audit
 without it. Parallel corpus runs each hold their own bodies, so size the number of
@@ -181,9 +181,10 @@ needs gigabytes. Check `squirrel self doctor` for the store's size and cap.
 Nothing is sent to the cloud for them. Bundles can contain keys that the site
 ships to every visitor, so treat the content store as you would the crawl.
 `content-store.db` and each project database (and their `-wal` and `-shm` files)
-are created readable and writable by you only (mode `0600`), and an existing file
-is tightened the next time it is opened. On a file system without modes, such as
-FAT, that does nothing.
+are created readable and writable by you only (mode `0600`, in folders `0700`),
+with the mode set before the database is first written, and an existing file is
+tightened the next time it is opened. `link-cache.db` gets the same. On file
+systems without POSIX modes (Windows, FAT) that does nothing.
 
 **When it is off.** The project database still has the empty `crawl_scripts` and
 `crawl_scripts_summary` tables, created with the rest of its schema. They hold no

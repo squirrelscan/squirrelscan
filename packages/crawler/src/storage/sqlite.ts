@@ -1441,6 +1441,8 @@ export class SQLiteStorage implements CrawlStorage {
   init(): Effect.Effect<void, StorageError, never> {
     return Effect.try({
       try: () => {
+        // Owner-only before the first open, so the file never exists wider (#1268).
+        if (this.path !== ":memory:") restrictToOwner(this.path);
         // busy_timeout first, and IMMEDIATE write transactions (#1226).
         this.db = openSqlite(this.path);
         enableWal(this.db);
@@ -1450,8 +1452,6 @@ export class SQLiteStorage implements CrawlStorage {
         this.db.exec("PRAGMA temp_store = MEMORY");
         this.db.exec(SCHEMA);
         this.runMigrations();
-        // Crawled HTML and stored scripts: owner only (#1268).
-        if (this.path !== ":memory:") restrictToOwner(this.path);
       },
       catch: (e) => StorageError.init(e),
     });
