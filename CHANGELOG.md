@@ -19,7 +19,7 @@ How it works:
 
 ### Fixed
 
-- **Supabase is detected in more real bundles.** A bundle that ships supabase-js (its Node.js deprecation notice or its `sb-<ref>-auth-token` storage key) and quotes a `<ref>.supabase.co` project URL anywhere is Supabase, wherever the key sits and whatever its format: the URL in a variable, a new-format `sb_secret_` key, or a URL far past the start of a large bundle, even after dozens of earlier quoted Supabase URLs. A docs link, a placeholder URL, library strings with no project URL, and a Base44 app are still not reported. (#1379)
+- **Supabase is detected in more real bundles.** A bundle that ships supabase-js (its Node.js deprecation notice or its `sb-<ref>-auth-token` storage key) and quotes a `<ref>.supabase.co` project URL anywhere is Supabase, wherever the key sits and whatever its format: the URL in a variable, a new-format `sb_secret_` key, or a URL far past the start of a large bundle, even after hundreds of earlier Supabase mentions. A mention that cannot lead to a detection (a placeholder URL, a non-key pair) no longer uses up the sample, and a repeated one counts once. A docs link, a placeholder URL, library strings with no project URL, and a Base44 app are still not reported. (#1379)
 
 ## v0.0.145 (2026-10-31)
 

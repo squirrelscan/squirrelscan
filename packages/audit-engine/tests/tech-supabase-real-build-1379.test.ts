@@ -29,16 +29,23 @@ function filler(count: number): string {
   return `${fns.join("\n")}\nexport const all=[${Array.from({ length: count }, (_, i) => `f${i}`).join(",")}];`;
 }
 
-/** The real supabase-js plus `appCode`, minified into one browser bundle. `before` runs ahead of the client. */
+/**
+ * The real supabase-js plus `appCode`, minified into one browser bundle. With
+ * `fillerFns` the app module sits between two big filler modules, so it is
+ * neither in the head nor in the tail of the file. `before` runs ahead of the client.
+ */
 async function build(name: string, appCode: string, fillerFns = 0, before = ""): Promise<string> {
-  const lead = fillerFns
-    ? `import { all } from "./${name}-filler.js";\nglobalThis.__sum = all.reduce((n, f) => n + f(1), 0);\n`
-    : "";
-  if (fillerFns) writeFileSync(join(dir, `${name}-filler.js`), filler(fillerFns));
   writeFileSync(
-    join(dir, `${name}.js`),
-    `${lead}${before}\nimport { createClient } from ${JSON.stringify(SUPABASE_JS)};\n${appCode}\n`,
+    join(dir, `${name}-app.js`),
+    `${before}\nimport { createClient } from ${JSON.stringify(SUPABASE_JS)};\n${appCode}\n`,
   );
+  const lead = fillerFns ? `import { all } from "./${name}-filler.js";\nglobalThis.__sum = all.reduce((n, f) => n + f(1), 0);\n` : "";
+  const tail = fillerFns ? `import { all as after } from "./${name}-after.js";\nglobalThis.__sum2 = after.reduce((n, f) => n + f(2), 0);\n` : "";
+  if (fillerFns) {
+    writeFileSync(join(dir, `${name}-filler.js`), filler(fillerFns));
+    writeFileSync(join(dir, `${name}-after.js`), filler(fillerFns).replace(/\bf(\d+)\b/g, "g$1"));
+  }
+  writeFileSync(join(dir, `${name}.js`), `${lead}import "./${name}-app.js";\n${tail}`);
   const result = await Bun.build({
     entrypoints: [join(dir, `${name}.js`)],
     outdir: join(dir, `${name}-out`),
@@ -96,18 +103,21 @@ describe("#1379 the real supabase-js build", () => {
     );
     expect(code.length).toBeGreaterThan(300_000);
     expect(code.indexOf(`${REF}.supabase.co`)).toBeGreaterThan(256 * 1024);
+    expect(code.length - code.indexOf(`${REF}.supabase.co`)).toBeGreaterThan(256 * 1024);
     expect(detect(code)).toContain("supabase");
   });
 
-  test("dozens of earlier quoted placeholder URLs do not hide the real one", async () => {
-    const earlier = Array.from({ length: 40 }, (_, i) => `globalThis.__p${i}="https://your-project.supabase.co";`).join("\n");
+  test("200 identical and 60 distinct earlier placeholder URLs do not hide the real one", async () => {
+    const same = Array.from({ length: 200 }, (_, i) => `globalThis.__s${i % 7}="https://your-project.supabase.co";`).join("\n");
+    const distinct = Array.from({ length: 60 }, (_, i) => `globalThis.__d${i}="https://your-project-${i}.supabase.co";`).join("\n");
     const code = await build(
       "many",
       `let l="https://${REF}.supabase.co";globalThis.__c = createClient(l,globalThis.__k);`,
       7000,
-      earlier,
+      `${same}\n${distinct}`,
     );
     expect(code.indexOf(`${REF}.supabase.co`)).toBeGreaterThan(256 * 1024);
+    expect(code.length - code.indexOf(`${REF}.supabase.co`)).toBeGreaterThan(256 * 1024);
     expect(detect(code)).toContain("supabase");
   });
 
