@@ -33,6 +33,8 @@ const COMMON_WORDS = wordSet(
   // Function words / generic verbs (#695) that read as high density on
   // ordinary pages, never as a real SEO target.
   "your our his her its who whom whose get here very such same each any all most much many even still yet",
+  // `out` (#1315): "out of stock", "check out" on every product page.
+  "out",
 );
 
 // Price-note boilerplate repeated beside every product on English shops
@@ -47,6 +49,9 @@ const LANGUAGE_STOP_WORDS = new Map<string, ReadonlySet<string>>([
       "aber alle allem allen aller alles als also ander andere anderem anderen anderer anderes auch auf aus bei bin bis bist damit dann das dass dein deine dem den denn der des die dies diese",
       "ein eine einem einen einer eines etwas hat haben hier ich ihr ihre ist jede kein keine man mehr mein meine mit nach nicht noch nun nur oder sein seine sind solche und uns unser",
       "vom von war waren was wenn wer wie wir wird zum zur inkl mwst zzgl versandkosten",
+      // Formal and informal address, prepositions and particles (#1315): "Sie" in every
+      // sentence of a service page, "für" and "zu" everywhere.
+      "sie für du dich dir deinen deinem deiner deines zu im am ihn ihm ihnen ihren ihrem ihrer ob so",
     ),
   ],
   [
@@ -208,6 +213,70 @@ function createSiteChromeAncestorTest(root: Element): (element: Element) => bool
   };
 }
 
+/** Smallest number of links, and of different labels, for a block to read as a link list (menu, footer columns). */
+const LINK_LIST_MIN_LINKS = 6;
+const LINK_LIST_MIN_LABELS = 4;
+/** Share of a block's text that is link text for it to be a link list. */
+const LINK_LIST_TEXT_SHARE = 0.85;
+const LINK_LIST_MAX_ANCHORS = 3000;
+const LINK_LIST_MAX_DEPTH = 8;
+
+/**
+ * Blocks that are mostly link text: a mega menu or footer columns built from plain
+ * `div`s, which the landmark test cannot see (#1315). Their link labels are site
+ * navigation repeated on every page, not copy. Only used when the page has no main
+ * copy of its own to measure. Requires several DIFFERENT labels, so a block that
+ * repeats one anchor ("emergency plumber" x20) still counts as the stuffing it is.
+ */
+function createLinkListTest(body: Element): (element: Element) => boolean {
+  type Stats = { links: number; chars: number; labels: Set<string> };
+  const stats = new Map<Element, Stats>();
+  let seen = 0;
+  for (const a of body.querySelectorAll("a")) {
+    if (++seen > LINK_LIST_MAX_ANCHORS) break;
+    const label = (a.textContent || "").replace(/\s+/g, " ").trim().toLowerCase();
+    if (!label) continue;
+    let current: Element | null = a.parentElement;
+    for (let depth = 0; current && current !== body && depth < LINK_LIST_MAX_DEPTH; depth++, current = current.parentElement) {
+      let entry = stats.get(current);
+      if (!entry) {
+        entry = { links: 0, chars: 0, labels: new Set() };
+        stats.set(current, entry);
+      }
+      entry.links += 1;
+      entry.chars += label.replace(/\s/g, "").length;
+      if (entry.labels.size < LINK_LIST_MIN_LABELS) entry.labels.add(label);
+    }
+  }
+  const lists = new WeakSet<Element>();
+  for (const [element, entry] of stats) {
+    if (entry.links < LINK_LIST_MIN_LINKS || entry.labels.size < LINK_LIST_MIN_LABELS) continue;
+    const textChars = (element.textContent || "").replace(/\s/g, "").length;
+    if (textChars > 0 && entry.chars >= textChars * LINK_LIST_TEXT_SHARE) lists.add(element);
+  }
+  const known = new WeakMap<Element, boolean>();
+  return (element) => {
+    const passed: Element[] = [];
+    let current: Element | null = element;
+    let answer = false;
+    while (current && current !== body) {
+      const cached = known.get(current);
+      if (cached !== undefined) {
+        answer = cached;
+        break;
+      }
+      passed.push(current);
+      if (lists.has(current)) {
+        answer = true;
+        break;
+      }
+      current = current.parentElement;
+    }
+    for (const el of passed) known.set(el, answer);
+    return answer;
+  };
+}
+
 interface ContentSelection {
   readonly root: Element;
   readonly words: string[];
@@ -246,8 +315,10 @@ function selectMainContent(
     if (words.length >= 100) return { root, words, isInExcludedChrome: null };
   }
 
-  const words = keywordTokens(getRenderedProseTextWhere(body, isInSiteChrome));
-  return { root: body, words, isInExcludedChrome: isInSiteChrome };
+  const isInLinkList = createLinkListTest(body);
+  const isExcluded = (element: Element): boolean => isInSiteChrome(element) || isInLinkList(element);
+  const words = keywordTokens(getRenderedProseTextWhere(body, isExcluded));
+  return { root: body, words, isInExcludedChrome: isExcluded };
 }
 
 /**
@@ -296,6 +367,42 @@ export function brandTerms(
     }
   }
   return terms;
+}
+
+/** Leaf-ish elements whose whole text is a short component string. */
+const CARD_TEXT_SELECTOR = "p, span, div, li, dd, dt, small";
+const CARD_TEXT_MAX_CHARS = 160;
+const CARD_MIN_PARENTS = 3;
+const CARD_MAX_ELEMENTS = 4000;
+
+/**
+ * Short texts repeated once per card (#1315): `text -> occurrences` for every text
+ * (digits replaced) that is the whole text of a block with no element children in at
+ * least {@link CARD_MIN_PARENTS} different parent elements.
+ */
+function repeatedCardText(root: Element, excluded: ((element: Element) => boolean) | null): Map<string, number> {
+  const byText = new Map<string, { count: number; parents: Set<Element> }>();
+  let seen = 0;
+  for (const el of root.querySelectorAll(CARD_TEXT_SELECTOR)) {
+    if (++seen > CARD_MAX_ELEMENTS) break;
+    if (el.children.length > 0) continue;
+    if (excluded?.(el)) continue;
+    const text = (el.textContent || "").replace(/\s+/g, " ").trim();
+    if (text.length < 8 || text.length > CARD_TEXT_MAX_CHARS) continue;
+    const key = text.toLowerCase().replace(/\d+([.,]\d+)*/g, "#");
+    let entry = byText.get(key);
+    if (!entry) {
+      entry = { count: 0, parents: new Set() };
+      byText.set(key, entry);
+    }
+    entry.count += 1;
+    if (el.parentElement) entry.parents.add(el.parentElement);
+  }
+  const out = new Map<string, number>();
+  for (const [text, entry] of byText) {
+    if (entry.parents.size >= CARD_MIN_PARENTS) out.set(text, entry.count);
+  }
+  return out;
 }
 
 export const keywordStuffingRule: Rule = {
@@ -424,6 +531,18 @@ export const keywordStuffingRule: Rule = {
     let ctaWordTotal = 0;
     for (const [label, occurrences] of ctaLabelCounts) {
       for (const word of keywordTokens(label)) {
+        ctaWordDeductions.set(word, (ctaWordDeductions.get(word) || 0) + occurrences);
+        ctaWordTotal += occurrences;
+      }
+    }
+
+    // Text repeated once per card in a grid (a rating sentence, an installment note) is a
+    // UI component, not copy aimed at a term (#1315). A leaf block counts as one only
+    // when the same text (digits ignored) sits in at least three different parent
+    // wrappers: the card pattern. The same sentence written again and again in one
+    // container is body copy and still counts.
+    for (const [text, occurrences] of repeatedCardText(contentRoot, isInExcludedChrome)) {
+      for (const word of keywordTokens(text)) {
         ctaWordDeductions.set(word, (ctaWordDeductions.get(word) || 0) + occurrences);
         ctaWordTotal += occurrences;
       }

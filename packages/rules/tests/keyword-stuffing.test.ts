@@ -405,3 +405,70 @@ describe("content/keyword-stuffing ignores the site's own brand name", () => {
     expect(checks[0].items?.map((i) => i.id)).toEqual(["widget"]);
   });
 });
+
+describe("content/keyword-stuffing: German function words, menu chrome, card microcopy (#1315)", () => {
+  const flagged = (html: string): string[] => {
+    const check = keywordStuffingRule.run(ctx(html)).checks.find((c) => c.name === "keyword-stuffing");
+    return check?.items?.map((i) => i.id) ?? [];
+  };
+  const page = (lang: string, body: string) => `<html lang="${lang}"><head><title>t</title></head><body>${body}</body></html>`;
+
+  test("German function words are not reported, a content word still is", () => {
+    const words = "sie für du dich dir deinen deinem deiner zu im am ihn ihm ob so";
+    const prose = Array.from({ length: 12 }, () => `${words} ${filler(8)}`).join(" ");
+    const html = page("de", `<main><p>${prose} ${"zahlung ".repeat(14)}</p></main>`);
+    const out = flagged(html);
+    for (const w of words.split(" ")) expect(out).not.toContain(w);
+    expect(out).toContain("zahlung");
+  });
+
+  test("`out` is not reported on an English page", () => {
+    const html = page("en", `<main><p>${Array.from({ length: 12 }, () => `out ${filler(8)}`).join(" ")}</p></main>`);
+    expect(flagged(html)).not.toContain("out");
+  });
+
+  test("a mega menu of plain div links on a page with little copy is not measured", () => {
+    const cats = ["bademode", "curvy", "wäsche", "kleider", "röcke", "hosen"];
+    const links = Array.from({ length: 60 }, (_, i) => `<a href="/c/${i}">${cats[i % cats.length]} ${["neu", "sale", "alle", "top"][i % 4]}</a>`).join(" ");
+    const html = page("de", `<body><div class="menu"><div>${links}</div></div><div class="copy"><p>Kontakt ${filler(70)}</p></div></body>`);
+    expect(flagged(html)).toEqual([]);
+  });
+
+  test("true positive: one anchor repeated 20 times is not a menu, it still flags", () => {
+    const links = Array.from({ length: 20 }, () => `<a href="/p">emergency plumber</a>`).join(" ");
+    const html = page("en", `<body><div>${links}</div><p>${filler(60)}</p></body>`);
+    expect(flagged(html)).toContain("plumber");
+  });
+
+  const card = (n: number) => `<div class="card"><h3>${FILLER_BANK[n % 30]} ${FILLER_BANK[(n + 7) % 30]}</h3><span class="rating">Durchschnittliche Bewertung von 4.${n} von 5 Sternen</span><div class="inst">Ab ${n},90 € zahlen in Raten</div></div>`;
+
+  test("text repeated once per product card does not count toward density", () => {
+    const html = page("de", `<main><div class="grid">${Array.from({ length: 12 }, (_, i) => card(i)).join("")}</div><p>${filler(60)}</p></main>`);
+    const out = flagged(html);
+    expect(out).not.toContain("durchschnittliche");
+    expect(out).not.toContain("bewertung");
+    expect(out).not.toContain("sternen");
+    expect(out).not.toContain("zahlen");
+  });
+
+  test("true positive: the same sentence written 12 times as body copy still flags", () => {
+    const sentence = "Günstige Matratzen kaufen";
+    const html = page("de", `<main><article><p>${Array.from({ length: 12 }, () => sentence).join(". ")}. ${filler(90)}</p></article></main>`);
+    expect(flagged(html)).toContain("matratzen");
+    // and as separate paragraphs in ONE container
+    const html2 = page("de", `<main><article>${Array.from({ length: 12 }, () => `<p>${sentence}</p>`).join("")}<p>${filler(90)}</p></article></main>`);
+    expect(flagged(html2)).toContain("matratzen");
+  });
+});
+
+describe("content/keyword-stuffing link-list and card heuristics stay bounded (#1315)", () => {
+  test("thousands of nested anchors and repeated cards finish quickly", () => {
+    const nest = (depth: number, inner: string) => Array.from({ length: depth }, () => "<div>").join("") + inner + Array.from({ length: depth }, () => "</div>").join("");
+    const links = Array.from({ length: 6000 }, (_, i) => `<a href="/x/${i}">label ${i % 97}</a>`).join("");
+    const cards = Array.from({ length: 6000 }, (_, i) => `<div><span>Durchschnittliche Bewertung ${i}</span></div>`).join("");
+    const html = `<html lang="de"><body>${nest(40, links)}${cards}<p>${filler(120)}</p></body></html>`;
+    const started = performance.now();
+    keywordStuffingRule.run(ctx(html));
+    expect(performance.now() - started).toBeLessThan(3000);
+  });
+});
