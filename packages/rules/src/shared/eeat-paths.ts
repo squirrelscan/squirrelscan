@@ -9,18 +9,37 @@
 
 import { z } from "zod";
 
-import { matchesExcludePattern } from "@squirrelscan/utils";
+import { excludePatternError, getPathname, matchesExcludePattern } from "@squirrelscan/utils";
 
 /** The `paths` option, identical on the three rules. */
 export const eeatPathsSchema = z
   .array(z.string().min(1).max(512))
   .max(50)
+  // A `regex:` pattern that does not compile would never match and warn on every call.
+  .superRefine((paths, ctx) => {
+    paths.forEach((pattern, index) => {
+      const error = excludePatternError(pattern);
+      if (error) {
+        ctx.addIssue({
+          code: "custom",
+          path: [index],
+          message: `not a valid regular expression: ${error}`,
+        });
+      }
+    });
+  })
   .default([])
   .describe(
     "Site-specific paths of the page, matched like excludePatterns (substring, /exact-segment/ or regex:), checked in addition to the built-in slugs",
   );
 
-/** Whether `url` is at one of the configured `paths`. No paths matches nothing. */
+/**
+ * Whether `url` is at one of the configured `paths`. No paths matches nothing. The
+ * pattern is matched against the URL's PATH only, never its host, query or fragment:
+ * `/pages/manufaktur` does not match `?next=/pages/manufaktur`, and `manufaktur` does
+ * not match every page on a host called manufaktur.de.
+ */
 export function matchesConfiguredPaths(url: string, paths: readonly string[]): boolean {
-  return paths.length > 0 && matchesExcludePattern(url, [...paths]);
+  if (paths.length === 0) return false;
+  return matchesExcludePattern(getPathname(url) || url, [...paths]);
 }

@@ -45,7 +45,7 @@ The word threshold is a proxy for that. Padding the page to 200 words does not m
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `paths` | string[] | `[]` | Site-specific paths of the page, checked in addition to the built-in slugs. Patterns are matched like [`excludePatterns`](/configuration/rule-options#url-patterns): a substring of the path, `/exact-segment/`, or `regex:`. |
+| `paths` | string[] | `[]` | Site-specific paths of the page, checked in addition to the built-in slugs. Patterns are matched like [`excludePatterns`](/configuration/rule-options#url-patterns), against the URL's path only (never the host, query string or fragment): a substring of the path, `/exact-segment/`, or `regex:`. |
 
 ### Configuration example
 
@@ -54,7 +54,7 @@ The word threshold is a proxy for that. Padding the page to 200 words does not m
 paths = ["/pages/manufaktur"]
 ```
 
-A crawled page at a configured path counts as the page, with no structured data needed, and a configured path that pages link to but the crawl did not fetch is reported as linked but not crawled, as for a built-in slug. A `paths` value that is not an array of strings is reported by `squirrel config validate`.
+A crawled page at a configured path counts as the page, with no structured data needed, and a configured path that pages link to but the crawl did not fetch is reported as linked but not crawled, as for a built-in slug. A `paths` value that is not an array of strings, or a `regex:` entry that does not compile, is reported by `squirrel config validate`.
 
 ## Enable / disable
 
