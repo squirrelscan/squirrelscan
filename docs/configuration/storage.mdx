@@ -306,8 +306,8 @@ crawl from before squirrelscan recorded when the build began waits a week.
 **Older leftovers are repaired once.** Before automatic retention existed,
 `self disk --prune` could leave page rows that a later audit then superseded.
 The next audits and `self disk --prune` runs of a project remove them, in small
-steps (5,000 rows at a time, at most a couple of seconds per run, so an audit
-never waits on it and the database is never locked for long), and then record
+steps (500 rows at a time, each a fraction of a second, and at most a couple of
+seconds per run, so an audit never waits on it), and then record
 that it is done. A url whose only copy sits in a retired audit keeps it,
 so re-audits stay incremental. Those rows were the database's only pointer to
 their page HTML in the content store, which the store's size cap evicts as usual.

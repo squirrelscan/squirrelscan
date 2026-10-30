@@ -20,7 +20,7 @@ How it works:
 ### Fixed
 
 - **Space held by audits killed while building their report comes back.** A crawl left marked `building` after Ctrl-C or a crash counted toward no `keep_audits` window and was never retired, so its rows stayed until a manual `squirrel self disk --prune`. A later audit of the project now retires it once its report has been building for more than six hours, no live process owns it, and at least `keep_audits` newer audits exist (when in doubt it is left alone). A crawl a later `squirrel analyze` rebuilt inside the window is never retired, and `self disk --prune` plans around a crawl that is still building. (#288)
-- **Page rows superseded before automatic retention are collected once.** `self disk --prune` could keep a page row that a later audit then replaced, and nothing revisited it. The next audit or prune of a project removes those rows in chunks of 5,000 and records that it is done; a url whose only copy is in a retired audit keeps it, so re-audits stay incremental. A removed row was the project database's only pointer to that page's stored HTML, so research corpora that keep retired audits should copy what they need first. (#289)
+- **Page rows superseded before automatic retention are collected once.** `self disk --prune` could keep a page row that a later audit then replaced, and nothing revisited it. The next audit or prune of a project removes those rows 500 at a time, a couple of seconds per run, and records that it is done; a url whose only copy is in a retired audit keeps it, so re-audits stay incremental. A removed row was the project database's only pointer to that page's stored HTML, so research corpora that keep retired audits should copy what they need first. (#289)
 
 ### Added
 

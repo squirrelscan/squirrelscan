@@ -234,6 +234,17 @@ describe("#289: the repair of rows superseded before automatic retention", () =>
     s.close?.();
   });
 
+  test("the default chunk is 500 rows, so the write lock is held briefly", async () => {
+    const s = await open();
+    const urls = Array.from({ length: 1200 }, (_, i) => `https://e.test/d${String(i).padStart(4, "0")}`);
+    const first = await crawl(s, 1_000, urls);
+    await run(s.retireCrawls([first], 1_500));
+    await crawl(s, 2_000, urls);
+    await run(s.repairSupersededPagesOnce({ budgetMs: 0 }));
+    expect(rowsOf(first)).toHaveLength(700);
+    s.close?.();
+  });
+
   test("a project that never retired anything loses nothing", async () => {
     const s = await open();
     const old = await crawl(s, 1_000, ["https://e.test/a"]);
