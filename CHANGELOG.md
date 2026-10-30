@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **`perf/content-in-js-bundle` no longer passes an audit where every page was browser-rendered.** A rendered page's copy is in the script that rendered it, so the rule had nothing to search for and reported "No page content found", which read as clean although nothing was judged. It is now skipped with a message saying every page was rendered and that `--http` checks it. Audits with some rendered and some plain pages still search the plain ones. See [Page content in a JavaScript bundle](https://docs.squirrelscan.com/rules/perf/content-in-js-bundle). (#1329)
+
 ### Added
 
 - **`[crawler] tls_proxy_resolves_names` lets a proxy that owns DNS resolve the TLS check's hosts.** Behind `HTTPS_PROXY`, `security/tls-certificate` resolves the name itself and asks the proxy for a tunnel to the vetted address, which a proxy that only allows connections by name refuses. With `tls_proxy_resolves_names = true` the audited host and its `www` or apex counterpart are requested by name with no local lookup, the hostname stays the SNI and verification name, and a refusing, hanging or garbled proxy still gives `not checked`. Off by default, because where those two names resolve becomes the proxy's decision; every other host is still resolved, vetted and pinned by squirrel, and an IP literal, a metadata name or a name the guard refuses on sight never take this path. See [Behind an HTTP proxy](https://docs.squirrelscan.com/rules/security/tls-certificate#behind-an-http-proxy). (#1317)
