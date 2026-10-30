@@ -115,7 +115,13 @@ async function audit(
     ],
     {
       cwd,
-      env: { ...process.env, HOME: home, NO_COLOR: "1", NO_TELEMETRY: "1" },
+      env: {
+        ...process.env,
+        HOME: home,
+        NO_COLOR: "1",
+        NO_TELEMETRY: "1",
+        SQUIRREL_CONTENT_STORE_PATH: undefined,
+      },
       stdout: "pipe",
       stderr: "pipe",
     }
