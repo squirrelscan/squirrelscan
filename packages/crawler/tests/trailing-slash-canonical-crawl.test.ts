@@ -5,12 +5,18 @@
 // strict — it 301s any no-slash path — so a single normalization slip shows up
 // as a recorded redirect rather than as a silent extra request.
 
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { Effect } from "effect";
 
 import { createCrawler } from "../src/core/crawler";
 import type { CrawlerConfig } from "../src/core/types";
 import { SQLiteStorage } from "../src/storage/sqlite";
+
+// #211: these crawl a real localhost server through redirects, so under CPU
+// contention a slow step can pass the 5 s default test timeout or the request
+// timeout. The servers are local, so a generous bound costs nothing when the
+// machine is idle; it only matters when it is not.
+setDefaultTimeout(30_000);
 
 const CONFIG: Partial<CrawlerConfig> = {
   maxPages: 20,
@@ -18,7 +24,7 @@ const CONFIG: Partial<CrawlerConfig> = {
   perHostConcurrency: 1,
   delayMs: 0,
   perHostDelayMs: 0,
-  timeoutMs: 2000,
+  timeoutMs: 10_000,
   userAgent: "squirrel-test",
   respectRobots: false,
   incremental: false,

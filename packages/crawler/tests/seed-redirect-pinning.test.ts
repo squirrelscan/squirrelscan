@@ -4,7 +4,7 @@
 // agent-manifest sweep) at a host the user never named, and files that host's
 // content under the seed's name.
 
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { Effect } from "effect";
 
 import { createCrawler } from "../src/core/crawler";
@@ -12,6 +12,12 @@ import type { CrawlerConfig } from "../src/core/types";
 import { isOffSiteFinalUrl, resolveSeedRedirect } from "../src/frontier";
 import { SQLiteStorage } from "../src/storage/sqlite";
 import { WELL_KNOWN_PATHS } from "../src/well-known";
+
+// #211: these crawl a real localhost server through redirects, so under CPU
+// contention a slow step can pass the 5 s default test timeout or the request
+// timeout. The servers are local, so a generous bound costs nothing when the
+// machine is idle; it only matters when it is not.
+setDefaultTimeout(30_000);
 
 // Paths a crawl sweeps against its base origin, beyond the well-known set.
 const ROOT_PROBE_PATHS = [
@@ -35,7 +41,7 @@ const CONFIG: Partial<CrawlerConfig> = {
   perHostConcurrency: 1,
   delayMs: 0,
   perHostDelayMs: 0,
-  timeoutMs: 2000,
+  timeoutMs: 10_000,
   userAgent: "squirrel-test",
   respectRobots: false,
   incremental: false,
