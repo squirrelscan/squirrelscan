@@ -134,6 +134,9 @@ export function groupTechnologies(items: ReportTechnology[]): TechGroup[] {
 
 /** A short one-line change summary, e.g. "2 added · 1 removed since last scan". */
 export function techChangeSummary(tech: ReportTechnologies): string | null {
+  // A local scan keeps no history, so "no changes" or "first scan" would claim a diff
+  // nobody computed (#1263): it says where the list came from instead.
+  if (tech.source === "local") return "Detected locally from the crawled pages (no scan history)";
   if (tech.firstScan) return "First recorded scan of this domain";
   const parts: string[] = [];
   if (tech.added.length > 0) parts.push(`${tech.added.length} added`);
@@ -145,4 +148,16 @@ export function techChangeSummary(tech: ReportTechnologies): string | null {
 /** Map techId → display name from the current item list (for added/removed). */
 export function techNameMap(items: ReportTechnology[]): Map<string, string> {
   return new Map(items.map((t) => [t.id, t.name]));
+}
+
+/**
+ * The opening tag of the technologies element in the llm and xml reports (#1263).
+ * A local scan keeps no history, so it states its `source` and omits `first-scan`,
+ * `added` and `removed`, which would claim a diff nobody computed; any other section
+ * keeps them, with `source` when it has one.
+ */
+export function techOpenTag(name: string, tech: ReportTechnologies, indent: string): string {
+  const source = tech.source ? ` source="${tech.source}"` : "";
+  if (tech.source === "local") return `${indent}<${name}${source}>`;
+  return `${indent}<${name}${source} first-scan="${tech.firstScan}" added="${tech.added.length}" removed="${tech.removed.length}">`;
 }

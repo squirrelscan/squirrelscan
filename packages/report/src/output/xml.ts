@@ -1,6 +1,7 @@
 // XML report output
 
 import type { ReportBranding } from "@squirrelscan/core-contracts";
+import { techOpenTag } from "../technologies";
 import type { AuditReport } from "../types";
 import { getScoreGrade } from "../scoring";
 import { getGroupName } from "../categories";
@@ -209,7 +210,7 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
   if (report.technologies && report.technologies.items.length > 0) {
     const tech = report.technologies;
     lines.push(
-      `${indent(1)}<technologies first-scan="${tech.firstScan}" added="${tech.added.length}" removed="${tech.removed.length}">`,
+      techOpenTag("technologies", tech, indent(1)),
     );
     for (const t of tech.items) {
       const ver = t.version ? ` version="${escapeXml(t.version)}"` : "";
@@ -294,7 +295,7 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
             lines.push(`${indent(5)}<item id="${escapeXml(item.id)}">`);
             // pub#846: the region the item is shown in, beside its bounded page list; a scoped
             // item's label drops the section phrase the region says.
-            const scope = itemRegionScope(item, report.structure);
+            const scope = itemRegionScope(item, report.structure, check);
             const label = itemLabel(item, scope);
             if (label && label !== item.id) lines.push(`${indent(6)}<label>${escapeXml(label)}</label>`);
             if (scope) lines.push(`${indent(6)}${scopeElement(scope)}`);

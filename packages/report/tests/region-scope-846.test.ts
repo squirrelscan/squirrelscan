@@ -399,3 +399,43 @@ describe("scoped findings in each format", () => {
     expect(text).toContain("-> /p00");
   });
 });
+
+describe("a finding that carries pages from an earlier audit is never scoped to a region (pub#860)", () => {
+  /** The `linkTextReport`, with the last seven pages' checks carried from an earlier audit. */
+  function carriedReport(): AuditReport {
+    const report = linkTextReport();
+    const rule = report.ruleResults["a11y/link-text"]!;
+    rule.checks = rule.checks.map((c, k) => (k >= 45 ? { ...c, provenance: "carried" as const, lastSeenAt: 1 } : c));
+    return report;
+  }
+  const REGION_LINE = /In the site header, on \d+ of \d+ pages/i;
+
+  test("the helpers refuse an item or a check of a carried finding", () => {
+    const item: CheckItem = { id: "x", sourcePages: pages(0, 10), regions: { footer: 10 } };
+    const s = structure({ footer: 10 });
+    expect(itemRegionScope(item, s)).toMatchObject({ region: "footer" });
+    expect(itemRegionScope(item, s, { carriedCount: 3 })).toBeUndefined();
+    expect(itemRegionScope(item, s, { carriedPages: [page(1)] })).toBeUndefined();
+    expect(itemRegionScope(item, s, { provenance: "carried" })).toBeUndefined();
+    expect(itemRegionScope(item, s, { carriedPages: [] })).toMatchObject({ region: "footer" });
+    expect(checkRegionScope({ details: { region: "footer" }, carriedCount: 2 }, 50, SITE_STRUCTURE)).toBeUndefined();
+  });
+
+  test("fresh pages only still read as before (control)", () => {
+    expect(renderText(linkTextReport())).toMatch(REGION_LINE);
+  });
+
+  test("text, markdown, llm, html, json and xml keep the page rows instead of a region share", () => {
+    const report = carriedReport();
+    expect(renderText(report)).not.toMatch(REGION_LINE);
+    expect(renderMarkdown(report)).not.toMatch(REGION_LINE);
+    expect(renderLlm(report)).not.toMatch(/in the site header, on \d+ of \d+ pages/);
+    expect(renderHtml(report)).not.toMatch(REGION_LINE);
+    expect(renderXml(report)).not.toContain("<scope region=");
+    const json = JSON.parse(renderJson(report));
+    const items = json.issues.flatMap((r: { checks: { items?: unknown[] }[] }) => r.checks.flatMap((c) => c.items ?? []));
+    expect(items.some((i: { scope?: unknown }) => i.scope !== undefined)).toBe(false);
+    // and the pages are listed, as for any unscoped finding
+    expect(renderText(report)).toContain("-> /p");
+  });
+});

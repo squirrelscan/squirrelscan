@@ -143,6 +143,14 @@ export interface CrawlerConfig {
    * Default: 5s.
    */
   stopGraceMs: number;
+  /**
+   * Epoch ms the crawl's discovery (robots.txt, llms.txt, the well-known sweep and the
+   * sitemap walk) must be done by (`--max-duration`, #1271). Each request is cut to what
+   * is left and the rest are skipped, so a site whose discovery files never answer cannot
+   * use up the audit's budget before the first page. Unset: the preamble and walk keep
+   * their own budgets.
+   */
+  discoveryDeadlineAt?: number;
   /** Number of URLs found in sitemaps (set at runtime by crawler) */
   sitemapUrlCount: number;
   /**
@@ -356,7 +364,8 @@ export type CrawlerErrorCode =
 
 export interface Crawler {
   /** Detect and follow both HTTP and client-side redirects, returning the final URL */
-  detectRedirects(targetUrl: string): Effect.Effect<string, never, never>;
+  /** `budget`: no hop starts, and none waits longer than what is left, past its deadline (#1271). */
+  detectRedirects(targetUrl: string, budget?: { readonly deadlineAt: number }): Effect.Effect<string, never, never>;
 
   /** Start a new crawl from the given base URL (runs synchronously until complete) */
   start(

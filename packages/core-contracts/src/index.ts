@@ -80,9 +80,9 @@ import type {
 import type { SiteMetadata } from "./site-metadata";
 import type { CompactResolutionSignal, ResolutionSignal } from "./resolution";
 import { RULE_TIMED_OUT_SKIP_REASON } from "./resolution";
-import type { AuditFailureReasonCode } from "./failure-reason";
+import type { AuditStatusReasonCode } from "./failure-reason";
 import type { RefusedFetch } from "./refused-fetch";
-import type { WafBlockedSummary } from "./waf-block";
+import type { WafBlockedSummary, WafSuspectSummary } from "./waf-block";
 import type { EntityMap } from "./entity-map";
 import type { AuditLevel, ResolvedAuditSettings } from "./audit-levels";
 import type { ReportCapTier } from "./limits";
@@ -671,13 +671,19 @@ export interface AuditReport {
     unfetched?: number;
   };
   /**
+   * What the `--max-duration` time limit cut (#1271). Present only when the run hit the
+   * limit and something was left undone; with it `status` is `partial` and
+   * `statusReasonCode` is `max_duration` (unless the run was already failed or blocked).
+   */
+  maxDuration?: MaxDurationCut;
+  /**
    * Machine-readable class of the failure behind `statusReason` (#1822), so the
    * email template, the dashboard, the MCP tools and Sentry can branch on the
    * cause instead of substring-matching prose. Set alongside `statusReason`;
    * absent on reports stored before #1822, where
    * `classifyAuditFailureReasonText` recovers the class from the text.
    */
-  statusReasonCode?: AuditFailureReasonCode;
+  statusReasonCode?: AuditStatusReasonCode;
   /**
    * Root fetches (robots.txt, sitemaps, llms.txt, the Markdown probe) the site
    * refused with a 401/403/429 or a bot-challenge 503. A refusal is a coverage
@@ -692,6 +698,12 @@ export interface AuditReport {
    * evaluation and never scored. Absent when no page was blocked.
    */
   wafBlocked?: WafBlockedSummary;
+  /**
+   * Pages that look like a provider's refusal but carry none of its block markers
+   * (#1258). They were audited like any other page, so the findings on them may
+   * describe the provider's page, not the site's. Absent when none was seen.
+   */
+  wafSuspect?: WafSuspectSummary;
   healthScore?: HealthScore;
   ruleResults: Record<string, ReportRuleResult>;
   /**
@@ -709,6 +721,16 @@ export interface AuditReport {
    * page classifier existed.
    */
   structure?: ReportStructure;
+  /**
+   * Crawled pages counted with their canonical page instead of as pages of their own (#858):
+   * query-string variants (`/contact?subject=Billing`) whose `rel=canonical` is another crawled
+   * page of the same path. `totalPages`, `pages` and every affected-page count are canonical
+   * groups; each variant still has its own checks, so tallies and the score are unchanged.
+   * Absent when there were none.
+   */
+  canonicalVariants?: number;
+  /** The folded variants and the page each is counted with (first 100), so no variant URL is lost (#858). */
+  canonicalVariantPages?: Array<{ page: string; canonical: string }>;
   /**
    * Resolved site-metadata "profile" (site type, business category, country,
    * audience, identity, contacts, socials, domain age). Like `technologies`,
@@ -1077,10 +1099,26 @@ export interface PublishedReportDetail {
   classesDropped?: number;
 }
 
+/** What a `--max-duration` time limit cut from a run (#1271). */
+export interface MaxDurationCut {
+  /** The budget, in seconds. */
+  seconds: number;
+  /** Pages discovered and queued but never fetched. */
+  unfetchedPages: number;
+  /** Pages fetched whose rules never ran. */
+  pagesNotEvaluated: number;
+  /** The rules phase was cut: site-wide checks are missing from the report. */
+  siteChecksCut: boolean;
+  /** The resource (CSS, image, script) checks ran out of time: some size and script findings may be incomplete. Absent when not cut. */
+  resourceChecksCut?: boolean;
+}
+
 /** Where an audit executed + how much of the site it crawled (#1180). */
 export interface ScanScope {
   /** "cli" = local machine, "ci" = CI runner, "cloud" = squirrelscan cloud container. */
   origin: "cli" | "ci" | "cloud";
+  /** Query-string variants counted with their canonical page: `pagesCrawled` excludes them (#858). */
+  canonicalVariants?: number;
   /** Page cap in effect for this run; absent when the runner had no cap. */
   maxPages?: number;
   /**
@@ -1120,6 +1158,11 @@ export interface ScanScope {
    * `originalUrl` and `redirectChain` are read from it.
    */
   startRedirect?: SeedRedirectRecord;
+  /**
+   * What the `--max-duration` time limit cut (#1271), kept here so a report rebuilt
+   * from the crawl later is still `partial` with reason code `max_duration`.
+   */
+  maxDuration?: MaxDurationCut;
 }
 
 /** Locked-rules audience for a report — anonymous/local vs signed-in tier (#368). */
@@ -1326,6 +1369,13 @@ export interface ReportTechnologies {
   advisories?: SoftwareAdvisory[];
   /** ISO timestamp of the scan that produced this snapshot. */
   scannedAt?: string;
+  /**
+   * Which detection produced it (#1263). `local`: the free signature scan over the
+   * pages the crawl already fetched (no extra request, no account, no history, so
+   * `added`, `removed` and `firstScan` say nothing). `cloud`: the credited cloud scan,
+   * which adds the cross-scan diff. Absent on reports written before this field.
+   */
+  source?: "local" | "cloud";
 }
 
 /** One link section's footprint across the audited pages. */

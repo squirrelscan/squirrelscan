@@ -220,7 +220,7 @@ _squirrel_completions() {
           return 0
           ;;
       esac
-      COMPREPLY=( $(compgen -W "--max-pages -m --max-depth --concurrency --per-host --level --coverage -C --format -f --output -o --refresh -r --fresh-ua --store-scripts --no-store-scripts --incremental --no-incremental --resume --verbose -v --debug --trace --project-name -n --publish -p --no-publish --ephemeral --no-ephemeral --visibility --follow-redirect --no-follow-redirect --yes -y --render --render-mode --http --offline --external-links --no-external-links --no-internal-links --no-classifier --fail-on --header -H --header-host --rule-include --rule-exclude --disable-discovery-probes --probe -P --passive --aggressive --probe-budget --pentest --summary --include-passed --help" -- "\${cur}") )
+      COMPREPLY=( $(compgen -W "--max-pages -m --max-depth --concurrency --per-host --level --coverage -C --format -f --output -o --refresh -r --fresh-ua --store-scripts --no-store-scripts --incremental --no-incremental --resume --verbose -v --debug --trace --project-name -n --publish -p --no-publish --ephemeral --no-ephemeral --visibility --follow-redirect --no-follow-redirect --yes -y --render --render-mode --http --offline --external-links --no-external-links --no-internal-links --no-classifier --fail-on --header -H --header-host --rule-include --rule-exclude --disable-discovery-probes --probe -P --passive --aggressive --probe-budget --pentest --summary --include-passed --help --include-info --include-pages --max-duration" -- "\${cur}") )
       return 0
       ;;
     entities)
@@ -272,7 +272,7 @@ _squirrel_completions() {
           return 0
           ;;
       esac
-      COMPREPLY=( $(compgen -W "--list -l --severity --category --format -f --diff --regression-since --allow-cross-site --output -o --input -i --publish -p --visibility --summary --include-passed --help" -- "\${cur}") )
+      COMPREPLY=( $(compgen -W "--list -l --severity --category --format -f --diff --regression-since --allow-cross-site --output -o --input -i --publish -p --visibility --summary --include-passed --include-info --help --include-pages" -- "\${cur}") )
       return 0
       ;;
     feedback)
@@ -521,6 +521,7 @@ _squirrel() {
             '1:url:_urls' \\
             '(-m --max-pages)'{-m,--max-pages}'[Maximum pages to crawl]:number' \\
             '--max-depth[Maximum crawl depth from the seed]:number' \\
+            '--max-duration[Wall-clock budget for the whole audit, in seconds]:seconds' \\
             '--concurrency[Global crawl worker pool size]:number' \\
             '--per-host[Max concurrent requests per host]:number' \\
             '(-C --coverage --level)--level[Audit level]:level:(${levelValues})' \\
@@ -549,7 +550,7 @@ _squirrel() {
             '--render[Force cloud browser rendering for this run]' \\
             '--render-mode[Render strategy]:mode:(off auto all)' \\
             '--http[Force plain HTTP fetch for this run]' \\
-            '--offline[Run fully offline: no cloud, publishing, telemetry, or requests to other sites]' \\
+            '--offline[Run offline: no cloud, publishing, telemetry, or requests to other sites (does not imply --passive)]' \\
             '--external-links[Check links to other sites this run, at any level]' \\
             '--no-external-links[Do not check links to other sites this run]' \\
             '--no-internal-links[Do not status-check unfetched internal link targets]' \\
@@ -561,12 +562,14 @@ _squirrel() {
             '*--rule-exclude[Skip these rule categories or rules]:pattern' \\
             '--disable-discovery-probes[Skip the pre-crawl discovery probes (llms.txt, well-known files, swagger.json)]' \\
             '(-P --probe)'{-P,--probe}'[Probing intensity]:level:(passive active aggressive)' \\
-            '--passive[Probing intensity passive: no requests beyond the crawl]' \\
+            '--passive[Probing intensity passive: no probe rules]' \\
             '--aggressive[Probing intensity aggressive: loud probes, can trip a WAF]' \\
             '--probe-budget[Wall-clock cap for all probing (e.g. 30s)]:duration' \\
             '--pentest[Shorthand for --level full --probe aggressive]' \\
             '--summary[Print score, category breakdown, and issue counts only]' \\
-            '--include-passed[Also list the rules that passed]'
+            '--include-passed[Also list the rules that passed]' \\
+            '--include-info[Also list info checks in the llm format]' \\
+            '--include-pages[JSON only: list every crawled page with its status and rule count]'
           ;;
         entities)
           _arguments \\
@@ -636,7 +639,9 @@ _squirrel() {
             '(-p --publish)'{-p,--publish}'[Publish to reports.squirrelscan.com]' \\
             '--visibility[Visibility when publishing]:visibility:(public unlisted private)' \\
             '--summary[Print score, category breakdown, and issue counts only]' \\
-            '--include-passed[Also list the rules that passed]'
+            '--include-passed[Also list the rules that passed]' \\
+            '--include-info[Also list info checks in the llm format]' \\
+            '--include-pages[JSON only: list every crawled page with its status and rule count]'
           ;;
       esac
       ;;
@@ -785,6 +790,7 @@ complete -c squirrel -n "__fish_seen_subcommand_from config; and __fish_seen_sub
 # Audit options
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -s m -l max-pages -d "Maximum pages to crawl"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l max-depth -d "Maximum crawl depth from the seed"
+complete -c squirrel -n "__fish_seen_subcommand_from audit" -l max-duration -d "Wall-clock budget for the whole audit, in seconds"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l concurrency -d "Global crawl worker pool size"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l per-host -d "Max concurrent requests per host"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l level -a "${levelValues}" -d "Audit level"
@@ -813,7 +819,7 @@ complete -c squirrel -n "__fish_seen_subcommand_from audit" -s y -l yes -d "Skip
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l render -d "Force cloud browser rendering for this run"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l render-mode -a "off auto all" -d "Render strategy"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l http -d "Force plain HTTP fetch for this run"
-complete -c squirrel -n "__fish_seen_subcommand_from audit" -l offline -d "Run fully offline: no cloud, publishing, telemetry, or requests to other sites"
+complete -c squirrel -n "__fish_seen_subcommand_from audit" -l offline -d "Run offline: no cloud, publishing, telemetry, or requests to other sites (does not imply --passive)"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l external-links -d "Check links to other sites this run, at any level"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l no-external-links -d "Do not check links to other sites this run"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l no-internal-links -d "Do not status-check unfetched internal link targets"
@@ -825,12 +831,14 @@ complete -c squirrel -n "__fish_seen_subcommand_from audit" -l rule-include -d "
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l rule-exclude -d "Skip these rule categories or rules"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l disable-discovery-probes -d "Skip the pre-crawl discovery probes (llms.txt, well-known files, swagger.json)"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -s P -l probe -a "passive active aggressive" -d "Probing intensity"
-complete -c squirrel -n "__fish_seen_subcommand_from audit" -l passive -d "Probing intensity passive: no requests beyond the crawl"
+complete -c squirrel -n "__fish_seen_subcommand_from audit" -l passive -d "Probing intensity passive: no probe rules"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l aggressive -d "Probing intensity aggressive: loud probes, can trip a WAF"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l probe-budget -d "Wall-clock cap for all probing (e.g. 30s)"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l pentest -d "Shorthand for --level full --probe aggressive"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l summary -d "Print score, category breakdown, and issue counts only"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l include-passed -d "Also list the rules that passed"
+complete -c squirrel -n "__fish_seen_subcommand_from audit" -l include-info -d "Also list info checks in the llm format"
+complete -c squirrel -n "__fish_seen_subcommand_from audit" -l include-pages -d "JSON only: list every crawled page with its status and rule count"
 
 # Entities options
 complete -c squirrel -n "__fish_seen_subcommand_from entities" -s l -l list -d "List stored audits and their entity counts"
@@ -878,6 +886,8 @@ complete -c squirrel -n "__fish_seen_subcommand_from report" -s p -l publish -d 
 complete -c squirrel -n "__fish_seen_subcommand_from report" -l visibility -a "public unlisted private" -d "Visibility when publishing"
 complete -c squirrel -n "__fish_seen_subcommand_from report" -l summary -d "Print score, category breakdown, and issue counts only"
 complete -c squirrel -n "__fish_seen_subcommand_from report" -l include-passed -d "Also list the rules that passed"
+complete -c squirrel -n "__fish_seen_subcommand_from report" -l include-info -d "Also list info checks in the llm format"
+complete -c squirrel -n "__fish_seen_subcommand_from report" -l include-pages -d "JSON only: list every crawled page with its status and rule count"
 `;
 }
 

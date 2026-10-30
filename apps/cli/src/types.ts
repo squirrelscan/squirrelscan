@@ -193,6 +193,8 @@ export interface ResponseHeaders {
 import type {
   AuditFailureReasonCode as _AFRC,
   AuditStatus as _AS,
+  AuditStatusReasonCode as _ASRC,
+  MaxDurationCut as _MDC,
   CacheStats as _CST,
   CategoryScore as _CS,
   CheckItemSource,
@@ -205,6 +207,7 @@ import type {
   HealthScore as _HS,
   RefusedFetch,
   WafBlockedSummary,
+  WafSuspectSummary,
   ReportStructure as _RST,
   ReportTechnologies as _RT,
   RuleCategory as _RC,
@@ -213,6 +216,8 @@ import type {
 } from "@squirrelscan/core-contracts";
 export type AuditStatus = _AS;
 export type AuditFailureReasonCode = _AFRC;
+export type AuditStatusReasonCode = _ASRC;
+export type MaxDurationCut = _MDC;
 export type CategoryScore = _CS;
 export type GroupScore = _GS;
 export type HealthScore = _HS;
@@ -422,6 +427,8 @@ export interface PageAudit {
   h1Count?: number;
   h1Text?: string[];
   checks: CheckResult[];
+  /** Distinct rules that reported on this page (#1260); set when the report is read from the store. */
+  ruleCount?: number;
   // New fields for expanded audit
   urlAnalysis?: UrlAnalysis;
   headingHierarchy?: HeadingHierarchy;
@@ -483,8 +490,10 @@ export interface AuditReport {
     /** Host(s) that throttled the crawl. */
     hosts: string[];
   };
-  /** Machine-readable class behind `statusReason` (#1822). */
-  statusReasonCode?: AuditFailureReasonCode;
+  /** Machine-readable class behind `statusReason` (#1822); `max_duration` on a partial report cut by `--max-duration` (#1271). */
+  statusReasonCode?: AuditStatusReasonCode;
+  /** What the `--max-duration` time limit cut (#1271). Mirrors core-contracts `AuditReport`. */
+  maxDuration?: MaxDurationCut;
   /**
    * Root fetches the site refused (401/403/429, a bot wall). Mirrors the field
    * on the engine's AuditReport; the two types are structurally different, so
@@ -497,6 +506,8 @@ export interface AuditReport {
    * structurally different, so it has to be declared in both.
    */
   wafBlocked?: WafBlockedSummary;
+  /** Pages that look like a provider's refusal without its block marker (#1258); audited. Mirrors core-contracts `AuditReport`. */
+  wafSuspect?: WafSuspectSummary;
   siteChecks: CheckResult[];
   pages: PageAudit[];
   summary: {
@@ -535,6 +546,10 @@ export interface AuditReport {
    * audited page carries a link section or a classification.
    */
   structure?: ReportStructure;
+  /** Query-string variants counted with their canonical page (#858). */
+  canonicalVariants?: number;
+  /** The folded variants and the page each is counted with (first 100) (#858). */
+  canonicalVariantPages?: Array<{ page: string; canonical: string }>;
   /**
    * Resolved Stage-0 site profile — REPORT-ONLY / non-scoring. Present only when
    * the credited cloud `site-metadata` service resolved it (logged-in + cloud +
@@ -626,6 +641,8 @@ export interface AuditReport {
     /** Requested page cap, when it exceeded MAX_PAGES_CAP and was clamped (#1909). */
     requestedMaxPages?: number;
     pagesCrawled: number;
+    /** Query-string variants counted with their canonical page (#858). */
+    canonicalVariants?: number;
     capped: boolean;
     /** The crawl time budget ended the crawl early (the page cap was not the reason). */
     stopReason?: "time";
@@ -633,6 +650,8 @@ export interface AuditReport {
     unfetched?: number;
     /** The start URL's followed redirect (#1281), so a rebuilt report still carries it. */
     startRedirect?: SeedRedirectRecord;
+    /** What the `--max-duration` time limit cut (#1271), so a rebuilt report is still partial. */
+    maxDuration?: MaxDurationCut;
   };
   /**
    * Rule-result cache disclosure (#1990): how many pages replayed a previous
@@ -714,6 +733,10 @@ export interface AuditOptions {
    */
   requestedMaxPages?: number;
   maxDepth?: number; // optional crawl-depth ceiling (#318); unset = unlimited
+  /** Wall-clock budget for the whole audit, seconds (#1271); unset = no limit. */
+  maxDurationSeconds?: number;
+  /** Epoch ms the budget counts from (the command's start); unset = when the audit starts. */
+  maxDurationStartedAt?: number;
   outputFormat?:
     | "json"
     | "html"

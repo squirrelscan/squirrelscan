@@ -1,10 +1,12 @@
 // JSON report output
 
 import type {
-  AuditFailureReasonCode,
+  AuditStatusReasonCode,
   EditorSummaryPriority,
+  MaxDurationCut,
   RefusedFetch,
   WafBlockedSummary,
+  WafSuspectSummary,
 } from "@squirrelscan/core-contracts";
 import type { ResolvedAuditSettings } from "@squirrelscan/core-contracts/audit-levels";
 import type {
@@ -22,6 +24,10 @@ import type {
   PackedComponentOccurrence,
   PackedSubtreeLadder,
 } from "@squirrelscan/core-contracts/component-evidence";
+import {
+  JSON_REPORT_PAGES,
+  JSON_REPORT_SCHEMA_VERSION,
+} from "@squirrelscan/core-contracts/limits";
 import { packComponentOccurrences } from "@squirrelscan/core-contracts/component-evidence";
 import { packSiteResourceOccurrences } from "@squirrelscan/core-contracts/site-resource-evidence";
 import { componentOccurrenceKey } from "../component-fix-groups";
@@ -33,7 +39,7 @@ import { fixUnits, ruleFixCoverage } from "../component-presentation";
 import { siteResourceFixGroups } from "../site-resource-fix-groups";
 import { isRenderableSiteResourceGroup } from "../site-resource-presentation";
 import { reportFailureReasonCode } from "../failure-notice";
-import { safeWafBlocked } from "../waf-blocked";
+import { safeWafBlocked, safeWafSuspect } from "../waf-blocked";
 import { getScoreGrade } from "../scoring";
 import { getGroupName } from "../categories";
 import { groupIssuesByCategory, flattenIssuesBySeverity, reportPassedRules } from "../grouping";
@@ -49,9 +55,10 @@ import { checkPageTypeScope, pageTypeScopeData, type PageTypeScope } from "../pa
 import { techIconUrl } from "../technologies";
 import { domainAgeYears, siteProfileRows } from "../site-metadata";
 import { editorSummaryView } from "../editor-summary";
-import { followedStartRedirect, scanScopeUnfetched, seedRedirect } from "../coverage";
+import { canonicalVariantCount, followedStartRedirect, scanScopeUnfetched, seedRedirect } from "../coverage";
 import { privateTargetLine, privateTargetSkippedRules } from "../private-target";
 import { notCheckedLine, notCheckedRules } from "../not-checked";
+import { collectInfoChecks, type InfoCheck } from "../info-checks";
 import { collectSkippedChecks, type SkippedCheck } from "../skipped";
 
 /**
@@ -113,15 +120,32 @@ function slimComponentFixGroups(
   });
 }
 
+/** One crawled page in the opt-in `pages` list (#1260). */
+export interface JsonPageRow {
+  url: string;
+  /** HTTP status the page answered with. */
+  status: number;
+  /** Distinct rules that reported on the page (skipped checks not counted). */
+  ruleCount: number;
+}
+
 export interface JsonRenderOptions {
   version?: string;
   /** Add `passedRules`, the rules that passed (`--include-passed`). */
   includePassed?: boolean;
+  /**
+   * Add `pages`, the crawled pages with their status and rule count (`--include-pages`, #1260).
+   * Omitted: the report has no `pages` key. Cut at {@link JSON_REPORT_PAGES}.maxEntries with
+   * `pagesTruncated` set.
+   */
+  pages?: readonly JsonPageRow[];
 }
 
 interface SlimJsonReport {
   meta: {
     version: string;
+    /** The report's schema version, major.minor (#1260). Absent on reports from before 1.1. */
+    schemaVersion: string;
     baseUrl: string;
     /**
      * A refused off-site seed redirect (#1418). Present only when the seed
@@ -170,6 +194,8 @@ interface SlimJsonReport {
      * when nothing was left queued.
      */
     unfetched?: number;
+    canonicalVariants?: number;
+    canonicalVariantPages?: Array<{ page: string; canonical: string }>;
     /** The audit level and the settings it resolved to. Absent before audit levels. */
     auditLevel?: ResolvedAuditSettings;
     /** Smart audits (#110): present only when `smart_audits` ran. */
@@ -196,8 +222,13 @@ interface SlimJsonReport {
    * site?" without parsing `statusReason` prose.
    */
   rateLimited?: { pages: number; hosts: string[]; unfetched?: number };
-  /** Machine-readable class behind `statusReason` (#1822); absent pre-#1822. */
-  statusReasonCode?: AuditFailureReasonCode;
+  /**
+   * Machine-readable class behind `statusReason` (#1822); absent pre-#1822. On a
+   * `partial` report it is `max_duration` when `--max-duration` cut the run (#1271).
+   */
+  statusReasonCode?: AuditStatusReasonCode;
+  /** What the `--max-duration` time limit cut (#1271). Present only when it cut something. */
+  maxDuration?: MaxDurationCut;
   /**
    * Root fetches (robots.txt, sitemaps, llms.txt, Markdown) the site refused
    *. Their absence is unknown, not confirmed. Present only when
@@ -211,6 +242,12 @@ interface SlimJsonReport {
    * is the machine-readable reason. Present only when a page was blocked.
    */
   wafBlocked?: WafBlockedSummary;
+  /**
+   * Pages that look like a provider's refusal but carry none of its block markers
+   * (#1258). They were audited like any page, so their findings may describe the
+   * provider's page. Present only when one was seen.
+   */
+  wafSuspect?: WafSuspectSummary;
   score: {
     overall: number | null; // null ⇒ N/A (failed/0-page audit, #586)
     grade: string;
@@ -238,6 +275,15 @@ interface SlimJsonReport {
      */
     skipped: number;
   };
+  /**
+   * Every crawled page with its HTTP status and the number of rules that reported on it
+   * (`--include-pages`, #1260). Present only when asked for. At most
+   * `JSON_REPORT_PAGES.maxEntries` entries: `pagesTotal` is the real count and
+   * `pagesTruncated` says the list was cut.
+   */
+  pages?: JsonPageRow[];
+  pagesTotal?: number;
+  pagesTruncated?: boolean;
   issues: Array<{
     ruleId: string;
     name: string;
@@ -330,6 +376,12 @@ interface SlimJsonReport {
    */
   skippedChecks?: SkippedCheck[];
   /**
+   * Info checks (#669): notes a rule recorded that are neither a finding nor a
+   * skip, for example `redundant-noindex`. They never change the score and are not
+   * in `issues`. Present only when non-empty.
+   */
+  infoChecks?: InfoCheck[];
+  /**
    * Rules that passed: at least one passing check and no failing or warning
    * one. `scope` is the rule's own; `pages` counts distinct pages with a pass,
    * and is 0 when the pass rows carry none. Present only with
@@ -365,6 +417,8 @@ interface SlimJsonReport {
     check: string;
     reason: string;
     message: string;
+    /** A rule that hit an internal error: the first pages it was not evaluated on (#1291). */
+    pages?: string[];
   }>;
   // Report-only — never part of the score. Present when the Pro cloud
   // editor-summary call ran (exec-email-shaped narrative + big-ticket items).
@@ -384,8 +438,11 @@ interface SlimJsonReport {
   // page types the classifier gave them. Absent when no audited page carries either, which is
   // every crawl stored before the page classifier existed.
   structure?: ReportStructure;
-  // Report-only — never part of the score. Present when cloud tech-detect ran.
+  // Report-only — never part of the score. Present when a technology scan ran: the cloud one, or
+  // the free local scan of the crawled pages (`source` says which, #1263).
   technologies?: {
+    /** `local` (free signature scan of the crawled pages) or `cloud` (credited scan with history). */
+    source?: "local" | "cloud";
     firstScan: boolean;
     added: string[];
     removed: string[];
@@ -430,7 +487,8 @@ interface SlimJsonReport {
 function buildSlimReport(
   report: AuditReport,
   version: string,
-  includePassed: boolean
+  includePassed: boolean,
+  pages?: readonly JsonPageRow[]
 ): SlimJsonReport {
   const siteWide = siteWideContext(report);
   const categoryIssues = groupIssuesByCategory(report.ruleResults, report.checkTallies);
@@ -439,12 +497,14 @@ function buildSlimReport(
   const refusedSeedRedirect = seedRedirect(report);
   const startRedirect = followedStartRedirect(report);
   const skippedChecks = collectSkippedChecks(report.ruleResults);
+  const infoChecks = collectInfoChecks(report.ruleResults);
   const privateTarget = privateTargetLine(report);
   const notChecked = notCheckedRules(report);
   const unfetched = scanScopeUnfetched(report);
   return {
     meta: {
       version,
+      schemaVersion: JSON_REPORT_SCHEMA_VERSION,
       baseUrl: report.baseUrl,
       // Sits next to the `baseUrl` it qualifies (#1418): a consumer reading the
       // graded URL sees, in the same object, that the seed pointed elsewhere.
@@ -472,6 +532,11 @@ function buildSlimReport(
         ? { stopReason: report.scanScope.stopReason }
         : {}),
       ...(unfetched > 0 ? { unfetched } : {}),
+      // Query-string variants counted with their canonical page; `totalPages` excludes them (#858).
+      ...(canonicalVariantCount(report) > 0 ? { canonicalVariants: canonicalVariantCount(report) } : {}),
+      ...(canonicalVariantCount(report) > 0 && report.canonicalVariantPages?.length
+        ? { canonicalVariantPages: report.canonicalVariantPages.slice(0, 100).map((v) => ({ page: String(v.page), canonical: String(v.canonical) })) }
+        : {}),
       ...(report.coverage ? { coverage: report.coverage } : {}),
       // The audit level and the settings it resolved to: `level` (a level's
       // name, or `custom`), `basedOn`, `changes` and `settings`. Absent on
@@ -494,12 +559,16 @@ function buildSlimReport(
     // it does not have to special-case older reports.
     ...(report.status === "failed" || report.status === "blocked"
       ? { statusReasonCode: reportFailureReasonCode(report) }
-      : {}),
+      : report.status === "partial" && report.statusReasonCode === "max_duration"
+        ? { statusReasonCode: report.statusReasonCode }
+        : {}),
+    ...(report.maxDuration ? { maxDuration: report.maxDuration } : {}),
     ...(report.rateLimited && report.rateLimited.pages > 0
       ? { rateLimited: report.rateLimited }
       : {}),
     ...(report.refusedFetches?.length ? { refusedFetches: report.refusedFetches } : {}),
     ...(safeWafBlocked(report) ? { wafBlocked: safeWafBlocked(report)! } : {}),
+    ...(safeWafSuspect(report) ? { wafSuspect: safeWafSuspect(report)! } : {}),
     score: {
       // null ⇒ N/A (failed/0-page audit); preserved through save/reload (#586).
       overall: report.healthScore?.overall ?? null,
@@ -543,6 +612,17 @@ function buildSlimReport(
         }
       : {}),
     // Severity-first across the whole report (#1536), not category-by-category.
+    ...(pages
+      ? {
+          pages: pages.slice(0, JSON_REPORT_PAGES.maxEntries).map((page) => ({
+            url: page.url,
+            status: page.status,
+            ruleCount: page.ruleCount,
+          })),
+          pagesTotal: pages.length,
+          pagesTruncated: pages.length > JSON_REPORT_PAGES.maxEntries,
+        }
+      : {}),
     issues: flattenIssuesBySeverity(categoryIssues).map((rule) => ({
       ruleId: rule.id,
       name: rule.name,
@@ -625,7 +705,7 @@ function buildSlimReport(
               ? { scope: pageTypeScopeData(typeScope) }
               : {}),
           items: check.items?.map((item) => {
-            const scope = itemRegionScope(item, report.structure);
+            const scope = itemRegionScope(item, report.structure, check);
             let shown: CheckItem & { scope?: RegionScope } = item;
             if (scope) {
               // The label drops the section phrase `scope` now carries; `meta.sections` keeps it.
@@ -683,6 +763,7 @@ function buildSlimReport(
       }),
     })),
     ...(skippedChecks.length > 0 ? { skippedChecks } : {}),
+    ...(infoChecks.length > 0 ? { infoChecks } : {}),
     ...(passedRules.length > 0
       ? {
           passedRules: passedRules.map((r) => ({
@@ -711,12 +792,14 @@ function buildSlimReport(
             check: r.check,
             reason: r.reason,
             message: notCheckedLine(r),
+            ...(r.pages && r.pages.length > 0 ? { pages: r.pages } : {}),
           })),
         }
       : {}),
     ...(report.technologies && report.technologies.items.length > 0
       ? {
           technologies: {
+            ...(report.technologies.source ? { source: report.technologies.source } : {}),
             firstScan: report.technologies.firstScan,
             added: report.technologies.added,
             removed: report.technologies.removed,
@@ -793,6 +876,6 @@ function buildSlimReport(
 
 export function renderJson(report: AuditReport, options?: JsonRenderOptions): string {
   const version = options?.version ?? "";
-  const slim = buildSlimReport(report, version, options?.includePassed ?? false);
+  const slim = buildSlimReport(report, version, options?.includePassed ?? false, options?.pages);
   return JSON.stringify(slim, null, 2);
 }

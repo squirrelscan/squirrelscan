@@ -1145,6 +1145,7 @@ export async function runCloudTechDetect(
         added: res.added,
         removed: res.removed,
         firstScan: res.firstScan,
+        source: "cloud" as const,
         ...(res.advisories && res.advisories.length > 0
           ? { advisories: res.advisories }
           : {}),
@@ -1193,7 +1194,9 @@ export function detectLocalTechnologies(
     );
     if (inputs.length === 0) return null;
     const section = detectReportTechnologiesMulti(inputs);
-    return section.items.length > 0 ? section : null;
+    return section.items.length > 0
+      ? { ...section, source: "local" as const }
+      : null;
   } catch (error) {
     logger.debug(
       "local tech-detect skipped",

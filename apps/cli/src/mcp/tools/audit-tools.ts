@@ -23,6 +23,7 @@ import type { Config } from "@/config";
 import type { Result } from "@/controllers/types";
 import type { AuditReport } from "@/types";
 
+import { MAX_DURATION_MAX_SECONDS } from "@/audit/max-duration";
 import {
   AUDIT_LEVELS,
   configLevelOverrides,
@@ -173,6 +174,7 @@ async function runWebsiteAudit(input: {
   externalLinks?: boolean;
   internalLinks?: boolean;
   followRedirect?: boolean;
+  maxDuration?: number;
 }): Promise<CallToolResult> {
   // The one entry check: http(s) only. An unsupported scheme or junk is refused
   // before any request, and the URL is not echoed back.
@@ -181,6 +183,8 @@ async function runWebsiteAudit(input: {
       "invalid_url: only http:// and https:// URLs can be audited. Nothing was registered or charged."
     );
   }
+  // #1271: the budget counts from the call, so the start-URL resolution is inside it.
+  const startedAt = Date.now();
   const config = await loadConfig(localConfigPath(), { silent: true });
   // #1281: resolve the start URL's redirects first. A same-site one is
   // followed silently; another site is audited only with explicit consent
@@ -216,6 +220,12 @@ async function runWebsiteAudit(input: {
   const extra = {
     url: input.url,
     offline: input.offline,
+    ...(input.maxDuration !== undefined
+      ? {
+          maxDurationSeconds: input.maxDuration,
+          maxDurationStartedAt: startedAt,
+        }
+      : {}),
     ...(start.record ? { startRedirect: start.record } : {}),
     ...(input.headers && Object.keys(input.headers).length > 0
       ? { headers: input.headers }
@@ -343,6 +353,14 @@ export function registerAuditTools(server: McpServer): void {
           .describe(
             "Audit where the URL redirects when that is another site (a link shortener, a launch domain forwarding to the product). Without it a cross-domain redirect comes back as confirmation_required naming the destination, and nothing is audited or charged. Redirects within one site (http to https, apex to www) are always followed. Default: [crawler] follow_redirect in squirrel.toml (false)"
           ),
+        maxDuration: z
+          .number()
+          .positive()
+          .max(MAX_DURATION_MAX_SECONDS)
+          .optional()
+          .describe(
+            "Wall-clock budget for the whole audit, in seconds. At the limit the audit stops launching new work and returns a report with status partial and reason code max_duration, covering only the pages fetched by then (maxDuration in the report counts what was left). It stops its own work within max(10% of the budget, 15 s) of the limit. Default: [crawler] max_duration in squirrel.toml (no limit)"
+          ),
         confirm: z
           .boolean()
           .optional()
@@ -377,6 +395,7 @@ export function registerAuditTools(server: McpServer): void {
       offline,
       confirm,
       followRedirect,
+      maxDuration,
       ephemeral,
       headers,
       externalLinks,
@@ -403,6 +422,7 @@ export function registerAuditTools(server: McpServer): void {
         offline,
         confirm,
         followRedirect,
+        maxDuration,
         ephemeral,
         headers,
         externalLinks,

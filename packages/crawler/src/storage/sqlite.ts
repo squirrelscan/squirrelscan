@@ -2526,7 +2526,9 @@ export class SQLiteStorage implements CrawlStorage {
     // asked for no body (getPagesWithoutBodies) gets null, not a store read.
     let html = (row.html as string | null | undefined) ?? null;
     const contentHash = row.content_hash as string;
-    if (opts?.body !== false && !html && contentHash && this.contentStore) {
+    // An empty inline string is a captured zero-byte response, not a missing
+    // body. Only a null column means the body may live in the content store.
+    if (opts?.body !== false && html === null && contentHash && this.contentStore) {
       html = this.contentStore.getString(contentHash);
     }
 
@@ -4599,6 +4601,26 @@ export class SQLiteStorage implements CrawlStorage {
           result.set(ruleId, existing);
         }
         return result;
+      },
+      catch: (e) => StorageError.read(e),
+    });
+  }
+
+  /**
+   * How many distinct rules reported on each page: rules with at least one
+   * non-skipped check stored under that page (#1260). Site-scope results are stored
+   * under the empty page url and are not counted. One indexed GROUP BY, no checks
+   * materialized.
+   */
+  getRuleCountsByPage(crawlId: string): Effect.Effect<Map<string, number>, StorageError, never> {
+    return Effect.try({
+      try: () => {
+        const rows = this.getDb()
+          .prepare(
+            "SELECT page_url AS url, COUNT(DISTINCT rule_id) AS n FROM rule_results WHERE crawl_id = ? AND page_url != '' AND status != 'skipped' GROUP BY page_url"
+          )
+          .all(crawlId) as Array<{ url: string; n: number }>;
+        return new Map(rows.map((row) => [row.url, row.n]));
       },
       catch: (e) => StorageError.read(e),
     });

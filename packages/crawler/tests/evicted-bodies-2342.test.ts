@@ -146,6 +146,38 @@ describe("evicted page bodies (#2342)", () => {
     expect(storage.evictedCacheEntryCount()).toBe(0);
   });
 
+  test("a captured empty body stays distinct from a missing body", async () => {
+    const content = evictableStore();
+    storage = new SQLiteStorage(":memory:", content.store);
+    await run(storage.init());
+    const crawlId = await crawl(storage);
+
+    await run(
+      storage.upsertPage(
+        crawlId,
+        page("https://example.com/empty", {
+          html: "",
+          sizeBytes: 0,
+          contentHash: "empty-body",
+        }),
+      ),
+    );
+    await run(
+      storage.upsertPage(
+        crawlId,
+        page("https://example.com/missing", {
+          html: null,
+          sizeBytes: 0,
+          contentHash: "missing-body",
+          contentType: null,
+        }),
+      ),
+    );
+
+    expect((await run(storage.getPage(crawlId, "https://example.com/empty")))?.html).toBe("");
+    expect((await run(storage.getPage(crawlId, "https://example.com/missing")))?.html).toBeNull();
+  });
+
   test("a pre-v28 row with no html_hash and no body left is a miss, not counted", async () => {
     // Rows written before html_hash existed cannot prove their body went to the
     // store. An HTML one with a content hash and no body is refetched either way.

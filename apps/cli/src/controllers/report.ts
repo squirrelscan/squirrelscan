@@ -10,9 +10,9 @@ import type {
   PublishedReportRecord,
 } from "@/crawler/storage/types";
 import type {
-  AuditFailureReasonCode,
   AuditReport,
   AuditStatus,
+  AuditStatusReasonCode,
   CheckResult,
   ComponentOccurrence,
   ReportRuleResult,
@@ -37,7 +37,10 @@ import {
 import { getGlobalContentStore } from "@/crawler/storage/content-store";
 import { warnEvictedPages } from "@/crawler/storage/eviction-notice";
 import { SQLiteStorage } from "@/crawler/storage/sqlite";
-import { reconstructReport } from "@/reports/reconstruct";
+import {
+  reconstructReport,
+  type ReconstructOptions,
+} from "@/reports/reconstruct";
 import { retiredAuditReason } from "@/reports/retired";
 import {
   CATEGORIES,
@@ -155,7 +158,9 @@ interface SlimJsonReport {
   status?: AuditStatus;
   statusReason?: string;
   /** Machine-readable class behind `statusReason` (#1822); absent pre-#1822. */
-  statusReasonCode?: AuditFailureReasonCode;
+  statusReasonCode?: AuditStatusReasonCode;
+  /** What the `--max-duration` time limit cut (#1271). */
+  maxDuration?: unknown;
   score: {
     overall: number | null; // null ⇒ N/A (failed/0-page audit, #586)
     grade: string;
@@ -173,6 +178,8 @@ interface SlimJsonReport {
    * they are never rebuilt into `ruleResults`.
    */
   skippedChecks?: unknown[];
+  /** Info checks (#669). Not read back: they are notes, not findings. */
+  infoChecks?: unknown[];
   issues: Array<{
     ruleId: string;
     name: string;
@@ -439,6 +446,9 @@ function convertSlimReport(report: SlimJsonReport): AuditReport {
     ...(report.statusReasonCode
       ? { statusReasonCode: report.statusReasonCode }
       : {}),
+    ...(slimMaxDuration(report.maxDuration)
+      ? { maxDuration: slimMaxDuration(report.maxDuration)! }
+      : {}),
     siteChecks: [],
     pages: [],
     summary: {
@@ -564,7 +574,8 @@ export interface AuditSource {
 export async function getStoredAudit(
   auditId: string,
   storagePath?: string,
-  source?: AuditSource
+  source?: AuditSource,
+  reconstruct?: ReconstructOptions
 ): Promise<Result<AuditReport>> {
   const dbPaths = storagePath ? [storagePath] : getProjectStoragePaths();
 
@@ -605,7 +616,12 @@ export async function getStoredAudit(
 
       const report = await Effect.runPromise(
         Effect.gen(function* () {
-          return yield* reconstructReport(storage, auditId);
+          return yield* reconstructReport(
+            storage,
+            auditId,
+            undefined,
+            reconstruct
+          );
         })
       );
       await warnEvictedPages(storage, auditId, "report");
@@ -637,7 +653,8 @@ export async function getStoredAudit(
 export async function getStoredAuditByPrefix(
   prefix: string,
   storagePath?: string,
-  source?: AuditSource
+  source?: AuditSource,
+  reconstruct?: ReconstructOptions
 ): Promise<Result<AuditReport>> {
   const dbPaths = storagePath ? [storagePath] : getProjectStoragePaths();
 
@@ -712,7 +729,12 @@ export async function getStoredAuditByPrefix(
     const report = await Effect.runPromise(
       Effect.gen(function* () {
         yield* storage.init();
-        return yield* reconstructReport(storage, match.crawl.id);
+        return yield* reconstructReport(
+          storage,
+          match.crawl.id,
+          undefined,
+          reconstruct
+        );
       })
     );
     await warnEvictedPages(storage, match.crawl.id, "report");
@@ -740,7 +762,8 @@ export async function getStoredAuditByPrefix(
 export async function getLatestAudit(
   baseUrl?: string,
   storagePath?: string,
-  source?: AuditSource
+  source?: AuditSource,
+  reconstruct?: ReconstructOptions
 ): Promise<Result<AuditReport>> {
   const dbPaths = storagePath ? [storagePath] : getProjectStoragePaths();
 
@@ -858,7 +881,9 @@ export async function getLatestAudit(
           yield* storage.init();
           const reconstructed = yield* reconstructReport(
             storage,
-            latest.crawl.id
+            latest.crawl.id,
+            undefined,
+            reconstruct
           );
           return reconstructed;
         })
@@ -927,6 +952,34 @@ export function validateFormat(format: string): Result<OutputFormat> {
   }
 
   return ok(format as OutputFormat);
+}
+
+/** `maxDuration` from untrusted slim JSON (#1271): whole non-negative counts and a flag, else dropped. */
+function slimMaxDuration(
+  value: unknown
+): AuditReport["maxDuration"] | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const v = value as Record<string, unknown>;
+  const count = (n: unknown): number | undefined =>
+    typeof n === "number" && Number.isInteger(n) && n >= 0 ? n : undefined;
+  const seconds = count(v.seconds);
+  const unfetchedPages = count(v.unfetchedPages);
+  const pagesNotEvaluated = count(v.pagesNotEvaluated);
+  if (
+    seconds === undefined ||
+    unfetchedPages === undefined ||
+    pagesNotEvaluated === undefined ||
+    typeof v.siteChecksCut !== "boolean"
+  ) {
+    return undefined;
+  }
+  return {
+    seconds,
+    unfetchedPages,
+    pagesNotEvaluated,
+    siteChecksCut: v.siteChecksCut,
+    ...(v.resourceChecksCut === true ? { resourceChecksCut: true } : {}),
+  };
 }
 
 /** The chain from untrusted slim JSON: at most ten {url, status} entries, anything else dropped. */

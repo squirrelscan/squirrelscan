@@ -5,7 +5,7 @@ import type { AuditReport, CheckResult } from "../types";
 import { AUDIT_FAILURE_NEXT_STEP } from "@squirrelscan/core-contracts/failure-reason";
 import { cacheReasonsLabel, cacheStatsSummaryLine } from "../cache-stats";
 import { refusedFetchLines, reportFailureReasonCode } from "../failure-notice";
-import { wafBlockedPagesLines, wafBlockedSeedCopy } from "../waf-blocked";
+import { wafBlockedPagesLines, wafBlockedSeedCopy, wafSuspectLines } from "../waf-blocked";
 import { getScoreGrade } from "../scoring";
 import { REPORT_SOURCE_PAGES_PREVIEW, REPORT_TEXT_WRAP_WIDTH } from "../constants";
 import { fixRollupLine, fixUnits, ruleFixCoverage } from "../component-presentation";
@@ -369,6 +369,17 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
     write("");
   }
 
+  // #1258: pages that look like a provider's refusal. Audited, but flagged.
+  const suspectLines = wafSuspectLines(report);
+  if (suspectLines.length > 0) {
+    write("SUSPECT PAGES");
+    write("-".repeat(40));
+    const [summary, ...listed] = suspectLines;
+    write(summary!);
+    for (const line of listed) write(`  ${line}`);
+    write("");
+  }
+
   // Site profile — report-only (Stage-0 context; never part of the score).
   if (report.siteMetadata) {
     write("SITE PROFILE");
@@ -520,7 +531,7 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
             // pub#837: each page once, with its links and where they sit; a long list says how
             // many pages it leaves out. pub#846: an item scoped to a region names it, lists only
             // the pages it is on outside it, and its label drops the section phrase.
-            const view = itemSourceView(item, report.structure);
+            const view = itemSourceView(item, report.structure, check);
             const label = itemLabel(item, view.scope) ?? item.id;
             // One line, no page list: the list IS the noise for an item that is
             // the same resource on effectively every page.

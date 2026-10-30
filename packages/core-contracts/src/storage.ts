@@ -6,7 +6,7 @@ import type { Effect } from "effect";
 import type { AuditFailureDetail } from "./failure-reason";
 import type { ClassifiedPageType, LinkSection, LinkSectionCounts, ScanScope } from "./index";
 import type { RefusedFetch } from "./refused-fetch";
-import type { WafBlockedSummary } from "./waf-block";
+import type { WafBlockedSummary, WafSuspectSummary } from "./waf-block";
 import type { UnverifiedReason } from "./services";
 
 // ============================================
@@ -222,6 +222,12 @@ export interface CrawlStats {
    * compatibility with older persisted stats blobs.
    */
   wafBlocked?: WafBlockedSummary;
+  /**
+   * Stored pages that look like a provider's refusal but carry no block marker (#1258).
+   * Audited like any page; recorded so the report can warn. Optional for backward
+   * compatibility with older persisted stats blobs.
+   */
+  wafSuspect?: WafSuspectSummary;
   /**
    * Fetches abandoned because the host was rate limiting (429/430, or a 503
    * carrying `Retry-After`) — a subset of `pagesFailed`, disjoint from

@@ -294,6 +294,14 @@ export function buildSiteContext(
         continue;
       }
 
+      // An empty body is a document only when the response status permits one.
+      // Error pages still join site.pages through EMPTY_PARSED_PAGE below, while
+      // 204/205 responses have no representation to parse by definition.
+      if (page.html === "" && !isAuditableEmptyBodyStatus(page.status)) {
+        contextPages.push({ page, parsed: null });
+        continue;
+      }
+
       let parsed: ParsedPage | null = null;
 
       // Reuse stored parsed data if available
@@ -302,7 +310,7 @@ export function buildSiteContext(
           const stored = JSON.parse(page.parsedData);
 
           // Handle corrupted state: parsedData exists but html is null
-          if (page.html == null) {
+          if (page.html === null) {
             logger.error(
               `Cannot recreate document for ${page.url}: HTML is null but parsedData exists (corrupted state)`,
             );
@@ -331,7 +339,7 @@ export function buildSiteContext(
       // Fallback: parse from HTML if no stored data (old crawls)
       if (!parsed) {
         // Skip pages without HTML and no stored data
-        if (page.html == null) {
+        if (page.html === null) {
           contextPages.push({ page, parsed: null });
           continue;
         }
@@ -371,7 +379,7 @@ export function releaseSiteContextDocuments(siteContext: SiteContextPage[]): voi
  */
 export function ensureSiteContextDocuments(siteContext: SiteContextPage[]): void {
   for (const entry of siteContext) {
-    if (entry.parsed && !entry.parsed.document && entry.page.html) {
+    if (entry.parsed && !entry.parsed.document && entry.page.html !== null) {
       entry.parsed.document = parseDocument(entry.page.html);
     }
   }
@@ -460,7 +468,7 @@ export function parseHtmlForRules(
  * Parse a page record to extract structured data for rules
  */
 export function parsePageRecord(page: PageRecord, options?: ParsePageOptions): ParsedPage | null {
-  if (!page.html) return null;
+  if (page.html === null) return null;
 
   return logger.withTrace(
     "parsePageRecord",
@@ -482,7 +490,7 @@ export function getParsedPages(
     const result: Array<{ url: string; parsed: ParsedPage }> = [];
 
     for (const page of pages) {
-      if (!page.html || !isHtmlContentType(page.contentType)) continue;
+      if (!hasAuditableHtmlBody(page) || !isHtmlContentType(page.contentType)) continue;
 
       const parsed = parsePageRecord(page);
       if (parsed) {
@@ -3369,6 +3377,8 @@ export interface StreamingRuleExecutionResult extends RuleExecutionResult {
    * explicitly so a caller sizing a large crawl reads the right number.
    */
   peakLiveDocsPageStream: number;
+  /** Pages whose rules never ran because `deadlineAt` passed first (#1271); 0 without a deadline. */
+  pagesNotEvaluated: number;
   /**
    * What the per-page rule-result cache did this run (#1990). Zeros with no
    * `disabledReason` mean no cache was supplied (the cloud); zeros WITH one mean a
@@ -3399,6 +3409,8 @@ export function runStreamingRules(
     batchSize?: number;
     hooks?: StreamPageRulesHooks;
     signal?: AbortSignal;
+    /** Epoch ms after which no further page starts its rules; see {@link streamPageRules} (#1271). */
+    deadlineAt?: number;
     /**
      * #1252 page-loop hooks, forwarded to {@link streamPageRules}. The cloud
      * passes them so the sync page-rule CPU yields to the event loop and emits a
@@ -3616,6 +3628,7 @@ export function runStreamingRules(
       collectors: [signalCollector, endpointCollector],
       hooks: opts?.hooks,
       signal: opts?.signal,
+      deadlineAt: opts?.deadlineAt,
       // v1's page-rule universe verbatim (its `pageDataMap` keys), so the streamed
       // pass can't drift from it — notably it excludes rate-limited pages, which
       // `isAuditablePage` alone does not (#1829).
@@ -3703,6 +3716,7 @@ export function runStreamingRules(
       sitemapUrlStatuses: assets.sitemapUrlStatuses,
       tallies,
       peakLiveDocsPageStream: streamed.peakLiveDocs,
+      pagesNotEvaluated: streamed.pagesNotEvaluated,
       ruleCache: ruleCacheDisabled
         ? { ...streamed.ruleCache, disabledReason: ruleCacheDisabled }
         : streamed.ruleCache,
@@ -4546,4 +4560,16 @@ export function isHtmlContentType(contentType: string | null): boolean {
   if (!contentType) return false;
   const lower = contentType.toLowerCase();
   return lower.includes("text/html") || lower.includes("application/xhtml+xml");
+}
+
+/** Whether an empty successful response is allowed to carry a document body. */
+export function isAuditableEmptyBodyStatus(status: number): boolean {
+  return status >= 200 && status < 300 && status !== 204 && status !== 205;
+}
+
+/** A captured body, including an empty one when its status permits content. */
+export function hasAuditableHtmlBody(
+  page: Pick<PageRecord, "html" | "status">,
+): page is Pick<PageRecord, "status"> & { html: string } {
+  return page.html !== null && (page.html.length > 0 || isAuditableEmptyBodyStatus(page.status));
 }

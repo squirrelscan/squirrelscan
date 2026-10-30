@@ -237,6 +237,16 @@ export const report = defineCommand({
       description:
         "Also list the rules that passed, with how many pages each passed on",
     },
+    includeInfo: {
+      type: "boolean",
+      description:
+        "Also list info checks (notes that are not findings) in the llm format. The JSON report always has them",
+    },
+    includePages: {
+      type: "boolean",
+      description:
+        "JSON only: list every crawled page with its HTTP status and how many rules reported on it (capped at 2000 entries, marked with pagesTruncated)",
+    },
   },
   async run({ args }) {
     // Loud warning for an unreadable/corrupt session (EACCES, corrupt JSON,
@@ -300,19 +310,31 @@ export const report = defineCommand({
       return;
     }
 
+    // #1260: the per-page rule count is only worth computing for the JSON pages list.
+    const reconstruct = {
+      includePageRuleCounts: Boolean(
+        args.includePages && (args.format ?? "console") === "json"
+      ),
+    };
+
     const resolveAuditRef = async (ref: string, source?: AuditSource) => {
       if (isUUID(ref)) {
-        return await getStoredAudit(ref, undefined, source);
+        return await getStoredAudit(ref, undefined, source, reconstruct);
       }
       if (isShortId(ref)) {
-        return await getStoredAuditByPrefix(ref, undefined, source);
+        return await getStoredAuditByPrefix(
+          ref,
+          undefined,
+          source,
+          reconstruct
+        );
       }
 
       let domain = ref;
       if (!domain.startsWith("http://") && !domain.startsWith("https://")) {
         domain = `https://${domain}`;
       }
-      return await getLatestAudit(domain, undefined, source);
+      return await getLatestAudit(domain, undefined, source, reconstruct);
     };
 
     const isDiffMode = Boolean(args.diff || args.regressionSince);
@@ -335,7 +357,12 @@ export const report = defineCommand({
       }
     } else {
       // Load latest audit globally (async)
-      loadResult = await getLatestAudit(undefined, undefined, source);
+      loadResult = await getLatestAudit(
+        undefined,
+        undefined,
+        source,
+        reconstruct
+      );
 
       if (!loadResult.ok) {
         console.error("No audits found. Run 'squirrel audit <url>' first");
@@ -565,6 +592,26 @@ export const report = defineCommand({
       );
     }
     const includePassed = (args.includePassed ?? false) && !args.input;
+    // Same for --include-info: the slim JSON a report is read from does not carry
+    // the checks `infoChecks` was built from, so there is nothing to list.
+    if (args.includeInfo && args.input) {
+      console.error(
+        "--include-info lists no checks for a report read with --input: info checks are not read back from a JSON file"
+      );
+    }
+    const includeInfo = (args.includeInfo ?? false) && !args.input;
+    // #1260: the pages list is JSON-only and is not read back from a JSON file.
+    if (args.includePages && formatResult.data !== "json") {
+      console.error(
+        `--include-pages only applies to --format json; the ${formatResult.data} report has no pages list`
+      );
+    }
+    if (args.includePages && args.input) {
+      console.error(
+        "--include-pages lists no pages for a report read with --input: the page list is not read back from a JSON file"
+      );
+    }
+    const includePages = (args.includePages ?? false) && !args.input;
     if (formatResult.data === "console") {
       generateConsoleReport(reportData, {
         summaryOnly: args.summary,
@@ -574,7 +621,7 @@ export const report = defineCommand({
       generateTextReport(reportData, args.output, undefined, includePassed);
     } else if (formatResult.data === "json") {
       // stdout by default, file if -o provided
-      generateJsonReport(reportData, args.output, includePassed);
+      generateJsonReport(reportData, args.output, includePassed, includePages);
     } else if (formatResult.data === "markdown") {
       // stdout by default, file if -o provided
       generateMarkdownReport(reportData, args.output, undefined, includePassed);
@@ -583,7 +630,7 @@ export const report = defineCommand({
       generateXmlReport(reportData, args.output, undefined, includePassed);
     } else if (formatResult.data === "llm") {
       // stdout by default, file if -o provided
-      generateLlmReport(reportData, args.output, includePassed);
+      generateLlmReport(reportData, args.output, includePassed, includeInfo);
     } else if (formatResult.data === "html") {
       // file by default - HTML needs a browser
       const hostname = new URL(reportData.baseUrl).hostname;

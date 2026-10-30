@@ -14,7 +14,7 @@ import { mapRenderItemToResponse } from "../src/cloud-fetcher";
 const TIMING = { startedAt: 0, responseAt: 1, finishedAt: 2 };
 
 const map = (item: RenderResultItem, requestUrl: string) =>
-  mapRenderItemToResponse(item, requestUrl, TIMING);
+  mapRenderItemToResponse({ ...item, html: item.html ?? "" }, requestUrl, TIMING);
 
 describe("mapRenderItemToResponse — redirect hops", () => {
   test("a landing-page-only chain never claims a 200 first hop", () => {

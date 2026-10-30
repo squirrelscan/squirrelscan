@@ -14,6 +14,7 @@ import { FONT_FINGERPRINTS } from "./fonts";
 import { OTHER_FINGERPRINTS } from "./other";
 import { GENERATED_FINGERPRINTS } from "./generated";
 import { WORDPRESS_FINGERPRINTS } from "./wordpress";
+import { STACK_FINGERPRINTS } from "./stack";
 
 export const ALL_FINGERPRINTS: TechFingerprint[] = [
   ...CMS_FINGERPRINTS,
@@ -30,6 +31,7 @@ export const ALL_FINGERPRINTS: TechFingerprint[] = [
   ...FONT_FINGERPRINTS,
   ...OTHER_FINGERPRINTS,
   ...WORDPRESS_FINGERPRINTS,
+  ...STACK_FINGERPRINTS,
   // Researched, adversarially-reviewed extension set (see ./generated.ts).
   ...GENERATED_FINGERPRINTS,
 ];
@@ -49,5 +51,6 @@ export {
   FONT_FINGERPRINTS,
   OTHER_FINGERPRINTS,
   WORDPRESS_FINGERPRINTS,
+  STACK_FINGERPRINTS,
   GENERATED_FINGERPRINTS,
 };

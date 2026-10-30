@@ -51,6 +51,7 @@ import {
   redactHeaders,
 } from "@/audit/headers";
 import { localUnverifiedLinksNotice } from "@/audit/local-link-notice";
+import { MAX_DURATION_MAX_SECONDS } from "@/audit/max-duration";
 import {
   generateConsoleReport,
   generateTextReport,
@@ -925,7 +926,7 @@ export function probeBannerLines(probe: {
   budgetMs: number;
 }): { value: string; note?: string } {
   if (probe.level === "passive") {
-    return { value: "passive · no requests beyond the crawl" };
+    return { value: "passive · no probe rules" };
   }
   const value = `${probe.level} · budget ${formatProbeBudget(probe.budgetMs)}`;
   if (probe.level !== "aggressive") return { value };
@@ -1006,6 +1007,34 @@ export function parsePositiveIntFlag(
   return parsed;
 }
 
+/**
+ * Parse `--max-duration <seconds>` (#1271): a positive number of seconds. Returns
+ * `undefined` when the flag was not passed (no budget), `null` after printing the
+ * error for an invalid value (zero, negative, not a number), else the seconds.
+ * Exported for tests.
+ */
+export function parseMaxDurationFlag(
+  raw: string | undefined
+): number | undefined | null {
+  if (raw === undefined) return undefined;
+  const text = raw.trim();
+  // Number("") is 0 and Number("1e3") is 1000: accept plain decimal seconds only.
+  const parsed = /^\d+(?:\.\d+)?$/.test(text) ? Number(text) : Number.NaN;
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    console.error(
+      `${fmt.red("Error:")} --max-duration must be a positive number of seconds (got '${raw}').`
+    );
+    return null;
+  }
+  if (parsed > MAX_DURATION_MAX_SECONDS) {
+    console.error(
+      `${fmt.red("Error:")} --max-duration must be at most ${MAX_DURATION_MAX_SECONDS} seconds (7 days), got '${raw}'.`
+    );
+    return null;
+  }
+  return parsed;
+}
+
 export const audit = defineCommand({
   meta: {
     name: "audit",
@@ -1026,6 +1055,11 @@ export const audit = defineCommand({
       type: "string",
       description:
         "Maximum crawl depth from the seed (seed = 0; default: unlimited)",
+    },
+    "max-duration": {
+      type: "string",
+      description:
+        "Wall-clock budget for the whole audit, in seconds. At the limit the audit stops launching new work, finishes in-flight pages, runs rules on what it has and writes a report with status partial and reason code max_duration. Exits within max(10% of the budget, 15 s) of the limit. Overrides [crawler] max_duration; unset means no limit",
     },
     concurrency: {
       type: "string",
@@ -1162,7 +1196,7 @@ export const audit = defineCommand({
     offline: {
       type: "boolean",
       description:
-        "Run fully offline: skip cloud features, publishing, telemetry, and any request to another site",
+        "Run offline: skip cloud features, publishing, telemetry, and any request to another site. Separate from probing: it does not imply --passive, so add --passive for no probe requests to the audited site",
     },
     // repo#2729: internal and external link checks are on at every level
     // (pub#823). --external-links turns external ones back on over
@@ -1229,7 +1263,7 @@ export const audit = defineCommand({
       type: "string",
       alias: "P",
       description:
-        "Probing intensity: passive (no requests beyond the crawl) | active (quiet probes that look like normal traffic) | aggressive (loud probes, can trip a WAF). Default: active if signed in, passive if not. Overrides [security] probe",
+        "Probing intensity: passive (no probe rules; the discovery probes still run unless disabled) | active (quiet probes that look like normal traffic) | aggressive (loud probes, can trip a WAF). Default: the audit level's (passive for quick, active for surface and full). Overrides [security] probe",
     },
     passive: {
       type: "boolean",
@@ -1258,8 +1292,20 @@ export const audit = defineCommand({
       description:
         "Also list the rules that passed, with how many pages each passed on",
     },
+    includeInfo: {
+      type: "boolean",
+      description:
+        "Also list info checks (notes that are not findings) in the llm format. The JSON report always has them",
+    },
+    includePages: {
+      type: "boolean",
+      description:
+        "JSON only: list every crawled page with its HTTP status and how many rules reported on it (capped at 2000 entries, marked with pagesTruncated)",
+    },
   },
   async run({ args, rawArgs }) {
+    // #1271: `--max-duration` counts from here, so every probe before the crawl is inside it.
+    const commandStartedAt = Date.now();
     // Configure logging before any output
     configureLogger({ debug: args.debug, trace: args.trace });
 
@@ -1864,7 +1910,12 @@ export const audit = defineCommand({
         args["per-host"],
         "--per-host"
       );
-      if (concurrency === null || perHostConcurrency === null) {
+      const maxDurationSeconds = parseMaxDurationFlag(args["max-duration"]);
+      if (
+        concurrency === null ||
+        perHostConcurrency === null ||
+        maxDurationSeconds === null
+      ) {
         process.exitCode = 1;
         return;
       }
@@ -1989,6 +2040,11 @@ export const audit = defineCommand({
         offline: args.offline,
         ...(concurrency !== undefined ? { concurrency } : {}),
         ...(perHostConcurrency !== undefined ? { perHostConcurrency } : {}),
+        ...(args.includePages && args.format === "json"
+          ? { includePages: true }
+          : {}),
+        ...(maxDurationSeconds !== undefined ? { maxDurationSeconds } : {}),
+        maxDurationStartedAt: commandStartedAt,
         ...(Object.keys(customHeaders).length > 0
           ? { headers: customHeaders }
           : {}),
@@ -2970,6 +3026,14 @@ export const audit = defineCommand({
         );
       }
       const includePassed = args.includePassed ?? false;
+      const includeInfo = args.includeInfo ?? false;
+      const includePages = args.includePages ?? false;
+      // #1260: the pages list is a JSON field; say so rather than ignore the flag.
+      if (includePages && format !== "json") {
+        console.error(
+          `--include-pages only applies to --format json; the ${format} report has no pages list`
+        );
+      }
       if (format === "console") {
         generateConsoleReport(report, {
           summaryOnly: args.summary,
@@ -2985,7 +3049,12 @@ export const audit = defineCommand({
         );
       } else if (format === "json") {
         // stdout by default, file if -o provided
-        generateJsonReport(report, options.outputPath, includePassed);
+        generateJsonReport(
+          report,
+          options.outputPath,
+          includePassed,
+          includePages
+        );
       } else if (format === "html") {
         // file by default - HTML needs a browser
         const hostname = new URL(report.baseUrl).hostname;
@@ -3006,7 +3075,12 @@ export const audit = defineCommand({
           includePassed
         );
       } else if (format === "llm") {
-        generateLlmReport(report, options.outputPath, includePassed);
+        generateLlmReport(
+          report,
+          options.outputPath,
+          includePassed,
+          includeInfo
+        );
       }
 
       // Publish to the dashboard (auto when signed in + online, or forced with

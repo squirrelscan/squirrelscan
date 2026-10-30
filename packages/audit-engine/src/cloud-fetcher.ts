@@ -65,6 +65,12 @@ const POLL_BACKOFF_FACTOR = 2;
 const DEFAULT_TIMEOUT_MS = 45_000;
 const MAX_CONSECUTIVE_SERVER_FAILURES = 3;
 
+type RenderResultItemWithHtml = RenderResultItem & { html: string };
+
+function hasRenderedHtml(item: RenderResultItem): item is RenderResultItemWithHtml {
+  return typeof item.html === "string";
+}
+
 export interface CloudFetcherOptions {
   /** Plain-HTTP fetcher used per-url on render failure and permanently after fallback. */
   fallback: DocumentFetcher;
@@ -198,7 +204,7 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
  * item omits headers do we synthesize content-type (downstream parsing gates on it).
  */
 export function mapRenderItemToResponse(
-  item: RenderResultItem,
+  item: RenderResultItemWithHtml,
   requestUrl: string,
   timing: { startedAt: number; responseAt: number; finishedAt: number },
 ): FetchResponse {
@@ -239,7 +245,7 @@ export function mapRenderItemToResponse(
     finalUrl,
     status,
     headers,
-    body: item.html ?? "",
+    body: item.html,
     timing,
     redirectChain: {
       sourceUrl: requestUrl,
@@ -513,7 +519,7 @@ export function createCloudDocumentFetcher(
           /* ignore */
         }
         if (!racing) void fallbackWaiter(w, "render-block");
-      } else if (item.html !== undefined) {
+      } else if (hasRenderedHtml(item)) {
         resolveWaiter(
           w,
           mapRenderItemToResponse(item, w.req.url, {

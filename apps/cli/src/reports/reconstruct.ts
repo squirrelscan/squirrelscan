@@ -3,8 +3,13 @@
 
 import type { PageFeatureRow } from "@squirrelscan/core-contracts";
 
-import { detachFromPage } from "@squirrelscan/audit-engine";
+import {
+  canonicalVariantMap,
+  detachFromPage,
+  foldChecksToCanonical,
+} from "@squirrelscan/audit-engine";
 import { buildCacheStats } from "@squirrelscan/core-contracts";
+import { maxDurationReason } from "@squirrelscan/core-contracts/failure-reason";
 import { createStructureBuilder } from "@squirrelscan/report/structure";
 import { loadAllRules, type RuleRunResult } from "@squirrelscan/rules";
 import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
@@ -21,7 +26,7 @@ import type {
   SitemapDiscovery,
 } from "@/types";
 
-import { parsePageRecord } from "@/audit/adapter";
+import { hasAuditableHtmlBody, parsePageRecord } from "@/audit/adapter";
 import {
   calculateHealthScore,
   deriveAuditStatusFromPages,
@@ -250,6 +255,11 @@ export interface ReconstructOptions {
    * post-crawl pipeline's residency.
    */
   batchSize?: number;
+  /**
+   * Fill each page's `ruleCount` (#1260). Off by default: the per-page count is a
+   * `GROUP BY` over every stored check, and only `--include-pages` reads it.
+   */
+  includePageRuleCounts?: boolean;
 }
 
 /**
@@ -379,6 +389,53 @@ export function reconstructReport(
     const { byPage: ruleResultsByPage, byRuleId: ruleResultsByRuleId } =
       yield* storage.getRuleResultsGrouped(crawlId);
 
+    // 6b. Query-string variants of a page (#858): a crawled page that declares another crawled
+    // page of the same path as its canonical is counted with it. Report time only; every page
+    // keeps its own checks, so the tallies and the score do not move. Fresh crawls only: a smart
+    // audit's union counts carried pages this fold cannot see.
+    let variantOf = new Map<string, string>();
+    if (!smartMerge) {
+      const canonicalRows: Array<{ url: string; canonical: string | null }> =
+        [];
+      let after: string | undefined;
+      for (;;) {
+        const rows = yield* storage
+          .getPageFeaturesPage(crawlId, { after, limit: batchSize })
+          .pipe(Effect.catchAll(() => Effect.succeed([] as PageFeatureRow[])));
+        if (rows.length === 0) break;
+        for (const row of rows)
+          canonicalRows.push({
+            url: row.normalizedUrl,
+            canonical: row.canonical,
+          });
+        after = rows[rows.length - 1]!.normalizedUrl;
+        if (rows.length < batchSize) break;
+      }
+      variantOf = canonicalVariantMap(canonicalRows);
+      // The two lookups share their check objects, so one pass over either folds both.
+      if (variantOf.size > 0)
+        foldChecksToCanonical(
+          Array.from(ruleResultsByRuleId.values()).flat(),
+          variantOf
+        );
+    }
+    const variantsOfCanonical = new Map<string, string[]>();
+    for (const [variant, canonical] of variantOf) {
+      const list = variantsOfCanonical.get(canonical);
+      if (list) list.push(variant);
+      else variantsOfCanonical.set(canonical, [variant]);
+    }
+    let variantPages = 0;
+    // Rules that reported on each page, for `--include-pages` (#1260). A failed read
+    // leaves the counts at 0 rather than failing the report.
+    const ruleCountsByPage = options?.includePageRuleCounts
+      ? yield* storage
+          .getRuleCountsByPage(crawlId)
+          .pipe(
+            Effect.catchAll(() => Effect.succeed(new Map<string, number>()))
+          )
+      : new Map<string, number>();
+
     // 7. Load rule registry to get metadata
     // Stored results can include explicitly enabled opt-in rules. Reconstruction
     // needs their metadata even though a default audit does not select them.
@@ -481,7 +538,8 @@ export function reconstructReport(
         if (features) featureBuf.delete(page.normalizedUrl);
         // Pages that answered with a document. A 404 page carries the site's chrome too, and
         // counting it would say the site has more header links than it has pages.
-        if (page.status >= 200 && page.status < 300) {
+        const isVariant = variantOf.has(page.normalizedUrl);
+        if (page.status >= 200 && page.status < 300 && !isVariant) {
           structureBuilder.add(features?.reportScalars?.structure);
         }
 
@@ -491,6 +549,11 @@ export function reconstructReport(
           statusCode: page.status,
         });
         pageStatuses.push({ status: page.status });
+        // A variant is not a page of its own in the report (#858): it is counted with its canonical.
+        if (isVariant) {
+          variantPages += 1;
+          continue;
+        }
         // The stored scalars, or — only when this page has none — the parse they
         // replaced (#2343). `reportScalars` is null on a row written before
         // schema v30, so an audit stored by an older binary still reports the
@@ -499,7 +562,10 @@ export function reconstructReport(
         const withBody = scalars
           ? null
           : yield* storage.getPage(crawlId, page.normalizedUrl);
-        const parsed = withBody?.html ? parsePageRecord(withBody) : null;
+        const parsed =
+          withBody !== null && hasAuditableHtmlBody(withBody)
+            ? parsePageRecord(withBody)
+            : null;
         const summarySignal = scalars
           ? {
               title: features?.title ?? null,
@@ -535,7 +601,12 @@ export function reconstructReport(
         );
 
         // Get rule results for this page
-        const pageChecks = ruleResultsByPage.get(page.normalizedUrl) ?? [];
+        const pageChecks = [
+          ...(ruleResultsByPage.get(page.normalizedUrl) ?? []),
+          ...(variantsOfCanonical.get(page.normalizedUrl) ?? []).flatMap(
+            (v) => ruleResultsByPage.get(v) ?? []
+          ),
+        ];
 
         // Build summary data
         if (summarySignal) {
@@ -620,6 +691,9 @@ export function reconstructReport(
             siteName: null,
           },
           checks: pageChecks,
+          ...(options?.includePageRuleCounts
+            ? { ruleCount: ruleCountsByPage.get(page.normalizedUrl) ?? 0 }
+            : {}),
           redirectChain: page.redirectChain,
           fetcherId: page.fetcherId,
           fallbackReason: page.fallbackReason,
@@ -729,7 +803,9 @@ export function reconstructReport(
             checks,
           };
 
-      if (!rule) {
+      // `crawl/asset-fetch-degraded` is the engine's own diagnostic note, never a registry rule;
+      // a `--max-duration` run that cuts the resource checks stores it (#1271).
+      if (!rule && ruleId !== "crawl/asset-fetch-degraded") {
         console.warn(`Rule not found in registry: ${ruleId}`);
       }
 
@@ -833,7 +909,7 @@ export function reconstructReport(
     // pages mean "we could not check these THIS run", which is exactly what the
     // reader needs to see. Letting the smart-audit override swallow it would
     // hide the coverage loss on every re-audit.
-    const auditStatus =
+    const baseAuditStatus =
       smartMerge &&
       smartMerge.coverage.knownPages > smartMerge.coverage.auditedPages &&
       rateLimitedCount === 0 &&
@@ -846,6 +922,17 @@ export function reconstructReport(
             reasonCode: undefined,
           }
         : runStatus;
+
+    // #1271: the audit's own `--max-duration` cut, restored from the stored scope.
+    const durationCut = crawl.scanScope?.maxDuration;
+    const auditStatus =
+      durationCut && baseAuditStatus.status === "completed"
+        ? {
+            status: "partial" as const,
+            reason: maxDurationReason(durationCut),
+            reasonCode: "max_duration" as const,
+          }
+        : baseAuditStatus;
 
     // No real audit ⇒ null score (N/A), not 0. Parity with the cloud/live
     // builder (generateReportFromStorage) + the API's failed-report persist (#586).
@@ -902,6 +989,10 @@ export function reconstructReport(
       ...(crawl.stats?.wafBlocked && crawl.stats.wafBlocked.total > 0
         ? { wafBlocked: crawl.stats.wafBlocked }
         : {}),
+      // Refusal-shaped pages with no provider marker (#1258): audited, but flagged.
+      ...(crawl.stats?.wafSuspect && crawl.stats.wafSuspect.total > 0
+        ? { wafSuspect: crawl.stats.wafSuspect }
+        : {}),
       // Root fetches the site refused, surfaced so a blocked report says
       // "refused" instead of leaving the reader to infer it.
       ...(crawl.stats?.refusedFetches?.length
@@ -912,6 +1003,7 @@ export function reconstructReport(
       // the crawl (#1050). A later database report restores that exact scope;
       // old crawl rows have no stamp and deliberately gain no inferred one.
       ...(crawl.scanScope ? { scanScope: crawl.scanScope } : {}),
+      ...(durationCut ? { maxDuration: durationCut } : {}),
       // The start URL's followed redirect (#1281), persisted with the scan scope.
       ...(crawl.scanScope?.startRedirect
         ? {
@@ -920,6 +1012,14 @@ export function reconstructReport(
           }
         : {}),
       ...(structure ? { structure } : {}),
+      ...(variantPages > 0
+        ? {
+            canonicalVariants: variantPages,
+            canonicalVariantPages: [...variantOf]
+              .slice(0, 100)
+              .map(([page, canonical]) => ({ page, canonical })),
+          }
+        : {}),
       ...(cacheStats ? { cacheStats } : {}),
       ...(renderBlockRecovered > 0
         ? { fetchFallbacks: { recovered: renderBlockRecovered } }

@@ -12,7 +12,14 @@ import type {
   SitemapData,
   WafBlockedSummary,
 } from "@squirrelscan/core-contracts";
-import { addWafBlockedPage, isCacheHitReason, wafBlockedPage } from "@squirrelscan/core-contracts";
+import {
+  addWafBlockedPage,
+  addWafSuspectPage,
+  isCacheHitReason,
+  wafBlockedPage,
+  type WafSuspectSummary,
+} from "@squirrelscan/core-contracts";
+import { classifyWafResponse } from "@squirrelscan/utils/waf";
 import { WELL_KNOWN_PATHS, isPermanentStorageError } from "@squirrelscan/core-contracts/storage";
 import { auditFailureDetail } from "@squirrelscan/core-contracts/failure-reason";
 import { COVERAGE_PAGE_LIMITS, REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
@@ -296,6 +303,12 @@ const PREAMBLE_TOTAL_BUDGET_MS = 45_000;
 // REDIRECT_BUDGET_HOPS in detectRedirects, which bounds a chain the same way.
 const PREAMBLE_BUDGET_REQUESTS = 3;
 
+/** The preamble's wall-clock allowance, cut to the discovery deadline when one is set (#1271). */
+export function discoveryBudgetMs(timeoutMs: number, discoveryDeadlineAt?: number, now: number = Date.now()): number {
+  const base = preambleBudgetMs(timeoutMs);
+  return discoveryDeadlineAt === undefined ? base : Math.max(1, Math.min(base, discoveryDeadlineAt - now));
+}
+
 /** The preamble's wall-clock allowance for a given per-request timeout. */
 export function preambleBudgetMs(timeoutMs: number): number {
   return Math.min(PREAMBLE_TOTAL_BUDGET_MS, Math.max(1, timeoutMs) * PREAMBLE_BUDGET_REQUESTS);
@@ -495,6 +508,13 @@ export function createCrawler(
     // hits an orphaned Deferred whose stopGuard already resolved or lost its
     // race, so Deferred.succeed has no awaiter and is an inert no-op.
     let stopSignal: Deferred.Deferred<void, never> | null = null;
+    /**
+     * `stop()` was called since the run began, possibly before the crawl loop existed (during the
+     * preamble: seed redirect resolution, robots.txt, sitemaps). Such a stop used to be lost when
+     * the run then set `isRunning = true`, so a `--max-duration` budget spent in the preamble let
+     * the crawl start and run to the per-URL watchdog (#1271). Cleared when a run begins.
+     */
+    let stopRequestedEarly = false;
     let robots: RobotsEvaluator | null = null;
     let baseUrl: string = "";
     // The custom headers go only to the audited origin (scheme, host and port,
@@ -601,6 +621,8 @@ export function createCrawler(
      * would drop a blocked page another worker had just recorded.
      */
     let wafBlocked: WafBlockedSummary | undefined;
+    /** Stored pages that look like a provider's refusal without its block marker (#1258). */
+    let wafSuspect: WafSuspectSummary | undefined;
     /**
      * The seed's normalized URL. A sitemap that lists the homepage enqueues it
      * first, so the frontier entry for the seed keeps `source: "sitemap"` and
@@ -1549,8 +1571,24 @@ export function createCrawler(
                   status: error.status ?? 403,
                   ...error.wafBlock,
                 }),
-                entry.source === "seed" || entry.normalizedUrl === seedNormalizedUrl,
+                entry.source === "seed" ||
+                  entry.normalizedUrl === seedNormalizedUrl ||
+                  // A page that redirected to the seed's own challenge (a sitemap or link
+                  // still listing the URL the user typed) is the seed's blocked page, not
+                  // another one (#1258).
+                  (error.wafBlock.finalUrl !== undefined &&
+                    normalizeAndCheckScope(error.wafBlock.finalUrl).normalized ===
+                      seedNormalizedUrl),
               );
+            }
+            // A bare 403 that reads like a provider's refusal (#1258): still the blocked
+            // fetch it was, and the report warns that it may be the provider's page.
+            if (blockedFetch && !error.wafBlock && error.wafSuspect) {
+              wafSuspect = addWafSuspectPage(wafSuspect, {
+                url: entry.normalizedUrl,
+                status: error.status ?? 403,
+                ...error.wafSuspect,
+              });
             }
             // A body the runtime could not decode is a page the audit never
             // saw. Counted (subset of pagesFailed) so the report can say its
@@ -1722,6 +1760,27 @@ export function createCrawler(
             };
             yield* storage.upsertPage(crawlId, errorPageRecord);
             pagesCommitted++;
+            // A refusal-shaped 4xx from a known provider with no block marker (#1258):
+            // stored as the error page it is, and the report warns it may be the provider's.
+            const suspect = classifyWafResponse({
+              status: result.status,
+              headers: {
+                server: result.headers.server,
+                cfCacheStatus: result.headers.cfCacheStatus,
+                xCache: result.headers.xCache,
+                raw: result.headers.techHeaders ?? null,
+              },
+              html: result.body,
+            });
+            if (suspect.verdict === "suspect") {
+              wafSuspect = addWafSuspectPage(wafSuspect, {
+                url: entry.normalizedUrl,
+                status: result.status,
+                provider: suspect.provider,
+                providerId: suspect.providerId,
+                signal: suspect.signal ?? "refusal page",
+              });
+            }
 
             yield* storage.updateFrontierStatus(
               crawlId,
@@ -2009,6 +2068,7 @@ export function createCrawler(
 
           yield* storage.upsertPage(crawlId, pageRecord);
           pagesCommitted++;
+
           yield* storage.updateFrontierStatus(crawlId, entry.normalizedUrl, "done");
 
           yield* emit({
@@ -2088,6 +2148,7 @@ export function createCrawler(
           // resume, and `updates` can only displace a weaker source.
           rootFailure,
           ...(wafBlocked ? { wafBlocked } : {}),
+          ...(wafSuspect ? { wafSuspect } : {}),
         };
 
         // Update average load time
@@ -2143,6 +2204,7 @@ export function createCrawler(
         // persisted stats keeps whatever root failure the earlier pass recorded.
         rootFailure = priorStats?.rootFailure;
         wafBlocked = priorStats?.wafBlocked;
+        wafSuspect = priorStats?.wafSuspect;
         processFailure = undefined;
         // Throttle verdicts do not survive a run. Exhaustion is terminal WITHIN
         // a run (an exhausted host is skipped before any request, so it can never
@@ -2778,6 +2840,7 @@ export function createCrawler(
       originalUrl?: string,
     ): Effect.Effect<string, CrawlerError | StorageError, never> =>
       Effect.gen(function* () {
+        stopRequestedEarly = false;
         // One wall-clock budget for the whole preamble, armed before the first
         // request of the crawl. See PREAMBLE_TOTAL_BUDGET_MS.
         //
@@ -2792,7 +2855,7 @@ export function createCrawler(
         // The log rides on the budget so every root probe can note a request the
         // site refused; persisted below so the rules say "refused", not "absent".
         const refusals = new RefusalLog();
-        const seedPhase = createPhaseBudget(preambleBudgetMs(config.timeoutMs), Date.now(), refusals);
+        const seedPhase = createPhaseBudget(discoveryBudgetMs(config.timeoutMs, config.discoveryDeadlineAt), Date.now(), refusals);
 
         // Follow redirects to get final URL (both HTTP and client-side)
         const rawFinalTargetUrl = yield* detectRedirects(targetUrl, seedPhase);
@@ -2896,7 +2959,7 @@ export function createCrawler(
         });
 
         currentCrawlId = crawlId;
-        isRunning = true;
+        isRunning = !stopRequestedEarly;
         isPaused = false;
 
         yield* emit({
@@ -2997,6 +3060,9 @@ export function createCrawler(
             customHeaders: config.headers,
             headerScope: getHeaderScope(),
             walkWindowMs: sitemapWalkWindowMs(config.timeoutMs),
+            ...(config.discoveryDeadlineAt !== undefined
+              ? { walkTotalMs: Math.max(1, config.discoveryDeadlineAt - Date.now()) }
+              : {}),
             refusals,
             ...(crawlEgress ? { egress: crawlEgress } : {}),
           },
@@ -3166,6 +3232,7 @@ export function createCrawler(
     const stop = (): Effect.Effect<void, CrawlerError, never> =>
       Effect.gen(function* () {
         isRunning = false;
+        stopRequestedEarly = true;
         // Arm the crawl loop's grace-then-interrupt hard cap (#923). Idempotent:
         // succeed on an already-completed Deferred is a no-op.
         if (stopSignal) {
@@ -3182,6 +3249,7 @@ export function createCrawler(
       crawlId: string,
     ): Effect.Effect<void, CrawlerError | StorageError, never> =>
       Effect.gen(function* () {
+        stopRequestedEarly = false;
         const crawl = yield* storage.getCrawl(crawlId);
         if (!crawl) {
           return yield* Effect.fail(new CrawlerError("UNKNOWN", `Crawl not found: ${crawlId}`));
@@ -3191,7 +3259,7 @@ export function createCrawler(
         headerSeed = crawl.originalUrl ?? crawl.seedUrl ?? "";
         crawlEgress = egressFor(baseUrl);
         currentCrawlId = crawlId;
-        isRunning = true;
+        isRunning = !stopRequestedEarly;
         isPaused = false;
 
         // Restore config from crawl
@@ -3208,7 +3276,7 @@ export function createCrawler(
             config.userAgent,
             true,
             customHeadersFor(baseUrl),
-            createPhaseBudget(preambleBudgetMs(config.timeoutMs), Date.now(), undefined, crawlEgress),
+            createPhaseBudget(discoveryBudgetMs(config.timeoutMs, config.discoveryDeadlineAt), Date.now(), undefined, crawlEgress),
             config.robotsUserAgent,
           ),
         );
@@ -3307,6 +3375,7 @@ export function createCrawler(
       newConfig: Partial<CrawlerConfig>,
     ): Effect.Effect<string, CrawlerError | StorageError, never> =>
       Effect.gen(function* () {
+        stopRequestedEarly = false;
         const crawl = yield* storage.getCrawl(crawlId);
         if (!crawl) {
           return yield* Effect.fail(new CrawlerError("UNKNOWN", `Crawl not found: ${crawlId}`));
@@ -3316,7 +3385,7 @@ export function createCrawler(
         headerSeed = crawl.originalUrl ?? crawl.seedUrl ?? "";
         crawlEgress = egressFor(baseUrl);
         currentCrawlId = crawlId;
-        isRunning = true;
+        isRunning = !stopRequestedEarly;
         isPaused = false;
         // A restart re-crawls from an empty frontier, so it is a fresh run for
         // reporting purposes and must be able to say this again (#1899).
@@ -3364,7 +3433,7 @@ export function createCrawler(
 
         // One wall-clock budget for this restart's preamble, same as start().
         const preamble = createPhaseBudget(
-          preambleBudgetMs(config.timeoutMs),
+          discoveryBudgetMs(config.timeoutMs, config.discoveryDeadlineAt),
           Date.now(),
           undefined,
           crawlEgress,

@@ -23,6 +23,7 @@ import {
   itemLabel,
   regionScopeLine,
 } from "../region-scope";
+import { hasCarriedPages } from "../page-type-scope";
 
 /** "in the site footer, ..." from "In the site footer, ...", to sit inside a sentence. */
 const lowerFirst = (text: string): string => text.charAt(0).toLowerCase() + text.slice(1);
@@ -31,7 +32,9 @@ import { domainAgeYears } from "../site-metadata";
 import { lockedRulesMessage } from "../locked-rules";
 import { privateTargetLine, privateTargetSkippedRules } from "../private-target";
 import { notCheckedLine, notCheckedRules } from "../not-checked";
+import { techOpenTag } from "../technologies";
 import { editorSummaryView } from "../editor-summary";
+import { collectInfoChecks } from "../info-checks";
 import {
   ENTITY_FINDING_LIMIT,
   ENTITY_TABLE_LIMIT,
@@ -75,7 +78,7 @@ import { formatSiteWideItem, siteWideContext, siteWideItem } from "../site-wide-
 import { stripControlChars } from "@squirrelscan/core-contracts/control-chars";
 import { AUDIT_FAILURE_NEXT_STEP_THIRD } from "@squirrelscan/core-contracts/failure-reason";
 import { refusedFetchLines, reportFailureReasonCode } from "../failure-notice";
-import { safeWafBlocked, wafBlockedSeedCopy } from "../waf-blocked";
+import { safeWafBlocked, safeWafSuspect, wafBlockedSeedCopy } from "../waf-blocked";
 
 export interface LlmRenderOptions {
   /** Roll up groups that are one repair (default true). */
@@ -85,7 +88,18 @@ export interface LlmRenderOptions {
   version?: string;
   /** List the rules that passed after the issues (`--include-passed`). */
   includePassed?: boolean;
+  /**
+   * Add the `<info-checks>` block (`--include-info`, #669). Off by default: the
+   * LLM report is read against a token budget, and most info checks are "nothing to
+   * check" notes. The JSON report always has them.
+   */
+  includeInfo?: boolean;
 }
+
+/** Pages named per info check in the LLM output; the true count is in `pages`. */
+const INFO_CHECK_PAGES = 3;
+/** Info checks listed in the LLM output; the rest are counted, and all are in the JSON report. */
+const INFO_CHECKS_LISTED = 25;
 
 function escapeXml(str: string): string {
   return str
@@ -299,6 +313,24 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
     lines.push("</waf-blocked>");
   }
 
+  // #1258: pages that look like a provider's refusal but carry no block marker. They were audited,
+  // so say plainly that their findings may describe the provider's page, not the site's.
+  const wafSuspect = safeWafSuspect(report);
+  if (wafSuspect && report.status !== "failed" && report.status !== "blocked") {
+    const providers = escapeXml(wafSuspect.providers.join(", "));
+    lines.push(`<waf-suspect pages="${wafSuspect.total}" providers="${providers}">`);
+    lines.push(
+      `${indent(1)}${wafSuspect.total} page(s) look like a refusal from a WAF or bot manager but carry no block marker. They were audited like any page, so check that a finding on them describes the site and not the provider's page before reporting it.`,
+    );
+    for (const page of wafSuspect.pages) {
+      const by = page.provider ? ` provider="${escapeXml(page.provider)}"` : "";
+      lines.push(
+        `${indent(1)}<page url="${escapeXml(page.url)}" status="${page.status}"${by} signal="${escapeXml(page.signal)}"/>`,
+      );
+    }
+    lines.push("</waf-suspect>");
+  }
+
   // Root fetches the site refused. Their absence is UNKNOWN, so an agent
   // must not turn them into "add a robots.txt" or "add a sitemap" fixes.
   const refused = refusedFetchLines(report);
@@ -362,8 +394,11 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
     // In-scope URLs left queued: how much more of the site the crawl knew of.
     const left = scanScopeUnfetched(report);
     const unfetched = left > 0 ? ` unfetched="${left}"` : "";
+    // Query-string variants counted with their canonical page (#858).
+    const variantCount = Number(report.canonicalVariants ?? s.canonicalVariants ?? 0);
+    const variants = Number.isSafeInteger(variantCount) && variantCount > 0 ? ` canonical-variants="${variantCount}"` : "";
     lines.push(
-      `<scan-scope origin="${s.origin}" crawled="${s.pagesCrawled}"${cap}${requested} capped="${s.capped}"${stop}${unfetched}/>`,
+      `<scan-scope origin="${s.origin}" crawled="${s.pagesCrawled}"${cap}${requested} capped="${s.capped}"${stop}${unfetched}${variants}/>`,
     );
   }
 
@@ -483,7 +518,7 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
   if (report.technologies && report.technologies.items.length > 0) {
     const tech = report.technologies;
     lines.push(
-      `<technologies first-scan="${tech.firstScan}" added="${tech.added.length}" removed="${tech.removed.length}">`,
+      techOpenTag("technologies", tech, ""),
     );
     for (const t of tech.items) {
       const ver = t.version ? ` version="${escapeXml(t.version)}"` : "";
@@ -651,7 +686,11 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
       // the rest as additional" remainder (rules/src/shared/sample-items.ts and
       // the a11y rules' slice(0, 10)). So listed + additional is the total.
       let itemsLeftOut = 0;
+      // The items of every check of the rule are listed together, so one that carries pages from
+      // an earlier audit keeps all of them on their page rows (pub#860).
+      let ruleCarriesPages = false;
       for (const check of rule.checks) {
+        if (hasCarriedPages(check)) ruleCarriesPages = true;
         // Narrowed to what the printed groups did NOT account for, so a
         // partially covered rule does not report the same pages twice.
         allItems.push(...uncoveredItems(check.items, coverage));
@@ -707,7 +746,7 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
           let itemLine = `${indent(3)}- ${escapeXml(itemId)}`;
           // pub#837/#846: the item's pages, and the region it is shown in; a scoped item's label
           // drops the section phrase the region says.
-          const view = itemSourceView(item, report.structure);
+          const view = itemSourceView(item, report.structure, ruleCarriesPages ? { provenance: "carried" } : undefined);
           const label = itemLabel(item, view.scope);
           if (label && label !== item.id) itemLine += ` (${escapeXml(label)})`;
           if (item.snippet) itemLine += ` | ${escapeXml(item.snippet)}`;
@@ -772,6 +811,24 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
       lines.push(`${indent(1)}<rule id="${escapeXml(rule.id)}" name="${escapeXml(rule.name)}"/>`);
     }
     lines.push("</not-applicable>");
+  }
+
+  // Info checks (#669), opt-in with `includeInfo`: notes a rule recorded that are
+  // neither findings nor skips. They never change the score. A few pages each,
+  // with the true count.
+  const infoChecks = options?.includeInfo ? collectInfoChecks(report.ruleResults) : [];
+  if (infoChecks.length > 0) {
+    lines.push(`<info-checks count="${infoChecks.length}">`);
+    for (const info of infoChecks.slice(0, INFO_CHECKS_LISTED)) {
+      const shown = info.pages.slice(0, INFO_CHECK_PAGES);
+      lines.push(
+        `${indent(1)}<check rule="${escapeXml(info.ruleId)}" name="${escapeXml(info.check)}" pages="${info.pagesCount}">${escapeXml(info.message)}${shown.length > 0 ? ` Pages: ${shown.map((p) => escapeXml(p)).join(", ")}${info.pagesCount > shown.length ? ", ..." : ""}` : ""}</check>`,
+      );
+    }
+    if (infoChecks.length > INFO_CHECKS_LISTED) {
+      lines.push(`${indent(1)}<more count="${infoChecks.length - INFO_CHECKS_LISTED}">Listed in full in the JSON report (infoChecks).</more>`);
+    }
+    lines.push("</info-checks>");
   }
 
   // Cloud-/Pro-gated rules that didn't run this audit (#780) — an agent must

@@ -24,6 +24,7 @@ squirrel audit <url> [options]
 |--------|-------|-------------|---------|
 | `--max-pages` | `-m` | Maximum pages to crawl | the [level's](/guides/audit-levels) page budget |
 | `--max-depth` | | Maximum crawl depth from the seed (start page = 0) | unlimited |
+| `--max-duration` | | Wall-clock budget for the whole audit, in seconds. At the limit the audit stops launching new work and writes a `partial` report (see [Time limit](#time-limit)) | no limit |
 | `--concurrency` | | Global crawl worker pool size (overrides `[crawler] concurrency`) | `5` |
 | `--per-host` | | Max concurrent requests per host (overrides `[crawler] per_host_concurrency`) | `5` |
 | `--level` | | [Audit level](/guides/audit-levels): `quick`, `surface`, `full` | auth-aware (see below) |
@@ -51,7 +52,7 @@ squirrel audit <url> [options]
 | `--render` | | Force cloud browser rendering for this run: alias of `--render-mode all` ([uses credits](/guides/browser-rendering); requires login) | auto |
 | `--render-mode` | | Render strategy: `off` (HTTP only) · `auto` (render only client-rendered pages) · `all` (render every page). Overrides `[cloud].render` | the level's: `auto` for quick, `all` for surface and full |
 | `--http` | | Force plain HTTP for this run: alias of `--render-mode off` (never render in the cloud; pages cost the same either way) | auto |
-| `--offline` | | Run fully offline: skip cloud features, publishing, and telemetry. No request goes to a host outside the audited site (its host, its `www` or apex twin, `[project] domains` and their subdomains): external links, third-party scripts, stylesheets and fonts, sitemaps on another site, and redirects to another site are not requested. Internal link targets still are checked. See [Fully offline audit](#fully-offline-audit) | `false` |
+| `--offline` | | Run offline: skip cloud features, publishing, and telemetry. No request goes to a host outside the audited site (its host, its `www` or apex twin, `[project] domains` and their subdomains): external links, third-party scripts, stylesheets and fonts, sitemaps on another site, and redirects to another site are not requested. Internal link targets still are checked. It does not change probing: `-C surface --offline` still sends the site probes unless you add `--passive`. See [Offline and passive are separate](#offline-and-passive-are-separate) | `false` |
 | `--external-links` | | Check links to other sites this run, even where `[external_links] enabled = false` turns them off. Cannot be combined with `--offline` or `--no-external-links` | the level's: on at every level |
 | `--no-external-links` | | Do not check links to other sites this run. The report shows them as **Not checked** | the level's |
 | `--no-internal-links` | | Do not status-check internal link targets the crawl did not fetch (one `HEAD` request each, on by default at every level). See [Link checking defaults](/rules/links#link-checking-defaults) | checked |
@@ -68,6 +69,8 @@ squirrel audit <url> [options]
 | `--pentest` | | Shortcut for `--level full --probe aggressive` | `false` |
 | `--summary` | | Print only the score, category breakdown, and issue counts — no per-issue detail. Console format only | `false` |
 | `--include-passed` | | Also list the rules that passed, with how many pages each passed on | `false` |
+| `--include-info` | | Also list info checks (notes that are not findings) in the `llm` format. The `json` format always has them under `infoChecks`. See [Info checks](/configuration/output#json) | `false` |
+| `--include-pages` | | JSON only: list every crawled page with its HTTP status and how many rules reported on it. See [Pages list](#pages-list) | `false` |
 
 ### Audit levels
 
@@ -101,6 +104,56 @@ and lets you top up.
 See [Audit levels](/guides/audit-levels) for every setting of every level, custom
 levels, and the plan and credit limits.
 
+### Offline and passive are separate
+
+Two settings control what an audit sends, and they are independent:
+
+- **Offline or online** is the network scope: does the audit use the cloud and
+  other sites? `--offline` says no. It means no cloud analysis, rendering or
+  publishing, no telemetry, and no check of links, scripts or sitemaps on other
+  sites. The one request that can leave the audited site is a start URL redirect
+  hop, which is how the audit finds where it starts (see
+  [Start URLs that redirect](#start-urls-that-redirect)).
+- **Passive or active** is how hard the audited site is poked: the
+  [probing intensity](#probing-intensity). `--passive` (or `--probe passive`)
+  turns the probe rules off. The probe level comes from `--probe` or its
+  shortcuts (`--passive`, `--aggressive`), then `[security] probe` in the config,
+  then the audit level, and `--offline` does not change it. The run banner's
+  `Probing` line shows the level in effect.
+
+| | Passive | Active (the default at `surface` and `full`) |
+|---|---|---|
+| **Offline** (`--offline`) | The crawl of the audited site, no cloud, no other host. No probe rules, but the 28 [discovery probes](/configuration/crawler#discovery-probes) still run unless disabled | The same, plus the probe rules: GraphQL `GET` requests and, for form actions, `HEAD` then `GET`, all to the audited site |
+| **Online** (signed in or out) | The crawl, plus other sites (external link checks) and, signed in, the cloud: rendering, cloud checks and publishing. No probe rules, discovery probes still run unless disabled | Everything above, plus the probe rules |
+
+So `squirrel audit <url> -C surface --offline` is offline and **active**: it keeps
+off the cloud and off other sites, and it still sends the probe rules (for example
+`GET /graphql?query={__schema{types{name}}}`) to the audited site. Add `--passive`
+to stop them.
+
+The [discovery probes](/configuration/crawler#discovery-probes) (`llms.txt`,
+`/.well-known/*` and so on, 28 requests) are a third dial, and it only goes one
+way. A `passive` run still sends them unless you also pass
+`--disable-discovery-probes`; but `--disable-discovery-probes` does force probing
+to `passive`, so `-C surface --offline --disable-discovery-probes` runs passive.
+To keep the traffic to the crawl itself, with no probes and no cloud:
+
+```bash
+squirrel audit https://example.com --offline --passive --disable-discovery-probes
+```
+
+That still sends the crawl's own requests: the pages and their scripts,
+`robots.txt`, the sitemap path guesses, a `HEAD` for each internal link target
+the crawl did not fetch, the soft-404 re-check where it applies, and start URL
+redirect hops. On a small test site it was 17
+requests, all of them pages, `robots.txt`, sitemap paths and scripts.
+
+The banner's `Probing` line (for example `Probing   active · budget 30s`) shows
+what the run will do before it starts.
+
+`robots.txt`, sitemaps, the pages themselves and the checks of internal link
+targets are the crawl, and still run.
+
 ### Probing intensity
 
 Probing intensity says how hard each page is poked beyond what the crawl
@@ -109,7 +162,7 @@ the page budget and rendering.
 
 | Level | What it sends |
 |-------|---------------|
-| `passive` | No request beyond the crawl |
+| `passive` | No probe rules, and nothing beyond the crawl itself except the 28 [discovery probes](/configuration/crawler#discovery-probes), which `--disable-discovery-probes` turns off |
 | `active` | Quiet probes: a handful of requests that look like normal traffic |
 | `aggressive` | Loud probes: many requests and many 404s, which can trip a WAF |
 
@@ -173,6 +226,12 @@ squirrel audit https://example.com --level full
 
 ```bash
 squirrel audit https://example.com -m 200
+```
+
+### Cap the run time
+
+```bash
+squirrel audit https://example.com --max-duration 240
 ```
 
 ### Export to JSON
@@ -371,6 +430,9 @@ squirrel audit https://example.com --offline
 `--offline` cannot be combined with `--publish` or `--render` (both require
 cloud access and login).
 
+`--offline` does not imply `--passive`: see
+[Offline and passive are separate](#offline-and-passive-are-separate).
+
 ### Ephemeral runs
 
 A signed-in `squirrel audit` does more than use the cloud. It adds the site to your dashboard (or reuses it), turns on [recurring audits](/cloud/scheduled-audits#when-a-schedule-turns-itself-on) after the site's first successful audit, and publishes the report. `--ephemeral` keeps the cloud features and drops all of that:
@@ -430,6 +492,33 @@ The gate summary is written to stderr, so machine formats like `--format json`
 keep a clean stdout for piping. A malformed expression fails fast (exit `1`)
 before any crawl runs.
 
+### Time limit
+
+`--max-duration <seconds>` (or `[crawler] max_duration`) puts a wall-clock budget on the whole audit. A slow or throttling site can otherwise keep a run going for minutes, and a batch or CI job that kills the process at its own timeout gets no report at all. With the limit set, the audit stops launching new work when the budget is reached and writes the report from what it has.
+
+What happens at the limit:
+
+1. The crawl stops launching requests. Pages already in flight get a few seconds to finish. Discovery (robots.txt, the sitemaps and the other root files) may use at most 30% of the budget before the first page, so a site whose `robots.txt` or sitemaps never answer cannot use the whole limit before a page is fetched; whatever it did not reach is reported as not checked.
+2. Rules run on the pages that were fetched, and the report is written as usual.
+3. The report has `status: "partial"` and `statusReasonCode: "max_duration"`, and a `maxDuration` object counting what was left: `unfetchedPages` (discovered, never fetched), `pagesNotEvaluated` (fetched, rules never ran), `siteChecksCut` (the site-wide checks did not finish) and, when the resource checks ran out of time, `resourceChecksCut` (some size and script findings may be incomplete). The score covers the audited pages only. The JSON, text, Markdown and LLM reports and the console name the cut; the XML and HTML reports carry the coverage notice only and do not name the time limit.
+
+```json
+{
+  "status": "partial",
+  "statusReason": "Stopped at the 240 s time limit (--max-duration): 38 discovered pages were not fetched",
+  "statusReasonCode": "max_duration",
+  "maxDuration": { "seconds": 240, "unfetchedPages": 38, "pagesNotEvaluated": 0, "siteChecksCut": false }
+}
+```
+
+**Exit margin.** The process stops its own work within `max(10% of the budget, 15 seconds)` after the limit: a 60 s budget ends by 75 s, a 600 s budget by 660 s, counted from when the command starts, so the reachability check and the discovery requests before the first page are inside it. Slow link and resource checks are cut inside that margin, and the rules phase is cut at its end. A rules phase that has to be cut loses the site-wide checks, and if a request made before the page checks was still hanging, the page checks as well; `siteChecksCut` says so. Writing the report takes a moment more, and publishing to the dashboard is not counted.
+
+**Exit code.** A partial report exits `0` like any finished audit, so a `--fail-on` gate still decides pass or fail. Read `status` and `statusReasonCode` to tell a cut-short run from a complete one. A site that never answers the first request fails at the limit as an [unreachable start URL](#unreachable-start-urls): exit `5` and an `unreachable` report of class `timeout` whose reason reads `no response from the site within the request timeout (the Ns --max-duration time limit was reached)`. A site that answered but had no page fetched by the limit fails with exit `1`, because there is nothing to report on.
+
+**Limits.** The margin covers waiting, not computation. A single large page can overrun the limit by the time it takes to parse it: the work cannot be interrupted partway through a page, so a multi-megabyte HTML file blocks the whole process while it is parsed, during the crawl as well as in the rules phase, and the limit takes effect only afterwards. The limit also has a ceiling of 604800 seconds (7 days); a larger value, in the flag or in `squirrel.toml`, is refused.
+
+A run that finishes before the limit, or that the limit did not cut, is a normal `completed` report and has no `maxDuration`. Unset means no limit. `squirrel report` shows a stored partial audit the same way.
+
 ### Filtering rules
 
 Use `--rule-include` / `--rule-exclude` to run only some rule categories, for
@@ -485,6 +574,16 @@ squirrel audit https://example.com --include-passed
 ```
 
 It works with every `--format`. To list them for an audit you already ran, use [`squirrel report --include-passed`](/cli/report#list-what-passed).
+
+### Pages list
+
+`--include-pages` adds the crawled pages to the JSON report, for a pipeline that tracks which pages a run actually covered:
+
+```bash
+squirrel audit https://example.com -f json --include-pages
+```
+
+It is off by default, so the report and its size are unchanged unless you ask. Each entry is `{ "url", "status", "ruleCount" }`: the page's URL, the HTTP status it answered with, and how many distinct rules reported on it (a skipped check does not count, and neither do site-wide rules). The list is cut at 2,000 pages; `pagesTotal` is the real count and `pagesTruncated` is `true` when entries were dropped. A URL whose fetch never produced a stored response (a connection error, a server error that survived retries, a rate-limited request) is not a page and is not listed; rate-limited pages are counted in `rateLimited`. To get the list for an audit you already ran, use [`squirrel report --include-pages`](/cli/report#pages-list). In any other format the flag does nothing and the command says so on stderr. See the [JSON output schema](/configuration/output#json-output-schema).
 
 ### Verbose output
 
@@ -577,6 +676,21 @@ The audit command manages crawl sessions intelligently:
 Changing scope-affecting config (`include`, `exclude`, `allow_query_params`, `drop_query_prefixes`) triggers a fresh crawl.
 </Info>
 
+### Empty successful pages
+
+A successful HTML response that permits a body counts as an audited page even
+when its body is zero bytes. squirrel treats it as an empty document, so checks
+such as missing title and missing H1 apply, and the page is included in the
+report's page count, coverage and score. Responses without an HTML content type,
+responses whose body was not captured, and no-content statuses such as 204 are
+not treated as empty documents.
+
+### Query-string variants
+
+A page and a query-string copy of it (`/contact` and `/contact?subject=Billing`) are two URLs the crawl fetches and checks, but they are one page to the reader. A crawled page whose `rel=canonical` points at another crawled page of the same path is counted with that page: a finding on both lists one affected page, the page total and the scan line count the pages once, and the report says how many variants were folded (`Scan: 5 pages crawled ... 1 query-string variant counted with its canonical.`, `meta.canonicalVariants` in JSON).
+
+Each folded variant is listed with the page it is counted with in `meta.canonicalVariantPages` (the first 100) in the JSON report, so no URL is lost. Only a declared canonical folds a page. A variant with no canonical, with a canonical of its own (a paginated listing, a search or filter page), or whose canonical is another path, another host or a page the crawl did not fetch stays a page of its own and is listed separately. Every variant is still fetched and checked, so scores and issue counts do not change, and a finding on a variant stays in the tallies; only how many pages are counted does. One caveat: a page whose canonical points at another page is folded even when its content differs, for example `/blog?page=2` declaring `/blog` as its canonical (a common pagination mistake). squirrel counts it with `/blog` because that is what the site told search engines; give such a page its own canonical to have it listed separately. The entity map, which describes every crawled URL, still lists them. A smart audit's union of carried pages is not folded.
+
 ## Caching
 
 squirrelscan caches page content locally. On subsequent audits:
@@ -644,8 +758,8 @@ Change the window, or turn it off, with
 
 | Code | Meaning |
 |------|---------|
-| `0` | Success |
-| `1` | Error (invalid URL, crawl failed, a site that answered with an error, etc.). A start URL that is not `http://` or `https://` with a host (`ftp://`, `file://`, `mailto:`, `javascript:`) is refused first, before any request: no run is registered and nothing is charged |
+| `0` | Success, including a `partial` report cut short by [`--max-duration`](#time-limit) (check `status`) |
+| `1` | Error (invalid URL, crawl failed, a site that answered with an error, no page fetched before the [`--max-duration`](#time-limit) limit although the site answered, etc.). A start URL that is not `http://` or `https://` with a host (`ftp://`, `file://`, `mailto:`, `javascript:`) is refused first, before any request: no run is registered and nothing is charged |
 | `2` | A [`--fail-on`](#gate-ci-on-audit-results) threshold tripped (CI gate) |
 | `3` | The audited page was blocked, so nothing was audited: a WAF or bot manager challenge or block page, or a bare 403 or 429 from the server (see [blocked by a WAF or bot manager](/guides/failed-audits#blocked-by-waf)). Every report with `status: "blocked"` exits `3` |
 | `4` | The start URL redirected to another site and the run was not told to follow it (or the chain looped, passed 5 hops, or reached a refused hop), so nothing was audited. See [Start URLs that redirect](#start-urls-that-redirect) |

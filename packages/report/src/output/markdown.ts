@@ -5,7 +5,7 @@ import type { AuditReport } from "../types";
 import { AUDIT_FAILURE_NEXT_STEP } from "@squirrelscan/core-contracts/failure-reason";
 import { cacheReasonsLabel, cacheStatsSummaryLine } from "../cache-stats";
 import { refusedFetchLines, reportFailureReasonCode } from "../failure-notice";
-import { wafBlockedPagesLines, wafBlockedSeedCopy } from "../waf-blocked";
+import { wafBlockedPagesLines, wafBlockedSeedCopy, wafSuspectLines } from "../waf-blocked";
 import { getScoreGrade } from "../scoring";
 import { REPORT_SOURCE_PAGES_PREVIEW, REPORT_PAGES_HARD_CAP } from "../constants";
 import { fixRollupLine, fixUnits, ruleFixCoverage } from "../component-presentation";
@@ -437,6 +437,15 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
       for (const line of listed) lines.push(`- ${escapeMarkdownInline(line)}`);
       if (listed.length > 0) lines.push("");
     }
+    // #1258: pages that look like a provider's refusal. Audited, but flagged.
+    const suspectLines = wafSuspectLines(report);
+    if (suspectLines.length > 0) {
+      const [summary, ...listed] = suspectLines;
+      lines.push(`> **Suspect pages:** ${escapeMarkdownText(summary!)}`);
+      lines.push("");
+      for (const line of listed) lines.push(`- ${escapeMarkdownInline(line)}`);
+      if (listed.length > 0) lines.push("");
+    }
     lines.push("## Health Score");
     lines.push("");
     lines.push("| Category | Score |");
@@ -712,7 +721,7 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
           );
           lines.push("");
           for (const item of visibleItems) {
-            const view = itemSourceView(item, report.structure);
+            const view = itemSourceView(item, report.structure, check);
             // pub#846: a scoped item's label drops the section phrase its region line says.
             const label = itemLabel(item, view.scope) ?? item.id;
             const isUrl =
@@ -733,8 +742,9 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
             // not this item's, so it is not pointed at. pub#846: an item scoped to a region
             // names it, and lists only the pages it is on outside it.
             if (view.scope) lines.push(`  - ${regionScopeLine(view.scope)}`);
-            const shown = view.rows.slice(0, REPORT_SOURCE_PAGES_PREVIEW);
-            for (const row of shown) {
+            // Markdown lists every source: the item sits in a collapsed block, so
+            // the full list costs no room (#837). Text, console and llm keep a preview.
+            for (const row of view.rows) {
               lines.push(
                 `  - from: ${sourceRowText(
                   markdownLink(getPathname(row.page) || "/", row.page),
@@ -742,7 +752,7 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
                 )}`,
               );
             }
-            const hidden = Math.max(0, view.total - shown.length);
+            const hidden = Math.max(0, view.total - view.rows.length);
             if (hidden > 0) lines.push(`  - ${moreSourcePages(hidden)}`);
           }
           lines.push("");

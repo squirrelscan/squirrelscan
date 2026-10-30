@@ -151,3 +151,41 @@ describe("a timed-out security rule stays visible to --fail-on (pub#970)", () =>
     expect(gate(["warnings>=1"], r).notes).toEqual([]);
   }, 30_000);
 });
+
+describe("a rule that threw on every page stays visible to --fail-on (#1291)", () => {
+  const throwing = (id: string, category: RuleCategory): Rule => ({
+    meta: {
+      id,
+      name: id,
+      description: "test",
+      category,
+      scope: "page",
+      severity: "warning",
+      weight: 1,
+    },
+    run: () => {
+      throw new Error("boom");
+    },
+  });
+
+  for (const category of ["core", "security"] as const) {
+    test(`${category}: scores as unchecked, warnings and severity gates trip, errors and score do not`, async () => {
+      const broken = await report(
+        throwing(`${category}/test-broken`, category),
+        fast
+      );
+      expect(broken.healthScore?.warningCount ?? 0).toBe(0);
+      const warnings = gate(["warnings>=1"], broken);
+      expect(warnings.trips).toHaveLength(1);
+      expect(warnings.trips[0]!.actual).toBe(
+        "1 warning-severity findings (incl. 1 rule that hit an internal error)"
+      );
+      expect(gate(["severity>=warning"], broken).trips).toHaveLength(1);
+      expect(gate(["errors>=1"], broken).trips).toHaveLength(0);
+      const lines = formatFailOnSummary(warnings).join("\n");
+      expect(lines).toContain(
+        `${category}/test-broken failed with an internal error on 3 pages and did not check them`
+      );
+    });
+  }
+});

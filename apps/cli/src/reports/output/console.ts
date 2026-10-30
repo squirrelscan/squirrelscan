@@ -8,6 +8,7 @@ import {
   reportFailureReasonCode,
   wafBlockedPagesLines,
   wafBlockedSeedCopy,
+  wafSuspectLines,
 } from "@squirrelscan/report";
 import {
   affectedPages,
@@ -206,6 +207,18 @@ export function generateConsoleReport(
     for (const line of listed) log(`  ${fmt.dim(line)}`);
   }
 
+  // #1258: pages that look like a provider's refusal. They were audited, so say their
+  // findings may describe the provider's page.
+  const suspectLines = wafSuspectLines(report);
+  if (suspectLines.length > 0) {
+    const [summary, ...listed] = suspectLines;
+    log("");
+    // A note, not a warning: a site's own short 403 behind a CDN reads the same, so this
+    // is a pointer to check, and the proof of a provider block is the marker, not the headers.
+    log(`Note: ${summary!}`);
+    for (const line of listed) log(`  ${fmt.dim(line)}`);
+  }
+
   // Editor's summary — report-only Pro exec narrative, surfaced at the top.
   const editorSummary = editorSummaryView(report.editorSummary, report);
   if (editorSummary) {
@@ -394,7 +407,7 @@ export function generateConsoleReport(
               // links and where they sit (pub#837). An item scoped to a
               // region names it, then its pages outside it, and its label
               // drops the section phrase the region says (pub#846).
-              const view = itemSourceView(item, report.structure);
+              const view = itemSourceView(item, report.structure, check);
               const label = itemLabel(item, view.scope) ?? item.id;
               log(box.line(`     ${fmt.dim(`→ ${label}`)}`));
               // Show HTML snippet if present
@@ -606,6 +619,14 @@ function printReportDetail(
 ): void {
   const notChecked = notCheckedDetailLines(report);
   const scan: string[] = [];
+  // #1271: the time limit cut the run. Yellow, first: it changes how far the score can be trusted.
+  if (
+    report.status === "partial" &&
+    report.maxDuration &&
+    report.statusReason
+  ) {
+    scan.push(fmt.yellow(`Partial audit: ${report.statusReason}`));
+  }
   // #1829: coverage lost to throttling. Yellow, because it changes how much of the report to trust.
   const rateLimited =
     report.rateLimited && report.rateLimited.pages > 0
