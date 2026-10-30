@@ -34,25 +34,23 @@ export function trustedPageType(
 }
 
 // The label alone is a URL-and-title reading (a model reads `/privacy` and `/contact` from the
-// path and the heading as much as from the body), so it is corroborated by the page body before it
-// is allowed to relax a verdict (pub#841 review): a law-firm landing page at `/solutions/legal`, a
-// marketing page at `/contact`, or a client-rendered shell at `/privacy` with no text is labelled
-// legal or contact by the model, and skipping the thin-content floor there would hide a real finding
-// and resolve an earlier one.
+// path and the heading as much as from the body), so it is corroborated by the page's MAIN content
+// before it is allowed to relax a verdict (pub#841 review): a law-firm landing page at
+// `/solutions/legal`, a marketing page at `/contact`, or a client-rendered shell at `/privacy` with
+// no text is labelled legal or contact by the model, and skipping the thin-content floor there would
+// hide a real finding and resolve an earlier one. Navigation, header, footer and aside are left out:
+// every page's footer links "Privacy Policy | Terms | Cookies" and carries a mailto: or a phone number.
 
-/** Phrases a policy text carries. A page needs {@link LEGAL_PHRASES_NEEDED} distinct ones. */
+/** Policy phrases. A page needs {@link LEGAL_PHRASES_NEEDED} distinct ones. Whole words, left and right. */
 const LEGAL_PHRASES = [
   "privacy policy",
   "personal data",
   "personal information",
-  "cookies",
   "terms of service",
   "terms of use",
   "terms and conditions",
   "governing law",
   "limitation of liability",
-  "third parties",
-  "third-party",
   "data controller",
   "data protection",
   "we collect",
@@ -60,33 +58,27 @@ const LEGAL_PHRASES = [
   "your rights",
   "gdpr",
   "intellectual property",
-  "disclaimer",
-  "warranty",
-  "warranties",
   "last updated",
   "effective date",
-  "indemnif",
+  "indemnify",
   "arbitration",
   "refund policy",
   "acceptable use",
   // The same vocabulary in the languages the classifier's training sites most often use.
-  "datenschutz",
-  "personenbezogene",
+  "datenschutzerklärung",
+  "personenbezogene daten",
   "nutzungsbedingungen",
   "allgemeine geschäftsbedingungen",
-  "haftung",
   "données personnelles",
   "politique de confidentialité",
   "conditions générales",
   "mentions légales",
-  "responsabilité",
   "datos personales",
   "política de privacidad",
   "términos y condiciones",
   "aviso legal",
-  "responsabilidad",
   "dati personali",
-  "informativa",
+  "informativa sulla privacy",
   "termini e condizioni",
   "dados pessoais",
   "política de privacidade",
@@ -96,6 +88,22 @@ const LEGAL_PHRASES = [
   "algemene voorwaarden",
 ] as const;
 const LEGAL_PHRASES_NEEDED = 3;
+
+const LETTER = /\p{L}/u;
+
+/** `phrase` in `text` as whole words (a letter right before or after it is not a match). */
+function containsPhrase(text: string, phrase: string): boolean {
+  let from = 0;
+  for (let tries = 0; tries < 20; tries++) {
+    const at = text.indexOf(phrase, from);
+    if (at < 0) return false;
+    const before = at > 0 ? text[at - 1]! : " ";
+    const after = at + phrase.length < text.length ? text[at + phrase.length]! : " ";
+    if (!LETTER.test(before) && !LETTER.test(after)) return true;
+    from = at + 1;
+  }
+  return false;
+}
 
 /** How much of the text is read for a way to reach the organisation: a contact page is short. */
 const CONTACT_SCAN_CHARS = 30_000;
@@ -118,66 +126,132 @@ function hasEmailAddress(text: string): boolean {
   return false;
 }
 
-/**
- * A phone number has nine digits, or eight after a leading "+": a year range or a price is not
- * one. Scanned by hand over a bounded prefix: a run of digits and separators is read once.
- */
-function hasPhoneNumber(text: string): boolean {
-  let digits = 0;
-  let plus = false;
-  let run = 0;
-  for (const char of text) {
-    if (char >= "0" && char <= "9") {
-      digits++;
-      run++;
-    } else if (run > 0 && " ()-.\u00a0".includes(char)) {
-      run++;
-      if (run > 40) {
-        digits = 0;
-        run = 0;
-        plus = false;
-      }
-    } else {
-      // The run ends (a "+" right before it marks an international number).
-      if (digits >= 9 || (plus && digits >= 8)) return true;
-      digits = 0;
-      run = 0;
-      plus = char === "+";
-    }
-  }
-  return digits >= 9 || (plus && digits >= 8);
+/** The most digit-and-separator characters one candidate run may span. */
+const MAX_PHONE_RUN = 40;
+
+function isPhoneRun(run: string, plus: boolean): boolean {
+  const digits = run.replace(/\D/g, "").length;
+  if (digits > 15) return false;
+  const groups = run.split(/[^0-9]+/).filter(Boolean);
+  if (plus) return digits >= 8;
+  if (digits < 9) return false;
+  // A phone number is written with a separator pattern or brackets; a bare run of digits is an id.
+  if (!/[\s().-]/.test(run.trim())) return false;
+  // An IPv4 address (four dotted groups) and a list of years ("2019 2020 2021") are not phone numbers.
+  if (groups.length === 4 && /^\d{1,3}(?:\.\d{1,3}){3}$/.test(run.trim())) return false;
+  if (groups.every((g) => /^(?:19|20)\d{2}$/.test(g))) return false;
+  return true;
 }
 
 /**
- * Whether the page body bears out a `contact` or `legal` label. A page with no text never does: a
- * client-rendered shell is judged by the rules like any other thin page. `contact` needs a way to
- * reach the organisation on the page (a `tel:` or `mailto:` link, an email address or phone number in
- * the text, or a message box); a newsletter field or a site search is not one. `legal` needs policy
- * vocabulary, not the word "legal".
+ * A phone number: nine to fifteen digits with a separator pattern or brackets, or eight after a
+ * leading "+". Scanned by hand over a bounded prefix, one pass.
+ */
+function hasPhoneNumber(text: string): boolean {
+  let run = "";
+  let plus = false;
+  const flush = (): boolean => {
+    const hit = run.length > 0 && isPhoneRun(run, plus);
+    run = "";
+    return hit;
+  };
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i]!;
+    const isDigit = char >= "0" && char <= "9";
+    if (isDigit || (run.length > 0 && (char === " " || char === "(" || char === ")" || char === "-" || char === "." || char === "\u00a0"))) {
+      if (run.length === 0) plus = i > 0 && text[i - 1] === "+";
+      run += char;
+      if (run.length > MAX_PHONE_RUN) {
+        if (flush()) return true;
+        plus = false;
+      }
+    } else {
+      if (flush()) return true;
+      plus = char === "+";
+    }
+  }
+  return flush();
+}
+
+/** Elements that are page furniture, not the page's own content. */
+const CHROME = "header, nav, footer, aside, [role='banner'], [role='navigation'], [role='contentinfo'], [role='complementary'], script, style, noscript, template";
+
+interface MainContent {
+  text: string;
+  hasContactLink: boolean;
+  hasMessageBox: boolean;
+}
+
+/** Most nodes read when flattening the content to text, and the deepest nesting followed. */
+const MAX_TEXT_NODES = 200_000;
+const MAX_TEXT_DEPTH = 256;
+
+/**
+ * Text of `node` with a space between elements, so a heading and the paragraph after it do not run
+ * together into one word (`textContent` joins them), which would defeat the whole-word phrase match.
+ */
+function textWithSpaces(node: Node): string {
+  const out: string[] = [];
+  let visited = 0;
+  const walk = (current: Node, depth: number): void => {
+    if (visited++ > MAX_TEXT_NODES || depth > MAX_TEXT_DEPTH) return;
+    if (current.nodeType === 3) {
+      out.push(current.nodeValue ?? "");
+      return;
+    }
+    for (const child of Array.from(current.childNodes)) walk(child, depth + 1);
+    out.push(" ");
+  };
+  walk(node, 0);
+  return out.join("");
+}
+
+/**
+ * The page's own content: the `<main>` landmark, else the body, with the header, navigation, footer
+ * and aside (and scripts and styles) taken out. Null without a document. Works on a copy, so the page
+ * is not changed.
+ */
+function mainContent(parsed: ParsedPage): MainContent | null {
+  const document = parsed.document;
+  if (!document) return null;
+  const root = document.querySelector("main, [role='main']") ?? document.body ?? document.documentElement;
+  if (!root) return null;
+  const copy = root.cloneNode(true) as Element;
+  for (const chrome of Array.from(copy.querySelectorAll(CHROME))) chrome.remove();
+  return {
+    text: textWithSpaces(copy).replace(/\s+/g, " ").trim().toLowerCase(),
+    hasContactLink: copy.querySelector("a[href^='mailto:' i], a[href^='tel:' i]") != null,
+    hasMessageBox: copy.querySelector("form textarea") != null,
+  };
+}
+
+/**
+ * Whether the page's main content bears out a `contact` or `legal` label. A page with no text never
+ * does: a client-rendered shell is judged by the rules like any other thin page. `contact` needs a
+ * way to reach the organisation in the content itself (a `tel:` or `mailto:` link, an email address
+ * or phone number in the text, or a message box); a newsletter field or a site search is not one,
+ * and neither is a footer. `legal` needs policy vocabulary, not the word "legal". A support page
+ * with a contact form is a contact surface and is accepted.
  */
 export function bodyCorroboratesPageType(parsed: ParsedPage | null | undefined, label: string): boolean {
-  const content = parsed?.content;
-  const text = (content?.textContent ?? "").toLowerCase();
-  const head = text.slice(0, CONTACT_SCAN_CHARS);
-  if (!parsed || !((content?.wordCount ?? 0) > 0) || text.length === 0) return false;
+  if (!parsed || (label !== "legal" && label !== "contact")) return false;
+  const main = mainContent(parsed);
+  if (!main || main.text.length === 0) return false;
   if (label === "legal") {
     let found = 0;
     for (const phrase of LEGAL_PHRASES) {
-      if (text.includes(phrase) && ++found >= LEGAL_PHRASES_NEEDED) return true;
+      if (containsPhrase(main.text, phrase) && ++found >= LEGAL_PHRASES_NEEDED) return true;
     }
     return false;
   }
-  if (label === "contact") {
-    if ((parsed.contactLinks?.length ?? 0) > 0) return true;
-    if (hasEmailAddress(head) || hasPhoneNumber(head)) return true;
-    return parsed.document?.querySelector("form textarea") != null;
-  }
-  return false;
+  if (main.hasContactLink || main.hasMessageBox) return true;
+  const head = main.text.slice(0, CONTACT_SCAN_CHARS);
+  return hasEmailAddress(head) || hasPhoneNumber(head);
 }
 
 /**
  * The page's type when it may relax a verdict: a trusted model label (see {@link trustedPageType})
- * in `types` that the page body bears out. `null` otherwise.
+ * in `types` that the page's main content bears out. `null` otherwise.
  */
 export function skippablePageType(
   parsed: ParsedPage | null | undefined,

@@ -2046,13 +2046,6 @@ export interface ClassifiedPageType {
  */
 export interface PageClassification {
   pageType: ClassifiedPageType;
-  /**
-   * Which classifier produced this answer: the model artifact's hash, the featurizer version and the
-   * rules version (see `CLASSIFIER_RULES_VERSION`). A crawl that reuses an unchanged page from its
-   * cache re-fetches it when this differs from the running classifier, so a model or rules change
-   * relabels the page (pub#841). Absent on a page classified before it existed.
-   */
-  model?: string;
   /** Why any part of the page fell back to the rules path, or "" when nothing did. */
   degraded: string;
 }
@@ -2388,6 +2381,14 @@ export interface ParsedPage {
    * existed). `pageType` above is the schema and URL based label; this is the model's.
    */
   classification?: PageClassification;
+  /**
+   * Which classifier this page was parsed with: the model artifact's hash, the featurizer version
+   * and the rules version (see `CLASSIFIER_RULES_VERSION`). Stamped whenever a classifier ran, even
+   * when it returned no answer, so a page it could not classify still caches. A crawl that reuses an
+   * unchanged page from its cache fetches it again when this differs from the running classifier, so
+   * a model or rules change relabels the page (pub#841). Absent when no classifier ran.
+   */
+  classifierVersion?: string;
 }
 
 /** The crawler's name for an audit level: quick, surface or full (see audit-levels.ts). */

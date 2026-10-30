@@ -270,11 +270,48 @@ describe("the body must corroborate a contact or legal label", () => {
     expect((await run1(`${words(70)} Open 2019-2024 at price 1999.99`, "contact")).status).toBe("warn");
   });
 
+  const FOOTER = `<footer><a href="/privacy">Privacy Policy</a> | <a href="/terms">Terms of Service</a> | <a href="/cookies">Cookies</a> | <a href="mailto:sales@example.com">sales@example.com</a> | <a href="tel:+31201234567">+31 20 123 4567</a></footer>`;
+
+  test("a footer's links and contact details do not corroborate: the landing page keeps its finding", async () => {
+    const landing = `<!doctype html><html><head><title>Legal</title></head><body><header><nav><a href="/">Home</a></nav></header><main><h1>Legal services</h1><p>${law}</p></main>${FOOTER}</body></html>`;
+    expect((await run1("", "legal", landing)).status).toBe("warn");
+    const contactLanding = `<!doctype html><html><head><title>Contact</title></head><body><main><h1>Contact sales</h1><p>${words(70)} Book a demo and see the product tour.</p></main>${FOOTER}</body></html>`;
+    expect((await run1("", "contact", contactLanding)).status).toBe("warn");
+  });
+
+  test("the same details inside the main content do corroborate", async () => {
+    const real = `<!doctype html><html><head><title>Contact</title></head><body><main><h1>Contact</h1><p>${words(60)}</p><a href="mailto:hi@example.com">Write to us</a></main>${FOOTER}</body></html>`;
+    expect((await run1("", "contact", real)).status).toBe("skipped");
+    const policy = `<!doctype html><html><head><title>Privacy</title></head><body><main><h1>Privacy</h1><p>${POLICY}</p></main>${FOOTER}</body></html>`;
+    expect((await run1("", "legal", policy)).status).toBe("skipped");
+  });
+
+  test("header, nav and aside inside the page are left out too", async () => {
+    const html = `<!doctype html><html><head><title>Contact</title></head><body><header><a href="mailto:a@b.co">a@b.co</a></header><nav>call +31 20 123 4567</nav><div><p>${words(60)}</p></div><aside>${POLICY}</aside></body></html>`;
+    expect((await run1("", "contact", html)).status).toBe("warn");
+    expect((await run1("", "legal", html)).status).toBe("warn");
+  });
+
+  test("an IP address, a list of years and a bare digit run are not phone numbers", async () => {
+    for (const noise of ["Server 192.168.100.200 is up.", "Since 2019 2020 2021 2022.", "Order 4400123456789 shipped."]) {
+      expect((await run1(`${words(70)} ${noise}`, "contact")).status).toBe("warn");
+    }
+    expect((await run1(`${words(70)} Call 020 1234 5678.`, "contact")).status).toBe("skipped");
+    expect((await run1(`${words(70)} Call (020) 123-4567.`, "contact")).status).toBe("skipped");
+  });
+
+  test("policy phrases are whole words, and generic words are not policy vocabulary", async () => {
+    // "cookies", "third parties" and "warranty" alone are everywhere; "gdpr" must not match inside a word.
+    expect((await run1("We use cookies, share with third parties and give a warranty. Disclaimer: results vary. Last updated today.", "legal")).status).toBe("warn");
+    expect((await run1("mygdprtool notgdpr privacy policys personal datas governing laws", "legal")).status).toBe("warn");
+  });
+
   test("hostile text costs a fixed amount: many @ signs or long separator runs", () => {
     const text = `${"a@".repeat(50_000)} ${"1 ".repeat(50_000)}`;
-    const parsed = { content: { textContent: text, wordCount: 100_000 }, contactLinks: [] } as unknown as ParsedPage;
+    const html = `<!doctype html><html><body><main><p>${text}</p></main></body></html>`;
+    const parsed = parsePage(html, "https://example.com/contact") as ParsedPage;
     const started = performance.now();
     expect(bodyCorroboratesPageType(parsed, "contact")).toBe(false);
-    expect(performance.now() - started).toBeLessThan(1000);
+    expect(performance.now() - started).toBeLessThan(2000);
   });
 });

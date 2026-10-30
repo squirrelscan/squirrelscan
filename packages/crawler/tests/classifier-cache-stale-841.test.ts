@@ -133,7 +133,6 @@ function hookFor(version: string): PageClassifierHook {
     classification: {
       pageType: { label: "other", confidence: 0.95, source: "model" as const },
       degraded: "",
-      model: version,
     },
     placeLink: () => null,
   });
@@ -171,11 +170,33 @@ async function run(first: string | undefined, second: string | undefined) {
   const pages = await Effect.runPromise(storage.getPages(crawlId2));
   const stored = pages.find((p) => p.normalizedUrl === `${ORIGIN}/`)?.parsedData ?? "";
   await Effect.runPromise(storage.close());
-  const model = /"model":"([^"]*)"/.exec(stored)?.[1];
+  const model = /"classifierVersion":"([^"]*)"/.exec(stored)?.[1];
   return { fetched, model, hasClassification: stored.includes('"classification"') };
 }
 
 describe("a cached page is reclassified when the classifier changed", () => {
+  test("a classifier that answered nothing still stamps the page, so the second run reuses it", async () => {
+    const nullHook = Object.assign(() => null, { version: "m1" }) as unknown as PageClassifierHook;
+    const storage = await Effect.runPromise(createTestStorage());
+    const cfg1 = { ...baseConfig, incremental: false, useCacheControl: false };
+    const crawlId1 = await createCrawlRecord(storage, cfg1);
+    await seedFrontier(storage, crawlId1, [{ path: "/", source: "seed" }]);
+    const crawler1 = await Effect.runPromise(
+      createCrawler({ config: { ...cfg1, documentFetcher: fetcherFor([]) }, storage, classify: nullHook }),
+    );
+    await Effect.runPromise(crawler1.resumeFromStorage(crawlId1));
+    const fetched: string[] = [];
+    const cfg2 = { ...baseConfig, incremental: true, useCacheControl: true, maxStalenessSeconds: 999_999 };
+    const crawlId2 = await createCrawlRecord(storage, cfg2);
+    await seedFrontier(storage, crawlId2, [{ path: "/", source: "seed" }]);
+    const crawler2 = await Effect.runPromise(
+      createCrawler({ config: { ...cfg2, documentFetcher: fetcherFor(fetched) }, storage, classify: nullHook }),
+    );
+    await Effect.runPromise(crawler2.resumeFromStorage(crawlId2));
+    await Effect.runPromise(storage.close());
+    expect(fetched).toEqual([]);
+  }, 30000);
+
   test("same classifier: the page is reused from cache, label kept", async () => {
     const r = await run("m1", "m1");
     expect(r.fetched).toEqual([]);
@@ -202,14 +223,25 @@ describe("a cached page is reclassified when the classifier changed", () => {
 });
 
 describe("cachedClassificationIsStale", () => {
-  const stamped = (model: string) =>
-    JSON.stringify({ meta: {}, classification: { pageType: { label: "x" }, degraded: "", model } });
+  const stamped = (version: string) =>
+    JSON.stringify({ meta: {}, classification: { pageType: { label: "x" }, degraded: "" }, classifierVersion: version });
   test("compares the stored stamp with the running classifier's", () => {
     expect(cachedClassificationIsStale(stamped("a"), "a")).toBe(false);
     expect(cachedClassificationIsStale(stamped("a"), "b")).toBe(true);
     expect(cachedClassificationIsStale(stamped("a"), undefined)).toBe(true);
     expect(cachedClassificationIsStale(JSON.stringify({ meta: {} }), "a")).toBe(true);
     expect(cachedClassificationIsStale(JSON.stringify({ meta: {} }), undefined)).toBe(false);
+  });
+  test("a page the classifier answered nothing for is stamped, so it caches (no refetch every run)", () => {
+    expect(cachedClassificationIsStale(JSON.stringify({ meta: {}, classifierVersion: "a" }), "a")).toBe(false);
+  });
+  test("a nested key named classification or model in the page's data is not mistaken for the stamp", () => {
+    const hostile = JSON.stringify({
+      schema: { all: [{ "@type": "Thing", classification: { model: "evil" }, classifierVersionX: "evil" }] },
+      classifierVersion: "a",
+    });
+    expect(cachedClassificationIsStale(hostile, "a")).toBe(false);
+    expect(cachedClassificationIsStale(hostile, "evil")).toBe(true);
   });
   test("a page with no parsed data has nothing to relabel", () => {
     expect(cachedClassificationIsStale(null, "a")).toBe(false);

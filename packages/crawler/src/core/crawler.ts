@@ -311,22 +311,23 @@ export function discoveryBudgetMs(timeoutMs: number, discoveryDeadlineAt?: numbe
 }
 
 /**
- * Whether a cached page's stored classification was made by a different classifier than the one
- * running now (pub#841 review). The classification is stored inside the page's parsed data, so a page
- * reused from the cache keeps the label of the model that first read it; a new model or a change to
- * the labelling rules would never reach an unchanged page. A page with no parsed data (a non-HTML
- * or error page) has nothing to relabel. `want` is the running classifier's version, or undefined
- * with the classifier off: a stored label then goes stale too, so a `--no-classifier` run does not
- * hand rules a label it did not ask for.
+ * Whether a cached page was parsed by a different classifier than the one running now (pub#841).
+ * The classification is stored inside the page's parsed data, so a page reused from the cache keeps
+ * the label of the classifier that first read it; a new model or a change to the labelling rules
+ * would never reach an unchanged page. The stamp is the parsed data's top-level `classifierVersion`
+ * (a unique key, so a nested JSON-LD property cannot be mistaken for it), written whenever a
+ * classifier ran, even if it answered nothing. A page with no parsed data (a non-HTML or error
+ * page) has nothing to relabel. `want` is the running classifier's version, or undefined with the
+ * classifier off: a stamped page then goes stale too, so a `--no-classifier` run does not hand rules
+ * a label it did not ask for, and toggling the classifier re-fetches pages each time (accepted).
+ * The first run after an upgrade re-fetches every unstamped page once, unconditionally.
  */
 export function cachedClassificationIsStale(
   parsedData: string | null | undefined,
   want: string | undefined,
 ): boolean {
   if (!parsedData) return false;
-  const at = parsedData.indexOf('"classification":');
-  if (at < 0) return want !== undefined;
-  const have = /"model":"([^"]*)"/.exec(parsedData.slice(at, at + 600))?.[1];
+  const have = /"classifierVersion":"([^"]*)"/.exec(parsedData)?.[1];
   return have !== want;
 }
 
