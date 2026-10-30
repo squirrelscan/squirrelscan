@@ -29,6 +29,7 @@
 // proxy that never answers make the rule say "not checked" with that reason,
 // never a pass and never a crash.
 
+import { wwwVariant } from "@squirrelscan/rules/security/tls-certificate";
 import { isNonPublicHostname } from "@squirrelscan/utils/non-public-host";
 import {
   EgressRefusedError,
@@ -147,7 +148,7 @@ export function createTlsProbe(options: TlsProbeOptions = {}): TlsProbeFn {
     if (
       proxy.kind === "proxy" &&
       options.proxyResolvesNames === true &&
-      isAuditedHostOrCounterpart(hostname, site?.hostname) &&
+      isAuditedHostOrCounterpart(hostname, port, site) &&
       isIP(hostname) === 0 &&
       !refusedWithoutLookup(`https://${hostname}:${port}/`, policy)
     ) {
@@ -621,15 +622,19 @@ function tunnelHandshake(args: {
   });
 }
 
-/** The audited host, or its `www.` / apex counterpart: the only names the proxy may resolve (#1317). */
+/**
+ * The audited host or the rule's own www/apex counterpart of it (`wwwVariant`: from the registrable domain
+ * only, so `blog.example.com` has none), on the audited site's own port: the only target the proxy may
+ * resolve (#1317). Any other name or port is vetted and pinned here as usual.
+ */
 function isAuditedHostOrCounterpart(
   hostname: string,
-  site: string | undefined
+  port: number,
+  site: { hostname: string; port: string } | undefined
 ): boolean {
-  if (site === undefined) return false;
+  if (site === undefined || String(port) !== site.port) return false;
   const host = hostname.toLowerCase();
-  if (host === site) return true;
-  return host === `www.${site}` || `www.${host}` === site;
+  return host === site.hostname || host === wwwVariant(site.hostname);
 }
 
 function siteOrigin(

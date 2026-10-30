@@ -978,6 +978,39 @@ describe("the proxy resolves names, opt-in (#1317)", () => {
     }
   });
 
+  test("on: only the rule's own www/apex counterpart, never a derived or look-alike name (#1317 review)", async () => {
+    const cases: Array<[string, string]> = [
+      ["https://www.example.com/", "www.www.example.com"],
+      ["https://blog.example.com/", "www.blog.example.com"],
+      ["https://blog.example.com/", "example.com"],
+    ];
+    for (const [site, host] of cases) {
+      const proxy = await via({ refuse: 403 });
+      const { dns, probe } = probeFor(
+        { siteUrl: site, proxyResolvesNames: true },
+        { [host]: ["93.184.216.34"] }
+      );
+      await probe({ hostname: host, port: 443 });
+      // vetted here and CONNECTed by address, never by name
+      expect(proxy.seen, `${site} ${host}`).toEqual(["93.184.216.34:443"]);
+      expect(dns.asked).toEqual([host]);
+    }
+  });
+
+  test("on: only the audited site's own port is requested by name", async () => {
+    const proxy = await via({ refuse: 403 });
+    const { dns, probe } = probeFor(
+      { siteUrl: "https://example.com:8443/", proxyResolvesNames: true },
+      { "example.com": ["93.184.216.34"] }
+    );
+    await probe({ hostname: "example.com", port: 8443 });
+    expect(proxy.seen).toEqual(["example.com:8443"]);
+    await probe({ hostname: "example.com", port: 22 });
+    // another port is not the audited origin: vetted here and CONNECTed by address
+    expect(proxy.seen).toEqual(["example.com:8443", "93.184.216.34:22"]);
+    expect(dns.asked).toEqual(["example.com"]);
+  });
+
   test("on: a name that came from page content is still vetted here and CONNECTed by address", async () => {
     const proxy = await via({ refuse: 403 });
     const { dns, probe } = probeFor(

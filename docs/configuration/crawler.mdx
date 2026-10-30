@@ -1053,7 +1053,7 @@ Only matters when `HTTPS_PROXY` or `HTTP_PROXY` is set. By default the `security
 tls_proxy_resolves_names = true
 ```
 
-The trade-off is plain: with it on, where those two names go is the proxy's decision, not squirrel's, so the check that a name does not resolve to a link-local, metadata or private address is the proxy's job. Every other host (a name found in page content, any other subdomain) is still resolved, vetted and pinned by squirrel, and an IP address, a cloud metadata name or a name the guard refuses on sight never take this path, whatever the setting. See [Behind an HTTP proxy](/rules/security/tls-certificate#behind-an-http-proxy).
+The trade-off is plain: with it on, where those two names go is the proxy's decision, not squirrel's, so the check that a name does not resolve to a link-local, metadata or private address is the proxy's job. Only the audited site's own port is requested by name, and the probe that explains a TLS failure of the start URL during the crawl has no audited site to compare with, so it never does. Every other host (a name found in page content, any other subdomain) is still resolved, vetted and pinned by squirrel, and an IP address, a cloud metadata name or a name the guard refuses on sight never take this path, whatever the setting. See [Behind an HTTP proxy](/rules/security/tls-certificate#behind-an-http-proxy).
 
 ### `disable_discovery_probes`
 
