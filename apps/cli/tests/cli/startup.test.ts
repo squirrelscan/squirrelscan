@@ -117,9 +117,14 @@ describe("light startup path (#2023)", () => {
       scripts: Record<string, string>;
     };
     expect(pkg.scripts.build).toContain("--compile --splitting");
+    // The binary reads no bunfig.toml or .env from the directory it runs in.
+    expect(pkg.scripts.build).toContain("--no-compile-autoload-dotenv");
+    expect(pkg.scripts.build).toContain("--no-compile-autoload-bunfig");
     const makefile = await Bun.file(
       new URL("../../../../Makefile", import.meta.url)
     ).text();
     expect(makefile).toContain("--compile --splitting --minify");
+    expect(makefile).toContain("--no-compile-autoload-dotenv");
+    expect(makefile).toContain("--no-compile-autoload-bunfig");
   });
 });

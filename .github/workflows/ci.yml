@@ -326,6 +326,8 @@ jobs:
             exit 1
           fi
           echo "Compiled CLI embeds rules version $expected"
+      - name: Verify the compiled binary ignores a working-directory bunfig.toml and .env
+        run: bun run apps/cli/scripts/check-compiled-autoload.ts apps/cli/build/squirrelscan
 
   psl-freshness:
     name: Public suffix data freshness
