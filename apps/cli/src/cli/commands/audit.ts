@@ -156,7 +156,11 @@ import {
 import { safeExit } from "@/self/updater";
 import { CWD_UNAVAILABLE, cwdOr } from "@/utils/cwd";
 import { configureLogger, logger, setLogInterceptor } from "@/utils/logger";
-import { getProjectNameContext, parseUserUrl } from "@/utils/url";
+import {
+  getProjectNameContext,
+  parseUserUrl,
+  redactStartUrl,
+} from "@/utils/url";
 
 import { version as packageVersion } from "../../../package.json";
 import {
@@ -1279,7 +1283,7 @@ export const audit = defineCommand({
 
     const commandStart = Date.now();
     logger.commandStart("audit", {
-      url: args.url,
+      url: redactStartUrl(String(args.url ?? "")),
       maxPages: args["max-pages"],
       format: args.format,
       output: args.output,
@@ -2005,7 +2009,7 @@ export const audit = defineCommand({
 
       // Preamble — aligned key/value block (Account, and Dashboard when online,
       // already printed above during status resolution; kv defined there).
-      kv("Auditing", fmt.bold(options.url));
+      kv("Auditing", fmt.bold(redactStartUrl(options.url)));
       if (startRedirect) {
         kv(
           "Redirect",
@@ -2400,7 +2404,7 @@ export const audit = defineCommand({
         // and starts over. Name the exact command while the context is on screen.
         if (canWrite && lastPagesFetched > 0) {
           process.stderr.write(
-            `${lastPagesFetched} pages are saved. Resume with:\n  squirrel audit ${args.url} --resume\n`
+            `${lastPagesFetched} pages are saved. Resume with:\n  squirrel audit ${redactStartUrl(args.url)} --resume\n`
           );
         }
         // #941: record the interruption on the crawl, so it reads as a stopped

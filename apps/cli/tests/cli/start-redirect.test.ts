@@ -155,7 +155,7 @@ describe("resolveAuditStart", () => {
     );
   });
 
-  test("the re-run command uses the URL the user typed, and nothing printed carries a secret", async () => {
+  test("the re-run command carries the typed URL without userinfo, query or fragment, and nothing printed carries a secret", async () => {
     const typed = "https://bit.ly/x?campaign=mine";
     const resolution: SeedRedirectResolution = {
       kind: "cross-domain",
@@ -173,7 +173,7 @@ describe("resolveAuditStart", () => {
       resolve: async () => resolution,
     });
     expect(result.stop?.rerunCommand).toBe(
-      "squirrel audit 'https://bit.ly/x?campaign=mine' --follow-redirect"
+      "squirrel audit https://bit.ly/x --follow-redirect"
     );
     expect(result.stop?.originalUrl).toBe("https://bit.ly/x");
     const followed = await resolveAuditStart({

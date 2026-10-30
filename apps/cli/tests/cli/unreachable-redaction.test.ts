@@ -2,13 +2,17 @@
 // text echoes: userinfo, a query token and a fragment are removed from the reason, the message
 // and every rendered format.
 
-import { redactUrlsInText } from "@squirrelscan/core-contracts/seed-redirect";
+import {
+  redactUrlsInText,
+  redirectedOutcome,
+} from "@squirrelscan/core-contracts/seed-redirect";
 import { describe, expect, test } from "bun:test";
 
 import {
   renderUnreachableOutcome,
   unreachableOutcome,
 } from "@/cli/unreachable";
+import { redactStartUrl } from "@/utils/url";
 
 // Built from parts so the secret scanner does not flag the fixtures.
 const COLON = ":";
@@ -83,6 +87,55 @@ describe("unreachable outcome redaction", () => {
       expect(out).not.toContain("token=");
       expect(out.startsWith("failed ") && out.endsWith(" end")).toBe(true);
     }
+  });
+
+  test("review findings: path-@ reads, long split userinfo, redirect outcome, rerun command", () => {
+    const cases = [
+      "https://usrx\\pwdy@host.example/",
+      `https://usrx§123/pwdy@host.example/`.replace("§", COLON),
+      `https://usrx§pwdy pwdy pwdy@host.example/`.replace("§", COLON),
+      `https://usrx§pwdy a b c d e f g h@host.example/`.replace("§", COLON),
+    ];
+    for (const input of cases) {
+      const out = redactUrlsInText(`failed ${input} end`);
+      expect(out).not.toContain("pwdy");
+      expect(out).not.toContain("usrx");
+      expect(out.endsWith(" end")).toBe(true);
+    }
+    // A plain host:port URL stays readable.
+    expect(redactUrlsInText("https://host.example:8080/p ok")).toBe(
+      "https://host.example:8080/p ok"
+    );
+    const outcome = redirectedOutcome({
+      kind: "cross-domain",
+      originalUrl: `https://${AUTH}@a.example/p?t=tokz#frgw`,
+      finalUrl: "https://b.example/",
+      chain: [],
+      refusal: `refused https://${AUTH}@a.example/p?t=tokz`,
+    });
+    const text = JSON.stringify(outcome);
+    for (const word of ["user", "secret", "tokz", "frgw"]) {
+      expect(text).not.toContain(word);
+    }
+    const refused = redirectedOutcome({
+      kind: "refused",
+      originalUrl: "https://a.example/",
+      finalUrl: "https://a.example/",
+      chain: [],
+      refusal: `blocked https://${AUTH}@a.example/p?t=tokz`,
+    });
+    expect(JSON.stringify(refused)).not.toContain("tokz");
+    expect(JSON.stringify(refused)).not.toContain("secret");
+  });
+
+  test("redactStartUrl strips userinfo, query and fragment and normalises a bare host", () => {
+    expect(redactStartUrl(`https://${AUTH}@host.example/p?t=tokz#frgw`)).toBe(
+      "https://host.example/p"
+    );
+    expect(redactStartUrl("https://usrx@host.example/")).toBe(
+      "https://host.example/"
+    );
+    expect(redactStartUrl("example.com")).toBe("https://example.com/");
   });
 
   test("a megabyte of text with no URL, and one of repeated schemes, stays linear", () => {

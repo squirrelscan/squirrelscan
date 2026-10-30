@@ -125,7 +125,7 @@ export function redirectedOutcome(
   switch (kind) {
     case "cross-domain":
       // The URL the user typed, not the destination: nothing of theirs is lost.
-      rerunCommand = `squirrel audit ${shellWord(resolution.originalUrl)} --follow-redirect`;
+      rerunCommand = `squirrel audit ${shellWord(originalUrl)} --follow-redirect`;
       message = `${originalUrl} redirects to ${finalUrl}, a different site, so nothing was audited.`;
       break;
     case "loop":
@@ -139,7 +139,7 @@ export function redirectedOutcome(
       const scheme = /^refused scheme ([a-z][a-z0-9+.-]*:)$/i.exec(resolution.refusal ?? "")?.[1];
       message = scheme
         ? `${originalUrl} redirects to a ${scheme} URL, which was refused and never requested, so nothing was audited. The last URL requested was ${finalUrl}.`
-        : `${originalUrl} redirects to ${finalUrl}, which was not requested (${resolution.refusal ?? "refused"}), so nothing was audited.`;
+        : `${originalUrl} redirects to ${finalUrl}, which was not requested (${redactUrlsInText(resolution.refusal ?? "refused")}), so nothing was audited.`;
     }
   }
   return {
@@ -192,45 +192,75 @@ function redactTokenCore(core: string): string {
   if (!urlish) return core;
   if (/^https?:/i.test(core)) {
     const redacted = redactUrl(core);
-    if (redacted !== "(unprintable URL)") return redacted;
+    // The parser can leave an `@` in the path (`https://usrx\\pwdy@host/`, `https://usrx:123/pwdy@host/`):
+    // it read the userinfo differently from the text, so fail closed.
+    if (redacted !== "(unprintable URL)" && !redacted.includes("@")) return redacted;
   }
   return URL_PLACEHOLDER;
 }
 
+const SPLIT_LOOKAHEAD_TOKENS = 16;
+
 /**
- * An http(s) token whose authority may have been cut by whitespace: it ends in `:` straight after
- * the authority (`http://user:`), or the next whitespace-separated token carries an `@`
- * (`http://user:pa` then `ss@host`). Both tokens are then replaced whole.
+ * An http(s) token whose authority runs to the end of the token (no `/`, `?`, `#` or `\\` after
+ * it) may have been cut by whitespace inside the userinfo (`http://user:pa ss pw@host`). The
+ * token is then replaced together with every following token up to and including the first one
+ * that contains an `@` (at most {@link SPLIT_LOOKAHEAD_TOKENS} tokens ahead). Returns how many
+ * whitespace-separated tokens past this one to replace, or 0 when the authority is not open.
  */
-function authorityMayBeSplit(token: string, next: string | undefined): boolean {
-  if (!/^[("'`<[{]*https?:/i.test(token)) return false;
-  if (next !== undefined && next.includes("@")) return true;
+function openAuthorityRun(token: string, parts: string[], index: number): number {
+  if (!/^[("'`<[{]*https?:\/\//i.test(token)) return 0;
   const afterScheme = token.slice(token.indexOf("//") + 2);
-  return token.endsWith(":") && !afterScheme.includes("/");
+  if (/[/?#\\@]/.test(afterScheme)) return 0;
+  for (let hop = 1; hop <= SPLIT_LOOKAHEAD_TOKENS; hop++) {
+    const next = parts[index + 2 * hop];
+    if (next === undefined) break;
+    if (next.includes("@")) return hop;
+  }
+  return 0;
 }
 
 /**
  * `text` with every URL-like whitespace-delimited token redacted, so error text that echoes a start
  * URL (a DNS, TLS or fetch failure) never carries userinfo, a query token or a fragment into a
  * report, a log or an agent's context. Fails closed: a token that is an http(s) URL the WHATWG
- * parser accepts goes through {@link redactUrl} (its own view of userinfo, so no differential);
- * any other token that looks like a URL (other scheme, `//` or `\\` prefix, `@`, a `?`/`#` tail
- * on a path) or that does not parse is replaced whole, as is an http(s) token whose authority
- * looks cut by whitespace. Linear: one split, no backtracking.
+ * parser accepts goes through {@link redactUrl} (its own view of userinfo, so no differential),
+ * unless the result still holds an `@`; any other token that looks like a URL (other scheme, `//`
+ * or `\\` prefix, `@`, a `?`/`#` tail on a path) or that does not parse is replaced whole, as is
+ * an http(s) token whose authority looks cut by whitespace together with the tokens up to the
+ * `@` that ends it. Out of scope, deliberately: percent-encoded URLs, a bare `?token=` token with
+ * no path, and secrets in a URL's path. Linear: one split, no backtracking.
  */
 export function redactUrlsInText(text: string): string {
   const parts = text.split(/(\s+)/);
-  return parts
-    .map((token, index) => {
-      if (index % 2 === 1 || token === "") return token;
-      let start = 0;
-      let end = token.length;
-      while (start < end && TOKEN_LEAD.has(token[start]!)) start++;
-      while (end > start && TOKEN_TRAIL.has(token[end - 1]!)) end--;
-      const core = authorityMayBeSplit(token, parts[index + 2])
-        ? URL_PLACEHOLDER
-        : redactTokenCore(token.slice(start, end));
-      return token.slice(0, start) + core + token.slice(end);
-    })
-    .join("");
+  const out: string[] = [];
+  for (let index = 0; index < parts.length; index++) {
+    const token = parts[index]!;
+    if (index % 2 === 1 || token === "") {
+      out.push(token);
+      continue;
+    }
+    let start = 0;
+    let end = token.length;
+    while (start < end && TOKEN_LEAD.has(token[start]!)) start++;
+    while (end > start && TOKEN_TRAIL.has(token[end - 1]!)) end--;
+    const run = openAuthorityRun(token, parts, index);
+    if (run > 0) {
+      out.push(token.slice(0, start) + URL_PLACEHOLDER);
+      // Whitespace between the run's tokens is kept; each following token is replaced whole.
+      for (let hop = 1; hop <= run; hop++) {
+        out.push(parts[index + 2 * hop - 1]!, URL_PLACEHOLDER);
+      }
+      index += 2 * run;
+      continue;
+    }
+    // `http://user:` with nothing after the colon: a cut userinfo, so the token goes whole.
+    const endsOpen = /^[("'`<[{]*https?:\/\/[^/?#\\@]*:$/i.test(token);
+    out.push(
+      endsOpen
+        ? token.slice(0, start) + URL_PLACEHOLDER
+        : token.slice(0, start) + redactTokenCore(token.slice(start, end)) + token.slice(end)
+    );
+  }
+  return out.join("");
 }

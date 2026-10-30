@@ -17,7 +17,11 @@ import { warnIfSessionUnreadable } from "@/self/credentials";
 import { loadUserSettings, updateSettings } from "@/self/settings";
 import { CWD_UNAVAILABLE, cwdOr } from "@/utils/cwd";
 import { logger, setLogInterceptor } from "@/utils/logger";
-import { getProjectNameContext, parseUserUrl } from "@/utils/url";
+import {
+  getProjectNameContext,
+  parseUserUrl,
+  redactStartUrl,
+} from "@/utils/url";
 
 import { version as packageVersion } from "../../../package.json";
 import {
@@ -155,9 +159,18 @@ export const crawl = defineCommand({
     },
   },
   async run({ args }) {
+    // Credentials never reach a log line, the banner or the crawler (as audit does).
+    const startCheck = parseUserUrl(String(args.url ?? ""));
+    if (startCheck.ok && startCheck.strippedCredentials) {
+      args.url = startCheck.url;
+      console.error(
+        `Note: credentials in the URL are ignored. Use --header "Authorization: Basic ..." for an authenticated crawl.`
+      );
+    }
+
     const commandStart = Date.now();
     logger.commandStart("crawl", {
-      url: args.url,
+      url: redactStartUrl(String(args.url ?? "")),
       maxPages: args["max-pages"],
       refresh: args.refresh,
       cwd: cwdOr(CWD_UNAVAILABLE),
@@ -240,7 +253,7 @@ export const crawl = defineCommand({
         }
         await promptForUpdate(settings.data, {}); // crawl is always interactive
       }
-      console.log(`Crawling: ${args.url}`);
+      console.log(`Crawling: ${redactStartUrl(args.url)}`);
       console.log(`Level: ${levelBannerValue(budget.resolved)}`);
       if (args.refresh) {
         console.log("Mode: Fresh crawl (ignoring cache)");
