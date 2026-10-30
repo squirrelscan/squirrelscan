@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **`perf/content-in-js-bundle` no longer passes an audit where every page was browser-rendered.** A rendered page's copy is in the script that rendered it, so the rule had nothing to search for and reported "No page content found", which read as clean although nothing was judged. It is now skipped with a message saying every page was rendered and that `--http` checks it. Audits with some rendered and some plain pages still search the plain ones. See [Page content in a JavaScript bundle](https://docs.squirrelscan.com/rules/perf/content-in-js-bundle). (#1329)
+
 ## v0.0.143 (2026-10-30)
 
 Two new performance rules, `perf/content-in-js-bundle` and `perf/framework-data-payload`, find page content shipped inside JavaScript. Page weight now measures the srcset candidate a browser downloads and leaves lazy images out, `squirrel auth login` opens a branded page, parallel audits no longer fail with a locked database, and `store_scripts` no longer changes what an audit finds. A start URL the audit cannot run on is refused before any request, `security/tls-certificate` shows as not checked when it cannot run, and the about, contact and privacy rules take a `paths` option.
