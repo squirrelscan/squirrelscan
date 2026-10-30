@@ -283,7 +283,16 @@ function collectResolutionEvidence(
       // short, markup unreadable, classifier unsure): that one is not evaluation evidence, like a skip.
       const inconclusive = check.status === "info" && check.details?.inconclusive === true;
       if ((check.status === "skipped" && !checkNotApplicable) || inconclusive) {
-        noteExplicitSkip(resolutionCheckKey(ruleId, check.name), check);
+        const skipKey = resolutionCheckKey(ruleId, check.name);
+        noteExplicitSkip(skipKey, check);
+        // An inconclusive result is a GAP: with every crawled page inconclusive no page would register
+        // the key, and an absent key resolves every prior on a crawled page. Registering it with no
+        // evaluated page puts those pages in `notEvaluated`, which carries (like scan-truncated).
+        if (inconclusive && !failing.has(skipKey) && failing.size < checkCap) {
+          failing.set(skipKey, new Set<string>());
+          evaluated.set(skipKey, new Set<string>());
+          keyRule.set(skipKey, ruleId);
+        }
       }
       if (
         check.status !== "pass" &&
