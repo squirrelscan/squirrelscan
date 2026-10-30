@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+## v0.0.146 (2026-10-31)
+
+Supabase is now detected in more real bundles, including a minified supabase-js build, and `security/cookie-flags` no longer warns about Lovable's `__dpl` routing cookie, a cookie the platform sets and a site cannot change.
+
 ### Fixed
 
 - **`security/cookie-flags` no longer warns about Lovable's `__dpl` cookie.** 95% of Lovable sites in a 35k-audit batch got an HttpOnly warning for it alone, a cookie the site owner does not set and Lovable does not document. It is now an info check, `cookie-httponly-platform`, naming the platform. The exemption is by exact cookie name from a short evidence-based list; session-looking and every other cookie still warn, and the Secure and SameSite checks are unchanged. (#1378)
