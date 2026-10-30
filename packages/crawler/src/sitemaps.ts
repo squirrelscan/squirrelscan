@@ -921,6 +921,10 @@ export function fetchSitemapsRecursive(
 
       const chunk = unseenUrls.slice(i, i + SITEMAP_FETCH_CONCURRENCY);
       const chunkTimeoutMs = Math.min(SITEMAP_FETCH_TIMEOUT_MS, remainingMs);
+      // One deadline for the whole chunk, fixed now: a request that waits behind
+      // the per-host gate gets what is left of it, not a fresh timeout, so a
+      // stalled origin costs the chunk one timeout however narrow the gate is (#422).
+      const chunkDeadlineAt = Date.now() + chunkTimeoutMs;
       const chunkResults = yield* Effect.all(
         chunk.map((url) =>
           Effect.promise(() =>
@@ -931,7 +935,7 @@ export function fetchSitemapsRecursive(
                   userAgent,
                   customHeaders,
                   headerScope,
-                  chunkTimeoutMs,
+                  chunkDeadlineAt - Date.now(),
                   refusals,
                   egress,
                 ),

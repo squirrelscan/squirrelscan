@@ -148,3 +148,21 @@ describe("an audit reads robots.txt once", () => {
     expect(hits.filter((p) => p === "/robots.txt")).toHaveLength(1);
   }, 120_000);
 });
+
+describe("spacedBooleanValueError", () => {
+  test("any occurrence of the flag can carry the stray value, and missing raw args is fine", async () => {
+    const { spacedBooleanValueError } =
+      await import("../../src/cli/commands/audit");
+    const flag = "--disable-discovery-probes";
+    expect(spacedBooleanValueError(undefined, flag)).toBeNull();
+    expect(spacedBooleanValueError([], flag)).toBeNull();
+    expect(spacedBooleanValueError([flag, "https://e.test"], flag)).toBeNull();
+    expect(spacedBooleanValueError([`${flag}=false`], flag)).toBeNull();
+    expect(spacedBooleanValueError([flag, "false"], flag)).toContain(
+      `${flag}=false`
+    );
+    expect(
+      spacedBooleanValueError([flag, "--offline", flag, "TRUE"], flag)
+    ).toContain(`${flag}=true`);
+  });
+});
