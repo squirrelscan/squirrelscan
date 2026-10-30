@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+## v0.0.145 (2026-10-31)
+
+Rules now read the page type, so contact and legal pages are no longer reported as thin, and a site's `/index.html` is read as its home page. `squirrel crawl --disable-discovery-probes` sends no discovery probe, an audit asks for `robots.txt` once, and sitemap requests obey the per-host limits. `--max-duration` holds on very large pages and on requests that hang before the page checks, smart audits resolve old findings when a re-crawled page's rule now answers `info`, and query-string variants are counted with their canonical page in the entity map and the hosted report. The `squirrel` binary no longer autoloads a `bunfig.toml` or `.env` from the directory it runs in, a crawler proxy that owns DNS can resolve the TLS check's hosts with `tls_proxy_resolves_names`, and space held by audits killed while building their report comes back.
+
 ### Added
 
 - **`squirrel crawl --disable-discovery-probes`** sends no discovery probe and overrides `[crawler] disable_discovery_probes`, like `squirrel audit`. (#422)
