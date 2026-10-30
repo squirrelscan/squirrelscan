@@ -466,6 +466,9 @@ squirrel report -f llm | claude "analyze this audit and prioritize fixes"
   Pages (3): /blog/post-1, /blog/post-2, /about
  </rule>
 </issues>
+<info-checks count="2">
+ <check rule="crawl/robots-meta-conflict" name="redundant-noindex" pages="2">2 page(s) blocked in robots.txt also have noindex Pages: /private/a, /private/b</check>
+</info-checks>
 <locked-rules count="7" audience="anonymous-upsell">
  Cloud-powered checks (page rendering, AI content analysis, link-rot, brand protection, and more) run with a free squirrelscan account.
  <cta label="Get started to unlock them" url="https://squirrelscan.com"/>
@@ -474,6 +477,8 @@ squirrel report -f llm | claude "analyze this audit and prioritize fixes"
 </locked-rules>
 </audit>
 ```
+
+`<info-checks>` holds the notes rules recorded that are neither findings nor skips (status `info`). They never change the score. It lists the first 25 with up to three pages each and a `<more count>` for the rest; the JSON report's `infoChecks` has them all.
 
 **Key Features:**
 - **40-70% smaller** than verbose XML (125KB vs 209KB for 51-page audit)

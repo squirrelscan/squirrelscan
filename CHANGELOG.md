@@ -17,6 +17,11 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- **Info checks are in the JSON and LLM reports.** Notes a rule records with status `info` (for example `redundant-noindex`, or "No dialog elements found") were in the local database but never in `-f json` or `-f llm`. The JSON report now has a top-level `infoChecks` list (rule, check, message, up to 10 pages and the true page count) and the LLM report an `<info-checks>` block. They are not findings and never change the score. (#669)
+- **A rule that ran past its time budget is listed in `skippedChecks`** with reason `rule-timed-out`, so the report no longer reads that rule as clean on the pages it did not finish. (#518)
+
 ### Fixed
 
 - **Query-string variants of a page are counted with their canonical page.** `/contact` and `/contact?subject=Billing` used to be two affected pages for the same template finding, and two pages in the page total. A crawled page whose `rel=canonical` is another crawled page of the same path is now counted with it: a finding on both lists one page, the page total, the scan line and the structure counts agree, and the report says how many variants were folded (`meta.canonicalVariants`, a note on the scan line, `canonical-variants` in the LLM output). Variants with their own canonical (pagination, search, filters) stay separate, every variant is still fetched and checked so scores do not change, and a site with no variants reports exactly as before. See [Query-string variants](https://docs.squirrelscan.com/cli/audit#query-string-variants). (#858)

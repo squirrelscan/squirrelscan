@@ -52,6 +52,7 @@ import { editorSummaryView } from "../editor-summary";
 import { canonicalVariantCount, followedStartRedirect, scanScopeUnfetched, seedRedirect } from "../coverage";
 import { privateTargetLine, privateTargetSkippedRules } from "../private-target";
 import { notCheckedLine, notCheckedRules } from "../not-checked";
+import { collectInfoChecks, type InfoCheck } from "../info-checks";
 import { collectSkippedChecks, type SkippedCheck } from "../skipped";
 
 /**
@@ -332,6 +333,12 @@ interface SlimJsonReport {
    */
   skippedChecks?: SkippedCheck[];
   /**
+   * Info checks (#669): notes a rule recorded that are neither a finding nor a
+   * skip, for example `redundant-noindex`. They never change the score and are not
+   * in `issues`. Present only when non-empty.
+   */
+  infoChecks?: InfoCheck[];
+  /**
    * Rules that passed: at least one passing check and no failing or warning
    * one. `scope` is the rule's own; `pages` counts distinct pages with a pass,
    * and is 0 when the pass rows carry none. Present only with
@@ -443,6 +450,7 @@ function buildSlimReport(
   const refusedSeedRedirect = seedRedirect(report);
   const startRedirect = followedStartRedirect(report);
   const skippedChecks = collectSkippedChecks(report.ruleResults);
+  const infoChecks = collectInfoChecks(report.ruleResults);
   const privateTarget = privateTargetLine(report);
   const notChecked = notCheckedRules(report);
   const unfetched = scanScopeUnfetched(report);
@@ -692,6 +700,7 @@ function buildSlimReport(
       }),
     })),
     ...(skippedChecks.length > 0 ? { skippedChecks } : {}),
+    ...(infoChecks.length > 0 ? { infoChecks } : {}),
     ...(passedRules.length > 0
       ? {
           passedRules: passedRules.map((r) => ({
