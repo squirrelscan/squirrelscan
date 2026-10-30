@@ -12,7 +12,7 @@ const scratch = mkdtempSync(join(tmpdir(), "squirrel-canonical-858-"));
 let homes = 0;
 
 const page = (title: string, canonical: string | null, links: string) =>
-  `<!doctype html><html lang="en"><head><title>${title}</title>${canonical ? `<link rel="canonical" href="${canonical}">` : ""}</head><body><main><h1>${title}</h1><p>${title} page body text for the audit to read.</p>${links}</main></body></html>`;
+  `<!doctype html><html lang="en"><head><title>${title}</title>${canonical ? `<link rel="canonical" href="${canonical}">` : ""}<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebPage","name":"${title}"}</script></head><body><main><h1>${title}</h1><p>${title} page body text for the audit to read.</p>${links}</main></body></html>`;
 
 // /contact and /contact?subject=Billing both declare /contact as canonical; /blog?page=2 declares itself.
 const site = Bun.serve({
@@ -107,6 +107,7 @@ async function audit(...args: string[]) {
 
 interface Json {
   meta: { totalPages: number; canonicalVariants?: number };
+  entities?: { summary: { pagesTotal: number }; pages: Array<{ url: string }> };
   issues: Array<{
     ruleId?: string;
     id?: string;
@@ -120,6 +121,11 @@ describe("query-string variants counted with their canonical (#858)", () => {
     // Pages: /, /contact, /about, /blog, /blog?page=2 (own canonical) = 5; /contact?subject=Billing is a variant.
     expect(json.meta.canonicalVariants).toBe(1);
     expect(json.meta.totalPages).toBe(5);
+    // The entity map counts pages the way the report does (#1350): the variant is not listed.
+    expect(json.entities?.summary.pagesTotal).toBe(5);
+    expect(JSON.stringify(json.entities?.pages)).not.toContain(
+      "subject=Billing"
+    );
     // The finding counts the variant under /contact, so the affected pages are the five.
     const issues = JSON.stringify(json.issues);
     expect(issues).not.toContain("subject=Billing");

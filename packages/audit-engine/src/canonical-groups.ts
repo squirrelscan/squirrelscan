@@ -9,7 +9,10 @@
 // canonical stay separate. Report time only: nothing is fetched differently and
 // every page still gets its own checks, so tallies and the score do not move.
 
+import { Effect } from "effect";
+
 import type { CheckItem, CheckResult } from "@squirrelscan/core-contracts";
+import type { CrawlStorage } from "@squirrelscan/core-contracts/storage";
 
 /** `https://host/path` with a trailing slash dropped, or undefined for a URL that does not parse. */
 function pathKey(url: string): string | undefined {
@@ -143,4 +146,33 @@ export function foldChecksToCanonical(checks: Iterable<CheckResult>, map: Readon
     if (touched) changed += 1;
   }
   return changed;
+}
+
+/** Variant page -> canonical page for a crawl, from the stored page features; empty when the storage has none (#858). */
+export function readCanonicalVariants(
+  storage: CrawlStorage,
+  crawlId: string,
+  batchSize: number,
+): Effect.Effect<Map<string, string>, never, never> {
+  return Effect.gen(function* () {
+    const reader = storage as unknown as {
+      getPageFeaturesPage?: (
+        crawlId: string,
+        opts?: { after?: string; limit?: number },
+      ) => Effect.Effect<Array<{ normalizedUrl: string; canonical: string | null }>, unknown, never>;
+    };
+    if (!reader.getPageFeaturesPage) return new Map<string, string>();
+    const rows: Array<{ url: string; canonical: string | null }> = [];
+    let after: string | undefined;
+    for (;;) {
+      const batch = yield* reader
+        .getPageFeaturesPage(crawlId, { after, limit: batchSize })
+        .pipe(Effect.catchAll(() => Effect.succeed([] as Array<{ normalizedUrl: string; canonical: string | null }>)));
+      if (batch.length === 0) break;
+      for (const row of batch) rows.push({ url: row.normalizedUrl, canonical: row.canonical });
+      after = batch[batch.length - 1]!.normalizedUrl;
+      if (batch.length < batchSize) break;
+    }
+    return canonicalVariantMap(rows);
+  });
 }

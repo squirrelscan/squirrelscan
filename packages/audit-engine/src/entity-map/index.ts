@@ -25,6 +25,7 @@ export type {
   EntityMapBuilder,
   EntityMapPageInput,
 } from "./build";
+export { foldEntityMapVariants } from "./fold-variants";
 export { diffEntityMaps } from "./diff";
 export type { DiffEntityMapsOptions } from "./diff";
 export { jsonLdGeneratedIds, toJsonLd } from "./jsonld";

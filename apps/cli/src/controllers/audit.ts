@@ -26,10 +26,12 @@ import {
   emptyRuleCacheStats,
   emptyRuleExecutionResult,
   flattenChecks,
+  readCanonicalVariants,
   type FlatFinding,
   type PageResultSink,
   unfetchedFrontierCount,
 } from "@squirrelscan/audit-engine";
+import { foldEntityMapVariants } from "@squirrelscan/audit-engine/entity-map";
 import { createEntityMapCollector } from "@squirrelscan/audit-engine/entity-map/collect";
 import { offlineAuditSettings } from "@squirrelscan/core-contracts/audit-levels";
 import { computeCost } from "@squirrelscan/core-contracts/credits";
@@ -2657,7 +2659,17 @@ export async function runAudit(
             crawlId,
             map: entityMap,
           });
-          report.entityMap = entityMap;
+          // #1350: the report counts a query-string variant with its canonical page, so the
+          // report's copy of the map does too. The stored map keeps every crawled page.
+          report.entityMap =
+            (report.canonicalVariants ?? 0) > 0
+              ? foldEntityMapVariants(
+                  entityMap,
+                  await Effect.runPromise(
+                    readCanonicalVariants(sqliteStorage, crawlId, 500)
+                  )
+                )
+              : entityMap;
         } catch (error) {
           // A finished audit must never be lost to a report-only section.
           logger.warn(
