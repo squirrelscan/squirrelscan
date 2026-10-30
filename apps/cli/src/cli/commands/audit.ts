@@ -111,6 +111,7 @@ import {
   createRunFinalizer,
   type FinalizeRunInput,
   markRunning,
+  registerableUrl,
   registerRun,
   reportProgress,
   type RegisteredRun,
@@ -1856,6 +1857,15 @@ export const audit = defineCommand({
         | { projectName: string; existed: boolean }
         | undefined;
       const startParsed = parseUserUrl(args.url);
+      if (!registerableUrl(args.url)) {
+        // Before any request: no balance read, no run registered or charged.
+        commandResult = "error";
+        console.error(
+          `${fmt.red("Error:")} ${startParsed.ok ? "Invalid URL" : startParsed.error}`
+        );
+        process.exitCode = 1;
+        return;
+      }
       if (startParsed.ok) {
         const earlyProjectName =
           args["project-name"] ?? domainToProjectName(startParsed.url);

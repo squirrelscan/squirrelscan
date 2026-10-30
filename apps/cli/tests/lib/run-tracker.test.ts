@@ -130,7 +130,7 @@ describe("registerRun", () => {
     expect(captured!.method).toBe("POST");
     expect(captured!.url).toContain("/v1/agent-runs/register");
     expect(captured!.url).not.toContain("/org/");
-    expect(captured!.body.url).toBe("https://example.com");
+    expect(captured!.body.url).toBe("https://example.com/");
     expect(captured!.body.mode).toBe("audit");
     // config is JSON-stringified for the API's `config: z.string()` field.
     expect(captured!.body.config).toBe(JSON.stringify({ maxPages: 10 }));
