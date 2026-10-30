@@ -129,6 +129,7 @@ export interface CappableReport {
   resourceSizes?: unknown;
   sitemapUrlStatuses?: unknown;
   rulesCache?: unknown;
+  scriptsEvaluated?: unknown;
   checkTallies?: unknown;
   /** Never trusted from the input: the capper counts its own (repo#2935). */
   rulePageCounts?: unknown;
@@ -145,6 +146,7 @@ export type CappedReport<T extends CappableReport> = Omit<
   | "siteChecks"
   | "entityMap"
   | "rulesCache"
+  | "scriptsEvaluated"
   | "checkTallies"
   | "rulePageCounts"
   | "linkTargetSets"
@@ -1320,6 +1322,7 @@ export function capReportForPublish<T extends CappableReport>(
     siteChecks: _siteChecks,
     entityMap: _entityMap,
     rulesCache: _rulesCache,
+    scriptsEvaluated: _scriptsEvaluated,
     checkTallies: _checkTallies,
     rulePageCounts: _rulePageCounts,
     linkTargetSets: _linkTargetSets,

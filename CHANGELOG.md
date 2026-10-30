@@ -68,6 +68,10 @@ How it works:
 
 - **`store_scripts` follow-ups.** The warning for scripts that were not stored now lists each reason with its count and the setting that applies (too large, total cap, memory cap, time budget) instead of blaming the size settings for all of them. `squirrel audit --no-store-scripts` turns `[storage] store_scripts = true` off for one run. `content-store.db` and project databases are created owner-only (`0600`), and existing ones are tightened when opened. The storage docs now state that the time and memory bounds are soft (about 20 seconds, up to 10 bodies in flight, roughly 3x memory for non-Latin1 bundles), that the preload pass has its own counters, and that the empty script tables exist when the option is off. (#1268)
 
+### Fixed
+
+- **`store_scripts` no longer changes what an audit finds.** With `[storage] store_scripts = true` (or `--store-scripts`) the audit fetched up to 200 scripts and gave all of them to the script rules, so `perf/js-file-size` failed on 36.5% of the same sites against 29.8% with it off, and scores moved. The rules now evaluate the same scripts they do with the option off (the first 10 to 50, in page order); the extra scripts are fetched and stored only. `meta.scriptsEvaluated` in the JSON report (and `<scripts-evaluated>` in the LLM output) says how many first-party scripts the script rules evaluated, so two runs can be compared. See [`store_scripts`](https://docs.squirrelscan.com/configuration/storage#store_scripts). (#1280)
+
 ## v0.0.141 (2026-10-29)
 
 `squirrel audit --ephemeral` uses cloud features for one run and leaves nothing behind: the site is not added to the dashboard, scheduled or published unless you pass `--publish`. `--store-scripts` keeps the first-party scripts an audit fetched in the content store. Keyword-stuffing checks use the measured copy's own script, leaked-secret checks no longer flag credential key-name constants, and CI now rejects edits to tagged CHANGELOG sections.

@@ -793,6 +793,8 @@ export interface AuditReport {
    * because it describes how this machine produced the report and not the site.
    * REPORT-ONLY — never feeds `healthScore`.
    */
+  /** First-party scripts the script rules evaluated (#1280). LOCAL ONLY, stripped on publish. */
+  scriptsEvaluated?: number;
   rulesCache?: {
     /** Pages that skipped parse + page rules and replayed stored verdicts. */
     pagesReplayed: number;

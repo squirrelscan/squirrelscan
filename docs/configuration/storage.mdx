@@ -132,7 +132,7 @@ Scripts on another domain are never fetched, and a script over 5 MB is not
 downloaded: it is recorded as skipped, with at least that size. Chunks a page
 only preloads are fetched only for pages that send a Content-Security-Policy.
 
-**Memory, time and findings.** The audit keeps every fetched script in memory for
+**Memory and time.** The audit keeps every fetched script in memory for
 its rules, so peak memory rises with the number of scripts fetched, by up to the
 total size of the bodies (a script over 5 MB is never downloaded). To bound that,
 a `store_scripts` run stops requesting scripts once it holds 256 MB of script
@@ -146,14 +146,20 @@ already in flight runs to its 15 second timeout, and the body is then decoded. T
 by the bodies of up to 10 requests in flight at that moment. Script text is held
 as a JavaScript string, which takes about 2 bytes per character for a bundle
 with non-Latin1 text (CJK, Cyrillic, emoji), so peak memory can reach roughly 3
-times the 256 MB bound on such sites. The scripts a page only preloads are
-fetched by a separate pass with its own counters: it does not share the 256 MB
-or 120 second bounds, only the per-script size limit and the CSP condition above.
-Because the rules that read script bodies (secrets, file size,
-minification) now see up to `store_scripts_max_scripts` scripts instead of 10 to
-50, an audit with `store_scripts` on can report more findings than the same audit
-without it. Parallel corpus runs each hold their own bodies, so size the number of
+times the 256 MB bound on such sites. The scripts a page only preloads are fetched the same way as without the
+option, and the rules read the same scripts either way. Parallel corpus runs each hold their own bodies, so size the number of
 runs to your memory.
+
+**It does not change the audit.** `store_scripts` is storage only. The rules that
+read script bodies (file size, compression, minification, source maps, secrets,
+technology detection) evaluate the same scripts they evaluate with the option off:
+the first 10 to 50 the audit always fetched, in page order. The extra scripts, up
+to `store_scripts_max_scripts`, are fetched and stored for later analysis and are
+never shown to a rule, so findings and scores are the same with it on or off, and
+a corpus run with storage on compares with one without. The JSON report says how
+many first-party scripts the script rules evaluated in `meta.scriptsEvaluated`
+(and the LLM output in `<scripts-evaluated>`), so two runs can be checked. To
+analyse the stored scripts, read them from the content store.
 
 **Bodies are the decoded text.** A script is stored as the UTF-8 text the audit
 read after the transfer encoding (gzip, brotli) was removed, so the content hash

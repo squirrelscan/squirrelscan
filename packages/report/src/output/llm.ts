@@ -388,6 +388,12 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
   // Rule-result cache disclosure (#1990). An agent asking "is this a fresh
   // reading of my site?" cannot tell from the findings — a replay is identical by
   // construction — so the answer has to be stated (#1981).
+  // #1280: how many first-party scripts the script rules evaluated, so two
+  // runs (or a run with and without store_scripts) compare.
+  if (typeof report.scriptsEvaluated === "number") {
+    lines.push(`<scripts-evaluated count="${Math.trunc(report.scriptsEvaluated)}"/>`);
+  }
+
   if (report.rulesCache) {
     const rc = report.rulesCache;
     const why = rc.disabledReason ? ` disabled-reason="${rc.disabledReason}"` : "";

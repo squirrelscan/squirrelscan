@@ -46,11 +46,15 @@ export function storedScriptLimits(
 
 /** Same-site scripts the fetch phase pulled, plus the chunks pages preload, one entry per URL. */
 export function scriptsToStore(
-  assets: Pick<PreFetchedAssets, "scripts" | "preloadedScripts">
+  assets: Pick<
+    PreFetchedAssets,
+    "scripts" | "storedOnlyScripts" | "preloadedScripts"
+  >
 ): StoredScriptInput[] {
   const byUrl = new Map<string, StoredScriptInput>();
   for (const script of [
     ...assets.scripts,
+    ...(assets.storedOnlyScripts ?? []),
     ...(assets.preloadedScripts ?? []),
   ]) {
     if (byUrl.has(script.url)) continue;
@@ -111,7 +115,10 @@ export async function storeFetchedScripts(opts: {
   crawlId: string;
   assets: Pick<
     PreFetchedAssets,
-    "scripts" | "preloadedScripts" | "assetCapDropped"
+    | "scripts"
+    | "storedOnlyScripts"
+    | "preloadedScripts"
+    | "storedScriptsNotFetched"
   >;
   config: Config;
 }): Promise<void> {
@@ -127,14 +134,14 @@ export async function storeFetchedScripts(opts: {
         limits,
         {
           fetchLimit: storedScriptFetchLimit(opts.config),
-          droppedByLimit: opts.assets.assetCapDropped?.scripts ?? 0,
+          droppedByLimit: opts.assets.storedScriptsNotFetched ?? 0,
         }
       )
     );
     logger.debug(
       `stored scripts: ${summary.stored} indexed, ${summary.distinct} distinct (${summary.distinctBytes} bytes), ${summary.skipped} skipped`
     );
-    const dropped = opts.assets.assetCapDropped?.scripts ?? 0;
+    const dropped = opts.assets.storedScriptsNotFetched ?? 0;
     if (dropped > 0) {
       logger.warn(
         `${dropped} script(s) the pages reference were not fetched (limit ${storedScriptFetchLimit(opts.config)} per audit); raise [storage] store_scripts_max_scripts to fetch and store more`

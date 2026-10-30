@@ -164,7 +164,7 @@ import {
   type FetchedWebAppManifests,
   type WebAppManifestOccurrences,
 } from "./web-app-manifest";
-import { fetchScriptContents, type ScriptFetchResult } from "./script-fetcher";
+import { fetchScriptContents, scriptRuleLimit, type ScriptFetchResult } from "./script-fetcher";
 import { overlayTechHeaders } from "@squirrelscan/utils/headers";
 import { initialViewportFlags, selectImageCandidate } from "@squirrelscan/utils/image-loading";
 import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
@@ -619,6 +619,15 @@ export interface PreFetchedAssets {
     fonts?: ResourceSizeData[];
   };
   scripts: ScriptContentData[];
+  /**
+   * Scripts a `store_scripts` run fetched beyond the ones the rules evaluate
+   * (#1280): stored for later analysis only, and held out of `scripts` so every
+   * script rule sees the set it sees with the option off. Optional: absent when
+   * nothing is stored.
+   */
+  storedOnlyScripts?: ScriptContentData[];
+  /** Referenced scripts a `store_scripts` run did not fetch for storage (its fetch limit). Absent when not storing. */
+  storedScriptsNotFetched?: number;
   /**
    * Same-site chunks a page preloads (`modulepreload`, `preload as=script`) that
    * no `<script src>` names. Held apart from `scripts` so the file-size,
@@ -1540,6 +1549,32 @@ export function fetchAssetsFromOccurrences(
       elapsed: `${Date.now() - resourceCheckStart}ms`,
     });
 
+    // The script rows the rules read (#1280): a run that stores scripts fetches
+    // more than an audit that does not, but only the share the audit would have
+    // fetched goes to the rules. The rest is for storage.
+    const ruleScriptCount = storeScripts
+      ? scriptRuleLimit(occurrences.pageCount, maxResources)
+      : resourceResults.scripts.length;
+    const ruleScripts = resourceResults.scripts.slice(0, ruleScriptCount);
+    const storedOnlyScripts = resourceResults.scripts.slice(ruleScriptCount);
+    const toScriptData = (fetch: ScriptFetchResult): ScriptContentData => ({
+        url: fetch.url,
+        status: fetch.status,
+        error: fetch.error,
+        contentType: fetch.contentType,
+        sizeBytes: fetch.sizeBytes,
+        content: fetch.content,
+        sourcePages: Array.from(resourceOccurrences.scripts.get(fetch.url) ?? []),
+        ...(fetch.fetchSkipReason ? { fetchSkipReason: fetch.fetchSkipReason } : {}),
+        rateLimited: fetch.rateLimited,
+        wafBlocked: fetch.wafBlocked,
+        ...(withheld(fetch.url, fetch.status, fetch.finalUrl) ? { headersWithheld: true } : {}),
+        redirected: fetch.redirected,
+        finalUrl: fetch.finalUrl,
+        sourceMapHeader: fetch.sourceMapHeader,
+        contentEncoding: fetch.contentEncoding,
+    });
+
     const result: PreFetchedAssets = {
       // Absent on the timeout fallback: not checked, rather than "no manifest linked".
       ...(resourceResults.webAppManifests
@@ -1633,25 +1668,15 @@ export function fetchAssetsFromOccurrences(
               externalCss: new Map(),
               externalFonts: new Map(),
             },
-        resourceResults,
+        { ...resourceResults, scripts: ruleScripts },
       ),
-      scripts: resourceResults.scripts.map((fetch) => ({
-        url: fetch.url,
-        status: fetch.status,
-        error: fetch.error,
-        contentType: fetch.contentType,
-        sizeBytes: fetch.sizeBytes,
-        content: fetch.content,
-        sourcePages: Array.from(resourceOccurrences.scripts.get(fetch.url) ?? []),
-        ...(fetch.fetchSkipReason ? { fetchSkipReason: fetch.fetchSkipReason } : {}),
-        rateLimited: fetch.rateLimited,
-        wafBlocked: fetch.wafBlocked,
-        ...(withheld(fetch.url, fetch.status, fetch.finalUrl) ? { headersWithheld: true } : {}),
-        redirected: fetch.redirected,
-        finalUrl: fetch.finalUrl,
-        sourceMapHeader: fetch.sourceMapHeader,
-        contentEncoding: fetch.contentEncoding,
-      })),
+      scripts: ruleScripts.map(toScriptData),
+      ...(storedOnlyScripts.length > 0
+        ? { storedOnlyScripts: storedOnlyScripts.map(toScriptData) }
+        : {}),
+      ...(storeScripts
+        ? { storedScriptsNotFetched: Math.max(0, resourceOccurrences.scripts.size - resourceResults.scripts.length) }
+        : {}),
       preloadedScripts: resourceResults.preloads.map((fetch) => ({
         url: fetch.url,
         status: fetch.status,

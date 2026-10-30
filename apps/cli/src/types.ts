@@ -641,6 +641,12 @@ export interface AuditReport {
    * which happened (#1981). LOCAL ONLY — stripped by `slimForPublish`.
    * REPORT-ONLY. Mirrors core-contracts `AuditReport`.
    */
+  /**
+   * First-party scripts the script rules (file size, minification, secrets,
+   * source maps) evaluated (#1280): the same count with or without
+   * `store_scripts`, so two runs compare. LOCAL ONLY, stripped on publish.
+   */
+  scriptsEvaluated?: number;
   rulesCache?: {
     pagesReplayed: number;
     pagesEvaluated: number;

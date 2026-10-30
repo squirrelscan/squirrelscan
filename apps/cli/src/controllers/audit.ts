@@ -2177,6 +2177,9 @@ export async function runAudit(
           : options.auditLevel;
       }
 
+      // How many first-party scripts the script rules saw (#1280).
+      report.scriptsEvaluated = assets.scripts.length;
+
       report.rulesCache = {
         pagesReplayed: ruleResults.ruleCache.replayedPages,
         pagesEvaluated: ruleResults.ruleCache.freshPages,
