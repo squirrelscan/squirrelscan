@@ -6,7 +6,9 @@ const WINDOW_BEFORE = 160;
 /** Chars kept after a hint hit: the longest value a detector reads (a URL's key literal). */
 const WINDOW_AFTER = 256;
 /** Hits kept per hint, so a bundle that repeats one literal cannot fill the sample. */
-const MAX_HITS_PER_HINT = 24;
+const MAX_HITS_PER_HINT = 48;
+/** Hits examined per hint, kept or not: a hit that yields no window (a long string) does not use up the kept ones. */
+const MAX_HIT_SCANS_PER_HINT = 256;
 /** A string longer than this past a window's end is cut before it, not carried to its close. */
 const MAX_STRING_CARRY = 512;
 /** Longest body the scan classifies: past a script fetch cap, so every fetched body fits. */
@@ -77,7 +79,8 @@ export function sampleBundleExtras(content: string, headChars: number, maxChars:
   const spans: Array<[number, number]> = [];
   for (const hint of bundleHints()) {
     let from = lower;
-    for (let n = 0; n < MAX_HITS_PER_HINT; n++) {
+    let kept = 0;
+    for (let n = 0; n < MAX_HIT_SCANS_PER_HINT && kept < MAX_HITS_PER_HINT; n++) {
       const at = content.indexOf(hint, from);
       if (at === -1 || at >= limit) break;
       from = at + hint.length;
@@ -89,11 +92,17 @@ export function sampleBundleExtras(content: string, headChars: number, maxChars:
         const close = skipEnd(skips, at);
         if (open === -1 || close - open > MAX_STRING_CARRY) continue;
         const end = codeBefore(Math.min(limit, at + hint.length + WINDOW_AFTER), at);
-        if (end > open) spans.push([open, end]);
+        if (end > open) {
+          spans.push([open, end]);
+          kept++;
+        }
         continue;
       }
       const end = codeBefore(Math.min(limit, at + hint.length + WINDOW_AFTER), at);
-      if (end > start) spans.push([start, end]);
+      if (end > start) {
+        spans.push([start, end]);
+        kept++;
+      }
     }
   }
   spans.sort((a, b) => a[0] - b[0]);

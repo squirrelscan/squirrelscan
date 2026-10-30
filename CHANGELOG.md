@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **Supabase is detected in more real bundles.** A bundle that ships supabase-js (its Node.js deprecation notice or its `sb-<ref>-auth-token` storage key) and quotes a `<ref>.supabase.co` project URL anywhere is Supabase, wherever the key sits and whatever its format: the URL in a variable, a new-format `sb_secret_` key, or a URL far past the start of a large bundle, even after dozens of earlier quoted Supabase URLs. A docs link, a placeholder URL, library strings with no project URL, and a Base44 app are still not reported. (#1379)
+
 ## v0.0.145 (2026-10-31)
 
 Rules now read the page type, so contact and legal pages are no longer reported as thin, and a site's `/index.html` is read as its home page. `squirrel crawl --disable-discovery-probes` sends no discovery probe, an audit asks for `robots.txt` once, and sitemap requests obey the per-host limits. `--max-duration` holds on very large pages and on requests that hang before the page checks, smart audits resolve old findings when a re-crawled page's rule now answers `info`, and query-string variants are counted with their canonical page in the entity map and the hosted report. The `squirrel` binary no longer autoloads a `bunfig.toml` or `.env` from the directory it runs in, a crawler proxy that owns DNS can resolve the TLS check's hosts with `tls_proxy_resolves_names`, and space held by audits killed while building their report comes back.
@@ -64,7 +68,6 @@ Rules now read the page type, so contact and legal pages are no longer reported 
 
 ### Fixed
 
-- **Supabase is detected in more real bundles.** A bundle that ships supabase-js (its Node.js deprecation notice or its `sb-<ref>-auth-token` storage key) and quotes a `<ref>.supabase.co` project URL anywhere is Supabase, wherever the key sits and whatever its format: the URL in a variable, a new-format `sb_secret_` key, or a URL far past the start of a large bundle. A docs link, a placeholder URL, library strings with no project URL, and a Base44 app are still not reported. (#1379)
 - **A successful HTML page with a zero-byte body is no longer omitted from rule results.** It is audited as an empty document, appears in the report, counts toward coverage and scoring, and receives findings such as missing title and H1. (#1314)
 - **Query-string variants of a page are counted with their canonical page.** `/contact` and `/contact?subject=Billing` used to be two affected pages for the same template finding, and two pages in the page total. A crawled page whose `rel=canonical` is another crawled page of the same path is now counted with it: a finding on both lists one page, the page total, the scan line and the structure counts agree, and the report says how many variants were folded (`meta.canonicalVariants`, a note on the scan line, `canonical-variants` in the LLM output). Variants with their own canonical (pagination, search, filters) stay separate, every variant is still fetched and checked so scores do not change, and a site with no variants reports exactly as before. See [Query-string variants](https://docs.squirrelscan.com/cli/audit#query-string-variants). (#858)
 - **The Markdown report lists every page that carries a broken link.** A broken link found on more than three pages showed the first three and "+N more pages", with no way to see the rest in the report. The Markdown report now lists all of them in the collapsed item block; the text, console and LLM reports keep the three-page preview. (#837)
