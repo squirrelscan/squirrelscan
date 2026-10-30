@@ -6,6 +6,9 @@ import type { CheckResult } from "@squirrelscan/core-contracts";
 
 import { parsePage } from "@squirrelscan/parser";
 
+import { hasJavaScriptDetections } from "@squirrelscan/utils/cdn";
+
+import { buildCollectedPageSignal } from "../src/collected-signals";
 import { badCachingRule } from "../src/performance/bad-caching";
 import type { ParsedPage, Rule, RuleContext, SiteData } from "../src/types";
 
@@ -494,5 +497,78 @@ describe("perf/bad-caching freshness and compression are info (pub#633)", () => 
     // The pages are still listed.
     expect(check(checks, "bad-caching-freshness")?.pages).toHaveLength(4);
     expect(check(checks, "bad-caching-compression")?.pages).toHaveLength(4);
+  });
+});
+
+// #605: Cloudflare JavaScript Detections is the one ETag-removing feature with a marker in the page.
+describe("perf/bad-caching names JavaScript Detections (#605)", () => {
+  const JSD = `<script>(function(){window.__CF$cv$params={r:'8a1',t:'MTcz'};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);})();</script>`;
+  const stripped = { "cache-control": "max-age=0", server: "cloudflare" };
+  const NAMES = "which may drop the ETag from HTML it rewrites";
+  const page = (i: number, html: string) => ({ url: `https://example.com/p${i}`, html, headers: stripped });
+
+  /** The resident engine reads each page's document; the streaming engine reads the recorded markers. */
+  function ctxFor(engine: "resident" | "streaming", htmls: string[]): RuleContext {
+    const pages = htmls.map((h, i) => page(i, h));
+    const base = siteCtx(pages.map((p) => ({ url: p.url, headers: p.headers })));
+    const parsed = pages.map((p) => parsePage(p.html, p.url));
+    base.site!.pages = base.site!.pages.map((sp, i) => ({ ...sp, parsed: parsed[i]! }));
+    if (engine === "resident") return base;
+    return {
+      ...base,
+      collectedSignals: { pages: pages.map((p, i) => buildCollectedPageSignal({ url: p.url, parsed: parsed[i]!, htmlBytes: 100 })) },
+    } as unknown as RuleContext;
+  }
+  const doc = (body: string) => `<html><head><title>t</title>${body}</head><body></body></html>`;
+
+  for (const engine of ["resident", "streaming"] as const) {
+    test(`${engine}: half or more of the missing pages carrying the marker names JavaScript Detections`, () => {
+      const ctx = ctxFor(engine, [doc(JSD), doc(JSD), doc(JSD), doc("")]);
+      const v = check(run(badCachingRule, ctx), "bad-caching-validators")!;
+      expect(v.message).toContain("Cloudflare JavaScript Detections");
+      expect(v.message).toContain("found on 3 of them");
+      expect(v.message).not.toContain(NAMES);
+      expect(v.details?.javascriptDetectionsPages).toBe(3);
+    });
+
+    test(`${engine}: Cloudflare pages without the marker keep the headers-only note`, () => {
+      const ctx = ctxFor(engine, [doc(""), doc(""), doc(""), doc("")]);
+      const v = check(run(badCachingRule, ctx), "bad-caching-validators")!;
+      expect(v.message).toContain(NAMES);
+      expect(v.details?.javascriptDetectionsPages).toBeUndefined();
+    });
+
+    test(`${engine}: fewer than half carrying the marker is not enough`, () => {
+      const ctx = ctxFor(engine, [doc(JSD), doc(""), doc(""), doc("")]);
+      const v = check(run(badCachingRule, ctx), "bad-caching-validators")!;
+      expect(v.message).toContain(NAMES);
+      expect(v.details?.javascriptDetectionsPages).toBeUndefined();
+    });
+
+    test(`${engine}: the path in visible text, or in a code sample, is not a script marker`, () => {
+      const text = `<p>Cloudflare loads /cdn-cgi/challenge-platform/scripts/jsd/main.js on your pages</p><pre>__CF$cv$params</pre>`;
+      const ctx = ctxFor(engine, [text, text, text, text].map((t) => `<html><head></head><body>${t}</body></html>`));
+      const v = check(run(badCachingRule, ctx), "bad-caching-validators")!;
+      expect(v.details?.javascriptDetectionsPages).toBeUndefined();
+    });
+
+    test(`${engine}: an external script from the challenge platform counts too`, () => {
+      const ext = doc(`<script src="/cdn-cgi/challenge-platform/scripts/jsd/main.js" defer></script>`);
+      const v = check(run(badCachingRule, ctxFor(engine, [ext, ext, ext, ext])), "bad-caching-validators")!;
+      expect(v.details?.javascriptDetectionsPages).toBe(4);
+    });
+  }
+
+  test("detection stays linear on a 1 MB page of scripts and on thousands of script tags", () => {
+    const big = `<html><head><script>${"x".repeat(1024 * 1024)}</script></head><body></body></html>`;
+    const many = `<html><head>${"<script>var a=1</script>".repeat(40_000)}</head><body></body></html>`;
+    for (const html of [big, many]) {
+      const parsed = parsePage(html, "https://example.com/");
+      const started = performance.now();
+      expect(hasJavaScriptDetections(parsed.document!)).toBe(false);
+      expect(performance.now() - started).toBeLessThan(100);
+    }
+    // the marker beyond the read window of a huge script is not found, and that is the documented bound
+    expect(hasJavaScriptDetections(parsePage(`<html><head><script>${"x".repeat(5000)}/cdn-cgi/challenge-platform/</script></head></html>`, "https://example.com/").document!)).toBe(false);
   });
 });

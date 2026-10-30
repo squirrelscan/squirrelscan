@@ -34,6 +34,7 @@ import { scanPageForMisspellings } from "./content/common-misspellings";
 import { RULE_TIME_BUDGET_MS, RuleTimeoutError, runWithinBudget } from "./rule-budget";
 import { scanPageForSecrets } from "./security/leaked-secrets";
 import { extractContentSentences } from "./shared/content-in-script";
+import { hasJavaScriptDetections } from "@squirrelscan/utils/cdn";
 
 /**
  * The per-page DOM-derived signal for the six all-pages site rules, captured while
@@ -89,6 +90,12 @@ export interface CollectedPageSignal {
    * Absent on a record cached before the field existed, which reads as not judged.
    */
   contentSentences?: string[];
+  /**
+   * Edge-network markers found in the page (perf/bad-caching, #605): `"cf-jsd"` when Cloudflare
+   * JavaScript Detections is injected. Absent on a record cached before the field existed, which
+   * reads as none found.
+   */
+  edgeMarkers?: string[];
   /**
    * Rules whose page-time extractor ran past its time budget on this page and was
    * abandoned (its field holds the empty value). The site pass records each as a
@@ -150,6 +157,7 @@ export function buildCollectedPageSignal(input: {
       inPageSections: null,
       misspellings: { english: false, occurrences: [] },
       contentSentences: [],
+      edgeMarkers: [],
     };
   }
 
@@ -241,6 +249,7 @@ export function buildCollectedPageSignal(input: {
       input.rendered === true
         ? []
         : timed("perf/content-in-js-bundle", [] as string[], () => extractContentSentences(doc)),
+    edgeMarkers: timed("perf/bad-caching", [] as string[], () => (hasJavaScriptDetections(doc) ? ["cf-jsd"] : [])),
   };
   // The one record serves both rules: a timeout is reported against both.
   if (timedOutRuleIds.includes("eeat/about-page")) timedOutRuleIds.push("eeat/contact-page");

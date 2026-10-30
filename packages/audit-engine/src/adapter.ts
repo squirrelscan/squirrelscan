@@ -3582,7 +3582,10 @@ export function runStreamingRules(
 
     const collectedPages: CollectedPageSignal[] = [];
     const signalCollector: PageSignalCollector = {
-      id: "site-dom-signals",
+      // Renamed from "site-dom-signals" when edgeMarkers joined the record (#605): a cached entry
+      // written before it lacks the field, and a replay would read that as "no marker". The new id
+      // makes every older entry a miss, so each site's first audit after the upgrade runs fresh once.
+      id: "site-dom-signals-v2",
       collect(page, parsed, shared) {
         const signal = detachFromPage(
           // `shared.fingerprint` is the one the loop already built for
