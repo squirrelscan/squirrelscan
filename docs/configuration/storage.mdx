@@ -227,7 +227,9 @@ Any number of `squirrel` processes can run on one machine at once, for example a
 
 - Every connection sets a 15 second lock timeout before it does anything else, and write transactions take the write lock when they begin, so a process that needs a lock waits for it instead of failing.
 - A new database file is switched to write-ahead logging with a short retry loop, because SQLite does not wait for that lock on its own.
-- If a lock is still held after 15 seconds, the audit fails with `SQLite database is busy (locked)` and the message names the database file and how long it waited.
+- If a lock is still held after 15 seconds, the audit fails with `SQLite database is busy (locked)` and the message names the database file and how long it waited. The wait is for the one statement that failed, not the whole audit.
+
+This relies on SQLite write-ahead logging, which needs a local disk. Keep `~/.squirrel` off a network file system (NFS, SMB): locking there is unreliable, and parallel runs can still fail or corrupt a database.
 
 Two audits of the *same* site at once still contend for one project database. They stay safe, and the second waits its turn, but run them one after the other if you can.
 
