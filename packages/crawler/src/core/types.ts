@@ -143,6 +143,14 @@ export interface CrawlerConfig {
    * Default: 5s.
    */
   stopGraceMs: number;
+  /**
+   * Epoch ms the crawl's discovery (robots.txt, llms.txt, the well-known sweep and the
+   * sitemap walk) must be done by (`--max-duration`, #1271). Each request is cut to what
+   * is left and the rest are skipped, so a site whose discovery files never answer cannot
+   * use up the audit's budget before the first page. Unset: the preamble and walk keep
+   * their own budgets.
+   */
+  discoveryDeadlineAt?: number;
   /** Number of URLs found in sitemaps (set at runtime by crawler) */
   sitemapUrlCount: number;
   /**

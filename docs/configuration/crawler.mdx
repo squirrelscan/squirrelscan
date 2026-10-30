@@ -73,7 +73,7 @@ The resolution order is **`--max-pages` / `-m` > non-default `[crawler] max_page
 **Type:** `number` (seconds)
 **Default:** unset (no limit)
 
-A wall-clock budget for the whole audit. When it is reached the audit stops launching new work, runs the rules on the pages already fetched and writes a report with `status: "partial"` and reason code `max_duration`. The process exits within `max(10% of the budget, 15 seconds)` of the limit. Must be greater than zero.
+A wall-clock budget for the whole audit. When it is reached the audit stops launching new work, runs the rules on the pages already fetched and writes a report with `status: "partial"` and reason code `max_duration`. The process exits within `max(10% of the budget, 15 seconds)` of the limit. Must be greater than zero and at most 604800 (7 days).
 
 ```toml
 [crawler]
