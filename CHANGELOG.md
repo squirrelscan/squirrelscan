@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **The entity map and the hosted report builder count query-string variants with their canonical page.** `entities.summary.pagesTotal` could exceed `meta.totalPages` by the number of folded variants; the entity map in the report now lists a variant's entities under its canonical page. The report builder the hosted audits use can fold variants the same way (`foldCanonicalVariants`), without moving the score. A smart audit's carried pages are not folded yet. (#1350)
+
 ## v0.0.144 (2026-10-30)
 
 `squirrel audit --max-duration` stops at a wall-clock budget and writes a partial report instead of running on, `--include-pages` adds every crawled page with its status and rule count to the JSON report, and info checks now appear in the JSON and LLM reports (`--include-info`). The local technology scan reads stylesheet URLs and knows 24 more stacks, query-string copies of a page are counted with their canonical page, rules see controls inside declarative shadow roots, and a successful but empty page is audited and scored. A rule that throws is reported once as not evaluated, a rule that runs past its time budget is listed as skipped, and the docs now keep `--offline` and `--passive` apart. Thanks to William for the empty-page fix (#1314, #1330).

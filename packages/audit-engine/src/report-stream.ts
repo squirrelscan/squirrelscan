@@ -24,6 +24,7 @@ import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
 import { parseRobotsTxt, resolveRobotsSitemapUrls } from "@squirrelscan/utils/robots-txt";
 
 import { logger } from "./adapter-logger";
+import { foldChecksToCanonical, readCanonicalVariants } from "./canonical-groups";
 import {
   calculateHealthScore,
   calculateHealthScoreFromTallies,
@@ -367,6 +368,14 @@ export interface BuildV1ReportOptions {
    * liveness heartbeat here so a large-crawl report tail keeps the run alive
    * (aligns #1252) instead of going silent for the whole assembly. */
   onBatch?: (info: { pagesDone: number }) => void;
+  /**
+   * Count a query-string variant with its canonical page (#858, #1350): `totalPages`, `pages` and
+   * every affected-page count are canonical groups, each variant keeps its own checks so the score
+   * does not move, and `canonicalVariants` / `canonicalVariantPages` say what was folded. Off by
+   * default so a caller that merges carried pages (a smart audit, whose union this fold cannot see)
+   * keeps its report; a fresh crawl turns it on.
+   */
+  foldCanonicalVariants?: boolean;
 }
 
 /**
@@ -394,6 +403,19 @@ export function buildV1Report(
     const crawl = yield* storage
       .getCrawl(crawlId)
       .pipe(Effect.catchAll(() => Effect.succeed(null)));
+
+    // Query-string variants of a page (#858, #1350), read once and folded into the checks in place
+    // before anything below counts a page. Needs the page_features rows, so SQLite storage only.
+    const variantOf = options?.foldCanonicalVariants
+      ? yield* readCanonicalVariants(storage, crawlId, batchSize)
+      : new Map<string, string>();
+    const variantsOfCanonical = new Map<string, string[]>();
+    for (const [variant, canonical] of variantOf) {
+      const list = variantsOfCanonical.get(canonical);
+      if (list) list.push(variant);
+      else variantsOfCanonical.set(canonical, [variant]);
+    }
+    let variantPages = 0;
 
     const links = yield* storage.getLinks(crawlId).pipe(Effect.catchAll(() => Effect.succeed([])));
 
@@ -472,6 +494,16 @@ export function buildV1Report(
       results: ruleResults.ruleResultsMap,
     });
 
+    // After the score: every variant page keeps its own checks, so folding never moves it (#858).
+    if (variantOf.size > 0) {
+      const checks: CheckResult[] = [];
+      for (const rr of ruleResults.ruleResultsMap.values()) checks.push(...rr.checks);
+      for (const list of ruleResults.pageResults.values()) checks.push(...list);
+      checks.push(...ruleResults.siteResults);
+      // Idempotent and safe on checks shared between the maps, so one pass over the union is enough.
+      foldChecksToCanonical(checks, variantOf);
+    }
+
     // Build the summary + page audits in ONE batched pass over the crawl's pages
     // (#1860). Batched rather than one `getPages(crawlId)` because a PageRecord
     // carries the page's full html: on a 500-page crawl of ~1 MB pages the
@@ -502,8 +534,16 @@ export function buildV1Report(
       for (const page of batch) {
         pagesCrawled++;
         pageStatuses.push({ status: page.status });
+        // A variant is not a page of its own in the report (#858): it is counted with its canonical.
+        if (variantOf.has(page.normalizedUrl)) {
+          variantPages++;
+          continue;
+        }
         const parsed = ruleResults.parsedPages.get(page.normalizedUrl) ?? null;
-        const pageChecks = ruleResults.pageResults.get(page.normalizedUrl) ?? [];
+        const pageChecks = [
+          ...(ruleResults.pageResults.get(page.normalizedUrl) ?? []),
+          ...(variantsOfCanonical.get(page.normalizedUrl) ?? []).flatMap((v) => ruleResults.pageResults.get(v) ?? []),
+        ];
 
         if (parsed) {
           if (!parsed.meta.title) summary.missingTitles.push(page.normalizedUrl);
@@ -622,11 +662,17 @@ export function buildV1Report(
       // Present only when the crawler refused an off-site seed redirect (#1418).
       ...(refusedSeedRedirect ? { finalUrl: refusedSeedRedirect } : {}),
       timestamp: new Date().toISOString(),
-      totalPages: pagesCrawled,
+      totalPages: pagesCrawled - variantPages,
       passed,
       warnings,
       failed,
       ...(renderBlockRecovered > 0 ? { fetchFallbacks: { recovered: renderBlockRecovered } } : {}),
+      ...(variantPages > 0
+        ? {
+            canonicalVariants: variantPages,
+            canonicalVariantPages: [...variantOf].slice(0, 100).map(([page, canonical]) => ({ page, canonical })),
+          }
+        : {}),
       // #1003: 500 matches the publish schema's siteChecks cap
       // (auditReportSchema's truncatedArray(checkResultSchema, 500)). Mixes
       // many DIFFERENT site-scoped rules' checks, so no fold (see
