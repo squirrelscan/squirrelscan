@@ -49,10 +49,16 @@ interface Chunk {
   url: string;
   content: string | null;
   pages: string[];
-  size?: number;
+  size?: number | null;
 }
 
-function ctxOf(pages: string[], chunks: Chunk[], engine: "resident" | "streaming", options = {}): RuleContext {
+function ctxOf(
+  pages: string[],
+  chunks: Chunk[],
+  engine: "resident" | "streaming",
+  options = {},
+  rendered: ReadonlySet<number> = new Set(),
+): RuleContext {
   const parsed = pages.map((html, i) => parsePage(html, pageUrl(i)));
   const base = {
     page: { url: BASE, html: "", statusCode: 200, loadTime: 0, headers: {} },
@@ -62,7 +68,7 @@ function ctxOf(pages: string[], chunks: Chunk[], engine: "resident" | "streaming
       baseUrl: BASE,
       pages:
         engine === "resident"
-          ? pages.map((_, i) => ({ url: pageUrl(i), statusCode: 200, parsed: parsed[i], sizeBytes: 1000 }))
+          ? pages.map((_, i) => ({ url: pageUrl(i), statusCode: 200, parsed: parsed[i], sizeBytes: 1000, rendered: rendered.has(i) }))
           : [],
       robotsTxt: null,
       sitemaps: null,
@@ -71,7 +77,7 @@ function ctxOf(pages: string[], chunks: Chunk[], engine: "resident" | "streaming
         status: 200,
         error: null,
         contentType: "application/javascript",
-        sizeBytes: c.size ?? (c.content?.length ?? 0),
+        sizeBytes: c.size === null ? null : (c.size ?? (c.content?.length ?? 0)),
         content: c.content,
         sourcePages: c.pages,
       })),
@@ -81,7 +87,7 @@ function ctxOf(pages: string[], chunks: Chunk[], engine: "resident" | "streaming
   return {
     ...base,
     collectedSignals: {
-      pages: pages.map((_, i) => buildCollectedPageSignal({ url: pageUrl(i), parsed: parsed[i]!, htmlBytes: 1000 })),
+      pages: pages.map((_, i) => buildCollectedPageSignal({ url: pageUrl(i), parsed: parsed[i]!, htmlBytes: 1000, rendered: rendered.has(i) })),
     },
   };
 }
@@ -172,7 +178,7 @@ describe.each(engines)("perf/content-in-js-bundle (%s engine)", (engine) => {
     const chunk = { url: `${BASE}/assets/entry.js`, content: chunkOf(sentencesOf(0), 60 * KB), pages: [pageUrl(0)] };
     const checks = await run(ctxOf(pages(3), [chunk], engine));
     expect(checks).toHaveLength(1);
-    expect(checks[0]!.status).toBe("warn");
+    expect(checks[0]!.status).toBe("info");
     const item = checks[0]!.items![0]!;
     expect(item.id).toBe(chunk.url);
     expect(item.sourcePages).toEqual([pageUrl(0)]);
@@ -188,7 +194,7 @@ describe.each(engines)("perf/content-in-js-bundle (%s engine)", (engine) => {
     const chunk = { url: `${BASE}/assets/entry.js`, content: chunkOf(all, 200 * KB), pages: allPages(12) };
     const checks = await run(ctxOf(pages(12), [chunk], engine));
     expect(checks[0]!.name).toBe("content-in-js-bundle-sitewide");
-    expect(checks[0]!.status).toBe("fail");
+    expect(checks[0]!.status).toBe("warn");
     expect(checks[0]!.items![0]!.meta).toMatchObject({ pagesWithContent: 12, otherPagesWithContent: 11 });
     expect(checks[0]!.message).toContain("12 pages");
   });
@@ -211,7 +217,7 @@ describe.each(engines)("perf/content-in-js-bundle (%s engine)", (engine) => {
     const checks = await run(
       ctxOf([html, pageHtml(1), pageHtml(2)], [{ url: `${BASE}/e.js`, content, pages: [pageUrl(0)] }], engine),
     );
-    expect(checks[0]!.status).toBe("warn");
+    expect(checks[0]!.status).toBe("info");
   });
 
   test("no finding when the content is only in the HTML and the chunk is hydration state", async () => {
@@ -262,7 +268,7 @@ describe.each(engines)("perf/content-in-js-bundle (%s engine)", (engine) => {
 
   test("a chunk that was not fetched (no content) is skipped", async () => {
     const checks = await run(ctxOf(pages(3), [{ url: `${BASE}/e.js`, content: null, pages: allPages(3), size: 900 * KB }], engine));
-    expect(checks[0]!.status).toBe("pass");
+    expect(checks[0]!.status).toBe("info");
   });
 
   test("a huge chunk is bounded: over the cap it is reported as not searched, quickly", async () => {
@@ -282,7 +288,37 @@ describe.each(engines)("perf/content-in-js-bundle (%s engine)", (engine) => {
       ctxOf(html, [{ url: `${BASE}/big.js`, content, pages: [pageUrl(0)] }], engine, { max_pages_checked: 50 }),
     );
     expect(performance.now() - started).toBeLessThan(10_000);
-    expect(checks[0]!.status).toBe("warn");
+    expect(checks[0]!.status).toBe("info");
+  });
+
+  test("nested landmarks (<main><article>) do not collect a page's sentences twice", async () => {
+    const html = pageHtml(0).replace("<main>", "<main><article>").replace("</main>", "</article></main>");
+    const checks = await run(
+      ctxOf([html, pageHtml(1), pageHtml(2)], [{ url: `${BASE}/e.js`, content: chunkOf(sentencesOf(0), 60 * KB), pages: [pageUrl(0)] }], engine),
+    );
+    expect(checks[0]!.status).toBe("info");
+  });
+
+  test("a browser-rendered page is not judged: its copy is in the script that rendered it", async () => {
+    const all = Array.from({ length: 4 }, (_, i) => sentencesOf(i)).flat();
+    const checks = await run(
+      ctxOf(pages(4), [{ url: `${BASE}/e.js`, content: chunkOf(all, 60 * KB), pages: allPages(4) }], engine, {}, new Set([0, 1, 2, 3])),
+    );
+    expect(checks[0]!.status).toBe("pass");
+  });
+
+  test("a chunk the audit does not have is never reported as a clean pass", async () => {
+    const checks = await run(
+      ctxOf(pages(3), [{ url: `${BASE}/big.js`, content: null, pages: allPages(3), size: 900 * KB }], engine),
+    );
+    expect(checks.map((c) => c.name)).toEqual(["content-in-js-bundle-unchecked"]);
+    expect(checks[0]!.status).toBe("info");
+    expect(checks[0]!.message).toContain("did not fully check");
+  });
+
+  test("a fetch error (no size) is also not a clean pass", async () => {
+    const checks = await run(ctxOf(pages(3), [{ url: `${BASE}/err.js`, content: null, pages: allPages(3), size: null }], engine));
+    expect(checks.some((c) => c.name === "content-in-js-bundle-unchecked")).toBe(true);
   });
 
   test("no scripts at all passes", async () => {

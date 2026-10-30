@@ -64,7 +64,10 @@ function isChrome(el: Element): boolean {
  * compiled component renders as separate children) do not split a match.
  */
 export function extractContentSentences(doc: Doc): string[] {
-  const roots = Array.from(doc.querySelectorAll("main, article, [role=main]")).slice(0, 8);
+  // Outermost landmarks only: `<main><article>` is one region, not two, and walking
+  // both would collect every sentence twice.
+  const found = Array.from(doc.querySelectorAll("main, article, [role=main]")).slice(0, 8);
+  const roots = found.filter((root) => !found.some((other) => other !== root && other.contains(root)));
   const body = documentBody(doc);
   if (roots.length === 0 && !body) return [];
 
@@ -90,12 +93,15 @@ export function extractContentSentences(doc: Doc): string[] {
     }
   }
 
-  const picked = candidates
+  // The same text twice (a repeated paragraph) is one sentence.
+  const seen = new Set<string>();
+  const unique = candidates.filter((c) => (seen.has(c.text) ? false : (seen.add(c.text), true)));
+  const picked = unique
     .sort((a, b) => b.text.length - a.text.length || a.order - b.order)
     .slice(0, SENTENCES_PER_PAGE)
     .sort((a, b) => a.order - b.order)
     .map((c) => c.text);
-  return [...new Set(picked)];
+  return picked;
 }
 
 const NAMED_ENTITIES: Readonly<Record<string, string>> = {

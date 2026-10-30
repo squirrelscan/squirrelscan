@@ -236,7 +236,11 @@ export function buildCollectedPageSignal(input: {
     misspellings: timed("content/common-misspellings", { english: false, occurrences: [] }, () =>
       scanPageForMisspellings(doc)
     ),
-    contentSentences: timed("perf/content-in-js-bundle", [] as string[], () => extractContentSentences(doc)),
+    // A browser-rendered page has its copy in the script that rendered it, by necessity: no sentences.
+    contentSentences:
+      input.rendered === true
+        ? []
+        : timed("perf/content-in-js-bundle", [] as string[], () => extractContentSentences(doc)),
   };
   // The one record serves both rules: a timeout is reported against both.
   if (timedOutRuleIds.includes("eeat/about-page")) timedOutRuleIds.push("eeat/contact-page");
