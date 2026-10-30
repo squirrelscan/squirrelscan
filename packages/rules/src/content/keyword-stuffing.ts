@@ -221,8 +221,8 @@ const LINK_LIST_TEXT_SHARE = 0.85;
 const LINK_LIST_MAX_ANCHORS = 3000;
 const LINK_LIST_MAX_DEPTH = 8;
 
-/** A word shared by at least this share of a block's link labels makes it a keyword cloud, not a menu. */
-const LINK_CLOUD_SHARE = 0.6;
+/** A word shared by at least this share of a block's link labels makes it a keyword cloud, not a menu (a menu of varied categories shares far less). */
+const LINK_CLOUD_SHARE = 0.3;
 /** Labels looked at per block to tell a keyword cloud from a menu. */
 const LINK_CLOUD_SAMPLE = 60;
 
@@ -425,16 +425,25 @@ const CARD_MIN_PARENTS = 3;
 /** Candidate leaf texts looked at per page, and the elements scanned to find them. Both are bounds. */
 const CARD_MAX_ELEMENTS = 4000;
 const CARD_MAX_SCANNED = 40_000;
-const DIGITS = /\d+(?:[.,]\d+)*/g;
+/**
+ * The shapes of numbers a card varies: a decimal (4.5, 12,90), an amount beside a currency symbol or code,
+ * a percentage, "4 of 5" / "4/5", and a count of stars or reviews. A bare integer is NOT one: doorway
+ * spam numbers its lines ("emergency plumber london 17") and must never read as a card.
+ */
+const CARD_NUMBER =
+  /[$\u20ac\u00a3\u00a5]\s?\d[\d.,]*|\d[\d.,]*\s?(?:[$\u20ac\u00a3\u00a5%]|eur|usd|gbp|chf)\b|\d+[.,]\d+|\b\d\s*(?:of|von|\/)\s*\d+\b|\b\d+\s*(?:stars?|sterne|sternen|reviews?|bewertungen)\b/gi;
+/** The card deduction never removes more than this share of the measured words. */
+const CARD_MAX_SHARE = 0.2;
 
 /**
- * Numeric microcopy repeated once per card (#1315): "Average rating 4.5 of 5 stars", "from 12,90 EUR in
- * instalments". `text -> occurrences` for every text that, with its digits replaced, is the whole text of
- * a leaf element in at least {@link CARD_MIN_PARENTS} different parent wrappers AND whose digits differ
- * between occurrences (a rating or a price varies from card to card). Text with no digits, or the same
- * digits every time, is never deducted: a stuffed phrase repeats identically ("cheap emergency plumber
- * london" x25) and must keep counting, whatever wraps it. The trade-off: non-numeric card microcopy
- * ("In stock") and a price identical on every card still count toward density.
+ * Rating and price microcopy repeated once per card (#1315): "Average rating 4.5 of 5 stars", "from 12,90 EUR in
+ * instalments". `text -> occurrences` for every text that, with its rating- or price-shaped numbers replaced, is
+ * the whole text of a leaf element in at least {@link CARD_MIN_PARENTS} different parent wrappers AND whose
+ * numbers differ between occurrences. Text with no such number is never deducted, nor is one whose only digits
+ * are bare integers ("emergency plumber london 17"): a stuffed phrase must keep counting, whatever wraps it.
+ * The trade-offs: non-numeric card microcopy ("In stock"), a price identical on every card and a bare count
+ * ("12 reviews" is covered, "12 items" is not) still count toward density. The total deducted is capped at
+ * {@link CARD_MAX_SHARE} of the page's words.
  *
  * Linear in the page: each leaf is read once, with no parent text read at all.
  */
@@ -449,8 +458,11 @@ function repeatedCardText(root: Element, excluded: ((element: Element) => boolea
     candidates += 1;
     if (excluded?.(el)) continue;
     const raw = (el.textContent || "").replace(/\s+/g, " ").trim();
-    if (raw.length < 8 || raw.length > CARD_TEXT_MAX_CHARS || !/\d/.test(raw)) continue;
-    const key = raw.toLowerCase().replace(DIGITS, "#");
+    if (raw.length < 8 || raw.length > CARD_TEXT_MAX_CHARS) continue;
+    CARD_NUMBER.lastIndex = 0;
+    if (!CARD_NUMBER.test(raw)) continue;
+    CARD_NUMBER.lastIndex = 0;
+    const key = raw.toLowerCase().replace(CARD_NUMBER, "#");
     let entry = byText.get(key);
     if (!entry) {
       entry = { count: 0, parents: new Set(), raws: new Set() };
@@ -603,8 +615,14 @@ export const keywordStuffingRule: Rule = {
     // when the same text (digits ignored) sits in at least three different parent
     // wrappers: the card pattern. The same sentence written again and again in one
     // container is body copy and still counts.
+    let cardWordTotal = 0;
+    const cardWordCap = Math.floor(words.length * CARD_MAX_SHARE);
     for (const [text, occurrences] of repeatedCardText(contentRoot, isInExcludedChrome)) {
-      for (const word of keywordTokens(text)) {
+      const tokens = keywordTokens(text);
+      const add = tokens.length * occurrences;
+      if (cardWordTotal + add > cardWordCap) continue;
+      cardWordTotal += add;
+      for (const word of tokens) {
         ctaWordDeductions.set(word, (ctaWordDeductions.get(word) || 0) + occurrences);
         ctaWordTotal += occurrences;
       }

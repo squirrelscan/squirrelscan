@@ -442,8 +442,17 @@ describe("content/keyword-stuffing: German function words, menu chrome, card mic
 
   const card = (n: number) => `<div class="card"><h3>${FILLER_BANK[n % 30]} ${FILLER_BANK[(n + 7) % 30]}</h3><span class="rating">Durchschnittliche Bewertung von 4.${n} von 5 Sternen</span><div class="inst">Ab ${n},90 € zahlen in Raten</div></div>`;
 
+  // Distinct words, so the page's own copy never trips the density check; sized so the cards stay under the 20% deduction cap.
+  const letters = (i: number): string => { let out = ""; let n = i; do { out = String.fromCharCode(97 + (n % 26)) + out; n = Math.floor(n / 26) - 1; } while (n >= 0); return out; };
+  const unique = (n: number) => Array.from({ length: n }, (_, i) => `zz${letters(i)}`).join(" ");
+
+  test("the card deduction never exceeds 20% of the words: a page that is nothing but numeric 'cards' still counts them", () => {
+    const html = page("en", `<main>${Array.from({ length: 60 }, (_, n) => `<div><h3>Item ${n}</h3><span>emergency plumber from ${n + 1}.99 EUR</span></div>`).join("")}<p>${filler(20)}</p></main>`);
+    expect(flagged(html)).toContain("plumber");
+  });
+
   test("text repeated once per product card does not count toward density", () => {
-    const html = page("de", `<main><div class="grid">${Array.from({ length: 12 }, (_, i) => card(i)).join("")}</div><p>${filler(60)}</p></main>`);
+    const html = page("de", `<main><div class="grid">${Array.from({ length: 12 }, (_, i) => card(i)).join("")}</div><p>${unique(500)}</p></main>`);
     const out = flagged(html);
     expect(out).not.toContain("durchschnittliche");
     expect(out).not.toContain("bewertung");
@@ -465,6 +474,19 @@ describe("content/keyword-stuffing: German function words, menu chrome, card mic
     expect(flagged(page("en", `<body><div role="menubar">${links}</div><p>${filler(90)}</p></body>`))).toContain("plumber");
   });
 
+  test("a keyword cloud is not excused by a menu signal, at 40% or 58% of the labels sharing a word", () => {
+    for (const shared of [10, 14]) {
+      const labels = Array.from({ length: 24 }, (_, i) => (i < shared ? `emergency plumber area${i}` : `service${i} option${i} page${i}`));
+      const links = labels.map((l, i) => `<a href="/p/${i}">${l}</a>`).join(" ");
+      for (const wrapper of [`<div role="menubar">${links}</div>`, `<div aria-expanded="true">${links}</div>`]) {
+        expect(flagged(page("en", `<body>${wrapper}<p>${filler(90)}</p></body>`)), `${shared} ${wrapper.slice(0, 22)}`).toContain("plumber");
+      }
+    }
+    // a menu of varied categories (each word in a few labels) with a real signal is still left out
+    const cats = Array.from({ length: 24 }, (_, i) => `<a href="/c/${i}">category${i} range${i % 8} line${i}</a>`).join(" ");
+    expect(flagged(page("en", `<body><div role="menubar">${cats}</div><p>${filler(90)}</p></body>`))).not.toContain("category1");
+  });
+
   test("true positive: a repeated phrase is never a card, however its wrapper looks", () => {
     const wrapped = Array.from({ length: 25 }, () => `<div class="sec"><p>cheap emergency plumber london</p></div>`).join("");
     expect(flagged(page("en", `<main>${wrapped}<p>${filler(110)}</p></main>`))).toContain("plumber");
@@ -480,11 +502,22 @@ describe("content/keyword-stuffing: German function words, menu chrome, card mic
     // identical digits are not a varying rating or price: still stuffing
     const digits = Array.from({ length: 25 }, () => `<div><span>24 hour emergency plumber london</span><b>x</b></div>`).join("");
     expect(flagged(page("en", `<main>${digits}<p>${filler(110)}</p></main>`))).toContain("plumber");
+    // a bare integer that varies is doorway numbering, not a rating or a price
+    for (const lines of [
+      Array.from({ length: 25 }, (_, n) => `<div><span>emergency plumber london call ${n}</span><b>x</b></div>`).join(""),
+      Array.from({ length: 25 }, (_, n) => `<div><p>${n + 1} cheap emergency plumber london</p></div>`).join(""),
+      Array.from({ length: 25 }, (_, n) => `<section><p>24 hour emergency plumber ${n}</p></section>`).join(""),
+    ]) {
+      expect(flagged(page("en", `<main>${lines}<p>${filler(110)}</p></main>`)), lines.slice(0, 40)).toContain("plumber");
+    }
+    // a decimal or a currency amount that varies still reads as a card, but never more than 20% of the words
+    const priced = Array.from({ length: 25 }, (_, n) => `<div><h3>Item ${n}</h3><span>emergency plumber from ${n + 1}.99 EUR</span></div>`).join("");
+    expect(flagged(page("en", `<main>${priced}<p>${filler(110)}</p></main>`))).toContain("plumber");
   });
 
   test("the card bound counts candidate cards, not every element, so a large grid is still deducted", () => {
     const big = Array.from({ length: 700 }, (_, n) => card(n % 30)).join("");
-    const out = flagged(page("de", `<main><div class="grid">${big}</div><p>${filler(60)}</p></main>`));
+    const out = flagged(page("de", `<main><div class="grid">${big}</div><p>${unique(45_000)}</p></main>`));
     expect(out).not.toContain("durchschnittliche");
     expect(out).not.toContain("zahlen");
   });
