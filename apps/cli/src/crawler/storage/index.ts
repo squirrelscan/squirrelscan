@@ -12,7 +12,7 @@ import { isLocalhost } from "@/utils/url";
 
 import type { CrawlStorage, StorageOptions } from "./types";
 
-import { getGlobalContentStore } from "./content-store";
+import { ContentStore, getGlobalContentStore } from "./content-store";
 import { SQLiteStorage } from "./sqlite";
 import { StorageError } from "./types";
 
@@ -135,13 +135,13 @@ export function createTestStorage(): Effect.Effect<
   never
 > {
   return Effect.gen(function* () {
-    if (!process.env.SQUIRREL_CONTENT_STORE_PATH) {
-      process.env.SQUIRREL_CONTENT_STORE_PATH = join(
-        tmpdir(),
-        `squirrel-content-store-${randomUUID()}.db`
-      );
-    }
-    const storage = new SQLiteStorage(":memory:", getGlobalContentStore());
+    // Its own content store file. The path used to go into
+    // SQUIRREL_CONTENT_STORE_PATH and stay there, so every later test file in the
+    // process (and the CLI processes they spawn from `process.env`) wrote to it.
+    const contentStore = new ContentStore(
+      join(tmpdir(), `squirrel-content-store-${randomUUID()}.db`)
+    );
+    const storage = new SQLiteStorage(":memory:", contentStore);
     yield* storage.init();
     return storage;
   });
