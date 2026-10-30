@@ -5000,7 +5000,9 @@ export class SQLiteStorage implements CrawlStorage {
    * keeps it.
    *
    * Chunked and budgeted: each pass is its own short transaction over the next
-   * `chunk` rows of retired crawls by rowid. A cursor kept beside the marker means
+   * `chunk` rows of retired crawls by rowid (500 by default: a legacy database that
+   * stored page HTML inline measured about 0.3 s of write lock per 500 rows of
+   * 60 KB, and 3 s at 5,000, which is why the chunk is small). A cursor kept beside the marker means
    * a row that stays (an only copy) is never examined again, and a call stops
    * after `budgetMs` (2 s by default, at least one chunk), so an audit never waits
    * on a big project's whole history: the work spreads over its next audits and
@@ -5015,7 +5017,7 @@ export class SQLiteStorage implements CrawlStorage {
     return Effect.try({
       try: () => {
         const db = this.getDb();
-        const chunk = Math.max(1, Math.floor(options.chunk ?? 5000));
+        const chunk = Math.max(1, Math.floor(options.chunk ?? 500));
         const maxChunks = options.maxChunks ?? Number.POSITIVE_INFINITY;
         const budgetMs = options.budgetMs ?? 2000;
         try {
