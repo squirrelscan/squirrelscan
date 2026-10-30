@@ -42,8 +42,8 @@ function cloudflareNote(cloudflarePages: number): string {
 function jsDetectionsNote(pages: number): string {
   return (
     `. Cloudflare JavaScript Detections (turned on by Bot Fight Mode) was found on ${pages} of them, and Cloudflare` +
-    " removes the ETag from HTML where it injects the script. Turn it off in the Cloudflare dashboard (Security," +
-    " Bots), add no-transform to the HTML Cache-Control, or also send Last-Modified"
+    " removes the ETag from HTML where it injects the script. Super Bot Fight Mode has a switch for it (Security," +
+    " Bots); the free Bot Fight Mode does not, so add no-transform to the HTML Cache-Control, or also send Last-Modified"
   );
 }
 

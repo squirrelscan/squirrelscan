@@ -28,13 +28,13 @@ const JSD_MAX_SCRIPTS = 60;
  * ETag-removing Cloudflare feature that leaves a marker in the page (#605). The marker is in a
  * `<script>`: an inline one that sets `__CF$cv$params` or references `/cdn-cgi/challenge-platform/`,
  * or an external one whose `src` is that path. Text that merely mentions the path is not a script and
- * never counts. Bounded and linear: at most {@link JSD_MAX_SCRIPTS} scripts and
- * {@link JSD_SCRIPT_CHARS} characters of each are read, so a megabyte of script costs no more than a kilobyte.
+ * never counts. Cloudflare injects the snippet at the END of the body, so the LAST
+ * {@link JSD_MAX_SCRIPTS} scripts are read, not the first; at most {@link JSD_SCRIPT_CHARS} characters of
+ * each, so a megabyte of script costs no more than a kilobyte. Linear in the number of scripts.
  */
 export function hasJavaScriptDetections(doc: { querySelectorAll(selector: string): Iterable<ScriptLike> }): boolean {
-  let seen = 0;
-  for (const script of doc.querySelectorAll("script")) {
-    if (++seen > JSD_MAX_SCRIPTS) return false;
+  const scripts = Array.from(doc.querySelectorAll("script"));
+  for (const script of scripts.slice(-JSD_MAX_SCRIPTS)) {
     const src = script.getAttribute("src");
     if (src && JSD_MARKER.test(src.slice(0, JSD_SCRIPT_CHARS))) return true;
     const text = script.textContent;

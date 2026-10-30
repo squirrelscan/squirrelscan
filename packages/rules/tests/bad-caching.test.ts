@@ -522,6 +522,16 @@ describe("perf/bad-caching names JavaScript Detections (#605)", () => {
   const doc = (body: string) => `<html><head><title>t</title>${body}</head><body></body></html>`;
 
   for (const engine of ["resident", "streaming"] as const) {
+    test(`${engine}: the marker at the end of a script-heavy page is found`, () => {
+      const filler = '<script src="/a.js"></script>'.repeat(150);
+      const heavy = `<html><head><title>t</title></head><body>${filler}${JSD}</body></html>`;
+      const ctx = ctxFor(engine, [heavy, heavy]);
+      const v = check(run(badCachingRule, ctx), "bad-caching-validators")!;
+      expect(v.message).toContain("Cloudflare JavaScript Detections");
+    });
+  }
+
+  for (const engine of ["resident", "streaming"] as const) {
     test(`${engine}: half or more of the missing pages carrying the marker names JavaScript Detections`, () => {
       const ctx = ctxFor(engine, [doc(JSD), doc(JSD), doc(JSD), doc("")]);
       const v = check(run(badCachingRule, ctx), "bad-caching-validators")!;
