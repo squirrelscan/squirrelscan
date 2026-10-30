@@ -33,11 +33,11 @@ export const optionsSchema = z.object({
   escalate_other_pages: z
     .number()
     .default(2)
-    .describe("Other pages whose content is in the same chunk before the finding becomes a failure"),
+    .describe("Other pages whose content is in the same chunk before the finding is reported as sitewide"),
   max_pages_checked: z
     .number()
     .max(20000)
-    .default(5000)
+    .default(2000)
     .describe("Pages searched for per chunk (5 sentences each), so a very large site stays bounded"),
   max_chunks: z
     .number()
@@ -94,7 +94,8 @@ export const contentInJsBundleRule: Rule = {
     } else {
       for (const page of ctx.site?.pages ?? []) {
         const doc = page.parsed?.document;
-        sentencesByPage.set(page.url, doc ? extractContentSentences(doc) : []);
+        // A browser-rendered page has its copy in the script that rendered it, by necessity.
+        sentencesByPage.set(page.url, doc && page.rendered !== true ? extractContentSentences(doc) : []);
       }
     }
     if (!judged) {
@@ -136,6 +137,7 @@ export const contentInJsBundleRule: Rule = {
     const findings: ChunkFinding[] = [];
     const deadline = performance.now() + SEARCH_BUDGET_MS;
     let outOfTime = false;
+    let verificationCapped = false;
     for (const script of searched) {
       const decoded = normalizeScriptText(script.content!);
       if (decoded === null) {
@@ -146,6 +148,8 @@ export const contentInJsBundleRule: Rule = {
         outOfTime = true;
         break;
       }
+      // Let other work run between chunks: decoding and hashing are synchronous.
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
       // The pages that load the chunk first, then an even sample of the rest,
       // up to the page cap; one pass over the chunk finds every page's sentences.
       const loaders = new Set(script.sourcePages);
@@ -160,7 +164,10 @@ export const contentInJsBundleRule: Rule = {
 
       const index = buildNeedleIndex(sampled.flatMap((url) => needlesByPage.get(url)!));
       const search = findNeedles(decoded, index, deadline);
-      if (search.truncated) outOfTime = true;
+      if (search.truncated) {
+        if (performance.now() > deadline) outOfTime = true;
+        else verificationCapped = true;
+      }
       const pagesWithContent = sampled.filter(
         (url) => needlesByPage.get(url)!.filter((n) => search.found.has(n)).length >= opts.min_sentences,
       );
@@ -199,7 +206,8 @@ export const contentInJsBundleRule: Rule = {
       const worst = escalated[0]!;
       checks.push({
         name: "content-in-js-bundle-sitewide",
-        status: "fail",
+        // A warning until the escalation is measured against real sites.
+        status: "warn",
         message: `${escalated.length} JS chunk(s) hold the text of several pages: ${worst.url} carries the content of ${worst.pagesWithContent.length} pages (${formatBytes(worst.sizeBytes)}) in every page's bundle`,
         items: escalated.map(itemOf),
         details: { suggestion: "Render the bodies on the server and import only frontmatter on the client" },
@@ -208,7 +216,9 @@ export const contentInJsBundleRule: Rule = {
     if (own.length > 0) {
       checks.push({
         name: "content-in-js-bundle",
-        status: "warn",
+        // One page's copy in a chunk is also what a hard-coded route component looks like
+        // (4 of 36 real documentation sites, none of them an MDX bundle): information, not a warning.
+        status: "info",
         message: `${own.length} JS chunk(s) contain the page's own content as script`,
         items: own.map(itemOf),
         details: { suggestion: "Render static content on the server and keep it out of the client bundle" },
@@ -229,7 +239,27 @@ export const contentInJsBundleRule: Rule = {
         message: `The search stopped after ${SEARCH_BUDGET_MS / 1000} s: later pages and chunks were not searched`,
       });
     }
-    if (findings.length === 0) {
+    if (verificationCapped) {
+      checks.push({
+        name: "content-in-js-bundle-partial",
+        status: "info",
+        message: "A chunk repeated the start of the same sentences so often that the search stopped comparing candidates early: its result is a floor",
+      });
+    }
+    // Chunks big enough to matter whose body the audit does not have (not fetched, failed,
+    // over the script fetch cap, skipped by a budget): not searched, so never a clean pass.
+    const unchecked = scripts.filter(
+      (s) => s.content === null && (s.sizeBytes === null || s.sizeBytes >= opts.min_chunk_bytes),
+    );
+    if (unchecked.length > 0) {
+      checks.push({
+        name: "content-in-js-bundle-unchecked",
+        status: "info",
+        message: `${unchecked.length} JS chunk(s) could not be searched (not fetched, failed, or over the script size limit): this audit did not fully check for page content in JavaScript`,
+        items: unchecked.slice(0, 20).map((s) => ({ id: s.url })),
+      });
+    }
+    if (findings.length === 0 && unchecked.length === 0 && skippedLarge.length === 0 && !outOfTime && !verificationCapped) {
       checks.push({
         name: "content-in-js-bundle",
         status: "pass",
