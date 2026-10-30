@@ -17,6 +17,7 @@ import {
   beforeAll,
   describe,
   expect,
+  spyOn,
   test,
 } from "bun:test";
 import { createServer as createHttpServer } from "node:http";
@@ -471,28 +472,38 @@ describe("behind an HTTP proxy from the environment (#1259)", () => {
     process.env.HTTPS_PROXY = `http://127.0.0.1:${proxy.port}`;
     return proxy;
   };
-  const probeVia = (options: TlsProbeOptions = {}) => {
-    const dns = resolver({});
+  const PUBLIC_AND_LOCAL = {
+    localhost: ["127.0.0.1"],
+    "shop.example.com": ["93.184.216.34"],
+  };
+  const probeVia = (
+    options: TlsProbeOptions = {},
+    answers: Record<string, string[]> = PUBLIC_AND_LOCAL
+  ) => {
+    const dns = resolver(answers);
     return {
       dns,
+      // The fixture server is on loopback, so private answers are allowed for the happy paths.
       probe: createTlsProbe({
         ca: fixtures.root,
         resolve: dns.resolve,
+        allowPrivateNetwork: true,
         ...options,
       }),
     };
   };
 
-  test("the handshake goes through a CONNECT tunnel, with SNI and verification intact", async () => {
+  test("the handshake goes through a CONNECT tunnel to the vetted address, with SNI and verification intact", async () => {
     const proxy = await via();
     const port = await serve(fixtures.valid);
     const { dns, probe } = probeVia();
     const result = certificate(await probe({ hostname: "localhost", port }));
-    expect(proxy.seen).toEqual([`localhost:${port}`]);
+    // The CONNECT names the address the guard vetted, never the name.
+    expect(proxy.seen).toEqual([`127.0.0.1:${port}`]);
     expect(result.trusted).toBe(true);
     expect(result.certificate.names).toContain("localhost");
-    // The proxy resolves the name; nothing is resolved or opened directly.
-    expect(dns.asked).toEqual([]);
+    // Resolved once, locally, by the guard.
+    expect(dns.asked).toEqual(["localhost"]);
   });
 
   test("an HTTP_PROXY alone is used too", async () => {
@@ -504,7 +515,7 @@ describe("behind an HTTP proxy from the environment (#1259)", () => {
     expect(
       certificate(await probe({ hostname: "localhost", port })).trusted
     ).toBe(true);
-    expect(proxy.seen).toEqual([`localhost:${port}`]);
+    expect(proxy.seen).toEqual([`127.0.0.1:${port}`]);
   });
 
   test.each([
@@ -581,10 +592,132 @@ describe("behind an HTTP proxy from the environment (#1259)", () => {
         kind: "unreachable",
         code: `PROXY_CONNECT_${status}`,
       });
-      expect(proxy.seen).toEqual(["shop.example.com:443"]);
-      expect(dns.asked).toEqual([]);
+      expect(proxy.seen).toEqual(["93.184.216.34:443"]);
+      expect(dns.asked).toEqual(["shop.example.com"]);
     }
   );
+
+  describe("the egress guard applies behind the proxy (#1259)", () => {
+    const strict = (answers: Record<string, string[]>) =>
+      probeVia({ allowPrivateNetwork: false }, answers);
+
+    test.each([
+      ["a cloud metadata address", "169.254.169.254"],
+      ["another link-local address", "169.254.10.10"],
+      ["the Azure WireServer address", "168.63.129.16"],
+      ["an IPv6 link-local address", "fe80::1"],
+    ])(
+      "a name that resolves to %s is refused and the proxy is never asked",
+      async (_name, address) => {
+        const proxy = await via();
+        const { probe } = probeVia({}, { "shop.example.com": [address] });
+        const result = await probe({ hostname: "shop.example.com", port: 443 });
+        expect(result).toMatchObject({
+          kind: "unreachable",
+          code: "EGRESS_REFUSED",
+        });
+        expect(proxy.seen).toEqual([]);
+      }
+    );
+
+    test("an address literal for the metadata service as the start host is refused", async () => {
+      const proxy = await via();
+      const { probe } = probeVia({ siteUrl: "https://169.254.169.254/" });
+      const result = await probe({ hostname: "169.254.169.254", port: 443 });
+      expect(result).toMatchObject({
+        kind: "unreachable",
+        code: "EGRESS_REFUSED",
+      });
+      expect(proxy.seen).toEqual([]);
+    });
+
+    test("a private answer for the www counterpart of a public site is refused, the proxy never asked", async () => {
+      const proxy = await via();
+      const { probe } = probeVia(
+        { siteUrl: "https://example.com/", allowPrivateNetwork: false },
+        { "example.com": ["93.184.216.34"], "www.example.com": ["10.0.0.5"] }
+      );
+      const result = await probe({ hostname: "www.example.com", port: 443 });
+      expect(result).toMatchObject({
+        kind: "unreachable",
+        code: "EGRESS_REFUSED",
+      });
+      expect(proxy.seen).toEqual([]);
+    });
+
+    test("a private-network answer for an ordinary public name is refused", async () => {
+      const proxy = await via();
+      const { probe } = strict({ "shop.example.com": ["192.168.1.10"] });
+      expect(
+        await probe({ hostname: "shop.example.com", port: 443 })
+      ).toMatchObject({
+        kind: "unreachable",
+        code: "EGRESS_REFUSED",
+      });
+      expect(proxy.seen).toEqual([]);
+    });
+
+    test("rebinding: the name is resolved once and the CONNECT names the vetted address", async () => {
+      const proxy = await via({ refuse: 403 });
+      const asked: string[] = [];
+      let calls = 0;
+      const probe = createTlsProbe({
+        ca: fixtures.root,
+        // A hostile resolver: public on the first answer, the metadata address after.
+        resolve: async (hostname: string) => {
+          asked.push(hostname);
+          return calls++ === 0 ? ["93.184.216.34"] : ["169.254.169.254"];
+        },
+      });
+      await probe({ hostname: "shop.example.com", port: 443 });
+      await probe({ hostname: "shop.example.com", port: 443 });
+      // Every CONNECT named an address that passed the guard for that call, never the name
+      // the proxy could resolve differently.
+      // One lookup per probe: the second answer is never asked for, so it cannot be used.
+      expect(asked).toEqual(["shop.example.com"]);
+      for (const target of proxy.seen) expect(target).toBe("93.184.216.34:443");
+      expect(proxy.seen.length).toBeGreaterThanOrEqual(1);
+      expect(proxy.seen.join(",")).not.toContain("169.254");
+      expect(proxy.seen.join(",")).not.toContain("shop.example.com");
+    });
+
+    test("a name that does not resolve locally is not checked, even though a proxy could resolve it", async () => {
+      const proxy = await via();
+      const { probe } = strict({});
+      expect(
+        await probe({ hostname: "only-the-proxy-knows.example.com", port: 443 })
+      ).toMatchObject({
+        kind: "unreachable",
+        code: "ENOTFOUND",
+      });
+      expect(proxy.seen).toEqual([]);
+    });
+
+    test("the proxy's reply never supplies a target: a redirect status is a refusal", async () => {
+      const proxy = await via({ refuse: 307 });
+      const { probe } = strict({ "shop.example.com": ["93.184.216.34"] });
+      expect(
+        await probe({ hostname: "shop.example.com", port: 443 })
+      ).toMatchObject({
+        kind: "unreachable",
+        code: "PROXY_CONNECT_307",
+      });
+      expect(proxy.seen).toEqual(["93.184.216.34:443"]);
+    });
+
+    test("a NO_PROXY host takes the direct path, which is vetted the same way", async () => {
+      const proxy = await via();
+      process.env.NO_PROXY = "shop.example.com";
+      const { probe } = strict({ "shop.example.com": ["169.254.169.254"] });
+      expect(
+        await probe({ hostname: "shop.example.com", port: 443 })
+      ).toMatchObject({
+        kind: "unreachable",
+        code: "EGRESS_REFUSED",
+      });
+      expect(proxy.seen).toEqual([]);
+    });
+  });
 
   test("a proxy that never answers times out as not checked", async () => {
     await via("hang");
@@ -624,8 +757,21 @@ describe("behind an HTTP proxy from the environment (#1259)", () => {
     const proxy = await via({ refuse: 407 });
     process.env.HTTPS_PROXY = `http://user:secret@127.0.0.1:${proxy.port}`; // pragma: allowlist secret
     const { probe } = probeVia();
-    const result = await probe({ hostname: "shop.example.com", port: 443 });
+    const logs: string[] = [];
+    const spies = (["log", "error", "warn", "info", "debug"] as const).map(
+      (method) =>
+        spyOn(console, method).mockImplementation((...args: unknown[]) => {
+          logs.push(args.map(String).join(" "));
+        })
+    );
+    let result: TlsProbe;
+    try {
+      result = await probe({ hostname: "shop.example.com", port: 443 });
+    } finally {
+      for (const spy of spies) spy.mockRestore();
+    }
     expect(JSON.stringify(result)).not.toContain("secret");
+    expect(logs.join("\n")).not.toContain("secret");
   });
 
   test("the rule reports a refused CONNECT as a skipped, not-checked result", async () => {
@@ -635,7 +781,10 @@ describe("behind an HTTP proxy from the environment (#1259)", () => {
       site: { baseUrl, pages: [] },
       options: {},
       page: { url: baseUrl },
-      tlsProbe: createTlsProbe({ siteUrl: baseUrl }),
+      tlsProbe: createTlsProbe({
+        siteUrl: baseUrl,
+        resolve: resolver({ "shop.example.com": ["93.184.216.34"] }).resolve,
+      }),
     } as unknown as RuleContext;
     const checks = (await tlsCertificateRule.run(ctx)).checks as CheckResult[];
     expect(checks).toHaveLength(1);
