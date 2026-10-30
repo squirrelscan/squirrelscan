@@ -294,7 +294,7 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
             lines.push(`${indent(5)}<item id="${escapeXml(item.id)}">`);
             // pub#846: the region the item is shown in, beside its bounded page list; a scoped
             // item's label drops the section phrase the region says.
-            const scope = itemRegionScope(item, report.structure);
+            const scope = itemRegionScope(item, report.structure, check);
             const label = itemLabel(item, scope);
             if (label && label !== item.id) lines.push(`${indent(6)}<label>${escapeXml(label)}</label>`);
             if (scope) lines.push(`${indent(6)}${scopeElement(scope)}`);

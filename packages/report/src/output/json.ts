@@ -627,7 +627,7 @@ function buildSlimReport(
               ? { scope: pageTypeScopeData(typeScope) }
               : {}),
           items: check.items?.map((item) => {
-            const scope = itemRegionScope(item, report.structure);
+            const scope = itemRegionScope(item, report.structure, check);
             let shown: CheckItem & { scope?: RegionScope } = item;
             if (scope) {
               // The label drops the section phrase `scope` now carries; `meta.sections` keeps it.

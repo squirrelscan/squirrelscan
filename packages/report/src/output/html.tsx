@@ -995,11 +995,14 @@ export function SiteResourceFixCards({ coverage }: { coverage: SiteResourceCover
 function ItemSources({
   item,
   structure,
+  check,
 }: {
   item: CheckItem;
   structure: ReportStructure | undefined;
+  /** The item's check, so one carrying pages from an earlier audit is never scoped to a region (pub#860). */
+  check?: GroupedCheck;
 }) {
-  const view = itemSourceView(item, structure);
+  const view = itemSourceView(item, structure, check);
   const renderRow = (row: ItemSourceRow, j: number) => (
     <p key={j} className="ind">
       from{" "}
@@ -1118,7 +1121,7 @@ function CheckBlock({
             <div className="mt-2 grid gap-2 font-mono text-xs">
               {items.map((item, i) => {
                 // pub#846: a scoped item's label drops the section phrase its region line says.
-                const ownLabel = itemLabel(item, itemRegionScope(item, structure));
+                const ownLabel = itemLabel(item, itemRegionScope(item, structure, check));
                 return (
                   <div key={i}>
                     {isPageUrl(item.id) ? (
@@ -1134,7 +1137,7 @@ function CheckBlock({
                     ) : (
                       <span className="break-all">{ownLabel ?? item.id}</span>
                     )}
-                    <ItemSources item={item} structure={structure} />
+                    <ItemSources item={item} structure={structure} check={check} />
                   </div>
                 );
               })}

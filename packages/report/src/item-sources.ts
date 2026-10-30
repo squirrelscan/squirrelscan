@@ -9,6 +9,7 @@ import {
   type ReportStructure,
 } from "@squirrelscan/core-contracts";
 
+import type { PageTypeScopeCheck } from "./page-type-scope";
 import { itemRegionScope, type RegionScope } from "./region-scope";
 
 export interface ItemSourceRow {
@@ -65,9 +66,10 @@ export interface ItemSourceView {
 export function itemSourceView(
   item: CheckItem,
   structure: ReportStructure | undefined,
+  check?: PageTypeScopeCheck,
 ): ItemSourceView {
   const { rows, unlisted } = itemSourceList(item);
-  const scope = itemRegionScope(item, structure);
+  const scope = itemRegionScope(item, structure, check);
   if (!scope) return { rows, total: rows.length + unlisted, all: rows };
   const outside = rows
     .filter((row) => !row.sections?.[scope.region])

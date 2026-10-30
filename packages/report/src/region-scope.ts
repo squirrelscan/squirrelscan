@@ -12,7 +12,7 @@ import {
 } from "@squirrelscan/core-contracts";
 
 import { isRedundantPageItem } from "./affected-pages";
-import { checkPageTypeScope, pageTypeScopeLine, type PageTypeScopeCheck } from "./page-type-scope";
+import { checkPageTypeScope, hasCarriedPages, pageTypeScopeLine, type PageTypeScopeCheck } from "./page-type-scope";
 import { structureNumber } from "./structure";
 
 /**
@@ -105,12 +105,16 @@ function itemTotalPages(item: CheckItem): number {
  * The region an item is scoped to, or undefined to keep its page list. Of the template regions it
  * sits in on enough of the pages that have them, the one with the most pages; the same item in
  * another part of the page stays on its own pages. Undefined without `regions` or structure, as on
- * an older stored crawl or with the classifier off.
+ * an older stored crawl or with the classifier off, and for an item of a check that carries
+ * pages from an earlier audit (pub#860): a share of this audit's region would then describe
+ * pages it never looked at, so the item keeps its page rows.
  */
 export function itemRegionScope(
   item: CheckItem,
   structure: ReportStructure | undefined,
+  check?: PageTypeScopeCheck,
 ): RegionScope | undefined {
+  if (check && hasCarriedPages(check)) return undefined;
   const regions = item.regions;
   if (!regions || typeof regions !== "object" || !structure) return undefined;
   let best: RegionScope | undefined;
@@ -129,10 +133,11 @@ export function itemRegionScope(
  * fired on. Undefined when it names none or fires on too few of the pages with that region.
  */
 export function checkRegionScope(
-  check: { details?: Record<string, unknown> },
+  check: PageTypeScopeCheck,
   pages: number,
   structure: ReportStructure | undefined,
 ): RegionScope | undefined {
+  if (hasCarriedPages(check)) return undefined;
   const region = check.details?.region;
   if (!isTemplateRegion(region)) return undefined;
   return scopeOf(region, count(pages), count(pages), structure);
@@ -154,7 +159,7 @@ export function checkPagesScopedAway(
   if (checkPageTypeScope(check, pages, structure)) return true;
   const items = check.items ?? [];
   if (items.length === 0 || items.some(isRedundantPageItem)) return false;
-  return items.some((item) => itemRegionScope(item, structure) !== undefined);
+  return items.some((item) => itemRegionScope(item, structure, check) !== undefined);
 }
 
 /**
