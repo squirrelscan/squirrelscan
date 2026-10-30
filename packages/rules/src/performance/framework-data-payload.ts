@@ -19,6 +19,10 @@ export const optionsSchema = z.object({
     .number()
     .default(100 * 1024)
     .describe("Combined size in characters of the page's framework data payloads that is worth reporting"),
+  min_text_chars: z
+    .number()
+    .default(1024)
+    .describe("Visible text below this many characters is too little to judge: an empty client-rendered shell is not a static text page"),
   min_text_ratio: z
     .number()
     .default(20)
@@ -69,7 +73,12 @@ export const frameworkDataPayloadRule: Rule = {
     }
 
     const text = visibleTextLength(doc);
-    const ratio = text > 0 ? total / text : Number.POSITIVE_INFINITY;
+    // A shell with no text is client-rendered (its content arrives as script), or the
+    // text was not measured: either way this is not a static text page.
+    if (text < opts.min_text_chars) {
+      return pass(`Framework data payload is ${formatKb(total)} but the page has only ${formatKb(text)} of text, too little to judge`);
+    }
+    const ratio = total / text;
     if (ratio < opts.min_text_ratio) {
       return pass(`Framework data payload is ${formatKb(total)} against ${formatKb(text)} of text: the page is mostly data`);
     }
@@ -95,7 +104,7 @@ export const frameworkDataPayloadRule: Rule = {
       details: {
         payloadCharacters: total,
         textCharacters: text,
-        ratio: Number.isFinite(ratio) ? Math.round(ratio) : null,
+        ratio: Math.round(ratio),
         formFields: interactivity.fields,
         embeddedMedia: interactivity.embedded,
         buttons: interactivity.buttons,

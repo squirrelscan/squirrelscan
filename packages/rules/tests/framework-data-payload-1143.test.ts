@@ -118,15 +118,23 @@ describe("perf/framework-data-payload", () => {
 
   test("an interactive page (many form fields) is not flagged, however big the payload", () => {
     const fields = Array.from({ length: 12 }, (_, i) => `<input type="text" name="f${i}">`).join("");
-    const [check] = run(page(`<main><form>${fields}</form><p>${prose(100)}</p></main>${nextFlight(300)}`));
+    const [check] = run(page(`<main><form>${fields}</form><p>${prose(200)}</p></main>${nextFlight(300)}`));
     expect(check?.status).toBe("pass");
     expect(check?.message).toContain("interactive");
   });
 
   test("a page with embedded media is not flagged", () => {
     const media = '<canvas></canvas><video></video><iframe></iframe><audio></audio><embed><object></object>';
-    const [check] = run(page(`<p>${prose(100)}</p>${media}${nextFlight(300)}`));
+    const [check] = run(page(`<p>${prose(200)}</p>${media}${nextFlight(300)}`));
     expect(check?.status).toBe("pass");
+  });
+
+  test("a client-rendered shell with almost no text is not judged, however big the payload", () => {
+    for (const body of ["", "<div id=root></div>", "<p>Loading</p>"]) {
+      const [check] = run(page(`${body}${nextFlight(300)}`));
+      expect(check?.status).toBe("pass");
+      expect(check?.message).toContain("too little to judge");
+    }
   });
 
   test("a page that is mostly data (text comparable to the payload) is not flagged", () => {

@@ -11,9 +11,10 @@ On an interactive app that data is the price of the interactivity. On a page tha
 
 ## What squirrel checks
 
-The rule runs on every crawled page and measures the framework payloads in the HTML the crawl fetched. It reports an info-level finding when all four of these hold:
+The rule runs on every crawled page and measures the framework payloads in the HTML the crawl fetched. It reports an info-level finding when all five of these hold:
 
 - the payloads add up to **100 KB or more** (`min_bytes`, measured in characters of the script or attribute text);
+- the page has **at least 1,024 characters of visible text** (`min_text_chars`): a shell with no text is client-rendered, not a static text page, and is passed;
 - the payload is **at least 20 times** the page's visible text (`min_text_ratio`), so a page that really is mostly data is left alone;
 - the page has **at most 5** form controls and embedded media together (`max_interactive`): text inputs, selects, textareas, editable regions, `canvas`, `video`, `audio`, `iframe`, `embed`, `object` and `dialog`. Hidden inputs and submit or button inputs do not count;
 - the page has **at most 50** `button` elements (`max_buttons`), since a navigation menu alone can add dozens.
@@ -41,6 +42,7 @@ Do not hydrate what has nothing to hydrate:
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `min_bytes` | number | `102400` | Combined size in characters of the page's framework data payloads that is worth reporting |
+| `min_text_chars` | number | `1024` | Visible text below this is too little to judge; the page passes |
 | `min_text_ratio` | number | `20` | The payload must be at least this many times the page's visible text |
 | `max_interactive` | number | `5` | Form controls plus embedded media a page may have and still count as static |
 | `max_buttons` | number | `50` | Buttons a page may have and still count as static |
@@ -50,6 +52,7 @@ Do not hydrate what has nothing to hydrate:
 ```toml squirrel.toml
 [rule_options."perf/framework-data-payload"]
 min_bytes = 102400
+min_text_chars = 1024
 min_text_ratio = 20
 max_interactive = 5
 max_buttons = 50
