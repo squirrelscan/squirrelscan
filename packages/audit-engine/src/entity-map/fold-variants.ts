@@ -7,6 +7,9 @@
 // page counts agree with `meta.totalPages`. Nodes, edges, occurrences and every other count are
 // unchanged (a variant's entities are still declared, just on the page the report counts them under).
 //
+// `morePages` on a node or an edge is left as it was: the pages past the cap are not listed, so a variant
+// among them cannot be found and the overflow count can stay one or two high.
+//
 // Reaches no further than `@squirrelscan/core-contracts`: the private API imports this barrel.
 
 import type { EntityMap, EntityMapPage } from "@squirrelscan/core-contracts";

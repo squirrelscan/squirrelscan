@@ -373,7 +373,8 @@ export interface BuildV1ReportOptions {
    * every affected-page count are canonical groups, each variant keeps its own checks so the score
    * does not move, and `canonicalVariants` / `canonicalVariantPages` say what was folded. Off by
    * default so a caller that merges carried pages (a smart audit, whose union this fold cannot see)
-   * keeps its report; a fresh crawl turns it on.
+   * keeps its report; a fresh crawl turns it on. The fold rewrites the checks of the caller's `ruleResults`
+   * in place (idempotent, after the score is computed), so build the report once from them.
    */
   foldCanonicalVariants?: boolean;
 }

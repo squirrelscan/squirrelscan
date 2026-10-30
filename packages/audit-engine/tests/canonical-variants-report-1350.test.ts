@@ -10,6 +10,7 @@ import type { EntityMap, PageRecord } from "@squirrelscan/core-contracts";
 import { generateSiteModel, writeCrawlToStorage } from "@squirrelscan/synthetic-site";
 
 import { generateReportFromStorage, runStreamingRules, type PreFetchedAssets } from "../src/adapter";
+import { entityMapVariantKeys } from "../src/canonical-groups";
 import { foldEntityMapVariants } from "../src/entity-map";
 
 const run = <A>(eff: Effect.Effect<A, unknown, never>): Promise<A> => Effect.runPromise(eff as Effect.Effect<A, never, never>);
@@ -119,5 +120,25 @@ describe("foldEntityMapVariants (#1350)", () => {
   test("nothing to fold returns the same map", () => {
     expect(foldEntityMapVariants(map, new Map())).toBe(map);
     expect(foldEntityMapVariants(map, new Map([[`${S}/other?x=1`, `${S}/other`]]))).toBe(map);
+  });
+});
+
+describe("entityMapVariantKeys (#1350)", () => {
+  const S = "https://example.com";
+  const storage = {
+    getPagesWithoutBodies: () =>
+      Effect.succeed([
+        { normalizedUrl: `${S}/c`, url: `${S}/c`, finalUrl: `${S}/c/` },
+        { normalizedUrl: `${S}/c?a=1`, url: `${S}/c?a=1`, finalUrl: `${S}/c/?a=1&x=2` },
+      ]),
+  } as never;
+
+  test("variant and canonical are keyed by the URL the entity map lists them under", async () => {
+    const out = await run(entityMapVariantKeys(storage, "crawl", new Map([[`${S}/c?a=1`, `${S}/c`]]), 10));
+    expect([...out]).toEqual([[`${S}/c/?a=1&x=2`, `${S}/c/`]]);
+  });
+  test("nothing to fold, or storage without the reader, is empty", async () => {
+    expect((await run(entityMapVariantKeys(storage, "crawl", new Map(), 10))).size).toBe(0);
+    expect((await run(entityMapVariantKeys({} as never, "crawl", new Map([["a", "b"]]), 10))).size).toBe(0);
   });
 });
