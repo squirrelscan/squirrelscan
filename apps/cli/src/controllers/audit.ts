@@ -2148,6 +2148,9 @@ export async function runAudit(
       // what ran even after a level's definition changes. REPORT-ONLY.
       if (options.auditLevel) report.auditLevel = options.auditLevel;
 
+      // How many first-party scripts the script rules saw (#1280).
+      report.scriptsEvaluated = assets.scripts.length;
+
       report.rulesCache = {
         pagesReplayed: ruleResults.ruleCache.replayedPages,
         pagesEvaluated: ruleResults.ruleCache.freshPages,

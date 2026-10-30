@@ -129,17 +129,25 @@ Scripts on another domain are never fetched, and a script over 5 MB is not
 downloaded: it is recorded as skipped, with at least that size. Chunks a page
 only preloads are fetched only for pages that send a Content-Security-Policy.
 
-**Memory, time and findings.** The audit keeps every fetched script in memory for
+**Memory and time.** The audit keeps every fetched script in memory for
 its rules, so peak memory rises with the number of scripts fetched, by up to the
 total size of the bodies (a script over 5 MB is never downloaded). To bound that,
 a `store_scripts` run stops requesting scripts once it holds 256 MB of script
 text, and stops after 120 seconds of script fetching. Scripts it did not request
 for either reason are recorded as skipped (`memory-cap`, `time-budget`) with no
-size. Because the rules that read script bodies (secrets, file size,
-minification) now see up to `store_scripts_max_scripts` scripts instead of 10 to
-50, an audit with `store_scripts` on can report more findings than the same audit
-without it. Parallel corpus runs each hold their own bodies, so size the number of
+size. Parallel corpus runs each hold their own bodies, so size the number of
 runs to your memory.
+
+**It does not change the audit.** `store_scripts` is storage only. The rules that
+read script bodies (file size, compression, minification, source maps, secrets,
+technology detection) evaluate the same scripts they evaluate with the option off:
+the first 10 to 50 the audit always fetched, in page order. The extra scripts, up
+to `store_scripts_max_scripts`, are fetched and stored for later analysis and are
+never shown to a rule, so findings and scores are the same with it on or off, and
+a corpus run with storage on compares with one without. The JSON report says how
+many first-party scripts the script rules evaluated in `meta.scriptsEvaluated`
+(and the LLM output in `<scripts-evaluated>`), so two runs can be checked. To
+analyse the stored scripts, read them from the content store.
 
 **Bodies are the decoded text.** A script is stored as the UTF-8 text the audit
 read after the transfer encoding (gzip, brotli) was removed, so the content hash

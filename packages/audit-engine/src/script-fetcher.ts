@@ -100,6 +100,15 @@ const DEFAULT_OPTIONS: ScriptFetcherOptions = {
   maxSizeBytes: SCRIPT_FETCH_LIMITS.MAX_SCRIPT_SIZE_BYTES,
 };
 
+/**
+ * How many scripts the script rules evaluate for an audit of `pageCount` pages:
+ * what an audit fetches when it is not storing scripts (#1280). A run that
+ * stores scripts fetches more, but only this many go to the rules.
+ */
+export function scriptRuleLimit(pageCount: number | undefined, maxScripts?: number): number {
+  return calculateScriptLimit(pageCount, maxScripts ?? SCRIPT_FETCH_LIMITS.MAX_SCRIPTS_TO_FETCH);
+}
+
 function calculateScriptLimit(
   pageCount: number | undefined,
   defaultLimit: number

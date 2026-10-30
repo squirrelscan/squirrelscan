@@ -482,6 +482,10 @@ function buildSlimReport(
       // identical findings by construction, so this is the only thing in the
       // report that distinguishes them (#1981).
       ...(report.rulesCache ? { rulesCache: report.rulesCache } : {}),
+      // #1280: the first-party scripts the script rules evaluated.
+      ...(report.scriptsEvaluated !== undefined
+        ? { scriptsEvaluated: report.scriptsEvaluated }
+        : {}),
     },
     status: report.status ?? "completed",
     ...(report.statusReason ? { statusReason: report.statusReason } : {}),
