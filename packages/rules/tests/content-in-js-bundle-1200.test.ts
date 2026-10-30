@@ -299,12 +299,24 @@ describe.each(engines)("perf/content-in-js-bundle (%s engine)", (engine) => {
     expect(checks[0]!.status).toBe("info");
   });
 
-  test("a browser-rendered page is not judged: its copy is in the script that rendered it", async () => {
+  test("an audit where EVERY page was browser-rendered is not judged, and says so (never a clean pass, #1329)", async () => {
     const all = Array.from({ length: 4 }, (_, i) => sentencesOf(i)).flat();
     const checks = await run(
       ctxOf(pages(4), [{ url: `${BASE}/e.js`, content: chunkOf(all, 60 * KB), pages: allPages(4) }], engine, {}, new Set([0, 1, 2, 3])),
     );
-    expect(checks[0]!.status).toBe("pass");
+    expect(checks).toHaveLength(1);
+    expect(checks[0]).toMatchObject({ name: "content-in-js-bundle", status: "skipped" });
+    expect(checks[0]!.message).toContain("every page was browser-rendered");
+    expect(checks[0]!.message).toContain("--http");
+  });
+
+  test("some pages rendered and some not: the plain ones are still searched", async () => {
+    const all = Array.from({ length: 4 }, (_, i) => sentencesOf(i)).flat();
+    const checks = await run(
+      ctxOf(pages(4), [{ url: `${BASE}/e.js`, content: chunkOf(all, 60 * KB), pages: allPages(4) }], engine, {}, new Set([0, 1])),
+    );
+    expect(checks.some((c) => c.status === "skipped")).toBe(false);
+    expect(checks.some((c) => c.name.startsWith("content-in-js-bundle") && c.status !== "pass")).toBe(true);
   });
 
   test("a chunk the audit does not have is never reported as a clean pass", async () => {

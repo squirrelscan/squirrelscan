@@ -90,6 +90,12 @@ export interface CollectedPageSignal {
    */
   contentSentences?: string[];
   /**
+   * The page was browser-rendered, so `contentSentences` is empty by design (its copy is in the script that
+   * rendered it), not because the page has none. Lets perf/content-in-js-bundle tell "nothing to search for"
+   * from "not searched" on an audit where every page was rendered. Absent otherwise.
+   */
+  contentRendered?: true;
+  /**
    * Rules whose page-time extractor ran past its time budget on this page and was
    * abandoned (its field holds the empty value). The site pass records each as a
    * rule error for this page. Absent when nothing timed out.
@@ -241,6 +247,7 @@ export function buildCollectedPageSignal(input: {
       input.rendered === true
         ? []
         : timed("perf/content-in-js-bundle", [] as string[], () => extractContentSentences(doc)),
+    ...(input.rendered === true ? { contentRendered: true as const } : {}),
   };
   // The one record serves both rules: a timeout is reported against both.
   if (timedOutRuleIds.includes("eeat/about-page")) timedOutRuleIds.push("eeat/contact-page");

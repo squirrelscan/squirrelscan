@@ -19,7 +19,7 @@ When the audit has fetched the site's JavaScript, squirrel searches every same-o
 
 The finding is per chunk:
 
-- `content-in-js-bundle` (info): the chunk holds the content of a page that loads it, and of no more than one other page. One page's copy in a chunk is also what a hard-coded route component looks like, so on its own it is information, not a warning.
+- `content-in-js-bundle` (info): the chunk holds the content of a page that loads it, and of no more than one other page. One page's copy in a chunk is also what a hard-coded route component looks like, so on its own it is information, not a warning. Information checks do not appear in the JSON and LLM reports (squirrelscan/squirrelscan [#669](https://github.com/squirrelscan/squirrelscan/issues/669)), so an agent reading either format does not see the single-page finding, while the sitewide warning reaches every format.
 - `content-in-js-bundle-sitewide` (warning): the same chunk also holds the content of at least two other pages. This is the "whole site's content in every page's bundle" signature. It is a warning, not a failure, until the escalation has been measured against more real sites.
 
 Each item gives the chunk URL, its size and its gzip size, how many pages' content it holds (and how many others), and an estimated prose share of the chunk: the share of its characters in long runs of plain text, which compiled copy scores high on and application code scores near zero on.
@@ -31,7 +31,7 @@ The rule was run over 40 public documentation and framework sites (12 pages each
 ### What does not count
 
 - Content that is only in the HTML: framework hydration state in an inline script (`__NEXT_DATA__` and the like) and JSON-LD are inline, not same-origin chunks, and are not searched. [Framework data payload](/rules/perf/framework-data-payload) covers inline state.
-- Pages rendered in a browser: a client-rendered page has its copy in the JavaScript that renders it by necessity, so its sentences are not collected.
+- Pages rendered in a browser: a client-rendered page has its copy in the JavaScript that renders it by necessity, so its sentences are not collected. When every page of an audit was rendered there is nothing to search for, so the rule is skipped with a message saying so (audit with rendering off, `--http`, to check it) instead of passing: nothing was judged, so it does not read as clean.
 - Chunks under 50 KB.
 - Text that is only in navigation or footer.
 - A chunk the audit does not have: one that failed to fetch, was skipped by a budget, or is over the 5 MB script fetch cap. These are not a clean result: the rule reports an info check, `content-in-js-bundle-unchecked`, saying the audit did not fully check, and lists up to 20 of them.
