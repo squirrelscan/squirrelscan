@@ -176,7 +176,48 @@ describe("the paths option (#1261)", () => {
   });
 });
 
+describe("paths match the URL's path only, never the host, query or fragment (#1261 review)", () => {
+  const target = (url: string, paths: string[]) => {
+    const checks = run(aboutPageRule, ctxFor([home, { url, html: html("X", FILLER) }], { paths }));
+    return checks[0]?.status;
+  };
+
+  test("a path pattern matches the page's path", () => {
+    expect(target(`${ORIGIN}/pages/manufaktur`, ["/pages/manufaktur"])).toBe("pass");
+    expect(target(`${ORIGIN}/pages/manufaktur?utm=1`, ["/pages/manufaktur"])).toBe("pass");
+    expect(target(`${ORIGIN}/pages/manufaktur#top`, ["/pages/manufaktur"])).toBe("pass");
+  });
+
+  test("a bare word does not match the host", () => {
+    expect(target("https://manufaktur.de/shop", ["manufaktur"])).toBe("warn");
+    expect(target("https://manufaktur.de/manufaktur/team", ["manufaktur"])).toBe("pass");
+  });
+
+  test("a path in the query string or fragment is not the page", () => {
+    expect(target(`${ORIGIN}/shop?next=/pages/manufaktur`, ["/pages/manufaktur"])).toBe("warn");
+    expect(target(`${ORIGIN}/shop#/pages/manufaktur`, ["/pages/manufaktur"])).toBe("warn");
+    expect(target(`${ORIGIN}/shop?x=1`, ["regex:manufaktur"])).toBe("warn");
+  });
+});
+
 describe("rule-options preflight for paths (#1261)", () => {
+  test.each(["eeat/about-page", "eeat/contact-page", "eeat/privacy-policy"])(
+    "%s flags a regex that does not compile, naming the entry",
+    (id) => {
+      const problems = checkRuleOptions({ [id]: { paths: ["/ok", "regex:([unclosed"] } });
+      expect(problems).toHaveLength(1);
+      expect(problems[0]).toMatchObject({ kind: "invalid-value", ruleId: id });
+      expect(problems[0]?.message).toContain(`[rule_options."${id}"] paths.1`);
+      expect(problems[0]?.message).toContain("not a valid regular expression");
+    },
+  );
+
+  test("a regex with flags and a plain path both pass", () => {
+    expect(
+      checkRuleOptions({ "eeat/about-page": { paths: ["regex:^/pages/manu:i", "/pages/x/"] } }),
+    ).toEqual([]);
+  });
+
   test.each(["eeat/about-page", "eeat/contact-page", "eeat/privacy-policy"])(
     "%s accepts an array of strings",
     (id) => {

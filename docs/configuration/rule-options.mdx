@@ -638,7 +638,7 @@ paths = ["/pages/kundendienst"]
 paths = ["regex:^/pages/rechtliches"]
 ```
 
-**Behavior:** patterns use the [URL pattern](#url-patterns) forms and are checked before the built-in slugs. A configured path that pages link to but the crawl did not fetch is reported as linked but not crawled. A `paths` value that is not an array of strings is reported by `config validate` and stops the rule's audit run.
+**Behavior:** patterns use the [URL pattern](#url-patterns) forms, matched against the URL's path only (never the host, query string or fragment), and are checked before the built-in slugs. A configured path that pages link to but the crawl did not fetch is reported as linked but not crawled. A `paths` value that is not an array of strings, or a `regex:` entry that does not compile, is reported by `config validate` and stops the rule's audit run.
 
 ---
 

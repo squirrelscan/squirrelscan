@@ -78,6 +78,31 @@ export function matchesExcludePattern(
 }
 
 /**
+ * Why `pattern` is not a usable {@link matchesExcludePattern} pattern, or null when it is.
+ * Only a `regex:` pattern can be invalid (one that does not compile); a rule option
+ * reports it up front instead of the matcher warning and never matching.
+ */
+export function excludePatternError(pattern: string): string | null {
+  if (!pattern.startsWith("regex:")) return null;
+  let regexStr = pattern.slice(6);
+  let flags = "";
+  const colonIndex = regexStr.lastIndexOf(":");
+  if (colonIndex > 0) {
+    const potentialFlags = regexStr.slice(colonIndex + 1);
+    if (/^[gimsuvy]+$/.test(potentialFlags)) {
+      flags = potentialFlags;
+      regexStr = regexStr.slice(0, colonIndex);
+    }
+  }
+  try {
+    new RegExp(regexStr, flags);
+    return null;
+  } catch (error) {
+    return error instanceof Error ? error.message : "invalid regular expression";
+  }
+}
+
+/**
  * Common exclusion patterns for pages that are intentionally dead-ends or orphans
  */
 export const COMMON_EXCLUDE_PATTERNS = {

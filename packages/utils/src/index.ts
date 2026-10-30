@@ -63,7 +63,7 @@ export {
 
 export { isPageIndexable, type IndexabilityCheck } from "./indexable";
 
-export { matchesExcludePattern, COMMON_EXCLUDE_PATTERNS } from "./patterns";
+export { excludePatternError, matchesExcludePattern, COMMON_EXCLUDE_PATTERNS } from "./patterns";
 
 export { isRobotsTxtDisallowed } from "./robots-txt";
 
