@@ -79,6 +79,42 @@ export interface LeaseCrawlRow {
   readonly legacy_abandoned: number;
 }
 
+/**
+ * Whether a crawl's recorded owner may still be running (#288): a heartbeat
+ * within the stale window, or an owner pid that is alive on THIS host however old
+ * the heartbeat is (a laptop closed over a weekend stops its beats, not the
+ * process). Deliberately more cautious than {@link isCrawlAbandoned}, which
+ * decides what to delete from a finished-or-not crawl: here the question guards a
+ * crawl whose report is being read, so a pid that is alive always wins. An owner
+ * on another host with a stale heartbeat cannot be probed and reads as not live;
+ * the caller's own idle clock covers that. No owner recorded reads as not live.
+ *
+ * Known limit: after a crash or reboot the pid may be reused by an unrelated
+ * process on the same host, which reads as alive. The cost is space, never data: a
+ * crawl that looks live is simply not recovered until that pid is gone, and a
+ * manual `squirrel self disk --prune` still reaches it once the build clock has
+ * passed. A process start time would close it; it is not worth a platform probe.
+ */
+export function isLeaseLive(
+  row: Pick<LeaseCrawlRow, "heartbeat_at" | "owner_pid" | "owner_host">,
+  env: LeaseEnv,
+): boolean {
+  const hb = row.heartbeat_at;
+  const hasOwner = row.owner_pid != null || row.owner_host != null;
+  if (typeof hb !== "number" || !Number.isFinite(hb) || !hasOwner) return false;
+  const age = env.now() - hb;
+  if (age < CRAWL_LEASE_STALE_MS && age > -CRAWL_LEASE_PID_TRUST_MS) return true;
+  const pid = row.owner_pid;
+  const host = row.owner_host;
+  return (
+    isReadablePid(pid) &&
+    typeof host === "string" &&
+    host !== "" &&
+    host === env.hostname() &&
+    env.pidAlive(pid)
+  );
+}
+
 export function isCrawlAbandoned(row: LeaseCrawlRow, env: LeaseEnv): boolean {
   const legacy = Number(row.legacy_abandoned) === 1;
   const hb = row.heartbeat_at;

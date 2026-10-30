@@ -149,6 +149,26 @@ describe("planProjectPrune", () => {
     expect(plan!.rows).toBeGreaterThan(0);
   });
 
+  test("a crawl still building its report is planned around, not retired and not counted (#288)", async () => {
+    await project(4);
+    // The oldest audit is mid-build: stamped `building` an hour ago.
+    const store = new SQLiteStorage(dbPath);
+    await run(store.init());
+    const oldest = (await run(store.listCrawls())).sort(
+      (a, b) => a.startedAt - b.startedAt
+    )[0]!;
+    await run(store.setReportStatus(oldest.id, "building"));
+    store.close?.();
+
+    const plan = await planProjectPrune(dbPath, 2);
+    expect(plan).not.toBeNull();
+    expect(plan!.retiring.map((c) => c.id)).not.toContain(oldest.id);
+    expect(plan!.skippedLive.map((c) => c.id)).toContain(oldest.id);
+    expect(plan!.skippedLive.find((c) => c.id === oldest.id)?.status).toBe(
+      "building"
+    );
+  });
+
   test("an already-retired project can still be rebuilt, and says so", async () => {
     // The state automatic retention leaves behind: the rows for the audits
     // outside the window are gone, and the file is still the size they made it.

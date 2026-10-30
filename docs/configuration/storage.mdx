@@ -293,6 +293,25 @@ five audits, the audits after retirement fetched 0 of 40 pages.
 Smart audits are unaffected either way: carried findings are keyed by site, not
 by crawl.
 
+**Interrupted audits are cleaned up too.** An audit killed (Ctrl-C, a crash, a
+reboot) after it crawled but before its report was built leaves a crawl that
+counts toward no window. A later audit of the same project retires it once all of
+these hold: its report has been building for more than six hours, no live process
+owns it (an owner process alive on this machine always counts as live, however
+long since its last heartbeat), a newer audit completed, and at least `keep_audits`
+audits are newer than it, so it is outside the window. When in doubt it is left
+alone, and `self disk --prune` plans around a crawl that is still building. A
+crawl from before squirrelscan recorded when the build began waits a week.
+
+**Older leftovers are repaired once.** Before automatic retention existed,
+`self disk --prune` could leave page rows that a later audit then superseded.
+The next audits and `self disk --prune` runs of a project remove them, in small
+steps (5,000 rows at a time, at most a couple of seconds per run, so an audit
+never waits on it and the database is never locked for long), and then record
+that it is done. A url whose only copy sits in a retired audit keeps it,
+so re-audits stay incremental. Those rows were the database's only pointer to
+their page HTML in the content store, which the store's size cap evicts as usual.
+
 ## Retention and reclaiming are different things
 
 Retention deletes rows. SQLite keeps the freed pages in the file and reuses them
