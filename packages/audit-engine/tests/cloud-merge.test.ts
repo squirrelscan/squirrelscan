@@ -156,6 +156,36 @@ describe("runCloudSmartAudits — cloud parity", () => {
     expect(partialScore).toBeLessThan(100);
   });
 
+  test("a carried finding on a page with NO page record is counted as unrendered, and its page is not a known page (#1031)", async () => {
+    const store = new MemStore();
+    await runCloudSmartAudits({
+      store,
+      siteKey: "web_1",
+      crawlId: "audit_1",
+      ruleResults: ruleResultsFor([P2], [P1, P3]),
+      pageStatuses: [P1, P2, P3].map((url) => ({ url, status: 200 })),
+    });
+    // The page lost its record (the case squirrelscan/repo#3509 investigates): the finding stays open.
+    store.pages.delete(P2);
+
+    const second = await runCloudSmartAudits({
+      store,
+      siteKey: "web_1",
+      crawlId: "audit_2",
+      ruleResults: ruleResultsFor([], [P1]),
+      pageStatuses: [{ url: P1, status: 200 }],
+    });
+    // The page has no record, so the merge cannot tell it was ever rendered: its open finding is counted as an
+    // unrendered finding, not a carried one, and it widens no page count. Known pages come from the page records,
+    // so knownPages does not exceed auditedPages although a finding on an unrecorded page is still open. This is the
+    // semantics of the counts today; it is pinned here so a change to it is deliberate (#1031, repo#3509).
+    expect(second.coverage.carriedFindings).toBe(0);
+    expect(second.coverage.unrenderedFindings).toBe(1);
+    expect(second.coverage.auditedPages).toBe(1);
+    expect(second.coverage.knownPages).toBe(2); // P1 and P3, the records that remain
+    expect(second.coverage.pagesWithStaleCarry).toBeUndefined();
+  });
+
   test("a 404 page stales its carried finding (recovers the score)", async () => {
     const store = new MemStore();
     await runCloudSmartAudits({
