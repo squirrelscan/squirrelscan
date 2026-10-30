@@ -394,7 +394,7 @@ export function generateConsoleReport(
               // links and where they sit (pub#837). An item scoped to a
               // region names it, then its pages outside it, and its label
               // drops the section phrase the region says (pub#846).
-              const view = itemSourceView(item, report.structure);
+              const view = itemSourceView(item, report.structure, check);
               const label = itemLabel(item, view.scope) ?? item.id;
               log(box.line(`     ${fmt.dim(`→ ${label}`)}`));
               // Show HTML snippet if present
