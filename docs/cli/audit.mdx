@@ -141,8 +141,8 @@ squirrel audit https://example.com --offline --passive --disable-discovery-probe
 
 That still sends the crawl's own requests: the pages and their scripts,
 `robots.txt`, the sitemap path guesses, a `HEAD` for each internal link target
-the crawl did not fetch, the soft-404 re-check and the AI agent access check
-where they apply, and start URL redirect hops. On a small test site it was 17
+the crawl did not fetch, the soft-404 re-check where it applies, and start URL
+redirect hops. On a small test site it was 17
 requests, all of them pages, `robots.txt`, sitemap paths and scripts.
 
 The banner's `Probing` line (for example `Probing   active · budget 30s`) shows
