@@ -107,6 +107,12 @@ describe("extractContentSentences", () => {
     expect(extractContentSentences(parsePage(html, pageUrl(3)).document!)).toEqual([]);
   });
 
+  test("an empty document (no root element) yields no sentences instead of throwing", () => {
+    for (const html of ["", "   ", "just text", "<!-- only a comment -->"]) {
+      expect(extractContentSentences(parsePage(html, pageUrl(5)).document!)).toEqual([]);
+    }
+  });
+
   test("a page of tens of thousands of nodes is bounded", () => {
     const rows = Array.from({ length: 60_000 }, () => "<i>a</i>").join("");
     const started = performance.now();
