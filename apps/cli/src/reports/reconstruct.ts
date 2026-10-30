@@ -118,6 +118,8 @@ export interface SmartMergeOverride {
      *  consumer contract) so an override built from an older coverage shape
      *  still type-checks; `runSmartAudits` always supplies it. */
     unrenderedFindings?: number;
+    /** Re-crawled pages that still carry earlier findings (#1031). */
+    pagesWithStaleCarry?: number;
   };
   carriedLastSeen: Map<string, number>;
 }

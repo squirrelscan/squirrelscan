@@ -111,4 +111,50 @@ describe("a fresh info result on a re-crawled page resolves the old fail rows (#
     );
     expect("pagesWithStaleCarry" in coverage).toBe(false);
   });
+
+  // An `info` that says "could not judge" is marked inconclusive by its rule and is no evidence the page is clean.
+  for (const signal of [false, true]) {
+    test(`an inconclusive info (could not judge) carries the old fail${signal ? " (signal)" : ""}; a plain info resolves it`, async () => {
+      const inconclusive = await rerun(
+        [
+          { name: "form-labels", status: "info", message: "Content too short for analysis", pageUrl: P, details: { inconclusive: true } },
+          { name: "form-labels", status: "pass", message: "ok", pageUrl: Q },
+        ],
+        signal,
+      );
+      expect(inconclusive.open.length).toBe(50);
+      const plain = await rerun(
+        [
+          { name: "form-labels", status: "info", message: "No form inputs found", pageUrl: P },
+          { name: "form-labels", status: "pass", message: "ok", pageUrl: Q },
+        ],
+        signal,
+      );
+      expect(plain.open.length).toBe(0);
+    });
+
+  }
+
+    test("an inconclusive info on a DIFFERENT check of the rule does not make the page clean for the first (signal)", async () => {
+      const r = await rerun(
+        [
+          { name: "form-labels-other", status: "info", message: "unreadable", pageUrl: P, details: { inconclusive: true } },
+          { name: "form-labels", status: "pass", message: "ok", pageUrl: Q },
+        ],
+        true,
+      );
+      expect(r.open.length).toBe(50);
+    });
+
+  test("a scan-truncated check on the page still carries, whatever else the rule said there", async () => {
+    const r = await rerun(
+      [
+        { name: "form-labels", status: "skipped", message: "scan stopped", skipReason: "scan-truncated", pageUrl: P },
+        { name: "form-labels-other", status: "pass", message: "ok", pageUrl: P },
+        { name: "form-labels", status: "pass", message: "ok", pageUrl: Q },
+      ],
+      true,
+    );
+    expect(r.open.length).toBe(50);
+  });
 });

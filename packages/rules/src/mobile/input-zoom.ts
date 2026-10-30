@@ -788,7 +788,7 @@ export const inputZoomRule: Rule = {
         name: "input-zoom",
         status: "info",
         message: `No form field read is under 16px.${notRead}`,
-        details: { fields: total, under16px: 0, notRead: unread },
+        details: { fields: total, under16px: 0, notRead: unread, inconclusive: true },
       });
     } else {
       checks.push({

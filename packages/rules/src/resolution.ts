@@ -177,6 +177,13 @@ function collectResolutionEvidence(
   // explicit skip of the check still carries.
   const ruleEvaluated = new Map<string, Set<string>>();
   const explicitSkips = new Map<string, Set<string>>();
+  const noteExplicitSkip = (key: string, check: CheckResult): void => {
+    const urls = check.pageUrl ? [check.pageUrl] : check.details?.aggregated === true ? (check.pages ?? []) : [];
+    if (urls.length === 0) return;
+    let skipped = explicitSkips.get(key);
+    if (!skipped) explicitSkips.set(key, (skipped = new Set<string>()));
+    for (const url of urls) skipped.add(normalized(url));
+  };
   // (#2063) Keyed on the QUERY-PRESERVING page identity, the same key the merge
   // stores findings under. A consumer on an older release hashed these
   // query-blind; it recognizes both spellings (see merge-core's resolutionHashes),
@@ -258,6 +265,9 @@ function collectResolutionEvidence(
           evaluated.set(key, new Set<string>());
           keyRule.set(key, ruleId);
         }
+        // (#1031) Also an explicit skip of the check on its pages: a rule-level verdict elsewhere on
+        // the page must not make this truncated check read as evaluated.
+        noteExplicitSkip(key, check);
         continue;
       }
       // (pub#1011) A check that does not apply to the page is evaluated and clean:
@@ -268,15 +278,13 @@ function collectResolutionEvidence(
         check.status === "skipped" &&
         check.skipReason === CHECK_NOT_APPLICABLE_SKIP_REASON &&
         (!!check.pageUrl || check.details?.foldKey === CHECK_NOT_APPLICABLE_SKIP_REASON);
-      if (check.status === "skipped" && !checkNotApplicable && (check.pageUrl || check.details?.aggregated === true)) {
-        const urls = check.pageUrl ? [check.pageUrl] : (check.pages ?? []);
-        const skipKey = resolutionCheckKey(ruleId, check.name);
-        let skipped = explicitSkips.get(skipKey);
-        if (!skipped) explicitSkips.set(skipKey, (skipped = new Set<string>()));
-        for (const url of urls) skipped.add(normalized(url));
+      // (#1031) An `info` is a verdict too ("No form inputs found": the check ran on the page and found
+      // nothing to fail), unless the rule marks it `details.inconclusive` ("could not judge": content too
+      // short, markup unreadable, classifier unsure): that one is not evaluation evidence, like a skip.
+      const inconclusive = check.status === "info" && check.details?.inconclusive === true;
+      if ((check.status === "skipped" && !checkNotApplicable) || inconclusive) {
+        noteExplicitSkip(resolutionCheckKey(ruleId, check.name), check);
       }
-      // (#1031) `info` is a verdict too ("No form inputs found"): the check ran on the page and
-      // found nothing to fail, so it registers the key and the page like a pass.
       if (
         check.status !== "pass" &&
         check.status !== "warn" &&
@@ -286,6 +294,7 @@ function collectResolutionEvidence(
       ) {
         continue;
       }
+      if (inconclusive) continue;
       // (#2063) A carried/unrendered check is a replay of an earlier observation,
       // not something this run evaluated. It can only mislead here — the pages it
       // names were not crawled, so the consumer never consults them — while eating

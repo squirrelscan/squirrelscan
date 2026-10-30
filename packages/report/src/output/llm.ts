@@ -372,8 +372,10 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
     // a prior audit observed those N.
     const unrendered = c.unrenderedFindings ?? 0;
     const unrenderedAttr = unrendered > 0 ? ` unrendered="${unrendered}"` : "";
+    // Re-crawled pages that still carry earlier findings (#1031); omitted when none.
+    const stale = Number.isSafeInteger(c.pagesWithStaleCarry) && (c.pagesWithStaleCarry ?? 0) > 0 ? ` stale-carry-pages="${c.pagesWithStaleCarry}"` : "";
     lines.push(
-      `<coverage audited="${c.auditedPages}" known="${c.knownPages}" carried="${c.carriedFindings}"${unrenderedAttr}/>`,
+      `<coverage audited="${c.auditedPages}" known="${c.knownPages}" carried="${c.carriedFindings}"${unrenderedAttr}${stale}/>`,
     );
   }
 

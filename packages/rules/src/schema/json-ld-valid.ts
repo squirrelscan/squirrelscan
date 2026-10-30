@@ -42,6 +42,7 @@ export const jsonLdValidRule: Rule = {
         name: "json-ld",
         status: "info",
         message: "JSON-LD detected but schema metadata unavailable",
+        details: { inconclusive: true },
       });
       return { checks };
     }

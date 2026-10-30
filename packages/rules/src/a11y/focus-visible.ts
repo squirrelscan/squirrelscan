@@ -65,6 +65,7 @@ export const focusVisibleRule: Rule = {
         name: "focus-visible",
         status: "info",
         message: "Focus styles not analyzed (requires CSS inspection)",
+        details: { inconclusive: true },
       });
     }
 

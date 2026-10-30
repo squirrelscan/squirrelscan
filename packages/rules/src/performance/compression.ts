@@ -77,6 +77,7 @@ export const compressionRule: Rule = {
           name: "compression",
           status: "info",
           message: `Unknown content encoding: ${contentEncoding}`,
+          details: { inconclusive: true },
           value: contentEncoding,
         });
       }

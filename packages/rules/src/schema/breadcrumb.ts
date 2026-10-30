@@ -95,7 +95,7 @@ export const breadcrumbSchemaRule: Rule = {
               name: "breadcrumb-schema",
               status: "info",
               message: UNREADABLE_MESSAGE,
-              details: { trailLinks },
+              details: { trailLinks, inconclusive: true },
             });
             return { checks };
           }

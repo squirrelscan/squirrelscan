@@ -80,6 +80,7 @@ export const mimeTypeRule: Rule = {
         name: "mime-type",
         status: "info",
         message: `Unknown extension ${extension}, skipping validation`,
+        details: { inconclusive: true },
       });
       return { checks };
     }

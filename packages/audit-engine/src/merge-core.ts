@@ -289,8 +289,11 @@ export function createNotEvaluatedCollector(normalize: (url: string) => string):
         evaluated.add(checkKey);
         return;
       }
+      // (#1031) An `info` the rule marks inconclusive ("could not judge") is a gap like a skip: the
+      // page is not evaluated for the check, so its old findings carry.
+      const inconclusive = check.status === "info" && check.details?.inconclusive === true;
       if (
-        check.status !== "skipped" ||
+        (check.status !== "skipped" && !inconclusive) ||
         check.skipReason === NOT_APPLICABLE_SKIP_REASON ||
         check.skipReason === CHECK_NOT_APPLICABLE_SKIP_REASON ||
         timedOut

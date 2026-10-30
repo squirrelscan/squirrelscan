@@ -629,6 +629,8 @@ export interface AuditReport {
     carriedFindings: number;
     /** Findings on pages no audit has ever rendered (#1652). */
     unrenderedFindings?: number;
+    /** Re-crawled pages that still carry earlier findings (#1031). */
+    pagesWithStaleCarry?: number;
   };
   /**
    * Scan scope disclosure (#1180): where the audit ran and how much of the site

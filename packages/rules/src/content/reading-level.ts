@@ -46,6 +46,7 @@ export const readingLevelRule: Rule = {
         name: "reading-level",
         status: "info",
         message: "Content too short for readability analysis",
+        details: { inconclusive: true },
       });
       return { checks };
     }

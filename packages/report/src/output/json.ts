@@ -206,6 +206,8 @@ interface SlimJsonReport {
       carriedFindings: number;
       /** Findings on pages no audit has ever rendered (#1652). */
       unrenderedFindings?: number;
+      /** Re-crawled pages that still carry earlier findings (#1031). */
+      pagesWithStaleCarry?: number;
     };
   };
   /**
