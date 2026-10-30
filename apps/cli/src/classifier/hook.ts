@@ -60,7 +60,6 @@ export function createPageClassifierHook(
           source: result.pageType.source,
         },
         degraded: result.degraded,
-        model: version,
       },
       placeLink: (element) => place(element),
     };
