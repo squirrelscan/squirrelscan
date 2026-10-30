@@ -52,6 +52,8 @@ export const cloakingRule: Rule = {
     scope: "site",
     severity: "error",
     weight: 7,
+    // Compromise detection: an ignore could hide a compromised site (#1262).
+    ignorable: false,
   },
 
   run(ctx: RuleContext): RuleResult {

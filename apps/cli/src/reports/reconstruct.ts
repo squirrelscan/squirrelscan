@@ -11,6 +11,7 @@ import {
 import { buildCacheStats } from "@squirrelscan/core-contracts";
 import { maxDurationReason } from "@squirrelscan/core-contracts/failure-reason";
 import { redactUrl } from "@squirrelscan/core-contracts/seed-redirect";
+import { summarizeIgnored } from "@squirrelscan/report/ignored";
 import { createStructureBuilder } from "@squirrelscan/report/structure";
 import { loadAllRules, type RuleRunResult } from "@squirrelscan/rules";
 import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
@@ -851,6 +852,15 @@ export function reconstructReport(
       }
     }
 
+    // What the config's `[[ignore]]` entries waived (#1262), from the checks the
+    // engine changed and the entries as this audit ran them.
+    const ignored = summarizeIgnored(
+      [...ruleResultsMap].map(
+        ([id, result]) => [id, result.checks] as [string, CheckResult[]]
+      ),
+      crawl.scanScope?.ignore
+    );
+
     // 13. Calculate health score.
     // Smart audits: score over the UNION (this run's checks minus removed pages,
     // plus carried fails, plus the synthetic-pass counts for clean carried pages)
@@ -1027,6 +1037,7 @@ export function reconstructReport(
       // old crawl rows have no stamp and deliberately gain no inferred one.
       ...(crawl.scanScope ? { scanScope: crawl.scanScope } : {}),
       ...(durationCut ? { maxDuration: durationCut } : {}),
+      ...(ignored ? { ignored } : {}),
       // The start URL's followed redirect (#1281), persisted with the scan scope.
       ...(crawl.scanScope?.startRedirect
         ? {

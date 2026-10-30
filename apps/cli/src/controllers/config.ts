@@ -123,10 +123,15 @@ export async function validateConfig(
 ): Promise<Result<ValidateConfigResult>> {
   const shown = showConfig(configPath);
   if (!shown.ok) return shown;
-  const { checkRuleOptions } = await import("@squirrelscan/rules");
+  const { checkIgnoreEntries, checkRuleOptions } =
+    await import("@squirrelscan/rules");
   return ok({
     ...shown.data,
-    ruleOptionProblems: checkRuleOptions(shown.data.config.rule_options),
+    ruleOptionProblems: [
+      ...checkRuleOptions(shown.data.config.rule_options),
+      // `[[ignore]]` entries that cannot do what they say (#1262).
+      ...checkIgnoreEntries(shown.data.config.ignore),
+    ],
   });
 }
 

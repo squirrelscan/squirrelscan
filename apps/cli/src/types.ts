@@ -5,6 +5,7 @@ import type {
   AuditLevel,
   ResolvedAuditSettings,
 } from "@squirrelscan/core-contracts/audit-levels";
+import type { IgnoreSummary } from "@squirrelscan/core-contracts/ignore";
 import type {
   SeedRedirectHop,
   SeedRedirectRecord,
@@ -474,6 +475,8 @@ export interface AuditReport {
   originalUrl?: string;
   /** Redirecting responses between `originalUrl` and the audited URL (#1281). */
   redirectChain?: SeedRedirectHop[];
+  /** What the config's `[[ignore]]` waivers removed from this audit (#1262). Mirrors core-contracts `AuditReport`. */
+  ignored?: IgnoreSummary;
   timestamp: string;
   totalPages: number;
   passed: number;
@@ -658,6 +661,14 @@ export interface AuditReport {
     startRedirect?: SeedRedirectRecord;
     /** What the `--max-duration` time limit cut (#1271), so a rebuilt report is still partial. */
     maxDuration?: MaxDurationCut;
+    /** The `[[ignore]]` list as this audit ran it (#1262). */
+    ignore?: {
+      entries: Array<{ rule: string; reason?: string }>;
+      disabled?: boolean;
+      fingerprint?: string;
+      timedOut?: number[];
+      carriedStale?: boolean;
+    };
   };
   /**
    * Rule-result cache disclosure (#1990): how many pages replayed a previous
@@ -807,6 +818,8 @@ export interface AuditOptions {
   startRedirect?: SeedRedirectRecord;
   /** Whether the project folder existed before the command's first store check (#1269). */
   projectDirPreexisting?: { projectName: string; existed: boolean };
+  /** `--no-ignore` (#1262): run without applying the config's `[[ignore]]` entries. */
+  noIgnore?: boolean;
 }
 
 // ============================================

@@ -55,6 +55,7 @@ import {
   structureSectionName,
   structureTotalsLine,
 } from "../structure";
+import { ignoredLine, safeIgnored } from "../ignored";
 import {
   followedStartRedirect,
   publishedReportNote,
@@ -208,6 +209,26 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
     }
     lines.push(`${indent(1)}${escapeXml(startRedirect.note)}`);
     lines.push("</start-redirect>");
+  }
+
+  // Waived findings (#1262): the report is filtered by the project's own config. An
+  // agent must know, or it will propose fixes for what the owner chose to waive.
+  const ignoredSummary = safeIgnored(report);
+  if (ignoredSummary) {
+    lines.push(
+      `<ignored items="${ignoredSummary.items}" pages="${ignoredSummary.pages}"${ignoredSummary.disabled ? ' disabled="true"' : ""}>`,
+    );
+    const note = ignoredLine(report);
+    if (note) lines.push(`${indent(1)}${escapeXml(note)}`);
+    for (const [ruleId, counts] of Object.entries(ignoredSummary.byRule)) {
+      lines.push(`${indent(1)}<rule id="${escapeXml(ruleId)}" items="${counts.items}" pages="${counts.pages}"/>`);
+    }
+    for (const entry of ignoredSummary.entries) {
+      lines.push(
+        `${indent(1)}<entry index="${entry.index + 1}" rule="${escapeXml(entry.rule)}" items="${entry.items}" pages="${entry.pages}"${entry.reason ? ` reason="${escapeXml(entry.reason)}"` : ""}/>`,
+      );
+    }
+    lines.push("</ignored>");
   }
 
   // Failed/blocked audit (#792): nothing was audited. Without this an agent

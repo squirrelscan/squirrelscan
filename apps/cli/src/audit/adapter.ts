@@ -518,6 +518,8 @@ export function runStreamingRules(
     pagesNotEvaluated: number;
     pagesTooLarge: number;
     tooLargePages: string[];
+    /** `[[ignore]]` entries that ran over their regex work budget and stopped waiving (#1262). */
+    ignoreTimedOut: number[];
     /** Folded per-rule tallies — bounded by the RULE count, not the page count. */
     tallies: Map<string, RuleTally>;
   },

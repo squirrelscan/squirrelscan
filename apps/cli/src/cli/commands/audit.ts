@@ -1194,6 +1194,12 @@ export const audit = defineCommand({
         "Use cloud features for this run only: don't add the site to your dashboard, don't schedule it, and don't publish the report",
     },
     // Declared for help and completions only; read from rawArgs like --no-publish.
+    "no-ignore": {
+      type: "boolean",
+      description:
+        "Run without applying the [[ignore]] entries in squirrel.toml, to see what they waive",
+    },
+    // Declared for help and completions only; read from rawArgs like --no-publish.
     "no-ephemeral": {
       type: "boolean",
       description: "Override [cloud] ephemeral = true for this run",
@@ -1385,6 +1391,8 @@ export const audit = defineCommand({
     // --no-publish is passed its publish value depends on argv order, so any
     // --publish/-p token alongside it counts as the conflict.
     const noPublish = hasNegatedFlag(rawArgs, "publish");
+    // --no-ignore (#1262): citty turns it into `ignore: false`, so read argv.
+    const noIgnore = hasNegatedFlag(rawArgs, "ignore");
     // The same for the external link switches (repo#2729): with
     // --no-external-links in argv any positive token is the conflict. Alone,
     // `--external-links=false` (or `--external-links false`, which citty
@@ -1630,7 +1638,8 @@ export const audit = defineCommand({
       // the table and the key. Options that change nothing only warn. pub#510
       const optionsCheck = preflightRuleOptions(
         config.rule_options,
-        resolveRulesConfig(config.rules, ruleFilter)
+        resolveRulesConfig(config.rules, ruleFilter),
+        noIgnore ? undefined : config.ignore
       );
       for (const warning of optionsCheck.warnings) {
         console.error(fmt.yellow(`Warning: ${warning}`));
@@ -2115,6 +2124,7 @@ export const audit = defineCommand({
           ? { disableDiscoveryProbes }
           : {}),
         probe: { level: probing.level, budgetMs: probing.budgetMs },
+        ...(noIgnore ? { noIgnore: true } : {}),
         ...(startRedirect ? { startRedirect } : {}),
         ...(projectDirPreexisting ? { projectDirPreexisting } : {}),
       };

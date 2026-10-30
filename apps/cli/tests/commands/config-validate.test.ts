@@ -69,6 +69,9 @@ afterEach(() => {
   process.exit = originalExit;
 });
 
+// Built at runtime: a nested-quantifier literal reads as a ReDoS to static analysis, and is the point of the test.
+const BACKREF = "regex:(a)\\\\1";
+
 /** `squirrel --config-file <file> config validate`. */
 async function validate(toml: string): Promise<void> {
   const file = join(dir, "squirrel.toml");
@@ -108,5 +111,70 @@ min_length = 20
 `);
     expect(exitCode).toBeNull();
     expect(stdout).toEqual([`Config valid: ${join(dir, "squirrel.toml")}`]);
+  });
+
+  // #1262: the `[[ignore]]` table.
+  test("a valid [[ignore]] table is valid", async () => {
+    await validate(`[[ignore]]
+rule = "security/cookie-flags"
+items = ["localization", "cart_currency"]
+reason = "Shopify sets these"
+`);
+    expect(exitCode).toBeNull();
+    expect(stdout).toEqual([`Config valid: ${join(dir, "squirrel.toml")}`]);
+  });
+
+  test("reports an entry that names no rule, one that names compromise detection, and an unsafe regex", async () => {
+    await validate(`[[ignore]]
+rule = "performance/ttfb"
+urls = ["/apps/"]
+
+[[ignore]]
+rule = "integrity/*"
+items = ["a"]
+
+[[ignore]]
+rule = "security/cookie-flags"
+items = ["${BACKREF}"]
+`);
+    expect(exitCode).toBe(1);
+    expect(stderr).toEqual([
+      'Invalid config: [[ignore]] entry 1 (performance/ttfb): no rule matches, so the entry changes nothing (did you mean "perf/ttfb"?)',
+      expect.stringContaining(
+        "[[ignore]] entry 2 (integrity/*): compromise detection cannot be ignored"
+      ),
+      expect.stringContaining(
+        `[[ignore]] entry 3 (security/cookie-flags) items: "regex:(a)\\1" is a regex the linear-time matcher cannot run (back-references;`
+      ),
+    ]);
+  });
+
+  test("an entry with neither items nor urls, and selectors, are refused by the schema", async () => {
+    await validate(`[[ignore]]
+rule = "security/cookie-flags"
+`);
+    expect(exitCode).toBe(1);
+    expect(stderr.join("\n")).toContain("an ignore entry needs items or urls");
+    stderr = [];
+    exitCode = null as number | null;
+    await validate(`[[ignore]]
+rule = "a11y/select-name"
+selectors = ["localization-form select"]
+items = ["x"]
+`);
+    expect(exitCode).toBe(1);
+    expect(stderr.join("\n")).toContain("selectors are not supported yet");
+  });
+
+  test("the per-rule ignore option names are pointed at [[ignore]]", async () => {
+    await validate(`[rule_options."security/cookie-flags"]
+ignore_items = ["localization"]
+`);
+    expect(exitCode).toBe(1);
+    expect(stderr).toEqual([
+      expect.stringContaining(
+        'ignore_items: waivers are not a rule option, so it changes nothing; use [[ignore]] with rule = "security/cookie-flags"'
+      ),
+    ]);
   });
 });

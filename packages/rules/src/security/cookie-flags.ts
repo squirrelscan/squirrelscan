@@ -61,6 +61,8 @@ export const cookieFlagsRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 5,
+    // Each check message starts with the number of cookies (#1262).
+    messageCountsItems: true,
   },
 
   run(ctx: RuleContext): RuleResult {

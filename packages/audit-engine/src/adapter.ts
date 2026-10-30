@@ -126,6 +126,7 @@ import {
 } from "./streaming";
 import {
   bindRuleCache,
+  withoutStoringAfterIgnoreTimeout,
   computeRunContextHash,
   type RuleCacheDisabledReason,
   type RuleCacheStats,
@@ -3455,6 +3456,8 @@ export interface StreamingRuleExecutionResult extends RuleExecutionResult {
   /** Pages over `maxPageBytes`, never parsed or evaluated (#1332), and the first 20 by URL. */
   pagesTooLarge: number;
   tooLargePages: string[];
+  /** `[[ignore]]` entries that ran over their regex work budget and stopped waiving (#1262). */
+  ignoreTimedOut: number[];
   /**
    * What the per-page rule-result cache did this run (#1990). Zeros with no
    * `disabledReason` mean no cache was supplied (the cloud); zeros WITH one mean a
@@ -3663,8 +3666,15 @@ export function runStreamingRules(
             timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           }),
         );
-        if ("hash" in ctxHash) ruleCache = bindRuleCache(ruleCacheOpts.store, ctxHash.hash);
-        else ruleCacheDisabled = ctxHash.disabled;
+        if ("hash" in ctxHash) {
+          // An `[[ignore]]` entry that ran over its work budget stops waiving from that
+          // point, so a verdict computed after it is not the one the list gives with its
+          // full budget: never stored, so a later run re-evaluates the page and says so.
+          ruleCache = withoutStoringAfterIgnoreTimeout(
+            bindRuleCache(ruleCacheOpts.store, ctxHash.hash),
+            () => runner.ignoreTimedOutEntries().length,
+          );
+        } else ruleCacheDisabled = ctxHash.disabled;
       }
     }
 
@@ -3811,6 +3821,7 @@ export function runStreamingRules(
       pagesNotEvaluated: streamed.pagesNotEvaluated,
       pagesTooLarge: streamed.pagesTooLarge,
       tooLargePages: streamed.tooLargePages,
+      ignoreTimedOut: runner.ignoreTimedOutEntries(),
       ruleCache: ruleCacheDisabled
         ? { ...streamed.ruleCache, disabledReason: ruleCacheDisabled }
         : streamed.ruleCache,

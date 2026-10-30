@@ -364,6 +364,26 @@ describe("loadReport - slim JSON reconstruction", () => {
     }
   });
 
+  test("carries the ignored summary through reconstruction (#1262)", () => {
+    const ignored = {
+      items: 3,
+      pages: 0,
+      byRule: { "security/cookie-flags": { items: 3, pages: 0 } },
+      entries: [
+        {
+          index: 0,
+          rule: "security/cookie-flags",
+          reason: "Shopify",
+          items: 3,
+          pages: 0,
+        },
+      ],
+    };
+    const reloaded = roundTrip(createMockReport({ ignored }));
+    expect(reloaded.ignored).toEqual(ignored);
+    expect(roundTrip(createMockReport({})).ignored).toBeUndefined();
+  });
+
   test("a report without a redirect gains no finalUrl from reconstruction", () => {
     expect(roundTrip(createMockReport({})).finalUrl).toBeUndefined();
   });

@@ -42,12 +42,15 @@ import {
   SITE_RULE_BUDGET_CAP_MS,
   siteRuleBudgetMs,
 } from "./rule-budget";
+import { IgnoreTable, isIgnorable, type IgnoreEntry } from "./ignore";
 import { noindexSource, skipsNoindexPages } from "./shared/noindex";
 import { pageTypeRuleSkip, skippablePageType } from "./shared/page-type";
 
 // Minimal config interface — CLI's full Config satisfies this
 export interface RulesConfig {
   rule_options: Record<string, Record<string, unknown>>;
+  /** `[[ignore]]` waivers (#1262): applied to every rule's result by `runOneRule`. */
+  ignore?: ReadonlyArray<IgnoreEntry>;
   rules?: {
     enable?: string[];
     disable?: string[];
@@ -263,6 +266,8 @@ export class RuleRunner {
   private rules: Map<string, Rule>;
   private enabledRuleIds: string[];
   private config: RulesConfig;
+  /** The `[[ignore]]` waivers, compiled once per run (#1262). */
+  private readonly ignoreTable: IgnoreTable;
   // Only affects site rules — page rules are sync CPU and run sequentially (#379)
   private ruleConcurrency: number;
   /** The per-page rule time budget this run uses, in ms; `0` means off. */
@@ -341,6 +346,14 @@ export class RuleRunner {
       additionalNamespaces: options.additionalNamespaces,
       includeOptIn: true,
     });
+    this.ignoreTable = new IgnoreTable(this.config.ignore, {
+      isIgnorableRule: (ruleId) => {
+        const rule = this.rules.get(ruleId);
+        return rule ? isIgnorable(rule.meta) : true;
+      },
+      messageCountsItems: (ruleId) => this.rules.get(ruleId)?.meta.messageCountsItems === true,
+      onTimeout: (message, entry) => logger.warn("ignore entry timed out", { message, entry: entry + 1 }),
+    });
 
     // Filter to enabled rules based on config
     const allIds = Array.from(this.rules.keys());
@@ -383,10 +396,28 @@ export class RuleRunner {
    * order is part of the identity — reordering the rule set reorders the flat
    * per-page check list, which the report renders.
    */
-  pageRuleSignature(): Array<{ id: string; options: Record<string, unknown> }> {
+  pageRuleSignature(): Array<{ id: string; options: Record<string, unknown>; ignore?: string }> {
     return this.getEnabledRules()
       .filter((rule) => rule.meta.scope === "page")
-      .map((rule) => ({ id: rule.meta.id, options: getRuleOptions(rule, this.config) }));
+      .map((rule) => {
+        // The `[[ignore]]` entries that name the rule are part of its verdict (#1262):
+        // editing one invalidates that rule's cached results and no other's.
+        const ignore = this.ignoreTable.signatureFor(rule.meta.id);
+        return {
+          id: rule.meta.id,
+          options: getRuleOptions(rule, this.config),
+          ...(ignore !== null ? { ignore } : {}),
+        };
+      });
+  }
+
+  /**
+   * Whether a `[[ignore]]` entry that depends on the page (it has `urls`) names the
+   * rule (#1262). Such a rule's verdict is no longer a property of its template, so
+   * template fan-out must not copy one page's verdict onto another.
+   */
+  ignoresByPage(ruleId: string): boolean {
+    return this.ignoreTable.hasUrlEntries(ruleId);
   }
 
   /** `meta` for an enabled rule, or undefined. Lets a cached result be re-assembled
@@ -418,6 +449,27 @@ export class RuleRunner {
    * carries on. A thrown error is the same skipped `<id>-error` (`details.errored`, #1291).
    */
   private runOneRule(
+    rule: Rule,
+    ctx: RuleContext,
+    siteMetadata: SiteMetadata | undefined,
+    budgetMs: number,
+    scopeForLog?: "site",
+    fanned?: CheckResult[]
+  ): RuleRunResult | Promise<RuleRunResult> {
+    const out = this.runOneRuleUnfiltered(rule, ctx, siteMetadata, budgetMs, scopeForLog, fanned);
+    if (this.ignoreTable.empty) return out;
+    // `[[ignore]]` (#1262): the one place every rule's result passes, fanned template
+    // verdicts included (they were cloned from a sibling page, so the filter judges
+    // THIS page). Before the result is counted, tallied or scored.
+    const pageUrl = rule.meta.scope === "page" ? ctx.page.url : undefined;
+    const apply = (result: RuleRunResult): RuleRunResult => {
+      const checks = this.ignoreTable.filterChecks(rule.meta.id, pageUrl, result.checks);
+      return checks === result.checks ? result : { ...result, checks };
+    };
+    return out instanceof Promise ? out.then(apply) : apply(out);
+  }
+
+  private runOneRuleUnfiltered(
     rule: Rule,
     ctx: RuleContext,
     siteMetadata: SiteMetadata | undefined,
@@ -513,6 +565,16 @@ export class RuleRunner {
           },
         ],
       };
+    }
+
+    // `[[ignore]]` page waiver (#1262): an entry naming this rule and this page by
+    // url alone waives the page outright, like the gates above: the rule is not run,
+    // a visible skipped check says why, and the skip is excluded from the score.
+    if (rule.meta.scope === "page" && !this.ignoreTable.empty) {
+      const waived = this.ignoreTable.pageWaiver(rule.meta.id, ctx.page.url);
+      if (waived !== null) {
+        return { meta: rule.meta, checks: [this.ignoreTable.waivedPageCheck(rule.meta.id, waived)] };
+      }
     }
 
     // #1951: this rule already ran on a page sharing this one's template cluster
@@ -904,6 +966,11 @@ export class RuleRunner {
       },
       () => ({})
     );
+  }
+
+  /** Indexes of the `[[ignore]]` entries that ran over their work budget and stopped waiving (#1262). */
+  ignoreTimedOutEntries(): number[] {
+    return this.ignoreTable.timedOutEntries();
   }
 
   /**

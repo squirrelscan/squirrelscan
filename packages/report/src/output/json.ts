@@ -55,7 +55,9 @@ import { checkPageTypeScope, pageTypeScopeData, type PageTypeScope } from "../pa
 import { techIconUrl } from "../technologies";
 import { domainAgeYears, siteProfileRows } from "../site-metadata";
 import { editorSummaryView } from "../editor-summary";
+import type { IgnoreSummary } from "@squirrelscan/core-contracts/ignore";
 import { canonicalVariantCount, followedStartRedirect, scanScopeUnfetched, seedRedirect } from "../coverage";
+import { safeIgnored } from "../ignored";
 import { privateTargetLine, privateTargetSkippedRules } from "../private-target";
 import { notCheckedLine, notCheckedRules } from "../not-checked";
 import { collectInfoChecks, type InfoCheck } from "../info-checks";
@@ -186,6 +188,13 @@ interface SlimJsonReport {
      */
     originalUrl?: string;
     redirectChain?: Array<{ url: string; status: number }>;
+    /**
+     * What the config's `[[ignore]]` entries removed from this audit (#1262): waived
+     * items and pages, per rule and per entry (with its reason; an entry that waived
+     * nothing has zeros), and `disabled` for a `--no-ignore` run. Absent when the
+     * config has no waivers.
+     */
+    ignored?: IgnoreSummary;
     timestamp: string;
     totalPages: number;
     /**
@@ -519,6 +528,7 @@ function buildSlimReport(
   const es = editorSummaryView(report.editorSummary, report);
   const refusedSeedRedirect = seedRedirect(report);
   const startRedirect = followedStartRedirect(report);
+  const ignoredSummary = safeIgnored(report);
   const skippedChecks = collectSkippedChecks(report.ruleResults);
   const infoChecks = collectInfoChecks(report.ruleResults);
   const privateTarget = privateTargetLine(report);
@@ -544,6 +554,7 @@ function buildSlimReport(
       ...(startRedirect
         ? { originalUrl: startRedirect.originalUrl, redirectChain: startRedirect.chain }
         : {}),
+      ...(ignoredSummary ? { ignored: ignoredSummary } : {}),
       timestamp: report.timestamp,
       totalPages: report.totalPages,
       ...(report.scanScope?.maxPages !== undefined

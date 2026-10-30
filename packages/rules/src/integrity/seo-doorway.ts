@@ -24,6 +24,8 @@ export const seoDoorwayRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 6,
+    // Compromise detection: an ignore could hide a compromised site (#1262).
+    ignorable: false,
   },
 
   run(ctx: RuleContext): RuleResult {

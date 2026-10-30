@@ -35,6 +35,8 @@ import {
   seedRedirectFollowUp,
   seedRedirectLine,
   startRedirectLine,
+  ignoredLine,
+  unusedIgnoreEntries,
   getGroupName,
   getSubcategoryName,
   groupTechnologies,
@@ -651,6 +653,16 @@ function printReportDetail(
   // #1281: the start URL redirected and the redirect was followed.
   const startRedirect = startRedirectLine(report);
   if (startRedirect) scan.push(fmt.dim(startRedirect));
+  // #1262: findings the config's [[ignore]] entries waived, and entries that matched nothing.
+  const ignored = ignoredLine(report);
+  if (ignored) scan.push(fmt.dim(ignored));
+  for (const entry of unusedIgnoreEntries(report)) {
+    scan.push(
+      fmt.yellow(
+        `Ignore entry ${entry.index + 1} (${entry.rule}) matched nothing.`
+      )
+    );
+  }
   // Scan scope (#1180) + smart-audits coverage (#110): the score reads with its basis. The
   // capped-crawl hint stays with pageLimitHint (commands layer).
   const scope = scanScopeLine(report);

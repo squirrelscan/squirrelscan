@@ -803,6 +803,7 @@
               "configuration/cloud",
               "configuration/security",
               "configuration/rule-options",
+              "configuration/ignore",
               "configuration/examples"
             ]
           }

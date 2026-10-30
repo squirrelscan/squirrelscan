@@ -210,6 +210,20 @@ export interface RuleMeta {
   optionsSchema?: z.ZodObject<z.ZodRawShape>;
   disabled?: boolean; // Internal flag - hides rule from all listings and execution
   /**
+   * `false` keeps a `[[ignore]]` entry from waiving this rule's findings (#1262).
+   * Set only on compromise detection (`integrity/*`), where an ignore could hide a
+   * compromised site. Absent means ignorable.
+   */
+  ignorable?: boolean;
+  /**
+   * The rule's check messages start with the number of items ("3 cookie(s) missing
+   * the Secure flag"). When an `[[ignore]]` waives some of the items, the engine then
+   * rewrites that number to the count that remains, so the message and the items
+   * agree (#1262). Rules without it keep their message and gain an "(N ignored)"
+   * suffix, because a message cannot be rebuilt from outside the rule.
+   */
+  messageCountsItems?: boolean;
+  /**
    * The rule is available but excluded by the default `enable = ["*"]` selection.
    * A concrete enable pattern (the exact id or its category) or
    * `[rule_options."id"] enabled = true` opts it in.

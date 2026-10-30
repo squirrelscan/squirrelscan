@@ -45,6 +45,7 @@ squirrel audit <url> [options]
 | `--publish` | `-p` | Force publish to reports.squirrelscan.com (now the default when logged in) | auto |
 | `--no-publish` | | Skip auto-publishing this run (stay online, just don't publish) | `false` |
 | `--ephemeral` | | Use cloud features for this run only: don't add the site to your dashboard, don't schedule it, and don't publish the report. Charged like any signed-in audit. Overrides `[cloud] ephemeral`. Add `--publish` to publish an unlisted report that is attached to no dashboard site. See [Ephemeral runs](#ephemeral-runs) | `false` |
+| `--no-ignore` | | Run without applying the `[[ignore]]` entries in `squirrel.toml`, to see what they waive. The report says they were not applied. See [Ignore](/configuration/ignore) | `false` |
 | `--no-ephemeral` | | Turn `[cloud] ephemeral = true` off for this run | `false` |
 | `--visibility` | | Visibility: `public`, `unlisted`, `private` | `unlisted` |
 | `--follow-redirect` | | Audit where the start URL redirects when that is another site (a link shortener, a launch domain forwarding to the product). Without it a terminal asks, and anything else exits `4`. Overrides `[crawler] follow_redirect`; `--no-follow-redirect` turns the config off for one run. `-y` does not imply it. See [Start URLs that redirect](#start-urls-that-redirect) | `false` |

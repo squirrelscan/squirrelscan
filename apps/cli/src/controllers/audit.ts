@@ -47,6 +47,7 @@ import {
   createConditionalRenderDocumentFetcher,
   createFetchDocumentFetcher,
 } from "@squirrelscan/fetchers";
+import { summarizeIgnored } from "@squirrelscan/report/ignored";
 import { isRuleEnabled } from "@squirrelscan/rules";
 import { createProbeBudget, selectDiscoveryProbes } from "@squirrelscan/rules";
 import { MAX_DURATION_MAX_PAGE_BYTES } from "@squirrelscan/utils/constants";
@@ -85,6 +86,10 @@ import {
 } from "@/audit/crawl-lease";
 import { entityMapSite, storeEntityMap } from "@/audit/entity-map";
 import { guardCollector } from "@/audit/guard-collector";
+import {
+  ignoreFingerprint,
+  previousIgnoreFingerprint,
+} from "@/audit/ignore-config";
 import {
   createDurationBudget,
   msUntil,
@@ -921,6 +926,8 @@ export async function runAudit(
   // Silent since CLI already logged the config path
   const config = await loadConfig(options.configPath, { silent: true });
   const mergedConfig = mergeOptionsToConfig(config, options);
+  // `[[ignore]]` entries that ran over their regex work budget this run (#1262).
+  let ignoreTimedOut: number[] = [];
 
   // #1271: the audit's wall-clock budget, counted from here (after any prompt).
   const durationBudget = createDurationBudget(
@@ -2228,12 +2235,14 @@ export async function runAudit(
             pagesNotEvaluated: 0,
             pagesTooLarge: 0,
             tooLargePages: [],
+            ignoreTimedOut: [],
             ruleCache: emptyRuleCacheStats(),
           };
         }
       } else {
         ruleResults = await Effect.runPromise(limitedRulesEffect);
       }
+      ignoreTimedOut = ruleResults.ignoreTimedOut;
 
       // Page results already went to `rule_results` batch by batch through the
       // sink above (#2343); only the site pass is left, and it is bounded by the
@@ -2398,6 +2407,28 @@ export async function runAudit(
           ...(options.startRedirect
             ? { startRedirect: options.startRedirect }
             : {}),
+          // `[[ignore]]` entries as this audit ran them (#1262), so a report rebuilt
+          // later names them, lists the ones that matched nothing, and can tell
+          // whether the list changed between audits.
+          ...(config.ignore && config.ignore.length > 0
+            ? {
+                ignore: {
+                  entries: config.ignore.map((e) => ({
+                    rule: e.rule,
+                    ...(e.reason ? { reason: e.reason } : {}),
+                  })),
+                  // `--no-ignore` is its own state: findings it let through must not
+                  // read as "unchanged" to the next audit that carries them.
+                  fingerprint: options.noIgnore
+                    ? "disabled"
+                    : ignoreFingerprint(config.ignore),
+                  ...(options.noIgnore ? { disabled: true } : {}),
+                  ...(ignoreTimedOut.length > 0
+                    ? { timedOut: ignoreTimedOut }
+                    : {}),
+                },
+              }
+            : {}),
         };
         report.scanScope = scanScope;
         // #1271: say what the time limit cut. Status `partial` only when it cut
@@ -2432,6 +2463,40 @@ export async function runAudit(
               report.statusReason = maxDurationReason(cut);
               report.statusReasonCode = "max_duration";
             }
+          }
+        }
+        // #1262: reconstruction ran before the entries were stamped, so build the
+        // summary again from the same checks with them.
+        {
+          const summary = summarizeIgnored(
+            Object.entries(report.ruleResults ?? {}).map(
+              ([id, r]) => [id, r.checks] as [string, typeof r.checks]
+            ),
+            scanScope.ignore
+          );
+          if (summary) {
+            // Findings carried from pages this run did not crawl were recorded under the
+            // previous list; they bypass the engine's filter (the carry path replays
+            // stored rows), so say so when the list changed since the last audit.
+            if (smartMerge && (report.coverage?.carriedFindings ?? 0) > 0) {
+              const previous = await previousIgnoreFingerprint(
+                sqliteStorage,
+                crawlId
+              );
+              // Stale when the list changed, and also when the previous audit was
+              // itself carrying stale rows (they were never re-evaluated since).
+              if (
+                previous !== undefined &&
+                (previous.fingerprint !== scanScope.ignore?.fingerprint ||
+                  previous.carriedStale)
+              ) {
+                summary.carriedStale = true;
+                if (scanScope.ignore) scanScope.ignore.carriedStale = true;
+              }
+            }
+            report.ignored = summary;
+          } else {
+            delete report.ignored;
           }
         }
         // #1281: the URL the user gave and the chain to the audited one.
@@ -2897,6 +2962,8 @@ export function mergeOptionsToConfig(
     // Smart audits (#684): the command resolves signed-in → on / anon → off and
     // passes an explicit boolean; when unset, keep whatever config declared.
     smart_audits: options.smartAudits ?? config.smart_audits,
+    // --no-ignore (#1262): the table is present and not applied for this run.
+    ...(options.noIgnore ? { ignore: [] } : {}),
     // --rule-include/--rule-exclude (#1066): same merge the CLI command uses to
     // pre-validate --fail-on against excluded categories (resolveRulesConfig).
     // The rest of `[rules]`, such as `time_budget_ms` (#578), passes through.

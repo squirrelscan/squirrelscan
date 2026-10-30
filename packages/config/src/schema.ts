@@ -8,6 +8,7 @@ import { isValidHeaderHost, isValidHeaderName, isValidHeaderValue } from "@squir
 import { z } from "zod";
 
 import { parseByteSize } from "./byte-size";
+import { IgnoreListSchema } from "./ignore";
 import { PROBE_LEVELS, parseProbeBudget } from "./probe";
 
 // ============================================
@@ -557,6 +558,12 @@ export const ConfigSchema = z.object({
   // builds a Config by hand does not have to learn it.
   security: SecurityConfigSchema.optional(),
   rule_options: z.record(z.string(), z.record(z.string(), z.unknown())).default({}),
+  /**
+   * `[[ignore]]` waivers (#1262): findings a rule reports that are right in
+   * general but not actionable here, dropped by the engine without disabling the
+   * rule. Optional: absent reads as no waivers and changes nothing.
+   */
+  ignore: IgnoreListSchema.optional(),
   /**
    * Smart audits (#110): persist per-page finding state across audits and score
    * over the UNION of all known non-removed pages, so a partial re-audit carries
