@@ -606,6 +606,14 @@ function printReportDetail(
 ): void {
   const notChecked = notCheckedDetailLines(report);
   const scan: string[] = [];
+  // #1271: the time limit cut the run. Yellow, first: it changes how far the score can be trusted.
+  if (
+    report.status === "partial" &&
+    report.maxDuration &&
+    report.statusReason
+  ) {
+    scan.push(fmt.yellow(`Partial audit: ${report.statusReason}`));
+  }
   // #1829: coverage lost to throttling. Yellow, because it changes how much of the report to trust.
   const rateLimited =
     report.rateLimited && report.rateLimited.pages > 0

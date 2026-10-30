@@ -167,6 +167,11 @@ export interface StreamPageRulesResult {
   /** Pages the extractor wrote page_features for (isAuditablePage-gated). */
   extractedCount: number;
   /**
+   * Pages of the universe whose rules never ran because `deadlineAt` passed first (#1271).
+   * 0 when no deadline was set or it was not reached.
+   */
+  pagesNotEvaluated: number;
+  /**
    * What the template fan-out actually did (#1951). All zeros when it is off, and
    * `fannedRuleRuns` is the number of page-rule invocations it removed — the only
    * measure that distinguishes a working fan-out from one whose byte-identical
@@ -207,6 +212,12 @@ export function streamPageRules(
     hooks?: StreamPageRulesHooks;
     soft404Confirmations?: ReadonlyMap<string, ParsedPage["soft404Confirmation"]>;
     signal?: AbortSignal;
+    /**
+     * Wall-clock time (epoch ms) after which no further page starts its rules (#1271):
+     * the loop ends cleanly with the pages done so far and the count it left is returned
+     * as `pagesNotEvaluated`. A page already running finishes. Unset: every page runs.
+     */
+    deadlineAt?: number;
     /**
      * The page-rule universe as normalized URLs — v1's `pageDataMap` key set.
      * When supplied, ONLY these pages run, which is what keeps the streamed pass
@@ -332,6 +343,8 @@ export function streamPageRules(
     let extractedCount = 0;
     let pagesDone = 0;
     let batchIndex = 0;
+    const deadlineAt = opts?.deadlineAt;
+    let deadlineHit = false;
 
     for (let offset = 0; ; offset += batchSize) {
       opts?.signal?.throwIfAborted();
@@ -392,6 +405,10 @@ export function streamPageRules(
       const parsedByUrl = new Map(parsedBatch.map((e) => [e.page.normalizedUrl, e.parsed]));
 
       for (const page of batch) {
+        if (deadlineAt !== undefined && Date.now() >= deadlineAt) {
+          deadlineHit = true;
+          break;
+        }
         // Per-page interruption checkpoint, matching SerialPageRuleExecutor's.
         // Checking only per batch would let a `rulesPhaseTimeoutMs` breach run a
         // whole batch of heavy pages to completion before it took effect.
@@ -668,7 +685,7 @@ export function streamPageRules(
       parsedByUrl.clear();
       replayByUrl.clear();
       keyByUrl.clear();
-      if (lastBatchSize < batchSize) break;
+      if (lastBatchSize < batchSize || deadlineHit) break;
     }
 
     // Final marker when the last page didn't land on a heartbeat boundary —
@@ -691,6 +708,7 @@ export function streamPageRules(
       pageUrls,
       peakLiveDocs,
       extractedCount,
+      pagesNotEvaluated: deadlineHit ? Math.max(0, (opts?.totalPages ?? pagesDone) - pagesDone) : 0,
       templateFanout: fanout?.stats() ?? {
         clusters: 0,
         fannedPages: 0,
