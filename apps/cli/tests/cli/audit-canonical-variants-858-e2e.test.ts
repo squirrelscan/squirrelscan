@@ -150,3 +150,66 @@ describe("query-string variants counted with their canonical (#858)", () => {
     expect(llm).toContain('crawled="5"');
   }, 180_000);
 });
+
+describe("entity map page counts when a variant redirected (#1350)", () => {
+  // /Contact/?subject=Billing redirects to another URL, so the entity map lists it under its final URL.
+  const redirecting = Bun.serve({
+    port: 0,
+    hostname: "127.0.0.1",
+    fetch(req) {
+      const url = new URL(req.url);
+      const origin = url.origin;
+      const html = { headers: { "content-type": "text/html; charset=utf-8" } };
+      if (url.pathname === "/")
+        return new Response(
+          page(
+            "Home",
+            `${origin}/`,
+            `<a href="/Contact/">c</a> <a href="/Contact/?subject=Billing">v</a>`
+          ),
+          html
+        );
+      if (url.pathname === "/Contact/" && url.search === "?subject=Billing")
+        return new Response(null, {
+          status: 302,
+          headers: { location: "/Contact/?subject=Billing&x=1" },
+        });
+      if (url.pathname === "/Contact/")
+        return new Response(
+          page("Contact", `${origin}/Contact/`, `<a href="/">Home</a>`),
+          html
+        );
+      return new Response("not found", { status: 404 });
+    },
+  });
+  afterAll(() => void redirecting.stop(true));
+
+  test("pagesTotal agrees with the report's page total", async () => {
+    const proc = Bun.spawn(
+      [
+        process.execPath,
+        "run",
+        entry,
+        "audit",
+        `http://127.0.0.1:${redirecting.port}/`,
+        "--offline",
+        "--http",
+        "-m",
+        "10",
+        "-f",
+        "json",
+      ],
+      { env: cleanEnv(), stdin: "ignore", stdout: "pipe", stderr: "pipe" }
+    );
+    const [out] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+      proc.exited,
+    ]);
+    const json = JSON.parse(out) as Json;
+    expect(json.entities?.summary.pagesTotal).toBe(json.meta.totalPages);
+    expect(JSON.stringify(json.entities?.pages)).not.toContain(
+      "subject=Billing"
+    );
+  });
+});

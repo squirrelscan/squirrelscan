@@ -26,6 +26,7 @@ import {
   emptyRuleCacheStats,
   emptyRuleExecutionResult,
   flattenChecks,
+  entityMapVariantKeys,
   readCanonicalVariants,
   type FlatFinding,
   type PageResultSink,
@@ -2592,7 +2593,14 @@ export async function runAudit(
               ? foldEntityMapVariants(
                   entityMap,
                   await Effect.runPromise(
-                    readCanonicalVariants(sqliteStorage, crawlId, 500)
+                    entityMapVariantKeys(
+                      sqliteStorage,
+                      crawlId,
+                      await Effect.runPromise(
+                        readCanonicalVariants(sqliteStorage, crawlId, 500)
+                      ),
+                      500
+                    )
                   )
                 )
               : entityMap;

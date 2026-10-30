@@ -176,3 +176,41 @@ export function readCanonicalVariants(
     return canonicalVariantMap(rows);
   });
 }
+
+/**
+ * `variantOf` re-keyed to the URLs the entity map lists pages under (#1350). The map is keyed on a page's
+ * final URL (`finalUrl || url`, entity-map/collect.ts), the report's fold on its normalized URL; they differ
+ * when a variant or its canonical redirected (a trailing slash, http to https), and the fold would then miss.
+ */
+export function entityMapVariantKeys(
+  storage: CrawlStorage,
+  crawlId: string,
+  variantOf: ReadonlyMap<string, string>,
+  batchSize: number,
+): Effect.Effect<Map<string, string>, never, never> {
+  return Effect.gen(function* () {
+    const out = new Map<string, string>();
+    const reader = storage as unknown as {
+      getPagesWithoutBodies?: (
+        crawlId: string,
+        opts?: { limit?: number; offset?: number },
+      ) => Effect.Effect<Array<{ normalizedUrl: string; url: string; finalUrl: string | null }>, unknown, never>;
+    };
+    if (variantOf.size === 0 || !reader.getPagesWithoutBodies) return out;
+    const keyOf = new Map<string, string>();
+    for (let offset = 0; ; offset += batchSize) {
+      const batch = yield* reader
+        .getPagesWithoutBodies(crawlId, { limit: batchSize, offset })
+        .pipe(Effect.catchAll(() => Effect.succeed([] as Array<{ normalizedUrl: string; url: string; finalUrl: string | null }>)));
+      if (batch.length === 0) break;
+      for (const page of batch) keyOf.set(page.normalizedUrl, page.finalUrl || page.url);
+      if (batch.length < batchSize) break;
+    }
+    for (const [variant, canonical] of variantOf) {
+      const from = keyOf.get(variant) ?? variant;
+      const to = keyOf.get(canonical) ?? canonical;
+      if (from !== to) out.set(from, to);
+    }
+    return out;
+  });
+}
