@@ -85,7 +85,10 @@ describe("framework payload analyzer on hostile pages", () => {
     expect(ms).toBeLessThan(CEILING_MS);
   });
 
-  test("documentBody is null for a document with no root", () => {
-    expect(documentBody(doc(""))).toBeNull();
+  test("documentBody is null for a document with no root, and an empty body for an empty page", () => {
+    // A hand-built document with neither body nor root element.
+    expect(documentBody({} as never)).toBeNull();
+    // Since #1270 a page with no markup parses to an empty shell: its body exists and is empty.
+    expect(documentBody(doc(""))?.childNodes.length ?? 0).toBe(0);
   });
 });

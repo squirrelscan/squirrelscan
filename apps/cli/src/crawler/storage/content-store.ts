@@ -6,8 +6,9 @@
 // It also held URL-keyed scripts for `squirrel analyze` until #768; those rows
 // age out under the size cap like any other.
 
-import { parseByteSize } from "@squirrelscan/config";
 import type { Database } from "bun:sqlite";
+
+import { parseByteSize } from "@squirrelscan/config";
 import {
   OWNER_ONLY_DIR_MODE,
   restrictToOwner,
