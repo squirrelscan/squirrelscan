@@ -211,7 +211,10 @@ const LINK_REL_WORDS = new Set(["stylesheet", "preload", "modulepreload"]);
 
 /** The value of attribute `name` in a tag's attribute text: quoted either way, or bare. */
 function attributeValue(attrs: string, name: string): string | undefined {
-  const match = new RegExp(`(?:^|\\s)${name}\\s*=\\s*(?:"([^"]{0,2000})"|'([^']{0,2000})'|([^\\s"'>]{1,2000}))`, "i").exec(attrs);
+  const match = new RegExp(
+    `(?:^|\\s)${name}\\s*=\\s*(?:"([^"]{0,2000})"|'([^']{0,2000})'|([^\\s"'>]{1,2000}))`,
+    "i",
+  ).exec(attrs);
   return match?.[1] ?? match?.[2] ?? match?.[3];
 }
 
@@ -221,16 +224,40 @@ export function extractLinkAssetHrefs(html: string): string[] {
   let m: RegExpExecArray | null;
   while ((m = re.exec(html)) !== null) {
     const attrs = m[1] ?? "";
-    const rel = attributeValue(attrs, "rel");
-    if (!rel || !rel.toLowerCase().split(/\s+/).some((word) => LINK_REL_WORDS.has(word))) continue;
+    // A bare value glued to a self-closing slash (`rel=stylesheet/>`) carries the slash.
+    const rel = attributeValue(attrs, "rel")?.replace(/\/$/, "");
+    if (
+      !rel ||
+      !rel
+        .toLowerCase()
+        .split(/\s+/)
+        .some((word) => LINK_REL_WORDS.has(word))
+    )
+      continue;
     const href = attributeValue(attrs, "href");
     if (href) out.push(href);
   }
   return out;
 }
 
-/** Most stylesheet and preload URLs listed per page, after the scripts, so they never push a script out. */
-const MAX_LINK_HREFS_PER_PAGE = 20;
+/**
+ * Most stylesheet and preload URLs listed per page, after the scripts, so they never push
+ * a script out. A URL longer than MAX_LINK_HREF_CHARS is not listed, so the worst case is
+ * 40 x 1000 chars = ~40 KB a page (the cloud payload carries them).
+ */
+const MAX_LINK_HREFS_PER_PAGE = 40;
+const MAX_LINK_HREF_CHARS = 1000;
+
+/** Platform asset prefixes the fingerprints key on: these URLs are listed before the rest. */
+const PLATFORM_ASSET_PATH =
+  /\/(?:wp-content\/(?:plugins|themes)|wp-includes|sites\/default\/files|static\/version|skin\/frontend|cdn\/shop|media\/system|bitrix\/templates)\//i;
+
+/** Platform asset URLs first, then the rest, each in document order. */
+export function prioritiseLinkHrefs(hrefs: string[]): string[] {
+  const platform = hrefs.filter((href) => PLATFORM_ASSET_PATH.test(href));
+  const rest = hrefs.filter((href) => !PLATFORM_ASSET_PATH.test(href));
+  return [...platform, ...rest];
+}
 
 /**
  * Tech-detect input for each page, with the first-party script bodies the crawl
@@ -347,9 +374,9 @@ export function buildTechInputs(
     const listed = [...urls].slice(0, SERVICE_LIMITS.techDetectMaxScriptsPerPage);
     const seen = new Set(listed);
     let linksAdded = 0;
-    for (const href of linkHrefs) {
+    for (const href of prioritiseLinkHrefs(linkHrefs)) {
       if (linksAdded >= MAX_LINK_HREFS_PER_PAGE) break;
-      if (seen.has(href)) continue;
+      if (href.length > MAX_LINK_HREF_CHARS || seen.has(href)) continue;
       seen.add(href);
       listed.push(href);
       linksAdded++;
