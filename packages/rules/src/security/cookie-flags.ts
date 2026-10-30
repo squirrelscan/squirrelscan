@@ -117,10 +117,10 @@ export const cookieFlagsRule: Rule = {
       }
     }
 
-    // A cookie the hosting platform sets for routing or deployment (a fixed
-    // list of exact names) is info naming the platform, not a warning: the site
-    // owner can't change it and it holds no session. Any other cookie, however
-    // it is named, still warns.
+    // A cookie on a fixed list of exact names that a hosting platform's sites
+    // commonly carry (not set by the site owner, no session in it) is info
+    // naming the platform, not a warning. Any other cookie, however it is
+    // named, still warns. The platform may not document the cookie.
     const noHttpOnly = cookies.filter((c) => !c.httpOnly);
     const platformOwned = noHttpOnly.filter((c) => platformCookie(c.name));
     const missingHttpOnly = noHttpOnly.filter((c) => !platformCookie(c.name));
@@ -129,7 +129,7 @@ export const cookieFlagsRule: Rule = {
       checks.push({
         name: "cookie-httponly-platform",
         status: "info",
-        message: `${platformOwned.length} platform cookie(s) without HttpOnly, set by the hosting platform for routing, not by your code (${platforms.map((p) => `${p.platform}: ${p.docs}`).join(", ")})`,
+        message: `${platformOwned.length} cookie(s) without HttpOnly that ${platforms.map((p) => p.platform).join(" and ")}-hosted sites commonly carry (${[...new Set(platformOwned.map((c) => c.name))].join(", ")}); the platform does not document it, so it is reported as info, not a warning`,
         items: platformOwned.map((c) => ({ id: c.name })),
       });
     }
