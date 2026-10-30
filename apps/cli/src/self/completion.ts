@@ -548,7 +548,7 @@ _squirrel() {
             '--render[Force cloud browser rendering for this run]' \\
             '--render-mode[Render strategy]:mode:(off auto all)' \\
             '--http[Force plain HTTP fetch for this run]' \\
-            '--offline[Run fully offline: no cloud, publishing, telemetry, or requests to other sites]' \\
+            '--offline[Run fully offline: no cloud, publishing, telemetry, or requests to other sites (does not imply --passive)]' \\
             '--external-links[Check links to other sites this run, at any level]' \\
             '--no-external-links[Do not check links to other sites this run]' \\
             '--no-internal-links[Do not status-check unfetched internal link targets]' \\
@@ -811,7 +811,7 @@ complete -c squirrel -n "__fish_seen_subcommand_from audit" -s y -l yes -d "Skip
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l render -d "Force cloud browser rendering for this run"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l render-mode -a "off auto all" -d "Render strategy"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l http -d "Force plain HTTP fetch for this run"
-complete -c squirrel -n "__fish_seen_subcommand_from audit" -l offline -d "Run fully offline: no cloud, publishing, telemetry, or requests to other sites"
+complete -c squirrel -n "__fish_seen_subcommand_from audit" -l offline -d "Run fully offline: no cloud, publishing, telemetry, or requests to other sites (does not imply --passive)"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l external-links -d "Check links to other sites this run, at any level"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l no-external-links -d "Do not check links to other sites this run"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l no-internal-links -d "Do not status-check unfetched internal link targets"

@@ -94,7 +94,7 @@ default.
 
 These rules send requests only when probing is `active` or `aggressive`. On a
 `passive` run each records one skipped check and sends nothing. All of them
-probe only the audited origin, never another host.
+probe only the audited origin, never another host. `--offline` does not turn them off: it restricts which hosts are requested, not the probing intensity, so an offline `surface` or `full` run still probes unless you pass `--passive` (see [Fully offline audit](/cli/audit#fully-offline-audit)).
 
 | Rule | What it sends | Level |
 |------|---------------|-------|
