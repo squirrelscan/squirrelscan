@@ -20,7 +20,6 @@ How it works:
 ### Fixed
 
 - **`security/cookie-flags` no longer warns about Lovable's `__dpl` cookie.** 95% of Lovable sites in a 35k-audit batch got an HttpOnly warning for it alone, a cookie the site owner does not set and Lovable does not document. It is now an info check, `cookie-httponly-platform`, naming the platform. The exemption is by exact cookie name from a short evidence-based list; session-looking and every other cookie still warn, and the Secure and SameSite checks are unchanged. (#1378)
-
 - **Supabase is detected in more real bundles.** A bundle that ships supabase-js (its Node.js deprecation notice or its `sb-<ref>-auth-token` storage key) and quotes a `<ref>.supabase.co` project URL anywhere is Supabase, wherever the key sits and whatever its format: the URL in a variable, a new-format `sb_secret_` key, or a URL far past the start of a large bundle, even after hundreds of earlier Supabase mentions. A mention that cannot lead to a detection (a placeholder URL, a non-key pair) no longer uses up the sample, and a repeated one counts once. A docs link, a placeholder URL, library strings with no project URL, and a Base44 app are still not reported. (#1379)
 
 ## v0.0.145 (2026-10-31)
