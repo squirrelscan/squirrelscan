@@ -426,21 +426,28 @@ const CARD_MIN_PARENTS = 3;
 const CARD_MAX_ELEMENTS = 4000;
 const CARD_MAX_SCANNED = 40_000;
 /**
- * The shapes of numbers a card varies: a decimal (4.5, 12,90), an amount beside a currency symbol or code,
- * a percentage, "4 of 5" / "4/5", and a count of stars or reviews. A bare integer is NOT one: doorway
- * spam numbers its lines ("emergency plumber london 17") and must never read as a card.
+ * The shapes of numbers a card varies: an amount beside a currency symbol or code, a percentage, "4 of 5" / "4/5",
+ * and a count of stars or reviews. A bare number is NOT one, a decimal included ("plumber 49.99"): doorway spam
+ * numbers and prices its lines, and must never read as a card.
  */
 const CARD_NUMBER =
-  /[$\u20ac\u00a3\u00a5]\s?\d[\d.,]*|\d[\d.,]*\s?(?:[$\u20ac\u00a3\u00a5%]|eur|usd|gbp|chf)\b|\d+[.,]\d+|\b\d\s*(?:of|von|\/)\s*\d+\b|\b\d+\s*(?:stars?|sterne|sternen|reviews?|bewertungen)\b/gi;
-/** The card deduction never removes more than this share of the measured words. */
+  /[$\u20ac\u00a3\u00a5]\s?\d[\d.,]*|\d[\d.,]*\s?(?:[$\u20ac\u00a3\u00a5%]|(?:eur|usd|gbp|chf)\b)|\b\d\s*(?:of|von|\/)\s*\d+\b|\b\d+\s*(?:stars?|sterne|sternen|reviews?|bewertungen)\b/gi;
+/** The card deduction never removes more than this share of the measured words... */
 const CARD_MAX_SHARE = 0.2;
+/** ...never takes a word below this share of the density threshold (half of it: 1.5% by default)... */
+const CARD_FLOOR_SHARE = 0.5;
+/** ...and never touches a word that is this share (%) of the measured words before any deduction. */
+const CARD_RAW_DENSITY_LIMIT = 10;
 
 /**
  * Rating and price microcopy repeated once per card (#1315): "Average rating 4.5 of 5 stars", "from 12,90 EUR in
  * instalments". `text -> occurrences` for every text that, with its rating- or price-shaped numbers replaced, is
  * the whole text of a leaf element in at least {@link CARD_MIN_PARENTS} different parent wrappers AND whose
- * numbers differ between occurrences. Text with no such number is never deducted, nor is one whose only digits
- * are bare integers ("emergency plumber london 17"): a stuffed phrase must keep counting, whatever wraps it.
+ * numbers differ between occurrences. Text with no such number is never deducted, nor is one whose only numbers
+ * are bare ("emergency plumber london 17", "plumber 49.99"). The deduction is bounded, because a spammer can dress
+ * a phrase in a price: at most {@link CARD_MAX_SHARE} of the page's words in total (the largest texts first, clamped),
+ * never below {@link CARD_FLOOR_SHARE} of the density threshold for any one word, and not at all for a word that is
+ * {@link CARD_RAW_DENSITY_LIMIT}% or more of the page before it.
  * The trade-offs: non-numeric card microcopy ("In stock"), a price identical on every card and a bare count
  * ("12 reviews" is covered, "12 items" is not) still count toward density. The total deducted is capped at
  * {@link CARD_MAX_SHARE} of the page's words.
@@ -610,25 +617,37 @@ export const keywordStuffingRule: Rule = {
       }
     }
 
-    // Text repeated once per card in a grid (a rating sentence, an installment note) is a
-    // UI component, not copy aimed at a term (#1315). A leaf block counts as one only
-    // when the same text (digits ignored) sits in at least three different parent
-    // wrappers: the card pattern. The same sentence written again and again in one
-    // container is body copy and still counts.
-    let cardWordTotal = 0;
-    const cardWordCap = Math.floor(words.length * CARD_MAX_SHARE);
-    for (const [text, occurrences] of repeatedCardText(contentRoot, isInExcludedChrome)) {
-      const tokens = keywordTokens(text);
-      const add = tokens.length * occurrences;
-      if (cardWordTotal + add > cardWordCap) continue;
-      cardWordTotal += add;
-      for (const word of tokens) {
-        ctaWordDeductions.set(word, (ctaWordDeductions.get(word) || 0) + occurrences);
-        ctaWordTotal += occurrences;
+    // Rating and price text repeated once per card (#1315) is a UI component, not copy aimed at a
+    // term. Bounded (see repeatedCardText): clamped to a share of the words, largest texts first.
+    const cardDeductions = new Map<string, number>();
+    {
+      let left = Math.floor(words.length * CARD_MAX_SHARE);
+      const texts = [...repeatedCardText(contentRoot, isInExcludedChrome)].sort((x, y) => y[1] - x[1]);
+      for (const [text, occurrences] of texts) {
+        const tokens = keywordTokens(text);
+        if (tokens.length === 0) continue;
+        const allowed = Math.min(occurrences, Math.floor(left / tokens.length));
+        if (allowed <= 0) continue;
+        left -= allowed * tokens.length;
+        for (const word of tokens) cardDeductions.set(word, (cardDeductions.get(word) || 0) + allowed);
       }
     }
+    // What of that is applied, word by word: never below the floor, never on a word that is
+    // already a big share of the page. Removed words also leave the total they are measured against.
+    const baseTotal = words.length - ctaWordTotal;
+    const floorCount = Math.ceil((baseTotal * opts.density_threshold * CARD_FLOOR_SHARE) / 100);
+    const cardApplied = new Map<string, number>();
+    let cardAppliedTotal = 0;
+    for (const [word, deduction] of cardDeductions) {
+      const raw = wordCounts.get(word) ?? 0;
+      if ((raw / words.length) * 100 >= CARD_RAW_DENSITY_LIMIT) continue;
+      const applied = Math.min(deduction, Math.max(0, raw - (ctaWordDeductions.get(word) ?? 0) - floorCount));
+      if (applied <= 0) continue;
+      cardApplied.set(word, applied);
+      cardAppliedTotal += applied;
+    }
 
-    const organicTotal = words.length - ctaWordTotal;
+    const organicTotal = baseTotal - cardAppliedTotal;
 
     const suspiciousWords: { word: string; count: number; density: number }[] = [];
 
@@ -648,7 +667,7 @@ export const keywordStuffingRule: Rule = {
         }
         if (whitelist.has(word)) continue;
 
-        const count = rawCount - (ctaWordDeductions.get(word) ?? 0);
+        const count = rawCount - (ctaWordDeductions.get(word) ?? 0) - (cardApplied.get(word) ?? 0);
         if (count <= 0) continue;
 
         const density = (count / organicTotal) * 100;
