@@ -220,6 +220,12 @@ export function streamPageRules(
      */
     deadlineAt?: number;
     /**
+     * HTML larger than this many bytes is not parsed or evaluated; each such page in the
+     * universe is returned in `pagesNotEvaluated` (`--max-duration`, #1332: a parse cannot be
+     * interrupted). Unset: every page runs.
+     */
+    maxPageBytes?: number;
+    /**
      * The page-rule universe as normalized URLs — v1's `pageDataMap` key set.
      * When supplied, ONLY these pages run, which is what keeps the streamed pass
      * on exactly v1's set instead of re-deriving it from a second predicate that
@@ -346,6 +352,8 @@ export function streamPageRules(
     let batchIndex = 0;
     const deadlineAt = opts?.deadlineAt;
     let deadlineHit = false;
+    const maxPageBytes = opts?.maxPageBytes;
+    let oversizeSkipped = 0;
 
     // The pages this crawl holds, so a page that redirected to another page of it
     // can leave the duplicate-content rows to its target (#1355). One light pass
@@ -412,8 +420,9 @@ export function streamPageRules(
       }
 
       // Parse only what has to be parsed (≤ batchSize DOMs live at the peak).
-      const toParse =
-        replayByUrl.size === 0 ? batch : batch.filter((p) => !replayByUrl.has(p.normalizedUrl));
+      const tooLarge = (p: (typeof batch)[number]): boolean =>
+        maxPageBytes !== undefined && (p.sizeBytes ?? p.html?.length ?? 0) > maxPageBytes;
+      const toParse = batch.filter((p) => !replayByUrl.has(p.normalizedUrl) && !tooLarge(p));
       const parsedBatch = yield* buildSiteContext(toParse);
       peakLiveDocs = Math.max(peakLiveDocs, parsedBatch.filter((p) => p.parsed?.document).length);
       const parsedByUrl = new Map(parsedBatch.map((e) => [e.page.normalizedUrl, e.parsed]));
@@ -455,6 +464,12 @@ export function streamPageRules(
           continue;
         }
 
+        if (tooLarge(page)) {
+          // Never parsed (#1332). Counted only when it would have run: the universe, not
+          // non-HTML or WAF pages, which no engine evaluates.
+          if (universe ? universe.has(page.normalizedUrl) : isAuditablePage(page)) oversizeSkipped++;
+          continue;
+        }
         const parsed = parsedByUrl.get(page.normalizedUrl);
         if (!parsed) continue; // non-HTML / failed parse — v1 skips these too
         // WAF-challenge pages are excluded from page-level scoring (v1 parity).
@@ -722,7 +737,8 @@ export function streamPageRules(
       pageUrls,
       peakLiveDocs,
       extractedCount,
-      pagesNotEvaluated: deadlineHit ? Math.max(0, (opts?.totalPages ?? pagesDone) - pagesDone) : 0,
+      pagesNotEvaluated:
+        (deadlineHit ? Math.max(0, (opts?.totalPages ?? pagesDone) - pagesDone - oversizeSkipped) : 0) + oversizeSkipped,
       templateFanout: fanout?.stats() ?? {
         clusters: 0,
         fannedPages: 0,

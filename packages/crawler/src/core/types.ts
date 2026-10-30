@@ -151,6 +151,11 @@ export interface CrawlerConfig {
    * their own budgets.
    */
   discoveryDeadlineAt?: number;
+  /**
+   * HTML larger than this many bytes is stored but not parsed, so it yields no links (`--max-duration`,
+   * #1332: parsing cannot be interrupted and would hold the crawl past its budget). Unset: no cap.
+   */
+  maxParseBytes?: number;
   /** Number of URLs found in sitemaps (set at runtime by crawler) */
   sitemapUrlCount: number;
   /**

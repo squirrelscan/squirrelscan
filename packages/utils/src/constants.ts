@@ -630,3 +630,11 @@ export const STORED_SCRIPT_LIMITS = {
   /** Wall-clock budget for the whole script fetch while storing scripts; later scripts are not fetched (`time-budget`). */
   fetchTimeBudgetMs: 120_000,
 } as const;
+
+/**
+ * `--max-duration` (#1332): a page whose HTML is larger than this is not parsed or evaluated in a
+ * budgeted run. Parsing cannot be interrupted, so one very large page would hold the event loop past
+ * the deadline; the page is stored, skipped by the rules and counted in `maxDuration.pagesNotEvaluated`.
+ * A run without `--max-duration` has no such cap.
+ */
+export const MAX_DURATION_MAX_PAGE_BYTES = 5 * 1024 * 1024;

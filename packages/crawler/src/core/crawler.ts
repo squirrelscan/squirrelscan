@@ -1965,8 +1965,10 @@ export function createCrawler(
           // Parse and discover URLs if HTML (before storing page)
           let parsedData: string | null = null;
           if (
-            isHtmlContentType(result.contentType) ||
-            (!result.contentType && looksLikeHtml(result.body))
+            (isHtmlContentType(result.contentType) ||
+              (!result.contentType && looksLikeHtml(result.body))) &&
+            // #1332: a budgeted run does not parse a page it could not stop parsing.
+            !(config.maxParseBytes !== undefined && result.body.length > config.maxParseBytes)
           ) {
             // Parse page data once (includes parseDocument internally)
             const parsed = parsePage(result.body, result.finalUrl, { classify: options.classify });

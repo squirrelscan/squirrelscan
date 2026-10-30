@@ -44,6 +44,7 @@ import {
   createFetchDocumentFetcher,
 } from "@squirrelscan/fetchers";
 import { createProbeBudget, selectDiscoveryProbes } from "@squirrelscan/rules";
+import { MAX_DURATION_MAX_PAGE_BYTES } from "@squirrelscan/utils/constants";
 import {
   customUserAgent,
   mergeHeaderRecords,
@@ -1166,7 +1167,10 @@ export async function runAudit(
         timeoutMs: mergedConfig.crawler.timeout_ms,
         // #1271: discovery (robots, sitemaps, root probes) cannot use up the budget before page 1.
         ...(durationBudget
-          ? { discoveryDeadlineAt: durationBudget.discoveryDoneAt }
+          ? {
+              discoveryDeadlineAt: durationBudget.discoveryDoneAt,
+              maxParseBytes: MAX_DURATION_MAX_PAGE_BYTES,
+            }
           : {}),
         userAgent,
         // squirrelscan/repo#3271: the robots.txt group token, when set apart from the UA.
@@ -2117,6 +2121,7 @@ export async function runAudit(
           ...(durationBudget
             ? {
                 deadlineAt: durationBudget.pageRulesStopAt,
+                maxPageBytes: MAX_DURATION_MAX_PAGE_BYTES,
                 probesDeadlineAt: durationBudget.probesDoneAt,
                 onProbeSkipped: (probe: string) => {
                   durationCut.probesSkipped.push(probe);

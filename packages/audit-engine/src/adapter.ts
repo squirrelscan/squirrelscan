@@ -3467,6 +3467,8 @@ export function runStreamingRules(
     signal?: AbortSignal;
     /** Epoch ms after which no further page starts its rules; see {@link streamPageRules} (#1271). */
     deadlineAt?: number;
+    /** HTML larger than this is neither parsed nor evaluated and is counted in `pagesNotEvaluated` (#1332). */
+    maxPageBytes?: number;
     /**
      * Epoch ms the probes before the page rules (soft-404 re-fetch, cloaking) must
      * be done by (#1327). One still going is abandoned and reported through
@@ -3698,6 +3700,7 @@ export function runStreamingRules(
       hooks: opts?.hooks,
       signal: opts?.signal,
       deadlineAt: opts?.deadlineAt,
+      maxPageBytes: opts?.maxPageBytes,
       // v1's page-rule universe verbatim (its `pageDataMap` keys), so the streamed
       // pass can't drift from it — notably it excludes rate-limited pages, which
       // `isAuditablePage` alone does not (#1829).
