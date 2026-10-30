@@ -1,0 +1,98 @@
+---
+title: "Page content in a JavaScript bundle: text shipped twice"
+description: "A same-origin JavaScript chunk of 50 KB or more that contains the text of your pages (compiled MDX or Markdown bodies, inlined CMS JSON). squirrel finds it by searching the chunk for each page's own sentences."
+---
+
+## What the bundle costs
+
+The pattern is common with MDX and Markdown on Vite, Next.js, Astro islands and Remix, and with CMS JSON imported at build time. An eager `import.meta.glob("content/*.mdx")` compiles every body to JavaScript and bundles it. The HTML is already server-rendered, so the page's text reaches the visitor twice: once as markup, once as script they download, parse and never run for display. When the chunk is the entry chunk, every page load also downloads the text of every other page.
+
+On the site this rule was written for, about 150 MDX bodies had been compiled into a 1.7 MB entry chunk (about 490 KB gzipped). Rendering the bodies on the server dropped the entry chunk to 617 KB (189 KB gzipped).
+
+[JavaScript bundle too large](/rules/perf/js-file-size) says a file is big but not why, and [total byte weight](/rules/perf/total-byte-weight) is sitewide. This rule names the cause.
+
+## What squirrel checks
+
+While each page is parsed, squirrel keeps up to five distinctive sentences of its main content: single text nodes of ten or more words, the longest first, taken from `<main>`, `<article>` or `[role=main]`, or from the body outside navigation, header, footer, aside and form landmarks. Code blocks are skipped. A sentence that opens three or more pages' main content is site template text and is dropped.
+
+When the audit has fetched the site's JavaScript, squirrel searches every same-origin chunk of 50 KB or more (the 10 largest) for those sentences. A page's content counts as inside a chunk when at least three of its sentences are found. The chunk is first decoded once so that compiled output matches: JavaScript string escapes (`\"`, `\'`, `\n`, `\t`, `\xNN`, `\uNNNN`, `\u{N}`), HTML entities (named, decimal and hex) and whitespace runs are all reduced to plain text.
+
+The finding is per chunk:
+
+- `content-in-js-bundle` (warning): the chunk holds the content of a page that loads it.
+- `content-in-js-bundle-sitewide` (failure): the same chunk also holds the content of at least two other pages. This is the "whole site's content in every page's bundle" signature.
+
+Each item gives the chunk URL, its size and its gzip size, how many pages' content it holds (and how many others), and an estimated prose share of the chunk: the share of its characters in long runs of plain text, which compiled copy scores high on and application code scores near zero on.
+
+### What does not count
+
+- Content that is only in the HTML: framework hydration state in an inline script (`__NEXT_DATA__` and the like) and JSON-LD are inline, not same-origin chunks, and are not searched. [Framework data payload](/rules/perf/framework-data-payload) covers inline state.
+- Chunks under 50 KB.
+- Text that is only in navigation or footer.
+- A chunk the audit could not fetch, or one over the 5 MB script fetch cap.
+
+### Limits
+
+Chunk bodies come from the audit's existing script fetches, so each chunk is downloaded and decoded once, with the same size and time limits as the other script rules. A chunk over 8 MB of text is reported as not searched. At most 300 pages are searched per chunk (the pages that load it first, then an even sample of the rest), and the whole search stops after 2.5 seconds and says so, so on a very large site the "other pages" count is a floor. One level of escaping is undone: text a bundler has double-escaped, such as JSON inside a string literal, may not match. A page needs at least three distinct sentences of ten words to be judged, so very short pages are not.
+
+## How to fix it
+
+Render static content on the server and keep it out of the client bundle.
+
+For MDX, compile and render bodies in a server function or loader, import only frontmatter on the client, and use lazy (not eager) globs for bodies:
+
+```ts
+// before: every body ends up in the client bundle
+const posts = import.meta.glob("../content/*.mdx", { eager: true });
+
+// after: frontmatter only on the client, bodies loaded on demand on the server
+const meta = import.meta.glob("../content/*.mdx", { eager: true, import: "frontmatter" });
+const bodies = import.meta.glob("../content/*.mdx"); // lazy: one chunk per file
+```
+
+With a framework that has server components, keep the content in server components. For CMS JSON, fetch it on the server rather than importing it at build time into code the browser loads.
+
+| | |
+|---|---|
+| **Rule ID** | `perf/content-in-js-bundle` |
+| **Category** | [Performance](/rules/perf) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 6/10 |
+
+## Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `min_chunk_bytes` | number | `51200` | Chunks smaller than this are not searched |
+| `min_sentences` | number | `3` | Distinctive sentences of a page that must be found for its content to count as inside the chunk |
+| `escalate_other_pages` | number | `2` | Other pages whose content is in the same chunk before the finding becomes a failure |
+| `max_pages_checked` | number | `300` | Pages searched for per chunk |
+| `max_chunks` | number | `10` | Largest chunks searched |
+
+### Configuration example
+
+```toml squirrel.toml
+[rule_options."perf/content-in-js-bundle"]
+min_chunk_bytes = 51200
+min_sentences = 3
+escalate_other_pages = 2
+max_pages_checked = 300
+max_chunks = 10
+```
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["perf/content-in-js-bundle"]
+```
+
+### Disable all Performance rules
+
+```toml squirrel.toml
+[rules]
+disable = ["perf/*"]
+```

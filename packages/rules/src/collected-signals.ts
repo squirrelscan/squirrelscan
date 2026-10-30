@@ -33,6 +33,7 @@ import type { InPageSectionSignal } from "./shared/inpage-section";
 import { scanPageForMisspellings } from "./content/common-misspellings";
 import { RULE_TIME_BUDGET_MS, RuleTimeoutError, runWithinBudget } from "./rule-budget";
 import { scanPageForSecrets } from "./security/leaked-secrets";
+import { extractContentSentences } from "./shared/content-in-script";
 
 /**
  * The per-page DOM-derived signal for the six all-pages site rules, captured while
@@ -82,6 +83,12 @@ export interface CollectedPageSignal {
    * no document. Absent on a record cached before the field existed, which reads as none (#1236).
    */
   inPageSections?: InPageSectionSignal | null;
+  /**
+   * perf/content-in-js-bundle: a few distinctive sentences of the page's main content
+   * (single text nodes of ten or more words), searched for in the site's JS chunks.
+   * Absent on a record cached before the field existed, which reads as not judged.
+   */
+  contentSentences?: string[];
   /**
    * Rules whose page-time extractor ran past its time budget on this page and was
    * abandoned (its field holds the empty value). The site pass records each as a
@@ -142,6 +149,7 @@ export function buildCollectedPageSignal(input: {
       anchors: null,
       inPageSections: null,
       misspellings: { english: false, occurrences: [] },
+      contentSentences: [],
     };
   }
 
@@ -228,6 +236,7 @@ export function buildCollectedPageSignal(input: {
     misspellings: timed("content/common-misspellings", { english: false, occurrences: [] }, () =>
       scanPageForMisspellings(doc)
     ),
+    contentSentences: timed("perf/content-in-js-bundle", [] as string[], () => extractContentSentences(doc)),
   };
   // The one record serves both rules: a timeout is reported against both.
   if (timedOutRuleIds.includes("eeat/about-page")) timedOutRuleIds.push("eeat/contact-page");

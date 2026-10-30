@@ -10,6 +10,7 @@ import { cacheHeadersRule } from "./cache-headers";
 import { carouselHiddenEagerRule } from "./carousel-hidden-eager";
 import { clsHintsRule } from "./cls-hints";
 import { compressionRule } from "./compression";
+import { contentInJsBundleRule } from "./content-in-js-bundle";
 import { criticalRequestChainsRule } from "./critical-request-chains";
 import { cssFileSizeRule } from "./css-file-size";
 import { jsFileSizeRule } from "./js-file-size";
@@ -48,6 +49,7 @@ export const rules: Rule[] = [
   carouselHiddenEagerRule,
   cssFileSizeRule,
   jsFileSizeRule,
+  contentInJsBundleRule,
   assetCompressionRule,
   domSizeRule,
   frameworkDataPayloadRule,
