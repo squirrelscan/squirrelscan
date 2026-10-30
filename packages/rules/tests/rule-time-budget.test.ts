@@ -319,14 +319,15 @@ describe("per-rule time budget", () => {
     let calls = 0;
     const flaky = rule("test/flaky", "page", () => {
       if (calls++ === 0) {
-        const until = performance.now() + 150;
+        const until = performance.now() + 1_000;
         while (performance.now() < until) {
           // one slow page, e.g. a GC pause
         }
       }
       return pass("test/flaky");
     });
-    const runner = makeRunner([flaky], 50);
+    // The fast second page must not time out on a starved runner: a wide budget, and a slow page far past it.
+    const runner = makeRunner([flaky], 250);
     const first = await runner.runPageRules({ ...redosPage(), url: "https://example.com/a" }, siteData());
     const second = await runner.runPageRules({ ...redosPage(), url: "https://example.com/b" }, siteData());
     expect(first.checks.map((c) => c.name)).toEqual(["test/flaky-error"]);
@@ -418,12 +419,16 @@ describe("per-rule time budget", () => {
     expect(checks.map((c) => c.name)).toEqual(["test/async"]);
   });
 
-  test("a budget of 0 turns it off", () => {
+  test("a budget of 0 turns it off", async () => {
+    // A macrotask boundary first: the previous test's watchdog can still be armed until the
+    // current task ends (see rule-budget.ts), and a starved shared runner must not be able to
+    // spend this call's budget either, so the pass-through call gets a generous one.
+    await new Promise((resolve) => setTimeout(resolve, 20));
     expect(runWithinBudget(() => 7, 0)).toBe(7);
     expect(() =>
       runWithinBudget(() => {
         throw new RangeError("passes through");
-      }, 50)
+      }, 5_000)
     ).toThrow(RangeError);
   });
 });
