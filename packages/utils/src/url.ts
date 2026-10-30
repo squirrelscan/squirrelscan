@@ -409,6 +409,20 @@ export function normalizePageUrl(url: string): string {
 }
 
 /**
+ * True when a page's `finalUrl` is a different page from the `url` that was
+ * requested (#1355). The crawler stores the requested url with the target's
+ * content, so a rule that groups pages by what they say (duplicate title or
+ * description) must not count the requested url as a second page carrying it:
+ * `/de-ch` and `/fr-ch` redirecting to `/en` are not three pages with one
+ * description. The content is counted once, where it is served from. An absent
+ * `finalUrl` is not a redirect.
+ */
+export function redirectedAway(url: string, finalUrl: string | null | undefined): boolean {
+  if (!finalUrl) return false;
+  return normalizePageUrl(finalUrl) !== normalizePageUrl(url);
+}
+
+/**
  * Drop a normalized page URL's query string — the pre-#2063 page identity.
  *
  * Exists ONLY for backward compatibility at version boundaries: a publisher on

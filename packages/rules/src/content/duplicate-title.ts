@@ -2,6 +2,7 @@
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 import type { SiteQuery } from "@squirrelscan/core-contracts";
+import { redirectedAway } from "@squirrelscan/utils/url";
 
 import { excludesNoindexPage, skipsNoindexPages } from "../shared/noindex";
 import { RegionVariantIndex } from "../shared/region-variants";
@@ -121,6 +122,7 @@ export const duplicateTitleRule: Rule = {
 
     for (const page of pages) {
       if (excludesNoindexPage(ctx.site, page.parsed, page.headers)) continue;
+      if (redirectedAway(page.url, page.finalUrl)) continue;
       const title = page.parsed.meta.title?.trim().toLowerCase();
       if (!title) continue;
 

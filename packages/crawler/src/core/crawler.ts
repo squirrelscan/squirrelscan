@@ -3544,16 +3544,20 @@ function looksLikeHtml(body: string): boolean {
 /**
  * The request headers the fetcher actually sends that a server might vary on.
  * Kept minimal + stable so Vary keying is meaningful. Only includes headers we
- * deterministically send: our fixed Accept-Language, and a User-Agent ONLY when
+ * deterministically send: a configured Accept-Language, and a User-Agent ONLY when
  * one is explicitly configured (the fetcher rotates UA per crawl when
  * `userAgent` is empty, so storing a value that won't match next time would
  * cause spurious misses). Accept-Encoding is intentionally omitted: it's set by
  * the runtime transport, not by us, so we can't key on it reliably.
  */
 function buildCacheRequestContext(config: CrawlerConfig): Record<string, string> {
-  const ctx: Record<string, string> = {
-    "accept-language": "en-US,en;q=0.9",
-  };
+  const ctx: Record<string, string> = {};
+  // We send no Accept-Language of our own (#1355); one set in `[crawler] headers`
+  // is the page's request language, so a cached page is keyed on it.
+  const configured = Object.entries(config.headers ?? {}).find(
+    ([name]) => name.toLowerCase() === "accept-language",
+  );
+  if (configured) ctx["accept-language"] = configured[1];
   if (config.userAgent) {
     ctx["user-agent"] = config.userAgent;
   }

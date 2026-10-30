@@ -751,7 +751,6 @@ export function fetchSitemap(
       {
         "User-Agent": userAgent,
         Accept: "application/xml, text/xml, */*",
-        "Accept-Language": "en-US,en;q=0.9",
       },
       originScopedHeaders,
       // Only codings decodeSitemapBody undoes within its cap: never the caller's.

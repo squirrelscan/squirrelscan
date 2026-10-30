@@ -17,6 +17,14 @@ How it works:
 
 ## [Unreleased]
 
+### Changed
+
+- **The crawler no longer sends a default `Accept-Language`.** It sent `en-US,en;q=0.9` on every request, so a site that redirects by language (Shopify Markets, for one) sent `/de-ch` and `/fr-ch` to `/en`, and the duplicate-description rule reported all three as one page. It now sends none, as a search-engine bot does, and `[crawler] headers = { "Accept-Language" = "..." }` still sets one. Pages cached by an earlier run are fetched again once. (#1355)
+
+### Fixed
+
+- **A page that redirected to another URL is no longer counted as a second page with the target's title and description.** `content/duplicate-title`, `content/duplicate-description` and `core/title-unique` counted the requested URL beside the URL it ended up on. They now count the content once, where it is served from. (#1355)
+
 ### Added
 
 - **`[crawler] tls_proxy_resolves_names` lets a proxy that owns DNS resolve the TLS check's hosts.** Behind `HTTPS_PROXY`, `security/tls-certificate` resolves the name itself and asks the proxy for a tunnel to the vetted address, which a proxy that only allows connections by name refuses. With `tls_proxy_resolves_names = true` the audited host and its `www` or apex counterpart are requested by name with no local lookup, the hostname stays the SNI and verification name, and a refusing, hanging or garbled proxy still gives `not checked`. Off by default, because where those two names resolve becomes the proxy's decision; every other host is still resolved, vetted and pinned by squirrel, and an IP literal, a metadata name or a name the guard refuses on sight never take this path. See [Behind an HTTP proxy](https://docs.squirrelscan.com/rules/security/tls-certificate#behind-an-http-proxy). (#1317)

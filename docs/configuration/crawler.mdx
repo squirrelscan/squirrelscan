@@ -800,6 +800,20 @@ does the status check of a sitemap URL on another host. Use this to authorize
 the crawler with schemes that require signed headers, such as
 [Web Bot Auth](/guides/web-bot-auth) (used by Shopify and Cloudflare).
 
+**Accept-Language.** The crawler sends no `Accept-Language` by default, the way a
+search-engine bot fetches. A site that redirects visitors by language (Shopify
+Markets and others) therefore serves each locale path (`/de-ch`, `/fr-ch`) its
+own page, instead of sending them all to the default language. To crawl as a
+visitor with a language, set one: `headers = { "Accept-Language" = "de-CH" }`.
+Cloud browser renders use the browser's own language and are not affected by
+this default.
+
+A page that redirects to another URL is counted once, at the URL it ends up on:
+[`content/duplicate-title`](/rules/content/duplicate-title),
+[`content/duplicate-description`](/rules/content/duplicate-description) and
+[`core/title-unique`](/rules/core/title-unique) do not count the requested URL as a
+second page carrying the target's title or description.
+
 <Note>
   A custom header configured for a website's **cloud** audits does more than
   authenticate the request: it marks the crawl as authorised, which raises the

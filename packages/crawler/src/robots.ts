@@ -105,7 +105,6 @@ export function fetchRobotsEvaluator(
             {
               "User-Agent": userAgent,
               Accept: "text/plain",
-              "Accept-Language": "en-US,en;q=0.9",
               "Upgrade-Insecure-Requests": "1",
             },
             customHeaders,
