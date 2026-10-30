@@ -10,6 +10,7 @@ import { parseHTML } from "@squirrelscan/parser/dom";
 import { buttonNameRule } from "../src/a11y/button-name";
 import { duplicateIdActiveRule } from "../src/a11y/duplicate-id-active";
 import { formLabelsRule } from "../src/a11y/form-labels";
+import { RuleRunner } from "../src/runner";
 import type { ParsedPage, RuleContext } from "../src/types";
 
 const page = (body: string) => `<!doctype html><html lang="en"><head><title>t</title></head><body><main>${body}</main></body></html>`;
@@ -114,5 +115,24 @@ describe("declarative shadow roots (#922)", () => {
     expect(out.querySelectorAll("my-b")).toHaveLength(3000);
     expect(out.querySelectorAll("i")).toHaveLength(2000);
     expect(out.querySelectorAll("template").length).toBe(1000);
+  });
+
+  test("findings name the element as the source does: no internal id suffix reaches an item", async () => {
+    const runner = new RuleRunner({ config: { rule_options: {}, rules: { enable: ["a11y/button-name"] } } });
+    const html = page(`<my-c><template shadowrootmode="open"><button id="go"></button></template></my-c><my-d><template shadowrootmode="open"><button id="go"></button></template></my-d>`);
+    const result = await runner.runPageRules({ url: "https://example.com/", html, statusCode: 200, loadTime: 0, headers: {} } as never, { baseUrl: "https://example.com", pages: [], robotsTxt: null, sitemaps: null });
+    const text = JSON.stringify(result.checks);
+    expect(text).toContain("button#go");
+    expect(text).not.toContain("__sr");
+  });
+
+  test("a light DOM style, script, template or whitespace does not replace a slot's fallback", () => {
+    for (const light of [`<style>x{}</style>`, `<script>1</script>`, `<template><i></i></template>`, `  \n `, `<link rel="x" href="/a"><meta name="m" content="c">`]) {
+      const html = page(`<my-s>${light}<template shadowrootmode="open"><slot><button id="fb"></button></slot></template></my-s>`);
+      expect(parseHTML(html).document.querySelectorAll("button")).toHaveLength(1);
+    }
+    // a rendered light child still replaces it
+    const real = page(`<my-s><style>x{}</style><p>hi</p><template shadowrootmode="open"><slot><button></button></slot></template></my-s>`);
+    expect(parseHTML(real).document.querySelectorAll("button")).toHaveLength(0);
   });
 });

@@ -63,7 +63,7 @@ export function parseHTML(
 ): ReturnType<typeof linkedomParseHTML> {
   const parsed = linkedomParseHTML(...args);
   if (parsed.document.documentElement) {
-    if (typeof args[0] === "string" && SHADOW_ROOT_HINT.test(args[0])) flattenDeclarativeShadowRoots(parsed.document);
+    if (typeof args[0] === "string" && SHADOW_ROOT_HINT.test(args[0])) flattenDeclarativeShadowRoots(parsed.document as never);
     return parsed;
   }
   const [html, ...rest] = args;
@@ -71,10 +71,37 @@ export function parseHTML(
 }
 
 const SHADOW_ROOT_HINT = /shadowroot/i;
+/** Documents whose ids were scoped per shadow root (see {@link scopeIdsToRoot}). */
+const SHADOW_SCOPED_DOCUMENTS = new WeakSet<object>();
+const SHADOW_ID_SUFFIX = /__sr\d+(?![\w-])/g;
+
+/**
+ * Findings must name an element as the page's source does. The suffix {@link scopeIdsToRoot}
+ * adds to the ids inside a shadow root is internal, so strip it from the strings of a rule's
+ * checks (message, items, details) before they leave the rule runner. A no-op on a document
+ * with no shadow roots, and in place: the checks are the rule's own, fresh from `run()`.
+ */
+export function stripShadowIdScopes(checks: unknown[], document: unknown): void {
+  if (!document || !SHADOW_SCOPED_DOCUMENTS.has(document as object)) return;
+  const scrub = (value: unknown, depth: number): unknown => {
+    if (typeof value === "string") return value.includes("__sr") ? value.replace(SHADOW_ID_SUFFIX, "") : value;
+    if (depth > 6 || value === null || typeof value !== "object") return value;
+    if (Array.isArray(value)) {
+      for (let i = 0; i < value.length; i++) value[i] = scrub(value[i], depth + 1);
+      return value;
+    }
+    const record = value as Record<string, unknown>;
+    for (const key of Object.keys(record)) record[key] = scrub(record[key], depth + 1);
+    return record;
+  };
+  for (const check of checks) scrub(check, 0);
+}
 /** Elements a browser lets host a shadow root, besides any custom element (a name with a hyphen). */
 const SHADOW_HOSTS = new Set(["article", "aside", "blockquote", "body", "div", "footer", "h1", "h2", "h3", "h4", "h5", "h6", "header", "main", "nav", "p", "section", "span"]);
 const MAX_SHADOW_TEMPLATES = 5000;
 const MAX_SHADOW_DEPTH = 16;
+/** Light DOM children that render nothing, so they never replace a slot's fallback. */
+const UNRENDERED_LIGHT_TAGS = new Set(["style", "script", "template", "link", "meta", "noscript", "title", "base"]);
 
 interface NodeLike {
   nodeType?: number;
@@ -101,9 +128,10 @@ const ID_REFERENCE_ATTRIBUTES = ["for", "aria-labelledby", "aria-describedby", "
  * so the ids of one root's content (and the references to them from inside that root) get a
  * per-root suffix, `q__sr2`, keeping every root its own namespace for the id rules.
  */
-function scopeIdsToRoot(content: NonNullable<TemplateLike["content"]>, root: number): void {
+function scopeIdsToRoot(content: NonNullable<TemplateLike["content"]>, root: number, document: object): void {
   const withIds = Array.from(content.querySelectorAll("[id]")) as NodeLike[];
   if (withIds.length === 0) return;
+  SHADOW_SCOPED_DOCUMENTS.add(document);
   const ids = new Set<string>();
   for (const el of withIds) {
     const id = el.getAttribute?.("id");
@@ -137,8 +165,11 @@ function dropReplacedSlotFallback(content: NonNullable<TemplateLike["content"]>,
   const light = (Array.from(host.childNodes) as NodeLike[]).filter((n) => (n as unknown) !== template);
   const supplied = new Set<string>();
   for (const node of light) {
-    if (node.nodeType === 1) supplied.add(node.getAttribute?.("slot") ?? "");
-    else if (node.nodeType === 3 && (node.textContent ?? "").trim() !== "") supplied.add("");
+    if (node.nodeType === 1) {
+      // Elements a browser never renders cannot be slotted content.
+      if (UNRENDERED_LIGHT_TAGS.has(((node as { localName?: string }).localName ?? "").toLowerCase())) continue;
+      supplied.add(node.getAttribute?.("slot") ?? "");
+    } else if (node.nodeType === 3 && (node.textContent ?? "").trim() !== "") supplied.add("");
   }
   for (const slot of slots) {
     if (!supplied.has(slot.getAttribute?.("name") ?? "")) continue;
@@ -159,7 +190,7 @@ function dropReplacedSlotFallback(content: NonNullable<TemplateLike["content"]>,
  * most {@link MAX_SHADOW_TEMPLATES} roots are inlined, nested up to
  * {@link MAX_SHADOW_DEPTH} levels; templates that are skipped cost nothing against it.
  */
-function flattenDeclarativeShadowRoots(document: { querySelectorAll(selector: string): ArrayLike<unknown> }): void {
+function flattenDeclarativeShadowRoots(document: { querySelectorAll(selector: string): ArrayLike<unknown> } & object): void {
   const hosted = new WeakSet<object>();
   let budget = MAX_SHADOW_TEMPLATES;
   let rootNumber = 0;
@@ -178,7 +209,7 @@ function flattenDeclarativeShadowRoots(document: { querySelectorAll(selector: st
       hosted.add(host);
       budget--;
       dropReplacedSlotFallback(template.content, host, template);
-      scopeIdsToRoot(template.content, ++rootNumber);
+      scopeIdsToRoot(template.content, ++rootNumber, document);
       for (const child of Array.from(template.content.childNodes)) host.insertBefore(child, template);
       host.removeChild(template);
       changed = true;

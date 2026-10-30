@@ -3,6 +3,7 @@ import { logger, profileRules } from "./logger";
 
 import { PRIVATE_TARGET_SKIP_REASON, RULE_TIMED_OUT_SKIP_REASON } from "@squirrelscan/core-contracts";
 import { detectSoft404, parsePage } from "@squirrelscan/parser";
+import { stripShadowIdScopes } from "@squirrelscan/parser/dom";
 import { mapWithConcurrency } from "@squirrelscan/utils";
 import { nonPublicHostLabel } from "@squirrelscan/utils/non-public-host";
 
@@ -517,6 +518,8 @@ export class RuleRunner {
     // output and logging are identical regardless of run() being sync or async.
     const finalize = (ruleChecks: CheckResult[]): RuleRunResult => {
       ruleCheckCount = ruleChecks.length;
+      // Ids inside a declarative shadow root carry an internal scope suffix (#922); findings name the source's.
+      stripShadowIdScopes(ruleChecks, ctx.parsed?.document);
       // pub#274: the logger drops this line unless SQUIRREL_RULE_PROFILE is set,
       // but its arguments (three filters and the payload) would still be built
       // on every rule invocation, so build them only when profiling.
