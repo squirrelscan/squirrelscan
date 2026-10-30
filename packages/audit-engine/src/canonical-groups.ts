@@ -106,23 +106,30 @@ export function foldChecksToCanonical(checks: Iterable<CheckResult>, map: Readon
     }
     const items = check.items;
     const itemsBefore = items?.length ?? 0;
+    // Items the fold itself rewrote from a variant page (`/c?a=1` -> `/c`): only these can become
+    // duplicates of another item. Every other item of the check is left exactly as it is.
+    const rewritten = new Set<unknown>();
     for (const item of items ?? []) {
       const before = item.sourcePages?.some((p) => map.has(p)) || (!item.sourcePages && map.has(item.id));
       if (before) {
+        if (!item.sourcePages) rewritten.add(item);
         foldItem(item, map);
         touched = true;
       }
     }
-    // Two items that were two pages (/c and /c?a=1) are one item now: list it once, and the
-    // counts a renderer reads from `details` follow the list.
-    if (items && touched) {
+    // Two items that were two pages (/c and /c?a=1) are one item now: list it once, and the counts a
+    // renderer reads from `details` follow the list. A rewritten item is dropped only when an item with
+    // the same id and the same content is already listed; distinct items sharing an id stay.
+    if (items && rewritten.size > 0) {
+      const content = (item: CheckItem): string => JSON.stringify({ ...item, id: undefined });
       const seen = new Set<string>();
-      const kept = items.filter((item) => {
-        if (item.sourcePages !== undefined) return true;
-        if (seen.has(item.id)) return false;
-        seen.add(item.id);
-        return true;
-      });
+      const kept: CheckItem[] = [];
+      for (const item of items) {
+        const key = `${item.id}\u0000${content(item)}`;
+        if (rewritten.has(item) && seen.has(key)) continue;
+        seen.add(key);
+        kept.push(item);
+      }
       if (kept.length !== items.length) {
         check.items = kept;
         const details = check.details as Record<string, unknown> | undefined;
