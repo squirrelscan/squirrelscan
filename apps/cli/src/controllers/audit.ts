@@ -4,6 +4,8 @@ import type { DocumentFetcher } from "@squirrelscan/fetchers";
 
 import { heapStats } from "bun:jsc";
 import { Duration, Effect, Fiber, Stream } from "effect";
+import { existsSync, rmSync } from "node:fs";
+import { dirname } from "node:path";
 
 import type { Config } from "@/config";
 import type { CrawlerEvent, RateLimitEvent } from "@/crawler/core/types";
@@ -113,7 +115,11 @@ import {
 import { createHybridDocumentFetcher } from "@/crawl/hybrid-fetcher";
 import { hostPinningNotice, pinOwnHosts } from "@/crawl/pin-own-hosts";
 import { resolveSeedRedirect } from "@/crawler/frontier";
-import { createStorage, domainToProjectName } from "@/crawler/storage";
+import {
+  createStorage,
+  domainToProjectName,
+  resolveProjectDbPath,
+} from "@/crawler/storage";
 import { retainGlobalContentStore } from "@/crawler/storage/content-store";
 import {
   warnEvictedPages,
@@ -899,6 +905,14 @@ export async function runAudit(
     // #403: a store this process cannot write opens read-only without saying
     // so, then fails at the first write or drops every page. Say which file
     // and why before any request goes out.
+    // The store check creates the project directory; an unreachable start URL
+    // removes it again below if this run made it, so a dead URL leaves no folder.
+    const projectDir = dirname(resolveProjectDbPath(projectName));
+    const preexisting = options.projectDirPreexisting;
+    const projectDirExisted =
+      preexisting && preexisting.projectName === projectName
+        ? preexisting.existed
+        : existsSync(projectDir);
     const storeProblems = checkAuditStores(projectName, {
       linkCache: mergedConfig.external_links.enabled,
     });
@@ -926,6 +940,14 @@ export async function runAudit(
         : undefined
     );
     if (!reachability.reachable) {
+      if (!projectDirExisted) {
+        try {
+          // Made by this run's store check and holding only what it created.
+          rmSync(projectDir, { recursive: true, force: true });
+        } catch {
+          // Not empty, or already gone.
+        }
+      }
       return err(
         commandError(
           ErrorCodes.UNREACHABLE,

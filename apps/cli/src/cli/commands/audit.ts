@@ -31,6 +31,7 @@ import { ownHostsPinned } from "@squirrelscan/utils/public-egress";
 import { defineCommand } from "citty";
 import { existsSync } from "node:fs";
 import { platform } from "node:os";
+import { dirname } from "node:path";
 
 import type { AuditFailureDetails, CrawlerEvent } from "@/controllers/audit";
 import type { PreflightBalance } from "@/lib/balance";
@@ -1844,8 +1845,25 @@ export const audit = defineCommand({
       // estimated or crawled, so `squirrel audit bit.ly/x` audits where it goes
       // (with consent when that is another site) and never grades the shortener.
       let startRedirect: SeedRedirectRecord | undefined;
+      // Whether the start URL's project folder was there before this run's
+      // store check created it, so an unreachable start URL can remove it (#1269).
+      let projectDirPreexisting:
+        | { projectName: string; existed: boolean }
+        | undefined;
       const startParsed = parseUserUrl(args.url);
       if (startParsed.ok) {
+        const earlyProjectName =
+          args["project-name"] ?? domainToProjectName(startParsed.url);
+        try {
+          projectDirPreexisting = {
+            projectName: earlyProjectName,
+            existed: existsSync(
+              dirname(resolveProjectDbPath(earlyProjectName))
+            ),
+          };
+        } catch {
+          // An invalid project name is reported by the store check below.
+        }
         // #403: a local store this process cannot write stops the run before
         // anything is requested, the start URL's resolution included. The
         // destination's own project is checked again below, once it is known.
@@ -1956,6 +1974,7 @@ export const audit = defineCommand({
           : {}),
         probe: { level: probing.level, budgetMs: probing.budgetMs },
         ...(startRedirect ? { startRedirect } : {}),
+        ...(projectDirPreexisting ? { projectDirPreexisting } : {}),
       };
 
       // Preamble — aligned key/value block (Account, and Dashboard when online,
@@ -3291,8 +3310,9 @@ export const audit = defineCommand({
       }
 
       // Failed/blocked audit (#489): the audit didn't really happen (down/403/
-      // 0-page), so exit non-zero (1 = operational failure) even without an
-      // explicit --fail-on gate, so CI doesn't read a down site as success.
+      // 0-page), so exit non-zero even without an explicit --fail-on gate, so CI
+      // doesn't read a down site as success: 1 = operational failure, 3 = blocked
+      // (#1269). An unreachable start URL never gets here: it exits 5 above.
       if (report.status === "failed" || report.status === "blocked") {
         process.exitCode = 1;
         // #1253: the audited page was a WAF or bot-manager challenge or block

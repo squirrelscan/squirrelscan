@@ -158,7 +158,8 @@ describe("a signed-in audit that fails at once", () => {
     await runAudit();
     await settled();
 
-    expect(process.exitCode).toBe(1);
+    // An unreachable start URL has its own exit code (#1269).
+    expect(process.exitCode).toBe(5);
     expect(lifecycle).toEqual([
       "sent running",
       "landed running",
