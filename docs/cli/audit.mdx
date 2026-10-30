@@ -283,6 +283,10 @@ squirrel audit https://example.com --render
 
 For finer control, `--render-mode auto` renders **only** pages that need it (client-side-rendered shells) and uses fast plain HTTP for the rest. To set the behavior permanently, use `render` in `[cloud]` - see the [browser rendering guide](/guides/browser-rendering).
 
+### Start URL rules
+
+The start URL must be `http://` or `https://` with a host. A bare domain gets `https://` (`http://` for a local name), and `localhost:3000` or `example.com:8080` keep their port. Credentials (`user:password@`) and the `#fragment` are dropped before anything is crawled, logged, registered or sent to the cloud, with a note on stderr; the query string is kept. Use `--header "Authorization: Basic ..."` to crawl a site behind basic auth. A URL longer than 2048 characters is audited but not registered as a dashboard run.
+
 ### Start URLs that redirect
 
 A start URL is resolved before anything else: its redirect chain is followed, one request per hop, and the end of the chain is what gets audited. A link shortener is the usual case. `squirrel audit https://bit.ly/abc` audits the site it points to, not bit.ly.
@@ -641,7 +645,7 @@ Change the window, or turn it off, with
 | Code | Meaning |
 |------|---------|
 | `0` | Success |
-| `1` | Error (invalid URL, crawl failed, a site that answered with an error, etc.) |
+| `1` | Error (invalid URL, crawl failed, a site that answered with an error, etc.). A start URL that is not `http://` or `https://` with a host (`ftp://`, `file://`, `mailto:`, `javascript:`) is refused first, before any request: no run is registered and nothing is charged |
 | `2` | A [`--fail-on`](#gate-ci-on-audit-results) threshold tripped (CI gate) |
 | `3` | The audited page was blocked, so nothing was audited: a WAF or bot manager challenge or block page, or a bare 403 or 429 from the server (see [blocked by a WAF or bot manager](/guides/failed-audits#blocked-by-waf)). Every report with `status: "blocked"` exits `3` |
 | `4` | The start URL redirected to another site and the run was not told to follow it (or the chain looped, passed 5 hops, or reached a refused hop), so nothing was audited. See [Start URLs that redirect](#start-urls-that-redirect) |

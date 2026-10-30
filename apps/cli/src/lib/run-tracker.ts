@@ -338,25 +338,34 @@ function readUpgradeOffer(raw: unknown): UpgradeOffer | null {
   };
 }
 
+/** The register endpoint refuses a longer URL (400), which leaves the run untracked. */
+export const MAX_REGISTER_URL_LENGTH = 2048;
+
 /**
- * The URL to register a run for, or null when the audit cannot start on it.
- * Same parse as the audit (`parseUserUrl`: http/https only, a host, scheme
- * added to a bare domain), then re-checked on the normalised result, with any
- * `user:password@` removed: credentials are never sent to the register call.
+ * The start URL an audit can run on, or null. Same parse as the audit
+ * (`parseUserUrl`: http/https only, a host, a scheme added to a bare domain,
+ * credentials and fragment dropped), re-checked on the normalised result.
  */
-export function registerableUrl(raw: string): string | null {
+export function auditableUrl(raw: string): string | null {
   const parsed = parseUserUrl(raw);
   if (!parsed.ok) return null;
   try {
     const u = new URL(parsed.url);
     if (u.protocol !== "http:" && u.protocol !== "https:") return null;
     if (!u.hostname) return null;
-    u.username = "";
-    u.password = "";
     return u.toString();
   } catch {
     return null;
   }
+}
+
+/**
+ * The URL to register a run for: an {@link auditableUrl} that fits the
+ * register endpoint. Its query is kept (it is part of the audited URL).
+ */
+export function registerableUrl(raw: string): string | null {
+  const url = auditableUrl(raw);
+  return url !== null && url.length <= MAX_REGISTER_URL_LENGTH ? url : null;
 }
 
 /**
@@ -389,7 +398,9 @@ export async function registerRun(
   // A bare domain gets its scheme added; credentials in the URL are dropped.
   const url = registerableUrl(input.url);
   if (!url) {
-    logger.debug("run-tracker: register skipped, not an http(s) URL");
+    logger.debug(
+      "run-tracker: register skipped, not a registerable http(s) URL"
+    );
     return null;
   }
   // #1534: one key for BOTH attempts, so a retry that races a first attempt the

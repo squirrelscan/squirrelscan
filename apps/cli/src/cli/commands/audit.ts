@@ -111,7 +111,7 @@ import {
   createRunFinalizer,
   type FinalizeRunInput,
   markRunning,
-  registerableUrl,
+  auditableUrl,
   registerRun,
   reportProgress,
   type RegisteredRun,
@@ -1259,6 +1259,24 @@ export const audit = defineCommand({
     // Configure logging before any output
     configureLogger({ debug: args.debug, trace: args.trace });
 
+    // The one URL check, before anything else: no cloud client, balance read,
+    // trace upload or log line sees a URL the audit cannot run on.
+    const startCheck = parseUserUrl(String(args.url ?? ""));
+    if (!auditableUrl(String(args.url ?? ""))) {
+      console.error(
+        `${fmt.red("Error:")} ${startCheck.ok ? "Invalid URL" : startCheck.error}`
+      );
+      process.exitCode = 1;
+      return;
+    }
+    if (startCheck.ok && startCheck.strippedCredentials) {
+      // Everything below, logs and the resume hint included, sees it without.
+      args.url = startCheck.url;
+      console.error(
+        `${fmt.yellow("Note:")} credentials in the URL are ignored. Use --header "Authorization: Basic ..." for an authenticated crawl.`
+      );
+    }
+
     const commandStart = Date.now();
     logger.commandStart("audit", {
       url: args.url,
@@ -1857,15 +1875,6 @@ export const audit = defineCommand({
         | { projectName: string; existed: boolean }
         | undefined;
       const startParsed = parseUserUrl(args.url);
-      if (!registerableUrl(args.url)) {
-        // Before any request: no balance read, no run registered or charged.
-        commandResult = "error";
-        console.error(
-          `${fmt.red("Error:")} ${startParsed.ok ? "Invalid URL" : startParsed.error}`
-        );
-        process.exitCode = 1;
-        return;
-      }
       if (startParsed.ok) {
         const earlyProjectName =
           args["project-name"] ?? domainToProjectName(startParsed.url);

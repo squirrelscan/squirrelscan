@@ -17,6 +17,8 @@ export type UrlParseResult =
   | {
       ok: true;
       url: string;
+      /** The input carried `user:password@`; it is not part of `url`. */
+      strippedCredentials?: boolean;
     }
   | {
       ok: false;
@@ -273,6 +275,18 @@ export function parseUserUrl(input: string): UrlParseResult {
     };
   }
 
+  // A scheme without `//` (`mailto:a@b.com`, `javascript:x@y.com`, `tel:+1@x.com`)
+  // would be read as a host once https:// is prefixed. Only a host:port
+  // (`localhost:3000`, `example.com:8080`) may have a colon this early.
+  if (/^[a-z][a-z0-9+.-]*:/i.test(trimmed) && !/^https?:\/\//i.test(trimmed)) {
+    if (!/^[^:/?#@\s]+:\d{1,5}(?:[/?#]|$)/.test(trimmed)) {
+      return {
+        ok: false,
+        error: "Unsupported protocol. Use http:// or https://",
+      };
+    }
+  }
+
   // Add scheme if missing
   let urlString = trimmed;
   const hasScheme = trimmed.includes("://");
@@ -282,6 +296,14 @@ export function parseUserUrl(input: string): UrlParseResult {
 
   try {
     const parsed = new URL(urlString);
+
+    // Credentials and the fragment never leave the machine in a start URL: they
+    // are not part of the page that is audited and would end up in cloud calls,
+    // logs and reports. Authenticated crawls use --header.
+    const strippedCredentials = parsed.username !== "" || parsed.password !== "";
+    parsed.username = "";
+    parsed.password = "";
+    parsed.hash = "";
 
     // Validate domain looks reasonable
     const domainCheck = isValidDomain(parsed.hostname);
@@ -301,9 +323,14 @@ export function parseUserUrl(input: string): UrlParseResult {
       }
     }
 
-    return { ok: true, url: parsed.toString() };
+    return {
+      ok: true,
+      url: parsed.toString(),
+      ...(strippedCredentials ? { strippedCredentials: true } : {}),
+    };
   } catch {
-    return { ok: false, error: `Invalid URL: "${input}"` };
+    // The input is not echoed: it may carry credentials.
+    return { ok: false, error: "Invalid URL" };
   }
 }
 
