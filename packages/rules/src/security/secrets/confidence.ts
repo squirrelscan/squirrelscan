@@ -560,6 +560,31 @@ function hygraphIssuerHost(iss: string | undefined): string | undefined {
   }
 }
 
+// A JWT that is the value of a URL query parameter is a signed-URL grant: a
+// storage service's per-object, short-lived access token (Supabase
+// `/storage/v1/object/sign/<bucket>/<path>?token=eyJ...`), valid for a GET on
+// that one object and put in the page so the browser can fetch it (#1293).
+// Matched on the text right before the value: the parameter name and the `=`.
+const SIGNED_URL_LEAD_RE = /[?&](?:token|jwt|sig|signature|access_token|x-amz-[a-z-]+)=$/i;
+
+/**
+ * The `iss` claim is the token's author's text: it goes into the report bounded,
+ * and a URL issuer loses its userinfo, query and fragment (a credential can ride
+ * in any of them).
+ */
+const ISSUER_MAX_LENGTH = 200;
+
+function displayIssuer(iss: string): string {
+  let shown = iss;
+  try {
+    const url = new URL(iss);
+    shown = `${url.protocol}//${url.host}${url.pathname === "/" && !iss.endsWith("/") ? "" : url.pathname}`;
+  } catch {
+    // not a URL: shown as is, bounded below
+  }
+  return shown.length > ISSUER_MAX_LENGTH ? `${shown.slice(0, ISSUER_MAX_LENGTH)}...` : shown;
+}
+
 function refineJwt(
   value: string,
   now: number,
@@ -574,7 +599,7 @@ function refineJwt(
     const beacon = publicBeaconToken(decoded.header, decoded.payload, before, after);
     if (beacon) {
       const iss = decoded.payload.iss;
-      const extra: FindingExtra = { ...beacon.extra, ...(typeof iss === "string" ? { issuer: iss } : {}) };
+      const extra: FindingExtra = { ...beacon.extra, ...(typeof iss === "string" ? { issuer: displayIssuer(iss) } : {}) };
       return { type: beacon.type, confidence: "medium", publicByDesign: true, extra };
     }
   }
@@ -606,7 +631,7 @@ function refineJwt(
   const supabase = iss === "supabase" || (iss !== undefined && SUPABASE_AUTH_ISSUER_RE.test(iss));
 
   const extra: FindingExtra = {};
-  if (iss !== undefined) extra.issuer = iss;
+  if (iss !== undefined) extra.issuer = displayIssuer(iss);
   if (role !== undefined) extra.role = role;
   if (ref !== undefined) extra.projectRef = ref;
   if (exp !== undefined) {
@@ -638,10 +663,34 @@ function refineJwt(
   if (iss !== undefined && /\.myshopify\.com$/i.test(iss)) {
     return { type: "Shopify Storefront JWT", confidence: "medium", publicByDesign: true, extra };
   }
+  // A signed URL's grant expires: a token with no `exp` is a long-lived credential.
+  // And a storage grant says what it grants: a `url` claim naming the object, or
+  // the storage sign path in the URL. A session token or a user JWT in `?token=`
+  // is a different thing.
+  const signedUrl =
+    exp !== undefined &&
+    before !== undefined &&
+    SIGNED_URL_LEAD_RE.test(before()) &&
+    (typeof payload.url === "string" || /\/object\/sign\//.test(before()));
+  // Still reported, at medium, with the evidence: a bearer in a URL is a live
+  // credential until it expires, and public/info findings are absent from
+  // machine-readable output. The label says what it is and the expiry says how
+  // long it is good for.
+  const signedUrlNote: Refinement = {
+    type: "Signed URL Token (JWT)",
+    confidence: "medium",
+    publicByDesign: false,
+    extra: {
+      ...extra,
+      kind: "signed-url",
+      hint: "a signed-URL grant for one object, valid until expiresAt: a storage service issues these so the browser can fetch the file; check what the token can reach",
+    },
+  };
   if (supabase) {
     if (role === "service_role") {
       return { type: "Supabase Service Role JWT", confidence: "high", publicByDesign: false, extra };
     }
+    if (signedUrl && role !== "anon") return signedUrlNote;
     if (role === "anon") {
       return { type: "Supabase Anon Key", confidence: "medium", publicByDesign: true, extra };
     }
@@ -650,6 +699,7 @@ function refineJwt(
   if (hasAdminScope(payload)) {
     return { type: "JSON Web Token (admin scope)", confidence: "high", publicByDesign: false, extra };
   }
+  if (signedUrl && role === undefined) return signedUrlNote;
   if (role === "anon") {
     return { type: "JSON Web Token (anon role)", confidence: "medium", publicByDesign: true, extra };
   }

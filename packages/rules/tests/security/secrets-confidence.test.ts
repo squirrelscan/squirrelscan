@@ -152,7 +152,9 @@ describe("AWS access key id", () => {
     do good = j(["AK", "IA"]) + runOf(r, B32, 16).replace(/DO/g, "DQ");
     while (decodeAwsAccountId(good) === null);
     const bad = j(["AK", "IA"]) + "8" + runOf(r, B32, 15).replace(/DO/g, "DQ");
-    const found = scanContent(`var a="${good}",b="${bad}";`, "inline-script");
+    // The secret beside the ids keeps them out of the informational tier (#1294).
+    const secret = "aws_secret_access_key=" + JSON.stringify(runOf(r, B32, 40)); // pragma: allowlist secret
+    const found = scanContent(`var a="${good}",b="${bad}";${secret}`, "inline-script").filter((f) => f.type === "AWS Access Key ID");
     expect(found.map((f) => [f.type, f.confidence, f.extra?.accountId])).toEqual([
       ["AWS Access Key ID", "high", decodeAwsAccountId(good)!],
       ["AWS Access Key ID", "medium", "undecodable"],
