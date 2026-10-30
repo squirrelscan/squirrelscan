@@ -129,7 +129,7 @@ export const CrawlerConfigSchema = z.object({
   // Wall-clock budget for the whole audit, in seconds (#1271). At the budget the
   // crawl stops launching work and the report is `partial` with reason code
   // `max_duration`. `--max-duration` overrides it; unset means no budget.
-  max_duration: z.number().positive().finite().optional(),
+  max_duration: z.number().positive().max(604_800).optional(),
   // Incremental re-scan: send conditional GETs (ETag/Last-Modified) so unchanged pages return 304; --refresh forces a full fetch. (#125)
   incremental: z.boolean().default(true),
   breadth_first: z.boolean().default(true),

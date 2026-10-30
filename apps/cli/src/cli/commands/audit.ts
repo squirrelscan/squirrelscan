@@ -51,6 +51,7 @@ import {
   redactHeaders,
 } from "@/audit/headers";
 import { localUnverifiedLinksNotice } from "@/audit/local-link-notice";
+import { MAX_DURATION_MAX_SECONDS } from "@/audit/max-duration";
 import {
   generateConsoleReport,
   generateTextReport,
@@ -1025,6 +1026,12 @@ export function parseMaxDurationFlag(
     );
     return null;
   }
+  if (parsed > MAX_DURATION_MAX_SECONDS) {
+    console.error(
+      `${fmt.red("Error:")} --max-duration must be at most ${MAX_DURATION_MAX_SECONDS} seconds (7 days), got '${raw}'.`
+    );
+    return null;
+  }
   return parsed;
 }
 
@@ -1297,6 +1304,8 @@ export const audit = defineCommand({
     },
   },
   async run({ args, rawArgs }) {
+    // #1271: `--max-duration` counts from here, so every probe before the crawl is inside it.
+    const commandStartedAt = Date.now();
     // Configure logging before any output
     configureLogger({ debug: args.debug, trace: args.trace });
 
@@ -2035,6 +2044,7 @@ export const audit = defineCommand({
           ? { includePages: true }
           : {}),
         ...(maxDurationSeconds !== undefined ? { maxDurationSeconds } : {}),
+        maxDurationStartedAt: commandStartedAt,
         ...(Object.keys(customHeaders).length > 0
           ? { headers: customHeaders }
           : {}),

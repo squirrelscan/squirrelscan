@@ -803,7 +803,9 @@ export function reconstructReport(
             checks,
           };
 
-      if (!rule) {
+      // `crawl/asset-fetch-degraded` is the engine's own diagnostic note, never a registry rule;
+      // a `--max-duration` run that cuts the resource checks stores it (#1271).
+      if (!rule && ruleId !== "crawl/asset-fetch-degraded") {
         console.warn(`Rule not found in registry: ${ruleId}`);
       }
 

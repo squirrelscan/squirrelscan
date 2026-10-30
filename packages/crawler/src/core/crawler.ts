@@ -296,6 +296,12 @@ const PREAMBLE_TOTAL_BUDGET_MS = 45_000;
 // REDIRECT_BUDGET_HOPS in detectRedirects, which bounds a chain the same way.
 const PREAMBLE_BUDGET_REQUESTS = 3;
 
+/** The preamble's wall-clock allowance, cut to the discovery deadline when one is set (#1271). */
+export function discoveryBudgetMs(timeoutMs: number, discoveryDeadlineAt?: number, now: number = Date.now()): number {
+  const base = preambleBudgetMs(timeoutMs);
+  return discoveryDeadlineAt === undefined ? base : Math.max(1, Math.min(base, discoveryDeadlineAt - now));
+}
+
 /** The preamble's wall-clock allowance for a given per-request timeout. */
 export function preambleBudgetMs(timeoutMs: number): number {
   return Math.min(PREAMBLE_TOTAL_BUDGET_MS, Math.max(1, timeoutMs) * PREAMBLE_BUDGET_REQUESTS);
@@ -2792,7 +2798,7 @@ export function createCrawler(
         // The log rides on the budget so every root probe can note a request the
         // site refused; persisted below so the rules say "refused", not "absent".
         const refusals = new RefusalLog();
-        const seedPhase = createPhaseBudget(preambleBudgetMs(config.timeoutMs), Date.now(), refusals);
+        const seedPhase = createPhaseBudget(discoveryBudgetMs(config.timeoutMs, config.discoveryDeadlineAt), Date.now(), refusals);
 
         // Follow redirects to get final URL (both HTTP and client-side)
         const rawFinalTargetUrl = yield* detectRedirects(targetUrl, seedPhase);
@@ -2997,6 +3003,9 @@ export function createCrawler(
             customHeaders: config.headers,
             headerScope: getHeaderScope(),
             walkWindowMs: sitemapWalkWindowMs(config.timeoutMs),
+            ...(config.discoveryDeadlineAt !== undefined
+              ? { walkTotalMs: Math.max(1, config.discoveryDeadlineAt - Date.now()) }
+              : {}),
             refusals,
             ...(crawlEgress ? { egress: crawlEgress } : {}),
           },
@@ -3208,7 +3217,7 @@ export function createCrawler(
             config.userAgent,
             true,
             customHeadersFor(baseUrl),
-            createPhaseBudget(preambleBudgetMs(config.timeoutMs), Date.now(), undefined, crawlEgress),
+            createPhaseBudget(discoveryBudgetMs(config.timeoutMs, config.discoveryDeadlineAt), Date.now(), undefined, crawlEgress),
             config.robotsUserAgent,
           ),
         );
@@ -3364,7 +3373,7 @@ export function createCrawler(
 
         // One wall-clock budget for this restart's preamble, same as start().
         const preamble = createPhaseBudget(
-          preambleBudgetMs(config.timeoutMs),
+          discoveryBudgetMs(config.timeoutMs, config.discoveryDeadlineAt),
           Date.now(),
           undefined,
           crawlEgress,

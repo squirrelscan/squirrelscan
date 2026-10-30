@@ -66,7 +66,45 @@ const fastSite = Bun.serve({
   },
 });
 
+// Pages answer fast; robots.txt, sitemaps and llms.txt never do. Without a cap on discovery
+// the whole budget went before the first page (#1271 review).
+const slowDiscoverySite = Bun.serve({
+  port: 0,
+  hostname: "127.0.0.1",
+  idleTimeout: 0,
+  async fetch(req) {
+    const { pathname } = new URL(req.url);
+    if (pathname === "/" || pathname.startsWith("/p/")) {
+      await Bun.sleep(150);
+      const n = pathname.startsWith("/p/") ? Number(pathname.slice(3)) : 0;
+      const links = Array.from(
+        { length: 6 },
+        (_, i) => `<a href="/p/${n * 6 + i + 1}">p</a>`
+      ).join(" ");
+      return new Response(
+        `<!doctype html><html lang="en"><head><title>P ${n}</title></head><body><h1>P ${n}</h1>${links}</body></html>`,
+        { headers: { "content-type": "text/html" } }
+      );
+    }
+    if (/robots|sitemap|llms/.test(pathname)) {
+      return new Promise<Response>((resolve) =>
+        hung.push(() => resolve(new Response("x")))
+      );
+    }
+    return new Response("not found", { status: 404 });
+  },
+});
+
+// Accepts the TCP connection and never answers: the seed itself hangs.
+const blackhole = Bun.listen({
+  hostname: "127.0.0.1",
+  port: 0,
+  socket: { data() {}, open() {}, close() {} },
+});
+
 afterAll(() => {
+  void slowDiscoverySite.stop(true);
+  blackhole.stop(true);
   for (const release of hung) release();
   void site.stop(true);
   void fastSite.stop(true);
@@ -170,6 +208,38 @@ describe("squirrel audit --max-duration", () => {
     expect(report.status).toBe("completed");
     expect(report.maxDuration).toBeUndefined();
   }, 90_000);
+
+  test("robots.txt and sitemaps that never answer do not use up the budget before the first page", async () => {
+    const r = await auditUrl(
+      `http://127.0.0.1:${slowDiscoverySite.port}/`,
+      "--max-duration",
+      "10"
+    );
+    expect(r.elapsedMs).toBeLessThan((10 + 15) * 1000 + 8_000);
+    expect(r.code).toBe(0);
+    const report = JSON.parse(r.out) as JsonReport;
+    expect(["completed", "partial"]).toContain(report.status);
+    expect(report.meta.totalPages ?? 0).toBeGreaterThan(1);
+  }, 90_000);
+
+  test("a seed that never answers fails at the limit, not after the 30 s reachability probe", async () => {
+    const r = await auditUrl(
+      `http://127.0.0.1:${blackhole.port}/`,
+      "--max-duration",
+      "6"
+    );
+    expect(r.code).toBe(1);
+    expect(r.elapsedMs).toBeLessThan((6 + 15) * 1000);
+    expect(r.err).toContain(
+      "time limit (--max-duration) was reached before the site answered"
+    );
+  }, 60_000);
+
+  test("a budget past 7 days is refused, not turned into a timer overflow", async () => {
+    const r = await audit("--max-duration", "99999999");
+    expect(r.code).toBe(1);
+    expect(r.err).toContain("--max-duration must be at most 604800 seconds");
+  }, 60_000);
 
   test.each(["0", "-5", "abc", "1e3", ""])(
     "--max-duration %p is rejected with exit 1 before anything is crawled",

@@ -223,10 +223,22 @@ function reachabilitySend(
 export async function checkReachability(
   url: string,
   scope?: ReachabilityScope,
-  requestScoped: typeof requestOnceScoped = requestOnceScoped
+  requestScoped: typeof requestOnceScoped = requestOnceScoped,
+  /** Epoch ms the whole probe must be done by (`--max-duration`, #1271); each attempt is cut to what is left. */
+  budgetDeadlineAt?: number
 ): Promise<ReachabilityResult> {
-  const deadline = Date.now() + REACHABILITY_TOTAL_BUDGET_MS;
-  let result = await attemptReachability(url, scope, requestScoped);
+  const deadline = Math.min(
+    Date.now() + REACHABILITY_TOTAL_BUDGET_MS,
+    budgetDeadlineAt ?? Number.POSITIVE_INFINITY
+  );
+  const attemptTimeout = (): number =>
+    Math.max(1, Math.min(REACHABILITY_TIMEOUT_MS, deadline - Date.now()));
+  let result = await attemptReachability(
+    url,
+    scope,
+    requestScoped,
+    attemptTimeout()
+  );
 
   for (let attempt = 2; attempt <= REACHABILITY_MAX_ATTEMPTS; attempt++) {
     if (result.reachable || !isTransientReachabilityError(result.error)) break;
@@ -239,7 +251,12 @@ export async function checkReachability(
       redactUrlsInText(result.error ?? "")
     );
     await sleep(delay);
-    result = await attemptReachability(url, scope, requestScoped);
+    result = await attemptReachability(
+      url,
+      scope,
+      requestScoped,
+      attemptTimeout()
+    );
   }
 
   return result;
@@ -248,7 +265,8 @@ export async function checkReachability(
 async function attemptReachability(
   url: string,
   scope: ReachabilityScope | undefined,
-  requestScoped: typeof requestOnceScoped
+  requestScoped: typeof requestOnceScoped,
+  timeoutMs: number = REACHABILITY_TIMEOUT_MS
 ): Promise<ReachabilityResult> {
   // Fast path for localhost/loopback using native fetch (no WAF detection needed)
   let isLocalhost = false;
@@ -266,7 +284,7 @@ async function attemptReachability(
     const controller = new AbortController();
     const timeout = setTimeout(
       () => controller.abort("Connection timed out"),
-      REACHABILITY_TIMEOUT_MS
+      timeoutMs
     );
     try {
       // Undecoded (#2717): Bun inflates a Content-Encoding body in full even
@@ -350,11 +368,11 @@ async function attemptReachability(
           };
         },
         // Shorter than the crawl timeout
-        REACHABILITY_TIMEOUT_MS,
+        timeoutMs,
         reachabilitySend(url, scope)
       ).pipe(
         Effect.timeoutFail({
-          duration: Duration.millis(REACHABILITY_TIMEOUT_MS),
+          duration: Duration.millis(timeoutMs),
           onTimeout: () =>
             new RequestError({
               url,

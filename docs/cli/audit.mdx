@@ -498,7 +498,7 @@ before any crawl runs.
 
 What happens at the limit:
 
-1. The crawl stops launching requests. Pages already in flight get a few seconds to finish.
+1. The crawl stops launching requests. Pages already in flight get a few seconds to finish. Discovery (robots.txt, the sitemaps and the other root files) may use at most 30% of the budget before the first page, so a site whose `robots.txt` or sitemaps never answer cannot use the whole limit before a page is fetched; whatever it did not reach is reported as not checked.
 2. Rules run on the pages that were fetched, and the report is written as usual.
 3. The report has `status: "partial"` and `statusReasonCode: "max_duration"`, and a `maxDuration` object counting what was left: `unfetchedPages` (discovered, never fetched), `pagesNotEvaluated` (fetched, rules never ran) and `siteChecksCut` (the site-wide checks did not finish). The score covers the audited pages only.
 
@@ -511,9 +511,11 @@ What happens at the limit:
 }
 ```
 
-**Exit margin.** The process stops its own work within `max(10% of the budget, 15 seconds)` after the limit: a 60 s budget ends by 75 s, a 600 s budget by 660 s, counted from when the audit starts crawling (after any prompt). Slow link and resource checks are cut inside that margin, and the rules phase is cut at its end. A rules phase that has to be cut loses the site-wide checks, and if a request made before the page checks was still hanging, the page checks as well; `siteChecksCut` says so. Writing the report takes a moment more, and publishing to the dashboard is not counted.
+**Exit margin.** The process stops its own work within `max(10% of the budget, 15 seconds)` after the limit: a 60 s budget ends by 75 s, a 600 s budget by 660 s, counted from when the command starts, so the reachability check and the discovery requests before the first page are inside it. Slow link and resource checks are cut inside that margin, and the rules phase is cut at its end. A rules phase that has to be cut loses the site-wide checks, and if a request made before the page checks was still hanging, the page checks as well; `siteChecksCut` says so. Writing the report takes a moment more, and publishing to the dashboard is not counted.
 
-**Exit code.** A partial report exits `0` like any finished audit, so a `--fail-on` gate still decides pass or fail. Read `status` and `statusReasonCode` to tell a cut-short run from a complete one. An audit that reaches the limit with no page fetched fails (exit `1`), because there is nothing to report on.
+**Exit code.** A partial report exits `0` like any finished audit, so a `--fail-on` gate still decides pass or fail. Read `status` and `statusReasonCode` to tell a cut-short run from a complete one. An audit that reaches the limit with no page fetched fails (exit `1`), because there is nothing to report on: a site that never answers the first request fails at the limit with `Cannot reach ... the time limit (--max-duration) was reached before the site answered`.
+
+**Limits.** The margin covers waiting, not computation. A single page that takes longer than the margin to parse and run the rules on, such as a multi-megabyte HTML file, runs to completion before the cut can take effect, because the work cannot be interrupted partway through a page. The limit also has a ceiling of 604800 seconds (7 days); a larger value is refused.
 
 A run that finishes before the limit, or that the limit did not cut, is a normal `completed` report and has no `maxDuration`. Unset means no limit. `squirrel report` shows a stored partial audit the same way.
 

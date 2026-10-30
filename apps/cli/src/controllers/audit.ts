@@ -247,6 +247,8 @@ export interface RunAuditOptions extends AuditOptions {
    * unset means no budget.
    */
   maxDurationSeconds?: number;
+  /** Epoch ms the budget counts from; the command passes its own start so the probes before the crawl are inside it. */
+  maxDurationStartedAt?: number;
   /** Max resources to check per category (CSS, images, scripts) in the rules phase */
   resourceCheckMaxItems?: number;
   /** Timeout per individual resource check in ms (overrides default 10s) */
@@ -910,7 +912,8 @@ export async function runAudit(
 
   // #1271: the audit's wall-clock budget, counted from here (after any prompt).
   const durationBudget = createDurationBudget(
-    options.maxDurationSeconds ?? mergedConfig.crawler.max_duration
+    options.maxDurationSeconds ?? mergedConfig.crawler.max_duration,
+    options.maxDurationStartedAt ?? Date.now()
   );
   const durationCut: DurationCut = {
     crawlStopped: false,
@@ -970,7 +973,10 @@ export async function runAudit(
       url,
       options.offline
         ? { ownSiteOnly: true, domains: mergedConfig.project?.domains }
-        : undefined
+        : undefined,
+      undefined,
+      // #1271: the probe is inside the budget, and cut to what is left of it.
+      durationBudget?.crawlStopAt
     );
     if (!reachability.reachable) {
       if (!projectDirExisted) {
@@ -981,14 +987,19 @@ export async function runAudit(
           // Not empty, or already gone.
         }
       }
+      // #1271: when the budget ran out waiting for the site, say so; the unreachable
+      // report carries the same reason.
+      const reason =
+        durationBudget && Date.now() >= durationBudget.crawlStopAt
+          ? // The wording classifies as a timeout (failure-reason.ts reads "no response from ... within
+            // the request timeout"), and carries no URL.
+            `no response from the site within the request timeout (the ${Math.round(durationBudget.budgetMs / 1000)}s --max-duration time limit was reached)`
+          : redactUrlsInText(reachability.error ?? "unknown error");
       return err(
         commandError(
           ErrorCodes.UNREACHABLE,
-          `Cannot reach ${redactUrl(url)}: ${redactUrlsInText(reachability.error ?? "unknown error")}`,
-          {
-            url: redactUrl(url),
-            reason: redactUrlsInText(reachability.error ?? "unknown error"),
-          }
+          `Cannot reach ${redactUrl(url)}: ${reason}`,
+          { url: redactUrl(url), reason }
         )
       );
     }
@@ -1151,6 +1162,10 @@ export async function runAudit(
         // is the origin's decision, not a parallelism setting.
         maxBackoffMs: mergedConfig.crawler.max_backoff_ms,
         timeoutMs: mergedConfig.crawler.timeout_ms,
+        // #1271: discovery (robots, sitemaps, root probes) cannot use up the budget before page 1.
+        ...(durationBudget
+          ? { discoveryDeadlineAt: durationBudget.discoveryDoneAt }
+          : {}),
         userAgent,
         // squirrelscan/repo#3271: the robots.txt group token, when set apart from the UA.
         robotsUserAgent: mergedConfig.crawler.robots_user_agent || undefined,

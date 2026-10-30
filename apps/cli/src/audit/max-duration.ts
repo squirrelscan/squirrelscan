@@ -11,6 +11,12 @@ export const MAX_DURATION_MIN_MARGIN_MS = 15_000;
 /** Margin as a share of the budget. */
 export const MAX_DURATION_MARGIN_RATIO = 0.1;
 
+/** The share of the budget discovery (robots.txt, sitemaps, the root probes) may use before the first page. */
+export const MAX_DURATION_DISCOVERY_SHARE = 0.3;
+
+/** Longest budget accepted, in seconds (7 days): beyond it a timer would overflow and the limit means nothing. */
+export const MAX_DURATION_MAX_SECONDS = 7 * 24 * 60 * 60;
+
 /** Where in the margin each post-crawl step must be done, as a share of it. */
 const CHECKS_SHARE = 0.2;
 const PAGE_RULES_SHARE = 0.4;
@@ -23,6 +29,8 @@ export interface DurationBudget {
   readonly marginMs: number;
   /** Epoch ms the budget started counting. */
   readonly startedAt: number;
+  /** Epoch ms discovery (robots.txt, sitemaps, root probes) must be done by. */
+  readonly discoveryDoneAt: number;
   /** Epoch ms the crawl must stop launching work. */
   readonly crawlStopAt: number;
   /** Epoch ms the resource and external link checks must be done. */
@@ -48,13 +56,17 @@ export function createDurationBudget(
 ): DurationBudget | undefined {
   if (seconds === undefined || !Number.isFinite(seconds) || seconds <= 0)
     return undefined;
-  const budgetMs = Math.round(seconds * 1000);
+  const budgetMs = Math.round(
+    Math.min(seconds, MAX_DURATION_MAX_SECONDS) * 1000
+  );
   const marginMs = maxDurationMarginMs(budgetMs);
   const end = startedAt + budgetMs;
   return {
     budgetMs,
     marginMs,
     startedAt,
+    discoveryDoneAt:
+      startedAt + Math.round(budgetMs * MAX_DURATION_DISCOVERY_SHARE),
     crawlStopAt: end,
     checksDoneAt: end + Math.round(marginMs * CHECKS_SHARE),
     pageRulesStopAt: end + Math.round(marginMs * PAGE_RULES_SHARE),

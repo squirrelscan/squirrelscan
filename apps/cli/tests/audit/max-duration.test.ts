@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import {
+  MAX_DURATION_MAX_SECONDS,
   MAX_DURATION_MIN_MARGIN_MS,
   createDurationBudget,
   maxDurationMarginMs,
@@ -54,6 +55,18 @@ describe("createDurationBudget", () => {
     expect(b.hardStopAt).toBeLessThan(b.crawlStopAt + b.marginMs);
   });
 
+  test("discovery ends at 30% of the budget, before the crawl stops", () => {
+    const b = createDurationBudget(100, 1_000_000)!;
+    expect(b.discoveryDoneAt).toBe(1_000_000 + 30_000);
+    expect(b.discoveryDoneAt).toBeLessThan(b.crawlStopAt);
+  });
+
+  test("a budget past 7 days is clamped, never a timer overflow", () => {
+    const b = createDurationBudget(99_999_999, 0)!;
+    expect(b.budgetMs).toBe(MAX_DURATION_MAX_SECONDS * 1000);
+    expect(b.crawlStopAt).toBeLessThan(2 ** 31 * 1000);
+  });
+
   test("msUntil is never below 1, so a spent budget is not read as no budget", () => {
     expect(msUntil(10, 5000)).toBe(1);
     expect(msUntil(7000, 5000)).toBe(2000);
@@ -87,6 +100,11 @@ describe("--max-duration flag", () => {
     [" 12 ", 12],
   ])("%p parses to %p seconds", (raw, expected) => {
     expect(parseMaxDurationFlag(raw)).toBe(expected);
+  });
+  test("7 days is the ceiling", () => {
+    expect(parseMaxDurationFlag("604800")).toBe(604800);
+    expect(parseMaxDurationFlag("604801")).toBeNull();
+    expect(parseMaxDurationFlag("99999999")).toBeNull();
   });
   test.each(["0", "0.0", "-1", "abc", "", "1e3", "Infinity", "5s"])(
     "%p is rejected",
