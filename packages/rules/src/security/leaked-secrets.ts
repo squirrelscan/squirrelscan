@@ -1943,6 +1943,59 @@ function isWidgetKeyAttribute(before: string): boolean {
 }
 
 
+// ── Search-only and platform-owned keys (#1287, #1229) ──────────────────────
+
+/**
+ * A key whose own name says it is the search key: `search_api_key`,
+ * `search-only-api-key`. Hosted-search products issue a search-only key for the
+ * browser by design, but a name is only a name: an admin key stored under
+ * `ALGOLIA_SEARCH_API_KEY` reads the same, and nothing offline says which it
+ * is. So the name earns a hint on the finding, never a downgrade (#1229).
+ */
+const PRIVILEGED_KEY_WORDS = ["admin", "secret", "private", "write", "master", "management", "manage", "backend", "server", "root"];
+
+function isSearchKeyName(key: string): boolean {
+  const words = keyWords(key);
+  // `searchAdminApiKey` is the admin key of a search product, not its
+  // browser key: the name has to say search and nothing privileged.
+  return words.includes("search") && !words.some((w) => PRIVILEGED_KEY_WORDS.includes(w));
+}
+
+/**
+ * Shopify's platform bundles (`/shopifycloud/` on cdn.shopify.com,
+ * `/cdn/shopifycloud/` on a shop's own domain) are byte-identical on every
+ * store: an `apiKey` in one is the platform's, not the merchant's. Only that
+ * one assignment is skipped, never a secret, token or provider key, and only
+ * on a Shopify host (cdn.shopify.com, or `*.myshopify.com`): a path alone is
+ * something any site can serve (#1287).
+ * The Shopify App Store listing pages carry the listed app's public `api-key`.
+ */
+const SHOPIFY_CDN_BUNDLE_PATH = "/shopifycloud/";
+const SHOPIFY_STORE_BUNDLE_PATH = "/cdn/shopifycloud/";
+const SHOPIFY_APP_STORE_HOST = "apps.shopify.com";
+const APP_STORE_KEY_RE = /^(?:data-)?api[_-]?key$/i;
+
+function platformSourceOf(
+  location: ReportedLocation,
+  sourceUrl: string | undefined
+): "bundle" | "app-store" | undefined {
+  if (sourceUrl === undefined) return undefined;
+  try {
+    const url = new URL(sourceUrl);
+    if (location.startsWith("external-script")) {
+      // A Shopify host, by parsed hostname: nothing else is evidence that the
+      // bytes are Shopify's. A custom-domain shop's copy is not recognised and
+      // reports like any other script.
+      if (url.hostname === "cdn.shopify.com" && url.pathname.startsWith(SHOPIFY_CDN_BUNDLE_PATH)) return "bundle";
+      if (url.hostname.endsWith(".myshopify.com") && url.pathname.startsWith(SHOPIFY_STORE_BUNDLE_PATH)) return "bundle";
+    }
+    if (url.hostname === SHOPIFY_APP_STORE_HOST) return "app-store";
+  } catch {
+    // not a URL: nothing is claimed
+  }
+  return undefined;
+}
+
 function maskSecret(value: string): string {
   if (value.length <= 12) {
     return value.slice(0, 4) + "*".repeat(value.length - 4);
@@ -2794,6 +2847,8 @@ export function scanContent(
     return { row: rows[0]!, named: false };
   };
 
+  const platformSource = platformSourceOf(location, sourceUrl);
+
   let shopifyPage: boolean | null = null;
   const isShopifyPage = () => (shopifyPage ??= pageLoadsFrom(content, SHOPIFY_CDN_HOST));
 
@@ -2902,6 +2957,16 @@ export function scanContent(
 
       // A shape that is also a word counts only where a value goes.
       if (valuePosition && !isInValuePosition(content, value, match.index)) {
+        continue;
+      }
+
+      // Assignments in Shopify's platform bundles, and the App Store's own
+      // `api-key` attribute, are Shopify's public code and public keys.
+      if (
+        generic &&
+        ((platformSource === "bundle" && name === "Generic API Key Assignment") ||
+          (platformSource === "app-store" && APP_STORE_KEY_RE.test(completeKeyOf(content, match.index, value))))
+      ) {
         continue;
       }
 
@@ -3022,6 +3087,16 @@ export function scanContent(
             ...(widget ? { hint: "embeddable widget key (data-*-key attribute)" } : {}),
           };
         }
+      }
+
+      // A key whose name says "search" may well be a search-only key, and an
+      // admin key stored under that name reads the same: reported as before,
+      // with the evidence the name gives.
+      if (generic && name === "Generic API Key Assignment" && !reportPublic && isSearchKeyName(completeKeyOf(content, match.index, value))) {
+        known = {
+          ...known,
+          hint: "the key name says search; a search-only key is meant for browsers but an admin key under this name reads the same, so check which key this is",
+        };
       }
 
       // A token that only opens like the provider's: reviewable, at medium,
