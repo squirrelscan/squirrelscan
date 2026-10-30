@@ -845,14 +845,18 @@ export function resolvePublishDecision(opts: {
  * Returns the message that refuses it, or null. Only the `=` form carries a value.
  */
 export function spacedBooleanValueError(
-  rawArgs: readonly string[],
+  rawArgs: readonly string[] | undefined,
   flag: string
 ): string | null {
-  const at = rawArgs.indexOf(flag);
-  if (at < 0) return null;
-  const next = rawArgs[at + 1]?.toLowerCase();
-  if (next === "true" || next === "false") {
-    return `${flag} takes no value after a space: write ${flag}=${next}, or drop it for the default.`;
+  // Every occurrence: a repeated flag is legal, and any one of them can carry
+  // the stray value. Callers that run without raw arguments (tests) pass none.
+  const args = rawArgs ?? [];
+  for (let at = 0; at < args.length; at++) {
+    if (args[at] !== flag) continue;
+    const next = args[at + 1]?.toLowerCase();
+    if (next === "true" || next === "false") {
+      return `${flag} takes no value after a space: write ${flag}=${next}, or drop it for the default.`;
+    }
   }
   return null;
 }

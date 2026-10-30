@@ -23,7 +23,7 @@ How it works:
 
 ### Fixed
 
-- **An audit asks for `robots.txt` once.** The RSL licensing probe fetched it a second time; it now reuses the crawl's own read, including its `Link: rel=license` header. (#422)
+- **An audit asks for `robots.txt` once.** The RSL licensing probe fetched it a second time; it now reuses the crawl's own read, including its `Link: rel=license` header. One visible difference: when that read gets a 403 or a server error, `ax/rsl-license` now reports "not checked" (as it does for a refused request) where its own second read used to leave it at "none declared". (#422)
 - **Sitemap requests obey `per_host_concurrency` and `per_host_delay_ms`.** The guessed sitemap locations used to go out five at a time whatever the setting said; they now queue behind the same per-host limits as the pages and the discovery probes. (#422)
 - **`--disable-discovery-probes false` is refused.** With a space, `false` was read as a stray argument and the probes were turned off, the opposite of what was typed. It now exits with an error that names the `=false` form. (#422)
 
