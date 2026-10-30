@@ -19,6 +19,8 @@
 
 import type { ParsedPage } from "../types";
 
+import { documentBody } from "./framework-payload";
+
 type Doc = NonNullable<ParsedPage["document"]>;
 
 /** Sentences kept per page. Three have to be found, so five leaves room for chrome that slipped through. */
@@ -59,7 +61,7 @@ function isChrome(el: Element): boolean {
  */
 export function extractContentSentences(doc: Doc): string[] {
   const roots = Array.from(doc.querySelectorAll("main, article, [role=main]")).slice(0, 8);
-  const body = doc.body ?? doc.documentElement;
+  const body = documentBody(doc);
   if (roots.length === 0 && !body) return [];
 
   const candidates: Array<{ text: string; order: number }> = [];
