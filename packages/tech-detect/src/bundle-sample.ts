@@ -5,16 +5,44 @@ import { scanJs, SEGMENT_SEPARATOR, skipEnd, skipStart } from "./js-scan";
 const WINDOW_BEFORE = 160;
 /** Chars kept after a hint hit: the longest value a detector reads (a URL's key literal). */
 const WINDOW_AFTER = 256;
-/** Hits kept per hint, so a bundle that repeats one literal cannot fill the sample. */
+/** Hits kept per hint with no detector pattern to test a window against, so a bundle that repeats one literal cannot fill the sample. */
 const MAX_HITS_PER_HINT = 48;
-/** Hits examined per hint, kept or not: a hit that yields no window (a long string) does not use up the kept ones. */
-const MAX_HIT_SCANS_PER_HINT = 256;
+/** Hits examined per hint, kept or not: a hit that yields no window (a long string) or fails its detectors' patterns does not use up the kept ones. */
+const MAX_HIT_SCANS_PER_HINT = 512;
 /** A string longer than this past a window's end is cut before it, not carried to its close. */
 const MAX_STRING_CARRY = 512;
 /** Longest body the scan classifies: past a script fetch cap, so every fetched body fits. */
 const MAX_SCAN_CHARS = 6 * 1024 * 1024;
 
 let hints: string[] | null = null;
+let matchers: Map<string, RegExp[]> | null = null;
+
+/**
+ * For each hint, the patterns of the detectors that use it (the primary pattern
+ * for `hint`, the `also` pattern for `also.hints`). A hint hit whose window
+ * matches none of them cannot lead to a detection, so it needs no window and does
+ * not count against the cap: a placeholder URL or an unrelated mention of the
+ * literal never pushes the real match out of the sample.
+ */
+function hintMatchers(): Map<string, RegExp[]> {
+  if (matchers) return matchers;
+  const map = new Map<string, RegExp[]>();
+  const add = (hint: string, re: RegExp): void => {
+    const own = new RegExp(re.source, re.flags.replace(/[gy]/g, ""));
+    const list = map.get(hint);
+    if (list) list.push(own);
+    else map.set(hint, [own]);
+  };
+  for (const fp of ALL_FINGERPRINTS) {
+    for (const d of fp.detectors) {
+      if (d.type !== "script-content") continue;
+      if (d.hint) add(d.hint, d.pattern);
+      if (d.also) for (const h of d.also.hints) add(h, d.also.pattern);
+    }
+  }
+  matchers = map;
+  return map;
+}
 
 /**
  * The literals the `inCode` bundle detectors need present before they can match
@@ -77,32 +105,35 @@ export function sampleBundleExtras(content: string, headChars: number, maxChars:
 
   const lower = Math.max(0, headChars - WINDOW_BEFORE);
   const spans: Array<[number, number]> = [];
+  const byHint = hintMatchers();
   for (const hint of bundleHints()) {
+    const tests = byHint.get(hint) ?? [];
+    // Windows already taken for this hint: one repeated literal is one window.
+    const seen = new Set<string>();
     let from = lower;
     let kept = 0;
-    for (let n = 0; n < MAX_HIT_SCANS_PER_HINT && kept < MAX_HITS_PER_HINT; n++) {
+    for (let n = 0; n < MAX_HIT_SCANS_PER_HINT && (tests.length > 0 || kept < MAX_HITS_PER_HINT); n++) {
       const at = content.indexOf(hint, from);
       if (at === -1 || at >= limit) break;
       from = at + hint.length;
-      const start = codeAfter(Math.max(lower, at - WINDOW_BEFORE));
+      let start = codeAfter(Math.max(lower, at - WINDOW_BEFORE));
       if (start > at) {
         // The hit sits in a string that opened before the window: keep a short one
         // whole (a library's own notice is a string), skip a long one.
         const open = skipStart(skips, at);
         const close = skipEnd(skips, at);
         if (open === -1 || close - open > MAX_STRING_CARRY) continue;
-        const end = codeBefore(Math.min(limit, at + hint.length + WINDOW_AFTER), at);
-        if (end > open) {
-          spans.push([open, end]);
-          kept++;
-        }
-        continue;
+        start = open;
       }
       const end = codeBefore(Math.min(limit, at + hint.length + WINDOW_AFTER), at);
-      if (end > start) {
-        spans.push([start, end]);
-        kept++;
+      if (end <= start) continue;
+      if (tests.length > 0) {
+        const text = content.slice(start, end);
+        if (seen.has(text) || !tests.some((re) => re.test(text))) continue;
+        seen.add(text);
       }
+      spans.push([start, end]);
+      kept++;
     }
   }
   spans.sort((a, b) => a[0] - b[0]);
