@@ -552,6 +552,7 @@ export function maxDurationReason(cut: {
   pagesNotEvaluated: number;
   siteChecksCut: boolean;
   resourceChecksCut?: boolean;
+  probesSkipped?: string[];
 }): string {
   const parts: string[] = [];
   if (cut.unfetchedPages > 0) {
@@ -566,5 +567,8 @@ export function maxDurationReason(cut: {
   }
   if (cut.siteChecksCut) parts.push("site-wide checks did not finish");
   if (cut.resourceChecksCut) parts.push("resource checks were cut short");
+  if (cut.probesSkipped && cut.probesSkipped.length > 0) {
+    parts.push(`${cut.probesSkipped.join(", ")} did not finish and ${cut.probesSkipped.length === 1 ? "was" : "were"} skipped`);
+  }
   return `Stopped at the ${cut.seconds} s time limit (--max-duration)${parts.length > 0 ? `: ${parts.join(", ")}` : ""}`;
 }

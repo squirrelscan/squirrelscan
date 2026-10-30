@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **`--max-duration`: a request hanging before the page checks no longer costs the page checks.** The soft-404 re-fetch of suspect pages and the cloaking probe run before the page rules; one that never answered held the rules phase until the hard stop, which cut the whole phase, so the report had no page findings even though every page was fetched. These probes now stop at their own deadline inside the margin and are skipped, `maxDuration.probesSkipped` names them, the page checks run on the fetched pages, and `siteChecksCut` is `true` only when the site-wide checks really did not finish. See [Time limit](https://docs.squirrelscan.com/cli/audit#time-limit). (#1327)
+
 ### Changed
 
 - **The `squirrel` binary no longer autoloads a `bunfig.toml` or `.env` from the directory it runs in.** Set `SQUIRRELSCAN_API_KEY` and any other variable in your shell or your CI secrets, as the docs describe; a `.env` file in the project directory is not read. (Settings and `squirrel.toml` are unaffected.)

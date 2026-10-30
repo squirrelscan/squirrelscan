@@ -236,6 +236,19 @@ async function mapPool<T, R>(items: T[], limit: number, fn: (item: T) => Promise
 }
 
 /**
+ * After a confirmation pass was cut short (a deadline, #1327): mark every
+ * candidate that has no verdict yet `unconfirmed`, so it still warns and is never
+ * dropped. A verdict already written stays.
+ */
+export function markUnresolvedSoft404(pages: Soft404ConfirmPage[]): void {
+  for (const p of pages) {
+    if (p.parsed.soft404Confirmation !== undefined) continue;
+    if (!detectSoft404(detectionInput(p.statusCode, p.parsed)).isSoft404) continue;
+    p.parsed.soft404Confirmation = "unconfirmed";
+  }
+}
+
+/**
  * Confirm the crawl's soft-404 candidates in place: re-derive candidacy with
  * `detectSoft404` (same inputs as the runner), re-fetch up to `maxConfirmations`
  * of them once, and write the verdict onto each candidate's

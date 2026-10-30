@@ -1116,6 +1116,8 @@ export interface MaxDurationCut {
   siteChecksCut: boolean;
   /** The resource (CSS, image, script) checks ran out of time: some size and script findings may be incomplete. Absent when not cut. */
   resourceChecksCut?: boolean;
+  /** Probes before the page rules that hit their own deadline and were skipped, e.g. `soft-404-confirmation` (#1327). Absent when none. */
+  probesSkipped?: string[];
 }
 
 /** Where an audit executed + how much of the site it crawled (#1180). */

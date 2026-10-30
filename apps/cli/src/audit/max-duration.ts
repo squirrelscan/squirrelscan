@@ -19,6 +19,8 @@ export const MAX_DURATION_MAX_SECONDS = 7 * 24 * 60 * 60;
 
 /** Where in the margin each post-crawl step must be done, as a share of it. */
 const CHECKS_SHARE = 0.2;
+/** The probes before the page rules (soft-404 re-fetch, cloaking) end here, so a hanging one cannot take the page rules' time. */
+const PROBES_SHARE = 0.3;
 const PAGE_RULES_SHARE = 0.4;
 const HARD_SHARE = 0.6;
 
@@ -35,6 +37,8 @@ export interface DurationBudget {
   readonly crawlStopAt: number;
   /** Epoch ms the resource and external link checks must be done. */
   readonly checksDoneAt: number;
+  /** Epoch ms the pre-page-rule probes (soft-404 re-fetch, cloaking) must be done by; a probe still going is skipped. */
+  readonly probesDoneAt: number;
   /** Epoch ms after which no further page starts its rules. */
   readonly pageRulesStopAt: number;
   /** Epoch ms the whole rules phase is cut. */
@@ -69,6 +73,7 @@ export function createDurationBudget(
       startedAt + Math.round(budgetMs * MAX_DURATION_DISCOVERY_SHARE),
     crawlStopAt: end,
     checksDoneAt: end + Math.round(marginMs * CHECKS_SHARE),
+    probesDoneAt: end + Math.round(marginMs * PROBES_SHARE),
     pageRulesStopAt: end + Math.round(marginMs * PAGE_RULES_SHARE),
     hardStopAt: end + Math.round(marginMs * HARD_SHARE),
   };
@@ -91,6 +96,8 @@ export interface DurationCut {
   rulesCut: boolean;
   /** The resource checks ran out of their time budget. */
   resourceChecksCut?: boolean;
+  /** Probes before the page rules that were skipped at their own deadline (#1327). */
+  probesSkipped: string[];
 }
 
 export function wasCut(cut: DurationCut): boolean {
@@ -98,6 +105,7 @@ export function wasCut(cut: DurationCut): boolean {
     cut.unfetched > 0 ||
     cut.pagesNotEvaluated > 0 ||
     cut.rulesCut ||
-    cut.resourceChecksCut === true
+    cut.resourceChecksCut === true ||
+    cut.probesSkipped.length > 0
   );
 }
