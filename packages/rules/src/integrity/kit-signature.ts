@@ -41,6 +41,8 @@ export const kitSignatureRule: Rule = {
     verdictScope: "page",
     severity: "error",
     weight: 9,
+    // Compromise detection: an ignore could hide a compromised site (#1262).
+    ignorable: false,
   },
 
   run(ctx: RuleContext): RuleResult {

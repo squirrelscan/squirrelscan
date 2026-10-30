@@ -9,6 +9,7 @@
     "./editor-summary": "./src/editor-summary.ts",
     "./not-checked": "./src/not-checked.ts",
     "./structure": "./src/structure.ts",
+    "./ignored": "./src/ignored.ts",
     "./domain-stats": "./src/domain-stats.ts",
     "./entities": "./src/entities.ts",
     "./entities-viewer": "./src/entities-viewer.ts",

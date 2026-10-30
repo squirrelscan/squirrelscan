@@ -11,6 +11,7 @@ import { domainAgeYears } from "../site-metadata";
 import { editorSummaryView } from "../editor-summary";
 import { entityPageTotal, stableIdPercent } from "../entities";
 import { followedStartRedirect, scanScopeUnfetched, seedRedirect } from "../coverage";
+import { ignoredLine, safeIgnored } from "../ignored";
 import { notCheckedLine, notCheckedRules } from "../not-checked";
 import { pageTypePhrase, structureAttr, structureSectionName } from "../structure";
 import { checkRegionScope, itemLabel, itemRegionScope, type RegionScope } from "../region-scope";
@@ -108,6 +109,25 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
     }
     lines.push(`${indent(2)}<note>${escapeXml(startRedirect.note)}</note>`);
     lines.push(`${indent(1)}</start-redirect>`);
+  }
+
+  // Waived findings (#1262): the report is filtered by the project's own config.
+  const ignoredSummary = safeIgnored(report);
+  if (ignoredSummary) {
+    lines.push(
+      `${indent(1)}<ignored items="${ignoredSummary.items}" pages="${ignoredSummary.pages}"${ignoredSummary.disabled ? ' disabled="true"' : ""}>`,
+    );
+    const note = ignoredLine(report);
+    if (note) lines.push(`${indent(2)}<note>${escapeXml(note)}</note>`);
+    for (const [ruleId, counts] of Object.entries(ignoredSummary.byRule)) {
+      lines.push(`${indent(2)}<rule id="${escapeXml(ruleId)}" items="${counts.items}" pages="${counts.pages}"/>`);
+    }
+    for (const entry of ignoredSummary.entries) {
+      lines.push(
+        `${indent(2)}<entry index="${entry.index + 1}" rule="${escapeXml(entry.rule)}" items="${entry.items}" pages="${entry.pages}"${entry.reason ? ` reason="${escapeXml(entry.reason)}"` : ""}/>`,
+      );
+    }
+    lines.push(`${indent(1)}</ignored>`);
   }
 
   // null ⇒ N/A (failed/0-page audit) — never coerce to 0/"F" (#586).

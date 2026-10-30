@@ -7,9 +7,11 @@
 // a warning.
 
 import {
+  checkIgnoreEntries,
   checkRuleOptions,
   filterRules,
   loadAllRules,
+  type IgnoreEntry,
 } from "@squirrelscan/rules";
 
 export interface RuleOptionsPreflight {
@@ -21,9 +23,15 @@ export interface RuleOptionsPreflight {
 
 export function preflightRuleOptions(
   ruleOptions: Record<string, Record<string, unknown>>,
-  rules: { enable: string[]; disable: string[] }
+  rules: { enable: string[]; disable: string[] },
+  ignore?: readonly IgnoreEntry[]
 ): RuleOptionsPreflight {
-  const problems = checkRuleOptions(ruleOptions);
+  // `[[ignore]]` problems (#1262) change nothing at audit time (the entry or matcher
+  // is skipped), so they only warn here; `squirrel config validate` fails on them.
+  const problems = [
+    ...checkRuleOptions(ruleOptions),
+    ...checkIgnoreEntries(ignore),
+  ];
   const result: RuleOptionsPreflight = { errors: [], warnings: [] };
   if (problems.length === 0) return result;
 

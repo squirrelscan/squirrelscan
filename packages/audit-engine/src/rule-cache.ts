@@ -317,8 +317,12 @@ export interface RunContextInput {
    * The CLI passes a hash of the rules source taken when it was built.
    */
   readonly rulesVersion: string;
-  /** The enabled PAGE rules, in execution order, with their resolved options. */
-  readonly pageRules: ReadonlyArray<{ id: string; options: unknown }>;
+  /**
+   * The enabled PAGE rules, in execution order, with their resolved options. Each enabled page rule with its resolved options and, when `[[ignore]]` entries name
+   * it (#1262), their signature: a waiver changes the rule's verdict, so editing one must
+   * miss the cache, and only for the rules it names.
+   */
+  readonly pageRules: ReadonlyArray<{ id: string; options: unknown; ignore?: string }>;
   /** The site data handed to page rules; only {@link PAGE_RULE_SITE_FIELDS} is read. */
   readonly siteData: SiteData;
   /** `RunnerScope.siteMetadata` — drives `appliesWhen` gating and `ctx.siteMetadata`. */
@@ -363,6 +367,11 @@ export interface RunContextInput {
  *
  * `pages` is excluded from the site-data projection on purpose; see the header.
  */
+/** A rule's key part: its id and options, plus its `[[ignore]]` signature when it has one (absent keeps every existing key unchanged). */
+function pageRuleKey(r: { id: string; options: unknown; ignore?: string }): unknown[] {
+  return r.ignore === undefined ? [r.id, r.options] : [r.id, r.options, r.ignore];
+}
+
 export async function computeRunContextHash(
   input: RunContextInput
 ): Promise<{ hash: string } | { disabled: RuleCacheDisabledReason }> {
@@ -372,7 +381,7 @@ export async function computeRunContextHash(
       RULE_CACHE_FORMAT,
       input.engineVersion,
       input.rulesVersion,
-      input.pageRules.map((r) => [r.id, r.options]),
+      input.pageRules.map(pageRuleKey),
       projection,
       input.siteMetadata ?? null,
       input.cloudResults ?? null,
@@ -390,7 +399,7 @@ export async function computeRunContextHash(
       const parts: Array<[string, unknown]> = [
         ["engineVersion", input.engineVersion],
         ["rulesVersion", input.rulesVersion],
-        ["pageRules", input.pageRules.map((r) => [r.id, r.options])],
+        ["pageRules", input.pageRules.map(pageRuleKey)],
         ["baseUrl", projection.baseUrl],
         ["siteIndexable", projection.siteIndexable],
         ["scripts", projection.scripts],
@@ -689,6 +698,22 @@ export function bindRuleCache(store: RuleCacheStore, runContextHash: string): St
       store.carryForward(key, page.normalizedUrl);
     },
     flush: store.flush ? () => store.flush!() : undefined,
+  };
+}
+
+/**
+ * `cache` that stops storing fresh verdicts once `timedOut()` reports an `[[ignore]]`
+ * entry that ran over its work budget (#1262): from then on a page's verdict is not
+ * the one the list gives with its full budget, and replaying it would hide the
+ * timeout notice and keep the partial verdict. Loading and carrying forward are unchanged.
+ */
+export function withoutStoringAfterIgnoreTimeout(cache: StreamRuleCache, timedOut: () => number): StreamRuleCache {
+  return {
+    ...cache,
+    putFresh(key, page, entry) {
+      if (timedOut() > 0) return;
+      cache.putFresh(key, page, entry);
+    },
   };
 }
 

@@ -77,6 +77,8 @@ export const templateDiscontinuityRule: Rule = {
     scope: "site",
     severity: "warning",
     weight: 6,
+    // Compromise detection: an ignore could hide a compromised site (#1262).
+    ignorable: false,
     optionsSchema: z.object({
       minPages: z
         .number()

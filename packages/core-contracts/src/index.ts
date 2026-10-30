@@ -2,6 +2,8 @@
 export * from "./storage";
 export * from "./refused-fetch";
 export * from "./waf-block";
+// `[[ignore]]` waivers (#1262): what a waiver leaves in a check and a report.
+export * from "./ignore";
 // Start URL redirects (#1281): chain, outcome and exit-code contract.
 export * from "./seed-redirect";
 
@@ -65,6 +67,7 @@ export type {
 } from "./entity-mcp";
 
 // Import storage types needed locally by interfaces in this file
+import type { IgnoreSummary } from "./ignore";
 import type { SeedRedirectHop, SeedRedirectRecord } from "./seed-redirect";
 import type {
   AgentAccessProbe,
@@ -635,6 +638,12 @@ export interface AuditReport {
   originalUrl?: string;
   /** Every redirecting response between `originalUrl` and the audited URL, in order. */
   redirectChain?: SeedRedirectHop[];
+  /**
+   * What the config's `[[ignore]]` waivers removed from this audit (#1262). Absent
+   * when the config has no waivers. Present (with zeros) when it has some, so a
+   * report always says whether anything was waived.
+   */
+  ignored?: IgnoreSummary;
   timestamp: string;
   totalPages: number;
   passed: number;
@@ -1176,6 +1185,20 @@ export interface ScanScope {
    * from the crawl later is still `partial` with reason code `max_duration`.
    */
   maxDuration?: MaxDurationCut;
+  /**
+   * The config's `[[ignore]]` list as this audit ran it (#1262): each entry's rule
+   * pattern and reason, in order, so a report rebuilt later can name the entries
+   * and list the ones that waived nothing. `disabled` is set by `--no-ignore`.
+   */
+  ignore?: {
+    entries: Array<{ rule: string; reason?: string }>;
+    disabled?: boolean;
+    fingerprint?: string;
+    /** Entries that ran over their regex work budget and stopped waiving (indexes). */
+    timedOut?: number[];
+    /** This audit carried findings recorded under an older `[[ignore]]` list (kept so the next partial audit still says so). */
+    carriedStale?: boolean;
+  };
 }
 
 /** Locked-rules audience for a report — anonymous/local vs signed-in tier (#368). */

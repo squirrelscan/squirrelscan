@@ -13,6 +13,7 @@ export * from "./fold";
 export * from "./resolution";
 export * from "./loader";
 export * from "./rule-options-check";
+export * from "./ignore";
 export * from "./plugins";
 export * from "./cloud";
 export * from "./discovery-probes";

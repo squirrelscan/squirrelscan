@@ -220,7 +220,7 @@ _squirrel_completions() {
           return 0
           ;;
       esac
-      COMPREPLY=( $(compgen -W "--max-pages -m --max-depth --concurrency --per-host --level --coverage -C --format -f --output -o --refresh -r --fresh-ua --store-scripts --no-store-scripts --incremental --no-incremental --resume --verbose -v --debug --trace --project-name -n --publish -p --no-publish --ephemeral --no-ephemeral --visibility --follow-redirect --no-follow-redirect --yes -y --render --render-mode --http --offline --external-links --no-external-links --no-internal-links --no-classifier --fail-on --header -H --header-host --rule-include --rule-exclude --disable-discovery-probes --probe -P --passive --aggressive --probe-budget --pentest --summary --include-passed --help --include-info --include-pages --max-duration" -- "\${cur}") )
+      COMPREPLY=( $(compgen -W "--max-pages -m --max-depth --concurrency --per-host --level --coverage -C --format -f --output -o --refresh -r --fresh-ua --store-scripts --no-store-scripts --incremental --no-incremental --resume --verbose -v --debug --trace --project-name -n --publish -p --no-publish --ephemeral --no-ephemeral --visibility --follow-redirect --no-follow-redirect --yes -y --render --render-mode --http --offline --external-links --no-external-links --no-internal-links --no-classifier --fail-on --header -H --header-host --rule-include --rule-exclude --disable-discovery-probes --probe -P --passive --aggressive --probe-budget --pentest --summary --include-passed --help --include-info --include-pages --max-duration --no-ignore" -- "\${cur}") )
       return 0
       ;;
     entities)
@@ -543,6 +543,7 @@ _squirrel() {
             '--no-publish[Skip auto-publishing this run]' \\
             '--ephemeral[Use cloud features for this run only: no dashboard site, no schedule, no publish]' \\
             '--no-ephemeral[Override [cloud] ephemeral = true for this run]' \\
+            '--no-ignore[Run without applying the [[ignore]] entries in squirrel.toml]' \\
             '--visibility[Visibility for published reports]:visibility:(public unlisted private)' \\
             '--follow-redirect[Audit where the start URL redirects when that is another site]' \\
             '--no-follow-redirect[Turn [crawler] follow_redirect off for this run]' \\
@@ -813,6 +814,7 @@ complete -c squirrel -n "__fish_seen_subcommand_from audit" -s p -l publish -d "
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l no-publish -d "Skip auto-publishing this run"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l ephemeral -d "Use cloud features for this run only: no dashboard site, no schedule, no publish"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l no-ephemeral -d "Override [cloud] ephemeral = true for this run"
+complete -c squirrel -n "__fish_seen_subcommand_from audit" -l no-ignore -d "Run without applying the [[ignore]] entries in squirrel.toml"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l visibility -a "public unlisted private" -d "Visibility for published reports"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l follow-redirect -d "Audit where the start URL redirects when that is another site"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l no-follow-redirect -d "Turn [crawler] follow_redirect off for this run"

@@ -260,6 +260,15 @@ export {
   type MixedProvenanceCheck,
 } from "./coverage";
 
+// `[[ignore]]` waivers in a report (#1262).
+export {
+  ignoredEntryLines,
+  ignoredLine,
+  safeIgnored,
+  summarizeIgnored,
+  unusedIgnoreEntries,
+} from "./ignored";
+
 // Start URL redirects (#1281): the followed-redirect disclosure and the
 // no-audit outcome a redirect that was not followed prints.
 export { followedStartRedirect, startRedirectLine, type FollowedStartRedirect } from "./coverage";

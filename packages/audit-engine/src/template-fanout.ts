@@ -308,8 +308,8 @@ export function fannableRules<R extends { meta: Rule["meta"] }>(rules: readonly 
  * so a rule disabled by config never enters the cache and the per-page path costs
  * a `Set.has` rather than a `meta` read.
  *
- * `skipOnSoft404`, `skipOnNoindex` (pub#457) and `skipOnPageType` (pub#841) DISQUALIFY a rule here, whatever
- * it declares. Each gate is decided per page, so it contradicts a template verdict,
+ * `skipOnSoft404`, `skipOnNoindex` (pub#457) and `skipOnPageType` (pub#841), and an `[[ignore]]` entry with
+ * `urls` naming the rule (#1262), DISQUALIFY a rule here, whatever it declares. Each gate is decided per page, so it contradicts a template verdict,
  * and the runner's gate ordering only protects the recipient: a soft-404 or noindex
  * member takes its own skip instead of a sibling's real verdict, but such a
  * REPRESENTATIVE would otherwise cache its skip and hand it to healthy members. No
@@ -323,7 +323,12 @@ export function createTemplateFanout(
   opts?: { maxClusters?: number },
 ): TemplateFanout {
   const maxClusters = Math.max(0, opts?.maxClusters ?? DEFAULT_MAX_CLUSTERS);
-  const fannable = new Set(fannableRules(runner.getEnabledRules()).map((r) => r.meta.id));
+  const fannable = new Set(
+    fannableRules(runner.getEnabledRules())
+      // `[[ignore]]` entries with urls (#1262) are decided per page, like the gates.
+      .filter((r) => !runner.ignoresByPage(r.meta.id))
+      .map((r) => r.meta.id),
+  );
 
   /**
    * Copy a checks array free of its page, or `null` when the copy did not happen.

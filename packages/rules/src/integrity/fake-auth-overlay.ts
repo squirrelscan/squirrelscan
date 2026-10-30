@@ -23,6 +23,8 @@ export const fakeAuthOverlayRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 8,
+    // Compromise detection: an ignore could hide a compromised site (#1262).
+    ignorable: false,
   },
 
   run(ctx: RuleContext): RuleResult {

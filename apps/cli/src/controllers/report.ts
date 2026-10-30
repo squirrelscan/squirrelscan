@@ -145,6 +145,8 @@ interface SlimJsonReport {
     /** The start URL as given and the chain to the audited one (#1281). Untrusted. */
     originalUrl?: unknown;
     redirectChain?: unknown;
+    /** What the config's `[[ignore]]` entries removed (#1262). Untrusted; the renderers validate it. */
+    ignored?: unknown;
     timestamp: string;
     totalPages: number;
     /** Page cap in force (#1909); absent in slim JSON written before it. */
@@ -439,6 +441,11 @@ function convertSlimReport(report: SlimJsonReport): AuditReport {
           originalUrl: report.meta.originalUrl,
           redirectChain: slimRedirectChain(report.meta.redirectChain),
         }
+      : {}),
+    // #1262: the waivers summary, carried through the round trip. A file is user
+    // supplied: only an object survives, and the renderers re-validate every field.
+    ...(typeof report.meta.ignored === "object" && report.meta.ignored !== null
+      ? { ignored: report.meta.ignored as AuditReport["ignored"] }
       : {}),
     timestamp: report.meta.timestamp,
     totalPages: report.meta.totalPages,

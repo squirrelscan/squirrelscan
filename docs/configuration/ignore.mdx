@@ -1,0 +1,119 @@
+---
+title: "Ignore: waive findings without disabling a rule"
+sidebarTitle: "Ignore"
+icon: "eye-off"
+description: "Waive findings that are right in general but not actionable here, by item or by URL, with [[ignore]] in squirrel.toml. Waived findings are counted, not hidden."
+---
+
+Some findings are correct in general and not actionable on your site: a cookie your platform sets itself, a country selector it renders, a path served by an app you do not control. Disabling the rule would also drop the cases that are actionable. An `[[ignore]]` entry waives just the findings you name, and the report says how many it waived.
+
+## Configuration
+
+```toml
+[[ignore]]
+rule   = "security/cookie-flags"
+items  = ["localization", "cart_currency"]
+reason = "Shopify sets these cookies itself"
+
+[[ignore]]
+rule = "perf/ttfb"
+urls = ["/apps/"]
+reason = "Served by a third-party app proxy"
+```
+
+Each `[[ignore]]` table is one entry.
+
+| Field | Required | Meaning |
+|---|---|---|
+| `rule` | yes | A rule id (`security/cookie-flags`) or a glob (`a11y/*`, `*`). |
+| `items` | one of `items` or `urls` | What to waive, matched against each finding's item: its id, then its label. A cookie name, a URL, a selector the rule reports. |
+| `urls` | one of `items` or `urls` | Pages to waive, using the same pattern forms as `excludePatterns`. |
+| `checks` | no | Only these check names of the rule (`cookie-httponly`). |
+| `reason` | no | Why. Shown in the report, next to the count. |
+| `selectors` | no | Reserved. Refused with a message until rules can say where in the page an item is. |
+
+An entry needs `items` or `urls`. One with neither would turn the rule off, which is what [`[rules] disable`](/configuration/rules) does openly, so it is refused.
+
+## What counts as a match
+
+**Items** match exactly by default: `localization` waives the item named `localization` and not `localization_extra`. Prefix a pattern with `glob:` for `*` and `?` wildcards (`glob:cart_*`), or with `regex:` for a regular expression (`regex:^_shopify_`; item and check patterns take no flags, so match case with the pattern itself). A regex that does not compile, is over 200 characters, or uses back-references or lookahead/lookbehind is refused and listed by `squirrel config validate` (see [Pattern limits](#pattern-limits)).
+
+**URLs** use the forms `excludePatterns` uses: a substring of the URL (`/apps/`), an exact path segment (`/thank-you/`, which must start and end with `/`), or `regex:` with optional flags (`regex:^/blog/\d{4}/:i`). A `regex:` url pattern is tested against the page's path only (`/blog/2024/x`), not the whole URL. They are matched against the page a finding is on.
+
+**Several fields in one entry combine with AND.** `items = ["localization"]` with `urls = ["/apps/"]` waives that cookie on pages under `/apps/` only. **Several entries combine with OR**: a finding is waived when any entry waives it.
+
+## What a waiver does
+
+| Entry | Effect |
+|---|---|
+| `urls` only, on a page rule | The rule is not run on a matching page. The report shows a skipped check (`ignored`), which is left out of the score, like a page the rule does not apply to. |
+| `items` | Matching items are removed from the finding before it is counted. When every item of a check is waived, the check becomes a pass whose message says `N waived by squirrel.toml`, so scores and counts stay stable. When some remain, the check keeps its status and its message gains `(N ignored)`; rules whose messages start with a count (`security/cookie-flags`) show the count that remains. |
+| `items` and `urls`, on a rule that lists source pages | The matching pages are removed from the item; an item left with no page is waived. |
+
+Nothing is dropped silently. Every report says what was waived:
+
+```text
+Ignored by squirrel.toml: 8 findings and 2 pages on 2 rules (1 of 2 entries matched). Run with --no-ignore to see them.
+Ignore entry 2 (security/cookie-flags) matched nothing.
+```
+
+The second line is the guard against a waiver that quietly stopped matching, for example because an item changed name. In JSON the summary is `meta.ignored` (waived items and pages, per rule and per entry with its reason; an entry that waived nothing has zeros), in the LLM and XML reports it is an `<ignored>` element, so an agent reading the report knows it is filtered and does not propose fixes for what you chose to waive.
+
+### See what is waived
+
+```bash
+squirrel audit https://example.com --no-ignore
+```
+
+runs the audit without applying the entries (the report says they were not applied). Compare it with a normal run, or use it in CI to review what the list hides.
+
+## Rules that cannot be ignored
+
+Compromise detection, the `integrity/*` rules (injected pages, phishing kits, malware, SEO spam, known malicious URLs), cannot be waived: an ignore could hide a compromised site. An entry that names one is an error in `squirrel config validate`, and the audit skips it. Every other rule can be ignored, including `security/leaked-secrets`.
+
+## How it relates to other settings
+
+| Setting | Difference |
+|---|---|
+| [`[crawler] exclude`](/configuration/crawler) | The page is never fetched, so it is not in page counts or link graphs. An ignore crawls and counts the page and waives findings. |
+| `excludePatterns` rule option (`links/orphan-pages` and others) | Stays. It changes the analysis (a page leaves the link graph), which a waiver cannot do. |
+| [`[rules] disable`](/configuration/rules) | The rule is not run and not counted. An ignore runs it and waives some findings. |
+| [`[rule_options]`](/configuration/rule-options) | Per-rule thresholds. Names such as `ignore_items` are not options; `squirrel config validate` points you at `[[ignore]]`. |
+
+## Notes
+
+- Waivers apply when the findings are produced. A smart audit that carries findings forward from pages this run did not crawl replays what an earlier audit recorded; when the ignore list changed since then, the report says those carried findings may still include waived items. Re-run without a page limit, or with `--refresh`.
+- Editing an entry re-evaluates only the rules it names; cached results for other rules stay valid.
+- Cloud audits do not read `squirrel.toml`. Website-level ignore settings for cloud audits are tracked separately.
+
+## Limits
+
+An entry list holds at most 200 entries, each with at most 100 items and 100 URL patterns of at most 200 and 512 characters. Run `squirrel config validate` after editing: it reports rules that do not exist (with a suggestion), rules that cannot be ignored and patterns that are refused.
+
+### Pattern limits
+
+Ignore patterns are matched against text taken from the pages being audited, so they are held to a bound. Today entries come from `squirrel.toml` only (there is no `--ignore` flag). Anything that supplies entries later, such as a website's cloud settings, goes through the same checks, and `squirrel config validate` and the audit use the same validator: a pattern valid in one is valid in the other.
+
+- **Regexes run on a linear-time engine**, not the JavaScript one, so no pattern can hang an audit however it is written (`(a+)+$`, `(a|a)*`, `\d+\d+`, nested `{1,50}` repeats are all safe to run). It supports literals, `.`, classes, `\d \w \s \b`, `^ $`, groups, alternation, `* + ? {m,n}`, and the flags `i`, `s` and `m` (url regexes: `regex:^/blog/:i`). Back-references, lookahead, lookbehind, named groups and `\p{...}` are refused.
+- A pattern is at most 200 characters. Repeats are expanded when the pattern is compiled and a pattern that expands past 1,500 steps (a deep `{1,50}` nest) is refused.
+- Text longer than 2,048 characters never matches a `regex:` or `glob:` pattern (it is not truncated, so `$` cannot match mid-string). Exact items still match.
+- Globs (`*`, `?`) are at most 512 characters and match in linear time.
+- At most 200 entries per config, 100 patterns per field of an entry, and 512 characters per pattern, wherever the entries come from (the config file today, website settings in the cloud later): the table enforces them itself, not only the config schema. Entries past the limits are not applied and are listed as problems.
+- A character class may have at most 64 separate ranges after case folding, and a test pays for the ranges it checks.
+- Work is metered, not timed (a single regex call cannot be interrupted, so the bound is structural): at most 400,000 steps per test, 10,000,000 per entry and 50,000,000 across all entries of an audit, counted for regexes and globs alike and never reset.
+- Each entry has a work budget. If its regexes use more than the per-test or per-run budget the entry **stops waiving** from that point and logs `ignore entry timed out`; the findings it was hiding come back. An entry never fails open into ignoring everything.
+- A pattern that takes too long to compile is refused when the config is checked: the engine measures a regex's expanded size before building it, so repeats of an empty group and `{9999}` nests compile at once, a case-folded class is folded once and shared, and all the regexes of one config together may use 1,000,000 units of compile work (a code point folded, an instruction emitted). Past that the remaining patterns are refused and their entries are not applied.
+- An entry must have `items` or `urls`. One with neither (or with empty lists, or only `checks`) would waive every finding of its rule, so it is refused and not applied.
+- When an entry runs out of its work budget the report says so: `squirrel audit` prints `N entries (...) timed out on a pattern, which stopped matching partway through` (the entry's exact items keep applying), and `meta.ignored.timedOutEntries` lists them in JSON. Verdicts computed after an entry timed out are not stored in the rule cache, so the next audit evaluates those pages again.
+- When an entry waives only some items of a finding, the finding's page list and its element and resource evidence are trimmed to match, so a waived item does not keep counting there.
+
+### Where the regex engine differs from JavaScript
+
+The engine answers the same yes or no as `RegExp.test` for most patterns, and every pattern it does not understand is refused rather than matched differently. These are the known differences:
+
+- **Code points, not UTF-16 units.** `.`, `[^a]`, `\W`, `\S` and `[\s\S]` each match an emoji as one character (`^.$`, `^[^a]$`, `^\W$`, `^\S$` and `^[\s\S]$` all match `😀`), where JavaScript without the `u` flag sees two units.
+- **Case folding with `i` is simple, per character, and done when the pattern is compiled.** A range wider than 512 characters is not folded (the limit is per range, so a narrower one beside it is). Special cases fold differently from JavaScript: the dotless `ı` and the long `ſ` match `I` and `S`, and `ǆ`, `σ` and `ς` do not follow JavaScript's own tables.
+- **Counted repeats take up to four digits.** `a{10000}` has five, so it is read as the literal text `a{10000}`, not a repeat. Repeats are also bounded by the expansion limit above.
+- **`\u{41}`** is read as the code point escape without the `u` flag (JavaScript reads `u{41}` as 41 repeats of `u`).
+- **Lazy quantifiers** (`a*?`) are accepted and behave like greedy ones, because a yes or no cannot tell them apart.
+- **Patterns that match the empty string anywhere are refused** (`regex:`, `a*`, `(|)`, `a{0}`, `$`): they would match every text and so waive everything. `^$`, which matches only the empty text, is allowed.
