@@ -420,6 +420,11 @@ export function reconstructReport(
       else variantsOfCanonical.set(canonical, [variant]);
     }
     let variantPages = 0;
+    // Rules that reported on each page, for `--include-pages` (#1260). A failed read
+    // leaves the counts at 0 rather than failing the report.
+    const ruleCountsByPage = yield* storage
+      .getRuleCountsByPage(crawlId)
+      .pipe(Effect.catchAll(() => Effect.succeed(new Map<string, number>())));
 
     // 7. Load rule registry to get metadata
     // Stored results can include explicitly enabled opt-in rules. Reconstruction
@@ -676,6 +681,7 @@ export function reconstructReport(
             siteName: null,
           },
           checks: pageChecks,
+          ruleCount: ruleCountsByPage.get(page.normalizedUrl) ?? 0,
           redirectChain: page.redirectChain,
           fetcherId: page.fetcherId,
           fallbackReason: page.fallbackReason,

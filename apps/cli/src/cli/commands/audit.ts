@@ -1263,6 +1263,11 @@ export const audit = defineCommand({
       description:
         "Also list info checks (notes that are not findings) in the llm format. The JSON report always has them",
     },
+    includePages: {
+      type: "boolean",
+      description:
+        "JSON only: list every crawled page with its HTTP status and how many rules reported on it (capped at 2000 entries, marked with pagesTruncated)",
+    },
   },
   async run({ args, rawArgs }) {
     // Configure logging before any output
@@ -2976,6 +2981,13 @@ export const audit = defineCommand({
       }
       const includePassed = args.includePassed ?? false;
       const includeInfo = args.includeInfo ?? false;
+      const includePages = args.includePages ?? false;
+      // #1260: the pages list is a JSON field; say so rather than ignore the flag.
+      if (includePages && format !== "json") {
+        console.error(
+          `--include-pages only applies to --format json; the ${format} report has no pages list`
+        );
+      }
       if (format === "console") {
         generateConsoleReport(report, {
           summaryOnly: args.summary,
@@ -2991,7 +3003,12 @@ export const audit = defineCommand({
         );
       } else if (format === "json") {
         // stdout by default, file if -o provided
-        generateJsonReport(report, options.outputPath, includePassed);
+        generateJsonReport(
+          report,
+          options.outputPath,
+          includePassed,
+          includePages
+        );
       } else if (format === "html") {
         // file by default - HTML needs a browser
         const hostname = new URL(report.baseUrl).hostname;

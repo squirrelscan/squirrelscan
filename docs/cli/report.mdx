@@ -36,6 +36,7 @@ squirrel report [id] [options]
 | `--summary` | | Print only the score, category breakdown, and issue counts — no per-issue detail. Console format only | `false` |
 | `--include-passed` | | Also list the rules that passed, with how many pages each passed on. See [List what passed](#list-what-passed) | `false` |
 | `--include-info` | | Also list info checks (notes that are not findings) in the `llm` format. The `json` format always has them under `infoChecks`. See [Info checks](/configuration/output#json) Not available with `--input`: a JSON file does not carry them back, so the flag prints a note and lists nothing | `false` |
+| `--include-pages` | | JSON only: list every crawled page with its HTTP status and how many rules reported on it. See [Pages list](#pages-list) | `false` |
 
 ## Publishing
 
@@ -197,6 +198,16 @@ The list comes after the issues. In the HTML report it is one closed line under 
 A rule is listed when it has at least one passing check and no warnings or errors. Each rule shows how many pages it passed on, or `site-wide` for a rule that checks the website once. A page rule whose passes carry no page shows `pages not recorded`. It works with every `--format`. Combined with `--publish`, `--diff`, `--regression-since` or `--list` the command exits with an error, since none of them renders the report. In `json` the list is `passedRules`, and each entry has `ruleId`, `name`, `category`, `scope` (`page` or `site`) and `pages`.
 
 A report loaded with `--input` lists none, because passing checks are not read back from a JSON file. The command says so on stderr and renders the rest of the report as usual.
+
+### Pages list
+
+`--include-pages` adds `pages` to a JSON report: one `{ "url", "status", "ruleCount" }` entry for each page the audit crawled, read from the stored audit.
+
+```bash
+squirrel report -f json --include-pages
+```
+
+The list is cut at 2,000 pages, with `pagesTotal` and `pagesTruncated` saying so. It is JSON only; other formats ignore the flag and the command says so on stderr. A report loaded with `--input` has no pages to list, because the page list is not read back from a JSON file, and the command says so on stderr. The fields are described under [`squirrel audit --include-pages`](/cli/audit#pages-list).
 
 ### Diff reports
 

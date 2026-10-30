@@ -22,6 +22,10 @@ import type {
   PackedComponentOccurrence,
   PackedSubtreeLadder,
 } from "@squirrelscan/core-contracts/component-evidence";
+import {
+  JSON_REPORT_PAGES,
+  JSON_REPORT_SCHEMA_VERSION,
+} from "@squirrelscan/core-contracts/limits";
 import { packComponentOccurrences } from "@squirrelscan/core-contracts/component-evidence";
 import { packSiteResourceOccurrences } from "@squirrelscan/core-contracts/site-resource-evidence";
 import { componentOccurrenceKey } from "../component-fix-groups";
@@ -114,15 +118,32 @@ function slimComponentFixGroups(
   });
 }
 
+/** One crawled page in the opt-in `pages` list (#1260). */
+export interface JsonPageRow {
+  url: string;
+  /** HTTP status the page answered with. */
+  status: number;
+  /** Distinct rules that reported on the page (skipped checks not counted). */
+  ruleCount: number;
+}
+
 export interface JsonRenderOptions {
   version?: string;
   /** Add `passedRules`, the rules that passed (`--include-passed`). */
   includePassed?: boolean;
+  /**
+   * Add `pages`, the crawled pages with their status and rule count (`--include-pages`, #1260).
+   * Omitted: the report has no `pages` key. Cut at {@link JSON_REPORT_PAGES}.maxEntries with
+   * `pagesTruncated` set.
+   */
+  pages?: readonly JsonPageRow[];
 }
 
 interface SlimJsonReport {
   meta: {
     version: string;
+    /** The report's schema version, major.minor (#1260). Absent on reports from before 1.1. */
+    schemaVersion: string;
     baseUrl: string;
     /**
      * A refused off-site seed redirect (#1418). Present only when the seed
@@ -241,6 +262,15 @@ interface SlimJsonReport {
      */
     skipped: number;
   };
+  /**
+   * Every crawled page with its HTTP status and the number of rules that reported on it
+   * (`--include-pages`, #1260). Present only when asked for. At most
+   * `JSON_REPORT_PAGES.maxEntries` entries: `pagesTotal` is the real count and
+   * `pagesTruncated` says the list was cut.
+   */
+  pages?: JsonPageRow[];
+  pagesTotal?: number;
+  pagesTruncated?: boolean;
   issues: Array<{
     ruleId: string;
     name: string;
@@ -441,7 +471,8 @@ interface SlimJsonReport {
 function buildSlimReport(
   report: AuditReport,
   version: string,
-  includePassed: boolean
+  includePassed: boolean,
+  pages?: readonly JsonPageRow[]
 ): SlimJsonReport {
   const siteWide = siteWideContext(report);
   const categoryIssues = groupIssuesByCategory(report.ruleResults, report.checkTallies);
@@ -457,6 +488,7 @@ function buildSlimReport(
   return {
     meta: {
       version,
+      schemaVersion: JSON_REPORT_SCHEMA_VERSION,
       baseUrl: report.baseUrl,
       // Sits next to the `baseUrl` it qualifies (#1418): a consumer reading the
       // graded URL sees, in the same object, that the seed pointed elsewhere.
@@ -560,6 +592,17 @@ function buildSlimReport(
         }
       : {}),
     // Severity-first across the whole report (#1536), not category-by-category.
+    ...(pages
+      ? {
+          pages: pages.slice(0, JSON_REPORT_PAGES.maxEntries).map((page) => ({
+            url: page.url,
+            status: page.status,
+            ruleCount: page.ruleCount,
+          })),
+          pagesTotal: pages.length,
+          pagesTruncated: pages.length > JSON_REPORT_PAGES.maxEntries,
+        }
+      : {}),
     issues: flattenIssuesBySeverity(categoryIssues).map((rule) => ({
       ruleId: rule.id,
       name: rule.name,
@@ -812,6 +855,6 @@ function buildSlimReport(
 
 export function renderJson(report: AuditReport, options?: JsonRenderOptions): string {
   const version = options?.version ?? "";
-  const slim = buildSlimReport(report, version, options?.includePassed ?? false);
+  const slim = buildSlimReport(report, version, options?.includePassed ?? false, options?.pages);
   return JSON.stringify(slim, null, 2);
 }

@@ -69,6 +69,7 @@ squirrel audit <url> [options]
 | `--summary` | | Print only the score, category breakdown, and issue counts — no per-issue detail. Console format only | `false` |
 | `--include-passed` | | Also list the rules that passed, with how many pages each passed on | `false` |
 | `--include-info` | | Also list info checks (notes that are not findings) in the `llm` format. The `json` format always has them under `infoChecks`. See [Info checks](/configuration/output#json) | `false` |
+| `--include-pages` | | JSON only: list every crawled page with its HTTP status and how many rules reported on it. See [Pages list](#pages-list) | `false` |
 
 ### Audit levels
 
@@ -539,6 +540,16 @@ squirrel audit https://example.com --include-passed
 ```
 
 It works with every `--format`. To list them for an audit you already ran, use [`squirrel report --include-passed`](/cli/report#list-what-passed).
+
+### Pages list
+
+`--include-pages` adds the crawled pages to the JSON report, for a pipeline that tracks which pages a run actually covered:
+
+```bash
+squirrel audit https://example.com -f json --include-pages
+```
+
+It is off by default, so the report and its size are unchanged unless you ask. Each entry is `{ "url", "status", "ruleCount" }`: the page's URL, the HTTP status it answered with, and how many distinct rules reported on it (a skipped check does not count, and neither do site-wide rules). The list is cut at 2,000 pages; `pagesTotal` is the real count and `pagesTruncated` is `true` when entries were dropped. A URL whose fetch never produced a stored response (a connection error, a server error that survived retries, a rate-limited request) is not a page and is not listed; rate-limited pages are counted in `rateLimited`. To get the list for an audit you already ran, use [`squirrel report --include-pages`](/cli/report#pages-list). In any other format the flag does nothing and the command says so on stderr. See the [JSON output schema](/configuration/output#json-output-schema).
 
 ### Verbose output
 

@@ -4629,6 +4629,26 @@ export class SQLiteStorage implements CrawlStorage {
    * of a parsed CheckResult, and the result is byte-identical to the readers
    * this replaces under any index or query plan.
    */
+  /**
+   * How many distinct rules reported on each page: rules with at least one
+   * non-skipped check stored under that page (#1260). Site-scope results are stored
+   * under the empty page url and are not counted. One indexed GROUP BY, no checks
+   * materialized.
+   */
+  getRuleCountsByPage(crawlId: string): Effect.Effect<Map<string, number>, StorageError, never> {
+    return Effect.try({
+      try: () => {
+        const rows = this.getDb()
+          .prepare(
+            "SELECT page_url AS url, COUNT(DISTINCT rule_id) AS n FROM rule_results WHERE crawl_id = ? AND page_url != '' AND status != 'skipped' GROUP BY page_url"
+          )
+          .all(crawlId) as Array<{ url: string; n: number }>;
+        return new Map(rows.map((row) => [row.url, row.n]));
+      },
+      catch: (e) => StorageError.read(e),
+    });
+  }
+
   getRuleResultsGrouped(crawlId: string): Effect.Effect<
     {
       byPage: Map<string, CheckResult[]>;
