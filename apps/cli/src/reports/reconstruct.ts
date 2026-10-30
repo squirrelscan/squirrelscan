@@ -64,7 +64,8 @@ function requestedDeepUrl(
   if (!crawl.originalUrl) return undefined;
   try {
     const requested = new URL(crawl.originalUrl);
-    if (requested.pathname === "" || requested.pathname === "/") return undefined;
+    if (requested.pathname === "" || requested.pathname === "/")
+      return undefined;
     return redactUrl(requested.toString());
   } catch {
     return undefined;

@@ -15,23 +15,37 @@ const site = Bun.serve({
   fetch(req) {
     const { pathname, origin } = new URL(req.url);
     if (pathname === "/robots.txt") {
-      return new Response(`User-agent: *\nAllow: /\nSitemap: ${origin}/sitemap.xml\n`);
+      return new Response(
+        `User-agent: *\nAllow: /\nSitemap: ${origin}/sitemap.xml\n`
+      );
     }
     if (pathname === "/sitemap.xml") {
       // The requested page is last: if sitemap insertion wins frontier dedup,
       // this seven-page list can push it past the five-page budget.
-      const urls = ["/", "/one", "/two", "/three", "/four", "/five", "/requested"];
+      const urls = [
+        "/",
+        "/one",
+        "/two",
+        "/three",
+        "/four",
+        "/five",
+        "/requested",
+      ];
       return new Response(
         `<?xml version="1.0"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls
           .map((path) => `<url><loc>${origin}${path}</loc></url>`)
           .join("")}</urlset>`,
-        { headers: { "content-type": "application/xml" } },
+        { headers: { "content-type": "application/xml" } }
       );
     }
-    if (["/", "/requested", "/one", "/two", "/three", "/four", "/five"].includes(pathname)) {
+    if (
+      ["/", "/requested", "/one", "/two", "/three", "/four", "/five"].includes(
+        pathname
+      )
+    ) {
       return new Response(
         `<!doctype html><html lang="en"><head><title>${pathname}</title></head><body><h1>${pathname}</h1></body></html>`,
-        { headers: { "content-type": "text/html; charset=utf-8" } },
+        { headers: { "content-type": "text/html; charset=utf-8" } }
       );
     }
     return new Response("not found", { status: 404 });
@@ -48,8 +62,9 @@ async function audit(path: string, maxPages: number) {
   const env = Object.fromEntries(
     Object.entries(process.env).filter(
       ([key, value]) =>
-        value !== undefined && !/^(SQUIRREL|FORCE_COLOR|NO_COLOR|COLORTERM)/.test(key),
-    ),
+        value !== undefined &&
+        !/^(SQUIRREL|FORCE_COLOR|NO_COLOR|COLORTERM)/.test(key)
+    )
   ) as Record<string, string>;
   const proc = Bun.spawn(
     [
@@ -77,7 +92,7 @@ async function audit(path: string, maxPages: number) {
       stdin: "ignore",
       stdout: "pipe",
       stderr: "pipe",
-    },
+    }
   );
   const [out, err, code] = await Promise.all([
     new Response(proc.stdout).text(),
@@ -92,7 +107,7 @@ describe("deep audit start URL", () => {
     const result = await audit("/requested", 5);
     expect(result.code).toBe(0);
     expect(result.err).toContain(
-      `Notice: requested ${site.url.origin}/requested; auditing the whole site at ${site.url.origin}.`,
+      `Notice: requested ${site.url.origin}/requested; auditing the whole site at ${site.url.origin}.`
     );
     const report = JSON.parse(result.out) as {
       meta: { baseUrl: string; requestedUrl?: string };
@@ -100,7 +115,9 @@ describe("deep audit start URL", () => {
     };
     expect(report.meta.baseUrl).toBe(site.url.origin);
     expect(report.meta.requestedUrl).toBe(`${site.url.origin}/requested`);
-    expect(report.pages.map((page) => page.url)).toContain(`${site.url.origin}/requested`);
+    expect(report.pages.map((page) => page.url)).toContain(
+      `${site.url.origin}/requested`
+    );
   }, 90_000);
 
   test("an origin-only start has no notice or requestedUrl", async () => {
