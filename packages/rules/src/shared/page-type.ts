@@ -97,16 +97,55 @@ const LEGAL_PHRASES = [
 ] as const;
 const LEGAL_PHRASES_NEEDED = 3;
 
-const EMAIL = /[a-z0-9._%+-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}/i;
-const PHONE = /\+?\d[\d\s().-]{6,}\d/;
+/** How much of the text is read for a way to reach the organisation: a contact page is short. */
+const CONTACT_SCAN_CHARS = 30_000;
+/** At most this many "@" signs are tried, so a hostile page costs a fixed amount. */
+const MAX_AT_SIGNS = 50;
 
-/** A phone number has nine digits, or eight after a leading "+": a year range or a price is not one. */
-function hasPhoneNumber(text: string): boolean {
-  for (const match of text.matchAll(new RegExp(PHONE.source, "g"))) {
-    const digits = match[0].replace(/\D/g, "").length;
-    if (digits >= 9 || (match[0].startsWith("+") && digits >= 8)) return true;
+const LOCAL_CHAR = /[a-z0-9._%+-]/;
+// Anchored on a slice at most 300 characters long, with every repetition bounded: no backtracking blow-up.
+const EMAIL_DOMAIN = /^[a-z0-9-]{1,63}(?:\.[a-z0-9-]{1,63}){0,5}\.[a-z]{2,24}/;
+
+/** An email address in the text: a local part before an "@" and a dotted domain after it. */
+function hasEmailAddress(text: string): boolean {
+  let from = 0;
+  for (let tries = 0; tries < MAX_AT_SIGNS; tries++) {
+    const at = text.indexOf("@", from);
+    if (at < 0) return false;
+    from = at + 1;
+    if (at > 0 && LOCAL_CHAR.test(text[at - 1]!) && EMAIL_DOMAIN.test(text.slice(at + 1, at + 301))) return true;
   }
   return false;
+}
+
+/**
+ * A phone number has nine digits, or eight after a leading "+": a year range or a price is not
+ * one. Scanned by hand over a bounded prefix: a run of digits and separators is read once.
+ */
+function hasPhoneNumber(text: string): boolean {
+  let digits = 0;
+  let plus = false;
+  let run = 0;
+  for (const char of text) {
+    if (char >= "0" && char <= "9") {
+      digits++;
+      run++;
+    } else if (run > 0 && " ()-.\u00a0".includes(char)) {
+      run++;
+      if (run > 40) {
+        digits = 0;
+        run = 0;
+        plus = false;
+      }
+    } else {
+      // The run ends (a "+" right before it marks an international number).
+      if (digits >= 9 || (plus && digits >= 8)) return true;
+      digits = 0;
+      run = 0;
+      plus = char === "+";
+    }
+  }
+  return digits >= 9 || (plus && digits >= 8);
 }
 
 /**
@@ -119,6 +158,7 @@ function hasPhoneNumber(text: string): boolean {
 export function bodyCorroboratesPageType(parsed: ParsedPage | null | undefined, label: string): boolean {
   const content = parsed?.content;
   const text = (content?.textContent ?? "").toLowerCase();
+  const head = text.slice(0, CONTACT_SCAN_CHARS);
   if (!parsed || !((content?.wordCount ?? 0) > 0) || text.length === 0) return false;
   if (label === "legal") {
     let found = 0;
@@ -129,7 +169,7 @@ export function bodyCorroboratesPageType(parsed: ParsedPage | null | undefined, 
   }
   if (label === "contact") {
     if ((parsed.contactLinks?.length ?? 0) > 0) return true;
-    if (EMAIL.test(text) || hasPhoneNumber(text)) return true;
+    if (hasEmailAddress(head) || hasPhoneNumber(head)) return true;
     return parsed.document?.querySelector("form textarea") != null;
   }
   return false;
