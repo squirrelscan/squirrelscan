@@ -19,7 +19,7 @@ When the audit has fetched the site's JavaScript, squirrel searches every same-o
 
 The finding is per chunk:
 
-- `content-in-js-bundle` (info): the chunk holds the content of a page that loads it, and of no more than one other page. One page's copy in a chunk is also what a hard-coded route component looks like, so on its own it is information, not a warning. Information checks do not appear in the JSON and LLM reports (squirrelscan/squirrelscan [#669](https://github.com/squirrelscan/squirrelscan/issues/669)), so an agent reading either format does not see the single-page finding, while the sitewide warning reaches every format.
+- `content-in-js-bundle` (info): the chunk holds the content of a page that loads it, and of no more than one other page. One page's copy in a chunk is also what a hard-coded route component looks like, so on its own it is information, not a warning. Whether information checks reach the JSON and LLM reports is tracked in squirrelscan/squirrelscan [#669](https://github.com/squirrelscan/squirrelscan/issues/669); the sitewide warning reaches every format.
 - `content-in-js-bundle-sitewide` (warning): the same chunk also holds the content of at least two other pages. This is the "whole site's content in every page's bundle" signature. It is a warning, not a failure, until the escalation has been measured against more real sites.
 
 Each item gives the chunk URL, its size and its gzip size, how many pages' content it holds (and how many others), and an estimated prose share of the chunk: the share of its characters in long runs of plain text, which compiled copy scores high on and application code scores near zero on.
@@ -27,6 +27,10 @@ Each item gives the chunk URL, its size and its gzip size, how many pages' conte
 ### What a run over real sites found
 
 The rule was run over 40 public documentation and framework sites (12 pages each). 36 were audited; 4 started at a URL that redirects to another site and 1 failed to start. Four of the 36 reported the single-page finding: a React documentation page, a Docusaurus page, a TanStack page and a pnpm page, each with the copy of one or two pages in a 300 KB to 1.2 MB chunk and an estimated prose share of 0 to 11%. None reported the sitewide finding. They are route components with hard-coded copy, not compiled MDX collections, which is why that case is information. The sitewide finding needs two or more other pages' content in the same chunk, the signature of an eager MDX glob.
+
+**A real eager-MDX site as a positive control.** A TanStack Start site on Vite with 132 MDX files was built with an eager glob that imports every module, the pattern this rule exists for. Its entry chunk was 1,474 KB (about 1.5 MB), the first paragraphs of 124 of the 132 files were found inside it, and the estimated prose share was 47%. The same site built with the bodies rendered on the server had a 603 KB entry chunk, none of the pages' content in it, and an estimated prose share of 37%. (The paragraphs were taken from the MDX sources and searched with the rule's own matcher, rather than read off rendered pages.)
+
+**The decision.** The prose share does not separate the two cases (47% against 37% for ordinary application code) and sits below a 50% line, so it is not used to raise the single-page finding to a warning. What marks a real MDX collection is how many pages' content is in one chunk: 124 here, against 1 or 2 in the hard-coded route components above. That is the sitewide finding, a warning from two other pages up. A single page's copy in a chunk stays information.
 
 ### What does not count
 
