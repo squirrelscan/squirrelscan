@@ -20,7 +20,18 @@ The rule makes one TLS handshake with the audited host and reads the certificate
 
 Automated CAs renew a certificate at about a third of its lifetime left: certbot and Let's Encrypt at 30 days of 90, and the managed certificates on Cloudflare, Google and Vercel the same way. A fixed 30-day warning therefore fired on healthy, auto-renewing certificates for a day or so before every routine renewal, and certificate lifetimes are shrinking (200 days from March 2026, then 100, then 47 by 2029), so a fixed window would flag a growing share of valid certificates.
 
-By default the warning waits until a renewal is 14 days overdue. With the certificate's lifetime `L` (`notAfter - notBefore`), the check warns when the days remaining are at most `L / 3 - 14` (rounded down, never below `error_days`): 16 days for a 90-day certificate, 52 for a 200-day one. A 90-day certificate with 28 days left passes, with 10 days left it warns, and with 5 days left it fails at the default `error_days` of 7. The check details carry the window that was used (`warnDays`) and whether it came from the lifetime or from the `warn_days` option. If the lifetime cannot be read the window is 30 days. Setting `warn_days` replaces all of this with a fixed number of days.
+By default the warning waits until a renewal is overdue. With the certificate's lifetime `L` (`notAfter - notBefore`, rounded to whole days, so Let's Encrypt's 90 days less a second reads 90), the check warns when the days remaining are at most `L / 3 - margin`, rounded down, where the margin is 14 days or 15% of `L`, whichever is less. The error threshold is 7 days, or a tenth of `L` (at least one day) for a certificate under 70 days, so a short-lived certificate neither fails on its third day nor loses its warning step. Neither is ever below the other: the warning window is at least the error threshold.
+
+| Lifetime | Warns at | Errors at |
+|---|---|---|
+| 365 days | 107 days or fewer | 7 days or fewer |
+| 200 days | 52 | 7 |
+| 90 days | 16 | 7 |
+| 47 days | 8 | 4 |
+| 30 days | 5 | 3 |
+| 10 days or less | 1 | 1 |
+
+A 90-day certificate with 28 days left passes, with 10 days left it warns, and with 5 days left it fails. The check details carry the windows that were used (`warnDays`, `errorDays`) and whether each came from the lifetime or from an option. If the lifetime cannot be read the warning window is 30 days. Setting `warn_days` or `error_days` replaces the derived value with a fixed number of days.
 
 Before each handshake, squirrel resolves the name once and checks the address, as it does for the crawl's own hosts. It never connects to a link-local or cloud metadata address. The `www` or apex counterpart of a public site must also resolve to a public address. The connection goes to the address that was checked, with the hostname sent for SNI and verification.
 
@@ -40,7 +51,7 @@ When the handshake cannot be made, the rule reports `not checked`: a skipped che
 
 ### Behind an HTTP proxy
 
-When `HTTPS_PROXY` or `HTTP_PROXY` (or the lowercase names) is set, the handshake goes through the proxy, never around it: squirrel opens a CONNECT tunnel to `host:port`, then does TLS inside it with the hostname as SNI and verifies the certificate itself. The proxy only relays bytes, so the result is the same pass, warning or failure as without a proxy. The address check described above still applies first: squirrel resolves the name once, refuses a link-local, cloud metadata or (for any host but the audited one) private answer before sending anything, and the CONNECT names that vetted address, not the name, so the proxy's own DNS or a rebinding answer cannot send the tunnel somewhere else. The hostname is still the SNI and verification name. No direct socket to the host is opened while a proxy applies. A name squirrel cannot resolve itself is `not checked`, even if the proxy could resolve it, and a proxy whose policy only allows hostnames will refuse the address CONNECT and give a `not checked` entry with its status. A host matched by `NO_PROXY` (`*`, a host, `.suffix` or `*.suffix`, with an optional port) is probed directly. A proxy that answers CONNECT with an error (403, 407, 502), never answers, cannot be reached or sends an unreadable reply makes the rule `not checked` with that reason, and so does a proxy this check cannot tunnel through (an `https:` or `socks` proxy URL). Proxy credentials in the URL are sent as `Proxy-Authorization` and never printed.
+When `HTTPS_PROXY` or `HTTP_PROXY` (or the lowercase names) is set, the handshake goes through the proxy, never around it: squirrel opens a CONNECT tunnel to `host:port`, then does TLS inside it with the hostname as SNI and verifies the certificate itself. The proxy only relays bytes, so the result is the same pass, warning or failure as without a proxy. The address check described above still applies first: squirrel resolves the name once, refuses a link-local, cloud metadata or (for any host but the audited one) private answer before sending anything, and the CONNECT names that vetted address, not the name, so the proxy's own DNS or a rebinding answer cannot send the tunnel somewhere else. The hostname is still the SNI and verification name. No direct socket to the host is opened while a proxy applies. A name squirrel cannot resolve itself is `not checked`, even if the proxy could resolve it, and a proxy whose policy only allows hostnames will refuse the address CONNECT and give a `not checked` entry with its status. A host matched by `NO_PROXY` (`*`, a host, `.suffix` or `*.suffix`, with an optional port; the first of `NO_PROXY` and `no_proxy` that is not empty) is probed directly. CIDR ranges such as `10.0.0.0/8` are not supported: an address in one is not matched by it. A proxy that answers CONNECT with an error (403, 407, 502), never answers, cannot be reached or sends an unreadable reply makes the rule `not checked` with that reason, and so does a proxy this check cannot tunnel through (an `https:` or `socks` proxy URL). Proxy credentials in the URL are sent as `Proxy-Authorization` and never printed.
 
 On a local or private-network host, such as `localhost` or `192.168.1.10`, the rule is skipped and left out of the score, because a dev server does not hold the production certificate. See [Transport and delivery rules do not apply](/guides/local-audits-cli#transport-and-delivery-rules-do-not-apply).
 
@@ -77,10 +88,10 @@ Use the `fullchain.pem` file, not `cert.pem`, which holds the leaf alone. Test t
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `warn_days` | integer | unset | Warn when the certificate expires within this many days. Unset: the last third of the certificate's lifetime less 14 days (16 days for a 90-day certificate). |
-| `error_days` | integer | `7` | Error when the certificate expires within this many days. |
+| `warn_days` | integer | unset | Warn when the certificate expires within this many days. Unset: the last third of the certificate's lifetime less a renewal margin (16 days for a 90-day certificate). |
+| `error_days` | integer | unset | Error when the certificate expires within this many days. Unset: 7 days, or a tenth of the certificate's lifetime for one under 70 days. |
 
-Set `warn_days` to override the lifetime-relative default with a fixed number of days, for example to warn earlier if your renewal job runs less often than monthly. `error_days` must not be more than `warn_days` when both are set.
+Set `warn_days` to override the lifetime-relative default with a fixed number of days, for example to warn earlier if your renewal job runs less often than monthly. `error_days` must not be more than `warn_days` when both are set; an explicit `warn_days` also caps a derived error threshold.
 
 ### Configuration example
 

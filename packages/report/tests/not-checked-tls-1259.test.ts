@@ -7,13 +7,16 @@ import { describe, expect, test } from "bun:test";
 import { TLS_CERTIFICATE_NOT_CHECKED_SKIP_REASON } from "@squirrelscan/core-contracts";
 
 import { notCheckedLines, notCheckedRules } from "../src/not-checked";
+import { renderHtml } from "../src/output/html";
 import { renderJson } from "../src/output/json";
+import { renderLlm } from "../src/output/llm";
 import { renderMarkdown } from "../src/output/markdown";
 import { renderText } from "../src/output/text";
+import { renderXml } from "../src/output/xml";
 import type { AuditReport } from "../src/types";
 
 const MESSAGE =
-  "TLS certificate not checked: an HTTP proxy is set in the environment, and a direct TLS connection would go around it";
+  "TLS certificate not checked: the proxy 127.0.0.1:3128 refused CONNECT to 93.184.216.34:443 with status 403";
 
 function report(): AuditReport {
   return {
@@ -58,7 +61,7 @@ describe("security/tls-certificate not checked (#1259)", () => {
       reason: TLS_CERTIFICATE_NOT_CHECKED_SKIP_REASON,
       message: MESSAGE,
     });
-    expect(rule?.hint).toContain("direct TLS connection");
+    expect(rule?.hint).toContain("CONNECT");
     expect(notCheckedLines(report())[0]).toStartWith("Not checked: TLS Certificate.");
   });
 
@@ -72,6 +75,19 @@ describe("security/tls-certificate not checked (#1259)", () => {
         reason: TLS_CERTIFICATE_NOT_CHECKED_SKIP_REASON,
       }),
     ]);
+  });
+
+  test("the html, llm and xml reports list it too, and the llm and xml name the reason", () => {
+    const html = String(renderHtml(report() as never));
+    expect(html).toContain("TLS certificate not checked");
+    for (const out of [
+      String(renderLlm(report() as never)),
+      String(renderXml(report() as never)),
+    ]) {
+      expect(out).toContain('<not-checked count="1">');
+      expect(out).toContain('check="tls-certificate" reason="tls-certificate-not-checked"');
+      expect(out).toContain("TLS certificate not checked");
+    }
   });
 
   test("the text and markdown reports show the same line", () => {

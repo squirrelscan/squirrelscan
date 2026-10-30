@@ -109,7 +109,7 @@ export function createTlsProbe(options: TlsProbeOptions = {}): TlsProbeFn {
       : {}),
   };
 
-  return async (target) => {
+  const probeOnce: TlsProbeFn = async (target) => {
     const hostname = target.hostname.replace(/^\[|\]$/g, "").replace(/\.$/, "");
     if (options.siteHostOnly && hostname.toLowerCase() !== site?.hostname) {
       return {
@@ -206,6 +206,16 @@ export function createTlsProbe(options: TlsProbeOptions = {}): TlsProbeFn {
         message: `no TLS handshake with ${hostname} within ${timeoutMs}ms`,
       }
     );
+  };
+
+  // A probe never throws (callers `Promise.all` it and read it in failure paths): whatever
+  // escapes the steps above, a malformed proxy URL included, is an unreachable answer.
+  return async (target) => {
+    try {
+      return await probeOnce(target);
+    } catch (error) {
+      return { kind: "unreachable", code: "error", message: errorText(error) };
+    }
   };
 }
 
@@ -417,12 +427,16 @@ export function proxyForTarget(hostname: string, port: number): ProxyDecision {
 }
 
 /**
- * `NO_PROXY` / `no_proxy`: a comma list of `*`, a host, a `.suffix` or `*.suffix`
- * (all subdomains), each with an optional `:port`. A host entry also covers its
+ * `NO_PROXY` / `no_proxy` (the first that is not empty): a comma list of `*`, a host, a
+ * `.suffix` or `*.suffix` (all subdomains), each with an optional `:port`. CIDR ranges
+ * (`10.0.0.0/8`) are not supported: an address in a range is not matched by it. A host entry also covers its
  * subdomains, as curl and the runtime read it.
  */
 function noProxyMatches(hostname: string, port: number): boolean {
-  const list = (process.env.NO_PROXY ?? process.env.no_proxy ?? "").trim();
+  const list =
+    [process.env.NO_PROXY, process.env.no_proxy]
+      .map((value) => (value ?? "").trim())
+      .find((value) => value !== "") ?? "";
   if (list === "") return false;
   const host = hostname.toLowerCase().replace(/\.$/, "");
   for (const rawEntry of list.split(",")) {
@@ -492,10 +506,19 @@ function tunnelHandshake(args: {
 
     const authority =
       isIP(address) === 6 ? `[${address}]:${port}` : `${address}:${port}`;
-    const credentials =
-      proxy.username !== ""
-        ? `Proxy-Authorization: Basic ${Buffer.from(`${decodeURIComponent(proxy.username)}:${decodeURIComponent(proxy.password)}`).toString("base64")}\r\n`
-        : "";
+    let credentials = "";
+    if (proxy.username !== "") {
+      try {
+        credentials = `Proxy-Authorization: Basic ${Buffer.from(`${decodeURIComponent(proxy.username)}:${decodeURIComponent(proxy.password)}`).toString("base64")}\r\n`;
+      } catch {
+        // A malformed percent escape in the proxy URL: the rule says so, it does not throw.
+        fail(
+          "PROXY_BAD_URL",
+          "the proxy URL in the environment has credentials that cannot be decoded"
+        );
+        return;
+      }
+    }
     const socket = connectTcp({
       host: proxy.hostname.replace(/^\[|\]$/g, ""),
       port: Number(proxy.port || 80),
@@ -554,7 +577,9 @@ function tunnelHandshake(args: {
       }
       let opened: TLSSocket;
       try {
-        opened = connectForFacts({ socket, hostname, ca });
+        // `host` is the identity the certificate is judged against: without it the
+        // runtime reads it off the tunnel socket, which is the PROXY's address.
+        opened = connectForFacts({ socket, hostname, host: hostname, ca });
       } catch (error) {
         fail("PROXY_TLS_ERROR", errorText(error));
         return;
