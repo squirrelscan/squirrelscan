@@ -19,7 +19,7 @@ How it works:
 
 ### Fixed
 
-- **A rule that throws is reported once as not evaluated, not as a failure on every page.** A rule that threw on every page of a 30-page site showed 30 failed checks and lowered the score for one defect in squirrel. It is now a skipped `<rule>-error` check (not evaluated, like a rule that ran out of time) on each page, plus one `<rule>-errors` summary with the first error and the page count, the score is unchanged, and the report prints a `Not checked:` line saying it is a squirrelscan defect. See [Rules](https://docs.squirrelscan.com/rules). (#1291)
+- **A rule that throws is reported once as not evaluated, not as a failure on every page.** A rule that threw on every page of a 30-page site showed 30 failed checks and lowered the score for one defect in squirrel. It is now a skipped `<rule>-error` check (not evaluated, like a rule that ran out of time) on each page, plus one `<rule>-errors` summary with the first error and the page count, the score is unchanged, and the report prints a `Not checked:` line saying it is a squirrelscan defect. A rule that throws on every page still scores as if it passed, so `--fail-on` on `warnings` or `severity` counts it as one warning and the JSON `notChecked` lists its first pages. See [Rules](https://docs.squirrelscan.com/rules). (#1291)
 
 ## v0.0.143 (2026-10-30)
 
