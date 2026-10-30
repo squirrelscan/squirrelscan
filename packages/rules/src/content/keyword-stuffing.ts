@@ -469,7 +469,12 @@ function repeatedCardText(root: Element, excluded: ((element: Element) => boolea
     CARD_NUMBER.lastIndex = 0;
     if (!CARD_NUMBER.test(raw)) continue;
     CARD_NUMBER.lastIndex = 0;
-    const key = raw.toLowerCase().replace(CARD_NUMBER, "#");
+    // The number is masked but its letters stay ("eur", "stars", "reviews"): they are words of the page
+    // too, so a repeated "from 12,90 EUR" deducts "eur" with the rest of the card.
+    const key = raw.toLowerCase().replace(CARD_NUMBER, (m) => {
+      const letters = m.replace(/[^\p{L}]+/gu, " ").trim();
+      return letters ? `# ${letters}` : "#";
+    });
     let entry = byText.get(key);
     if (!entry) {
       entry = { count: 0, parents: new Set(), raws: new Set() };
