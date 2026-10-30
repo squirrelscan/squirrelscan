@@ -55,9 +55,10 @@ async function run(data: PageData): Promise<(id: string) => CheckResult[]> {
 }
 
 // A 93-word contact page: short title, short description.
-const CONTACT = { title: "Contact", description: "Get in touch.", body: words(90) };
+const CONTACT = { title: "Contact", description: "Get in touch.", body: `${words(80)} Email us at hello@example.com` };
 // A 218-word privacy page.
-const LEGAL = { title: "Privacy", description: "Privacy policy.", body: words(215) };
+const POLICY = "This privacy policy explains the personal data we collect and how cookies are used by third parties. Last updated today.";
+const LEGAL = { title: "Privacy", description: "Privacy policy.", body: `${POLICY} ${words(200)}` };
 
 const statuses = (checks: CheckResult[]): string[] => checks.map((c) => c.status);
 
@@ -97,7 +98,7 @@ describe("after: a trusted contact or legal label skips them, and counts the ski
   });
 
   test("legal: also skips keyword density; contact does not", async () => {
-    const repeated = Array.from({ length: 60 }, () => "data information service").join(" ");
+    const repeated = `${POLICY} ${Array.from({ length: 60 }, () => "data information service").join(" ")}`;
     const legal = await run(page({ title: "Privacy", description: "Privacy.", body: repeated, classification: cls("legal", 0.99) }));
     expect(legal("content/keyword-stuffing")[0]?.status).toBe("skipped");
     const contact = await run(page({ title: "Contact", description: "Contact.", body: repeated, classification: cls("contact", 0.99) }));
@@ -106,7 +107,7 @@ describe("after: a trusted contact or legal label skips them, and counts the ski
 
   test("a title or description that is too LONG still applies on a contact page", async () => {
     const long = "x".repeat(200);
-    const get = await run(page({ title: long, description: long, body: words(90), classification: cls("contact", 0.99) }));
+    const get = await run(page({ title: long, description: long, body: CONTACT.body, classification: cls("contact", 0.99) }));
     expect(get("core/meta-title")[0]?.message).toBe("Title too long");
     expect(get("core/meta-description")[0]?.message).toBe("Description too long");
   });
@@ -174,7 +175,7 @@ describe("resolution signal: a page-type skip resolves the earlier finding, it d
       make(LEGAL_URL, {
         title: "Privacy",
         description: "Privacy.",
-        body: Array.from({ length: 80 }, () => "data information service").join(" "),
+        body: `${POLICY} ${Array.from({ length: 80 }, () => "data information service").join(" ")}`,
         classification: cls("legal", 0.99),
       }),
     ]);
@@ -213,5 +214,59 @@ describe("resolution signal: a page-type skip resolves the earlier finding, it d
     expect(signal.failing[stuffing] ?? []).not.toContain(h(LEGAL_URL));
     // The marketing page's short title is still a finding.
     expect(signal.failing[resolutionCheckKey("core/meta-title", "meta-title")]).toContain(h(MARKETING_URL));
+  });
+});
+
+// The label is a URL-and-title reading, so the page body has to bear it out (pub#841 review).
+describe("the body must corroborate a contact or legal label", () => {
+  const law = `${"Our attorneys advise on contracts and disputes. ".repeat(6)}`;
+  const run1 = async (body: string, label: string, html?: string) => {
+    const data = page({ title: "X", description: "Y", body, classification: cls(label, 0.99) });
+    const real = html ? { ...data, html, parsed: { ...(parsePage(html, data.url) as ParsedPage), classification: cls(label, 0.99) } } : data;
+    return (await run(real))("content/word-count")[0]!;
+  };
+
+  test("a law-firm landing page at /solutions/legal (no policy text) keeps its thin-content finding", async () => {
+    expect((await run1(law, "legal")).status).toBe("warn");
+  });
+
+  test("a marketing page at /contact with no way to reach anyone keeps its finding", async () => {
+    expect((await run1(`${words(70)} Book a demo and see the product tour today.`, "contact")).status).toBe("warn");
+  });
+
+  test("a client-rendered shell at /privacy with no text is not exempt: word-count reports it", async () => {
+    const shell = `<!doctype html><html><head><title>App</title></head><body><div id="root"></div></body></html>`;
+    const check = await run1("", "legal", shell);
+    expect(check.status).toBe("warn");
+    expect(check.message).toContain("0 words");
+  });
+
+  test("a newsletter field or a site search is not a way to contact the organisation", async () => {
+    const html = `<!doctype html><html><head><title>Contact</title></head><body><form><input type="email" name="email"><button>Subscribe</button></form><p>${words(60)}</p></body></html>`;
+    expect((await run1("", "contact", html)).status).toBe("warn");
+  });
+
+  test("a message box, a mailto or tel link, an email address or a phone number does corroborate", async () => {
+    const form = `<!doctype html><html><head><title>Contact</title></head><body><form><textarea name="message"></textarea></form><p>${words(60)}</p></body></html>`;
+    const mail = `<!doctype html><html><head><title>Contact</title></head><body><p>${words(60)}</p><a href="mailto:hi@example.com">Write to us</a></body></html>`;
+    const tel = `<!doctype html><html><head><title>Contact</title></head><body><p>${words(60)}</p><a href="tel:+31201234567">Call us</a></body></html>`;
+    const phone = `<!doctype html><html><head><title>Contact</title></head><body><p>${words(60)} Call +31 20 123 4567 any weekday.</p></body></html>`;
+    for (const html of [form, mail, tel, phone]) {
+      expect((await run1("", "contact", html)).status).toBe("skipped");
+    }
+  });
+
+  test("policy text in another language corroborates (German, French, Spanish)", async () => {
+    for (const body of [
+      "Datenschutzerklärung: wir verarbeiten personenbezogene Daten nach den Nutzungsbedingungen. Haftung ausgeschlossen.",
+      "Politique de confidentialité: vos données personnelles sont traitées selon les conditions générales. Mentions légales.",
+      "Política de privacidad: tratamos sus datos personales según el aviso legal y la responsabilidad del titular.",
+    ]) {
+      expect((await run1(body, "legal")).status).toBe("skipped");
+    }
+  });
+
+  test("a year range or a price is not a phone number", async () => {
+    expect((await run1(`${words(70)} Open 2019-2024 at price 1999.99`, "contact")).status).toBe("warn");
   });
 });

@@ -3,7 +3,7 @@
 import { z } from "zod";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
-import { isTrustedPageTypeIn, pageTypeSkip, trustedPageType } from "../shared/page-type";
+import { pageTypeSkip, skippablePageType } from "../shared/page-type";
 
 /** Page types whose short title or description is normal (pub#841). */
 const SHORT_OK_PAGE_TYPES = ["contact", "legal"] as const;
@@ -66,9 +66,9 @@ export const metaTitleRule: Rule = {
 
     const len = title.length;
 
-    if (len < opts.min_length && isTrustedPageTypeIn(ctx.parsed, SHORT_OK_PAGE_TYPES)) {
+    if (len < opts.min_length && skippablePageType(ctx.parsed, SHORT_OK_PAGE_TYPES) !== null) {
       // A contact or legal page is not a search target worth a long title (pub#841). Too long still applies.
-      checks.push(pageTypeSkip("meta-title", trustedPageType(ctx.parsed)!, "The title length floor"));
+      checks.push(pageTypeSkip("meta-title", skippablePageType(ctx.parsed, SHORT_OK_PAGE_TYPES)!, "The title length floor"));
     } else if (len < opts.min_length) {
       checks.push({
         name: "meta-title",

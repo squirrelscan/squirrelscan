@@ -33,13 +33,119 @@ export function trustedPageType(
   return pageType.label;
 }
 
-/** Whether the page's trusted type is one of `types`. */
-export function isTrustedPageTypeIn(
+// The label alone is a URL-and-title reading (a model reads `/privacy` and `/contact` from the
+// path and the heading as much as from the body), so it is corroborated by the page body before it
+// is allowed to relax a verdict (pub#841 review): a law-firm landing page at `/solutions/legal`, a
+// marketing page at `/contact`, or a client-rendered shell at `/privacy` with no text is labelled
+// legal or contact by the model, and skipping the thin-content floor there would hide a real finding
+// and resolve an earlier one.
+
+/** Phrases a policy text carries. A page needs {@link LEGAL_PHRASES_NEEDED} distinct ones. */
+const LEGAL_PHRASES = [
+  "privacy policy",
+  "personal data",
+  "personal information",
+  "cookies",
+  "terms of service",
+  "terms of use",
+  "terms and conditions",
+  "governing law",
+  "limitation of liability",
+  "third parties",
+  "third-party",
+  "data controller",
+  "data protection",
+  "we collect",
+  "you agree",
+  "your rights",
+  "gdpr",
+  "intellectual property",
+  "disclaimer",
+  "warranty",
+  "warranties",
+  "last updated",
+  "effective date",
+  "indemnif",
+  "arbitration",
+  "refund policy",
+  "acceptable use",
+  // The same vocabulary in the languages the classifier's training sites most often use.
+  "datenschutz",
+  "personenbezogene",
+  "nutzungsbedingungen",
+  "allgemeine geschäftsbedingungen",
+  "haftung",
+  "données personnelles",
+  "politique de confidentialité",
+  "conditions générales",
+  "mentions légales",
+  "responsabilité",
+  "datos personales",
+  "política de privacidad",
+  "términos y condiciones",
+  "aviso legal",
+  "responsabilidad",
+  "dati personali",
+  "informativa",
+  "termini e condizioni",
+  "dados pessoais",
+  "política de privacidade",
+  "termos de uso",
+  "persoonsgegevens",
+  "privacybeleid",
+  "algemene voorwaarden",
+] as const;
+const LEGAL_PHRASES_NEEDED = 3;
+
+const EMAIL = /[a-z0-9._%+-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}/i;
+const PHONE = /\+?\d[\d\s().-]{6,}\d/;
+
+/** A phone number has nine digits, or eight after a leading "+": a year range or a price is not one. */
+function hasPhoneNumber(text: string): boolean {
+  for (const match of text.matchAll(new RegExp(PHONE.source, "g"))) {
+    const digits = match[0].replace(/\D/g, "").length;
+    if (digits >= 9 || (match[0].startsWith("+") && digits >= 8)) return true;
+  }
+  return false;
+}
+
+/**
+ * Whether the page body bears out a `contact` or `legal` label. A page with no text never does: a
+ * client-rendered shell is judged by the rules like any other thin page. `contact` needs a way to
+ * reach the organisation on the page (a `tel:` or `mailto:` link, an email address or phone number in
+ * the text, or a message box); a newsletter field or a site search is not one. `legal` needs policy
+ * vocabulary, not the word "legal".
+ */
+export function bodyCorroboratesPageType(parsed: ParsedPage | null | undefined, label: string): boolean {
+  const content = parsed?.content;
+  const text = (content?.textContent ?? "").toLowerCase();
+  if (!parsed || !((content?.wordCount ?? 0) > 0) || text.length === 0) return false;
+  if (label === "legal") {
+    let found = 0;
+    for (const phrase of LEGAL_PHRASES) {
+      if (text.includes(phrase) && ++found >= LEGAL_PHRASES_NEEDED) return true;
+    }
+    return false;
+  }
+  if (label === "contact") {
+    if ((parsed.contactLinks?.length ?? 0) > 0) return true;
+    if (EMAIL.test(text) || hasPhoneNumber(text)) return true;
+    return parsed.document?.querySelector("form textarea") != null;
+  }
+  return false;
+}
+
+/**
+ * The page's type when it may relax a verdict: a trusted model label (see {@link trustedPageType})
+ * in `types` that the page body bears out. `null` otherwise.
+ */
+export function skippablePageType(
   parsed: ParsedPage | null | undefined,
   types: readonly string[],
-): boolean {
+): string | null {
   const label = trustedPageType(parsed);
-  return label !== null && types.includes(label);
+  if (label === null || !types.includes(label)) return null;
+  return bodyCorroboratesPageType(parsed, label) ? label : null;
 }
 
 /**

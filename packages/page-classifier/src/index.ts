@@ -27,5 +27,12 @@ export {
 
 export { FEATURIZER_VERSION } from "./featurize";
 
+/**
+ * Bump when the classifier's rules or labelling logic change in a way that can change a label
+ * without a new model artifact (the URL homepage rule, the rules fallback). It is part of the version
+ * stamped on every classification, so cached pages are re-fetched and relabelled.
+ */
+export const CLASSIFIER_RULES_VERSION = 1;
+
 export type { Model } from "./model-format";
 export type { PageTypeLabel, RegionLabel } from "./rules-fallback";
