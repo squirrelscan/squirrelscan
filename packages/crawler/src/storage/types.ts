@@ -7,6 +7,21 @@ export * from "@squirrelscan/core-contracts/storage";
  * Ctrl-C leaves one, so they get the longer grace.
  */
 export const ABANDONED_IDLE_MS = 30 * 60 * 1000;
+/**
+ * How long a crawl stamped `building` must have shown no activity before an
+ * audit that finished later may treat its report as interrupted (#288). Building
+ * a report takes minutes, even for a very large site, so a crawl idle for this
+ * long whose project has since completed another audit is not being read by any
+ * process.
+ */
+export const INTERRUPTED_REPORT_IDLE_MS = 6 * 60 * 60 * 1000;
+/**
+ * The same for a `building` crawl with no `building_at` (written before #288 knew
+ * when the build started): its only clock is the last page it wrote, which a
+ * healthy audit has long outlived by the time it starts building, so it waits a
+ * week.
+ */
+export const INTERRUPTED_REPORT_LEGACY_IDLE_MS = 7 * 24 * 60 * 60 * 1000;
 export const ABANDONED_RESUMABLE_IDLE_MS = 7 * 24 * 60 * 60 * 1000;
 
 /**

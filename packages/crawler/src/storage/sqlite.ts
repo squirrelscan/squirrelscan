@@ -58,12 +58,15 @@ import type {
 
 import {
   isCrawlAbandoned,
+  isLeaseLive,
   REAL_LEASE_ENV,
   type LeaseCrawlRow,
   type LeaseEnv,
 } from "./crawl-liveness";
 import {
   ABANDONED_IDLE_MS,
+  INTERRUPTED_REPORT_IDLE_MS,
+  INTERRUPTED_REPORT_LEGACY_IDLE_MS,
   ABANDONED_RESUMABLE_IDLE_MS,
   StorageError,
 } from "./types";
@@ -155,7 +158,7 @@ interface UnfinishedCrawlRow extends LeaseCrawlRow {
   last_activity: number;
 }
 
-export const SCHEMA_VERSION = 38;
+export const SCHEMA_VERSION = 40;
 
 // Migrations to run when upgrading from older versions
 const MIGRATIONS: Record<number, string[]> = {
@@ -613,6 +616,29 @@ const MIGRATIONS: Record<number, string[]> = {
     "ALTER TABLE rule_results ADD COLUMN site_resource_occurrences TEXT DEFAULT NULL",
     "ALTER TABLE rule_results ADD COLUMN site_resource_evidence TEXT DEFAULT NULL",
   ],
+  // Version 39: collect the page rows that retirement kept and a later audit has
+  // since superseded, once (#289). Automatic retention collects them only for the
+  // urls the audit that just ran wrote, which is complete from #285 on. A row
+  // superseded BEFORE that (a crawl retired by `self disk --prune`, then a later
+  // audit re-crawling a url it kept) was never revisited. This is the one-time
+  // repair for that population: a url whose only row belongs to a retired crawl
+  // keeps it (it is the cache entry an incremental audit serves), and only a row
+  // with a newer row for the same url goes. A migration runs once per project
+  // database, so no audit pays for it again. Fresh databases skip it.
+  // The marker table the one-time repair uses (#289). Only the marker is created
+  // here: the repair itself runs in chunks, from retention and `self disk
+  // --prune`, never from `init()`, because deleting a big project's superseded
+  // rows in one transaction holds the write lock for seconds.
+  39: [
+    `CREATE TABLE IF NOT EXISTS maintenance_marks (
+       name TEXT PRIMARY KEY,
+       done_at INTEGER NOT NULL
+     )`,
+  ],
+  // Version 40: when a crawl was stamped `building` (#288). The only clock that
+  // says how long its report has been building: the last page it wrote is long
+  // past by then. NULL for every crawl written before this. ADDITIVE.
+  40: [`ALTER TABLE crawls ADD COLUMN building_at INTEGER`],
 };
 
 // Every `pages` column but the two that hold a page's body, for
@@ -729,6 +755,8 @@ const CRAWLS_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> = [
   // Migration 36 (#1050): a missing value has defined back-compat semantics,
   // but the writer still needs the column to exist on every current database.
   { name: "scan_scope", type: "TEXT" },
+  // Migration 40 (#288): when the `building` sentinel was stamped.
+  { name: "building_at", type: "INTEGER" },
 ];
 
 // Same guard for `entity_edges` (#492). Migration 31 added both columns, and
@@ -794,6 +822,8 @@ CREATE TABLE IF NOT EXISTS crawls (
   owner_pid INTEGER,
   owner_host TEXT,
   heartbeat_at INTEGER,
+  -- When the sentinel building was stamped on report_status (#288); NULL if never.
+  building_at INTEGER,
   -- Exact report coverage for a later database reconstruction (#1050). NULL
   -- on crawls stored before schema 36, which means "scope not recorded".
   scan_scope TEXT
@@ -4809,7 +4839,10 @@ export class SQLiteStorage implements CrawlStorage {
    *    audit from before the outage.
    *  - `report_status` of `building`: this crawl is `analyzed` but its own
    *    process is still reconstructing its report. Retiring it there is the one
-   *    way an audit that was going to succeed can be made to fail.
+   *    way an audit that was going to succeed can be made to fail. It holds no
+   *    slot here; a `building` crawl idle for hours with no live owner is
+   *    recovered separately ({@link listInterruptedReports}, #288), and only when
+   *    at least `keep` audits listed here are newer than it.
    *
    * NULL `report_status` is an ordinary audit: it predates migration 27.
    *
@@ -4854,6 +4887,209 @@ export class SQLiteStorage implements CrawlStorage {
         }));
       },
       catch: (e) => StorageError.read(e),
+    });
+  }
+
+  /**
+   * Crawls whose audit was killed while it was building its report (#288): still
+   * stamped `building`, retired by nothing and counted by nothing, so their rows
+   * (about 95 MB for 1,000 pages) stayed forever.
+   *
+   * A `building` crawl is only ever recovered when a LATER audit of the project
+   * has completed with a report, and the crawl has shown no activity for
+   * {@link INTERRUPTED_REPORT_IDLE_MS}. The first proves the project moved on, the
+   * second that no process is still reading it, so a live audit (always newer
+   * than every finished one, or recently active) is never listed. The same
+   * predicate is re-checked inside {@link retireCrawlsDetailed}'s transaction.
+   *
+   * Bounded by the number of audits (one row each in `crawls`): the activity
+   * lookups use the per-crawl indexes on `pages` and `frontier`.
+   */
+  listInterruptedReports(): Effect.Effect<
+    Array<{ id: string; startedAt: number }>,
+    StorageError,
+    never
+  > {
+    return Effect.try({
+      try: () => {
+        const rows = this.getDb()
+          .prepare(
+            `SELECT id, started_at, heartbeat_at, owner_pid, owner_host FROM crawls
+             WHERE ${SQLiteStorage.interruptedReportSql(this.leaseEnv.now())}
+             ORDER BY started_at DESC, rowid DESC`
+          )
+          .all() as Array<
+          { id: string; started_at: number } & LeaseCrawlRow
+        >;
+        // A crawl whose owner is demonstrably alive is building its report right
+        // now, however long ago it last touched a page.
+        return rows
+          .filter((row) => !isLeaseLive(row, this.leaseEnv))
+          .map((row) => ({ id: row.id, startedAt: row.started_at }));
+      },
+      catch: (e) => StorageError.read(e),
+    });
+  }
+
+  /** The predicate behind {@link listInterruptedReports}, scoped to unaliased `crawls` rows. */
+  private static interruptedReportSql(now: number): string {
+    const idleCutoff = Math.floor(now - INTERRUPTED_REPORT_IDLE_MS);
+    const legacyCutoff = Math.floor(now - INTERRUPTED_REPORT_LEGACY_IDLE_MS);
+    return `
+      retired_at IS NULL
+      AND status IN ('completed', 'analyzed')
+      AND report_status = 'building'
+      AND started_at < COALESCE(
+        (SELECT MAX(f.started_at) FROM crawls f
+         WHERE f.retired_at IS NULL
+           AND f.status IN ('completed', 'analyzed')
+           AND (f.report_status IS NULL
+                OR f.report_status IN ('completed', 'partial'))),
+        0)
+      AND (CASE
+             WHEN building_at IS NOT NULL THEN building_at < ${idleCutoff}
+             ELSE ${SQLiteStorage.LAST_ACTIVITY_SQL} < ${legacyCutoff}
+           END)`;
+  }
+
+  /**
+   * `building` crawls that are NOT interrupted (#288): still being built, or too
+   * recent to say. `self disk --prune` plans around them rather than naming them
+   * for a retirement the transaction would skip.
+   */
+  listLiveBuildingReports(): Effect.Effect<
+    Array<{ id: string; startedAt: number }>,
+    StorageError,
+    never
+  > {
+    return Effect.try({
+      try: () => {
+        const db = this.getDb();
+        const rows = db
+          .prepare(
+            `SELECT id, started_at FROM crawls
+             WHERE retired_at IS NULL AND status IN ('completed', 'analyzed') AND report_status = 'building'
+             ORDER BY started_at DESC, rowid DESC`
+          )
+          .all() as Array<{ id: string; started_at: number }>;
+        const interrupted = new Set(
+          (
+            db
+              .prepare(
+                `SELECT id, heartbeat_at, owner_pid, owner_host FROM crawls WHERE ${SQLiteStorage.interruptedReportSql(this.leaseEnv.now())}`
+              )
+              .all() as Array<
+              { id: string } & Pick<LeaseCrawlRow, "heartbeat_at" | "owner_pid" | "owner_host">
+            >
+          )
+            .filter((row) => !isLeaseLive(row, this.leaseEnv))
+            .map((row) => row.id)
+        );
+        return rows
+          .filter((row) => !interrupted.has(row.id))
+          .map((row) => ({ id: row.id, startedAt: row.started_at }));
+      },
+      catch: (e) => StorageError.read(e),
+    });
+  }
+
+  /**
+   * The one-time repair for page rows that retirement kept and a later audit
+   * superseded before automatic retention existed (#289): rows of retired crawls
+   * with a newer row for the same url. A url whose only row is in a retired crawl
+   * keeps it.
+   *
+   * Chunked and budgeted: each pass is its own short transaction over the next
+   * `chunk` rows of retired crawls by rowid. A cursor kept beside the marker means
+   * a row that stays (an only copy) is never examined again, and a call stops
+   * after `budgetMs` (2 s by default, at least one chunk), so an audit never waits
+   * on a big project's whole history: the work spreads over its next audits and
+   * an interrupted run resumes where it stopped. The marker is written only when a
+   * pass finds no row left to examine.
+   * Called from retention and `self disk --prune`, not from `init()`.
+   * A database too old to have the marker table has nothing to repair.
+   */
+  repairSupersededPagesOnce(
+    options: { chunk?: number; maxChunks?: number; budgetMs?: number } = {}
+  ): Effect.Effect<number, StorageError, never> {
+    return Effect.try({
+      try: () => {
+        const db = this.getDb();
+        const chunk = Math.max(1, Math.floor(options.chunk ?? 5000));
+        const maxChunks = options.maxChunks ?? Number.POSITIVE_INFINITY;
+        const budgetMs = options.budgetMs ?? 2000;
+        try {
+          if (db.prepare("SELECT 1 FROM maintenance_marks WHERE name = 'superseded-pages'").get()) {
+            return 0;
+          }
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          if (msg.includes("no such table")) return 0;
+          throw e;
+        }
+        // Resume where the last call stopped: a rowid cursor, so a row examined
+        // (and kept, an only copy) is never examined again, however many chunks
+        // the project needs. Stored beside the marker.
+        const saved = db
+          .prepare("SELECT done_at AS at FROM maintenance_marks WHERE name = 'superseded-pages-cursor'")
+          .get() as { at: number } | undefined;
+        let cursor = saved?.at ?? 0;
+        let total = 0;
+        const startedAt = performance.now();
+        for (let pass = 0; pass < maxChunks; pass++) {
+          let deleted = 0;
+          let upper: number | null = null;
+          const run = db.transaction(() => {
+            // The next `chunk` rows of retired crawls after the cursor, in rowid
+            // order, and the highest rowid among them.
+            const row = db
+              .prepare(
+                `SELECT MAX(rid) AS upper FROM (
+                   SELECT p.rowid AS rid FROM pages p
+                   WHERE p.rowid > ?
+                     AND p.crawl_id IN (SELECT id FROM crawls WHERE retired_at IS NOT NULL)
+                   ORDER BY p.rowid LIMIT ?
+                 )`
+              )
+              .get(cursor, chunk) as { upper: number | null };
+            upper = row.upper;
+            if (upper === null) return;
+            const result = db
+              .prepare(
+                `DELETE FROM pages WHERE rowid IN (
+                   SELECT p.rowid FROM pages p
+                   WHERE p.rowid > ? AND p.rowid <= ?
+                     AND p.crawl_id IN (SELECT id FROM crawls WHERE retired_at IS NOT NULL)
+                     AND EXISTS (
+                       SELECT 1 FROM pages newer
+                       WHERE newer.normalized_url = p.normalized_url
+                         AND (newer.fetched_at, newer.rowid) > (p.fetched_at, p.rowid)
+                     )
+                 )`
+              )
+              .run(cursor, upper);
+            deleted = Number(result.changes ?? 0);
+            db.prepare(
+              "INSERT OR REPLACE INTO maintenance_marks (name, done_at) VALUES ('superseded-pages-cursor', ?)"
+            ).run(upper);
+          });
+          run.immediate();
+          total += deleted;
+          if (upper === null) {
+            // Every retired-crawl row examined: done for good, once.
+            db.prepare(
+              "INSERT OR REPLACE INTO maintenance_marks (name, done_at) VALUES ('superseded-pages', ?)"
+            ).run(this.leaseEnv.now());
+            break;
+          }
+          cursor = upper;
+          // Budgeted per call: the repair is resumable, so an audit never waits on a
+          // big project's whole history. At least one chunk per call.
+          if (performance.now() - startedAt >= budgetMs) break;
+        }
+        return total;
+      },
+      catch: (e) => StorageError.write(e),
     });
   }
 
@@ -4950,11 +5186,12 @@ export class SQLiteStorage implements CrawlStorage {
    * Record what the audit this crawl produced said (#1912).
    *
    * `building` is stamped when the crawl reaches `analyzed`, before its report
-   * is reconstructed, and replaced with the report's own status once there is
-   * one. Automatic retention reads both: it does not count a `failed` or
-   * `blocked` run as one of the audits you are keeping, and it will not retire
-   * a crawl still marked `building`, which is the only signal that another
-   * process is in the middle of reading it.
+   * is reconstructed (with `building_at`, when), and replaced with the report's
+   * own status once there is one. Automatic retention reads both: it does not
+   * count a `failed` or `blocked` run as one of the audits you are keeping, and it
+   * retires a crawl marked `building` only once it has been idle for hours with no
+   * live owner and sits outside the window (#288), since the sentinel is the only
+   * signal that another process is in the middle of reading it.
    */
   setReportStatus(
     crawlId: string,
@@ -4966,13 +5203,19 @@ export class SQLiteStorage implements CrawlStorage {
   ): Effect.Effect<void, StorageError, never> {
     return Effect.try({
       try: () => {
+        // `building_at` records when the sentinel was stamped (#288): the clock
+        // that says how long a report has been building.
         this.getDb()
           .prepare(
             options?.keepBuilding
               ? "UPDATE crawls SET report_status = ? WHERE id = ? AND (report_status IS NULL OR report_status != 'building')"
-              : "UPDATE crawls SET report_status = ? WHERE id = ?"
+              : "UPDATE crawls SET report_status = ?, building_at = CASE WHEN ? = 'building' THEN ? ELSE building_at END WHERE id = ?"
           )
-          .run(reportStatus, crawlId);
+          .run(
+            ...(options?.keepBuilding
+              ? [reportStatus, crawlId]
+              : [reportStatus, reportStatus, this.leaseEnv.now(), crawlId])
+          );
       },
       catch: (e) => StorageError.write(e),
     });
@@ -5257,6 +5500,33 @@ export class SQLiteStorage implements CrawlStorage {
             );
           }
           const unfinishedIds = new Set(unfinished.map((c) => c.id));
+          // A crawl stamped `building` is retired only while it is still an
+          // interrupted report (#288), decided HERE from the rows as they are now.
+          // A process genuinely building its report is newer than every finished
+          // audit or recently active, so it is skipped, whoever asked.
+          const building = (
+            db
+              .prepare(
+                `SELECT id FROM crawls WHERE id IN (${marks(crawlIds.length)}) AND report_status = 'building'`
+              )
+              .all(...crawlIds) as Array<{ id: string }>
+          ).map((c) => c.id);
+          const stillInterrupted = new Set(
+            building.length === 0
+              ? []
+              : (
+                  db
+                    .prepare(
+                      `SELECT id, heartbeat_at, owner_pid, owner_host FROM crawls WHERE id IN (${marks(building.length)}) AND ${SQLiteStorage.interruptedReportSql(this.leaseEnv.now())}`
+                    )
+                    .all(...building) as Array<
+                    { id: string } & Pick<LeaseCrawlRow, "heartbeat_at" | "owner_pid" | "owner_host">
+                  >
+                )
+                  .filter((row) => !isLeaseLive(row, this.leaseEnv))
+                  .map((c) => c.id)
+          );
+          const liveBuilding = new Set(building.filter((id) => !stillInterrupted.has(id)));
           // Re-decided HERE, inside the transaction, from the rows as they are
           // now (a heartbeat may have landed since the listing). The pid probe
           // is a synchronous syscall, so it is legal in this transaction.
@@ -5268,7 +5538,9 @@ export class SQLiteStorage implements CrawlStorage {
                   .map((row) => row.id)
           );
           retired = crawlIds.filter(
-            (id) => !unfinishedIds.has(id) || stillAbandoned.has(id)
+            (id) =>
+              !liveBuilding.has(id) &&
+              (!unfinishedIds.has(id) || stillAbandoned.has(id))
           );
           skipped = crawlIds.filter((id) => !retired.includes(id));
           if (retired.length === 0) return;

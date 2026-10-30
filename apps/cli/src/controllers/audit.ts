@@ -2624,8 +2624,9 @@ export async function runAudit(
           .pipe(
             Effect.catchAll((error) => {
               // Not worth failing a finished audit over, but not silent either:
-              // a crawl left reading `building` is never retired and never
-              // counted, so it holds its rows until someone prunes.
+              // a crawl left reading `building` is counted by nothing and is
+              // only recovered hours later, by a newer audit, so it holds its
+              // rows until then.
               logger.warn(
                 `Could not record this audit's outcome on its crawl: ${String(error)}`
               );

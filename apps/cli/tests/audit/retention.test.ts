@@ -7,10 +7,11 @@
 // re-audit reads (turning every re-audit into a cold crawl), and counting an
 // audit nobody can open toward "the last 3 you can open".
 
+import { Database } from "bun:sqlite";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { hostname, tmpdir } from "node:os";
 import { join } from "node:path";
 
 import type { CrawlMetadata, PageRecord } from "@/crawler/storage/types";
@@ -415,12 +416,25 @@ describe("retainRecentAudits", () => {
     store.close?.();
   });
 
+  /** Record the crawl lease a running audit holds: a fresh heartbeat from this process. */
+  function holdLease(id: string): void {
+    const raw = new Database(dbPath);
+    raw
+      .query(
+        "UPDATE crawls SET heartbeat_at = ?, owner_pid = ?, owner_host = ? WHERE id = ?"
+      )
+      .run(Date.now(), process.pid, hostname(), id);
+    raw.close();
+  }
+
   test("an audit still building its report is never retired", async () => {
     const store = await open();
     // Another process is between the `analyzed` stamp and its own report. It
     // reads as a finished audit to everything else, and retiring it there turns
-    // a run that was going to succeed into "Audit data was reclaimed".
+    // a run that was going to succeed into "Audit data was reclaimed". Its owner
+    // holds the crawl lease, which is what says it is alive (#288).
     const building = await audit(store, 0, "analyzed", "building");
+    holdLease(building);
     const later: string[] = [];
     for (let i = 1; i < 5; i++) later.push(await audit(store, i));
 
@@ -433,6 +447,74 @@ describe("retainRecentAudits", () => {
     const byId = new Map((await run(store.listCrawls())).map((c) => [c.id, c]));
     expect(byId.get(building)?.retiredAt).toBeUndefined();
     expect(byId.get(later[0]!)?.retiredAt).toBeDefined();
+    store.close?.();
+  });
+
+  /** The build of this crawl began `hours` ago. */
+  function buildingSince(id: string, hours: number): void {
+    const raw = new Database(dbPath);
+    raw
+      .query("UPDATE crawls SET building_at = ? WHERE id = ?")
+      .run(Date.now() - hours * 3_600_000, id);
+    raw.close();
+  }
+
+  test("an audit killed while building its report is recovered by a later audit (#288)", async () => {
+    const store = await open();
+    // No owner and building for hours: the process died after the `analyzed`
+    // stamp. It holds no slot of the window, and the audit that finds it, with
+    // three newer audits to keep, retires it.
+    const stuck = await audit(store, 0, "analyzed", "building");
+    buildingSince(stuck, 7);
+    const later: string[] = [];
+    for (let i = 1; i < 4; i++) later.push(await audit(store, i));
+
+    const outcome = await retainRecentAudits(store, {
+      keep: 3,
+      currentCrawlId: later[2]!,
+    });
+
+    expect(outcome?.retired).toBe(1);
+    const byId = new Map((await run(store.listCrawls())).map((c) => [c.id, c]));
+    expect(byId.get(stuck)?.retiredAt).toBeDefined();
+    for (const id of later) expect(byId.get(id)?.retiredAt).toBeUndefined();
+    store.close?.();
+  });
+
+  test("a recovered audit inside the keep window is never retired (#288)", async () => {
+    const store = await open();
+    // `squirrel analyze` rebuilt this audit's report and left the sentinel on
+    // purpose (#955): it is viewable. Only two audits follow it and keep is 3, so
+    // it is inside the window, however long ago it started building.
+    const rebuilt = await audit(store, 0, "analyzed", "building");
+    buildingSince(rebuilt, 9);
+    const later: string[] = [];
+    for (let i = 1; i < 3; i++) later.push(await audit(store, i));
+
+    const outcome = await retainRecentAudits(store, {
+      keep: 3,
+      currentCrawlId: later[1]!,
+    });
+
+    expect(outcome).toBeNull();
+    const byId = new Map((await run(store.listCrawls())).map((c) => [c.id, c]));
+    expect(byId.get(rebuilt)?.retiredAt).toBeUndefined();
+    store.close?.();
+  });
+
+  test("an audit that has only just started building is left alone (#288)", async () => {
+    const store = await open();
+    // Its pages are ancient, but the build began an hour ago and its owner has no
+    // heartbeat: nothing says it is dead, and a healthy audit looks exactly like this.
+    const healthy = await audit(store, 0, "analyzed", "building");
+    buildingSince(healthy, 1);
+    const later: string[] = [];
+    for (let i = 1; i < 5; i++) later.push(await audit(store, i));
+
+    await retainRecentAudits(store, { keep: 3, currentCrawlId: later[3]! });
+
+    const byId = new Map((await run(store.listCrawls())).map((c) => [c.id, c]));
+    expect(byId.get(healthy)?.retiredAt).toBeUndefined();
     store.close?.();
   });
 

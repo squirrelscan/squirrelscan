@@ -117,6 +117,13 @@ export async function retainRecentAudits(
 ): Promise<RetentionOutcome | null> {
   if (!Number.isFinite(options.keep) || options.keep <= 0) return null;
 
+  // The one-time repair of page rows superseded before automatic retention
+  // (#289): chunked and marked done, so every later call is one indexed probe.
+  // It never fails the audit.
+  await Effect.runPromise(
+    storage.repairSupersededPagesOnce().pipe(Effect.catchAll(() => Effect.void))
+  );
+
   const candidates = await Effect.runPromise(storage.listRetentionCandidates());
   const windowed = selectCrawlsToRetire(candidates, options);
   // Crawls from audits that were killed before they finished (#941). They hold
@@ -131,7 +138,24 @@ export async function retainRecentAudits(
   const abandoned = (await Effect.runPromise(storage.listAbandonedCrawls()))
     .map((crawl) => crawl.id)
     .filter((id) => id !== options.currentCrawlId);
-  const retiring = [...windowed, ...abandoned];
+  // Audits killed while building their report (#288): stamped `building`, so
+  // they hold no slot of the window and the pass above never retires them. One is
+  // recovered only when it is certainly outside the window: at least `keep`
+  // openable audits are newer than it. A `building` crawl `squirrel analyze` has
+  // since rebuilt is viewable, and is never retired while it is inside the window
+  // (the candidate ordering above stays the one authority on what is kept).
+  // Re-checked inside the retirement transaction: idle for hours, no live owner.
+  const interrupted = (
+    await Effect.runPromise(storage.listInterruptedReports())
+  )
+    .filter(
+      (crawl) =>
+        crawl.id !== options.currentCrawlId &&
+        candidates.filter((c) => c.startedAt > crawl.startedAt).length >=
+          options.keep
+    )
+    .map((crawl) => crawl.id);
+  const retiring = [...new Set([...windowed, ...abandoned, ...interrupted])];
   if (retiring.length === 0) return null;
 
   // "The first time an audit retires anything" for THIS project, read off the

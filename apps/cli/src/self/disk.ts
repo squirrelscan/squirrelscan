@@ -367,9 +367,23 @@ export async function planProjectPrune(
     const stats = await Effect.runPromise(storage.databasePageStats());
     const reclaimableBytes = stats.freelistPages * stats.pageSize;
     const abandoned = await Effect.runPromise(storage.listAbandonedCrawls());
-    const skippedLive = await Effect.runPromise(
-      storage.listPossiblyLiveCrawls()
+    // A crawl still stamped `building` whose report may be in the making (#288) is
+    // planned around like a possibly live audit: retiring it would be skipped by
+    // the transaction, so the plan names it instead of counting it.
+    const buildingLive = (
+      await Effect.runPromise(storage.listLiveBuildingReports())
+    ).map(
+      (c): CrawlRef => ({
+        id: c.id,
+        status: "building",
+        startedAt: c.startedAt,
+        lastActivityAt: c.startedAt,
+      })
     );
+    const skippedLive = [
+      ...(await Effect.runPromise(storage.listPossiblyLiveCrawls())),
+      ...buildingLive,
+    ];
     const unfinished = new Set([
       ...abandoned.map((c) => c.id),
       ...skippedLive.map((c) => c.id),
@@ -451,28 +465,39 @@ export async function runProjectPrune(plan: ProjectPrunePlan): Promise<{
   bytesAfter: number;
   /** Why the file was not rebuilt, when it was not. The crawls still retired. */
   vacuumSkipped?: string;
+  /** Crawls the transaction held back because they no longer qualified (resumed, or a report being built). */
+  skippedCrawls?: string[];
 }> {
   const { SQLiteStorage } = await import("@/crawler/storage/sqlite");
   const { Effect } = await import("effect");
 
   const storage = new SQLiteStorage(plan.path);
   let rows = 0;
+  let skippedCrawls: string[] = [];
   let vacuumSkipped: string | undefined;
   try {
     await Effect.runPromise(storage.init());
+    // The one-time repair of rows superseded before automatic retention (#289),
+    // chunked and marked done; a project pruned before it ever ran an audit
+    // since the upgrade is repaired here.
+    await Effect.runPromise(
+      storage
+        .repairSupersededPagesOnce()
+        .pipe(Effect.catchAll(() => Effect.void))
+    );
     // `allowAbandoned` lets the unfinished ones through, and only those that
     // still satisfy the abandoned predicate inside the retiring transaction: a
     // crawl resumed since the plan was made is skipped, not gutted, and the
     // rest of the project is still retired.
-    rows = (
-      await Effect.runPromise(
-        storage.retireCrawlsDetailed(
-          [...plan.retiring, ...plan.abandoned].map((c) => c.id),
-          Date.now(),
-          { allowAbandoned: true }
-        )
+    const retired = await Effect.runPromise(
+      storage.retireCrawlsDetailed(
+        [...plan.retiring, ...plan.abandoned].map((c) => c.id),
+        Date.now(),
+        { allowAbandoned: true }
       )
-    ).deleted;
+    );
+    rows = retired.deleted;
+    skippedCrawls = retired.skipped;
     // VACUUM writes a full copy next to the file before swapping it in.
     vacuumSkipped = lowDiskReason(plan.path);
     if (vacuumSkipped === undefined) await Effect.runPromise(storage.vacuum());
@@ -485,6 +510,7 @@ export async function runProjectPrune(plan: ProjectPrunePlan): Promise<{
     rows,
     bytesBefore: plan.bytesBefore,
     bytesAfter: dbFamilyBytes(plan.path),
+    skippedCrawls,
     ...(vacuumSkipped === undefined ? {} : { vacuumSkipped }),
   };
 }
@@ -520,6 +546,8 @@ export interface PruneOutcome {
   readonly reason?: string;
   readonly bytesBefore: number;
   readonly bytesAfter: number;
+  /** Crawls the retiring transaction held back (#288): still being built, or resumed. */
+  readonly skippedCrawls?: number;
 }
 
 const errorMessage = (e: unknown): string =>
@@ -584,6 +612,9 @@ export async function runPrunePlans(
           : { reason: result.vacuumSkipped }),
         bytesBefore: result.bytesBefore,
         bytesAfter: result.bytesAfter,
+        ...(result.skippedCrawls?.length
+          ? { skippedCrawls: result.skippedCrawls.length }
+          : {}),
       });
     } catch (e) {
       outcomes.push({

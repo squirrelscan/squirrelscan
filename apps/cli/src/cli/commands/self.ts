@@ -520,7 +520,10 @@ async function runPrune(
     after += o.bytesAfter;
     console.log(
       `${o.name}: ${formatBytes(o.bytesBefore)} -> ${formatBytes(o.bytesAfter)}` +
-        (o.status === "skipped" ? ` (retired, not rebuilt: ${o.reason})` : "")
+        (o.status === "skipped" ? ` (retired, not rebuilt: ${o.reason})` : "") +
+        (o.skippedCrawls
+          ? ` (${o.skippedCrawls} audit(s) held back: still being built or resumed)`
+          : "")
     );
   }
   const count = (status: string) =>
