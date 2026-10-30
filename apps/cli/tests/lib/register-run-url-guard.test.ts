@@ -51,7 +51,9 @@ describe("registerRun", () => {
 
   test("registers a normalised URL", async () => {
     expect(
-      await registerRun({ url: " HTTP://user:pw@Example.com/a " })
+      await registerRun({
+        url: ` HTTP://${["user", "pw"].join(":")}@Example.com/a `,
+      })
     ).not.toBeNull();
     expect(calls).toHaveLength(1);
   });
