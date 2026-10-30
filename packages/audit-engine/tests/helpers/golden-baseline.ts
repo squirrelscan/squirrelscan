@@ -139,6 +139,14 @@ export interface RuleFindingSnapshot {
   status: CheckStatus;
   /** null for site-scope checks (no single page). */
   pageUrl: string | null;
+  /**
+   * The finding's message, value and expected (#229): load-bearing downstream (the finding fingerprint
+   * keys on them, report groups key on the message, every renderer prints it), so a reworded rule
+   * must move the gate. `value`/`expected` are JSON-serialized (null when absent).
+   */
+  message: string;
+  value: string | null;
+  expected: string | null;
 }
 
 /**
@@ -191,7 +199,7 @@ export interface EngineBaselineSnapshot {
     warningCount: number;
     passedCount: number;
   };
-  /** Full (ruleId, checkName, status, pageUrl) set — sorted, deterministic, UNCAPPED. */
+  /** Full (ruleId, checkName, status, pageUrl, message, value, expected) set — sorted, deterministic, UNCAPPED. */
   findings: RuleFindingSnapshot[];
   /** Sorted by ruleId. */
   perRuleTally: RuleTallySnapshot[];
@@ -255,6 +263,9 @@ function buildSnapshot(
         checkName: check.name,
         status: check.status,
         pageUrl: check.pageUrl ?? null,
+        message: check.message,
+        value: check.value === undefined ? null : JSON.stringify(check.value),
+        expected: check.expected === undefined ? null : JSON.stringify(check.expected),
       });
       statusBucket(tally, check.status);
     }
@@ -266,7 +277,10 @@ function buildSnapshot(
       a.ruleId.localeCompare(b.ruleId) ||
       a.checkName.localeCompare(b.checkName) ||
       a.status.localeCompare(b.status) ||
-      (a.pageUrl ?? "").localeCompare(b.pageUrl ?? ""),
+      (a.pageUrl ?? "").localeCompare(b.pageUrl ?? "") ||
+      a.message.localeCompare(b.message) ||
+      (a.value ?? "").localeCompare(b.value ?? "") ||
+      (a.expected ?? "").localeCompare(b.expected ?? ""),
   );
 
   const perRuleTally = [...tallyByRule.values()].sort((a, b) => a.ruleId.localeCompare(b.ruleId));
@@ -433,8 +447,27 @@ export interface BaselineDiffResult {
  * to catch). */
 const FINDING_KEY_DELIMITER = "\x1f";
 
+/** A finding as a divergence report prints it. */
+function findingText(f: RuleFindingSnapshot): string {
+  const extra = [
+    f.value !== null ? `value=${f.value}` : "",
+    f.expected !== null ? `expected=${f.expected}` : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  return `${f.checkName} status=${f.status} pageUrl=${f.pageUrl ?? "(site)"} message=${JSON.stringify(f.message)}${extra ? ` ${extra}` : ""}`;
+}
+
 function findingKey(f: RuleFindingSnapshot): string {
-  return [f.ruleId, f.checkName, f.status, f.pageUrl ?? ""].join(FINDING_KEY_DELIMITER);
+  return [
+    f.ruleId,
+    f.checkName,
+    f.status,
+    f.pageUrl ?? "",
+    f.message,
+    f.value ?? "",
+    f.expected ?? "",
+  ].join(FINDING_KEY_DELIMITER);
 }
 
 /** Category/GroupScore field-by-field equality — NOT JSON.stringify. Those
@@ -533,7 +566,7 @@ export function diffBaselines(
       divergences.push({
         ruleId: f.ruleId,
         kind: "finding-only-in-a",
-        detail: `${f.checkName} status=${f.status} pageUrl=${f.pageUrl ?? "(site)"} — in A, missing from B`,
+        detail: `${findingText(f)} — in A, missing from B`,
       });
     }
   }
@@ -542,7 +575,7 @@ export function diffBaselines(
       divergences.push({
         ruleId: f.ruleId,
         kind: "finding-only-in-b",
-        detail: `${f.checkName} status=${f.status} pageUrl=${f.pageUrl ?? "(site)"} — in B, missing from A`,
+        detail: `${findingText(f)} — in B, missing from A`,
       });
     }
   }

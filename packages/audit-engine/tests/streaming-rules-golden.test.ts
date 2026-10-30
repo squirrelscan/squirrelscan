@@ -66,13 +66,13 @@ const EMPTY_ASSETS: PreFetchedAssets = {
   sitemapUrlStatuses: [],
 };
 
-// The (ruleId, checkName, status, pageUrl) finding multiset — order-independent
+// The (ruleId, checkName, status, pageUrl, message, value, expected) finding multiset, order-independent
 // (sorted), duplicate-preserving. The handoff's finding-set identity.
-function findingTuples(map: Map<string, RuleRunResult>): string[] {
+function findingTuples(map: Map<string, RuleRunResult>, textExempt: ReadonlySet<string> = new Set()): string[] {
   const out: string[] = [];
   for (const [ruleId, rr] of map) {
     for (const check of rr.checks) {
-      out.push(`${ruleId}|${check.name}|${check.status}|${check.pageUrl ?? ""}`);
+      out.push(`${ruleId}|${check.name}|${check.status}|${check.pageUrl ?? ""}${textExempt.has(ruleId) ? "" : `|${check.message}|${check.value ?? ""}|${check.expected ?? ""}`}`);
     }
   }
   return out.sort();
@@ -111,13 +111,19 @@ async function runV2(
 
 // Assert full byte-identity for one crawl DB: v1 vs v2 ruleResultsMap score +
 // finding set, plus the streamed tally score against v1.
-async function assertParity(storage: SQLiteStorage, crawlId: string) {
+async function assertParity(
+  storage: SQLiteStorage,
+  crawlId: string,
+  textExempt: ReadonlySet<string> = new Set(),
+) {
   const v1 = await runV1(storage, crawlId);
   const v2 = await runV2(storage, crawlId);
 
   const v1Score = scoreOf(v1.ruleResultsMap);
   expect(scoreOf(v2.ruleResultsMap)).toEqual(v1Score);
-  expect(findingTuples(v2.ruleResultsMap)).toEqual(findingTuples(v1.ruleResultsMap));
+  expect(findingTuples(v2.ruleResultsMap, textExempt)).toEqual(
+    findingTuples(v1.ruleResultsMap, textExempt),
+  );
   expect(talliesScore(v2.tallies, v2.ruleResultsMap)).toEqual(v1Score);
   return { v1, v2, v1Score };
 }
@@ -239,7 +245,12 @@ describe("runStreamingRules — GOLDEN INVARIANT vs runRulesOnStorage", () => {
       ),
     );
 
-    const { v1 } = await assertParity(storage, crawlId);
+    // #1359: v1 counts the bodyless 404 as a page in these two messages, streaming does not.
+    const { v1 } = await assertParity(
+      storage,
+      crawlId,
+      new Set(["url/slug-convention", "perf/total-byte-weight"]),
+    );
     // The WAF advisory check must actually be present (proves the branch ran).
     expect(v1.ruleResultsMap.has("crawl/waf-challenge-pages")).toBe(true);
 
