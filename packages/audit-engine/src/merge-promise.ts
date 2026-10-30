@@ -21,7 +21,7 @@ import type {
 } from "@squirrelscan/core-contracts";
 import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
 import {
-  NOT_APPLICABLE_SKIP_REASON,
+  isRuleNotApplicableReason,
   resolutionCheckKey,
   resolutionUrlHash,
 } from "@squirrelscan/core-contracts/resolution";
@@ -829,8 +829,8 @@ export async function runCloudSmartAudits(
         const url = normalizePageUrl(c.pageUrl);
         if (
           c.status === "skipped" &&
-          c.skipReason === NOT_APPLICABLE_SKIP_REASON &&
-          c.details?.foldKey === NOT_APPLICABLE_SKIP_REASON
+          isRuleNotApplicableReason(c.skipReason) &&
+          c.details?.foldKey === c.skipReason
         ) {
           notApplicablePages.add(pageRuleKey(url, ruleId));
           continue;

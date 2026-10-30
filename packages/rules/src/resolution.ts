@@ -28,7 +28,7 @@ import {
   type CompactResolutionSignal,
   encodeIndexGaps,
   CHECK_NOT_APPLICABLE_SKIP_REASON,
-  NOT_APPLICABLE_SKIP_REASON,
+  isRuleNotApplicableReason,
   RULE_TIMED_OUT_SKIP_REASON,
   resolutionRuleKey,
   resolutionCheckKey,
@@ -97,7 +97,7 @@ function isThrownRuleRow(ruleId: string, check: CheckResult): boolean {
  * evaluate, so they emit nothing either.
  *
  * One skip is a verdict rather than a gap: the runner's noindex gate
- * (`skipReason: "noindex"`, pub#457) decided that NOTHING the rule reports applies
+ * (`skipReason: "noindex"`, pub#457; the page-type gate, `"page-type"`, pub#841, is read the same way) decided that NOTHING the rule reports applies
  * to that page. Its page counts as evaluated clean for every key of that rule that
  * this run emits, so a finding carried from before the page went noindex resolves
  * instead of being carried forever. If the run emits no key for the rule at all
@@ -203,13 +203,13 @@ function collectResolutionEvidence(
 
   for (const [ruleId, rule] of Object.entries(ruleResults)) {
     for (const check of rule.checks) {
-      if (check.status === "skipped" && check.skipReason === NOT_APPLICABLE_SKIP_REASON) {
+      if (check.status === "skipped" && isRuleNotApplicableReason(check.skipReason)) {
         // A fold can turn these into one aggregate with pages[]. The runner gives
         // the skip its own `details.foldKey`, so an aggregate is trusted only when
         // it carries that key (every constituent was a noindex skip, not a mix
         // with another gate's skip). A clipped list only leaves the clipped pages
         // unevaluated (carry), never wrongly clean.
-        const homogeneous = check.details?.foldKey === NOT_APPLICABLE_SKIP_REASON;
+        const homogeneous = check.details?.foldKey === check.skipReason;
         const skippedUrls = check.pageUrl
           ? [check.pageUrl]
           : homogeneous

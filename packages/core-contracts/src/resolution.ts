@@ -200,6 +200,19 @@ export const RULE_TIMED_OUT_SKIP_REASON = "rule-timed-out";
 export const NOT_APPLICABLE_SKIP_REASON = "noindex";
 
 /**
+ * The runner's page-type gate (pub#841): a contact or legal page is short by nature, so a rule
+ * that declares `skipOnPageType` is skipped on it. Like the noindex gate it is a "does not apply"
+ * verdict for EVERY check of the rule on that page, and it names the rule, not a check, so it is
+ * keyed by rule in the resolution signal. Also the skip's `details.foldKey`.
+ */
+export const PAGE_TYPE_SKIP_REASON = "page-type";
+
+/** Whether a skip reason is a rule-wide "does not apply" verdict (the noindex and page-type gates). */
+export function isRuleNotApplicableReason(reason: string | undefined): boolean {
+  return reason === NOT_APPLICABLE_SKIP_REASON || reason === PAGE_TYPE_SKIP_REASON;
+}
+
+/**
  * A check that does not apply to THIS page: nothing for it to look at (no images,
  * no form fields, no body, no `Link` header, a page below the minimum size, a
  * `<picture>`-less page, a URL with no extension). Unlike a gap (`scan-truncated`,

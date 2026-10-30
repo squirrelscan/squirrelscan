@@ -19,7 +19,7 @@ import { packComponentOccurrences } from "@squirrelscan/core-contracts/component
 import { packSiteResourceOccurrences } from "@squirrelscan/core-contracts/site-resource-evidence";
 import {
   CHECK_NOT_APPLICABLE_SKIP_REASON,
-  NOT_APPLICABLE_SKIP_REASON,
+  isRuleNotApplicableReason,
   RULE_TIMED_OUT_SKIP_REASON,
   SCAN_TRUNCATED_SKIP_REASON,
   resolutionRuleKey,
@@ -294,7 +294,7 @@ export function createNotEvaluatedCollector(normalize: (url: string) => string):
       const inconclusive = check.status === "info" && check.details?.inconclusive === true;
       if (
         (check.status !== "skipped" && !inconclusive) ||
-        check.skipReason === NOT_APPLICABLE_SKIP_REASON ||
+        isRuleNotApplicableReason(check.skipReason) ||
         check.skipReason === CHECK_NOT_APPLICABLE_SKIP_REASON ||
         timedOut
       ) {
