@@ -49,7 +49,7 @@ import { checkPageTypeScope, pageTypeScopeData, type PageTypeScope } from "../pa
 import { techIconUrl } from "../technologies";
 import { domainAgeYears, siteProfileRows } from "../site-metadata";
 import { editorSummaryView } from "../editor-summary";
-import { followedStartRedirect, scanScopeUnfetched, seedRedirect } from "../coverage";
+import { canonicalVariantCount, followedStartRedirect, scanScopeUnfetched, seedRedirect } from "../coverage";
 import { privateTargetLine, privateTargetSkippedRules } from "../private-target";
 import { notCheckedLine, notCheckedRules } from "../not-checked";
 import { collectSkippedChecks, type SkippedCheck } from "../skipped";
@@ -170,6 +170,7 @@ interface SlimJsonReport {
      * when nothing was left queued.
      */
     unfetched?: number;
+    canonicalVariants?: number;
     /** The audit level and the settings it resolved to. Absent before audit levels. */
     auditLevel?: ResolvedAuditSettings;
     /** Smart audits (#110): present only when `smart_audits` ran. */
@@ -474,6 +475,8 @@ function buildSlimReport(
         ? { stopReason: report.scanScope.stopReason }
         : {}),
       ...(unfetched > 0 ? { unfetched } : {}),
+      // Query-string variants counted with their canonical page; `totalPages` excludes them (#858).
+      ...(canonicalVariantCount(report) > 0 ? { canonicalVariants: canonicalVariantCount(report) } : {}),
       ...(report.coverage ? { coverage: report.coverage } : {}),
       // The audit level and the settings it resolved to: `level` (a level's
       // name, or `custom`), `basedOn`, `changes` and `settings`. Absent on

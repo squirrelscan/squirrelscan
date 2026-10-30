@@ -639,6 +639,12 @@ report's page count, coverage and score. Responses without an HTML content type,
 responses whose body was not captured, and no-content statuses such as 204 are
 not treated as empty documents.
 
+### Query-string variants
+
+A page and a query-string copy of it (`/contact` and `/contact?subject=Billing`) are two URLs the crawl fetches and checks, but they are one page to the reader. A crawled page whose `rel=canonical` points at another crawled page of the same path is counted with that page: a finding on both lists one affected page, the page total and the scan line count the pages once, and the report says how many variants were folded (`Scan: 5 pages crawled ... 1 query-string variant counted with its canonical.`, `meta.canonicalVariants` in JSON).
+
+Only a declared canonical folds a page. A variant with no canonical, with a canonical of its own (a paginated listing, a search or filter page), or whose canonical is another path, another host or a page the crawl did not fetch stays a page of its own and is listed separately. Every variant is still fetched and checked, so scores and issue counts do not change; only how many pages are counted does. The entity map, which describes every crawled URL, still lists them. A smart audit's union of carried pages is not folded.
+
 ## Caching
 
 squirrelscan caches page content locally. On subsequent audits:

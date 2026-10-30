@@ -363,8 +363,11 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
     // In-scope URLs left queued: how much more of the site the crawl knew of.
     const left = scanScopeUnfetched(report);
     const unfetched = left > 0 ? ` unfetched="${left}"` : "";
+    // Query-string variants counted with their canonical page (#858).
+    const variantCount = Number(report.canonicalVariants ?? s.canonicalVariants ?? 0);
+    const variants = Number.isSafeInteger(variantCount) && variantCount > 0 ? ` canonical-variants="${variantCount}"` : "";
     lines.push(
-      `<scan-scope origin="${s.origin}" crawled="${s.pagesCrawled}"${cap}${requested} capped="${s.capped}"${stop}${unfetched}/>`,
+      `<scan-scope origin="${s.origin}" crawled="${s.pagesCrawled}"${cap}${requested} capped="${s.capped}"${stop}${unfetched}${variants}/>`,
     );
   }
 

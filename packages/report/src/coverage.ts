@@ -109,6 +109,20 @@ function isVersionLike(value: unknown): value is string {
   return typeof value === "string" && /^[0-9A-Za-z][0-9A-Za-z._+-]{0,63}$/.test(value);
 }
 
+/**
+ * " 4 query-string variants counted with their canonical." (#858), or "". Read off stored reports of
+ * any origin: anything but a positive whole number counts as none.
+ */
+export function canonicalVariantCount(report: Pick<AuditReport, "canonicalVariants" | "scanScope">): number {
+  const raw = report.canonicalVariants ?? report.scanScope?.canonicalVariants;
+  return typeof raw === "number" && Number.isSafeInteger(raw) && raw > 0 ? raw : 0;
+}
+
+export function canonicalVariantsNote(report: Pick<AuditReport, "canonicalVariants" | "scanScope">): string {
+  const n = canonicalVariantCount(report);
+  return n > 0 ? ` ${n} query-string variant${n === 1 ? "" : "s"} counted with ${n === 1 ? "its" : "their"} canonical.` : "";
+}
+
 export function scanScopeLine(report: AuditReport): string | null {
   const raw = report.scanScope;
   if (!raw) return null;
@@ -141,7 +155,7 @@ export function scanScopeLine(report: AuditReport): string | null {
     unfetched > 0 ? `${unfetched} more discovered but not fetched` : "",
   ].filter(Boolean);
   const cap = parts.length > 0 ? ` (${parts.join("; ")})` : "";
-  return `Scan: ${s.pagesCrawled} page${s.pagesCrawled === 1 ? "" : "s"} crawled from ${origin}${version}${cap}.`;
+  return `Scan: ${s.pagesCrawled} page${s.pagesCrawled === 1 ? "" : "s"} crawled from ${origin}${version}${cap}.${canonicalVariantsNote(report)}`;
 }
 
 /**

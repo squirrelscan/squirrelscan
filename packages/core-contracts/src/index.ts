@@ -710,6 +710,14 @@ export interface AuditReport {
    */
   structure?: ReportStructure;
   /**
+   * Crawled pages counted with their canonical page instead of as pages of their own (#858):
+   * query-string variants (`/contact?subject=Billing`) whose `rel=canonical` is another crawled
+   * page of the same path. `totalPages`, `pages` and every affected-page count are canonical
+   * groups; each variant still has its own checks, so tallies and the score are unchanged.
+   * Absent when there were none.
+   */
+  canonicalVariants?: number;
+  /**
    * Resolved site-metadata "profile" (site type, business category, country,
    * audience, identity, contacts, socials, domain age). Like `technologies`,
    * it is a REPORT-ONLY section that NEVER contributes to `healthScore`.
@@ -1081,6 +1089,8 @@ export interface PublishedReportDetail {
 export interface ScanScope {
   /** "cli" = local machine, "ci" = CI runner, "cloud" = squirrelscan cloud container. */
   origin: "cli" | "ci" | "cloud";
+  /** Query-string variants counted with their canonical page: `pagesCrawled` excludes them (#858). */
+  canonicalVariants?: number;
   /** Page cap in effect for this run; absent when the runner had no cap. */
   maxPages?: number;
   /**

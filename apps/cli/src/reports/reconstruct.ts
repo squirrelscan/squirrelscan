@@ -3,7 +3,11 @@
 
 import type { PageFeatureRow } from "@squirrelscan/core-contracts";
 
-import { detachFromPage } from "@squirrelscan/audit-engine";
+import {
+  canonicalVariantMap,
+  detachFromPage,
+  foldChecksToCanonical,
+} from "@squirrelscan/audit-engine";
 import { buildCacheStats } from "@squirrelscan/core-contracts";
 import { createStructureBuilder } from "@squirrelscan/report/structure";
 import { loadAllRules, type RuleRunResult } from "@squirrelscan/rules";
@@ -379,6 +383,44 @@ export function reconstructReport(
     const { byPage: ruleResultsByPage, byRuleId: ruleResultsByRuleId } =
       yield* storage.getRuleResultsGrouped(crawlId);
 
+    // 6b. Query-string variants of a page (#858): a crawled page that declares another crawled
+    // page of the same path as its canonical is counted with it. Report time only; every page
+    // keeps its own checks, so the tallies and the score do not move. Fresh crawls only: a smart
+    // audit's union counts carried pages this fold cannot see.
+    let variantOf = new Map<string, string>();
+    if (!smartMerge) {
+      const canonicalRows: Array<{ url: string; canonical: string | null }> =
+        [];
+      let after: string | undefined;
+      for (;;) {
+        const rows = yield* storage
+          .getPageFeaturesPage(crawlId, { after, limit: batchSize })
+          .pipe(Effect.catchAll(() => Effect.succeed([] as PageFeatureRow[])));
+        if (rows.length === 0) break;
+        for (const row of rows)
+          canonicalRows.push({
+            url: row.normalizedUrl,
+            canonical: row.canonical,
+          });
+        after = rows[rows.length - 1]!.normalizedUrl;
+        if (rows.length < batchSize) break;
+      }
+      variantOf = canonicalVariantMap(canonicalRows);
+      // The two lookups share their check objects, so one pass over either folds both.
+      if (variantOf.size > 0)
+        foldChecksToCanonical(
+          Array.from(ruleResultsByRuleId.values()).flat(),
+          variantOf
+        );
+    }
+    const variantsOfCanonical = new Map<string, string[]>();
+    for (const [variant, canonical] of variantOf) {
+      const list = variantsOfCanonical.get(canonical);
+      if (list) list.push(variant);
+      else variantsOfCanonical.set(canonical, [variant]);
+    }
+    let variantPages = 0;
+
     // 7. Load rule registry to get metadata
     // Stored results can include explicitly enabled opt-in rules. Reconstruction
     // needs their metadata even though a default audit does not select them.
@@ -481,7 +523,8 @@ export function reconstructReport(
         if (features) featureBuf.delete(page.normalizedUrl);
         // Pages that answered with a document. A 404 page carries the site's chrome too, and
         // counting it would say the site has more header links than it has pages.
-        if (page.status >= 200 && page.status < 300) {
+        const isVariant = variantOf.has(page.normalizedUrl);
+        if (page.status >= 200 && page.status < 300 && !isVariant) {
           structureBuilder.add(features?.reportScalars?.structure);
         }
 
@@ -491,6 +534,11 @@ export function reconstructReport(
           statusCode: page.status,
         });
         pageStatuses.push({ status: page.status });
+        // A variant is not a page of its own in the report (#858): it is counted with its canonical.
+        if (isVariant) {
+          variantPages += 1;
+          continue;
+        }
         // The stored scalars, or — only when this page has none — the parse they
         // replaced (#2343). `reportScalars` is null on a row written before
         // schema v30, so an audit stored by an older binary still reports the
@@ -538,7 +586,12 @@ export function reconstructReport(
         );
 
         // Get rule results for this page
-        const pageChecks = ruleResultsByPage.get(page.normalizedUrl) ?? [];
+        const pageChecks = [
+          ...(ruleResultsByPage.get(page.normalizedUrl) ?? []),
+          ...(variantsOfCanonical.get(page.normalizedUrl) ?? []).flatMap(
+            (v) => ruleResultsByPage.get(v) ?? []
+          ),
+        ];
 
         // Build summary data
         if (summarySignal) {
@@ -923,6 +976,7 @@ export function reconstructReport(
           }
         : {}),
       ...(structure ? { structure } : {}),
+      ...(variantPages > 0 ? { canonicalVariants: variantPages } : {}),
       ...(cacheStats ? { cacheStats } : {}),
       ...(renderBlockRecovered > 0
         ? { fetchFallbacks: { recovered: renderBlockRecovered } }

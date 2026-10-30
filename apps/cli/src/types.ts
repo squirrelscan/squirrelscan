@@ -535,6 +535,8 @@ export interface AuditReport {
    * audited page carries a link section or a classification.
    */
   structure?: ReportStructure;
+  /** Query-string variants counted with their canonical page (#858). */
+  canonicalVariants?: number;
   /**
    * Resolved Stage-0 site profile — REPORT-ONLY / non-scoring. Present only when
    * the credited cloud `site-metadata` service resolved it (logged-in + cloud +
@@ -626,6 +628,8 @@ export interface AuditReport {
     /** Requested page cap, when it exceeded MAX_PAGES_CAP and was clamped (#1909). */
     requestedMaxPages?: number;
     pagesCrawled: number;
+    /** Query-string variants counted with their canonical page (#858). */
+    canonicalVariants?: number;
     capped: boolean;
     /** The crawl time budget ended the crawl early (the page cap was not the reason). */
     stopReason?: "time";
