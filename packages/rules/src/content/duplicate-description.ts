@@ -2,7 +2,7 @@
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 import type { SiteQuery } from "@squirrelscan/core-contracts";
-import { redirectedAway } from "@squirrelscan/utils/url";
+import { crawledPageKeys, redirectedAway } from "@squirrelscan/utils/url";
 
 import { excludesNoindexPage, skipsNoindexPages } from "../shared/noindex";
 import { RegionVariantIndex } from "../shared/region-variants";
@@ -119,9 +119,10 @@ export const duplicateDescriptionRule: Rule = {
     // Group pages by description
     const descToUrls = new Map<string, string[]>();
 
+    const crawled = crawledPageKeys(pages.map((p) => p.url));
     for (const page of pages) {
       if (excludesNoindexPage(ctx.site, page.parsed, page.headers)) continue;
-      if (redirectedAway(page.url, page.finalUrl)) continue;
+      if (redirectedAway(page.url, page.finalUrl, crawled)) continue;
       const desc = page.parsed.meta.description?.trim().toLowerCase();
       if (!desc) continue;
 

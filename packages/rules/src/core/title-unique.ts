@@ -2,7 +2,7 @@
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 import type { SiteQuery } from "@squirrelscan/core-contracts";
-import { redirectedAway } from "@squirrelscan/utils/url";
+import { crawledPageKeys, redirectedAway } from "@squirrelscan/utils/url";
 
 import { excludesNoindexPage, skipsNoindexPages } from "../shared/noindex";
 import { RegionVariantIndex } from "../shared/region-variants";
@@ -126,9 +126,10 @@ export const titleUniqueRule: Rule = {
     // Collect all titles and their pages
     const titleMap = new Map<string, string[]>();
 
+    const crawled = crawledPageKeys(ctx.site.pages.map((p) => p.url));
     for (const page of ctx.site.pages) {
       if (excludesNoindexPage(ctx.site, page.parsed, page.headers)) continue;
-      if (redirectedAway(page.url, page.finalUrl)) continue;
+      if (redirectedAway(page.url, page.finalUrl, crawled)) continue;
       const title = page.parsed.meta.title?.trim() || "";
       if (!title) continue;
 

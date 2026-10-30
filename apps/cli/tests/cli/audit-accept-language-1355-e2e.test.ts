@@ -61,6 +61,26 @@ const server = Bun.serve({
     }
     if (pathname === "/old")
       return new Response(null, { status: 301, headers: { location: "/en" } });
+    // A second shop where the redirect target is never linked, so never crawled:
+    // /a2 carries /b2's text and /c2 repeats it. That is a real duplicate.
+    if (pathname === "/shop2") {
+      return new Response(
+        page(
+          "Shop two",
+          "The second shop",
+          `<a href="/a2">a</a> <a href="/c2">c</a>`
+        ),
+        { headers: html }
+      );
+    }
+    if (pathname === "/a2")
+      return new Response(null, { status: 301, headers: { location: "/b2" } });
+    if (pathname === "/b2" || pathname === "/c2") {
+      return new Response(
+        page("Shared title two", "A description both pages share verbatim"),
+        { headers: html }
+      );
+    }
     if (pathname === "/en") {
       return new Response(
         page("Saddle shop", "English description of the saddle shop"),
@@ -81,7 +101,7 @@ beforeEach(() => {
 });
 
 let runs = 0;
-async function audit(toml?: string) {
+async function audit(toml?: string, start = "/") {
   const dir = join(scratch, `run-${++runs}`);
   mkdirSync(dir, { recursive: true });
   if (toml) writeFileSync(join(dir, "squirrel.toml"), toml);
@@ -92,7 +112,7 @@ async function audit(toml?: string) {
       "run",
       entry,
       "audit",
-      `http://127.0.0.1:${server.port}/`,
+      `http://127.0.0.1:${server.port}${start}`,
       "--offline",
       "--passive",
       "-m",
@@ -165,6 +185,15 @@ describe("an Accept-Language set in [crawler] headers is still sent", () => {
     );
     expect(report.issues.map((i) => i.ruleId)).not.toContain(
       "content/duplicate-title"
+    );
+  }, 120_000);
+});
+
+describe("a redirect whose target was never crawled does not hide a duplicate", () => {
+  test("/a2 redirects to /b2 (never linked) and /c2 repeats /b2's text: the duplicate is reported", async () => {
+    const report = await audit(undefined, "/shop2");
+    expect(report.issues.map((i) => i.ruleId)).toContain(
+      "content/duplicate-description"
     );
   }, 120_000);
 });

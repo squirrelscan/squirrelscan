@@ -35,6 +35,7 @@ import { buildSiteContext, buildHeadersMap, isRenderedFetch } from "./adapter";
 import { collectDroppedBatch } from "./batch-gc";
 import { detachFromPage } from "./detach";
 import { extractPageFeatures, isAuditablePage } from "./page-features";
+import { crawledPageKeys } from "@squirrelscan/utils/url";
 import type { PageRuleLoopHooks } from "./page-rule-executor";
 import {
   emptyRuleCacheStats,
@@ -346,6 +347,19 @@ export function streamPageRules(
     const deadlineAt = opts?.deadlineAt;
     let deadlineHit = false;
 
+    // The pages this crawl holds, so a page that redirected to another page of it
+    // can leave the duplicate-content rows to its target (#1355). One light pass
+    // over the rows (no bodies); the keys go through the same canonicalisation
+    // the comparison applies to a final url.
+    const crawledUrls = new Set<string>();
+    for (let at = 0; ; at += 1000) {
+      const light = yield* storage
+        .getPagesWithoutBodies(crawlId, { limit: 1000, offset: at })
+        .pipe(Effect.orDie);
+      if (light.length === 0) break;
+      for (const key of crawledPageKeys(light.map((p) => p.normalizedUrl))) crawledUrls.add(key);
+    }
+
     for (let offset = 0; ; offset += batchSize) {
       opts?.signal?.throwIfAborted();
       // A read failure mid-stream is a HARD error, not end-of-crawl. `orDie` so a
@@ -591,7 +605,7 @@ export function streamPageRules(
         // `!isAuditablePage(page)` continue above already guarantees this page is
         // auditable, so no second gate is needed here. `shared` was built before
         // the rules ran (see above); it is the same object either way.
-        const features = extractPageFeatures(page, parsed, shared);
+        const features = extractPageFeatures(page, parsed, { ...shared, crawledUrls });
         yield* storage
           .upsertPageFeatures(crawlId, features)
           .pipe(Effect.catchAll(() => Effect.void));
