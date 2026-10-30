@@ -49,9 +49,9 @@ const LANGUAGE_STOP_WORDS = new Map<string, ReadonlySet<string>>([
       "aber alle allem allen aller alles als also ander andere anderem anderen anderer anderes auch auf aus bei bin bis bist damit dann das dass dein deine dem den denn der des die dies diese",
       "ein eine einem einen einer eines etwas hat haben hier ich ihr ihre ist jede kein keine man mehr mein meine mit nach nicht noch nun nur oder sein seine sind solche und uns unser",
       "vom von war waren was wenn wer wie wir wird zum zur inkl mwst zzgl versandkosten",
-      // Formal and informal address, prepositions and particles (#1315): "Sie" in every
-      // sentence of a service page, "für" and "zu" everywhere.
-      "sie für du dich dir deinen deinem deiner deines zu im am ihn ihm ihnen ihren ihrem ihrer ob so",
+      // Formal and informal address and common pronouns (#1315): "Sie" in every sentence of a
+      // service page, "für" everywhere. Words under three characters are never tokens.
+      "sie für dich dir deinen deinem deiner deines ihn ihm ihnen ihren ihrem ihrer",
     ),
   ],
   [
@@ -221,12 +221,34 @@ const LINK_LIST_TEXT_SHARE = 0.85;
 const LINK_LIST_MAX_ANCHORS = 3000;
 const LINK_LIST_MAX_DEPTH = 8;
 
+const MENU_NAME = /(?:^|[-_\s])(?:menu|nav|navigation|dropdown|mega|flyout|submenu|megamenu)(?:$|[-_\s])/i;
+
+/**
+ * A block of links is a menu when it is a list of links (`ul`/`ol` with `li` items, or inside one) or
+ * when it, or a wrapper up to three levels above it, is named or roled as one. A bare `div` of anchors
+ * with no such signal is a link cloud and keeps counting (a keyword spammer's favourite shape).
+ */
+function hasMenuSignal(element: Element, body: Element): boolean {
+  if (element.querySelector("ul > li, ol > li")) return true;
+  let current: Element | null = element;
+  for (let depth = 0; current && current !== body && depth < 4; depth++, current = current.parentElement) {
+    const tag = current.tagName?.toLowerCase();
+    if (tag === "ul" || tag === "ol" || tag === "li") return true;
+    const role = current.getAttribute?.("role")?.toLowerCase();
+    if (role && /^(?:menu|menubar|navigation|tablist)$/.test(role)) return true;
+    const name = `${current.getAttribute?.("class") ?? ""} ${current.getAttribute?.("id") ?? ""}`;
+    if (MENU_NAME.test(name)) return true;
+  }
+  return false;
+}
+
 /**
  * Blocks that are mostly link text: a mega menu or footer columns built from plain
  * `div`s, which the landmark test cannot see (#1315). Their link labels are site
  * navigation repeated on every page, not copy. Only used when the page has no main
- * copy of its own to measure. Requires several DIFFERENT labels, so a block that
- * repeats one anchor ("emergency plumber" x20) still counts as the stuffing it is.
+ * copy of its own to measure. Requires several DIFFERENT labels and a menu signal (a list
+ * of links, or menu/nav naming, see {@link hasMenuSignal}), so a block that repeats one
+ * anchor ("emergency plumber" x20), or a bare cloud of keyword links, still counts.
  */
 function createLinkListTest(body: Element): (element: Element) => boolean {
   type Stats = { links: number; chars: number; labels: Set<string> };
@@ -252,7 +274,7 @@ function createLinkListTest(body: Element): (element: Element) => boolean {
   for (const [element, entry] of stats) {
     if (entry.links < LINK_LIST_MIN_LINKS || entry.labels.size < LINK_LIST_MIN_LABELS) continue;
     const textChars = (element.textContent || "").replace(/\s/g, "").length;
-    if (textChars > 0 && entry.chars >= textChars * LINK_LIST_TEXT_SHARE) lists.add(element);
+    if (textChars > 0 && entry.chars >= textChars * LINK_LIST_TEXT_SHARE && hasMenuSignal(element, body)) lists.add(element);
   }
   const known = new WeakMap<Element, boolean>();
   return (element) => {
@@ -373,7 +395,9 @@ export function brandTerms(
 const CARD_TEXT_SELECTOR = "p, span, div, li, dd, dt, small";
 const CARD_TEXT_MAX_CHARS = 160;
 const CARD_MIN_PARENTS = 3;
+/** Candidate card texts kept per page, and the elements looked at to find them. */
 const CARD_MAX_ELEMENTS = 4000;
+const CARD_MAX_SCANNED = 40_000;
 
 /**
  * Short texts repeated once per card (#1315): `text -> occurrences` for every text
@@ -382,13 +406,20 @@ const CARD_MAX_ELEMENTS = 4000;
  */
 function repeatedCardText(root: Element, excluded: ((element: Element) => boolean) | null): Map<string, number> {
   const byText = new Map<string, { count: number; parents: Set<Element> }>();
-  let seen = 0;
+  let scanned = 0;
+  let candidates = 0;
   for (const el of root.querySelectorAll(CARD_TEXT_SELECTOR)) {
-    if (++seen > CARD_MAX_ELEMENTS) break;
+    // Two bounds: the elements looked at, and the candidate cards kept (a card is ~9 elements deep).
+    if (++scanned > CARD_MAX_SCANNED || candidates >= CARD_MAX_ELEMENTS) break;
     if (el.children.length > 0) continue;
     if (excluded?.(el)) continue;
     const text = (el.textContent || "").replace(/\s+/g, " ").trim();
     if (text.length < 8 || text.length > CARD_TEXT_MAX_CHARS) continue;
+    // A card has other things in it (title, price, rating): a text that is the WHOLE text of its
+    // wrapper is a block of copy on its own, however often it repeats.
+    const parent = el.parentElement;
+    if (!parent || (parent.textContent || "").replace(/\s+/g, " ").trim() === text) continue;
+    candidates += 1;
     const key = text.toLowerCase().replace(/\d+([.,]\d+)*/g, "#");
     let entry = byText.get(key);
     if (!entry) {

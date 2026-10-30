@@ -33,7 +33,7 @@ How it works:
 
 ### Fixed
 
-- **`content/keyword-stuffing` stops flagging German function words, menu chrome on short pages and product-card microcopy.** The German list now has the formal and informal address and common prepositions (`sie`, `für`, `du`, `dir`, `zu`, `im` and more), `out` is an English function word, blocks of mostly link text with several different labels (a mega menu made of plain `div`s) are left out when a page has no main copy of its own, and a short text repeated once per card in a grid (rating and instalment notes, digits ignored) no longer counts toward density. One anchor repeated many times and the same sentence repeated in one container still flag. See [Keyword stuffing](https://docs.squirrelscan.com/rules/content/keyword-stuffing). (#1315)
+- **`content/keyword-stuffing` stops flagging German function words, menu chrome on short pages and product-card microcopy.** The German list now has the formal and informal address and common prepositions (`sie`, `für`, `dich`, `dir` and more), `out` is an English function word, blocks of mostly link text with several different labels that look like a menu (a list of links, or `menu`/`nav`/`dropdown` naming; a bare `div` of keyword links still counts) are left out when a page has no main copy of its own, and a short text repeated once per card in a grid (rating and instalment notes, digits ignored, and not the whole text of its wrapper) no longer counts toward density. One anchor repeated many times and the same sentence repeated in one container still flag. See [Keyword stuffing](https://docs.squirrelscan.com/rules/content/keyword-stuffing). (#1315)
 
 ## v0.0.144 (2026-10-30)
 
