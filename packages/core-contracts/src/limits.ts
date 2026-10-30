@@ -481,8 +481,8 @@ export const JSON_REPORT_PAGES = {
   maxEntries: 2_000,
 } as const;
 
-/** The JSON report's schema version (`meta.schemaVersion`): major.minor. 1.1 added the opt-in `pages` list (#1260). */
-export const JSON_REPORT_SCHEMA_VERSION = "1.1";
+/** The JSON report's schema version (`meta.schemaVersion`): major.minor. 1.2 added `meta.requestedUrl` (#1369). */
+export const JSON_REPORT_SCHEMA_VERSION = "1.2";
 
 // ── LLM Report Output ──────────────────────────────────────────
 export const LLM_REPORT = {

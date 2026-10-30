@@ -616,6 +616,8 @@ export function auditStatusToLifecycle(
 export interface AuditReport {
   crawlId?: string;
   baseUrl: string;
+  /** The deep page the user asked for when the audit scope is the whole site. */
+  requestedUrl?: string;
   /**
    * Where the seed URL's redirects resolved to, when that is a DIFFERENT site
    * from `baseUrl` — i.e. the redirect left the seed's registrable domain and

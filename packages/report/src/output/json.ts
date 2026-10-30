@@ -147,6 +147,8 @@ interface SlimJsonReport {
     /** The report's schema version, major.minor (#1260). Absent on reports from before 1.1. */
     schemaVersion: string;
     baseUrl: string;
+    /** The deep page requested when `baseUrl` describes the site-wide scope. */
+    requestedUrl?: string;
     /**
      * A refused off-site seed redirect (#1418). Present only when the seed
      * redirected off its own registrable domain and the crawler declined to
@@ -508,6 +510,7 @@ function buildSlimReport(
       version,
       schemaVersion: JSON_REPORT_SCHEMA_VERSION,
       baseUrl: report.baseUrl,
+      ...(report.requestedUrl ? { requestedUrl: report.requestedUrl } : {}),
       // Sits next to the `baseUrl` it qualifies (#1418): a consumer reading the
       // graded URL sees, in the same object, that the seed pointed elsewhere.
       ...(refusedSeedRedirect

@@ -3207,6 +3207,15 @@ export function createCrawler(
           }
         }
 
+        // Put a deep URL the user named into the frontier before sitemap entries.
+        // Its source bonus already makes it the first page dispatched; inserting
+        // it first also means a sitemap copy cannot win frontier dedup (#1369).
+        // Root starts keep their existing sitemap accounting and insertion order.
+        const deepSeed = new URL(seedResolution.seedUrl).pathname !== "/";
+        if (deepSeed) {
+          yield* enqueueUrl(crawlId, seedResolution.seedUrl, 0, undefined, "seed");
+        }
+
         // Seed pages holding open carried findings ahead of generic discovery so
         // their findings get re-checked within budget (#1146). Enqueued BEFORE
         // sitemaps so that when a carried page is also a sitemap URL, the carried
@@ -3216,8 +3225,8 @@ export function createCrawler(
           yield* enqueueUrl(crawlId, carriedUrl, 0, undefined, "carried");
         }
         // Baseline so sitemapPendingCount below counts ONLY sitemap URLs that
-        // became pending, not the carried seeds just enqueued (#123 re-enable
-        // logic keys off a genuinely-empty sitemap result).
+        // became pending, not the requested or carried seeds just enqueued
+        // (#123 re-enable logic keys off a genuinely-empty sitemap result).
         const preSitemapPendingCount = yield* storage.getPendingCount(crawlId);
 
         // Enqueue URLs from ALL sitemaps (including children) for crawling.
@@ -3229,7 +3238,7 @@ export function createCrawler(
         }
         config.sitemapUrlCount = sitemapUrlsToEnqueue.length;
         // How many sitemap URLs actually became pending after robots/scope
-        // filtering (the seed is not enqueued yet). If 0 — every sitemap URL
+        // filtering. If 0 — every sitemap URL
         // was filtered — link discovery is re-enabled below so a fetchable
         // seed can still seed the frontier, preventing an empty/under-crawl on
         // prerender/CSR sites that disallow sitemap paths. See issue #123.
@@ -3246,9 +3255,11 @@ export function createCrawler(
           yield* storage.updateStats(crawlId, { linkDiscoveryOff: true });
         }
 
-        // Seed the crawl queue — the resolved URL when its redirect was adopted,
-        // the user's own URL when it was refused as off-site.
-        yield* enqueueUrl(crawlId, seedResolution.seedUrl, 0, undefined, "seed");
+        // Origin-only audits retain the old order; deep starts were seeded
+        // before the sitemap loop above.
+        if (!deepSeed) {
+          yield* enqueueUrl(crawlId, seedResolution.seedUrl, 0, undefined, "seed");
+        }
 
         // If nothing is pending after sitemaps + seed, every candidate URL was
         // filtered (robots.txt / scope). The crawl loop terminates cleanly

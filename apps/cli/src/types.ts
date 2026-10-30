@@ -460,6 +460,8 @@ export interface ReportRuleResult {
 export interface AuditReport {
   crawlId?: string; // UUID of the crawl this report was generated from
   baseUrl: string;
+  /** The deep page the user asked for when the audit scope is the whole site. */
+  requestedUrl?: string;
   /**
    * Where the seed's redirects resolved to, when that is a DIFFERENT site from
    * `baseUrl` — the redirect left the seed's site and was refused, not adopted.

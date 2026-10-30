@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **A deep start URL is now explicit and guaranteed to be audited.** `squirrel audit https://example.com/blog/post` says that it will audit the whole origin, records the page as `meta.requestedUrl` beside `meta.baseUrl`, and seeds that page before sitemap URLs so a small page limit cannot omit it. Origin-only audits are unchanged. (#1369)
+
 ## v0.0.146 (2026-10-31)
 
 Supabase is now detected in more real bundles, including a minified supabase-js build, and `security/cookie-flags` no longer warns about Lovable's `__dpl` routing cookie, a cookie the platform sets and a site cannot change.

@@ -211,6 +211,16 @@ const CLOUD_SERVICE_LABELS: Record<string, string> = {
   "content-gaps": "Content gap analysis",
 };
 
+export function deepAuditScope(
+  url: string
+): { requestedUrl: string; origin: string } | null {
+  const parsed = parseUserUrl(url);
+  if (!parsed.ok) return null;
+  const requested = new URL(parsed.url);
+  if (requested.pathname === "" || requested.pathname === "/") return null;
+  return { requestedUrl: redactStartUrl(parsed.url), origin: requested.origin };
+}
+
 /** Up-front estimate shown in the one-time cloud-consent prompt. */
 export interface CloudConsentEstimate {
   maxPages: number;
@@ -2097,6 +2107,14 @@ export const audit = defineCommand({
       // Preamble — aligned key/value block (Account, and Dashboard when online,
       // already printed above during status resolution; kv defined there).
       kv("Auditing", fmt.bold(redactStartUrl(options.url)));
+      const deepScope = deepAuditScope(options.url);
+      if (deepScope) {
+        log(
+          fmt.yellow(
+            `Notice: requested ${deepScope.requestedUrl}; auditing the whole site at ${deepScope.origin}. The requested page is crawled first.`
+          )
+        );
+      }
       if (startRedirect) {
         kv(
           "Redirect",

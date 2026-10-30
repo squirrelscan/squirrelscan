@@ -10,6 +10,7 @@ import {
 } from "@squirrelscan/audit-engine";
 import { buildCacheStats } from "@squirrelscan/core-contracts";
 import { maxDurationReason } from "@squirrelscan/core-contracts/failure-reason";
+import { redactUrl } from "@squirrelscan/core-contracts/seed-redirect";
 import { createStructureBuilder } from "@squirrelscan/report/structure";
 import { loadAllRules, type RuleRunResult } from "@squirrelscan/rules";
 import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
@@ -54,6 +55,19 @@ function rateLimitedHosts(baseUrl: string, rateLimitedCount: number): string[] {
     return [new URL(baseUrl).hostname];
   } catch {
     return [];
+  }
+}
+
+function requestedDeepUrl(
+  crawl: Pick<CrawlMetadata, "baseUrl" | "originalUrl">
+): string | undefined {
+  if (!crawl.originalUrl) return undefined;
+  try {
+    const requested = new URL(crawl.originalUrl);
+    if (requested.pathname === "" || requested.pathname === "/") return undefined;
+    return redactUrl(requested.toString());
+  } catch {
+    return undefined;
   }
 }
 
@@ -951,9 +965,11 @@ export function reconstructReport(
       (p) => p.fallbackReason === "render-block"
     ).length;
 
+    const requestedUrl = requestedDeepUrl(crawl);
     const report: AuditReport = {
       crawlId,
       baseUrl: crawl.baseUrl,
+      ...(requestedUrl ? { requestedUrl } : {}),
       timestamp: new Date(crawl.startedAt).toISOString(),
       totalPages: smartMerge ? smartMerge.coverage.knownPages : pages.length,
       passed: unionPassed,
