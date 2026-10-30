@@ -64,6 +64,12 @@ describe("#1379 supabase-js signature plus a quoted project URL", () => {
     expect(detect(code)).toContain("supabase");
   });
 
+  test("dozens of earlier quoted placeholder URLs do not push the real one out of the sample", () => {
+    const others = Array.from({ length: 40 }, (_, i) => `a${i}="https://your-project.supabase.co",`).join("");
+    const code = `${filler(120_000)}var ${others}z=0;${filler(60_000)}${NOTICE};${filler(60_000)}let l="https://${REF}.supabase.co",h=g(l);${filler(300_000)}`;
+    expect(detect(code)).toContain("supabase");
+  });
+
   test("not detected: library strings and no project URL", () => {
     expect(detect(`${filler(20_000)}${NOTICE};${STORAGE_KEY}${filler(20_000)}`)).not.toContain("supabase");
   });
