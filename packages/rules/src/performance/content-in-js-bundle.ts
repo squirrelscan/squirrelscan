@@ -85,18 +85,35 @@ export const contentInJsBundleRule: Rule = {
     // live (collected-signals.ts); v1 reads the live documents.
     const sentencesByPage = new Map<string, string[]>();
     let judged = true;
+    // Every page was browser-rendered: no copy to search for, which is not the same as nothing found (#1329).
+    let allRendered = false;
     if (ctx.collectedSignals) {
+      allRendered = ctx.collectedSignals.pages.length > 0 && ctx.collectedSignals.pages.every((rec) => rec.contentRendered === true);
       judged = !(
         ctx.collectedSignals.pages.length > 0 &&
         ctx.collectedSignals.pages.every((rec) => rec.contentSentences === undefined)
       );
       for (const rec of ctx.collectedSignals.pages) sentencesByPage.set(rec.url, rec.contentSentences ?? []);
     } else {
-      for (const page of ctx.site?.pages ?? []) {
+      const pages = ctx.site?.pages ?? [];
+      allRendered = pages.length > 0 && pages.every((page) => page.rendered === true);
+      for (const page of pages) {
         const doc = page.parsed?.document;
         // A browser-rendered page has its copy in the script that rendered it, by necessity.
         sentencesByPage.set(page.url, doc && page.rendered !== true ? extractContentSentences(doc) : []);
       }
+    }
+    if (allRendered) {
+      return {
+        checks: [
+          {
+            name: "content-in-js-bundle",
+            status: "skipped",
+            message:
+              "Page content in JavaScript was not checked: every page was browser-rendered, and a rendered page's copy is in the script that rendered it by design. Audit with rendering off (--http) to check it",
+          },
+        ],
+      };
     }
     if (!judged) {
       return {
