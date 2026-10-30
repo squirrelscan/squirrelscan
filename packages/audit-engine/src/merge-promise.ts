@@ -405,6 +405,13 @@ export interface CloudSmartAuditsResult {
      * report JSON feeds the publish idempotency hash and the golden fixtures.
      */
     unrenderedFindings?: number;
+    /**
+     * (#1031) Pages this run crawled that still carry findings from an earlier run.
+     * Such a page was re-evaluated, so a carried finding on it means the rule gave no verdict
+     * there (skipped, clipped) rather than a fix: the symptom of a stuck carry. OMITTED when
+     * zero so a report without any is byte-identical to before.
+     */
+    pagesWithStaleCarry?: number;
   };
   /**
    * `${normalizedUrl}|${ruleId}|${checkName}` → lastSeenAt for tagging report
@@ -1156,6 +1163,15 @@ export async function runCloudSmartAudits(
     ...(carriedSource ? { carriedSource } : {}),
   });
 
+  // (#1031) Carried findings on pages this run crawled: those pages were re-evaluated.
+  const staleCarryPages = new Set<string>();
+  for (const f of unionCarried) {
+    if (crawledUrls.has(f.normalizedUrl) || (resolution?.crawledUrls.has(f.normalizedUrl) ?? false)) {
+      staleCarryPages.add(f.normalizedUrl);
+    }
+  }
+  const pagesWithStaleCarry = staleCarryPages.size;
+
   let reportTotals: CloudSmartAuditsResult["reportTotals"];
   let shownLastSeen = carriedLastSeen;
   if (checkTallies && resolution) {
@@ -1195,6 +1211,7 @@ export async function runCloudSmartAudits(
       knownPages: knownPageCount(session.activePageCount, auditedPages, input.unfetchedPages),
       carriedFindings: carriedCount - unrenderedCount,
       ...(unrenderedCount > 0 ? { unrenderedFindings: unrenderedCount } : {}),
+      ...(pagesWithStaleCarry > 0 ? { pagesWithStaleCarry } : {}),
     },
     carriedLastSeen: shownLastSeen,
     persistedFindings,

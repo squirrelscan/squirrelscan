@@ -796,6 +796,11 @@ export interface AuditReport {
      * Optional: reports published before #1652 omit it.
      */
     unrenderedFindings?: number;
+    /**
+     * (#1031) Pages this run crawled that still carry findings from an earlier run (the rule gave
+     * no verdict there). Omitted when none.
+     */
+    pagesWithStaleCarry?: number;
   };
   /**
    * Scan scope disclosure (#1180): where the audit ran and how much of the site

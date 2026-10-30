@@ -71,6 +71,10 @@ export function coverageLine(report: AuditReport): string | null {
       `${unrendered} finding${unrendered === 1 ? "" : "s"} on pages not yet rendered`
     );
   }
+  const stale = c.pagesWithStaleCarry ?? 0;
+  if (Number.isSafeInteger(stale) && stale > 0) {
+    notes.push(`${stale} re-crawled page${stale === 1 ? "" : "s"} still carry${stale === 1 ? "s" : ""} earlier findings`);
+  }
   const suffix = notes.length > 0 ? ` (${notes.join("; ")})` : "";
   return `Coverage: audited ${c.auditedPages} of ${c.knownPages} known page${c.knownPages === 1 ? "" : "s"}${suffix}.`;
 }

@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **Smart audits resolve old findings when a re-crawled page's rule now answers `info`.** A rule that used to fail a page (50 unlabeled form fields) and now reports `No form inputs found`, or reports only a different check of the same rule, left the old rows open as carried findings run after run, with the coverage line showing nothing carried. An `info` result now counts as the rule's verdict for the page, and a re-crawled page the rule evaluated is clean for the rule's other checks too, so their earlier findings resolve. A check explicitly skipped on the page still carries. Coverage gains `pagesWithStaleCarry` (re-crawled pages that still carry earlier findings), shown on the coverage line when above zero. See [Output](https://docs.squirrelscan.com/configuration/output). (#1031)
+
 ## v0.0.144 (2026-10-30)
 
 `squirrel audit --max-duration` stops at a wall-clock budget and writes a partial report instead of running on, `--include-pages` adds every crawled page with its status and rule count to the JSON report, and info checks now appear in the JSON and LLM reports (`--include-info`). The local technology scan reads stylesheet URLs and knows 24 more stacks, query-string copies of a page are counted with their canonical page, rules see controls inside declarative shadow roots, and a successful but empty page is audited and scored. A rule that throws is reported once as not evaluated, a rule that runs past its time budget is listed as skipped, and the docs now keep `--offline` and `--passive` apart. Thanks to William for the empty-page fix (#1314, #1330).
