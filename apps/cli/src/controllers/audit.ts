@@ -33,6 +33,10 @@ import { offlineAuditSettings } from "@squirrelscan/core-contracts/audit-levels"
 import { computeCost } from "@squirrelscan/core-contracts/credits";
 import { PLANS } from "@squirrelscan/core-contracts/plans";
 import {
+  redactUrl,
+  redactUrlsInText,
+} from "@squirrelscan/core-contracts/seed-redirect";
+import {
   createConditionalRenderDocumentFetcher,
   createFetchDocumentFetcher,
 } from "@squirrelscan/fetchers";
@@ -951,8 +955,11 @@ export async function runAudit(
       return err(
         commandError(
           ErrorCodes.UNREACHABLE,
-          `Cannot reach ${url}: ${reachability.error}`,
-          { url, reason: reachability.error ?? "unknown error" }
+          `Cannot reach ${redactUrl(url)}: ${redactUrlsInText(reachability.error ?? "unknown error")}`,
+          {
+            url: redactUrl(url),
+            reason: redactUrlsInText(reachability.error ?? "unknown error"),
+          }
         )
       );
     }

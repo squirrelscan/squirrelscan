@@ -1,5 +1,9 @@
 // Crawl controller - runs crawl only without analysis
 
+import {
+  redactUrl,
+  redactUrlsInText,
+} from "@squirrelscan/core-contracts/seed-redirect";
 import { customUserAgent } from "@squirrelscan/utils/headers";
 import { Effect, Stream } from "effect";
 
@@ -221,7 +225,7 @@ export async function runCrawl(
       return err(
         commandError(
           ErrorCodes.UNREACHABLE,
-          `Cannot reach ${url}: ${reachability.error}`
+          `Cannot reach ${redactUrl(url)}: ${redactUrlsInText(reachability.error ?? "unknown error")}`
         )
       );
     }

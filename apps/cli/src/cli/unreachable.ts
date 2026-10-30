@@ -8,7 +8,10 @@ import {
   classifyAuditFailureReasonText,
   type AuditFailureReasonCode,
 } from "@squirrelscan/core-contracts/failure-reason";
-import { redactUrl } from "@squirrelscan/core-contracts/seed-redirect";
+import {
+  redactUrl,
+  redactUrlsInText,
+} from "@squirrelscan/core-contracts/seed-redirect";
 import { writeFileSync } from "node:fs";
 
 export interface UnreachableOutcome {
@@ -32,9 +35,11 @@ function trimTrailingPunctuation(reason: string): string {
 /** The outcome for a start URL the reachability probe could not reach. */
 export function unreachableOutcome(
   url: string,
-  reason: string
+  rawReason: string
 ): UnreachableOutcome {
   const safeUrl = redactUrl(url);
+  // The probe's error text can echo the start URL (userinfo, a query token): redact it here too.
+  const reason = redactUrlsInText(rawReason);
   return {
     status: "unreachable",
     url: safeUrl,

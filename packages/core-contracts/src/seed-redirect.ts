@@ -175,3 +175,36 @@ export function redactUrl(value: string): string {
   }
   return "(unprintable URL)";
 }
+
+/** Characters that end a URL inside error text: whitespace, quotes and closing brackets. */
+const URL_TEXT_END = new Set([
+  " ", "\t", "\r", "\n", '"', "'", "`", "<", ">", ")", "]", "}",
+]);
+
+/**
+ * `text` with every `http://` or `https://` URL in it passed through {@link redactUrl}, so error
+ * text that echoes a start URL (a DNS, TLS or fetch failure) never carries userinfo, a query
+ * token or a fragment into a report, a log or an agent's context. A linear scan with no
+ * backtracking: it finds each scheme, takes the run up to the next separator, drops trailing
+ * sentence punctuation, and redacts that run.
+ */
+export function redactUrlsInText(text: string): string {
+  const lower = text.toLowerCase();
+  let out = "";
+  let at = 0;
+  while (at < text.length) {
+    const http = lower.indexOf("http://", at);
+    const https = lower.indexOf("https://", at);
+    const start =
+      http === -1 ? https : https === -1 ? http : Math.min(http, https);
+    if (start === -1) break;
+    let end = start;
+    while (end < text.length && !URL_TEXT_END.has(text[end]!)) end++;
+    let trimmed = end;
+    while (trimmed > start && ".,;:!?".includes(text[trimmed - 1]!)) trimmed--;
+    out += text.slice(at, start) + redactUrl(text.slice(start, trimmed));
+    out += text.slice(trimmed, end);
+    at = end;
+  }
+  return out + text.slice(at);
+}
