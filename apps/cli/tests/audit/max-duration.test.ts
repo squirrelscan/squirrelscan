@@ -12,10 +12,11 @@ import {
   createDurationBudget,
   maxDurationMarginMs,
   msUntil,
+  raceUntil,
   wasCut,
 } from "@/audit/max-duration";
 import { parseMaxDurationFlag } from "@/cli/commands/audit";
-import { loadReport } from "@/controllers/report";
+import { loadReport, slimMaxDuration } from "@/controllers/report";
 
 describe("margin: max(10% of the budget, 15 s)", () => {
   test.each([
@@ -279,5 +280,71 @@ describe("a saved JSON report keeps the cut", () => {
       if (!loaded.ok) return;
       expect(loaded.data.maxDuration).toBeUndefined();
     }
+  });
+});
+
+describe("the page rules keep a window after the probes (#1327)", () => {
+  test("at least 3 s on the smallest margin, still inside the hard stop", () => {
+    const b = createDurationBudget(10, 0)!;
+    expect(b.marginMs).toBe(15_000);
+    expect(b.pageRulesStopAt - b.probesDoneAt).toBeGreaterThanOrEqual(3_000);
+    expect(b.pageRulesStopAt).toBeLessThan(b.hardStopAt);
+  });
+  test("a large budget keeps the proportional window", () => {
+    const b = createDurationBudget(1000, 0)!;
+    expect(b.pageRulesStopAt).toBe(1_000_000 + Math.round(b.marginMs * 0.4));
+  });
+});
+
+describe("raceUntil", () => {
+  test("no deadline waits for the work", async () => {
+    expect(await raceUntil(Promise.resolve(3), undefined)).toEqual({
+      timedOut: false,
+      value: 3,
+    });
+  });
+  test("work that ends in time returns its value", async () => {
+    expect(await raceUntil(Promise.resolve("ok"), Date.now() + 1000)).toEqual({
+      timedOut: false,
+      value: "ok",
+    });
+  });
+  test("a hung call is abandoned at the deadline and its late failure is swallowed", async () => {
+    const hung = new Promise<number>((_, reject) =>
+      setTimeout(() => reject(new Error("late")), 80)
+    );
+    const started = Date.now();
+    expect(await raceUntil(hung, Date.now() + 20)).toEqual({ timedOut: true });
+    expect(Date.now() - started).toBeLessThan(70);
+    await new Promise((r) => setTimeout(r, 120));
+  });
+});
+
+describe("slimMaxDuration keeps probesSkipped from stored JSON (#1327)", () => {
+  const base = {
+    seconds: 30,
+    unfetchedPages: 0,
+    pagesNotEvaluated: 0,
+    siteChecksCut: false,
+  };
+  test("probe ids pass through, anything else is dropped", () => {
+    expect(
+      slimMaxDuration({
+        ...base,
+        probesSkipped: [
+          "soft-404-confirmation",
+          "../../x y",
+          5,
+          "cloaking-probe",
+        ],
+      })?.probesSkipped
+    ).toEqual(["soft-404-confirmation", "cloaking-probe"]);
+  });
+  test("absent or malformed means none", () => {
+    expect(slimMaxDuration(base)?.probesSkipped).toBeUndefined();
+    expect(
+      slimMaxDuration({ ...base, probesSkipped: "cloaking-probe" })
+        ?.probesSkipped
+    ).toBeUndefined();
   });
 });

@@ -22,6 +22,8 @@ const CHECKS_SHARE = 0.2;
 /** The probes before the page rules (soft-404 re-fetch, cloaking) end here, so a hanging one cannot take the page rules' time. */
 const PROBES_SHARE = 0.3;
 const PAGE_RULES_SHARE = 0.4;
+/** After the probes the page rules get at least this long before no further page starts (the share alone is 1.5 s on a 15 s margin). */
+const MIN_PAGE_RULES_WINDOW_MS = 3_000;
 const HARD_SHARE = 0.6;
 
 export interface DurationBudget {
@@ -74,7 +76,13 @@ export function createDurationBudget(
     crawlStopAt: end,
     checksDoneAt: end + Math.round(marginMs * CHECKS_SHARE),
     probesDoneAt: end + Math.round(marginMs * PROBES_SHARE),
-    pageRulesStopAt: end + Math.round(marginMs * PAGE_RULES_SHARE),
+    pageRulesStopAt: Math.min(
+      Math.max(
+        end + Math.round(marginMs * PAGE_RULES_SHARE),
+        end + Math.round(marginMs * PROBES_SHARE) + MIN_PAGE_RULES_WINDOW_MS
+      ),
+      end + Math.round(marginMs * HARD_SHARE)
+    ),
     hardStopAt: end + Math.round(marginMs * HARD_SHARE),
   };
 }
@@ -108,4 +116,33 @@ export function wasCut(cut: DurationCut): boolean {
     cut.resourceChecksCut === true ||
     cut.probesSkipped.length > 0
   );
+}
+
+/**
+ * Wait for `work` until epoch ms `at`, then stop waiting (#1327): a hung cloud round trip (120 s per request,
+ * with retries) cannot hold the audit past the point the probes and the page rules need. The work is abandoned,
+ * not cancelled, and its late rejection is swallowed. No `at`: waits as before.
+ */
+export async function raceUntil<T>(
+  work: Promise<T>,
+  at: number | undefined,
+  now: number = Date.now()
+): Promise<{ timedOut: false; value: T } | { timedOut: true }> {
+  if (at === undefined) return { timedOut: false, value: await work };
+  work.catch(() => undefined);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const expired = new Promise<{ timedOut: true }>((resolve) => {
+    timer = setTimeout(
+      () => resolve({ timedOut: true }),
+      Math.max(0, at - now)
+    );
+  });
+  try {
+    return await Promise.race([
+      work.then((value) => ({ timedOut: false as const, value })),
+      expired,
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
 }

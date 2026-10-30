@@ -118,6 +118,11 @@ interface Soft404ConfirmBaseOptions {
   perHostDelayMs?: number;
   /** Overall wall-clock budget for the pass; exhausted → remaining unconfirmed. */
   wallBudgetMs?: number;
+  /**
+   * Cancels the pass (a `--max-duration` deadline, #1327): no further re-fetch is dispatched, the one in
+   * flight is aborted, and every candidate left is `unconfirmed`.
+   */
+  signal?: AbortSignal;
   /** Injectable clock (ms epoch) for deterministic budget tests. Default Date.now. */
   now?: () => number;
   /** Injectable delay for deterministic politeness tests. Default setTimeout. */
@@ -147,10 +152,14 @@ function detectionInput(statusCode: number, parsed: ParsedPage) {
   };
 }
 
-function defaultConfirmFetch(timeoutMs: number, egress?: EgressPolicy): ConfirmFetch {
+function defaultConfirmFetch(timeoutMs: number, egress?: EgressPolicy, cancel?: AbortSignal): ConfirmFetch {
   return async (url, userAgent, headers) => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
+    // A cancelled pass (a deadline, #1327) aborts the request in flight too.
+    const onCancel = () => controller.abort();
+    if (cancel?.aborted) controller.abort();
+    else cancel?.addEventListener("abort", onCancel, { once: true });
     try {
       // Build the SAME browser-like request the crawl sent (UA + sec-fetch/sec-ch
       // headers) so a header/UA-varying origin can't diverge between crawl and
@@ -183,6 +192,7 @@ function defaultConfirmFetch(timeoutMs: number, egress?: EgressPolicy): ConfirmF
       return { status: 0, body: "", error: e instanceof Error ? e.message : String(e) };
     } finally {
       clearTimeout(timer);
+      cancel?.removeEventListener("abort", onCancel);
       // Closes the connection (#766): a capped read stops reading, but Bun
       // keeps downloading the body until the signal aborts.
       controller.abort();
@@ -235,6 +245,12 @@ async function mapPool<T, R>(items: T[], limit: number, fn: (item: T) => Promise
   return out;
 }
 
+/** Whether a confirmation pass has anything to fetch: a candidate that is not rendered, with the pass enabled. */
+export function hasSoft404FetchWork(pages: Soft404ConfirmPage[], enabled: boolean | undefined): boolean {
+  if (enabled === false) return false;
+  return pages.some((p) => !p.rendered && detectSoft404(detectionInput(p.statusCode, p.parsed)).isSoft404);
+}
+
 /**
  * After a confirmation pass was cut short (a deadline, #1327): mark every
  * candidate that has no verdict yet `unconfirmed`, so it still warns and is never
@@ -260,7 +276,7 @@ export function markUnresolvedSoft404(pages: Soft404ConfirmPage[]): void {
 export async function confirmSoft404Candidates(
   pages: Soft404ConfirmPage[],
   opts: Soft404ConfirmOptions,
-  fetchImpl: ConfirmFetch = defaultConfirmFetch(opts.timeoutMs ?? 15_000, opts.egress),
+  fetchImpl: ConfirmFetch = defaultConfirmFetch(opts.timeoutMs ?? 15_000, opts.egress, opts.signal),
 ): Promise<Soft404ConfirmSummary> {
   const summary: Soft404ConfirmSummary = {
     candidates: 0,
@@ -325,7 +341,7 @@ export async function confirmSoft404Candidates(
     for (let i = 0; i < group.length; i++) {
       const c = group[i]!;
       // Wall-budget exhausted → don't fetch; annotate unconfirmed (never dropped).
-      if (now() - start >= wallBudgetMs) {
+      if (opts.signal?.aborted || now() - start >= wallBudgetMs) {
         record(c, "unconfirmed");
         continue;
       }
