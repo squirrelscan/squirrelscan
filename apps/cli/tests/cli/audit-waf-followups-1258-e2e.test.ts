@@ -11,12 +11,14 @@ const entry = join(import.meta.dir, "../../src/cli.ts");
 const scratch = mkdtempSync(join(tmpdir(), "squirrel-waf-1258-"));
 
 /** `/` redirects to `/challenge`, a Cloudflare challenge; the sitemap lists `/` again. */
+const redirectHits = new Set<string>();
 const redirectSite = Bun.serve({
   port: 0,
   hostname: "127.0.0.1",
   fetch(req) {
     const url = new URL(req.url);
-    if (url.pathname === "/") {
+    redirectHits.add(url.pathname);
+    if (url.pathname === "/" || url.pathname === "/other") {
       return new Response(null, {
         status: 302,
         headers: { location: "/challenge" },
@@ -38,7 +40,7 @@ const redirectSite = Bun.serve({
     }
     if (url.pathname === "/sitemap.xml") {
       return new Response(
-        `<?xml version="1.0"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>${url.origin}/</loc></url></urlset>`,
+        `<?xml version="1.0"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>${url.origin}/</loc></url><url><loc>${url.origin}/other</loc></url></urlset>`,
         { headers: { "content-type": "application/xml" } }
       );
     }
@@ -154,6 +156,17 @@ describe("a seed that redirects to a challenge", () => {
     expect(report.wafBlocked.total).toBe(1);
     expect(report.wafBlocked.pages).toEqual([]);
   }, 120_000);
+
+  test("another page that redirects to the seed's challenge is the same blocked page, not a second one", async () => {
+    const r = await audit(redirectSite.port, "-f", "json", "--max-depth", "2");
+    const report = JSON.parse(r.out) as { wafBlocked: Blocked };
+    // `/other` is listed in the sitemap and redirects to the seed's destination.
+    expect(redirectHits.has("/other")).toBe(true);
+    expect(report.wafBlocked.total).toBe(1);
+    expect(
+      report.wafBlocked.pages.map((p) => new URL(p.url).pathname)
+    ).not.toContain("/other");
+  }, 120_000);
 });
 
 describe("a refusal-shaped page with no provider marker", () => {
@@ -201,7 +214,7 @@ describe("a refusal-shaped page with no provider marker", () => {
     const r = await audit(suspectSite.port);
     expect(r.code).toBe(0);
     expect(r.out).toContain(
-      "Warning: 2 pages look like a refusal from Cloudflare but carry no block marker"
+      "Note: 2 pages look like a refusal from Cloudflare but carry no block marker"
     );
     expect(r.out).toContain("/denied: Cloudflare, HTTP 406");
     expect(r.out).toContain("/forbidden: Cloudflare, HTTP 403");

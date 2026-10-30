@@ -213,7 +213,9 @@ export function generateConsoleReport(
   if (suspectLines.length > 0) {
     const [summary, ...listed] = suspectLines;
     log("");
-    log(fmt.yellow(`Warning: ${summary!}`));
+    // A note, not a warning: a site's own short 403 behind a CDN reads the same, so this
+    // is a pointer to check, and the proof of a provider block is the marker, not the headers.
+    log(`Note: ${summary!}`);
     for (const line of listed) log(`  ${fmt.dim(line)}`);
   }
 
