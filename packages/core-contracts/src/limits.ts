@@ -473,6 +473,17 @@ export const CUSTOM_CRAWL_CONFIG = {
   maxDepth: 10,
 } as const;
 
+// ── JSON report: per-page list (#1260) ─────────────────────────
+// `squirrel audit --include-pages -f json` lists every crawled page with its status and
+// how many rules reported on it. A list over this many entries is cut and marked
+// (`pagesTruncated`), so a report stays bounded however large the crawl.
+export const JSON_REPORT_PAGES = {
+  maxEntries: 2_000,
+} as const;
+
+/** The JSON report's schema version (`meta.schemaVersion`): major.minor. 1.1 added the opt-in `pages` list (#1260). */
+export const JSON_REPORT_SCHEMA_VERSION = "1.1";
+
 // ── LLM Report Output ──────────────────────────────────────────
 export const LLM_REPORT = {
   maxAffectedPages: 5,

@@ -422,6 +422,8 @@ export interface PageAudit {
   h1Count?: number;
   h1Text?: string[];
   checks: CheckResult[];
+  /** Distinct rules that reported on this page (#1260); set when the report is read from the store. */
+  ruleCount?: number;
   // New fields for expanded audit
   urlAnalysis?: UrlAnalysis;
   headingHierarchy?: HeadingHierarchy;

@@ -237,6 +237,11 @@ export const report = defineCommand({
       description:
         "Also list the rules that passed, with how many pages each passed on",
     },
+    includePages: {
+      type: "boolean",
+      description:
+        "JSON only: list every crawled page with its HTTP status and how many rules reported on it (capped at 2000 entries, marked with pagesTruncated)",
+    },
   },
   async run({ args }) {
     // Loud warning for an unreadable/corrupt session (EACCES, corrupt JSON,
@@ -565,6 +570,18 @@ export const report = defineCommand({
       );
     }
     const includePassed = (args.includePassed ?? false) && !args.input;
+    // #1260: the pages list is JSON-only and is not read back from a JSON file.
+    if (args.includePages && formatResult.data !== "json") {
+      console.error(
+        `--include-pages only applies to --format json; the ${formatResult.data} report has no pages list`
+      );
+    }
+    if (args.includePages && args.input) {
+      console.error(
+        "--include-pages lists no pages for a report read with --input: the page list is not read back from a JSON file"
+      );
+    }
+    const includePages = (args.includePages ?? false) && !args.input;
     if (formatResult.data === "console") {
       generateConsoleReport(reportData, {
         summaryOnly: args.summary,
@@ -574,7 +591,7 @@ export const report = defineCommand({
       generateTextReport(reportData, args.output, undefined, includePassed);
     } else if (formatResult.data === "json") {
       // stdout by default, file if -o provided
-      generateJsonReport(reportData, args.output, includePassed);
+      generateJsonReport(reportData, args.output, includePassed, includePages);
     } else if (formatResult.data === "markdown") {
       // stdout by default, file if -o provided
       generateMarkdownReport(reportData, args.output, undefined, includePassed);
