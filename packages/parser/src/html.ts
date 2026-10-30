@@ -526,6 +526,11 @@ export function parsePage(html: string, url: string, options?: ParsePageOptions)
 
   return {
     document: doc,
+    // FIRST key after `document` (which is never stored), so the stored JSON starts with it and the
+    // crawl cache reads it as a prefix, never from a nested property. Stamped even when the classifier
+    // returned nothing, so the cache can tell "classified by this version, no answer" from "never
+    // classified" (pub#841).
+    ...(options?.classify?.version ? { classifierVersion: options.classify.version } : {}),
     meta: extractMeta(doc),
     h1: extractH1(doc),
     og: extractOG(doc),
@@ -551,9 +556,6 @@ export function parsePage(html: string, url: string, options?: ParsePageOptions)
 
     // Present only when the classifier ran, so a parse without one is byte-identical to before.
     ...(classified ? { classification: classified.classification } : {}),
-    // Stamped even when the classifier returned nothing, so the crawl cache can tell "classified by
-    // this version, no answer" from "never classified" (pub#841).
-    ...(options?.classify?.version ? { classifierVersion: options.classify.version } : {}),
 
     // Legacy (deprecated)
     schema,
