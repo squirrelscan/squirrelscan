@@ -91,8 +91,23 @@ describe("the home page lists its stylesheet URLs beside its scripts", () => {
     );
     const urls = home?.scripts?.map((s) => s.url) ?? [];
     for (let i = 0; i < 60; i++) expect(urls).toContain(`/s${i}.js`);
-    expect(urls.filter((u) => u.endsWith(".css"))).toHaveLength(20);
+    expect(urls.filter((u) => u.endsWith(".css"))).toHaveLength(40);
     expect(urls.slice(0, 60).every((u) => u.endsWith(".js"))).toBe(true);
+  });
+
+  test("WooCommerce CSS listed last among 70 stylesheets is still detected (platform paths first)", () => {
+    const links = Array.from(
+      { length: 70 },
+      (_, i) => `<link rel="stylesheet" href="/builder/c${i}.css">`,
+    ).join("");
+    const woo = `<link rel="stylesheet" href="/wp-content/plugins/woocommerce/assets/css/woocommerce.css">`;
+    const html = `<html><head>${links}${woo}<script src="/app.js"></script></head></html>`;
+    const inputs = buildTechInputs([{ url: "https://example.com/", headers: {}, html }], []);
+    expect(detectReportTechnologiesMulti(inputs).items.map((t) => t.id)).toContain("woocommerce");
+  });
+
+  test("a glued self-closing slash on an unquoted rel still lists the href", () => {
+    expect(extractLinkAssetHrefs(`<link href=/a.css rel=stylesheet/>`)).toEqual(["/a.css"]);
   });
 
   test("a stylesheet named only in prose or a code sample is not listed", () => {

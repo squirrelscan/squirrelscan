@@ -23,7 +23,7 @@ const BLOG = page(
   "",
   `<p>We compared Borlabs Cookie, Complianz, Real Cookie Banner, Cookie Notice, consentmanager, Klaro, Axeptio, CookieFirst,
 Cookie Information, Cookie-Script, Cloudflare Zaraz, Matomo Tag Manager, Piwik PRO, Commanders Act, Lightspeed, Contao,
-SilverStripe, Plone, Grav, Odoo, Liferay, Pimcore, Azure Front Door and Google Cloud CDN. Hosts: cdn.consentmanager.net,
+SilverStripe, Plone, Grav, Odoo, Liferay, Pimcore, and Azure Front Door. Hosts: cdn.consentmanager.net,
 static.axept.io, consent.cookiefirst.com, cdn.cookie-script.com, cdn.tagcommander.com, cdn.webshopapp.com, /cdn-cgi/zaraz/.</p>
 <pre>&lt;script src="https://consent.cookiefirst.com/banner.js"&gt;&lt;/script&gt;
 &lt;script&gt;window.klaroConfig = {}; window.axeptioSettings = {}; var borlabsCookieConfig = {};&lt;/script&gt;

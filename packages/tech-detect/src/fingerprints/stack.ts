@@ -299,6 +299,7 @@ export const STACK_FINGERPRINTS: TechFingerprint[] = [
     category: "cdn",
     website: "https://azure.microsoft.com/products/frontdoor",
     icon: "azure-front-door",
+    // x-azure-ref is slightly broader than Front Door: other Azure edge services can send it too.
     detectors: [{ type: "header", name: "x-azure-ref", pattern: /.+/ }],
     confidence: "high",
   },
