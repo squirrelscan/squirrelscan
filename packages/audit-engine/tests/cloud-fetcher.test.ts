@@ -88,6 +88,26 @@ describe("render runId threading (#1134)", () => {
     expect(captured[0]?.runId).toBeUndefined();
   });
 
+  test("the render submit carries no Accept-Language and no request headers: a browser render uses its own language (#1355)", async () => {
+    // A plain fetch sends no default Accept-Language (#1355) and passes a configured one through; the cloud
+    // render request has no header field at all, so neither case can put one on the browser. The render still works.
+    const captured: RenderRequest[] = [];
+    const fetcher = createCloudDocumentFetcher(recordingClient(captured), fastOpts);
+    const plain = await fetcher.fetch({ url: "https://example.com/" } as FetchRequest);
+    const configured = await fetcher.fetch({
+      url: "https://example.com/",
+      headers: { "accept-language": "de-CH", "user-agent": "x" },
+    } as unknown as FetchRequest);
+    expect(plain.status).toBe(200);
+    expect(configured.status).toBe(200);
+    expect(captured).toHaveLength(2);
+    for (const request of captured) {
+      expect(Object.keys(request).sort()).toEqual(["timeoutMs", "urls"]);
+      expect(JSON.stringify(request).toLowerCase()).not.toContain("accept-language");
+      expect(JSON.stringify(request)).not.toContain("de-CH");
+    }
+  });
+
   test("waits for an async resolver, so a render that beats register is still attributed (#2290)", async () => {
     // Pricing v11: an untagged render is a standalone charge AND its page is
     // billed again at settlement. The CLI's resolver awaits register instead.
