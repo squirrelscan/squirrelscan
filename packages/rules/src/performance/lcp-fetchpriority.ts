@@ -39,6 +39,7 @@ export const lcpFetchpriorityRule: Rule = {
         name: "lcp-fetchpriority",
         status: "info",
         message: "No eager hero image candidate found",
+        details: { inconclusive: true },
       });
       return { checks };
     }

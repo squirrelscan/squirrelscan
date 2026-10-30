@@ -144,6 +144,7 @@ export const ogImageSizeRule: Rule = {
           message: "og:image dimensions not specified",
           value: "Add og:image:width and og:image:height",
           items: imageItem,
+          details: { inconclusive: true },
         });
       }
 

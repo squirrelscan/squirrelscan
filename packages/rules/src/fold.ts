@@ -206,7 +206,10 @@ export function foldGroupKey(check: CheckResult): string {
   const provenance =
     check.provenance === "carried" || check.provenance === "unrendered" ? check.provenance : "";
   const foldKey = typeof check.details?.foldKey === "string" ? check.details.foldKey : "";
-  return `${check.name}\u0000${check.status}\u0000${provenance}\u0000${foldKey}`;
+  // (#1031) An inconclusive `info` ("could not judge") never folds with a plain one, so the marker
+  // survives on the aggregate and resolution still reads it.
+  const inconclusive = check.details?.inconclusive === true ? "\u0000inconclusive" : "";
+  return `${check.name}\u0000${check.status}\u0000${provenance}\u0000${foldKey}${inconclusive}`;
 }
 
 /** Default publish sample: the primary caps applied on every publish (#1167). */
@@ -1080,6 +1083,8 @@ function foldGroup(group: CheckResult[], limits: FoldLimits): CheckResult {
   const details: Record<string, unknown> = { aggregated: true, occurrences };
   // Every constituent shares it: it is part of the group key.
   if (typeof first.details?.foldKey === "string") details.foldKey = first.details.foldKey;
+  // (#1031) Grouped by the marker (see foldGroupKey), so the first check speaks for the group.
+  if (first.details?.inconclusive === true) details.inconclusive = true;
   // pub#846: a check that only reads one region (a footer copyright year) keeps naming it.
   const region = first.details?.region;
   if (typeof region === "string" && group.every((c) => c.details?.region === region)) {
