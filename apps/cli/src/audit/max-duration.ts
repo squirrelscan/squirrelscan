@@ -89,8 +89,15 @@ export interface DurationCut {
   pagesNotEvaluated: number;
   /** The rules phase hit the hard stop; site rules did not finish. */
   rulesCut: boolean;
+  /** The resource checks ran out of their time budget. */
+  resourceChecksCut?: boolean;
 }
 
 export function wasCut(cut: DurationCut): boolean {
-  return cut.unfetched > 0 || cut.pagesNotEvaluated > 0 || cut.rulesCut;
+  return (
+    cut.unfetched > 0 ||
+    cut.pagesNotEvaluated > 0 ||
+    cut.rulesCut ||
+    cut.resourceChecksCut === true
+  );
 }

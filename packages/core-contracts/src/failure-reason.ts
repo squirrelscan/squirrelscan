@@ -551,6 +551,7 @@ export function maxDurationReason(cut: {
   unfetchedPages: number;
   pagesNotEvaluated: number;
   siteChecksCut: boolean;
+  resourceChecksCut?: boolean;
 }): string {
   const parts: string[] = [];
   if (cut.unfetchedPages > 0) {
@@ -564,5 +565,6 @@ export function maxDurationReason(cut: {
     );
   }
   if (cut.siteChecksCut) parts.push("site-wide checks did not finish");
+  if (cut.resourceChecksCut) parts.push("resource checks were cut short");
   return `Stopped at the ${cut.seconds} s time limit (--max-duration)${parts.length > 0 ? `: ${parts.join(", ")}` : ""}`;
 }

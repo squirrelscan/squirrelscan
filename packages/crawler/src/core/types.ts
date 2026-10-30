@@ -364,7 +364,8 @@ export type CrawlerErrorCode =
 
 export interface Crawler {
   /** Detect and follow both HTTP and client-side redirects, returning the final URL */
-  detectRedirects(targetUrl: string): Effect.Effect<string, never, never>;
+  /** `budget`: no hop starts, and none waits longer than what is left, past its deadline (#1271). */
+  detectRedirects(targetUrl: string, budget?: { readonly deadlineAt: number }): Effect.Effect<string, never, never>;
 
   /** Start a new crawl from the given base URL (runs synchronously until complete) */
   start(
