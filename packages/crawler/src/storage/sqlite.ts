@@ -5011,6 +5011,32 @@ export class SQLiteStorage implements CrawlStorage {
    * Called from retention and `self disk --prune`, not from `init()`.
    * A database too old to have the marker table has nothing to repair.
    */
+  /**
+   * The statements of {@link repairSupersededPagesOnce}, kept as data so a test can ask SQLite for their query
+   * plans (#289): a finished project pays the `probe` and nothing else, and a chunk reads the next `chunk` rows
+   * by rowid and looks each one's newer copy up by url, never scanning the pages table or the retired crawls.
+   */
+  static readonly SUPERSEDED_REPAIR_SQL = {
+    probe: "SELECT 1 FROM maintenance_marks WHERE name = 'superseded-pages'",
+    cursor: "SELECT done_at AS at FROM maintenance_marks WHERE name = 'superseded-pages-cursor'",
+    chunkUpper: `SELECT MAX(rid) AS upper FROM (
+                   SELECT p.rowid AS rid FROM pages p
+                   WHERE p.rowid > ?
+                     AND p.crawl_id IN (SELECT id FROM crawls WHERE retired_at IS NOT NULL)
+                   ORDER BY p.rowid LIMIT ?
+                 )`,
+    chunkDelete: `DELETE FROM pages WHERE rowid IN (
+                   SELECT p.rowid FROM pages p
+                   WHERE p.rowid > ? AND p.rowid <= ?
+                     AND p.crawl_id IN (SELECT id FROM crawls WHERE retired_at IS NOT NULL)
+                     AND EXISTS (
+                       SELECT 1 FROM pages newer
+                       WHERE newer.normalized_url = p.normalized_url
+                         AND (newer.fetched_at, newer.rowid) > (p.fetched_at, p.rowid)
+                     )
+                 )`,
+  } as const;
+
   repairSupersededPagesOnce(
     options: { chunk?: number; maxChunks?: number; budgetMs?: number } = {}
   ): Effect.Effect<number, StorageError, never> {
@@ -5021,7 +5047,7 @@ export class SQLiteStorage implements CrawlStorage {
         const maxChunks = options.maxChunks ?? Number.POSITIVE_INFINITY;
         const budgetMs = options.budgetMs ?? 2000;
         try {
-          if (db.prepare("SELECT 1 FROM maintenance_marks WHERE name = 'superseded-pages'").get()) {
+          if (db.prepare(SQLiteStorage.SUPERSEDED_REPAIR_SQL.probe).get()) {
             return 0;
           }
         } catch (e) {
@@ -5033,7 +5059,7 @@ export class SQLiteStorage implements CrawlStorage {
         // (and kept, an only copy) is never examined again, however many chunks
         // the project needs. Stored beside the marker.
         const saved = db
-          .prepare("SELECT done_at AS at FROM maintenance_marks WHERE name = 'superseded-pages-cursor'")
+          .prepare(SQLiteStorage.SUPERSEDED_REPAIR_SQL.cursor)
           .get() as { at: number } | undefined;
         let cursor = saved?.at ?? 0;
         let total = 0;
@@ -5045,30 +5071,12 @@ export class SQLiteStorage implements CrawlStorage {
             // The next `chunk` rows of retired crawls after the cursor, in rowid
             // order, and the highest rowid among them.
             const row = db
-              .prepare(
-                `SELECT MAX(rid) AS upper FROM (
-                   SELECT p.rowid AS rid FROM pages p
-                   WHERE p.rowid > ?
-                     AND p.crawl_id IN (SELECT id FROM crawls WHERE retired_at IS NOT NULL)
-                   ORDER BY p.rowid LIMIT ?
-                 )`
-              )
+              .prepare(SQLiteStorage.SUPERSEDED_REPAIR_SQL.chunkUpper)
               .get(cursor, chunk) as { upper: number | null };
             upper = row.upper;
             if (upper === null) return;
             const result = db
-              .prepare(
-                `DELETE FROM pages WHERE rowid IN (
-                   SELECT p.rowid FROM pages p
-                   WHERE p.rowid > ? AND p.rowid <= ?
-                     AND p.crawl_id IN (SELECT id FROM crawls WHERE retired_at IS NOT NULL)
-                     AND EXISTS (
-                       SELECT 1 FROM pages newer
-                       WHERE newer.normalized_url = p.normalized_url
-                         AND (newer.fetched_at, newer.rowid) > (p.fetched_at, p.rowid)
-                     )
-                 )`
-              )
+              .prepare(SQLiteStorage.SUPERSEDED_REPAIR_SQL.chunkDelete)
               .run(cursor, upper);
             deleted = Number(result.changes ?? 0);
             db.prepare(
