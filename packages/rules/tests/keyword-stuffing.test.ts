@@ -459,7 +459,7 @@ describe("content/keyword-stuffing: German function words, menu chrome, card mic
   test("a deduction is clamped, not skipped, and large real grids are still deducted", () => {
     const en = Array.from({ length: 40 }, (_, n) => `<div><h3>Item ${n}</h3><span>Average rating 4.${n % 10} of 5 stars</span><span>from ${n + 1},90 EUR in instalments</span></div>`).join("");
     const outEn = flagged(page("en", `<main><div class="grid">${en}</div><p>${unique(700)}</p></main>`));
-    for (const w of ["average", "rating", "stars", "instalments"]) expect(outEn).not.toContain(w);
+    for (const w of ["average", "rating", "stars", "instalments", "eur"]) expect(outEn).not.toContain(w);
     const de = Array.from({ length: 60 }, (_, n) => `<div><h3>Nr ${n}</h3><span>Preis ab ${n + 1},90 \u20ac inkl. MwSt</span></div>`).join("");
     expect(flagged(page("de", `<main><div class="grid">${de}</div><p>${unique(500)}</p></main>`))).not.toContain("preis");
     const rating = Array.from({ length: 80 }, (_, n) => `<div><h3>Item ${n}</h3><span>Average rating 4.${n % 10} of 5 stars</span></div>`).join("");
