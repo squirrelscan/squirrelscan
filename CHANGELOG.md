@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **`squirrel report --input` keeps a saved report's skipped checks.** A JSON report lists the checks a rule could not finish in `skippedChecks`, with `summary.skipped`, but loading the file dropped them, so re-rendering or re-exporting it read as a clean audit on those pages. They are now read back, validated (the file is untrusted), and kept out of `issues`. (#518)
+
 ## v0.0.146 (2026-10-31)
 
 Supabase is now detected in more real bundles, including a minified supabase-js build, and `security/cookie-flags` no longer warns about Lovable's `__dpl` routing cookie, a cookie the platform sets and a site cannot change.
