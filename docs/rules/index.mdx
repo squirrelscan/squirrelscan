@@ -122,7 +122,13 @@ Same-domain scripts, stylesheets and images that appear only inside `<noscript>`
 
 ## Content inside shadow roots
 
-A web component can render its controls inside a declarative shadow root, written as `<template shadowrootmode="open">` (or `"closed"`) inside its host element. A browser attaches that content to the host and renders it. squirrel reads it the same way: before the rules run, the content of such a template is placed where the template was, so every DOM rule (button names, links, images, headings, form fields) sees the buttons and links inside the root as it sees any other. As in a browser, only the first shadow template of a host counts, an element that cannot host a shadow root (a `table`, for instance) keeps its template inert, and a plain `<template>` with no `shadowrootmode` is never checked: its content is not rendered. A shadow root created by JavaScript after load, with `attachShadow`, exists only in a [browser-rendered](/guides/browser-rendering) audit and is read from the rendered page.
+A web component can render its controls inside a declarative shadow root, written as `<template shadowrootmode="open">` (or `"closed"`) inside its host element. A browser attaches that content to the host and renders it. squirrel reads it the same way: before the rules run, the content of such a template is placed where the template was, so every DOM rule (button names, links, images, headings, form fields) sees the buttons and links inside the root as it sees any other.
+
+- As in a browser, only the first shadow template of a host counts, an element that cannot host a shadow root (a `table`, an `li`) keeps its template inert, and a plain `<template>` with no `shadowrootmode` is never checked: its content is not rendered.
+- **Ids stay scoped to their root.** The same `id` in three copies of a component is not a duplicate, and a `<label for>` or `aria-labelledby` in one root does not point at an element of another. Inlining renames the ids of each root with a suffix (`q__sr2`) and the references to them from inside that root, so a finding about such an element may show the suffixed id.
+- **Slots.** A `<slot>` shows the host's own children assigned to it instead of its fallback content, so the fallback is not checked where the host supplies content for that slot, and is checked where it does not.
+- **Bounds.** At most 5,000 shadow roots are inlined per page, nested up to 16 levels deep; templates that are skipped (inert, on a host that cannot hold a root) do not count against the 5,000. A page past either bound keeps the rest inert.
+- A shadow root created by JavaScript after load, with `attachShadow`, exists only in a [browser-rendered](/guides/browser-rendering) audit and is read from the rendered page.
 
 ## Pages kept out of search
 
