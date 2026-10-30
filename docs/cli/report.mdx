@@ -35,6 +35,7 @@ squirrel report [id] [options]
 | `--visibility` | | Visibility: `public`, `unlisted`, `private` | `public` |
 | `--summary` | | Print only the score, category breakdown, and issue counts — no per-issue detail. Console format only | `false` |
 | `--include-passed` | | Also list the rules that passed, with how many pages each passed on. See [List what passed](#list-what-passed) | `false` |
+| `--include-info` | | Also list info checks (notes that are not findings) in the `llm` format. The `json` format always has them under `infoChecks`. See [Info checks](/configuration/output#json) | `false` |
 
 ## Publishing
 

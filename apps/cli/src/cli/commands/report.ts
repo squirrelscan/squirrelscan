@@ -237,6 +237,11 @@ export const report = defineCommand({
       description:
         "Also list the rules that passed, with how many pages each passed on",
     },
+    includeInfo: {
+      type: "boolean",
+      description:
+        "Also list info checks (notes that are not findings) in the llm format. The JSON report always has them",
+    },
   },
   async run({ args }) {
     // Loud warning for an unreadable/corrupt session (EACCES, corrupt JSON,
@@ -565,6 +570,7 @@ export const report = defineCommand({
       );
     }
     const includePassed = (args.includePassed ?? false) && !args.input;
+    const includeInfo = args.includeInfo ?? false;
     if (formatResult.data === "console") {
       generateConsoleReport(reportData, {
         summaryOnly: args.summary,
@@ -583,7 +589,7 @@ export const report = defineCommand({
       generateXmlReport(reportData, args.output, undefined, includePassed);
     } else if (formatResult.data === "llm") {
       // stdout by default, file if -o provided
-      generateLlmReport(reportData, args.output, includePassed);
+      generateLlmReport(reportData, args.output, includePassed, includeInfo);
     } else if (formatResult.data === "html") {
       // file by default - HTML needs a browser
       const hostname = new URL(reportData.baseUrl).hostname;

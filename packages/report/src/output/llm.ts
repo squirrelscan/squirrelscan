@@ -87,6 +87,12 @@ export interface LlmRenderOptions {
   version?: string;
   /** List the rules that passed after the issues (`--include-passed`). */
   includePassed?: boolean;
+  /**
+   * Add the `<info-checks>` block (`--include-info`, #669). Off by default: the
+   * LLM report is read against a token budget, and most info checks are "nothing to
+   * check" notes. The JSON report always has them.
+   */
+  includeInfo?: boolean;
 }
 
 /** Pages named per info check in the LLM output; the true count is in `pages`. */
@@ -788,9 +794,10 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
     lines.push("</not-applicable>");
   }
 
-  // Info checks (#669): notes a rule recorded that are neither findings nor skips.
-  // They never change the score. A few pages each, with the true count.
-  const infoChecks = collectInfoChecks(report.ruleResults);
+  // Info checks (#669), opt-in with `includeInfo`: notes a rule recorded that are
+  // neither findings nor skips. They never change the score. A few pages each,
+  // with the true count.
+  const infoChecks = options?.includeInfo ? collectInfoChecks(report.ruleResults) : [];
   if (infoChecks.length > 0) {
     lines.push(`<info-checks count="${infoChecks.length}">`);
     for (const info of infoChecks.slice(0, INFO_CHECKS_LISTED)) {

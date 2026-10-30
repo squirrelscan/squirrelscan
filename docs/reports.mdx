@@ -478,7 +478,7 @@ squirrel report -f llm | claude "analyze this audit and prioritize fixes"
 </audit>
 ```
 
-`<info-checks>` holds the notes rules recorded that are neither findings nor skips (status `info`). They never change the score. It lists the first 25 with up to three pages each and a `<more count>` for the rest; the JSON report's `infoChecks` has them all.
+`<info-checks>` holds the notes rules recorded that are neither findings nor skips (status `info`). It is left out unless you pass `--include-info` (the LLM report is read against a token budget, and most info checks are "nothing to check" notes); the JSON report always has them. They never change the score. It lists the first 25 with up to three pages each and a `<more count>` for the rest; the JSON report's `infoChecks` has them all.
 
 **Key Features:**
 - **40-70% smaller** than verbose XML (125KB vs 209KB for 51-page audit)

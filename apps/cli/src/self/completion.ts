@@ -220,7 +220,7 @@ _squirrel_completions() {
           return 0
           ;;
       esac
-      COMPREPLY=( $(compgen -W "--max-pages -m --max-depth --concurrency --per-host --level --coverage -C --format -f --output -o --refresh -r --fresh-ua --store-scripts --no-store-scripts --incremental --no-incremental --resume --verbose -v --debug --trace --project-name -n --publish -p --no-publish --ephemeral --no-ephemeral --visibility --follow-redirect --no-follow-redirect --yes -y --render --render-mode --http --offline --external-links --no-external-links --no-internal-links --no-classifier --fail-on --header -H --header-host --rule-include --rule-exclude --disable-discovery-probes --probe -P --passive --aggressive --probe-budget --pentest --summary --include-passed --help" -- "\${cur}") )
+      COMPREPLY=( $(compgen -W "--max-pages -m --max-depth --concurrency --per-host --level --coverage -C --format -f --output -o --refresh -r --fresh-ua --store-scripts --no-store-scripts --incremental --no-incremental --resume --verbose -v --debug --trace --project-name -n --publish -p --no-publish --ephemeral --no-ephemeral --visibility --follow-redirect --no-follow-redirect --yes -y --render --render-mode --http --offline --external-links --no-external-links --no-internal-links --no-classifier --fail-on --header -H --header-host --rule-include --rule-exclude --disable-discovery-probes --probe -P --passive --aggressive --probe-budget --pentest --summary --include-passed --help --include-info" -- "\${cur}") )
       return 0
       ;;
     entities)
@@ -272,7 +272,7 @@ _squirrel_completions() {
           return 0
           ;;
       esac
-      COMPREPLY=( $(compgen -W "--list -l --severity --category --format -f --diff --regression-since --allow-cross-site --output -o --input -i --publish -p --visibility --summary --include-passed --help" -- "\${cur}") )
+      COMPREPLY=( $(compgen -W "--list -l --severity --category --format -f --diff --regression-since --allow-cross-site --output -o --input -i --publish -p --visibility --summary --include-passed --include-info --help" -- "\${cur}") )
       return 0
       ;;
     feedback)
@@ -566,7 +566,8 @@ _squirrel() {
             '--probe-budget[Wall-clock cap for all probing (e.g. 30s)]:duration' \\
             '--pentest[Shorthand for --level full --probe aggressive]' \\
             '--summary[Print score, category breakdown, and issue counts only]' \\
-            '--include-passed[Also list the rules that passed]'
+            '--include-passed[Also list the rules that passed]' \\
+            '--include-info[Also list info checks in the llm format]'
           ;;
         entities)
           _arguments \\
@@ -636,7 +637,8 @@ _squirrel() {
             '(-p --publish)'{-p,--publish}'[Publish to reports.squirrelscan.com]' \\
             '--visibility[Visibility when publishing]:visibility:(public unlisted private)' \\
             '--summary[Print score, category breakdown, and issue counts only]' \\
-            '--include-passed[Also list the rules that passed]'
+            '--include-passed[Also list the rules that passed]' \\
+            '--include-info[Also list info checks in the llm format]'
           ;;
       esac
       ;;
@@ -831,6 +833,7 @@ complete -c squirrel -n "__fish_seen_subcommand_from audit" -l probe-budget -d "
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l pentest -d "Shorthand for --level full --probe aggressive"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l summary -d "Print score, category breakdown, and issue counts only"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l include-passed -d "Also list the rules that passed"
+complete -c squirrel -n "__fish_seen_subcommand_from audit" -l include-info -d "Also list info checks in the llm format"
 
 # Entities options
 complete -c squirrel -n "__fish_seen_subcommand_from entities" -s l -l list -d "List stored audits and their entity counts"
@@ -878,6 +881,7 @@ complete -c squirrel -n "__fish_seen_subcommand_from report" -s p -l publish -d 
 complete -c squirrel -n "__fish_seen_subcommand_from report" -l visibility -a "public unlisted private" -d "Visibility when publishing"
 complete -c squirrel -n "__fish_seen_subcommand_from report" -l summary -d "Print score, category breakdown, and issue counts only"
 complete -c squirrel -n "__fish_seen_subcommand_from report" -l include-passed -d "Also list the rules that passed"
+complete -c squirrel -n "__fish_seen_subcommand_from report" -l include-info -d "Also list info checks in the llm format"
 `;
 }
 

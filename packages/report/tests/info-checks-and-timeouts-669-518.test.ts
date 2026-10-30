@@ -81,8 +81,12 @@ describe("info checks in the JSON report (#669)", () => {
 });
 
 describe("info checks in the LLM report (#669)", () => {
-  test("listed under <info-checks> with the page count", () => {
-    const llm = renderLlm(baseReport({ "crawl/robots-meta-conflict": INFO_RULE }));
+  test("off by default: the LLM report is read against a token budget", () => {
+    expect(renderLlm(baseReport({ "crawl/robots-meta-conflict": INFO_RULE }))).not.toContain("<info-checks");
+  });
+
+  test("listed under <info-checks> with the page count when asked for", () => {
+    const llm = renderLlm(baseReport({ "crawl/robots-meta-conflict": INFO_RULE }), { includeInfo: true });
     expect(llm).toContain('<info-checks count="1">');
     expect(llm).toContain('<check rule="crawl/robots-meta-conflict" name="redundant-noindex" pages="2">');
     expect(llm).toContain("Pages: https://example.com/a, https://example.com/b");
@@ -95,7 +99,7 @@ describe("info checks in the LLM report (#669)", () => {
         { name: "note", status: "info", message: "Nothing to check", pages: ["https://example.com/a"] },
       ]);
     }
-    const llm = renderLlm(baseReport(many));
+    const llm = renderLlm(baseReport(many), { includeInfo: true });
     expect(llm).toContain('<info-checks count="40">');
     expect(llm).toContain('<more count="15">');
     const json = JSON.parse(renderJson(baseReport(many))) as { infoChecks: unknown[] };
@@ -112,7 +116,7 @@ describe("info checks in the LLM report (#669)", () => {
   });
 
   test("absent when there are none", () => {
-    expect(renderLlm(baseReport({}))).not.toContain("<info-checks");
+    expect(renderLlm(baseReport({}), { includeInfo: true })).not.toContain("<info-checks");
   });
 });
 

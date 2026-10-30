@@ -19,7 +19,7 @@ How it works:
 
 ### Added
 
-- **Info checks are in the JSON and LLM reports.** Notes a rule records with status `info` (for example `redundant-noindex`, or "No dialog elements found") were in the local database but never in `-f json` or `-f llm`. The JSON report now has a top-level `infoChecks` list (rule, check, message, up to 10 pages and the true page count) and the LLM report an `<info-checks>` block. They are not findings and never change the score. (#669)
+- **Info checks are in the JSON and LLM reports.** Notes a rule records with status `info` (for example `redundant-noindex`, or "No dialog elements found") were in the local database but never in `-f json` or `-f llm`. The JSON report now has a top-level `infoChecks` list (rule, check, message, up to 10 pages and the true page count), and the LLM report an `<info-checks>` block with `--include-info` (off by default, to keep the output small). They are not findings and never change the score. (#669)
 - **A rule that ran past its time budget is listed in `skippedChecks`** with reason `rule-timed-out`, so the report no longer reads that rule as clean on the pages it did not finish. (#518)
 
 ### Fixed
