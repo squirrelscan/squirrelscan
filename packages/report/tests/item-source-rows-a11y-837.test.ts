@@ -86,10 +86,10 @@ describe("a11y item source rows (pub#837)", () => {
     expect(text).not.toContain("found on");
   });
 
-  test("markdown: three rows, then how many are left out", () => {
+  test("markdown: every page is listed", () => {
     const md = renderMarkdown(PER_PAGE);
-    expect(md).toContain(`  - from: [/p0](${page(0)})\n`);
-    expect(md).toContain("  - +3 more pages");
+    for (let k = 0; k < 6; k++) expect(md).toContain(`  - from: [/p${k}](${page(k)})\n`);
+    expect(md).not.toContain("more pages");
   });
 
   test("html: the rest of the pages expand inside the item", () => {
@@ -109,7 +109,8 @@ describe("a11y item source rows (pub#837)", () => {
     expect(count(text, "from: /p0")).toBe(1);
     // 10 listed, 3 shown: 7 more listed and 30 never listed.
     expect(text).toContain("+37 more pages");
-    expect(renderMarkdown(PUBLISHED)).toContain("  - +37 more pages");
+    // Markdown lists all 10 the report has, and counts the 30 it never listed.
+    expect(renderMarkdown(PUBLISHED)).toContain("  - +30 more pages");
     expect(renderLlm(PUBLISHED)).toContain("; +35 more pages)");
     const html = renderHtml(PUBLISHED);
     expect(html).toMatch(/<summary class="more">\+7 more pages<\/summary>/);

@@ -124,9 +124,10 @@ describe("broken link sources: markdown", () => {
     expect(plain(md)).toContain("| 2 broken internal link(s) (4xx/5xx), found on 4 pages |");
   });
 
-  test("a long list says how many pages it leaves out, with no pointer elsewhere", () => {
+  test("a long list is listed in full, with no pointer elsewhere", () => {
     const long = renderMarkdown(report([MANY]));
-    expect(long).toContain("  - +3 more pages");
+    for (let i = 0; i < 6; i++) expect(long).toContain(`  - from: [/p${i}]`);
+    expect(long).not.toContain("more pages");
     expect(long).not.toContain("see full list");
   });
 });

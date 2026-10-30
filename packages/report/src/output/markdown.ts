@@ -733,8 +733,9 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
             // not this item's, so it is not pointed at. pub#846: an item scoped to a region
             // names it, and lists only the pages it is on outside it.
             if (view.scope) lines.push(`  - ${regionScopeLine(view.scope)}`);
-            const shown = view.rows.slice(0, REPORT_SOURCE_PAGES_PREVIEW);
-            for (const row of shown) {
+            // Markdown lists every source: the item sits in a collapsed block, so
+            // the full list costs no room (#837). Text, console and llm keep a preview.
+            for (const row of view.rows) {
               lines.push(
                 `  - from: ${sourceRowText(
                   markdownLink(getPathname(row.page) || "/", row.page),
@@ -742,7 +743,7 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
                 )}`,
               );
             }
-            const hidden = Math.max(0, view.total - shown.length);
+            const hidden = Math.max(0, view.total - view.rows.length);
             if (hidden > 0) lines.push(`  - ${moreSourcePages(hidden)}`);
           }
           lines.push("");
