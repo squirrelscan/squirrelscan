@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **A page of unclosed tags no longer makes technology detection take tens of seconds.** Every signature that matched a script `src`, a stylesheet `link`, or a `data-*` flag scanned up to 400 characters after each `<script`, `<link` or `<img` opener, so a 5 MB page of openers took about 20 to 30 s (about 1 s now). The page's tags are now parsed once and those signatures read that list. Side effects: a script `src` written without quotes, or after a long run of other attributes, is now found, and a commented-out tag is no longer read as a script. (#1456)
+
 ## v0.0.153 (2026-11-01)
 
 Technology detection recognises the Klaviyo script loader forms browsers actually run (an unquoted or long-attribute `src`, a preload link, the inline `element.src =` loader and a proxied script URL) without the loader scan slowing a page that holds many empty scripts or a tag stuffed with openers. Thanks to William for the Klaviyo loader recall fix (#1457, #1463).
