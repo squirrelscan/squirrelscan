@@ -86,8 +86,56 @@ export interface ControlScan {
 }
 
 const ATTR_CHARS = 300;
-/** An attribute is normalised (padding removed) over this many characters before it is cut to {@link ATTR_CHARS}. */
+/** An attribute is normalised (padding removed) over this many raw characters. */
 const ATTR_RAW_CHARS = 16_000;
+/** Normalised characters of an attribute that are read; more than this, or more raw characters than {@link ATTR_RAW_CHARS}, is reported as unread. */
+const ATTR_NORMALISED_CHARS = 16_000;
+/** An attribute's text is read in windows of this many characters. */
+const ATTR_WINDOW_CHARS = 300;
+/**
+ * Window starts are this far apart, and each is moved back to the start of its word (by at most
+ * {@link ATTR_WINDOW_SNAP}), so consecutive starts are never more than `STRIDE + SNAP` = 150 apart: every run of
+ * 150 characters, and so every cue phrase, lies whole inside one window, wherever the padding put it.
+ */
+const ATTR_WINDOW_STRIDE = 100;
+/**
+ * Windows past an attribute's first that the whole page may read (about 6 MB of text), shared fairly over its
+ * controls, and the most one control may take. A window is only read when it holds a word a cue or a brand
+ * lexicon phrase is made of.
+ */
+const MAX_WINDOWS_PER_CONTROL = 160;
+/** The most windows past the first that one attribute contributes (its first ones and its last). */
+const WINDOWS_PER_ATTRIBUTE = 40;
+/** The same words as {@link WINDOW_CUE}, tested on an attribute as written (no normalisation): the cheap first tier. */
+const RAW_CUE = /(?<![\p{L}\p{N}])(?:sign|log ?in|continu|verif|google|microsoft|calendly|docusign|clickfunnels|kajabi|office|outlook)/iu;
+/** The page's window budget. A mutable object so a test can lower it to exercise the exhausted path. */
+export const integrityLimits = { windowBudget: 20_000 };
+const limits = integrityLimits;
+const WINDOW_CUE = /(?<![\p{L}\p{N}])(?:sign|log ?in|continu|verif|google|microsoft|calendly|docusign|clickfunnels|kajabi|office|outlook)/u;
+const ATTR_WINDOW_SNAP = 50;
+
+/**
+ * An attribute's text as overlapping windows over its first {@link ATTR_NORMALISED_CHARS} normalised characters
+ * (padding spaces and invisible characters are removed first), so a sign-in cue is read wherever in the label it
+ * sits, with no head and tail glued together. `cut` is set only when the attribute is longer than the bounds.
+ */
+function attributeWindows(text: string): { windows: string[]; cut: boolean } {
+  const normalised = readable(text.slice(0, ATTR_RAW_CHARS)).trim();
+  const cut = text.length > ATTR_RAW_CHARS || normalised.length > ATTR_NORMALISED_CHARS;
+  const read = normalised.length > ATTR_NORMALISED_CHARS ? normalised.slice(0, ATTR_NORMALISED_CHARS) : normalised;
+  if (read.length <= ATTR_WINDOW_CHARS) return { windows: read === "" ? [] : [read], cut };
+  const windows: string[] = [];
+  for (let at = 0; at < read.length; at += ATTR_WINDOW_STRIDE) {
+    let start = at;
+    if (start > 0 && read[start - 1] !== " ") {
+      const space = read.lastIndexOf(" ", start);
+      if (space !== -1 && start - space <= ATTR_WINDOW_SNAP) start = space + 1;
+    }
+    windows.push(read.slice(start, start + ATTR_WINDOW_CHARS));
+    if (start + ATTR_WINDOW_CHARS >= read.length) break;
+  }
+  return { windows, cut };
+}
 /**
  * One control's read: at most `SHORT_VISITS` nodes looked at (text or not) and `SHORT_CHARS` characters kept.
  * That is a ceiling, not an entitlement: see {@link TOTAL_VISITS}.
@@ -351,7 +399,7 @@ export function scanControls(doc: Document): ControlScan {
     const control = controlAbove(img.parentElement);
     if (control) {
       const list = imageAlts.get(control) ?? [];
-      list.push(alt.slice(0, ATTR_CHARS));
+      list.push(alt);
       imageAlts.set(control, list);
     }
   }
@@ -401,34 +449,74 @@ export function scanControls(doc: Document): ControlScan {
     return form ? (getAttrCI(form, "action") ?? "") : null;
   };
   const { chosen, cut: notPrepared } = shortlist(found, destinationOf, (el) => imageAlts.has(el));
-  // Controls whose attribute text or `aria-labelledby` list was longer than what is read: counted, not hidden.
+  // Controls whose attribute text or `aria-labelledby` list was longer than what is read, or that a window cap cut: counted, not hidden.
   let paddedAttributes = 0;
-  const prepared = chosen.map(({ element, href }) => {
+  // Phase 1, in document order: each control's attribute windows, and whether any of its attributes holds a sign-in
+  // or brand word as written (a cheap test on the raw text; a look-alike spelling misses it and is read in tier two).
+  const gathered = chosen.map(({ element, href }) => {
     const tag = element.tagName.toLowerCase();
     const referenced = (getAttrCI(element, "aria-labelledby") ?? "").slice(0, ATTR_RAW_CHARS).split(/\s+/).filter(Boolean);
-    if (referenced.length > MAX_LABELLEDBY) paddedAttributes++;
+    let attributeCut = referenced.length > MAX_LABELLEDBY;
     const labelled = referenced
       .slice(0, MAX_LABELLEDBY)
       .map((id) => byId(id))
       .filter((target): target is Element => target !== null)
       .map((target) => targetText(target));
-    const extra = [
+    const raw = [
       getAttrCI(element, "aria-label"),
       getAttrCI(element, "title"),
       tag === "input" ? getAttrCI(element, "value") : null,
       tag === "input" ? getAttrCI(element, "alt") : null,
       ...labelled,
       ...(imageAlts.get(element) ?? []),
-    ]
-      .filter((v): v is string => typeof v === "string" && v !== "")
-      .map((v) => {
-        // Padding (spaces, zero-width characters) is dropped BEFORE the cut; a value too long even for that is counted.
-        if (v.length > ATTR_RAW_CHARS) paddedAttributes++;
-        return readable(v.slice(0, ATTR_RAW_CHARS)).trim().slice(0, ATTR_CHARS);
-      })
-      .filter((v) => v !== "");
-    return { element, href, extra, rank: rank(tag, href, extra) };
+    ].filter((v): v is string => typeof v === "string" && v !== "");
+    const rawCue = raw.some((v) => RAW_CUE.test(v.length > ATTR_RAW_CHARS ? v.slice(0, ATTR_RAW_CHARS) : v));
+    const windows = raw.map((v) => {
+      // Padding (spaces, zero-width characters) is dropped first; what is left is read in overlapping windows.
+      const read = attributeWindows(v);
+      attributeCut ||= read.cut;
+      return read.windows;
+    });
+    return { element, tag, href, windows, rawCue, attributeCut };
   });
+
+  // Phase 2: the window budget. Every attribute keeps its first window. The windows past it are read only where a
+  // sign-in or brand word is in them (a window without one cannot match a cue), at most WINDOWS_PER_ATTRIBUTE per
+  // attribute (the first ones and the last), and within the page's window budget shared fairly over the controls
+  // still to read. Controls with a cue word in an attribute as written are served first, so padding the page with
+  // benign controls cannot spend the budget before the real one. Nothing is dropped silently: a control the
+  // allowance or a cap cut is counted in `unread`, so the note is emitted even when nothing matched.
+  let windowBudget = limits.windowBudget;
+  const labels: string[][] = Array.from({ length: gathered.length });
+  const cutControls = new Set<number>();
+  const byTier = gathered.map((_, index) => index).sort((a, b) => Number(!gathered[a]!.rawCue) - Number(!gathered[b]!.rawCue) || a - b);
+  for (const [turn, index] of byTier.entries()) {
+    const item = gathered[index]!;
+    let cut = false;
+    const cue = item.windows.flatMap((windows) => {
+      const found = windows.slice(1).filter((window) => WINDOW_CUE.test(window));
+      if (found.length <= WINDOWS_PER_ATTRIBUTE) return found;
+      cut = true;
+      return [...found.slice(0, WINDOWS_PER_ATTRIBUTE - 1), found[found.length - 1]!];
+    });
+    const allowance =
+      windowBudget <= 0 ? 0 : Math.min(MAX_WINDOWS_PER_CONTROL, Math.max(1, Math.floor(windowBudget / (byTier.length - turn))));
+    let taken = cue;
+    if (cue.length > allowance) {
+      cut = true;
+      taken = allowance === 0 ? [] : [...cue.slice(0, allowance - 1), cue[cue.length - 1]!];
+    }
+    windowBudget -= taken.length;
+    labels[index] = [...item.windows.flatMap((windows) => windows.slice(0, 1)), ...taken];
+    if (cut || item.attributeCut) cutControls.add(index);
+  }
+  paddedAttributes = cutControls.size;
+  const prepared = gathered.map((item, index) => ({
+    element: item.element,
+    href: item.href,
+    extra: labels[index]!,
+    rank: rank(item.tag, item.href, labels[index]!),
+  }));
 
   // Reading order: most relevant first, document order within a rank. Controls with no destination (rank 0)
   // are not read at all. Each read is bounded by a fair share of the page's visits (see TOTAL_VISITS).

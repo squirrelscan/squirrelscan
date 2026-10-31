@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { parsePage } from "@squirrelscan/parser";
+import { brandImpersonationRule } from "../src/integrity/brand-impersonation";
 import { detectBrandImpersonation, detectFakeAuthOverlay, detectPageSignals } from "../src/integrity/signals";
 import type { RuleContext } from "../src/types";
 
@@ -181,4 +182,69 @@ test("controls in the 25th template, in a template inside a template, and after 
   expect(brand(`<template><template><a href="${OFF}">Sign in with Google</a></template></template>`)).toBe("Google");
   const logos = Array.from({ length: 500 }, (_, i) => `<img alt="logo ${i}" src="/l.png">`).join("");
   expect(brand(`${logos}<a href="${OFF}"><img alt="Sign in with Google" src="/g.png"></a>`)).toBe("Google");
+});
+
+// ── long attribute labels are read in overlapping windows (#1424) ───────────
+
+const PHRASE = "Sign in with Google";
+/** The control for each attribute that can carry a label, with `label` as its value. */
+const ATTRIBUTE_CONTROLS: Array<[string, (label: string) => string]> = [
+  ["aria-label", (label) => `<a href="${OFF}" aria-label="${label}"><svg></svg></a>`],
+  ["title", (label) => `<a href="${OFF}" title="${label}"><svg></svg></a>`],
+  ["value", (label) => `<form action="${OFF}"><input type="submit" value="${label}"></form>`],
+  ["logo alt", (label) => `<a href="${OFF}"><img src="/g.png" alt="${label}"></a>`],
+];
+/** A label with the phrase after `before` real characters and followed by `after` more. */
+const padded = (before: number, after: number): string => `${"a".repeat(before)} ${PHRASE} ${"b".repeat(after)}`;
+
+test.each(ATTRIBUTE_CONTROLS)("%s: the phrase with real padding on both sides is read at every offset", (_attribute, control) => {
+  // 0..420 sampled densely around the old head/tail seams (131..280) and the window boundaries (multiples of 100).
+  const offsets = [0, 1, 50, 99, 100, 101, 130, 131, 149, 150, 151, 200, 250, 279, 280, 281, 299, 300, 301, 350, 399, 400, 420];
+  for (const before of offsets) {
+    expect(brand(control(padded(before, 400))), `${before} characters before`).toBe("Google");
+    expect(brand(control(padded(400, before))), `${before} characters after`).toBe("Google");
+  }
+});
+
+test.each(ATTRIBUTE_CONTROLS)("%s: a phrase spanning a window boundary is read, and so is one deep in a long label", (_attribute, control) => {
+  // The phrase starts at 290 (inside the first window's end) and at 5,000 (the 50th window).
+  for (const before of [285, 290, 295, 1_000, 5_000, 15_900]) {
+    expect(brand(control(padded(before, 100))), `${before}`).toBe("Google");
+  }
+});
+
+test("a long label made of many words is read through, wherever the phrase falls among them", () => {
+  const words = Array.from({ length: 400 }, (_, i) => `word${i}`);
+  for (const at of [3, 40, 41, 90, 140, 250, 399]) {
+    const label = [...words.slice(0, at), PHRASE, ...words.slice(at)].join(" ");
+    expect(brand(`<a href="${OFF}" aria-label="${label}"><svg></svg></a>`), `after ${at} words`).toBe("Google");
+  }
+});
+
+test("a label that merely contains the pieces of a phrase across a window seam is not that phrase", () => {
+  // "Redesign in with Google" must not become "sign in with Google" because a window starts inside "Redesign".
+  for (const before of [95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 195, 196, 197, 198, 199, 200, 201, 202, 203]) {
+    const label = `${"a".repeat(before)} Redesign in with Google Workspace ${"b".repeat(200)}`;
+    expect(brand(`<a href="${OFF}" aria-label="${label}"><svg></svg></a>`), `${before}`).toBeNull();
+  }
+});
+
+test("an ordinary long title or alt does not raise the unread note", async () => {
+  const sentence = "Our award winning team of designers and developers builds fast, accessible websites for clients. ";
+  for (const label of [sentence.repeat(7), sentence.repeat(60)]) {
+    for (const [, control] of ATTRIBUTE_CONTROLS) {
+      const result = await brandImpersonationRule.run(context(control(label)));
+      expect(result.checks).toEqual([]);
+    }
+  }
+});
+
+test("only an attribute past the 16,000 character bound is reported unread, and the phrase before it is still found", async () => {
+  const unread = await brandImpersonationRule.run(context(`<a href="${OFF}" aria-label="${"a".repeat(17_000)}"><svg></svg></a>`));
+  expect(unread.checks[0]?.status).toBe("info");
+  expect(unread.checks[0]?.details).toMatchObject({ scanTruncated: true, controlsUnread: 1 });
+  expect(brand(`<a href="${OFF}" aria-label="${padded(300, 17_000)}"><svg></svg></a>`)).toBe("Google");
+  // A label whose NORMALISED text is past the bound (one character expands to many) is reported too.
+  const expanding = await brandImpersonationRule.run(context(`<a href="${OFF}" aria-label="${"\ufdfa".repeat(2_000)}"><svg></svg></a>`));
+  expect(expanding.checks[0]?.details).toMatchObject({ scanTruncated: true });
 });

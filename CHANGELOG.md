@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **`integrity/brand-impersonation` reads sign-in cues anywhere in a long control attribute.** The rule kept only the first 300 normalised characters of `aria-label`, `title`, an input `value` or a logo `alt`, so real-character padding before `Sign in with Google` hid the cue. Each attribute is now normalised over its first 16,000 characters and read in overlapping 300-character windows, so a cue is found at any offset, with no head and tail glued together; windows after an attribute's first are read only where a sign-in or brand word is in them, at most 40 per attribute and within a page-wide budget of 20,000 windows shared fairly over the controls, controls with a sign-in or brand word as written first; only an attribute longer than 16,000 characters (raw or normalised), or a control the budget cut, is counted as not read in full, so an ordinary long title no longer raises the note. (#1424)
+
 ## v0.0.151 (2026-11-01)
 
 Technology detection finds Sentry, React, PostHog, Stripe and GA4 past the start of a large bundle, and a Next.js App Router page no longer detects a vendor it only mentions. A start URL at the site root that redirects to a deep page keeps the root-start crawl order. Thanks to William for the tests that pin the `[[ignore]]` timeout notice in a cut run (#1434).
