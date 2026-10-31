@@ -1,32 +1,12 @@
 import { expect, test } from "bun:test";
-import { parsePage } from "@squirrelscan/parser";
-import { integrityLimits } from "../src/integrity/controls";
-import { RuleRunner } from "../src/runner";
+import { OFF, REAL, OVERLAY, run, finished, fired, foundOrNoted, padded } from "./integrity-budget-fixture";
 
-// #784: the integrity rules against hostile pages at the REAL default rule budget (2 s), through the rule
-// runner. A slow scan is abandoned ("Not checked") and the real control or overlay goes unseen, so each
-// case asserts both that the rule finished (the budget is the time bound: a run past it is reported as skipped) and
-// that it found what a clean page of the same shape would.
+// #784: the integrity rules against hostile pages, through the rule runner. The subject is the WORK bounds
+// (how much of the page a rule reads, and the notes it emits when it stops), not elapsed time, so the runner's
+// wall-clock rule budget is turned off here (`ruleTimeBudgetMs: 0`): on a loaded machine the same page that an
+// idle one finishes would be cut by the clock (#1465). Each case asserts that the rule finished (no `-error`,
+// `timeout` or skipped check) and that it found what a clean page of the same shape would, or said what it left.
 
-const url = "https://example.com/";
-const OFF = "https://credential-fixture.invalid/signin";
-const REAL = `<a href="${OFF}">Sign in with Google</a>`;
-const OVERLAY = '<iframe id="google-auth" srcdoc="" style="position:fixed;inset:0;z-index:9999"></iframe>';
-const RULES = ["integrity/brand-impersonation", "integrity/fake-auth-overlay"];
-
-type Check = { name?: string; status?: string; details?: Record<string, unknown> };
-
-async function run(body: string, head = ""): Promise<{ ms: number; checks: Check[] }> {
-  const html = `<!doctype html><html><head><title>Fixture</title>${head}</head><body><main><h1>Fixture</h1>${body}</main></body></html>`;
-  const parsed = parsePage(html, url);
-  const runner = new RuleRunner({ config: { rule_options: {}, rules: { enable: RULES } } as never });
-  const started = performance.now();
-  const result = await runner.runPageRules({ url, html, statusCode: 200, loadTime: 0, headers: {}, parsed } as never);
-  return { ms: performance.now() - started, checks: (result.checks ?? []) as Check[] };
-}
-const finished = (checks: Check[]): boolean => !checks.some((c) => /-error$|timeout/.test(c.name ?? "") || c.status === "skipped");
-const fired = (checks: Check[], name: string): boolean =>
-  checks.some((c) => c.name === name && c.status !== "skipped" && c.details?.scanTruncated !== true);
 
 test("5 MB of plain links (333,000 controls) before the real control: both rules finish and find it", async () => {
   const { checks } = await run(`${'<a href="/">x</a>'.repeat(300_000)}${REAL}`);
@@ -67,11 +47,6 @@ test("a phrase squashed of its spaces needs its word boundaries: look-alike word
   const split = await run(`<a href="${OFF}">Sign<br>in with Goo<i>gle</i></a>`);
   expect(fired(split.checks, "brand-impersonation")).toBe(true);
 });
-
-// ── pruning must not be a silent bypass (round 3): found, or reported ───────────
-
-const noted = (checks: Check[]): boolean => checks.some((c) => c.details?.scanTruncated === true);
-const foundOrNoted = (checks: Check[], name: string): boolean => fired(checks, name) || noted(checks);
 
 test("a tab or newline inside an own-site looking destination is the off-site URL it resolves to", async () => {
   for (const href of ["/&#9;/credential-fixture.invalid/signin", "/&#10;/credential-fixture.invalid/signin", "&#9;//credential-fixture.invalid/signin"]) {
@@ -145,141 +120,3 @@ test("1,600 controls naming one 500 KB aria-labelledby target finish and find th
   expect(finished(checks)).toBe(true);
   expect(fired(checks, "brand-impersonation")).toBe(true);
 }, 120_000);
-
-test("30,000 cross-host decoys with children before the real control: the fair share finds it", async () => {
-  const decoy = `<a href="https://p.invalid/x">${"<i></i>".repeat(20)}</a>`;
-  const { checks } = await run(`${decoy.repeat(30_000)}${REAL}`);
-  expect(finished(checks)).toBe(true);
-  expect(fired(checks, "brand-impersonation")).toBe(true);
-}, 180_000);
-
-// Characterisation: this passes on main too; it pins the default-budget behaviour on nested anchors.
-test("20,000 unclosed anchors nest in each other; both rules finish at the default budget and the innermost real control is found", async () => {
-  const { checks } = await run(`${'<a href="https://p.invalid/x">x'.repeat(20_000)}${REAL}`);
-  expect(finished(checks)).toBe(true);
-  expect(fired(checks, "brand-impersonation")).toBe(true);
-}, 180_000);
-
-// ── long attribute labels: work is bounded per page, not per control (#1424) ─────────────────────────────────
-
-const label16k = (i: number): string => Array.from({ length: 1_600 }, (_, j) => `sign in ${i}x${j}`).join(" ").slice(0, 16_000);
-const padded = (before: number): string => `${"a".repeat(before)} Sign in with Google ${"b".repeat(50)}`;
-
-test("300 controls with 16 KB labels full of sign words (unique tokens) before the real controls: finished, found", async () => {
-  const hostile = Array.from({ length: 300 }, (_, i) => `<a href="https://p.invalid/${i}" aria-label="${label16k(i)}">x</a>`).join("");
-  const { checks } = await run(`${hostile}${REAL}`);
-  expect(finished(checks)).toBe(true);
-  expect(fired(checks, "brand-impersonation")).toBe(true);
-}, 180_000);
-
-test("300 controls with 16 KB U+FDFA labels before the real control: finished, found", async () => {
-  const hostile = Array.from({ length: 300 }, (_, i) => `<a href="https://p.invalid/${i}" title="${"ﷺ".repeat(16_000)}">x</a>`).join("");
-  const { checks } = await run(`${hostile}${REAL}`);
-  expect(finished(checks)).toBe(true);
-  expect(fired(checks, "brand-impersonation")).toBe(true);
-}, 180_000);
-
-test("5,000 controls with 1 KB labels in three attributes before the real control: finished, found", async () => {
-  const label = (i: number) => Array.from({ length: 100 }, (_, j) => `log${i}x${j}`).join(" ");
-  const hostile = Array.from({ length: 5_000 }, (_, i) => `<a href="https://p.invalid/${i}" title="${label(i)}" aria-label="${label(i)}"><img alt="${label(i)}"></a>`).join("");
-  const { checks } = await run(`${hostile}${REAL}`);
-  expect(finished(checks)).toBe(true);
-  expect(fired(checks, "brand-impersonation")).toBe(true);
-}, 180_000);
-
-test("100,000 tiny controls with short titles before the real control: finished, found", async () => {
-  const { checks } = await run(`${'<a href="https://p.invalid/x" title="t">x</a>'.repeat(100_000)}${REAL}`);
-  expect(finished(checks)).toBe(true);
-  expect(fired(checks, "brand-impersonation")).toBe(true);
-}, 180_000);
-
-test("a padded label after the hostile controls is found, or the page says controls went unread", async () => {
-  const hostile = Array.from({ length: 300 }, (_, i) => `<a href="https://p.invalid/${i}" aria-label="${label16k(i)}">x</a>`).join("");
-  const real = `<a href="${OFF}" aria-label="${padded(2_000)}"><svg></svg></a>`;
-  const { checks } = await run(`${hostile}${real}`);
-  expect(finished(checks)).toBe(true);
-  expect(foundOrNoted(checks, "brand-impersonation")).toBe(true);
-}, 180_000);
-
-test("the window budget reports what it cut: hostile cue windows past the page budget are counted unread", async () => {
-  // About 48,000 cue windows in 300 controls against a 20,000-window page budget, and nothing else on the page.
-  const hostile = Array.from({ length: 300 }, (_, i) => `<a href="https://p.invalid/${i}" aria-label="${label16k(i)}">x</a>`).join("");
-  const { checks } = await run(hostile);
-  const note = checks.find((c) => c.details?.scanTruncated === true);
-  expect(Number(note?.details?.controlsUnread)).toBeGreaterThan(0);
-  // A page whose labels fit the budget and the per-attribute cap raises no note.
-  const small = await run(Array.from({ length: 5 }, (_, i) => `<a href="https://p.invalid/${i}" aria-label="${label16k(i).slice(0, 3_000)}">x</a>`).join(""));
-  expect(small.checks.find((c) => c.details?.scanTruncated === true)).toBeUndefined();
-}, 180_000);
-
-// ── the window budget fails safe (#1424) ─────────────────────────────────────────────────────────────────────
-
-test("5,000 benign long-label controls before the real padded control do not spend the budget it needs", async () => {
-  const benign = Array.from({ length: 5_000 }, (_, i) => `<a href="https://p.invalid/${i}" title="${"lorem ipsum dolor sit amet ".repeat(20)}${i}">x</a>`).join("");
-  const real = `<a href="${OFF}" aria-label="${padded(3_000)}"><svg></svg></a>`;
-  const { checks } = await run(`${benign}${real}`);
-  expect(finished(checks)).toBe(true);
-  expect(fired(checks, "brand-impersonation")).toBe(true);
-}, 180_000);
-
-test("hostile controls with unique sign-word padding served before it do not hide the real padded control", async () => {
-  const hostile = Array.from({ length: 300 }, (_, i) => `<a href="https://p.invalid/${i}" aria-label="${label16k(i)}">x</a>`).join("");
-  const { checks } = await run(`${hostile}<a href="${OFF}" aria-label="${padded(2_000)}"><svg></svg></a>`);
-  expect(finished(checks)).toBe(true);
-  expect(fired(checks, "brand-impersonation")).toBe(true);
-}, 180_000);
-
-test("an exhausted window budget reads the first window of every control, and says what it left", async () => {
-  const saved = { ...integrityLimits };
-  integrityLimits.sequentialWindows = 10;
-  integrityLimits.sharedWindows = 10;
-  try {
-    const hostile = Array.from({ length: 300 }, (_, i) => `<a href="https://p.invalid/${i}" aria-label="${label16k(i)}">x</a>`).join("");
-    // The phrase is in the first window of the last control: read whatever the budget.
-    const near = await run(`${hostile}<a href="${OFF}" aria-label="Sign in with Google"><svg></svg></a>`);
-    expect(fired(near.checks, "brand-impersonation")).toBe(true);
-    // The phrase is past the first window of the last control: found, or the unread note is emitted.
-    const far = await run(`${hostile}<a href="${OFF}" aria-label="${padded(3_000)}"><svg></svg></a>`);
-    expect(finished(far.checks)).toBe(true);
-    expect(foundOrNoted(far.checks, "brand-impersonation")).toBe(true);
-    const note = far.checks.find((c) => c.details?.scanTruncated === true);
-    if (!fired(far.checks, "brand-impersonation")) expect(Number(note?.details?.controlsUnread)).toBeGreaterThan(0);
-    // With no hit at all the note is still emitted.
-    const none = await run(hostile);
-    expect(Number(none.checks.find((c) => c.details?.scanTruncated === true)?.details?.controlsUnread)).toBeGreaterThan(0);
-  } finally {
-    Object.assign(integrityLimits, saved);
-  }
-}, 180_000);
-
-test("an attribute with more cue windows than the per-attribute cap is counted, not skipped", async () => {
-  const { checks } = await run(`<a href="https://p.invalid/x" title="${label16k(1)}">x</a>`);
-  expect(Number(checks.find((c) => c.details?.scanTruncated === true)?.details?.controlsUnread)).toBe(1);
-}, 180_000);
-
-test("300 controls with 16 KB U+FDFA labels finish at the default budget (runner level)", async () => {
-  const hostile = Array.from({ length: 300 }, (_, i) => `<a href="https://p.invalid/${i}" aria-label="${"\ufdfa".repeat(16_000)}">x</a>`).join("");
-  const { checks } = await run(`${hostile}${REAL}`);
-  expect(finished(checks)).toBe(true);
-  expect(fired(checks, "brand-impersonation")).toBe(true);
-}, 180_000);
-
-// 21,000 cue-bearing decoys (about 8 MB) spend more windows than the page budget has.
-const decoys21k = Array.from({ length: 21_000 }, (_, i) => `<a href="https://p.invalid/${i}" title="${"sign in please ".repeat(24)}">x</a>`).join("");
-
-test("21,000 cue-bearing decoys after the real padded control: it is found, because the first controls are read in full", async () => {
-  // Cue-bearing text after the phrase too, so a share of one window (the last) would miss the phrase.
-  const real = `<a href="${OFF}" aria-label="${"a".repeat(2_500)} Sign in with Google ${"sign in please ".repeat(300)}"><svg></svg></a>`;
-  const { checks } = await run(`${real}${decoys21k}`);
-  expect(finished(checks)).toBe(true);
-  expect(fired(checks, "brand-impersonation")).toBe(true);
-}, 300_000);
-
-test("21,000 cue-bearing decoys before the real padded control: found, or the page says controls went unread", async () => {
-  const real = `<a href="${OFF}" aria-label="${padded(2_500)}"><svg></svg></a>`;
-  const { checks } = await run(`${decoys21k}${real}`);
-  expect(finished(checks)).toBe(true);
-  expect(foundOrNoted(checks, "brand-impersonation")).toBe(true);
-  const note = checks.find((c) => c.details?.scanTruncated === true);
-  if (!fired(checks, "brand-impersonation")) expect(Number(note?.details?.controlsUnread)).toBeGreaterThan(0);
-}, 300_000);
