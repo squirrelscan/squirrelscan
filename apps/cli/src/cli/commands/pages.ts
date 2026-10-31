@@ -9,10 +9,15 @@ import {
   PAGE_MAP_DUPLICATE,
   PAGE_MAP_MISSING,
   cleanText,
+  diffPageMaps,
   filterPageMap,
   hasPageMapFilters,
   pageMapMeta,
   renderPageMapCsv,
+  renderPageMapDiffCsv,
+  renderPageMapDiffJson,
+  renderPageMapDiffMarkdown,
+  renderPageMapHtml,
   renderPageMapJson,
   renderPageMapMarkdown,
   type PageMapDuplicate,
@@ -23,7 +28,7 @@ import {
 import { defineCommand } from "citty";
 import { writeFileSync } from "node:fs";
 
-import { loadPageMap } from "@/controllers/pages";
+import { loadPageMap, loadPageMapPair } from "@/controllers/pages";
 import { ErrorCodes } from "@/controllers/types";
 import { splitListFlag } from "@/entities/filters";
 import { warnIfSessionUnreadable } from "@/self/credentials";
@@ -32,12 +37,15 @@ import { safeExit } from "@/self/updater";
 import { fmt } from "../format";
 
 /** Every `-f` value this command accepts. */
-export const PAGES_FORMATS = ["json", "csv", "markdown"] as const;
+export const PAGES_FORMATS = ["json", "csv", "markdown", "html"] as const;
 export type PagesFormat = (typeof PAGES_FORMATS)[number];
 
 export function isPagesFormat(value: string): value is PagesFormat {
   return (PAGES_FORMATS as readonly string[]).includes(value);
 }
+
+/** `--diff` formats: prose, a change set a CI job can parse, or a sheet. */
+const DIFF_FORMATS = ["markdown", "json", "csv"] as const;
 
 /** Rows the console table prints before pointing at the file formats. */
 const CONSOLE_ROWS = 50;
@@ -126,7 +134,12 @@ export const pages = defineCommand({
     crawl: {
       type: "string",
       description:
-        "Crawl ID (or 8-char prefix) to read (defaults to the latest audit)",
+        "Crawl ID (or 8-char prefix) to read (defaults to the latest audit); repeat twice with --diff",
+    },
+    diff: {
+      type: "boolean",
+      description:
+        "Compare two audits of the site: pages added, removed and changed (the previous and latest by default)",
     },
     format: {
       type: "string",
@@ -213,6 +226,65 @@ export const pages = defineCommand({
       return safeExit(1);
     }
 
+    // ── --diff ───────────────────────────────────────────────────────
+    if (args.diff) {
+      const diffFormat = args.format ?? "markdown";
+      if (!(DIFF_FORMATS as readonly string[]).includes(diffFormat)) {
+        console.error(
+          `--diff supports ${DIFF_FORMATS.join(", ")}, got --format ${diffFormat}`
+        );
+        return safeExit(1);
+      }
+      if (
+        filters.missing ||
+        filters.duplicate ||
+        filters.tooLong ||
+        filters.orphan
+      ) {
+        // A filter on what a page IS breaks exactly the transitions a diff exists to show: a
+        // page whose title was fixed stops matching --missing title on the newer side, so the
+        // older row would be reported as removed.
+        console.error(
+          "--missing, --duplicate, --too-long and --orphan cannot be combined with --diff: they select on the state a diff compares, so a fixed page would be reported as removed. Use --section or --page instead."
+        );
+        return safeExit(1);
+      }
+      const ids = splitListFlag(args.crawl as string | string[] | undefined);
+      const pair = await loadPageMapPair(ids);
+      if (!pair.ok) {
+        if (pair.error.code === ErrorCodes.CRAWL_NOT_FOUND) {
+          console.log(pair.error.message);
+          return;
+        }
+        console.error(pair.error.message);
+        return safeExit(1);
+      }
+      for (const warning of pair.data.warnings) {
+        console.error(
+          `Warning: a project store could not be read (${warning})`
+        );
+      }
+      const scoped = (rows: readonly PageMapRow[]) =>
+        hasPageMapFilters(filters) ? filterPageMap(rows, filters) : rows;
+      const { older, newer } = pair.data;
+      const result = diffPageMaps(scoped(older.rows), scoped(newer.rows));
+      const diffMeta = {
+        site: newer.crawl.baseUrl,
+        older: { crawlId: older.crawl.id, startedAt: older.crawl.startedAt },
+        newer: { crawlId: newer.crawl.id, startedAt: newer.crawl.startedAt },
+      };
+      emit(
+        diffFormat === "json"
+          ? renderPageMapDiffJson(result, diffMeta)
+          : diffFormat === "csv"
+            ? renderPageMapDiffCsv(result)
+            : renderPageMapDiffMarkdown(result, diffMeta),
+        args.output
+      );
+      return;
+    }
+
+
     const crawlIds = splitListFlag(args.crawl as string | string[] | undefined);
     if (crawlIds.length > 1) {
       console.error("--crawl takes one audit, or two with --diff");
@@ -246,7 +318,9 @@ export const pages = defineCommand({
           ? renderPageMapJson(rows, meta)
           : format === "csv"
             ? renderPageMapCsv(rows)
-            : renderPageMapMarkdown(rows, meta),
+            : format === "html"
+              ? renderPageMapHtml(rows, meta)
+              : renderPageMapMarkdown(rows, meta),
         args.output
       );
       return;

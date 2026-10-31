@@ -18,8 +18,9 @@ squirrel pages [options]
 
 | Option | Alias | Description | Default |
 |--------|-------|-------------|---------|
-| `--crawl` | | Crawl ID (or 8-character prefix) to read | latest audit |
-| `--format` | `-f` | Output format: `json`, `csv`, `markdown` | console table, or markdown when piped |
+| `--crawl` | | Crawl ID (or 8-character prefix) to read; repeat twice with `--diff` | latest audit |
+| `--diff` | | Compare two audits of the site: pages added, removed and changed | `false` |
+| `--format` | `-f` | Output format: `json`, `csv`, `markdown`, `html` (`markdown`, `json` or `csv` with `--diff`) | console table, or markdown when piped |
 | `--output` | `-o` | Write to a file instead of stdout | - |
 | `--missing` | | Only pages missing `title`, `description`, `h1` or `schema` (repeatable or comma-separated) | all |
 | `--duplicate` | | Only pages the audit flags as a duplicate `title` or `description` (repeatable or comma-separated) | all |
@@ -96,13 +97,33 @@ With no `--format` you get a console table of the first 50 pages on a terminal, 
 |--------|--------------|
 | `json` | `{ site, crawlId, startedAt, total, filtered, pages: [...] }`: `total` is every page in the audit, `filtered` is how many matched, `pages` holds the rows with every column |
 | `csv` | One header row and a row per page. List columns (`schemaTypes`, `externalDomains`, `flags`) join with a space. A cell that starts with `=`, `+`, `-` or `@` is prefixed with an apostrophe so a spreadsheet does not run it as a formula |
+| `html` | One standalone page, no network requests, with the table sortable by any column and filterable by text and by flag. At most 5,000 rows are inlined (the page says when more matched; use `csv` or `json` for all of them) |
 | `markdown` | A table of the columns a person scans: URL, status, title and length, description and length, H1 count, words, schema, in and out links, flags |
 
 Titles, descriptions and URLs come from the audited site, so each format treats them as hostile. The console, csv, markdown and html outputs remove control characters, escape sequences, invisible characters and bidirectional overrides, a pipe in a URL is escaped so it cannot end a markdown table cell, and csv prefixes a formula start with an apostrophe. `json` keeps the text and writes DEL, the C1 controls, bidirectional overrides, invisible characters and line separators as `\uXXXX`, so the file is safe to print and the value is unchanged.
 
+## Comparing two audits
+
+`--diff` shows what changed between two audits of the same site, which is how you check a fix: did the title rewrite land, did the 404 go away, did a page lose its schema.
+
+```bash
+# The latest audit against the one before it
+squirrel pages --diff
+
+# A named audit against the one before it, or two named audits
+squirrel pages --diff --crawl 4f2ab91c
+squirrel pages --diff --crawl 4f2ab91c --crawl 9a01c3de
+```
+
+Pages are matched by URL. The report lists the pages **added** (only on the newer audit), **removed** (only on the older one) and **changed**, with each changed field's before and after: `status`, `finalUrl`, `canonical`, `noindex`, `title`, `description`, `h1Count`, `schemaTypes` and `flags`. Counts that move with every crawl (links, word count, load time) are not compared. A list compares as a set, so a reorder is not a change.
+
+With one audit named, or none, the older side is the audit of the same site that ran just before it. The store holds every project, so without that rule "the two newest audits" would often be two different sites. Naming two audits compares exactly those, in whichever order you give them, even across sites. With only one audit of the site, the command says so and exits `0`.
+
+`--diff` takes `markdown` (default), `json` or `csv`. `--section` and `--page` narrow both sides. `--missing`, `--duplicate`, `--too-long` and `--orphan` are rejected with `--diff`: they select on the state a diff compares, so a page whose title was fixed would stop matching `--missing title` on the newer side and be reported as removed.
+
 ## Exit codes
 
-The command exits `0` whenever it has an answer: an audit with no matching pages prints an empty table, and a store with no audit prints how to create one. It exits `1` for a usage mistake (an unknown `--missing`, `--duplicate` or `--format` value) or a project store it cannot read.
+The command exits `0` whenever it has an answer: an audit with no matching pages prints an empty table, and a store with no audit prints how to create one. It exits `1` for a usage mistake (an unknown `--missing`, `--duplicate` or `--format` value) or a project store it cannot read. `--diff` with a format it does not support, or with a state filter, is also a usage error.
 
 ## Related
 

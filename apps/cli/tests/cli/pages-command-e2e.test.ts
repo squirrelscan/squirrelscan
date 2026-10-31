@@ -25,7 +25,10 @@ const SAME = "A title that two different pages share word for word";
 // must still be found (#701).
 // `/items?id=1` and `/items?id=2` are two pages that differ only by query string: each keeps its own
 // out-links, and they share one `inlinks` count (the rules key links without the query string).
-const NAV = [
+// The site changes between the two audits the --diff tests compare: `phase` 2 gives /a a title,
+// /b a description, takes /dup2 down and adds /fresh.
+let phase = 1;
+const navPaths = () => [
   "/",
   "/a",
   "/b?id=1",
@@ -34,9 +37,11 @@ const NAV = [
   "/blog/post/",
   "/items?id=1",
   "/items?id=2",
+  ...(phase === 2 ? ["/fresh"] : []),
 ];
 const nav = (self: string) =>
-  NAV.filter((p) => p !== self)
+  navPaths()
+    .filter((p) => p !== self)
     .map((p) => `<a href="${p}">${p}</a>`)
     .join(" ");
 
@@ -58,14 +63,29 @@ const site = Bun.serve({
           )
         );
       case "/a":
-        return html(page(null, nav("/a")));
+        return html(
+          page(
+            phase === 2 ? "Page A now has a title of its own" : null,
+            nav("/a")
+          )
+        );
       case "/b":
         return html(
-          page("Page B of the page map test site", nav("/b?id=1"), null)
+          page(
+            "Page B of the page map test site",
+            nav("/b?id=1"),
+            phase === 2
+              ? "Page B now has a description that is long enough to read as one."
+              : null
+          )
         );
-      case "/dup1":
       case "/dup2":
+        if (phase === 2) return new Response("gone", { status: 404 });
+      // falls through
+      case "/dup1":
         return html(page(SAME, nav(pathname)));
+      case "/fresh":
+        return html(page("A page added between the two audits", nav("/fresh")));
       case "/blog/post/":
         return html(
           page("A blog post on the page map test site", nav("/blog/post/"))
@@ -93,6 +113,7 @@ const site = Bun.serve({
             "items?id=1",
             "items?id=2",
             "lonely",
+            ...(phase === 2 ? ["fresh"] : []),
           ]
             .map((p) => `<url><loc>${origin}/${p}</loc></url>`)
             .join("")}</urlset>`,
@@ -397,5 +418,140 @@ describe("hostile page values (#701)", () => {
     expect(lonely?.title).toContain("Lonely");
     // The hostile bytes really are in the stored page, so the clean outputs above prove something.
     expect(lonely?.title).toContain(String.fromCharCode(27));
+  }, 120_000);
+});
+
+describe("squirrel pages -f html", () => {
+  test("is a standalone page with the pages as data", async () => {
+    const r = await squirrel("pages", "-f", "html");
+    expect(r.code).toBe(0);
+    expect(r.out.startsWith("<!doctype html>")).toBe(true);
+    expect(r.out).toContain('id="pm-data"');
+    expect(r.out).toContain("/blog/post");
+    const filtered = await squirrel(
+      "pages",
+      "-f",
+      "html",
+      "--section",
+      "/blog"
+    );
+    expect(filtered.out).toContain("/blog/post");
+    expect(filtered.out).not.toContain("/dup1");
+  }, 120_000);
+});
+
+describe("squirrel pages --diff", () => {
+  beforeAll(async () => {
+    phase = 2;
+    const r = await squirrel(
+      "audit",
+      `http://127.0.0.1:${site.port}/`,
+      "--offline",
+      "--http",
+      "-m",
+      "20",
+      "-f",
+      "json",
+      "-o",
+      join(scratch, "audit2.json")
+    );
+    expect([0, 1]).toContain(r.code);
+  }, 180_000);
+
+  interface Diff {
+    site: string;
+    older: { crawlId: string };
+    newer: { crawlId: string };
+    counts: {
+      added: number;
+      removed: number;
+      changed: number;
+      unchanged: number;
+    };
+    added: Row[];
+    removed: Row[];
+    changed: Array<{
+      url: string;
+      changes: Array<{ field: string; before: string; after: string }>;
+    }>;
+  }
+  const diffJson = async (...args: string[]): Promise<Diff> => {
+    const r = await squirrel("pages", "--diff", "-f", "json", ...args);
+    expect(r.code).toBe(0);
+    return JSON.parse(r.out) as Diff;
+  };
+  const changedPaths = (d: Diff) =>
+    d.changed.map((c) => new URL(c.url).pathname).sort();
+
+  test("compares the latest audit with the one before it", async () => {
+    const d = await diffJson();
+    expect(d.older.crawlId).not.toBe(d.newer.crawlId);
+    expect(d.added.map((r) => new URL(r.url).pathname)).toEqual(["/fresh"]);
+    expect(changedPaths(d)).toEqual(
+      expect.arrayContaining(["/a", "/b", "/dup2"])
+    );
+    const a = d.changed.find((c) => new URL(c.url).pathname === "/a")!;
+    expect(a.changes.find((c) => c.field === "title")).toEqual({
+      field: "title",
+      before: "",
+      after: "Page A now has a title of its own",
+    });
+    const dup2 = d.changed.find((c) => new URL(c.url).pathname === "/dup2")!;
+    expect(dup2.changes.find((c) => c.field === "status")).toEqual({
+      field: "status",
+      before: "200",
+      after: "404",
+    });
+    expect(d.counts.unchanged).toBeGreaterThan(0);
+  }, 120_000);
+
+  test("one --crawl names the newer side, two name both, in either order", async () => {
+    const latest = (await asJson()).crawlId;
+    const auto = await diffJson();
+    const one = await diffJson("--crawl", latest.slice(0, 8));
+    expect(one.older.crawlId).toBe(auto.older.crawlId);
+    const older8 = auto.older.crawlId.slice(0, 8);
+    const two = await diffJson(
+      "--crawl",
+      latest.slice(0, 8),
+      "--crawl",
+      older8
+    );
+    expect(two.older.crawlId).toBe(auto.older.crawlId);
+    expect(two.newer.crawlId).toBe(latest);
+    const reversed = await diffJson(
+      "--crawl",
+      older8,
+      "--crawl",
+      latest.slice(0, 8)
+    );
+    expect(reversed.newer.crawlId).toBe(latest);
+  }, 120_000);
+
+  test("--section narrows both sides; markdown and csv carry the same changes", async () => {
+    const d = await diffJson("--section", "/blog");
+    expect(d.counts).toMatchObject({ added: 0, removed: 0, changed: 0 });
+    const md = await squirrel("pages", "--diff");
+    expect(md.code).toBe(0);
+    expect(md.out).toContain("# Page map diff: ");
+    expect(md.out).toContain("Page A now has a title of its own");
+    const csv = await squirrel("pages", "--diff", "-f", "csv");
+    expect(csv.out.split("\n")[0]).toBe("kind,url,field,before,after");
+    expect(csv.out).toContain("added,");
+  }, 120_000);
+
+  test("filters on page state and unsupported formats are usage errors", async () => {
+    const missing = await squirrel("pages", "--diff", "--missing", "title");
+    expect(missing.code).toBe(1);
+    expect(missing.err).toContain("cannot be combined with --diff");
+    const html = await squirrel("pages", "--diff", "-f", "html");
+    expect(html.code).toBe(1);
+    expect(html.err).toContain("--diff supports markdown, json, csv");
+  }, 120_000);
+
+  test("naming an audit that does not exist is an answer, not a failure", async () => {
+    const r = await squirrel("pages", "--diff", "--crawl", "ffffffff");
+    expect(r.code).toBe(0);
+    expect(r.out).toContain("No audit found");
   }, 120_000);
 });

@@ -342,3 +342,89 @@ export async function loadPageMap(
     );
   }
 }
+
+/**
+ * The two audits of a `--diff`, older first.
+ *
+ * Two ids name both sides (across sites if you like). One id names the newer side and the older
+ * one is the audit of the same site before it; none compares the latest audit with the one
+ * before it. The store holds every project, so "the two newest audits" would routinely be two
+ * different sites, and diffing those reports one site's whole page set as added and the other's
+ * as removed.
+ */
+export async function loadPageMapPair(
+  crawlIds: readonly string[]
+): Promise<
+  Result<{ older: StoredPageMap; newer: StoredPageMap; warnings: string[] }>
+> {
+  if (crawlIds.length >= 2) {
+    const a = await loadPageMap(crawlIds[0]);
+    if (!a.ok) return a;
+    const b = await loadPageMap(crawlIds[1]);
+    if (!b.ok) return b;
+    const [older, newer] =
+      a.data.crawl.startedAt <= b.data.crawl.startedAt
+        ? [a.data, b.data]
+        : [b.data, a.data];
+    return ok({
+      older,
+      newer,
+      warnings: [...a.data.warnings, ...b.data.warnings],
+    });
+  }
+  const newer = await loadPageMap(crawlIds[0]);
+  if (!newer.ok) return newer;
+  const previous = await findPreviousCrawl(newer.data.crawl);
+  if (!previous.ok) return previous;
+  const older = await loadPageMap(previous.data.id);
+  if (!older.ok) return older;
+  return ok({
+    older: older.data,
+    newer: newer.data,
+    warnings: [...newer.data.warnings, ...older.data.warnings],
+  });
+}
+
+/** The renderable audit of the same site that ran just before `crawl`. */
+async function findPreviousCrawl(
+  crawl: CrawlMetadata
+): Promise<Result<CrawlMetadata>> {
+  let best: CrawlMetadata | undefined;
+  for (const dbPath of getProjectStoragePaths()) {
+    if (!existsSync(dbPath)) continue;
+    const storage = new SQLiteStorage(dbPath, getGlobalContentStore());
+    try {
+      await Effect.runPromise(storage.init());
+      for (const other of await Effect.runPromise(storage.listCrawls())) {
+        if (
+          other.baseUrl === crawl.baseUrl &&
+          other.startedAt < crawl.startedAt &&
+          isReportRenderable(other) &&
+          (!best || other.startedAt > best.startedAt)
+        ) {
+          best = other;
+        }
+      }
+    } catch (error) {
+      return err(
+        commandError(
+          ErrorCodes.CRAWL_ERROR,
+          `Could not read the page map: ${dbPath}: ${String(error)}`
+        )
+      );
+    } finally {
+      await Effect.runPromise(
+        storage.close().pipe(Effect.catchAll(() => Effect.void))
+      );
+    }
+  }
+  if (!best) {
+    return err(
+      commandError(
+        ErrorCodes.CRAWL_NOT_FOUND,
+        `Need two audits of ${crawl.baseUrl} to compare; only one has been run. Run "squirrel audit ${crawl.baseUrl}" again, or name both: squirrel pages --diff --crawl <older> --crawl <newer>`
+      )
+    );
+  }
+  return ok(best);
+}

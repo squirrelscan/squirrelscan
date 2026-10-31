@@ -247,7 +247,7 @@ _squirrel_completions() {
           return 0
           ;;
       esac
-      COMPREPLY=( $(compgen -W "--crawl --format -f --output -o --missing --duplicate --too-long --orphan --section --page --help" -- "\${cur}") )
+      COMPREPLY=( $(compgen -W "--crawl --diff --format -f --output -o --missing --duplicate --too-long --orphan --section --page --help" -- "\${cur}") )
       return 0
       ;;
     crawl)
@@ -611,7 +611,8 @@ _squirrel() {
           ;;
         pages)
           _arguments \\
-            '--crawl[Crawl ID to read]:id' \\
+            '*--crawl[Crawl ID to read (twice with --diff)]:id' \\
+            '--diff[Compare two audits: pages added, removed and changed]' \\
             '(-f --format)'{-f,--format}'[Output format]:format:(${pagesFormatValues})' \\
             '(-o --output)'{-o,--output}'[Write to a file instead of stdout]:file:_files' \\
             '*--missing[Only pages missing a title, description, h1 or schema]:field:(${pagesMissingValues})' \\
@@ -892,7 +893,8 @@ complete -c squirrel -n "__fish_seen_subcommand_from entities" -s i -l input -d 
 complete -c squirrel -n "__fish_seen_subcommand_from entities" -l diff -d "Compare two audits"
 
 # Pages options
-complete -c squirrel -n "__fish_seen_subcommand_from pages" -l crawl -d "Crawl ID to read"
+complete -c squirrel -n "__fish_seen_subcommand_from pages" -l crawl -d "Crawl ID to read (twice with --diff)"
+complete -c squirrel -n "__fish_seen_subcommand_from pages" -l diff -d "Compare two audits: pages added, removed and changed"
 complete -c squirrel -n "__fish_seen_subcommand_from pages" -s f -l format -x -a "${pagesFormatValues}" -d "Output format"
 complete -c squirrel -n "__fish_seen_subcommand_from pages" -s o -l output -d "Write to a file instead of stdout"
 complete -c squirrel -n "__fish_seen_subcommand_from pages" -l missing -x -a "${pagesMissingValues}" -d "Only pages missing a title, description, h1 or schema"

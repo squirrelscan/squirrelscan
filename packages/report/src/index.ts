@@ -476,3 +476,18 @@ export type {
   PageMapMissing,
   PageMapRow,
 } from "./page-map";
+
+export {
+  PAGE_MAP_DIFF_FIELDS,
+  diffPageMaps,
+  renderPageMapDiffCsv,
+  renderPageMapDiffJson,
+  renderPageMapDiffMarkdown,
+} from "./page-map-diff";
+export type {
+  PageMapChange,
+  PageMapDiff,
+  PageMapDiffField,
+  PageMapDiffMeta,
+} from "./page-map-diff";
+export { PAGE_MAP_HTML_ROW_CAP, renderPageMapHtml } from "./page-map-html";
