@@ -150,7 +150,14 @@ jobs:
         timeout-minutes: 25
         uses: anthropics/claude-code-action@e4a6faad497d33dbc7144135c75e41f82f0bf6c0 # v1
         with:
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # Which Anthropic credential runs the review. CLAUDE_CODE_OAUTH_TOKEN is
+          # a setup-token tied to the account that created it; setting the repo
+          # variable CLAUDE_REVIEW_AUTH to `api_key` switches to an
+          # ANTHROPIC_API_KEY secret instead, with no workflow change. Unset or
+          # any other value keeps the OAuth token. Exactly one of the two is
+          # ever passed, so a missing secret fails the step loudly.
+          claude_code_oauth_token: ${{ vars.CLAUDE_REVIEW_AUTH != 'api_key' && secrets.CLAUDE_CODE_OAUTH_TOKEN || '' }}
+          anthropic_api_key: ${{ vars.CLAUDE_REVIEW_AUTH == 'api_key' && secrets.ANTHROPIC_API_KEY || '' }}
           prompt: |
             REPO: ${{ github.repository }}
             PR NUMBER: ${{ github.event.pull_request.number }}
