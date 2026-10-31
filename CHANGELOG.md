@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- **`[[ignore]]` entries take `selectors`.** A waiver can now name an element by where it sits (`selectors = ["localization-form select"]`: tags, `#id`, `.class`, descendant and `>`), so a rule keeps reporting your own elements while it waives the one your platform renders. `a11y/label-content-name-mismatch`, `a11y/form-labels` and `a11y/select-name` report the element's place; `squirrel config validate` names a rule that does not, refuses an unsupported selector, and the waived items are counted and listed in `meta.ignored` like `items`. Reports never carry the recorded place. (#1440)
+
 ## v0.0.154 (2026-11-01)
 
 Technology detection reads a long `next/script` snippet in a Next.js flight payload again, and a page of unclosed tags no longer makes it take tens of seconds. `url/slug-convention` and `perf/total-byte-weight` count the same pages on both engines when a crawl has bodiless 4xx or 5xx pages, and `integrity/brand-impersonation` keeps reading long attribute labels on a page padded to starve it.

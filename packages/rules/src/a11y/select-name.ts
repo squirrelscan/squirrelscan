@@ -3,6 +3,7 @@
 import { sortUnnamedControls, unconfirmedRow } from "../shared/static-hidden";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 import { labelsFor } from "../shared/attribute-lookup";
+import { elementSelector } from "../element-path";
 
 function hasAccessibleName(el: Element, doc: Document): boolean {
   // Check aria-label
@@ -46,6 +47,8 @@ export const selectNameRule: Rule = {
     verdictScope: "page",
     severity: "error",
     weight: 8,
+    messageCountsItems: true,
+    itemSelectors: true,
   },
 
   run(ctx: RuleContext): RuleResult {
@@ -56,13 +59,16 @@ export const selectNameRule: Rule = {
     const selects = doc.querySelectorAll("select");
     // pub#991: a select out of the accessibility tree is not reported, and
     // one a style may hide is unconfirmed, like the other naming checks.
-    const unnamed = sortUnnamedControls<string>();
+    const unnamed = sortUnnamedControls<{ id: string; selector?: string }>();
 
     for (const select of selects) {
       if (!hasAccessibleName(select, doc)) {
         const name = select.getAttribute("name") || "";
         const id = select.getAttribute("id") || "";
-        unnamed.add(select, name ? `select[name="${name}"]` : id ? `select#${id}` : "select");
+        unnamed.add(select, {
+          id: name ? `select[name="${name}"]` : id ? `select#${id}` : "select",
+          ...(ctx.wantsItemSelectors ? { selector: elementSelector(select) } : {}),
+        });
       }
     }
     const missingNames = unnamed.failures;
@@ -72,7 +78,7 @@ export const selectNameRule: Rule = {
         name: "select-name",
         status: "fail",
         message: `${missingNames.length} select element(s) without accessible names`,
-        items: missingNames.map((id) => ({ id })),
+        items: missingNames,
       });
     }
     if (unnamed.unconfirmed.length > 0) {

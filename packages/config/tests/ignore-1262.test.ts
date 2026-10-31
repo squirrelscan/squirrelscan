@@ -19,15 +19,18 @@ describe("IgnoreEntrySchema", () => {
     ).toBe(true);
   });
 
-  test("refuses an entry with neither items nor urls and points at [rules] disable", () => {
+  test("refuses an entry with no items, urls or selectors and points at [rules] disable", () => {
     expect(messages({ rule: "perf/ttfb" })[0]).toContain('[rules] disable = ["perf/ttfb"]');
     expect(messages({ rule: "perf/ttfb", items: [], urls: [] })).toHaveLength(1);
   });
 
-  test("refuses selectors, which are reserved", () => {
-    expect(messages({ rule: "a11y/x", items: ["a"], selectors: ["form select"] })).toContain(
-      "selectors are not supported yet: ignore by items or urls",
-    );
+  test("accepts selectors (#1440), alone or beside items and urls, and caps them", () => {
+    expect(parse({ rule: "a11y/x", selectors: ["localization-form select"] }).success).toBe(true);
+    expect(parse({ rule: "a11y/x", items: ["a"], urls: ["/p/"], selectors: ["form select"] }).success).toBe(true);
+    expect(parse({ rule: "a11y/x", selectors: [] }).success).toBe(false);
+    expect(parse({ rule: "a11y/x", selectors: ["a".repeat(301)] }).success).toBe(false);
+    expect(parse({ rule: "a11y/x", selectors: Array.from({ length: MAX_IGNORE_MATCHERS + 1 }, (_, i) => `s${i}`) }).success).toBe(false);
+    expect(messages({ rule: "a11y/x", selectors: [] })[0]).toContain("items, urls or selectors");
   });
 
   test("caps the rule, the matchers and the reason", () => {

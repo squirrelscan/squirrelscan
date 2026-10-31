@@ -544,7 +544,7 @@ export function createStaticVisibility(options: StaticVisibilityOptions): Static
  */
 export type ControlItem =
   | string
-  | { id: string; snippet?: string; label?: string; meta?: Record<string, unknown> };
+  | { id: string; snippet?: string; label?: string; selector?: string; meta?: Record<string, unknown> };
 
 export interface UnnamedControls<T extends ControlItem> {
   /** Files one unnamed control under the finding it belongs to. */

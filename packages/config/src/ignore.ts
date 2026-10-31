@@ -13,15 +13,18 @@ export const MAX_IGNORE_MATCHERS = 100;
 export const MAX_IGNORE_ITEM_LENGTH = 200;
 /** Characters in one url matcher (a path pattern). */
 export const MAX_IGNORE_URL_LENGTH = 512;
+/** Characters in one selector (the engine refuses longer ones). */
+export const MAX_IGNORE_SELECTOR_LENGTH = 300;
 /** Characters in a reason. */
 export const MAX_IGNORE_REASON_LENGTH = 500;
 
 /**
- * One waiver. `rule` names the rule (or a glob such as `a11y/*`); `items` and
- * `urls` narrow what is waived and AND together when both are present. An entry
- * with neither would turn a rule off, which `[rules] disable` already does
- * visibly, so it is refused. `selectors` is reserved and refused until rules can
- * say where in the DOM an item is.
+ * One waiver. `rule` names the rule (or a glob such as `a11y/*`); `items`, `urls`
+ * and `selectors` narrow what is waived and AND together when several are present.
+ * An entry with none would turn a rule off, which `[rules] disable` already does
+ * visibly, so it is refused. `selectors` match the element path a rule reports on
+ * its items (`localization-form select`); `squirrel config validate` checks that a
+ * rule the entry names reports one.
  */
 export const IgnoreEntrySchema = z
   .object({
@@ -29,24 +32,18 @@ export const IgnoreEntrySchema = z
     checks: z.array(z.string().min(1).max(MAX_IGNORE_ITEM_LENGTH)).max(MAX_IGNORE_MATCHERS).optional(),
     items: z.array(z.string().min(1).max(MAX_IGNORE_ITEM_LENGTH)).max(MAX_IGNORE_MATCHERS).optional(),
     urls: z.array(z.string().min(1).max(MAX_IGNORE_URL_LENGTH)).max(MAX_IGNORE_MATCHERS).optional(),
-    selectors: z.array(z.string()).optional(),
+    selectors: z.array(z.string().min(1).max(MAX_IGNORE_SELECTOR_LENGTH)).max(MAX_IGNORE_MATCHERS).optional(),
     reason: z.string().max(MAX_IGNORE_REASON_LENGTH).optional(),
   })
   .superRefine((entry, ctx) => {
-    if (entry.selectors !== undefined) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["selectors"],
-        message: "selectors are not supported yet: ignore by items or urls",
-      });
-    }
     const hasItems = (entry.items?.length ?? 0) > 0;
     const hasUrls = (entry.urls?.length ?? 0) > 0;
-    if (!hasItems && !hasUrls) {
+    const hasSelectors = (entry.selectors?.length ?? 0) > 0;
+    if (!hasItems && !hasUrls && !hasSelectors) {
       ctx.addIssue({
         code: "custom",
         path: [],
-        message: `an ignore entry needs items or urls; to turn a rule off use [rules] disable = ["${entry.rule}"]`,
+        message: `an ignore entry needs items, urls or selectors; to turn a rule off use [rules] disable = ["${entry.rule}"]`,
       });
     }
   });
