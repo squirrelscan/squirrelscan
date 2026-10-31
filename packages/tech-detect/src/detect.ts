@@ -84,6 +84,43 @@ function stripHtmlComments(html: string): string {
  * the body of a script past {@link INLINE_LOADER_MAX_CHARS} unless it is a Next.js flight payload (a whole inlined bundle names many URLs in strings
  * it never loads).
  */
+
+/**
+ * Whether a script body starts as a Next.js flight script: optional whitespace and comments, an optional `(`,
+ * then `self.__next_f` or `self.__next_s`. A linear scan over the first characters, with no regular expression
+ * (a comment-skipping pattern backtracked for a second on 512 characters of `/* x *\/` repeated).
+ */
+function startsAsFlightScript(body: string): boolean {
+  const head = body.slice(0, FLIGHT_SCRIPT_HEAD_CHARS);
+  let i = 0;
+  const skipSpace = (): void => {
+    while (i < head.length && /\s/.test(head[i]!)) i++;
+  };
+  for (;;) {
+    skipSpace();
+    if (head.startsWith("/*", i)) {
+      const end = head.indexOf("*/", i + 2);
+      if (end === -1) return false;
+      i = end + 2;
+    } else if (head.startsWith("//", i)) {
+      const end = head.indexOf("\n", i + 2);
+      if (end === -1) return false;
+      i = end + 1;
+    } else break;
+  }
+  if (head[i] === "(") {
+    i++;
+    skipSpace();
+  }
+  for (const start of ["self.__next_f", "self.__next_s"]) {
+    if (head.startsWith(start, i)) {
+      const next = head[i + start.length] ?? "";
+      return !/[A-Za-z0-9_$]/.test(next);
+    }
+  }
+  return false;
+}
+
 const URL_TAGS = new Set(["script", "link", "img", "iframe", "embed", "object", "source"]);
 const INLINE_LOADER_MAX_CHARS = 16 * 1024;
 /**
@@ -98,7 +135,7 @@ const DATA_SCRIPT_TYPE =
  * A Next.js App Router flight script (`self.__next_f.push(...)`) carries the layout's `next/script` snippets as
  * strings, so it is read well past {@link INLINE_LOADER_MAX_CHARS}; any other script over the cap is a bundle.
  */
-const FLIGHT_SCRIPT_START = /^\s*(?:\/\*[\s\S]{0,200}?\*\/\s*|\/\/[^\n]{0,200}\n\s*)*\(?\s*self\.__next_(?:f|s)\b/;
+const FLIGHT_SCRIPT_HEAD_CHARS = 512;
 const FLIGHT_SCRIPT_MAX_CHARS = 2 * 1024 * 1024;
 /** Inline script text read per page, all scripts together. */
 const INLINE_TEXT_BUDGET = 8 * 1024 * 1024;
@@ -161,13 +198,13 @@ export function pageMarkup(html: string): string {
       scriptEnd.lastIndex = pos;
       const end = scriptEnd.exec(html)?.index ?? html.length;
       parts.push(tag);
-      const type = attributeValue(tag, "type")?.trim() ?? "";
+      const type = attributeValue(tag.slice(0, MAX_TAG_CHARS), "type")?.trim() ?? "";
       const length = end - pos;
-      if (length > 0 && !DATA_SCRIPT_TYPE.test(type) && inlineText < INLINE_TEXT_BUDGET) {
+      if (length > 0 && !DATA_SCRIPT_TYPE.test(type.slice(0, 256)) && inlineText < INLINE_TEXT_BUDGET) {
         const head = html.slice(pos, Math.min(end, pos + 512));
         // An ordinary script is read whole up to the cap; a flight script is read up to its larger one (a
         // longer one is cut there, not dropped).
-        const cap = FLIGHT_SCRIPT_START.test(head) ? FLIGHT_SCRIPT_MAX_CHARS : INLINE_LOADER_MAX_CHARS;
+        const cap = startsAsFlightScript(head) ? FLIGHT_SCRIPT_MAX_CHARS : INLINE_LOADER_MAX_CHARS;
         if (length <= INLINE_LOADER_MAX_CHARS || cap === FLIGHT_SCRIPT_MAX_CHARS) {
           const take = Math.min(length, cap, INLINE_TEXT_BUDGET - inlineText);
           parts.push(html.slice(pos, pos + take));
