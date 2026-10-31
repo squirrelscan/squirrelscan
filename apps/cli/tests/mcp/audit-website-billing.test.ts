@@ -156,6 +156,13 @@ beforeEach(() => {
       return Response.json({ error: "unavailable" }, { status: 503 });
     }
     if (url.includes("/v1/")) return Response.json({});
+    // A link shortener on another registrable domain (#1281).
+    if (new URL(url).hostname === "shortlink.com") {
+      return new Response(null, {
+        status: 301,
+        headers: { location: "https://destsite.com/" },
+      });
+    }
     if (new URL(url).pathname === "/") {
       // The gate holds the audit's own request, not the redirect resolution before it.
       if (siteGate && ++homeRequests > 1) await siteGate;
@@ -248,6 +255,52 @@ const finalized = () =>
       b.key === `PATCH /v1/agent-runs/${runId}` &&
       (b.body.status === "completed" || b.body.status === "failed")
   )?.body;
+
+describe("a start URL that redirects to another site is estimated, registered and billed as the destination (#1281)", () => {
+  const SHORT = { url: "https://shortlink.com/x", maxPages: 1, level: "quick" };
+  const registerBody = () =>
+    bodies.find((b) => b.key === "POST /v1/agent-runs/register")?.body;
+
+  test("a cross-domain redirect asks for consent before any estimate, registration or charge", async () => {
+    const out = await call("audit_website", { ...SHORT, confirm: true });
+    const body = JSON.parse(out.text);
+    expect(body).toMatchObject({
+      status: "confirmation_required",
+      reason: "redirect",
+      finalUrl: "https://destsite.com/",
+    });
+    expect(body.estimate).toBeUndefined();
+    expect(registered()).toBe(false);
+    expect(cloudCalls()).toEqual([]);
+  });
+
+  test("with consent the estimate is made for the destination and nothing names the shortener", async () => {
+    const out = await call("audit_website", { ...SHORT, followRedirect: true });
+    const body = JSON.parse(out.text);
+    expect(body.status).toBe("confirmation_required");
+    expect(body.estimate).toMatchObject({ credits: 52, pages: 1 });
+    expect(registered()).toBe(false);
+    expect(JSON.stringify(body)).not.toContain("shortlink.com");
+  });
+
+  test("the registered run, and the pages rendered for it, are the destination's", async () => {
+    const out = await call("audit_website", {
+      ...SHORT,
+      followRedirect: true,
+      confirm: true,
+    });
+    expect(out.isError).toBe(false);
+    expect(registered()).toBe(true);
+    const register = JSON.stringify(registerBody());
+    expect(register).toContain("destsite.com");
+    expect(register).not.toContain("shortlink.com");
+    expect(finalized()).toMatchObject({ status: "completed", pagesAudited: 1 });
+    // The shortener's own page is never fetched as a page of the audit.
+    expect(requested.filter((r) => r.includes("shortlink.com"))).toHaveLength(
+      1
+    );
+  });
+});
 
 describe("signed in, audit_website is a billed cloud audit", () => {
   test("without confirm it returns the estimate and registers nothing", async () => {
