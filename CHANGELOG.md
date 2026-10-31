@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Changed
+
+- **`install.sh` is hardened at run time.** It tightens the umask to at least `022`, checks the downloaded binary's size against the manifest before the checksum, turns Ctrl-C, `SIGTERM` and `SIGHUP` into a clean exit that removes the temp directory and ends the download (no failure report: stopping is not a failure), refuses `SQUIRREL_BIN_DIR` set to `/` or to only whitespace, stops with a clear message when `HOME` is unset, and retries from `~/.squirrel/tmp` when the system temp directory is mounted `noexec` (or says that is the cause). (#168)
+
 ### Fixed
 
 - **Technology detection on a page with many large scripts keeps the loader windows of later bundles.** With the page byte budget (512 KB in the cloud) full, a small early script's whole remainder took room that a later bundle's windows around its vendor literal (PostHog, React, Supabase, Sentry, Stripe) needed, so that bundle's copy lost the literal. Every bundle's windows are now chosen first, in rounds, and remainders and tails take what is left. (#1445)
