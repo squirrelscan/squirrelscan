@@ -57,20 +57,26 @@ type Json = unknown;
 
 const hasText = (v: Json): v is string => typeof v === "string" && v.length > 0;
 
+/** A JavaScript token that prose does not have: inline loader code, not text with a bracket in it. */
+const CODE_TOKEN = /\bfunction\b|=>|[\w\])]\s*=[^=]|\.createElement|\bwindow\.|\bdocument\./;
+
 /**
  * Whether a `$L<id>` component is `next/script` by its props: a `strategy`, an `id` with inline code (`__html`,
- * or `children` that is code, not prose: it has a call and a statement end or a block), or a `src` URL. A dev
- * build also names the module (`next/dist/client/script`), which counts too.
+ * or string `children` that has a JavaScript token), or a `src` URL beside a `strategy` or an `id`. A bare `src`
+ * is any embed or image component. A dev build also names the module (`next/dist/client/script`), which counts.
  */
 function isScriptComponent(ref: string, props: Record<string, Json>, modules: Set<string>): boolean {
   if (modules.has(ref)) return true;
   if (typeof props.strategy === "string") return true;
-  if (hasText(props.src)) return true;
   if (!hasText(props.id)) return false;
+  if (hasText(props.src)) return true;
   const inner = props.dangerouslySetInnerHTML;
   if (isObject(inner) && hasText(inner.__html)) return true;
-  const code = props.children;
-  return hasText(code) && code.includes("(") && (code.includes(";") || code.includes("{"));
+  if (!hasText(props.children)) return false;
+  const code = props.children.slice(0, 64 * 1024);
+  // Prose has a bracket and a semicolon too, so a call and a statement end or block are required AND a token
+  // that is code (the word `function`, `window.` or a `?query=` in prose is not).
+  return code.includes("(") && (code.includes(";") || code.includes("{")) && CODE_TOKEN.test(code);
 }
 const isObject = (v: Json): v is Record<string, Json> => typeof v === "object" && v !== null && !Array.isArray(v);
 
