@@ -3,7 +3,7 @@ import { inBundle, inBundleWith, inScript, inStyle, resourceAttr, scriptSrc } fr
 
 const KLAVIYO_SCRIPT_PATH = String.raw`(?:static|static-tracking)\.klaviyo\.com\/onsite\/js\/(?:[A-Za-z0-9]+\/)?klaviyo\.js`;
 const KLAVIYO_SCRIPT_URL = String.raw`(?:https?:)?\/\/${KLAVIYO_SCRIPT_PATH}`;
-const KLAVIYO_ATTR_VALUE = String.raw`(?:"${KLAVIYO_SCRIPT_URL}[^"]*"|'${KLAVIYO_SCRIPT_URL}[^']*'|${KLAVIYO_SCRIPT_URL}[^\s>]*)`;
+const KLAVIYO_ATTR_VALUE = String.raw`(?:"\s*${KLAVIYO_SCRIPT_URL}[^"]*"|'\s*${KLAVIYO_SCRIPT_URL}[^']*'|${KLAVIYO_SCRIPT_URL}[^\s>]*)`;
 
 export const OTHER_FINGERPRINTS: TechFingerprint[] = [
   {
@@ -24,7 +24,7 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
       {
         type: "script-url",
         pattern: new RegExp(
-          `^<script\\b[^>]{0,65536}>[\\s\\S]{0,16384}?\\b[A-Za-z_$][\\w$]{0,63}\\.src\\s*=\\s*["']${KLAVIYO_SCRIPT_URL}`,
+          `^(?!<)[^\\r\\n]{0,16384}?\\b[A-Za-z_$][\\w$]{0,63}\\.src\\s*=\\s*["']${KLAVIYO_SCRIPT_URL}`,
           "im",
         ),
       },
