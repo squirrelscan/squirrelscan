@@ -510,6 +510,8 @@ export function runStreamingRules(
     deadlineAt?: number;
     /** HTML larger than this is neither parsed nor evaluated; counted in `pagesTooLarge` (#1332). */
     maxPageBytes?: number;
+    /** Called once when an `[[ignore]]` entry exhausts its regex work budget. */
+    onIgnoreTimeout?: (entry: number) => void;
   }
 ): Effect.Effect<
   RuleExecutionResult & {

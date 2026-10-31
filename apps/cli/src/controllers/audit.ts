@@ -2184,6 +2184,9 @@ export async function runAudit(
           pinOwnHosts: pinOwnHosts(),
           // --offline: the soft-404 and cloaking probes stay on the audited site (#819).
           ...(options.offline ? { ownSiteOnly: true } : {}),
+          onIgnoreTimeout: (entry: number) => {
+            if (!ignoreTimedOut.includes(entry)) ignoreTimedOut.push(entry);
+          },
           ...(ruleCacheStore
             ? {
                 ruleCache: {
@@ -2235,7 +2238,7 @@ export async function runAudit(
             pagesNotEvaluated: 0,
             pagesTooLarge: 0,
             tooLargePages: [],
-            ignoreTimedOut: [],
+            ignoreTimedOut: [...ignoreTimedOut],
             ruleCache: emptyRuleCacheStats(),
           };
         }

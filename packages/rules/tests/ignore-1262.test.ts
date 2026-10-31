@@ -93,6 +93,54 @@ describe("the cookie case from the issue", () => {
   });
 });
 
+describe("ignore timeout observation", () => {
+  test("reports the entry as soon as it times out, before the rules phase returns", async () => {
+    const rule: Rule = {
+      meta: {
+        id: "test/ignore-timeout",
+        name: "ignore timeout",
+        description: "test",
+        category: "core",
+        scope: "page",
+        severity: "warning",
+        weight: 1,
+      },
+      run: (): RuleResult => ({
+        checks: [
+          {
+            name: "long-items",
+            status: "warn",
+            message: "long items",
+            items: Array.from({ length: 60 }, (_, i) => ({ id: `${"q".repeat(2040)}${i}` })),
+          },
+        ],
+      }),
+    };
+    const observed: number[] = [];
+    const r = new RuleRunner({
+      config: {
+        rule_options: {},
+        rules: { enable: [rule.meta.id] },
+        ignore: [
+          {
+            rule: rule.meta.id,
+            items: Array.from({ length: 100 }, (_, i) => `glob:*never-${i}`),
+          },
+        ],
+      },
+      additionalNamespaces: [{ name: "test", rules: [rule] }],
+      onIgnoreTimeout: (entry) => observed.push(entry),
+    });
+
+    await r.runPageRules(page(URL_A, []), siteData());
+
+    // A caller can retain this observation even if its deadline interrupts the
+    // surrounding rules Effect before the final RuleExecutionResult is returned.
+    expect(observed).toEqual([0]);
+    expect(r.ignoreTimedOutEntries()).toEqual([0]);
+  });
+});
+
 describe("urls: a page waiver", () => {
   test("an entry with urls alone skips the rule on a matching page, visibly, and does not run it", async () => {
     let runs = 0;

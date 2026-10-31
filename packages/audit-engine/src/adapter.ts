@@ -3501,6 +3501,8 @@ export function runStreamingRules(
     probesDeadlineAt?: number;
     /** Called with the name of each probe skipped at `probesDeadlineAt`. */
     onProbeSkipped?: (probe: string) => void;
+    /** Called once when an `[[ignore]]` entry exhausts its regex work budget. */
+    onIgnoreTimeout?: (entry: number) => void;
     /**
      * #1252 page-loop hooks, forwarded to {@link streamPageRules}. The cloud
      * passes them so the sync page-rule CPU yields to the event loop and emits a
@@ -3599,7 +3601,9 @@ export function runStreamingRules(
     // Threat-intel scope + runner (mirror of runRulesOnStorage).
     const effectiveScope =
       config.intel?.enabled && !scope?.intel ? { ...scope, intel: localIntelContext() } : scope;
-    const runner = createRunner(config, effectiveScope);
+    const runner = createRunner(config, effectiveScope, {
+      onIgnoreTimeout: opts?.onIgnoreTimeout,
+    });
 
     // Pass 1: DOM-free scalar universe (one batch of DOMs live at a time).
     const {

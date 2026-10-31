@@ -116,6 +116,8 @@ export interface RunnerScope {
 
 export interface RunnerOptions extends RunnerScope {
   config: RulesConfig;
+  /** Called once for each `[[ignore]]` entry that exhausts its regex work budget. */
+  onIgnoreTimeout?: (entry: number) => void;
   /** Extra rule namespaces (plugins / tests) merged on top of the built-ins. */
   additionalNamespaces?: RuleNamespace[];
   /**
@@ -352,7 +354,10 @@ export class RuleRunner {
         return rule ? isIgnorable(rule.meta) : true;
       },
       messageCountsItems: (ruleId) => this.rules.get(ruleId)?.meta.messageCountsItems === true,
-      onTimeout: (message, entry) => logger.warn("ignore entry timed out", { message, entry: entry + 1 }),
+      onTimeout: (message, entry) => {
+        logger.warn("ignore entry timed out", { message, entry: entry + 1 });
+        options.onIgnoreTimeout?.(entry);
+      },
     });
 
     // Filter to enabled rules based on config
@@ -1071,6 +1076,10 @@ function collectedTimeoutChecks(
 // Convenience function to create runner with defaults. `scope` threads the
 // per-audit-run Stage-0 site metadata + prefetched cloud results; omit it
 // for an offline / no-cloud run (no gating, all cloud lookups miss).
-export function createRunner(config: RulesConfig, scope?: RunnerScope): RuleRunner {
-  return new RuleRunner({ config, ...scope });
+export function createRunner(
+  config: RulesConfig,
+  scope?: RunnerScope,
+  options?: Pick<RunnerOptions, "onIgnoreTimeout">
+): RuleRunner {
+  return new RuleRunner({ config, ...scope, ...options });
 }
