@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+## v0.0.151 (2026-11-01)
+
+Technology detection finds Sentry, React, PostHog, Stripe and GA4 past the start of a large bundle, and a Next.js App Router page no longer detects a vendor it only mentions. A start URL at the site root that redirects to a deep page keeps the root-start crawl order. Thanks to William for the tests that pin the `[[ignore]]` timeout notice in a cut run (#1434).
+
 ### Fixed
 
 - **A Next.js App Router page no longer detects a vendor it only mentions.** The flight script (`self.__next_f.push`) was read as one block of text so the layout's `next/script` loader was found, which also matched a vendor URL that the page renders as content: a JSON-LD `sameAs`, a meta description, a CSP `<meta>`, a link or prose. The chunks of all the page's flight scripts are now decoded together and only the `src`, inline `__html` and string `children` of a `script` element, or of a `next/script` component (recognised by its props, since a production build does not name the module), are read; the layout loader is still detected on Next 14 and 15 production builds (`afterInteractive`, `lazyOnload`, in the head or the body). A flight script with no decodable chunk is read as an ordinary script. (#1437)
