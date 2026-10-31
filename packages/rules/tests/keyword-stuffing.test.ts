@@ -447,6 +447,13 @@ describe("content/keyword-stuffing: German function words, menu chrome, card mic
     // The same links with a real menu signal and a varied set of category words are left out, as the docs say.
     const varied = Array.from({ length: 20 }, (_, i) => `<a href="/c/${i}">${["bademode", "curvy", "wäsche", "kleider", "röcke", "hosen"][i % 6]} ${sub[i]}</a>`).join(" ");
     expect(flagged(page("de", `<body><div role="menubar">${varied}</div>${copy}</body>`))).toEqual([]);
+    // The reporter's real mega-menu shape: varied labels in plain divs, no signal. Still counted (the signal gate
+    // is what separates it from the menubar case above, not the labels).
+    // One category word (repeated in its label) on a quarter of the links stays under the keyword-cloud share, so only the signal decides.
+    const quarter = Array.from({ length: 20 }, (_, i) => `<a href="/c/${i}">${["bademode bademode bademode bademode", "curvy", "wäsche", "kleider"][i % 4]} ${sub[i]}</a>`).join(" ");
+    expect(flagged(page("de", `<body><div role="menubar">${quarter}</div>${copy}</body>`))).toEqual([]);
+    expect(flagged(page("de", `<body><div>${quarter}</div>${copy}</body>`))).toContain("bademode");
+    expect(flagged(page("de", `<body><div class="mega-menu" id="menu">${quarter}</div>${copy}</body>`))).toContain("bademode");
     // A shared word is a keyword cloud even with the signal, so the issue's literal shape is counted by design.
     expect(flagged(page("de", `<body><div role="menubar">${links}</div>${copy}</body>`))).toContain("bademode");
   });
