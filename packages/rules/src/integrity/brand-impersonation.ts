@@ -40,11 +40,18 @@ export const brandImpersonationRule: Rule = {
     if (!hit) {
       // A scan cut by its work bounds cannot say "clean": say what was left unread (#784).
       const notes = integrityScanNotes(ctx);
-      if (notes.controlsUnread) {
+      if (notes.controlsUnread || notes.templatesUnread) {
+        const parts: string[] = [];
+        if (notes.controlsUnread) {
+          parts.push(`${notes.controlsUnread} sign-in control${notes.controlsUnread === 1 ? "" : "s"} could not be read in full`);
+        }
+        if (notes.templatesUnread) {
+          parts.push(`${notes.templatesUnread} <template> element${notes.templatesUnread === 1 ? "" : "s"} past the template limit were not read`);
+        }
         checks.push({
           name: "brand-impersonation",
           status: "info",
-          message: `${notes.controlsUnread} sign-in control${notes.controlsUnread === 1 ? "" : "s"} could not be read in full (scan work limit); no brand impersonation was found in what was read`,
+          message: `${parts.join("; ")} (scan work limit); no brand impersonation was found in what was read`,
           pageUrl: ctx.page.url,
           details: { scanTruncated: true, ...notes },
         });
