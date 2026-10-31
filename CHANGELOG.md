@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **Technology detection no longer loses Sentry, React, PostHog and others in large bundles.** Past the first 256 KB of a bundle, only detectors with a declared search literal got a window of text; the other 184 of 194 (`Sentry.init`, the React devtools hook, `posthog.init`, `Stripe(`, GA4 config) could match only in whatever tail the hint windows left, and v0.0.146's wider windows left none, so 30 of 188 Sentry sites in a corpus re-run were lost. Every detector now has a search literal (derived from its pattern when it declares none), windows are shared out across them one round at a time, and the tail keeps a 6 KB reserve. (#1420)
+
 ## v0.0.150 (2026-10-31)
 
 Technology detection reads inline loaders again that a cache, a CDN or Next.js moved out of reach in v0.0.149, so Clarity, Contentful and other loader-based tools are detected on those pages as before.
