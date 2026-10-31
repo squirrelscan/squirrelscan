@@ -44,6 +44,8 @@ describe("readPeerCertificate", () => {
       validFrom: new Date("2025-01-01T00:00:00Z"),
       validTo: new Date("2099-01-01T00:00:00Z"),
       rsaBits: 2048,
+      keyType: "rsa",
+      keyBits: 2048,
     });
   });
 
@@ -57,6 +59,32 @@ describe("readPeerCertificate", () => {
     expect(certificate?.rsaBits).toBeUndefined();
     expect(certificate?.names).toEqual([]);
     expect(certificate?.issuer).toBe("Only CN");
+  });
+
+  test("key type, size, curve and signature come from the extras, or from the peer certificate's own fields (#1259)", () => {
+    const base = { issuer: { CN: "CA" }, valid_from: "Jan  1 00:00:00 2025 GMT", valid_to: "Jan  1 00:00:00 2099 GMT" };
+    expect(readPeerCertificate({ ...base, bits: 256, asn1Curve: "prime256v1", nistCurve: "P-256" })).toMatchObject({
+      keyType: "ecdsa",
+      keyBits: 256,
+      curve: "P-256",
+    });
+    const ed = readPeerCertificate({ ...base, bits: 256 }, { keyType: "ed25519", signatureAlgorithm: "ED25519" });
+    expect(ed).toMatchObject({ keyType: "ed25519", signatureAlgorithm: "ED25519" });
+    expect(ed?.keyBits).toBeUndefined();
+    expect(readPeerCertificate({ ...base }, { keyType: "dsa", keyBits: 1024 })).toMatchObject({ keyType: "dsa", keyBits: 1024 });
+    expect(readPeerCertificate({ ...base }, { keyType: "ec" })?.keyType).toBe("ecdsa");
+    expect(readPeerCertificate({ ...base }, { keyType: "x448" })?.keyType).toBe("other");
+    // Nothing known: no key facts at all.
+    expect(readPeerCertificate({ ...base })).not.toHaveProperty("keyType");
+  });
+
+  test("the signature algorithm and curve are bounded and lose control characters", () => {
+    const certificate = readPeerCertificate(
+      { issuer: { CN: "CA" }, valid_from: "Jan  1 00:00:00 2025 GMT", valid_to: "Jan  1 00:00:00 2099 GMT" },
+      { keyType: "rsa", keyBits: 2048, signatureAlgorithm: `sha1\u001b[31mWith${"x".repeat(200)}` },
+    );
+    expect(certificate?.signatureAlgorithm).not.toContain("\u001b");
+    expect(certificate?.signatureAlgorithm?.length).toBeLessThanOrEqual(60);
   });
 
   test("server-chosen text loses control characters and is bounded", () => {
