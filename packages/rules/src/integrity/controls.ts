@@ -12,6 +12,7 @@
 
 import { getAttrCI } from "@squirrelscan/utils";
 
+import { BRAND_SPECS } from "./brand-specs";
 import { hiddenSelectors } from "./overlay-style";
 
 /** Text with nothing outside ASCII (a linear test, with no backtracking). */
@@ -90,17 +91,56 @@ const ATTR_CHARS = 300;
 const ATTR_RAW_CHARS = 16_000;
 const ATTR_STRIDE = ATTR_CHARS / 2;
 
-/** Read a bounded attribute in overlapping windows so a cue cannot straddle a cut. */
+/**
+ * An attribute's text in overlapping windows over its first {@link ATTR_RAW_CHARS} normalised characters, so a cue
+ * cannot straddle a cut (every run of 150 characters lies whole inside one window). A window edge that falls inside
+ * a word gets a letter stuck on it (`x`): a window cut out of `Redesign in with Google` must not read as `sign in
+ * with Google`, and a cue half-cut by the edge must not read as a whole word either.
+ */
 function boundedAttribute(text: string): { texts: string[]; cut: boolean } {
   const normalised = readable(text.slice(0, ATTR_RAW_CHARS)).trim();
   const limited = normalised.slice(0, ATTR_RAW_CHARS);
   const texts: string[] = [];
   for (let start = 0; start < limited.length; start += ATTR_STRIDE) {
-    texts.push(limited.slice(start, start + ATTR_CHARS));
+    const end = Math.min(limited.length, start + ATTR_CHARS);
+    const before = start > 0 && limited[start - 1] !== " " ? "x" : "";
+    const after = end < limited.length && limited[end] !== " " ? "x" : "";
+    texts.push(`${before}${limited.slice(start, end)}${after}`);
     if (start + ATTR_CHARS >= limited.length) break;
   }
   return { texts, cut: text.length > ATTR_RAW_CHARS || normalised.length > ATTR_RAW_CHARS };
 }
+
+/**
+ * The words a cue is made of, derived from what the rules match: the auth cues of {@link AUTH_CUE_PHRASES} and every
+ * brand lexicon phrase. A window can hold such a phrase only if it holds the phrase's first word (with a short first
+ * word joined to the second, `sign ?in`: the rule lets a space be missing), so a window without one cannot match a cue
+ * and is not read. Derived, not listed by hand: a new lexicon phrase widens the prefilter by itself.
+ */
+const AUTH_CUE_PHRASES = ["sign in", "log in", "login", "logon", "continue with", "verify"];
+function cueAlternatives(): string[] {
+  const phrases = [...AUTH_CUE_PHRASES, ...BRAND_SPECS.flatMap((spec) => spec.lexicon)];
+  const alternatives = new Set<string>();
+  for (const phrase of phrases) {
+    const [first, second] = phrase.split(" ");
+    const escape = (word: string): string => word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    alternatives.add(first!.length <= 4 && second ? `${escape(first!)} ?${escape(second)}` : escape(first!));
+  }
+  return [...alternatives];
+}
+const CUE_PATTERN = `(?<![\\p{L}\\p{N}])(?:${cueAlternatives().join("|")})`;
+/** A window (normalised, lower case) that holds the start of a cue phrase. */
+export const WINDOW_CUE = new RegExp(CUE_PATTERN, "u");
+/** The same test on an attribute as written, no normalisation: the cheap first tier. */
+const RAW_CUE = new RegExp(CUE_PATTERN, "iu");
+/** Windows past an attribute's first that the page may read, how they are shared, and the most one attribute adds. */
+const SEQUENTIAL_WINDOW_BUDGET = 10_000;
+const SHARED_WINDOW_BUDGET = 10_000;
+const MAX_WINDOWS_PER_CONTROL = 160;
+const WINDOWS_PER_ATTRIBUTE = 40;
+/** The page's window budgets. A mutable object so a test can lower them to exercise the exhausted path. */
+export const integrityLimits = { sequentialWindows: SEQUENTIAL_WINDOW_BUDGET, sharedWindows: SHARED_WINDOW_BUDGET };
+
 /**
  * One control's read: at most `SHORT_VISITS` nodes looked at (text or not) and `SHORT_CHARS` characters kept.
  * That is a ceiling, not an entitlement: see {@link TOTAL_VISITS}.
@@ -251,10 +291,10 @@ function shortlist(
   found: Element[],
   destinationOf: (el: Element) => string | null,
   hasLogo: (el: Element) => boolean,
-): { chosen: Array<{ element: Element; href: string }>; cut: number } {
-  const first: Array<{ element: Element; href: string }> = [];
-  const second: Array<{ element: Element; href: string }> = [];
-  for (const el of found) {
+): { chosen: Array<{ element: Element; href: string; order: number }>; cut: number } {
+  const first: Array<{ element: Element; href: string; order: number }> = [];
+  const second: Array<{ element: Element; href: string; order: number }> = [];
+  for (const [order, el] of found.entries()) {
     const isLink = el.tagName.toLowerCase() === "a";
     let href: string | null = null;
     let cue = false;
@@ -269,10 +309,10 @@ function shortlist(
     if (href === null) continue;
     const normalised = urlText(href);
     if (normalised === "" || PLAIN_LOCAL_HREF.test(normalised)) {
-      if (cue || hasLogo(el)) first.push({ element: el, href });
+      if (cue || hasLogo(el)) first.push({ element: el, href, order });
       continue;
     }
-    (!isLink || AUTH_PATH.test(href.slice(0, 300)) ? first : second).push({ element: el, href });
+    (!isLink || AUTH_PATH.test(href.slice(0, 300)) ? first : second).push({ element: el, href, order });
   }
   const all = first.concat(second);
   return { chosen: all.slice(0, MAX_PREPARED), cut: Math.max(0, all.length - MAX_PREPARED) };
@@ -414,35 +454,80 @@ export function scanControls(doc: Document): ControlScan {
     return form ? (getAttrCI(form, "action") ?? "") : null;
   };
   const { chosen, cut: notPrepared } = shortlist(found, destinationOf, (el) => imageAlts.has(el));
-  // Controls whose attribute text or `aria-labelledby` list was longer than what is read: counted, not hidden.
+  // Controls whose attribute text or `aria-labelledby` list was longer than what is read, or that a window cap cut: counted, not hidden.
   let paddedAttributes = 0;
-  const prepared = chosen.map(({ element, href }) => {
+  // Phase 1: each control's attribute windows, and whether an attribute holds a sign-in or brand word as written (a
+  // cheap test on the raw text; a look-alike spelling misses it and is served in the second tier, never skipped).
+  const gathered = chosen.map(({ element, href, order }) => {
     const tag = element.tagName.toLowerCase();
     const referenced = (getAttrCI(element, "aria-labelledby") ?? "").slice(0, ATTR_RAW_CHARS).split(/\s+/).filter(Boolean);
-    let attributeCut = referenced.length > MAX_LABELLEDBY;
+    let cut = referenced.length > MAX_LABELLEDBY;
     const labelled = referenced
       .slice(0, MAX_LABELLEDBY)
       .map((id) => byId(id))
       .filter((target): target is Element => target !== null)
       .map((target) => targetText(target));
-    const extra = [
+    const raw = [
       getAttrCI(element, "aria-label"),
       getAttrCI(element, "title"),
       tag === "input" ? getAttrCI(element, "value") : null,
       tag === "input" ? getAttrCI(element, "alt") : null,
       ...labelled,
       ...(imageAlts.get(element) ?? []),
-    ]
-      .filter((v): v is string => typeof v === "string" && v !== "")
-      .flatMap((v) => {
-        // Padding (spaces, zero-width characters) is dropped before overlapping windows are read.
-        const bounded = boundedAttribute(v);
-        attributeCut ||= bounded.cut;
-        return bounded.texts;
-      })
-      .filter((v) => v !== "");
-    if (attributeCut) paddedAttributes++;
-    return { element, href, extra, rank: rank(tag, href, extra) };
+    ].filter((v): v is string => typeof v === "string" && v !== "");
+    const rawCue = raw.some((v) => RAW_CUE.test(v.length > ATTR_RAW_CHARS ? v.slice(0, ATTR_RAW_CHARS) : v));
+    const windows = raw.map((v) => {
+      const bounded = boundedAttribute(v);
+      cut ||= bounded.cut;
+      return bounded.texts.filter((text) => text !== "");
+    });
+    return { element, tag, href, order, rawCue, windows, cut };
+  });
+
+  // Phase 2: windows past an attribute's first are read only where a cue word is in them (a window without one cannot
+  // match), at most WINDOWS_PER_ATTRIBUTE per attribute (its first ones and its last). Two page budgets: the first is
+  // spent in order (controls with a cue word as written first, then document order), so the first controls of the
+  // page always get full reads however much padding follows them; the second is shared fairly over the controls
+  // still cut, so padding in front cannot take everything either. What neither covers is counted, so the info note
+  // is emitted even when nothing matched.
+  const wanted = gathered.map((item) =>
+    item.windows.flatMap((windows) => {
+      const found = windows.slice(1).filter((window) => WINDOW_CUE.test(window));
+      if (found.length <= WINDOWS_PER_ATTRIBUTE) return found;
+      item.cut = true;
+      return [...found.slice(0, WINDOWS_PER_ATTRIBUTE - 1), found[found.length - 1]!];
+    }),
+  );
+  const served = wanted.map(() => 0);
+  const servingOrder = gathered
+    .map((_, index) => index)
+    .sort((a, b) => Number(!gathered[a]!.rawCue) - Number(!gathered[b]!.rawCue) || gathered[a]!.order - gathered[b]!.order);
+  let sequential = integrityLimits.sequentialWindows;
+  for (const index of servingOrder) {
+    if (sequential <= 0) break;
+    const take = Math.min(wanted[index]!.length, MAX_WINDOWS_PER_CONTROL, sequential);
+    served[index] = take;
+    sequential -= take;
+  }
+  let shared = integrityLimits.sharedWindows;
+  const stillCut = servingOrder.filter((index) => served[index]! < wanted[index]!.length);
+  for (const [turn, index] of stillCut.entries()) {
+    if (shared <= 0) break;
+    const share = Math.max(1, Math.floor(shared / (stillCut.length - turn)));
+    const take = Math.min(wanted[index]!.length - served[index]!, MAX_WINDOWS_PER_CONTROL - served[index]!, share, shared);
+    if (take <= 0) continue;
+    served[index]! += take;
+    shared -= take;
+  }
+  const prepared = gathered.map((item, index) => {
+    const want = wanted[index]!;
+    const count = served[index]!;
+    // The first windows it was served and the last: padding is at the ends as often as in the middle.
+    const taken = count >= want.length ? want : count === 0 ? [] : [...want.slice(0, count - 1), want[want.length - 1]!];
+    if (count < want.length) item.cut = true;
+    if (item.cut) paddedAttributes++;
+    const extra = [...item.windows.flatMap((windows) => windows.slice(0, 1)), ...taken];
+    return { element: item.element, href: item.href, extra, rank: rank(item.tag, item.href, extra) };
   });
 
   // Reading order: most relevant first, document order within a rank. Controls with no destination (rank 0)

@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
 import { parsePage } from "@squirrelscan/parser";
 import { brandImpersonationRule } from "../src/integrity/brand-impersonation";
+import { WINDOW_CUE } from "../src/integrity/controls";
+import { BRAND_SPECS } from "../src/integrity/brand-specs";
 import { detectBrandImpersonation, detectFakeAuthOverlay, detectPageSignals } from "../src/integrity/signals";
 import type { RuleContext } from "../src/types";
 
@@ -211,4 +213,62 @@ test("controls in the 25th template, in a template inside a template, and after 
   expect(brand(`<template><template><a href="${OFF}">Sign in with Google</a></template></template>`)).toBe("Google");
   const logos = Array.from({ length: 500 }, (_, i) => `<img alt="logo ${i}" src="/l.png">`).join("");
   expect(brand(`${logos}<a href="${OFF}"><img alt="Sign in with Google" src="/g.png"></a>`)).toBe("Google");
+});
+
+// ── long attribute labels: every offset, every attribute, the seams and the cue prefilter (#1424) ─────────────
+
+const PHRASE = "Sign in with Google";
+/** The control for each attribute that can carry a label, with `label` as its value. */
+const ATTRIBUTE_CONTROLS: Array<[string, (label: string) => string]> = [
+  ["aria-label", (label) => `<a href="${OFF}" aria-label="${label}"><svg></svg></a>`],
+  ["title", (label) => `<a href="${OFF}" title="${label}"><svg></svg></a>`],
+  ["value", (label) => `<form action="${OFF}"><input type="submit" value="${label}"></form>`],
+  ["logo alt", (label) => `<a href="${OFF}"><img src="/g.png" alt="${label}"></a>`],
+  ["input image alt", (label) => `<form action="${OFF}"><input type="image" src="/g.png" alt="${label}"></form>`],
+];
+
+test.each(ATTRIBUTE_CONTROLS)("%s: the phrase is read at every offset 0..460, with padding on both sides", (_attribute, control) => {
+  for (let before = 0; before <= 460; before++) {
+    expect(brand(control(`${"a".repeat(before)} ${PHRASE} ${"b".repeat(400)}`)), `${before} before`).toBe("Google");
+    expect(brand(control(`${"a".repeat(400)} ${PHRASE} ${"b".repeat(before)}`)), `${before} after`).toBe("Google");
+  }
+});
+
+test.each(ATTRIBUTE_CONTROLS)("%s: a phrase deep in a long label, and a split phrase across a window boundary", (_attribute, control) => {
+  for (const before of [285, 290, 295, 1_000, 5_000, 15_900]) {
+    expect(brand(control(`${"a".repeat(before)} ${PHRASE} ${"b".repeat(100)}`)), `${before}`).toBe("Google");
+  }
+});
+
+test("look-alike words are not the phrase at any alignment of the padding", () => {
+  // `Redesign in with Google Workspace` and `Login with GoogleMail` are the docs' own non-examples; a window cut
+  // through `Redesign` must not read as `sign in with Google`.
+  for (let before = 0; before <= 460; before++) {
+    for (const words of ["Redesign in with Google Workspace", "Login with GoogleMail", "Plugin with Google"]) {
+      const label = `${"a".repeat(before)} ${words} ${"b".repeat(300)}`;
+      expect(brand(`<a href="${OFF}" aria-label="${label}"><svg></svg></a>`), `${words} after ${before}`).toBeNull();
+    }
+  }
+});
+
+test("a long label made of many words is read through, wherever the phrase falls among them", () => {
+  const words = Array.from({ length: 400 }, (_, i) => `word${i}`);
+  for (const at of [3, 40, 41, 90, 140, 250, 399]) {
+    const label = [...words.slice(0, at), PHRASE, ...words.slice(at)].join(" ");
+    expect(brand(`<a href="${OFF}" aria-label="${label}"><svg></svg></a>`), `after ${at} words`).toBe("Google");
+  }
+});
+
+test("the cue prefilter holds every phrase the rules match (drift guard)", () => {
+  const phrases = [
+    ...BRAND_SPECS.flatMap((spec) => spec.lexicon),
+    // The auth cues and the provider buttons of detectBrandImpersonation, with and without the space.
+    "sign in", "signin", "log in", "login", "logon", "continue with", "verify",
+    ...["continue", "sign in", "signin", "log in", "login", "logon"].flatMap((verb) => ["google", "microsoft"].map((brandName) => `${verb} with ${brandName}`)),
+  ];
+  for (const phrase of phrases) expect(WINDOW_CUE.test(phrase), phrase).toBe(true);
+  // And it does not hold ordinary words that merely contain a cue's letters.
+  for (const word of ["designers", "blog", "technology", "logistics is hard", "assignment", "catalog entry"]) {
+    expect(WINDOW_CUE.test(word), word).toBe(false);
+  }
 });
