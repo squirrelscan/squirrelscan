@@ -11,6 +11,7 @@ import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 import {
   detectBrandImpersonation,
   detectPageSignals,
+  integrityScanNotes,
   shouldEscalate,
 } from "./signals";
 
@@ -37,6 +38,17 @@ export const brandImpersonationRule: Rule = {
 
     const hit = detectBrandImpersonation(ctx);
     if (!hit) {
+      // A scan cut by its work bounds cannot say "clean": say what was left unread (#784).
+      const notes = integrityScanNotes(ctx);
+      if (notes.controlsUnread) {
+        checks.push({
+          name: "brand-impersonation",
+          status: "info",
+          message: `${notes.controlsUnread} sign-in control${notes.controlsUnread === 1 ? "" : "s"} could not be read in full (scan work limit); no brand impersonation was found in what was read`,
+          pageUrl: ctx.page.url,
+          details: { scanTruncated: true, ...notes },
+        });
+      }
       return { checks };
     }
 
@@ -59,6 +71,7 @@ export const brandImpersonationRule: Rule = {
         signals: [...signals],
         corroborating,
         escalated: escalate,
+        ...integrityScanNotes(ctx),
       },
     });
 

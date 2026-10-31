@@ -17,8 +17,11 @@ import { getDomain } from "tldts";
 
 import { getAttrCI } from "@squirrelscan/utils";
 
-import { getPageSeparatedText, getSeparatedText } from "../content/text-content";
+import { getPageSeparatedText } from "../content/text-content";
 import type { RuleContext } from "../types";
+
+import { collectControls, readable, scanControls } from "./controls";
+import { cssScanTruncated, overlayGeometry } from "./overlay-style";
 
 /** Distinct page-level compromise signals (one per page-scope rule). */
 export type IntegritySignal =
@@ -70,22 +73,6 @@ function authHaystack(ctx: PageSignalContext): string {
 /** One `authHaystack` per parsed document: several detectors read it. */
 const haystackCache = new WeakMap<object, string>();
 
-/**
- * Characters that render as nothing: soft hyphens, zero-width spaces and
- * joiners, invisible operators, variation selectors and the rest of Unicode's
- * default-ignorable set.
- */
-const INVISIBLE = /\p{Default_Ignorable_Code_Point}/gu;
-
-/**
- * Text as a cue is matched against: lower case, the invisible characters
- * gone and every run of whitespace (a newline, a double space, `&nbsp;`) one
- * space, so none of them can split `sign in` or a brand phrase (pub#749).
- */
-function readable(text: string): string {
-  return text.replace(INVISIBLE, "").replace(/\s+/g, " ").toLowerCase();
-}
-
 // ── Brand impersonation ─────────────────────────────────────────────
 //
 // Third-party brands whose login / funnel / scheduling surfaces are commonly
@@ -107,7 +94,14 @@ export interface BrandSpec {
 export const BRAND_SPECS: BrandSpec[] = [
   {
     brand: "Google",
-    lexicon: ["sign in with google", "google account", "google login"],
+    lexicon: [
+      "sign in with google",
+      "continue with google",
+      "log in with google",
+      "login with google",
+      "google account",
+      "google login",
+    ],
     actionCues: ["sign in", "log in", "continue", "verify"],
     legitHosts: ["accounts.google.com", "google.com"],
   },
@@ -115,12 +109,22 @@ export const BRAND_SPECS: BrandSpec[] = [
     brand: "Microsoft",
     lexicon: [
       "sign in with microsoft",
+      "continue with microsoft",
+      "log in with microsoft",
+      "login with microsoft",
       "microsoft account",
       "office 365 login",
       "outlook login",
     ],
     actionCues: ["sign in", "log in", "continue", "verify"],
-    legitHosts: ["login.microsoftonline.com", "login.live.com", "microsoft.com"],
+    legitHosts: [
+      "login.microsoftonline.com",
+      "login.microsoftonline.us",
+      "login.windows.net",
+      "login.live.com",
+      "b2clogin.com",
+      "microsoft.com",
+    ],
   },
   {
     brand: "Calendly",
@@ -228,6 +232,15 @@ function hostMatches(host: string, hosts: string[]): boolean {
   return hosts.some((h) => host === h || host.endsWith(`.${h}`));
 }
 
+function hrefPath(raw: string | null, base: string): string {
+  if (!raw) return "";
+  try {
+    return new URL(raw, base).pathname;
+  } catch {
+    return "";
+  }
+}
+
 function hrefHost(raw: string | null, base: string): string | null {
   if (!raw) return null;
   try {
@@ -238,53 +251,115 @@ function hrefHost(raw: string | null, base: string): string | null {
 }
 
 /**
+ * Identity brokers: hosted sign-in services a site puts between itself and Google or Microsoft. A "Sign in
+ * with Google" or "Sign in with Microsoft" control that goes to a broker's AUTHORIZE ENDPOINT is a real
+ * integration, not an off-brand credential grab (#784). Narrow on purpose: the hosts are open to anyone who
+ * registers a tenant (a free Auth0, Supabase or Firebase project can serve any page), so a broker host alone
+ * proves nothing; only the endpoint shape does, and only for the two providers brokers federate. Other
+ * brands, and any other path on these hosts, are judged as before.
+ */
+const IDENTITY_BROKER_ENDPOINTS: Array<{ host: string; path: RegExp }> = [
+  { host: "auth0.com", path: /^\/authorize(?:\/|$)/ },
+  { host: "okta.com", path: /^\/oauth2\/(?:[\w.-]+\/)?v1\/authorize(?:\/|$)|^\/oauth2\/authorize(?:\/|$)/ },
+  { host: "oktapreview.com", path: /^\/oauth2\/(?:[\w.-]+\/)?v1\/authorize(?:\/|$)|^\/oauth2\/authorize(?:\/|$)/ },
+  { host: "okta-emea.com", path: /^\/oauth2\/(?:[\w.-]+\/)?v1\/authorize(?:\/|$)|^\/oauth2\/authorize(?:\/|$)/ },
+  { host: "amazoncognito.com", path: /^\/oauth2\/authorize(?:\/|$)/ },
+  { host: "supabase.co", path: /^\/auth\/v1\/authorize(?:\/|$)/ },
+  { host: "firebaseapp.com", path: /^\/__\/auth\/handler(?:\/|$)/ },
+];
+
+/** The brands an identity broker can legitimately stand in for. */
+const BROKERED_BRANDS = new Set(["Google", "Microsoft"]);
+
+function isBrokerEndpoint(brand: string, host: string, path: string): boolean {
+  if (!BROKERED_BRANDS.has(brand)) return false;
+  return IDENTITY_BROKER_ENDPOINTS.some((e) => hostMatches(host, [e.host]) && e.path.test(path));
+}
+
+interface CredentialDestination {
+  host: string;
+  /** The destination's path (no query or fragment), for the broker endpoint shape. */
+  path: string;
+  brandLabeled: string;
+  signIn: boolean;
+}
+
+const phraseRegexes = new Map<string, RegExp>();
+
+/**
+ * `phrase` in `label` as whole words, with a space optional between its words. The label forms keep the
+ * spaces the page had and glue elements together, so `Sign<br>in with Goo<i>gle</i> to continue` reads
+ * `signin with google to continue`: the optional spaces see through the splice while the word boundaries at
+ * each end keep `Redesign in with Google` and `Login with GoogleMail` out.
+ */
+function hasPhrase(label: string, phrase: string): boolean {
+  let regex = phraseRegexes.get(phrase);
+  if (!regex) {
+    const body = phrase
+      .split(" ")
+      .map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+      .join(" ?");
+    regex = new RegExp(`(?<![\\p{L}\\p{N}])${body}(?![\\p{L}\\p{N}])`, "u");
+    phraseRegexes.set(phrase, regex);
+  }
+  return regex.test(label);
+}
+
+/**
  * Collect the destination hosts of the page's actual CREDENTIAL SURFACE — not
  * every outbound link (a legit Google-SSO page with a footer Twitter link must
  * not be read as "credentials go to twitter.com"). The credential surface is:
  *   - `<form>` actions for forms that contain a password field, and
- *   - auth-labeled `<a>`/`<button>` links (label says "sign in"/"log in"/"continue
- *     with"/names the brand).
+ *   - auth-labeled controls: `<a>`, `<button>`, `<input type=submit|button|image>` and
+ *     `role=button` whose label says "sign in"/"log in"/"continue with"/names the brand,
+ *     read from their text, `aria-label`, `title`, `value` and a logo's `alt` (#784).
  * Returns the destination hosts tied to those, paired with whether each came
- * from a control whose label actually names the brand.
+ * from a control whose label actually names the brand. A broker host counts as
+ * the brand's own (see {@link IDENTITY_BROKER_ENDPOINTS}).
  */
 function credentialDestinations(
   doc: NonNullable<RuleContext["parsed"]["document"]>,
   base: string
-): { host: string; brandLabeled: string; signIn: boolean }[] {
-  const out: { host: string; brandLabeled: string; signIn: boolean }[] = [];
+): CredentialDestination[] {
+  const out: CredentialDestination[] = [];
 
   // Password-form actions (or the page URL when the action is empty → self-post).
   for (const form of doc.querySelectorAll("form")) {
     if (!form.querySelector('input[type="password"]')) continue;
     const action = getAttrCI(form, "action");
     const host = hrefHost(action, base) ?? hrefHost(base, base);
-    if (host) out.push({ host, brandLabeled: "", signIn: false });
+    if (host) out.push({ host, path: hrefPath(action, base), brandLabeled: "", signIn: false });
   }
 
-  // Auth-labeled links: only links whose own text is a sign-in affordance.
-  const MAX_LABEL_CHARS = 300;
-  // The label is read as written and with a break at every element inside it
-  // (`Sign in with<br>Google`), whitespace and invisible characters collapsed.
+  // Auth-labeled controls: only those whose own label is a sign-in affordance.
   const AUTH_LABEL = /\b(sign in|log in|login|continue with|verify)\b/;
   const SIGN_IN_LABEL = /\b(sign in|log in|login)\b/;
-  for (const a of doc.querySelectorAll("a[href]")) {
-    // A label is a few words. The parser nests an unclosed `<a>` inside the
-    // next, so on junk markup every anchor holds the rest of the page, and
-    // reading each in full again would grow with the square of their number.
-    // A long label is still read, as before, without the extra passes: a kit
-    // can pad one with a `<style>` or hidden text.
-    const raw = a.textContent ?? "";
-    const short = raw.length <= MAX_LABEL_CHARS;
-    const glued = short ? readable(raw) : raw.toLowerCase();
-    const labels = [glued, short && a.firstElementChild ? readable(getSeparatedText(a)) : glued];
-    if (!labels.some((label) => AUTH_LABEL.test(label))) continue;
-    const host = hrefHost(getAttrCI(a, "href"), base);
+  // "Continue with Google" / "Continue with Microsoft": the providers' own button wording. "Continue with
+  // Microsoft account" is a link about an account, not the button (pub#696).
+  // A space is optional between the words, so a label split by markup (`Sign<br>in with Goo<i>gle</i>`, read as
+  // `signin with google`) is the same cue; the boundaries at each end are whole-word.
+  const PROVIDER_BUTTON =
+    /(?<![\p{L}\p{N}])(?:continue|sign ?in|log ?in|logon) ?with ?(?:google|microsoft)(?![\p{L}\p{N}])(?! ?account)/u;
+  for (const control of collectControls(doc)) {
+    const { labels } = control;
+    const providerButton =
+      labels.some((label) => PROVIDER_BUTTON.test(label));
+    if (!providerButton && !labels.some((label) => AUTH_LABEL.test(label))) continue;
+    // A link's destination is its href; a button's is its formaction or its form's action. A control with
+    // neither (a script-driven button) has no destination to judge.
+    const host =
+      control.href === null ? null : (hrefHost(control.href, base) ?? hrefHost(base, base));
     if (!host) continue;
-    const brand =
-      BRAND_SPECS.find((s) => s.lexicon.some((p) => labels.some((label) => label.includes(p))))
-        ?.brand ?? "";
-    const signIn = labels.some((label) => SIGN_IN_LABEL.test(label));
-    out.push({ host, brandLabeled: brand, signIn });
+    const brandSpec = BRAND_SPECS.find((s) =>
+      s.lexicon.some(
+        (p) => labels.some((label) => hasPhrase(label, p))
+      )
+    );
+    const brand = brandSpec?.brand ?? "";
+    // "Continue with Google" is the provider's own button wording: a control that names the brand in an
+    // "<action> with <brand>" phrase is a sign-in affordance by itself.
+    const signIn = providerButton || labels.some((label) => SIGN_IN_LABEL.test(label));
+    out.push({ host, path: hrefPath(control.href, base), brandLabeled: brand, signIn });
   }
 
   return out;
@@ -322,10 +397,13 @@ export function detectBrandImpersonation(
   if (!hasCredentialAffordance) return null;
 
   for (const spec of BRAND_SPECS) {
-    const matchedBrand = spec.lexicon.some((p) => haystack.includes(p));
+    // The brand and an action cue are in the page's text, or in the label of a control that names the brand
+    // (a label held only in `aria-label`, `title` or a logo's `alt` is in no text).
+    const controlNamesBrand = credDests.some((d) => d.brandLabeled === spec.brand);
+    const matchedBrand = controlNamesBrand || spec.lexicon.some((p) => haystack.includes(p));
     if (!matchedBrand) continue;
 
-    const hasAction = spec.actionCues.some((c) => haystack.includes(c));
+    const hasAction = controlNamesBrand || spec.actionCues.some((c) => haystack.includes(c));
     if (!hasAction) continue; // bare mention → not impersonation
 
     // The decisive, FP-safe condition: a credential control EXPLICITLY LABELED
@@ -336,7 +414,9 @@ export function detectBrandImpersonation(
     // accounts.google.com link are all spared.
     const offBrandDests = credDests.filter(
       (d) =>
-        !hostMatches(d.host, spec.legitHosts) && !isSelfOrSameSite(d.host, self)
+        !hostMatches(d.host, spec.legitHosts) &&
+        !isBrokerEndpoint(spec.brand, d.host, d.path) &&
+        !isSelfOrSameSite(d.host, self)
     );
     const brandLabeledOffBrand = offBrandDests.filter(
       (d) => d.brandLabeled === spec.brand
@@ -431,22 +511,35 @@ export function detectObfuscatedScript(
 
 // ── Fake auth overlay ───────────────────────────────────────────────
 
-export interface FakeAuthOverlayHit {
-  reason: string;
+/** `src` as an origin and path only, at most 120 characters: never userinfo, a query token or a fragment. */
+function safeSrc(src: string, base: string): string {
+  if (!src) return "";
+  try {
+    const url = new URL(src, base);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return `(${url.protocol.replace(":", "")} source)`;
+    return `${url.origin}${url.pathname}`.slice(0, 120);
+  } catch {
+    return "(unparsed source)";
+  }
 }
 
-/** Parse an inline style string into a lower-cased property→value map. */
-function parseInlineStyle(style: string): Map<string, string> {
-  const map = new Map<string, string>();
-  for (const decl of style.split(";")) {
-    const idx = decl.indexOf(":");
-    if (idx === -1) continue;
-    map.set(
-      decl.slice(0, idx).trim().toLowerCase(),
-      decl.slice(idx + 1).trim().toLowerCase()
-    );
-  }
-  return map;
+/**
+ * What the bounded scans left unread on this page (#784): sign-in controls whose text was past the reading
+ * budget, and CSS past the amount read. Both are work bounds, spent most-relevant first; this says when one
+ * was hit, so a clean result on such a page is not read as "nothing there".
+ */
+export function integrityScanNotes(ctx: PageSignalContext): { controlsUnread?: number; cssTruncated?: true } {
+  const doc = ctx.parsed.document;
+  if (!doc) return {};
+  const unread = scanControls(doc).unread;
+  return {
+    ...(unread > 0 ? { controlsUnread: unread } : {}),
+    ...(cssScanTruncated(doc) ? { cssTruncated: true as const } : {}),
+  };
+}
+
+export interface FakeAuthOverlayHit {
+  reason: string;
 }
 
 /**
@@ -478,23 +571,6 @@ export function detectFakeAuthOverlay(
   // intent: an auth-suggestive iframe id/class/src, OR an off-self iframe source
   // combined with page-level auth copy / a password field.
   for (const frame of doc.querySelectorAll("iframe")) {
-    const style = parseInlineStyle(getAttrCI(frame, "style") ?? "");
-    const position = style.get("position");
-    const zIndex = parseInt(style.get("z-index") ?? "0", 10);
-    const width = style.get("width") ?? "";
-    const height = style.get("height") ?? "";
-    const top = style.get("top");
-    const left = style.get("left");
-
-    const isFixed = position === "fixed" || position === "absolute";
-    const isHighZ = Number.isFinite(zIndex) && zIndex >= 1000;
-    const fillsViewport =
-      (width.includes("100%") || width.includes("100vw")) &&
-      (height.includes("100%") || height.includes("100vh"));
-    const pinnedToCorner =
-      top === "0" || top === "0px" || left === "0" || left === "0px";
-    if (!(isFixed && isHighZ && fillsViewport && pinnedToCorner)) continue;
-
     const id = (getAttrCI(frame, "id") ?? "").toLowerCase();
     const cls = (getAttrCI(frame, "class") ?? "").toLowerCase();
     const src = getAttrCI(frame, "src") ?? "";
@@ -507,13 +583,24 @@ export function detectFakeAuthOverlay(
         `${id} ${cls}`
       ) || /(auth|login|signin|sign-in|oauth|verify)/.test(src.toLowerCase());
 
-    // Fire when the overlay carries auth intent: either an auth-suggestive
-    // identifier, or it loads an off-self source AND the page shows auth copy.
-    if (authIdentifier || (!srcIsSelf && pageHasAuthAffordance)) {
+    // Fire only when the overlay carries auth intent: either an auth-suggestive identifier, or it loads an
+    // off-self source AND the page shows auth copy. A frame with neither cannot fire, so its CSS is never
+    // resolved: padding with ordinary frames costs the loop and nothing more.
+    if (!(authIdentifier || (!srcIsSelf && pageHasAuthAffordance))) continue;
+
+    const geometry = overlayGeometry(doc, frame);
+    const zIndex = geometry.zIndex;
+    if (!(geometry.fixed && zIndex >= 1000 && geometry.fillsViewport && geometry.pinned)) continue;
+
+    {
+      // The reason reaches reports: what the page chose (id, src) is shown as an origin and path only, with no
+      // userinfo, query token or fragment, and bounded (#784).
+      const shownId = id.replace(/[^\w-]/g, "").slice(0, 60);
+      const shownSrc = safeSrc(src, ctx.page.url);
       return {
         reason: `Full-viewport fixed iframe (z-index ${zIndex}${
-          id ? `, #${id}` : ""
-        })${src ? ` loading ${src}` : ""} overlays the page — credential-overlay pattern`,
+          shownId ? `, #${shownId}` : ""
+        })${shownSrc ? ` loading ${shownSrc}` : ""} overlays the page — credential-overlay pattern`,
       };
     }
   }

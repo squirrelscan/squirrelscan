@@ -7,6 +7,7 @@ import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 import {
   detectFakeAuthOverlay,
   detectPageSignals,
+  integrityScanNotes,
   shouldEscalate,
 } from "./signals";
 
@@ -33,6 +34,16 @@ export const fakeAuthOverlayRule: Rule = {
 
     const hit = detectFakeAuthOverlay(ctx);
     if (!hit) {
+      const notes = integrityScanNotes(ctx);
+      if (notes.cssTruncated) {
+        checks.push({
+          name: "fake-auth-overlay",
+          status: "info",
+          message: "Some of the page's CSS was not applied to its iframes (it is long, or has more rules for the same iframes than squirrel reads); an overlay styled in the part that was not used would not be seen",
+          pageUrl: ctx.page.url,
+          details: { scanTruncated: true, ...notes },
+        });
+      }
       return { checks };
     }
 
@@ -54,6 +65,7 @@ export const fakeAuthOverlayRule: Rule = {
         signals: [...signals],
         corroborating,
         escalated: escalate,
+        ...integrityScanNotes(ctx),
       },
     });
 
