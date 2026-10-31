@@ -42,7 +42,7 @@ import {
   SITE_RULE_BUDGET_CAP_MS,
   siteRuleBudgetMs,
 } from "./rule-budget";
-import { IgnoreTable, isIgnorable, type IgnoreEntry } from "./ignore";
+import { IgnoreTable, isIgnorable, stripItemSelectors, type IgnoreEntry } from "./ignore";
 import { noindexSource, skipsNoindexPages } from "./shared/noindex";
 import { pageTypeRuleSkip, skippablePageType } from "./shared/page-type";
 
@@ -462,13 +462,16 @@ export class RuleRunner {
     fanned?: CheckResult[]
   ): RuleRunResult | Promise<RuleRunResult> {
     const out = this.runOneRuleUnfiltered(rule, ctx, siteMetadata, budgetMs, scopeForLog, fanned);
-    if (this.ignoreTable.empty) return out;
     // `[[ignore]]` (#1262): the one place every rule's result passes, fanned template
     // verdicts included (they were cloned from a sibling page, so the filter judges
-    // THIS page). Before the result is counted, tallied or scored.
+    // THIS page). Before the result is counted, tallied or scored. The element path a rule
+    // puts on its items (#1440) is for this filter only and leaves here, waivers or not.
     const pageUrl = rule.meta.scope === "page" ? ctx.page.url : undefined;
     const apply = (result: RuleRunResult): RuleRunResult => {
-      const checks = this.ignoreTable.filterChecks(rule.meta.id, pageUrl, result.checks);
+      const filtered = this.ignoreTable.empty
+        ? result.checks
+        : this.ignoreTable.filterChecks(rule.meta.id, pageUrl, result.checks);
+      const checks = stripItemSelectors(filtered);
       return checks === result.checks ? result : { ...result, checks };
     };
     return out instanceof Promise ? out.then(apply) : apply(out);
@@ -794,6 +797,7 @@ export class RuleRunner {
             cloudResults,
             intel,
             probe,
+            ...(this.ignoreTable.wantsSelectors(rule.meta.id) ? { wantsItemSelectors: true } : {}),
             options: getRuleOptions(rule, this.config),
           };
           // The substitution happens INSIDE this loop rather than by splicing

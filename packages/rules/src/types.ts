@@ -224,6 +224,12 @@ export interface RuleMeta {
    */
   messageCountsItems?: boolean;
   /**
+   * The rule puts `CheckItem.selector` (see `elementSelector`) on the items that are DOM elements, so an
+   * `[[ignore]]` entry can waive them by `selectors` (#1440). `squirrel config validate` refuses an entry with
+   * only `selectors` when none of the rules it names set this.
+   */
+  itemSelectors?: boolean;
+  /**
    * The rule is available but excluded by the default `enable = ["*"]` selection.
    * A concrete enable pattern (the exact id or its category) or
    * `[rule_options."id"] enabled = true` opts it in.
@@ -659,6 +665,12 @@ export interface SiteData {
 export interface RuleContext {
   // Page data (for page-scope rules)
   page: PageData;
+
+  /**
+   * True when an `[[ignore]]` entry with `selectors` names this rule (#1440). Only then does a rule that reports
+   * elements compute `CheckItem.selector` (`elementSelector`), so a run with no selector entry does no path work at all.
+   */
+  wantsItemSelectors?: boolean;
 
   // Parsed page content (extracted by core modules)
   parsed: ParsedPage;

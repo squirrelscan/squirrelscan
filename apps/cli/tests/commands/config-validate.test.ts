@@ -149,21 +149,39 @@ items = ["${BACKREF}"]
     ]);
   });
 
-  test("an entry with neither items nor urls, and selectors, are refused by the schema", async () => {
+  test("an entry with no items, urls or selectors is refused by the schema", async () => {
     await validate(`[[ignore]]
 rule = "security/cookie-flags"
 `);
     expect(exitCode).toBe(1);
-    expect(stderr.join("\n")).toContain("an ignore entry needs items or urls");
+    expect(stderr.join("\n")).toContain(
+      "an ignore entry needs items, urls or selectors"
+    );
+  });
+
+  test("selectors are accepted for a rule that reports elements, and named as a problem for one that does not (#1440)", async () => {
+    await validate(`[[ignore]]
+rule = "a11y/select-name"
+selectors = ["localization-form select"]
+`);
+    expect(exitCode).toBeNull();
+    stderr = [];
+    exitCode = null as number | null;
+    await validate(`[[ignore]]
+rule = "security/cookie-flags"
+selectors = ["form select"]
+`);
+    expect(exitCode).toBe(1);
+    expect(stderr.join("\n")).toContain("security/cookie-flags");
+    expect(stderr.join("\n")).toContain("does not report an element path");
     stderr = [];
     exitCode = null as number | null;
     await validate(`[[ignore]]
 rule = "a11y/select-name"
-selectors = ["localization-form select"]
-items = ["x"]
+selectors = ["a[href]"]
 `);
     expect(exitCode).toBe(1);
-    expect(stderr.join("\n")).toContain("selectors are not supported yet");
+    expect(stderr.join("\n")).toContain("selectors");
   });
 
   test("the per-rule ignore option names are pointed at [[ignore]]", async () => {

@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- **`[[ignore]]` entries take `selectors`.** A waiver can now name an element by where it sits (`selectors = ["localization-form select"]`: tags, `#id`, `.class`, descendant and `>`), so a rule keeps reporting your own elements while it waives the one your platform renders. `a11y/label-content-name-mismatch`, `a11y/form-labels` and `a11y/select-name` report the element's place; `squirrel config validate` names a rule that does not, refuses an unsupported selector, and the waived items are counted and listed in `meta.ignored` like `items`. Reports never carry the recorded place. (#1440)
+
 ### Fixed
 
 - **`surge-sh`, `railway-app`, `aws-amplify-hosting` and ActiveCampaign Pages are read from the page's own host.** Their signatures matched `.surge.sh`, `.railway.app`, `.amplifyapp.com` and `.ac-page.com` anywhere in the page HTML, so a site that only loads a third-party script or links to one of those hosts read as hosted there (the same class as the `firebase-hosting` fix). Surge and Railway keep their `Server` response header signal. (#1449)
