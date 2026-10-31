@@ -172,3 +172,37 @@ describe("www/apex counterpart through the audit's rule stage", () => {
     expect(targets.map((target) => target.hostname)).toEqual(["blog.example.com"]);
   });
 });
+
+describe("key, signature, protocol and counterpart limits through the audit's rule stage (#1259)", () => {
+  const withFacts = (facts: Record<string, unknown>, protocol?: string): TlsProbe => {
+    const base = served(AUDITED_NAMES, inDays(365)) as Extract<TlsProbe, { kind: "certificate" }>;
+    return { ...base, certificate: { ...base.certificate, ...facts }, ...(protocol ? { protocol } : {}) } as TlsProbe;
+  };
+  const named = (checks: CheckResult[], name: string) => checks.find((check) => check.name === name);
+
+  test("options from the config reach the key, signature and protocol checks", async () => {
+    const probe = probeFor({
+      [AUDITED]: withFacts({ rsaBits: 2048, keyType: "rsa", keyBits: 2048, signatureAlgorithm: "sha1WithRSAEncryption" }, "TLSv1.2"),
+      [WWW]: null,
+    }).probe;
+    const defaults = await auditStage(`https://${AUDITED}/`, probe);
+    expect(named(defaults, "tls-certificate-key")).toBeUndefined();
+    expect(named(defaults, "tls-certificate-signature")?.status).toBe("warn");
+    expect(named(defaults, "tls-certificate-protocol")).toBeUndefined();
+
+    const strict = await auditStage(`https://${AUDITED}/`, probe, {
+      rsa_min_bits: 3072,
+      reject_weak_signature: false,
+      min_tls_version: "TLSv1.3",
+    });
+    expect(named(strict, "tls-certificate-key")?.message).toContain("RSA 2048 bits");
+    expect(named(strict, "tls-certificate-signature")).toBeUndefined();
+    expect(named(strict, "tls-certificate-protocol")?.value).toBe("TLSv1.2");
+  });
+
+  test("check_counterpart = false from the config makes one handshake", async () => {
+    const { probe, targets } = probeFor({ [AUDITED]: served(AUDITED_NAMES, inDays(365)), [WWW]: served(AUDITED_NAMES, inDays(365)) });
+    await auditStage(`https://${AUDITED}/`, probe, { check_counterpart: false });
+    expect(targets.map((target) => target.hostname)).toEqual([AUDITED]);
+  });
+});
