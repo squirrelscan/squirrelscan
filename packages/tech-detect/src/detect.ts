@@ -81,12 +81,26 @@ function stripHtmlComments(html: string): string {
  * `img`, `iframe`, `embed`, `object`, `source`), as written, and the text of each JavaScript `<script>` that
  * is short enough to be a loader snippet. Not kept: text between tags, comments, `<a>` and `<meta>` (a vendor
  * linked or described is not a vendor loaded), data blocks (`application/json`, JSON-LD, `__NEXT_DATA__`) and
- * the body of a script past {@link INLINE_LOADER_MAX_CHARS} (a whole inlined bundle names many URLs in strings
+ * the body of a script past {@link INLINE_LOADER_MAX_CHARS} unless it is a Next.js flight payload (a whole inlined bundle names many URLs in strings
  * it never loads).
  */
 const URL_TAGS = new Set(["script", "link", "img", "iframe", "embed", "object", "source"]);
 const INLINE_LOADER_MAX_CHARS = 16 * 1024;
-const JS_SCRIPT_TYPE = /^(?:(?:text|application)\/(?:x-)?(?:java|ecma)script|module|text\/jsx|text\/babel)(?:\s*;|$)/i;
+/**
+ * Script types that hold data, not code the browser runs: JSON (JSON-LD, `__NEXT_DATA__`, `__nuxt_data__`), import
+ * maps, speculation rules and templates. Every other type is read: a cache or CDN wraps a loader in its own type
+ * to defer it (`litespeed/javascript`, Cloudflare Rocket Loader's `<hash>-text/javascript`, Partytown, a consent
+ * tool's `text/plain`) and the browser runs it all the same.
+ */
+const DATA_SCRIPT_TYPE = /json|importmap|speculationrules|template|^text\/(?:html|css|markdown|csv|xml)\b|^application\/(?:xml|xhtml)/i;
+/**
+ * A Next.js App Router flight script (`self.__next_f.push(...)`) carries the layout's `next/script` snippets as
+ * strings, so it is read well past {@link INLINE_LOADER_MAX_CHARS}; any other script over the cap is a bundle.
+ */
+const FLIGHT_SCRIPT_START = /^\s*\(?\s*self\.__next_(?:f|s)\b/;
+const FLIGHT_SCRIPT_MAX_CHARS = 2 * 1024 * 1024;
+/** Inline script text read per page, all scripts together. */
+const INLINE_TEXT_BUDGET = 8 * 1024 * 1024;
 /** Longest tag read quote-aware; past it the first `>` ends the tag. */
 const MAX_TAG_CHARS = 64 * 1024;
 
@@ -119,6 +133,7 @@ export function pageMarkup(html: string): string {
   if (lastMarkup?.html === html) return lastMarkup.markup;
   const parts: string[] = [];
   const scriptEnd = /<\/script/gi;
+  let inlineText = 0;
   let pos = 0;
   for (;;) {
     const open = html.indexOf("<", pos);
@@ -145,9 +160,14 @@ export function pageMarkup(html: string): string {
       scriptEnd.lastIndex = pos;
       const end = scriptEnd.exec(html)?.index ?? html.length;
       parts.push(tag);
-      const type = attributeValue(tag, "type");
-      if (end - pos <= INLINE_LOADER_MAX_CHARS && (type === null || type.trim() === "" || JS_SCRIPT_TYPE.test(type.trim()))) {
-        parts.push(html.slice(pos, end));
+      const type = attributeValue(tag, "type")?.trim() ?? "";
+      const length = end - pos;
+      if (length > 0 && !DATA_SCRIPT_TYPE.test(type) && inlineText + length <= INLINE_TEXT_BUDGET) {
+        const body = html.slice(pos, end);
+        if (length <= INLINE_LOADER_MAX_CHARS || (length <= FLIGHT_SCRIPT_MAX_CHARS && FLIGHT_SCRIPT_START.test(body.slice(0, 64)))) {
+          parts.push(body);
+          inlineText += length;
+        }
       }
       pos = end;
     } else if (URL_TAGS.has(tagName)) {
