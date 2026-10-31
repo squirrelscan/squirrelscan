@@ -40,7 +40,9 @@ It emits these checks:
 - `tls-certificate-expiry` judges the date. It fails when the certificate has expired, when it is not yet valid, or when it expires within `error_days`. It warns when it expires within `warn_days` or, when that is not set, within the last third of the certificate's lifetime less a 14-day renewal margin (see [Expiry warning window](#expiry-warning-window)). Otherwise it passes, and the message shows the issuer, the expiry date and the days remaining.
 - `tls-certificate-hostname` fails when the certificate does not cover the audited hostname. The message names the hostname and the names the certificate does cover. A wildcard such as `*.example.com` covers one label.
 - `tls-certificate-chain` fails in three cases. A self-signed certificate says so. A server that omits its intermediate reports an incomplete chain when the runtime reports a missing leaf signature, which is how squirrel's runtime reports it. A chain that does not verify under the verification error `UNABLE_TO_GET_ISSUER_CERT_LOCALLY` gets a different message: an intermediate may be missing, or the root is not trusted. The check cannot tell those two apart, because the runtime does not expose the served chain. To see which one it is, run `openssl s_client -connect HOST:443 -servername HOST -showcerts` and look at how many certificates the server sends.
-- `tls-certificate-key` warns when the key is RSA with fewer than 2048 bits. ECDSA keys are not judged for size.
+- `tls-certificate-key` warns when the leaf's public key type is not in `key_types` (a DSA key warns by default) or its size is below the minimum for its type (`rsa_min_bits`, `ecdsa_min_bits`, `dsa_min_bits`). The message names the key: `RSA 1024 bits`, `ECDSA P-256`, `Ed25519`, `DSA 1024 bits`. Ed25519 has no size to judge.
+- `tls-certificate-signature` warns when the leaf certificate is signed with SHA-1, MD5, MD4 or MD2 (`reject_weak_signature`). Only the leaf is judged: the runtime does not expose the rest of the chain.
+- `tls-certificate-protocol` warns when the server negotiated a protocol below `min_tls_version`. squirrel's runtime offers its best protocol and ignores a version limit, so this catches a server whose best is TLS 1.1 or lower; a server that also still accepts TLS 1.0 negotiates TLS 1.3 here and passes.
 - `tls-certificate-www` warns when the www or apex counterpart resolves and answers on the same port, but its certificate is not valid for that name. A counterpart that does not resolve, or does not answer, reports nothing.
 
 The check for expiry always runs when the handshake succeeds, so a valid site gets a pass that shows its issuer and expiry date.
@@ -100,6 +102,13 @@ Use the `fullchain.pem` file, not `cert.pem`, which holds the leaf alone. Test t
 |--------|------|---------|-------------|
 | `warn_days` | integer | unset | Warn when the certificate expires within this many days. Unset: the last third of the certificate's lifetime less a renewal margin (16 days for a 90-day certificate). |
 | `error_days` | integer | unset | Error when the certificate expires within this many days. Unset: 7 days, or a tenth of the certificate's lifetime for one under 70 days. |
+| `key_types` | array of `rsa`, `ecdsa`, `ed25519`, `dsa` | `["rsa", "ecdsa", "ed25519"]` | Public key types the certificate may use. Any other type warns, so a DSA key warns by default. At least one type. |
+| `rsa_min_bits` | integer (512 to 16384) | 2048 | Smallest RSA modulus that does not warn. |
+| `ecdsa_min_bits` | integer (112 to 1024) | 256 | Smallest elliptic curve that does not warn, as the curve size (256 for P-256, 384 for P-384). |
+| `dsa_min_bits` | integer (512 to 16384) | 2048 | Smallest DSA modulus that does not warn. Only meaningful when `dsa` is in `key_types`. |
+| `reject_weak_signature` | boolean | true | Warn when the leaf is signed with SHA-1, MD5, MD4 or MD2. |
+| `min_tls_version` | `TLSv1`, `TLSv1.1`, `TLSv1.2`, `TLSv1.3` | `TLSv1.2` | Warn when the negotiated protocol is lower. |
+| `check_counterpart` | boolean | true | Also handshake with the `www` or apex counterpart of the audited host. `false` makes no second handshake. |
 
 Set `warn_days` to override the lifetime-relative default with a fixed number of days, for example to warn earlier if your renewal job runs less often than monthly. `error_days` must not be more than `warn_days` when both are set; an explicit `warn_days` also caps a derived error threshold.
 
@@ -109,7 +118,15 @@ Set `warn_days` to override the lifetime-relative default with a fixed number of
 [rule_options."security/tls-certificate"]
 warn_days = 60
 error_days = 14
+# Stricter keys: RSA at 3072 bits or ECDSA P-384, no DSA, TLS 1.3 only
+rsa_min_bits = 3072
+ecdsa_min_bits = 384
+min_tls_version = "TLSv1.3"
+# A site with no www name to check
+check_counterpart = false
 ```
+
+An invalid value (an unknown key type, a bit size out of range, a version that does not exist) is refused with the option named.
 
 ## Enable / disable
 

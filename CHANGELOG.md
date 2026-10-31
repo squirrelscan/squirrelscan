@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- **`security/tls-certificate` judges every key type and reads the signature and protocol.** New options under `[rule_options."security/tls-certificate"]`: `key_types` (default `rsa`, `ecdsa`, `ed25519`: a DSA key now warns), `rsa_min_bits` (2048), `ecdsa_min_bits` (256), `dsa_min_bits` (2048), `reject_weak_signature` (true: a SHA-1 or MD5 signed leaf warns), `min_tls_version` (`TLSv1.2`) and `check_counterpart` (true; `false` skips the www or apex handshake). The key check names the type and size (`RSA 1024 bits`, `ECDSA P-256`, `Ed25519`). The probe reads the key and signature from the leaf and the negotiated protocol; it offers its runtime's best protocol, so the protocol check only catches a server whose best is below the minimum. See [the rule page](https://docs.squirrelscan.com/rules/security/tls-certificate). (#1259)
+
 ### Fixed
 
 - **A start URL with a broken TLS certificate now reports `security/tls-certificate` failing.** An expired, wrong-host, self-signed or untrusted-chain certificate on the audited URL still ends the run as `unreachable` (exit 5, no score), but the report in the format you asked for now carries a `security/tls-certificate` failure with the cause (expired on a date, a name the certificate does not cover, self-signed, a chain that does not verify, a short RSA key), where it used to carry only `Cannot reach`. It follows `--rule-exclude` and `[rules] disable`, and a TLS failure that is not a certificate problem (a plain-HTTP port) has no finding. `ERR_TLS_CERT_ALTNAME_INVALID` and `unable to get local issuer certificate` are now classified as TLS failures (reason code `tls`) instead of `unknown`. (#1259)

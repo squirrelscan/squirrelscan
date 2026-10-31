@@ -44,9 +44,11 @@ import {
   authorizationErrorCode,
   readPeerCertificate,
   type RawPeerCertificate,
+  type TlsCertificateExtras,
   type TlsProbe,
   type TlsProbeFn,
 } from "@squirrelscan/utils/tls-certificate";
+import { X509Certificate } from "node:crypto";
 import { connect as connectTcp, isIP, type Socket } from "node:net";
 import { connect, type TLSSocket } from "node:tls";
 
@@ -362,6 +364,32 @@ function connectForFacts(options: {
 }
 
 /**
+ * The leaf's key and signature, read from its DER: `getPeerCertificate()` gives a bit size but no key
+ * type or signature algorithm. Undefined fields when the runtime cannot parse the certificate (the facts
+ * the peer certificate itself holds still apply).
+ */
+function certificateExtras(
+  raw: Uint8Array | undefined
+): TlsCertificateExtras | undefined {
+  if (!raw) return undefined;
+  try {
+    const x509 = new X509Certificate(raw);
+    const key = x509.publicKey;
+    const details = key.asymmetricKeyDetails;
+    return {
+      keyType: key.asymmetricKeyType,
+      ...(typeof details?.modulusLength === "number"
+        ? { keyBits: details.modulusLength }
+        : {}),
+      signatureAlgorithm: (x509 as unknown as { signatureAlgorithm?: string })
+        .signatureAlgorithm,
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Wait for the handshake on `open` and finish with the certificate the server
  * sent, trusted or not: verification is done on the facts, so every served
  * certificate is read. Shared by the direct and the tunnelled handshake.
@@ -374,9 +402,11 @@ function readServedCertificate(
   open.once("secureConnect", () => {
     let certificate: ReturnType<typeof readPeerCertificate>;
     try {
-      certificate = readPeerCertificate(
-        open.getPeerCertificate() as unknown as RawPeerCertificate
-      );
+      const peer =
+        open.getPeerCertificate() as unknown as RawPeerCertificate & {
+          raw?: Uint8Array;
+        };
+      certificate = readPeerCertificate(peer, certificateExtras(peer.raw));
     } catch (error) {
       finish({
         kind: "unreachable",
@@ -394,11 +424,16 @@ function readServedCertificate(
       return;
     }
     const trustError = authorizationErrorCode(open.authorizationError);
+    const protocol = open.getProtocol();
     finish({
       kind: "certificate",
       certificate,
       trusted: open.authorized === true,
       ...(trustError !== undefined ? { trustError } : {}),
+      ...(typeof protocol === "string" &&
+      /^TLSv1(\.[0-3])?$|^SSLv3$/.test(protocol)
+        ? { protocol }
+        : {}),
     });
   });
   // `on`, not `once`: a second error, or one after destroy, must not go unhandled.

@@ -177,6 +177,24 @@ describe("certificate facts from a real handshake", () => {
     ).toBeUndefined();
   });
 
+  test("the key type and size, the curve, the signature algorithm and the negotiated protocol are read (#1259)", async () => {
+    const valid = certificate(await handshake(fixtures.valid));
+    expect(valid.certificate).toMatchObject({ keyType: "rsa", keyBits: 2048 });
+    expect(valid.certificate.signatureAlgorithm).toMatch(/sha256/i);
+    expect(valid.protocol).toMatch(/^TLSv1\.[23]$/);
+
+    const weak = certificate(await handshake(fixtures.weakKey));
+    expect(weak.certificate).toMatchObject({ keyType: "rsa", keyBits: 1024 });
+
+    const ec = certificate(await handshake(fixtures.ecKey));
+    expect(ec.certificate).toMatchObject({
+      keyType: "ecdsa",
+      keyBits: 256,
+      curve: "P-256",
+    });
+    expect(ec.certificate.rsaBits).toBeUndefined();
+  });
+
   test("a port nobody listens on is unreachable, not a certificate", async () => {
     const server = await serveCertificate(fixtures.valid);
     const port = server.port;
