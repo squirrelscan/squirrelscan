@@ -78,6 +78,20 @@ export function scanJs(src: string): ScannedJs {
   let copied = 0;
   let i = 0;
   let lastCode = 0; // exclusive end of the last non-comment, non-space char seen
+  // First NUL at or after the last position asked about (-2: not looked yet, -1: none left):
+  // one scan serves every later comment, so a body of many comments is not quadratic.
+  let nulAt = -2;
+  const nextNul = (from: number): number => {
+    if (nulAt === -2 || (nulAt !== -1 && nulAt < from)) nulAt = src.indexOf("\0", from);
+    return nulAt;
+  };
+  // The same for the next `*/`: a NUL ends a comment before its `*/`, so without this each
+  // `/*` of a NUL-split body searched to the end of the file for a closer it never reached.
+  let closeAt = -2;
+  const nextClose = (from: number): number => {
+    if (closeAt === -2 || (closeAt !== -1 && closeAt < from)) closeAt = src.indexOf("*/", from);
+    return closeAt;
+  };
 
   const blank = (from: number, to: number): void => {
     parts.push(src.slice(copied, from), " ".repeat(to - from));
@@ -122,9 +136,9 @@ export function scanJs(src: string): ScannedJs {
         continue;
       }
       if (d === 42) {
-        const close = src.indexOf("*/", i + 2);
+        const close = nextClose(i + 2);
         let end = close === -1 ? n : close + 2;
-        const nul = src.indexOf("\0", i + 2);
+        const nul = nextNul(i + 2);
         if (nul !== -1 && nul < end) end = nul;
         skips.push(i, end - 1);
         blank(i, end);

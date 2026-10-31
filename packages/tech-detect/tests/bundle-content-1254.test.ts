@@ -10,16 +10,27 @@ import {
   sampleBundleExtras,
   TECH_DETECT_PAGE_BUDGET_MS,
   TECH_SCRIPT_CONTENT_LIMIT,
+  type DetectOptions,
 } from "../src";
+import { scanJs } from "../src/js-scan";
 
 const SHELL = `<!doctype html><html><head><title>App</title></head><body><div id="root"></div><script type="module" src="/assets/index-a1b2c3.js"></script></body></html>`;
 const REF = "abcdefghijklmnopqrst"; // 20 chars, a project ref shape
 
-function detect(scripts: Array<{ url: string; content?: string }>, html = SHELL): string[] {
-  return detectTechnologies({ url: "https://example.com/", headers: {}, html, scripts }).map(
-    (t) => t.id,
-  );
+function detect(
+  scripts: Array<{ url: string; content?: string }>,
+  html = SHELL,
+  options: DetectOptions = {},
+): string[] {
+  return detectTechnologies(
+    { url: "https://example.com/", headers: {}, html, scripts },
+    undefined,
+    options,
+  ).map((t) => t.id);
 }
+
+/** What the local scan passes: whole bundles up to the largest `bundle_bytes`. */
+const WHOLE = { maxScriptChars: 16 * 1024 * 1024, budgetMs: 30_000 };
 
 describe("bundle bodies reach script-content detection", () => {
   test("Vite SPA shell + a bundle calling createClient on a supabase.co ref", () => {
@@ -131,12 +142,24 @@ describe("near misses do not match", () => {
 });
 
 describe("bounds", () => {
-  test("only the first 64 KB of a bundle is matched", () => {
+  test("a caller that asks for more gets the whole body matched, wherever the call sits (#1387)", () => {
     const call = `createClient("https://${REF}.supabase.co","k");`;
-    const early = call + "a".repeat(TECH_SCRIPT_CONTENT_LIMIT);
-    const late = "a".repeat(TECH_SCRIPT_CONTENT_LIMIT) + call;
-    expect(detect([{ url: "https://example.com/a.js", content: early }])).toContain("supabase");
-    expect(detect([{ url: "https://example.com/a.js", content: late }])).not.toContain("supabase");
+    const pad = "a".repeat(3 * 1024 * 1024);
+    const url = "https://example.com/a.js";
+    expect(detect([{ url, content: call + pad }], SHELL, WHOLE)).toContain("supabase");
+    expect(detect([{ url, content: `${pad}\n${call}` }], SHELL, WHOLE)).toContain("supabase");
+    expect(detect([{ url, content: `${pad}\n${call}\n${pad}` }], SHELL, WHOLE)).toContain("supabase");
+  });
+
+  test("by default a script is matched only up to 256 KB: the cloud services keep their cap", () => {
+    const call = `createClient("https://${REF}.supabase.co","k");`;
+    const pad = "a".repeat(TECH_SCRIPT_CONTENT_LIMIT);
+    const url = "https://example.com/a.js";
+    expect(TECH_SCRIPT_CONTENT_LIMIT).toBe(256 * 1024);
+    expect(detect([{ url, content: call + pad }])).toContain("supabase");
+    expect(detect([{ url, content: `${pad}\n${call}` }])).not.toContain("supabase");
+    // An explicit smaller cap is honoured too.
+    expect(detect([{ url, content: `${"a".repeat(1000)}\n${call}` }], SHELL, { maxScriptChars: 500 })).not.toContain("supabase");
   });
 
   test("a 1 MB hostile bundle finishes inside the per-page budget", () => {
@@ -154,6 +177,34 @@ describe("bounds", () => {
     const started = performance.now();
     detect([{ url: "https://example.com/a.js", content: hostile }]);
     expect(performance.now() - started).toBeLessThan(TECH_DETECT_PAGE_BUDGET_MS);
+  });
+
+  // Each shape below was quadratic in scanJs: an opener whose closer is never reached searched to
+  // the end of the file again for the next opener. The bound is tight (a linear scan of 8 MB is
+  // a fraction of a second), not the page budget, which only a hung scan would exceed.
+  describe("comment-opener bodies scan in linear time (#1387)", () => {
+    const shapes: Record<string, (n: number) => string> = {
+      "closed comments": (n) => "/**/".repeat(n / 4),
+      "open comment openers": (n) => "/*".repeat(n / 2),
+      "NUL-split openers, no closer": (n) => "/*\0".repeat(n / 3),
+      "NUL-split openers, one closer at the end": (n) => `${"/*\0".repeat(n / 3)}*/`,
+      "NUL-split line comments": (n) => "//\0\n".repeat(n / 4),
+    };
+    for (const [name, make] of Object.entries(shapes)) {
+      for (const size of [1024 * 1024, 8 * 1024 * 1024]) {
+        test(`${name}, ${size / (1024 * 1024)} MB`, () => {
+          const hostile = make(size);
+          const started = performance.now();
+          const scanned = scanJs(hostile);
+          const scanMs = performance.now() - started;
+          expect(scanned.code.length).toBe(hostile.length);
+          expect(scanMs).toBeLessThan(2_000);
+          const detectStart = performance.now();
+          detect([{ url: "https://example.com/a.js", content: hostile }], SHELL, WHOLE);
+          expect(performance.now() - detectStart).toBeLessThan(5_000);
+        }, 30_000);
+      }
+    }
   });
 
   test("an exhausted budget stops the scan and says so", () => {

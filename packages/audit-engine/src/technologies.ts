@@ -111,17 +111,68 @@ export interface LocalTechInput {
   meta?: Record<string, string>;
   /** Absent: script-url detectors scan the page HTML instead. */
   scripts?: { url: string; content?: string }[];
+  /**
+   * Set by {@link buildTechInputs} when a byte cap left a script of this page read
+   * only in part or not at all (#1387); `time-budget` is added at detection time.
+   */
+  truncation?: { reasons: TechTruncationReason[]; scripts: number };
 }
 
+export type TechTruncationReason = NonNullable<ReportTechnologies["truncated"]>["reasons"][number];
+
 const TECH_CONFIDENCE_RANK = { high: 3, medium: 2, low: 1 } as const;
+
+export interface DetectReportOptions {
+  /** Wall-clock budget per page; default {@link TECH_DETECT_PAGE_BUDGET_MS}. */
+  pageBudgetMs?: number;
+  /** Characters of each script body matched; default the tech-detect package's 256 KB cap. */
+  maxScriptChars?: number;
+}
+
+/**
+ * The options of the local scan, which reads what the user's own crawl fetched and so matches
+ * whole bundles up to the largest `bundle_bytes`, with a budget sized for that. Every other
+ * caller (the cloud services, which run over client-sent bodies and hostile sites' bundles)
+ * keeps the package's 256 KB per script and 5 s per page.
+ */
+export const LOCAL_TECH_DETECT_OPTIONS: Required<DetectReportOptions> = {
+  pageBudgetMs: SERVICE_LIMITS.techDetectLocalPageBudgetMs,
+  maxScriptChars: SERVICE_LIMITS.techDetectMaxBundleBytes,
+};
+
+/**
+ * What the byte caps cut from `inputs` (a script read in part or not at all), as the report's
+ * `truncated` field, or undefined when every body was read whole. The cloud result carries it
+ * too: its payload is built from capped inputs, so the same facts apply to what it detected.
+ */
+export function techInputTruncation(
+  inputs: readonly LocalTechInput[],
+  extraReasons: Iterable<TechTruncationReason> = [],
+): ReportTechnologies["truncated"] {
+  const reasons = new Set<TechTruncationReason>(extraReasons);
+  let scripts = 0;
+  for (const input of inputs) {
+    if (!input.truncation) continue;
+    for (const reason of input.truncation.reasons) reasons.add(reason);
+    scripts += input.truncation.scripts;
+  }
+  return reasons.size > 0 ? { reasons: [...reasons], scripts } : undefined;
+}
 
 export function detectReportTechnologiesMulti(
   pages: LocalTechInput[],
   diff?: TechScanDiff,
+  options: DetectReportOptions = {},
 ): ReportTechnologies {
   const byId = new Map<string, DetectedTechnology>();
+  const reasons = new Set<TechTruncationReason>();
   for (const page of pages) {
-    for (const technology of detectTechnologies(page)) {
+    const detected = detectTechnologies(page, undefined, {
+      ...(options.pageBudgetMs !== undefined ? { budgetMs: options.pageBudgetMs } : {}),
+      ...(options.maxScriptChars !== undefined ? { maxScriptChars: options.maxScriptChars } : {}),
+      onBudgetExceeded: () => reasons.add("time-budget"),
+    });
+    for (const technology of detected) {
       const previous = byId.get(technology.id);
       const better =
         !previous ||
@@ -138,7 +189,9 @@ export function detectReportTechnologiesMulti(
         pages.map((page) => page.headers),
       )
     : [...byId.values()];
-  return buildReportTechnologies(technologies, diff);
+  const section = buildReportTechnologies(technologies, diff);
+  const truncated = techInputTruncation(pages, reasons);
+  return truncated ? { ...section, truncated } : section;
 }
 
 export function detectReportTechnologies(
@@ -167,6 +220,13 @@ export const DEFAULT_TECH_BUNDLE_LIMITS: TechBundleLimits = {
   bundleBytes: SERVICE_LIMITS.techDetectBundleBytes,
   pageBytes: SERVICE_LIMITS.techDetectPageScriptBytes,
   auditBytes: SERVICE_LIMITS.techDetectAuditScriptBytes,
+};
+
+/** The local scan's caps (#1387): nothing is sent anywhere, so bundles are read whole up to these. */
+export const DEFAULT_LOCAL_TECH_BUNDLE_LIMITS: TechBundleLimits = {
+  bundleBytes: SERVICE_LIMITS.techDetectLocalBundleBytes,
+  pageBytes: SERVICE_LIMITS.techDetectLocalPageScriptBytes,
+  auditBytes: SERVICE_LIMITS.techDetectLocalAuditScriptBytes,
 };
 
 /** A script the crawl already fetched (for the secret rules); never refetched here. */
@@ -309,13 +369,26 @@ export function buildTechInputs(
       .map((script) => ({
         url: script.url,
         content: script.content as string,
+        bytes: byteLength(script.content as string),
         head: "",
         headBytes: 0,
         extras: "",
         extrasBytes: 0,
       }));
+    // Every body fits whole under all three caps (the local scan's defaults hold a
+    // page of bundles): no floor, no sampling, no second scan of the text.
+    const allWhole =
+      plan.every((item) => item.bytes <= limits.bundleBytes) &&
+      plan.reduce((sum, item) => sum + item.bytes, 0) <= room();
+    if (allWhole) {
+      for (const item of plan) {
+        item.head = item.content;
+        item.headBytes = item.bytes;
+        charge(item.bytes);
+      }
+    }
     const floor = Math.min(TECH_BUNDLE_FLOOR_BYTES, limits.bundleBytes);
-    for (const item of plan) {
+    for (const item of allWhole ? [] : plan) {
       const r = Math.min(floor, room());
       if (r <= 0) break;
       item.head = truncateToBytes(item.content, r);
@@ -345,6 +418,23 @@ export function buildTechInputs(
       item.head = head;
       item.headBytes = bytes;
     }
+    // A body read in part or left out: the report says so (#1387). A bundle that
+    // reached `bundleBytes` was cut by that cap; one that stopped short of it ran
+    // into the page or audit budget.
+    const reasons = new Set<TechTruncationReason>();
+    let cut = 0;
+    for (const item of plan) {
+      if (item.head.length >= item.content.length) continue;
+      cut++;
+      reasons.add(
+        item.headBytes + item.extrasBytes >= limits.bundleBytes - 4
+          ? "bundle-bytes"
+          : limits.pageBytes - pageBytes <= 0
+            ? "page-bytes"
+            : "audit-bytes",
+      );
+    }
+    const truncation = cut > 0 ? { reasons: [...reasons], scripts: cut } : undefined;
     const withBody: { url: string; content: string }[] = [];
     for (const item of plan) {
       if (!item.head) continue;
@@ -362,6 +452,7 @@ export function buildTechInputs(
       headers: page.headers,
       html: page.html,
       ...(page.meta ? { meta: page.meta } : {}),
+      ...(truncation ? { truncation } : {}),
     };
     if (index > 0 && withBody.length === 0) return base;
 
