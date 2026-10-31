@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- **Technology detection finds Klaviyo and Shopify Payments on a Shopify storefront from its static HTML.** Klaviyo from the theme app block marker (`shopify://apps/klaviyo-email-marketing-sms/...`) or the inline `window._klOnsite` / `window.klaviyo` onsite loader, alongside the existing script and `_learnq` signals. Shopify Payments from `"shopifyPaymentsEnabled":true` in the inline shop config, reported as "Shopify Payments (enabled in shop config)" at medium confidence because it is a merchant setting, not a loaded script. A page that only links to or names the vendor is not detected. (#1447)
+
 ## v0.0.151 (2026-11-01)
 
 Technology detection finds Sentry, React, PostHog, Stripe and GA4 past the start of a large bundle, and a Next.js App Router page no longer detects a vendor it only mentions. A start URL at the site root that redirects to a deep page keeps the root-start crawl order. Thanks to William for the tests that pin the `[[ignore]]` timeout notice in a cut run (#1434).
