@@ -19,7 +19,7 @@ How it works:
 
 ### Fixed
 
-- **Technology detection finds an inline loader URL on every page, whatever the byte caps.** A `script-url` signature read the page HTML only when the page had no script bodies attached, so Microsoft Clarity's standard inline snippet (which builds the `www.clarity.ms/tag/` URL inside a `<script>`) was found on pages that ran out of the byte budget and missed on pages that had bodies: a re-run of a stored corpus lost 24 Clarity sites under the local scan's whole-bundle reading. Signatures now always read the page's markup (tags and script text) in addition to the listed script URLs, and text between tags is not read, so a vendor named in a paragraph is not detected as its script. (#1430)
+- **Technology detection finds an inline loader URL on every page, whatever the byte caps.** A `script-url` signature read the page HTML only when the page had no script bodies attached, so Microsoft Clarity's standard inline snippet (which builds the `www.clarity.ms/tag/` URL inside a `<script>`) was found on pages that ran out of the byte budget and missed on pages that had bodies: a re-run of a stored corpus lost 24 Clarity sites under the local scan's whole-bundle reading. Signatures now always read the page's markup (script, link, image and frame tags, and the text of JavaScript scripts up to 16 KB) in addition to the listed script URLs; text between tags, links, meta text, JSON data blocks and large inline bundles are not read, so a vendor named in a paragraph or linked is not detected as its script. The Contentful script-URL signature now needs a URL or package form (`cdn.contentful.com`, `contentful.js`, `contentful@`) rather than the word. (#1430)
 
 ### Added
 
