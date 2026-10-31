@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+## v0.0.149 (2026-10-31)
+
+`squirrel pages` lists the pages of a stored audit as a table, writes a standalone HTML table and compares two audits. `eeat/about-page` and `eeat/privacy-policy` probe a configured path the crawl did not reach, technology detection finds an inline loader URL on every page whatever the byte caps, and `integrity/brand-impersonation` says when `<template>` elements were past its limit. Thanks to William for keeping the `[[ignore]]` timeout notice when the rules phase is cut (#1426).
+
 ### Added
 
 - **`eeat/about-page` and `eeat/privacy-policy` probe a configured path the crawl did not reach.** A `paths` entry that names one page (`/agentur`, `/policies/privacy-policy`) and that no crawled page links to is requested once after the crawl, so a page that exists but is not linked, common for Shopify `/pages/*` and `/policies/*`, is no longer reported missing. A path that answers 404 still reports the page missing and the message names the probed path. The request honours robots.txt and the per-host limits, runs with the other discovery probes (`disable_discovery_probes` turns it off), is never counted as a crawled page and costs no credits. (#1428)
