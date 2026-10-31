@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **Technology detection finds an inline loader URL on every page, whatever the byte caps.** A `script-url` signature read the page HTML only when the page had no script bodies attached, so Microsoft Clarity's standard inline snippet (which builds the `www.clarity.ms/tag/` URL inside a `<script>`) was found on pages that ran out of the byte budget and missed on pages that had bodies: a re-run of a stored corpus lost 24 Clarity sites under the local scan's whole-bundle reading. Signatures now always read the page's markup (tags and script text) in addition to the listed script URLs, and text between tags is not read, so a vendor named in a paragraph is not detected as its script. (#1430)
+
 ### Added
 
 - **`eeat/about-page` and `eeat/privacy-policy` probe a configured path the crawl did not reach.** A `paths` entry that names one page (`/agentur`, `/policies/privacy-policy`) and that no crawled page links to is requested once after the crawl, so a page that exists but is not linked, common for Shopify `/pages/*` and `/policies/*`, is no longer reported missing. A path that answers 404 still reports the page missing and the message names the probed path. The request honours robots.txt and the per-host limits, runs with the other discovery probes (`disable_discovery_probes` turns it off), is never counted as a crawled page and costs no credits. (#1428)
