@@ -77,12 +77,42 @@ function stripHtmlComments(html: string): string {
 }
 
 /**
- * The markup of a page without its prose: every tag as written (so `src`, `href` and the like are kept) and the
- * text of each `<script>` element, but not the text between tags. A `script-url` detector reads this, so a
- * loader URL an inline snippet builds is seen whether or not the page has script bodies attached (#1430), and
- * a vendor named in a paragraph is not read as that vendor's script. One linear pass; the last page's result is
- * kept because every detector of a page asks for it.
+ * What `pageMarkup` keeps of a page: the tags that can name a script or a tracking URL (`script`, `link`,
+ * `img`, `iframe`, `embed`, `object`, `source`), as written, and the text of each JavaScript `<script>` that
+ * is short enough to be a loader snippet. Not kept: text between tags, comments, `<a>` and `<meta>` (a vendor
+ * linked or described is not a vendor loaded), data blocks (`application/json`, JSON-LD, `__NEXT_DATA__`) and
+ * the body of a script past {@link INLINE_LOADER_MAX_CHARS} (a whole inlined bundle names many URLs in strings
+ * it never loads).
  */
+const URL_TAGS = new Set(["script", "link", "img", "iframe", "embed", "object", "source"]);
+const INLINE_LOADER_MAX_CHARS = 16 * 1024;
+const JS_SCRIPT_TYPE = /^(?:(?:text|application)\/(?:x-)?(?:java|ecma)script|module|text\/jsx|text\/babel)(?:\s*;|$)/i;
+/** Longest tag read quote-aware; past it the first `>` ends the tag. */
+const MAX_TAG_CHARS = 64 * 1024;
+
+/** The index of the `>` that ends the tag starting at `open`, skipping quoted attribute values. */
+function tagEnd(html: string, open: number): number {
+  const limit = Math.min(html.length, open + MAX_TAG_CHARS);
+  let i = open + 1;
+  while (i < limit) {
+    const ch = html.charCodeAt(i);
+    if (ch === 62) return i; // >
+    if (ch === 34 || ch === 39) {
+      const close = html.indexOf(ch === 34 ? '"' : "'", i + 1);
+      if (close === -1 || close >= limit) break;
+      i = close + 1;
+      continue;
+    }
+    i++;
+  }
+  return html.indexOf(">", open + 1);
+}
+
+function attributeValue(tag: string, name: string): string | null {
+  const m = new RegExp(`\\s${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, "i").exec(tag);
+  return m ? (m[1] ?? m[2] ?? m[3] ?? "") : null;
+}
+
 let lastMarkup: { html: string; markup: string } | undefined;
 
 export function pageMarkup(html: string): string {
@@ -99,21 +129,29 @@ export function pageMarkup(html: string): string {
       pos = close + 3;
       continue;
     }
-    const close = html.indexOf(">", open + 1);
+    const close = tagEnd(html, open);
     if (close === -1) {
-      parts.push(html.slice(open));
+      const rest = html.slice(open);
+      const lone = /^<([a-zA-Z][a-zA-Z0-9-]*)/.exec(rest)?.[1]?.toLowerCase();
+      if (lone && URL_TAGS.has(lone)) parts.push(rest);
       break;
     }
     const tag = html.slice(open, close + 1);
-    parts.push(tag);
     pos = close + 1;
-    const name = /^<\/?([a-zA-Z][a-zA-Z0-9-]*)/.exec(tag)?.[1]?.toLowerCase();
-    if (name === "script" && tag[1] !== "/" && !tag.endsWith("/>")) {
+    const name = /^<(\/?)([a-zA-Z][a-zA-Z0-9-]*)/.exec(tag);
+    if (!name || name[1] === "/") continue;
+    const tagName = name[2]!.toLowerCase();
+    if (tagName === "script" && !tag.endsWith("/>")) {
       scriptEnd.lastIndex = pos;
-      const end = scriptEnd.exec(html)?.index ?? -1;
-      const bodyEnd = end === -1 ? html.length : end;
-      parts.push(html.slice(pos, bodyEnd));
-      pos = bodyEnd;
+      const end = scriptEnd.exec(html)?.index ?? html.length;
+      parts.push(tag);
+      const type = attributeValue(tag, "type");
+      if (end - pos <= INLINE_LOADER_MAX_CHARS && (type === null || type.trim() === "" || JS_SCRIPT_TYPE.test(type.trim()))) {
+        parts.push(html.slice(pos, end));
+      }
+      pos = end;
+    } else if (URL_TAGS.has(tagName)) {
+      parts.push(tag);
     }
   }
   const markup = parts.join("\n");

@@ -66,10 +66,42 @@ describe("pageMarkup", () => {
 
   test("an unterminated tag or script is kept to the end and the pass stays linear", () => {
     expect(pageMarkup('<script>var a="clarity.ms"')).toContain("clarity.ms");
-    expect(pageMarkup('<a href="x')).toContain("<a href");
+    expect(pageMarkup('<img src="x')).toContain("<img src");
     const started = performance.now();
     pageMarkup("<script>x</script>".repeat(200_000));
     pageMarkup("<".repeat(500_000));
     expect(performance.now() - started).toBeLessThan(3_000);
+  });
+});
+
+describe("what the markup does not carry (review of #1431)", () => {
+  test("data blocks, meta text and links are not a loaded script", () => {
+    const html = page(
+      '<meta name="description" content="We use Microsoft Clarity (clarity.ms)">' +
+        '<script type="application/ld+json">{"sameAs":["https://www.clarity.ms/"]}</script>' +
+        '<script id="__NEXT_DATA__" type="application/json">{"u":"https://www.clarity.ms/tag/x"}</script>',
+      '<a href="https://www.clarity.ms/">Clarity</a>',
+    );
+    expect(ids(html, BODIES)).not.toContain("clarity");
+    expect(ids(html)).not.toContain("clarity");
+  });
+
+  test("a whole inlined bundle is not read for URLs it names in strings, a loader snippet is", () => {
+    const bundle = `<script>${'var s="https://www.clarity.ms/tag/x";'.repeat(1_000)}</script>`;
+    expect(ids(page(bundle), BODIES)).not.toContain("clarity");
+    expect(ids(page(CLARITY_SNIPPET), BODIES)).toContain("clarity");
+    expect(ids(page('<script type="text/javascript">var u="https://www.clarity.ms/tag/x";</script>'))).toContain("clarity");
+    expect(ids(page('<script type="module">import("https://www.clarity.ms/tag/x")</script>'))).toContain("clarity");
+  });
+
+  test("a `>` inside a quoted attribute does not end the tag early", () => {
+    expect(ids(page('<img alt="a > b" src="https://www.clarity.ms/x.gif">'), BODIES)).toContain("clarity");
+    expect(ids(page('<link onload="this.rel=\'stylesheet\';f=()=>1" rel="preload" href="https://www.clarity.ms/x.css">'), BODIES)).toContain("clarity");
+  });
+
+  test("Contentful is a script URL or package name, not the word", () => {
+    expect(ids(page('<script src="https://cdn.contentful.com/x.js"></script>'), BODIES)).toContain("contentful");
+    expect(ids(page('<script src="https://cdn.jsdelivr.net/npm/contentful@10/dist/contentful.browser.min.js"></script>'))).toContain("contentful");
+    expect(ids(page('<script>var a="we compare contentful and others";</script>'), BODIES)).not.toContain("contentful");
   });
 });
