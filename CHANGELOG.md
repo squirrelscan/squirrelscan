@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+## v0.0.147 (2026-10-31)
+
+`security/tls-certificate` now judges every key type and reads the signature and protocol, and a start URL with a broken TLS certificate reports that check failing instead of ending without a finding. A deep start URL is named in the audit, recorded as `meta.requestedUrl` and guaranteed a slot, `--include-pages` says how each page answered, and the local technology scan reads whole bundles and says when it was cut short. `security/cookie-flags` no longer warns about CSRF token cookies, and `squirrel report --input` keeps a saved report's skipped checks. The JSON report schema is now 1.3. Thanks to William for the deep start URL work (#1369, #1385).
+
 ### Added
 
 - **`security/tls-certificate` judges every key type and reads the signature and protocol.** New options under `[rule_options."security/tls-certificate"]`: `key_types` (default `rsa`, `ecdsa`, `ed25519`: a DSA key now warns), `rsa_min_bits` (2048), `ecdsa_min_bits` (256), `dsa_min_bits` (2048), `reject_weak_signature` (true: a SHA-1 or MD5 signed leaf warns), `min_tls_version` (`TLSv1.2`) and `check_counterpart` (true; `false` skips the www or apex handshake). The key check names the type and size (`RSA 1024 bits`, `ECDSA P-256`, `Ed25519`). The probe reads the key and signature from the leaf and the negotiated protocol. The runtime refuses below TLS 1.2 (such a server stays `not checked`) and cannot handshake with Ed25519, Ed448, DSA, RSA-PSS, P-521 or secp256k1 leaves, so live the protocol check can only warn for `min_tls_version = "TLSv1.3"` against a TLS 1.2 server, and the Ed25519 and DSA key checks apply only where a runtime can read such a certificate. See [the rule page](https://docs.squirrelscan.com/rules/security/tls-certificate). (#1259)
