@@ -10,6 +10,7 @@ import { parsePage } from "@squirrelscan/parser";
 import { rules as securityRules } from "../src/security";
 import { cspViolationsRule } from "../src/security/csp-violations";
 import type { BrowserEvents } from "@squirrelscan/core-contracts";
+import { readBrowserEvents } from "@squirrelscan/core-contracts/browser-events";
 import type { RuleContext } from "../src/types";
 
 const URL_ = "https://clinic.test/book";
@@ -147,4 +148,33 @@ test("the rule is registered once in the security category with page verdict sco
   const found = securityRules.filter((r) => r.meta.id === "security/csp-violations");
   expect(found).toHaveLength(1);
   expect(found[0]!.meta).toMatchObject({ category: "security", scope: "page", verdictScope: "page" });
+});
+
+describe("hostile text from the page reaches no evidence line", () => {
+  // Control, bidi and invisible characters a page could put in a violation to forge or hide a report line.
+  const hostile = ["\u001b", "\u009b", "\u009d", "\u0090", "\u202e", "\u2066", "\u2028", "\u200b", "\ufeff", "\u00ad", "\u3164", "\u{e0041}", "\t", "\n"].join("");
+  const unsafe = new RegExp("[\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u2028\\u2029\\u202a-\\u202e\\u2066-\\u2069]|\\p{Default_Ignorable_Code_Point}", "u");
+
+  test("events read through the contract carry no unsafe character into the check, its items or its details", () => {
+    const sanitised = readBrowserEvents({
+      cspViolations: [
+        { violatedDirective: `script-src-elem${hostile}`, blockedUri: `https://www.googletagmanager.com/${hostile}gtm.js`, disposition: "enforce" },
+        { violatedDirective: `img-src${hostile}`, blockedUri: `https://cdn${hostile}.test/a.png`, disposition: "enforce" },
+      ],
+      failedRequests: [],
+      pageErrors: [],
+      listenedAfterLoad: true,
+    });
+    const check = run({ rendered: true, events: sanitised });
+    expect(check.status).not.toBe("skipped");
+    const strings: string[] = [];
+    const walk = (value: unknown): void => {
+      if (typeof value === "string") strings.push(value);
+      else if (Array.isArray(value)) value.forEach(walk);
+      else if (value && typeof value === "object") Object.values(value).forEach(walk);
+    };
+    walk(check);
+    expect(strings.length).toBeGreaterThan(2);
+    for (const text of strings) expect(unsafe.test(text)).toBe(false);
+  });
 });
