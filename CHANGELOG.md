@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **`url/slug-convention` and `perf/total-byte-weight` count the same pages on both engines when a crawl has a 4xx or 5xx page with no HTML.** The resident engine counted such an error page in the messages ("All 31 page(s)", "across 31 pages", the average weight) and the streaming engine did not. Error pages with no document are now out of both counts, as the docs already said for the weight rule. (#1359)
+
 ## v0.0.153 (2026-11-01)
 
 Technology detection recognises the Klaviyo script loader forms browsers actually run (an unquoted or long-attribute `src`, a preload link, the inline `element.src =` loader and a proxied script URL) without the loader scan slowing a page that holds many empty scripts or a tag stuffed with openers. Thanks to William for the Klaviyo loader recall fix (#1457, #1463).
