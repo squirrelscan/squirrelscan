@@ -3,6 +3,26 @@ import { inBundle, inBundleWith, inScript, inStyle, resourceAttr, scriptSrc } fr
 
 export const OTHER_FINGERPRINTS: TechFingerprint[] = [
   {
+    // Curated, not generated, so the static markup of a Shopify storefront is read too (#1447): the static.klaviyo.com
+    // script is injected after load and is not in the HTML, but the theme app block marker and the inline onsite
+    // loader are. A page that only links to or names Klaviyo matches none of these.
+    id: "klaviyo",
+    name: "Klaviyo",
+    category: "widget",
+    website: "https://www.klaviyo.com",
+    icon: "klaviyo",
+    detectors: [
+      { type: "script-url", pattern: /static\.klaviyo\.com\/onsite\/js\/klaviyo\.js/i },
+      { type: "script-content", pattern: /_learnq\.push\(/i },
+      // The Shopify theme app block of Klaviyo's onsite embed.
+      { type: "html", pattern: /shopify:\/\/apps\/klaviyo-email-marketing-sms\//i, requires: "shopify://apps/" },
+      // The inline onsite loader: `window._klOnsite=window._klOnsite||[]` and the `window.klaviyo` proxy.
+      { type: "script-content", pattern: /window\._klOnsite\s*=\s*window\._klOnsite\s*\|\|/ },
+      { type: "script-content", pattern: /window\.klaviyo\s*=\s*(?:window\.klaviyo\s*\|\||new\s+Proxy\s*\()/ },
+    ],
+    confidence: "high",
+  },
+  {
     id: "jquery",
     name: "jQuery",
     category: "other",
