@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+## v0.0.150 (2026-10-31)
+
+Technology detection reads inline loaders again that a cache, a CDN or Next.js moved out of reach in v0.0.149, so Clarity, Contentful and other loader-based tools are detected on those pages as before.
+
 ### Fixed
 
 - **Technology detection reads inline loaders again that a cache, a CDN or Next.js moved out of reach in v0.0.149.** The markup read added for #1430 skipped inline scripts of an unusual `type` and any script over 16 KB, which lost real installs: Microsoft Clarity on 29 of 5,377 corpus sites (a Next.js App Router layout snippet inside a large `self.__next_f.push` script, LiteSpeed Cache's `litespeed/javascript` and Cloudflare Rocket Loader's `<hash>-text/javascript`) and the same loaders of other vendors. Every inline script that is not a data block is now read (JSON, import maps, templates stay out), and a flight script is read up to 2 MB; outside a flight script, a CSP `<meta>`, prose, links, JSON-LD and `__NEXT_DATA__` are still not detected as a script (inside one, content the page renders into its React tree can match, as it did before v0.0.149), and 22 real library bundles inlined into a page show no new matches. (#1435)
