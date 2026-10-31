@@ -3194,18 +3194,6 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     confidence: "high",
   },
   {
-    id: "klaviyo",
-    name: "Klaviyo",
-    category: "widget",
-    website: "https://www.klaviyo.com",
-    icon: "klaviyo",
-    detectors: [
-      { type: "script-url", pattern: new RegExp("static\\.klaviyo\\.com/onsite/js/klaviyo\\.js", "i") },
-      { type: "script-content", pattern: new RegExp("_learnq\\.push\\(", "i") },
-    ],
-    confidence: "high",
-  },
-  {
     id: "activecampaign",
     name: "ActiveCampaign",
     category: "widget",

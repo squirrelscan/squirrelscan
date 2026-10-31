@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- **Technology detection finds Klaviyo and Shopify Payments on a Shopify storefront from its static HTML.** Klaviyo from the theme app block marker (`shopify://apps/klaviyo-email-marketing-sms/...`) or the inline `window._klOnsite` / `window.klaviyo` onsite loader, alongside the existing script and `_learnq` signals. Shopify Payments from `"shopifyPaymentsEnabled":true` in the inline shop config, reported as "Shopify Payments (enabled in shop config)" at medium confidence because it is a merchant setting, not a loaded script. A page that only links to or names the vendor is not detected. (#1447)
+
 ### Fixed
 
 - **`firebase-hosting` is no longer reported for a site that only loads a script from `*.web.app`.** The signature matched `.web.app` and `.firebaseapp.com` anywhere in the page HTML, so a Shopify store with a third-party app hosted on Firebase Hosting read as hosted there. It now matches the page's own host, or Firebase Hosting's own `Vary: x-fh-requested-host` header. (#1448)

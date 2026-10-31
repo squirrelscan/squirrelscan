@@ -2,6 +2,19 @@ import type { TechFingerprint } from "../types";
 
 export const PAYMENT_FINGERPRINTS: TechFingerprint[] = [
   {
+    // A shop-config flag, not a loaded SDK: the inline shop config of a Shopify storefront says the merchant has
+    // Shopify Payments enabled (#1447). Named so a report does not read it as a script the page loads.
+    id: "shopify-payments",
+    name: "Shopify Payments (enabled in shop config)",
+    category: "payment",
+    website: "https://www.shopify.com/payments",
+    icon: "shopify-payments",
+    detectors: [
+      { type: "html", pattern: /"shopifyPaymentsEnabled"\s*:\s*true\b/, requires: "shopifyPaymentsEnabled" },
+    ],
+    confidence: "medium",
+  },
+  {
     id: "stripe",
     name: "Stripe",
     category: "payment",
