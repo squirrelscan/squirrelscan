@@ -481,8 +481,8 @@ export const JSON_REPORT_PAGES = {
   maxEntries: 2_000,
 } as const;
 
-/** The JSON report's schema version (`meta.schemaVersion`): major.minor. 1.1 added the opt-in `pages` list (#1260), 1.2 `finalUrl` and `outcome` on its rows, 1.3 `technologies.truncated` (#1387). */
-export const JSON_REPORT_SCHEMA_VERSION = "1.3";
+/** The JSON report's schema version (`meta.schemaVersion`): major.minor. 1.1 added the opt-in `pages` list (#1260), 1.2 `finalUrl` and `outcome` on its rows, 1.3 `technologies.truncated` (#1387), 1.4 `technologies.items[].origin` (#1406). */
+export const JSON_REPORT_SCHEMA_VERSION = "1.4";
 
 // ── LLM Report Output ──────────────────────────────────────────
 export const LLM_REPORT = {

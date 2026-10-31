@@ -71,6 +71,7 @@ import {
   runCloudPrefetchFromPayloads,
   runCloudTechDetect,
   detectLocalTechnologies,
+  mergeLocalTechnologies,
   localTechBundleLimits,
   type CloudPrefetchResult,
   type CloudTechDetectResult,
@@ -2452,16 +2453,22 @@ export async function runAudit(
       // Report-only technologies section (never affects the health score).
       // Cloud tech-detect (credited, cross-scan diff) wins; otherwise fall back to
       // a free local scan so quick/logged-out audits still surface the stack (#407).
+      // The local scan always runs (free, no request): beside the cloud section it adds what whole bundles
+      // hold past the cloud payload caps (#1406), and only its result is merged, never its bytes.
+      const localTech = detectLocalTechnologies({
+        baseUrl: url,
+        siteContext: techSample,
+        scripts: assets.scripts,
+        limits: localTechBundleLimits(mergedConfig),
+        keepEmpty: techResult !== null,
+      });
       if (techResult) {
-        report.technologies = techResult.technologies;
-      } else {
-        const localTech = detectLocalTechnologies({
-          baseUrl: url,
-          siteContext: techSample,
-          scripts: assets.scripts,
-          limits: localTechBundleLimits(mergedConfig),
-        });
-        if (localTech) report.technologies = localTech;
+        report.technologies = mergeLocalTechnologies(
+          techResult.technologies,
+          localTech
+        );
+      } else if (localTech) {
+        report.technologies = localTech;
       }
 
       // Persist the resolved Stage-0 profile for explainability — it records

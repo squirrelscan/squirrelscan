@@ -149,8 +149,17 @@ export function techTruncationNote(tech: ReportTechnologies): string | null {
 /** A short one-line change summary, e.g. "2 added · 1 removed since last scan". */
 export function techChangeSummary(tech: ReportTechnologies): string | null {
   const base = techChangeSummaryBase(tech);
+  const local = techLocalOnlyNote(tech);
   const note = techTruncationNote(tech);
-  return note ? [base, note].filter(Boolean).join(". ") : base;
+  const parts = [base, local, note].filter(Boolean);
+  return parts.length > 0 ? parts.join(". ") : null;
+}
+
+/** One sentence naming how many technologies only the local scan found (#1406): they have no scan history. */
+export function techLocalOnlyNote(tech: ReportTechnologies): string | null {
+  if (tech.source === "local") return null;
+  const count = tech.items.filter((t) => t.origin === "local").length;
+  return count === 0 ? null : `${count} found only by the local scan of the crawled bundles (no scan history)`;
 }
 
 function techChangeSummaryBase(tech: ReportTechnologies): string | null {

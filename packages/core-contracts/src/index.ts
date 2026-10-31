@@ -1339,6 +1339,11 @@ export interface ReportTechnology {
   website?: string;
   /** Icon slug (logo asset key). */
   icon?: string;
+  /**
+   * `local`: found only by the free local whole-bundle scan, not by the cloud scan of the same audit (#1406).
+   * It has no scan diff (never in `added`). Absent: the cloud scan found it, or the section is local.
+   */
+  origin?: "local";
 }
 
 /**

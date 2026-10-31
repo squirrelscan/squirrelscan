@@ -458,6 +458,8 @@ interface SlimJsonReport {
       confidence: string;
       website?: string;
       logoUrl: string | null;
+      /** `local`: found only by the local whole-bundle scan of a signed-in audit, with no scan diff (#1406). */
+      origin?: "local";
     }>;
   };
   // Report-only — never part of the score. Present when the cloud site-metadata
@@ -815,6 +817,7 @@ function buildSlimReport(
               version: t.version,
               confidence: t.confidence,
               ...(t.website ? { website: t.website } : {}),
+              ...(t.origin ? { origin: t.origin } : {}),
               logoUrl: techIconUrl(t.icon),
             })),
           },
