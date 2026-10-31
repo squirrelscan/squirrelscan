@@ -98,6 +98,14 @@ const ATTR_WINDOW_CHARS = 300;
  * 150 characters, and so every cue phrase, lies whole inside one window, wherever the padding put it.
  */
 const ATTR_WINDOW_STRIDE = 100;
+/**
+ * Windows past an attribute's first that the whole page may read (about 6 MB of text), shared fairly over its
+ * controls, and the most one control may take. A window is only read when it holds a word a cue or a brand
+ * lexicon phrase is made of.
+ */
+const PAGE_WINDOW_BUDGET = 20_000;
+const MAX_WINDOWS_PER_CONTROL = 160;
+const WINDOW_CUE = /sign|log|continu|verif|google|microsoft|calendly|docusign|clickfunnels|kajabi|office|outlook/;
 const ATTR_WINDOW_SNAP = 50;
 
 /**
@@ -437,7 +445,8 @@ export function scanControls(doc: Document): ControlScan {
   const { chosen, cut: notPrepared } = shortlist(found, destinationOf, (el) => imageAlts.has(el));
   // Controls whose attribute text or `aria-labelledby` list was longer than what is read: counted, not hidden.
   let paddedAttributes = 0;
-  const prepared = chosen.map(({ element, href }) => {
+  let windowBudget = PAGE_WINDOW_BUDGET;
+  const prepared = chosen.map(({ element, href }, position) => {
     const tag = element.tagName.toLowerCase();
     const referenced = (getAttrCI(element, "aria-labelledby") ?? "").slice(0, ATTR_RAW_CHARS).split(/\s+/).filter(Boolean);
     let attributeCut = referenced.length > MAX_LABELLEDBY;
@@ -455,14 +464,31 @@ export function scanControls(doc: Document): ControlScan {
       ...(imageAlts.get(element) ?? []),
     ]
       .filter((v): v is string => typeof v === "string" && v !== "")
-      .flatMap((v) => {
+      .map((v) => {
         // Padding (spaces, zero-width characters) is dropped first; what is left is read in overlapping windows.
         const read = attributeWindows(v);
         attributeCut ||= read.cut;
         return read.windows;
       });
+    // Every attribute keeps its first window. The windows past it are read only where a sign-in or brand word is
+    // in them (a window without one cannot match a cue), and only within the page's window budget, shared fairly
+    // over the controls still to prepare: what the budget cuts is counted, not dropped silently.
+    const base = extra.flatMap((windows) => windows.slice(0, 1));
+    const cueWindows = extra.flatMap((windows) => windows.slice(1).filter((window) => WINDOW_CUE.test(window)));
+    const allowance =
+      windowBudget <= 0
+        ? 0
+        : Math.min(MAX_WINDOWS_PER_CONTROL, Math.max(1, Math.floor(windowBudget / (chosen.length - position))));
+    let taken = cueWindows;
+    if (cueWindows.length > allowance) {
+      attributeCut = true;
+      // The first ones and the last: padding is at the ends as often as in the middle.
+      taken = allowance === 0 ? [] : [...cueWindows.slice(0, allowance - 1), cueWindows[cueWindows.length - 1]!];
+    }
+    windowBudget -= taken.length;
+    const labelTexts = [...base, ...taken];
     if (attributeCut) paddedAttributes++;
-    return { element, href, extra, rank: rank(tag, href, extra) };
+    return { element, href, extra: labelTexts, rank: rank(tag, href, labelTexts) };
   });
 
   // Reading order: most relevant first, document order within a rank. Controls with no destination (rank 0)
