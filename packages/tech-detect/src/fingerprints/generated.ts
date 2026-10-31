@@ -2099,18 +2099,6 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     versionPattern: new RegExp("@shoelace-style/shoelace@([0-9]+\\.[0-9]+\\.[0-9]+)", "i"),
   },
   {
-    id: "firebase-hosting",
-    name: "Firebase Hosting",
-    category: "hosting",
-    website: "https://firebase.google.com/products/hosting",
-    icon: "firebase-hosting",
-    detectors: [
-      { type: "header", name: "Vary", pattern: new RegExp("x-fh-requested-host", "i") },
-      { type: "url-path", pattern: new RegExp("\\.web\\.app|\\.firebaseapp\\.com", "i") },
-    ],
-    confidence: "high",
-  },
-  {
     id: "surge-sh",
     name: "Surge.sh",
     category: "hosting",

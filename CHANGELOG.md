@@ -19,6 +19,8 @@ How it works:
 
 ### Fixed
 
+- **`firebase-hosting` is no longer reported for a site that only loads a script from `*.web.app`.** The signature matched `.web.app` and `.firebaseapp.com` anywhere in the page HTML, so a Shopify store with a third-party app hosted on Firebase Hosting read as hosted there. It now matches the page's own host, or Firebase Hosting's own `Vary: x-fh-requested-host` header. (#1448)
+
 - **A Next.js client component with script-like props is no longer read as a `next/script` loader.** A component with an `id` and prose children that contain a bracket and a semicolon, or one with a bare `src` prop, was read as an inline or external script, so a vendor it only mentioned or embedded could be detected from a flight payload. A string `children` now needs a call and a statement end or block AND a JavaScript token (`function`, `=>`, an assignment, `.createElement`, `window.`) and a `src` needs an `id` or a `strategy` beside it. (#1444)
 
 
