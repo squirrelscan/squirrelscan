@@ -17,6 +17,11 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **A start URL at the site root that redirects to a deep page keeps the root-start crawl order.** The crawler put the redirect destination ahead of the sitemap whenever the typed URL or its destination had a path, so `https://example.com/` redirecting to `/en/` changed which entry owns the page and, in quick mode with a sitemap that listed only the destination, switched link discovery back on. The order now follows the URL you typed. A start URL that is also the only sitemap URL still counts as a pending sitemap URL. (#1405)
+
+
 ## v0.0.150 (2026-10-31)
 
 Technology detection reads inline loaders again that a cache, a CDN or Next.js moved out of reach in v0.0.149, so Clarity, Contentful and other loader-based tools are detected on those pages as before.

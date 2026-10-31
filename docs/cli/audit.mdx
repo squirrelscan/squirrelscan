@@ -408,7 +408,7 @@ in the crawl frontier, ahead of sitemap pages, so it is included even with a
 small `--max-pages` value. JSON reports keep the distinction as
 `meta.requestedUrl` alongside `meta.baseUrl`. If the requested URL redirects,
 its resolved destination receives that frontier priority. A root URL that
-redirects to a deep page retains root-start reporting. An origin-only start URL
+redirects to a deep page keeps root-start reporting and frontier order: the order follows the URL you typed, not where it redirects. An origin-only start URL
 such as `https://example.com/` has the existing behavior and prints no notice.
 
 ### Fully offline audit

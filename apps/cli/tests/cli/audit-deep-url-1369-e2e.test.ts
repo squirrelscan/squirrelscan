@@ -189,8 +189,10 @@ describe("deep audit start URL", () => {
       pages: Array<{ url: string }>;
     };
     expect(report.meta.requestedUrl).toBeUndefined();
-    expect(report.pages.map((page) => page.url)).toContain(
-      `${site.url.origin}/requested`
-    );
+    // Root-start order (#1405): the sitemap's first entry, the root, is crawled in a one-page
+    // budget, not the page it redirects to. A deep typed start is covered by the tests above.
+    expect(report.pages.map((page) => page.url)).toEqual([
+      `${site.url.origin}/`,
+    ]);
   }, 90_000);
 });

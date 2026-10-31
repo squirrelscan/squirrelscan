@@ -3273,16 +3273,19 @@ export function createCrawler(
           }
         }
 
-        // Put a deep URL the user named, or the deep destination it resolved to,
-        // into the frontier before sitemap entries. Its source bonus already
-        // makes it the first page dispatched; inserting it first also means a
-        // sitemap copy cannot win frontier dedup (#1369). A deep URL that
-        // redirects to the root still gives its destination this priority.
-        // Root-to-root starts keep their existing sitemap accounting and order.
-        const prioritizeSeed =
-          hasDeepPath(userProvidedUrl) || hasDeepPath(seedResolution.seedUrl);
+        // Put a deep URL the user typed into the frontier before sitemap entries.
+        // Its source bonus already makes it the first page dispatched; inserting
+        // it first also means a sitemap copy cannot win frontier dedup (#1369).
+        // Keyed on the URL the user typed ONLY (#1405): a root start that
+        // redirects to a deep page (`/` to `/en/`) keeps the root-start order
+        // and sitemap accounting, and a deep start that redirects to the root
+        // is covered by the typed URL.
+        const prioritizeSeed = hasDeepPath(userProvidedUrl);
+        let earlySeedPending = false;
         if (prioritizeSeed) {
+          const pendingBeforeSeed = yield* storage.getPendingCount(crawlId);
           yield* enqueueUrl(crawlId, seedResolution.seedUrl, 0, undefined, "seed");
+          earlySeedPending = (yield* storage.getPendingCount(crawlId)) > pendingBeforeSeed;
         }
 
         // Seed pages holding open carried findings ahead of generic discovery so
@@ -3311,8 +3314,17 @@ export function createCrawler(
         // was filtered — link discovery is re-enabled below so a fetchable
         // seed can still seed the frontier, preventing an empty/under-crawl on
         // prerender/CSR sites that disallow sitemap paths. See issue #123.
+        // A sitemap URL that is also the early-enqueued seed deduped against it, so it
+        // never raised the pending count: it still counts as a pending sitemap URL.
+        const seedAlsoInSitemap =
+          earlySeedPending &&
+          sitemapUrlsToEnqueue.some(
+            (u) => normalizeAndCheckScope(u.loc).normalized === seedNormalizedUrl,
+          );
         config.sitemapPendingCount =
-          (yield* storage.getPendingCount(crawlId)) - preSitemapPendingCount;
+          (yield* storage.getPendingCount(crawlId)) -
+          preSitemapPendingCount +
+          (seedAlsoInSitemap ? 1 : 0);
         logger.debug(
           "sitemaps discovered and stored",
           `${sitemapResult.discovered.length} discovered, ${sitemapResult.all.length} total, ${config.sitemapPendingCount}/${config.sitemapUrlCount} enqueued (rest filtered)`,
