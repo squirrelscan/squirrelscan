@@ -146,7 +146,7 @@ async function probeOne(
             oauthRegistrationEndpoint: null,
             oauthClientIdMetadataDocumentSupported: null,
             error: "body exceeds cap",
-            ...(countWords ? { wordCount: null } : {}),
+            ...(countWords ? { wordCount: null, finalUrl: response.url || url } : {}),
           };
         }
         const raw = await readBodyCapped(response, WELL_KNOWN_MAX_BYTES);
@@ -174,7 +174,7 @@ async function probeOne(
           oauthClientIdMetadataDocumentSupported: oauth.clientIdMetadataDocumentSupported,
           error: null,
           // A configured page (#1428) is judged on its content, so it carries the text's word count.
-          ...(countWords ? { wordCount: htmlWordCount(body, url, response.status, looksHtml) } : {}),
+          ...(countWords ? { wordCount: htmlWordCount(body, url, response.status, looksHtml || /html/i.test(contentType ?? "")), finalUrl: response.url || url } : {}),
         };
       },
       budget?.egress,
