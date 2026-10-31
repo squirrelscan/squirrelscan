@@ -19,19 +19,31 @@ const MAX_KEPT_PER_HINT = 8;
  * match there. At most this many chars, and never more than a quarter of the budget.
  */
 const TAIL_RESERVE_CHARS = 6 * 1024;
+/** Windows each declared hint is given before any derived hint is given its first. */
+const DECLARED_FIRST_WINDOWS = 2;
 /** Hits examined per hint, kept or not: a hit that yields no window (a long string) or fails its detectors' patterns does not use up the kept ones. */
 const MAX_HIT_SCANS_PER_HINT = 512;
+/** Matches of an `inCode` pattern one window is walked through looking for one that starts in code (the matcher's own bound is 64 over a whole script). */
+const MAX_QUALIFY_CANDIDATES = 64;
 /** A string longer than this past a window's end is cut before it, not carried to its close. */
 const MAX_STRING_CARRY = 512;
 /** Longest body the scan classifies: past the largest `[tech_detect] bundle_bytes`, so every body a caller can hand over fits. */
 const MAX_SCAN_CHARS = 32 * 1024 * 1024;
+
+/** A detector pattern that decides whether a window is worth keeping. */
+interface HintPattern {
+  /** Without the `g` and `y` flags, for a plain `test`. */
+  plain: RegExp;
+  /** With `g`, walked match by match when the detector is `inCode`; null when it is not. */
+  inCode: RegExp | null;
+}
 
 /** One literal the sampler searches a bundle for, with the detector patterns that decide whether a hit is worth a window. */
 interface HintSpec {
   text: string;
   /** Searched in a lower-cased copy of the body (the detector pattern is case-insensitive). */
   ci: boolean;
-  patterns: RegExp[];
+  patterns: HintPattern[];
   /** Declared by the fingerprint (`hint`, `also.hints`) rather than derived from its pattern. */
   declared: boolean;
 }
@@ -48,9 +60,13 @@ let specs: HintSpec[] | null = null;
 function hintSpecs(): HintSpec[] {
   if (specs) return specs;
   const map = new Map<string, HintSpec>();
-  const add = (text: string, ci: boolean, re: RegExp, declared: boolean): void => {
+  const add = (text: string, ci: boolean, re: RegExp, declared: boolean, inCode: boolean): void => {
     const key = `${ci ? "i" : "s"}:${text}`;
-    const own = new RegExp(re.source, re.flags.replace(/[gy]/g, ""));
+    const flags = re.flags.replace(/[gy]/g, "");
+    const own: HintPattern = {
+      plain: new RegExp(re.source, flags),
+      inCode: inCode ? new RegExp(re.source, `${flags}g`) : null,
+    };
     const known = map.get(key);
     if (known) {
       known.patterns.push(own);
@@ -60,11 +76,13 @@ function hintSpecs(): HintSpec[] {
   for (const fp of ALL_FINGERPRINTS) {
     for (const d of fp.detectors) {
       if (d.type !== "script-content") continue;
-      if (d.hint) add(d.hint, false, d.pattern, true);
-      if (d.also) for (const h of d.also.hints) add(h, false, d.also.pattern, true);
+      const inCode = d.inCode === true;
+      if (d.hint) add(d.hint, false, d.pattern, true, inCode);
+      // The `also` pattern is matched anywhere in the body, strings included: not gated to code.
+      if (d.also) for (const h of d.also.hints) add(h, false, d.also.pattern, true, false);
       if (!d.hint) {
         const derived = deriveHints(d.pattern);
-        for (const text of derived.hints) add(text, derived.caseInsensitive, d.pattern, false);
+        for (const text of derived.hints) add(text, derived.caseInsensitive, d.pattern, false, inCode);
       }
     }
   }
@@ -105,9 +123,10 @@ function mergedCost(spans: ReadonlyArray<[number, number]>): number {
 /**
  * The parts of `content` past its first `headChars` that matter to detection: windows around
  * hint hits, then the tail, joined with {@link SEGMENT_SEPARATOR} and capped at `maxChars`.
- * Every detector has a hint (declared, or derived from its pattern), the windows are shared out
- * across hints one round at a time (each hint's first window before any hint's second), and the
- * tail keeps a reserve the windows cannot take (#1420).
+ * Nearly every detector has a hint (declared, or derived from its pattern; `adobe-analytics` has
+ * none), the windows are shared out across hints one round at a time (each hint's first window
+ * before any hint's second, declared hints first), and the tail keeps a reserve the windows cannot
+ * take (#1420).
  *
  * Every window starts and ends in CODE state of the whole file, classified once
  * over the whole body (the scan is linear): a window cut inside a string would
@@ -144,19 +163,44 @@ export function sampleBundleExtras(content: string, headChars: number, maxChars:
 
   const floor = Math.max(0, headChars - WINDOW_BEFORE);
   // A lower-cased copy, only when a case-insensitive hint needs it and the indices still line up.
+  // U+0130 (a dotted capital I, in Turkish locale tables) is the one character whose lower case is
+  // longer than itself, and a single one in a body would shift every index: it becomes a plain `I`
+  // first, which lower-cases to one character like the rest.
   let lowered: string | null | undefined;
   const lowerContent = (): string | null => {
     if (lowered === undefined) {
-      const copy = content.toLowerCase();
+      const copy = content.replaceAll("\u0130", "I").toLowerCase();
       lowered = copy.length === content.length ? copy : null;
     }
     return lowered;
+  };
+  /**
+   * Whether the window `[start, end)` holds a match of one of the detector patterns the hint serves.
+   * An `inCode` detector rejects a match that starts inside a string, regex literal or comment of the
+   * whole file, so a prose or docs mention of the vendor does not qualify a window and cannot use
+   * up the windows kept for the real call.
+   */
+  const qualifies = (spec: HintSpec, text: string, start: number): boolean => {
+    for (const { plain, inCode } of spec.patterns) {
+      if (!inCode) {
+        if (plain.test(text)) return true;
+        continue;
+      }
+      inCode.lastIndex = 0;
+      for (let seen = 0; seen < MAX_QUALIFY_CANDIDATES; seen++) {
+        const m = inCode.exec(text);
+        if (!m) break;
+        if (skipEnd(skips, start + m.index) === -1) return true;
+        if (m[0].length === 0) inCode.lastIndex++;
+      }
+    }
+    return false;
   };
 
   // Qualified windows per hint, declared hints first: a window is kept only if a detector pattern
   // that uses the hint matches it, so a placeholder or an unrelated mention of the literal costs
   // nothing and takes no budget from a real match.
-  const perHint: Array<Array<[number, number]>> = [];
+  const perHint: Array<{ windows: Array<[number, number]>; declared: boolean }> = [];
   const ordered = [...hintSpecs()].sort((x, y) => Number(y.declared) - Number(x.declared));
   for (const spec of ordered) {
     const haystack = spec.ci ? lowerContent() : content;
@@ -180,24 +224,30 @@ export function sampleBundleExtras(content: string, headChars: number, maxChars:
       const end = codeBefore(Math.min(limit, at + spec.text.length + WINDOW_AFTER), at);
       if (end <= start) continue;
       const text = content.slice(start, end);
-      if (seen.has(text) || !spec.patterns.some((re) => re.test(text))) continue;
+      if (seen.has(text) || !qualifies(spec, text, start)) continue;
       seen.add(text);
       windows.push([start, end]);
     }
-    if (windows.length > 0) perHint.push(windows);
+    if (windows.length > 0) perHint.push({ windows, declared: spec.declared });
   }
 
   // Shared out round by round: every hint's first window, then every hint's second, until the
   // window budget is spent. The budget leaves the tail its reserve, so what the windows take can
-  // never push out what only the tail can match (#1420).
-  const tailReserve = Math.min(TAIL_RESERVE_CHARS, Math.floor(maxChars / 4));
-  const windowBudget = maxChars - tailReserve;
+  // never push out what only the tail can match (#1420). A declared hint (written by hand for a
+  // detector that needs a real call, such as a Firebase or Supabase config) gets its first few
+  // windows before any derived hint's first: 200 derived literals would otherwise take the whole
+  // budget before a declared hint's second window, and its first can be a lookalike.
+  const windowBudget = maxChars - Math.min(TAIL_RESERVE_CHARS, Math.floor(maxChars / 4));
   const chosen: Array<[number, number]> = [];
+  const take = (window: [number, number] | undefined): void => {
+    if (window && mergedCost([...chosen, window]) <= windowBudget) chosen.push(window);
+  };
+  for (let round = 0; round < DECLARED_FIRST_WINDOWS; round++) {
+    for (const { windows, declared } of perHint) if (declared) take(windows[round]);
+  }
   for (let round = 0; round < MAX_KEPT_PER_HINT; round++) {
-    for (const windows of perHint) {
-      const window = windows[round];
-      if (!window) continue;
-      if (mergedCost([...chosen, window]) <= windowBudget) chosen.push(window);
+    for (const { windows, declared } of perHint) {
+      if (!declared || round >= DECLARED_FIRST_WINDOWS) take(windows[round]);
     }
   }
   const merged = mergeSpans(chosen);

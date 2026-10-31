@@ -73,6 +73,23 @@ describe("deriveHints", () => {
     expect(deriveHints(/\bfoo\b|bar/).hints).toEqual([]);
   });
 
+  test("the most selective literal, not the longest: gtag( over config, ym( over init, ml( over account", () => {
+    expect(deriveHints(/gtag\(['"]config['"],\s*['"]G-/i).hints).toEqual(["gtag("]);
+    expect(deriveHints(/ym\(\d+,\s*["']init["']/i).hints).toEqual(["ym("]);
+    expect(deriveHints(/ml\(\s*["']account["']/i).hints).toEqual(["ml("]);
+    expect(deriveHints(/window\[['"]adrum-(?:start-time|app-key)['"]\]/).hints).toEqual(["adrum-"]);
+    expect(deriveHints(/_st\(\s*['"]install['"]|SwiftypeObject/i).hints).toEqual(["_st(", "swiftypeobject"]);
+    // A bare common word is never a hint; with nothing else the alternative stays tail-only.
+    expect(deriveHints(/\bconfig\b/).hints).toEqual([]);
+    expect(deriveHints(/\binit\s*\(\s*\d/).hints).toEqual([]);
+  });
+
+  test("no literal is a common word: none of the measured common words (config, init, account...) is used", () => {
+    for (const hint of bundleHints()) {
+      expect(["config", "init", "account", "install", "window[", "window.", "document."]).not.toContain(hint.toLowerCase());
+    }
+  });
+
   test("every derived hint is a literal part of the pattern it came from (all script-content patterns)", () => {
     let derived = 0;
     for (const fp of ALL_FINGERPRINTS) {
@@ -84,7 +101,7 @@ describe("deriveHints", () => {
         for (const hint of hints) {
           derived++;
           expect(haystack).toContain(hint);
-          expect(hint.length).toBeGreaterThanOrEqual(4);
+          expect(hint.length).toBeGreaterThanOrEqual(3);
         }
       }
     }
@@ -162,5 +179,83 @@ describe("the extras budget (#1420)", () => {
     const extras = sampleBundleExtras(hostile, HEAD, EXTRAS);
     expect(performance.now() - started).toBeLessThan(1_000);
     expect(extras.length).toBeLessThanOrEqual(EXTRAS);
+  });
+});
+
+describe("review fixes (#1420)", () => {
+  /** Distinct vendor calls that qualify a derived-hint window each. */
+  const VENDORS = [
+    'Sentry.init({dsn:"https://k@o1.ingest.sentry.io/2"});',
+    'posthog.init("phc_x",{});',
+    'Stripe("pk_test_x");',
+    "window.__REACT_DEVTOOLS_GLOBAL_HOOK__={};",
+    "window.__VUE__=!0;",
+    "fbq('init','1234567890');",
+    "gtag('config','G-ABC1234567');",
+    'Bugsnag.start({apiKey:"x"});',
+    'Countly.init({app_key:"x"});',
+    'Paddle.Setup({vendor:1});',
+    'Calendly.initPopupWidget({url:"x"});',
+    '_paq.push(["trackPageView"]);',
+    'ttq.load("ABC");',
+    'jwplayer("p").setup({});',
+    'Bugsnag.notify(e);',
+  ];
+
+  test("an inCode detector's real config survives any number of string mentions of the vendor", () => {
+    for (const mentions of [7, 8, 9, 40]) {
+      const docs = Array.from({ length: mentions }, (_, i) => `var doc${i}='{authDomain:"doc${i}.firebaseapp.com"}';`).join("\n");
+      const content = [filler(100_000), docs, filler(100_000), `var cfg={authDomain:"real-app.firebaseapp.com"};`, filler(100_000)].join("\n");
+      expect(sampleBundleExtras(content, HEAD, EXTRAS)).toContain("real-app.firebaseapp.com");
+      expect(detect(content)).toContain("firebase");
+    }
+  });
+
+  test("a docs snippet in a string does not take a window, a real call after it does", () => {
+    const key = ["eyJ", "x".repeat(40)].join("");
+    // Matches the Supabase pattern as text, but starts inside a string: an inCode detector rejects it.
+    const mention = (i: number): string => `var note${i}='mk("https://${REF(i)}.supabase.co","${key}")';`;
+    const content = [
+      filler(40_000),
+      ...Array.from({ length: 30 }, (_, i) => mention(i) + "\n" + filler(1_500)),
+      `var real=mk("https://${REF(999)}.supabase.co","${key}");`,
+      filler(40_000),
+    ].join("\n");
+    const extras = sampleBundleExtras(content, HEAD, EXTRAS);
+    expect(extras).toContain(REF(999));
+    expect(detect(content)).toContain("supabase");
+  });
+
+  test("declared hints keep their first windows when derived hints could take the whole budget", () => {
+    // A 4 KB budget holds a handful of windows; fifteen vendor calls come before two real Supabase configs.
+    const key = ["eyJ", "x".repeat(40)].join("");
+    const supabase = (n: number): string => `var s${n}=mk("https://${REF(n)}.supabase.co","${key}");`;
+    const content = [
+      filler(30_000),
+      ...VENDORS.map((v) => `${v}\n${filler(900)}`),
+      supabase(1),
+      filler(900),
+      supabase(2),
+      filler(60_000),
+    ].join("\n");
+    const extras = sampleBundleExtras(content, HEAD, 4096);
+    expect(extras.length).toBeLessThanOrEqual(4096);
+    expect(extras).toContain(REF(1));
+    expect(extras).toContain(REF(2));
+  });
+
+  test("one U+0130 in a bundle does not switch off the case-insensitive hints", () => {
+    const turkish = 'var tr={"\u0130stanbul":"\u0130stanbul","\u0130zmir":"\u0130zmir"};';
+    const body = (prefix: string): string =>
+      `${filler(120_000)}\n${prefix}\n${crowd(300)}\n${filler(60_000)}\nPostHog.Init("phc_x",{});\n${filler(120_000)}\n${crowd(300)}\n${filler(120_000)}`;
+    for (const content of [body(""), body(turkish)]) {
+      expect(sampleBundleExtras(content, HEAD, EXTRAS).toLowerCase()).toContain("posthog.init");
+      expect(detect(content)).toContain("posthog");
+    }
+  });
+
+  test("U+0130 after the real call and at the very end of a bundle keeps the indices aligned", () => {
+    const content = `${filler(60_000)}\nPostHog.Init("phc_x",{});\n${filler(60_000)}\n\u0130\u0130\u0130`;
+    expect(sampleBundleExtras(content, HEAD, EXTRAS)).toContain("PostHog.Init(");
   });
 });
