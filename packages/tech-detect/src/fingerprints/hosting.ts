@@ -12,7 +12,7 @@ export const HOSTING_FINGERPRINTS: TechFingerprint[] = [
     icon: "firebase-hosting",
     detectors: [
       { type: "header", name: "Vary", pattern: /x-fh-requested-host/i },
-      { type: "url-host", pattern: /(?:^|\.)(?:web\.app|firebaseapp\.com)$/i },
+      { type: "url-host", pattern: /(?:^|\.)(?:web\.app|firebaseapp\.com)\.?$/i },
     ],
     confidence: "high",
   },
