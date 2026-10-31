@@ -426,13 +426,13 @@ describe("#288: an interrupted report build is recovered, a live one never", () 
       // their own index, and each one's rows past the cursor from the per-crawl index. No table scan.
       for (const sql of [sqls.chunkUpper, sqls.chunkDelete]) {
         const p = plan(sql);
-        expect(p).toMatch(/SEARCH p USING (COVERING )?INDEX idx_pages_crawl \(crawl_id=\? AND rowid>/);
-        expect(p).toMatch(/SEARCH crawls USING INDEX idx_crawls_retired/);
+        expect(p).toMatch(/SEARCH p (EXISTS )?USING (COVERING )?INDEX idx_pages_crawl \(crawl_id=\? AND rowid>/);
+        expect(p).toMatch(/SEARCH crawls (EXISTS )?USING (COVERING )?INDEX idx_crawls_retired/);
         expect(p).not.toMatch(/SCAN (p|pages|crawls)\b/);
       }
       // The newer copy of a row is looked up by its url, so a chunk costs its rows, not the project's history.
       const del = plan(sqls.chunkDelete);
-      expect(del).toMatch(/SEARCH newer USING (COVERING )?INDEX idx_pages_url_recency \(normalized_url=\?/);
+      expect(del).toMatch(/SEARCH newer (EXISTS )?USING (COVERING )?INDEX idx_pages_url_recency \(normalized_url=\?/);
       expect(del).not.toMatch(/SCAN newer\b/);
     } finally {
       db.close();

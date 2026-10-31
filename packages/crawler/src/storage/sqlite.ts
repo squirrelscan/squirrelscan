@@ -4994,24 +4994,6 @@ export class SQLiteStorage implements CrawlStorage {
   }
 
   /**
-   * The one-time repair for page rows that retirement kept and a later audit
-   * superseded before automatic retention existed (#289): rows of retired crawls
-   * with a newer row for the same url. A url whose only row is in a retired crawl
-   * keeps it.
-   *
-   * Chunked and budgeted: each pass is its own short transaction over the next
-   * `chunk` rows of retired crawls by rowid (500 by default: a legacy database that
-   * stored page HTML inline measured about 0.3 s of write lock per 500 rows of
-   * 60 KB, and 3 s at 5,000, which is why the chunk is small). A cursor kept beside the marker means
-   * a row that stays (an only copy) is never examined again, and a call stops
-   * after `budgetMs` (2 s by default, at least one chunk), so an audit never waits
-   * on a big project's whole history: the work spreads over its next audits and
-   * an interrupted run resumes where it stopped. The marker is written only when a
-   * pass finds no row left to examine.
-   * Called from retention and `self disk --prune`, not from `init()`.
-   * A database too old to have the marker table has nothing to repair.
-   */
-  /**
    * The statements of {@link repairSupersededPagesOnce}, kept as data so a test can ask SQLite for their query
    * plans (#289): a finished project pays the `probe` and nothing else, and a chunk reads the next `chunk` rows
    * by rowid and looks each one's newer copy up by url, never scanning the pages table or the retired crawls.
@@ -5037,6 +5019,24 @@ export class SQLiteStorage implements CrawlStorage {
                  )`,
   } as const;
 
+  /**
+   * The one-time repair for page rows that retirement kept and a later audit
+   * superseded before automatic retention existed (#289): rows of retired crawls
+   * with a newer row for the same url. A url whose only row is in a retired crawl
+   * keeps it.
+   *
+   * Chunked and budgeted: each pass is its own short transaction over the next
+   * `chunk` rows of retired crawls by rowid (500 by default: a legacy database that
+   * stored page HTML inline measured about 0.3 s of write lock per 500 rows of
+   * 60 KB, and 3 s at 5,000, which is why the chunk is small). A cursor kept beside the marker means
+   * a row that stays (an only copy) is never examined again, and a call stops
+   * after `budgetMs` (2 s by default, at least one chunk), so an audit never waits
+   * on a big project's whole history: the work spreads over its next audits and
+   * an interrupted run resumes where it stopped. The marker is written only when a
+   * pass finds no row left to examine.
+   * Called from retention and `self disk --prune`, not from `init()`.
+   * A database too old to have the marker table has nothing to repair.
+   */
   repairSupersededPagesOnce(
     options: { chunk?: number; maxChunks?: number; budgetMs?: number } = {}
   ): Effect.Effect<number, StorageError, never> {
