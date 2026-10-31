@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Changed
+
+- **`install.sh` is hardened at run time.** It tightens the umask to at least `022`, checks the downloaded binary's size against the manifest before the checksum, turns Ctrl-C, `SIGTERM` and `SIGHUP` into a clean exit that removes the temp directory and ends the download (no failure report: stopping is not a failure), refuses `SQUIRREL_BIN_DIR` set to `/` or to only whitespace, stops with a clear message when `HOME` is unset, and retries from `~/.squirrel/tmp` when the system temp directory is mounted `noexec` (or says that is the cause). (#168)
+
 ## v0.0.151 (2026-11-01)
 
 Technology detection finds Sentry, React, PostHog, Stripe and GA4 past the start of a large bundle, and a Next.js App Router page no longer detects a vendor it only mentions. A start URL at the site root that redirects to a deep page keeps the root-start crawl order. Thanks to William for the tests that pin the `[[ignore]]` timeout notice in a cut run (#1434).
