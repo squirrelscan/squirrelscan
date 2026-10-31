@@ -19,6 +19,8 @@ How it works:
 
 ### Fixed
 
+- **A page of unclosed tags no longer makes technology detection take tens of seconds.** Every signature that matched a script `src`, a stylesheet `link`, or a `data-*` flag scanned up to 400 characters after each `<script`, `<link` or `<img` opener, so a 5 MB page of openers took about 20 to 30 s (about 1 s now). The page's tags are now parsed once and those signatures read that list. Side effects: a script `src` written without quotes, or after a long run of other attributes, is now found, and a commented-out tag is no longer read as a script. (#1456)
+
 - **`integrity/brand-impersonation` keeps reading long attribute labels when a page is padded to starve it.** An attribute full of repeated `sign in` text no longer spends the per-attribute window cap before the window that names the brand (brand windows come first), every control with long attributes keeps two cue windows (its first and its last) outside the page budget so thousands of cue-bearing decoys cannot leave a later control unread, and the shared half of the budget goes first to controls whose label has no cue word as written. The auth wording the label patterns and the window prefilter use is now one list, so a verb added to it reaches both. (#1458, #1459, #1460)
 
 ## v0.0.153 (2026-11-01)

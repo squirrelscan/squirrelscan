@@ -352,8 +352,8 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
     detectors: [
       ...scriptSrc(String.raw`https:\/\/[a-z0-9.-]{1,120}\/npm\/@clerk\/clerk-js@`),
       ...scriptSrc(String.raw`https:\/\/[a-z0-9-]{1,63}\.clerk\.accounts\.dev\/`),
-      { type: "html", pattern: /<script\s(?:[^>]{0,400}\s)?data-clerk-js-script\b/i },
-      { type: "html", pattern: /<script\s(?:[^>]{0,400}\s)?data-clerk-publishable-key\s*=\s*["']pk_(?:test|live)_/i },
+      { type: "tag-attr", tags: ["script"], attrs: ["data-clerk-js-script"], pattern: /^/ },
+      { type: "tag-attr", tags: ["script"], attrs: ["data-clerk-publishable-key"], pattern: /^pk_(?:test|live)_/i },
       // A bundle: the publishable key handed to the provider or client, as an
       // object property (quoted or not), an assignment, or the literal Next.js
       // inlines in place of `process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` in a
