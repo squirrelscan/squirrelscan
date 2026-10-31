@@ -1,7 +1,7 @@
 // #1419 controller regression: when --max-duration cuts the rules Effect after
 // an [[ignore]] timeout, the partial report keeps the timeout notice.
 
-import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
 import { Effect } from "effect";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -17,30 +17,30 @@ const createRealDurationBudget = realMaxDuration.createDurationBudget;
 
 let durationBudget: ReturnType<typeof realMaxDuration.createDurationBudget>;
 
-mock.module("@/audit/max-duration", () => ({
-  ...realMaxDuration,
-  createDurationBudget: (seconds: number | undefined, startedAt?: number) => {
-    const real = createRealDurationBudget(seconds, startedAt);
-    if (!real) return undefined;
-    const afterTest = Date.now() + 60_000;
-    durationBudget = {
-      ...real,
-      discoveryDoneAt: afterTest,
-      crawlStopAt: afterTest,
-      checksDoneAt: afterTest,
-      probesDoneAt: afterTest,
-      pageRulesStopAt: afterTest,
-      hardStopAt: afterTest,
-    };
-    return durationBudget;
-  },
-}));
+const durationBudgetSpy = spyOn(
+  realMaxDuration,
+  "createDurationBudget"
+).mockImplementation((seconds: number | undefined, startedAt?: number) => {
+  const real = createRealDurationBudget(seconds, startedAt);
+  if (!real) return undefined;
+  const afterTest = Date.now() + 60_000;
+  durationBudget = {
+    ...real,
+    discoveryDoneAt: afterTest,
+    crawlStopAt: afterTest,
+    checksDoneAt: afterTest,
+    probesDoneAt: afterTest,
+    pageRulesStopAt: afterTest,
+    hardStopAt: afterTest,
+  };
+  return durationBudget;
+});
 
-mock.module("@/audit/adapter", () => ({
-  ...realAdapter,
-  runStreamingRules: (
-    ...args: Parameters<typeof realAdapter.runStreamingRules>
-  ) => {
+const runStreamingRulesSpy = spyOn(
+  realAdapter,
+  "runStreamingRules"
+).mockImplementation(
+  (...args: Parameters<typeof realAdapter.runStreamingRules>) => {
     const options = args[5];
     if (!durationBudget) throw new Error("duration budget was not created");
     (durationBudget as { hardStopAt: number }).hardStopAt = Date.now() + 100;
@@ -48,8 +48,8 @@ mock.module("@/audit/adapter", () => ({
       options?.onIgnoreTimeout?.(0);
       return yield* Effect.never;
     });
-  },
-}));
+  }
+);
 
 const { runAudit } = await import("@/controllers/audit");
 
@@ -81,7 +81,8 @@ items = ["glob:*never*"]
 afterAll(() => {
   server.stop(true);
   rmSync(scratch, { recursive: true, force: true });
-  mock.restore();
+  runStreamingRulesSpy.mockRestore();
+  durationBudgetSpy.mockRestore();
 });
 
 describe("a cut rules phase after an ignore timeout (#1419)", () => {
