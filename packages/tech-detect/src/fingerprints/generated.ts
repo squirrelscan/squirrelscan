@@ -2106,7 +2106,7 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     icon: "surge-sh",
     detectors: [
       { type: "header", name: "Server", pattern: new RegExp("^Surge$", "i") },
-      { type: "url-path", pattern: new RegExp("\\.surge\\.sh", "i") },
+      { type: "url-host", pattern: new RegExp("(?:^|\\.)surge\\.sh\\.?$", "i") },
     ],
     confidence: "high",
   },
@@ -2118,7 +2118,7 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     icon: "railway-app",
     detectors: [
       { type: "header", name: "Server", pattern: new RegExp("^railway(?:-hikari)?$", "i") },
-      { type: "url-path", pattern: new RegExp("\\.up\\.railway\\.app|\\.railway\\.app", "i") },
+      { type: "url-host", pattern: new RegExp("(?:^|\\.)railway\\.app\\.?$", "i") },
     ],
     confidence: "high",
   },
@@ -2129,7 +2129,7 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://aws.amazon.com/amplify/hosting",
     icon: "aws-amplify-hosting",
     detectors: [
-      { type: "url-path", pattern: new RegExp("\\.amplifyapp\\.com", "i") },
+      { type: "url-host", pattern: new RegExp("(?:^|\\.)amplifyapp\\.com\\.?$", "i") },
     ],
     confidence: "medium",
   },
@@ -3203,7 +3203,7 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
       { type: "script-url", pattern: new RegExp("\\.activehosted\\.com", "i") },
       { type: "script-url", pattern: new RegExp("activecampaign-subscription-forms/site_tracking\\.js", "i") },
       { type: "script-content", pattern: new RegExp("acEnableTracking", "i") },
-      { type: "url-path", pattern: new RegExp("\\.ac-page\\.com", "i") },
+      { type: "url-host", pattern: new RegExp("(?:^|\\.)ac-page\\.com\\.?$", "i") },
     ],
     confidence: "high",
   },
