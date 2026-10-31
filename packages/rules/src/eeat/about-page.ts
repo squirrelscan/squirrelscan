@@ -13,7 +13,7 @@ import {
   findInPageSection,
   inPageSectionsUnmeasured,
 } from "../shared/inpage-section";
-import { eeatPathsSchema, matchesConfiguredPaths } from "../shared/eeat-paths";
+import { eeatPathsSchema, matchesConfiguredPaths, probedConfiguredPages, probedNote } from "../shared/eeat-paths";
 import { findLinkedUncrawledPage, linkedUncrawledCheck } from "../shared/linked-uncrawled-page";
 
 export const optionsSchema = z.object({ paths: eeatPathsSchema });
@@ -29,9 +29,10 @@ export const aboutPageRule: Rule = {
     name: "About Page",
     description: "Checks for an about/company page with content",
     solution:
-      "An About page establishes credibility and trust. Include company history, mission, team overview, and credentials. Link from main navigation or footer. For E-E-A-T, explain your expertise and why visitors should trust you. Include contact information and physical location if applicable. An About page your pages link to but the crawl did not fetch (an excluded path, or past the page limit) is reported as linked but not crawled rather than missing. On a single-page site, an About section (an element whose id is about, about-us or a localised slug, linked from the page as #about) counts as the About page; add enough content to it (200 words or more).",
+      "An About page establishes credibility and trust. Include company history, mission, team overview, and credentials. Link from main navigation or footer. For E-E-A-T, explain your expertise and why visitors should trust you. Include contact information and physical location if applicable. A concrete path in `paths` that the crawl did not reach is requested once after the crawl (robots.txt and the per-host limits apply), so an About page nothing links to is found; the finding says which paths were probed. An About page your pages link to but the crawl did not fetch (an excluded path, or past the page limit) is reported as linked but not crawled rather than missing. On a single-page site, an About section (an element whose id is about, about-us or a localised slug, linked from the page as #about) counts as the About page; add enough content to it (200 words or more).",
     category: "eeat",
     scope: "site",
+    discoveryProbes: ["configured-pages"],
     severity: "warning",
     weight: 5,
     optionsSchema,
@@ -112,17 +113,42 @@ export const aboutPageRule: Rule = {
     } else {
       // pub#740: an About page the pages link to but the crawl never fetched
       // (an excluded path, or past the page budget) is unverified, not missing.
+      const probed = probedConfiguredPages(ctx.site, paths);
+      const probedFound = probed.find((p) => p.outcome === "found");
       const linked = ctx.site ? findLinkedUncrawledPage(ctx.site, { href: (url) => isAboutPath(url, paths) }) : null;
-      checks.push(
-        linked
-          ? linkedUncrawledCheck("about-page", "About page", linked)
-          : {
-              name: "about-page",
-              status: "warn",
-              message: "No About page found",
-              value: "Create /about or /about-us page",
-            },
-      );
+      if (probedFound) {
+        // #1428: the crawl did not reach it, the probe did.
+        const words = probedFound.wordCount;
+        checks.push(
+          words !== null && words < 200
+            ? {
+                name: "about-page",
+                status: "info",
+                message: `About page exists but has limited content (found by probing ${probedFound.path}, not reached by the crawl)`,
+                value: `${words} words - consider expanding`,
+                details: { probed: true, path: probedFound.path, status: probedFound.status },
+              }
+            : {
+                name: "about-page",
+                status: "pass",
+                message: `About page exists (found by probing ${probedFound.path}, not reached by the crawl)`,
+                value: probedFound.url,
+                details: { probed: true, path: probedFound.path, status: probedFound.status },
+              },
+        );
+      } else {
+        checks.push(
+          linked
+            ? linkedUncrawledCheck("about-page", "About page", linked)
+            : {
+                name: "about-page",
+                status: "warn",
+                message: probed.length > 0 ? `No About page found ${probedNote(probed)}` : "No About page found",
+                value: "Create /about or /about-us page",
+                ...(probed.length > 0 ? { details: { probed: true, paths: probed.map((p) => p.path) } } : {}),
+              },
+        );
+      }
     }
 
     return { checks };

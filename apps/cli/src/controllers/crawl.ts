@@ -4,6 +4,7 @@ import {
   redactUrl,
   redactUrlsInText,
 } from "@squirrelscan/core-contracts/seed-redirect";
+import { configuredPagePaths } from "@squirrelscan/rules";
 import { customUserAgent } from "@squirrelscan/utils/headers";
 import { Effect, Stream } from "effect";
 
@@ -308,6 +309,10 @@ export async function runCrawl(
               config.crawler.disable_discovery_probes === true) === true
               ? { discoveryProbes: [] }
               : {}),
+            // #1428: pages the E-E-A-T rules are configured with that the crawl does not reach are asked for once.
+            configuredPagePaths: configuredPagePaths(
+              config.rule_options as Record<string, unknown>
+            ),
             incremental: !options.refresh, // default true unless --refresh
             include: config.crawler.include,
             exclude: config.crawler.exclude,

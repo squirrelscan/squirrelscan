@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- **`eeat/about-page` and `eeat/privacy-policy` probe a configured path the crawl did not reach.** A `paths` entry that names one page (`/agentur`, `/policies/privacy-policy`) and that no crawled page links to is requested once after the crawl, so a page that exists but is not linked, common for Shopify `/pages/*` and `/policies/*`, is no longer reported missing. A path that answers 404 still reports the page missing and the message names the probed path. The request honours robots.txt and the per-host limits, runs with the other discovery probes (`disable_discovery_probes` turns it off), is never counted as a crawled page and costs no credits. (#1428)
+
 ### Changed
 
 - **`integrity/brand-impersonation` says when `<template>` elements were past its limit.** The info note for a scan cut by the template limit now names templates (`details.templatesUnread`, "N <template> elements were past the template limit and not read") instead of counting them as sign-in controls (`details.controlsUnread`). (#784)

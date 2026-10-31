@@ -54,7 +54,7 @@ The word threshold is a proxy for that. Padding the page to 200 words does not m
 paths = ["/pages/manufaktur"]
 ```
 
-A crawled page at a configured path counts as the page, with no structured data needed, and a configured path that pages link to but the crawl did not fetch is reported as linked but not crawled, as for a built-in slug. A `paths` value that is not an array of strings, or a `regex:` entry that does not compile, is reported by `squirrel config validate`.
+A crawled page at a configured path counts as the page, with no structured data needed, and a configured path that pages link to but the crawl did not fetch is reported as linked but not crawled, as for a built-in slug. A configured path that names one page (it starts with `/`, is not a `regex:` pattern, and has no space, query or fragment) that the crawl did not reach is requested once after the crawl: a page that exists but nothing links to is found, and a page that answers 404 is reported missing with the probed path in the message (`No About page found (probed /gone: 404)`). The request follows [`robots.txt`](/configuration/crawler) when the crawl does (a disallowed path is not requested and the message says so), uses the crawl's per-host limits and runs with the other discovery probes, so `disable_discovery_probes` turns it off and `--offline` keeps it on the audited host. A probed page is a probe result, not a crawled page: no page rule audits it, it is not counted in the crawl's pages and it costs no credits. A path the crawl's `exclude` or `include` refuses is not requested. A `paths` value that is not an array of strings, or a `regex:` entry that does not compile, is reported by `squirrel config validate`.
 
 ## Enable / disable
 

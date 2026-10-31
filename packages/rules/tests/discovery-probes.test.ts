@@ -7,7 +7,7 @@ import { describe, expect, test } from "bun:test";
 
 import { DISCOVERY_PROBES } from "@squirrelscan/core-contracts/storage";
 
-import { selectDiscoveryProbes } from "../src/discovery-probes";
+import { configuredPagePaths, selectDiscoveryProbes } from "../src/discovery-probes";
 import { loadAllRules } from "../src/loader";
 import type { Rule } from "../src/types";
 
@@ -36,8 +36,9 @@ describe("selectDiscoveryProbes (#409)", () => {
 
   // security/security-txt (#713) is a reader of the two security.txt paths, so
   // they stay on when only ax is excluded.
-  test("excluding the ax category sends only the security.txt probes", () => {
-    const securityTxt = ["/.well-known/security.txt", "/security.txt"];
+  test("excluding the ax category sends only the security.txt probes and the configured-pages probe", () => {
+    // `configured-pages` is read by eeat/about-page and eeat/privacy-policy (#1428).
+    const securityTxt = ["/.well-known/security.txt", "/security.txt", "configured-pages"];
     expect(selectDiscoveryProbes({ enabled: true, rules: { enable: ["*"], disable: ["ax/*"] } })).toEqual(
       securityTxt,
     );
@@ -95,7 +96,7 @@ describe("selectDiscoveryProbes (#409)", () => {
     expect(
       selectDiscoveryProbes({
         enabled: true,
-        rules: { enable: ["*"], disable: ["ax/*", "security/*"] },
+        rules: { enable: ["*"], disable: ["ax/*", "security/*", "eeat/*"] },
         additionalNamespaces: [{ name: "acme", rules: [pluginRule] }],
       }),
     ).toEqual(["/openapi.json"]);
@@ -109,5 +110,22 @@ describe("selectDiscoveryProbes (#409)", () => {
       "/.well-known/agents.md",
       "/docs/AGENTS.md",
     ]);
+  });
+});
+
+describe("configuredPagePaths (#1428)", () => {
+  test("only a pattern that names one path can be requested", () => {
+    expect(
+      configuredPagePaths({
+        "eeat/about-page": { paths: ["/agentur", "agentur", "regex:^/a", "//evil.test/x", "/with space", "/a?b=1", "/ok/"] },
+        "eeat/privacy-policy": { paths: ["/policies/privacy-policy", "/agentur"] },
+        "eeat/contact-page": { paths: ["/kontakt"] },
+      }),
+    ).toEqual(["/agentur", "/ok/", "/policies/privacy-policy"]);
+  });
+
+  test("no options, or options without paths, ask for nothing", () => {
+    expect(configuredPagePaths(undefined)).toEqual([]);
+    expect(configuredPagePaths({ "eeat/about-page": {} })).toEqual([]);
   });
 });

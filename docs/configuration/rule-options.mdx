@@ -640,7 +640,7 @@ paths = ["/pages/kundendienst"]
 paths = ["regex:^/pages/rechtliches"]
 ```
 
-**Behavior:** patterns use the [URL pattern](#url-patterns) forms, matched against the URL's path only (never the host, query string or fragment), and are checked before the built-in slugs. A configured path that pages link to but the crawl did not fetch is reported as linked but not crawled. A `paths` value that is not an array of strings, or a `regex:` entry that does not compile, is reported by `config validate` and stops the rule's audit run.
+**Behavior:** patterns use the [URL pattern](#url-patterns) forms, matched against the URL's path only (never the host, query string or fragment), and are checked before the built-in slugs. A configured path that pages link to but the crawl did not fetch is reported as linked but not crawled. For `eeat/about-page` and `eeat/privacy-policy`, a path that names one page (starting with `/`, not a `regex:` pattern) that the crawl did not reach is also requested once after the crawl, under the discovery probes' rules (robots.txt, per-host limits, `disable_discovery_probes`); the finding says what was probed, and a probed page is never counted as a crawled page. A `paths` value that is not an array of strings, or a `regex:` entry that does not compile, is reported by `config validate` and stops the rule's audit run.
 
 ---
 

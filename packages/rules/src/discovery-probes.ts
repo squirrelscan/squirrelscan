@@ -47,3 +47,28 @@ export function selectDiscoveryProbes(input: DiscoveryProbeSelectionInput): Disc
   }
   return DISCOVERY_PROBES.filter((probe) => wanted.has(probe));
 }
+
+/** The rules whose configured `paths` the `configured-pages` probe asks for (#1428). */
+const CONFIGURED_PAGE_RULES = ["eeat/about-page", "eeat/privacy-policy"] as const;
+
+/**
+ * The concrete page paths the E-E-A-T rules are configured with, for the `configured-pages` probe (#1428).
+ * Only a pattern that names one path can be requested: it starts with `/`, is not a `regex:` pattern and has
+ * no whitespace, query or fragment. A substring such as `agentur` or a regular expression has no path to
+ * ask for and is matched against crawled pages only, as before.
+ */
+export function configuredPagePaths(ruleOptions: Record<string, unknown> | undefined): string[] {
+  const out = new Set<string>();
+  for (const id of CONFIGURED_PAGE_RULES) {
+    const options = ruleOptions?.[id];
+    const paths = (options as { paths?: unknown } | undefined)?.paths;
+    if (!Array.isArray(paths)) continue;
+    for (const path of paths) {
+      if (typeof path !== "string" || path.length > 512) continue;
+      if (!path.startsWith("/") || path.startsWith("//")) continue;
+      if (/[\s?#\\]/.test(path)) continue;
+      out.add(path);
+    }
+  }
+  return [...out];
+}

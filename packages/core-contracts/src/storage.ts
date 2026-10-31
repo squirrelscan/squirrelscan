@@ -1169,12 +1169,14 @@ export type WellKnownPath = (typeof WELL_KNOWN_PATHS)[number];
  * - `agent-access`: / as a browser, GPTBot and Claude-User
  * - a {@link WellKnownPath}: that one path of the well-known sweep
  * - `rsl`: robots.txt re-read for `License:`, plus the documents it names
+ * - `configured-pages`: after the crawl, each concrete path an E-E-A-T rule is configured with
+ *   (`[rule_options."eeat/about-page"] paths`) that the crawl did not reach (#1428)
  *
  * Rules declare the probes they read (`RuleMeta.discoveryProbes`), and a probe
  * no enabled rule reads is never sent. A probe that was not sent, or got no
  * answer, is reported "not checked" by its readers, never as a missing file.
  */
-export type DiscoveryProbe = "llms-txt" | "markdown" | "agent-access" | "rsl" | WellKnownPath;
+export type DiscoveryProbe = "llms-txt" | "markdown" | "agent-access" | "rsl" | "configured-pages" | WellKnownPath;
 
 /** Every discovery probe, in the order the crawl preamble sends them. */
 export const DISCOVERY_PROBES: readonly DiscoveryProbe[] = [
@@ -1183,6 +1185,7 @@ export const DISCOVERY_PROBES: readonly DiscoveryProbe[] = [
   "agent-access",
   ...WELL_KNOWN_PATHS,
   "rsl",
+  "configured-pages",
 ];
 
 // One probed well-known/agent-file path. Rules decide meaning; the crawler only
@@ -1218,6 +1221,16 @@ export interface WellKnownProbe {
   oauthClientIdMetadataDocumentSupported: boolean | null;
   /** Non-fatal fetch error note; null otherwise. */
   error: string | null;
+  /**
+   * Set on a page probed because a rule is configured with its path and the crawl did not reach it
+   * (#1428). Such an entry is a probe result, never a crawled page: it is not stored as a page, is not
+   * audited by the page rules and adds no credits.
+   */
+  configuredPage?: true;
+  /** A configured-page probe that robots.txt disallows is not requested; status is 0 and this is true. */
+  blockedByRobots?: boolean;
+  /** Words of the probed page's text when it answered with HTML; null when it did not or could not be measured. */
+  wordCount?: number | null;
 }
 
 export interface WellKnownProbeRecord {

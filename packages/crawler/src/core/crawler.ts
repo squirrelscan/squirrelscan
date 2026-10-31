@@ -134,6 +134,7 @@ import {
 import { fetchLlmsTxt } from "../llms";
 import { probeMarkdownResponse } from "../markdown";
 import { fetchRobotsEvaluator as fetchRobots } from "../robots";
+import { probeConfiguredPage } from "../well-known";
 import { probeWellKnown } from "../well-known";
 import { probeAgentAccess } from "../agent-access";
 import { fetchRslLicensing } from "../rsl";
@@ -2544,6 +2545,9 @@ export function createCrawler(
         );
         yield* Effect.raceFirst(pool, stopGuard);
 
+        // The crawl drained on its own (not stopped): ask for the configured pages it did not reach (#1428).
+        if (isRunning && !stopRequested) yield* probeConfiguredPages(crawlId);
+
         // Crawl loop exited. Distinguish a clean drain from a backstop
         // hard-interrupt (#969): stop() clears isRunning before it can win the
         // grace race OR make idle workers exit at their loop-top check, so
@@ -2784,6 +2788,52 @@ export function createCrawler(
           logger.debug("redirect detection failed", targetUrl, error);
           return settledUrl;
         }
+      });
+
+    /**
+     * The `configured-pages` probe (#1428): each concrete path an E-E-A-T rule is configured with that the
+     * crawl did not reach is requested once, after the crawl, so the rule can tell a page that exists but is
+     * not linked from a page that is missing. Same gate as the other probes (per-host limits, egress policy),
+     * robots.txt honoured when the crawl honours it, and a path the crawl's own scope refuses is not
+     * requested. The answer is a probe record on the well-known row: never a page, so no rule audits it.
+     */
+    const probeConfiguredPages = (crawlId: string): Effect.Effect<void, StorageError, never> =>
+      Effect.gen(function* () {
+        const selected = config.discoveryProbes;
+        if (selected && !selected.includes("configured-pages")) return;
+        const wanted = [...new Set(config.configuredPagePaths ?? [])];
+        if (wanted.length === 0) return;
+        const targets: string[] = [];
+        for (const path of wanted) {
+          const { normalized, decision } = normalizeAndCheckScope(new URL(path, baseUrl).toString());
+          if (!normalized || !decision.allowed) continue;
+          if (yield* storage.hasPage(crawlId, normalized)) continue;
+          targets.push(path);
+        }
+        if (targets.length === 0) return;
+        const interrupted = new AbortController();
+        const budget = createPhaseBudget(
+          discoveryBudgetMs(config.timeoutMs, config.discoveryDeadlineAt),
+          Date.now(),
+          undefined,
+          crawlEgress,
+        );
+        const gate = probeGate(budget, interrupted.signal);
+        const probes = yield* Effect.all(
+          targets.map((path) =>
+            probeConfiguredPage(baseUrl, path, config.userAgent, {
+              customHeaders: customHeadersFor(baseUrl),
+              budget,
+              gate,
+              ...(config.respectRobots && robots ? { robotsAllows: (url: string) => robots!.isAllowed(url) } : {}),
+            }),
+          ),
+          { concurrency: "unbounded" },
+        ).pipe(Effect.onInterrupt(() => Effect.sync(() => interrupted.abort())));
+        // Appended to the well-known row (one request per path, so a path is never recorded twice).
+        const existing = yield* storage.getWellKnownProbe(crawlId);
+        const kept = (existing?.probes ?? []).filter((p) => !(p.configuredPage && targets.includes(p.path)));
+        yield* storage.setWellKnownProbe(crawlId, { probes: [...kept, ...probes], fetchedAt: existing?.fetchedAt ?? Date.now() });
       });
 
     /**
