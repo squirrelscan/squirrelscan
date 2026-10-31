@@ -90,6 +90,7 @@ export type {
   TechBundleLimits,
   TechFetchedScript,
   TechPageSource,
+  TechScriptGaps,
   TechScanDiff,
 } from "./technologies";
 

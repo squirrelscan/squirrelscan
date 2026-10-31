@@ -1986,6 +1986,7 @@ export async function runAudit(
             // the same ordered page list the whole-crawl context did (#1913).
             siteContext: techSample,
             scripts: assets.scripts,
+            scriptsNotRead: assets.scriptsNotRead,
             getBalance: techClient
               ? async () =>
                   preflightBalanceOf((await techClient.getBalance()).balance)
@@ -2493,6 +2494,7 @@ export async function runAudit(
           baseUrl: url,
           siteContext: techSample,
           scripts: assets.scripts,
+          scriptsNotRead: assets.scriptsNotRead,
           limits: localTechBundleLimits(mergedConfig),
         });
         if (localTech) report.technologies = localTech;

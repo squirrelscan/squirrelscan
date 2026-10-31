@@ -249,7 +249,10 @@ export function generateConsoleReport(
   }
 
   // Technologies — report-only section, separate from issues, not scored.
-  if (report.technologies && report.technologies.items.length > 0) {
+  if (
+    report.technologies &&
+    (report.technologies.items.length > 0 || report.technologies.truncated)
+  ) {
     log("");
     printTechnologies(report.technologies);
   }

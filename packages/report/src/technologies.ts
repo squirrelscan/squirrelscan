@@ -137,6 +137,8 @@ const TRUNCATION_REASON_TEXT: Record<NonNullable<ReportTechnologies["truncated"]
   "page-bytes": "the page's script budget ran out",
   "audit-bytes": "the audit's script budget ran out",
   "time-budget": "the per-page time budget ran out",
+  "script-too-large": "a script was over the crawl's 5 MB fetch cap",
+  "script-limit": "the audit's script limit left some scripts unread",
 };
 
 /** One sentence saying detection was cut short (#1387), or null when it read everything. */

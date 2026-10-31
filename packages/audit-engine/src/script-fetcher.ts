@@ -92,6 +92,9 @@ export interface ScriptFetcherOptions {
   egress?: EgressPolicy;
 }
 
+/** The `error` of a script the fetcher dropped for its size (over `maxSizeBytes`). */
+export const SCRIPT_TOO_LARGE_ERROR = "script too large";
+
 const DEFAULT_OPTIONS: ScriptFetcherOptions = {
   concurrency: SCRIPT_FETCH_LIMITS.FETCH_CONCURRENCY,
   timeoutMs: SCRIPT_FETCH_LIMITS.FETCH_TIMEOUT_MS,
@@ -215,7 +218,7 @@ async function fetchScriptAttempt(
         finalUrl,
         sourceMapHeader,
         contentEncoding,
-        error: "script too large",
+        error: SCRIPT_TOO_LARGE_ERROR,
       };
     }
 
@@ -269,7 +272,7 @@ async function fetchScriptAttempt(
         finalUrl,
         sourceMapHeader,
         contentEncoding,
-        error: "script too large",
+        error: SCRIPT_TOO_LARGE_ERROR,
       };
     }
 

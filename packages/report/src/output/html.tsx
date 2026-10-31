@@ -1485,7 +1485,7 @@ function SiteContext({ report, offline }: { report: AuditReport; offline: boolea
   const profileRows = meta ? siteProfileRows(meta) : [];
   const flags = meta ? siteProfileFlags(meta) : null;
   const cs = report.cacheStats;
-  const hasTech = !!tech && tech.items.length > 0;
+  const hasTech = !!tech && (tech.items.length > 0 || !!tech.truncated);
   const techSummary = tech ? techChangeSummary(tech) : null;
   return (
     <>
@@ -1934,7 +1934,7 @@ function ReportPage({
                       ]
                     : []),
                   ...(passedRules.length > 0 ? [["#passed", "Passed"]] : []),
-                  ...(report.technologies?.items.length || report.siteMetadata
+                  ...(report.technologies?.items.length || report.technologies?.truncated || report.siteMetadata
                     ? [["#site", "Site"]]
                     : []),
                   ...(report.domainStats ? [["#footprint", "Search"]] : []),
