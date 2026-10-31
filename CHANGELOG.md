@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Changed
+
+- **`integrity/brand-impersonation` says when `<template>` elements were past its limit.** The info note for a scan cut by the template limit now names templates (`details.templatesUnread`, "N <template> elements were past the template limit and not read") instead of counting them as sign-in controls (`details.controlsUnread`). (#784)
+
 ## v0.0.148 (2026-10-31)
 
 `[[ignore]]` in `squirrel.toml` waives findings by item or URL without disabling a rule, the technology scan reports the scripts it never read, and the JSON report schema is now 1.4. `integrity/brand-impersonation` and `integrity/fake-auth-overlay` no longer miss the common evasions, a keyword-stuffing plain-div menu shape is covered, and the audit ignore list drops nine entries whose advisories no longer match.
