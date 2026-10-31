@@ -38,6 +38,7 @@ import type { PreflightBalance } from "@/lib/balance";
 import type { UserSettings } from "@/self/types";
 import type { AuditOptions } from "@/types";
 
+import { isEmptyCutTechnologies } from "@/audit/cloud";
 import { decodeFailureLines, isDecodeFailure } from "@/audit/decode-failures";
 import {
   normalizeFailOnArgs,
@@ -3385,10 +3386,7 @@ export const audit = defineCommand({
       if (
         registeredRun?.websiteId &&
         report.technologies &&
-        !(
-          report.technologies.items.length === 0 &&
-          report.technologies.truncated
-        ) &&
+        !isEmptyCutTechnologies(report.technologies) &&
         !publishedReportId
       ) {
         await syncTechnologies({
