@@ -3,6 +3,10 @@ import { inBundle, inBundleWith, inScript, inStyle, resourceAttr, scriptSrc } fr
 
 const KLAVIYO_SCRIPT_PATH = String.raw`(?:static|static-tracking)\.klaviyo\.com\/onsite\/js\/(?:[A-Za-z0-9]+\/)?klaviyo\.js`;
 const KLAVIYO_SCRIPT_URL = String.raw`(?:https?:)?\/\/${KLAVIYO_SCRIPT_PATH}`;
+// One character of a script's own body in `pageMarkup`: the markup joins the kept tags and short inline bodies with a
+// newline, so the body ends where the next kept tag starts a line. Without this the lazy scan ran on into later parts,
+// and 1 MB of empty script tags cost 16x what the old pattern did.
+const OWN_BODY = String.raw`(?:(?!\n<(?:script|link|img|iframe|embed|object|source)\b)[\s\S])`;
 const KLAVIYO_ATTR_VALUE = String.raw`(?:"\s*${KLAVIYO_SCRIPT_URL}[^"]*"|'\s*${KLAVIYO_SCRIPT_URL}[^']*'|${KLAVIYO_SCRIPT_URL}[^\s>]*)`;
 
 export const OTHER_FINGERPRINTS: TechFingerprint[] = [
@@ -20,11 +24,19 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
       { type: "script-url", pattern: new RegExp(`^(?:https?:)?\\/\\/[^\\r\\n]{0,2048}${KLAVIYO_SCRIPT_PATH}`, "i") },
       // pageMarkup strips comments and prose/code samples, then keeps complete resource tags and short inline loaders.
       { type: "script-url", pattern: new RegExp(`^<script\\b[^>]{0,65536}\\s(?:src|data-src)\\s*=\\s*${KLAVIYO_ATTR_VALUE}`, "im") },
-      { type: "script-url", pattern: new RegExp(`^<link\\b[^>]{0,65536}\\shref\\s*=\\s*${KLAVIYO_ATTR_VALUE}`, "im") },
+      // A link only loads the script when it is a preload (a stylesheet or a prefetch hint does not run it); `rel` may
+      // sit before or after the `href`.
       {
         type: "script-url",
         pattern: new RegExp(
-          `^(?!<)[^\\r\\n]{0,16384}?\\b[A-Za-z_$][\\w$]{0,63}\\.src\\s*=\\s*["']${KLAVIYO_SCRIPT_URL}`,
+          `^<link\\b(?=[^>]{0,65536}\\srel\\s*=\\s*["']?(?:module)?preload\\b)[^>]{0,65536}\\shref\\s*=\\s*${KLAVIYO_ATTR_VALUE}`,
+          "im",
+        ),
+      },
+      {
+        type: "script-url",
+        pattern: new RegExp(
+          `^<script\\b[^>]{0,65536}>${OWN_BODY}{0,16384}?\\b[A-Za-z_$][\\w$]{0,63}\\.src\\s*=\\s*["']${KLAVIYO_SCRIPT_URL}`,
           "im",
         ),
       },

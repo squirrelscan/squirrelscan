@@ -55,4 +55,36 @@ describe("Klaviyo script recall", () => {
     );
     for (const ids of withAndWithoutBodies(html)) expect(ids).not.toContain("klaviyo");
   });
+
+  test("only a preload link loads the script: rel before or after the href, stylesheet and prefetch do not", () => {
+    for (const html of [
+      page(`<link rel="modulepreload" href="${SRC}">`),
+      page(`<link href="${SRC}" rel="preload" as="script">`),
+      page(`<link as=script rel=preload href=${SRC}>`),
+    ]) {
+      for (const ids of withAndWithoutBodies(html)) expect(ids).toContain("klaviyo");
+    }
+    for (const html of [
+      page(`<link rel="stylesheet" href="${SRC}">`),
+      page(`<link rel="prefetch" href="${SRC}">`),
+      page(`<link href="${SRC}">`),
+    ]) {
+      for (const ids of withAndWithoutBodies(html)) expect(ids).not.toContain("klaviyo");
+    }
+  });
+
+  test("the inline loader scan stays inside the script's own body", () => {
+    // The assignment sits in the NEXT script: the first, empty script must not claim it.
+    const html = page(`<script></script><script>var b=document.createElement("script");b.src="//cdn.example.com/x.js";</script><link rel="preload" href="/a.css">`);
+    for (const ids of withAndWithoutBodies(html)) expect(ids).not.toContain("klaviyo");
+    const other = `<script>var u="${SRC}";</script><script>var b=1;b.src="/local.js";</script>`;
+    for (const ids of withAndWithoutBodies(page(other))) expect(ids).not.toContain("klaviyo");
+  });
+
+  test("a megabyte of empty script tags is not slow", () => {
+    const html = page("<script></script>".repeat(Math.ceil((1024 * 1024) / "<script></script>".length)));
+    const start = performance.now();
+    found(html);
+    expect(performance.now() - start).toBeLessThan(1500);
+  });
 });
