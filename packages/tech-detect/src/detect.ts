@@ -1,6 +1,7 @@
 import type { DetectedTechnology, Detector, TechDetectInput, TechFingerprint } from "./types";
 import { ALL_FINGERPRINTS } from "./fingerprints";
 import { flightLoaderText, hasFlightChunk } from "./flight";
+import { COLLECTED_TAGS } from "./collected-tags";
 import { inString, scanJs, type ScannedJs } from "./js-scan";
 
 /**
@@ -170,11 +171,55 @@ function attributeValue(tag: string, name: string): string | null {
   return m ? (m[1] ?? m[2] ?? m[3] ?? "") : null;
 }
 
-let lastMarkup: { html: string; markup: string } | undefined;
+let lastMarkup: { html: string; markup: string; tags: CollectedTag[] } | undefined;
+
+/** A tag the page pass kept, with its attributes as written (names lower case, first wins). */
+interface CollectedTag {
+  tag: string;
+  attrs: Map<string, string>;
+}
+/** How many tags (of `COLLECTED_TAGS`) and attributes per tag the page pass keeps. */
+const MAX_COLLECTED_TAGS = 100_000;
+const MAX_ATTRIBUTES_PER_TAG = 100;
+const MAX_ATTRIBUTE_VALUE_CHARS = 2_048;
+
+/** The attributes of a start tag, in one linear pass: quoted, single-quoted or bare values; names lower case; first wins. */
+function parseTagAttributes(tag: string): Map<string, string> {
+  const attrs = new Map<string, string>();
+  let i = tag.search(/[\s/]/);
+  if (i === -1) return attrs;
+  const n = tag.length;
+  while (i < n && attrs.size < MAX_ATTRIBUTES_PER_TAG) {
+    while (i < n && /[\s/]/.test(tag[i]!)) i++;
+    if (i >= n || tag[i] === ">") break;
+    const nameStart = i;
+    while (i < n && !/[\s=/>]/.test(tag[i]!)) i++;
+    const name = tag.slice(nameStart, i).toLowerCase();
+    while (i < n && /\s/.test(tag[i]!)) i++;
+    let value = "";
+    if (tag[i] === "=") {
+      i++;
+      while (i < n && /\s/.test(tag[i]!)) i++;
+      const quote = tag[i];
+      if (quote === '"' || quote === "'") {
+        const end = tag.indexOf(quote, i + 1);
+        value = tag.slice(i + 1, end === -1 ? n : end);
+        i = end === -1 ? n : end + 1;
+      } else {
+        const start = i;
+        while (i < n && !/[\s>]/.test(tag[i]!)) i++;
+        value = tag.slice(start, i);
+      }
+    }
+    if (name && !attrs.has(name)) attrs.set(name, (value.length > MAX_ATTRIBUTE_VALUE_CHARS ? value.slice(0, MAX_ATTRIBUTE_VALUE_CHARS) : value).trim());
+  }
+  return attrs;
+}
 
 export function pageMarkup(html: string): string {
   if (lastMarkup?.html === html) return lastMarkup.markup;
   const parts: string[] = [];
+  const collected: CollectedTag[] = [];
   const flightBodies: string[] = [];
   const scriptEnd = /<\/script/gi;
   let inlineText = 0;
@@ -200,6 +245,9 @@ export function pageMarkup(html: string): string {
     const name = /^<(\/?)([a-zA-Z][a-zA-Z0-9-]*)/.exec(tag);
     if (!name || name[1] === "/") continue;
     const tagName = name[2]!.toLowerCase();
+    if (COLLECTED_TAGS.has(tagName) && collected.length < MAX_COLLECTED_TAGS) {
+      collected.push({ tag: tagName, attrs: parseTagAttributes(tag.length > MAX_TAG_CHARS ? tag.slice(0, MAX_TAG_CHARS) : tag) });
+    }
     if (tagName === "script" && !tag.endsWith("/>")) {
       scriptEnd.lastIndex = pos;
       const end = scriptEnd.exec(html)?.index ?? html.length;
@@ -228,8 +276,29 @@ export function pageMarkup(html: string): string {
   }
   if (flightBodies.length > 0) parts.push(flightLoaderText(flightBodies, (t) => DATA_SCRIPT_TYPE.test(t)));
   const markup = parts.join("\n");
-  lastMarkup = { html, markup };
+  lastMarkup = { html, markup, tags: collected };
   return markup;
+}
+
+/** The tags a page pass kept (see {@link COLLECTED_TAGS}), found in the same single pass as {@link pageMarkup}. */
+function pageTags(html: string): CollectedTag[] {
+  pageMarkup(html);
+  return lastMarkup?.tags ?? [];
+}
+
+function matchesTagAttr(detector: Extract<Detector, { type: "tag-attr" }>, html: string): boolean {
+  for (const entry of pageTags(html)) {
+    if (!detector.tags.includes(entry.tag)) continue;
+    for (const attr of detector.attrs) {
+      const value = entry.attrs.get(attr);
+      if (value === undefined) continue;
+      if (detector.pattern.test(value)) return true;
+      if (detector.tokens) {
+        for (const token of value.split(/[\s,]+/)) if (token && detector.pattern.test(token)) return true;
+      }
+    }
+  }
+  return false;
 }
 
 function matchDetector(
@@ -252,7 +321,7 @@ function matchDetector(
       // The listed URLs, and the page's own markup: an inline loader builds its URL inside a `<script>` and
       // has no `src` to list. The same page gives the same answer with or without script bodies attached.
       if (input.scripts?.some((s) => s.url && detector.pattern.test(s.url))) return true;
-      return detector.pattern.test(pageMarkup(html));
+      return detector.pattern.test(pageMarkup(input.html));
     case "script-content":
       if (detector.inCode) {
         return (
@@ -282,6 +351,9 @@ function matchDetector(
     case "dom":
       // DOM selectors need a document — skip in headerless detection
       return false;
+    case "tag-attr":
+      // `input.html`, not `html`: the page pass already leaves comments out, and one string keeps the one-page cache warm.
+      return matchesTagAttr(detector, input.html);
     case "url-host": {
       try {
         return detector.pattern.test(new URL(input.url).hostname);
@@ -318,6 +390,8 @@ function detectorLabel(detector: Detector): string {
       return `url-path:${detector.pattern.source.slice(0, 30)}`;
     case "url-host":
       return `url-host:${detector.pattern.source.slice(0, 30)}`;
+    case "tag-attr":
+      return `tag-attr:${detector.attrs.join("|")}:${detector.pattern.source.slice(0, 30)}`;
   }
 }
 

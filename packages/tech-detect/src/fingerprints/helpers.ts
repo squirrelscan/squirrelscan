@@ -1,3 +1,4 @@
+import { assertCollectedTags } from "../collected-tags";
 import type { Detector } from "../types";
 
 // Lazy, up to the next script tag open or close: each body is scanned once, so a
@@ -15,10 +16,8 @@ export const STYLE_BODY = String.raw`(?:(?!<\/?style)[\s\S])*?`;
 export function scriptSrc(urlSource: string): Detector[] {
   return [
     { type: "script-url", pattern: new RegExp(`^${urlSource}`, "i") },
-    {
-      type: "html",
-      pattern: new RegExp(`<script\\s(?:[^>]{0,300}\\s)?src\\s*=\\s*["']${urlSource}`, "i"),
-    },
+    // The `src` of a real `<script>` tag, from the page's one parsed list of tags (not a scan of the HTML per signature).
+    { type: "tag-attr", tags: ["script"], attrs: ["src"], pattern: new RegExp(`^${urlSource}`, "i") },
   ];
 }
 
@@ -63,13 +62,17 @@ export function inStyle(bodySource: string, requires: string): Detector {
   };
 }
 
-/** `urlSource` as the value of a resource attribute on one of `tags`, never an `<a href>`. */
+/**
+ * `urlSource` as the value of a resource attribute on one of `tags`, never an `<a href>`. A `srcset`-style list is read
+ * token by token. Read from the page's parsed tags, so it costs a lookup per signature, not a scan of the HTML.
+ */
 export function resourceAttr(tags: string, attrs: string, urlSource: string): Detector {
+  assertCollectedTags(tags.split("|"));
   return {
-    type: "html",
-    pattern: new RegExp(
-      `<(?:${tags})\\s(?:[^>]{0,400}\\s)?(?:${attrs})\\s*=\\s*["'](?:[^"']{0,200}[\\s,])?${urlSource}`,
-      "i",
-    ),
+    type: "tag-attr",
+    tags: tags.split("|"),
+    attrs: attrs.split("|"),
+    pattern: new RegExp(`^${urlSource}`, "i"),
+    tokens: true,
   };
 }

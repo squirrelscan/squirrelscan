@@ -50,7 +50,12 @@ export type Detector =
   | { type: "url-path"; pattern: RegExp }
   // Matches the audited page's own host name only, never its HTML: a third-party app a page loads
   // (a script on `*.web.app`) says nothing about where the page itself is hosted.
-  | { type: "url-host"; pattern: RegExp };
+  | { type: "url-host"; pattern: RegExp }
+  // An attribute of a real tag as written (comments excluded, quoted or not), read from one parsed list of the page's
+  // tags instead of a scan of the HTML per signature (#1456). `pattern` tests the value (anchor it to the start of a
+  // URL); `tokens` also tests each whitespace or comma separated token (`srcset`). `tags` must be among the tags the
+  // page pass collects (`COLLECTED_TAGS` in detect.ts).
+  | { type: "tag-attr"; tags: readonly string[]; attrs: readonly string[]; pattern: RegExp; tokens?: boolean };
 
 export interface TechFingerprint {
   id: string;
