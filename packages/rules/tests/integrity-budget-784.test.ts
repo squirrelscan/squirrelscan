@@ -88,10 +88,18 @@ test("5,001 empty templates do not use up the template bound; 5,001 real ones ar
   expect(fired(empty.checks, "brand-impersonation")).toBe(true);
   const full = await run(`${"<template><b>x</b></template>".repeat(5_001)}<template>${REAL}</template>`);
   expect(foundOrNoted(full.checks, "brand-impersonation")).toBe(true);
-  // The note names templates, not controls, as what was left unread.
-  const note = full.checks.find((c) => c.details?.scanTruncated === true);
-  expect(Number(note?.details?.templatesUnread)).toBeGreaterThan(0);
-  expect(String((note as { message?: string } | undefined)?.message)).toContain("template");
+  // The note names templates, not controls, as what was left unread: 5,000 are read, so one more than that is one cut.
+  const one = await run(`${"<template><b>x</b></template>".repeat(5_000)}<template>${REAL}</template>`);
+  const note = one.checks.find((c) => c.details?.scanTruncated === true) as { message?: string; details?: Record<string, unknown> } | undefined;
+  expect(note?.details?.templatesUnread).toBe(1);
+  expect(note?.details?.controlsUnread).toBeUndefined();
+  expect(note?.message).toBe(
+    "1 <template> element was past the template limit and not read (scan work limit); no brand impersonation was found in what was read",
+  );
+  const several = await run(`${"<template><b>x</b></template>".repeat(5_002)}<template>${REAL}</template>`);
+  const many = several.checks.find((c) => c.details?.scanTruncated === true) as { message?: string; details?: Record<string, unknown> } | undefined;
+  expect(many?.details?.templatesUnread).toBe(3);
+  expect(many?.message).toContain("3 <template> elements were past the template limit and not read");
 }, 120_000);
 
 test("an overlay whose geometry is on a ninth class, or after 1,000 padding classes, is found", async () => {
@@ -144,6 +152,7 @@ test("30,000 cross-host decoys with children before the real control: the fair s
   expect(fired(checks, "brand-impersonation")).toBe(true);
 }, 180_000);
 
+// Characterisation: this passes on main too; it pins the default-budget behaviour on nested anchors.
 test("20,000 unclosed anchors nest in each other; both rules finish at the default budget and the innermost real control is found", async () => {
   const { checks } = await run(`${'<a href="https://p.invalid/x">x'.repeat(20_000)}${REAL}`);
   expect(finished(checks)).toBe(true);

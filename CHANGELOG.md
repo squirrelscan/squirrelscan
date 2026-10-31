@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Changed
+
+- **`integrity/brand-impersonation` says when `<template>` elements were past its limit.** The info note for a scan cut by the template limit now names templates (`details.templatesUnread`, "N <template> elements were past the template limit and not read") instead of counting them as sign-in controls (`details.controlsUnread`). (#784)
+
 ### Added
 
 - **`squirrel pages` lists the pages of a stored audit as a table.** One row per crawled page: URL, final URL, status, depth, canonical, noindex, title and description with their lengths, H1 text and count, heading count, word count, schema types and JSON-LD `@id`s, in-links, internal and external out-links with the external hosts, load time, last modified, and a `flags` column taken from the audit's own rule results so the table and the issue list agree. `-f json|csv|markdown`, and filters that combine: `--missing title|description|h1|schema`, `--duplicate title|description`, `--too-long`, `--orphan`, `--section /blog`, `--page <text>`. Everything is read from what the crawl stored, so it makes no request and costs no credits. (#701)
