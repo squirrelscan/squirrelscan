@@ -1,5 +1,12 @@
 # Dependency Audit Allowlist
 
+Every `--ignore` in the `audit:dependencies` script in `package.json` is an exception, and an
+exception stays only while its advisory still matches the lockfile. When a dependency change makes an
+advisory stop matching (check with `bun audit` after removing the ignore, on the bun version in
+`packageManager`), drop the ignore and its section here in the same change, so the list does not
+hide a later regression of the same advisory. The `dependency-advisory` workflow opens an issue when
+the audit fails; it is also the moment to prune.
+
 ## GHSA-9wv6-86v2-598j
 
 `path-to-regexp@6.1.0` is installed only through Tangly's `@astrojs/vercel`
@@ -8,44 +15,6 @@ load or deploy the Vercel adapter. The Wrangler and MCP dependency paths resolve
 to patched `path-to-regexp` versions.
 
 Remove this exception when Tangly stops installing unused deployment adapters.
-
-## GHSA-mh99-v99m-4gvg
-
-`brace-expansion` DoS via unbounded expansion. The affected range is `<=5.0.7`, and
-the tree resolves two copies: `5.0.8` (already patched) and `1.1.16`, which is the
-newest release on the 1.x line — there is no patched 1.x to move to.
-
-The `1.1.16` copy arrives only through lint and docs tooling:
-`eslint-plugin-sonarjs`, `eslint-plugin-github` and `ultracite` (all
-`devDependencies` of `@squirrelscan/cli`), plus `tangly` in the docs workspace.
-None of them are bundled into the compiled `squirrel` binary, so no shipped
-artifact is exposed; the reachable impact is a developer running lint locally or
-in CI against hostile glob input, which does not occur.
-
-Forcing the 1.x consumers onto 2.x/5.x via an `overrides` entry is a major bump of
-third-party lint tooling and churns the lockfile and generated notices, so it is
-tracked separately rather than bundled into a security fix.
-
-Remove this exception when those packages ship a patched `brace-expansion`, or when
-the override bump is done deliberately.
-
-## GHSA-hp3w-g68c-fv3c
-
-`sprintf-js` DoS via unbounded precision specifiers. The affected range is
-`<=1.1.3`, and `1.1.3` is the newest release: there is no patched version to move
-to.
-
-The tree resolves one copy, `1.0.3`, through `gray-matter` > `js-yaml@3` >
-`argparse@1`, and `gray-matter` is installed only by `tangly` in the docs
-workspace. `bun audit` also prints an
-`eslint-plugin-github` > `@eslint/eslintrc` path, but that `js-yaml` resolves to
-`4.x`, which uses `argparse@2` and does not depend on `sprintf-js`. Within
-`js-yaml@3` only its own `bin/js-yaml.js` command loads `argparse`, so the
-library calls `gray-matter` makes never load `sprintf-js`, and nothing in the
-compiled `squirrel` binary does either.
-
-Remove this exception when `sprintf-js` ships a fix or `gray-matter` moves off
-`js-yaml@3`.
 
 ## GHSA-238p-pmpm-9mq7
 
@@ -80,19 +49,3 @@ renders at request time, and every page is our own MDX with no untrusted props o
 view-transition values. Neither advisory has untrusted input to work with.
 
 Remove this exception, and the cap, when tangly moves to `@astrojs/mdx` `8`.
-
-## GHSA-mrhx-c7xc-m3w5
-
-Zod: memory exhaustion while validating oversized constrained collections (high,
-fixed in `4.6.6`). `cli` and `rules` ask for `^4.6.6`, and that copy (`4.6.7`)
-is also the one the MCP packages, tangly/astro and ultracite resolve. Two
-affected copies remain. `config` and `crawler` ask for `^3.25.76`, and reaching
-`4.6.6` there is a zod 3 to 4 migration, not a bump (#1085).
-`@vercel/cli-config` (docs only, through `@vercel/oidc`) pins `4.1.11` exactly
-and is not in the compiled binary.
-
-Public zod validates trusted local config and our own cloud API responses. The
-attack needs an attacker-sized array inside the validated input, and neither
-source carries one from an untrusted party.
-
-Remove this exception when zod is at `4.6.6` or later everywhere (#1085).
