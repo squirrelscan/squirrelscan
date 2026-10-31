@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **`surge-sh`, `railway-app`, `aws-amplify-hosting` and ActiveCampaign Pages are read from the page's own host.** Their signatures matched `.surge.sh`, `.railway.app`, `.amplifyapp.com` and `.ac-page.com` anywhere in the page HTML, so a site that only loads a third-party script or links to one of those hosts read as hosted there (the same class as the `firebase-hosting` fix). Surge and Railway keep their `Server` response header signal. (#1449)
+
 ## v0.0.154 (2026-11-01)
 
 Technology detection reads a long `next/script` snippet in a Next.js flight payload again, and a page of unclosed tags no longer makes it take tens of seconds. `url/slug-convention` and `perf/total-byte-weight` count the same pages on both engines when a crawl has bodiless 4xx or 5xx pages, and `integrity/brand-impersonation` keeps reading long attribute labels on a page padded to starve it.
