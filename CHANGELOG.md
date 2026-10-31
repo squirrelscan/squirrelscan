@@ -19,7 +19,7 @@ How it works:
 
 ### Added
 
-- **The `--include-pages` list says how each page answered.** Each `pages` entry in the JSON report now has `finalUrl` (where the page was served from after redirects) and `outcome` (`ok`, `http-error`, `rate-limited` or `error`) beside `url`, `status` and `ruleCount`, so a pipeline that tracks coverage can tell a rate-limited page from a missing one without re-deriving it. `meta.schemaVersion` is now `1.2`. (#1260)
+- **The `--include-pages` list says how each page answered.** Each `pages` entry in the JSON report now has `finalUrl` (where the page was served from after redirects) and `outcome` (`ok`, `http-error`, `rate-limited` or `error`) beside `url`, `status` and `ruleCount`, so a pipeline that tracks coverage can tell a rate-limited page from a missing one without re-deriving it. `meta.schemaVersion` is now `1.2`; without `--include-pages` that is the only change to a JSON report. (#1260)
 
 ### Fixed
 
