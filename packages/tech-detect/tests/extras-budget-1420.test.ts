@@ -418,7 +418,7 @@ describe("the tail cut inside a long span (#1433 review)", () => {
   }
 
   test("a long regex at the tail cut is skipped, not reopened", () => {
-    const content = withTail(long("/["), `x/${FAKE}${"z".repeat(600)}]/;\n`).replace("var s=/[", "var s=/[");
+    const content = withTail(long("/["), `x/${FAKE}${"z".repeat(600)}]/;\n`);
     const extras = sampleBundleExtras(content, HEAD, EXTRAS);
     expect(extras.length).toBeLessThanOrEqual(EXTRAS);
     expect(detect(content)).not.toContain("firebase");
