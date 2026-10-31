@@ -397,8 +397,8 @@ describe("hostile page values (#701)", () => {
       );
     });
 
-  test("csv and markdown carry no escape, control or bidi character from a page", async () => {
-    for (const format of ["csv", "markdown"]) {
+  test("csv, markdown and html carry no escape, control or bidi character from a page", async () => {
+    for (const format of ["csv", "markdown", "html"]) {
       const r = await squirrel("pages", "-f", format);
       expect(r.code).toBe(0);
       expect(unsafe(r.out)).toEqual([]);
@@ -538,6 +538,26 @@ describe("squirrel pages --diff", () => {
     const csv = await squirrel("pages", "--diff", "-f", "csv");
     expect(csv.out.split("\n")[0]).toBe("kind,url,field,before,after");
     expect(csv.out).toContain("added,");
+  }, 120_000);
+
+  test("the diff in every format carries no control or bidi character from a page", async () => {
+    for (const format of ["markdown", "csv", "json"]) {
+      const r = await squirrel("pages", "--diff", "-f", format);
+      expect(r.code).toBe(0);
+      if (format !== "json") {
+        expect(
+          [...r.out].filter((ch) => {
+            const c = ch.charCodeAt(0);
+            return (
+              c === 27 ||
+              c === 7 ||
+              (c >= 0x80 && c <= 0x9f) ||
+              (c >= 0x202a && c <= 0x202e)
+            );
+          })
+        ).toEqual([]);
+      }
+    }
   }, 120_000);
 
   test("filters on page state and unsupported formats are usage errors", async () => {

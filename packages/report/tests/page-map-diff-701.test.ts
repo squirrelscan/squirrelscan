@@ -157,3 +157,39 @@ describe("renderPageMapHtml", () => {
     expect(html).toContain("textContent");
   });
 });
+
+// The diff and the HTML table print values from audited pages too (#701).
+describe("hostile page values in the diff and the HTML table", () => {
+  const ESC = String.fromCharCode(27);
+  const unsafe = (text: string): string[] =>
+    [...text].filter((ch) => {
+      const c = ch.charCodeAt(0);
+      return c === 27 || c === 7 || (c >= 0x80 && c <= 0x9f) || (c >= 0x202a && c <= 0x202e) || (c >= 0x2066 && c <= 0x2069);
+    });
+  const evilTitle = `T${ESC}[2J${ESC}]8;;https://evil.example\u0007x\u009b31m\u202eabc\nline`;
+  const evilUrl = `https://example.com/p${ESC}[1;1H\u202e`;
+  const before = [row(evilUrl, { title: "a" })];
+  const after = [row(evilUrl, { title: evilTitle, description: "=cmd|' /C calc'!A0" }), row(`${E}/new${ESC}[2J`, { title: evilTitle })];
+  const meta = { site: `https://e.test/${ESC}[2J`, older: { crawlId: "1", startedAt: 1 }, newer: { crawlId: "2", startedAt: 2 } };
+
+  test("diff markdown and csv carry no control or bidi character, and csv guards formulas", () => {
+    const diff = diffPageMaps(before, after);
+    expect(unsafe(renderPageMapDiffMarkdown(diff, meta))).toEqual([]);
+    const csv = renderPageMapDiffCsv(diff);
+    expect(unsafe(csv)).toEqual([]);
+    expect(csv).toContain("'=cmd|' /C calc'!A0");
+    expect(csv.trim().split("\n").length).toBe(1 + diff.changed.flatMap((c) => c.changes).length + diff.added.length);
+  });
+
+  test("the diff JSON keeps the bytes and is valid", () => {
+    const json = JSON.parse(renderPageMapDiffJson(diffPageMaps(before, after), meta)) as { changed: Array<{ changes: Array<{ after: string }> }> };
+    expect(json.changed[0]!.changes.find((c) => c.after.includes("evil.example"))).toBeDefined();
+  });
+
+  test("the HTML table carries no control or bidi character in its data or its heading", () => {
+    const html = renderPageMapHtml(after, pageMapMeta({ id: "abc", baseUrl: meta.site, startedAt: 1 }, 2));
+    expect(unsafe(html)).toEqual([]);
+    // The text survives, only its control and bidi characters are gone.
+    expect(html).toContain("evil.example");
+  });
+});
