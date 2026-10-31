@@ -70,6 +70,9 @@ describe("classifier parity corpus (#1822)", () => {
     // TLS keys on the probe's whole certificate sentence, with or without the lead-in.
     expect(classifyAuditFailureReasonText("SSL/TLS error - certificate issue")).toBe("tls");
     expect(classifyAuditFailureReasonText("certificate rotation failed")).toBe("unknown");
+    // The runtime's own TLS error names (#1259).
+    expect(classifyAuditFailureReasonText("ERR_TLS_CERT_ALTNAME_INVALID fetching \"https://x.example/\"")).toBe("tls");
+    expect(classifyAuditFailureReasonText("unable to get local issuer certificate")).toBe("tls");
   });
 
   test("our own internal failures never read as the audited site's", () => {

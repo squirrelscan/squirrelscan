@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **A start URL with a broken TLS certificate now reports `security/tls-certificate` failing.** An expired, wrong-host, self-signed or untrusted-chain certificate on the audited URL still ends the run as `unreachable` (exit 5, no score), but the report in the format you asked for now carries a `security/tls-certificate` failure with the cause, where it used to carry only `Cannot reach`. `ERR_TLS_CERT_ALTNAME_INVALID` and `unable to get local issuer certificate` are now classified as TLS failures (reason code `tls`) instead of `unknown`. (#1259)
+
 ## v0.0.146 (2026-10-31)
 
 Supabase is now detected in more real bundles, including a minified supabase-js build, and `security/cookie-flags` no longer warns about Lovable's `__dpl` routing cookie, a cookie the platform sets and a site cannot change.

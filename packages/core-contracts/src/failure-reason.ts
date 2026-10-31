@@ -430,10 +430,16 @@ export function classifyAuditFailureReasonText(
     r.includes("wrong version number") ||
     r.includes("err_cert_") ||
     r.includes("err_ssl_") ||
+    // Bun and Node name a TLS failure ERR_TLS_*: ERR_TLS_CERT_ALTNAME_INVALID for a name the certificate does not cover.
+    r.includes("err_tls_") ||
     r.includes("certificate has expired") ||
     r.includes("self-signed certificate") ||
     r.includes("self signed certificate") ||
     r.includes("unable to verify the first certificate") ||
+    // A chain under a root the runtime does not trust (a private CA, a missing intermediate): the fetch says
+    // "unable to get local issuer certificate" and the cause probe may not run (#1259).
+    r.includes("unable to get local issuer certificate") ||
+    r.includes("unable to get issuer certificate") ||
     r.includes("hostname/ip does not match") ||
     // The same probe folds every certificate problem into one sentence:
     // `Cannot reach <url>: SSL/TLS error - certificate issue`.
