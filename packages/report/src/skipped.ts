@@ -149,6 +149,7 @@ export function parseSkippedChecks(value: unknown): SkippedCheck[] {
     const pages = (Array.isArray(e.pages) ? e.pages : [])
       .filter((p): p is string => typeof p === "string" && p.length <= 2_048)
       // The file is untrusted and these reach a terminal: no control characters, no bidi overrides.
+      // A URL loses them outright (a space would split it); names below become spaces so words stay apart.
       .map((p) => stripUnsafeLineText(p, ""))
       .slice(0, MAX_RESTORED_PAGES);
     const count = e.pagesCount;
