@@ -141,6 +141,19 @@ import { createTestStorage } from "../storage";
 import { DEFAULT_CRAWLER_CONFIG, CrawlerError } from "./types";
 
 const PATTERN_SAMPLE_LIMIT = 1;
+
+/** Whether a validated start URL names a path below the origin root. */
+function hasDeepPath(url: string): boolean {
+  try {
+    const { pathname } = new URL(url);
+    return pathname !== "" && pathname !== "/";
+  } catch {
+    // The crawler currently receives validated HTTP(S) URLs, but a malformed
+    // integration value must not abort crawl setup while deciding seed order.
+    return false;
+  }
+}
+
 /**
  * Which fetch a root failure came from (#1822). The frontier's own `seed`
  * source is the audited entry URL; everything else reaching a zero-page crawl
@@ -3214,8 +3227,7 @@ export function createCrawler(
         // redirects to the root still gives its destination this priority.
         // Root-to-root starts keep their existing sitemap accounting and order.
         const prioritizeSeed =
-          new URL(userProvidedUrl).pathname !== "/" ||
-          new URL(seedResolution.seedUrl).pathname !== "/";
+          hasDeepPath(userProvidedUrl) || hasDeepPath(seedResolution.seedUrl);
         if (prioritizeSeed) {
           yield* enqueueUrl(crawlId, seedResolution.seedUrl, 0, undefined, "seed");
         }

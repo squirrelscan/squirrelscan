@@ -1,6 +1,7 @@
 // A deep start URL is disclosed, retained in JSON and fetched inside a small
 // page budget even when the sitemap already offers enough other pages (#1369).
 
+import { Database } from "bun:sqlite";
 import { afterAll, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -68,6 +69,7 @@ afterAll(() => {
 
 let homes = 0;
 async function audit(path: string, maxPages: number) {
+  const home = join(scratch, `home-${++homes}`);
   const env = Object.fromEntries(
     Object.entries(process.env).filter(
       ([key, value]) =>
@@ -93,7 +95,7 @@ async function audit(path: string, maxPages: number) {
     {
       env: {
         ...env,
-        HOME: join(scratch, `home-${++homes}`),
+        HOME: home,
         SQUIRREL_NO_UPDATE: "1",
         NO_TELEMETRY: "1",
         NO_COLOR: "1",
@@ -108,7 +110,7 @@ async function audit(path: string, maxPages: number) {
     new Response(proc.stderr).text(),
     proc.exited,
   ]);
-  return { out, err, code };
+  return { out, err, code, home };
 }
 
 describe("deep audit start URL", () => {
@@ -139,8 +141,31 @@ describe("deep audit start URL", () => {
     expect(report.meta.requestedUrl).toBeUndefined();
   }, 90_000);
 
+  test("an origin-only start lets sitemap insertion win seed dedup", async () => {
+    const result = await audit("/?origin-order=1", 1);
+    expect(result.code).toBe(0);
+    const dbPath = Array.from(
+      new Bun.Glob(".squirrel/projects/*/project.db").scanSync({
+        cwd: result.home,
+        absolute: true,
+      })
+    )[0];
+    expect(dbPath).toBeDefined();
+    const db = new Database(dbPath!, { readonly: true });
+    try {
+      const entry = db
+        .query("SELECT source FROM frontier WHERE normalized_url = ?")
+        .get(`${site.url.origin}/`) as { source: string } | null;
+      // The sitemap root is inserted before the query-bearing seed. It keeps
+      // ownership when the seed is added later, exercising `!prioritizeSeed`.
+      expect(entry?.source).toBe("sitemap");
+    } finally {
+      db.close();
+    }
+  }, 90_000);
+
   test("a deep redirect reports the request and prioritizes its root destination", async () => {
-    const result = await audit("/deep-to-root", 1);
+    const result = await audit("/deep-to-root?ref=campaign", 1);
     expect(result.code).toBe(0);
     expect(result.err).toContain(
       `Notice: requested ${site.url.origin}/deep-to-root; auditing the whole site at ${site.url.origin}.`

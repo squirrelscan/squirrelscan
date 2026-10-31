@@ -2032,8 +2032,9 @@ export const audit = defineCommand({
           // Cross-domain redirects have their own startRedirect disclosure. A
           // same-site redirect is otherwise silent, so retain what the user
           // named for deep-start reporting and frontier priority (#1369).
-          if (!resolved.record)
-            sameSiteRequestedUrl = redactStartUrl(startParsed.url);
+          // Keep the same normalized, unredacted value used for a start that
+          // did not redirect; report reconstruction redacts it before output.
+          if (!resolved.record) sameSiteRequestedUrl = startParsed.url;
         }
         startRedirect = resolved.record;
       }
