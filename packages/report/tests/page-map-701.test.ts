@@ -172,7 +172,7 @@ describe("renderPageMapMarkdown", () => {
     // Pipes escaped, one line, no live tag.
     expect(dataLine).toContain("a \\| b # heading");
     expect(dataLine).toContain("\\<script>");
-    expect(dataLine).not.toMatch(/(^|[^\\])<script>/);
+    expect(dataLine).not.toMatch(/(^|[^\\])<script>/i);
     expect(md.split("\n").filter((l) => l.startsWith("| `https://"))).toHaveLength(1);
   });
 });

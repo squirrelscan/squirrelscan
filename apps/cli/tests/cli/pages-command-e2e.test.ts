@@ -23,7 +23,18 @@ const SAME = "A title that two different pages share word for word";
 // Every page but `/lonely` links to every other one, so only `/lonely` is an orphan.
 // `/b?id=1` and `/blog/post/` are stored with their query string and trailing slash: their link counts
 // must still be found (#701).
-const NAV = ["/", "/a", "/b?id=1", "/dup1", "/dup2", "/blog/post/"];
+// `/items?id=1` and `/items?id=2` are two pages that differ only by query string: each keeps its own
+// out-links, and they share one `inlinks` count (the rules key links without the query string).
+const NAV = [
+  "/",
+  "/a",
+  "/b?id=1",
+  "/dup1",
+  "/dup2",
+  "/blog/post/",
+  "/items?id=1",
+  "/items?id=2",
+];
 const nav = (self: string) =>
   NAV.filter((p) => p !== self)
     .map((p) => `<a href="${p}">${p}</a>`)
@@ -59,6 +70,17 @@ const site = Bun.serve({
         return html(
           page("A blog post on the page map test site", nav("/blog/post/"))
         );
+      case "/items": {
+        // A self link, a link to the post, and two external hosts: Out is 1 (the self link is not a
+        // link out) and Ext is 2 on each variant, however many variants there are.
+        const self = `/items${new URL(req.url).search}`;
+        return html(
+          page(
+            `Item ${new URL(req.url).searchParams.get("id")} of the page map test site`,
+            `<a href="${self}">self</a> <a href="/blog/post/">post</a> <a href="https://ext-a.example/x">a</a> <a href="https://ext-b.example/y">b</a>`
+          )
+        );
+      }
       case "/sitemap.xml":
         return new Response(
           `<?xml version="1.0"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${[
@@ -68,6 +90,8 @@ const site = Bun.serve({
             "dup1",
             "dup2",
             "blog/post/",
+            "items?id=1",
+            "items?id=2",
             "lonely",
           ]
             .map((p) => `<url><loc>${origin}/${p}</loc></url>`)
@@ -195,6 +219,8 @@ describe("squirrel pages", () => {
       "/blog/post/",
       "/dup1",
       "/dup2",
+      "/items",
+      "/items",
       "/lonely",
     ]);
     const home = map.pages.find((r) => new URL(r.url).pathname === "/")!;
@@ -206,8 +232,8 @@ describe("squirrel pages", () => {
     expect(home.titleLength).toBe("Home of the page map test site".length);
     expect(home.descriptionLength).toBeGreaterThan(20);
     expect(home.wordCount).toBeGreaterThan(100);
-    // Five internal links out (every page but itself and the lonely one), one external.
-    expect(home.internalOutlinks).toBe(5);
+    // Seven internal links out (every page but itself and the lonely one, both item variants), one external.
+    expect(home.internalOutlinks).toBe(7);
     expect(home.externalOutlinks).toBe(1);
     expect(home.externalDomains).toEqual(["elsewhere.example"]);
     // Every linked page is linked from the other five; the page nobody links to has no inlinks.
@@ -224,14 +250,29 @@ describe("squirrel pages", () => {
     const map = await asJson();
     const at = (path: string) =>
       map.pages.find((r) => new URL(r.url).pathname === path)!;
-    // Linked from the five other pages of the nav, however the URL is spelled.
-    expect(at("/blog/post/").inlinks).toBe(5);
+    // Linked from the other pages of the nav (and both item pages for the post), however the URL is spelled.
+    expect(at("/blog/post/").inlinks).toBe(7);
     expect(at("/b").inlinks).toBe(5);
-    expect(at("/blog/post/").internalOutlinks).toBe(5);
-    expect(at("/b").internalOutlinks).toBe(5);
+    expect(at("/blog/post/").internalOutlinks).toBe(7);
+    expect(at("/b").internalOutlinks).toBe(7);
     // And the audit's own orphan rule agrees: neither is flagged.
     expect(at("/blog/post/").flags).not.toContain("orphan");
     expect(at("/b").flags).not.toContain("orphan");
+  }, 120_000);
+
+  test("query-string variants keep their own out-links and share an in-link count, and a self link is no link (#701)", async () => {
+    const map = await asJson();
+    const items = map.pages.filter((r) => new URL(r.url).pathname === "/items");
+    expect(items).toHaveLength(2);
+    for (const item of items) {
+      // The post only: the self link is skipped, and the other variant's counts are not added in.
+      expect(item.internalOutlinks).toBe(1);
+      expect(item.externalOutlinks).toBe(2);
+      expect(item.externalDomains).toEqual(["ext-a.example", "ext-b.example"]);
+    }
+    // The rules key links without the query string, so the variants share one in-link count:
+    // the six pages of the nav that link to them, each counted once.
+    expect(items.map((r) => r.inlinks)).toEqual([6, 6]);
   }, 120_000);
 
   test("h1, heading count and JSON-LD ids come from the stored parse", async () => {
@@ -248,7 +289,7 @@ describe("squirrel pages", () => {
       "/b",
     ]);
     // No page declares schema.org types.
-    expect((await asJson("--missing", "schema")).filtered).toBe(7);
+    expect((await asJson("--missing", "schema")).filtered).toBe(9);
   }, 120_000);
 
   test("--duplicate title names the pages the audit flags, --section and --page narrow by URL", async () => {
@@ -281,10 +322,10 @@ describe("squirrel pages", () => {
     expect(
       lines[0]!.startsWith("url,finalUrl,status,depth,canonical,noindex,title")
     ).toBe(true);
-    expect(lines).toHaveLength(8);
+    expect(lines).toHaveLength(10);
     const md = await squirrel("pages", "-f", "markdown", "--section", "/blog");
     expect(md.code).toBe(0);
-    expect(md.out).toContain("1 of 7 pages match");
+    expect(md.out).toContain("1 of 9 pages match");
     expect(md.out).toContain("/blog/post");
   }, 120_000);
 
@@ -347,7 +388,7 @@ describe("hostile page values (#701)", () => {
   test("csv neutralises the formula in the description and keeps one record per page", async () => {
     const r = await squirrel("pages", "-f", "csv");
     expect(r.out).toContain("'=cmd|' /C calc'!A0");
-    expect(r.out.split("\n").filter((l) => l.length > 0)).toHaveLength(8);
+    expect(r.out.split("\n").filter((l) => l.length > 0)).toHaveLength(10);
   }, 120_000);
 
   test("json is valid and keeps the page's own bytes", async () => {
