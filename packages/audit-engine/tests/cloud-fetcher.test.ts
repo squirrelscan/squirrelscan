@@ -89,8 +89,11 @@ describe("render runId threading (#1134)", () => {
   });
 
   test("the render submit carries no Accept-Language and no request headers: a browser render uses its own language (#1355)", async () => {
-    // A plain fetch sends no default Accept-Language (#1355) and passes a configured one through; the cloud
-    // render request has no header field at all, so neither case can put one on the browser. The render still works.
+    // A plain fetch sends no default Accept-Language (#1355) and passes a configured one through; the render
+    // request the CLI submits has no header field at all (only urls, a timeout and a run id), so from `squirrel audit`
+    // neither case can put one on the browser. The render still works. Custom headers of a website in the
+    // dashboard reach the browser on the hosted audit path instead, which this package does not build (the
+    // dashboard docs describe it): the two statements are about two different request paths.
     const captured: RenderRequest[] = [];
     const fetcher = createCloudDocumentFetcher(recordingClient(captured), fastOpts);
     const plain = await fetcher.fetch({ url: "https://example.com/" } as FetchRequest);
