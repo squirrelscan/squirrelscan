@@ -2879,14 +2879,15 @@ export const audit = defineCommand({
         // format asked for says so, and the exit code is its own.
         if (result.error.code === ErrorCodes.UNREACHABLE) {
           const detail = result.error.details as
-            | { url?: unknown; reason?: unknown }
+            | { url?: unknown; reason?: unknown; tlsFinding?: unknown }
             | undefined;
           emitUnreachableOutcome(
             unreachableOutcome(
               typeof detail?.url === "string" ? detail.url : options.url,
               typeof detail?.reason === "string"
                 ? detail.reason
-                : result.error.message
+                : result.error.message,
+              { tlsFinding: detail?.tlsFinding === true }
             ),
             { format: args.format, output: args.output }
           );

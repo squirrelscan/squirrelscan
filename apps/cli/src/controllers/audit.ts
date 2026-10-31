@@ -36,6 +36,7 @@ import { foldEntityMapVariants } from "@squirrelscan/audit-engine/entity-map";
 import { createEntityMapCollector } from "@squirrelscan/audit-engine/entity-map/collect";
 import { offlineAuditSettings } from "@squirrelscan/core-contracts/audit-levels";
 import { computeCost } from "@squirrelscan/core-contracts/credits";
+import { classifyAuditFailureReasonText } from "@squirrelscan/core-contracts/failure-reason";
 import { maxDurationReason } from "@squirrelscan/core-contracts/failure-reason";
 import { PLANS } from "@squirrelscan/core-contracts/plans";
 import {
@@ -46,12 +47,14 @@ import {
   createConditionalRenderDocumentFetcher,
   createFetchDocumentFetcher,
 } from "@squirrelscan/fetchers";
+import { isRuleEnabled } from "@squirrelscan/rules";
 import { createProbeBudget, selectDiscoveryProbes } from "@squirrelscan/rules";
 import { MAX_DURATION_MAX_PAGE_BYTES } from "@squirrelscan/utils/constants";
 import {
   customUserAgent,
   mergeHeaderRecords,
 } from "@squirrelscan/utils/headers";
+import { tlsFailureCause } from "@squirrelscan/utils/tls-certificate";
 
 import type { RetentionOutcome } from "@/audit/retention";
 import type { PreflightBalance } from "@/lib/balance";
@@ -1001,17 +1004,42 @@ export async function runAudit(
       }
       // #1271: when the budget ran out waiting for the site, say so; the unreachable
       // report carries the same reason.
-      const reason =
+      let reason =
         durationBudget && Date.now() >= durationBudget.crawlStopAt
           ? // The wording classifies as a timeout (failure-reason.ts reads "no response from ... within
             // the request timeout"), and carries no URL.
             `no response from the site within the request timeout (the ${Math.round(durationBudget.budgetMs / 1000)}s --max-duration time limit was reached)`
           : redactUrlsInText(reachability.error ?? "unknown error");
+      // #1259: a TLS failure on the start URL is named by one handshake (expired on a date, a name the
+      // certificate does not cover, a missing intermediate, a self-signed or untrusted chain), and the
+      // report says `security/tls-certificate` failed when that rule is selected.
+      let tlsFinding = false;
+      if (
+        classifyAuditFailureReasonText(
+          `Cannot reach ${redactUrl(url)}: ${reason}`
+        ) === "tls" &&
+        !(durationBudget && Date.now() >= durationBudget.crawlStopAt)
+      ) {
+        const cause = await startUrlTlsCause(
+          url,
+          mergedConfig,
+          durationBudget?.crawlStopAt
+        );
+        if (cause) reason = redactUrlsInText(cause);
+        tlsFinding = isRuleEnabled(
+          TLS_CERTIFICATE_RULE_ID,
+          mergedConfig.rules.enable,
+          mergedConfig.rules.disable,
+          (mergedConfig.rule_options as Record<string, { enabled?: boolean }>)[
+            TLS_CERTIFICATE_RULE_ID
+          ]
+        );
+      }
       return err(
         commandError(
           ErrorCodes.UNREACHABLE,
           `Cannot reach ${redactUrl(url)}: ${reason}`,
-          { url: redactUrl(url), reason }
+          { url: redactUrl(url), reason, tlsFinding }
         )
       );
     }
@@ -2955,4 +2983,48 @@ export function mergeOptionsToConfig(
             : {}),
         },
   };
+}
+
+const TLS_CERTIFICATE_RULE_ID = "security/tls-certificate";
+
+/**
+ * The certificate problem behind a TLS failure of the start URL, from one handshake (3 s at most, and not
+ * past the budget): the same probe and sentences the crawl uses for a failed page. Undefined when the
+ * handshake finds no certificate problem or cannot look (a plain-HTTP port, a protocol the runtime refuses).
+ */
+async function startUrlTlsCause(
+  url: string,
+  config: Config,
+  stopAt: number | undefined
+): Promise<string | undefined> {
+  let target: URL;
+  try {
+    target = new URL(url);
+  } catch {
+    return undefined;
+  }
+  if (target.protocol !== "https:") return undefined;
+  const hostname = target.hostname.replace(/^\[(.*)\]$/, "$1");
+  const timeoutMs = Math.min(
+    3_000,
+    stopAt === undefined ? 3_000 : Math.max(0, stopAt - Date.now())
+  );
+  if (timeoutMs <= 0) return undefined;
+  try {
+    const probe = createTlsProbe({
+      allowPrivateNetwork: true,
+      proxyResolvesNames: config.crawler.tls_proxy_resolves_names === true,
+    });
+    return tlsFailureCause(
+      await probe({
+        hostname,
+        port: target.port ? Number(target.port) : 443,
+        timeoutMs,
+      }),
+      hostname,
+      new Date()
+    );
+  } catch {
+    return undefined;
+  }
 }

@@ -73,6 +73,8 @@ describe("classifier parity corpus (#1822)", () => {
     // The runtime's own TLS error names (#1259).
     expect(classifyAuditFailureReasonText("ERR_TLS_CERT_ALTNAME_INVALID fetching \"https://x.example/\"")).toBe("tls");
     expect(classifyAuditFailureReasonText("unable to get local issuer certificate")).toBe("tls");
+    expect(classifyAuditFailureReasonText("the certificate chains to an untrusted root (SELF_SIGNED_CERT_IN_CHAIN)")).toBe("tls");
+    expect(classifyAuditFailureReasonText("the chain does not verify to a trusted root: an intermediate may be missing")).toBe("tls");
   });
 
   test("our own internal failures never read as the audited site's", () => {

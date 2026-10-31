@@ -210,6 +210,13 @@ export function tlsFailureCause(probe: TlsProbe, hostname: string, now: Date): s
   if (probe.kind !== "certificate") return undefined;
   const [problem] = certificateProblems(probe, hostname, now);
   if (!problem) return undefined;
+  const cause = problemCause(problem, hostname);
+  // A short RSA key is named beside the first problem: it is often why a chain does not verify (#1259).
+  const bits = probe.certificate.rsaBits;
+  return bits !== undefined && bits < 2048 ? `${cause}; the certificate's key is RSA ${bits} bits, below 2048` : cause;
+}
+
+function problemCause(problem: TlsProblem, hostname: string): string {
   switch (problem.kind) {
     case "expired":
       return `certificate has expired on ${isoDate(problem.validTo)}`;

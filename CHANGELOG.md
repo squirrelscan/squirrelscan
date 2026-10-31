@@ -19,7 +19,7 @@ How it works:
 
 ### Fixed
 
-- **A start URL with a broken TLS certificate now reports `security/tls-certificate` failing.** An expired, wrong-host, self-signed or untrusted-chain certificate on the audited URL still ends the run as `unreachable` (exit 5, no score), but the report in the format you asked for now carries a `security/tls-certificate` failure with the cause, where it used to carry only `Cannot reach`. `ERR_TLS_CERT_ALTNAME_INVALID` and `unable to get local issuer certificate` are now classified as TLS failures (reason code `tls`) instead of `unknown`. (#1259)
+- **A start URL with a broken TLS certificate now reports `security/tls-certificate` failing.** An expired, wrong-host, self-signed or untrusted-chain certificate on the audited URL still ends the run as `unreachable` (exit 5, no score), but the report in the format you asked for now carries a `security/tls-certificate` failure with the cause (expired on a date, a name the certificate does not cover, self-signed, a chain that does not verify, a short RSA key), where it used to carry only `Cannot reach`. It follows `--rule-exclude` and `[rules] disable`, and a TLS failure that is not a certificate problem (a plain-HTTP port) has no finding. `ERR_TLS_CERT_ALTNAME_INVALID` and `unable to get local issuer certificate` are now classified as TLS failures (reason code `tls`) instead of `unknown`. (#1259)
 
 ### Changed
 

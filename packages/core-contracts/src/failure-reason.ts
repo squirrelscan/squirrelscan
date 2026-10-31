@@ -440,6 +440,9 @@ export function classifyAuditFailureReasonText(
     // "unable to get local issuer certificate" and the cause probe may not run (#1259).
     r.includes("unable to get local issuer certificate") ||
     r.includes("unable to get issuer certificate") ||
+    // The cause probe's own sentences for a chain that does not verify (utils tls-certificate).
+    r.includes("trusted root") ||
+    r.includes("intermediate certificate") ||
     r.includes("hostname/ip does not match") ||
     // The same probe folds every certificate problem into one sentence:
     // `Cannot reach <url>: SSL/TLS error - certificate issue`.
