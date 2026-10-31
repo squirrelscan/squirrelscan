@@ -283,8 +283,9 @@ describe("storeCrawlScripts", () => {
     expect(puts).toHaveLength(3);
     expect(summary.stored).toBe(3 + 20); // the 20 copies share the first body
     expect(elapsed).toBeLessThan(15_000);
-    // After a collection only what the (fake) store itself keeps is left: the 3 distinct
-    // bodies, 15 MB. The storage call retains none of the 200 MB it was handed.
+    // After a collection only what the (fake) store itself keeps is left. The storage call
+    // retains no copies of the bodies it was handed. Blind spot: a call that kept the SAME
+    // string references (no copy) adds nothing to the heap and would pass; only copies show.
     expect(retained).toBeLessThan(32 * 1024 * 1024);
   });
 
