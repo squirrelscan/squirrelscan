@@ -84,6 +84,15 @@ function cleanEnv(): Record<string, string> {
 }
 
 async function audit(url: string, ...args: string[]) {
+  return run(url, true, args);
+}
+
+/** Without `--offline`: the run a signed-out user gets by default (local, no cloud, the seed chain resolved the same). */
+async function auditOnline(url: string, ...args: string[]) {
+  return run(url, false, args);
+}
+
+async function run(url: string, offline: boolean, args: string[]) {
   const proc = Bun.spawn(
     [
       process.execPath,
@@ -91,7 +100,7 @@ async function audit(url: string, ...args: string[]) {
       entry,
       "audit",
       url,
-      "--offline",
+      ...(offline ? ["--offline"] : ["--http"]),
       "-m",
       "3",
       ...(args.includes("-f") ? [] : ["-f", "json"]),
@@ -183,5 +192,42 @@ describe("squirrel audit with a same-site start redirect", () => {
     };
     expect(report.meta.baseUrl).toBe(shortener.url.origin);
     expect(report.meta.originalUrl).toBeUndefined();
+  }, 90_000);
+});
+
+describe("the same start-URL redirects without --offline (#1281)", () => {
+  test("-y alone does not follow a cross-domain redirect: exit 4, nothing crawled", async () => {
+    const r = await auditOnline(shortUrl, "-y");
+    expect(r.code).toBe(4);
+    const outcome = JSON.parse(r.out) as { status: string; finalUrl: string };
+    expect(outcome.status).toBe("redirected");
+    expect(outcome.finalUrl).toBe(`${destination.url.origin}/`);
+    expect(destinationHits).toEqual(["/"]);
+  }, 60_000);
+
+  test("--follow-redirect audits the destination, and the report records the original URL and chain", async () => {
+    const r = await auditOnline(shortUrl, "--follow-redirect");
+    expect(r.code).toBe(0);
+    const report = JSON.parse(r.out.slice(r.out.indexOf("{"))) as {
+      meta: {
+        baseUrl: string;
+        originalUrl?: string;
+        redirectChain?: { status: number }[];
+      };
+    };
+    expect(report.meta.baseUrl).toBe(destination.url.origin);
+    expect(report.meta.originalUrl).toBe(shortUrl);
+    expect(report.meta.redirectChain?.map((hop) => hop.status)).toEqual([
+      301, 200,
+    ]);
+  }, 90_000);
+
+  test("a same-site path change is followed without a flag", async () => {
+    const r = await auditOnline(`http://localhost:${shortener.port}/old`);
+    expect(r.code).toBe(0);
+    const report = JSON.parse(r.out.slice(r.out.indexOf("{"))) as {
+      meta: { baseUrl: string };
+    };
+    expect(report.meta.baseUrl).toBe(`http://localhost:${shortener.port}`);
   }, 90_000);
 });
