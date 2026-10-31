@@ -1013,6 +1013,17 @@ export interface FetchedScript {
   error?: string | null;
 }
 
+/**
+ * True for a technologies section that found nothing and only says a cap cut the scan short (#1408).
+ * It is not a real "found nothing", so the dashboard sync skips it (clearing synced tech would be wrong).
+ */
+export function isEmptyCutTechnologies(t: {
+  items: readonly unknown[];
+  truncated?: unknown;
+}): boolean {
+  return t.items.length === 0 && Boolean(t.truncated);
+}
+
 /** The bundle byte caps for this run: `[tech_detect] bundle_bytes` over the defaults (#1254). */
 export function techBundleLimits(config: Config): TechBundleLimits {
   const bundleBytes =

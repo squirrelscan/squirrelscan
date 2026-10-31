@@ -13,6 +13,7 @@ import type { SiteContextPage } from "../../src/audit/adapter";
 
 import {
   detectLocalTechnologies,
+  isEmptyCutTechnologies,
   runCloudTechDetect,
 } from "../../src/audit/cloud";
 import { getDefaultConfig } from "../../src/config";
@@ -229,5 +230,21 @@ describe("scripts the crawl never gave a body (#1408)", () => {
     expect([...(result?.technologies.truncated?.reasons ?? [])].sort()).toEqual(
       ["script-limit", "script-too-large"]
     );
+  });
+});
+
+describe("the dashboard sync guard for a cut, empty technologies section (#1408)", () => {
+  test("an empty section that was cut short is not synced; empty and clean, or non-empty, is", () => {
+    const cutShort = { reasons: ["script-limit"], scripts: 2 };
+    expect(isEmptyCutTechnologies({ items: [], truncated: cutShort })).toBe(
+      true
+    );
+    expect(isEmptyCutTechnologies({ items: [] })).toBe(false);
+    expect(
+      isEmptyCutTechnologies({
+        items: [{ id: "wordpress" }],
+        truncated: cutShort,
+      })
+    ).toBe(false);
   });
 });
