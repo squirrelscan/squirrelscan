@@ -19,7 +19,7 @@ How it works:
 
 ### Fixed
 
-- **`integrity/brand-impersonation` reads sign-in cues at both ends of long control attributes.** The rule kept only the first 300 normalised characters of `aria-label`, `title`, an input `value` or a logo `alt`, so real-character padding before `Sign in with Google` hid the cue. It now keeps both edges of the bounded attribute and reports the control as unread when content in the middle or past the raw-input limit was omitted. (#1424)
+- **`integrity/brand-impersonation` reads sign-in cues anywhere in a long control attribute.** The rule kept only the first 300 normalised characters of `aria-label`, `title`, an input `value` or a logo `alt`, so real-character padding before `Sign in with Google` hid the cue. Each attribute is now normalised over its first 16,000 characters and read in overlapping 300-character windows, so a cue is found at any offset, with no head and tail glued together; only an attribute longer than 16,000 characters (raw or normalised) is counted as not read in full, so an ordinary long title no longer raises the note. (#1424)
 
 ## v0.0.151 (2026-11-01)
 

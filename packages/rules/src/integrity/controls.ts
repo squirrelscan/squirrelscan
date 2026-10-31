@@ -27,85 +27,13 @@ const INVISIBLE = /\p{Default_Ignorable_Code_Point}/gu;
  */
 const CONFUSABLES: Readonly<Record<string, string>> = Object.fromEntries([
   // Cyrillic
-  ...Object.entries({
-    а: "a",
-    е: "e",
-    о: "o",
-    р: "p",
-    с: "c",
-    у: "y",
-    х: "x",
-    і: "i",
-    ј: "j",
-    ѕ: "s",
-    ԁ: "d",
-    һ: "h",
-    ԛ: "q",
-    ԝ: "w",
-    ӏ: "l",
-    ѵ: "v",
-    ѡ: "w",
-    ԍ: "g",
-    к: "k",
-    т: "t",
-    н: "h",
-    м: "m",
-    ү: "y",
-    ь: "b",
-    в: "b",
-  }),
+  ...Object.entries({ а: "a", е: "e", о: "o", р: "p", с: "c", у: "y", х: "x", і: "i", ј: "j", ѕ: "s", ԁ: "d", һ: "h", ԛ: "q", ԝ: "w", ӏ: "l", ѵ: "v", ѡ: "w", ԍ: "g", к: "k", т: "t", н: "h", м: "m", ү: "y", ь: "b", в: "b" }),
   // Greek
-  ...Object.entries({
-    ο: "o",
-    α: "a",
-    ι: "i",
-    ν: "v",
-    ρ: "p",
-    υ: "u",
-    χ: "x",
-    ε: "e",
-    κ: "k",
-    τ: "t",
-    β: "b",
-    η: "n",
-    ω: "w",
-    μ: "u",
-    γ: "y",
-  }),
+  ...Object.entries({ ο: "o", α: "a", ι: "i", ν: "v", ρ: "p", υ: "u", χ: "x", ε: "e", κ: "k", τ: "t", β: "b", η: "n", ω: "w", μ: "u", γ: "y" }),
   // Armenian
   ...Object.entries({ օ: "o", ս: "u", ո: "n", հ: "h", ց: "g", ք: "p", ա: "a" }),
   // Latin look-alikes and small capitals
-  ...Object.entries({
-    ɡ: "g",
-    ı: "i",
-    ɑ: "a",
-    ᴀ: "a",
-    ʙ: "b",
-    ᴄ: "c",
-    ᴅ: "d",
-    ᴇ: "e",
-    ꜰ: "f",
-    ɢ: "g",
-    ʜ: "h",
-    ɪ: "i",
-    ᴊ: "j",
-    ᴋ: "k",
-    ʟ: "l",
-    ᴍ: "m",
-    ɴ: "n",
-    ᴏ: "o",
-    ᴘ: "p",
-    ʀ: "r",
-    ꜱ: "s",
-    ᴛ: "t",
-    ᴜ: "u",
-    ᴠ: "v",
-    ᴡ: "w",
-    ʏ: "y",
-    ᴢ: "z",
-    ǝ: "e",
-    ȷ: "j",
-  }),
+  ...Object.entries({ ɡ: "g", ı: "i", ɑ: "a", ᴀ: "a", ʙ: "b", ᴄ: "c", ᴅ: "d", ᴇ: "e", ꜰ: "f", ɢ: "g", ʜ: "h", ɪ: "i", ᴊ: "j", ᴋ: "k", ʟ: "l", ᴍ: "m", ɴ: "n", ᴏ: "o", ᴘ: "p", ʀ: "r", ꜱ: "s", ᴛ: "t", ᴜ: "u", ᴠ: "v", ᴡ: "w", ʏ: "y", ᴢ: "z", ǝ: "e", ȷ: "j" }),
 ]);
 const CONFUSABLE_RUN = new RegExp(`[${Object.keys(CONFUSABLES).join("")}]`, "g");
 
@@ -158,20 +86,41 @@ export interface ControlScan {
 }
 
 const ATTR_CHARS = 300;
-/** An attribute is normalised (padding removed) over this many characters before it is cut to {@link ATTR_CHARS}. */
+/** An attribute is normalised (padding removed) over this many raw characters. */
 const ATTR_RAW_CHARS = 16_000;
-const ATTR_HEAD_CHARS = Math.ceil((ATTR_CHARS - 1) / 2);
-const ATTR_TAIL_CHARS = ATTR_CHARS - ATTR_HEAD_CHARS - 1;
+/** Normalised characters of an attribute that are read; more than this, or more raw characters than {@link ATTR_RAW_CHARS}, is reported as unread. */
+const ATTR_NORMALISED_CHARS = 16_000;
+/** An attribute's text is read in windows of this many characters. */
+const ATTR_WINDOW_CHARS = 300;
+/**
+ * Window starts are this far apart, and each is moved back to the start of its word (by at most
+ * {@link ATTR_WINDOW_SNAP}), so consecutive starts are never more than `STRIDE + SNAP` = 150 apart: every run of
+ * 150 characters, and so every cue phrase, lies whole inside one window, wherever the padding put it.
+ */
+const ATTR_WINDOW_STRIDE = 100;
+const ATTR_WINDOW_SNAP = 50;
 
-/** Keep both edges of a bounded attribute; a cue hidden in the omitted middle is reported through `cut`. */
-function boundedAttribute(text: string): { text: string; cut: boolean } {
+/**
+ * An attribute's text as overlapping windows over its first {@link ATTR_NORMALISED_CHARS} normalised characters
+ * (padding spaces and invisible characters are removed first), so a sign-in cue is read wherever in the label it
+ * sits, with no head and tail glued together. `cut` is set only when the attribute is longer than the bounds.
+ */
+function attributeWindows(text: string): { windows: string[]; cut: boolean } {
   const normalised = readable(text.slice(0, ATTR_RAW_CHARS)).trim();
-  const cut = text.length > ATTR_RAW_CHARS || normalised.length > ATTR_CHARS;
-  if (normalised.length <= ATTR_CHARS) return { text: normalised, cut };
-  return {
-    text: `${normalised.slice(0, ATTR_HEAD_CHARS)} ${normalised.slice(-ATTR_TAIL_CHARS)}`,
-    cut,
-  };
+  const cut = text.length > ATTR_RAW_CHARS || normalised.length > ATTR_NORMALISED_CHARS;
+  const read = normalised.length > ATTR_NORMALISED_CHARS ? normalised.slice(0, ATTR_NORMALISED_CHARS) : normalised;
+  if (read.length <= ATTR_WINDOW_CHARS) return { windows: read === "" ? [] : [read], cut };
+  const windows: string[] = [];
+  for (let at = 0; at < read.length; at += ATTR_WINDOW_STRIDE) {
+    let start = at;
+    if (start > 0 && read[start - 1] !== " ") {
+      const space = read.lastIndexOf(" ", start);
+      if (space !== -1 && start - space <= ATTR_WINDOW_SNAP) start = space + 1;
+    }
+    windows.push(read.slice(start, start + ATTR_WINDOW_CHARS));
+    if (start + ATTR_WINDOW_CHARS >= read.length) break;
+  }
+  return { windows, cut };
 }
 /**
  * One control's read: at most `SHORT_VISITS` nodes looked at (text or not) and `SHORT_CHARS` characters kept.
@@ -257,11 +206,7 @@ function readChunks(
           getAttrCI(child, "hidden") !== null ||
           getAttrCI(child, "aria-hidden")?.toLowerCase() === "true" ||
           (style !== null && HIDDEN_STYLE.test(style)) ||
-          (cls !== null &&
-            cls
-              .toLowerCase()
-              .split(/\s+/)
-              .some((c) => hiddenBy.classes.has(c))) ||
+          (cls !== null && cls.toLowerCase().split(/\s+/).some((c) => hiddenBy.classes.has(c))) ||
           (id !== null && hiddenBy.ids.has(id.toLowerCase()));
       }
       push(child, nowHidden);
@@ -300,8 +245,7 @@ function rank(tag: string, href: string | null, extra: string[]): number {
   if (href === null) return 0;
   if (extra.some((text) => AUTH_CUE.test(readable(text.slice(0, ATTR_CHARS))))) return 3;
   if (tag !== "a") return 2;
-  if (href && (/^(?:[a-z][a-z0-9+.-]*:)?\/\//i.test(href) || AUTH_PATH.test(href.slice(0, 300))))
-    return 2;
+  if (href && (/^(?:[a-z][a-z0-9+.-]*:)?\/\//i.test(href) || AUTH_PATH.test(href.slice(0, 300)))) return 2;
   return 1;
 }
 
@@ -495,10 +439,7 @@ export function scanControls(doc: Document): ControlScan {
   let paddedAttributes = 0;
   const prepared = chosen.map(({ element, href }) => {
     const tag = element.tagName.toLowerCase();
-    const referenced = (getAttrCI(element, "aria-labelledby") ?? "")
-      .slice(0, ATTR_RAW_CHARS)
-      .split(/\s+/)
-      .filter(Boolean);
+    const referenced = (getAttrCI(element, "aria-labelledby") ?? "").slice(0, ATTR_RAW_CHARS).split(/\s+/).filter(Boolean);
     let attributeCut = referenced.length > MAX_LABELLEDBY;
     const labelled = referenced
       .slice(0, MAX_LABELLEDBY)
@@ -514,13 +455,12 @@ export function scanControls(doc: Document): ControlScan {
       ...(imageAlts.get(element) ?? []),
     ]
       .filter((v): v is string => typeof v === "string" && v !== "")
-      .map((v) => {
-        // Padding (spaces, zero-width characters) is dropped before both edges are kept.
-        const bounded = boundedAttribute(v);
-        attributeCut ||= bounded.cut;
-        return bounded.text;
-      })
-      .filter((v) => v !== "");
+      .flatMap((v) => {
+        // Padding (spaces, zero-width characters) is dropped first; what is left is read in overlapping windows.
+        const read = attributeWindows(v);
+        attributeCut ||= read.cut;
+        return read.windows;
+      });
     if (attributeCut) paddedAttributes++;
     return { element, href, extra, rank: rank(tag, href, extra) };
   });
@@ -531,18 +471,13 @@ export function scanControls(doc: Document): ControlScan {
     .map((_, i) => i)
     .filter((i) => prepared[i]!.rank > 0)
     .sort((a, b) => prepared[b]!.rank - prepared[a]!.rank || a - b);
-  const reads: Array<ReturnType<typeof readChunks> | undefined> = Array.from({
-    length: prepared.length,
-  });
+  const reads: Array<ReturnType<typeof readChunks> | undefined> = Array.from({ length: prepared.length });
   let spend = TOTAL_VISITS;
   let longBudget = LONG_BUDGET_VISITS;
   let unread = notPrepared + paddedAttributes;
   for (const [position, i] of order.entries()) {
     const item = prepared[i]!;
-    const allowance = Math.min(
-      SHORT_VISITS,
-      Math.max(MIN_ALLOWANCE, Math.floor(spend / (order.length - position))),
-    );
+    const allowance = Math.min(SHORT_VISITS, Math.max(MIN_ALLOWANCE, Math.floor(spend / (order.length - position))));
     let read = readChunks(item.element, allowance, SHORT_CHARS, hiddenBy);
     spend -= read.visits;
     if (read.cut && longBudget > 0 && item.rank >= 2) {
