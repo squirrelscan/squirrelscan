@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **Technology detection no longer loses Sentry, React, PostHog and others in large bundles.** Past the first 256 KB of a bundle, only detectors with a declared search literal got a window of text; the other 184 of 194 (`Sentry.init`, the React devtools hook, `posthog.init`, `Stripe(`, GA4 config) could match only in whatever tail the hint windows left, and v0.0.146's wider windows left none, so 30 of 188 Sentry sites in a corpus re-run were lost. Every detector now has a search literal (derived from its pattern when it declares none), windows are shared out across them one round at a time, and the tail keeps a 6 KB reserve. (#1420)
+
 ## v0.0.147 (2026-10-31)
 
 `security/tls-certificate` now judges every key type and reads the signature and protocol, and a start URL with a broken TLS certificate reports that check failing instead of ending without a finding. A deep start URL is named in the audit, recorded as `meta.requestedUrl` and guaranteed a slot, `--include-pages` says how each page answered, and the local technology scan reads whole bundles and says when it was cut short. `security/cookie-flags` no longer warns about CSRF token cookies, and `squirrel report --input` keeps a saved report's skipped checks. The JSON report schema is now 1.3. Thanks to William for the deep start URL work (#1369, #1385).
