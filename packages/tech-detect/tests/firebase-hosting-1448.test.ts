@@ -42,7 +42,7 @@ describe("not Firebase Hosting", () => {
 
 describe("Firebase Hosting", () => {
   test("a *.web.app or *.firebaseapp.com host", () => {
-    for (const url of ["https://my-site.web.app/", "https://my-project.firebaseapp.com/page", "https://web.app/"]) {
+    for (const url of ["https://my-site.web.app/", "https://my-project.firebaseapp.com/page", "https://web.app/", "https://my-site.web.app./"]) {
       expect(ids(url, {}, page(""))).toContain("firebase-hosting");
     }
   });
