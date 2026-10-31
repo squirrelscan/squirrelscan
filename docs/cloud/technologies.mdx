@@ -91,6 +91,8 @@ Results are grouped by category:
 
 A WordPress plugin is recognised by something it writes into the page: an asset URL under `wp-content/plugins/<slug>/` (or the cache directory it fills) on a script, stylesheet or image tag, the HTML comment it adds (`This website is like a Rocket` for WP Rocket, `Performance optimized by W3 Total Cache`, the Yoast SEO and Rank Math comments), or its own JSON-LD block (`yoast-schema-graph`, `rank-math-schema`, `aioseo-schema`). Its name in page text, in a code sample or in a link does not count. A managed host is recognised by the response header it sets (`x-kinsta-cache`, `x-powered-by: WP Engine`, `x-sg-cache`), reported as `header:<name>`. LiteSpeed Cache is recognised from its page comment or plugin assets, not from the `x-litespeed-cache` header, which any LiteSpeed-cached site sends. Pressable, WordPress VIP, SiteGround and Cloudways report at medium or low confidence because their headers are the least documented.
 
+Hosting platforms that live on a host suffix are read from the audited page's own host, not from URLs inside the page: Firebase Hosting is `*.web.app`, `*.firebaseapp.com` or Firebase Hosting's own `Vary: x-fh-requested-host` header. A site on its own domain that merely mentions `firebaseapp.com` in its config, or loads a third-party script from a `*.web.app` host, is not reported as hosted there; that is intended.
+
 A typical result:
 
 ```text
