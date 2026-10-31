@@ -17,9 +17,9 @@ How it works:
 
 ## [Unreleased]
 
-### Fixed
+### Added
 
-- **`integrity/brand-impersonation` reads sign-in cues throughout long control attributes.** The rule kept only the first 300 normalised characters of `aria-label`, `title`, an input `value` or a logo `alt`, so real-character padding could hide the cue. It now reads overlapping 300-character windows (stride 150) over the first 16,000 normalised characters. A window edge inside a word is marked so a seam cannot create a phrase, windows after an attribute's first are read only where a sign-in or brand phrase starts (derived from the rule's lexicon), at most 40 per attribute and within a page budget of 20,000 windows, half spent in order (controls with a cue word first, then document order) and half shared fairly. A control is counted as not read in full only when its attribute is past 16,000 characters or a cap or the budget cut windows from it, and the info note is emitted even with no hit. (#1424)
+- **Technology detection finds Klaviyo and Shopify Payments on a Shopify storefront from its static HTML.** Klaviyo from the theme app block marker (`shopify://apps/klaviyo-email-marketing-sms/...`) or the inline `window._klOnsite` / `window.klaviyo` onsite loader, alongside the existing script and `_learnq` signals. Shopify Payments from `"shopifyPaymentsEnabled":true` in the inline shop config, reported as "Shopify Payments (enabled in shop config)" at medium confidence because it is a merchant setting, not a loaded script. A page that only links to or names the vendor is not detected. (#1447)
 
 ### Changed
 
@@ -27,18 +27,10 @@ How it works:
 
 ### Fixed
 
+- **`integrity/brand-impersonation` reads sign-in cues throughout long control attributes.** The rule kept only the first 300 normalised characters of `aria-label`, `title`, an input `value` or a logo `alt`, so real-character padding could hide the cue. It now reads overlapping 300-character windows (stride 150) over the first 16,000 normalised characters. A window edge inside a word is marked so a seam cannot create a phrase, windows after an attribute's first are read only where a sign-in or brand phrase starts (derived from the rule's lexicon), at most 40 per attribute and within a page budget of 20,000 windows, half spent in order (controls with a cue word first, then document order) and half shared fairly. A control is counted as not read in full only when its attribute is past 16,000 characters or a cap or the budget cut windows from it, and the info note is emitted even with no hit. (#1424)
 - **Technology detection on a page with many large scripts keeps the loader windows of later bundles.** With the page byte budget (512 KB in the cloud) full, a small early script's whole remainder took room that a later bundle's windows around its vendor literal (PostHog, React, Supabase, Sentry, Stripe) needed, so that bundle's copy lost the literal. Every bundle's windows are now chosen first, in rounds, and remainders and tails take what is left. (#1445)
-
-### Added
-
-- **Technology detection finds Klaviyo and Shopify Payments on a Shopify storefront from its static HTML.** Klaviyo from the theme app block marker (`shopify://apps/klaviyo-email-marketing-sms/...`) or the inline `window._klOnsite` / `window.klaviyo` onsite loader, alongside the existing script and `_learnq` signals. Shopify Payments from `"shopifyPaymentsEnabled":true` in the inline shop config, reported as "Shopify Payments (enabled in shop config)" at medium confidence because it is a merchant setting, not a loaded script. A page that only links to or names the vendor is not detected. (#1447)
-
-### Fixed
-
 - **`firebase-hosting` is no longer reported for a site that only loads a script from `*.web.app`.** The signature matched `.web.app` and `.firebaseapp.com` anywhere in the page HTML, so a Shopify store with a third-party app hosted on Firebase Hosting read as hosted there. It now matches the page's own host, or Firebase Hosting's own `Vary: x-fh-requested-host` header. (#1448)
-
 - **A Next.js client component with script-like props is no longer read as a `next/script` loader.** A component with an `id` and prose children that contain a bracket and a semicolon, or one with a bare `src` prop, was read as an inline or external script, so a vendor it only mentioned or embedded could be detected from a flight payload. A string `children` now needs a call and a statement end or block AND a JavaScript token (`function`, `=>`, an assignment, `.createElement`, `window.`) and a `src` needs an `id` or a `strategy` beside it. (#1444)
-
 
 ## v0.0.151 (2026-11-01)
 
