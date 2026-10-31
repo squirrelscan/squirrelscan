@@ -18,7 +18,7 @@ The rule reads the `set-cookie` response header of each crawled page, splits it 
 - `cookie-secure` warns when a cookie on an HTTPS page has no `Secure` attribute. Message: `2 cookie(s) missing the Secure flag`. The check is skipped on HTTP pages, where there is no secure connection to pin the cookie to.
 - `cookie-httponly` warns when a cookie has no `HttpOnly` attribute. Message: `2 cookie(s) missing the HttpOnly flag`.
 - `cookie-httponly-platform` reports info for a cookie without `HttpOnly` that a hosting platform's sites commonly carry, naming the platform. Message: `1 cookie(s) without HttpOnly that Lovable-hosted sites commonly carry (__dpl); the platform does not document it, so it is reported as info, not a warning`.
-- `cookie-httponly-csrf` reports info for a CSRF token cookie without `HttpOnly` (`XSRF-TOKEN`, `csrftoken`), naming the frameworks and linking their docs. Message: `1 CSRF token cookie(s) without HttpOnly (csrftoken: Django): the page's own script is meant to read it and send it back in a header, so HttpOnly would break it. Reported as info, not a warning (...)`.
+- `cookie-httponly-csrf` reports info for a CSRF token cookie without `HttpOnly` (`XSRF-TOKEN`, `csrftoken`), naming the frameworks and linking their docs. Message: `1 CSRF token cookie(s) without HttpOnly (csrftoken: Django). Frameworks that read the token from script (Angular, Axios) need it readable; if your frontend does not read it, you can set HttpOnly. Reported as info, not a warning. Docs: https://docs.djangoproject.com/...`.
 - `cookie-samesite` reports info when a cookie declares no `SameSite`, or declares it with an empty value such as `SameSite=`. Message: `2 cookie(s) don't explicitly declare SameSite (browsers default to Lax)`.
 - `cookie-flags` passes when cookies were set and none of the above fired. Message: `3 cookie(s) set with Secure, HttpOnly, and SameSite configured correctly`.
 
@@ -30,14 +30,14 @@ Two kinds of cookie are exempt. A few cookies appear on every site a hosting pla
 |---|---|---|
 | `__dpl` | Lovable | Present on 1,013 of 1,066 Lovable-hosted sites in a 35,000-audit batch, the only cookie missing `HttpOnly`. Lovable does not document it. |
 
-A CSRF double-submit cookie is the other exemption. The framework puts the token in a cookie so the page's own script can read it and send it back in a request header, so `HttpOnly` would break the scheme. Only the missing-`HttpOnly` warning is lifted; `Secure` and `SameSite` are still checked.
+A CSRF token cookie is the other exemption. Some frameworks put the token in a cookie so the page's own script can read it and send it back in a request header (Angular and Axios do). `HttpOnly` is needed only when your frontend does not read the cookie, and then you can set it; the docs below differ on how much that matters. So a missing `HttpOnly` on one of these names is reported as info. Only the missing-`HttpOnly` warning is lifted; `Secure` and `SameSite` are still checked.
 
 | Cookie | Framework | Source |
 |---|---|---|
 | `XSRF-TOKEN` | Angular, Laravel, Spring Security | [Angular](https://angular.dev/best-practices/security): `HttpClient` reads it and sets `X-XSRF-TOKEN`. [Laravel](https://laravel.com/docs/csrf#csrf-x-xsrf-token): sent so Angular and Axios can place it in `X-XSRF-TOKEN`. [Spring](https://docs.spring.io/spring-security/reference/servlet/exploits/csrf.html): `CookieCsrfTokenRepository` writes it, with `HttpOnly` false so JavaScript frameworks can read it. |
 | `csrftoken` | Django | [Django](https://docs.djangoproject.com/en/stable/ref/settings/#csrf-cookie-httponly): the default cookie name; `CSRF_COOKIE_HTTPONLY` defaults to `False` and Django says setting it offers no practical protection. |
 
-Exemption is by exact cookie name only, on any site: a site that names its own session cookie `__dpl` would also be exempt. Every other cookie, whatever its name or value, still gets the `cookie-httponly` warning. `Secure` and `SameSite` are checked on these cookies as on any other.
+Exemption is by exact cookie name only, and names are case-sensitive as RFC 6265 says (`CSRFTOKEN`, `xsrf-token` and `__Host-XSRF-TOKEN` still warn), on any site: a site that names its own session cookie `__dpl` would also be exempt. Every other cookie, whatever its name or value, still gets the `cookie-httponly` warning. `Secure` and `SameSite` are checked on these cookies as on any other.
 
 Multiple cookies in one header value are split on newlines and on commas that are followed by a `name=` pair, so an `Expires` date containing a comma does not split a cookie in two. Only cookies your server sets in a response header are seen; cookies written by JavaScript are not.
 

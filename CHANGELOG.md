@@ -19,7 +19,7 @@ How it works:
 
 ### Fixed
 
-- **`security/cookie-flags` no longer warns about CSRF token cookies.** `XSRF-TOKEN` (Angular, Laravel, Spring Security) and `csrftoken` (Django) are read by the page's own script and sent back in a header, so `HttpOnly` would break them; each framework's docs say so. They are now an info check, `cookie-httponly-csrf`, with the reason and docs links. The match is by exact name, a session cookie beside them still warns, and Secure and SameSite are still checked. (#1378)
+- **`security/cookie-flags` no longer warns about CSRF token cookies.** `XSRF-TOKEN` (Angular, Laravel, Spring Security) and `csrftoken` (Django) are cookies a frontend such as Angular or Axios reads from script to send back in a header. `HttpOnly` is needed only when your frontend does not read the cookie, so a missing one is not a finding. They are now an info check, `cookie-httponly-csrf`, with the reason and docs links. The match is by exact name, a session cookie beside them still warns, and Secure and SameSite are still checked. (#1378)
 
 ## v0.0.146 (2026-10-31)
 

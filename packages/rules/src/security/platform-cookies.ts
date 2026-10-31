@@ -4,9 +4,10 @@
 // (#1378). An entry is added on evidence, recorded in `evidence`; the platforms
 // do not always document their cookies.
 //
-// The same list holds CSRF double-submit cookies: a framework sends the token in a
-// cookie so the page's own script can read it and send it back in a header, so
-// HttpOnly would break it. Exempt by exact name, only from the HttpOnly warning.
+// The same list holds CSRF token cookies a framework sends so the page's own script can read
+// them and send the token back in a header (Angular, Axios). HttpOnly is needed only when the
+// frontend does not read the cookie, so a missing one is not a finding. Exempt by exact name
+// (case-sensitive, as RFC 6265 cookie names are), only from the HttpOnly warning.
 
 export interface PlatformCookie {
   /** Exact cookie name (case-sensitive, as cookie names are). */
@@ -44,7 +45,7 @@ export const PLATFORM_COOKIES: readonly PlatformCookie[] = [
     ],
     documented: true,
     evidence:
-      "Angular's HttpClient reads the XSRF-TOKEN cookie and sets X-XSRF-TOKEN; Laravel sends it \"as a developer convenience\" for Angular and Axios; Spring's CookieCsrfTokenRepository writes it and needs HttpOnly false to let JavaScript frameworks read it. Seen on 578 sites in the Product Hunt corpus (#1378)",
+      "Angular's HttpClient reads the XSRF-TOKEN cookie and sets X-XSRF-TOKEN; Laravel sends it \"as a developer convenience\" for Angular and Axios; Spring's CookieCsrfTokenRepository writes it, with HttpOnly false so JavaScript frameworks can read it, and recommends HttpOnly when you do not need that.",
   },
   {
     name: "csrftoken",
@@ -53,7 +54,7 @@ export const PLATFORM_COOKIES: readonly PlatformCookie[] = [
     docs: ["https://docs.djangoproject.com/en/stable/ref/settings/#csrf-cookie-httponly"],
     documented: true,
     evidence:
-      "Django's default CSRF_COOKIE_NAME; CSRF_COOKIE_HTTPONLY defaults to False, and Django says HttpOnly on it offers no practical protection and that AJAX code then has to read the token from a form input. Seen on 102 sites in the Product Hunt corpus (#1378)",
+      "Django's default CSRF_COOKIE_NAME; CSRF_COOKIE_HTTPONLY defaults to False, and Django says HttpOnly on it offers no practical protection and that with HttpOnly set, JavaScript has to read the token from a form input instead.",
   },
 ];
 

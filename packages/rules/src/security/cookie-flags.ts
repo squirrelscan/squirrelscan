@@ -143,7 +143,7 @@ export const cookieFlagsRule: Rule = {
       checks.push({
         name: "cookie-httponly-csrf",
         status: "info",
-        message: `${csrfOwned.length} CSRF token cookie(s) without HttpOnly (${entries.map((e) => `${e.name}: ${e.platform}`).join("; ")}): the page's own script is meant to read it and send it back in a header, so HttpOnly would break it. Reported as info, not a warning (${entries.flatMap((e) => e.docs).join(" ")})`,
+        message: `${csrfOwned.length} CSRF token cookie(s) without HttpOnly (${entries.map((e) => `${e.name}: ${e.platform}`).join("; ")}). Frameworks that read the token from script (Angular, Axios) need it readable; if your frontend does not read it, you can set HttpOnly. Reported as info, not a warning. Docs: ${entries.flatMap((e) => e.docs).join(" ")}`,
         items: csrfOwned.map((c) => ({ id: c.name })),
       });
     }
