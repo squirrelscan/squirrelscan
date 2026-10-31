@@ -259,3 +259,58 @@ describe("review fixes (#1420)", () => {
     expect(sampleBundleExtras(content, HEAD, EXTRAS)).toContain("PostHog.Init(");
   });
 });
+
+// Corpus re-run of #1433 (33,967 sites): small scripts whose loader (`ttq.load(`, `fbq('init'`,
+// `posthog.init`) v0.0.149 found and the first version of this change dropped. The string tracker
+// (a heuristic) read a quote inside a regex after `}` or `)` as the opening of a string and called
+// the loader part of it, a long one, so its window was skipped; another hint's window after it then
+// started the tail past the loader, and the stretch between was lost.
+describe("a loader the string tracker loses is still sent (#1433 corpus)", () => {
+  /** One long line the tracker reads as a string from the regex's quote to the end of the line, loader inside. */
+  const lostLine = (loader: string): string => `x=a}/'/.test(c);${filler(1_500).replaceAll("\n", "")}${loader}${filler(1_000).replaceAll("\n", "")}\n`;
+  const after = 'Stripe("pk_test_x");\n';
+  const cases: Array<{ name: string; loader: string; id: string; before: number; rest: number }> = [
+    { name: "26 KB script, ttq.load( at 21 KB", loader: "ttq.load('ABCDEFGH');ttq.page();", id: "tiktok-pixel", before: 20_000, rest: 3_500 },
+    { name: "121 KB script, fbq( 2 KB from the end", loader: "fbq('init','1234567890');fbq('track','PageView');", id: "facebook-pixel", before: 116_000, rest: 1_500 },
+    { name: "34 KB chunk, posthog.init at 19 KB", loader: "window.posthog||[]);posthog.init('phc_x',{api_host:'https://h.example.com'});", id: "posthog", before: 17_000, rest: 14_000 },
+  ];
+  for (const c of cases) {
+    test(c.name, () => {
+      const content = `${filler(c.before)}\n${lostLine(c.loader)}${filler(300)}\n${after}${filler(c.rest)}`;
+      const extras = sampleBundleExtras(content, HEAD, EXTRAS);
+      expect(extras).toContain(c.loader.slice(0, 16));
+      expect(extras.length).toBeLessThanOrEqual(EXTRAS);
+      expect(detect(content)).toContain(c.id);
+    });
+  }
+
+  test("the rest of the file is kept whole when it fits the extras, whatever the windows hold", () => {
+    const content = `${filler(30_000)}\nStripe("pk_test_x");\n${filler(5_000)}\nposthog.init("phc_x",{});\n${filler(4_000)}`;
+    const extras = sampleBundleExtras(content, HEAD, EXTRAS);
+    const rest = content.slice(HEAD);
+    expect(extras.length).toBeLessThanOrEqual(EXTRAS);
+    expect(extras.endsWith(rest.slice(-3_000))).toBe(true);
+    expect(extras).toContain("Stripe(");
+    expect(extras).toContain("posthog.init(");
+  });
+
+  test("a tail the windows overlap is sent once", () => {
+    const content = `${filler(40_000)}\nStripe("pk_test_x");\n${filler(2_000)}`;
+    const extras = sampleBundleExtras(content, HEAD, EXTRAS);
+    expect(extras.split("Stripe(").length).toBe(2);
+  });
+
+  test("a cut inside a long real string reopens it: code quoted in an inlined script is not a match", () => {
+    const key = ["eyJ", "x".repeat(40)].join("");
+    const inlined = `${filler(30_000)}var c=mk("https://${REF(7)}.supabase.co","${key}");\n${filler(2_000)}`;
+    const content = `${filler(16_500)}\nvar worker=\`${inlined}\`;\n${filler(3_000)}`;
+    const extras = sampleBundleExtras(content, HEAD, EXTRAS);
+    expect(extras.length).toBeLessThanOrEqual(EXTRAS);
+    expect(extras).toContain(REF(7));
+    expect(extras.startsWith("`")).toBe(true);
+    // The whole body reads the call as text inside a string; so must the sampled one.
+    expect(detect(content)).not.toContain("supabase");
+    expect(detect(content, false)).not.toContain("supabase");
+  });
+});
+

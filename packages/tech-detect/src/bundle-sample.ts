@@ -25,6 +25,8 @@ const DECLARED_FIRST_WINDOWS = 2;
 const MAX_HIT_SCANS_PER_HINT = 512;
 /** Matches of an `inCode` pattern one window is walked through looking for one that starts in code (the matcher's own bound is 64 over a whole script). */
 const MAX_QUALIFY_CANDIDATES = 64;
+/** Chars a segment may carry in front of its text to reopen a long string or comment it is cut inside (see `cutAt`). */
+const OPENER_SLACK = 2;
 /** A string longer than this past a window's end is cut before it, not carried to its close. */
 const MAX_STRING_CARRY = 512;
 /** Longest body the scan classifies: past the largest `[tech_detect] bundle_bytes`, so every body a caller can hand over fits. */
@@ -113,10 +115,10 @@ function mergeSpans(spans: ReadonlyArray<[number, number]>): Array<[number, numb
   return merged;
 }
 
-/** Chars the spans take once merged, each with its separator. */
+/** Chars the spans take once merged, each with its separator and room for an opener. */
 function mergedCost(spans: ReadonlyArray<[number, number]>): number {
   let total = 0;
-  for (const [start, end] of mergeSpans(spans)) total += end - start + SEGMENT_SEPARATOR.length;
+  for (const [start, end] of mergeSpans(spans)) total += end - start + SEGMENT_SEPARATOR.length + OPENER_SLACK;
   return total;
 }
 
@@ -128,38 +130,51 @@ function mergedCost(spans: ReadonlyArray<[number, number]>): number {
  * before any hint's second, declared hints first), and the tail keeps a reserve the windows cannot
  * take (#1420).
  *
- * Every window starts and ends in CODE state of the whole file, classified once
- * over the whole body (the scan is linear): a window cut inside a string would
- * make the scan of the window read its closing quote as an opening one and
- * misclassify everything after it (an `https://` inside a string read as a `//`
- * comment). The separator then ends any string or comment still open at a
- * segment's end, so segments, and the head before them, scan independently.
+ * Windows are cut in CODE state of the whole file, classified once over the whole body (the scan
+ * is linear): a window cut inside a string would make the scan of the window read its closing
+ * quote as an opening one and misclassify everything after it (an `https://` inside a string read
+ * as a `//` comment). A cut that has to fall inside a string, regex or comment too long to carry
+ * (the tracker is a heuristic and can lose track of code, #1433) keeps the cut and puts the
+ * characters that opened the span in front of the segment, so the scan of the sent text reads it
+ * as the whole file does. The separator ends any string or comment still open at a segment's end,
+ * so segments, and the head before them, scan independently.
  * Empty when the body fits in the head.
  */
 export function sampleBundleExtras(content: string, headChars: number, maxChars: number): string {
   if (content.length <= headChars || maxChars <= 0) return "";
   const limit = Math.min(content.length, MAX_SCAN_CHARS);
   const { skips } = scanJs(content.slice(0, limit));
-  /** First position at or after `p` that is not inside a string, regex literal or comment. */
-  const codeAfter = (p: number): number => {
-    const end = skipEnd(skips, p);
-    return end === -1 ? p : end + 1;
+  /** The string, regex literal or comment that holds `p` (`start < p <= end`), or null in code. */
+  const spanAt = (p: number): { open: number; close: number } | null => {
+    const close = skipEnd(skips, p);
+    return close === -1 ? null : { open: skipStart(skips, p), close };
   };
-  /** `p`, or the nearest boundary that does not split a string, regex literal or comment. */
-  const codeBefore = (p: number, floor: number): number => {
-    const end = skipEnd(skips, p);
-    if (end === -1) return p;
-    if (end + 1 - p <= MAX_STRING_CARRY) return end + 1;
-    // Walk back to the start of the range holding p.
-    let lo = floor;
-    let hi = p;
-    while (lo < hi) {
-      const mid = (lo + hi) >> 1;
-      if (skipEnd(skips, mid) === end) hi = mid;
-      else lo = mid + 1;
-    }
-    return Math.max(floor, lo - 1);
+  /**
+   * Where a segment may begin at `p`. In code, at `p`. Inside a short string, regex or comment, past
+   * its end. Inside a long one, at `p` itself, with the characters that opened it put in front of
+   * the segment, so the scan of the sent text reads it as the whole file does. The tracker is a
+   * heuristic (a regex after `}` or `)`, a template literal with a nested template, a quote in a
+   * regex each flip it for the rest of a minified line): jumping to the far end of a long span
+   * that is really code drops the region a detector needs (#1433 corpus), and cutting inside it with
+   * no opener makes a real string, such as an inlined script, read as code.
+   */
+  const openerOf = (open: number): string => {
+    const first = content.charAt(open);
+    return first === "/" && /[/*]/.test(content.charAt(open + 1)) ? content.slice(open, open + 2) : first;
   };
+  const cutAt = (p: number): { pos: number; opener: string } => {
+    const span = spanAt(p);
+    if (!span) return { pos: p, opener: "" };
+    if (span.close + 1 - p <= MAX_STRING_CARRY) return { pos: span.close + 1, opener: "" };
+    return { pos: p, opener: openerOf(span.open) };
+  };
+  /** The end of a window cut at `p`: past a short string it ends in, as is inside a long one (the separator ends it). */
+  const endAt = (p: number): number => {
+    const span = spanAt(p);
+    return span && span.close + 1 - p <= MAX_STRING_CARRY ? span.close + 1 : p;
+  };
+  /** Text in front of a segment that starts at a given offset, when it begins inside a long span. */
+  const openers = new Map<number, string>();
 
   const floor = Math.max(0, headChars - WINDOW_BEFORE);
   // A lower-cased copy, only when a case-insensitive hint needs it and the indices still line up.
@@ -190,7 +205,7 @@ export function sampleBundleExtras(content: string, headChars: number, maxChars:
       for (let seen = 0; seen < MAX_QUALIFY_CANDIDATES; seen++) {
         const m = inCode.exec(text);
         if (!m) break;
-        if (skipEnd(skips, start + m.index) === -1) return true;
+        if (spanAt(start + m.index) === null) return true;
         if (m[0].length === 0) inCode.lastIndex++;
       }
     }
@@ -212,20 +227,26 @@ export function sampleBundleExtras(content: string, headChars: number, maxChars:
       const at = haystack.indexOf(spec.text, from);
       if (at === -1 || at >= limit) break;
       from = at + spec.text.length;
-      let start = codeAfter(Math.max(floor, at - WINDOW_BEFORE));
-      if (start > at) {
-        // The hit sits in a string that opened before the window: keep a short one
-        // whole (a library's own notice is a string), skip a long one.
-        const open = skipStart(skips, at);
-        const close = skipEnd(skips, at);
-        if (open === -1 || close - open > MAX_STRING_CARRY) continue;
-        start = open;
+      const from160 = Math.max(floor, at - WINDOW_BEFORE);
+      let cut = cutAt(from160);
+      if (cut.pos > at) {
+        // The hit sits in a string that opened before the window: keep a short one whole (a
+        // library's own notice is a string); around a long one (prose, data, or code the tracker
+        // lost) cut inside it with its opener in front.
+        const span = spanAt(at);
+        if (!span) continue;
+        cut =
+          span.close - span.open <= MAX_STRING_CARRY
+            ? { pos: span.open, opener: "" }
+            : { pos: from160, opener: openerOf(span.open) };
       }
-      const end = codeBefore(Math.min(limit, at + spec.text.length + WINDOW_AFTER), at);
+      const start = cut.pos;
+      const end = endAt(Math.min(limit, at + spec.text.length + WINDOW_AFTER));
       if (end <= start) continue;
       const text = content.slice(start, end);
       if (seen.has(text) || !qualifies(spec, text, start)) continue;
       seen.add(text);
+      if (cut.opener) openers.set(start, cut.opener);
       windows.push([start, end]);
     }
     if (windows.length > 0) perHint.push({ windows, declared: spec.declared });
@@ -252,17 +273,18 @@ export function sampleBundleExtras(content: string, headChars: number, maxChars:
   }
   const merged = mergeSpans(chosen);
   let used = 0;
-  const parts: string[] = [];
-  for (const [start, end] of merged) {
-    parts.push(content.slice(start, end));
-    used += end - start + SEGMENT_SEPARATOR.length;
-  }
-  // The tail takes what the windows left, never re-sending a window's text.
-  const tailRoom = maxChars - used - (parts.length > 0 ? SEGMENT_SEPARATOR.length : 0);
+  for (const [start, end] of merged) used += end - start + SEGMENT_SEPARATOR.length + OPENER_SLACK;
+  // The tail takes what the windows left. It is one more span merged with them, so a window it
+  // overlaps is not sent twice and nothing between the windows and the tail is dropped: when the
+  // rest of the file fits in the room, the whole rest is kept, as before #1420.
+  const tailRoom = maxChars - used - (merged.length > 0 ? SEGMENT_SEPARATOR.length : 0) - OPENER_SLACK;
+  let spans = merged;
   if (tailRoom > 0 && limit === content.length) {
-    const last = merged[merged.length - 1];
-    const start = codeAfter(Math.max(content.length - tailRoom, headChars, last ? last[1] : 0));
-    if (start < content.length) parts.push(content.slice(start));
+    const cut = cutAt(Math.max(content.length - tailRoom, headChars));
+    if (cut.pos < content.length) {
+      if (cut.opener) openers.set(cut.pos, cut.opener);
+      spans = mergeSpans([...merged, [cut.pos, content.length]]);
+    }
   }
-  return parts.join(SEGMENT_SEPARATOR);
+  return spans.map(([start, end]) => (openers.get(start) ?? "") + content.slice(start, end)).join(SEGMENT_SEPARATOR);
 }
