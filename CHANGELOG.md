@@ -19,7 +19,7 @@ How it works:
 
 ### Fixed
 
-- **Klaviyo detection again recognises the script loader forms browsers actually execute.** It accepts an unquoted `src`, a `src` after long attributes, a lazy `data-src`, a preload link, the inline `element.src = "//static.klaviyo.com/..."` loader and a collected script URL passed through a proxy. The URL signatures remain anchored, and an anchor link, an escaped code sample or a commented-out script tag does not count as a loaded script. (#1457)
+- **Klaviyo detection again recognises the script loader forms browsers actually execute.** It accepts an unquoted `src`, a `src` after long attributes, a lazy `data-src`, a preload link, the inline `element.src = "//static.klaviyo.com/..."` loader and a collected script URL passed through a proxy. The URL signatures remain anchored, and an anchor link, an escaped code sample or a commented-out script tag does not count as a loaded script. Only a `rel=preload` or `rel=modulepreload` link counts as a loader, and the inline-loader check stays inside its own script, so a page of many empty script tags is no slower to scan. (#1457)
 
 ## v0.0.152 (2026-11-01)
 
