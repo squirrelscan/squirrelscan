@@ -282,6 +282,13 @@ function matchDetector(
     case "dom":
       // DOM selectors need a document — skip in headerless detection
       return false;
+    case "url-host": {
+      try {
+        return detector.pattern.test(new URL(input.url).hostname);
+      } catch {
+        return false;
+      }
+    }
     case "url-path":
       // Match the page URL first, then fall back to the HTML. The HTML fallback
       // is intentional: url-path patterns are specific path SEGMENTS (e.g.
@@ -309,6 +316,8 @@ function detectorLabel(detector: Detector): string {
       return `dom:${detector.selector}`;
     case "url-path":
       return `url-path:${detector.pattern.source.slice(0, 30)}`;
+    case "url-host":
+      return `url-host:${detector.pattern.source.slice(0, 30)}`;
   }
 }
 

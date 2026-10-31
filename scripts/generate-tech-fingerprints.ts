@@ -44,7 +44,7 @@ const VALID_CATEGORIES = new Set([
   "other",
 ]);
 const DETECTOR_TYPES = new Set([
-  "header", "meta", "script-url", "script-content", "html", "url-path",
+  "header", "meta", "script-url", "script-content", "html", "url-path", "url-host",
 ]);
 
 interface RawDetector {

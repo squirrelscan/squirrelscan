@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **`firebase-hosting` is no longer reported for a site that only loads a script from `*.web.app`.** The signature matched `.web.app` and `.firebaseapp.com` anywhere in the page HTML, so a Shopify store with a third-party app hosted on Firebase Hosting read as hosted there. It now matches the page's own host, or Firebase Hosting's own `Vary: x-fh-requested-host` header. (#1448)
+
 ## v0.0.151 (2026-11-01)
 
 Technology detection finds Sentry, React, PostHog, Stripe and GA4 past the start of a large bundle, and a Next.js App Router page no longer detects a vendor it only mentions. A start URL at the site root that redirects to a deep page keeps the root-start crawl order. Thanks to William for the tests that pin the `[[ignore]]` timeout notice in a cut run (#1434).
