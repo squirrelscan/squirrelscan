@@ -158,15 +158,13 @@ function readLinkCounts(
             targets.add(target);
           } else {
             external++;
-            const known = hosts.get(own);
+            const known = hosts.get(page.normalizedUrl);
             if (known) known.add(resolved.hostname);
-            else hosts.set(own, new Set([resolved.hostname]));
+            else hosts.set(page.normalizedUrl, new Set([resolved.hostname]));
           }
         }
-        if (internal > 0)
-          internalOut.set(own, (internalOut.get(own) ?? 0) + internal);
-        if (external > 0)
-          externalOut.set(own, (externalOut.get(own) ?? 0) + external);
+        if (internal > 0) internalOut.set(page.normalizedUrl, internal);
+        if (external > 0) externalOut.set(page.normalizedUrl, external);
         for (const target of targets)
           inbound.set(target, (inbound.get(target) ?? 0) + 1);
       }
@@ -316,9 +314,10 @@ export async function loadPageMap(
               wordCount: f?.wordCount ?? null,
               schemaTypes: f?.schemaTypes ?? [],
               inlinks: links.inbound.get(key) ?? 0,
-              internalOutlinks: links.internalOut.get(key) ?? 0,
-              externalOutlinks: links.externalOut.get(key) ?? 0,
-              externalDomains: links.externalHosts.get(key) ?? [],
+              internalOutlinks: links.internalOut.get(page.normalizedUrl) ?? 0,
+              externalOutlinks: links.externalOut.get(page.normalizedUrl) ?? 0,
+              externalDomains:
+                links.externalHosts.get(page.normalizedUrl) ?? [],
               loadTimeMs: page.loadTimeMs ?? null,
               lastModified: page.lastModified ?? null,
               flags: [...flags].sort(),

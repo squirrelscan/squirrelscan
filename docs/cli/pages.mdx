@@ -63,7 +63,7 @@ squirrel pages -f csv -o pages.csv
 | `lastModified` | The `Last-Modified` header, if the server sent one |
 | `flags` | What the audit found on the page (below) |
 
-A link to the page itself is neither an in-link nor an out-link. Links come from the pages' stored parse, the same source the orphan and internal-link rules read, so a nofollow link counts here even though the orphan rule does not count it.
+A link to the page itself is neither an in-link nor an out-link. Pages that differ only by their query string (`/items?id=1` and `/items?id=2`) keep their own out-links, but share one `inlinks` count, because the orphan and internal-link rules count links to a page without its query string. Links come from the pages' stored parse, the same source the orphan and internal-link rules read, so a nofollow link counts here even though the orphan rule does not count it.
 
 ## Flags
 

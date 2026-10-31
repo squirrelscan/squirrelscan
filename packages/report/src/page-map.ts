@@ -277,7 +277,7 @@ export function renderPageMapCsv(rows: readonly PageMapRow[]): string {
  * of the URL write into the columns after it.
  */
 export function urlCell(url: string): string {
-  return markdownCodeSpan(cleanText(url)).replace(/\|/g, "\\|");
+  return markdownCodeSpan(cleanText(url)).split("|").join("\\|");
 }
 
 /** A cell of prose from an audited page: markdown-escaped, one line, cut at `max` characters. */
