@@ -16,6 +16,7 @@ import {
   SCAN_TRUNCATED_SKIP_REASON,
 } from "@squirrelscan/core-contracts/resolution";
 import type { CheckResult } from "@squirrelscan/core-contracts";
+import { stripUnsafeLineText } from "@squirrelscan/core-contracts/control-chars";
 import type { ReportRuleResult } from "./types";
 
 /** Skip reasons listed in the report. Extend here to widen coverage. */
@@ -119,6 +120,10 @@ export function collectSkippedChecks(
 /** Most entries, and pages per entry, read back from a saved report (the file is user-supplied). */
 const MAX_RESTORED_SKIPPED = 1_000;
 const MAX_RESTORED_PAGES = 5_000;
+/** Largest page total read back: far past any crawl, so a forged count cannot round-trip into `summary.skipped`. */
+const MAX_RESTORED_COUNT = 10_000_000;
+/** A rule id as the catalog writes it: `category/name`, lowercase. Anything else (`__proto__`, `constructor`) is not a rule. */
+const RULE_ID = /^[a-z0-9][a-z0-9-]{0,60}\/[a-z0-9][a-z0-9-]{0,80}$/;
 
 /**
  * The skipped checks of a saved JSON report, validated (#518). The file is untrusted:
@@ -136,24 +141,25 @@ export function parseSkippedChecks(value: unknown): SkippedCheck[] {
       typeof e.check !== "string" ||
       typeof e.reason !== "string" ||
       !LISTED_SKIP_REASONS.has(e.reason) ||
-      e.ruleId.length === 0 ||
-      e.ruleId.length > 200 ||
+      !RULE_ID.test(e.ruleId) ||
       e.check.length > 200
     ) {
       continue;
     }
     const pages = (Array.isArray(e.pages) ? e.pages : [])
       .filter((p): p is string => typeof p === "string" && p.length <= 2_048)
+      // The file is untrusted and these reach a terminal: no control characters, no bidi overrides.
+      .map((p) => stripUnsafeLineText(p, ""))
       .slice(0, MAX_RESTORED_PAGES);
     const count = e.pagesCount;
     const pagesCount =
-      typeof count === "number" && Number.isSafeInteger(count) && count >= pages.length
+      typeof count === "number" && Number.isSafeInteger(count) && count >= pages.length && count <= MAX_RESTORED_COUNT
         ? count
         : pages.length;
     out.push({
       ruleId: e.ruleId,
-      name: typeof e.name === "string" && e.name.length <= 200 ? e.name : e.ruleId,
-      check: e.check,
+      name: typeof e.name === "string" && e.name.length <= 200 ? stripUnsafeLineText(e.name) : e.ruleId,
+      check: stripUnsafeLineText(e.check),
       reason: e.reason,
       pages,
       pagesCount,
@@ -190,7 +196,7 @@ export function restoreSkippedChecks(
         ...(entry.reason === RULE_TIMED_OUT_SKIP_REASON || errored ? { pages: entry.pagesCount } : {}),
       },
     };
-    const existing = ruleResults[entry.ruleId];
+    const existing = Object.hasOwn(ruleResults, entry.ruleId) ? ruleResults[entry.ruleId] : undefined;
     if (existing) existing.checks.push(row);
     else ruleResults[entry.ruleId] = { meta: metaFor(entry.ruleId, entry.name), checks: [row] };
   }

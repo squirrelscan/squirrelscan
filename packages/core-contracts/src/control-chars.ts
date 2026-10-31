@@ -73,3 +73,25 @@ export function stripControlCharsPreservingSgr(text: string): string {
   }
   return out + stripControlChars(text.slice(last));
 }
+
+/**
+ * Everything a one-line cell of untrusted text must not carry: all C0 controls (tab and newline
+ * included), DEL, the C1 controls (`U+009B` is an 8-bit CSI that some terminals run as ESC `[`),
+ * the bidirectional overrides and isolates that reorder what a reader sees (`U+202A` to `U+202E`,
+ * `U+2066` to `U+2069`, the marks `U+200E`, `U+200F` and `U+061C`), and the line and paragraph
+ * separators. A table cell, a CSV field or a report line built from a page value goes through
+ * this first.
+ */
+const UNSAFE_LINE_TEXT = new RegExp(
+  "[\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u2028\\u2029\\u202a-\\u202e\\u2066-\\u2069]",
+  "g",
+);
+
+/**
+ * `text` as one safe line: each unsafe character becomes `replacement` (a space by default, so
+ * words a newline separated stay apart). Unlike {@link stripControlChars} it also removes C1
+ * controls and bidirectional overrides, and it removes newlines and tabs too.
+ */
+export function stripUnsafeLineText(text: string, replacement = " "): string {
+  return text.replace(UNSAFE_LINE_TEXT, replacement);
+}

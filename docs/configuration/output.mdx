@@ -692,7 +692,7 @@ Top-level keys. Keys marked optional are omitted when they do not apply.
 
 `summary.skipped` is the sum of `pagesCount` across `skippedChecks`, and is 0 when none were skipped.
 
-`squirrel report --input <file>` reads `skippedChecks` back from a saved JSON report, so re-rendering or re-exporting it keeps the list and `summary.skipped`. The file is treated as untrusted: an entry with a reason outside the ones above, a non-string rule id, check or page, or an unusable count is dropped, and a skip never becomes an issue. A report with no skips stays free of the key.
+`squirrel report --input <file>` reads `skippedChecks` back from a saved JSON report, so re-rendering or re-exporting it keeps the list and `summary.skipped`. The file is treated as untrusted: an entry with a reason outside the ones above, or a rule id that is not a `category/name` rule id, is dropped; a page that is not a string is dropped from its entry; an unusable page count falls back to the number of pages listed; and a skip never becomes an issue. A report with no skips stays free of the key.
 
 A consumer that closes a finding when a rule stops reporting it should leave the pages in `skippedChecks` for that rule open, because the rule did not finish looking at them.
 

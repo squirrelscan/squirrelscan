@@ -210,6 +210,103 @@ describe("report --input reads skipped checks back (#518)", () => {
     expect(again.skippedChecks?.[1]).toMatchObject({ pagesCount: 0 });
   });
 
+  test("rule ids that are object keys cannot crash the read or reach the report", () => {
+    const base = {
+      reason: "scan-truncated",
+      name: "N",
+      check: "c",
+      pages: ["https://example.com/p"],
+      pagesCount: 1,
+      pagesHasMore: false,
+    };
+    const hostile = {
+      ...original,
+      skippedChecks: [
+        ...[
+          "__proto__",
+          "constructor",
+          "toString",
+          "hasOwnProperty",
+          "valueOf",
+          "constructor/x/y",
+          "__proto__/a",
+        ].map((ruleId) => ({ ...base, ruleId })),
+        { ...base, ruleId: "constructor/real-looking" },
+        { ...base, ruleId: "content/ok" },
+      ],
+    };
+    const again = reload(writeJson("protos.json", hostile));
+    expect(again.skippedChecks?.map((s) => s.ruleId)).toEqual([
+      "constructor/real-looking",
+      "content/ok",
+    ]);
+    // The plain object everything is read into is untouched.
+    expect(({} as Record<string, unknown>).checks).toBeUndefined();
+  });
+
+  test("terminal escapes, C1 controls and bidi overrides in a name, check or page are stripped (#518)", () => {
+    const ESC = String.fromCharCode(27);
+    const evil = {
+      ...original,
+      skippedChecks: [
+        {
+          ruleId: "content/ok",
+          name: `Hidden${ESC}[2J${ESC}]8;;https://evil.example${ESC}\\text\u009b31m\u202egnirts\nnext`,
+          check: `chk${ESC}[1;1H\u2066x\u2069`,
+          reason: "scan-truncated",
+          pages: [
+            `https://example.com/p${ESC}[2J\u009b0m\u202e/x\r\nHost: evil`,
+          ],
+          pagesCount: 1,
+          pagesHasMore: false,
+        },
+      ],
+    };
+    const again = reload(writeJson("escapes.json", evil));
+    const entry = again.skippedChecks?.[0] as {
+      name: string;
+      check: string;
+      pages: string[];
+    };
+    for (const value of [entry.name, entry.check, ...entry.pages]) {
+      const unsafe = [...value].filter((ch) => {
+        const c = ch.charCodeAt(0);
+        return (
+          c <= 0x1f ||
+          (c >= 0x7f && c <= 0x9f) ||
+          (c >= 0x202a && c <= 0x202e) ||
+          (c >= 0x2066 && c <= 0x2069)
+        );
+      });
+      expect(unsafe).toEqual([]);
+    }
+    expect(entry.pages[0]).toBe("https://example.com/p[2J0m/xHost: evil");
+    expect(entry.name.startsWith("Hidden")).toBe(true);
+  });
+
+  test("a forged page count cannot round-trip into summary.skipped", () => {
+    const forged = {
+      ...original,
+      skippedChecks: [
+        {
+          ruleId: "content/ok",
+          name: "N",
+          check: "c",
+          reason: "scan-truncated",
+          pages: ["https://example.com/p"],
+          pagesCount: 9e15,
+          pagesHasMore: true,
+        },
+      ],
+    };
+    const again = reload(writeJson("huge.json", forged));
+    expect(again.skippedChecks?.[0]).toMatchObject({
+      pagesCount: 1,
+      pagesHasMore: false,
+    });
+    expect(again.summary.skipped).toBe(1);
+  });
+
   test("a file with skippedChecks that is not a list reads as none", () => {
     const again = reload(
       writeJson("notlist.json", { ...original, skippedChecks: { a: 1 } })
