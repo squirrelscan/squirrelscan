@@ -29,9 +29,15 @@ export interface PageMapRow {
   descriptionLength: number;
   /** Number of `<h1>` elements; null when the crawl stored none for the page. */
   h1Count: number | null;
+  /** Text of the first `<h1>`; null when the page has none or was not parsed. */
+  h1: string | null;
+  /** Number of headings (`h1` to `h6`); null when the page was not parsed. */
+  headingCount: number | null;
   wordCount: number | null;
   /** schema.org `@type`s declared on the page. */
   schemaTypes: string[];
+  /** JSON-LD `@id` values declared on the page (the first 20). */
+  schemaIds: string[];
   /** Distinct crawled pages linking here (self links excluded). */
   inlinks: number;
   internalOutlinks: number;
@@ -107,8 +113,24 @@ function pathOf(url: string): string {
   }
 }
 
+/** A page that answered below 400 and has stored features, so "missing" means something. */
+function isParsedPage(row: PageMapRow): boolean {
+  return row.status < 400 && row.wordCount !== null;
+}
+
+/** `path` as text for comparing: percent-decoded when it decodes, lower-cased. */
+function comparablePath(path: string): string {
+  try {
+    return decodeURIComponent(path).toLowerCase();
+  } catch {
+    return path.toLowerCase();
+  }
+}
+
 /** Whether `path` is `section` or under it (`/blog` matches `/blog` and `/blog/a`, not `/blogger`). */
-function inSection(path: string, section: string): boolean {
+function inSection(rawPath: string, rawSection: string): boolean {
+  const path = comparablePath(rawPath);
+  const section = comparablePath(rawSection);
   const base = section.startsWith("/") ? section : `/${section}`;
   const trimmed = base.length > 1 ? base.replace(/\/+$/, "") : base;
   return trimmed === "/" || path === trimmed || path.startsWith(`${trimmed}/`);
@@ -122,6 +144,9 @@ function inSection(path: string, section: string): boolean {
 export function filterPageMap(rows: readonly PageMapRow[], filters: PageMapFilters): PageMapRow[] {
   return rows.filter((row) => {
     if (filters.missing?.length) {
+      // A page that errored (4xx, 5xx) or was never parsed (a PDF, an image) has no title or schema
+      // to be missing: only a page that answered with success and was parsed can lack one.
+      if (!isParsedPage(row)) return false;
       const hit = filters.missing.some((field) => {
         switch (field) {
           case "title":
@@ -149,7 +174,10 @@ export function filterPageMap(rows: readonly PageMapRow[], filters: PageMapFilte
     }
     if (filters.orphan && !row.flags.includes("orphan")) return false;
     if (filters.section && !inSection(pathOf(row.url), filters.section)) return false;
-    if (filters.page?.length && !filters.page.some((text) => row.url.includes(text))) return false;
+    if (filters.page?.length) {
+      const url = comparablePath(row.url);
+      if (!filters.page.some((text) => url.includes(comparablePath(text)))) return false;
+    }
     return true;
   });
 }
@@ -188,8 +216,11 @@ export const PAGE_MAP_COLUMNS = [
   "description",
   "descriptionLength",
   "h1Count",
+  "h1",
+  "headingCount",
   "wordCount",
   "schemaTypes",
+  "schemaIds",
   "inlinks",
   "internalOutlinks",
   "externalOutlinks",
@@ -213,12 +244,26 @@ export function pageMapMeta(crawl: { id: string; baseUrl: string; startedAt: num
   return { site: crawl.baseUrl, crawlId: crawl.id, startedAt: crawl.startedAt, total };
 }
 
+/**
+ * `JSON.stringify` output with every character it leaves raw but a terminal or a reader treats
+ * specially written as a `\\uXXXX` escape: DEL, the C1 controls (`U+009B` is an 8-bit CSI), the
+ * bidirectional overrides and isolates, and the line and paragraph separators. Lossless: it is
+ * the same JSON value.
+ */
+export function escapeJsonUnsafe(json: string): string {
+  return json.replace(JSON_UNSAFE, (ch) => `\\u${ch.charCodeAt(0).toString(16).padStart(4, "0")}`);
+}
+const JSON_UNSAFE = new RegExp(
+  "[\\u007f-\\u009f\\u061c\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2069\\u00ad\\ufeff]",
+  "g",
+);
+
 export function renderPageMapJson(rows: readonly PageMapRow[], meta: PageMapMeta): string {
-  return `${JSON.stringify(
+  return `${escapeJsonUnsafe(JSON.stringify(
     { site: meta.site, crawlId: meta.crawlId, startedAt: new Date(meta.startedAt).toISOString(), total: meta.total, filtered: rows.length, pages: rows },
     null,
     2,
-  )}\n`;
+  ))}\n`;
 }
 
 /** One RFC 4180 table with a header row. List cells join with a space; every cell is spreadsheet-safe. */
@@ -236,6 +281,15 @@ export function renderPageMapCsv(rows: readonly PageMapRow[]): string {
     );
   }
   return `${lines.join("\n")}\n`;
+}
+
+/**
+ * A URL as a table cell: a code span with every `|` escaped, because GFM splits a table row on an
+ * unescaped pipe even inside a code span, so a pipe in a URL would end the cell and let the rest
+ * of the URL write into the columns after it.
+ */
+export function urlCell(url: string): string {
+  return markdownCodeSpan(cleanText(url)).replace(/\|/g, "\\|");
 }
 
 /** A cell of prose from an audited page: markdown-escaped, one line, cut at `max` characters. */
@@ -259,7 +313,7 @@ export function renderPageMapMarkdown(rows: readonly PageMapRow[], meta: PageMap
   out.push("|---|---|---|---|---|---|---|---|---|---|---|---|");
   for (const row of rows) {
     out.push(
-      `| ${markdownCodeSpan(cleanText(row.url))} | ${row.status} | ${cell(row.title)} | ${row.titleLength} | ${cell(row.description)} | ${row.descriptionLength} | ${row.h1Count ?? ""} | ${row.wordCount ?? ""} | ${cell(row.schemaTypes.join(", "), 40)} | ${row.inlinks} | ${row.internalOutlinks} | ${cell(row.flags.join(", "), 60)} |`,
+      `| ${urlCell(row.url)} | ${row.status} | ${cell(row.title)} | ${row.titleLength} | ${cell(row.description)} | ${row.descriptionLength} | ${row.h1Count ?? ""} | ${row.wordCount ?? ""} | ${cell(row.schemaTypes.join(", "), 40)} | ${row.inlinks} | ${row.internalOutlinks} | ${cell(row.flags.join(", "), 60)} |`,
     );
   }
   return `${out.join("\n")}\n`;

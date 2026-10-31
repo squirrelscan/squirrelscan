@@ -20,4 +20,10 @@ describe("stripUnsafeLineText", () => {
     expect(out).not.toContain(ESC);
     expect(out).toBe("]8;;https://evil.example\\label]8;;\\[2J[1;1H");
   });
+
+  test("removes invisible characters without splitting the word, and keeps joiners that scripts need", () => {
+    const tag = String.fromCodePoint(0xe0041, 0xe0042);
+    expect(stripUnsafeLineText(`a\u200bb\u2060c\ufeffd\u00ade${tag}f\u180eg`)).toBe("abcdefg");
+    expect(stripUnsafeLineText("\u0645\u06cc\u200c\u062e\u0648\u0627\u0647\u0645")).toBe("\u0645\u06cc\u200c\u062e\u0648\u0627\u0647\u0645");
+  });
 });

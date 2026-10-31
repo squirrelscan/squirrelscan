@@ -47,7 +47,15 @@ const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
 
 function emit(content: string, outputPath: string | undefined): void {
   if (outputPath) {
-    writeFileSync(outputPath, content.replace(ANSI, ""));
+    try {
+      writeFileSync(outputPath, content.replace(ANSI, ""));
+    } catch (error) {
+      // A bad path is a usage mistake, not a crash: name the path and the reason.
+      const reason = error instanceof Error ? error.message : String(error);
+      console.error(`Could not write ${outputPath}: ${reason}`);
+      safeExit(1);
+      return;
+    }
     console.error(`Wrote ${outputPath}`);
     return;
   }
@@ -146,7 +154,7 @@ export const pages = defineCommand({
     orphan: {
       type: "boolean",
       description:
-        "Only pages the audit flags as orphans (no internal link from a crawled page)",
+        "Only pages the audit flags as orphans (fewer internal links to them than the orphan rule's minimum, 2 by default; nothing is flagged on a crawl the rule skipped)",
     },
     section: {
       type: "string",
@@ -205,7 +213,12 @@ export const pages = defineCommand({
       return safeExit(1);
     }
 
-    const loaded = await loadPageMap(args.crawl);
+    const crawlIds = splitListFlag(args.crawl as string | string[] | undefined);
+    if (crawlIds.length > 1) {
+      console.error("--crawl takes one audit, or two with --diff");
+      return safeExit(1);
+    }
+    const loaded = await loadPageMap(crawlIds[0]);
     if (!loaded.ok) {
       // Nothing stored is an ANSWER; a store that could not be read is a FAILURE.
       if (loaded.error.code === ErrorCodes.CRAWL_NOT_FOUND) {

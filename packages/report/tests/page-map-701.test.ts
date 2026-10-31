@@ -6,6 +6,8 @@ import {
   PAGE_MAP_COLUMNS,
   cleanText,
   csvSafeText,
+  escapeJsonUnsafe,
+  urlCell,
   filterPageMap,
   hasPageMapFilters,
   pageMapMeta,
@@ -28,8 +30,11 @@ function row(over: Partial<PageMapRow> = {}): PageMapRow {
     description: "A page",
     descriptionLength: 6,
     h1Count: 1,
+    h1: "Heading",
+    headingCount: 1,
     wordCount: 120,
     schemaTypes: ["WebSite"],
+    schemaIds: ["https://example.com/#website"],
     inlinks: 3,
     internalOutlinks: 5,
     externalOutlinks: 1,
@@ -44,9 +49,20 @@ function row(over: Partial<PageMapRow> = {}): PageMapRow {
 const rows: PageMapRow[] = [
   row(),
   row({ url: "https://example.com/blog/a", title: null, titleLength: 0, flags: ["title"] }),
-  row({ url: "https://example.com/blog/b", description: "", descriptionLength: 0, h1Count: 0, flags: ["duplicate-title", "h1"] }),
+  row({
+    url: "https://example.com/blog/b",
+    description: "",
+    descriptionLength: 0,
+    h1Count: 0,
+    flags: ["duplicate-title", "h1"],
+  }),
   row({ url: "https://example.com/blogger", schemaTypes: [], flags: ["no-schema"] }),
-  row({ url: "https://example.com/long", titleLength: 90, descriptionLength: 200, flags: ["duplicate-description", "orphan"] }),
+  row({
+    url: "https://example.com/long",
+    titleLength: 90,
+    descriptionLength: 200,
+    flags: ["duplicate-description", "orphan"],
+  }),
 ];
 const urls = (list: PageMapRow[]) => list.map((r) => new URL(r.url).pathname);
 
@@ -61,7 +77,10 @@ describe("filterPageMap", () => {
     expect(urls(filterPageMap(rows, { missing: ["description"] }))).toEqual(["/blog/b"]);
     expect(urls(filterPageMap(rows, { missing: ["h1"] }))).toEqual(["/blog/b"]);
     expect(urls(filterPageMap(rows, { missing: ["schema"] }))).toEqual(["/blogger"]);
-    expect(urls(filterPageMap(rows, { missing: ["title", "schema"] }))).toEqual(["/blog/a", "/blogger"]);
+    expect(urls(filterPageMap(rows, { missing: ["title", "schema"] }))).toEqual([
+      "/blog/a",
+      "/blogger",
+    ]);
   });
 
   test("a row with no stored h1 count is not missing an h1", () => {
@@ -71,12 +90,17 @@ describe("filterPageMap", () => {
   test("--duplicate reads the audit's flags", () => {
     expect(urls(filterPageMap(rows, { duplicate: ["title"] }))).toEqual(["/blog/b"]);
     expect(urls(filterPageMap(rows, { duplicate: ["description"] }))).toEqual(["/long"]);
-    expect(urls(filterPageMap(rows, { duplicate: ["title", "description"] }))).toEqual(["/blog/b", "/long"]);
+    expect(urls(filterPageMap(rows, { duplicate: ["title", "description"] }))).toEqual([
+      "/blog/b",
+      "/long",
+    ]);
   });
 
   test("--too-long is a title over 75 or a description over 160", () => {
     expect(urls(filterPageMap(rows, { tooLong: true }))).toEqual(["/long"]);
-    expect(filterPageMap([row({ titleLength: 75, descriptionLength: 160 })], { tooLong: true })).toHaveLength(0);
+    expect(
+      filterPageMap([row({ titleLength: 75, descriptionLength: 160 })], { tooLong: true }),
+    ).toHaveLength(0);
     expect(filterPageMap([row({ titleLength: 76 })], { tooLong: true })).toHaveLength(1);
     expect(filterPageMap([row({ descriptionLength: 161 })], { tooLong: true })).toHaveLength(1);
   });
@@ -104,7 +128,11 @@ describe("filterPageMap", () => {
 
 describe("renderPageMapCsv", () => {
   test("a header of every column, one line per page, lists joined by a space", () => {
-    const lines = renderPageMapCsv([row({ externalDomains: ["a.example", "b.example"], flags: ["orphan", "h1"] })]).trim().split("\n");
+    const lines = renderPageMapCsv([
+      row({ externalDomains: ["a.example", "b.example"], flags: ["orphan", "h1"] }),
+    ])
+      .trim()
+      .split("\n");
     expect(lines[0]).toBe(PAGE_MAP_COLUMNS.join(","));
     expect(lines).toHaveLength(2);
     expect(lines[1]).toContain("a.example b.example");
@@ -119,7 +147,10 @@ describe("renderPageMapCsv", () => {
 });
 
 describe("renderPageMapMarkdown", () => {
-  const meta = pageMapMeta({ id: "0123456789abcdef", baseUrl: "https://example.com", startedAt: 1_000 }, 5);
+  const meta = pageMapMeta(
+    { id: "0123456789abcdef", baseUrl: "https://example.com", startedAt: 1_000 },
+    5,
+  );
 
   test("a table with a row per page and the audit named", () => {
     const md = renderPageMapMarkdown(rows, meta);
@@ -133,7 +164,10 @@ describe("renderPageMapMarkdown", () => {
   });
 
   test("a cell from an audited page cannot break the table or inject markup", () => {
-    const md = renderPageMapMarkdown([row({ title: "a | b\n# heading", description: "<script>x</script> *bold*" })], meta);
+    const md = renderPageMapMarkdown(
+      [row({ title: "a | b\n# heading", description: "<script>x</script> *bold*" })],
+      meta,
+    );
     const dataLine = md.split("\n").find((l) => l.startsWith("| `https://"))!;
     // Pipes escaped, one line, no live tag.
     expect(dataLine).toContain("a \\| b # heading");
@@ -145,9 +179,18 @@ describe("renderPageMapMarkdown", () => {
 
 describe("renderPageMapJson", () => {
   test("carries the audit, both counts and the rows", () => {
-    const meta = pageMapMeta({ id: "abc", baseUrl: "https://example.com", startedAt: Date.UTC(2026, 9, 31) }, 5);
+    const meta = pageMapMeta(
+      { id: "abc", baseUrl: "https://example.com", startedAt: Date.UTC(2026, 9, 31) },
+      5,
+    );
     const json = JSON.parse(renderPageMapJson(rows.slice(0, 2), meta)) as Record<string, unknown>;
-    expect(json).toMatchObject({ site: "https://example.com", crawlId: "abc", startedAt: "2026-10-31T00:00:00.000Z", total: 5, filtered: 2 });
+    expect(json).toMatchObject({
+      site: "https://example.com",
+      crawlId: "abc",
+      startedAt: "2026-10-31T00:00:00.000Z",
+      total: 5,
+      filtered: 2,
+    });
     expect((json.pages as unknown[]).length).toBe(2);
   });
 });
@@ -166,23 +209,43 @@ describe("hostile page values (#701)", () => {
     canonical: "@SUM(1)",
   };
   const rows = [row(hostile)];
-  const meta = pageMapMeta({ id: "abc", baseUrl: `https://e.test/${ESC}[2J\u202e`, startedAt: 1 }, 1);
+  const meta = pageMapMeta(
+    { id: "abc", baseUrl: `https://e.test/${ESC}[2J\u202e`, startedAt: 1 },
+    1,
+  );
   const unsafe = (text: string) =>
     [...text].filter((ch) => {
       const c = ch.charCodeAt(0);
-      return c === 27 || c === 7 || (c >= 0x80 && c <= 0x9f) || (c >= 0x202a && c <= 0x202e) || (c >= 0x2066 && c <= 0x2069);
+      return (
+        c === 27 ||
+        c === 7 ||
+        (c >= 0x80 && c <= 0x9f) ||
+        (c >= 0x202a && c <= 0x202e) ||
+        (c >= 0x2066 && c <= 0x2069)
+      );
     });
 
   test("cleanText removes escapes, C1 controls, bidi overrides and line breaks; keeps ordinary text", () => {
     expect(unsafe(cleanText(hostile.title))).toEqual([]);
     expect(cleanText(hostile.title)).toContain("FORGED");
     expect(cleanText(hostile.title)).not.toContain("\n");
-    expect(cleanText("plain, ordinary text \u00e9\u4e2d")).toBe("plain, ordinary text \u00e9\u4e2d");
+    expect(cleanText("plain, ordinary text \u00e9\u4e2d")).toBe(
+      "plain, ordinary text \u00e9\u4e2d",
+    );
     expect(cleanText(null)).toBe("");
   });
 
   test("csvSafeText prefixes a formula start after any leading whitespace, and cleans first", () => {
-    for (const value of ["=1+1", "+1", "-1", "@SUM(1)", "  =HYPERLINK(\"x\")", "\t=x", "\r\n=x", `${ESC}=x`]) {
+    for (const value of [
+      "=1+1",
+      "+1",
+      "-1",
+      "@SUM(1)",
+      '  =HYPERLINK("x")',
+      "\t=x",
+      "\r\n=x",
+      `${ESC}=x`,
+    ]) {
       expect(csvSafeText(value).trimStart().startsWith("'")).toBe(true);
     }
     expect(csvSafeText("normal =text")).toBe("normal =text");
@@ -209,5 +272,87 @@ describe("hostile page values (#701)", () => {
   test("json keeps the values as they are and is valid", () => {
     const json = JSON.parse(renderPageMapJson(rows, meta)) as { pages: Array<{ title: string }> };
     expect(json.pages[0]!.title).toBe(hostile.title);
+  });
+});
+
+describe("review fixes (#701)", () => {
+  const meta = pageMapMeta({ id: "abc", baseUrl: "https://example.com", startedAt: 1 }, 1);
+
+  test("a pipe in a URL cannot end the table cell: every row has the same number of unescaped pipes", () => {
+    const md = renderPageMapMarkdown(
+      [row({ url: "https://example.com/p|pipe|injected|cells|x" }), row()],
+      meta,
+    );
+    const lines = md.split("\n").filter((l) => l.startsWith("| `https://"));
+    expect(lines).toHaveLength(2);
+    const unescapedPipes = (line: string) => line.match(/(?<!\\)\|/g)?.length;
+    expect(unescapedPipes(lines[0]!)).toBe(unescapedPipes(lines[1]!));
+    expect(urlCell("https://e.test/a|b")).toBe("`https://e.test/a\\|b`");
+  });
+
+  test("json escapes DEL, C1 controls, bidi and separators as \\uXXXX and stays the same value", () => {
+    const title = "a\u007fb\u009bc\u202ed\u2028e\u2066f\u200bg\u061ch";
+    const out = renderPageMapJson([row({ title })], meta);
+    for (const ch of title
+      .slice(1)
+      .split("")
+      .filter((c) => c.charCodeAt(0) > 0x7e))
+      expect(out).not.toContain(ch);
+    expect(out).toContain("\\u009b");
+    expect(out).toContain("\\u202e");
+    expect((JSON.parse(out) as { pages: Array<{ title: string }> }).pages[0]!.title).toBe(title);
+    expect(escapeJsonUnsafe('{"a":"plain \u00e9\u4e2d"}')).toBe('{"a":"plain \u00e9\u4e2d"}');
+  });
+
+  test("--missing only judges pages that answered below 400 and were parsed", () => {
+    const rows = [
+      row({ url: `${"https://example.com"}/ok`, title: null, schemaTypes: [] }),
+      row({
+        url: "https://example.com/gone",
+        status: 404,
+        title: null,
+        schemaTypes: [],
+        wordCount: null,
+      }),
+      row({ url: "https://example.com/doc.pdf", title: null, schemaTypes: [], wordCount: null }),
+    ];
+    expect(filterPageMap(rows, { missing: ["title"] }).map((r) => r.url)).toEqual([
+      "https://example.com/ok",
+    ]);
+    expect(filterPageMap(rows, { missing: ["schema"] }).map((r) => r.url)).toEqual([
+      "https://example.com/ok",
+    ]);
+  });
+
+  test("--section and --page ignore case and match percent-encoded paths", () => {
+    const rows = [
+      row({ url: "https://example.com/caf%C3%A9/Menu" }),
+      row({ url: "https://example.com/other" }),
+    ];
+    expect(filterPageMap(rows, { section: "/café" }).map((r) => r.url)).toEqual([
+      "https://example.com/caf%C3%A9/Menu",
+    ]);
+    expect(filterPageMap(rows, { section: "/CAF%C3%A9" })).toHaveLength(1);
+    expect(filterPageMap(rows, { page: ["MENU"] })).toHaveLength(1);
+    expect(filterPageMap(rows, { page: ["café/menu"] })).toHaveLength(1);
+  });
+
+  test("cleanText removes invisible characters", () => {
+    expect(cleanText(`a\u200bb${String.fromCodePoint(0xe0041)}c\ufeffd`)).toBe("abcd");
+  });
+
+  test("csv carries the h1, heading count and schema id columns", () => {
+    const csv = renderPageMapCsv([
+      row({
+        h1: "Main, heading",
+        headingCount: 4,
+        schemaIds: ["https://e.test/#a", "https://e.test/#b"],
+      }),
+    ]);
+    expect(csv.split("\n")[0]).toContain(
+      ",h1Count,h1,headingCount,wordCount,schemaTypes,schemaIds,",
+    );
+    expect(csv).toContain('"Main, heading",4,');
+    expect(csv).toContain("https://e.test/#a https://e.test/#b");
   });
 });

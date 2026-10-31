@@ -39,21 +39,60 @@ export interface StoredPageMap {
 /** Pages read per batch, so a 10,000 page audit is never one resident array. */
 const BATCH = 500;
 
-/** The link fields the page map reads out of a page's stored parse. */
-interface StoredLink {
-  url?: string;
-  isInternal?: boolean;
+/** What the page map reads out of a page's stored parse. */
+interface StoredParse {
+  links?: Array<{ url?: string; isInternal?: boolean }>;
+  h1?: { texts?: unknown };
+  headings?: { headings?: unknown };
+  schemas?: { _schemas?: unknown };
 }
 
-/** The links of a stored `parsedData` blob; none for a page that was not parsed. */
-function storedLinks(parsedData: string | null): StoredLink[] {
-  if (!parsedData) return [];
+function storedParse(parsedData: string | null): StoredParse {
+  if (!parsedData) return {};
   try {
-    const parsed = JSON.parse(parsedData) as { links?: StoredLink[] };
-    return Array.isArray(parsed.links) ? parsed.links : [];
+    const parsed = JSON.parse(parsedData) as unknown;
+    return typeof parsed === "object" && parsed !== null
+      ? (parsed as StoredParse)
+      : {};
   } catch {
-    return [];
+    return {};
   }
+}
+
+/** Most `@id` values kept per page, and the longest one: a page can declare thousands. */
+const MAX_SCHEMA_IDS = 20;
+const MAX_SCHEMA_ID_CHARS = 500;
+
+/** The first h1, the number of headings and the JSON-LD `@id` values of one parsed page. */
+function pageFacts(parse: StoredParse): {
+  h1: string | null;
+  headingCount: number | null;
+  schemaIds: string[];
+} {
+  const texts = parse.h1?.texts;
+  const first = Array.isArray(texts)
+    ? texts.find((t) => typeof t === "string" && t.length > 0)
+    : undefined;
+  const headings = parse.headings?.headings;
+  const nodes = parse.schemas?._schemas;
+  const ids = new Set<string>();
+  if (Array.isArray(nodes)) {
+    for (const node of nodes) {
+      const id = (node as { "@id"?: unknown } | null)?.["@id"];
+      if (
+        typeof id === "string" &&
+        id.length > 0 &&
+        id.length <= MAX_SCHEMA_ID_CHARS
+      )
+        ids.add(id);
+      if (ids.size >= MAX_SCHEMA_IDS) break;
+    }
+  }
+  return {
+    h1: typeof first === "string" ? first : null,
+    headingCount: Array.isArray(headings) ? headings.length : null,
+    schemaIds: [...ids],
+  };
 }
 
 interface LinkCounts {
@@ -61,12 +100,23 @@ interface LinkCounts {
   externalOut: Map<string, number>;
   externalHosts: Map<string, string[]>;
   inbound: Map<string, number>;
+  /** Per page, by stored url. */
+  facts: Map<string, ReturnType<typeof pageFacts>>;
 }
 
 /**
- * Link counts per page from the pages' stored parse, which is where the internal link graph
- * lives (`link_appearances` holds external links only). Out-links count every link on the page;
- * in-links count each crawled page that links here once, however many times it does; a page
+ * The page's key in the link counts: the same `normalizeUrl` the orphan and internal-link rules
+ * key their counts with, applied to the page's stored URL AND to every link target. The stored
+ * url keeps a trailing slash and a query string, the normalised form drops them, so keying one
+ * side with each loses every link to such a page. Pages that differ only by those collapse to one
+ * key and share their counts, as they do in the rules.
+ */
+const linkKey = (url: string): string => normalizeUrl(url);
+
+/**
+ * Link counts and per-page facts from the pages' stored parse, which is where the internal link
+ * graph lives (`link_appearances` holds external links only). Out-links count every link on the
+ * page; in-links count each crawled page that links here once, however many times it does; a page
  * linking to itself is neither. Read a batch at a time.
  */
 function readLinkCounts(
@@ -78,16 +128,20 @@ function readLinkCounts(
     const externalOut = new Map<string, number>();
     const hosts = new Map<string, Set<string>>();
     const inbound = new Map<string, number>();
+    const facts = new Map<string, ReturnType<typeof pageFacts>>();
     for (let offset = 0; ; offset += BATCH) {
       const batch = yield* storage.getPageLinkRows(crawlId, {
         limit: BATCH,
         offset,
       });
       for (const page of batch) {
+        const parse = storedParse(page.parsedData);
+        facts.set(page.normalizedUrl, pageFacts(parse));
+        const own = linkKey(page.normalizedUrl);
         const targets = new Set<string>();
         let internal = 0;
         let external = 0;
-        for (const link of storedLinks(page.parsedData)) {
+        for (const link of Array.isArray(parse.links) ? parse.links : []) {
           if (typeof link.url !== "string" || link.url.length === 0) continue;
           let resolved: URL;
           try {
@@ -98,19 +152,21 @@ function readLinkCounts(
           if (resolved.protocol !== "http:" && resolved.protocol !== "https:")
             continue;
           if (link.isInternal) {
-            const target = normalizeUrl(resolved.href);
-            if (target === page.normalizedUrl) continue;
+            const target = linkKey(resolved.href);
+            if (target === own) continue;
             internal++;
             targets.add(target);
           } else {
             external++;
-            const known = hosts.get(page.normalizedUrl);
+            const known = hosts.get(own);
             if (known) known.add(resolved.hostname);
-            else hosts.set(page.normalizedUrl, new Set([resolved.hostname]));
+            else hosts.set(own, new Set([resolved.hostname]));
           }
         }
-        if (internal > 0) internalOut.set(page.normalizedUrl, internal);
-        if (external > 0) externalOut.set(page.normalizedUrl, external);
+        if (internal > 0)
+          internalOut.set(own, (internalOut.get(own) ?? 0) + internal);
+        if (external > 0)
+          externalOut.set(own, (externalOut.get(own) ?? 0) + external);
         for (const target of targets)
           inbound.set(target, (inbound.get(target) ?? 0) + 1);
       }
@@ -118,7 +174,7 @@ function readLinkCounts(
     }
     const externalHosts = new Map<string, string[]>();
     for (const [page, set] of hosts) externalHosts.set(page, [...set].sort());
-    return { internalOut, externalOut, externalHosts, inbound };
+    return { internalOut, externalOut, externalHosts, inbound, facts };
   });
 }
 
@@ -238,7 +294,8 @@ export async function loadPageMap(
             if (f?.robotsNoindex) flags.add("noindex");
             if (f && f.status < 400 && f.schemaTypes.length === 0)
               flags.add("no-schema");
-            const key = page.normalizedUrl;
+            const key = linkKey(page.normalizedUrl);
+            const parsed = links.facts.get(page.normalizedUrl);
             const title = f?.title ?? null;
             const description = f?.description ?? null;
             out.push({
@@ -253,6 +310,9 @@ export async function loadPageMap(
               description,
               descriptionLength: description?.length ?? 0,
               h1Count: f?.reportScalars?.h1Count ?? null,
+              h1: parsed?.h1 ?? null,
+              headingCount: parsed?.headingCount ?? null,
+              schemaIds: parsed?.schemaIds ?? [],
               wordCount: f?.wordCount ?? null,
               schemaTypes: f?.schemaTypes ?? [],
               inlinks: links.inbound.get(key) ?? 0,
