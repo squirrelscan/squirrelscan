@@ -17,6 +17,11 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **Technology detection on a page with many large scripts keeps the loader windows of later bundles.** With the page byte budget (512 KB in the cloud) full, a small early script's whole remainder took room that a later bundle's windows around its vendor literal (PostHog, React, Supabase, Sentry, Stripe) needed, so that bundle's copy lost the literal. Every bundle's windows are now chosen first, in rounds, and remainders and tails take what is left. (#1445)
+
+
 ## v0.0.151 (2026-11-01)
 
 Technology detection finds Sentry, React, PostHog, Stripe and GA4 past the start of a large bundle, and a Next.js App Router page no longer detects a vendor it only mentions. A start URL at the site root that redirects to a deep page keeps the root-start crawl order. Thanks to William for the tests that pin the `[[ignore]]` timeout notice in a cut run (#1434).
