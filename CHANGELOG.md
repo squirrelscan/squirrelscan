@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **Technology detection on a page with many large scripts keeps the loader windows of later bundles.** With the page byte budget (512 KB in the cloud) full, a small early script's whole remainder took room that a later bundle's windows around its vendor literal (PostHog, React, Supabase, Sentry, Stripe) needed, so that bundle's copy lost the literal. Every bundle's windows are now chosen first, in rounds, and remainders and tails take what is left. (#1445)
+
 ### Added
 
 - **Technology detection finds Klaviyo and Shopify Payments on a Shopify storefront from its static HTML.** Klaviyo from the theme app block marker (`shopify://apps/klaviyo-email-marketing-sms/...`) or the inline `window._klOnsite` / `window.klaviyo` onsite loader, alongside the existing script and `_learnq` signals. Shopify Payments from `"shopifyPaymentsEnabled":true` in the inline shop config, reported as "Shopify Payments (enabled in shop config)" at medium confidence because it is a merchant setting, not a loaded script. A page that only links to or names the vendor is not detected. (#1447)

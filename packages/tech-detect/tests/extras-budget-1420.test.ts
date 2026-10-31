@@ -5,7 +5,7 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { bundleHints, detectTechnologies, SEGMENT_SEPARATOR, sampleBundleExtras } from "../src";
+import { bundleHints, createBundleSampler, detectTechnologies, SEGMENT_SEPARATOR, sampleBundleExtras } from "../src";
 import { ALL_FINGERPRINTS } from "../src/fingerprints";
 import { deriveHints } from "../src/hint-derive";
 
@@ -474,3 +474,59 @@ describe("the opener check covers the whole text sent, window and tail (#1433 re
   }
 });
 
+
+// #1445: the windows-only step of a page leaves the tail its reserve too, and a later step keeps what it chose.
+describe("the two-step sampler (#1445)", () => {
+  const unique = (bytes: number, seed: number): string =>
+    Array.from({ length: Math.ceil(bytes / 30) }, (_, n) => `var q${seed}_${n}=(a<<3)+b;\n`).join("").slice(0, bytes);
+  const LOADERS = [
+    'posthog.init("phc_x",{api_host:"https://eu.i.posthog.com"});',
+    'var st=Stripe("pk_test_x");',
+    'Sentry.init({dsn:"https://k@o1.ingest.sentry.io/2"});',
+    "fbq('init','1234567890');",
+    "ttq.load('ABCDEFGH');",
+  ];
+  const body = (): string =>
+    `${unique(20_000, 900)}\n${LOADERS.flatMap((l, i) => Array.from({ length: 8 }, (_, k) => `${unique(2_500, i * 10 + k)}\n${l}\n`)).join("")}${unique(40_000, 901)}\nvar u="https://x.sc.omtrdc.net/b/ss/y";\n`;
+
+  test("windows only never spend the tail's reserve", () => {
+    const sampler = createBundleSampler(body(), HEAD);
+    for (const max of [4_000, 8_000, EXTRAS]) {
+      const windows = sampler.sample(max, true);
+      expect(windows.length).toBeGreaterThan(0);
+      expect(windows.length).toBeLessThanOrEqual(max - Math.min(6 * 1024, Math.floor(max / 4)) + 8);
+    }
+  });
+
+  test("the full step after a windows-only one keeps its windows and adds the tail", () => {
+    const sampler = createBundleSampler(body(), HEAD);
+    const windows = sampler.sample(EXTRAS, true);
+    const full = sampler.sample(EXTRAS, false);
+    expect(full.length).toBeLessThanOrEqual(EXTRAS);
+    for (const part of windows.split(SEGMENT_SEPARATOR)) expect(full).toContain(part);
+    expect(full).toContain("omtrdc.net");
+  });
+
+  test("sampleBundleExtras is the full step of a fresh sampler", () => {
+    const content = body();
+    expect(sampleBundleExtras(content, HEAD, EXTRAS)).toBe(createBundleSampler(content, HEAD).sample(EXTRAS, false));
+  });
+});
+
+describe("the sampler's scan prefix (#1445)", () => {
+  const code = (chars: number): string => "var q=(a<<3)+b;if(q>9){q-=9}\n".repeat(Math.ceil(chars / 29)).slice(0, chars);
+  const content = `${code(100_000)}\nposthog.init("phc_a",{});\n${code(300_000)}\nvar st=Stripe("pk_test_x");\n${code(100_000)}`;
+
+  test("windows come from the prefix only, and a prefixed scan has no tail", () => {
+    const part = createBundleSampler(content, HEAD, 200_000).sample(EXTRAS, false);
+    expect(part).toContain("posthog.init(");
+    expect(part).not.toContain("Stripe(");
+    const whole = createBundleSampler(content, HEAD).sample(EXTRAS, false);
+    expect(whole).toContain("Stripe(");
+  });
+
+  test("a prefix shorter than the head still searches past the head", () => {
+    const part = createBundleSampler(content, HEAD, 10).sample(EXTRAS, true);
+    expect(part).not.toContain("Stripe(");
+  });
+});

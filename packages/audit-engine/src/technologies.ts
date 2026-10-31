@@ -6,7 +6,8 @@ import {
 import {
   detectTechnologies,
   SEGMENT_SEPARATOR,
-  sampleBundleExtras,
+  createBundleSampler,
+  type BundleSampler,
   type DetectedTechnology,
 } from "@squirrelscan/tech-detect";
 import { recordToHeaders } from "@squirrelscan/utils/headers";
@@ -207,6 +208,97 @@ export function detectReportTechnologies(
 const TECH_BUNDLE_FLOOR_BYTES = 16 * 1024;
 /** Most bytes of vendor-literal windows and tail added to a bundle that does not fit whole. */
 const TECH_BUNDLE_EXTRAS_BYTES = 24 * 1024;
+/** Smallest hint window (160 before and 256 after a literal): below this room a bundle is not scanned for windows. */
+const MIN_WINDOW_BYTES = 420;
+/** Smallest tail worth scanning a bundle for. */
+const MIN_TAIL_BYTES = 32;
+/**
+ * Characters of bundle text the windows of one page's bundles are searched in, all bundles together. Every
+ * bundle of a page is scanned for its windows before any bundle's remainder is sent (#1445), where the budget
+ * alone used to stop the scanning after the first bundles; this bounds a page of dozens of multi-megabyte
+ * scripts to a fraction of a second per few MB, shared out fairly (see {@link windowScanAllowances}).
+ */
+const MAX_WINDOW_SCAN_CHARS_PER_PAGE = 12 * 1024 * 1024;
+/** A bundle is always searched in at least this much of its start, whatever the page's share. */
+const MIN_WINDOW_SCAN_CHARS = 64 * 1024;
+
+/**
+ * How much of each bundle's start is searched for windows, by water-filling: the smallest bundles first,
+ * each given its whole length when that is within an equal share of what is left, the rest sharing what
+ * they leave. A bundle that does not fit its share is searched in a prefix of that size, never skipped, and
+ * a single huge body gets the whole `cap`. Every bundle gets at least `floor` characters (or its length).
+ */
+export function windowScanAllowances(
+  lengths: readonly number[],
+  cap = MAX_WINDOW_SCAN_CHARS_PER_PAGE,
+  floor = MIN_WINDOW_SCAN_CHARS,
+): number[] {
+  const order = lengths.map((length, i) => ({ length, i })).sort((x, y) => x.length - y.length);
+  const out = new Array<number>(lengths.length).fill(0);
+  let remaining = cap;
+  order.forEach(({ length, i }, k) => {
+    const share = Math.max(Math.floor(remaining / (order.length - k)), floor);
+    out[i] = Math.min(length, share);
+    remaining = Math.max(0, remaining - out[i]!);
+  });
+  return out;
+}
+
+/** What {@link spreadBundleExtras} reads and sets of one bundle of a page. */
+interface ExtrasItem {
+  content: string;
+  head: string;
+  headBytes: number;
+  extras: string;
+  extrasBytes: number;
+}
+
+/**
+ * Pass 2 for a page: the parts of each bundle past its head that detection needs, given out in steps over ALL
+ * the page's bundles (#1445). Windows come in rounds of growing size (2 KB, 8 KB, the full extras), so no
+ * bundle's windows take the room before every bundle has had its first ones; the last step adds the
+ * remainder or tail. A bundle already holding extras gives them back first and re-chooses with the room that
+ * is left. The samplers (scan and hint search, once per bundle) live only as long as this call.
+ */
+function spreadBundleExtras(
+  plan: readonly ExtrasItem[],
+  bundleBytes: number,
+  room: () => number,
+  charge: (n: number) => void,
+): void {
+  const open = plan.filter((item) => item.head && item.head.length < item.content.length);
+  const allowances = windowScanAllowances(open.map((item) => item.content.length));
+  const samplers = new Map<ExtrasItem, BundleSampler>();
+  const steps = [
+    { cap: 2 * 1024, windowsOnly: true },
+    { cap: 8 * 1024, windowsOnly: true },
+    { cap: TECH_BUNDLE_EXTRAS_BYTES, windowsOnly: true },
+    { cap: TECH_BUNDLE_EXTRAS_BYTES, windowsOnly: false },
+  ];
+  for (const { cap, windowsOnly } of steps) {
+    open.forEach((item, k) => {
+      const held = item.extrasBytes;
+      const r = Math.min(
+        cap,
+        bundleBytes - item.headBytes - SEGMENT_SEPARATOR.length,
+        room() + held - SEGMENT_SEPARATOR.length,
+      );
+      // Windows need room for at least one (about 420 bytes); the last step takes any room for the tail.
+      if (r < (windowsOnly ? MIN_WINDOW_BYTES : MIN_TAIL_BYTES)) return;
+      let sampler = samplers.get(item);
+      if (!sampler) {
+        sampler = createBundleSampler(item.content, item.head.length, allowances[k]);
+        samplers.set(item, sampler);
+      }
+      const extras = truncateToBytes(sampler.sample(r, windowsOnly), r);
+      if (!extras) return;
+      const bytes = byteLength(extras) + SEGMENT_SEPARATOR.length;
+      charge(bytes - held);
+      item.extras = extras;
+      item.extrasBytes = bytes;
+    });
+  }
+}
 
 /** Bytes of first-party script bodies detection may read (#1254). */
 export interface TechBundleLimits {
@@ -408,19 +500,7 @@ export function buildTechInputs(
       item.headBytes = byteLength(item.head);
       charge(item.headBytes);
     }
-    for (const item of plan) {
-      if (!item.head || item.head.length >= item.content.length) continue;
-      const r = Math.min(
-        TECH_BUNDLE_EXTRAS_BYTES,
-        limits.bundleBytes - item.headBytes - SEGMENT_SEPARATOR.length,
-        room() - SEGMENT_SEPARATOR.length,
-      );
-      if (r <= 0) continue;
-      item.extras = truncateToBytes(sampleBundleExtras(item.content, item.head.length, r), r);
-      if (!item.extras) continue;
-      item.extrasBytes = byteLength(item.extras) + SEGMENT_SEPARATOR.length;
-      charge(item.extrasBytes);
-    }
+    spreadBundleExtras(plan, limits.bundleBytes, room, charge);
     for (const item of plan) {
       if (!item.head || item.head.length >= item.content.length) continue;
       const r = Math.min(limits.bundleBytes - item.headBytes - item.extrasBytes, room());
