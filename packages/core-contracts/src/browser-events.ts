@@ -7,7 +7,7 @@
 // stripped of control characters and bounded, every URL is cut to an origin and path (a query string or a
 // fragment can carry a token), and every list is capped. `readBrowserEvents` is the one place that does it.
 
-import { stripControlChars } from "./control-chars";
+import { stripUnsafeLineText } from "./control-chars";
 
 /** One `securitypolicyviolation` event the browser raised. */
 export interface BrowserCspViolation {
@@ -55,9 +55,19 @@ export const BROWSER_EVENT_LIMITS = {
   text: 500,
 } as const;
 
+/**
+ * Characters that render as nothing or change how text reads: zero-width spaces and joiners, the BOM, the soft
+ * hyphen, the TAG block, variation selectors and the Hangul fillers (all Default_Ignorable_Code_Point). A page
+ * controls these strings, so none of them is kept.
+ */
+const INVISIBLE = /\p{Default_Ignorable_Code_Point}/gu;
+
+/** One line of untrusted text: invisible characters gone, C0/C1 controls (tab and newline too), bidi controls and line separators replaced by a space, runs of space collapsed. */
+export const eventLine = (value: string): string => stripUnsafeLineText(value.replace(INVISIBLE, "")).replace(/ {2,}/g, " ");
+
 const clean = (value: unknown, max: number = BROWSER_EVENT_LIMITS.text): string | undefined => {
   if (typeof value !== "string") return undefined;
-  const text = stripControlChars(value).trim().slice(0, max);
+  const text = eventLine(value.slice(0, max * 4)).trim().slice(0, max);
   return text === "" ? undefined : text;
 };
 

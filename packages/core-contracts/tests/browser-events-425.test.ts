@@ -68,7 +68,7 @@ describe("readBrowserEvents", () => {
       ],
       pageErrors: ["TypeError: x is undefined\u0007", "", 5, "e".repeat(5000)],
     });
-    expect(out?.failedRequests).toEqual([{ url: "https://a.test/x", method: "GET", resourceType: "script", failure: "net::ERR_BLOCKED_BY_CSP[31m" }]);
+    expect(out?.failedRequests).toEqual([{ url: "https://a.test/x", method: "GET", resourceType: "script", failure: "net::ERR_BLOCKED_BY_CSP [31m" }]);
     expect(out?.pageErrors[0]).toBe("TypeError: x is undefined");
     expect(out?.pageErrors[1]).toHaveLength(BROWSER_EVENT_LIMITS.text);
     expect(out?.pageErrors).toHaveLength(2);
@@ -83,5 +83,44 @@ describe("readBrowserEvents", () => {
     expect(out?.cspViolations).toHaveLength(BROWSER_EVENT_LIMITS.cspViolations);
     expect(out?.failedRequests).toHaveLength(BROWSER_EVENT_LIMITS.failedRequests);
     expect(out?.pageErrors).toHaveLength(BROWSER_EVENT_LIMITS.pageErrors);
+  });
+});
+
+// Every character a page could use to forge or hide a line in a terminal, report or agent context.
+const HOSTILE = [
+  "\u001b", "\u009b", "\u009d", "\u0007", "\u0090", "\u202e", "\u2066", "\u200e", "\u061c", "\u2028", "\u2029",
+  "\u200b", "\u200d", "\u2060", "\ufeff", "\u00ad", "\u180e", "\u3164", "\u115f", "\uffa0", "\ufe0f", "\u{e0041}", "\t", "\n", "\r", "\u007f",
+].join("");
+const UNSAFE = new RegExp("[\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u2028\\u2029\\u202a-\\u202e\\u2066-\\u2069]|\\p{Default_Ignorable_Code_Point}", "u");
+
+describe("hostile text", () => {
+  test("no field of a sanitised event carries a control, bidi or invisible character", () => {
+    const events = readBrowserEvents({
+      cspViolations: [
+        {
+          violatedDirective: `script${HOSTILE}-src`,
+          effectiveDirective: `script${HOSTILE}-src-elem`,
+          blockedUri: `https://cdn${HOSTILE}.test/a${HOSTILE}.js`,
+          sourceFile: `https://site.test/${HOSTILE}app.js`,
+          disposition: "enforce",
+        },
+        { violatedDirective: "img-src", blockedUri: `in${HOSTILE}line` },
+      ],
+      failedRequests: [{ url: `https://x.test/${HOSTILE}`, status: 500, error: `fail${HOSTILE}ed` }],
+      pageErrors: [`TypeError:${HOSTILE} boom`],
+    });
+    expect(events).toBeDefined();
+    const strings: string[] = [];
+    const walk = (value: unknown): void => {
+      if (typeof value === "string") strings.push(value);
+      else if (Array.isArray(value)) value.forEach(walk);
+      else if (value && typeof value === "object") Object.values(value).forEach(walk);
+    };
+    walk(events);
+    expect(strings.length).toBeGreaterThan(4);
+    for (const s of strings) expect(UNSAFE.test(s)).toBe(false);
+    // The words survive: the hostile run is removed or becomes a space, never the surrounding text.
+    expect(events!.cspViolations[0]!.violatedDirective.replace(/ /g, "")).toBe("script-src");
+    expect(events!.pageErrors[0]).toContain("TypeError:");
   });
 });
