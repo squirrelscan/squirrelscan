@@ -12,6 +12,7 @@ import { IGNORED_SKIP_REASON, type IgnoredDetails } from "@squirrelscan/core-con
 import { matchesExcludePattern } from "@squirrelscan/utils/patterns";
 import { getPathname } from "@squirrelscan/utils/url";
 
+import { compileSelector, parsePath, type Segment, type SelectorMatcher } from "./ignore-selector";
 import { compileSafeRegex, type CompileWork, type SafeRegex } from "./safe-regex";
 import type { RuleMeta } from "./types";
 
@@ -26,6 +27,8 @@ export interface IgnoreEntry {
   checks?: string[];
   items?: string[];
   urls?: string[];
+  /** Selectors over an item's element path (#1440): `localization-form select`. */
+  selectors?: string[];
   reason?: string;
 }
 
@@ -52,7 +55,7 @@ type TextMatcher = (text: string) => boolean;
 /** Why a matcher could not be compiled, for `squirrel config validate`. */
 export interface IgnoreMatcherProblem {
   entry: number;
-  field: "rule" | "items" | "urls" | "checks";
+  field: "rule" | "items" | "urls" | "checks" | "selectors";
   pattern: string;
   message: string;
 }
@@ -193,6 +196,7 @@ interface CompiledEntry {
   rule: TextMatcher;
   checks?: TextMatcher[];
   items?: TextMatcher[];
+  selectors?: SelectorMatcher[];
   urls: TextMatcher[];
   budget: EntryBudget;
 }
@@ -246,11 +250,11 @@ export class IgnoreTable {
       // Like the config schema's superRefine, enforced here for entries that never went
       // through it: an entry with no items and no urls (a bare rule, `checks` alone,
       // empty arrays) would waive everything the rule finds.
-      if ((entry.items?.length ?? 0) === 0 && (entry.urls?.length ?? 0) === 0) {
-        refused("rule", entry.rule, "an entry needs `items` or `urls`: without either it would waive every finding of the rule, so it is not applied");
+      if ((entry.items?.length ?? 0) === 0 && (entry.urls?.length ?? 0) === 0 && (entry.selectors?.length ?? 0) === 0) {
+        refused("rule", entry.rule, "an entry needs `items`, `urls` or `selectors`: without any it would waive every finding of the rule, so it is not applied");
         return;
       }
-      for (const field of ["items", "urls", "checks"] as const) {
+      for (const field of ["items", "urls", "checks", "selectors"] as const) {
         if ((entry[field]?.length ?? 0) > MAX_MATCHERS_PER_FIELD) {
           refused(field, `${entry[field]!.length} patterns`, `more than ${MAX_MATCHERS_PER_FIELD} patterns in one entry: the entry is not applied`);
           return;
@@ -261,6 +265,12 @@ export class IgnoreTable {
         const m = compileTextMatcher(pattern, budget);
         if (typeof m === "string") refused("items", pattern, m);
         else items.push(m);
+      }
+      const selectors: SelectorMatcher[] = [];
+      for (const pattern of entry.selectors ?? []) {
+        const m = compileSelector(pattern);
+        if (typeof m === "string") refused("selectors", pattern, m);
+        else selectors.push(m);
       }
       const checks: TextMatcher[] = [];
       for (const pattern of entry.checks ?? []) {
@@ -278,13 +288,16 @@ export class IgnoreTable {
       // so it is not applied at all (its problems are reported).
       if ((entry.items?.length ?? 0) > 0 && items.length === 0) return;
       if ((entry.urls?.length ?? 0) > 0 && urls.length === 0) return;
+      if ((entry.selectors?.length ?? 0) > 0 && selectors.length === 0) return;
       if ((entry.checks?.length ?? 0) > 0 && checks.length === 0) return;
+      if (selectors.length > 0) budget.metered = true;
       this.compiled.push({
         index,
         entry,
         rule: ruleMatcher(entry.rule),
         ...(entry.checks && checks.length > 0 ? { checks } : {}),
         ...(items.length > 0 ? { items } : {}),
+        ...(selectors.length > 0 ? { selectors } : {}),
         urls,
         budget,
       });
@@ -310,9 +323,15 @@ export class IgnoreTable {
     return this.timedOut.map((t) => t.entry);
   }
 
-  /** Whether an entry naming `ruleId` depends on the page (it has `urls`): such a rule's verdict is not a property of its template. */
+  /** Whether an entry with `selectors` names `ruleId`: only then does a rule compute the element paths it reports (#1440). */
+  wantsSelectors(ruleId: string): boolean {
+    return this.forRule(ruleId).some((c) => c.selectors !== undefined);
+  }
+
+  /** Whether an entry naming `ruleId` depends on the page (it has `urls` or `selectors`): such a rule's verdict is not a property of its template. */
   hasUrlEntries(ruleId: string): boolean {
-    return this.forRule(ruleId).some((c) => c.urls.length > 0);
+    // A selector entry depends on the page too: sibling pages of one template can differ in an id or a class.
+    return this.forRule(ruleId).some((c) => c.urls.length > 0 || c.selectors !== undefined);
   }
 
   /**
@@ -322,7 +341,7 @@ export class IgnoreTable {
   signatureFor(ruleId: string): string | null {
     const list = this.forRule(ruleId);
     if (list.length === 0) return null;
-    return JSON.stringify(list.map((c) => [c.index, c.entry.rule, c.entry.checks ?? null, c.entry.items ?? null, c.entry.urls ?? null, c.entry.reason ?? null]));
+    return JSON.stringify(list.map((c) => [c.index, c.entry.rule, c.entry.checks ?? null, c.entry.items ?? null, c.entry.selectors ?? null, c.entry.urls ?? null, c.entry.reason ?? null]));
   }
 
   /**
@@ -331,10 +350,36 @@ export class IgnoreTable {
    */
   pageWaiver(ruleId: string, pageUrl: string): number | null {
     for (const c of this.forRule(ruleId)) {
-      if (c.items || c.checks || c.urls.length === 0) continue;
+      if (c.items || c.selectors || c.checks || c.urls.length === 0) continue;
       if (this.matchesUrls(c, pageUrl)) return c.index;
     }
     return null;
+  }
+
+  /** The last path parsed: one item is judged by every selector of every entry, and parsed once. */
+  private lastPath: { text: string; segments: Segment[] } | undefined;
+
+  /**
+   * Whether any selector of the entry matches the element path. The path is parsed once per item, and each test is
+   * charged to the entry's work budget (parts x segments), so a hostile page with thousands of items against
+   * hundreds of selectors times the entry out like a regex or glob does: from then on it waives nothing.
+   */
+  private matchesSelectors(c: CompiledEntry, path: string): boolean {
+    if (c.budget.dead || c.budget.total.left <= 0) {
+      this.noteTimeout(c);
+      return false;
+    }
+    if (this.lastPath?.text !== path) this.lastPath = { text: path, segments: parsePath(path) };
+    const segments = this.lastPath.segments;
+    for (const matcher of c.selectors!) {
+      // The memoised walk is parts x segments states, each looking back over up to `segments` ancestors.
+      if (!charge(c.budget, matcher.parts * Math.max(1, segments.length) ** 2)) {
+        this.noteTimeout(c);
+        return false;
+      }
+      if (matcher.test(segments)) return true;
+    }
+    return false;
   }
 
   /** Whether any url matcher of the entry matches `page`, then notes an entry whose work budget just ran out. */
@@ -356,7 +401,7 @@ export class IgnoreTable {
     if (!c.budget.metered || (!c.budget.dead && c.budget.total.left > 0)) return;
     c.budget.dead = true;
     if (this.timedOut.some((t) => t.entry === c.index)) return;
-    const message = `[[ignore]] entry ${c.index + 1} (${c.entry.rule}) timed out: its regex or glob patterns ran over their work budget and stop matching (exact items still apply), so the findings they would hide stay`;
+    const message = `[[ignore]] entry ${c.index + 1} (${c.entry.rule}) timed out: its regex, glob or selector patterns ran over their work budget and stop matching (exact items still apply), so the findings they would hide stay`;
     this.timedOut.push({ entry: c.index, message });
     this.onTimeout?.(message, c.index);
   }
@@ -467,7 +512,7 @@ export class IgnoreTable {
     // A check without items is waived whole only for a page waiver (urls, no items) that matches its page.
     if (checkPage !== undefined) {
       for (const c of applicable) {
-        if (c.items || c.urls.length === 0) continue;
+        if (c.items || c.selectors || c.urls.length === 0) continue;
         if (this.matchesUrls(c, checkPage)) {
           return {
             name: check.name,
@@ -483,15 +528,19 @@ export class IgnoreTable {
     return check;
   }
 
-  /** The item after one entry: unchanged (same object), narrowed (fewer source pages) or null (waived). */
+  /** The item after one entry: unchanged (same object), narrowed (fewer source pages) or null (waived). Items, selectors and urls AND together. */
   private applyToItem(c: CompiledEntry, item: CheckItem, checkPage: string | undefined): CheckItem | null {
     if (c.items) {
       const hit = c.items.some((m) => m(item.id) || (item.label !== undefined && m(item.label)));
       this.noteTimeout(c);
       if (!hit) return item;
     }
+    if (c.selectors) {
+      // An item with no selector (a rule that does not report elements) is never waived by one.
+      if (item.selector === undefined || !this.matchesSelectors(c, item.selector)) return item;
+    }
     if (c.urls.length === 0) return null;
-    // Items AND urls: waived where the item sits on a matching page.
+    // Items AND selectors AND urls: waived where the item sits on a matching page.
     if (item.sourcePages && item.sourcePages.length > 0) {
       const keep = item.sourcePages.filter((page) => !this.matchesUrls(c, page));
       if (keep.length === item.sourcePages.length) return item;
@@ -501,4 +550,24 @@ export class IgnoreTable {
     if (checkPage !== undefined && this.matchesUrls(c, checkPage)) return null;
     return item;
   }
+}
+
+/**
+ * The checks without `CheckItem.selector` (#1440): the path a rule puts on an element item is for the ignore
+ * filter only, so no output carries it and a run with no selector entry is byte-identical to one before the
+ * field existed. The same array when no item has one.
+ */
+export function stripItemSelectors(checks: CheckResult[]): CheckResult[] {
+  if (!checks.some((check) => check.items?.some((item) => item.selector !== undefined))) return checks;
+  return checks.map((check) => {
+    if (!check.items?.some((item) => item.selector !== undefined)) return check;
+    return {
+      ...check,
+      items: check.items.map((item) => {
+        if (item.selector === undefined) return item;
+        const { selector: _selector, ...rest } = item;
+        return rest;
+      }),
+    };
+  });
 }

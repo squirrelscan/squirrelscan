@@ -153,7 +153,7 @@ export function checkRuleOptions(
  * rule pattern that names no rule, an entry that names a rule that cannot be waived
  * (compromise detection), and a matcher that was refused (an unsafe or invalid
  * regex). The schema has already refused an entry with neither items nor urls and
- * a `selectors` key. Every one changes nothing at audit time (the entry or the
+ * (selectors are accepted). Every one changes nothing at audit time (the entry or the
  * matcher is skipped), so `squirrel config validate` reports them as it does the
  * `[rule_options]` ones.
  */
@@ -178,6 +178,19 @@ export function checkIgnoreEntries(
         message: `${where(i, entry.rule)}: no rule matches, so the entry changes nothing${hint}`,
       });
       return;
+    }
+    // An entry with only `selectors` waives by element: it does something only when a rule it names reports one (#1440).
+    const hasSelectors = (entry.selectors?.length ?? 0) > 0;
+    if (hasSelectors && (entry.items?.length ?? 0) === 0 && (entry.urls?.length ?? 0) === 0) {
+      const reporting = matching.filter((r) => r.meta.itemSelectors === true);
+      if (reporting.length === 0) {
+        problems.push({
+          kind: "ignore-entry",
+          ruleId: entry.rule,
+          key: "selectors",
+          message: `${where(i, entry.rule)}: ${matching.length === 1 ? matching[0]!.meta.id : `none of the ${matching.length} rules it names`} does not report an element path, so \`selectors\` waives nothing; use items or urls, or name a rule that reports elements`,
+        });
+      }
     }
     const locked = matching.filter((r) => !isIgnorable(r.meta));
     if (locked.length > 0 && locked.length === matching.length) {

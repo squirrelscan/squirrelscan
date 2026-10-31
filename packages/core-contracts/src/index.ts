@@ -94,6 +94,12 @@ export interface CheckItem {
   id: string;
   label?: string;
   snippet?: string;
+  /**
+   * Where the element sits in the page, as a selector path (`html > body > form#f > select#s`), for a rule that
+   * reports a DOM element (#1440). It lets an `[[ignore]]` entry with `selectors` waive that element. The rule
+   * runner removes it before the report, so it never appears in an output.
+   */
+  selector?: string;
   sourcePages?: string[];
   /**
    * Pages the item was found on, when a published report keeps fewer of them

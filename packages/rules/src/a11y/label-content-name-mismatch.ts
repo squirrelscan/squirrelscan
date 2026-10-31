@@ -1,5 +1,6 @@
 // a11y/label-content-name-mismatch - Label text matches accessible name
 
+import { elementSelector } from "../element-path";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 function getVisibleText(el: Element): string {
@@ -40,6 +41,8 @@ export const labelContentNameMismatchRule: Rule = {
     verdictScope: "page",
     severity: "error",
     weight: 7,
+    messageCountsItems: true,
+    itemSelectors: true,
   },
 
   run(ctx: RuleContext): RuleResult {
@@ -52,7 +55,7 @@ export const labelContentNameMismatchRule: Rule = {
       "button[aria-label], a[aria-label], [role='button'][aria-label], [role='link'][aria-label], input[aria-label], select[aria-label]"
     );
 
-    const mismatches: string[] = [];
+    const mismatches: Array<{ id: string; selector?: string }> = [];
 
     for (const el of elementsWithAriaLabel) {
       const ariaLabel =
@@ -69,9 +72,10 @@ export const labelContentNameMismatchRule: Rule = {
 
       if (!normalizedAriaLabel.includes(normalizedVisible)) {
         const tagName = el.tagName.toLowerCase();
-        mismatches.push(
-          `${tagName}: visible="${normalizedVisible.slice(0, 20)}" vs aria-label="${normalizedAriaLabel.slice(0, 20)}"`
-        );
+        mismatches.push({
+          id: `${tagName}: visible="${normalizedVisible.slice(0, 20)}" vs aria-label="${normalizedAriaLabel.slice(0, 20)}"`,
+          ...(ctx.wantsItemSelectors ? { selector: elementSelector(el) } : {}),
+        });
       }
     }
 
@@ -80,7 +84,7 @@ export const labelContentNameMismatchRule: Rule = {
         name: "label-content-name-mismatch",
         status: "fail",
         message: `${mismatches.length} element(s) where visible text doesn't match accessible name`,
-        items: mismatches.slice(0, 10).map((id) => ({ id })),
+        items: mismatches.slice(0, 10),
         details: {
           issue:
             "Voice control users may not be able to activate these controls",

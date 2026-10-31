@@ -3,6 +3,7 @@
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 import { sortUnnamedControls, unconfirmedRow } from "../shared/static-hidden";
+import { elementSelector } from "../element-path";
 import { labelsFor } from "../shared/attribute-lookup";
 
 export const formLabelsRule: Rule = {
@@ -17,6 +18,8 @@ export const formLabelsRule: Rule = {
     verdictScope: "page",
     severity: "error",
     weight: 6,
+    messageCountsItems: true,
+    itemSelectors: true,
   },
 
   run(ctx: RuleContext): RuleResult {
@@ -29,7 +32,7 @@ export const formLabelsRule: Rule = {
     );
 
     // pub#671: a field out of the accessibility tree is not reported.
-    const unlabeled = sortUnnamedControls<string>();
+    const unlabeled = sortUnnamedControls<{ id: string; selector?: string }>();
 
     for (const input of inputs) {
       const id = input.getAttribute("id");
@@ -57,7 +60,7 @@ export const formLabelsRule: Rule = {
       if (!hasLabel) {
         const type = input.getAttribute("type") || input.tagName.toLowerCase();
         const name = input.getAttribute("name") || id || type;
-        unlabeled.add(input, name);
+        unlabeled.add(input, { id: name, ...(ctx.wantsItemSelectors ? { selector: elementSelector(input) } : {}) });
       }
     }
 
@@ -67,7 +70,7 @@ export const formLabelsRule: Rule = {
         name: "form-labels",
         status: "fail",
         message: `${unlabeledInputs.length} form input(s) without labels`,
-        items: unlabeledInputs.map((id) => ({ id })),
+        items: unlabeledInputs,
       });
     }
     if (unlabeled.unconfirmed.length > 0) {

@@ -19,6 +19,11 @@ reason = "Shopify sets these cookies itself"
 rule = "perf/ttfb"
 urls = ["/apps/"]
 reason = "Served by a third-party app proxy"
+
+[[ignore]]
+rule      = "a11y/label-content-name-mismatch"
+selectors = ["localization-form select"]
+reason    = "The country selector is rendered by the platform"
 ```
 
 Each `[[ignore]]` table is one entry.
@@ -26,19 +31,39 @@ Each `[[ignore]]` table is one entry.
 | Field | Required | Meaning |
 |---|---|---|
 | `rule` | yes | A rule id (`security/cookie-flags`) or a glob (`a11y/*`, `*`). |
-| `items` | one of `items` or `urls` | What to waive, matched against each finding's item: its id, then its label. A cookie name, a URL, a selector the rule reports. |
-| `urls` | one of `items` or `urls` | Pages to waive, using the same pattern forms as `excludePatterns`. |
+| `items` | one of `items`, `urls` or `selectors` | What to waive, matched against each finding's item: its id, then its label. A cookie name, a URL, a selector the rule reports. |
+| `urls` | one of `items`, `urls` or `selectors` | Pages to waive, using the same pattern forms as `excludePatterns`. |
 | `checks` | no | Only these check names of the rule (`cookie-httponly`). |
 | `reason` | no | Why. Shown in the report, next to the count. |
-| `selectors` | no | Reserved. Refused with a message until rules can say where in the page an item is. |
+| `selectors` | one of `items`, `urls` or `selectors` | Elements to waive, as selectors over the element's place in the page (`localization-form select`). Only for rules that report the element they found; see [Selectors](#selectors). |
 
-An entry needs `items` or `urls`. One with neither would turn the rule off, which is what [`[rules] disable`](/configuration/rules) does openly, so it is refused.
+An entry needs `items`, `urls` or `selectors`. One with none would turn the rule off, which is what [`[rules] disable`](/configuration/rules) does openly, so it is refused.
 
 ## What counts as a match
 
 **Items** match exactly by default: `localization` waives the item named `localization` and not `localization_extra`. Prefix a pattern with `glob:` for `*` and `?` wildcards (`glob:cart_*`), or with `regex:` for a regular expression (`regex:^_shopify_`; item and check patterns take no flags, so match case with the pattern itself). A regex that does not compile, is over 200 characters, or uses back-references or lookahead/lookbehind is refused and listed by `squirrel config validate` (see [Pattern limits](#pattern-limits)).
 
 **URLs** use the forms `excludePatterns` uses: a substring of the URL (`/apps/`), an exact path segment (`/thank-you/`, which must start and end with `/`), or `regex:` with optional flags (`regex:^/blog/\d{4}/:i`). A `regex:` url pattern is tested against the page's path only (`/blog/2024/x`), not the whole URL. They are matched against the page a finding is on.
+
+### Selectors
+
+Selectors are for a finding about one element of the page, such as a form field or a control, when the same rule must keep reporting other elements. A rule that reports an element records where it sits (its tag, `#id` and `.class` tokens, and those of the elements around it), and a selector is matched against that:
+
+| Selector | Matches |
+|---|---|
+| `select` | any `<select>` |
+| `#country` | the element with id `country` |
+| `select.picker#country` | a `<select>` with class `picker` and id `country` |
+| `localization-form select` | a `<select>` anywhere inside a `<localization-form>` |
+| `form > select` | a `<select>` that is a direct child of a `<form>` |
+
+Only tags (or `*`), `#id`, `.class`, a space (descendant) and `>` (child) are supported, up to 12 parts and 300 characters; an attribute selector, a pseudo-class, `+`, `~` or a list is refused by `squirrel config validate` and the entry is not applied. Tag and id and class names are matched as written in the page (tags without case); a name with characters other than letters, digits, `_` and `-` is left out of the recorded place, so a selector cannot name it. The recorded place covers the nearest 16 ancestors of the element, at most 6 classes of 40 characters each (read from the first 1,024 characters of a class attribute) and 1,000 characters in all. It is computed only for a rule that an entry with `selectors` names. An ancestor whose tag name is not a plain name (letters, digits, `_` and `-`: a namespaced `o:p` or `svg:x`) makes that element's whole path unparseable, so no selector matches it: the waiver fails closed and the finding stays.
+
+Selector matching is charged to the entry's work budget like regex and glob matchers, parts times segments squared per item, and all entries draw on the one audit-wide pool of 50 million steps (an entry that spends its own 10 million stops first). While an entry with `selectors` names a rule, each element that rule reports carries a path of up to 1,000 characters until the waiver filter has run: about 100 MB per 100,000 reported elements, which is why the paths are not built for a rule no entry names.
+
+Rules that report elements today: `a11y/label-content-name-mismatch`, `a11y/form-labels` and `a11y/select-name`. An entry with only `selectors` for a rule that does not report elements waives nothing, and `squirrel config validate` names the rule. Selectors trust the page's own tag, id and class names (a page can choose to be waived by naming its elements the way an entry expects, the same trust model as `items`), and their matching shares the entry's work budget with regex and glob matchers: an entry that spends it stops waiving and is reported like any other that timed out. A waiver applies to the items the rule lists (the first ten for these rules); the recorded place never appears in a report.
+
+### Combining fields and entries
 
 **Several fields in one entry combine with AND.** `items = ["localization"]` with `urls = ["/apps/"]` waives that cookie on pages under `/apps/` only. **Several entries combine with OR**: a finding is waived when any entry waives it.
 
@@ -48,6 +73,7 @@ An entry needs `items` or `urls`. One with neither would turn the rule off, whic
 |---|---|
 | `urls` only, on a page rule | The rule is not run on a matching page. The report shows a skipped check (`ignored`), which is left out of the score, like a page the rule does not apply to. |
 | `items` | Matching items are removed from the finding before it is counted. When every item of a check is waived, the check becomes a pass whose message says `N waived by squirrel.toml`, so scores and counts stay stable. When some remain, the check keeps its status and its message gains `(N ignored)`; rules whose messages start with a count (`security/cookie-flags`) show the count that remains. |
+| `selectors` | Matching element items are removed from the finding, counted and listed in `meta.ignored` like `items`. An entry whose selectors match nothing is listed as matching nothing. |
 | `items` and `urls`, on a rule that lists source pages | The matching pages are removed from the item; an item left with no page is waived. |
 
 Nothing is dropped silently. Every report says what was waived:
@@ -117,3 +143,7 @@ The engine answers the same yes or no as `RegExp.test` for most patterns, and ev
 - **`\u{41}`** is read as the code point escape without the `u` flag (JavaScript reads `u{41}` as 41 repeats of `u`).
 - **Lazy quantifiers** (`a*?`) are accepted and behave like greedy ones, because a yes or no cannot tell them apart.
 - **Patterns that match the empty string anywhere are refused** (`regex:`, `a*`, `(|)`, `a{0}`, `$`): they would match every text and so waive everything. `^$`, which matches only the empty text, is allowed.
+
+## For rule authors
+
+A rule whose item is a DOM element sets `selector: elementSelector(el)` on that item (`CheckItem.selector`, from `packages/rules/src/element-path.ts`) and `itemSelectors: true` in its `meta`. Set `messageCountsItems: true` too when the message starts with the item count, so a waiver rewrites it. The runner removes `selector` from every item after the ignore filter, so it never reaches a report, and a run with no `selectors` entry is byte-identical to one without the field.
