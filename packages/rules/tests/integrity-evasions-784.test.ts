@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { parsePage } from "@squirrelscan/parser";
+import { brandImpersonationRule } from "../src/integrity/brand-impersonation";
 import { detectBrandImpersonation, detectFakeAuthOverlay, detectPageSignals } from "../src/integrity/signals";
 import type { RuleContext } from "../src/types";
 
@@ -25,6 +26,35 @@ test("a button, an input and a label held only in an attribute are controls too"
     `<a href="${OFF}"><img src="/g.png" alt="Sign in with Google"></a>`,
   ];
   for (const html of cases) expect(brand(html), html).toBe("Google");
+});
+
+const PADDED_SIGN_IN = `${"a".repeat(400)} Sign in with Google`;
+
+test.each([
+  ["aria-label", `<a href="${OFF}" aria-label="${PADDED_SIGN_IN}"><svg></svg></a>`],
+  ["title", `<a href="${OFF}" title="${PADDED_SIGN_IN}"><svg></svg></a>`],
+  ["value", `<form action="${OFF}"><input type="submit" value="${PADDED_SIGN_IN}"></form>`],
+  ["logo alt", `<a href="${OFF}"><img src="/g.png" alt="${PADDED_SIGN_IN}"></a>`],
+])("a sign-in phrase past 300 real characters in %s is still read", (_attribute, html) => {
+  expect(brand(html)).toBe("Google");
+});
+
+test("overlapping attribute windows find a phrase at every offset around their cuts", () => {
+  for (let offset = 0; offset <= 420; offset++) {
+    const label = `${"a".repeat(offset)} Sign in with Google ${"b".repeat(400)}`;
+    expect(brand(`<a href="${OFF}" aria-label="${label}"><svg></svg></a>`), `offset ${offset}`).toBe("Google");
+  }
+  const expanded = `${"ﬃ".repeat(100)} Sign in with Google ${"b".repeat(400)}`;
+  expect(brand(`<a href="${OFF}" aria-label="${expanded}"><svg></svg></a>`), "NFKC expansion at offset 300").toBe("Google");
+});
+
+test("a long ordinary title is not unread until the 16,000-character bound", async () => {
+  const ordinary = await brandImpersonationRule.run(context(`<a href="${OFF}" title="${"a".repeat(400)}">Elsewhere</a>`));
+  expect(ordinary.checks).toHaveLength(0);
+
+  const bounded = await brandImpersonationRule.run(context(`<a href="${OFF}" title="${"a".repeat(16_001)}">Elsewhere</a>`));
+  expect(bounded.checks).toHaveLength(1);
+  expect(bounded.checks[0]?.details).toMatchObject({ scanTruncated: true, controlsUnread: 1 });
 });
 
 test("Continue with Google and Log in with Google are Google's wording, and a Microsoft pair", () => {
