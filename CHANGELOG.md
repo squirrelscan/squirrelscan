@@ -17,6 +17,11 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **A Next.js client component with script-like props is no longer read as a `next/script` loader.** A component with an `id` and prose children that contain a bracket and a semicolon, or one with a bare `src` prop, was read as an inline or external script, so a vendor it only mentioned or embedded could be detected from a flight payload. A string `children` now needs a call and a statement end or block AND a JavaScript token (`function`, `=>`, an assignment, `.createElement`, `window.`) and a `src` needs an `id` or a `strategy` beside it. (#1444)
+
+
 ## v0.0.151 (2026-11-01)
 
 Technology detection finds Sentry, React, PostHog, Stripe and GA4 past the start of a large bundle, and a Next.js App Router page no longer detects a vendor it only mentions. A start URL at the site root that redirects to a deep page keeps the root-start crawl order. Thanks to William for the tests that pin the `[[ignore]]` timeout notice in a cut run (#1434).

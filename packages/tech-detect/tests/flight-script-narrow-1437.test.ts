@@ -153,6 +153,34 @@ describe("real next build output", () => {
     });
   }
 
+  // The real build of a page of client components (Note) with the vendor URL in props and prose: n1 has an
+  // id and parenthesised prose, n2 a strategy-less title, n3 an id and a src, n4 an id and function-like
+  // children. n3 and n4 ARE script-shaped (indistinguishable from next/script), so a page that has them still
+  // detects the vendor; n1, n2 and the rest are not loaders.
+  test("client components: prose with an id is not a loader; an id with a src or function-like children still is", () => {
+    const html = real("client-components-no-loader");
+    const detect = (page: string): boolean =>
+      detectTechnologies({ url: "https://example.com/", headers: {}, html: page }).some((t) => t.id === "clarity");
+    expect(detect(html)).toBe(true);
+    const withoutScriptShaped = html.replaceAll("clarity.ms/tag/z", "example.com/tag/z").replaceAll("clarity.ms/tag/q", "example.com/tag/q");
+    expect(withoutScriptShaped).not.toBe(html);
+    expect(detect(withoutScriptShaped)).toBe(false);
+  });
+
+  test("prose naming the vendor with the word function, window., =>, = or a query string is not a loader", () => {
+    const prose = [
+      "as a function of the plan, see https://www.clarity.ms/tag/x.",
+      "see https://www.clarity.ms/tag/x?ref=docs for the docs",
+      "Set x = 1 and use https://www.clarity.ms/tag/x here.",
+      "window. and https://www.clarity.ms/tag/x then a => b",
+      "a (b = c) https://www.clarity.ms/tag/x then window. only",
+    ];
+    for (const text of prose) {
+      const html = `<!doctype html><html><body><script>${push([`5:${el("$L2", { id: "n1", children: text })}`])}</script></body></html>`;
+      expect(detectTechnologies({ url: "https://example.com/", headers: {}, html }).some((t) => t.id === "clarity")).toBe(false);
+    }
+  });
+
   test("a page with no loader that only renders the vendor as content does not detect it", () => {
     const big = real("none-big-content");
     expect(big.length).toBeGreaterThan(16 * 1024);
@@ -175,7 +203,19 @@ describe("the Script component is identified by its props, across the page's fli
   test("an id with inline __html, an id with code children, and a src", () => {
     expect(clarity([`5:${el("$L2", { id: "c", dangerouslySetInnerHTML: { __html: SNIPPET } })}`])).toBe(true);
     expect(clarity([`5:${el("$L2", { id: "c", children: SNIPPET })}`])).toBe(true);
-    expect(clarity([`5:${el("$L2", { src: URL_, strategy: "lazyOnload" })}`])).toBe(true);
+    expect(clarity([`5:${el("$L2", { id: "c", src: URL_, strategy: "lazyOnload" })}`])).toBe(true);
+  });
+
+  test("parenthesised prose with an id, and a client component with only a src, are not scripts (#1444)", () => {
+    const prose = "We installed (and liked) https://www.clarity.ms/tag/x; see the notes";
+    expect(clarity([`5:${el("$L2", { id: "n1", children: prose })}`])).toBe(false);
+    expect(clarity([`5:${el("$L2", { src: URL_ })}`])).toBe(false);
+    expect(clarity([`5:${el("$L2", { src: URL_, alt: "x", width: 10 })}`])).toBe(false);
+  });
+
+  test("a src beside an id or a strategy is still a script", () => {
+    expect(clarity([`5:${el("$L2", { id: "c", src: URL_ })}`])).toBe(true);
+    expect(clarity([`5:${el("$L2", { strategy: "lazyOnload", src: URL_ })}`])).toBe(true);
   });
 
   test("a component whose children are prose, with or without an id, is not a script", () => {
