@@ -10,6 +10,7 @@ import { audit } from "@/cli/commands/audit";
 import { credits } from "@/cli/commands/credits";
 import { feedback } from "@/cli/commands/feedback";
 import { keys } from "@/cli/commands/keys";
+import { pages, PAGES_FORMATS } from "@/cli/commands/pages";
 import { report } from "@/cli/commands/report";
 import { self } from "@/cli/commands/self";
 import { skills } from "@/cli/commands/skills";
@@ -49,6 +50,7 @@ const auditDef = commandFlags(audit);
 const reportDef = commandFlags(report);
 const creditsDef = commandFlags(credits);
 const feedbackDef = commandFlags(feedback);
+const pagesDef = commandFlags(pages);
 
 // Flags completion may offer beyond the def: citty's built-in --help, and
 // auto-negation of boolean args (--no-incremental).
@@ -76,6 +78,7 @@ function script(shell: Shell): string {
 // flag it never offered. Move the entry, do not widen it.
 const BASH_BLOCK_END: Record<string, string> = {
   audit: "entities)",
+  pages: "crawl)",
   crawl: "credits)",
   report: "feedback)",
   credits: "analyze)",
@@ -242,6 +245,48 @@ describe.each(shells)("%s completion", (shell) => {
         `--probe|-P)\n          COMPREPLY=( $(compgen -W "${levels}"`
       );
     }
+  });
+
+  // `squirrel pages` (#701)
+  describe("pages", () => {
+    // The arm name collides with `--max-pages)`-style text earlier in the script, so the block
+    // is cut from the command's own arm, not the first `pages)` anywhere.
+    const block =
+      shell === "fish"
+        ? commandBlock(shell, text, "pages")
+        : (() => {
+            const marker =
+              shell === "bash" ? "\n    pages)" : "\n        pages)";
+            const start = text.indexOf(marker);
+            expect(start).toBeGreaterThan(-1);
+            const end =
+              shell === "bash"
+                ? text.indexOf("    crawl)", start)
+                : text.indexOf(";;", start);
+            expect(end).toBeGreaterThan(start);
+            return text.slice(start, end);
+          })();
+
+    test("every citty flag is offered", () => {
+      expect(pagesDef.flags).toContain("too-long");
+      for (const flag of pagesDef.flags) expectOffersFlag(shell, block, flag);
+    });
+
+    test("every offered flag exists on the citty def", () => {
+      const allowed = new Set([...pagesDef.flags, "help"]);
+      for (const offered of longFlagsIn(shell, block)) {
+        expect(allowed).toContain(offered);
+      }
+    });
+
+    test("the format list matches PAGES_FORMATS and the command is listed", () => {
+      const list =
+        shell === "fish"
+          ? block.match(/-l format -x -a "([^"]+)"/)?.[1]?.split(" ")
+          : formatListIn(shell, block);
+      expect(list).toEqual([...PAGES_FORMATS]);
+      expect(text).toContain("pages");
+    });
   });
 
   // credits had NO bash or zsh arm at all before #1604 — `squirrel credits

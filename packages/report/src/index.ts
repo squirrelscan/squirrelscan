@@ -452,3 +452,25 @@ export {
   type LockedRulesMessage,
   type LockedRulesReportShape,
 } from "./locked-rules";
+
+export {
+  PAGE_MAP_COLUMNS,
+  PAGE_MAP_DUPLICATE,
+  PAGE_MAP_FLAG_RULES,
+  PAGE_MAP_MISSING,
+  PAGE_MAP_RULE_IDS,
+  PAGE_MAP_TOO_LONG,
+  filterPageMap,
+  hasPageMapFilters,
+  pageMapMeta,
+  renderPageMapCsv,
+  renderPageMapJson,
+  renderPageMapMarkdown,
+} from "./page-map";
+export type {
+  PageMapDuplicate,
+  PageMapFilters,
+  PageMapMeta,
+  PageMapMissing,
+  PageMapRow,
+} from "./page-map";

@@ -1,0 +1,107 @@
+---
+title: "pages"
+icon: "table"
+description: "List the pages of a stored audit with their titles, descriptions, links and flags"
+---
+
+An issue list only shows the pages that break a rule. The `pages` command lists every page the audit crawled, one row each, so you can read a site's titles and descriptions side by side, spot orphans, or see that every post title ends in the same suffix.
+
+Every column is data the audit already stored: the pages, their extracted features, their links and the rule results. The command fetches nothing, so it is instant and costs no credits.
+
+## Usage
+
+```bash
+squirrel pages [options]
+```
+
+## Options
+
+| Option | Alias | Description | Default |
+|--------|-------|-------------|---------|
+| `--crawl` | | Crawl ID (or 8-character prefix) to read | latest audit |
+| `--format` | `-f` | Output format: `json`, `csv`, `markdown` | console table, or markdown when piped |
+| `--output` | `-o` | Write to a file instead of stdout | - |
+| `--missing` | | Only pages missing `title`, `description`, `h1` or `schema` (repeatable or comma-separated) | all |
+| `--duplicate` | | Only pages the audit flags as a duplicate `title` or `description` (repeatable or comma-separated) | all |
+| `--too-long` | | Only pages with a title over 75 or a description over 160 characters | `false` |
+| `--orphan` | | Only pages the audit flags as orphans | `false` |
+| `--section` | | Only pages under this URL path, for example `/blog` | all |
+| `--page` | | Only pages whose URL contains this text (repeatable) | all |
+
+Filters combine: a page has to match every filter you pass. Within `--missing`, `--duplicate` and `--page`, matching any one value is enough.
+
+```bash
+# Blog posts with no description
+squirrel pages --section /blog --missing description
+
+# Every page as a spreadsheet
+squirrel pages -f csv -o pages.csv
+```
+
+## Columns
+
+| Column | Meaning |
+|--------|---------|
+| `url` | The URL the crawl requested |
+| `finalUrl` | Where it was served from after redirects (the same as `url` when it did not redirect) |
+| `status` | HTTP status |
+| `depth` | Clicks from the start URL |
+| `canonical` | The page's canonical URL, if it declares one |
+| `noindex` | The page asks not to be indexed (meta robots or `X-Robots-Tag`) |
+| `title`, `titleLength` | The `<title>` and its length in characters |
+| `description`, `descriptionLength` | The meta description and its length |
+| `h1Count` | Number of `<h1>` elements |
+| `wordCount` | Words of visible content |
+| `schemaTypes` | schema.org `@type` values declared on the page |
+| `inlinks` | Crawled pages that link here, each counted once |
+| `internalOutlinks` | Links from this page to other pages of the same site |
+| `externalOutlinks`, `externalDomains` | Links to other sites, and the hosts they point at |
+| `loadTimeMs` | Response time of the fetch |
+| `lastModified` | The `Last-Modified` header, if the server sent one |
+| `flags` | What the audit found on the page (below) |
+
+A link to the page itself is neither an in-link nor an out-link. Links come from the pages' stored parse, the same source the orphan and internal-link rules read, so a nofollow link counts here even though the orphan rule does not count it.
+
+## Flags
+
+The `flags` column comes from the audit's own rule results, so the table and the issue list agree.
+
+| Flag | Set when |
+|------|----------|
+| `title` | [`core/meta-title`](/rules/core/meta-title) warned or failed on the page |
+| `description` | [`core/meta-description`](/rules/core/meta-description) warned or failed |
+| `h1` | [`core/h1`](/rules/core/h1) warned or failed |
+| `title-not-unique` | [`core/title-unique`](/rules/core/title-unique) names the page |
+| `duplicate-title` | [`content/duplicate-title`](/rules/content/duplicate-title) names the page |
+| `duplicate-description` | [`content/duplicate-description`](/rules/content/duplicate-description) names the page |
+| `orphan` | [`links/orphan-pages`](/rules/links/orphan-pages) names the page |
+| `canonical` | [`core/canonical`](/rules/core/canonical) warned or failed |
+| `robots` | [`core/robots-meta`](/rules/core/robots-meta) warned or failed |
+| `thin-content` | [`content/word-count`](/rules/content/word-count) warned or failed |
+| `noindex` | The page asks not to be indexed (a fact from the crawl, not a rule) |
+| `no-schema` | The page answered with a success status and declares no schema.org type (also a fact) |
+
+`--duplicate` and `--orphan` select on these flags, so they list exactly the pages the issue list names. A rule that was disabled, or skipped for the audit, sets no flag. `--missing` and `--too-long` read the columns themselves: the title and description limits are the rules' defaults (75 and 160 characters), so a site that changed `max_length` in `squirrel.toml` sees its own limit in the `title` and `description` flags instead.
+
+What the table does not carry: the text of the `<h1>`, heading counts and the JSON-LD `@id` values are not stored per page by the crawl, so they are not columns. Use [`squirrel entities`](/cli/entities) for the declared schema and `@id`s.
+
+## Output formats
+
+With no `--format` you get a console table of the first 50 pages on a terminal, and markdown when the output is piped or goes to a file, so `squirrel pages | ...` is parseable without a flag.
+
+| Format | What you get |
+|--------|--------------|
+| `json` | `{ site, crawlId, startedAt, total, filtered, pages: [...] }`: `total` is every page in the audit, `filtered` is how many matched, `pages` holds the rows with every column |
+| `csv` | One header row and a row per page. List columns (`schemaTypes`, `externalDomains`, `flags`) join with a space. A cell that starts with `=`, `+`, `-` or `@` is prefixed with an apostrophe so a spreadsheet does not run it as a formula |
+| `markdown` | A table of the columns a person scans: URL, status, title and length, description and length, H1 count, words, schema, in and out links, flags |
+
+Titles, descriptions and URLs come from the audited site, so each format escapes them for itself.
+
+## Exit codes
+
+The command exits `0` whenever it has an answer: an audit with no matching pages prints an empty table, and a store with no audit prints how to create one. It exits `1` for a usage mistake (an unknown `--missing`, `--duplicate` or `--format` value) or a project store it cannot read.
+
+## Related
+
+- [`squirrel report`](/cli/report) for the findings, and `--include-pages` for a per-page list inside the JSON report
+- [`squirrel entities`](/cli/entities) for the schema.org graph

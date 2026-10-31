@@ -776,6 +776,7 @@
               "cli/analyze",
               "cli/report",
               "cli/entities",
+              "cli/pages",
               "cli/init",
               "cli/config",
               "cli/feedback",

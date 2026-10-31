@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- **`squirrel pages` lists the pages of a stored audit as a table.** One row per crawled page: URL, final URL, status, depth, canonical, noindex, title and description with their lengths, H1 count, word count, schema types, in-links, internal and external out-links with the external hosts, load time, last modified, and a `flags` column taken from the audit's own rule results so the table and the issue list agree. `-f json|csv|markdown`, and filters that combine: `--missing title|description|h1|schema`, `--duplicate title|description`, `--too-long`, `--orphan`, `--section /blog`, `--page <text>`. Everything is read from what the crawl stored, so it makes no request and costs no credits. (#701)
+
 ## v0.0.148 (2026-10-31)
 
 `[[ignore]]` in `squirrel.toml` waives findings by item or URL without disabling a rule, the technology scan reports the scripts it never read, and the JSON report schema is now 1.4. `integrity/brand-impersonation` and `integrity/fake-auth-overlay` no longer miss the common evasions, a keyword-stuffing plain-div menu shape is covered, and the audit ignore list drops nine entries whose advisories no longer match.

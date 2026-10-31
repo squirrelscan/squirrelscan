@@ -1,9 +1,11 @@
+import { PAGE_MAP_DUPLICATE, PAGE_MAP_MISSING } from "@squirrelscan/report";
 import { FEEDBACK_CATEGORIES } from "@squirrelscan/utils/constants";
 
 import type { Result } from "@/controllers/types";
 
 import { AUDIT_LEVELS } from "@/cli/audit-level";
 import { ENTITY_FORMATS } from "@/cli/commands/entities";
+import { PAGES_FORMATS } from "@/cli/commands/pages";
 import { OUTPUT_FORMATS } from "@/constants";
 import { ok, err, commandError } from "@/controllers/types";
 import { ENTITY_PROBLEMS } from "@/entities/filters";
@@ -12,6 +14,9 @@ import { RULE_CATEGORY_VALUES } from "@/rules/categories";
 const categoryValues = RULE_CATEGORY_VALUES.join(" ");
 const entityFormatValues = ENTITY_FORMATS.join(" ");
 const entityProblemValues = ENTITY_PROBLEMS.join(" ");
+const pagesFormatValues = PAGES_FORMATS.join(" ");
+const pagesMissingValues = PAGE_MAP_MISSING.join(" ");
+const pagesDuplicateValues = PAGE_MAP_DUPLICATE.join(" ");
 const formatValues = OUTPUT_FORMATS.join(" ");
 const feedbackCategoryValues = FEEDBACK_CATEGORIES.join(" ");
 const levelValues = AUDIT_LEVELS.join(" ");
@@ -48,7 +53,7 @@ _squirrel_completions() {
   local global_opts="--config-file -c"
 
   # Top-level commands
-  local commands="setup audit auth crawl credits analyze entities init config report feedback keys mcp channel self skills"
+  local commands="setup audit auth crawl credits analyze entities pages init config report feedback keys mcp channel self skills"
 
   # Auth subcommands
   local auth_commands="login logout status whoami"
@@ -227,6 +232,24 @@ _squirrel_completions() {
       COMPREPLY=( $(compgen -W "--list -l --crawl --type --page --problem --format -f --output -o --input -i --diff --help" -- "\${cur}") )
       return 0
       ;;
+    pages)
+      case "\${prev}" in
+        --format|-f)
+          COMPREPLY=( $(compgen -W "${pagesFormatValues}" -- "\${cur}") )
+          return 0
+          ;;
+        --missing)
+          COMPREPLY=( $(compgen -W "${pagesMissingValues}" -- "\${cur}") )
+          return 0
+          ;;
+        --duplicate)
+          COMPREPLY=( $(compgen -W "${pagesDuplicateValues}" -- "\${cur}") )
+          return 0
+          ;;
+      esac
+      COMPREPLY=( $(compgen -W "--crawl --format -f --output -o --missing --duplicate --too-long --orphan --section --page --help" -- "\${cur}") )
+      return 0
+      ;;
     crawl)
       case "\${prev}" in
         --level|--coverage|-C)
@@ -322,6 +345,7 @@ _squirrel() {
     'crawl:Crawl a website (no analysis)'
     'credits:Show cloud credit balance and pricing'
     'analyze:Run audit rules on stored crawl'
+    'pages:List the pages of a stored audit as a table'
     'init:Initialize squirrel.toml'
     'config:Manage configuration'
     'report:Generate report from audit results'
@@ -585,6 +609,18 @@ _squirrel() {
             '*'{-i,--input}'[Read an exported entity map JSON]:file:_files' \\
             '--diff[Compare two audits]'
           ;;
+        pages)
+          _arguments \\
+            '--crawl[Crawl ID to read]:id' \\
+            '(-f --format)'{-f,--format}'[Output format]:format:(${pagesFormatValues})' \\
+            '(-o --output)'{-o,--output}'[Write to a file instead of stdout]:file:_files' \\
+            '*--missing[Only pages missing a title, description, h1 or schema]:field:(${pagesMissingValues})' \\
+            '*--duplicate[Only pages the audit flags as duplicates]:field:(${pagesDuplicateValues})' \\
+            '--too-long[Only pages with a title over 75 or a description over 160 characters]' \\
+            '--orphan[Only pages the audit flags as orphans]' \\
+            '--section[Only pages under this URL path]:path' \\
+            '*--page[Only pages whose URL contains this text]:text'
+          ;;
         crawl)
           _arguments \\
             '1:url:_urls' \\
@@ -671,6 +707,7 @@ complete -c squirrel -n "__fish_use_subcommand" -a auth -d "Authentication comma
 complete -c squirrel -n "__fish_use_subcommand" -a crawl -d "Crawl a website (no analysis)"
 complete -c squirrel -n "__fish_use_subcommand" -a credits -d "Show cloud credit balance and pricing"
 complete -c squirrel -n "__fish_use_subcommand" -a analyze -d "Run audit rules on stored crawl"
+complete -c squirrel -n "__fish_use_subcommand" -a pages -d "List the pages of a stored audit as a table"
 complete -c squirrel -n "__fish_use_subcommand" -a init -d "Initialize squirrel.toml"
 complete -c squirrel -n "__fish_use_subcommand" -a config -d "Manage configuration"
 complete -c squirrel -n "__fish_use_subcommand" -a report -d "Generate report from audit results"
@@ -853,6 +890,17 @@ complete -c squirrel -n "__fish_seen_subcommand_from entities" -s f -l format -x
 complete -c squirrel -n "__fish_seen_subcommand_from entities" -s o -l output -d "Write to a file instead of stdout"
 complete -c squirrel -n "__fish_seen_subcommand_from entities" -s i -l input -d "Read an exported entity map JSON"
 complete -c squirrel -n "__fish_seen_subcommand_from entities" -l diff -d "Compare two audits"
+
+# Pages options
+complete -c squirrel -n "__fish_seen_subcommand_from pages" -l crawl -d "Crawl ID to read"
+complete -c squirrel -n "__fish_seen_subcommand_from pages" -s f -l format -x -a "${pagesFormatValues}" -d "Output format"
+complete -c squirrel -n "__fish_seen_subcommand_from pages" -s o -l output -d "Write to a file instead of stdout"
+complete -c squirrel -n "__fish_seen_subcommand_from pages" -l missing -x -a "${pagesMissingValues}" -d "Only pages missing a title, description, h1 or schema"
+complete -c squirrel -n "__fish_seen_subcommand_from pages" -l duplicate -x -a "${pagesDuplicateValues}" -d "Only pages the audit flags as duplicates"
+complete -c squirrel -n "__fish_seen_subcommand_from pages" -l too-long -d "Only pages with a title over 75 or a description over 160 characters"
+complete -c squirrel -n "__fish_seen_subcommand_from pages" -l orphan -d "Only pages the audit flags as orphans"
+complete -c squirrel -n "__fish_seen_subcommand_from pages" -l section -d "Only pages under this URL path"
+complete -c squirrel -n "__fish_seen_subcommand_from pages" -l page -d "Only pages whose URL contains this text"
 
 # Credits options
 complete -c squirrel -n "__fish_seen_subcommand_from credits" -l json -d "Output as JSON"
