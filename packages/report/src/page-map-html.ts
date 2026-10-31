@@ -4,7 +4,7 @@
 // `textContent`.
 
 import { escapeEntityJsonForScript } from "./entities-viewer";
-import type { PageMapMeta, PageMapRow } from "./page-map";
+import { cleanText, type PageMapMeta, type PageMapRow } from "./page-map";
 
 /** Rows inlined in the page: a browser parses all of it before drawing, so the file is bounded. */
 export const PAGE_MAP_HTML_ROW_CAP = 5_000;
@@ -123,19 +123,21 @@ export function renderPageMapHtml(rows: readonly PageMapRow[], meta: PageMapMeta
     JSON.stringify({
       total: meta.total,
       rows: shown.map((row) => ({
-        url: row.url,
+        // Cleaned: the viewer shows these as text, and a bidi override or an escape in a URL or
+        // title would reorder or smuggle what a reader sees.
+        url: cleanText(row.url),
         status: row.status,
-        title: row.title,
+        title: row.title === null ? null : cleanText(row.title),
         titleLength: row.titleLength,
-        description: row.description,
+        description: row.description === null ? null : cleanText(row.description),
         descriptionLength: row.descriptionLength,
         h1Count: row.h1Count,
         wordCount: row.wordCount,
-        schemaTypes: row.schemaTypes,
+        schemaTypes: row.schemaTypes.map(cleanText),
         inlinks: row.inlinks,
         internalOutlinks: row.internalOutlinks,
         externalOutlinks: row.externalOutlinks,
-        flags: row.flags,
+        flags: row.flags.map(cleanText),
       })),
     }),
   );
@@ -149,13 +151,13 @@ export function renderPageMapHtml(rows: readonly PageMapRow[], meta: PageMapMeta
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<title>${escapeHtml(`Page map: ${meta.site}`)}</title>
+<title>${escapeHtml(`Page map: ${cleanText(meta.site)}`)}</title>
 <style>${STYLES}</style>
 </head>
 <body>
 <div class="pm-wrap">
   <h1>Page map</h1>
-  <p class="pm-sub">${escapeHtml(meta.site)} &middot; audit ${escapeHtml(meta.crawlId.slice(0, 8))}</p>
+  <p class="pm-sub">${escapeHtml(cleanText(meta.site))} &middot; audit ${escapeHtml(cleanText(meta.crawlId.slice(0, 8)))}</p>
   <div class="pm-controls">
     <input id="pm-q" type="search" placeholder="Filter by URL, title, description or flag" aria-label="Filter pages">
     <select id="pm-flag" aria-label="Filter by flag"><option value="">Any flag</option></select>
