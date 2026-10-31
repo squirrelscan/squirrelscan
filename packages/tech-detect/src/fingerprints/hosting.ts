@@ -2,6 +2,21 @@ import type { TechFingerprint } from "../types";
 
 export const HOSTING_FINGERPRINTS: TechFingerprint[] = [
   {
+    // Curated, not generated: the generated pattern matched `.web.app` anywhere in the page HTML, so a Shopify
+    // store that loads a third-party app's script from `*.web.app` read as hosted on Firebase (#1448). The
+    // host is the page's own, and the other signal is Firebase Hosting's own `Vary` entry.
+    id: "firebase-hosting",
+    name: "Firebase Hosting",
+    category: "hosting",
+    website: "https://firebase.google.com/products/hosting",
+    icon: "firebase-hosting",
+    detectors: [
+      { type: "header", name: "Vary", pattern: /x-fh-requested-host/i },
+      { type: "url-host", pattern: /(?:^|\.)(?:web\.app|firebaseapp\.com)\.?$/i },
+    ],
+    confidence: "high",
+  },
+  {
     id: "vercel",
     name: "Vercel",
     category: "hosting",

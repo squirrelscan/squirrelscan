@@ -47,7 +47,10 @@ export type Detector =
   // pattern runs, a cheap gate for patterns that scan a bounded window per tag.
   | { type: "html"; pattern: RegExp; requires?: string }
   | { type: "dom"; selector: string }
-  | { type: "url-path"; pattern: RegExp };
+  | { type: "url-path"; pattern: RegExp }
+  // Matches the audited page's own host name only, never its HTML: a third-party app a page loads
+  // (a script on `*.web.app`) says nothing about where the page itself is hosted.
+  | { type: "url-host"; pattern: RegExp };
 
 export interface TechFingerprint {
   id: string;
