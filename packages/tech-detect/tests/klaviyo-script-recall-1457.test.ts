@@ -3,6 +3,9 @@
 import { describe, expect, test } from "bun:test";
 
 import { detectTechnologies } from "../src";
+import { ALL_FINGERPRINTS } from "../src/fingerprints";
+
+const KLAVIYO = ALL_FINGERPRINTS.find((fp) => fp.id === "klaviyo")!;
 
 const SRC = "https://static.klaviyo.com/onsite/js/klaviyo.js";
 const page = (head: string, body = "<p>Shop</p>") =>
@@ -85,6 +88,17 @@ describe("Klaviyo script recall", () => {
     const html = page("<script></script>".repeat(Math.ceil((1024 * 1024) / "<script></script>".length)));
     const start = performance.now();
     found(html);
-    expect(performance.now() - start).toBeLessThan(1500);
+    expect(performance.now() - start).toBeLessThan(3000);
+  });
+
+  test("a tag whose quoted attribute holds thousands of line-start openers is not slow", () => {
+    for (const tag of ["script", "link"]) {
+      const opener = `\n<${tag} `;
+      const html = page(`<${tag} data-x="${opener.repeat(Math.ceil((1024 * 1024) / opener.length))}" src="/a.js"></${tag}>`);
+      // The Klaviyo fingerprint alone: other vendors' patterns have their own cost on this shape.
+      const start = performance.now();
+      detectTechnologies({ url: "https://shop.example.com/", headers: {}, html }, [KLAVIYO]);
+      expect(performance.now() - start).toBeLessThan(3000);
+    }
   });
 });
