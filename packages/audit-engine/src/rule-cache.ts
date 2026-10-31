@@ -466,6 +466,9 @@ export async function computePageCacheKey(
     page.securityHeaders,
     page.redirectChain ?? null,
     page.fetcherId ?? null,
+    // What the browser render saw (#425): security/csp-violations reads it, so a page whose events changed
+    // must not replay the old verdict.
+    page.browserEvents ?? null,
     soft404Confirmation ?? null,
   ]);
   return sha256Hex(canonical);

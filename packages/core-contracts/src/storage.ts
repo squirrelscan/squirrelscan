@@ -1,6 +1,7 @@
 // Canonical storage types — crawl records, interfaces, and contracts
 // All storage adapters (SQLite, D1, R2, filesystem) implement these interfaces.
 
+import type { BrowserEvents } from "./browser-events";
 import type { Effect } from "effect";
 
 import type { AuditFailureDetail } from "./failure-reason";
@@ -524,6 +525,13 @@ export interface PageRecord {
    */
   fetcherId?: string;
   fallbackReason?: string;
+
+  /**
+   * What the browser saw during a rendered crawl beyond the HTML (#425): CSP violations, failed requests,
+   * page errors. Present only on a page a render service served that reported them; absent on every other
+   * page and on records written before #425.
+   */
+  browserEvents?: BrowserEvents | null;
 
   /**
    * sha256 of the NORMALIZED raw source (Cloudflare challenge-platform injection

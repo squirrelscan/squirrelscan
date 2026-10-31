@@ -2122,6 +2122,8 @@ export function createCrawler(
             // Normalized-source hash from the render-all gate's probe, when it
             // rendered — persisted so the next re-run can reuse this render (#839).
             sourceHash: result.sourceHash,
+            // What the browser render saw beyond the HTML (#425).
+            ...(result.browserEvents ? { browserEvents: result.browserEvents } : {}),
           };
 
           yield* storage.upsertPage(crawlId, pageRecord);

@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- **`security/csp-violations` reports Content-Security-Policy violations the browser saw on a rendered page.** Violations are grouped by directive and blocked host; a blocked known vendor script (analytics, ads, chat) fails, anything else warns, and report-only violations are counted but not reported. Pages fetched without a browser skip with a reason. The contract carries bounded, sanitised browser events (`browserEvents`) and the page store gains a `browser_events` column (schema 41); the renderer-side collection ships separately. (#425)
+
 ## v0.0.155 (2026-11-01)
 
 Technology detection recognises fewer look-alikes and more real loaders: a Clerk key must decode to a Clerk host (a Stripe publishable key is no longer Clerk), a Next.js script component's bare loader is read, a config past many look-alike strings in a bundle is found, and surge, railway, amplify and ActiveCampaign Pages hosting is read from the page's own host. `[[ignore]]` entries take element `selectors`, and `--max-duration` judges a gzip page by its decoded size, so a small compressed page can no longer force a long parse. Thanks to William for the Clerk key validation (#1481, #1482).

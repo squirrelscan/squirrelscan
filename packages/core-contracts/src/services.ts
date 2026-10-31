@@ -2,6 +2,7 @@
 // LLM-backed enrichment services (CLI -> API). Dep-free plain TypeScript
 // (type-only imports below are erased at compile time).
 
+import type { BrowserEvents } from "./browser-events";
 import type {
   DomainStatsMetrics,
   EditorSummaryPriority,
@@ -618,6 +619,12 @@ export interface RenderResultItem {
   renderTimeMs?: number;
   /** Queue delivery lag + browser-pool acquisition + concurrency-slot wait before rendering started. Absent on a render-cache hit (#826). */
   queueWaitMs?: number;
+  /**
+   * What the browser saw beyond the HTML: CSP violations, failed requests and page errors, collected through
+   * a short window after `load` (#425). Untrusted (the page chose it): read with `readBrowserEvents`.
+   * Absent on an older render service and on a render-cache hit that predates it.
+   */
+  browserEvents?: BrowserEvents;
 }
 
 export interface RenderResultResponse {
