@@ -25,8 +25,8 @@ const DECLARED_FIRST_WINDOWS = 2;
 const MAX_HIT_SCANS_PER_HINT = 512;
 /** Matches of an `inCode` pattern one window is walked through looking for one that starts in code (the matcher's own bound is 64 over a whole script). */
 const MAX_QUALIFY_CANDIDATES = 64;
-/** Chars a segment may carry in front of its text to reopen a long string or comment it is cut inside (see `cutAt`). */
-const OPENER_SLACK = 2;
+/** Chars a segment may carry beyond its text: an opener of up to 2 characters, and one character backed up so a cut never splits an escape (see `cutAt`). */
+const OPENER_SLACK = 3;
 /** A string longer than this past a window's end is cut before it, not carried to its close. */
 const MAX_STRING_CARRY = 512;
 /** Longest body the scan classifies: past the largest `[tech_detect] bundle_bytes`, so every body a caller can hand over fits. */
@@ -166,7 +166,13 @@ export function sampleBundleExtras(content: string, headChars: number, maxChars:
     const span = spanAt(p);
     if (!span) return { pos: p, opener: "" };
     if (span.close + 1 - p <= MAX_STRING_CARRY) return { pos: span.close + 1, opener: "" };
-    return { pos: p, opener: openerOf(span.open) };
+    const opener = openerOf(span.open);
+    // a regex literal cannot be reopened mid-way (a `/` inside a class): skip past it as before
+    if (opener === "/") return { pos: span.close + 1, opener: "" };
+    // never cut between a backslash and the character it escapes: that character would read unescaped
+    let slashes = 0;
+    while (p - 1 - slashes > span.open && content.charAt(p - 1 - slashes) === "\\") slashes++;
+    return { pos: slashes % 2 === 1 ? p - 1 : p, opener };
   };
   /** The end of a window cut at `p`: past a short string it ends in, as is inside a long one (the separator ends it). */
   const endAt = (p: number): number => {
@@ -239,6 +245,12 @@ export function sampleBundleExtras(content: string, headChars: number, maxChars:
           span.close - span.open <= MAX_STRING_CARRY
             ? { pos: span.open, opener: "" }
             : { pos: from160, opener: openerOf(span.open) };
+        if (cut.opener === "/") continue;
+        if (cut.opener) {
+          let k = 0;
+          while (cut.pos - 1 - k > span.open && content.charAt(cut.pos - 1 - k) === "\\") k++;
+          if (k % 2 === 1) cut = { pos: cut.pos - 1, opener: cut.opener };
+        }
       }
       const start = cut.pos;
       const end = endAt(Math.min(limit, at + spec.text.length + WINDOW_AFTER));

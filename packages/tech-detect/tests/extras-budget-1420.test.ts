@@ -5,7 +5,7 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { bundleHints, detectTechnologies, sampleBundleExtras } from "../src";
+import { bundleHints, detectTechnologies, SEGMENT_SEPARATOR, sampleBundleExtras } from "../src";
 import { ALL_FINGERPRINTS } from "../src/fingerprints";
 import { deriveHints } from "../src/hint-derive";
 
@@ -31,7 +31,7 @@ function crowd(count: number): string {
 }
 
 function detect(content: string, extras = true): string[] {
-  const body = extras ? `${content.slice(0, HEAD)}\n\\0\n${sampleBundleExtras(content, HEAD, EXTRAS)}` : content;
+  const body = extras ? `${content.slice(0, HEAD)}${SEGMENT_SEPARATOR}${sampleBundleExtras(content, HEAD, EXTRAS)}` : content;
   return detectTechnologies(
     { url: "https://example.com/", headers: {}, html: "<html></html>", scripts: [{ url: "https://example.com/a.js", content: body }] },
     undefined,
@@ -311,6 +311,48 @@ describe("a loader the string tracker loses is still sent (#1433 corpus)", () =>
     // The whole body reads the call as text inside a string; so must the sampled one.
     expect(detect(content)).not.toContain("supabase");
     expect(detect(content, false)).not.toContain("supabase");
+  });
+});
+
+// Review of #1433 (6ff784ed): the characters put in front of a cut inside a long span must not let
+// quoted text read as code. Firebase, Supabase and Clerk are matched in code only, so a fake config
+// inside a string or regex is the probe. The cut of a window is `hit - 160`, so a body controls it.
+describe("a cut inside a long string or regex never turns its text into code (#1433 review)", () => {
+  const FAKE = `{authDomain:"x.firebaseapp.com",storageBucket:"x.appspot.com"}`;
+  /** `lead` + `between` padded to exactly 160 chars + the hint: the window cut falls on the first char of `between`. */
+  const aligned = (lead: string, between: string, hint: string): string =>
+    `${lead}${(between + "z".repeat(160)).slice(0, 160)}${hint}`;
+  const lone = (q: string): string => `${filler(HEAD + 200).replaceAll("\n", "")}var s=${q}${"a".repeat(1_500)}`;
+
+  for (const q of ["'", "`"]) {
+    test(`an escaped ${q} at the cut stays escaped`, () => {
+      // An odd run of backslashes escapes the quote (an even run would close the string for real).
+      for (const backslashes of [1, 3]) {
+        const body = aligned(`${lone(q)}${"\\".repeat(backslashes)}`, `${q}${FAKE}`, "Stripe(");
+        const content = `${body}"${q};\n${filler(60_000)}`;
+        const extras = sampleBundleExtras(content, HEAD, EXTRAS);
+        expect(extras).toContain("Stripe(");
+        expect(detect(content)).not.toContain("firebase");
+        expect(detect(content, false)).not.toContain("firebase");
+      }
+    });
+  }
+
+  test("a `/` inside the class of a long regex does not end a reopened regex early", () => {
+    const lead = `${filler(HEAD + 200).replaceAll("\n", "")}var r=/[${"a".repeat(1_500)}`;
+    const body = aligned(lead, `x/${FAKE}`, "Stripe(");
+    const content = `${body}]/;\n${filler(60_000)}`;
+    expect(detect(content)).not.toContain("firebase");
+    expect(detect(content, false)).not.toContain("firebase");
+  });
+
+  test("a loader between the last window and the tail is kept (the tail is merged with the windows)", () => {
+    // adobe-analytics has no search literal, so only the tail can send it; the one window is near the end.
+    const content = `${filler(40_000)}\nvar a=b(x.2o7.net);\n${filler(15_000)}\nStripe("pk_test_x");\n${filler(800)}`;
+    const extras = sampleBundleExtras(content, HEAD, EXTRAS);
+    expect(extras).toContain("2o7.net");
+    expect(extras).toContain("Stripe(");
+    expect(detect(content)).toContain("adobe-analytics");
   });
 });
 
