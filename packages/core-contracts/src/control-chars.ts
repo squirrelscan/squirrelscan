@@ -89,21 +89,51 @@ const UNSAFE_LINE_TEXT = new RegExp(
 
 /**
  * Characters that draw nothing, so a value can carry text a reader cannot see: the zero-width
- * space, the word joiner and the invisible math operators, the BOM, the soft hyphen, the Mongolian
- * vowel separator, and the Unicode tag block (invisible ASCII, used to smuggle instructions to a
- * model). They are removed, not replaced by a space, so a word they sat inside stays one word.
- * The zero-width joiner and non-joiner stay: scripts such as Persian and Devanagari need them.
+ * space, the word joiner, the deprecated formatting characters and the invisible math operators,
+ * the BOM, the soft hyphen, the combining grapheme joiner, the Hangul and Khmer fillers, the
+ * Mongolian free variation selectors and vowel separator, the interlinear annotation marks, the
+ * musical formatting characters, the Unicode tag block (invisible ASCII, used to smuggle
+ * instructions to a model) and the supplementary variation selectors (the same trick, one byte
+ * per selector). They are removed, not replaced by a space, so a word they sat inside stays one
+ * word. The zero-width joiner and non-joiner and the basic variation selectors (`U+FE00` to
+ * `U+FE0F`, which make an emoji an emoji) stay: scripts and emoji need them.
  */
-const INVISIBLE_TEXT = new RegExp(
-  "[\\u00ad\\u180e\\u200b\\u2060-\\u2064\\ufeff\\u{e0000}-\\u{e007f}]",
-  "gu",
-);
+const INVISIBLE_SOURCE =
+  "[\\u00ad\\u034f\\u115f\\u1160\\u17b4\\u17b5\\u180b-\\u180f\\u200b\\u2060-\\u2064\\u206a-\\u206f\\u3164\\ufeff\\uffa0\\ufff9-\\ufffb\\u{1d173}-\\u{1d17a}\\u{e0000}-\\u{e007f}\\u{e0100}-\\u{e01ef}]";
+const INVISIBLE_TEXT = new RegExp(INVISIBLE_SOURCE, "gu");
 
 /**
  * `text` as one safe line: each unsafe character becomes `replacement` (a space by default, so
  * words a newline separated stay apart). Unlike {@link stripControlChars} it also removes C1
  * controls and bidirectional overrides, and it removes newlines and tabs too.
+ *
+ * Every character is judged on its own, in one pass per class, never by matching an escape
+ * sequence: an input that nests or splits one (`ESC ESC [`, an ESC with an invisible character
+ * between it and `[`) cannot leave an ESC or a C1 control behind, because each of those characters
+ * is removed wherever it stands. What is left of an escape is plain text (`[2J`), which a
+ * terminal prints and does not run.
  */
 export function stripUnsafeLineText(text: string, replacement = " "): string {
   return text.replace(INVISIBLE_TEXT, "").replace(UNSAFE_LINE_TEXT, replacement);
+}
+
+/** Every character {@link stripUnsafeLineText} acts on, plus the joiners it leaves: what JSON output escapes. */
+const JSON_UNSAFE = new RegExp(
+  `${INVISIBLE_SOURCE.slice(0, -1)}\\u007f-\\u009f\\u061c\\u200c-\\u200f\\u2028-\\u202e\\u2066-\\u2069]`,
+  "gu",
+);
+
+/**
+ * JSON text with every character `JSON.stringify` leaves raw but a terminal or a reader treats
+ * specially written as a `\\uXXXX` escape (a surrogate pair for the tag block and the variation
+ * selector supplement). Lossless: it is the same JSON value, and safe to print to a terminal.
+ */
+export function escapeJsonUnsafe(json: string): string {
+  return json.replace(JSON_UNSAFE, (ch) => {
+    const code = ch.codePointAt(0) ?? 0;
+    const unit = (n: number) => `\\u${n.toString(16).padStart(4, "0")}`;
+    if (code <= 0xffff) return unit(code);
+    const offset = code - 0x10000;
+    return unit(0xd800 + (offset >> 10)) + unit(0xdc00 + (offset & 0x3ff));
+  });
 }

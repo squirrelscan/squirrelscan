@@ -6,9 +6,11 @@
 // building it costs no request and no credit. The `flags` column comes from the audit's own
 // rule results, so the table and the issue list agree.
 
-import { stripUnsafeLineText } from "@squirrelscan/core-contracts/control-chars";
+import { escapeJsonUnsafe, stripUnsafeLineText } from "@squirrelscan/core-contracts/control-chars";
 
 import { csvRow } from "./entities-export";
+
+export { escapeJsonUnsafe };
 import { escapeMarkdownCell, escapeMarkdownText, markdownCodeSpan } from "./output/markdown-escape";
 
 /** One crawled page. Every field is data the crawl stored; nothing here reads the page again. */
@@ -243,20 +245,6 @@ export interface PageMapMeta {
 export function pageMapMeta(crawl: { id: string; baseUrl: string; startedAt: number }, total: number): PageMapMeta {
   return { site: crawl.baseUrl, crawlId: crawl.id, startedAt: crawl.startedAt, total };
 }
-
-/**
- * `JSON.stringify` output with every character it leaves raw but a terminal or a reader treats
- * specially written as a `\\uXXXX` escape: DEL, the C1 controls (`U+009B` is an 8-bit CSI), the
- * bidirectional overrides and isolates, and the line and paragraph separators. Lossless: it is
- * the same JSON value.
- */
-export function escapeJsonUnsafe(json: string): string {
-  return json.replace(JSON_UNSAFE, (ch) => `\\u${ch.charCodeAt(0).toString(16).padStart(4, "0")}`);
-}
-const JSON_UNSAFE = new RegExp(
-  "[\\u007f-\\u009f\\u061c\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2069\\u00ad\\ufeff]",
-  "g",
-);
 
 export function renderPageMapJson(rows: readonly PageMapRow[], meta: PageMapMeta): string {
   return `${escapeJsonUnsafe(JSON.stringify(
