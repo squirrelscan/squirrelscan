@@ -27,13 +27,85 @@ const INVISIBLE = /\p{Default_Ignorable_Code_Point}/gu;
  */
 const CONFUSABLES: Readonly<Record<string, string>> = Object.fromEntries([
   // Cyrillic
-  ...Object.entries({ а: "a", е: "e", о: "o", р: "p", с: "c", у: "y", х: "x", і: "i", ј: "j", ѕ: "s", ԁ: "d", һ: "h", ԛ: "q", ԝ: "w", ӏ: "l", ѵ: "v", ѡ: "w", ԍ: "g", к: "k", т: "t", н: "h", м: "m", ү: "y", ь: "b", в: "b" }),
+  ...Object.entries({
+    а: "a",
+    е: "e",
+    о: "o",
+    р: "p",
+    с: "c",
+    у: "y",
+    х: "x",
+    і: "i",
+    ј: "j",
+    ѕ: "s",
+    ԁ: "d",
+    һ: "h",
+    ԛ: "q",
+    ԝ: "w",
+    ӏ: "l",
+    ѵ: "v",
+    ѡ: "w",
+    ԍ: "g",
+    к: "k",
+    т: "t",
+    н: "h",
+    м: "m",
+    ү: "y",
+    ь: "b",
+    в: "b",
+  }),
   // Greek
-  ...Object.entries({ ο: "o", α: "a", ι: "i", ν: "v", ρ: "p", υ: "u", χ: "x", ε: "e", κ: "k", τ: "t", β: "b", η: "n", ω: "w", μ: "u", γ: "y" }),
+  ...Object.entries({
+    ο: "o",
+    α: "a",
+    ι: "i",
+    ν: "v",
+    ρ: "p",
+    υ: "u",
+    χ: "x",
+    ε: "e",
+    κ: "k",
+    τ: "t",
+    β: "b",
+    η: "n",
+    ω: "w",
+    μ: "u",
+    γ: "y",
+  }),
   // Armenian
   ...Object.entries({ օ: "o", ս: "u", ո: "n", հ: "h", ց: "g", ք: "p", ա: "a" }),
   // Latin look-alikes and small capitals
-  ...Object.entries({ ɡ: "g", ı: "i", ɑ: "a", ᴀ: "a", ʙ: "b", ᴄ: "c", ᴅ: "d", ᴇ: "e", ꜰ: "f", ɢ: "g", ʜ: "h", ɪ: "i", ᴊ: "j", ᴋ: "k", ʟ: "l", ᴍ: "m", ɴ: "n", ᴏ: "o", ᴘ: "p", ʀ: "r", ꜱ: "s", ᴛ: "t", ᴜ: "u", ᴠ: "v", ᴡ: "w", ʏ: "y", ᴢ: "z", ǝ: "e", ȷ: "j" }),
+  ...Object.entries({
+    ɡ: "g",
+    ı: "i",
+    ɑ: "a",
+    ᴀ: "a",
+    ʙ: "b",
+    ᴄ: "c",
+    ᴅ: "d",
+    ᴇ: "e",
+    ꜰ: "f",
+    ɢ: "g",
+    ʜ: "h",
+    ɪ: "i",
+    ᴊ: "j",
+    ᴋ: "k",
+    ʟ: "l",
+    ᴍ: "m",
+    ɴ: "n",
+    ᴏ: "o",
+    ᴘ: "p",
+    ʀ: "r",
+    ꜱ: "s",
+    ᴛ: "t",
+    ᴜ: "u",
+    ᴠ: "v",
+    ᴡ: "w",
+    ʏ: "y",
+    ᴢ: "z",
+    ǝ: "e",
+    ȷ: "j",
+  }),
 ]);
 const CONFUSABLE_RUN = new RegExp(`[${Object.keys(CONFUSABLES).join("")}]`, "g");
 
@@ -88,6 +160,19 @@ export interface ControlScan {
 const ATTR_CHARS = 300;
 /** An attribute is normalised (padding removed) over this many characters before it is cut to {@link ATTR_CHARS}. */
 const ATTR_RAW_CHARS = 16_000;
+const ATTR_HEAD_CHARS = Math.ceil((ATTR_CHARS - 1) / 2);
+const ATTR_TAIL_CHARS = ATTR_CHARS - ATTR_HEAD_CHARS - 1;
+
+/** Keep both edges of a bounded attribute; a cue hidden in the omitted middle is reported through `cut`. */
+function boundedAttribute(text: string): { text: string; cut: boolean } {
+  const normalised = readable(text.slice(0, ATTR_RAW_CHARS)).trim();
+  const cut = text.length > ATTR_RAW_CHARS || normalised.length > ATTR_CHARS;
+  if (normalised.length <= ATTR_CHARS) return { text: normalised, cut };
+  return {
+    text: `${normalised.slice(0, ATTR_HEAD_CHARS)} ${normalised.slice(-ATTR_TAIL_CHARS)}`,
+    cut,
+  };
+}
 /**
  * One control's read: at most `SHORT_VISITS` nodes looked at (text or not) and `SHORT_CHARS` characters kept.
  * That is a ceiling, not an entitlement: see {@link TOTAL_VISITS}.
@@ -172,7 +257,11 @@ function readChunks(
           getAttrCI(child, "hidden") !== null ||
           getAttrCI(child, "aria-hidden")?.toLowerCase() === "true" ||
           (style !== null && HIDDEN_STYLE.test(style)) ||
-          (cls !== null && cls.toLowerCase().split(/\s+/).some((c) => hiddenBy.classes.has(c))) ||
+          (cls !== null &&
+            cls
+              .toLowerCase()
+              .split(/\s+/)
+              .some((c) => hiddenBy.classes.has(c))) ||
           (id !== null && hiddenBy.ids.has(id.toLowerCase()));
       }
       push(child, nowHidden);
@@ -211,7 +300,8 @@ function rank(tag: string, href: string | null, extra: string[]): number {
   if (href === null) return 0;
   if (extra.some((text) => AUTH_CUE.test(readable(text.slice(0, ATTR_CHARS))))) return 3;
   if (tag !== "a") return 2;
-  if (href && (/^(?:[a-z][a-z0-9+.-]*:)?\/\//i.test(href) || AUTH_PATH.test(href.slice(0, 300)))) return 2;
+  if (href && (/^(?:[a-z][a-z0-9+.-]*:)?\/\//i.test(href) || AUTH_PATH.test(href.slice(0, 300))))
+    return 2;
   return 1;
 }
 
@@ -351,7 +441,7 @@ export function scanControls(doc: Document): ControlScan {
     const control = controlAbove(img.parentElement);
     if (control) {
       const list = imageAlts.get(control) ?? [];
-      list.push(alt.slice(0, ATTR_CHARS));
+      list.push(alt);
       imageAlts.set(control, list);
     }
   }
@@ -405,8 +495,11 @@ export function scanControls(doc: Document): ControlScan {
   let paddedAttributes = 0;
   const prepared = chosen.map(({ element, href }) => {
     const tag = element.tagName.toLowerCase();
-    const referenced = (getAttrCI(element, "aria-labelledby") ?? "").slice(0, ATTR_RAW_CHARS).split(/\s+/).filter(Boolean);
-    if (referenced.length > MAX_LABELLEDBY) paddedAttributes++;
+    const referenced = (getAttrCI(element, "aria-labelledby") ?? "")
+      .slice(0, ATTR_RAW_CHARS)
+      .split(/\s+/)
+      .filter(Boolean);
+    let attributeCut = referenced.length > MAX_LABELLEDBY;
     const labelled = referenced
       .slice(0, MAX_LABELLEDBY)
       .map((id) => byId(id))
@@ -422,11 +515,13 @@ export function scanControls(doc: Document): ControlScan {
     ]
       .filter((v): v is string => typeof v === "string" && v !== "")
       .map((v) => {
-        // Padding (spaces, zero-width characters) is dropped BEFORE the cut; a value too long even for that is counted.
-        if (v.length > ATTR_RAW_CHARS) paddedAttributes++;
-        return readable(v.slice(0, ATTR_RAW_CHARS)).trim().slice(0, ATTR_CHARS);
+        // Padding (spaces, zero-width characters) is dropped before both edges are kept.
+        const bounded = boundedAttribute(v);
+        attributeCut ||= bounded.cut;
+        return bounded.text;
       })
       .filter((v) => v !== "");
+    if (attributeCut) paddedAttributes++;
     return { element, href, extra, rank: rank(tag, href, extra) };
   });
 
@@ -436,13 +531,18 @@ export function scanControls(doc: Document): ControlScan {
     .map((_, i) => i)
     .filter((i) => prepared[i]!.rank > 0)
     .sort((a, b) => prepared[b]!.rank - prepared[a]!.rank || a - b);
-  const reads: Array<ReturnType<typeof readChunks> | undefined> = Array.from({ length: prepared.length });
+  const reads: Array<ReturnType<typeof readChunks> | undefined> = Array.from({
+    length: prepared.length,
+  });
   let spend = TOTAL_VISITS;
   let longBudget = LONG_BUDGET_VISITS;
   let unread = notPrepared + paddedAttributes;
   for (const [position, i] of order.entries()) {
     const item = prepared[i]!;
-    const allowance = Math.min(SHORT_VISITS, Math.max(MIN_ALLOWANCE, Math.floor(spend / (order.length - position))));
+    const allowance = Math.min(
+      SHORT_VISITS,
+      Math.max(MIN_ALLOWANCE, Math.floor(spend / (order.length - position))),
+    );
     let read = readChunks(item.element, allowance, SHORT_CHARS, hiddenBy);
     spend -= read.visits;
     if (read.cut && longBudget > 0 && item.rank >= 2) {
