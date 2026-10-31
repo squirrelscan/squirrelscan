@@ -1,6 +1,7 @@
 # Dependency Audit Allowlist
 
-Every `--ignore` in the `audit:dependencies` script in `package.json` is an exception, and an
+Every `--ignore` in the `audit:dependencies` script in `package.json` is an exception (the two
+ignores for `GHSA-gcqx-w48m-w2h4` and `GHSA-wx4j-mvgx-mqwp` have no section below), and an
 exception stays only while its advisory still matches the lockfile. When a dependency change makes an
 advisory stop matching (check with `bun audit` after removing the ignore, on the bun version in
 `packageManager`), drop the ignore and its section here in the same change, so the list does not
