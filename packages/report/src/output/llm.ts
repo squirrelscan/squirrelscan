@@ -525,7 +525,7 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
     for (const t of tech.items) {
       const ver = t.version ? ` version="${escapeXml(t.version)}"` : "";
       lines.push(
-        `${indent(1)}<tech name="${escapeXml(t.name)}" cat="${escapeXml(t.category)}"${ver}/>`,
+        `${indent(1)}<tech name="${escapeXml(t.name)}" cat="${escapeXml(t.category)}"${ver}${t.origin ? ` origin="${t.origin}"` : ""}/>`,
       );
     }
     lines.push("</technologies>");

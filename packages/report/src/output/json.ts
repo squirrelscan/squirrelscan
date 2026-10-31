@@ -445,6 +445,8 @@ interface SlimJsonReport {
   technologies?: {
     /** `local` (free signature scan of the crawled pages) or `cloud` (credited scan with history). */
     source?: "local" | "cloud";
+    /** Present when a byte cap or the time budget cut the local scan short (#1387): fewer technologies than the site runs may be listed. */
+    truncated?: { reasons: string[]; scripts: number };
     firstScan: boolean;
     added: string[];
     removed: string[];
@@ -456,6 +458,8 @@ interface SlimJsonReport {
       confidence: string;
       website?: string;
       logoUrl: string | null;
+      /** `local`: found only by the local whole-bundle scan of a signed-in audit, with no scan diff (#1406). */
+      origin?: "local";
     }>;
   };
   // Report-only — never part of the score. Present when the cloud site-metadata
@@ -802,6 +806,7 @@ function buildSlimReport(
       ? {
           technologies: {
             ...(report.technologies.source ? { source: report.technologies.source } : {}),
+            ...(report.technologies.truncated ? { truncated: report.technologies.truncated } : {}),
             firstScan: report.technologies.firstScan,
             added: report.technologies.added,
             removed: report.technologies.removed,
@@ -812,6 +817,7 @@ function buildSlimReport(
               version: t.version,
               confidence: t.confidence,
               ...(t.website ? { website: t.website } : {}),
+              ...(t.origin ? { origin: t.origin } : {}),
               logoUrl: techIconUrl(t.icon),
             })),
           },

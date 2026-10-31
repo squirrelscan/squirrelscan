@@ -3,6 +3,7 @@
 // TOML loading and file discovery are NOT here — those are CLI adapters.
 
 import { AUDIT_LEVELS, parseAuditLevel } from "@squirrelscan/core-contracts/audit-levels";
+import { SERVICE_LIMITS } from "@squirrelscan/core-contracts/limits";
 import { isValidHeaderHost, isValidHeaderName, isValidHeaderValue } from "@squirrelscan/utils/headers";
 import { z } from "zod";
 
@@ -224,9 +225,10 @@ export const ClassifierConfigSchema = z.object({
 // Technology detection reads the first bytes of each first-party script bundle
 // the crawl already fetched (#1254), so a stack that lives only in a bundle
 // (a Vite or Next.js app with an empty HTML shell) is still found. Unset =
-// SERVICE_LIMITS.techDetectBundleBytes (64 KB); 0 turns bundle matching off.
+// the default (8 MB per bundle in the local scan, 64 KB in the payload to the cloud
+// detection service); 0 turns bundle matching off.
 export const TechDetectConfigSchema = z.object({
-  bundle_bytes: z.number().int().min(0).max(262_144).optional(),
+  bundle_bytes: z.number().int().min(0).max(SERVICE_LIMITS.techDetectMaxBundleBytes).optional(),
 }).strict();
 
 export const OutputConfigSchema = z.object({

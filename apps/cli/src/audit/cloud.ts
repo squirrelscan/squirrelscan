@@ -23,7 +23,10 @@ import {
   detachFromPage,
   detectReportTechnologiesMulti,
   buildTechInputs,
+  DEFAULT_LOCAL_TECH_BUNDLE_LIMITS,
   DEFAULT_TECH_BUNDLE_LIMITS,
+  LOCAL_TECH_DETECT_OPTIONS,
+  techInputTruncation,
   type LocalTechInput,
   type TechBundleLimits,
   ensureSiteContextDocuments,
@@ -1015,6 +1018,17 @@ export function techBundleLimits(config: Config): TechBundleLimits {
 }
 
 /**
+ * The local scan's byte caps (#1387): `[tech_detect] bundle_bytes` over the local
+ * defaults (8 MB a bundle). The scan sends nothing, so it reads bundles whole.
+ */
+export function localTechBundleLimits(config: Config): TechBundleLimits {
+  const bundleBytes =
+    config.tech_detect?.bundle_bytes ??
+    DEFAULT_LOCAL_TECH_BUNDLE_LIMITS.bundleBytes;
+  return { ...DEFAULT_LOCAL_TECH_BUNDLE_LIMITS, bundleBytes };
+}
+
+/**
  * The ordered tech-detect page inputs for one audit, shared by the cloud call and
  * the local scan so both detect from the same bytes (#1254): HTML 2xx pages, the
  * base-URL page first, at most `techDetectMaxPages`, each page's HTML capped, the
@@ -1116,8 +1130,10 @@ export async function runCloudTechDetect(
     );
     const [homeInput, ...restInputs] = inputs;
     if (!homeInput) return null;
+    const cloudTruncated = techInputTruncation(inputs);
 
-    // The local scan detects from these same inputs, so the two agree (#1254).
+    // The payload is the same pages and bodies the local scan reads, cut to the cloud caps (#1254):
+    // the local scan reads far more (#1387), so the two no longer agree on what they see.
     const homePayload: TechDetectPagePayload = toTechPayload(homeInput);
     const restPayloads: TechDetectPagePayload[] = restInputs.map(toTechPayload);
 
@@ -1146,6 +1162,8 @@ export async function runCloudTechDetect(
         removed: res.removed,
         firstScan: res.firstScan,
         source: "cloud" as const,
+        // What the payload caps cut before the service saw the bundles (#1387).
+        ...(cloudTruncated ? { truncated: cloudTruncated } : {}),
         ...(res.advisories && res.advisories.length > 0
           ? { advisories: res.advisories }
           : {}),
@@ -1172,8 +1190,13 @@ export interface LocalTechDetectOptions {
   siteContext: SiteContextPage[];
   /** Fetched scripts from the resource-assets phase (carries inline content). */
   scripts: FetchedScript[];
-  /** Bundle byte caps; default {@link DEFAULT_TECH_BUNDLE_LIMITS}. */
+  /** Bundle byte caps; default {@link DEFAULT_LOCAL_TECH_BUNDLE_LIMITS}. */
   limits?: TechBundleLimits;
+  /**
+   * Return the section even when nothing was detected, so a caller merging it into the cloud section still
+   * learns whether the local scan read every bundle (its `truncated` field). Default: null when empty.
+   */
+  keepEmpty?: boolean;
 }
 
 /**
@@ -1190,11 +1213,15 @@ export function detectLocalTechnologies(
       opts.siteContext,
       opts.baseUrl,
       opts.scripts,
-      opts.limits
+      opts.limits ?? DEFAULT_LOCAL_TECH_BUNDLE_LIMITS
     );
     if (inputs.length === 0) return null;
-    const section = detectReportTechnologiesMulti(inputs);
-    return section.items.length > 0
+    const section = detectReportTechnologiesMulti(
+      inputs,
+      undefined,
+      LOCAL_TECH_DETECT_OPTIONS
+    );
+    return section.items.length > 0 || opts.keepEmpty
       ? { ...section, source: "local" as const }
       : null;
   } catch (error) {
@@ -1204,6 +1231,46 @@ export function detectLocalTechnologies(
     );
     return null;
   }
+}
+
+/**
+ * The cloud technologies section with what the free local scan found in whole bundles added to it (#1406).
+ *
+ * The cloud scan sees each bundle cut to the payload caps (64 KB a bundle); the local scan reads them whole,
+ * so it finds technologies the cloud one cannot (a library deep in a large bundle). One section, then:
+ * - the cloud items stay as they are, a missing version is filled in from the local scan;
+ * - a technology only the local scan found is added, marked `origin: "local"`, and is never in `added`
+ *   (it has no scan diff); `added`, `removed`, `firstScan`, `advisories` and `scannedAt` are the cloud's;
+ * - the local scan's bytes are not sent anywhere: only its result is merged here;
+ * - `truncated` describes the merged section: the cloud payload cut stops being a limit once the local
+ *   scan covered those bundles, so it is the local scan's own cut (a bundle over 8 MB, a budget, the time
+ *   limit) or absent.
+ * Without a local result (it threw) the cloud section is returned as it was, cut included.
+ */
+export function mergeLocalTechnologies(
+  cloud: ReportTechnologies,
+  local: ReportTechnologies | null
+): ReportTechnologies {
+  if (!local) return cloud;
+  const localById = new Map(local.items.map((item) => [item.id, item]));
+  const cloudIds = new Set(cloud.items.map((item) => item.id));
+  const items = [
+    ...cloud.items.map((item) => {
+      const found = localById.get(item.id);
+      return found && item.version === null && found.version !== null
+        ? { ...item, version: found.version }
+        : item;
+    }),
+    ...local.items
+      .filter((item) => !cloudIds.has(item.id))
+      .map((item) => ({ ...item, origin: "local" as const })),
+  ];
+  const { truncated: _cloudCut, ...rest } = cloud;
+  return {
+    ...rest,
+    items,
+    ...(local.truncated ? { truncated: local.truncated } : {}),
+  };
 }
 
 // ── Cloud editor's summary (credited, report-only) ───────

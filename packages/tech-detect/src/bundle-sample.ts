@@ -11,8 +11,8 @@ const MAX_HITS_PER_HINT = 48;
 const MAX_HIT_SCANS_PER_HINT = 512;
 /** A string longer than this past a window's end is cut before it, not carried to its close. */
 const MAX_STRING_CARRY = 512;
-/** Longest body the scan classifies: past a script fetch cap, so every fetched body fits. */
-const MAX_SCAN_CHARS = 6 * 1024 * 1024;
+/** Longest body the scan classifies: past the largest `[tech_detect] bundle_bytes`, so every body a caller can hand over fits. */
+const MAX_SCAN_CHARS = 32 * 1024 * 1024;
 
 let hints: string[] | null = null;
 let matchers: Map<string, RegExp[]> | null = null;

@@ -102,3 +102,56 @@ describe("cloud payload and local scan agree on the same crawl", () => {
     expect(localIds.has("firebase")).toBe(true);
   });
 });
+
+describe("the cloud section says what the payload caps cut (#1387)", () => {
+  const big = `${"var a=1;\n".repeat(30_000)}const sb=createClient("https://${REF}.supabase.co","k");`;
+  const bigScripts = [
+    { url: `${BASE}assets/index-1.js`, content: big, sourcePages: [BASE] },
+  ];
+  const client = {
+    detectTechnologies: async () => ({
+      technologies: [],
+      added: [],
+      removed: [],
+      firstScan: true,
+    }),
+  } as unknown as CloudServicesClient;
+
+  test("a bundle past the 64 KB payload cap is reported as truncated on the cloud result", async () => {
+    const result = await runCloudTechDetect({
+      client,
+      config: getDefaultConfig(),
+      auditId: "a2",
+      baseUrl: BASE,
+      siteContext,
+      scripts: bigScripts,
+    });
+    expect(result?.technologies.source).toBe("cloud");
+    expect(result?.technologies.truncated).toEqual({
+      reasons: ["bundle-bytes"],
+      scripts: 1,
+    });
+  });
+
+  test("a crawl whose bundles fit the cap has no truncated field", async () => {
+    const result = await runCloudTechDetect({
+      client,
+      config: getDefaultConfig(),
+      auditId: "a3",
+      baseUrl: BASE,
+      siteContext,
+      scripts,
+    });
+    expect(result?.technologies.truncated).toBeUndefined();
+  });
+
+  test("the local scan reads the same bundle whole and reports no cut", () => {
+    const local = detectLocalTechnologies({
+      baseUrl: BASE,
+      siteContext,
+      scripts: bigScripts,
+    });
+    expect(local?.items.map((t) => t.id)).toContain("supabase");
+    expect(local?.truncated).toBeUndefined();
+  });
+});

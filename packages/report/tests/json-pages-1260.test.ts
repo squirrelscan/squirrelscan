@@ -31,10 +31,10 @@ const parse = (options?: Parameters<typeof renderJson>[1]) =>
   };
 
 describe("meta.schemaVersion", () => {
-  test("is 1.1, the version that added pages, on every JSON report", () => {
-    expect(JSON_REPORT_SCHEMA_VERSION).toBe("1.1");
-    expect(parse().meta.schemaVersion).toBe("1.1");
-    expect(parse({ pages: rows(1) }).meta.schemaVersion).toBe("1.1");
+  test("is 1.4, the version that added technologies.items[].origin, on every JSON report", () => {
+    expect(JSON_REPORT_SCHEMA_VERSION).toBe("1.4");
+    expect(parse().meta.schemaVersion).toBe("1.4");
+    expect(parse({ pages: rows(1) }).meta.schemaVersion).toBe("1.4");
   });
 });
 

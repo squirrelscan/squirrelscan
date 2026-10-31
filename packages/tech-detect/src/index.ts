@@ -8,8 +8,8 @@ export type {
 
 export {
   detectTechnologies,
-  TECH_SCRIPT_CONTENT_LIMIT,
   TECH_DETECT_PAGE_BUDGET_MS,
+  TECH_SCRIPT_CONTENT_LIMIT,
 } from "./detect";
 export type { DetectOptions } from "./detect";
 export { ALL_FINGERPRINTS } from "./fingerprints";

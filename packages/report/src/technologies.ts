@@ -132,8 +132,37 @@ export function groupTechnologies(items: ReportTechnology[]): TechGroup[] {
     }));
 }
 
+const TRUNCATION_REASON_TEXT: Record<NonNullable<ReportTechnologies["truncated"]>["reasons"][number], string> = {
+  "bundle-bytes": "a script was longer than `[tech_detect] bundle_bytes`",
+  "page-bytes": "the page's script budget ran out",
+  "audit-bytes": "the audit's script budget ran out",
+  "time-budget": "the per-page time budget ran out",
+};
+
+/** One sentence saying detection was cut short (#1387), or null when it read everything. */
+export function techTruncationNote(tech: ReportTechnologies): string | null {
+  if (!tech.truncated) return null;
+  const why = tech.truncated.reasons.map((r) => TRUNCATION_REASON_TEXT[r]).join("; ");
+  return `Detection was cut short (${why}), so technologies the site runs may be missing`;
+}
+
 /** A short one-line change summary, e.g. "2 added · 1 removed since last scan". */
 export function techChangeSummary(tech: ReportTechnologies): string | null {
+  const base = techChangeSummaryBase(tech);
+  const local = techLocalOnlyNote(tech);
+  const note = techTruncationNote(tech);
+  const parts = [base, local, note].filter(Boolean);
+  return parts.length > 0 ? parts.join(". ") : null;
+}
+
+/** One sentence naming how many technologies only the local scan found (#1406): they have no scan history. */
+export function techLocalOnlyNote(tech: ReportTechnologies): string | null {
+  if (tech.source === "local") return null;
+  const count = tech.items.filter((t) => t.origin === "local").length;
+  return count === 0 ? null : `${count} found only by the local scan of the crawled bundles (no scan history)`;
+}
+
+function techChangeSummaryBase(tech: ReportTechnologies): string | null {
   // A local scan keeps no history, so "no changes" or "first scan" would claim a diff
   // nobody computed (#1263): it says where the list came from instead.
   if (tech.source === "local") return "Detected locally from the crawled pages (no scan history)";
@@ -158,6 +187,7 @@ export function techNameMap(items: ReportTechnology[]): Map<string, string> {
  */
 export function techOpenTag(name: string, tech: ReportTechnologies, indent: string): string {
   const source = tech.source ? ` source="${tech.source}"` : "";
-  if (tech.source === "local") return `${indent}<${name}${source}>`;
-  return `${indent}<${name}${source} first-scan="${tech.firstScan}" added="${tech.added.length}" removed="${tech.removed.length}">`;
+  const cut = tech.truncated ? ` truncated="${tech.truncated.reasons.join(" ")}"` : "";
+  if (tech.source === "local") return `${indent}<${name}${source}${cut}>`;
+  return `${indent}<${name}${source}${cut} first-scan="${tech.firstScan}" added="${tech.added.length}" removed="${tech.removed.length}">`;
 }
