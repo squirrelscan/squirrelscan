@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **`integrity/brand-impersonation` reads sign-in cues throughout bounded long control attributes.** The rule kept only the first 300 normalised characters of `aria-label`, `title`, an input `value` or a logo `alt`, so real-character padding could hide the cue. It now reads overlapping 300-character windows over the first 16,000 normalised characters and reports the control as unread only when content beyond that bound was omitted. (#1424)
+
 ### Changed
 
 - **`install.sh` is hardened at run time.** It tightens the umask to at least `022`, checks the downloaded binary's size against the manifest before the checksum, turns Ctrl-C, `SIGTERM` and `SIGHUP` into a clean exit that removes the temp directory and ends the download (no failure report: stopping is not a failure), refuses `SQUIRREL_BIN_DIR` set to `/` or to only whitespace, stops with a clear message when `HOME` is unset, and retries from `~/.squirrel/tmp` when the system temp directory is mounted `noexec` (or says that is the cause). (#168)

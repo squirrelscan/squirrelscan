@@ -88,6 +88,19 @@ export interface ControlScan {
 const ATTR_CHARS = 300;
 /** An attribute is normalised (padding removed) over this many characters before it is cut to {@link ATTR_CHARS}. */
 const ATTR_RAW_CHARS = 16_000;
+const ATTR_STRIDE = ATTR_CHARS / 2;
+
+/** Read a bounded attribute in overlapping windows so a cue cannot straddle a cut. */
+function boundedAttribute(text: string): { texts: string[]; cut: boolean } {
+  const normalised = readable(text.slice(0, ATTR_RAW_CHARS)).trim();
+  const limited = normalised.slice(0, ATTR_RAW_CHARS);
+  const texts: string[] = [];
+  for (let start = 0; start < limited.length; start += ATTR_STRIDE) {
+    texts.push(limited.slice(start, start + ATTR_CHARS));
+    if (start + ATTR_CHARS >= limited.length) break;
+  }
+  return { texts, cut: text.length > ATTR_RAW_CHARS || normalised.length > ATTR_RAW_CHARS };
+}
 /**
  * One control's read: at most `SHORT_VISITS` nodes looked at (text or not) and `SHORT_CHARS` characters kept.
  * That is a ceiling, not an entitlement: see {@link TOTAL_VISITS}.
@@ -351,7 +364,7 @@ export function scanControls(doc: Document): ControlScan {
     const control = controlAbove(img.parentElement);
     if (control) {
       const list = imageAlts.get(control) ?? [];
-      list.push(alt.slice(0, ATTR_CHARS));
+      list.push(alt);
       imageAlts.set(control, list);
     }
   }
@@ -406,7 +419,7 @@ export function scanControls(doc: Document): ControlScan {
   const prepared = chosen.map(({ element, href }) => {
     const tag = element.tagName.toLowerCase();
     const referenced = (getAttrCI(element, "aria-labelledby") ?? "").slice(0, ATTR_RAW_CHARS).split(/\s+/).filter(Boolean);
-    if (referenced.length > MAX_LABELLEDBY) paddedAttributes++;
+    let attributeCut = referenced.length > MAX_LABELLEDBY;
     const labelled = referenced
       .slice(0, MAX_LABELLEDBY)
       .map((id) => byId(id))
@@ -421,12 +434,14 @@ export function scanControls(doc: Document): ControlScan {
       ...(imageAlts.get(element) ?? []),
     ]
       .filter((v): v is string => typeof v === "string" && v !== "")
-      .map((v) => {
-        // Padding (spaces, zero-width characters) is dropped BEFORE the cut; a value too long even for that is counted.
-        if (v.length > ATTR_RAW_CHARS) paddedAttributes++;
-        return readable(v.slice(0, ATTR_RAW_CHARS)).trim().slice(0, ATTR_CHARS);
+      .flatMap((v) => {
+        // Padding (spaces, zero-width characters) is dropped before overlapping windows are read.
+        const bounded = boundedAttribute(v);
+        attributeCut ||= bounded.cut;
+        return bounded.texts;
       })
       .filter((v) => v !== "");
+    if (attributeCut) paddedAttributes++;
     return { element, href, extra, rank: rank(tag, href, extra) };
   });
 
