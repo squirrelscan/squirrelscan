@@ -105,20 +105,24 @@ export const totalByteWeightRule: Rule = {
           externalJsCount: rec.externalJsCount,
           imageCount: rec.imageCount,
         }))
-      : pages.map((page) => {
-          const s = page.parsed?.document
-            ? extractPageByteSignal(page.parsed.document)
-            : undefined;
-          return {
-            url: page.url,
-            html: page.sizeBytes ?? 0,
-            inlineCss: s?.inlineCssLen ?? 0,
-            inlineJs: s?.inlineJsLen ?? 0,
-            externalCssCount: s?.externalCssCount ?? 0,
-            externalJsCount: s?.externalJsCount ?? 0,
-            imageCount: s?.imageCount ?? 0,
-          };
-        });
+      : pages
+          // A bodiless error page (one v1 appends per 4xx/5xx it could not parse) has no weight to average in,
+          // and the streaming universe has no record of it (#1359).
+          .filter((page) => !(page.statusCode >= 400 && !page.parsed?.document && (!page.parsed?.pageType || page.parsed.pageType === "unknown")))
+          .map((page) => {
+            const s = page.parsed?.document
+              ? extractPageByteSignal(page.parsed.document)
+              : undefined;
+            return {
+              url: page.url,
+              html: page.sizeBytes ?? 0,
+              inlineCss: s?.inlineCssLen ?? 0,
+              inlineJs: s?.inlineJsLen ?? 0,
+              externalCssCount: s?.externalCssCount ?? 0,
+              externalJsCount: s?.externalJsCount ?? 0,
+              imageCount: s?.imageCount ?? 0,
+            };
+          });
 
     const byUrl = new Map<string, PageWeight>();
     for (const rec of records) byUrl.set(rec.url, rec);
