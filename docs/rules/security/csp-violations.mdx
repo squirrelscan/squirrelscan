@@ -1,0 +1,90 @@
+---
+title: "CSP violations the browser reports on a rendered page"
+description: "The browser itself reports every script, frame, image and endpoint a Content-Security-Policy blocked. squirrel reads those violations from a rendered crawl and names the directive and host to fix."
+---
+
+## What this rule catches
+
+A Content-Security-Policy that leaves out a host the site depends on breaks a booking widget, an analytics tag or a payment frame without any sign in the page. The response is 200, the HTML looks normal, and an HTTP audit sees nothing wrong. The browser, though, reports every block as a `securitypolicyviolation` event. This rule reads those events from a rendered crawl.
+
+It is the browser's own verdict, so it reports what actually happened, including blocks that only occur after the page hydrates: a widget script injected a second after load, an analytics beacon that fires when the page settles. [security/csp-blocks-own-resources](/rules/security/csp-blocks-own-resources) predicts the same failure from the policy and the markup without a browser; this rule confirms it with one.
+
+## What squirrel checks
+
+The rule runs on every crawled page and emits one check named `csp-violations`:
+
+- **Skipped** when the page was not rendered. A crawl without a browser has no violations to read, so the check is `skipped` with the reason `not-rendered` and the message `Not checked: the browser only reports CSP violations on a rendered crawl (this page was fetched without a browser)`. It is never a pass.
+- **Skipped** when the page was rendered but the render service did not report the browser's events (an older service, or an old cached render): the reason is `no-browser-events`.
+- **Pass** when the browser reported no violation. When the renderer kept listening for a few seconds after `load`, the message says so; when it stopped at `load`, the message says a late embed or hit could be missed.
+- **Fail** when a blocked host belongs to a vendor category the rule knows: analytics, ads, payments, captcha, form or booking. The feature has silently stopped working.
+- **Warn** when the blocked hosts are all something else, and for blocked `inline` or `eval` code.
+
+The message names the directive and the hosts, for example `The browser blocked 3 hosts under the page's CSP, including 3 from a known analytics vendor (connect-src: analytics.google.com, www.google.com, stats.g.doubleclick.net)`. Each blocked host is an item: the directive the browser says it violated (`script-src-elem`, `connect-src`, `frame-src`), the host to add, up to five of the blocked URLs, how many times it was blocked, and the vendor category when the host is a known one. Only the first 25 hosts are listed; `details.additional` counts the rest. `details` also carries the number of violations, failed requests and page errors the render saw, and `listenedAfterLoad`.
+
+A violation from a `Content-Security-Policy-Report-Only` header blocks nothing, so it is counted in `details.reportOnly` and not reported.
+
+### What the render collects
+
+The renderer registers a `securitypolicyviolation` listener before any page script runs, and keeps listening for a few seconds after `load`, because embeds and analytics hits often fire after hydration. It attaches the violations (directive, blocked URI, source file and line), the requests that failed and the errors the page threw to the rendered page result. A console listener is not enough: the browser reports a block as an event, not always as a console line.
+
+The page chooses what these events say, so squirrel treats them as untrusted. Every URL is cut to its origin and path (a query string or fragment can carry a token), text is stripped of control characters and bounded, and every list is capped (100 violations, 200 failed requests, 50 page errors). The events are stored with the page in the audit's database.
+
+### What it does not do
+
+- It reads nothing on an audit that does not render pages. Render is part of `--render-mode` and the cloud render service (see [browser rendering](/guides/browser-rendering)); a plain HTTP crawl skips the rule.
+- It does not yet report "analytics is detected but no request left the page". The data is collected for it; the rule is not.
+
+## How to fix it
+
+Add each reported host to the directive the finding names, reload the page with the browser console open and confirm no violation remains.
+
+```http
+Content-Security-Policy: default-src 'self';
+  script-src 'self' https://www.googletagmanager.com;
+  connect-src 'self' https://www.google-analytics.com https://analytics.google.com https://stats.g.doubleclick.net https://www.google.com
+```
+
+Test a change in `Content-Security-Policy-Report-Only` first if the site is busy. Inline and `eval` blocks need a nonce or hash, or the code moved to a file.
+
+| | |
+|---|---|
+| **Rule ID** | `security/csp-violations` |
+| **Category** | [Security](/rules/security) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 6/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["security/csp-violations"]
+```
+
+### Disable all Security rules
+
+```toml squirrel.toml
+[rules]
+disable = ["security/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["security/csp-violations"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it.
+
+## Related rules
+
+- [security/csp](/rules/security/csp): how strict the policy is.
+- [security/csp-blocks-own-resources](/rules/security/csp-blocks-own-resources): the same failure predicted from the policy and the markup, without a browser.
+- [security/sri](/rules/security/sri): per-file hashes for the third-party origins your policy allows.
+
+## Check your site
+
+Run `squirrel audit https://example.com --render-mode all` and open the Security section of the report. Each blocked host is listed by page with its directive. A signed-out audit renders nothing, so this rule is skipped there.
