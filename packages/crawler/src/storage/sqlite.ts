@@ -4730,6 +4730,65 @@ export class SQLiteStorage implements CrawlStorage {
     });
   }
 
+  /**
+   * The pages each of `ruleIds` failed or warned on, for the page map's flags (#701). A page
+   * rule stores its page in `page_url`; a site rule stores the pages it names in `items`
+   * (`id` for `links/orphan-pages`, `sourcePages` for the duplicate rules), so both are read. Only the rule id, the page
+   * and the item ids come back, never a whole check.
+   */
+  getFlaggedPages(
+    crawlId: string,
+    ruleIds: readonly string[]
+  ): Effect.Effect<Map<string, string[]>, StorageError, never> {
+    return Effect.try({
+      try: () => {
+        const out = new Map<string, string[]>();
+        if (ruleIds.length === 0) return out;
+        const marks = ruleIds.map(() => "?").join(", ");
+        const rows = this.getDb()
+          .prepare(
+            `SELECT rule_id, page_url, items FROM rule_results WHERE crawl_id = ? AND status IN ('fail', 'warn') AND rule_id IN (${marks})`
+          )
+          .all(crawlId, ...ruleIds) as Array<{
+          rule_id: string;
+          page_url: string;
+          items: string | null;
+        }>;
+        for (const row of rows) {
+          const urls = new Set<string>();
+          if (row.page_url) urls.add(row.page_url);
+          if (row.items) {
+            try {
+              const items = JSON.parse(row.items) as unknown;
+              if (Array.isArray(items)) {
+                for (const item of items) {
+                  const entry = item as { id?: unknown; sourcePages?: unknown } | null;
+                  // A duplicate group names its pages in `sourcePages` (its id is the title);
+                  // an orphan names the page as its id.
+                  if (Array.isArray(entry?.sourcePages)) {
+                    for (const page of entry.sourcePages) {
+                      if (typeof page === "string") urls.add(page);
+                    }
+                  }
+                  if (typeof entry?.id === "string" && /^https?:\/\//.test(entry.id)) {
+                    urls.add(entry.id);
+                  }
+                }
+              }
+            } catch {
+              // An unreadable items cell names no page.
+            }
+          }
+          const list = out.get(row.rule_id);
+          if (list) list.push(...urls);
+          else out.set(row.rule_id, [...urls]);
+        }
+        return out;
+      },
+      catch: (e) => StorageError.read(e),
+    });
+  }
+
   /** One `rule_results` row as a CheckResult. The single definition the three
    * readers share, so a column added to one cannot be forgotten in the others. */
   private rowToCheckResult(row: Record<string, unknown>): CheckResult {

@@ -48,14 +48,14 @@ function byReach(nodes: EntityMapNode[]): EntityMapNode[] {
  * when someone opens the export. Prefixing with an apostrophe is the documented
  * neutralisation and survives a round trip as text.
  */
-function csvField(value: string | number | boolean | null | undefined): string {
+export function csvField(value: string | number | boolean | null | undefined): string {
   if (value === null || value === undefined) return "";
   const raw = String(value);
   const safe = /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
   return /[",\n\r]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
 }
 
-function csvRow(fields: (string | number | boolean | null | undefined)[]): string {
+export function csvRow(fields: (string | number | boolean | null | undefined)[]): string {
   return fields.map(csvField).join(",");
 }
 

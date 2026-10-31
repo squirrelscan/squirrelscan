@@ -1,0 +1,151 @@
+// The page map (#701): filters, and the csv, markdown and json renderers.
+
+import { describe, expect, test } from "bun:test";
+
+import {
+  PAGE_MAP_COLUMNS,
+  filterPageMap,
+  hasPageMapFilters,
+  pageMapMeta,
+  renderPageMapCsv,
+  renderPageMapJson,
+  renderPageMapMarkdown,
+  type PageMapRow,
+} from "../src/page-map";
+
+function row(over: Partial<PageMapRow> = {}): PageMapRow {
+  return {
+    url: "https://example.com/",
+    finalUrl: "https://example.com/",
+    status: 200,
+    depth: 0,
+    canonical: null,
+    noindex: false,
+    title: "Home",
+    titleLength: 4,
+    description: "A page",
+    descriptionLength: 6,
+    h1Count: 1,
+    wordCount: 120,
+    schemaTypes: ["WebSite"],
+    inlinks: 3,
+    internalOutlinks: 5,
+    externalOutlinks: 1,
+    externalDomains: ["other.example"],
+    loadTimeMs: 120,
+    lastModified: null,
+    flags: [],
+    ...over,
+  };
+}
+
+const rows: PageMapRow[] = [
+  row(),
+  row({ url: "https://example.com/blog/a", title: null, titleLength: 0, flags: ["title"] }),
+  row({ url: "https://example.com/blog/b", description: "", descriptionLength: 0, h1Count: 0, flags: ["duplicate-title", "h1"] }),
+  row({ url: "https://example.com/blogger", schemaTypes: [], flags: ["no-schema"] }),
+  row({ url: "https://example.com/long", titleLength: 90, descriptionLength: 200, flags: ["duplicate-description", "orphan"] }),
+];
+const urls = (list: PageMapRow[]) => list.map((r) => new URL(r.url).pathname);
+
+describe("filterPageMap", () => {
+  test("no filters is every page, and hasPageMapFilters says so", () => {
+    expect(hasPageMapFilters({})).toBe(false);
+    expect(filterPageMap(rows, {})).toHaveLength(rows.length);
+  });
+
+  test("--missing title, description, h1 and schema, any of several", () => {
+    expect(urls(filterPageMap(rows, { missing: ["title"] }))).toEqual(["/blog/a"]);
+    expect(urls(filterPageMap(rows, { missing: ["description"] }))).toEqual(["/blog/b"]);
+    expect(urls(filterPageMap(rows, { missing: ["h1"] }))).toEqual(["/blog/b"]);
+    expect(urls(filterPageMap(rows, { missing: ["schema"] }))).toEqual(["/blogger"]);
+    expect(urls(filterPageMap(rows, { missing: ["title", "schema"] }))).toEqual(["/blog/a", "/blogger"]);
+  });
+
+  test("a row with no stored h1 count is not missing an h1", () => {
+    expect(filterPageMap([row({ h1Count: null })], { missing: ["h1"] })).toHaveLength(0);
+  });
+
+  test("--duplicate reads the audit's flags", () => {
+    expect(urls(filterPageMap(rows, { duplicate: ["title"] }))).toEqual(["/blog/b"]);
+    expect(urls(filterPageMap(rows, { duplicate: ["description"] }))).toEqual(["/long"]);
+    expect(urls(filterPageMap(rows, { duplicate: ["title", "description"] }))).toEqual(["/blog/b", "/long"]);
+  });
+
+  test("--too-long is a title over 75 or a description over 160", () => {
+    expect(urls(filterPageMap(rows, { tooLong: true }))).toEqual(["/long"]);
+    expect(filterPageMap([row({ titleLength: 75, descriptionLength: 160 })], { tooLong: true })).toHaveLength(0);
+    expect(filterPageMap([row({ titleLength: 76 })], { tooLong: true })).toHaveLength(1);
+    expect(filterPageMap([row({ descriptionLength: 161 })], { tooLong: true })).toHaveLength(1);
+  });
+
+  test("--orphan reads the audit's orphan flag", () => {
+    expect(urls(filterPageMap(rows, { orphan: true }))).toEqual(["/long"]);
+  });
+
+  test("--section is a path prefix on a segment boundary", () => {
+    expect(urls(filterPageMap(rows, { section: "/blog" }))).toEqual(["/blog/a", "/blog/b"]);
+    expect(urls(filterPageMap(rows, { section: "blog/" }))).toEqual(["/blog/a", "/blog/b"]);
+    expect(filterPageMap(rows, { section: "/" })).toHaveLength(rows.length);
+  });
+
+  test("--page is a URL substring, any of several", () => {
+    expect(urls(filterPageMap(rows, { page: ["long"] }))).toEqual(["/long"]);
+    expect(urls(filterPageMap(rows, { page: ["blogger", "long"] }))).toEqual(["/blogger", "/long"]);
+  });
+
+  test("filters combine: every group must match", () => {
+    expect(urls(filterPageMap(rows, { section: "/blog", missing: ["h1"] }))).toEqual(["/blog/b"]);
+    expect(filterPageMap(rows, { section: "/blog", orphan: true })).toHaveLength(0);
+  });
+});
+
+describe("renderPageMapCsv", () => {
+  test("a header of every column, one line per page, lists joined by a space", () => {
+    const lines = renderPageMapCsv([row({ externalDomains: ["a.example", "b.example"], flags: ["orphan", "h1"] })]).trim().split("\n");
+    expect(lines[0]).toBe(PAGE_MAP_COLUMNS.join(","));
+    expect(lines).toHaveLength(2);
+    expect(lines[1]).toContain("a.example b.example");
+    expect(lines[1]).toContain("orphan h1");
+  });
+
+  test("quotes commas, quotes and newlines, and neutralises formulas from an audited page", () => {
+    const csv = renderPageMapCsv([row({ title: '=HYPERLINK("x"),\nb', description: "+cmd" })]);
+    expect(csv).toContain(`"'=HYPERLINK(""x""),\nb"`);
+    expect(csv).toContain(",'+cmd,");
+  });
+});
+
+describe("renderPageMapMarkdown", () => {
+  const meta = pageMapMeta({ id: "0123456789abcdef", baseUrl: "https://example.com", startedAt: 1_000 }, 5);
+
+  test("a table with a row per page and the audit named", () => {
+    const md = renderPageMapMarkdown(rows, meta);
+    expect(md).toContain("# Page map: ");
+    expect(md).toContain("5 pages, from audit `01234567`.");
+    expect(md.split("\n").filter((l) => l.startsWith("| `https://")).length).toBe(5);
+  });
+
+  test("says how many of the pages match a filter", () => {
+    expect(renderPageMapMarkdown(rows.slice(0, 2), meta)).toContain("2 of 5 pages match");
+  });
+
+  test("a cell from an audited page cannot break the table or inject markup", () => {
+    const md = renderPageMapMarkdown([row({ title: "a | b\n# heading", description: "<script>x</script> *bold*" })], meta);
+    const dataLine = md.split("\n").find((l) => l.startsWith("| `https://"))!;
+    // Pipes escaped, one line, no live tag.
+    expect(dataLine).toContain("a \\| b # heading");
+    expect(dataLine).toContain("\\<script>");
+    expect(dataLine).not.toMatch(/(^|[^\\])<script>/);
+    expect(md.split("\n").filter((l) => l.startsWith("| `https://"))).toHaveLength(1);
+  });
+});
+
+describe("renderPageMapJson", () => {
+  test("carries the audit, both counts and the rows", () => {
+    const meta = pageMapMeta({ id: "abc", baseUrl: "https://example.com", startedAt: Date.UTC(2026, 9, 31) }, 5);
+    const json = JSON.parse(renderPageMapJson(rows.slice(0, 2), meta)) as Record<string, unknown>;
+    expect(json).toMatchObject({ site: "https://example.com", crawlId: "abc", startedAt: "2026-10-31T00:00:00.000Z", total: 5, filtered: 2 });
+    expect((json.pages as unknown[]).length).toBe(2);
+  });
+});

@@ -57,6 +57,7 @@ export const main = defineCommand({
     credits: () => import("./commands/credits").then((m) => m.credits),
     analyze: () => import("./commands/analyze").then((m) => m.analyze),
     entities: () => import("./commands/entities").then((m) => m.entities),
+    pages: () => import("./commands/pages").then((m) => m.pages),
     init: () => import("./commands/init").then((m) => m.init),
     config: () => import("./commands/config").then((m) => m.config),
     report: () => import("./commands/report").then((m) => m.report),

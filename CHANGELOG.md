@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- **`squirrel pages` lists the pages of a stored audit as a table.** One row per crawled page: URL, final URL, status, depth, canonical, noindex, title and description with their lengths, H1 count, word count, schema types, in-links, internal and external out-links with the external hosts, load time, last modified, and a `flags` column taken from the audit's own rule results so the table and the issue list agree. `-f json|csv|markdown`, and filters that combine: `--missing title|description|h1|schema`, `--duplicate title|description`, `--too-long`, `--orphan`, `--section /blog`, `--page <text>`. Everything is read from what the crawl stored, so it makes no request and costs no credits. (#701)
+
 ## v0.0.147 (2026-10-31)
 
 `security/tls-certificate` now judges every key type and reads the signature and protocol, and a start URL with a broken TLS certificate reports that check failing instead of ending without a finding. A deep start URL is named in the audit, recorded as `meta.requestedUrl` and guaranteed a slot, `--include-pages` says how each page answered, and the local technology scan reads whole bundles and says when it was cut short. `security/cookie-flags` no longer warns about CSRF token cookies, and `squirrel report --input` keeps a saved report's skipped checks. The JSON report schema is now 1.3. Thanks to William for the deep start URL work (#1369, #1385).
