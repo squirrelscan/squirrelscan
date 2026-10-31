@@ -22,6 +22,8 @@ import { writeFileSync } from "node:fs";
 export interface UnreachableIssue {
   ruleId: string;
   name: string;
+  description: string;
+  solution: string;
   category: string;
   group: string;
   severity: string;
@@ -29,8 +31,10 @@ export interface UnreachableIssue {
     name: string;
     status: "fail";
     message: string;
-    pageUrl: string;
-    value: string;
+    affectedPages: string[];
+    affectedPagesCount: number;
+    affectedPagesHasMore: boolean;
+    legacyValue: string;
   }>;
 }
 
@@ -58,6 +62,14 @@ function trimTrailingPunctuation(reason: string): string {
  * The runtime's raw TLS error in words an owner can act on. The cause probe's own sentences ("certificate has
  * expired on 2026-01-01", "hostname/IP does not match: ...") pass through; the fetch's error codes are translated.
  */
+/** A reason that names a certificate problem: the probe's sentences and the runtime's own error names for one. */
+const CERTIFICATE_PROBLEM =
+  /certificate has expired|not valid until|does not cover|hostname\/ip does not match|self.signed|unable to verify the first certificate|issuer certificate|untrusted root|trusted root|ERR_TLS_CERT_ALTNAME_INVALID|CERT_HAS_EXPIRED/i;
+
+export function recognisedCertificateProblem(reason: string): boolean {
+  return CERTIFICATE_PROBLEM.test(reason);
+}
+
 function tlsCauseText(reason: string): string {
   const text = trimTrailingPunctuation(reason);
   if (/ERR_TLS_CERT_ALTNAME_INVALID/i.test(text))
@@ -76,9 +88,12 @@ function tlsCauseText(reason: string): string {
 /** `security/tls-certificate` failing on the start URL, with the cause the TLS probe found. */
 function tlsStartUrlIssue(url: string, reason: string): UnreachableIssue {
   const meta = tlsCertificateRule.meta;
+  const cause = tlsCauseText(reason);
   return {
     ruleId: meta.id,
     name: meta.name,
+    description: meta.description,
+    solution: meta.solution ?? "",
     category: "Security",
     group: meta.category,
     severity: meta.severity,
@@ -86,9 +101,11 @@ function tlsStartUrlIssue(url: string, reason: string): UnreachableIssue {
       {
         name: "tls-certificate",
         status: "fail",
-        message: `The start URL's TLS certificate cannot be trusted: ${tlsCauseText(reason)}`,
-        pageUrl: url,
-        value: tlsCauseText(reason),
+        message: `The start URL's TLS certificate cannot be trusted: ${cause}`,
+        affectedPages: [url],
+        affectedPagesCount: 1,
+        affectedPagesHasMore: false,
+        legacyValue: cause,
       },
     ],
   };
@@ -97,7 +114,8 @@ function tlsStartUrlIssue(url: string, reason: string): UnreachableIssue {
 /** The outcome for a start URL the reachability probe could not reach. */
 export function unreachableOutcome(
   url: string,
-  rawReason: string
+  rawReason: string,
+  options: { tlsFinding?: boolean } = {}
 ): UnreachableOutcome {
   const safeUrl = redactUrl(url);
   // The probe's error text can echo the start URL (userinfo, a query token): redact it here too.
@@ -111,7 +129,11 @@ export function unreachableOutcome(
     statusReasonCode,
     statusReason: reason,
     message: `Cannot reach ${safeUrl}: ${trimTrailingPunctuation(reason)}. No audit ran and there is no score.`,
-    ...(statusReasonCode === "tls"
+    // A finding only for a certificate problem the cause names, and only when the rule is selected:
+    // a plain-HTTP port or a protocol the runtime refuses is a TLS failure, not a certificate one.
+    ...(statusReasonCode === "tls" &&
+    options.tlsFinding !== false &&
+    recognisedCertificateProblem(reason)
       ? { issues: [tlsStartUrlIssue(safeUrl, reason)] }
       : {}),
   };
