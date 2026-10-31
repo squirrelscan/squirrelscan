@@ -274,13 +274,18 @@ describe("a start URL that redirects to another site is estimated, registered an
     expect(cloudCalls()).toEqual([]);
   });
 
-  test("with consent the estimate is made for the destination and nothing names the shortener", async () => {
+  test("with consent the estimate is returned without registering, and nothing in it names the shortener", async () => {
     const out = await call("audit_website", { ...SHORT, followRedirect: true });
     const body = JSON.parse(out.text);
     expect(body.status).toBe("confirmation_required");
     expect(body.estimate).toMatchObject({ credits: 52, pages: 1 });
     expect(registered()).toBe(false);
     expect(JSON.stringify(body)).not.toContain("shortlink.com");
+    // Only the redirect resolution touched the shortener; the estimate fetches no page.
+    const hosts = requested.map(
+      (r) => new URL(r.slice(r.indexOf(" ") + 1)).hostname
+    );
+    expect(hosts.filter((h) => h === "shortlink.com")).toHaveLength(1);
   });
 
   test("the registered run, and the pages rendered for it, are the destination's", async () => {
@@ -296,9 +301,10 @@ describe("a start URL that redirects to another site is estimated, registered an
     expect(register).not.toContain("shortlink.com");
     expect(finalized()).toMatchObject({ status: "completed", pagesAudited: 1 });
     // The shortener's own page is never fetched as a page of the audit.
-    expect(requested.filter((r) => r.includes("shortlink.com"))).toHaveLength(
-      1
+    const hosts = requested.map(
+      (r) => new URL(r.slice(r.indexOf(" ") + 1)).hostname
     );
+    expect(hosts.filter((h) => h === "shortlink.com")).toHaveLength(1);
   });
 });
 
