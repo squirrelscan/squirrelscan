@@ -4,6 +4,8 @@ import { describe, expect, test } from "bun:test";
 
 import {
   PAGE_MAP_COLUMNS,
+  cleanText,
+  csvSafeText,
   filterPageMap,
   hasPageMapFilters,
   pageMapMeta,
@@ -109,9 +111,9 @@ describe("renderPageMapCsv", () => {
     expect(lines[1]).toContain("orphan h1");
   });
 
-  test("quotes commas, quotes and newlines, and neutralises formulas from an audited page", () => {
+  test("quotes commas and quotes, makes a newline a space, and neutralises formulas from an audited page", () => {
     const csv = renderPageMapCsv([row({ title: '=HYPERLINK("x"),\nb', description: "+cmd" })]);
-    expect(csv).toContain(`"'=HYPERLINK(""x""),\nb"`);
+    expect(csv).toContain(`"'=HYPERLINK(""x""), b"`);
     expect(csv).toContain(",'+cmd,");
   });
 });
@@ -147,5 +149,65 @@ describe("renderPageMapJson", () => {
     const json = JSON.parse(renderPageMapJson(rows.slice(0, 2), meta)) as Record<string, unknown>;
     expect(json).toMatchObject({ site: "https://example.com", crawlId: "abc", startedAt: "2026-10-31T00:00:00.000Z", total: 5, filtered: 2 });
     expect((json.pages as unknown[]).length).toBe(2);
+  });
+});
+
+// Every value of a row comes from an audited site, and these outputs reach a terminal, a spreadsheet
+// or a viewer: a page must not be able to move the cursor, clear the screen, plant a hyperlink,
+// reorder text, run a formula or break a table.
+describe("hostile page values (#701)", () => {
+  const ESC = String.fromCharCode(27);
+  const BEL = String.fromCharCode(7);
+  const hostile = {
+    title: `T${ESC}[2J${ESC}[1;1HFORGED${ESC}]8;;https://evil.example${BEL}click${ESC}]8;;${BEL}\u009b31m\u202egnp.exe\u2066x\u2069\nnext line`,
+    description: `=cmd|' /C calc'!A0`,
+    url: `https://example.com/p${ESC}[2J\u009b0m\u202e/x`,
+    finalUrl: `https://example.com/+SUM(1)`,
+    canonical: "@SUM(1)",
+  };
+  const rows = [row(hostile)];
+  const meta = pageMapMeta({ id: "abc", baseUrl: `https://e.test/${ESC}[2J\u202e`, startedAt: 1 }, 1);
+  const unsafe = (text: string) =>
+    [...text].filter((ch) => {
+      const c = ch.charCodeAt(0);
+      return c === 27 || c === 7 || (c >= 0x80 && c <= 0x9f) || (c >= 0x202a && c <= 0x202e) || (c >= 0x2066 && c <= 0x2069);
+    });
+
+  test("cleanText removes escapes, C1 controls, bidi overrides and line breaks; keeps ordinary text", () => {
+    expect(unsafe(cleanText(hostile.title))).toEqual([]);
+    expect(cleanText(hostile.title)).toContain("FORGED");
+    expect(cleanText(hostile.title)).not.toContain("\n");
+    expect(cleanText("plain, ordinary text \u00e9\u4e2d")).toBe("plain, ordinary text \u00e9\u4e2d");
+    expect(cleanText(null)).toBe("");
+  });
+
+  test("csvSafeText prefixes a formula start after any leading whitespace, and cleans first", () => {
+    for (const value of ["=1+1", "+1", "-1", "@SUM(1)", "  =HYPERLINK(\"x\")", "\t=x", "\r\n=x", `${ESC}=x`]) {
+      expect(csvSafeText(value).trimStart().startsWith("'")).toBe(true);
+    }
+    expect(csvSafeText("normal =text")).toBe("normal =text");
+    expect(csvSafeText("a-b")).toBe("a-b");
+  });
+
+  test("csv: no control or bidi character, and no cell starts a formula", () => {
+    const csv = renderPageMapCsv(rows);
+    expect(unsafe(csv)).toEqual([]);
+    const cells = csv.split("\n")[1]!;
+    expect(cells).toContain("'=cmd|' /C calc'!A0");
+    expect(cells).toContain("'@SUM(1)");
+    // One header line and one row: the newline in the title did not start a record.
+    expect(csv.trim().split("\n")).toHaveLength(2);
+  });
+
+  test("markdown: one row per page, no control or bidi character, no live HTML", () => {
+    const md = renderPageMapMarkdown(rows, meta);
+    expect(unsafe(md)).toEqual([]);
+    expect(md.split("\n").filter((l) => l.startsWith("| `https://"))).toHaveLength(1);
+    expect(md).not.toMatch(/(^|[^\\])<[a-z]/i);
+  });
+
+  test("json keeps the values as they are and is valid", () => {
+    const json = JSON.parse(renderPageMapJson(rows, meta)) as { pages: Array<{ title: string }> };
+    expect(json.pages[0]!.title).toBe(hostile.title);
   });
 });

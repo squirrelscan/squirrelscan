@@ -78,7 +78,15 @@ const site = Bun.serve({
           }
         );
       case "/lonely":
-        return html(page("A page nothing links to on the test site"));
+        // A hostile title and description: terminal escapes, a hyperlink, a bidi override, a newline
+        // and a spreadsheet formula, none of which may reach a terminal, a sheet or a viewer.
+        return html(
+          page(
+            `Lonely\u001b[2J\u001b]8;;https://evil.example\u0007click\u202egnp.exe\nsecond line`,
+            "",
+            "=cmd|' /C calc'!A0"
+          )
+        );
       default:
         return new Response("not found", { status: 404 });
     }
@@ -282,5 +290,42 @@ describe("squirrel pages", () => {
     const latest = await asJson();
     const named = await asJson("--crawl", latest.crawlId.slice(0, 8));
     expect(named.crawlId).toBe(latest.crawlId);
+  }, 120_000);
+});
+
+describe("hostile page values (#701)", () => {
+  const unsafe = (text: string): string[] =>
+    [...text].filter((ch) => {
+      const c = ch.charCodeAt(0);
+      return (
+        c === 27 ||
+        c === 7 ||
+        (c >= 0x80 && c <= 0x9f) ||
+        (c >= 0x202a && c <= 0x202e) ||
+        (c >= 0x2066 && c <= 0x2069)
+      );
+    });
+
+  test("csv and markdown carry no escape, control or bidi character from a page", async () => {
+    for (const format of ["csv", "markdown"]) {
+      const r = await squirrel("pages", "-f", format);
+      expect(r.code).toBe(0);
+      expect(unsafe(r.out)).toEqual([]);
+      expect(r.out).toContain("Lonely");
+    }
+  }, 120_000);
+
+  test("csv neutralises the formula in the description and keeps one record per page", async () => {
+    const r = await squirrel("pages", "-f", "csv");
+    expect(r.out).toContain("'=cmd|' /C calc'!A0");
+    expect(r.out.split("\n").filter((l) => l.length > 0)).toHaveLength(8);
+  }, 120_000);
+
+  test("json is valid and keeps the page's own bytes", async () => {
+    const map = await asJson();
+    const lonely = map.pages.find((r) => new URL(r.url).pathname === "/lonely");
+    expect(lonely?.title).toContain("Lonely");
+    // The hostile bytes really are in the stored page, so the clean outputs above prove something.
+    expect(lonely?.title).toContain(String.fromCharCode(27));
   }, 120_000);
 });
