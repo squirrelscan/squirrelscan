@@ -76,6 +76,51 @@ function stripHtmlComments(html: string): string {
   return out + html.slice(pos);
 }
 
+/**
+ * The markup of a page without its prose: every tag as written (so `src`, `href` and the like are kept) and the
+ * text of each `<script>` element, but not the text between tags. A `script-url` detector reads this, so a
+ * loader URL an inline snippet builds is seen whether or not the page has script bodies attached (#1430), and
+ * a vendor named in a paragraph is not read as that vendor's script. One linear pass; the last page's result is
+ * kept because every detector of a page asks for it.
+ */
+let lastMarkup: { html: string; markup: string } | undefined;
+
+export function pageMarkup(html: string): string {
+  if (lastMarkup?.html === html) return lastMarkup.markup;
+  const parts: string[] = [];
+  const scriptEnd = /<\/script/gi;
+  let pos = 0;
+  for (;;) {
+    const open = html.indexOf("<", pos);
+    if (open === -1) break;
+    if (html.startsWith("<!--", open)) {
+      const close = html.indexOf("-->", open + 4);
+      if (close === -1) break;
+      pos = close + 3;
+      continue;
+    }
+    const close = html.indexOf(">", open + 1);
+    if (close === -1) {
+      parts.push(html.slice(open));
+      break;
+    }
+    const tag = html.slice(open, close + 1);
+    parts.push(tag);
+    pos = close + 1;
+    const name = /^<\/?([a-zA-Z][a-zA-Z0-9-]*)/.exec(tag)?.[1]?.toLowerCase();
+    if (name === "script" && tag[1] !== "/" && !tag.endsWith("/>")) {
+      scriptEnd.lastIndex = pos;
+      const end = scriptEnd.exec(html)?.index ?? -1;
+      const bodyEnd = end === -1 ? html.length : end;
+      parts.push(html.slice(pos, bodyEnd));
+      pos = bodyEnd;
+    }
+  }
+  const markup = parts.join("\n");
+  lastMarkup = { html, markup };
+  return markup;
+}
+
 function matchDetector(
   detector: Detector,
   input: TechDetectInput,
@@ -93,11 +138,10 @@ function matchDetector(
       return value != null && detector.pattern.test(value);
     }
     case "script-url":
-      if (input.scripts) {
-        return input.scripts.some((s) => s.url && detector.pattern.test(s.url));
-      }
-      // Fallback: scan HTML for script src attributes
-      return detector.pattern.test(html);
+      // The listed URLs, and the page's own markup: an inline loader builds its URL inside a `<script>` and
+      // has no `src` to list. The same page gives the same answer with or without script bodies attached.
+      if (input.scripts?.some((s) => s.url && detector.pattern.test(s.url))) return true;
+      return detector.pattern.test(pageMarkup(html));
     case "script-content":
       if (detector.inCode) {
         return (

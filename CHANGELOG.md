@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **Technology detection finds an inline loader URL on every page, whatever the byte caps.** A `script-url` signature read the page HTML only when the page had no script bodies attached, so Microsoft Clarity's standard inline snippet (which builds the `www.clarity.ms/tag/` URL inside a `<script>`) was found on pages that ran out of the byte budget and missed on pages that had bodies: a re-run of a stored corpus lost 24 Clarity sites under the local scan's whole-bundle reading. Signatures now always read the page's markup (tags and script text) in addition to the listed script URLs, and text between tags is not read, so a vendor named in a paragraph is not detected as its script. (#1430)
+
 ## v0.0.148 (2026-10-31)
 
 `[[ignore]]` in `squirrel.toml` waives findings by item or URL without disabling a rule, the technology scan reports the scripts it never read, and the JSON report schema is now 1.4. `integrity/brand-impersonation` and `integrity/fake-auth-overlay` no longer miss the common evasions, a keyword-stuffing plain-div menu shape is covered, and the audit ignore list drops nine entries whose advisories no longer match.
