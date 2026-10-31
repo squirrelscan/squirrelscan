@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **`surge-sh`, `railway-app`, `aws-amplify-hosting` and ActiveCampaign Pages are read from the page's own host.** Their signatures matched `.surge.sh`, `.railway.app`, `.amplifyapp.com` and `.ac-page.com` anywhere in the page HTML, so a site that only loads a third-party script or links to one of those hosts read as hosted there (the same class as the `firebase-hosting` fix). Surge and Railway keep their `Server` response header signal. (#1449)
+
 ## v0.0.153 (2026-11-01)
 
 Technology detection recognises the Klaviyo script loader forms browsers actually run (an unquoted or long-attribute `src`, a preload link, the inline `element.src =` loader and a proxied script URL) without the loader scan slowing a page that holds many empty scripts or a tag stuffed with openers. Thanks to William for the Klaviyo loader recall fix (#1457, #1463).
