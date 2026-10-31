@@ -88,6 +88,10 @@ test("5,001 empty templates do not use up the template bound; 5,001 real ones ar
   expect(fired(empty.checks, "brand-impersonation")).toBe(true);
   const full = await run(`${"<template><b>x</b></template>".repeat(5_001)}<template>${REAL}</template>`);
   expect(foundOrNoted(full.checks, "brand-impersonation")).toBe(true);
+  // The note names templates, not controls, as what was left unread.
+  const note = full.checks.find((c) => c.details?.scanTruncated === true);
+  expect(Number(note?.details?.templatesUnread)).toBeGreaterThan(0);
+  expect(String((note as { message?: string } | undefined)?.message)).toContain("template");
 }, 120_000);
 
 test("an overlay whose geometry is on a ninth class, or after 1,000 padding classes, is found", async () => {
@@ -136,6 +140,12 @@ test("1,600 controls naming one 500 KB aria-labelledby target finish and find th
 test("30,000 cross-host decoys with children before the real control: the fair share finds it", async () => {
   const decoy = `<a href="https://p.invalid/x">${"<i></i>".repeat(20)}</a>`;
   const { checks } = await run(`${decoy.repeat(30_000)}${REAL}`);
+  expect(finished(checks)).toBe(true);
+  expect(fired(checks, "brand-impersonation")).toBe(true);
+}, 180_000);
+
+test("20,000 unclosed anchors nest in each other; both rules finish at the default budget and the innermost real control is found", async () => {
+  const { checks } = await run(`${'<a href="https://p.invalid/x">x'.repeat(20_000)}${REAL}`);
   expect(finished(checks)).toBe(true);
   expect(fired(checks, "brand-impersonation")).toBe(true);
 }, 180_000);

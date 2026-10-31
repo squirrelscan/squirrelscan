@@ -81,6 +81,8 @@ export interface ControlScan {
   controls: Control[];
   /** Relevant controls whose text was cut by the work bounds (a sign-in attribute, a button, a link to another host or a sign-in path). */
   unread: number;
+  /** Templates with content that the template bound left unread (not counted in `unread`). */
+  templatesUnread: number;
 }
 
 const ATTR_CHARS = 300;
@@ -437,7 +439,7 @@ export function scanControls(doc: Document): ControlScan {
   const reads: Array<ReturnType<typeof readChunks> | undefined> = Array.from({ length: prepared.length });
   let spend = TOTAL_VISITS;
   let longBudget = LONG_BUDGET_VISITS;
-  let unread = notPrepared + templatesCut + paddedAttributes;
+  let unread = notPrepared + paddedAttributes;
   for (const [position, i] of order.entries()) {
     const item = prepared[i]!;
     const allowance = Math.min(SHORT_VISITS, Math.max(MIN_ALLOWANCE, Math.floor(spend / (order.length - position))));
@@ -463,7 +465,7 @@ export function scanControls(doc: Document): ControlScan {
       squashed: [...new Set(labels.map((l) => l.replace(/ /g, "")))],
     };
   });
-  const scan = { controls, unread };
+  const scan = { controls, unread, templatesUnread: templatesCut };
   scanCache.set(doc, scan);
   return scan;
 }

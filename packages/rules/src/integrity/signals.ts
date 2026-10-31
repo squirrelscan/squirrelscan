@@ -528,12 +528,13 @@ function safeSrc(src: string, base: string): string {
  * budget, and CSS past the amount read. Both are work bounds, spent most-relevant first; this says when one
  * was hit, so a clean result on such a page is not read as "nothing there".
  */
-export function integrityScanNotes(ctx: PageSignalContext): { controlsUnread?: number; cssTruncated?: true } {
+export function integrityScanNotes(ctx: PageSignalContext): { controlsUnread?: number; templatesUnread?: number; cssTruncated?: true } {
   const doc = ctx.parsed.document;
   if (!doc) return {};
-  const unread = scanControls(doc).unread;
+  const { unread, templatesUnread } = scanControls(doc);
   return {
     ...(unread > 0 ? { controlsUnread: unread } : {}),
+    ...(templatesUnread > 0 ? { templatesUnread } : {}),
     ...(cssScanTruncated(doc) ? { cssTruncated: true as const } : {}),
   };
 }
