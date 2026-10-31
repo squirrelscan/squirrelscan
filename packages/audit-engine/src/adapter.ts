@@ -2367,6 +2367,8 @@ export function runRulesOnStorage(
           // This page's HTML is the post-JS DOM when a render fetcher served it (#673). Lets
           // ax/content-without-js skip its raw-vs-rendered diff when it would be self-identical.
           rendered: isRenderedFetch(page.fetcherId),
+          // CSP violations the browser raised (#425), read by security/csp-violations.
+          ...(page.browserEvents ? { browserEvents: page.browserEvents } : {}),
         },
       });
     }

@@ -5,6 +5,7 @@ import { Effect, Duration, Schedule, pipe } from "effect";
 import type {
   AuditFailureDetail,
   AuditFailureSource,
+  BrowserEvents,
   RedirectChain,
   RedirectHop,
   ResponseHeaders,
@@ -572,6 +573,8 @@ export interface FetchResult {
   fallbackReason?: string;
   /** sha256 of the normalized raw source, when the conditional-render gate probed and rendered — persisted as the page's source_hash for next-run reuse (#839). */
   sourceHash?: string;
+  /** CSP violations, failed requests and page errors a browser render collected (#425). */
+  browserEvents?: BrowserEvents;
   /** Browser render cost only, threaded from the browser-queue fetcher's server-measured value (#826). Absent for non-rendered fetches. */
   renderTimeMs?: number;
   /** Queue delivery lag + browser-pool acquisition + concurrency-slot wait before rendering started (#826). Absent for non-rendered fetches. */
@@ -1079,6 +1082,7 @@ function fetchWithDocumentFetcher(
       // Normalized-source hash, set only when the conditional-render gate probed
       // and rendered — persisted as the page's source_hash for next-run reuse (#839).
       sourceHash: response.sourceHash,
+      ...(response.browserEvents ? { browserEvents: response.browserEvents } : {}),
       // Queue-wait vs render-time breakdown, set only by the browser-queue
       // fetcher (#826).
       renderTimeMs: response.renderTimeMs,

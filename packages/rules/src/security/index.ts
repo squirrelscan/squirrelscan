@@ -5,6 +5,7 @@ import type { Rule } from "../types";
 import { cookieFlagsRule } from "./cookie-flags";
 import { cspRule } from "./csp";
 import { cspBlocksOwnResourcesRule } from "./csp-blocks-own-resources";
+import { cspViolationsRule } from "./csp-violations";
 import { formCaptchaRule } from "./form-captcha";
 import { formHttpsRule } from "./form-https";
 import { graphqlGetMutationsRule } from "./graphql-get-mutations";
@@ -33,6 +34,7 @@ export const rules: Rule[] = [
   tlsCertificateRule,
   cspRule,
   cspBlocksOwnResourcesRule,
+  cspViolationsRule,
   xFrameOptionsRule,
   xContentTypeRule,
   referrerPolicyRule,
@@ -55,6 +57,7 @@ export const rules: Rule[] = [
 export {
   cookieFlagsRule,
   cspBlocksOwnResourcesRule,
+  cspViolationsRule,
   cspRule,
   formCaptchaRule,
   formHttpsRule,

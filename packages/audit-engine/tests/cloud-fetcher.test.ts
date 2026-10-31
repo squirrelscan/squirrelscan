@@ -4,7 +4,7 @@ import { CloudClientError, type CloudServicesClient } from "@squirrelscan/cloud-
 import type { RenderRequest } from "@squirrelscan/core-contracts";
 import type { DocumentFetcher, FetchRequest } from "@squirrelscan/fetchers";
 
-import { createCloudDocumentFetcher, terminalFallbackReason } from "../src/cloud-fetcher";
+import { createCloudDocumentFetcher, mapRenderItemToResponse, terminalFallbackReason } from "../src/cloud-fetcher";
 
 describe("terminalFallbackReason", () => {
   test("run_inactive (reaped run #475) is immediately terminal → fall back to local HTTP", () => {
@@ -215,5 +215,37 @@ describe("render runId threading (#1134)", () => {
     });
     await fetcher.fetch({ url: "https://example.com/" } as FetchRequest);
     expect(captured[0]?.runId).toBeUndefined();
+  });
+});
+
+describe("browser events on a rendered page (#425)", () => {
+  const timing = { startedAt: 0, responseAt: 1, finishedAt: 2 };
+  const item = (browserEvents: unknown) =>
+    ({ url: "https://example.com/", status: 200, html: "<html></html>", headers: {}, browserEvents }) as never;
+
+  test("the render item's events ride on the fetch response, bounded and cut to origin and path", () => {
+    const response = mapRenderItemToResponse(
+      item({
+        cspViolations: [{ violatedDirective: "script-src-elem", blockedUri: "https://w.test/e.js?token=SECRET", disposition: "enforce" }],
+        failedRequests: [{ url: "https://w.test/e.js?token=SECRET", failure: "net::ERR_BLOCKED_BY_CSP" }],
+        pageErrors: ["boom"],
+        listenedAfterLoad: true,
+      }),
+      "https://example.com/",
+      timing,
+    );
+    expect(response.browserEvents).toEqual({
+      cspViolations: [{ violatedDirective: "script-src-elem", blockedUri: "https://w.test/e.js", disposition: "enforce" }],
+      failedRequests: [{ url: "https://w.test/e.js", failure: "net::ERR_BLOCKED_BY_CSP" }],
+      pageErrors: ["boom"],
+      listenedAfterLoad: true,
+    });
+    expect(JSON.stringify(response.browserEvents)).not.toContain("SECRET");
+  });
+
+  test("an item without events, or with junk, has none", () => {
+    expect(mapRenderItemToResponse(item(undefined), "https://example.com/", timing).browserEvents).toBeUndefined();
+    expect(mapRenderItemToResponse(item("junk"), "https://example.com/", timing).browserEvents).toBeUndefined();
+    expect("browserEvents" in mapRenderItemToResponse(item(undefined), "https://example.com/", timing)).toBe(false);
   });
 });

@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- **`security/csp-violations` reports Content-Security-Policy violations the browser saw on a rendered page.** Violations are grouped by directive and blocked host; a blocked known vendor script (analytics, ads, chat) fails, anything else warns, and report-only violations are counted but not reported. Pages fetched without a browser skip with a reason. The contract carries bounded, sanitised browser events (`browserEvents`) and the page store gains a `browser_events` column (schema 41); the renderer-side collection ships separately. (#425)
+
 ## v0.0.147 (2026-10-31)
 
 `security/tls-certificate` now judges every key type and reads the signature and protocol, and a start URL with a broken TLS certificate reports that check failing instead of ending without a finding. A deep start URL is named in the audit, recorded as `meta.requestedUrl` and guaranteed a slot, `--include-pages` says how each page answered, and the local technology scan reads whole bundles and says when it was cut short. `security/cookie-flags` no longer warns about CSRF token cookies, and `squirrel report --input` keeps a saved report's skipped checks. The JSON report schema is now 1.3. Thanks to William for the deep start URL work (#1369, #1385).

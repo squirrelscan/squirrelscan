@@ -11,6 +11,7 @@
     "./clamp": "./src/clamp.ts",
     "./item-sources": "./src/item-sources.ts",
     "./control-chars": "./src/control-chars.ts",
+    "./browser-events": "./src/browser-events.ts",
     "./failure-reason": "./src/failure-reason.ts",
     "./waf-block": "./src/waf-block.ts",
     "./offsite-redirect": "./src/offsite-redirect.ts",

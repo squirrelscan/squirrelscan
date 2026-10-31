@@ -1,4 +1,4 @@
-import type { RedirectChain } from "@squirrelscan/core-contracts";
+import type { BrowserEvents, RedirectChain } from "@squirrelscan/core-contracts";
 import {
   DEFAULT_MAX_DOCUMENT_BODY_BYTES,
   fetchUndecoded,
@@ -104,6 +104,8 @@ export interface FetchResponse {
    * on every direct (unprobed) fetch.
    */
   sourceHash?: string;
+  /** CSP violations, failed requests and page errors a browser render collected (#425); only a render service sets it. */
+  browserEvents?: BrowserEvents;
   /**
    * Browser render cost only (page.goto + content + link extraction), as
    * measured server-side by crawler-worker — set only by the browser-queue
