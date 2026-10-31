@@ -1212,6 +1212,11 @@ export interface LocalTechDetectOptions {
   limits?: TechBundleLimits;
   /** First-party scripts the audit's script limit left unread (`assets.scriptsNotRead`), for `truncated`. */
   scriptsNotRead?: number;
+  /**
+   * Return the section even when nothing was detected, so a caller merging it into the cloud section still
+   * learns whether the local scan read every bundle (its `truncated` field). Default: null when empty.
+   */
+  keepEmpty?: boolean;
 }
 
 /**
@@ -1240,7 +1245,7 @@ export function detectLocalTechnologies(
     // Nothing detected is no section, so a weak local guess never clears synced tech, unless a cap
     // or budget cut the scan short: then the empty section carries the cut, so the report does not
     // read as "this site runs nothing" (#1408). The audit command does not sync such a section.
-    return section.items.length > 0 || section.truncated
+    return section.items.length > 0 || section.truncated || opts.keepEmpty
       ? { ...section, source: "local" as const }
       : null;
   } catch (error) {
@@ -1250,6 +1255,46 @@ export function detectLocalTechnologies(
     );
     return null;
   }
+}
+
+/**
+ * The cloud technologies section with what the free local scan found in whole bundles added to it (#1406).
+ *
+ * The cloud scan sees each bundle cut to the payload caps (64 KB a bundle); the local scan reads them whole,
+ * so it finds technologies the cloud one cannot (a library deep in a large bundle). One section, then:
+ * - the cloud items stay as they are, a missing version is filled in from the local scan;
+ * - a technology only the local scan found is added, marked `origin: "local"`, and is never in `added`
+ *   (it has no scan diff); `added`, `removed`, `firstScan`, `advisories` and `scannedAt` are the cloud's;
+ * - the local scan's bytes are not sent anywhere: only its result is merged here;
+ * - `truncated` describes the merged section: the cloud payload cut stops being a limit once the local
+ *   scan covered those bundles, so it is the local scan's own cut (a bundle over 8 MB, a budget, the time
+ *   limit) or absent.
+ * Without a local result (it threw) the cloud section is returned as it was, cut included.
+ */
+export function mergeLocalTechnologies(
+  cloud: ReportTechnologies,
+  local: ReportTechnologies | null
+): ReportTechnologies {
+  if (!local) return cloud;
+  const localById = new Map(local.items.map((item) => [item.id, item]));
+  const cloudIds = new Set(cloud.items.map((item) => item.id));
+  const items = [
+    ...cloud.items.map((item) => {
+      const found = localById.get(item.id);
+      return found && item.version === null && found.version !== null
+        ? { ...item, version: found.version }
+        : item;
+    }),
+    ...local.items
+      .filter((item) => !cloudIds.has(item.id))
+      .map((item) => ({ ...item, origin: "local" as const })),
+  ];
+  const { truncated: _cloudCut, ...rest } = cloud;
+  return {
+    ...rest,
+    items,
+    ...(local.truncated ? { truncated: local.truncated } : {}),
+  };
 }
 
 // ── Cloud editor's summary (credited, report-only) ───────

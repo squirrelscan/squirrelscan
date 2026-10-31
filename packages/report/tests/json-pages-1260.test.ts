@@ -33,10 +33,10 @@ const parse = (options?: Parameters<typeof renderJson>[1]) =>
   };
 
 describe("meta.schemaVersion", () => {
-  test("is 1.5, the version that added executedRules and the unstored page rows, on every JSON report", () => {
-    expect(JSON_REPORT_SCHEMA_VERSION).toBe("1.5");
-    expect(parse().meta.schemaVersion).toBe("1.5");
-    expect(parse({ pages: rows(1) }).meta.schemaVersion).toBe("1.5");
+  test("is 1.6, the version that added executedRules and the unstored page rows, on every JSON report", () => {
+    expect(JSON_REPORT_SCHEMA_VERSION).toBe("1.6");
+    expect(parse().meta.schemaVersion).toBe("1.6");
+    expect(parse({ pages: rows(1) }).meta.schemaVersion).toBe("1.6");
   });
 });
 
