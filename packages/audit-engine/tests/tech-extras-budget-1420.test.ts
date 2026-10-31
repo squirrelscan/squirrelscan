@@ -29,7 +29,10 @@ function crowd(count: number): string {
   return lines.join("\n");
 }
 
-function detect(content: string): { ids: string[]; bodyBytes: number } {
+function detect(
+  content: string,
+  limits = DEFAULT_TECH_BUNDLE_LIMITS,
+): { ids: string[]; bodyBytes: number } {
   const inputs = buildTechInputs(
     [
       {
@@ -39,7 +42,7 @@ function detect(content: string): { ids: string[]; bodyBytes: number } {
       },
     ],
     [{ url: "https://example.com/a.js", content, sourcePages: [HOME] }],
-    DEFAULT_TECH_BUNDLE_LIMITS,
+    limits,
   );
   const body = inputs[0]!.scripts?.find((s) => s.content)?.content ?? "";
   return {
@@ -77,3 +80,28 @@ describe("unhinted detectors past the head, at the cloud payload caps (#1420)", 
     expect(detect(content).ids).toContain("supabase");
   });
 });
+
+// #1433 corpus: a loader the string tracker lost (a quote in a regex after `}` reads as the start of a
+// string that runs to the end of the line) in a small script, with another hint's window after it.
+describe("a loader in a small script survives the string tracker, at both caps (#1433 corpus)", () => {
+  const lostLine = (loader: string): string =>
+    `x=a}/'/.test(c);${filler(1_500).replaceAll("\n", "")}${loader}${filler(1_000).replaceAll("\n", "")}\n`;
+  const cases = [
+    { name: "ttq.load( at 21 KB of 26 KB", loader: "ttq.load('ABCDEFGH');ttq.page();", id: "tiktok-pixel", before: 20_000, rest: 3_500 },
+    { name: "fbq( 2 KB from the end of 121 KB", loader: "fbq('init','1234567890');", id: "facebook-pixel", before: 116_000, rest: 1_500 },
+    { name: "posthog.init at 19 KB of 34 KB", loader: "window.posthog||[]);posthog.init('phc_x',{});", id: "posthog", before: 17_000, rest: 14_000 },
+  ];
+  const caps = [
+    { cap: "cloud", limits: DEFAULT_TECH_BUNDLE_LIMITS },
+    { cap: "24 KB bundle", limits: { bundleBytes: 24 * 1024, pageBytes: 512 * 1024, auditBytes: 1024 * 1024 } },
+  ];
+  for (const c of cases) {
+    for (const { cap, limits } of caps) {
+      test(`${c.name} (${cap})`, () => {
+        const content = `${filler(c.before)}\n${lostLine(c.loader)}${filler(300)}\nStripe("pk_test_x");\n${filler(c.rest)}`;
+        expect(detect(content, limits).ids).toContain(c.id);
+      });
+    }
+  }
+});
+
