@@ -78,6 +78,10 @@ def main() -> None:
     source = f"http://127.0.0.1:{server.server_address[1]}"
     dead_proxy = "http://127.0.0.1:9"
     env = dict(os.environ)
+    # Hermetic on a dev machine: no inherited agent config dirs or squirrel overrides redirect where skills land.
+    for name in list(env):
+        if name in ("CLAUDE_CONFIG_DIR", "CODEX_HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_CACHE_HOME") or name.startswith("SQUIRREL_"):
+            del env[name]
     env.update(
         HOME=home,
         USERPROFILE=home,
@@ -93,7 +97,7 @@ def main() -> None:
         NO_PROXY="127.0.0.1,localhost",
         no_proxy="127.0.0.1,localhost",
     )
-    proc = subprocess.run([*command, "skills", "install"], env=env, capture_output=True, text=True, timeout=120)
+    proc = subprocess.run([*command, "skills", "install"], env=env, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120)
     server.shutdown()
     output = f"--- stdout ---\n{proc.stdout}\n--- stderr ---\n{proc.stderr}\n--- requests ---\n{hits}"
     if proc.returncode != 0:
