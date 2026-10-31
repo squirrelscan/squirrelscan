@@ -19,6 +19,10 @@ describe("Klaviyo script recall", () => {
     for (const ids of withAndWithoutBodies(page(`<script src=${SRC}></script>`))) expect(ids).toContain("klaviyo");
   });
 
+  test("a quoted script src with browser-trimmed leading space", () => {
+    for (const ids of withAndWithoutBodies(page(`<script src="  ${SRC}"></script>`))) expect(ids).toContain("klaviyo");
+  });
+
   test("a script src after more than 300 characters of attributes", () => {
     const padding = Array.from({ length: 40 }, (_, i) => `data-padding-${i}="abcdefgh"`).join(" ");
     for (const ids of withAndWithoutBodies(page(`<script ${padding} src="${SRC}"></script>`))) expect(ids).toContain("klaviyo");
