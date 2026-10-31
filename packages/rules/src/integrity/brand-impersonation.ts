@@ -46,7 +46,7 @@ export const brandImpersonationRule: Rule = {
           parts.push(`${notes.controlsUnread} sign-in control${notes.controlsUnread === 1 ? "" : "s"} could not be read in full`);
         }
         if (notes.templatesUnread) {
-          parts.push(`${notes.templatesUnread} <template> element${notes.templatesUnread === 1 ? "" : "s"} past the template limit were not read`);
+          parts.push(`${notes.templatesUnread} <template> element${notes.templatesUnread === 1 ? " was" : "s were"} past the template limit and not read`);
         }
         checks.push({
           name: "brand-impersonation",
