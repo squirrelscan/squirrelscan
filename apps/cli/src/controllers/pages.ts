@@ -390,6 +390,9 @@ async function findPreviousCrawl(
   crawl: CrawlMetadata
 ): Promise<Result<CrawlMetadata>> {
   let best: CrawlMetadata | undefined;
+  // The newest earlier audit that cannot be read (reclaimed, still running): named in the message
+  // when it is the only earlier one, so "only one has been run" is never said wrongly.
+  let skipped: CrawlMetadata | undefined;
   for (const dbPath of getProjectStoragePaths()) {
     if (!existsSync(dbPath)) continue;
     const storage = new SQLiteStorage(dbPath, getGlobalContentStore());
@@ -397,11 +400,13 @@ async function findPreviousCrawl(
       await Effect.runPromise(storage.init());
       for (const other of await Effect.runPromise(storage.listCrawls())) {
         if (
-          other.baseUrl === crawl.baseUrl &&
-          other.startedAt < crawl.startedAt &&
-          isReportRenderable(other) &&
-          (!best || other.startedAt > best.startedAt)
-        ) {
+          other.baseUrl !== crawl.baseUrl ||
+          other.startedAt >= crawl.startedAt
+        )
+          continue;
+        if (!isReportRenderable(other)) {
+          if (!skipped || other.startedAt > skipped.startedAt) skipped = other;
+        } else if (!best || other.startedAt > best.startedAt) {
           best = other;
         }
       }
@@ -417,6 +422,14 @@ async function findPreviousCrawl(
         storage.close().pipe(Effect.catchAll(() => Effect.void))
       );
     }
+  }
+  if (!best && skipped) {
+    return err(
+      commandError(
+        ErrorCodes.CRAWL_NOT_FOUND,
+        `The previous audit of ${crawl.baseUrl} (${skipped.id.slice(0, 8)}) ${reportUnavailableReason(skipped)}, so there is nothing to compare with. Run "squirrel audit ${crawl.baseUrl}" again, or name both audits.`
+      )
+    );
   }
   if (!best) {
     return err(

@@ -4,7 +4,7 @@
 
 import { csvField } from "./entities-export";
 import { escapeMarkdownCell, escapeMarkdownText, markdownCodeSpan } from "./output/markdown-escape";
-import { cleanText, csvSafeText, type PageMapMeta, type PageMapRow } from "./page-map";
+import { cleanText, csvSafeText, escapeJsonUnsafe, urlCell, type PageMapMeta, type PageMapRow } from "./page-map";
 
 /** The fields a change is reported for. Counts that move with every crawl (links, word count, load time) are not among them. */
 export const PAGE_MAP_DIFF_FIELDS = [
@@ -15,7 +15,9 @@ export const PAGE_MAP_DIFF_FIELDS = [
   "title",
   "description",
   "h1Count",
+  "h1",
   "schemaTypes",
+  "schemaIds",
   "flags",
 ] as const satisfies readonly (keyof PageMapRow)[];
 
@@ -76,18 +78,33 @@ export function diffPageMaps(
 
 export interface PageMapDiffMeta {
   site: string;
-  older: Pick<PageMapMeta, "crawlId" | "startedAt">;
-  newer: Pick<PageMapMeta, "crawlId" | "startedAt">;
+  older: Pick<PageMapMeta, "crawlId" | "startedAt"> & { pages?: number };
+  newer: Pick<PageMapMeta, "crawlId" | "startedAt"> & { pages?: number };
+}
+
+/**
+ * A sentence when the two audits crawled clearly different numbers of pages (a quick audit against a
+ * full one), because then pages come and go with the crawl's scope and not with the site. Null when
+ * the counts are close or unknown.
+ */
+export function pageMapDiffScopeNote(meta: PageMapDiffMeta): string | null {
+  const a = meta.older.pages;
+  const b = meta.newer.pages;
+  if (a === undefined || b === undefined || Math.max(a, b) === 0) return null;
+  if (Math.abs(a - b) / Math.max(a, b) <= 0.2) return null;
+  return `The audits crawled different numbers of pages (${a} and ${b}), so some pages below may be added or removed because of the crawl's scope, not a change to the site.`;
 }
 
 /** The diff as JSON: both audits, the counts, and the three lists. */
 export function renderPageMapDiffJson(diff: PageMapDiff, meta: PageMapDiffMeta): string {
   const iso = (ms: number) => new Date(ms).toISOString();
-  return `${JSON.stringify(
+  const note = pageMapDiffScopeNote(meta);
+  return `${escapeJsonUnsafe(JSON.stringify(
     {
       site: meta.site,
       older: { crawlId: meta.older.crawlId, startedAt: iso(meta.older.startedAt) },
       newer: { crawlId: meta.newer.crawlId, startedAt: iso(meta.newer.startedAt) },
+      ...(note ? { scopeNote: note } : {}),
       counts: {
         added: diff.added.length,
         removed: diff.removed.length,
@@ -100,7 +117,7 @@ export function renderPageMapDiffJson(diff: PageMapDiff, meta: PageMapDiffMeta):
     },
     null,
     2,
-  )}\n`;
+  ))}\n`;
 }
 
 /** A value from an audited page, as one short markdown-table-safe cell. */
@@ -117,11 +134,13 @@ export function renderPageMapDiffMarkdown(diff: PageMapDiff, meta: PageMapDiffMe
     `Audit ${id(meta.older.crawlId)} (${new Date(meta.older.startedAt).toISOString().slice(0, 10)}) to ${id(meta.newer.crawlId)} (${new Date(meta.newer.startedAt).toISOString().slice(0, 10)}): ${diff.added.length} added, ${diff.removed.length} removed, ${diff.changed.length} changed, ${diff.unchanged} unchanged.`,
   );
   out.push("");
+  const scope = pageMapDiffScopeNote(meta);
+  if (scope) out.push(`> ${scope}`, "");
   if (diff.changed.length > 0) {
     out.push("## Changed", "", "| URL | Field | Before | After |", "|---|---|---|---|");
     for (const page of diff.changed) {
       for (const change of page.changes) {
-        out.push(`| ${markdownCodeSpan(cleanText(page.url))} | ${change.field} | ${cell(change.before)} | ${cell(change.after)} |`);
+        out.push(`| ${urlCell(page.url)} | ${change.field} | ${cell(change.before)} | ${cell(change.after)} |`);
       }
     }
     out.push("");
@@ -132,7 +151,7 @@ export function renderPageMapDiffMarkdown(diff: PageMapDiff, meta: PageMapDiffMe
   ] as const) {
     if (rows.length === 0) continue;
     out.push(`## ${heading}`, "", "| URL | Status | Title |", "|---|---|---|");
-    for (const row of rows) out.push(`| ${markdownCodeSpan(cleanText(row.url))} | ${row.status} | ${cell(row.title ?? "")} |`);
+    for (const row of rows) out.push(`| ${urlCell(row.url)} | ${row.status} | ${cell(row.title ?? "")} |`);
     out.push("");
   }
   if (diff.added.length + diff.removed.length + diff.changed.length === 0) {

@@ -250,6 +250,12 @@ export const pages = defineCommand({
         return safeExit(1);
       }
       const ids = splitListFlag(args.crawl as string | string[] | undefined);
+      if (ids.length > 2) {
+        console.error(
+          `--diff compares two audits, got ${ids.length} --crawl values`
+        );
+        return safeExit(1);
+      }
       const pair = await loadPageMapPair(ids);
       if (!pair.ok) {
         if (pair.error.code === ErrorCodes.CRAWL_NOT_FOUND) {
@@ -270,8 +276,16 @@ export const pages = defineCommand({
       const result = diffPageMaps(scoped(older.rows), scoped(newer.rows));
       const diffMeta = {
         site: newer.crawl.baseUrl,
-        older: { crawlId: older.crawl.id, startedAt: older.crawl.startedAt },
-        newer: { crawlId: newer.crawl.id, startedAt: newer.crawl.startedAt },
+        older: {
+          crawlId: older.crawl.id,
+          startedAt: older.crawl.startedAt,
+          pages: older.rows.length,
+        },
+        newer: {
+          crawlId: newer.crawl.id,
+          startedAt: newer.crawl.startedAt,
+          pages: newer.rows.length,
+        },
       };
       emit(
         diffFormat === "json"
@@ -283,7 +297,6 @@ export const pages = defineCommand({
       );
       return;
     }
-
 
     const crawlIds = splitListFlag(args.crawl as string | string[] | undefined);
     if (crawlIds.length > 1) {
