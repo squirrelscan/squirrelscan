@@ -6,7 +6,7 @@ import { describe, expect, test } from "bun:test";
 import { JSON_REPORT_PAGES, JSON_REPORT_SCHEMA_VERSION } from "@squirrelscan/core-contracts/limits";
 
 import type { AuditReport } from "../src/types";
-import { renderJson, type JsonPageRow } from "../src/output/json";
+import { pageOutcome, renderJson, type JsonPageRow } from "../src/output/json";
 
 const report = {
   baseUrl: "https://example.com",
@@ -21,7 +21,9 @@ const report = {
 const rows = (n: number): JsonPageRow[] =>
   Array.from({ length: n }, (_, i) => ({
     url: `https://example.com/p/${i}`,
+    finalUrl: `https://example.com/p/${i}`,
     status: i % 7 === 0 ? 404 : 200,
+    outcome: i % 7 === 0 ? "http-error" : "ok",
     ruleCount: i % 5,
   }));
 
@@ -31,7 +33,7 @@ const parse = (options?: Parameters<typeof renderJson>[1]) =>
   };
 
 describe("meta.schemaVersion", () => {
-  test("is 1.2 on every JSON report", () => {
+  test("is 1.2, which added meta.requestedUrl and finalUrl and outcome on the pages rows, on every JSON report", () => {
     expect(JSON_REPORT_SCHEMA_VERSION).toBe("1.2");
     expect(parse().meta.schemaVersion).toBe("1.2");
     expect(parse({ pages: rows(1) }).meta.schemaVersion).toBe("1.2");
@@ -46,12 +48,12 @@ describe("pages list", () => {
     expect(json).not.toHaveProperty("pagesTruncated");
   });
 
-  test("lists url, status and ruleCount per page", () => {
+  test("lists url, finalUrl, status, outcome and ruleCount per page", () => {
     const json = parse({ pages: rows(3) });
     expect(json.pages).toEqual([
-      { url: "https://example.com/p/0", status: 404, ruleCount: 0 },
-      { url: "https://example.com/p/1", status: 200, ruleCount: 1 },
-      { url: "https://example.com/p/2", status: 200, ruleCount: 2 },
+      { url: "https://example.com/p/0", finalUrl: "https://example.com/p/0", status: 404, outcome: "http-error", ruleCount: 0 },
+      { url: "https://example.com/p/1", finalUrl: "https://example.com/p/1", status: 200, outcome: "ok", ruleCount: 1 },
+      { url: "https://example.com/p/2", finalUrl: "https://example.com/p/2", status: 200, outcome: "ok", ruleCount: 2 },
     ]);
     expect(json.pagesTotal).toBe(3);
     expect(json.pagesTruncated).toBe(false);
@@ -79,8 +81,26 @@ describe("pages list", () => {
 
   test("extra fields on a row are not copied", () => {
     const json = parse({
-      pages: [{ url: "u", status: 200, ruleCount: 1, html: "<p>secret</p>" } as JsonPageRow],
+      pages: [{ url: "u", finalUrl: "u", status: 200, outcome: "ok", ruleCount: 1, html: "<p>secret</p>" } as JsonPageRow],
     });
-    expect(json.pages).toEqual([{ url: "u", status: 200, ruleCount: 1 }]);
+    expect(json.pages).toEqual([{ url: "u", finalUrl: "u", status: 200, outcome: "ok", ruleCount: 1 }]);
+  });
+});
+
+describe("pageOutcome", () => {
+  test("ok under 400, rate-limited at 429, http-error for other 4xx and 5xx, error without a usable status", () => {
+    for (const status of [200, 204, 301, 302, 399]) expect(pageOutcome(status)).toBe("ok");
+    expect(pageOutcome(429)).toBe("rate-limited");
+    for (const status of [400, 403, 404, 410, 500, 503]) expect(pageOutcome(status)).toBe("http-error");
+    for (const status of [0, -1, 99, 600, Number.NaN, 200.5]) expect(pageOutcome(status)).toBe("error");
+  });
+
+  test("a rate-limited page is listed with its URL and the rate-limited outcome", () => {
+    const json = parse({
+      pages: [{ url: "https://example.com/slow", finalUrl: "https://example.com/slow", status: 429, outcome: pageOutcome(429), ruleCount: 0 }],
+    });
+    expect(json.pages).toEqual([
+      { url: "https://example.com/slow", finalUrl: "https://example.com/slow", status: 429, outcome: "rate-limited", ruleCount: 0 },
+    ]);
   });
 });

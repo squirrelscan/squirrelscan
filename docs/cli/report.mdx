@@ -201,7 +201,7 @@ A report loaded with `--input` lists none, because passing checks are not read b
 
 ### Pages list
 
-`--include-pages` adds `pages` to a JSON report: one `{ "url", "status", "ruleCount" }` entry for each page the audit crawled, read from the stored audit.
+`--include-pages` adds `pages` to a JSON report: one `{ "url", "finalUrl", "status", "outcome", "ruleCount" }` entry for each page the audit crawled, read from the stored audit.
 
 ```bash
 squirrel report -f json --include-pages

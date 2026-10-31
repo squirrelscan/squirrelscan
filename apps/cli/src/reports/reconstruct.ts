@@ -695,6 +695,7 @@ export function reconstructReport(
 
         const pageAudit: PageAudit = {
           url: page.url,
+          finalUrl: page.finalUrl,
           statusCode: page.status,
           meta: kept?.meta ?? {
             title: null,

@@ -1,4 +1,4 @@
-import { renderJson } from "@squirrelscan/report";
+import { pageOutcome, renderJson } from "@squirrelscan/report";
 
 import type { AuditReport } from "@/types";
 
@@ -20,7 +20,9 @@ export function generateJsonReport(
       ? {
           pages: report.pages.map((page) => ({
             url: page.url,
+            finalUrl: page.finalUrl ?? page.url,
             status: page.statusCode,
+            outcome: pageOutcome(page.statusCode),
             ruleCount: page.ruleCount ?? 0,
           })),
         }

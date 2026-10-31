@@ -120,11 +120,28 @@ function slimComponentFixGroups(
   });
 }
 
+/**
+ * How a crawled page answered (#1260): `ok` (status under 400), `rate-limited` (429),
+ * `http-error` (any other 4xx or 5xx) or `error` (no usable status). A URL whose fetch never
+ * produced a stored response is not a page and is not listed.
+ */
+export type JsonPageOutcome = "ok" | "http-error" | "rate-limited" | "error";
+
+/** The {@link JsonPageOutcome} of an HTTP status. */
+export function pageOutcome(status: number): JsonPageOutcome {
+  if (!Number.isInteger(status) || status < 100 || status > 599) return "error";
+  if (status === 429) return "rate-limited";
+  return status >= 400 ? "http-error" : "ok";
+}
+
 /** One crawled page in the opt-in `pages` list (#1260). */
 export interface JsonPageRow {
   url: string;
+  /** The URL the page was served from after redirects; `url` when it did not redirect. */
+  finalUrl: string;
   /** HTTP status the page answered with. */
   status: number;
+  outcome: JsonPageOutcome;
   /** Distinct rules that reported on the page (skipped checks not counted). */
   ruleCount: number;
 }
@@ -621,7 +638,9 @@ function buildSlimReport(
       ? {
           pages: pages.slice(0, JSON_REPORT_PAGES.maxEntries).map((page) => ({
             url: page.url,
+            finalUrl: page.finalUrl,
             status: page.status,
+            outcome: page.outcome,
             ruleCount: page.ruleCount,
           })),
           pagesTotal: pages.length,

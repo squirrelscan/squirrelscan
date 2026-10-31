@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- **The `--include-pages` list says how each page answered.** Each `pages` entry in the JSON report now has `finalUrl` (where the page was served from after redirects) and `outcome` (`ok`, `http-error`, `rate-limited` or `error`) beside `url`, `status` and `ruleCount`, so a pipeline that tracks coverage can tell a rate-limited page from a missing one without re-deriving it. `meta.schemaVersion` is now `1.2`. (#1260)
+
 ### Fixed
 
 - **`squirrel report --input` keeps a saved report's skipped checks.** A JSON report lists the checks a rule could not finish in `skippedChecks`, with `summary.skipped`, but loading the file dropped them, so re-rendering or re-exporting it read as a clean audit on those pages. They are now read back, validated (the file is untrusted), and kept out of `issues`. (#518)

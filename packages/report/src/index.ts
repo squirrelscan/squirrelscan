@@ -164,7 +164,8 @@ export { renderMarkdown } from "./output/markdown";
 export { renderText } from "./output/text";
 export { renderXml } from "./output/xml";
 export { renderLlm } from "./output/llm";
-export { renderJson } from "./output/json";
+export { pageOutcome, renderJson } from "./output/json";
+export type { JsonPageOutcome, JsonPageRow } from "./output/json";
 
 // Technologies section helpers (shared across formats + CLI console)
 export {
