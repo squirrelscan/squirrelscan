@@ -1389,6 +1389,17 @@ export interface ReportTechnologies {
    * which adds the cross-scan diff. Absent on reports written before this field.
    */
   source?: "local" | "cloud";
+  /**
+   * Present when a byte cap or the time budget cut the local scan short, so fewer
+   * technologies than the site runs may be listed (#1387). Absent: the scan read
+   * everything it was given.
+   */
+  truncated?: {
+    /** `bundle-bytes`: a script past `[tech_detect] bundle_bytes`; `page-bytes` / `audit-bytes`: a script left out by the page or audit budget; `time-budget`: the per-page time budget ran out. */
+    reasons: Array<"bundle-bytes" | "page-bytes" | "audit-bytes" | "time-budget">;
+    /** Scripts read only in part or not at all. */
+    scripts: number;
+  };
 }
 
 /** One link section's footprint across the audited pages. */

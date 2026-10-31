@@ -100,7 +100,10 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
     icon: "sentry",
     detectors: [
       { type: "script-url", pattern: /browser\.sentry-cdn\.com/i },
-      { type: "script-content", pattern: /Sentry\.init/ },
+      // `[Sentry]` (the SDK's own log prefix) or a real init call with a config object. The bare
+      // `Sentry.init` also appears in other libraries' prose (supabase-js says "in Sentry.init() to
+      // emit it"), which matters once a whole bundle is read (#1387).
+      { type: "script-content", pattern: /\[Sentry\]|Sentry\.init\(\s*\{/ },
       { type: "html", pattern: /sentry\.init/i },
     ],
   },

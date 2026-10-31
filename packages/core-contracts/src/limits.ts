@@ -481,8 +481,8 @@ export const JSON_REPORT_PAGES = {
   maxEntries: 2_000,
 } as const;
 
-/** The JSON report's schema version (`meta.schemaVersion`): major.minor. 1.1 added the opt-in `pages` list (#1260); 1.2 added `meta.requestedUrl` (#1369) and `finalUrl` and `outcome` on the pages rows (#1260). */
-export const JSON_REPORT_SCHEMA_VERSION = "1.2";
+/** The JSON report's schema version (`meta.schemaVersion`): major.minor. 1.1 added the opt-in `pages` list (#1260); 1.2 added `meta.requestedUrl` (#1369) and `finalUrl` and `outcome` on the pages rows (#1260); 1.3 added `technologies.truncated` (#1387). */
+export const JSON_REPORT_SCHEMA_VERSION = "1.3";
 
 // ── LLM Report Output ──────────────────────────────────────────
 export const LLM_REPORT = {
@@ -820,6 +820,18 @@ export const SERVICE_LIMITS = {
   techDetectPageScriptBytes: 512 * 1024,
   /** ...per audit; sized so the cloud payload stays inside maxBodyBytes after JSON escaping. */
   techDetectAuditScriptBytes: 1024 * 1024,
+  /**
+   * The local scan sends nothing anywhere, so it reads bundles whole (#1387): per bundle
+   * (default; `[tech_detect] bundle_bytes`), over every bundle of a page, and of an audit.
+   * The bytes are already in memory from the crawl; these bound only the work.
+   */
+  techDetectLocalBundleBytes: 8 * 1024 * 1024,
+  techDetectLocalPageScriptBytes: 32 * 1024 * 1024,
+  techDetectLocalAuditScriptBytes: 64 * 1024 * 1024,
+  /** Largest `[tech_detect] bundle_bytes` the config accepts. */
+  techDetectMaxBundleBytes: 16 * 1024 * 1024,
+  /** Wall-clock budget for the local tech scan of one page; the report says when it ran out. */
+  techDetectLocalPageBudgetMs: 30_000,
   /** Max sampled pages per site-metadata call (home + a few representative pages). */
   metadataMaxPages: 6,
   /** Defensive cap (bytes) on the total JSON-LD payload per site-metadata call. */

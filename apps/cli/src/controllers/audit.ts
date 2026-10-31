@@ -71,7 +71,7 @@ import {
   runCloudPrefetchFromPayloads,
   runCloudTechDetect,
   detectLocalTechnologies,
-  techBundleLimits,
+  localTechBundleLimits,
   type CloudPrefetchResult,
   type CloudTechDetectResult,
 } from "@/audit/cloud";
@@ -2465,7 +2465,7 @@ export async function runAudit(
           baseUrl: url,
           siteContext: techSample,
           scripts: assets.scripts,
-          limits: techBundleLimits(mergedConfig),
+          limits: localTechBundleLimits(mergedConfig),
         });
         if (localTech) report.technologies = localTech;
       }

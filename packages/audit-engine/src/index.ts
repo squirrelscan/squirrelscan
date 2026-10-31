@@ -79,6 +79,9 @@ export {
   detectReportTechnologiesMulti,
   buildTechInputs,
   extractScriptSrcs,
+  DEFAULT_LOCAL_TECH_BUNDLE_LIMITS,
+  LOCAL_TECH_DETECT_OPTIONS,
+  techInputTruncation,
   DEFAULT_TECH_BUNDLE_LIMITS,
   withWafTech,
 } from "./technologies";

@@ -3,22 +3,32 @@ import { ALL_FINGERPRINTS } from "./fingerprints";
 import { inString, scanJs, type ScannedJs } from "./js-scan";
 
 /**
- * Longest slice of one script body detection reads (chars): the largest
- * `[tech_detect] bundle_bytes` the config allows. What a caller sends is cut
- * smaller by its own cap (64 KB by default), so this only bounds a caller that
- * sends more, and a hostile megabyte cannot stall a page.
+ * Default wall-clock budget for one detectTechnologies call (one page). A caller
+ * that reads whole bundles (the local scan) passes a longer one; running out of
+ * time is reported through `onBudgetExceeded`, never silent.
  */
-export const TECH_SCRIPT_CONTENT_LIMIT = 256 * 1024;
-
-/** Default wall-clock budget for one detectTechnologies call (one page). */
 export const TECH_DETECT_PAGE_BUDGET_MS = 5_000;
 
-/** Candidate matches an `inCode` detector inspects before giving up. */
-const MAX_IN_CODE_CANDIDATES = 8;
+/**
+ * Candidate matches an `inCode` detector inspects before giving up. A candidate is
+ * a pattern match that starts inside a string or comment (a docs snippet, a
+ * product named in prose): a big bundle holds many before the real one.
+ */
+const MAX_IN_CODE_CANDIDATES = 64;
+
+/**
+ * Longest slice of one script body a caller gets matched, in characters, unless it asks for more
+ * (`DetectOptions.maxScriptChars`). The cloud services that run this package over bodies a client
+ * sent, and over a hostile audited site's bundles, rely on it: only the local scan, which reads
+ * what the user's own crawl fetched, passes a larger value.
+ */
+export const TECH_SCRIPT_CONTENT_LIMIT = 256 * 1024;
 
 export interface DetectOptions {
   /** Stop evaluating fingerprints once this much time has passed. */
   budgetMs?: number;
+  /** Match at most this many characters of each script body; default {@link TECH_SCRIPT_CONTENT_LIMIT}. */
+  maxScriptChars?: number;
   /** Called once when the budget cut the scan short. */
   onBudgetExceeded?: () => void;
 }
@@ -28,10 +38,10 @@ interface ScriptView {
   scanned?: ScannedJs;
 }
 
-function scriptView(views: Map<string, ScriptView>, content: string): ScriptView {
+function scriptView(views: Map<string, ScriptView>, content: string, maxChars: number): ScriptView {
   let view = views.get(content);
   if (!view) {
-    view = { head: content.slice(0, TECH_SCRIPT_CONTENT_LIMIT) };
+    view = { head: content.length > maxChars ? content.slice(0, maxChars) : content };
     views.set(content, view);
   }
   return view;
@@ -71,6 +81,7 @@ function matchDetector(
   input: TechDetectInput,
   html: string,
   views: Map<string, ScriptView>,
+  maxChars: number,
 ): boolean {
   switch (detector.type) {
     case "header": {
@@ -93,14 +104,14 @@ function matchDetector(
           input.scripts?.some(
             (s) =>
               s.content &&
-              matchesInCode(detector.pattern, scriptView(views, s.content)) &&
-              (!detector.also || detector.also.pattern.test(scriptView(views, s.content).head)),
+              matchesInCode(detector.pattern, scriptView(views, s.content, maxChars)) &&
+              (!detector.also || detector.also.pattern.test(scriptView(views, s.content, maxChars).head)),
           ) ?? false
         );
       }
       if (
         input.scripts?.some(
-          (s) => s.content && detector.pattern.test(scriptView(views, s.content).head),
+          (s) => s.content && detector.pattern.test(scriptView(views, s.content, maxChars).head),
         )
       ) {
         return true;
@@ -231,6 +242,7 @@ export function detectTechnologies(
 ): DetectedTechnology[] {
   const results: DetectedTechnology[] = [];
   const views = new Map<string, ScriptView>();
+  const maxChars = options.maxScriptChars ?? TECH_SCRIPT_CONTENT_LIMIT;
   const deadline = performance.now() + (options.budgetMs ?? TECH_DETECT_PAGE_BUDGET_MS);
 
   // Resolve the meta map: trust a non-empty caller-supplied one, otherwise parse
@@ -256,7 +268,7 @@ export function detectTechnologies(
     }
 
     for (const detector of fp.detectors) {
-      if (matchDetector(detector, input, html, views)) {
+      if (matchDetector(detector, input, html, views, maxChars)) {
         matchedDetector = detector;
         break; // ANY match = detected
       }

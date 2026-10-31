@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Changed
+
+- **Technology detection reads whole bundles locally, and says when it was cut short.** The free local scan matched only the first 256 KB of a bundle at best (64 KB by default), so a framework or SDK deeper in a 1 to 2 MB Vite or Next.js build was missed (a batch re-run with the caps lifted found React on 15% more sites). It now reads each first-party bundle the crawl fetched whole up to 8 MB (`[tech_detect] bundle_bytes`, up to 16 MiB), 32 MB a page and 64 MB an audit, with a 30 second budget per page. The crawl fetches a script only up to 5 MB and only the first 10 to 50 of a page's scripts, so those limits, not this one, bound what is seen. When a byte cap or the time budget cuts it short, the report has `technologies.truncated` (JSON, `meta.schemaVersion` 1.3) or a note beside the list (other formats) with the reason; a signed-in audit's cloud section, built from the unchanged 64 KB, 512 KB and 1 MB payload caps, carries the byte reasons too. The cloud services that run the same package keep the 256 KB per script and 5 s per page they had. The comment scanner under it no longer goes quadratic on a body of many comments, including NUL-split ones. The `sentry` fingerprint no longer fires on supabase-js, whose bundle quotes `Sentry.init()` in prose. (#1387)
+
 ### Added
 
 - **The `--include-pages` list says how each page answered.** Each `pages` entry in the JSON report now has `finalUrl` (where the page was served from after redirects) and `outcome` (`ok`, `http-error`, `rate-limited` or `error`) beside `url`, `status` and `ruleCount`, so a pipeline that tracks coverage can tell a rate-limited page from a missing one without re-deriving it. `meta.schemaVersion` is now `1.2`; without `--include-pages` that is the only change to a JSON report. (#1260)

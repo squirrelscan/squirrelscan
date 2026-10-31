@@ -464,6 +464,8 @@ interface SlimJsonReport {
   technologies?: {
     /** `local` (free signature scan of the crawled pages) or `cloud` (credited scan with history). */
     source?: "local" | "cloud";
+    /** Present when a byte cap or the time budget cut the local scan short (#1387): fewer technologies than the site runs may be listed. */
+    truncated?: { reasons: string[]; scripts: number };
     firstScan: boolean;
     added: string[];
     removed: string[];
@@ -824,6 +826,7 @@ function buildSlimReport(
       ? {
           technologies: {
             ...(report.technologies.source ? { source: report.technologies.source } : {}),
+            ...(report.technologies.truncated ? { truncated: report.technologies.truncated } : {}),
             firstScan: report.technologies.firstScan,
             added: report.technologies.added,
             removed: report.technologies.removed,
