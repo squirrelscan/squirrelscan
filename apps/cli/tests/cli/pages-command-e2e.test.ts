@@ -21,7 +21,9 @@ const page = (
 
 const SAME = "A title that two different pages share word for word";
 // Every page but `/lonely` links to every other one, so only `/lonely` is an orphan.
-const NAV = ["/", "/a", "/b", "/dup1", "/dup2", "/blog/post"];
+// `/b?id=1` and `/blog/post/` are stored with their query string and trailing slash: their link counts
+// must still be found (#701).
+const NAV = ["/", "/a", "/b?id=1", "/dup1", "/dup2", "/blog/post/"];
 const nav = (self: string) =>
   NAV.filter((p) => p !== self)
     .map((p) => `<a href="${p}">${p}</a>`)
@@ -47,23 +49,25 @@ const site = Bun.serve({
       case "/a":
         return html(page(null, nav("/a")));
       case "/b":
-        return html(page("Page B of the page map test site", nav("/b"), null));
+        return html(
+          page("Page B of the page map test site", nav("/b?id=1"), null)
+        );
       case "/dup1":
       case "/dup2":
         return html(page(SAME, nav(pathname)));
-      case "/blog/post":
+      case "/blog/post/":
         return html(
-          page("A blog post on the page map test site", nav("/blog/post"))
+          page("A blog post on the page map test site", nav("/blog/post/"))
         );
       case "/sitemap.xml":
         return new Response(
           `<?xml version="1.0"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${[
             "",
             "a",
-            "b",
+            "b?id=1",
             "dup1",
             "dup2",
-            "blog/post",
+            "blog/post/",
             "lonely",
           ]
             .map((p) => `<url><loc>${origin}/${p}</loc></url>`)
@@ -137,6 +141,9 @@ interface Row {
   titleLength: number;
   descriptionLength: number;
   h1Count: number | null;
+  h1: string | null;
+  headingCount: number | null;
+  schemaIds: string[];
   wordCount: number | null;
   schemaTypes: string[];
   inlinks: number;
@@ -185,7 +192,7 @@ describe("squirrel pages", () => {
       "/",
       "/a",
       "/b",
-      "/blog/post",
+      "/blog/post/",
       "/dup1",
       "/dup2",
       "/lonely",
@@ -213,6 +220,28 @@ describe("squirrel pages", () => {
     ).toBe(5);
   }, 120_000);
 
+  test("pages stored with a trailing slash or a query string still get their link counts (#701)", async () => {
+    const map = await asJson();
+    const at = (path: string) =>
+      map.pages.find((r) => new URL(r.url).pathname === path)!;
+    // Linked from the five other pages of the nav, however the URL is spelled.
+    expect(at("/blog/post/").inlinks).toBe(5);
+    expect(at("/b").inlinks).toBe(5);
+    expect(at("/blog/post/").internalOutlinks).toBe(5);
+    expect(at("/b").internalOutlinks).toBe(5);
+    // And the audit's own orphan rule agrees: neither is flagged.
+    expect(at("/blog/post/").flags).not.toContain("orphan");
+    expect(at("/b").flags).not.toContain("orphan");
+  }, 120_000);
+
+  test("h1, heading count and JSON-LD ids come from the stored parse", async () => {
+    const map = await asJson();
+    const home = map.pages.find((r) => new URL(r.url).pathname === "/")!;
+    expect(home.h1).toBe("Heading");
+    expect(home.headingCount).toBe(1);
+    expect(home.schemaIds).toEqual([]);
+  }, 120_000);
+
   test("--missing title, description and schema", async () => {
     expect(paths((await asJson("--missing", "title")).pages)).toEqual(["/a"]);
     expect(paths((await asJson("--missing", "description")).pages)).toEqual([
@@ -228,7 +257,7 @@ describe("squirrel pages", () => {
       "/dup2",
     ]);
     expect(paths((await asJson("--section", "/blog")).pages)).toEqual([
-      "/blog/post",
+      "/blog/post/",
     ]);
     expect(paths((await asJson("--page", "dup")).pages)).toEqual([
       "/dup1",

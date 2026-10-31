@@ -76,7 +76,7 @@ export function stripControlCharsPreservingSgr(text: string): string {
 
 /**
  * Everything a one-line cell of untrusted text must not carry: all C0 controls (tab and newline
- * included), DEL, the C1 controls (`U+009B` is an 8-bit CSI that some terminals run as ESC `[`),
+ * included), DEL, the C1 controls (`U+009B` is an 8-bit CSI that some terminals run as ESC `[`), the invisible characters below,
  * the bidirectional overrides and isolates that reorder what a reader sees (`U+202A` to `U+202E`,
  * `U+2066` to `U+2069`, the marks `U+200E`, `U+200F` and `U+061C`), and the line and paragraph
  * separators. A table cell, a CSV field or a report line built from a page value goes through
@@ -88,10 +88,22 @@ const UNSAFE_LINE_TEXT = new RegExp(
 );
 
 /**
+ * Characters that draw nothing, so a value can carry text a reader cannot see: the zero-width
+ * space, the word joiner and the invisible math operators, the BOM, the soft hyphen, the Mongolian
+ * vowel separator, and the Unicode tag block (invisible ASCII, used to smuggle instructions to a
+ * model). They are removed, not replaced by a space, so a word they sat inside stays one word.
+ * The zero-width joiner and non-joiner stay: scripts such as Persian and Devanagari need them.
+ */
+const INVISIBLE_TEXT = new RegExp(
+  "[\\u00ad\\u180e\\u200b\\u2060-\\u2064\\ufeff\\u{e0000}-\\u{e007f}]",
+  "gu",
+);
+
+/**
  * `text` as one safe line: each unsafe character becomes `replacement` (a space by default, so
  * words a newline separated stay apart). Unlike {@link stripControlChars} it also removes C1
  * controls and bidirectional overrides, and it removes newlines and tabs too.
  */
 export function stripUnsafeLineText(text: string, replacement = " "): string {
-  return text.replace(UNSAFE_LINE_TEXT, replacement);
+  return text.replace(INVISIBLE_TEXT, "").replace(UNSAFE_LINE_TEXT, replacement);
 }

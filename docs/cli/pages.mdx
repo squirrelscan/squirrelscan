@@ -24,9 +24,9 @@ squirrel pages [options]
 | `--missing` | | Only pages missing `title`, `description`, `h1` or `schema` (repeatable or comma-separated) | all |
 | `--duplicate` | | Only pages the audit flags as a duplicate `title` or `description` (repeatable or comma-separated) | all |
 | `--too-long` | | Only pages with a title over 75 or a description over 160 characters | `false` |
-| `--orphan` | | Only pages the audit flags as orphans | `false` |
-| `--section` | | Only pages under this URL path, for example `/blog` | all |
-| `--page` | | Only pages whose URL contains this text (repeatable) | all |
+| `--orphan` | | Only pages the audit flags as orphans: fewer internal links to them than the orphan rule's minimum (2 by default). A crawl the rule skipped (a capped crawl) flags nothing | `false` |
+| `--section` | | Only pages under this URL path, for example `/blog`; case-insensitive, and `/café` matches `/caf%C3%A9` | all |
+| `--page` | | Only pages whose URL contains this text, case-insensitive (repeatable; a comma splits the value) | all |
 
 Filters combine: a page has to match every filter you pass. Within `--missing`, `--duplicate` and `--page`, matching any one value is enough.
 
@@ -51,8 +51,11 @@ squirrel pages -f csv -o pages.csv
 | `title`, `titleLength` | The `<title>` and its length in characters |
 | `description`, `descriptionLength` | The meta description and its length |
 | `h1Count` | Number of `<h1>` elements |
+| `h1` | Text of the first `<h1>` |
+| `headingCount` | Number of headings, `h1` to `h6` |
 | `wordCount` | Words of visible content |
 | `schemaTypes` | schema.org `@type` values declared on the page |
+| `schemaIds` | JSON-LD `@id` values declared on the page (the first 20) |
 | `inlinks` | Crawled pages that link here, each counted once |
 | `internalOutlinks` | Links from this page to other pages of the same site |
 | `externalOutlinks`, `externalDomains` | Links to other sites, and the hosts they point at |
@@ -81,9 +84,9 @@ The `flags` column comes from the audit's own rule results, so the table and the
 | `noindex` | The page asks not to be indexed (a fact from the crawl, not a rule) |
 | `no-schema` | The page answered with a success status and declares no schema.org type (also a fact) |
 
-`--duplicate` and `--orphan` select on these flags, so they list exactly the pages the issue list names. A rule that was disabled, or skipped for the audit, sets no flag. `--missing` and `--too-long` read the columns themselves: the title and description limits are the rules' defaults (75 and 160 characters), so a site that changed `max_length` in `squirrel.toml` sees its own limit in the `title` and `description` flags instead.
+`--duplicate` and `--orphan` select on these flags, so they list exactly the pages the issue list names. A rule that was disabled, or skipped for the audit, sets no flag. `--missing` and `--too-long` read the columns themselves, and `--missing` only judges pages that answered below 400 and were parsed (a PDF, an image or a 404 has no title to be missing): the title and description limits are the rules' defaults (75 and 160 characters), so a site that changed `max_length` in `squirrel.toml` sees its own limit in the `title` and `description` flags instead.
 
-What the table does not carry: the text of the `<h1>`, heading counts and the JSON-LD `@id` values are not stored per page by the crawl, so they are not columns. Use [`squirrel entities`](/cli/entities) for the declared schema and `@id`s.
+`h1`, `headingCount` and `schemaIds` are read from the page's stored parse, the same parse the links come from; a page that was not parsed (a PDF, an image, an error page) has none of them. Anchor text is not a column: use [`squirrel entities`](/cli/entities) for the declared schema graph.
 
 ## Output formats
 
@@ -95,7 +98,7 @@ With no `--format` you get a console table of the first 50 pages on a terminal, 
 | `csv` | One header row and a row per page. List columns (`schemaTypes`, `externalDomains`, `flags`) join with a space. A cell that starts with `=`, `+`, `-` or `@` is prefixed with an apostrophe so a spreadsheet does not run it as a formula |
 | `markdown` | A table of the columns a person scans: URL, status, title and length, description and length, H1 count, words, schema, in and out links, flags |
 
-Titles, descriptions and URLs come from the audited site, so each format escapes them for itself.
+Titles, descriptions and URLs come from the audited site, so each format treats them as hostile. The console, csv, markdown and html outputs remove control characters, escape sequences, invisible characters and bidirectional overrides, a pipe in a URL is escaped so it cannot end a markdown table cell, and csv prefixes a formula start with an apostrophe. `json` keeps the text and writes DEL, the C1 controls, bidirectional overrides, invisible characters and line separators as `\uXXXX`, so the file is safe to print and the value is unchanged.
 
 ## Exit codes
 
