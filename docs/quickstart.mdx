@@ -55,10 +55,18 @@ Set any of these before running the installer.
 | --- | --- |
 | `SQUIRREL_VERSION` | Install a specific release instead of the newest one, for example `v0.0.94`. |
 | `SQUIRREL_CHANNEL` | `stable` (default) or `beta`. |
-| `SQUIRREL_BIN_DIR` | Where to put the `squirrel` symlink. Defaults to the first writable directory on your PATH, falling back to `~/.local/bin`. |
+| `SQUIRREL_BIN_DIR` | Where to put the `squirrel` symlink. Defaults to the first writable directory on your PATH, falling back to `~/.local/bin`. The installer refuses a value that is only whitespace and any path that names `/` once `.` and `..` are resolved by name (`/`, `//`, `/.`, `/..`, `/usr/..`; a symlink to `/` is not followed); an empty value is read as not set. |
 | `SQUIRREL_NO_MODIFY_PATH` | Any value but empty, `0` or `false` stops the installer editing your shell profile or user PATH. It prints the line to add instead. See below. |
 | `SQUIRREL_FORCE_MIRROR` | Download from squirrelscan's mirror instead of GitHub. See below. |
 | `NO_TELEMETRY` | Any defined value, including an empty value, `0`, or `false`, turns off the anonymous failure report the installer sends when it fails. `DO_NOT_TRACK=1` (or `true`) does too. |
+
+### What the installer protects
+
+- **Permissions.** It runs with the umask tightened to at least `022`, so the directories and the binary it creates are never group or world writable, whatever umask it inherited. A stricter umask (`077`) is kept.
+- **Size and checksum.** The release manifest records each binary's size. A download of a different size fails with a size mismatch, before the checksum, so a cut-short download reads as that and not as a bad hash.
+- **Ctrl-C.** An interrupt, `SIGTERM` or `SIGHUP` during the install (including one sent to the installer alone, mid-download) removes the temporary directory, ends the download and exits with 130, 143 or 129. Stopping the install is not a failure, so no failure report is sent.
+- **No `HOME`.** If `HOME` is unset or empty it stops at once and tells you to set it. The installer keeps its state under `$HOME/.squirrel`, so it needs `HOME` even when `SQUIRREL_BIN_DIR` is set.
+- **A `noexec` temp directory.** The binary is first run from your temp directory. If it cannot be run there (a `noexec` mount, whatever language the system's messages are in), the installer retries from `~/.squirrel/tmp`. If that fails too it says a `noexec` mount is the likely cause and tells you to set `TMPDIR` to a directory on a filesystem that can run programs; if `~/.squirrel/tmp` cannot even be created it says that instead.
 
 ### How the installer sets up your PATH
 
