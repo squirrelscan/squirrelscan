@@ -39,7 +39,7 @@ describe("a loader wrapped by a cache or CDN is still read", () => {
 });
 
 describe("a Next.js App Router flight script over 16 KB", () => {
-  const layout = `self.__next_f.push([1,${JSON.stringify(`5:["$","$L6",null,{"children":${JSON.stringify(SNIPPET)}}]`)}])`;
+  const layout = `self.__next_f.push([1,${JSON.stringify(`6:I["(app-pages-browser)/./node_modules/next/dist/client/script.js",["chunk"],""]\n5:["$","$L6",null,{"children":${JSON.stringify(SNIPPET)}}]\n`)}])`;
   const big = `${layout};${"/* flight padding */ ".repeat(2_000)}`;
 
   test("the layout's inline loader snippet is found", () => {

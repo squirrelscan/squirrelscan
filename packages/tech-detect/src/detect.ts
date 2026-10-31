@@ -1,5 +1,6 @@
 import type { DetectedTechnology, Detector, TechDetectInput, TechFingerprint } from "./types";
 import { ALL_FINGERPRINTS } from "./fingerprints";
+import { flightLoaderText, hasFlightChunk } from "./flight";
 import { inString, scanJs, type ScannedJs } from "./js-scan";
 
 /**
@@ -81,8 +82,8 @@ function stripHtmlComments(html: string): string {
  * `img`, `iframe`, `embed`, `object`, `source`), as written, and the text of each JavaScript `<script>` that
  * is short enough to be a loader snippet. Not kept: text between tags, comments, `<a>` and `<meta>` (a vendor
  * linked or described is not a vendor loaded), data blocks (`application/json`, JSON-LD, `__NEXT_DATA__`) and
- * the body of a script past {@link INLINE_LOADER_MAX_CHARS} unless it is a Next.js flight payload (a whole inlined bundle names many URLs in strings
- * it never loads).
+ * the body of a script past {@link INLINE_LOADER_MAX_CHARS} (a whole inlined bundle names many URLs in strings
+ * it never loads). A Next.js flight script is the exception only for the script elements it carries (#1437).
  */
 
 /**
@@ -90,7 +91,7 @@ function stripHtmlComments(html: string): string {
  * then `self.__next_f` or `self.__next_s`. A linear scan over the first characters, with no regular expression
  * (a comment-skipping pattern backtracked for a second on 512 characters of `/* x *\/` repeated).
  */
-function startsAsFlightScript(body: string): boolean {
+function flightKind(body: string): "f" | "s" | null {
   const head = body.slice(0, FLIGHT_SCRIPT_HEAD_CHARS);
   let i = 0;
   const skipSpace = (): void => {
@@ -100,11 +101,11 @@ function startsAsFlightScript(body: string): boolean {
     skipSpace();
     if (head.startsWith("/*", i)) {
       const end = head.indexOf("*/", i + 2);
-      if (end === -1) return false;
+      if (end === -1) return null;
       i = end + 2;
     } else if (head.startsWith("//", i)) {
       const end = head.indexOf("\n", i + 2);
-      if (end === -1) return false;
+      if (end === -1) return null;
       i = end + 1;
     } else break;
   }
@@ -112,13 +113,16 @@ function startsAsFlightScript(body: string): boolean {
     i++;
     skipSpace();
   }
-  for (const start of ["self.__next_f", "self.__next_s"]) {
+  for (const [start, kind] of [
+    ["self.__next_f", "f"],
+    ["self.__next_s", "s"],
+  ] as const) {
     if (head.startsWith(start, i)) {
       const next = head[i + start.length] ?? "";
-      return !/[A-Za-z0-9_$]/.test(next);
+      return /[A-Za-z0-9_$]/.test(next) ? null : kind;
     }
   }
-  return false;
+  return null;
 }
 
 const URL_TAGS = new Set(["script", "link", "img", "iframe", "embed", "object", "source"]);
@@ -133,7 +137,8 @@ const DATA_SCRIPT_TYPE =
   /json|importmap|speculationrules|template|x-(?:tmpl|mustache|handlebars|jquery-tmpl|jsrender|underscore|ejs)|shader|octet-stream|^text\/(?:html|css|markdown|csv|xml)\b|^application\/(?:xml|xhtml)/i;
 /**
  * A Next.js App Router flight script (`self.__next_f.push(...)`) carries the layout's `next/script` snippets as
- * strings, so it is read well past {@link INLINE_LOADER_MAX_CHARS}; any other script over the cap is a bundle.
+ * strings, so it is decoded up to this size for the script elements it holds; any other script over the
+ * inline cap is a bundle.
  */
 const FLIGHT_SCRIPT_HEAD_CHARS = 512;
 const FLIGHT_SCRIPT_MAX_CHARS = 2 * 1024 * 1024;
@@ -170,6 +175,7 @@ let lastMarkup: { html: string; markup: string } | undefined;
 export function pageMarkup(html: string): string {
   if (lastMarkup?.html === html) return lastMarkup.markup;
   const parts: string[] = [];
+  const flightBodies: string[] = [];
   const scriptEnd = /<\/script/gi;
   let inlineText = 0;
   let pos = 0;
@@ -202,11 +208,15 @@ export function pageMarkup(html: string): string {
       const length = end - pos;
       if (length > 0 && !DATA_SCRIPT_TYPE.test(type.slice(0, 256)) && inlineText < INLINE_TEXT_BUDGET) {
         const head = html.slice(pos, Math.min(end, pos + 512));
-        // An ordinary script is read whole up to the cap; a flight script is read up to its larger one (a
-        // longer one is cut there, not dropped).
-        const cap = startsAsFlightScript(head) ? FLIGHT_SCRIPT_MAX_CHARS : INLINE_LOADER_MAX_CHARS;
-        if (length <= INLINE_LOADER_MAX_CHARS || cap === FLIGHT_SCRIPT_MAX_CHARS) {
-          const take = Math.min(length, cap, INLINE_TEXT_BUDGET - inlineText);
+        // A flight script (`self.__next_f`) is read with the page's other flight scripts, for the script
+        // elements they carry, not as text (#1437). One with no readable chunk is read like any other script.
+        const flight = flightKind(head) === "f";
+        if (flight && hasFlightChunk(html.slice(pos, Math.min(end, pos + FLIGHT_SCRIPT_MAX_CHARS)))) {
+          const take = Math.min(length, FLIGHT_SCRIPT_MAX_CHARS, INLINE_TEXT_BUDGET - inlineText);
+          flightBodies.push(html.slice(pos, pos + take));
+          inlineText += take;
+        } else if (length <= INLINE_LOADER_MAX_CHARS) {
+          const take = Math.min(length, INLINE_TEXT_BUDGET - inlineText);
           parts.push(html.slice(pos, pos + take));
           inlineText += take;
         }
@@ -216,6 +226,7 @@ export function pageMarkup(html: string): string {
       parts.push(tag);
     }
   }
+  if (flightBodies.length > 0) parts.push(flightLoaderText(flightBodies, (t) => DATA_SCRIPT_TYPE.test(t)));
   const markup = parts.join("\n");
   lastMarkup = { html, markup };
   return markup;
