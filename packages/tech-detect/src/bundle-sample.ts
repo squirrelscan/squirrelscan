@@ -148,8 +148,32 @@ function mergedCost(spans: ReadonlyArray<[number, number]>): number {
  * Empty when the body fits in the head.
  */
 export function sampleBundleExtras(content: string, headChars: number, maxChars: number): string {
-  if (content.length <= headChars || maxChars <= 0) return "";
-  const limit = Math.min(content.length, MAX_SCAN_CHARS);
+  return createBundleSampler(content, headChars).sample(maxChars, false);
+}
+
+/** A bundle's extras in two steps (see {@link createBundleSampler}). */
+export interface BundleSampler {
+  /**
+   * The extras for `maxChars`. With `windowsOnly` the hint windows alone, all of `maxChars` and no tail: the caller
+   * gives every bundle of a page its windows before any bundle's remainder or tail takes room (#1445).
+   * Without it, the windows and then the tail, as {@link sampleBundleExtras}. The scan of the body
+   * and the search for hint hits run once however many times this is called.
+   */
+  sample(maxChars: number, windowsOnly: boolean): string;
+}
+
+/**
+ * A sampler over one body: the classification and the hint windows are computed once, on first use. Only the
+ * first `scanChars` characters are classified and searched; a body longer than that has windows from that
+ * prefix and no tail.
+ */
+export function createBundleSampler(
+  content: string,
+  headChars: number,
+  scanChars: number = MAX_SCAN_CHARS,
+): BundleSampler {
+  if (content.length <= headChars) return { sample: () => "" };
+  const limit = Math.min(content.length, MAX_SCAN_CHARS, Math.max(scanChars, headChars));
   const { skips } = scanJs(content.slice(0, limit));
   /** The string, regex literal or comment that holds `p` (`start < p <= end`), or null in code. */
   const spanAt = (p: number): { open: number; close: number } | null => {
@@ -211,10 +235,12 @@ export function sampleBundleExtras(content: string, headChars: number, maxChars:
   // longer than itself, and a single one in a body would shift every index: it becomes a plain `I`
   // first, which lower-cases to one character like the rest.
   let lowered: string | null | undefined;
+  // The part of the body that is searched; a prefixed scan does not read, or copy, the rest.
+  const searched = limit < content.length ? content.slice(0, limit) : content;
   const lowerContent = (): string | null => {
     if (lowered === undefined) {
-      const copy = content.replaceAll("\u0130", "I").toLowerCase();
-      lowered = copy.length === content.length ? copy : null;
+      const copy = searched.replaceAll("\u0130", "I").toLowerCase();
+      lowered = copy.length === searched.length ? copy : null;
     }
     return lowered;
   };
@@ -244,51 +270,59 @@ export function sampleBundleExtras(content: string, headChars: number, maxChars:
   // Qualified windows per hint, declared hints first: a window is kept only if a detector pattern
   // that uses the hint matches it, so a placeholder or an unrelated mention of the literal costs
   // nothing and takes no budget from a real match.
-  const perHint: Array<{ windows: Array<[number, number]>; declared: boolean }> = [];
-  const ordered = [...hintSpecs()].sort((x, y) => Number(y.declared) - Number(x.declared));
-  for (const spec of ordered) {
-    const haystack = spec.ci ? lowerContent() : content;
-    if (haystack === null) continue;
-    const seen = new Set<string>();
-    const windows: Array<[number, number]> = [];
-    let from = floor;
-    for (let n = 0; n < MAX_HIT_SCANS_PER_HINT && windows.length < MAX_KEPT_PER_HINT; n++) {
-      const at = haystack.indexOf(spec.text, from);
-      if (at === -1 || at >= limit) break;
-      from = at + spec.text.length;
-      const from160 = Math.max(floor, at - WINDOW_BEFORE);
-      let cut = cutAt(from160);
-      if (cut.pos > at) {
-        // The hit sits in a string that opened before the window: keep a short one whole (a
-        // library's own notice is a string); around a long one (prose, data, or code the tracker
-        // lost) cut inside it with its opener in front.
-        const span = spanAt(at);
-        if (!span) continue;
-        cut =
-          span.close - span.open <= MAX_STRING_CARRY
-            ? { pos: span.open, opener: "" }
-            : { pos: from160, opener: openerOf(span.open) };
-        if (cut.opener === "/") continue;
-        if (cut.opener) {
-          let k = 0;
-          while (cut.pos - 1 - k > span.open && content.charAt(cut.pos - 1 - k) === "\\") k++;
-          if (k % 2 === 1) cut = { pos: cut.pos - 1, opener: cut.opener };
+  let heldWindowCost = 0;
+  type HintWindows = Array<{ windows: Array<[number, number]>; declared: boolean }>;
+  let computed: HintWindows | undefined;
+  const hintWindows = (): HintWindows => {
+    if (computed) return computed;
+    const perHint: HintWindows = [];
+    const ordered = [...hintSpecs()].sort((x, y) => Number(y.declared) - Number(x.declared));
+    for (const spec of ordered) {
+      const haystack = spec.ci ? lowerContent() : searched;
+      if (haystack === null) continue;
+      const seen = new Set<string>();
+      const windows: Array<[number, number]> = [];
+      let from = floor;
+      for (let n = 0; n < MAX_HIT_SCANS_PER_HINT && windows.length < MAX_KEPT_PER_HINT; n++) {
+        const at = haystack.indexOf(spec.text, from);
+        if (at === -1 || at >= limit) break;
+        from = at + spec.text.length;
+        const from160 = Math.max(floor, at - WINDOW_BEFORE);
+        let cut = cutAt(from160);
+        if (cut.pos > at) {
+          // The hit sits in a string that opened before the window: keep a short one whole (a
+          // library's own notice is a string); around a long one (prose, data, or code the tracker
+          // lost) cut inside it with its opener in front.
+          const span = spanAt(at);
+          if (!span) continue;
+          cut =
+            span.close - span.open <= MAX_STRING_CARRY
+              ? { pos: span.open, opener: "" }
+              : { pos: from160, opener: openerOf(span.open) };
+          if (cut.opener === "/") continue;
+          if (cut.opener) {
+            let k = 0;
+            while (cut.pos - 1 - k > span.open && content.charAt(cut.pos - 1 - k) === "\\") k++;
+            if (k % 2 === 1) cut = { pos: cut.pos - 1, opener: cut.opener };
+          }
         }
+        const settled = settle(cut, Math.min(limit, at + spec.text.length + WINDOW_AFTER));
+        if (!settled) continue;
+        cut = settled;
+        const start = cut.pos;
+        const end = endAt(Math.min(limit, at + spec.text.length + WINDOW_AFTER));
+        if (end <= start) continue;
+        const text = content.slice(start, end);
+        if (seen.has(text) || !qualifies(spec, text, start)) continue;
+        seen.add(text);
+        if (cut.opener) openers.set(start, cut.opener);
+        windows.push([start, end]);
       }
-      const settled = settle(cut, Math.min(limit, at + spec.text.length + WINDOW_AFTER));
-      if (!settled) continue;
-      cut = settled;
-      const start = cut.pos;
-      const end = endAt(Math.min(limit, at + spec.text.length + WINDOW_AFTER));
-      if (end <= start) continue;
-      const text = content.slice(start, end);
-      if (seen.has(text) || !qualifies(spec, text, start)) continue;
-      seen.add(text);
-      if (cut.opener) openers.set(start, cut.opener);
-      windows.push([start, end]);
+      if (windows.length > 0) perHint.push({ windows, declared: spec.declared });
     }
-    if (windows.length > 0) perHint.push({ windows, declared: spec.declared });
-  }
+    computed = perHint;
+    return perHint;
+  };
 
   // Shared out round by round: every hint's first window, then every hint's second, until the
   // window budget is spent. The budget leaves the tail its reserve, so what the windows take can
@@ -296,33 +330,45 @@ export function sampleBundleExtras(content: string, headChars: number, maxChars:
   // detector that needs a real call, such as a Firebase or Supabase config) gets its first few
   // windows before any derived hint's first: 200 derived literals would otherwise take the whole
   // budget before a declared hint's second window, and its first can be a lookalike.
-  const windowBudget = maxChars - Math.min(TAIL_RESERVE_CHARS, Math.floor(maxChars / 4));
-  const chosen: Array<[number, number]> = [];
-  const take = (window: [number, number] | undefined): void => {
-    if (window && mergedCost([...chosen, window]) <= windowBudget) chosen.push(window);
+  return {
+    sample(maxChars, windowsOnly) {
+    if (maxChars <= 0) return "";
+    const perHint = hintWindows();
+    // The windows a windows-only call chose are kept by a later call: the tail only takes what is left.
+    const baseBudget = maxChars - Math.min(TAIL_RESERVE_CHARS, Math.floor(maxChars / 4));
+    const windowBudget = windowsOnly ? baseBudget : Math.max(baseBudget, heldWindowCost);
+    const chosen: Array<[number, number]> = [];
+    const take = (window: [number, number] | undefined): void => {
+      if (window && mergedCost([...chosen, window]) <= windowBudget) chosen.push(window);
+    };
+    for (let round = 0; round < DECLARED_FIRST_WINDOWS; round++) {
+      for (const { windows, declared } of perHint) if (declared) take(windows[round]);
+    }
+    for (let round = 0; round < MAX_KEPT_PER_HINT; round++) {
+      for (const { windows, declared } of perHint) {
+        if (!declared || round >= DECLARED_FIRST_WINDOWS) take(windows[round]);
+      }
+    }
+    const merged = mergeSpans(chosen);
+    if (windowsOnly) {
+      heldWindowCost = mergedCost(merged);
+      return merged.map(([start, end]) => (openers.get(start) ?? "") + content.slice(start, end)).join(SEGMENT_SEPARATOR);
+    }
+    let used = 0;
+    for (const [start, end] of merged) used += end - start + SEGMENT_SEPARATOR.length + OPENER_SLACK;
+    // The tail takes what the windows left. It is one more span merged with them, so a window it
+    // overlaps is not sent twice and nothing between the windows and the tail is dropped: when the
+    // rest of the file fits in the room, the whole rest is kept, as before #1420.
+    const tailRoom = maxChars - used - (merged.length > 0 ? SEGMENT_SEPARATOR.length : 0) - OPENER_SLACK;
+    let spans = merged;
+    if (tailRoom > 0 && limit === content.length) {
+      const cut = settle(cutAt(Math.max(content.length - tailRoom, headChars)), content.length);
+      if (cut && cut.pos < content.length) {
+        if (cut.opener) openers.set(cut.pos, cut.opener);
+        spans = mergeSpans([...merged, [cut.pos, content.length]]);
+      }
+    }
+    return spans.map(([start, end]) => (openers.get(start) ?? "") + content.slice(start, end)).join(SEGMENT_SEPARATOR);
+    },
   };
-  for (let round = 0; round < DECLARED_FIRST_WINDOWS; round++) {
-    for (const { windows, declared } of perHint) if (declared) take(windows[round]);
-  }
-  for (let round = 0; round < MAX_KEPT_PER_HINT; round++) {
-    for (const { windows, declared } of perHint) {
-      if (!declared || round >= DECLARED_FIRST_WINDOWS) take(windows[round]);
-    }
-  }
-  const merged = mergeSpans(chosen);
-  let used = 0;
-  for (const [start, end] of merged) used += end - start + SEGMENT_SEPARATOR.length + OPENER_SLACK;
-  // The tail takes what the windows left. It is one more span merged with them, so a window it
-  // overlaps is not sent twice and nothing between the windows and the tail is dropped: when the
-  // rest of the file fits in the room, the whole rest is kept, as before #1420.
-  const tailRoom = maxChars - used - (merged.length > 0 ? SEGMENT_SEPARATOR.length : 0) - OPENER_SLACK;
-  let spans = merged;
-  if (tailRoom > 0 && limit === content.length) {
-    const cut = settle(cutAt(Math.max(content.length - tailRoom, headChars)), content.length);
-    if (cut && cut.pos < content.length) {
-      if (cut.opener) openers.set(cut.pos, cut.opener);
-      spans = mergeSpans([...merged, [cut.pos, content.length]]);
-    }
-  }
-  return spans.map(([start, end]) => (openers.get(start) ?? "") + content.slice(start, end)).join(SEGMENT_SEPARATOR);
 }
