@@ -1,7 +1,7 @@
 ---
 title: "FAQ"
 icon: "circle-help"
-description: "Short answers to the questions people ask first: what is open source, what is sent, what robots.txt does, what it costs, and how it compares"
+description: "Short answers to the questions people ask first: what is open source, what is sent, what robots.txt does, what the crawler sends, what is stored, what it costs, who is behind it and how it compares"
 ---
 
 The questions a skeptical developer asks first, answered briefly. Each answer links to the page it comes from, and those pages win if anything here is out of date.
@@ -43,7 +43,7 @@ Auditing a site you don't own? Opt in:
 respect_robots = true
 ```
 
-Cloud audits have the same switch per website, also off by default. See [`respect_robots`](/configuration/crawler#respect_robots).
+Cloud audits have the same switch per website ([crawl settings](/dashboard/crawl-settings#respect-robotstxt)). Cloud audits started over MCP or the API respect `robots.txt` by default. You can turn that off for a website you own. See [`respect_robots`](/configuration/crawler#respect_robots) for the CLI setting, and the next answers for the user agent.
 
 ## What does it cost?
 
@@ -65,3 +65,29 @@ The audit rules are deterministic. Local audits run only those rules. The rules 
 Lighthouse audits one URL per run and goes deep on that page's performance. squirrelscan crawls the whole site and checks links, security headers, structured data and agent experience together. For one slow page, Lighthouse is still the right first stop. Details: [Lighthouse alternative](https://squirrelscan.com/learn/lighthouse-alternative).
 
 Screaming Frog is a mature desktop crawler, strong at manual, exploratory work: filtering and segmenting a crawl, and custom extraction with XPath or CSS selectors, which squirrelscan does not have. squirrelscan does not render JavaScript locally either; rendering is a cloud feature. What it offers instead is a CLI that runs the same way in CI or inside a coding agent, with output meant for a model. Many teams use both. Details: [Screaming Frog alternative](https://squirrelscan.com/learn/screaming-frog-alternative).
+
+## What user agent does it send, and how fast does it crawl?
+
+**The CLI today.** With the default `user_agent = ""`, the first crawl draws a random modern browser user agent and pins it to the project, so every later run reuses it. It does not announce itself as squirrelscan. To identify the crawler, set `user_agent` yourself ([`user_agent`](/configuration/crawler#user_agent), and the example in [Rate-limited hosts](/guides/rate-limited-hosts)). The defaults are 5 concurrent requests and a 50 ms delay between requests to one host. A `429`, or a `503` with `Retry-After`, makes the host back off ([`concurrency`](/configuration/crawler#concurrency), [`per_host_delay_ms`](/configuration/crawler#per_host_delay_ms)).
+
+**The cloud today.** Page fetches use a random current browser user agent chosen per audit, rendered pages use the headless Chrome user agent, and asset and external link checks send `SquirrelScan/2.0 (+https://squirrelscan.com)` ([What squirrelscan cloud looks like in your logs](/cloud/firewall#what-squirrelscan-cloud-looks-like-in-your-logs)).
+
+**What changes for MCP and API audits.** Cloud audits started over MCP or the API identify as squirrelscan and respect `robots.txt` by default. You can override both per website after you confirm you own it.
+
+## What does squirrelscan store, and for how long?
+
+- **Local audits** are stored in a database on your machine and kept until you delete them ([Reports](/reports#delete-old-audits)).
+- **Cached page copies in the cloud:** a cached render is reused for at most 7 days, cached page bodies for reusing a previous crawl expire after 7 days, and cached AI page analysis expires after 30 days.
+- **Deleting a website** is a soft delete: its past audits, reports and issues are preserved, and published report links keep working ([Dashboard](/dashboard#deleting-a-website)).
+- **Deleting a report** removes it from your lists and from its link. A copy already cached at the edge can be shown for at most about 3 minutes ([Dashboard](/dashboard#managing-reports)). The delete is a soft delete.
+- **Retention periods in the privacy policy:** published reports are kept until you unpublish or delete them or close your account. Account and billing records are kept as long as the account is active and as the law requires. Email subscriptions are kept until you unsubscribe ([Privacy policy](https://squirrelscan.com/privacy)).
+
+To have data erased, ask: the privacy policy lists the right to request deletion. Other data, such as telemetry, has no stated period.
+
+## Who is behind squirrelscan?
+
+squirrelscan is developed by [Nik Cubrilovic](https://squirrelscan.com/about). The service is operated by Nineprimes Pty Ltd, trading as squirrelscan ([Privacy policy](https://squirrelscan.com/privacy)).
+
+## Is there a roadmap, and where do I report bugs?
+
+There is no public roadmap, and GitHub Discussions is not enabled on the repository. To report a bug or ask for a feature, [open an issue](https://github.com/squirrelscan/squirrelscan/issues) on the public repository. For help with an account or an audit, use the [support page](https://squirrelscan.com/support) or email support@squirrelscan.com.
