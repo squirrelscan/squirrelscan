@@ -383,6 +383,8 @@ describe("the opener never completes an in-code pattern with quoted text (#1433 
           if (detect(content, false).includes(id)) continue; // the whole body reads it as code: not a probe
           tested++;
           expect(detect(content)).not.toContain(id);
+          // Cut right on the text: the window moves on a char, it is not dropped.
+          if (first === 0) expect(sampleBundleExtras(content, HEAD, EXTRAS)).toContain("Stripe(");
         }
         expect(tested).toBeGreaterThan(100);
       });
@@ -436,5 +438,39 @@ describe("the tail cut inside a long span (#1433 review)", () => {
     const extras = sampleBundleExtras(content, HEAD, EXTRAS);
     expect(extras.length).toBeLessThanOrEqual(EXTRAS);
   });
+});
+
+// Round 5 of the review: the opener check looks at the text that will be sent, not a fixed 400 chars,
+// because the in-code patterns have whitespace runs of any length. The tail is cut exactly on the first
+// char after a quote inside a long string, with a config padded with S spaces after it.
+describe("the opener check covers the whole text sent, window and tail (#1433 review)", () => {
+  const configs = (c2: string, sp: string): Record<string, { text: string; id: string }> => ({
+    firebase: { text: `authDomain${c2}:${sp}${c2}x.firebaseapp.com${c2}`, id: "firebase" },
+    clerk: { text: `publishableKey${c2}:${sp}${c2}pk_test_${"x".repeat(30)}${c2}`, id: "clerk" },
+    supabase: { text: `https://abcdefghijklmnopqrst.supabase.co${c2}${sp},${c2}eyJ${"x".repeat(40)}${c2}`, id: "supabase" },
+  });
+  const tail = (q: string, c2: string, text: string): string => {
+    const room = EXTRAS - 3;
+    const lead = `${filler(HEAD + 200).replaceAll("\n", "")}var s=${q}${"a".repeat(1_500)}${c2}`;
+    // No hint literal in the body, so the tail is the last `room` chars: it starts on `text`.
+    return `${lead}${(text + "z".repeat(600) + `${q};\n` + filler(room)).slice(0, room)}`;
+  };
+
+  for (const q of ["'", '"']) {
+    const c2 = q === '"' ? "'" : '"';
+    for (const spaces of [1, 30, 380, 395, 420, 500, 800]) {
+      for (const [name, { text, id }] of Object.entries(configs(c2, " ".repeat(spaces)))) {
+        test(`tail cut on ${name} text padded with ${spaces} spaces in a long ${q} string`, () => {
+          const content = tail(q, c2, text);
+          expect(detect(content, false)).not.toContain(id); // inside a string: not a probe otherwise
+          const extras = sampleBundleExtras(content, HEAD, EXTRAS);
+          expect(extras.length).toBeLessThanOrEqual(EXTRAS);
+          // The cut moved on a char, it did not drop the tail.
+          expect(extras.length).toBeGreaterThan(20_000);
+          expect(detect(content)).not.toContain(id);
+        });
+      }
+    }
+  }
 });
 

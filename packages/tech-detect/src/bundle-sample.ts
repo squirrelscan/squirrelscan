@@ -187,11 +187,11 @@ export function sampleBundleExtras(content: string, headChars: number, maxChars:
    * at it with text that sits inside the string: the cut is moved on, past an escape pair whole,
    * until no such pattern matches at the opener; null when none of the next few starts is clean.
    */
-  const settle = (cut: { pos: number; opener: string }): { pos: number; opener: string } | null => {
+  const settle = (cut: { pos: number; opener: string }, to: number): { pos: number; opener: string } | null => {
     if (!cut.opener) return cut;
     let pos = cut.pos;
     for (let tries = 0; tries < 16; tries++) {
-      const probe = cut.opener + content.slice(pos, pos + 400);
+      const probe = cut.opener + content.slice(pos, to);
       if (!openerCompletes.some((re) => ((re.lastIndex = 0), re.test(probe)))) return { pos, opener: cut.opener };
       pos += content.charAt(pos) === "\\" ? 2 : 1;
     }
@@ -275,7 +275,7 @@ export function sampleBundleExtras(content: string, headChars: number, maxChars:
           if (k % 2 === 1) cut = { pos: cut.pos - 1, opener: cut.opener };
         }
       }
-      const settled = settle(cut);
+      const settled = settle(cut, Math.min(limit, at + spec.text.length + WINDOW_AFTER));
       if (!settled) continue;
       cut = settled;
       const start = cut.pos;
@@ -318,7 +318,7 @@ export function sampleBundleExtras(content: string, headChars: number, maxChars:
   const tailRoom = maxChars - used - (merged.length > 0 ? SEGMENT_SEPARATOR.length : 0) - OPENER_SLACK;
   let spans = merged;
   if (tailRoom > 0 && limit === content.length) {
-    const cut = settle(cutAt(Math.max(content.length - tailRoom, headChars)));
+    const cut = settle(cutAt(Math.max(content.length - tailRoom, headChars)), content.length);
     if (cut && cut.pos < content.length) {
       if (cut.opener) openers.set(cut.pos, cut.opener);
       spans = mergeSpans([...merged, [cut.pos, content.length]]);
