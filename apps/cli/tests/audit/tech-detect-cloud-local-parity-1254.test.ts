@@ -155,3 +155,79 @@ describe("the cloud section says what the payload caps cut (#1387)", () => {
     expect(local?.truncated).toBeUndefined();
   });
 });
+
+describe("scripts the crawl never gave a body (#1408)", () => {
+  const client = {
+    detectTechnologies: async () => ({
+      technologies: [],
+      added: [],
+      removed: [],
+      firstScan: true,
+    }),
+  } as unknown as CloudServicesClient;
+  const oversize = [
+    {
+      url: `${BASE}assets/huge.js`,
+      content: null,
+      error: "script too large",
+      sourcePages: [BASE],
+    },
+  ];
+  const none = [
+    { url: `${BASE}assets/ok.js`, content: "var a=1;", sourcePages: [BASE] },
+  ];
+
+  test("the local scan with nothing detected but a dropped script returns an empty section that says so", () => {
+    const local = detectLocalTechnologies({
+      baseUrl: BASE,
+      siteContext,
+      scripts: oversize,
+    });
+    expect(local?.items).toEqual([]);
+    expect(local?.source).toBe("local");
+    expect(local?.truncated).toEqual({
+      reasons: ["script-too-large"],
+      scripts: 1,
+    });
+  });
+
+  test("the script limit's unread scripts are reported too", () => {
+    const local = detectLocalTechnologies({
+      baseUrl: BASE,
+      siteContext,
+      scripts: none,
+      scriptsNotRead: 2,
+    });
+    expect(local?.truncated).toEqual({ reasons: ["script-limit"], scripts: 2 });
+  });
+
+  test("nothing detected and nothing cut stays no section, so synced technologies are not cleared", () => {
+    expect(
+      detectLocalTechnologies({ baseUrl: BASE, siteContext, scripts: none })
+    ).toBeNull();
+    expect(
+      detectLocalTechnologies({
+        baseUrl: BASE,
+        siteContext,
+        scripts: none,
+        scriptsNotRead: 0,
+      })
+    ).toBeNull();
+  });
+
+  test("the cloud result carries the same reasons", async () => {
+    const result = await runCloudTechDetect({
+      client,
+      config: getDefaultConfig(),
+      auditId: "g1",
+      baseUrl: BASE,
+      siteContext,
+      scripts: oversize,
+      scriptsNotRead: 4,
+    });
+    expect(result?.technologies.truncated?.scripts).toBe(5);
+    expect([...(result?.technologies.truncated?.reasons ?? [])].sort()).toEqual(
+      ["script-limit", "script-too-large"]
+    );
+  });
+});

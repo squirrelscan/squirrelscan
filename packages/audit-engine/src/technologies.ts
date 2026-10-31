@@ -10,6 +10,8 @@ import {
   type DetectedTechnology,
 } from "@squirrelscan/tech-detect";
 import { recordToHeaders } from "@squirrelscan/utils/headers";
+
+import { SCRIPT_TOO_LARGE_ERROR } from "./script-fetcher";
 import { byteLength, truncateToBytes } from "@squirrelscan/utils/bytes";
 import { detectWaf, getWafProviderName } from "@squirrelscan/waf-detect";
 
@@ -235,6 +237,14 @@ export interface TechFetchedScript {
   content?: string | null;
   /** Pages that reference it; absent or empty means the home page. */
   sourcePages?: readonly string[];
+  /** Why the crawl has no body for it, when it dropped the script: `script too large` is counted in `truncated`. */
+  error?: string | null;
+}
+
+/** What `buildTechInputs` is told about scripts it was never handed (#1408). */
+export interface TechScriptGaps {
+  /** First-party scripts the pages reference that the audit did not read: its script limit was reached. */
+  scriptsNotRead?: number;
 }
 
 /** One crawled HTML page, home page first in the list handed to {@link buildTechInputs}. */
@@ -339,8 +349,11 @@ export function buildTechInputs(
   pages: TechPageSource[],
   scripts: readonly TechFetchedScript[],
   limits: TechBundleLimits = DEFAULT_TECH_BUNDLE_LIMITS,
+  gaps: TechScriptGaps = {},
 ): LocalTechInput[] {
   const attached = new Set<string>();
+  // Scripts the crawl dropped for their size, counted once however many pages reference them.
+  const counted = new Set<string>();
   let auditBytes = 0;
   return pages.map((page, index) => {
     const own = new Set([page.url, ...(page.requestedUrl ? [page.requestedUrl] : [])]);
@@ -433,6 +446,18 @@ export function buildTechInputs(
             ? "page-bytes"
             : "audit-bytes",
       );
+    }
+    // A script the crawl dropped for its size has no body at all: detection never saw it (#1408).
+    for (const script of limits.bundleBytes > 0 ? owned : []) {
+      if (script.content || script.error !== SCRIPT_TOO_LARGE_ERROR || counted.has(script.url)) continue;
+      counted.add(script.url);
+      cut++;
+      reasons.add("script-too-large");
+    }
+    // The audit's script limit left some scripts unread; said once, on the home page's input.
+    if (index === 0 && limits.bundleBytes > 0 && (gaps.scriptsNotRead ?? 0) > 0) {
+      cut += gaps.scriptsNotRead ?? 0;
+      reasons.add("script-limit");
     }
     const truncation = cut > 0 ? { reasons: [...reasons], scripts: cut } : undefined;
     const withBody: { url: string; content: string }[] = [];

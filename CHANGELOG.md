@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Changed
+
+- **Technology detection reports the scripts it never read.** A first-party script the crawl dropped for being over its 5 MB fetch cap, and the first-party scripts a page references that the audit's script limit left unfetched (10 to 50), are now counted in `technologies.truncated` (`script-too-large`, `script-limit`) beside the byte and time reasons, so a bundle that hid a technology no longer reads as a clean scan. When a scan detects nothing but was cut short, the technologies section is kept, empty, with `truncated`; it is not synced to the dashboard, so the stack an earlier scan found is not cleared. (#1408)
+
 ## v0.0.147 (2026-10-31)
 
 `security/tls-certificate` now judges every key type and reads the signature and protocol, and a start URL with a broken TLS certificate reports that check failing instead of ending without a finding. A deep start URL is named in the audit, recorded as `meta.requestedUrl` and guaranteed a slot, `--include-pages` says how each page answered, and the local technology scan reads whole bundles and says when it was cut short. `security/cookie-flags` no longer warns about CSRF token cookies, and `squirrel report --input` keeps a saved report's skipped checks. The JSON report schema is now 1.3. Thanks to William for the deep start URL work (#1369, #1385).

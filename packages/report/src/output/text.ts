@@ -396,7 +396,7 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
   }
 
   // Technologies — report-only (no logos possible in plain text; emoji + name).
-  if (report.technologies && report.technologies.items.length > 0) {
+  if (report.technologies && (report.technologies.items.length > 0 || report.technologies.truncated)) {
     const tech = report.technologies;
     write("TECHNOLOGIES");
     write("-".repeat(40));

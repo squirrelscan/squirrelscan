@@ -517,7 +517,7 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
   }
 
   // Technologies — report-only context for the agent (does not affect the score).
-  if (report.technologies && report.technologies.items.length > 0) {
+  if (report.technologies && (report.technologies.items.length > 0 || report.technologies.truncated)) {
     const tech = report.technologies;
     lines.push(
       techOpenTag("technologies", tech, ""),

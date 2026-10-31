@@ -3370,9 +3370,15 @@ export const audit = defineCommand({
       // Non-published path only — a published run syncs in the report-publish
       // handler. Gate on presence not items.length: an empty [] is a real
       // "found nothing" that clears stale tech (mirrors the publish-side sync).
+      // Not for an empty section that only says a cap cut the scan short (#1408): that is not a
+      // real "found nothing", and clearing the stack an earlier scan found would be wrong.
       if (
         registeredRun?.websiteId &&
         report.technologies &&
+        !(
+          report.technologies.items.length === 0 &&
+          report.technologies.truncated
+        ) &&
         !publishedReportId
       ) {
         await syncTechnologies({

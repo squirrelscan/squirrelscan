@@ -1395,8 +1395,8 @@ export interface ReportTechnologies {
    * everything it was given.
    */
   truncated?: {
-    /** `bundle-bytes`: a script past `[tech_detect] bundle_bytes`; `page-bytes` / `audit-bytes`: a script left out by the page or audit budget; `time-budget`: the per-page time budget ran out. */
-    reasons: Array<"bundle-bytes" | "page-bytes" | "audit-bytes" | "time-budget">;
+    /** `bundle-bytes`: a script past `[tech_detect] bundle_bytes`; `page-bytes` / `audit-bytes`: a script left out by the page or audit budget; `time-budget`: the per-page time budget ran out; `script-too-large`: the crawl dropped a first-party script over its fetch cap (5 MB), so detection never saw it; `script-limit`: first-party scripts the page references were not read because the audit's script limit was reached. */
+    reasons: Array<"bundle-bytes" | "page-bytes" | "audit-bytes" | "time-budget" | "script-too-large" | "script-limit">;
     /** Scripts read only in part or not at all. */
     scripts: number;
   };

@@ -644,6 +644,12 @@ export interface PreFetchedAssets {
   /** Referenced scripts a `store_scripts` run did not fetch for storage (its fetch limit). Absent when not storing. */
   storedScriptsNotFetched?: number;
   /**
+   * First-party scripts the pages reference that `scripts` does not hold, because the audit's script
+   * limit was reached (#1408). Technology detection reads `scripts`, so these are unread; it reports
+   * them as truncated. Optional: assets built by hand have none.
+   */
+  scriptsNotRead?: number;
+  /**
    * Same-site chunks a page preloads (`modulepreload`, `preload as=script`) that
    * no `<script src>` names. Held apart from `scripts` so the file-size,
    * compression and minification rules see exactly what they saw before; only
@@ -1707,6 +1713,9 @@ export function fetchAssetsFromOccurrences(
         { ...resourceResults, scripts: ruleScripts },
       ),
       scripts: ruleScripts.map(toScriptData),
+      ...(resourceOccurrences.scripts.size > ruleScripts.length
+        ? { scriptsNotRead: resourceOccurrences.scripts.size - ruleScripts.length }
+        : {}),
       ...(storedOnlyScripts.length > 0
         ? { storedOnlyScripts: storedOnlyScripts.map(toScriptData) }
         : {}),

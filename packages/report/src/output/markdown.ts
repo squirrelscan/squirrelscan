@@ -486,7 +486,7 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
 
   // Technologies — report-only section, never part of the score. Logos embed
   // via inline <img> (GFM-supported); they degrade to alt text in plain terminals.
-  if (report.technologies && report.technologies.items.length > 0) {
+  if (report.technologies && (report.technologies.items.length > 0 || report.technologies.truncated)) {
     const tech = report.technologies;
     lines.push("## Technologies");
     lines.push("");

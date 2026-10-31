@@ -207,7 +207,7 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
   }
 
   // Technologies — report-only (does not affect the health score).
-  if (report.technologies && report.technologies.items.length > 0) {
+  if (report.technologies && (report.technologies.items.length > 0 || report.technologies.truncated)) {
     const tech = report.technologies;
     lines.push(
       techOpenTag("technologies", tech, indent(1)),

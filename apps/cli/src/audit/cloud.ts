@@ -29,6 +29,7 @@ import {
   techInputTruncation,
   type LocalTechInput,
   type TechBundleLimits,
+  type TechScriptGaps,
   ensureSiteContextDocuments,
   prefetchCloudData,
   releaseSiteContextDocuments,
@@ -1008,6 +1009,8 @@ export interface FetchedScript {
   content?: string | null;
   /** Pages that reference it (the crawl's own record); drives which page's input carries the body. */
   sourcePages?: readonly string[];
+  /** Why the crawl has no body (`script too large` is counted in the report's `truncated`). */
+  error?: string | null;
 }
 
 /** The bundle byte caps for this run: `[tech_detect] bundle_bytes` over the defaults (#1254). */
@@ -1038,7 +1041,8 @@ export function buildTechPageInputs(
   siteContext: SiteContextPage[],
   baseUrl: string,
   scripts: readonly FetchedScript[],
-  limits: TechBundleLimits = DEFAULT_TECH_BUNDLE_LIMITS
+  limits: TechBundleLimits = DEFAULT_TECH_BUNDLE_LIMITS,
+  gaps: TechScriptGaps = {}
 ): LocalTechInput[] {
   const htmlPages = siteContext.filter(
     (p) => p.page.html && p.page.status >= 200 && p.page.status < 300
@@ -1065,7 +1069,7 @@ export function buildTechPageInputs(
       meta: extractMetaTags(html),
     };
   });
-  return buildTechInputs(sources, scripts, limits);
+  return buildTechInputs(sources, scripts, limits, gaps);
 }
 
 function toTechPayload(input: LocalTechInput): TechDetectPagePayload {
@@ -1086,6 +1090,8 @@ export interface RunCloudTechDetectOptions {
   siteContext: SiteContextPage[];
   /** Fetched scripts from the resource-assets phase (carries inline content). */
   scripts: FetchedScript[];
+  /** First-party scripts the audit's script limit left unread (`assets.scriptsNotRead`), for `truncated`. */
+  scriptsNotRead?: number;
   /** Preflight balance for the confirm prompt; absent → no balance shown. */
   getBalance?: () => Promise<PreflightBalance>;
   confirm?: (
@@ -1126,7 +1132,8 @@ export async function runCloudTechDetect(
       siteContext,
       baseUrl,
       opts.scripts,
-      techBundleLimits(config)
+      techBundleLimits(config),
+      { scriptsNotRead: opts.scriptsNotRead }
     );
     const [homeInput, ...restInputs] = inputs;
     if (!homeInput) return null;
@@ -1192,6 +1199,8 @@ export interface LocalTechDetectOptions {
   scripts: FetchedScript[];
   /** Bundle byte caps; default {@link DEFAULT_LOCAL_TECH_BUNDLE_LIMITS}. */
   limits?: TechBundleLimits;
+  /** First-party scripts the audit's script limit left unread (`assets.scriptsNotRead`), for `truncated`. */
+  scriptsNotRead?: number;
 }
 
 /**
@@ -1208,7 +1217,8 @@ export function detectLocalTechnologies(
       opts.siteContext,
       opts.baseUrl,
       opts.scripts,
-      opts.limits ?? DEFAULT_LOCAL_TECH_BUNDLE_LIMITS
+      opts.limits ?? DEFAULT_LOCAL_TECH_BUNDLE_LIMITS,
+      { scriptsNotRead: opts.scriptsNotRead }
     );
     if (inputs.length === 0) return null;
     const section = detectReportTechnologiesMulti(
@@ -1216,7 +1226,10 @@ export function detectLocalTechnologies(
       undefined,
       LOCAL_TECH_DETECT_OPTIONS
     );
-    return section.items.length > 0
+    // Nothing detected is no section, so a weak local guess never clears synced tech, unless a cap
+    // or budget cut the scan short: then the empty section carries the cut, so the report does not
+    // read as "this site runs nothing" (#1408). The audit command does not sync such a section.
+    return section.items.length > 0 || section.truncated
       ? { ...section, source: "local" as const }
       : null;
   } catch (error) {

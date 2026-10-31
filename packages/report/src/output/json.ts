@@ -822,7 +822,7 @@ function buildSlimReport(
           })),
         }
       : {}),
-    ...(report.technologies && report.technologies.items.length > 0
+    ...(report.technologies && (report.technologies.items.length > 0 || report.technologies.truncated)
       ? {
           technologies: {
             ...(report.technologies.source ? { source: report.technologies.source } : {}),
