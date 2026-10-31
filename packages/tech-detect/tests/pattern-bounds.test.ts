@@ -66,7 +66,17 @@ describe("every pattern is bounded on hostile input", () => {
   }, 60_000);
 
   test("each fingerprint alone finishes within the budget on repeated tag openers", () => {
-    const openers = ["<script ", '<script src="', "<link ", "<meta ", "<img ", "<a ", '<div class="'];
+    const openers = [
+      "<script ",
+      '<script src="',
+      "<script>\n",
+      "<script>a.b.c.d.e.f.g.h\n",
+      "<link ",
+      "<meta ",
+      "<img ",
+      "<a ",
+      '<div class="',
+    ];
     const slow: string[] = [];
     for (const fp of ALL_FINGERPRINTS) {
       for (const opener of openers) {
@@ -113,4 +123,22 @@ describe("bounded patterns still match real markup", () => {
     const uw = `<script data-account="AbC123" src="https://cdn.userway.org/widget.js"></script>`;
     expect(ids(uw)).toContain("userway");
   });
+});
+
+describe("Klaviyo loader pattern bounds (#1457 review)", () => {
+  test("repeated script lines stay linear", () => {
+    const klaviyo = ALL_FINGERPRINTS.find((fp) => fp.id === "klaviyo");
+    const loader = klaviyo?.detectors.find(
+      (detector) => "pattern" in detector && detector.pattern.source.includes("\\.src\\s*=\\s*"),
+    );
+    expect(loader && "pattern" in loader).toBe(true);
+    if (!loader || !("pattern" in loader)) return;
+
+    for (const unit of ["<script>\n", "<script>a.b.c.d.e.f.g.h\n"]) {
+      const markup = unit.repeat(Math.ceil(2_000_000 / unit.length)).slice(0, 2_000_000);
+      const start = performance.now();
+      loader.pattern.test(markup);
+      expect(performance.now() - start).toBeLessThan(400);
+    }
+  }, 30_000);
 });
