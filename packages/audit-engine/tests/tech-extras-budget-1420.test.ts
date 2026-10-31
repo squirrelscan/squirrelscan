@@ -143,6 +143,87 @@ describe("hint windows are allocated across all of a page's bundles before whole
     expect(detectPage(scripts)).toContain("stripe");
   });
 
+  // The issue's page: 34 scripts at the 512 KB page cap (12 under the 16 KB floor, 21 of 40 KB, then the late
+  // bundle), 472 KB of heads and about 40 KB of room, with the loader literal in the last bundle's window.
+  const thirtyFour = (loader: string) => [
+    ...Array.from({ length: 12 }, (_, n) => ({ url: `https://example.com/t${n}.js`, content: plain(10_000) })),
+    ...Array.from({ length: 21 }, (_, n) => small(n)),
+    late(loader),
+  ];
+
+  test("34 scripts at the 512 KB page cap: the loader in the last bundle's window is found, whichever vendor", () => {
+    for (const [loader, id] of [
+      ['posthog.init("phc_x",{api_host:"https://eu.i.posthog.com"});', "posthog"],
+      ['var st=Stripe("pk_test_x");', "stripe"],
+      ['Sentry.init({dsn:"https://k@o1.ingest.sentry.io/2"});', "sentry"],
+    ] as const) {
+      const scripts = thirtyFour(loader);
+      expect(scripts).toHaveLength(34);
+      expect(detectPage(scripts)).toContain(id);
+    }
+  });
+
+  // 200 seeded pages: random script counts, sizes, order, loaders and caps. The budgets hold on every one, and the
+  // same input gives the same extras (the sampler has no state that survives a build).
+  test("200 seeded pages: the page, audit and bundle budgets hold and a rebuild is byte-identical", () => {
+    const rng = (seed: number) => {
+      let a = seed >>> 0;
+      return () => {
+        a = (a + 0x6d2b79f5) >>> 0;
+        let t = a;
+        t = Math.imul(t ^ (t >>> 15), t | 1);
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    };
+    const LOADERS = ['posthog.init("phc_x",{});', 'var st=Stripe("pk_test_x");', 'Sentry.init({dsn:"https://k@o1.ingest.sentry.io/2"});', "fbq('init','1234567890');", "ttq.load('ABCDEFGH');"];
+    const CAPS = [
+      DEFAULT_TECH_BUNDLE_LIMITS,
+      { bundleBytes: 24 * 1024, pageBytes: 256 * 1024, auditBytes: 512 * 1024 },
+      { bundleBytes: 128 * 1024, pageBytes: 1024 * 1024, auditBytes: 2 * 1024 * 1024 },
+    ];
+    for (let seed = 1; seed <= 200; seed++) {
+      const r = rng(seed);
+      const count = 5 + Math.floor(r() * 32);
+      const scripts = Array.from({ length: count }, (_, n) => {
+        const size = 1_000 + Math.floor(r() * 47_000);
+        const loaders = Array.from({ length: Math.floor(r() * 3) }, () => LOADERS[Math.floor(r() * LOADERS.length)]!);
+        let content = plain(size);
+        for (const loader of loaders) {
+          const at = Math.floor(r() * content.length);
+          content = `${content.slice(0, at)}\n${loader}\n${content.slice(at)}`;
+        }
+        return { url: `https://example.com/f${seed}-${n}.js`, content };
+      });
+      const limits = CAPS[seed % CAPS.length]!;
+      const build = () =>
+        buildTechInputs([{ url: HOME, headers: {}, html: HTML }], scripts.map((x) => ({ ...x, sourcePages: [HOME] })), limits);
+      const first = build();
+      expect(JSON.stringify(build()), `seed ${seed}`).toBe(JSON.stringify(first));
+      const sizes = (first[0]!.scripts ?? []).map((x) => Buffer.byteLength(x.content ?? ""));
+      const total = sizes.reduce((sum, n) => sum + n, 0);
+      expect(total, `seed ${seed} page`).toBeLessThanOrEqual(limits.pageBytes);
+      expect(total, `seed ${seed} audit`).toBeLessThanOrEqual(limits.auditBytes);
+      for (const n of sizes) expect(n, `seed ${seed} bundle`).toBeLessThanOrEqual(limits.bundleBytes);
+    }
+  }, 120_000);
+
+  test("the same page twice gives byte-identical extras (the allocation is deterministic)", () => {
+    const build = () =>
+      buildTechInputs(
+        [{ url: HOME, headers: {}, html: HTML }],
+        thirtyFour('posthog.init("phc_x",{});').map((s) => ({ ...s, sourcePages: [HOME] })),
+        DEFAULT_TECH_BUNDLE_LIMITS,
+      );
+    const first = build();
+    const second = build();
+    expect(JSON.stringify(second)).toBe(JSON.stringify(first));
+    // and the page budget holds
+    const bytes = (inputs: ReturnType<typeof build>): number =>
+      (inputs[0]!.scripts ?? []).reduce((sum, x) => sum + Buffer.byteLength(x.content ?? ""), 0);
+    expect(bytes(first)).toBeLessThanOrEqual(DEFAULT_TECH_BUNDLE_LIMITS.pageBytes);
+  });
+
   test("a loader inside an early small script's remainder is still found", () => {
     const early = { url: "https://example.com/early.js", content: `${plain(20_000)}\nposthog.init("phc_x",{});\n${plain(10_000)}` };
     const scripts = [early, ...Array.from({ length: 25 }, (_, n) => small(n)), late("var st=Stripe('pk_test_x');")];
