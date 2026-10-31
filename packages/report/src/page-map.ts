@@ -6,6 +6,8 @@
 // building it costs no request and no credit. The `flags` column comes from the audit's own
 // rule results, so the table and the issue list agree.
 
+import { stripUnsafeLineText } from "@squirrelscan/core-contracts/control-chars";
+
 import { csvRow } from "./entities-export";
 import { escapeMarkdownCell, escapeMarkdownText, markdownCodeSpan } from "./output/markdown-escape";
 
@@ -152,6 +154,27 @@ export function filterPageMap(rows: readonly PageMapRow[], filters: PageMapFilte
   });
 }
 
+/**
+ * A value from an audited page as safe text for a terminal, a table or a spreadsheet: control
+ * characters (ESC sequences, OSC 8 hyperlinks, C1 controls), bidirectional overrides and line
+ * breaks are removed, so one value is one line and cannot move the cursor, clear the screen,
+ * reorder what a reader sees or smuggle a link. JSON output is the one place a value is left as
+ * it is, because JSON escapes them itself.
+ */
+export function cleanText(value: string | null | undefined): string {
+  return value ? stripUnsafeLineText(value) : "";
+}
+
+/**
+ * {@link cleanText} for a spreadsheet cell: also prefixed with an apostrophe when it would start
+ * a formula (`=`, `+`, `-`, `@`, after any leading whitespace), per OWASP's CSV injection advice.
+ * Tab and CR cannot lead a cell any more: they are already spaces.
+ */
+export function csvSafeText(value: string | null | undefined): string {
+  const clean = cleanText(value);
+  return /^\s*[=+\-@]/.test(clean) ? `'${clean}` : clean;
+}
+
 /** The columns of the CSV, in order. */
 export const PAGE_MAP_COLUMNS = [
   "url",
@@ -206,7 +229,8 @@ export function renderPageMapCsv(rows: readonly PageMapRow[]): string {
       csvRow(
         PAGE_MAP_COLUMNS.map((column) => {
           const value = row[column];
-          return Array.isArray(value) ? value.join(" ") : value;
+          if (Array.isArray(value)) return csvSafeText(value.join(" "));
+          return typeof value === "string" ? csvSafeText(value) : value;
         }),
       ),
     );
@@ -217,14 +241,14 @@ export function renderPageMapCsv(rows: readonly PageMapRow[]): string {
 /** A cell of prose from an audited page: markdown-escaped, one line, cut at `max` characters. */
 function cell(value: string | null | undefined, max = 80): string {
   if (!value) return "";
-  const flat = value.replace(/\s+/g, " ").trim();
+  const flat = cleanText(value).replace(/\s+/g, " ").trim();
   const cut = flat.length > max ? `${flat.slice(0, max - 1)}…` : flat;
   return escapeMarkdownCell(cut);
 }
 
 /** The pages as a markdown table: the columns a person scans, the rest in the JSON and CSV. */
 export function renderPageMapMarkdown(rows: readonly PageMapRow[], meta: PageMapMeta): string {
-  const out = [`# Page map: ${escapeMarkdownText(meta.site)}`, ""];
+  const out = [`# Page map: ${escapeMarkdownText(cleanText(meta.site))}`, ""];
   out.push(
     rows.length === meta.total
       ? `${meta.total} pages, from audit ${markdownCodeSpan(meta.crawlId.slice(0, 8))}.`
@@ -235,7 +259,7 @@ export function renderPageMapMarkdown(rows: readonly PageMapRow[], meta: PageMap
   out.push("|---|---|---|---|---|---|---|---|---|---|---|---|");
   for (const row of rows) {
     out.push(
-      `| ${markdownCodeSpan(row.url)} | ${row.status} | ${cell(row.title)} | ${row.titleLength} | ${cell(row.description)} | ${row.descriptionLength} | ${row.h1Count ?? ""} | ${row.wordCount ?? ""} | ${cell(row.schemaTypes.join(", "), 40)} | ${row.inlinks} | ${row.internalOutlinks} | ${cell(row.flags.join(", "), 60)} |`,
+      `| ${markdownCodeSpan(cleanText(row.url))} | ${row.status} | ${cell(row.title)} | ${row.titleLength} | ${cell(row.description)} | ${row.descriptionLength} | ${row.h1Count ?? ""} | ${row.wordCount ?? ""} | ${cell(row.schemaTypes.join(", "), 40)} | ${row.inlinks} | ${row.internalOutlinks} | ${cell(row.flags.join(", "), 60)} |`,
     );
   }
   return `${out.join("\n")}\n`;

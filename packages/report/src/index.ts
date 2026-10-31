@@ -460,6 +460,8 @@ export {
   PAGE_MAP_MISSING,
   PAGE_MAP_RULE_IDS,
   PAGE_MAP_TOO_LONG,
+  cleanText,
+  csvSafeText,
   filterPageMap,
   hasPageMapFilters,
   pageMapMeta,

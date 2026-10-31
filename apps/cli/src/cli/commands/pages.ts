@@ -8,6 +8,7 @@
 import {
   PAGE_MAP_DUPLICATE,
   PAGE_MAP_MISSING,
+  cleanText,
   filterPageMap,
   hasPageMapFilters,
   pageMapMeta,
@@ -53,12 +54,13 @@ function emit(content: string, outputPath: string | undefined): void {
   process.stdout.write(content);
 }
 
+/** The path and query of a page URL as one terminal-safe string: every value here comes from the audited site. */
 function pathOf(url: string): string {
   try {
     const parsed = new URL(url);
-    return `${parsed.pathname}${parsed.search}`;
+    return cleanText(`${parsed.pathname}${parsed.search}`);
   } catch {
-    return url;
+    return cleanText(url);
   }
 }
 
@@ -68,14 +70,14 @@ function clip(value: string, width: number): string {
 }
 
 /** The console view: path, status, title and description length, links, flags. */
-function printTable(
+export function printTable(
   rows: readonly PageMapRow[],
   total: number,
   label: string
 ): void {
   console.log("");
   console.log(fmt.bold("PAGES"));
-  console.log(fmt.dim(label));
+  console.log(fmt.dim(cleanText(label)));
   console.log("");
   const shown = rows.slice(0, CONSOLE_ROWS);
   const pathWidth = Math.min(
