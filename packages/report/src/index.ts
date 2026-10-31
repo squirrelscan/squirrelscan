@@ -462,6 +462,8 @@ export {
   PAGE_MAP_TOO_LONG,
   cleanText,
   csvSafeText,
+  escapeJsonUnsafe,
+  urlCell,
   filterPageMap,
   hasPageMapFilters,
   pageMapMeta,
@@ -480,6 +482,7 @@ export type {
 export {
   PAGE_MAP_DIFF_FIELDS,
   diffPageMaps,
+  pageMapDiffScopeNote,
   renderPageMapDiffCsv,
   renderPageMapDiffJson,
   renderPageMapDiffMarkdown,

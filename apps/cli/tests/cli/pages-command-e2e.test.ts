@@ -569,6 +569,38 @@ describe("squirrel pages --diff", () => {
     expect(html.err).toContain("--diff supports markdown, json, csv");
   }, 120_000);
 
+  test("more audits than the command takes is a usage error", async () => {
+    const latest = (await asJson()).crawlId.slice(0, 8);
+    const three = await squirrel(
+      "pages",
+      "--diff",
+      "--crawl",
+      latest,
+      "--crawl",
+      latest,
+      "--crawl",
+      latest
+    );
+    expect(three.code).toBe(1);
+    expect(three.err).toContain("--diff compares two audits, got 3");
+    const two = await squirrel("pages", "--crawl", latest, "--crawl", latest);
+    expect(two.code).toBe(1);
+    expect(two.err).toContain("--crawl takes one audit, or two with --diff");
+  }, 120_000);
+
+  test("-o to a path that cannot be written is a clean error, not a crash", async () => {
+    const r = await squirrel(
+      "pages",
+      "-f",
+      "csv",
+      "-o",
+      join(scratch, "no-such-dir", "pages.csv")
+    );
+    expect(r.code).toBe(1);
+    expect(r.err).toContain("Could not write");
+    expect(r.err).not.toContain("    at ");
+  }, 120_000);
+
   test("naming an audit that does not exist is an answer, not a failure", async () => {
     const r = await squirrel("pages", "--diff", "--crawl", "ffffffff");
     expect(r.code).toBe(0);
