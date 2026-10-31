@@ -10,10 +10,32 @@
 // A group, a class, an optional or repeated character, an escape class (`\s`, `\d`, `\b`) or `.`
 // ends a literal run, and a character followed by `?`, `*` or `{` is dropped from it, so the hint is
 // never a literal a match can lack. When nothing of at least MIN_DERIVED_HINT_CHARS remains, the
-// alternative gets no hint and stays tail-only, as before.
+// alternative gets no hint and stays tail-only, as before. A few detectors (adobe-analytics, whose
+// only literal is inside a group) have none.
+//
+// Of the runs an alternative requires, the most selective one is used, not the longest: `config` in
+// `gtag('config', 'G-` or `init` in `ym(1, 'init'` is longer than `gtag(` or `ym(` and occurs
+// hundreds of times in one real bundle, which would exhaust the per-hint hit budget before the real
+// call. Punctuation, digits, capitals and underscores raise a run's score and a short list of common
+// words ({@link COMMON_WORDS}) is never used on its own.
 
-/** Shorter than this and the literal hits constantly and means little. */
+/** Shorter than this and the literal hits constantly and means little (a run with punctuation may be one shorter, see {@link MIN_PUNCTUATED_HINT_CHARS}). */
 export const MIN_DERIVED_HINT_CHARS = 4;
+/** A run that has a character other than a letter or digit (`ym(`, `ml(`) is selective enough at this length. */
+export const MIN_PUNCTUATED_HINT_CHARS = 3;
+
+/**
+ * Words and fragments that, alone, are in nearly every bundle (measured on built react, vue, svelte,
+ * antd, firebase, clerk and others: `config` 610, `account` 580, `init` 526 hits in one bundle). A
+ * run equal to one is not used as a hint.
+ */
+const COMMON_WORDS = new Set([
+  "config", "init", "account", "install", "window[", "window.", "document.", "track", "push", "load",
+  "send", "page", "data", "name", "type", "start", "create", "options", "script", "client", "event",
+  "events", "user", "users", "error", "version", "token", "key", "value", "props", "state", "class",
+  "style", "false", "true", "null", "undefined", "function", "return", "object", "string", "number",
+  "this.", "self.", "global.", "exports.",
+]);
 
 /** Characters that, escaped, stand for themselves. */
 const LITERAL_ESCAPES = new Set([..."\\.^$*+?()[]{}|/-'\"`:,;=<>!@#%&~ "]);
@@ -47,8 +69,8 @@ function skipClass(source: string, open: number): number {
   return source.length;
 }
 
-/** The top-level alternatives of a pattern source (split at a `|` outside groups and classes). */
-function alternatives(source: string): string[] {
+/** The top-level alternatives of a pattern source (split at a `|` outside groups and classes); exported for the soundness test. */
+export function alternatives(source: string): string[] {
   const out: string[] = [];
   let start = 0;
   for (let i = 0; i < source.length; i++) {
@@ -65,6 +87,43 @@ function alternatives(source: string): string[] {
   return out;
 }
 
+/** Index just past the arguments of the escape whose letter `kind` sits at `at`: a hex digit pair or run, a braced or angled name, a control letter, or the digits after a digit escape. */
+function skipEscapeArguments(source: string, at: number, kind: string | undefined): number {
+  const after = at + 1;
+  const hex = /^[0-9a-fA-F]/;
+  const take = (re: RegExp, max: number): number => {
+    let j = after;
+    while (j < source.length && j - after < max && re.test(source[j]!)) j++;
+    return j;
+  };
+  switch (kind) {
+    case "x":
+      return take(hex, 2);
+    case "u":
+      if (source[after] === "{") {
+        const close = source.indexOf("}", after);
+        return close === -1 ? source.length : close + 1;
+      }
+      return take(hex, 4);
+    case "c":
+      return /^[a-zA-Z]/.test(source[after] ?? "") ? after + 1 : after;
+    case "k": {
+      if (source[after] !== "<") return after;
+      const close = source.indexOf(">", after);
+      return close === -1 ? source.length : close + 1;
+    }
+    case "p":
+    case "P": {
+      if (source[after] !== "{") return after;
+      const close = source.indexOf("}", after);
+      return close === -1 ? source.length : close + 1;
+    }
+    default:
+      // \0-\9: a back-reference (\12) or a legacy octal escape (\012) reads every digit that follows.
+      return kind !== undefined && /^[0-9]$/.test(kind) ? take(/^[0-9]$/, source.length) : after;
+  }
+}
+
 /** The literal runs that every match of one alternative contains. */
 function literalRuns(alternative: string): string[] {
   const runs: string[] = [];
@@ -79,7 +138,12 @@ function literalRuns(alternative: string): string[] {
       const next = alternative[i + 1];
       i++;
       if (next !== undefined && LITERAL_ESCAPES.has(next)) run += next;
-      else end();
+      else {
+        end();
+        // The escape takes arguments that are NOT literals of the match: \x60, \u0041, \u{41}, \cJ,
+        // \k<name>, \p{L}, and the digits after \1 or \0 (a back-reference or an octal escape).
+        i = skipEscapeArguments(alternative, i, next) - 1;
+      }
       continue;
     }
     if (c === "[") {
@@ -117,20 +181,41 @@ function literalRuns(alternative: string): string[] {
   return runs;
 }
 
+/** How selective a run is as a search literal: longer is better, and punctuation, digits, capitals and underscores count double. */
+function selectivity(run: string): number {
+  let score = 0;
+  for (const ch of run) score += /[a-z]/.test(ch) ? 1 : 3;
+  return score;
+}
+
+/** Whether a run may be a hint: long enough for its kind and not a bare common word. */
+function usable(run: string): boolean {
+  if (COMMON_WORDS.has(run.toLowerCase())) return false;
+  if (run.length >= MIN_DERIVED_HINT_CHARS) return true;
+  return run.length >= MIN_PUNCTUATED_HINT_CHARS && /[^a-zA-Z0-9]/.test(run);
+}
+
 /**
  * The literals worth searching a bundle for to find where `pattern` can match: for each top-level
- * alternative, its longest required literal of at least {@link MIN_DERIVED_HINT_CHARS}. For a
- * case-insensitive pattern they are lower-cased, and the caller searches a lower-cased copy.
+ * alternative, its most selective required literal ({@link selectivity}) that is long enough and not a
+ * bare common word. For a case-insensitive pattern they are lower-cased, and the caller searches a
+ * lower-cased copy.
  */
 export function deriveHints(pattern: RegExp): { hints: string[]; caseInsensitive: boolean } {
   const caseInsensitive = pattern.flags.includes("i");
   const hints = new Set<string>();
   for (const alternative of alternatives(pattern.source)) {
     let best = "";
+    let bestScore = 0;
     for (const run of literalRuns(alternative)) {
-      if (run.length > best.length) best = run;
+      if (!usable(run)) continue;
+      const score = selectivity(run);
+      if (score > bestScore) {
+        best = run;
+        bestScore = score;
+      }
     }
-    if (best.length >= MIN_DERIVED_HINT_CHARS) hints.add(caseInsensitive ? best.toLowerCase() : best);
+    if (best) hints.add(caseInsensitive ? best.toLowerCase() : best);
   }
   return { hints: [...hints], caseInsensitive };
 }
