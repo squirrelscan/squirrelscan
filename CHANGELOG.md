@@ -19,7 +19,7 @@ How it works:
 
 ### Fixed
 
-- **`integrity/brand-impersonation` reads sign-in cues throughout bounded long control attributes.** The rule kept only the first 300 normalised characters of `aria-label`, `title`, an input `value` or a logo `alt`, so real-character padding could hide the cue. It now reads overlapping 300-character windows over the first 16,000 normalised characters and reports the control as unread only when content beyond that bound was omitted. (#1424)
+- **`integrity/brand-impersonation` reads sign-in cues throughout long control attributes.** The rule kept only the first 300 normalised characters of `aria-label`, `title`, an input `value` or a logo `alt`, so real-character padding could hide the cue. It now reads overlapping 300-character windows (stride 150) over the first 16,000 normalised characters. A window edge inside a word is marked so a seam cannot create a phrase, windows after an attribute's first are read only where a sign-in or brand phrase starts (derived from the rule's lexicon), at most 40 per attribute and within a page budget of 20,000 windows, half spent in order (controls with a cue word first, then document order) and half shared fairly. A control is counted as not read in full only when its attribute is past 16,000 characters or a cap or the budget cut windows from it, and the info note is emitted even with no hit. (#1424)
 
 ### Changed
 
