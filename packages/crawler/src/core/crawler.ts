@@ -2547,6 +2547,9 @@ export function createCrawler(
 
         // The crawl drained on its own (not stopped): ask for the configured pages it did not reach (#1428).
         if (isRunning && !stopRequested) yield* probeConfiguredPages(crawlId);
+        else if ((config.configuredPagePaths?.length ?? 0) > 0) {
+          logger.debug("configured pages not probed", "the crawl was stopped (a --max-duration or a manual stop), so the configured pages it did not reach were not requested");
+        }
 
         // Crawl loop exited. Distinguish a clean drain from a backstop
         // hard-interrupt (#969): stop() clears isRunning before it can win the

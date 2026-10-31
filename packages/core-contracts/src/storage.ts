@@ -1231,6 +1231,8 @@ export interface WellKnownProbe {
   blockedByRobots?: boolean;
   /** Words of the probed page's text when it answered with HTML; null when it did not or could not be measured. */
   wordCount?: number | null;
+  /** Where a configured-page probe ended up after redirects (the URL the answer came from). */
+  finalUrl?: string;
 }
 
 export interface WellKnownProbeRecord {
