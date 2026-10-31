@@ -51,6 +51,13 @@ interface HintSpec {
 }
 
 let specs: HintSpec[] | null = null;
+/** Every `inCode` detector pattern, sticky: whether one matches starting at a given text's first character. */
+const openerCompletes: RegExp[] = [];
+for (const fp of ALL_FINGERPRINTS) {
+  for (const d of fp.detectors) {
+    if (d.type === "script-content" && d.inCode) openerCompletes.push(new RegExp(d.pattern.source, `${d.pattern.flags.replace(/[gy]/g, "")}y`));
+  }
+}
 
 /**
  * Every hint the sampler looks for: the ones fingerprints declare (`hint`, `also.hints`) and, for a
@@ -174,6 +181,22 @@ export function sampleBundleExtras(content: string, headChars: number, maxChars:
     while (p - 1 - slashes > span.open && content.charAt(p - 1 - slashes) === "\\") slashes++;
     return { pos: slashes % 2 === 1 ? p - 1 : p, opener };
   };
+  /**
+   * A cut that reopens a span puts its opener (a quote) in front of the text. That quote is CODE to
+   * the matcher, so a quote-initial `inCode` pattern (Supabase, Clerk, Firebase) can match starting
+   * at it with text that sits inside the string: the cut is moved on, past an escape pair whole,
+   * until no such pattern matches at the opener; null when none of the next few starts is clean.
+   */
+  const settle = (cut: { pos: number; opener: string }): { pos: number; opener: string } | null => {
+    if (!cut.opener) return cut;
+    let pos = cut.pos;
+    for (let tries = 0; tries < 16; tries++) {
+      const probe = cut.opener + content.slice(pos, pos + 400);
+      if (!openerCompletes.some((re) => ((re.lastIndex = 0), re.test(probe)))) return { pos, opener: cut.opener };
+      pos += content.charAt(pos) === "\\" ? 2 : 1;
+    }
+    return null;
+  };
   /** The end of a window cut at `p`: past a short string it ends in, as is inside a long one (the separator ends it). */
   const endAt = (p: number): number => {
     const span = spanAt(p);
@@ -252,6 +275,9 @@ export function sampleBundleExtras(content: string, headChars: number, maxChars:
           if (k % 2 === 1) cut = { pos: cut.pos - 1, opener: cut.opener };
         }
       }
+      const settled = settle(cut);
+      if (!settled) continue;
+      cut = settled;
       const start = cut.pos;
       const end = endAt(Math.min(limit, at + spec.text.length + WINDOW_AFTER));
       if (end <= start) continue;
@@ -292,8 +318,8 @@ export function sampleBundleExtras(content: string, headChars: number, maxChars:
   const tailRoom = maxChars - used - (merged.length > 0 ? SEGMENT_SEPARATOR.length : 0) - OPENER_SLACK;
   let spans = merged;
   if (tailRoom > 0 && limit === content.length) {
-    const cut = cutAt(Math.max(content.length - tailRoom, headChars));
-    if (cut.pos < content.length) {
+    const cut = settle(cutAt(Math.max(content.length - tailRoom, headChars)));
+    if (cut && cut.pos < content.length) {
       if (cut.opener) openers.set(cut.pos, cut.opener);
       spans = mergeSpans([...merged, [cut.pos, content.length]]);
     }

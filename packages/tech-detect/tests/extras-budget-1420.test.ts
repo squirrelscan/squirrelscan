@@ -356,3 +356,85 @@ describe("a cut inside a long string or regex never turns its text into code (#1
   });
 });
 
+// Review of #1433 (4447b39a): the opener is a quote and the matcher reads a quote as code, so a cut
+// on the first character after a quote inside a long string completes a quote-initial in-code pattern
+// (Supabase, Firebase, Clerk) with text that is inside the string. The cut moves on until none does.
+describe("the opener never completes an in-code pattern with quoted text (#1433 review)", () => {
+  const texts = (c2: string): Record<string, { text: string; id: string }> => ({
+    supabase: { text: `https://${"abcdefghijklmnopqrst"}.supabase.co${c2},${c2}eyJ${"x".repeat(40)}${c2}`, id: "supabase" },
+    firebase: { text: `authDomain${c2}: ${c2}x.firebaseapp.com${c2}`, id: "firebase" },
+    clerk: { text: `publishableKey${c2}: ${c2}pk_test_${"x".repeat(30)}${c2}`, id: "clerk" },
+  });
+
+  for (const q of ["'", '"', "`"]) {
+    // A quote of the other kind inside the string, as the pattern needs one in front of its text.
+    const c2 = q === '"' ? "'" : '"';
+    for (const [name, { text, id }] of Object.entries(texts(c2))) {
+      test(`${name} text in a long ${q} string, cut at every alignment`, () => {
+        const T = `${c2}${text}`;
+        const base = "a".repeat(1_500);
+        let tested = 0;
+        // `first` is where the char after the in-string quote falls relative to the window cut.
+        for (let first = -T.length - 2; first <= 160 - text.length; first++) {
+          const region = [...(base + "z".repeat(160))];
+          const at = base.length + first - 1;
+          for (let i = 0; i < T.length; i++) if (at + i >= 0 && at + i < region.length) region[at + i] = T[i]!;
+          const content = `${filler(HEAD + 200).replaceAll("\n", "")}var s=${q}${region.join("")}Stripe(${q};\n${filler(40_000)}`;
+          if (detect(content, false).includes(id)) continue; // the whole body reads it as code: not a probe
+          tested++;
+          expect(detect(content)).not.toContain(id);
+        }
+        expect(tested).toBeGreaterThan(100);
+      });
+    }
+  }
+});
+
+// The tail is cut like a window: the same rules (an escape stays whole, a long regex is skipped, the
+// opener and the backed-up char fit the budget). With no hint literal in the body the tail is the
+// last `EXTRAS - 3` chars, so its start is controlled by the body's length.
+describe("the tail cut inside a long span (#1433 review)", () => {
+  const FAKE = `{authDomain:"x.firebaseapp.com",storageBucket:"x.appspot.com"}`;
+  /** `lead`, then exactly `EXTRAS - short` chars that start with `rest`: the tail starts at the first of them (for a slack of `short`). */
+  const withTail = (lead: string, rest: string, short = 3): string => {
+    const room = EXTRAS - short;
+    return `${lead}${(rest + filler(room)).slice(0, room)}`;
+  };
+  const long = (open: string): string => `${filler(HEAD + 200).replaceAll("\n", "")}var s=${open}${"a".repeat(1_500)}`;
+
+  for (const q of ["'", "`"]) {
+    test(`an escaped ${q} at the tail cut stays escaped`, () => {
+      for (const backslashes of [1, 3]) {
+        const content = withTail(`${long(q)}${"\\".repeat(backslashes)}`, `${q}${FAKE}${"z".repeat(600)}${q};\n`);
+        const extras = sampleBundleExtras(content, HEAD, EXTRAS);
+        expect(extras.length).toBeGreaterThan(20_000);
+        expect(extras.length).toBeLessThanOrEqual(EXTRAS);
+        expect(detect(content, false)).not.toContain("firebase");
+        expect(detect(content)).not.toContain("firebase");
+      }
+    });
+  }
+
+  test("a long regex at the tail cut is skipped, not reopened", () => {
+    const content = withTail(long("/["), `x/${FAKE}${"z".repeat(600)}]/;\n`).replace("var s=/[", "var s=/[");
+    const extras = sampleBundleExtras(content, HEAD, EXTRAS);
+    expect(extras.length).toBeLessThanOrEqual(EXTRAS);
+    expect(detect(content)).not.toContain("firebase");
+  });
+
+  test("an opener of two chars and a backed-up char fit the budget exactly", () => {
+    // A long block comment with a backslash right before the cut: `/*` in front, one char backed up.
+    const content = withTail(`${long("/*")}\\`, `${"b".repeat(1_000)}*/;\n`);
+    const extras = sampleBundleExtras(content, HEAD, EXTRAS);
+    expect(extras.startsWith("/*\\")).toBe(true);
+    expect(extras.length).toBeLessThanOrEqual(EXTRAS);
+  });
+
+  test("the budget holds whichever side of the cut the escape falls on", () => {
+    // One char longer than the case above: with a slack of 2 the tail would start right after the backslash and back up past the budget.
+    const content = withTail(`${long("/*")}\\`, `${"b".repeat(1_000)}*/;\n`, 2);
+    const extras = sampleBundleExtras(content, HEAD, EXTRAS);
+    expect(extras.length).toBeLessThanOrEqual(EXTRAS);
+  });
+});
+
