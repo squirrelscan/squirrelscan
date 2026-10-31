@@ -148,6 +148,9 @@ const SEQUENTIAL_WINDOW_BUDGET = 10_000;
 const SHARED_WINDOW_BUDGET = 10_000;
 const MAX_WINDOWS_PER_CONTROL = 160;
 const WINDOWS_PER_ATTRIBUTE = 40;
+/** Logo `alt` texts per control: how many are read in full, and how many are kept at all. */
+const FULL_ALTS_PER_CONTROL = 4;
+const MAX_ALTS_PER_CONTROL = 100;
 /** Windows every control with long attributes gets past each attribute's first, outside the page budgets (#1459). */
 const FLOOR_WINDOWS_PER_CONTROL = 2;
 /** The page's window budgets. A mutable object so a test can lower them to exercise the exhausted path. */
@@ -409,14 +412,19 @@ export function scanControls(doc: Document): ControlScan {
 
   // A logo's `alt` belongs to the control it sits in.
   const imageAlts = new Map<Element, string[]>();
+  const altsCut = new Set<Element>();
   for (const img of images) {
     const alt = getAttrCI(img, "alt");
     if (!alt) continue;
     const control = controlAbove(img.parentElement);
     if (control) {
       const list = imageAlts.get(control) ?? [];
-      list.push(alt);
-      imageAlts.set(control, list);
+      // A control holds a few logos: the first ones are read in full, the next only for their first characters, and
+      // past MAX_ALTS_PER_CONTROL none (counted), so a control wrapping 300,000 images costs a bounded amount.
+      if (list.length < MAX_ALTS_PER_CONTROL) {
+        list.push(list.length < FULL_ALTS_PER_CONTROL ? alt : alt.slice(0, ATTR_CHARS));
+        imageAlts.set(control, list);
+      } else altsCut.add(control);
     }
   }
 
@@ -472,7 +480,7 @@ export function scanControls(doc: Document): ControlScan {
   const gathered = chosen.map(({ element, href, order }) => {
     const tag = element.tagName.toLowerCase();
     const referenced = (getAttrCI(element, "aria-labelledby") ?? "").slice(0, ATTR_RAW_CHARS).split(/\s+/).filter(Boolean);
-    let cut = referenced.length > MAX_LABELLEDBY;
+    let cut = referenced.length > MAX_LABELLEDBY || altsCut.has(element);
     const labelled = referenced
       .slice(0, MAX_LABELLEDBY)
       .map((id) => byId(id))
@@ -551,6 +559,11 @@ export function scanControls(doc: Document): ControlScan {
     const extra = [...item.windows.flatMap((windows) => windows.slice(0, 1)), ...taken];
     return { element: item.element, href: item.href, extra, rank: rank(item.tag, item.href, extra) };
   });
+  // The window arrays are not needed past this point: free them before the reads below.
+  gathered.length = 0;
+  wanted.length = 0;
+  served.length = 0;
+  imageAlts.clear();
 
   // Reading order: most relevant first, document order within a rank. Controls with no destination (rank 0)
   // are not read at all. Each read is bounded by a fair share of the page's visits (see TOTAL_VISITS).
