@@ -810,9 +810,12 @@ Two things to know. The crawl still presents a browser User-Agent and browser
 `sec-ch-ua` and `sec-fetch-*` headers, so a request with no language is an
 unusual combination that a strict bot filter may notice; if a site starts
 refusing, set an `Accept-Language` to look like an ordinary browser. And a cloud
-browser render uses the browser's own language, while the plain HTTP fetch the
-audit makes beside it sends none, so the two can see different locale pages on a
-site that redirects by language.
+browser render started from `squirrel audit` uses the browser's own language, and
+`[crawler] headers` do not reach it (the CLI sends the render service only the URLs, a timeout and a run id),
+while the plain HTTP fetch the audit makes beside it sends none, so the two can see
+different locale pages on a site that redirects by language. Audits run from the
+dashboard are different: the custom request headers set on the website are sent with
+the cloud browser's requests too (see [crawl settings](/dashboard/crawl-settings)).
 
 Pages cached by an earlier run are only refetched when the site varied on
 `Accept-Language` (a `Vary: Accept-Language` response). A site that redirected by
