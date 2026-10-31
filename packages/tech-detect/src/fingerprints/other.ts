@@ -1,6 +1,10 @@
 import type { TechFingerprint } from "../types";
 import { inBundle, inBundleWith, inScript, inStyle, resourceAttr, scriptSrc } from "./helpers";
 
+const KLAVIYO_SCRIPT_PATH = String.raw`(?:static|static-tracking)\.klaviyo\.com\/onsite\/js\/(?:[A-Za-z0-9]+\/)?klaviyo\.js`;
+const KLAVIYO_SCRIPT_URL = String.raw`(?:https?:)?\/\/${KLAVIYO_SCRIPT_PATH}`;
+const KLAVIYO_ATTR_VALUE = String.raw`(?:"${KLAVIYO_SCRIPT_URL}[^"]*"|'${KLAVIYO_SCRIPT_URL}[^']*'|${KLAVIYO_SCRIPT_URL}[^\s>]*)`;
+
 export const OTHER_FINGERPRINTS: TechFingerprint[] = [
   {
     // Curated, not generated, so the static markup of a Shopify storefront is read too (#1447): the static.klaviyo.com
@@ -12,9 +16,18 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
     website: "https://www.klaviyo.com",
     icon: "klaviyo",
     detectors: [
-      // The onsite script, as a listed script URL or the `src` of a real script tag (also `static-tracking` and the
-      // per-company `/onsite/js/<id>/klaviyo.js` form); a link or a code sample is not a loaded script.
-      ...scriptSrc(String.raw`(?:https?:)?\/\/(?:static|static-tracking)\.klaviyo\.com\/onsite\/js\/(?:[A-Za-z0-9]+\/)?klaviyo\.js`),
+      // A listed script URL, direct or passed through a proxy. The pattern stays anchored for CodeQL.
+      { type: "script-url", pattern: new RegExp(`^(?:https?:)?\\/\\/[^\\r\\n]{0,2048}${KLAVIYO_SCRIPT_PATH}`, "i") },
+      // pageMarkup strips comments and prose/code samples, then keeps complete resource tags and short inline loaders.
+      { type: "script-url", pattern: new RegExp(`^<script\\b[^>]{0,65536}\\s(?:src|data-src)\\s*=\\s*${KLAVIYO_ATTR_VALUE}`, "im") },
+      { type: "script-url", pattern: new RegExp(`^<link\\b[^>]{0,65536}\\shref\\s*=\\s*${KLAVIYO_ATTR_VALUE}`, "im") },
+      {
+        type: "script-url",
+        pattern: new RegExp(
+          `^<script\\b[^>]{0,65536}>[\\s\\S]{0,16384}?\\b[A-Za-z_$][\\w$]{0,63}\\.src\\s*=\\s*["']${KLAVIYO_SCRIPT_URL}`,
+          "im",
+        ),
+      },
       { type: "script-content", pattern: /_learnq\.push\(/i },
       // The Shopify theme app block of Klaviyo's onsite embed.
       { type: "html", pattern: /shopify:\/\/apps\/klaviyo-email-marketing-sms\//i, requires: "shopify://apps/" },
