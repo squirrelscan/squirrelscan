@@ -299,3 +299,23 @@ test("one attribute full of repeated sign-in text does not spend the window cap 
   expect(label.length).toBeLessThan(16_000);
   for (const [, control] of ATTRIBUTE_CONTROLS) expect(brand(control(label))).toBe("Google");
 });
+
+// ── logo alts per control are bounded (#1424 follow-up) ──────────────────────────────────────────────────
+
+test("a control wrapping many logos: the first few alts are read in full, the rest only at their start, and past 100 they are counted", async () => {
+  const phrase = "Sign in with Google";
+  // The phrase is in the 3rd alt, padded past 300 characters: still read (the first four alts are read in full).
+  const full = [`${"a".repeat(400)} ${phrase}`].map((alt) => `<img src="/g.png" alt="${alt}">`);
+  const early = `<a href="${OFF}"><img src="/a.png" alt="x"><img src="/b.png" alt="y">${full.join("")}</a>`;
+  expect(brand(early)).toBe("Google");
+  // The same padded alt as the 20th logo is read only for its first 300 characters: not found, and not an error.
+  const filler = Array.from({ length: 19 }, (_, i) => `<img src="/${i}.png" alt="logo ${i}">`).join("");
+  expect(brand(`<a href="${OFF}">${filler}${full.join("")}</a>`)).toBeNull();
+  // An unpadded phrase in the 20th alt is within its first 300 characters: found.
+  expect(brand(`<a href="${OFF}">${filler}<img src="/g.png" alt="${phrase}"></a>`)).toBe("Google");
+  // 300 logos in one control: the control is reported as not read in full.
+  const many = Array.from({ length: 300 }, (_, i) => `<img src="/${i}.png" alt="sign in ${i}">`).join("");
+  const { brandImpersonationRule } = await import("../src/integrity/brand-impersonation");
+  const result = await brandImpersonationRule.run(context(`<a href="${OFF}">${many}</a>`));
+  expect(result.checks[0]?.details).toMatchObject({ scanTruncated: true, controlsUnread: 1 });
+});
