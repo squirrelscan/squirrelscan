@@ -109,7 +109,9 @@ describe("security/cookie-flags", () => {
     // undercount.
     const httpOnlyCheck = checksByName(checks, "cookie-httponly");
     expect(httpOnlyCheck?.items?.map((i) => i.id)).toEqual(["optout"]);
-    expect(checksByName(checks, "cookie-httponly-csrf")?.items?.map((i) => i.id)).toEqual(["csrftoken"]);
+    expect(checksByName(checks, "cookie-httponly-csrf")?.items?.map((i) => i.id)).toEqual([
+      "csrftoken",
+    ]);
     const secureCheck = checksByName(checks, "cookie-secure");
     expect(secureCheck?.items?.map((i) => i.id)).toEqual(["optout"]);
   });
@@ -149,16 +151,24 @@ describe("security/cookie-flags: platform cookies (#1378)", () => {
 
   test("a session cookie beside __dpl still warns, naming only the session cookie", () => {
     const { checks } = cookieFlagsRule.run(
-      ctx("__dpl=dpl_abc123; Path=/; Secure; SameSite=Lax, session=" + "a1b2c3d4".repeat(4) + "; Path=/; Secure; SameSite=Lax"),
+      ctx(
+        "__dpl=dpl_abc123; Path=/; Secure; SameSite=Lax, session=" +
+          "a1b2c3d4".repeat(4) +
+          "; Path=/; Secure; SameSite=Lax",
+      ),
     );
     const warn = checksByName(checks, "cookie-httponly");
     expect(warn?.status).toBe("warn");
     expect(warn?.items?.map((i) => i.id)).toEqual(["session"]);
-    expect(checksByName(checks, "cookie-httponly-platform")?.items?.map((i) => i.id)).toEqual(["__dpl"]);
+    expect(checksByName(checks, "cookie-httponly-platform")?.items?.map((i) => i.id)).toEqual([
+      "__dpl",
+    ]);
   });
 
   test("a session cookie alone without HttpOnly warns as before", () => {
-    const { checks } = cookieFlagsRule.run(ctx("session=" + "a1b2c3d4".repeat(4) + "; Path=/; Secure; SameSite=Lax"));
+    const { checks } = cookieFlagsRule.run(
+      ctx("session=" + "a1b2c3d4".repeat(4) + "; Path=/; Secure; SameSite=Lax"),
+    );
     expect(checksByName(checks, "cookie-httponly")?.status).toBe("warn");
     expect(checksByName(checks, "cookie-httponly-platform")).toBeUndefined();
   });
@@ -172,7 +182,9 @@ describe("security/cookie-flags: platform cookies (#1378)", () => {
   });
 
   test("a platform cookie with HttpOnly set adds no platform info", () => {
-    const { checks } = cookieFlagsRule.run(ctx("__dpl=dpl_abc123; Path=/; Secure; HttpOnly; SameSite=Lax"));
+    const { checks } = cookieFlagsRule.run(
+      ctx("__dpl=dpl_abc123; Path=/; Secure; HttpOnly; SameSite=Lax"),
+    );
     expect(checks).toHaveLength(1);
     expect(checks[0]?.status).toBe("pass");
   });
@@ -192,7 +204,9 @@ describe("security/cookie-flags: platform cookies (#1378)", () => {
   });
 
   test("names match exactly: __dpl2 and a case variant are ordinary cookies", () => {
-    const { checks } = cookieFlagsRule.run(ctx("__dpl2=x; Path=/; Secure; SameSite=Lax, __DPL=y; Path=/; Secure; SameSite=Lax"));
+    const { checks } = cookieFlagsRule.run(
+      ctx("__dpl2=x; Path=/; Secure; SameSite=Lax, __DPL=y; Path=/; Secure; SameSite=Lax"),
+    );
     expect(checksByName(checks, "cookie-httponly")?.items).toHaveLength(2);
   });
 });
@@ -203,7 +217,9 @@ describe("security/cookie-flags: CSRF token cookies (#1378)", () => {
 
   test("XSRF-TOKEN and csrftoken without HttpOnly: info with the reason and docs, no warning", () => {
     const { checks } = cookieFlagsRule.run(
-      ctx("XSRF-TOKEN=abc; Path=/; Secure; SameSite=Lax, csrftoken=def; Path=/; Secure; SameSite=Lax"),
+      ctx(
+        "XSRF-TOKEN=abc; Path=/; Secure; SameSite=Lax, csrftoken=def; Path=/; Secure; SameSite=Lax",
+      ),
     );
     expect(checksByName(checks, "cookie-httponly")).toBeUndefined();
     const info = checksByName(checks, "cookie-httponly-csrf");
@@ -217,15 +233,24 @@ describe("security/cookie-flags: CSRF token cookies (#1378)", () => {
 
   test("a session cookie beside a CSRF cookie still warns, naming only the session cookie", () => {
     const { checks } = cookieFlagsRule.run(
-      ctx(`XSRF-TOKEN=abc; Path=/; Secure; SameSite=Lax, session=${SESSION}; Path=/; Secure; SameSite=Lax, sid=${SESSION}; Path=/; Secure; SameSite=Lax`),
+      ctx(
+        `XSRF-TOKEN=abc; Path=/; Secure; SameSite=Lax, session=${SESSION}; Path=/; Secure; SameSite=Lax, sid=${SESSION}; Path=/; Secure; SameSite=Lax`,
+      ),
     );
-    expect(checksByName(checks, "cookie-httponly")?.items?.map((i) => i.id)).toEqual(["session", "sid"]);
-    expect(checksByName(checks, "cookie-httponly-csrf")?.items?.map((i) => i.id)).toEqual(["XSRF-TOKEN"]);
+    expect(checksByName(checks, "cookie-httponly")?.items?.map((i) => i.id)).toEqual([
+      "session",
+      "sid",
+    ]);
+    expect(checksByName(checks, "cookie-httponly-csrf")?.items?.map((i) => i.id)).toEqual([
+      "XSRF-TOKEN",
+    ]);
   });
 
   test("names match exactly: a csrf-looking name outside the list warns", () => {
     const { checks } = cookieFlagsRule.run(
-      ctx("csrf_session=x; Path=/; Secure; SameSite=Lax, XSRF-TOKEN2=y; Path=/; Secure; SameSite=Lax, CSRFTOKEN=z; Path=/; Secure; SameSite=Lax, xsrf-token=w; Path=/; Secure; SameSite=Lax"),
+      ctx(
+        "csrf_session=x; Path=/; Secure; SameSite=Lax, XSRF-TOKEN2=y; Path=/; Secure; SameSite=Lax, CSRFTOKEN=z; Path=/; Secure; SameSite=Lax, xsrf-token=w; Path=/; Secure; SameSite=Lax",
+      ),
     );
     expect(checksByName(checks, "cookie-httponly")?.items).toHaveLength(4);
     expect(checksByName(checks, "cookie-httponly-csrf")).toBeUndefined();
@@ -239,8 +264,38 @@ describe("security/cookie-flags: CSRF token cookies (#1378)", () => {
     expect(checksByName(none, "cookie-samesite-none-insecure")?.status).toBe("fail");
   });
 
+  test("prefixed names are not the listed names: __Host- and __Secure- variants still warn", () => {
+    const { checks } = cookieFlagsRule.run(
+      ctx(
+        "__Host-XSRF-TOKEN=a; Path=/; Secure; SameSite=Lax, __Secure-csrftoken=b; Path=/; Secure; SameSite=Lax",
+      ),
+    );
+    expect(checksByName(checks, "cookie-httponly")?.items?.map((i) => i.id)).toEqual([
+      "__Host-XSRF-TOKEN",
+      "__Secure-csrftoken",
+    ]);
+    expect(checksByName(checks, "cookie-httponly-csrf")).toBeUndefined();
+  });
+
+  test("a page with only CSRF cookies without HttpOnly has the info check and no pass check", () => {
+    const { checks } = cookieFlagsRule.run(ctx("XSRF-TOKEN=a; Path=/; Secure; SameSite=Lax"));
+    expect(checks.map((c) => c.name)).toEqual(["cookie-httponly-csrf"]);
+    expect(checks.some((c) => c.status === "pass")).toBe(false);
+  });
+
+  test("the message says HttpOnly is needed only when the frontend reads the cookie, with no claim that it breaks, and ends on a bare URL", () => {
+    const { checks } = cookieFlagsRule.run(ctx("csrftoken=a; Path=/; Secure; SameSite=Lax"));
+    const message = checksByName(checks, "cookie-httponly-csrf")?.message ?? "";
+    expect(message).toContain("if your frontend does not read it, you can set HttpOnly");
+    expect(message).not.toMatch(/break/i);
+    expect(message.endsWith("#csrf-cookie-httponly")).toBe(true);
+    expect(message).not.toMatch(/\)$/);
+  });
+
   test("a CSRF cookie that already has HttpOnly adds no CSRF info", () => {
-    const { checks } = cookieFlagsRule.run(ctx("csrftoken=abc; Path=/; Secure; HttpOnly; SameSite=Lax"));
+    const { checks } = cookieFlagsRule.run(
+      ctx("csrftoken=abc; Path=/; Secure; HttpOnly; SameSite=Lax"),
+    );
     expect(checks).toHaveLength(1);
     expect(checks[0]?.status).toBe("pass");
   });
