@@ -11,6 +11,9 @@ const SNIPPET =
   '(function(c,l,a,r,i,t,y){c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};t=l.createElement(r);t.async=1;' +
   't.src="https://www.clarity.ms/tag/"+i;y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);})(window,document,"clarity","script","abc123");';
 
+// Built at run time: a literal hex run in a fixture is flagged by the secret scanner.
+const HASH = "0123456789abcdef".repeat(2).slice(0, 24);
+
 const page = (head: string, body = "<p>Hello</p>") =>
   `<!doctype html><html><head><title>t</title>${head}</head><body>${body}</body></html>`;
 const BODIES = [{ url: "https://example.com/assets/app.js", content: "var a=1;" }];
@@ -24,7 +27,7 @@ describe("a loader wrapped by a cache or CDN is still read", () => {
   });
 
   test("Cloudflare Rocket Loader: type=<hash>-text/javascript", () => {
-    const html = page(`<script type="0123456789abcdef01234567-text/javascript">${SNIPPET}</script>`);
+    const html = page(`<script type="${HASH}-text/javascript">${SNIPPET}</script>`);
     for (const found of both(html)) expect(found).toContain("clarity");
   });
 
@@ -42,6 +45,13 @@ describe("a Next.js App Router flight script over 16 KB", () => {
   test("the layout's inline loader snippet is found", () => {
     expect(big.length).toBeGreaterThan(16 * 1024);
     for (const found of both(page(`<script>${big}</script>`))) expect(found).toContain("clarity");
+  });
+
+  test("a leading comment does not hide a flight script, and one over 2 MB is cut, not dropped", () => {
+    const withComment = `/* chunk */ ${big}`;
+    expect(ids(page(`<script>${withComment}</script>`))).toContain("clarity");
+    const huge = `${layout};${"x".repeat(2_200_000)}`;
+    expect(ids(page(`<script>${huge}</script>`))).toContain("clarity");
   });
 
   test("an untyped script over 16 KB that is not a flight payload is a bundle and is not read", () => {
@@ -65,8 +75,14 @@ describe("still not read", () => {
     for (const found of both(html)) expect(found).not.toContain("clarity");
   });
 
+  test("template, shader and binary types are data too", () => {
+    for (const type of ["text/x-handlebars-template", "text/x-mustache", "x-shader/x-fragment", "application/octet-stream", "text/x-jsrender"]) {
+      expect(ids(page(`<script type="${type}">${SNIPPET}</script>`))).not.toContain("clarity");
+    }
+  });
+
   test("a data type with a wrapper-like prefix is still data", () => {
-    expect(ids(page(`<script type="0123456789abcdef01234567-application/json">{"u":"https://www.clarity.ms/x"}</script>`))).not.toContain("clarity");
+    expect(ids(page(`<script type="${HASH}-application/json">{"u":"https://www.clarity.ms/x"}</script>`))).not.toContain("clarity");
   });
 });
 

@@ -92,12 +92,13 @@ const INLINE_LOADER_MAX_CHARS = 16 * 1024;
  * to defer it (`litespeed/javascript`, Cloudflare Rocket Loader's `<hash>-text/javascript`, Partytown, a consent
  * tool's `text/plain`) and the browser runs it all the same.
  */
-const DATA_SCRIPT_TYPE = /json|importmap|speculationrules|template|^text\/(?:html|css|markdown|csv|xml)\b|^application\/(?:xml|xhtml)/i;
+const DATA_SCRIPT_TYPE =
+  /json|importmap|speculationrules|template|x-(?:tmpl|mustache|handlebars|jquery-tmpl|jsrender|underscore|ejs)|shader|octet-stream|^text\/(?:html|css|markdown|csv|xml)\b|^application\/(?:xml|xhtml)/i;
 /**
  * A Next.js App Router flight script (`self.__next_f.push(...)`) carries the layout's `next/script` snippets as
  * strings, so it is read well past {@link INLINE_LOADER_MAX_CHARS}; any other script over the cap is a bundle.
  */
-const FLIGHT_SCRIPT_START = /^\s*\(?\s*self\.__next_(?:f|s)\b/;
+const FLIGHT_SCRIPT_START = /^\s*(?:\/\*[\s\S]{0,200}?\*\/\s*|\/\/[^\n]{0,200}\n\s*)*\(?\s*self\.__next_(?:f|s)\b/;
 const FLIGHT_SCRIPT_MAX_CHARS = 2 * 1024 * 1024;
 /** Inline script text read per page, all scripts together. */
 const INLINE_TEXT_BUDGET = 8 * 1024 * 1024;
@@ -162,11 +163,15 @@ export function pageMarkup(html: string): string {
       parts.push(tag);
       const type = attributeValue(tag, "type")?.trim() ?? "";
       const length = end - pos;
-      if (length > 0 && !DATA_SCRIPT_TYPE.test(type) && inlineText + length <= INLINE_TEXT_BUDGET) {
-        const body = html.slice(pos, end);
-        if (length <= INLINE_LOADER_MAX_CHARS || (length <= FLIGHT_SCRIPT_MAX_CHARS && FLIGHT_SCRIPT_START.test(body.slice(0, 64)))) {
-          parts.push(body);
-          inlineText += length;
+      if (length > 0 && !DATA_SCRIPT_TYPE.test(type) && inlineText < INLINE_TEXT_BUDGET) {
+        const head = html.slice(pos, Math.min(end, pos + 512));
+        // An ordinary script is read whole up to the cap; a flight script is read up to its larger one (a
+        // longer one is cut there, not dropped).
+        const cap = FLIGHT_SCRIPT_START.test(head) ? FLIGHT_SCRIPT_MAX_CHARS : INLINE_LOADER_MAX_CHARS;
+        if (length <= INLINE_LOADER_MAX_CHARS || cap === FLIGHT_SCRIPT_MAX_CHARS) {
+          const take = Math.min(length, cap, INLINE_TEXT_BUDGET - inlineText);
+          parts.push(html.slice(pos, pos + take));
+          inlineText += take;
         }
       }
       pos = end;
