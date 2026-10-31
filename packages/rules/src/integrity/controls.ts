@@ -13,6 +13,7 @@
 import { getAttrCI } from "@squirrelscan/utils";
 
 import { BRAND_SPECS } from "./brand-specs";
+import { AUTH_CUE_PHRASES, AUTH_LABEL } from "./cues";
 import { hiddenSelectors } from "./overlay-style";
 
 /** Text with nothing outside ASCII (a linear test, with no backtracking). */
@@ -117,27 +118,38 @@ function boundedAttribute(text: string): { texts: string[]; cut: boolean } {
  * word joined to the second, `sign ?in`: the rule lets a space be missing), so a window without one cannot match a cue
  * and is not read. Derived, not listed by hand: a new lexicon phrase widens the prefilter by itself.
  */
-const AUTH_CUE_PHRASES = ["sign in", "log in", "login", "logon", "continue with", "verify"];
-function cueAlternatives(): string[] {
-  const phrases = [...AUTH_CUE_PHRASES, ...BRAND_SPECS.flatMap((spec) => spec.lexicon)];
+/** The pattern for windows (and raw attributes) that hold the start of any of `phrases`: see {@link cueAlternatives}. */
+export function cuePattern(phrases: readonly string[]): string {
   const alternatives = new Set<string>();
   for (const phrase of phrases) {
     const [first, second] = phrase.split(" ");
     const escape = (word: string): string => word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     alternatives.add(first!.length <= 4 && second ? `${escape(first!)} ?${escape(second)}` : escape(first!));
   }
-  return [...alternatives];
+  return `(?<![\\p{L}\\p{N}])(?:${[...alternatives].join("|")})`;
 }
-const CUE_PATTERN = `(?<![\\p{L}\\p{N}])(?:${cueAlternatives().join("|")})`;
+const CUE_PATTERN = cuePattern([...AUTH_CUE_PHRASES, ...BRAND_SPECS.flatMap((spec) => spec.lexicon)]);
 /** A window (normalised, lower case) that holds the start of a cue phrase. */
 export const WINDOW_CUE = new RegExp(CUE_PATTERN, "u");
 /** The same test on an attribute as written, no normalisation: the cheap first tier. */
 const RAW_CUE = new RegExp(CUE_PATTERN, "iu");
+/**
+ * Words of the brand lexicon that are not auth wording (`google`, `microsoft`, `calendly`, ...), derived from it. When an
+ * attribute has more cue windows than the cap, windows holding one of these come before windows that only repeat a
+ * sign-in word: a phrase of a brand is what decides, repeated `sign in` text is how a label is padded (#1458).
+ */
+const BRAND_WORDS = (() => {
+  const auth = new Set([...AUTH_CUE_PHRASES, "with", "account", "in"].flatMap((phrase) => phrase.split(" ")));
+  return [...new Set(BRAND_SPECS.flatMap((spec) => spec.lexicon).flatMap((phrase) => phrase.split(" ")).filter((word) => !auth.has(word)))];
+})();
+const BRAND_WINDOW = new RegExp(`(?<![\\p{L}\\p{N}])(?:${BRAND_WORDS.map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})`, "u");
 /** Windows past an attribute's first that the page may read, how they are shared, and the most one attribute adds. */
 const SEQUENTIAL_WINDOW_BUDGET = 10_000;
 const SHARED_WINDOW_BUDGET = 10_000;
 const MAX_WINDOWS_PER_CONTROL = 160;
 const WINDOWS_PER_ATTRIBUTE = 40;
+/** Windows every control with long attributes gets past each attribute's first, outside the page budgets (#1459). */
+const FLOOR_WINDOWS_PER_CONTROL = 2;
 /** The page's window budgets. A mutable object so a test can lower them to exercise the exhausted path. */
 export const integrityLimits = { sequentialWindows: SEQUENTIAL_WINDOW_BUDGET, sharedWindows: SHARED_WINDOW_BUDGET };
 
@@ -168,7 +180,6 @@ const MAX_PREPARED = 60_000;
 /** A style attribute is read up to this many characters: hiding is a union of readings, so more is never needed. */
 const STYLE_ATTR_CHARS = 8_192;
 const SCAN_SELECTOR = "a[href], button, input, [role='button'], form[id], img[alt], template";
-const AUTH_CUE = /\b(sign in|log in|login|continue with|verify)\b/;
 /** Destination paths a sign-in control points at; a control to one of these is read before an ordinary link. */
 const AUTH_PATH = /(sign-?in|log-?in|oauth|auth|sso|account)/i;
 /** Subtrees that render as no text: reading them would let `Sign<script>0</script> in` hide a label. */
@@ -262,7 +273,7 @@ type Root = { querySelectorAll(selector: string): ArrayLike<Element> };
 function rank(tag: string, href: string | null, extra: string[]): number {
   // No destination (a script-driven button with no form): there is nothing to judge, so nothing to read.
   if (href === null) return 0;
-  if (extra.some((text) => AUTH_CUE.test(readable(text.slice(0, ATTR_CHARS))))) return 3;
+  if (extra.some((text) => AUTH_LABEL.test(readable(text.slice(0, ATTR_CHARS))))) return 3;
   if (tag !== "a") return 2;
   if (href && (/^(?:[a-z][a-z0-9+.-]*:)?\/\//i.test(href) || AUTH_PATH.test(href.slice(0, 300)))) return 2;
   return 1;
@@ -495,22 +506,33 @@ export function scanControls(doc: Document): ControlScan {
       const found = windows.slice(1).filter((window) => WINDOW_CUE.test(window));
       if (found.length <= WINDOWS_PER_ATTRIBUTE) return found;
       item.cut = true;
-      return [...found.slice(0, WINDOWS_PER_ATTRIBUTE - 1), found[found.length - 1]!];
+      // Over the cap, windows with a brand word come first, then the ones that only repeat a sign-in word.
+      return [...found.filter((window) => BRAND_WINDOW.test(window)), ...found.filter((window) => !BRAND_WINDOW.test(window))].slice(
+        0,
+        WINDOWS_PER_ATTRIBUTE,
+      );
     }),
   );
-  const served = wanted.map(() => 0);
+  // Every control with long attributes keeps a small floor outside the budgets, so no run of earlier controls can leave
+  // a later one with only its first window.
+  const served = wanted.map((want) => Math.min(want.length, FLOOR_WINDOWS_PER_CONTROL));
   const servingOrder = gathered
     .map((_, index) => index)
     .sort((a, b) => Number(!gathered[a]!.rawCue) - Number(!gathered[b]!.rawCue) || gathered[a]!.order - gathered[b]!.order);
   let sequential = integrityLimits.sequentialWindows;
   for (const index of servingOrder) {
     if (sequential <= 0) break;
-    const take = Math.min(wanted[index]!.length, MAX_WINDOWS_PER_CONTROL, sequential);
-    served[index] = take;
+    const take = Math.min(wanted[index]!.length - served[index]!, MAX_WINDOWS_PER_CONTROL - served[index]!, sequential);
+    if (take <= 0) continue;
+    served[index]! += take;
     sequential -= take;
   }
   let shared = integrityLimits.sharedWindows;
-  const stillCut = servingOrder.filter((index) => served[index]! < wanted[index]!.length);
+  // The shared half goes to controls without a cue word as written first: they are rare, and the cue-bearing ones
+  // had the sequential half (#1459).
+  const stillCut = [...servingOrder.filter((index) => !gathered[index]!.rawCue), ...servingOrder.filter((index) => gathered[index]!.rawCue)].filter(
+    (index) => served[index]! < wanted[index]!.length,
+  );
   for (const [turn, index] of stillCut.entries()) {
     if (shared <= 0) break;
     const share = Math.max(1, Math.floor(shared / (stillCut.length - turn)));

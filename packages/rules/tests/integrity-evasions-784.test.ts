@@ -1,7 +1,8 @@
 import { expect, test } from "bun:test";
 import { parsePage } from "@squirrelscan/parser";
 import { brandImpersonationRule } from "../src/integrity/brand-impersonation";
-import { WINDOW_CUE } from "../src/integrity/controls";
+import { WINDOW_CUE, cuePattern } from "../src/integrity/controls";
+import { AUTH_CUE_PHRASES, AUTH_LABEL, AUTH_LABEL_PHRASES, PROVIDER_BUTTON, PROVIDER_VERBS } from "../src/integrity/cues";
 import { BRAND_SPECS } from "../src/integrity/brand-specs";
 import { detectBrandImpersonation, detectFakeAuthOverlay, detectPageSignals } from "../src/integrity/signals";
 import type { RuleContext } from "../src/types";
@@ -271,4 +272,30 @@ test("the cue prefilter holds every phrase the rules match (drift guard)", () =>
   for (const word of ["designers", "blog", "technology", "logistics is hard", "assignment", "catalog entry"]) {
     expect(WINDOW_CUE.test(word), word).toBe(false);
   }
+});
+
+test("the prefilter's auth words come from the exported cue lists, which also build AUTH_LABEL and PROVIDER_BUTTON (#1460)", () => {
+  // Every phrase the two patterns are built from passes the prefilter, taken from the same exports.
+  for (const phrase of AUTH_LABEL_PHRASES) {
+    expect(AUTH_LABEL.test(` ${phrase} `), phrase).toBe(true);
+    expect(WINDOW_CUE.test(phrase), phrase).toBe(true);
+  }
+  for (const verb of PROVIDER_VERBS) {
+    for (const spelling of [verb, verb.replace(" ", "")]) {
+      expect(PROVIDER_BUTTON.test(`${spelling} with google`), spelling).toBe(true);
+      expect(WINDOW_CUE.test(`${spelling} with google`), spelling).toBe(true);
+    }
+  }
+  // A verb added to the lists reaches the prefilter: the pattern is a function of them.
+  expect(new RegExp(cuePattern(AUTH_CUE_PHRASES), "u").test("authenticate with google")).toBe(false);
+  expect(new RegExp(cuePattern([...AUTH_CUE_PHRASES, "authenticate with"]), "u").test("authenticate with google")).toBe(true);
+});
+
+test("one attribute full of repeated sign-in text does not spend the window cap before the brand phrase (#1458)", () => {
+  // 7,000 characters of `sign in`, padding, the Google phrase, then more `sign in` text: far more auth-only windows
+  // than the per-attribute cap, and the one window that names Google sits in the middle of them.
+  const repeated = "sign in ".repeat(875);
+  const label = `${repeated}${"a".repeat(3_000)} Sign in with Google ${"a".repeat(300)} ${"sign in ".repeat(250)}`;
+  expect(label.length).toBeLessThan(16_000);
+  for (const [, control] of ATTRIBUTE_CONTROLS) expect(brand(control(label))).toBe("Google");
 });

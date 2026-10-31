@@ -82,6 +82,7 @@ const haystackCache = new WeakMap<object, string>();
 // "Sign in with Google" or a Calendly embed on the brand's own domain is spared).
 
 import { BRAND_SPECS, type BrandSpec } from "./brand-specs";
+import { AUTH_LABEL, PROVIDER_BUTTON, SIGN_IN_LABEL } from "./cues";
 
 export { BRAND_SPECS, type BrandSpec };
 
@@ -258,15 +259,7 @@ function credentialDestinations(
     if (host) out.push({ host, path: hrefPath(action, base), brandLabeled: "", signIn: false });
   }
 
-  // Auth-labeled controls: only those whose own label is a sign-in affordance.
-  const AUTH_LABEL = /\b(sign in|log in|login|continue with|verify)\b/;
-  const SIGN_IN_LABEL = /\b(sign in|log in|login)\b/;
-  // "Continue with Google" / "Continue with Microsoft": the providers' own button wording. "Continue with
-  // Microsoft account" is a link about an account, not the button (pub#696).
-  // A space is optional between the words, so a label split by markup (`Sign<br>in with Goo<i>gle</i>`, read as
-  // `signin with google`) is the same cue; the boundaries at each end are whole-word.
-  const PROVIDER_BUTTON =
-    /(?<![\p{L}\p{N}])(?:continue|sign ?in|log ?in|logon) ?with ?(?:google|microsoft)(?![\p{L}\p{N}])(?! ?account)/u;
+  // Auth-labeled controls: only those whose own label is a sign-in affordance (wording in ./cues).
   for (const control of collectControls(doc)) {
     const { labels } = control;
     const providerButton =
