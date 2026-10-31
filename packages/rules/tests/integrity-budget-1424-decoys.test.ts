@@ -15,11 +15,24 @@ test("21,000 cue-bearing decoys after the real padded control: it is found, beca
   expect(fired(checks, "brand-impersonation")).toBe(true);
 }, 300_000);
 
-test("21,000 cue-bearing decoys before the real padded control: found, or the page says controls went unread", async () => {
+test("21,000 cue-bearing decoys before the real padded control: it is found, because every control keeps a floor of windows (#1459)", async () => {
+  const real = `<a href="${OFF}" aria-label="${padded(400)}"><svg></svg></a>`;
+  const { checks } = await run(`${decoys21k}${real}`);
+  expect(finished(checks)).toBe(true);
+  expect(fired(checks, "brand-impersonation")).toBe(true);
+}, 300_000);
+
+test("21,000 cue-bearing decoys before a real control whose label has no cue word as written: found too (#1459)", async () => {
+  // Fullwidth letters: the raw text has no sign-in word, so the control is not in the cue tier; its floor serves it.
+  const obfuscated = `<a href="${OFF}" aria-label="${"a".repeat(400)} \uff33\uff49\uff47\uff4e \uff49\uff4e \uff57\uff49\uff54\uff48 \uff27\uff4f\uff4f\uff47\uff4c\uff45 ${"b".repeat(50)}"><svg></svg></a>`;
+  const { checks } = await run(`${decoys21k}${obfuscated}`);
+  expect(finished(checks)).toBe(true);
+  expect(fired(checks, "brand-impersonation")).toBe(true);
+}, 300_000);
+
+test("a deep padded label after the decoys is found or the page says controls went unread", async () => {
   const real = `<a href="${OFF}" aria-label="${padded(2_500)}"><svg></svg></a>`;
   const { checks } = await run(`${decoys21k}${real}`);
   expect(finished(checks)).toBe(true);
   expect(foundOrNoted(checks, "brand-impersonation")).toBe(true);
-  const note = checks.find((c) => c.details?.scanTruncated === true);
-  if (!fired(checks, "brand-impersonation")) expect(Number(note?.details?.controlsUnread)).toBeGreaterThan(0);
 }, 300_000);
