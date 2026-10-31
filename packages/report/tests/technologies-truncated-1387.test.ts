@@ -4,6 +4,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { techChangeSummary, techTruncationNote } from "../src/technologies";
+import { renderHtml } from "../src/output/html";
 import { renderJson } from "../src/output/json";
 import { renderLlm } from "../src/output/llm";
 import { renderMarkdown } from "../src/output/markdown";
@@ -45,7 +46,7 @@ function report(technologies: object): AuditReport {
 describe("technologies truncated (#1387)", () => {
   test("the note names every reason; none when the scan read everything", () => {
     const note = techTruncationNote(section({ truncated: cut }) as never);
-    expect(note).toContain("cut short");
+    expect(note).toContain("Detection was cut short");
     expect(note).toContain("bundle_bytes");
     expect(note).toContain("time budget");
     expect(techTruncationNote(section({}) as never)).toBeNull();
@@ -55,14 +56,14 @@ describe("technologies truncated (#1387)", () => {
     const line = techChangeSummary(section({ truncated: cut }) as never);
     expect(line).toContain("Detected locally from the crawled pages");
     expect(line).toContain("Detection was cut short");
-    expect(techChangeSummary(section({}) as never)).not.toContain("cut short");
+    expect(techChangeSummary(section({}) as never)).not.toContain("Detection was cut short");
   });
 
   test("the text and markdown reports say so", () => {
     const r = report(section({ truncated: cut }));
     expect(String(renderText(r as never))).toContain("Detection was cut short");
     expect(String(renderMarkdown(r as never))).toContain("Detection was cut short");
-    expect(String(renderText(report(section({})) as never))).not.toContain("cut short");
+    expect(String(renderText(report(section({})) as never))).not.toContain("Detection was cut short");
   });
 
   test("the JSON report carries truncated with the reasons", () => {
@@ -127,5 +128,12 @@ describe("an empty technologies section that was cut short (#1408)", () => {
       technologies?: unknown;
     };
     expect(hidden.technologies).toBeUndefined();
+  });
+
+  test("the html report shows the empty cut section; an empty uncut one stays out", () => {
+    const withCut = String(renderHtml(report(cutEmpty) as never));
+    expect(withCut).toContain("Tech stack");
+    expect(withCut).toContain("Detection was cut short");
+    expect(String(renderHtml(report(emptyClean) as never))).not.toContain("Detection was cut short");
   });
 });
