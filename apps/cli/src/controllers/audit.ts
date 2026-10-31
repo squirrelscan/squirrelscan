@@ -49,7 +49,11 @@ import {
 } from "@squirrelscan/fetchers";
 import { summarizeIgnored } from "@squirrelscan/report/ignored";
 import { isRuleEnabled } from "@squirrelscan/rules";
-import { createProbeBudget, selectDiscoveryProbes } from "@squirrelscan/rules";
+import {
+  configuredPagePaths,
+  createProbeBudget,
+  selectDiscoveryProbes,
+} from "@squirrelscan/rules";
 import { MAX_DURATION_MAX_PAGE_BYTES } from "@squirrelscan/utils/constants";
 import {
   customUserAgent,
@@ -1247,6 +1251,10 @@ export async function runAudit(
             { enabled?: boolean }
           >,
         }),
+        // #1428: pages the E-E-A-T rules are configured with that the crawl does not reach are asked for once.
+        configuredPagePaths: configuredPagePaths(
+          mergedConfig.rule_options as Record<string, unknown>
+        ),
         incremental: incrementalEnabled,
         // Browser-like freshness: skip re-requesting fresh pages (max-age /
         // Expires) across audits. Honored only when incremental; --refresh

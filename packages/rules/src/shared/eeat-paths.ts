@@ -9,6 +9,8 @@
 
 import { z } from "zod";
 
+import type { WellKnownProbeData } from "@squirrelscan/core-contracts";
+
 import { excludePatternError, getPathname, matchesExcludePattern } from "@squirrelscan/utils";
 
 /** The `paths` option, identical on the three rules. */
@@ -42,4 +44,46 @@ export const eeatPathsSchema = z
 export function matchesConfiguredPaths(url: string, paths: readonly string[]): boolean {
   if (paths.length === 0) return false;
   return matchesExcludePattern(getPathname(url) || url, [...paths]);
+}
+
+/** What the `configured-pages` probe found at one configured path the crawl did not reach (#1428). */
+export interface ProbedConfiguredPage {
+  path: string;
+  url: string;
+  /** `found`: answered 2xx. `missing`: answered, not 2xx. `blocked`: robots.txt disallows it, so it was not requested. */
+  outcome: "found" | "missing" | "blocked";
+  status: number;
+  /** Words of the page's text, null when it was not HTML or could not be measured. */
+  wordCount: number | null;
+}
+
+/**
+ * The answers the crawl's `configured-pages` probe holds for the rule's configured `paths`. A path the probe
+ * never attempted, or could not get an answer for (a network error, the budget spent), is left out: it is
+ * evidence of nothing, so the rule reports as it did before the probe existed.
+ */
+export function probedConfiguredPages(
+  site: { wellKnown?: WellKnownProbeData | null } | undefined,
+  paths: readonly string[],
+): ProbedConfiguredPage[] {
+  const out: ProbedConfiguredPage[] = [];
+  for (const probe of site?.wellKnown?.probes ?? []) {
+    if (!probe.configuredPage || !matchesConfiguredPaths(probe.path, paths)) continue;
+    if (probe.blockedByRobots) {
+      out.push({ path: probe.path, url: probe.url, outcome: "blocked", status: 0, wordCount: null });
+    } else if (probe.status >= 200 && probe.status < 300) {
+      out.push({ path: probe.path, url: probe.url, outcome: "found", status: probe.status, wordCount: probe.wordCount ?? null });
+    } else if (probe.status >= 300) {
+      out.push({ path: probe.path, url: probe.url, outcome: "missing", status: probe.status, wordCount: null });
+    }
+  }
+  return out;
+}
+
+/** The part of a missing-page finding that says what was probed: `(probed /agentur: 404)`. */
+export function probedNote(probes: readonly ProbedConfiguredPage[]): string {
+  const parts = probes.map((p) =>
+    p.outcome === "blocked" ? `${p.path}: disallowed by robots.txt, not requested` : `${p.path}: ${p.status}`,
+  );
+  return `(probed ${parts.join(", ")})`;
 }

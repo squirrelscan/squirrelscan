@@ -9,6 +9,7 @@ import { BUDGET_EXHAUSTED_ERROR, budgetedTimeoutMs, safeFetchWithDeadline, ungat
 import type { PhaseBudget, ProbeGate } from "./deadline";
 import type { WellKnownProbe, WellKnownProbeData } from "@squirrelscan/core-contracts";
 import { mergeHeaderRecords } from "@squirrelscan/utils/headers";
+import { parsePage } from "@squirrelscan/parser";
 
 // Fixed probe list, owned by core-contracts so rules can declare the paths they
 // read (#409). Rules decide what each hit/miss means; the crawler only fetches +
@@ -78,6 +79,15 @@ export function looksLikeMarkdown(body: string): boolean {
   return /\[[^\]]+\]\([^)]+\)/.test(trimmed.slice(0, 4_096));
 }
 
+function htmlWordCount(body: string, url: string, status: number, looksHtml: boolean): number | null {
+  if (!looksHtml || status < 200 || status >= 300) return null;
+  try {
+    return parsePage(body, url).content.wordCount;
+  } catch {
+    return null;
+  }
+}
+
 const unreachableProbe = (path: string, url: string, error: string): WellKnownProbe => ({
   path,
   url,
@@ -100,6 +110,7 @@ async function probeOne(
   userAgent: string,
   customHeaders?: Record<string, string>,
   budget?: PhaseBudget,
+  countWords = false,
 ): Promise<WellKnownProbe> {
   const url = new URL(path, baseUrl).toString();
   const timeoutMs = budgetedTimeoutMs(budget, PROBE_TIMEOUT_MS);
@@ -135,6 +146,7 @@ async function probeOne(
             oauthRegistrationEndpoint: null,
             oauthClientIdMetadataDocumentSupported: null,
             error: "body exceeds cap",
+            ...(countWords ? { wordCount: null } : {}),
           };
         }
         const raw = await readBodyCapped(response, WELL_KNOWN_MAX_BYTES);
@@ -161,6 +173,8 @@ async function probeOne(
           oauthRegistrationEndpoint: oauth.registrationEndpoint,
           oauthClientIdMetadataDocumentSupported: oauth.clientIdMetadataDocumentSupported,
           error: null,
+          // A configured page (#1428) is judged on its content, so it carries the text's word count.
+          ...(countWords ? { wordCount: htmlWordCount(body, url, response.status, looksHtml) } : {}),
         };
       },
       budget?.egress,
@@ -190,5 +204,32 @@ export function probeWellKnown(
       ),
     );
     return { probes };
+  });
+}
+
+/**
+ * A page a rule is configured with, requested once after the crawl because the crawl did not reach it
+ * (#1428). The answer is a probe record with the word count of an HTML page, never a crawled page. A path
+ * robots.txt disallows is not requested (`blockedByRobots`).
+ */
+export function probeConfiguredPage(
+  baseUrl: string,
+  path: string,
+  userAgent: string,
+  options: {
+    customHeaders?: Record<string, string>;
+    budget?: PhaseBudget;
+    gate?: ProbeGate;
+    robotsAllows?: (url: string) => boolean;
+  } = {},
+): Effect.Effect<WellKnownProbe, never, never> {
+  const { customHeaders, budget, gate = ungated, robotsAllows } = options;
+  const url = new URL(path, baseUrl).toString();
+  return Effect.promise(async () => {
+    if (robotsAllows && !robotsAllows(url)) {
+      return { ...unreachableProbe(path, url, "disallowed by robots.txt"), configuredPage: true as const, blockedByRobots: true };
+    }
+    const probe = await gate(url, () => probeOne(baseUrl, path, userAgent, customHeaders, budget, true));
+    return { ...probe, configuredPage: true as const, wordCount: probe.wordCount ?? null };
   });
 }

@@ -93,6 +93,13 @@ export interface CrawlerConfig {
    */
   discoveryProbes?: readonly DiscoveryProbe[];
   /**
+   * Concrete page paths (`/agentur`) the E-E-A-T rules are configured with (#1428). Each one the crawl did
+   * not reach is requested once after the crawl, when the `configured-pages` probe is selected, so the rule
+   * can tell a page that exists but is not linked from a page that is missing. robots.txt and the per-host
+   * limits apply. The result is a probe record, never a crawled page.
+   */
+  configuredPagePaths?: readonly string[];
+  /**
    * Per-host limits for the discovery probes when they differ from the page
    * fetches' (#409). A cloud-rendered crawl clamps per-host concurrency to the
    * plan's render concurrency (2 on free) with no delay, but the probes are
