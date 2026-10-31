@@ -12,7 +12,9 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
     website: "https://www.klaviyo.com",
     icon: "klaviyo",
     detectors: [
-      { type: "script-url", pattern: /static\.klaviyo\.com\/onsite\/js\/klaviyo\.js/i },
+      // The onsite script, as a listed script URL or the `src` of a real script tag (also `static-tracking` and the
+      // per-company `/onsite/js/<id>/klaviyo.js` form); a link or a code sample is not a loaded script.
+      ...scriptSrc(String.raw`(?:https?:)?\/\/(?:static|static-tracking)\.klaviyo\.com\/onsite\/js\/(?:[A-Za-z0-9]+\/)?klaviyo\.js`),
       { type: "script-content", pattern: /_learnq\.push\(/i },
       // The Shopify theme app block of Klaviyo's onsite embed.
       { type: "html", pattern: /shopify:\/\/apps\/klaviyo-email-marketing-sms\//i, requires: "shopify://apps/" },
