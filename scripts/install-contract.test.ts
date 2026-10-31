@@ -305,10 +305,11 @@ describe("self install failure reporting", () => {
 
   test("sh runs self install under tee and reports the binary's own exit code", () => {
     expect(shellInstaller).toContain(
-      'self install --bin-dir "$bin_dir" 2>&1 | tee "$self_install_log"',
+      '"$binary" self install --bin-dir "$bin_dir" 2>&1 | tee "$log"',
     );
-    // tee's status is not the binary's — PIPESTATUS[0] is.
-    expect(shellInstaller).toContain("local rc=${PIPESTATUS[0]}");
+    // tee's status is not the binary's — PIPESTATUS[0] is, and run_self_install returns it.
+    expect(shellInstaller).toContain('return "${PIPESTATUS[0]}"');
+    expect(shellInstaller).toContain('run_self_install "$exec_binary" "$bin_dir" "$self_install_log"');
     expect(shellInstaller).toContain('LAST_ERROR_CODE="$rc"');
   });
 
@@ -667,7 +668,7 @@ describe("self install killed by a signal", () => {
     // #2023: a killed self install is finished by hand; the headline and the
     // memory guidance still reach the user when even the file work fails.
     expect(shellInstaller).toContain(
-      'install_by_hand_and_verify "$tmpdir/squirrel" "$version" "$bin_dir" "$rc"',
+      'install_by_hand_and_verify "$exec_binary" "$version" "$bin_dir" "$rc"',
     );
     expect(shellInstaller).toContain(
       'error "$(self_install_kill_headline "$kill_rc")" "$(self_install_kill_guidance "$kill_rc")"',
