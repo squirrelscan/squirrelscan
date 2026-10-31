@@ -17,9 +17,15 @@ const site = Bun.serve({
     const { pathname } = new URL(req.url);
     if (pathname === "/" || pathname === "/about") {
       return new Response(
-        `<!doctype html><html lang="en"><head><title>Page ${pathname}</title><meta name="description" content="A page"></head><body><h1>Hello</h1><a href="/about">About</a> <a href="/missing">Missing</a></body></html>`,
+        `<!doctype html><html lang="en"><head><title>Page ${pathname}</title><meta name="description" content="A page"></head><body><h1>Hello</h1><a href="/about">About</a> <a href="/missing">Missing</a> <a href="/old">Old</a></body></html>`,
         { headers: { "content-type": "text/html; charset=utf-8" } }
       );
+    }
+    if (pathname === "/old") {
+      return new Response(null, {
+        status: 301,
+        headers: { location: "/about" },
+      });
     }
     return new Response("not found", { status: 404 });
   },
@@ -74,7 +80,9 @@ const auditArgs = (...extra: string[]) => [
 
 interface Page {
   url: string;
+  finalUrl: string;
   status: number;
+  outcome: string;
   ruleCount: number;
 }
 interface Json {
@@ -94,12 +102,26 @@ describe("--include-pages", () => {
     );
     expect(r.code).toBe(0);
     const json = JSON.parse(r.out) as Json;
-    expect(json.meta.schemaVersion).toBe("1.1");
+    expect(json.meta.schemaVersion).toBe("1.2");
     const pages = json.pages ?? [];
     const byPath = new Map(pages.map((p) => [new URL(p.url).pathname, p]));
     expect(byPath.get("/")?.status).toBe(200);
     expect(byPath.get("/about")?.status).toBe(200);
     expect(byPath.get("/missing")?.status).toBe(404);
+    // Each row says how the page answered and where it was served from (#1260).
+    expect(byPath.get("/")).toMatchObject({ outcome: "ok", finalUrl: url() });
+    expect(byPath.get("/missing")?.outcome).toBe("http-error");
+    // A redirected URL keeps the URL asked for and names where it was served from.
+    const old = byPath.get("/old");
+    expect(old).toBeDefined();
+    expect(new URL(old!.finalUrl).pathname).toBe("/about");
+    expect(old?.outcome).toBe("ok");
+    for (const p of pages) {
+      expect(["ok", "http-error", "rate-limited", "error"]).toContain(
+        p.outcome
+      );
+      expect(typeof p.finalUrl).toBe("string");
+    }
     // An audited page had rules report on it; every entry has a whole count.
     expect(byPath.get("/")?.ruleCount).toBeGreaterThan(0);
     for (const p of pages) expect(Number.isInteger(p.ruleCount)).toBe(true);
@@ -122,6 +144,7 @@ describe("--include-pages", () => {
       "/",
       "/about",
       "/missing",
+      "/old",
     ]);
     expect(
       json.pages?.find((p) => new URL(p.url).pathname === "/")?.ruleCount
@@ -134,7 +157,7 @@ describe("--include-pages", () => {
     const json = JSON.parse(r.out) as Json;
     expect(json).not.toHaveProperty("pages");
     expect(json).not.toHaveProperty("pagesTotal");
-    expect(json.meta.schemaVersion).toBe("1.1");
+    expect(json.meta.schemaVersion).toBe("1.2");
   }, 120_000);
 
   test("another format says the flag is JSON only and still prints the report", async () => {

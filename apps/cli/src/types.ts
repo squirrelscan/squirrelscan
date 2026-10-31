@@ -416,6 +416,8 @@ export interface ImageData {
  */
 export interface PageAudit {
   url: string;
+  /** Where the page was served from after redirects (#1260); absent on a report read from JSON. */
+  finalUrl?: string;
   statusCode: number;
   loadTime?: number;
   meta: MetaData;

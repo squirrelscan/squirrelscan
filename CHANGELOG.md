@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- **The `--include-pages` list says how each page answered.** Each `pages` entry in the JSON report now has `finalUrl` (where the page was served from after redirects) and `outcome` (`ok`, `http-error`, `rate-limited` or `error`) beside `url`, `status` and `ruleCount`, so a pipeline that tracks coverage can tell a rate-limited page from a missing one without re-deriving it. `meta.schemaVersion` is now `1.2`. (#1260)
+
 ## v0.0.146 (2026-10-31)
 
 Supabase is now detected in more real bundles, including a minified supabase-js build, and `security/cookie-flags` no longer warns about Lovable's `__dpl` routing cookie, a cookie the platform sets and a site cannot change.
