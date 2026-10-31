@@ -11,8 +11,9 @@
 // - `getPeerCertificate()` returns the leaf only, so the chain cannot be walked.
 //   A missing intermediate shows up as the first authorization error,
 //   UNABLE_TO_VERIFY_LEAF_SIGNATURE, and that is what it is read from.
-// - `minVersion` / `maxVersion` are ignored, so protocol-version checks are out
-//   of scope here (phase 2 of #712).
+// - `minVersion` / `maxVersion` are ignored, so the probe cannot ask a server for an old protocol: it
+//   reports the version the server chose when offered the runtime's best, and a server that also
+//   speaks TLS 1.0 shows as TLS 1.3 (#1259).
 
 const DAY_MS = 86_400_000;
 
@@ -33,6 +34,25 @@ export interface TlsCertificate {
   validTo: Date;
   /** RSA modulus length in bits. Undefined for other key types. */
   rsaBits?: number;
+  /** The leaf's public key type, when the runtime could read it. */
+  keyType?: TlsKeyType;
+  /** Key size in bits: the RSA or DSA modulus, or the size of an elliptic curve. Undefined for Ed25519 or when unread. */
+  keyBits?: number;
+  /** An elliptic curve's name (`P-256`). */
+  curve?: string;
+  /** The leaf's signature algorithm as the runtime names it (`sha256WithRSAEncryption`, `ecdsa-with-SHA256`). */
+  signatureAlgorithm?: string;
+}
+
+/** Public key types the rule can name. */
+export type TlsKeyType = "rsa" | "ecdsa" | "ed25519" | "dsa" | "other";
+
+/** What the CLI's probe reads off the leaf beyond `getPeerCertificate()` (key and signature, from the DER). */
+export interface TlsCertificateExtras {
+  keyType?: string;
+  keyBits?: number;
+  curve?: string;
+  signatureAlgorithm?: string;
 }
 
 export type TlsProbe =
@@ -47,6 +67,8 @@ export type TlsProbe =
       trusted: boolean;
       /** The runtime's authorization error code, when the chain did not verify. */
       trustError?: string;
+      /** The protocol the server chose (`TLSv1.3`), when the runtime reported it. */
+      protocol?: string;
     };
 
 /**
@@ -73,6 +95,8 @@ export interface RawPeerCertificate {
   valid_to?: string;
   modulus?: string;
   bits?: number;
+  asn1Curve?: string;
+  nistCurve?: string;
 }
 
 /** SAN entries kept from one certificate; a shared certificate can carry hundreds, never thousands. */
@@ -98,6 +122,7 @@ export function authorizationErrorCode(value: unknown): string | undefined {
 /** A `getPeerCertificate()` result as a `TlsCertificate`, or undefined when it holds no usable dates. */
 export function readPeerCertificate(
   raw: RawPeerCertificate | undefined,
+  extras?: TlsCertificateExtras,
 ): TlsCertificate | undefined {
   if (!raw || typeof raw !== "object") return undefined;
   const validFrom = new Date(raw.valid_from ?? "");
@@ -122,7 +147,33 @@ export function readPeerCertificate(
     validFrom,
     validTo,
     ...(raw.modulus !== undefined && typeof raw.bits === "number" ? { rsaBits: raw.bits } : {}),
+    ...keyFacts(raw, extras),
   };
+}
+
+const KEY_TYPES = new Set<string>(["rsa", "ecdsa", "ed25519", "dsa", "other"]);
+
+/** The runtime's key type names (`rsa`, `ec`, `ed25519`, `dsa`) as ours. */
+function keyTypeOf(name: string): TlsKeyType {
+  const type = name.toLowerCase();
+  if (type === "ec" || type === "ecdsa") return "ecdsa";
+  return KEY_TYPES.has(type) ? (type as TlsKeyType) : "other";
+}
+
+/** Key type, size, curve and signature algorithm, bounded and stripped of control characters (the server picks them). */
+function keyFacts(raw: RawPeerCertificate, extras: TlsCertificateExtras | undefined): Partial<TlsCertificate> {
+  const out: Partial<TlsCertificate> = {};
+  if (extras?.keyType) out.keyType = keyTypeOf(certificateText(extras.keyType, 20));
+  else if (raw.modulus !== undefined) out.keyType = "rsa";
+  else if (raw.nistCurve !== undefined || raw.asn1Curve !== undefined) out.keyType = "ecdsa";
+  const bits = extras?.keyBits ?? (typeof raw.bits === "number" ? raw.bits : undefined);
+  if (typeof bits === "number" && Number.isFinite(bits) && bits > 0 && out.keyType !== "ed25519") {
+    out.keyBits = Math.floor(bits);
+  }
+  const curve = extras?.curve ?? raw.nistCurve ?? raw.asn1Curve;
+  if (out.keyType === "ecdsa" && curve) out.curve = certificateText(curve, 40);
+  if (extras?.signatureAlgorithm) out.signatureAlgorithm = certificateText(extras.signatureAlgorithm, 60);
+  return out;
 }
 
 /**

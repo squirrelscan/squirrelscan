@@ -222,7 +222,15 @@ describe("expiry thresholds", () => {
   });
 
   test("the options default to lifetime-relative windows", () => {
-    expect(DEFAULTS).toEqual({});
+    expect(DEFAULTS).toEqual({
+      key_types: ["rsa", "ecdsa", "ed25519"],
+      rsa_min_bits: 2048,
+      ecdsa_min_bits: 256,
+      dsa_min_bits: 2048,
+      reject_weak_signature: true,
+      min_tls_version: "TLSv1.2",
+      check_counterpart: true,
+    });
     expect(DEFAULTS.warn_days).toBeUndefined();
     expect(DEFAULTS.error_days).toBeUndefined();
   });
@@ -235,7 +243,17 @@ describe("expiry thresholds", () => {
     expect(optionsSchema.safeParse({ error_days: 40 }).success).toBe(true);
     expect(optionsSchema.safeParse({ warn_days: 30, error_days: 30 }).success).toBe(true);
     // The refinement keeps the object shape the option checks and docs read.
-    expect(Object.keys(optionsSchema.shape)).toEqual(["warn_days", "error_days"]);
+    expect(Object.keys(optionsSchema.shape)).toEqual([
+      "warn_days",
+      "error_days",
+      "key_types",
+      "rsa_min_bits",
+      "ecdsa_min_bits",
+      "dsa_min_bits",
+      "reject_weak_signature",
+      "min_tls_version",
+      "check_counterpart",
+    ]);
   });
 
   test("a certificate that expired hours ago says less than a day, not 1 day", async () => {
@@ -302,6 +320,7 @@ describe("hostname, chain and key", () => {
     const key = check(checks, "tls-certificate-key");
     expect(key?.status).toBe("warn");
     expect(key?.message).toContain("1024 bits");
+    expect(key?.value).toBe("RSA 1024 bits");
   });
 
   test("an ECDSA key has no RSA size to judge and does not warn", async () => {
@@ -507,5 +526,96 @@ describe("rule declaration", () => {
     expect(tlsCertificateRule.meta.scope).toBe("site");
     expect(tlsCertificateRule.meta.skipOnPrivateTarget).toBe(true);
     expect(tlsCertificateRule.meta.optionsSchema).toBeDefined();
+  });
+});
+
+describe("key and certificate limits (#1259)", () => {
+  const withKey = (extra: Partial<Served["certificate"]>, protocol?: string): Served => {
+    const base = cert(LOCAL);
+    return { ...base, certificate: { ...base.certificate, rsaBits: undefined, ...extra }, ...(protocol ? { protocol } : {}) } as Served;
+  };
+  const RSA = (bits: number) => withKey({ keyType: "rsa", keyBits: bits, rsaBits: bits });
+  const EC = (curve: string, bits: number) => withKey({ keyType: "ecdsa", keyBits: bits, curve });
+  const keyOf = async (served: Served, options: Partial<TlsCertificateOptions> = {}) =>
+    check((await audit({ localhost: served }, options)).checks, "tls-certificate-key");
+
+  test("the key check names the type and size", async () => {
+    expect((await keyOf(RSA(1024)))?.value).toBe("RSA 1024 bits");
+    expect((await keyOf(EC("P-224", 224)))?.value).toBe("ECDSA P-224");
+    expect((await keyOf(withKey({ keyType: "dsa", keyBits: 1024 })))?.value).toBe("DSA 1024 bits");
+  });
+
+  test("RSA, ECDSA and Ed25519 at or above their minimums do not warn", async () => {
+    expect(await keyOf(RSA(2048))).toBeUndefined();
+    expect(await keyOf(EC("P-256", 256))).toBeUndefined();
+    expect(await keyOf(withKey({ keyType: "ed25519" }))).toBeUndefined();
+  });
+
+  test("a DSA key warns by default and passes when dsa is allowed at its minimum", async () => {
+    const dsa = withKey({ keyType: "dsa", keyBits: 2048 });
+    expect((await keyOf(dsa))?.message).toContain("not in the allowed key types (rsa, ecdsa, ed25519)");
+    expect(await keyOf(dsa, { key_types: ["rsa", "ecdsa", "ed25519", "dsa"] })).toBeUndefined();
+    expect((await keyOf(withKey({ keyType: "dsa", keyBits: 1024 }), { key_types: ["dsa"] }))?.message).toContain("below the 2048-bit minimum for DSA");
+  });
+
+  test("the minimums are options", async () => {
+    expect((await keyOf(RSA(2048), { rsa_min_bits: 3072 }))?.message).toContain("below the 3072-bit minimum for RSA");
+    expect(await keyOf(RSA(1024), { rsa_min_bits: 1024 })).toBeUndefined();
+    expect((await keyOf(EC("P-256", 256), { ecdsa_min_bits: 384 }))?.message).toContain("below the 384-bit minimum for ECDSA");
+  });
+
+  test("a key type outside key_types warns even when its size is fine", async () => {
+    expect((await keyOf(RSA(4096), { key_types: ["ecdsa", "ed25519"] }))?.message).toContain("not in the allowed key types (ecdsa, ed25519)");
+  });
+
+  const sig = async (algorithm: string | undefined, options: Partial<TlsCertificateOptions> = {}) =>
+    check((await audit({ localhost: withKey({ keyType: "rsa", keyBits: 2048, rsaBits: 2048, signatureAlgorithm: algorithm }) }, options)).checks, "tls-certificate-signature");
+
+  test("a SHA-1 or MD5 signature warns by default, SHA-256 and unread ones do not", async () => {
+    expect((await sig("sha1WithRSAEncryption"))?.status).toBe("warn");
+    expect((await sig("md5WithRSAEncryption"))?.status).toBe("warn");
+    expect((await sig("ecdsa-with-SHA1"))?.status).toBe("warn");
+    for (const ok of ["sha256WithRSAEncryption", "sha384WithRSAEncryption", "ecdsa-with-SHA256", "ED25519", undefined]) {
+      expect(await sig(ok), String(ok)).toBeUndefined();
+    }
+  });
+
+  test("reject_weak_signature = false turns the signature check off", async () => {
+    expect(await sig("sha1WithRSAEncryption", { reject_weak_signature: false })).toBeUndefined();
+  });
+
+  const proto = async (protocol: string | undefined, options: Partial<TlsCertificateOptions> = {}) =>
+    check((await audit({ localhost: withKey({ keyType: "rsa", keyBits: 2048, rsaBits: 2048 }, protocol) }, options)).checks, "tls-certificate-protocol");
+
+  test("a negotiated protocol below min_tls_version warns; the default minimum is TLS 1.2", async () => {
+    expect((await proto("TLSv1.1"))?.message).toContain("TLSv1.1, below the TLSv1.2 minimum");
+    expect((await proto("TLSv1"))?.status).toBe("warn");
+    expect(await proto("TLSv1.2")).toBeUndefined();
+    expect(await proto("TLSv1.3")).toBeUndefined();
+    expect(await proto(undefined)).toBeUndefined();
+    expect(await proto("TLSv1.2", { min_tls_version: "TLSv1.3" })).toBeDefined();
+    expect(await proto("TLSv1.1", { min_tls_version: "TLSv1.1" })).toBeUndefined();
+  });
+
+  test("check_counterpart = false makes no handshake with the www or apex name", async () => {
+    const hosts = { "example.test": fixtures.example, "www.example.test": fixtures.example };
+    expect((await audit(hosts)).calls.sort()).toEqual(["example.test", "www.example.test"]);
+    expect((await audit(hosts, { check_counterpart: false })).calls).toEqual(["example.test"]);
+  });
+
+  test("invalid values are refused with the option named", () => {
+    for (const [bad, path] of [
+      [{ key_types: [] }, "key_types"],
+      [{ key_types: ["rsa", "ecc"] }, "key_types"],
+      [{ rsa_min_bits: 100 }, "rsa_min_bits"],
+      [{ ecdsa_min_bits: "256" }, "ecdsa_min_bits"],
+      [{ min_tls_version: "TLSv2" }, "min_tls_version"],
+      [{ reject_weak_signature: "yes" }, "reject_weak_signature"],
+      [{ check_counterpart: 1 }, "check_counterpart"],
+    ] as const) {
+      const refused = optionsSchema.safeParse(bad);
+      expect(refused.success, JSON.stringify(bad)).toBe(false);
+      expect(refused.error?.issues[0]?.path[0]).toBe(path);
+    }
   });
 });

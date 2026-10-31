@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- **`security/tls-certificate` judges every key type and reads the signature and protocol.** New options under `[rule_options."security/tls-certificate"]`: `key_types` (default `rsa`, `ecdsa`, `ed25519`: a DSA key now warns), `rsa_min_bits` (2048), `ecdsa_min_bits` (256), `dsa_min_bits` (2048), `reject_weak_signature` (true: a SHA-1 or MD5 signed leaf warns), `min_tls_version` (`TLSv1.2`) and `check_counterpart` (true; `false` skips the www or apex handshake). The key check names the type and size (`RSA 1024 bits`, `ECDSA P-256`, `Ed25519`). The probe reads the key and signature from the leaf and the negotiated protocol; it offers its runtime's best protocol, so the protocol check only catches a server whose best is below the minimum. See [the rule page](https://docs.squirrelscan.com/rules/security/tls-certificate). (#1259)
+
 ## v0.0.146 (2026-10-31)
 
 Supabase is now detected in more real bundles, including a minified supabase-js build, and `security/cookie-flags` no longer warns about Lovable's `__dpl` routing cookie, a cookie the platform sets and a site cannot change.

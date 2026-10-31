@@ -41,6 +41,26 @@ export const optionsSchema = z
       .describe(
         "Error when the certificate expires within this many days. Unset (the default): 7 days, or a tenth of the certificate's lifetime for a short-lived one",
       ),
+    key_types: z
+      .array(z.enum(["rsa", "ecdsa", "ed25519", "dsa"]))
+      .min(1)
+      .default(["rsa", "ecdsa", "ed25519"])
+      .describe("Public key types the certificate may use; any other type warns (a DSA key warns by default)"),
+    rsa_min_bits: z.number().int().min(512).max(16384).default(2048).describe("Smallest RSA modulus, in bits, that does not warn"),
+    ecdsa_min_bits: z.number().int().min(112).max(1024).default(256).describe("Smallest elliptic curve, in bits (the curve size: 256 for P-256), that does not warn"),
+    dsa_min_bits: z.number().int().min(512).max(16384).default(2048).describe("Smallest DSA modulus, in bits, that does not warn; only meaningful when `dsa` is in key_types"),
+    reject_weak_signature: z
+      .boolean()
+      .default(true)
+      .describe("Warn when the leaf certificate is signed with SHA-1, MD5, MD4 or MD2"),
+    min_tls_version: z
+      .enum(["TLSv1", "TLSv1.1", "TLSv1.2", "TLSv1.3"])
+      .default("TLSv1.2")
+      .describe("Warn when the handshake negotiates a lower protocol version (the probe offers the runtime's best, so this catches a server whose best is lower)"),
+    check_counterpart: z
+      .boolean()
+      .default(true)
+      .describe("Also handshake with the www or apex counterpart of the audited host; false skips that handshake"),
   })
   // Otherwise the warning band is empty and every near expiry reads as an error.
   .refine(
@@ -147,7 +167,6 @@ export interface TlsCertificateDeps {
   now: Date;
 }
 
-const RSA_MIN_BITS = 2048;
 
 export const tlsCertificateRule: Rule = {
   meta: {
@@ -211,7 +230,7 @@ export async function checkTlsCertificate(
 
   const hostname = url.hostname.replace(/^\[(.*)\]$/, "$1");
   const port = url.port ? Number(url.port) : 443;
-  const variant = wwwVariant(hostname);
+  const variant = options.check_counterpart ? wwwVariant(hostname) : undefined;
   // Both handshakes at once, so the worst case is one probe deadline, not two.
   const [probe, other] = await Promise.all([
     deps.probe({ hostname, port }),
@@ -227,15 +246,12 @@ export async function checkTlsCertificate(
     if (problem.kind === "expired" || problem.kind === "not-yet-valid") continue;
     checks.push(problemCheck(problem, hostname, probe.certificate));
   }
-  if (probe.certificate.rsaBits !== undefined && probe.certificate.rsaBits < RSA_MIN_BITS) {
-    checks.push({
-      name: "tls-certificate-key",
-      status: "warn",
-      message: `RSA key is ${probe.certificate.rsaBits} bits; use at least ${RSA_MIN_BITS}`,
-      value: `${probe.certificate.rsaBits} bits`,
-      expected: `${RSA_MIN_BITS} bits or more, or an ECDSA key`,
-    });
-  }
+  const key = keyCheck(probe.certificate, options);
+  if (key) checks.push(key);
+  const signature = signatureCheck(probe.certificate, options);
+  if (signature) checks.push(signature);
+  const protocol = protocolCheck(probe.protocol, options);
+  if (protocol) checks.push(protocol);
 
   // A counterpart that does not resolve, does not answer, or was not contacted
   // (refused by the egress check, or --offline) reports nothing on purpose:
@@ -258,6 +274,90 @@ export async function checkTlsCertificate(
   }
 
   return { checks };
+}
+
+const KEY_TYPE_NAMES = { rsa: "RSA", ecdsa: "ECDSA", ed25519: "Ed25519", dsa: "DSA", other: "an unrecognised" } as const;
+
+/** The key as a person names it: `RSA 1024 bits`, `ECDSA P-256`, `Ed25519`, `DSA 1024 bits`. */
+export function describeKey(certificate: TlsCertificate): string | undefined {
+  const type = certificate.keyType ?? (certificate.rsaBits !== undefined ? "rsa" : undefined);
+  if (!type) return undefined;
+  switch (type) {
+    case "rsa":
+      return `RSA ${certificate.keyBits ?? certificate.rsaBits} bits`;
+    case "dsa":
+      return certificate.keyBits !== undefined ? `DSA ${certificate.keyBits} bits` : "DSA";
+    case "ecdsa":
+      return `ECDSA ${certificate.curve ?? (certificate.keyBits !== undefined ? `${certificate.keyBits} bits` : "")}`.trim();
+    case "ed25519":
+      return "Ed25519";
+    default:
+      return "an unrecognised key type";
+  }
+}
+
+/** Warns when the key type is not allowed or its size is below the minimum for its type; nothing when it is fine. */
+function keyCheck(certificate: TlsCertificate, options: TlsCertificateOptions): CheckResult | undefined {
+  const type = certificate.keyType ?? (certificate.rsaBits !== undefined ? "rsa" : undefined);
+  const named = describeKey(certificate);
+  if (!type || !named) return undefined;
+  const allowed = options.key_types;
+  if (type === "other" || !allowed.includes(type)) {
+    return {
+      name: "tls-certificate-key",
+      status: "warn",
+      message: `The certificate uses ${named} key, which is not in the allowed key types (${allowed.join(", ")})`,
+      value: named,
+      expected: `a key of type ${allowed.join(", ")}`,
+      details: { keyType: type, allowedKeyTypes: allowed },
+    };
+  }
+  const bits = certificate.keyBits ?? certificate.rsaBits;
+  const minimum =
+    type === "rsa" ? options.rsa_min_bits : type === "ecdsa" ? options.ecdsa_min_bits : type === "dsa" ? options.dsa_min_bits : undefined;
+  if (minimum !== undefined && bits !== undefined && bits < minimum) {
+    return {
+      name: "tls-certificate-key",
+      status: "warn",
+      message: `${named} key is below the ${minimum}-bit minimum for ${KEY_TYPE_NAMES[type]}`,
+      value: named,
+      expected: `${minimum} bits or more${type === "rsa" ? ", or an ECDSA key" : ""}`,
+      details: { keyType: type, keyBits: bits, minimumBits: minimum },
+    };
+  }
+  return undefined;
+}
+
+const WEAK_SIGNATURE = /(^|[^a-z0-9])(sha1|sha-1|md5|md4|md2)([^0-9]|$)/i;
+
+/** Warns when the leaf is signed with a broken hash. The leaf only: the probe cannot read the rest of the chain. */
+function signatureCheck(certificate: TlsCertificate, options: TlsCertificateOptions): CheckResult | undefined {
+  const algorithm = certificate.signatureAlgorithm;
+  if (!options.reject_weak_signature || !algorithm || !WEAK_SIGNATURE.test(algorithm)) return undefined;
+  return {
+    name: "tls-certificate-signature",
+    status: "warn",
+    message: `The certificate is signed with a weak algorithm (${algorithm})`,
+    value: algorithm,
+    expected: "a SHA-256 or stronger signature",
+  };
+}
+
+const PROTOCOL_ORDER = ["SSLv3", "TLSv1", "TLSv1.1", "TLSv1.2", "TLSv1.3"];
+
+/** Warns when the server chose a protocol below `min_tls_version`. */
+function protocolCheck(protocol: string | undefined, options: TlsCertificateOptions): CheckResult | undefined {
+  if (!protocol) return undefined;
+  const got = PROTOCOL_ORDER.indexOf(protocol);
+  const wanted = PROTOCOL_ORDER.indexOf(options.min_tls_version);
+  if (got === -1 || got >= wanted) return undefined;
+  return {
+    name: "tls-certificate-protocol",
+    status: "warn",
+    message: `The server negotiated ${protocol}, below the ${options.min_tls_version} minimum`,
+    value: protocol,
+    expected: `${options.min_tls_version} or newer`,
+  };
 }
 
 function expiryCheck(
