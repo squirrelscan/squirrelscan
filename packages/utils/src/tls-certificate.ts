@@ -13,7 +13,10 @@
 //   UNABLE_TO_VERIFY_LEAF_SIGNATURE, and that is what it is read from.
 // - `minVersion` / `maxVersion` are ignored, so the probe cannot ask a server for an old protocol: it
 //   reports the version the server chose when offered the runtime's best, and a server that also
-//   speaks TLS 1.0 shows as TLS 1.3 (#1259).
+//   speaks TLS 1.0 shows as TLS 1.3. The runtime's client also refuses below TLS 1.2, so a server that
+//   only speaks TLS 1.0 or 1.1 ends the handshake (`not checked`) and never reaches a protocol check.
+//   Ed25519, Ed448, DSA, RSA-PSS, P-521 and secp256k1 leaves also fail the runtime's handshake, so the
+//   key facts for them are read only when a runtime can handshake with them (#1259).
 
 const DAY_MS = 86_400_000;
 

@@ -56,7 +56,7 @@ export const optionsSchema = z
     min_tls_version: z
       .enum(["TLSv1", "TLSv1.1", "TLSv1.2", "TLSv1.3"])
       .default("TLSv1.2")
-      .describe("Warn when the handshake negotiates a lower protocol version (the probe offers the runtime's best, so this catches a server whose best is lower)"),
+      .describe("Warn when the handshake negotiates a lower protocol version. squirrel's runtime refuses below TLS 1.2 (such a server is `not checked`), so only TLSv1.3 against a server that tops out at TLS 1.2 can warn"),
     check_counterpart: z
       .boolean()
       .default(true)
@@ -276,7 +276,7 @@ export async function checkTlsCertificate(
   return { checks };
 }
 
-const KEY_TYPE_NAMES = { rsa: "RSA", ecdsa: "ECDSA", ed25519: "Ed25519", dsa: "DSA", other: "an unrecognised" } as const;
+const KEY_TYPE_NAMES = { rsa: "RSA", ecdsa: "ECDSA", ed25519: "Ed25519", dsa: "DSA", other: "an unrecognised key type" } as const;
 
 /** The key as a person names it: `RSA 1024 bits`, `ECDSA P-256`, `Ed25519`, `DSA 1024 bits`. */
 export function describeKey(certificate: TlsCertificate): string | undefined {
@@ -306,7 +306,7 @@ function keyCheck(certificate: TlsCertificate, options: TlsCertificateOptions): 
     return {
       name: "tls-certificate-key",
       status: "warn",
-      message: `The certificate uses ${named} key, which is not in the allowed key types (${allowed.join(", ")})`,
+      message: `The certificate's key (${named}) is not in the allowed key types (${allowed.join(", ")})`,
       value: named,
       expected: `a key of type ${allowed.join(", ")}`,
       details: { keyType: type, allowedKeyTypes: allowed },
@@ -319,7 +319,7 @@ function keyCheck(certificate: TlsCertificate, options: TlsCertificateOptions): 
     return {
       name: "tls-certificate-key",
       status: "warn",
-      message: `${named} key is below the ${minimum}-bit minimum for ${KEY_TYPE_NAMES[type]}`,
+      message: `The certificate's key (${named}) is below the ${minimum}-bit minimum for ${KEY_TYPE_NAMES[type]}`,
       value: named,
       expected: `${minimum} bits or more${type === "rsa" ? ", or an ECDSA key" : ""}`,
       details: { keyType: type, keyBits: bits, minimumBits: minimum },
