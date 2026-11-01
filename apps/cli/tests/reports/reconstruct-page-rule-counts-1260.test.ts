@@ -8,13 +8,13 @@ import type {
 
 import { describe, expect, spyOn, test } from "bun:test";
 import { Effect } from "effect";
-
-import { SQLiteStorage } from "@/crawler/storage/sqlite";
-import { reconstructReport } from "@/reports/reconstruct";
-import { generateJsonReport } from "@/reports/output/json";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
+import { SQLiteStorage } from "@/crawler/storage/sqlite";
+import { generateJsonReport } from "@/reports/output/json";
+import { reconstructReport } from "@/reports/reconstruct";
 
 const SITE = "https://example.com";
 
@@ -132,7 +132,12 @@ describe("per-page rule counts (#1260)", () => {
 });
 
 describe("URLs with no stored page, executed rules (#1396)", () => {
-  const front = (path: string, status: "failed" | "skipped", reason: string, at: number) => ({
+  const front = (
+    path: string,
+    status: "failed" | "skipped",
+    reason: string,
+    at: number
+  ) => ({
     normalizedUrl: `${SITE}${path}`,
     rawUrl: `${SITE}${path}`,
     depth: 1,
@@ -146,17 +151,49 @@ describe("URLs with no stored page, executed rules (#1396)", () => {
 
   async function withUnstored() {
     const { store, crawlId } = await storedAudit();
-    await run(store.upsertFrontier(crawlId, front("/excluded/a", "skipped", "excluded", 1)));
-    await run(store.upsertFrontier(crawlId, front("/private/x", "skipped", "robots_disallowed", 2)));
-    await run(store.upsertFrontier(crawlId, front("/boom", "failed", "connect ECONNREFUSED", 3)));
-    await run(store.upsertFrontier(crawlId, front("/throttled", "failed", "Rate limited by example.com", 4)));
+    await run(
+      store.upsertFrontier(
+        crawlId,
+        front("/excluded/a", "skipped", "excluded", 1)
+      )
+    );
+    await run(
+      store.upsertFrontier(
+        crawlId,
+        front("/private/x", "skipped", "robots_disallowed", 2)
+      )
+    );
+    await run(
+      store.upsertFrontier(
+        crawlId,
+        front("/boom", "failed", "connect ECONNREFUSED", 3)
+      )
+    );
+    await run(
+      store.upsertFrontier(
+        crawlId,
+        front("/throttled", "failed", "Rate limited by example.com", 4)
+      )
+    );
     // A request that failed but whose response was stored is a page, not an unstored URL.
-    await run(store.upsertFrontier(crawlId, front("/page-1", "failed", "HTTP 503", 5)));
+    await run(
+      store.upsertFrontier(crawlId, front("/page-1", "failed", "HTTP 503", 5))
+    );
     // A rule that only skipped, and one that ran.
     await run(
-      store.saveRuleResults(crawlId, `${SITE}/page-2`, "core/meta-description", [
-        { name: "description", status: "skipped", message: "limit", skipReason: "scan-limit" } as never,
-      ])
+      store.saveRuleResults(
+        crawlId,
+        `${SITE}/page-2`,
+        "core/meta-description",
+        [
+          {
+            name: "description",
+            status: "skipped",
+            message: "limit",
+            skipReason: "scan-limit",
+          } as never,
+        ]
+      )
     );
     return { store, crawlId };
   }
@@ -171,19 +208,44 @@ describe("URLs with no stored page, executed rules (#1396)", () => {
 
   test("includePageRuleCounts lists an errored fetch, a rate-limited request, an excluded URL and a robots-blocked one", async () => {
     const { store, crawlId } = await withUnstored();
-    const report = await run(reconstructReport(store, crawlId, undefined, { includePageRuleCounts: true }));
+    const report = await run(
+      reconstructReport(store, crawlId, undefined, {
+        includePageRuleCounts: true,
+      })
+    );
     expect(report.unstoredPagesTotal).toBe(4);
-    const rows = new Map((report.unstoredPages ?? []).map((row) => [new URL(row.url).pathname, row]));
-    expect(rows.get("/excluded/a")).toMatchObject({ outcome: "skipped", reason: "excluded" });
-    expect(rows.get("/private/x")).toMatchObject({ outcome: "skipped", reason: "robots-disallowed" });
-    expect(rows.get("/boom")).toMatchObject({ outcome: "error", reason: "connect ECONNREFUSED" });
-    expect(rows.get("/throttled")).toMatchObject({ outcome: "error", reason: "rate-limited" });
+    const rows = new Map(
+      (report.unstoredPages ?? []).map((row) => [
+        new URL(row.url).pathname,
+        row,
+      ])
+    );
+    expect(rows.get("/excluded/a")).toMatchObject({
+      outcome: "skipped",
+      reason: "excluded",
+    });
+    expect(rows.get("/private/x")).toMatchObject({
+      outcome: "skipped",
+      reason: "robots-disallowed",
+    });
+    expect(rows.get("/boom")).toMatchObject({
+      outcome: "error",
+      reason: "connect ECONNREFUSED",
+    });
+    expect(rows.get("/throttled")).toMatchObject({
+      outcome: "error",
+      reason: "rate-limited",
+    });
     expect(rows.has("/page-1")).toBe(false);
   });
 
   test("--include-pages JSON lists them after the crawled pages, inside pagesTotal, and executedRules omits a fully skipped rule", async () => {
     const { store, crawlId } = await withUnstored();
-    const report = await run(reconstructReport(store, crawlId, undefined, { includePageRuleCounts: true }));
+    const report = await run(
+      reconstructReport(store, crawlId, undefined, {
+        includePageRuleCounts: true,
+      })
+    );
     const dir = mkdtempSync(join(tmpdir(), "sq-1396-"));
     try {
       const out = join(dir, "r.json");
@@ -192,15 +254,27 @@ describe("URLs with no stored page, executed rules (#1396)", () => {
       err.mockRestore();
       const json = JSON.parse(readFileSync(out, "utf8")) as {
         meta: { schemaVersion: string };
-        pages: Array<{ url: string; outcome: string; reason?: string; status: number }>;
+        pages: Array<{
+          url: string;
+          outcome: string;
+          reason?: string;
+          status: number;
+        }>;
         pagesTotal: number;
         executedRules?: string[];
       };
       expect(json.meta.schemaVersion).toBe("1.5");
       expect(json.pages).toHaveLength(5 + 4);
       expect(json.pagesTotal).toBe(9);
-      expect(json.pages.slice(0, 5).every((row) => row.reason === undefined)).toBe(true);
-      expect(json.pages.slice(5).map((row) => row.outcome).sort()).toEqual(["error", "error", "skipped", "skipped"]);
+      expect(
+        json.pages.slice(0, 5).every((row) => row.reason === undefined)
+      ).toBe(true);
+      expect(
+        json.pages
+          .slice(5)
+          .map((row) => row.outcome)
+          .sort()
+      ).toEqual(["error", "error", "skipped", "skipped"]);
       expect(json.executedRules).toContain("core/meta-title");
       expect(json.executedRules).not.toContain("core/meta-description");
     } finally {
