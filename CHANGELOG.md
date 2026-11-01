@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **A real Firebase, Supabase or Clerk config deep in a whole bundle is found past any number of look-alike strings.** An `inCode` detector gave up after 64 pattern matches that started inside strings, and a whole bundle (the local scan reads one up to 8 MB) holds far more than a 256 KB head: docs text, error messages and vendor snippets that quote a config. The search now continues past the string a match was in, so many mentions in one string are one candidate, and the bound is 4,096. A config that only appears in strings and comments is still not detected, and one that comes after more than 4,095 such matches is still missed, with no truncation signal. (#1422)
+
 ### Added
 
 - **`[[ignore]]` entries take `selectors`.** A waiver can now name an element by where it sits (`selectors = ["localization-form select"]`: tags, `#id`, `.class`, descendant and `>`), so a rule keeps reporting your own elements while it waives the one your platform renders. `a11y/label-content-name-mismatch`, `a11y/form-labels` and `a11y/select-name` report the element's place; `squirrel config validate` names a rule that does not, refuses an unsupported selector, and the waived items are counted and listed in `meta.ignored` like `items`. Reports never carry the recorded place. (#1440)
