@@ -507,3 +507,89 @@ test("many links with huge queries do not make the brand check slow", () => {
   for (const c of contexts) detectBrandImpersonation(c);
   expect(performance.now() - t).toBeLessThan(1_500);
 });
+
+// ── survivors of the #1494 review ────────────────────────────────────────────────────────────────────────────
+
+const brandOn = (pageUrl: string, href: string, label = "Continue with Google"): string | null => {
+  const html = `<!doctype html><html><head><title>x</title></head><body><a href="${href}" aria-label="${label}"><svg></svg></a></body></html>`;
+  const parsed = parsePage(html, pageUrl);
+  return detectBrandImpersonation({ page: { url: pageUrl, html, statusCode: 200, loadTime: 0, headers: {}, parsed }, parsed, options: {} })?.brand ?? null;
+};
+
+test("the environment suffix needs its hyphen and a listed word", () => {
+  for (const tenant of ["examplexprod", "example-xprod", "exampleprod", "example--prod", "example-prod-", "example_prod", "example-production2"]) {
+    expect(allow(`https://${tenant}.auth0.com/authorize?connection=google-oauth2`), tenant).toBe("Google");
+  }
+  expect(allow("https://example-prod.auth0.com/authorize?connection=google-oauth2")).toBeNull();
+});
+
+test("site names of three to five letters are spared on their exact tenant; two letters never", () => {
+  for (const name of ["abc", "abcd", "abcde"]) {
+    expect(brandOn(`https://${name}.com/`, `https://${name}.auth0.com/authorize`), name).toBeNull();
+    expect(brandOn(`https://${name}.com/`, `https://${name}-prod.okta.com/oauth2/v1/authorize?idp=0oa1`), name).toBeNull();
+    expect(brandOn(`https://www.${name}.com/`, `https://${name}-login.auth0.com/authorize?connection=google-oauth2`), name).toBe("Google");
+  }
+  expect(brandOn("https://ab.com/", "https://ab.auth0.com/authorize")).toBe("Google");
+});
+
+test("a hint is read up to 8,192 characters of query and not beyond", () => {
+  const stem = "?connection=google-oauth2&p=";
+  for (const [length, spared] of [[200, true], [4_000, true], [8_192, true], [8_193, false], [20_000, false]] as const) {
+    const query = stem + "a".repeat(length - stem.length);
+    expect(query).toHaveLength(length);
+    const got = allow(`https://example-prod.auth0.com/authorize${query}`);
+    expect(got === null, `${length}`).toBe(spared);
+  }
+  // an exact tenant needs no hint, so a long query changes nothing there
+  expect(allow(`https://example.auth0.com/authorize?${"a=b&".repeat(5_000)}`)).toBeNull();
+});
+
+test("deeper Okta and Cognito labels, and a registrable name from a co.uk site", () => {
+  for (const href of [
+    "https://evil.example.okta.com/oauth2/v1/authorize",
+    "https://evil.example.okta.com/oauth2/v1/authorize?idp=0oa1",
+    "https://example.okta.com.evil.test/oauth2/v1/authorize?idp=0oa1",
+    "https://example.oktapreview.com.evil.test/oauth2/v1/authorize",
+    "https://a.example.auth.us-east-1.amazoncognito.com/oauth2/authorize?identity_provider=Google",
+  ]) {
+    expect(allow(href), href).toBe("Google");
+  }
+  const uk = "https://www.example.co.uk/";
+  expect(brandOn(uk, "https://example.auth0.com/authorize")).toBeNull();
+  expect(brandOn(uk, "https://example-staging.okta.com/oauth2/v1/authorize?idp=0oa1")).toBeNull();
+  expect(brandOn(uk, "https://co.auth0.com/authorize?connection=google-oauth2")).toBe("Google");
+  expect(brandOn(uk, "https://uk.auth0.com/authorize")).toBe("Google");
+  expect(brandOn(uk, "https://example-login.auth0.com/authorize?connection=google-oauth2")).toBe("Google");
+});
+
+test("the Microsoft provider names are exact; Google names do not spare a Microsoft label", () => {
+  const env = "https://example-prod.auth0.com/authorize?connection=";
+  for (const name of ["windowslive", "windows-live", "microsoftaccount", "azure-ad", "azuread", "azure", "live", "office365", "microsoftonline", "microsoft", "windowslive-oauth2", "azuread-oauth2"]) {
+    expect(allow(`${env}${name}`, "Continue with Microsoft"), name).toBeNull();
+    expect(allow(`${env}${name}`, "Continue with Google"), name).toBe("Google");
+  }
+  for (const name of ["microsoft.evil", "azurefake", "liveness", "windowslivex", "live-evil", "office3650", "google-oauth2"]) {
+    expect(allow(`${env}${name}`, "Continue with Microsoft"), name).toBe("Microsoft");
+  }
+  expect(allow(`${env}google-oauth2`, "Continue with Google")).toBeNull();
+  for (const name of ["google", "google-oauth2", "google-apps", "google.com", "google-workspace", "Google"]) {
+    expect(allow(`${env}${name}`), name).toBeNull();
+  }
+  for (const name of ["googlefake", "google-evil", "goog", "google2", "xgoogle"]) {
+    expect(allow(`${env}${name}`), name).toBe("Google");
+  }
+});
+
+test("the query of a form action and a formaction is read for every tenant family", () => {
+  const cases: Array<[string, string]> = [
+    ["https://example-prod.okta.com/oauth2/v1/authorize?idp=0oa1", "https://example-prod.okta.com/oauth2/v1/authorize"],
+    ["https://example-prod.auth.eu-west-1.amazoncognito.com/oauth2/authorize?identity_provider=Google", "https://example-prod.auth.eu-west-1.amazoncognito.com/oauth2/authorize"],
+    ["https://example-prod.auth0.com/authorize?connection=google-oauth2", "https://example-prod.auth0.com/authorize"],
+  ];
+  for (const [hinted, bare] of cases) {
+    expect(brand(`<form method="post"><button formaction="${hinted}">Continue with Google</button></form>`), hinted).toBeNull();
+    expect(brand(`<form method="post"><button formaction="${bare}">Continue with Google</button></form>`), bare).toBe("Google");
+    expect(brand(`<form action="${hinted}" method="post"><input type="password"><button>Continue with Google</button></form>`), hinted).toBeNull();
+    expect(brand(`<form action="${bare}" method="post"><input type="password"><button>Continue with Google</button></form>`), bare).toBe("Google");
+  }
+});
