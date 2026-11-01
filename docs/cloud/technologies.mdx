@@ -63,7 +63,7 @@ bundle_bytes = 8388608   # 0 to 16777216 (16 MiB); unset = 8 MiB locally, 64 KB 
 
 - Only first-party scripts the crawl already fetched are read: those on the audited host or its subdomains (a CDN on another domain is not), within the crawl's script fetch limits, and only JavaScript bodies under 5 MB.
 - On a signed-in audit the bundle text sent to the cloud detection service is at most 1 MB per audit, 64 KB per bundle unless you raise `bundle_bytes`. Bundles can contain keys, so set `bundle_bytes = 0` to send none.
-- A key kept in a variable and passed by name (`publishableKey: key`) is not matched; a Clerk key is recognised only where it is written out next to `publishableKey`.
+- A key kept in a variable and passed by name (`publishableKey: key`) is not matched; a Clerk key is recognised only where it is written out next to `publishableKey`. A Clerk key's body is the base64 of its Frontend API host (a `clerk.` host ending in `$`, such as `clerk.<domain>$` or `<name>.clerk.accounts.dev$`), so a `publishableKey: "pk_live_..."` whose body is not that (a Stripe publishable key is passed under the same name) is not read as Clerk.
 - A local scan that runs long on one page stops at its 30 second budget and reports what it found so far, with `truncated.reasons` containing `time-budget`. The scan of a page the cloud service gets is stopped at 5 seconds.
 
 Results are grouped by category:
