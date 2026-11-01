@@ -2,7 +2,7 @@ import type { DetectedTechnology, Detector, TechDetectInput, TechFingerprint } f
 import { ALL_FINGERPRINTS } from "./fingerprints";
 import { flightLoaderText, hasFlightChunk } from "./flight";
 import { COLLECTED_TAGS } from "./collected-tags";
-import { inString, scanJs, type ScannedJs } from "./js-scan";
+import { inString, scanJs, stringEnd, type ScannedJs } from "./js-scan";
 
 /**
  * Default wall-clock budget for one detectTechnologies call (one page). A caller
@@ -12,11 +12,13 @@ import { inString, scanJs, type ScannedJs } from "./js-scan";
 export const TECH_DETECT_PAGE_BUDGET_MS = 5_000;
 
 /**
- * Candidate matches an `inCode` detector inspects before giving up. A candidate is
- * a pattern match that starts inside a string or comment (a docs snippet, a
- * product named in prose): a big bundle holds many before the real one.
+ * Candidate matches an `inCode` detector inspects before giving up. A candidate is a pattern match that starts
+ * inside a string (a docs snippet, a product named in prose): a whole bundle holds many before the real one. The
+ * search moves on past the string a candidate was in, so many mentions inside one string are one candidate, and
+ * the matches go forward over the body once, so the bound is on the work per detector, not on correctness: it is
+ * high enough that a whole bundle's real match is reached (#1422).
  */
-const MAX_IN_CODE_CANDIDATES = 64;
+const MAX_IN_CODE_CANDIDATES = 4_096;
 
 /**
  * Longest slice of one script body a caller gets matched, in characters, unless it asks for more
@@ -58,7 +60,10 @@ function matchesInCode(pattern: RegExp, view: ScriptView): boolean {
     const m = re.exec(code);
     if (!m) return false;
     if (!inString(strings, m.index)) return true;
-    if (m[0].length === 0) re.lastIndex++;
+    // Nothing that starts inside this string can be code: continue after it.
+    const end = stringEnd(strings, m.index);
+    if (end >= re.lastIndex) re.lastIndex = end + 1;
+    else if (m[0].length === 0) re.lastIndex++;
   }
   return false;
 }
