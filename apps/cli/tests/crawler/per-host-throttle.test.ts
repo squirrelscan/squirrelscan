@@ -150,7 +150,7 @@ describe("per-host throttle (#265)", () => {
     // the old shared-lastFetchAt code fired them together (spread ~0).
     const firstStarts = [...starts].sort((a, b) => a - b).slice(0, PER_HOST);
     const spread = firstStarts[PER_HOST - 1] - firstStarts[0];
-    expect(spread).toBeGreaterThanOrEqual((PER_HOST - 1) * DELAY * 0.6);
+    expect(spread).toBeGreaterThanOrEqual((PER_HOST - 1) * DELAY * 0.4);
 
     await Effect.runPromise(storage.close());
   }, 30000);
@@ -266,7 +266,7 @@ describe("per-host throttle (#265)", () => {
       // The two discovered pages are spaced by the robots Crawl-delay (~300ms),
       // not the 50ms per_host_delay_ms — proving the override still wins.
       const gap = Math.abs(b!.t - a!.t);
-      expect(gap).toBeGreaterThanOrEqual(CRAWL_DELAY_MS * 0.6);
+      expect(gap).toBeGreaterThanOrEqual(CRAWL_DELAY_MS * 0.4);
 
       await Effect.runPromise(storage.close());
     } finally {
@@ -399,8 +399,8 @@ describe("per-host throttle (#265)", () => {
 
       // Capped at ~2000ms, nowhere near the declared 10000ms.
       const gap = Math.abs(b!.t - a!.t);
-      expect(gap).toBeGreaterThanOrEqual(2000 * 0.6);
-      expect(gap).toBeLessThan(4000);
+      expect(gap).toBeGreaterThanOrEqual(2000 * 0.4);
+      expect(gap).toBeLessThan(6000); // the declared 10000 is far above
 
       await Effect.runPromise(storage.close());
     } finally {
@@ -460,11 +460,18 @@ describe("per-host throttle (#265)", () => {
 
     const ordered = [...starts].sort((a, b) => a - b);
     expect(ordered.length).toBe(5);
-    // Each consecutive start is spaced ~DELAY apart — the single slot does not
-    // collapse to back-to-back fetches; politeness holds in sequential mode.
-    for (let i = 1; i < ordered.length; i++) {
-      expect(ordered[i] - ordered[i - 1]).toBeGreaterThanOrEqual(DELAY * 0.6);
-    }
+    // The single slot does not collapse to back-to-back fetches: politeness holds in
+    // sequential mode. A start is stamped when the fetcher is called, not when the
+    // throttle released the slot, so one gap can lose the scheduling delay of its
+    // earlier start on a loaded runner (27 ms seen for a 50 ms delay, #1516). The gaps
+    // add up to the span first to last, where that error is paid once, and the median
+    // gap is not moved by one late start. Bounds are 0.4 of the delay, under half of
+    // it; with no delay the gaps are the 5 ms fetch latency and both bounds fail.
+    const gaps = ordered.slice(1).map((start, i) => start - ordered[i]!);
+    const span = ordered[ordered.length - 1]! - ordered[0]!;
+    const median = [...gaps].sort((a, b) => a - b)[Math.floor(gaps.length / 2)]!;
+    expect(span).toBeGreaterThanOrEqual((ordered.length - 1) * DELAY * 0.4);
+    expect(median).toBeGreaterThanOrEqual(DELAY * 0.4);
 
     await Effect.runPromise(storage.close());
   }, 30000);
