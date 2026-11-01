@@ -246,6 +246,61 @@ describe("search keys keep reporting, with the name as a hint (#1229)", () => {
   });
 });
 
+describe("search and master key names: spellings, context and placeholders (#1515)", () => {
+  const one = (text: string) => scanContent(text, "inline-script", PAGE);
+  const tier = (text: string) => one(text).map((f) => [f.confidence, f.extra?.keyKind, typeof f.extra?.hint]);
+  const key32 = mixedRun(seededRng(71), 32);
+  const key40 = runOf(seededRng(72), HEX, 40);
+
+  test("a name that spells apikey as one word is a provider name: read as before, not skipped as a bare scope word", () => {
+    for (const name of ["ALGOLIA_SEARCH_APIKEY", "search_apikey", "searchApikey"]) {
+      expect([name, tier(`var c={${name}:"${key32}"};`)]).toEqual([name, [["medium", undefined, "string"]]]);
+    }
+    for (const name of ["master_apikey", "MASTER_APIKEY"]) {
+      expect([name, tier(`var c={${name}:"${key40}"};`)]).toEqual([name, [["high", "admin-named", "undefined"]]]);
+    }
+  });
+
+  test("masterKey and searchKey, in any spelling, are Meilisearch names: not reported outside a Meilisearch context", () => {
+    for (const name of ["masterKey", "MASTER_KEY", "masterkey", "MASTERKEY", "searchKey", "SEARCH_KEY", "searchkey", "SEARCHKEY"]) {
+      expect([name, one(`var c={${name}:"${key32}"};`).length]).toEqual([name, 0]);
+    }
+  });
+
+  test("inside a Meilisearch config the one-word spellings rank like the two-word ones", () => {
+    for (const name of ["masterKey", "MASTERKEY", "masterkey"]) {
+      expect([name, tier(`new MeiliSearch({host:"x",${name}:"${key40}"});`)]).toEqual([name, [["high", "admin-named", "undefined"]]]);
+    }
+    for (const name of ["searchKey", "searchkey", "SEARCHKEY"]) {
+      expect([name, tier(`new MeiliSearch({host:"x",${name}:"${key32}"});`)]).toEqual([name, [["medium", undefined, "string"]]]);
+    }
+  });
+
+  test("the Meilisearch context is the word meili in the name, or in the 120 characters before the key (not after it)", () => {
+    expect(one(`var c={meiliMasterKey:"${key40}"};`).length).toBe(1);
+    expect(one(`var c={MEILI_SEARCH_KEY:"${key32}"};`).length).toBe(1);
+    // The window (PROVIDER_CONTEXT_GAP, 120 characters) is read back from the start of the matched assignment, so
+    // the boundary below was found by probing: `meili` + 123 filler characters is inside, 124 is outside.
+    expect(one(`meili${"x".repeat(123)}masterKey:"${key40}"`).length).toBe(1);
+    expect(one(`meili${"x".repeat(124)}masterKey:"${key40}"`).length).toBe(0);
+    // The context is read before the key only.
+    expect(one(`masterKey:"${key40}" meili`).length).toBe(0);
+  });
+
+  test("a placeholder for a master, search or admin key is not a finding, in a Meilisearch config or under an admin name", () => {
+    for (const text of [
+      'new MeiliSearch({masterKey:"YOUR_MASTER_KEY_GOES_HERE_1234"});',
+      'new MeiliSearch({masterKey:"MASTER_KEY_PLACEHOLDER_VALUE"});',
+      'new MeiliSearch({searchKey:"YOUR_SEARCH_KEY_GOES_HERE_1234"});',
+      'var c={adminApiKey:"YOUR_ADMIN_KEY_GOES_HERE_12345678"};', // pragma: allowlist secret
+    ]) {
+      expect([text, one(text).length]).toEqual([text, 0]);
+    }
+    // The same key names with a real-shaped value still report.
+    expect(one(`new MeiliSearch({masterKey:"${key40}"});`).length).toBe(1);
+  });
+});
+
 describe("bypass attempts: a real secret dressed as a public token", () => {
   const r = seededRng(77);
   const extras: Array<[string, object]> = [
