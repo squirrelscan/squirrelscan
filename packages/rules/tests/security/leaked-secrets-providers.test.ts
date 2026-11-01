@@ -97,7 +97,7 @@ describe("providers that had no named pattern (#1309)", () => {
 
   test("each Shopify prefix is a token; a Stripe restricted key is critical in a script", () => {
     for (const prefix of ["shpat_", "shpss_", "shpca_", "shppa_"]) {
-      expect(found(`var k="${prefix.replace("sh", "s" + "h")}${runOf(r, HEX, 32)}";`).map((f) => f[0])).toEqual(["Shopify Admin API Token"]);
+      expect(found(`var k="${prefix}${runOf(r, HEX, 32)}";`).map((f) => f[0])).toEqual(["Shopify Admin API Token"]);
     }
     const shpat = "s" + "hpat_" + runOf(r, HEX, 32);
     expect(scanContent(`var k="${shpat}";`, "external-script", PAGE)[0]?.type).toBe("Shopify Admin API Token");
@@ -132,7 +132,7 @@ describe("providers that had no named pattern (#1309)", () => {
 
 describe("tiers, boundaries and false-positive shapes pinned after review (#1309)", () => {
   const rr = seededRng(13090);
-  const shp = (prefix: string, hex = runOf(rr, HEX, 32)) => `${prefix.replace("sh", "s" + "h")}${hex}`;
+  const shp = (prefix: string, hex = runOf(rr, HEX, 32)) => `${prefix}${hex}`;
   const critical = (text: string, location: SecretLocation = "external-script") => scanContent(text, location, PAGE).map(isShippedServerSecret); // pragma: allowlist secret
 
   test("Shopify Admin, sbp_, GOCSPX- and Stripe restricted keys are critical in a browser-served script, and only there", () => {
