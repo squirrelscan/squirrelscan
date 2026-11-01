@@ -585,6 +585,32 @@ function displayIssuer(iss: string): string {
   return shown.length > ISSUER_MAX_LENGTH ? `${shown.slice(0, ISSUER_MAX_LENGTH)}...` : shown;
 }
 
+/** The JSON a JWT part decodes to, whatever its type, `undefined` when it is empty, too long to read or not JSON. */
+function jwtPartJson(part: string | undefined): { value: unknown } | undefined {
+  if (!part || part.length > JWT_MAX_PART_CHARS) return undefined;
+  try {
+    return { value: JSON.parse(Buffer.from(part, "base64url").toString("utf8")) as unknown };
+  } catch {
+    return undefined;
+  }
+}
+
+const isJsonObject = (value: unknown): boolean => value !== null && typeof value === "object" && !Array.isArray(value);
+
+/**
+ * True when the match is proven not to be a token: the header is read in full and is not a JSON object with a string `alg` (RFC 7515,
+ * 7516), or the payload is read in full and is valid JSON that is not an object (a JWT claims set is one, RFC 7519). A part too long to
+ * read, an empty or detached payload, or one that is not JSON is undecided, so the match is kept (#1283).
+ */
+function isNotAJwt(value: string): boolean {
+  const [head, body] = value.split(".");
+  if (!head || head.length > JWT_MAX_PART_CHARS) return false;
+  const header = jwtPartJson(head);
+  if (!header || !isJsonObject(header.value) || typeof (header.value as Record<string, unknown>).alg !== "string") return true;
+  const payload = jwtPartJson(body);
+  return payload !== undefined && !isJsonObject(payload.value);
+}
+
 function refineJwt(
   value: string,
   now: number,
@@ -603,10 +629,12 @@ function refineJwt(
       return { type: beacon.type, confidence: "medium", publicByDesign: true, extra };
     }
   }
-  // Not a token anyone issued: a header or payload that is not a JSON object, or a header with no string `alg` (RFC 7515 requires one;
-  // `none` is a string and still a token). An `eyJ` run with two dots that decodes to something else is a base64 payload or a
-  // string of text, not a credential (#1283).
-  if (!decoded || typeof decoded.header.alg !== "string") return { drop: true };
+  // Dropped only on proof it is not a token (see `isNotAJwt`): an `eyJ` run with two dots that is a base64 payload or text (#1283).
+  // A part too long to read, or a good header over a payload that is not JSON, is undecided: reported at medium.
+  if (!decoded) {
+    return isNotAJwt(value) ? { drop: true } : { type: "JSON Web Token", confidence: "medium", publicByDesign: false };
+  }
+  if (typeof decoded.header.alg !== "string") return { drop: true };
   const { payload } = decoded;
   const role = typeof payload.role === "string" ? payload.role : undefined;
   const iss = typeof payload.iss === "string" ? payload.iss : undefined;
