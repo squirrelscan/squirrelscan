@@ -25,8 +25,16 @@ const CLASS_CHARS_PER_VISIT = 16;
 const GEOMETRY = /^(?:position|inset(?:-[a-z]+)*|top|right|bottom|left|width|height|z-index)$/;
 /** Rule visits over ALL frames of a page: past it a frame is judged by its inline style alone and the CSS is reported truncated. */
 const SHEET_WORK_BUDGET = 1_000_000;
-const MAX_SELECTOR_CHARS = 300;
-const MAX_BODY_CHARS = 4_000;
+/**
+ * A rule is read up to these sizes: each selector of a list 2,048 characters, the whole selector list and the body 256 KB, which no
+ * real overlay rule comes near and padding cannot cheaply pass. Past them the rule is not read, and the CSS is reported truncated
+ * (`cssTruncated`) when it could be an overlay's: a selector longer than the bound, or a list longer than it, could match any
+ * iframe on the page and is reported whenever the page has one; a body past the bound is reported when its selector could match
+ * (#1423). A rule is never skipped in silence while it could matter.
+ */
+const MAX_SELECTOR_CHARS = 2_048;
+const MAX_PRELUDE_CHARS = 262_144;
+const MAX_BODY_CHARS = 262_144;
 
 interface Declaration {
   property: string;
@@ -231,14 +239,26 @@ function parseDeclarations(text: string, reading: Reading = "tokens"): Declarati
 interface Wanted {
   ids: Set<string>;
   classes: Set<string>;
+  /** Iframes on the page: with none, no rule can be an overlay's. */
+  frames: number;
 }
 
 const SIMPLE_SELECTOR = /^(iframe)?((?:[.#][\w-]+)*)$/;
 
 /** The simple selectors in a list; others (combinators, attributes, pseudo-classes) are not modelled. */
 function parseSelectors(selector: string): ParsedSelector[] {
+  return parseSelectorList(selector).selectors;
+}
+
+/** The simple selectors of a list, and whether one of its parts is longer than {@link MAX_SELECTOR_CHARS} (it is not read: it could match anything). */
+function parseSelectorList(selector: string): { selectors: ParsedSelector[]; oversized: boolean } {
   const out: ParsedSelector[] = [];
+  let oversized = false;
   for (const part of selector.split(",")) {
+    if (part.length > MAX_SELECTOR_CHARS + 64) {
+      oversized = true;
+      continue;
+    }
     const match = SIMPLE_SELECTOR.exec(part.trim());
     if (!match || (match[1] === undefined && match[2] === "")) continue;
     const tokens = match[2]!.match(/[.#][\w-]+/g) ?? [];
@@ -248,7 +268,7 @@ function parseSelectors(selector: string): ParsedSelector[] {
       ids: tokens.filter((t) => t[0] === "#").map((t) => t.slice(1)),
     });
   }
-  return out;
+  return { selectors: out, oversized };
 }
 
 /** The index key (`iframe`, `.c`, `#i`) of a selector when every token could match an iframe on the page. */
@@ -284,8 +304,13 @@ function findRuleEnd(css: string, open: number): number {
  * the cursor and the cursor then moves past what it found, so the scan is linear however the text is
  * built (unterminated comments, runs of openers, no braces at all).
  */
-export function scanCss(css: string, onRule: (selector: string, body: string) => void, reading: Reading = "tokens"): void {
-  if (reading === "tokens") return scanCssTokens(css, onRule);
+export function scanCss(
+  css: string,
+  onRule: (selector: string, body: string) => void,
+  reading: Reading = "tokens",
+  onOversized?: (selector: string, reason: "prelude" | "body") => void,
+): void {
+  if (reading === "tokens") return scanCssTokens(css, onRule, onOversized);
   let i = 0;
   const n = css.length;
   while (i < n) {
@@ -326,10 +351,11 @@ export function scanCss(css: string, onRule: (selector: string, body: string) =>
     // The `plain` and `naive` readings cut at the first `}` (the `tokens` reading has its own scan, see `scanCssTokens`).
     const close = css.indexOf("}", open + 1);
     if (close === -1) return;
-    // A rule whose selector or body is absurdly long is not one a page needs; it is skipped, not the rest.
-    if (open - i <= MAX_SELECTOR_CHARS && close - open - 1 <= MAX_BODY_CHARS) {
-      onRule(css.slice(i, open).trim().toLowerCase(), css.slice(open + 1, close));
-    }
+    // A rule whose selector or body is past the bounds is not read, and the caller is told which selector, so a rule that could
+    // be an overlay's is reported rather than skipped in silence; the rest of the sheet is still read.
+    if (open - i > MAX_PRELUDE_CHARS) onOversized?.("", "prelude");
+    else if (close - open - 1 > MAX_BODY_CHARS) onOversized?.(css.slice(i, open).trim().toLowerCase(), "body");
+    else onRule(css.slice(i, open).trim().toLowerCase(), css.slice(open + 1, close));
     i = close + 1;
   }
 }
@@ -340,7 +366,11 @@ export function scanCss(css: string, onRule: (selector: string, body: string) =>
  * `@media print{.x{content:"{"}}`, `[a="{"]`); a block ends at its own `}`. At-rules and anything but a plain selector are
  * skipped whole, so only a rule's own body is handed on. See {@link walk}.
  */
-function scanCssTokens(source: string, onRule: (selector: string, body: string) => void): void {
+function scanCssTokens(
+  source: string,
+  onRule: (selector: string, body: string) => void,
+  onOversized?: (selector: string, reason: "prelude" | "body") => void,
+): void {
   const css = preprocess(source);
   const n = css.length;
   let i = 0;
@@ -388,9 +418,11 @@ function scanCssTokens(source: string, onRule: (selector: string, body: string) 
     selector += css.slice(from, open);
     const close = findRuleEnd(css, open);
     if (close === -1) return;
-    // A rule whose selector or body is absurdly long is not one a page needs; it is skipped, not the rest.
-    if (ch !== "@" && open - i <= MAX_SELECTOR_CHARS && close - open - 1 <= MAX_BODY_CHARS) {
-      onRule(selector.trim().toLowerCase(), css.slice(open + 1, close));
+    // A rule whose selector or body is past the bounds is not read, and the caller is told which selector (see the plain scan).
+    if (ch !== "@") {
+      if (open - i > MAX_PRELUDE_CHARS) onOversized?.("", "prelude");
+      else if (close - open - 1 > MAX_BODY_CHARS) onOversized?.(selector.trim().toLowerCase(), "body");
+      else onRule(selector.trim().toLowerCase(), css.slice(open + 1, close));
     }
     i = close + 1;
   }
@@ -429,7 +461,9 @@ function sheetFor(doc: Document, wanted: Wanted, reading: Reading): Sheet {
     if (text.length > room) truncated = true;
     chars += css.length;
     scanCss(css, (selector, body) => {
-      const selectors = parseSelectors(selector);
+      const { selectors, oversized } = parseSelectorList(selector);
+      // a selector longer than the bound is not read and could match any iframe on the page
+      if (oversized && wanted.frames > 0) cut.dropped = true;
       const keys = new Set<string>();
       for (const parsed of selectors) {
         const key = ruleKey(parsed, wanted);
@@ -450,7 +484,16 @@ function sheetFor(doc: Document, wanted: Wanted, reading: Reading): Sheet {
         }
         byKey.set(key, list);
       }
-    }, reading);
+    }, reading, (selector, reason) => {
+      // A rule past the bounds is not read: say so when it could be an overlay's. A selector list past the bound could match any
+      // iframe; a body past it matters when one of its selectors matches an iframe on the page.
+      if (reason === "prelude") {
+        if (wanted.frames > 0) cut.dropped = true;
+        return;
+      }
+      const { selectors, oversized } = parseSelectorList(selector);
+      if ((oversized && wanted.frames > 0) || selectors.some((parsed) => ruleKey(parsed, wanted))) cut.dropped = true;
+    });
   }
   const sheet: Sheet = { byKey, memo: new Map(), truncated: truncated || cut.dropped, work: SHEET_WORK_BUDGET };
   byReading[reading] = sheet;
@@ -630,8 +673,9 @@ const wantedCache = new WeakMap<object, Wanted>();
 function wantedFor(doc: Document): Wanted {
   const cached = wantedCache.get(doc);
   if (cached) return cached;
-  const wanted: Wanted = { ids: new Set(), classes: new Set() };
+  const wanted: Wanted = { ids: new Set(), classes: new Set(), frames: 0 };
   for (const frame of doc.querySelectorAll("iframe")) {
+    wanted.frames++;
     const id = (getAttrCI(frame, "id") ?? "").toLowerCase();
     if (id) wanted.ids.add(id);
     for (const c of (getAttrCI(frame, "class") ?? "").toLowerCase().split(/\s+/)) if (c) wanted.classes.add(c);
@@ -690,7 +734,7 @@ export function cssScanTruncated(doc: Document): boolean {
   return tokens.truncated || Object.values(sheetCache.get(doc) ?? {}).some((sheet) => sheet.truncated);
 }
 
-const hiddenCache = new WeakMap<object, { classes: Set<string>; ids: Set<string> }>();
+const hiddenCache = new WeakMap<object, { classes: Set<string>; ids: Set<string>; truncated: boolean }>();
 
 const ZERO_SIZE = /^0(?:\.0+)?(?:px|em|rem|%|pt)?$/;
 
@@ -709,20 +753,27 @@ function declaresHidden(declarations: Declaration[]): boolean {
  * for reading a label as a visitor sees it (#784). Simple `.class` and `#id` selectors only, over the same
  * one-pass scan and the same CSS bound as the overlay geometry.
  */
-export function hiddenSelectors(doc: Document): { classes: Set<string>; ids: Set<string> } {
+export function hiddenSelectors(doc: Document): { classes: Set<string>; ids: Set<string>; truncated: boolean } {
   const cached = hiddenCache.get(doc);
   if (cached) return cached;
   const classes = new Set<string>();
   const ids = new Set<string>();
+  // A rule past the size bounds, or CSS past the amount read, may hide a class or id this scan then reads as visible text.
+  let truncated = false;
   let chars = 0;
   for (const style of doc.querySelectorAll("style")) {
     const text = style.textContent ?? "";
     const room = MAX_CSS_CHARS - chars;
-    if (room <= 0) break;
+    if (room <= 0) {
+      truncated = true;
+      break;
+    }
+    if (text.length > room) truncated = true;
     const css = text.length > room ? text.slice(0, room) : text;
     chars += css.length;
     scanCss(css, (selector, body) => {
-      const parsed = parseSelectors(selector);
+      const { selectors: parsed, oversized } = parseSelectorList(selector);
+      if (oversized) truncated = true;
       if (parsed.length === 0) return;
       const declarations = parseDeclarations(body);
       if (!declaresHidden(declarations)) return;
@@ -731,9 +782,12 @@ export function hiddenSelectors(doc: Document): { classes: Set<string>; ids: Set
         for (const c of sel.classes) classes.add(c);
         for (const i of sel.ids) ids.add(i);
       }
+    }, "tokens", (selector, reason) => {
+      // an unread rule: a selector list past the bound could name any class, a body past it matters when its selector is a class or id
+      if (reason === "prelude" || parseSelectorList(selector).oversized || parseSelectors(selector).some((sel) => !sel.tag)) truncated = true;
     });
   }
-  const result = { classes, ids };
+  const result = { classes, ids, truncated };
   hiddenCache.set(doc, result);
   return result;
 }

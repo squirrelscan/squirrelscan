@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **The integrity rules no longer pass three bounds in silence.** A hidden decoy after more than 8,192 characters of `style` attribute was read as visible and broke the label's phrase; a style attribute is now read to 1 MB (once per element), and a control with a longer one is counted in `controlsUnread`. A CSS rule with a body over 4,000 characters or a selector over 300 was skipped whole, hiding an overlay rule behind cheap padding; rules are now read up to 256 KB and a 2,048-character selector, and a larger rule that could match an iframe on the page makes the CSS `cssTruncated`. A link or form resolved against a `<base href>` on another host is now judged by that host (and a relative iframe `src` resolves against it), where it was judged as the page's own site; a selector list is read per part (a list over 2,048 characters of short parts no longer hides the matching one), an oversized part, prelude or hidden-class rule gives `cssTruncated` or `hiddenCssTruncated`, links are ranked as off-site under a moved base, a `<base>` inside svg, noscript or template is ignored, and an empty link `href` goes to the base. (#1423)
+
 ## v0.0.158 (2026-11-01)
 
 `security/leaked-secrets` is sharper in both directions: it stops reporting documentation samples, placeholders, catalogue values and sample data tables as credentials, names more providers (Cerebras, OpenRouter, NVIDIA, Fireworks, Shopify Admin, Stripe restricted keys, Google OAuth client secrets), and classifies Shopify, Netlify and signed-URL tokens and browser SDK keys instead of calling them generic leaks. A percent-encoded Twitter bearer token is found again, and the crawler throttle spacing test no longer fails under load. Thanks to William for the throttle test fix (#1516, #1519).
