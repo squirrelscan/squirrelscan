@@ -64,7 +64,7 @@ const CODE_TOKEN = /\bfunction\b|=>|[\w\])]\s*=[^=]|\.createElement|\bwindow\.|\
  * or string `children` that has a JavaScript token), or a `src` URL beside a `strategy` or an `id`. A bare `src`
  * is any embed or image component. A dev build also names the module (`next/dist/client/script`), which counts.
  */
-function isScriptComponent(ref: string, props: Record<string, Json>, modules: Set<string>): boolean {
+function isScriptComponent(ref: string, props: Record<string, Json>, modules: Set<string>, codeLike: Map<string, boolean>): boolean {
   if (modules.has(ref)) return true;
   if (typeof props.strategy === "string") return true;
   if (!hasText(props.id)) return false;
@@ -73,10 +73,16 @@ function isScriptComponent(ref: string, props: Record<string, Json>, modules: Se
   if (isObject(inner) && hasText(inner.__html)) return true;
   const children = Array.isArray(props.children) ? props.children.find((c): c is string => typeof c === "string" && c.length > 0) : props.children;
   if (!hasText(children)) return false;
-  const code = children.slice(0, 64 * 1024);
-  // Prose has a bracket and a semicolon too, so a call and a statement end or block are required AND a token
-  // that is code (the word `function`, `window.` or a `?query=` in prose is not).
-  return code.includes("(") && (code.includes(";") || code.includes("{")) && CODE_TOKEN.test(code);
+  // The verdict is per text, not per reference: many elements can point at one long text row, and each would rescan it.
+  let verdict = codeLike.get(children);
+  if (verdict === undefined) {
+    const code = children.slice(0, 64 * 1024);
+    // Prose has a bracket and a semicolon too, so a call and a statement end or block are required AND a token
+    // that is code (the word `function`, `window.` or a `?query=` in prose is not).
+    verdict = code.includes("(") && (code.includes(";") || code.includes("{")) && CODE_TOKEN.test(code);
+    codeLike.set(children, verdict);
+  }
+  return verdict;
 }
 
 interface FlightRow {
@@ -174,12 +180,29 @@ export function flightLoaderText(bodies: readonly string[], isData: (type: strin
     const ref = TEXT_REF.exec(v)?.[1];
     return ref !== undefined && texts.has(ref) ? texts.get(ref)! : v;
   };
+  // What is emitted is capped like what is decoded: every `$7` pointing at one long text row would otherwise
+  // re-emit the whole row once per reference (references x row size).
+  // A text is emitted once however many elements point at it (the same string object, so the lookup is cheap).
   const out: string[] = [];
+  const emitted = new Set<string>();
+  let outChars = 0;
+  const emit = (text: string): void => {
+    if (emitted.has(text) || outChars + text.length > MAX_DECODED_CHARS) return;
+    emitted.add(text);
+    outChars += text.length;
+    out.push(text);
+  };
   let nodes = 0;
+  const codeLike = new Map<string, boolean>();
   const collect = (v: Json): void => {
     const value = resolve(v);
-    if (typeof value === "string") out.push(value);
-    else if (Array.isArray(value)) for (const item of value) if (typeof resolve(item) === "string") out.push(resolve(item) as string);
+    if (typeof value === "string") emit(value);
+    else if (Array.isArray(value)) {
+      for (const item of value) {
+        const text = resolve(item);
+        if (typeof text === "string") emit(text);
+      }
+    }
   };
   for (const row of rows) {
     const payload = row.payload;
@@ -200,12 +223,12 @@ export function flightLoaderText(bodies: readonly string[], isData: (type: strin
         if (marker === "$" && typeof type === "string" && isObject(props)) {
           const ref = COMPONENT_REF.exec(type)?.[1];
           const seen = hasTextRef(props) ? resolvedProps(props, resolve) : props;
-          if (type === "script" || (ref !== undefined && isScriptComponent(ref, seen, scriptModules))) {
+          if (type === "script" || (ref !== undefined && isScriptComponent(ref, seen, scriptModules, codeLike))) {
             const kind = seen.type;
             if (!(typeof kind === "string" && isData(kind.slice(0, 256)))) {
-              if (typeof seen.src === "string") out.push(seen.src);
+              if (typeof seen.src === "string") emit(seen.src);
               const inner = seen.dangerouslySetInnerHTML;
-              if (isObject(inner) && typeof inner.__html === "string") out.push(inner.__html);
+              if (isObject(inner) && typeof inner.__html === "string") emit(inner.__html);
               collect(seen.children);
             }
           }

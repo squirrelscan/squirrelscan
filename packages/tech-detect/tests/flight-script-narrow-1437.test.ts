@@ -295,4 +295,59 @@ describe("a long snippet in a flight text row (#1477)", () => {
     }
     expect(performance.now() - started).toBeLessThan(3_000);
   });
+
+  test("many references to one long text row emit it once: no blow-up, and a real loader in another row is still found", () => {
+    const text = longSnippet();
+    const big = `${"/* filler */ ".repeat(80_000)}\n${SNIPPET}`; // about 1 MB of text
+    expect(big.length).toBeGreaterThan(1_000_000);
+    const elements = Array.from({ length: 4_000 }, () => [`5:${el("$L2", { id: "a", children: "$7" })}`, `5:${el("script", { children: "$7" })}`]).flat();
+    const started = performance.now();
+    const html = page([...elements, textRow("7", big), `6:${GTM}`, textRow("8", text)]);
+    expect(html.length).toBeGreaterThan(1_000_000);
+    const markup = pageMarkup(html);
+    expect(markup.length).toBeLessThanOrEqual(9 * 1024 * 1024);
+    const ids = found(html);
+    expect(ids).toContain("clarity");
+    expect(ids).toContain("google-tag-manager");
+    expect(performance.now() - started).toBeLessThan(10_000);
+  }, 60_000);
+
+  test("one element with 100,000 references to the same row, and distinct rows past the cap, stay bounded", () => {
+    const refs = Array.from({ length: 100_000 }, () => "$7");
+    const big = `${"/* filler */ ".repeat(60_000)}\n${SNIPPET}`;
+    const html = page([`5:${el("$L2", { id: "a", strategy: "afterInteractive", children: refs })}`, textRow("7", big), `6:${GTM}`]);
+    const markup = pageMarkup(html);
+    expect(markup.length).toBeLessThanOrEqual(9 * 1024 * 1024);
+    expect(found(html)).toContain("google-tag-manager");
+    // 40 distinct 1 MB rows: the emitted text stops at the cap and the page still returns
+    const many = Array.from({ length: 40 }, (_, i) => textRow(`a${i}`, `${i}${"x".repeat(1_000_000)}`));
+    const refsMany = Array.from({ length: 40 }, (_, i) => `$a${i}`);
+    const html2 = page([`5:${el("$L2", { id: "a", strategy: "afterInteractive", children: refsMany })}`, ...many]);
+    expect(pageMarkup(html2).length).toBeLessThanOrEqual(9 * 1024 * 1024);
+  }, 60_000);
+
+  test("a declared length too large or too small, with emoji and CJK, never throws; an exact one reads the rows after it", () => {
+    const body = longSnippet("/* \u4e2d\u6587 \ud83d\ude80 \u00e9 */\n");
+    const exact = Buffer.byteLength(body);
+    for (const declared of [0, 1, exact - 3, exact + 5, exact * 4, 0xffffff]) {
+      const rows = [`5:${el("$L2", { id: "a", children: "$7" })}`, `7:T${declared.toString(16)},${body}`, `6:${GTM}`];
+      expect(() => found(page(rows))).not.toThrow();
+    }
+    const ids = found(page([`5:${el("$L2", { id: "a", children: "$7" })}`, `7:T${exact.toString(16)},${body}`, `6:${GTM}`]));
+    expect(ids).toContain("clarity");
+    expect(ids).toContain("google-tag-manager");
+  });
+
+  test("20,000 references to one 70 KB text row that looks like code but has no code token cost one test, not 20,000", () => {
+    // Has `(` and `;` (so the code-like test goes on to look for a token) and no `=`, `function`, `window.`...
+    const text = "Call us (we answer; email works too). ".repeat(1_900);
+    expect(text.length).toBeGreaterThan(64 * 1024);
+    const refs = Array.from({ length: 20_000 }, () => `5:${el("$L2", { id: "a", children: "$1" })}`);
+    const html = page([textRow("1", text), ...refs]);
+    expect(html.length).toBeLessThan(2 * 1024 * 1024);
+    const started = performance.now();
+    const markup = pageMarkup(html);
+    expect(performance.now() - started).toBeLessThan(1_000);
+    expect(markup).not.toContain("Call us");
+  });
 });
