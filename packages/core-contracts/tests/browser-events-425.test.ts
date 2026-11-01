@@ -124,3 +124,30 @@ describe("hostile text", () => {
     expect(events!.pageErrors[0]).toContain("TypeError:");
   });
 });
+
+describe("a blockedUri of another scheme keeps its scheme and host only", () => {
+  const blocked = (value: unknown): string | undefined =>
+    readBrowserEvents({ cspViolations: [{ violatedDirective: "img-src", blockedUri: value }] })?.cspViolations[0]?.blockedUri;
+
+  test("userinfo, port, path, query and fragment never survive in an ftp or extension URL", () => {
+    expect(blocked("ftp://u:pw@h.example/p?token=1#frag")).toBe("ftp://h.example");
+    expect(blocked("chrome-extension://abcdefghijklmnop/page.html?k=v")).toBe("chrome-extension://abcdefghijklmnop");
+    expect(blocked("ws-unknown://user@Host.Example:8080/x?y=z")).toBe("ws-unknown://host.example");
+  });
+  test("a scheme with no host is the scheme alone: javascript, mailto, tel", () => {
+    expect(blocked("javascript:alert(document.cookie)")).toBe("javascript:");
+    expect(blocked("mailto:person@example.invalid?subject=secret")).toBe("mailto:");
+  });
+  test("keywords and plain words are kept; a string with a path, query or assignment is dropped", () => {
+    for (const keyword of ["inline", "eval", "wasm-eval", "trusted-types-policy", "self"]) expect(blocked(keyword)).toBe(keyword);
+    expect(blocked("token=abc123")).toBeUndefined();
+    expect(blocked("not a url/with?query")).toBeUndefined();
+    // a URL the parser rejects still loses userinfo, query and fragment
+    expect(blocked("ftp://u:pw@h example/p?token=1#f")).toBe("ftp://h example/p");
+    expect(blocked("a".repeat(41))).toBeUndefined();
+  });
+  test("the kept http, https and keyword-scheme values are unchanged", () => {
+    expect(blocked("https://cdn.example.invalid/a.js?k=v")).toBe("https://cdn.example.invalid/a.js");
+    expect(blocked("data:text/plain;base64,AAAA")).toBe("data:");
+  });
+});

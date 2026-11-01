@@ -90,6 +90,30 @@ export function eventUrl(value: unknown): string | undefined {
   }
 }
 
+/**
+ * A `blockedUri` that is a URL of a scheme `eventUrl` does not keep (`ftp:`, `chrome-extension:`, `javascript:`...): its
+ * scheme and host only, never userinfo, port, path, query or fragment. Page script can dispatch a synthetic violation
+ * event with any string, so no part of such a value is kept raw. A string that is not a URL is kept only when it is plain
+ * words of at most 40 characters (the keywords CSP names), or as a scheme and path with userinfo, query and fragment removed
+ * when it only looks like a URL; anything else is undefined.
+ */
+function otherSchemeOrigin(value: unknown): string | undefined {
+  const text = clean(value, 2048);
+  if (!text) return undefined;
+  try {
+    const url = new URL(text);
+    const scheme = url.protocol.slice(0, 30).toLowerCase();
+    return url.hostname ? `${scheme}//${url.hostname.slice(0, 120).toLowerCase()}` : scheme;
+  } catch {
+    // Not a URL: a CSP keyword (`inline`, `eval`) or what a hostile event made of one. Only plain words are kept, never
+    // anything with a scheme, a path, a query or an assignment in it.
+    if (/^[\w .-]{1,40}$/.test(text)) return text;
+    // A URL the parser rejects (a hostile run made a space in the host): userinfo, query and fragment still never survive.
+    const m = /^([a-z][a-z0-9+.-]{0,29}:\/\/)(?:[^/?#]*@)?([^?#]*)/i.exec(text);
+    return m ? `${m[1]!.toLowerCase()}${m[2]!}`.slice(0, 200) : undefined;
+  }
+}
+
 const KEYWORD_SCHEMES = new Set(["data:", "blob:", "filesystem:", "about:"]);
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -106,7 +130,7 @@ export function readBrowserEvents(raw: unknown): BrowserEvents | undefined {
     if (violations.length >= BROWSER_EVENT_LIMITS.cspViolations) break;
     if (!isRecord(item)) continue;
     const violatedDirective = clean(item.violatedDirective, 60);
-    const blockedUri = eventUrl(item.blockedUri) ?? clean(item.blockedUri, 40);
+    const blockedUri = eventUrl(item.blockedUri) ?? otherSchemeOrigin(item.blockedUri);
     if (!violatedDirective || !blockedUri) continue;
     const effectiveDirective = clean(item.effectiveDirective, 60);
     const sourceFile = eventUrl(item.sourceFile);
