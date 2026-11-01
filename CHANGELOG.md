@@ -19,7 +19,7 @@ How it works:
 
 ### Fixed
 
-- **`integrity/fake-auth-overlay` reads the modern viewport units.** A fixed full-screen frame sized with `dvh`, `svh`, `lvh`, `dvw`, `svw`, `lvw`, `vmax` or `vmin` (alone or inside `calc()`) was not seen as covering the viewport, while `100vh` was. They now count, and a length that merely contains digits before `100` (`1100%`, `100.5%`) no longer does. (#1496)
+- **`integrity/fake-auth-overlay` reads the modern viewport units.** A fixed full-screen frame sized with `dvh`, `svh`, `lvh`, `dvw`, `svw`, `lvw`, `vmax` or `vmin` (alone or inside `calc()`) was not seen as covering the viewport, while `100vh` was. They now count, and a length that merely contains digits before `100` (`1100%`) no longer does. Other spellings fill too (`100.0%`, `+100vw`, `1e2vw`, over-full `150%`, `calc(50vw + 50vw)`, `100vi`/`100vb`, `100cqw`, `stretch`, `-webkit-fill-available`), as do the logical inset properties; a length in a custom property (`var(--w)`) is not resolved. (#1496)
 
 ## v0.0.154 (2026-11-01)
 
