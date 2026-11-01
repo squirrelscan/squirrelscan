@@ -171,7 +171,7 @@ function attributeValue(tag: string, name: string): string | null {
   return m ? (m[1] ?? m[2] ?? m[3] ?? "") : null;
 }
 
-let lastMarkup: { html: string; markup: string; tags: CollectedTag[] } | undefined;
+let lastMarkup: { html: string; attrs: ReadonlySet<string>; markup: string; tags: CollectedTag[] } | undefined;
 
 /** A tag the page pass kept, with its attributes as written (names lower case, first wins). */
 interface CollectedTag {
@@ -183,13 +183,17 @@ const MAX_COLLECTED_TAGS = 100_000;
 const MAX_ATTRIBUTES_PER_TAG = 100;
 const MAX_ATTRIBUTE_VALUE_CHARS = 2_048;
 
-/** The attributes of a start tag, in one linear pass: quoted, single-quoted or bare values; names lower case; first wins. */
-function parseTagAttributes(tag: string): Map<string, string> {
+/**
+ * The attributes of a start tag that some detector reads (`wanted`), in one linear pass: quoted, single-quoted or bare
+ * values; names lower case; first wins (as in a browser). Other attributes are walked past, not kept: a page of tags
+ * with a hundred attributes each must not cost a hundred map entries per tag. The walk itself is bounded.
+ */
+function parseTagAttributes(tag: string, wanted: ReadonlySet<string>): Map<string, string> {
   const attrs = new Map<string, string>();
   let i = tag.search(/[\s/]/);
   if (i === -1) return attrs;
   const n = tag.length;
-  while (i < n && attrs.size < MAX_ATTRIBUTES_PER_TAG) {
+  for (let seen = 0; i < n && seen < MAX_ATTRIBUTES_PER_TAG; seen++) {
     while (i < n && /[\s/]/.test(tag[i]!)) i++;
     if (i >= n || tag[i] === ">") break;
     const nameStart = i;
@@ -203,21 +207,51 @@ function parseTagAttributes(tag: string): Map<string, string> {
       const quote = tag[i];
       if (quote === '"' || quote === "'") {
         const end = tag.indexOf(quote, i + 1);
-        value = tag.slice(i + 1, end === -1 ? n : end);
+        if (wanted.has(name) && !attrs.has(name)) value = tag.slice(i + 1, end === -1 ? n : end);
         i = end === -1 ? n : end + 1;
       } else {
         const start = i;
         while (i < n && !/[\s>]/.test(tag[i]!)) i++;
-        value = tag.slice(start, i);
+        if (wanted.has(name) && !attrs.has(name)) value = tag.slice(start, i);
       }
     }
-    if (name && !attrs.has(name)) attrs.set(name, (value.length > MAX_ATTRIBUTE_VALUE_CHARS ? value.slice(0, MAX_ATTRIBUTE_VALUE_CHARS) : value).trim());
+    if (name && wanted.has(name) && !attrs.has(name)) {
+      attrs.set(name, (value.length > MAX_ATTRIBUTE_VALUE_CHARS ? value.slice(0, MAX_ATTRIBUTE_VALUE_CHARS) : value).trim());
+    }
   }
   return attrs;
 }
 
+/**
+ * The attribute names the `tag-attr` detectors of `fingerprints` read: all the page pass keeps of a tag. Computed once
+ * per list. A signature list with no such detector keeps no attributes at all.
+ */
+const neededCache = new WeakMap<object, ReadonlySet<string>>();
+function neededAttributes(fingerprints: readonly TechFingerprint[]): ReadonlySet<string> {
+  const known = neededCache.get(fingerprints);
+  if (known) return known;
+  const names = new Set<string>();
+  for (const fp of fingerprints) {
+    for (const detector of fp.detectors) {
+      if (detector.type === "tag-attr") for (const attr of detector.attrs) names.add(attr);
+    }
+  }
+  neededCache.set(fingerprints, names);
+  return names;
+}
+
+/** The attribute names the running `detectTechnologies` call reads (the built-in signatures' by default). */
+let activeAttrs: ReadonlySet<string> | undefined;
+const defaultAttrs = (): ReadonlySet<string> => (activeAttrs ??= neededAttributes(ALL_FINGERPRINTS));
+
+/** Drop the page pass's result: it is per page, and a page's tags must not outlive the call that read them. */
+export function releasePageMarkup(): void {
+  lastMarkup = undefined;
+}
+
 export function pageMarkup(html: string): string {
-  if (lastMarkup?.html === html) return lastMarkup.markup;
+  const wanted = defaultAttrs();
+  if (lastMarkup?.html === html && lastMarkup.attrs === wanted) return lastMarkup.markup;
   const parts: string[] = [];
   const collected: CollectedTag[] = [];
   const flightBodies: string[] = [];
@@ -246,7 +280,8 @@ export function pageMarkup(html: string): string {
     if (!name || name[1] === "/") continue;
     const tagName = name[2]!.toLowerCase();
     if (COLLECTED_TAGS.has(tagName) && collected.length < MAX_COLLECTED_TAGS) {
-      collected.push({ tag: tagName, attrs: parseTagAttributes(tag.length > MAX_TAG_CHARS ? tag.slice(0, MAX_TAG_CHARS) : tag) });
+      const attrs = parseTagAttributes(tag.length > MAX_TAG_CHARS ? tag.slice(0, MAX_TAG_CHARS) : tag, wanted);
+      if (attrs.size > 0) collected.push({ tag: tagName, attrs });
     }
     if (tagName === "script" && !tag.endsWith("/>")) {
       scriptEnd.lastIndex = pos;
@@ -276,7 +311,7 @@ export function pageMarkup(html: string): string {
   }
   if (flightBodies.length > 0) parts.push(flightLoaderText(flightBodies, (t) => DATA_SCRIPT_TYPE.test(t)));
   const markup = parts.join("\n");
-  lastMarkup = { html, markup, tags: collected };
+  lastMarkup = { html, attrs: wanted, markup, tags: collected };
   return markup;
 }
 
@@ -477,6 +512,21 @@ export function detectTechnologies(
   rawInput: TechDetectInput,
   fingerprints: TechFingerprint[] = ALL_FINGERPRINTS,
   options: DetectOptions = {},
+): DetectedTechnology[] {
+  const previous = activeAttrs;
+  activeAttrs = neededAttributes(fingerprints);
+  try {
+    return detectOnePage(rawInput, fingerprints, options);
+  } finally {
+    activeAttrs = previous;
+    releasePageMarkup();
+  }
+}
+
+function detectOnePage(
+  rawInput: TechDetectInput,
+  fingerprints: TechFingerprint[],
+  options: DetectOptions,
 ): DetectedTechnology[] {
   const results: DetectedTechnology[] = [];
   const views = new Map<string, ScriptView>();
