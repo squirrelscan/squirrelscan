@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **`integrity/brand-impersonation` no longer spares a sign-in link to a broker's authorize URL that does not name the provider.** A "Continue with Google" or "Continue with Microsoft" control to an Auth0, Okta, Cognito, Supabase or Firebase authorize endpoint was treated as a real integration on the path alone, but those hosts let anyone register a tenant and a tenant controls its hosted login page. The query must now name the provider the label does (`connection`, `idp`, `identity_provider`, `provider`, `providerId`); a bare authorize URL or another provider is reported like any off-brand host. (#1494)
+
 ## v0.0.155 (2026-11-01)
 
 Technology detection recognises fewer look-alikes and more real loaders: a Clerk key must decode to a Clerk host (a Stripe publishable key is no longer Clerk), a Next.js script component's bare loader is read, a config past many look-alike strings in a bundle is found, and surge, railway, amplify and ActiveCampaign Pages hosting is read from the page's own host. `[[ignore]]` entries take element `selectors`, and `--max-duration` judges a gzip page by its decoded size, so a small compressed page can no longer force a long parse. Thanks to William for the Clerk key validation (#1481, #1482).
