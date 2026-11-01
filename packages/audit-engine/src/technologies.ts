@@ -206,6 +206,13 @@ export function detectReportTechnologies(
 
 /** Every bundle gets at least this much head before any gets more (#1254). */
 const TECH_BUNDLE_FLOOR_BYTES = 16 * 1024;
+/**
+ * Share of a page's byte budget the floor pass leaves for hint windows (#1510): the floor gives each script a head in
+ * plan order, so on a page of dozens of scripts the later ones used to get a short head or none, and no room was left
+ * for the window around a vendor literal past it. Held only when the room is at least four times the reserve, so a page
+ * whose floors fit is unchanged and a small budget is shared as before.
+ */
+const TECH_WINDOW_RESERVE_BYTES = 64 * 1024;
 /** Most bytes of vendor-literal windows and tail added to a bundle that does not fit whole. */
 const TECH_BUNDLE_EXTRAS_BYTES = 24 * 1024;
 /** Smallest hint window (160 before and 256 after a literal): below this room a bundle is not scanned for windows. */
@@ -266,7 +273,10 @@ function spreadBundleExtras(
   room: () => number,
   charge: (n: number) => void,
 ): void {
-  const open = plan.filter((item) => item.head && item.head.length < item.content.length);
+  // A script the floor pass left no head (its budget ran out) is open too, and first: it has nothing else (#1510).
+  const open = plan
+    .filter((item) => item.head.length < item.content.length)
+    .sort((a, b) => Number(a.head !== "") - Number(b.head !== ""));
   const allowances = windowScanAllowances(open.map((item) => item.content.length));
   const samplers = new Map<ExtrasItem, BundleSampler>();
   const steps = [
@@ -493,8 +503,9 @@ export function buildTechInputs(
       }
     }
     const floor = Math.min(TECH_BUNDLE_FLOOR_BYTES, limits.bundleBytes);
+    const windowReserve = !allWhole && room() >= 4 * TECH_WINDOW_RESERVE_BYTES ? TECH_WINDOW_RESERVE_BYTES : 0;
     for (const item of allWhole ? [] : plan) {
-      const r = Math.min(floor, room());
+      const r = Math.min(floor, room() - windowReserve);
       if (r <= 0) break;
       item.head = truncateToBytes(item.content, r);
       item.headBytes = byteLength(item.head);
@@ -542,11 +553,11 @@ export function buildTechInputs(
     const truncation = cut > 0 ? { reasons: [...reasons], scripts: cut } : undefined;
     const withBody: { url: string; content: string }[] = [];
     for (const item of plan) {
-      if (!item.head) continue;
+      if (!item.head && !item.extras) continue;
       attached.add(item.url);
       withBody.push({
         url: item.url,
-        content: item.extras ? `${item.head}${SEGMENT_SEPARATOR}${item.extras}` : item.head,
+        content: item.extras ? (item.head ? `${item.head}${SEGMENT_SEPARATOR}${item.extras}` : item.extras) : item.head,
       });
     }
 
