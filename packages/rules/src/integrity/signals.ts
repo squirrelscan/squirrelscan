@@ -209,26 +209,52 @@ const names = (param: string) => (query: URLSearchParams, brand: string): boolea
 const hasIdp = (query: URLSearchParams): boolean => query.getAll("idp").some((value) => value.trim() !== "");
 
 const OKTA_PATH = /^\/oauth2\/(?:[\w.-]+\/)?v1\/authorize(?:\/|$)|^\/oauth2\/authorize(?:\/|$)/;
-const IDENTITY_BROKER_ENDPOINTS: Array<{ host: string; path: RegExp; hint: (query: URLSearchParams, brand: string) => boolean }> = [
-  { host: "auth0.com", path: /^\/authorize(?:\/|$)/, hint: names("connection") },
-  { host: "okta.com", path: OKTA_PATH, hint: hasIdp },
-  { host: "oktapreview.com", path: OKTA_PATH, hint: hasIdp },
-  { host: "okta-emea.com", path: OKTA_PATH, hint: hasIdp },
-  { host: "amazoncognito.com", path: /^\/oauth2\/authorize(?:\/|$)/, hint: names("identity_provider") },
-  { host: "supabase.co", path: /^\/auth\/v1\/authorize(?:\/|$)/, hint: names("provider") },
-  { host: "firebaseapp.com", path: /^\/__\/auth\/handler(?:\/|$)/, hint: names("providerId") },
+/**
+ * `tenant`: the family serves a login page that its tenant controls (Auth0, Okta, Cognito: anyone can register a tenant
+ * and customise it), so a hint in the URL proves nothing (the attacker writes the URL): the tenant itself must be the
+ * site's own, named after it. Supabase and Firebase endpoints go straight to the provider with no tenant-controlled login
+ * page, so for them the named provider is the whole condition.
+ */
+const IDENTITY_BROKER_ENDPOINTS: Array<{
+  host: string;
+  path: RegExp;
+  hint: (query: URLSearchParams, brand: string) => boolean;
+  tenant: boolean;
+}> = [
+  { host: "auth0.com", path: /^\/authorize(?:\/|$)/, hint: names("connection"), tenant: true },
+  { host: "okta.com", path: OKTA_PATH, hint: hasIdp, tenant: true },
+  { host: "oktapreview.com", path: OKTA_PATH, hint: hasIdp, tenant: true },
+  { host: "okta-emea.com", path: OKTA_PATH, hint: hasIdp, tenant: true },
+  { host: "amazoncognito.com", path: /^\/oauth2\/authorize(?:\/|$)/, hint: names("identity_provider"), tenant: true },
+  { host: "supabase.co", path: /^\/auth\/v1\/authorize(?:\/|$)/, hint: names("provider"), tenant: false },
+  { host: "firebaseapp.com", path: /^\/__\/auth\/handler(?:\/|$)/, hint: names("providerId"), tenant: false },
 ];
 
 /** The brands an identity broker can legitimately stand in for. */
 const BROKERED_BRANDS = new Set(["Google", "Microsoft"]);
 
 /**
- * A control to a broker's authorize endpoint that names the provider the label does. The hosts are open to anyone who
- * registers a tenant and a tenant can serve the path, so the path alone proves nothing: a bare authorize URL (the
- * broker's hosted login page, which the tenant owner controls) or one naming another provider is judged like any
- * other off-brand host (#1494).
+ * Whether the broker tenant in `host` (the labels before the broker's own suffix) is named after the audited site: a tenant
+ * label contains the site's registrable name (`example-login.auth0.com` on `example.com`). A tenant that has nothing to do
+ * with the site is somebody else's, and the audited page borrowing its login is what impersonation looks like.
  */
-function isBrokerEndpoint(brand: string, host: string, path: string, query: string): boolean {
+function tenantIsSites(host: string, suffix: string, self: Set<string>): boolean {
+  const tenant = host.slice(0, Math.max(0, host.length - suffix.length - 1)).split(".");
+  for (const own of self) {
+    const name = registrableDomain(own).split(".")[0] ?? "";
+    if (name.length >= 3 && tenant.some((label) => label.includes(name))) return true;
+  }
+  return false;
+}
+
+/**
+ * A control to a broker's authorize endpoint that names the provider the label does, on a tenant that is the audited
+ * site's own where the family has tenants. The hosts are open to anyone who registers a tenant and a tenant can serve the
+ * path and its hosted login page, so neither the path nor a hint in the URL (written by whoever wrote the link) proves a
+ * real integration; a bare authorize URL, one naming another provider and a foreign tenant are judged like any other
+ * off-brand host (#1494).
+ */
+function isBrokerEndpoint(brand: string, host: string, path: string, query: string, self: Set<string>): boolean {
   if (!BROKERED_BRANDS.has(brand)) return false;
   let params: URLSearchParams;
   try {
@@ -236,7 +262,9 @@ function isBrokerEndpoint(brand: string, host: string, path: string, query: stri
   } catch {
     return false;
   }
-  return IDENTITY_BROKER_ENDPOINTS.some((e) => hostMatches(host, [e.host]) && e.path.test(path) && e.hint(params, brand));
+  return IDENTITY_BROKER_ENDPOINTS.some(
+    (e) => hostMatches(host, [e.host]) && e.path.test(path) && e.hint(params, brand) && (!e.tenant || tenantIsSites(host, e.host, self)),
+  );
 }
 
 interface CredentialDestination {
@@ -372,7 +400,7 @@ export function detectBrandImpersonation(
     const offBrandDests = credDests.filter(
       (d) =>
         !hostMatches(d.host, spec.legitHosts) &&
-        !isBrokerEndpoint(spec.brand, d.host, d.path, d.query) &&
+        !isBrokerEndpoint(spec.brand, d.host, d.path, d.query, self) &&
         !isSelfOrSameSite(d.host, self)
     );
     const brandLabeledOffBrand = offBrandDests.filter(
