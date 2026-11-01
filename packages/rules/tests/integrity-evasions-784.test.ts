@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { parsePage } from "@squirrelscan/parser";
 import { brandImpersonationRule } from "../src/integrity/brand-impersonation";
-import { WINDOW_CUE, cuePattern } from "../src/integrity/controls";
+import { PLAIN_LOCAL_HREF, WINDOW_CUE, cuePattern, looksOffSite, urlText } from "../src/integrity/controls";
 import { AUTH_CUE_PHRASES, AUTH_LABEL, AUTH_LABEL_PHRASES, PROVIDER_BUTTON, PROVIDER_VERBS } from "../src/integrity/cues";
 import { BRAND_SPECS } from "../src/integrity/brand-specs";
 import { detectBrandImpersonation, detectFakeAuthOverlay, detectPageSignals } from "../src/integrity/signals";
@@ -314,5 +314,73 @@ test("a plain local destination is still not given the long read", () => {
   const label = `${"<i></i>".repeat(400)}Sign in with Google`;
   for (const href of ["/signin-not-auth-looking", "/x", "x/y", "#top"]) {
     expect(brand(`<a href="${href}">${label}</a>`), href).toBeNull();
+  }
+});
+
+// ── the classification against how a URL parser resolves the same text (#1495) ──────────────────────────────
+
+const BASE = "https://example.com/";
+const RESOLVE_PREFIXES = ["", " ", "\t", "\n", "\r", "\u0000", "\u0001", "\u001f", "\u0020", "\t\n ", "\u0000\t "];
+const RESOLVE_OPENERS = [
+  "//", "\\\\", "/\\", "\\/", "/\t/", "/\n/", "/\r/", "\t//", "\n//", "/ /", "///", "////", "\\\\\\", "/\\/", "\\//",
+  "https://", "http://", "HTTPS://", "hTtP://", "https:/\\", "https:\\\\", "https:\\/", "http:\\\\", "http:/\\", "http:", "https:", "ws://", "wss://", "ftp://", "ftp:",
+  "/", "/.", "/./", "/..", "/../", "/.//", "/..//", "/./\\", "./", "../", "./\\", "../\\", "x/", "x//", "x/\\", "?", "#", "?//", "#//", "/%2f", "/%5c", "%2f%2f", "%5c%5c", "/%09/", "/%0a/", "/%0d/",
+  "javascript:", "data:", "mailto:", "tel:", "blob:", "about:", "file://", "file:",
+];
+const RESOLVE_BODIES = ["other.example/x", "other.example", "example.com.other.example/x", "other.example:8443/x", "user@other.example/x", "example.com@other.example/x", "x"];
+
+test("a destination a parser sends to another host is never classified as plainly local, and is read", () => {
+  let checked = 0;
+  let crossOrigin = 0;
+  for (const prefix of RESOLVE_PREFIXES) {
+    for (const opener of RESOLVE_OPENERS) {
+      for (const body of RESOLVE_BODIES) {
+        const href = `${prefix}${opener}${body}`;
+        let resolved: URL;
+        try {
+          resolved = new URL(href, BASE);
+        } catch {
+          continue;
+        }
+        checked++;
+        // Another host, by what `new URL` makes of it: (non-hierarchical schemes have no host and are ignored by the rule).
+        if (resolved.hostname === "" || resolved.hostname === "example.com") continue;
+        crossOrigin++;
+        const text = urlText(href);
+        expect(text === "" || PLAIN_LOCAL_HREF.test(text), `plainly local: ${JSON.stringify(href)} -> ${resolved.href}`).toBe(false);
+        expect(looksOffSite(href), `not read: ${JSON.stringify(href)} -> ${resolved.href}`).toBe(true);
+      }
+    }
+  }
+  // The sweep means something: a large set, most of it cross-origin.
+  expect(checked).toBeGreaterThan(3_000);
+  expect(crossOrigin).toBeGreaterThan(1_000);
+});
+
+test("a plainly local destination resolves to the page's own host", () => {
+  for (const prefix of RESOLVE_PREFIXES) {
+    for (const opener of RESOLVE_OPENERS) {
+      for (const body of RESOLVE_BODIES) {
+        const href = `${prefix}${opener}${body}`;
+        const text = urlText(href);
+        if (!(text === "" || PLAIN_LOCAL_HREF.test(text))) continue;
+        let resolved: URL;
+        try {
+          resolved = new URL(href, BASE);
+        } catch {
+          continue;
+        }
+        expect(resolved.hostname, `${JSON.stringify(href)} -> ${resolved.href}`).toBe("example.com");
+      }
+    }
+  }
+});
+
+test("a sign-in path is found however it is padded: past 300 characters, after a long query, or in the query", () => {
+  const label = `${"<i></i>".repeat(400)}Sign in with Google`;
+  // Off-site by host: always read. Local-looking with a sign-in path only past 300 characters: a local link is dropped (it
+  // cannot be off-brand), so the case that matters is a cross-host link whose path or query is long.
+  for (const href of [`https://other.example/${"a".repeat(400)}/signin`, `https://other.example/a?${"q=1&".repeat(200)}next=/login`, `//other.example/${"b".repeat(5_000)}`]) {
+    expect(brand(`<a href="${href}">${label}</a>`), href.slice(0, 40)).toBe("Google");
   }
 });

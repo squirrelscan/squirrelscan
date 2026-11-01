@@ -275,24 +275,37 @@ function rank(tag: string, href: string | null, extra: string[]): number {
   if (href === null) return 0;
   if (extra.some((text) => AUTH_LABEL.test(readable(text.slice(0, ATTR_CHARS))))) return 3;
   if (tag !== "a") return 2;
-  // The destination as the parser reads it (the same text `shortlist()` decides on): tabs and newlines gone, a
-  // backslash a slash, so `/\\other.example/x` and `/<TAB>/other.example/x` are the protocol-relative URLs they are.
+  // The destination as the parser reads it (the same text `shortlist()` decides on).
   const target = urlText(href);
-  if (target && (/^(?:[a-z][a-z0-9+.-]*:)?[\\/]{2}/i.test(target) || AUTH_PATH.test(target.slice(0, 300)))) return 2;
+  if (target && (looksOffSite(href) || AUTH_PATH.test(target.slice(0, MAX_AUTH_PATH_CHARS)))) return 2;
   return 1;
+}
+
+/** Longest destination read for a sign-in path: a path or query padded past it is still read, up to this. */
+const MAX_AUTH_PATH_CHARS = 8_192;
+
+/**
+ * Whether a destination may leave the page's own site, judged on the text the way a URL parser reads it: a protocol-
+ * relative one (`//host`, and `\\host`, `/\host` and `\/host`, a backslash being a slash in a special URL), a scheme
+ * with slashes, or an http(s), ws(s) or ftp scheme with or without them (`http:host` on an https page is
+ * `http://host`). Leans toward "may": a wrong yes only costs a read. Property-tested against `new URL(href, base)`.
+ */
+export function looksOffSite(href: string): boolean {
+  const target = urlText(href);
+  return /^(?:[a-z][a-z0-9+.-]*:)?[\\/]{2}/i.test(target) || /^(?:https?|wss?|ftp):/i.test(target);
 }
 
 /**
  * A URL as the parser sees it: leading control characters and spaces and every tab and newline are removed
  * (WHATWG URL parsing), so `/<TAB>/host/path` is the protocol-relative `//host/path`, not a root-relative path.
  */
-function urlText(href: string): string {
+export function urlText(href: string): string {
   // oxlint-disable-next-line no-control-regex
   return href.replace(/[\t\n\r]/g, "").replace(/^[\u0000-\u0020]+/, "");
 }
 
 /** A destination that is plainly on the page's own site: a root-relative path, a fragment, a query or a bare relative path. */
-const PLAIN_LOCAL_HREF = /^(?:\/(?![/\\])|#|\?|[\w.~-]+(?:[/?#][^:\\]*)?$)/;
+export const PLAIN_LOCAL_HREF = /^(?:\/(?![/\\])|#|\?|[\w.~-]+(?:[/?#][^:\\]*)?$)/;
 
 /**
  * The controls worth a full prepare, in the order they get it. A link whose destination is plainly the
@@ -326,7 +339,7 @@ function shortlist(
       if (cue || hasLogo(el)) first.push({ element: el, href, order });
       continue;
     }
-    (!isLink || AUTH_PATH.test(href.slice(0, 300)) ? first : second).push({ element: el, href, order });
+    (!isLink || looksOffSite(href) || AUTH_PATH.test(normalised.slice(0, MAX_AUTH_PATH_CHARS)) ? first : second).push({ element: el, href, order });
   }
   const all = first.concat(second);
   return { chosen: all.slice(0, MAX_PREPARED), cut: Math.max(0, all.length - MAX_PREPARED) };
