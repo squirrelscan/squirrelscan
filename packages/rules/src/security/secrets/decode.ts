@@ -156,6 +156,27 @@ export function unescapeJsStrings(text: string): string {
 // this many escapes (one `%20` in a query string is not an encoded document)
 // and decode to text.
 const PERCENT_MIN_ESCAPES = 3;
+/**
+ * An app-only Twitter bearer: 19 or more `A`, then token characters with at least one of the escapes the token itself carries
+ * (`%2B`, `%2F`, `%3D`). The match is exactly the token: it ends at the first character that is neither a token character nor one of
+ * those escapes (a `%26` after it is the next parameter), and it starts after a non-token character or after an escape that decodes to a delimiter (`%3D` `=`, `%22` `"`, `%27` `'`, `%26` `&`, `%3A` `:`: `key=token`), not in the middle
+ * of a base64 payload (after a letter, a digit, `+`, `/`, `%2B`, `%2F`, or the `%2C` of a `data:` URL).
+ */
+const TWITTER_BEARER_SHAPE_RE = /(?:(?<![A-Za-z0-9+/])|(?<=%(?:3[Dd]|22|27|26|3[Aa])))A{19}(?:[A-Za-z0-9]|%2[BbFf]|%3[Dd]){1,300}/g;
+/** Where the placeholder for the kept `%` is looked for: private-use code points not present in the run. */
+const KEPT_PERCENT_FIRST = 0xe000;
+const KEPT_PERCENT_COUNT = 256;
+
+/** A code point the run does not contain, to stand in for the `%` of a kept token while the rest is decoded; undefined when every candidate is taken. */
+function freeKeptPercent(run: string): string | undefined {
+  for (let i = 0; i < KEPT_PERCENT_COUNT; i++) {
+    const candidate = String.fromCharCode(KEPT_PERCENT_FIRST + i);
+    if (!run.includes(candidate)) return candidate;
+  }
+  return undefined;
+}
+/** A cheap test before the token regex: 19 `A` in a row. */
+const TWITTER_BEARER_PRECHECK_RE = /A{19}/;
 const PERCENT_MAX_RUNS = 256;
 const PERCENT_MAX_RUN_CHARS = 1024 * 1024;
 
@@ -181,6 +202,18 @@ function endsPercentRun(code: number): boolean {
  * not text. A `%` not followed by two hex digits is kept as written.
  */
 export function decodePercentRun(run: string): string | null {
+  // A Twitter bearer in the run keeps its own escapes as written, so the pattern and its checks read the whole token (decoding cuts
+  // it at its first `+`, `/` or `=`, #1283). Only the token is kept: everything else in the run, a `%26...` after it included, is
+  // decoded and scanned as usual. The placeholder is a code point the run does not contain, so a literal one can neither hide the
+  // token nor turn into a `%`.
+  let kept: string | undefined;
+  if (run.includes("%") && TWITTER_BEARER_PRECHECK_RE.test(run)) {
+    kept = freeKeptPercent(run);
+    if (kept !== undefined) {
+      const placeholder = kept;
+      run = run.replace(TWITTER_BEARER_SHAPE_RE, (token) => (token.includes("%") ? token.replaceAll("%", placeholder) : token));
+    }
+  }
   const bytes: number[] = [];
   let escapes = 0;
   for (let i = 0; i < run.length; i++) {
@@ -201,12 +234,15 @@ export function decodePercentRun(run: string): string | null {
     }
     bytes.push(code);
   }
+  // The kept token's own escapes count: a run holding an encoded token is an encoded run.
+  if (kept !== undefined) for (const ch of run) if (ch === kept) escapes++;
   if (escapes < PERCENT_MIN_ESCAPES) return null;
   for (const byte of bytes) {
     if (!isTextByte(byte)) return null;
   }
   const decoded = Buffer.from(bytes).toString("utf8");
-  return decoded.includes("�") ? null : decoded;
+  if (decoded.includes("�")) return null;
+  return kept === undefined ? decoded : decoded.replaceAll(kept, "%");
 }
 
 /**

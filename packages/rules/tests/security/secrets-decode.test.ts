@@ -26,7 +26,7 @@ import {
 } from "../../src/security/secrets/decode";
 
 const j = (parts: string[]) => parts.join("");
-const STRIPE = j(["sk_li", "ve_"]) + "4eC39HqLyjWDarjtT1zdp7dc"; // pragma: allowlist secret
+const STRIPE = j(["sk_li", "ve_"]) + "Zq7mR2xKd9LpV4nB8cT5wY3j"; // pragma: allowlist secret
 
 function rng(seed: number) {
   let a = seed >>> 0;
