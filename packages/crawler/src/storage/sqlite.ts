@@ -4657,6 +4657,30 @@ export class SQLiteStorage implements CrawlStorage {
   }
 
   /**
+   * The URLs the crawl requested but could not store a page for (#1396): frontier entries that failed (a connection
+   * error, a rate limit, an HTTP error with no stored response) or were skipped (excluded, out of scope, blocked by
+   * robots.txt), and have no stored page. At most `limit` entries, oldest first, and the true `total`.
+   */
+  getUnstoredFrontierEntries(
+    crawlId: string,
+    limit: number,
+  ): Effect.Effect<{ entries: Array<{ url: string; status: "failed" | "skipped"; reason: string | null }>; total: number }, StorageError, never> {
+    return Effect.try({
+      try: () => {
+        const db = this.getDb();
+        const unstored =
+          "FROM frontier f WHERE f.crawl_id = ? AND f.status IN ('failed', 'skipped') AND NOT EXISTS (SELECT 1 FROM pages p WHERE p.crawl_id = f.crawl_id AND p.normalized_url = f.normalized_url)";
+        const rows = db
+          .prepare(`SELECT f.normalized_url AS url, f.status AS status, f.reason AS reason ${unstored} ORDER BY f.enqueued_at, f.normalized_url LIMIT ?`)
+          .all(crawlId, Math.max(0, Math.floor(limit))) as Array<{ url: string; status: "failed" | "skipped"; reason: string | null }>;
+        const total = (db.prepare(`SELECT COUNT(*) AS n ${unstored}`).get(crawlId) as { n: number }).n;
+        return { entries: rows, total };
+      },
+      catch: (e) => StorageError.read(e),
+    });
+  }
+
+  /**
    * Both groupings of a crawl's rule results, from ONE materialization (#1920).
    *
    * `getRuleResultsByPage` and `getRuleResultsByRuleId` differ only in their

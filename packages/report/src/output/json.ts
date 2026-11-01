@@ -124,16 +124,27 @@ function slimComponentFixGroups(
 
 /**
  * How a crawled page answered (#1260): `ok` (status under 400), `rate-limited` (429),
- * `http-error` (any other 4xx or 5xx) or `error` (no usable status). A URL whose fetch never
- * produced a stored response is not a page and is not listed.
+ * `http-error` (any other 4xx or 5xx) or `error` (no usable status). A URL the crawl requested but
+ * stored no page for is listed after the pages (#1396) as `error` (the request failed) or `skipped`
+ * (the crawl chose not to request it: excluded, another site, robots.txt), with a `reason`.
  */
-export type JsonPageOutcome = "ok" | "http-error" | "rate-limited" | "error";
+export type JsonPageOutcome = "ok" | "http-error" | "rate-limited" | "error" | "skipped";
 
 /** The {@link JsonPageOutcome} of an HTTP status. */
 export function pageOutcome(status: number): JsonPageOutcome {
   if (!Number.isInteger(status) || status < 100 || status > 599) return "error";
   if (status === 429) return "rate-limited";
   return status >= 400 ? "http-error" : "ok";
+}
+
+/**
+ * The ids of the rules that produced at least one non-skipped check, sorted (#1396): a rule whose checks were all
+ * skipped (a scan limit, a missing probe, an internal error) did not evaluate anything and is not listed.
+ */
+export function collectExecutedRules(ruleResults: Record<string, { checks: ReadonlyArray<{ status: string }> } | undefined>): string[] {
+  return Object.keys(ruleResults)
+    .filter((ruleId) => ruleResults[ruleId]?.checks.some((check) => check.status !== "skipped"))
+    .sort();
 }
 
 /** One crawled page in the opt-in `pages` list (#1260). */
@@ -146,6 +157,8 @@ export interface JsonPageRow {
   outcome: JsonPageOutcome;
   /** Distinct rules that reported on the page (skipped checks not counted). */
   ruleCount: number;
+  /** Why a URL with no stored page is listed as `error` or `skipped` (#1396). Absent on a crawled page. */
+  reason?: string;
 }
 
 export interface JsonRenderOptions {
@@ -158,6 +171,8 @@ export interface JsonRenderOptions {
    * `pagesTruncated` set.
    */
   pages?: readonly JsonPageRow[];
+  /** The real number of rows when `pages` carries fewer than there are (unstored URLs past the loaded cap), for `pagesTotal`. */
+  pagesTotal?: number;
 }
 
 interface SlimJsonReport {
@@ -412,6 +427,13 @@ interface SlimJsonReport {
    */
   infoChecks?: InfoCheck[];
   /**
+   * The rule ids that ran on this audit: rules that produced at least one non-skipped check (#1396), sorted. A rule
+   * that was fully skipped or disabled is not listed. So `issues`, `passedRules` and `skippedChecks` can be checked
+   * against it without re-reading the configuration. Empty and omitted on a report read back with `report --input`,
+   * which carries no rule results.
+   */
+  executedRules?: string[];
+  /**
    * Rules that passed: at least one passing check and no failing or warning
    * one. `scope` is the rule's own; `pages` counts distinct pages with a pass,
    * and is 0 when the pass rows carry none. Present only with
@@ -520,7 +542,8 @@ function buildSlimReport(
   report: AuditReport,
   version: string,
   includePassed: boolean,
-  pages?: readonly JsonPageRow[]
+  pages?: readonly JsonPageRow[],
+  pagesTotal?: number
 ): SlimJsonReport {
   const siteWide = siteWideContext(report);
   const categoryIssues = groupIssuesByCategory(report.ruleResults, report.checkTallies);
@@ -530,6 +553,7 @@ function buildSlimReport(
   const startRedirect = followedStartRedirect(report);
   const ignoredSummary = safeIgnored(report);
   const skippedChecks = collectSkippedChecks(report.ruleResults);
+  const executedRules = collectExecutedRules(report.ruleResults);
   const infoChecks = collectInfoChecks(report.ruleResults);
   const privateTarget = privateTargetLine(report);
   const notChecked = notCheckedRules(report);
@@ -655,9 +679,10 @@ function buildSlimReport(
             status: page.status,
             outcome: page.outcome,
             ruleCount: page.ruleCount,
+            ...(page.reason ? { reason: page.reason } : {}),
           })),
-          pagesTotal: pages.length,
-          pagesTruncated: pages.length > JSON_REPORT_PAGES.maxEntries,
+          pagesTotal: Math.max(pages.length, pagesTotal ?? 0),
+          pagesTruncated: Math.max(pages.length, pagesTotal ?? 0) > JSON_REPORT_PAGES.maxEntries,
         }
       : {}),
     issues: flattenIssuesBySeverity(categoryIssues).map((rule) => ({
@@ -800,6 +825,7 @@ function buildSlimReport(
       }),
     })),
     ...(skippedChecks.length > 0 ? { skippedChecks } : {}),
+    ...(executedRules.length > 0 ? { executedRules } : {}),
     ...(infoChecks.length > 0 ? { infoChecks } : {}),
     ...(passedRules.length > 0
       ? {
@@ -914,6 +940,6 @@ function buildSlimReport(
 
 export function renderJson(report: AuditReport, options?: JsonRenderOptions): string {
   const version = options?.version ?? "";
-  const slim = buildSlimReport(report, version, options?.includePassed ?? false, options?.pages);
+  const slim = buildSlimReport(report, version, options?.includePassed ?? false, options?.pages, options?.pagesTotal);
   return JSON.stringify(slim, null, 2);
 }
