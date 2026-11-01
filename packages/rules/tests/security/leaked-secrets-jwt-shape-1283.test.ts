@@ -1,5 +1,5 @@
-// security/leaked-secrets: a `JSON Web Token` match is reported only when it decodes to a JWT (#1283): a header that is a JSON object with a
-// string `alg` and a payload that is a JSON object. A header read in full that is not one, or a payload read in full that is JSON but not an object, is dropped; a part too long to read, or a good header over a payload that is not JSON, is reported. Synthetic values.
+// security/leaked-secrets: a `JSON Web Token` match is reported only when it decodes to a JWT (#1283): a header and a
+// payload that are JSON objects. A part within the read bound that is not a JSON object is dropped; a part too long to read, nested too deeply to parse or empty is undecided and reported. Synthetic values.
 
 import { describe, expect, test } from "bun:test";
 
@@ -26,14 +26,12 @@ describe("eyJ-shaped runs that are not JWTs are dropped", () => {
     }
   });
 
-  test("a header or payload that is JSON but not an object, a header with no alg, an alg that is not a string", () => {
+  test("a header or payload that is JSON but not an object, a header with no alg over a payload that is not JSON", () => {
     const payload = b64u({ sub: "u1", pad: "p".repeat(60) });
     const header = b64u({ alg: "HS256", typ: "JWT" });
     for (const value of [
       `${b64u(["alg", "HS256"])}.${payload}.${sig()}`,
-      `${b64u({ typ: "JWT" })}.${payload}.${sig()}`,
-      `${b64u({ alg: 256 })}.${payload}.${sig()}`,
-      `${b64u({ alg: null })}.${payload}.${sig()}`,
+      `${b64u({ typ: "JWT" })}.${"x".repeat(60)}.${sig()}`,
       `${header}.${b64u([1, 2, 3])}.${sig()}`,
       `${header}.${b64u("text")}.${sig()}`,
       `${header}.${b64u(null)}.${sig()}`,
@@ -65,8 +63,8 @@ describe("a token that cannot be read in full is reported, never dropped (fail c
     }
   });
 
-  test("a header that proves a JWS (string alg) over a payload that is not JSON is undecided, so it reports", () => {
-    expect(types(`var t="${header}.eyJ${runOf(r, URLSAFE, 60)}.${sig()}";`)).toEqual(["JSON Web Token"]);
+  test("a good header over a payload within the bound that is not JSON is proof, so it drops", () => {
+    expect(types(`var t="${header}.eyJ${runOf(r, URLSAFE, 60)}.${sig()}";`)).toEqual([]);
   });
 });
 

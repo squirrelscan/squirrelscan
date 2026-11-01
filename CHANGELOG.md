@@ -19,7 +19,7 @@ How it works:
 
 ### Fixed
 
-- **`security/leaked-secrets` stops reporting strings that only look like a JWT.** A `JSON Web Token` match was kept as a generic JWT-shaped string at medium when it did not decode. It is now dropped only on proof: a header read in full that is not a JSON object with a string `alg`, or a payload read in full that is JSON but not an object. A part past 8,192 characters, an empty or non-JSON payload under a good header, and any real JWT (`alg: none` and expired tokens included) still report. (#1283)
+- **`security/leaked-secrets` stops reporting strings that only look like a JWT.** A `JSON Web Token` match was kept as a generic JWT-shaped string at medium when it did not decode. It is now dropped only on proof: a header or payload within the 8,192-character read bound that is not a JSON object (garbage, truncated, trailing bytes, an array, a string, a number or `null`). A part past 8,192 characters, nested too deeply to parse or empty, and a header with no string `alg` over a payload that decodes (it keeps its classification, `service_role` included) still report. (#1283)
 
 ## v0.0.158 (2026-11-01)
 

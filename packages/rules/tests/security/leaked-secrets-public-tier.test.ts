@@ -54,9 +54,9 @@ describe("Shopify platform tokens (#1287)", () => {
     expect(found(`var w="${jwt({ ...wallet, scope: "admin" })}";`)).toEqual([["JSON Web Token (admin scope)", "high", false]]);
     expect(found(`var w="${jwt({ ...wallet, role: "service_role" })}";`).map((f) => f[2])).toEqual([false]);
     expect(found(`var w="${jwt({ iat: 1761000000, merchantId: "58212" })}";`)).toEqual([["JSON Web Token", "medium", false]]);
-    // `alg: none` is a string and still a token (not claimed); a header with no `alg` is not a JWT at all (#1283)
-    expect(found(`var w="${jwt(wallet, { alg: "none", typ: "JWT" })}";`)).toEqual([["JSON Web Token", "medium", false]]);
-    expect(found(`var w="${jwt(wallet, { typ: "JWT" })}";`)).toEqual([]);
+    for (const header of [{ alg: "none", typ: "JWT" }, { typ: "JWT" }]) {
+      expect(found(`var w="${jwt(wallet, header)}";`)).toEqual([["JSON Web Token", "medium", false]]);
+    }
   });
 
   describe("Shopify's platform bundles", () => {
