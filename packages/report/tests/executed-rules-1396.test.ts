@@ -142,9 +142,9 @@ describe("unstoredPageRow", () => {
   test("the reason carries no URL, query string, token, address or response text", () => {
     const secrets = [
       "Off-site redirect to https://evil.example/cb?token=sk_live_ABCDEF123456&next=/x#frag",
-      "fetch failed for https://user:pw@shop.example/a?session=deadbeefdeadbeef",
+      "fetch failed for https://user:pw@shop.example/a?session=deadbeefdeadbeef", // pragma: allowlist secret
       "HTTP 500 body: <html>Internal error: DB password=hunter2 at 10.1.2.3</html>",
-      "unexpected response: {\"error\":\"invalid api key AKIAIOSFODNN7EXAMPLE\"}",
+      "unexpected response: {\"error\":\"invalid api key AKIAIOSFODNN7EXAMPLE\"}", // pragma: allowlist secret
       `bad\u001b[2J\u202e line\n${"x".repeat(500)} https://t.example/?k=v`,
     ];
     for (const message of secrets) {
