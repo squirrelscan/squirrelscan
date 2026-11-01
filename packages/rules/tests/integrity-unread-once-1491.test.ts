@@ -47,3 +47,20 @@ test("a control cut by the logo-alt cap is counted once, with the attribute boun
   const { checks } = await run(`<a href="${OFF}" aria-label="${BIG_ATTRIBUTE}">${alts}</a>`);
   expect(unread(checks)).toBe(1);
 }, 120_000);
+
+test("two controls cut for different reasons (attribute bound, text read) are two, and a third cut by both is three", async () => {
+  const attr = `<a href="https://a.invalid/1" aria-label="${BIG_ATTRIBUTE}"><svg></svg></a>`;
+  const text = `<a href="https://a.invalid/2" aria-label="Sign in">${BIG_TEXT}</a>`;
+  const both = `<a href="https://a.invalid/3" aria-label="${BIG_ATTRIBUTE}">${BIG_TEXT}</a>`;
+  expect(unread((await run(attr + text)).checks)).toBe(2);
+  expect(unread((await run(attr + text + both)).checks)).toBe(3);
+}, 120_000);
+
+test("controls of different rank (an off-site link, a button in a form, a sign-in label) are each counted once", async () => {
+  const offSite = `<a href="https://a.invalid/1" aria-label="${BIG_ATTRIBUTE}">${BIG_TEXT}</a>`;
+  const button = `<form action="https://a.invalid/f" method="post"><button aria-label="${BIG_ATTRIBUTE}">${BIG_TEXT}</button></form>`;
+  const labelled = `<a href="/local" aria-label="${BIG_ATTRIBUTE} Sign in">${BIG_TEXT}</a>`;
+  expect(unread((await run(offSite)).checks)).toBe(1);
+  expect(unread((await run(offSite + button)).checks)).toBe(2);
+  expect(unread((await run(offSite + button + labelled)).checks)).toBe(3);
+}, 120_000);
