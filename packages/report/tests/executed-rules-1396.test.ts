@@ -93,12 +93,35 @@ describe("unstoredPageRow", () => {
     expect(unstoredPageRow({ url: "u", status: "skipped", reason: null })).toMatchObject({ outcome: "skipped", reason: "skipped" });
   });
 
-  test("a throttled request is rate-limited, any other failure keeps a cleaned, bounded message", () => {
-    expect(unstoredPageRow({ url: "u", status: "failed", reason: "Rate limited by example.com" })).toEqual({ url: "u", outcome: "error", reason: "rate-limited" });
-    expect(unstoredPageRow({ url: "u", status: "failed", reason: "connect ECONNREFUSED" })).toMatchObject({ outcome: "error", reason: "connect ECONNREFUSED" });
-    const hostile = unstoredPageRow({ url: "u", status: "failed", reason: `bad\u001b[2J‮ line\n${"x".repeat(500)}` });
-    expect(hostile.reason).not.toMatch(/[\u0000-\u001f\u007f-\u009f‮]/);
-    expect(hostile.reason.length).toBeLessThanOrEqual(203);
-    expect(unstoredPageRow({ url: "u", status: "failed", reason: null }).reason).toBe("request-failed");
+  test("a failed request is one of a fixed set of codes, never the message", () => {
+    const reason = (message: string | null) => unstoredPageRow({ url: "u", status: "failed", reason: message }).reason;
+    expect(reason("Rate limited by example.com")).toBe("rate-limited");
+    expect(reason("HTTP 503")).toBe("http-503");
+    expect(reason("connect ECONNREFUSED 10.0.0.1:443")).toBe("connection-refused");
+    expect(reason("Request timed out after 15000ms")).toBe("timeout");
+    expect(reason("getaddrinfo ENOTFOUND shop.example")).toBe("dns");
+    expect(reason("Too many redirects")).toBe("too-many-redirects");
+    expect(reason("unable to verify the first certificate")).toBe("tls");
+    expect(reason("something unexpected")).toBe("request-failed");
+    expect(reason(null)).toBe("request-failed");
+  });
+
+  test("the reason carries no URL, query string, token, address or response text", () => {
+    const secrets = [
+      "Off-site redirect to https://evil.example/cb?token=sk_live_ABCDEF123456&next=/x#frag",
+      "fetch failed for https://user:pw@shop.example/a?session=deadbeefdeadbeef",
+      "HTTP 500 body: <html>Internal error: DB password=hunter2 at 10.1.2.3</html>",
+      "unexpected response: {\"error\":\"invalid api key AKIAIOSFODNN7EXAMPLE\"}",
+      `bad\u001b[2J\u202e line\n${"x".repeat(500)} https://t.example/?k=v`,
+    ];
+    for (const message of secrets) {
+      const { reason } = unstoredPageRow({ url: "u", status: "failed", reason: message });
+      expect(reason, message).toMatch(/^[a-z0-9-]{1,40}$/);
+      for (const leak of ["//", "token", "sk_live", "session", "deadbeef", "hunter2", "10.1.2.3", "AKIA", "evil", "shop.example", "?", "#", "@", "<", "\u001b", "\u202e"]) {
+        expect(reason.toLowerCase().includes(leak.toLowerCase()), `${leak} in ${reason}`).toBe(false);
+      }
+    }
+    // A skipped entry's reason is a code too, whatever the stored text was.
+    expect(unstoredPageRow({ url: "u", status: "skipped", reason: "weird https://x.example/?a=b" }).reason).toBe("skipped");
   });
 });

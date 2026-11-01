@@ -230,7 +230,7 @@ describe("URLs with no stored page, executed rules (#1396)", () => {
     });
     expect(rows.get("/boom")).toMatchObject({
       outcome: "error",
-      reason: "connect ECONNREFUSED",
+      reason: "connection-refused",
     });
     expect(rows.get("/throttled")).toMatchObject({
       outcome: "error",
