@@ -85,6 +85,8 @@ export interface ControlScan {
   unread: number;
   /** Templates with content that the template bound left unread (not counted in `unread`). */
   templatesUnread: number;
+  /** A CSS rule that may hide text in a label was past the size bounds or the amount read: its text may be read as visible. */
+  hiddenCssTruncated: boolean;
 }
 
 const ATTR_CHARS = 300;
@@ -287,11 +289,13 @@ function isControl(el: Element): boolean {
 type Root = { querySelectorAll(selector: string): ArrayLike<Element> };
 
 /** The relevance of a control from what costs nothing to read (see {@link scanControls}). */
-export function rank(tag: string, target: string | null, extra: string[]): number {
+export function rank(tag: string, target: string | null, extra: string[], localIsOwn = true): number {
   // No destination (a script-driven button with no form): there is nothing to judge, so nothing to read.
   if (target === null) return 0;
   if (extra.some((text) => AUTH_LABEL.test(readable(text.slice(0, ATTR_CHARS))))) return 3;
   if (tag !== "a") return 2;
+  // A `<base href>` that moves the site makes every relative destination (an empty one included) another host's: read first and counted if cut.
+  if (!localIsOwn) return 2;
   // `target` is the destination as the parser reads it (see `urlText`), the same text `shortlist()` decided on, computed once per control.
   if (target && (offSiteText(target) || AUTH_PATH.test(target.slice(0, MAX_AUTH_PATH_CHARS)))) return 2;
   return 1;
@@ -385,9 +389,22 @@ const scanCache = new WeakMap<object, ControlScan>();
  * Whether a `<base href>` moves where relative URLs resolve: the first one with an `href` (what a browser uses) that is not itself a
  * plainly local path. Then `/signin` is not the page's own site, and a link or form to it is read like any other destination (#1423).
  */
+/**
+ * The `href` of the first `<base>` element a browser would use: in the HTML namespace and in the document's own tree, so not one
+ * inside `<noscript>` (not parsed as elements with scripting on), `<template>` (a separate fragment), `<svg>` or `<math>` (another
+ * namespace).
+ */
+export function documentBaseHref(doc: Document): string | null {
+  for (const base of Array.from(doc.querySelectorAll("base[href]"))) {
+    if (base.closest("noscript, template, svg, math") !== null) continue;
+    const href = getAttrCI(base, "href");
+    if (href !== null) return href;
+  }
+  return null;
+}
+
 export function baseMovesRelativeUrls(doc: Document): boolean {
-  const base = doc.querySelector("base[href]");
-  const href = base === null ? null : getAttrCI(base, "href");
+  const href = documentBaseHref(doc);
   if (href === null) return false;
   const text = urlText(href);
   return !(text === "" || PLAIN_LOCAL_HREF.test(text));
@@ -522,7 +539,8 @@ export function scanControls(doc: Document): ControlScan {
     const form = enclosingForm(el);
     return form ? (getAttrCI(form, "action") ?? "") : null;
   };
-  const { chosen, cut: notPrepared } = shortlist(found, destinationOf, (el) => imageAlts.has(el), !baseMovesRelativeUrls(doc));
+  const localIsOwn = !baseMovesRelativeUrls(doc);
+  const { chosen, cut: notPrepared } = shortlist(found, destinationOf, (el) => imageAlts.has(el), localIsOwn);
   // Controls whose attribute text or `aria-labelledby` list was longer than what is read, or that a window cap cut: counted, not hidden.
   let paddedAttributes = 0;
   // Phase 1: each control's attribute windows, and whether an attribute holds a sign-in or brand word as written (a
@@ -607,7 +625,7 @@ export function scanControls(doc: Document): ControlScan {
     if (count < want.length) item.cut = true;
     if (item.cut) paddedAttributes++;
     const extra = [...item.windows.flatMap((windows) => windows.slice(0, 1)), ...taken];
-    return { element: item.element, href: item.href, extra, rank: rank(item.tag, item.target, extra) };
+    return { element: item.element, href: item.href, extra, rank: rank(item.tag, item.target, extra, localIsOwn) };
   });
   // The window arrays are not needed past this point: free them before the reads below.
   gathered.length = 0;
@@ -650,7 +668,7 @@ export function scanControls(doc: Document): ControlScan {
       squashed: [...new Set(labels.map((l) => l.replace(/ /g, "")))],
     };
   });
-  const scan = { controls, unread, templatesUnread: templatesCut };
+  const scan = { controls, unread, templatesUnread: templatesCut, hiddenCssTruncated: hiddenBy.truncated };
   scanCache.set(doc, scan);
   return scan;
 }
