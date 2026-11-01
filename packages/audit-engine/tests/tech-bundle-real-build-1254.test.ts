@@ -13,7 +13,7 @@ import { buildTechInputs, detectReportTechnologiesMulti } from "../src/technolog
 const REF = "abcdefghijklmnopqrst";
 // Key-shaped values are assembled at run time so no literal sits in this file.
 const JWT = ["eyJ", "x".repeat(60)].join("");
-const CLERK_KEY = ["pk_", "test_", "Y2xlcmsuZXhhbXBsZS5pbnZhbGlkJA".repeat(2)].join("");
+const CLERK_KEY = ["pk_", "test_", btoa("clerk.example.invalid$")].join("");
 
 let dir: string;
 beforeAll(() => {
@@ -136,7 +136,7 @@ describe("alignment sweep: string-heavy code before the config", () => {
   const REF = "abcdefghijklmnopqrst";
   const apps: Record<string, [string, string]> = {
     firebase: [`var cfg={apiKey:"k",authDomain:"demo-app.firebaseapp.com",projectId:"p"};`, "firebase"],
-    clerk: [`var p={publishableKey:"${["pk_", "test_", "Y2xlcmsuZXhhbXBsZS5pbnZhbGlkJA".repeat(2)].join("")}"};`, "clerk"],
+    clerk: [`var p={publishableKey:"${CLERK_KEY}"};`, "clerk"],
     supabase: [`var c=tg("https://${REF}.supabase.co","${["eyJ", "x".repeat(60)].join("")}");`, "supabase"],
   };
   for (const [name, [app, id]] of Object.entries(apps)) {
@@ -163,7 +163,7 @@ describe("alignment sweep: string-heavy code before the config", () => {
   });
 
   test("clerk with 0..20 decoy pk_test_ fragments spread before the real key", () => {
-    const key = ["pk_", "test_", "Y2xlcmsuZXhhbXBsZS5pbnZhbGlkJA".repeat(2)].join("");
+    const key = CLERK_KEY;
     const misses: number[] = [];
     for (let decoys = 0; decoys <= 20; decoys++) {
       let code = UNIT.repeat(Math.ceil(90_000 / UNIT.length));
