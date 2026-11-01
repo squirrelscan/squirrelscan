@@ -1,5 +1,5 @@
 import { assertCollectedTags } from "../collected-tags";
-import type { Detector } from "../types";
+import type { Detector, ScriptMatchValidator } from "../types";
 
 // Lazy, up to the next script tag open or close: each body is scanned once, so a
 // flood of unclosed tags stays linear, and a config far into a big blob still matches.
@@ -34,8 +34,12 @@ export function inScript(bodySource: string, requires: string): Detector {
  * `source` in a fetched first-party bundle, as code: not inside a comment or a
  * string literal, so a docs snippet or a commented-out call does not match.
  */
-export function inBundle(source: string, hint: string): Detector {
-  return { type: "script-content", pattern: new RegExp(source), inCode: true, hint };
+export function inBundle(
+  source: string,
+  hint: string,
+  validate?: ScriptMatchValidator,
+): Detector {
+  return { type: "script-content", pattern: new RegExp(source), inCode: true, hint, validate };
 }
 
 /**
