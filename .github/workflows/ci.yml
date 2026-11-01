@@ -162,20 +162,22 @@ jobs:
   # required status check in the repo ruleset; renaming it means updating the
   # ruleset in the same change or every PR blocks on a check that never reports.
   #
-  # Wall time, measured on run 33955204147 (400 files, 251.6s total):
-  #   audit-engine 143.0s · crawler 60.9s · cli 24.5s · rest 20.4s
-  #   rules 2.5s · report 0.2s
-  # Sequential steps keep that total unchanged. Cheapest first, so a fast suite
-  # still reports if the slow one exhausts timeout-minutes. A parallel matrix
-  # would cut the job to ~160s but renames the check per suite, hence a ruleset
-  # edit; not worth it for one job on the critical path.
+  # Wall time, measured on main run 41308096807 (job total 23m, cap 25m; #1518):
+  #   apps/cli 603s · audit-engine 372s · rules 143s · rest 125s · crawler 121s
+  #   report 2s, plus about 20s of checkout and setup per job
+  # One job ran them back to back and sat 2 minutes under the cap (a PR run hit
+  # 24m54s; five runs were cancelled at the cap and showed as failed checks). The
+  # suites now run as two parallel jobs of about 12 and 11 minutes, grouped so
+  # each is balanced, and "CLI tests" is a small aggregate job that needs both and
+  # fails unless both passed. The required status check keeps its name and its
+  # job id (`build` needs it), so the ruleset needs no edit. Every suite still
+  # runs once: `scripts/test-suites.ts --check` in the quality job fails if a
+  # test file belongs to no suite or ci.yml has no `--run` step for a suite, in
+  # whichever job the step sits.
   # ---------------------------------------------------------------------------
-  cli-tests:
-    name: CLI tests
+  cli-tests-app:
+    name: CLI tests (apps/cli and crawler)
     needs: quality
-    # Explicit, not the implicit success(): that also looks at `changes`, so a
-    # dead classifier would skip this job (and pass its required check) even
-    # though quality, failing open, ran.
     if: ${{ !cancelled() && needs.quality.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -185,25 +187,54 @@ jobs:
         uses: ./.github/actions/setup-bun
       # Every suite runs even when an earlier one is red, the way the single bare
       # `bun test` reported every failure at once; each still fails the job. The
-      # setup guard keeps a broken toolchain to one red step instead of six.
+      # setup guard keeps a broken toolchain to one red step instead of several.
       - name: Report tests
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         run: bun run scripts/test-suites.ts --run report
-      - name: Rules tests
-        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
-        run: bun run scripts/test-suites.ts --run rules
-      - name: Remaining package and script tests
-        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
-        run: bun run scripts/test-suites.ts --run rest
       - name: apps/cli tests
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         run: bun run scripts/test-suites.ts --run cli
       - name: Crawler tests
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         run: bun run scripts/test-suites.ts --run crawler
+
+  cli-tests-packages:
+    name: CLI tests (rules, engine and the rest)
+    needs: quality
+    if: ${{ !cancelled() && needs.quality.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: setup
+        uses: ./.github/actions/setup-bun
+      - name: Rules tests
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: bun run scripts/test-suites.ts --run rules
+      - name: Remaining package and script tests
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: bun run scripts/test-suites.ts --run rest
       - name: Audit engine tests
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         run: bun run scripts/test-suites.ts --run audit-engine
+
+  # The required status check. Skipped exactly when the old single job was (quality
+  # not green); otherwise it passes only when both test jobs passed, so a cancelled
+  # or skipped half is a red check, never a green one.
+  cli-tests:
+    name: CLI tests
+    needs: [quality, cli-tests-app, cli-tests-packages]
+    if: ${{ !cancelled() && needs.quality.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Both test jobs passed
+        env:
+          APP: ${{ needs.cli-tests-app.result }}
+          PACKAGES: ${{ needs.cli-tests-packages.result }}
+        run: |
+          echo "apps/cli and crawler: $APP; rules, engine and the rest: $PACKAGES"
+          [ "$APP" = success ] && [ "$PACKAGES" = success ]
 
   installer-scripts:
     name: Installer script syntax
