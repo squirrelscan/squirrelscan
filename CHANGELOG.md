@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **`integrity/brand-impersonation` no longer spares a sign-in link to a broker's authorize URL that does not name the provider.** A "Continue with Google" or "Continue with Microsoft" control to an Auth0, Okta, Cognito, Supabase or Firebase authorize endpoint was treated as a real integration on the path alone, but those hosts let anyone register a tenant and a tenant controls its hosted login page. The query must now name the provider the label does (`connection`, `idp`, `identity_provider`, `provider`, `providerId`); a bare authorize URL or another provider is reported like any off-brand host. (#1494)
+
 ## v0.0.154 (2026-11-01)
 
 Technology detection reads a long `next/script` snippet in a Next.js flight payload again, and a page of unclosed tags no longer makes it take tens of seconds. `url/slug-convention` and `perf/total-byte-weight` count the same pages on both engines when a crawl has bodiless 4xx or 5xx pages, and `integrity/brand-impersonation` keeps reading long attribute labels on a page padded to starve it.

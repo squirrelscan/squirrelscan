@@ -83,13 +83,13 @@ test("a label in Cyrillic look-alikes or fullwidth letters is matched after norm
 
 test("a broker's authorize endpoint is not impersonation for Google or Microsoft; the three Microsoft hosts are legitimate", () => {
   for (const host of [
-    "https://tenant.auth0.com/authorize?client_id=x",
-    "https://tenant.okta.com/oauth2/v1/authorize?client_id=x",
-    "https://tenant.okta.com/oauth2/default/v1/authorize?client_id=x",
-    "https://tenant.oktapreview.com/oauth2/v1/authorize",
-    "https://tenant.auth.eu-west-1.amazoncognito.com/oauth2/authorize?client_id=x",
+    "https://tenant.auth0.com/authorize?client_id=x&connection=google-oauth2",
+    "https://tenant.okta.com/oauth2/v1/authorize?client_id=x&idp=0oa1b2c3d4",
+    "https://tenant.okta.com/oauth2/default/v1/authorize?client_id=x&idp=0oa1b2c3d4",
+    "https://tenant.oktapreview.com/oauth2/v1/authorize?idp=0oa1b2c3d4",
+    "https://tenant.auth.eu-west-1.amazoncognito.com/oauth2/authorize?client_id=x&identity_provider=Google",
     "https://project.supabase.co/auth/v1/authorize?provider=google",
-    "https://project.firebaseapp.com/__/auth/handler",
+    "https://project.firebaseapp.com/__/auth/handler?providerId=google.com",
   ]) {
     expect(brand(`<a href="${host}">Sign in with Google</a>`), host).toBeNull();
   }
@@ -298,4 +298,53 @@ test("one attribute full of repeated sign-in text does not spend the window cap 
   const label = `${repeated}${"a".repeat(3_000)} Sign in with Google ${"a".repeat(300)} ${"sign in ".repeat(250)}`;
   expect(label.length).toBeLessThan(16_000);
   for (const [, control] of ATTRIBUTE_CONTROLS) expect(brand(control(label))).toBe("Google");
+});
+
+// ── a broker's authorize endpoint must name the provider (#1494) ─────────────────────────────────────────────
+
+const BROKER_BARE = [
+  "https://t1.auth0.com/authorize",
+  "https://t1.auth0.com/authorize?client_id=x&redirect_uri=https%3A%2F%2Fapp.example%2Fcb",
+  "https://t1.okta.com/oauth2/v1/authorize?client_id=x",
+  "https://t1.oktapreview.com/oauth2/default/v1/authorize",
+  "https://t1.auth.eu-west-1.amazoncognito.com/oauth2/authorize?client_id=x",
+  "https://t1.supabase.co/auth/v1/authorize",
+  "https://t1.firebaseapp.com/__/auth/handler",
+];
+const BROKER_OTHER_PROVIDER = [
+  "https://t1.auth0.com/authorize?connection=github",
+  "https://t1.auth0.com/authorize?connection=google-oauth2.evil",
+  "https://t1.auth0.com/authorize?redirect_uri=connection%3Dgoogle-oauth2",
+  "https://t1.auth.eu-west-1.amazoncognito.com/oauth2/authorize?identity_provider=Facebook",
+  "https://t1.supabase.co/auth/v1/authorize?provider=github",
+  "https://t1.firebaseapp.com/__/auth/handler?providerId=github.com",
+  "https://t1.okta.com/oauth2/v1/authorize?idp=",
+];
+
+test.each([["Google", "Continue with Google"], ["Google", "Sign in with Google"], ["Microsoft", "Continue with Microsoft"]])(
+  "a broker authorize link for %s that does not name the provider is off-brand ('%s')",
+  (expected, label) => {
+    for (const href of [...BROKER_BARE, ...BROKER_OTHER_PROVIDER]) {
+      expect(brand(`<a href="${href}" aria-label="${label}"><svg></svg></a>`), href).toBe(expected);
+      expect(brand(`<a href="${href}">${label}</a>`), href).toBe(expected);
+    }
+  },
+);
+
+test("a broker authorize link naming Microsoft is spared for a Microsoft label and not for a Google one", () => {
+  const microsoft = [
+    "https://t1.auth0.com/authorize?connection=windowslive",
+    "https://t1.auth.eu-west-1.amazoncognito.com/oauth2/authorize?identity_provider=Microsoft",
+    "https://t1.supabase.co/auth/v1/authorize?provider=azure",
+    "https://t1.firebaseapp.com/__/auth/handler?providerId=microsoft.com",
+  ];
+  for (const href of microsoft) {
+    expect(brand(`<a href="${href}">Continue with Microsoft</a>`), href).toBeNull();
+    expect(brand(`<a href="${href}">Continue with Google</a>`), href).toBe("Google");
+  }
+});
+
+test("the same shape on a plain off-brand host and on the broker without a hint are treated alike", () => {
+  expect(brand(`<a href="https://shop-login.example/authorize" aria-label="Continue with Google"><svg></svg></a>`)).toBe("Google");
+  expect(brand(`<a href="https://t1.auth0.com/authorize" aria-label="Continue with Google"><svg></svg></a>`)).toBe("Google");
 });

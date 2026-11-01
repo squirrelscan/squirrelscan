@@ -169,6 +169,15 @@ function hrefPath(raw: string | null, base: string): string {
   }
 }
 
+function hrefQuery(raw: string | null, base: string): string {
+  if (!raw) return "";
+  try {
+    return new URL(raw, base).search;
+  } catch {
+    return "";
+  }
+}
+
 function hrefHost(raw: string | null, base: string): string | null {
   if (!raw) return null;
   try {
@@ -186,28 +195,56 @@ function hrefHost(raw: string | null, base: string): string | null {
  * proves nothing; only the endpoint shape does, and only for the two providers brokers federate. Other
  * brands, and any other path on these hosts, are judged as before.
  */
-const IDENTITY_BROKER_ENDPOINTS: Array<{ host: string; path: RegExp }> = [
-  { host: "auth0.com", path: /^\/authorize(?:\/|$)/ },
-  { host: "okta.com", path: /^\/oauth2\/(?:[\w.-]+\/)?v1\/authorize(?:\/|$)|^\/oauth2\/authorize(?:\/|$)/ },
-  { host: "oktapreview.com", path: /^\/oauth2\/(?:[\w.-]+\/)?v1\/authorize(?:\/|$)|^\/oauth2\/authorize(?:\/|$)/ },
-  { host: "okta-emea.com", path: /^\/oauth2\/(?:[\w.-]+\/)?v1\/authorize(?:\/|$)|^\/oauth2\/authorize(?:\/|$)/ },
-  { host: "amazoncognito.com", path: /^\/oauth2\/authorize(?:\/|$)/ },
-  { host: "supabase.co", path: /^\/auth\/v1\/authorize(?:\/|$)/ },
-  { host: "firebaseapp.com", path: /^\/__\/auth\/handler(?:\/|$)/ },
+/** The provider names a broker's own query uses, for Google and for Microsoft (`google-oauth2`, `windowslive`, `azure`, ...). */
+const PROVIDER_NAMES: Record<string, RegExp> = {
+  Google: /^google(?:[-_.]?(?:oauth2|workspace|apps|com))?$/i,
+  Microsoft: /^(?:windowslive|windows-live|microsoft(?:account)?|azure(?:ad|-ad)?|azuread(?:-oauth2)?|office365|microsoftonline|live)(?:-oauth2)?(?:\.com)?$/i,
+};
+/** A query parameter of the endpoint names the provider the control's label does. */
+const names = (param: string) => (query: URLSearchParams, brand: string): boolean => {
+  const pattern = PROVIDER_NAMES[brand];
+  return pattern !== undefined && query.getAll(param).some((value) => pattern.test(value.trim()));
+};
+/** Okta names a configured identity provider by an opaque id: the parameter must be there, its value cannot be read as a provider. */
+const hasIdp = (query: URLSearchParams): boolean => query.getAll("idp").some((value) => value.trim() !== "");
+
+const OKTA_PATH = /^\/oauth2\/(?:[\w.-]+\/)?v1\/authorize(?:\/|$)|^\/oauth2\/authorize(?:\/|$)/;
+const IDENTITY_BROKER_ENDPOINTS: Array<{ host: string; path: RegExp; hint: (query: URLSearchParams, brand: string) => boolean }> = [
+  { host: "auth0.com", path: /^\/authorize(?:\/|$)/, hint: names("connection") },
+  { host: "okta.com", path: OKTA_PATH, hint: hasIdp },
+  { host: "oktapreview.com", path: OKTA_PATH, hint: hasIdp },
+  { host: "okta-emea.com", path: OKTA_PATH, hint: hasIdp },
+  { host: "amazoncognito.com", path: /^\/oauth2\/authorize(?:\/|$)/, hint: names("identity_provider") },
+  { host: "supabase.co", path: /^\/auth\/v1\/authorize(?:\/|$)/, hint: names("provider") },
+  { host: "firebaseapp.com", path: /^\/__\/auth\/handler(?:\/|$)/, hint: names("providerId") },
 ];
 
 /** The brands an identity broker can legitimately stand in for. */
 const BROKERED_BRANDS = new Set(["Google", "Microsoft"]);
 
-function isBrokerEndpoint(brand: string, host: string, path: string): boolean {
+/**
+ * A control to a broker's authorize endpoint that names the provider the label does. The hosts are open to anyone who
+ * registers a tenant and a tenant can serve the path, so the path alone proves nothing: a bare authorize URL (the
+ * broker's hosted login page, which the tenant owner controls) or one naming another provider is judged like any
+ * other off-brand host (#1494).
+ */
+function isBrokerEndpoint(brand: string, host: string, path: string, query: string): boolean {
   if (!BROKERED_BRANDS.has(brand)) return false;
-  return IDENTITY_BROKER_ENDPOINTS.some((e) => hostMatches(host, [e.host]) && e.path.test(path));
+  let params: URLSearchParams;
+  try {
+    params = new URLSearchParams(query);
+  } catch {
+    return false;
+  }
+  return IDENTITY_BROKER_ENDPOINTS.some((e) => hostMatches(host, [e.host]) && e.path.test(path) && e.hint(params, brand));
 }
 
 interface CredentialDestination {
   host: string;
   /** The destination's path (no query or fragment), for the broker endpoint shape. */
   path: string;
+  /** The destination's query string, for the provider a broker endpoint names. */
+  query: string;
   brandLabeled: string;
   signIn: boolean;
 }
@@ -256,7 +293,7 @@ function credentialDestinations(
     if (!form.querySelector('input[type="password"]')) continue;
     const action = getAttrCI(form, "action");
     const host = hrefHost(action, base) ?? hrefHost(base, base);
-    if (host) out.push({ host, path: hrefPath(action, base), brandLabeled: "", signIn: false });
+    if (host) out.push({ host, path: hrefPath(action, base), query: hrefQuery(action, base), brandLabeled: "", signIn: false });
   }
 
   // Auth-labeled controls: only those whose own label is a sign-in affordance (wording in ./cues).
@@ -279,7 +316,7 @@ function credentialDestinations(
     // "Continue with Google" is the provider's own button wording: a control that names the brand in an
     // "<action> with <brand>" phrase is a sign-in affordance by itself.
     const signIn = providerButton || labels.some((label) => SIGN_IN_LABEL.test(label));
-    out.push({ host, path: hrefPath(control.href, base), brandLabeled: brand, signIn });
+    out.push({ host, path: hrefPath(control.href, base), query: hrefQuery(control.href, base), brandLabeled: brand, signIn });
   }
 
   return out;
@@ -335,7 +372,7 @@ export function detectBrandImpersonation(
     const offBrandDests = credDests.filter(
       (d) =>
         !hostMatches(d.host, spec.legitHosts) &&
-        !isBrokerEndpoint(spec.brand, d.host, d.path) &&
+        !isBrokerEndpoint(spec.brand, d.host, d.path, d.query) &&
         !isSelfOrSameSite(d.host, self)
     );
     const brandLabeledOffBrand = offBrandDests.filter(
