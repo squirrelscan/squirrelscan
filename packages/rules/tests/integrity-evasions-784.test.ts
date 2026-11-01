@@ -756,8 +756,8 @@ const coversUnder = (reading: Reading, style: string, sheet = ""): boolean => {
   const { doc, frame } = frameOf(`${sheet}<iframe id="google-auth" srcdoc="" style="${style.replaceAll('"', "&quot;")}"></iframe>`);
   return isCover(overlayGeometryFor(doc, frame, reading));
 };
-const BASE = "position:fixed;top:0;left:0;z-index:99999";
-const GEOM = `${BASE};width:100vw;height:100vh`;
+const OVERLAY_BASE = "position:fixed;top:0;left:0;z-index:99999";
+const GEOM = `${OVERLAY_BASE};width:100vw;height:100vh`;
 
 test("declarations are read by three readings and a frame is a cover when any of them says so (#1496)", () => {
   const frame = (style: string) => `<iframe id="google-auth" srcdoc="" style="${style.replaceAll('"', "&quot;")}"></iframe>`;
@@ -770,8 +770,8 @@ test("declarations are read by three readings and a frame is a cover when any of
     `--x:[;]; ${GEOM}`,
     `content:"\\""; ${GEOM}`,
     `content:"\\"/*"; ${GEOM}`,
-    `${BASE}; width:/*;*/100vw; height:100vh`,
-    `${BASE}; width:100vw/**/; height:100vh`,
+    `${OVERLAY_BASE}; width:/*;*/100vw; height:100vh`,
+    `${OVERLAY_BASE}; width:100vw/**/; height:100vh`,
     `a\\/*b:c; ${GEOM}`,
     // the declaration list a browser would not read past, and the ones it would
     `a:(]; ${GEOM}`,
@@ -780,8 +780,8 @@ test("declarations are read by three readings and a frame is a cover when any of
     `a:( ; ${GEOM}`,
     `a:calc((1); ${GEOM}`,
     `a:url( ; ${GEOM}`,
-    `${BASE}; width:100vw; /* height:100vh`,
-    `${BASE}; height:100vh; content:"x; width:100vw`,
+    `${OVERLAY_BASE}; width:100vw; /* height:100vh`,
+    `${OVERLAY_BASE}; height:100vh; content:"x; width:100vw`,
     `a:u\\72 l(/*); ${GEOM}`,
     `a:URL(/*); ${GEOM}`,
     `a:\\55 RL(/*); ${GEOM}`,
@@ -797,7 +797,7 @@ test("declarations are read by three readings and a frame is a cover when any of
   }
   // a closer with nothing open is an ordinary token; balanced blocks do not swallow
   for (const ok of ["a:)", "a:]", "a:}", "}", ")", "a:(b;c)", "a:[;]", "a:{;}", "a:calc((1))", "a:url( ; )", "a:xurl(/*c*/)"]) {
-    expect(detectFakeAuthOverlay(context(frame(`${BASE}; ${ok}; width:100vw; height:100vh`))), ok).not.toBeNull();
+    expect(detectFakeAuthOverlay(context(frame(`${OVERLAY_BASE}; ${ok}; width:100vw; height:100vh`))), ok).not.toBeNull();
   }
 });
 
@@ -844,7 +844,7 @@ test("a style rule is cut at its own closing brace, past strings, comments and b
 });
 
 test("the union reading is a superset of the plain split on random mixes (#1496)", () => {
-  const pieces = ['"', "'", "/*", "*/", ";", "(", ")", "[", "]", "{", "}", "\\", "&#13;", "&#10;", "url(", "URL(", "a", ":", " ", GEOM, "width:100vw", "height:100vh", BASE];
+  const pieces = ['"', "'", "/*", "*/", ";", "(", ")", "[", "]", "{", "}", "\\", "&#13;", "&#10;", "url(", "URL(", "a", ":", " ", GEOM, "width:100vw", "height:100vh", OVERLAY_BASE];
   let seed = 424242;
   const next = (): number => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
   let plainOnly = 0;
@@ -1090,7 +1090,7 @@ function mainCover(doc: NonNullable<RuleContext["parsed"]["document"]>, frame: E
 
 test("the union is a superset of the old reading on random attribute and stylesheet mixes", () => {
   const mixes = Number(process.env.OVERLAY_MIXES ?? 30_000);
-  const pieces = ['"', "'", "/*", "*/", ";", "(", ")", "[", "]", "{", "}", "\\", "\\\n", "&#13;", "&#10;", "&#12;", "\u0000", "\u2028", "\ufeff", "\u00a0", "\ud800", "url(", "URL(", "@media{", "@import ", "a", ":", " ", GEOM, "width:100vw", "height:100vh", "width:100%x", "height:100%", BASE, "!important", "position:fixed", "z-index:99999", "top:0", "left:0", "x100%", "\\70 osition"];
+  const pieces = ['"', "'", "/*", "*/", ";", "(", ")", "[", "]", "{", "}", "\\", "\\\n", "&#13;", "&#10;", "&#12;", "\u0000", "\u2028", "\ufeff", "\u00a0", "\ud800", "url(", "URL(", "@media{", "@import ", "a", ":", " ", GEOM, "width:100vw", "height:100vh", "width:100%x", "height:100%", OVERLAY_BASE, "!important", "position:fixed", "z-index:99999", "top:0", "left:0", "x100%", "\\70 osition"];
   let seed = 20241101;
   const next = (): number => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
   const mix = (): string => {
