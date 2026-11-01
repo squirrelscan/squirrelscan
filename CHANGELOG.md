@@ -19,7 +19,7 @@ How it works:
 
 ### Fixed
 
-- **`security/leaked-secrets` distinguishes admin-named hosted-search keys from search-only keys.** A 32-character Algolia or Typesense-shaped value under `search_admin_api_key`, `adminApiKey` or `admin_api_key` reports at high; `search_api_key` stays medium with the search-only hint. Meilisearch `masterKey` reports at high and `searchKey` at medium with the hint. See [leaked-secrets](https://docs.squirrelscan.com/rules/security/leaked-secrets#public-by-design-platform-tokens-and-beacons). (#1515)
+- **`security/leaked-secrets` distinguishes admin-named hosted-search keys from search-only keys.** A 32-character value (Algolia and Typesense shape) under `search_admin_api_key`, `adminApiKey` or `admin_api_key` reports at high, and a `master_api_key` name at any length; `search_api_key` stays medium with the search-only hint. Meilisearch `masterKey` reports at high and `searchKey` at medium with the hint, only when `meili` appears in the name or in the 120 characters before it. A placeholder such as `YOUR_MASTER_KEY_GOES_HERE` is not reported, and a one-word `search_apikey` name is read as before. See [leaked-secrets](https://docs.squirrelscan.com/rules/security/leaked-secrets#public-by-design-platform-tokens-and-beacons). (#1515)
 
 ## v0.0.158 (2026-11-01)
 

@@ -987,7 +987,7 @@ export const CONTEXT_PATTERNS: ContextPattern[] = [
 // couple of non-alphanumerics in front of the word (#2218). Next.js's own
 // `%filtered%` needs no entry: isPercentEncodedLabel already reads it.
 const PLACEHOLDER_WORDS =
-  "placeholder|your[_-]?api[_-]?key|test[_-]?key|demo[_-]?key|sample|dummy|fake|redacted";
+  "placeholder|your[_-]?api[_-]?key|your[_-]?(?:master|search|admin)[_-]?key|(?:master|search|admin)[_-]?key[_-]?placeholder|test[_-]?key|demo[_-]?key|sample|dummy|fake|redacted";
 const FALSE_POSITIVE_PATTERNS = [
   // Google tag IDs (GTM containers, GA4/UA measurement IDs, Ads/DC tags)
   // are public identifiers — never secrets, whatever pattern caught them
@@ -2371,17 +2371,22 @@ function isSearchKeyName(key: string): boolean {
   const words = keyWords(key);
   // `searchAdminApiKey` is the admin key of a search product, not its
   // browser key: the name has to say search and nothing privileged.
-  return words.includes("search") && !words.some((w) => PRIVILEGED_KEY_WORDS.includes(w));
+  return (words.includes("search") || words.includes("searchkey")) && !words.some((w) => PRIVILEGED_KEY_WORDS.includes(w));
 }
 
 function isAdminSearchProviderKey(key: string, value: string): boolean {
   const words = keyWords(key);
-  return words.includes("master") || (SEARCH_PROVIDER_KEY_SHAPE_RE.test(value) && words.includes("admin"));
+  return words.includes("master") || words.includes("masterkey") || (SEARCH_PROVIDER_KEY_SHAPE_RE.test(value) && words.includes("admin"));
 }
 
+// A name that is only the scope word and `key`: Meilisearch's `masterKey` and
+// `searchKey`, in any spelling (`MASTER_KEY`, `masterkey`, `SEARCHKEY`). A name
+// that also says `api`, in two words or one (`search_apikey`), is a provider
+// `*_api_key` name and is read by the generic detector as before.
 function isBareSearchScopeKey(key: string): boolean {
   const words = keyWords(key);
-  return !words.includes("api") && (words.includes("search") || words.includes("master"));
+  if (words.some((w) => w === "api" || w === "apikey")) return false;
+  return words.some((w) => w === "search" || w === "master" || w === "searchkey" || w === "masterkey");
 }
 
 function hasMeilisearchContext(content: string, index: number, key: string): boolean {
