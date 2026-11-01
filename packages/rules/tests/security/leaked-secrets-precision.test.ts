@@ -209,7 +209,8 @@ describe("provider tokens: a substring of a longer value is not the provider's t
   test("positive controls: the same shapes delimited on both sides keep the provider's name", () => {
     expect(reported(script(`var c={k:"key-${mailgunBody}"};`))).toEqual([["leaked-secrets-high", "Mailgun API Key"]]);
     expect(reported(script(`var c={sid:"AC${twilioBody}"};`))).toEqual([["leaked-secrets-high", "Twilio Account SID"]]);
-    expect(reported(script(`var c={id:"${awsKey}"};`))).toEqual([["leaked-secrets-high", "AWS Access Key ID"]]);
+    // Alone the id is the public half of the pair: medium, still in the output (#1294).
+    expect(reported(script(`var c={id:"${awsKey}"};`))).toEqual([["leaked-secrets-medium", "AWS Access Key ID"]]);
     expect(reported(script(`var c={t:"${github}"};`))).toEqual([["leaked-secrets-high", "GitHub Personal Access Token"]]);
   });
 });
