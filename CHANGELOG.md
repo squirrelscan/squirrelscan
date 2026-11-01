@@ -19,6 +19,8 @@ How it works:
 
 ### Fixed
 
+- **A Next.js loader written as a bare script child is read when its component is `next/script` elsewhere on the page.** A page uses one component reference for every use, and a real layout passes a Clarity loader as `{ type: "text/javascript", children: "..." }` with no `id` and no `strategy` beside two uses of the same reference that carry them. Once any use of a reference has one of `next/script`'s four strategies, every use of it is read as a script; a reference never seen with a strategy is not, so a component that merely displays a code sample is still dropped. (#1487)
+
 - **A real Firebase, Supabase or Clerk config deep in a whole bundle is found past any number of look-alike strings.** An `inCode` detector gave up after 64 pattern matches that started inside strings, and a whole bundle (the local scan reads one up to 8 MB) holds far more than a 256 KB head: docs text, error messages and vendor snippets that quote a config. The search now continues past the string a match was in, so many mentions in one string are one candidate, and the bound is 4,096. A config that only appears in strings and comments is still not detected, and one that comes after more than 4,095 such matches is still missed, with no truncation signal. (#1422)
 
 ### Added
