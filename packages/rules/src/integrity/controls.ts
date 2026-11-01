@@ -496,7 +496,7 @@ export function scanControls(doc: Document): ControlScan {
   };
   const { chosen, cut: notPrepared } = shortlist(found, destinationOf, (el) => imageAlts.has(el));
   // Controls whose attribute text or `aria-labelledby` list was longer than what is read, or that a window cap cut: counted, not hidden.
-  let paddedAttributes = 0;
+  const cutControls = new Set<number>();
   // Phase 1: each control's attribute windows, and whether an attribute holds a sign-in or brand word as written (a
   // cheap test on the raw text; a look-alike spelling misses it and is served in the second tier, never skipped).
   const gathered = chosen.map(({ element, href, target, order }) => {
@@ -577,7 +577,7 @@ export function scanControls(doc: Document): ControlScan {
     // The first windows it was served and the last: padding is at the ends as often as in the middle.
     const taken = count >= want.length ? want : count === 0 ? [] : [...want.slice(0, count - 1), want[want.length - 1]!];
     if (count < want.length) item.cut = true;
-    if (item.cut) paddedAttributes++;
+    if (item.cut) cutControls.add(index);
     const extra = [...item.windows.flatMap((windows) => windows.slice(0, 1)), ...taken];
     return { element: item.element, href: item.href, extra, rank: rank(item.tag, item.target, extra) };
   });
@@ -596,7 +596,6 @@ export function scanControls(doc: Document): ControlScan {
   const reads: Array<ReturnType<typeof readChunks> | undefined> = Array.from({ length: prepared.length });
   let spend = TOTAL_VISITS;
   let longBudget = LONG_BUDGET_VISITS;
-  let unread = notPrepared + paddedAttributes;
   for (const [position, i] of order.entries()) {
     const item = prepared[i]!;
     const allowance = Math.min(SHORT_VISITS, Math.max(MIN_ALLOWANCE, Math.floor(spend / (order.length - position))));
@@ -607,8 +606,10 @@ export function scanControls(doc: Document): ControlScan {
       longBudget -= read.visits;
     }
     reads[i] = read;
-    if (read.cut && item.rank >= 2) unread++;
+    // A control counts once, whichever of its bounds it hit: its attributes, its window caps and its text read share one entry.
+    if (read.cut && item.rank >= 2) cutControls.add(i);
   }
+  const unread = notPrepared + cutControls.size;
 
   const controls = prepared.map((item, i) => {
     const read = reads[i];

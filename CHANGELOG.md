@@ -19,6 +19,8 @@ How it works:
 
 ### Fixed
 
+- **`integrity/brand-impersonation` counts a control once in `controlsUnread`.** A control that hit more than one bound (an attribute over 16,000 characters, more cue windows than the cap, a text read cut at its visit allowance) was counted once for its attributes and again for its text read, so `details.controlsUnread` could exceed the page's controls. Each control now counts at most once; controls cut by the prepared-controls cap, the logo-alt cap and the templates are still counted. (#1491)
+
 - **`security/leaked-secrets` distinguishes admin-named hosted-search keys from search-only keys.** A 32-character value (Algolia and Typesense shape) under `search_admin_api_key`, `adminApiKey` or `admin_api_key` reports at high, and a `master_api_key` name at any length; `search_api_key` stays medium with the search-only hint. Meilisearch `masterKey` reports at high and `searchKey` at medium with the hint, only when `meili` appears in the name or in the 120 characters before it. A placeholder such as `YOUR_MASTER_KEY_GOES_HERE` is not reported, and a one-word `search_apikey` name is read as before. See [leaked-secrets](https://docs.squirrelscan.com/rules/security/leaked-secrets#public-by-design-platform-tokens-and-beacons). (#1515)
 
 ## v0.0.158 (2026-11-01)
