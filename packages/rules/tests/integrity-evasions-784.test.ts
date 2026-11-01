@@ -4,7 +4,7 @@ import { brandImpersonationRule } from "../src/integrity/brand-impersonation";
 import { WINDOW_CUE, cuePattern } from "../src/integrity/controls";
 import { AUTH_CUE_PHRASES, AUTH_LABEL, AUTH_LABEL_PHRASES, PROVIDER_BUTTON, PROVIDER_VERBS } from "../src/integrity/cues";
 import { BRAND_SPECS } from "../src/integrity/brand-specs";
-import { splitDeclarations } from "../src/integrity/overlay-style";
+import { isCover, overlayGeometry, overlayGeometryFor, splitDeclarations, type Reading } from "../src/integrity/overlay-style";
 import { detectBrandImpersonation, detectFakeAuthOverlay, detectPageSignals } from "../src/integrity/signals";
 import type { RuleContext } from "../src/types";
 
@@ -368,76 +368,194 @@ test("padding, comments and escapes do not hide a cover (#1496)", () => {
   expect(detectFakeAuthOverlay(context(cover("1\\30 vw", "100vh")))).toBeNull();
 });
 
-test("declarations are split the way a browser tokenises them (#1496)", () => {
+const frameOf = (html: string): { doc: NonNullable<RuleContext["parsed"]["document"]>; frame: Element } => {
+  const doc = context(html).parsed.document!;
+  return { doc, frame: doc.querySelector("iframe")! };
+};
+/** Whether one reading of the CSS says the frame is a cover. */
+const coversUnder = (reading: Reading, style: string, sheet = ""): boolean => {
+  const { doc, frame } = frameOf(`${sheet}<iframe id="google-auth" srcdoc="" style="${style.replaceAll('"', "&quot;")}"></iframe>`);
+  return isCover(overlayGeometryFor(doc, frame, reading));
+};
+const BASE = "position:fixed;top:0;left:0;z-index:99999";
+const GEOM = `${BASE};width:100vw;height:100vh`;
+
+test("declarations are read by three readings and a frame is a cover when any of them says so (#1496)", () => {
   const frame = (style: string) => `<iframe id="google-auth" srcdoc="" style="${style.replaceAll('"', "&quot;")}"></iframe>`;
-  const base = "position:fixed;top:0;left:0;z-index:99999";
   const hiding = [
-    `content:"/*"; ${base}; width:100vw; height:100vh`,
-    `content:'/*'; ${base}; width:100vw; height:100vh`,
-    `background:url(data:image/png;base64,AAA); ${base}; width:100vw; height:100vh`,
-    `font-family:"a;b"; ${base}; width:100vw; height:100vh`,
-    `--x:{;}; ${base}; width:100vw; height:100vh`,
-    `--x:[;]; ${base}; width:100vw; height:100vh`,
-    `content:"\\""; ${base}; width:100vw; height:100vh`,
-    `content:"\\"/*"; ${base}; width:100vw; height:100vh`,
-    `${base}; width:/*;*/100vw; height:100vh`,
-    `${base}; width:100vw/**/; height:100vh`,
-    `a\\/*b:c; ${base}; width:100vw; height:100vh`,
+    `content:"/*"; ${GEOM}`,
+    `content:'/*'; ${GEOM}`,
+    `background:url(data:image/png;base64,AAA); ${GEOM}`,
+    `font-family:"a;b"; ${GEOM}`,
+    `--x:{;}; ${GEOM}`,
+    `--x:[;]; ${GEOM}`,
+    `content:"\\""; ${GEOM}`,
+    `content:"\\"/*"; ${GEOM}`,
+    `${BASE}; width:/*;*/100vw; height:100vh`,
+    `${BASE}; width:100vw/**/; height:100vh`,
+    `a\\/*b:c; ${GEOM}`,
+    // the declaration list a browser would not read past, and the ones it would
+    `a:(]; ${GEOM}`,
+    `a:[}; ${GEOM}`,
+    `a:{); ${GEOM}`,
+    `a:( ; ${GEOM}`,
+    `a:calc((1); ${GEOM}`,
+    `a:url( ; ${GEOM}`,
+    `${BASE}; width:100vw; /* height:100vh`,
+    `${BASE}; height:100vh; content:"x; width:100vw`,
+    `a:u\\72 l(/*); ${GEOM}`,
+    `a:URL(/*); ${GEOM}`,
+    `a:\\55 RL(/*); ${GEOM}`,
+    `a:\\;url(/*); ${GEOM}`,
+    `content:"x&#13;;${GEOM}`,
+    `content:"x&#12;;${GEOM}`,
+    `content:"x&#13;&#10;;${GEOM}`,
   ];
   for (const style of hiding) expect(detectFakeAuthOverlay(context(frame(style))), style.slice(0, 50)).not.toBeNull();
-  // an unterminated comment runs to the end, as in a browser: nothing after it is read
-  expect(detectFakeAuthOverlay(context(frame(`${base}; width:100vw; /* height:100vh`)))).toBeNull();
-  // a semicolon inside a string or url() is not a separator: width stays inside the content value
-  expect(detectFakeAuthOverlay(context(frame(`${base}; height:100vh; content:"x; width:100vw"`)))).toBeNull();
-  expect(detectFakeAuthOverlay(context(frame(`${base}; height:100vh; background:url(a;width:100vw)`)))).toBeNull();
+  // junk after the geometry changes nothing
+  for (const open of ["a:(]", "a:[}", "a:{)", "a:( ", "a:url( "]) {
+    expect(detectFakeAuthOverlay(context(frame(`${GEOM}; ${open}`))), open).not.toBeNull();
+  }
+  // a closer with nothing open is an ordinary token; balanced blocks do not swallow
+  for (const ok of ["a:)", "a:]", "a:}", "}", ")", "a:(b;c)", "a:[;]", "a:{;}", "a:calc((1))", "a:url( ; )", "a:xurl(/*c*/)"]) {
+    expect(detectFakeAuthOverlay(context(frame(`${BASE}; ${ok}; width:100vw; height:100vh`))), ok).not.toBeNull();
+  }
 });
 
-/** A recursive reading of CSS Syntax 3 consume-a-list-of-declarations / simple blocks, written differently from the stack in the source. */
-function referenceSplit(text: string): string[] {
+test("the tokens reading is the browser's: strings, url(), blocks, escapes and newlines (#1496)", () => {
+  // each of these is ONE declaration to a browser, so the tokens reading does not see the geometry behind it
+  for (const swallowed of ["a:(]", "a:[}", "a:{)", "a:( ", "a:calc((1)", "a:url( ", 'content:"x;', "a:\\;url(/*"]) {
+    expect(coversUnder("tokens", `${swallowed}; ${GEOM}`), swallowed).toBe(false);
+    expect(coversUnder("naive", `${swallowed}; ${GEOM}`) || coversUnder("plain", `${swallowed}; ${GEOM}`), swallowed).toBe(true);
+  }
+  // and these it does see: a string, url() or block that ends, an escaped url, any newline ending a string
+  for (const read of [
+    `content:"/*"; ${GEOM}`,
+    `background:url(data:image/png;base64,AAA); ${GEOM}`,
+    `--x:{;}; ${GEOM}`,
+    `a:u\\72 l(/*); ${GEOM}`,
+    `a:URL(/*); ${GEOM}`,
+    `a:\\55 RL(/*); ${GEOM}`,
+    `content:"x&#13;;${GEOM}`,
+    `content:"x&#12;;${GEOM}`,
+    `content:"x&#13;&#10;;${GEOM}`,
+    `content:"x&#10;;${GEOM}`,
+  ]) {
+    expect(coversUnder("tokens", read), read.slice(0, 40)).toBe(true);
+  }
+  expect(splitDeclarations("a:(]; width:100vw")).toEqual(["a:(]; width:100vw"]);
+  expect(splitDeclarations("a:URL(/*); b:1")).toEqual(["a:URL(/*)", " b:1"]);
+  expect(splitDeclarations("a:u\\72 l(/*); b:1")).toEqual(["a:u\\72 l(/*)", " b:1"]);
+  expect(splitDeclarations("a:\\;url(/*); b:1")).toHaveLength(1);
+  expect(splitDeclarations("a:url(x\\)y;z); b:1")).toEqual(["a:url(x\\)y;z)", " b:1"]);
+  expect(splitDeclarations('a:"x\r;b:1')).toEqual(["a:\"x", "b:1"].map((t, i) => (i === 0 ? t + "\n" : t)));
+  expect(splitDeclarations("a:b/* c */;d:e")).toEqual(["a:b ", "d:e"]);
+});
+
+test("a style rule is cut at its own closing brace, past strings, comments and blocks, and the union keeps the old cut (#1496)", () => {
+  const rule = (body: string) => `<style>#google-auth{${body}}</style>`;
+  const frame = '<iframe id="google-auth" srcdoc=""></iframe>';
+  for (const body of [`content:"}"; ${GEOM}`, `/* } */${GEOM}`, `--x:{}; ${GEOM}`, `a:url(});${GEOM}`, `content:'}'; ${GEOM}`]) {
+    expect(coversUnder("tokens", "", rule(body)), body.slice(0, 30)).toBe(true);
+    expect(detectFakeAuthOverlay(context(frame, "")), "no sheet").toBeNull();
+    expect(detectFakeAuthOverlay(context(`${rule(body)}${frame}`)), body.slice(0, 30)).not.toBeNull();
+  }
+  // the old cut at the first `}` is kept as a reading: what it saw is still seen
+  expect(detectFakeAuthOverlay(context(`${rule(`${GEOM}; a:{`)}${frame}`))).not.toBeNull();
+});
+
+test("the union reading is a superset of the plain split on random mixes (#1496)", () => {
+  const pieces = ['"', "'", "/*", "*/", ";", "(", ")", "[", "]", "{", "}", "\\", "&#13;", "&#10;", "url(", "URL(", "a", ":", " ", GEOM, "width:100vw", "height:100vh", BASE];
+  let seed = 424242;
+  const next = (): number => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+  let plainOnly = 0;
+  for (let i = 0; i < 20_000; i++) {
+    let style = "";
+    for (let j = 0; j < 2 + Math.floor(next() * 14); j++) style += pieces[Math.floor(next() * pieces.length)];
+    const { doc, frame } = frameOf(`<iframe id="google-auth" srcdoc="" style="${style.replaceAll('"', "&quot;")}"></iframe>`);
+    const union = isCover(overlayGeometry(doc, frame));
+    const plain = isCover(overlayGeometryFor(doc, frame, "plain"));
+    if (plain) expect(union, style).toBe(true);
+    if (plain && !isCover(overlayGeometryFor(doc, frame, "tokens"))) plainOnly++;
+  }
+  // the generator does produce lists only the old reading caught, so the property is not vacuous
+  expect(plainOnly).toBeGreaterThan(0);
+});
+
+/**
+ * A recursive reading of CSS Syntax 3 consume-a-list-of-declarations, written differently from the stack in the source:
+ * the text is first cut into tokens (strings, comments, identifiers with escapes, unquoted url tokens, single characters),
+ * then consumed recursively block by block.
+ */
+function referenceSplit(raw: string): string[] {
+  const text = raw.replace(/\r\n?|\f/g, "\n");
   const n = text.length;
+  type Token = { kind: "text" | "comment" | "char"; raw: string };
+  const identChar = (c: string): boolean => /[\w-]/.test(c) || c >= "\u0080";
+  const decodeIdent = (ident: string): string =>
+    ident.replace(/\\(?:([0-9a-f]{1,6})[ \t\n]?|([^\n]))/gi, (_m, hex?: string, ch?: string) => (ch !== undefined ? ch : String.fromCodePoint(Number.parseInt(hex!, 16) || 0xfffd)));
+  const tokens: Token[] = [];
+  let pos = 0;
+  const escapeLen = (at: number): number => {
+    let j = at + 1;
+    if (j >= n) return n - at;
+    if (/[0-9a-f]/i.test(text[j]!)) {
+      let digits = 1;
+      while (digits < 6 && j + 1 < n && /[0-9a-f]/i.test(text[j + 1]!)) {
+        j++;
+        digits++;
+      }
+      if (j + 1 < n && /[ \t\n]/.test(text[j + 1]!)) j++;
+    }
+    return j + 1 - at;
+  };
+  while (pos < n) {
+    const c = text[pos]!;
+    if (c === "\\" || identChar(c)) {
+      const from = pos;
+      while (pos < n && (text[pos] === "\\" || identChar(text[pos]!))) pos += text[pos] === "\\" ? escapeLen(pos) : 1;
+      const ident = text.slice(from, pos);
+      tokens.push({ kind: "text", raw: ident });
+      if (text[pos] === "(" && decodeIdent(ident).toLowerCase() === "url" && !/^\s*["']/.test(text.slice(pos + 1))) {
+        const start = pos++;
+        while (pos < n && text[pos] !== ")") pos += text[pos] === "\\" ? escapeLen(pos) : 1;
+        pos = Math.min(pos + 1, n);
+        tokens.push({ kind: "text", raw: text.slice(start, pos) });
+      }
+    } else if (c === '"' || c === "'") {
+      const from = pos++;
+      while (pos < n && text[pos] !== c && text[pos] !== "\n") pos += text[pos] === "\\" ? escapeLen(pos) : 1;
+      if (pos < n && text[pos] === c) pos++;
+      tokens.push({ kind: "text", raw: text.slice(from, Math.min(pos, n)) });
+    } else if (c === "/" && text[pos + 1] === "*") {
+      const end = text.indexOf("*/", pos + 2);
+      pos = end === -1 ? n : end + 2;
+      tokens.push({ kind: "comment", raw: " " });
+    } else {
+      tokens.push({ kind: "char", raw: c });
+      pos++;
+    }
+  }
   const decls: string[] = [];
   let buf = "";
-  let pos = 0;
-  const raw = (from: number, to: number): void => {
-    buf += text.slice(from, Math.min(to, n));
-  };
-  const isUrl = (at: number): boolean => /(?:^|[^\w\\-])url$/i.test(text.slice(Math.max(0, at - 4), at)) || (at === 3 && /^url$/i.test(text.slice(0, 3)));
+  let at = 0;
   const consume = (closer: string | null): void => {
-    while (pos < n) {
-      const c = text[pos]!;
-      if (c === "\\") {
-        raw(pos, pos + 2);
-        pos += 2;
-      } else if (c === '"' || c === "'") {
-        const from = pos++;
-        while (pos < n && text[pos] !== c && text[pos] !== "\n") pos += text[pos] === "\\" ? 2 : 1;
-        if (pos < n) pos++;
-        raw(from, pos);
-      } else if (c === "/" && text[pos + 1] === "*") {
-        const end = text.indexOf("*/", pos + 2);
-        buf += " ";
-        pos = end === -1 ? n : end + 2;
-      } else if (c === "(" && isUrl(pos) && !/^\s*["']/.test(text.slice(pos + 1))) {
-        const from = pos++;
-        while (pos < n && text[pos] !== ")") pos += text[pos] === "\\" ? 2 : 1;
-        raw(from, Math.min(pos + 1, n));
-        pos = Math.min(pos + 1, n);
-      } else if (c === "(" || c === "[" || c === "{") {
-        buf += c;
-        pos++;
-        consume(c === "(" ? ")" : c === "[" ? "]" : "}");
-      } else if (closer !== null && c === closer) {
-        buf += c;
-        pos++;
+    while (at < tokens.length) {
+      const t = tokens[at++]!;
+      if (t.kind !== "char") {
+        buf += t.raw;
+        continue;
+      }
+      if (t.raw === "(" || t.raw === "[" || t.raw === "{") {
+        buf += t.raw;
+        consume(t.raw === "(" ? ")" : t.raw === "[" ? "]" : "}");
+      } else if (closer !== null && t.raw === closer) {
+        buf += t.raw;
         return;
-      } else if (c === ";" && closer === null) {
+      } else if (t.raw === ";" && closer === null) {
         decls.push(buf);
         buf = "";
-        pos++;
-      } else {
-        buf += c;
-        pos++;
-      }
+      } else buf += t.raw;
     }
   };
   consume(null);
@@ -445,33 +563,28 @@ function referenceSplit(text: string): string[] {
   return decls;
 }
 
-test("block rules follow the spec: only the matching closer closes, unclosed blocks swallow the rest (#1496)", () => {
-  const frame = (style: string) => `<iframe id="google-auth" srcdoc="" style="${style.replaceAll('"', "&quot;")}"></iframe>`;
-  const base = "position:fixed;top:0;left:0;z-index:99999";
-  const swallowed = ["a:(]", "a:[}", "a:{)", "a:( ", "a:calc((1)", "a:url( ", "a:foo(;", "a:([{"];
-  for (const open of swallowed) {
-    expect(detectFakeAuthOverlay(context(frame(`${base}; ${open}; width:100vw; height:100vh`))), open).toBeNull();
-    // the same junk after the geometry changes nothing
-    expect(detectFakeAuthOverlay(context(frame(`${base}; width:100vw; height:100vh; ${open}`))), open).not.toBeNull();
-  }
-  // a closer with nothing open is an ordinary token
-  for (const stray of ["a:)", "a:]", "a:}", "}", ")"]) {
-    expect(detectFakeAuthOverlay(context(frame(`${base}; ${stray}; width:100vw; height:100vh`))), stray).not.toBeNull();
-  }
-  // balanced blocks and a url() with a semicolon do not swallow
-  for (const ok of ["a:(b;c)", "a:[;]", "a:{;}", "a:calc((1))", "a:url( ; )", "a:xurl(/*c*/)"]) {
-    expect(detectFakeAuthOverlay(context(frame(`${base}; ${ok}; width:100vw; height:100vh`))), ok).not.toBeNull();
-  }
-});
-
 test("the tokenizer gives the same declarations as the reference on random delimiter mixes", () => {
-  const pieces = ['"', "'", "/*", "*/", ";", "(", ")", "[", "]", "{", "}", "\\", "\n", "url(", "url", "a", ":", " ", "x/", "*"];
+  const pieces = ['"', "'", "/*", "*/", ";", "(", ")", "[", "]", "{", "}", "\\", "\n", "\r", "\f", "url(", "url", "URL(", "u\\72 l(", "\\55 rl(", "a", ":", " ", "x/", "*", "\\31 ", "-"];
   let seed = 987654321;
   const next = (): number => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
   for (let i = 0; i < 20_000; i++) {
     let text = "";
     for (let j = 0; j < 2 + Math.floor(next() * 28); j++) text += pieces[Math.floor(next() * pieces.length)];
     expect(splitDeclarations(text), JSON.stringify(text)).toEqual(referenceSplit(text));
+  }
+});
+
+test("lengths the evaluator must not over-read, and the spellings it must (#1496)", () => {
+  // `vw` is not a height unit, a trailing letter is not a unit, a leading-dot number is a number
+  expect(detectFakeAuthOverlay(context(cover("100vw", "100vw")))).toBeNull();
+  expect(detectFakeAuthOverlay(context(cover("100vh", "100vh")))).toBeNull();
+  expect(detectFakeAuthOverlay(context(cover("100vwx", "100vh")))).toBeNull();
+  expect(detectFakeAuthOverlay(context(cover("100vw", "100vhx")))).toBeNull();
+  expect(detectFakeAuthOverlay(context(cover(".1e3vw", "100vh")))).not.toBeNull();
+  expect(detectFakeAuthOverlay(context(cover("calc(0px - -100vw)", "100vh")))).not.toBeNull();
+  // documented limits: fixed lengths are not subtracted, a product fills, vmin/vmax and container units fill on both axes
+  for (const [w, h] of [["calc(50vw + 50vw - 400px)", "100vh"], ["calc(1vw * 40)", "100vh"], ["100cqw", "100cqh"], ["100vmin", "100vmin"]]) {
+    expect(detectFakeAuthOverlay(context(cover(w!, h!))), `${w} x ${h}`).not.toBeNull();
   }
 });
 
