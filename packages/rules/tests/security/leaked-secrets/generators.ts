@@ -250,6 +250,13 @@ const P = {
   mailgun: ["ke", "y-"].join(""),
   re: ["r", "e_"].join(""),
   nral: ["NR", "AL"].join(""),
+  skOr: ["sk-", "or-v1-"].join(""),
+  csk: ["cs", "k-"].join(""),
+  nvapi: ["nv", "api-"].join(""),
+  fw: ["f", "w_"].join(""),
+  rkLive: ["rk_", "live_"].join(""),
+  shpat: ["sh", "pat_"].join(""),
+  gocspx: ["GOC", "SPX-"].join(""),
   eaac: ["EAACEd", "Eose0cBA"].join(""),
   pem: (kind: string, suffix = "") => ["-----BEGIN ", kind, " PRIVATE KEY", suffix, "-----"].join(""),
 };
@@ -316,6 +323,20 @@ export const GENERATORS: Generator[] = [
     make: (r) => value(P.pplx + runOf(r, ALNUM, 48)),
   },
 
+  {
+    pattern: "OpenRouter API Key",
+    tier: "prefixed",
+    make: (r) => value(P.skOr + runOf(r, HEX, 64)),
+  },
+  { pattern: "Cerebras API Key", tier: "prefixed", make: (r) => value(P.csk + runOf(r, LOWER + DIGIT, 48)) },
+  { pattern: "NVIDIA API Key", tier: "prefixed", make: (r) => value(P.nvapi + mixedRun(r, 64, B64URL)) },
+  {
+    pattern: "Fireworks AI API Key",
+    tier: "prefixed",
+    // Upper, lower and a digit are guaranteed by construction.
+    make: (r) => value(P.fw + "Aa1" + runOf(r, ALNUM, 29)),
+  },
+
   // ── Database / backend ────────────────────────────────────────────────
   {
     // The table's pattern is the general JWT; the decoded `iss`/`role` name
@@ -330,7 +351,7 @@ export const GENERATORS: Generator[] = [
     // The detector's `sbp_` shape is a Supabase personal access token, not the
     // service-role key (which is a JWT with role=service_role; see the probe
     // in cases.ts). Kept under the detector's own name.
-    pattern: "Supabase Service Role Key",
+    pattern: "Supabase Personal Access Token",
     tier: "prefixed",
     make: (r) => value(P.sbp + runOf(r, HEX, 40)),
   },
@@ -418,6 +439,12 @@ export const GENERATORS: Generator[] = [
     // the faithful one is pinned as a gap in cases.ts.
     make: (r) => value("AZ" + runOf(r, LOWER + DIGIT + "_-", 78)),
   },
+  { pattern: "Stripe Restricted Key", tier: "prefixed", make: (r) => value(P.rkLive + runOf(r, ALNUM, 24)) },
+  {
+    pattern: "Shopify Admin API Token",
+    tier: "prefixed",
+    make: (r) => value(P.shpat + runOf(r, HEX, 32)),
+  },
   {
     pattern: "Square Access Token",
     tier: "prefixed",
@@ -428,6 +455,8 @@ export const GENERATORS: Generator[] = [
     tier: "prefixed",
     make: (r) => value(P.sq0csp + runOf(r, B64URL, 43)),
   },
+
+  { pattern: "Google OAuth Client Secret", tier: "prefixed", make: (r) => value(P.gocspx + runOf(r, B64URL, 28)) },
 
   // ── Cloud ─────────────────────────────────────────────────────────────
   {

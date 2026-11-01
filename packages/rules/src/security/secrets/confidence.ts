@@ -546,6 +546,20 @@ function publicBeaconToken(
   return undefined;
 }
 
+// Hygraph (formerly GraphCMS) signs its API tokens with an issuer on its own
+// host: `management-<region>.hygraph.com` for the management API (it can change
+// the project's schema and content), another `*.hygraph.com` for a content API
+// token. Whole-host comparison on the parsed issuer (#1309).
+function hygraphIssuerHost(iss: string | undefined): string | undefined {
+  if (iss === undefined) return undefined;
+  try {
+    const host = new URL(iss).hostname.toLowerCase();
+    return host === "hygraph.com" || host.endsWith(".hygraph.com") || host.endsWith(".graphcms.com") ? host : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function refineJwt(
   value: string,
   now: number,
@@ -606,6 +620,16 @@ function refineJwt(
       confidence: "info",
       publicByDesign: false,
       extra,
+    };
+  }
+  const hygraphHost = hygraphIssuerHost(iss);
+  if (hygraphHost !== undefined) {
+    const management = hygraphHost.startsWith("management-");
+    return {
+      type: management ? "Hygraph Management Token" : "Hygraph Content API Token",
+      confidence: management ? "high" : "medium",
+      publicByDesign: false,
+      extra: { ...extra, provider: "Hygraph", keyKind: management ? "management" : "content" },
     };
   }
   // Shopify's boot code embeds a storefront JWT on every page of a Shopify
@@ -786,7 +810,13 @@ const GITHUB_TYPES = new Set([
   "GitHub Refresh Token",
 ]);
 
-const STRIPE_TYPES = new Set(["Stripe Live Key", "Stripe Test Key", "Stripe Publishable Key", "Clerk Secret Key"]);
+const STRIPE_TYPES = new Set([
+  "Stripe Live Key",
+  "Stripe Test Key",
+  "Stripe Restricted Key",
+  "Stripe Publishable Key",
+  "Clerk Secret Key",
+]);
 
 /** What the scanner knows about where the value sits. */
 export interface FindingContext {
