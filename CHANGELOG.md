@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+## v0.0.158 (2026-11-01)
+
+`security/leaked-secrets` is sharper in both directions: it stops reporting documentation samples, placeholders, catalogue values and sample data tables as credentials, names more providers (Cerebras, OpenRouter, NVIDIA, Fireworks, Shopify Admin, Stripe restricted keys, Google OAuth client secrets), and classifies Shopify, Netlify and signed-URL tokens and browser SDK keys instead of calling them generic leaks. A percent-encoded Twitter bearer token is found again, and the crawler throttle spacing test no longer fails under load. Thanks to William for the throttle test fix (#1516, #1519).
+
 ### Fixed
 
 - **`security/leaked-secrets` no longer reports documentation samples, placeholders and binary payloads as credentials.** jwt.io's default sample token (when its signature verifies under a published sample secret), a `-----BEGIN ... PRIVATE KEY-----` header with no key body after it, a connection string with a documentation password on `localhost` or one whose password is a template placeholder (`${user}`, `{{ pass }}`, `%s`), Stripe's published sample key, a hashed asset name such as `neon_<hash>.png`, a Dominican Republic IBAN and a run of `A` inside a base64 image, font or wasm payload are not reported. A real-shaped key in the same place still is: a PEM block with a body, a random password on a local host, any other `sk_test_` key. `example-password` and similar are placeholders. Paystack's `sk_live_` keys (40 hex) are labelled Paystack instead of Stripe, and an `sk_live_` key with a hex tail that is not Stripe's, such as a chat widget's `data-deployment-key`, reports as an unknown-provider key with a widget hint. `changeme` stays reportable on purpose. See [leaked-secrets](https://docs.squirrelscan.com/rules/security/leaked-secrets). (#1283, #1227)
