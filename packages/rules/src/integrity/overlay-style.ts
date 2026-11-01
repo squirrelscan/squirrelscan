@@ -49,68 +49,143 @@ interface Rule {
 }
 
 /**
- * The declarations of a style declaration list (a `style` attribute, or a rule body already cut out of its braces),
- * split the way CSS Syntax Level 3 consumes them, in one forward pass. A declaration runs to the next `;` that is
- * outside every block and string; `(`, `[` and `{` open a block that only its own closer ends (`(` waits for `)`:
- * a mismatched closer inside it is an ordinary token, so `a:(]; width:100vw` is one declaration, as in a browser); a
- * closer with nothing open is an ordinary token too; blocks left open at the end end quietly at EOF. Comments are
- * dropped (`/*` opens one only outside a string and an unquoted `url(...)`; an unterminated one runs to the end), a
- * backslash escapes the next character, a string ends at its quote or an unescaped newline, and an unquoted
- * `url(...)` is one token to its `)`. Where a browser would swallow the rest of the list we do the same, and so read
- * nothing after it: the shapes that need it (an unclosed block in the middle of a declaration list) are not
- * something real styles contain, so matching the browser keeps false positives low.
+ * Three readings of the same CSS text, and a frame is a cover when ANY of them says so (the union, #1496). `tokens`
+ * follows CSS Syntax 3 (strings, comments, `url()` and blocks are units); `naive` drops complete comments, splits on every
+ * `;` and reads an unterminated comment or string as ordinary text (it keeps reading); `plain` is the old split on `;` and
+ * nothing else. A page can hide an overlay from whichever one a parser differs from a browser on, so no single reading
+ * is trusted to see it; the cost of the union is a few more reads of a frame that already carries auth intent.
  */
-export function splitDeclarations(text: string): string[] {
-  const out: string[] = [];
-  let start = 0;
-  let quote = "";
-  const closers: string[] = [];
-  let current = "";
+export type Reading = "tokens" | "naive" | "plain";
+const READINGS: readonly Reading[] = ["tokens", "naive", "plain"];
+
+const isIdentChar = (c: string): boolean => /[\w-]/.test(c) || c >= "\u0080";
+
+/** CSS preprocessing: a CRLF, a lone CR and a form feed are each one newline (a string ends at one). */
+function preprocess(text: string): string {
+  return /[\r\f]/.test(text) ? text.replace(/\r\n?|\f/g, "\n") : text;
+}
+
+/** The index of the last character of the escape that starts with the backslash at `at`: 1-6 hex digits and one optional space, or one character. */
+function escapeEnd(text: string, at: number): number {
   const n = text.length;
-  for (let i = 0; i < n; i++) {
+  let j = at + 1;
+  if (j >= n) return n - 1;
+  if (/[0-9a-f]/i.test(text[j]!)) {
+    let digits = 1;
+    while (digits < 6 && j + 1 < n && /[0-9a-f]/i.test(text[j + 1]!)) {
+      j++;
+      digits++;
+    }
+    if (j + 1 < n && /[ \t\n]/.test(text[j + 1]!)) j++;
+  }
+  return j;
+}
+
+/**
+ * One forward pass over CSS the way CSS Syntax 3 tokenises it, calling `onChar` for each structural character outside a
+ * string, comment and unquoted `url(...)`, AFTER the stack of expected closers was updated (`(` waits for `)`, `[` for `]`,
+ * `{` for `}`; a closer pops only when it matches the top, any other closer is an ordinary token, a block left open ends at
+ * EOF). `onComment(from, to)` is told of each comment (an unterminated one runs to the end). A backslash escapes (a hex
+ * escape takes up to six digits and a space); a string ends at its quote or an unescaped newline; `url(` is recognised on the
+ * identifier with its escapes decoded (`u\72 l(`, `URL(`) and, unquoted, is one token to its `)`. Linear: every index is
+ * visited once and `indexOf` only moves forward.
+ */
+function walk(
+  text: string,
+  start: number,
+  closers: string[],
+  onChar: (index: number, char: string, closers: string[]) => boolean,
+  onComment: (from: number, to: number) => void,
+): void {
+  const n = text.length;
+  let quote = "";
+  let identStart = -1;
+  for (let i = start; i < n; i++) {
     const c = text[i]!;
     if (c === "\\") {
-      i++;
+      if (!quote && identStart < 0) identStart = i;
+      i = escapeEnd(text, i);
       continue;
     }
     if (quote) {
       if (c === quote || c === "\n") quote = "";
       continue;
     }
-    if (c === '"' || c === "'") quote = c;
-    else if (c === "(" && isUrlFunction(text, i) && !opensQuoted(text, i + 1)) {
-      // An unquoted `url(...)` is one token to its `)`: no comment or string starts inside it.
+    if (isIdentChar(c)) {
+      if (identStart < 0) identStart = i;
+      continue;
+    }
+    const ident = identStart >= 0 ? text.slice(identStart, i) : "";
+    identStart = -1;
+    if (c === '"' || c === "'") {
+      quote = c;
+      continue;
+    }
+    if (c === "(" && ident !== "" && unescapeCss(ident).toLowerCase() === "url" && !opensQuoted(text, i + 1)) {
       let j = i + 1;
-      for (; j < n && text[j] !== ")"; j++) if (text[j] === "\\") j++;
+      for (; j < n && text[j] !== ")"; j++) if (text[j] === "\\") j = escapeEnd(text, j);
       i = j;
-    } else if (c === "(") closers.push(")");
+      continue;
+    }
+    if (c === "/" && text[i + 1] === "*") {
+      const close = text.indexOf("*/", i + 2);
+      onComment(i, close === -1 ? n : close + 2);
+      if (close === -1) return;
+      i = close + 1;
+      continue;
+    }
+    if (c === "(") closers.push(")");
     else if (c === "[") closers.push("]");
     else if (c === "{") closers.push("}");
-    else if (c === ")" || c === "]" || c === "}") {
-      if (closers.at(-1) === c) closers.pop();
-    } else if (c === ";" && closers.length === 0) {
-      out.push(current + text.slice(start, i));
-      current = "";
-      start = i + 1;
-    } else if (c === "/" && text[i + 1] === "*") {
-      current += text.slice(start, i) + " ";
-      const close = text.indexOf("*/", i + 2);
-      if (close === -1) {
-        start = n;
-        break;
-      }
-      start = close + 2;
-      i = close + 1;
-    }
+    else if ((c === ")" || c === "]" || c === "}") && closers.at(-1) === c) closers.pop();
+    if (onChar(i, c, closers)) return;
   }
+}
+
+/**
+ * The declarations of a style declaration list (a `style` attribute, or a rule body cut out of its braces) as CSS Syntax 3
+ * consumes them: a declaration runs to the next `;` outside every block and string, a comment is dropped, and a block
+ * left open runs to the end. See {@link walk}.
+ */
+export function splitDeclarations(input: string): string[] {
+  const text = preprocess(input);
+  const out: string[] = [];
+  let start = 0;
+  let current = "";
+  walk(
+    text,
+    0,
+    [],
+    (i, c, closers) => {
+      if (c === ";" && closers.length === 0) {
+        out.push(current + text.slice(start, i));
+        current = "";
+        start = i + 1;
+      }
+      return false;
+    },
+    (from, to) => {
+      current += `${text.slice(start, from)} `;
+      start = to;
+    },
+  );
   out.push(current + text.slice(start));
   return out;
 }
 
-/** `url` (not the tail of a longer identifier) right before the `(` at `at`. */
-function isUrlFunction(text: string, at: number): boolean {
-  if (at < 3 || text.slice(at - 3, at).toLowerCase() !== "url") return false;
-  return at === 3 || !/[\w\\-]/.test(text[at - 4]!);
+/** Complete comments dropped; an unterminated `/*` is just its two characters removed, the rest is read on. */
+function stripCommentsTolerant(text: string): string {
+  if (!text.includes("/*")) return text;
+  let out = "";
+  let at = 0;
+  for (;;) {
+    const open = text.indexOf("/*", at);
+    if (open === -1) return out + text.slice(at);
+    const close = text.indexOf("*/", open + 2);
+    if (close === -1) return `${out}${text.slice(at, open)} ${text.slice(open + 2)}`;
+    out += `${text.slice(at, open)} `;
+    at = close + 2;
+  }
 }
 
 /** Whether the first thing after `url(` (past whitespace) is a quote, which makes it an ordinary function. */
@@ -126,17 +201,19 @@ function unescapeCss(text: string): string {
   return text.replace(/\\(?:([0-9a-f]{1,6})[ \t\n\r\f]?|([^\n]))/gi, (_m, hex?: string, char?: string) => {
     if (char !== undefined) return char;
     const code = Number.parseInt(hex!, 16);
-    return code === 0 || code > 0x10_ffff || (code >= 0xd800 && code <= 0xdfff) ? "\ufffd" : String.fromCodePoint(code);
+    return code === 0 || code > 0x10_ffff || (code >= 0xd800 && code <= 0xdfff) ? "�" : String.fromCodePoint(code);
   });
 }
 
-function parseDeclarations(text: string): Declaration[] {
+function parseDeclarations(text: string, reading: Reading = "tokens"): Declaration[] {
   const out: Declaration[] = [];
-  for (const raw of splitDeclarations(text)) {
+  const raws = reading === "tokens" ? splitDeclarations(text) : reading === "naive" ? stripCommentsTolerant(text).split(";") : text.split(";");
+  const decode = reading === "plain" ? (t: string): string => t : unescapeCss;
+  for (const raw of raws) {
     const idx = raw.indexOf(":");
     if (idx === -1) continue;
-    const property = unescapeCss(raw.slice(0, idx)).trim().toLowerCase();
-    let value = unescapeCss(raw.slice(idx + 1)).trim().toLowerCase();
+    const property = decode(raw.slice(0, idx)).trim().toLowerCase();
+    let value = decode(raw.slice(idx + 1)).trim().toLowerCase();
     // Anchored on the literal `!` (no leading `\s*`), so a long run of spaces cannot backtrack.
     const important = /!\s*important$/.test(value);
     if (important) value = value.replace(/!\s*important$/, "").trim();
@@ -177,13 +254,32 @@ function ruleKey(selector: ParsedSelector, wanted: Wanted): string | undefined {
   return first ?? "iframe";
 }
 
+/** The `}` that closes the rule whose `{` is at `open`, or -1 (see {@link walk}). */
+function findRuleEnd(css: string, open: number): number {
+  let end = -1;
+  walk(
+    css,
+    open + 1,
+    ["}"],
+    (i, c, closers) => {
+      if (c === "}" && closers.length === 0) {
+        end = i;
+        return true;
+      }
+      return false;
+    },
+    () => {},
+  );
+  return end;
+}
+
 /**
  * One pass over a stylesheet: comments and at-rules (`@media`, `@supports`, `@keyframes`, `@import`) are
  * skipped, every other `selector { body }` is handed to `onRule`. `indexOf` only searches forward from
  * the cursor and the cursor then moves past what it found, so the scan is linear however the text is
  * built (unterminated comments, runs of openers, no braces at all).
  */
-export function scanCss(css: string, onRule: (selector: string, body: string) => void): void {
+export function scanCss(css: string, onRule: (selector: string, body: string) => void, reading: Reading = "tokens"): void {
   let i = 0;
   const n = css.length;
   while (i < n) {
@@ -221,7 +317,8 @@ export function scanCss(css: string, onRule: (selector: string, body: string) =>
     }
     const open = css.indexOf("{", i);
     if (open === -1) return;
-    const close = css.indexOf("}", open + 1);
+    // `plain` and `naive` cut at the first `}`; `tokens` at the `}` that closes the rule, past strings, comments and blocks.
+    const close = reading === "tokens" ? findRuleEnd(css, open) : css.indexOf("}", open + 1);
     if (close === -1) return;
     // A rule whose selector or body is absurdly long is not one a page needs; it is skipped, not the rest.
     if (open - i <= MAX_SELECTOR_CHARS && close - open - 1 <= MAX_BODY_CHARS) {
@@ -233,16 +330,20 @@ export function scanCss(css: string, onRule: (selector: string, body: string) =>
 
 interface Sheet {
   byKey: Map<string, Rule[]>;
+  /** Per-frame layers already worked out, by id and classes (pages repeat them). */
+  memo: Map<string, Declaration[][]>;
   /** The stylesheet text was longer than {@link MAX_CSS_CHARS}: the rest was not read. */
   truncated: boolean;
   /** Rule visits left for frames (see {@link SHEET_WORK_BUDGET}). */
   work: number;
 }
 
-const sheetCache = new WeakMap<object, Sheet>();
+const sheetCache = new WeakMap<object, Partial<Record<Reading, Sheet>>>();
 
-function sheetFor(doc: Document, wanted: Wanted): Sheet {
-  const cached = sheetCache.get(doc);
+function sheetFor(doc: Document, wanted: Wanted, reading: Reading): Sheet {
+  const byReading = sheetCache.get(doc) ?? {};
+  sheetCache.set(doc, byReading);
+  const cached = byReading[reading];
   if (cached) return cached;
   const byKey = new Map<string, Rule[]>();
   let chars = 0;
@@ -267,7 +368,7 @@ function sheetFor(doc: Document, wanted: Wanted): Sheet {
         if (key) keys.add(key);
       }
       if (keys.size === 0) return;
-      const declarations = parseDeclarations(body);
+      const declarations = parseDeclarations(body, reading);
       if (!declarations.some((d) => GEOMETRY.test(d.property))) return;
       const rule: Rule = { selectors, declarations, order: position.next++ };
       for (const key of keys) {
@@ -281,10 +382,10 @@ function sheetFor(doc: Document, wanted: Wanted): Sheet {
         }
         byKey.set(key, list);
       }
-    });
+    }, reading);
   }
-  const sheet: Sheet = { byKey, truncated: truncated || cut.dropped, work: SHEET_WORK_BUDGET };
-  sheetCache.set(doc, sheet);
+  const sheet: Sheet = { byKey, memo: new Map(), truncated: truncated || cut.dropped, work: SHEET_WORK_BUDGET };
+  byReading[reading] = sheet;
   return sheet;
 }
 
@@ -368,10 +469,8 @@ function sheetLayers(sheet: Sheet, id: string, classes: Set<string>, memo: Map<s
   return layers;
 }
 
-const memoCache = new WeakMap<object, Map<string, Declaration[][]>>();
-
 /** The iframe's resolved style properties, lower-cased: stylesheet, then inline, `!important` over either. */
-function resolvedStyle(doc: Document, sheet: Sheet, frame: Element): Map<string, string> {
+function resolvedStyle(sheet: Sheet, frame: Element, reading: Reading): Map<string, string> {
   const id = (getAttrCI(frame, "id") ?? "").toLowerCase();
   // The class attribute is charged to the page's budget by length, so padding it costs the page, not the scan.
   const classAttr = getAttrCI(frame, "class") ?? "";
@@ -380,13 +479,8 @@ function resolvedStyle(doc: Document, sheet: Sheet, frame: Element): Map<string,
   if (sheet.work > 0) {
     for (const c of classAttr.toLowerCase().split(/\s+/)) if (c) classes.add(c);
   } else sheet.truncated = true;
-  let memo = memoCache.get(doc);
-  if (!memo) {
-    memo = new Map();
-    memoCache.set(doc, memo);
-  }
-  const [normal, important] = sheetLayers(sheet, id, classes, memo) as [Declaration[], Declaration[]];
-  const inline = parseDeclarations(getAttrCI(frame, "style") ?? "");
+  const [normal, important] = sheetLayers(sheet, id, classes, sheet.memo) as [Declaration[], Declaration[]];
+  const inline = parseDeclarations(getAttrCI(frame, "style") ?? "", reading);
   const layers: Declaration[][] = [
     normal,
     inline.filter((d) => !d.important),
@@ -478,9 +572,27 @@ function wantedFor(doc: Document): Wanted {
   return wanted;
 }
 
-/** Whether an iframe, as the page styles it, is a fixed, high-z-index, viewport-filling cover. */
+/** Whether a geometry is a fixed, high-z-index, viewport-filling cover pinned to a corner (what the detector requires). */
+export const isCover = (g: OverlayGeometry): boolean => g.fixed && g.zIndex >= 1000 && g.fillsViewport && g.pinned;
+
+/**
+ * An iframe's geometry as the page styles it: the first of the three {@link Reading}s that makes it a cover, else the
+ * `tokens` one. The union means nothing a plain split of the CSS caught is lost to a stricter parse, and nothing a stricter
+ * parse reads is lost to a plain split.
+ */
 export function overlayGeometry(doc: Document, frame: Element): OverlayGeometry {
-  const style = resolvedStyle(doc, sheetFor(doc, wantedFor(doc)), frame);
+  let first: OverlayGeometry | undefined;
+  for (const reading of READINGS) {
+    const geometry = overlayGeometryFor(doc, frame, reading);
+    if (isCover(geometry)) return geometry;
+    first ??= geometry;
+  }
+  return first!;
+}
+
+/** The geometry under one reading (exported for the tests that compare readings). */
+export function overlayGeometryFor(doc: Document, frame: Element, reading: Reading): OverlayGeometry {
+  const style = resolvedStyle(sheetFor(doc, wantedFor(doc), reading), frame, reading);
   const position = style.get("position");
   const zIndex = Number.parseInt(style.get("z-index") ?? "0", 10);
   const width = style.get("width") ?? "";
@@ -500,7 +612,9 @@ export function overlayGeometry(doc: Document, frame: Element): OverlayGeometry 
 
 /** Whether the page's CSS was longer than the amount read (the overlay rule may be in the part that was not). */
 export function cssScanTruncated(doc: Document): boolean {
-  return sheetFor(doc, wantedFor(doc)).truncated;
+  // The `tokens` sheet always; the others only if a frame needed them (they are built on demand).
+  const tokens = sheetFor(doc, wantedFor(doc), "tokens");
+  return tokens.truncated || Object.values(sheetCache.get(doc) ?? {}).some((sheet) => sheet.truncated);
 }
 
 const hiddenCache = new WeakMap<object, { classes: Set<string>; ids: Set<string> }>();
