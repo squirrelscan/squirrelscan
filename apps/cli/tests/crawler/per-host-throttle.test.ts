@@ -469,7 +469,9 @@ describe("per-host throttle (#265)", () => {
     // it; with no delay the gaps are the 5 ms fetch latency and both bounds fail.
     const gaps = ordered.slice(1).map((start, i) => start - ordered[i]!);
     const span = ordered[ordered.length - 1]! - ordered[0]!;
-    const median = [...gaps].sort((a, b) => a - b)[Math.floor(gaps.length / 2)]!;
+    const median = [...gaps].sort((a, b) => a - b)[
+      Math.floor(gaps.length / 2)
+    ]!;
     expect(span).toBeGreaterThanOrEqual((ordered.length - 1) * DELAY * 0.4);
     expect(median).toBeGreaterThanOrEqual(DELAY * 0.4);
 
