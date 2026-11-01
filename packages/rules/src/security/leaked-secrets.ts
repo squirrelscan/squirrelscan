@@ -3142,6 +3142,56 @@ function isJwtHead(body: string, text: string, end: number): boolean {
 }
 
 /**
+ * A Bearer value that is only the HEADER segment of a JWT: `eyJhbGciOiJIUzI1NiIs`, base64url of `{"alg":"HS256",` with no payload or
+ * signature behind it. It is a documentation or UI fragment (a truncated example), not a credential. Dropped only on proof (#1227):
+ * - the WHOLE body decodes to a complete JOSE header: a plain JSON object, with an `alg`, whose keys are all JOSE header names
+ *   ({@link JOSE_HEADER_KEYS}); or
+ * - the body is short (at most {@link TRUNCATED_HEADER_MAX_CHARS}) and cut mid-JSON, and its decoded prefix still opens with `{"alg"`,
+ *   `{"typ"`, `{"kid"` or `{"cty"`.
+ * Any other `eyJ…` value (a JSON object that merely opens with `typ` or `alg` and goes on to carry a `sub`, a `token`, padding) is an
+ * opaque bearer token and still reports. A value that continues as a token (see {@link continuesAsToken}) is not a header on its own.
+ */
+const JWT_HEADER_START_RE = /^\{\s*"(?:alg|typ|kid|cty)"/;
+const TRUNCATED_HEADER_MAX_CHARS = 64;
+const MAX_HEADER_BODY_CHARS = 2_048;
+const JOSE_HEADER_KEYS = new Set(["alg", "typ", "kid", "cty", "enc", "zip", "x5t", "x5t#S256", "x5u", "x5c", "jku", "jwk", "crit"]);
+
+/**
+ * Whether the text after a Bearer value goes on as part of a token: a `.` followed by a token character, a `%` or `\`
+ * (an escaped separator: `%2E`, `\x2e`), or, after whitespace or a `,`, a `.` or another `eyJ`. The end of the text, a quote, a
+ * bracket and other punctuation do not continue one.
+ */
+function continuesAsToken(text: string, end: number): boolean {
+  const c = text.charAt(end);
+  if (c === "") return false;
+  if (c === ".") return /[A-Za-z0-9_-]/.test(text.charAt(end + 1));
+  if (c === "%" || c === "\\") return true;
+  if (c === "," || /\s/.test(c)) {
+    const after = /^[\s,]*/.exec(text.slice(end, end + 64))?.[0].length ?? 0;
+    const next = text.slice(end + after, end + after + 3);
+    return next.startsWith(".") || next === "eyJ";
+  }
+  return false;
+}
+
+function isHeaderOnlyJwt(body: string, text: string, end: number): boolean {
+  // a complete header is a few hundred characters: a longer value is not one, and is not parsed
+  if (body.length > MAX_HEADER_BODY_CHARS || !/^eyJ[A-Za-z0-9_-]+$/.test(body)) return false;
+  if (continuesAsToken(text, end)) return false;
+  const decoded = Buffer.from(body, "base64url").toString("utf8");
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(decoded);
+  } catch {
+    // cut mid-JSON: a header only when it is short and its prefix still opens like one
+    return body.length <= TRUNCATED_HEADER_MAX_CHARS && JWT_HEADER_START_RE.test(decoded);
+  }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return false;
+  const keys = Object.keys(parsed);
+  return keys.includes("alg") && keys.every((key) => JOSE_HEADER_KEYS.has(key));
+}
+
+/**
  * The FAST patterns the keyword prefilter selects for this content, by name.
  * Exported for the corpus meta-test, which asserts that every positive's
  * input selects the pattern it expects and a corrupted keyword deselects it.
@@ -3487,6 +3537,8 @@ export function scanContent(
         // belongs to that pattern: the three-segment token is one credential,
         // and the Bearer match stops at its first dot. A JWT no pattern
         // recognises still reports here as an opaque bearer token.
+        // A header-only JWT (no dot, no payload) is a truncated example, not a credential.
+        if (name === "Bearer Token" && isHeaderOnlyJwt(body, content, match.index + value.length)) continue;
         if (name === "Bearer Token" && isJwtHead(body, content, match.index + value.length)) {
           // The JWT pattern's value is head + "." + payload + "." + signature
           // (#361). Only THAT exact token, at this occurrence, counts as
