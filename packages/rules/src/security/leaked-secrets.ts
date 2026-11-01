@@ -3142,6 +3142,21 @@ function isJwtHead(body: string, text: string, end: number): boolean {
 }
 
 /**
+ * A Bearer value that is only the HEADER segment of a JWT: `eyJhbGciOiJIUzI1NiIs`, base64url of `{"alg":"HS256",` with no dot and
+ * no payload or signature behind it. It is a documentation or UI fragment (a truncated example), not a credential. It has to decode
+ * to a JWT header (`{"alg"`, `{"typ"`, `{"kid"`, `{"cty"`): any other `eyJ…` value is base64 of some other JSON and stays an opaque
+ * bearer token, and a head with a dot and a second segment after it is a token, handled by {@link isJwtHead} (#1227).
+ */
+const JWT_HEADER_START_RE = /^\{\s*"(?:alg|typ|kid|cty)"\s*:/;
+
+function isHeaderOnlyJwt(body: string, text: string, end: number): boolean {
+  if (!/^eyJ[A-Za-z0-9_-]+$/.test(body)) return false;
+  if (text.charCodeAt(end) === 46 && isWordCharAt(text, end + 1)) return false;
+  // 24 characters are 18 bytes: enough to read the first key, and whole bytes whatever follows
+  return JWT_HEADER_START_RE.test(Buffer.from(body.slice(0, 24), "base64url").toString("utf8"));
+}
+
+/**
  * The FAST patterns the keyword prefilter selects for this content, by name.
  * Exported for the corpus meta-test, which asserts that every positive's
  * input selects the pattern it expects and a corrupted keyword deselects it.
@@ -3487,6 +3502,8 @@ export function scanContent(
         // belongs to that pattern: the three-segment token is one credential,
         // and the Bearer match stops at its first dot. A JWT no pattern
         // recognises still reports here as an opaque bearer token.
+        // A header-only JWT (no dot, no payload) is a truncated example, not a credential.
+        if (name === "Bearer Token" && isHeaderOnlyJwt(body, content, match.index + value.length)) continue;
         if (name === "Bearer Token" && isJwtHead(body, content, match.index + value.length)) {
           // The JWT pattern's value is head + "." + payload + "." + signature
           // (#361). Only THAT exact token, at this occurrence, counts as

@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **`security/leaked-secrets` no longer reports a header-only JWT after `Bearer`.** `Bearer eyJhbGciOiJIUzI1NiIs`, the header segment of a JWT with no dot, payload or signature, was reported as a medium bearer token. A value that decodes to a JWT header (`alg`, `typ`, `kid` or `cty` first) and has nothing after it is dropped; a full `Bearer <JWT>` and an opaque bearer token still report. (#1227)
+
 ## v0.0.158 (2026-11-01)
 
 `security/leaked-secrets` is sharper in both directions: it stops reporting documentation samples, placeholders, catalogue values and sample data tables as credentials, names more providers (Cerebras, OpenRouter, NVIDIA, Fireworks, Shopify Admin, Stripe restricted keys, Google OAuth client secrets), and classifies Shopify, Netlify and signed-URL tokens and browser SDK keys instead of calling them generic leaks. A percent-encoded Twitter bearer token is found again, and the crawler throttle spacing test no longer fails under load. Thanks to William for the throttle test fix (#1516, #1519).
