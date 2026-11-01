@@ -107,9 +107,10 @@ const TEXT_ROW_HEAD = /^([0-9a-f]{1,16}):T([0-9a-f]{1,10}),/;
  * emits for a string of 1 KB or more: `id:T<hex byte length>,<text>`, the text running for exactly that many
  * UTF-8 bytes, newlines included. Text rows are returned by id; the rest are the line rows to parse.
  */
-function parseRows(text: string): { rows: FlightRow[]; texts: Map<string, string> } {
+function parseRows(text: string): { rows: FlightRow[]; texts: Map<string, string>; strategyPayloads: string[] } {
   const rows: FlightRow[] = [];
   const texts = new Map<string, string>();
+  const strategyPayloads: string[] = [];
   let pos = 0;
   while (pos < text.length) {
     const head = TEXT_ROW_HEAD.exec(text.slice(pos, pos + 40));
@@ -119,7 +120,9 @@ function parseRows(text: string): { rows: FlightRow[]; texts: Map<string, string
       let end = start;
       let used = 0;
       while (end < text.length && used < bytes) used += utf8Units(text, end++);
-      texts.set(head[1]!, text.slice(start, end));
+      const value = text.slice(start, end);
+      texts.set(head[1]!, value);
+      strategyPayloads.push(value);
       pos = end;
       if (text[pos] === "\n") pos++;
       continue;
@@ -128,10 +131,14 @@ function parseRows(text: string): { rows: FlightRow[]; texts: Map<string, string
     if (nl === -1) nl = text.length;
     const line = text.slice(pos, nl);
     const colon = line.indexOf(":");
-    if (colon > 0 && colon <= 16 && /^[0-9a-f]+$/.test(line.slice(0, colon))) rows.push({ id: line.slice(0, colon), payload: line.slice(colon + 1) });
+    if (colon > 0 && colon <= 16 && /^[0-9a-f]+$/.test(line.slice(0, colon))) {
+      const payload = line.slice(colon + 1);
+      rows.push({ id: line.slice(0, colon), payload });
+      strategyPayloads.push(payload);
+    }
     pos = nl + 1;
   }
-  return { rows, texts };
+  return { rows, texts, strategyPayloads };
 }
 
 /** Whether a prop that matters to a script (`src`, `children`, `dangerouslySetInnerHTML`) may point at a text row. */
@@ -172,7 +179,7 @@ export function flightLoaderText(bodies: readonly string[], isData: (type: strin
   const parts: string[] = [];
   const used = { total: 0 };
   for (const body of bodies) if (!decodeChunks(body, parts, used)) break;
-  const { rows, texts } = parseRows(parts.join(""));
+  const { rows, texts, strategyPayloads } = parseRows(parts.join(""));
   const scriptModules = new Set<string>();
   for (const row of rows) {
     if (row.payload.startsWith("I[") && SCRIPT_MODULE.test(row.payload.slice(0, 512))) scriptModules.add(row.id);
@@ -214,11 +221,11 @@ export function flightLoaderText(bodies: readonly string[], isData: (type: strin
   // Only rows that mention a `strategy` are parsed for this, so a payload without one pays a substring search.
   const scriptRefs = new Set<string>();
   let refNodes = 0;
-  scan: for (const row of rows) {
-    if (!row.payload.includes('"strategy"') || (row.payload[0] !== "[" && row.payload[0] !== "{")) continue;
+  scan: for (const payload of strategyPayloads) {
+    if (!payload.includes('"strategy"') || (payload[0] !== "[" && payload[0] !== "{")) continue;
     let root: Json;
     try {
-      root = JSON.parse(row.payload);
+      root = JSON.parse(payload);
     } catch {
       continue;
     }
