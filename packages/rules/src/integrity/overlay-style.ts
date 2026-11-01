@@ -48,13 +48,38 @@ interface Rule {
   order: number;
 }
 
+/** CSS comments removed in one forward pass (an unterminated one runs to the end, as in a browser). */
+function stripComments(text: string): string {
+  if (!text.includes("/*")) return text;
+  let out = "";
+  let at = 0;
+  for (;;) {
+    const open = text.indexOf("/*", at);
+    if (open === -1) return out + text.slice(at);
+    out += text.slice(at, open) + " ";
+    const close = text.indexOf("*/", open + 2);
+    if (close === -1) return out;
+    at = close + 2;
+  }
+}
+
+/** CSS escapes undone: `\30 0` is `00`, `\76` is `v`, `\w` is `w`. Linear, one regex pass. */
+function unescapeCss(text: string): string {
+  if (!text.includes("\\")) return text;
+  return text.replace(/\\(?:([0-9a-f]{1,6})[ \t\n\r\f]?|([^\n]))/gi, (_m, hex?: string, char?: string) => {
+    if (char !== undefined) return char;
+    const code = Number.parseInt(hex!, 16);
+    return code === 0 || code > 0x10_ffff || (code >= 0xd800 && code <= 0xdfff) ? "\ufffd" : String.fromCodePoint(code);
+  });
+}
+
 function parseDeclarations(text: string): Declaration[] {
   const out: Declaration[] = [];
-  for (const raw of text.split(";")) {
+  for (const raw of stripComments(text).split(";")) {
     const idx = raw.indexOf(":");
     if (idx === -1) continue;
-    const property = raw.slice(0, idx).trim().toLowerCase();
-    let value = raw.slice(idx + 1).trim().toLowerCase();
+    const property = unescapeCss(raw.slice(0, idx)).trim().toLowerCase();
+    let value = unescapeCss(raw.slice(idx + 1)).trim().toLowerCase();
     // Anchored on the literal `!` (no leading `\s*`), so a long run of spaces cannot backtrack.
     const important = /!\s*important$/.test(value);
     if (important) value = value.replace(/!\s*important$/, "").trim();
@@ -329,10 +354,10 @@ const ZERO = /^0(?:px|%|em|rem|vh|vw)?$/;
  * Whether a `width` or `height` value fills its axis (#1496), read as CSS spells it and leaning toward "fills" when it
  * cannot tell. Units of the axis: `%`, the viewport units (`vw`/`vh` and their dynamic, small and large forms `dvw`, `svh`,
  * `lvh`, ...), the logical `vi`/`vb` forms, the container units (`cqw`, `cqh`, `cqi`, `cqb`, `cqmin`, `cqmax`) and
- * `vmin`/`vmax`. A number of 100 up to 1000 fills (an over-full 150% or 200vh does too), any spelling of it (`100.0`,
+ * `vmin`/`vmax`. A number of 100 or more fills (an over-full 150% or 10000vw does too), any spelling of it (`100.0`,
  * `+100`, `1e2`); inside `calc()`, `min()`, `max()` or `clamp()` the numbers of the axis are added, so `calc(50vw + 50vw)`
  * fills and `calc(100% - 0px)` does (a subtraction of a fixed length is not taken off). The keywords
- * `stretch`, `fill-available` and their prefixed forms fill. Not it: `10vw`, `100px`, `1100vw`, `0.100vw`, `50%`, and
+ * `stretch`, `fill-available` and their prefixed forms fill. Not it: `10vw`, `100px`, `0.100vw`, `50%`, `-100vw`, and
  * a length held in a custom property (`var(--w)`), which is not resolved: a documented limit.
  */
 const AXIS_UNITS = {
@@ -344,20 +369,32 @@ const AXIS_TOKEN = {
   height: new RegExp(`(?<![\\w.])([+-]?)(\\d+(?:\\.\\d+)?(?:e[+-]?\\d+)?|\\.\\d+(?:e[+-]?\\d+)?)(?:${AXIS_UNITS.height})(?![\\w%])`, "gi"),
 };
 const FILL_KEYWORD = /(?:^|[\s(,])(?:-webkit-|-moz-)?(?:stretch|fill-available|available)(?:$|[\s),])/i;
-const MAX_FILL_PERCENT = 1_000;
+/** Work cap of the tokeniser: a longer (whitespace-collapsed) value is padding, not a length, and counts as filling. */
+const MAX_LENGTH_SCAN = 2_048;
+const MAX_RAW_LENGTH = 100_000;
 
-function fillsAxis(value: string, axis: "width" | "height"): boolean {
-  if (value === "" || value.length > 512) return false;
+function fillsAxis(raw: string, axis: "width" | "height"): boolean {
+  if (raw === "") return false;
+  // The cap bounds the work, never the verdict: a value padded past it is treated as filling (fail toward detection).
+  if (raw.length > MAX_RAW_LENGTH) return true;
+  const value = stripComments(unescapeCss(raw)).replace(/\s+/g, " ").trim();
+  if (value === "") return false;
+  if (value.length > MAX_LENGTH_SCAN) return true;
   if (FILL_KEYWORD.test(value)) return true;
+  // Inside a calc() a minus sign may subtract or flip a sign, so every magnitude counts there; alone a negative length is off-screen.
+  const arithmetic = value.includes("calc(") || value.includes("*") || value.includes("/");
   let sum = 0;
+  let any = false;
   for (const match of value.matchAll(AXIS_TOKEN[axis])) {
     const amount = Number(match[2]);
-    if (!Number.isFinite(amount)) continue;
-    if (match[1] === "-") continue;
-    if (amount >= 100 && amount <= MAX_FILL_PERCENT) return true;
+    if (match[1] === "-" && !arithmetic) continue;
+    any = true;
+    if (amount >= 100) return true;
     sum += amount;
   }
-  return sum >= 100 && sum <= MAX_FILL_PERCENT;
+  // `calc(1vw * 100)`: a product or quotient of an axis length is not worked out; it counts as filling.
+  if (any && (value.includes("*") || value.includes("/"))) return true;
+  return sum >= 100;
 }
 
 export interface OverlayGeometry {
