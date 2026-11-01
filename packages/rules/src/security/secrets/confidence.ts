@@ -585,30 +585,32 @@ function displayIssuer(iss: string): string {
   return shown.length > ISSUER_MAX_LENGTH ? `${shown.slice(0, ISSUER_MAX_LENGTH)}...` : shown;
 }
 
-/** The JSON a JWT part decodes to, whatever its type, `undefined` when it is empty, too long to read or not JSON. */
-function jwtPartJson(part: string | undefined): { value: unknown } | undefined {
-  if (!part || part.length > JWT_MAX_PART_CHARS) return undefined;
-  try {
-    return { value: JSON.parse(Buffer.from(part, "base64url").toString("utf8")) as unknown };
-  } catch {
-    return undefined;
-  }
-}
-
-const isJsonObject = (value: unknown): boolean => value !== null && typeof value === "object" && !Array.isArray(value);
+type JwtPartVerdict = "object" | "not-json" | "not-object" | "inconclusive";
 
 /**
- * True when the match is proven not to be a token: the header is read in full and is not a JSON object with a string `alg` (RFC 7515,
- * 7516), or the payload is read in full and is valid JSON that is not an object (a JWT claims set is one, RFC 7519). A part too long to
- * read, an empty or detached payload, or one that is not JSON is undecided, so the match is kept (#1283).
+ * What a JWT part is, with scanner limits kept apart from proof: `not-json` (a parse error within the cap) and `not-object` (valid JSON
+ * that is not a plain object) are proof it is not a token part; an empty part, one past {@link JWT_MAX_PART_CHARS} and JSON nested deeper
+ * than `JSON.parse` allows (a RangeError) are `inconclusive`.
+ */
+function jwtPartVerdict(part: string | undefined): JwtPartVerdict {
+  if (!part || part.length > JWT_MAX_PART_CHARS) return "inconclusive";
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(Buffer.from(part, "base64url").toString("utf8"));
+  } catch (error) {
+    return error instanceof SyntaxError ? "not-json" : "inconclusive";
+  }
+  return parsed !== null && typeof parsed === "object" && !Array.isArray(parsed) ? "object" : "not-object";
+}
+
+/**
+ * True when a match that did not decode is proven not to be a token: its header or its payload is within the read bound and is not a JSON
+ * object (garbage, truncated, trailing bytes, an array, a string, a number, `null`). A part too long to read, one nested too deeply to
+ * parse and an empty payload are undecided, so the match is kept (#1283).
  */
 function isNotAJwt(value: string): boolean {
   const [head, body] = value.split(".");
-  if (!head || head.length > JWT_MAX_PART_CHARS) return false;
-  const header = jwtPartJson(head);
-  if (!header || !isJsonObject(header.value) || typeof (header.value as Record<string, unknown>).alg !== "string") return true;
-  const payload = jwtPartJson(body);
-  return payload !== undefined && !isJsonObject(payload.value);
+  return [jwtPartVerdict(head), jwtPartVerdict(body)].some((verdict) => verdict === "not-json" || verdict === "not-object");
 }
 
 function refineJwt(
@@ -630,11 +632,11 @@ function refineJwt(
     }
   }
   // Dropped only on proof it is not a token (see `isNotAJwt`): an `eyJ` run with two dots that is a base64 payload or text (#1283).
-  // A part too long to read, or a good header over a payload that is not JSON, is undecided: reported at medium.
+  // An undecided part (too long to read, nested too deeply, empty) is reported at medium. A header with no `alg` over a payload that
+  // decodes is a malformed token, not proof of a non-token: it keeps its classification.
   if (!decoded) {
     return isNotAJwt(value) ? { drop: true } : { type: "JSON Web Token", confidence: "medium", publicByDesign: false };
   }
-  if (typeof decoded.header.alg !== "string") return { drop: true };
   const { payload } = decoded;
   const role = typeof payload.role === "string" ? payload.role : undefined;
   const iss = typeof payload.iss === "string" ? payload.iss : undefined;
