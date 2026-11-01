@@ -474,10 +474,95 @@ function verifiesUnderSampleSecret(token: string, header: Record<string, unknown
   return JWT_IO_SECRETS.some((secret) => createHmac(hash, secret).update(signed).digest("base64url") === signature);
 }
 
-function refineJwt(value: string, now: number, before: (() => string) | undefined): Refinement {
+// Tokens a platform or a vendor script puts on a page for the browser to read
+// (#1287, #1229). Each is recognised by the claims it is made of, not by a
+// header, and none of them carries a role or an admin scope: a token that does
+// is never one of these.
+// The sessions URL is parsed, not matched: a regex over page text for a host
+// matches `evilshopifyinc.com` and `shopifyinc.com.evil.test` too.
+const URL_CANDIDATE_RE = /https?:\/\/[^\s"'<>\\)]{1,200}/gi;
+const SHOPIFY_SESSIONS_HOST = "shopifyinc.com";
+
+function mentionsShopSessions(text: string): boolean {
+  for (const candidate of text.match(URL_CANDIDATE_RE) ?? []) {
+    try {
+      const url = new URL(candidate);
+      if (url.hostname === SHOPIFY_SESSIONS_HOST && url.pathname.startsWith("/sessions")) return true;
+    } catch {
+      // not a URL after all
+    }
+  }
+  return false;
+}
+const NETLIFY_CWV_ATTR_RE = /data-netlify-cwv-token\s*=\s*["']?$/i;
+// A beacon is a read-only client identifier, so its payload is made of the
+// registered claims and the platform's own identifiers and nothing else: an
+// `email`, an `admin: true`, a `permissions` list or any claim this list does
+// not name is a token that carries more than the beacon does, whatever issuer
+// or attribute dresses it up.
+const REGISTERED_CLAIMS = ["iss", "aud", "iat", "exp", "nbf", "jti", "sub"];
+
+function onlyClaims(payload: Record<string, unknown>, own: string[]): boolean {
+  return Object.keys(payload).every((key) => REGISTERED_CLAIMS.includes(key) || own.includes(key));
+}
+
+/** The platform or beacon token a payload is, if it is one of the known shapes. */
+function publicBeaconToken(
+  header: Record<string, unknown>,
+  payload: Record<string, unknown>,
+  before: (() => string) | undefined,
+  after: (() => string) | undefined,
+): { type: string; extra: FindingExtra } | undefined {
+  if (hasAdminScope(payload) || typeof payload.role === "string") return undefined;
+  // An unsigned token (`alg: none`, no `alg`) is whatever its sender writes.
+  if (typeof header.alg !== "string" || header.alg.toLowerCase() === "none") return undefined;
+  if (
+    (typeof payload.merchantId === "string" || typeof payload.merchantId === "number") &&
+    typeof payload.merchantOrigin === "string" &&
+    onlyClaims(payload, ["merchantId", "merchantOrigin", "expiresAt"])
+  ) {
+    return { type: "Shopify Wallet Token", extra: { platform: "Shopify", kind: "per-request wallet token" } };
+  }
+  if (
+    typeof payload.client_id === "string" &&
+    typeof payload.unique_id === "string" &&
+    onlyClaims(payload, ["client_id", "client_account_id", "unique_id"])
+  ) {
+    // The sessions URL beside the token is the evidence: the claim names alone
+    // are what any custom app's own session token could be made of.
+    if (mentionsShopSessions((before?.() ?? "") + " " + (after?.() ?? ""))) {
+      return { type: "Shopify Shop Session Token", extra: { platform: "Shopify", kind: "client session token" } };
+    }
+  }
+  const iss = typeof payload.iss === "string" ? payload.iss : undefined;
+  if (
+    iss === "netlify" &&
+    before !== undefined &&
+    NETLIFY_CWV_ATTR_RE.test(before()) &&
+    onlyClaims(payload, ["site_id", "account_id", "deploy_id"])
+  ) {
+    return { type: "Netlify Web Vitals Token", extra: { platform: "Netlify", kind: "web vitals beacon" } };
+  }
+  return undefined;
+}
+
+function refineJwt(
+  value: string,
+  now: number,
+  before: (() => string) | undefined,
+  after?: () => string,
+): Refinement {
   const decoded = decodeJwt(value);
   if (decoded && isJwtIoSampleClaims(decoded.payload) && verifiesUnderSampleSecret(value, decoded.header)) {
     return { drop: true };
+  }
+  if (decoded) {
+    const beacon = publicBeaconToken(decoded.header, decoded.payload, before, after);
+    if (beacon) {
+      const iss = decoded.payload.iss;
+      const extra: FindingExtra = { ...beacon.extra, ...(typeof iss === "string" ? { issuer: iss } : {}) };
+      return { type: beacon.type, confidence: "medium", publicByDesign: true, extra };
+    }
   }
   if (!decoded) {
     // The header matched but the payload is not JSON: not a token anyone
@@ -728,7 +813,7 @@ export function refineFinding(
       return refineAwsAccessKeyId(value, context.before?.(), context.after?.());
     if (CONNECTION_STRING_TYPES.has(type)) return refineConnectionString(value);
     if (GITHUB_TYPES.has(type)) return refineGithubToken(value);
-    if (type === "JSON Web Token" || type === "Supabase Anon Key") return refineJwt(value, now, context.before);
+    if (type === "JSON Web Token" || type === "Supabase Anon Key") return refineJwt(value, now, context.before, context.after);
     if (type === "Algolia Secured API Key") return refineAlgoliaSecuredKey(value);
     if (type === "Algolia API Key") return refineAlgoliaHexKey();
     if (STRIPE_TYPES.has(type)) return refineStripeKey(value);
