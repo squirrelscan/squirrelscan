@@ -332,9 +332,46 @@ describe("JWT claims", () => {
     expect(refineFinding("JSON Web Token", token({ iss: "acme-shop.myshopify.com", exp: nowSec - 3600 }), NOW)?.confidence).toBe("info");
   });
 
-  test("a payload that is not JSON is a generic JWT-shaped string", () => {
-    const r = refineFinding("Supabase Anon Key", `${header}.${"x".repeat(120)}`, NOW);
-    expect(r).toMatchObject({ type: "JSON Web Token", confidence: "medium", publicByDesign: false });
+  test("a match that does not decode to a JWT is dropped: header or payload not a JSON object, or a header with no string alg (#1283)", () => {
+    const payload = b64u({ iat: 1700000000, pad: "p".repeat(80) });
+    const shapes: Array<[string, string]> = [
+      ["payload is not JSON", `${header}.${"x".repeat(120)}`],
+      ["payload is not JSON, with a signature", `${header}.${"x".repeat(120)}.c2ln`],
+      ["header is not JSON", `${"x".repeat(40)}.${payload}.c2ln`],
+      ["header is a JSON array", `${b64u(["alg", "HS256"])}.${payload}.c2ln`],
+      ["header is a JSON string", `${b64u("alg")}.${payload}.c2ln`],
+      ["header is null", `${b64u(null)}.${payload}.c2ln`],
+      ["header has no alg", `${b64u({ typ: "JWT" })}.${payload}.c2ln`],
+      ["header alg is a number", `${b64u({ alg: 256, typ: "JWT" })}.${payload}.c2ln`],
+      ["header alg is null", `${b64u({ alg: null, typ: "JWT" })}.${payload}.c2ln`],
+      ["header alg is an object", `${b64u({ alg: { a: 1 } })}.${payload}.c2ln`],
+      ["payload is a JSON array", `${header}.${b64u([1, 2, 3])}.c2ln`],
+      ["payload is a JSON string", `${header}.${b64u("text")}.c2ln`],
+      ["payload is a number", `${header}.${b64u(42)}.c2ln`],
+      ["payload is null", `${header}.${b64u(null)}.c2ln`],
+      ["payload is empty", `${header}..c2ln`],
+    ];
+    for (const [label, value] of shapes) {
+      for (const type of ["JSON Web Token", "Supabase Anon Key"]) {
+        expect([label, type, refineFinding(type, value, NOW)]).toEqual([label, type, { drop: true }]);
+      }
+    }
+  });
+
+  test("a real JWT is still reported: any alg string (none included), expired, any claims", () => {
+    const nowSec = Math.floor(NOW / 1000);
+    for (const alg of ["HS256", "RS256", "ES256", "none", "EdDSA", "x-custom"]) {
+      const value = `${b64u({ alg, typ: "JWT" })}.${b64u({ sub: "u1", pad: "p".repeat(80) })}.c2ln`;
+      expect([alg, refineFinding("JSON Web Token", value, NOW)?.type]).toEqual([alg, "JSON Web Token"]);
+    }
+    const expired = `${header}.${b64u({ sub: "u1", exp: nowSec - 3600, pad: "p".repeat(80) })}.c2ln`;
+    expect(refineFinding("JSON Web Token", expired, NOW)).toMatchObject({ type: "JSON Web Token (expired)", confidence: "info" });
+    const unsigned = `${b64u({ alg: "none" })}.${b64u({ sub: "u1", pad: "p".repeat(80) })}.`;
+    expect(refineFinding("JSON Web Token", unsigned, NOW)?.drop).not.toBe(true);
+    const admin = `${header}.${b64u({ sub: "u1", scope: "admin" })}.c2ln`;
+    expect(refineFinding("JSON Web Token", admin, NOW)).toMatchObject({ type: "JSON Web Token (admin scope)", confidence: "high" });
+    // an empty payload object and extra header fields are tokens
+    expect(refineFinding("JSON Web Token", `${b64u({ alg: "HS256", kid: "k1", x: [1] })}.${b64u({})}.c2ln`, NOW)?.drop).not.toBe(true);
   });
 
   test("hostile claims do not throw: huge exp, non-string role, deep nesting, giant payload", () => {
@@ -355,7 +392,8 @@ describe("JWT claims", () => {
       expect(() => refineFinding("Supabase Anon Key", token(claims), NOW)).not.toThrow();
     }
     const giant = `${header}.${"A".repeat(20000)}`;
-    expect(refineFinding("Supabase Anon Key", giant, NOW)?.type).toBe("JSON Web Token");
+    // a giant part that is not JSON is dropped like any other (#1283)
+    expect(refineFinding("Supabase Anon Key", giant, NOW)).toEqual({ drop: true });
   });
 });
 
