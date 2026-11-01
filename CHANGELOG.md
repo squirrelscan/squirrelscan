@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **`--max-duration`'s parse cap judges the decoded page, not the compressed one.** The cap (5 MiB, because a parse cannot be interrupted) compared the recorded size, which is the Content-Length header, so a gzip response of a few KB that inflates to megabytes was parsed in full, in the crawl, the audit pass and the streaming pass that counts the pages left out. All three now compare the larger of the recorded size and the decoded body's bytes, so such a page is stored, counted in `pagesTooLarge` and listed like any other too-large page. A run without `--max-duration` is unchanged. (#1497)
+
 ## v0.0.154 (2026-11-01)
 
 Technology detection reads a long `next/script` snippet in a Next.js flight payload again, and a page of unclosed tags no longer makes it take tens of seconds. `url/slug-convention` and `perf/total-byte-weight` count the same pages on both engines when a crawl has bodiless 4xx or 5xx pages, and `integrity/brand-impersonation` keeps reading long attribute labels on a page padded to starve it.

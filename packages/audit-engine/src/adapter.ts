@@ -138,6 +138,7 @@ import { detachFromPage, detachParsedPage } from "./detach";
 import { resolveCloakingProbes, selectCloakingPaths } from "./cloaking-probe";
 import { createSiteQuery } from "./site-query";
 import { confirmSoft404Candidates, hasSoft404FetchWork, markUnresolvedSoft404 } from "./soft404-confirm";
+import { decodedPageBytes } from "@squirrelscan/utils/bytes";
 import { headerScopeBase } from "@squirrelscan/utils/headers";
 
 import { createHeaderScope, headersWithheldFrom } from "./lib/header-scope";
@@ -292,7 +293,7 @@ export function buildSiteContext(
 
     for (const page of pages) {
       // `--max-duration` (#1332): a page over the cap is stored but never parsed, here or anywhere else.
-      if (maxParseBytes !== undefined && (page.sizeBytes ?? Buffer.byteLength(page.html ?? "")) > maxParseBytes) {
+      if (maxParseBytes !== undefined && decodedPageBytes(page.sizeBytes, page.html ?? "") > maxParseBytes) {
         contextPages.push({ page, parsed: null });
         continue;
       }

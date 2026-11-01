@@ -23,6 +23,7 @@
 // cluster key and is left alone — with `SQUIRREL_TEMPLATE_FANOUT=0` as the kill
 // switch. See template-fanout.ts for what makes it sound and what it can never do.
 
+import { decodedPageBytes } from "@squirrelscan/utils/bytes";
 import { Effect } from "effect";
 
 import type { PageRecord } from "@squirrelscan/core-contracts";
@@ -429,7 +430,7 @@ export function streamPageRules(
 
       // Parse only what has to be parsed (≤ batchSize DOMs live at the peak).
       const tooLarge = (p: (typeof batch)[number]): boolean =>
-        maxPageBytes !== undefined && (p.sizeBytes ?? p.html?.length ?? 0) > maxPageBytes;
+        maxPageBytes !== undefined && decodedPageBytes(p.sizeBytes, p.html ?? "") > maxPageBytes;
       const toParse = batch.filter((p) => !replayByUrl.has(p.normalizedUrl) && !tooLarge(p));
       const parsedBatch = yield* buildSiteContext(toParse, undefined, { maxParseBytes: maxPageBytes });
       peakLiveDocs = Math.max(peakLiveDocs, parsedBatch.filter((p) => p.parsed?.document).length);
