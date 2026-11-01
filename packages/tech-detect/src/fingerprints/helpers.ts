@@ -43,6 +43,14 @@ export function inBundle(
 }
 
 /**
+ * `source` in a fetched first-party bundle as code, or inside the string that is the inline script of a script
+ * element a framework renders (`__html:` or a script `children:` value, see `stringValue` in the detector type).
+ */
+export function inBundleString(source: string, hint: string): Detector {
+  return { type: "script-content", pattern: new RegExp(source), inCode: true, stringValue: true, hint };
+}
+
+/**
  * `source` in a fetched first-party bundle as code, in a bundle that ALSO matches
  * `alsoSource` anywhere (a string included): the library's own strings and a
  * value elsewhere in the file. `alsoHints` are literals the second pattern needs.
