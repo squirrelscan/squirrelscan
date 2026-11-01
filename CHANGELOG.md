@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+## v0.0.156 (2026-11-01)
+
+Site integrity is harder to talk around: `integrity/brand-impersonation` no longer spares a sign-in link to an identity broker's authorize URL because its query names a provider (the tenant must be the site's own), ranks controls by the destination as a browser reads it, and `integrity/fake-auth-overlay` reads the modern viewport units and tokenises a style the way a browser does, so a string, comment or escape no longer hides the geometry. The JSON report (schema 1.5) names the rules that ran, and `--include-pages` lists the URLs that never answered with a fixed reason code. Technology detection finds Microsoft Clarity's loader inside a first-party bundle and Railway behind `server: railway-edge`.
+
 ### Added
 
 - **Microsoft Clarity is detected from its loader inside a first-party bundle.** The standard snippet's `t.src="https://www.clarity.ms/tag/"+i` (and its `setAttribute("src", ...)` and template-literal forms), bundled into a site's own script, now matches as code, with the window around it sent in a capped scan. A bundle that only names the URL in prose, a docs string or a comment does not. Before v0.0.150 a few such installs were found by accident through a whole-text read of the page. (#1488)
