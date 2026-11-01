@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+## v0.0.157 (2026-11-01)
+
+Technology detection finds a Microsoft Clarity snippet that a framework bundle carries as the text of an inline script, and a small script late on a crowded page is no longer left out of detection. Test coverage that missed v0.0.156 (leading-space sign-in forms, three Clarity negatives) is included.
+
 ### Fixed
 
 - **Microsoft Clarity is detected when its snippet is the text of an inline script in a framework bundle.** The standard loader carried as the `__html` of a `dangerouslySetInnerHTML` prop, or as the `children` string, of a script element's props (a `"script"` tag, a `strategy` key or a script `type`) is now found, including in a bundle sampled past its head. The string must read as JavaScript (no markup) and hold the snippet's own signature or its script-creating loader, so a docs page, a markdown renderer or a test fixture that quotes the snippet is not a detection. An `id` key alone is not enough, so a `next/script` with no `strategy` prop (and no `"script"` tag or script `type`) is not read. (#1509, refs #1488)
