@@ -3142,18 +3142,53 @@ function isJwtHead(body: string, text: string, end: number): boolean {
 }
 
 /**
- * A Bearer value that is only the HEADER segment of a JWT: `eyJhbGciOiJIUzI1NiIs`, base64url of `{"alg":"HS256",` with no dot and
- * no payload or signature behind it. It is a documentation or UI fragment (a truncated example), not a credential. It has to decode
- * to a JWT header (`{"alg"`, `{"typ"`, `{"kid"`, `{"cty"`): any other `eyJ…` value is base64 of some other JSON and stays an opaque
- * bearer token, and a head with a dot and a second segment after it is a token, handled by {@link isJwtHead} (#1227).
+ * A Bearer value that is only the HEADER segment of a JWT: `eyJhbGciOiJIUzI1NiIs`, base64url of `{"alg":"HS256",` with no payload or
+ * signature behind it. It is a documentation or UI fragment (a truncated example), not a credential. Dropped only on proof (#1227):
+ * - the WHOLE body decodes to a complete JOSE header: a plain JSON object, with an `alg`, whose keys are all JOSE header names
+ *   ({@link JOSE_HEADER_KEYS}); or
+ * - the body is short (at most {@link TRUNCATED_HEADER_MAX_CHARS}) and cut mid-JSON, and its decoded prefix still opens with `{"alg"`,
+ *   `{"typ"`, `{"kid"` or `{"cty"`.
+ * Any other `eyJ…` value (a JSON object that merely opens with `typ` or `alg` and goes on to carry a `sub`, a `token`, padding) is an
+ * opaque bearer token and still reports. A value that continues as a token (see {@link continuesAsToken}) is not a header on its own.
  */
-const JWT_HEADER_START_RE = /^\{\s*"(?:alg|typ|kid|cty)"\s*:/;
+const JWT_HEADER_START_RE = /^\{\s*"(?:alg|typ|kid|cty)"/;
+const TRUNCATED_HEADER_MAX_CHARS = 64;
+const MAX_HEADER_BODY_CHARS = 2_048;
+const JOSE_HEADER_KEYS = new Set(["alg", "typ", "kid", "cty", "enc", "zip", "x5t", "x5t#S256", "x5u", "x5c", "jku", "jwk", "crit"]);
+
+/**
+ * Whether the text after a Bearer value goes on as part of a token: a `.` followed by a token character, a `%` or `\`
+ * (an escaped separator: `%2E`, `\x2e`), or, after whitespace or a `,`, a `.` or another `eyJ`. The end of the text, a quote, a
+ * bracket and other punctuation do not continue one.
+ */
+function continuesAsToken(text: string, end: number): boolean {
+  const c = text.charAt(end);
+  if (c === "") return false;
+  if (c === ".") return /[A-Za-z0-9_-]/.test(text.charAt(end + 1));
+  if (c === "%" || c === "\\") return true;
+  if (c === "," || /\s/.test(c)) {
+    const after = /^[\s,]*/.exec(text.slice(end, end + 64))?.[0].length ?? 0;
+    const next = text.slice(end + after, end + after + 3);
+    return next.startsWith(".") || next === "eyJ";
+  }
+  return false;
+}
 
 function isHeaderOnlyJwt(body: string, text: string, end: number): boolean {
-  if (!/^eyJ[A-Za-z0-9_-]+$/.test(body)) return false;
-  if (text.charCodeAt(end) === 46 && isWordCharAt(text, end + 1)) return false;
-  // 24 characters are 18 bytes: enough to read the first key, and whole bytes whatever follows
-  return JWT_HEADER_START_RE.test(Buffer.from(body.slice(0, 24), "base64url").toString("utf8"));
+  // a complete header is a few hundred characters: a longer value is not one, and is not parsed
+  if (body.length > MAX_HEADER_BODY_CHARS || !/^eyJ[A-Za-z0-9_-]+$/.test(body)) return false;
+  if (continuesAsToken(text, end)) return false;
+  const decoded = Buffer.from(body, "base64url").toString("utf8");
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(decoded);
+  } catch {
+    // cut mid-JSON: a header only when it is short and its prefix still opens like one
+    return body.length <= TRUNCATED_HEADER_MAX_CHARS && JWT_HEADER_START_RE.test(decoded);
+  }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return false;
+  const keys = Object.keys(parsed);
+  return keys.includes("alg") && keys.every((key) => JOSE_HEADER_KEYS.has(key));
 }
 
 /**

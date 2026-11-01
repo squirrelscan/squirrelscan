@@ -19,7 +19,7 @@ How it works:
 
 ### Fixed
 
-- **`security/leaked-secrets` no longer reports a header-only JWT after `Bearer`.** `Bearer eyJhbGciOiJIUzI1NiIs`, the header segment of a JWT with no dot, payload or signature, was reported as a medium bearer token. A value that decodes to a JWT header (`alg`, `typ`, `kid` or `cty` first) and has nothing after it is dropped; a full `Bearer <JWT>` and an opaque bearer token still report. (#1227)
+- **`security/leaked-secrets` no longer reports a header-only JWT after `Bearer`.** `Bearer eyJhbGciOiJIUzI1NiIs`, the header segment of a JWT with no dot, payload or signature, was reported as a medium bearer token. It is dropped only when the whole value decodes to a complete JOSE header (a JSON object with an `alg` and only JOSE header keys), or is a short truncated one (64 characters or fewer, cut mid-JSON, opening with `alg`, `typ`, `kid` or `cty`), and the text after it does not continue a token. An opaque JSON bearer value that merely opens with one of those keys, a JWT written with a `%2E`, space, comma or escaped separator, and a full `Bearer <JWT>` still report. (#1227)
 
 ## v0.0.158 (2026-11-01)
 
