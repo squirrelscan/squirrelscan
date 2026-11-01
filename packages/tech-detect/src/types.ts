@@ -41,6 +41,11 @@ export type Detector =
       type: "script-content";
       pattern: RegExp;
       inCode?: boolean;
+      // `stringValue` (with `inCode`): a match inside a string literal also counts when that string is the value of
+      // `__html`, or of `children` on a script-shaped props object (a `strategy` or `id` sibling): the inline loader of a
+      // `next/script` or `dangerouslySetInnerHTML` carried as text in a framework bundle (#1509). Any other string
+      // (docs, an error message, a code sample) is still rejected.
+      stringValue?: boolean;
       hint?: string;
       also?: undefined;
       validate?: ScriptMatchValidator;
@@ -49,6 +54,7 @@ export type Detector =
       type: "script-content";
       pattern: RegExp;
       inCode: true;
+      stringValue?: undefined;
       hint?: string;
       also: { pattern: RegExp; hints: string[] };
       validate?: ScriptMatchValidator;

@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **Microsoft Clarity is detected when its snippet is the text of an inline script in a framework bundle.** The standard loader carried as a `dangerouslySetInnerHTML` `__html` string, or as the `children` string of a `next/script` props object (one with a `strategy` or `id` key), is now found, including in a bundle sampled past its head. The same snippet in a docs string, a code sample or any other string still is not. (#1509, refs #1488)
+
 ## v0.0.156 (2026-11-01)
 
 Site integrity is harder to talk around: `integrity/brand-impersonation` no longer spares a sign-in link to an identity broker's authorize URL because its query names a provider (the tenant must be the site's own), ranks controls by the destination as a browser reads it, and `integrity/fake-auth-overlay` reads the modern viewport units and tokenises a style the way a browser does, so a string, comment or escape no longer hides the geometry. The JSON report (schema 1.5) names the rules that ran, and `--include-pages` lists the URLs that never answered with a fixed reason code. Technology detection finds Microsoft Clarity's loader inside a first-party bundle and Railway behind `server: railway-edge`.

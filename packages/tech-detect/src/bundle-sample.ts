@@ -27,6 +27,10 @@ const MAX_HIT_SCANS_PER_HINT = 512;
 const MAX_QUALIFY_CANDIDATES = 64;
 /** Chars a segment may carry beyond its text: an opener of up to 2 characters, and one character backed up so a cut never splits an escape (see `cutAt`). */
 const OPENER_SLACK = 3;
+/** Chars before a string-value hint's string kept in its window: the `__html:` or `children:` key it is the value of, and the keys of its object. */
+const STRING_KEY_PREFIX = 400;
+/** Chars after the string kept for the keys that follow it in its object. */
+const STRING_KEY_SUFFIX = 400;
 /** A string longer than this past a window's end is cut before it, not carried to its close. */
 const MAX_STRING_CARRY = 512;
 /** Longest body the scan classifies: past the largest `[tech_detect] bundle_bytes`, so every body a caller can hand over fits. */
@@ -48,6 +52,8 @@ interface HintSpec {
   patterns: HintPattern[];
   /** Declared by the fingerprint (`hint`, `also.hints`) rather than derived from its pattern. */
   declared: boolean;
+  /** A detector reads the string this hint sits in as the text of a script element: its window keeps the key before the string and the keys after it (#1509). */
+  stringValue: boolean;
 }
 
 let specs: HintSpec[] | null = null;
@@ -69,7 +75,7 @@ for (const fp of ALL_FINGERPRINTS) {
 function hintSpecs(): HintSpec[] {
   if (specs) return specs;
   const map = new Map<string, HintSpec>();
-  const add = (text: string, ci: boolean, re: RegExp, declared: boolean, inCode: boolean): void => {
+  const add = (text: string, ci: boolean, re: RegExp, declared: boolean, inCode: boolean, stringValue = false): void => {
     const key = `${ci ? "i" : "s"}:${text}`;
     const flags = re.flags.replace(/[gy]/g, "");
     const own: HintPattern = {
@@ -80,13 +86,15 @@ function hintSpecs(): HintSpec[] {
     if (known) {
       known.patterns.push(own);
       known.declared ||= declared;
-    } else map.set(key, { text, ci, patterns: [own], declared });
+      known.stringValue ||= stringValue;
+    } else map.set(key, { text, ci, patterns: [own], declared, stringValue });
   };
   for (const fp of ALL_FINGERPRINTS) {
     for (const d of fp.detectors) {
       if (d.type !== "script-content") continue;
       const inCode = d.inCode === true;
-      if (d.hint) add(d.hint, false, d.pattern, true, inCode);
+      // A string-value detector accepts a match inside a string, so its window is judged by the plain pattern.
+      if (d.hint) add(d.hint, false, d.pattern, true, inCode && d.stringValue !== true, d.stringValue === true);
       // The `also` pattern is matched anywhere in the body, strings included: not gated to code.
       if (d.also) for (const h of d.also.hints) add(h, false, d.also.pattern, true, false);
       if (!d.hint) {
@@ -309,8 +317,20 @@ export function createBundleSampler(
         const settled = settle(cut, Math.min(limit, at + spec.text.length + WINDOW_AFTER));
         if (!settled) continue;
         cut = settled;
-        const start = cut.pos;
-        const end = endAt(Math.min(limit, at + spec.text.length + WINDOW_AFTER));
+        let start = cut.pos;
+        let end = endAt(Math.min(limit, at + spec.text.length + WINDOW_AFTER));
+        if (spec.stringValue) {
+          // The hit is in a short string: keep the code before it (its key) and after it (the object's other keys).
+          const span = spanAt(at);
+          if (span && span.close - span.open <= MAX_STRING_CARRY) {
+            const wide = cutAt(Math.max(floor, span.open - STRING_KEY_PREFIX));
+            if (!wide.opener && wide.pos <= span.open) {
+              start = wide.pos;
+              end = endAt(Math.min(limit, span.close + 1 + STRING_KEY_SUFFIX));
+              cut = { pos: start, opener: "" };
+            }
+          }
+        }
         if (end <= start) continue;
         const text = content.slice(start, end);
         if (seen.has(text) || !qualifies(spec, text, start)) continue;
