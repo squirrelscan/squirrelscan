@@ -463,7 +463,9 @@ export function reconstructReport(
     const unstoredRead = options?.includePageRuleCounts
       ? yield* storage
           .getUnstoredFrontierEntries(crawlId, JSON_REPORT_PAGES.maxEntries)
-          .pipe(Effect.catchAll(() => Effect.succeed({ entries: [], total: 0 })))
+          .pipe(
+            Effect.catchAll(() => Effect.succeed({ entries: [], total: 0 }))
+          )
       : null;
 
     // 7. Load rule registry to get metadata
@@ -1017,7 +1019,10 @@ export function reconstructReport(
           }
         : {}),
       ...(unstoredRead && unstoredRead.total > 0
-        ? { unstoredPages: unstoredRead.entries.map(unstoredPageRow), unstoredPagesTotal: unstoredRead.total }
+        ? {
+            unstoredPages: unstoredRead.entries.map(unstoredPageRow),
+            unstoredPagesTotal: unstoredRead.total,
+          }
         : {}),
       // #1829: coverage lost to throttling, in a form renderers can count
       // rather than parse out of the reason prose.
