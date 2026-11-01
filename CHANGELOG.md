@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **`railway-app` is detected from `server: railway-edge` too.** The `Server` signature matched only `railway` and `railway-hikari`; Railway's v3 edge proxy sends `railway-edge` (per its changelog), so a custom-domain site served by it went undetected. (#1504)
+
 ### Added
 
 - **Microsoft Clarity is detected from its loader inside a first-party bundle.** The standard snippet's `t.src="https://www.clarity.ms/tag/"+i` (and its `setAttribute("src", ...)` and template-literal forms), bundled into a site's own script, now matches as code, with the window around it sent in a capped scan. A bundle that only names the URL in prose, a docs string or a comment does not. Before v0.0.150 a few such installs were found by accident through a whole-text read of the page. (#1488)

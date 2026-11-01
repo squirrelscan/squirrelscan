@@ -2117,7 +2117,7 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://railway.app",
     icon: "railway-app",
     detectors: [
-      { type: "header", name: "Server", pattern: new RegExp("^railway(?:-hikari)?$", "i") },
+      { type: "header", name: "Server", pattern: new RegExp("^railway(?:-(?:hikari|edge))?$", "i") },
       { type: "url-host", pattern: new RegExp("(?:^|\\.)railway\\.app\\.?$", "i") },
     ],
     confidence: "high",
