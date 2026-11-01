@@ -13,7 +13,7 @@
 
 import { page } from "./contexts";
 import type { Case, Expectation } from "./cases";
-import { awsKeySuffix, githubToken, runOf, seededRng, supabaseJwt, type Rng } from "./generators";
+import { awsKeySuffix, githubToken, mixedRun, runOf, seededRng, supabaseJwt, type Rng } from "./generators";
 
 const UPPER = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 const DIGIT = "0123456789";
@@ -379,9 +379,12 @@ export const ROUND_5: Case[] = [
   rw("aws-key-id-in-a-presigned-url-is-informational", (r) =>
     page("", `<script>self.__next_f.push([1,"{\\"href\\":\\"https://acme-downloads.s3.amazonaws.test/x.zip?X-Amz-Algorithm=AWS4-HMAC-SHA256\\u0026X-Amz-Credential=${["AK", "IA"].join("")}${awsKeySuffix(r)}%2F20260916%2Fus-east-1%2Fs3%2Faws4_request\\u0026X-Amz-Date=20260916T023448Z\\u0026X-Amz-Expires=86400\\u0026X-Amz-SignedHeaders=host\\u0026X-Amz-Signature=${runOf(r, HEX, 64)}\\"}"])</script>`),
     [inl("inline-script", "AWS Access Key ID", "info")]),
-  rw("aws-key-id-under-a-key-still-reports", (r) =>
+  rw("aws-key-id-under-a-key-with-no-secret-is-medium", (r) =>
     page("", `<script>window.__ENV={AWS_ACCESS_KEY_ID:"${["AK", "IA"].join("")}${awsKeySuffix(r)}"};</script>`),
-    [inl("inline-script", "AWS Access Key ID", "high")]),
+    [inl("inline-script", "AWS Access Key ID", "medium")]),
+  rw("aws-key-id-beside-its-secret-is-high-and-the-secret-critical", (r) =>
+    page("", `<script>window.__ENV={AWS_ACCESS_KEY_ID:"${["AK", "IA"].join("")}${awsKeySuffix(r)}",aws_secret_access_key:"${mixedRun(r, 40)}"};</script>`),
+    [inl("inline-script", "AWS Access Key ID", "high"), inl("inline-script", "AWS Secret Access Key", "critical")]),
 
   // 7. Public client keys the generic tiers were reporting as leaks.
   rw("amplitude-browser-key-under-its-own-name", (r) =>
@@ -450,9 +453,9 @@ export const ROUND_5: Case[] = [
 
   // 4. A credential-shaped query name with no signature and no expiry beside
   // it is not a presigned URL.
-  rw("aws-key-id-in-a-bare-credential-query-parameter-still-reports", (r) =>
-    page("", `<script>var u="https://acme-downloads.s3.amazonaws.test/x.zip?X-Amz-Credential=${["AK", "IA"].join("")}${awsKeySuffix(r)}";</script>`),
-    [inl("inline-script", "AWS Access Key ID", "high")]),
+  rw("aws-key-id-in-a-bare-credential-query-parameter-is-not-presigned", (r) =>
+    page("", `<script>var u="https://acme-downloads.s3.amazonaws.test/x.zip?X-Amz-Credential=${["AK", "IA"].join("")}${awsKeySuffix(r)}&aws_secret_access_key=${mixedRun(r, 40)}";</script>`),
+    [inl("inline-script", "AWS Access Key ID", "high"), inl("inline-script", "AWS Secret Access Key", "critical")]),
 ];
 
 export const DEDUP_CASES: Case[] = (() => {

@@ -629,6 +629,22 @@ export const FAST_PATTERNS: FastPattern[] = [
     confidence: "high",
   },
 
+  {
+    // RevenueCat's public SDK keys, one per store: `appl_` (App Store), `goog_`
+    // (Play), `amzn_`, `strp_` (Stripe) and `rcb_` (Web Billing). They ship in
+    // the app by design. A digit in the tail keeps `goog_` an identifier
+    // prefix and not a key (#1294).
+    name: "RevenueCat Public SDK Key",
+    pattern: /(?:appl|goog|amzn|strp|rcb)_(?=[A-Za-z0-9]{0,39}[0-9])[A-Za-z0-9]{28,40}/g,
+    keywords: ["appl_", "goog_", "amzn_", "strp_", "rcb_"],
+    confidence: "medium",
+    publicByDesign: true,
+    accept: (value, content, index) =>
+      REVENUECAT_CONTEXT_RE.test(
+        content.slice(Math.max(0, index - REVENUECAT_CONTEXT_REACH), index + value.length + REVENUECAT_CONTEXT_REACH)
+      ),
+  },
+
   // Crypto Keys
   {
     name: "Private Key (RSA)",
@@ -2145,7 +2161,14 @@ function isVendorScriptDataAttribute(
   pageUrl: string | undefined
 ): boolean {
   if (pageUrl === undefined) return false;
-  if (text.slice(Math.max(0, index - 5), index).toLowerCase() !== "data-") return false;
+  // The attribute is `data-<anything>`: the match starts at its credential
+  // word (`secret` of `data-tb-secret`), so walk back over the attribute's name.
+  let nameStart = index;
+  while (nameStart > 0 && index - nameStart < 64 && /[A-Za-z0-9-]/.test(text[nameStart - 1] ?? "")) nameStart--;
+  if (text.slice(nameStart, nameStart + 5).toLowerCase() !== "data-") return false;
+  // The WHOLE attribute name has to be free of privileged words, not just its
+  // last segment: `data-admin-api-key` ends in `api-key` and is not a widget key.
+  if (keyWords(text.slice(nameStart, index)).some((w) => PRIVILEGED_NAME_WORDS.includes(w))) return false;
   const tag = tagBoundsAround(text, index);
   if (!tag) return false;
   const open = text.slice(tag.start, tag.end);
@@ -2384,6 +2407,69 @@ function platformSourceOf(
   }
   return undefined;
 }
+// ── Keys that are public by what they are called (#1294) ────────────────────
+
+/**
+ * Bundlers expose only the variables with a public prefix to the browser
+ * (`NEXT_PUBLIC_`, `VITE_`, `PUBLIC_`), so a value under one of those is public
+ * by construction, and a key a developer called `public...` or `publishable...`
+ * or `client...Key` says the same. A value with a secret prefix is not
+ * rescued by its key: the prefix is the provider's own statement.
+ */
+const PUBLIC_ENV_PREFIX_RE = /^(?:NEXT_PUBLIC_|NUXT_PUBLIC_|VITE_|PUBLIC_)/;
+const SECRET_VALUE_PREFIX_RE = /^(?:sk_|rk_|sb_secret_)/;
+const PRIVILEGED_NAME_WORDS = ["secret", "private", "server", "admin", "password", "master", "service"];
+
+function isPublicKeyName(key: string): boolean {
+  if (PUBLIC_ENV_PREFIX_RE.test(key)) return true;
+  const words = keyWords(key);
+  if (words.some((w) => PRIVILEGED_NAME_WORDS.includes(w))) return false;
+  return words[0] === "public" || words[0] === "publishable" || (words[0] === "client" && words[words.length - 1] === "key");
+}
+
+// An AWS access key id is the public half of the pair: with no secret key
+// beside it, it grants nothing (#1294). The secret is looked for within this
+// many characters either side, as a keyed 40-character value.
+const AWS_PAIR_REACH = 300;
+// Any 40-character base64-alphabet token near the id may be its secret key, keyed or not
+// (`["AKIA...", "<40>"]`, `{id, secret}`).
+const AWS_SECRET_NEAR_RE = /(?<![A-Za-z0-9/+_-])[A-Za-z0-9/+]{40}(?![A-Za-z0-9/+=_-])/;
+
+// Browser SDKs whose init call takes a project key that is public by design
+// (Bugsnag's notifier API key, Amplitude's API key). The key counts only when
+// the SDK is the immediately enclosing call or object: `Bugsnag.start({apiKey`,
+// `amplitude.getInstance().init(..., {apiKey`, `bugsnag: {apiKey`. The brand
+// word anywhere nearby is not that, and the brands whose `apiKey` IS the
+// secret API key (Datadog, Rollbar) or whose public id has no distinctive
+// shape (Crisp, Tawk) are deliberately absent.
+const SDK_INIT_BRANDS: ReadonlyArray<readonly [RegExp, string]> = [
+  [/(?:bugsnag)[A-Za-z0-9_$.()]*\(\s*$|bugsnag["']?\s*[:=]\s*$/i, "Bugsnag API Key"],
+  [/(?:amplitude)[A-Za-z0-9_$.()]*\([^()]{0,80}$|amplitude["']?\s*[:=]\s*$/i, "Amplitude API Key"],
+];
+const SDK_INIT_REACH = 240;
+
+function sdkInitBrandOf(content: string, keyAt: number): string | undefined {
+  let depth = 0;
+  for (let i = keyAt - 1; i >= 0 && keyAt - i <= SDK_INIT_REACH; i--) {
+    const ch = content[i];
+    if (ch === "}") depth++;
+    else if (ch === "{") {
+      if (depth > 0) {
+        depth--;
+        continue;
+      }
+      const before = content.slice(Math.max(0, i - 80), i);
+      return SDK_INIT_BRANDS.find(([re]) => re.test(before))?.[1];
+    }
+  }
+  return undefined;
+}
+
+// What a RevenueCat key has to sit beside: the SDK's own name, in front of the
+// value or after it. Without it `goog_ModuleLoaderConfigurationData1` is just an
+// identifier.
+const REVENUECAT_CONTEXT_RE = /purchases|revenuecat/i;
+const REVENUECAT_CONTEXT_REACH = 200;
 
 function maskSecret(value: string): string {
   if (value.length <= 12) {
@@ -3447,7 +3533,7 @@ export function scanContent(
         reportType = unattributedKeyType(providerKey.row.prefix);
         known = { prefix: providerKey.row.prefix, provider: "unknown", ...EXPOSURE_ONLY };
       } else if (generic) {
-        const brand = BRAND_CLAIMABLE_KEY_RE.test(keyOf(value)) ? publicBrandNear(match.index) : undefined;
+        const brand = BRAND_CLAIMABLE_KEY_RE.test(keyOf(value)) ? (publicBrandNear(match.index) ?? sdkInitBrandOf(content, match.index)) : undefined;
         if (brand) {
           reportType = brand;
           reportPublic = true;
@@ -3460,6 +3546,19 @@ export function scanContent(
         ) {
           reportType = "Third-party Widget Key";
           reportPublic = true;
+        } else if (
+          name !== "Bearer Token" &&
+          name !== "Basic Auth Header" &&
+          isPublicKeyName(completeKeyOf(content, match.index, value)) &&
+          !SECRET_VALUE_PREFIX_RE.test(body)
+        ) {
+          // A name is a claim, not proof, and it comes last: a brand, Shopify's
+          // own token or a widget attribute has already said what the value is,
+          // and a name must add a hint, never take a classification away.
+          known = {
+            ...known,
+            hint: "the key name says this value is meant for the browser (NEXT_PUBLIC_, VITE_, PUBLIC_, public*, publishable*, client*Key); confirm the value is a client key and not a secret under a public name",
+          };
         }
       }
 
@@ -3522,6 +3621,18 @@ export function scanContent(
         () => content.slice(match!.index + value.length, match!.index + value.length + FORWARD_REACH),
         known
       );
+      if (finding && finding.type === "AWS Access Key ID" && finding.confidence !== "info" && finding.confidence !== "medium") {
+        const around = content.slice(
+          Math.max(0, match.index - AWS_PAIR_REACH),
+          match.index + value.length + AWS_PAIR_REACH
+        );
+        if (!AWS_SECRET_NEAR_RE.test(around)) {
+          // The public half of the pair is low value alone, but stays in the
+          // machine-readable output: the secret may be in another file.
+          finding.confidence = "medium";
+          finding.extra = { ...finding.extra, pair: `no 40-character secret-shaped value within ${AWS_PAIR_REACH} characters: probably the public half of the pair; the secret may sit elsewhere` }; // pragma: allowlist secret
+        }
+      }
       if (finding) found.push(finding);
     }
   }
