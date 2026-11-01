@@ -305,6 +305,14 @@ function resolvedStyle(doc: Document, sheet: Sheet, frame: Element): Map<string,
 
 const ZERO = /^0(?:px|%|em|rem|vh|vw)?$/;
 
+/**
+ * A length that is the whole viewport (or its container) on one axis, alone or inside `calc()`: `100%`, the viewport units
+ * `vw`/`vh` and their dynamic, small and large forms (`dvw`, `svh`, `lvh`, ...), and `vmax`/`vmin` (#1496). `50dvh`,
+ * `100px` and `1100%` are not it.
+ */
+const FULL_WIDTH = /(?<![\d.])100(?:%|[dsl]?vw|vmax|vmin)/i;
+const FULL_HEIGHT = /(?<![\d.])100(?:%|[dsl]?vh|vmax|vmin)/i;
+
 export interface OverlayGeometry {
   fixed: boolean;
   zIndex: number;
@@ -343,9 +351,7 @@ export function overlayGeometry(doc: Document, frame: Element): OverlayGeometry 
   return {
     fixed: position === "fixed" || position === "absolute",
     zIndex: Number.isFinite(zIndex) ? zIndex : 0,
-    fillsViewport:
-      ((width.includes("100%") || width.includes("100vw")) && (height.includes("100%") || height.includes("100vh"))) ||
-      stretched,
+    fillsViewport: (FULL_WIDTH.test(width) && FULL_HEIGHT.test(height)) || stretched,
     pinned: zero("top") || zero("left"),
   };
 }
