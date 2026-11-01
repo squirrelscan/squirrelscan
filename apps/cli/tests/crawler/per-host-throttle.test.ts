@@ -416,6 +416,7 @@ describe("per-host throttle (#265)", () => {
       // Capped at ~2000ms, nowhere near the declared 10000ms.
       const gap = Math.abs(b!.t - a!.t);
       expect(gap).toBeGreaterThanOrEqual(2000 * MIN_SPACING_FRACTION);
+      // More than 2x scheduling headroom, but still below the uncapped 10s value.
       expect(gap).toBeLessThan(5000);
 
       await Effect.runPromise(storage.close());
@@ -480,6 +481,9 @@ describe("per-host throttle (#265)", () => {
     // >2x margin still distinguishes the 5ms fetch latency from the 50ms delay.
     const gaps = ordered.slice(1).map((start, i) => start - ordered[i]!);
     expect(median(gaps)).toBeGreaterThanOrEqual(DELAY * MIN_SPACING_FRACTION);
+    expect(ordered.at(-1)! - ordered[0]!).toBeGreaterThanOrEqual(
+      (ordered.length - 1) * DELAY * MIN_SPACING_FRACTION
+    );
 
     await Effect.runPromise(storage.close());
   }, 30000);
