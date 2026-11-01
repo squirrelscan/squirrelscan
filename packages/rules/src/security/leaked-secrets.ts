@@ -971,6 +971,15 @@ export const CONTEXT_PATTERNS: ContextPattern[] = [
     pattern: /[A-Za-z0-9+/]{86,}={0,2}/g,
     confidence: "medium",
   },
+  {
+    // A Meilisearch key is any string of 16 or more characters: the master key (`masterKey`, `MEILI_MASTER_KEY`) is the admin
+    // key and is reported at high, a search key (`searchKey`) is meant for browsers and keeps medium with the search-only hint.
+    // The key's name picks the tier (see refineMeilisearchKey), and the word `meili` has to be in front of it (#1515).
+    name: "Meilisearch API Key",
+    keyword: "meili",
+    pattern: /[A-Za-z0-9_-]{16,128}/g,
+    confidence: "medium",
+  },
 ];
 
 // False positive filters - common non-sensitive patterns.
@@ -2373,6 +2382,35 @@ function isSearchKeyName(key: string): boolean {
   return words.includes("search") && !words.some((w) => PRIVILEGED_KEY_WORDS.includes(w));
 }
 
+/** An admin-named variable: the key can write and delete an index (`search_admin_api_key`, `adminApiKey`, `admin_api_key`). */
+function isAdminKeyName(key: string): boolean {
+  return keyWords(key).includes("admin");
+}
+
+/** A hosted-search provider's admin key is 32 characters: Algolia's are lower-case hex, Typesense's alphanumeric. */
+const SEARCH_PROVIDER_KEY_RE = /^[A-Za-z0-9]{32}$/;
+
+const ADMIN_KEY_HINT = "the key name says admin: an admin key can write and delete an index, so a key under this name is a high-severity leak; rotate it";
+const SEARCH_ONLY_HINT = "the key name says search; a search-only key is meant for browsers but an admin key under this name reads the same, so check which key this is";
+
+/**
+ * The tier of a Meilisearch key is read from the name it is held under: `masterKey` or `MEILI_MASTER_KEY` (or an admin name) is the
+ * master key, high; a search or public name is a search key, medium with the search-only hint; any other name stays a medium
+ * Meilisearch key.
+ */
+function refineMeilisearchKey(finding: LeakedSecret, before: string): void {
+  const key = /([A-Za-z0-9_$-]+)['"\]\s]*[:=]\s*['"]?$/.exec(before.slice(-200))?.[1] ?? "";
+  const words = keyWords(key);
+  if (words.includes("master") || words.includes("admin")) {
+    finding.type = "Meilisearch Master Key";
+    finding.confidence = "high";
+    finding.extra = { ...finding.extra, hint: "a Meilisearch master key is the admin key: it creates and deletes indexes and mints other keys; rotate it" };
+  } else if (words.includes("search") || words.includes("public")) {
+    finding.type = "Meilisearch Search Key";
+    finding.extra = { ...finding.extra, hint: SEARCH_ONLY_HINT };
+  }
+}
+
 /**
  * Shopify's platform bundles (`/shopifycloud/` on cdn.shopify.com,
  * `/cdn/shopifycloud/` on a shop's own domain) are byte-identical on every
@@ -3589,10 +3627,18 @@ export function scanContent(
       // admin key stored under that name reads the same: reported as before,
       // with the evidence the name gives.
       if (generic && name === "Generic API Key Assignment" && !reportPublic && isSearchKeyName(completeKeyOf(content, match.index, value))) {
-        known = {
-          ...known,
-          hint: "the key name says search; a search-only key is meant for browsers but an admin key under this name reads the same, so check which key this is",
-        };
+        known = { ...known, hint: SEARCH_ONLY_HINT };
+      }
+      // An admin-named variable holding a hosted-search provider's 32-character key is the admin key: a tier up from a search name.
+      if (
+        generic &&
+        name === "Generic API Key Assignment" &&
+        !reportPublic &&
+        SEARCH_PROVIDER_KEY_RE.test(body) &&
+        isAdminKeyName(completeKeyOf(content, match.index, value))
+      ) {
+        reportConfidence = "high";
+        known = { ...known, hint: ADMIN_KEY_HINT };
       }
 
       if (seedVerdict === "demo-login") {
@@ -3748,6 +3794,7 @@ export function scanContent(
           () => back.before,
           () => content.slice(at + value.length, at + value.length + FORWARD_REACH)
         );
+        if (finding && name === "Meilisearch API Key") refineMeilisearchKey(finding, back.before);
         if (finding) found.push(finding);
       }
     }

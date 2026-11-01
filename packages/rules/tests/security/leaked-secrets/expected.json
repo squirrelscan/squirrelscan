@@ -4839,6 +4839,64 @@
     {"type":"Cohere API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"7oNLdu********************1c4W"},
     {"type":"Cohere API Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"7oNLdu********************1c4W"}
   ],
+  "meilisearch-api-key@inline-config-object": [
+    {"type":"Meilisearch API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"89jzGi********************0nTe"},
+    {"type":"Meilisearch API Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"89jzGi********************0nTe"}
+  ],
+  "meilisearch-api-key@window-env": [
+    {"type":"Meilisearch API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"5Zs36P********************oFy8"},
+    {"type":"Meilisearch API Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"5Zs36P********************oFy8"}
+  ],
+  "meilisearch-api-key@next-data": [
+    {"type":"Meilisearch API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"6PnubL********************GR0Y"},
+    {"type":"Meilisearch API Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"6PnubL********************GR0Y"}
+  ],
+  "meilisearch-api-key@nuxt-payload": [
+    {"type":"Meilisearch API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"8VY6Xy********************mqBG"},
+    {"type":"Meilisearch API Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"8VY6Xy********************mqBG"}
+  ],
+  "meilisearch-api-key@html-comment": [
+    {"type":"Meilisearch API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"5J0ZsV********************A37c"}
+  ],
+  "meilisearch-api-key@meta-content": [
+    {"type":"Meilisearch API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"3aPBoO********************4Yv8"}
+  ],
+  "meilisearch-api-key@data-attribute": [
+    {"type":"Meilisearch API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"5KV4E2********************QEB0"}
+  ],
+  "meilisearch-api-key@external-bundle": [
+    {"type":"Meilisearch API Key","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"8qQYzU********************o3t2"}
+  ],
+  "meilisearch-api-key@fetch-bearer-header": [
+    {"type":"Bearer Token","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"Bearer********************ca03"}
+  ],
+  "meilisearch-api-key@pre-env-dump": [
+    {"type":"Meilisearch API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"1RgruO********************BFaj"}
+  ],
+  "meilisearch-api-key@sourcemap-comment": [
+    {"type":"Meilisearch API Key","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"5GBdbW********************Xqnp"}
+  ],
+  "meilisearch-api-key@entity-encoded-attribute": [
+    {"type":"Meilisearch API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"9O4J90********************Cvgb"}
+  ],
+  "meilisearch-api-key@unicode-escaped-script-string": [
+    {"type":"Meilisearch API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"8fLCiz********************o3i8"},
+    {"type":"Meilisearch API Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"8fLCiz********************o3i8"}
+  ],
+  "meilisearch-api-key@base64-data-attribute": [
+    {"type":"Meilisearch API Key","confidence":"medium","publicByDesign":false,"location":"html (base64)","masked":"3riSEm********************4xDb"}
+  ],
+  "meilisearch-api-key@base64-global": [
+    {"type":"Meilisearch API Key","confidence":"medium","publicByDesign":false,"location":"html (base64)","masked":"6fYIkb********************CfCF"},
+    {"type":"Meilisearch API Key","confidence":"medium","publicByDesign":false,"location":"inline-script (base64)","masked":"6fYIkb********************CfCF"}
+  ],
+  "meilisearch-api-key@url-encoded-data-attribute": [
+    {"type":"Meilisearch API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"5BeztG********************yvXK"}
+  ],
+  "meilisearch-api-key@url-encoded-inline-settings": [
+    {"type":"Meilisearch API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"4yJJXB********************8j3z"},
+    {"type":"Meilisearch API Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"4yJJXB********************8j3z"}
+  ],
   "together-ai-key@inline-config-object": [
     {"type":"Together AI Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"1b4610********************879d"},
     {"type":"Together AI Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"1b4610********************879d"}

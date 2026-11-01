@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **`security/leaked-secrets` reports a hosted-search key under an admin name at high, and finds Meilisearch keys.** A 32-character Algolia or Typesense key held under an admin-named variable (`search_admin_api_key`, `adminApiKey`, `admin_api_key`) is reported at high, with a hint that an admin key can write and delete an index; a search-named variable keeps medium and the search-only hint. A Meilisearch `masterKey` (or `MEILI_MASTER_KEY`) is reported at high as `Meilisearch Master Key`, and a `searchKey` as `Meilisearch Search Key` at medium with the search-only hint; both need the word `meili` within 40 characters in front of the key. The rule's docs say which names change the tier. (#1515)
+
 ## v0.0.158 (2026-11-01)
 
 `security/leaked-secrets` is sharper in both directions: it stops reporting documentation samples, placeholders, catalogue values and sample data tables as credentials, names more providers (Cerebras, OpenRouter, NVIDIA, Fireworks, Shopify Admin, Stripe restricted keys, Google OAuth client secrets), and classifies Shopify, Netlify and signed-URL tokens and browser SDK keys instead of calling them generic leaks. A percent-encoded Twitter bearer token is found again, and the crawler throttle spacing test no longer fails under load. Thanks to William for the throttle test fix (#1516, #1519).
