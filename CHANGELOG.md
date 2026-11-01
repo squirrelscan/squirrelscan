@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **`integrity/brand-impersonation` counts a control once in `controlsUnread`.** A control that hit more than one bound (an attribute over 16,000 characters, more cue windows than the cap, a text read cut at its visit allowance) was counted once for its attributes and again for its text read, so `details.controlsUnread` could exceed the page's controls. Each control now counts at most once; controls cut by the prepared-controls cap, the logo-alt cap and the templates are still counted. (#1491)
+
 ## v0.0.158 (2026-11-01)
 
 `security/leaked-secrets` is sharper in both directions: it stops reporting documentation samples, placeholders, catalogue values and sample data tables as credentials, names more providers (Cerebras, OpenRouter, NVIDIA, Fireworks, Shopify Admin, Stripe restricted keys, Google OAuth client secrets), and classifies Shopify, Netlify and signed-URL tokens and browser SDK keys instead of calling them generic leaks. A percent-encoded Twitter bearer token is found again, and the crawler throttle spacing test no longer fails under load. Thanks to William for the throttle test fix (#1516, #1519).
