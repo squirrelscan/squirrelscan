@@ -1,4 +1,5 @@
 import type { TechFingerprint } from "../types";
+import { inBundle } from "./helpers";
 
 export const ANALYTICS_FINGERPRINTS: TechFingerprint[] = [
   {
@@ -107,6 +108,13 @@ export const ANALYTICS_FINGERPRINTS: TechFingerprint[] = [
     detectors: [
       { type: "script-url", pattern: /clarity\.ms/i },
       { type: "html", pattern: /clarity\(['"]set['"]/i },
+      // The standard loader bundled into a first-party script: `t.src="https://www.clarity.ms/tag/"+i`, the
+      // `setAttribute("src", ...)` form or a template literal. The assignment is code, the URL after it is a string, so
+      // the match starts in code and a docs string, comment or prose that only names the URL does not match (#1488).
+      inBundle(
+        String.raw`(?:\.src\s*=|setAttribute\s*\(\s*["']src["']\s*,)\s*["'\x60](?:https?:)?\/\/(?:www\.)?clarity\.ms\/tag\/`,
+        "clarity.ms/tag/",
+      ),
     ],
   },
   {
