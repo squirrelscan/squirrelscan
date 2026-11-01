@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+## v0.0.155 (2026-11-01)
+
+Technology detection recognises fewer look-alikes and more real loaders: a Clerk key must decode to a Clerk host (a Stripe publishable key is no longer Clerk), a Next.js script component's bare loader is read, a config past many look-alike strings in a bundle is found, and surge, railway, amplify and ActiveCampaign Pages hosting is read from the page's own host. `[[ignore]]` entries take element `selectors`, and `--max-duration` judges a gzip page by its decoded size, so a small compressed page can no longer force a long parse. Thanks to William for the Clerk key validation (#1481, #1482).
+
 ### Added
 
 - **`[[ignore]]` entries take `selectors`.** A waiver can now name an element by where it sits (`selectors = ["localization-form select"]`: tags, `#id`, `.class`, descendant and `>`), so a rule keeps reporting your own elements while it waives the one your platform renders. `a11y/label-content-name-mismatch`, `a11y/form-labels` and `a11y/select-name` report the element's place; `squirrel config validate` names a rule that does not, refuses an unsupported selector, and the waived items are counted and listed in `meta.ignored` like `items`. Reports never carry the recorded place. (#1440)
