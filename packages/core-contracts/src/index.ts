@@ -616,11 +616,26 @@ export function auditStatusToLifecycle(
   return status === "failed" || status === "blocked" ? "failed" : "completed";
 }
 
+/** A URL the crawl requested but could not store a page for (#1396), listed by `--include-pages`. */
+export interface UnstoredPage {
+  url: string;
+  /** `skipped`: the crawl chose not to request it (excluded, other site, robots.txt). `error`: the request failed. */
+  outcome: "error" | "skipped";
+  /** Why, as a short bounded text: `robots-disallowed`, `excluded`, `rate-limited`, the error message, ... */
+  reason: string;
+}
+
 export interface AuditReport {
   crawlId?: string;
   baseUrl: string;
   /** The deep page the user asked for when the audit scope is the whole site. */
   requestedUrl?: string;
+  /**
+   * URLs the crawl requested but stored no page for, with why (#1396). Filled only for `--include-pages`; at most
+   * `JSON_REPORT_PAGES.maxEntries`, with `unstoredPagesTotal` the real count.
+   */
+  unstoredPages?: UnstoredPage[];
+  unstoredPagesTotal?: number;
   /**
    * Where the seed URL's redirects resolved to, when that is a DIFFERENT site
    * from `baseUrl` — i.e. the redirect left the seed's registrable domain and

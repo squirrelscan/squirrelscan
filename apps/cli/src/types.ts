@@ -465,6 +465,9 @@ export interface AuditReport {
   baseUrl: string;
   /** The deep page the user asked for when the audit scope is the whole site. */
   requestedUrl?: string;
+  /** URLs the crawl requested but stored no page for, for `--include-pages` (#1396). Mirrors core-contracts `AuditReport`. */
+  unstoredPages?: import("@squirrelscan/core-contracts").UnstoredPage[];
+  unstoredPagesTotal?: number;
   /**
    * Where the seed's redirects resolved to, when that is a DIFFERENT site from
    * `baseUrl` — the redirect left the seed's site and was refused, not adopted.

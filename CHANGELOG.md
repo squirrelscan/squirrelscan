@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- **The JSON report names the rules that ran, and `--include-pages` lists the URLs that never answered.** `executedRules` is the sorted list of rule ids that produced at least one check that was not skipped on this audit, so `issues`, `passedRules` and `skippedChecks` can be checked against it without reading `squirrel.toml`; a fully skipped or disabled rule is not listed. With `--include-pages`, a URL the crawl requested but stored no page for (a connection error, a rate-limited request with no stored response, an excluded or out-of-scope URL, one robots.txt blocks) is listed after the crawled pages with `outcome` `error` or `skipped` and a `reason`, inside the 2,000-entry cap. `meta.schemaVersion` is `1.5`; both additions are optional. (#1396)
+
 ## v0.0.153 (2026-11-01)
 
 Technology detection recognises the Klaviyo script loader forms browsers actually run (an unquoted or long-attribute `src`, a preload link, the inline `element.src =` loader and a proxied script URL) without the loader scan slowing a page that holds many empty scripts or a tag stuffed with openers. Thanks to William for the Klaviyo loader recall fix (#1457, #1463).

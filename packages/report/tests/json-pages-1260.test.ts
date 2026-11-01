@@ -33,10 +33,10 @@ const parse = (options?: Parameters<typeof renderJson>[1]) =>
   };
 
 describe("meta.schemaVersion", () => {
-  test("is 1.3, the version that added technologies.truncated, on every JSON report", () => {
-    expect(JSON_REPORT_SCHEMA_VERSION).toBe("1.4");
-    expect(parse().meta.schemaVersion).toBe("1.4");
-    expect(parse({ pages: rows(1) }).meta.schemaVersion).toBe("1.4");
+  test("is 1.5, the version that added executedRules and the unstored page rows, on every JSON report", () => {
+    expect(JSON_REPORT_SCHEMA_VERSION).toBe("1.5");
+    expect(parse().meta.schemaVersion).toBe("1.5");
+    expect(parse({ pages: rows(1) }).meta.schemaVersion).toBe("1.5");
   });
 });
 

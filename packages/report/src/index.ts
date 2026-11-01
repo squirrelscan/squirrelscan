@@ -166,6 +166,7 @@ export { renderXml } from "./output/xml";
 export { renderLlm } from "./output/llm";
 export { pageOutcome, renderJson } from "./output/json";
 export type { JsonPageOutcome, JsonPageRow } from "./output/json";
+export { unstoredPageRow } from "./unstored-pages";
 
 // Technologies section helpers (shared across formats + CLI console)
 export {
