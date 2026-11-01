@@ -13,18 +13,18 @@ function detectsClerk(content: string): boolean {
 
 describe("Clerk publishable-key detection (#1478)", () => {
   test("does not mistake Stripe publishable keys for Clerk", () => {
-    expect(detectsClerk('stripe={publishableKey:"pk_live_51Qabcdefghijklmnopqrstuv"}')).toBeFalse();
-    expect(detectsClerk('stripe={publishableKey:"pk_test_51Qabcdefghijklmnopqrstuv"}')).toBeFalse();
+    expect(detectsClerk('stripe={publishableKey:"pk_live_51Qabcdefghijklmnopqrstuv"}')).toBeFalse(); // pragma: allowlist secret
+    expect(detectsClerk('stripe={publishableKey:"pk_test_51Qabcdefghijklmnopqrstuv"}')).toBeFalse(); // pragma: allowlist secret
   });
 
   test("accepts a Clerk production key whose body decodes to a Clerk host", () => {
-    expect(detectsClerk('config={publishableKey:"pk_live_Y2xlcmsuZXhhbXBsZS5jb20k"}')).toBeTrue();
+    expect(detectsClerk('config={publishableKey:"pk_live_Y2xlcmsuZXhhbXBsZS5jb20k"}')).toBeTrue(); // pragma: allowlist secret
   });
 
   test("accepts a Clerk development-instance key", () => {
     expect(
       detectsClerk(
-        'config={publishableKey:"pk_test_c3Vubnktb3dsLTEyLmNsZXJrLmFjY291bnRzLmRldiQ="}',
+        'config={publishableKey:"pk_test_c3Vubnktb3dsLTEyLmNsZXJrLmFjY291bnRzLmRldiQ="}', // pragma: allowlist secret
       ),
     ).toBeTrue();
   });
