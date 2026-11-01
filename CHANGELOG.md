@@ -19,7 +19,7 @@ How it works:
 
 ### Fixed
 
-- **`integrity/brand-impersonation` ranks a control by the destination as a browser reads it.** A link written `/\other.example/x` or with a tab inside (`/<TAB>/other.example/x`) is the protocol-relative URL it resolves to, but the ranking read the raw text and treated it as local, so a long label past 256 nodes was neither read in full nor counted as unread. The ranking now uses the same normalised destination as the own-site test. (#1495)
+- **`integrity/brand-impersonation` ranks a control by the destination as a browser reads it.** A link written `/\other.example/x` or with a tab inside (`/<TAB>/other.example/x`) is the protocol-relative URL it resolves to, but the ranking read the raw text and treated it as local, so a long label past 256 nodes was neither read in full nor counted as unread. The ranking now uses the same normalised destination as the own-site test. (#1495) The sign-in path is looked for in the first 8,192 characters of the destination (it was 300, on the raw text), the text is computed once per control, and links to other hosts are not moved ahead of other links when the 60,000-control cap cuts (only the read order within the prepared ones).
 
 ## v0.0.154 (2026-11-01)
 

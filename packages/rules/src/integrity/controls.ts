@@ -270,14 +270,13 @@ function isControl(el: Element): boolean {
 type Root = { querySelectorAll(selector: string): ArrayLike<Element> };
 
 /** The relevance of a control from what costs nothing to read (see {@link scanControls}). */
-function rank(tag: string, href: string | null, extra: string[]): number {
+export function rank(tag: string, target: string | null, extra: string[]): number {
   // No destination (a script-driven button with no form): there is nothing to judge, so nothing to read.
-  if (href === null) return 0;
+  if (target === null) return 0;
   if (extra.some((text) => AUTH_LABEL.test(readable(text.slice(0, ATTR_CHARS))))) return 3;
   if (tag !== "a") return 2;
-  // The destination as the parser reads it (the same text `shortlist()` decides on).
-  const target = urlText(href);
-  if (target && (looksOffSite(href) || AUTH_PATH.test(target.slice(0, MAX_AUTH_PATH_CHARS)))) return 2;
+  // `target` is the destination as the parser reads it (see `urlText`), the same text `shortlist()` decided on, computed once per control.
+  if (target && (offSiteText(target) || AUTH_PATH.test(target.slice(0, MAX_AUTH_PATH_CHARS)))) return 2;
   return 1;
 }
 
@@ -291,7 +290,10 @@ const MAX_AUTH_PATH_CHARS = 8_192;
  * `http://host`). Leans toward "may": a wrong yes only costs a read. Property-tested against `new URL(href, base)`.
  */
 export function looksOffSite(href: string): boolean {
-  const target = urlText(href);
+  return offSiteText(urlText(href));
+}
+
+function offSiteText(target: string): boolean {
   return /^(?:[a-z][a-z0-9+.-]*:)?[\\/]{2}/i.test(target) || /^(?:https?|wss?|ftp):/i.test(target);
 }
 
@@ -314,13 +316,13 @@ export const PLAIN_LOCAL_HREF = /^(?:\/(?![/\\])|#|\?|[\w.~-]+(?:[/?#][^:\\]*)?$
  * thousands of ordinary links inside the time budget. Links to other hosts or sign-in paths come after buttons.
  * More than {@link MAX_PREPARED} are cut, the least relevant first, and counted unread.
  */
-function shortlist(
+export function shortlist(
   found: Element[],
   destinationOf: (el: Element) => string | null,
   hasLogo: (el: Element) => boolean,
-): { chosen: Array<{ element: Element; href: string; order: number }>; cut: number } {
-  const first: Array<{ element: Element; href: string; order: number }> = [];
-  const second: Array<{ element: Element; href: string; order: number }> = [];
+): { chosen: Array<{ element: Element; href: string; target: string; order: number }>; cut: number } {
+  const first: Array<{ element: Element; href: string; target: string; order: number }> = [];
+  const second: Array<{ element: Element; href: string; target: string; order: number }> = [];
   for (const [order, el] of found.entries()) {
     const isLink = el.tagName.toLowerCase() === "a";
     let href: string | null = null;
@@ -336,10 +338,11 @@ function shortlist(
     if (href === null) continue;
     const normalised = urlText(href);
     if (normalised === "" || PLAIN_LOCAL_HREF.test(normalised)) {
-      if (cue || hasLogo(el)) first.push({ element: el, href, order });
+      if (cue || hasLogo(el)) first.push({ element: el, href, target: normalised, order });
       continue;
     }
-    (!isLink || looksOffSite(href) || AUTH_PATH.test(normalised.slice(0, MAX_AUTH_PATH_CHARS)) ? first : second).push({ element: el, href, order });
+    // Off-site links are NOT promoted here (rank() reads them first once prepared): thousands of decoy links to other hosts must not fill the prepare cap ahead of a real control.
+    (!isLink || AUTH_PATH.test(normalised.slice(0, MAX_AUTH_PATH_CHARS)) ? first : second).push({ element: el, href, target: normalised, order });
   }
   const all = first.concat(second);
   return { chosen: all.slice(0, MAX_PREPARED), cut: Math.max(0, all.length - MAX_PREPARED) };
@@ -485,7 +488,7 @@ export function scanControls(doc: Document): ControlScan {
   let paddedAttributes = 0;
   // Phase 1: each control's attribute windows, and whether an attribute holds a sign-in or brand word as written (a
   // cheap test on the raw text; a look-alike spelling misses it and is served in the second tier, never skipped).
-  const gathered = chosen.map(({ element, href, order }) => {
+  const gathered = chosen.map(({ element, href, target, order }) => {
     const tag = element.tagName.toLowerCase();
     const referenced = (getAttrCI(element, "aria-labelledby") ?? "").slice(0, ATTR_RAW_CHARS).split(/\s+/).filter(Boolean);
     let cut = referenced.length > MAX_LABELLEDBY;
@@ -508,7 +511,7 @@ export function scanControls(doc: Document): ControlScan {
       cut ||= bounded.cut;
       return bounded.texts.filter((text) => text !== "");
     });
-    return { element, tag, href, order, rawCue, windows, cut };
+    return { element, tag, href, target, order, rawCue, windows, cut };
   });
 
   // Phase 2: windows past an attribute's first are read only where a cue word is in them (a window without one cannot
@@ -565,7 +568,7 @@ export function scanControls(doc: Document): ControlScan {
     if (count < want.length) item.cut = true;
     if (item.cut) paddedAttributes++;
     const extra = [...item.windows.flatMap((windows) => windows.slice(0, 1)), ...taken];
-    return { element: item.element, href: item.href, extra, rank: rank(item.tag, item.href, extra) };
+    return { element: item.element, href: item.href, extra, rank: rank(item.tag, item.target, extra) };
   });
 
   // Reading order: most relevant first, document order within a rank. Controls with no destination (rank 0)
