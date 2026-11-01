@@ -603,11 +603,10 @@ function refineJwt(
       return { type: beacon.type, confidence: "medium", publicByDesign: true, extra };
     }
   }
-  if (!decoded) {
-    // The header matched but the payload is not JSON: not a token anyone
-    // issued. Reported as a generic JWT-shaped string, never as Supabase's.
-    return { type: "JSON Web Token", confidence: "medium", publicByDesign: false };
-  }
+  // Not a token anyone issued: a header or payload that is not a JSON object, or a header with no string `alg` (RFC 7515 requires one;
+  // `none` is a string and still a token). An `eyJ` run with two dots that decodes to something else is a base64 payload or a
+  // string of text, not a credential (#1283).
+  if (!decoded || typeof decoded.header.alg !== "string") return { drop: true };
   const { payload } = decoded;
   const role = typeof payload.role === "string" ? payload.role : undefined;
   const iss = typeof payload.iss === "string" ? payload.iss : undefined;
