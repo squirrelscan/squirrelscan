@@ -28,6 +28,9 @@ const CONFIG: Partial<CrawlerConfig> = {
   maxParseBytes: CAP,
 };
 
+/** The seed page of a crawl: the one whose path is exactly `/` (an exact comparison on the parsed URL, not a substring). */
+const seedOf = (pages: Array<{ normalizedUrl: string }>) => pages.find((p) => new URL(p.normalizedUrl).pathname === "/")!;
+
 const servers: Array<{ stop: (force?: boolean) => void }> = [];
 afterEach(() => {
   while (servers.length > 0) servers.pop()?.stop(true);
@@ -69,21 +72,21 @@ describe("the parse cap judges the decoded page (#1332)", () => {
     const body = html(20, 300 * 1024);
     expect(gzipSync(body).length).toBeLessThan(CAP / 8); // the wire size is far under the cap, the decoded size far over
     const pages = await crawl(serve(body, { gzip: true }));
-    const seed = pages.find((p) => p.normalizedUrl.endsWith("/"))!;
+    const seed = seedOf(pages);
     expect(seed.parsedData).toBeNull();
     expect(pages.length).toBe(1); // no link was discovered, so no other page was fetched
   }, 30_000);
 
   test("the same page served plain (Content-Length is the decoded size) is not parsed either", async () => {
     const pages = await crawl(serve(html(20, 300 * 1024), { gzip: false }));
-    expect(pages.find((p) => p.normalizedUrl.endsWith("/"))!.parsedData).toBeNull();
+    expect(seedOf(pages).parsedData).toBeNull();
     expect(pages.length).toBe(1);
   }, 30_000);
 
   test("a page under the cap, gzip or plain, is parsed and its links followed", async () => {
     for (const gzip of [true, false]) {
       const pages = await crawl(serve(html(5, 2_000), { gzip }));
-      expect(pages.find((p) => p.normalizedUrl.endsWith("/"))!.parsedData).not.toBeNull();
+      expect(seedOf(pages).parsedData).not.toBeNull();
       expect(pages.length).toBeGreaterThan(1);
     }
   }, 30_000);
@@ -91,7 +94,7 @@ describe("the parse cap judges the decoded page (#1332)", () => {
   test("a multi-byte page whose character count is under the cap but whose bytes are over it is not parsed", async () => {
     // 30,000 three-byte characters: 30 K characters, 90 KB of bytes.
     const pages = await crawl(serve(html(20, 0).replace("</p>", `${"中".repeat(30_000)}</p>`), { gzip: true }));
-    expect(pages.find((p) => p.normalizedUrl.endsWith("/"))!.parsedData).toBeNull();
+    expect(seedOf(pages).parsedData).toBeNull();
   }, 30_000);
 
   test("the boundary: a decoded page of exactly the cap is parsed, one byte more is not (plain and gzip)", async () => {
@@ -106,9 +109,9 @@ describe("the parse cap judges the decoded page (#1332)", () => {
       expect(Buffer.byteLength(atCap)).toBe(CAP);
       expect(Buffer.byteLength(over)).toBe(CAP + 1);
       const parsedAt = await crawl(serve(atCap, { gzip }));
-      expect(parsedAt.find((p) => p.normalizedUrl.endsWith("/"))!.parsedData, `cap, gzip=${gzip}`).not.toBeNull();
+      expect(seedOf(parsedAt).parsedData, `cap, gzip=${gzip}`).not.toBeNull();
       const parsedOver = await crawl(serve(over, { gzip }));
-      expect(parsedOver.find((p) => p.normalizedUrl.endsWith("/"))!.parsedData, `cap+1, gzip=${gzip}`).toBeNull();
+      expect(seedOf(parsedOver).parsedData, `cap+1, gzip=${gzip}`).toBeNull();
     }
   }, 60_000);
 });
