@@ -32,6 +32,37 @@ describe("the snippet as the text of a script element", () => {
   });
 });
 
+// The real shapes of three targets, with fake ids: next/script's default export passed to the JSX runtime (no "script"
+// tag, no `type`), unquoted keys, a `strategy` on all three.
+const IIFE = (len: number): string => {
+  const base = BODY.replace("abc123", "p0fakeid01");
+  return base + " ".repeat(Math.max(0, len - base.length));
+};
+const D55 = `(0,x.jsx)(y.default,{id:"c1",strategy:"lazyOnload",dangerouslySetInnerHTML:{__html:\`${IIFE(387)}\`}})`;
+const D49 = `(0,x.jsx)(y.default,{id:"c2",strategy:"afterInteractive",dangerouslySetInnerHTML:{__html:\`${IIFE(343)}\`}})`;
+const D04 = `(0,x.jsx)(y.default,{id:"c3",strategy:"afterInteractive",children:'${IIFE(560)}'}),z&&(0,x.jsxs)("div",{className:"k"})`;
+
+describe("the real shapes of the string-carried targets", () => {
+  test("d55-shape: __html template literal on next/script props, after a separate element with type and src", () => {
+    const lead = `(0,x.jsx)("link",{type:"text/javascript",src:"/a.js"}),`;
+    expect(ids(`${filler(40)}[${lead}${D55}]${filler(40)}`)).toContain("clarity");
+  });
+  test("d49-shape: the same with strategy afterInteractive and a 343-character literal", () => {
+    expect(ids(`${filler(40)}[${D49}]${filler(40)}`)).toContain("clarity");
+  });
+  test("d04-shape: a single-quoted children string of 560 characters, no dangerouslySetInnerHTML", () => {
+    expect(ids(`${filler(40)}[${D04}]${filler(40)}`)).toContain("clarity");
+  });
+  test("the three shapes in a bundle too big to send whole: the sampled windows still detect them", () => {
+    for (const [name, code] of [["d55", D55], ["d49", D49], ["d04", D04]] as const) {
+      const body = `${filler(8_000)}\n[${code}]\n${filler(8_000)}`;
+      const head = body.slice(0, 16 * 1024);
+      const extras = sampleBundleExtras(body, head.length, 24 * 1024);
+      expect(ids(`${head}${SEGMENT_SEPARATOR}${extras}`, { maxScriptChars: 256 * 1024 }), name).toContain("clarity");
+    }
+  });
+});
+
 describe("other script-shaped carriers", () => {
   test("a \"script\" element tag, with or without a strategy; a script type; the loader pair instead of the signature", () => {
     expect(ids(`h("script",{children:'${BODY}'});`)).toContain("clarity");

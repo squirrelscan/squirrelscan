@@ -31,6 +31,8 @@ const OPENER_SLACK = 3;
 const STRING_KEY_PREFIX = 400;
 /** Chars after the string kept for the keys that follow it in its object. */
 const STRING_KEY_SUFFIX = 400;
+/** A string-value hint keeps its whole string in the window up to this length (the standard snippet is 340 to 560 characters). */
+const STRING_VALUE_CARRY = 1536;
 /** A string longer than this past a window's end is cut before it, not carried to its close. */
 const MAX_STRING_CARRY = 512;
 /** Longest body the scan classifies: past the largest `[tech_detect] bundle_bytes`, so every body a caller can hand over fits. */
@@ -322,7 +324,7 @@ export function createBundleSampler(
         if (spec.stringValue) {
           // The hit is in a short string: keep the code before it (its key) and after it (the object's other keys).
           const span = spanAt(at);
-          if (span && span.close - span.open <= MAX_STRING_CARRY) {
+          if (span && span.close - span.open <= STRING_VALUE_CARRY) {
             const wide = cutAt(Math.max(floor, span.open - STRING_KEY_PREFIX));
             if (!wide.opener && wide.pos <= span.open) {
               start = wide.pos;
