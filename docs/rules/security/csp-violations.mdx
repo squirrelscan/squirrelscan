@@ -27,7 +27,7 @@ A violation from a `Content-Security-Policy-Report-Only` header blocks nothing, 
 
 The renderer registers a `securitypolicyviolation` listener before any page script runs, and keeps listening for a few seconds after `load`, because embeds and analytics hits often fire after hydration. It attaches the violations (directive, blocked URI, source file and line), the requests that failed and the errors the page threw to the rendered page result. A console listener is not enough: the browser reports a block as an event, not always as a console line.
 
-The page chooses what these events say, so squirrel treats them as untrusted. Every URL is cut to its origin and path (a query string or fragment can carry a token), text is stripped of control characters and bounded, and every list is capped (100 violations, 200 failed requests, 50 page errors). The events are stored with the page in the audit's database.
+The page chooses what these events say, so squirrel treats them as untrusted. Every http and https URL is cut to its origin and path, and a WebSocket URL (`ws:`, `wss:`) to its origin (a query string, a fragment or a page-chosen path such as `/socket/<token>` can carry a token). A blocked URL of any other scheme keeps its scheme and host only, with no userinfo, port, path or query; one the URL parser rejects is cut at its first slash, and a value that is not a URL is kept only when it is one of CSP's own keywords (`inline`, `eval`, `data`, `blob`...), text is stripped of control characters and bounded, and every list is capped (100 violations, 200 failed requests, 50 page errors). The events are stored with the page in the audit's database.
 
 ### What it does not do
 

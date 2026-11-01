@@ -80,9 +80,9 @@ export function eventUrl(value: unknown): string | undefined {
   if (!text) return undefined;
   try {
     const url = new URL(text);
-    if (url.protocol === "http:" || url.protocol === "https:" || url.protocol === "wss:" || url.protocol === "ws:") {
-      return `${url.origin}${url.pathname}`.slice(0, 300);
-    }
+    if (url.protocol === "http:" || url.protocol === "https:") return `${url.origin}${url.pathname}`.slice(0, 300);
+    // A WebSocket path is as page-chosen as a query (`/socket/<token>`): origin only.
+    if (url.protocol === "wss:" || url.protocol === "ws:") return url.origin.slice(0, 300);
     // The schemes CSP reports by name; a `javascript:` or any other URL is not evidence worth keeping.
     return KEYWORD_SCHEMES.has(url.protocol) ? url.protocol : undefined;
   } catch {
@@ -93,24 +93,22 @@ export function eventUrl(value: unknown): string | undefined {
 /**
  * A `blockedUri` that is a URL of a scheme `eventUrl` does not keep (`ftp:`, `chrome-extension:`, `javascript:`...): its
  * scheme and host only, never userinfo, port, path, query or fragment. Page script can dispatch a synthetic violation
- * event with any string, so no part of such a value is kept raw. A string that is not a URL is kept only when it is plain
- * words of at most 40 characters (the keywords CSP names), or as a scheme and path with userinfo, query and fragment removed
- * when it only looks like a URL; anything else is undefined.
+ * event with any string, so no part of such a value is kept raw. A URL the parser rejects (a hostile run made a space in
+ * the host) is cut the same way, at its first `/`, `?`, `#` or `\`, after the userinfo; anything that is not a URL is
+ * undefined (CSP's own keywords, `inline` and `eval`, are `eventUrl`'s). The scheme is at most 30 characters, colon
+ * included, so what is stored survives a reload through this reader unchanged.
  */
 function otherSchemeOrigin(value: unknown): string | undefined {
   const text = clean(value, 2048);
   if (!text) return undefined;
   try {
     const url = new URL(text);
-    const scheme = url.protocol.slice(0, 30).toLowerCase();
+    if (url.protocol.length > 30) return undefined;
+    const scheme = url.protocol.toLowerCase();
     return url.hostname ? `${scheme}//${url.hostname.slice(0, 120).toLowerCase()}` : scheme;
   } catch {
-    // Not a URL: a CSP keyword (`inline`, `eval`) or what a hostile event made of one. Only plain words are kept, never
-    // anything with a scheme, a path, a query or an assignment in it.
-    if (/^[\w .-]{1,40}$/.test(text)) return text;
-    // A URL the parser rejects (a hostile run made a space in the host): userinfo, query and fragment still never survive.
-    const m = /^([a-z][a-z0-9+.-]{0,29}:\/\/)(?:[^/?#]*@)?([^?#]*)/i.exec(text);
-    return m ? `${m[1]!.toLowerCase()}${m[2]!}`.slice(0, 200) : undefined;
+    const m = /^([a-z][a-z0-9+.-]{0,28}:\/\/)(?:[^/?#\\]*@)?([^/?#\\]*)/i.exec(text);
+    return m && m[2] ? `${m[1]!.toLowerCase()}${m[2]}`.slice(0, 160) : undefined;
   }
 }
 

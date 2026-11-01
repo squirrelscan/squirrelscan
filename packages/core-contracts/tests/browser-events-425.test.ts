@@ -7,7 +7,8 @@ describe("eventUrl", () => {
     // Built from parts so the secret scanner does not flag the fixture.
     const userinfo = ["user", "pw"].join(":");
     expect(eventUrl(`https://${userinfo}@cdn.test:8443/a/b.js?token=SECRET#frag`)).toBe("https://cdn.test:8443/a/b.js");
-    expect(eventUrl("wss://live.test/socket?x=1")).toBe("wss://live.test/socket");
+    expect(eventUrl("wss://live.test/socket/token123?x=1")).toBe("wss://live.test"); // origin only: a page-chosen path is as private as a query
+    expect(eventUrl("ws://live.test:8080/a")).toBe("ws://live.test:8080");
   });
   test("a CSP keyword stays a keyword, anything else is dropped", () => {
     expect(eventUrl("inline")).toBe("inline");
@@ -105,6 +106,7 @@ describe("hostile text", () => {
           disposition: "enforce",
         },
         { violatedDirective: "img-src", blockedUri: `in${HOSTILE}line` },
+        { violatedDirective: "img-src", blockedUri: `ftp://u${HOSTILE}:pw@h${HOSTILE}ost.example/p` },
       ],
       failedRequests: [{ url: `https://x.test/${HOSTILE}`, status: 500, error: `fail${HOSTILE}ed` }],
       pageErrors: [`TypeError:${HOSTILE} boom`],
@@ -138,13 +140,34 @@ describe("a blockedUri of another scheme keeps its scheme and host only", () => 
     expect(blocked("javascript:alert(document.cookie)")).toBe("javascript:");
     expect(blocked("mailto:person@example.invalid?subject=secret")).toBe("mailto:");
   });
-  test("keywords and plain words are kept; a string with a path, query or assignment is dropped", () => {
+  test("keywords are kept; anything else that is not a URL is dropped", () => {
     for (const keyword of ["inline", "eval", "wasm-eval", "trusted-types-policy", "self"]) expect(blocked(keyword)).toBe(keyword);
-    expect(blocked("token=abc123")).toBeUndefined();
-    expect(blocked("not a url/with?query")).toBeUndefined();
-    // a URL the parser rejects still loses userinfo, query and fragment
-    expect(blocked("ftp://u:pw@h example/p?token=1#f")).toBe("ftp://h example/p");
-    expect(blocked("a".repeat(41))).toBeUndefined();
+    for (const junk of ["token=abc123", "not a url/with?query", "a".repeat(41), "some words here"]) expect(blocked(junk)).toBeUndefined();
+  });
+  test("a URL the parser rejects is cut at its authority: no path, query or fragment, and a secret after a slash never survives", () => {
+    expect(blocked("ftp://h example/p@SECRET")).toBe("ftp://h example");
+    expect(blocked("ftp://u:pw@h example/p?token=1#f")).toBe("ftp://h example");
+    expect(blocked("ftp://a@b@h example/x")).toBe("ftp://h example");
+    expect(blocked("FTP://H example/x")).toBe("ftp://H example"); // the scheme is lower-cased, the host as written
+    expect(blocked("ftp://h example\\p@SECRET")).toBe("ftp://h example");
+    expect(blocked("ftp://?x=1")).toBeUndefined();
+  });
+  test("bounds: a scheme is at most 30 characters with its colon, a host at most 120, a rejected URL's authority is cut", () => {
+    const scheme29 = `a${"b".repeat(28)}`;
+    expect(blocked(`${scheme29}://h.example/x`)).toBe(`${scheme29}://h.example`);
+    expect(blocked(`${scheme29}b://h.example/x`)).toBeUndefined(); // 30 characters and a colon: dropped, not cut
+    expect(blocked(`${scheme29}b://h example/x`)).toBeUndefined();
+    expect(blocked(`ftp://${"h".repeat(200)}.example/x`)).toBe(`ftp://${"h".repeat(120)}`);
+    const long = blocked(`ftp://${"h ".repeat(200)}/x`)!;
+    expect(long.length).toBeLessThanOrEqual(160);
+    expect(long.startsWith("ftp://h h")).toBe(true);
+  });
+  test("what is stored survives a second read unchanged (a reload from the page store)", () => {
+    for (const value of ["ftp://u:pw@h.example/p?t=1", "javascript:alert(1)", "ftp://h example/p@x", `a${"b".repeat(28)}://h.example`, "wss://live.test/s/tok", "https://a.test/p?q=1", "inline", "data:text/plain,x"]) {
+      const once = blocked(value);
+      expect(once, value).toBeDefined();
+      expect(blocked(once), value).toBe(once);
+    }
   });
   test("the kept http, https and keyword-scheme values are unchanged", () => {
     expect(blocked("https://cdn.example.invalid/a.js?k=v")).toBe("https://cdn.example.invalid/a.js");
