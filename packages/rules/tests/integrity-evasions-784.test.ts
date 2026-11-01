@@ -4,7 +4,7 @@ import { brandImpersonationRule } from "../src/integrity/brand-impersonation";
 import { PLAIN_LOCAL_HREF, WINDOW_CUE, cuePattern, looksOffSite, urlText } from "../src/integrity/controls";
 import { AUTH_CUE_PHRASES, AUTH_LABEL, AUTH_LABEL_PHRASES, PROVIDER_BUTTON, PROVIDER_VERBS } from "../src/integrity/cues";
 import { BRAND_SPECS } from "../src/integrity/brand-specs";
-import { isCover, overlayGeometry, overlayGeometryFor, splitDeclarations, type Reading } from "../src/integrity/overlay-style";
+import { isCover, overlayGeometry, overlayGeometryFor, splitDeclarations, styleUnder, type Reading } from "../src/integrity/overlay-style";
 import { detectBrandImpersonation, detectFakeAuthOverlay, detectPageSignals } from "../src/integrity/signals";
 import type { RuleContext } from "../src/types";
 
@@ -890,12 +890,15 @@ function referenceSplit(raw: string): string[] {
   };
   while (pos < n) {
     const c = text[pos]!;
-    if (c === "\\" || identChar(c)) {
+    if (c === "\\" && text[pos + 1] === "\n") {
+      tokens.push({ kind: "char", raw: c });
+      pos++;
+    } else if (c === "\\" || identChar(c)) {
       const from = pos;
-      while (pos < n && (text[pos] === "\\" || identChar(text[pos]!))) pos += text[pos] === "\\" ? escapeLen(pos) : 1;
+      while (pos < n && ((text[pos] === "\\" && text[pos + 1] !== "\n") || identChar(text[pos]!))) pos += text[pos] === "\\" ? escapeLen(pos) : 1;
       const ident = text.slice(from, pos);
       tokens.push({ kind: "text", raw: ident });
-      if (text[pos] === "(" && decodeIdent(ident).toLowerCase() === "url" && !/^\s*["']/.test(text.slice(pos + 1))) {
+      if (text[pos] === "(" && decodeIdent(ident).toLowerCase() === "url" && !/^[ \t\n]*["']/.test(text.slice(pos + 1))) {
         const start = pos++;
         while (pos < n && text[pos] !== ")") pos += text[pos] === "\\" ? escapeLen(pos) : 1;
         pos = Math.min(pos + 1, n);
@@ -957,8 +960,18 @@ test("lengths the evaluator must not over-read, and the spellings it must (#1496
   // `vw` is not a height unit, a trailing letter is not a unit, a leading-dot number is a number
   expect(detectFakeAuthOverlay(context(cover("100vw", "100vw")))).toBeNull();
   expect(detectFakeAuthOverlay(context(cover("100vh", "100vh")))).toBeNull();
-  expect(detectFakeAuthOverlay(context(cover("100vwx", "100vh")))).toBeNull();
-  expect(detectFakeAuthOverlay(context(cover("100vw", "100vhx")))).toBeNull();
+  // a unit with trailing text still reads as the unit (main read it with `includes`): `100%x` fills
+  expect(detectFakeAuthOverlay(context(cover("100vwx", "100vh")))).not.toBeNull();
+  expect(detectFakeAuthOverlay(context(cover("100%x", "100vhx")))).not.toBeNull();
+  expect(detectFakeAuthOverlay(context(cover("x100%", "100%")))).not.toBeNull();
+  // 100 is the threshold, not 100.0001 and not 99.99
+  expect(detectFakeAuthOverlay(context(cover("100vw", "100vh")))).not.toBeNull();
+  expect(detectFakeAuthOverlay(context(cover("100.0001vw", "100vh")))).not.toBeNull();
+  expect(detectFakeAuthOverlay(context(cover("99.99vw", "100vh")))).toBeNull();
+  expect(detectFakeAuthOverlay(context(cover("99vw", "100vh")))).toBeNull();
+  // the leading-dot form is a number: .5vw is half a percent, .5vw + 99.5vw is 100
+  expect(detectFakeAuthOverlay(context(cover(".5vw", "100vh")))).toBeNull();
+  expect(detectFakeAuthOverlay(context(cover("calc(.5vw + 99.5vw)", "100vh")))).not.toBeNull();
   expect(detectFakeAuthOverlay(context(cover(".1e3vw", "100vh")))).not.toBeNull();
   expect(detectFakeAuthOverlay(context(cover("calc(0px - -100vw)", "100vh")))).not.toBeNull();
   // documented limits: fixed lengths are not subtracted, a product fills, vmin/vmax and container units fill on both axes
@@ -1013,3 +1026,90 @@ test("the units work from a stylesheet too", () => {
   const frame = '<iframe id="google-auth" srcdoc=""></iframe>';
   expect(detectFakeAuthOverlay(context(frame, "<style>#google-auth{position:fixed;top:0;left:0;width:100dvw;height:100svh;z-index:99999}</style>"))).not.toBeNull();
 });
+
+// ── round 6: the old reading is a floor, backslash-newline, at-rule preludes ────────────────────────────────
+
+test("a backslash before a newline is not an escape outside a string, and a string continues over it", () => {
+  const style = `b:\\\n${"url(/*);"}\\70 osition:fixed;top:0;left:0;z-index:99999;width:100vw;height:100vh;c:*/`;
+  // the rest is hidden from every reading that treats `\<LF>` as an escape; the tokens reading must not
+  expect(coversUnder("tokens", style.replace("\\70 osition", "position"))).toBe(true);
+  expect(splitDeclarations("b:\\\nurl(/*); c:1")).toEqual(["b:\\\nurl(/*)", " c:1"]);
+  expect(splitDeclarations('b:"x\\\n;y"; c:1')).toEqual(['b:"x\\\n;y"', " c:1"]);
+  expect(detectFakeAuthOverlay(context(`<iframe id="google-auth" srcdoc="" style="${style.replace("\\70 osition", "position")}"></iframe>`))).not.toBeNull();
+});
+
+test("the CSS whitespace before a quote in url( is a space, tab or newline only", () => {
+  // NBSP, U+2028 and a BOM are not CSS whitespace: `url(<NBSP>"` is an unquoted url token ending at the `)`
+  for (const odd of ["\u00a0", "\u2028", "\ufeff"]) {
+    expect(splitDeclarations(`a:url(${odd}"/*); b:1`), JSON.stringify(odd)).toEqual([`a:url(${odd}"/*)`, " b:1"]);
+  }
+  expect(splitDeclarations('a:url( "/*)"); b:1')).toEqual(['a:url( "/*)")', " b:1"]);
+});
+
+test("geometry written inside a comment is read by the plain reading only: the old reading stays a floor", () => {
+  const style = `/*;${GEOM};*/`;
+  expect(coversUnder("plain", style)).toBe(true);
+  expect(coversUnder("tokens", style)).toBe(false);
+  expect(coversUnder("naive", style)).toBe(false);
+  expect(detectFakeAuthOverlay(context(`<iframe id="google-auth" srcdoc="" style="${style}"></iframe>`))).not.toBeNull();
+});
+
+test("preludes and at-rules are cut past strings and brackets, so the rule after them is read", () => {
+  const rule = `#google-auth{${GEOM}}`;
+  for (const before of [
+    '@media print{.x{content:"{"}}',
+    '@import "a;b";',
+    "@import url(a;b);",
+    '@charset "a;b";',
+    "@font-face{font-family:x;src:url(a;b)}",
+    "garbage;",
+    "/* c */",
+    '.x{content:"}"}',
+  ]) {
+    expect(coversUnder("tokens", "", `<style>${before}${rule}</style>`), before).toBe(true);
+  }
+  expect(coversUnder("tokens", "", `<style>#google-auth,[a="{"]{${GEOM}}</style>`)).toBe(true);
+  expect(coversUnder("tokens", "", `<style>#google-auth,[a="}"]{${GEOM}}</style>`)).toBe(true);
+  // rules inside an at-rule are not applied, as before
+  expect(coversUnder("tokens", "", `<style>@media print{${rule}}</style>`)).toBe(false);
+});
+
+/** The old rules, as main read them: plain split, the first `}`, and `includes` for the fill. */
+function mainCover(doc: NonNullable<RuleContext["parsed"]["document"]>, frame: Element): boolean {
+  const style = styleUnder(doc, frame, "plain");
+  const zero = (side: string): boolean => /^0(?:px|%|em|rem|vh|vw)?$/.test(style.get(side) ?? "");
+  const width = style.get("width") ?? "";
+  const height = style.get("height") ?? "";
+  const auto = (v: string): boolean => v === "" || v === "auto";
+  const stretched = zero("top") && zero("right") && zero("bottom") && zero("left") && auto(width) && auto(height);
+  const z = Number.parseInt(style.get("z-index") ?? "0", 10);
+  const fills = ((width.includes("100%") || width.includes("100vw")) && (height.includes("100%") || height.includes("100vh"))) || stretched;
+  const position = style.get("position");
+  return (position === "fixed" || position === "absolute") && Number.isFinite(z) && z >= 1000 && fills && (zero("top") || zero("left"));
+}
+
+test("the union is a superset of the old reading on random attribute and stylesheet mixes", () => {
+  const mixes = Number(process.env.OVERLAY_MIXES ?? 30_000);
+  const pieces = ['"', "'", "/*", "*/", ";", "(", ")", "[", "]", "{", "}", "\\", "\\\n", "&#13;", "&#10;", "&#12;", "\u0000", "\u2028", "\ufeff", "\u00a0", "\ud800", "url(", "URL(", "@media{", "@import ", "a", ":", " ", GEOM, "width:100vw", "height:100vh", "width:100%x", "height:100%", BASE, "!important", "position:fixed", "z-index:99999", "top:0", "left:0", "x100%", "\\70 osition"];
+  let seed = 20241101;
+  const next = (): number => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+  const mix = (): string => {
+    let t = "";
+    for (let j = 0; j < 2 + Math.floor(next() * 16); j++) t += pieces[Math.floor(next() * pieces.length)];
+    return t;
+  };
+  let oldOnly = 0;
+  for (let i = 0; i < mixes; i++) {
+    const sheet = i % 6 === 0;
+    const text = mix();
+    const html = sheet
+      ? `<style>#google-auth{${text.replaceAll("</", "<\\/")}}</style><iframe id="google-auth" srcdoc=""></iframe>`
+      : `<iframe id="google-auth" srcdoc="" style="${text.replaceAll('"', "&quot;")}"></iframe>`;
+    const { doc, frame } = frameOf(html);
+    const old = mainCover(doc, frame);
+    const union = isCover(overlayGeometry(doc, frame));
+    if (old && !union) throw new Error(`main flags, the union does not: ${JSON.stringify(text)}`);
+    if (old && !isCover(overlayGeometryFor(doc, frame, "tokens"))) oldOnly++;
+  }
+  expect(oldOnly).toBeGreaterThan(0);
+}, 600_000);

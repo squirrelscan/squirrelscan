@@ -103,6 +103,11 @@ function walk(
   for (let i = start; i < n; i++) {
     const c = text[i]!;
     if (c === "\\") {
+      // Outside a string a backslash before a newline is not an escape (a stray `\` token); inside one it continues the string.
+      if (!quote && text[i + 1] === "\n") {
+        identStart = -1;
+        continue;
+      }
       if (!quote && identStart < 0) identStart = i;
       i = escapeEnd(text, i);
       continue;
@@ -191,7 +196,7 @@ function stripCommentsTolerant(text: string): string {
 /** Whether the first thing after `url(` (past whitespace) is a quote, which makes it an ordinary function. */
 function opensQuoted(text: string, from: number): boolean {
   let j = from;
-  while (j < text.length && /\s/.test(text[j]!)) j++;
+  while (j < text.length && /[ \t\n]/.test(text[j]!)) j++;
   return text[j] === '"' || text[j] === "'";
 }
 
@@ -280,6 +285,7 @@ function findRuleEnd(css: string, open: number): number {
  * built (unterminated comments, runs of openers, no braces at all).
  */
 export function scanCss(css: string, onRule: (selector: string, body: string) => void, reading: Reading = "tokens"): void {
+  if (reading === "tokens") return scanCssTokens(css, onRule);
   let i = 0;
   const n = css.length;
   while (i < n) {
@@ -317,12 +323,74 @@ export function scanCss(css: string, onRule: (selector: string, body: string) =>
     }
     const open = css.indexOf("{", i);
     if (open === -1) return;
-    // `plain` and `naive` cut at the first `}`; `tokens` at the `}` that closes the rule, past strings, comments and blocks.
-    const close = reading === "tokens" ? findRuleEnd(css, open) : css.indexOf("}", open + 1);
+    // The `plain` and `naive` readings cut at the first `}` (the `tokens` reading has its own scan, see `scanCssTokens`).
+    const close = css.indexOf("}", open + 1);
     if (close === -1) return;
     // A rule whose selector or body is absurdly long is not one a page needs; it is skipped, not the rest.
     if (open - i <= MAX_SELECTOR_CHARS && close - open - 1 <= MAX_BODY_CHARS) {
       onRule(css.slice(i, open).trim().toLowerCase(), css.slice(open + 1, close));
+    }
+    i = close + 1;
+  }
+}
+
+/**
+ * The `tokens` reading of a stylesheet: every prelude (a rule's selector or an at-rule's) runs to the `{` that opens its block,
+ * a `;` outside every block, or the end, past strings, comments, escapes and brackets (`@import "a;b";`, `@import url(a;b);`,
+ * `@media print{.x{content:"{"}}`, `[a="{"]`); a block ends at its own `}`. At-rules and anything but a plain selector are
+ * skipped whole, so only a rule's own body is handed on. See {@link walk}.
+ */
+function scanCssTokens(source: string, onRule: (selector: string, body: string) => void): void {
+  const css = preprocess(source);
+  const n = css.length;
+  let i = 0;
+  while (i < n) {
+    const ch = css[i]!;
+    if (ch === " " || ch === "\n" || ch === "\t" || ch === "}" || ch === ";") {
+      i++;
+      continue;
+    }
+    if (ch === "/" && css[i + 1] === "*") {
+      const end = css.indexOf("*/", i + 2);
+      if (end === -1) return;
+      i = end + 2;
+      continue;
+    }
+    let open = -1;
+    let stop = -1;
+    let selector = "";
+    let from = i;
+    walk(
+      css,
+      i,
+      [],
+      (j, c, closers) => {
+        if (c === "{" && closers.length === 1) {
+          open = j;
+          return true;
+        }
+        if (c === ";" && closers.length === 0) {
+          stop = j;
+          return true;
+        }
+        return false;
+      },
+      (commentFrom, commentTo) => {
+        selector += `${css.slice(from, commentFrom)} `;
+        from = commentTo;
+      },
+    );
+    if (open === -1) {
+      if (stop === -1) return;
+      i = stop + 1;
+      continue;
+    }
+    selector += css.slice(from, open);
+    const close = findRuleEnd(css, open);
+    if (close === -1) return;
+    // A rule whose selector or body is absurdly long is not one a page needs; it is skipped, not the rest.
+    if (ch !== "@" && open - i <= MAX_SELECTOR_CHARS && close - open - 1 <= MAX_BODY_CHARS) {
+      onRule(selector.trim().toLowerCase(), css.slice(open + 1, close));
     }
     i = close + 1;
   }
@@ -516,8 +584,8 @@ const AXIS_UNITS = {
   height: "%|[dsl]?vh|[dsl]?vb|cqh|cqb|vmax|vmin|cqmin|cqmax",
 } as const;
 const AXIS_TOKEN = {
-  width: new RegExp(`(?<![\\w.])([+-]?)(\\d+(?:\\.\\d+)?(?:e[+-]?\\d+)?|\\.\\d+(?:e[+-]?\\d+)?)(?:${AXIS_UNITS.width})(?![\\w%])`, "gi"),
-  height: new RegExp(`(?<![\\w.])([+-]?)(\\d+(?:\\.\\d+)?(?:e[+-]?\\d+)?|\\.\\d+(?:e[+-]?\\d+)?)(?:${AXIS_UNITS.height})(?![\\w%])`, "gi"),
+  width: new RegExp(`(?<![\\d.])([+-]?)(\\d+(?:\\.\\d+)?(?:e[+-]?\\d+)?|\\.\\d+(?:e[+-]?\\d+)?)(?:${AXIS_UNITS.width})`, "gi"),
+  height: new RegExp(`(?<![\\d.])([+-]?)(\\d+(?:\\.\\d+)?(?:e[+-]?\\d+)?|\\.\\d+(?:e[+-]?\\d+)?)(?:${AXIS_UNITS.height})`, "gi"),
 };
 const FILL_KEYWORD = /(?:^|[\s(,])(?:-webkit-|-moz-)?(?:stretch|fill-available|available)(?:$|[\s),])/i;
 /** Work cap of the tokeniser: a longer (whitespace-collapsed) value is padding, not a length, and counts as filling. */
@@ -588,6 +656,11 @@ export function overlayGeometry(doc: Document, frame: Element): OverlayGeometry 
     first ??= geometry;
   }
   return first!;
+}
+
+/** The cascaded style of a frame under one reading (exported for the tests that compare readings with the old rules). */
+export function styleUnder(doc: Document, frame: Element, reading: Reading): Map<string, string> {
+  return resolvedStyle(sheetFor(doc, wantedFor(doc), reading), frame, reading);
 }
 
 /** The geometry under one reading (exported for the tests that compare readings). */
