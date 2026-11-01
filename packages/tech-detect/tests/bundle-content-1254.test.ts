@@ -16,6 +16,8 @@ import { scanJs } from "../src/js-scan";
 
 const SHELL = `<!doctype html><html><head><title>App</title></head><body><div id="root"></div><script type="module" src="/assets/index-a1b2c3.js"></script></body></html>`;
 const REF = "abcdefghijklmnopqrst"; // 20 chars, a project ref shape
+const CLERK_TEST_KEY = "pk_test_Y2xlcmsuZXhhbXBsZS5jb20k"; // pragma: allowlist secret
+const CLERK_LIVE_KEY = "pk_live_Y2xlcmsuZXhhbXBsZS5jb20k"; // pragma: allowlist secret
 
 function detect(
   scripts: Array<{ url: string; content?: string }>,
@@ -47,7 +49,7 @@ describe("bundle bodies reach script-content detection", () => {
 
   test("Next.js chunks: Firebase config in one, Clerk key in another", () => {
     const firebase = `const cfg={apiKey:"k",authDomain:"demo-app.firebaseapp.com",projectId:"demo-app"};initializeApp(cfg)`;
-    const clerk = `e.exports=n.createElement(ClerkProvider,{publishableKey:"pk_test_Y2xlcmsuZXhhbXBsZS5pbnZhbGlkJA0123456789"})`; // pragma: allowlist secret
+    const clerk = `e.exports=n.createElement(ClerkProvider,{publishableKey:"${CLERK_TEST_KEY}"})`;
     const ids = detect(
       [
         { url: "https://example.com/_next/static/chunks/app/layout-1.js", content: firebase },
@@ -76,8 +78,8 @@ describe("mangled and indirect shapes", () => {
     "a URL and key held in one declaration": `const u="https://${REF}.supabase.co",k="${KEY}";`,
     "a supabaseUrl property": `{supabaseUrl:"https://${REF}.supabase.co",x:1}`,
     "a quoted firebase key": `{"authDomain":"demo-app.firebaseapp.com"}`,
-    "a quoted clerk key": `{"publishableKey":"pk_test_${"a".repeat(30)}"}`, // pragma: allowlist secret
-    "a clerk env fallback": `publishableKey:e.publishableKey||"pk_live_${"a".repeat(30)}"`, // pragma: allowlist secret
+    "a quoted clerk key": `{"publishableKey":"${CLERK_TEST_KEY}"}`,
+    "a clerk env fallback": `publishableKey:e.publishableKey||"${CLERK_LIVE_KEY}"`,
   };
   const vendor = (name: string) =>
     name.includes("firebase") ? "firebase" : name.includes("clerk") ? "clerk" : "supabase";

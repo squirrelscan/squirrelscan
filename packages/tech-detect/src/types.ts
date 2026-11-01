@@ -19,6 +19,8 @@ export type TechCategory =
   | "images"
   | "other";
 
+export type ScriptMatchValidator = (match: RegExpExecArray) => boolean;
+
 export type Detector =
   | { type: "header"; name: string; pattern: RegExp }
   | { type: "meta"; name: string; pattern: RegExp }
@@ -35,13 +37,21 @@ export type Detector =
   // anchor it qualifies, e.g. a library's own strings and a project URL elsewhere.
   // Needs `inCode` (the type enforces it), and the second pattern is not gated to
   // code, so a comment or string that quotes the signature also satisfies it.
-  | { type: "script-content"; pattern: RegExp; inCode?: boolean; hint?: string; also?: undefined }
+  | {
+      type: "script-content";
+      pattern: RegExp;
+      inCode?: boolean;
+      hint?: string;
+      also?: undefined;
+      validate?: ScriptMatchValidator;
+    }
   | {
       type: "script-content";
       pattern: RegExp;
       inCode: true;
       hint?: string;
       also: { pattern: RegExp; hints: string[] };
+      validate?: ScriptMatchValidator;
     }
   // `requires`: literal that must appear in the html (case-sensitive) before the
   // pattern runs, a cheap gate for patterns that scan a bounded window per tag.

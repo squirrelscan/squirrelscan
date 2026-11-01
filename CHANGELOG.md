@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **A Stripe publishable key is no longer mistaken for Clerk.** A `pk_live_` or `pk_test_` value written next to `publishableKey` now counts as Clerk only when its body decodes to a Clerk frontend host ending in `$`; opaque Stripe keys no longer trigger the Clerk signature. (#1478)
+
 ## v0.0.153 (2026-11-01)
 
 Technology detection recognises the Klaviyo script loader forms browsers actually run (an unquoted or long-attribute `src`, a preload link, the inline `element.src =` loader and a proxied script URL) without the loader scan slowing a page that holds many empty scripts or a tag stuffed with openers. Thanks to William for the Klaviyo loader recall fix (#1457, #1463).
