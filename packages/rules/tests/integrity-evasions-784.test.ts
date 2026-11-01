@@ -734,3 +734,39 @@ test("the union is a superset of the old reading on random attribute and stylesh
   }
   expect(oldOnly).toBeGreaterThan(0);
 }, 600_000);
+
+// ── round 7: tests only ──────────────────────────────────────────────────────────────────────────────────────
+
+test("the leading-dot form is a number on the height axis too", () => {
+  expect(detectFakeAuthOverlay(context(cover("100vw", ".5vh")))).toBeNull();
+  expect(detectFakeAuthOverlay(context(cover("100vw", "calc(.5vh + 99.5vh)")))).not.toBeNull();
+  expect(detectFakeAuthOverlay(context(cover("100vw", ".1e3vh")))).not.toBeNull();
+});
+
+test("stylesheet preprocessing: a CR or FF inside a string ends it, and a comment in a prelude is a space", () => {
+  const rule = `#google-auth{${GEOM}}`;
+  // a form feed and a newline end the string, so the `}` after them is the rule's own and the next rule is read (an HTML
+  // parser turns a CR into a newline before the CSS sees it, and `&#13;` is raw text inside <style>)
+  for (const end of ["\f", "\n"]) {
+    expect(coversUnder("tokens", "", `<style>.x{content:"a${end}}${rule}</style>`), JSON.stringify(end)).toBe(true);
+  }
+  expect(coversUnder("tokens", "", `<style>#google-auth/* c */{${GEOM}}</style>`)).toBe(true);
+  expect(coversUnder("tokens", "", `<style>/* a */#google-auth/* b */,/* c */.y{${GEOM}}</style>`)).toBe(true);
+  // a comment in the middle of a compound selector is a space: `#a/**/.b` is two selectors in a descendant relation, not read
+  expect(coversUnder("tokens", "", `<style>#google/**/-auth{${GEOM}}</style>`)).toBe(false);
+});
+
+test("preludes: a `{` inside brackets, a stray `}` before a rule, and a declaration before a rule", () => {
+  const body = GEOM;
+  expect(coversUnder("tokens", "", `<style>#google-auth[a={]{${body}}</style>`)).toBe(false);
+  // the `{` inside the brackets opens a block that the `]` does not close, so a browser reads no rule from here on either
+  expect(coversUnder("tokens", "", `<style>#google-auth,[a={]{x:1}#google-auth{${body}}</style>`)).toBe(false);
+  expect(coversUnder("tokens", "", `<style>[a="{"]{x:1}#google-auth{${body}}</style>`)).toBe(true);
+  expect(coversUnder("tokens", "", `<style>}#google-auth{${body}}</style>`)).toBe(true);
+  expect(coversUnder("tokens", "", `<style>}}}#google-auth{${body}}</style>`)).toBe(true);
+  // `a;#g{...}`: a browser drops `a;` and reads the rule; so do we. A browser would also treat `a;#g` as ONE bad prelude in
+  // some contexts (nested rules), which we do not model: the over-read only matters for a fixed, high-z-index,
+  // auth-named iframe, which is what the rule looks for anyway.
+  expect(coversUnder("tokens", "", `<style>a;#google-auth{${body}}</style>`)).toBe(true);
+  expect(coversUnder("tokens", "", `<style>a:b;c:d;#google-auth{${body}}</style>`)).toBe(true);
+});
