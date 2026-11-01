@@ -123,3 +123,64 @@ test("a plainly local link with no cue attribute is read when a <base href> move
   const own = await run(link);
   expect(own.checks.some((c) => c.name === "brand-impersonation" && c.details?.brand === "Google")).toBe(false);
 }, 60_000);
+
+// ── review round on #1526: selector lists, hidden-class signal, rank under a moved base, <base> placement ──────────────────
+
+test("a selector list over 2,048 characters of unrelated parts still reads the part that matches", () => {
+  const unrelated = Array.from({ length: 400 }, (_, i) => `.unrelated-${i}-xxxxxxxx`).join(",");
+  expect(unrelated.length).toBeGreaterThan(2_048);
+  expect(detectFakeAuthOverlay(context(overlayFrame, `<style>${unrelated},#google-auth{${GEOM}}</style>`))).not.toBeNull();
+  expect(detectFakeAuthOverlay(context(overlayFrame, `<style>#google-auth,${unrelated}{${GEOM}}</style>`))).not.toBeNull();
+});
+
+test("an oversized part of a selector list, a rule body or a prelude is a signal when the page has an iframe", async () => {
+  const hugePart = `iframe${".cover".repeat(500)}`;
+  const withPart = await run(overlayFrame, `<style>.a,${hugePart}{${GEOM}}</style>`);
+  expect(details(withPart.checks, "fake-auth-overlay")?.cssTruncated).toBe(true);
+  const hugePrelude = Array.from({ length: 30_000 }, (_, i) => `.p${i}xxxxxxxx`).join(",");
+  const withPrelude = await run(overlayFrame, `<style>${hugePrelude}{${GEOM}}</style>`);
+  expect(details(withPrelude.checks, "fake-auth-overlay")?.cssTruncated).toBe(true);
+  // no iframe on the page: nothing a cover could be
+  const noFrame = await run("<p>hello</p>", `<style>.a,${hugePart}{${GEOM}}</style>`);
+  expect(details(noFrame.checks, "fake-auth-overlay")?.cssTruncated).toBeUndefined();
+}, 60_000);
+
+test("an oversized rule that may hide a class or id is reported on a sign-in label, one for a tag selector is not", async () => {
+  const pad = `--p:${"a".repeat(300_000)};`;
+  const label = `<a href="${OFF}">Sign in with <span class="h">x</span>Google</a>`;
+  const hit = await run(label, `<style>.h{${pad}display:none}</style>`);
+  expect(details(hit.checks, "brand-impersonation")?.hiddenCssTruncated).toBe(true);
+  const tag = await run(label, `<style>em{${pad}display:none}</style>`);
+  expect(details(tag.checks, "brand-impersonation")?.hiddenCssTruncated).toBeUndefined();
+  const small = await run(label, "<style>.h{display:none}</style>");
+  expect(details(small.checks, "brand-impersonation")?.hiddenCssTruncated).toBeUndefined();
+}, 60_000);
+
+test("under a moved <base>, a local link with no cue is still read when the page has 400 or 6,000 other nodes", async () => {
+  const base = '<base href="https://evil.example/">';
+  for (const href of ["/go", ""]) {
+    for (const n of [400, 6_000]) {
+      const body = `${"<b>x</b>".repeat(n)}<a href="${href}">Sign in with Google</a>`;
+      const { checks } = await run(body, base);
+      const d = details(checks, "brand-impersonation");
+      const found = checks.some((c) => c.name === "brand-impersonation" && c.details?.brand === "Google");
+      // either the control is read and found, or the page says it was cut: never silent
+      expect([href, n, found || d?.scanTruncated === true]).toEqual([href, n, true]);
+    }
+  }
+}, 60_000);
+
+test("a <base> inside svg, noscript or template is not the document base; the first one with an href is", () => {
+  const link = '<a href="/signin">Sign in with Google</a>';
+  const evil = '<base href="https://evil.example/">';
+  expect(brand(link, `<noscript>${evil}</noscript>`)).toBeNull();
+  expect(brand(`<svg>${evil}</svg>${link}`)).toBeNull();
+  expect(brand(`<template>${evil}</template>${link}`)).toBeNull();
+  expect(brand(link, `<base target=_blank>${evil}`)).toBe("Google");
+});
+
+test("an empty link href goes to the <base>; without a moved base it is the page's own", () => {
+  const link = '<a href="">Sign in with Google</a>';
+  expect(brand(link, '<base href="https://evil.example/">')).toBe("Google");
+  expect(brand(link)).toBeNull();
+});

@@ -20,7 +20,7 @@ import { getAttrCI } from "@squirrelscan/utils";
 import { getPageSeparatedText } from "../content/text-content";
 import type { RuleContext } from "../types";
 
-import { collectControls, readable, scanControls } from "./controls";
+import { collectControls, documentBaseHref, readable, scanControls } from "./controls";
 import { cssScanTruncated, overlayGeometry } from "./overlay-style";
 
 /** Distinct page-level compromise signals (one per page-scope rule). */
@@ -344,8 +344,7 @@ function hasPhrase(label: string, phrase: string): boolean {
  * it) that resolves to an http(s) URL. A link `/signin` under `<base href="https://evil.example/">` leaves the site (#1423).
  */
 export function documentBase(doc: NonNullable<RuleContext["parsed"]["document"]>, pageUrl: string): string {
-  const baseElement = doc.querySelector("base[href]");
-  const href = baseElement === null ? null : getAttrCI(baseElement, "href");
+  const href = documentBaseHref(doc);
   if (!href) return pageUrl;
   try {
     const resolved = new URL(href.trim(), pageUrl);
@@ -382,8 +381,10 @@ function credentialDestinations(
     if (!providerButton && !labels.some((label) => AUTH_LABEL.test(label))) continue;
     // A link's destination is its href; a button's is its formaction or its form's action. A control with
     // neither (a script-driven button) has no destination to judge.
+    // An empty link href resolves to the `<base>` (a browser's reading); an empty form action is the page itself.
+    const emptyLink = control.href !== null && control.href.trim() === "" && control.element.tagName.toLowerCase() === "a";
     const host =
-      control.href === null ? null : (hrefHost(control.href, base) ?? hrefHost(pageUrl, pageUrl));
+      control.href === null ? null : emptyLink ? hrefHost(base, base) : (hrefHost(control.href, base) ?? hrefHost(pageUrl, pageUrl));
     if (!host) continue;
     const brandSpec = BRAND_SPECS.find((s) =>
       s.lexicon.some(
@@ -565,14 +566,21 @@ function safeSrc(src: string, base: string): string {
  * budget, and CSS past the amount read. Both are work bounds, spent most-relevant first; this says when one
  * was hit, so a clean result on such a page is not read as "nothing there".
  */
-export function integrityScanNotes(ctx: PageSignalContext): { controlsUnread?: number; templatesUnread?: number; cssTruncated?: true } {
+export function integrityScanNotes(ctx: PageSignalContext): {
+  controlsUnread?: number;
+  templatesUnread?: number;
+  cssTruncated?: true;
+  hiddenCssTruncated?: true;
+} {
   const doc = ctx.parsed.document;
   if (!doc) return {};
-  const { unread, templatesUnread } = scanControls(doc);
+  const { unread, templatesUnread, controls, hiddenCssTruncated } = scanControls(doc);
   return {
     ...(unread > 0 ? { controlsUnread: unread } : {}),
     ...(templatesUnread > 0 ? { templatesUnread } : {}),
     ...(cssScanTruncated(doc) ? { cssTruncated: true as const } : {}),
+    // an unread CSS rule that may hide a label's text matters only when the page has a control
+    ...(hiddenCssTruncated && controls.length > 0 ? { hiddenCssTruncated: true as const } : {}),
   };
 }
 
