@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **`security/leaked-secrets` stops reporting strings that only look like a JWT.** A `JSON Web Token` match was kept as a generic JWT-shaped string at medium when it did not decode. It is now dropped only on proof: a header or payload within the 8,192-character read bound that is not a JSON object (garbage, truncated, trailing bytes, an array, a string, a number or `null`). A part past 8,192 characters, nested too deeply to parse or empty, and a header with no string `alg` over a payload that decodes (it keeps its classification, `service_role` included) still report. (#1283)
+
 ## v0.0.158 (2026-11-01)
 
 `security/leaked-secrets` is sharper in both directions: it stops reporting documentation samples, placeholders, catalogue values and sample data tables as credentials, names more providers (Cerebras, OpenRouter, NVIDIA, Fireworks, Shopify Admin, Stripe restricted keys, Google OAuth client secrets), and classifies Shopify, Netlify and signed-URL tokens and browser SDK keys instead of calling them generic leaks. A percent-encoded Twitter bearer token is found again, and the crawler throttle spacing test no longer fails under load. Thanks to William for the throttle test fix (#1516, #1519).

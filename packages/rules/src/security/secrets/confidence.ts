@@ -585,6 +585,34 @@ function displayIssuer(iss: string): string {
   return shown.length > ISSUER_MAX_LENGTH ? `${shown.slice(0, ISSUER_MAX_LENGTH)}...` : shown;
 }
 
+type JwtPartVerdict = "object" | "not-json" | "not-object" | "inconclusive";
+
+/**
+ * What a JWT part is, with scanner limits kept apart from proof: `not-json` (a parse error within the cap) and `not-object` (valid JSON
+ * that is not a plain object) are proof it is not a token part; an empty part, one past {@link JWT_MAX_PART_CHARS} and JSON nested deeper
+ * than `JSON.parse` allows (a RangeError) are `inconclusive`.
+ */
+function jwtPartVerdict(part: string | undefined): JwtPartVerdict {
+  if (!part || part.length > JWT_MAX_PART_CHARS) return "inconclusive";
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(Buffer.from(part, "base64url").toString("utf8"));
+  } catch (error) {
+    return error instanceof SyntaxError ? "not-json" : "inconclusive";
+  }
+  return parsed !== null && typeof parsed === "object" && !Array.isArray(parsed) ? "object" : "not-object";
+}
+
+/**
+ * True when a match that did not decode is proven not to be a token: its header or its payload is within the read bound and is not a JSON
+ * object (garbage, truncated, trailing bytes, an array, a string, a number, `null`). A part too long to read, one nested too deeply to
+ * parse and an empty payload are undecided, so the match is kept (#1283).
+ */
+function isNotAJwt(value: string): boolean {
+  const [head, body] = value.split(".");
+  return [jwtPartVerdict(head), jwtPartVerdict(body)].some((verdict) => verdict === "not-json" || verdict === "not-object");
+}
+
 function refineJwt(
   value: string,
   now: number,
@@ -603,10 +631,11 @@ function refineJwt(
       return { type: beacon.type, confidence: "medium", publicByDesign: true, extra };
     }
   }
+  // Dropped only on proof it is not a token (see `isNotAJwt`): an `eyJ` run with two dots that is a base64 payload or text (#1283).
+  // An undecided part (too long to read, nested too deeply, empty) is reported at medium. A header with no `alg` over a payload that
+  // decodes is a malformed token, not proof of a non-token: it keeps its classification.
   if (!decoded) {
-    // The header matched but the payload is not JSON: not a token anyone
-    // issued. Reported as a generic JWT-shaped string, never as Supabase's.
-    return { type: "JSON Web Token", confidence: "medium", publicByDesign: false };
+    return isNotAJwt(value) ? { drop: true } : { type: "JSON Web Token", confidence: "medium", publicByDesign: false };
   }
   const { payload } = decoded;
   const role = typeof payload.role === "string" ? payload.role : undefined;
