@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **`integrity/fake-auth-overlay` reads the modern viewport units.** A fixed full-screen frame sized with `dvh`, `svh`, `lvh`, `dvw`, `svw`, `lvw`, `vmax` or `vmin` (alone or inside `calc()`) was not seen as covering the viewport, while `100vh` was. They now count, and a length that merely contains digits before `100` (`1100%`, `100.5%`) no longer does. (#1496)
+
 ## v0.0.154 (2026-11-01)
 
 Technology detection reads a long `next/script` snippet in a Next.js flight payload again, and a page of unclosed tags no longer makes it take tens of seconds. `url/slug-convention` and `perf/total-byte-weight` count the same pages on both engines when a crawl has bodiless 4xx or 5xx pages, and `integrity/brand-impersonation` keeps reading long attribute labels on a page padded to starve it.
