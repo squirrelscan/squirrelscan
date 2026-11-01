@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **A Next.js loader written as a bare script child is read when its component is `next/script` elsewhere on the page.** A page uses one component reference for every use, and a real layout passes a Clarity loader as `{ type: "text/javascript", children: "..." }` with no `id` and no `strategy` beside two uses of the same reference that carry them. Once any use of a reference has one of `next/script`'s four strategies, every use of it is read as a script; a reference never seen with a strategy is not, so a component that merely displays a code sample is still dropped. (#1487)
+
 ## v0.0.154 (2026-11-01)
 
 Technology detection reads a long `next/script` snippet in a Next.js flight payload again, and a page of unclosed tags no longer makes it take tens of seconds. `url/slug-convention` and `perf/total-byte-weight` count the same pages on both engines when a crawl has bodiless 4xx or 5xx pages, and `integrity/brand-impersonation` keeps reading long attribute labels on a page padded to starve it.

@@ -2,7 +2,7 @@
 // vendor URL that the page renders as content (JSON-LD sameAs, a meta description, a CSP meta, a link, prose)
 // is not detected, while the layout's real loader (a `script` element, or a `next/script` component) still is.
 
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 
 import { detectTechnologies } from "../src";
 import { pageMarkup } from "../src/detect";
@@ -350,4 +350,115 @@ describe("a long snippet in a flight text row (#1477)", () => {
     expect(performance.now() - started).toBeLessThan(1_000);
     expect(markup).not.toContain("Call us");
   });
+});
+
+// #1487: a page uses one component ref for every use of it. The layout head has a bare `{ type, children }` loader
+// with no `id` and no `strategy` beside two uses of the same ref that carry them, and a text row right before it.
+describe("a bare loader of a ref that is next/script elsewhere on the page (#1487)", () => {
+  const textRow = (id: string, text: string): string => `${id}:T${Buffer.byteLength(text).toString(16)},${text}`;
+  const flightPage = (chunks: string[]): string =>
+    `<!doctype html><html><head><title>t</title></head><body>${chunks.map((c) => `<script>self.__next_f.push([1,${JSON.stringify(c)}])</script>`).join("")}</body></html>`;
+  const found = (html: string): string[] => detectTechnologies({ url: "https://example.com/", headers: {}, html }).map((t) => t.id);
+  const MODULE = '13:I[479520,["chunk-a","chunk-b"],""]';
+  const tuple = (type: string, props: object): unknown => ["$", type, null, props];
+  const bare = tuple("$L13", { type: "text/javascript", children: SNIPPET });
+  const withStrategy = tuple("$L13", { src: "https://cdn.example.invalid/lib.js", strategy: "afterInteractive" });
+  const withId = tuple("$L13", { id: "other", strategy: "lazyOnload", children: "var x = 1;" });
+
+  test("the bare instance is read when another instance of the ref has a next/script strategy", () => {
+    const head = el("head", { children: [bare, withStrategy, withId, tuple("link", { rel: "icon", href: "/i.ico" })] });
+    const html = flightPage([`${MODULE}\n5:${head}\n`]);
+    expect(found(html)).toContain("clarity");
+    // the order of the instances does not matter
+    const reversed = el("head", { children: [withId, withStrategy, bare] });
+    expect(found(flightPage([`${MODULE}\n5:${reversed}\n`]))).toContain("clarity");
+  });
+
+  test("a JSON row right after a text row with no newline between them is parsed", () => {
+    const text = `${"x ".repeat(600)}`;
+    const head = el("head", { children: [bare, withStrategy] });
+    const rows = `${textRow("14", text)}5:${head}\n`; // no newline after the text row
+    expect(found(flightPage([rows]))).toContain("clarity");
+    // and with multi-byte text, where the byte length is not the character length
+    const wide = `${"\u4e2d\u6587 ".repeat(300)}`;
+    expect(found(flightPage([`${textRow("14", wide)}5:${head}\n`]))).toContain("clarity");
+  });
+
+  test("a ref never seen with next/script props is not read: a component that shows a code sample", () => {
+    const sample = tuple("$L20", { type: "text/javascript", children: SNIPPET });
+    const other = tuple("$L20", { label: "copy", title: "Install" });
+    expect(found(flightPage([`20:I[1,[],""]\n5:${el("div", { children: [sample, other] })}\n`]))).not.toContain("clarity");
+  });
+
+  test("a lookalike `strategy` prop that is not one of next/script's is not enough to promote a ref", () => {
+    const sample = tuple("$L21", { type: "text/javascript", children: SNIPPET });
+    const lookalike = tuple("$L21", { strategy: "fancy", title: "x" });
+    expect(found(flightPage([`21:I[1,[],""]\n5:${el("div", { children: [sample, lookalike] })}\n`]))).not.toContain("clarity");
+  });
+
+  test("a code sample in a plain element or a ref's data-typed script is still dropped", () => {
+    const pre = tuple("pre", { children: SNIPPET });
+    const ld = tuple("$L13", { type: "application/ld+json", children: SNIPPET });
+    expect(found(flightPage([`${MODULE}\n5:${el("div", { children: [pre, ld, withStrategy] })}\n`]))).not.toContain("clarity");
+  });
+
+  test("many refs, each with and without script props, stay bounded", () => {
+    const refs = Array.from({ length: 20_000 }, (_, i) => tuple(`$L${(i + 100).toString(16)}`, i % 2 ? { strategy: "lazyOnload", src: "https://cdn.example.invalid/a.js" } : { type: "text/javascript", children: "var a = 1;" }));
+    const html = flightPage([`5:${el("div", { children: refs })}\n`]);
+    const started = performance.now();
+    pageMarkup(html);
+    expect(performance.now() - started).toBeLessThan(1_000);
+  });
+
+  const strategyUse = tuple("$L30", { src: "https://cdn.example.invalid/lib.js", strategy: "afterInteractive" });
+  const bareUse = tuple("$L30", { type: "text/javascript", children: SNIPPET });
+  const MOD = '30:I[1,[],""]';
+
+  test("pass 1 stops at its node budget: a strategy use after 400,000 nodes of filler does not promote the ref", () => {
+    // 450,000 arrays (each one node of the walk) in one row that also mentions "strategy": the page's first row spends the pass-1 budget.
+    const filler = `1:${JSON.stringify({ strategy: "x", list: Array.from({ length: 450_000 }, () => []) })}`;
+    const near = flightPage([`${MOD}\n${filler}\n`, `5:${el("div", { children: [strategyUse, bareUse] })}\n`]);
+    // the budget is spent: the strategy use is not seen, so the bare use is not read (a documented bound, not a hang)
+    expect(found(near)).not.toContain("clarity");
+    // without the filler the same page reads it
+    expect(found(flightPage([`${MOD}\n5:${el("div", { children: [strategyUse, bareUse] })}\n`]))).toContain("clarity");
+  }, 60_000);
+
+  test("pass 1 stops at its depth guard: a strategy use nested 70 levels deep does not promote the ref, 10 levels does", () => {
+    const nest = (depth: number, inner: unknown): unknown => (depth === 0 ? inner : [nest(depth - 1, inner)]);
+    const at = (depth: number): string => flightPage([`${MOD}\n5:${JSON.stringify(["$", "div", null, { children: [bareUse, nest(depth, strategyUse)] }])}\n`]);
+    expect(found(at(10))).toContain("clarity");
+    expect(found(at(70))).not.toContain("clarity");
+  });
+
+  test("only rows that mention a strategy are parsed in pass 1 (the substring prefilter)", async () => {
+    const { flightLoaderText } = await import("../src/flight");
+    const rows = Array.from({ length: 100 }, (_, i) => `${(i + 1).toString(16)}:${JSON.stringify(["$", "div", null, { children: `row ${i}` }])}`);
+    const body = `self.__next_f.push([1,${JSON.stringify(`${MOD}\n${rows.join("\n")}\n40:${el("div", { children: [strategyUse, bareUse] })}\n`)}])`;
+    const parse = spyOn(JSON, "parse");
+    try {
+      const text = flightLoaderText([body], () => false);
+      expect(text).toContain("clarity");
+      // 1 chunk + 102 line rows in pass 2 (the I row is not JSON) + 1 row with a strategy in pass 1
+      const rowsParsed = 100 + 1;
+      expect(parse.mock.calls.length).toBe(1 + rowsParsed + 1);
+    } finally {
+      parse.mockRestore();
+    }
+  });
+
+  test("once pass 1 has spent its node budget no later row is parsed for it", async () => {
+    const { flightLoaderText } = await import("../src/flight");
+    const filler = `1:${JSON.stringify({ strategy: "x", list: Array.from({ length: 450_000 }, () => []) })}`;
+    const later = Array.from({ length: 50 }, (_, i) => `${(i + 2).toString(16)}:${JSON.stringify(["$", "$L30", null, { strategy: "lazyOnload", n: i }])}`);
+    const body = `self.__next_f.push([1,${JSON.stringify(`${MOD}\n${filler}\n${later.join("\n")}\n`)}])`;
+    const parse = spyOn(JSON, "parse");
+    try {
+      flightLoaderText([body], () => false);
+      // 1 chunk, the filler row in pass 1 (budget spent there), the filler row in pass 2 (which stops at its own budget)
+      expect(parse.mock.calls.length).toBe(3);
+    } finally {
+      parse.mockRestore();
+    }
+  }, 60_000);
 });

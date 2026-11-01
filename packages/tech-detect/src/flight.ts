@@ -157,6 +157,9 @@ function resolvedProps(props: Record<string, Json>, resolve: (v: Json) => Json):
   };
 }
 
+/** The loading strategies `next/script` takes; a lookalike component's `strategy` prop is not one of them. */
+const SCRIPT_STRATEGIES = new Set(["afterInteractive", "lazyOnload", "beforeInteractive", "worker"]);
+
 const TEXT_REF = /^\$([0-9a-f]{1,16})$/;
 const isObject = (v: Json): v is Record<string, Json> => typeof v === "object" && v !== null && !Array.isArray(v);
 
@@ -204,6 +207,40 @@ export function flightLoaderText(bodies: readonly string[], isData: (type: strin
       }
     }
   };
+  // Pass 1: the refs that are `next/script` somewhere on the page. A page uses one component ref for every use of it, and
+  // a use can carry a bare `{ type, children }` with no `id` and no `strategy` (a loader written as a plain script
+  // child), so once ANY instance of a ref has a `strategy` that is one of `next/script`'s four (a lookalike component's
+  // `strategy` prop is not), every instance of the ref is read as a script. A ref never seen with script props is not (#1487).
+  // Only rows that mention a `strategy` are parsed for this, so a payload without one pays a substring search.
+  const scriptRefs = new Set<string>();
+  let refNodes = 0;
+  scan: for (const row of rows) {
+    if (!row.payload.includes('"strategy"') || (row.payload[0] !== "[" && row.payload[0] !== "{")) continue;
+    let root: Json;
+    try {
+      root = JSON.parse(row.payload);
+    } catch {
+      continue;
+    }
+    const stack: Array<{ node: Json; depth: number }> = [{ node: root, depth: 0 }];
+    while (stack.length > 0) {
+      const { node, depth } = stack.pop()!;
+      if (++refNodes > MAX_NODES) break scan; // the budget is the page's, not the row's: no later row is parsed for this
+      if (depth > MAX_DEPTH || typeof node !== "object" || node === null) continue;
+      if (Array.isArray(node)) {
+        const [marker, type, , props] = node;
+        if (marker === "$" && typeof type === "string" && isObject(props)) {
+          const ref = COMPONENT_REF.exec(type)?.[1];
+          if (ref !== undefined && typeof props.strategy === "string" && SCRIPT_STRATEGIES.has(props.strategy)) scriptRefs.add(ref);
+          for (const value of Object.values(props)) if (typeof value === "object" && value !== null) stack.push({ node: value, depth: depth + 1 });
+          continue;
+        }
+        for (const item of node) if (typeof item === "object" && item !== null) stack.push({ node: item, depth: depth + 1 });
+      } else {
+        for (const value of Object.values(node)) if (typeof value === "object" && value !== null) stack.push({ node: value, depth: depth + 1 });
+      }
+    }
+  }
   for (const row of rows) {
     const payload = row.payload;
     if (payload[0] !== "[" && payload[0] !== "{") continue;
@@ -223,7 +260,7 @@ export function flightLoaderText(bodies: readonly string[], isData: (type: strin
         if (marker === "$" && typeof type === "string" && isObject(props)) {
           const ref = COMPONENT_REF.exec(type)?.[1];
           const seen = hasTextRef(props) ? resolvedProps(props, resolve) : props;
-          if (type === "script" || (ref !== undefined && isScriptComponent(ref, seen, scriptModules, codeLike))) {
+          if (type === "script" || (ref !== undefined && (scriptRefs.has(ref) || isScriptComponent(ref, seen, scriptModules, codeLike)))) {
             const kind = seen.type;
             if (!(typeof kind === "string" && isData(kind.slice(0, 256)))) {
               if (typeof seen.src === "string") emit(seen.src);
