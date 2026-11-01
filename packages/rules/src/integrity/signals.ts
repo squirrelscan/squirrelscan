@@ -189,11 +189,12 @@ function hrefHost(raw: string | null, base: string): string | null {
 
 /**
  * Identity brokers: hosted sign-in services a site puts between itself and Google or Microsoft. A "Sign in
- * with Google" or "Sign in with Microsoft" control that goes to a broker's AUTHORIZE ENDPOINT is a real
- * integration, not an off-brand credential grab (#784). Narrow on purpose: the hosts are open to anyone who
- * registers a tenant (a free Auth0, Supabase or Firebase project can serve any page), so a broker host alone
- * proves nothing; only the endpoint shape does, and only for the two providers brokers federate. Other
- * brands, and any other path on these hosts, are judged as before.
+ * with Google" or "Sign in with Microsoft" control to a broker's AUTHORIZE ENDPOINT is a real integration, not an
+ * off-brand credential grab (#784). Narrow on purpose: the hosts are open to anyone who registers a tenant (a free
+ * Auth0, Okta or Cognito tenant serves a login page its owner controls, a free Supabase or Firebase project serves
+ * any page), so a broker host and a hint in the URL (written by whoever wrote the link) prove nothing. The tenant
+ * does: it must be the site's own, by NAME (#1494). Only the two providers brokers federate are spared; other brands,
+ * and any other path on these hosts, are judged as before.
  */
 /** The provider names a broker's own query uses, for Google and for Microsoft (`google-oauth2`, `windowslive`, `azure`, ...). */
 const PROVIDER_NAMES: Record<string, RegExp> = {
@@ -210,61 +211,89 @@ const hasIdp = (query: URLSearchParams): boolean => query.getAll("idp").some((va
 
 const OKTA_PATH = /^\/oauth2\/(?:[\w.-]+\/)?v1\/authorize(?:\/|$)|^\/oauth2\/authorize(?:\/|$)/;
 /**
- * `tenant`: the family serves a login page that its tenant controls (Auth0, Okta, Cognito: anyone can register a tenant
- * and customise it), so a hint in the URL proves nothing (the attacker writes the URL): the tenant itself must be the
- * site's own, named after it. Supabase and Firebase endpoints go straight to the provider with no tenant-controlled login
- * page, so for them the named provider is the whole condition.
+ * `tenant`: the family has tenants (Auth0, Okta, Cognito): the host is `<tenant><rest>` and `rest` must be exactly the
+ * family's own shape (`.auth0.com` with an optional region, `.okta.com`, `.auth.<region>.amazoncognito.com`), so a
+ * tenant cannot hide in a deeper label (`evil.acme.auth0.com`). Supabase and Firebase endpoints go straight to the
+ * provider with no tenant-controlled login page: for them the named provider is the whole condition.
  */
 const IDENTITY_BROKER_ENDPOINTS: Array<{
   host: string;
   path: RegExp;
   hint: (query: URLSearchParams, brand: string) => boolean;
-  tenant: boolean;
+  rest?: RegExp;
 }> = [
-  { host: "auth0.com", path: /^\/authorize(?:\/|$)/, hint: names("connection"), tenant: true },
-  { host: "okta.com", path: OKTA_PATH, hint: hasIdp, tenant: true },
-  { host: "oktapreview.com", path: OKTA_PATH, hint: hasIdp, tenant: true },
-  { host: "okta-emea.com", path: OKTA_PATH, hint: hasIdp, tenant: true },
-  { host: "amazoncognito.com", path: /^\/oauth2\/authorize(?:\/|$)/, hint: names("identity_provider"), tenant: true },
-  { host: "supabase.co", path: /^\/auth\/v1\/authorize(?:\/|$)/, hint: names("provider"), tenant: false },
-  { host: "firebaseapp.com", path: /^\/__\/auth\/handler(?:\/|$)/, hint: names("providerId"), tenant: false },
+  { host: "auth0.com", path: /^\/authorize(?:\/|$)/, hint: names("connection"), rest: /^\.(?:(?:us|eu|au|jp|uk)\.)?auth0\.com$/ },
+  { host: "okta.com", path: OKTA_PATH, hint: hasIdp, rest: /^\.okta\.com$/ },
+  { host: "oktapreview.com", path: OKTA_PATH, hint: hasIdp, rest: /^\.oktapreview\.com$/ },
+  { host: "okta-emea.com", path: OKTA_PATH, hint: hasIdp, rest: /^\.okta-emea\.com$/ },
+  {
+    host: "amazoncognito.com",
+    path: /^\/oauth2\/authorize(?:\/|$)/,
+    hint: names("identity_provider"),
+    rest: /^\.auth(?:-fips)?\.[a-z]{2}(?:-[a-z]+)+-\d\.amazoncognito\.com$/,
+  },
+  { host: "supabase.co", path: /^\/auth\/v1\/authorize(?:\/|$)/, hint: names("provider") },
+  { host: "firebaseapp.com", path: /^\/__\/auth\/handler(?:\/|$)/, hint: names("providerId") },
 ];
 
 /** The brands an identity broker can legitimately stand in for. */
 const BROKERED_BRANDS = new Set(["Google", "Microsoft"]);
 
-/**
- * Whether the broker tenant in `host` (the labels before the broker's own suffix) is named after the audited site: a tenant
- * label contains the site's registrable name (`example-login.auth0.com` on `example.com`). A tenant that has nothing to do
- * with the site is somebody else's, and the audited page borrowing its login is what impersonation looks like.
- */
-function tenantIsSites(host: string, suffix: string, self: Set<string>): boolean {
-  const tenant = host.slice(0, Math.max(0, host.length - suffix.length - 1)).split(".");
-  for (const own of self) {
-    const name = registrableDomain(own).split(".")[0] ?? "";
-    if (name.length >= 3 && tenant.some((label) => label.includes(name))) return true;
-  }
-  return false;
+/** Environment suffixes a site's own tenant may carry (`acme-prod`). Never words an attacker would pick (`login`, `sso`, `secure`, `support`, `eu`). */
+const TENANT_ENVIRONMENTS = new Set(["prod", "production", "dev", "staging", "stage", "test", "qa", "uat", "preview"]);
+/** Shortest site name a tenant is matched against: a one- or two-letter name matches too much (documented limit: such sites are never spared). */
+const MIN_TENANT_NAME = 3;
+/** Longest query read for a hint: a hint pushed past it is not found, which reads as unhinted (more reporting, never less). */
+const MAX_HINT_QUERY = 8_192;
+
+/** Whether `host` and `path` have the shape of a broker's authorize endpoint (no query read yet). */
+function brokerShaped(host: string, path: string): boolean {
+  return IDENTITY_BROKER_ENDPOINTS.some((e) => hostMatches(host, [e.host]) && e.path.test(path));
 }
 
 /**
- * A control to a broker's authorize endpoint that names the provider the label does, on a tenant that is the audited
- * site's own where the family has tenants. The hosts are open to anyone who registers a tenant and a tenant can serve the
- * path and its hosted login page, so neither the path nor a hint in the URL (written by whoever wrote the link) proves a
- * real integration; a bare authorize URL, one naming another provider and a foreign tenant are judged like any other
- * off-brand host (#1494).
+ * How the tenant label of a broker host relates to the audited site: `"exact"` when it IS the site's name (the common
+ * hosted-login case, `acme.okta.com` for `acme.com`), `"environment"` when it is the name plus a hyphenated
+ * environment (`acme-prod`), else `undefined` (somebody else's tenant, or one an attacker can name freely).
+ */
+function tenantRelation(host: string, rest: RegExp, self: Set<string>): "exact" | "environment" | undefined {
+  const dot = host.indexOf(".");
+  if (dot <= 0 || !rest.test(host.slice(dot))) return undefined;
+  const tenant = host.slice(0, dot);
+  let relation: "exact" | "environment" | undefined;
+  for (const own of self) {
+    const name = registrableDomain(own).split(".")[0] ?? "";
+    if (name.length < MIN_TENANT_NAME) continue;
+    if (tenant === name) return "exact";
+    if (tenant.startsWith(`${name}-`) && TENANT_ENVIRONMENTS.has(tenant.slice(name.length + 1))) relation = "environment";
+  }
+  return relation;
+}
+
+/**
+ * A control to a broker's authorize endpoint for a brand brokers federate. Where the family has tenants the tenant must
+ * be the audited site's own by name: exactly its name (no hint needed), or its name plus an environment suffix with the
+ * query naming the provider the label does. Supabase and Firebase need the named provider alone. A foreign tenant, a
+ * look-alike or deeper label, a tenant with a free-form suffix, and another provider are judged like any other off-brand
+ * host (#1494).
  */
 function isBrokerEndpoint(brand: string, host: string, path: string, query: string, self: Set<string>): boolean {
   if (!BROKERED_BRANDS.has(brand)) return false;
-  let params: URLSearchParams;
-  try {
-    params = new URLSearchParams(query);
-  } catch {
-    return false;
+  for (const e of IDENTITY_BROKER_ENDPOINTS) {
+    if (!hostMatches(host, [e.host]) || !e.path.test(path)) continue;
+    const relation = e.rest === undefined ? undefined : tenantRelation(host, e.rest, self);
+    if (e.rest !== undefined && relation === undefined) continue;
+    if (relation === "exact") return true;
+    if (query.length > MAX_HINT_QUERY) continue;
+    let params: URLSearchParams;
+    try {
+      params = new URLSearchParams(query);
+    } catch {
+      continue;
+    }
+    if (e.hint(params, brand)) return true;
   }
-  return IDENTITY_BROKER_ENDPOINTS.some(
-    (e) => hostMatches(host, [e.host]) && e.path.test(path) && e.hint(params, brand) && (!e.tenant || tenantIsSites(host, e.host, self)),
-  );
+  return false;
 }
 
 interface CredentialDestination {
@@ -321,7 +350,10 @@ function credentialDestinations(
     if (!form.querySelector('input[type="password"]')) continue;
     const action = getAttrCI(form, "action");
     const host = hrefHost(action, base) ?? hrefHost(base, base);
-    if (host) out.push({ host, path: hrefPath(action, base), query: hrefQuery(action, base), brandLabeled: "", signIn: false });
+    if (host) {
+      const path = hrefPath(action, base);
+      out.push({ host, path, query: brokerShaped(host, path) ? hrefQuery(action, base) : "", brandLabeled: "", signIn: false });
+    }
   }
 
   // Auth-labeled controls: only those whose own label is a sign-in affordance (wording in ./cues).
@@ -344,7 +376,9 @@ function credentialDestinations(
     // "Continue with Google" is the provider's own button wording: a control that names the brand in an
     // "<action> with <brand>" phrase is a sign-in affordance by itself.
     const signIn = providerButton || labels.some((label) => SIGN_IN_LABEL.test(label));
-    out.push({ host, path: hrefPath(control.href, base), query: hrefQuery(control.href, base), brandLabeled: brand, signIn });
+    const path = hrefPath(control.href, base);
+    // The query is read only for a broker-shaped destination: a long query on any other link costs nothing.
+    out.push({ host, path, query: brokerShaped(host, path) ? hrefQuery(control.href, base) : "", brandLabeled: brand, signIn });
   }
 
   return out;
