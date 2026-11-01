@@ -223,3 +223,76 @@ describe("the Script component is identified by its props, across the page's fli
     expect(clarity([`5:${el("$L2", { children: "We installed https://www.clarity.ms/tag/x last week" })}`])).toBe(false);
   });
 });
+
+// #1477: React Flight writes a string of 1 KB or more as its own text row, `id:T<hex byte length>,<text>`, and the
+// element points at it (`"children":"$7"`). A long inline snippet (a loader beside other trackers in one
+// `next/script`) is such a row, and its text can hold newlines and multi-byte characters.
+describe("a long snippet in a flight text row (#1477)", () => {
+  const textRow = (id: string, text: string): string => `${id}:T${Buffer.byteLength(text).toString(16)},${text}`;
+  const longSnippet = (extra = ""): string =>
+    `${extra}window.dataLayer=window.dataLayer||[];\n// ${"padding to pass 1 KB ".repeat(60)}\n${SNIPPET}\nconsole.log("done");`;
+  const flightPage = (chunks: string[]): string =>
+    `<!doctype html><html><head><title>t</title></head><body>${chunks.map((c) => `<script>self.__next_f.push([1,${JSON.stringify(c)}])</script>`).join("")}</body></html>`;
+  // A text row carries its own newlines, so the rows are joined by hand into one chunk.
+  const page = (rows: string[]): string => flightPage([`${rows.join("\n")}\n`]);
+  const found = (html: string): string[] => detectTechnologies({ url: "https://example.com/", headers: {}, html }).map((t) => t.id);
+  const GTM = el("script", { src: "https://www.googletagmanager.com/gtm.js?id=GTM-ABC123", async: true });
+
+  test("children that point at a text row are read: an id'd next/script, a strategy, and a plain script", () => {
+    const text = longSnippet();
+    expect(text.length).toBeGreaterThan(1024);
+    for (const component of [
+      el("$L2", { id: "analytics", children: "$7" }),
+      el("$L2", { id: "analytics", strategy: "afterInteractive", children: "$7" }),
+      el("script", { children: "$7" }),
+      el("$L2", { id: "analytics", children: ["$7"] }),
+    ]) {
+      expect(found(page([`5:${component}`, textRow("7", text)]))).toContain("clarity");
+    }
+  });
+
+  test("dangerouslySetInnerHTML.__html that points at a text row is read", () => {
+    const html = page([`5:${el("$L2", { id: "a", strategy: "lazyOnload", dangerouslySetInnerHTML: { __html: "$7" } })}`, textRow("7", longSnippet())]);
+    expect(found(html)).toContain("clarity");
+  });
+
+  test("the text row may come first, hold newlines and multi-byte characters, and the rows after it are still read", () => {
+    const text = longSnippet("/* éè 中文 🚀 */\n");
+    const html = page([textRow("7", text), `5:${el("$L2", { id: "a", children: "$7" })}`, `6:${GTM}`]);
+    const ids = found(html);
+    expect(ids).toContain("clarity");
+    expect(ids).toContain("google-tag-manager");
+  });
+
+  test("the text row is split over chunks like any other row", () => {
+    const rows = `5:${el("$L2", { id: "a", children: "$7" })}\n${textRow("7", longSnippet())}\n6:${GTM}\n`;
+    const cut = Math.floor(rows.length / 3);
+    const ids = found(flightPage([rows.slice(0, cut), rows.slice(cut, cut * 2), rows.slice(cut * 2)]));
+    expect(ids).toContain("clarity");
+    expect(ids).toContain("google-tag-manager");
+  });
+
+  test("prose and data in a text row are still not read", () => {
+    const prose = "A privacy policy mentions https://www.clarity.ms/tag/abc123 in a paragraph. ".repeat(20);
+    expect(prose.length).toBeGreaterThan(1024);
+    for (const component of [
+      el("p", { children: "$7" }),
+      el("$L2", { id: "intro", children: "$7" }),
+      el("script", { type: "application/ld+json", children: "$7" }),
+      el("a", { href: "$7" }),
+    ]) {
+      expect(found(page([`5:${component}`, textRow("7", prose)]))).not.toContain("clarity");
+    }
+    expect(found(page([`5:${el("$L2", { id: "a", children: "$8" })}`]))).not.toContain("clarity");
+  });
+
+  test("hostile text rows stay bounded: a declared length past the data, and many heads", () => {
+    const started = performance.now();
+    const over = `7:Tffffffffff,${"x".repeat(100_000)}`;
+    const many = "1:Tff,".repeat(50_000);
+    for (const rows of [[over], [many], [over, `5:${el("$L2", { id: "a", children: "$7" })}`]]) {
+      expect(() => found(page(rows))).not.toThrow();
+    }
+    expect(performance.now() - started).toBeLessThan(3_000);
+  });
+});

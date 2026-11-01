@@ -17,7 +17,6 @@ const MAX_DEPTH = 64;
 const MAX_NODES = 400_000;
 const PUSH = "push([1,";
 const SCRIPT_MODULE = /next\/(?:dist\/client\/)?script/;
-const ROW_ID = /^([0-9a-f]{1,16}):/;
 const COMPONENT_REF = /^\$L([0-9a-f]{1,16})$/;
 
 /** Whether a script body has a `push([1,"..."])` chunk, the form that carries RSC rows. */
@@ -72,12 +71,87 @@ function isScriptComponent(ref: string, props: Record<string, Json>, modules: Se
   if (hasText(props.src)) return true;
   const inner = props.dangerouslySetInnerHTML;
   if (isObject(inner) && hasText(inner.__html)) return true;
-  if (!hasText(props.children)) return false;
-  const code = props.children.slice(0, 64 * 1024);
+  const children = Array.isArray(props.children) ? props.children.find((c): c is string => typeof c === "string" && c.length > 0) : props.children;
+  if (!hasText(children)) return false;
+  const code = children.slice(0, 64 * 1024);
   // Prose has a bracket and a semicolon too, so a call and a statement end or block are required AND a token
   // that is code (the word `function`, `window.` or a `?query=` in prose is not).
   return code.includes("(") && (code.includes(";") || code.includes("{")) && CODE_TOKEN.test(code);
 }
+
+interface FlightRow {
+  id: string;
+  payload: string;
+}
+
+/** UTF-8 bytes of the code unit at `i` of `text` (a surrogate pair counts 4 bytes over its two units). */
+function utf8Units(text: string, i: number): number {
+  const c = text.charCodeAt(i);
+  if (c < 0x80) return 1;
+  if (c < 0x800) return 2;
+  if (c >= 0xd800 && c <= 0xdbff) return 2; // high surrogate: 4 bytes for the pair, counted on the first unit
+  if (c >= 0xdc00 && c <= 0xdfff) return 2; // low surrogate: the other 2 bytes
+  return 3;
+}
+
+const TEXT_ROW_HEAD = /^([0-9a-f]{1,16}):T([0-9a-f]{1,10}),/;
+
+/**
+ * The rows of the joined flight text. A row is `id:payload` up to a newline, except a text row, which React
+ * emits for a string of 1 KB or more: `id:T<hex byte length>,<text>`, the text running for exactly that many
+ * UTF-8 bytes, newlines included. Text rows are returned by id; the rest are the line rows to parse.
+ */
+function parseRows(text: string): { rows: FlightRow[]; texts: Map<string, string> } {
+  const rows: FlightRow[] = [];
+  const texts = new Map<string, string>();
+  let pos = 0;
+  while (pos < text.length) {
+    const head = TEXT_ROW_HEAD.exec(text.slice(pos, pos + 40));
+    if (head) {
+      const bytes = Number.parseInt(head[2]!, 16);
+      const start = pos + head[0].length;
+      let end = start;
+      let used = 0;
+      while (end < text.length && used < bytes) used += utf8Units(text, end++);
+      texts.set(head[1]!, text.slice(start, end));
+      pos = end;
+      if (text[pos] === "\n") pos++;
+      continue;
+    }
+    let nl = text.indexOf("\n", pos);
+    if (nl === -1) nl = text.length;
+    const line = text.slice(pos, nl);
+    const colon = line.indexOf(":");
+    if (colon > 0 && colon <= 16 && /^[0-9a-f]+$/.test(line.slice(0, colon))) rows.push({ id: line.slice(0, colon), payload: line.slice(colon + 1) });
+    pos = nl + 1;
+  }
+  return { rows, texts };
+}
+
+/** Whether a prop that matters to a script (`src`, `children`, `dangerouslySetInnerHTML`) may point at a text row. */
+function hasTextRef(props: Record<string, Json>): boolean {
+  const inner = props.dangerouslySetInnerHTML;
+  return (
+    typeof props.children === "string" ||
+    Array.isArray(props.children) ||
+    typeof props.src === "string" ||
+    (isObject(inner) && typeof inner.__html === "string")
+  );
+}
+
+/** The props with a text-row reference in `src`, `children` or `__html` replaced by the text. */
+function resolvedProps(props: Record<string, Json>, resolve: (v: Json) => Json): Record<string, Json> {
+  const inner = props.dangerouslySetInnerHTML;
+  return {
+    ...props,
+    ...(typeof props.src === "string" ? { src: resolve(props.src) } : {}),
+    ...(typeof props.children === "string" ? { children: resolve(props.children) } : {}),
+    ...(Array.isArray(props.children) ? { children: props.children.map((c) => (typeof c === "string" ? resolve(c) : c)) } : {}),
+    ...(isObject(inner) && typeof inner.__html === "string" ? { dangerouslySetInnerHTML: { ...inner, __html: resolve(inner.__html) } } : {}),
+  };
+}
+
+const TEXT_REF = /^\$([0-9a-f]{1,16})$/;
 const isObject = (v: Json): v is Record<string, Json> => typeof v === "object" && v !== null && !Array.isArray(v);
 
 /**
@@ -89,22 +163,26 @@ export function flightLoaderText(bodies: readonly string[], isData: (type: strin
   const parts: string[] = [];
   const used = { total: 0 };
   for (const body of bodies) if (!decodeChunks(body, parts, used)) break;
-  const rows = parts.join("").split("\n");
+  const { rows, texts } = parseRows(parts.join(""));
   const scriptModules = new Set<string>();
   for (const row of rows) {
-    const id = ROW_ID.exec(row)?.[1];
-    if (id && row.startsWith("I[", id.length + 1) && SCRIPT_MODULE.test(row.slice(0, 512))) scriptModules.add(id);
+    if (row.payload.startsWith("I[") && SCRIPT_MODULE.test(row.payload.slice(0, 512))) scriptModules.add(row.id);
   }
+  /** A string, or the text row it points at (`"$2a"`): a long inline snippet is a text row, not a string of the element. */
+  const resolve = (v: Json): Json => {
+    if (typeof v !== "string") return v;
+    const ref = TEXT_REF.exec(v)?.[1];
+    return ref !== undefined && texts.has(ref) ? texts.get(ref)! : v;
+  };
   const out: string[] = [];
   let nodes = 0;
   const collect = (v: Json): void => {
-    if (typeof v === "string") out.push(v);
-    else if (Array.isArray(v)) for (const s of v) if (typeof s === "string") out.push(s);
+    const value = resolve(v);
+    if (typeof value === "string") out.push(value);
+    else if (Array.isArray(value)) for (const item of value) if (typeof resolve(item) === "string") out.push(resolve(item) as string);
   };
   for (const row of rows) {
-    const id = ROW_ID.exec(row);
-    if (!id) continue;
-    const payload = row.slice(id[0].length);
+    const payload = row.payload;
     if (payload[0] !== "[" && payload[0] !== "{") continue;
     let root: Json;
     try {
@@ -121,13 +199,14 @@ export function flightLoaderText(bodies: readonly string[], isData: (type: strin
         const [marker, type, , props] = node;
         if (marker === "$" && typeof type === "string" && isObject(props)) {
           const ref = COMPONENT_REF.exec(type)?.[1];
-          if (type === "script" || (ref !== undefined && isScriptComponent(ref, props, scriptModules))) {
-            const kind = props.type;
+          const seen = hasTextRef(props) ? resolvedProps(props, resolve) : props;
+          if (type === "script" || (ref !== undefined && isScriptComponent(ref, seen, scriptModules))) {
+            const kind = seen.type;
             if (!(typeof kind === "string" && isData(kind.slice(0, 256)))) {
-              if (typeof props.src === "string") out.push(props.src);
-              const inner = props.dangerouslySetInnerHTML;
+              if (typeof seen.src === "string") out.push(seen.src);
+              const inner = seen.dangerouslySetInnerHTML;
               if (isObject(inner) && typeof inner.__html === "string") out.push(inner.__html);
-              collect(props.children);
+              collect(seen.children);
             }
           }
           // Elements nest (`head` and `body` hold scripts): look inside every prop that is a value tree.
