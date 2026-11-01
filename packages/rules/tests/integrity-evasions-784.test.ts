@@ -83,11 +83,11 @@ test("a label in Cyrillic look-alikes or fullwidth letters is matched after norm
 
 test("a broker's authorize endpoint is not impersonation for Google or Microsoft; the three Microsoft hosts are legitimate", () => {
   for (const host of [
-    "https://example-login.auth0.com/authorize?client_id=x&connection=google-oauth2",
+    "https://example.auth0.com/authorize?client_id=x&connection=google-oauth2",
     "https://example.okta.com/oauth2/v1/authorize?client_id=x&idp=0oa1b2c3d4",
     "https://example-prod.okta.com/oauth2/default/v1/authorize?client_id=x&idp=0oa1b2c3d4",
     "https://example.oktapreview.com/oauth2/v1/authorize?idp=0oa1b2c3d4",
-    "https://example-auth.auth.eu-west-1.amazoncognito.com/oauth2/authorize?client_id=x&identity_provider=Google",
+    "https://example-prod.auth.eu-west-1.amazoncognito.com/oauth2/authorize?client_id=x&identity_provider=Google",
     "https://project.supabase.co/auth/v1/authorize?provider=google",
     "https://project.firebaseapp.com/__/auth/handler?providerId=google.com",
   ]) {
@@ -368,8 +368,8 @@ test.each([["Google", "Continue with Google"], ["Google", "Sign in with Google"]
 
 test("a broker authorize link naming Microsoft is spared for a Microsoft label and not for a Google one", () => {
   const microsoft = [
-    "https://example-login.auth0.com/authorize?connection=windowslive",
-    "https://example.auth.eu-west-1.amazoncognito.com/oauth2/authorize?identity_provider=Microsoft",
+    "https://example-dev.auth0.com/authorize?connection=windowslive",
+    "https://example-qa.auth.eu-west-1.amazoncognito.com/oauth2/authorize?identity_provider=Microsoft",
     "https://t1.supabase.co/auth/v1/authorize?provider=azure",
     "https://t1.firebaseapp.com/__/auth/handler?providerId=microsoft.com",
   ];
@@ -399,15 +399,111 @@ test("a hint is not enough on a tenant that is not the site's own: a foreign ten
   for (const href of foreign) expect(brand(`<a href="${href}" aria-label="Continue with Google"><svg></svg></a>`), href).toBe("Google");
 });
 
-test("a tenant named after the site and naming the provider is spared; the platform endpoints need the provider only", () => {
+const allow = (href: string, label = "Continue with Google", head = ""): string | null =>
+  brand(`<a href="${href}" aria-label="${label}"><svg></svg></a>`, head);
+
+test("a tenant that IS the site's name is spared with no hint at all; the platform endpoints need the provider only", () => {
   for (const href of [
-    "https://example-login.auth0.com/authorize?connection=google-oauth2",
-    "https://example.eu.auth0.com/authorize?connection=google-oauth2",
-    "https://example-sso.okta.com/oauth2/v1/authorize?idp=0oa1b2c3d4",
-    "https://example.auth.us-east-1.amazoncognito.com/oauth2/authorize?identity_provider=Google",
+    "https://example.auth0.com/authorize",
+    "https://example.auth0.com/authorize?client_id=x&connection=waad",
+    "https://example.auth0.com/authorize?connection=Username-Password-Authentication",
+    "https://example.eu.auth0.com/authorize?client_id=x",
+    "https://example.okta.com/oauth2/v1/authorize?client_id=x",
+    "https://example.okta.com/oauth2/default/v1/authorize",
+    "https://example.oktapreview.com/oauth2/v1/authorize",
+    "https://example.okta-emea.com/oauth2/v1/authorize",
+    "https://example.auth.us-east-1.amazoncognito.com/oauth2/authorize?client_id=x",
+    "https://example.auth-fips.us-gov-west-1.amazoncognito.com/oauth2/authorize",
     "https://abcdefghijklmnopqrst.supabase.co/auth/v1/authorize?provider=google",
     "https://any-project.firebaseapp.com/__/auth/handler?providerId=google.com",
   ]) {
-    expect(brand(`<a href="${href}" aria-label="Continue with Google"><svg></svg></a>`), href).toBeNull();
+    expect(allow(href), href).toBeNull();
+    expect(allow(href, "Continue with Microsoft") === null, href).toBe(!href.includes("google"));
   }
+});
+
+test("name plus an environment suffix needs the provider hint; free-form suffixes and look-alikes are never spared", () => {
+  for (const env of ["prod", "production", "dev", "staging", "stage", "test", "qa", "uat", "preview"]) {
+    expect(allow(`https://example-${env}.auth0.com/authorize?connection=google-oauth2`), env).toBeNull();
+    expect(allow(`https://example-${env}.okta.com/oauth2/v1/authorize?idp=0oa1`), env).toBeNull();
+    expect(allow(`https://example-${env}.auth.eu-west-1.amazoncognito.com/oauth2/authorize?identity_provider=Google`), env).toBeNull();
+    // environment form without the hint, or with another provider, is not spared
+    expect(allow(`https://example-${env}.auth0.com/authorize`), env).toBe("Google");
+    expect(allow(`https://example-${env}.auth0.com/authorize?connection=github`), env).toBe("Google");
+    expect(allow(`https://example-${env}.okta.com/oauth2/v1/authorize`), env).toBe("Google");
+  }
+  const attacker = [
+    "https://example-login.auth0.com/authorize?connection=google-oauth2",
+    "https://example-sso.okta.com/oauth2/v1/authorize?idp=0oa1b2c3d4",
+    "https://example-secure.auth0.com/authorize?connection=google-oauth2",
+    "https://exampleeu.auth0.com/authorize?connection=google-oauth2",
+    "https://example-eu.auth0.com/authorize?connection=google-oauth2",
+    "https://examplecorp.auth0.com/authorize?connection=google-oauth2",
+    "https://example-support.okta.com/oauth2/v1/authorize?idp=0oa1",
+    "https://xexamplex.auth0.com/authorize?connection=google-oauth2",
+    "https://login-example.auth0.com/authorize?connection=google-oauth2",
+    "https://prod-example.auth0.com/authorize?connection=google-oauth2",
+    "https://example-prod-x.auth0.com/authorize?connection=google-oauth2",
+    "https://xn--example-9xa.auth0.com/authorize?connection=google-oauth2",
+    "https://evil.example.auth0.com/authorize?connection=google-oauth2",
+    "https://example.evil.auth0.com/authorize?connection=google-oauth2",
+    "https://example.auth0.com.evil.test/authorize?connection=google-oauth2",
+    "https://evil.example.okta.com/oauth2/v1/authorize?idp=0oa1",
+    "https://example.xx.auth0.com/authorize?connection=google-oauth2",
+    "https://example.auth.eu-west-1.evil.amazoncognito.com/oauth2/authorize?identity_provider=Google",
+    "https://evil.example.auth.us-east-1.amazoncognito.com/oauth2/authorize?identity_provider=Google",
+    "https://example.amazoncognito.com/oauth2/authorize?identity_provider=Google",
+  ];
+  for (const href of attacker) expect(allow(href), href).toBe("Google");
+});
+
+test("a site whose name is shorter than three letters is never spared by a tenant (documented floor)", () => {
+  const short = (href: string): string | null => {
+    const html = `<!doctype html><html><head><title>x</title></head><body><a href="${href}" aria-label="Continue with Google"><svg></svg></a></body></html>`;
+    const parsed = parsePage(html, "https://ab.com/");
+    return detectBrandImpersonation({ page: { url: "https://ab.com/", html, statusCode: 200, loadTime: 0, headers: {}, parsed }, parsed, options: {} })?.brand ?? null;
+  };
+  expect(short("https://ab.auth0.com/authorize?connection=google-oauth2")).toBe("Google");
+  expect(short("https://abc.auth0.com/authorize?connection=google-oauth2")).toBe("Google");
+});
+
+test("the canonical and og:url hosts count as the site for the tenant name; the query of a form action and formaction is read", () => {
+  const head = '<link rel="canonical" href="https://acmecorp.org/"><meta property="og:url" content="https://other-brand.net/">';
+  expect(allow("https://acmecorp.auth0.com/authorize", "Continue with Google", head)).toBeNull();
+  expect(allow("https://other-brand.okta.com/oauth2/v1/authorize", "Continue with Google", head)).toBeNull();
+  expect(allow("https://third.auth0.com/authorize", "Continue with Google", head)).toBe("Google");
+  const hinted = "https://example-prod.auth0.com/authorize?connection=google-oauth2";
+  const bare = "https://example-prod.auth0.com/authorize";
+  expect(brand(`<form method="post"><button formaction="${hinted}">Continue with Google</button></form>`)).toBeNull();
+  expect(brand(`<form method="post"><button formaction="${bare}">Continue with Google</button></form>`)).toBe("Google");
+  expect(brand(`<form action="${hinted}" method="post"><input type="password"><button>Continue with Google</button></form>`)).toBeNull();
+  expect(brand(`<form action="${bare}" method="post"><input type="password"><button>Continue with Google</button></form>`)).toBe("Google");
+});
+
+test("provider names and hosts of the families: Microsoft names, repeated and padded hints, regional hosts", () => {
+  const e = "https://example-prod";
+  for (const name of ["windowslive", "azure", "azuread-oauth2", "office365", "microsoftonline", "Microsoft"]) {
+    expect(allow(`${e}.auth0.com/authorize?connection=${name}`, "Continue with Microsoft"), name).toBeNull();
+    expect(allow(`${e}.auth0.com/authorize?connection=${name}`), name).toBe("Google");
+  }
+  expect(allow(`${e}.auth0.com/authorize?connection=github&connection=google-oauth2`)).toBeNull();
+  expect(allow(`${e}.auth0.com/authorize?connection=%20google-oauth2%20`)).toBeNull();
+  expect(allow(`${e}.okta.com/oauth2/v1/authorize?idp=%20`)).toBe("Google");
+  expect(allow(`${e}.okta.com/oauth2/v1/authorize?idp=a&idp=`)).toBeNull();
+  expect(allow(`${e}.okta.com/oauth2/v1/authorize?idp=`)).toBe("Google");
+  // a hint pushed past the read cap is not found: more reporting, never less
+  expect(allow(`${e}.auth0.com/authorize?${"a=b&".repeat(3_000)}connection=google-oauth2`)).toBe("Google");
+  // another provider's name that merely starts like Google's
+  expect(allow(`${e}.auth0.com/authorize?connection=googlefake`)).toBe("Google");
+});
+
+test("many links with huge queries do not make the brand check slow", () => {
+  const query = `${"a=b&".repeat(250_000)}connection=github`;
+  const links = Array.from({ length: 50 }, (_, i) => `<a href="https://shop${i}.example/path?${query}" aria-label="Sign in">x</a>`).join("");
+  const links2 = Array.from({ length: 50 }, (_, i) => `<a href="https://example-prod${i}.auth0.com/authorize?${query}" aria-label="Continue with Google"><svg></svg></a>`).join("");
+  // parsing the page is not what is timed: only the brand check
+  const contexts = [context(links), context(links2)];
+  const t = performance.now();
+  for (const c of contexts) detectBrandImpersonation(c);
+  expect(performance.now() - t).toBeLessThan(1_500);
 });
