@@ -420,9 +420,12 @@ export function scanControls(doc: Document): ControlScan {
     if (control) {
       const list = imageAlts.get(control) ?? [];
       // A control holds a few logos: the first ones are read in full, the next only for their first characters, and
-      // past MAX_ALTS_PER_CONTROL none (counted), so a control wrapping 300,000 images costs a bounded amount.
+      // past MAX_ALTS_PER_CONTROL none (both counted), so a control wrapping 300,000 images costs a bounded amount.
       if (list.length < MAX_ALTS_PER_CONTROL) {
-        list.push(list.length < FULL_ALTS_PER_CONTROL ? alt : alt.slice(0, ATTR_CHARS));
+        const full = list.length < FULL_ALTS_PER_CONTROL;
+        // A later alt longer than the cut loses its tail: the control is counted as not read in full.
+        if (!full && alt.length > ATTR_CHARS) altsCut.add(control);
+        list.push(full ? alt : alt.slice(0, ATTR_CHARS));
         imageAlts.set(control, list);
       } else altsCut.add(control);
     }
