@@ -308,9 +308,24 @@ test("a control wrapping many logos: the first few alts are read in full, the re
   const full = [`${"a".repeat(400)} ${phrase}`].map((alt) => `<img src="/g.png" alt="${alt}">`);
   const early = `<a href="${OFF}"><img src="/a.png" alt="x"><img src="/b.png" alt="y">${full.join("")}</a>`;
   expect(brand(early)).toBe("Google");
-  // The same padded alt as the 20th logo is read only for its first 300 characters: not found, and not an error.
+  // The same padded alt as the 20th logo is read only for its first 300 characters: not found, but the control is
+  // reported as not read in full (it is never a silent miss).
   const filler = Array.from({ length: 19 }, (_, i) => `<img src="/${i}.png" alt="logo ${i}">`).join("");
   expect(brand(`<a href="${OFF}">${filler}${full.join("")}</a>`)).toBeNull();
+  const { brandImpersonationRule: rule20 } = await import("../src/integrity/brand-impersonation");
+  const cut20 = await rule20.run(context(`<a href="${OFF}">${filler}${full.join("")}</a>`));
+  expect(cut20.checks[0]?.details).toMatchObject({ scanTruncated: true, controlsUnread: 1 });
+  // From the 5th logo on, 5 to 99 decoys before it make no difference: a long late alt is always reported.
+  for (const decoys of [4, 5, 20, 99]) {
+    const before = Array.from({ length: decoys }, (_, i) => `<img src="/${i}.png" alt="logo ${i}">`).join("");
+    const result = await rule20.run(context(`<a href="${OFF}">${before}${full.join("")}</a>`));
+    const reported = result.checks[0]?.details as { controlsUnread?: number } | undefined;
+    const found = brand(`<a href="${OFF}">${before}${full.join("")}</a>`) === "Google";
+    expect(found || reported?.controlsUnread === 1, `${decoys} decoys`).toBe(true);
+  }
+  // A 20,000-character alt as the 10th logo is reported too.
+  const tenth = `${Array.from({ length: 9 }, (_, i) => `<img src="/${i}.png" alt="logo ${i}">`).join("")}<img src="/big.png" alt="${"a".repeat(20_000)}">`;
+  expect((await rule20.run(context(`<a href="${OFF}">${tenth}</a>`))).checks[0]?.details).toMatchObject({ scanTruncated: true, controlsUnread: 1 });
   // An unpadded phrase in the 20th alt is within its first 300 characters: found.
   expect(brand(`<a href="${OFF}">${filler}<img src="/g.png" alt="${phrase}"></a>`)).toBe("Google");
   // 300 logos in one control: the control is reported as not read in full.
