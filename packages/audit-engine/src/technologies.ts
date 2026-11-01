@@ -208,9 +208,10 @@ export function detectReportTechnologies(
 const TECH_BUNDLE_FLOOR_BYTES = 16 * 1024;
 /**
  * Share of a page's byte budget the floor pass leaves for hint windows (#1510): the floor gives each script a head in
- * plan order, so on a page of dozens of scripts the later ones used to get a short head or none, and no room was left
- * for the window around a vendor literal past it. Held only when the room is at least four times the reserve, so a page
- * whose floors fit is unchanged and a small budget is shared as before.
+ * plan order, so on a page whose floors do not fit the budget the later scripts used to get a short head or none, and
+ * no room was left for the window around a vendor literal past it. Held only when the floors would not fit the room
+ * (a page whose floors fit gives every script the same head as before) and the room is at least four times the reserve
+ * (a small budget is shared as before). The reserve is shared by every script that needs windows.
  */
 const TECH_WINDOW_RESERVE_BYTES = 64 * 1024;
 /** Most bytes of vendor-literal windows and tail added to a bundle that does not fit whole. */
@@ -503,7 +504,10 @@ export function buildTechInputs(
       }
     }
     const floor = Math.min(TECH_BUNDLE_FLOOR_BYTES, limits.bundleBytes);
-    const windowReserve = !allWhole && room() >= 4 * TECH_WINDOW_RESERVE_BYTES ? TECH_WINDOW_RESERVE_BYTES : 0;
+    // Held back only when the floors would not fit the room: a page whose scripts all get their head keeps it (#1510).
+    const floorDemand = plan.reduce((sum, item) => sum + Math.min(floor, item.bytes), 0);
+    const windowReserve =
+      !allWhole && floorDemand > room() && room() >= 4 * TECH_WINDOW_RESERVE_BYTES ? TECH_WINDOW_RESERVE_BYTES : 0;
     for (const item of allWhole ? [] : plan) {
       const r = Math.min(floor, room() - windowReserve);
       if (r <= 0) break;

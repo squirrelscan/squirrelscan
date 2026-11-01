@@ -19,7 +19,7 @@ How it works:
 
 ### Fixed
 
-- **A small script late on a crowded page is no longer left out of technology detection.** On a page with dozens of scripts the per-script floor spent the whole page budget on the earlier ones, so a vendor literal past the head of a later, smaller script was never shown to detection. The floor now leaves a share of the page budget for the windows around vendor literals, and a script the floor left no head gets its windows first. A page whose floors fit is unchanged. (#1510, refs #1488)
+- **A small script late on a crowded page is no longer left out of technology detection.** On a page with dozens of scripts the per-script floor spent the whole page budget on the earlier ones, so a vendor literal past the head of a later, smaller script was never shown to detection. The floor now leaves a share of the page budget for the windows around vendor literals, and a script the floor left no head gets its windows first. The reserve is held only when the floors would not fit the page budget, so a page whose scripts all get their head keeps it. It is shared by every script that needs windows, so a very crowded page can still miss one. (#1510, refs #1488)
 
 ## v0.0.156 (2026-11-01)
 
