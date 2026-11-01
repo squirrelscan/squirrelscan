@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { OFF, REAL, OVERLAY, run, finished, fired, foundOrNoted, padded } from "./integrity-budget-fixture";
+import { OFF, REAL, OVERLAY, run, finished, fired, foundOrNoted } from "./integrity-budget-fixture";
 
 // #784: the integrity rules against hostile pages, through the rule runner. The subject is the WORK bounds
 // (how much of the page a rule reads, and the notes it emits when it stops), not elapsed time, so the runner's
