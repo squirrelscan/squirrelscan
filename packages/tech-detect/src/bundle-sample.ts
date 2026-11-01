@@ -23,7 +23,7 @@ const TAIL_RESERVE_CHARS = 6 * 1024;
 const DECLARED_FIRST_WINDOWS = 2;
 /** Hits examined per hint, kept or not: a hit that yields no window (a long string) or fails its detectors' patterns does not use up the kept ones. */
 const MAX_HIT_SCANS_PER_HINT = 512;
-/** Matches of an `inCode` pattern one window is walked through looking for one that starts in code (the matcher's own bound is 64 over a whole script). */
+/** Matches of an `inCode` pattern one window is walked through looking for one that starts in code (the matcher's own bound is 4,096 candidates over a whole script). */
 const MAX_QUALIFY_CANDIDATES = 64;
 /** Chars a segment may carry beyond its text: an opener of up to 2 characters, and one character backed up so a cut never splits an escape (see `cutAt`). */
 const OPENER_SLACK = 3;

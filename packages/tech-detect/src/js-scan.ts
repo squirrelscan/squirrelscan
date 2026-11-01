@@ -191,6 +191,21 @@ export function inString(strings: number[], index: number): boolean {
   return false;
 }
 
+/** The index of the closing quote of the string literal that has `index` inside it (see {@link inString}), or -1. */
+export function stringEnd(strings: number[], index: number): number {
+  let lo = 0;
+  let hi = strings.length / 2 - 1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    const start = strings[mid * 2]!;
+    const end = strings[mid * 2 + 1]!;
+    if (index < start) hi = mid - 1;
+    else if (index > end) lo = mid + 1;
+    else return index > start ? end : -1;
+  }
+  return -1;
+}
+
 /** The start of the range in `skips` that has `index` inside it (`start < index <= end`), or -1. */
 export function skipStart(skips: number[], index: number): number {
   let lo = 0;
