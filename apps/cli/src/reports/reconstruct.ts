@@ -10,7 +10,9 @@ import {
 } from "@squirrelscan/audit-engine";
 import { buildCacheStats } from "@squirrelscan/core-contracts";
 import { maxDurationReason } from "@squirrelscan/core-contracts/failure-reason";
+import { JSON_REPORT_PAGES } from "@squirrelscan/core-contracts/limits";
 import { redactUrl } from "@squirrelscan/core-contracts/seed-redirect";
+import { unstoredPageRow } from "@squirrelscan/report";
 import { summarizeIgnored } from "@squirrelscan/report/ignored";
 import { createStructureBuilder } from "@squirrelscan/report/structure";
 import { loadAllRules, type RuleRunResult } from "@squirrelscan/rules";
@@ -456,6 +458,13 @@ export function reconstructReport(
             Effect.catchAll(() => Effect.succeed(new Map<string, number>()))
           )
       : new Map<string, number>();
+
+    // URLs the crawl requested but stored no page for, for `--include-pages` (#1396). A failed read leaves them out.
+    const unstoredRead = options?.includePageRuleCounts
+      ? yield* storage
+          .getUnstoredFrontierEntries(crawlId, JSON_REPORT_PAGES.maxEntries)
+          .pipe(Effect.catchAll(() => Effect.succeed({ entries: [], total: 0 })))
+      : null;
 
     // 7. Load rule registry to get metadata
     // Stored results can include explicitly enabled opt-in rules. Reconstruction
@@ -1006,6 +1015,9 @@ export function reconstructReport(
             statusReason: auditStatus.reason,
             statusReasonCode: auditStatus.reasonCode,
           }
+        : {}),
+      ...(unstoredRead && unstoredRead.total > 0
+        ? { unstoredPages: unstoredRead.entries.map(unstoredPageRow), unstoredPagesTotal: unstoredRead.total }
         : {}),
       // #1829: coverage lost to throttling, in a form renderers can count
       // rather than parse out of the reason prose.
