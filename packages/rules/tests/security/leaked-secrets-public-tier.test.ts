@@ -193,12 +193,14 @@ describe("search keys keep reporting, with the name as a hint (#1229)", () => {
   });
 
   test("an admin key under a search-looking name reports like any other, as do other names", () => {
-    for (const name of ["searchOwnerKey", "search_sudo_api_key", "searchIndexingApiKey", "azure_search_api_key", "search_admin_api_key", "apiKey"]) {
+    for (const name of ["searchOwnerKey", "search_sudo_api_key", "searchIndexingApiKey", "azure_search_api_key", "apiKey"]) {
       const reported = found(`{"${name}":"${key}"}`);
       expect([name, reported.every((f) => f[1] === "medium" && f[2] === false)]).toEqual([name, true]);
     }
-    // No hint when the name carries a privileged word.
-    expect(one(`{"search_admin_api_key":"${key}"}`)[0]?.extra?.hint).toBeUndefined();
+    // No search-only hint when the name carries a privileged word; an admin name is a tier up (#1515): high, with the admin hint.
+    expect(one(`{"search_secret_api_key":"${key}"}`)[0]?.extra?.hint).toBeUndefined();
+    const admin = one(`{"search_admin_api_key":"${key}"}`)[0];
+    expect([admin?.confidence, String(admin?.extra?.hint).includes("search-only")]).toEqual(["high", false]);
   });
 
   test("the same value under a search name and an admin name is reported as a leak, never as public", () => {
@@ -387,10 +389,12 @@ describe("guards pinned after review (#1287, #1229)", () => {
   test("a search hint is for the search key only: every privileged word, and other names, get none", () => {
     const key = mixedRun(seededRng(35), 32);
     const hint = (name: string) => scanContent(`{"${name}":"${key}"}`, "inline-script", PAGE)[0]?.extra?.hint;
-    for (const word of ["admin", "secret", "private", "write", "master", "management", "manage", "backend", "server", "root"]) {
+    for (const word of ["secret", "private", "write", "master", "management", "manage", "backend", "server", "root"]) {
       expect([word, hint(`search_${word}_api_key`)]).toEqual([word, undefined]);
       expect([word, hint(`${word}SearchApiKey`)]).toEqual([word, undefined]);
     }
+    // an admin name has its own hint, the admin one (#1515), never the search-only one
+    for (const name of ["search_admin_api_key", "adminSearchApiKey"]) expect([name, String(hint(name)).includes("search-only")]).toEqual([name, false]);
     expect(typeof hint("searchApiKey")).toBe("string");
     expect(typeof hint("typesense_search_api_key")).toBe("string");
     expect(hint("apiKey")).toBeUndefined();

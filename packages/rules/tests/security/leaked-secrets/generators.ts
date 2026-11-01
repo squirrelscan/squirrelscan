@@ -724,6 +724,7 @@ export const GENERATORS: Generator[] = [
 
   // ── Context tier (keyword window + credential key) ────────────────────
   { pattern: "Cohere API Key", tier: "keyed", keyName: "cohereKey", make: (r) => value(keyedRun(r, ALNUM, 40)) },
+  { pattern: "Meilisearch API Key", tier: "keyed", keyName: "meiliKey", make: (r) => value(keyedRun(r, ALNUM, 32)) },
   { pattern: "Together AI Key", tier: "keyed", keyName: "togetherKey", make: (r) => value(keyedRun(r, HEX, 64)) },
   { pattern: "Mistral API Key", tier: "keyed", keyName: "mistralKey", make: (r) => value(keyedRun(r, ALNUM, 32)) },
   { pattern: "Pinecone API Key", tier: "keyed", keyName: "pineconeKey", make: (r) => value(uuid(r)) },
