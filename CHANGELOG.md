@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **A small script late on a crowded page is no longer left out of technology detection.** On a page with dozens of scripts the per-script floor spent the whole page budget on the earlier ones, so a vendor literal past the head of a later, smaller script was never shown to detection. The floor now leaves a share of the page budget for the windows around vendor literals, and a script the floor left no head gets its windows first. A page whose floors fit is unchanged. (#1510, refs #1488)
+
 ## v0.0.156 (2026-11-01)
 
 Site integrity is harder to talk around: `integrity/brand-impersonation` no longer spares a sign-in link to an identity broker's authorize URL because its query names a provider (the tenant must be the site's own), ranks controls by the destination as a browser reads it, and `integrity/fake-auth-overlay` reads the modern viewport units and tokenises a style the way a browser does, so a string, comment or escape no longer hides the geometry. The JSON report (schema 1.5) names the rules that ran, and `--include-pages` lists the URLs that never answered with a fixed reason code. Technology detection finds Microsoft Clarity's loader inside a first-party bundle and Railway behind `server: railway-edge`.
