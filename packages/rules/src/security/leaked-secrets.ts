@@ -1674,6 +1674,36 @@ function isLocationValue(body: string): boolean {
   return rooted || segments.length > 1;
 }
 
+/**
+ * An AMD / RequireJS module path: `Magento_Customer/js/change-email-password`, `Magento_Ui/js/form/element/abstract`,
+ * `text!Vendor_Module/template/form`. Word segments joined by `/` (letters, with `-`, `_` or `.` between words, at most two digits
+ * and three capitals after a word's first letter, so a camelCase name passes and a drawn value does not), under a module name of the
+ * `Vendor_Module` form or a plain `js` segment. Narrow on purpose: every segment is a short word, there is no long
+ * digit run or mixed-case run anywhere, and the path says what it is (#1292).
+ */
+const MODULE_SEGMENT_RE = /^[A-Za-z][A-Za-z0-9]*(?:[-_.][A-Za-z0-9]+)*$/;
+// `Magento_Customer`, `Acme_ShopBase`: two CamelCase names of lower-case words, no digits (a drawn `KrllP_YU8RDYAyNCX` is not one)
+const VENDOR_MODULE_RE = /^[A-Z][a-z]+(?:[A-Z][a-z]+)*_[A-Z][a-z]+(?:[A-Z][a-z]+)*$/;
+
+export function isModulePath(body: string): boolean {
+  if (body.length > 128 || !body.includes("/")) return false;
+  const segments = body.replace(/^[a-z]+!/, "").split("/");
+  if (segments.length < 2) return false;
+  for (const segment of segments) {
+    if (segment.length > 32 || !MODULE_SEGMENT_RE.test(segment)) return false;
+    let digits = 0;
+    let capitals = 0;
+    for (const ch of segment) {
+      if (ch >= "0" && ch <= "9") digits++;
+      else if (ch >= "A" && ch <= "Z") capitals++;
+    }
+    if (digits > 2) return false;
+    // capitals after the first letter: `changeEmailPassword` and `Vendor_Module` are names, a drawn run of mixed case is not
+    if (capitals - (segment[0]! >= "A" && segment[0]! <= "Z" ? 1 : 0) > 3 && !VENDOR_MODULE_RE.test(segment)) return false;
+  }
+  return VENDOR_MODULE_RE.test(segments[0]!) || segments.includes("js");
+}
+
 /** `login.err.weakPassword`: a catalogue key, not a secret. */
 function isDottedIdentifier(body: string): boolean {
   if (!body.includes(".") || body.length > DOTTED_MAX) return false;
@@ -2054,10 +2084,11 @@ function seedDataVerdict(content: string, at: number, keyName: string, budget: {
 }
 
 /** Could this body be a credential at all? */
-function isNotACredentialValue(body: string, patternName = ""): boolean {
+export function isNotACredentialValue(body: string, patternName = ""): boolean {
   return (
     isNonAsciiText(body) ||
     isLocationValue(body) ||
+    isModulePath(body) ||
     isDottedIdentifier(body) ||
     isTranslatedLabel(body) ||
     isTemplateExpression(body) ||

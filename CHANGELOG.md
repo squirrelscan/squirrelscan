@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **`security/leaked-secrets` no longer reports an AMD / RequireJS module path as a credential.** A module path such as `Magento_Customer/js/change-email-password` under a credential-named key, and the paths beside it (`Magento_Ui/js/form/element/abstract`, `text!Vendor_Module/template/form`) were reported as generic secrets. A value of short word segments joined by `/`, under a `Vendor_Module` head or a `js` segment, with no digit runs or mixed-case runs, is a name; random base64-ish values with a `/` still report (0 of 20,000 fuzzed values are read as a module path). (#1292)
+
 ## v0.0.158 (2026-11-01)
 
 `security/leaked-secrets` is sharper in both directions: it stops reporting documentation samples, placeholders, catalogue values and sample data tables as credentials, names more providers (Cerebras, OpenRouter, NVIDIA, Fireworks, Shopify Admin, Stripe restricted keys, Google OAuth client secrets), and classifies Shopify, Netlify and signed-URL tokens and browser SDK keys instead of calling them generic leaks. A percent-encoded Twitter bearer token is found again, and the crawler throttle spacing test no longer fails under load. Thanks to William for the throttle test fix (#1516, #1519).
