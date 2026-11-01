@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **`integrity/brand-impersonation` ranks a control by the destination as a browser reads it.** A link written `/\other.example/x` or with a tab inside (`/<TAB>/other.example/x`) is the protocol-relative URL it resolves to, but the ranking read the raw text and treated it as local, so a long label past 256 nodes was neither read in full nor counted as unread. The ranking now uses the same normalised destination as the own-site test. (#1495)
+
 ## v0.0.154 (2026-11-01)
 
 Technology detection reads a long `next/script` snippet in a Next.js flight payload again, and a page of unclosed tags no longer makes it take tens of seconds. `url/slug-convention` and `perf/total-byte-weight` count the same pages on both engines when a crawl has bodiless 4xx or 5xx pages, and `integrity/brand-impersonation` keeps reading long attribute labels on a page padded to starve it.
