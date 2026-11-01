@@ -42,3 +42,17 @@ for (const { id, suffix, header } of CASES) {
     }
   });
 }
+
+// #1504: Railway's edge proxies send `server: railway`, `railway-hikari` and (the v3 proxy, per Railway's changelog) `railway-edge`.
+describe("railway-app Server header values (#1504)", () => {
+  for (const value of ["railway", "railway-hikari", "railway-edge", "Railway-Edge", "RAILWAY"]) {
+    test(`Server: ${value} on a custom domain`, () => {
+      expect(ids("https://www.example.com/", { server: value }, page(""))).toContain("railway-app");
+    });
+  }
+  for (const value of ["railway-edge-x", "xrailway", "not-railway-edge", "railway-edges", "railway edge", "railway-"]) {
+    test(`Server: ${value} is not Railway`, () => {
+      expect(ids("https://www.example.com/", { server: value }, page(""))).not.toContain("railway-app");
+    });
+  }
+});
