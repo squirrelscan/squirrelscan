@@ -94,7 +94,7 @@ function hintSpecs(): HintSpec[] {
       if (d.type !== "script-content") continue;
       const inCode = d.inCode === true;
       // A string-value detector accepts a match inside a string, so its window is judged by the plain pattern.
-      if (d.hint) add(d.hint, false, d.pattern, true, inCode && d.stringValue !== true, d.stringValue === true);
+      if (d.hint) add(d.hint, false, d.pattern, true, inCode && d.stringValue === undefined, d.stringValue !== undefined);
       // The `also` pattern is matched anywhere in the body, strings included: not gated to code.
       if (d.also) for (const h of d.also.hints) add(h, false, d.also.pattern, true, false);
       if (!d.hint) {

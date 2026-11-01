@@ -41,11 +41,11 @@ export type Detector =
       type: "script-content";
       pattern: RegExp;
       inCode?: boolean;
-      // `stringValue` (with `inCode`): a match inside a string literal also counts when that string is the value of
-      // `__html`, or of `children` on a script-shaped props object (a `strategy` or `id` sibling): the inline loader of a
-      // `next/script` or `dangerouslySetInnerHTML` carried as text in a framework bundle (#1509). Any other string
-      // (docs, an error message, a code sample) is still rejected.
-      stringValue?: boolean;
+      // `stringValue` (with `inCode`): a match inside a string literal also counts when that string is the text of an
+      // inline script element a framework renders (`dangerouslySetInnerHTML:{__html}` or `children` on script props:
+      // a `"script"` tag, a `strategy` key or a script `type`) and matches this regular expression, the evidence that it
+      // is a loader and not a quote of one (#1509). Any other string (docs, markup, a code sample) is still rejected.
+      stringValue?: RegExp;
       hint?: string;
       also?: undefined;
       validate?: ScriptMatchValidator;

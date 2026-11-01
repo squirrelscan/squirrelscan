@@ -19,7 +19,7 @@ How it works:
 
 ### Fixed
 
-- **Microsoft Clarity is detected when its snippet is the text of an inline script in a framework bundle.** The standard loader carried as a `dangerouslySetInnerHTML` `__html` string, or as the `children` string of a `next/script` props object (one with a `strategy` or `id` key), is now found, including in a bundle sampled past its head. The same snippet in a docs string, a code sample or any other string still is not. (#1509, refs #1488)
+- **Microsoft Clarity is detected when its snippet is the text of an inline script in a framework bundle.** The standard loader carried as the `__html` of a `dangerouslySetInnerHTML` prop, or as the `children` string, of a script element's props (a `"script"` tag, a `strategy` key or a script `type`) is now found, including in a bundle sampled past its head. The string must read as JavaScript (no markup) and hold the snippet's own signature or its script-creating loader, so a docs page, a markdown renderer or a test fixture that quotes the snippet is not a detection. An `id` key alone is not enough. (#1509, refs #1488)
 
 ## v0.0.156 (2026-11-01)
 
