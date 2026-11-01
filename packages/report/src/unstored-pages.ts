@@ -25,6 +25,7 @@ const OWN_MESSAGES: ReadonlyArray<[RegExp, UnstoredPageReason]> = [
   [/^rate limited\b/i, "rate-limited"],
   [/^off-site redirect\b/i, "off-site-redirect"],
   [/^request blocked\b/i, "blocked"],
+  [/^blocked by\b/i, "blocked"],
   [/^could not decode\b/i, "unreadable-body"],
   [/^tls\/connection error\b/i, "tls"],
   [/^crawl request timed out\b/i, "timeout"],
