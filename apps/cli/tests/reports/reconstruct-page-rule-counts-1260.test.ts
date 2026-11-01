@@ -6,6 +6,7 @@ import type {
   PageRecord,
 } from "@squirrelscan/core-contracts/storage";
 
+import { JSON_REPORT_PAGES } from "@squirrelscan/core-contracts";
 import { describe, expect, spyOn, test } from "bun:test";
 import { Effect } from "effect";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
@@ -204,6 +205,19 @@ describe("URLs with no stored page, executed rules (#1396)", () => {
     const report = await run(reconstructReport(store, crawlId));
     expect(spy).not.toHaveBeenCalled();
     expect(report.unstoredPages).toBeUndefined();
+  });
+
+  test("includePageRuleCounts reads at most the report's page cap from the store", async () => {
+    const { store, crawlId } = await withUnstored();
+    const spy = spyOn(store, "getUnstoredFrontierEntries");
+    await run(
+      reconstructReport(store, crawlId, undefined, {
+        includePageRuleCounts: true,
+      })
+    );
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy.mock.calls[0]?.[0]).toBe(crawlId);
+    expect(spy.mock.calls[0]?.[1]).toBe(JSON_REPORT_PAGES.maxEntries);
   });
 
   test("includePageRuleCounts lists an errored fetch, a rate-limited request, an excluded URL and a robots-blocked one", async () => {

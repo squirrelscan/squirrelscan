@@ -109,6 +109,8 @@ describe("unstoredPageRow", () => {
     // What the crawl writes for a server error that survived retries, and for a WAF refusal.
     expect(reason("Server error: 500")).toBe("http-500");
     expect(reason("Request blocked by server")).toBe("blocked");
+    expect(reason("Blocked by Cloudflare challenge (403)")).toBe("blocked");
+    expect(reason("blocked by DataDome")).toBe("blocked");
     expect(reason("Off-site redirect to https://other.example/cb?x=1")).toBe("off-site-redirect");
     expect(reason("Crawl request timed out")).toBe("timeout");
     expect(reason("TLS/connection error: unable to verify the first certificate")).toBe("tls");
