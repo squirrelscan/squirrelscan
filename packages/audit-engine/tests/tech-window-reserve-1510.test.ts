@@ -82,6 +82,33 @@ describe("a small script late in a crowded page", () => {
   });
 });
 
+/** Scripts whose attached body starts with the first 16 KB of the original: they got their floor head. */
+function headed(spec: Spec, limits = DEFAULT_TECH_BUNDLE_LIMITS): number {
+  const { inputs, scripts } = inputsFor(spec, limits);
+  const bodies = new Map((inputs[0]!.scripts ?? []).map((s) => [s.url, s.content ?? ""]));
+  return scripts.filter((s) => (bodies.get(s.url) ?? "").startsWith(s.content.slice(0, 16 * 1024))).length;
+}
+
+describe("the reserve is held only when the floors would not fit (#1510)", () => {
+  test("29 to 32 scripts: the floors fit 512 KB (not 448 KB), so every script keeps its head as before", () => {
+    for (const count of [29, 30, 32]) expect(headed({ count, size: 75_000, target: 3 }), `${count} scripts`).toBe(count);
+  });
+
+  test("33 scripts do not fit: the reserve holds back 64 KB, so 28 scripts get the head", () => {
+    expect(headed({ count: 33, size: 75_000, target: 3 })).toBe(28);
+    expect(headed(SHAPE)).toBe(28);
+  });
+
+  test("at exactly four times the reserve the reserve applies; below it the budget is shared as before", () => {
+    const at = { ...DEFAULT_TECH_BUNDLE_LIMITS, pageBytes: 256 * 1024 };
+    const below = { ...DEFAULT_TECH_BUNDLE_LIMITS, pageBytes: 256 * 1024 - 1 };
+    const small = { ...DEFAULT_TECH_BUNDLE_LIMITS, pageBytes: 128 * 1024 };
+    expect(headed({ count: 20, size: 75_000, target: 3 }, at)).toBe(12); // (256 - 64) / 16
+    expect(headed({ count: 20, size: 75_000, target: 3 }, below)).toBe(15); // no reserve: 255.99 / 16
+    expect(headed({ count: 20, size: 75_000, target: 3 }, small)).toBe(8); // no reserve: 128 / 16
+  });
+});
+
 describe("a page whose floors fit is unchanged", () => {
   test("few scripts: every script is read to its floor and the target is found as before", () => {
     const { inputs, scripts } = inputsFor({ count: 8, size: 75_000, target: 5 });
