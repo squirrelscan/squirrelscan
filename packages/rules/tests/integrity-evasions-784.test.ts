@@ -678,3 +678,29 @@ test("a sign-in path is found however it is padded: past 300 characters, after a
     expect(brand(`<a href="${href}">${label}</a>`), href.slice(0, 40)).toBe("Google");
   }
 });
+
+// ── viewport units (#1496) ───────────────────────────────────────────────────────────────────────────────
+
+const cover = (width: string, height: string, extra = "") =>
+  `<iframe id="google-auth" srcdoc="" style="position:fixed;top:0;left:0;width:${width};height:${height};z-index:99999${extra}"></iframe>`;
+
+test("every viewport unit that is the whole viewport makes a fixed frame a cover", () => {
+  const widths = ["100%", "100vw", "100dvw", "100svw", "100lvw", "100vmax", "100vmin", "calc(100dvw - 0px)", "calc(100vw + 0px)"];
+  const heights = ["100%", "100vh", "100dvh", "100svh", "100lvh", "100vmax", "100vmin", "calc(100dvh - 0px)", "max(100svh, 100%)"];
+  for (const width of widths) {
+    for (const height of heights) {
+      expect(detectFakeAuthOverlay(context(cover(width, height))), `${width} x ${height}`).not.toBeNull();
+    }
+  }
+});
+
+test("a fixed frame that is not the whole viewport is not a cover", () => {
+  for (const [width, height] of [["50dvw", "100dvh"], ["100dvw", "50dvh"], ["100px", "100px"], ["1100%", "100%"], ["100.5%", "100.5%"], ["300px", "100dvh"], ["100dvh", "100dvw"]]) {
+    expect(detectFakeAuthOverlay(context(cover(width!, height!))), `${width} x ${height}`).toBeNull();
+  }
+});
+
+test("the units work from a stylesheet too", () => {
+  const frame = '<iframe id="google-auth" srcdoc=""></iframe>';
+  expect(detectFakeAuthOverlay(context(frame, "<style>#google-auth{position:fixed;top:0;left:0;width:100dvw;height:100svh;z-index:99999}</style>"))).not.toBeNull();
+});
