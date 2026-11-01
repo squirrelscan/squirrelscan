@@ -281,4 +281,114 @@ describe("URLs with no stored page, executed rules (#1396)", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  test("an off-site redirect, a server error and a WAF refusal are listed with their codes", async () => {
+    const { store, crawlId } = await storedAudit();
+    await run(
+      store.upsertFrontier(
+        crawlId,
+        front(
+          "/moved",
+          "failed",
+          "Off-site redirect to https://other.example/cb?token=abc#x",
+          1
+        )
+      )
+    );
+    await run(
+      store.upsertFrontier(
+        crawlId,
+        front("/oops", "failed", "Server error: 500", 2)
+      )
+    );
+    await run(
+      store.upsertFrontier(
+        crawlId,
+        front("/waf", "failed", "Request blocked by server", 3)
+      )
+    );
+    const report = await run(
+      reconstructReport(store, crawlId, undefined, {
+        includePageRuleCounts: true,
+      })
+    );
+    const rows = new Map(
+      (report.unstoredPages ?? []).map((row) => [
+        new URL(row.url).pathname,
+        row,
+      ])
+    );
+    expect(rows.get("/moved")).toMatchObject({
+      outcome: "error",
+      reason: "off-site-redirect",
+    });
+    expect(rows.get("/oops")).toMatchObject({
+      outcome: "error",
+      reason: "http-500",
+    });
+    expect(rows.get("/waf")).toMatchObject({
+      outcome: "error",
+      reason: "blocked",
+    });
+    expect(JSON.stringify(report.unstoredPages)).not.toContain("token");
+  });
+
+  test("a read that fails leaves the rows out and does not fail the report", async () => {
+    const { store, crawlId } = await withUnstored();
+    spyOn(store, "getUnstoredFrontierEntries").mockImplementation(
+      () => Effect.fail(new Error("disk")) as never
+    );
+    const report = await run(
+      reconstructReport(store, crawlId, undefined, {
+        includePageRuleCounts: true,
+      })
+    );
+    expect(report.unstoredPages).toBeUndefined();
+    expect(report.pages.length).toBe(5);
+  });
+
+  test("pagesTotal is the crawled pages plus the real unstored count, which can exceed the rows loaded", () => {
+    const dir = mkdtempSync(join(tmpdir(), "sq-1396-total-"));
+    try {
+      const out = join(dir, "r.json");
+      const err = spyOn(console, "error").mockImplementation(() => {});
+      generateJsonReport(
+        {
+          baseUrl: SITE,
+          timestamp: "2026-11-01T00:00:00.000Z",
+          totalPages: 1,
+          passed: 0,
+          warnings: 0,
+          failed: 0,
+          ruleResults: {},
+          pages: [
+            {
+              url: `${SITE}/`,
+              finalUrl: `${SITE}/`,
+              statusCode: 200,
+              ruleCount: 1,
+            },
+          ],
+          unstoredPages: [
+            { url: `${SITE}/a`, outcome: "skipped", reason: "excluded" },
+          ],
+          unstoredPagesTotal: 7_500,
+        } as never,
+        out,
+        false,
+        true
+      );
+      err.mockRestore();
+      const json = JSON.parse(readFileSync(out, "utf8")) as {
+        pages: unknown[];
+        pagesTotal: number;
+        pagesTruncated: boolean;
+      };
+      expect(json.pages).toHaveLength(2);
+      expect(json.pagesTotal).toBe(7_501);
+      expect(json.pagesTruncated).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });

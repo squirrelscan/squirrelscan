@@ -41,9 +41,10 @@ test("failed and skipped entries with no stored page, oldest first, with the tru
 
   const all = await run(s.getUnstoredFrontierEntries(id, 10));
   expect(all.total).toBe(3);
+  // Failed requests first, then skipped URLs, each oldest first.
   expect(all.entries.map((e) => [e.url, e.status, e.reason])).toEqual([
-    ["https://e.test/excluded/a", "skipped", "excluded"],
     ["https://e.test/boom", "failed", "connect ECONNREFUSED"],
+    ["https://e.test/excluded/a", "skipped", "excluded"],
     ["https://e.test/robots", "skipped", "robots_disallowed"],
   ]);
 
@@ -61,5 +62,21 @@ test("another crawl's entries are not listed", async () => {
   const b = await run(s.createCrawl({ baseUrl: "https://e.test", startedAt: 2, status: "analyzed", config: {} as CrawlMetadata["config"], stats: STATS } as Omit<CrawlMetadata, "id">));
   await run(s.upsertFrontier(a, frontier("https://e.test/x", "failed", "boom")));
   expect((await run(s.getUnstoredFrontierEntries(b, 10))).total).toBe(0);
+  s.close?.();
+});
+
+test("under a cap an error is never cut to keep a skip, and ties break by URL", async () => {
+  const s = new SQLiteStorage(join(dir, "project.db"));
+  await run(s.init());
+  const id = await run(s.createCrawl({ baseUrl: "https://e.test", startedAt: 1, status: "analyzed", config: {} as CrawlMetadata["config"], stats: STATS } as Omit<CrawlMetadata, "id">));
+  // 1,000 skipped entries enqueued before the one error: a plain oldest-first cap of 1,000 would lose the error.
+  for (let i = 0; i < 1_000; i++) await run(s.upsertFrontier(id, frontier(`https://e.test/skip/${String(i).padStart(4, "0")}`, "skipped", "excluded", 1)));
+  await run(s.upsertFrontier(id, frontier("https://e.test/zz-error", "failed", "HTTP 503", 99)));
+  await run(s.upsertFrontier(id, frontier("https://e.test/aa-error", "failed", "HTTP 502", 99)));
+  const capped = await run(s.getUnstoredFrontierEntries(id, 1_000));
+  expect(capped.total).toBe(1_002);
+  expect(capped.entries).toHaveLength(1_000);
+  expect(capped.entries.slice(0, 2).map((e) => e.url)).toEqual(["https://e.test/aa-error", "https://e.test/zz-error"]);
+  expect(capped.entries.slice(2, 4).map((e) => e.url)).toEqual(["https://e.test/skip/0000", "https://e.test/skip/0001"]);
   s.close?.();
 });

@@ -616,13 +616,39 @@ export function auditStatusToLifecycle(
   return status === "failed" || status === "blocked" ? "failed" : "completed";
 }
 
+/**
+ * Why a URL with no stored page is listed (#1396). Always one of these codes, never text from the crawl: `skipped` is the
+ * fallback for a skip the crawl recorded without a known reason, `request-failed` for a failure no other code names, and
+ * `http-<status>` for an HTTP error status.
+ */
+export const UNSTORED_PAGE_REASONS = [
+  "robots-disallowed",
+  "excluded",
+  "not-included",
+  "other-site",
+  "url-too-long",
+  "skipped",
+  "rate-limited",
+  "off-site-redirect",
+  "blocked",
+  "timeout",
+  "connection-refused",
+  "connection-reset",
+  "dns",
+  "tls",
+  "too-many-redirects",
+  "unreadable-body",
+  "request-failed",
+] as const;
+export type UnstoredPageReason = (typeof UNSTORED_PAGE_REASONS)[number] | `http-${number}`;
+
 /** A URL the crawl requested but could not store a page for (#1396), listed by `--include-pages`. */
 export interface UnstoredPage {
+  /** As the crawl recorded it, cut at 2,048 characters. */
   url: string;
   /** `skipped`: the crawl chose not to request it (excluded, other site, robots.txt). `error`: the request failed. */
   outcome: "error" | "skipped";
-  /** Why, as a short bounded text: `robots-disallowed`, `excluded`, `rate-limited`, the error message, ... */
-  reason: string;
+  reason: UnstoredPageReason;
 }
 
 export interface AuditReport {

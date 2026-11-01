@@ -53,6 +53,15 @@ describe("executedRules", () => {
     for (const rule of (json.passedRules ?? []) as Array<{ ruleId: string }>) expect(json.executedRules).toContain(rule.ruleId);
   });
 
+  test("a check carried over from an earlier audit does not make a rule executed in this one", () => {
+    const smart = {
+      "core/carried-only": result("core/carried-only", [check("warn", { provenance: "carried", pageUrl: "https://example.com/old" })]),
+      "core/fresh-and-carried": result("core/fresh-and-carried", [check("warn", { provenance: "carried" }), check("pass", { provenance: "fresh" })]),
+      "core/fresh": result("core/fresh", [check("pass")]),
+    };
+    expect(collectExecutedRules(smart)).toEqual(["core/fresh", "core/fresh-and-carried"]);
+  });
+
   test("a report with no rule results omits it (a report read back with --input carries none)", () => {
     const bare = JSON.parse(renderJson({ ...report, ruleResults: {} } as unknown as AuditReport)) as Record<string, unknown>;
     expect(bare).not.toHaveProperty("executedRules");
@@ -97,13 +106,35 @@ describe("unstoredPageRow", () => {
     const reason = (message: string | null) => unstoredPageRow({ url: "u", status: "failed", reason: message }).reason;
     expect(reason("Rate limited by example.com")).toBe("rate-limited");
     expect(reason("HTTP 503")).toBe("http-503");
+    // What the crawl writes for a server error that survived retries, and for a WAF refusal.
+    expect(reason("Server error: 500")).toBe("http-500");
+    expect(reason("Request blocked by server")).toBe("blocked");
+    expect(reason("Off-site redirect to https://other.example/cb?x=1")).toBe("off-site-redirect");
+    expect(reason("Crawl request timed out")).toBe("timeout");
+    expect(reason("TLS/connection error: unable to verify the first certificate")).toBe("tls");
+    expect(reason("Could not decode response body from https://e.test/a (content-encoding: gzip): incorrect header check")).toBe("unreadable-body");
     expect(reason("connect ECONNREFUSED 10.0.0.1:443")).toBe("connection-refused");
-    expect(reason("Request timed out after 15000ms")).toBe("timeout");
+    expect(reason("read ECONNRESET")).toBe("connection-reset");
     expect(reason("getaddrinfo ENOTFOUND shop.example")).toBe("dns");
     expect(reason("Too many redirects")).toBe("too-many-redirects");
-    expect(reason("unable to verify the first certificate")).toBe("tls");
     expect(reason("something unexpected")).toBe("request-failed");
     expect(reason(null)).toBe("request-failed");
+  });
+
+  test("a path that spells a cause in a URL is not a cause", () => {
+    const reason = (message: string) => unstoredPageRow({ url: "u", status: "failed", reason: message }).reason;
+    // A decode error names the page: `/timeout`, `/ssl` and `/ECONNREFUSED` in the URL must not become the reason.
+    expect(reason("Could not decode response body from https://e.test/timeout (content-encoding: gzip): bad")).toBe("unreadable-body");
+    expect(reason("Fetch failed for https://e.test/ssl/ECONNREFUSED/timeout")).toBe("request-failed");
+    expect(reason("Fetch failed for //e.test/tls?x=timeout")).toBe("request-failed");
+  });
+
+  test("a url-too-long row is cut and every reason is of the fixed type", () => {
+    const row = unstoredPageRow({ url: `https://e.test/${"a".repeat(10_000)}`, status: "skipped", reason: "url_too_long" });
+    expect(row.reason).toBe("url-too-long");
+    expect(row.url.length).toBeLessThanOrEqual(2_051);
+    expect(unstoredPageRow({ url: "u", status: "skipped", reason: "invalid_url" }).reason).toBe("skipped");
+    expect(unstoredPageRow({ url: "u", status: "skipped", reason: "some new reason" }).reason).toBe("skipped");
   });
 
   test("the reason carries no URL, query string, token, address or response text", () => {

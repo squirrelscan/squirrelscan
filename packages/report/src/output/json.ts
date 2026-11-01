@@ -5,6 +5,7 @@ import type {
   EditorSummaryPriority,
   MaxDurationCut,
   RefusedFetch,
+  UnstoredPageReason,
   WafBlockedSummary,
   WafSuspectSummary,
 } from "@squirrelscan/core-contracts";
@@ -141,9 +142,13 @@ export function pageOutcome(status: number): JsonPageOutcome {
  * The ids of the rules that produced at least one non-skipped check, sorted (#1396): a rule whose checks were all
  * skipped (a scan limit, a missing probe, an internal error) did not evaluate anything and is not listed.
  */
-export function collectExecutedRules(ruleResults: Record<string, { checks: ReadonlyArray<{ status: string }> } | undefined>): string[] {
+export function collectExecutedRules(
+  ruleResults: Record<string, { checks: ReadonlyArray<{ status: string; provenance?: string }> } | undefined>,
+): string[] {
+  // A check carried over from an earlier audit (a smart audit keeps findings of pages it did not re-crawl) is not a
+  // rule that ran in this one.
   return Object.keys(ruleResults)
-    .filter((ruleId) => ruleResults[ruleId]?.checks.some((check) => check.status !== "skipped"))
+    .filter((ruleId) => ruleResults[ruleId]?.checks.some((check) => check.status !== "skipped" && check.provenance !== "carried"))
     .sort();
 }
 
@@ -158,7 +163,7 @@ export interface JsonPageRow {
   /** Distinct rules that reported on the page (skipped checks not counted). */
   ruleCount: number;
   /** Why a URL with no stored page is listed as `error` or `skipped` (#1396). Absent on a crawled page. */
-  reason?: string;
+  reason?: UnstoredPageReason;
 }
 
 export interface JsonRenderOptions {
@@ -427,7 +432,8 @@ interface SlimJsonReport {
    */
   infoChecks?: InfoCheck[];
   /**
-   * The rule ids that ran on this audit: rules that produced at least one non-skipped check (#1396), sorted. A rule
+   * The rule ids that ran on this audit: rules that produced at least one non-skipped check in this audit (#1396), sorted. A
+   * check carried over from an earlier audit (a smart audit keeps findings of pages it did not re-crawl) does not count. A rule
    * that was fully skipped or disabled is not listed. So `issues`, `passedRules` and `skippedChecks` can be checked
    * against it without re-reading the configuration. Empty and omitted on a report read back with `report --input`,
    * which carries no rule results.
