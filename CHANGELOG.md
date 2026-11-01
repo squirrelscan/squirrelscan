@@ -19,7 +19,7 @@ How it works:
 
 ### Fixed
 
-- **`integrity/fake-auth-overlay` reads the modern viewport units.** A fixed full-screen frame sized with `dvh`, `svh`, `lvh`, `dvw`, `svw`, `lvw`, `vmax` or `vmin` (alone or inside `calc()`) was not seen as covering the viewport, while `100vh` was. They now count, and a length that merely contains digits before `100` (`1100%`, `100.5%`) no longer does. (#1496)
+- **`integrity/fake-auth-overlay` reads the modern viewport units.** A fixed full-screen frame sized with `dvh`, `svh`, `lvh`, `dvw`, `svw`, `lvw`, `vmax` or `vmin` (alone or inside `calc()`) was not seen as covering the viewport, while `100vh` was. They now count, and a length that merely contains digits before `100` (`1100%`) no longer does. Other spellings fill too (`100.0%`, `+100vw`, `1e2vw`, over-full `150%`, `calc(50vw + 50vw)`, `100vi`/`100vb`, `100cqw`, `stretch`, `-webkit-fill-available`), as do the logical inset properties; a length in a custom property (`var(--w)`) is not resolved. (#1496)
 
 - **`integrity/brand-impersonation` ranks a control by the destination as a browser reads it.** A link written `/\other.example/x` or with a tab inside (`/<TAB>/other.example/x`) is the protocol-relative URL it resolves to, but the ranking read the raw text and treated it as local, so a long label past 256 nodes was neither read in full nor counted as unread. The ranking now uses the same normalised destination as the own-site test. (#1495) The sign-in path is looked for in the first 8,192 characters of the destination (it was 300, on the raw text), the text is computed once per control, and links to other hosts are not moved ahead of other links when the 60,000-control cap cuts (only the read order within the prepared ones).
 
