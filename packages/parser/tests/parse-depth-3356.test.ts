@@ -4,7 +4,7 @@
 // so a page of 20,000 nested links took 34 s to parse. The walks are now
 // memoized per document. These pin (1) that every anchor gets the answer the
 // single walks gave, on seeded random pages of landmarks, roles, classes and
-// ids, and (2) a time budget on the deeply nested shapes.
+// ids, and (2) that the deeply nested shapes cost linear time (a growth ratio, not a wall-clock budget).
 
 import { describe, expect, test } from "bun:test";
 
@@ -113,23 +113,47 @@ function parseMs(html: string): number {
 const nested = (depth: number, open: string, close: string) =>
   `<!doctype html><html lang="en"><body><main>${open.repeat(depth)}${close.repeat(depth)}</main></body></html>`;
 
+/**
+ * Growth of `run` from `small` to 4 times that depth, as a ratio of best-of-3 times. Linear work gives about 4;
+ * the walk per link this guards against gives about 16. A ratio does not move with the load a busy runner is
+ * under, where an absolute `under 1 s` did (#1483): the same machine slows both runs alike.
+ */
+function growth(run: (depth: number) => number, small = 5_000): number {
+  // The least of three measurements: a stall makes a ratio too big, never too small, while the walk per link
+  // is quadratic every time.
+  let least = Number.POSITIVE_INFINITY;
+  for (let attempt = 0; attempt < 3 && least >= MAX_GROWTH; attempt++) {
+    least = Math.min(least, run(small * 4) / Math.max(run(small), 1));
+  }
+  return least;
+}
+/** Slack over linear: a 4x depth may cost up to this many times as much (linear is about 4, quadratic about 16). */
+const MAX_GROWTH = 10;
+
 describe("nesting costs a walk, not a walk per link (#3356)", () => {
   for (const [shape, open, close] of [
     ["role=text spans", '<span role="text"><a href="/x">x</a>', "</span>"],
     ["aria-hidden divs", '<div aria-hidden="true"><a href="/x">x</a>', "</div>"],
     ["blockquotes", '<blockquote><a href="/x">l</a>', "</blockquote>"],
   ] as const) {
-    test(`20,000 nested ${shape} parse in under 1 s`, { timeout: 60_000 }, () => {
-      expect(parseMs(nested(20_000, open, close))).toBeLessThan(1_000);
+    test(`20,000 nested ${shape} cost linear time (4x the depth, under ${MAX_GROWTH}x the time)`, { timeout: 60_000 }, () => {
+      expect(growth((depth) => parseMs(nested(depth, open, close)))).toBeLessThan(MAX_GROWTH);
     });
   }
 
-  test("extractLinks takes 20,000 nested links in under 1 s", { timeout: 60_000 }, () => {
-    const { document } = parseHTML(nested(20_000, '<div class="x"><a href="/x">x</a>', "</div>"));
-    const start = performance.now();
-    const found = extractLinks(document as never, URL);
-    expect(performance.now() - start).toBeLessThan(1_000);
-    expect(found).toHaveLength(20_000);
+  test("extractLinks on nested links costs linear time and finds every link", { timeout: 60_000 }, () => {
+    const extractMs = (depth: number): number => {
+      const { document } = parseHTML(nested(depth, '<div class="x"><a href="/x">x</a>', "</div>"));
+      let best = Number.POSITIVE_INFINITY;
+      for (let i = 0; i < 3; i++) {
+        const start = performance.now();
+        const found = extractLinks(document as never, URL);
+        best = Math.min(best, performance.now() - start);
+        expect(found).toHaveLength(depth);
+      }
+      return best;
+    };
+    expect(growth(extractMs)).toBeLessThan(MAX_GROWTH);
   });
 });
 
@@ -152,6 +176,25 @@ describe("the memo holds no page alive (#2343)", () => {
     return new WeakRef(document);
   }
 
+  /** Deepens the stack with dead locals, so a stale slot a finished parse left behind is overwritten before a collection. */
+  function scrubStack(depth: number): number {
+    const filler = [depth, depth + 1, depth + 2, depth + 3];
+    return depth === 0 ? filler[0]! : scrubStack(depth - 1) + filler[3]!;
+  }
+
+  /**
+   * Collects until every page is gone or the bound is spent: whether the collector has run, and whether JSC's
+   * conservative stack scan still sees a stale slot, depends on timing (#1483), so one forced collection is not
+   * evidence. Bounded: 100 rounds of a scrubbed stack, a full collection and a short sleep (about a second at most).
+   */
+  async function settle(pages: ReadonlyArray<WeakRef<object>>): Promise<void> {
+    for (let i = 0; i < 100 && pages.some((page) => page.deref()); i++) {
+      scrubStack(400);
+      Bun.gc(true);
+      await Bun.sleep(i < 10 ? 0 : 10);
+    }
+  }
+
   test("a memo that outlives its page keeps none of the page's DOM", async () => {
     // A stale stack slot can keep a finished parse's memo reachable (JSC scans
     // the stack conservatively); it must not keep the page with it.
@@ -161,13 +204,24 @@ describe("the memo holds no page alive (#2343)", () => {
     // (the same scan this guards against), while a memo holding its keys
     // strongly keeps every page it has seen.
     const pages = [walkAndDrop(memos), walkAndDrop(memos), walkAndDrop(memos)];
-    for (let i = 0; i < 10 && (pages[0]!.deref() || pages[1]!.deref()); i++) {
-      Bun.gc(true);
-      await Bun.sleep(0);
-    }
+    await settle([pages[0]!, pages[1]!]);
     expect(pages[0]!.deref()).toBeUndefined();
     expect(pages[1]!.deref()).toBeUndefined();
     // The memos are still alive here.
     expect(memos).toHaveLength(2);
   });
+
+  test("control: a memo that holds its pages strongly keeps them, however long the poll runs", async () => {
+    // The mutation the test above guards against. If this ever stopped holding, the poll would be proving nothing.
+    const held: object[] = [];
+    const leaking = (element: Element): unknown => {
+      held.push(element.ownerDocument as unknown as object);
+      return undefined;
+    };
+    const pages = [walkAndDrop([leaking]), walkAndDrop([leaking])];
+    await settle(pages);
+    expect(pages[0]!.deref()).toBeDefined();
+    expect(pages[1]!.deref()).toBeDefined();
+    expect(held.length).toBeGreaterThan(0);
+  }, 15_000);
 });
