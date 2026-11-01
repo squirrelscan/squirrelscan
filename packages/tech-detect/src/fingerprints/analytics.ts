@@ -1,5 +1,5 @@
 import type { TechFingerprint } from "../types";
-import { inBundle } from "./helpers";
+import { inBundle, inBundleString } from "./helpers";
 
 export const ANALYTICS_FINGERPRINTS: TechFingerprint[] = [
   {
@@ -114,6 +114,13 @@ export const ANALYTICS_FINGERPRINTS: TechFingerprint[] = [
       inBundle(
         String.raw`(?:\.src\s*=|setAttribute\s*\(\s*["']src["']\s*,)\s*["'\x60](?:https?:)?\/\/(?:www\.)?clarity\.ms\/tag\/`,
         "clarity.ms/tag/",
+      ),
+      // The standard snippet as the text of an inline script a framework renders: a template literal `__html:` or a
+      // `children:'...'` of a `next/script` props object. The quotes of the loader may be escaped in a JSON-style
+      // string, and a docs string that only shows the snippet is still rejected (#1509).
+      inBundleString(
+        String.raw`\.src\s*=\s*\\?["'\x60](?:https?:)?\\?\/\\?\/(?:www\.)?clarity\.ms\\?\/tag\\?\/`,
+        "clarity.ms",
       ),
     ],
   },
