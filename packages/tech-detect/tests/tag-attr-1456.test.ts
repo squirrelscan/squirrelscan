@@ -81,3 +81,34 @@ describe("hostile pages (5 MB)", () => {
     }
   }
 });
+
+describe("bounds (review of #1467)", () => {
+  test("hostile openers: a quote then a newline, and a 1 MB attribute value", () => {
+    const rep = (unit: string): string => page("", unit.repeat(Math.ceil(5_000_000 / unit.length)));
+    for (const html of [rep('<img a="\n'), rep("<script a='\n"), page("", `<img alt="${"x".repeat(1_000_000)}" src="/a.png">`), page("", `<script src="${"y".repeat(1_000_000)}"></script>`)]) {
+      const started = performance.now();
+      ids(html);
+      expect(performance.now() - started).toBeLessThan(6_000);
+    }
+  }, 120_000);
+
+  test("a page of tags with 100 attributes each keeps only what a signature reads, and nothing after the call", () => {
+    const attributes = Array.from({ length: 100 }, (_, i) => `data-a${i}="value ${i}"`).join(" ");
+    const html = page("", `<img ${attributes} src="/a.png">`.repeat(Math.ceil(8_000_000 / (attributes.length + 20))));
+    Bun.gc(true);
+    const before = process.memoryUsage().heapUsed;
+    ids(html);
+    Bun.gc(true);
+    // Retained after the call: before the fix the 100,000 collected tags each kept a hundred attributes (255 MB).
+    expect(process.memoryUsage().heapUsed - before).toBeLessThan(60_000_000);
+  }, 120_000);
+
+  test("a signature list that reads no tag attribute keeps none, and a custom list reads its own", () => {
+    const custom = [{ id: "x", name: "X", category: "other" as const, detectors: [{ type: "tag-attr" as const, tags: ["img"], attrs: ["data-x"], pattern: /^yes$/ }] }];
+    const found = (html: string) => detectTechnologies({ url: "https://example.com/", headers: {}, html }, custom).map((t) => t.id);
+    expect(found(page("", '<img data-x="yes">'))).toEqual(["x"]);
+    expect(found(page("", '<img data-x="no">'))).toEqual([]);
+    // The built-in signatures still read theirs afterwards (the attribute set is per call).
+    expect(ids(page('<script src="https://cdn.gpteng.co/lovable.js"></script>'))).toContain("lovable");
+  });
+});

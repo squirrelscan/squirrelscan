@@ -19,7 +19,7 @@ How it works:
 
 ### Fixed
 
-- **A page of unclosed tags no longer makes technology detection take tens of seconds.** Every signature that matched a script `src`, a stylesheet `link`, or a `data-*` flag scanned up to 400 characters after each `<script`, `<link` or `<img` opener, so a 5 MB page of openers took about 20 to 30 s (about 1 s now). The page's tags are now parsed once and those signatures read that list. Side effects: a script `src` written without quotes, or after a long run of other attributes, is now found, and a commented-out tag is no longer read as a script. (#1456)
+- **A page of unclosed tags no longer makes technology detection take tens of seconds.** Every signature that matched a script `src`, a stylesheet `link`, or a `data-*` flag scanned up to 400 characters after each `<script`, `<link` or `<img` opener, so a 5 MB page of openers took about 20 to 30 s (about 1 s now). The page's tags are now parsed once and those signatures read that list. Behaviour changes: a script `src` written without quotes, in single quotes or after a long run of other attributes is now found; a commented-out tag is no longer read as a script; a tag that repeats an attribute uses the first, as browsers do; and matches that were only text are gone: `document.write('<script src=...>')` in inline JavaScript, a tag written inside a string literal, a `link` href inside a script string, and tag text inside an attribute value are no longer read as tags. Only the attributes a signature reads are kept per tag, and the parsed tags are freed after each page. (#1456)
 
 ## v0.0.153 (2026-11-01)
 
