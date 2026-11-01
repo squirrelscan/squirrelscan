@@ -7,6 +7,8 @@ description: "The browser itself reports every script, frame, image and endpoint
 
 A Content-Security-Policy that leaves out a host the site depends on breaks a booking widget, an analytics tag or a payment frame without any sign in the page. The response is 200, the HTML looks normal, and an HTTP audit sees nothing wrong. The browser, though, reports every block as a `securitypolicyviolation` event. This rule reads those events from a rendered crawl.
 
+**Status: browser-event ingestion only. The renderer collector is not part of this release.** The rule, the event contract and the page store are in place, but nothing in squirrel's renderer collects the events yet, so today every rendered page is `skipped` with the reason `no-browser-events`. The rule starts reporting when a renderer attaches events to the page result.
+
 It is the browser's own verdict, so it reports what actually happened, including blocks that only occur after the page hydrates: a widget script injected a second after load, an analytics beacon that fires when the page settles. [security/csp-blocks-own-resources](/rules/security/csp-blocks-own-resources) predicts the same failure from the policy and the markup without a browser; this rule confirms it with one.
 
 ## What squirrel checks
@@ -15,24 +17,34 @@ The rule runs on every crawled page and emits one check named `csp-violations`:
 
 - **Skipped** when the page was not rendered. A crawl without a browser has no violations to read, so the check is `skipped` with the reason `not-rendered` and the message `Not checked: the browser only reports CSP violations on a rendered crawl (this page was fetched without a browser)`. It is never a pass.
 - **Skipped** when the page was rendered but the render service did not report the browser's events (an older service, or an old cached render): the reason is `no-browser-events`.
-- **Pass** when the browser reported no violation. When the renderer kept listening for a few seconds after `load`, the message says so; when it stopped at `load`, the message says a late embed or hit could be missed.
+- **Info** when the only violations came from a report-only policy: nothing was blocked, so it is not a pass and not a finding.
+- **Pass** when the browser reported no enforced violation from the site. Violations raised by a browser extension (`chrome-extension:`, `moz-extension:`) are ignored, because nothing on the site can fix them. When the renderer kept listening for a few seconds after `load`, the message says so; when it stopped at `load`, the message says a late embed or hit could be missed.
 - **Fail** when a blocked host belongs to a vendor category the rule knows: analytics, ads, payments, captcha, form or booking. The feature has silently stopped working.
 - **Warn** when the blocked hosts are all something else, and for blocked `inline` or `eval` code.
 
-The message names the directive and the hosts, for example `The browser blocked 3 hosts under the page's CSP, including 3 from a known analytics vendor (connect-src: analytics.google.com, www.google.com, stats.g.doubleclick.net)`. Each blocked host is an item: the directive the browser says it violated (`script-src-elem`, `connect-src`, `frame-src`), the host to add, up to five of the blocked URLs, how many times it was blocked, and the vendor category when the host is a known one. Only the first 25 hosts are listed; `details.additional` counts the rest. `details` also carries the number of violations, failed requests and page errors the render saw, and `listenedAfterLoad`.
+The message names the directive and the hosts, for example `The browser blocked 3 hosts under the page's CSP, including 3 from a known analytics vendor (connect-src: analytics.google.com, www.google.com, stats.g.doubleclick.net)`. Each blocked host is an item: the directive the browser says it violated (`script-src-elem`, `connect-src`, `frame-src`), the host to add, up to five of the blocked URLs, how many times it was blocked, and the vendor category when the host is a known one. Only the first 25 hosts are listed; `details.additional` counts the rest. The inline and eval blocks are counted as sources, not as hosts. Violations are recorded once per directive and host, up to 100; past that the message says `N more not recorded` and `details.droppedViolations` carries the count. `details` also carries the number of violations and failed requests the render saw, and `listenedAfterLoad`.
 
 A violation from a `Content-Security-Policy-Report-Only` header blocks nothing, so it is counted in `details.reportOnly` and not reported.
 
-### What the render collects
+### What the contract accepts
 
-The renderer registers a `securitypolicyviolation` listener before any page script runs, and keeps listening for a few seconds after `load`, because embeds and analytics hits often fire after hydration. It attaches the violations (directive, blocked URI, source file and line), the requests that failed and the errors the page threw to the rendered page result. A console listener is not enough: the browser reports a block as an event, not always as a console line.
+The collector is not shipped yet; this is what the ingestion side accepts from a renderer. The renderer is expected to register a `securitypolicyviolation` listener before any page script runs and keep listening for a few seconds after `load`, because embeds and analytics hits often fire after hydration, and to attach the violations (directive, blocked URI, source file and line) and the requests that failed to the rendered page result. Page errors and the browser's failure text are not kept.
 
-The page chooses what these events say, so squirrel treats them as untrusted. Every http and https URL is cut to its origin and path, and a WebSocket URL (`ws:`, `wss:`) to its origin (a query string, a fragment or a page-chosen path such as `/socket/<token>` can carry a token). A blocked URL of any other scheme keeps its scheme and host only, with no userinfo, port, path or query; one the URL parser rejects is cut at its first slash, and a value that is not a URL is kept only when it is one of CSP's own keywords (`inline`, `eval`, `data`, `blob`...), text is stripped of control characters and bounded, and every list is capped (100 violations, 200 failed requests, 50 page errors). The events are stored with the page in the audit's database.
+The page chooses what these events say, so squirrel treats them as untrusted. A blocked URL is kept as follows:
+
+- `http` and `https`: origin and path, with no userinfo, query or fragment.
+- `ws` and `wss`: origin only (a page-chosen path such as `/socket/<token>` can carry a token).
+- `data`, `blob`, `filesystem` and `about`: the scheme only.
+- Any other scheme (`ftp`, `chrome-extension`...): `scheme://hostname`, with no userinfo, port, path or query. When the URL parser rejects the value, the part before the first `/`, `?`, `#` or `\` is kept only if it looks like a host (letters, digits, dots, hyphens, brackets and colons); anything else is dropped, never kept as text.
+- Schemes with no host (`javascript:`, `mailto:`): the scheme only.
+- CSP's own keywords (`inline`, `eval`, `wasm-eval`...) are kept as keywords; any other text is dropped.
+
+A directive name must be lowercase letters, digits and hyphens, or the violation is dropped. Text is stripped of control and invisible characters and bounded. Violations are deduplicated by directive and host before the cap of 100 (the rest is counted in `droppedViolations`), failed requests are capped at 200, and at most 2,000 raw entries are read. The events are stored with the page in the audit's database and are bounded again whenever they are read back.
 
 ### What it does not do
 
 - It reads nothing on an audit that does not render pages. Render is part of `--render-mode` and the cloud render service (see [browser rendering](/guides/browser-rendering)); a plain HTTP crawl skips the rule.
-- It does not yet report "analytics is detected but no request left the page". The data is collected for it; the rule is not.
+- It does not yet report "analytics is detected but no request left the page". The collector for it does not exist yet.
 
 ## How to fix it
 

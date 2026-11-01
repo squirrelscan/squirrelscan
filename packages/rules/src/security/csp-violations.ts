@@ -16,6 +16,8 @@ import { hostCategory, type VendorCategory } from "./csp-vendors";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 const MAX_ITEMS = 25;
+/** Schemes of browser extensions: their injected scripts are blocked by the page's CSP, but nothing on the site can fix that. */
+const EXTENSION_PROTOCOLS = new Set(["chrome-extension:", "moz-extension:", "safari-extension:", "safari-web-extension:", "ms-browser-extension:"]);
 const SAMPLE_URLS = 5;
 
 const CATEGORY_LABEL: Record<VendorCategory, string> = {
@@ -47,6 +49,15 @@ function blockedHost(blockedUri: string): string {
   }
 }
 
+function isExtensionUri(uri: string | undefined): boolean {
+  if (!uri) return false;
+  try {
+    return EXTENSION_PROTOCOLS.has(new URL(uri).protocol);
+  } catch {
+    return false;
+  }
+}
+
 export const cspViolationsRule: Rule = {
   meta: {
     id: "security/csp-violations",
@@ -54,7 +65,7 @@ export const cspViolationsRule: Rule = {
     description:
       "Reports the Content-Security-Policy violations the browser raised while rendering the page: scripts, frames, styles, images and endpoints it blocked",
     solution:
-      "Each finding names a directive the browser enforced and a host it blocked. Add the host to that directive (scripts to script-src or script-src-elem, beacons and API calls to connect-src, embeds to frame-src, images to img-src), reload the page with the browser console open and confirm no violation remains. A blocked analytics, ads, payments, captcha, form or booking endpoint is an error because the feature silently stops working. Inline script and eval blocks need a nonce or hash, or the code moved to a file.",
+      "Each finding names a directive the browser enforced and a host it blocked. Add the host to that directive (scripts to script-src or script-src-elem, beacons and API calls to connect-src, embeds to frame-src, images to img-src), reload the page with the browser console open and confirm no violation remains. A blocked analytics, ads, payments, captcha, form or booking endpoint fails the check because the feature silently stops working; any other blocked host warns. Inline script and eval blocks need a nonce or hash, or the code moved to a file.",
     category: "security",
     scope: "page",
     // Reads the render's own events, which differ per page inside one template.
@@ -92,9 +103,15 @@ export const cspViolationsRule: Rule = {
 
     const blocked = new Map<string, Blocked>();
     let reportOnly = 0;
+    let extensions = 0;
     for (const violation of events.cspViolations) {
       if (violation.disposition === "report") {
         reportOnly++;
+        continue;
+      }
+      // A browser extension's own script is not the site's to allow.
+      if (isExtensionUri(violation.blockedUri) || isExtensionUri(violation.sourceFile)) {
+        extensions++;
         continue;
       }
       const host = blockedHost(violation.blockedUri);
@@ -115,13 +132,29 @@ export const cspViolationsRule: Rule = {
       });
     }
 
+    const dropped = events.droppedViolations ?? 0;
     const details = {
       violations: events.cspViolations.length,
       failedRequests: events.failedRequests.length,
-      pageErrors: events.pageErrors.length,
       listenedAfterLoad: events.listenedAfterLoad === true,
       ...(reportOnly > 0 ? { reportOnly } : {}),
+      ...(extensions > 0 ? { extensionViolations: extensions } : {}),
+      ...(dropped > 0 ? { droppedViolations: dropped } : {}),
     };
+    const droppedNote = dropped > 0 ? ` (${dropped} more not recorded)` : "";
+
+    if (blocked.size === 0 && reportOnly > 0) {
+      return {
+        checks: [
+          {
+            name: "csp-violations",
+            status: "info",
+            message: `Only a report-only policy raised violations (${reportOnly}); nothing was blocked, but enforcing that policy would block them${droppedNote}`,
+            details,
+          },
+        ],
+      };
+    }
 
     if (blocked.size === 0) {
       return {
@@ -131,8 +164,8 @@ export const cspViolationsRule: Rule = {
             status: "pass",
             message:
               events.listenedAfterLoad === true
-                ? "The browser reported no CSP violation while rendering the page"
-                : "The browser reported no CSP violation up to the page's load (it was not watched after load, so a late embed or hit could be missed)",
+                ? `The browser reported no enforced CSP violation from the site while rendering the page${droppedNote}`
+                : `The browser reported no enforced CSP violation from the site up to the page's load (it was not watched after load, so a late embed or hit could be missed)${droppedNote}`,
             details,
           },
         ],
@@ -141,6 +174,14 @@ export const cspViolationsRule: Rule = {
 
     const all = [...blocked.values()];
     const known = all.filter((b) => b.category !== undefined);
+    const hostCount = all.filter((b) => !b.host.startsWith("(")).length;
+    const keywordCount = all.length - hostCount;
+    const what = [
+      hostCount > 0 ? `${hostCount} host${hostCount === 1 ? "" : "s"}` : "",
+      keywordCount > 0 ? `${keywordCount} inline, eval or data source${keywordCount === 1 ? "" : "s"}` : "",
+    ]
+      .filter(Boolean)
+      .join(" and ");
     const summary = [...new Set(all.map((b) => b.directive))]
       .map((directive) => {
         const hosts = all.filter((b) => b.directive === directive).map((b) => b.host);
@@ -162,7 +203,7 @@ export const cspViolationsRule: Rule = {
     const check: CheckResult = {
       name: "csp-violations",
       status: known.length > 0 ? "fail" : "warn",
-      message: `The browser blocked ${all.length} host${all.length === 1 ? "" : "s"} under the page's CSP${known.length > 0 ? `, including ${known.length} from a known ${[...new Set(known.map((b) => CATEGORY_LABEL[b.category!]))].join("/")} vendor` : ""} (${summary})`,
+      message: `The browser blocked ${what} under the page's CSP${known.length > 0 ? `, including ${known.length} from a known ${[...new Set(known.map((b) => CATEGORY_LABEL[b.category!]))].join("/")} vendor` : ""} (${summary})${droppedNote}`,
       items,
       details: { ...details, ...(all.length > MAX_ITEMS ? { additional: all.length - MAX_ITEMS } : {}) },
     };

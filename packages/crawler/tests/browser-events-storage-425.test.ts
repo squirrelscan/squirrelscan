@@ -19,8 +19,7 @@ const STATS = { pagesTotal: 0, pagesFetched: 0, pagesFailed: 0, pagesSkipped: 0,
 
 const EVENTS: BrowserEvents = {
   cspViolations: [{ violatedDirective: "script-src-elem", blockedUri: "https://w.test/e.js", disposition: "enforce" }],
-  failedRequests: [{ url: "https://w.test/e.js", failure: "net::ERR_BLOCKED_BY_CSP" }],
-  pageErrors: ["boom"],
+  failedRequests: [{ url: "https://w.test/e.js" }],
   listenedAfterLoad: true,
 };
 
@@ -105,6 +104,32 @@ describe("browser events on a stored page", () => {
     const again = new SQLiteStorage(dbPath);
     await run(again.init());
     expect((await run(again.getPage(id, "https://e.test/x")))?.browserEvents ?? null).toBeNull();
+    again.close?.();
+  });
+
+  test("what a page store holds is re-bounded on read: an oversized or hostile stored value comes back cut", async () => {
+    const s = new SQLiteStorage(dbPath);
+    await run(s.init());
+    const id = await crawl(s);
+    await run(s.upsertPage(id, page("https://e.test/big", { browserEvents: EVENTS })));
+    s.close?.();
+    const stored = {
+      cspViolations: [
+        ...Array.from({ length: 300 }, (_, i) => ({ violatedDirective: "img-src", blockedUri: `https://h${i}.test/a?t=SECRET` })),
+        { violatedDirective: "img-src SECRETMARK", blockedUri: "ftp://h SECRETMARK" },
+      ],
+      failedRequests: [{ url: "https://h.test/a?t=SECRET", failure: "SECRETMARK" }],
+      pageErrors: ["SECRETMARK"],
+    };
+    const raw = new Database(dbPath);
+    raw.query("UPDATE pages SET browser_events = ? WHERE normalized_url = ?").run(JSON.stringify(stored), "https://e.test/big");
+    raw.close();
+    const again = new SQLiteStorage(dbPath);
+    await run(again.init());
+    const events = (await run(again.getPage(id, "https://e.test/big")))?.browserEvents;
+    expect(events?.cspViolations).toHaveLength(100);
+    expect(events?.droppedViolations).toBe(200);
+    expect(JSON.stringify(events)).not.toContain("SECRET");
     again.close?.();
   });
 });

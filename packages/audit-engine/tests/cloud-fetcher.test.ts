@@ -251,7 +251,7 @@ describe("browser events on a rendered page (#425)", () => {
       item({
         cspViolations: [{ violatedDirective: "script-src-elem", blockedUri: "https://w.test/e.js?token=SECRET", disposition: "enforce" }],
         failedRequests: [{ url: "https://w.test/e.js?token=SECRET", failure: "net::ERR_BLOCKED_BY_CSP" }],
-        pageErrors: ["boom"],
+        pageErrors: ["boom SECRET"],
         listenedAfterLoad: true,
       }),
       "https://example.com/",
@@ -259,8 +259,7 @@ describe("browser events on a rendered page (#425)", () => {
     );
     expect(response.browserEvents).toEqual({
       cspViolations: [{ violatedDirective: "script-src-elem", blockedUri: "https://w.test/e.js", disposition: "enforce" }],
-      failedRequests: [{ url: "https://w.test/e.js", failure: "net::ERR_BLOCKED_BY_CSP" }],
-      pageErrors: ["boom"],
+      failedRequests: [{ url: "https://w.test/e.js" }],
       listenedAfterLoad: true,
     });
     expect(JSON.stringify(response.browserEvents)).not.toContain("SECRET");

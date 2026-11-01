@@ -1,7 +1,7 @@
 // What a browser render saw beyond the HTML (#425): the browser's own `securitypolicyviolation` events,
-// the requests it could not make and the errors the page threw, including those that fired a few seconds
-// after `load`. Collected by the renderer, carried on the rendered page result, stored with the page and
-// read by `security/csp-violations`.
+// and the requests it could not make, including those that fired a few seconds after `load`. Carried on the
+// rendered page result, stored with the page and read by `security/csp-violations`. This module is the
+// ingestion side only: no renderer in this repo collects the events yet.
 //
 // The data comes from the audited page, so it is untrusted by the time it is read: every string is
 // stripped of control characters and bounded, every URL is cut to an origin and path (a query string or a
@@ -30,8 +30,6 @@ export interface BrowserFailedRequest {
   url: string;
   method?: string;
   resourceType?: string;
-  /** The browser's failure text (`net::ERR_BLOCKED_BY_CSP`). */
-  failure?: string;
   /** The status, when a response arrived but was an error. */
   status?: number;
 }
@@ -39,8 +37,8 @@ export interface BrowserFailedRequest {
 export interface BrowserEvents {
   cspViolations: BrowserCspViolation[];
   failedRequests: BrowserFailedRequest[];
-  /** Uncaught page errors and unhandled rejections, as text. */
-  pageErrors: string[];
+  /** Distinct violations (by directive and host) past the cap that were not recorded. */
+  droppedViolations?: number;
   /**
    * True when the renderer listened for a few seconds past `load` (the whole window the rule can rely on);
    * absent or false when it stopped at `load`, so a violation that fires after hydration could be missed.
@@ -51,9 +49,16 @@ export interface BrowserEvents {
 export const BROWSER_EVENT_LIMITS = {
   cspViolations: 100,
   failedRequests: 200,
-  pageErrors: 50,
+  /** Raw entries looked at, so a page that raises thousands of events costs a bounded scan. */
+  scan: 2000,
   text: 500,
 } as const;
+
+/** A CSP directive name: lowercase letters, digits and hyphens, nothing free-form. */
+const DIRECTIVE = /^[a-z][a-z0-9-]{0,59}$/;
+
+/** What a rejected URL's authority may hold: a host name, an IPv6 literal or a port, never free text. */
+const HOSTISH = /^[a-z0-9.\-[\]:]{1,120}$/i;
 
 /**
  * Characters that render as nothing or change how text reads: zero-width spaces and joiners, the BOM, the soft
@@ -108,7 +113,17 @@ function otherSchemeOrigin(value: unknown): string | undefined {
     return url.hostname ? `${scheme}//${url.hostname.slice(0, 120).toLowerCase()}` : scheme;
   } catch {
     const m = /^([a-z][a-z0-9+.-]{0,28}:\/\/)(?:[^/?#\\]*@)?([^/?#\\]*)/i.exec(text);
-    return m && m[2] ? `${m[1]!.toLowerCase()}${m[2]}`.slice(0, 160) : undefined;
+    return m && m[2] && HOSTISH.test(m[2]) ? `${m[1]!.toLowerCase()}${m[2].toLowerCase()}` : undefined;
+  }
+}
+
+/** The host of an already-sanitised blocked URI, or its keyword (`inline`, `data:`) when it has none. */
+function blockedHost(blockedUri: string): string {
+  try {
+    const url = new URL(blockedUri);
+    return url.hostname ? url.hostname.toLowerCase() : url.protocol;
+  } catch {
+    return blockedUri.toLowerCase();
   }
 }
 
@@ -124,52 +139,60 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 export function readBrowserEvents(raw: unknown): BrowserEvents | undefined {
   if (!isRecord(raw)) return undefined;
   const violations: BrowserCspViolation[] = [];
-  for (const item of Array.isArray(raw.cspViolations) ? raw.cspViolations : []) {
-    if (violations.length >= BROWSER_EVENT_LIMITS.cspViolations) break;
+  const seen = new Set<string>();
+  let dropped = 0;
+  const rawViolations = Array.isArray(raw.cspViolations) ? raw.cspViolations.slice(0, BROWSER_EVENT_LIMITS.scan) : [];
+  for (const item of rawViolations) {
     if (!isRecord(item)) continue;
-    const violatedDirective = clean(item.violatedDirective, 60);
+    const violatedDirective = clean(item.violatedDirective, 60)?.toLowerCase();
     const blockedUri = eventUrl(item.blockedUri) ?? otherSchemeOrigin(item.blockedUri);
-    if (!violatedDirective || !blockedUri) continue;
-    const effectiveDirective = clean(item.effectiveDirective, 60);
+    if (!violatedDirective || !DIRECTIVE.test(violatedDirective) || !blockedUri) continue;
+    const effective = clean(item.effectiveDirective, 60)?.toLowerCase();
+    const effectiveDirective = effective && DIRECTIVE.test(effective) ? effective : undefined;
+    const disposition = item.disposition === "enforce" || item.disposition === "report" ? item.disposition : undefined;
+    // One entry per directive, host and disposition: a page that blocks the same host a thousand times must not
+    // push the other hosts past the cap.
+    const key = `${violatedDirective}\u0000${blockedHost(blockedUri)}\u0000${disposition ?? ""}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (violations.length >= BROWSER_EVENT_LIMITS.cspViolations) {
+      dropped++;
+      continue;
+    }
     const sourceFile = eventUrl(item.sourceFile);
     const line = typeof item.lineNumber === "number" && Number.isInteger(item.lineNumber) && item.lineNumber >= 0 ? item.lineNumber : undefined;
     violations.push({
-      violatedDirective: violatedDirective.toLowerCase(),
-      ...(effectiveDirective ? { effectiveDirective: effectiveDirective.toLowerCase() } : {}),
+      violatedDirective,
+      ...(effectiveDirective ? { effectiveDirective } : {}),
       blockedUri,
       ...(sourceFile ? { sourceFile } : {}),
       ...(line !== undefined ? { lineNumber: line } : {}),
-      ...(item.disposition === "enforce" || item.disposition === "report" ? { disposition: item.disposition } : {}),
+      ...(disposition ? { disposition } : {}),
     });
   }
+  // A stored count survives a reload; a fresh read only counts what it dropped itself.
+  const storedDropped = typeof raw.droppedViolations === "number" && Number.isInteger(raw.droppedViolations) && raw.droppedViolations > 0 ? Math.min(raw.droppedViolations, 1_000_000) : 0;
+  dropped = Math.min(dropped + storedDropped, 1_000_000);
   const failed: BrowserFailedRequest[] = [];
-  for (const item of Array.isArray(raw.failedRequests) ? raw.failedRequests : []) {
+  for (const item of Array.isArray(raw.failedRequests) ? raw.failedRequests.slice(0, BROWSER_EVENT_LIMITS.scan) : []) {
     if (failed.length >= BROWSER_EVENT_LIMITS.failedRequests) break;
     if (!isRecord(item)) continue;
     const url = eventUrl(item.url);
     if (!url) continue;
     const method = clean(item.method, 10);
     const resourceType = clean(item.resourceType, 30);
-    const failure = clean(item.failure, 120);
     failed.push({
       url,
       ...(method ? { method: method.toUpperCase() } : {}),
       ...(resourceType ? { resourceType: resourceType.toLowerCase() } : {}),
-      ...(failure ? { failure } : {}),
       ...(typeof item.status === "number" && Number.isInteger(item.status) && item.status >= 100 && item.status <= 599 ? { status: item.status } : {}),
     });
   }
-  const errors: string[] = [];
-  for (const item of Array.isArray(raw.pageErrors) ? raw.pageErrors : []) {
-    if (errors.length >= BROWSER_EVENT_LIMITS.pageErrors) break;
-    const text = clean(item);
-    if (text) errors.push(text);
-  }
-  if (violations.length === 0 && failed.length === 0 && errors.length === 0 && raw.listenedAfterLoad !== true) return undefined;
+  if (violations.length === 0 && failed.length === 0 && dropped === 0 && raw.listenedAfterLoad !== true) return undefined;
   return {
     cspViolations: violations,
     failedRequests: failed,
-    pageErrors: errors,
+    ...(dropped > 0 ? { droppedViolations: dropped } : {}),
     ...(raw.listenedAfterLoad === true ? { listenedAfterLoad: true } : {}),
   };
 }

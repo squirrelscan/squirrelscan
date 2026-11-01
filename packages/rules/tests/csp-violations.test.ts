@@ -36,7 +36,6 @@ function run(opts: { rendered?: boolean; events?: BrowserEvents }) {
 const events = (cspViolations: BrowserEvents["cspViolations"], over: Partial<BrowserEvents> = {}): BrowserEvents => ({
   cspViolations,
   failedRequests: [],
-  pageErrors: [],
   listenedAfterLoad: true,
   ...over,
 });
@@ -120,8 +119,61 @@ describe("what the rule reads", () => {
 
   test("a report-only violation blocks nothing: it is counted in the details, not reported", () => {
     const check = run({ rendered: true, events: events([{ violatedDirective: "script-src", blockedUri: "https://x.test/a.js", disposition: "report" }]) });
-    expect(check.status).toBe("pass");
+    // Only a report-only policy fired: not a pass, and not a finding.
+    expect(check.status).toBe("info");
+    expect(check.message).toContain("report-only");
+    expect(check.message).not.toContain("no enforced CSP violation");
     expect(check.details).toMatchObject({ reportOnly: 1, violations: 1 });
+  });
+
+  test("a report-only violation next to an enforced one still reports only the enforced one", () => {
+    const check = run({
+      rendered: true,
+      events: events([
+        { violatedDirective: "script-src", blockedUri: "https://x.test/a.js", disposition: "report" },
+        { violatedDirective: "img-src", blockedUri: "https://y.test/a.png", disposition: "enforce" },
+      ]),
+    });
+    expect(check.status).toBe("warn");
+    expect(check.items).toHaveLength(1);
+    expect(check.details).toMatchObject({ reportOnly: 1 });
+  });
+
+  test("a browser extension's blocked script is not the site's to fix: no advice, no finding", () => {
+    for (const blockedUri of ["chrome-extension://abcdefgh", "moz-extension://abcdefgh"]) {
+      const check = run({ rendered: true, events: events([{ violatedDirective: "script-src-elem", blockedUri, disposition: "enforce" }]) });
+      expect(check.status).toBe("pass");
+      expect(check.items).toBeUndefined();
+      expect(check.message).not.toContain("abcdefgh");
+      expect(check.details).toMatchObject({ extensionViolations: 1 });
+    }
+    const fromExtension = run({
+      rendered: true,
+      events: events([{ violatedDirective: "img-src", blockedUri: "https://x.test/a.png", sourceFile: "chrome-extension://abcdefgh", disposition: "enforce" }]),
+    });
+    expect(fromExtension.status).toBe("pass");
+  });
+
+  test("inline and eval are counted as sources, not as hosts", () => {
+    const check = run({
+      rendered: true,
+      events: events([
+        { violatedDirective: "script-src-elem", blockedUri: "inline", disposition: "enforce" },
+        { violatedDirective: "script-src", blockedUri: "eval", disposition: "enforce" },
+        { violatedDirective: "img-src", blockedUri: "https://images.unknown-cdn.test/a.png", disposition: "enforce" },
+      ]),
+    });
+    expect(check.message).toContain("1 host and 2 inline, eval or data sources");
+    expect(check.message).not.toContain("3 hosts");
+  });
+
+  test("violations past the recorded cap say how many were not recorded", () => {
+    const check = run({
+      rendered: true,
+      events: events([{ violatedDirective: "img-src", blockedUri: "https://y.test/a.png", disposition: "enforce" }], { droppedViolations: 40 }),
+    });
+    expect(check.message).toContain("40 more not recorded");
+    expect(check.details).toMatchObject({ droppedViolations: 40 });
   });
 
   test("inline and eval blocks are warnings that name the code, not a host to add", () => {
@@ -162,8 +214,7 @@ describe("hostile text from the page reaches no evidence line", () => {
         { violatedDirective: `img-src${hostile}`, blockedUri: `https://cdn${hostile}.test/a.png`, disposition: "enforce" },
       ],
       failedRequests: [],
-      pageErrors: [],
-      listenedAfterLoad: true,
+          listenedAfterLoad: true,
     });
     const check = run({ rendered: true, events: sanitised });
     expect(check.status).not.toBe("skipped");

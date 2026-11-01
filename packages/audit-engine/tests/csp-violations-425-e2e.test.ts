@@ -34,7 +34,6 @@ const EVENTS: BrowserEvents = {
     { violatedDirective: "img-src", blockedUri: "https://pixel.test/p.gif", disposition: "report" },
   ],
   failedRequests: [],
-  pageErrors: [],
   listenedAfterLoad: true,
 };
 
