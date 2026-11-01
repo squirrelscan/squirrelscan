@@ -19,7 +19,7 @@ How it works:
 
 ### Fixed
 
-- **`integrity/brand-impersonation` no longer spares a sign-in link to a broker's authorize URL that does not name the provider.** A "Continue with Google" or "Continue with Microsoft" control to an Auth0, Okta, Cognito, Supabase or Firebase authorize endpoint was treated as a real integration on the path alone, but those hosts let anyone register a tenant and a tenant controls its hosted login page. The query must now name the provider the label does (`connection`, `idp`, `identity_provider`, `provider`, `providerId`); a bare authorize URL or another provider is reported like any off-brand host. (#1494)
+- **`integrity/brand-impersonation` no longer spares a sign-in link to a broker's authorize URL on the strength of its path or a hint in it.** A "Continue with Google" or "Continue with Microsoft" control to an Auth0, Okta, Cognito, Supabase or Firebase authorize endpoint was treated as a real integration on the path alone, but those hosts let anyone register a tenant, a tenant controls its hosted login page, and the link is written by whoever wrote the page. For Auth0, Okta and Cognito the tenant must now be named after the audited site and the query must name the provider the label does; Supabase and Firebase endpoints (no tenant login page) need the named provider. A foreign tenant, a bare authorize URL or another provider is reported like any off-brand host (an `info` check as a single signal). (#1494)
 
 ## v0.0.154 (2026-11-01)
 

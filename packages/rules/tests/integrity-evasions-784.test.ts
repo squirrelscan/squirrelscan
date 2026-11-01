@@ -83,11 +83,11 @@ test("a label in Cyrillic look-alikes or fullwidth letters is matched after norm
 
 test("a broker's authorize endpoint is not impersonation for Google or Microsoft; the three Microsoft hosts are legitimate", () => {
   for (const host of [
-    "https://tenant.auth0.com/authorize?client_id=x&connection=google-oauth2",
-    "https://tenant.okta.com/oauth2/v1/authorize?client_id=x&idp=0oa1b2c3d4",
-    "https://tenant.okta.com/oauth2/default/v1/authorize?client_id=x&idp=0oa1b2c3d4",
-    "https://tenant.oktapreview.com/oauth2/v1/authorize?idp=0oa1b2c3d4",
-    "https://tenant.auth.eu-west-1.amazoncognito.com/oauth2/authorize?client_id=x&identity_provider=Google",
+    "https://example-login.auth0.com/authorize?client_id=x&connection=google-oauth2",
+    "https://example.okta.com/oauth2/v1/authorize?client_id=x&idp=0oa1b2c3d4",
+    "https://example-prod.okta.com/oauth2/default/v1/authorize?client_id=x&idp=0oa1b2c3d4",
+    "https://example.oktapreview.com/oauth2/v1/authorize?idp=0oa1b2c3d4",
+    "https://example-auth.auth.eu-west-1.amazoncognito.com/oauth2/authorize?client_id=x&identity_provider=Google",
     "https://project.supabase.co/auth/v1/authorize?provider=google",
     "https://project.firebaseapp.com/__/auth/handler?providerId=google.com",
   ]) {
@@ -333,8 +333,8 @@ test.each([["Google", "Continue with Google"], ["Google", "Sign in with Google"]
 
 test("a broker authorize link naming Microsoft is spared for a Microsoft label and not for a Google one", () => {
   const microsoft = [
-    "https://t1.auth0.com/authorize?connection=windowslive",
-    "https://t1.auth.eu-west-1.amazoncognito.com/oauth2/authorize?identity_provider=Microsoft",
+    "https://example-login.auth0.com/authorize?connection=windowslive",
+    "https://example.auth.eu-west-1.amazoncognito.com/oauth2/authorize?identity_provider=Microsoft",
     "https://t1.supabase.co/auth/v1/authorize?provider=azure",
     "https://t1.firebaseapp.com/__/auth/handler?providerId=microsoft.com",
   ];
@@ -347,4 +347,32 @@ test("a broker authorize link naming Microsoft is spared for a Microsoft label a
 test("the same shape on a plain off-brand host and on the broker without a hint are treated alike", () => {
   expect(brand(`<a href="https://shop-login.example/authorize" aria-label="Continue with Google"><svg></svg></a>`)).toBe("Google");
   expect(brand(`<a href="https://t1.auth0.com/authorize" aria-label="Continue with Google"><svg></svg></a>`)).toBe("Google");
+});
+
+test("a hint is not enough on a tenant that is not the site's own: a foreign tenant is off-brand whatever the URL says", () => {
+  // The page is on example.com. The links are written by whoever wrote the page, so the provider hint proves nothing.
+  const foreign = [
+    "https://t1.auth0.com/authorize?connection=google-oauth2",
+    "https://t1.auth0.com/authorize?idp=google&connection=google-oauth2",
+    "https://t1.auth0.com/authorize?idp=x",
+    "https://t1.okta.com/oauth2/v1/authorize?idp=google",
+    "https://t1.okta.com/oauth2/v1/authorize?idp=0oa1b2c3d4",
+    "https://t1.auth.eu-west-1.amazoncognito.com/oauth2/authorize?identity_provider=Google",
+    "https://other-company.auth0.com/authorize?connection=google-oauth2",
+    "https://notexample.us.auth0.com.credential-fixture.invalid/authorize?connection=google-oauth2",
+  ];
+  for (const href of foreign) expect(brand(`<a href="${href}" aria-label="Continue with Google"><svg></svg></a>`), href).toBe("Google");
+});
+
+test("a tenant named after the site and naming the provider is spared; the platform endpoints need the provider only", () => {
+  for (const href of [
+    "https://example-login.auth0.com/authorize?connection=google-oauth2",
+    "https://example.eu.auth0.com/authorize?connection=google-oauth2",
+    "https://example-sso.okta.com/oauth2/v1/authorize?idp=0oa1b2c3d4",
+    "https://example.auth.us-east-1.amazoncognito.com/oauth2/authorize?identity_provider=Google",
+    "https://abcdefghijklmnopqrst.supabase.co/auth/v1/authorize?provider=google",
+    "https://any-project.firebaseapp.com/__/auth/handler?providerId=google.com",
+  ]) {
+    expect(brand(`<a href="${href}" aria-label="Continue with Google"><svg></svg></a>`), href).toBeNull();
+  }
 });
