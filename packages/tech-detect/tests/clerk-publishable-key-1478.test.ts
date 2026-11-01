@@ -76,6 +76,31 @@ describe("Clerk publishable-key detection (#1478)", () => {
     }
   });
 
+  test("unpadded bodies whose host length is not a multiple of 3 still decode (the padding is restored)", () => {
+    for (const host of ["clerk.a-b.com$", "clerk.b2b-app.io$", "clerk.ab$"]) {
+      expect(detectsClerk(assigned(pk("live", unpadded(host)))), `unpadded ${host}`).toBe(true);
+      expect(detectsClerk(assigned(pk("test", b64(host)))), `padded ${host}`).toBe(true);
+    }
+  });
+
+  test("the host charset is case-insensitive after `clerk.`, but the `clerk.` marker itself is lower case", () => {
+    expect(detectsClerk(assigned(pk("live", b64("clerk.EXAMPLE.com$"))))).toBe(true);
+    expect(detectsClerk(assigned(pk("live", b64("Clerk.example.com$"))))).toBe(false);
+  });
+
+  test("the body floor: 12 base64 characters decode to the shortest accepted host, 11 do not", () => {
+    expect(b64("clerk.ab$")).toHaveLength(12);
+    expect(detectsClerk(assigned(pk("live", b64("clerk.ab$"))))).toBe(true);
+    expect(detectsClerk(assigned(pk("live", unpadded("clerk.a$"))))).toBe(false);
+  });
+
+  test("a body that is not valid base64 (length 1 mod 4) is not Clerk and does not throw", () => {
+    const body = `${unpadded("clerk.ab$")}A`;
+    expect(body.length % 4).toBe(1);
+    expect(() => detectsClerk(assigned(pk("live", body)))).not.toThrow();
+    expect(detectsClerk(assigned(pk("live", body)))).toBe(false);
+  });
+
   test("a Stripe key and a Clerk key in one bundle detect Clerk once, from the Clerk key", () => {
     const bundle = `var a={stripe:{publishableKey:"${pk("live", stripeBody("ZyXwVu8T7"))}"}};var b={publishableKey:"${pk("live", b64("clerk.example.com$"))}"};`;
     expect(idsOf(bundle)).toContain("clerk");
