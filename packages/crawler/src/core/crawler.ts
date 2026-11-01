@@ -19,6 +19,7 @@ import {
   wafBlockedPage,
   type WafSuspectSummary,
 } from "@squirrelscan/core-contracts";
+import { decodedPageBytes } from "@squirrelscan/utils/bytes";
 import { classifyWafResponse } from "@squirrelscan/utils/waf";
 import { WELL_KNOWN_PATHS, isPermanentStorageError } from "@squirrelscan/core-contracts/storage";
 import { auditFailureDetail } from "@squirrelscan/core-contracts/failure-reason";
@@ -1981,8 +1982,9 @@ export function createCrawler(
           if (
             (isHtmlContentType(result.contentType) ||
               (!result.contentType && looksLikeHtml(result.body))) &&
-            // #1332: a budgeted run does not parse a page it could not stop parsing.
-            !(config.maxParseBytes !== undefined && (result.sizeBytes ?? result.body.length) > config.maxParseBytes)
+            // #1332: a budgeted run does not parse a page it could not stop parsing. The size is the decoded body's, not the
+            // Content-Length (the encoded size): a small gzip body can inflate past the cap.
+            !(config.maxParseBytes !== undefined && decodedPageBytes(result.sizeBytes, result.body) > config.maxParseBytes)
           ) {
             // Parse page data once (includes parseDocument internally)
             const parsed = parsePage(result.body, result.finalUrl, { classify: options.classify });
