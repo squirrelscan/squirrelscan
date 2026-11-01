@@ -59,3 +59,59 @@ describe("a header-only JWT after Bearer", () => {
     expect(found(`var h="Authorization: Bearer ${nested}";`)).toEqual([["Bearer Token", "medium"]]);
   });
 });
+
+describe("only a complete or short truncated JOSE header is dropped", () => {
+  test("an opaque JSON bearer value that merely opens with alg, typ, kid or cty reports, at any length", () => {
+    for (const pad of [120, 1_000]) {
+      for (const value of [
+        b64u({ typ: "access", sub: "u1", pad: runOf(r, ALNUM, pad) }),
+        b64u({ alg: "x", sub: "u", token: runOf(r, ALNUM, pad) }),
+        b64u({ kid: "k1", user: "u1", pad: runOf(r, ALNUM, pad) }),
+        b64u({ cty: "x", pad: runOf(r, ALNUM, pad) }),
+      ]) {
+        expect([value.length, found(`var h="Authorization: Bearer ${value}";`)]).toEqual([value.length, [["Bearer Token", "medium"]]]);
+      }
+    }
+  });
+
+  test("a complete header is dropped with any JOSE key and needs an alg; a long truncated one is not a header", () => {
+    for (const header of [{ alg: "ES256", typ: "JWT", kid: "k1" }, { alg: "RS256", x5t: "abc", "x5t#S256": "def" }, { alg: "dir", enc: "A128GCM", zip: "DEF" }]) {
+      expect([JSON.stringify(header), found(`var h="Authorization: Bearer ${b64u(header)}";`)]).toEqual([JSON.stringify(header), []]);
+    }
+    // a JOSE-only object with no alg is not a complete header
+    expect(found(`var h="Authorization: Bearer ${b64u({ typ: "JWT", kid: "k1" })}";`)).toEqual([["Bearer Token", "medium"]]);
+    // cut mid-JSON but past 64 characters: opaque
+    const long = b64u({ alg: "HS256", typ: "JWT", kid: runOf(r, ALNUM, 80) }).slice(0, 100);
+    expect(found(`var h="Authorization: Bearer ${long}";`)).toEqual([["Bearer Token", "medium"]]);
+    // a complete JOSE header past 2,048 characters is not read as one
+    expect(found(`var h="Authorization: Bearer ${b64u({ alg: "HS256", kid: runOf(r, ALNUM, 2_100) })}";`)).toEqual([["Bearer Token", "medium"]]);
+    // cut mid-JSON and short, but not opening like a header
+    expect(found(`var h="Authorization: Bearer ${b64u({ sub: "u1", alg: "HS256", pad: "pppppp" }).slice(0, 36)}";`)).toEqual([["Bearer Token", "medium"]]);
+    // cut mid-JSON, short, opening like a header
+    expect(found(`var h="Authorization: Bearer ${b64u({ alg: "HS256", typ: "JWT" }).slice(0, 40)}";`)).toEqual([]);
+  });
+});
+
+describe("a real JWT after Bearer is not dropped when its separator is not a plain dot", () => {
+  const payload = b64u({ sub: "u1", iat: 1761000000, pad: runOf(r, ALNUM, 30) });
+  const sig = runOf(r, ALNUM, 43);
+  test("%2E, a space, a comma, an escaped newline and a dot with a dash behind it", () => {
+    for (const [label, token] of [
+      ["%2E", `${HEADER}%2E${payload}%2E${sig}`],
+      ["space", `${HEADER} ${payload} ${sig}`],
+      ["comma", `${HEADER},${payload},${sig}`],
+      ["escaped newline", `${HEADER}\\n.${payload}\\n.${sig}`],
+      ["newline", `${HEADER}\n.${payload}.${sig}`],
+      ["dot dash", `${HEADER}.-${payload}.${sig}`],
+      ["comma then eyJ", `${HEADER}, ${payload}`],
+    ] as Array<[string, string]>) {
+      expect([label, found(`var h="Authorization: Bearer ${token}";`).length > 0]).toEqual([label, true]);
+    }
+  });
+
+  test("the end of the text, a quote, a bracket, a sentence period and a space before other text still drop a header", () => {
+    for (const tail of ['"', "'", ")", "]", "}", ">", ".", ". Next", " and more", ", then text", "\n", ""]) {
+      expect([tail, found(`curl -H Bearer ${HEADER}${tail}`)]).toEqual([tail, []]);
+    }
+  });
+});
