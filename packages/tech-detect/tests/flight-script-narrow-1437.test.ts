@@ -384,6 +384,18 @@ describe("a bare loader of a ref that is next/script elsewhere on the page (#148
     expect(found(flightPage([`${textRow("14", wide)}5:${head}\n`]))).toContain("clarity");
   });
 
+  test("a next/script strategy use carried in a text row promotes the ref", () => {
+    const strategyText = JSON.stringify([withStrategy, "x".repeat(1_100)]);
+    const head = el("head", { children: [bare] });
+    expect(found(flightPage([`${MODULE}\n${textRow("14", strategyText)}5:${head}\n`]))).toContain("clarity");
+  });
+
+  test("a text row without a next/script strategy does not promote the ref", () => {
+    const ordinaryText = JSON.stringify([tuple("$L13", { title: "example" }), "x".repeat(1_100)]);
+    const head = el("head", { children: [bare] });
+    expect(found(flightPage([`${MODULE}\n${textRow("14", ordinaryText)}5:${head}\n`]))).not.toContain("clarity");
+  });
+
   test("a ref never seen with next/script props is not read: a component that shows a code sample", () => {
     const sample = tuple("$L20", { type: "text/javascript", children: SNIPPET });
     const other = tuple("$L20", { label: "copy", title: "Install" });
