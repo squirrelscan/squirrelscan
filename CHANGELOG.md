@@ -19,6 +19,8 @@ How it works:
 
 ### Added
 
+- **Microsoft Clarity is detected from its loader inside a first-party bundle.** The standard snippet's `t.src="https://www.clarity.ms/tag/"+i` (and its `setAttribute("src", ...)` and template-literal forms), bundled into a site's own script, now matches as code, with the window around it sent in a capped scan. A bundle that only names the URL in prose, a docs string or a comment does not. Before v0.0.150 a few such installs were found by accident through a whole-text read of the page. (#1488)
+
 - **The JSON report names the rules that ran, and `--include-pages` lists the URLs that never answered.** `executedRules` is the sorted list of rule ids that produced at least one check that was not skipped on this audit, so `issues`, `passedRules` and `skippedChecks` can be checked against it without reading `squirrel.toml`; a fully skipped or disabled rule is not listed, and a finding a smart audit carried over from an earlier crawl does not make a rule executed. With `--include-pages`, a URL the crawl requested but stored no page for (a connection error, a rate-limited request with no stored response, an excluded or out-of-scope URL, one robots.txt blocks) is listed after the crawled pages with `outcome` `error` or `skipped` and a `reason`, inside the 2,000-entry cap. `meta.schemaVersion` is `1.5`; both additions are optional. (#1396)
 
 ### Fixed
