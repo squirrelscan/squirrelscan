@@ -695,9 +695,35 @@ test("every viewport unit that is the whole viewport makes a fixed frame a cover
 });
 
 test("a fixed frame that is not the whole viewport is not a cover", () => {
-  for (const [width, height] of [["50dvw", "100dvh"], ["100dvw", "50dvh"], ["100px", "100px"], ["1100%", "100%"], ["100.5%", "100.5%"], ["300px", "100dvh"], ["100dvh", "100dvw"]]) {
+  for (const [width, height] of [["50dvw", "100dvh"], ["100dvw", "50dvh"], ["100px", "100px"], ["1100%", "100%"], ["300px", "100dvh"], ["100dvh", "100dvw"]]) {
     expect(detectFakeAuthOverlay(context(cover(width!, height!))), `${width} x ${height}`).toBeNull();
   }
+});
+
+test("other spellings of the whole viewport are covers too", () => {
+  const same = ["100.0%", "100.00vw", "+100vw", "1e2vw", "1E2%", "100.000dvw", "calc(100vw)", "calc(50vw + 50vw)", "calc(100% - 0px)", "max(100vw, 0px)", "min(100vw, 200vw)", "clamp(0px, 100vw, 200vw)", "101vw", "150%", "100vi", "100svi", "100cqw", "100cqi", "-webkit-fill-available", "stretch", "-moz-available"];
+  for (const width of same) {
+    expect(detectFakeAuthOverlay(context(cover(width, "100vh"))), `${width} wide`).not.toBeNull();
+  }
+  const tall = ["100.0%", "100.00vh", "+100vh", "1e2vh", "calc(50vh + 50vh)", "200vh", "100vb", "100dvb", "100cqh", "100cqb", "-webkit-fill-available", "stretch"];
+  for (const height of tall) {
+    expect(detectFakeAuthOverlay(context(cover("100vw", height))), `${height} tall`).not.toBeNull();
+  }
+});
+
+test("lengths that only look like the whole viewport are not covers", () => {
+  const not = ["10vw", "100px", "1100vw", "0.100vw", "50%", "-100vw", "5e1vw", "100vh", "var(--w)", "calc(100px + 50vw)", "10100%"];
+  for (const width of not) {
+    expect(detectFakeAuthOverlay(context(cover(width, "100vh"))), `${width} wide`).toBeNull();
+  }
+});
+
+test("inset spelled with logical sides is the same as top/left/bottom/right", () => {
+  const frame = (style: string) => `<iframe id="google-auth" srcdoc="" style="position:fixed;${style};z-index:99999"></iframe>`;
+  for (const style of ["inset:0", "inset-block:0;inset-inline:0", "inset-block-start:0;inset-block-end:0;inset-inline-start:0;inset-inline-end:0", "top:0;right:0;bottom:0;left:0"]) {
+    expect(detectFakeAuthOverlay(context(frame(style))), style).not.toBeNull();
+  }
+  expect(detectFakeAuthOverlay(context(frame("inset-block:0;inset-inline:40px"))), "inline inset 40px").toBeNull();
 });
 
 test("the units work from a stylesheet too", () => {

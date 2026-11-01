@@ -212,6 +212,24 @@ function ruleMatches(rule: Rule, id: string, classes: Set<string>): boolean {
   );
 }
 
+/** Logical offsets in a horizontal left-to-right page (the injected overlays are never vertical or right-to-left). */
+const LOGICAL_SIDES: Readonly<Record<string, string>> = {
+  "inset-block-start": "top",
+  "inset-block-end": "bottom",
+  "inset-inline-start": "left",
+  "inset-inline-end": "right",
+};
+
+/** `inset-block` / `inset-inline`: one value for both sides or two values, start then end. */
+function expandPair(value: string, first: string, second: string): Array<[string, string]> {
+  const parts = value.split(/\s+/).filter(Boolean);
+  if (parts.length === 0 || parts.length > 2) return [];
+  return [
+    [first, parts[0]!],
+    [second, parts[1] ?? parts[0]!],
+  ];
+}
+
 function expandInset(value: string): Array<[string, string]> {
   const parts = value.split(/\s+/).filter(Boolean);
   if (parts.length === 0 || parts.length > 4) return [];
@@ -297,7 +315,9 @@ function resolvedStyle(doc: Document, sheet: Sheet, frame: Element): Map<string,
   for (const layer of layers) {
     for (const d of layer) {
       if (d.property === "inset") for (const [side, value] of expandInset(d.value)) out.set(side, value);
-      else out.set(d.property, d.value);
+      else if (d.property === "inset-block") for (const [side, value] of expandPair(d.value, "top", "bottom")) out.set(side, value);
+      else if (d.property === "inset-inline") for (const [side, value] of expandPair(d.value, "left", "right")) out.set(side, value);
+      else out.set(LOGICAL_SIDES[d.property] ?? d.property, d.value);
     }
   }
   return out;
@@ -306,12 +326,39 @@ function resolvedStyle(doc: Document, sheet: Sheet, frame: Element): Map<string,
 const ZERO = /^0(?:px|%|em|rem|vh|vw)?$/;
 
 /**
- * A length that is the whole viewport (or its container) on one axis, alone or inside `calc()`: `100%`, the viewport units
- * `vw`/`vh` and their dynamic, small and large forms (`dvw`, `svh`, `lvh`, ...), and `vmax`/`vmin` (#1496). `50dvh`,
- * `100px` and `1100%` are not it.
+ * Whether a `width` or `height` value fills its axis (#1496), read as CSS spells it and leaning toward "fills" when it
+ * cannot tell. Units of the axis: `%`, the viewport units (`vw`/`vh` and their dynamic, small and large forms `dvw`, `svh`,
+ * `lvh`, ...), the logical `vi`/`vb` forms, the container units (`cqw`, `cqh`, `cqi`, `cqb`, `cqmin`, `cqmax`) and
+ * `vmin`/`vmax`. A number of 100 up to 1000 fills (an over-full 150% or 200vh does too), any spelling of it (`100.0`,
+ * `+100`, `1e2`); inside `calc()`, `min()`, `max()` or `clamp()` the numbers of the axis are added, so `calc(50vw + 50vw)`
+ * fills and `calc(100% - 0px)` does (a subtraction of a fixed length is not taken off). The keywords
+ * `stretch`, `fill-available` and their prefixed forms fill. Not it: `10vw`, `100px`, `1100vw`, `0.100vw`, `50%`, and
+ * a length held in a custom property (`var(--w)`), which is not resolved: a documented limit.
  */
-const FULL_WIDTH = /(?<![\d.])100(?:%|[dsl]?vw|vmax|vmin)/i;
-const FULL_HEIGHT = /(?<![\d.])100(?:%|[dsl]?vh|vmax|vmin)/i;
+const AXIS_UNITS = {
+  width: "%|[dsl]?vw|[dsl]?vi|cqw|cqi|vmax|vmin|cqmin|cqmax",
+  height: "%|[dsl]?vh|[dsl]?vb|cqh|cqb|vmax|vmin|cqmin|cqmax",
+} as const;
+const AXIS_TOKEN = {
+  width: new RegExp(`(?<![\\w.])([+-]?)(\\d+(?:\\.\\d+)?(?:e[+-]?\\d+)?|\\.\\d+(?:e[+-]?\\d+)?)(?:${AXIS_UNITS.width})(?![\\w%])`, "gi"),
+  height: new RegExp(`(?<![\\w.])([+-]?)(\\d+(?:\\.\\d+)?(?:e[+-]?\\d+)?|\\.\\d+(?:e[+-]?\\d+)?)(?:${AXIS_UNITS.height})(?![\\w%])`, "gi"),
+};
+const FILL_KEYWORD = /(?:^|[\s(,])(?:-webkit-|-moz-)?(?:stretch|fill-available|available)(?:$|[\s),])/i;
+const MAX_FILL_PERCENT = 1_000;
+
+function fillsAxis(value: string, axis: "width" | "height"): boolean {
+  if (value === "" || value.length > 512) return false;
+  if (FILL_KEYWORD.test(value)) return true;
+  let sum = 0;
+  for (const match of value.matchAll(AXIS_TOKEN[axis])) {
+    const amount = Number(match[2]);
+    if (!Number.isFinite(amount)) continue;
+    if (match[1] === "-") continue;
+    if (amount >= 100 && amount <= MAX_FILL_PERCENT) return true;
+    sum += amount;
+  }
+  return sum >= 100 && sum <= MAX_FILL_PERCENT;
+}
 
 export interface OverlayGeometry {
   fixed: boolean;
@@ -351,7 +398,7 @@ export function overlayGeometry(doc: Document, frame: Element): OverlayGeometry 
   return {
     fixed: position === "fixed" || position === "absolute",
     zIndex: Number.isFinite(zIndex) ? zIndex : 0,
-    fillsViewport: (FULL_WIDTH.test(width) && FULL_HEIGHT.test(height)) || stretched,
+    fillsViewport: (fillsAxis(width, "width") && fillsAxis(height, "height")) || stretched,
     pinned: zero("top") || zero("left"),
   };
 }
