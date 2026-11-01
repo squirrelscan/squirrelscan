@@ -1,3 +1,5 @@
+import { createHmac } from "node:crypto";
+
 // security/leaked-secrets — token decoders (#361).
 //
 // Several credential formats carry enough structure to confirm or downgrade a
@@ -149,6 +151,58 @@ function isPlaceholderSecret(part: string): boolean {
   return /^[*•.]+$/.test(part) || /^x+$/.test(folded) || PLACEHOLDER_SECRET_RE.test(folded);
 }
 
+// A password that is nothing but a placeholder for one: `${pass}`, `{{ pass }}`,
+// `{password}`, `%s`, `%(pw)s`. Tested on the password alone and on the whole of
+// it: a hard-coded password next to a templated host (`@${DB_HOST}`), or a real
+// password that merely contains `%s` or `{abc}`, is still a credential.
+const TEMPLATE_PASSWORD_RE = /^(?:\$\{[^}]{1,64}\}|\{\{[^}]{1,64}\}\}|\{[a-z_]{1,32}\}|%[sd]|%\([A-Za-z_]\w{0,32}\)[sd])$/;
+
+// Hosts that name this machine or a name no resolver hands out: loopback and
+// the reserved `.localhost`, `.test`, `.example` and `.invalid` (RFC 2606 and
+// RFC 6761). `.internal` and `.local` are NOT here: they are real private
+// networks (Fly, Kubernetes, mDNS) and a database there is a real database.
+const UNROUTABLE_HOST_RE =
+  /^(?:localhost|127(?:\.\d{1,3}){3}|\[::1\]|(?:[a-z0-9-]+\.)*[a-z0-9-]+\.(?:localhost|test|example|invalid))$/i;
+
+function isUnroutableHosts(authority: string, at: number): boolean {
+  const hosts = (at === -1 ? authority : authority.slice(at + 1)).split(",");
+  return hosts.every((h) => UNROUTABLE_HOST_RE.test(h.replace(/:\d*$/, "")));
+}
+
+// A password a person typed into a docs example: a placeholder word with its
+// vowels swapped for digits (`s3cret`), a trailing number (`password123`), or
+// a separator (`example-password`). Short, all letters once those are undone,
+// and containing a word that names itself a placeholder. A random password has
+// no such word in it.
+const LEET: Record<string, string> = { "0": "o", "1": "l", "3": "e", "4": "a", "5": "s", "7": "t", "@": "a", $: "s" };
+const DOCUMENTATION_STEMS = [
+  "secret", "password", "passwd", "pass", "pwd", "admin", "root", "test", "changeme", "example",
+  "sample", "demo", "dummy", "default", "letmein", "postgres", "mysql", "redis", "mongo", "qwerty",
+];
+
+/** Is `text` nothing but whole stems end to end (`examplepassword`, `testpass`)? */
+function isMadeOfStems(text: string): boolean {
+  const reachable = new Array<boolean>(text.length + 1).fill(false);
+  reachable[0] = true;
+  for (let i = 0; i < text.length; i++) {
+    if (!reachable[i]) continue;
+    for (const stem of DOCUMENTATION_STEMS) {
+      if (text.startsWith(stem, i)) reachable[i + stem.length] = true;
+    }
+  }
+  return reachable[text.length] === true;
+}
+
+function isDocumentationPassword(password: string): boolean {
+  if (password.length > 24) return false;
+  const folded = password
+    .toLowerCase()
+    .replace(/\d{1,4}$/, "")
+    .replace(/[013457@$]/g, (c) => LEET[c] ?? c)
+    .replace(/[-_.]/g, "");
+  return /^[a-z]+$/.test(folded) && isMadeOfStems(folded);
+}
+
 /**
  * What a connection string leaks is the credential in it. A docs snippet
  * writes the shape without one — `postgresql://…`, `redis://…`, or a
@@ -176,17 +230,23 @@ function refineConnectionString(value: string): Refinement {
   const authority = rest.split(/[/?#]/, 1)[0] ?? "";
   const at = authority.lastIndexOf("@");
   let credential = false;
+  let password: string | undefined;
   if (at !== -1) {
     const userinfo = authority.slice(0, at).replace(ESCAPED_COLON_RE, ":");
     const colon = userinfo.indexOf(":");
-    if (colon !== -1 && colon !== userinfo.length - 1 && !isPlaceholderSecret(userinfo.slice(colon + 1))) {
+    // A password that is itself a template placeholder (`${pass}`, `%s`) is a
+    // driver's own connection builder, not a credential (#1227).
+    const candidate = colon === -1 ? "" : userinfo.slice(colon + 1);
+    if (colon !== -1 && colon !== userinfo.length - 1 && !isPlaceholderSecret(candidate) && !TEMPLATE_PASSWORD_RE.test(candidate)) {
       credential = true;
+      password = userinfo.slice(colon + 1);
     }
   }
   if (!credential) {
     for (const found of rest.matchAll(CREDENTIAL_QUERY_VALUE_RE)) {
       if (!isPlaceholderSecret(found[1] ?? "")) {
         credential = true;
+        password = found[1];
         break;
       }
     }
@@ -194,6 +254,15 @@ function refineConnectionString(value: string): Refinement {
   if (!credential) return { drop: true };
 
   const host = (at === -1 ? authority : authority.slice(at + 1)).replace(/:\d*$/, "");
+  // `user:s3cret@localhost` is a documentation example: a word a person
+  // chose, on a machine that is not reachable. A random password on the same
+  // host is a development credential somebody shipped, and stays (#1227).
+  // A `host=` or `hostaddr=` query parameter overrides the authority in libpq
+  // and other drivers: `@localhost/db?host=db.acme-prod.net` connects there.
+  const hostOverride = /[?&](?:host|hostaddr|server)=/i.test(rest);
+  if (password !== undefined && isDocumentationPassword(password) && !hostOverride && isUnroutableHosts(authority, at)) {
+    return { drop: true };
+  }
   const database = /^[^/?#]*\/([^/?#]*)/.exec(rest)?.[1] ?? "";
   const placeholderHost = PLACEHOLDER_HOST_RE.test(foldPlaceholder(host));
   const placeholderDb = database !== "" && PLACEHOLDER_DB_RE.test(foldPlaceholder(database));
@@ -364,8 +433,52 @@ function hasAdminScope(payload: Record<string, unknown>): boolean {
   return false;
 }
 
+/**
+ * jwt.io's default token, the sample every JWT decoder, debugger and tutorial
+ * page pre-fills: `{"sub":"1234567890","name":"John Doe","iat":1516239022}`,
+ * with `admin: true` in the editor's version. `sub` alone is a bare number a
+ * real token could carry, and so is `iat`, so the sample needs the subject AND
+ * one of the other two (#1283).
+ *
+ * The claims alone are not proof: anyone can sign those claims with a real
+ * secret, and a token that grants `admin` to the sample's subject is exactly
+ * what an attacker would mint. So the sample is dropped only when its
+ * signature verifies under one of the secrets the decoder pages publish
+ * (`your-256-bit-secret` and its siblings). A token with the sample's claims
+ * and any other signature is read like any other token.
+ */
+const JWT_IO_SECRETS = ["your-256-bit-secret", "your-384-bit-secret", "your-512-bit-secret", "secret", "your-secret"];
+const HMAC_ALGS: Record<string, string> = { HS256: "sha256", HS384: "sha384", HS512: "sha512" };
+
+// The published payload and nothing else: `{"sub":"1234567890","name":
+// "John Doe","iat":1516239022}`, with `"admin":true` in the editor's version.
+// Any other claim or value is a different token, even when it is signed with
+// `secret`: that is a password anybody can guess and a server may really use.
+function isJwtIoSampleClaims(payload: Record<string, unknown>): boolean {
+  const keys = Object.keys(payload).sort().join(",");
+  return (
+    (keys === "iat,name,sub" || keys === "admin,iat,name,sub") &&
+    payload.sub === "1234567890" &&
+    payload.name === "John Doe" &&
+    payload.iat === 1516239022 &&
+    (payload.admin === undefined || payload.admin === true)
+  );
+}
+
+function verifiesUnderSampleSecret(token: string, header: Record<string, unknown>): boolean {
+  const hash = typeof header.alg === "string" ? HMAC_ALGS[header.alg] : undefined;
+  const lastDot = token.lastIndexOf(".");
+  if (hash === undefined || lastDot === -1) return false;
+  const signed = token.slice(0, lastDot);
+  const signature = token.slice(lastDot + 1).replace(/=+$/, "");
+  return JWT_IO_SECRETS.some((secret) => createHmac(hash, secret).update(signed).digest("base64url") === signature);
+}
+
 function refineJwt(value: string, now: number, before: (() => string) | undefined): Refinement {
   const decoded = decodeJwt(value);
+  if (decoded && isJwtIoSampleClaims(decoded.payload) && verifiesUnderSampleSecret(value, decoded.header)) {
+    return { drop: true };
+  }
   if (!decoded) {
     // The header matched but the payload is not JSON: not a token anyone
     // issued. Reported as a generic JWT-shaped string, never as Supabase's.
@@ -530,7 +643,21 @@ function refineAlgoliaHexKey(): Refinement {
 
 // ── Stripe, Slack, Sentry ───────────────────────────────────────────────────
 
+// The keys Stripe prints in its own documentation: public, so unusable, and
+// copied into every tutorial. Exact tails only (the part after the prefix),
+// and only for the secret and restricted prefixes: the published sample is
+// `sk_test_` plus one of these, and the same tail after `sk_live_` or
+// `rk_live_` is somebody pasting the sample into a live-looking string, not a
+// credential Stripe issued (#1227).
+const STRIPE_DOC_SAMPLE_TAILS = new Set([
+  "4eC39HqLyjWDarjtT1zdp7dc", // pragma: allowlist secret
+  "BQokikJOvBiI2HlWgH4olfQ2", // pragma: allowlist secret
+]);
+const STRIPE_SECRET_PREFIX_RE = /^(?:sk|rk)_(?:live|test)_/;
+
 function refineStripeKey(value: string): Refinement {
+  const prefix = STRIPE_SECRET_PREFIX_RE.exec(value)?.[0];
+  if (prefix !== undefined && STRIPE_DOC_SAMPLE_TAILS.has(value.slice(prefix.length))) return { drop: true };
   const kind = value.startsWith("sk_") ? "secret" : value.startsWith("rk_") ? "restricted" : "publishable";
   const mode = value.slice(3, 8) === "live_" ? "live" : "test";
   return { extra: { kind, mode } };

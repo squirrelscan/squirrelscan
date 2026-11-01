@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **`security/leaked-secrets` no longer reports documentation samples, placeholders and binary payloads as credentials.** jwt.io's default sample token (when its signature verifies under a published sample secret), a `-----BEGIN ... PRIVATE KEY-----` header with no key body after it, a connection string with a documentation password on `localhost` or one whose password is a template placeholder (`${user}`, `{{ pass }}`, `%s`), Stripe's published sample key, a hashed asset name such as `neon_<hash>.png`, a Dominican Republic IBAN and a run of `A` inside a base64 image, font or wasm payload are not reported. A real-shaped key in the same place still is: a PEM block with a body, a random password on a local host, any other `sk_test_` key. `example-password` and similar are placeholders. Paystack's `sk_live_` keys (40 hex) are labelled Paystack instead of Stripe, and an `sk_live_` key with a hex tail that is not Stripe's, such as a chat widget's `data-deployment-key`, reports as an unknown-provider key with a widget hint. `changeme` stays reportable on purpose. See [leaked-secrets](https://docs.squirrelscan.com/rules/security/leaked-secrets). (#1283, #1227)
+
 ## v0.0.157 (2026-11-01)
 
 Technology detection finds a Microsoft Clarity snippet that a framework bundle carries as the text of an inline script, and a small script late on a crowded page is no longer left out of detection. Test coverage that missed v0.0.156 (leading-space sign-in forms, three Clarity negatives) is included.
