@@ -751,11 +751,11 @@ export const FAST_PATTERNS: FastPattern[] = [
   {
     name: "Generic API Key Assignment",
     pattern:
-      /(?:api[_-]?key|apikey)(?:['"]\s*\]|['"]?)\s*(?:[:=]|\|\|=?|\?\?=?)\s*['"][a-zA-Z0-9_-]{20,}['"]/gi,
+      /(?:api[_-]?key|apikey|master[_-]?key|search[_-]?key)(?:['"]\s*\]|['"]?)\s*(?:[:=]|\|\|=?|\?\?=?)\s*['"][a-zA-Z0-9_-]{20,}['"]/gi,
     confidence: "medium",
     keyAnchored: true,
     generic: true,
-    keywords: ["api_key", "api-key", "apikey"],
+    keywords: ["api_key", "api-key", "apikey", "master_key", "master-key", "masterkey", "search_key", "search-key", "searchkey"],
   },
   {
     name: "Generic Secret Assignment",
@@ -2365,12 +2365,28 @@ function isWidgetKeyAttribute(before: string): boolean {
  * is. So the name earns a hint on the finding, never a downgrade (#1229).
  */
 const PRIVILEGED_KEY_WORDS = ["admin", "secret", "private", "write", "master", "management", "manage", "backend", "server", "root"];
+const SEARCH_PROVIDER_KEY_SHAPE_RE = /^[A-Za-z0-9_-]{32}$/;
 
 function isSearchKeyName(key: string): boolean {
   const words = keyWords(key);
   // `searchAdminApiKey` is the admin key of a search product, not its
   // browser key: the name has to say search and nothing privileged.
   return words.includes("search") && !words.some((w) => PRIVILEGED_KEY_WORDS.includes(w));
+}
+
+function isAdminSearchProviderKey(key: string, value: string): boolean {
+  const words = keyWords(key);
+  return words.includes("master") || (SEARCH_PROVIDER_KEY_SHAPE_RE.test(value) && words.includes("admin"));
+}
+
+function isBareSearchScopeKey(key: string): boolean {
+  const words = keyWords(key);
+  return !words.includes("api") && (words.includes("search") || words.includes("master"));
+}
+
+function hasMeilisearchContext(content: string, index: number, key: string): boolean {
+  if (key.toLowerCase().includes("meili")) return true;
+  return content.slice(Math.max(0, index - PROVIDER_CONTEXT_GAP), index).toLowerCase().includes("meili");
 }
 
 /**
@@ -3453,11 +3469,22 @@ export function scanContent(
       // match and `apiKey:"YOUR_API_KEY…"` is a placeholder however keyed. // pragma: allowlist secret
       const body = generic ? genericValueOf(value) : value;
       if (generic) {
+        const completeKey = completeKeyOf(content, match.index, value);
+        // `searchKey` and `masterKey` are Meilisearch's names. Outside a
+        // Meilisearch config the same words label unrelated catalogue data;
+        // provider-prefixed `*_api_key` names still use the generic detector.
+        if (
+          name === "Generic API Key Assignment" &&
+          isBareSearchScopeKey(completeKey) &&
+          !hasMeilisearchContext(content, match.index, completeKey)
+        ) {
+          continue;
+        }
         if (/\s/.test(body) || shannonEntropy(body) < genericEntropyFloor(body.length)) continue;
         // `password:"Password"`, `passwd:"passwd"`: an i18n label whose value // pragma: allowlist secret
         // is its own key. And a URL-encoded sentence (`…ed%`, `%20`) is a
         // label too, however the encoding scattered its letters. // pragma: allowlist secret
-        if (alnum(body) === alnum(completeKeyOf(content, match.index, value))) continue;
+        if (alnum(body) === alnum(completeKey)) continue;
         if (isPercentEncodedLabel(body)) continue;
         // A label in a script that does not space its words, a route path or
         // a catalogue key cannot be a credential whatever the key says.
@@ -3585,14 +3612,21 @@ export function scanContent(
         }
       }
 
-      // A key whose name says "search" may well be a search-only key, and an
-      // admin key stored under that name reads the same: reported as before,
-      // with the evidence the name gives.
-      if (generic && name === "Generic API Key Assignment" && !reportPublic && isSearchKeyName(completeKeyOf(content, match.index, value))) {
-        known = {
-          ...known,
-          hint: "the key name says search; a search-only key is meant for browsers but an admin key under this name reads the same, so check which key this is",
-        };
+      // Algolia and Typesense use the same 32-character shape for search and
+      // admin keys. The variable name cannot prove scope, but an explicit
+      // admin/master name is enough to rank the browser exposure above a
+      // search-named value; a search name stays reviewable with a hint.
+      if (generic && name === "Generic API Key Assignment" && !reportPublic) {
+        const completeKey = completeKeyOf(content, match.index, value);
+        if (isAdminSearchProviderKey(completeKey, body)) {
+          reportConfidence = "high";
+          known = { ...known, keyKind: "admin-named" };
+        } else if (isSearchKeyName(completeKey)) {
+          known = {
+            ...known,
+            hint: "the key name says search; a search-only key is meant for browsers but an admin key under this name reads the same, so check which key this is",
+          };
+        }
       }
 
       if (seedVerdict === "demo-login") {
