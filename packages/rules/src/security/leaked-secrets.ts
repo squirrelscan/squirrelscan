@@ -1673,6 +1673,7 @@ function isDottedIdentifier(body: string): boolean {
 // a value that short, so listing them would only read as a blind spot.
 const PASSWORD_TRANSLATIONS = new Set([
   "passwort",
+  "geheimnis",
   "kennwort",
   "wachtwoord",
   "wagwoord",
@@ -1723,14 +1724,328 @@ function isTemplateExpression(body: string): boolean {
   return /[.[(]/.test(inner) || !/[0-9]/.test(inner);
 }
 
+
+// ── What a generic assignment's value can be (#1292) ────────────────────────
+//
+// The gate below is the second half of isNotACredentialValue: shapes that name
+// something other than a credential even though a credential word sits in the
+// key. Each one is a class counted in the corpus triage; a random token falls
+// into none of them (it mixes case or digits, has no separator-joined words,
+// is not a location, and is not rooted in an expression).
+
+/** A CSS-module class (`styles-module__secret___x9Y2z`, `Button__primary___3xK9z`). `Name_key_hash` alone is not: it reads like a drawn password. */
+const CSS_MODULE_HEAD_RE = /^[A-Za-z][A-Za-z0-9_-]*$/;
+const CSS_MODULE_HASH_RE = /^[A-Za-z0-9_-]{3,}$/;
+
+/**
+ * The WHOLE value is a css-loader class, `<file>__<local>___<hash>` (`styles-module__secret___x9Y2z`, `Button__primary___3xK9z`): a
+ * head with a `__` and a local name, then `___` and a hash. A value that merely contains `-module__` somewhere, or has no
+ * `___hash`, is not one (`Xk9mQ2vL8zPq-module__4tR7yU1iO3` is a password). Linear: one split at the last `___`.
+ */
+function isCssModuleClass(body: string): boolean {
+  const cut = body.lastIndexOf("___");
+  if (cut <= 0) return false;
+  const head = body.slice(0, cut);
+  const local = head.lastIndexOf("__");
+  return local > 0 && local + 2 < head.length && CSS_MODULE_HEAD_RE.test(head) && CSS_MODULE_HASH_RE.test(body.slice(cut + 3));
+}
+
+/**
+ * `user_password_field`, `secret:reset:token`, `app_secret_v6`: words joined by
+ * `_`, `:` or `.`: all lower case, each word at most eight characters (sixteen when the
+ * key ends in a `_v6`-style version), no more than two digits in all. A longer word, a capital or a digit run reads as drawn at
+ * random (`Prod_token_8fK2mQ9x`) and reports. Not `-`: a hyphenated
+ * passphrase (`correct-horse-battery-staple`) is a password people choose. A storage key or a
+ * catalogue key, not a value drawn at random.
+ */
+const IDENTIFIER_JOINED_RE = /^[a-z][a-z0-9]{0,7}(?:[_:.][a-z][a-z0-9]{0,7})+$/;
+/** A storage key with a version suffix (`app_secret_v6`, `authentication_secret_v6`): lower-case words of up to sixteen characters, then `_v` and one or two digits. */
+const VERSIONED_KEY_RE = /^[a-z][a-z0-9]{0,15}(?:[_:.][a-z][a-z0-9]{0,15})*[_:.]v\d{1,2}$/;
+
+/**
+ * A joined identifier is a NAME of a credential, so one of its words says so: `user_password_field`, `secret:reset:token`,
+ * `app_secret_v6`. Random lower-case words joined by `_` (a passphrase, a drawn value) have none and are reported.
+ */
+const CREDENTIAL_WORDS: ReadonlySet<string> = new Set([
+  "secret", "secrets", "token", "tokens", "key", "keys", "apikey", "pass", "password", "passwd", "pwd", "auth", "authorization",
+  "cred", "creds", "credential", "credentials", "api", "private", "bearer", "session", "sign", "signature", "salt", "jwt", "login", "access", "oauth",
+]);
+
+/** The patterns whose value is handed over after a scheme word (`Bearer x`, `Basic x`): the value is never a name. */
+const SCHEME_VALUE_PATTERNS: ReadonlySet<string> = new Set(["Bearer Token", "Basic Auth Header"]);
+
+function isJoinedIdentifier(body: string): boolean {
+  if (body.length > 48 || !(IDENTIFIER_JOINED_RE.test(body) || VERSIONED_KEY_RE.test(body))) return false;
+  // A WHOLE word: `monkey`, `capital`, `bypass` or `author` merely contain one and say nothing.
+  if (!body.split(/[_:.]/).some((word) => CREDENTIAL_WORDS.has(word))) return false;
+  let digits = 0;
+  for (let i = 0; i < body.length; i++) {
+    const code = body.charCodeAt(i);
+    if (code >= 48 && code <= 57) digits++;
+  }
+  return digits <= 2;
+}
+
+/**
+ * A URL or a rooted path. A URL that carries a credential in it is still one:
+ * a Teams or Zapier webhook has an id segment with digits in it, and userinfo
+ * is a password. So a URL counts as a location only when it has neither.
+ */
+function isUrlWithoutCredential(body: string): boolean {
+  if (!/^(?:https?:)?\/\//i.test(body) && !body.startsWith("/")) return false;
+  if (/^(?:https?:)?\/\/[^/?#]*@/i.test(body)) return false;
+  // Any query value of eight characters or more can be the credential.
+  const query = body.indexOf("?");
+  if (query !== -1 && body.slice(query + 1).split(/[&=#]/).some((part) => part.length >= 8)) return false;
+  for (const part of body.split(/[/?#&=]/)) {
+    if (part.length >= 6 && /[0-9]/.test(part)) return false;
+    // A long run of letters is as much a secret as a long run of letters and digits.
+    if (part.length >= 20) return false;
+  }
+  return true;
+}
+
+// `secret1…` (a bech32 string), a `0x` EVM address, an env-var reference,
+// an elided value and a mask are all labels, addresses or placeholders.
+const ENV_REFERENCE_RE = /^(?:(?:process|import\.meta)\.env\.[A-Za-z_]\w*|\$\{[A-Z][A-Z0-9_]{2,}\})$/;
+const MASK_RE = /^[•●·*.\s_-]*$/u;
+
+/** `abcdefgh...`: a short stub with an ellipsis, not a long token cut off. */
+function isElidedValue(body: string): boolean {
+  const stripped = body.endsWith("...") ? body.slice(0, -3) : body.endsWith("…") ? body.slice(0, -1) : undefined;
+  return stripped !== undefined && stripped.length <= 12;
+}
+
+/** The captured span reads as code, not as a quoted value. */
+/** Longer than this a quoted value is not read as a code fragment: the clauses below can fire inside a long random password. */
+const CODE_SPAN_MAX_LENGTH = 64;
+
+function looksLikeCodeSpan(body: string): boolean {
+  if (body.length > CODE_SPAN_MAX_LENGTH) return false;
+  // Strict comparison belongs to code and to nothing else.
+  if (/===|!==/.test(body)) return true;
+  // The rest also occurs inside a real password (`Zx9&&Kw3mQ7`, `return-of-the-king`),
+  // so it counts only with the statement separator that code has between them.
+  if (body.includes(";") && /=>|\)\s*\{|\bfunction\b|\breturn\b|;(?:var|let|const|if|for)\b|;\s+[A-Za-z_$][\w$]*\s*[=(.]/.test(body)) return true;
+  let open = 0;
+  let close = 0;
+  for (let i = 0; i < body.length; i++) {
+    if (body[i] === "(") open++;
+    else if (body[i] === ")") close++;
+  }
+  // Unbalanced parentheses count as code only around a member call (`a.b(`),
+  // not around a bare `(` in a password (`Pa(ssw.rd9Qx`).
+  return open !== close && /(?<![\w$])[A-Za-z][a-z]{2,}\.[a-z][A-Za-z]{2,}\(/.test(body);
+}
+
+// None of these shapes is longer than a short label, a class name or an identifier;
+// a longer value is not gated, which also bounds the work of every test below.
+const IMPLAUSIBLE_MAX_LENGTH = 256;
+
+export function isImplausibleSecretValue(body: string, patternName = ""): boolean {
+  if (body.length > IMPLAUSIBLE_MAX_LENGTH) return false;
+  return (
+    isUrlWithoutCredential(body) ||
+    isCssModuleClass(body) ||
+    (!SCHEME_VALUE_PATTERNS.has(patternName) && isJoinedIdentifier(body)) ||
+    ENV_REFERENCE_RE.test(body) ||
+    isElidedValue(body) ||
+    MASK_RE.test(body) ||
+    looksLikeCodeSpan(body)
+  );
+}
+
+// ── Credentials in sample data the page renders (#1308) ─────────────────────
+//
+// A seed-user table, a breach-lookup demo, a puzzle level and a generator's
+// sample output carry realistic credentials as DATA. The value cannot tell
+// them from a leak; the structure around it can: a row of an array of three or
+// more objects with the same keys, with the email domains beside it reserved
+// (`.test`, `example.com`), or an object that carries game or sample markers.
+
+const TABLE_WALK_BACK = 1500;
+const TABLE_WALK_FORWARD = 8000;
+const TABLE_MIN_ROWS = 3;
+const SEED_OBJECT_REACH = 600;
+// Markers a puzzle or a generator carries and a configuration object does not.
+// `flag` counts only with a string value: `flags:{…}` and `flag:true` are
+// feature flags, which sit right beside real configuration.
+const SEED_MARKERS: readonly RegExp[] = [
+  /\bFLAG\{/,
+  /\bflag(?:Path|Value|Answer)?\s*["']?\s*:\s*["'`]/,
+  /\bcandidates\s*["']?\s*:\s*\[/,
+  /\bcrack[A-Z]\w*\s*["']?\s*:/,
+  /\bsample\s*["']?\s*:[\s\S]{0,400}?\boptions\b/,
+  /\boptions\s*["']?\s*:[\s\S]{0,200}?\blength\s*["']?\s*:/,
+];
+// One marker alone is not enough: a real configuration can carry a string
+// `flag` or an `options` object with a `length`. Two distinct markers in one
+// object are a puzzle or a generator; one marker counts only inside a table.
+const SEED_MARKERS_ALONE = 2;
+
+/** The `{…}` the match sits in, bounded; undefined when it is not inside one. */
+/** Characters the seed-data checks have walked, and the most one scan may spend on them. */
+export const seedWork = { examined: 0 };
+const SEED_SCAN_BUDGET = 3_000_000;
+
+function enclosingObject(content: string, at: number): string | undefined {
+  let depth = 0;
+  let start = -1;
+  for (let i = at - 1; i >= 0 && at - i <= SEED_OBJECT_REACH; i--) {
+    const ch = content[i];
+    if (ch === "}" || ch === "]") depth++;
+    else if (ch === "{" || ch === "[") {
+      if (depth > 0) depth--;
+      else if (ch === "{") {
+        start = i;
+        break;
+      } else return undefined;
+    }
+  }
+  if (start === -1) return undefined;
+  depth = 0;
+  for (let i = start; i < content.length && i - start <= SEED_OBJECT_REACH * 2; i++) {
+    const ch = content[i];
+    if (ch === "{" || ch === "[") depth++;
+    else if (ch === "}" || ch === "]") {
+      depth--;
+      if (depth === 0) return content.slice(start, i + 1);
+    }
+  }
+  return content.slice(start, start + SEED_OBJECT_REACH * 2);
+}
+const HOST_AFTER_AT_RE = /^([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,})/;
+const EMAIL_LOCAL_CHAR_RE = /[A-Za-z0-9._%+-]/;
+/** The longest host read after an `@`: a name is at most 253 characters. */
+const EMAIL_HOST_MAX = 255;
+
+/**
+ * The hosts of the email addresses in `text`: found from each `@`, with a one-character look behind and a bounded read ahead, so
+ * a long run of local-part characters with no `@` in it (a hostile row) costs nothing per character.
+ */
+function emailHosts(text: string): string[] {
+  const hosts: string[] = [];
+  let at = text.indexOf("@");
+  while (at !== -1) {
+    if (at > 0 && EMAIL_LOCAL_CHAR_RE.test(text[at - 1]!)) {
+      const host = HOST_AFTER_AT_RE.exec(text.slice(at + 1, at + 1 + EMAIL_HOST_MAX))?.[1];
+      if (host !== undefined) hosts.push(host);
+    }
+    at = text.indexOf("@", at + 1);
+  }
+  return hosts;
+}
+const RESERVED_HOST_RE = /(?:^|\.)(?:example\.(?:com|org|net)|[a-z0-9-]+\.(?:test|example|invalid|localhost)|(?:test|example|invalid|localhost))$/i;
+// A key is at most 64 characters: unbounded, a long run of word characters with no colon is scanned again from every character in it.
+const KEY_IN_ROW_RE = sharedRegex(/["']?([A-Za-z_$][\w$-]{0,63})["']?\s*:/g);
+
+export type SeedVerdict = "skip" | "demo-login" | undefined;
+
+/** Rows of the array the match sits in, when that array is a table of same-keyed objects. */
+function tableAround(content: string, at: number, spend: (n: number) => void): { text: string; rows: string[] } | undefined {
+  spend(TABLE_WALK_BACK + TABLE_WALK_FORWARD);
+  let depth = 0;
+  let sawObject = false;
+  let arrayStart = -1;
+  for (let i = at - 1; i >= 0 && at - i <= TABLE_WALK_BACK; i--) {
+    const ch = content[i];
+    if (ch === "}" || ch === "]") depth++;
+    else if (ch === "{" || ch === "[") {
+      if (depth > 0) depth--;
+      else if (ch === "{") {
+        if (sawObject) return undefined;
+        sawObject = true;
+      } else {
+        arrayStart = i;
+        break;
+      }
+    }
+  }
+  if (arrayStart === -1 || !sawObject) return undefined;
+  // Forward to the array's end, collecting the top-level objects as rows.
+  const rows: string[] = [];
+  let d = 0;
+  let rowStart = -1;
+  let end = -1;
+  for (let i = arrayStart; i < content.length && i - arrayStart <= TABLE_WALK_FORWARD; i++) {
+    const ch = content[i];
+    if (ch === "{" || ch === "[") {
+      d++;
+      if (d === 2 && ch === "{") rowStart = i;
+    } else if (ch === "}" || ch === "]") {
+      if (d === 2 && ch === "}" && rowStart !== -1) {
+        rows.push(content.slice(rowStart, i + 1));
+        rowStart = -1;
+      }
+      d--;
+      if (d === 0) {
+        end = i + 1;
+        break;
+      }
+    }
+  }
+  if (end === -1 || rows.length < TABLE_MIN_ROWS) return undefined;
+  return { text: content.slice(arrayStart, end), rows };
+}
+
+function rowKeys(row: string): string {
+  const keys = new Set<string>();
+  KEY_IN_ROW_RE.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = KEY_IN_ROW_RE.exec(row)) !== null) keys.add(m[1]!.toLowerCase());
+  return [...keys].sort().join(",");
+}
+
+/**
+ * What the data structure around a generic match says. `skip`: a sample (a
+ * table whose emails are all reserved, or an object with game or sample
+ * markers). `demo-login`: a table of same-keyed rows with real-domain emails,
+ * which can be working logins and stays reported, labelled as such.
+ */
+function seedDataVerdict(content: string, at: number, keyName: string, budget: { left: number }): SeedVerdict {
+  // One scan has a fixed allowance for these walks; past it nothing is exempted,
+  // so a page of ten thousand adversarial rows costs a bounded amount and every
+  // password after the allowance reports as usual.
+  const spend = (n: number) => {
+    budget.left -= n;
+    seedWork.examined += n;
+  };
+  if (budget.left <= 0) return undefined;
+  spend(SEED_OBJECT_REACH * 2);
+  const object = enclosingObject(content, at);
+  const markers = object === undefined ? 0 : SEED_MARKERS.filter((re) => re.test(object)).length;
+  if (markers >= SEED_MARKERS_ALONE) return "skip";
+  const near = content.slice(Math.max(0, at - 400), at + 400);
+  // Cheap pre-check: a table has object separators close to the match.
+  if (!/\}\s*,\s*\{/.test(near)) return undefined;
+  if (budget.left <= 0) return undefined;
+  const table = tableAround(content, at, spend);
+  if (!table) return undefined;
+  const shapes = table.rows.map(rowKeys);
+  const key = keyName.toLowerCase();
+  const carries = (shape: string) => shape.includes(key);
+  const mine = shapes.filter(carries);
+  if (mine.length < TABLE_MIN_ROWS || new Set(mine).size !== 1) return undefined;
+  // A marker plus a table of same-shaped records is sample data.
+  if (markers >= 1) return "skip";
+  // The email domains that count are those of the rows that carry the secret's own key (an unrelated row of the same array with a
+  // reserved-domain email does not make a real secret sample data), and EVERY such row needs an email: one row with a reserved
+  // address does not excuse two rows with none.
+  const perRow = table.rows.filter((_row, index) => carries(shapes[index]!)).map(emailHosts);
+  if (perRow.some((rowHosts) => rowHosts.length === 0)) return undefined;
+  const hosts = perRow.flat();
+  return hosts.every((host) => RESERVED_HOST_RE.test(host)) ? "skip" : "demo-login";
+}
+
 /** Could this body be a credential at all? */
-function isNotACredentialValue(body: string): boolean {
+function isNotACredentialValue(body: string, patternName = ""): boolean {
   return (
     isNonAsciiText(body) ||
     isLocationValue(body) ||
     isDottedIdentifier(body) ||
     isTranslatedLabel(body) ||
-    isTemplateExpression(body)
+    isTemplateExpression(body) ||
+    isImplausibleSecretValue(body, patternName)
   );
 }
 
@@ -2922,6 +3237,7 @@ export function scanContent(
   };
 
   const platformSource = platformSourceOf(location, sourceUrl);
+  const seedBudget = { left: SEED_SCAN_BUDGET };
 
   let shopifyPage: boolean | null = null;
   const isShopifyPage = () => (shopifyPage ??= pageLoadsFrom(content, SHOPIFY_CDN_HOST));
@@ -2950,6 +3266,7 @@ export function scanContent(
     let match: RegExpExecArray | null;
     while ((match = pattern.exec(content)) !== null) {
       let value = match[0];
+      let seedVerdict: SeedVerdict;
 
       // A prefix is a prefix only at the start of a token. `re_` inside
       // `_Care_Dry…`, `[0-9]{8,10}:` on the tail of a UUID and `fooghp_…`
@@ -3058,7 +3375,13 @@ export function scanContent(
         if (isPercentEncodedLabel(body)) continue;
         // A label in a script that does not space its words, a route path or
         // a catalogue key cannot be a credential whatever the key says.
-        if (isNotACredentialValue(body)) continue;
+        if (isNotACredentialValue(body, name)) continue;
+        // A password in sample data the page renders (a seed table, a puzzle
+        // level, a generator's output) is data, not configuration.
+        if (name === "Generic Secret Assignment") {
+          seedVerdict = seedDataVerdict(content, match.index, completeKeyOf(content, match.index, value), seedBudget);
+          if (seedVerdict === "skip") continue;
+        }
         // WordPress's oEmbed nonce: `data-secret` on a wp-embedded-content
         // element, or a ten-character alphanumeric under `data-secret`.
         if (
@@ -3171,6 +3494,12 @@ export function scanContent(
           ...known,
           hint: "the key name says search; a search-only key is meant for browsers but an admin key under this name reads the same, so check which key this is",
         };
+      }
+
+      if (seedVerdict === "demo-login") {
+        reportType = "Possible Demo Login (seed data table)";
+        reportConfidence = "medium";
+        known = { hint: "a row of a table of same-shaped records with real-domain emails: may be a working demo login" };
       }
 
       // A token that only opens like the provider's: reviewable, at medium,
