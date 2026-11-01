@@ -23,7 +23,7 @@ Security is one of the four score groups on every report. This page covers trans
 
 ## Security rules
 
-HTTPS, headers, and safe link practices (23 rules).
+HTTPS, headers, and safe link practices (24 rules).
 
 ## Run only these rules
 
@@ -57,6 +57,7 @@ These carry the highest severity and weight in the category.
 | [Content-Security-Policy: what to set and how to check it](/rules/security/csp) | A missing CSP, a report-only policy or an unsafe-inline script-src leaves XSS unmitigated. squirrel parses the header and names each gap. | warning | Site-wide |
 | [Cookie flags: Secure, HttpOnly and SameSite on Set-Cookie](/rules/security/cookie-flags) | SameSite=None without Secure is rejected outright, and a session cookie without HttpOnly is readable by any script. squirrel parses every Set-Cookie. | warning | Per-page |
 | [CSP blocks your own scripts, frames and analytics endpoints](/rules/security/csp-blocks-own-resources) | A Content-Security-Policy that leaves out a host your page depends on breaks a widget or a tracker silently. squirrel matches each page's policy against what the page loads. | warning | Per-page |
+| [CSP violations the browser reports on a rendered page](/rules/security/csp-violations) | The browser itself reports every script, frame, image and endpoint a Content-Security-Policy blocked. squirrel reads those violations from a rendered crawl and names the directive and host to fix. | warning | Per-page |
 | [Form action over HTTP: the insecure form submission warning](/rules/security/form-https) | A form on an HTTPS page that posts to http:// sends the data in the clear and browsers interstitial it. squirrel checks action and formaction. | error | Per-page |
 | [GraphQL introspection in production: what an open schema exposes](/rules/security/graphql-introspection) | Open introspection hands anyone a map of every type in your API. squirrel sends one read-only introspection query per endpoint and counts the types it gets back. | warning | Site-wide |
 | [GraphQL mutations over GET: why they open the door to CSRF](/rules/security/graphql-get-mutations) | A server that runs a mutation sent as a GET lets any site fire it with your visitors' cookies. squirrel sends a no-op mutation that cannot write and checks the answer. | error | Site-wide |

@@ -2794,6 +2794,12 @@
    "csp-blocks-own-resources|pass|No enforced Content-Security-Policy to check (security/csp covers a missing policy)||"
   ]
  },
+ "security/csp-violations": {
+  "digest": "43216634260913",
+  "lines": [
+   "csp-violations|skipped|Not checked: the browser only reports CSP violations on a rendered crawl (this page was fetched without a browser)||"
+  ]
+ },
  "security/form-captcha": {
   "digest": "25043495342045",
   "lines": [

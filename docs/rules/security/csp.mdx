@@ -83,6 +83,7 @@ enable = ["security/csp"]
 - [security/permissions-policy](/rules/security/permissions-policy): the companion header for device and browser features.
 - [security/leaked-secrets](/rules/security/leaked-secrets): what an attacker collects once a script does run.
 - [security/csp-blocks-own-resources](/rules/security/csp-blocks-own-resources): the opposite failure, a policy that is present but leaves out a host the page loads, so the browser blocks it.
+- [security/csp-violations](/rules/security/csp-violations): the browser's own report of what a policy blocked, from a rendered crawl.
 
 Security findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
 

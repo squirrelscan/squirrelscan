@@ -512,6 +512,8 @@ export function streamPageRules(
           finalUrl: page.finalUrl,
           redirectChain: page.redirectChain,
           rendered: isRenderedFetch(page.fetcherId),
+          // CSP violations the browser raised (#425), read by security/csp-violations.
+          ...(page.browserEvents ? { browserEvents: page.browserEvents } : {}),
         };
 
         // ONE fingerprint per page, three consumers now: `page_features.template_fp`

@@ -38,7 +38,9 @@
 // cancels the SUBMIT: the server debits on submit, so the submit runs to its
 // own bound and the debit is recorded whether or not anyone still wants the page.
 
+import { readBrowserEvents } from "@squirrelscan/core-contracts/browser-events";
 import type {
+  BrowserEvents,
   RenderChargeLine,
   RenderJobResponse,
   RenderResultItem,
@@ -197,6 +199,11 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   });
 }
 
+function browserEventsField(raw: unknown): { browserEvents?: BrowserEvents } {
+  const events = readBrowserEvents(raw);
+  return events ? { browserEvents: events } : {};
+}
+
 /**
  * Map a completed RenderResultItem to the DocumentFetcher response shape.
  * Exported for tests. Browser-rendered pages carry their real response headers
@@ -261,6 +268,8 @@ export function mapRenderItemToResponse(
     // Queue-wait vs render-time breakdown, absent on a render-cache hit (#826).
     renderTimeMs: item.renderTimeMs,
     queueWaitMs: item.queueWaitMs,
+    // What the browser saw beyond the HTML (#425): untrusted, so bounded and cut to origin and path here.
+    ...browserEventsField(item.browserEvents),
   };
 }
 

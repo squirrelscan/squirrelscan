@@ -14,6 +14,7 @@ import type { ProbeBudget } from "./probe-budget";
 import type { TlsProbeFn } from "@squirrelscan/utils/tls-certificate";
 import type { CloudResultStore, RuleCloudSpec } from "./cloud";
 import type {
+  BrowserEvents,
   BusinessCategory,
   CheckItem,
   CheckResult,
@@ -341,6 +342,12 @@ export interface PageData {
    * treat as raw HTML (rule runs as today).
    */
   rendered?: boolean;
+  /**
+   * What the browser saw while rendering this page (#425): CSP violations, failed requests and page errors,
+   * collected through a short window after `load`. Present only on a rendered page whose render service
+   * reported them; read by security/csp-violations. Already bounded and cut to origin and path.
+   */
+  browserEvents?: BrowserEvents;
 }
 
 // Parsed page content - extracted by core modules

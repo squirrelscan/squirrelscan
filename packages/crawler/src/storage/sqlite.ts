@@ -10,7 +10,8 @@ import { enableWal, openSqlite } from "./sqlite-open";
 import { createHash, randomUUID } from "node:crypto";
 import { Effect } from "effect";
 
-import type { CheckResult } from "@squirrelscan/core-contracts";
+import type { BrowserEvents, CheckResult } from "@squirrelscan/core-contracts";
+import { readBrowserEvents } from "@squirrelscan/core-contracts/browser-events";
 import {
   packComponentOccurrences,
   unpackComponentOccurrences,
@@ -158,7 +159,7 @@ interface UnfinishedCrawlRow extends LeaseCrawlRow {
   last_activity: number;
 }
 
-export const SCHEMA_VERSION = 40;
+export const SCHEMA_VERSION = 41;
 
 // Migrations to run when upgrading from older versions
 const MIGRATIONS: Record<number, string[]> = {
@@ -639,6 +640,8 @@ const MIGRATIONS: Record<number, string[]> = {
   // says how long its report has been building: the last page it wrote is long
   // past by then. NULL for every crawl written before this. ADDITIVE.
   40: [`ALTER TABLE crawls ADD COLUMN building_at INTEGER`],
+  // Version 41: what a browser render saw beyond the HTML (#425), as JSON.
+  41: [`ALTER TABLE pages ADD COLUMN browser_events TEXT`],
 };
 
 // Every `pages` column but the two that hold a page's body, for
@@ -668,6 +671,7 @@ const PAGE_COLUMNS_WITHOUT_BODIES = [
   "request_headers",
   "fetcher_id",
   "fallback_reason",
+  "browser_events",
   "source_hash",
   "html_hash",
 ].join(", ");
@@ -692,6 +696,7 @@ const PAGES_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> = [
   { name: "request_headers", type: "TEXT" },
   { name: "fetcher_id", type: "TEXT" },
   { name: "fallback_reason", type: "TEXT" },
+  { name: "browser_events", type: "TEXT" },
   { name: "source_hash", type: "TEXT" },
   { name: "html_hash", type: "TEXT" },
 ];
@@ -860,6 +865,7 @@ CREATE TABLE IF NOT EXISTS pages (
   request_headers TEXT,
   fetcher_id TEXT,
   fallback_reason TEXT,
+  browser_events TEXT,
   source_hash TEXT,
   html_hash TEXT,
   PRIMARY KEY (crawl_id, normalized_url),
@@ -1928,8 +1934,8 @@ export class SQLiteStorage implements CrawlStorage {
             crawl_id, url, normalized_url, final_url, depth, parent_url,
             redirect_chain, status, content_type, size_bytes, load_time_ms, ttfb, download_time, fetched_at,
             etag, last_modified, content_hash, html, parsed_data, headers, security_headers, request_headers,
-            fetcher_id, fallback_reason, source_hash, html_hash
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            fetcher_id, fallback_reason, source_hash, html_hash, browser_events
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
         stmt.run(
           crawlId,
@@ -1957,7 +1963,8 @@ export class SQLiteStorage implements CrawlStorage {
           page.fetcherId ?? null,
           page.fallbackReason ?? null,
           page.sourceHash ?? null,
-          exactHtmlHash
+          exactHtmlHash,
+          page.browserEvents ? JSON.stringify(page.browserEvents) : null
         );
       },
       catch: (e) => StorageError.write(e),
@@ -2521,6 +2528,16 @@ export class SQLiteStorage implements CrawlStorage {
     });
   }
 
+  /** A page's stored browser events, read back through the same bounds they were written with (#425). */
+  private readBrowserEventsColumn(value: unknown): BrowserEvents | null {
+    if (typeof value !== "string" || value === "") return null;
+    try {
+      return readBrowserEvents(JSON.parse(value)) ?? null;
+    } catch {
+      return null;
+    }
+  }
+
   private rowToPageRecord(
     row: Record<string, unknown>,
     opts?: { body?: boolean }
@@ -2598,6 +2615,7 @@ export class SQLiteStorage implements CrawlStorage {
       fallbackReason: (row.fallback_reason as string | null) ?? undefined,
       sourceHash: (row.source_hash as string | null) ?? null,
       htmlHash: (row.html_hash as string | null) ?? null,
+      browserEvents: this.readBrowserEventsColumn(row.browser_events),
     };
   }
 

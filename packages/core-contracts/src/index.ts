@@ -18,6 +18,7 @@ export * from "./schedule";
 export * from "./limits";
 export * from "./clamp";
 export * from "./control-chars";
+export * from "./browser-events";
 export * from "./untrusted-keys";
 
 // Org-scoped API keys — token format, env→prefix map, scopes (shared by
