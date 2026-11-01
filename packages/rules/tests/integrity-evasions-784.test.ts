@@ -316,13 +316,13 @@ test("every viewport unit that is the whole viewport makes a fixed frame a cover
 });
 
 test("a fixed frame that is not the whole viewport is not a cover", () => {
-  for (const [width, height] of [["50dvw", "100dvh"], ["100dvw", "50dvh"], ["100px", "100px"], ["1100%", "100%"], ["300px", "100dvh"], ["100dvh", "100dvw"]]) {
+  for (const [width, height] of [["50dvw", "100dvh"], ["100dvw", "50dvh"], ["100px", "100px"], ["300px", "100dvh"], ["100dvh", "100dvw"]]) {
     expect(detectFakeAuthOverlay(context(cover(width!, height!))), `${width} x ${height}`).toBeNull();
   }
 });
 
 test("other spellings of the whole viewport are covers too", () => {
-  const same = ["100.0%", "100.00vw", "+100vw", "1e2vw", "1E2%", "100.000dvw", "calc(100vw)", "calc(50vw + 50vw)", "calc(100% - 0px)", "max(100vw, 0px)", "min(100vw, 200vw)", "clamp(0px, 100vw, 200vw)", "101vw", "150%", "100vi", "100svi", "100cqw", "100cqi", "-webkit-fill-available", "stretch", "-moz-available"];
+  const same = ["100.0%", "100.00vw", "+100vw", "1e2vw", "1E2%", "100.000dvw", "calc(100vw)", "calc(50vw + 50vw)", "calc(100% - 0px)", "max(100vw, 0px)", "min(100vw, 200vw)", "clamp(0px, 100vw, 200vw)", "101vw", "150%", "1100vw", "10000vw", "1e5vw", "1e400vw", "calc(2000vw - 1900vw)", "calc(100vw * 20)", "calc(100vw / 1)", "calc(1vw * 100)", "max(-5vw, 100vw)", "100vi", "100svi", "100cqw", "100cqi", "-webkit-fill-available", "stretch", "-moz-available"];
   for (const width of same) {
     expect(detectFakeAuthOverlay(context(cover(width, "100vh"))), `${width} wide`).not.toBeNull();
   }
@@ -333,10 +333,38 @@ test("other spellings of the whole viewport are covers too", () => {
 });
 
 test("lengths that only look like the whole viewport are not covers", () => {
-  const not = ["10vw", "100px", "1100vw", "0.100vw", "50%", "-100vw", "5e1vw", "100vh", "var(--w)", "calc(100px + 50vw)", "10100%"];
+  const not = ["10vw", "100px", "0.100vw", "50%", "-100vw", "5e1vw", "100vh", "var(--w)", "calc(100px + 50vw)"];
   for (const width of not) {
     expect(detectFakeAuthOverlay(context(cover(width, "100vh"))), `${width} wide`).toBeNull();
   }
+});
+
+test("padding, comments and escapes do not hide a cover (#1496)", () => {
+  const widths = [
+    `${" ".repeat(600)}100vw`,
+    `${"/**/".repeat(200)}100vw`,
+    `/*${"x".repeat(700)}*/100vw`,
+    `calc(${"0px + ".repeat(200)}100vw)`,
+    `${"1px ".repeat(1_000)}`,
+    "1\\30 0vw",
+    "10\\30 vw",
+    "100v\\w",
+    "100\\76 w",
+    "\\31 00vw",
+    "100\\56 W",
+    "100\\000076 w",
+  ];
+  for (const width of widths) {
+    expect(detectFakeAuthOverlay(context(cover(width, "100vh"))), width.slice(0, 40)).not.toBeNull();
+  }
+  // an escaped property name and a comment that hides the semicolon
+  const named = '<iframe id="google-auth" srcdoc="" style="position:fixed;top:0;left:0;wid\\74 h:100vw;height:100vh;z-index:99999"></iframe>';
+  expect(detectFakeAuthOverlay(context(named))).not.toBeNull();
+  const commented = '<iframe id="google-auth" srcdoc="" style="position:fixed;top:0;left:0;width:/*;*/100vw;height:100vh;z-index:99999"></iframe>';
+  expect(detectFakeAuthOverlay(context(commented))).not.toBeNull();
+  // escapes that spell something else stay what they spell
+  expect(detectFakeAuthOverlay(context(cover("10\\30 px", "100vh")))).toBeNull();
+  expect(detectFakeAuthOverlay(context(cover("1\\30 vw", "100vh")))).toBeNull();
 });
 
 test("inset spelled with logical sides is the same as top/left/bottom/right", () => {
