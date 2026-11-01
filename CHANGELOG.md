@@ -19,6 +19,8 @@ How it works:
 
 ### Fixed
 
+- **A Stripe publishable key is no longer mistaken for Clerk.** A `pk_live_` or `pk_test_` value written next to `publishableKey` now counts as Clerk only when its body decodes to a Clerk frontend host ending in `$`; opaque Stripe keys no longer trigger the Clerk signature. (#1478)
+
 - **`--max-duration`'s parse cap judges the decoded page, not the compressed one.** The cap (5 MiB, because a parse cannot be interrupted) compared the recorded size, which is the Content-Length header, so a gzip response of a few KB that inflates to megabytes was parsed in full, in the crawl, the audit pass and the streaming pass that counts the pages left out. All three now compare the larger of the recorded size and the decoded body's bytes, so such a page is stored, counted in `pagesTooLarge` and listed like any other too-large page. A run without `--max-duration` is unchanged. (#1497)
 
 - **A Next.js loader written as a bare script child is read when its component is `next/script` elsewhere on the page.** A page uses one component reference for every use, and a real layout passes a Clarity loader as `{ type: "text/javascript", children: "..." }` with no `id` and no `strategy` beside two uses of the same reference that carry them. Once any use of a reference has one of `next/script`'s four strategies, every use of it is read as a script; a reference never seen with a strategy is not, so a component that merely displays a code sample is still dropped. (#1487)
