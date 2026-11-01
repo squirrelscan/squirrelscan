@@ -121,6 +121,8 @@ export const ANALYTICS_FINGERPRINTS: TechFingerprint[] = [
       inBundleString(
         String.raw`\.src\s*=\s*\\?["'\x60](?:https?:)?\\?\/\\?\/(?:www\.)?clarity\.ms\\?\/tag\\?\/`,
         "clarity.ms",
+        // The standard snippet's own signature, or a script element created and given the loader in the same string.
+        /function\s*\(\s*c\s*,\s*l\s*,\s*a\s*,\s*r\s*,\s*i\s*,\s*t\s*,\s*y\s*\)|createElement\s*\(\s*\\?["'\x60]script\\?["'\x60]\s*\)/,
       ),
     ],
   },

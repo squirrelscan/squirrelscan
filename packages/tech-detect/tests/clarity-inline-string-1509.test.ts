@@ -27,12 +27,50 @@ describe("the snippet as the text of a script element", () => {
   });
   test("children first with the strategy after it, and a JSON-style string with escaped quotes and slashes", () => {
     expect(ids(`h(Script,{children:'${BODY}',strategy:"lazyOnload"});`)).toContain("clarity");
-    expect(ids(`h(Script,{id:"c",children:"${ESCAPED}"});`)).toContain("clarity");
+    expect(ids(`h(Script,{id:"c",strategy:"afterInteractive",children:"${ESCAPED}"});`)).toContain("clarity");
     expect(ids(`h("script",{"dangerouslySetInnerHTML":{"__html":"${ESCAPED}"}});`)).toContain("clarity");
   });
 });
 
+describe("other script-shaped carriers", () => {
+  test("a \"script\" element tag, with or without a strategy; a script type; the loader pair instead of the signature", () => {
+    expect(ids(`h("script",{children:'${BODY}'});`)).toContain("clarity");
+    expect(ids(`(0,a.jsx)("script",{id:"x",children:\`${BODY}\`});`)).toContain("clarity");
+    expect(ids(`h("script",{dangerouslySetInnerHTML:{__html:\`${BODY}\`}});`)).toContain("clarity");
+    expect(ids(`h(Tag,{type:"text/javascript",children:'${BODY}'});`)).toContain("clarity");
+    expect(ids(`React.createElement("script",null);h(Script,{strategy:"lazyOnload",children:'var s=document.createElement("script");s.src="https://www.clarity.ms/tag/abc";'});`)).toContain("clarity");
+  });
+});
+
 describe("any other string is still not the loader", () => {
+  test("markup, quotes of the loader, and elements that are not scripts (the reviewed false-positive matrix)", () => {
+    const loader = 't.src="https://www.clarity.ms/tag/"+i';
+    for (const code of [
+      `h("div",{dangerouslySetInnerHTML:{__html:'<pre><code>${loader}</code></pre>'}});`, // docs as markup on a div
+      `h("div",{dangerouslySetInnerHTML:{__html:'${BODY}'}});`, // the real snippet on a div
+      `h(Markdown,{dangerouslySetInnerHTML:{__html:'${BODY}'}});`,
+      `h("pre",{dangerouslySetInnerHTML:{__html:'${loader}'}});`,
+      `var ld={dangerouslySetInnerHTML:{__html:'{"@type":"HowTo","text":"${loader.replaceAll('"', '\\"')}"}'}};`, // JSON-LD embedding it
+      `var fixture={__html:'${loader}'};`, // a test fixture
+      `h("div",{id:"docs",children:'${loader}'});`,
+      `h("pre",{id:"x",children:'${loader}'});`,
+      `h(CodeBlock,{id:"x",children:'${BODY}'});`,
+      `h(Markdown,{id:"x",children:'${BODY}'});`,
+      `h(Script,{title:"Tracking id: abc",children:'${BODY}'});`, // prose in the window
+      `h(Script,{title:"{strategy:",children:'${BODY}'});`,
+      `h(Script,{title:"{id:",children:'${BODY}'});`,
+      `h("div",{note:"\"script\",{",children:'${BODY}'});`, // a string that looks like the tag
+      `h(Code,{id:"x",children:'<script>${loader}</script>'});`, // markup in the string
+      `h(Script,{strategy:"afterInteractive",children:'<div>${BODY}</div>'});`,
+      `h(Script,{strategy:"afterInteractive",children:'${loader}'});`, // a bare quote of the loader line, no signature
+    ]) {
+      expect(ids(`${filler(3)}${code}${filler(3)}`), code).not.toContain("clarity");
+    }
+  });
+  test("a bare __html or children on a props object with only an id is not enough", () => {
+    expect(ids(`h(Script,{id:"clarity",children:'${BODY}'});`)).not.toContain("clarity");
+    expect(ids(`h(Script,{id:"clarity",dangerouslySetInnerHTML:{__html:'${BODY}'}});`)).not.toContain("clarity");
+  });
   test("docs strings, code samples, other keys, children without a script-shaped object", () => {
     for (const code of [
       `var docs='${BODY}';`,
@@ -43,6 +81,8 @@ describe("any other string is still not the loader", () => {
       `h(Code,{lang:"js",children:'${BODY}'});`,
       `h(Script,{strategy:"afterInteractive"});h(Code,{children:'${BODY}'});`, // the sibling belongs to another object
       `h(Code,{children:'${BODY}'});h(Script,{strategy:"afterInteractive"});`,
+      `h(Code,{wrap:{strategy:"afterInteractive"},children:'${BODY}'});`, // a nested key is not the object's own
+      `h(Code,{wrap:[{strategy:"afterInteractive"}],children:'${BODY}'});`,
       `/* h(Script,{id:"c",children:'${BODY}'}) */`,
       `var s="__html:";var d='${BODY}';`, // the key is text, not the key of this string
       `h(Script,{id:"c",children:["see ",'${BODY}']});`, // an array item is not the value
@@ -55,6 +95,30 @@ describe("any other string is still not the loader", () => {
       const text = BODY.replace("https://www.clarity.ms/tag/", loader);
       expect(ids(`h("script",{dangerouslySetInnerHTML:{__html:\`${text}\`}});`), loader).not.toContain("clarity");
     }
+  });
+});
+
+describe("distances read around a string (pinned)", () => {
+  test("the key must sit right before the string: more than 48 characters of space is not a key", () => {
+    expect(ids(`h("script",{children:${" ".repeat(10)}'${BODY}'});`)).toContain("clarity");
+    expect(ids(`h("script",{children:${" ".repeat(60)}'${BODY}'});`)).not.toContain("clarity");
+  });
+  test("the object's own keys are found up to 2,000 characters away, not further", () => {
+    const pad = (n: number) => `pad:"${"x".repeat(n)}",`;
+    expect(ids(`h(Script,{${pad(1_200)}children:'${BODY}'${","}strategy:"lazyOnload"});`)).toContain("clarity");
+    expect(ids(`h(Script,{${pad(2_500)}children:'${BODY}',strategy:"lazyOnload"});`)).not.toContain("clarity");
+    expect(ids(`h(Script,{children:'${BODY}',${pad(2_500)}strategy:"lazyOnload"});`)).not.toContain("clarity");
+  });
+  test("a key right at the object's start or end is its own key; `restrategy:` is not `strategy:`", () => {
+    expect(ids(`h(Script,{strategy:"lazyOnload",children:'${BODY}'});`)).toContain("clarity");
+    expect(ids(`h(Script,{children:'${BODY}',strategy:"lazyOnload"});`)).toContain("clarity");
+    expect(ids(`h(Script,{restrategy:"lazyOnload",children:'${BODY}'});`)).not.toContain("clarity");
+    // a quoted key is a string, and a string supplies no keys: only an unquoted `strategy` counts
+    expect(ids(`h(Script,{"strategy":"lazyOnload",children:'${BODY}'});`)).not.toContain("clarity");
+  });
+  test("a string longer than 4,096 characters is never a carrier", () => {
+    const long = `${BODY}${"/* pad */ ".repeat(500)}`;
+    expect(ids(`h("script",{children:'${long}'});`)).not.toContain("clarity");
   });
 });
 
@@ -96,6 +160,17 @@ describe("in a bundle too big to send whole (the sampler)", () => {
     expect(extras).toContain('strategy:"afterInteractive"');
     expect(ids(`${head}${SEGMENT_SEPARATOR}${extras}`, { maxScriptChars: 256 * 1024 })).toContain("clarity");
     expect(ids(head, { maxScriptChars: 256 * 1024 })).not.toContain("clarity");
+  });
+  test("a sibling after the string is kept in the window (the suffix), and a string past the carry is read whole only in a whole scan", () => {
+    const after = `h(Script,{children:'${BODY}',strategy:"afterInteractive"});`;
+    const body = `${filler(8_000)}\n${after}\n${filler(8_000)}`;
+    const head = body.slice(0, 16 * 1024);
+    const extras = sampleBundleExtras(body, head.length, 24 * 1024);
+    expect(extras).toContain('strategy:"afterInteractive"');
+    expect(ids(`${head}${SEGMENT_SEPARATOR}${extras}`, { maxScriptChars: 256 * 1024 })).toContain("clarity");
+    // 700 characters of text in the string: past the carry, so a window cannot keep the key; a whole scan still can
+    const longString = `h(Script,{strategy:"afterInteractive",children:'${BODY}${" ".repeat(600)}'});`;
+    expect(ids(`${filler(10)}${longString}${filler(10)}`)).toContain("clarity");
   });
   test("the __html form and a children key that comes last in its object", () => {
     for (const code of [

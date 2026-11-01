@@ -9,6 +9,7 @@ import { ALL_FINGERPRINTS } from "./fingerprints";
 import { flightLoaderText, hasFlightChunk } from "./flight";
 import { COLLECTED_TAGS } from "./collected-tags";
 import { inString, scanJs, skipStart, stringEnd, type ScannedJs } from "./js-scan";
+import { isScriptTextString } from "./script-text";
 
 /**
  * Default wall-clock budget for one detectTechnologies call (one page). A caller
@@ -57,35 +58,11 @@ function scriptView(views: Map<string, ScriptView>, content: string, maxChars: n
   return view;
 }
 
-/** Chars read before a string for the key it is the value of, and each side of it for the object's other keys. */
-const STRING_KEY_CHARS = 48;
-const STRING_SIBLING_CHARS = 400;
-const SCRIPT_HTML_KEY = /__html["']?\s*:\s*$/;
-const SCRIPT_CHILDREN_KEY = /children["']?\s*:\s*$/;
-const SCRIPT_SIBLING = /(?:^|[{,\s"'])(?:strategy|id)["']?\s*:/;
-
-/**
- * Whether the string literal opening at `open` and closing at `close` is the text of an inline script a framework
- * renders: the value of `__html`, or of `children` on an object that also has a `strategy` or `id` key (a
- * `next/script` props object). Reads a bounded amount of code on each side of the string, never the string itself.
- */
-function isScriptTextString(code: string, open: number, close: number): boolean {
-  const key = code.slice(Math.max(0, open - STRING_KEY_CHARS), open);
-  if (SCRIPT_HTML_KEY.test(key)) return true;
-  if (!SCRIPT_CHILDREN_KEY.test(key)) return false;
-  let before = code.slice(Math.max(0, open - STRING_SIBLING_CHARS), open);
-  before = before.slice(before.lastIndexOf("{") + 1);
-  let after = code.slice(close + 1, close + 1 + STRING_SIBLING_CHARS);
-  const end = after.indexOf("}");
-  if (end !== -1) after = after.slice(0, end);
-  return SCRIPT_SIBLING.test(before) || SCRIPT_SIBLING.test(after);
-}
-
 function matchesInCode(
   pattern: RegExp,
   view: ScriptView,
   validate?: ScriptMatchValidator,
-  stringValue = false,
+  stringValue?: RegExp,
 ): boolean {
   view.scanned ??= scanJs(view.head);
   const { code, strings, skips } = view.scanned;
@@ -101,7 +78,7 @@ function matchesInCode(
     }
     // Nothing that starts inside this string can be code: continue after it.
     const end = stringEnd(strings, m.index);
-    if (stringValue && end !== -1 && (!validate || validate(m)) && isScriptTextString(code, skipStart(skips, m.index), end)) return true;
+    if (stringValue && end !== -1 && (!validate || validate(m)) && isScriptTextString(code, strings, skipStart(skips, m.index), end, stringValue)) return true;
     if (end >= re.lastIndex) re.lastIndex = end + 1;
     else if (m[0].length === 0) re.lastIndex++;
   }
@@ -412,7 +389,7 @@ function matchDetector(
                 detector.pattern,
                 scriptView(views, s.content, maxChars),
                 detector.validate,
-                detector.stringValue === true,
+                detector.stringValue,
               ) &&
               (!detector.also || detector.also.pattern.test(scriptView(views, s.content, maxChars).head)),
           ) ?? false
