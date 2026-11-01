@@ -192,13 +192,41 @@ describe("search keys keep reporting, with the name as a hint (#1229)", () => {
     }
   });
 
-  test("an admin key under a search-looking name reports like any other, as do other names", () => {
-    for (const name of ["searchOwnerKey", "search_sudo_api_key", "searchIndexingApiKey", "azure_search_api_key", "search_admin_api_key", "apiKey"]) {
+  test("an admin-named provider key reports at high; other privileged and ordinary names stay medium", () => {
+    for (const name of ["searchOwnerKey", "search_sudo_api_key", "searchIndexingApiKey", "azure_search_api_key", "apiKey"]) {
       const reported = found(`{"${name}":"${key}"}`);
       expect([name, reported.every((f) => f[1] === "medium" && f[2] === false)]).toEqual([name, true]);
     }
-    // No hint when the name carries a privileged word.
-    expect(one(`{"search_admin_api_key":"${key}"}`)[0]?.extra?.hint).toBeUndefined();
+    for (const name of ["search_admin_api_key", "adminApiKey", "admin_api_key"]) {
+      const [finding] = one(`{"${name}":"${key}"}`);
+      expect([name, finding?.confidence, finding?.extra?.keyKind, finding?.extra?.hint]).toEqual([
+        name,
+        "high",
+        "admin-named",
+        undefined,
+      ]);
+    }
+  });
+
+  test("Algolia and Typesense shapes change tier only when the variable names admin scope", () => {
+    const algolia = runOf(seededRng(61), HEX, 32);
+    const typesense = mixedRun(seededRng(62), 32);
+    for (const [provider, providerKey] of [["algolia", algolia], ["typesense", typesense]] as const) {
+      expect([provider, one(`{"adminApiKey":"${providerKey}"}`)[0]?.confidence]).toEqual([provider, "high"]);
+      const search = one(`{"searchApiKey":"${providerKey}"}`)[0];
+      expect([provider, search?.confidence, typeof search?.extra?.hint]).toEqual([provider, "medium", "string"]);
+    }
+    const short = mixedRun(seededRng(63), 24);
+    expect(one(`{"adminApiKey":"${short}"}`)[0]?.confidence).toBe("medium");
+  });
+
+  test("Meilisearch masterKey and searchKey assignments are detected at their scope tiers", () => {
+    const master = mixedRun(seededRng(64), 24);
+    const search = mixedRun(seededRng(65), 32);
+    const masterFinding = one(`MeiliSearch({masterKey:"${master}"})`)[0];
+    const searchFinding = one(`MeiliSearch({searchKey:"${search}"})`)[0];
+    expect([masterFinding?.confidence, masterFinding?.extra?.keyKind]).toEqual(["high", "admin-named"]);
+    expect([searchFinding?.confidence, typeof searchFinding?.extra?.hint]).toEqual(["medium", "string"]);
   });
 
   test("the same value under a search name and an admin name is reported as a leak, never as public", () => {

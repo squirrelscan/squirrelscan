@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **`security/leaked-secrets` distinguishes admin-named hosted-search keys from search-only keys.** A 32-character Algolia or Typesense-shaped value under `search_admin_api_key`, `adminApiKey` or `admin_api_key` reports at high; `search_api_key` stays medium with the search-only hint. Meilisearch `masterKey` reports at high and `searchKey` at medium with the hint. See [leaked-secrets](https://docs.squirrelscan.com/rules/security/leaked-secrets#public-by-design-platform-tokens-and-beacons). (#1515)
+
 ## v0.0.158 (2026-11-01)
 
 `security/leaked-secrets` is sharper in both directions: it stops reporting documentation samples, placeholders, catalogue values and sample data tables as credentials, names more providers (Cerebras, OpenRouter, NVIDIA, Fireworks, Shopify Admin, Stripe restricted keys, Google OAuth client secrets), and classifies Shopify, Netlify and signed-URL tokens and browser SDK keys instead of calling them generic leaks. A percent-encoded Twitter bearer token is found again, and the crawler throttle spacing test no longer fails under load. Thanks to William for the throttle test fix (#1516, #1519).
