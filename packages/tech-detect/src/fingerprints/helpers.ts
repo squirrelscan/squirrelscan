@@ -44,10 +44,10 @@ export function inBundle(
 
 /**
  * `source` in a fetched first-party bundle as code, or inside the string that is the inline script of a script
- * element a framework renders (`__html:` or a script `children:` value, see `stringValue` in the detector type).
+ * element a framework renders (see `stringValue` in the detector type); `evidence` must match that string.
  */
-export function inBundleString(source: string, hint: string): Detector {
-  return { type: "script-content", pattern: new RegExp(source), inCode: true, stringValue: true, hint };
+export function inBundleString(source: string, hint: string, evidence: RegExp): Detector {
+  return { type: "script-content", pattern: new RegExp(source), inCode: true, stringValue: evidence, hint };
 }
 
 /**
