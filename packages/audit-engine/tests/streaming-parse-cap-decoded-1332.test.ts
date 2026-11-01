@@ -80,7 +80,7 @@ async function tooLarge(inject: { sizeBytes: number; html: string } | null): Pro
   await run(storage.upsertPage(crawlId, injectedPage({ url: INJECTED, status: 200, contentType: "text/html", html: inject.html, sizeBytes: inject.sizeBytes })));
   const result = await run(runStreamingRules(storage, crawlId, CONFIG, ASSETS, undefined, { batchSize: 8, maxPageBytes: CAP }));
   await run(storage.close());
-  return { added: result.pagesTooLarge - baseline.pagesTooLarge, listed: result.tooLargePages.includes(INJECTED) };
+  return { added: result.pagesTooLarge - baseline.pagesTooLarge, listed: new Set(result.tooLargePages).has(INJECTED) };
 }
 
 describe("the streaming parse cap judges the decoded page (#1332)", () => {
