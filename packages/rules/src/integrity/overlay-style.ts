@@ -25,8 +25,13 @@ const CLASS_CHARS_PER_VISIT = 16;
 const GEOMETRY = /^(?:position|inset(?:-[a-z]+)*|top|right|bottom|left|width|height|z-index)$/;
 /** Rule visits over ALL frames of a page: past it a frame is judged by its inline style alone and the CSS is reported truncated. */
 const SHEET_WORK_BUDGET = 1_000_000;
-const MAX_SELECTOR_CHARS = 300;
-const MAX_BODY_CHARS = 4_000;
+/**
+ * A rule is read up to these sizes: a selector of 2,048 characters and a body of 256 KB, which no real overlay rule comes near and
+ * padding cannot cheaply pass. A rule past them whose selector could match an iframe on the page is not read, and the CSS is
+ * reported truncated (`cssTruncated`) instead of the rule being skipped in silence (#1423).
+ */
+const MAX_SELECTOR_CHARS = 2_048;
+const MAX_BODY_CHARS = 262_144;
 
 interface Declaration {
   property: string;
@@ -284,8 +289,13 @@ function findRuleEnd(css: string, open: number): number {
  * the cursor and the cursor then moves past what it found, so the scan is linear however the text is
  * built (unterminated comments, runs of openers, no braces at all).
  */
-export function scanCss(css: string, onRule: (selector: string, body: string) => void, reading: Reading = "tokens"): void {
-  if (reading === "tokens") return scanCssTokens(css, onRule);
+export function scanCss(
+  css: string,
+  onRule: (selector: string, body: string) => void,
+  reading: Reading = "tokens",
+  onOversized?: (selector: string) => void,
+): void {
+  if (reading === "tokens") return scanCssTokens(css, onRule, onOversized);
   let i = 0;
   const n = css.length;
   while (i < n) {
@@ -326,10 +336,11 @@ export function scanCss(css: string, onRule: (selector: string, body: string) =>
     // The `plain` and `naive` readings cut at the first `}` (the `tokens` reading has its own scan, see `scanCssTokens`).
     const close = css.indexOf("}", open + 1);
     if (close === -1) return;
-    // A rule whose selector or body is absurdly long is not one a page needs; it is skipped, not the rest.
+    // A rule whose selector or body is past the bounds is not read, and the caller is told which selector, so a rule that could
+    // be an overlay's is reported rather than skipped in silence; the rest of the sheet is still read.
     if (open - i <= MAX_SELECTOR_CHARS && close - open - 1 <= MAX_BODY_CHARS) {
       onRule(css.slice(i, open).trim().toLowerCase(), css.slice(open + 1, close));
-    }
+    } else onOversized?.(css.slice(i, Math.min(open, i + MAX_SELECTOR_CHARS)).trim().toLowerCase());
     i = close + 1;
   }
 }
@@ -340,7 +351,7 @@ export function scanCss(css: string, onRule: (selector: string, body: string) =>
  * `@media print{.x{content:"{"}}`, `[a="{"]`); a block ends at its own `}`. At-rules and anything but a plain selector are
  * skipped whole, so only a rule's own body is handed on. See {@link walk}.
  */
-function scanCssTokens(source: string, onRule: (selector: string, body: string) => void): void {
+function scanCssTokens(source: string, onRule: (selector: string, body: string) => void, onOversized?: (selector: string) => void): void {
   const css = preprocess(source);
   const n = css.length;
   let i = 0;
@@ -388,9 +399,10 @@ function scanCssTokens(source: string, onRule: (selector: string, body: string) 
     selector += css.slice(from, open);
     const close = findRuleEnd(css, open);
     if (close === -1) return;
-    // A rule whose selector or body is absurdly long is not one a page needs; it is skipped, not the rest.
-    if (ch !== "@" && open - i <= MAX_SELECTOR_CHARS && close - open - 1 <= MAX_BODY_CHARS) {
-      onRule(selector.trim().toLowerCase(), css.slice(open + 1, close));
+    // A rule whose selector or body is past the bounds is not read, and the caller is told which selector (see the plain scan).
+    if (ch !== "@") {
+      if (open - i <= MAX_SELECTOR_CHARS && close - open - 1 <= MAX_BODY_CHARS) onRule(selector.trim().toLowerCase(), css.slice(open + 1, close));
+      else onOversized?.(selector.slice(0, MAX_SELECTOR_CHARS).trim().toLowerCase());
     }
     i = close + 1;
   }
@@ -450,7 +462,11 @@ function sheetFor(doc: Document, wanted: Wanted, reading: Reading): Sheet {
         }
         byKey.set(key, list);
       }
-    }, reading);
+    }, reading, (selector) => {
+      // A rule past the bounds is not read: say so when its selector could match an iframe on the page.
+      // (the prefix is cut at a token boundary: a half-read class name would never match the page)
+      for (const parsed of parseSelectors(selector.length >= MAX_SELECTOR_CHARS ? selector.replace(/[.#][\w-]*$/, "") : selector)) if (ruleKey(parsed, wanted)) cut.dropped = true;
+    });
   }
   const sheet: Sheet = { byKey, memo: new Map(), truncated: truncated || cut.dropped, work: SHEET_WORK_BUDGET };
   byReading[reading] = sheet;

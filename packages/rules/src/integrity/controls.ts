@@ -180,8 +180,20 @@ const MAX_LABELLEDBY = 4;
 const MAX_TEMPLATES = 5_000;
 /** Controls given a full prepare (attributes, rank): the most relevant by what a destination alone shows, the rest counted unread. */
 const MAX_PREPARED = 60_000;
-/** A style attribute is read up to this many characters: hiding is a union of readings, so more is never needed. */
-const STYLE_ATTR_CHARS = 8_192;
+/**
+ * A style attribute is read up to this many characters, once per element (the answer is cached, so a control nested around a big
+ * one does not re-read it). Past it the read of the control is reported as cut, not silently taken as visible (#1423).
+ */
+const STYLE_ATTR_CHARS = 1_048_576;
+const styleHiddenCache = new WeakMap<Element, boolean>();
+
+function styleHides(el: Element, style: string): boolean {
+  const cached = styleHiddenCache.get(el);
+  if (cached !== undefined) return cached;
+  const hides = HIDDEN_STYLE.test(style.length > STYLE_ATTR_CHARS ? style.slice(0, STYLE_ATTR_CHARS) : style);
+  styleHiddenCache.set(el, hides);
+  return hides;
+}
 const SCAN_SELECTOR = "a[href], button, input, [role='button'], form[id], img[alt], template";
 /** Destination paths a sign-in control points at; a control to one of these is read before an ordinary link. */
 const AUTH_PATH = /(sign-?in|log-?in|oauth|auth|sso|account)/i;
@@ -211,6 +223,7 @@ function readChunks(
   let chars = 0;
   let visits = 0;
   // Iterative walk, hidden-ness inherited: a stack of [node, hidden].
+  let styleCut = false;
   const stack: Array<[Node, boolean]> = [];
   const push = (parent: Node, hidden: boolean): void => {
     const kids = parent.childNodes;
@@ -232,20 +245,21 @@ function readChunks(
       if (UNRENDERED.has(child.tagName.toLowerCase())) continue;
       let nowHidden = hidden;
       if (!hidden && child.attributes.length > 0) {
-        const style = getAttrCI(child, "style")?.slice(0, STYLE_ATTR_CHARS) ?? null;
+        const style = getAttrCI(child, "style");
+        if (style !== null && style.length > STYLE_ATTR_CHARS) styleCut = true;
         const cls = getAttrCI(child, "class");
         const id = getAttrCI(child, "id");
         nowHidden =
           getAttrCI(child, "hidden") !== null ||
           getAttrCI(child, "aria-hidden")?.toLowerCase() === "true" ||
-          (style !== null && HIDDEN_STYLE.test(style)) ||
+          (style !== null && styleHides(child, style)) ||
           (cls !== null && cls.toLowerCase().split(/\s+/).some((c) => hiddenBy.classes.has(c))) ||
           (id !== null && hiddenBy.ids.has(id.toLowerCase()));
       }
       push(child, nowHidden);
     }
   }
-  return { chunks, visits, cut: false };
+  return { chunks, visits, cut: styleCut };
 }
 
 function formsOf(label: Chunk[]): string[] {
@@ -323,6 +337,7 @@ export function shortlist(
   found: Element[],
   destinationOf: (el: Element) => string | null,
   hasLogo: (el: Element) => boolean,
+  localIsOwn = true,
 ): { chosen: Array<{ element: Element; href: string; target: string; order: number }>; cut: number } {
   const first: Array<{ element: Element; href: string; target: string; order: number }> = [];
   const second: Array<{ element: Element; href: string; target: string; order: number }> = [];
@@ -340,7 +355,8 @@ export function shortlist(
     // No destination (a script-driven button with no form): nothing to judge, nothing to read.
     if (href === null) continue;
     const normalised = urlText(href);
-    if (normalised === "" || PLAIN_LOCAL_HREF.test(normalised)) {
+    // A plainly local destination is the page's own site only while no `<base href>` moves where relative URLs resolve.
+    if (localIsOwn && (normalised === "" || PLAIN_LOCAL_HREF.test(normalised))) {
       if (cue || hasLogo(el)) first.push({ element: el, href, target: normalised, order });
       continue;
     }
@@ -365,6 +381,18 @@ const scanCache = new WeakMap<object, ControlScan>();
  * sign-in path) also get a long read while a page-wide budget lasts; `unread` counts relevant controls whose
  * read was cut by the bounds, so a caller can say so.
  */
+/**
+ * Whether a `<base href>` moves where relative URLs resolve: the first one with an `href` (what a browser uses) that is not itself a
+ * plainly local path. Then `/signin` is not the page's own site, and a link or form to it is read like any other destination (#1423).
+ */
+export function baseMovesRelativeUrls(doc: Document): boolean {
+  const base = doc.querySelector("base[href]");
+  const href = base === null ? null : getAttrCI(base, "href");
+  if (href === null) return false;
+  const text = urlText(href);
+  return !(text === "" || PLAIN_LOCAL_HREF.test(text));
+}
+
 export function scanControls(doc: Document): ControlScan {
   const cached = scanCache.get(doc);
   if (cached) return cached;
@@ -494,7 +522,7 @@ export function scanControls(doc: Document): ControlScan {
     const form = enclosingForm(el);
     return form ? (getAttrCI(form, "action") ?? "") : null;
   };
-  const { chosen, cut: notPrepared } = shortlist(found, destinationOf, (el) => imageAlts.has(el));
+  const { chosen, cut: notPrepared } = shortlist(found, destinationOf, (el) => imageAlts.has(el), !baseMovesRelativeUrls(doc));
   // Controls whose attribute text or `aria-labelledby` list was longer than what is read, or that a window cap cut: counted, not hidden.
   let paddedAttributes = 0;
   // Phase 1: each control's attribute windows, and whether an attribute holds a sign-in or brand word as written (a

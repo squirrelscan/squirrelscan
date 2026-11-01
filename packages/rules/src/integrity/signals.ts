@@ -339,9 +339,26 @@ function hasPhrase(label: string, phrase: string): boolean {
  * from a control whose label actually names the brand. A broker host counts as
  * the brand's own (see {@link IDENTITY_BROKER_ENDPOINTS}).
  */
+/**
+ * The URL relative links resolve against: the page's own, unless the document has a `<base href>` (the first one, as a browser reads
+ * it) that resolves to an http(s) URL. A link `/signin` under `<base href="https://evil.example/">` leaves the site (#1423).
+ */
+export function documentBase(doc: NonNullable<RuleContext["parsed"]["document"]>, pageUrl: string): string {
+  const baseElement = doc.querySelector("base[href]");
+  const href = baseElement === null ? null : getAttrCI(baseElement, "href");
+  if (!href) return pageUrl;
+  try {
+    const resolved = new URL(href.trim(), pageUrl);
+    return resolved.protocol === "http:" || resolved.protocol === "https:" ? resolved.href : pageUrl;
+  } catch {
+    return pageUrl;
+  }
+}
+
 function credentialDestinations(
   doc: NonNullable<RuleContext["parsed"]["document"]>,
-  base: string
+  base: string,
+  pageUrl: string = base,
 ): CredentialDestination[] {
   const out: CredentialDestination[] = [];
 
@@ -349,7 +366,8 @@ function credentialDestinations(
   for (const form of doc.querySelectorAll("form")) {
     if (!form.querySelector('input[type="password"]')) continue;
     const action = getAttrCI(form, "action");
-    const host = hrefHost(action, base) ?? hrefHost(base, base);
+    // An empty form action submits to the page's own URL, not to the `<base>`.
+    const host = hrefHost(action, base) ?? hrefHost(pageUrl, pageUrl);
     if (host) {
       const path = hrefPath(action, base);
       out.push({ host, path, query: brokerShaped(host, path) ? hrefQuery(action, base) : "", brandLabeled: "", signIn: false });
@@ -365,7 +383,7 @@ function credentialDestinations(
     // A link's destination is its href; a button's is its formaction or its form's action. A control with
     // neither (a script-driven button) has no destination to judge.
     const host =
-      control.href === null ? null : (hrefHost(control.href, base) ?? hrefHost(base, base));
+      control.href === null ? null : (hrefHost(control.href, base) ?? hrefHost(pageUrl, pageUrl));
     if (!host) continue;
     const brandSpec = BRAND_SPECS.find((s) =>
       s.lexicon.some(
@@ -401,7 +419,7 @@ export function detectBrandImpersonation(
   const haystack = authHaystack(ctx);
 
   const self = selfHosts(ctx);
-  const credDests = credentialDestinations(doc, ctx.page.url);
+  const credDests = credentialDestinations(doc, documentBase(doc, ctx.page.url), ctx.page.url);
 
   // A credential affordance must exist at all: a password field, auth copy, or
   // a control whose own label says sign in or log in, so a missing page-wide
@@ -594,7 +612,8 @@ export function detectFakeAuthOverlay(
     const id = (getAttrCI(frame, "id") ?? "").toLowerCase();
     const cls = (getAttrCI(frame, "class") ?? "").toLowerCase();
     const src = getAttrCI(frame, "src") ?? "";
-    const srcHost = hrefHost(src, ctx.page.url);
+    // A relative `src` resolves against the `<base href>`; an empty one is the page itself.
+    const srcHost = src === "" ? null : hrefHost(src, documentBase(doc, ctx.page.url));
     const srcIsSelf = srcHost ? self.has(srcHost) : true; // no/empty src → self
 
     // Auth-suggestive identifier (the injected `#google-auth` pattern).
