@@ -19,7 +19,7 @@ How it works:
 
 ### Fixed
 
-- **`security/leaked-secrets` stops reporting strings that only look like a JWT.** A `JSON Web Token` match that does not decode (a header or payload that is not a JSON object, or a header with no string `alg`) was kept as a generic JWT-shaped string at medium; it is now dropped. Real JWTs with an `alg` and a JSON payload, `alg: none` and expired tokens still report. (#1283)
+- **`security/leaked-secrets` stops reporting strings that only look like a JWT.** A `JSON Web Token` match was kept as a generic JWT-shaped string at medium when it did not decode. It is now dropped only on proof: a header read in full that is not a JSON object with a string `alg`, or a payload read in full that is JSON but not an object. A part past 8,192 characters, an empty or non-JSON payload under a good header, and any real JWT (`alg: none` and expired tokens included) still report. (#1283)
 
 - **`security/leaked-secrets` no longer reports a header-only JWT after `Bearer`.** `Bearer eyJhbGciOiJIUzI1NiIs`, the header segment of a JWT with no dot, payload or signature, was reported as a medium bearer token. It is dropped only when the whole value decodes to a complete JOSE header (a JSON object with an `alg` and only JOSE header keys), or is a short truncated one (64 characters or fewer, cut mid-JSON, opening with `alg`, `typ`, `kid` or `cty`), and the text after it does not continue a token. An opaque JSON bearer value that merely opens with one of those keys, a JWT written with a `%2E`, space, comma or escaped separator, and a full `Bearer <JWT>` still report. (#1227)
 
