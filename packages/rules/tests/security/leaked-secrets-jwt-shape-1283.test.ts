@@ -1,5 +1,5 @@
 // security/leaked-secrets: a `JSON Web Token` match is reported only when it decodes to a JWT (#1283): a header that is a JSON object with a
-// string `alg` and a payload that is a JSON object. Everything else with the `eyJ` shape and two dots is dropped. Synthetic values.
+// string `alg` and a payload that is a JSON object. A header read in full that is not one, or a payload read in full that is JSON but not an object, is dropped; a part too long to read, or a good header over a payload that is not JSON, is reported. Synthetic values.
 
 import { describe, expect, test } from "bun:test";
 
@@ -46,6 +46,27 @@ describe("eyJ-shaped runs that are not JWTs are dropped", () => {
     const value = `eyJ${runOf(r, URLSAFE, 36)}.eyJ${runOf(r, URLSAFE, 60)}.${sig()}`;
     expect(types(`<div data-token="${value}"></div>`, "html")).toEqual([]);
     expect(types(`<script>window.__S={"session":"${value}"}</script>`, "html")).toEqual([]);
+  });
+});
+
+describe("a token that cannot be read in full is reported, never dropped (fail closed)", () => {
+  const header = b64u({ alg: "HS256", typ: "JWT" });
+
+  test("a real token with a payload or header past what is decoded (8,192 characters per part)", () => {
+    const wide = b64u({ sub: "u1", pad: "p".repeat(7_000) });
+    const huge = b64u({ sub: "u1", pad: "p".repeat(20_000) });
+    const longHeader = b64u({ alg: "HS256", kid: "k".repeat(9_000) });
+    for (const [name, value] of Object.entries({
+      wide: `${header}.${wide}.${sig()}`,
+      huge: `${header}.${huge}.${sig()}`,
+      longHeader: `${longHeader}.${b64u({ sub: "u1" })}.${sig()}`,
+    })) {
+      expect([name, types(`var t="${value}";`)]).toEqual([name, ["JSON Web Token"]]);
+    }
+  });
+
+  test("a header that proves a JWS (string alg) over a payload that is not JSON is undecided, so it reports", () => {
+    expect(types(`var t="${header}.eyJ${runOf(r, URLSAFE, 60)}.${sig()}";`)).toEqual(["JSON Web Token"]);
   });
 });
 

@@ -332,11 +332,21 @@ describe("JWT claims", () => {
     expect(refineFinding("JSON Web Token", token({ iss: "acme-shop.myshopify.com", exp: nowSec - 3600 }), NOW)?.confidence).toBe("info");
   });
 
+  test("undecided matches are reported, not dropped: a good header over a payload that is not JSON, empty, or too long to read (#1283)", () => {
+    for (const [label, value] of [
+      ["payload is not JSON", `${header}.${"x".repeat(120)}`],
+      ["payload is not JSON, with a signature", `${header}.${"x".repeat(120)}.c2ln`],
+      ["payload is empty", `${header}..c2ln`],
+      ["payload past 8,192 characters", `${header}.${b64u({ pad: "p".repeat(20_000) })}.c2ln`],
+      ["header past 8,192 characters", `${b64u({ alg: "HS256", kid: "k".repeat(9_000) })}.${b64u({ sub: "u" })}.c2ln`],
+    ] as Array<[string, string]>) {
+      expect([label, refineFinding("JSON Web Token", value, NOW)]).toEqual([label, { type: "JSON Web Token", confidence: "medium", publicByDesign: false }]);
+    }
+  });
+
   test("a match that does not decode to a JWT is dropped: header or payload not a JSON object, or a header with no string alg (#1283)", () => {
     const payload = b64u({ iat: 1700000000, pad: "p".repeat(80) });
     const shapes: Array<[string, string]> = [
-      ["payload is not JSON", `${header}.${"x".repeat(120)}`],
-      ["payload is not JSON, with a signature", `${header}.${"x".repeat(120)}.c2ln`],
       ["header is not JSON", `${"x".repeat(40)}.${payload}.c2ln`],
       ["header is a JSON array", `${b64u(["alg", "HS256"])}.${payload}.c2ln`],
       ["header is a JSON string", `${b64u("alg")}.${payload}.c2ln`],
@@ -344,12 +354,13 @@ describe("JWT claims", () => {
       ["header has no alg", `${b64u({ typ: "JWT" })}.${payload}.c2ln`],
       ["header alg is a number", `${b64u({ alg: 256, typ: "JWT" })}.${payload}.c2ln`],
       ["header alg is null", `${b64u({ alg: null, typ: "JWT" })}.${payload}.c2ln`],
+      ["header has no alg, payload not JSON", `${b64u({ typ: "JWT" })}.${"x".repeat(120)}.c2ln`],
+      ["header alg is a number, payload not JSON", `${b64u({ alg: 256 })}.${"x".repeat(120)}.c2ln`],
       ["header alg is an object", `${b64u({ alg: { a: 1 } })}.${payload}.c2ln`],
       ["payload is a JSON array", `${header}.${b64u([1, 2, 3])}.c2ln`],
       ["payload is a JSON string", `${header}.${b64u("text")}.c2ln`],
       ["payload is a number", `${header}.${b64u(42)}.c2ln`],
       ["payload is null", `${header}.${b64u(null)}.c2ln`],
-      ["payload is empty", `${header}..c2ln`],
     ];
     for (const [label, value] of shapes) {
       for (const type of ["JSON Web Token", "Supabase Anon Key"]) {
@@ -392,8 +403,8 @@ describe("JWT claims", () => {
       expect(() => refineFinding("Supabase Anon Key", token(claims), NOW)).not.toThrow();
     }
     const giant = `${header}.${"A".repeat(20000)}`;
-    // a giant part that is not JSON is dropped like any other (#1283)
-    expect(refineFinding("Supabase Anon Key", giant, NOW)).toEqual({ drop: true });
+    // a giant part is undecided, so it is reported (#1283)
+    expect(refineFinding("Supabase Anon Key", giant, NOW)).toEqual({ type: "JSON Web Token", confidence: "medium", publicByDesign: false });
   });
 });
 
