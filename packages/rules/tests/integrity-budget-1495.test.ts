@@ -20,6 +20,8 @@ test("the shortlist puts sign-in paths ahead of other off-site links, judged on 
   const decoy = "https://p.invalid/x";
   // a sign-in path split by a tab (the parser removes it), one far past 300 characters, one at the edge of the read
   expect(order([decoy, "https://p.invalid/sign\tin"])[0]).toBe("https://p.invalid/sign\tin");
+  // a sign-in path with leading spaces in the href
+  expect(order([decoy, "  https://p.invalid/signin"])[0]).toBe("  https://p.invalid/signin");
   expect(order([decoy, `https://p.invalid/${"a".repeat(1_000)}/signin`])[0]).toContain("signin");
   expect(order([decoy, `https://p.invalid/${"a".repeat(8_000)}/signin`])[0]).toContain("signin");
   // past the 8,192 characters read, a path is not promoted: that is the bound
@@ -48,6 +50,11 @@ test("rank: off-site and sign-in destinations read first, on the normalised text
   expect(r("/\t/host/x")).toBe(2);
   expect(r("\\\\host/x")).toBe(2);
   expect(r("http:host")).toBe(2);
+  // leading spaces and controls are removed by the URL parser: the form still ranks as what it reads as
+  expect(r("  /sign-in")).toBe(2);
+  expect(r(" \u0001/sign-in")).toBe(2);
+  expect(r("  //host/x")).toBe(2);
+  expect(r("  /plain")).toBe(1);
   expect(r("/plain", "button")).toBe(2);
   expect(rank("a", null, [])).toBe(0);
 });

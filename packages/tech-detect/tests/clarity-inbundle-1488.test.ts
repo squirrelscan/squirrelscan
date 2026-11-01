@@ -49,6 +49,9 @@ describe("prose, comments and look-alikes are not the loader", () => {
       'x.src="https://example.com/tag/"+i;',
       'x.src="https://clarity.ms.evil.invalid/tag/"+i;',
       'var u="https://www.clarity.ms/s/0.7/clarity.js";',
+      'x.src="www.clarity.ms/tag/"+i;', // scheme-less: neither a scheme nor `//`, a relative path
+      'x.src="https://clarityXms/tag/"+i;', // the dot of `clarity.ms` is a dot
+      'x.src="https://www.clarity-ms/tag/"+i;',
       // the whole loader assignment inside a string literal: its `.src =` is text, not code
       'var d=\'t.src="https://www.clarity.ms/tag/"+i\';',
       "var d2=\"t.src='https://www.clarity.ms/tag/'+i\";",
