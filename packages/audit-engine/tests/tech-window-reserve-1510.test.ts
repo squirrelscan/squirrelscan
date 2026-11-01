@@ -99,6 +99,25 @@ describe("the reserve is held only when the floors would not fit (#1510)", () =>
     expect(headed(SHAPE)).toBe(28);
   });
 
+  test("many small scripts: a script's floor is its own size, so the demand is the real one and the reserve is not held", () => {
+    // 40 x 11.5 KB and one big script last: the real floors total 476 KB and fit 512 KB; counting 16 KB for each small
+    // script would read 656 KB and hold the reserve, which would starve the last ones.
+    const small = Array.from({ length: 40 }, (_, i) => ({ url: `https://example.com/m${i}.js`, content: filler(11_500, i + 1), sourcePages: [HOME] }));
+    const big = { url: "https://example.com/big.js", content: filler(200_000, 77), sourcePages: [HOME] };
+    const scripts = [...small, big];
+    const html = `<!doctype html>${scripts.map((x) => `<script src="${x.url}"></script>`).join("")}`;
+    const [home] = buildTechInputs([{ url: HOME, headers: {}, html }], scripts);
+    const bodies = new Map((home!.scripts ?? []).map((x) => [x.url, x.content ?? ""]));
+    for (const x of small) expect(bodies.get(x.url), x.url).toBe(x.content);
+    expect(bodies.get(big.url)!.startsWith(big.content.slice(0, 16 * 1024))).toBe(true);
+  });
+
+  test("demand exactly equal to the room does not hold the reserve; one script more does", () => {
+    const at = { ...DEFAULT_TECH_BUNDLE_LIMITS, pageBytes: 256 * 1024 };
+    expect(headed({ count: 16, size: 75_000, target: 3 }, at)).toBe(16); // 16 x 16 KB = 256 KB: fits
+    expect(headed({ count: 17, size: 75_000, target: 3 }, at)).toBe(12);
+  });
+
   test("at exactly four times the reserve the reserve applies; below it the budget is shared as before", () => {
     const at = { ...DEFAULT_TECH_BUNDLE_LIMITS, pageBytes: 256 * 1024 };
     const below = { ...DEFAULT_TECH_BUNDLE_LIMITS, pageBytes: 256 * 1024 - 1 };
