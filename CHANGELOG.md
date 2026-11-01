@@ -19,7 +19,7 @@ How it works:
 
 ### Fixed
 
-- **Technology detection reads a long `next/script` snippet in a Next.js flight payload again.** The flight read added in v0.0.151 looked only at an element's own strings, but React writes a string of 1 KB or more as a separate text row that the element points at (`"children":"$7"`), so a Microsoft Clarity loader inside a larger inline snippet was missed (about 46 of 33,000 corpus sites). The text rows are read where a script element or a `next/script` component points at them; prose, links, JSON-LD and other elements' text rows are still not read. (#1477)
+- **Technology detection reads a long `next/script` snippet in a Next.js flight payload again.** The flight read added in v0.0.151 looked only at an element's own strings, but React writes a string of 1 KB or more as a separate text row that the element points at (`"children":"$7"`), so a Microsoft Clarity loader inside a long inline snippet was missed. The text rows are read where a script element or a `next/script` component points at them; prose, links, JSON-LD and other elements' text rows are still not read. (#1477)
 
 ## v0.0.153 (2026-11-01)
 
