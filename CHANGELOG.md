@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **`railway-app` is detected from `server: railway-edge` too.** The `Server` signature matched only `railway` and `railway-hikari`; Railway's v3 edge proxy sends `railway-edge` (per its changelog), so a custom-domain site served by it went undetected. (#1504)
+
 ## v0.0.155 (2026-11-01)
 
 Technology detection recognises fewer look-alikes and more real loaders: a Clerk key must decode to a Clerk host (a Stripe publishable key is no longer Clerk), a Next.js script component's bare loader is read, a config past many look-alike strings in a bundle is found, and surge, railway, amplify and ActiveCampaign Pages hosting is read from the page's own host. `[[ignore]]` entries take element `selectors`, and `--max-duration` judges a gzip page by its decoded size, so a small compressed page can no longer force a long parse. Thanks to William for the Clerk key validation (#1481, #1482).
