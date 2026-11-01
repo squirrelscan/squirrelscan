@@ -15,15 +15,24 @@
 // output (JSON escapes any unpaired surrogate to an ASCII `\uXXXX` sequence) —
 // so it exactly matches the bytes `fetch` puts on the wire for a serialized
 // request body, the case the publish size gates measure. The sole divergence is
-// a raw string carrying a LONE/unpaired surrogate: Bun's `Buffer.byteLength`
-// counts it as 2 bytes where `TextEncoder`/`fetch` emit the 3-byte U+FFFD
-// replacement. That can't reach a JSON body gate; pass JSON (or well-formed
-// text) for wire-exact counts.
+// a raw string carrying a LONE/unpaired surrogate, which older Bun versions
+// counted as 2 bytes where `TextEncoder`/`fetch` emit the 3-byte U+FFFD
+// replacement (current Bun counts 3). That can't reach a JSON body gate; pass
+// JSON (or well-formed text) for wire-exact counts.
 
 /** UTF-8 byte size of `str` (no allocation). Wire-exact for well-formed strings
  * — including all `JSON.stringify` output. See the module note on lone surrogates. */
 export function byteLength(str: string): number {
   return Buffer.byteLength(str, "utf8");
+}
+
+/**
+ * The size of a fetched page as the parser would see it (#1332): the larger of the recorded `sizeBytes` (the
+ * Content-Length header, the ENCODED size; a response with none is sized from its body) and the decoded body's UTF-8
+ * bytes. A small gzip body can inflate past a parse cap, so the encoded size alone is not a safe bound.
+ */
+export function decodedPageBytes(sizeBytes: number | null | undefined, body: string): number {
+  return Math.max(sizeBytes ?? 0, byteLength(body));
 }
 
 // Module-level singletons — encode/decode are stateless (no `{stream:true}`), so
