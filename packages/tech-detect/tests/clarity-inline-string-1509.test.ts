@@ -215,3 +215,43 @@ describe("in a bundle too big to send whole (the sampler)", () => {
     }
   });
 });
+
+describe("string lengths, `type` values and the brace walk (pinned)", () => {
+  const carrier = (len: number): string => BODY + " ".repeat(Math.max(0, len - BODY.length));
+
+  test("a carrier string of 1,000 to 4,096 characters is read in a whole scan; 4,097 is not", () => {
+    for (const len of [1_000, 3_500, 4_090]) {
+      expect(ids(`h("script",{children:'${carrier(len)}'});`), `${len}`).toContain("clarity");
+    }
+    expect(ids(`h("script",{children:'${carrier(4_200)}'});`)).not.toContain("clarity");
+  });
+
+  test("through the sampler, a string up to 1,536 characters keeps its key and tag; one past that does not", () => {
+    const sampled = (len: number): string[] => {
+      const body = `${filler(8_000)}\n[h("script",{children:'${carrier(len)}'})]\n${filler(8_000)}`;
+      const head = body.slice(0, 16 * 1024);
+      const extras = sampleBundleExtras(body, head.length, 24 * 1024);
+      return ids(`${head}${SEGMENT_SEPARATOR}${extras}`, { maxScriptChars: 256 * 1024 });
+    };
+    expect(sampled(1_100)).toContain("clarity");
+    expect(sampled(1_500)).toContain("clarity");
+    expect(sampled(1_700)).not.toContain("clarity"); // a known limit: past the carry the window cannot hold the key
+  });
+
+  test("a script `type` of text/javascript, application/javascript or module counts; another type does not", () => {
+    for (const type of ["text/javascript", "application/javascript", "module"]) {
+      expect(ids(`h(Tag,{type:"${type}",children:'${BODY}'});`), type).toContain("clarity");
+    }
+    for (const type of ["text/plain", "application/json", "text/x-docs", "moduleX"]) {
+      expect(ids(`h(Tag,{type:"${type}",children:'${BODY}'});`), type).not.toContain("clarity");
+    }
+    expect(ids(`h(Tag,{children:'${BODY}',type:"module"});`)).toContain("clarity"); // the type may follow the string
+  });
+
+  test("the walk back from a string stops at a `(` or `[` that is not closed: the string is then not a direct prop", () => {
+    expect(ids(`h(Wrap,{strategy:"lazyOnload",kids:g(children:'${BODY}')});`)).not.toContain("clarity");
+    expect(ids(`h(Wrap,{strategy:"lazyOnload",kids:[children:'${BODY}']});`)).not.toContain("clarity");
+    // a closed call or array before the key is skipped over
+    expect(ids(`h(Script,{kids:g(1),list:[1,2],strategy:"lazyOnload",children:'${BODY}'});`)).toContain("clarity");
+  });
+});
