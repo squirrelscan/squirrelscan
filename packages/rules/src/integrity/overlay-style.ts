@@ -48,19 +48,58 @@ interface Rule {
   order: number;
 }
 
-/** CSS comments removed in one forward pass (an unterminated one runs to the end, as in a browser). */
-function stripComments(text: string): string {
-  if (!text.includes("/*")) return text;
-  let out = "";
-  let at = 0;
-  for (;;) {
-    const open = text.indexOf("/*", at);
-    if (open === -1) return out + text.slice(at);
-    out += text.slice(at, open) + " ";
-    const close = text.indexOf("*/", open + 2);
-    if (close === -1) return out;
-    at = close + 2;
+/**
+ * The declarations of a style block, split the way a browser tokenises them, in one forward pass: comments are
+ * dropped (an unterminated one runs to the end), `;` separates only outside strings, brackets and parentheses
+ * (so `url(data:image/png;base64,AAA)` and `"a;b"` stay whole), `/*` opens a comment only outside a string, a
+ * backslash escapes the next character, and a string ends at its quote or an unescaped newline.
+ */
+function splitDeclarations(text: string): string[] {
+  const out: string[] = [];
+  let start = 0;
+  let quote = "";
+  let depth = 0;
+  let current = "";
+  const n = text.length;
+  for (let i = 0; i < n; i++) {
+    const c = text[i]!;
+    if (c === "\\") {
+      i++;
+      continue;
+    }
+    if (quote) {
+      if (c === quote || c === "\n") quote = "";
+      continue;
+    }
+    if (c === '"' || c === "'") quote = c;
+    else if (c === "(" && text.slice(Math.max(0, i - 3), i).toLowerCase() === "url") {
+      // An unquoted `url(...)` is one token to its `)`: no comment or string starts inside it.
+      let j = i + 1;
+      while (j < n && /\s/.test(text[j]!)) j++;
+      if (text[j] === '"' || text[j] === "'") depth++;
+      else {
+        for (; j < n && text[j] !== ")"; j++) if (text[j] === "\\") j++;
+        i = j;
+      }
+    } else if (c === "(" || c === "[" || c === "{") depth++;
+    else if (c === ")" || c === "]" || c === "}") depth = Math.max(0, depth - 1);
+    else if (c === ";" && depth === 0) {
+      out.push(current + text.slice(start, i));
+      current = "";
+      start = i + 1;
+    } else if (c === "/" && text[i + 1] === "*") {
+      current += text.slice(start, i) + " ";
+      const close = text.indexOf("*/", i + 2);
+      if (close === -1) {
+        start = n;
+        break;
+      }
+      start = close + 2;
+      i = close + 1;
+    }
   }
+  out.push(current + text.slice(start));
+  return out;
 }
 
 /** CSS escapes undone: `\30 0` is `00`, `\76` is `v`, `\w` is `w`. Linear, one regex pass. */
@@ -75,7 +114,7 @@ function unescapeCss(text: string): string {
 
 function parseDeclarations(text: string): Declaration[] {
   const out: Declaration[] = [];
-  for (const raw of stripComments(text).split(";")) {
+  for (const raw of splitDeclarations(text)) {
     const idx = raw.indexOf(":");
     if (idx === -1) continue;
     const property = unescapeCss(raw.slice(0, idx)).trim().toLowerCase();
@@ -377,7 +416,8 @@ function fillsAxis(raw: string, axis: "width" | "height"): boolean {
   if (raw === "") return false;
   // The cap bounds the work, never the verdict: a value padded past it is treated as filling (fail toward detection).
   if (raw.length > MAX_RAW_LENGTH) return true;
-  const value = stripComments(unescapeCss(raw)).replace(/\s+/g, " ").trim();
+  // parseDeclarations has already dropped comments and undone escapes.
+  const value = raw.replace(/\s+/g, " ").trim();
   if (value === "") return false;
   if (value.length > MAX_LENGTH_SCAN) return true;
   if (FILL_KEYWORD.test(value)) return true;

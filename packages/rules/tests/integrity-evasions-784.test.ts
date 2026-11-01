@@ -367,6 +367,64 @@ test("padding, comments and escapes do not hide a cover (#1496)", () => {
   expect(detectFakeAuthOverlay(context(cover("1\\30 vw", "100vh")))).toBeNull();
 });
 
+test("declarations are split the way a browser tokenises them (#1496)", () => {
+  const frame = (style: string) => `<iframe id="google-auth" srcdoc="" style="${style.replaceAll('"', "&quot;")}"></iframe>`;
+  const base = "position:fixed;top:0;left:0;z-index:99999";
+  const hiding = [
+    `content:"/*"; ${base}; width:100vw; height:100vh`,
+    `content:'/*'; ${base}; width:100vw; height:100vh`,
+    `background:url(data:image/png;base64,AAA); ${base}; width:100vw; height:100vh`,
+    `font-family:"a;b"; ${base}; width:100vw; height:100vh`,
+    `--x:{;}; ${base}; width:100vw; height:100vh`,
+    `--x:[;]; ${base}; width:100vw; height:100vh`,
+    `content:"\\""; ${base}; width:100vw; height:100vh`,
+    `content:"\\"/*"; ${base}; width:100vw; height:100vh`,
+    `${base}; width:/*;*/100vw; height:100vh`,
+    `${base}; width:100vw/**/; height:100vh`,
+    `a\\/*b:c; ${base}; width:100vw; height:100vh`,
+  ];
+  for (const style of hiding) expect(detectFakeAuthOverlay(context(frame(style))), style.slice(0, 50)).not.toBeNull();
+  // an unterminated comment runs to the end, as in a browser: nothing after it is read
+  expect(detectFakeAuthOverlay(context(frame(`${base}; width:100vw; /* height:100vh`)))).toBeNull();
+  // a semicolon inside a string or url() is not a separator: width stays inside the content value
+  expect(detectFakeAuthOverlay(context(frame(`${base}; height:100vh; content:"x; width:100vw"`)))).toBeNull();
+  expect(detectFakeAuthOverlay(context(frame(`${base}; height:100vh; background:url(a;width:100vw)`)))).toBeNull();
+});
+
+test("the declaration tokenizer agrees with a reference parse on random mixes and stays linear", () => {
+  let seed = 1234567;
+  const next = (): number => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+  // structured generator with a known answer: well-formed junk (strings, url(), brackets, comments, with `/*`, `;` and
+  // `:` inside) in front of a top-level width/height, which must always be read
+  const junkText = (): string => {
+    const alphabet = ["/*", "*/", ";", ":", "a", " ", "width:100vw", "x"];
+    let out = "";
+    for (let j = 0; j < 1 + Math.floor(next() * 6); j++) out += alphabet[Math.floor(next() * alphabet.length)];
+    return out.replaceAll("*/", "* /");
+  };
+  const junk: Array<() => string> = [
+    () => `content:"${junkText()}"`,
+    () => `content:'${junkText()}'`,
+    () => `background:url(${junkText().replaceAll(")", "")})`,
+    () => `--v:{${junkText().replaceAll("/*", "/ *").replaceAll("}", "")}}`,
+    () => `--v:[${junkText().replaceAll("/*", "/ *").replaceAll("]", "")}]`,
+    () => `/*${junkText()}*/`,
+    () => `content:"\\"${junkText()}"`,
+  ];
+  for (let i = 0; i < 2_000; i++) {
+    const parts: string[] = [];
+    for (let j = 0; j < 1 + Math.floor(next() * 4); j++) parts.push(junk[Math.floor(next() * junk.length)]!());
+    const html = `<iframe id="google-auth" srcdoc="" style="${`${parts.join(";")};position:fixed;top:0;left:0;z-index:99999;width:100vw;height:100vh`.replaceAll('"', "&quot;")}"></iframe>`;
+    expect(detectFakeAuthOverlay(context(html)), html).not.toBeNull();
+  }
+  for (const hostile of ['"'.repeat(1_000_000), "/*".repeat(500_000), "(;".repeat(500_000), '"\\'.repeat(500_000), "a;".repeat(500_000)]) {
+    const html = `<iframe id="google-auth" srcdoc="" style="position:fixed;top:0;left:0;z-index:99999;width:100vw;height:100vh;${hostile.replaceAll('"', "&quot;")}"></iframe>`;
+    const t = performance.now();
+    detectFakeAuthOverlay(context(html));
+    expect(performance.now() - t, hostile.slice(0, 6)).toBeLessThan(2_000);
+  }
+});
+
 test("inset spelled with logical sides is the same as top/left/bottom/right", () => {
   const frame = (style: string) => `<iframe id="google-auth" srcdoc="" style="position:fixed;${style};z-index:99999"></iframe>`;
   for (const style of ["inset:0", "inset-block:0;inset-inline:0", "inset-block-start:0;inset-block-end:0;inset-inline-start:0;inset-inline-end:0", "top:0;right:0;bottom:0;left:0"]) {

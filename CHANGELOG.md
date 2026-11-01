@@ -19,7 +19,7 @@ How it works:
 
 ### Fixed
 
-- **`integrity/fake-auth-overlay` reads the modern viewport units.** A fixed full-screen frame sized with `dvh`, `svh`, `lvh`, `dvw`, `svw`, `lvw`, `vmax` or `vmin` (alone or inside `calc()`) was not seen as covering the viewport, while `100vh` was. They now count, and a length is read as its own number (`1100%` is a real, over-full width, not a `100%` lookalike). Other spellings fill too (`100.0%`, `+100vw`, `1e2vw`, over-full `150%`, `calc(50vw + 50vw)`, `100vi`/`100vb`, `100cqw`, `stretch`, `-webkit-fill-available`), as do the logical inset properties; CSS escapes (`1\30 0vw`) and comments in a style are undone before the length is read, and padding a value past the scan cap counts as filling, never as hiding it; a length in a custom property (`var(--w)`) is not resolved. (#1496)
+- **`integrity/fake-auth-overlay` reads the modern viewport units.** A fixed full-screen frame sized with `dvh`, `svh`, `lvh`, `dvw`, `svw`, `lvw`, `vmax` or `vmin` (alone or inside `calc()`) was not seen as covering the viewport, while `100vh` was. They now count, and a length is read as its own number (`1100%` is a real, over-full width, not a `100%` lookalike). Other spellings fill too (`100.0%`, `+100vw`, `1e2vw`, over-full `150%`, `calc(50vw + 50vw)`, `100vi`/`100vb`, `100cqw`, `stretch`, `-webkit-fill-available`), as do the logical inset properties; CSS escapes (`1\30 0vw`) and comments in a style are undone before the length is read, padding a value past the scan cap counts as filling, never as hiding it, and a `;` or `/*` inside a string, `url()` or brackets no longer splits or hides a declaration; a length in a custom property (`var(--w)`) is not resolved. (#1496)
 
 ## v0.0.154 (2026-11-01)
 
