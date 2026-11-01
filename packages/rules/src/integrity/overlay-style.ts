@@ -49,16 +49,22 @@ interface Rule {
 }
 
 /**
- * The declarations of a style block, split the way a browser tokenises them, in one forward pass: comments are
- * dropped (an unterminated one runs to the end), `;` separates only outside strings, brackets and parentheses
- * (so `url(data:image/png;base64,AAA)` and `"a;b"` stay whole), `/*` opens a comment only outside a string, a
- * backslash escapes the next character, and a string ends at its quote or an unescaped newline.
+ * The declarations of a style declaration list (a `style` attribute, or a rule body already cut out of its braces),
+ * split the way CSS Syntax Level 3 consumes them, in one forward pass. A declaration runs to the next `;` that is
+ * outside every block and string; `(`, `[` and `{` open a block that only its own closer ends (`(` waits for `)`:
+ * a mismatched closer inside it is an ordinary token, so `a:(]; width:100vw` is one declaration, as in a browser); a
+ * closer with nothing open is an ordinary token too; blocks left open at the end end quietly at EOF. Comments are
+ * dropped (`/*` opens one only outside a string and an unquoted `url(...)`; an unterminated one runs to the end), a
+ * backslash escapes the next character, a string ends at its quote or an unescaped newline, and an unquoted
+ * `url(...)` is one token to its `)`. Where a browser would swallow the rest of the list we do the same, and so read
+ * nothing after it: the shapes that need it (an unclosed block in the middle of a declaration list) are not
+ * something real styles contain, so matching the browser keeps false positives low.
  */
-function splitDeclarations(text: string): string[] {
+export function splitDeclarations(text: string): string[] {
   const out: string[] = [];
   let start = 0;
   let quote = "";
-  let depth = 0;
+  const closers: string[] = [];
   let current = "";
   const n = text.length;
   for (let i = 0; i < n; i++) {
@@ -72,18 +78,17 @@ function splitDeclarations(text: string): string[] {
       continue;
     }
     if (c === '"' || c === "'") quote = c;
-    else if (c === "(" && text.slice(Math.max(0, i - 3), i).toLowerCase() === "url") {
+    else if (c === "(" && isUrlFunction(text, i) && !opensQuoted(text, i + 1)) {
       // An unquoted `url(...)` is one token to its `)`: no comment or string starts inside it.
       let j = i + 1;
-      while (j < n && /\s/.test(text[j]!)) j++;
-      if (text[j] === '"' || text[j] === "'") depth++;
-      else {
-        for (; j < n && text[j] !== ")"; j++) if (text[j] === "\\") j++;
-        i = j;
-      }
-    } else if (c === "(" || c === "[" || c === "{") depth++;
-    else if (c === ")" || c === "]" || c === "}") depth = Math.max(0, depth - 1);
-    else if (c === ";" && depth === 0) {
+      for (; j < n && text[j] !== ")"; j++) if (text[j] === "\\") j++;
+      i = j;
+    } else if (c === "(") closers.push(")");
+    else if (c === "[") closers.push("]");
+    else if (c === "{") closers.push("}");
+    else if (c === ")" || c === "]" || c === "}") {
+      if (closers.at(-1) === c) closers.pop();
+    } else if (c === ";" && closers.length === 0) {
       out.push(current + text.slice(start, i));
       current = "";
       start = i + 1;
@@ -100,6 +105,19 @@ function splitDeclarations(text: string): string[] {
   }
   out.push(current + text.slice(start));
   return out;
+}
+
+/** `url` (not the tail of a longer identifier) right before the `(` at `at`. */
+function isUrlFunction(text: string, at: number): boolean {
+  if (at < 3 || text.slice(at - 3, at).toLowerCase() !== "url") return false;
+  return at === 3 || !/[\w\\-]/.test(text[at - 4]!);
+}
+
+/** Whether the first thing after `url(` (past whitespace) is a quote, which makes it an ordinary function. */
+function opensQuoted(text: string, from: number): boolean {
+  let j = from;
+  while (j < text.length && /\s/.test(text[j]!)) j++;
+  return text[j] === '"' || text[j] === "'";
 }
 
 /** CSS escapes undone: `\30 0` is `00`, `\76` is `v`, `\w` is `w`. Linear, one regex pass. */
