@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- **Microsoft Clarity is detected from its loader inside a first-party bundle.** The standard snippet's `t.src="https://www.clarity.ms/tag/"+i` (and its `setAttribute("src", ...)` and template-literal forms), bundled into a site's own script, now matches as code, with the window around it sent in a capped scan. A protocol-relative `//www.clarity.ms/tag/` and `setAttribute (` with a space match too. A bundle that only names the URL in prose, a docs string or a comment does not. Before v0.0.150 a few such installs were found by accident through a whole-text read of the page. (#1488)
+
 ## v0.0.155 (2026-11-01)
 
 Technology detection recognises fewer look-alikes and more real loaders: a Clerk key must decode to a Clerk host (a Stripe publishable key is no longer Clerk), a Next.js script component's bare loader is read, a config past many look-alike strings in a bundle is found, and surge, railway, amplify and ActiveCampaign Pages hosting is read from the page's own host. `[[ignore]]` entries take element `selectors`, and `--max-duration` judges a gzip page by its decoded size, so a small compressed page can no longer force a long parse. Thanks to William for the Clerk key validation (#1481, #1482).
