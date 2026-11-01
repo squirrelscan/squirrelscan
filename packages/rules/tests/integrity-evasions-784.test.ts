@@ -593,3 +593,20 @@ test("the query of a form action and a formaction is read for every tenant famil
     expect(brand(`<form action="${bare}" method="post"><input type="password"><button>Continue with Google</button></form>`), bare).toBe("Google");
   }
 });
+
+// ── ranking reads the destination as the parser does (#1495) ──────────────────────────────────────────────
+
+test("a backslash, tab-split or space-led protocol-relative destination gets the long read of its label like an https one", () => {
+  // The phrase sits past 256 nodes of empty children: only the long read (given to off-site and sign-in controls) reaches it.
+  const label = `${"<i></i>".repeat(400)}Sign in with Google`;
+  for (const href of ["https://other.example/x", "//other.example/x", "/\\other.example/x", "\\\\other.example/x", "/&#9;/other.example/x", "/&#10;/other.example/x", " //other.example/x", "&#9;//other.example/x"]) {
+    expect(brand(`<a href="${href}">${label}</a>`), href).toBe("Google");
+  }
+});
+
+test("a plain local destination is still not given the long read", () => {
+  const label = `${"<i></i>".repeat(400)}Sign in with Google`;
+  for (const href of ["/signin-not-auth-looking", "/x", "x/y", "#top"]) {
+    expect(brand(`<a href="${href}">${label}</a>`), href).toBeNull();
+  }
+});
