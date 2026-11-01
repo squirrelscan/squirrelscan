@@ -278,7 +278,10 @@ function rank(tag: string, href: string | null, extra: string[]): number {
   if (href === null) return 0;
   if (extra.some((text) => AUTH_LABEL.test(readable(text.slice(0, ATTR_CHARS))))) return 3;
   if (tag !== "a") return 2;
-  if (href && (/^(?:[a-z][a-z0-9+.-]*:)?\/\//i.test(href) || AUTH_PATH.test(href.slice(0, 300)))) return 2;
+  // The destination as the parser reads it (the same text `shortlist()` decides on): tabs and newlines gone, a
+  // backslash a slash, so `/\\other.example/x` and `/<TAB>/other.example/x` are the protocol-relative URLs they are.
+  const target = urlText(href);
+  if (target && (/^(?:[a-z][a-z0-9+.-]*:)?[\\/]{2}/i.test(target) || AUTH_PATH.test(target.slice(0, 300)))) return 2;
   return 1;
 }
 
