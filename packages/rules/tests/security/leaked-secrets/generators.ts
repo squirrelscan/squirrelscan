@@ -446,6 +446,17 @@ export const GENERATORS: Generator[] = [
     make: (r) => value(P.shpat + runOf(r, HEX, 32)),
   },
   {
+    pattern: "RevenueCat Public SDK Key",
+    tier: "prefixed",
+    check: "public",
+    // The pattern needs the SDK's own name beside the value (`purchases` or `revenuecat`): the key name carries it.
+    keyName: "revenueCatKey",
+    // Contexts that spell their own key names (`window.__ENV`, a meta tag, JSON-LD, a data attribute, an env dump) never carry that word.
+    notIn: ["window-env", "meta-content", "data-attribute", "json-ld", "pre-env-dump"],
+    // A digit is guaranteed: the pattern needs one in the tail.
+    make: (r) => value(["app", "l_"].join("") + "7" + runOf(r, ALNUM, 31)),
+  },
+  {
     pattern: "Square Access Token",
     tier: "prefixed",
     make: (r) => value(P.sq0atp + runOf(r, B64URL, 22)),
@@ -462,6 +473,8 @@ export const GENERATORS: Generator[] = [
   {
     pattern: "AWS Access Key ID",
     tier: "prefixed",
+    // Alone, the id is the public half of the pair (#1294): medium, with a hint.
+    check: "medium",
     make: (r) => value(P.akia + awsKeySuffix(r)),
   },
   {

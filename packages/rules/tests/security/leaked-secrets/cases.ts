@@ -92,6 +92,8 @@ const PATTERN_GAPS: Record<string, { expectPattern: string | null; gap: string }
  */
 function draw(g: Generator, id: string): Generated {
   for (let attempt = 0; ; attempt++) {
+    // A generator that can never produce a firing value would loop here for ever: fail the suite instead.
+    if (attempt > 500) throw new Error(`no value drawn for ${g.pattern} fires bare in 500 attempts`);
     const value = g.make(seededRng(seedOf(attempt === 0 ? id : `${id}#${attempt}`)));
     if (tripsFalsePositiveFilter(value.text)) continue;
     // A positive has to fire when scanned bare: a random draw can land under
@@ -298,12 +300,18 @@ const PROBES: Case[] = [
   // ── Token structure (#361) ────────────────────────────────────────────
   probe("aws-key-id-outside-base32-is-medium", (r) => ({
     // `0`, `1`, `8`, `9` are not base32: no account id decodes, so not high.
-    html: inline(`window.__S3__={accessKeyId:"${["AK", "IA"].join("")}${runOf(r, "0189", 4)}${awsKeySuffix(r).slice(4)}"};`),
-    expect: [{ pattern: "AWS Access Key ID", check: "medium", location: "inline-script" }],
+    html: inline(`window.__S3__={accessKeyId:"${["AK", "IA"].join("")}${runOf(r, "0189", 4)}${awsKeySuffix(r).slice(4)}",aws_secret_access_key:"${mixedRun(r, 40)}"};`),
+    expect: [
+      { pattern: "AWS Access Key ID", check: "medium", location: "inline-script" },
+      { pattern: "AWS Secret Access Key", check: "critical", location: "inline-script" },
+    ],
   })),
   probe("aws-key-id-in-base32-is-high", (r) => ({
-    html: inline(`window.__S3__={accessKeyId:"${["AK", "IA"].join("")}${awsKeySuffix(r)}"};`),
-    expect: [{ pattern: "AWS Access Key ID", check: "high", location: "inline-script" }],
+    html: inline(`window.__S3__={accessKeyId:"${["AK", "IA"].join("")}${awsKeySuffix(r)}",aws_secret_access_key:"${mixedRun(r, 40)}"};`),
+    expect: [
+      { pattern: "AWS Access Key ID", check: "high", location: "inline-script" },
+      { pattern: "AWS Secret Access Key", check: "critical", location: "inline-script" },
+    ],
   })),
   probe("github-token-with-wrong-checksum-is-dropped", (r) => {
     const valid = githubToken(r, ["gh", "p_"].join(""));
