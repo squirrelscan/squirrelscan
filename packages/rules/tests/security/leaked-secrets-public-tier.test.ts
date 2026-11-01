@@ -199,13 +199,26 @@ describe("search keys keep reporting, with the name as a hint (#1229)", () => {
     }
     for (const name of ["search_admin_api_key", "adminApiKey", "admin_api_key"]) {
       const [finding] = one(`{"${name}":"${key}"}`);
-      expect([name, finding?.confidence, finding?.extra?.keyKind, finding?.extra?.hint]).toEqual([
-        name,
-        "high",
-        "admin-named",
-        undefined,
-      ]);
+      expect([name, finding?.confidence, finding?.extra?.keyKind]).toEqual([name, "high", "admin-named"]);
+      // The admin tier says what an admin key can do; it never carries the search-only wording.
+      expect([name, String(finding?.extra?.hint).includes("write and delete an index")]).toEqual([name, true]);
+      expect([name, String(finding?.extra?.hint).includes("search-only")]).toEqual([name, false]);
     }
+  });
+
+  test("whole-word admin: names that merely contain the letters stay medium, a separator in the 32 characters still ranks high", () => {
+    const hex32 = runOf(seededRng(66), HEX, 32);
+    for (const name of ["administratorApiKey", "sadminApiKey", "radmin_api_key", "adminsApiKey"]) {
+      expect([name, one(`{"${name}":"${hex32}"}`)[0]?.confidence]).toEqual([name, "medium"]);
+    }
+    // 31 and 33 characters are not the provider shape.
+    for (const length of [31, 33]) {
+      expect([length, one(`{"adminApiKey":"${runOf(seededRng(67), HEX, length)}"}`)[0]?.confidence]).toEqual([length, "medium"]);
+    }
+    // The 32 characters may include `_` and `-` (base64url-style keys): the shape is any 32 of [A-Za-z0-9_-].
+    const separated = `${hex32.slice(0, 10)}_${hex32.slice(10, 20)}-${hex32.slice(20, 30)}`;
+    expect(separated).toHaveLength(32);
+    expect(one(`{"adminApiKey":"${separated}"}`)[0]?.confidence).toBe("high");
   });
 
   test("Algolia and Typesense shapes change tier only when the variable names admin scope", () => {
@@ -257,7 +270,7 @@ describe("search and master key names: spellings, context and placeholders (#151
       expect([name, tier(`var c={${name}:"${key32}"};`)]).toEqual([name, [["medium", undefined, "string"]]]);
     }
     for (const name of ["master_apikey", "MASTER_APIKEY"]) {
-      expect([name, tier(`var c={${name}:"${key40}"};`)]).toEqual([name, [["high", "admin-named", "undefined"]]]);
+      expect([name, tier(`var c={${name}:"${key40}"};`)]).toEqual([name, [["high", "admin-named", "string"]]]);
     }
   });
 
@@ -269,7 +282,7 @@ describe("search and master key names: spellings, context and placeholders (#151
 
   test("inside a Meilisearch config the one-word spellings rank like the two-word ones", () => {
     for (const name of ["masterKey", "MASTERKEY", "masterkey"]) {
-      expect([name, tier(`new MeiliSearch({host:"x",${name}:"${key40}"});`)]).toEqual([name, [["high", "admin-named", "undefined"]]]);
+      expect([name, tier(`new MeiliSearch({host:"x",${name}:"${key40}"});`)]).toEqual([name, [["high", "admin-named", "string"]]]);
     }
     for (const name of ["searchKey", "searchkey", "SEARCHKEY"]) {
       expect([name, tier(`new MeiliSearch({host:"x",${name}:"${key32}"});`)]).toEqual([name, [["medium", undefined, "string"]]]);
@@ -471,8 +484,14 @@ describe("guards pinned after review (#1287, #1229)", () => {
     const key = mixedRun(seededRng(35), 32);
     const hint = (name: string) => scanContent(`{"${name}":"${key}"}`, "inline-script", PAGE)[0]?.extra?.hint;
     for (const word of ["admin", "secret", "private", "write", "master", "management", "manage", "backend", "server", "root"]) {
-      expect([word, hint(`search_${word}_api_key`)]).toEqual([word, undefined]);
-      expect([word, hint(`${word}SearchApiKey`)]).toEqual([word, undefined]);
+      // An admin or master word may carry the admin-tier hint, never the search-only one.
+      for (const name of [`search_${word}_api_key`, `${word}SearchApiKey`]) {
+        expect([name, String(hint(name)).includes("search-only")]).toEqual([name, false]);
+      }
+      if (word !== "admin" && word !== "master") {
+        expect([word, hint(`search_${word}_api_key`)]).toEqual([word, undefined]);
+        expect([word, hint(`${word}SearchApiKey`)]).toEqual([word, undefined]);
+      }
     }
     expect(typeof hint("searchApiKey")).toBe("string");
     expect(typeof hint("typesense_search_api_key")).toBe("string");

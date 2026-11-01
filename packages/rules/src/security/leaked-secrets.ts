@@ -3625,7 +3625,11 @@ export function scanContent(
         const completeKey = completeKeyOf(content, match.index, value);
         if (isAdminSearchProviderKey(completeKey, body)) {
           reportConfidence = "high";
-          known = { ...known, keyKind: "admin-named" };
+          known = {
+            ...known,
+            keyKind: "admin-named",
+            hint: "the key name says admin or master: an admin key can write and delete an index, so a copy in a script that ships to browsers lets anyone change it",
+          };
         } else if (isSearchKeyName(completeKey)) {
           known = {
             ...known,
