@@ -1,6 +1,19 @@
 import type { TechFingerprint } from "../types";
 import { inBundle, inBundleWith, inScript, inStyle, resourceAttr, scriptSrc } from "./helpers";
 
+function isClerkPublishableKey(match: RegExpExecArray): boolean {
+  const body = match[1];
+  if (!body) return false;
+  const unpadded = body.replace(/-/g, "+").replace(/_/g, "/").replace(/=+$/, "");
+  const padded = unpadded + "=".repeat((4 - (unpadded.length % 4)) % 4);
+  try {
+    const decoded = atob(padded);
+    return /^[a-z0-9.-]{1,253}\$$/i.test(decoded) && decoded.includes("clerk.");
+  } catch {
+    return false;
+  }
+}
+
 export const OTHER_FINGERPRINTS: TechFingerprint[] = [
   {
     // Curated, not generated, so the static markup of a Shopify storefront is read too (#1447): the static.klaviyo.com
@@ -330,12 +343,14 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
       // inlines in place of `process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` in a
       // `props.publishableKey || <env>` fallback.
       inBundle(
-        String.raw`(?:["'](?:publishableKey|NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY|CLERK_PUBLISHABLE_KEY)["']|\b(?:publishableKey|NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY|CLERK_PUBLISHABLE_KEY))\s*(?:[:=]\s*(?:[\w$.]{1,60}\s*(?:\|\||\?\?)\s*)?|(?:\|\||\?\?)\s*)["'\x60]pk_test_[A-Za-z0-9+/=_-]{20,200}["'\x60]`,
+        String.raw`(?:["'](?:publishableKey|NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY|CLERK_PUBLISHABLE_KEY)["']|\b(?:publishableKey|NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY|CLERK_PUBLISHABLE_KEY))\s*(?:[:=]\s*(?:[\w$.]{1,60}\s*(?:\|\||\?\?)\s*)?|(?:\|\||\?\?)\s*)["'\x60]pk_test_([A-Za-z0-9+/_-]{20,200}={0,2})["'\x60]`,
         "pk_test_",
+        isClerkPublishableKey,
       ),
       inBundle(
-        String.raw`(?:["'](?:publishableKey|NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY|CLERK_PUBLISHABLE_KEY)["']|\b(?:publishableKey|NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY|CLERK_PUBLISHABLE_KEY))\s*(?:[:=]\s*(?:[\w$.]{1,60}\s*(?:\|\||\?\?)\s*)?|(?:\|\||\?\?)\s*)["'\x60]pk_live_[A-Za-z0-9+/=_-]{20,200}["'\x60]`,
+        String.raw`(?:["'](?:publishableKey|NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY|CLERK_PUBLISHABLE_KEY)["']|\b(?:publishableKey|NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY|CLERK_PUBLISHABLE_KEY))\s*(?:[:=]\s*(?:[\w$.]{1,60}\s*(?:\|\||\?\?)\s*)?|(?:\|\||\?\?)\s*)["'\x60]pk_live_([A-Za-z0-9+/_-]{20,200}={0,2})["'\x60]`,
         "pk_live_",
+        isClerkPublishableKey,
       ),
     ],
     versionPattern: /@clerk\/clerk-js@(\d+(?:\.\d+){0,2})/i,

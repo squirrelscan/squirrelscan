@@ -1,4 +1,10 @@
-import type { DetectedTechnology, Detector, TechDetectInput, TechFingerprint } from "./types";
+import type {
+  DetectedTechnology,
+  Detector,
+  ScriptMatchValidator,
+  TechDetectInput,
+  TechFingerprint,
+} from "./types";
 import { ALL_FINGERPRINTS } from "./fingerprints";
 import { flightLoaderText, hasFlightChunk } from "./flight";
 import { inString, scanJs, type ScannedJs } from "./js-scan";
@@ -48,7 +54,11 @@ function scriptView(views: Map<string, ScriptView>, content: string, maxChars: n
   return view;
 }
 
-function matchesInCode(pattern: RegExp, view: ScriptView): boolean {
+function matchesInCode(
+  pattern: RegExp,
+  view: ScriptView,
+  validate?: ScriptMatchValidator,
+): boolean {
   view.scanned ??= scanJs(view.head);
   const { code, strings } = view.scanned;
   const flags = pattern.flags.includes("g") ? pattern.flags : `${pattern.flags}g`;
@@ -56,7 +66,7 @@ function matchesInCode(pattern: RegExp, view: ScriptView): boolean {
   for (let seen = 0; seen < MAX_IN_CODE_CANDIDATES; seen++) {
     const m = re.exec(code);
     if (!m) return false;
-    if (!inString(strings, m.index)) return true;
+    if (!inString(strings, m.index) && (!validate || validate(m))) return true;
     if (m[0].length === 0) re.lastIndex++;
   }
   return false;
@@ -259,7 +269,11 @@ function matchDetector(
           input.scripts?.some(
             (s) =>
               s.content &&
-              matchesInCode(detector.pattern, scriptView(views, s.content, maxChars)) &&
+              matchesInCode(
+                detector.pattern,
+                scriptView(views, s.content, maxChars),
+                detector.validate,
+              ) &&
               (!detector.also || detector.also.pattern.test(scriptView(views, s.content, maxChars).head)),
           ) ?? false
         );

@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **A Stripe publishable key is no longer mistaken for Clerk.** A `pk_live_` or `pk_test_` value written next to `publishableKey` now counts as Clerk only when its body decodes to a Clerk frontend host ending in `$`; opaque Stripe keys no longer trigger the Clerk signature. (#1478)
+
 ## v0.0.152 (2026-11-01)
 
 Technology detection finds Klaviyo and Shopify Payments on a Shopify storefront from its static HTML, no longer reports `firebase-hosting` for a site that only loads a script from `*.web.app`, and keeps the loader windows of later bundles on a page with many large scripts. `integrity/brand-impersonation` reads sign-in cues throughout long control attributes, and `install.sh` is hardened at run time. Thanks to William for the long control label windows (#1424, #1454).
