@@ -76,8 +76,8 @@ describe("mangled and indirect shapes", () => {
     "a URL and key held in one declaration": `const u="https://${REF}.supabase.co",k="${KEY}";`,
     "a supabaseUrl property": `{supabaseUrl:"https://${REF}.supabase.co",x:1}`,
     "a quoted firebase key": `{"authDomain":"demo-app.firebaseapp.com"}`,
-    "a quoted clerk key": `{"publishableKey":"pk_test_${"a".repeat(30)}"}`, // pragma: allowlist secret
-    "a clerk env fallback": `publishableKey:e.publishableKey||"pk_live_${"a".repeat(30)}"`, // pragma: allowlist secret
+    "a quoted clerk key": `{"publishableKey":"pk_test_Y2xlcmsuZXhhbXBsZS5jb20k"}`, // pragma: allowlist secret
+    "a clerk env fallback": `publishableKey:e.publishableKey||"pk_live_Y2xlcmsuZXhhbXBsZS5jb20k"`, // pragma: allowlist secret
   };
   const vendor = (name: string) =>
     name.includes("firebase") ? "firebase" : name.includes("clerk") ? "clerk" : "supabase";
@@ -232,5 +232,48 @@ describe("sampling a big body", () => {
     const extras = sampleBundleExtras(hostile, 16 * 1024, 24 * 1024);
     expect(performance.now() - started).toBeLessThan(500);
     expect(extras.length).toBeLessThanOrEqual(24 * 1024);
+  });
+});
+
+// #1478: a Clerk key's body is the base64 of its Frontend API host; a Stripe publishable key has the same prefix
+// and is passed under the same property name, and must not read as Clerk.
+describe("a Stripe publishableKey is not a Clerk key (#1478)", () => {
+  const pk = (kind: "live" | "test", body: string): string => ["pk_", kind, "_", body].join("");
+  // Stripe-shaped bodies: opaque alphanumerics (built at run time, so no key-shaped literal sits in the file).
+  const stripeBody = (seed: string): string => `51${seed.repeat(8)}`.slice(0, 99);
+  const idsOf = (content: string): string[] => detect([{ url: "https://example.com/a.js", content }]);
+
+  test("stripe:{publishableKey:...} with a live or a test key detects no Clerk", () => {
+    for (const kind of ["live", "test"] as const) {
+      const bundle = `var cfg={stripe:{publishableKey:"${pk(kind, stripeBody("AbCdEfGh1"))}"},env:"prod"};`;
+      expect(idsOf(bundle)).not.toContain("clerk");
+      const quoted = `{"stripe":{"publishableKey":"${pk(kind, stripeBody("QwErTy0Z9"))}"}}`;
+      expect(idsOf(quoted)).not.toContain("clerk");
+      const fallback = `publishableKey:e.publishableKey||"${pk(kind, stripeBody("Mn0pQr5sT"))}"`;
+      expect(idsOf(fallback)).not.toContain("clerk");
+    }
+  });
+
+  test("real-shaped Clerk keys still detect: production and development hosts, test and live prefixes", () => {
+    const hosts = [
+      "clerk.example.com$",
+      "foo-bar-12.clerk.accounts.dev$",
+      "a.clerk.accounts.dev$",
+      "ab.clerk.example.org$",
+      "abc.clerk.example.org$",
+      "x-clerk.accounts.dev$",
+    ];
+    for (const host of hosts) {
+      const body = Buffer.from(host).toString("base64");
+      for (const kind of ["test", "live"] as const) {
+        expect(idsOf(`<ClerkProvider publishableKey="x">;var p={publishableKey:"${pk(kind, body)}"};`)).toContain("clerk");
+      }
+    }
+  });
+
+  test("a Stripe key and a Clerk key in one bundle detect Clerk once, from the Clerk key", () => {
+    const bundle = `var a={stripe:{publishableKey:"${pk("live", stripeBody("ZyXwVu8T7"))}"}};var b={publishableKey:"${pk("live", Buffer.from("clerk.example.com$").toString("base64"))}"};`;
+    expect(idsOf(bundle)).toContain("clerk");
+    expect(idsOf(bundle).filter((id) => id === "clerk")).toHaveLength(1);
   });
 });

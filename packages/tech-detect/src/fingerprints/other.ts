@@ -328,13 +328,16 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
       // A bundle: the publishable key handed to the provider or client, as an
       // object property (quoted or not), an assignment, or the literal Next.js
       // inlines in place of `process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` in a
-      // `props.publishableKey || <env>` fallback.
+      // `props.publishableKey || <env>` fallback. A Clerk key's body is the base64 of its Frontend API host,
+      // `clerk.<domain>$` or `<name>.clerk.accounts.dev$`, so it holds the base64 of `clerk` at one of its three
+      // alignments (`Y2xlcm`, `ZXJr`, `bGVy`); a Stripe `publishableKey: "pk_live_..."` has the same prefix and
+      // property name and none of those (#1478).
       inBundle(
-        String.raw`(?:["'](?:publishableKey|NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY|CLERK_PUBLISHABLE_KEY)["']|\b(?:publishableKey|NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY|CLERK_PUBLISHABLE_KEY))\s*(?:[:=]\s*(?:[\w$.]{1,60}\s*(?:\|\||\?\?)\s*)?|(?:\|\||\?\?)\s*)["'\x60]pk_test_[A-Za-z0-9+/=_-]{20,200}["'\x60]`,
+        String.raw`(?:["'](?:publishableKey|NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY|CLERK_PUBLISHABLE_KEY)["']|\b(?:publishableKey|NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY|CLERK_PUBLISHABLE_KEY))\s*(?:[:=]\s*(?:[\w$.]{1,60}\s*(?:\|\||\?\?)\s*)?|(?:\|\||\?\?)\s*)["'\x60]pk_test_[A-Za-z0-9+/_-]{0,150}(?:Y2xlcm|ZXJr|bGVy)[A-Za-z0-9+/=_-]{0,150}["'\x60]`,
         "pk_test_",
       ),
       inBundle(
-        String.raw`(?:["'](?:publishableKey|NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY|CLERK_PUBLISHABLE_KEY)["']|\b(?:publishableKey|NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY|CLERK_PUBLISHABLE_KEY))\s*(?:[:=]\s*(?:[\w$.]{1,60}\s*(?:\|\||\?\?)\s*)?|(?:\|\||\?\?)\s*)["'\x60]pk_live_[A-Za-z0-9+/=_-]{20,200}["'\x60]`,
+        String.raw`(?:["'](?:publishableKey|NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY|CLERK_PUBLISHABLE_KEY)["']|\b(?:publishableKey|NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY|CLERK_PUBLISHABLE_KEY))\s*(?:[:=]\s*(?:[\w$.]{1,60}\s*(?:\|\||\?\?)\s*)?|(?:\|\||\?\?)\s*)["'\x60]pk_live_[A-Za-z0-9+/_-]{0,150}(?:Y2xlcm|ZXJr|bGVy)[A-Za-z0-9+/=_-]{0,150}["'\x60]`,
         "pk_live_",
       ),
     ],

@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **A Stripe `publishableKey` no longer reads as Clerk.** The Clerk bundle pattern took any `publishableKey: "pk_live_..."` or `pk_test_` with a 20 to 200 character body, and Stripe publishable keys have the same prefix and property name (`stripe:{publishableKey:"pk_live_..."}` in an app config), so a site configured that way showed Clerk. A Clerk key's body is the base64 of its Frontend API host (`clerk.<domain>$`, `<name>.clerk.accounts.dev$`); the pattern now needs the base64 of `clerk` in it. (#1478)
+
 ## v0.0.152 (2026-11-01)
 
 Technology detection finds Klaviyo and Shopify Payments on a Shopify storefront from its static HTML, no longer reports `firebase-hosting` for a site that only loads a script from `*.web.app`, and keeps the loader windows of later bundles on a page with many large scripts. `integrity/brand-impersonation` reads sign-in cues throughout long control attributes, and `install.sh` is hardened at run time. Thanks to William for the long control label windows (#1424, #1454).
