@@ -36,7 +36,9 @@ export function generateJsonReport(
               reason: page.reason,
             })),
           ],
-          pagesTotal: report.pages.length + (report.unstoredPagesTotal ?? report.unstoredPages?.length ?? 0),
+          pagesTotal:
+            report.pages.length +
+            (report.unstoredPagesTotal ?? report.unstoredPages?.length ?? 0),
         }
       : {}),
   });
