@@ -161,9 +161,14 @@ function hostMatches(host: string, hosts: string[]): boolean {
 }
 
 /** Whether a destination is one of the brand's own: a sign-in host, or an endpoint host on the paths that are its sign-in (#1418). */
-function isLegitDestination(spec: BrandSpec, host: string, path: string): boolean {
+function isLegitDestination(spec: BrandSpec, host: string, path: string, self: Set<string>): boolean {
   if (hostMatches(host, spec.legitHosts)) return true;
-  return (spec.legitEndpoints ?? []).some((e) => (host === e.host || (e.suffix === true && host.endsWith(`.${e.host}`))) && e.path.test(path));
+  return (spec.legitEndpoints ?? []).some(
+    (e) =>
+      (host === e.host || (e.suffix === true && host.endsWith(`.${e.host}`))) &&
+      e.path.test(path) &&
+      (e.tenant === undefined || tenantRelation(host, e.tenant, self) !== undefined),
+  );
 }
 
 function hrefPath(raw: string | null, base: string): string {
@@ -458,7 +463,7 @@ export function detectBrandImpersonation(
     // accounts.google.com link are all spared.
     const offBrandDests = credDests.filter(
       (d) =>
-        !isLegitDestination(spec, d.host, d.path) &&
+        !isLegitDestination(spec, d.host, d.path, self) &&
         !isBrokerEndpoint(spec.brand, d.host, d.path, d.query, self) &&
         !isSelfOrSameSite(d.host, self)
     );

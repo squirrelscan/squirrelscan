@@ -19,7 +19,7 @@ How it works:
 
 ### Fixed
 
-- **`integrity/brand-impersonation` no longer spares a sign-in control that goes to user content under `google.com` or `microsoft.com`.** The brand's own hosts are now an explicit list: Google's `accounts.google.com`, `accounts.youtube.com` and the `/accounts` path of `google.com`; Microsoft's `login.microsoftonline.com`, `.us`, `login.windows.net`, `login.live.com` and `login.microsoft.com`, and `<tenant>.b2clogin.com` only on its authorize paths. `sites.google.com`, `docs.google.com`, `script.google.com`, `forms.google.com`, `drive.google.com`, the `google.com/url` and `/amp/s/` redirectors, `translate.google.com`, `forms.microsoft.com`, `answers.microsoft.com` and the like are reported. (#1418, refs #784)
+- **`integrity/brand-impersonation` no longer spares a sign-in control that goes to user content under `google.com` or `microsoft.com`.** The brand's own hosts are now an explicit list: Google's `accounts.google.com`, `accounts.youtube.com` (its single sign-on host, reported before), `myaccount.google.com` and the `/accounts` path of `google.com`; Microsoft's `login.microsoftonline.com`, `.us`, `.de`, `login.partner.microsoftonline.cn`, `login.chinacloudapi.cn`, `login.windows.net`, `login.live.com`, `login.microsoft.com`, `account.live.com` and `account.microsoft.com`, and `<tenant>.b2clogin.com` and `<tenant>.ciamlogin.com` only for the audited site's own tenant, on their authorize paths. `sites.google.com`, `docs.google.com`, `script.google.com`, `forms.google.com`, `drive.google.com`, the `google.com/url` and `/amp/s/` redirectors, `translate.google.com`, `forms.microsoft.com`, `answers.microsoft.com` and the like are reported (a lone signal is an `info` check). (#1418, refs #784)
 
 ## v0.0.159 (2026-11-02)
 
