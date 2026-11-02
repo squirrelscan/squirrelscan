@@ -67,6 +67,15 @@ describe("values that name something other than a credential (#1292)", () => {
     expect(checks.some((c) => c.status === "fail" || c.status === "warn")).toBe(false);
   });
 
+  test("a single word of 8 or 12 mixed-case letters followed by dots or an ellipsis (likely UI text) is a partial value at the info tier, not dropped", () => {
+    for (const word of ["Abcd" + "efgh", "Abcd" + "EfghIjkl", "Qwer" + "tyui", "MnoP" + "qrStuvWx"]) {
+      for (const dots of ["...", "…"]) {
+        const [one, ...rest] = scanContent(`var c={password:"${word}${dots}"};`, "inline-script", PAGE);
+        expect([word.length, dots, rest.length, one?.type, one?.confidence]).toEqual([word.length, dots, 0, "Partial Secret Value Visible (elided)", "info"]);
+      }
+    }
+  });
+
   test("a long token cut off by an ellipsis reports too, as before", () => {
     // 13 characters or more before the dots: a token cut off, reported at medium as any generic match
     for (const stub of ["Xk9!" + "mQ2vL8zPq...", "Xk9!" + "mQ2vL8zPqRt4Yw7Nb3Hc...", "Xk9!" + "mQ2vL8zPq…"]) {
@@ -130,6 +139,15 @@ describe("sample data the page renders (#1308)", () => {
       expect([domain, found(table(domain))]).toEqual([domain, Array(3).fill("Possible Demo Login (seed data table)")]);
     }
     expect(scanContent(table("x.test"), "inline-script", PAGE)[0]?.extra).toMatchObject({ hint: expect.stringContaining("sample data") });
+  });
+
+  test("seed rows are kept whatever the value looks like: random mixed-case with digits and symbols (24, 27, 31 characters) and a 12-digit number", () => {
+    const values = ["Kd8#" + "wQ3!zPm7" + "Rt2$Yb5&Nc9x", "Ve4%" + "mL7*Qa2#Zs8" + "Hj6!Pw3@Tn1" + "x", "Gx5@" + "Tr9#Lm3!Qe7$Wb2%Vc8" + "Hk4&Dp6*", "482" + "905" + "176" + "340"];
+    expect(values.map((v) => v.length)).toEqual([24, 27, 31, 12]);
+    for (const value of values) {
+      const text = `var u=[${row("a@x.test", value)},${row("b@x.test", value + "1")},${row("c@x.test", value + "2")}];`;
+      expect([value.length, found(text)]).toEqual([value.length, Array(3).fill("Possible Demo Login (seed data table)")]);
+    }
   });
 
   test("the same table with real-domain emails still reports, labelled a possible demo login", () => {
