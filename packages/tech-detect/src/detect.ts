@@ -142,7 +142,7 @@ const INLINE_LOADER_MAX_CHARS = 16 * 1024;
  * to defer it (`litespeed/javascript`, Cloudflare Rocket Loader's `<hash>-text/javascript`, Partytown, a consent
  * tool's `text/plain`) and the browser runs it all the same.
  */
-const DATA_SCRIPT_TYPE =
+export const DATA_SCRIPT_TYPE =
   /json|importmap|speculationrules|template|x-(?:tmpl|mustache|handlebars|jquery-tmpl|jsrender|underscore|ejs)|shader|octet-stream|^text\/(?:html|css|markdown|csv|xml)\b|^application\/(?:xml|xhtml)/i;
 /**
  * A Next.js App Router flight script (`self.__next_f.push(...)`) carries the layout's `next/script` snippets as
@@ -554,7 +554,7 @@ function detectOnePage(
       : { ...rawInput, meta: extractMetaFromHtml(rawInput.html) };
   // One structural pass over the page: the views of its HTML (see inert-regions.ts). The tag readers get the page with
   // `<template>` content taken out.
-  const pageViewSet = pageViews(rawInput.html);
+  const pageViewSet = pageViews(rawInput.html, (type) => DATA_SCRIPT_TYPE.test(type));
   const input: TechDetectInput = pageViewSet.markup === withMeta.html ? withMeta : { ...withMeta, html: pageViewSet.markup };
 
   for (const fp of fingerprints) {

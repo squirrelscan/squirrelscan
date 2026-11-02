@@ -19,7 +19,7 @@ How it works:
 
 ### Fixed
 
-- `tech-detect`: matches inside non-executed content no longer count as detections. Data script bodies (JSON, import maps, templates), `<template>` content and HTML comments are skipped in one bounded pass, except for an explicit list of marker-comment fingerprints (plugin banners) and `<style>` CSS. Unclear regions (unterminated comments or templates, declarative shadow roots) still detect. #1550
+- `tech-detect`: matches inside non-executed content no longer count as detections. Data script bodies (JSON, import maps, templates), `<template>` content and HTML comments are skipped in one bounded tokenizing pass, except for an explicit list of marker-comment fingerprints (plugin banners) and `<style>` CSS. The pass follows the browser's tokenizer so a real tag cannot be hidden behind a fake boundary: comments end at `-->` or `--!>`, `<!-->` and `<!--->` are empty comments, `<script>`, `<style>`, `<textarea>`, `<title>`, `<xmp>`, `<iframe>`, `<noembed>`, `<noframes>` and `<noscript>` are raw text, a script ends by the script-data rules, attributes are read quote-aware (the first `type` counts) and a template pairs only with end tags seen as tags. Anything it cannot prove stays detected: a comment, template or data script that never closes (an unclosed data script keeps the rest of the page), a tag over 64 KB, an `<svg>` or `<math>` region with markup that depends on the tree builder, and declarative shadow roots. #1550
 
 ## v0.0.159 (2026-11-02)
 

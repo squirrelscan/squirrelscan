@@ -5,6 +5,7 @@
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 
 import { ALL_FINGERPRINTS, detectTechnologies } from "../src";
+import { DATA_SCRIPT_TYPE } from "../src/detect";
 import { COMMENT_MARKER_FINGERPRINTS, pageViews } from "../src/inert-regions";
 
 setDefaultTimeout(60_000);
@@ -144,7 +145,7 @@ describe("marker comments and CSS keep detecting", () => {
     const known = new Set(ALL_FINGERPRINTS.map((fp) => fp.id));
     for (const id of COMMENT_MARKER_FINGERPRINTS) expect(known.has(id), id).toBe(true);
     for (const fp of ALL_FINGERPRINTS) {
-      const opensAtComment = [...fp.detectors.map((d) => ("pattern" in d ? d.pattern.source : "")), fp.versionPattern?.source ?? ""].some((source) => /<!--|-->/.test(source));
+      const opensAtComment = [...fp.detectors.map((d) => ("pattern" in d ? d.pattern.source : "")), fp.versionPattern?.source ?? ""].some((source) => source.includes("<!--") || source.includes("--" + ">"));
       if (opensAtComment) expect(COMMENT_MARKER_FINGERPRINTS.has(fp.id), fp.id).toBe(true);
     }
   });
@@ -166,7 +167,7 @@ describe("real tags, loaders and tag readers are unchanged", () => {
 describe("pageViews", () => {
   test("a page with nothing to take out is the same string in every view", () => {
     const html = shell("<p>hello</p>");
-    const v = pageViews(html);
+    const v = pageViews(html, (t) => DATA_SCRIPT_TYPE.test(t));
     expect(v.markup).toBe(html);
     expect(v.clean).toBe(html);
     expect(v.commented).toBe(html);
@@ -174,7 +175,7 @@ describe("pageViews", () => {
 
   test("what each view keeps", () => {
     const html = `<p>a</p><!--c--><template><b>t</b></template><script type="application/json">{"k":1}</script><script>var x=1;</script><style>.s{}</style>`;
-    const v = pageViews(html);
+    const v = pageViews(html, (t) => DATA_SCRIPT_TYPE.test(t));
     expect(v.markup).toBe(`<p>a</p><!--c--><script type="application/json">{"k":1}</script><script>var x=1;</script><style>.s{}</style>`);
     expect(v.clean).toBe(`<p>a</p><script type="application/json"></script><script>var x=1;</script><style>.s{}</style>`);
     expect(v.commented).toBe(`<p>a</p><!--c--><script type="application/json"></script><script>var x=1;</script><style>.s{}</style>`);

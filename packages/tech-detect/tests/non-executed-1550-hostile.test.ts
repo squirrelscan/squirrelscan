@@ -28,6 +28,15 @@ describe("hostile pages stay in budget, at 5 MB and 10 MiB", () => {
     ["script openers", (n) => fill("<script>", n)],
     ["tags with a quote", (n) => fill('<a "', n)],
     ["angle brackets", (n) => fill("<", n)],
+    ["script comment openers", (n) => `<script>${fill("<!--<script>", n)}</script>${YOUTUBE}`],
+    ["script closers", (n) => fill("<script>a</script >", n)],
+    ["many small svgs", (n) => fill("<svg><path d=\"M0\"/><title>t</title></svg>", n)],
+    ["an unclosed svg", (n) => `<svg>${fill("<g>", n)}`],
+    ["svg breakouts", (n) => fill("<svg><p></svg>", n)],
+    ["raw text elements", (n) => fill("<xmp><!--</xmp><noscript>a</noscript><iframe>b</iframe>", n)],
+    ["tags with many attributes", (n) => fill(`<a ${"b=c ".repeat(200)}>`, n)],
+    ["one 70 KB tag", (n) => `<div ${"a ".repeat(36_000)}>${fill("<!-- c -->", n)}`],
+    ["bogus comments", (n) => fill("<!x><?y></ z></>", n)],
     ["real tags between comments and templates", (n) => fill(`<!-- c --><template>t</template>${YOUTUBE}`, n)],
   ];
   for (const [label, bytes] of [["5 MB", MB5], ["10 MiB", MIB10]] as const) {
