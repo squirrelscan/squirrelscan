@@ -259,6 +259,7 @@ interface ExtrasItem {
   headBytes: number;
   extras: string;
   extrasBytes: number;
+  extrasStart: number | null;
 }
 
 /**
@@ -307,6 +308,7 @@ function spreadBundleExtras(
       charge(bytes - held);
       item.extras = extras;
       item.extrasBytes = bytes;
+      item.extrasStart = sampler.firstSourceChar();
     });
   }
 }
@@ -446,7 +448,9 @@ export function prioritiseLinkHrefs(hrefs: string[]): string[] {
  *   it (the home page for a shared bundle): detection unions over pages, so a
  *   second copy adds bytes and no signal.
  * - Bodies are cut to `bundleBytes`, then `pageBytes` per page and `auditBytes`
- *   per audit; a body past a cap is dropped, the script's URL stays listed.
+ *   per audit; a body past a cap is dropped, the script's URL stays listed. A
+ *   script's source text is attached at most once: sampled windows and the tail
+ *   never overlap the head that is sent beside them.
  */
 export function buildTechInputs(
   pages: TechPageSource[],
@@ -490,6 +494,7 @@ export function buildTechInputs(
         headBytes: 0,
         extras: "",
         extrasBytes: 0,
+        extrasStart: null,
       }));
     // Every body fits whole under all three caps (the local scan's defaults hold a
     // page of bundles): no floor, no sampling, no second scan of the text.
@@ -517,10 +522,14 @@ export function buildTechInputs(
     }
     spreadBundleExtras(plan, limits.bundleBytes, room, charge);
     for (const item of plan) {
-      if (!item.head || item.head.length >= item.content.length) continue;
+      // Pass 2 sampled from the text after this head. Grow the head only as far
+      // as the first window or tail, so the third pass still spends available
+      // budget without sending any source byte twice (#1534).
+      const headLimit = item.extrasStart ?? item.content.length;
+      if (!item.head || item.head.length >= headLimit) continue;
       const r = Math.min(limits.bundleBytes - item.headBytes - item.extrasBytes, room());
       if (r <= 0) continue;
-      const head = truncateToBytes(item.content, item.headBytes + r);
+      const head = truncateToBytes(item.content.slice(0, headLimit), item.headBytes + r);
       const bytes = byteLength(head);
       charge(bytes - item.headBytes);
       item.head = head;
