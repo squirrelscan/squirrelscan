@@ -1,7 +1,7 @@
 // One generator per pattern in security/leaked-secrets. Every value is built at
 // runtime from parts and a seeded RNG: nothing in this file is a whole
-// credential-shaped literal, so neither GitHub push protection nor the
-// detect-secrets CI gate has anything to trip on, and nothing here is a real
+// credential-shaped literal, so neither GitHub push protection nor any secret
+// scanner has anything to trip on, and nothing here is a real
 // key. Provider "EXAMPLE" keys are deliberately NOT used: the detector's
 // false-positive list suppresses them, so they would prove nothing.
 //

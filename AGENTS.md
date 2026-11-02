@@ -237,15 +237,7 @@ Report a suspected vulnerability privately, as [SECURITY.md](SECURITY.md) descri
 
 ## CI checks that fail for non-obvious reasons
 
-- **Secret scan** runs `detect-secrets` 1.5.0 in CI over every tracked file against `.secrets.baseline`. Do NOT run the full-repo scan locally: it pegs the CPU for minutes and CI already does it. The baseline stores line numbers, so editing a file it lists can fail CI with "The baseline file was updated". Only then, scan just the files your branch changed and commit the updated baseline:
-
-  ```bash
-  pip install detect-secrets==1.5.0
-  git diff --name-only -z origin/main...HEAD | xargs -0 detect-secrets-hook --baseline .secrets.baseline
-  git add .secrets.baseline
-  ```
-
-  A fake credential in a test needs `// pragma: allowlist secret` on its line, and so does an identifier as innocent as `API_KEY_ENV`. Make placeholder ids low-entropy (`01TEST0000000000000000000A`): a random-looking one can trip the entropy check. GitHub push protection is a separate gate that rejects some realistic token shapes at push time. Build those from parts (`${prefix}rest`).
+- **Secrets in tests**: there is no repo secret scan any more, but GitHub push protection still rejects some realistic token shapes at push time. Build those from parts (`${prefix}rest`) rather than writing the whole literal, and keep placeholder ids obviously fake (`01TEST0000000000000000000A`). Never commit a real secret.
 - **CodeQL** judges test files by production rules. A URL literal passed to `.includes()` or `.startsWith()` trips the URL-sanitization check, so use `expect(x).toContain(url)`. A new host-shaped regex (`/cdn\.example\.com/`) needs an anchor or context such as `src\s*=\s*["']`. A single `.replace("&", ...)` counts as incomplete escaping: use `replaceAll`.
 - **Dependency audit** runs `bun audit` against the live advisory database, so it can go red with no change on your side. If `git diff origin/main...HEAD -- bun.lock package.json` is empty, say so on the PR and leave it to maintainers.
 - **Third-party notices**: bumping a runtime dependency of the CLI changes `THIRD_PARTY_NOTICES.md` and `npm/THIRD_PARTY_NOTICES.md`. Run `bun run notices:generate`, commit both, and confirm with `bun run notices:check`.

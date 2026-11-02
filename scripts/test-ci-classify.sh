@@ -56,7 +56,6 @@ expect "1 1 1 1 1" "classifier itself" scripts/ci-classify.sh
 expect "1 1 1 1 1" "other script" scripts/generate-third-party-notices.ts
 expect "1 1 1 1 1" "notices" THIRD_PARTY_NOTICES.md
 expect "1 1 1 1 1" "license" LICENSE
-expect "1 1 1 1 1" "secrets baseline" .secrets.baseline
 expect "1 1 1 1 1" "unknown top-level file" new-thing.toml
 expect "1 1 1 1 1" "git-quoted path" '"docs/caf\303\251.mdx"'
 expect "1 1 1 1 1" "mixed docs + workflow" docs/a.mdx .github/workflows/ci.yml
