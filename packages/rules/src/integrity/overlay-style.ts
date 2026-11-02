@@ -65,6 +65,9 @@ interface ParsedSelector {
   tag: boolean;
   classes: string[];
   ids: string[];
+  /** The class and id names as written, for the decided reading (a browser compares them case-sensitively). */
+  classesExact: string[];
+  idsExact: string[];
   attrs: AttrCondition[];
   /** `ids * 10000 + (classes, attributes, pseudo-classes) * 100 + tag`, each part capped at 99. */
   specificity: number;
@@ -292,8 +295,10 @@ function parseSelectorList(selector: string): { selectors: ParsedSelector[]; ove
     const tokens = match[2]!.match(/[.#][\w-]+/g) ?? [];
     out.push({
       tag: match[1] !== undefined,
-      classes: tokens.filter((t) => t[0] === ".").map((t) => t.slice(1)),
-      ids: tokens.filter((t) => t[0] === "#").map((t) => t.slice(1)),
+      classes: tokens.filter((t) => t[0] === ".").map((t) => t.slice(1).toLowerCase()),
+      ids: tokens.filter((t) => t[0] === "#").map((t) => t.slice(1).toLowerCase()),
+      classesExact: [],
+      idsExact: [],
       attrs: [],
       specificity: 0,
       unknown: false,
@@ -377,45 +382,66 @@ function identEnd(text: string, at: number): number {
 }
 
 /**
- * A selector lower-cased except what sits inside `[...]`: an attribute value is case-sensitive in a browser (`[data-k=V]` does
- * not match `data-k="v"`), so its case is kept for {@link attrMatches}; the name and the flag are lower-cased where they are read.
+ * A selector lower-cased except what a browser compares case-sensitively: what sits inside `[...]` (an attribute value:
+ * `[data-k=V]` does not match `data-k="v"`) and the name after a `.` or `#` (a class or an id: `.COVER` does not match
+ * `class="cover"`). Their case is kept for the decided reading; the parser lower-cases them where the full reading and the
+ * rule index need the folded form, and the attribute name and flag where they are read.
  */
 function lowerSelector(selector: string): string {
-  if (!selector.includes("[")) return selector.toLowerCase();
+  if (!/[[.#]/.test(selector)) return selector.toLowerCase();
+  const n = selector.length;
   let out = "";
   let from = 0;
   let i = 0;
-  while (i < selector.length) {
+  const keep = (start: number, end: number): void => {
+    out += selector.slice(from, start).toLowerCase() + selector.slice(start, end);
+    from = end;
+  };
+  while (i < n) {
     const c = selector[i]!;
     if (c === "\\") {
-      i += 2;
-      continue;
-    }
-    if (c !== "[") {
-      i++;
-      continue;
-    }
-    out += selector.slice(from, i + 1).toLowerCase();
-    let j = i + 1;
-    let quote = "";
-    while (j < selector.length) {
-      const d = selector[j]!;
-      if (d === "\\") j += 2;
-      else if (quote) {
-        if (d === quote) quote = "";
-        j++;
-      } else if (d === '"' || d === "'") {
-        quote = d;
-        j++;
-      } else if (d === "]") break;
-      else j++;
-    }
-    out += selector.slice(i + 1, j);
-    from = j;
-    i = j;
+      i = escapeEnd(selector, i) + 1;
+    } else if (c === "[") {
+      let j = i + 1;
+      let quote = "";
+      while (j < n) {
+        const d = selector[j]!;
+        if (d === "\\") j += 2;
+        else if (quote) {
+          if (d === quote) quote = "";
+          j++;
+        } else if (d === '"' || d === "'") {
+          quote = d;
+          j++;
+        } else if (d === "]") break;
+        else j++;
+      }
+      j = Math.min(j, n);
+      keep(i + 1, j);
+      i = j;
+    } else if (c === "." || c === "#") {
+      let j = i + 1;
+      while (j < n) {
+        const d = selector[j]!;
+        if (d === "\\") j = escapeEnd(selector, j) + 1;
+        else if (isIdentChar(d)) j++;
+        else break;
+      }
+      j = Math.min(j, n);
+      keep(i + 1, j);
+      i = j;
+    } else i++;
   }
   return out + selector.slice(from).toLowerCase();
 }
+
+/** Attributes whose values HTML compares without case in an attribute selector (the Selectors spec list). */
+const CASE_INSENSITIVE_ATTRS: ReadonlySet<string> = new Set(
+  "accept accept-charset align alink axis bgcolor charset checked clear codetype color compact declare defer dir direction disabled enctype face frame hreflang http-equiv lang language link media method multiple nohref noresize noshade nowrap readonly rel rev rules scope scrolling selected shape target text type valign valuetype vlink".split(" ")
+);
+
+/** What HTML splits a token list (`class`, `~=`) on: space, tab, LF, FF and CR, not JavaScript's `\s` (NBSP, U+2003, U+FEFF, VT). */
+const HTML_SPACES = /[ \t\n\f\r]+/;
 
 const ATTR_OPS = new Set(["=", "~=", "|=", "^=", "$=", "*="]);
 
@@ -445,7 +471,8 @@ function parseAttr(inner: string): AttrCondition | undefined {
     i = end;
   }
   const flag = inner.slice(i).trim().toLowerCase();
-  if (flag !== "" && flag !== "i" && flag !== "s") return undefined;
+  // `s` is not read: a browser that does not support the flag drops the whole rule, so such a rule is not modelled.
+  if (flag !== "" && flag !== "i") return undefined;
   return { name, op: op as AttrCondition["op"], value: unescapeCss(value), ci: flag === "i" };
 }
 
@@ -457,7 +484,7 @@ const cap99 = (n: number): number => Math.min(n, 99);
  * taken as matching (it still counts in the specificity; `:where()` counts nothing): the error is toward detection.
  */
 function parseCompound(text: string): ParsedSelector | undefined {
-  const out: ParsedSelector = { tag: false, classes: [], ids: [], attrs: [], specificity: 0, unknown: false };
+  const out: ParsedSelector = { tag: false, classes: [], ids: [], classesExact: [], idsExact: [], attrs: [], specificity: 0, unknown: false };
   let i = 0;
   let classLike = 0;
   if (text[0] === "*") i = 1;
@@ -472,11 +499,16 @@ function parseCompound(text: string): ParsedSelector | undefined {
     if (c === "." || c === "#") {
       const end = identEnd(text, i + 1);
       if (end === i + 1) return undefined;
-      const name = unescapeCss(text.slice(i + 1, end)).toLowerCase();
+      const written = unescapeCss(text.slice(i + 1, end));
+      const name = written.toLowerCase();
       if (c === ".") {
         out.classes.push(name);
+        out.classesExact.push(written);
         classLike++;
-      } else out.ids.push(name);
+      } else {
+        out.ids.push(name);
+        out.idsExact.push(written);
+      }
       i = end;
     } else if (c === "[") {
       let j = i + 1;
@@ -957,6 +989,8 @@ function sheetFor(doc: Document, wanted: Wanted, reading: Reading): Sheet {
           // A value is compared case-sensitively in a browser but case-folded under `all`: the `decided` reading is needed too.
           if (attr.op !== "" && !attr.ci) hasUnknown.value = true;
         }
+        // A class or id written with capitals reads differently under a browser's case-sensitive match: the decided reading too.
+        if (parsed.classesExact.some((c) => c !== c.toLowerCase()) || parsed.idsExact.some((i) => i !== i.toLowerCase())) hasUnknown.value = true;
       }
       if (atUnknown || selectors.some((parsed) => parsed.unknown)) hasUnknown.value = true;
       for (const key of keys) {
@@ -1025,7 +1059,8 @@ function sheetFor(doc: Document, wanted: Wanted, reading: Reading): Sheet {
 }
 
 /** Whether an attribute selector holds for the frame's value of the attribute (`undefined`: the attribute is absent). */
-function attrMatches(condition: AttrCondition, raw: string | undefined, fold: boolean): boolean {
+function attrMatches(condition: AttrCondition, raw: string | undefined, foldAll: boolean): boolean {
+  const fold = foldAll || CASE_INSENSITIVE_ATTRS.has(condition.name);
   if (raw === undefined) return false;
   if (condition.op === "") return true;
   // A browser compares a value case-sensitively unless the selector says `i`; the full cascade also reads it case-folded, so a
@@ -1036,7 +1071,7 @@ function attrMatches(condition: AttrCondition, raw: string | undefined, fold: bo
     case "=":
       return have === want;
     case "~=":
-      return want !== "" && !/\s/.test(want) && have.split(/\s+/).includes(want);
+      return want !== "" && !/[ \t\n\f\r]/.test(want) && have.split(HTML_SPACES).includes(want);
     case "|=":
       return have === want || have.startsWith(`${want}-`);
     case "^=":
@@ -1053,15 +1088,17 @@ function attrMatches(condition: AttrCondition, raw: string | undefined, fold: bo
  * selectors whose applicability is known count: a rule in an undecided at-rule, and a selector with an ancestor part or a
  * pseudo-class, are left out (see {@link Mode}).
  */
-function matchedSpecificity(rule: Rule, id: string, classes: Set<string>, attr: (name: string) => string | undefined, decided: boolean): number {
+function matchedSpecificity(rule: Rule, frame: FrameNames, attr: (name: string) => string | undefined, decided: boolean): number {
   if (decided && rule.atUnknown) return -1;
   let best = -1;
   for (const selector of rule.selectors) {
     if (selector.specificity <= best) continue;
     if (decided && selector.unknown) continue;
     if (
-      selector.classes.every((c) => classes.has(c)) &&
-      selector.ids.every((i) => i === id) &&
+      // The decided reading compares a class and an id as a browser does, case-sensitively; the full reading folds case.
+      (decided
+        ? selector.classesExact.every((c) => frame.rawClasses.has(c)) && selector.idsExact.every((i) => i === frame.rawId)
+        : selector.classes.every((c) => frame.classes.has(c)) && selector.ids.every((i) => i === frame.id)) &&
       selector.attrs.every((a) => attrMatches(a, attr(a.name), !decided))
     ) {
       best = selector.specificity;
@@ -1108,11 +1145,18 @@ function expandInset(value: string): Array<[string, string]> {
  */
 type Mode = "all" | "decided";
 
+/** An iframe's id and classes, folded for the rule index and the full reading and as written for the decided one. */
+interface FrameNames {
+  id: string;
+  classes: Set<string>;
+  rawId: string;
+  rawClasses: Set<string>;
+}
+
 /** The stylesheet's contribution to one iframe, memoised per (id, classes): pages repeat them. */
 function sheetLayers(
   sheet: Sheet,
-  id: string,
-  classes: Set<string>,
+  frame: FrameNames,
   attr: (name: string) => string | undefined,
   memo: Map<string, Declaration[][]>,
   mode: Mode,
@@ -1120,7 +1164,10 @@ function sheetLayers(
   // The frame's values of the attributes some selector tests are part of the key: two frames alike in all of it cascade alike.
   let attrKey = "";
   for (const name of sheet.attrNames) attrKey += `\u0000${name}=${attr(name) ?? "\u0001"}`;
-  const key = `${mode}\u0000${id}\u0000${[...classes].sort().join(" ")}${attrKey}`;
+  const { id, classes } = frame;
+  // The decided reading also depends on the names' case as written.
+  const exact = mode === "decided" ? `\u0000${frame.rawId}\u0000${[...frame.rawClasses].sort().join(" ")}` : "";
+  const key = `${mode}\u0000${id}\u0000${[...classes].sort().join(" ")}${exact}${attrKey}`;
   const cached = memo.get(key);
   if (cached) return cached;
   // The frame's candidate rules: the lists of its tag, id and (at most a few) classes that have any, merged and
@@ -1156,7 +1203,7 @@ function sheetLayers(
   // The cascade among the rules that match: specificity, then source order, the last one applied wins.
   const matched: Array<{ rule: Rule; specificity: number }> = [];
   for (const rule of candidates) {
-    const specificity = matchedSpecificity(rule, id, classes, attr, mode === "decided");
+    const specificity = matchedSpecificity(rule, frame, attr, mode === "decided");
     if (specificity >= 0) matched.push({ rule, specificity });
   }
   matched.sort((a, b) => a.specificity - b.specificity || a.rule.order - b.rule.order);
@@ -1170,19 +1217,25 @@ function sheetLayers(
 
 /** The iframe's resolved style properties, lower-cased: stylesheet, then inline, `!important` over either. */
 function resolvedStyle(sheet: Sheet, frame: Element, reading: Reading, mode: Mode): Map<string, string> {
-  const id = (getAttrCI(frame, "id") ?? "").toLowerCase();
+  const rawId = getAttrCI(frame, "id") ?? "";
+  const id = rawId.toLowerCase();
   // The class attribute is charged to the page's budget by length, so padding it costs the page, not the scan.
   const classAttr = getAttrCI(frame, "class") ?? "";
   sheet.work -= Math.ceil(classAttr.length / CLASS_CHARS_PER_VISIT);
   const classes = new Set<string>();
+  const rawClasses = new Set<string>();
   if (sheet.work > 0) {
-    for (const c of classAttr.toLowerCase().split(/\s+/)) if (c) classes.add(c);
+    for (const c of classAttr.split(HTML_SPACES)) {
+      if (!c) continue;
+      rawClasses.add(c);
+      classes.add(c.toLowerCase());
+    }
   } else sheet.truncated = true;
   const attr = (name: string): string | undefined => {
     const value = getAttrCI(frame, name);
     return value === undefined || value === null ? undefined : value.slice(0, MAX_ATTR_CHARS);
   };
-  const [normal, important] = sheetLayers(sheet, id, classes, attr, sheet.memo, mode) as [Declaration[], Declaration[]];
+  const [normal, important] = sheetLayers(sheet, { id, classes, rawId, rawClasses }, attr, sheet.memo, mode) as [Declaration[], Declaration[]];
   const inline = parseDeclarations(getAttrCI(frame, "style") ?? "", reading);
   const layers: Declaration[][] = [
     normal,
@@ -1270,7 +1323,7 @@ function wantedFor(doc: Document): Wanted {
     wanted.frames++;
     const id = (getAttrCI(frame, "id") ?? "").toLowerCase();
     if (id) wanted.ids.add(id);
-    for (const c of (getAttrCI(frame, "class") ?? "").toLowerCase().split(/\s+/)) if (c) wanted.classes.add(c);
+    for (const c of (getAttrCI(frame, "class") ?? "").toLowerCase().split(HTML_SPACES)) if (c) wanted.classes.add(c);
   }
   wantedCache.set(doc, wanted);
   return wanted;

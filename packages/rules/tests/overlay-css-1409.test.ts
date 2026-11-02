@@ -5,7 +5,7 @@
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { parsePage } from "@squirrelscan/parser";
 
-import { overlayGeometryFor, type Reading } from "../src/integrity/overlay-style";
+import { overlayGeometry, overlayGeometryFor, type Reading } from "../src/integrity/overlay-style";
 import { cssScanTruncated, hiddenSelectors, isCover, nestingUsed } from "../src/integrity/overlay-style";
 import { detectFakeAuthOverlay } from "../src/integrity/signals";
 import type { RuleContext } from "../src/types";
@@ -128,7 +128,6 @@ describe("descendant and attribute selectors name the iframe by its last compoun
       `iframe[id|=google]{${FIXED}}`,
       `iframe[srcdoc]{${FIXED}}`,
       `iframe[ID="GOOGLE-AUTH" i]{${FIXED}}`,
-      `iframe[id="google-auth" s]{${FIXED}}`,
       `iframe[\\69 d]{${FIXED}}`,
     ]) {
       expect(fires(css), css).toBe(true);
@@ -576,5 +575,141 @@ describe("review round 3: attribute case, nested at-rules, spent nesting budget 
     expect(nestingUsed(ctx.parsed.document!).selectors).toBe(20_000);
     expect(cssScanTruncated(ctx.parsed.document!)).toBe(true);
     expect(elapsed).toBeLessThan(2_000);
+  });
+});
+
+describe("review round 4: class and id case, HTML whitespace, the `s` flag, case-insensitive attributes (#1409)", () => {
+  const COVER = `.cover{${FIXED}}`;
+  const frame = (attrs: string): string => `<iframe ${attrs} srcdoc=""></iframe>`;
+  const STATIC = "position:static";
+
+  test("a class or id decoy that only matches case-folded does not hide a cover; an exact one does", () => {
+    const f = frame('id="google-auth" class="cover"');
+    for (const decoy of [`.COVER{${STATIC}}`, `.Cover{${STATIC}}`, `#GOOGLE-AUTH{${STATIC}}`, `iframe.COVER#google-auth{${STATIC}}`, `main .COVER{${STATIC}}`]) {
+      expect(fires(`${COVER}${decoy}`, f), decoy).toBe(true);
+    }
+    expect(fires(`${COVER}.cover{${STATIC}}`, f)).toBe(false);
+    expect(fires(`.cover{${FIXED}}#google-auth{${STATIC}}`, f)).toBe(false);
+    // the frame's own capitals: only the exact selector reads it
+    const upper = frame('id="Google-Auth" class="Cover"');
+    expect(fires(`.Cover{${FIXED}}.cover{${STATIC}}`, upper)).toBe(true);
+    expect(fires(`.Cover{${FIXED}}.Cover{${STATIC}}`, upper)).toBe(false);
+    expect(fires(`#Google-Auth{${FIXED}}#google-auth{${STATIC}}`, upper)).toBe(true);
+  });
+
+  test("a class attribute splits on HTML whitespace only: NBSP, U+2003, U+FEFF and VT stay inside the token", () => {
+    // The page parser (linkedom) folds these characters to a space in a `class` value, so the attribute list is replaced on the
+    // element: what the rule reads is what a parser that kept the characters would hand it.
+    const coverIn = (sep: string): boolean => {
+      // a second frame carries a plain `x` class, so the rule `.x` is read for the page
+      const { parsed } = page(`${COVER}.x{${STATIC}}`, `${frame('id="google-auth" class="cover"')}<iframe class="x"></iframe>`);
+      const el = parsed.document!.querySelector("iframe")!;
+      Object.defineProperty(el, "attributes", {
+        value: [
+          { name: "id", value: "google-auth" },
+          { name: "class", value: `cover x${sep}y` },
+        ],
+      });
+      return isCover(overlayGeometry(parsed.document!, el));
+    };
+    for (const sep of ["\u00a0", "\u2003", "\ufeff", "\u000b"]) expect(coverIn(sep), JSON.stringify(sep)).toBe(true); // `x<sep>y` is one class, not `.x`
+    for (const sep of [" ", "\t", "\n", "\f", "\r"]) expect(coverIn(sep), JSON.stringify(sep)).toBe(false);
+  });
+
+  test("`[a=b s]` is not read (a browser that does not support the flag drops the rule): neither a decoy nor a cover", () => {
+    const f = frame('id="google-auth" class="cover" data-k="v"');
+    expect(fires(`${COVER}[data-k=v s]{${STATIC}}`, f)).toBe(true);
+    expect(fires(`[data-k=v s]{${FIXED}}`, f)).toBe(false);
+    expect(fires(`${COVER}[data-k=v i]{${STATIC}}`, f)).toBe(false);
+  });
+
+  test("attributes HTML compares without case: type, lang, dir, align, scrolling, target", () => {
+    for (const [name, value] of [["type", "Text"], ["lang", "EN"], ["dir", "RTL"], ["align", "Left"], ["scrolling", "NO"], ["target", "_Blank"]] as const) {
+      const f = frame(`id="google-auth" class="cover" ${name}="${value}"`);
+      const lower = value.toLowerCase();
+      expect(fires(`${COVER}[${name}=${lower}]{${STATIC}}`, f), name).toBe(false); // the decoy applies: case is ignored for it
+    }
+    // another attribute stays case-sensitive
+    expect(fires(`${COVER}[data-k=v]{${STATIC}}`, frame('id="google-auth" class="cover" data-k="V"'))).toBe(true);
+  });
+
+  test("a cover that sits in an undecided rule is still reported (the full reading)", () => {
+    for (const css of [
+      `@media (max-width:1px){.cover{${FIXED}}}`,
+      `@supports (display:foo){.cover{${FIXED}}}`,
+      `.nothing .cover{${FIXED}}`,
+      `.cover:hover{${FIXED}}`,
+      `@layer a{.cover{${FIXED}}}`,
+    ]) {
+      expect(fires(css, frame('id="google-auth" class="cover"')), css).toBe(true);
+    }
+  });
+
+  test("a bracket with a quoted `]` or an escaped `]` keeps its value's case, and what follows it is lower-cased", () => {
+    const f = frame('id="google-auth" class="cover" data-k="A]B"');
+    expect(fires(`${COVER}[data-k="A]B"]{${STATIC}}`, f)).toBe(false);
+    expect(fires(`${COVER}[data-k='A]B']{${STATIC}}`, f)).toBe(false);
+    expect(fires(`${COVER}[data-k=A\\]B]{${STATIC}}`, f)).toBe(false);
+    expect(fires(`${COVER}[data-k="a]b"]{${STATIC}}`, f)).toBe(true);
+    expect(fires(`${COVER}[data-k="A]B"].COVER{${STATIC}}`, f)).toBe(true);
+    expect(fires(`${COVER}[data-k="A]B"].cover{${STATIC}}`, f)).toBe(false);
+  });
+
+  test("two frames that differ only in the case of their class are each judged as written (not one memoised answer)", () => {
+    const upper = '<iframe id="google-auth" class="COVER" srcdoc=""></iframe>';
+    const lower = '<iframe id="google-auth" class="cover" srcdoc=""></iframe>';
+    // `.cover` is a cover and `.COVER` is a static decoy for the other frame: the lower-case frame is the cover, whichever is read first
+    expect(fires(`.cover{${FIXED}}.COVER{${STATIC}}`, upper + lower)).toBe(true);
+    expect(fires(`.cover{${FIXED}}.COVER{${STATIC}}`, lower + upper)).toBe(true);
+  });
+
+  test("`~=` splits the frame's value on HTML whitespace: NBSP does not separate words", () => {
+    const f = frame('id="google-auth" class="cover" data-k="x\u00a0y"');
+    expect(fires(`${COVER}[data-k~=y]{${STATIC}}`, f)).toBe(true);
+    expect(fires(`${COVER}[data-k~=x]{${STATIC}}`, frame('id="google-auth" class="cover" data-k="x y"'))).toBe(false);
+  });
+
+  test("an escaped class name matches as written: `.\\000043over` is `.Cover`", () => {
+    const f = frame('id="google-auth" class="Cover"');
+    expect(fires(`.Cover{${FIXED}}.\\000043over{${STATIC}}`, f)).toBe(false);
+    expect(fires(`.Cover{${FIXED}}.\\000063over{${STATIC}}`, f)).toBe(true);
+  });
+
+  test("an attribute value past the read length is not read (512 characters)", () => {
+    const long = `${"x".repeat(600)}end`;
+    const f = frame(`id="google-auth" class="cover" data-k="${long}"`);
+    expect(fires(`${COVER}[data-k$=end]{${STATIC}}`, f)).toBe(true);
+    expect(fires(`${COVER}[data-k^=xxx]{${STATIC}}`, f)).toBe(false);
+  });
+});
+
+describe("the nesting budget spent exactly: each early exit reports the cut (#1409)", () => {
+  const parts = (prefix: string, n: number, withAmp = true): string =>
+    Array.from({ length: n }, (_, i) => `${withAmp ? "&" : ""}${prefix}${i}`).join(",");
+  // 4 x 4,096 + 3,584 + 31 = 19,999 produced selectors: exactly one is left
+  const prefix =
+    `${parts(".p", 64, false)}{ ${parts(".q", 64)}{border:0} }`.repeat(4) +
+    `${parts(".p", 56, false)}{ ${parts(".q", 64)}{border:0} }` +
+    `a{ ${parts(".r", 31)}{border:0} }`;
+  const probe = (tail: string) => {
+    const ctx = context(`${prefix}${tail}`);
+    detectFakeAuthOverlay(ctx);
+    return { used: nestingUsed(ctx.parsed.document!).selectors, truncated: cssScanTruncated(ctx.parsed.document!) };
+  };
+
+  test("the prefix leaves one selector and is not itself truncated", () => {
+    expect(probe("")).toEqual({ used: 19_999, truncated: false });
+  });
+  test("a nested rule that fits exactly the last one is not truncated", () => {
+    expect(probe("a{ &.x{border:0} }")).toEqual({ used: 20_000, truncated: false });
+  });
+  test("a nested rule met with the budget already spent is reported", () => {
+    expect(probe("a{ &.x{border:0} } b{ &.y{border:0} }")).toEqual({ used: 20_000, truncated: true });
+  });
+  test("a second child part after the last selector is reported", () => {
+    expect(probe("a{ &.x,&.y{border:0} }")).toEqual({ used: 20_000, truncated: true });
+  });
+  test("a second parent part after the last selector is reported", () => {
+    expect(probe("a,b{ &.x{border:0} }")).toEqual({ used: 20_000, truncated: true });
   });
 });
