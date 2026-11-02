@@ -60,6 +60,10 @@ describe("the content of a template is not evidence", () => {
     expect(detects(after, "youtube-embed")).toBe(true);
   });
 
+  test("a longer tag name that starts with `template` is not a template tag", () => {
+    expect(detects(shell(`<template><templates>${STRIPE}</template>`), "stripe")).toBe(false);
+  });
+
   test("a declarative shadow root is rendered: its content is read", () => {
     expect(detects(shell(`<template shadowrootmode="open">${STRIPE}</template>`), "stripe")).toBe(true);
     expect(detects(shell(`<template shadowroot="open">${STRIPE}</template>`), "stripe")).toBe(true);
