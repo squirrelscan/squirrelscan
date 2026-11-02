@@ -156,6 +156,23 @@ describe("sample data the page renders (#1308)", () => {
     expect(scanContent(table("acme.com"), "inline-script", PAGE)[0]?.extra).toMatchObject({ hint: expect.stringContaining("demo login") });
   });
 
+  test("the seed-table finding is reported at medium confidence, for reserved-domain and real-domain tables alike", () => {
+    for (const domain of ["x.test", "acme.com"]) {
+      const findings = scanContent(table(domain), "inline-script", PAGE);
+      expect([domain, findings.map((f) => [f.type, f.confidence])]).toEqual([domain, Array(3).fill(["Possible Demo Login (seed data table)", "medium"])]);
+    }
+  });
+
+  test("an elided value inside a seed table is a seed row: the seed verdict wins, at medium, not the partial-value check at info", () => {
+    const stub = "Xk9!" + "mQ2v...";
+    for (const domain of ["x.test", "acme.com"]) {
+      const text = `var users=[${row(`a@${domain}`, "admin", PASSWORD)},${row(`b@${domain}`, "user", stub)},${row(`c@${domain}`, "user", "Zk5!" + "mQ2vL8zR")}];`; // pragma: allowlist secret
+      const findings = scanContent(text, "inline-script", PAGE);
+      expect([domain, findings.map((f) => [f.type, f.confidence])]).toEqual([domain, Array(3).fill(["Possible Demo Login (seed data table)", "medium"])]);
+      expect(findings.some((f) => f.type === "Partial Secret Value Visible (elided)")).toBe(false);
+    }
+  });
+
   test("a mix of reserved and real domains is not a sample", () => {
     const mixed = `var users=[${row("a@x.test", "admin", PASSWORD)},${row("b@acme.com", "user", "Yk7!" + "mQ2vL8zQ")},${row("c@x.test", "user", "Zk5!" + "mQ2vL8zR")}];`; // pragma: allowlist secret
     expect(found(mixed).every((t) => t === "Possible Demo Login (seed data table)")).toBe(true);
