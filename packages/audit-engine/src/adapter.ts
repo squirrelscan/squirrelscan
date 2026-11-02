@@ -2935,7 +2935,7 @@ function buildStreamingSiteData(
   egressPinnedByTransport?: boolean,
   pinOwnHosts?: boolean,
   ownSiteOnly?: boolean,
-  probes?: { deadlineAt?: number; onSkipped?: (probe: string) => void },
+  probes?: { deadlineAt?: number; onSkipped?: (probe: string) => void; maxParseBytes?: number },
 ): Effect.Effect<
   {
     siteDataForPageRules: SiteData;
@@ -3165,6 +3165,7 @@ function buildStreamingSiteData(
             ownSiteOnly,
           ),
           perHostDelayMs: config.crawler?.per_host_delay_ms,
+          maxParseBytes: probes?.maxParseBytes,
           signal: cancel,
         },
       ).catch((): undefined => undefined), probes?.deadlineAt),
@@ -3630,7 +3631,7 @@ export function runStreamingRules(
         opts?.egressPinnedByTransport,
         opts?.pinOwnHosts,
         opts?.ownSiteOnly,
-        { deadlineAt: opts?.probesDeadlineAt, onSkipped: opts?.onProbeSkipped },
+        { deadlineAt: opts?.probesDeadlineAt, onSkipped: opts?.onProbeSkipped, maxParseBytes: opts?.maxPageBytes },
       ),
     );
 

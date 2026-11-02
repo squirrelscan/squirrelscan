@@ -1241,10 +1241,17 @@ export function createCrawler(
             // Fall through to HTML parsing
           }
         }
+        // #1502: a cached page over the parse cap (stored, never parsed, when it was fetched under the cap) is not
+        // parsed here either: the cap bounds the parse cost wherever the HTML is parsed. The size is the decoded
+        // body's, as at the fetch gate.
+        const overParseCap =
+          config.maxParseBytes !== undefined &&
+          decodedPageBytes(cachedPage.sizeBytes, cachedPage.html ?? "") > config.maxParseBytes;
         if (
           linkDiscoveryAllowed() &&
           crawlableUrls.length === 0 &&
           cachedPage.html &&
+          !overParseCap &&
           (isHtmlContentType(cachedPage.contentType) ||
             (!cachedPage.contentType && looksLikeHtml(cachedPage.html)))
         ) {
