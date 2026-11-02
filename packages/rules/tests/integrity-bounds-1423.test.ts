@@ -187,27 +187,30 @@ test("an empty link href goes to the <base>; without a moved base it is the page
 
 // ── review round 2 on #1526: base resolution is linear, foreignObject, notes ───────────────────────────────────────────
 
-test("30,000 sibling full-viewport iframes with a password form and no <base>: the base is read once, in a linear pass", async () => {
-  const frames = `<iframe src="/f" style="${GEOM}"></iframe>`.repeat(30_000);
+test("60,000 sibling full-viewport iframes with a password form and no <base>: the base is read once, in a linear pass", async () => {
+  const frames = `<iframe src="/f" style="${GEOM}"></iframe>`.repeat(60_000);
   const started = performance.now();
   await run(`<form><input type="password"></form>${frames}`);
-  expect(performance.now() - started).toBeLessThan(3_000);
-}, 60_000);
+  // linear: well under a second alone; the quadratic variant takes minutes at this size, so a loaded machine cannot flip it
+  expect(performance.now() - started).toBeLessThan(10_000);
+}, 120_000);
 
 test("tens of thousands of <base> elements, flat in one svg or nested deep in an svg, are found in a linear pass", async () => {
   const base = '<base href="https://evil.example/">';
   const link = '<a href="/signin">Sign in with Google</a>';
   const started = performance.now();
   await run(`<svg>${"<g>".repeat(4_000)}${base.repeat(16_000)}${"</g>".repeat(4_000)}</svg>${link}`);
-  await run(`<svg>${base.repeat(40_000)}</svg>${link}`);
-  expect(performance.now() - started).toBeLessThan(3_000);
-}, 60_000);
+  await run(`<svg>${base.repeat(80_000)}</svg>${link}`);
+  expect(performance.now() - started).toBeLessThan(10_000);
+}, 120_000);
 
 test("a <base> inside <svg><foreignObject> is an HTML element and is honoured; one directly in svg is not", () => {
   const link = '<a href="/signin">Sign in with Google</a>';
   const evil = '<base href="https://evil.example/">';
   expect(brand(`<svg><foreignObject>${evil}</foreignObject></svg>${link}`)).toBe("Google");
   expect(brand(`<svg><g>${evil}</g></svg>${link}`)).toBeNull();
+  expect(brand(`<math>${evil}</math>${link}`)).toBeNull();
+  expect(brand(`<math><mrow>${evil}</mrow></math>${link}`)).toBeNull();
   expect(brand(`<noscript><svg><foreignObject>${evil}</foreignObject></svg></noscript>${link}`)).toBeNull();
 });
 
