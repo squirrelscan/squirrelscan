@@ -15,5 +15,11 @@ export type { DetectOptions } from "./detect";
 export { ALL_FINGERPRINTS } from "./fingerprints";
 export { checkVersionAdvisories } from "./versions";
 export type { SoftwareAdvisory } from "./versions";
-export { bundleHints, createBundleSampler, sampleBundleExtras, type BundleSampler } from "./bundle-sample";
+export {
+  bundleHints,
+  createBundleSampler,
+  sampleBundleExtras,
+  type BundleSampler,
+  type SourceSpan,
+} from "./bundle-sample";
 export { SEGMENT_SEPARATOR } from "./js-scan";
