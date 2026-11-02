@@ -158,6 +158,88 @@ export function isNonPublicHostname(rawHost: string): boolean {
   return !host.includes(".");
 }
 
+/** The eight 16-bit groups of an IPv6 literal (dotted IPv4 tail allowed), or undefined when it is not one. */
+function ipv6Groups(host: string): number[] | undefined {
+  let text = host.toLowerCase();
+  const tail = /(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(text);
+  if (tail) {
+    const o = tail.slice(1).map(Number);
+    if (o.some((n) => n > 255)) return undefined;
+    text = `${text.slice(0, tail.index)}${((o[0]! << 8) | o[1]!).toString(16)}:${((o[2]! << 8) | o[3]!).toString(16)}`;
+  }
+  const halves = text.split("::");
+  if (halves.length > 2) return undefined;
+  const side = (part: string): number[] | undefined => {
+    if (part === "") return [];
+    const groups = part.split(":");
+    const out: number[] = [];
+    for (const g of groups) {
+      if (!/^[0-9a-f]{1,4}$/.test(g)) return undefined;
+      out.push(Number.parseInt(g, 16));
+    }
+    return out;
+  };
+  const head = side(halves[0]!);
+  const rest = halves.length === 2 ? side(halves[1]!) : [];
+  if (!head || !rest) return undefined;
+  if (halves.length === 1) return head.length === 8 ? head : undefined;
+  const fill = 8 - head.length - rest.length;
+  if (fill < 1) return undefined;
+  return [...head, ...Array<number>(fill).fill(0), ...rest];
+}
+
+const dotted = (hi: number, lo: number): string => `${hi >> 8}.${hi & 0xff}.${lo >> 8}.${lo & 0xff}`;
+
+/** An IPv4 literal in a range no public site is served from, beyond the private ones: documentation, benchmarking, multicast, reserved, broadcast. */
+function isSpecialUseIpv4(host: string): boolean {
+  const o = host.split(".").map(Number);
+  if (o.length !== 4 || o.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return false;
+  const [a, b, c] = o as [number, number, number, number];
+  if (a >= 224) return true; // multicast 224/4, reserved 240/4, broadcast 255.255.255.255
+  if (a === 192 && b === 0 && (c === 0 || c === 2)) return true; // 192.0.0.0/24 (IETF), 192.0.2.0/24 (TEST-NET-1)
+  if (a === 192 && b === 88 && c === 99) return true; // 192.88.99.0/24 (6to4 relay, deprecated)
+  if (a === 198 && (b === 18 || b === 19)) return true; // 198.18.0.0/15 (benchmarking)
+  if (a === 198 && b === 51 && c === 100) return true; // 198.51.100.0/24 (TEST-NET-2)
+  if (a === 203 && b === 0 && c === 113) return true; // 203.0.113.0/24 (TEST-NET-3)
+  return false;
+}
+
+/** An IPv6 literal that is special-use or carries an IPv4 address that is not public: NAT64, 6to4, Teredo, compatible, site-local, documentation, multicast, discard. */
+function isSpecialUseIpv6(host: string): boolean {
+  const g = ipv6Groups(host);
+  if (!g) return false;
+  const [g0, g1, g2, g3, g4, g5, g6, g7] = g as [number, number, number, number, number, number, number, number];
+  const zeros = (from: number, to: number): boolean => g.slice(from, to).every((x) => x === 0);
+  if (zeros(0, 6)) return true; // ::/96: unspecified, loopback and the deprecated IPv4-compatible form
+  if (g0 === 0x64 && g1 === 0xff9b) {
+    if (zeros(2, 6)) return isNonPublicHostnameStrict(dotted(g6, g7)); // NAT64: the embedded IPv4 decides
+    if (g2 === 1) return true; // 64:ff9b:1::/48, local-use NAT64
+  }
+  if (g0 === 0x2002) return isNonPublicHostnameStrict(dotted(g1, g2)); // 6to4: the embedded IPv4 decides
+  if (g0 === 0x2001 && g1 === 0) return true; // Teredo 2001::/32
+  if (g0 === 0x2001 && g1 === 0xdb8) return true; // documentation 2001:db8::/32
+  if ((g0 & 0xfff0) === 0x3ff0) return true; // documentation 3fff::/20
+  if ((g0 & 0xffc0) === 0xfec0) return true; // site-local fec0::/10
+  if (g0 >> 8 === 0xff) return true; // multicast ff00::/8
+  if (g0 === 0x100 && g1 === 0 && g2 === 0 && g3 === 0) return true; // discard 100::/64
+  if (zeros(0, 4) && g4 === 0xffff && g5 === 0) return isNonPublicHostnameStrict(dotted(g6, g7)); // ::ffff:0:a.b.c.d
+  if (zeros(0, 5) && g5 === 0xffff) return isNonPublicHostnameStrict(dotted(g6, g7)); // ::ffff:a.b.c.d
+  return false;
+}
+
+/**
+ * {@link isNonPublicHostname} plus the special-use address ranges a hosted or batch caller must not be pointed at: IPv4
+ * documentation, benchmarking, multicast, reserved and broadcast; IPv6 NAT64, 6to4 (judged by the IPv4 they carry), Teredo,
+ * IPv4-compatible, site-local, documentation, multicast and discard. A separate function, not a change to the shared one,
+ * because the shared classifier also decides which delivery rules run on a page, and fixtures and docs use these ranges.
+ */
+export function isNonPublicHostnameStrict(rawHost: string): boolean {
+  if (isNonPublicHostname(rawHost)) return true;
+  const host = normalizeHostname(rawHost);
+  if (!isIpLiteral(host)) return false;
+  return host.includes(":") ? isSpecialUseIpv6(host) : isSpecialUseIpv4(host);
+}
+
 /**
  * The wider question the POLICY callers ask (#1560): is this bare host one no public visitor, and no hosted service, can reach?
  * `isNonPublicHostname` plus every special-use IP literal: NAT64, 6to4, Teredo and ISATAP forms, the documentation ranges (IPv4
