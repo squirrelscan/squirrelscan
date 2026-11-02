@@ -9,6 +9,7 @@ import type {
   ParsedPage,
 } from "../types";
 
+import { REPORT_LIMITS } from "@squirrelscan/core-contracts";
 import { SECRET_KEY_LOOKBEHIND_SIZE } from "@squirrelscan/utils/constants";
 
 import { shannonEntropy } from "../integrity/signals";
@@ -3308,12 +3309,101 @@ export function selectFastPatterns(content: string): string[] {
   return FAST_PATTERNS.filter((p) => fastPatternMayFire(p, index)).map((p) => p.name);
 }
 
+// ── How many findings one page keeps (#1554) ──────────────────────────────────
+//
+// Nothing used to bound this, and a page full of distinct secret-shaped values (a generated fixture, a data dump) kept
+// hundreds of MB, made a rule result of tens of MB and, past about 480K, threw at the merge. What already bounded the
+// result downstream: the report clamps every check to `REPORT_LIMITS.maxItemsPerCheck` items (the rest become
+// `details.additional`) and the publish cap shrinks a report to 1 MiB, so a page's findings past that count were never
+// shown anywhere. The page cap is that same number, so the three caps agree: whatever the page keeps can be listed.
+//
+// A page over the cap keeps its most serious findings, not its first: critical, then high, then medium, then public and
+// informational ones, each tier in scan order. What was left out is COUNTED and travels with the page (`omitted`), so
+// the rule can say so and the page does not read as clean.
+
+/** Most findings one page (or one external script) keeps. */
+export const PAGE_FINDINGS_CAP = REPORT_LIMITS.maxItemsPerCheck;
+
+/** 0 critical (a server-only secret in a browser-served script), 1 high, 2 medium, 3 public by design or informational. */
+function severityTier(s: LeakedSecret): number {
+  if (s.publicByDesign || s.confidence === "info") return 3;
+  if (isShippedServerSecret(s)) return 0;
+  return s.confidence === "high" ? 1 : 2;
+}
+
+/** Collects findings up to a cap and counts the rest (see above). Below the cap it is a plain list in scan order. */
+export interface FindingSink {
+  add(finding: LeakedSecret): void;
+  /** Counts findings that were left out elsewhere (a nested scan's). */
+  omit(count: number): void;
+  /** Findings seen and not kept. */
+  omitted(): number;
+  /** What was kept, in scan order. */
+  result(): LeakedSecret[];
+}
+
+export function createFindingSink(cap: number = PAGE_FINDINGS_CAP): FindingSink {
+  const plain: LeakedSecret[] = [];
+  let tiers: Array<Array<{ finding: LeakedSecret; seq: number }>> | null = null;
+  let seq = 0;
+  let omitted = 0;
+  return {
+    add(finding) {
+      if (!tiers) {
+        if (plain.length < cap) {
+          plain.push(finding);
+          return;
+        }
+        // The cap is reached: from here the tiers decide what stays. The list so far is moved into them, keeping its order.
+        tiers = [[], [], [], []];
+        for (const kept of plain) tiers[severityTier(kept)]!.push({ finding: kept, seq: seq++ });
+        plain.length = 0;
+      }
+      const tier = severityTier(finding);
+      let worst = 3;
+      while (worst > 0 && tiers[worst]!.length === 0) worst--;
+      if (tier < worst) {
+        tiers[worst]!.pop(); // the most recent finding of the least serious tier makes room
+        omitted++;
+        tiers[tier]!.push({ finding, seq: seq++ });
+      } else {
+        omitted++;
+        seq++;
+      }
+    },
+    omit(count) {
+      omitted += count;
+    },
+    omitted: () => omitted,
+    result() {
+      if (!tiers) return plain;
+      const all: Array<{ finding: LeakedSecret; seq: number }> = [];
+      for (const tier of tiers) for (const entry of tier) all.push(entry);
+      all.sort((a, b) => a.seq - b.seq);
+      return all.map((entry) => entry.finding);
+    },
+  };
+}
+
 /**
  * How much text after a value a decoder may read. A signature sits PAST the
  * key it signs, so a presigned S3 URL cannot be recognised from the
  * look-behind alone; one kilobyte covers the query string of one.
  */
 const FORWARD_REACH = 1024;
+
+/** The findings of one body, at most {@link PAGE_FINDINGS_CAP} of them, and how many more there were. */
+export function scanContentBounded(
+  content: string,
+  location: ReportedLocation,
+  sourceUrl?: string,
+  depth = 0,
+  source: { offsetBase?: number; scriptIndex?: number } = {}
+): { secrets: LeakedSecret[]; omitted: number } {
+  const sink = createFindingSink();
+  scanInto(sink, content, location, sourceUrl, depth, source);
+  return { secrets: sink.result(), omitted: sink.omitted() };
+}
 
 export function scanContent(
   content: string,
@@ -3322,7 +3412,17 @@ export function scanContent(
   depth = 0,
   source: { offsetBase?: number; scriptIndex?: number } = {}
 ): LeakedSecret[] {
-  const found: LeakedSecret[] = [];
+  return scanContentBounded(content, location, sourceUrl, depth, source).secrets;
+}
+
+function scanInto(
+  found: FindingSink,
+  content: string,
+  location: ReportedLocation,
+  sourceUrl: string | undefined,
+  depth: number,
+  source: { offsetBase?: number; scriptIndex?: number }
+): void {
 
   // Entities in HTML, `\u`/`\x` escapes in script text (#360): every pattern
   // below reads the decoded form, once. See secrets/decode.ts.
@@ -3825,7 +3925,7 @@ export function scanContent(
           finding.extra = { ...finding.extra, pair: `no 40-character secret-shaped value within ${AWS_PAIR_REACH} characters: probably the public half of the pair; the secret may sit elsewhere` }; // pragma: allowlist secret
         }
       }
-      if (finding) found.push(finding);
+      if (finding) found.add(finding);
     }
   }
 
@@ -3940,7 +4040,7 @@ export function scanContent(
           () => back.before,
           () => content.slice(at + value.length, at + value.length + FORWARD_REACH)
         );
-        if (finding) found.push(finding);
+        if (finding) found.add(finding);
       }
     }
   }
@@ -3948,17 +4048,22 @@ export function scanContent(
   // Pass 3: base64 blobs that decode to text (#360) — a config object handed
   // to the client as one string — scanned as content of their own, two
   // levels deep, reported with a ` (base64)` location suffix.
-  for (const finding of scanBase64Blobs(content, location, sourceUrl, depth, scanContent)) {
+  // A decoded blob is scanned into a sink of its own, so the cap holds for it too and what it left out is counted here.
+  const scanBlob = (text: string, blobLocation: ReportedLocation, url: string | undefined, blobDepth: number): LeakedSecret[] => {
+    const inner = createFindingSink();
+    scanInto(inner, text, blobLocation, url, blobDepth, {});
+    found.omit(inner.omitted());
+    return inner.result();
+  };
+  for (const finding of scanBase64Blobs(content, location, sourceUrl, depth, scanBlob)) {
     const adjustedOffset = finding.offset + (source.offsetBase ?? 0);
     if (adjustedOffset < 0) continue;
-    found.push({
+    found.add({
       ...finding,
       offset: adjustedOffset,
       ...(source.scriptIndex !== undefined ? { scriptIndex: source.scriptIndex } : {}),
     });
   }
-
-  return found;
 }
 
 /**
@@ -3998,15 +4103,17 @@ function detachSecret(secret: LeakedSecret): LeakedSecret {
   return out;
 }
 
-export function scanPageForSecrets(
+/**
+ * One page's findings, at most {@link PAGE_FINDINGS_CAP} (the most serious first when there are more), and the number
+ * left out. The page's document pass and each of its inline scripts share ONE cap.
+ */
+export function scanPageBounded(
   doc: NonNullable<ParsedPage["document"]>,
   pageUrl: string
-): LeakedSecret[] {
-  const found: LeakedSecret[] = [];
+): { secrets: LeakedSecret[]; omitted: number } {
+  const sink = createFindingSink();
   const html = doc.toString();
-  if (html) {
-    found.push(...scanContent(html, "html", pageUrl));
-  }
+  if (html) scanInto(sink, html, "html", pageUrl, 0, {});
   for (const [scriptIndex, script] of Array.from(doc.querySelectorAll("script")).entries()) {
     if (script.hasAttribute("src")) continue;
     const scriptContent = script.textContent || "";
@@ -4018,16 +4125,21 @@ export function scanPageForSecrets(
       // that the rule's dedup then has to reconcile. Attributes carry no
       // findings of their own that the document pass has not already made.
       const openTag = openTagOf(script);
-      found.push(
-        ...scanContent(`${openTag}${scriptContent}`, "inline-script", pageUrl, 0, {
-          offsetBase: -openTag.length,
-          scriptIndex,
-        })
-      );
+      scanInto(sink, `${openTag}${scriptContent}`, "inline-script", pageUrl, 0, {
+        offsetBase: -openTag.length,
+        scriptIndex,
+      });
     }
   }
   // The records are kept for the whole crawl until the site rule runs: they must not keep the scanned page alive (#1552).
-  return found.map(detachSecret);
+  return { secrets: sink.result().map(detachSecret), omitted: sink.omitted() };
+}
+
+export function scanPageForSecrets(
+  doc: NonNullable<ParsedPage["document"]>,
+  pageUrl: string
+): LeakedSecret[] {
+  return scanPageBounded(doc, pageUrl).secrets;
 }
 
 export const leakedSecretsRule: Rule = {
@@ -4051,20 +4163,36 @@ export const leakedSecretsRule: Rule = {
   run(ctx: RuleContext): RuleResult {
     const checks: CheckResult[] = [];
     const leakedSecrets: LeakedSecret[] = [];
+    // Findings found and not kept, by the per-page cap (see PAGE_FINDINGS_CAP), and the pages that lost some.
+    let omittedFindings = 0;
+    const omittedPages: Array<{ url: string; omitted: number }> = [];
+    // Appended one at a time: spreading a large array into `push` throws RangeError past the engine's argument limit
+    // (#1554), and the whole site's result went with it.
+    const append = (found: readonly LeakedSecret[]): void => {
+      for (const finding of found) leakedSecrets.push(finding);
+    };
+    const noteOmitted = (url: string, omitted: number): void => {
+      if (omitted <= 0) return;
+      omittedFindings += omitted;
+      omittedPages.push({ url, omitted });
+    };
 
     // Scan all pages' HTML and inline scripts. Streaming (#1021): the per-page
     // scan already ran at page-time — read the collected results in page order.
-    // v1: scan each live `site.pages` document. Both go through scanPageForSecrets,
+    // v1: scan each live `site.pages` document. Both go through scanPageBounded,
     // so the per-page secret list and its order are byte-identical.
     if (ctx.collectedSignals) {
       for (const rec of ctx.collectedSignals.pages) {
-        leakedSecrets.push(...rec.secrets);
+        append(rec.secrets);
+        noteOmitted(rec.url, rec.secretsOmitted ?? 0);
       }
     } else if (ctx.site?.pages) {
       for (const page of ctx.site.pages) {
         const doc = page.parsed.document;
         if (!doc) continue;
-        leakedSecrets.push(...scanPageForSecrets(doc, page.url));
+        const scanned = scanPageBounded(doc, page.url);
+        append(scanned.secrets);
+        noteOmitted(page.url, scanned.omitted);
       }
     }
 
@@ -4072,9 +4200,9 @@ export const leakedSecretsRule: Rule = {
     if (ctx.site?.scripts) {
       for (const script of ctx.site.scripts) {
         if (script.content) {
-          leakedSecrets.push(
-            ...scanContent(script.content, "external-script", script.url)
-          );
+          const scanned = scanContentBounded(script.content, "external-script", script.url);
+          append(scanned.secrets);
+          noteOmitted(script.url, scanned.omitted);
         }
       }
     }
@@ -4144,49 +4272,80 @@ export const leakedSecretsRule: Rule = {
       },
     });
 
+    // The report keeps `maxItemsPerCheck` items of a check and rolls the rest into `details.additional`: the rule does the
+    // same, so a check never carries more than the report would (a 10 MB page of key shapes was a 107 MB result).
+    const listed = (list: LeakedSecret[]): { items: CheckItem[]; extra: { additional?: number } } => {
+      const shown = list.length > PAGE_FINDINGS_CAP ? list.slice(0, PAGE_FINDINGS_CAP) : list;
+      return {
+        items: shown.map(item),
+        extra: list.length > shown.length ? { additional: list.length - shown.length } : {},
+      };
+    };
+
     if (critical.length > 0) {
+      const { items, extra } = listed(critical);
       checks.push({
         name: "leaked-secrets-critical",
         status: "fail",
         message: `${critical.length} critical server-only secret(s) shipped to every visitor in browser-served scripts (rotate now)`,
-        details: { severity: "critical" },
-        items: critical.map(item),
+        details: { severity: "critical", ...extra },
+        items,
       });
     }
 
     if (highConfidence.length > 0) {
+      const { items, extra } = listed(highConfidence);
       checks.push({
         name: "leaked-secrets-high",
         status: "fail",
         message: `${highConfidence.length} high-confidence leaked secret(s) detected`,
-        items: highConfidence.map(item),
+        ...(extra.additional !== undefined ? { details: extra } : {}),
+        items,
       });
     }
 
     if (mediumConfidence.length > 0) {
+      const { items, extra } = listed(mediumConfidence);
       checks.push({
         name: "leaked-secrets-medium",
         status: "warn",
         message: `${mediumConfidence.length} potential secret(s) detected (verify manually)`,
-        items: mediumConfidence.map(item),
+        ...(extra.additional !== undefined ? { details: extra } : {}),
+        items,
       });
     }
 
     if (publicKeys.length > 0) {
+      const { items, extra } = listed(publicKeys);
       checks.push({
         name: "leaked-secrets-public",
         status: "info",
         message: `${publicKeys.length} public client-side key(s) found (public by design — verify usage restrictions are configured)`,
-        items: publicKeys.map(item),
+        ...(extra.additional !== undefined ? { details: extra } : {}),
+        items,
       });
     }
 
     if (informational.length > 0) {
+      const { items, extra } = listed(informational);
       checks.push({
         name: "leaked-secrets-info",
         status: "info",
         message: `${informational.length} expired, session-scoped or signature-bound token(s) found (informational, not counted as a leak)`,
-        items: informational.map(item),
+        ...(extra.additional !== undefined ? { details: extra } : {}),
+        items,
+      });
+    }
+
+    // Findings the per-page cap left out are COUNTED, never dropped in silence: the pages that lost some are listed, so a
+    // page that was cut does not read as one with only what is shown.
+    if (omittedFindings > 0) {
+      checks.push({
+        name: "leaked-secrets-omitted",
+        status: "warn",
+        message: `${omittedFindings} more secret-shaped finding(s) on ${omittedPages.length} source(s) were not kept: a page or script keeps at most ${PAGE_FINDINGS_CAP}, most serious first, so what is listed is not all of it`,
+        details: { omitted: omittedFindings, perPageCap: PAGE_FINDINGS_CAP },
+        items: omittedPages.slice(0, 20).map((p) => ({ id: p.url, label: `${p.omitted} finding(s) not kept` })),
       });
     }
 
