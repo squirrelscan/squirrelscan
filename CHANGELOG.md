@@ -19,7 +19,7 @@ How it works:
 
 ### Fixed
 
-- **The `--max-duration` parse cap now also holds when a cached page is reused and when a soft-404 is re-fetched.** A page over the cap is stored but never parsed when it is fetched; reusing it from cache used to parse its HTML for links, and the soft-404 confirmation parsed the body it re-fetched, so both brought back the parse cost the cap bounds. A cached page over the cap is reused without discovering its links, and a re-fetched body over the cap leaves the candidate `unconfirmed` (still reported, never dropped). The size is the decoded body's, as at the fetch gate. (#1502, refs #1332)
+- **The `--max-duration` parse cap now also holds when a cached page is reused.** A page over the cap is stored but never parsed when it is fetched; reusing it from cache used to parse its HTML for links, which brought back the parse cost the cap bounds (25 stored pages of about 6 MB took a reuse pass 192 s and 2.6 GB more memory before, 1.2 s and 0.2 GB after, measured by the reviewer). A cached page over the cap is now reused without discovering its links. The size is the decoded body's, as at the fetch gate. The soft-404 confirmation re-fetch gets the same guard as defense in depth: a re-fetched body over the cap leaves the candidate `unconfirmed` (still reported, never dropped), though that re-fetch is already cut at 1 MB, under the 5 MiB cap. (#1502, refs #1332)
 
 ## v0.0.159 (2026-11-02)
 
