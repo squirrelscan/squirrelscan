@@ -31,6 +31,20 @@ const PUBLIC = async () => ["93.184.216.34"];
 const OPTIONS = { pin: false, policy: { resolve: PUBLIC } } as const;
 
 describe("resolveStartRedirect", () => {
+  // #1560: the private-network allowance is a GRANT that follows the start URL, so it stays the narrow classifier. A start URL that is a
+  // special-use literal (NAT64, 6to4) is not allowed to redirect around the private network, as a public start URL is not.
+  test("a NAT64 or 6to4 start URL is not granted private-network egress; a LAN start URL still is", async () => {
+    for (const start of ["http://[64:ff9b::a00:5]/", "http://[2002:a00:5::]/", "http://203.0.113.10/"]) {
+      const { transport, asked } = table({ [start]: { status: 302, location: "http://10.0.0.5/" }, "http://10.0.0.5/": { status: 200 } });
+      const result = await resolveStartRedirect(start, { ...OPTIONS, transport });
+      // the guard refuses the literal without a request: nothing was asked, and no chain was followed
+      expect([start, result.kind, asked, result.chain]).toEqual([start, "none", [], []]);
+    }
+    const lan = table({ "http://192.168.1.2/": { status: 302, location: "http://10.0.0.5/" }, "http://10.0.0.5/": { status: 200 } });
+    const ok = await resolveStartRedirect("http://192.168.1.2/", { ...OPTIONS, transport: lan.transport });
+    expect(ok.finalUrl).toBe("http://10.0.0.5/");
+  });
+
   test("a start URL that does not redirect resolves to itself", async () => {
     const { transport } = table({ "https://example.com/": { status: 200 } });
     const result = await resolveStartRedirect("https://example.com/", { ...OPTIONS, transport });

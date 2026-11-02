@@ -11,7 +11,9 @@ import { describe, expect, test } from "bun:test";
 import {
   isNonPublicHostname,
   isNonPublicUrl,
+  isPrivateNetworkUrl,
   nonPublicHostLabel,
+  privateNetworkHostLabel,
 } from "../src/non-public-host";
 
 describe("nonPublicHostLabel", () => {
@@ -53,7 +55,7 @@ describe("nonPublicHostLabel", () => {
     ["https://example.com/"],
     ["https://www.squirrelscan.com/docs"],
     ["http://staging.example.com:8080/"],
-    ["https://203.0.113.10/"], // a public literal IP
+    ["https://93.184.216.34/"], // a public literal IP (203.0.113.0/24 is documentation, not public: it is listed below)
     ["http://172.32.0.1/"], // just past 172.16/12
     ["http://192.169.0.1/"], // just past 192.168/16
   ])("%s is public", (url) => {
@@ -109,6 +111,42 @@ describe("nonPublicHostLabel", () => {
     ["http://[::ffff:10.0.0.1]/", "[::ffff:a00:1]"],
   ])("%s is still caught by the IP rules", (url, label) => {
     expect(nonPublicHostLabel(url)).toBe(label);
+  });
+
+  // #1560: the policy callers ask the wide question. A special-use literal is not public, whatever it embeds. The documentation
+  // ranges moved here from the public list above (a fixture that wants "public" uses a real public address).
+  test.each([
+    ["http://[64:ff9b::a00:1]/", "[64:ff9b::a00:1]"], // NAT64 for 10.0.0.1
+    ["http://[64:ff9b::a9fe:a9fe]/", "[64:ff9b::a9fe:a9fe]"], // NAT64 for the metadata address
+    ["http://[64:ff9b:1::a00:1]/", "[64:ff9b:1::a00:1]"],
+    ["http://[2002:a00:1::]/", "[2002:a00:1::]"], // 6to4 for 10.0.0.1
+    ["http://[2002:7f00:1::1]/", "[2002:7f00:1::1]"], // 6to4 for loopback
+    ["http://[2001:0:4136:e378:8000:63bf:80ff:fffe]/", "[2001:0:4136:e378:8000:63bf:80ff:fffe]"], // Teredo
+    ["http://[fec0::1]/", "[fec0::1]"], // site-local
+    ["http://[2001:db8::1]/", "[2001:db8::1]"], // documentation
+    ["http://[3fff::1]/", "[3fff::1]"],
+    ["http://[ff02::1]/", "[ff02::1]"], // multicast
+    ["http://[2a00:1450::5efe:a00:1]/", "[2a00:1450::5efe:a00:1]"], // ISATAP embedding 10.0.0.1
+    ["http://203.0.113.10/", "203.0.113.10"], // documentation (TEST-NET-3)
+    ["http://192.0.2.1:8080/", "192.0.2.1:8080"], // TEST-NET-1
+    ["http://198.51.100.7/", "198.51.100.7"], // TEST-NET-2
+    ["http://198.18.0.1/", "198.18.0.1"], // benchmarking
+    ["http://224.0.0.1/", "224.0.0.1"], // multicast
+    ["http://240.0.0.1/", "240.0.0.1"], // reserved
+    ["http://255.255.255.255/", "255.255.255.255"],
+  ])("%s is special-use: not public, labelled %s", (url, label) => {
+    expect(nonPublicHostLabel(url)).toBe(label);
+    expect(isNonPublicUrl(url)).toBe(true);
+  });
+
+  test("the narrow label (the grant) does not name them: a start URL there is not allowed private-network egress", () => {
+    for (const url of ["http://[64:ff9b::a00:1]/", "http://[2002:a00:1::]/", "http://[2001::1]/", "http://203.0.113.10/", "http://[fec0::1]/", "http://224.0.0.1/"]) {
+      expect([url, privateNetworkHostLabel(url), isPrivateNetworkUrl(url)]).toEqual([url, null, false]);
+    }
+    // and it keeps what it always named
+    for (const url of ["http://localhost:3000", "http://10.0.0.5/", "http://[::1]:5173/", "http://box.local/", "http://169.254.169.254/"]) {
+      expect([url, privateNetworkHostLabel(url) !== null]).toEqual([url, true]);
+    }
   });
 
   test("uppercase does not evade the name rules", () => {

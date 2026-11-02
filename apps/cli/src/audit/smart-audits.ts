@@ -45,7 +45,7 @@ export const REMOVED_STATUSES = new Set([404, 410]);
  * page's synthetic pass, would otherwise put a rule that does not apply back
  * into the score through the pages this run did not re-crawl.
  */
-function privateTargetRuleIds(siteKey: string): ReadonlySet<string> {
+export function privateTargetRuleIds(siteKey: string): ReadonlySet<string> {
   if (!isNonPublicUrl(siteKey)) return new Set();
   const ids = new Set<string>();
   for (const rule of loadAllRules().values()) {

@@ -41,6 +41,7 @@
  * hardening. This decides what to hand to the cloud and which rules apply,
  * never whether to fetch.
  */
+import { isSpecialUseIpLiteral } from "./special-use-ip";
 import { isPrivateOrReservedHost } from "./url";
 
 /** Loopback by name. RFC 6761 for `localhost`; the rest are conventional. */
@@ -156,8 +157,25 @@ export function isNonPublicHostname(rawHost: string): boolean {
 }
 
 /**
+ * The wider question the POLICY callers ask (#1560): is this bare host one no public visitor, and no hosted service, can reach?
+ * `isNonPublicHostname` plus every special-use IP literal: NAT64, 6to4, Teredo and ISATAP forms, the documentation ranges (IPv4
+ * and IPv6), site-local, multicast and the reserved blocks, whatever IPv4 they embed (see `special-use-ip.ts`). Cloud handoff,
+ * the render charge, publish gating, the `skipOnPrivateTarget` rule gating and the default scheme read this.
+ *
+ * NOT for a grant. `isNonPublicHostname` stays the narrow test that `allowPrivateNetwork` follows (the crawl's seed redirect
+ * and the engine's probes): a host that this function calls non-public but `isNonPublicHostname` does not is refused egress
+ * unless it is allowed explicitly, which is the safe direction. The egress guards keep `public-egress.ts`.
+ */
+export function isNonPublicHostnameForPolicy(rawHost: string): boolean {
+  const host = normalizeHostname(rawHost);
+  if (isNonPublicHostname(host)) return true;
+  return isIpLiteral(host) && isSpecialUseIpLiteral(host);
+}
+
+/**
  * The `host:port` of a local or private-network URL, or null when the host is
- * public.
+ * public. "Local or private" is `isNonPublicHostnameForPolicy`: the narrow
+ * private ranges and names, and every special-use IP literal (#1560).
  *
  * Takes the user's RAW input, including a bare `localhost:3000`. A schemeless
  * value gets `http://` purely so the URL parser will yield a host; the scheme
@@ -168,6 +186,18 @@ export function isNonPublicHostname(rawHost: string): boolean {
  * never be the thing that rejects a typo.
  */
 export function nonPublicHostLabel(rawUrl: string): string | null {
+  return hostLabelWhere(rawUrl, isNonPublicHostnameForPolicy);
+}
+
+/**
+ * {@link nonPublicHostLabel} with the NARROW classifier (`isNonPublicHostname`): for the callers that grant
+ * `allowPrivateNetwork` from the start URL (the crawl's seed redirect), where a wider verdict would widen a grant.
+ */
+export function privateNetworkHostLabel(rawUrl: string): string | null {
+  return hostLabelWhere(rawUrl, isNonPublicHostname);
+}
+
+function hostLabelWhere(rawUrl: string, classify: (host: string) => boolean): string | null {
   const trimmed = rawUrl.trim();
   if (trimmed.length === 0) return null;
   // An explicit non-http(s) scheme is someone else's error to report.
@@ -181,7 +211,7 @@ export function nonPublicHostLabel(rawUrl: string): string | null {
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
   // URL.hostname keeps an IPv6 literal bracketed; the checks want it bare.
   const bare = parsed.hostname.replace(/^\[|\]$/g, "");
-  if (!isNonPublicHostname(bare)) return null;
+  if (!classify(bare)) return null;
   // `host` (not `hostname`) so the port the user typed is in the label, and as
   // they typed it: this names the thing they pointed at, it is not an id.
   return parsed.host;
@@ -190,4 +220,9 @@ export function nonPublicHostLabel(rawUrl: string): string | null {
 /** True when `rawUrl` is a usable http(s) URL on a local or private-network host. */
 export function isNonPublicUrl(rawUrl: string): boolean {
   return nonPublicHostLabel(rawUrl) !== null;
+}
+
+/** True when `rawUrl` is a usable http(s) URL on a host the narrow classifier calls local or private (see {@link privateNetworkHostLabel}). */
+export function isPrivateNetworkUrl(rawUrl: string): boolean {
+  return privateNetworkHostLabel(rawUrl) !== null;
 }

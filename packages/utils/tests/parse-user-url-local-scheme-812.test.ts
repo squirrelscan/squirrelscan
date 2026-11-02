@@ -35,6 +35,20 @@ describe("parseUserUrl scheme default for local-only names (pub#812)", () => {
     expect(url("lan.dev")).toBe("https://lan.dev/");
   });
 
+  // #1560: a special-use literal has no public certificate either, so it defaults to http; a public literal stays https.
+  test("a schemeless special-use IP literal defaults to http, a public one to https", () => {
+    expect(url("[64:ff9b::a00:1]")).toBe("http://[64:ff9b::a00:1]/");
+    expect(url("[2002:a00:1::]:8080")).toBe("http://[2002:a00:1::]:8080/");
+    expect(url("[2001:db8::1]")).toBe("http://[2001:db8::1]/");
+    expect(url("[fec0::1]")).toBe("http://[fec0::1]/");
+    expect(url("192.0.2.1")).toBe("http://192.0.2.1/");
+    expect(url("203.0.113.10:3000")).toBe("http://203.0.113.10:3000/");
+    expect(url("198.18.0.1")).toBe("http://198.18.0.1/");
+    expect(url("8.8.8.8")).toBe("https://8.8.8.8/");
+    expect(url("[2606:4700::1111]")).toBe("https://[2606:4700::1111]/");
+    expect(url("[64:ff9b::a00:1]")).not.toBe("https://[64:ff9b::a00:1]/");
+  });
+
   test("an explicit scheme is kept as given", () => {
     expect(url("https://myapp.test")).toBe("https://myapp.test/");
     expect(url("https://box.local/")).toBe("https://box.local/");

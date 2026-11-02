@@ -26,7 +26,15 @@ export {
   type ProjectNameContext,
 } from "./url";
 
-export { isNonPublicHostname, isNonPublicUrl, nonPublicHostLabel } from "./non-public-host";
+export {
+  isNonPublicHostname,
+  isNonPublicHostnameForPolicy,
+  isNonPublicUrl,
+  isPrivateNetworkUrl,
+  nonPublicHostLabel,
+  privateNetworkHostLabel,
+} from "./non-public-host";
+export { isSpecialUseIpLiteral, isSpecialUseIpv4, isSpecialUseIpv6 } from "./special-use-ip";
 
 export { decodeCloudflareEmail, isCloudflareEmailProtectionUrl } from "./cloudflare-email";
 
