@@ -241,9 +241,9 @@ export function createBundleSampler(
   /** Text in front of a segment that starts at a given offset, when it begins inside a long span. */
   const openers = new Map<number, string>();
 
-  // The head is sent beside the sample. A window may use up to WINDOW_BEFORE
-  // characters before its hint, but never backs into text the head already owns.
-  const floor = Math.max(0, headChars);
+  // Keep the detector context immediately before the head boundary. The page
+  // allocator trims any overlap from the head before it joins the two parts.
+  const floor = Math.max(0, headChars - WINDOW_BEFORE);
   // A lower-cased copy, only when a case-insensitive hint needs it and the indices still line up.
   // U+0130 (a dotted capital I, in Turkish locale tables) is the one character whose lower case is
   // longer than itself, and a single one in a body would shift every index: it becomes a plain `I`
@@ -334,6 +334,21 @@ export function createBundleSampler(
               start = wide.pos;
               end = endAt(Math.min(limit, span.close + 1 + STRING_KEY_SUFFIX));
               cut = { pos: start, opener: "" };
+            }
+          }
+        }
+        // Prefer the non-overlapping side of the head boundary whenever it still
+        // contains the detector's complete match. Only carry text from before
+        // the boundary when that context is actually required (for example, a
+        // URL whose host hint begins just after the boundary).
+        if (end <= headChars) continue;
+        if (start < headChars) {
+          const narrow = settle(cutAt(headChars), end);
+          if (narrow && narrow.pos >= headChars && narrow.pos <= at) {
+            const narrowText = content.slice(narrow.pos, end);
+            if (qualifies(spec, narrowText, narrow.pos)) {
+              start = narrow.pos;
+              cut = narrow;
             }
           }
         }

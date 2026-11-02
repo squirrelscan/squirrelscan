@@ -152,7 +152,15 @@ describe("hint windows are allocated across all of a page's bundles before whole
   test("7 x 40 KB scripts plus a late bundle send no script line twice (#1534)", () => {
     const early = Array.from({ length: 7 }, (_, n) => ({
       url: `https://example.com/u${n}.js`,
-      content: uniqueLines(40_000, n),
+      content:
+        n === 0
+          ? (() => {
+              const base = uniqueLines(40_000, n);
+              const signal = `var s=mk("https://p0000000000000000001.supabase.co","eyJ${"x".repeat(40)}");`;
+              const split = base.lastIndexOf("\n", 16_300) + 1;
+              return `${base.slice(0, split)}${";".repeat(16_364 - split)}${signal}\n${base.slice(split)}`;
+            })()
+          : uniqueLines(40_000, n),
     }));
     const last = {
       url: "https://example.com/late.js",
@@ -172,7 +180,9 @@ describe("hint windows are allocated across all of a page's bundles before whole
     const sizes = bodies.map((script) => Buffer.byteLength(script.content ?? ""));
     expect(sizes.reduce((sum, size) => sum + size, 0)).toBeLessThanOrEqual(DEFAULT_TECH_BUNDLE_LIMITS.pageBytes);
     for (const size of sizes) expect(size).toBeLessThanOrEqual(DEFAULT_TECH_BUNDLE_LIMITS.bundleBytes);
-    expect(detectReportTechnologiesMulti(inputs).items.map((technology) => technology.id)).toContain("posthog");
+    const ids = detectReportTechnologiesMulti(inputs).items.map((technology) => technology.id);
+    expect(ids).toContain("posthog");
+    expect(ids).toContain("supabase");
   });
 
   test("25 scripts at the 512 KB page cap: a loader in the last bundle's window is found beside the early remainders", () => {
