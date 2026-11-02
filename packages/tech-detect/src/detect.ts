@@ -167,6 +167,40 @@ const FLIGHT_SCRIPT_HEAD_CHARS = 512;
 const FLIGHT_SCRIPT_MAX_CHARS = 2 * 1024 * 1024;
 /** Inline script text read per page, all scripts together. */
 const INLINE_TEXT_BUDGET = 8 * 1024 * 1024;
+/**
+ * An import map (`<script type="importmap">`) is data the browser resolves module specifiers with: its `imports` and `scopes`
+ * values are URLs the page loads as modules (`"three": "https://cdn.example/three.module.js"`). They are kept as script URLs, read
+ * from a map of at most this many characters and at most {@link IMPORTMAP_MAX_URLS} URLs (#1539).
+ */
+const IMPORTMAP_MAX_CHARS = 64 * 1024;
+const IMPORTMAP_MAX_URLS = 256;
+const IMPORTMAP_MAX_URL_CHARS = 2048;
+
+/** The URL strings an import map's `imports` and `scopes` map to; a map that is not JSON, or has no such object, has none. */
+function importMapUrls(text: string): string[] {
+  let map: unknown;
+  try {
+    map = JSON.parse(text);
+  } catch {
+    return [];
+  }
+  if (map === null || typeof map !== "object" || Array.isArray(map)) return [];
+  const urls: string[] = [];
+  const take = (table: unknown): void => {
+    if (table === null || typeof table !== "object" || Array.isArray(table)) return;
+    for (const value of Object.values(table as Record<string, unknown>)) {
+      if (urls.length >= IMPORTMAP_MAX_URLS) return;
+      if (typeof value === "string" && value.length > 0 && value.length <= IMPORTMAP_MAX_URL_CHARS) urls.push(value);
+    }
+  };
+  const { imports, scopes } = map as { imports?: unknown; scopes?: unknown };
+  take(imports);
+  if (scopes !== null && typeof scopes === "object" && !Array.isArray(scopes)) {
+    for (const scope of Object.values(scopes as Record<string, unknown>)) take(scope);
+  }
+  return urls;
+}
+
 /** Longest tag read quote-aware; past it the first `>` ends the tag. */
 const MAX_TAG_CHARS = 64 * 1024;
 
@@ -311,6 +345,14 @@ export function pageMarkup(html: string): string {
       parts.push(tag);
       const type = attributeValue(tag.slice(0, MAX_TAG_CHARS), "type")?.trim() ?? "";
       const length = end - pos;
+      if (length > 0 && length <= IMPORTMAP_MAX_CHARS && /^importmap$/i.test(type.slice(0, 32))) {
+        // The page loads these as modules: each is a script URL, for the URL patterns (as a tag in the markup) and for the
+        // tag attribute detectors (as a collected script). The map itself stays out of the markup: it is data.
+        for (const url of importMapUrls(html.slice(pos, end))) {
+          parts.push(`<script type="module" src="${url.replaceAll('"', "%22").replaceAll(">", "%3E")}"></script>`);
+          if (collected.length < MAX_COLLECTED_TAGS && wanted.has("src")) collected.push({ tag: "script", attrs: new Map([["src", url]]) });
+        }
+      }
       if (length > 0 && !DATA_SCRIPT_TYPE.test(type.slice(0, 256)) && inlineText < INLINE_TEXT_BUDGET) {
         const head = html.slice(pos, Math.min(end, pos + 512));
         // A flight script (`self.__next_f`) is read with the page's other flight scripts, for the script

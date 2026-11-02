@@ -61,6 +61,7 @@ describe("a Next.js App Router flight script over 16 KB", () => {
   });
 });
 
+// An import map is no longer in this list: the URLs its `imports` and `scopes` map to are script URLs (#1539, importmap-1539.test.ts).
 describe("still not read", () => {
   test("a CSP meta, prose, a link, JSON-LD, __NEXT_DATA__ and __nuxt_data__", () => {
     const html = page(
@@ -68,7 +69,6 @@ describe("still not read", () => {
         `<script type="application/ld+json">{"sameAs":["https://www.clarity.ms/"]}</script>` +
         `<script id="__NEXT_DATA__" type="application/json">{"u":"https://www.clarity.ms/tag/x"}</script>` +
         `<script id="__nuxt_data__" type="application/json" data-ssr="true">["https://www.clarity.ms/tag/x"]</script>` +
-        `<script type="importmap">{"imports":{"c":"https://www.clarity.ms/c.js"}}</script>` +
         `<script type="text/template"><a href="https://www.clarity.ms/">x</a></script>`,
       '<p>We use clarity.ms for analytics.</p><a href="https://www.clarity.ms/">Clarity</a>',
     );
