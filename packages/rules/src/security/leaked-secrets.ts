@@ -3977,6 +3977,27 @@ function openTagOf(el: Element): string {
   return tag + ">";
 }
 
+/**
+ * A copy of `text` that shares no storage with the string it was cut from. A slice keeps its whole parent alive in the engines'
+ * string representations (a finding's `value` is a slice of the page's serialized HTML or of an inline script's text, megabytes),
+ * so a record kept until the site rule runs would hold its whole page. Built from the characters, which also keeps a lone
+ * surrogate that a cut through a pair leaves (a UTF-8 round trip would replace it).
+ */
+function detached(text: string): string {
+  return text.length === 0 ? text : text.split("").join("");
+}
+
+/** `secret` with every string it carries copied out of the scanned text (see {@link detached}); the record is otherwise unchanged. */
+function detachSecret(secret: LeakedSecret): LeakedSecret {
+  const out: LeakedSecret = { ...secret, value: detached(secret.value) };
+  if (secret.extra) {
+    const extra: Record<string, unknown> = { ...secret.extra };
+    for (const [key, value] of Object.entries(extra)) if (typeof value === "string") extra[key] = detached(value);
+    out.extra = extra as FindingExtra;
+  }
+  return out;
+}
+
 export function scanPageForSecrets(
   doc: NonNullable<ParsedPage["document"]>,
   pageUrl: string
@@ -4005,7 +4026,8 @@ export function scanPageForSecrets(
       );
     }
   }
-  return found;
+  // The records are kept for the whole crawl until the site rule runs: they must not keep the scanned page alive (#1552).
+  return found.map(detachSecret);
 }
 
 export const leakedSecretsRule: Rule = {
