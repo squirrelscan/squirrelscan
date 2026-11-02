@@ -3,7 +3,10 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { isImplausibleSecretValue, scanContent, seedWork } from "../../src/security/leaked-secrets";
+import { parsePage } from "@squirrelscan/parser";
+
+import { isImplausibleSecretValue, leakedSecretsRule, scanContent, seedWork } from "../../src/security/leaked-secrets";
+import type { RuleContext } from "../../src/types";
 import { mixedRun, runOf, seededRng } from "./leaked-secrets/generators";
 
 const HEX = "0123456789abcdef";
@@ -34,7 +37,42 @@ describe("values that name something other than a credential (#1292)", () => {
   test("URLs and paths, env references, elided stubs, masks", () => {
     none(`var c={secret:"https://cdn.acme.test/js/app.min.js",password:"//cdn.acme.test/x",token:"/js/secret/app"};`); // pragma: allowlist secret
     none(`var c={password:"process.env.PASSWORD_HERE",secret:"import.meta.env.VITE_SECRET",x:{password:"\${DB_PASSWORD_ENV}"}};`); // pragma: allowlist secret
-    none(`var c={password:"••••••••••",secret:"abcdefgh...",y:{secret:"abcdefgh…"},z:{password:"__________"}};`); // pragma: allowlist secret
+    none(`var c={password:"••••••••••",z:{password:"__________"},y:{secret:"..."},x:{password:"…"}};`); // pragma: allowlist secret
+  });
+
+  test("a value that ends in an ellipsis is reported as a partial value, never dropped", () => {
+    // The visible start of a real secret, built from parts so no line is a whole credential.
+    for (const stub of ["Xk9!" + "mQ2v...", "Uq7!" + "ng2K...", "abcdefgh...", "Xk9!" + "mQ2v…", "Tz4#" + "wL9pRs…"]) {
+      for (const text of [`var c={password:"${stub}"};`, `var c={secret:"${stub}"};`, `var c={x:{pwd:"${stub}"}};`]) {
+        const [one, ...rest] = scanContent(text, "inline-script", PAGE);
+        expect([text, rest.length]).toEqual([text, 0]);
+        expect([text, one?.type, one?.confidence]).toEqual([text, "Partial Secret Value Visible (elided)", "info"]);
+        expect(one?.extra).toMatchObject({ hint: expect.stringContaining("ellipsis") });
+      }
+    }
+  });
+
+  test("the rule lists a partial value in its own info check, apart from expired and session tokens, with the value masked", () => {
+    const html = `<!doctype html><html><body><script>var c={password:"${"Xk9!" + "mQ2v..."}"};</script></body></html>`;
+    const checks = leakedSecretsRule.run({
+      site: { baseUrl: PAGE, pages: [{ url: PAGE, statusCode: 200, parsed: parsePage(html, PAGE) }], robotsTxt: null, sitemaps: null, scripts: [] },
+      options: {},
+    } as unknown as RuleContext).checks;
+    const partial = checks.find((c) => c.name === "leaked-secrets-partial");
+    expect(partial?.status).toBe("info");
+    expect(partial?.items).toHaveLength(1);
+    expect(partial?.items?.[0]?.id).toContain("Partial Secret Value Visible (elided)");
+    expect(partial?.items?.[0]?.id).not.toContain("Xk9!" + "mQ2v"); // masked
+    expect(checks.find((c) => c.name === "leaked-secrets-info")).toBeUndefined();
+    expect(checks.some((c) => c.status === "fail" || c.status === "warn")).toBe(false);
+  });
+
+  test("a long token cut off by an ellipsis reports too, as before", () => {
+    // 13 characters or more before the dots: a token cut off, reported at medium as any generic match
+    for (const stub of ["Xk9!" + "mQ2vL8zPq...", "Xk9!" + "mQ2vL8zPqRt4Yw7Nb3Hc...", "Xk9!" + "mQ2vL8zPq…"]) {
+      const [one, ...rest] = scanContent(`var c={password:"${stub}"};`, "inline-script", PAGE);
+      expect([stub.length, rest.length, one?.type, one?.confidence]).toEqual([stub.length, 0, "Generic Secret Assignment", "medium"]);
+    }
   });
 
   test("a span that is code, not a quoted value", () => {
@@ -87,7 +125,11 @@ describe("sample data the page renders (#1308)", () => {
     `var users=[${row(`a@${domain}`, "admin", PASSWORD)},${row(`b@${domain}`, "user", "Yk7!" + "mQ2vL8zQ")},${row(`c@${domain}`, "user", "Zk5!" + "mQ2vL8zR")}];`; // pragma: allowlist secret
 
   test("a table of same-shaped records with reserved-domain emails is sample data", () => {
-    for (const domain of ["x.test", "demo.example", "example.com", "foo.example.org", "demo.localhost"]) none(table(domain));
+    // Kept, not dropped: sample data cannot be told from a working login by its structure, so it is labelled.
+    for (const domain of ["x.test", "demo.example", "example.com", "foo.example.org", "demo.localhost"]) {
+      expect([domain, found(table(domain))]).toEqual([domain, Array(3).fill("Possible Demo Login (seed data table)")]);
+    }
+    expect(scanContent(table("x.test"), "inline-script", PAGE)[0]?.extra).toMatchObject({ hint: expect.stringContaining("sample data") });
   });
 
   test("the same table with real-domain emails still reports, labelled a possible demo login", () => {
@@ -115,9 +157,14 @@ describe("sample data the page renders (#1308)", () => {
   });
 
   test("puzzle levels and generator output carry markers", () => {
-    none(`var l={crackUser:"root",crackPassword:"${PASSWORD}",candidates:["a","b"],flagPath:"/flag"};`);
-    none(`var l={password:"${PASSWORD}",flag:"FLAG{ctf_win}"};`);
-    none(`var g={password:"${PASSWORD}A",sample:"${mixedRun(r, 32)}",options:{length:32,symbols:true}};`);
+    // Kept and labelled: a marker is not proof that the value is not a working credential.
+    for (const text of [
+      `var l={crackUser:"root",crackPassword:"${PASSWORD}",candidates:["a","b"],flagPath:"/flag"};`,
+      `var l={password:"${PASSWORD}",flag:"FLAG{ctf_win}"};`,
+      `var g={password:"${PASSWORD}A",sample:"${mixedRun(r, 32)}",options:{length:32,symbols:true}};`,
+    ]) {
+      expect([text.slice(0, 40), found(text)]).toEqual([text.slice(0, 40), ["Possible Demo Login (seed data table)"]]);
+    }
   });
 
   test("one marker alone, in a config object, is not a puzzle: the password still reports", () => {
@@ -133,7 +180,7 @@ describe("sample data the page renders (#1308)", () => {
 
   test("one marker inside a table of same-shaped records is sample data", () => {
     const row = (n: number) => `{id:${n},flag:"x${n}",password:"${PASSWORD}${n}"}`;
-    none(`var l=[${row(1)},${row(2)},${row(3)}];`);
+    expect(found(`var l=[${row(1)},${row(2)},${row(3)}];`)).toEqual(Array(3).fill("Possible Demo Login (seed data table)"));
   });
 
   test("a real private host is a real host: a .local table reports as a possible demo login", () => {
@@ -223,7 +270,7 @@ describe("review follow-ups (#1292, #1308)", () => {
     test("rows that carry the secret and reserved-domain emails are a sample, whatever else the array holds", () => {
       const row = (email: string, pw: string) => `{email:"${email}",secret:"${pw}"}`;
       const text = real(`${row("a@x.test", secret())},${row("b@demo.example", secret())},${row("c@example.com", secret())},{contact:"y@acme.com"}`);
-      none(text);
+      expect(found(text)).toEqual(Array(3).fill("Possible Demo Login (seed data table)"));
     });
 
     test("one real-domain row among the secret's own rows keeps the table reporting", () => {
@@ -370,8 +417,8 @@ describe("gates narrowed after the security review and the value-matched A/B (#1
       expect(found(`var u=[${row("a@example.com", pw(1))},${row(undefined, pw(2))},${row(undefined, pw(3))}];`)).toEqual(Array(3).fill("Generic Secret Assignment"));
     });
 
-    test("every row with a reserved email is a sample; one real domain or one row without an email is not", () => {
-      expect(found(`var u=[${row("a@example.com", pw(4))},${row("b@x.test", pw(5))},${row("c@demo.example", pw(6))}];`)).toEqual([]);
+    test("every row with a reserved email is a labelled sample; one real domain or one row without an email is a demo login or a plain match", () => {
+      expect(found(`var u=[${row("a@example.com", pw(4))},${row("b@x.test", pw(5))},${row("c@demo.example", pw(6))}];`)).toEqual(Array(3).fill("Possible Demo Login (seed data table)"));
       expect(found(`var u=[${row("a@example.com", pw(7))},${row("b@acme.com", pw(8))},${row("c@demo.example", pw(9))}];`).length).toBe(3);
       expect(found(`var u=[${row("a@example.com", pw(10))},${row("b@x.test", pw(11))},${row(undefined, pw(12))}];`).length).toBe(3);
     }); // pragma: allowlist secret
