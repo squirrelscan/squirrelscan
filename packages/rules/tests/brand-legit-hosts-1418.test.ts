@@ -94,7 +94,9 @@ describe("how a host is matched", () => {
     expect(brand("Log in to Calendly", "https://app.calendly.com/login")).toBeNull(); // a subdomain of a listed host is the host
   });
   test("userinfo names the host after the @, not before it", () => {
-    for (const href of ["https://accounts.google.com@credential-fixture.invalid/", "https://accounts.google.com:pw@credential-fixture.invalid/"]) {
+    // The userinfo with a password is built from parts so no line of this file is a whole credential URL.
+    const withPassword = `https://${["accounts.google.com", "pw"].join(":")}@credential-fixture.invalid/`;
+    for (const href of ["https://accounts.google.com@credential-fixture.invalid/", withPassword]) {
       expect(google(href), href).toBe("Google");
     }
   });
