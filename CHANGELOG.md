@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+## v0.0.159 (2026-11-02)
+
+`security/leaked-secrets` is more precise and harder to talk around: an admin-named hosted-search key reports at high with a hint (William's #1523 for #1515, with an overlapping maintainer draft, #1524, folded in), a header-only `Bearer` JWT, a JWT-shaped string that does not decode and an AMD or RequireJS module path are no longer reported as credentials, and a real token with a missing `alg`, an oversized part or a decoy in front still reports. The integrity rules count an unread control once, read a style attribute and a CSS rule to larger bounds, say so when a rule is too large to read, and resolve a relative link by the page's first `<base href>` as a browser does.
+
 ### Fixed
 
 - **`security/leaked-secrets` no longer reports an AMD / RequireJS module path whose words are all known as a credential.** A module path such as `Magento_Customer/js/change-email-password` under a credential-named key was reported as a generic secret. A value of segments joined by `/` is now a name when every word (at most three per segment, camelCase parts and plurals included) is in a list of module-path words, it has a `Vendor_Module` head or a `js` segment, and no segment has more than two digits or three capitals. A path with a word outside the list reports as before, so some real module paths still report; a drawn run of letters is not a word, so random values with a `/` still report. Trade-off: a passphrase made only of listed words in that shape can be suppressed. (#1292)
