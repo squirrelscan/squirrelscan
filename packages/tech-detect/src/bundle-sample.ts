@@ -155,6 +155,8 @@ function mergedCost(spans: ReadonlyArray<[number, number]>): number {
  * characters that opened the span in front of the segment, so the scan of the sent text reads it
  * as the whole file does. The separator ends any string or comment still open at a segment's end,
  * so segments, and the head before them, scan independently.
+ * The caller supplies `content.slice(0, headChars)` beside these extras; a window wholly inside
+ * that head is therefore omitted.
  * Empty when the body fits in the head.
  */
 export function sampleBundleExtras(content: string, headChars: number, maxChars: number): string {
@@ -175,9 +177,9 @@ export interface BundleSampler {
 }
 
 /**
- * A sampler over one body: the classification and the hint windows are computed once, on first use. Only the
- * first `scanChars` characters are classified and searched; a body longer than that has windows from that
- * prefix and no tail.
+ * A sampler over one body: the classification and the hint windows are computed once, on first use. The caller
+ * supplies the first `headChars` characters beside the sample. Only the first `scanChars` characters are
+ * classified and searched; a body longer than that has windows from that prefix and no tail.
  */
 export function createBundleSampler(
   content: string,

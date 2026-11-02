@@ -321,8 +321,11 @@ function spreadBundleExtras(
         );
         if (expanded <= r) break;
         r = expanded;
-        extras = truncateToBytes(sampler.sample(r, windowsOnly), r);
-        if (!extras) return;
+        const expandedExtras = truncateToBytes(sampler.sample(r, windowsOnly), r);
+        // Keep the already-valid sample if a defensive resample ever comes back
+        // empty; the shortened head still has a disjoint replacement beside it.
+        if (!expandedExtras) break;
+        extras = expandedExtras;
         extrasStart = sampler.firstSourceChar();
       }
       const bytes = byteLength(extras) + SEGMENT_SEPARATOR.length;
