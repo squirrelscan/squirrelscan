@@ -145,7 +145,7 @@ describe("sample data the page renders (#1308)", () => {
     const values = ["Kd8#" + "wQ3!zPm7" + "Rt2$Yb5&Nc9x", "Ve4%" + "mL7*Qa2#Zs8" + "Hj6!Pw3@Tn1" + "x", "Gx5@" + "Tr9#Lm3!Qe7$Wb2%Vc8" + "Hk4&Dp6*", "482" + "905" + "176" + "340"];
     expect(values.map((v) => v.length)).toEqual([24, 27, 31, 12]);
     for (const value of values) {
-      const text = `var u=[${row("a@x.test", value)},${row("b@x.test", value + "1")},${row("c@x.test", value + "2")}];`;
+      const text = `var u=[${row("a@x.test", "user", value)},${row("b@x.test", "user", value + "1")},${row("c@x.test", "user", value + "2")}];`;
       expect([value.length, found(text)]).toEqual([value.length, Array(3).fill("Possible Demo Login (seed data table)")]);
     }
   });
