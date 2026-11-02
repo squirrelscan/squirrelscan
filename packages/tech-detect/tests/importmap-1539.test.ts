@@ -323,6 +323,16 @@ describe("scopes, templates and entries the page never imports", () => {
     expect(ids(page(`<TEMPLATE id=a>${map}</TEMPLATE>${map}`))).toContain("threejs");
     expect(synthetic(page(`<template>${map}</template>`))).toBe(0);
   });
+
+  // Pins CURRENT behaviour, not a decision. The tag reader does not count a self-closing `<template/>` as an open template, so a map after
+  // it is read. An HTML parser ignores the slash on a non-void element and treats `<template/>` as an open tag, so a browser would treat
+  // that map as inert: the reader errs toward reading it. A change to this is deliberate and flips these expectations.
+  test("pins current behaviour: a self-closing template tag does not open a template, so a map after it is read", () => {
+    const map = importmap({ three: url });
+    expect(ids(page(`<template/>${map}`))).toContain("threejs");
+    expect(ids(page(`<template />${map}`))).toContain("threejs");
+    expect(ids(page(`<template/><template>${map}</template>`))).not.toContain("threejs");
+  });
 });
 
 describe("precision", () => {
