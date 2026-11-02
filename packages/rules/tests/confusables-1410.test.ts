@@ -79,13 +79,13 @@ describe("digit swaps inside a word", () => {
     expect(folded("w1th 1n")).toBe("with in");
     expect(folded("1n")).toBe("in");
     expect(folded("x1y")).toBe("xiy"); // no cue word either way: read with i, not a cue
-    expect(folded("11111a")).toBe("iiiiia"); // more than four 1s are all read as i
+    expect(folded("11111a")).toBe("iiiiia"); // no cue word of that length: every 1 is read as i
     expect(folded("abc2")).toBe("abc2");
     expect(folded("a4b7c9")).toBe("a4b7c9");
     expect(folded("2024")).toBe("2024");
     expect(folded("sign 1n")).toBe("sign in");
   });
-  test("a word with many 1s is not tried every way: past four it is read with i, in no time", () => {
+  test("a word with many 1s is compared with the cue words of its length, not built every way: in no time", () => {
     const started = performance.now();
     expect(folded(`a${"1".repeat(25)}`)).toBe(`a${"i".repeat(25)}`);
     expect(folded("1a1b1c1d1e")).toBe("iaibicidie"); // five 1s
