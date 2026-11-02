@@ -64,3 +64,25 @@ test("controls of different rank (an off-site link, a button in a form, a sign-i
   expect(unread((await run(offSite + button)).checks)).toBe(2);
   expect(unread((await run(offSite + button + labelled)).checks)).toBe(3);
 }, 120_000);
+
+/** Over the attribute bound with no cue words: only the attribute bound cuts it. */
+const PLAIN_BIG_ATTRIBUTE = "a".repeat(20_000);
+const LOCAL = '<a href="/about" title="About us">About</a>';
+
+test("three controls cut only by the attribute bound are three", async () => {
+  const one = (i: number) => `<a href="https://p.invalid/${i}" aria-label="${PLAIN_BIG_ATTRIBUTE}"><svg></svg></a>`;
+  expect(unread((await run(one(1))).checks)).toBe(1);
+  expect(unread((await run(one(1) + one(2) + one(3))).checks)).toBe(3);
+}, 120_000);
+
+test("a plain local link read first does not shift the count of a later cut off-site link", async () => {
+  const offSite = `<a href="https://p.invalid/1" aria-label="${PLAIN_BIG_ATTRIBUTE}">${BIG_TEXT}</a>`;
+  expect(unread((await run(LOCAL + offSite)).checks)).toBe(1);
+  expect(unread((await run(LOCAL + LOCAL + offSite)).checks)).toBe(1);
+}, 120_000);
+
+test("a plain local link whose text read is cut is not counted: only the relevant controls are", async () => {
+  const { checks } = await run(`<a href="/about" title="About us">${BIG_TEXT}</a>`);
+  expect(unread(checks)).toBe(0);
+  expect(counted(checks)).toBe(0);
+}, 120_000);
