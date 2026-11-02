@@ -31,12 +31,13 @@ async function run(html: string, ruleTimeBudgetMs?: number): Promise<{ ms: numbe
 }
 
 const attrs40 = Array.from({ length: 40 }, (_, i) => `d${i}="v"`).join(" ");
-const SHAPES: Array<[string, () => string]> = [
-  ["4.9 MB of off-site links with 5 extra attributes (about 76,000 controls)", () => page(rep(`<a href="${O}" a="1" b="2" c="3" d="4" e="5">x</a>`, 4.9 * MB) + REAL)],
-  ["7 MB of off-site links with 40 extra attributes", () => page(rep(`<a href="${O}" ${attrs40}>x</a>`, 7 * MB) + REAL)],
-  ["7 MB of links naming 5 aria-labelledby ids", () => page(rep(`<a href="${O}" aria-labelledby="a b c d e">x</a>`, 7 * MB) + `<span id="a">x</span>${REAL}`)],
-  ["135,000 links naming 2 aria-labelledby ids", () => page(Array.from({ length: 135_000 }, (_, i) => `<a href=/x${i % 7} aria-labelledby="a b">x</a>`).join("") + REAL)],
-  ["330,000 img inside one control", () => page(`<a href="${OFF}">${"<img>".repeat(330_000)}Sign in with Google</a>`)],
+/** Each shape at full size (skipped on a busy machine) and at about a quarter of it (always run, at the default budget). */
+const SHAPES: Array<[string, (scale: number) => string]> = [
+  ["off-site links with 5 extra attributes (4.9 MB, about 76,000 controls)", (k) => page(rep(`<a href="${O}" a="1" b="2" c="3" d="4" e="5">x</a>`, 4.9 * MB * k) + REAL)],
+  ["off-site links with 40 extra attributes (7 MB)", (k) => page(rep(`<a href="${O}" ${attrs40}>x</a>`, 7 * MB * k) + REAL)],
+  ["links naming 5 aria-labelledby ids (7 MB)", (k) => page(rep(`<a href="${O}" aria-labelledby="a b c d e">x</a>`, 7 * MB * k) + `<span id="a">x</span>${REAL}`)],
+  ["links naming 2 aria-labelledby ids (135,000)", (k) => page(Array.from({ length: Math.round(135_000 * k) }, (_, i) => `<a href=/x${i % 7} aria-labelledby="a b">x</a>`).join("") + REAL)],
+  ["img inside one control (330,000)", (k) => page(`<a href="${OFF}">${"<img>".repeat(Math.round(330_000 * k))}Sign in with Google</a>`)],
 ];
 
 const abandonedChecks = (checks: Check[]): Check[] => checks.filter((c) => c.status === "skipped" || /-error$|timeout/.test(c.name ?? ""));
@@ -48,14 +49,20 @@ const foundOrReported = (checks: Check[]): boolean => {
 const quiet = loadavg()[0]! < cpus().length / 2;
 
 for (const [label, build] of SHAPES) {
-  test(`${label}: the real control is found or the controls not read are counted`, async () => {
-    const { checks } = await run(build(), 0);
+  test(`${label}: the real control is found or the controls not read are counted (budget off)`, async () => {
+    const { checks } = await run(build(1), 0);
+    expect([label, "found or reported", foundOrReported(checks)]).toEqual([label, "found or reported", true]);
+  }, 120_000);
+
+  test(`${label}, a quarter of the size: not abandoned at the default 2 s budget`, async () => {
+    const { checks } = await run(build(0.25));
+    expect([label, "abandoned", abandonedChecks(checks).length]).toEqual([label, "abandoned", 0]);
     expect([label, "found or reported", foundOrReported(checks)]).toEqual([label, "found or reported", true]);
   }, 120_000);
 
   test(`${label}: not abandoned at the default 2 s budget${quiet ? "" : " (skipped: the machine is busy)"}`, async () => {
     if (!quiet) return;
-    const { checks } = await run(build());
+    const { checks } = await run(build(1));
     expect([label, "abandoned", abandonedChecks(checks).length]).toEqual([label, "abandoned", 0]);
     expect([label, "found or reported", foundOrReported(checks)]).toEqual([label, "found or reported", true]);
   }, 120_000);
