@@ -20,7 +20,7 @@ const defaults = { ...attributeLimits };
 afterEach(() => Object.assign(attributeLimits, defaults));
 
 test("the default budgets are the documented ones", () => {
-  expect(defaults).toEqual({ shortlist: 2_000_000, prepare: 1_500_000 });
+  expect(defaults).toEqual({ shortlist: 2_000_000, prepare: 1_500_000, fold: 2_000_000 });
 });
 
 describe("readControlAttributes reads each control once, bounded", () => {
