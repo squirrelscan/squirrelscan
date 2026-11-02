@@ -74,6 +74,7 @@ describe("every pattern is bounded on hostile input", () => {
       // A quoted attribute holding many line-start openers (the in-tag scan must not restart over the same bytes).
       '<script a="\n',
       '<link a="\n',
+      '<img a="\n',
       "<link ",
       "<meta ",
       "<img ",
