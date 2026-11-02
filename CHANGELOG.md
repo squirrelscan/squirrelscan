@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+## v0.0.160 (2026-11-02)
+
+The integrity and secrets rules are harder to talk around and no longer break on hostile pages: `security/leaked-secrets` keeps a password in sample data or a value that ends in an ellipsis instead of dropping it, and its records no longer hold the page they came from; `integrity/brand-impersonation` and `integrity/fake-auth-overlay` read more look-alike spellings and more of the CSS that styles an overlay, stop sparing sign-in links that go to user content on a brand's domain, and are no longer abandoned on pages of tens of thousands of controls. Technology detection reads import maps, and its bundle samples no longer repeat text and fill their allowance (William's #1536, with our allowance fix on top). The `--max-duration` parse cap holds for cached pages, and the docs say that only rendering runs in the cloud.
+
 ### Fixed
 
 - **The `--max-duration` parse cap now also holds when a cached page is reused.** A page over the cap is stored but never parsed when it is fetched; reusing it from cache used to parse its HTML for links, which brought back the parse cost the cap bounds (25 stored pages of about 6 MB took a reuse pass 192 s and 2.6 GB more memory before, 1.2 s and 0.2 GB after, measured on a synthetic store of 25 pages). A cached page over the cap is now reused without discovering its links. The size is the decoded body's, as at the fetch gate. The soft-404 confirmation re-fetch gets the same guard as defense in depth: a re-fetched body over the cap leaves the candidate `unconfirmed` (still reported, never dropped), though that re-fetch is already cut at 1 MB, under the 5 MiB production cap, which is why the guard is bounded there. (#1502, refs #1332)
