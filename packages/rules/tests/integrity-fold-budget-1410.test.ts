@@ -17,7 +17,7 @@ const page = (body: string) => `<!doctype html><html><head><title>Fixture</title
 const doc = (body: string) => parsePage(page(body), url).document!;
 const defaults = { ...attributeLimits };
 afterEach(() => Object.assign(attributeLimits, defaults));
-const UNIT = "1a1b1c1d "; // a token with four 1s: tried sixteen ways
+const UNIT = "1a1b1c1d "; // a token with four 1s: the worst case for a fold that tried every spelling
 
 describe("the fold is bounded by length and by the page's budget", () => {
   test("the default fold budget is pinned", () => {
@@ -43,16 +43,16 @@ describe("the fold is bounded by length and by the page's budget", () => {
 
   test("past the page's fold budget the label is read as written and the control is counted", () => {
     const links = Array.from({ length: 300 }, (_, i) => `<a href="https://p.invalid/${i}">${UNIT.repeat(100)}</a>`).join(""); // 900 characters each
-    attributeLimits.fold = 9_000; // ten labels
+    attributeLimits.fold = 9_000; // each label has 300 characters of its own and 600 for the pool: fifteen fit
     const scan = scanControls(doc(links));
-    expect(scan.unread).toBe(290);
+    expect(scan.unread).toBe(285);
     attributeLimits.fold = defaults.fold;
     expect(scanControls(doc(links)).unread).toBe(0);
   });
 
   test("an attribute is charged to the same budget: past it the attribute is read as written and the control is counted", () => {
-    const links = Array.from({ length: 50 }, (_, i) => `<a href="https://p.invalid/${i}" aria-label="${UNIT.repeat(20)}">x</a>`).join(""); // 180 characters each
-    attributeLimits.fold = 900; // five attributes
+    const links = Array.from({ length: 50 }, (_, i) => `<a href="https://p.invalid/${i}" aria-label="${UNIT.repeat(40)}">x</a>`).join(""); // 360 characters each: 60 past the control's own 300
+    attributeLimits.fold = 300; // five attributes
     expect(scanControls(doc(links)).unread).toBe(45);
   });
 });
@@ -89,4 +89,85 @@ describe("digit-heavy text does not abandon the rules at the default budget", ()
       expect([label, abandoned(checks)]).toEqual([label, 0]);
     }, 180_000);
   }
+});
+
+// ── a control's own allowance: the pool being spent never hides a short swapped-digit cue ───────────────────────────────────────
+
+describe("a short swapped-digit cue folds when the page's pool is spent", () => {
+  const CUE = "S1gn 1n w1th G00g1e";
+  const filler = (attr: string) => `<a href="${O}" ${attr}="${UNIT.repeat(1_778).slice(0, 16_000)}">x</a>`; // 16,000 characters
+  const read = (body: string) => scanControls(doc(body)).controls.some((c) => c.labels.some((l) => l.includes("sign in with google")));
+  const SWAPPED_TEXT = `<a href="${OFF}">${CUE}</a>`;
+  const SWAPPED_ATTR = `<a href="${OFF}" aria-label="${CUE}"><svg></svg></a>`;
+
+  test("200 attribute fillers (3.2 million characters, over the 2 million pool), then the cue in a text and in an attribute, before or after", () => {
+    for (const attr of ["aria-label", "title"]) {
+      const fillers = Array.from({ length: 200 }, () => filler(attr)).join("");
+      expect([attr, "text after", read(fillers + SWAPPED_TEXT)]).toEqual([attr, "text after", true]);
+      expect([attr, "attribute after", read(fillers + SWAPPED_ATTR)]).toEqual([attr, "attribute after", true]);
+      expect([attr, "text before", read(SWAPPED_TEXT + fillers)]).toEqual([attr, "text before", true]);
+      expect([attr, "attribute before", read(SWAPPED_ATTR + fillers)]).toEqual([attr, "attribute before", true]);
+    }
+  }, 120_000);
+
+  test("with the pool at zero the short cue still folds, and a cue past the control's own 300 characters does not and is counted", () => {
+    attributeLimits.fold = 0;
+    expect(read(SWAPPED_TEXT)).toBe(true);
+    expect(read(SWAPPED_ATTR)).toBe(true);
+    const late = (cue: string) => `${"lorem ".repeat(60)}${cue}`; // 360 characters before the cue
+    const lateText = `<a href="${OFF}">${late(CUE)}</a>`;
+    const lateAttr = `<a href="${OFF}" aria-label="${late(CUE)}"><svg></svg></a>`;
+    expect(read(lateText)).toBe(false);
+    expect(read(lateAttr)).toBe(false);
+    expect(scanControls(doc(lateText)).unread).toBe(1);
+    expect(scanControls(doc(lateAttr)).unread).toBe(1);
+    // a longer label with the cue inside its first 300 characters: the head folds (the cue is found) and the control is counted
+    const longer = `${CUE} ${"lorem ".repeat(60)}`;
+    expect(read(`<a href="${OFF}">${longer}</a>`)).toBe(true);
+    expect(read(`<a href="${OFF}" aria-label="${longer}"><svg></svg></a>`)).toBe(true);
+    expect(scanControls(doc(`<a href="${OFF}">${longer}</a>`)).unread).toBe(1);
+  });
+
+  test("the label as written is kept whatever the pool: the plain cue is found with the pool at zero, in a text and in an attribute", () => {
+    attributeLimits.fold = 0;
+    const digits = "1a1b1c1d ".repeat(50);
+    expect(read(`<a href="${OFF}">${digits} Sign in with Google</a>`)).toBe(true);
+    expect(read(`<a href="${OFF}" aria-label="${digits} Sign in with Google"><svg></svg></a>`)).toBe(true);
+  });
+
+  test("an exact fit: a text and an attribute of 400 characters need 100 from the pool; 100 folds the cue at 350, 99 does not", () => {
+    const body = (cue: string) => `${"lorem ".repeat(55)}${cue} ${"z".repeat(400 - 330 - cue.length - 1)}`;
+    const text = `<a href="${OFF}">${body("S1gn 1n w1th G00g1e")}</a>`;
+    expect(body("S1gn 1n w1th G00g1e").length).toBe(400);
+    attributeLimits.fold = 100;
+    expect(read(text)).toBe(true);
+    expect(scanControls(doc(text)).unread).toBe(0);
+    attributeLimits.fold = 99;
+    expect(read(text)).toBe(false);
+    expect(scanControls(doc(text)).unread).toBe(1);
+    const attr = `<a href="${OFF}" aria-label="${body("S1gn 1n w1th G00g1e")}"><svg></svg></a>`;
+    attributeLimits.fold = 100;
+    expect(read(attr)).toBe(true);
+    attributeLimits.fold = 99;
+    expect(read(attr)).toBe(false);
+  });
+
+  test("a control's allowance is shared by its attributes: the second attribute gets what the first left", () => {
+    attributeLimits.fold = 0;
+    const first = "1a1b1c1d ".repeat(22); // 198 characters
+    const second = `${"lorem ".repeat(25)}${CUE}`; // the cue starts at 150, 100 characters into the 102 left
+    const html = `<a href="${OFF}" aria-label="${first}" title="${second}"><svg></svg></a>`;
+    expect(read(html)).toBe(false);
+    expect(scanControls(doc(html)).unread).toBe(1);
+    // alone, the second attribute has the whole allowance
+    expect(read(`<a href="${OFF}" title="${second}"><svg></svg></a>`)).toBe(true);
+  });
+
+  test("a control's second text reading keeps the plain cue when the allowance and the pool are spent", () => {
+    attributeLimits.fold = 0;
+    const digits = "1a1b1c1d ".repeat(34); // 306 characters, folded to the allowance of 300 in the first reading
+    // the visible-only reading is the only one where Sign in with Google is not split by the hidden word
+    const html = `<a href="${OFF}">${digits}Sign in <span style="display:none">x</span>with Google</a>`;
+    expect(read(html)).toBe(true);
+  });
 });
