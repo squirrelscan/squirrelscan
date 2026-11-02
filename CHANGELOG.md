@@ -19,7 +19,7 @@ How it works:
 
 ### Fixed
 
-- **Technology detection reads the URLs an import map maps to.** A library loaded as an ES module through `<script type="importmap">` (three.js through jsdelivr, unpkg, cdnjs or a self-hosted path) was not detected, because an import map is a data block and its URLs were never script URLs. The `imports` and `scopes` values of an import map (a map of up to 64 KB, 64 URLs a map, 512 a page; http, https and relative values without quotes, brackets, backticks, backslashes or whitespace) now count as script URLs (a map inside a `<template>` does not); a URL in a CSP `<meta>`, an anchor, JSON-LD, a JSON data script or prose still does not. (#1539)
+- **Technology detection reads the URLs an import map maps to.** A library loaded as an ES module through `<script type="importmap">` (three.js through jsdelivr, unpkg, cdnjs or a self-hosted path) was not detected, because an import map is a data block and its URLs were never script URLs. The `imports` and `scopes` values of an import map (a map of up to 65,536 characters, 256 URLs a map, 512 a page; http, https and `/`, `./` or `../` paths without quotes, brackets, backticks, backslashes, whitespace or control characters) now count as script URLs (a map inside a `<template>` does not); a URL in a CSP `<meta>`, an anchor, JSON-LD, a JSON data script or prose still does not. (#1539)
 
 ## v0.0.159 (2026-11-02)
 

@@ -170,25 +170,28 @@ const INLINE_TEXT_BUDGET = 8 * 1024 * 1024;
 /**
  * An import map (`<script type="importmap">`) is data the browser resolves module specifiers with: its `imports` and `scopes`
  * string values are URLs the page loads as modules (`"three": "https://cdn.example/three.module.js"`). They are kept as script
- * URLs (#1539), bounded: a map of at most {@link IMPORTMAP_MAX_CHARS} characters, at most {@link IMPORTMAP_MAX_URLS_PER_MAP} URLs
+ * URLs (#1539), bounded: a map of at most {@link IMPORTMAP_MAX_CHARS} characters (UTF-16 code units, not bytes), at most {@link IMPORTMAP_MAX_URLS_PER_MAP} URLs
  * a map and {@link IMPORTMAP_MAX_URLS_PER_PAGE} a page, {@link IMPORTMAP_MAX_URL_CHARS} characters a URL, and
  * {@link IMPORTMAP_MAX_MARKUP_CHARS} characters of synthetic tags a page. A URL past a bound, or one that could not be written as
- * the `src` of exactly one tag (a quote, angle bracket, backtick, backslash, whitespace or control character in it, or a scheme
- * other than http and https), is not read and is counted in {@link pageImportMapSkipped}; the rest of the page is read as usual.
+ * the `src` of exactly one tag (a quote, angle bracket, backtick, backslash, whitespace (U+2028 and U+2029 included), a control character (C0, DEL, C1)
+ * or a lone surrogate in it), or that is not an address (a scheme other than http and https, or a bare name), is not read.
+ * It is counted internally in {@link pageImportMapSkipped} (no report carries it); the rest of the page is read as usual.
  */
 const IMPORTMAP_MAX_CHARS = 64 * 1024;
-const IMPORTMAP_MAX_URLS_PER_MAP = 64;
+const IMPORTMAP_MAX_URLS_PER_MAP = 256;
 const IMPORTMAP_MAX_URLS_PER_PAGE = 512;
 const IMPORTMAP_MAX_URL_CHARS = 2048;
 const IMPORTMAP_MAX_MARKUP_CHARS = 64 * 1024;
-const IMPORTMAP_UNSAFE_URL = /["'`<>\\\s\u0000-\u001f\u007f]/;
-const URL_SCHEME = /^[A-Za-z][A-Za-z0-9+.-]*:/;
-const HTTP_SCHEME = /^https?:/i;
+const IMPORTMAP_UNSAFE_URL = /["'`<>\\\s\u0000-\u001f\u007f-\u009f]/;
+/** A UTF-16 surrogate with no partner: not a character, and not something to write into a tag. */
+const LONE_SURROGATE = /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/;
+/** What a browser accepts as an import map address: an http(s) URL, or a path starting with `/`, `./` or `../` (a bare name is not one). */
+const IMPORTMAP_ADDRESS = /^(?:https?:\/\/|\.{0,2}\/)/i;
 
 /** A URL value that is written as the `src` of one well-formed tag: http, https, protocol-relative or a relative path. */
 function isImportMapUrl(value: string): boolean {
-  if (value.length === 0 || value.length > IMPORTMAP_MAX_URL_CHARS || IMPORTMAP_UNSAFE_URL.test(value)) return false;
-  return !URL_SCHEME.test(value) || HTTP_SCHEME.test(value);
+  if (value.length > IMPORTMAP_MAX_URL_CHARS || IMPORTMAP_UNSAFE_URL.test(value) || LONE_SURROGATE.test(value)) return false;
+  return IMPORTMAP_ADDRESS.test(value);
 }
 
 /**
