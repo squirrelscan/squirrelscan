@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **`security/leaked-secrets` no longer fails, or balloons, on a page full of secret-shaped values.** A page kept every finding it made, and the rule merged them with a spread (`push(...findings)`), which throws `RangeError: Maximum call stack size exceeded` past a few hundred thousand: one generated page took the whole site's result with it. A 10 MB page of key shapes also kept 245 to 277 MB of findings, made a rule result of 107 MB and peaked at 1.25 to 1.41 GB. A page or external script now keeps at most 1,000 findings (the report's own per-check item cap), critical first, then high, medium and public or informational, each in scan order. A check lists at most 1,000 items and records the rest in `details.additional`. What was left out is counted: a `leaked-secrets-omitted` warning gives the number and lists the pages that lost findings. The merge is a loop. The same 10 MB page now keeps well under 1 MB and gives a result under 200 KB. A site with fewer findings than the caps is unchanged. (#1554)
+
 ## v0.0.159 (2026-11-02)
 
 `security/leaked-secrets` is more precise and harder to talk around: an admin-named hosted-search key reports at high with a hint (William's #1523 for #1515, with an overlapping maintainer draft, #1524, folded in), a header-only `Bearer` JWT, a JWT-shaped string that does not decode and an AMD or RequireJS module path are no longer reported as credentials, and a real token with a missing `alg`, an oversized part or a decoy in front still reports. The integrity rules count an unread control once, read a style attribute and a CSS rule to larger bounds, say so when a rule is too large to read, and resolve a relative link by the page's first `<base href>` as a browser does.
