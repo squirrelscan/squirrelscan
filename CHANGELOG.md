@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **`integrity/brand-impersonation` is no longer abandoned on a page of tens of thousands of multi-attribute controls.** A page of 5 to 10 MB of tiny links or buttons with several attributes, or with `aria-labelledby` ids, could run the rule past its 2 s budget ("Not checked"). The attributes a control is read for are now read in one pass over its first 64 (a control with more is counted in `controlsUnread`), the page has a work budget for the attributes it looks at when listing controls (2,000,000 units) and when reading their labels (1,500,000 units), and the visits of `aria-labelledby` target reads come off the page's visits. A page past a budget reports the controls it did not read in `controlsUnread` and `scanTruncated` instead of timing out. (#1462)
+
 ## v0.0.159 (2026-11-02)
 
 `security/leaked-secrets` is more precise and harder to talk around: an admin-named hosted-search key reports at high with a hint (William's #1523 for #1515, with an overlapping maintainer draft, #1524, folded in), a header-only `Bearer` JWT, a JWT-shaped string that does not decode and an AMD or RequireJS module path are no longer reported as credentials, and a real token with a missing `alg`, an oversized part or a decoy in front still reports. The integrity rules count an unread control once, read a style attribute and a CSS rule to larger bounds, say so when a rule is too large to read, and resolve a relative link by the page's first `<base href>` as a browser does.

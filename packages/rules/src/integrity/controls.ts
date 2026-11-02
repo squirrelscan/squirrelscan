@@ -337,38 +337,115 @@ export const PLAIN_LOCAL_HREF = /^(?:\/(?![/\\])|#|\?|[\w.~-]+(?:[/?#][^:\\]*)?$
  * thousands of ordinary links inside the time budget. Links to other hosts or sign-in paths come after buttons.
  * More than {@link MAX_PREPARED} are cut, the least relevant first, and counted unread.
  */
+/** Attributes of one control that are looked at; a control with more is read as cut (counted unread), not walked in full. */
+const MAX_ATTRIBUTES_PER_CONTROL = 64;
+/** Work units (one per attribute looked at, one per control) the page may spend finding the controls' destinations and cues. */
+const SHORTLIST_ATTRIBUTE_BUDGET = 2_000_000;
+/** The same for reading each prepared control's label attributes. */
+const PREPARE_ATTRIBUTE_BUDGET = 1_500_000;
+
+/** A control's attributes as one pass reads them: the names compared by length first, so a junk name costs no string work. */
+export interface ControlAttributes {
+  href: string | null;
+  cue: boolean;
+  ariaLabel: string | null;
+  title: string | null;
+  value: string | null;
+  alt: string | null;
+  labelledby: string | null;
+  /** The element had more attributes than {@link MAX_ATTRIBUTES_PER_CONTROL}. */
+  overlong: boolean;
+  /** Attributes looked at: what the page's attribute budget is charged. */
+  scanned: number;
+}
+
+/** One pass over the first {@link MAX_ATTRIBUTES_PER_CONTROL} attributes. The first of each name wins, as in a browser. */
+export function readControlAttributes(el: Element): ControlAttributes {
+  const out: ControlAttributes = { href: null, cue: false, ariaLabel: null, title: null, value: null, alt: null, labelledby: null, overlong: false, scanned: 0 };
+  const attrs = el.attributes;
+  const total = attrs.length;
+  const limit = total > MAX_ATTRIBUTES_PER_CONTROL ? MAX_ATTRIBUTES_PER_CONTROL : total;
+  out.overlong = total > limit;
+  out.scanned = limit;
+  for (let k = 0; k < limit; k++) {
+    const attr = attrs[k]!;
+    const name = attr.name;
+    switch (name.length) {
+      case 3:
+        if (out.alt === null && name.toLowerCase() === "alt") out.alt = attr.value;
+        break;
+      case 4:
+        if (out.href === null && name.toLowerCase() === "href") out.href = attr.value;
+        break;
+      case 5:
+        if (out.title === null && name.toLowerCase() === "title") {
+          out.title = attr.value;
+          out.cue = true;
+        } else if (out.value === null && name.toLowerCase() === "value") out.value = attr.value;
+        break;
+      case 10:
+        if (out.ariaLabel === null && name.toLowerCase() === "aria-label") {
+          out.ariaLabel = attr.value;
+          out.cue = true;
+        }
+        break;
+      case 15:
+        if (out.labelledby === null && name.toLowerCase() === "aria-labelledby") {
+          out.labelledby = attr.value;
+          out.cue = true;
+        }
+        break;
+    }
+  }
+  return out;
+}
+
+/** What `scanControls` spends the page's attribute work on: a mutable object so a test can lower the budgets. */
+export const attributeLimits = { shortlist: SHORTLIST_ATTRIBUTE_BUDGET, prepare: PREPARE_ATTRIBUTE_BUDGET };
+
 export function shortlist(
   found: Element[],
   destinationOf: (el: Element) => string | null,
   hasLogo: (el: Element) => boolean,
   localIsOwn = true,
-): { chosen: Array<{ element: Element; href: string; target: string; order: number }>; cut: number } {
-  const first: Array<{ element: Element; href: string; target: string; order: number }> = [];
-  const second: Array<{ element: Element; href: string; target: string; order: number }> = [];
+  budget: { left: number } = { left: Infinity },
+): { chosen: Array<{ element: Element; href: string; target: string; order: number; read: ControlAttributes }>; cut: number } {
+  type Entry = { element: Element; href: string; target: string; order: number; read: ControlAttributes };
+  const first: Entry[] = [];
+  const second: Entry[] = [];
+  // Controls not looked at because the page's attribute budget ran out: counted as unread, never silently clean.
+  let unexamined = 0;
   for (const [order, el] of found.entries()) {
-    const isLink = el.tagName.toLowerCase() === "a";
-    let href: string | null = null;
-    let cue = false;
-    // One pass over the attributes: a link's first `href` (what a browser keeps) and whether any attribute could carry a cue.
-    for (const attr of el.attributes) {
-      const name = attr.name.toLowerCase();
-      if (isLink && name === "href") href ??= attr.value;
-      else if (name === "aria-label" || name === "title" || name === "aria-labelledby") cue = true;
+    if (budget.left <= 0) {
+      unexamined++;
+      continue;
     }
+    const isLink = el.tagName.toLowerCase() === "a";
+    // One pass over the attributes: a link's first `href` (what a browser keeps) and whether any attribute could carry a cue.
+    const read = readControlAttributes(el);
+    budget.left -= 1 + read.scanned;
+    const cue = read.cue;
+    let href: string | null = isLink ? read.href : null;
     if (!isLink) href = destinationOf(el);
     // No destination (a script-driven button with no form): nothing to judge, nothing to read.
     if (href === null) continue;
     const normalised = urlText(href);
     // A plainly local destination is the page's own site only while no `<base href>` moves where relative URLs resolve.
     if (localIsOwn && (normalised === "" || PLAIN_LOCAL_HREF.test(normalised))) {
-      if (cue || hasLogo(el)) first.push({ element: el, href, target: normalised, order });
+      if (cue || hasLogo(el)) first.push({ element: el, href, target: normalised, order, read });
       continue;
     }
     // Off-site links are NOT promoted here (rank() reads them first once prepared): thousands of decoy links to other hosts must not fill the prepare cap ahead of a real control.
-    (!isLink || AUTH_PATH.test(normalised.slice(0, MAX_AUTH_PATH_CHARS)) ? first : second).push({ element: el, href, target: normalised, order });
+    (!isLink || AUTH_PATH.test(normalised.slice(0, MAX_AUTH_PATH_CHARS)) ? first : second).push({
+      element: el,
+      href,
+      target: normalised,
+      order,
+      read,
+    });
   }
   const all = first.concat(second);
-  return { chosen: all.slice(0, MAX_PREPARED), cut: Math.max(0, all.length - MAX_PREPARED) };
+  return { chosen: all.slice(0, MAX_PREPARED), cut: Math.max(0, all.length - MAX_PREPARED) + unexamined };
 }
 
 const scanCache = new WeakMap<object, ControlScan>();
@@ -547,10 +624,13 @@ export function scanControls(doc: Document): ControlScan {
   // An `aria-labelledby` target's text, read once per target with the bounded walker (a page can point
   // thousands of controls at one huge element).
   const targetTexts = new Map<Element, string>();
+  // Visits the targets' reads cost: charged to the page's visits (TOTAL_VISITS) before the controls' own reads share what is left.
+  let targetVisits = 0;
   const targetText = (target: Element): string => {
     const known = targetTexts.get(target);
     if (known !== undefined) return known;
     const read = readChunks(target, SHORT_VISITS, ATTR_CHARS, hiddenBy);
+    targetVisits += read.visits;
     const text = read.chunks
       .map((c) => c.text)
       .join("")
@@ -568,28 +648,29 @@ export function scanControls(doc: Document): ControlScan {
     return form ? (getAttrCI(form, "action") ?? "") : null;
   };
   const localIsOwn = !baseMovesRelativeUrls(doc);
-  const { chosen, cut: notPrepared } = shortlist(found, destinationOf, (el) => imageAlts.has(el), localIsOwn);
+  const { chosen, cut: notPrepared } = shortlist(found, destinationOf, (el) => imageAlts.has(el), localIsOwn, { left: attributeLimits.shortlist });
   // Controls whose attribute text or `aria-labelledby` list was longer than what is read, or that a window cap cut: counted, not hidden.
   const cutControls = new Set<number>();
   // Phase 1: each control's attribute windows, and whether an attribute holds a sign-in or brand word as written (a
   // cheap test on the raw text; a look-alike spelling misses it and is served in the second tier, never skipped).
-  const gathered = chosen.map(({ element, href, target, order }) => {
+  const prepareBudget = { left: attributeLimits.prepare };
+  const gathered = chosen.map(({ element, href, target, order, read }) => {
     const tag = element.tagName.toLowerCase();
-    const referenced = (getAttrCI(element, "aria-labelledby") ?? "").slice(0, ATTR_RAW_CHARS).split(/\s+/).filter(Boolean);
-    let cut = referenced.length > MAX_LABELLEDBY || altsCut.has(element);
+    // The attributes were read once when the controls were listed; here only what they name is looked up. The page's budget is
+    // charged per control and per `aria-labelledby` id; a control the budget no longer covers keeps its destination and is counted cut.
+    const covered = prepareBudget.left > 0;
+    const referenced = covered ? (read.labelledby ?? "").slice(0, ATTR_RAW_CHARS).split(/\s+/).filter(Boolean) : [];
+    prepareBudget.left -= 1 + Math.min(referenced.length, MAX_LABELLEDBY);
+    let cut = referenced.length > MAX_LABELLEDBY || altsCut.has(element) || read.overlong || !covered;
     const labelled = referenced
       .slice(0, MAX_LABELLEDBY)
       .map((id) => byId(id))
       .filter((target): target is Element => target !== null)
       .map((target) => targetText(target));
-    const raw = [
-      getAttrCI(element, "aria-label"),
-      getAttrCI(element, "title"),
-      tag === "input" ? getAttrCI(element, "value") : null,
-      tag === "input" ? getAttrCI(element, "alt") : null,
-      ...labelled,
-      ...(imageAlts.get(element) ?? []),
-    ].filter((v): v is string => typeof v === "string" && v !== "");
+    const raw = (covered
+      ? [read.ariaLabel, read.title, tag === "input" ? read.value : null, tag === "input" ? read.alt : null, ...labelled, ...(imageAlts.get(element) ?? [])]
+      : []
+    ).filter((v): v is string => typeof v === "string" && v !== "");
     const rawCue = raw.some((v) => RAW_CUE.test(v.length > ATTR_RAW_CHARS ? v.slice(0, ATTR_RAW_CHARS) : v));
     const windows = raw.map((v) => {
       const bounded = boundedAttribute(v);
@@ -668,7 +749,8 @@ export function scanControls(doc: Document): ControlScan {
     .filter((i) => prepared[i]!.rank > 0)
     .sort((a, b) => prepared[b]!.rank - prepared[a]!.rank || a - b);
   const reads: Array<ReturnType<typeof readChunks> | undefined> = Array.from({ length: prepared.length });
-  let spend = TOTAL_VISITS;
+  // What the `aria-labelledby` target reads cost comes off the page's visits, but never more than three quarters: a control's own read stays possible.
+  let spend = TOTAL_VISITS - Math.min(targetVisits, (TOTAL_VISITS * 3) / 4);
   let longBudget = LONG_BUDGET_VISITS;
   for (const [position, i] of order.entries()) {
     const item = prepared[i]!;
