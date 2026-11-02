@@ -237,11 +237,12 @@ Report a suspected vulnerability privately, as [SECURITY.md](SECURITY.md) descri
 
 ## CI checks that fail for non-obvious reasons
 
-- **Secret scan** runs `detect-secrets` 1.5.0 over every tracked file against `.secrets.baseline`. The baseline stores line numbers, so editing a file it lists can fail with "The baseline file was updated". Run the scan locally, `git add .secrets.baseline`, and repeat until it exits 0. Do it last, right before you push:
+- **Secret scan** runs `detect-secrets` 1.5.0 in CI over every tracked file against `.secrets.baseline`. Do NOT run the full-repo scan locally: it pegs the CPU for minutes and CI already does it. The baseline stores line numbers, so editing a file it lists can fail CI with "The baseline file was updated". Only then, scan just the files your branch changed and commit the updated baseline:
 
   ```bash
   pip install detect-secrets==1.5.0
-  git ls-files -z | xargs -0 detect-secrets-hook --baseline .secrets.baseline
+  git diff --name-only -z origin/main...HEAD | xargs -0 detect-secrets-hook --baseline .secrets.baseline
+  git add .secrets.baseline
   ```
 
   A fake credential in a test needs `// pragma: allowlist secret` on its line, and so does an identifier as innocent as `API_KEY_ENV`. Make placeholder ids low-entropy (`01TEST0000000000000000000A`): a random-looking one can trip the entropy check. GitHub push protection is a separate gate that rejects some realistic token shapes at push time. Build those from parts (`${prefix}rest`).
