@@ -8,6 +8,11 @@ import { nonPublicHostLabel as sharedNonPublicHostLabel } from "@squirrelscan/ut
 // the "still public" cases matter more than the coverage cases.
 import { describe, expect, test } from "bun:test";
 
+import { privateTargetRuleIds } from "../../src/audit/smart-audits";
+import {
+  resolvePublishDecision,
+  resolveRegisterDecision,
+} from "../../src/cli/commands/audit";
 import {
   cloudRenderSkippedLines,
   LOCAL_HOST_NOT_PUBLISHED_LINE,
@@ -37,6 +42,82 @@ describe("nonPublicHostLabel", () => {
       expect(nonPublicHostLabel(url)).toBeNull();
     }
   );
+});
+
+// #1560: NAT64, 6to4, Teredo and the other special-use IPv6 literals (and the IPv4 documentation and reserved ranges) are not public,
+// whatever IPv4 they embed, in every caller that decides policy from the start URL: the label the cloud handoff, render charge and
+// MCP billing read, the publish and register decisions made from it, and the smart audit's private-target rule list.
+describe("special-use literals are non-public in every policy caller (#1560)", () => {
+  const FORMS = [
+    "http://[64:ff9b::a00:1]/", // NAT64 for 10.0.0.1
+    "http://[64:ff9b::7f00:1]/", // NAT64 for loopback
+    "http://[64:ff9b::a9fe:a9fe]/", // NAT64 for the metadata address
+    "http://[64:ff9b:1::a00:1]/",
+    "http://[2002:a00:1::]/", // 6to4 for 10.0.0.1
+    "http://[2002:a9fe:a9fe::]/", // 6to4 for the metadata address
+    "http://[2001:0:4136:e378:8000:63bf:80ff:fffe]/", // Teredo
+    "http://[fec0::1]/",
+    "http://[2001:db8::1]/",
+    "http://[ff02::1]/",
+    "http://203.0.113.10/",
+    "http://192.0.2.1:3000/",
+  ];
+  const SMART_ONLY_GATED = ["security/https", "perf/http2"];
+
+  test.each(FORMS)(
+    "%s: labelled, so not handed to the cloud, not billed, not published",
+    (url) => {
+      const label = nonPublicHostLabel(url);
+      expect(label).not.toBeNull();
+      expect(
+        resolvePublishDecision({
+          signedIn: true,
+          offline: false,
+          explicitPublish: true,
+          noPublish: false,
+          configPublish: true,
+          nonPublicHost: label !== null,
+        })
+      ).toBe(false);
+      expect(
+        resolveRegisterDecision({
+          signedIn: true,
+          offline: false,
+          nonPublicHost: label !== null,
+        })
+      ).toBe(false);
+    }
+  );
+
+  test.each(FORMS)(
+    "%s: the smart audit lists the private-target rules as not applicable",
+    (url) => {
+      const ids = privateTargetRuleIds(url);
+      for (const id of SMART_ONLY_GATED) expect(ids.has(id)).toBe(true);
+      expect(ids.size).toBeGreaterThan(5);
+    }
+  );
+
+  test("a public literal is publishable and a smart audit applies every rule", () => {
+    for (const url of [
+      "https://93.184.216.34/",
+      "https://[2606:4700::1111]/",
+    ]) {
+      const label = nonPublicHostLabel(url);
+      expect(label).toBeNull();
+      expect(
+        resolvePublishDecision({
+          signedIn: true,
+          offline: false,
+          explicitPublish: false,
+          noPublish: false,
+          configPublish: true,
+          nonPublicHost: false,
+        })
+      ).toBe(true);
+      expect(privateTargetRuleIds(url).size).toBe(0);
+    }
+  });
 });
 
 describe("the lines the user actually reads", () => {

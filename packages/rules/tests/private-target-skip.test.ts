@@ -131,6 +131,13 @@ describe("runner private-target gate: page rules", () => {
     ["http://mac-mini.local/"],
     ["http://myapp.test/"],
     ["https://localhost:3443/"], // a dev server WITH https is still not the edge
+    // #1560: special-use literals are not a production delivery edge either
+    ["http://[64:ff9b::a00:1]/"],
+    ["http://[2002:a00:1::]/"],
+    ["http://[2001::1]/"],
+    ["http://[fec0::1]/"],
+    ["http://203.0.113.10/"],
+    ["http://192.0.2.1/"],
   ])("%s: every gated rule emits exactly one private-target skip", async (url) => {
     const checks = await runPage(url);
     for (const id of PAGE_GATED) {
@@ -211,6 +218,10 @@ describe("runner private-target gate: site rules", () => {
     ["https://localhost:3443"],
     ["http://172.20.0.4"],
     ["http://myapp.test"],
+    // #1560
+    ["http://[64:ff9b::a00:1]"],
+    ["http://[2002:a00:1::]"],
+    ["http://203.0.113.10"],
   ])(
     "%s: every gated site rule emits exactly one private-target skip",
     async (baseUrl) => {
@@ -224,6 +235,13 @@ describe("runner private-target gate: site rules", () => {
       }
     },
   );
+
+  test("a public IP literal runs them (the wide classifier does not call a public address private)", async () => {
+    const checks = await runSite("http://93.184.216.34");
+    for (const id of SITE_GATED) expect(checks(id).some(isPrivateSkip)).toBe(false);
+    const page = await runPage("http://[2606:4700::1111]/");
+    for (const id of PAGE_GATED) expect(page(id).some(isPrivateSkip)).toBe(false);
+  });
 
   test("a public host runs them", async () => {
     // Plain http, so security/http-to-https stops at its own "not HTTPS" skip
