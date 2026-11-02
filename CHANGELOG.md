@@ -19,7 +19,7 @@ How it works:
 
 ### Fixed
 
-- **`security/leaked-secrets` stops reporting strings that only look like a JWT.** A `JSON Web Token` match was kept as a generic JWT-shaped string at medium when it did not decode. It is now dropped only on proof: a header or payload within the 8,192-character read bound that is not a JSON object (garbage, truncated, trailing bytes, an array, a string, a number or `null`). A part past 8,192 characters, nested too deeply to parse or empty, and a header with no string `alg` over a payload that decodes (it keeps its classification, `service_role` included) still report. (#1283)
+- **`security/leaked-secrets` stops reporting strings that only look like a JWT.** A `JSON Web Token` match was kept as a generic JWT-shaped string at medium when it did not decode. It is now dropped only on proof: a header or payload within the 8,192-character read bound that is not a JSON object (garbage, truncated, trailing bytes, an array, a string, a number or `null`; an unreadable header counts as proof), or a header object with no string `alg` over a payload that is only a plain generic token. A part past 8,192 characters, nested too deeply to parse or empty still reports, and a header with no string `alg` keeps the classification its payload earns (`service_role`, an admin scope, Supabase, Hygraph, Shopify). Known limit: two decoy `eyJ…` segments in a row before a real token consume its payload, and the match is dropped; one decoy is handled. (#1283)
 
 ## v0.0.158 (2026-11-01)
 

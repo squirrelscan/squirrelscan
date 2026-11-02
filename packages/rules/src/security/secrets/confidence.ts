@@ -613,7 +613,7 @@ function isNotAJwt(value: string): boolean {
   return [jwtPartVerdict(head), jwtPartVerdict(body)].some((verdict) => verdict === "not-json" || verdict === "not-object");
 }
 
-function refineJwt(
+function classifyJwt(
   value: string,
   now: number,
   before: (() => string) | undefined,
@@ -632,8 +632,7 @@ function refineJwt(
     }
   }
   // Dropped only on proof it is not a token (see `isNotAJwt`): an `eyJ` run with two dots that is a base64 payload or text (#1283).
-  // An undecided part (too long to read, nested too deeply, empty) is reported at medium. A header with no `alg` over a payload that
-  // decodes is a malformed token, not proof of a non-token: it keeps its classification.
+  // An undecided part (too long to read, nested too deeply, empty) is reported at medium.
   if (!decoded) {
     return isNotAJwt(value) ? { drop: true } : { type: "JSON Web Token", confidence: "medium", publicByDesign: false };
   }
@@ -763,6 +762,31 @@ function refineJwt(
     };
   }
   return { type: "JSON Web Token", confidence: "medium", publicByDesign: false, extra };
+}
+
+/** What a JWT-shaped match with no string `alg` in its header may be and still be dropped: a plain generic token. */
+const PLAIN_JWT_TYPES = new Set(["JSON Web Token", "JSON Web Token (expired)", "Session Token (JWT)"]);
+
+/**
+ * A header with no string `alg` (missing, null, a number, an array, an object) is malformed, which alone proves nothing: the payload is
+ * classified first, and the match is dropped only when it would be a plain generic JWT (the #1283 decoy shape). A payload that classifies
+ * as something specific (a service role, an admin scope, Supabase, Hygraph, Shopify) keeps that classification (#1283).
+ */
+function refineJwt(
+  value: string,
+  now: number,
+  before: (() => string) | undefined,
+  after?: () => string,
+): Refinement {
+  // A decoy `eyJ…` segment right before a real token is consumed by the pattern as its first part: the match is decoy.header.payload.
+  // When the match does not decode but the two parts after the first do, the real token is classified.
+  const parts = value.split(".");
+  const asMatched = decodeJwt(value);
+  const token = !asMatched && parts.length === 3 && decodeJwt(`${parts[1]}.${parts[2]}`) ? `${parts[1]}.${parts[2]}` : value;
+  const result = classifyJwt(token, now, before, after);
+  if (result.drop || result.type === undefined || !PLAIN_JWT_TYPES.has(result.type)) return result;
+  const decoded = decodeJwt(token);
+  return decoded && typeof decoded.header.alg !== "string" ? { drop: true } : result;
 }
 
 // ── Algolia ─────────────────────────────────────────────────────────────────
