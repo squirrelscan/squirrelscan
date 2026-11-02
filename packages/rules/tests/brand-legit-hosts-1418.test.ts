@@ -169,6 +169,30 @@ describe("Microsoft: only its sign-in hosts spare a sign-in control", () => {
       expect(microsoft(href), href).toBe("Microsoft");
     }
   });
+  test("the real B2C shape puts /tfp/<tenant>.onmicrosoft.com/<policy> before the authorize path: own tenant spared, foreign tenant reported", () => {
+    // built from parts: the tenant host, the /tfp/ directory path, the policy and the authorize tail
+    const b2c = (tenant: string, tail: string, query = ""): string => `https://${tenant}.b2clogin.com/tfp/${tenant}.onmicrosoft.com/${tail}${query}`;
+    const policy = ["b2c", "1", "signin"].join("_");
+    const own = "shop";
+    const foreign = "tenant";
+    for (const href of [
+      b2c(own, `${policy}/oauth2/v2.0/authorize`, "?client_id=x&p=" + policy), // the policy form with the v2.0 path
+      b2c(own, `${policy}/oauth2/authorize`), // the older path without v2.0
+      b2c(own, "oauth2/v2.0/authorize"), // no policy segment
+      b2c(`${own}-prod`, `${policy}/oauth2/v2.0/authorize`), // an environment suffix
+    ]) {
+      expect(microsoft(href), href).toBeNull();
+    }
+    for (const href of [
+      b2c(foreign, `${policy}/oauth2/v2.0/authorize`, "?client_id=x&p=" + policy),
+      b2c(foreign, `${policy}/oauth2/authorize`),
+      b2c(foreign, "oauth2/v2.0/authorize"),
+      b2c(own, `${policy}/oauth2/v2.0/token`), // a /tfp/ path that is not an authorize endpoint
+      b2c(own, `${policy}/oauth2/authorizexyz`),
+    ]) {
+      expect(microsoft(href), href).toBe("Microsoft");
+    }
+  });
   test("a tenant is matched against a site name of at least three letters, and the name is the registrable domain's", () => {
     const authorize = (tenant: string) => `https://${tenant}.b2clogin.com/${tenant}.onmicrosoft.com/oauth2/v2.0/authorize`;
     expect(brand("Sign in with Microsoft", authorize("abc"), "https://abc.com/")).toBeNull(); // three letters: matched
