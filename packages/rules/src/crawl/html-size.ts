@@ -67,6 +67,18 @@ export const htmlSizeRule: Rule = {
       });
     }
 
+    // A page whose markup had to be degraded to be read at all (an oversized class attribute cut to its first tokens, or a page that
+    // could not be parsed and was read empty) says so: its other findings were made on what could be read (#1557).
+    const notices = ctx.parsed?.parseNotices;
+    if (notices && notices.length > 0) {
+      checks.push({
+        name: "html-parse",
+        status: "warn",
+        message: `The page's markup could not be read in full: ${notices.join("; ")}`,
+        details: { notices },
+      });
+    }
+
     return { checks };
   },
 };

@@ -94,6 +94,10 @@ Glossary: [Googlebot file size limit](/glossary#googlebot-file-size-limit).
 
 {/* glossary:backlinks:end */}
 
+## A page whose markup could not be read in full
+
+The check also reports when a page's markup had to be degraded for the audit to read it. A `class` attribute of more than 20,000 tokens makes the HTML parser overflow its stack (from about 640,000 tokens, an attribute of a little over a megabyte), so the page is read again with that attribute cut to its first 20,000 tokens, and everything after it is read normally. A page that cannot be read at all is audited empty. Either way the page gets a warning, `html-parse`, that says which, because the other findings on it were made on what could be read. One page like this no longer stops the audit: the other pages are audited and the report is written. A page that parses the first time is not changed.
+
 ## References
 
 - [Inside Googlebot: crawling, fetching and the bytes we process, Google Search Central](https://developers.google.com/search/blog/2026/03/crawler-blog-post)
