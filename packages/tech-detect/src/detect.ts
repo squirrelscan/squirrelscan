@@ -169,36 +169,54 @@ const FLIGHT_SCRIPT_MAX_CHARS = 2 * 1024 * 1024;
 const INLINE_TEXT_BUDGET = 8 * 1024 * 1024;
 /**
  * An import map (`<script type="importmap">`) is data the browser resolves module specifiers with: its `imports` and `scopes`
- * values are URLs the page loads as modules (`"three": "https://cdn.example/three.module.js"`). They are kept as script URLs, read
- * from a map of at most this many characters and at most {@link IMPORTMAP_MAX_URLS} URLs (#1539).
+ * string values are URLs the page loads as modules (`"three": "https://cdn.example/three.module.js"`). They are kept as script
+ * URLs (#1539), bounded: a map of at most {@link IMPORTMAP_MAX_CHARS} characters, at most {@link IMPORTMAP_MAX_URLS_PER_MAP} URLs
+ * a map and {@link IMPORTMAP_MAX_URLS_PER_PAGE} a page, {@link IMPORTMAP_MAX_URL_CHARS} characters a URL, and
+ * {@link IMPORTMAP_MAX_MARKUP_CHARS} characters of synthetic tags a page. A URL past a bound, or one that could not be written as
+ * the `src` of exactly one tag (a quote, angle bracket, backtick, backslash, whitespace or control character in it, or a scheme
+ * other than http and https), is not read and is counted in {@link pageImportMapSkipped}; the rest of the page is read as usual.
  */
 const IMPORTMAP_MAX_CHARS = 64 * 1024;
-const IMPORTMAP_MAX_URLS = 256;
+const IMPORTMAP_MAX_URLS_PER_MAP = 64;
+const IMPORTMAP_MAX_URLS_PER_PAGE = 512;
 const IMPORTMAP_MAX_URL_CHARS = 2048;
+const IMPORTMAP_MAX_MARKUP_CHARS = 64 * 1024;
+const IMPORTMAP_UNSAFE_URL = /["'`<>\\\s\u0000-\u001f\u007f]/;
+const URL_SCHEME = /^[A-Za-z][A-Za-z0-9+.-]*:/;
+const HTTP_SCHEME = /^https?:/i;
 
-/** The URL strings an import map's `imports` and `scopes` map to; a map that is not JSON, or has no such object, has none. */
-function importMapUrls(text: string): string[] {
+/** A URL value that is written as the `src` of one well-formed tag: http, https, protocol-relative or a relative path. */
+function isImportMapUrl(value: string): boolean {
+  if (value.length === 0 || value.length > IMPORTMAP_MAX_URL_CHARS || IMPORTMAP_UNSAFE_URL.test(value)) return false;
+  return !URL_SCHEME.test(value) || HTTP_SCHEME.test(value);
+}
+
+/**
+ * The URL strings an import map's `imports` and `scopes` map to, at most `limit` of them, and how many string values were left
+ * out (a bound or an unsafe value). A map that is not JSON, or has no such object, has none.
+ */
+function importMapUrls(text: string, limit: number): { urls: string[]; skipped: number } {
   let map: unknown;
   try {
     map = JSON.parse(text);
   } catch {
-    return [];
+    return { urls: [], skipped: 0 };
   }
-  if (map === null || typeof map !== "object" || Array.isArray(map)) return [];
   const urls: string[] = [];
+  let skipped = 0;
+  const isTable = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === "object" && !Array.isArray(value);
   const take = (table: unknown): void => {
-    if (table === null || typeof table !== "object" || Array.isArray(table)) return;
-    for (const value of Object.values(table as Record<string, unknown>)) {
-      if (urls.length >= IMPORTMAP_MAX_URLS) return;
-      if (typeof value === "string" && value.length > 0 && value.length <= IMPORTMAP_MAX_URL_CHARS) urls.push(value);
+    if (!isTable(table)) return;
+    for (const value of Object.values(table)) {
+      if (typeof value !== "string") continue;
+      if (urls.length >= limit || !isImportMapUrl(value)) skipped++;
+      else urls.push(value);
     }
   };
-  const { imports, scopes } = map as { imports?: unknown; scopes?: unknown };
-  take(imports);
-  if (scopes !== null && typeof scopes === "object" && !Array.isArray(scopes)) {
-    for (const scope of Object.values(scopes as Record<string, unknown>)) take(scope);
-  }
-  return urls;
+  if (!isTable(map)) return { urls, skipped };
+  take(map.imports);
+  if (isTable(map.scopes)) for (const scope of Object.values(map.scopes)) take(scope);
+  return { urls, skipped };
 }
 
 /** Longest tag read quote-aware; past it the first `>` ends the tag. */
@@ -227,7 +245,7 @@ function attributeValue(tag: string, name: string): string | null {
   return m ? (m[1] ?? m[2] ?? m[3] ?? "") : null;
 }
 
-let lastMarkup: { html: string; attrs: ReadonlySet<string>; markup: string; tags: CollectedTag[] } | undefined;
+let lastMarkup: { html: string; attrs: ReadonlySet<string>; markup: string; tags: CollectedTag[]; importMapSkipped: number } | undefined;
 
 /** A tag the page pass kept, with its attributes as written (names lower case, first wins). */
 interface CollectedTag {
@@ -313,6 +331,9 @@ export function pageMarkup(html: string): string {
   const flightBodies: string[] = [];
   const scriptEnd = /<\/script/gi;
   let inlineText = 0;
+  let importMapSkipped = 0;
+  let importMapUrlCount = 0;
+  let importMapMarkup = 0;
   let pos = 0;
   for (;;) {
     const open = html.indexOf("<", pos);
@@ -345,12 +366,24 @@ export function pageMarkup(html: string): string {
       parts.push(tag);
       const type = attributeValue(tag.slice(0, MAX_TAG_CHARS), "type")?.trim() ?? "";
       const length = end - pos;
-      if (length > 0 && length <= IMPORTMAP_MAX_CHARS && /^importmap$/i.test(type.slice(0, 32))) {
-        // The page loads these as modules: each is a script URL, for the URL patterns (as a tag in the markup) and for the
+      if (length > 0 && /^importmap$/i.test(type.slice(0, 32))) {
+        // The page loads these as modules: each is a script URL, for the URL patterns (as one tag in the markup) and for the
         // tag attribute detectors (as a collected script). The map itself stays out of the markup: it is data.
-        for (const url of importMapUrls(html.slice(pos, end))) {
-          parts.push(`<script type="module" src="${url.replaceAll('"', "%22").replaceAll(">", "%3E")}"></script>`);
-          if (collected.length < MAX_COLLECTED_TAGS && wanted.has("src")) collected.push({ tag: "script", attrs: new Map([["src", url]]) });
+        if (length > IMPORTMAP_MAX_CHARS) importMapSkipped++;
+        else {
+          const { urls, skipped } = importMapUrls(html.slice(pos, end), Math.min(IMPORTMAP_MAX_URLS_PER_MAP, IMPORTMAP_MAX_URLS_PER_PAGE - importMapUrlCount));
+          importMapSkipped += skipped;
+          for (const url of urls) {
+            const synthetic = `<script type="module" src="${url}"></script>`;
+            if (importMapMarkup + synthetic.length > IMPORTMAP_MAX_MARKUP_CHARS) {
+              importMapSkipped++;
+              continue;
+            }
+            importMapMarkup += synthetic.length;
+            importMapUrlCount++;
+            parts.push(synthetic);
+            if (collected.length < MAX_COLLECTED_TAGS && wanted.has("src")) collected.push({ tag: "script", attrs: new Map([["src", url]]) });
+          }
         }
       }
       if (length > 0 && !DATA_SCRIPT_TYPE.test(type.slice(0, 256)) && inlineText < INLINE_TEXT_BUDGET) {
@@ -375,8 +408,14 @@ export function pageMarkup(html: string): string {
   }
   if (flightBodies.length > 0) parts.push(flightLoaderText(flightBodies, (t) => DATA_SCRIPT_TYPE.test(t)));
   const markup = parts.join("\n");
-  lastMarkup = { html, attrs: wanted, markup, tags: collected };
+  lastMarkup = { html, attrs: wanted, markup, tags: collected, importMapSkipped };
   return markup;
+}
+
+/** How many import map entries (a bound, an unsafe value, a map over its size) the page pass left out: see {@link IMPORTMAP_MAX_CHARS}. */
+export function pageImportMapSkipped(html: string): number {
+  pageMarkup(html);
+  return lastMarkup?.importMapSkipped ?? 0;
 }
 
 /** The tags a page pass kept (see {@link COLLECTED_TAGS}), found in the same single pass as {@link pageMarkup}. */
