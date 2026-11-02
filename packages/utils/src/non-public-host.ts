@@ -193,7 +193,7 @@ const dotted = (hi: number, lo: number): string => `${hi >> 8}.${hi & 0xff}.${lo
 /** An IPv4 literal in a range no public site is served from, beyond the private ones: documentation, benchmarking, multicast, reserved, broadcast. */
 function isSpecialUseIpv4(host: string): boolean {
   const o = host.split(".").map(Number);
-  if (o.length !== 4 || o.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return false;
+  if (o.length !== 4 || o.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return true; // not an address: refused
   const [a, b, c] = o as [number, number, number, number];
   if (a >= 224) return true; // multicast 224/4, reserved 240/4, broadcast 255.255.255.255
   if (a === 192 && b === 0 && (c === 0 || c === 2)) return true; // 192.0.0.0/24 (IETF), 192.0.2.0/24 (TEST-NET-1)
@@ -205,30 +205,29 @@ function isSpecialUseIpv4(host: string): boolean {
 }
 
 /** An IPv6 literal that is special-use or carries an IPv4 address that is not public: NAT64, 6to4, Teredo, compatible, site-local, documentation, multicast, discard. */
-function isSpecialUseIpv6(host: string): boolean {
-  const g = ipv6Groups(host);
-  if (!g) return false;
+function isSpecialUseIpv6(g: readonly number[]): boolean {
   const [g0, g1, g2, g3, g4, g5, g6, g7] = g as [number, number, number, number, number, number, number, number];
+  // An embedded IPv4 can only add a refusal: a public one falls through to the prefix rules below (a multicast, site-local, documentation or discard prefix stays refused).
   const zeros = (from: number, to: number): boolean => g.slice(from, to).every((x) => x === 0);
   if (zeros(0, 6)) return true; // ::/96: unspecified, loopback and the deprecated IPv4-compatible form
   if (g0 === 0x64 && g1 === 0xff9b) {
-    if (zeros(2, 6)) return isNonPublicHostnameStrict(dotted(g6, g7)); // NAT64: the embedded IPv4 decides
+    if (zeros(2, 6) && isNonPublicHostnameStrict(dotted(g6, g7))) return true; // NAT64
     if (g2 === 1) return true; // 64:ff9b:1::/48, local-use NAT64
   }
-  if (g0 === 0x2002) return isNonPublicHostnameStrict(dotted(g1, g2)); // 6to4: the embedded IPv4 decides
+  if (g0 === 0x2002 && isNonPublicHostnameStrict(dotted(g1, g2))) return true; // 6to4
   if (g0 === 0x2001 && g1 === 0) return true; // Teredo 2001::/32
   if (g0 === 0x2001 && g1 === 0xdb8) return true; // documentation 2001:db8::/32
   if (g0 === 0x2001 && g1 === 2 && g2 === 0) return true; // benchmarking 2001:2::/48
   if (g0 === 0x2001 && (g1 & 0xfff0) === 0x10) return true; // ORCHID 2001:10::/28
   if (g0 === 0x2001 && (g1 & 0xfff0) === 0x20) return true; // ORCHIDv2 2001:20::/28
   if (g0 === 0x5f00) return true; // SRv6 segment ids 5f00::/16
-  if ((g4 === 0 || g4 === 0x200) && g5 === 0x5efe) return isNonPublicHostnameStrict(dotted(g6, g7)); // ISATAP under any prefix: the IPv4 decides
+  if ((g4 === 0 || g4 === 0x200) && g5 === 0x5efe && isNonPublicHostnameStrict(dotted(g6, g7))) return true; // ISATAP under any prefix
   if (g0 === 0x3fff && (g1 & 0xf000) === 0) return true; // documentation 3fff::/20
   if ((g0 & 0xffc0) === 0xfec0) return true; // site-local fec0::/10
   if (g0 >> 8 === 0xff) return true; // multicast ff00::/8
-  if (g0 === 0x100 && g1 === 0 && g2 === 0 && g3 === 0) return true; // discard 100::/64
-  if (zeros(0, 4) && g4 === 0xffff && g5 === 0) return isNonPublicHostnameStrict(dotted(g6, g7)); // ::ffff:0:a.b.c.d
-  if (zeros(0, 5) && g5 === 0xffff) return isNonPublicHostnameStrict(dotted(g6, g7)); // ::ffff:a.b.c.d
+  if (g0 === 0x100 && g1 === 0 && g2 === 0 && (g3 === 0 || g3 === 1)) return true; // discard 100::/64, dummy 100:0:0:1::/64
+  if (zeros(0, 4) && g4 === 0xffff && g5 === 0 && isNonPublicHostnameStrict(dotted(g6, g7))) return true; // ::ffff:0:a.b.c.d
+  if (zeros(0, 5) && g5 === 0xffff && isNonPublicHostnameStrict(dotted(g6, g7))) return true; // ::ffff:a.b.c.d
   return false;
 }
 
@@ -237,12 +236,16 @@ function isSpecialUseIpv6(host: string): boolean {
  * documentation, benchmarking, multicast, reserved and broadcast; IPv6 NAT64, 6to4 (judged by the IPv4 they carry), Teredo,
  * IPv4-compatible, site-local, documentation, multicast and discard. A separate function, not a change to the shared one,
  * because the shared classifier also decides which delivery rules run on a page, and fixtures and docs use these ranges.
+ * Fail closed: text that has the shape of an address (a colon, or four dotted numbers) and is not a well-formed one (nine
+ * groups, two `::`, a zone id or brackets, an octet over 255) is refused, so a spelling no parser would accept is not let through.
  */
 export function isNonPublicHostnameStrict(rawHost: string): boolean {
   if (isNonPublicHostname(rawHost)) return true;
   const host = normalizeHostname(rawHost);
   if (!isIpLiteral(host)) return false;
-  return host.includes(":") ? isSpecialUseIpv6(host) : isSpecialUseIpv4(host);
+  if (!host.includes(":")) return isSpecialUseIpv4(host);
+  const groups = ipv6Groups(host);
+  return groups === undefined ? true : isSpecialUseIpv6(groups); // text that looks like an address and is not one is refused
 }
 
 /**
