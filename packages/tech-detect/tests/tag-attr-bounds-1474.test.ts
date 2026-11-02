@@ -57,8 +57,9 @@ describe("1 MB of line-start openers inside one quoted attribute", () => {
         const hostile = `<${tag} a=${quote}${rep(`\n<${tag}`, MB)}${quote}>${close}`;
         const started = performance.now();
         expect(ids(page("", hostile + one))).toContain(id);
-        // Seconds were minutes for the Klaviyo patterns before the tempered in-tag scan: this bound is well over a loaded machine's jitter
-        expect(performance.now() - started).toBeLessThan(10_000);
+        // Seconds were minutes for the Klaviyo patterns before the tempered in-tag scan (3.2 s for the 1 MB script case before the fix);
+        // 50 to 85 ms now. The bound is over 20 times that, well over a loaded machine's jitter and under the pre-fix cost.
+        expect(performance.now() - started).toBeLessThan(2_000);
       }
     }, 240_000);
 
@@ -66,7 +67,8 @@ describe("1 MB of line-start openers inside one quoted attribute", () => {
       const started = performance.now();
       ids(page("", rep(`<${tag} a="\n`, MB)));
       ids(page("", rep(`<${tag} a='\n`, MB)));
-      expect(performance.now() - started).toBeLessThan(10_000);
+      // Two 1 MB pages: 125 to 305 ms now, so the bound is over 6 times that.
+      expect(performance.now() - started).toBeLessThan(2_000);
     }, 240_000);
   }
 });

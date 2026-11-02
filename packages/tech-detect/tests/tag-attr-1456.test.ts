@@ -12,6 +12,13 @@ const page = (head: string, body = "") => `<!doctype html><html><head><title>t</
 const ids = (html: string, scripts?: Array<{ url: string; content?: string }>): string[] =>
   detectTechnologies({ url: "https://example.com/", headers: {}, html, ...(scripts ? { scripts } : {}) }).map((t) => t.id);
 const BODIES = [{ url: "https://example.com/app.js", content: "var a=1;" }];
+/** One detection of a page: the milliseconds it took and how many times the per-page time budget cut the scan short. */
+const timed = (html: string): { ms: number; exceeded: number } => {
+  let exceeded = 0;
+  const started = performance.now();
+  detectTechnologies({ url: "https://example.com/", headers: {}, html }, ALL_FINGERPRINTS, { onBudgetExceeded: () => exceeded++ });
+  return { ms: performance.now() - started, exceeded };
+};
 
 describe("script src signatures", () => {
   test("quoted, single-quoted and unquoted src; a src after a long run of other attributes", () => {
@@ -72,11 +79,11 @@ describe("hostile pages (5 MB)", () => {
   for (const tag of ["script", "link", "img", "iframe"]) {
     for (const [label, unit] of [["unclosed openers", `<${tag} `], ["unbalanced quotes", `<${tag} x="`]] as const) {
       test(`${tag}: ${label}`, () => {
-        const html = rep(unit);
-        const started = performance.now();
-        ids(html);
-        // Minutes before the change (every signature rescanned 400 characters after each opener); 0.3 to 0.75 s now.
-        expect(performance.now() - started).toBeLessThan(tag === "iframe" ? 6_000 : 2_000);
+        const { ms, exceeded } = timed(rep(unit));
+        // Minutes before the change (every signature rescanned 400 characters after each opener); 0.2 to 0.55 s now.
+        expect(ms).toBeLessThan(tag === "iframe" ? 6_000 : 2_000);
+        // The page pass is read once for every signature: a rescan per signature would run into the per-page budget.
+        expect(exceeded).toBe(0);
       }, 120_000);
     }
   }
@@ -86,10 +93,19 @@ describe("bounds (review of #1467)", () => {
   test("hostile openers: a quote then a newline, and a 1 MB attribute value", () => {
     const rep = (unit: string): string => page("", unit.repeat(Math.ceil(5_000_000 / unit.length)));
     for (const html of [rep('<img a="\n'), rep("<script a='\n"), page("", `<img alt="${"x".repeat(1_000_000)}" src="/a.png">`), page("", `<script src="${"y".repeat(1_000_000)}"></script>`)]) {
-      const started = performance.now();
-      ids(html);
-      expect(performance.now() - started).toBeLessThan(6_000);
+      const { ms, exceeded } = timed(html);
+      // 60 to 380 ms now (the two 5 MB cases the slowest): the bound is over 5 times that.
+      expect(ms).toBeLessThan(2_000);
+      expect(exceeded).toBe(0);
     }
+  }, 120_000);
+
+  test("a 5 MB page of closed script, img and link tags is read once for every signature", () => {
+    const unit = '<script src="https://cdn.example.net/a.js"></script><img src="https://cdn.example.net/i.png"><link rel="stylesheet" href="https://cdn.example.net/s.css">';
+    const { ms, exceeded } = timed(page("", unit.repeat(Math.ceil(5_000_000 / unit.length))));
+    // 1.3 to 1.6 s now; a rescan of the page for each signature is over the 5 s per-page budget.
+    expect(ms).toBeLessThan(2_500);
+    expect(exceeded).toBe(0);
   }, 120_000);
 
   test("a page of tags with 100 attributes each keeps only what a signature reads, and nothing after the call", () => {
