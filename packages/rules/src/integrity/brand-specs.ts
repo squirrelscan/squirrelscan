@@ -7,8 +7,14 @@ export interface BrandSpec {
   lexicon: string[];
   /** Auth/booking action cues that turn a mention into an impersonation. */
   actionCues: string[];
-  /** Legit hosts for this brand — links here are treated as real integrations. */
+  /** The brand's own sign-in or service hosts: the host or any subdomain of it. Never a registrable domain that also hosts user content. */
   legitHosts: string[];
+  /**
+   * Hosts that serve both the brand's sign-in and other content (user pages, redirectors, proxies), spared only on
+   * the paths that are the sign-in. `suffix` also takes subdomains (a tenant host such as `<tenant>.b2clogin.com`);
+   * otherwise exactly that host.
+   */
+  legitEndpoints?: Array<{ host: string; suffix?: boolean; path: RegExp }>;
 }
 
 export const BRAND_SPECS: BrandSpec[] = [
@@ -23,7 +29,13 @@ export const BRAND_SPECS: BrandSpec[] = [
       "google login",
     ],
     actionCues: ["sign in", "log in", "continue", "verify"],
-    legitHosts: ["accounts.google.com", "google.com"],
+    // `sites.`, `docs.`, `script.`, `drive.`, `forms.`, `translate.` and the `/url` and `/amp/s/` redirectors of google.com hold
+    // user content or send a visitor anywhere (#1418): only the sign-in hosts and the accounts path are the brand's.
+    legitHosts: ["accounts.google.com", "accounts.youtube.com"],
+    legitEndpoints: [
+      { host: "www.google.com", path: /^\/accounts(?:\/|$)/ },
+      { host: "google.com", path: /^\/accounts(?:\/|$)/ },
+    ],
   },
   {
     brand: "Microsoft",
@@ -37,14 +49,16 @@ export const BRAND_SPECS: BrandSpec[] = [
       "outlook login",
     ],
     actionCues: ["sign in", "log in", "continue", "verify"],
+    // Azure AD B2C tenants live under `b2clogin.com` and are tenant-owned: only their authorize paths are the sign-in.
+    // `forms.`, `answers.` and the rest of microsoft.com are not sign-in hosts (#1418).
     legitHosts: [
       "login.microsoftonline.com",
       "login.microsoftonline.us",
       "login.windows.net",
       "login.live.com",
-      "b2clogin.com",
-      "microsoft.com",
+      "login.microsoft.com",
     ],
+    legitEndpoints: [{ host: "b2clogin.com", suffix: true, path: /\/oauth2\/(?:v2\.0\/)?authorize(?:\/|$)/ }],
   },
   {
     brand: "Calendly",
