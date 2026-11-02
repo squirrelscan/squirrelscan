@@ -50,8 +50,8 @@ squirrel audit <url> [options]
 | `--visibility` | | Visibility: `public`, `unlisted`, `private` | `unlisted` |
 | `--follow-redirect` | | Audit where the start URL redirects when that is another site (a link shortener, a launch domain forwarding to the product). Without it a terminal asks, and anything else exits `4`. Overrides `[crawler] follow_redirect`; `--no-follow-redirect` turns the config off for one run. `-y` does not imply it. See [Start URLs that redirect](#start-urls-that-redirect) | `false` |
 | `--yes` | `-y` | Skip confirmation prompts (e.g. cloud credit spend). Does not follow a redirect to another site: use `--follow-redirect` | `false` |
-| `--render` | | Force cloud browser rendering for this run: alias of `--render-mode all` ([uses credits](/guides/browser-rendering); requires login) | auto |
-| `--render-mode` | | Render strategy: `off` (HTTP only) · `auto` (render only client-rendered pages) · `all` (render every page). Overrides `[cloud].render` | the level's: `auto` for quick, `all` for surface and full |
+| `--render` | | Force cloud browser rendering for this run: alias of `--render-mode all` ([uses credits](/guides/browser-rendering); requires login). Only rendering runs in the cloud: your machine still fetches the site | auto |
+| `--render-mode` | | Render strategy: `off` (HTTP only) · `auto` (render only client-rendered pages) · `all` (render every page). Only rendering runs in the cloud: your machine still fetches the site. Overrides `[cloud].render` | the level's: `auto` for quick, `all` for surface and full |
 | `--http` | | Force plain HTTP for this run: alias of `--render-mode off` (never render in the cloud; pages cost the same either way) | auto |
 | `--offline` | | Run offline: skip cloud features, publishing, and telemetry. No request goes to a host outside the audited site (its host, its `www` or apex twin, `[project] domains` and their subdomains): external links, third-party scripts, stylesheets and fonts, sitemaps on another site, and redirects to another site are not requested. Internal link targets still are checked. It does not change probing: `-C surface --offline` still sends the site probes unless you add `--passive`. See [Offline and passive are separate](#offline-and-passive-are-separate) | `false` |
 | `--external-links` | | Check links to other sites this run, even where `[external_links] enabled = false` turns them off. Cannot be combined with `--offline` or `--no-external-links` | the level's: on at every level |
@@ -340,6 +340,8 @@ Force rendering for a run even if your config disables it:
 ```bash
 squirrel audit https://example.com --render
 ```
+
+Rendering is the only part that runs in the cloud: with `--render` or any `--render-mode` other than `off`, your machine still fetches the site (the pages, `robots.txt`, sitemaps, scripts and assets, link checks), so the site still sees your IP address. See [what still comes from your machine](/cloud/rendering#what-still-comes-from-your-machine).
 
 For finer control, `--render-mode auto` renders **only** pages that need it (client-side-rendered shells) and uses fast plain HTTP for the rest. To set the behavior permanently, use `render` in `[cloud]` - see the [browser rendering guide](/guides/browser-rendering).
 
