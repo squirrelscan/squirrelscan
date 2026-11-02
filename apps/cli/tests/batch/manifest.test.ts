@@ -496,3 +496,71 @@ describe("the same attempt twice", () => {
     ).toBe("failed");
   });
 });
+
+describe("manifest read-back bounds at the edge (#1547 round 2)", () => {
+  const e = entry("a");
+  const good = formatRecord(record(e, "completed"));
+  const rec = (extra: Record<string, unknown>) =>
+    JSON.stringify({
+      v: 1,
+      url: e.url,
+      key: e.key,
+      status: "completed",
+      attempt: 1,
+      ...extra,
+    });
+
+  test("blank and whitespace-only lines are not records and not skipped; a padded record line is read", () => {
+    expect(parseManifest(`  \n\t\n\r\n${good}`)).toMatchObject({
+      skipped: 0,
+      truncated: false,
+    });
+    expect(parseManifest(`  \n\t\n\r\n${good}`).records).toHaveLength(1);
+    expect(parseManifest(`   ${good.trim()}\t\r\n`).records).toHaveLength(1);
+  });
+
+  test("a report path is kept at 512 characters and dropped at 513", () => {
+    const path = (n: number) => `${"a".repeat(n - 5)}.json`;
+    expect(
+      parseManifest(rec({ report: path(512) })).records[0]!.report
+    ).toHaveLength(512);
+    expect(
+      parseManifest(rec({ report: path(513) })).records[0]!.report
+    ).toBeUndefined();
+  });
+
+  test("pages is kept at one billion and dropped above", () => {
+    expect(parseManifest(rec({ pages: 1_000_000_000 })).records[0]!.pages).toBe(
+      1_000_000_000
+    );
+    expect(
+      parseManifest(rec({ pages: 1_000_000_001 })).records[0]!.pages
+    ).toBeUndefined();
+    expect(parseManifest(rec({ pages: 0 })).records[0]!.pages).toBe(0);
+  });
+
+  test("a line of exactly the line cap is read, one character more is skipped without being parsed", () => {
+    const base = rec({});
+    const padded = (length: number): string =>
+      base + " ".repeat(length - base.length);
+    const exact = padded(BATCH_MANIFEST_MAX_LINE_CHARS);
+    expect(exact).toHaveLength(BATCH_MANIFEST_MAX_LINE_CHARS);
+    expect(parseManifest(`${exact}\n${good}`)).toMatchObject({ skipped: 0 });
+    expect(parseManifest(`${exact}\n${good}`).records).toHaveLength(2);
+    const over = padded(BATCH_MANIFEST_MAX_LINE_CHARS + 1);
+    const r = parseManifest(`${over}\n${good}`);
+    expect([r.records.length, r.skipped]).toEqual([1, 1]);
+    // an over-long line that is not even JSON is skipped the same way, and does not count as a blank
+    expect(
+      parseManifest(`${"x".repeat(BATCH_MANIFEST_MAX_LINE_CHARS + 1)}\n${good}`)
+    ).toMatchObject({ skipped: 1 });
+  });
+
+  test("a skipped over-long line still counts toward the line cap", () => {
+    const long = "x".repeat(BATCH_MANIFEST_MAX_LINE_CHARS + 1);
+    expect(parseManifest(`${long}\n${long}\n${long}`, 2)).toMatchObject({
+      truncated: true,
+      skipped: 2,
+    });
+  });
+});

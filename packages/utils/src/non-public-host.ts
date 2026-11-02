@@ -218,7 +218,12 @@ function isSpecialUseIpv6(host: string): boolean {
   if (g0 === 0x2002) return isNonPublicHostnameStrict(dotted(g1, g2)); // 6to4: the embedded IPv4 decides
   if (g0 === 0x2001 && g1 === 0) return true; // Teredo 2001::/32
   if (g0 === 0x2001 && g1 === 0xdb8) return true; // documentation 2001:db8::/32
-  if ((g0 & 0xfff0) === 0x3ff0) return true; // documentation 3fff::/20
+  if (g0 === 0x2001 && g1 === 2 && g2 === 0) return true; // benchmarking 2001:2::/48
+  if (g0 === 0x2001 && (g1 & 0xfff0) === 0x10) return true; // ORCHID 2001:10::/28
+  if (g0 === 0x2001 && (g1 & 0xfff0) === 0x20) return true; // ORCHIDv2 2001:20::/28
+  if (g0 === 0x5f00) return true; // SRv6 segment ids 5f00::/16
+  if ((g4 === 0 || g4 === 0x200) && g5 === 0x5efe) return isNonPublicHostnameStrict(dotted(g6, g7)); // ISATAP under any prefix: the IPv4 decides
+  if (g0 === 0x3fff && (g1 & 0xf000) === 0) return true; // documentation 3fff::/20
   if ((g0 & 0xffc0) === 0xfec0) return true; // site-local fec0::/10
   if (g0 >> 8 === 0xff) return true; // multicast ff00::/8
   if (g0 === 0x100 && g1 === 0 && g2 === 0 && g3 === 0) return true; // discard 100::/64
