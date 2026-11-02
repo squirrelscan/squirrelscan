@@ -8,6 +8,7 @@ import {
   SEGMENT_SEPARATOR,
   createBundleSampler,
   type BundleSampler,
+  type SourceSpan,
   type DetectedTechnology,
 } from "@squirrelscan/tech-detect";
 import { recordToHeaders } from "@squirrelscan/utils/headers";
@@ -259,7 +260,79 @@ interface ExtrasItem {
   headBytes: number;
   extras: string;
   extrasBytes: number;
-  extrasStart: number | null;
+  /** The stretches of `content` the extras are made of (see {@link BundleSampler.lastSpans}); pass 3 grows and joins them. */
+  spans: readonly SourceSpan[];
+}
+
+/** The spans that are left of a sample once it is cut to its first `keep` characters (the byte cut can land inside the last one). */
+function spansWithin(spans: readonly SourceSpan[], keep: number): SourceSpan[] {
+  const out: SourceSpan[] = [];
+  let at = 0;
+  for (const span of spans) {
+    const room = keep - at - span.opener.length;
+    if (room <= 0) break;
+    const length = span.end - span.start;
+    if (room < length) {
+      out.push({ ...span, end: span.start + room });
+      break;
+    }
+    out.push(span);
+    at += span.opener.length + length + SEGMENT_SEPARATOR.length;
+  }
+  return out;
+}
+
+/**
+ * Pass 3 for one bundle: spend up to `spare` more bytes on the source text that no piece carries yet, in order: the
+ * head grows up to the first span, then each span up to the next, and the last to the end of the body. A piece that
+ * reaches the next one is one piece with it: no separator, and no opener (the text before it continues), so the
+ * bytes the join no longer needs go back to the budget. Every source character is sent once, bytes are UTF-8 bytes,
+ * and a cut never lands inside a character. Null when no piece grows and none touch another (#1534).
+ */
+function topUpBundle(
+  content: string,
+  headChars: number,
+  spans: readonly SourceSpan[],
+  spare: number,
+): { head: string; extras: string } | null {
+  const joined: SourceSpan[] = [{ start: 0, end: headChars, opener: "" }];
+  let left = Math.max(0, spare);
+  let changed = false;
+  // Step k grows the last piece toward span k, the one that follows it, then joins the two if they now touch.
+  for (let k = 0; k <= spans.length; k++) {
+    const piece = joined[joined.length - 1]!;
+    const next = spans[k];
+    const limit = next?.start ?? content.length;
+    if (piece.end < limit) {
+      // Closing the gap to the next span also drops its separator and its opener from the join.
+      const saved = next ? SEGMENT_SEPARATOR.length + byteLength(next.opener) : 0;
+      const gap = content.slice(piece.end, limit);
+      const add =
+        gap.length <= left + saved && byteLength(gap) <= left + saved
+          ? gap
+          : truncateToBytes(gap.slice(0, left), left);
+      piece.end += add.length;
+      left -= byteLength(add);
+      changed ||= add.length > 0;
+    }
+    if (!next) break;
+    if (piece.end === next.start) {
+      // one stretch of the source: nothing between the two to separate
+      piece.end = next.end;
+      left += SEGMENT_SEPARATOR.length + byteLength(next.opener);
+      changed = true;
+    } else {
+      joined.push({ ...next });
+    }
+  }
+  if (!changed) return null;
+  return {
+    head: content.slice(0, joined[0]!.end),
+    extras: joined
+      .slice(1)
+      .map((piece) => piece.opener + content.slice(piece.start, piece.end))
+      .join(SEGMENT_SEPARATOR),
+  };
 }
 
 /**
@@ -305,6 +378,7 @@ function spreadBundleExtras(
       let extras = truncateToBytes(sampler.sample(r, windowsOnly), r);
       if (!extras) return;
       let extrasStart = sampler.firstSourceChar();
+      let spans = spansWithin(sampler.lastSpans(), extras.length);
       // A detector can need the context immediately before the head boundary.
       // Keep that context in the sampled window, then remove the same source
       // characters from the head so the joined body carries them only once.
@@ -327,12 +401,13 @@ function spreadBundleExtras(
         if (!expandedExtras) break;
         extras = expandedExtras;
         extrasStart = sampler.firstSourceChar();
+        spans = spansWithin(sampler.lastSpans(), extras.length);
       }
       const bytes = byteLength(extras) + SEGMENT_SEPARATOR.length;
       charge(bytes - held);
       item.extras = extras;
       item.extrasBytes = bytes;
-      item.extrasStart = extrasStart;
+      item.spans = spans;
     });
   }
 }
@@ -473,8 +548,10 @@ export function prioritiseLinkHrefs(hrefs: string[]): string[] {
  *   second copy adds bytes and no signal.
  * - Bodies are cut to `bundleBytes`, then `pageBytes` per page and `auditBytes`
  *   per audit; a body past a cap is dropped, the script's URL stays listed. A
- *   script's source text is attached at most once: sampled windows and the tail
- *   never overlap the head that is sent beside them.
+ *   script's source text is attached at most once: the head, the sampled windows
+ *   and the tail are disjoint stretches of it, the rest of the bundle's allowance
+ *   grows them toward each other, and stretches that touch are one (no separator
+ *   inside a call at a boundary).
  */
 export function buildTechInputs(
   pages: TechPageSource[],
@@ -500,7 +577,8 @@ export function buildTechInputs(
     //   2. the parts of a bundle past its head that detection needs: windows around
     //      the vendor literals and the tail, where a bundled app's own code sits
     //      after the framework it ships with,
-    //   3. the rest of the per-bundle cap, as more head.
+    //   3. the rest of the per-bundle cap, spent on the text pass 2 left out, from the front (more head,
+    //      then the end of each window), with stretches that touch joined into one (#1534).
     let pageBytes = 0;
     const room = (): number =>
       Math.min(limits.pageBytes - pageBytes, limits.auditBytes - auditBytes);
@@ -518,7 +596,7 @@ export function buildTechInputs(
         headBytes: 0,
         extras: "",
         extrasBytes: 0,
-        extrasStart: null,
+        spans: [],
       }));
     // Every body fits whole under all three caps (the local scan's defaults hold a
     // page of bundles): no floor, no sampling, no second scan of the text.
@@ -546,18 +624,19 @@ export function buildTechInputs(
     }
     spreadBundleExtras(plan, limits.bundleBytes, room, charge);
     for (const item of plan) {
-      // Pass 2 sampled from the text after this head. Grow the head only as far
-      // as the first window or tail, so the third pass still spends available
-      // budget without sending any source byte twice (#1534).
-      const headLimit = item.extrasStart ?? item.content.length;
-      if (!item.head || item.head.length >= headLimit) continue;
-      const r = Math.min(limits.bundleBytes - item.headBytes - item.extrasBytes, room());
-      if (r <= 0) continue;
-      const head = truncateToBytes(item.content.slice(0, headLimit), item.headBytes + r);
-      const bytes = byteLength(head);
-      charge(bytes - item.headBytes);
-      item.head = head;
-      item.headBytes = bytes;
+      // Pass 2 chose stretches of the text after this head. The rest of the bundle's allowance goes on the text
+      // between them, from the front, and stretches that touch become one (#1534).
+      if (!item.head || item.head.length >= item.content.length) continue;
+      const spare = Math.min(limits.bundleBytes - item.headBytes - item.extrasBytes, room());
+      const top = topUpBundle(item.content, item.head.length, item.spans, spare);
+      if (!top) continue;
+      const headBytes = byteLength(top.head);
+      const extrasBytes = top.extras ? byteLength(top.extras) + SEGMENT_SEPARATOR.length : 0;
+      charge(headBytes + extrasBytes - item.headBytes - item.extrasBytes);
+      item.head = top.head;
+      item.headBytes = headBytes;
+      item.extras = top.extras;
+      item.extrasBytes = extrasBytes;
     }
     // A body read in part or left out: the report says so (#1387). A bundle that
     // reached `bundleBytes` was cut by that cap; one that stopped short of it ran
