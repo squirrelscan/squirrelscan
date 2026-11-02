@@ -373,24 +373,31 @@ export function shortlist(
 
 const scanCache = new WeakMap<object, ControlScan>();
 
-/** Ancestors walked per `<base>`; a deeper one is read as honoured (an over-read toward a finding, and a bounded walk). */
-const BASE_ANCESTOR_DEPTH = 64;
-
 /**
- * Whether a `<base>` is one a browser honours: not inside `<noscript>`, `<template>`, `<svg>` or `<math>`, except an element
- * inside `<foreignObject>`, which is in the HTML namespace. A bounded walk up from the element.
+ * The `href` of the first `<base>` a browser honours, found in one iterative pass over the document in document order: a subtree
+ * under `<noscript>` or `<template>` is skipped, a `<base>` inside `<svg>` or `<math>` is another namespace and ignored, and the
+ * children of `<foreignObject>` are HTML again. The pass is linear, has no depth bound (a bound would let nesting decide which base
+ * wins), and stops at the first honoured `<base href>`.
  */
-function isHonouredBase(base: Element): boolean {
-  let htmlInside = false;
-  let node: Element | null = base.parentElement;
-  for (let depth = 0; node !== null && depth < BASE_ANCESTOR_DEPTH; depth++, node = node.parentElement) {
-    const tag = node.tagName.toLowerCase();
-    if (tag === "noscript" || tag === "template") return false;
-    if (tag === "foreignobject") htmlInside = true;
-    else if ((tag === "svg" || tag === "math") && !htmlInside) return false;
-    else if (tag === "svg" || tag === "math") htmlInside = false;
+function firstHonouredBaseHref(doc: Document): string | null {
+  const root = doc.documentElement;
+  if (!root) return null;
+  const stack: Array<{ element: Element; foreign: boolean }> = [{ element: root, foreign: false }];
+  while (stack.length > 0) {
+    const { element, foreign } = stack.pop()!;
+    const tag = element.tagName.toLowerCase();
+    if (tag === "noscript" || tag === "template") continue;
+    if (tag === "base" && !foreign) {
+      const href = getAttrCI(element, "href");
+      if (href !== null) return href;
+    }
+    const childForeign = tag === "foreignobject" ? false : foreign || tag === "svg" || tag === "math";
+    // pushed in reverse so the first child is popped first: document order
+    // `children` builds a new list on every access in some DOMs: read it once per element
+    const children = element.children;
+    for (let k = children.length - 1; k >= 0; k--) stack.push({ element: children[k]!, foreign: childForeign });
   }
-  return true;
+  return null;
 }
 
 const baseHrefCache = new WeakMap<object, string | null>();
@@ -403,13 +410,7 @@ const baseHrefCache = new WeakMap<object, string | null>();
 export function documentBaseHref(doc: Document): string | null {
   const cached = baseHrefCache.get(doc);
   if (cached !== undefined) return cached;
-  let found: string | null = null;
-  for (const base of Array.from(doc.querySelectorAll("base[href]"))) {
-    const href = getAttrCI(base, "href");
-    if (href === null || !isHonouredBase(base)) continue;
-    found = href;
-    break;
-  }
+  const found = firstHonouredBaseHref(doc);
   baseHrefCache.set(doc, found);
   return found;
 }
