@@ -220,11 +220,18 @@ export const STREAM_BATCH_PAGES_MAX = 500;
 //
 // `squirrel audit --urls-file` reads a file a user or a script wrote, so it is
 // untrusted input: every cap below bounds the work and the memory of reading it.
-/** Largest urls file read, in bytes. A larger one is refused whole, not cut. */
-export const BATCH_URLS_FILE_MAX_BYTES = 8 * 1024 * 1024;
+/**
+ * Largest urls file read, in bytes (the #1231 spec's 64 MB). A larger one is refused whole, not cut. A caller must stat the
+ * file, or read only this many bytes plus one, BEFORE decoding it to a string: the check in the parser comes after the decode.
+ */
+export const BATCH_URLS_FILE_MAX_BYTES = 64 * 1024 * 1024;
 /** Longest URL accepted, in characters. */
 export const BATCH_URL_MAX_LENGTH = 2048;
-/** Most URLs one batch audits. */
+/** Most URLs one batch audits: a file listing more is refused before any request, not cut. */
 export const BATCH_MAX_URLS = 100_000;
+/** Most rejected lines kept (with their text) in a parse result; the rest are only counted. */
+export const BATCH_MAX_REJECTED_KEPT = 1_000;
 /** Most lines of a manifest read back when resuming; a longer file is read to here. */
 export const BATCH_MANIFEST_MAX_LINES = 1_000_000;
+/** Longest manifest line read back, in characters; a longer one is skipped without being parsed. */
+export const BATCH_MANIFEST_MAX_LINE_CHARS = 64 * 1024;

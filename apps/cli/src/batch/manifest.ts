@@ -7,12 +7,18 @@
 
 import type { BatchUrl } from "./urls-file";
 
-import { BATCH_MANIFEST_MAX_LINES } from "../constants";
+import {
+  BATCH_MANIFEST_MAX_LINE_CHARS,
+  BATCH_MANIFEST_MAX_LINES,
+  BATCH_URL_MAX_LENGTH,
+} from "../constants";
 
 /**
  * How a URL ended. The audit's own vocabulary (`completed`, `partial`, `blocked`, `unreachable`, `redirected`, `failed`) plus
  * what only a batch can say: `timeout` (the child ran past its budget), `crashed` (it died without writing a record),
  * `rejected` (the URL was refused before any audit) and `skipped-budget` (not started: the batch ran out of its budget).
+ * `running` is the line written when a URL starts: it is never a final answer, and one that is still the last record when
+ * the file is read back means the process died, so it is read as `crashed` (see {@link effectiveStatus}).
  */
 export type BatchStatus =
   | "completed"
@@ -24,7 +30,8 @@ export type BatchStatus =
   | "timeout"
   | "crashed"
   | "rejected"
-  | "skipped-budget";
+  | "skipped-budget"
+  | "running";
 
 export const BATCH_STATUSES: readonly BatchStatus[] = [
   "completed",
@@ -37,6 +44,7 @@ export const BATCH_STATUSES: readonly BatchStatus[] = [
   "crashed",
   "rejected",
   "skipped-budget",
+  "running",
 ];
 
 /** One line of the results file. */
@@ -52,6 +60,7 @@ export interface BatchRecord {
   /** 1 for the first run of the URL, then one more for each retry. */
   attempt: number;
   startedAt?: string;
+  finishedAt?: string;
   durationMs?: number;
   /** The report's file, relative to the batch directory. */
   report?: string;
@@ -62,23 +71,49 @@ export interface BatchRecord {
   notes?: string[];
 }
 
-/** The statuses `--retry-failed` runs again: the URL did not get an audit that says anything about the site. */
-const RETRYABLE: ReadonlySet<BatchStatus> = new Set([
+/**
+ * The statuses that count as a failed URL: the batch exit code is 6 when any URL ends in one, and `--retry-failed` runs them
+ * again. `blocked` and `redirected` are here (the #1231 spec): a WAF-blocked or off-site-redirected URL can succeed later.
+ */
+const FAILED: ReadonlySet<BatchStatus> = new Set([
   "failed",
   "unreachable",
   "timeout",
   "crashed",
+  "blocked",
+  "redirected",
 ]);
 
+/** A record's status as the batch reads it: a `running` line that is the last one is a process that died. */
+export const effectiveStatus = (record: BatchRecord): BatchStatus =>
+  record.status === "running" ? "crashed" : record.status;
+
+/** Whether a status is a failed URL (see {@link FAILED}): counted in the exit code, run again by `--retry-failed`. */
+export const isFailedStatus = (status: BatchStatus): boolean =>
+  FAILED.has(status === "running" ? "crashed" : status);
+
 /** Whether a status is one `--retry-failed` retries. */
-export const isRetryableStatus = (status: BatchStatus): boolean =>
-  RETRYABLE.has(status);
+export const isRetryableStatus = isFailedStatus;
 
 const isStatus = (value: unknown): value is BatchStatus =>
   typeof value === "string" &&
   (BATCH_STATUSES as readonly string[]).includes(value);
 
-/** One manifest line as a record, or undefined when it is not one. Fields of the wrong type are dropped, not trusted. */
+/** Largest attempt number believed: a tampered 1e308 would otherwise win every later record of the URL. */
+const MAX_ATTEMPT = 1_000;
+const MAX_TEXT = 10_000;
+const MAX_NOTES = 50;
+const KEY = /^[0-9a-f]{16}$/;
+
+/** A report path inside the batch directory: relative, no `..` or `.` segment, no backslash, colon or control character. */
+const isSafeReport = (value: string): boolean =>
+  value.length > 0 &&
+  value.length <= 512 &&
+  !value.startsWith("/") &&
+  /^[\w.@+-]+(?:\/[\w.@+-]+)*$/.test(value) &&
+  value.split("/").every((segment) => segment !== "." && segment !== "..");
+
+/** One manifest line as a record, or undefined when it is not one. A field of the wrong type or range is dropped, not trusted. */
 function asRecord(value: unknown): BatchRecord | undefined {
   if (typeof value !== "object" || value === null || Array.isArray(value))
     return undefined;
@@ -86,26 +121,43 @@ function asRecord(value: unknown): BatchRecord | undefined {
   if (
     r.v !== 1 ||
     typeof r.url !== "string" ||
+    r.url.length > BATCH_URL_MAX_LENGTH ||
     typeof r.key !== "string" ||
+    !KEY.test(r.key) ||
     !isStatus(r.status)
   )
     return undefined;
   if (
     typeof r.attempt !== "number" ||
     !Number.isInteger(r.attempt) ||
-    r.attempt < 1
+    r.attempt < 1 ||
+    r.attempt > MAX_ATTEMPT
   )
     return undefined;
-  const num = (v: unknown): number | undefined =>
-    typeof v === "number" && Number.isFinite(v) ? v : undefined;
+  const num = (v: unknown, min: number, max: number): number | undefined =>
+    typeof v === "number" && Number.isFinite(v) && v >= min && v <= max
+      ? v
+      : undefined;
+  const int = (v: unknown, min: number, max: number): number | undefined => {
+    const n = num(v, min, max);
+    return n !== undefined && Number.isInteger(n) ? n : undefined;
+  };
   const str = (v: unknown): string | undefined =>
-    typeof v === "string" ? v : undefined;
-  const exitCode = num(r.exitCode);
-  const durationMs = num(r.durationMs);
-  const score = num(r.score);
-  const pages = num(r.pages);
+    typeof v === "string" && v.length <= MAX_TEXT ? v : undefined;
+  const exitCode = int(r.exitCode, 0, 255);
+  const durationMs = num(r.durationMs, 0, Number.MAX_SAFE_INTEGER);
+  const score = num(r.score, 0, 100);
+  const pages = int(r.pages, 0, 1_000_000_000);
+  const report =
+    typeof r.report === "string" && isSafeReport(r.report)
+      ? r.report
+      : undefined;
   const notes = Array.isArray(r.notes)
-    ? r.notes.filter((n): n is string => typeof n === "string")
+    ? r.notes
+        .filter(
+          (n): n is string => typeof n === "string" && n.length <= MAX_TEXT
+        )
+        .slice(0, MAX_NOTES)
     : undefined;
   return {
     v: 1,
@@ -116,8 +168,11 @@ function asRecord(value: unknown): BatchRecord | undefined {
     ...(str(r.reason) !== undefined ? { reason: str(r.reason)! } : {}),
     ...(exitCode !== undefined ? { exitCode } : {}),
     ...(str(r.startedAt) !== undefined ? { startedAt: str(r.startedAt)! } : {}),
+    ...(str(r.finishedAt) !== undefined
+      ? { finishedAt: str(r.finishedAt)! }
+      : {}),
     ...(durationMs !== undefined ? { durationMs } : {}),
-    ...(str(r.report) !== undefined ? { report: str(r.report)! } : {}),
+    ...(report !== undefined ? { report } : {}),
     ...(score !== undefined ? { score } : {}),
     ...(pages !== undefined ? { pages } : {}),
     ...(str(r.finalUrl) !== undefined ? { finalUrl: str(r.finalUrl)! } : {}),
@@ -152,12 +207,18 @@ export function parseManifest(
   while (start < content.length) {
     let end = content.indexOf("\n", start);
     if (end === -1) end = content.length;
-    const text = content.slice(start, end).trim();
+    const tooLong = end - start > BATCH_MANIFEST_MAX_LINE_CHARS;
+    const text = tooLong ? "x" : content.slice(start, end).trim();
     start = end + 1;
     if (text === "") continue;
     if (++lines > maxLines) {
       truncated = true;
       break;
+    }
+    // A line past the cap is not a record this batch wrote: skipped without being parsed or copied.
+    if (tooLong) {
+      skipped++;
+      continue;
     }
     try {
       const record = asRecord(JSON.parse(text));
@@ -188,21 +249,27 @@ export interface Plan {
   run: Array<{ entry: BatchUrl; attempt: number }>;
   /** URLs already done, left alone. */
   done: number;
-  /** URLs whose record is a retryable failure that was left alone because retry was not asked for. */
+  /** URLs whose record is a failure that was left alone because retry was not asked for. */
   failedKept: number;
 }
 
 /**
- * What a re-run does. A URL with no record runs. A URL whose last record is done (including a refusal, which a retry cannot
- * change) is skipped. One that ended in a retryable failure is skipped too, unless `retryFailed`, which runs it again as
- * the next attempt. One that was not started (`skipped-budget`) runs.
+ * What a re-run does. The plan is made from the urls file alone: a record counts only for a URL listed in it, under its key,
+ * and only when the record's own url is that URL (a record edited to carry another URL, or a key of another URL, is not
+ * the URL's record). A URL with no record runs. A URL whose last record is done (including a refusal, which a retry cannot
+ * change) is skipped. One that ended in a failure (`failed`, `unreachable`, `timeout`, `crashed`, `blocked`, `redirected`, or
+ * a `running` line left by a process that died) is skipped too, unless `retryFailed`, which runs it again as the next
+ * attempt. One that was not started (`skipped-budget`) runs.
  */
 export function planBatch(
   urls: readonly BatchUrl[],
   records: readonly BatchRecord[],
   options: { retryFailed?: boolean } = {}
 ): Plan {
-  const latest = latestRecords(records);
+  const listed = new Map(urls.map((entry) => [entry.key, entry.url]));
+  const latest = latestRecords(
+    records.filter((r) => listed.get(r.key) === r.url)
+  );
   const plan: Plan = { run: [], done: 0, failedKept: 0 };
   for (const entry of urls) {
     const record = latest.get(entry.key);
@@ -210,7 +277,7 @@ export function planBatch(
       plan.run.push({ entry, attempt: 1 });
     } else if (record.status === "skipped-budget") {
       plan.run.push({ entry, attempt: record.attempt + 1 });
-    } else if (isRetryableStatus(record.status)) {
+    } else if (isFailedStatus(record.status)) {
       if (options.retryFailed === true)
         plan.run.push({ entry, attempt: record.attempt + 1 });
       else plan.failedKept++;
