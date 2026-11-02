@@ -13,31 +13,12 @@
 import { getAttrCI } from "@squirrelscan/utils";
 
 import { BRAND_SPECS } from "./brand-specs";
+import { CONFUSABLE_RUN, CONFUSABLES, INVISIBLE, digitForms } from "./confusables";
 import { AUTH_CUE_PHRASES, AUTH_LABEL } from "./cues";
 import { hiddenSelectors } from "./overlay-style";
 
 /** Text with nothing outside ASCII (a linear test, with no backtracking). */
 const ASCII_ONLY = /^\p{ASCII}*$/u;
-
-/** Characters that render as nothing: soft hyphens, zero-width spaces and joiners, variation selectors. */
-const INVISIBLE = /\p{Default_Ignorable_Code_Point}/gu;
-
-/**
- * Latin letters other scripts draw the same: the Cyrillic and Greek look-alikes a kit swaps in so a
- * word-bounded cue does not match, plus the dotless i. Applied after NFKC (which folds fullwidth and
- * styled letters) and lower-casing, so these are lower-case forms.
- */
-const CONFUSABLES: Readonly<Record<string, string>> = Object.fromEntries([
-  // Cyrillic
-  ...Object.entries({ а: "a", е: "e", о: "o", р: "p", с: "c", у: "y", х: "x", і: "i", ј: "j", ѕ: "s", ԁ: "d", һ: "h", ԛ: "q", ԝ: "w", ӏ: "l", ѵ: "v", ѡ: "w", ԍ: "g", к: "k", т: "t", н: "h", м: "m", ү: "y", ь: "b", в: "b" }),
-  // Greek
-  ...Object.entries({ ο: "o", α: "a", ι: "i", ν: "v", ρ: "p", υ: "u", χ: "x", ε: "e", κ: "k", τ: "t", β: "b", η: "n", ω: "w", μ: "u", γ: "y" }),
-  // Armenian
-  ...Object.entries({ օ: "o", ս: "u", ո: "n", հ: "h", ց: "g", ք: "p", ա: "a" }),
-  // Latin look-alikes and small capitals
-  ...Object.entries({ ɡ: "g", ı: "i", ɑ: "a", ᴀ: "a", ʙ: "b", ᴄ: "c", ᴅ: "d", ᴇ: "e", ꜰ: "f", ɢ: "g", ʜ: "h", ɪ: "i", ᴊ: "j", ᴋ: "k", ʟ: "l", ᴍ: "m", ɴ: "n", ᴏ: "o", ᴘ: "p", ʀ: "r", ꜱ: "s", ᴛ: "t", ᴜ: "u", ᴠ: "v", ᴡ: "w", ʏ: "y", ᴢ: "z", ǝ: "e", ȷ: "j" }),
-]);
-const CONFUSABLE_RUN = new RegExp(`[${Object.keys(CONFUSABLES).join("")}]`, "g");
 
 /**
  * Text as a cue is matched against: combining marks gone, NFKC (fullwidth and styled letters become
@@ -791,7 +772,7 @@ export function scanControls(doc: Document): ControlScan {
     const read = reads[i];
     // Deduplicated before the (costly) normalisation, not after.
     const raw = new Set([...(read ? formsOf(read.chunks) : []), ...item.extra]);
-    const labels = [...new Set([...raw].map(readable).filter((f) => f.trim() !== ""))];
+    const labels = [...new Set([...raw].flatMap((text) => digitForms(readable(text))).filter((f) => f.trim() !== ""))];
     return {
       element: item.element,
       href: item.href,
