@@ -61,13 +61,168 @@ import { parseHTML as linkedomParseHTML } from "linkedom";
 export function parseHTML(
   ...args: Parameters<typeof linkedomParseHTML>
 ): ReturnType<typeof linkedomParseHTML> {
-  const parsed = linkedomParseHTML(...args);
+  const parsed = parseContained(args);
   if (parsed.document.documentElement) {
     if (typeof args[0] === "string" && SHADOW_ROOT_HINT.test(args[0])) flattenDeclarativeShadowRoots(parsed.document as never);
     return parsed;
   }
   const [html, ...rest] = args;
   return linkedomParseHTML(`<html><head></head><body>${String(html)}</body></html>`, ...rest);
+}
+
+// ── A parse that throws does not fail the audit (#1557) ───────────────────────────────────────────────────────────────────────
+//
+// linkedom's `className` setter spreads every class token into one call (`classList.add(...value.split(/\s+/))`), which
+// overflows the stack from about 640,000 tokens, an attribute of 1.2 MB, far under the page cap; duplicates count. The throw
+// came out of `parseHTML` and failed the whole audit with no report. It is contained here, the one place pages are parsed:
+//
+// - on a RangeError the page is parsed again with each class attribute of more than {@link MAX_CLASS_TOKENS} tokens cut to its first
+//   {@link MAX_CLASS_TOKENS}, found by a linear pass over the tags (script, style and the other text-only elements are skipped, so
+//   no page text is edited); everything after the big element reaches the rules;
+// - a throw that is not that, or a second throw, leaves an empty document (a browser builds `<html><head></head><body></body></html>`
+//   for markup with nothing in it), and the page says so.
+//
+// Either way the page carries a notice (`parseNotices`), which `crawl/html-size` reports. A page that parses the first time is
+// untouched: no pre-pass, no copy.
+
+/** Class tokens kept on an attribute that overflowed the parse. A real page has tens; this is orders of magnitude above that. */
+export const MAX_CLASS_TOKENS = 20_000;
+const PARSE_NOTICES = new WeakMap<object, string[]>();
+
+/** The notices of a document `parseHTML` had to degrade to parse (an empty list for any other): see {@link parseContained}. */
+export function parseNotices(document: unknown): string[] {
+  return (typeof document === "object" && document !== null ? PARSE_NOTICES.get(document) : undefined) ?? [];
+}
+
+function parseContained(args: Parameters<typeof linkedomParseHTML>): ReturnType<typeof linkedomParseHTML> {
+  try {
+    return linkedomParseHTML(...args);
+  } catch (error) {
+    const [html, ...rest] = args;
+    if (typeof html === "string" && error instanceof RangeError) {
+      const { text, cut } = truncateClassAttributes(html, MAX_CLASS_TOKENS);
+      if (cut.length > 0) {
+        try {
+          const parsed = linkedomParseHTML(text, ...rest);
+          PARSE_NOTICES.set(parsed.document, cut.map((tokens) => `a class attribute of ${tokens.toLocaleString("en-US")} tokens was cut to the first ${MAX_CLASS_TOKENS.toLocaleString("en-US")} to read the page`));
+          return parsed;
+        } catch {
+          // fall through to the empty document
+        }
+      }
+    }
+    const parsed = linkedomParseHTML("<html><head></head><body></body></html>", ...rest);
+    PARSE_NOTICES.set(parsed.document, [`the page could not be read (${error instanceof Error ? error.message.slice(0, 120) : "parse error"}), so it was audited empty`]);
+    return parsed;
+  }
+}
+
+/** Elements whose content is text, not markup: a tag-looking string inside one is not a tag. */
+const TEXT_ELEMENTS: ReadonlyMap<string, RegExp> = new Map(["script", "style", "textarea", "title", "xmp", "plaintext", "noembed", "noframes", "iframe"].map((name) => [name, new RegExp(`</${name}`, "gi")]));
+/** The five characters the HTML tokenizer treats as whitespace (tab, line feed, form feed, carriage return, space). */
+const isSpace = (code: number): boolean => code === 32 || code === 9 || code === 10 || code === 12 || code === 13;
+
+/**
+ * `html` with the value of each `class` attribute that has more than `limit` tokens cut to its first `limit` tokens, and the
+ * token counts that were cut. One linear pass over the tags, reading each tag as the HTML tokenizer does (a quote opens a
+ * value only at its start, an unquoted value ends at whitespace or `>`), skipping comments and the text of script, style and
+ * the like; a tag shorter than `2 * limit` characters cannot hold that many tokens and is not read at all.
+ */
+export function truncateClassAttributes(html: string, limit: number): { text: string; cut: number[] } {
+  const edits: Array<{ from: number; to: number }> = [];
+  const cut: number[] = [];
+  const length = html.length;
+  let i = 0;
+  while (i < length) {
+    const open = html.indexOf("<", i);
+    if (open === -1) break;
+    if (html.startsWith("<!--", open)) {
+      const close = html.indexOf("-->", open + 4);
+      i = close === -1 ? length : close + 3;
+      continue;
+    }
+    const first = html.charCodeAt(open + 1);
+    const isTag = (first >= 65 && first <= 90) || (first >= 97 && first <= 122);
+    if (!isTag) {
+      i = open + 1;
+      continue;
+    }
+    let at = open + 1;
+    while (at < length && !isSpace(html.charCodeAt(at)) && html[at] !== "/" && html[at] !== ">") at++;
+    const name = html.slice(open + 1, at).toLowerCase();
+    // attributes
+    while (at < length) {
+      while (at < length && (isSpace(html.charCodeAt(at)) || html[at] === "/")) at++;
+      if (at >= length || html[at] === ">") break;
+      const nameStart = at;
+      at++;
+      while (at < length && !isSpace(html.charCodeAt(at)) && html[at] !== "=" && html[at] !== "/" && html[at] !== ">") at++;
+      const attribute = html.slice(nameStart, at).toLowerCase();
+      while (at < length && isSpace(html.charCodeAt(at))) at++;
+      if (html[at] !== "=") continue;
+      at++;
+      while (at < length && isSpace(html.charCodeAt(at))) at++;
+      let valueStart = at;
+      let valueEnd: number;
+      const quote = html[at];
+      if (quote === '"' || quote === "'") {
+        valueStart = at + 1;
+        const close = html.indexOf(quote, valueStart);
+        valueEnd = close === -1 ? length : close;
+        at = close === -1 ? length : close + 1;
+      } else {
+        while (at < length && !isSpace(html.charCodeAt(at)) && html[at] !== ">") at++;
+        valueEnd = at;
+      }
+      if (attribute === "class" && valueEnd - valueStart >= 2 * limit) {
+        // the start of the token after the limit-th: the value is cut there
+        let tokens = 0;
+        let inToken = false;
+        let cutAt = -1;
+        for (let k = valueStart; k < valueEnd; k++) {
+          const space = isSpace(html.charCodeAt(k));
+          if (!space && !inToken) {
+            tokens++;
+            if (tokens > limit) {
+              cutAt = k;
+              break;
+            }
+          }
+          inToken = !space;
+        }
+        if (cutAt !== -1) {
+          edits.push({ from: cutAt, to: valueEnd });
+          cut.push(countTokens(html, valueStart, valueEnd));
+        }
+      }
+    }
+    i = at + 1;
+    const closer = TEXT_ELEMENTS.get(name);
+    if (closer) {
+      closer.lastIndex = i;
+      const found = closer.exec(html);
+      i = found ? found.index : length;
+    }
+  }
+  if (edits.length === 0) return { text: html, cut };
+  let text = "";
+  let last = 0;
+  for (const edit of edits) {
+    text += html.slice(last, edit.from);
+    last = edit.to;
+  }
+  return { text: text + html.slice(last), cut };
+}
+
+function countTokens(html: string, from: number, to: number): number {
+  let tokens = 0;
+  let inToken = false;
+  for (let k = from; k < to; k++) {
+    const space = isSpace(html.charCodeAt(k));
+    if (!space && !inToken) tokens++;
+    inToken = !space;
+  }
+  return tokens;
 }
 
 const SHADOW_ROOT_HINT = /shadowroot/i;

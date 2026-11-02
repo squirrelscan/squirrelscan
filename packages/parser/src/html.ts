@@ -14,7 +14,7 @@ import {
 } from "@squirrelscan/utils";
 import type { Document, Element } from "linkedom";
 
-import { parseHTML } from "./dom";
+import { parseHTML, parseNotices } from "./dom";
 
 import type {
   ContactLinkData,
@@ -60,6 +60,8 @@ export interface ParsedPage extends BaseParsedPage {
   // the DOM is released (#235). Absent on a parse stored before it existed,
   // which reads as the old DOM-only behaviour.
   errorShell?: boolean;
+  /** Set when the page's markup had to be degraded to be read at all (an oversized class attribute cut, or an empty document): see `parseNotices` (#1557). */
+  parseNotices?: string[];
 }
 
 // Crawl-time ParsedPage keyed by normalizedUrl, so an audit reuses the DOM (#267)
@@ -541,6 +543,7 @@ export function parsePage(html: string, url: string, options?: ParsePageOptions)
     headings: extractHeadings(doc),
     content: extractContent(doc, html),
     errorShell: hasErrorShellMarker(doc),
+    ...(parseNotices(doc).length > 0 ? { parseNotices: parseNotices(doc) } : {}),
 
     // New schema data
     schemas,

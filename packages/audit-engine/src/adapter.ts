@@ -8,6 +8,7 @@ import {
   extractContent,
   extractFontUrls,
   hasErrorShellMarker,
+  parseNotices,
   extractHeadings,
   extractImages,
   extractLinks,
@@ -458,6 +459,7 @@ export function parseHtmlForRules(
     // Captured now, while the DOM is live: the streamed audit releases it before
     // soft-404 candidates are picked (#235).
     errorShell: hasErrorShellMarker(doc),
+    ...(parseNotices(doc).length > 0 ? { parseNotices: parseNotices(doc) } : {}),
     // New schema data
     schemas,
     author,

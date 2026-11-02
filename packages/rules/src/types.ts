@@ -402,6 +402,8 @@ export interface ParsedPage {
   soft404Confirmation?: Soft404Confirmation;
   /** Error-shell marker captured while the DOM was live; see the parser's `ParsedPage.errorShell` (#235). */
   errorShell?: boolean;
+  /** The page's markup was degraded to be read (an oversized class attribute cut, or an empty document); see the parser's `parseNotices` (#1557). */
+  parseNotices?: string[];
 
   // DEPRECATED: Use schemas.types, schemas.valid, etc. instead
   schema: SchemaData;
