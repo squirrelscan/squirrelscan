@@ -373,6 +373,58 @@ export function shortlist(
 
 const scanCache = new WeakMap<object, ControlScan>();
 
+/** Ancestors walked per `<base>`; a deeper one is read as honoured (an over-read toward a finding, and a bounded walk). */
+const BASE_ANCESTOR_DEPTH = 64;
+
+/**
+ * Whether a `<base>` is one a browser honours: not inside `<noscript>`, `<template>`, `<svg>` or `<math>`, except an element
+ * inside `<foreignObject>`, which is in the HTML namespace. A bounded walk up from the element.
+ */
+function isHonouredBase(base: Element): boolean {
+  let htmlInside = false;
+  let node: Element | null = base.parentElement;
+  for (let depth = 0; node !== null && depth < BASE_ANCESTOR_DEPTH; depth++, node = node.parentElement) {
+    const tag = node.tagName.toLowerCase();
+    if (tag === "noscript" || tag === "template") return false;
+    if (tag === "foreignobject") htmlInside = true;
+    else if ((tag === "svg" || tag === "math") && !htmlInside) return false;
+    else if (tag === "svg" || tag === "math") htmlInside = false;
+  }
+  return true;
+}
+
+const baseHrefCache = new WeakMap<object, string | null>();
+
+/**
+ * The `href` of the first `<base>` element a browser would use: in the HTML namespace and in the document's own tree, so not one
+ * inside `<noscript>` (not parsed as elements with scripting on), `<template>` (a separate fragment), `<svg>` or `<math>` (another
+ * namespace; an element inside `<foreignObject>` is HTML again). The answer is computed once per document.
+ */
+export function documentBaseHref(doc: Document): string | null {
+  const cached = baseHrefCache.get(doc);
+  if (cached !== undefined) return cached;
+  let found: string | null = null;
+  for (const base of Array.from(doc.querySelectorAll("base[href]"))) {
+    const href = getAttrCI(base, "href");
+    if (href === null || !isHonouredBase(base)) continue;
+    found = href;
+    break;
+  }
+  baseHrefCache.set(doc, found);
+  return found;
+}
+
+/**
+ * Whether a `<base href>` moves where relative URLs resolve: the first one with an `href` (what a browser uses) that is not itself a
+ * plainly local path. Then `/signin` is not the page's own site, and a link or form to it is read like any other destination (#1423).
+ */
+export function baseMovesRelativeUrls(doc: Document): boolean {
+  const href = documentBaseHref(doc);
+  if (href === null) return false;
+  const text = urlText(href);
+  return !(text === "" || PLAIN_LOCAL_HREF.test(text));
+}
+
 /**
  * The page's sign-in controls (links, buttons, `input type=submit|button|image`, `role=button`) with the
  * destination they would send the user to and every readable form of their label: text as written and
@@ -385,31 +437,6 @@ const scanCache = new WeakMap<object, ControlScan>();
  * sign-in path) also get a long read while a page-wide budget lasts; `unread` counts relevant controls whose
  * read was cut by the bounds, so a caller can say so.
  */
-/**
- * Whether a `<base href>` moves where relative URLs resolve: the first one with an `href` (what a browser uses) that is not itself a
- * plainly local path. Then `/signin` is not the page's own site, and a link or form to it is read like any other destination (#1423).
- */
-/**
- * The `href` of the first `<base>` element a browser would use: in the HTML namespace and in the document's own tree, so not one
- * inside `<noscript>` (not parsed as elements with scripting on), `<template>` (a separate fragment), `<svg>` or `<math>` (another
- * namespace).
- */
-export function documentBaseHref(doc: Document): string | null {
-  for (const base of Array.from(doc.querySelectorAll("base[href]"))) {
-    if (base.closest("noscript, template, svg, math") !== null) continue;
-    const href = getAttrCI(base, "href");
-    if (href !== null) return href;
-  }
-  return null;
-}
-
-export function baseMovesRelativeUrls(doc: Document): boolean {
-  const href = documentBaseHref(doc);
-  if (href === null) return false;
-  const text = urlText(href);
-  return !(text === "" || PLAIN_LOCAL_HREF.test(text));
-}
-
 export function scanControls(doc: Document): ControlScan {
   const cached = scanCache.get(doc);
   if (cached) return cached;

@@ -616,12 +616,13 @@ export function detectFakeAuthOverlay(
   // full-page app shells/portals, require BOTH the overlay geometry AND auth
   // intent: an auth-suggestive iframe id/class/src, OR an off-self iframe source
   // combined with page-level auth copy / a password field.
+  const frameBase = documentBase(doc, ctx.page.url);
   for (const frame of doc.querySelectorAll("iframe")) {
     const id = (getAttrCI(frame, "id") ?? "").toLowerCase();
     const cls = (getAttrCI(frame, "class") ?? "").toLowerCase();
     const src = getAttrCI(frame, "src") ?? "";
     // A relative `src` resolves against the `<base href>`; an empty one is the page itself.
-    const srcHost = src === "" ? null : hrefHost(src, documentBase(doc, ctx.page.url));
+    const srcHost = src === "" ? null : hrefHost(src, frameBase);
     const srcIsSelf = srcHost ? self.has(srcHost) : true; // no/empty src → self
 
     // Auth-suggestive identifier (the injected `#google-auth` pattern).
