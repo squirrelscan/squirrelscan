@@ -284,12 +284,15 @@ test("the prefilter's auth words come from the exported cue lists, which also bu
   for (const verb of PROVIDER_VERBS) {
     for (const spelling of [verb, verb.replace(" ", "")]) {
       expect(PROVIDER_BUTTON.test(`${spelling} with google`), spelling).toBe(true);
-      expect(WINDOW_CUE.test(`${spelling} with google`), spelling).toBe(true);
+      // The bare verb, not `<verb> with google`: the brand lexicon's `google` passes the prefilter by itself and would hide a verb that
+      // left the derivation. Only the verb's own place in AUTH_CUE_PHRASES lets it through.
+      expect(WINDOW_CUE.test(spelling), spelling).toBe(true);
     }
   }
-  // A verb added to the lists reaches the prefilter: the pattern is a function of them.
-  expect(new RegExp(cuePattern(AUTH_CUE_PHRASES), "u").test("authenticate with google")).toBe(false);
-  expect(new RegExp(cuePattern([...AUTH_CUE_PHRASES, "authenticate with"]), "u").test("authenticate with google")).toBe(true);
+  // A verb added to the lists reaches the prefilter: the pattern is a function of them. The probe word is invented, so no
+  // legitimate verb addition can turn the negative into a failure.
+  expect(new RegExp(cuePattern(AUTH_CUE_PHRASES), "u").test("zzqverb")).toBe(false);
+  expect(new RegExp(cuePattern([...AUTH_CUE_PHRASES, "zzqverb"]), "u").test("zzqverb")).toBe(true);
 });
 
 test("one attribute full of repeated sign-in text does not spend the window cap before the brand phrase (#1458)", () => {
