@@ -83,8 +83,8 @@ export interface TechFingerprint {
   confidence?: "high" | "medium" | "low";
   versionPattern?: RegExp;
   /**
-   * Match html and script detectors against the markup with HTML comments
-   * removed, so a commented-out tag is not evidence.
+   * Kept for the fingerprint files that set it. HTML comments are no longer evidence for any fingerprint but the explicit
+   * marker-comment allowlist (`COMMENT_MARKER_FINGERPRINTS`), so this changes nothing (#1550).
    */
   ignoreComments?: boolean;
   /** Drop this detection when any of these fingerprint ids is also detected. */

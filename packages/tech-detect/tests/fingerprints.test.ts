@@ -349,10 +349,11 @@ describe("Angular false positive on Tailwind class soup (#1097)", () => {
   // sample — still detects. This residual is inherent to every html-type
   // detector here (ng-version=" in a docs code sample would FP the same way)
   // and isn't something this fix set out to (or can cheaply) close.
-  test("[residual, accepted] ng-app inside an HTML comment still detects Angular", () => {
+  // A comment is not evidence (#1550): the sample in a comment is no longer a detection.
+  test("ng-app inside an HTML comment does not detect Angular", () => {
     const html = `<html><body><!-- Example: <html ng-app="myApp"> --></body></html>`;
     const ids = detectTechnologies(input({ html })).map((t) => t.id);
-    expect(ids).toContain("angular");
+    expect(ids).not.toContain("angular");
   });
 
   test("[residual, accepted] ng-app inside an inline <script> string literal still detects Angular", () => {

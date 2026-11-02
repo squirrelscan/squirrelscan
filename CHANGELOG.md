@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- `tech-detect`: matches inside non-executed content no longer count as detections. Data script bodies (JSON, import maps, templates), `<template>` content and HTML comments are skipped in one bounded pass, except for an explicit list of marker-comment fingerprints (plugin banners) and `<style>` CSS. Unclear regions (unterminated comments or templates, declarative shadow roots) still detect. #1550
+
 ## v0.0.159 (2026-11-02)
 
 `security/leaked-secrets` is more precise and harder to talk around: an admin-named hosted-search key reports at high with a hint (William's #1523 for #1515, with an overlapping maintainer draft, #1524, folded in), a header-only `Bearer` JWT, a JWT-shaped string that does not decode and an AMD or RequireJS module path are no longer reported as credentials, and a real token with a missing `alg`, an oversized part or a decoy in front still reports. The integrity rules count an unread control once, read a style attribute and a CSS rule to larger bounds, say so when a rule is too large to read, and resolve a relative link by the page's first `<base href>` as a browser does.

@@ -8,6 +8,7 @@ import type {
 import { ALL_FINGERPRINTS } from "./fingerprints";
 import { flightLoaderText, hasFlightChunk } from "./flight";
 import { COLLECTED_TAGS } from "./collected-tags";
+import { COMMENT_MARKER_FINGERPRINTS, pageViews } from "./inert-regions";
 import { inString, scanJs, skipStart, stringEnd, type ScannedJs } from "./js-scan";
 import { isScriptTextString } from "./script-text";
 
@@ -83,21 +84,6 @@ function matchesInCode(
     else if (m[0].length === 0) re.lastIndex++;
   }
   return false;
-}
-
-/** Remove `<!-- ... -->` comments in one pass; an unterminated one is kept as is. */
-function stripHtmlComments(html: string): string {
-  let out = "";
-  let pos = 0;
-  for (;;) {
-    const open = html.indexOf("<!--", pos);
-    if (open === -1) break;
-    const close = html.indexOf("-->", open + 4);
-    if (close === -1) break;
-    out += html.slice(pos, open);
-    pos = close + 3;
-  }
-  return out + html.slice(pos);
 }
 
 /**
@@ -562,13 +548,14 @@ function detectOnePage(
 
   // Resolve the meta map: trust a non-empty caller-supplied one, otherwise parse
   // it from the HTML so meta-type detectors fire without a separate parse step.
-  const input: TechDetectInput =
+  const withMeta: TechDetectInput =
     rawInput.meta && Object.keys(rawInput.meta).length > 0
       ? rawInput
       : { ...rawInput, meta: extractMetaFromHtml(rawInput.html) };
-
-  // Linear scan; computed once and only for fingerprints that ask for it.
-  let markupHtml: string | null = null;
+  // One structural pass over the page: the views of its HTML (see inert-regions.ts). The tag readers get the page with
+  // `<template>` content taken out.
+  const pageViewSet = pageViews(rawInput.html);
+  const input: TechDetectInput = pageViewSet.markup === withMeta.html ? withMeta : { ...withMeta, html: pageViewSet.markup };
 
   for (const fp of fingerprints) {
     if (performance.now() > deadline) {
@@ -576,11 +563,9 @@ function detectOnePage(
       break;
     }
     let matchedDetector: Detector | null = null;
-    let html = input.html;
-    if (fp.ignoreComments) {
-      markupHtml ??= stripHtmlComments(input.html);
-      html = markupHtml;
-    }
+    // Text a browser never runs or shows (a data script's body, a `<template>`, a comment) is not evidence (#1550); a
+    // fingerprint whose evidence is a marker comment reads the view that keeps comments.
+    const html = COMMENT_MARKER_FINGERPRINTS.has(fp.id) ? pageViewSet.commented : pageViewSet.clean;
 
     for (const detector of fp.detectors) {
       if (matchDetector(detector, input, html, views, maxChars)) {
