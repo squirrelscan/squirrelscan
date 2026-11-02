@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- The macOS Intel (`darwin-x64`) binary is now built with Bun's baseline target, like the other x64 builds, so it no longer dies with an illegal instruction (exit 132) on Intel Macs whose CPU lacks AVX instructions #1562
+
 ## v0.0.172 (2026-11-07)
 
 Three rule false positives are fixed (entity-conflicts, broken-anchors, mojibake), the entity map compares legal identifiers, and the REST API docs cover the rules catalogue, partial reports for rule-filtered runs and per-rule results.
