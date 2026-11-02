@@ -19,7 +19,7 @@ How it works:
 
 ### Fixed
 
-- **`security/leaked-secrets` no longer reports an AMD / RequireJS module path as a credential.** A module path such as `Magento_Customer/js/change-email-password` under a credential-named key, and the paths beside it (`Magento_Ui/js/form/element/abstract`, `text!Vendor_Module/template/form`) were reported as generic secrets. A value of short word segments joined by `/`, under a `Vendor_Module` head or a `js` segment, with no digit runs or mixed-case runs, is a name; random base64-ish values with a `/` still report (0 of 20,000 fuzzed values are read as a module path). (#1292)
+- **`security/leaked-secrets` no longer reports an AMD / RequireJS module path as a credential.** A module path such as `Magento_Customer/js/change-email-password` under a credential-named key, and the paths beside it (`Magento_Ui/js/form/element/abstract`, `text!Vendor_Module/template/form`) were reported as generic secrets. A value of short word segments joined by `/` is a name when every word (at most three per segment, camelCase parts and plurals included) is in a list of module-path words, it has a `Vendor_Module` head or a `js` segment, and no segment has more than two digits or three capitals; a drawn run of letters is not a word, so random values with a `/` still report. (#1292)
 
 ## v0.0.158 (2026-11-01)
 

@@ -1685,6 +1685,52 @@ const MODULE_SEGMENT_RE = /^[A-Za-z][A-Za-z0-9]*(?:[-_.][A-Za-z0-9]+)*$/;
 // `Magento_Customer`, `Acme_ShopBase`: two CamelCase names of lower-case words, no digits (a drawn `KrllP_YU8RDYAyNCX` is not one)
 const VENDOR_MODULE_RE = /^[A-Z][a-z]+(?:[A-Z][a-z]+)*_[A-Z][a-z]+(?:[A-Z][a-z]+)*$/;
 
+// The words of the module paths a store's own code writes (AMD / RequireJS names: `Magento_Customer/js/change-email-password`). A word
+// outside the list is not read as one: a drawn lower-case run of letters, however word-shaped, is a credential until a person names it.
+const MODULE_VOCABULARY = new Set([
+  "abstract", "account", "accounts", "action", "actions", "add", "address", "addresses", "admin", "advanced", "ajax", "alert", "alerts", "api",
+  "app", "apply", "auth", "authentication", "authorization", "authorize", "back", "backend", "base", "basic", "billing", "block", "blocks",
+  "bootstrap", "button", "cache", "cancel", "captcha", "card", "cards", "carousel", "cart", "cartdata", "catalog", "categories", "category",
+  "change", "checkbox", "checkout", "city", "close", "collapse", "column", "columns", "common", "compare", "component", "components", "config",
+  "confirm", "confirmation", "content", "controller", "controllers", "cookie", "cookies", "core", "countries", "country", "coupon", "create",
+  "credit", "css", "custom", "customer", "customers", "data", "default", "define", "delete", "description", "dialog", "discount", "domready",
+  "dynamic", "edit", "element", "elements", "email", "emails", "error", "errors", "event", "events", "expand", "extended", "external", "factory",
+  "fetch", "field", "fields", "fieldset", "filter", "filters", "footer", "forgot", "form", "forms", "front", "frontend", "gallery", "general",
+  "generic", "get", "global", "grid", "group", "groups", "handler", "handlers", "header", "helper", "helpers", "hide", "html", "http", "i18n",
+  "image", "images", "index", "info", "init", "initialize", "inline", "input", "internal", "item", "items", "jquery", "js", "json", "keeper", "key",
+  "keys", "knockout", "ko", "label", "labels", "lang", "language", "layout", "layouts", "less", "lib", "libs", "list", "listing", "load", "loader",
+  "loading", "local", "locale", "locales", "login", "logout", "mage", "magento", "main", "map", "mapper", "mapping", "maps", "menu", "message",
+  "messages", "method", "methods", "mixin", "mixins", "modal", "model", "models", "module", "modules", "multi", "name", "names", "nav", "navigation",
+  "newsletter", "notice", "notices", "observer", "observers", "open", "option", "options", "order", "orders", "overlay", "page", "pager", "pages",
+  "pagination", "password", "passwords", "path", "paths", "payment", "payments", "phone", "plugin", "plugins", "polyfill", "polyfills", "popup",
+  "post", "postal", "postcode", "price", "prices", "private", "product", "products", "provider", "providers", "public", "put", "quote", "quotes",
+  "radio", "rate", "rates", "recaptcha", "region", "regions", "register", "registration", "remember", "remote", "remove", "renderer", "renderers",
+  "request", "requests", "require", "requirejs", "reset", "response", "review", "reviews", "route", "router", "routes", "row", "rows", "rule",
+  "rules", "sass", "save", "scss", "search", "secret", "secrets", "security", "select", "send", "service", "services", "session", "sessions",
+  "setting", "settings", "shared", "shim", "shims", "shipping", "show", "sidebar", "signin", "signup", "simple", "single", "skin", "slider", "sort",
+  "sorter", "standard", "state", "static", "status", "statuses", "step", "steps", "storage", "store", "stores", "submit", "subscription", "success",
+  "summary", "swatch", "swatches", "tab", "table", "tabs", "tax", "taxes", "template", "templates", "text", "theme", "themes", "title", "titles",
+  "toggle", "token", "tokens", "tooltip", "total", "totals", "translate", "translation", "type", "types", "ui", "underscore", "update", "uri", "url",
+  "urls", "user", "users", "util", "utils", "validation", "validator", "validators", "vendor", "verification", "verify", "view", "views", "warning",
+  "weight", "widget", "widgets", "wishlist", "wizard", "xml", "zip", "zoom",
+]);
+const MODULE_MAX_WORDS_PER_SEGMENT = 3;
+const CAMEL_PART_RE = /[A-Z]?[a-z]+|[A-Z]+(?![a-z])|[0-9]+/g;
+
+/** A word of a module path: in {@link MODULE_VOCABULARY}, a plural of one, or digits. */
+function isModuleWord(word: string): boolean {
+  const lower = word.toLowerCase();
+  if (/^[0-9]+$/.test(lower) || MODULE_VOCABULARY.has(lower)) return true;
+  return lower.endsWith("s") && MODULE_VOCABULARY.has(lower.slice(0, -1));
+}
+
+/** A segment of a module path: one to three words joined by `-`, `_` or `.`, each of camelCase parts that are module words. */
+function isModuleSegment(segment: string): boolean {
+  const words = segment.split(/[-_.]/);
+  if (words.length > MODULE_MAX_WORDS_PER_SEGMENT) return false;
+  return words.every((word) => (word.match(CAMEL_PART_RE) ?? []).every(isModuleWord));
+}
+
 export function isModulePath(body: string): boolean {
   if (body.length > 128 || !body.includes("/")) return false;
   const segments = body.replace(/^[a-z]+!/, "").split("/");
@@ -1701,6 +1747,8 @@ export function isModulePath(body: string): boolean {
     // capitals after the first letter: `changeEmailPassword` and `Vendor_Module` are names, a drawn run of mixed case is not
     if (capitals - (segment[0]! >= "A" && segment[0]! <= "Z" ? 1 : 0) > 3 && !VENDOR_MODULE_RE.test(segment)) return false;
   }
+  // every segment is a name's words; the `Vendor_Module` head is judged by its own pattern
+  if (!segments.every((segment, i) => (i === 0 && VENDOR_MODULE_RE.test(segment)) || isModuleSegment(segment))) return false;
   return VENDOR_MODULE_RE.test(segments[0]!) || segments.includes("js");
 }
 
