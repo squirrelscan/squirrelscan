@@ -41,13 +41,13 @@ function mockResponse(url: string, body: string): FetchResponse {
   };
 }
 
-function fetcherFor(fetched: string[]): DocumentFetcher {
+function fetcherFor(fetched: string[], home: string = HOME): DocumentFetcher {
   return {
     id: "mock",
     capabilities: { jsRendering: false, cookies: false, screenshot: false },
     async fetch(req) {
       fetched.push(req.url);
-      return mockResponse(req.url, req.url === `${ORIGIN}/` ? HOME : "<!doctype html><title>l</title><p>leaf</p>");
+      return mockResponse(req.url, req.url === `${ORIGIN}/` ? home : "<!doctype html><title>l</title><p>leaf</p>");
     },
   };
 }
@@ -111,11 +111,11 @@ async function crawlRecord(storage: CrawlStorage, config: Record<string, unknown
  * Pass 1 fetches the home page under a cap of 1 byte (stored, never parsed: no parsed links). Pass 2 reuses it from
  * cache under `cap`. `encodedSize` rewrites the stored size to a small number, as a gzip body would have recorded.
  */
-async function reuseUnderCap(cap: number | undefined, encodedSize?: number) {
+async function reuseUnderCap(cap: number | undefined, encodedSize?: number, home: string = HOME) {
   const storage = await Effect.runPromise(createTestStorage());
   const cfg1 = { ...baseConfig, incremental: false, useCacheControl: false, maxParseBytes: 1 };
   const crawlId1 = await crawlRecord(storage, cfg1);
-  const crawler1 = await Effect.runPromise(createCrawler({ config: { ...cfg1, documentFetcher: fetcherFor([]) }, storage }));
+  const crawler1 = await Effect.runPromise(createCrawler({ config: { ...cfg1, documentFetcher: fetcherFor([], home) }, storage }));
   await Effect.runPromise(crawler1.resumeFromStorage(crawlId1));
   const stored = await Effect.runPromise(storage.getPage(crawlId1, `${ORIGIN}/`));
   expect(stored?.parsedData ?? null).toBeNull(); // nothing parsed on pass 1
@@ -132,7 +132,7 @@ async function reuseUnderCap(cap: number | undefined, encodedSize?: number) {
     ...(cap !== undefined ? { maxParseBytes: cap } : {}),
   };
   const crawlId2 = await crawlRecord(storage, cfg2);
-  const crawler2 = await Effect.runPromise(createCrawler({ config: { ...cfg2, documentFetcher: fetcherFor(fetched) }, storage }));
+  const crawler2 = await Effect.runPromise(createCrawler({ config: { ...cfg2, documentFetcher: fetcherFor(fetched, home) }, storage }));
   await Effect.runPromise(crawler2.resumeFromStorage(crawlId2));
   const frontier = (await Effect.runPromise(storage.getAllFrontierEntries(crawlId2))).map((e) => e.normalizedUrl);
   const stats = await Effect.runPromise(storage.getStats(crawlId2));
@@ -157,6 +157,26 @@ describe("a reused cached page honours the parse cap (#1502)", () => {
     const r = await reuseUnderCap(HOME_BYTES - 1, 100);
     expect(r.frontier).not.toContain(OFF_MAP);
   }, 30_000);
+
+  test("the size is counted in bytes: a multi-byte page parses at exactly its byte size and not one byte under, though its character count is far under", async () => {
+    const cjk = `<!doctype html><html><head><title>t</title></head><body><a href="${OFF_MAP}">off</a><p>${"中".repeat(1_500)}</p></body></html>`;
+    const bytes = Buffer.byteLength(cjk);
+    expect(cjk.length).toBeLessThan(bytes - 2_000);
+    expect((await reuseUnderCap(bytes, undefined, cjk)).frontier).toContain(OFF_MAP);
+    expect((await reuseUnderCap(bytes - 1, undefined, cjk)).frontier).not.toContain(OFF_MAP);
+    // over the cap in bytes and under it in characters: an UTF-16 length comparison would parse it
+    expect((await reuseUnderCap(cjk.length + 100, undefined, cjk)).frontier).not.toContain(OFF_MAP);
+    // the same when the recorded (encoded) size is small, as a gzip page's is: only the html's own bytes can decide
+    expect((await reuseUnderCap(cjk.length + 100, 100, cjk)).frontier).not.toContain(OFF_MAP);
+    expect((await reuseUnderCap(bytes, 100, cjk)).frontier).toContain(OFF_MAP);
+  }, 60_000);
+
+  test("a recorded size larger than the stored html counts too (the larger of the two decides)", async () => {
+    // the html fits the cap, but the page was recorded as larger (its encoded Content-Length): it is not parsed
+    expect((await reuseUnderCap(HOME_BYTES, HOME_BYTES + 1_000)).frontier).not.toContain(OFF_MAP);
+    // and with a recorded size that fits as well it is
+    expect((await reuseUnderCap(HOME_BYTES, HOME_BYTES)).frontier).toContain(OFF_MAP);
+  }, 60_000);
 
   test("no cap: the cached page is parsed and its links discovered, as before", async () => {
     expect((await reuseUnderCap(undefined)).frontier).toContain(OFF_MAP);

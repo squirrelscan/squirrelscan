@@ -5,6 +5,9 @@ import { describe, expect, test } from "bun:test";
 
 import { parsePage } from "@squirrelscan/parser";
 
+import { MAX_DURATION_MAX_PAGE_BYTES } from "@squirrelscan/utils/constants";
+
+import { DEFAULT_MAX_BODY_BYTES } from "../src/lib/capped-body-read";
 import { confirmSoft404Candidates, type ConfirmFetch, type Soft404ConfirmPage } from "../src/soft404-confirm";
 
 const SHELL = `<!doctype html>
@@ -62,5 +65,13 @@ describe("the streaming audit hands the cap to the confirmation pass (source gua
     // the cap enters the site-fetch phase with the other probe options, and the confirmation call reads it from there
     expect(source).toContain("maxParseBytes: opts?.maxPageBytes }");
     expect(source).toContain("maxParseBytes: probes?.maxParseBytes,");
+  });
+});
+
+describe("why the guard is defense in depth (#1502)", () => {
+  test("the production re-fetch is cut at a body size under the `--max-duration` parse cap, so it cannot return an oversize body there", () => {
+    // `defaultConfirmFetch` reads with `readBodyCapped(res, DEFAULT_MAX_BODY_BYTES)`; a body cut at that size is under the cap
+    // `--max-duration` sets, so the guard only acts for a smaller cap or a caller that injects its own fetch.
+    expect(DEFAULT_MAX_BODY_BYTES).toBeLessThan(MAX_DURATION_MAX_PAGE_BYTES);
   });
 });
