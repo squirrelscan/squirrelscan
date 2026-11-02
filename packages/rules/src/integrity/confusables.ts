@@ -81,7 +81,7 @@ function foldToken(token: string): string {
  * The readings of `text`: as written, and with the digits of every word that mixes letters and digits read as the letters they
  * stand for, when that differs (`Office365 login` is read as written, `S1gn 1n` is read as `sign in`, and a cue that contains
  * a digit, such as `office 365`, is not lost to the fold). A number on its own (`1995`, `10`, `5`) and a word with only other
- * digits (`24h`) are not touched. Linear: one pass over the words, each tried at most 16 ways, and only a word with a
+ * digits (`24h`) are not touched. Linear: one pass over the words, each compared with the cue words of its own length, and only a word with a
  * foldable digit and a letter. The caller bounds the length it hands in.
  */
 export function digitForms(text: string): string[] {

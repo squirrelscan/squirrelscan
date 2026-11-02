@@ -78,23 +78,41 @@ const ATTR_RAW_CHARS = 16_000;
 const ATTR_STRIDE = ATTR_CHARS / 2;
 
 /**
+ * How many characters of a text of `length` the digit fold may read. Each control has a small allowance of its own (the first
+ * {@link FOLD_FREE_CHARS} characters, where short cue labels live) that the page's shared pool never touches, and the pool is
+ * charged only for the excess: all of the text when both cover it, else only what the control's own allowance covers. So a page
+ * of long digit-heavy fillers can use up the pool and a short swapped-digit label still folds, in a text or in an attribute.
+ */
+function foldSpan(length: number, own: { left: number }, pool: { left: number }): number {
+  const fromOwn = Math.min(length, own.left);
+  const excess = length - fromOwn;
+  if (excess <= pool.left) {
+    own.left -= fromOwn;
+    pool.left -= excess;
+    return length;
+  }
+  const span = own.left;
+  own.left = 0;
+  return span;
+}
+
+/**
  * An attribute's text in overlapping windows over its first {@link ATTR_RAW_CHARS} normalised characters, so a cue
  * cannot straddle a cut (every run of 150 characters lies whole inside one window). A window edge that falls inside
  * a word gets a letter stuck on it (`x`): a window cut out of `Redesign in with Google` must not read as `sign in
  * with Google`, and a cue half-cut by the edge must not read as a whole word either.
  */
-function boundedAttribute(text: string, fold?: { left: number }): { texts: string[][]; cut: boolean } {
+function boundedAttribute(text: string, own?: { left: number }, pool?: { left: number }): { texts: string[][]; cut: boolean } {
   const normalised = readable(text.slice(0, ATTR_RAW_CHARS)).trim();
   const limited = normalised.slice(0, ATTR_RAW_CHARS);
   let cut = text.length > ATTR_RAW_CHARS || normalised.length > ATTR_RAW_CHARS;
-  // A kit that writes digits for letters (`S1gn 1n w1th G00g1e`) is read as the letters too: both readings are windowed. The
-  // fold is charged to the page's budget; past it the attribute is read as written and counted cut.
+  // A kit that writes digits for letters (`S1gn 1n w1th G00g1e`) is read as the letters too: both readings are windowed, the one
+  // as written always. The fold is charged (see {@link foldSpan}); what it may not read is not folded and the control is counted cut.
   const readings = [limited];
   if (hasFoldableDigit(limited)) {
-    if (fold === undefined || fold.left >= limited.length) {
-      if (fold) fold.left -= limited.length;
-      readings.splice(0, 1, ...digitForms(limited));
-    } else cut = true;
+    const span = own && pool ? foldSpan(limited.length, own, pool) : limited.length;
+    if (span < limited.length) cut = true;
+    if (span > 0) readings.push(...digitForms(limited.slice(0, span)).slice(1));
   }
   // One window list per reading: each reading keeps its own always-read first window.
   const texts = readings.map((reading) => {
@@ -347,6 +365,8 @@ const PREPARE_ATTRIBUTE_BUDGET = 1_500_000;
 const FOLD_CHAR_BUDGET = 2_000_000;
 /** The longest text the digit fold reads at once (the attribute bound); a longer label is folded to this and counted unread. */
 const FOLD_LABEL_MAX_CHARS = 16_000;
+/** The characters of each control's attributes, and of its text, that the fold reads outside the page's pool (see {@link foldSpan}). */
+const FOLD_FREE_CHARS = 300;
 
 /** A control's attributes as one pass reads them: the names compared by length first, so a junk name costs no string work. */
 export interface ControlAttributes {
@@ -695,8 +715,9 @@ export function scanControls(doc: Document): ControlScan {
       : []
     ).filter((v): v is string => typeof v === "string" && v !== "");
     const rawCue = raw.some((v) => RAW_CUE.test(v.length > ATTR_RAW_CHARS ? v.slice(0, ATTR_RAW_CHARS) : v));
+    const attributeFree = { left: FOLD_FREE_CHARS };
     const windows = raw.flatMap((v) => {
-      const bounded = boundedAttribute(v, foldBudget);
+      const bounded = boundedAttribute(v, attributeFree, foldBudget);
       cut ||= bounded.cut;
       return bounded.texts.map((texts) => texts.filter((text) => text !== ""));
     });
@@ -793,19 +814,16 @@ export function scanControls(doc: Document): ControlScan {
     const read = reads[i];
     // Deduplicated before the (costly) normalisation, not after.
     // The attributes (`item.extra`) were folded when their windows were made, both readings; only the text read is folded here.
+    const textFree = { left: FOLD_FREE_CHARS };
     const foldedText = (text: string): string[] => {
       const plain = readable(text);
       if (!hasFoldableDigit(plain)) return [plain];
-      // The digit fold is bounded: a label is folded to at most 16,000 characters and the page's fold budget, and a
-      // control whose label was not folded in full is counted unread.
-      const head = plain.length > FOLD_LABEL_MAX_CHARS ? plain.slice(0, FOLD_LABEL_MAX_CHARS) : plain;
-      if (plain.length > FOLD_LABEL_MAX_CHARS) cutControls.add(i);
-      if (foldBudget.left < head.length) {
-        cutControls.add(i);
-        return [plain];
-      }
-      foldBudget.left -= head.length;
-      return [plain, ...digitForms(head).slice(1)];
+      // The digit fold is bounded: a label is folded to at most 16,000 characters, charged to the control's allowance and the
+      // page's pool; a control whose label was not folded in full is counted unread. The label as written is always kept.
+      const capped = plain.length > FOLD_LABEL_MAX_CHARS ? plain.slice(0, FOLD_LABEL_MAX_CHARS) : plain;
+      const span = foldSpan(capped.length, textFree, foldBudget);
+      if (span < plain.length) cutControls.add(i);
+      return span > 0 ? [plain, ...digitForms(capped.slice(0, span)).slice(1)] : [plain];
     };
     const readings = [...new Set(item.extra)].map((text) => readable(text));
     for (const text of new Set(read ? formsOf(read.chunks) : [])) readings.push(...foldedText(text));
