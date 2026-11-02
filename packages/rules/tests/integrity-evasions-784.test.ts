@@ -94,9 +94,11 @@ test("a broker's authorize endpoint is not impersonation for Google or Microsoft
   ]) {
     expect(brand(`<a href="${host}">Sign in with Google</a>`), host).toBeNull();
   }
-  for (const host of ["https://login.windows.net/common/oauth2/authorize", "https://login.microsoftonline.us/common/oauth2/v2.0/authorize", "https://tenant.b2clogin.com/tenant.onmicrosoft.com/oauth2/v2.0/authorize"]) {
+  for (const host of ["https://login.windows.net/common/oauth2/authorize", "https://login.microsoftonline.us/common/oauth2/v2.0/authorize", "https://example.b2clogin.com/example.onmicrosoft.com/oauth2/v2.0/authorize"]) {
     expect(brand(`<a href="${host}">Sign in with Microsoft</a>`), host).toBeNull();
   }
+  // somebody else's B2C tenant is not the site's own
+  expect(brand(`<a href="https://tenant.b2clogin.com/tenant.onmicrosoft.com/oauth2/v2.0/authorize">Sign in with Microsoft</a>`)).toBe("Microsoft");
   // A look-alike that merely contains a broker name is still off-brand.
   expect(brand(`<a href="https://auth0.com.credential-fixture.invalid/authorize">Sign in with Google</a>`)).toBe("Google");
 });
