@@ -35,6 +35,7 @@ import { detectWafChallengePage } from "@squirrelscan/waf-detect";
 import { DEFAULT_MAX_BODY_BYTES, readBodyCapped } from "./lib/capped-body-read";
 import { customHeadersFor, type ScopedHeaderOptions } from "./lib/header-scope";
 import { probeFetch } from "./lib/probe-fetch";
+import { decodedPageBytes } from "@squirrelscan/utils/bytes";
 import type { EgressPolicy } from "@squirrelscan/utils/public-egress";
 
 import type { ParsedPage } from "@squirrelscan/rules";
@@ -123,6 +124,11 @@ interface Soft404ConfirmBaseOptions {
    * flight is aborted, and every candidate left is `unconfirmed`.
    */
   signal?: AbortSignal;
+  /**
+   * HTML over this many bytes is not parsed (`--max-duration`, #1332): a re-fetched body over it is `unconfirmed`,
+   * never parsed, so the confirmation pass cannot bring back the parse cost the cap bounds (#1502). Unset: no cap.
+   */
+  maxParseBytes?: number;
   /** Injectable clock (ms epoch) for deterministic budget tests. Default Date.now. */
   now?: () => number;
   /** Injectable delay for deterministic politeness tests. Default setTimeout. */
@@ -215,6 +221,10 @@ async function confirmOne(
   // claim. A network error (status 0) or any non-2xx re-fetch can't confirm or
   // refute it → unconfirmed (annotate, never drop).
   if (res.status < 200 || res.status >= 300) return "unconfirmed";
+
+  // #1502: a body over the parse cap is never parsed, here or anywhere else; it cannot be judged, so it is unconfirmed
+  // (annotated, never dropped). The body is already decoded, so its size is the parser's.
+  if (opts.maxParseBytes !== undefined && decodedPageBytes(undefined, res.body) > opts.maxParseBytes) return "unconfirmed";
 
   // A WAF/bot-challenge served on re-fetch (e.g. a 200 interstitial to an
   // unexpected UA) is NOT real content — never call that "intermittent". Treat

@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **The `--max-duration` parse cap now also holds when a cached page is reused and when a soft-404 is re-fetched.** A page over the cap is stored but never parsed when it is fetched; reusing it from cache used to parse its HTML for links, and the soft-404 confirmation parsed the body it re-fetched, so both brought back the parse cost the cap bounds. A cached page over the cap is reused without discovering its links, and a re-fetched body over the cap leaves the candidate `unconfirmed` (still reported, never dropped). The size is the decoded body's, as at the fetch gate. (#1502, refs #1332)
+
 ## v0.0.159 (2026-11-02)
 
 `security/leaked-secrets` is more precise and harder to talk around: an admin-named hosted-search key reports at high with a hint (William's #1523 for #1515, with an overlapping maintainer draft, #1524, folded in), a header-only `Bearer` JWT, a JWT-shaped string that does not decode and an AMD or RequireJS module path are no longer reported as credentials, and a real token with a missing `alg`, an oversized part or a decoy in front still reports. The integrity rules count an unread control once, read a style attribute and a CSS rule to larger bounds, say so when a rule is too large to read, and resolve a relative link by the page's first `<base href>` as a browser does.
