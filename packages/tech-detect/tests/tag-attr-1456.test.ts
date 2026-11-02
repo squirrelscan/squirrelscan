@@ -5,7 +5,7 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { detectTechnologies } from "../src";
+import { ALL_FINGERPRINTS, detectTechnologies } from "../src";
 import { assertCollectedTags } from "../src/collected-tags";
 
 const page = (head: string, body = "") => `<!doctype html><html><head><title>t</title>${head}</head><body>${body}</body></html>`;
@@ -75,8 +75,8 @@ describe("hostile pages (5 MB)", () => {
         const html = rep(unit);
         const started = performance.now();
         ids(html);
-        // Minutes before the change (every signature rescanned 400 characters after each opener); seconds now.
-        expect(performance.now() - started).toBeLessThan(6_000);
+        // Minutes before the change (every signature rescanned 400 characters after each opener); 0.3 to 0.75 s now.
+        expect(performance.now() - started).toBeLessThan(tag === "iframe" ? 6_000 : 2_000);
       }, 120_000);
     }
   }
@@ -111,4 +111,56 @@ describe("bounds (review of #1467)", () => {
     // The built-in signatures still read theirs afterwards (the attribute set is per call).
     expect(ids(page('<script src="https://cdn.gpteng.co/lovable.js"></script>'))).toContain("lovable");
   });
+});
+
+describe("a real tag with its attributes on separate lines (#1474)", () => {
+  test("script src, link rel and href, a clerk key, data-main and a Meta Pixel script", () => {
+    for (const [id, tag] of [
+      ["lovable", '<script\n async\n src="https://cdn.gpteng.co/lovable.js"\n></script>'],
+      ["bulma", '<link\n rel="stylesheet"\n href="https://cdn.example.net/css/bulma.min.css"\n>'],
+      ["bulma", '<link\n href="https://cdn.example.net/css/bulma.min.css"\n rel="stylesheet"\n>'],
+      ["clerk", '<script\n data-clerk-publishable-key="pk_test_abc"\n src="/c.js"\n></script>'],
+      ["requirejs", '<script\n data-main="js/app"\n src="require.js"\n></script>'],
+      ["facebook-pixel", '<script\n async\n src="https://connect.facebook.net/en_US/fbevents.js"\n></script>'],
+    ] as const) {
+      expect([id, tag.slice(0, 30), ids(page(tag))]).toEqual([id, tag.slice(0, 30), expect.arrayContaining([id])]);
+    }
+  });
+});
+
+describe("line-start openers inside one quoted attribute (#1474): 1 MB, script, link and img", () => {
+  const MB = 1_048_576;
+  const shape = (tag: string): string => {
+    const unit = `\n<${tag} `;
+    return page("", `<${tag} data-x="${unit.repeat(Math.ceil(MB / unit.length))}" src="/a.js">`);
+  };
+  const ctx = (html: string) => ({ url: "https://example.com/", headers: {}, html });
+
+  test("every built-in together, twice", () => {
+    for (const tag of ["script", "link", "img"]) {
+      const html = shape(tag);
+      for (let round = 0; round < 2; round++) {
+        const started = performance.now();
+        detectTechnologies(ctx(html));
+        // measured under 350 ms; the Klaviyo patterns took minutes before the tempered in-tag scan
+        expect([tag, round, performance.now() - started < 1_500]).toEqual([tag, round, true]);
+      }
+    }
+  }, 120_000);
+
+  test("each fingerprint alone, twice (there is no built-in <img> in-tag fingerprint: the img shape is a guard)", () => {
+    const slow: string[] = [];
+    for (const tag of ["script", "link", "img"]) {
+      const input = ctx(shape(tag));
+      for (const fp of ALL_FINGERPRINTS) {
+        for (let round = 0; round < 2; round++) {
+          const started = performance.now();
+          detectTechnologies(input, [fp]);
+          const ms = performance.now() - started;
+          if (ms > 400) slow.push(`${tag} ${fp.id} ${Math.round(ms)} ms`);
+        }
+      }
+    }
+    expect(slow).toEqual([]);
+  }, 600_000);
 });
