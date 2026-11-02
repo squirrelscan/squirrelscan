@@ -133,6 +133,48 @@ describe("hint windows are allocated across all of a page's bundles before whole
     content: `${plain(before)}\n${loader}\n${plain(50_000)}`,
   });
 
+  const uniqueLines = (bytes: number, script: number): string => {
+    const lines: string[] = [];
+    let length = 0;
+    for (let n = 0; length < bytes; n++) {
+      const line = `/*q_1534_${script}_${n}*/var q=(a<<3)+b;if(q>9){q-=9}\n`;
+      lines.push(line);
+      length += line.length;
+    }
+    return lines.join("").slice(0, bytes);
+  };
+
+  const expectEachMarkerOnce = (body: string, script: number, label: string): void => {
+    const markers = [...body.matchAll(new RegExp(`q_1534_${script}_(\\d+)\\*/`, "g"))].map((m) => m[0]);
+    expect(new Set(markers).size, label).toBe(markers.length);
+  };
+
+  test("7 x 40 KB scripts plus a late bundle send no script line twice (#1534)", () => {
+    const early = Array.from({ length: 7 }, (_, n) => ({
+      url: `https://example.com/u${n}.js`,
+      content: uniqueLines(40_000, n),
+    }));
+    const last = {
+      url: "https://example.com/late.js",
+      content: `${uniqueLines(150_000, 7)}\nposthog.init("phc_x",{});\n${uniqueLines(50_000, 8)}`,
+    };
+    const inputs = buildTechInputs(
+      [{ url: HOME, headers: {}, html: HTML }],
+      [...early, last].map((script) => ({ ...script, sourcePages: [HOME] })),
+      DEFAULT_TECH_BUNDLE_LIMITS,
+    );
+    const bodies = inputs[0]!.scripts ?? [];
+    expect(bodies).toHaveLength(8);
+    for (let n = 0; n < 7; n++) {
+      const body = bodies.find((script) => script.url === early[n]!.url)?.content ?? "";
+      expectEachMarkerOnce(body, n, `script ${n}`);
+    }
+    const sizes = bodies.map((script) => Buffer.byteLength(script.content ?? ""));
+    expect(sizes.reduce((sum, size) => sum + size, 0)).toBeLessThanOrEqual(DEFAULT_TECH_BUNDLE_LIMITS.pageBytes);
+    for (const size of sizes) expect(size).toBeLessThanOrEqual(DEFAULT_TECH_BUNDLE_LIMITS.bundleBytes);
+    expect(detectReportTechnologiesMulti(inputs).items.map((technology) => technology.id)).toContain("posthog");
+  });
+
   test("25 scripts at the 512 KB page cap: a loader in the last bundle's window is found beside the early remainders", () => {
     const scripts = [...Array.from({ length: 24 }, (_, n) => small(n)), late('posthog.init("phc_x",{api_host:"https://eu.i.posthog.com"});')];
     expect(detectPage(scripts)).toContain("posthog");
@@ -188,7 +230,7 @@ describe("hint windows are allocated across all of a page's bundles before whole
       const scripts = Array.from({ length: count }, (_, n) => {
         const size = 1_000 + Math.floor(r() * 47_000);
         const loaders = Array.from({ length: Math.floor(r() * 3) }, () => LOADERS[Math.floor(r() * LOADERS.length)]!);
-        let content = plain(size);
+        let content = uniqueLines(size, seed * 100 + n);
         for (const loader of loaders) {
           const at = Math.floor(r() * content.length);
           content = `${content.slice(0, at)}\n${loader}\n${content.slice(at)}`;
@@ -205,6 +247,10 @@ describe("hint windows are allocated across all of a page's bundles before whole
       expect(total, `seed ${seed} page`).toBeLessThanOrEqual(limits.pageBytes);
       expect(total, `seed ${seed} audit`).toBeLessThanOrEqual(limits.auditBytes);
       for (const n of sizes) expect(n, `seed ${seed} bundle`).toBeLessThanOrEqual(limits.bundleBytes);
+      for (let n = 0; n < scripts.length; n++) {
+        const body = first[0]!.scripts?.find((script) => script.url === scripts[n]!.url)?.content;
+        if (body) expectEachMarkerOnce(body, seed * 100 + n, `seed ${seed} script ${n}`);
+      }
     }
   }, 120_000);
 

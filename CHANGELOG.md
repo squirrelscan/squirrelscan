@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **Technology-detection bundle samples no longer repeat the tail of a script.** On a page with roughly 7 to 10 scripts near 40 KB plus a late bundle, the sampler could send each small script's whole head and then send part of that same text again as its tail, spending about a third of the 512 KB page budget on duplicates. Once a script has sampled windows or a tail, its head now stops before them; the page, audit and bundle caps still hold, and a loader in the late bundle remains detectable. (#1534)
+
 ## v0.0.159 (2026-11-02)
 
 `security/leaked-secrets` is more precise and harder to talk around: an admin-named hosted-search key reports at high with a hint (William's #1523 for #1515, with an overlapping maintainer draft, #1524, folded in), a header-only `Bearer` JWT, a JWT-shaped string that does not decode and an AMD or RequireJS module path are no longer reported as credentials, and a real token with a missing `alg`, an oversized part or a decoy in front still reports. The integrity rules count an unread control once, read a style attribute and a CSS rule to larger bounds, say so when a rule is too large to read, and resolve a relative link by the page's first `<base href>` as a browser does.
