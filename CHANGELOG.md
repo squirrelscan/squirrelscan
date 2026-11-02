@@ -19,7 +19,7 @@ How it works:
 
 ### Fixed
 
-- **`integrity/brand-impersonation` is no longer abandoned on a page of tens of thousands of multi-attribute controls.** A page of 5 to 10 MB of tiny links or buttons with several attributes, or with `aria-labelledby` ids, could run the rule past its 2 s budget ("Not checked"). The attributes a control is read for are now read in one pass over its first 64 (a control with more is counted in `controlsUnread`), the page has a work budget for the attributes it looks at when listing controls (2,000,000 units) and when reading their labels (1,500,000 units), and the visits of `aria-labelledby` target reads come off the page's visits. A page past a budget reports the controls it did not read in `controlsUnread` and `scanTruncated` instead of timing out. (#1462)
+- **`integrity/brand-impersonation` is no longer abandoned on a page of tens of thousands of multi-attribute controls.** A page of 5 to 10 MB of tiny links or buttons with several attributes, or with `aria-labelledby` ids, or thousands of distinct `aria-labelledby` targets, could run the rule past its 2 s budget ("Not checked"). The attributes a control is read for are now read in one pass (a control with more than 4,096 is counted in `controlsUnread`), the page has a work budget for the attributes it looks at when listing controls (2,000,000 units), and the text of `aria-labelledby` targets is read for at most 300,000 visits in all, checked before each read. A page past a budget reports the controls it did not read in `controlsUnread` and `scanTruncated` instead of timing out; the budgets bound the work, not the wall-clock time. (#1462)
 
 ## v0.0.159 (2026-11-02)
 

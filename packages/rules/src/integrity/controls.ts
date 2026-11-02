@@ -337,8 +337,11 @@ export const PLAIN_LOCAL_HREF = /^(?:\/(?![/\\])|#|\?|[\w.~-]+(?:[/?#][^:\\]*)?$
  * thousands of ordinary links inside the time budget. Links to other hosts or sign-in paths come after buttons.
  * More than {@link MAX_PREPARED} are cut, the least relevant first, and counted unread.
  */
-/** Attributes of one control that are looked at; a control with more is read as cut (counted unread), not walked in full. */
-const MAX_ATTRIBUTES_PER_CONTROL = 64;
+/**
+ * Attributes of one control that are looked at, each by a length test first so a junk name costs no string work. The page's work
+ * budget is what bounds the total; this bounds one element, and a control with more is read as cut (counted unread).
+ */
+const MAX_ATTRIBUTES_PER_CONTROL = 4_096;
 /** Work units (one per attribute looked at, one per control) the page may spend finding the controls' destinations and cues. */
 const SHORTLIST_ATTRIBUTE_BUDGET = 2_000_000;
 /** The same for reading each prepared control's label attributes. */
@@ -359,7 +362,7 @@ export interface ControlAttributes {
   scanned: number;
 }
 
-/** One pass over the first {@link MAX_ATTRIBUTES_PER_CONTROL} attributes. The first of each name wins, as in a browser. */
+/** One pass over the first {@link MAX_ATTRIBUTES_PER_CONTROL} attributes, past the 64th as well. The first of each name wins, as in a browser. */
 export function readControlAttributes(el: Element): ControlAttributes {
   const out: ControlAttributes = { href: null, cue: false, ariaLabel: null, title: null, value: null, alt: null, labelledby: null, overlong: false, scanned: 0 };
   const attrs = el.attributes;
@@ -403,8 +406,8 @@ export function readControlAttributes(el: Element): ControlAttributes {
 /** What `scanControls` spends the page's attribute work on: a mutable object so a test can lower the budgets. */
 export const attributeLimits = { shortlist: SHORTLIST_ATTRIBUTE_BUDGET, prepare: PREPARE_ATTRIBUTE_BUDGET };
 
-/** Counts a test reads: distinct `aria-labelledby` targets whose text was read (each once per page). */
-export const integrityCounters = { targetReads: 0 };
+/** A test hook, off in production: when `enabled`, counts the distinct `aria-labelledby` targets whose text was read. */
+export const integrityCounters = { enabled: false, targetReads: 0 };
 
 export function shortlist(
   found: Element[],
@@ -635,12 +638,16 @@ export function scanControls(doc: Document): ControlScan {
   const targetTexts = new Map<Element, string>();
   // Visits the targets' reads cost: charged to the page's visits (TOTAL_VISITS) before the controls' own reads share what is left.
   let targetVisits = 0;
-  const targetText = (target: Element): string => {
+  // The most the targets' reads may cost, checked BEFORE each read: a page of thousands of distinct targets cannot spend more.
+  const targetBudget = (TOTAL_VISITS * 3) / 4;
+  /** A target's text, or null when the page's target budget is spent and the target is not read (the control is then counted cut). */
+  const targetText = (target: Element): string | null => {
     const known = targetTexts.get(target);
     if (known !== undefined) return known;
+    if (targetVisits >= targetBudget) return null;
     const read = readChunks(target, SHORT_VISITS, ATTR_CHARS, hiddenBy);
     targetVisits += read.visits;
-    integrityCounters.targetReads++;
+    if (integrityCounters.enabled) integrityCounters.targetReads++;
     const text = read.chunks
       .map((c) => c.text)
       .join("")
@@ -672,11 +679,14 @@ export function scanControls(doc: Document): ControlScan {
     const referenced = covered ? (read.labelledby ?? "").slice(0, ATTR_RAW_CHARS).split(/\s+/).filter(Boolean) : [];
     prepareBudget.left -= 1 + Math.min(referenced.length, MAX_LABELLEDBY);
     let cut = referenced.length > MAX_LABELLEDBY || altsCut.has(element) || read.overlong || !covered;
-    const labelled = referenced
-      .slice(0, MAX_LABELLEDBY)
-      .map((id) => byId(id))
-      .filter((target): target is Element => target !== null)
-      .map((target) => targetText(target));
+    const labelled: string[] = [];
+    for (const id of referenced.slice(0, MAX_LABELLEDBY)) {
+      const target = byId(id);
+      if (target === null) continue;
+      const text = targetText(target);
+      if (text === null) cut = true;
+      else labelled.push(text);
+    }
     const raw = (covered
       ? [read.ariaLabel, read.title, tag === "input" ? read.value : null, tag === "input" ? read.alt : null, ...labelled, ...(imageAlts.get(element) ?? [])]
       : []
@@ -759,8 +769,8 @@ export function scanControls(doc: Document): ControlScan {
     .filter((i) => prepared[i]!.rank > 0)
     .sort((a, b) => prepared[b]!.rank - prepared[a]!.rank || a - b);
   const reads: Array<ReturnType<typeof readChunks> | undefined> = Array.from({ length: prepared.length });
-  // What the `aria-labelledby` target reads cost comes off the page's visits, but never more than three quarters: a control's own read stays possible.
-  let spend = TOTAL_VISITS - Math.min(targetVisits, (TOTAL_VISITS * 3) / 4);
+  // What the `aria-labelledby` target reads cost comes off the page's visits; they stop at three quarters of them, so a control's own read stays possible.
+  let spend = TOTAL_VISITS - Math.min(targetVisits, targetBudget);
   let longBudget = LONG_BUDGET_VISITS;
   for (const [position, i] of order.entries()) {
     const item = prepared[i]!;

@@ -37,6 +37,11 @@ const SHAPES: Array<[string, (scale: number) => string]> = [
   ["off-site links with 40 extra attributes (7 MB)", (k) => page(rep(`<a href="${O}" ${attrs40}>x</a>`, 7 * MB * k) + REAL)],
   ["links naming 5 aria-labelledby ids (7 MB)", (k) => page(rep(`<a href="${O}" aria-labelledby="a b c d e">x</a>`, 7 * MB * k) + `<span id="a">x</span>${REAL}`)],
   ["links naming 2 aria-labelledby ids (135,000)", (k) => page(Array.from({ length: Math.round(135_000 * k) }, (_, i) => `<a href=/x${i % 7} aria-labelledby="a b">x</a>`).join("") + REAL)],
+  ["links each naming 4 distinct ids of nested targets (100,000 targets, 25,000 links)", (k) => {
+    const targets = Math.round(100_000 * k);
+    const links = Math.round(25_000 * k);
+    return page(`${Array.from({ length: targets }, (_, i) => `<span id="t${i}">`).join("")}x${"</span>".repeat(targets)}${Array.from({ length: links }, (_, i) => `<a href="${O}" aria-labelledby="t${4 * i} t${4 * i + 1} t${4 * i + 2} t${4 * i + 3}">x</a>`).join("")}${REAL}`);
+  }],
   ["img inside one control (330,000)", (k) => page(`<a href="${OFF}">${"<img>".repeat(Math.round(330_000 * k))}Sign in with Google</a>`)],
 ];
 
