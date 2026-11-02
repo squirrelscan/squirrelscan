@@ -56,7 +56,19 @@ describe("IPv6 special-use and embedded-IPv4 forms", () => {
     "[feff::1]",
     "[2001:db8::1]", // documentation
     "[2001:db8:ffff::1]",
-    "[3fff::1]",
+    "[3fff::1]", // documentation 3fff::/20
+    "[3fff:fff::1]",
+    "[2a00:1450::5efe:7f00:1]", // ISATAP around loopback, under a global prefix
+    "[2a00:1450::200:5efe:7f00:1]",
+    "[2a00:1450::5efe:a00:1]",
+    "[2001:2::1]", // benchmarking 2001:2::/48
+    "[2001:2:0:ffff::1]",
+    "[2001:10::1]", // ORCHID 2001:10::/28
+    "[2001:1f::1]",
+    "[2001:20::1]", // ORCHIDv2 2001:20::/28
+    "[2001:2f::1]",
+    "[5f00::1]", // SRv6 5f00::/16
+    "[5f00:ffff::]",
     "[ff02::1]", // multicast
     "[ff00::]",
     "[100::1]", // discard
@@ -77,6 +89,15 @@ describe("IPv6 special-use and embedded-IPv4 forms", () => {
     "[100:0:0:1::1]", // not the /64 discard prefix
     "[64:ff9b:2::1]", // not the local-use /48
     "[2400:cb00::1]",
+    "[3ff0::1]", // below the /20: not documentation
+    "[3ffe::1]",
+    "[3fff:1000::1]",
+    "[2a00:1450::5efe:808:808]", // ISATAP around a public address
+    "[2001:2:1::1]", // outside 2001:2::/48
+    "[2001:30::1]",
+    "[2001:0f::1]",
+    "[5eff::1]",
+    "[5f01::1]",
     "[::ffff:8.8.8.8]",
   ])("%s is still public", (literal) => {
     expect(isNonPublicHostnameStrict(host(literal))).toBe(false);
@@ -92,6 +113,11 @@ describe("what it keeps and what it leaves alone", () => {
   });
   test("the shared classifier is unchanged for the special-use ranges", () => {
     for (const h of ["203.0.113.9", "198.18.0.1", "64:ff9b::7f00:1", "2001:db8::1", "ff02::1"]) expect(isNonPublicHostname(h)).toBe(false);
+  });
+  test("malformed octets and groups handed to the function directly are not addresses", () => {
+    for (const h of ["999.999.999.999", "1.2.3.256", "300.0.2.1", "224.0.0.256", "1.2.3", "2001:db8", "1:2:3:4:5:6:7:8:9", "1::2::3", "g::1", "::fffff", ":::", "1:2:3:4:5:6:7::8", "2001:db8:0:0:0:0:0::1", "12345::1", "1.2.3.4:5"]) {
+      expect(isNonPublicHostnameStrict(h), h).toBe(false);
+    }
   });
   test("names and malformed groups are not read as addresses", () => {
     expect(isNonPublicHostnameStrict("example.com")).toBe(false);

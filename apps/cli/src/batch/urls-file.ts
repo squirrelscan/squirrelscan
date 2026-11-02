@@ -86,18 +86,8 @@ const SCHEME_SLASHES = /^[a-z][a-z0-9+.-]*:\/\//i;
 /** A scheme written without slashes (`javascript:`, `mailto:`): a colon not followed by a port. */
 const BARE_SCHEME = /^[a-z][a-z0-9+.-]*:(?!\d+(?:[/?#]|$))/i;
 
-/** A line made safe to store: userinfo, query values and fragment masked, control characters shown as U+FFFD. Linear. */
-function redactForEcho(line: string): string {
-  const text = line
-    .slice(0, BATCH_URL_MAX_LENGTH)
-    .replace(/\p{Cc}/gu, "\uFFFD");
-  const scheme = SCHEME_SLASHES.exec(text)?.[0] ?? "";
-  const rest = text.slice(scheme.length);
-  const authorityEnd = rest.search(/[/?#]/);
-  const authority = authorityEnd === -1 ? rest : rest.slice(0, authorityEnd);
-  const afterAuthority = authorityEnd === -1 ? "" : rest.slice(authorityEnd);
-  const at = authority.lastIndexOf("@");
-  const safeAuthority = at === -1 ? authority : `***${authority.slice(at)}`;
+/** Mask query values and fragment of an already userinfo-free string. */
+function maskQueryFragment(afterAuthority: string): string {
   const hash = afterAuthority.indexOf("#");
   const beforeHash =
     hash === -1 ? afterAuthority : afterAuthority.slice(0, hash);
@@ -113,7 +103,53 @@ function redactForEcho(line: string): string {
       })
       .join("&");
   }
-  return `${scheme}${safeAuthority}${safe}${hash === -1 ? "" : "#***"}`;
+  return `${safe}${hash === -1 ? "" : "#***"}`;
+}
+/** Candidate as readLine builds it. */
+function candidateOf(text: string): string {
+  return SCHEME_SLASHES.test(text) ||
+    BARE_SCHEME.test(text) ||
+    text.startsWith("/")
+    ? text
+    : `https://${text}`;
+}
+/**
+ * A line made safe to store. The WHATWG parser decides where the authority is (it reads any mix of `/` and `\` after the scheme),
+ * so when it finds userinfo the echo is rebuilt from its parts and nothing of the original authority is kept. When it throws, the
+ * fallback masks everything up to the last `@`, fullwidth or small `@`, or `%40` before the first `?` or `#`. Linear.
+ */
+function redactForEcho(line: string): string {
+  const text = line
+    .slice(0, BATCH_URL_MAX_LENGTH)
+    .replace(/\p{Cc}/gu, "\uFFFD");
+  // 1. the parser's own view: when it sees userinfo, rebuild from its parts, nothing of the original authority survives
+  try {
+    const u = new URL(candidateOf(line.trim()));
+    if (u.username !== "" || u.password !== "") {
+      return `${u.protocol}//***@${u.host}${u.pathname}${maskQueryFragment(`${u.search}${u.hash === "" ? "" : "#"}`)}`.slice(
+        0,
+        BATCH_URL_MAX_LENGTH
+      );
+    }
+  } catch {
+    /* fall through */
+  }
+  // 2. conservative fallback (parse failed, or the line was cut / has controls): cut at the first ? or #, then mask
+  //    everything up to the LAST at-sign (ASCII, fullwidth, small, percent-encoded) in that head, slashes or not.
+  const cut = text.search(/[?#]/);
+  const head = cut === -1 ? text : text.slice(0, cut);
+  const tail = cut === -1 ? "" : text.slice(cut);
+  let at = Math.max(
+    head.lastIndexOf("@"),
+    head.lastIndexOf("\uFF20"),
+    head.lastIndexOf("\uFE6B")
+  );
+  const pct = head.toLowerCase().lastIndexOf("%40");
+  if (pct > at) at = pct + 2;
+  // only a scheme that is one is kept: `token:secret@host` has a secret where a scheme would be
+  const scheme = /^(?:https?|ftp|wss?|file):/i.exec(head)?.[0] ?? "";
+  const safeHead = at === -1 ? head : `${scheme}***@${head.slice(at + 1)}`;
+  return `${safeHead}${maskQueryFragment(tail)}`;
 }
 
 /** One line as a URL, or the reason it is refused. */
@@ -124,10 +160,7 @@ function readLine(
   if (text.length > BATCH_URL_MAX_LENGTH) return { reason: "too-long" };
   if (CONTROL_CHARS.test(text)) return { reason: "control-char" };
   // A bare host (`example.com`, `localhost:3000`) is read as https; a scheme-less path or another scheme is not.
-  const candidate =
-    SCHEME_SLASHES.test(text) || BARE_SCHEME.test(text) || text.startsWith("/")
-      ? text
-      : `https://${text}`;
+  const candidate = candidateOf(text);
   let parsed: URL;
   try {
     parsed = new URL(candidate);
@@ -178,7 +211,8 @@ export function parseUrlsFile(
     if (end === -1) end = content.length;
     lineNumber++;
     // A line far past the cap is refused from its head alone: it is not copied, trimmed and scanned whole.
-    const huge = end - start > BATCH_URL_MAX_LENGTH * 2;
+    const lineLength = end - start;
+    const huge = lineLength > BATCH_URL_MAX_LENGTH * 2;
     const text = (
       huge
         ? content.slice(start, start + BATCH_URL_MAX_LENGTH + 1)
@@ -192,9 +226,13 @@ export function parseUrlsFile(
     if ("reason" in read) {
       rejectedCount++;
       if (rejected.length < maxRejected) {
+        // A line cut for length may have its `@` past the cut, so nothing of it is echoed but its size.
+        const cut = huge || text.length > BATCH_URL_MAX_LENGTH;
         rejected.push({
           line: lineNumber,
-          text: redactForEcho(text),
+          text: cut
+            ? `[line of ${huge ? lineLength : text.length}+ characters]`
+            : redactForEcho(text),
           reason: read.reason,
         });
       }
