@@ -6,7 +6,7 @@ import { parsePage } from "@squirrelscan/parser";
 
 import { detectBrandImpersonation, detectFakeAuthOverlay } from "../src/integrity/signals";
 import type { RuleContext } from "../src/types";
-import { OFF, run } from "./integrity-budget-fixture";
+import { OFF, REAL, run } from "./integrity-budget-fixture";
 
 const url = "https://example.com/";
 function context(body: string, head = ""): RuleContext {
@@ -183,4 +183,66 @@ test("an empty link href goes to the <base>; without a moved base it is the page
   const link = '<a href="">Sign in with Google</a>';
   expect(brand(link, '<base href="https://evil.example/">')).toBe("Google");
   expect(brand(link)).toBeNull();
+});
+
+// ── review round 2 on #1526: base resolution is linear, foreignObject, notes ───────────────────────────────────────────
+
+test("many full-viewport iframes with a password form and no <base>: the base is read once, not per iframe", async () => {
+  const frames = `<iframe src="/f" style="${GEOM}"></iframe>`.repeat(10_000);
+  const started = performance.now();
+  await run(`<form><input type="password"></form>${frames}`);
+  expect(performance.now() - started).toBeLessThan(3_000);
+}, 60_000);
+
+test("thousands of <base> elements inside one deeply nested svg are walked a bounded number of ancestors each", async () => {
+  const body = `<svg>${"<g>".repeat(4_000)}${'<base href="https://evil.example/">'.repeat(16_000)}${"</g>".repeat(4_000)}</svg><a href="/signin">Sign in with Google</a>`;
+  const started = performance.now();
+  await run(body);
+  expect(performance.now() - started).toBeLessThan(2_500);
+}, 60_000);
+
+test("a <base> inside <svg><foreignObject> is an HTML element and is honoured; one directly in svg is not", () => {
+  const link = '<a href="/signin">Sign in with Google</a>';
+  const evil = '<base href="https://evil.example/">';
+  expect(brand(`<svg><foreignObject>${evil}</foreignObject></svg>${link}`)).toBe("Google");
+  expect(brand(`<svg><g>${evil}</g></svg>${link}`)).toBeNull();
+  expect(brand(`<noscript><svg><foreignObject>${evil}</foreignObject></svg></noscript>${link}`)).toBeNull();
+});
+
+test("under a moved <base>, a local link whose text read is cut is counted: it ranks like an off-site link", async () => {
+  const body = `<a href="/go">${"<b>x</b>".repeat(6_000)}Sign in with Google</a>`;
+  const moved = await run(body, '<base href="https://evil.example/">');
+  expect(details(moved.checks, "brand-impersonation")).toMatchObject({ scanTruncated: true, controlsUnread: 1 });
+  // the same link without the base is the site's own and is not read
+  const own = await run(body);
+  expect(own.checks.some((c) => c.name === "brand-impersonation")).toBe(false);
+}, 60_000);
+
+test("hiddenCssTruncated: not on a page with no control, and the note names the cause", async () => {
+  const pad = `--p:${"a".repeat(300_000)};`;
+  const none = await run("<p>no controls here</p>", `<style>.h{${pad}display:none}</style>`);
+  expect(none.checks.some((c) => c.name === "brand-impersonation")).toBe(false);
+  const clean = await run('<a href="/about" aria-label="Sign in">Sign in</a>', `<style>.h{${pad}display:none}</style>`);
+  const note = clean.checks.find((c) => c.name === "brand-impersonation") as { message?: string; details?: Record<string, unknown> } | undefined;
+  expect(note?.details).toMatchObject({ hiddenCssTruncated: true });
+  expect(note?.message).toContain("a CSS rule too large to read may hide text in a sign-in label");
+  // a finding carries the detail as well
+  const hit = await run(REAL, `<style>.h{${pad}display:none}</style>`);
+  expect(details(hit.checks, "brand-impersonation")).toMatchObject({ brand: "Google", hiddenCssTruncated: true });
+}, 60_000);
+
+test("a password form with an empty action under a moved <base> posts to the page itself, not to the base host", () => {
+  const form = '<form method="post"><input type="password"><button>Sign in with Google</button></form>';
+  expect(brand(form, '<base href="https://evil.example/">')).toBeNull();
+  // an explicit relative action does follow the base
+  const relative = '<form method="post" action="/login"><input type="password"><button>Sign in with Google</button></form>';
+  expect(brand(relative, '<base href="https://evil.example/">')).toBe("Google");
+});
+
+test("the destinations named in a finding leave out a password form's own page: an empty action is not the base host", () => {
+  const body = '<form method="post"><input type="password"></form><a href="https://other.example/x">Sign in with Google</a>';
+  const hit = detectBrandImpersonation(context(body, '<base href="https://evil.example/">'));
+  expect(hit?.brand).toBe("Google");
+  expect(hit?.reason).toContain("other.example");
+  expect(hit?.reason).not.toContain("evil.example");
 });
