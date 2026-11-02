@@ -27,6 +27,8 @@ description: "Install squirrelscan and run your first audit"
   </Tab>
 </Tabs>
 
+The x64 binaries (macOS Intel, Linux and Windows) are built for the baseline x86-64 instruction set, so they run on CPUs without AVX. Apple Silicon and Linux arm64 have their own builds. Baseline builds can be slightly slower than an AVX-tuned one; that is the trade for running everywhere.
+
 This downloads the binary and links it into a directory on your PATH. With Homebrew, that happens on the first run, when the launcher runs the regular installer. See [How the installer sets up your PATH](#how-the-installer-sets-up-your-path) below.
 
 Run your first audit right away: it crawls the site, scores it and lists exact fixes.
