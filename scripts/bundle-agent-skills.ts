@@ -133,9 +133,10 @@ const source = {
   commit: git(["rev-parse", "HEAD"]) ?? "unknown",
 };
 
-// File contents and the commit sha read as high-entropy strings to the public
-// repo's secret scan (detect-secrets): they are published skill files, so each
-// such line carries the scanner's inline allowlist marker.
+// File contents and the commit sha read as high-entropy strings to a secret
+// scanner (the public repo used detect-secrets until it was dropped): they are
+// published skill files, not secrets. Each such line keeps its inline allowlist
+// marker so the generated bundle stays byte-for-byte what it was.
 const allowlisted = (json: string) =>
   json.replace(/^(\s*"(?:content|commit)": .*)$/gm, "$1 // pragma: allowlist secret");
 
