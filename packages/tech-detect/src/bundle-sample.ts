@@ -170,6 +170,8 @@ export interface BundleSampler {
    * and the search for hint hits run once however many times this is called.
    */
   sample(maxChars: number, windowsOnly: boolean): string;
+  /** First source character carried by the most recent non-empty sample. */
+  firstSourceChar(): number | null;
 }
 
 /**
@@ -182,7 +184,7 @@ export function createBundleSampler(
   headChars: number,
   scanChars: number = MAX_SCAN_CHARS,
 ): BundleSampler {
-  if (content.length <= headChars) return { sample: () => "" };
+  if (content.length <= headChars) return { sample: () => "", firstSourceChar: () => null };
   const limit = Math.min(content.length, MAX_SCAN_CHARS, Math.max(scanChars, headChars));
   const { skips } = scanJs(content.slice(0, limit));
   /** The string, regex literal or comment that holds `p` (`start < p <= end`), or null in code. */
@@ -239,7 +241,9 @@ export function createBundleSampler(
   /** Text in front of a segment that starts at a given offset, when it begins inside a long span. */
   const openers = new Map<number, string>();
 
-  const floor = Math.max(0, headChars - WINDOW_BEFORE);
+  // The head is sent beside the sample. A window may use up to WINDOW_BEFORE
+  // characters before its hint, but never backs into text the head already owns.
+  const floor = Math.max(0, headChars);
   // A lower-cased copy, only when a case-insensitive hint needs it and the indices still line up.
   // U+0130 (a dotted capital I, in Turkish locale tables) is the one character whose lower case is
   // longer than itself, and a single one in a body would shift every index: it becomes a plain `I`
@@ -352,9 +356,13 @@ export function createBundleSampler(
   // detector that needs a real call, such as a Firebase or Supabase config) gets its first few
   // windows before any derived hint's first: 200 derived literals would otherwise take the whole
   // budget before a declared hint's second window, and its first can be a lookalike.
+  let firstSampledChar: number | null = null;
   return {
     sample(maxChars, windowsOnly) {
-    if (maxChars <= 0) return "";
+    if (maxChars <= 0) {
+      firstSampledChar = null;
+      return "";
+    }
     const perHint = hintWindows();
     // The windows a windows-only call chose are kept by a later call: the tail only takes what is left.
     const baseBudget = maxChars - Math.min(TAIL_RESERVE_CHARS, Math.floor(maxChars / 4));
@@ -374,6 +382,7 @@ export function createBundleSampler(
     const merged = mergeSpans(chosen);
     if (windowsOnly) {
       heldWindowCost = mergedCost(merged);
+      firstSampledChar = merged[0]?.[0] ?? null;
       return merged.map(([start, end]) => (openers.get(start) ?? "") + content.slice(start, end)).join(SEGMENT_SEPARATOR);
     }
     let used = 0;
@@ -390,7 +399,9 @@ export function createBundleSampler(
         spans = mergeSpans([...merged, [cut.pos, content.length]]);
       }
     }
+    firstSampledChar = spans[0]?.[0] ?? null;
     return spans.map(([start, end]) => (openers.get(start) ?? "") + content.slice(start, end)).join(SEGMENT_SEPARATOR);
     },
+    firstSourceChar: () => firstSampledChar,
   };
 }
