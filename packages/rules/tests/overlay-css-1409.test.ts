@@ -6,7 +6,7 @@ import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { parsePage } from "@squirrelscan/parser";
 
 import { overlayGeometryFor, type Reading } from "../src/integrity/overlay-style";
-import { cssScanTruncated, hiddenSelectors } from "../src/integrity/overlay-style";
+import { cssScanTruncated, hiddenSelectors, nestingUsed } from "../src/integrity/overlay-style";
 import { detectFakeAuthOverlay } from "../src/integrity/signals";
 import type { RuleContext } from "../src/types";
 
@@ -279,5 +279,118 @@ describe("hostile CSS stays linear, at 5 MB and at 10 MiB", () => {
     const frames = Array.from({ length: 3_000 }, (_, i) => `<iframe data-i="x${i}y" srcdoc=""></iframe>`).join("");
     const ctx = context(rules, `${frames}${FRAME}`);
     expect(time(() => detectFakeAuthOverlay(ctx))).toBeLessThan(6_000);
+  });
+});
+
+describe("CSS nesting is bounded: no product of selectors, lengths or rules (#1409 review)", () => {
+  const time = (run: () => unknown): number => {
+    const started = performance.now();
+    run();
+    return performance.now() - started;
+  };
+  const probe = (css: string) => {
+    const { parsed } = page(css);
+    const doc = parsed.document!;
+    let elapsed = 0;
+    const ctx = context(css);
+    elapsed = time(() => detectFakeAuthOverlay(ctx));
+    return { elapsed, used: nestingUsed(ctx.parsed.document!), truncated: cssScanTruncated(ctx.parsed.document!), doc };
+  };
+  const parts = (prefix: string, n: number, withAmp = true): string =>
+    Array.from({ length: n }, (_, i) => `${withAmp ? "&" : ""}${prefix}${i}`).join(",");
+
+  test("20 comma-separated parts per level, 10 levels deep, every part using `&`: bounded counts, truncated", () => {
+    let css = `.c{${FIXED}}`;
+    for (let level = 10; level >= 1; level--) css = `${parts(`.k${level}_`, 20)}{${css}}`;
+    const r = probe(css);
+    expect(r.used.selectors).toBeLessThanOrEqual(20_000);
+    expect(r.used.rules).toBeLessThanOrEqual(10);
+    expect(r.truncated).toBe(true); // ten levels is past the depth bound of eight
+    expect(r.elapsed).toBeLessThan(3_000);
+  });
+
+  test("parents times children is capped at 64 parts each", () => {
+    // 200 parts against 200 `&` parts would be 40,000 selectors; at most 64 x 64 are produced, and the cut is reported
+    const css = `${parts(".p", 200, false)}{ ${parts(".q", 200)}{${FIXED}} }`;
+    const r = probe(css);
+    expect(r.used.selectors).toBeLessThanOrEqual(64 * 64);
+    expect(r.truncated).toBe(true);
+  });
+
+  test("the budget of produced selectors is shared by the whole sheet and reported when spent", () => {
+    // each rule produces 64 x 64 = 4,096 selectors: the 20,000 are spent in the fifth rule
+    const rule = `${parts(".p", 64, false)}{ ${parts(".q", 64)}{border:0} }`;
+    const r = probe(rule.repeat(40));
+    expect(r.used.selectors).toBe(20_000);
+    expect(r.truncated).toBe(true);
+  });
+
+  test("a child without `&` is produced once, however many parents there are", () => {
+    const r = probe(`${parts(".p", 64, false)}{ .x{border:0} .y{border:0} }`);
+    expect(r.used.selectors).toBe(2);
+    expect(r.truncated).toBe(false);
+  });
+
+  test("a run of `&` is not expanded: one part of 1 MB of `&`, and 1,000 `&` against a long parent", () => {
+    const huge = probe(`a{ ${"&".repeat(1_000_000)}{${FIXED}} }`);
+    expect(huge.used.selectors).toBe(0);
+    expect(huge.truncated).toBe(true);
+    expect(huge.elapsed).toBeLessThan(3_000);
+    const parent = `.${"p".repeat(2_000)}`;
+    const long = probe(`${parent}{ ${"&".repeat(1_000)}{${FIXED}} }`);
+    expect(long.used.selectors).toBe(0); // 1,000 x 2,000 characters would be 2 MB: dropped before it is built
+    expect(long.truncated).toBe(true);
+  });
+
+  test("a produced selector never grows from level to level", () => {
+    // `&&` doubles the parent's last compound at each level; the bound stops it long before 2^8 x 1,000
+    let css = `.c{${FIXED}}`;
+    for (let level = 8; level >= 1; level--) css = `${level === 1 ? `.${"z".repeat(1_000)}` : "&&"}{${css}}`;
+    const r = probe(css);
+    expect(r.elapsed).toBeLessThan(3_000);
+    expect(r.used.selectors).toBeLessThanOrEqual(8);
+    expect(r.truncated).toBe(true); // the doubling reaches the length bound and is reported
+  });
+
+  test("50,000 levels of nesting are scanned iteratively and reported truncated", () => {
+    const r = probe(`${"a{".repeat(50_000)}.c{${FIXED}}${"}".repeat(50_000)}`);
+    expect(r.truncated).toBe(true);
+    expect(r.used.rules).toBeLessThanOrEqual(8);
+    expect(r.elapsed).toBeLessThan(6_000);
+  });
+
+  test("nested rules are counted against a per-sheet cap and reported when it is reached", () => {
+    // two parents of 60,000 nested rules each (240 KB, under the body bound): 120,000 rules, 50,000 are read
+    const r = probe(`a{${".x{}".repeat(60_000)}} b{${".x{}".repeat(60_000)}}`);
+    expect(r.used.rules).toBe(50_000);
+    expect(r.truncated).toBe(true);
+    expect(r.elapsed).toBeLessThan(6_000);
+  });
+
+  test("the rule cap holds on its own: nested rules that produce no selector are counted too", () => {
+    const r = probe(`a{${">{}".repeat(80_000)}}`); // 240 KB of nested rules with no compound to read
+    expect(r.used).toEqual({ rules: 50_000, selectors: 0 });
+    expect(r.truncated).toBe(true);
+  });
+
+  test("a style rule whose body is past the bound and holds nested rules is reported, not skipped in silence", () => {
+    const padded = `main{${"/*pad*/".repeat(60_000)} .c{${FIXED}} }`; // 360 KB body with a nested iframe rule
+    expect(padded.length).toBeGreaterThan(262_144);
+    const r = probe(padded);
+    expect(r.truncated).toBe(true);
+    // a large body with no nested rule is skipped without a signal, as before (it cannot match an iframe)
+    expect(probe(`main{${"/*pad*/".repeat(60_000)}color:red}`).truncated).toBe(false);
+  });
+
+  test("a nested rule whose own selector or body is past the bounds is reported", () => {
+    const longSelector = `.${"s".repeat(300_000)}`;
+    expect(probe(`main{ ${longSelector}{${FIXED}} }`).truncated).toBe(true);
+    expect(probe(`main{ .c{${"/*pad*/".repeat(60_000)}${FIXED}} }`).truncated).toBe(true);
+  });
+
+  test("a page with no nested rule spends none of the budget and is not reported truncated", () => {
+    const r = probe(`.c{${FIXED}} @media all{.d{border:0}}`);
+    expect(r.used).toEqual({ rules: 0, selectors: 0 });
+    expect(r.truncated).toBe(false);
   });
 });

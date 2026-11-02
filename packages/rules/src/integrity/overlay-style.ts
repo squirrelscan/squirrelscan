@@ -488,15 +488,72 @@ function parseFrameSelectorList(selector: string): { selectors: ParsedSelector[]
   return { selectors: out, oversized };
 }
 
-/** A nested rule's selector list in the context of its parent's: `&` is the parent, no `&` is a descendant of it. */
-function nestSelector(parent: string, child: string): string {
-  const parents = splitTopLevel(parent, ",").slice(0, 8);
-  const children = splitTopLevel(child, ",").slice(0, 8);
-  const out: string[] = [];
-  for (const p of parents) {
-    for (const c of children) out.push(c.includes("&") ? c.replaceAll("&", p.trim()) : `${p.trim()} ${c.trim()}`);
+/** Parts of a parent's or a child's selector list that are combined (the rest is not read and the CSS is reported truncated). */
+const MAX_NEST_PARTS = 64;
+/** Nested rules read per sheet, and selectors produced for them: past either the rest is not read and the CSS is reported truncated. */
+const MAX_NESTED_RULES = 50_000;
+const MAX_NESTED_SELECTORS = 20_000;
+
+/** What nesting has used of a sheet's budget (also read by the tests, which assert the counts, not the clock). */
+interface NestBudget {
+  rules: number;
+  selectors: number;
+}
+
+const countChar = (text: string, char: string): number => {
+  let n = 0;
+  for (let i = text.indexOf(char); i !== -1; i = text.indexOf(char, i + 1)) n++;
+  return n;
+};
+
+/**
+ * A nested rule's selector list in the context of its parent's. Only the last compound of a selector is ever read (see
+ * {@link subjectCompound}), so a child without `&` in it is itself, whatever its parent was, and `&` is the parent's own
+ * last compound, never its whole text: nothing is multiplied by the depth. What remains, a child with `&` against each parent
+ * part, is bounded three ways: at most {@link MAX_NEST_PARTS} parts of each list, no produced part longer than
+ * {@link MAX_SELECTOR_CHARS} (its length is worked out before it is built, so a run of `&` is not expanded), and a shared
+ * budget of produced selectors. Whatever one of those drops makes `cut` true: the caller reports the CSS truncated.
+ */
+function nestSelector(parent: string, child: string, budget: NestBudget): { selector: string; cut: boolean } {
+  let cut = false;
+  const parentParts = splitTopLevel(parent, ",");
+  const childParts = splitTopLevel(child, ",");
+  if (parentParts.length > MAX_NEST_PARTS || childParts.length > MAX_NEST_PARTS) cut = true;
+  const parents: string[] = [];
+  for (const part of parentParts.slice(0, MAX_NEST_PARTS)) {
+    const subject = subjectCompound(part.trim());
+    if (subject) parents.push(subject);
   }
-  return out.join(",");
+  const out: string[] = [];
+  const emit = (text: string): void => {
+    if (budget.selectors <= 0) {
+      cut = true;
+      return;
+    }
+    budget.selectors--;
+    out.push(text);
+  };
+  for (const part of childParts.slice(0, MAX_NEST_PARTS)) {
+    if (part.length > MAX_SELECTOR_CHARS + 64) {
+      cut = true;
+      continue;
+    }
+    const subject = subjectCompound(part.trim());
+    if (!subject) continue;
+    const amps = countChar(subject, "&");
+    if (amps === 0) {
+      emit(subject);
+      continue;
+    }
+    for (const parentSubject of parents) {
+      if (subject.length + amps * Math.max(parentSubject.length - 1, 0) > MAX_SELECTOR_CHARS) {
+        cut = true;
+        continue;
+      }
+      emit(subject.replaceAll("&", parentSubject));
+    }
+  }
+  return { selector: out.join(","), cut };
 }
 
 /** The index key (`.c`, `#i`, `iframe`, or `*` for attributes alone) of a selector when every token could match an iframe on the page. */
@@ -505,6 +562,12 @@ function ruleKey(selector: ParsedSelector, wanted: Wanted): string | undefined {
   if (!selector.ids.every((i) => wanted.ids.has(i))) return undefined;
   const first = selector.classes[0] ? `.${selector.classes[0]}` : selector.ids[0] ? `#${selector.ids[0]}` : undefined;
   return first ?? (selector.tag ? "iframe" : "*");
+}
+
+/** Whether the body between `open` and `close` holds a block of its own (CSS nesting): an unread body could then hold a rule for an iframe. */
+function hasNestedBlock(css: string, open: number, close: number): boolean {
+  const at = css.indexOf("{", open + 1);
+  return at !== -1 && at < close;
 }
 
 /** The `}` that closes the rule whose `{` is at `open`, or -1 (see {@link walk}). */
@@ -559,7 +622,7 @@ export function scanCss(
   css: string,
   onRule: (selector: string, body: string) => void,
   reading: Reading = "tokens",
-  onOversized?: (selector: string, reason: "prelude" | "body") => void,
+  onOversized?: (selector: string, reason: "prelude" | "body", nested?: boolean) => void,
   atRules = false,
 ): void {
   if (reading === "tokens") return scanCssTokens(css, onRule, onOversized, atRules);
@@ -615,7 +678,7 @@ export function scanCss(
     // A rule whose selector or body is past the bounds is not read, and the caller is told which selector, so a rule that could
     // be an overlay's is reported rather than skipped in silence; the rest of the sheet is still read.
     if (open - i > MAX_PRELUDE_CHARS) onOversized?.("", "prelude");
-    else if (close - open - 1 > MAX_BODY_CHARS) onOversized?.(css.slice(i, open).trim().toLowerCase(), "body");
+    else if (close - open - 1 > MAX_BODY_CHARS) onOversized?.(css.slice(i, open).trim().toLowerCase(), "body", hasNestedBlock(css, open, close));
     else onRule(css.slice(i, open).trim().toLowerCase(), css.slice(open + 1, close));
     i = close + 1;
   }
@@ -630,7 +693,7 @@ export function scanCss(
 function scanCssTokens(
   source: string,
   onRule: (selector: string, body: string) => void,
-  onOversized?: (selector: string, reason: "prelude" | "body") => void,
+  onOversized?: (selector: string, reason: "prelude" | "body", nested?: boolean) => void,
   atRules = false,
 ): void {
   const css = preprocess(source);
@@ -688,7 +751,7 @@ function scanCssTokens(
     // A rule whose selector or body is past the bounds is not read, and the caller is told which selector (see the plain scan).
     if (ch !== "@") {
       if (open - i > MAX_PRELUDE_CHARS) onOversized?.("", "prelude");
-      else if (close - open - 1 > MAX_BODY_CHARS) onOversized?.(selector.trim().toLowerCase(), "body");
+      else if (close - open - 1 > MAX_BODY_CHARS) onOversized?.(selector.trim().toLowerCase(), "body", hasNestedBlock(css, open, close));
       else onRule(selector.trim().toLowerCase(), css.slice(open + 1, close));
     }
     i = close + 1;
@@ -699,6 +762,8 @@ interface Sheet {
   byKey: Map<string, Rule[]>;
   /** Attribute names any kept selector tests: the frame's values of them are part of its memo key. */
   attrNames: Set<string>;
+  /** Nested rules read and selectors produced for them (see {@link nestSelector}). */
+  nest: NestBudget;
   /** Per-frame layers already worked out, by id and classes (pages repeat them). */
   memo: Map<string, Declaration[][]>;
   /** The stylesheet text was longer than {@link MAX_CSS_CHARS}: the rest was not read. */
@@ -716,6 +781,7 @@ function sheetFor(doc: Document, wanted: Wanted, reading: Reading): Sheet {
   if (cached) return cached;
   const byKey = new Map<string, Rule[]>();
   const attrNames = new Set<string>();
+  const nest: NestBudget = { rules: 0, selectors: MAX_NESTED_SELECTORS };
   let chars = 0;
   let truncated = false;
   const position = { next: 0 };
@@ -738,7 +804,25 @@ function sheetFor(doc: Document, wanted: Wanted, reading: Reading): Sheet {
       if (body.includes("{")) {
         if (depth >= MAX_NESTING_DEPTH) cut.dropped = true;
         else
-          scanCss(body, (inner, innerBody) => addRule(nestSelector(selector, inner), innerBody, depth + 1), reading, undefined, true);
+          scanCss(
+            body,
+            (inner, innerBody) => {
+              if (nest.rules >= MAX_NESTED_RULES) {
+                cut.dropped = true;
+                return;
+              }
+              nest.rules++;
+              const nested = nestSelector(selector, inner, nest);
+              if (nested.cut) cut.dropped = true;
+              addRule(nested.selector, innerBody, depth + 1);
+            },
+            reading,
+            () => {
+              // A nested rule past the bounds is not read; it could be for an iframe.
+              if (wanted.frames > 0) cut.dropped = true;
+            },
+            true,
+          );
       }
       const keys = new Set<string>();
       for (const parsed of selectors) {
@@ -762,7 +846,7 @@ function sheetFor(doc: Document, wanted: Wanted, reading: Reading): Sheet {
         byKey.set(key, list);
       }
     };
-    scanCss(css, (selector, body) => addRule(selector, body, 0), reading, (selector, reason) => {
+    scanCss(css, (selector, body) => addRule(selector, body, 0), reading, (selector, reason, nested) => {
       // A rule past the bounds is not read: say so when it could be an overlay's. A selector list past the bound could match any
       // iframe; a body past it matters when one of its selectors matches an iframe on the page.
       if (reason === "prelude") {
@@ -770,10 +854,11 @@ function sheetFor(doc: Document, wanted: Wanted, reading: Reading): Sheet {
         return;
       }
       const { selectors, oversized } = parseFrameSelectorList(selector);
-      if ((oversized && wanted.frames > 0) || selectors.some((parsed) => ruleKey(parsed, wanted))) cut.dropped = true;
+      // A body past the bound that holds nested rules is unread whatever its own selector is: a nested rule could be an iframe's.
+      if ((nested && wanted.frames > 0) || (oversized && wanted.frames > 0) || selectors.some((parsed) => ruleKey(parsed, wanted))) cut.dropped = true;
     }, true);
   }
-  const sheet: Sheet = { byKey, attrNames, memo: new Map(), truncated: truncated || cut.dropped, work: SHEET_WORK_BUDGET };
+  const sheet: Sheet = { byKey, attrNames, nest, memo: new Map(), truncated: truncated || cut.dropped, work: SHEET_WORK_BUDGET };
   byReading[reading] = sheet;
   return sheet;
 }
@@ -1054,6 +1139,12 @@ export function overlayGeometryFor(doc: Document, frame: Element, reading: Readi
     fillsViewport: (fillsAxis(width, "width") && fillsAxis(height, "height")) || stretched,
     pinned: zero("top") || zero("left"),
   };
+}
+
+/** What nesting used of the sheet's budget under one reading: nested rules read and selectors produced (for tests that assert the bounds). */
+export function nestingUsed(doc: Document, reading: Reading = "tokens"): { rules: number; selectors: number } {
+  const { rules, selectors } = sheetFor(doc, wantedFor(doc), reading).nest;
+  return { rules, selectors: MAX_NESTED_SELECTORS - selectors };
 }
 
 /** Whether the page's CSS was longer than the amount read (the overlay rule may be in the part that was not). */
