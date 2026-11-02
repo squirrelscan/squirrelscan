@@ -19,7 +19,7 @@ squirrel decides whether robots.txt blocks a URL the way Google does: it reads t
 - `redundant-noindex` reports info for pages that are both blocked and carry `noindex`, from the meta tag or the header. Message: `{count} page(s) blocked in robots.txt also have noindex`, with `noindex won't be seen if page is blocked from crawling` as the value. The pages are listed on the check. It is an info check, not a finding: it appears in the JSON report's `infoChecks` and, with `--include-info`, the LLM report's `<info-checks>`, never in `issues`, and does not change the score.
 - `robots-conflict` passes. Message: `No robots meta/robots.txt conflicts detected`.
 
-The `robots-conflict` check always passes in the current implementation: its warn branch is never reached, so the only finding this rule produces is the informational one. Severity for the rule is warning, weight 5.
+The `robots-conflict` check always passes in the current implementation: its warn branch is never reached, so the only thing this rule can report is the informational check. Severity for the rule is warning, weight 5.
 
 A page robots.txt allows that carries `noindex` is not reported by this rule: that is the supported way to keep a page out of search results. ([crawl/all-noindex-pages](/rules/crawl/all-noindex-pages) still counts noindex pages across the site.)
 
