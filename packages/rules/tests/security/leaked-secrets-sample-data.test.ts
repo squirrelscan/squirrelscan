@@ -60,6 +60,7 @@ describe("values that name something other than a credential (#1292)", () => {
     } as unknown as RuleContext).checks;
     const partial = checks.find((c) => c.name === "leaked-secrets-partial");
     expect(partial?.status).toBe("info");
+    expect(partial?.message).toContain("under a password or secret key end in an ellipsis");
     expect(partial?.items).toHaveLength(1);
     expect(partial?.items?.[0]?.id).toContain("Partial Secret Value Visible (elided)");
     expect(partial?.items?.[0]?.id).not.toContain("Xk9!" + "mQ2v"); // masked

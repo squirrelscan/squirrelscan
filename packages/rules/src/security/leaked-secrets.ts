@@ -1899,8 +1899,8 @@ function isUrlWithoutCredential(body: string): boolean {
   return true;
 }
 
-// `secret1…` (a bech32 string), a `0x` EVM address, an env-var reference,
-// an elided value and a mask are all labels, addresses or placeholders.
+// An env-var reference (`process.env.NAME`, `${NAME}`) and a mask of bullets, `*`, `.`, `_`, `-` or spaces are placeholders, not values:
+// `isImplausibleSecretValue` drops them. A short value that ends in an ellipsis is not dropped: see `isElidedValue`.
 const ENV_REFERENCE_RE = /^(?:(?:process|import\.meta)\.env\.[A-Za-z_]\w*|\$\{[A-Z][A-Z0-9_]{2,}\})$/;
 const MASK_RE = /^[•●·*.\s_-]*$/u;
 
@@ -4194,7 +4194,7 @@ export const leakedSecretsRule: Rule = {
       checks.push({
         name: "leaked-secrets-partial",
         status: "info",
-        message: `${partialValues.length} value(s) under a credential name end in an ellipsis (the visible start of a secret, or a placeholder: check the full value)`,
+        message: `${partialValues.length} value(s) under a password or secret key end in an ellipsis (the visible start of a secret, or a placeholder: check the full value)`,
         items: partialValues.map(item),
       });
     }
