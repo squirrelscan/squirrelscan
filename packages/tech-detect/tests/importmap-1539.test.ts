@@ -211,6 +211,27 @@ describe("hostile pages (5 MB), counted not timed", () => {
   });
 });
 
+describe("scopes, templates and entries the page never imports", () => {
+  const url = HOSTS[0]!;
+  test("a map with only a scopes table counts: scoped mappings are real", () => {
+    expect(ids(page(`<script type="importmap">${JSON.stringify({ scopes: { "/a/": { three: url } } })}</script>`))).toContain("threejs");
+  });
+
+  test("a map entry the page never imports still counts (evidence, not proof)", () => {
+    expect(ids(page(importmap({ three: url }), "<p>no module script here</p>"))).toContain("threejs");
+  });
+
+  test("a map inside a template is inert and is not read, nested templates included; the same map after the template is", () => {
+    const map = importmap({ three: url });
+    expect(ids(page(`<template>${map}</template>`))).not.toContain("threejs");
+    expect(ids(page(`<template><div><template>${map}</template>${map}</div></template>`))).not.toContain("threejs");
+    expect(ids(page(`<template><p>x</p></template>${map}`))).toContain("threejs");
+    expect(ids(page(`<template></template><template>${map}</template>`))).not.toContain("threejs");
+    expect(ids(page(`<TEMPLATE id=a>${map}</TEMPLATE>${map}`))).toContain("threejs");
+    expect(synthetic(page(`<template>${map}</template>`))).toBe(0);
+  });
+});
+
 describe("precision", () => {
   test("the word importmap in prose or a comment, JSON outside an importmap script, and a map of other vendors", () => {
     for (const html of [

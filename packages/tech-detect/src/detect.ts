@@ -332,6 +332,7 @@ export function pageMarkup(html: string): string {
   const scriptEnd = /<\/script/gi;
   let inlineText = 0;
   let importMapSkipped = 0;
+  let templateDepth = 0;
   let importMapUrlCount = 0;
   let importMapMarkup = 0;
   let pos = 0;
@@ -354,8 +355,14 @@ export function pageMarkup(html: string): string {
     const tag = html.slice(open, close + 1);
     pos = close + 1;
     const name = /^<(\/?)([a-zA-Z][a-zA-Z0-9-]*)/.exec(tag);
-    if (!name || name[1] === "/") continue;
+    if (!name) continue;
     const tagName = name[2]!.toLowerCase();
+    // Template content is inert: an import map in it never applies (#1539). Depth follows the tags as written.
+    if (tagName === "template") {
+      if (name[1] === "/") templateDepth = Math.max(0, templateDepth - 1);
+      else if (!tag.endsWith("/>")) templateDepth++;
+    }
+    if (name[1] === "/") continue;
     if (COLLECTED_TAGS.has(tagName) && collected.length < MAX_COLLECTED_TAGS) {
       const attrs = parseTagAttributes(tag.length > MAX_TAG_CHARS ? tag.slice(0, MAX_TAG_CHARS) : tag, wanted);
       if (attrs.size > 0) collected.push({ tag: tagName, attrs });
@@ -366,7 +373,7 @@ export function pageMarkup(html: string): string {
       parts.push(tag);
       const type = attributeValue(tag.slice(0, MAX_TAG_CHARS), "type")?.trim() ?? "";
       const length = end - pos;
-      if (length > 0 && /^importmap$/i.test(type.slice(0, 32))) {
+      if (length > 0 && templateDepth === 0 && /^importmap$/i.test(type.slice(0, 32))) {
         // The page loads these as modules: each is a script URL, for the URL patterns (as one tag in the markup) and for the
         // tag attribute detectors (as a collected script). The map itself stays out of the markup: it is data.
         if (length > IMPORTMAP_MAX_CHARS) importMapSkipped++;
