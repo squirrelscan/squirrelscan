@@ -76,11 +76,15 @@ describe("how a host is matched", () => {
       "HTTPS://ACCOUNTS.GOOGLE.COM/o/oauth2/v2/auth",
       "https://accounts.google.com:8443/o/oauth2/v2/auth",
       "//accounts.google.com/o/oauth2/v2/auth",
-      "https:\\accounts.google.com\o\oauth2",
+      String.raw`https:\\accounts.google.com\o\oauth2`, // two backslashes read as `//`, and a backslash in the path as a `/`
       "https://accounts.goo\tgle.com/o/oauth2",
     ]) {
       expect(google(href), href).toBeNull();
     }
+  });
+  test("a backslash form that names another host is judged by the host it names", () => {
+    expect(google(String.raw`https:\\credential-fixture.invalid\accounts.google.com`)).toBe("Google");
+    expect(google(String.raw`https:\\accounts.google.com@credential-fixture.invalid\x`)).toBe("Google");
   });
   test("the dot boundary: a host that only ends with a listed host's text is not it", () => {
     for (const href of ["https://evilaccounts.google.com/", "https://notaccounts.youtube.com/", "https://xmyaccount.google.com/"]) {
@@ -157,10 +161,20 @@ describe("Microsoft: only its sign-in hosts spare a sign-in control", () => {
       "https://shop.b2clogin.com/x/oauth2/authorizexyz",
       "https://b2clogin.com/oauth2/authorize",
       "https://shop.b2clogin.com.evil.example/oauth2/v2.0/authorize",
+      "https://shop.evil.b2clogin.com/shop.onmicrosoft.com/oauth2/v2.0/authorize", // the site's name as the first label, a deeper tenant
+      "https://shop.evil.ciamlogin.com/shop.onmicrosoft.com/oauth2/v2.0/authorize",
+      "https://shopxprod.b2clogin.com/shop.onmicrosoft.com/oauth2/v2.0/authorize", // the name and a suffix that is not hyphenated
       "https://shop.ciamlogin.com/shop.onmicrosoft.com/page",
     ]) {
       expect(microsoft(href), href).toBe("Microsoft");
     }
+  });
+  test("a tenant is matched against a site name of at least three letters, and the name is the registrable domain's", () => {
+    const authorize = (tenant: string) => `https://${tenant}.b2clogin.com/${tenant}.onmicrosoft.com/oauth2/v2.0/authorize`;
+    expect(brand("Sign in with Microsoft", authorize("abc"), "https://abc.com/")).toBeNull(); // three letters: matched
+    expect(brand("Sign in with Microsoft", authorize("ab"), "https://ab.com/")).toBe("Microsoft"); // two letters: never spared
+    expect(brand("Sign in with Microsoft", authorize("shop"), "https://www.shop.com/")).toBeNull(); // a sub-domain of the site
+    expect(brand("Sign in with Microsoft", authorize("www"), "https://www.shop.com/")).toBe("Microsoft");
   });
   test("forms, answers and other microsoft.com hosts are reported", () => {
     for (const href of [
