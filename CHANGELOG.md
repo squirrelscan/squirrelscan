@@ -19,7 +19,7 @@ How it works:
 
 ### Fixed
 
-- **Technology-detection bundle samples no longer repeat the tail of a script.** On a page with roughly 7 to 10 scripts near 40 KB plus a late bundle, the sampler could send each small script's whole head and then send part of that same text again as its tail, spending about a third of the 512 KB page budget on duplicates. Once a script has sampled windows or a tail, its head now stops before them; the page, audit and bundle caps still hold, and a loader in the late bundle remains detectable. (#1534)
+- **Technology-detection bundle samples no longer repeat text, and still fill the bundle's allowance.** On a page with roughly 7 to 10 scripts near 40 KB plus a late bundle, the sampler could send each small script's whole head and then send part of that same text again as its tail, spending about a third of the 512 KB page budget on duplicates. A script's source text is now sent once: its head, sampled windows and tail are separate stretches, the rest of the bundle's allowance goes on the text between them (from the front, counted in UTF-8 bytes), and stretches that touch are joined with no separator. A bundle over its cap is read up to the cap, a vendor call at the end of the first 16 KB is kept whole, and a loader in a late bundle remains detectable. The page, audit and bundle caps still hold. (#1534)
 
 ## v0.0.159 (2026-11-02)
 

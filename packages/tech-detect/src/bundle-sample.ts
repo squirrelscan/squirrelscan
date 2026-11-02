@@ -174,6 +174,19 @@ export interface BundleSampler {
   sample(maxChars: number, windowsOnly: boolean): string;
   /** First source character carried by the most recent non-empty sample. */
   firstSourceChar(): number | null;
+  /**
+   * The stretches of `content` the most recent sample is made of, in order: `content.slice(start, end)` with the
+   * text put in front of it (`opener`) when it begins inside a long string. A caller that sends more text than the
+   * sample can grow these toward each other, and join two that touch with no separator and no opener (#1534).
+   */
+  lastSpans(): SourceSpan[];
+}
+
+/** One stretch of a body that a sample carries. */
+export interface SourceSpan {
+  start: number;
+  end: number;
+  opener: string;
 }
 
 /**
@@ -186,7 +199,7 @@ export function createBundleSampler(
   headChars: number,
   scanChars: number = MAX_SCAN_CHARS,
 ): BundleSampler {
-  if (content.length <= headChars) return { sample: () => "", firstSourceChar: () => null };
+  if (content.length <= headChars) return { sample: () => "", firstSourceChar: () => null, lastSpans: () => [] };
   const limit = Math.min(content.length, MAX_SCAN_CHARS, Math.max(scanChars, headChars));
   const { skips } = scanJs(content.slice(0, limit));
   /** The string, regex literal or comment that holds `p` (`start < p <= end`), or null in code. */
@@ -373,11 +386,15 @@ export function createBundleSampler(
   // detector that needs a real call, such as a Firebase or Supabase config) gets its first few
   // windows before any derived hint's first: 200 derived literals would otherwise take the whole
   // budget before a declared hint's second window, and its first can be a lookalike.
-  let firstSampledChar: number | null = null;
+  let sampledSpans: SourceSpan[] = [];
+  const render = (spans: ReadonlyArray<[number, number]>): string => {
+    sampledSpans = spans.map(([start, end]) => ({ start, end, opener: openers.get(start) ?? "" }));
+    return sampledSpans.map((span) => span.opener + content.slice(span.start, span.end)).join(SEGMENT_SEPARATOR);
+  };
   return {
     sample(maxChars, windowsOnly) {
     if (maxChars <= 0) {
-      firstSampledChar = null;
+      sampledSpans = [];
       return "";
     }
     const perHint = hintWindows();
@@ -399,8 +416,7 @@ export function createBundleSampler(
     const merged = mergeSpans(chosen);
     if (windowsOnly) {
       heldWindowCost = mergedCost(merged);
-      firstSampledChar = merged[0]?.[0] ?? null;
-      return merged.map(([start, end]) => (openers.get(start) ?? "") + content.slice(start, end)).join(SEGMENT_SEPARATOR);
+      return render(merged);
     }
     let used = 0;
     for (const [start, end] of merged) used += end - start + SEGMENT_SEPARATOR.length + OPENER_SLACK;
@@ -416,9 +432,9 @@ export function createBundleSampler(
         spans = mergeSpans([...merged, [cut.pos, content.length]]);
       }
     }
-    firstSampledChar = spans[0]?.[0] ?? null;
-    return spans.map(([start, end]) => (openers.get(start) ?? "") + content.slice(start, end)).join(SEGMENT_SEPARATOR);
+    return render(spans);
     },
-    firstSourceChar: () => firstSampledChar,
+    firstSourceChar: () => sampledSpans[0]?.start ?? null,
+    lastSpans: () => sampledSpans,
   };
 }
