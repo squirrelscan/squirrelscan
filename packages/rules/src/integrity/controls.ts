@@ -403,6 +403,9 @@ export function readControlAttributes(el: Element): ControlAttributes {
 /** What `scanControls` spends the page's attribute work on: a mutable object so a test can lower the budgets. */
 export const attributeLimits = { shortlist: SHORTLIST_ATTRIBUTE_BUDGET, prepare: PREPARE_ATTRIBUTE_BUDGET };
 
+/** Counts a test reads: distinct `aria-labelledby` targets whose text was read (each once per page). */
+export const integrityCounters = { targetReads: 0 };
+
 export function shortlist(
   found: Element[],
   destinationOf: (el: Element) => string | null,
@@ -631,6 +634,7 @@ export function scanControls(doc: Document): ControlScan {
     if (known !== undefined) return known;
     const read = readChunks(target, SHORT_VISITS, ATTR_CHARS, hiddenBy);
     targetVisits += read.visits;
+    integrityCounters.targetReads++;
     const text = read.chunks
       .map((c) => c.text)
       .join("")
