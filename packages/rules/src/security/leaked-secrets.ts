@@ -1904,11 +1904,18 @@ function isUrlWithoutCredential(body: string): boolean {
 const ENV_REFERENCE_RE = /^(?:(?:process|import\.meta)\.env\.[A-Za-z_]\w*|\$\{[A-Z][A-Z0-9_]{2,}\})$/;
 const MASK_RE = /^[•●·*.\s_-]*$/u;
 
-/** `abcdefgh...`: a short stub with an ellipsis, not a long token cut off. */
+/**
+ * `abcdefgh...`: a short stub with an ellipsis. It may be the visible start of a real secret, so it is never dropped: the
+ * generic path reports it as a partial value at the informational tier (see `PARTIAL_VALUE_TYPE`). A value that is only a
+ * mask (`••••`, `...`) is still dropped, by `MASK_RE`.
+ */
 function isElidedValue(body: string): boolean {
   const stripped = body.endsWith("...") ? body.slice(0, -3) : body.endsWith("…") ? body.slice(0, -1) : undefined;
   return stripped !== undefined && stripped.length <= 12;
 }
+
+/** The type of a value that ends in an ellipsis: not known to be a secret, not known to be anything else. */
+const PARTIAL_VALUE_TYPE = "Partial Secret Value Visible (elided)";
 
 /** The captured span reads as code, not as a quoted value. */
 /** Longer than this a quoted value is not read as a code fragment: the clauses below can fire inside a long random password. */
@@ -1943,7 +1950,6 @@ export function isImplausibleSecretValue(body: string, patternName = ""): boolea
     isCssModuleClass(body) ||
     (!SCHEME_VALUE_PATTERNS.has(patternName) && isJoinedIdentifier(body)) ||
     ENV_REFERENCE_RE.test(body) ||
-    isElidedValue(body) ||
     MASK_RE.test(body) ||
     looksLikeCodeSpan(body)
   );
@@ -3625,9 +3631,10 @@ export function scanContent(
         if (isNotACredentialValue(body, name)) continue;
         // A password in sample data the page renders (a seed table, a puzzle
         // level, a generator's output) is data, not configuration.
+        // A sample is never dropped on that evidence alone: the structure cannot prove the value is not a working login, so
+        // the match is kept and labelled (see the demo-login branch below).
         if (name === "Generic Secret Assignment") {
           seedVerdict = seedDataVerdict(content, match.index, completeKeyOf(content, match.index, value), seedBudget);
-          if (seedVerdict === "skip") continue;
         }
         // WordPress's oEmbed nonce: `data-secret` on a wp-embedded-content
         // element, or a ten-character alphanumeric under `data-secret`.
@@ -3769,10 +3776,21 @@ export function scanContent(
         }
       }
 
-      if (seedVerdict === "demo-login") {
+      if (seedVerdict === "demo-login" || seedVerdict === "skip") {
         reportType = "Possible Demo Login (seed data table)";
         reportConfidence = "medium";
-        known = { hint: "a row of a table of same-shaped records with real-domain emails: may be a working demo login" };
+        known = {
+          hint:
+            seedVerdict === "demo-login"
+              ? "a row of a table of same-shaped records with real-domain emails: may be a working demo login"
+              : "sample data (reserved-domain emails or sample markers around it): usually not a working login, but the structure cannot prove it",
+        };
+      }
+      // A value that ends in an ellipsis is the visible start of something: reported, not dropped, at the informational tier.
+      if (generic && seedVerdict === undefined && isElidedValue(body)) {
+        reportType = PARTIAL_VALUE_TYPE;
+        reportConfidence = "info";
+        known = { hint: "the value ends in an ellipsis: it may be the visible start of a real secret, so check what the full value is and where it is built" };
       }
 
       // A token that only opens like the provider's: reviewable, at medium,
@@ -4072,9 +4090,12 @@ export const leakedSecretsRule: Rule = {
     // Public-by-design client keys are informational only — never leaks
     const publicKeys = uniqueSecrets.filter((s) => s.publicByDesign);
     // Expired tokens and session tokens: shown, never counted (#361)
-    const informational = uniqueSecrets.filter(
+    const informationalAll = uniqueSecrets.filter(
       (s) => !s.publicByDesign && s.confidence === "info"
     );
+    // A value cut short by an ellipsis is not an expired or session token: it has its own check.
+    const partialValues = informationalAll.filter((s) => s.type === PARTIAL_VALUE_TYPE);
+    const informational = informationalAll.filter((s) => s.type !== PARTIAL_VALUE_TYPE);
     const realSecrets = uniqueSecrets.filter(
       (s) => !s.publicByDesign && s.confidence !== "info"
     );
@@ -4144,6 +4165,15 @@ export const leakedSecretsRule: Rule = {
         status: "info",
         message: `${informational.length} expired, session-scoped or signature-bound token(s) found (informational, not counted as a leak)`,
         items: informational.map(item),
+      });
+    }
+
+    if (partialValues.length > 0) {
+      checks.push({
+        name: "leaked-secrets-partial",
+        status: "info",
+        message: `${partialValues.length} value(s) under a credential name end in an ellipsis (the visible start of a secret, or a placeholder: check the full value)`,
+        items: partialValues.map(item),
       });
     }
 
