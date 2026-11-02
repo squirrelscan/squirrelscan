@@ -32,7 +32,7 @@ import { buildInPageSectionSignal } from "./shared/inpage-section";
 import type { InPageSectionSignal } from "./shared/inpage-section";
 import { scanPageForMisspellings } from "./content/common-misspellings";
 import { RULE_TIME_BUDGET_MS, RuleTimeoutError, runWithinBudget } from "./rule-budget";
-import { scanPageForSecrets } from "./security/leaked-secrets";
+import { scanPageBounded } from "./security/leaked-secrets";
 import { extractContentSentences } from "./shared/content-in-script";
 import { hasJavaScriptDetections } from "@squirrelscan/utils/cdn";
 
@@ -47,6 +47,8 @@ export interface CollectedPageSignal {
   url: string;
   /** leaked-secrets: HTML + inline-script scan results, in the legacy scan order. */
   secrets: LeakedSecret[];
+  /** leaked-secrets: findings past the per-page cap that were not kept (#1554); absent when none. */
+  secretsOmitted?: number;
   /** total-byte-weight: summed inline `<style>` / inline `<script>` text lengths. */
   inlineCssLen: number;
   inlineJsLen: number;
@@ -220,9 +222,11 @@ export function buildCollectedPageSignal(input: {
     () => extractPageByteSignal(doc)
   );
 
+  const scanned = timed("security/leaked-secrets", { secrets: [] as LeakedSecret[], omitted: 0 }, () => scanPageBounded(doc, url));
   const signal: CollectedPageSignal = {
     url,
-    secrets: timed("security/leaked-secrets", [], () => scanPageForSecrets(doc, url)),
+    secrets: scanned.secrets,
+    ...(scanned.omitted > 0 ? { secretsOmitted: scanned.omitted } : {}),
     inlineCssLen: byteSignal.inlineCssLen,
     inlineJsLen: byteSignal.inlineJsLen,
     htmlBytes,
