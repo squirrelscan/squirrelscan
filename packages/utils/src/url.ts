@@ -7,7 +7,7 @@ import { isIP } from "node:net";
 
 // A cycle (non-public-host reads `isPrivateOrReservedHost` from here), safe
 // because neither module calls the other while it loads.
-import { isNonPublicHostname } from "./non-public-host";
+import { isNonPublicHostnameForPolicy } from "./non-public-host";
 
 // ============================================
 // URL Parsing (user input normalization)
@@ -256,7 +256,7 @@ export function isValidDomain(hostname: string): DomainValidationResult {
  * Parse user-entered URL and normalize
  * - Regular domains → https://
  * - Localhost, local IPs and local-only names (`myapp.test`, `box.local`,
- *   `nas.lan`: whatever `isNonPublicHostname` classifies as local) → http://
+ *   `nas.lan`, a special-use literal: whatever `isNonPublicHostnameForPolicy` classifies as local) → http://
  *   (pub#812: Valet and Herd serve `.test` sites over plain http)
  * - An explicit scheme is kept
  */
@@ -317,7 +317,7 @@ export function parseUserUrl(input: string): UrlParseResult {
     }
 
     const local =
-      isLocalhost(parsed.hostname) || isNonPublicHostname(normalizeIpHostname(parsed.hostname));
+      isLocalhost(parsed.hostname) || isNonPublicHostnameForPolicy(normalizeIpHostname(parsed.hostname));
 
     // Only normalize scheme when user didn't provide one
     if (!hasScheme) {

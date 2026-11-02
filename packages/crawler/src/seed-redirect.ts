@@ -11,7 +11,7 @@ import {
   MAX_SEED_REDIRECT_HOPS,
   redactUrl,
 } from "@squirrelscan/core-contracts/seed-redirect";
-import { isNonPublicUrl } from "@squirrelscan/utils/non-public-host";
+import { isPrivateNetworkUrl } from "@squirrelscan/utils/non-public-host";
 import {
   EgressRefusedError,
   type EgressPolicy,
@@ -85,7 +85,9 @@ export async function resolveStartRedirect(
   if (!start) return { kind: "none", originalUrl: url, finalUrl: url, chain: [] };
 
   const policy: EgressPolicy = {
-    allowPrivateNetwork: isNonPublicUrl(url),
+    // The narrow classifier: this is a grant, so a special-use literal the policy callers call non-public (NAT64, 6to4) is not allowed
+    // private-network egress by the start URL (#1560).
+    allowPrivateNetwork: isPrivateNetworkUrl(url),
     resolve: resolveHostAddresses,
     ...(options.pin === false ? { pin: false } : {}),
     // Not pinned (opted out, or an environment proxy carries the request): the

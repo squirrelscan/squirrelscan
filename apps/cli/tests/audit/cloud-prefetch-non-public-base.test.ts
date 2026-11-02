@@ -105,6 +105,12 @@ describe.each(seams)("%s", (_name, run) => {
     ["http://box.local/"],
     ["http://myapp.test/"],
     ["http://intranet/"],
+    // #1560: special-use literals no hosted service can reach, whatever they embed
+    ["http://[64:ff9b::a00:1]/"],
+    ["http://[2002:a00:1::]/"],
+    ["http://[2001:0:4136:e378:8000:63bf:80ff:fffe]/"],
+    ["http://[fec0::1]/"],
+    ["http://203.0.113.10/"],
   ])(
     "a %s base marks the host unreachable, whatever the pages say",
     async (baseUrl) => {
@@ -117,6 +123,18 @@ describe.each(seams)("%s", (_name, run) => {
   test("a public base leaves it false, so render runs exactly as before", async () => {
     const input = await run("https://example.com");
     expect(input.hostUnreachableByCloud).toBe(false);
+  });
+
+  test("a public literal base leaves it false", async () => {
+    for (const baseUrl of [
+      "https://93.184.216.34",
+      "https://[2606:4700::1111]/",
+    ]) {
+      expect([baseUrl, (await run(baseUrl)).hostUnreachableByCloud]).toEqual([
+        baseUrl,
+        false,
+      ]);
+    }
   });
 
   // The flag must be NARROW: it is the only thing about the request that a
