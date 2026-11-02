@@ -12,18 +12,19 @@ Cloud browser rendering fixes that: each page is loaded in a **real headless bro
 
 ## What still comes from your machine
 
-Only the rendering runs in the cloud. Your machine still talks to the audited site, so the site sees your IP address for these requests, and a site that blocks the cloud browser can still be reached from your machine. With `--render-mode all` (or `--render`) and with `auto`, your machine sends:
+Only the rendering of your pages runs in the cloud. Your machine still talks to the audited site, so the site sees your IP address for these requests, and a site that blocks the cloud browser can still be reached from your machine. With `--render-mode all` (or `--render`) and with `auto`, your machine sends:
 
-- **A plain request for each page, beside the render.** On a first visit, or with `--refresh`, the plain request runs at the same time as the render and is only used to fingerprint the page's source. On a later visit it goes first, as a conditional request, to decide whether the page changed and needs rendering again.
+- **A plain request for each page.** In `auto`, it goes first for every page, and only the pages that look like client-rendered shells are then rendered; if that render fails, the plain response is kept. In `all`, the plain request is a probe next to each render: on a first visit, or with `--refresh`, it runs at the same time as the render and is only used to fingerprint the page's source, and on a later visit it goes first, as a conditional request, to decide whether the page changed and needs rendering again. That concurrent and conditional probe is part of `all` only.
 - **A plain request for any page the cloud could not render.** If a render fails, times out, or the site blocks the cloud browser (a 401, 403, 429 or 503, or a bot-challenge page), the page is fetched from your machine instead of being left out.
 - **The start URL's reachability check and redirects, and the TLS certificate check** of the audited host.
 - **`robots.txt`, the sitemaps, and the `llms.txt`, well-known, agent-access and licensing files.**
 - **First-party scripts, and the stylesheets, images and PDFs** the asset checks measure.
 - **Internal link targets** the crawl did not fetch.
-- **External links**, apart from the ones the cloud's link checker answers: the cloud is asked first, and any link it does not answer, and every link to a private address, is requested from your machine.
-- **The soft-404 confirmation and the cloaking probes,** which request pages again.
+- **External links**, apart from the ones the cloud's link checker answers: the cloud is asked first, and any link it does not answer is requested from your machine. A link to a private address is never sent to the cloud: when you audit a public site it is refused and not requested at all (it is reported as unresolved, not broken), and when you audit a private site it is requested from your machine (link-local and cloud metadata addresses never are).
+- **The soft-404 confirmation,** which requests each flagged page once more (on by default, `[integrity.soft404_confirm]`), **and the cloaking probes,** which request a capped set of pages again with a Googlebot user agent (off unless you turn on `[integrity.cloaking_probe]`).
+- **Third-party scripts, stylesheets and fonts,** which are status-probed, HEAD first and with nothing stored, when the `reliability/broken-resources` rule is enabled. The same goes for URLs a sitemap lists on another site, which get a status check, and for redirect chains, which are followed hop by hop, including hops to other hosts.
 
-`--http` sends all of these, and every page, from your machine, and nothing runs in the cloud. Pages that `auto` does not render are plain requests from your machine too. A mode where the cloud makes every request to the site is not part of this release.
+`--http` sends every page request from your machine, and no page is rendered in the cloud. When you are signed in and the audit level has the cloud checks on (surface and full, not quick), the cloud checks still run: the link checker and technology detection, among others. Pages that `auto` does not render are plain requests from your machine too. A mode where the cloud makes every request to the site is not part of this release.
 
 ## When it runs
 
