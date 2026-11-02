@@ -3312,7 +3312,7 @@ export function selectFastPatterns(content: string): string[] {
 // ── How many findings one page keeps (#1554) ──────────────────────────────────
 //
 // Nothing used to bound this, and a page full of distinct secret-shaped values (a generated fixture, a data dump) kept
-// hundreds of MB, made a rule result of tens of MB and, past about 480K, threw at the merge. What already bounded the
+// hundreds of MB, made a rule result of tens of MB and, past about 638K, threw at the merge. What already bounded the
 // result downstream: the report clamps every check to `REPORT_LIMITS.maxItemsPerCheck` items (the rest become
 // `details.additional`) and the publish cap shrinks a report to 1 MiB, so a page's findings past that count were never
 // shown anywhere. The page cap is that same number, so the three caps agree: whatever the page keeps can be listed.
@@ -3331,57 +3331,150 @@ function severityTier(s: LeakedSecret): number {
   return s.confidence === "high" ? 1 : 2;
 }
 
-/** Collects findings up to a cap and counts the rest (see above). Below the cap it is a plain list in scan order. */
+/** Collects findings (see above). */
 export interface FindingSink {
   add(finding: LeakedSecret): void;
   /** Counts findings that were left out elsewhere (a nested scan's). */
   omit(count: number): void;
-  /** Findings seen and not kept. */
+  /** Distinct values seen and not kept. */
   omitted(): number;
   /** What was kept, in scan order. */
   result(): LeakedSecret[];
+  /** A sink of the same kind for a nested scan (a decoded blob). */
+  child(): FindingSink;
 }
 
+/** Every finding, in scan order, no cap and no dedupe: the contract of `scanContent` and `scanPageForSecrets`. */
+export function createListSink(): FindingSink {
+  const all: LeakedSecret[] = [];
+  return {
+    add: (finding) => void all.push(finding),
+    omit: () => undefined,
+    omitted: () => 0,
+    result: () => all,
+    child: createListSink,
+  };
+}
+
+/** What the site rule's dedupe by value keeps: public by design (2) over a shipped server secret (1) over the rest (0); the last of equals. */
+function precedence(s: LeakedSecret): number {
+  if (s.publicByDesign) return 2;
+  return isShippedServerSecret(s) ? 1 : 0;
+}
+
+/** A generic assignment: the site rule drops one whose quoted body is a public record's value. */
+const isGeneric = (s: LeakedSecret): boolean => !s.publicByDesign && s.type.startsWith("Generic ");
+
+/** A 53-bit hash of a string (two FNV-1a passes): distinct values are counted and remembered without holding the strings. */
+function hash53(text: string): number {
+  let h1 = 0x811c9dc5;
+  let h2 = 0x01000193 ^ text.length;
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 0x01000193);
+    h2 = Math.imul(h2 ^ c, 0x85ebca6b) + i;
+  }
+  return (h1 >>> 0) * 0x200000 + ((h2 >>> 0) & 0x1fffff);
+}
+
+interface Kept {
+  finding: LeakedSecret;
+  seq: number;
+  tier: number;
+  alive: boolean;
+}
+
+/**
+ * The bounded sink of one page or script. It applies the site rule's own dedupe by value (`precedence`) BEFORE counting
+ * toward the cap, so copies of one value, which the rule would merge anyway, neither fill the cap nor are counted as
+ * omitted: the cap and the omitted count are in distinct values. A generic assignment whose quoted body is a public
+ * record's value is dropped, as the rule drops it, so the cap cannot keep the generic one and evict the public one. Over the
+ * cap, a finding of a more serious tier replaces the most recent one of the least serious tier; everything not kept is
+ * counted once, by value.
+ */
 export function createFindingSink(cap: number = PAGE_FINDINGS_CAP): FindingSink {
-  const plain: LeakedSecret[] = [];
-  let tiers: Array<Array<{ finding: LeakedSecret; seq: number }>> | null = null;
+  const kept = new Map<string, Kept>();
+  const tiers: Kept[][] = [[], [], [], []];
+  const alive = [0, 0, 0, 0];
+  const omittedValues = new Set<number>();
+  const publicBodies = new Set<number>();
+  const genericsByBody = new Map<number, Kept[]>();
+  let external = 0;
   let seq = 0;
-  let omitted = 0;
+
+  const kill = (entry: Kept): void => {
+    entry.alive = false;
+    alive[entry.tier]!--;
+    kept.delete(entry.finding.value);
+  };
+  const insert = (finding: LeakedSecret, order: number): void => {
+    const tier = severityTier(finding);
+    const entry: Kept = { finding, seq: order, tier, alive: true };
+    tiers[tier]!.push(entry);
+    alive[tier]!++;
+    kept.set(finding.value, entry);
+    if (isGeneric(finding)) {
+      const body = hash53(quotedBodyOf(finding.value));
+      const list = genericsByBody.get(body);
+      if (list) list.push(entry);
+      else genericsByBody.set(body, [entry]);
+    }
+  };
+  const size = (): number => kept.size;
+
   return {
     add(finding) {
-      if (!tiers) {
-        if (plain.length < cap) {
-          plain.push(finding);
-          return;
+      if (finding.publicByDesign) {
+        const body = hash53(quotedBodyOf(finding.value));
+        publicBodies.add(body);
+        for (const generic of genericsByBody.get(body) ?? []) if (generic.alive) kill(generic);
+        genericsByBody.delete(body);
+      } else if (isGeneric(finding) && publicBodies.has(hash53(quotedBodyOf(finding.value)))) {
+        return; // the rule drops it: a public client key it re-reads
+      }
+      const prior = kept.get(finding.value);
+      if (prior) {
+        // the rule's dedupe by value: the higher precedence wins, the last of equals; it keeps the first place
+        if (precedence(finding) >= precedence(prior.finding)) {
+          kill(prior);
+          insert(finding, prior.seq);
         }
-        // The cap is reached: from here the tiers decide what stays. The list so far is moved into them, keeping its order.
-        tiers = [[], [], [], []];
-        for (const kept of plain) tiers[severityTier(kept)]!.push({ finding: kept, seq: seq++ });
-        plain.length = 0;
+        return;
+      }
+      const key = hash53(finding.value);
+      if (size() < cap) {
+        omittedValues.delete(key);
+        insert(finding, seq++);
+        return;
       }
       const tier = severityTier(finding);
       let worst = 3;
-      while (worst > 0 && tiers[worst]!.length === 0) worst--;
+      while (worst > 0 && alive[worst] === 0) worst--;
       if (tier < worst) {
-        tiers[worst]!.pop(); // the most recent finding of the least serious tier makes room
-        omitted++;
-        tiers[tier]!.push({ finding, seq: seq++ });
+        const list = tiers[worst]!;
+        let victim = list.pop();
+        while (victim && !victim.alive) victim = list.pop(); // the most recent kept one of the least serious tier makes room
+        if (victim) {
+          omittedValues.add(hash53(victim.finding.value));
+          kill(victim);
+        }
+        omittedValues.delete(key);
+        insert(finding, seq++);
       } else {
-        omitted++;
-        seq++;
+        omittedValues.add(key);
       }
     },
     omit(count) {
-      omitted += count;
+      external += count;
     },
-    omitted: () => omitted,
+    omitted: () => omittedValues.size + external,
     result() {
-      if (!tiers) return plain;
-      const all: Array<{ finding: LeakedSecret; seq: number }> = [];
-      for (const tier of tiers) for (const entry of tier) all.push(entry);
+      const all: Kept[] = [];
+      for (const list of tiers) for (const entry of list) if (entry.alive) all.push(entry);
       all.sort((a, b) => a.seq - b.seq);
       return all.map((entry) => entry.finding);
     },
+    child: () => createFindingSink(cap),
   };
 }
 
@@ -3392,7 +3485,7 @@ export function createFindingSink(cap: number = PAGE_FINDINGS_CAP): FindingSink 
  */
 const FORWARD_REACH = 1024;
 
-/** The findings of one body, at most {@link PAGE_FINDINGS_CAP} of them, and how many more there were. */
+/** The findings of one body: at most {@link PAGE_FINDINGS_CAP} distinct values, and how many more there were. */
 export function scanContentBounded(
   content: string,
   location: ReportedLocation,
@@ -3405,6 +3498,7 @@ export function scanContentBounded(
   return { secrets: sink.result(), omitted: sink.omitted() };
 }
 
+/** Every finding of one body, in scan order: no cap, no dedupe. The site rule reads {@link scanContentBounded}. */
 export function scanContent(
   content: string,
   location: ReportedLocation,
@@ -3412,7 +3506,9 @@ export function scanContent(
   depth = 0,
   source: { offsetBase?: number; scriptIndex?: number } = {}
 ): LeakedSecret[] {
-  return scanContentBounded(content, location, sourceUrl, depth, source).secrets;
+  const sink = createListSink();
+  scanInto(sink, content, location, sourceUrl, depth, source);
+  return sink.result();
 }
 
 function scanInto(
@@ -4050,7 +4146,7 @@ function scanInto(
   // levels deep, reported with a ` (base64)` location suffix.
   // A decoded blob is scanned into a sink of its own, so the cap holds for it too and what it left out is counted here.
   const scanBlob = (text: string, blobLocation: ReportedLocation, url: string | undefined, blobDepth: number): LeakedSecret[] => {
-    const inner = createFindingSink();
+    const inner = found.child();
     scanInto(inner, text, blobLocation, url, blobDepth, {});
     found.omit(inner.omitted());
     return inner.result();
@@ -4104,14 +4200,20 @@ function detachSecret(secret: LeakedSecret): LeakedSecret {
 }
 
 /**
- * One page's findings, at most {@link PAGE_FINDINGS_CAP} (the most serious first when there are more), and the number
- * left out. The page's document pass and each of its inline scripts share ONE cap.
+ * One page's findings, at most {@link PAGE_FINDINGS_CAP} distinct values (the most serious first when there are more), and
+ * the number of distinct values left out. The page's document pass and each of its inline scripts share ONE cap.
  */
 export function scanPageBounded(
   doc: NonNullable<ParsedPage["document"]>,
   pageUrl: string
 ): { secrets: LeakedSecret[]; omitted: number } {
   const sink = createFindingSink();
+  scanPageInto(sink, doc, pageUrl);
+  // The records are kept for the whole crawl until the site rule runs: they must not keep the scanned page alive (#1552).
+  return { secrets: sink.result().map(detachSecret), omitted: sink.omitted() };
+}
+
+function scanPageInto(sink: FindingSink, doc: NonNullable<ParsedPage["document"]>, pageUrl: string): void {
   const html = doc.toString();
   if (html) scanInto(sink, html, "html", pageUrl, 0, {});
   for (const [scriptIndex, script] of Array.from(doc.querySelectorAll("script")).entries()) {
@@ -4131,15 +4233,16 @@ export function scanPageBounded(
       });
     }
   }
-  // The records are kept for the whole crawl until the site rule runs: they must not keep the scanned page alive (#1552).
-  return { secrets: sink.result().map(detachSecret), omitted: sink.omitted() };
 }
 
+/** Every finding of a page, in scan order: no cap, no dedupe. The site rule and the collector read {@link scanPageBounded}. */
 export function scanPageForSecrets(
   doc: NonNullable<ParsedPage["document"]>,
   pageUrl: string
 ): LeakedSecret[] {
-  return scanPageBounded(doc, pageUrl).secrets;
+  const sink = createListSink();
+  scanPageInto(sink, doc, pageUrl);
+  return sink.result();
 }
 
 export const leakedSecretsRule: Rule = {
