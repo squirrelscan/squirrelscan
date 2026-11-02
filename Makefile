@@ -24,7 +24,7 @@ test:
 
 test-release-tooling:
 	@bash scripts/test-changelog-extraction.sh
-	@bun test scripts/release-version.test.ts
+	@bun test scripts/release-version.test.ts scripts/build-targets.test.ts
 
 check: format-check lint typecheck
 
@@ -39,6 +39,7 @@ build-all: ci
 		ext=""; target="$$platform"; \
 		if [ "$$platform" = "windows-x64" ]; then ext=".exe"; fi; \
 		case "$$platform" in \
+			darwin-x64) target="darwin-x64-baseline";; \
 			linux-x64) target="linux-x64-baseline";; \
 			linux-x64-musl) target="linux-x64-musl-baseline";; \
 			windows-x64) target="windows-x64-baseline";; \
