@@ -431,11 +431,17 @@ export function shortlist(
     let href: string | null = isLink ? read.href : null;
     if (!isLink) href = destinationOf(el);
     // No destination (a script-driven button with no form): nothing to judge, nothing to read.
-    if (href === null) continue;
+    // A link whose attributes were cut at the 64th may have its `href` past the cut: that is not "no destination", it is unread.
+    if (href === null) {
+      if (isLink && read.overlong) unexamined++;
+      continue;
+    }
     const normalised = urlText(href);
     // A plainly local destination is the page's own site only while no `<base href>` moves where relative URLs resolve.
     if (localIsOwn && (normalised === "" || PLAIN_LOCAL_HREF.test(normalised))) {
       if (cue || hasLogo(el)) first.push({ element: el, href, target: normalised, order, read });
+      // A cue attribute past the cut would have made it a candidate: counted, not skipped silently.
+      else if (read.overlong) unexamined++;
       continue;
     }
     // Off-site links are NOT promoted here (rank() reads them first once prepared): thousands of decoy links to other hosts must not fill the prepare cap ahead of a real control.
