@@ -71,6 +71,8 @@ export { SchemaCollection } from "./schema/collection";
 // Re-export extractor types and functions
 export * from "./extractors";
 
+export { parseNotices } from "./dom";
+
 // Parse HTML string into Document (single parse, reused by all extractors)
 export function parseDocument(html: string): ReturnType<typeof parseHTML>["document"] {
   const { document } = parseHTML(html);

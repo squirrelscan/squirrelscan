@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **One page with a huge `class` attribute no longer fails the whole audit.** A class attribute of about 640,000 tokens (a little over a megabyte, far under the page cap; duplicates count) made the HTML parse throw `RangeError: Maximum call stack size exceeded` in linkedom's `className` setter, and the audit failed with no report. The parse is contained where pages are parsed: the page is read again with that attribute cut to its first 20,000 tokens (everything after it reaches the rules), a page that still cannot be read is audited empty, and either way `crawl/html-size` warns `html-parse` on it. A page that parses the first time is untouched; a 10 MiB page with such an attribute parses in about 0.4 s. (#1557)
+
 ## v0.0.160 (2026-11-02)
 
 The integrity and secrets rules are harder to talk around and no longer break on hostile pages: `security/leaked-secrets` keeps a password in sample data or a value that ends in an ellipsis instead of dropping it, and its records no longer hold the page they came from; `integrity/brand-impersonation` and `integrity/fake-auth-overlay` read more look-alike spellings and more of the CSS that styles an overlay, stop sparing sign-in links that go to user content on a brand's domain, and are no longer abandoned on pages of tens of thousands of controls. Technology detection reads import maps, and its bundle samples no longer repeat text and fill their allowance (William's #1536, with our allowance fix on top). The `--max-duration` parse cap holds for cached pages, and the docs say that only rendering runs in the cloud.
