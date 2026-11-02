@@ -19,7 +19,7 @@ How it works:
 
 ### Fixed
 
-- **`integrity/fake-auth-overlay` reads more of the CSS that styles an overlay iframe.** Rules inside `@media`, `@supports`, `@layer`, `@container` and `@scope` blocks that can apply to a screen (a print-only or speech-only `@media` is skipped), rules nested in a style rule, descendant, child and sibling selectors (read for their last compound) and attribute selectors now count, and the cascade follows `!important`, then specificity, then source order: an id rule beats a class rule written later. Each of these let a fixed full-viewport cover through before. The hidden-text scan is unchanged. The scan stays linear: 5 MB and 10 MiB of hostile CSS are read in under a second. (#1409, refs #784)
+- **`integrity/fake-auth-overlay` reads more of the CSS that styles an overlay iframe.** Rules inside `@media`, `@supports`, `@layer`, `@container` and `@scope` blocks that can apply to a screen (a print-only or speech-only `@media` is skipped), rules nested in a style rule, descendant, child and sibling selectors (read for their last compound) and attribute selectors now count, and the cascade follows `!important`, then specificity, then source order: an id rule beats a class rule written later. Each of these let a fixed full-viewport cover through before. The hidden-text scan is unchanged. The scan stays linear: 5 MB and 10 MiB of hostile CSS are read in under a second, and nesting is bounded (depth 8, 64 parts per list, 2,048 characters per produced selector, 50,000 nested rules and 20,000 produced selectors per sheet); anything past a bound makes the CSS `cssTruncated`. (#1409, refs #784)
 
 ## v0.0.159 (2026-11-02)
 
