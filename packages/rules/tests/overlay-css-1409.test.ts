@@ -6,7 +6,7 @@ import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { parsePage } from "@squirrelscan/parser";
 
 import { overlayGeometryFor, type Reading } from "../src/integrity/overlay-style";
-import { cssScanTruncated, hiddenSelectors, nestingUsed } from "../src/integrity/overlay-style";
+import { cssScanTruncated, hiddenSelectors, isCover, nestingUsed } from "../src/integrity/overlay-style";
 import { detectFakeAuthOverlay } from "../src/integrity/signals";
 import type { RuleContext } from "../src/types";
 
@@ -184,10 +184,6 @@ describe("the cascade: !important, then specificity, then source order", () => {
     expect(fires(`.d{${STATIC}} .c{${FIXED}}`, frame)).toBe(true);
     expect(fires(`.c{${FIXED}} .d{${STATIC}}`, frame)).toBe(false);
   });
-  test("a pseudo-class counts as a class in the specificity, `:where()` as nothing", () => {
-    expect(fires(`.c{${FIXED}} iframe:hover{${STATIC}}`)).toBe(false);
-    expect(fires(`.c{${FIXED}} iframe:where(.x){${STATIC}}`)).toBe(true);
-  });
   test("a descendant selector counts every compound's specificity only for its last one", () => {
     // the ancestors are not read, so `main .c` is (0,1,0) like `.c`: the later one wins
     expect(fires(`main .c{${STATIC}} .c{${FIXED}}`)).toBe(true);
@@ -207,6 +203,142 @@ describe("the cascade: !important, then specificity, then source order", () => {
     const frames = '<iframe id="google-auth" class="c" data-k="2" srcdoc=""></iframe><iframe id="google-auth" class="c" data-k="1" srcdoc=""></iframe>';
     expect(fires(`.c{${FIXED}} .c[data-k="2"]{${STATIC}}`, frames)).toBe(true); // the data-k=1 frame stays fixed
     expect(fires(`.c{${FIXED}} .c[data-k]{${STATIC}}`, frames)).toBe(false);
+  });
+});
+
+describe("a rule whose applicability cannot be decided never disables a cover (#1409 review)", () => {
+  const STATIC = "position:static";
+  const COVER = `.c{${FIXED}}`;
+  test("a decoy that a browser would not apply, written after the cover, does not hide it", () => {
+    for (const decoy of [
+      `@media (max-width:1px){.c{${STATIC}}}`,
+      `@media (min-width:5000px){.c{${STATIC}}}`,
+      `@media not (display:grid){.c{${STATIC}}}`,
+      `@supports (display:foo){.c{z-index:1}}`,
+      `@supports not (position:fixed){.c{${STATIC}}}`,
+      `@scope (.nothing){.c{width:1px}}`,
+      `@container (min-width:99999px){.c{${STATIC}}}`,
+      `@layer a{.c{${STATIC}}}`, // a layered rule loses to the unlayered cover in a browser
+      `.nothing .c{${STATIC}}`,
+      `main > .c{${STATIC}}`,
+      `html.x iframe.c{z-index:1}`,
+      `.c:hover{${STATIC}}`,
+      `.c:not(.c){${STATIC}}`,
+      `.c:focus-within{width:1px}`,
+      `iframe:target{${STATIC}}`,
+      `#google-auth:not(.c){${STATIC}}`,
+      `@media (max-width:1px){#google-auth{${STATIC}}}`, // a higher specificity does not help it
+      `@media (max-width:1px){.c{${STATIC}!important}}`, // nor an !important one
+    ]) {
+      expect(fires(`${COVER}${decoy}`), decoy).toBe(true);
+    }
+  });
+  test("a nested rule inside a parent that need not match, and a parent with an ancestor part, is undecided too", () => {
+    expect(fires(`${COVER} .nothing{ .c{${STATIC}} }`)).toBe(true); // `.nothing .c`: an ancestor that is not evaluated
+    expect(fires(`${COVER} .nothing .c{ &{${STATIC}} }`)).toBe(true); // `&` is the parent's last compound, its ancestor dropped
+    expect(fires(`${COVER} .nothing{ & > .c{${STATIC}} }`)).toBe(true);
+    expect(fires(`${COVER} .c:hover{ &{${STATIC}} }`)).toBe(true);
+    expect(fires(`${COVER} .c{ &{${STATIC}} }`)).toBe(false); // an exact nested rule is decided
+  });
+  test("the same decoys written before the cover, and nested", () => {
+    expect(fires(`@media (max-width:1px){.c{${STATIC}}}${COVER}`)).toBe(true);
+    expect(fires(`.c{${FIXED}} main{ .c:hover{${STATIC}} }`)).toBe(true);
+    expect(fires(`.c{${FIXED}} @media (max-width:1px){ .c{ ${STATIC} } }`)).toBe(true);
+  });
+  test("a decoy that is decided (a screen, an exact selector) still disables it, as in a browser", () => {
+    expect(fires(`${COVER}@media screen{.c{${STATIC}}}`)).toBe(false);
+    expect(fires(`${COVER}@media all{.c{${STATIC}}}`)).toBe(false);
+    expect(fires(`${COVER}.c{${STATIC}}`)).toBe(false);
+    expect(fires(`${COVER}#google-auth{${STATIC}}`)).toBe(false);
+  });
+  test("a rule that cannot be evaluated can still enable a cover (a lone signal, as for any undecided rule)", () => {
+    for (const css of [
+      `.c:hover{${FIXED}}`,
+      `.modal-open .c{${FIXED}}`,
+      `body.noscroll iframe{${FIXED}}`,
+      `[data-state=closed] .c{${FIXED}}`,
+      `@media (min-width:5000px){.c{${FIXED}}}`,
+      `@supports (display:foo){.c{${FIXED}}}`,
+      `@layer a{.c{${FIXED}}}`,
+      `@container (min-width:1px){.c{${FIXED}}}`,
+    ]) {
+      expect(fires(css), css).toBe(true);
+    }
+  });
+  test("an undecided rule enabling the cover does not beat a decided rule that disables it", () => {
+    // the decided cascade alone has no cover, and the full one has the undecided rule applied: reported (either)
+    expect(fires(`.c{${STATIC}} @media (min-width:1px){.c{${FIXED}}}`)).toBe(true);
+    // with nothing undecided there is one cascade and it is the browser's
+    expect(fires(`.c{${FIXED}} .c{${STATIC}}`)).toBe(false);
+  });
+  test("a prelude past 2,048 characters is read as undecided, never skipped: its block is still read", () => {
+    for (const length of [2_060, 3_000, 100_000]) {
+      const prelude = `screen, ${"(min-width:1px),".repeat(Math.ceil(length / 16))} (x)`;
+      expect(fires(`@media ${prelude}{.c{${FIXED}}}`), `${length}`).toBe(true);
+      expect(fires(`${COVER}@media ${prelude}{.c{${STATIC}}}`), `${length} decoy`).toBe(true);
+    }
+  });
+  test("the three readings all apply the decided cascade", () => {
+    const { parsed } = page(`${COVER}@media (max-width:1px){.c{${STATIC}}}`);
+    const doc = parsed.document!;
+    const frame = doc.querySelector("iframe")!;
+    for (const reading of ["tokens", "naive", "plain"] as Reading[]) {
+      const g = overlayGeometryFor(doc, frame, reading, "decided");
+      expect(g.fixed && g.fillsViewport && g.pinned, reading).toBe(true);
+      const all = overlayGeometryFor(doc, frame, reading, "all");
+      expect(all.fixed, `${reading} all`).toBe(false); // the full cascade applies the decoy
+    }
+  });
+});
+
+describe("an open rule ends at the end of the text, and the order of a nested rule is a browser's (#1409 review)", () => {
+  // The cascade of the token reading alone (the plain reading does not see nesting, and a cover in any reading is reported).
+  const tokenCover = (css: string): boolean => {
+    const doc = page(css).parsed.document!;
+    const frame = doc.querySelector("iframe")!;
+    return isCover(overlayGeometryFor(doc, frame, "tokens"));
+  };
+  test("an unclosed rule, also inside an unclosed at-rule", () => {
+    for (const reading of ["tokens", "naive", "plain"] as Reading[]) {
+      const doc = page(`.c{${FIXED}`).parsed.document!;
+      expect(isCover(overlayGeometryFor(doc, doc.querySelector("iframe")!, reading)), reading).toBe(true);
+    }
+    expect(tokenCover(`@media all{.c{${FIXED}`)).toBe(true);
+    expect(tokenCover(`main{ .c{${FIXED}`)).toBe(true);
+    expect(fires(`.c{${FIXED}`)).toBe(true);
+    expect(fires(`@media all{.c{${FIXED}`)).toBe(true);
+    expect(fires(`@media all{.n{border:0} .c{${FIXED}`)).toBe(true);
+    expect(fires(`main{ .c{${FIXED}`)).toBe(true);
+  });
+  test("an unclosed rule that is not a cover is not one", () => {
+    expect(fires(`.c{position:static;z-index:1`)).toBe(false);
+  });
+  test("a nested rule comes after the declarations before it and before those after it", () => {
+    expect(tokenCover(`.c{ position:static; &{${FIXED}} }`)).toBe(true); // the nested rule is later than its parent's declarations
+    expect(tokenCover(`.c{ &{position:static} ${FIXED} }`)).toBe(true); // declarations after a nested rule come last
+    expect(tokenCover(`.c{ ${FIXED}; &{position:static} }`)).toBe(false); // the nested rule is last
+    expect(tokenCover(`.c{ ${FIXED}; &{border:0} z-index:1 }`)).toBe(false); // z-index:1 comes last
+    expect(tokenCover(`.c{ ${FIXED}; &{border:0} z-index:5000 }`)).toBe(true);
+  });
+  test("a nested block without `;` before the next declaration does not garble it", () => {
+    expect(fires(`.c{ &{border:0} position:fixed;inset:0;z-index:9999;width:100%;height:100% }`)).toBe(true);
+    // (`height:100% &{...}` is a nested rule with an invalid selector in a browser: the declaration is not one)
+    expect(tokenCover(`.c{ position:fixed;inset:0;z-index:9999;width:100%;height:100% &{border:0} }`)).toBe(false);
+    expect(fires(`.c{ position:fixed;inset:0;&{border:0} z-index:9999;width:100%;height:100% }`)).toBe(true);
+  });
+  test("`&` is the parent's last compound, in a compound or alone", () => {
+    const withP = '<iframe id="google-auth" class="p c" srcdoc=""></iframe>';
+    expect(fires(`.p{ &.c{${FIXED}} }`, withP)).toBe(true);
+    expect(fires(`.p{ &.c{${FIXED}} }`)).toBe(false); // the frame has no `p`
+    expect(fires(`.p{ .c&{${FIXED}} }`, withP)).toBe(true);
+    expect(fires(`.p{ &{${FIXED}} }`, withP)).toBe(true);
+    expect(fires(`.p{ &{${FIXED}} }`)).toBe(false);
+    expect(fires(`iframe{ &#google-auth{${FIXED}} }`)).toBe(true);
+    expect(fires(`main .p{ &.c{${FIXED}} }`, withP)).toBe(true); // the parent's ancestor is not evaluated
+  });
+  test("an attribute value is compared without case on both sides", () => {
+    expect(fires(`iframe[data-k=Vv]{${FIXED}}`, '<iframe id="google-auth" data-k="Vv" srcdoc=""></iframe>')).toBe(true);
+    expect(fires(`iframe[data-k=vv]{${FIXED}}`, '<iframe id="google-auth" data-k="VV" srcdoc=""></iframe>')).toBe(true);
   });
 });
 

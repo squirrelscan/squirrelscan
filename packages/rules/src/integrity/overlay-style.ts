@@ -68,6 +68,11 @@ interface ParsedSelector {
   attrs: AttrCondition[];
   /** `ids * 10000 + (classes, attributes, pseudo-classes) * 100 + tag`, each part capped at 99. */
   specificity: number;
+  /**
+   * Whether the selector applies to the iframe cannot be decided here: it has an ancestor part (`main .c`, `html.x iframe`)
+   * or a pseudo-class (`:hover`, `:not(.c)`), neither of which is evaluated.
+   */
+  unknown: boolean;
 }
 
 interface Rule {
@@ -75,6 +80,8 @@ interface Rule {
   declarations: Declaration[];
   /** Position in the stylesheet: later rules win. */
   order: number;
+  /** The rule sits in an at-rule whose condition cannot be decided here (`@media (min-width: 1px)`, `@supports`, `@layer`...). */
+  atUnknown: boolean;
 }
 
 /**
@@ -289,6 +296,7 @@ function parseSelectorList(selector: string): { selectors: ParsedSelector[]; ove
       ids: tokens.filter((t) => t[0] === "#").map((t) => t.slice(1)),
       attrs: [],
       specificity: 0,
+      unknown: false,
     });
   }
   return { selectors: out, oversized };
@@ -408,7 +416,7 @@ const cap99 = (n: number): number => Math.min(n, 99);
  * taken as matching (it still counts in the specificity; `:where()` counts nothing): the error is toward detection.
  */
 function parseCompound(text: string): ParsedSelector | undefined {
-  const out: ParsedSelector = { tag: false, classes: [], ids: [], attrs: [], specificity: 0 };
+  const out: ParsedSelector = { tag: false, classes: [], ids: [], attrs: [], specificity: 0, unknown: false };
   let i = 0;
   let classLike = 0;
   if (text[0] === "*") i = 1;
@@ -461,12 +469,16 @@ function parseCompound(text: string): ParsedSelector | undefined {
         }
         i = j + 1;
       }
+      out.unknown = true; // a pseudo-class is a condition on the element's state or surroundings: not evaluated
       if (name !== "where") classLike++;
     } else return undefined;
   }
   out.specificity = cap99(out.ids.length) * 10_000 + cap99(classLike) * 100 + (out.tag ? 1 : 0);
   return out;
 }
+
+/** Starts a part of a nested selector whose ancestors were dropped: the part is read, as one whose applicability is unknown. */
+const UNKNOWN_MARK = "\u0001";
 
 /**
  * The selectors of a rule's list that can match an iframe, each as its subject compound (see {@link subjectCompound}), and
@@ -480,10 +492,17 @@ function parseFrameSelectorList(selector: string): { selectors: ParsedSelector[]
       oversized = true;
       continue;
     }
-    const subject = subjectCompound(part.trim());
+    let raw = part.trim();
+    // A selector produced by nesting carries a mark when its ancestors were dropped (see nestSelector).
+    const marked = raw.startsWith(UNKNOWN_MARK);
+    if (marked) raw = raw.slice(1);
+    const subject = subjectCompound(raw);
     if (!subject) continue;
     const parsed = parseCompound(subject);
-    if (parsed) out.push(parsed);
+    if (!parsed) continue;
+    // An ancestor part is a condition on the page that is not evaluated.
+    if (marked || subject !== raw) parsed.unknown = true;
+    out.push(parsed);
   }
   return { selectors: out, oversized };
 }
@@ -519,10 +538,14 @@ function nestSelector(parent: string, child: string, budget: NestBudget): { sele
   const parentParts = splitTopLevel(parent, ",");
   const childParts = splitTopLevel(child, ",");
   if (parentParts.length > MAX_NEST_PARTS || childParts.length > MAX_NEST_PARTS) cut = true;
-  const parents: string[] = [];
+  const parents: Array<{ subject: string; unknown: boolean }> = [];
   for (const part of parentParts.slice(0, MAX_NEST_PARTS)) {
-    const subject = subjectCompound(part.trim());
-    if (subject) parents.push(subject);
+    let text = part.trim();
+    const marked = text.startsWith(UNKNOWN_MARK);
+    if (marked) text = text.slice(1);
+    const subject = subjectCompound(text);
+    // The parent's own ancestors and pseudo-classes are dropped with it: what is built from it is of unknown applicability.
+    if (subject) parents.push({ subject, unknown: marked || subject !== text || subject.includes(":") });
   }
   const out: string[] = [];
   const emit = (text: string): void => {
@@ -538,19 +561,21 @@ function nestSelector(parent: string, child: string, budget: NestBudget): { sele
       cut = true;
       continue;
     }
-    const subject = subjectCompound(part.trim());
+    const text = part.trim();
+    const subject = subjectCompound(text);
     if (!subject) continue;
     const amps = countChar(subject, "&");
     if (amps === 0) {
-      emit(subject);
+      // `child` inside `parent` is `parent child`: a descendant, so an ancestor condition that is not evaluated.
+      emit(UNKNOWN_MARK + subject);
       continue;
     }
-    for (const parentSubject of parents) {
-      if (subject.length + amps * Math.max(parentSubject.length - 1, 0) > MAX_SELECTOR_CHARS) {
+    for (const parent of parents) {
+      if (subject.length + amps * Math.max(parent.subject.length - 1, 0) > MAX_SELECTOR_CHARS) {
         cut = true;
         continue;
       }
-      emit(subject.replaceAll("&", parentSubject));
+      emit((parent.unknown || subject !== text ? UNKNOWN_MARK : "") + subject.replaceAll("&", parent.subject));
     }
   }
   return { selector: out.join(","), cut };
@@ -589,38 +614,84 @@ function findRuleEnd(css: string, open: number): number {
   return end;
 }
 
+/**
+ * The declarations of a style rule's body with its nested blocks (and the selectors in front of them) taken out: the text
+ * before the first nested block, and the text after it. Linear, one {@link walk}.
+ */
+function splitNestedDeclarations(body: string): { before: string; after: string } {
+  const text = preprocess(body);
+  let seen = false;
+  let before = "";
+  let current = "";
+  let segment = 0;
+  walk(
+    text,
+    0,
+    [],
+    (i, c, closers) => {
+      if (c === ";" && closers.length === 0 && segment >= 0) {
+        current += text.slice(segment, i + 1);
+        segment = i + 1;
+      } else if (c === "{" && closers.length === 1) {
+        // a nested block starts: what is in front of it back to the last `;` is its selector, not a declaration
+        if (!seen) {
+          seen = true;
+          before = current;
+          current = "";
+        }
+        segment = -1;
+      } else if (c === "}" && closers.length === 0 && segment < 0) {
+        segment = i + 1;
+      }
+      return false;
+    },
+    () => {},
+  );
+  if (segment >= 0) current += text.slice(segment);
+  return seen ? { before, after: current } : { before: current, after: "" };
+}
+
 /** At-rules whose block holds style rules that apply to the document (conditional group rules and `@layer`). */
 const GROUP_AT_RULES = new Set(["media", "supports", "layer", "container", "scope"]);
-/** Longest at-rule prelude looked at to decide whether to read its block: a longer one is skipped whole, as before. */
+/** Longest at-rule prelude whose conditions are read: a longer one is read as a condition that is not decided. */
 const MAX_AT_PRELUDE = 2_048;
 
 /**
- * Whether the block of the at-rule whose prelude is `prelude` (text from the `@` to the `{`) is read for rules. A group rule
- * is read unless it can never apply to a screen: a `@media` list whose every query is print-only, speech-only or `not all`.
- * Any other condition (`(min-width: 1px)`, `@supports not (...)`, `@container`) may hold on some viewport or browser, so it is
- * read: the error is toward detection.
+ * What the block of the at-rule whose prelude is `prelude` (text from the `@` to the `{`) is for. `descend`: its rules are read.
+ * A group rule is read unless it can never apply to a screen (a `@media` list whose every query is print-only, speech-only or
+ * `not all`). `known`: its condition is decided, true for a screen: `@media all`, `@media screen`, or none. Every other
+ * condition (`(max-width: 1px)`, `@supports`, `@container`, `@scope`, `@layer` precedence) is not evaluated, so its rules are
+ * of unknown applicability (see {@link Rule.atUnknown}). A prelude past {@link MAX_AT_PRELUDE} is read for its name only
+ * and is not decided either (its block is still read).
  */
-function atRuleDescends(prelude: string): boolean {
-  const text = (prelude.includes("\\") ? unescapeCss(prelude) : prelude).toLowerCase();
-  const match = /^@([\w-]+)/.exec(text);
-  if (!match || !GROUP_AT_RULES.has(match[1]!)) return false;
-  if (match[1] !== "media") return true;
-  return splitTopLevel(text.slice(match[0].length), ",").some((q) => {
+function atRuleKind(prelude: string): { descend: boolean; known: boolean } {
+  const head = prelude.length > 64 ? prelude.slice(0, 64) : prelude;
+  const name = /^@([\w-]+)/.exec((head.includes("\\") ? unescapeCss(head) : head).toLowerCase());
+  if (!name || !GROUP_AT_RULES.has(name[1]!)) return { descend: false, known: false };
+  if (name[1] !== "media") return { descend: true, known: false };
+  if (prelude.length > MAX_AT_PRELUDE) return { descend: true, known: false };
+  const text = (prelude.includes("\\") ? unescapeCss(prelude) : prelude).toLowerCase().slice(name[0].length);
+  let descend = false;
+  let known = false;
+  for (const q of splitTopLevel(text, ",")) {
     const query = q.trim();
-    return !(/^(?:only\s+)?(?:print|speech)(?![\w-])/.test(query) || /^not\s+all(?![\w-])/.test(query));
-  });
+    if (/^(?:only\s+)?(?:print|speech)(?![\w-])/.test(query) || /^not\s+all(?![\w-])/.test(query)) continue;
+    descend = true;
+    if (query === "" || /^(?:only\s+)?(?:all|screen)$/.test(query)) known = true;
+  }
+  return { descend, known };
 }
 
 /**
  * One pass over a stylesheet: comments and at-rules are skipped (except, with `atRules`, the blocks of the group rules in
- * {@link atRuleDescends}, whose rules are read as if written at the top level), every other `selector { body }` is
+ * {@link atRuleKind}, whose rules are read as if written at the top level), every other `selector { body }` is
  * handed to `onRule`. `indexOf` only searches forward from
  * the cursor and the cursor then moves past what it found, so the scan is linear however the text is
  * built (unterminated comments, runs of openers, no braces at all).
  */
 export function scanCss(
   css: string,
-  onRule: (selector: string, body: string) => void,
+  onRule: (selector: string, body: string, unknown: boolean) => void,
   reading: Reading = "tokens",
   onOversized?: (selector: string, reason: "prelude" | "body", nested?: boolean) => void,
   atRules = false,
@@ -628,8 +699,12 @@ export function scanCss(
   if (reading === "tokens") return scanCssTokens(css, onRule, onOversized, atRules);
   let i = 0;
   const n = css.length;
+  // The blocks of the group rules being read, each whether its condition is undecided; a `}` outside a rule closes the last.
+  const open: boolean[] = [];
+  let undecided = 0;
   while (i < n) {
     const ch = css[i]!;
+    if (ch === "}" && open.length > 0 && open.pop()) undecided--;
     if (ch === " " || ch === "\n" || ch === "\t" || ch === "\r" || ch === "}" || ch === ";") {
       i++;
       continue;
@@ -644,8 +719,11 @@ export function scanCss(
       if (atRules) {
         // A group rule's block is read in place: its rules are the next ones, and its closing `}` is skipped like any other.
         let stop = i + 1;
-        while (stop < n && stop - i <= MAX_AT_PRELUDE && css[stop] !== "{" && css[stop] !== ";") stop++;
-        if (css[stop] === "{" && atRuleDescends(css.slice(i, stop))) {
+        while (stop < n && stop - i <= MAX_PRELUDE_CHARS && css[stop] !== "{" && css[stop] !== ";") stop++;
+        const kind = css[stop] === "{" ? atRuleKind(css.slice(i, stop)) : undefined;
+        if (kind?.descend) {
+          open.push(!kind.known);
+          if (!kind.known) undecided++;
           i = stop + 1;
           continue;
         }
@@ -670,16 +748,17 @@ export function scanCss(
       i = j;
       continue;
     }
-    const open = css.indexOf("{", i);
-    if (open === -1) return;
-    // The `plain` and `naive` readings cut at the first `}` (the `tokens` reading has its own scan, see `scanCssTokens`).
-    const close = css.indexOf("}", open + 1);
-    if (close === -1) return;
+    const brace = css.indexOf("{", i);
+    if (brace === -1) return;
+    // The `plain` and `naive` readings cut at the first `}` (the `tokens` reading has its own scan, see `scanCssTokens`);
+    // a rule left open at the end of the text ends there, as a browser reads it.
+    const found = css.indexOf("}", brace + 1);
+    const close = found === -1 ? n : found;
     // A rule whose selector or body is past the bounds is not read, and the caller is told which selector, so a rule that could
     // be an overlay's is reported rather than skipped in silence; the rest of the sheet is still read.
-    if (open - i > MAX_PRELUDE_CHARS) onOversized?.("", "prelude");
-    else if (close - open - 1 > MAX_BODY_CHARS) onOversized?.(css.slice(i, open).trim().toLowerCase(), "body", hasNestedBlock(css, open, close));
-    else onRule(css.slice(i, open).trim().toLowerCase(), css.slice(open + 1, close));
+    if (brace - i > MAX_PRELUDE_CHARS) onOversized?.("", "prelude");
+    else if (close - brace - 1 > MAX_BODY_CHARS) onOversized?.(css.slice(i, brace).trim().toLowerCase(), "body", hasNestedBlock(css, brace, close));
+    else onRule(css.slice(i, brace).trim().toLowerCase(), css.slice(brace + 1, close), undecided > 0);
     i = close + 1;
   }
 }
@@ -692,15 +771,19 @@ export function scanCss(
  */
 function scanCssTokens(
   source: string,
-  onRule: (selector: string, body: string) => void,
+  onRule: (selector: string, body: string, unknown: boolean) => void,
   onOversized?: (selector: string, reason: "prelude" | "body", nested?: boolean) => void,
   atRules = false,
 ): void {
   const css = preprocess(source);
   const n = css.length;
   let i = 0;
+  // The blocks of the group rules being read, each whether its condition is undecided; a `}` outside a rule closes the last.
+  const blocks: boolean[] = [];
+  let undecided = 0;
   while (i < n) {
     const ch = css[i]!;
+    if (ch === "}" && blocks.length > 0 && blocks.pop()) undecided--;
     if (ch === " " || ch === "\n" || ch === "\t" || ch === "}" || ch === ";") {
       i++;
       continue;
@@ -742,17 +825,23 @@ function scanCssTokens(
     }
     selector += css.slice(from, open);
     // A group rule's block is read in place (no search for its end: the blocks nest, and the closing `}` is skipped below).
-    if (atRules && ch === "@" && selector.length <= MAX_AT_PRELUDE && atRuleDescends(selector)) {
-      i = open + 1;
-      continue;
+    if (atRules && ch === "@") {
+      const kind = atRuleKind(selector);
+      if (kind.descend) {
+        blocks.push(!kind.known);
+        if (!kind.known) undecided++;
+        i = open + 1;
+        continue;
+      }
     }
-    const close = findRuleEnd(css, open);
-    if (close === -1) return;
+    // A rule left open at the end of the text ends there, as a browser reads it.
+    const ended = findRuleEnd(css, open);
+    const close = ended === -1 ? n : ended;
     // A rule whose selector or body is past the bounds is not read, and the caller is told which selector (see the plain scan).
     if (ch !== "@") {
       if (open - i > MAX_PRELUDE_CHARS) onOversized?.("", "prelude");
       else if (close - open - 1 > MAX_BODY_CHARS) onOversized?.(selector.trim().toLowerCase(), "body", hasNestedBlock(css, open, close));
-      else onRule(selector.trim().toLowerCase(), css.slice(open + 1, close));
+      else onRule(selector.trim().toLowerCase(), css.slice(open + 1, close), undecided > 0);
     }
     i = close + 1;
   }
@@ -764,6 +853,8 @@ interface Sheet {
   attrNames: Set<string>;
   /** Nested rules read and selectors produced for them (see {@link nestSelector}). */
   nest: NestBudget;
+  /** A rule of the sheet is of unknown applicability (an undecided at-rule, an ancestor part or a pseudo-class). */
+  hasUnknown: boolean;
   /** Per-frame layers already worked out, by id and classes (pages repeat them). */
   memo: Map<string, Declaration[][]>;
   /** The stylesheet text was longer than {@link MAX_CSS_CHARS}: the rest was not read. */
@@ -782,6 +873,7 @@ function sheetFor(doc: Document, wanted: Wanted, reading: Reading): Sheet {
   const byKey = new Map<string, Rule[]>();
   const attrNames = new Set<string>();
   const nest: NestBudget = { rules: 0, selectors: MAX_NESTED_SELECTORS };
+  const hasUnknown = { value: false };
   let chars = 0;
   let truncated = false;
   const position = { next: 0 };
@@ -796,44 +888,20 @@ function sheetFor(doc: Document, wanted: Wanted, reading: Reading): Sheet {
     const css = text.length > room ? text.slice(0, room) : text;
     if (text.length > room) truncated = true;
     chars += css.length;
-    /** One rule, and the rules nested in its body (CSS nesting: `main { .c { ... } }`), to a bounded depth. */
-    const addRule = (selector: string, body: string, depth: number): void => {
-      const { selectors, oversized } = parseFrameSelectorList(selector);
-      // a selector longer than the bound is not read and could match any iframe on the page
-      if (oversized && wanted.frames > 0) cut.dropped = true;
-      if (body.includes("{")) {
-        if (depth >= MAX_NESTING_DEPTH) cut.dropped = true;
-        else
-          scanCss(
-            body,
-            (inner, innerBody) => {
-              if (nest.rules >= MAX_NESTED_RULES) {
-                cut.dropped = true;
-                return;
-              }
-              nest.rules++;
-              const nested = nestSelector(selector, inner, nest);
-              if (nested.cut) cut.dropped = true;
-              addRule(nested.selector, innerBody, depth + 1);
-            },
-            reading,
-            () => {
-              // A nested rule past the bounds is not read; it could be for an iframe.
-              if (wanted.frames > 0) cut.dropped = true;
-            },
-            true,
-          );
-      }
+    /** One rule of a sheet: its declarations, kept under the keys its selectors can be found by. */
+    const keepRule = (selectors: ParsedSelector[], text: string, atUnknown: boolean): void => {
+      if (text.trim() === "") return;
       const keys = new Set<string>();
       for (const parsed of selectors) {
         const key = ruleKey(parsed, wanted);
         if (key) keys.add(key);
       }
       if (keys.size === 0) return;
-      const declarations = parseDeclarations(body, reading);
+      const declarations = parseDeclarations(text, reading);
       if (!declarations.some((d) => GEOMETRY.test(d.property))) return;
-      const rule: Rule = { selectors, declarations, order: position.next++ };
+      const rule: Rule = { selectors, declarations, order: position.next++, atUnknown };
       for (const parsed of selectors) for (const attr of parsed.attrs) attrNames.add(attr.name);
+      if (atUnknown || selectors.some((parsed) => parsed.unknown)) hasUnknown.value = true;
       for (const key of keys) {
         const list = byKey.get(key) ?? [];
         list.push(rule);
@@ -846,7 +914,43 @@ function sheetFor(doc: Document, wanted: Wanted, reading: Reading): Sheet {
         byKey.set(key, list);
       }
     };
-    scanCss(css, (selector, body) => addRule(selector, body, 0), reading, (selector, reason, nested) => {
+    /**
+     * One rule, and the rules nested in its body (CSS nesting: `main { .c { ... } }`), to a bounded depth. The declarations
+     * before its first nested rule come first in the cascade, the nested rules next, the declarations after them last, as a
+     * browser orders them; a nested block is never part of a declaration.
+     */
+    const addRule = (selector: string, body: string, depth: number, atUnknown: boolean): void => {
+      const { selectors, oversized } = parseFrameSelectorList(selector);
+      // a selector longer than the bound is not read and could match any iframe on the page
+      if (oversized && wanted.frames > 0) cut.dropped = true;
+      if (!body.includes("{")) {
+        keepRule(selectors, body, atUnknown);
+        return;
+      }
+      const parts = splitNestedDeclarations(body);
+      keepRule(selectors, parts.before, atUnknown);
+      if (depth >= MAX_NESTING_DEPTH) cut.dropped = true;
+      else {
+        scanCss(
+          body,
+          (inner, innerBody, innerUnknown) => {
+            if (nest.rules >= MAX_NESTED_RULES) {
+              cut.dropped = true;
+              return;
+            }
+            nest.rules++;
+            const nested = nestSelector(selector, inner, nest);
+            if (nested.cut) cut.dropped = true;
+            addRule(nested.selector, innerBody, depth + 1, atUnknown || innerUnknown);
+          },
+          reading,
+          undefined,
+          true,
+        );
+      }
+      keepRule(selectors, parts.after, atUnknown);
+    };
+    scanCss(css, (selector, body, unknown) => addRule(selector, body, 0, unknown), reading, (selector, reason, nested) => {
       // A rule past the bounds is not read: say so when it could be an overlay's. A selector list past the bound could match any
       // iframe; a body past it matters when one of its selectors matches an iframe on the page.
       if (reason === "prelude") {
@@ -858,7 +962,7 @@ function sheetFor(doc: Document, wanted: Wanted, reading: Reading): Sheet {
       if ((nested && wanted.frames > 0) || (oversized && wanted.frames > 0) || selectors.some((parsed) => ruleKey(parsed, wanted))) cut.dropped = true;
     }, true);
   }
-  const sheet: Sheet = { byKey, attrNames, nest, memo: new Map(), truncated: truncated || cut.dropped, work: SHEET_WORK_BUDGET };
+  const sheet: Sheet = { byKey, attrNames, nest, hasUnknown: hasUnknown.value, memo: new Map(), truncated: truncated || cut.dropped, work: SHEET_WORK_BUDGET };
   byReading[reading] = sheet;
   return sheet;
 }
@@ -885,11 +989,17 @@ function attrMatches(condition: AttrCondition, raw: string | undefined): boolean
   }
 }
 
-/** The highest specificity among the selectors of the rule that match the frame, or -1 when none does. */
-function matchedSpecificity(rule: Rule, id: string, classes: Set<string>, attr: (name: string) => string | undefined): number {
+/**
+ * The highest specificity among the selectors of the rule that match the frame, or -1 when none does. With `decided` only the
+ * selectors whose applicability is known count: a rule in an undecided at-rule, and a selector with an ancestor part or a
+ * pseudo-class, are left out (see {@link Mode}).
+ */
+function matchedSpecificity(rule: Rule, id: string, classes: Set<string>, attr: (name: string) => string | undefined, decided: boolean): number {
+  if (decided && rule.atUnknown) return -1;
   let best = -1;
   for (const selector of rule.selectors) {
     if (selector.specificity <= best) continue;
+    if (decided && selector.unknown) continue;
     if (
       selector.classes.every((c) => classes.has(c)) &&
       selector.ids.every((i) => i === id) &&
@@ -931,6 +1041,14 @@ function expandInset(value: string): Array<[string, string]> {
   ];
 }
 
+/**
+ * Which rules of a sheet the cascade is worked out with. `all`: every rule, those of unknown applicability applied as if
+ * they matched. `decided`: only the rules whose applicability is known. A cover is reported when EITHER says so: a rule
+ * that cannot be evaluated can enable a cover (found under `all`) but must not be able to disable one (a decoy that never
+ * matches in a browser: found under `decided`), whichever way a browser would decide it.
+ */
+type Mode = "all" | "decided";
+
 /** The stylesheet's contribution to one iframe, memoised per (id, classes): pages repeat them. */
 function sheetLayers(
   sheet: Sheet,
@@ -938,11 +1056,12 @@ function sheetLayers(
   classes: Set<string>,
   attr: (name: string) => string | undefined,
   memo: Map<string, Declaration[][]>,
+  mode: Mode,
 ): Declaration[][] {
   // The frame's values of the attributes some selector tests are part of the key: two frames alike in all of it cascade alike.
   let attrKey = "";
   for (const name of sheet.attrNames) attrKey += `\u0000${name}=${attr(name) ?? "\u0001"}`;
-  const key = `${id}\u0000${[...classes].sort().join(" ")}${attrKey}`;
+  const key = `${mode}\u0000${id}\u0000${[...classes].sort().join(" ")}${attrKey}`;
   const cached = memo.get(key);
   if (cached) return cached;
   // The frame's candidate rules: the lists of its tag, id and (at most a few) classes that have any, merged and
@@ -978,7 +1097,7 @@ function sheetLayers(
   // The cascade among the rules that match: specificity, then source order, the last one applied wins.
   const matched: Array<{ rule: Rule; specificity: number }> = [];
   for (const rule of candidates) {
-    const specificity = matchedSpecificity(rule, id, classes, attr);
+    const specificity = matchedSpecificity(rule, id, classes, attr, mode === "decided");
     if (specificity >= 0) matched.push({ rule, specificity });
   }
   matched.sort((a, b) => a.specificity - b.specificity || a.rule.order - b.rule.order);
@@ -991,7 +1110,7 @@ function sheetLayers(
 }
 
 /** The iframe's resolved style properties, lower-cased: stylesheet, then inline, `!important` over either. */
-function resolvedStyle(sheet: Sheet, frame: Element, reading: Reading): Map<string, string> {
+function resolvedStyle(sheet: Sheet, frame: Element, reading: Reading, mode: Mode): Map<string, string> {
   const id = (getAttrCI(frame, "id") ?? "").toLowerCase();
   // The class attribute is charged to the page's budget by length, so padding it costs the page, not the scan.
   const classAttr = getAttrCI(frame, "class") ?? "";
@@ -1002,9 +1121,9 @@ function resolvedStyle(sheet: Sheet, frame: Element, reading: Reading): Map<stri
   } else sheet.truncated = true;
   const attr = (name: string): string | undefined => {
     const value = getAttrCI(frame, name);
-    return value === undefined || value === null ? undefined : value.slice(0, MAX_ATTR_CHARS);
+    return value === undefined || value === null ? undefined : value.slice(0, MAX_ATTR_CHARS).toLowerCase();
   };
-  const [normal, important] = sheetLayers(sheet, id, classes, attr, sheet.memo) as [Declaration[], Declaration[]];
+  const [normal, important] = sheetLayers(sheet, id, classes, attr, sheet.memo, mode) as [Declaration[], Declaration[]];
   const inline = parseDeclarations(getAttrCI(frame, "style") ?? "", reading);
   const layers: Declaration[][] = [
     normal,
@@ -1109,21 +1228,26 @@ export const isCover = (g: OverlayGeometry): boolean => g.fixed && g.zIndex >= 1
 export function overlayGeometry(doc: Document, frame: Element): OverlayGeometry {
   let first: OverlayGeometry | undefined;
   for (const reading of READINGS) {
-    const geometry = overlayGeometryFor(doc, frame, reading);
+    const geometry = overlayGeometryFor(doc, frame, reading, "all");
     if (isCover(geometry)) return geometry;
     first ??= geometry;
+    // A sheet with rules that cannot be evaluated is read again without them (see {@link Mode}).
+    if (sheetFor(doc, wantedFor(doc), reading).hasUnknown) {
+      const decided = overlayGeometryFor(doc, frame, reading, "decided");
+      if (isCover(decided)) return decided;
+    }
   }
   return first!;
 }
 
 /** The cascaded style of a frame under one reading (exported for the tests that compare readings with the old rules). */
-export function styleUnder(doc: Document, frame: Element, reading: Reading): Map<string, string> {
-  return resolvedStyle(sheetFor(doc, wantedFor(doc), reading), frame, reading);
+export function styleUnder(doc: Document, frame: Element, reading: Reading, mode: Mode = "all"): Map<string, string> {
+  return resolvedStyle(sheetFor(doc, wantedFor(doc), reading), frame, reading, mode);
 }
 
 /** The geometry under one reading (exported for the tests that compare readings). */
-export function overlayGeometryFor(doc: Document, frame: Element, reading: Reading): OverlayGeometry {
-  const style = resolvedStyle(sheetFor(doc, wantedFor(doc), reading), frame, reading);
+export function overlayGeometryFor(doc: Document, frame: Element, reading: Reading, mode: Mode = "all"): OverlayGeometry {
+  const style = resolvedStyle(sheetFor(doc, wantedFor(doc), reading), frame, reading, mode);
   const position = style.get("position");
   const zIndex = Number.parseInt(style.get("z-index") ?? "0", 10);
   const width = style.get("width") ?? "";
