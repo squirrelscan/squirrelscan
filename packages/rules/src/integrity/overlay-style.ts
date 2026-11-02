@@ -2,9 +2,12 @@
 //
 // The injected overlay does not have to write its geometry inline: `position:fixed !important`, the
 // `inset:0` shorthand, or a class defined in a `<style>` block all produce the same full-viewport cover.
-// Only what is cheap and safe is resolved: inline `<style>` blocks, rules whose selector is a plain
-// `iframe`, `.class` or `#id` combination (no combinators, no media queries), in source order with
-// `!important` winning.
+// Only what is cheap and safe is resolved: inline `<style>` blocks; rules whose selector names the iframe by its tag,
+// `.class`, `#id` or attributes (a combinator is read for its last compound only: the ancestors are not checked, which
+// errs toward detection), including rules inside `@media`, `@supports`, `@layer`, `@container` and `@scope` blocks that
+// apply to a screen and rules nested in a style rule; the cascade is `!important`, then specificity, then source order.
+// Not modelled (documented limits): `@layer` precedence, `:not()`/`:is()` arguments, media query conditions other than a
+// print-only or speech-only query, nested conditional group rules written with bare declarations.
 //
 // Work is linear in the CSS and the iframes, and no cap is applied in document order (a page can pad
 // the head of a stylesheet, or the first iframes, to push the real rule or frame past one):
@@ -35,6 +38,10 @@ const SHEET_WORK_BUDGET = 1_000_000;
 const MAX_SELECTOR_CHARS = 2_048;
 const MAX_PRELUDE_CHARS = 262_144;
 const MAX_BODY_CHARS = 262_144;
+/** Style rules nested in style rules are read this deep; a deeper one is not read and the CSS is reported truncated. */
+const MAX_NESTING_DEPTH = 8;
+/** Chars of an attribute value tested by an attribute selector (and kept in the memo key). */
+const MAX_ATTR_CHARS = 512;
 
 interface Declaration {
   property: string;
@@ -42,11 +49,25 @@ interface Declaration {
   important: boolean;
 }
 
-/** One selector of a rule, parsed once: an optional `iframe` tag and the `.class` / `#id` tokens that must all match. */
+/** One attribute selector (`[id]`, `[src*="x" i]`) of a compound. */
+interface AttrCondition {
+  name: string;
+  op: "" | "=" | "~=" | "|=" | "^=" | "$=" | "*=";
+  value: string;
+  ci: boolean;
+}
+
+/**
+ * One selector of a rule, parsed once: the subject compound (the last one of a complex selector): an optional `iframe` tag
+ * and the `.class` / `#id` / attribute conditions that must all match, and its specificity.
+ */
 interface ParsedSelector {
   tag: boolean;
   classes: string[];
   ids: string[];
+  attrs: AttrCondition[];
+  /** `ids * 10000 + (classes, attributes, pseudo-classes) * 100 + tag`, each part capped at 99. */
+  specificity: number;
 }
 
 interface Rule {
@@ -245,7 +266,7 @@ interface Wanted {
 
 const SIMPLE_SELECTOR = /^(iframe)?((?:[.#][\w-]+)*)$/;
 
-/** The simple selectors in a list; others (combinators, attributes, pseudo-classes) are not modelled. */
+/** The simple selectors in a list; others (combinators, attributes, pseudo-classes) are not modelled. Used for the hidden-text scan, which must stay strict. */
 function parseSelectors(selector: string): ParsedSelector[] {
   return parseSelectorList(selector).selectors;
 }
@@ -266,17 +287,224 @@ function parseSelectorList(selector: string): { selectors: ParsedSelector[]; ove
       tag: match[1] !== undefined,
       classes: tokens.filter((t) => t[0] === ".").map((t) => t.slice(1)),
       ids: tokens.filter((t) => t[0] === "#").map((t) => t.slice(1)),
+      attrs: [],
+      specificity: 0,
     });
   }
   return { selectors: out, oversized };
 }
 
-/** The index key (`iframe`, `.c`, `#i`) of a selector when every token could match an iframe on the page. */
+
+const isCombinator = (c: string): boolean => c === " " || c === "\n" || c === "\t" || c === ">" || c === "+" || c === "~";
+
+/** Splits `text` at the commas outside brackets, parentheses and strings: a selector list, or a `:is(a, b)` is one part. Linear. */
+function splitTopLevel(text: string, separator: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let quote = "";
+  let start = 0;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i]!;
+    if (c === "\\") {
+      i++;
+      continue;
+    }
+    if (quote) {
+      if (c === quote) quote = "";
+      continue;
+    }
+    if (c === '"' || c === "'") quote = c;
+    else if (c === "(" || c === "[") depth++;
+    else if ((c === ")" || c === "]") && depth > 0) depth--;
+    else if (c === separator && depth === 0) {
+      parts.push(text.slice(start, i));
+      start = i + 1;
+    }
+  }
+  parts.push(text.slice(start));
+  return parts;
+}
+
+/** The last compound of a complex selector: what the element itself must match (the combinators and ancestors are not read). */
+function subjectCompound(selector: string): string {
+  let depth = 0;
+  let quote = "";
+  let start = 0;
+  let last = "";
+  const close = (end: number): void => {
+    if (end > start) last = selector.slice(start, end);
+  };
+  for (let i = 0; i < selector.length; i++) {
+    const c = selector[i]!;
+    if (c === "\\") {
+      i++;
+      continue;
+    }
+    if (quote) {
+      if (c === quote) quote = "";
+      continue;
+    }
+    if (c === '"' || c === "'") quote = c;
+    else if (c === "(" || c === "[") depth++;
+    else if ((c === ")" || c === "]") && depth > 0) depth--;
+    else if (depth === 0 && isCombinator(c)) {
+      close(i);
+      start = i + 1;
+    }
+  }
+  close(selector.length);
+  return last;
+}
+
+/** The end of the identifier that starts at `at` (letters, digits, `-`, `_`, escapes and non-ASCII). */
+function identEnd(text: string, at: number): number {
+  let i = at;
+  while (i < text.length) {
+    const c = text[i]!;
+    if (c === "\\") i = escapeEnd(text, i) + 1;
+    else if (isIdentChar(c)) i++;
+    else break;
+  }
+  return i;
+}
+
+const ATTR_OPS = new Set(["=", "~=", "|=", "^=", "$=", "*="]);
+
+/** `[name]`, `[name=value]`, `[name op "value" i]` from the text between the brackets, or undefined. */
+function parseAttr(inner: string): AttrCondition | undefined {
+  const nameEnd = identEnd(inner, 0);
+  const name = unescapeCss(inner.slice(0, nameEnd)).trim().toLowerCase();
+  if (!name) return undefined;
+  let i = nameEnd;
+  while (inner[i] === " ") i++;
+  if (i >= inner.length) return { name, op: "", value: "", ci: false };
+  let op = inner[i]!;
+  if (inner[i + 1] === "=") op += "=";
+  if (!ATTR_OPS.has(op)) return undefined;
+  i += op.length;
+  while (inner[i] === " ") i++;
+  let value: string;
+  const q = inner[i];
+  if (q === '"' || q === "'") {
+    let j = i + 1;
+    while (j < inner.length && inner[j] !== q) j += inner[j] === "\\" ? 2 : 1;
+    value = inner.slice(i + 1, j);
+    i = j + 1;
+  } else {
+    const end = identEnd(inner, i);
+    value = inner.slice(i, end);
+    i = end;
+  }
+  const flag = inner.slice(i).trim().toLowerCase();
+  if (flag !== "" && flag !== "i" && flag !== "s") return undefined;
+  return { name, op: op as AttrCondition["op"], value: unescapeCss(value), ci: flag === "i" };
+}
+
+const cap99 = (n: number): number => Math.min(n, 99);
+
+/**
+ * A compound selector (`iframe.c#id[src*="x"]:hover`) as conditions on the iframe, or undefined when it cannot match an
+ * iframe (another tag, a pseudo-element, text it does not understand). A pseudo-class cannot be resolved here and is
+ * taken as matching (it still counts in the specificity; `:where()` counts nothing): the error is toward detection.
+ */
+function parseCompound(text: string): ParsedSelector | undefined {
+  const out: ParsedSelector = { tag: false, classes: [], ids: [], attrs: [], specificity: 0 };
+  let i = 0;
+  let classLike = 0;
+  if (text[0] === "*") i = 1;
+  else if (text[0] !== "." && text[0] !== "#" && text[0] !== "[" && text[0] !== ":") {
+    const end = identEnd(text, 0);
+    if (end === 0 || unescapeCss(text.slice(0, end)).toLowerCase() !== "iframe") return undefined;
+    out.tag = true;
+    i = end;
+  }
+  while (i < text.length) {
+    const c = text[i]!;
+    if (c === "." || c === "#") {
+      const end = identEnd(text, i + 1);
+      if (end === i + 1) return undefined;
+      const name = unescapeCss(text.slice(i + 1, end)).toLowerCase();
+      if (c === ".") {
+        out.classes.push(name);
+        classLike++;
+      } else out.ids.push(name);
+      i = end;
+    } else if (c === "[") {
+      let j = i + 1;
+      let quote = "";
+      for (; j < text.length; j++) {
+        const d = text[j]!;
+        if (d === "\\") j++;
+        else if (quote) {
+          if (d === quote) quote = "";
+        } else if (d === '"' || d === "'") quote = d;
+        else if (d === "]") break;
+      }
+      const attr = parseAttr(text.slice(i + 1, j));
+      if (!attr) return undefined;
+      out.attrs.push(attr);
+      classLike++;
+      i = j + 1;
+    } else if (c === ":") {
+      if (text[i + 1] === ":") return undefined; // a pseudo-element is not the iframe
+      const end = identEnd(text, i + 1);
+      if (end === i + 1) return undefined;
+      const name = unescapeCss(text.slice(i + 1, end)).toLowerCase();
+      i = end;
+      if (text[i] === "(") {
+        let depth = 0;
+        let j = i;
+        for (; j < text.length; j++) {
+          if (text[j] === "\\") j++;
+          else if (text[j] === "(") depth++;
+          else if (text[j] === ")" && --depth === 0) break;
+        }
+        i = j + 1;
+      }
+      if (name !== "where") classLike++;
+    } else return undefined;
+  }
+  out.specificity = cap99(out.ids.length) * 10_000 + cap99(classLike) * 100 + (out.tag ? 1 : 0);
+  return out;
+}
+
+/**
+ * The selectors of a rule's list that can match an iframe, each as its subject compound (see {@link subjectCompound}), and
+ * whether one part was past a bound (it is not read and could match any iframe).
+ */
+function parseFrameSelectorList(selector: string): { selectors: ParsedSelector[]; oversized: boolean } {
+  const out: ParsedSelector[] = [];
+  let oversized = false;
+  for (const part of splitTopLevel(selector, ",")) {
+    if (part.length > MAX_SELECTOR_CHARS + 64) {
+      oversized = true;
+      continue;
+    }
+    const subject = subjectCompound(part.trim());
+    if (!subject) continue;
+    const parsed = parseCompound(subject);
+    if (parsed) out.push(parsed);
+  }
+  return { selectors: out, oversized };
+}
+
+/** A nested rule's selector list in the context of its parent's: `&` is the parent, no `&` is a descendant of it. */
+function nestSelector(parent: string, child: string): string {
+  const parents = splitTopLevel(parent, ",").slice(0, 8);
+  const children = splitTopLevel(child, ",").slice(0, 8);
+  const out: string[] = [];
+  for (const p of parents) {
+    for (const c of children) out.push(c.includes("&") ? c.replaceAll("&", p.trim()) : `${p.trim()} ${c.trim()}`);
+  }
+  return out.join(",");
+}
+
+/** The index key (`.c`, `#i`, `iframe`, or `*` for attributes alone) of a selector when every token could match an iframe on the page. */
 function ruleKey(selector: ParsedSelector, wanted: Wanted): string | undefined {
   if (!selector.classes.every((c) => wanted.classes.has(c))) return undefined;
   if (!selector.ids.every((i) => wanted.ids.has(i))) return undefined;
   const first = selector.classes[0] ? `.${selector.classes[0]}` : selector.ids[0] ? `#${selector.ids[0]}` : undefined;
-  return first ?? "iframe";
+  return first ?? (selector.tag ? "iframe" : "*");
 }
 
 /** The `}` that closes the rule whose `{` is at `open`, or -1 (see {@link walk}). */
@@ -298,9 +526,32 @@ function findRuleEnd(css: string, open: number): number {
   return end;
 }
 
+/** At-rules whose block holds style rules that apply to the document (conditional group rules and `@layer`). */
+const GROUP_AT_RULES = new Set(["media", "supports", "layer", "container", "scope"]);
+/** Longest at-rule prelude looked at to decide whether to read its block: a longer one is skipped whole, as before. */
+const MAX_AT_PRELUDE = 2_048;
+
 /**
- * One pass over a stylesheet: comments and at-rules (`@media`, `@supports`, `@keyframes`, `@import`) are
- * skipped, every other `selector { body }` is handed to `onRule`. `indexOf` only searches forward from
+ * Whether the block of the at-rule whose prelude is `prelude` (text from the `@` to the `{`) is read for rules. A group rule
+ * is read unless it can never apply to a screen: a `@media` list whose every query is print-only, speech-only or `not all`.
+ * Any other condition (`(min-width: 1px)`, `@supports not (...)`, `@container`) may hold on some viewport or browser, so it is
+ * read: the error is toward detection.
+ */
+function atRuleDescends(prelude: string): boolean {
+  const text = (prelude.includes("\\") ? unescapeCss(prelude) : prelude).toLowerCase();
+  const match = /^@([\w-]+)/.exec(text);
+  if (!match || !GROUP_AT_RULES.has(match[1]!)) return false;
+  if (match[1] !== "media") return true;
+  return splitTopLevel(text.slice(match[0].length), ",").some((q) => {
+    const query = q.trim();
+    return !(/^(?:only\s+)?(?:print|speech)(?![\w-])/.test(query) || /^not\s+all(?![\w-])/.test(query));
+  });
+}
+
+/**
+ * One pass over a stylesheet: comments and at-rules are skipped (except, with `atRules`, the blocks of the group rules in
+ * {@link atRuleDescends}, whose rules are read as if written at the top level), every other `selector { body }` is
+ * handed to `onRule`. `indexOf` only searches forward from
  * the cursor and the cursor then moves past what it found, so the scan is linear however the text is
  * built (unterminated comments, runs of openers, no braces at all).
  */
@@ -309,8 +560,9 @@ export function scanCss(
   onRule: (selector: string, body: string) => void,
   reading: Reading = "tokens",
   onOversized?: (selector: string, reason: "prelude" | "body") => void,
+  atRules = false,
 ): void {
-  if (reading === "tokens") return scanCssTokens(css, onRule, onOversized);
+  if (reading === "tokens") return scanCssTokens(css, onRule, onOversized, atRules);
   let i = 0;
   const n = css.length;
   while (i < n) {
@@ -326,6 +578,15 @@ export function scanCss(
       continue;
     }
     if (ch === "@") {
+      if (atRules) {
+        // A group rule's block is read in place: its rules are the next ones, and its closing `}` is skipped like any other.
+        let stop = i + 1;
+        while (stop < n && stop - i <= MAX_AT_PRELUDE && css[stop] !== "{" && css[stop] !== ";") stop++;
+        if (css[stop] === "{" && atRuleDescends(css.slice(i, stop))) {
+          i = stop + 1;
+          continue;
+        }
+      }
       // Skip to the end of the statement, or past the whole block, counting braces.
       let depth = 0;
       let j = i + 1;
@@ -370,6 +631,7 @@ function scanCssTokens(
   source: string,
   onRule: (selector: string, body: string) => void,
   onOversized?: (selector: string, reason: "prelude" | "body") => void,
+  atRules = false,
 ): void {
   const css = preprocess(source);
   const n = css.length;
@@ -416,6 +678,11 @@ function scanCssTokens(
       continue;
     }
     selector += css.slice(from, open);
+    // A group rule's block is read in place (no search for its end: the blocks nest, and the closing `}` is skipped below).
+    if (atRules && ch === "@" && selector.length <= MAX_AT_PRELUDE && atRuleDescends(selector)) {
+      i = open + 1;
+      continue;
+    }
     const close = findRuleEnd(css, open);
     if (close === -1) return;
     // A rule whose selector or body is past the bounds is not read, and the caller is told which selector (see the plain scan).
@@ -430,6 +697,8 @@ function scanCssTokens(
 
 interface Sheet {
   byKey: Map<string, Rule[]>;
+  /** Attribute names any kept selector tests: the frame's values of them are part of its memo key. */
+  attrNames: Set<string>;
   /** Per-frame layers already worked out, by id and classes (pages repeat them). */
   memo: Map<string, Declaration[][]>;
   /** The stylesheet text was longer than {@link MAX_CSS_CHARS}: the rest was not read. */
@@ -446,6 +715,7 @@ function sheetFor(doc: Document, wanted: Wanted, reading: Reading): Sheet {
   const cached = byReading[reading];
   if (cached) return cached;
   const byKey = new Map<string, Rule[]>();
+  const attrNames = new Set<string>();
   let chars = 0;
   let truncated = false;
   const position = { next: 0 };
@@ -460,10 +730,16 @@ function sheetFor(doc: Document, wanted: Wanted, reading: Reading): Sheet {
     const css = text.length > room ? text.slice(0, room) : text;
     if (text.length > room) truncated = true;
     chars += css.length;
-    scanCss(css, (selector, body) => {
-      const { selectors, oversized } = parseSelectorList(selector);
+    /** One rule, and the rules nested in its body (CSS nesting: `main { .c { ... } }`), to a bounded depth. */
+    const addRule = (selector: string, body: string, depth: number): void => {
+      const { selectors, oversized } = parseFrameSelectorList(selector);
       // a selector longer than the bound is not read and could match any iframe on the page
       if (oversized && wanted.frames > 0) cut.dropped = true;
+      if (body.includes("{")) {
+        if (depth >= MAX_NESTING_DEPTH) cut.dropped = true;
+        else
+          scanCss(body, (inner, innerBody) => addRule(nestSelector(selector, inner), innerBody, depth + 1), reading, undefined, true);
+      }
       const keys = new Set<string>();
       for (const parsed of selectors) {
         const key = ruleKey(parsed, wanted);
@@ -473,6 +749,7 @@ function sheetFor(doc: Document, wanted: Wanted, reading: Reading): Sheet {
       const declarations = parseDeclarations(body, reading);
       if (!declarations.some((d) => GEOMETRY.test(d.property))) return;
       const rule: Rule = { selectors, declarations, order: position.next++ };
+      for (const parsed of selectors) for (const attr of parsed.attrs) attrNames.add(attr.name);
       for (const key of keys) {
         const list = byKey.get(key) ?? [];
         list.push(rule);
@@ -484,26 +761,59 @@ function sheetFor(doc: Document, wanted: Wanted, reading: Reading): Sheet {
         }
         byKey.set(key, list);
       }
-    }, reading, (selector, reason) => {
+    };
+    scanCss(css, (selector, body) => addRule(selector, body, 0), reading, (selector, reason) => {
       // A rule past the bounds is not read: say so when it could be an overlay's. A selector list past the bound could match any
       // iframe; a body past it matters when one of its selectors matches an iframe on the page.
       if (reason === "prelude") {
         if (wanted.frames > 0) cut.dropped = true;
         return;
       }
-      const { selectors, oversized } = parseSelectorList(selector);
+      const { selectors, oversized } = parseFrameSelectorList(selector);
       if ((oversized && wanted.frames > 0) || selectors.some((parsed) => ruleKey(parsed, wanted))) cut.dropped = true;
-    });
+    }, true);
   }
-  const sheet: Sheet = { byKey, memo: new Map(), truncated: truncated || cut.dropped, work: SHEET_WORK_BUDGET };
+  const sheet: Sheet = { byKey, attrNames, memo: new Map(), truncated: truncated || cut.dropped, work: SHEET_WORK_BUDGET };
   byReading[reading] = sheet;
   return sheet;
 }
 
-function ruleMatches(rule: Rule, id: string, classes: Set<string>): boolean {
-  return rule.selectors.some(
-    (selector) => selector.classes.every((c) => classes.has(c)) && selector.ids.every((i) => i === id),
-  );
+/** Whether an attribute selector holds for the frame's value of the attribute (`undefined`: the attribute is absent). */
+function attrMatches(condition: AttrCondition, raw: string | undefined): boolean {
+  if (raw === undefined) return false;
+  if (condition.op === "") return true;
+  const have = condition.ci ? raw.toLowerCase() : raw;
+  const want = condition.ci ? condition.value.toLowerCase() : condition.value;
+  switch (condition.op) {
+    case "=":
+      return have === want;
+    case "~=":
+      return want !== "" && !/\s/.test(want) && have.split(/\s+/).includes(want);
+    case "|=":
+      return have === want || have.startsWith(`${want}-`);
+    case "^=":
+      return want !== "" && have.startsWith(want);
+    case "$=":
+      return want !== "" && have.endsWith(want);
+    case "*=":
+      return want !== "" && have.includes(want);
+  }
+}
+
+/** The highest specificity among the selectors of the rule that match the frame, or -1 when none does. */
+function matchedSpecificity(rule: Rule, id: string, classes: Set<string>, attr: (name: string) => string | undefined): number {
+  let best = -1;
+  for (const selector of rule.selectors) {
+    if (selector.specificity <= best) continue;
+    if (
+      selector.classes.every((c) => classes.has(c)) &&
+      selector.ids.every((i) => i === id) &&
+      selector.attrs.every((a) => attrMatches(a, attr(a.name)))
+    ) {
+      best = selector.specificity;
+    }
+  }
+  return best;
 }
 
 /** Logical offsets in a horizontal left-to-right page (the injected overlays are never vertical or right-to-left). */
@@ -537,8 +847,17 @@ function expandInset(value: string): Array<[string, string]> {
 }
 
 /** The stylesheet's contribution to one iframe, memoised per (id, classes): pages repeat them. */
-function sheetLayers(sheet: Sheet, id: string, classes: Set<string>, memo: Map<string, Declaration[][]>): Declaration[][] {
-  const key = `${id}\u0000${[...classes].sort().join(" ")}`;
+function sheetLayers(
+  sheet: Sheet,
+  id: string,
+  classes: Set<string>,
+  attr: (name: string) => string | undefined,
+  memo: Map<string, Declaration[][]>,
+): Declaration[][] {
+  // The frame's values of the attributes some selector tests are part of the key: two frames alike in all of it cascade alike.
+  let attrKey = "";
+  for (const name of sheet.attrNames) attrKey += `\u0000${name}=${attr(name) ?? "\u0001"}`;
+  const key = `${id}\u0000${[...classes].sort().join(" ")}${attrKey}`;
   const cached = memo.get(key);
   if (cached) return cached;
   // The frame's candidate rules: the lists of its tag, id and (at most a few) classes that have any, merged and
@@ -546,6 +865,8 @@ function sheetLayers(sheet: Sheet, id: string, classes: Set<string>, memo: Map<s
   const lists: Rule[][] = [];
   const own = sheet.byKey.get("iframe");
   if (own) lists.push(own);
+  const universal = sheet.byKey.get("*");
+  if (universal) lists.push(universal);
   const byId = id ? sheet.byKey.get(`#${id}`) : undefined;
   if (byId) lists.push(byId);
   for (const c of classes) {
@@ -569,11 +890,15 @@ function sheetLayers(sheet: Sheet, id: string, classes: Set<string>, memo: Map<s
     sheet.truncated = true;
     candidates = candidates.sort((a, b) => a.order - b.order).slice(-MAX_RULES_PER_FRAME);
   }
-  // Applied in source order, so a later rule wins whichever key found it.
-  candidates.sort((a, b) => a.order - b.order);
-  const layers: Declaration[][] = [[], []]; // normal, !important
+  // The cascade among the rules that match: specificity, then source order, the last one applied wins.
+  const matched: Array<{ rule: Rule; specificity: number }> = [];
   for (const rule of candidates) {
-    if (!ruleMatches(rule, id, classes)) continue;
+    const specificity = matchedSpecificity(rule, id, classes, attr);
+    if (specificity >= 0) matched.push({ rule, specificity });
+  }
+  matched.sort((a, b) => a.specificity - b.specificity || a.rule.order - b.rule.order);
+  const layers: Declaration[][] = [[], []]; // normal, !important
+  for (const { rule } of matched) {
     for (const d of rule.declarations) layers[d.important ? 1 : 0]!.push(d);
   }
   memo.set(key, layers);
@@ -590,7 +915,11 @@ function resolvedStyle(sheet: Sheet, frame: Element, reading: Reading): Map<stri
   if (sheet.work > 0) {
     for (const c of classAttr.toLowerCase().split(/\s+/)) if (c) classes.add(c);
   } else sheet.truncated = true;
-  const [normal, important] = sheetLayers(sheet, id, classes, sheet.memo) as [Declaration[], Declaration[]];
+  const attr = (name: string): string | undefined => {
+    const value = getAttrCI(frame, name);
+    return value === undefined || value === null ? undefined : value.slice(0, MAX_ATTR_CHARS);
+  };
+  const [normal, important] = sheetLayers(sheet, id, classes, attr, sheet.memo) as [Declaration[], Declaration[]];
   const inline = parseDeclarations(getAttrCI(frame, "style") ?? "", reading);
   const layers: Declaration[][] = [
     normal,
