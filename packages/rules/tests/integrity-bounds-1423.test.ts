@@ -187,18 +187,20 @@ test("an empty link href goes to the <base>; without a moved base it is the page
 
 // ── review round 2 on #1526: base resolution is linear, foreignObject, notes ───────────────────────────────────────────
 
-test("many full-viewport iframes with a password form and no <base>: the base is read once, not per iframe", async () => {
-  const frames = `<iframe src="/f" style="${GEOM}"></iframe>`.repeat(10_000);
+test("30,000 sibling full-viewport iframes with a password form and no <base>: the base is read once, in a linear pass", async () => {
+  const frames = `<iframe src="/f" style="${GEOM}"></iframe>`.repeat(30_000);
   const started = performance.now();
   await run(`<form><input type="password"></form>${frames}`);
   expect(performance.now() - started).toBeLessThan(3_000);
 }, 60_000);
 
-test("thousands of <base> elements inside one deeply nested svg are walked a bounded number of ancestors each", async () => {
-  const body = `<svg>${"<g>".repeat(4_000)}${'<base href="https://evil.example/">'.repeat(16_000)}${"</g>".repeat(4_000)}</svg><a href="/signin">Sign in with Google</a>`;
+test("tens of thousands of <base> elements, flat in one svg or nested deep in an svg, are found in a linear pass", async () => {
+  const base = '<base href="https://evil.example/">';
+  const link = '<a href="/signin">Sign in with Google</a>';
   const started = performance.now();
-  await run(body);
-  expect(performance.now() - started).toBeLessThan(2_500);
+  await run(`<svg>${"<g>".repeat(4_000)}${base.repeat(16_000)}${"</g>".repeat(4_000)}</svg>${link}`);
+  await run(`<svg>${base.repeat(40_000)}</svg>${link}`);
+  expect(performance.now() - started).toBeLessThan(3_000);
 }, 60_000);
 
 test("a <base> inside <svg><foreignObject> is an HTML element and is honoured; one directly in svg is not", () => {
@@ -245,4 +247,30 @@ test("the destinations named in a finding leave out a password form's own page: 
   expect(hit?.brand).toBe("Google");
   expect(hit?.reason).toContain("other.example");
   expect(hit?.reason).not.toContain("evil.example");
+});
+
+test("which <base> wins does not depend on how deeply it is nested (no depth cap)", () => {
+  const link = '<a href="/signin">Sign in with Google</a>';
+  const evil = '<base href="https://evil.example/">';
+  const local = '<base href="/">';
+  const wrap = (open: string, close: string, depth: number, inner: string) => `${open}${"<div>".repeat(depth)}${inner}${"</div>".repeat(depth)}${close}`;
+  for (const depth of [63, 64, 65, 200, 2_000]) {
+    const ignoredHosts: Array<[string, (inner: string) => string]> = [
+      ["noscript", (inner) => wrap("<noscript>", "</noscript>", depth, inner)],
+      ["template", (inner) => wrap("<template>", "</template>", depth, inner)],
+      ["svg", (inner) => `<svg>${"<g>".repeat(depth)}${inner}${"</g>".repeat(depth)}</svg>`],
+    ];
+    for (const [name, host] of ignoredHosts) {
+      // a deep ignored base never moves the site, however deep
+      expect([name, depth, brand(link, host(evil))]).toEqual([name, depth, null]);
+      // a deep ignored plain-local decoy before the real moving base does not hide it
+      expect([name, depth, brand(link, `${host(local)}${evil}`)]).toEqual([name, depth, "Google"]);
+    }
+    // a base inside foreignObject at any depth is HTML and is honoured
+    const deepForeign = `<svg>${"<g>".repeat(depth)}<foreignObject>${evil}</foreignObject>${"</g>".repeat(depth)}</svg>`;
+    expect([depth, brand(deepForeign + link)]).toEqual([depth, "Google"]);
+    // a real base nested deep in ordinary elements is honoured; a deep real local base before it still wins
+    expect([depth, brand(wrap("", "", depth, evil) + link)]).toEqual([depth, "Google"]);
+    expect([depth, brand(wrap("", "", depth, local + evil) + link)]).toEqual([depth, null]);
+  }
 });
