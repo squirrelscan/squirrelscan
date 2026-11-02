@@ -10,6 +10,8 @@ Browser rendering solves this: pages are loaded in a real headless browser in th
 
 <Note>Browser rendering is a [cloud feature](/cloud) - it requires login, and costs nothing beyond the audit's normal price of 50 credits plus **2 per audited page**, rendered or not. See [how it works under the hood](/cloud/rendering).</Note>
 
+<Note>Only the rendering runs in the cloud. Your machine still fetches the site (the pages themselves, `robots.txt`, sitemaps, scripts and assets, link checks), so the site still sees your IP address. See [what still comes from your machine](/cloud/rendering#what-still-comes-from-your-machine).</Note>
+
 ## It's automatic when you're logged in
 
 ```bash

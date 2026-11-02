@@ -1225,12 +1225,12 @@ export const audit = defineCommand({
     render: {
       type: "boolean",
       description:
-        "Force cloud browser rendering for this run (alias of --render-mode all; uses credits; requires login)",
+        "Force cloud browser rendering for this run (alias of --render-mode all; uses credits; requires login). Only rendering runs in the cloud: your machine still fetches the site",
     },
     "render-mode": {
       type: "string",
       description:
-        "Render strategy: off (HTTP only) | auto (render only client-rendered pages) | all (render every page). Overrides [cloud].render.",
+        "Render strategy: off (HTTP only) | auto (render only client-rendered pages) | all (render every page). Only rendering runs in the cloud: your machine still fetches the site. Overrides [cloud].render.",
     },
     http: {
       type: "boolean",
