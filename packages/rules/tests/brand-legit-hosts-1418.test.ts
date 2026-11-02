@@ -11,10 +11,10 @@ import type { RuleContext } from "../src/types";
 
 const url = "https://shop.example/";
 
-function brand(label: string, href: string): string | null {
+function brand(label: string, href: string, pageUrl = url): string | null {
   const html = `<!doctype html><html><head><title>Account</title></head><body><main><h1>Account</h1><a href="${href}">${label}</a></main></body></html>`;
-  const parsed = parsePage(html, url);
-  const ctx = { page: { url, html, statusCode: 200, loadTime: 0, headers: {}, parsed }, parsed, options: {} } as unknown as RuleContext;
+  const parsed = parsePage(html, pageUrl);
+  const ctx = { page: { url: pageUrl, html, statusCode: 200, loadTime: 0, headers: {}, parsed }, parsed, options: {} } as unknown as RuleContext;
   return detectBrandImpersonation(ctx)?.brand ?? null;
 }
 const google = (href: string): string | null => brand("Sign in with Google", href);
@@ -28,6 +28,7 @@ describe("Google: only its sign-in hosts spare a sign-in control", () => {
       "https://accounts.youtube.com/accounts/SetSID",
       "https://www.google.com/accounts/ServiceLogin",
       "https://google.com/accounts/ServiceLogin?x=1",
+      "https://myaccount.google.com/security",
     ]) {
       expect(google(href), href).toBeNull();
     }
@@ -69,6 +70,52 @@ describe("Google: only its sign-in hosts spare a sign-in control", () => {
   });
 });
 
+describe("how a host is matched", () => {
+  test("case, a port, a scheme-relative or backslash form and tabs inside the URL do not change a genuine host", () => {
+    for (const href of [
+      "HTTPS://ACCOUNTS.GOOGLE.COM/o/oauth2/v2/auth",
+      "https://accounts.google.com:8443/o/oauth2/v2/auth",
+      "//accounts.google.com/o/oauth2/v2/auth",
+      "https:\\accounts.google.com\o\oauth2",
+      "https://accounts.goo\tgle.com/o/oauth2",
+    ]) {
+      expect(google(href), href).toBeNull();
+    }
+  });
+  test("the dot boundary: a host that only ends with a listed host's text is not it", () => {
+    for (const href of ["https://evilaccounts.google.com/", "https://notaccounts.youtube.com/", "https://xmyaccount.google.com/"]) {
+      expect(google(href), href).toBe("Google");
+    }
+    for (const href of ["https://xlogin.live.com/", "https://evillogin.microsoftonline.de/", "https://notaccount.live.com/", "https://fakeaccount.microsoft.com/"]) {
+      expect(microsoft(href), href).toBe("Microsoft");
+    }
+    expect(brand("Log in to Calendly", "https://evilcalendly.com/login")).toBe("Calendly");
+    expect(brand("Log in to Calendly", "https://calendly.com/login")).toBeNull();
+    expect(brand("Log in to Calendly", "https://app.calendly.com/login")).toBeNull(); // a subdomain of a listed host is the host
+  });
+  test("userinfo names the host after the @, not before it", () => {
+    for (const href of ["https://accounts.google.com@credential-fixture.invalid/", "https://accounts.google.com:pw@credential-fixture.invalid/"]) {
+      expect(google(href), href).toBe("Google");
+    }
+  });
+  test("a trailing-dot host is not the listed host (unchanged from before: it is judged as another host)", () => {
+    expect(google("https://accounts.google.com./o/oauth2")).toBe("Google");
+  });
+  test("a look-alike label is reported: homograph, extra label, hyphen", () => {
+    for (const href of ["https://accounts.g\u043e\u043egle.com/", "https://accounts.google.com.credential-fixture.invalid/", "https://accounts-google.com/", "https://login-live.com/"]) {
+      expect(brand("Sign in with Google", href) ?? brand("Sign in with Microsoft", href), href).not.toBeNull();
+    }
+  });
+  test("a page on a user-content host is the same site as the other hosts of its domain (unchanged: a known limit)", () => {
+    // `isSelfOrSameSite`: sites.google.com and docs.google.com share a registrable domain, so a page hosted on the first whose
+    // "Sign in with Google" goes to the second is the site's own surface and is spared; the same for forms.microsoft.com.
+    expect(brand("Sign in with Google", "https://docs.google.com/forms/d/e/abc/viewform", "https://sites.google.com/view/anything")).toBeNull();
+    expect(brand("Sign in with Microsoft", "https://answers.microsoft.com/x", "https://forms.microsoft.com/r/abc")).toBeNull();
+    // while the same link from a page on another domain is reported
+    expect(brand("Sign in with Google", "https://docs.google.com/forms/d/e/abc/viewform")).toBe("Google");
+  });
+});
+
 describe("Microsoft: only its sign-in hosts spare a sign-in control", () => {
   test("the Microsoft sign-in hosts are spared", () => {
     for (const href of [
@@ -77,20 +124,38 @@ describe("Microsoft: only its sign-in hosts spare a sign-in control", () => {
       "https://login.live.com/oauth20_authorize.srf",
       "https://login.windows.net/common/oauth2/authorize",
       "https://login.microsoft.com/common/oauth2/authorize",
+      "https://login.microsoftonline.de/common/oauth2/authorize",
+      "https://login.chinacloudapi.cn/common/oauth2/authorize",
+      "https://login.partner.microsoftonline.cn/common/oauth2/authorize",
+      "https://account.live.com/Account/Home",
+      "https://account.microsoft.com/",
     ]) {
       expect(microsoft(href), href).toBeNull();
     }
   });
-  test("b2clogin.com is spared on its authorize paths only", () => {
-    expect(microsoft("https://tenant.b2clogin.com/tenant.onmicrosoft.com/b2c_1_signin/oauth2/v2.0/authorize?client_id=x")).toBeNull();
-    expect(microsoft("https://tenant.b2clogin.com/tenant.onmicrosoft.com/oauth2/authorize")).toBeNull();
+  test("b2clogin.com and ciamlogin.com are spared for the site's own tenant, on an authorize path only", () => {
+    // the page is shop.example: its own tenant is `shop`, or `shop` plus an environment suffix
     for (const href of [
-      "https://tenant.b2clogin.com/",
-      "https://tenant.b2clogin.com/tenant.onmicrosoft.com/b2c_1_signin/page/selfasserted",
-      "https://tenant.b2clogin.com/oauth2/authorized-not",
-      "https://tenant.b2clogin.com/x/oauth2/authorizexyz",
-      "https://b2clogin.com/anything",
-      "https://tenant.b2clogin.com.evil.example/oauth2/v2.0/authorize",
+      "https://shop.b2clogin.com/shop.onmicrosoft.com/b2c_1_signin/oauth2/v2.0/authorize?client_id=x",
+      "https://shop.b2clogin.com/shop.onmicrosoft.com/oauth2/authorize",
+      "https://shop-prod.b2clogin.com/shop.onmicrosoft.com/b2c_1_signin/oauth2/v2.0/authorize",
+      "https://shop.ciamlogin.com/shop.onmicrosoft.com/oauth2/v2.0/authorize",
+    ]) {
+      expect(microsoft(href), href).toBeNull();
+    }
+    for (const href of [
+      "https://tenant.b2clogin.com/tenant.onmicrosoft.com/b2c_1_signin/oauth2/v2.0/authorize?client_id=x", // somebody else's tenant
+      "https://evil.b2clogin.com/x/oauth2/v2.0/authorize",
+      "https://evil.shop.b2clogin.com/shop.onmicrosoft.com/oauth2/v2.0/authorize", // a deeper label
+      "https://shop-login.b2clogin.com/shop.onmicrosoft.com/oauth2/v2.0/authorize", // a suffix an attacker can pick
+      "https://tenant.ciamlogin.com/tenant.onmicrosoft.com/oauth2/v2.0/authorize",
+      "https://shop.b2clogin.com/",
+      "https://shop.b2clogin.com/shop.onmicrosoft.com/b2c_1_signin/page/selfasserted",
+      "https://shop.b2clogin.com/oauth2/authorized-not",
+      "https://shop.b2clogin.com/x/oauth2/authorizexyz",
+      "https://b2clogin.com/oauth2/authorize",
+      "https://shop.b2clogin.com.evil.example/oauth2/v2.0/authorize",
+      "https://shop.ciamlogin.com/shop.onmicrosoft.com/page",
     ]) {
       expect(microsoft(href), href).toBe("Microsoft");
     }
