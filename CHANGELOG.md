@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Changed
+
+- **The docs and the help of `--render` and `--render-mode` say that only rendering runs in the cloud.** Your machine still fetches the site: the pages (a plain request beside each render, and a plain fallback request for a page the cloud could not render or the site blocked), the start URL and TLS checks, `robots.txt`, sitemaps and the other discovery files, scripts and assets, internal and external link checks, and the soft-404 and cloaking probes. The new section [what still comes from your machine](https://docs.squirrelscan.com/cloud/rendering#what-still-comes-from-your-machine) lists them. No behaviour changes. (#1285)
+
 ## v0.0.159 (2026-11-02)
 
 `security/leaked-secrets` is more precise and harder to talk around: an admin-named hosted-search key reports at high with a hint (William's #1523 for #1515, with an overlapping maintainer draft, #1524, folded in), a header-only `Bearer` JWT, a JWT-shaped string that does not decode and an AMD or RequireJS module path are no longer reported as credentials, and a real token with a missing `alg`, an oversized part or a decoy in front still reports. The integrity rules count an unread control once, read a style attribute and a CSS rule to larger bounds, say so when a rule is too large to read, and resolve a relative link by the page's first `<base href>` as a browser does.

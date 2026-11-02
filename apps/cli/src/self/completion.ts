@@ -572,8 +572,8 @@ _squirrel() {
             '--follow-redirect[Audit where the start URL redirects when that is another site]' \\
             '--no-follow-redirect[Turn [crawler] follow_redirect off for this run]' \\
             '(-y --yes)'{-y,--yes}'[Skip confirmation prompts]' \\
-            '--render[Force cloud browser rendering for this run]' \\
-            '--render-mode[Render strategy]:mode:(off auto all)' \\
+            '--render[Force cloud rendering; your machine still fetches the site]' \\
+            '--render-mode[Render strategy; your machine still fetches the site]:mode:(off auto all)' \\
             '--http[Force plain HTTP fetch for this run]' \\
             '--offline[Run offline: no cloud, publishing, telemetry, or requests to other sites (does not imply --passive)]' \\
             '--external-links[Check links to other sites this run, at any level]' \\
@@ -857,8 +857,8 @@ complete -c squirrel -n "__fish_seen_subcommand_from audit" -l visibility -a "pu
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l follow-redirect -d "Audit where the start URL redirects when that is another site"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l no-follow-redirect -d "Turn [crawler] follow_redirect off for this run"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -s y -l yes -d "Skip confirmation prompts (cloud credit spend)"
-complete -c squirrel -n "__fish_seen_subcommand_from audit" -l render -d "Force cloud browser rendering for this run"
-complete -c squirrel -n "__fish_seen_subcommand_from audit" -l render-mode -a "off auto all" -d "Render strategy"
+complete -c squirrel -n "__fish_seen_subcommand_from audit" -l render -d "Force cloud rendering; your machine still fetches the site"
+complete -c squirrel -n "__fish_seen_subcommand_from audit" -l render-mode -a "off auto all" -d "Render strategy; your machine still fetches the site"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l http -d "Force plain HTTP fetch for this run"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l offline -d "Run offline: no cloud, publishing, telemetry, or requests to other sites (does not imply --passive)"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l external-links -d "Check links to other sites this run, at any level"
