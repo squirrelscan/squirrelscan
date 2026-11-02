@@ -14,7 +14,17 @@ export interface BrandSpec {
    * the paths that are the sign-in. `suffix` also takes subdomains (a tenant host such as `<tenant>.b2clogin.com`);
    * otherwise exactly that host.
    */
-  legitEndpoints?: Array<{ host: string; suffix?: boolean; path: RegExp }>;
+  legitEndpoints?: Array<{
+    host: string;
+    suffix?: boolean;
+    path: RegExp;
+    /**
+     * For a host family with tenants that anyone can register (`<tenant>.b2clogin.com`): the host must be `<tenant><rest>`
+     * with `rest` matching this, and the tenant must be the audited site's own by name, as for the identity brokers
+     * (#1494). A foreign tenant is judged like any other off-brand host.
+     */
+    tenant?: RegExp;
+  }>;
 }
 
 export const BRAND_SPECS: BrandSpec[] = [
@@ -31,7 +41,7 @@ export const BRAND_SPECS: BrandSpec[] = [
     actionCues: ["sign in", "log in", "continue", "verify"],
     // `sites.`, `docs.`, `script.`, `drive.`, `forms.`, `translate.` and the `/url` and `/amp/s/` redirectors of google.com hold
     // user content or send a visitor anywhere (#1418): only the sign-in hosts and the accounts path are the brand's.
-    legitHosts: ["accounts.google.com", "accounts.youtube.com"],
+    legitHosts: ["accounts.google.com", "accounts.youtube.com", "myaccount.google.com"],
     legitEndpoints: [
       { host: "www.google.com", path: /^\/accounts(?:\/|$)/ },
       { host: "google.com", path: /^\/accounts(?:\/|$)/ },
@@ -57,8 +67,17 @@ export const BRAND_SPECS: BrandSpec[] = [
       "login.windows.net",
       "login.live.com",
       "login.microsoft.com",
+      "login.microsoftonline.de",
+      "login.chinacloudapi.cn",
+      "login.partner.microsoftonline.cn",
+      "account.live.com",
+      "account.microsoft.com",
     ],
-    legitEndpoints: [{ host: "b2clogin.com", suffix: true, path: /\/oauth2\/(?:v2\.0\/)?authorize(?:\/|$)/ }],
+    // Azure AD B2C and Entra External ID tenants are tenant-owned: only the site's own tenant (by name), on an authorize path.
+    legitEndpoints: [
+      { host: "b2clogin.com", suffix: true, path: /\/oauth2\/(?:v2\.0\/)?authorize(?:\/|$)/, tenant: /^\.b2clogin\.com$/ },
+      { host: "ciamlogin.com", suffix: true, path: /\/oauth2\/(?:v2\.0\/)?authorize(?:\/|$)/, tenant: /^\.ciamlogin\.com$/ },
+    ],
   },
   {
     brand: "Calendly",
