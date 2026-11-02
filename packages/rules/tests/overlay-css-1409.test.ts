@@ -526,3 +526,55 @@ describe("CSS nesting is bounded: no product of selectors, lengths or rules (#14
     expect(r.truncated).toBe(false);
   });
 });
+
+describe("review round 3: attribute case, nested at-rules, spent nesting budget (#1409)", () => {
+  const COVER_ID = `.cover{${FIXED}}`;
+  const coverFrame = (attrs: string): string => `<iframe id="google-auth" class="cover" ${attrs} srcdoc=""></iframe>`;
+
+  test("an attribute value is compared case-sensitively: a decoy that only matches case-folded does not hide a cover", () => {
+    for (const [css, attrs] of [
+      [`${COVER_ID}[data-k=V]{position:static}`, 'data-k="v"'],
+      [`${COVER_ID}[data-k="V"]{position:static}`, 'data-k="v"'],
+      [`${COVER_ID}[data-k=V s]{position:static}`, 'data-k="v"'],
+      [`${COVER_ID}[data-k=v]{position:static}`, 'data-k="V"'],
+      [`${COVER_ID}[data-k^=V]{position:static}`, 'data-k="vx"'],
+      [`${COVER_ID}.cover[DATA-K=V]{position:static}`, 'data-k="v"'],
+    ] as const) {
+      expect(fires(css, coverFrame(attrs))).toBe(true);
+    }
+  });
+
+  test("an exact-case or `i` attribute decoy still hides the cover", () => {
+    expect(fires(`${COVER_ID}[data-k=V]{position:static}`, coverFrame('data-k="V"'))).toBe(false);
+    expect(fires(`${COVER_ID}[data-k=V i]{position:static}`, coverFrame('data-k="v"'))).toBe(false);
+    expect(fires(`${COVER_ID}[DATA-K=v]{position:static}`, coverFrame('data-k="v"'))).toBe(false);
+  });
+
+  test("an undecided at-rule is inherited by a rule nested in it, with or without `&`", () => {
+    expect(fires(`.c{${FIXED}} @media (max-width:1px){.c{&{position:static}}}`)).toBe(true);
+    expect(fires(`.c{${FIXED}} @media (max-width:1px){main{.c{position:static}}}`)).toBe(true);
+  });
+
+  test("a nested child past 2,112 characters without `&` is dropped and the CSS is reported truncated", () => {
+    const css = `main{ .${"s".repeat(2_200)}{border:0} }`;
+    const ctx = context(css);
+    detectFakeAuthOverlay(ctx);
+    expect(cssScanTruncated(ctx.parsed.document!)).toBe(true);
+  });
+
+  test("dense nesting after the selector budget is spent costs nothing more, and a cover written first is still found", () => {
+    const amps = Array.from({ length: 64 }, () => "&").join(",");
+    const as = Array.from({ length: 64 }, () => "a").join(",");
+    const inner = `${amps}{}`.repeat(1_900);
+    const css = `${COVER_ID}${`${as}{${inner}}`.repeat(16)}`;
+    expect(css.length).toBeGreaterThan(3_000_000);
+    const ctx = context(css, coverFrame(""));
+    const started = performance.now();
+    const result = detectFakeAuthOverlay(ctx);
+    const elapsed = performance.now() - started;
+    expect(result).not.toBeNull();
+    expect(nestingUsed(ctx.parsed.document!).selectors).toBe(20_000);
+    expect(cssScanTruncated(ctx.parsed.document!)).toBe(true);
+    expect(elapsed).toBeLessThan(2_000);
+  });
+});

@@ -376,6 +376,47 @@ function identEnd(text: string, at: number): number {
   return i;
 }
 
+/**
+ * A selector lower-cased except what sits inside `[...]`: an attribute value is case-sensitive in a browser (`[data-k=V]` does
+ * not match `data-k="v"`), so its case is kept for {@link attrMatches}; the name and the flag are lower-cased where they are read.
+ */
+function lowerSelector(selector: string): string {
+  if (!selector.includes("[")) return selector.toLowerCase();
+  let out = "";
+  let from = 0;
+  let i = 0;
+  while (i < selector.length) {
+    const c = selector[i]!;
+    if (c === "\\") {
+      i += 2;
+      continue;
+    }
+    if (c !== "[") {
+      i++;
+      continue;
+    }
+    out += selector.slice(from, i + 1).toLowerCase();
+    let j = i + 1;
+    let quote = "";
+    while (j < selector.length) {
+      const d = selector[j]!;
+      if (d === "\\") j += 2;
+      else if (quote) {
+        if (d === quote) quote = "";
+        j++;
+      } else if (d === '"' || d === "'") {
+        quote = d;
+        j++;
+      } else if (d === "]") break;
+      else j++;
+    }
+    out += selector.slice(i + 1, j);
+    from = j;
+    i = j;
+  }
+  return out + selector.slice(from).toLowerCase();
+}
+
 const ATTR_OPS = new Set(["=", "~=", "|=", "^=", "$=", "*="]);
 
 /** `[name]`, `[name=value]`, `[name op "value" i]` from the text between the brackets, or undefined. */
@@ -534,6 +575,7 @@ const countChar = (text: string, char: string): number => {
  * budget of produced selectors. Whatever one of those drops makes `cut` true: the caller reports the CSS truncated.
  */
 function nestSelector(parent: string, child: string, budget: NestBudget): { selector: string; cut: boolean } {
+  if (budget.selectors <= 0) return { selector: "", cut: true };
   let cut = false;
   const parentParts = splitTopLevel(parent, ",");
   const childParts = splitTopLevel(child, ",");
@@ -557,6 +599,11 @@ function nestSelector(parent: string, child: string, budget: NestBudget): { sele
     out.push(text);
   };
   for (const part of childParts.slice(0, MAX_NEST_PARTS)) {
+    // Once the sheet's selector budget is spent nothing more is produced: stop reading, not just stop emitting.
+    if (budget.selectors <= 0) {
+      cut = true;
+      break;
+    }
     if (part.length > MAX_SELECTOR_CHARS + 64) {
       cut = true;
       continue;
@@ -571,6 +618,10 @@ function nestSelector(parent: string, child: string, budget: NestBudget): { sele
       continue;
     }
     for (const parent of parents) {
+      if (budget.selectors <= 0) {
+        cut = true;
+        break;
+      }
       if (subject.length + amps * Math.max(parent.subject.length - 1, 0) > MAX_SELECTOR_CHARS) {
         cut = true;
         continue;
@@ -757,8 +808,8 @@ export function scanCss(
     // A rule whose selector or body is past the bounds is not read, and the caller is told which selector, so a rule that could
     // be an overlay's is reported rather than skipped in silence; the rest of the sheet is still read.
     if (brace - i > MAX_PRELUDE_CHARS) onOversized?.("", "prelude");
-    else if (close - brace - 1 > MAX_BODY_CHARS) onOversized?.(css.slice(i, brace).trim().toLowerCase(), "body", hasNestedBlock(css, brace, close));
-    else onRule(css.slice(i, brace).trim().toLowerCase(), css.slice(brace + 1, close), undecided > 0);
+    else if (close - brace - 1 > MAX_BODY_CHARS) onOversized?.(lowerSelector(css.slice(i, brace).trim()), "body", hasNestedBlock(css, brace, close));
+    else onRule(lowerSelector(css.slice(i, brace).trim()), css.slice(brace + 1, close), undecided > 0);
     i = close + 1;
   }
 }
@@ -840,8 +891,8 @@ function scanCssTokens(
     // A rule whose selector or body is past the bounds is not read, and the caller is told which selector (see the plain scan).
     if (ch !== "@") {
       if (open - i > MAX_PRELUDE_CHARS) onOversized?.("", "prelude");
-      else if (close - open - 1 > MAX_BODY_CHARS) onOversized?.(selector.trim().toLowerCase(), "body", hasNestedBlock(css, open, close));
-      else onRule(selector.trim().toLowerCase(), css.slice(open + 1, close), undecided > 0);
+      else if (close - open - 1 > MAX_BODY_CHARS) onOversized?.(lowerSelector(selector.trim()), "body", hasNestedBlock(css, open, close));
+      else onRule(lowerSelector(selector.trim()), css.slice(open + 1, close), undecided > 0);
     }
     i = close + 1;
   }
@@ -900,7 +951,13 @@ function sheetFor(doc: Document, wanted: Wanted, reading: Reading): Sheet {
       const declarations = parseDeclarations(text, reading);
       if (!declarations.some((d) => GEOMETRY.test(d.property))) return;
       const rule: Rule = { selectors, declarations, order: position.next++, atUnknown };
-      for (const parsed of selectors) for (const attr of parsed.attrs) attrNames.add(attr.name);
+      for (const parsed of selectors) {
+        for (const attr of parsed.attrs) {
+          attrNames.add(attr.name);
+          // A value is compared case-sensitively in a browser but case-folded under `all`: the `decided` reading is needed too.
+          if (attr.op !== "" && !attr.ci) hasUnknown.value = true;
+        }
+      }
       if (atUnknown || selectors.some((parsed) => parsed.unknown)) hasUnknown.value = true;
       for (const key of keys) {
         const list = byKey.get(key) ?? [];
@@ -968,11 +1025,13 @@ function sheetFor(doc: Document, wanted: Wanted, reading: Reading): Sheet {
 }
 
 /** Whether an attribute selector holds for the frame's value of the attribute (`undefined`: the attribute is absent). */
-function attrMatches(condition: AttrCondition, raw: string | undefined): boolean {
+function attrMatches(condition: AttrCondition, raw: string | undefined, fold: boolean): boolean {
   if (raw === undefined) return false;
   if (condition.op === "") return true;
-  const have = condition.ci ? raw.toLowerCase() : raw;
-  const want = condition.ci ? condition.value.toLowerCase() : condition.value;
+  // A browser compares a value case-sensitively unless the selector says `i`; the full cascade also reads it case-folded, so a
+  // decoy that only matches once case is ignored can still hide a cover there but never counts as a decided match.
+  const have = condition.ci || fold ? raw.toLowerCase() : raw;
+  const want = condition.ci || fold ? condition.value.toLowerCase() : condition.value;
   switch (condition.op) {
     case "=":
       return have === want;
@@ -1003,7 +1062,7 @@ function matchedSpecificity(rule: Rule, id: string, classes: Set<string>, attr: 
     if (
       selector.classes.every((c) => classes.has(c)) &&
       selector.ids.every((i) => i === id) &&
-      selector.attrs.every((a) => attrMatches(a, attr(a.name)))
+      selector.attrs.every((a) => attrMatches(a, attr(a.name), !decided))
     ) {
       best = selector.specificity;
     }
@@ -1121,7 +1180,7 @@ function resolvedStyle(sheet: Sheet, frame: Element, reading: Reading, mode: Mod
   } else sheet.truncated = true;
   const attr = (name: string): string | undefined => {
     const value = getAttrCI(frame, name);
-    return value === undefined || value === null ? undefined : value.slice(0, MAX_ATTR_CHARS).toLowerCase();
+    return value === undefined || value === null ? undefined : value.slice(0, MAX_ATTR_CHARS);
   };
   const [normal, important] = sheetLayers(sheet, id, classes, attr, sheet.memo, mode) as [Declaration[], Declaration[]];
   const inline = parseDeclarations(getAttrCI(frame, "style") ?? "", reading);
