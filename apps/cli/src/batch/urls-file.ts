@@ -6,7 +6,9 @@
 // classifier: private, loopback, link-local, documentation, benchmarking, multicast and reserved ranges, and NAT64, 6to4,
 // Teredo and site-local IPv6), and a length and a count that bound the work. A line that is refused is returned with its
 // line number and a reason, never dropped silently, so the batch can record it; the text echoed back has userinfo, query
-// values and fragment masked, so a credential in a refused line cannot reach a results file either. The key of a URL,
+// values and fragment masked, so a credential in a refused line cannot reach a results file either. What is NOT masked: the
+// path and the NAMES of query keys are echoed as written, and so are the path and query of an accepted URL, which land in the
+// manifest and in child process arguments: a secret carried in a path or a query key is not protected here. The key of a URL,
 // which names its report and its manifest record, is a hash of the URL: nothing the file says reaches a file name.
 //
 // A file over the byte cap, or listing more than `maxUrls` distinct URLs, is an error before any request is made, not a

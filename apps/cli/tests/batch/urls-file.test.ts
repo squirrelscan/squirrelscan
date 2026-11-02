@@ -445,6 +445,23 @@ describe("the echo of a refused line never holds a credential, whatever the slas
     }
   });
 
+  test("a refused line of 2,049 to 4,096 characters whose `@` is past 2,048 echoes only its size", () => {
+    const s1 = secret(90);
+    for (const total of [2_049, 3_000, 4_096, 4_097, 9_000]) {
+      const tail = "@h.example.com";
+      const userinfo = s1
+        .repeat(Math.ceil((total - 2 - tail.length) / s1.length))
+        .slice(0, total - 2 - tail.length);
+      const line = `//${userinfo}${tail}`; // starts with `/`: the parser refuses it
+      expect(line).toHaveLength(total);
+      const r = ok(`${line}\n`);
+      expect(r.rejected[0]!.text, String(total)).toMatch(
+        /^\[line of \d+\+ characters\]$/
+      );
+      expect(echoOf(line), String(total)).not.toContain(s1.slice(0, 8));
+    }
+  });
+
   test("a userinfo that holds an `@` is masked up to the LAST one when the parser refuses the line", () => {
     const [s1, s2] = [secret(80), secret(81)];
     const echo = echoOf(`//${s1}@${s2}@h.example.com`);
