@@ -397,3 +397,152 @@ describe("hostile files are read in linear time", () => {
     expect(time(() => parseUrlsFile(content))).toBeLessThan(20_000);
   });
 });
+
+describe("the echo of a refused line never holds a credential, whatever the slashes (#1547 round 2)", () => {
+  // each secret is built from parts and numbered, so a leak names the line that leaked it
+  const secret = (n: number): string => ["sec", "ret", String(n)].join("");
+  const echoOf = (line: string): string => {
+    const r = ok(`${line}\n`, { maxRejected: 10 });
+    return JSON.stringify(r.rejected) + JSON.stringify(r.urls);
+  };
+
+  test("every mix of `/` and `\\` after the scheme, any case of the scheme", () => {
+    const shapes = [
+      (u: string, h: string) => `https:/${u}@${h}/`,
+      (u: string, h: string) => `https:///${u}@${h}`,
+      (u: string, h: string) => `https:////${u}@${h}`,
+      (u: string, h: string) => `https:/\\${u}@${h}`,
+      (u: string, h: string) => `https:\\/${u}@${h}`,
+      (u: string, h: string) => `https:\\\\${u}@${h}/x`,
+      (u: string, h: string) => `HTTPS:////${u}@${h}`,
+      (u: string, h: string) => `ftp:///${u}@${h}`,
+      (u: string, h: string) => `ftp://${u}@${h}/`,
+      (u: string, h: string) => `http://${u}@${h}:8080/p?q=1#f`,
+    ];
+    for (const [i, shape] of shapes.entries()) {
+      const s1 = secret(i);
+      const user = `${s1}:${s1}`;
+      expect(
+        echoOf(shape(user, "h.example.com")),
+        shape(user, "h.example.com").replaceAll(s1, "S")
+      ).not.toContain(s1);
+    }
+  });
+
+  test("a line the parser refuses outright still shows no credential-shaped text", () => {
+    const s1 = secret(50);
+    for (const line of [
+      `//${s1}:${s1}@h.example.com`,
+      `/${s1}:${s1}@h.example.com`,
+      `https://${s1}\uFF20h.example.com/`,
+      `https://${s1}\uFE6Bh.example.com/`,
+      `https://${s1}%40h.example.com/`,
+      `https://${s1}%3a${s1}@h.example.com/`,
+      `${s1}:${s1}@h.example.com`,
+      `https://${s1}:${s1}@/x`,
+    ]) {
+      expect(echoOf(line), line.replaceAll(s1, "S")).not.toContain(s1);
+    }
+  });
+
+  test("a userinfo that holds an `@` is masked up to the LAST one when the parser refuses the line", () => {
+    const [s1, s2] = [secret(80), secret(81)];
+    const echo = echoOf(`//${s1}@${s2}@h.example.com`);
+    expect(echo).not.toContain(s1);
+    expect(echo).not.toContain(s2);
+  });
+
+  test("a userinfo longer than the line cap is not echoed, cut or whole", () => {
+    const s1 = secret(60);
+    const long = `https://${s1.repeat(400)}@h.example.com/`; // 3,600 characters
+    expect(echoOf(long)).not.toContain(s1);
+    const huge = `https://${s1.repeat(1_500)}@h.example.com/`; // far past twice the cap
+    expect(echoOf(huge)).not.toContain(s1);
+    const rejected = ok(`${huge}\n`).rejected[0]!;
+    expect(rejected.reason).toBe("too-long");
+    expect(rejected.text).toMatch(/^\[line of \d+\+ characters\]$/);
+    // under the cap it is parsed and rebuilt, whatever its length
+    const near = `https://${s1.repeat(150)}@h.example.com/`;
+    expect(near.length).toBeLessThan(BATCH_URL_MAX_LENGTH);
+    expect(echoOf(near)).not.toContain(s1);
+  });
+
+  test("a randomized differential: 3,000 lines of drawn scheme, separators, userinfo and host", () => {
+    let state = 1547;
+    const next = (n: number): number => {
+      state = (state * 48271) % 2147483647; // Park-Miller
+      return state % n;
+    };
+    const pick = <T>(items: readonly T[]): T => items[next(items.length)]!;
+    const lines: string[] = [];
+    const secrets: string[] = [];
+    for (let i = 0; i < 3_000; i++) {
+      const s1 = secret(1_000 + i);
+      secrets.push(s1);
+      const scheme = pick([
+        "http",
+        "https",
+        "HTTPS",
+        "Http",
+        "ftp",
+        "ws",
+        "javascript",
+        "x-y",
+      ]);
+      const sep = pick([
+        "//",
+        "/",
+        "///",
+        "////",
+        "/\\",
+        "\\/",
+        "\\\\",
+        "",
+        ":",
+        "//\\",
+      ]);
+      const user = pick([`${s1}:${s1}`, s1, `:${s1}`, `${s1}%3a${s1}`]);
+      const at = pick(["@", "@", "@", "\uFF20", "\uFE6B", "%40"]);
+      const host = pick([
+        "h.example.com",
+        "10.0.0.1",
+        "[::1]",
+        "h.example.com:8080",
+        "",
+        "localhost",
+      ]);
+      const tail = pick(["", "/", "/p", `/p?k=${s1}`, `?k=${s1}#${s1}`, "#f"]);
+      lines.push(`${scheme}:${sep}${user}${at}${host}${tail}`);
+    }
+    const r = ok(`${lines.join("\n")}\n`, { maxRejected: 5_000 });
+    const out = JSON.stringify(r.rejected) + JSON.stringify(r.urls);
+    for (const [i, s1] of secrets.entries()) {
+      if (out.includes(s1))
+        throw new Error(
+          `leak of line ${i + 1}: ${lines[i]!.replaceAll(s1, "S")}`
+        );
+    }
+    expect(r.rejectedCount).toBeGreaterThan(2_000);
+  });
+
+  test("the parse that finds userinfo rebuilds the line from its parts: scheme, host, path and masked query", () => {
+    const s1 = secret(70);
+    expect(
+      ok(`https:////${s1}:${s1}@h.example.com:8443/a/b?k=${s1}#${s1}\n`)
+        .rejected[0]!.text
+    ).toBe("https://***@h.example.com:8443/a/b?k=***#***");
+  });
+});
+
+describe("the href cap is on what is audited (#1547 round 2)", () => {
+  test("2,048 characters once parsed is kept, 2,049 is refused, whatever the line's own length", () => {
+    const at = (pad: number) =>
+      `https://a.example.com/${"日".repeat(100)}${"x".repeat(pad)}`; // each 日 is 9 characters once encoded
+    const exact = ok(`${at(1_126)}\n`);
+    expect(exact.urls).toHaveLength(1);
+    expect(exact.urls[0]!.url).toHaveLength(BATCH_URL_MAX_LENGTH);
+    const over = ok(`${at(1_127)}\n`);
+    expect(over.urls).toEqual([]);
+    expect(over.rejected[0]!.reason).toBe("too-long");
+  });
+});
