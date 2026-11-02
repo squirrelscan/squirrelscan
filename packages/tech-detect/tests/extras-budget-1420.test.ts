@@ -511,6 +511,23 @@ describe("the two-step sampler (#1445)", () => {
     const content = body();
     expect(sampleBundleExtras(content, HEAD, EXTRAS)).toBe(createBundleSampler(content, HEAD).sample(EXTRAS, false));
   });
+
+  test("a hint just after the head keeps detector context from just before it", () => {
+    const signal = `var s=mk("https://${REF(1)}.supabase.co","eyJ${"x".repeat(40)}");`;
+    const content = `${";".repeat(HEAD - 20)}${signal}${filler(40_000)}`;
+    const extras = createBundleSampler(content, HEAD).sample(EXTRAS, true);
+    const ids = detectTechnologies(
+      {
+        url: "https://example.com/",
+        headers: {},
+        html: "<html></html>",
+        scripts: [{ url: "https://example.com/a.js", content: extras }],
+      },
+      undefined,
+      { maxScriptChars: 16 * 1024 * 1024 },
+    ).map((technology) => technology.id);
+    expect(ids).toContain("supabase");
+  });
 });
 
 describe("the sampler's scan prefix (#1445)", () => {
