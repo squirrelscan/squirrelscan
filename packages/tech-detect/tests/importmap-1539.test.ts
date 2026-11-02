@@ -5,6 +5,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { detectTechnologies } from "../src";
+import { pageImportMapSkipped, pageMarkup } from "../src/detect";
 
 const page = (head: string, body = "") => `<!doctype html><html><head><title>t</title>${head}</head><body>${body}</body></html>`;
 const ids = (html: string, url = "https://example.com/"): string[] => detectTechnologies({ url, headers: {}, html }).map((t) => t.id);
@@ -92,22 +93,134 @@ describe("what is still not a script URL", () => {
   });
 });
 
+const SYNTHETIC = '<script type="module" src="';
+const synthetic = (html: string): number => pageMarkup(html).split(SYNTHETIC).length - 1;
+
 describe("bounds", () => {
-  test("a map of over 64 KB, more than 256 URLs and a URL over 2,048 characters are not read past the bound", () => {
-    const big = importmap({ pad: "x".repeat(70_000), three: HOSTS[0]! });
-    expect(ids(page(big))).not.toContain("threejs");
-    const many: Record<string, string> = {};
-    for (let i = 0; i < 300; i++) many[`k${i}`] = `./m${i}.js`;
-    many.three = HOSTS[0]!;
-    expect(ids(page(importmap(many)))).not.toContain("threejs");
-    expect(ids(page(importmap({ three: `${HOSTS[0]}?${"a".repeat(2_100)}` })))).not.toContain("threejs");
+  test("a map of over 64 KB, the 65th URL of a map and a URL over 2,048 characters are not read; each is counted", () => {
+    const big = page(importmap({ pad: "x".repeat(70_000), three: HOSTS[0]! }));
+    expect(ids(big)).not.toContain("threejs");
+    expect(pageImportMapSkipped(big)).toBe(1);
+    const sixtyFour: Record<string, string> = {};
+    for (let i = 0; i < 63; i++) sixtyFour[`k${i}`] = `./m${i}.js`;
+    expect(ids(page(importmap({ ...sixtyFour, three: HOSTS[0]! })))).toContain("threejs");
+    const sixtyFive = page(importmap({ ...sixtyFour, k63: "./m63.js", three: HOSTS[0]! }));
+    expect(ids(sixtyFive)).not.toContain("threejs");
+    expect(synthetic(sixtyFive)).toBe(64);
+    expect(pageImportMapSkipped(sixtyFive)).toBe(1);
+    const long = page(importmap({ three: `${HOSTS[0]}?${"a".repeat(2_100)}` }));
+    expect(ids(long)).not.toContain("threejs");
+    expect(pageImportMapSkipped(long)).toBe(1);
   });
 
-  test("a 5 MB page of import maps is read in linear time", () => {
-    const unit = importmap({ a: "./a.js", b: "https://cdn.example.net/b.js", c: "./c.js" });
-    const html = page(unit.repeat(Math.ceil(5_000_000 / unit.length)));
+  test("at most 512 URLs a page: 9 maps of 64, the 513th and later are counted", () => {
+    const maps = Array.from({ length: 9 }, (_, m) => importmap(Object.fromEntries(Array.from({ length: 64 }, (_, i) => [`k${i}`, `./m${m}-${i}.js`])))).join("");
+    const html = page(maps);
+    expect(synthetic(html)).toBe(512);
+    expect(pageImportMapSkipped(html)).toBe(64);
+  });
+
+  test("at most 64 KB of synthetic tags a page: 2,000-character URLs stop at the byte bound", () => {
+    const url = (i: number) => `./${"d".repeat(1_990)}${i}.js`;
+    const maps = Array.from({ length: 3 }, (_, m) => importmap(Object.fromEntries(Array.from({ length: 30 }, (_, i) => [`k${i}`, url(m * 30 + i)])))).join("");
+    const html = page(maps);
+    const count = synthetic(html);
+    expect(count).toBeGreaterThan(20);
+    expect(count).toBeLessThan(40);
+    expect(count * 2_030).toBeLessThanOrEqual(64 * 1024 + 2_030);
+    expect(pageImportMapSkipped(html)).toBe(90 - count);
+  });
+});
+
+describe("a URL cannot forge a tag", () => {
+  const forged = [
+    '"><script src=//evil-three.example/three.js>',
+    '"><img src=x onerror=1><script src="https://evil-three.example/three.module.js',
+    "https://cdn.example.net/a.js\nthree.module.js",
+    "https://cdn.example.net/a.js\n<script src=//evil-three.example/three.js>",
+    "https://cdn.example.net/a b/three.module.js",
+    "https://cdn.example.net/'three.module.js",
+    "https://cdn.example.net/`three.module.js",
+    "https://cdn.example.net/<three.module.js>",
+    "https://cdn.example.net/\\three.module.js",
+    "javascript:three.module.js",
+    "data:text/javascript,three.module.js",
+    "blob:https://example.com/three.module.js",
+  ];
+  test("a quote, bracket, backtick, backslash, whitespace, control character or a scheme other than http(s) is skipped and counted", () => {
+    for (const url of forged) {
+      const html = page(importmap({ lib: url }));
+      expect([url, synthetic(html), pageImportMapSkipped(html), ids(html).includes("threejs")]).toEqual([url, 0, 1, false]);
+      expect(pageMarkup(html)).not.toContain("evil-three");
+    }
+    // a newline written as the JSON escape is a newline in the string, and is rejected too
+    const raw = `<script type="importmap">{"imports":{"lib":"https://cdn.example.net/a.js\\n<script src=//evil-three.example/three.js>"}}</script>`;
+    expect(synthetic(page(raw))).toBe(0);
+  });
+
+  test("a good URL next to forged ones is the only synthetic tag, as exactly one well-formed script tag", () => {
+    const html = page(importmap({ a: forged[0]!, three: HOSTS[0]!, b: forged[3]! }));
+    expect(synthetic(html)).toBe(1);
+    expect(pageMarkup(html)).toContain(`${SYNTHETIC}${HOSTS[0]}"></script>`);
+    expect(ids(html)).toContain("threejs");
+  });
+
+  test("http, https, protocol-relative and relative URLs are kept", () => {
+    const html = page(importmap({ a: "http://cdn.example.net/a.js", b: "https://cdn.example.net/b.js", c: "//cdn.example.net/c.js", d: "./d.js", e: "../e.js", f: "/f.js", g: "g.js" }));
+    expect(synthetic(html)).toBe(7);
+    expect(pageImportMapSkipped(html)).toBe(0);
+  });
+});
+
+describe("hostile pages (5 MB), counted not timed", () => {
+  const time = (html: string): number => {
     const started = performance.now();
     ids(html);
-    expect(performance.now() - started).toBeLessThan(10_000);
+    return performance.now() - started;
+  };
+
+  test("one map with 100,000 entries, and one 5 MB map: over the size bound, skipped, no tag", () => {
+    const entries = Object.fromEntries(Array.from({ length: 100_000 }, (_, i) => [`k${i}`, `./m${i}.js`]));
+    const huge = page(importmap(entries));
+    expect(huge.length).toBeGreaterThan(1_500_000);
+    expect(synthetic(huge)).toBe(0);
+    expect(pageImportMapSkipped(huge)).toBe(1);
+    const five = page(importmap({ pad: "x".repeat(5_000_000) }));
+    expect(synthetic(five)).toBe(0);
+    expect(pageImportMapSkipped(five)).toBe(1);
+    expect(time(huge)).toBeLessThan(10_000);
+    expect(time(five)).toBeLessThan(10_000);
   }, 120_000);
+
+  test("100,000 tiny maps: 512 URLs are read, the rest counted, and the markup holds 512 synthetic tags at most", () => {
+    const unit = importmap({ a: "./a.js" });
+    const html = page(unit.repeat(100_000));
+    expect(html.length).toBeGreaterThan(5_000_000);
+    expect(synthetic(html)).toBe(512);
+    expect(pageImportMapSkipped(html)).toBe(100_000 - 512);
+    expect(time(html)).toBeLessThan(15_000);
+  }, 120_000);
+
+  test("deep scopes: 200 scopes of 5 URLs in one map read the first 64 and count the rest", () => {
+    const scopes: Record<string, Record<string, string>> = {};
+    for (let s = 0; s < 200; s++) scopes[`/s${s}/`] = Object.fromEntries(Array.from({ length: 5 }, (_, i) => [`k${i}`, `./s${s}-${i}.js`]));
+    const html = page(`<script type="importmap">${JSON.stringify({ scopes })}</script>`);
+    expect(html.length).toBeLessThan(64 * 1024 + 2_000);
+    expect(synthetic(html)).toBe(64);
+    expect(pageImportMapSkipped(html)).toBe(1_000 - 64);
+  });
+});
+
+describe("precision", () => {
+  test("the word importmap in prose or a comment, JSON outside an importmap script, and a map of other vendors", () => {
+    for (const html of [
+      page("", `<p>Use an importmap: {"imports":{"three":"${HOSTS[0]}"}}</p>`),
+      page("<!-- <script type=\"importmap\">" + JSON.stringify({ imports: { three: HOSTS[0] } }) + "</script> -->"),
+      page(`<div data-importmap='${JSON.stringify({ imports: { three: HOSTS[0] } })}'></div>`),
+      page(`<script type="application/importmap+json">${JSON.stringify({ imports: { three: HOSTS[0] } })}</script>`.replace("application/importmap+json", "application/json")),
+      page(importmap({ lodash: "https://cdn.jsdelivr.net/npm/lodash-es@4/lodash.js", app: "./app.js" })),
+    ]) {
+      expect(ids(html)).not.toContain("threejs");
+    }
+  });
 });
