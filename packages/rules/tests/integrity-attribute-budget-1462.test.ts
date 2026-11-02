@@ -5,6 +5,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { parsePage } from "@squirrelscan/parser";
 
+import { RuleRunner } from "../src/runner";
 import { attributeLimits, readControlAttributes, scanControls, shortlist } from "../src/integrity/controls";
 
 const url = "https://example.com/";
@@ -68,6 +69,30 @@ describe("the shortlist is charged per control and per attribute", () => {
     expect(scanControls(doc(`<a href="${O}" ${junk(100)}>x</a>`)).unread).toBe(1);
     expect(scanControls(doc(`<a href="${O}" ${junk(63)}>x</a>`)).unread).toBe(0);
   });
+
+  test("a cut attribute read is never a silent skip: a link whose href or cue is past the 64th attribute is counted unread", () => {
+    const junk = Array.from({ length: 70 }, (_, i) => `d${i}="v"`).join(" ");
+    // href past the cut: no destination was read, the control is counted (before: skipped as having none)
+    expect(scanControls(doc(`<a ${junk} href="${O}">Sign in with Google</a>`)).unread).toBe(1);
+    // a plainly local link whose cue attribute is past the cut: counted (before: skipped as having no cue)
+    expect(scanControls(doc(`<a href="/x" ${junk} aria-label="Sign in with Google">x</a>`)).unread).toBe(1);
+    // the same links with their attributes inside the cut are read as before
+    expect(scanControls(doc(`<a href="/x" aria-label="Sign in with Google">x</a>`)).unread).toBe(0);
+    // a link with no href and a short attribute list has no destination and is not counted
+    expect(scanControls(doc(`<a name="top">x</a><a href="${O}">y</a>`)).unread).toBe(0);
+  });
+
+  test("decoys that exhaust the listing budget, then the real control: counted unread and the rule reports scanTruncated", async () => {
+    attributeLimits.shortlist = 1_000;
+    const body = `${`<a href="${O}" a="1">x</a>`.repeat(2_000)}<a href="${OFF}">Sign in with Google</a>`;
+    expect(scanControls(doc(body)).unread).toBeGreaterThanOrEqual(1_501);
+    const parsed = parsePage(page(body), url);
+    const runner = new RuleRunner({ config: { rule_options: {}, rules: { enable: ["integrity/brand-impersonation"] } } as never, ruleTimeBudgetMs: 0 });
+    const result = await runner.runPageRules({ url, html: page(body), statusCode: 200, loadTime: 0, headers: {}, parsed } as never);
+    const brand = (result.checks as Array<{ name?: string; details?: Record<string, unknown> }>).find((c) => c.name === "brand-impersonation");
+    expect(brand?.details?.scanTruncated).toBe(true);
+    expect(Number(brand?.details?.controlsUnread)).toBeGreaterThanOrEqual(1_501);
+  }, 60_000);
 
   test("scanControls counts controls the page budget did not cover as unread", () => {
     attributeLimits.shortlist = 2_000;
