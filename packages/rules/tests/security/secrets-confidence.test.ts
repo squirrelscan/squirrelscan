@@ -342,14 +342,44 @@ describe("JWT claims", () => {
     }
   });
 
-  test("a header with no string alg over a payload that decodes keeps its classification (#1283)", () => {
-    const plain = b64u({ iat: 1700000000, pad: "p".repeat(80) });
-    const admin = b64u({ role: "service_role", iss: "supabase", ref: "abc", pad: "p".repeat(80) });
-    for (const head of [{ typ: "JWT" }, { kid: "k1" }, { alg: 256 }, { alg: null }, { alg: ["HS256"] }, { alg: { a: 1 } }]) {
-      const label = JSON.stringify(head);
-      expect([label, refineFinding("JSON Web Token", `${b64u(head)}.${plain}.c2ln`, NOW)?.type]).toEqual([label, "JSON Web Token"]);
-      expect([label, refineFinding("JSON Web Token", `${b64u(head)}.${admin}.c2ln`, NOW)?.type]).toEqual([label, "Supabase Service Role JWT"]);
+  const NO_ALG: Array<[string, unknown]> = [
+    ["no alg", { typ: "JWT" }],
+    ["kid only", { kid: "k1" }],
+    ["alg null", { alg: null }],
+    ["alg number", { alg: 256 }],
+    ["alg array", { alg: ["HS256"] }],
+    ["alg object", { alg: { a: 1 } }],
+  ];
+
+  test("a header with no string alg keeps a specific classification of its payload (#1283)", () => {
+    const exp = Math.floor(NOW / 1000) + 3_600;
+    const payloads: Array<[string, Record<string, unknown>, string]> = [
+      ["service role", { role: "service_role", iss: "supabase", ref: "abc" }, "Supabase Service Role JWT"],
+      ["admin scope", { scope: "admin" }, "JSON Web Token (admin scope)"],
+      ["hygraph management", { iss: "https://management-eu.hygraph.com/graphql" }, "Hygraph Management Token"],
+      ["hygraph content", { iss: "https://eu.hygraph.com/graphql" }, "Hygraph Content API Token"],
+      ["supabase anon", { iss: "supabase", role: "anon", ref: "abc" }, "Supabase Anon Key"],
+      ["supabase authenticated", { iss: "supabase", role: "authenticated", ref: "abc" }, "Supabase JWT"],
+      ["shopify storefront", { iss: "https://acme.myshopify.com", exp }, "Shopify Storefront JWT"],
+    ];
+    for (const [head, headerValue] of NO_ALG) {
+      for (const [name, claims, type] of payloads) {
+        const value = `${b64u(headerValue)}.${b64u({ iat: 1700000000, pad: "p".repeat(80), ...claims })}.c2ln`;
+        expect([head, name, refineFinding("JSON Web Token", value, NOW)?.type]).toEqual([head, name, type]);
+      }
     }
+  });
+
+  test("a header with no string alg over a plain generic payload is dropped, and so are permissions [*] and an expired plain token (#1283)", () => {
+    const plain = [{ sub: "u1" }, { permissions: ["*"] }, { sub: "u1", exp: 1_000_000_000 }, { sub: "u1", exp: Math.floor(NOW / 1000) + 3_600, iat: 1700000000 }];
+    for (const [head, headerValue] of NO_ALG) {
+      for (const claims of plain) {
+        const value = `${b64u(headerValue)}.${b64u({ pad: "p".repeat(80), ...claims })}.c2ln`;
+        expect([head, JSON.stringify(claims), refineFinding("JSON Web Token", value, NOW)]).toEqual([head, JSON.stringify(claims), { drop: true }]);
+      }
+    }
+    // the same payloads under a string alg report
+    expect(refineFinding("JSON Web Token", `${header}.${b64u({ sub: "u1", pad: "p".repeat(80) })}.c2ln`, NOW)?.type).toBe("JSON Web Token");
   });
 
   test("a part past 8,192 characters or nested 5,000 deep is reported, a privileged payload included (#1283)", () => {

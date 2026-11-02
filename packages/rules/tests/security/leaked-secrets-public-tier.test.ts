@@ -54,9 +54,10 @@ describe("Shopify platform tokens (#1287)", () => {
     expect(found(`var w="${jwt({ ...wallet, scope: "admin" })}";`)).toEqual([["JSON Web Token (admin scope)", "high", false]]);
     expect(found(`var w="${jwt({ ...wallet, role: "service_role" })}";`).map((f) => f[2])).toEqual([false]);
     expect(found(`var w="${jwt({ iat: 1761000000, merchantId: "58212" })}";`)).toEqual([["JSON Web Token", "medium", false]]);
-    for (const header of [{ alg: "none", typ: "JWT" }, { typ: "JWT" }]) {
-      expect(found(`var w="${jwt(wallet, header)}";`)).toEqual([["JSON Web Token", "medium", false]]);
-    }
+    // `alg: none` is a string: the generic token. A header with no string `alg` gives no beacon class and the payload is a plain generic
+    // one, which is dropped (#1283); the beacon branch needs a string alg, so a wallet-shaped payload is not public under it.
+    expect(found(`var w="${jwt(wallet, { alg: "none", typ: "JWT" })}";`)).toEqual([["JSON Web Token", "medium", false]]);
+    expect(found(`var w="${jwt(wallet, { typ: "JWT" })}";`)).toEqual([]);
   });
 
   describe("Shopify's platform bundles", () => {
@@ -163,6 +164,8 @@ describe("the Netlify web vitals beacon (#1229)", () => {
       expect(found(`<div data-netlify-cwv-token="${jwt({ ...claims, ...extra })}"></div>`, "html").map((f) => f[2])).toEqual([false]);
     }
     expect(found(`<div data-netlify-cwv-token="${jwt(claims, { alg: "none" })}"></div>`, "html").map((f) => f[2])).toEqual([false]);
+    // no string alg: not the beacon class, and a plain generic token is dropped (#1283)
+    expect(found(`<div data-netlify-cwv-token="${jwt(claims, { typ: "JWT" })}"></div>`, "html")).toEqual([]);
   });
 });
 

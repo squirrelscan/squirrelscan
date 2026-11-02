@@ -68,6 +68,20 @@ describe("a token that cannot be read in full is reported, never dropped (fail c
   });
 });
 
+describe("a decoy segment before a real token", () => {
+  const real = `${b64u({ alg: "HS256" })}.${b64u({ role: "service_role", iss: "supabase", ref: "abc", pad: "p".repeat(40) })}.${sig()}`;
+  const decoy = (c: string) => `eyJ${c.repeat(30)}`;
+
+  test("one decoy: the real token is classified, not dropped; a space between them is a plain token", () => {
+    expect(types(`var t="${decoy("a")}.${real}";`)).toEqual(["Supabase Service Role JWT"]);
+    expect(types(`var t="${decoy("a")} ${real}";`)).toEqual(["Supabase Service Role JWT"]);
+  });
+
+  test("known limit: two decoys in a row consume the real payload, and the match is dropped", () => {
+    expect(types(`var t="${decoy("a")}.${decoy("b")}.${real}";`)).toEqual([]);
+  });
+});
+
 describe("real JWTs still report", () => {
   const payload = (extra: Record<string, unknown> = {}) => b64u({ sub: "u1", pad: "p".repeat(60), ...extra });
 
