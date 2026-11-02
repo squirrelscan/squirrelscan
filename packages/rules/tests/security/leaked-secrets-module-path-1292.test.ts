@@ -1,5 +1,5 @@
 // security/leaked-secrets: an AMD / RequireJS module path under a credential-named key is not a credential (#1292). The rule is narrow:
-// short word segments, a `Vendor_Module` head or a `js` segment, no digit runs or mixed-case runs. Random base64-ish values with `/` still report.
+// segments of words from a list of module-path words (at most three per segment), a `Vendor_Module` head or a `js` segment, at most two digits and three capitals per segment. Random base64-ish values with `/` still report.
 
 import { describe, expect, test } from "bun:test";
 
@@ -76,5 +76,68 @@ describe("values that are not module paths still report", () => {
       if (isModulePath(candidate)) dropped++;
     }
     expect(dropped).toBe(0);
+  });
+});
+
+describe("the words are a list: a drawn lower-case run is not a word", () => {
+  const rng = seededRng(1292_7);
+  const LOWER = "abcdefghijklmnopqrstuvwxyz";
+  const draw = (n: number) => runOf(rng as never, LOWER, n);
+
+  test("a lower-case tail after a Vendor_Module head, a js segment or both is not a module path", () => {
+    for (let i = 0; i < 2_000; i++) {
+      const n = 8 + Math.floor(rng() * 33);
+      for (const value of [`Magento_Customer/${draw(n)}`, `${draw(3)}/js/${draw(n)}`, `Stripe_Live/js/${draw(20)}`, `Magento_Customer/js/${draw(n)}/${draw(n)}`]) {
+        expect([value, isModulePath(value)]).toEqual([value, false]);
+      }
+    }
+  });
+
+  test("random lower-case values of 8 to 40 letters with one to three slashes: none of 100,000 is a module path", () => {
+    let dropped = 0;
+    for (let i = 0; i < 100_000; i++) {
+      const length = 8 + Math.floor(rng() * 33);
+      const chars = draw(length).split("");
+      for (let s = 0; s < 1 + Math.floor(rng() * 3); s++) chars[1 + Math.floor(rng() * (length - 2))] = "/";
+      if (isModulePath(chars.join(""))) dropped++;
+    }
+    expect(dropped).toBe(0);
+  });
+
+  test("a word outside the list, a fourth word in a segment and a plural of a listed word", () => {
+    expect(isModulePath("Magento_Customer/js/zorblax")).toBe(false);
+    expect(isModulePath("Magento_Customer/js/change-email-password-reset")).toBe(false);
+    expect(isModulePath("Magento_Customer/js/change-email-password")).toBe(true);
+    expect(isModulePath("Magento_Customer/js/models/quotes")).toBe(true);
+    expect(isModulePath("Magento_Customer/js/dialogs/overlays")).toBe(true);
+  });
+});
+
+describe("the bounds are exact", () => {
+  test("a segment of 32 characters passes, one of 34 does not; a path of 128 passes, one of 150 does not", () => {
+    expect(isModulePath("Magento_Customer/js/customer-registration-confirm")).toBe(true); // 31
+    expect(isModulePath("Magento_Customer/js/customer-registration-confirmation")).toBe(false); // 34
+    const path = (n: number) => `Magento_Customer/js/${"model/".repeat(n)}form`;
+    expect(path(14).length).toBeLessThanOrEqual(128);
+    expect(isModulePath(path(14))).toBe(true);
+    expect(path(25).length).toBeGreaterThan(128);
+    expect(isModulePath(path(25))).toBe(false);
+  });
+
+  test("two digits in a segment pass, three do not", () => {
+    expect(isModulePath("Magento_Customer/js/model22")).toBe(true);
+    expect(isModulePath("Magento_Customer/js/model222")).toBe(false);
+  });
+
+  test("a segment with three capitals after its first letter passes, five do not", () => {
+    expect(isModulePath("Magento_Customer/js/modelQuoteCartData")).toBe(true);
+    expect(isModulePath("Magento_Customer/js/modelQuoteCartDataFormItem")).toBe(false);
+  });
+
+  test("the path needs a Vendor_Module head or a js segment: listed words alone are not enough", () => {
+    expect(isModulePath("app/js/auth/token")).toBe(true);
+    expect(isModulePath("app/lib/auth/token")).toBe(false);
+    expect(isModulePath("Magento_Customer/lib/auth")).toBe(true);
+    expect(isModulePath("Magento/Customer/lib/auth")).toBe(false);
   });
 });
