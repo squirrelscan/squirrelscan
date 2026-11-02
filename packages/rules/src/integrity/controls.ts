@@ -13,7 +13,7 @@
 import { getAttrCI } from "@squirrelscan/utils";
 
 import { BRAND_SPECS } from "./brand-specs";
-import { CONFUSABLE_RUN, CONFUSABLES, INVISIBLE, digitForms } from "./confusables";
+import { CONFUSABLE_RUN, CONFUSABLES, INVISIBLE, digitForms, hasFoldableDigit } from "./confusables";
 import { AUTH_CUE_PHRASES, AUTH_LABEL } from "./cues";
 import { hiddenSelectors } from "./overlay-style";
 
@@ -37,6 +37,8 @@ export function readable(text: string): string {
   return text
     .replace(INVISIBLE, "")
     .replace(/\p{M}+/gu, "")
+    // The lunate sigma, small and capital (U+03F2, U+03F9), draws a `c`; NFKC would turn them into sigmas that draw an `o` or a `s`.
+    .replace(/[\u03f2\u03f9]/g, "c")
     .normalize("NFKC")
     .normalize("NFD")
     .replace(/\p{M}/gu, "")
@@ -81,18 +83,32 @@ const ATTR_STRIDE = ATTR_CHARS / 2;
  * a word gets a letter stuck on it (`x`): a window cut out of `Redesign in with Google` must not read as `sign in
  * with Google`, and a cue half-cut by the edge must not read as a whole word either.
  */
-function boundedAttribute(text: string): { texts: string[]; cut: boolean } {
+function boundedAttribute(text: string, fold?: { left: number }): { texts: string[][]; cut: boolean } {
   const normalised = readable(text.slice(0, ATTR_RAW_CHARS)).trim();
   const limited = normalised.slice(0, ATTR_RAW_CHARS);
-  const texts: string[] = [];
-  for (let start = 0; start < limited.length; start += ATTR_STRIDE) {
-    const end = Math.min(limited.length, start + ATTR_CHARS);
-    const before = start > 0 && limited[start - 1] !== " " ? "x" : "";
-    const after = end < limited.length && limited[end] !== " " ? "x" : "";
-    texts.push(`${before}${limited.slice(start, end)}${after}`);
-    if (start + ATTR_CHARS >= limited.length) break;
+  let cut = text.length > ATTR_RAW_CHARS || normalised.length > ATTR_RAW_CHARS;
+  // A kit that writes digits for letters (`S1gn 1n w1th G00g1e`) is read as the letters too: both readings are windowed. The
+  // fold is charged to the page's budget; past it the attribute is read as written and counted cut.
+  const readings = [limited];
+  if (hasFoldableDigit(limited)) {
+    if (fold === undefined || fold.left >= limited.length) {
+      if (fold) fold.left -= limited.length;
+      readings.splice(0, 1, ...digitForms(limited));
+    } else cut = true;
   }
-  return { texts, cut: text.length > ATTR_RAW_CHARS || normalised.length > ATTR_RAW_CHARS };
+  // One window list per reading: each reading keeps its own always-read first window.
+  const texts = readings.map((reading) => {
+    const windows: string[] = [];
+    for (let start = 0; start < reading.length; start += ATTR_STRIDE) {
+      const end = Math.min(reading.length, start + ATTR_CHARS);
+      const before = start > 0 && reading[start - 1] !== " " ? "x" : "";
+      const after = end < reading.length && reading[end] !== " " ? "x" : "";
+      windows.push(`${before}${reading.slice(start, end)}${after}`);
+      if (start + ATTR_CHARS >= reading.length) break;
+    }
+    return windows;
+  });
+  return { texts, cut };
 }
 
 /**
@@ -327,6 +343,10 @@ const MAX_ATTRIBUTES_PER_CONTROL = 4_096;
 const SHORTLIST_ATTRIBUTE_BUDGET = 2_000_000;
 /** The same for reading each prepared control's label attributes. */
 const PREPARE_ATTRIBUTE_BUDGET = 1_500_000;
+/** Characters the digit fold (`S1gn 1n`) reads on a page, in labels and attributes; a text past it is read as written and counted unread. */
+const FOLD_CHAR_BUDGET = 2_000_000;
+/** The longest text the digit fold reads at once (the attribute bound); a longer label is folded to this and counted unread. */
+const FOLD_LABEL_MAX_CHARS = 16_000;
 
 /** A control's attributes as one pass reads them: the names compared by length first, so a junk name costs no string work. */
 export interface ControlAttributes {
@@ -385,7 +405,7 @@ export function readControlAttributes(el: Element): ControlAttributes {
 }
 
 /** What `scanControls` spends the page's attribute work on: a mutable object so a test can lower the budgets. */
-export const attributeLimits = { shortlist: SHORTLIST_ATTRIBUTE_BUDGET, prepare: PREPARE_ATTRIBUTE_BUDGET };
+export const attributeLimits = { shortlist: SHORTLIST_ATTRIBUTE_BUDGET, prepare: PREPARE_ATTRIBUTE_BUDGET, fold: FOLD_CHAR_BUDGET };
 
 /** A test hook, off in production: when `enabled`, counts the distinct `aria-labelledby` targets whose text was read. */
 export const integrityCounters = { enabled: false, targetReads: 0 };
@@ -652,6 +672,8 @@ export function scanControls(doc: Document): ControlScan {
   // Phase 1: each control's attribute windows, and whether an attribute holds a sign-in or brand word as written (a
   // cheap test on the raw text; a look-alike spelling misses it and is served in the second tier, never skipped).
   const prepareBudget = { left: attributeLimits.prepare };
+  // Characters the digit fold may read in all, attributes and text labels together (a fold is linear in what it reads, never free).
+  const foldBudget = { left: attributeLimits.fold };
   const gathered = chosen.map(({ element, href, target, order, read }) => {
     const tag = element.tagName.toLowerCase();
     // The attributes were read once when the controls were listed; here only what they name is looked up. The page's budget is
@@ -673,10 +695,10 @@ export function scanControls(doc: Document): ControlScan {
       : []
     ).filter((v): v is string => typeof v === "string" && v !== "");
     const rawCue = raw.some((v) => RAW_CUE.test(v.length > ATTR_RAW_CHARS ? v.slice(0, ATTR_RAW_CHARS) : v));
-    const windows = raw.map((v) => {
-      const bounded = boundedAttribute(v);
+    const windows = raw.flatMap((v) => {
+      const bounded = boundedAttribute(v, foldBudget);
       cut ||= bounded.cut;
-      return bounded.texts.filter((text) => text !== "");
+      return bounded.texts.map((texts) => texts.filter((text) => text !== ""));
     });
     return { element, tag, href, target, order, rawCue, windows, cut };
   });
@@ -766,13 +788,28 @@ export function scanControls(doc: Document): ControlScan {
     // A control counts once, whichever of its bounds it hit: its attributes, its window caps and its text read share one entry.
     if (read.cut && item.rank >= 2) cutControls.add(i);
   }
-  const unread = notPrepared + cutControls.size;
 
   const controls = prepared.map((item, i) => {
     const read = reads[i];
     // Deduplicated before the (costly) normalisation, not after.
-    const raw = new Set([...(read ? formsOf(read.chunks) : []), ...item.extra]);
-    const labels = [...new Set([...raw].flatMap((text) => digitForms(readable(text))).filter((f) => f.trim() !== ""))];
+    // The attributes (`item.extra`) were folded when their windows were made, both readings; only the text read is folded here.
+    const foldedText = (text: string): string[] => {
+      const plain = readable(text);
+      if (!hasFoldableDigit(plain)) return [plain];
+      // The digit fold is bounded: a label is folded to at most 16,000 characters and the page's fold budget, and a
+      // control whose label was not folded in full is counted unread.
+      const head = plain.length > FOLD_LABEL_MAX_CHARS ? plain.slice(0, FOLD_LABEL_MAX_CHARS) : plain;
+      if (plain.length > FOLD_LABEL_MAX_CHARS) cutControls.add(i);
+      if (foldBudget.left < head.length) {
+        cutControls.add(i);
+        return [plain];
+      }
+      foldBudget.left -= head.length;
+      return [plain, ...digitForms(head).slice(1)];
+    };
+    const readings = [...new Set(item.extra)].map((text) => readable(text));
+    for (const text of new Set(read ? formsOf(read.chunks) : [])) readings.push(...foldedText(text));
+    const labels = [...new Set(readings.filter((f) => f.trim() !== ""))];
     return {
       element: item.element,
       href: item.href,
@@ -780,6 +817,7 @@ export function scanControls(doc: Document): ControlScan {
       squashed: [...new Set(labels.map((l) => l.replace(/ /g, "")))],
     };
   });
+  const unread = notPrepared + cutControls.size;
   const scan = { controls, unread, templatesUnread: templatesCut, hiddenCssTruncated: hiddenBy.truncated };
   scanCache.set(doc, scan);
   return scan;
