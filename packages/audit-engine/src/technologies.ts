@@ -290,7 +290,7 @@ function spreadBundleExtras(
   for (const { cap, windowsOnly } of steps) {
     open.forEach((item, k) => {
       const held = item.extrasBytes;
-      const r = Math.min(
+      let r = Math.min(
         cap,
         bundleBytes - item.headBytes - SEGMENT_SEPARATOR.length,
         room() + held - SEGMENT_SEPARATOR.length,
@@ -302,13 +302,34 @@ function spreadBundleExtras(
         sampler = createBundleSampler(item.content, item.head.length, allowances[k]);
         samplers.set(item, sampler);
       }
-      const extras = truncateToBytes(sampler.sample(r, windowsOnly), r);
+      let extras = truncateToBytes(sampler.sample(r, windowsOnly), r);
       if (!extras) return;
+      let extrasStart = sampler.firstSourceChar();
+      // A detector can need the context immediately before the head boundary.
+      // Keep that context in the sampled window, then remove the same source
+      // characters from the head so the joined body carries them only once.
+      while (extrasStart !== null && extrasStart < item.head.length) {
+        const head = item.content.slice(0, extrasStart);
+        const headBytes = byteLength(head);
+        charge(headBytes - item.headBytes);
+        item.head = head;
+        item.headBytes = headBytes;
+        const expanded = Math.min(
+          cap,
+          bundleBytes - item.headBytes - SEGMENT_SEPARATOR.length,
+          room() + held - SEGMENT_SEPARATOR.length,
+        );
+        if (expanded <= r) break;
+        r = expanded;
+        extras = truncateToBytes(sampler.sample(r, windowsOnly), r);
+        if (!extras) return;
+        extrasStart = sampler.firstSourceChar();
+      }
       const bytes = byteLength(extras) + SEGMENT_SEPARATOR.length;
       charge(bytes - held);
       item.extras = extras;
       item.extrasBytes = bytes;
-      item.extrasStart = sampler.firstSourceChar();
+      item.extrasStart = extrasStart;
     });
   }
 }
