@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **`security/leaked-secrets` no longer fails, or balloons, on a page full of secret-shaped values.** A page kept every finding it made, and the rule merged them with a spread (`push(...findings)`), which throws `RangeError: Maximum call stack size exceeded` past a few hundred thousand: one generated page took the whole site's result with it. A 10 MB page of key shapes also kept 245 to 277 MB of findings, made a rule result of 107 MB and peaked at 1.25 to 1.41 GB. A page or external script now keeps at most 1,000 findings (the report's own per-check item cap), critical first, then high, medium and public or informational, each in scan order. A check lists at most 1,000 items and records the rest in `details.additional`. What was left out is counted: a `leaked-secrets-omitted` warning gives the number and lists the pages that lost findings. The merge is a loop. The same 10 MB page now keeps well under 1 MB and gives a result under 200 KB. A site with fewer findings than the caps is unchanged. (#1554)
+
 ## v0.0.160 (2026-11-02)
 
 The integrity and secrets rules are harder to talk around and no longer break on hostile pages: `security/leaked-secrets` keeps a password in sample data or a value that ends in an ellipsis instead of dropping it, and its records no longer hold the page they came from; `integrity/brand-impersonation` and `integrity/fake-auth-overlay` read more look-alike spellings and more of the CSS that styles an overlay, stop sparing sign-in links that go to user content on a brand's domain, and are no longer abandoned on pages of tens of thousands of controls. Technology detection reads import maps, and its bundle samples no longer repeat text and fill their allowance (William's #1536, with our allowance fix on top). The `--max-duration` parse cap holds for cached pages, and the docs say that only rendering runs in the cloud.
