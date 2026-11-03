@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+## v0.0.161 (2026-11-04)
+
+A reliability release: a page with a huge class attribute no longer fails the audit, `security/leaked-secrets` keeps its memory and its findings bounded on crafted pages and sites, and NAT64, 6to4 and other special-use IPv6 addresses are treated as non-public where policy is decided.
+
 ### Fixed
 
 - **NAT64, 6to4, Teredo and the other special-use addresses are treated as non-public where policy is decided.** The shared host classifier named loopback, private, link-local, CGNAT and ULA ranges only, so a start URL such as `http://[64:ff9b::a00:1]/` (NAT64 for 10.0.0.1) or `http://[2002:a00:1::]/` (6to4) was handed to the cloud, billed for a render, published and given the production delivery rules as if it were public. Cloud handoff, the render charge, publish and register gating, the MCP billing note, the `skipOnPrivateTarget` rule gating, a smart audit's not-applicable list and the default scheme now use a wider test that also names NAT64, 6to4, Teredo, ISATAP, site-local, multicast and documentation IPv6 literals and the IPv4 documentation, benchmarking, multicast and reserved ranges, whatever IPv4 they embed. The egress guards and the private-network allowance of a start URL's redirects are unchanged. A fixture that wants a public literal must use a real public address: `203.0.113.x` and the other documentation ranges are no longer public here. (#1560)
