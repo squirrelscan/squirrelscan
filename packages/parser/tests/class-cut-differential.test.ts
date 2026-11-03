@@ -79,6 +79,12 @@ const CASES: Array<[string, string]> = [
   ["whitespace as &#10; and &#x0C;", `<p id=a class="${T(6, "&#10;")}&#x0C;${T(6, "&#x0C;", "d")}">${AFTER}`],
   ["a token that starts with an entity", `<p id=a class="${T(5)} &amp;c5 c6 c7">${AFTER}`],
   ["a token that starts after a whitespace entity and an entity", `<p id=a class="${T(5)}&#32;&amp;c5&#32;c6&#32;c7">${AFTER}`],
+  // token LIMIT + 1 begins while the value so far is entities only (no raw text between them)
+  ["every token and separator is a numeric entity", `<div id=x class="${Array.from({ length: 12 }, (_, i) => `&#${97 + i};&#${97 + i};`).join("&#32;")}"><h1>H</h1></div>${AFTER}`],
+  ["entity-led tokens in a long run of entities", `<div id=x class="${Array.from({ length: 12 }, (_, i) => `&#${97 + i};`).join("&#32;")}"><h1>H</h1></div>${AFTER}`],
+  ["unquoted value of entities", `<p id=a class=${Array.from({ length: 12 }, (_, i) => `&#${97 + i};`).join("&#x20;")}>${AFTER}`],
+  ["named entities mixed with whitespace entities", `<p id=a class="${Array.from({ length: 12 }, (_, i) => `&lt&#${97 + i};`).join("&#32;&#32;")}">${AFTER}`],
+  ["entities then raw text then entities", `<p id=a class="&#97;&#32;&#98;&#32;&#99;&#32;&#100;&#32;&#101;&#32;f g&#32;&#104;">${AFTER}`],
   ["NBSP separators are one token", `<p id=a class="${T(12, " ")}">${AFTER}`],
   ["NBSP entity separators are one token", `<p id=a class="${T(12, "&nbsp;")}">${AFTER}`],
   ["U+2003, U+FEFF and VT separators are one token", `<p id=a class="${T(4, " ")}${T(4, "﻿", "d")}${T(4, "\u000b", "e")}">${AFTER}`],
@@ -124,6 +130,13 @@ const CASES: Array<[string, string]> = [
 
 describe("the cut leaves the tree the tokenizer reads, and cuts only the class it reads", () => {
   for (const [name, html] of CASES) test(name, () => expectSameTreeCutOnlyClass(html));
+
+  test("htmlparser2 resolves to the same copy for this package and for linkedom (a split copy would make the cut read another tokenizer)", () => {
+    const here = Bun.resolveSync("htmlparser2", import.meta.dir);
+    const linkedomDir = Bun.resolveSync("linkedom", import.meta.dir);
+    const viaLinkedom = Bun.resolveSync("htmlparser2", linkedomDir);
+    expect(here).toBe(viaLinkedom);
+  });
 
   test("the first LIMIT tokens survive, in order, as a prefix", () => {
     const { text } = impl.truncateClassAttributes(`<p id=a class="${N}">`, LIMIT);

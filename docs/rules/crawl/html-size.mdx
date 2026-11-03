@@ -100,6 +100,8 @@ The rule emits a second check, `html-parse`, when a page's markup had to be degr
 
 Either way the page gets a warning, `html-parse`, that says which. Its findings were made on what could be read: rules that match on class names (an overlay, a cookie banner, an interstitial) do not see the tokens past the 20,000th on a cut attribute, and an empty page reports the elements it never saw as missing. Shorten the class list (a real one has tens of tokens) and audit the page again. One page like this does not stop the audit: the other pages are audited and the report is written. A page that parses the first time is not changed.
 
+The parser splits an HTML element's `class` value on tab, line feed, form feed, carriage return and space only, so a no-break space stays inside a token as it does in a browser. This covers HTML elements only: an `<svg>` element's class is still split on every JavaScript whitespace character, CSS selectors such as `.a` and `[class~=a]` still match across a no-break space, and rules that split a class value themselves on `\s+` are unchanged.
+
 ## References
 
 - [Inside Googlebot: crawling, fetching and the bytes we process, Google Search Central](https://developers.google.com/search/blog/2026/03/crawler-blog-post)
