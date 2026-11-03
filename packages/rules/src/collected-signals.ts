@@ -49,6 +49,8 @@ export interface CollectedPageSignal {
   secrets: LeakedSecret[];
   /** leaked-secrets: findings past the per-page cap that were not kept (#1554); absent when none. */
   secretsOmitted?: number;
+  /** Whether any omitted finding was more serious than public or informational; absent reads as true (unknown). */
+  secretsOmittedSerious?: boolean;
   /** total-byte-weight: summed inline `<style>` / inline `<script>` text lengths. */
   inlineCssLen: number;
   inlineJsLen: number;
@@ -115,6 +117,8 @@ export interface CollectedPageSignal {
 /** The collected per-page signals for one crawl, in page-stream (crawl) order. */
 export interface CollectedSiteSignals {
   pages: CollectedPageSignal[];
+  /** The crawl's one budget of kept leaked-secrets findings (#1568); the rule shares it for external scripts. */
+  secretsBudget?: SiteFindingBudget;
 }
 
 /**
@@ -230,7 +234,7 @@ export function buildCollectedPageSignal(input: {
   const signal: CollectedPageSignal = {
     url,
     secrets: scanned.secrets,
-    ...(scanned.omitted > 0 ? { secretsOmitted: scanned.omitted } : {}),
+    ...(scanned.omitted > 0 ? { secretsOmitted: scanned.omitted, secretsOmittedSerious: scanned.omittedSerious } : {}),
     inlineCssLen: byteSignal.inlineCssLen,
     inlineJsLen: byteSignal.inlineJsLen,
     htmlBytes,
@@ -285,9 +289,10 @@ export function applySiteFindingBudget(signal: CollectedPageSignal, budget: Site
   const admitted = budget.admit(signal.secrets);
   if (admitted.omitted === 0 && admitted.secrets.length === signal.secrets.length) return signal;
   const omitted = (signal.secretsOmitted ?? 0) + admitted.omitted;
-  const { secretsOmitted: _unused, ...rest } = signal;
-  void _unused;
-  return { ...rest, secrets: admitted.secrets, ...(omitted > 0 ? { secretsOmitted: omitted } : {}) };
+  const { secretsOmitted: _a, secretsOmittedSerious: _b, ...rest } = signal;
+  void [_a, _b];
+  const serious = admitted.omittedSerious || (signal.secretsOmitted ? (signal.secretsOmittedSerious ?? true) : false);
+  return { ...rest, secrets: admitted.secrets, ...(omitted > 0 ? { secretsOmitted: omitted, secretsOmittedSerious: serious } : {}) };
 }
 
 export { createSiteFindingBudget, SITE_FINDINGS_CAP, type SiteFindingBudget } from "./security/leaked-secrets";
