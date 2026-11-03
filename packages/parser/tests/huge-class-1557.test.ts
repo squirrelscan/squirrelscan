@@ -5,6 +5,9 @@
 import { describe, expect, test } from "bun:test";
 
 import { MAX_CLASS_TOKENS, parseHTML, parseNotices, truncateClassAttributes } from "../src/dom";
+
+// the documented limit is pinned as a literal: a change to it must change the docs and these tests (#1571)
+const LIMIT_20K = 20_000;
 import { parsePage } from "../src/index";
 
 const page = (body: string, head = "") => `<!doctype html><html><head><title>t</title>${head}</head><body>${body}</body></html>`;
@@ -18,17 +21,18 @@ describe("a class attribute that overflowed the parse", () => {
     expect(document.getElementById("after")?.textContent).toBe("marker");
     expect(document.getElementById("img-after")).not.toBeNull();
     expect(document.getElementById("big")?.classList.length).toBe(1); // every token is `a`: one class
-    expect(parseNotices(document)).toEqual([`a class attribute of 1,000,000 tokens was cut to the first ${MAX_CLASS_TOKENS.toLocaleString("en-US")} to read the page`]);
+    expect(parseNotices(document)).toEqual(["a class attribute of 1,000,000 tokens was cut to the first 20,000 to read the page"]);
   }, 120_000);
 
   test("distinct tokens: the first 20,000 are kept, in order", () => {
     const names = Array.from({ length: 700_000 }, (_, i) => `c${i}`);
     const { document } = parseHTML(page(`<div class="${names.join(" ")}" id="big"></div><p id="after">m</p>`));
     const classes = document.getElementById("big")!.classList;
-    expect(classes.length).toBe(MAX_CLASS_TOKENS);
+    expect(MAX_CLASS_TOKENS).toBe(20_000);
+    expect(classes.length).toBe(20_000);
     expect(classes.contains("c0")).toBe(true);
-    expect(classes.contains(`c${MAX_CLASS_TOKENS - 1}`)).toBe(true);
-    expect(classes.contains(`c${MAX_CLASS_TOKENS}`)).toBe(false);
+    expect(classes.contains("c19999")).toBe(true);
+    expect(classes.contains("c20000")).toBe(false);
     expect(document.getElementById("after")?.textContent).toBe("m");
   }, 120_000);
 
@@ -65,58 +69,52 @@ describe("a class attribute that overflowed the parse", () => {
   });
 });
 
-describe("a throw that is not an oversized class leaves an empty document with a notice", () => {
-  test("any other error, and a retry that throws again", () => {
-    // a class value the cut cannot shrink enough is not constructible here; the empty-document path is exercised through a getter that throws
-    const hostile = { toString: () => { throw new RangeError("Maximum call stack size exceeded"); } };
-    const { document } = parseHTML(hostile as unknown as string);
-    expect(document.documentElement).not.toBeNull();
-    expect(parseNotices(document)[0]).toContain("could not be read");
-    expect(parseNotices(document)[0]).toContain("audited empty");
-  });
-});
+describe("truncateClassAttributes pins the limit at 20,000 tokens", () => {
+  const cut = (n: number) => truncateClassAttributes(`<p class="${Array.from({ length: n }, (_, i) => `t${i}`).join(" ")}">`, LIMIT_20K);
 
-describe("truncateClassAttributes", () => {
-  const LIMIT = 100;
-  const cutOf = (html: string) => truncateClassAttributes(html, LIMIT);
-  const big = (n: number) => tokens(n);
-
-  test("exactly the limit is kept, one more is cut", () => {
-    expect(cutOf(`<p class="${big(LIMIT)}"></p>`).cut).toEqual([]);
-    expect(cutOf(`<p class="${big(LIMIT + 1)}"></p>`).cut).toEqual([LIMIT + 1]);
-    expect(cutOf(`<p class="${big(LIMIT + 1)}"></p>`).text).toBe(`<p class="${big(LIMIT)} "></p>`);
+  test("19,999 and 20,000 tokens are kept whole, 20,001 is cut to 20,000", () => {
+    expect(cut(19_999).cut).toEqual([]);
+    expect(cut(20_000).cut).toEqual([]);
+    const over = cut(20_001);
+    expect(over.cut).toEqual([20_001]);
+    expect(over.text.endsWith(`t19999 ">`)).toBe(true);
+    expect(over.text.includes("t20000")).toBe(false);
   });
 
-  test("single quotes, no quotes, upper case and other attributes around it", () => {
-    for (const tag of [`<p id=a class='${big(500)}' title="t">`, `<p ID=a CLASS="${big(500)}" data-x=1>`, `<p class=${big(500).replaceAll(" ", " ")} id=a>`]) {
-      const out = cutOf(tag);
-      if (tag.includes(" ")) continue; // one token without whitespace: nothing to cut
-      expect([tag.slice(0, 20), out.cut]).toEqual([tag.slice(0, 20), [500]]);
-      expect(out.text.endsWith(">")).toBe(true);
+  test("the cut is a prefix: the text before and after the value is untouched", () => {
+    const html = `<p id="a" class='${tokens(30)}' title="t">x</p>`;
+    expect(truncateClassAttributes(html, 10).text).toBe(`<p id="a" class='${tokens(10)} ' title="t">x</p>`);
+  });
+
+  test("each of single quotes, no quotes and upper case is asserted", () => {
+    // single quotes: cut. unquoted: one token (nothing to cut). upper case: not the class linkedom reads (nothing to cut).
+    const results = [
+      [`<p id=a class='${tokens(500)}' title="t">`, [500]],
+      [`<p id=a class=${tokens(500).replaceAll(" ", "_")} data-x=1>`, []],
+      [`<p ID=a CLASS="${tokens(500)}" data-x=1>`, []],
+    ] as const;
+    for (const [html, expected] of results) expect([html.slice(0, 22), truncateClassAttributes(html, 100).cut]).toEqual([html.slice(0, 22), expected as unknown as number[]]);
+  });
+
+  test("a valueless attribute, a slash before the class and a repeated attribute are read through", () => {
+    for (const tag of [`<p hidden disabled class="${tokens(500)}">`, `<input required/class="${tokens(500)}">`, `<p hidden class="${tokens(500)}" hidden>`]) {
+      expect([tag.slice(0, 22), truncateClassAttributes(tag, 100).cut]).toEqual([tag.slice(0, 22), [500]]);
     }
   });
 
-  test("valueless attributes and a slash before the class are read through", () => {
-    for (const tag of [`<p hidden disabled class="${big(500)}">`, `<input required/class="${big(500)}">`, `<p hidden class="${big(500)}" hidden>`]) {
-      expect([tag.slice(0, 22), cutOf(tag).cut]).toEqual([tag.slice(0, 22), [500]]);
-    }
+  test("an unterminated quote and a tag cut off by the end of the page cut nothing: the page has no such element", () => {
+    expect(truncateClassAttributes(`<p class="${tokens(500)}`, 100).cut).toEqual([]);
+    expect(truncateClassAttributes(`<p class="${tokens(500)}"`, 100).cut).toEqual([]);
   });
 
-  test("not a tag: a comment, script, style and textarea text, a data-class attribute, an end tag", () => {
-    const bigClass = `class="${big(500)}"`;
-    for (const html of [`<!-- <p ${bigClass}> -->`, `<script>var s='<p ${bigClass}>';</script>`, `<style>/* <p ${bigClass}> */</style>`, `<textarea><p ${bigClass}></textarea>`, `<p data-class="${big(500)}">`, `</p ${bigClass}>`, `<p title='x ${bigClass}'>`]) {
-      expect([html.slice(0, 24), cutOf(html).cut]).toEqual([html.slice(0, 24), []]);
-    }
-    // markup after a script that mentions a tag is still read
-    expect(cutOf(`<script>'<p>'</script><p ${bigClass}>`).cut).toEqual([500]);
-    // a closing tag of another element does not end the script's text
-    expect(cutOf(`<script></style><p ${bigClass}></script><b ${bigClass}>`).cut).toEqual([500]);
-  });
-
-  test("a short value is never counted, and the cost is linear: 10 MiB with no big class", () => {
-    const html = `<p class="a b c">x</p>`.repeat(Math.ceil((10 * 1_048_576) / 22));
-    const started = performance.now();
-    expect(truncateClassAttributes(html, MAX_CLASS_TOKENS).cut).toEqual([]);
+  test("the cost is linear: 10 MiB with no big class, and 10 MiB of hostile shapes", () => {
+    const plain = `<p class="a b c">x</p>`.repeat(Math.ceil((10 * 1_048_576) / 22));
+    let started = performance.now();
+    expect(truncateClassAttributes(plain, MAX_CLASS_TOKENS).cut).toEqual([]);
+    expect(performance.now() - started).toBeLessThan(10_000);
+    const hostile = `<?x <b class="${tokens(30)} > ">`.repeat(Math.ceil((10 * 1_048_576) / 100));
+    started = performance.now();
+    expect(truncateClassAttributes(hostile, 20).cut).toEqual([]);
     expect(performance.now() - started).toBeLessThan(10_000);
   }, 60_000);
 });

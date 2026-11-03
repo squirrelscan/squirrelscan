@@ -31,6 +31,7 @@ import {
   extractOG,
   extractTwitter,
   parseDocument,
+  parseNotices,
   parseSchemas,
   runClassifier,
   schemaCollectionFromJSON,
@@ -271,6 +272,11 @@ export function parsePageRecord(
         visibleAuthor: visibleMeta.visibleAuthor,
         visibleDatePublished: visibleMeta.visibleDatePublished,
         visibleDateModified: visibleMeta.visibleDateModified,
+        // Set when the markup had to be degraded to be read (an oversized class attribute cut, or an empty document): the
+        // third producer carries it too, so `crawl/html-size` reports it on every path (#1557, #1570).
+        ...(parseNotices(doc).length > 0
+          ? { parseNotices: parseNotices(doc) }
+          : {}),
         // Present only when the classifier ran (#2307).
         ...(classified ? { classification: classified.classification } : {}),
         // Legacy (deprecated)

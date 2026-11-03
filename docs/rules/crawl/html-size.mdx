@@ -13,7 +13,7 @@ squirrel's default failure threshold is that same 2 MB, with a warning at 1 MB s
 
 ## What squirrel checks
 
-The rule runs on every crawled page. It measures the UTF-8 byte length of the response HTML and emits a single check named `html-size`:
+The rule runs on every crawled page. It measures the UTF-8 byte length of the response HTML and emits a check named `html-size`, plus a second one, `html-parse`, on a page whose markup could not be read in full (below):
 
 - Fail at or above `error_bytes`, 2 MB by default. Message: `HTML is 2.4MB — exceeds Googlebot 2MB limit, content will be truncated`, with the byte count as the value and the threshold as the expected value. Severity error, weight 5.
 - Warn at or above `warn_bytes`, 1 MB by default. Message: `HTML is 1180KB — approaching Googlebot 2MB limit`.
@@ -96,7 +96,9 @@ Glossary: [Googlebot file size limit](/glossary#googlebot-file-size-limit).
 
 ## A page whose markup could not be read in full
 
-The check also reports when a page's markup had to be degraded for the audit to read it. A `class` attribute of more than 20,000 tokens makes the HTML parser overflow its stack (from about 640,000 tokens, an attribute of a little over a megabyte), so the page is read again with that attribute cut to its first 20,000 tokens, and everything after it is read normally. A page that cannot be read at all is audited empty. Either way the page gets a warning, `html-parse`, that says which, because the other findings on it were made on what could be read. One page like this no longer stops the audit: the other pages are audited and the report is written. A page that parses the first time is not changed.
+The rule emits a second check, `html-parse`, when a page's markup had to be degraded for the audit to read it. A `class` attribute of more than 20,000 tokens makes the HTML parser overflow its stack (from about 640,000 tokens, an attribute of a little over a megabyte), so the page is read again with that attribute cut to its first 20,000 tokens, and everything after it is read normally. Which attribute is cut is decided by the same tokenizer that parses the page, so only a `class` value the parse would read is touched, and nothing else on the page changes. A page that cannot be read at all is audited empty.
+
+Either way the page gets a warning, `html-parse`, that says which. Its findings were made on what could be read: rules that match on class names (an overlay, a cookie banner, an interstitial) do not see the tokens past the 20,000th on a cut attribute, and an empty page reports the elements it never saw as missing. Shorten the class list (a real one has tens of tokens) and audit the page again. One page like this does not stop the audit: the other pages are audited and the report is written. A page that parses the first time is not changed.
 
 ## References
 
