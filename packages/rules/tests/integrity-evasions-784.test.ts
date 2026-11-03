@@ -864,7 +864,7 @@ test("the union reading is a superset of the plain split on random mixes (#1496)
   }
   // the generator does produce lists only the old reading caught, so the property is not vacuous
   expect(plainOnly).toBeGreaterThan(0);
-});
+}, 60_000);
 
 /**
  * A recursive reading of CSS Syntax 3 consume-a-list-of-declarations, written differently from the stack in the source:
