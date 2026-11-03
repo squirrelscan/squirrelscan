@@ -11,7 +11,7 @@ permissions:
 
 concurrency:
   group: boat-gate-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   full-tests:
@@ -20,7 +20,30 @@ jobs:
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/setup-bun
-      - run: bun test
-      - run: bun run test:engine
-      - run: bun run test:release
+      - name: Runner facts
+        run: |
+          date -u +%FT%TZ
+          bun --version
+          nproc
+          free -m || true
+      - id: unit
+        name: bun test
+        run: /usr/bin/time -v bun test
+        continue-on-error: true
+      - id: engine
+        name: test:engine
+        run: bun run test:engine
+        continue-on-error: true
+      - id: release
+        name: test:release
+        run: bun run test:release
+        continue-on-error: true
+      - name: Result
+        run: |
+          echo "bun test: ${{ steps.unit.outcome }}"
+          echo "test:engine: ${{ steps.engine.outcome }}"
+          echo "test:release: ${{ steps.release.outcome }}"
+          [ "${{ steps.unit.outcome }}${{ steps.engine.outcome }}${{ steps.release.outcome }}" = "successsuccesssuccess" ]
