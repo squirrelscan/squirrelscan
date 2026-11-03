@@ -3340,18 +3340,33 @@ export interface FindingSink {
   omitted(): number;
   /** What was kept, in scan order. */
   result(): LeakedSecret[];
+  /**
+   * Which part of the page the next findings come from. Scan order within the page is canonical: a lower phase comes before a
+   * higher one in the result and in the rule's dedupe ("the last of equals wins"), whatever order the phases were scanned in.
+   */
+  phase(phase: number): void;
+  /** Entries the sink holds in all its structures (for tests: bounded whatever is added). */
+  retained(): number;
   /** A sink of the same kind for a nested scan (a decoded blob). */
   child(): FindingSink;
 }
 
 /** Every finding, in scan order, no cap and no dedupe: the contract of `scanContent` and `scanPageForSecrets`. */
 export function createListSink(): FindingSink {
-  const all: LeakedSecret[] = [];
+  const phases = new Map<number, LeakedSecret[]>();
+  let current: LeakedSecret[] = [];
+  phases.set(0, current);
   return {
-    add: (finding) => void all.push(finding),
+    add: (finding) => void current.push(finding),
     omit: () => undefined,
+    phase(phase) {
+      let list = phases.get(phase);
+      if (!list) phases.set(phase, (list = []));
+      current = list;
+    },
     omitted: () => 0,
-    result: () => all,
+    result: () => [...phases.entries()].sort((x, y) => x[0] - y[0]).flatMap(([, list]) => list),
+    retained: () => [...phases.values()].reduce((n, list) => n + list.length, 0),
     child: createListSink,
   };
 }
@@ -3379,10 +3394,22 @@ function hash53(text: string): number {
 
 interface Kept {
   finding: LeakedSecret;
+  /** Canonical scan position of the first copy (phase, then order within it). */
   seq: number;
+  /** Canonical scan position of the copy kept, the latest of equals. */
+  last: number;
   tier: number;
   alive: boolean;
+  /** Set for a generic assignment: the hash of its quoted body (see `genericsByBody`). */
+  body?: number;
 }
+
+/**
+ * The sink's own bookkeeping is bounded too, not only what it keeps (#1554 probes): the hash set of values left out holds at
+ * most cap times this many entries (past it, further left-out findings are counted one each, which can count a value twice),
+ * so a page of a million distinct values cannot grow it without limit; the same bound holds the set of public bodies.
+ */
+const BOOKKEEPING_CAP_FACTOR = 8;
 
 /**
  * The bounded sink of one page or script. It applies the site rule's own dedupe by value (`precedence`) BEFORE counting
@@ -3390,7 +3417,8 @@ interface Kept {
  * omitted: the cap and the omitted count are in distinct values. A generic assignment whose quoted body is a public
  * record's value is dropped, as the rule drops it, so the cap cannot keep the generic one and evict the public one. Over the
  * cap, a finding of a more serious tier replaces the most recent one of the least serious tier; everything not kept is
- * counted once, by value.
+ * counted once, by value (up to the bookkeeping bound above). Memory is bounded in what it keeps AND in what it remembers:
+ * a replaced or evicted entry leaves no residue.
  */
 export function createFindingSink(cap: number = PAGE_FINDINGS_CAP): FindingSink {
   const kept = new Map<string, Kept>();
@@ -3398,53 +3426,77 @@ export function createFindingSink(cap: number = PAGE_FINDINGS_CAP): FindingSink 
   const alive = [0, 0, 0, 0];
   const omittedValues = new Set<number>();
   const publicBodies = new Set<number>();
-  const genericsByBody = new Map<number, Kept[]>();
+  const genericsByBody = new Map<number, Set<Kept>>();
+  const bookkeepingCap = Math.max(16, cap * BOOKKEEPING_CAP_FACTOR);
+  let overflowOmitted = 0;
   let external = 0;
   let seq = 0;
+  let base = 0;
 
+  /** Drops dead entries from a tier's list once they outnumber the live ones plus a margin, so a list never grows with churn. */
+  const compact = (tier: number): void => {
+    const list = tiers[tier]!;
+    if (list.length > alive[tier]! * 2 + 64) tiers[tier] = list.filter((entry) => entry.alive);
+  };
   const kill = (entry: Kept): void => {
     entry.alive = false;
     alive[entry.tier]!--;
     kept.delete(entry.finding.value);
+    if (entry.body !== undefined) {
+      const set = genericsByBody.get(entry.body);
+      if (set) {
+        set.delete(entry);
+        if (set.size === 0) genericsByBody.delete(entry.body);
+      }
+    }
+    compact(entry.tier);
   };
-  const insert = (finding: LeakedSecret, order: number): void => {
+  const insert = (finding: LeakedSecret, order: number, last: number): void => {
     const tier = severityTier(finding);
-    const entry: Kept = { finding, seq: order, tier, alive: true };
+    const entry: Kept = { finding, seq: order, last, tier, alive: true };
     tiers[tier]!.push(entry);
     alive[tier]!++;
     kept.set(finding.value, entry);
     if (isGeneric(finding)) {
       const body = hash53(quotedBodyOf(finding.value));
-      const list = genericsByBody.get(body);
-      if (list) list.push(entry);
-      else genericsByBody.set(body, [entry]);
+      entry.body = body;
+      const set = genericsByBody.get(body);
+      if (set) set.add(entry);
+      else genericsByBody.set(body, new Set([entry]));
     }
   };
-  const size = (): number => kept.size;
+  const remember = (key: number): void => {
+    if (omittedValues.size < bookkeepingCap) omittedValues.add(key);
+    else if (!omittedValues.has(key)) overflowOmitted++;
+  };
 
   return {
     add(finding) {
       if (finding.publicByDesign) {
         const body = hash53(quotedBodyOf(finding.value));
-        publicBodies.add(body);
-        for (const generic of genericsByBody.get(body) ?? []) if (generic.alive) kill(generic);
-        genericsByBody.delete(body);
+        if (publicBodies.size < bookkeepingCap) publicBodies.add(body);
+        for (const generic of [...(genericsByBody.get(body) ?? [])]) if (generic.alive) kill(generic);
       } else if (isGeneric(finding) && publicBodies.has(hash53(quotedBodyOf(finding.value)))) {
         return; // the rule drops it: a public client key it re-reads
       }
+      const at = base + seq++;
       const prior = kept.get(finding.value);
       if (prior) {
-        // the rule's dedupe by value: the higher precedence wins, the last of equals; it keeps the first place
-        if (precedence(finding) >= precedence(prior.finding)) {
+        // the rule's dedupe by value: the higher precedence wins, the last of equals in canonical scan order; it keeps
+        // the first place (the earliest copy's)
+        const rank = precedence(finding) - precedence(prior.finding);
+        if (rank > 0 || (rank === 0 && at > prior.last)) {
           kill(prior);
-          insert(finding, prior.seq);
+          insert(finding, Math.min(prior.seq, at), Math.max(prior.last, at));
+        } else if (at < prior.seq) {
+          prior.seq = at;
         }
         return;
       }
       const key = hash53(finding.value);
-      if (size() < cap) {
+      if (kept.size < cap) {
         omittedValues.delete(key);
-        insert(finding, seq++);
+        insert(finding, at, at);
         return;
       }
       const tier = severityTier(finding);
@@ -3455,25 +3507,35 @@ export function createFindingSink(cap: number = PAGE_FINDINGS_CAP): FindingSink 
         let victim = list.pop();
         while (victim && !victim.alive) victim = list.pop(); // the most recent kept one of the least serious tier makes room
         if (victim) {
-          omittedValues.add(hash53(victim.finding.value));
+          remember(hash53(victim.finding.value));
           kill(victim);
         }
         omittedValues.delete(key);
-        insert(finding, seq++);
+        insert(finding, at, at);
       } else {
-        omittedValues.add(key);
+        remember(key);
       }
     },
     omit(count) {
       external += count;
     },
-    omitted: () => omittedValues.size + external,
+    phase(phase) {
+      base = phase * 2 ** 32;
+      seq = 0;
+    },
+    omitted: () => omittedValues.size + overflowOmitted + external,
     result() {
       const all: Kept[] = [];
       for (const list of tiers) for (const entry of list) if (entry.alive) all.push(entry);
       all.sort((a, b) => a.seq - b.seq);
       return all.map((entry) => entry.finding);
     },
+    retained: () =>
+      kept.size +
+      tiers.reduce((n, l) => n + l.length, 0) +
+      omittedValues.size +
+      publicBodies.size +
+      [...genericsByBody.values()].reduce((n, set) => n + set.size, 0),
     child: () => createFindingSink(cap),
   };
 }
@@ -4242,7 +4304,8 @@ export function scanPageForSecrets(
 ): LeakedSecret[] {
   const sink = createListSink();
   scanPageInto(sink, doc, pageUrl);
-  return sink.result();
+  // Detached like the bounded scan's records: they outlive the page (#1552).
+  return sink.result().map(detachSecret);
 }
 
 export const leakedSecretsRule: Rule = {
