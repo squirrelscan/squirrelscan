@@ -1,0 +1,26 @@
+name: Boat full gate
+
+# Trial: the release quality gate's heavy test steps on a Boat VM (`runs-on: boat`).
+# Manual only. It compares wall time and failures with the GitHub-hosted release gate
+# before anything in release.yml changes. It reads the repo and publishes nothing.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: boat-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  full-tests:
+    name: Full serial tests on Boat
+    runs-on: boat
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-bun
+      - run: bun test
+      - run: bun run test:engine
+      - run: bun run test:release
