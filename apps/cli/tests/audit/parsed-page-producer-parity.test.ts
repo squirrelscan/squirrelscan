@@ -18,6 +18,7 @@ import type { ContactLinkData } from "@squirrelscan/core-contracts";
 
 import { parseHtmlForRules } from "@squirrelscan/audit-engine";
 import { parsePage, type PageClassifierHook } from "@squirrelscan/parser";
+import { htmlSizeRule } from "@squirrelscan/rules/crawl/html-size";
 import { describe, expect, test } from "bun:test";
 
 import type { PageRecord } from "../../src/crawler/storage/types";
@@ -233,6 +234,53 @@ describe("ParsedPage producer parity — classifier", () => {
         expect("sectionSource" in link).toBe(false);
         expect("sectionConfidence" in link).toBe(false);
       }
+    }
+  });
+});
+
+// #1557, #1570: a class attribute that overflows the parse is cut and the page noticed; every producer must carry the notice, or the
+// `html-parse` warn is missing on that audit path (the CLI's own copy lacked it).
+describe("ParsedPage producer parity: parseNotices (#1570)", () => {
+  const HUGE = `<!DOCTYPE html><html><head><title>t</title></head><body><div class="${Array.from({ length: 700_000 }, (_, i) => `c${i}`).join(" ")}"></div><h2>after</h2></body></html>`;
+  const NOTICE = [
+    "a class attribute of 700,000 tokens was cut to the first 20,000 to read the page",
+  ];
+
+  test("all three producers carry the notice, and crawl/html-size warns on each", () => {
+    const record = { ...pageRecord(), html: HUGE } as PageRecord;
+    const produced = [
+      parsePage(HUGE, URL),
+      parseHtmlForRules(HUGE, URL),
+      parsePageRecord(record)!,
+    ];
+    for (const parsed of produced) {
+      expect(parsed.parseNotices).toEqual(NOTICE);
+      const result = htmlSizeRule.run({
+        page: {
+          url: URL,
+          html: HUGE,
+          statusCode: 200,
+          loadTime: 0,
+          headers: {},
+        },
+        parsed,
+        options: {},
+      } as never) as { checks: Array<{ name: string; status: string }> };
+      expect(result.checks.map((c) => c.name)).toEqual([
+        "html-size",
+        "html-parse",
+      ]); // the page is over 2 MB, so the size check fails too
+      expect(result.checks[1]!.status).toBe("warn");
+    }
+  }, 60_000);
+
+  test("a page that parses the first time carries none", () => {
+    for (const parsed of [
+      parsePage(HTML, URL),
+      parseHtmlForRules(HTML, URL),
+      parsePageRecord(pageRecord())!,
+    ]) {
+      expect("parseNotices" in parsed).toBe(false);
     }
   });
 });

@@ -178,6 +178,7 @@
         "@squirrelscan/core-contracts": "workspace:*",
         "@squirrelscan/utils": "workspace:*",
         "effect": "^3.21.3",
+        "htmlparser2": "^10.1.0",
         "linkedom": "^0.18.12",
       },
       "devDependencies": {
