@@ -32,7 +32,7 @@ import { buildInPageSectionSignal } from "./shared/inpage-section";
 import type { InPageSectionSignal } from "./shared/inpage-section";
 import { scanPageForMisspellings } from "./content/common-misspellings";
 import { RULE_TIME_BUDGET_MS, RuleTimeoutError, runWithinBudget } from "./rule-budget";
-import { scanPageBounded } from "./security/leaked-secrets";
+import { startPageScan } from "./security/leaked-secrets";
 import { extractContentSentences } from "./shared/content-in-script";
 import { hasJavaScriptDetections } from "@squirrelscan/utils/cdn";
 
@@ -222,7 +222,11 @@ export function buildCollectedPageSignal(input: {
     () => extractPageByteSignal(doc)
   );
 
-  const scanned = timed("security/leaked-secrets", { secrets: [] as LeakedSecret[], omitted: 0 }, () => scanPageBounded(doc, url));
+  // The scan's findings live outside the budgeted call: a scan stopped at the budget keeps what it found before the stop
+  // (the page is still listed in `timedOut`, so the rest of it reads as unscanned, not clean) (#1556).
+  const secretScan = startPageScan(doc, url);
+  timed("security/leaked-secrets", undefined, () => secretScan.run());
+  const scanned = secretScan.result();
   const signal: CollectedPageSignal = {
     url,
     secrets: scanned.secrets,

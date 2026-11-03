@@ -4262,6 +4262,23 @@ function detachSecret(secret: LeakedSecret): LeakedSecret {
 }
 
 /**
+ * A page scan whose findings survive an interruption (#1556): the collector runs it under the rule's time budget, and a scan
+ * that overruns is stopped at an arbitrary point. The sink is outside the stopped call, so what was found before the stop
+ * is still there to keep; only the rest of the page is unscanned (and the page says so, see `timedOut`).
+ */
+export function startPageScan(doc: NonNullable<ParsedPage["document"]>, pageUrl: string): {
+  run(): void;
+  result(): { secrets: LeakedSecret[]; omitted: number };
+} {
+  const sink = createFindingSink();
+  return {
+    run: () => scanPageInto(sink, doc, pageUrl),
+    // The records are kept for the whole crawl until the site rule runs: they must not keep the scanned page alive (#1552).
+    result: () => ({ secrets: sink.result().map(detachSecret), omitted: sink.omitted() }),
+  };
+}
+
+/**
  * One page's findings, at most {@link PAGE_FINDINGS_CAP} distinct values (the most serious first when there are more), and
  * the number of distinct values left out. The page's document pass and each of its inline scripts share ONE cap.
  */
@@ -4269,15 +4286,16 @@ export function scanPageBounded(
   doc: NonNullable<ParsedPage["document"]>,
   pageUrl: string
 ): { secrets: LeakedSecret[]; omitted: number } {
-  const sink = createFindingSink();
-  scanPageInto(sink, doc, pageUrl);
-  // The records are kept for the whole crawl until the site rule runs: they must not keep the scanned page alive (#1552).
-  return { secrets: sink.result().map(detachSecret), omitted: sink.omitted() };
+  const scan = startPageScan(doc, pageUrl);
+  scan.run();
+  return scan.result();
 }
 
 function scanPageInto(sink: FindingSink, doc: NonNullable<ParsedPage["document"]>, pageUrl: string): void {
-  const html = doc.toString();
-  if (html) scanInto(sink, html, "html", pageUrl, 0, {});
+  // Inline scripts first: the findings the most serious tier is made of (a server-only key shipped to the browser) are read
+  // from a script, so a scan stopped at the time budget (#1556) has read them before the page's whole text. The sink keeps
+  // the canonical order: the document's findings (phase 0) come before the scripts' (phase 1) in the result and in the dedupe.
+  sink.phase(1);
   for (const [scriptIndex, script] of Array.from(doc.querySelectorAll("script")).entries()) {
     if (script.hasAttribute("src")) continue;
     const scriptContent = script.textContent || "";
@@ -4295,6 +4313,9 @@ function scanPageInto(sink: FindingSink, doc: NonNullable<ParsedPage["document"]
       });
     }
   }
+  sink.phase(0);
+  const html = doc.toString();
+  if (html) scanInto(sink, html, "html", pageUrl, 0, {});
 }
 
 /** Every finding of a page, in scan order: no cap, no dedupe. The site rule and the collector read {@link scanPageBounded}. */
@@ -4535,8 +4556,8 @@ export const leakedSecretsRule: Rule = {
       checks.push({
         name: "leaked-secrets-unscanned",
         status: "info",
-        message: `${unscanned.length} page(s) were not scanned for secrets because the scan exceeded its time budget, so no finding on them is not a clean result`,
-        items: unscanned.slice(0, 20).map((p) => ({ id: p.url, label: "Not scanned" })),
+        message: `${unscanned.length} page(s) were not fully scanned for secrets because the scan exceeded its time budget (what was found before it stopped is kept), so no finding on them is not a clean result`,
+        items: unscanned.slice(0, 20).map((p) => ({ id: p.url, label: "Not fully scanned" })),
       });
     }
 
