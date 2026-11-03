@@ -184,7 +184,6 @@ class ClassProbe extends Parser {
   private tokens = 0;
   private inToken = false;
   private cutAt = -1;
-  private lastRawEnd = -1;
 
   static create(source: string, limit: number): ClassProbe {
     const ref: { probe?: ClassProbe } = {};
@@ -221,19 +220,21 @@ class ClassProbe extends Parser {
     this.tokens = 0;
     this.inToken = false;
     this.cutAt = -1;
-    this.lastRawEnd = start;
   }
 
   override onattribdata(start: number, end: number): void {
     if (!this.reading) return;
     for (let i = start; i < end; i++) this.take(!isClassSpace(this.source.charCodeAt(i)), i);
-    this.lastRawEnd = end;
   }
 
   override onattribentity(cp: number): void {
     if (!this.reading) return;
-    // an entity decodes to one code point; where it sits in the source is the end of the data before it
-    this.take(!(cp === 32 || cp === 9 || cp === 10 || cp === 12 || cp === 13), this.lastRawEnd);
+    // The tokenizer has just consumed the entity: its start is its own `entityStart` (not in the typed API, read as a number; if a version drops it nothing
+    // is cut, and the page falls to the empty document rather than a wrong cut).
+    const tokenizer = (this as unknown as { tokenizer?: { entityStart?: unknown } }).tokenizer;
+    const entityStart = tokenizer?.entityStart;
+    const known = typeof entityStart === "number" && entityStart >= 0;
+    this.take(!(cp === 32 || cp === 9 || cp === 10 || cp === 12 || cp === 13), known ? entityStart : -1);
   }
 
   override onattribend(quote: QuoteType, end: number): void {
