@@ -46,6 +46,7 @@
 
 import { Element as ElementFacade } from "linkedom";
 
+import { Parser, QuoteType } from "htmlparser2";
 import { parseHTML as linkedomParseHTML } from "linkedom";
 
 /**
@@ -67,26 +68,31 @@ export function parseHTML(
     return parsed;
   }
   const [html, ...rest] = args;
-  return linkedomParseHTML(`<html><head></head><body>${String(html)}</body></html>`, ...rest);
+  return parseContained([`<html><head></head><body>${String(html)}</body></html>`, ...rest] as typeof args);
 }
 
 // ── A parse that throws does not fail the audit (#1557) ───────────────────────────────────────────────────────────────────────
 //
-// linkedom's `className` setter spreads every class token into one call (`classList.add(...value.split(/\s+/))`), which
-// overflows the stack from about 640,000 tokens, an attribute of 1.2 MB, far under the page cap; duplicates count. The throw
-// came out of `parseHTML` and failed the whole audit with no report. It is contained here, the one place pages are parsed:
+// linkedom's `className` setter spreads every class token into one call (`classList.add(...pieces)`), which overflows the stack
+// from about 640,000 pieces, an attribute of 1.2 MB, far under the page cap; duplicates count. The throw came out of `parseHTML`
+// and failed the whole audit with no report. It is contained here, the one place pages are parsed:
 //
 // - on a RangeError the page is parsed again with each class attribute of more than {@link MAX_CLASS_TOKENS} tokens cut to its first
-//   {@link MAX_CLASS_TOKENS}, found by a linear pass over the tags (script, style and the other text-only elements are skipped, so
-//   no page text is edited); everything after the big element reaches the rules;
-// - a throw that is not that, or a second throw, leaves an empty document (a browser builds `<html><head></head><body></body></html>`
+//   {@link MAX_CLASS_TOKENS}. The cut is decided by htmlparser2's own `Parser`, the tokenizer linkedom parses with, built with
+//   linkedom's own options: it reports where each class value starts and ends, which tag it is on and whether linkedom would
+//   read it (only the first `class` of a tag, spelt exactly `class`). No second reading of the markup exists, so there is
+//   nothing for crafted markup to make disagree with the parse (comments, CDATA, bogus comments, raw-text elements, quoting,
+//   entities and duplicate attributes are all the tokenizer's);
+// - a throw that is not a RangeError, or a second throw, leaves an empty document (a browser builds `<html><head></head><body></body></html>`
 //   for markup with nothing in it), and the page says so.
 //
 // Either way the page carries a notice (`parseNotices`), which `crawl/html-size` reports. A page that parses the first time is
-// untouched: no pre-pass, no copy.
+// untouched: no pre-pass, no copy. The probe is one linear tokenizer pass and one linear splice.
 
 /** Class tokens kept on an attribute that overflowed the parse. A real page has tens; this is orders of magnitude above that. */
 export const MAX_CLASS_TOKENS = 20_000;
+/** Notices kept for one page: the rest are summed in a last line. */
+const MAX_PARSE_NOTICES = 5;
 const PARSE_NOTICES = new WeakMap<object, string[]>();
 
 /** The notices of a document `parseHTML` had to degrade to parse (an empty list for any other): see {@link parseContained}. */
@@ -94,7 +100,11 @@ export function parseNotices(document: unknown): string[] {
   return (typeof document === "object" && document !== null ? PARSE_NOTICES.get(document) : undefined) ?? [];
 }
 
+/** The options linkedom builds its `Parser` with (`shared/parse-from-string.js`, HTML mode). The cut is only sound while these match. */
+const LINKEDOM_PARSER_OPTIONS = { lowerCaseAttributeNames: false, decodeEntities: true, xmlMode: false } as const;
+
 function parseContained(args: Parameters<typeof linkedomParseHTML>): ReturnType<typeof linkedomParseHTML> {
+  installClassSplit();
   try {
     return linkedomParseHTML(...args);
   } catch (error) {
@@ -104,7 +114,7 @@ function parseContained(args: Parameters<typeof linkedomParseHTML>): ReturnType<
       if (cut.length > 0) {
         try {
           const parsed = linkedomParseHTML(text, ...rest);
-          PARSE_NOTICES.set(parsed.document, cut.map((tokens) => `a class attribute of ${tokens.toLocaleString("en-US")} tokens was cut to the first ${MAX_CLASS_TOKENS.toLocaleString("en-US")} to read the page`));
+          PARSE_NOTICES.set(parsed.document, cutNotices(cut));
           return parsed;
         } catch {
           // fall through to the empty document
@@ -117,112 +127,153 @@ function parseContained(args: Parameters<typeof linkedomParseHTML>): ReturnType<
   }
 }
 
-/** Elements whose content is text, not markup: a tag-looking string inside one is not a tag. */
-const TEXT_ELEMENTS: ReadonlyMap<string, RegExp> = new Map(["script", "style", "textarea", "title", "xmp", "plaintext", "noembed", "noframes", "iframe"].map((name) => [name, new RegExp(`</${name}`, "gi")]));
-/** The five characters the HTML tokenizer treats as whitespace (tab, line feed, form feed, carriage return, space). */
-const isSpace = (code: number): boolean => code === 32 || code === 9 || code === 10 || code === 12 || code === 13;
+function cutNotices(cut: number[]): string[] {
+  const notices = cut.slice(0, MAX_PARSE_NOTICES).map((tokens) => `a class attribute of ${tokens.toLocaleString("en-US")} tokens was cut to the first ${MAX_CLASS_TOKENS.toLocaleString("en-US")} to read the page`);
+  if (cut.length > MAX_PARSE_NOTICES) notices.push(`${(cut.length - MAX_PARSE_NOTICES).toLocaleString("en-US")} more class attributes were cut the same way`);
+  return notices;
+}
+
+/** The five characters the HTML spec splits a class value on (tab, line feed, form feed, carriage return, space): not JavaScript's `\s`. */
+const isClassSpace = (code: number): boolean => code === 32 || code === 9 || code === 10 || code === 12 || code === 13;
+const CLASS_SPLIT = /[ \t\n\f\r]+/;
+
+/**
+ * Make linkedom split a class value as HTML does (#1567). Its `className` setter splits on JavaScript's `\s`, which also holds NBSP,
+ * U+2003, U+FEFF and VT, so `class="cover&nbsp;x"` read back as two tokens where a browser keeps one. The pieces and the `add(...)`
+ * spread are the setter's own, so the overflow and its cut stay as described above. Idempotent.
+ */
+function installClassSplit(): void {
+  if (classSplitInstalled) return;
+  classSplitInstalled = true;
+  const proto = (ElementFacade as unknown as { prototype: object }).prototype;
+  const original = Object.getOwnPropertyDescriptor(proto, "className");
+  if (!original?.set) return;
+  Object.defineProperty(proto, "className", {
+    ...original,
+    set(this: { classList: { clear(): void; add(...tokens: string[]): void } }, value: unknown) {
+      const { classList } = this;
+      classList.clear();
+      classList.add(...String(value).split(CLASS_SPLIT));
+    },
+  });
+}
+let classSplitInstalled = false;
+
+interface PendingCut {
+  from: number;
+  to: number;
+  tokens: number;
+}
+
+interface TagHooks {
+  onopentagname: () => void;
+  onopentag: () => void;
+}
+
+/**
+ * Every class value the tokenizer reports, found by running htmlparser2's `Parser` (the one linkedom parses with, same options) over
+ * the page with its attribute events overridden to report offsets. A value is read as linkedom reads it: only the first `class`
+ * on a tag (linkedom keeps the first of a duplicated name), spelt exactly `class` (linkedom feeds no other spelling to its class
+ * setter), and a tag the tokenizer never finishes (cut off by the end of the page) is not an element at all.
+ */
+class ClassProbe extends Parser {
+  readonly edits: PendingCut[] = [];
+  classSeen = false;
+  pending: PendingCut | null = null;
+  private reading = false;
+  private tokens = 0;
+  private inToken = false;
+  private cutAt = -1;
+  private lastRawEnd = -1;
+
+  static create(source: string, limit: number): ClassProbe {
+    const ref: { probe?: ClassProbe } = {};
+    const probe = new ClassProbe(source, limit, {
+      onopentagname: () => {
+        if (!ref.probe) return;
+        ref.probe.classSeen = false;
+        ref.probe.pending = null;
+      },
+      // the tag is real: its cut, if any, is kept
+      onopentag: () => {
+        const self = ref.probe;
+        if (self?.pending) self.edits.push(self.pending);
+        if (self) self.pending = null;
+      },
+    });
+    ref.probe = probe;
+    return probe;
+  }
+
+  private constructor(
+    private readonly source: string,
+    private readonly limit: number,
+    hooks: TagHooks,
+  ) {
+    super(hooks, LINKEDOM_PARSER_OPTIONS);
+  }
+
+  override onattribname(start: number, end: number): void {
+    this.reading = false;
+    if (end - start !== 5 || this.classSeen || this.source.slice(start, end) !== "class") return;
+    this.classSeen = true;
+    this.reading = true;
+    this.tokens = 0;
+    this.inToken = false;
+    this.cutAt = -1;
+    this.lastRawEnd = start;
+  }
+
+  override onattribdata(start: number, end: number): void {
+    if (!this.reading) return;
+    for (let i = start; i < end; i++) this.take(!isClassSpace(this.source.charCodeAt(i)), i);
+    this.lastRawEnd = end;
+  }
+
+  override onattribentity(cp: number): void {
+    if (!this.reading) return;
+    // an entity decodes to one code point; where it sits in the source is the end of the data before it
+    this.take(!(cp === 32 || cp === 9 || cp === 10 || cp === 12 || cp === 13), this.lastRawEnd);
+  }
+
+  override onattribend(quote: QuoteType, end: number): void {
+    if (!this.reading) return;
+    this.reading = false;
+    if (this.cutAt === -1) return;
+    // a quoted value ends one before the end the tokenizer reports (it is past the closing quote); an unquoted one ends there
+    const valueEnd = quote === QuoteType.Double || quote === QuoteType.Single ? end - 1 : end;
+    this.pending = { from: this.cutAt, to: valueEnd, tokens: this.tokens };
+  }
+
+  /** Count a decoded character; the first character of token `limit + 1` is where the value is cut. */
+  private take(visible: boolean, at: number): void {
+    if (visible && !this.inToken) {
+      this.tokens++;
+      if (this.tokens === this.limit + 1) this.cutAt = at;
+    }
+    this.inToken = visible;
+  }
+}
 
 /**
  * `html` with the value of each `class` attribute that has more than `limit` tokens cut to its first `limit` tokens, and the
- * token counts that were cut. One linear pass over the tags, reading each tag as the HTML tokenizer does (a quote opens a
- * value only at its start, an unquoted value ends at whitespace or `>`), skipping comments and the text of script, style and
- * the like; a tag shorter than `2 * limit` characters cannot hold that many tokens and is not read at all.
+ * token counts that were cut. The offsets come from the tokenizer (see {@link ClassProbe}), so what is cut is what the parse reads
+ * as that value and nothing else; a page with no such attribute comes back as the same string.
  */
 export function truncateClassAttributes(html: string, limit: number): { text: string; cut: number[] } {
-  const edits: Array<{ from: number; to: number }> = [];
-  const cut: number[] = [];
-  const length = html.length;
-  let i = 0;
-  while (i < length) {
-    const open = html.indexOf("<", i);
-    if (open === -1) break;
-    if (html.startsWith("<!--", open)) {
-      const close = html.indexOf("-->", open + 4);
-      i = close === -1 ? length : close + 3;
-      continue;
-    }
-    const first = html.charCodeAt(open + 1);
-    const isTag = (first >= 65 && first <= 90) || (first >= 97 && first <= 122);
-    if (!isTag) {
-      i = open + 1;
-      continue;
-    }
-    let at = open + 1;
-    while (at < length && !isSpace(html.charCodeAt(at)) && html[at] !== "/" && html[at] !== ">") at++;
-    const name = html.slice(open + 1, at).toLowerCase();
-    // attributes
-    while (at < length) {
-      while (at < length && (isSpace(html.charCodeAt(at)) || html[at] === "/")) at++;
-      if (at >= length || html[at] === ">") break;
-      const nameStart = at;
-      at++;
-      while (at < length && !isSpace(html.charCodeAt(at)) && html[at] !== "=" && html[at] !== "/" && html[at] !== ">") at++;
-      const attribute = html.slice(nameStart, at).toLowerCase();
-      while (at < length && isSpace(html.charCodeAt(at))) at++;
-      if (html[at] !== "=") continue;
-      at++;
-      while (at < length && isSpace(html.charCodeAt(at))) at++;
-      let valueStart = at;
-      let valueEnd: number;
-      const quote = html[at];
-      if (quote === '"' || quote === "'") {
-        valueStart = at + 1;
-        const close = html.indexOf(quote, valueStart);
-        valueEnd = close === -1 ? length : close;
-        at = close === -1 ? length : close + 1;
-      } else {
-        while (at < length && !isSpace(html.charCodeAt(at)) && html[at] !== ">") at++;
-        valueEnd = at;
-      }
-      if (attribute === "class" && valueEnd - valueStart >= 2 * limit) {
-        // the start of the token after the limit-th: the value is cut there
-        let tokens = 0;
-        let inToken = false;
-        let cutAt = -1;
-        for (let k = valueStart; k < valueEnd; k++) {
-          const space = isSpace(html.charCodeAt(k));
-          if (!space && !inToken) {
-            tokens++;
-            if (tokens > limit) {
-              cutAt = k;
-              break;
-            }
-          }
-          inToken = !space;
-        }
-        if (cutAt !== -1) {
-          edits.push({ from: cutAt, to: valueEnd });
-          cut.push(countTokens(html, valueStart, valueEnd));
-        }
-      }
-    }
-    i = at + 1;
-    const closer = TEXT_ELEMENTS.get(name);
-    if (closer) {
-      closer.lastIndex = i;
-      const found = closer.exec(html);
-      i = found ? found.index : length;
-    }
-  }
-  if (edits.length === 0) return { text: html, cut };
-  let text = "";
+  const probe = ClassProbe.create(html, limit);
+  probe.write(html);
+  probe.end();
+  const { edits } = probe;
+  if (edits.length === 0) return { text: html, cut: [] };
+  const parts: string[] = [];
   let last = 0;
   for (const edit of edits) {
-    text += html.slice(last, edit.from);
+    parts.push(html.slice(last, edit.from));
     last = edit.to;
   }
-  return { text: text + html.slice(last), cut };
-}
-
-function countTokens(html: string, from: number, to: number): number {
-  let tokens = 0;
-  let inToken = false;
-  for (let k = from; k < to; k++) {
-    const space = isSpace(html.charCodeAt(k));
-    if (!space && !inToken) tokens++;
-    inToken = !space;
-  }
-  return tokens;
+  parts.push(html.slice(last));
+  return { text: parts.join(""), cut: edits.map((edit) => edit.tokens) };
 }
 
 const SHADOW_ROOT_HINT = /shadowroot/i;

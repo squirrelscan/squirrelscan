@@ -14,8 +14,14 @@ describe("crawl/html-size parse notice", () => {
     expect(checks.map((c) => c.name)).toEqual(["html-size", "html-parse"]);
     const notice = checks[1]!;
     expect(notice.status).toBe("warn");
-    expect(notice.message).toBe("The page's markup could not be read in full: a class attribute of 900,000 tokens was cut to the first 20,000 to read the page; second");
+    expect(notice.message).toBe("The page's markup could not be read in full: a class attribute of 900,000 tokens was cut to the first 20,000 to read the page; second. Findings that depend on what was skipped are not reliable; shorten the oversized class attribute and audit again");
     expect(notice.details).toEqual({ notices: ["a class attribute of 900,000 tokens was cut to the first 20,000 to read the page", "second"] });
+  });
+
+  test("the rule's solution text tells what the html-parse warn means, beside the size advice", () => {
+    expect(htmlSizeRule.meta.solution).toContain("Googlebot truncates HTML documents at 2MB");
+    expect(htmlSizeRule.meta.solution).toContain("If the html-parse check warns");
+    expect(htmlSizeRule.meta.solution).toContain("20,000 tokens");
   });
 
   test("no notices, or an empty list, adds nothing", () => {
