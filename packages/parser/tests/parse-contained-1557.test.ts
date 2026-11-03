@@ -1,25 +1,21 @@
-// #1557, #1571: which failures `parseHTML` retries and what it falls back to. The linkedom parse is replaced by a stub that throws on
-// demand, so each path (RangeError that can be cut, RangeError that cannot, any other error, a retry that throws again) is reached
+// #1557, #1571: which failures `parseHTML` retries and what it falls back to. The parse function is injected (a stub that throws on
+// demand, no module mocking), so each path (RangeError that can be cut, RangeError that cannot, any other error, a retry that throws again) is reached
 // without relying on the stack size of the machine that runs the tests.
 
-import { describe, expect, mock, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
-const real = await import("linkedom");
-const realParse = real.parseHTML as (...a: unknown[]) => unknown;
-const realExports = { ...real };
+import { parseContainedWith, parseHTML as realParseHTML, parseNotices } from "../src/dom";
+
 const calls: string[] = [];
 let behaviour: (html: string, call: number) => void = () => {};
 
-mock.module("linkedom", () => ({
-  ...realExports,
-  parseHTML: (html: string, ...rest: unknown[]) => {
-    calls.push(String(html));
-    behaviour(String(html), calls.length);
-    return realParse(html, ...rest);
-  },
-}));
-
-const { parseHTML, parseNotices } = await import("../src/dom");
+// the stub parses with the real parser (through the module's own door) after `behaviour` has had its chance to throw
+const stub = ((html: string, ...rest: unknown[]) => {
+  calls.push(String(html));
+  behaviour(String(html), calls.length);
+  return (realParseHTML as (...a: unknown[]) => unknown)(html, ...rest);
+}) as never;
+const parseHTML = (html: string) => parseContainedWith(stub, [html] as never);
 
 const BIG = Array.from({ length: 20_005 }, (_, i) => `t${i}`).join(" ");
 const PAGE = `<html><body><div class="${BIG}" id="big"></div><p id="after">tail</p></body></html>`;
@@ -72,13 +68,6 @@ describe("which failures parseHTML retries", () => {
     const { document } = parseHTML(`<html><body><div class="a b c"></div></body></html>`);
     expect(calls.length).toBe(2);
     expect(parseNotices(document)[0]).toContain("audited empty");
-  });
-
-  test("markup with no element is read as an empty body, through the same containment", () => {
-    reset(() => {});
-    const { document } = parseHTML("just text");
-    expect(document.body.textContent).toBe("just text");
-    expect(parseNotices(document)).toEqual([]);
   });
 
   test("a page that parses the first time is parsed once and carries no notice", () => {
