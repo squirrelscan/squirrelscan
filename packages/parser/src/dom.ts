@@ -104,16 +104,24 @@ export function parseNotices(document: unknown): string[] {
 const LINKEDOM_PARSER_OPTIONS = { lowerCaseAttributeNames: false, decodeEntities: true, xmlMode: false } as const;
 
 function parseContained(args: Parameters<typeof linkedomParseHTML>): ReturnType<typeof linkedomParseHTML> {
+  return parseContainedWith(linkedomParseHTML, args);
+}
+
+/** The containment with the parse function passed in: the production path passes linkedom's, tests pass a stub that throws on demand (no module mocking). */
+export function parseContainedWith(
+  parse: typeof linkedomParseHTML,
+  args: Parameters<typeof linkedomParseHTML>,
+): ReturnType<typeof linkedomParseHTML> {
   installClassSplit();
   try {
-    return linkedomParseHTML(...args);
+    return parse(...args);
   } catch (error) {
     const [html, ...rest] = args;
     if (typeof html === "string" && error instanceof RangeError) {
       const { text, cut } = truncateClassAttributes(html, MAX_CLASS_TOKENS);
       if (cut.length > 0) {
         try {
-          const parsed = linkedomParseHTML(text, ...rest);
+          const parsed = parse(text, ...rest);
           PARSE_NOTICES.set(parsed.document, cutNotices(cut));
           return parsed;
         } catch {
@@ -121,7 +129,7 @@ function parseContained(args: Parameters<typeof linkedomParseHTML>): ReturnType<
         }
       }
     }
-    const parsed = linkedomParseHTML("<html><head></head><body></body></html>", ...rest);
+    const parsed = parse("<html><head></head><body></body></html>", ...rest);
     PARSE_NOTICES.set(parsed.document, [`the page could not be read (${error instanceof Error ? error.message.slice(0, 120) : "parse error"}), so it was audited empty`]);
     return parsed;
   }

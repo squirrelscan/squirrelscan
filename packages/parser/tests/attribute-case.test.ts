@@ -386,8 +386,6 @@ const SOURCE_GLOBS = ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts", "**/*.js", 
 const EXEMPT = new Set([
   "packages/parser/src/dom.ts",
   "packages/parser/tests/attribute-case.test.ts",
-  // replaces linkedom's `parseHTML` with a stub that throws on demand, to reach the retry paths of `parseHTML` (#1571); the page is still parsed by dom.ts
-  "packages/parser/tests/parse-contained-1557.test.ts",
 ]);
 
 describe("linkedom is reachable through one door", () => {
