@@ -3755,7 +3755,7 @@ export function runStreamingRules(
       retainPageResults: opts?.retainPageResults,
       }),
     );
-    const collectedSignals: CollectedSiteSignals = { pages: collectedPages };
+    const collectedSignals: CollectedSiteSignals = { pages: collectedPages, secretsBudget };
 
     // Bounded, read-only aggregate view over the crawl (#1022): the site pass's
     // Bucket-C/D dual-path rules read its rollups (incoming-link counts, duplicate

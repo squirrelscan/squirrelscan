@@ -3335,9 +3335,11 @@ function severityTier(s: LeakedSecret): number {
 export interface FindingSink {
   add(finding: LeakedSecret): void;
   /** Counts findings that were left out elsewhere (a nested scan's). */
-  omit(count: number): void;
+  omit(count: number, serious?: boolean): void;
   /** Distinct values seen and not kept. */
   omitted(): number;
+  /** True when anything left out was more serious than public or informational (tier 0 to 2). */
+  omittedSerious(): boolean;
   /** What was kept, in scan order. */
   result(): LeakedSecret[];
   /**
@@ -3359,6 +3361,7 @@ export function createListSink(): FindingSink {
   return {
     add: (finding) => void current.push(finding),
     omit: () => undefined,
+    omittedSerious: () => false,
     phase(phase) {
       let list = phases.get(phase);
       if (!list) phases.set(phase, (list = []));
@@ -3429,6 +3432,7 @@ export function createFindingSink(cap: number = PAGE_FINDINGS_CAP): FindingSink 
   const genericsByBody = new Map<number, Set<Kept>>();
   const bookkeepingCap = Math.max(16, cap * BOOKKEEPING_CAP_FACTOR);
   let overflowOmitted = 0;
+  let seriousOmitted = false;
   let external = 0;
   let seq = 0;
   let base = 0;
@@ -3465,7 +3469,8 @@ export function createFindingSink(cap: number = PAGE_FINDINGS_CAP): FindingSink 
       else genericsByBody.set(body, new Set([entry]));
     }
   };
-  const remember = (key: number): void => {
+  const remember = (key: number, tier: number): void => {
+    if (tier < 3) seriousOmitted = true;
     if (omittedValues.size < bookkeepingCap) omittedValues.add(key);
     else if (!omittedValues.has(key)) overflowOmitted++;
   };
@@ -3507,18 +3512,20 @@ export function createFindingSink(cap: number = PAGE_FINDINGS_CAP): FindingSink 
         let victim = list.pop();
         while (victim && !victim.alive) victim = list.pop(); // the most recent kept one of the least serious tier makes room
         if (victim) {
-          remember(hash53(victim.finding.value));
+          remember(hash53(victim.finding.value), victim.tier);
           kill(victim);
         }
         omittedValues.delete(key);
         insert(finding, at, at);
       } else {
-        remember(key);
+        remember(key, tier);
       }
     },
-    omit(count) {
+    omit(count, serious = true) {
       external += count;
+      if (serious && count > 0) seriousOmitted = true;
     },
+    omittedSerious: () => seriousOmitted,
     phase(phase) {
       base = phase * 2 ** 32;
       seq = 0;
@@ -3556,43 +3563,55 @@ export const SITE_FINDINGS_CAP = 10_000;
 const SITE_TIER_SHARE = [1, 0.8, 0.6, 0.4] as const;
 
 export interface SiteFindingBudget {
-  /** The page's findings the site still has room for, in their order, and how many findings were left out. */
-  admit(secrets: readonly LeakedSecret[]): { secrets: LeakedSecret[]; omitted: number };
+  /**
+   * The page's findings the site still has room for, in their order, how many were left out (at least that many: a value
+   * left out on several pages counts on each), and whether any of them was more serious than public or informational.
+   */
+  admit(secrets: readonly LeakedSecret[]): { secrets: LeakedSecret[]; omitted: number; omittedSerious: boolean };
   /** Distinct values kept so far. */
   kept(): number;
 }
 
+/**
+ * One budget per crawl. Per value it remembers the best precedence AND the most serious tier admitted so far: the rule's
+ * "last of equals wins" can make a later copy the one that is reported, so a copy that is more serious than any kept before
+ * it is always admitted, whatever the copy allowance. A copy dropped for the allowance is counted as omitted.
+ */
 export function createSiteFindingBudget(cap: number = SITE_FINDINGS_CAP): SiteFindingBudget {
-  const seen = new Map<number, number>(); // value hash -> highest precedence kept
+  const seen = new Map<number, { rank: number; tier: number }>();
   let copies = 0;
   return {
     kept: () => seen.size,
     admit(secrets) {
       const out: LeakedSecret[] = [];
       let omitted = 0;
+      let omittedSerious = false;
       for (const finding of secrets) {
         const key = hash53(finding.value);
+        const tier = severityTier(finding);
+        const rank = precedence(finding);
         const prior = seen.get(key);
         if (prior !== undefined) {
-          const rank = precedence(finding);
-          if (rank > prior) {
-            seen.set(key, rank);
+          if (rank > prior.rank || tier < prior.tier) {
+            seen.set(key, { rank: Math.max(rank, prior.rank), tier: Math.min(tier, prior.tier) });
             out.push(finding);
           } else if (copies < cap) {
             copies++;
             out.push(finding);
+          } else {
+            omitted++; // a copy of a kept value at no higher rank or tier: counted, never dropped in silence, and never serious
           }
-          continue; // a copy of a value already kept: merged by the rule, so not a loss
+          continue;
         }
-        const tier = severityTier(finding);
         if (seen.size < Math.floor(cap * SITE_TIER_SHARE[tier]!)) {
-          seen.set(key, precedence(finding));
+          seen.set(key, { rank, tier });
           out.push(finding);
         } else {
           omitted++;
+          if (tier < 3) omittedSerious = true;
         }
       }
-      return { secrets: out, omitted };
+      return { secrets: out, omitted, omittedSerious };
     },
   };
 }
@@ -3611,10 +3630,10 @@ export function scanContentBounded(
   sourceUrl?: string,
   depth = 0,
   source: { offsetBase?: number; scriptIndex?: number } = {}
-): { secrets: LeakedSecret[]; omitted: number } {
+): { secrets: LeakedSecret[]; omitted: number; omittedSerious: boolean } {
   const sink = createFindingSink();
   scanInto(sink, content, location, sourceUrl, depth, source);
-  return { secrets: sink.result(), omitted: sink.omitted() };
+  return { secrets: sink.result(), omitted: sink.omitted(), omittedSerious: sink.omittedSerious() };
 }
 
 /** Every finding of one body, in scan order: no cap, no dedupe. The site rule reads {@link scanContentBounded}. */
@@ -4267,7 +4286,7 @@ function scanInto(
   const scanBlob = (text: string, blobLocation: ReportedLocation, url: string | undefined, blobDepth: number): LeakedSecret[] => {
     const inner = found.child();
     scanInto(inner, text, blobLocation, url, blobDepth, {});
-    found.omit(inner.omitted());
+    found.omit(inner.omitted(), inner.omittedSerious());
     return inner.result();
   };
   for (const finding of scanBase64Blobs(content, location, sourceUrl, depth, scanBlob)) {
@@ -4325,13 +4344,13 @@ function detachSecret(secret: LeakedSecret): LeakedSecret {
  */
 export function startPageScan(doc: NonNullable<ParsedPage["document"]>, pageUrl: string): {
   run(): void;
-  result(): { secrets: LeakedSecret[]; omitted: number };
+  result(): { secrets: LeakedSecret[]; omitted: number; omittedSerious: boolean };
 } {
   const sink = createFindingSink();
   return {
     run: () => scanPageInto(sink, doc, pageUrl),
     // The records are kept for the whole crawl until the site rule runs: they must not keep the scanned page alive (#1552).
-    result: () => ({ secrets: sink.result().map(detachSecret), omitted: sink.omitted() }),
+    result: () => ({ secrets: sink.result().map(detachSecret), omitted: sink.omitted(), omittedSerious: sink.omittedSerious() }),
   };
 }
 
@@ -4342,7 +4361,7 @@ export function startPageScan(doc: NonNullable<ParsedPage["document"]>, pageUrl:
 export function scanPageBounded(
   doc: NonNullable<ParsedPage["document"]>,
   pageUrl: string
-): { secrets: LeakedSecret[]; omitted: number } {
+): { secrets: LeakedSecret[]; omitted: number; omittedSerious: boolean } {
   const scan = startPageScan(doc, pageUrl);
   scan.run();
   return scan.result();
@@ -4415,16 +4434,23 @@ export const leakedSecretsRule: Rule = {
     const append = (found: readonly LeakedSecret[]): void => {
       for (const finding of found) leakedSecrets.push(finding);
     };
-    // Pages the collector kept were already admitted by the crawl's budget (see `createSiteFindingBudget`); the legacy page
-    // path and the external scripts, which are scanned here, go through one of their own.
-    const budget = createSiteFindingBudget();
-    const admitted = (found: readonly LeakedSecret[], omitted: number): { secrets: readonly LeakedSecret[]; omitted: number } => {
+    // Pages the collector kept were already admitted by the crawl's budget (see `createSiteFindingBudget`). The legacy page
+    // path and the external scripts, which are scanned here, go through THE SAME budget when the collector handed it over,
+    // so a site has one cap; without one (a caller that built the records itself) they get one of their own.
+    const budget = ctx.collectedSignals?.secretsBudget ?? createSiteFindingBudget();
+    let omittedSerious = false;
+    const admitted = (
+      found: readonly LeakedSecret[],
+      omitted: number,
+      serious: boolean
+    ): { secrets: readonly LeakedSecret[]; omitted: number; serious: boolean } => {
       const result = budget.admit(found);
-      return { secrets: result.secrets, omitted: omitted + result.omitted };
+      return { secrets: result.secrets, omitted: omitted + result.omitted, serious: serious || result.omittedSerious };
     };
-    const noteOmitted = (url: string, omitted: number): void => {
+    const noteOmitted = (url: string, omitted: number, serious: boolean): void => {
       if (omitted <= 0) return;
       omittedFindings += omitted;
+      if (serious) omittedSerious = true;
       omittedPages.push({ url, omitted });
     };
 
@@ -4435,16 +4461,16 @@ export const leakedSecretsRule: Rule = {
     if (ctx.collectedSignals) {
       for (const rec of ctx.collectedSignals.pages) {
         append(rec.secrets);
-        noteOmitted(rec.url, rec.secretsOmitted ?? 0);
+        noteOmitted(rec.url, rec.secretsOmitted ?? 0, rec.secretsOmittedSerious ?? true);
       }
     } else if (ctx.site?.pages) {
       for (const page of ctx.site.pages) {
         const doc = page.parsed.document;
         if (!doc) continue;
         const scanned = scanPageBounded(doc, page.url);
-        const kept = admitted(scanned.secrets, scanned.omitted);
+        const kept = admitted(scanned.secrets, scanned.omitted, scanned.omittedSerious);
         append(kept.secrets);
-        noteOmitted(page.url, kept.omitted);
+        noteOmitted(page.url, kept.omitted, kept.serious);
       }
     }
 
@@ -4453,9 +4479,9 @@ export const leakedSecretsRule: Rule = {
       for (const script of ctx.site.scripts) {
         if (script.content) {
           const scanned = scanContentBounded(script.content, "external-script", script.url);
-          const kept = admitted(scanned.secrets, scanned.omitted);
+          const kept = admitted(scanned.secrets, scanned.omitted, scanned.omittedSerious);
           append(kept.secrets);
-          noteOmitted(script.url, kept.omitted);
+          noteOmitted(script.url, kept.omitted, kept.serious);
         }
       }
     }
@@ -4595,9 +4621,10 @@ export const leakedSecretsRule: Rule = {
     if (omittedFindings > 0) {
       checks.push({
         name: "leaked-secrets-omitted",
-        status: "warn",
-        message: `${omittedFindings} more secret-shaped finding(s) on ${omittedPages.length} source(s) were not kept: a page or script keeps at most ${PAGE_FINDINGS_CAP} and a site ${SITE_FINDINGS_CAP}, most serious first, so what is listed is not all of it`,
-        details: { omitted: omittedFindings, perPageCap: PAGE_FINDINGS_CAP, siteCap: SITE_FINDINGS_CAP },
+        // Only public-by-design or informational findings left out: nothing to act on, so no warning on a clean site.
+        status: omittedSerious ? "warn" : "info",
+        message: `At least ${omittedFindings} more secret-shaped finding(s) on ${omittedPages.length} source(s) were not kept (a value left out on several pages counts on each): a page or script keeps at most ${PAGE_FINDINGS_CAP} and a site ${SITE_FINDINGS_CAP} in all, most serious first, so what is listed is not all of it`,
+        details: { omitted: omittedFindings, perPageCap: PAGE_FINDINGS_CAP, siteCap: SITE_FINDINGS_CAP, atLeast: true },
         items: omittedPages.slice(0, 20).map((p) => ({ id: p.url, label: `${p.omitted} finding(s) not kept` })),
       });
     }
