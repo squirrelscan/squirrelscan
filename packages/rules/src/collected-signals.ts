@@ -32,7 +32,7 @@ import { buildInPageSectionSignal } from "./shared/inpage-section";
 import type { InPageSectionSignal } from "./shared/inpage-section";
 import { scanPageForMisspellings } from "./content/common-misspellings";
 import { RULE_TIME_BUDGET_MS, RuleTimeoutError, runWithinBudget } from "./rule-budget";
-import { startPageScan } from "./security/leaked-secrets";
+import { startPageScan, type SiteFindingBudget } from "./security/leaked-secrets";
 import { extractContentSentences } from "./shared/content-in-script";
 import { hasJavaScriptDetections } from "@squirrelscan/utils/cdn";
 
@@ -274,3 +274,20 @@ export function buildCollectedPageSignal(input: {
   }
   return signal;
 }
+
+/**
+ * The page's record as the crawl's list keeps it: its findings pass through the crawl's site budget (#1568), and the ones
+ * the site had no room for are counted in `secretsOmitted`. The record the rule cache stores is the page's own, untouched:
+ * the decision depends on the pages before it, so it belongs to this crawl and not to the page.
+ */
+export function applySiteFindingBudget(signal: CollectedPageSignal, budget: SiteFindingBudget): CollectedPageSignal {
+  if (signal.secrets.length === 0) return signal;
+  const admitted = budget.admit(signal.secrets);
+  if (admitted.omitted === 0 && admitted.secrets.length === signal.secrets.length) return signal;
+  const omitted = (signal.secretsOmitted ?? 0) + admitted.omitted;
+  const { secretsOmitted: _unused, ...rest } = signal;
+  void _unused;
+  return { ...rest, secrets: admitted.secrets, ...(omitted > 0 ? { secretsOmitted: omitted } : {}) };
+}
+
+export { createSiteFindingBudget, SITE_FINDINGS_CAP, type SiteFindingBudget } from "./security/leaked-secrets";

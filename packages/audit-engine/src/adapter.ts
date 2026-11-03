@@ -30,7 +30,9 @@ import {
   type ParsePageOptions,
 } from "@squirrelscan/parser";
 import {
+  applySiteFindingBudget,
   buildCollectedPageSignal,
+  createSiteFindingBudget,
   createRunner,
   isRuleEnabled,
   isSiteIndexable,
@@ -3685,6 +3687,8 @@ export function runStreamingRules(
     }
 
     const collectedPages: CollectedPageSignal[] = [];
+    // One budget of kept leaked-secrets findings for the whole crawl (#1568), applied as a page joins the list.
+    const secretsBudget = createSiteFindingBudget();
     const signalCollector: PageSignalCollector = {
       // Renamed from "site-dom-signals" when edgeMarkers joined the record (#605): a cached entry
       // written before it lacks the field, and a replay would read that as "no marker". The new id
@@ -3710,7 +3714,7 @@ export function runStreamingRules(
           }),
           "collected-signal",
         );
-        collectedPages.push(signal);
+        collectedPages.push(applySiteFindingBudget(signal, secretsBudget));
         // The value the rule cache stores for this page. It is already detached
         // and holds no DOM, so it is exactly what a replay needs (#1990). An
         // extractor that ran past its time budget left a hole, which must not be
@@ -3721,7 +3725,7 @@ export function runStreamingRules(
       // `collectedPages` stays in crawl order whether a page ran or replayed —
       // which matters because the site rules aggregate over that order.
       replay(_page, snapshot) {
-        collectedPages.push(snapshot as CollectedPageSignal);
+        collectedPages.push(applySiteFindingBudget(snapshot as CollectedPageSignal, secretsBudget));
       },
     };
     const endpointCollector = createEndpointCollector({
