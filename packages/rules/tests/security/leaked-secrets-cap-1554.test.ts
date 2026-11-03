@@ -10,6 +10,7 @@ import {
   leakedSecretsRule,
   type LeakedSecret,
   PAGE_FINDINGS_CAP,
+  SITE_FINDINGS_CAP,
   scanContent,
   scanContentBounded,
   scanPageBounded,
@@ -360,7 +361,7 @@ describe("the rule: no spread, one cap with the report, and the omitted count is
     const check = named(run([hostile]), "leaked-secrets-omitted")!;
     expect(check.status).toBe("warn");
     expect(check.message).toContain(`${omittedCount} more`);
-    expect(check.details).toEqual({ omitted: omittedCount, perPageCap: PAGE_FINDINGS_CAP });
+    expect(check.details).toEqual({ omitted: omittedCount, perPageCap: PAGE_FINDINGS_CAP, siteCap: SITE_FINDINGS_CAP });
     expect(check.items![0]).toEqual({
       id: "https://shop.acme.test/dump",
       label: `${omittedCount} finding(s) not kept`,
@@ -430,7 +431,7 @@ describe("the rule's lists, from forged page records (#1554 review)", () => {
     });
     const check = run(pages).checks.find((c) => c.name === "leaked-secrets-omitted")!;
     expect(check.items).toHaveLength(20);
-    expect(check.details).toEqual({ omitted: 150, perPageCap: PAGE_FINDINGS_CAP });
+    expect(check.details).toEqual({ omitted: 150, perPageCap: PAGE_FINDINGS_CAP, siteCap: SITE_FINDINGS_CAP });
     expect(check.message).toContain("150 more");
     expect(check.message).toContain("30 source(s)");
   });
