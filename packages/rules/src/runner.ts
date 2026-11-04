@@ -112,14 +112,18 @@ export interface RunnerScope {
    * `security/tls-certificate` reports "not checked".
    */
   tlsProbe?: TlsProbeFn;
+  /**
+   * Extra rule namespaces (plugins / tests) merged on top of the built-ins. Scope
+   * rather than a runner-only option so `createRunner` carries it, and so the audit
+   * controller can hand the same list to `selectDiscoveryProbes` (#1375).
+   */
+  additionalNamespaces?: RuleNamespace[];
 }
 
 export interface RunnerOptions extends RunnerScope {
   config: RulesConfig;
   /** Called once for each `[[ignore]]` entry that exhausts its regex work budget. */
   onIgnoreTimeout?: (entry: number) => void;
-  /** Extra rule namespaces (plugins / tests) merged on top of the built-ins. */
-  additionalNamespaces?: RuleNamespace[];
   /**
    * Max rules to run concurrently within a single page/site pass. Rules are
    * independent (each reads shared, immutable context and produces its own
