@@ -20,6 +20,7 @@ import {
   isBinInPath,
   findLocalSettingsPath,
 } from "../../src/self/paths";
+import { ignoresFilePermissions } from "./ignores-file-permissions";
 
 describe("getSquirrelPaths", () => {
   const originalEnv = { ...process.env };
@@ -283,7 +284,7 @@ describe("findLocalSettingsPath", () => {
   // settings — instead of surfacing the fact that it couldn't be checked.
   // Root ignores permission bits, so this would be a no-op under a root-run
   // sandbox/CI container.
-  test.skipIf(process.getuid?.() === 0)(
+  test.skipIf(ignoresFilePermissions)(
     "returns err (not a silent skip-and-continue) when a parent dir can't be stat'd (EACCES)",
     () => {
       base = mkdtempSync(join(tmpdir(), "sq-local-settings-"));

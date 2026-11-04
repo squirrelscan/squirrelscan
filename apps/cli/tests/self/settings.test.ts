@@ -37,6 +37,7 @@ import {
   DEFAULT_SETTINGS,
 } from "../../src/self/settings";
 import { UserSettingsSchema } from "../../src/self/types";
+import { ignoresFilePermissions } from "./ignores-file-permissions";
 
 // #2182: the two flags behind the one-time "kept local" publish nudge. They are
 // declared on the zod schema, which is what makes them survive a save — the
@@ -759,7 +760,7 @@ describe("loadUserSettings — corrupt vs. missing vs. valid (#805)", () => {
   // silently fell through to an anonymous session — the exact bug #805 is
   // about. Root ignores permission bits, so this would be a no-op (and not
   // actually exercise the failure) under a root-run sandbox/CI container.
-  test.skipIf(process.getuid?.() === 0)(
+  test.skipIf(ignoresFilePermissions)(
     "returns err (not a silent anonymous ok) when the file exists but is unreadable (EACCES)",
     () => {
       writeFileSync(testPath, JSON.stringify({ channel: "stable" }));
