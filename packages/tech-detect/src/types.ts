@@ -62,7 +62,9 @@ export type Detector =
   // `requires`: literal that must appear in the html (case-sensitive) before the
   // pattern runs, a cheap gate for patterns that scan a bounded window per tag.
   // `comments`: this detector also reads HTML comments (a marker comment such as an app block banner); no other detector does (#1550).
-  | { type: "html"; pattern: RegExp; requires?: string; comments?: true }
+  // `dataScripts`: this detector also reads the text of data scripts (`type="application/json"` and the like), for a fact a page
+  // states only as JSON (a shop config flag); no other detector does. `<template>` content and comments stay cut (#1550).
+  | { type: "html"; pattern: RegExp; requires?: string; comments?: true; dataScripts?: true }
   | { type: "dom"; selector: string }
   | { type: "url-path"; pattern: RegExp }
   // Matches the audited page's own host name only, never its HTML: a third-party app a page loads

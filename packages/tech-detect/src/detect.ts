@@ -102,8 +102,10 @@ function matchesInCode(
 interface InertRange {
   from: number;
   to: number;
-  /** A comment (kept for the fingerprints that match one); every other region is cut from every view. */
+  /** A comment (kept for the fingerprints that match one). */
   comment: boolean;
+  /** The text of a data script (kept for the fingerprints that match one, see {@link readsDataScripts}); a `<template>` is cut from every view. */
+  data: boolean;
 }
 
 const RAW_TEXT_TAGS: ReadonlySet<string> = new Set(["style", "textarea", "title", "xmp", "iframe", "noembed", "noframes"]);
@@ -127,12 +129,27 @@ function readsComments(detector: Detector): boolean {
   return known;
 }
 
-/** `html` without the `ranges` (sorted, non-overlapping), and without comments unless `keepComments`. */
-function cutRanges(html: string, ranges: readonly InertRange[], keepComments: boolean): string {
+const dataScriptCache = new WeakMap<Detector, boolean>();
+/**
+ * Whether a detector reads the text of data scripts: an `html` detector marked `dataScripts`, for a fact the page only states as JSON
+ * (the `shopifyPaymentsEnabled` flag in `<script id="shopify-features" type="application/json">`, #1550). Comments and `<template>`
+ * content stay cut for it unless it also reads comments. Per detector, like {@link readsComments}.
+ */
+function readsDataScripts(detector: Detector): boolean {
+  let known = dataScriptCache.get(detector);
+  if (known === undefined) {
+    known = detector.type === "html" && detector.dataScripts === true;
+    dataScriptCache.set(detector, known);
+  }
+  return known;
+}
+
+/** `html` without the `ranges` (sorted, non-overlapping), and without comments unless `keepComments`, without data script text unless `keepData`. */
+function cutRanges(html: string, ranges: readonly InertRange[], keepComments: boolean, keepData: boolean): string {
   let out = "";
   let at = 0;
   for (const r of ranges) {
-    if (r.comment && keepComments) continue;
+    if ((r.comment && keepComments) || (r.data && keepData)) continue;
     out += html.slice(at, r.from);
     at = r.to;
   }
@@ -355,7 +372,7 @@ function isDeclarativeShadowRoot(tag: string): boolean {
 }
 
 let lastMarkup:
-  | { html: string; attrs: ReadonlySet<string>; markup: string; tags: CollectedTag[]; importMapSkipped: number; ranges: InertRange[]; views: Partial<Record<"clean" | "commented", string>> }
+  | { html: string; attrs: ReadonlySet<string>; markup: string; tags: CollectedTag[]; importMapSkipped: number; ranges: InertRange[]; views: Partial<Record<"clean" | "commented" | "data" | "commented+data", string>> }
   | undefined;
 
 /** A tag the page pass kept, with its attributes as written (names lower case, first wins). */
@@ -474,7 +491,7 @@ export function pageMarkup(html: string): string {
         if (!found) break; // an unterminated comment: the rest of the page stays, as written
         end = found.index + found[0].length;
       }
-      if (!halted) ranges.push({ from: open, to: end, comment: true });
+      if (!halted) ranges.push({ from: open, to: end, comment: true, data: false });
       pos = end;
       continue;
     }
@@ -505,7 +522,7 @@ export function pageMarkup(html: string): string {
           while (mapCollected.length > 0 && mapCollected[mapCollected.length - 1]! >= t.collected) mapCollected.pop();
           [inlineText, importMapSkipped, importMapUrlCount, importMapMarkup] = t.state as [number, number, number, number];
           while (ranges.length > 0 && ranges[ranges.length - 1]!.from >= t.contentStart) ranges.pop();
-          ranges.push({ from: t.contentStart, to: open, comment: false });
+          ranges.push({ from: t.contentStart, to: open, comment: false, data: false });
         }
       } else {
         const cut = !isDeclarativeShadowRoot(tag);
@@ -529,7 +546,7 @@ export function pageMarkup(html: string): string {
       const runs = scriptRuns(scriptAttrs);
       const length = end - pos;
       // A script the browser does not run is data: its text is not read by the `html` detectors either; an unclosed one stays.
-      if (length > 0 && endMatch && !halted && !runs) ranges.push({ from: pos, to: end, comment: false });
+      if (length > 0 && endMatch && !halted && !runs) ranges.push({ from: pos, to: end, comment: false, data: true });
       if (length > 0 && /^importmap$/i.test(asciiTrim(type).slice(0, 32))) {
         // The page loads these as modules: each is a script URL, for the URL patterns (as one tag in the markup) and for the
         // tag attribute detectors (as a collected script). The map itself stays out of the markup: it is data.
@@ -601,14 +618,15 @@ export function pageMarkup(html: string): string {
 
 /**
  * The page's HTML the `html` detectors read: without the inert regions (data script bodies, `<template>` content) and, unless
- * `keepComments`, without comments. Built once per page and view from the ranges the single page pass found.
+ * `keepComments`, without comments. `keepData` keeps the data script bodies (never `<template>` content). Built once per page and
+ * view (at most four) from the ranges the single page pass found, never by rescanning the page.
  */
-function pageHtml(html: string, keepComments: boolean): string {
+function pageHtml(html: string, keepComments: boolean, keepData = false): string {
   pageMarkup(html);
   const page = lastMarkup;
   if (!page || page.ranges.length === 0) return html;
-  const key = keepComments ? "commented" : "clean";
-  return (page.views[key] ??= cutRanges(html, page.ranges, keepComments));
+  const key = keepComments ? (keepData ? "commented+data" : "commented") : keepData ? "data" : "clean";
+  return (page.views[key] ??= cutRanges(html, page.ranges, keepComments, keepData));
 }
 
 /** How many import map entries (a bound, an unsafe value, a map over its size) the page pass left out: see {@link IMPORTMAP_MAX_CHARS}. */
@@ -855,7 +873,7 @@ function detectOnePage(
     let matchedDetector: Detector | null = null;
     for (const detector of fp.detectors) {
       // The page without what a browser does not run or show; comments stay only for a detector that matches one (#1550).
-      const html = pageHtml(input.html, readsComments(detector));
+      const html = pageHtml(input.html, readsComments(detector), readsDataScripts(detector));
       if (matchDetector(detector, input, html, views, maxChars)) {
         matchedDetector = detector;
         break; // ANY match = detected
