@@ -16,6 +16,7 @@ import { SCAN_TRUNCATED_SKIP_REASON } from "@squirrelscan/core-contracts/resolut
 import { skipComment, skipString, stepBlocks, stripComments } from "../shared/css-tokens";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 import { getTextExcludingScripts } from "./text-content";
+import { CLASS_SPLIT } from "@squirrelscan/parser/dom";
 
 export const optionsSchema = z.object({
   min_hidden_chars: z
@@ -1087,7 +1088,7 @@ function describeElement(el: Element): string {
   let label = tagOf(el) || "element";
   const id = el.getAttribute("id");
   if (id) label += `#${id}`;
-  const classes = (el.getAttribute("class") || "").trim().split(/\s+/).filter(Boolean);
+  const classes = (el.getAttribute("class") || "").split(CLASS_SPLIT).filter(Boolean);
   for (const cls of classes.slice(0, 2)) label += `.${cls}`;
   return label;
 }

@@ -15,6 +15,8 @@
 // known org-level markers.
 
 import { getAttrCI } from "@squirrelscan/utils";
+
+import { CLASS_SPLIT } from "./dom";
 import type { Document, Element } from "linkedom";
 
 /** Visible (non-schema) author + date signals extracted from the DOM. */
@@ -90,7 +92,7 @@ const EXACT_ROLE_NOISE = /^(editor|editorial)$/i;
 const MAX_AUTHOR_LEN = 80;
 
 function classTokens(el: Element): string[] {
-  return (getAttrCI(el, "class") ?? "").toLowerCase().split(/\s+/).filter(Boolean);
+  return (getAttrCI(el, "class") ?? "").toLowerCase().split(CLASS_SPLIT).filter(Boolean);
 }
 
 /**

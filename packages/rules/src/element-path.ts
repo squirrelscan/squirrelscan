@@ -10,6 +10,8 @@
 // MAX_PATH_CHARS characters of path in all (the nearest ancestors that fit). The engine strips it from the item before
 // the report, so no output carries it.
 
+import { CLASS_SPLIT } from "@squirrelscan/parser/dom";
+
 /** Ancestors kept, counting the element itself: the nearest ones decide what an ignore can say. */
 export const ANCESTOR_LIMIT = 16;
 /** Characters of the whole path. */
@@ -32,7 +34,7 @@ function segment(el: Element): string {
   const classes = el.getAttribute("class");
   if (classes) {
     let kept = 0;
-    for (const token of classes.slice(0, MAX_CLASS_SCAN).split(/\s+/)) {
+    for (const token of classes.slice(0, MAX_CLASS_SCAN).split(CLASS_SPLIT)) {
       if (kept >= MAX_CLASSES) break;
       if (token && token.length <= MAX_TOKEN_CHARS && TOKEN_CHARS.test(token)) {
         out += `.${token}`;

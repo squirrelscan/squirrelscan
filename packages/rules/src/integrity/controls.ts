@@ -16,6 +16,7 @@ import { BRAND_SPECS } from "./brand-specs";
 import { CONFUSABLE_RUN, CONFUSABLES, INVISIBLE, digitForms, hasFoldableDigit } from "./confusables";
 import { AUTH_CUE_PHRASES, AUTH_LABEL } from "./cues";
 import { hiddenSelectors } from "./overlay-style";
+import { CLASS_SPLIT } from "@squirrelscan/parser/dom";
 
 /** Text with nothing outside ASCII (a linear test, with no backtracking). */
 const ASCII_ONLY = /^\p{ASCII}*$/u;
@@ -270,7 +271,7 @@ function readChunks(
           getAttrCI(child, "hidden") !== null ||
           getAttrCI(child, "aria-hidden")?.toLowerCase() === "true" ||
           (style !== null && styleHides(child, style)) ||
-          (cls !== null && cls.toLowerCase().split(/\s+/).some((c) => hiddenBy.classes.has(c))) ||
+          (cls !== null && cls.toLowerCase().split(CLASS_SPLIT).some((c) => hiddenBy.classes.has(c))) ||
           (id !== null && hiddenBy.ids.has(id.toLowerCase()));
       }
       push(child, nowHidden);

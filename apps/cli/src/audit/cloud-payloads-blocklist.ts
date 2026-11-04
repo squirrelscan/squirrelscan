@@ -3,6 +3,7 @@
 // dispatched by the cloud prefetch phase (@squirrelscan/audit-engine).
 
 import { detachFromPage } from "@squirrelscan/audit-engine";
+import { CLASS_SPLIT } from "@squirrelscan/parser/dom";
 
 import type { SiteContextPage } from "@/audit/adapter";
 
@@ -139,7 +140,7 @@ export function absorbSelectors(
       if (id && SIMPLE_TOKEN_RE.test(id)) addSelector(selectors, `#${id}`);
       const classAttr = el.getAttribute("class");
       if (!classAttr) continue;
-      for (const cls of classAttr.split(/\s+/)) {
+      for (const cls of classAttr.split(CLASS_SPLIT)) {
         if (selectors.size >= MAX_SELECTORS) break;
         if (cls && SIMPLE_TOKEN_RE.test(cls)) addSelector(selectors, `.${cls}`);
       }

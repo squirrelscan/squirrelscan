@@ -8,6 +8,7 @@
 import type { ParsedPage } from "../types";
 
 import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
+import { CLASS_SPLIT } from "@squirrelscan/parser/dom";
 
 export interface PageFingerprint {
   /** Distinct external asset hosts referenced by <link>/<script>/<img>. */
@@ -135,7 +136,7 @@ export function fingerprintPage(
   const bodyClasses = new Set<string>();
   const body = doc.querySelector("body");
   if (body) {
-    for (const cls of (body.getAttribute("class") ?? "").split(/\s+/)) {
+    for (const cls of (body.getAttribute("class") ?? "").split(CLASS_SPLIT)) {
       if (cls) bodyClasses.add(cls.toLowerCase());
     }
   }

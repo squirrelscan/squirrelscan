@@ -39,6 +39,7 @@ import {
   type SiteContextPage,
 } from "./adapter";
 import { detachFromPage } from "./detach";
+import { CLASS_SPLIT } from "@squirrelscan/parser/dom";
 
 // The parsed page's linkedom Document, without adding a direct linkedom dep here.
 type Document = NonNullable<NonNullable<SiteContextPage["parsed"]>["document"]>;
@@ -305,7 +306,7 @@ function absorbBlocklistSelectors(
       if (id && SIMPLE_TOKEN_RE.test(id)) addSelector(selectors, `#${id}`);
       const classAttr = el.getAttribute("class");
       if (!classAttr) continue;
-      for (const cls of classAttr.split(/\s+/)) {
+      for (const cls of classAttr.split(CLASS_SPLIT)) {
         if (selectors.size >= BL_MAX_SELECTORS) break;
         if (cls && SIMPLE_TOKEN_RE.test(cls)) addSelector(selectors, `.${cls}`);
       }
