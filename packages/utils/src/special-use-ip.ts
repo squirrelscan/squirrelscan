@@ -12,6 +12,9 @@
 // (`0:5efe:a.b.c.d` and `200:5efe:a.b.c.d` on any prefix, #1577): this module for policy, `isNonPublicAddress` at connect time.
 // ISATAP only routes on a host with an ISATAP interface, so one embedding a public IPv4 stays public in both. A test table in
 // `tests/special-use-ip.test.ts` runs the same literals through both and asserts they agree.
+//
+// NAT64 and 6to4 with a PUBLIC embedded IPv4 (`64:ff9b::808:808`, `2002:808:808::1`) are special-use here, by prefix (#1572): the
+// egress guard judges them by the embedded address, and that difference is intentional (see `isNonPublicHostnameForPolicy`).
 
 import { isIP } from "node:net";
 

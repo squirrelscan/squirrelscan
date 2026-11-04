@@ -41,6 +41,8 @@
  * hardening. This decides what to hand to the cloud and which rules apply,
  * never whether to fetch.
  */
+import { isIP } from "node:net";
+
 import { isSpecialUseIpLiteral } from "./special-use-ip";
 import { isPrivateOrReservedHost } from "./url";
 
@@ -162,6 +164,12 @@ export function isNonPublicHostname(rawHost: string): boolean {
  * and IPv6), site-local, multicast and the reserved blocks, whatever IPv4 they embed (see `special-use-ip.ts`). Cloud handoff,
  * the render charge, publish gating, the `skipOnPrivateTarget` rule gating and the default scheme read this.
  *
+ * NAT64 and 6to4 are judged by PREFIX, not by the IPv4 they embed (#1572): `64:ff9b::808:808` and `2002:808:808::1` are non-public here
+ * even though the embedded IPv4 is public, because they are translation and transition space (a hosted runner may have no path
+ * into it, and no public certificate is expected for such a literal), and no real site is audited by one. The egress guard
+ * (`public-egress.ts`) deliberately answers differently, by the embedded address, because it decides whether a connection is
+ * safe, not whether the target is public. A malformed IPv6 (a colon that is not a valid literal) is non-public: fail closed.
+ *
  * NOT for a grant. `isNonPublicHostname` stays the narrow test that `allowPrivateNetwork` follows (the crawl's seed redirect
  * and the engine's probes): a host that this function calls non-public but `isNonPublicHostname` does not is refused egress
  * unless it is allowed explicitly, which is the safe direction. The egress guards keep `public-egress.ts`.
@@ -169,6 +177,8 @@ export function isNonPublicHostname(rawHost: string): boolean {
 export function isNonPublicHostnameForPolicy(rawHost: string): boolean {
   const host = normalizeHostname(rawHost);
   if (isNonPublicHostname(host)) return true;
+  // A colon that is not a valid IPv6 literal cannot name a public site: fail closed (#1572). Unreachable through the URL-parsed callers.
+  if (host.includes(":") && isIP(host) !== 6) return true;
   return isIpLiteral(host) && isSpecialUseIpLiteral(host);
 }
 

@@ -122,3 +122,32 @@ describe("ISATAP literals: the egress classifier and the policy classifier agree
     expect(isNonPublicHostnameForPolicy(host)).toBe(nonPublic);
   });
 });
+
+// #1572: NAT64 and 6to4 with a PUBLIC embedded IPv4 are non-public for policy, by prefix; the egress guard answers by the embedded address, on purpose.
+describe("translation prefixes with a public embedded IPv4", () => {
+  test.each(["64:ff9b::808:808", "64:ff9b::8.8.8.8", "2002:808:808::1"])("%s: policy says non-public", (host) => {
+    expect(isSpecialUseIpv6(host)).toBe(true);
+    expect(isNonPublicHostnameForPolicy(host)).toBe(true);
+  });
+  test.each(["64:ff9b::808:808", "2002:808:808::1"])("%s: the egress guard judges the embedded address, so it differs from policy by design", (host) => {
+    expect(isNonPublicAddress(host)).toBe(false);
+    expect(isNonPublicAddress(host)).not.toBe(isNonPublicHostnameForPolicy(host));
+  });
+  test.each(["64:ff9b::a00:1", "2002:a00:1::1"])("%s: both layers refuse a private embedded IPv4", (host) => {
+    expect(isNonPublicAddress(host)).toBe(true);
+    expect(isNonPublicHostnameForPolicy(host)).toBe(true);
+  });
+});
+
+// #1572: a colon that is not a valid IPv6 is non-public (fail closed). The narrow classifier, which backs a grant, is unchanged.
+describe("a malformed IPv6 is non-public for policy", () => {
+  test.each(["64:ff9b::g", "1:2:3:4:5:6:7:8:9", "::1::2", "2606:4700::1111::1", "abc:def", "1:2", "::ffff:1.2.3.999", "[::1]x:"])("%s", (host) => {
+    expect(isNonPublicHostnameForPolicy(host)).toBe(true);
+    expect(isNonPublicHostname(host)).toBe(false);
+  });
+  test("valid IPv6 literals are unaffected", () => {
+    for (const host of ["2606:4700::1111", "2a00:1450::5efe:808:808", "::ffff:808:808", "fe80::1%eth0"]) {
+      expect([host, isNonPublicHostnameForPolicy(host)]).toEqual([host, host.startsWith("fe80")]);
+    }
+  });
+});
