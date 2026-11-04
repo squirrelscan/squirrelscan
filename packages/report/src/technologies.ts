@@ -194,14 +194,21 @@ export function techLocalOnlyNote(tech: ReportTechnologies): string | null {
   return count === 0 ? null : `${count} found only by the local scan of the crawled bundles (no scan history)`;
 }
 
+/** A loaded report is raw JSON: only a real array has a length worth printing, never an object that claims one. */
+function listCount(v: unknown): number {
+  return Array.isArray(v) ? v.length : 0;
+}
+
 function techChangeSummaryBase(tech: ReportTechnologies): string | null {
   // A local scan keeps no history, so "no changes" or "first scan" would claim a diff
   // nobody computed (#1263): it says where the list came from instead.
   if (tech.source === "local") return "Detected locally from the crawled pages (no scan history)";
   if (tech.firstScan) return "First recorded scan of this domain";
   const parts: string[] = [];
-  if (tech.added.length > 0) parts.push(`${tech.added.length} added`);
-  if (tech.removed.length > 0) parts.push(`${tech.removed.length} removed`);
+  const added = listCount(tech.added);
+  const removed = listCount(tech.removed);
+  if (added > 0) parts.push(`${added} added`);
+  if (removed > 0) parts.push(`${removed} removed`);
   if (parts.length === 0) return "No changes since last scan";
   return `${parts.join(" · ")} since last scan`;
 }
@@ -223,5 +230,5 @@ export function techOpenTag(name: string, tech: ReportTechnologies, indent: stri
   const source = tech.source === "local" || tech.source === "cloud" ? ` source="${tech.source}"` : "";
   const cut = tech.truncated ? ` truncated="${techTruncationReasons(tech).join(" ")}"` : "";
   if (tech.source === "local") return `${indent}<${name}${source}${cut}>`;
-  return `${indent}<${name}${source}${cut} first-scan="${tech.firstScan === true}" added="${tech.added.length}" removed="${tech.removed.length}">`;
+  return `${indent}<${name}${source}${cut} first-scan="${tech.firstScan === true}" added="${listCount(tech.added)}" removed="${listCount(tech.removed)}">`;
 }
