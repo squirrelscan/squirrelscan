@@ -77,9 +77,69 @@ describe("a decoy segment before a real token", () => {
     expect(types(`var t="${decoy("a")} ${real}";`)).toEqual(["Supabase Service Role JWT"]);
   });
 
-  test("known limit: two decoys in a row consume the real payload, and the match is dropped", () => {
-    expect(types(`var t="${decoy("a")}.${decoy("b")}.${real}";`)).toEqual([]);
+  const scan = (text: string) => scanContent(`var t="${text}";`, "inline-script", PAGE); // pragma: allowlist secret
+
+  test("one decoy: the whole real token is the value, with its own classification (#1530)", () => {
+    const found = scan(`${decoy("a")}.${real}`);
+    expect(found.map((f) => [f.type, f.value])).toEqual([["Supabase Service Role JWT", real]]);
+    expect(found[0]!.length).toBe(real.length);
   });
+
+  test("two, three and many decoys in a row: the real token is reported the same way (#1530)", () => {
+    for (const count of [2, 3, 5, 20]) {
+      const decoys = Array.from({ length: count }, (_, i) => decoy("abcdefghijklmnopqrstuvwxyz"[i % 26]!));
+      const found = scan(`${decoys.join(".")}.${real}`);
+      expect([count, found.map((f) => [f.type, f.value])]).toEqual([count, [["Supabase Service Role JWT", real]]]);
+    }
+  });
+
+  test("a crafted decoy that is valid JSON does not hide the real token", () => {
+    const jsonDecoy = b64u({ a: "x".repeat(30) });
+    const algDecoy = b64u({ alg: "HS256", pad: "p".repeat(30) });
+    for (const d of [jsonDecoy, algDecoy]) {
+      expect(scan(`${d}.${real}`).map((f) => [f.type, f.value])).toEqual([["Supabase Service Role JWT", real]]);
+      expect(scan(`${d}.${d}.${real}`).map((f) => [f.type, f.value])).toEqual([["Supabase Service Role JWT", real]]);
+    }
+  });
+
+  test("a real token with an unrelated token after it is not replaced", () => {
+    const other = `${b64u({ alg: "HS256" })}.${b64u({ sub: "u2", pad: "p".repeat(40) })}.${sig()}`;
+    expect(scan(`${real} ${other}`).map((f) => f.type)).toEqual(["Supabase Service Role JWT", "JSON Web Token"]);
+    expect(scan(`${other} ${real}`).map((f) => f.type)).toEqual(["JSON Web Token", "Supabase Service Role JWT"]);
+  });
+
+  test("a run of eyJ segments with no real token reports nothing", () => {
+    expect(types(`var t="${[decoy("a"), decoy("b"), decoy("c"), decoy("d")].join(".")}";`)).toEqual([]);
+    expect(types(`var t="${decoy("a")}.${decoy("b")}.${sig()}";`)).toEqual([]);
+  });
+
+  test("a run of eyJ segments stays linear, with and without a real token at the end", () => {
+    const time = (text: string) => {
+      const started = performance.now();
+      const found = types(text);
+      return { found, ms: performance.now() - started };
+    };
+    // 100,000 characters of `eyJ.`: no segment is long enough to match
+    const dots = time(`var t="${"eyJ.".repeat(25_000)}";`);
+    expect(dots.found).toEqual([]);
+    expect(dots.ms).toBeLessThan(2_000);
+    // long segments: 100,000 characters of 13-character decoys, then the real token
+    const run = `${decoy("a").slice(0, 13)}.`.repeat(8_000);
+    const none = time(`var t="${run}";`);
+    expect(none.found).toEqual([]);
+    expect(none.ms).toBeLessThan(2_000);
+    const withReal = time(`var t="${run}${real}";`);
+    expect(withReal.found).toEqual(["Supabase Service Role JWT"]);
+    expect(withReal.ms).toBeLessThan(2_000);
+    // separate runs, each ending without a real token, many times over
+    const many = time(`${`var t="${decoy("a")}.${decoy("b")}.${decoy("c")}";`}\n`.repeat(2_000));
+    expect(many.found).toEqual([]);
+    expect(many.ms).toBeLessThan(2_000);
+    // doubling the run does not quadruple the time
+    const small = Math.max(time(`var t="${run.repeat(2)}";`).ms, 5);
+    const large = time(`var t="${run.repeat(8)}";`).ms;
+    expect(large / small).toBeLessThan(12);
+  }, 60_000);
 });
 
 describe("real JWTs still report", () => {

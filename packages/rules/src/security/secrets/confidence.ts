@@ -360,6 +360,17 @@ export function decodeJwt(token: string): { header: Record<string, unknown>; pay
   return header && payload ? { header, payload } : null;
 }
 
+/**
+ * Does a `JSON Web Token` match read as decoy segments in front of a real token? The pattern takes the first three dotted
+ * `eyJ` segments, so `decoy.header.payload` is matched when a decoy sits before a real token. Such a match does not decode, or its
+ * header has no string `alg` (a crafted decoy that is valid JSON), or its payload is itself a header (a string `alg`: a payload
+ * carries claims). The scan then looks for the real token from the second segment on (#1530).
+ */
+export function jwtMatchIsSuspect(value: string): boolean {
+  const decoded = decodeJwt(value);
+  return !decoded || typeof decoded.header.alg !== "string" || typeof decoded.payload.alg === "string";
+}
+
 const ADMIN_WORD_RE = /\badmin\b|\bsuperuser\b|\bservice_role\b/i;
 
 // Issuers whose tokens are credentials the site holds as a CLIENT of the

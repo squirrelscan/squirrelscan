@@ -21,7 +21,7 @@ import {
   withPrefilter,
   type GramIndex,
 } from "../shared/literal-prefilter";
-import { refineFinding, type Confidence, type FindingExtra } from "./secrets/confidence";
+import { jwtMatchIsSuspect, refineFinding, type Confidence, type FindingExtra } from "./secrets/confidence";
 import { decodeForLocation, scanBase64Blobs, type ReportedLocation } from "./secrets/decode";
 
 import { sharedRegex } from "../shared-regex";
@@ -3841,7 +3841,31 @@ function scanInto(
 
     pattern.lastIndex = 0;
     let match: RegExpExecArray | null;
+    // The JWT pattern takes the first three dotted `eyJ` segments, so decoy segments before a real token are matched with its
+    // header and payload and the real token is lost (#1530). A sticky copy tries each next segment start in turn.
+    const jwtRetry = name === "JSON Web Token" ? new RegExp(pattern.source, "y") : undefined;
+    // The start of the last segment a failed chain reached: a later match that starts at or before it was already tried.
+    let jwtTriedTo = -1;
     while ((match = pattern.exec(content)) !== null) {
+      if (jwtRetry && match.index > jwtTriedTo && jwtMatchIsSuspect(match[0])) {
+        let current: RegExpExecArray = match;
+        let real: RegExpExecArray | undefined;
+        for (;;) {
+          jwtRetry.lastIndex = current.index + current[0].indexOf(".") + 1;
+          const next = jwtRetry.exec(content);
+          // the real token starts inside the match it hides in; one that starts past it is another token
+          if (!next || next.index >= current.index + current[0].length) break;
+          current = next;
+          if (!jwtMatchIsSuspect(next[0])) {
+            real = next;
+            break;
+          }
+        }
+        if (real) {
+          match = real;
+          pattern.lastIndex = real.index + real[0].length;
+        } else jwtTriedTo = current.index;
+      }
       let value = match[0];
       let seedVerdict: SeedVerdict;
 
