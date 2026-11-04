@@ -30,7 +30,7 @@ import type { PageRecord } from "@squirrelscan/core-contracts";
 import type { SQLiteStorage } from "@squirrelscan/crawler";
 import type { PageFingerprint, RuleRunResult, SiteData, PageData, ParsedPage } from "@squirrelscan/rules";
 import type { RuleRunner } from "@squirrelscan/rules";
-import { fingerprintPage, mergeRuleRunResult } from "@squirrelscan/rules";
+import { detachFingerprint, fingerprintPage, mergeRuleRunResult } from "@squirrelscan/rules";
 
 import { buildSiteContext, buildHeadersMap, isRenderedFetch } from "./adapter";
 import { collectDroppedBatch } from "./batch-gc";
@@ -527,7 +527,8 @@ export function streamPageRules(
         // mutate the DOM; `template-cluster-key-golden.test.ts` pins the stored
         // keys, so a rule that did would fail there.
         const shared: SharedPageSignals = {
-          fingerprint: fingerprintPage(parsed, pageUrl),
+          // Copied out of the page here, once: the collectors keep it as handed in, and a slice would keep the page alive (#1565).
+          fingerprint: detachFingerprint(fingerprintPage(parsed, pageUrl)),
         };
         // The grouping key is the template cluster, this page's rule-input signature
         // (#275: script and stylesheet urls with integrity presence, meta names and

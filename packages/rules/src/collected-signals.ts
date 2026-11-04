@@ -265,11 +265,12 @@ export function buildCollectedPageSignal(input: {
     // Only the branch that actually computes is timed: a caller that hands in a
     // fingerprint (#1949) does no work here and should not be charged for one.
     // Fingerprint, script sources and anchors hold attribute and text slices of the page: copied so the record does not keep it (#1565).
-    fingerprint: detachFingerprint(
+    // A supplied fingerprint is the caller's own (the streaming loop shares one per page and detaches it where it builds it, #1565):
+    // it is kept as handed in. One computed here is copied out of the page.
+    fingerprint:
       input.fingerprint !== undefined
         ? input.fingerprint
-        : timed("integrity/template-discontinuity", null, () => fingerprintPage(parsed, url))
-    ),
+        : detachFingerprint(timed("integrity/template-discontinuity", null, () => fingerprintPage(parsed, url))),
     signals: timed("integrity/orphan-page", [], () => [...detectPageSignals(signalCtx)]),
     scriptSrcs: detachedList(timed("adblock/blocked-links", [] as string[], () => pageScriptSrcs(doc))),
     subprocessorMatch: timed("legal/subprocessor-disclosure", null, () =>

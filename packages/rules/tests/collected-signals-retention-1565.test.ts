@@ -94,12 +94,16 @@ describe("the copy is the same record", () => {
     expect(a.fingerprint?.hasNav).toBe(true);
   });
 
-  test("a fingerprint handed in is copied, not changed", () => {
+  test("a fingerprint handed in is kept as handed in; one computed here is a copy of the extractor's", () => {
     const html = `<!doctype html><html><body class="a b"><nav>n</nav></body></html>`;
     const parsed = parsePage(html, url(3));
-    const given = buildCollectedPageSignal({ url: url(3), parsed, htmlBytes: 1 }).fingerprint!;
-    const out = buildCollectedPageSignal({ url: url(3), parsed, htmlBytes: 1, fingerprint: given });
-    expect(out.fingerprint).not.toBe(given);
-    expect([...out.fingerprint!.bodyClasses]).toEqual([...given.bodyClasses]);
+    const computed = buildCollectedPageSignal({ url: url(3), parsed, htmlBytes: 1 }).fingerprint!;
+    // the streaming loop detaches the shared fingerprint where it builds it, so the collector must not copy it again
+    const out = buildCollectedPageSignal({ url: url(3), parsed, htmlBytes: 1, fingerprint: computed });
+    expect(out.fingerprint).toBe(computed);
+    // one computed in here is a new object with the same values as the extractor's
+    const again = buildCollectedPageSignal({ url: url(3), parsed, htmlBytes: 1 }).fingerprint!;
+    expect(again).not.toBe(computed);
+    expect([...again.bodyClasses]).toEqual([...computed.bodyClasses]);
   });
 });
