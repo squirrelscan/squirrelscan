@@ -75,7 +75,7 @@ const IDS = [
   "consent-x", "qc-cmp2-container", "BorlabsCookieBox", "cookieK", "coÅkie",
 ];
 const CLASSES = [
-  "", "a b", "cc-window", "cc-window-x", "x cc-window y", "CC-WINDOW", "cc-window\tfoo", "foo cc-window",
+  "", "a b", "cc-window", "cc-window-x", "x cc-window y", "CC-WINDOW", "cc-window\tfoo", 
   "foo\ncc-window\n", "osano-cm-window", "cmplz-cookiebanner", "cookie-notice", "CookieNotice", "ConsentBox",
   "cli-bar-container", "iubenda-cs-banner x", "nav cookie", "plain",
 ];
@@ -120,6 +120,13 @@ describe("legal/cookie-consent single-pass scan matches the selector version (pu
     // the corpus must exercise both answers, or the loop proves nothing
     expect(passes).toBeGreaterThan(200);
     expect(passes).toBeLessThan(1800);
+  });
+
+  // #1567: a class list splits on HTML whitespace only, so an NBSP does not separate tokens and `foo<NBSP>cc-window` is not the `cc-window` class. The selector
+  // reference above reads `.cc-window` through a parser that folds NBSP into a space, which a browser does not, so the shape is pinned here, not in the run above.
+  test("an NBSP between class tokens does not make `cc-window` a token, as in a browser", () => {
+    expect(detects(`<html><body><div class="foo\u00a0cc-window"><p>x</p></div></body></html>`)).toBe(false);
+    expect(detects(`<html><body><div class="foo cc-window"><p>x</p></div></body></html>`)).toBe(true);
   });
 
   test("a CMP container is found on any element, anywhere", () => {

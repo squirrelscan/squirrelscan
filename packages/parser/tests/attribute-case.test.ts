@@ -383,9 +383,12 @@ const SOURCE_GLOBS = ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts", "**/*.js", 
 
 // dom.ts is the door. This file describes the patterns it looks for, in
 // comments and in the two regexes above, so it cannot scan itself.
+// class-cut-fuzz-1569 reads linkedom directly ON PURPOSE: its oracle is the unpatched tree a browser-like parser builds, which the class cut
+// must reproduce (it imports src/dom.ts first, so the case patch is in place in the same way as in production).
 const EXEMPT = new Set([
   "packages/parser/src/dom.ts",
   "packages/parser/tests/attribute-case.test.ts",
+  "packages/parser/tests/class-cut-fuzz-1569.test.ts",
 ]);
 
 describe("linkedom is reachable through one door", () => {
