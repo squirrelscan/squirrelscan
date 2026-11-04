@@ -214,6 +214,10 @@ function embeddedIpv4(g: number[]): number[] | null {
   return null;
 }
 
+function octetsOf(hi: number, lo: number): number[] {
+  return [hi >> 8, hi & 0xff, lo >> 8, lo & 0xff];
+}
+
 function isAlwaysRefusedIpv4(o: number[]): boolean {
   return (o[0] === 169 && o[1] === 254) || METADATA_IPV4.has(o.join("."));
 }
@@ -271,6 +275,9 @@ function isNonPublicIpv6(g: number[]): boolean {
   if ((g0 & 0xff00) === 0xff00) return true; // multicast ff00::/8
   if (g0 === 0x2001 && g[1] === 0x0db8) return true; // documentation
   if (g0 === 0x64 && g[1] === 0xff9b && g[2] === 1) return true; // local-use NAT64
+  // ISATAP (#1577): an interface identifier `0:5efe:a.b.c.d` or `200:5efe:a.b.c.d` on any prefix embeds an IPv4 address, judged as
+  // that address, as `isSpecialUseIpv6` does for the policy layer.
+  if ((g[4] === 0 || g[4] === 0x200) && g[5] === 0x5efe) return isNonPublicIpv4(octetsOf(g[6] ?? 0, g[7] ?? 0));
   const v4 = embeddedIpv4(g);
   return v4 !== null && isNonPublicIpv4(v4);
 }
