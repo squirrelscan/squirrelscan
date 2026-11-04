@@ -35,6 +35,7 @@ import { RULE_TIME_BUDGET_MS, RuleTimeoutError, runWithinBudget } from "./rule-b
 import { startPageScan, type SiteFindingBudget } from "./security/leaked-secrets";
 import { extractContentSentences } from "./shared/content-in-script";
 import { hasJavaScriptDetections } from "@squirrelscan/utils/cdn";
+import { detachedList, detachedSet } from "./shared/detach";
 
 /**
  * The per-page DOM-derived signal for the six all-pages site rules, captured while
@@ -119,6 +120,26 @@ export interface CollectedSiteSignals {
   pages: CollectedPageSignal[];
   /** The crawl's one budget of kept leaked-secrets findings (#1568); the rule shares it for external scripts. */
   secretsBudget?: SiteFindingBudget;
+}
+
+/** The fingerprint with every string copied out of the page (a new object: the caller's own is left as it is). */
+export function detachFingerprint(fp: PageFingerprint | null): PageFingerprint | null {
+  if (!fp) return fp;
+  return {
+    ...fp,
+    assetHosts: detachedSet(fp.assetHosts),
+    resourceHosts: detachedSet(fp.resourceHosts),
+    codeHosts: detachedSet(fp.codeHosts),
+    bodyClasses: detachedSet(fp.bodyClasses),
+    cssVars: detachedSet(fp.cssVars),
+    stylesheetHrefs: detachedSet(fp.stylesheetHrefs),
+  };
+}
+
+/** The anchor signal with every string copied out of the page. */
+export function detachAnchors(a: PageAnchorSignal | null): PageAnchorSignal | null {
+  if (!a) return a;
+  return { ...a, ids: detachedList(a.ids), skipFragments: detachedList(a.skipFragments), selfFragments: detachedList(a.selfFragments) };
 }
 
 /**
@@ -243,20 +264,22 @@ export function buildCollectedPageSignal(input: {
     imageCount: byteSignal.imageCount,
     // Only the branch that actually computes is timed: a caller that hands in a
     // fingerprint (#1949) does no work here and should not be charged for one.
-    fingerprint:
+    // Fingerprint, script sources and anchors hold attribute and text slices of the page: copied so the record does not keep it (#1565).
+    fingerprint: detachFingerprint(
       input.fingerprint !== undefined
         ? input.fingerprint
-        : timed("integrity/template-discontinuity", null, () => fingerprintPage(parsed, url)),
+        : timed("integrity/template-discontinuity", null, () => fingerprintPage(parsed, url))
+    ),
     signals: timed("integrity/orphan-page", [], () => [...detectPageSignals(signalCtx)]),
-    scriptSrcs: timed("adblock/blocked-links", [], () => pageScriptSrcs(doc)),
+    scriptSrcs: detachedList(timed("adblock/blocked-links", [] as string[], () => pageScriptSrcs(doc))),
     subprocessorMatch: timed("legal/subprocessor-disclosure", null, () =>
       matchSubprocessorLink(doc, url)
     ),
     commercialOffer: timed("legal/subprocessor-disclosure", false, () =>
       hasCommercialOfferLink(doc)
     ),
-    anchors: timed("links/broken-anchors", null, () =>
-      buildPageAnchorSignal({ parsed, rendered: input.rendered === true })
+    anchors: detachAnchors(
+      timed("links/broken-anchors", null, () => buildPageAnchorSignal({ parsed, rendered: input.rendered === true }))
     ),
     inPageSections: timed("eeat/about-page", null, () => buildInPageSectionSignal(doc)),
     misspellings: timed("content/common-misspellings", { english: false, occurrences: [] }, () =>

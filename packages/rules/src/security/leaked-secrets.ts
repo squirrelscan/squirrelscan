@@ -1,5 +1,6 @@
 // security/leaked-secrets - Detect leaked API keys and secrets in HTML/JS
 
+import { detached } from "../shared/detach";
 import type {
   Rule,
   RuleContext,
@@ -4314,16 +4315,6 @@ function openTagOf(el: Element): string {
     tag += ` ${attr.name}="${attr.value.replace(/"/g, "&quot;")}"`;
   }
   return tag + ">";
-}
-
-/**
- * A copy of `text` that shares no storage with the string it was cut from. A slice keeps its whole parent alive in the engines'
- * string representations (a finding's `value` is a slice of the page's serialized HTML or of an inline script's text, megabytes),
- * so a record kept until the site rule runs would hold its whole page. Built from the characters, which also keeps a lone
- * surrogate that a cut through a pair leaves (a UTF-8 round trip would replace it).
- */
-function detached(text: string): string {
-  return text.length === 0 ? text : text.split("").join("");
 }
 
 /** `secret` with every string it carries copied out of the scanned text (see {@link detached}); the record is otherwise unchanged. */
