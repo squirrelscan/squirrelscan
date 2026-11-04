@@ -211,6 +211,13 @@ describe("bounds", () => {
     expect(ids(page(`${longTag}<!-- ${YT} -->`))).toContain("youtube-embed");
     expect(ids(page(`<!-- ${YT} -->`))).not.toContain("youtube-embed");
   });
+  test("an unclosed template after a page-sized number of parts does not overflow the argument limit", () => {
+    // The rollback compacts the markup parts in place: spreading ~300k parts into push() throws a RangeError.
+    const map = '<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}</script>';
+    const many = '<script type="application/json">{}</script><!-- c -->'.repeat(150_000);
+    expect(() => ids(page(`${many}<template>${map}`))).not.toThrow();
+    expect(ids(page(`${many}<template>${map}`))).not.toContain("threejs");
+  }, 60_000);
   test("hostile inputs stay linear", () => {
     const shapes: Record<string, string> = {
       "unclosed templates": "<template>".repeat(100_000),

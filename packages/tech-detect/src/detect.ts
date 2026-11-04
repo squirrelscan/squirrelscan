@@ -567,12 +567,13 @@ export function pageMarkup(html: string): string {
   if (!halted && (mapParts.length > 0 || mapCollected.length > 0)) {
     const dropParts = new Set(mapParts);
     const dropCollected = new Set(mapCollected);
-    const keptParts = parts.filter((_, i) => !dropParts.has(i));
-    parts.length = 0;
-    parts.push(...keptParts);
-    const keptCollected = collected.filter((_, i) => !dropCollected.has(i));
-    collected.length = 0;
-    collected.push(...keptCollected);
+    // Compact in place: spreading a page-sized array into push() throws a RangeError past the engine's argument limit.
+    let w = 0;
+    for (let i = 0; i < parts.length; i++) if (!dropParts.has(i)) parts[w++] = parts[i]!;
+    parts.length = w;
+    w = 0;
+    for (let i = 0; i < collected.length; i++) if (!dropCollected.has(i)) collected[w++] = collected[i]!;
+    collected.length = w;
   }
   if (flightBodies.length > 0) parts.push(flightLoaderText(flightBodies, (t) => !scriptTypeRuns(t)));
   const markup = parts.join("\n");
