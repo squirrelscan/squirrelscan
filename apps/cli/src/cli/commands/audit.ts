@@ -26,7 +26,7 @@ import {
 import { AUDIT_LEVEL_PRESETS } from "@squirrelscan/core-contracts/audit-levels";
 import { isAuditFailureReasonCode } from "@squirrelscan/core-contracts/failure-reason";
 import { fullScanHint } from "@squirrelscan/report";
-import { loadAllRules } from "@squirrelscan/rules";
+import { loadKnownRules } from "@squirrelscan/rules";
 import { isValidHeaderHost } from "@squirrelscan/utils/headers";
 import { ownHostsPinned } from "@squirrelscan/utils/public-egress";
 import { defineCommand } from "citty";
@@ -1643,7 +1643,7 @@ export const audit = defineCommand({
       // #1587: an `enable`/`disable` entry in squirrel.toml that matches no rule
       // is a typo that leaves the rule running; warn once, never fail.
       {
-        const registry = loadAllRules({ includeOptIn: true });
+        const registry = loadKnownRules({ includeOptIn: true });
         const ids = [...registry.keys()];
         const unknownWarning = formatUnknownRuleWarning(
           findUnknownRulePatterns(
@@ -1800,7 +1800,7 @@ export const audit = defineCommand({
               "Cloud",
               unlimitedCredits
                 ? "checks on (unmetered account)"
-                : `checks on · ${AUDIT_BASE_CREDITS} credits + ${AUDIT_PAGE_CREDITS} per audited page (--offline runs local-only for free)`
+                : `checks on · ${AUDIT_BASE_CREDITS} credits + ${AUDIT_PAGE_CREDITS} per audited page, plus 1 per external link the cloud verifies (--offline runs local-only for free)`
             );
           }
         } catch (error) {
