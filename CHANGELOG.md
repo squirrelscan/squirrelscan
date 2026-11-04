@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+## v0.0.165 (2026-11-04)
+
+A new link rule, `links/anchor-mismatch`, and tech detection that ignores vendors named only in content the browser does not run. The anchor text parser now separates block children and link text is read the same way in stored and fresh crawls.
+
 ### Added
 
 - `links/anchor-mismatch` compares the anchor text pointing at a page with that page's title, H1 and URL words, per source page and target page, and warns when no meaningful word is shared. Navigation, header, footer and sidebar links, utility pages (privacy, terms, contact), the homepage, fragment links and pagination are left out; only pages that answered 2xx with HTML are judged; plurals, accents and two-character brands match; text in any script other than Latin, Cyrillic and Greek (Chinese, Japanese, Thai, Arabic, Hebrew, Korean, Devanagari and the rest) is counted as not judged, and so is text glued from adjacent elements that CSS may have laid out as separate words when its stored pieces were cut. A WordPress `/?p=123` or `/?page_id=5` target is judged as a page, not skipped as the homepage. The message says when the mismatching text is the only contextual anchor text a page receives. See [links/anchor-mismatch](https://docs.squirrelscan.com/rules/links/anchor-mismatch).
