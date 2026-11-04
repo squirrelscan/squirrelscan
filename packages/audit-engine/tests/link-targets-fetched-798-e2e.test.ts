@@ -167,6 +167,8 @@ for (const engine of ["v1", "streaming"] as const) {
         "1 internal link(s) answered the crawl with a bot-wall challenge - status unverifiable",
       );
       expect(refused?.items?.map((i) => i.id)).toEqual([`${BASE}/walled`]);
-    });
+      // Builds a whole engine run: the first one in a one-process gate pays the
+      // cold start and took 5.0 s on a hosted runner, past the 5 s default.
+    }, 30_000);
   });
 }
