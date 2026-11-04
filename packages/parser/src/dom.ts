@@ -239,6 +239,7 @@ class ClassProbe extends Parser {
     if (!this.reading) return;
     // The tokenizer has just consumed the entity: its start is its own `entityStart` (not in the typed API, read as a number; if a version drops it nothing
     // is cut, and the page falls to the empty document rather than a wrong cut).
+    // The cut therefore depends on a private tokenizer field: tests/htmlparser2-entitystart-guard-1576.test.ts fails, naming htmlparser2, when a bump drops it.
     const tokenizer = (this as unknown as { tokenizer?: { entityStart?: unknown } }).tokenizer;
     const entityStart = tokenizer?.entityStart;
     const known = typeof entityStart === "number" && entityStart >= 0;
