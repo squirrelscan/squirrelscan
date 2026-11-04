@@ -33,15 +33,18 @@ describe("readControlAttributes reads each control once, bounded", () => {
     expect(input).toMatchObject({ value: "V", alt: "A", href: null, cue: false, scanned: 3 });
   });
 
-  test("the href and the cue attributes are read wherever they are, up to 4,096 attributes; a control with more is reported overlong", () => {
+  test("the href and the cue attributes are read wherever they are: the first 4,096 attributes, then a second pass over the rest within the room it is given (#1559)", () => {
     const junk = (n: number) => Array.from({ length: n }, (_, i) => `d${i}="v"`).join(" ");
     for (const n of [63, 64, 65, 101, 4_000]) {
       const read = readControlAttributes(el(`<a ${junk(n)} aria-label="late" title="t" href="/x">x</a>`));
       expect([n, read]).toMatchObject([n, { overlong: false, scanned: n + 3, ariaLabel: "late", title: "t", href: "/x", cue: true }]);
     }
     const past = readControlAttributes(el(`<a ${junk(4_100)} aria-label="late" href="/x">x</a>`));
-    expect(past).toMatchObject({ overlong: true, scanned: 4_096, ariaLabel: null, href: null });
-    const early = readControlAttributes(el(`<a href="/x" aria-label="early" ${junk(4_100)}>x</a>`));
+    expect(past).toMatchObject({ overlong: false, scanned: 4_102, ariaLabel: "late", href: "/x" });
+    // with no room for the second pass the first 4,096 are all that is read, and the control is reported overlong
+    const cut = readControlAttributes(el(`<a ${junk(4_100)} aria-label="late" href="/x">x</a>`), 0);
+    expect(cut).toMatchObject({ overlong: true, scanned: 4_096, ariaLabel: null, href: null });
+    const early = readControlAttributes(el(`<a href="/x" aria-label="early" ${junk(4_100)}>x</a>`), 0);
     expect(early).toMatchObject({ overlong: true, scanned: 4_096, ariaLabel: "early", href: "/x" });
   });
 });
@@ -58,29 +61,45 @@ describe("the shortlist is charged per control and per attribute", () => {
     expect([all.chosen.length, all.cut]).toEqual([100, 0]);
   });
 
-  test("the charge is the attributes looked at, capped per control", () => {
+  test("the charge is the attributes looked at: all of them, the second pass bounded by the budget left", () => {
     const junk = Array.from({ length: 4_200 }, (_, i) => `d${i}="v"`).join(" ");
     const found = Array.from(doc(`<a href="${O}" ${junk}>x</a>`.repeat(10)).querySelectorAll("a"));
     const budget = { left: 100_000 };
     const result = shortlist(found, () => null, () => false, true, budget);
-    // 10 controls x (1 + 4,096 attributes looked at), and every one is overlong
-    expect(100_000 - budget.left).toBe(10 * 4_097);
-    expect(result.chosen.every((entry) => entry.read.overlong)).toBe(true);
+    // 10 controls x (1 + 4,201 attributes looked at), none overlong
+    expect(100_000 - budget.left).toBe(10 * 4_202);
+    expect(result.chosen.every((entry) => !entry.read.overlong)).toBe(true);
+    // a budget of 5,000 covers the first pass and 903 attributes more: the rest of the control is overlong, and the budget is spent, not overdrawn
+    const small = { left: 5_000 };
+    const longer = Array.from(doc(`<a href="${O}" ${Array.from({ length: 5_000 }, (_, i) => `e${i}="v"`).join(" ")}>x</a>`).querySelectorAll("a"));
+    const cut = shortlist(longer, () => null, () => false, true, small);
+    expect(small.left).toBe(0);
+    expect(cut.chosen.length).toBe(1);
+    expect(cut.chosen[0]!.read).toMatchObject({ overlong: true, scanned: 4_096 + 903 });
   });
 
-  test("a control with more than 4,096 attributes is counted unread; with 4,096 or fewer it is not", () => {
+  test("a control with more attributes than the budget can read is counted unread; one the budget covers is not", () => {
     const junk = (n: number) => Array.from({ length: n }, (_, i) => `d${i}="v"`).join(" ");
-    expect(scanControls(doc(`<a href="${O}" ${junk(4_100)}>x</a>`)).unread).toBe(1);
+    // the default budget covers the second pass; a budget with room for 53 attributes past the 4,096th does not cover 5,000
+    expect(scanControls(doc(`<a href="${O}" ${junk(5_000)}>x</a>`)).unread).toBe(0);
+    attributeLimits.shortlist = 4_150;
+    expect(scanControls(doc(`<a href="${O}" ${junk(5_000)}>x</a>`)).unread).toBe(1);
+    attributeLimits.shortlist = defaults.shortlist;
     expect(scanControls(doc(`<a href="${O}" ${junk(4_095)}>x</a>`)).unread).toBe(0);
     expect(scanControls(doc(`<a href="${O}" ${junk(100)}>x</a>`)).unread).toBe(0);
   });
 
-  test("a cut attribute read is never a silent skip: a link whose href or cue is past the 4,096th attribute is counted unread", () => {
-    const junk = Array.from({ length: 4_100 }, (_, i) => `d${i}="v"`).join(" ");
+  test("a cut attribute read is never a silent skip: a link whose href or cue is past what the budget could read is counted unread; within it, it is read", () => {
+    const junk = Array.from({ length: 5_000 }, (_, i) => `d${i}="v"`).join(" ");
+    // the second pass finds the href and the cue past the 4,096th attribute (#1559)
+    const found = scanControls(doc(`<a ${junk} href="${O}">Sign in with Google</a><a href="/x" ${junk} aria-label="Sign in with Google">x</a>`));
+    expect([found.unread, found.controls.length]).toEqual([0, 2]);
+    attributeLimits.shortlist = 4_150;
     // href past the cut: no destination was read, the control is counted (before: skipped as having none)
     expect(scanControls(doc(`<a ${junk} href="${O}">Sign in with Google</a>`)).unread).toBe(1);
     // a plainly local link whose cue attribute is past the cut: counted (before: skipped as having no cue)
     expect(scanControls(doc(`<a href="/x" ${junk} aria-label="Sign in with Google">x</a>`)).unread).toBe(1);
+    attributeLimits.shortlist = defaults.shortlist;
     // within the cut the same links are read: the href and the cue are found at the 70th attribute
     const near = Array.from({ length: 70 }, (_, i) => `d${i}="v"`).join(" ");
     const read = scanControls(doc(`<a ${near} href="${O}">Sign in with Google</a><a href="/x" ${near} aria-label="Sign in with Google">x</a>`));

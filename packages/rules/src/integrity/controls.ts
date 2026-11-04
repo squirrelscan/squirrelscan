@@ -383,12 +383,18 @@ export interface ControlAttributes {
   scanned: number;
 }
 
-/** One pass over the first {@link MAX_ATTRIBUTES_PER_CONTROL} attributes, past the 64th as well. The first of each name wins, as in a browser. */
-export function readControlAttributes(el: Element): ControlAttributes {
+/**
+ * One pass over the first {@link MAX_ATTRIBUTES_PER_CONTROL} attributes, past the 64th as well, then a second pass over the ones
+ * past it, up to `room` of them (the page's attribute budget left): a name is a few characters, so a control can be padded with
+ * about 20 KB of valueless attributes to push its `href` and cue past the first pass. The first of each name wins, as in a browser.
+ * `overlong` is true only when attributes remain that neither pass read.
+ */
+export function readControlAttributes(el: Element, room = Number.POSITIVE_INFINITY): ControlAttributes {
   const out: ControlAttributes = { href: null, cue: false, ariaLabel: null, title: null, value: null, alt: null, labelledby: null, overlong: false, scanned: 0 };
   const attrs = el.attributes;
   const total = attrs.length;
-  const limit = total > MAX_ATTRIBUTES_PER_CONTROL ? MAX_ATTRIBUTES_PER_CONTROL : total;
+  const first = total > MAX_ATTRIBUTES_PER_CONTROL ? MAX_ATTRIBUTES_PER_CONTROL : total;
+  const limit = total > first ? first + Math.max(0, Math.min(total - first, room)) : first;
   out.overlong = total > limit;
   out.scanned = limit;
   for (let k = 0; k < limit; k++) {
@@ -449,7 +455,7 @@ export function shortlist(
     }
     const isLink = el.tagName.toLowerCase() === "a";
     // One pass over the attributes: a link's first `href` (what a browser keeps) and whether any attribute could carry a cue.
-    const read = readControlAttributes(el);
+    const read = readControlAttributes(el, budget.left - 1 - MAX_ATTRIBUTES_PER_CONTROL);
     budget.left -= 1 + read.scanned;
     const cue = read.cue;
     let href: string | null = isLink ? read.href : null;
@@ -699,9 +705,14 @@ export function scanControls(doc: Document): ControlScan {
     // The attributes were read once when the controls were listed; here only what they name is looked up. The page's budget is
     // charged per control and per `aria-labelledby` id; a control the budget no longer covers keeps its destination and is counted cut.
     const covered = prepareBudget.left > 0;
-    const referenced = covered ? (read.labelledby ?? "").slice(0, ATTR_RAW_CHARS).split(/\s+/).filter(Boolean) : [];
+    // The ids are read from the first non-space character, so padding in front of the first id does not push it past the slice; text
+    // left past the slice is an id that was not read, and the control is counted cut.
+    const ids = read.labelledby ?? "";
+    const idsFrom = ids.search(/\S/);
+    const referenced = covered && idsFrom >= 0 ? ids.slice(idsFrom, idsFrom + ATTR_RAW_CHARS).split(/\s+/).filter(Boolean) : [];
+    const idsPast = covered && idsFrom >= 0 && ids.length > idsFrom + ATTR_RAW_CHARS && /\S/.test(ids.slice(idsFrom + ATTR_RAW_CHARS));
     prepareBudget.left -= 1 + Math.min(referenced.length, MAX_LABELLEDBY);
-    let cut = referenced.length > MAX_LABELLEDBY || altsCut.has(element) || read.overlong || !covered;
+    let cut = referenced.length > MAX_LABELLEDBY || idsPast || altsCut.has(element) || read.overlong || !covered;
     const labelled: string[] = [];
     for (const id of referenced.slice(0, MAX_LABELLEDBY)) {
       const target = byId(id);
