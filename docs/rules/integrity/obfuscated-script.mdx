@@ -17,7 +17,7 @@ The packer markers are `eval(`, `function("return this")`, `function('return thi
 
 It emits at most one check named `obfuscated-script`:
 
-- Info when this is the only integrity signal on the page. Message: `Suspicious 152.4KB obfuscated inline script (single signal — review)`.
+- Info when this is the only integrity signal on the page. Message: `Suspicious 152.4KB obfuscated inline script (single signal — review)`. When the page's sign-in controls were cut by the scan work limits (`details.controlsUnread`, `details.templatesUnread`, `details.hiddenCssTruncated`), the message names what was left unread and `details.scanTruncated` is true, because a corroborating signal may have been missed, as in `integrity/brand-impersonation`.
 - Fail when at least two distinct integrity signals fire on the page. Message: `Likely injected payload: 152.4KB obfuscated inline script (3 corroborating integrity signals)`.
 
 The size in the message is that character count divided by 1024, so it tracks the text length rather than the transferred bytes. The reported value carries that size, the entropy rounded to two decimals, and the list of markers that matched. Scripts with a real `src` are out of scope for this signal.
