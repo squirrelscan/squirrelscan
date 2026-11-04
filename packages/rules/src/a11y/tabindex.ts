@@ -3,6 +3,7 @@
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { getAttrCI, querySelectorAllByAttrCI } from "@squirrelscan/utils";
+import { CLASS_SPLIT } from "@squirrelscan/parser/dom";
 
 export const tabindexRule: Rule = {
   meta: {
@@ -40,7 +41,7 @@ export const tabindexRule: Rule = {
       if (value > 0) {
         const tagName = el.tagName.toLowerCase();
         const id = el.getAttribute("id");
-        const cls = el.getAttribute("class")?.split(" ")[0];
+        const cls = el.getAttribute("class")?.split(CLASS_SPLIT).find(Boolean);
 
         const identifier = id
           ? `${tagName}#${id}`

@@ -7,6 +7,7 @@ import type { Element } from "linkedom";
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 import { sharedRegex } from "../shared-regex";
+import { CLASS_SPLIT } from "@squirrelscan/parser/dom";
 /** Never read by a visitor at all. */
 const SCRIPT_LIKE_TAGS = ["script", "style", "noscript", "template"] as const;
 
@@ -99,7 +100,7 @@ export function isCodeLikeElement(el: Element): boolean {
     const name = attr.name.toLowerCase();
     if (HIGHLIGHT_ATTRIBUTES.has(name)) return true;
     if (name !== "class") continue;
-    for (const token of attr.value.split(/\s+/)) {
+    for (const token of attr.value.split(CLASS_SPLIT)) {
       if (!token) continue;
       const lower = token.toLowerCase();
       if (HIGHLIGHT_CLASS_TOKENS.has(lower)) return true;

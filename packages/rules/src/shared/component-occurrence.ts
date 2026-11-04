@@ -6,6 +6,7 @@ import {
 } from "@squirrelscan/core-contracts";
 import type { Element } from "linkedom";
 import { createHash } from "node:crypto";
+import { CLASS_SPLIT } from "@squirrelscan/parser/dom";
 
 type RegionRole = ComponentOccurrence["region"]["role"];
 type NestedIn = ComponentOccurrence["region"]["nestedIn"];
@@ -92,7 +93,7 @@ function buildStableAttributes(element: Element): string {
   const id = element.getAttribute("id");
   const role = element.getAttribute("role");
   const classes = (element.getAttribute("class") ?? "")
-    .split(/\s+/)
+    .split(CLASS_SPLIT)
     .filter(Boolean)
     .filter((token) => !isStateClass(token))
     .sort()
