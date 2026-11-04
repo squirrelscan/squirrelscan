@@ -22,6 +22,12 @@ const SHAPES: ReadonlyArray<readonly [name: string, build: () => string]> = [
   ["a 1 MB part", () => ".a" + "b".repeat(1_000_000)],
   ["a 1 MB part of unknown pseudo-classes", () => ".a" + ":x".repeat(500_000)],
   ["20,000 `:nth-child(` with an `of` list", () => ":nth-child(2n of ".repeat(20_000)],
+  ["100,000 characters of nested `::slotted(`", () => "::slotted(".repeat(10_000)],
+  ["100,000 characters of nested `:host(`", () => ":host(".repeat(16_667)],
+  ["100,000 characters of nested `:host-context(`", () => ":host-context(".repeat(7_143)],
+  ["`::slotted(` nested and closed", () => "::slotted(".repeat(10_000) + ".a" + ")".repeat(10_000)],
+  ["`:host(` nested and closed", () => ":host(".repeat(16_667) + ".a" + ")".repeat(16_667)],
+  ["`:host-context(` nested and closed", () => ":host-context(".repeat(7_143) + ".a" + ")".repeat(7_143)],
 ];
 
 describe("selectorListState stays linear on hostile selectors (#1582)", () => {

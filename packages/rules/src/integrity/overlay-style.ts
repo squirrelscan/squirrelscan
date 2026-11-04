@@ -849,6 +849,8 @@ function pseudoArgsState(name: string, args: string, depth: number, d: Doubt): b
       d.doubtful = true;
       return true;
     }
+    // `:host-context()` is not supported by Firefox or Safari, which drop the rule: valid in Chrome only, so not a certain reading
+    if (name === "host-context") d.doubtful = true;
     return exactCompound(text, depth, d, true);
   }
   if (name === "dir") {
