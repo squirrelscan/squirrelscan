@@ -7,6 +7,11 @@
 // it is syntactic (no lookup), and an address that matches is not public, whatever its embedded IPv4 is. Used by the callers that
 // decide policy (cloud handoff, render charge, publish, rule gating, the default scheme). The egress guards do NOT use it: they
 // keep `public-egress.ts`, which refuses by address with its own embedded-IPv4 logic.
+//
+// Special-use ranges and which layer covers them. Both layers refuse the ISATAP forms that embed a non-public IPv4 address
+// (`0:5efe:a.b.c.d` and `200:5efe:a.b.c.d` on any prefix, #1577): this module for policy, `isNonPublicAddress` at connect time.
+// ISATAP only routes on a host with an ISATAP interface, so one embedding a public IPv4 stays public in both. A test table in
+// `tests/special-use-ip.test.ts` runs the same literals through both and asserts they agree.
 
 import { isIP } from "node:net";
 

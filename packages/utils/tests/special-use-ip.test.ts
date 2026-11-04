@@ -2,6 +2,7 @@
 
 import { describe, expect, test } from "bun:test";
 
+import { isNonPublicAddress } from "../src/public-egress";
 import { isNonPublicHostname, isNonPublicHostnameForPolicy } from "../src/non-public-host";
 import { isSpecialUseIpLiteral, isSpecialUseIpv4, isSpecialUseIpv6 } from "../src/special-use-ip";
 
@@ -97,5 +98,27 @@ describe("the policy classifier is the narrow one plus the special-use literals"
     for (const host of ["example.com", "www.squirrelscan.com", "8.8.8.8", "2606:4700::1111", "64-ff9b.example.com", "2002.example.com", "192-0-2-1.example.com"]) {
       expect([host, isNonPublicHostnameForPolicy(host)]).toEqual([host, false]);
     }
+  });
+});
+
+// #1577: the connect-time egress classifier and the policy classifier agree on ISATAP literals.
+const ISATAP: Array<[string, string, boolean]> = [
+  ["ISATAP embedding 10.0.0.1", "::5efe:10.0.0.1", true],
+  ["ISATAP embedding 10.0.0.1, hex tail", "::5efe:a00:1", true],
+  ["ISATAP on a global prefix embedding 10.0.0.1", "2a00::5efe:a00:1", true],
+  ["ISATAP with the u bit embedding 10.0.0.1", "2a00::200:5efe:a00:1", true],
+  ["ISATAP embedding loopback", "2a00:1450::5efe:7f00:1", true],
+  ["ISATAP embedding the metadata address", "fe80::5efe:a9fe:a9fe", true],
+  ["ISATAP embedding 8.8.8.8", "::5efe:8.8.8.8", false],
+  ["ISATAP on a global prefix embedding 8.8.8.8", "2a00:1450::5efe:808:808", false],
+  ["ISATAP with the u bit embedding 8.8.8.8", "2a00::200:5efe:808:808", false],
+];
+
+describe("ISATAP literals: the egress classifier and the policy classifier agree", () => {
+  test.each(ISATAP)("%s (%s)", (_label, host, nonPublic) => {
+    expect(isNonPublicAddress(host)).toBe(nonPublic);
+    expect(isNonPublicAddress(`[${host}]`)).toBe(nonPublic);
+    expect(isSpecialUseIpv6(host)).toBe(nonPublic);
+    expect(isNonPublicHostnameForPolicy(host)).toBe(nonPublic);
   });
 });
