@@ -19,12 +19,12 @@ There is one detector, with one set of fingerprints, and two ways it runs. A rep
 | | Local scan | Cloud scan |
 |---|---|---|
 | Account and credits | None: free, works logged out | Signed in; included in the audit base |
-| Reads | The pages the crawl already fetched, their response headers and the first-party bundles it already downloaded | The same bytes, sent to the cloud service |
+| Reads | The pages the crawl already fetched, their response headers and the first-party bundles it already downloaded, whole | The same pages and headers, with each bundle cut to the payload caps, sent to the cloud service |
 | Extra requests | None | None |
 | Change history | None: no "added" or "removed" since the last scan | Compared with the previous scan of the domain, with the first scan marked |
-| Runs when | Every audit where the cloud scan did not run (logged out, offline, Quick) | Signed-in cloud audits |
+| Runs when | Every audit: on its own where the cloud scan did not run (logged out, offline, Quick), and beside the cloud scan on a signed-in audit, where its extra finds are merged into the one section | Signed-in cloud audits |
 
-A local scan keeps no history, so its section never says "No changes since last scan" and shows where the list came from instead. The cloud scan is the one that stores results per domain and reports the difference between scans.
+On a signed-in audit the two are merged into one section (see below). A local scan keeps no history, so a technology only it found has no scan diff, and a section from a local scan alone never says "No changes since last scan" and shows where the list came from instead. The cloud scan is the one that stores results per domain and reports the difference between scans.
 
 ### Why a result can show little more than headers
 

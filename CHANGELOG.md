@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- The Technologies docs table now says the local scan also runs beside the cloud scan on a signed-in audit and that the cloud payload carries each bundle cut to the caps; a test runs the controller's cloud-then-merge path with the cloud client stubbed and a fingerprint 400 KB into a bundle (#1406)
+
 ## v0.0.166 (2026-11-05)
 
 A signed-in audit keeps what its local bundle scan finds, local-only technologies are marked in every report format, a `<link>` that only describes a page no longer counts as a vendor loaded, and the fake-auth overlay rule reads three more selector shapes a browser drops.
