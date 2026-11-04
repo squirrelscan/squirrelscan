@@ -45,7 +45,7 @@ import {
   structureNumber,
   structureTotalsLine,
 } from "../structure";
-import { groupTechnologies, techChangeSummary, techIconUrl } from "../technologies";
+import { groupTechnologies, isLocalOnlyTech, TECH_LOCAL_MARK, techChangeSummary, techIconUrl } from "../technologies";
 import { SITE_PROFILE_NOTE, siteProfileFlags, siteProfileRows } from "../site-metadata";
 import { EDITOR_SUMMARY_NOTE, editorSummaryView, priorityEffortLabel } from "../editor-summary";
 import { getGroupName, getSubcategoryName, severityLabel } from "../categories";
@@ -510,7 +510,8 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
           : "";
         // The version is read off the audited site (#3522): fenced so it cannot close the span.
         const ver = t.version ? ` ${markdownCodeSpan(t.version)}` : "";
-        return `${logo}${escapeMarkdownText(t.name)}${ver}`;
+        const mark = isLocalOnlyTech(t) ? ` ${TECH_LOCAL_MARK}` : "";
+        return `${logo}${escapeMarkdownText(t.name)}${ver}${mark}`;
       });
       lines.push(`**${group.emoji} ${group.label}**  `);
       lines.push(cells.join(" · "));

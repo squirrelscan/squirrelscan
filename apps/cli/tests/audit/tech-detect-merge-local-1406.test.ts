@@ -16,6 +16,7 @@ import type { SiteContextPage } from "../../src/audit/adapter";
 import {
   detectLocalTechnologies,
   mergeLocalTechnologies,
+  resolveTechnologiesSection,
   runCloudTechDetect,
 } from "../../src/audit/cloud";
 import { getDefaultConfig } from "../../src/config";
@@ -190,5 +191,47 @@ describe("a bundle past the cloud payload cap, on a signed-in audit with the clo
     // The local scan read the bundle whole, so the payload's cut is no longer a limit.
     expect(merged.truncated).toBeUndefined();
     expect(merged.source).toBe("cloud");
+  });
+});
+
+// The audit command builds the section through resolveTechnologiesSection: the count of first-party scripts
+// the script limit left unfetched must reach the local scan, or `script-limit` is lost on every audit.
+describe("resolveTechnologiesSection forwards scriptsNotRead (#1406)", () => {
+  const siteContext = [
+    {
+      page: {
+        url: BASE,
+        finalUrl: BASE,
+        status: 200,
+        html: "<html><body><p>hi</p></body></html>",
+        headers: {},
+        securityHeaders: {},
+      },
+      parsed: null,
+    },
+  ] as unknown as SiteContextPage[];
+  const local = { baseUrl: BASE, siteContext, scripts: [], scriptsNotRead: 3 };
+
+  test("a signed-out scan that detects nothing still reports the script-limit cut", () => {
+    const resolved = resolveTechnologiesSection(null, local);
+    expect(resolved?.items).toEqual([]);
+    expect(resolved?.truncated?.reasons).toContain("script-limit");
+  });
+
+  test("a signed-in merge keeps script-limit instead of deleting the cloud's disclosure", () => {
+    const cloud = section([tech("react")], {
+      source: "cloud",
+      truncated: { reasons: ["script-limit"], scripts: 3 },
+    });
+    const resolved = resolveTechnologiesSection(cloud, local);
+    expect(resolved?.truncated?.reasons).toContain("script-limit");
+    expect(resolved?.source).toBe("cloud");
+  });
+
+  test("nothing unread and nothing detected: signed-out has no section, signed-in keeps the cloud's", () => {
+    const none = { ...local, scriptsNotRead: 0 };
+    expect(resolveTechnologiesSection(null, none)).toBeNull();
+    const cloud = section([tech("react")], { source: "cloud" });
+    expect(resolveTechnologiesSection(cloud, none)?.truncated).toBeUndefined();
   });
 });

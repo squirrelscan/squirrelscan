@@ -1297,6 +1297,22 @@ export function mergeLocalTechnologies(
   };
 }
 
+/**
+ * The report's technologies section: the cloud one with the local scan merged in (#1406), or the local
+ * scan alone when the cloud scan is off or skipped. `scriptsNotRead` rides in `local` so a script the
+ * audit's script limit left unfetched is disclosed as `script-limit` either way.
+ */
+export function resolveTechnologiesSection(
+  cloud: ReportTechnologies | null,
+  local: Omit<LocalTechDetectOptions, "keepEmpty">
+): ReportTechnologies | null {
+  const localTech = detectLocalTechnologies({
+    ...local,
+    keepEmpty: cloud !== null,
+  });
+  return cloud ? mergeLocalTechnologies(cloud, localTech) : localTech;
+}
+
 // ── Cloud editor's summary (credited, report-only) ───────
 
 export interface RunCloudEditorSummaryOptions {

@@ -174,6 +174,8 @@ export {
   techIconUrl,
   groupTechnologies,
   techChangeSummary,
+  isLocalOnlyTech,
+  TECH_LOCAL_MARK,
   type TechGroup,
 } from "./technologies";
 

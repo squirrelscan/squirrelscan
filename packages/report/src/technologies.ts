@@ -157,10 +157,26 @@ export function techChangeSummary(tech: ReportTechnologies): string | null {
   return parts.length > 0 ? parts.join(". ") : null;
 }
 
+/** The suffix every human-readable report puts after a technology only the local scan found (#1406). */
+export const TECH_LOCAL_MARK = "(local scan)";
+
+/**
+ * True only for the literal `"local"`. A report loaded from JSON is not validated at runtime, so any other
+ * `origin` value (a string that looks like markup, say) is treated as absent and never rendered.
+ */
+export function isLocalOnlyTech(t: Pick<ReportTechnology, "origin">): boolean {
+  return t.origin === "local";
+}
+
+/** The ` origin="local"` attribute of the llm and xml reports: a fixed literal, never the stored value. */
+export function techOriginAttr(t: Pick<ReportTechnology, "origin">): string {
+  return isLocalOnlyTech(t) ? ' origin="local"' : "";
+}
+
 /** One sentence naming how many technologies only the local scan found (#1406): they have no scan history. */
 export function techLocalOnlyNote(tech: ReportTechnologies): string | null {
   if (tech.source === "local") return null;
-  const count = tech.items.filter((t) => t.origin === "local").length;
+  const count = tech.items.filter(isLocalOnlyTech).length;
   return count === 0 ? null : `${count} found only by the local scan of the crawled bundles (no scan history)`;
 }
 

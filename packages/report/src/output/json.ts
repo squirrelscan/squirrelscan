@@ -53,7 +53,7 @@ import {
   type RegionScope,
 } from "../region-scope";
 import { checkPageTypeScope, pageTypeScopeData, type PageTypeScope } from "../page-type-scope";
-import { techIconUrl } from "../technologies";
+import { isLocalOnlyTech, techIconUrl } from "../technologies";
 import { domainAgeYears, siteProfileRows } from "../site-metadata";
 import { editorSummaryView } from "../editor-summary";
 import type { IgnoreSummary } from "@squirrelscan/core-contracts/ignore";
@@ -882,7 +882,7 @@ function buildSlimReport(
               version: t.version,
               confidence: t.confidence,
               ...(t.website ? { website: t.website } : {}),
-              ...(t.origin ? { origin: t.origin } : {}),
+              ...(isLocalOnlyTech(t) ? { origin: "local" as const } : {}),
               logoUrl: techIconUrl(t.icon),
             })),
           },
