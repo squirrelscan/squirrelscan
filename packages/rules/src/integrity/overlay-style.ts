@@ -570,11 +570,11 @@ function parseCompound(text: string): ParsedSelector | undefined {
 
 /** Pseudo-classes written without arguments (Chrome). `-webkit-` ones are all accepted: Chrome has several and the list moves. */
 const PLAIN_PSEUDO_CLASSES: ReadonlySet<string> = new Set(
-  "active any-link autofill buffering checked current default defined disabled empty enabled first-child first-of-type focus focus-visible focus-within fullscreen future host hover in-range indeterminate interest-source interest-target invalid last-child last-of-type link modal muted only-child only-of-type open optional out-of-range past paused picture-in-picture placeholder-shown playing popover-open read-only read-write required root scope seeking stalled target user-invalid user-valid valid visited volume-locked xr-overlay active-view-transition target-current target-before target-after horizontal vertical start end decrement increment double-button single-button no-button corner-present window-inactive".split(" "),
+  "active any-link autofill checked current default defined disabled empty enabled first-child first-of-type focus focus-visible focus-within fullscreen future host hover in-range indeterminate interest-source interest-target invalid last-child last-of-type link modal only-child only-of-type open optional out-of-range past picture-in-picture placeholder-shown popover-open read-only read-write required root scope target user-invalid user-valid valid visited xr-overlay active-view-transition target-current target-before target-after horizontal vertical start end decrement increment double-button single-button no-button corner-present window-inactive".split(" "),
 );
 /** Pseudo-classes that take an argument in parentheses. */
 const FUNCTIONAL_PSEUDO_CLASSES: ReadonlySet<string> = new Set(
-  "active-view-transition-type current dir has host host-context is lang not nth-child nth-last-child nth-last-of-type nth-of-type state where".split(" "),
+  "active-view-transition-type dir has host host-context is lang not nth-child nth-last-child nth-last-of-type nth-of-type state where".split(" "),
 );
 /** Pseudo-elements, with or without arguments (`::part(x)`). */
 const PSEUDO_ELEMENTS: ReadonlySet<string> = new Set(
@@ -673,10 +673,64 @@ function validAttribute(inner: string, d: Doubt): boolean {
   return i >= n;
 }
 
+/** Pseudo-elements after which a pseudo-class is never valid (`::before:hover`); the others take some (`::part(x):hover`, `::-webkit-scrollbar:horizontal`). */
+const NO_PSEUDO_CLASS_AFTER: ReadonlySet<string> = new Set(["after", "backdrop", "before", "first-letter", "first-line", "marker", "placeholder"]);
+
+const AN_PLUS_B = /^(?:even|odd|[+-]?\d+|[+-]?\d*n(?:[ \t\n\r\f]*[+-][ \t\n\r\f]*\d+)?)$/i;
+
+/**
+ * The arguments of the functional pseudo-classes whose grammar is fixed. `invalid`: every engine rejects them (`:nth-child(bogus)`,
+ * `:nth-child()`, `:lang()`, `:dir()`). An escape or a nested `of` selector this cannot decide is `doubtful`. Linear.
+ */
+function pseudoArgsState(name: string, args: string, depth: number, d: Doubt): boolean {
+  const text = args.trim();
+  if (name === "nth-child" || name === "nth-last-child" || name === "nth-of-type" || name === "nth-last-of-type") {
+    if (text.includes("\\")) {
+      d.doubtful = true;
+      return true;
+    }
+    let formula = text;
+    let list: string | undefined;
+    if (name.endsWith("child")) {
+      const of = /[ \t\n\r\f]of[ \t\n\r\f]/i.exec(text);
+      if (of) {
+        formula = text.slice(0, of.index).trim();
+        list = text.slice(of.index + of[0].length);
+      }
+    }
+    if (!AN_PLUS_B.test(formula)) return false;
+    if (list !== undefined && depth < MAX_VALIDATE_DEPTH) {
+      const inner = selectorListState(list, false, depth + 1);
+      if (inner === "invalid") return false;
+      if (inner === "doubtful") d.doubtful = true;
+    }
+    return true;
+  }
+  if (name === "lang") {
+    // a comma list of identifiers or strings; an empty list or an empty part is invalid
+    return splitTopLevel(text, ",").every((part) => part.trim() !== "");
+  }
+  if (name === "dir") {
+    if (text.includes("\\")) {
+      d.doubtful = true;
+      return true;
+    }
+    // Chrome accepts any identifier (`:dir(foo)` matches nothing), so only a non-identifier is a certain error
+    if (validIdentEnd(text, 0) !== text.length) return false;
+    const value = asciiLower(text);
+    if (value !== "ltr" && value !== "rtl") d.doubtful = true;
+    return true;
+  }
+  return true;
+}
+
 /** The end of the valid compound selector at `at`, or -1 when none starts there or it is invalid. */
 function validCompound(text: string, at: number, depth: number, d: Doubt): number {
   const n = text.length;
   let i = at;
+  // set once a pseudo-element (one this list knows, not an engine-prefixed one) has been read: its name, for what may follow it
+  let element: string | undefined;
+  d.element = false;
   const first = text[i];
   if (first === "*" || first === "|" || (first !== undefined && first !== "&" && validIdentEnd(text, i) >= 0)) {
     // a type selector, with an optional namespace prefix: only `*|` and `|` name a namespace that exists
@@ -702,11 +756,14 @@ function validCompound(text: string, at: number, depth: number, d: Doubt): numbe
   while (i < n) {
     const c = text[i]!;
     if (c === "." || c === "#") {
+      // nothing but a pseudo-class may follow a pseudo-element (`::before.x`)
+      if (element !== undefined) return -1;
       const end = validIdentEnd(text, i + 1);
       if (end < 0) return -1;
       i = end;
     } else if (c === "&") i++;
     else if (c === "[") {
+      if (element !== undefined) return -1;
       const close = blockEnd(text, i + 1, "]");
       if (close < 0) {
         // unterminated: the sheet's end closes it in a browser, so it is not a certain error
@@ -716,8 +773,8 @@ function validCompound(text: string, at: number, depth: number, d: Doubt): numbe
       if (!validAttribute(text.slice(i + 1, close), d)) return -1;
       i = close + 1;
     } else if (c === ":") {
-      const element = text[i + 1] === ":";
-      const start = i + (element ? 2 : 1);
+      const isElement = text[i + 1] === ":";
+      const start = i + (isElement ? 2 : 1);
       const nameEnd = validIdentEnd(text, start);
       if (nameEnd < 0) return -1;
       const name = asciiLower(unescapeCss(text.slice(start, nameEnd)));
@@ -732,9 +789,12 @@ function validCompound(text: string, at: number, depth: number, d: Doubt): numbe
         args = text.slice(nameEnd + 1, close);
         after = close + 1;
       }
-      if (element || LEGACY_PSEUDO_ELEMENTS.has(name)) {
+      if (isElement || LEGACY_PSEUDO_ELEMENTS.has(name)) {
         // a name this list does not know may be valid in some engine (`::-moz-selection`): doubtful
         if (!PSEUDO_ELEMENTS.has(name) && !name.startsWith("-webkit-")) d.doubtful = true;
+        else if (PSEUDO_ELEMENTS.has(name)) element = name;
+      } else if (element !== undefined && NO_PSEUDO_CLASS_AFTER.has(element)) {
+        return -1;
       } else if (!name.startsWith("-webkit-")) {
         if (args === undefined ? !PLAIN_PSEUDO_CLASSES.has(name) : !FUNCTIONAL_PSEUDO_CLASSES.has(name)) d.doubtful = true;
         // `:not()` and `:has()` are strict lists (`:is()` and `:where()` forgive an invalid argument, so they are not read).
@@ -742,11 +802,12 @@ function validCompound(text: string, at: number, depth: number, d: Doubt): numbe
           const inner = selectorListState(args, name === "has", depth + 1);
           if (inner === "invalid") return -1;
           if (inner === "doubtful") d.doubtful = true;
-        }
+        } else if (args !== undefined && !pseudoArgsState(name, args, depth, d)) return -1;
       }
       i = after;
     } else break;
   }
+  d.element = element !== undefined;
   return i > at ? i : -1;
 }
 
@@ -770,8 +831,11 @@ function validComplexSelector(text: string, relative: boolean, depth: number, d:
     if (end < 0) return false;
     i = end;
     const spaced = i;
+    const afterElement = d.element === true;
     skip();
     if (i >= n) return true;
+    // a pseudo-element ends the selector: `.x::before .y` and `.x::before > .y` are invalid
+    if (afterElement) return false;
     if (combinator(text[i])) {
       i++;
       skip();
@@ -783,6 +847,8 @@ function validComplexSelector(text: string, relative: boolean, depth: number, d:
 /** Set when a part may be valid in some engine though this check does not know it. */
 interface Doubt {
   doubtful: boolean;
+  /** The last compound read ended in a pseudo-element, so no combinator may follow it. */
+  element?: boolean;
 }
 
 /**

@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- `integrity/fake-auth-overlay` drops a selector list that a browser drops: an invalid argument of `:nth-child()`, `:nth-last-child()`, `:nth-of-type()`, `:nth-last-of-type()`, `:lang()` or `:dir()`, or any selector after a pseudo-element (`::before.x`, `::before:hover`, `.x::before .y`). A decoy rule using one no longer hides a cover. The media-state pseudo-classes Chrome does not support (`:playing`, `:muted`, `:seeking`, `:buffering`, `:stalled`, `:current(.a)`) are read as doubtful, not valid (#1581)
+
 ## v0.0.162 (2026-11-04)
 
 Follow-ups from the v0.0.161 reviews: the fake-auth overlay rule reads more of the CSS without letting a doubtful selector hide a cover, the integrity rules read past the 4,096th attribute, the collected signal no longer keeps its page alive, and the special-use IPv6 policy covers ISATAP, `5f00::/16` and `100:0:0:1::/64`.
