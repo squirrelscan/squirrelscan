@@ -78,8 +78,15 @@ export interface AnchorTextResult {
   parts?: string[];
 }
 
-const MAX_PARTS = 16;
-const MAX_PART_LENGTH = 200;
+/**
+ * Caps on `parts`. A part cut at {@link MAX_ANCHOR_PART_LENGTH} characters, or a list that reached
+ * {@link MAX_ANCHOR_PARTS} entries (blank parts are not stored, so a full list may have dropped
+ * later ones), is incomplete: a reader must not treat a word's absence from it as evidence.
+ */
+export const MAX_ANCHOR_PARTS = 16;
+export const MAX_ANCHOR_PART_LENGTH = 200;
+const MAX_PARTS = MAX_ANCHOR_PARTS;
+const MAX_PART_LENGTH = MAX_ANCHOR_PART_LENGTH;
 
 /**
  * The anchor's text with a space at each block-level boundary between child nodes. `textContent`
@@ -107,6 +114,10 @@ export function anchorTextResult(element: Element): AnchorTextResult {
   // The current part's chunks and the finished parts; only kept when the text turns out glued.
   let partChunks: string[] = [];
   const parts: string[] = [];
+  const pushPart = (): void => {
+    const part = partChunks.join("").trim();
+    if (part !== "" && parts.length < MAX_PARTS) parts.push(part.slice(0, MAX_PART_LENGTH));
+  };
   let lastParent: Node | null = null;
   const stack: Array<{ nodes: NodeListOf<ChildNode>; i: number; boundary: boolean }> = [
     { nodes: element.childNodes, i: 0, boundary: false },
@@ -135,8 +146,7 @@ export function anchorTextResult(element: Element): AnchorTextResult {
         child.parentNode !== lastParent
       ) {
         glued = true;
-        if (parts.length < MAX_PARTS)
-          parts.push(partChunks.join("").trim().slice(0, MAX_PART_LENGTH));
+        pushPart();
         partChunks = [];
       }
       pendingGap = false;
@@ -156,8 +166,8 @@ export function anchorTextResult(element: Element): AnchorTextResult {
     }
   }
   if (!glued) return { text: chunks.join("").trim(), glued };
-  if (parts.length < MAX_PARTS) parts.push(partChunks.join("").trim().slice(0, MAX_PART_LENGTH));
-  return { text: chunks.join("").trim(), glued, parts: parts.filter((part) => part !== "") };
+  pushPart();
+  return { text: chunks.join("").trim(), glued, parts };
 }
 
 /** The anchor's text; see {@link anchorTextResult}. */

@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { parsePage } from "@squirrelscan/parser";
+import { MAX_ANCHOR_PART_LENGTH, MAX_ANCHOR_PARTS, parsePage } from "@squirrelscan/parser";
 
 import {
   AnchorGraphBuilder,
@@ -558,6 +558,59 @@ describe("links/anchor-mismatch", () => {
     ];
     expect(check(pages(glued)).status).toBe("pass");
     expect(check(pages({ ...glued, textParts: undefined })).status).toBe("warn");
+  });
+
+  test("a glued card whose stored part was clipped is not judged unless a word matched", () => {
+    const head = `${"item ".repeat(50)}LG`;
+    const glued = (parts: string[]): LinkData => ({
+      url: "/brands/lg",
+      text: `${head}See details`,
+      isInternal: true,
+      textGlued: true,
+      textParts: parts,
+    });
+    const pages = (link: LinkData): PageSpec[] => [
+      { ...HOME, links: [link, body("/fridge", "Fridge")] },
+      { url: "https://example.com/brands/lg", title: "LG" },
+      { url: "https://example.com/fridge", title: "Fridge repairs" },
+    ];
+    // The parser cut the first part at 200 characters: "LG" was in the lost tail.
+    const clipped = check(pages(glued([head.slice(0, MAX_ANCHOR_PART_LENGTH), "See details"])));
+    expect(clipped.status).toBe("pass");
+    expect((clipped.details as { notJudged: number }).notJudged).toBe(1);
+    // A part that fits in full is complete evidence, so the same pair warns.
+    expect(check(pages(glued(["item", "See details"]))).status).toBe("warn");
+    // A list at the part cap may have dropped later parts.
+    const full = Array.from({ length: MAX_ANCHOR_PARTS }, (_, i) => `piece${String.fromCharCode(97 + i)}`);
+    expect(check(pages(glued(full))).status).toBe("pass");
+    // A clipped part that still holds the match is a judged pair.
+    const matched = check(pages(glued([`LG ${head}`.slice(0, MAX_ANCHOR_PART_LENGTH), "See details"])));
+    expect((matched.details as { judged: number }).judged).toBe(2);
+  });
+
+  test("a front door path with a query string is a page, not the homepage", () => {
+    for (const target of ["/?p=123", "/?page_id=5"]) {
+      const c = check([
+        { ...HOME, links: [body(target, "click here")] },
+        { url: `https://example.com${target}`, title: "Freezer repairs" },
+      ]);
+      expect(c.status).toBe("warn");
+    }
+    // The bare front door, and an entry page that carries a query, stay unjudged.
+    const home = check([
+      { ...HOME, links: [body("/", "click here"), body("/about", "About")] },
+      { url: "https://example.com/about", title: "About us" },
+    ]);
+    expect(home.status).toBe("pass");
+    const entry = check(
+      [
+        { ...HOME, links: [body("/?lang=en", "click here"), body("/about", "About")] },
+        { url: "https://example.com/?lang=en", title: "Freezer repairs" },
+        { url: "https://example.com/about", title: "About us" },
+      ],
+      { entryUrls: ["https://example.com/?lang=en"] },
+    );
+    expect(entry.status).toBe("pass");
   });
 
   test("?p=123 is a real WordPress permalink, not pagination", () => {

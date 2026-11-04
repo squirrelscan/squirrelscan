@@ -8,9 +8,10 @@
 //
 // PREREQUISITE FOR ANY PARALLEL BACKEND: workers can't receive `page.parsed`
 // (linkedom Document isn't serializable), so they must re-parse from `page.html`.
-// They MUST parse via `parseHtmlForRules` (adapter.ts) — NOT the parser pkg's
-// `parsePage`, which builds `links` without `rel`/`isNofollow` and would silently
-// drop those fields that real rules consume (weak-internal-links, orphan-pages).
+// They MUST parse via `parseHtmlForRules` (adapter.ts), the one parse the rules are
+// tested against, so a worker cannot read a different `links` shape than the main
+// thread (`rel`/`isNofollow` for weak-internal-links and orphan-pages, `textGlued`
+// and `textParts` for links/anchor-mismatch).
 
 import type { CheckResult, PageData, RuleRunResult, RuleRunner, SiteData } from "@squirrelscan/rules";
 
