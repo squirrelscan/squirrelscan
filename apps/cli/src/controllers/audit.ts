@@ -48,7 +48,7 @@ import {
   createFetchDocumentFetcher,
 } from "@squirrelscan/fetchers";
 import { summarizeIgnored } from "@squirrelscan/report/ignored";
-import { isRuleEnabled } from "@squirrelscan/rules";
+import { isRuleEnabled, type RuleNamespace } from "@squirrelscan/rules";
 import {
   configuredPagePaths,
   createProbeBudget,
@@ -233,6 +233,12 @@ export type ProgressCallback = (progress: AuditProgress) => void;
 export type CrawlerEventCallback = (event: CrawlerEvent) => void;
 
 export interface RunAuditOptions extends AuditOptions {
+  /**
+   * Plugin rule namespaces for this run (#1375). The CLI loads none today; when it
+   * does, the one list reaches both the rule runner and `selectDiscoveryProbes`, so a
+   * plugin rule that reads a probe keeps it under `--rule-exclude ax`.
+   */
+  pluginNamespaces?: RuleNamespace[];
   onProgress?: ProgressCallback;
   onEvent?: CrawlerEventCallback;
   configPath?: string;
@@ -1250,6 +1256,7 @@ export async function runAudit(
             string,
             { enabled?: boolean }
           >,
+          additionalNamespaces: options.pluginNamespaces,
         }),
         // #1428: pages the E-E-A-T rules are configured with that the crawl does not reach are asked for once.
         configuredPagePaths: configuredPagePaths(
@@ -2161,6 +2168,9 @@ export async function runAudit(
           cloudResults: cloudResult?.store,
           siteMetadata: cloudResult?.siteMetadata ?? undefined,
           ...(entityMap ? { entityMap } : {}),
+          ...(options.pluginNamespaces
+            ? { additionalNamespaces: options.pluginNamespaces }
+            : {}),
           probe: probeBudget,
           // #712: security/tls-certificate's handshake, vetted and pinned; the
           // www/apex variant must resolve public unless the site is private.
