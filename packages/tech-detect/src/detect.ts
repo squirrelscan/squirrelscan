@@ -433,6 +433,13 @@ export function pageMarkup(html: string): string {
   const ranges: InertRange[] = [];
   // Open `<template>` tags, innermost last; what the pass kept up to the tag is restored when a cut template closes.
   const templates: Array<{ contentStart: number; cut: boolean; parts: number; collected: number; flight: number; state: number[] }> = [];
+  /** Open `<template>`s whose content a browser keeps inert (every one but a declarative shadow root). */
+  let openCut = 0;
+  // Where the import map entries read while such a template was open sit in `parts` and `collected` (ascending). A template that
+  // closes takes them back with the rest of its content; one still open at the end of the page never rendered them: they are
+  // dropped there, unless a tag over the limit means the pass could not tell where the template ends.
+  const mapParts: number[] = [];
+  const mapCollected: number[] = [];
   const rawMissing = new Set<string>();
   /** Set by a tag over {@link MAX_TAG_CHARS}: the pass can no longer prove where a region ends, so it cuts nothing more. */
   let halted = false;
@@ -472,16 +479,20 @@ export function pageMarkup(html: string): string {
     if (tagName === "template") {
       if (name[1] === "/") {
         const t = templates.pop();
+        if (t?.cut) openCut--;
         if (t && t.cut && !halted) {
           parts.length = t.parts;
           collected.length = t.collected;
           flightBodies.length = t.flight;
+          while (mapParts.length > 0 && mapParts[mapParts.length - 1]! >= t.parts) mapParts.pop();
+          while (mapCollected.length > 0 && mapCollected[mapCollected.length - 1]! >= t.collected) mapCollected.pop();
           [inlineText, importMapSkipped, importMapUrlCount, importMapMarkup] = t.state as [number, number, number, number];
           while (ranges.length > 0 && ranges[ranges.length - 1]!.from >= t.contentStart) ranges.pop();
           ranges.push({ from: t.contentStart, to: open, comment: false });
         }
       } else {
         const cut = !isDeclarativeShadowRoot(tag);
+        if (cut) openCut++;
         templates.push({ contentStart: pos, cut, parts: parts.length, collected: collected.length, flight: flightBodies.length, state: [inlineText, importMapSkipped, importMapUrlCount, importMapMarkup] });
       }
     }
@@ -516,8 +527,12 @@ export function pageMarkup(html: string): string {
             }
             importMapMarkup += synthetic.length;
             importMapUrlCount++;
+            if (openCut > 0) mapParts.push(parts.length);
             parts.push(synthetic);
-            if (collected.length < MAX_COLLECTED_TAGS && wanted.has("src")) collected.push({ tag: "script", attrs: new Map([["src", url]]) });
+            if (collected.length < MAX_COLLECTED_TAGS && wanted.has("src")) {
+              if (openCut > 0) mapCollected.push(collected.length);
+              collected.push({ tag: "script", attrs: new Map([["src", url]]) });
+            }
           }
         }
       }
@@ -548,6 +563,16 @@ export function pageMarkup(html: string): string {
       if (found) pos = found.index;
       else rawMissing.add(tagName);
     }
+  }
+  if (!halted && (mapParts.length > 0 || mapCollected.length > 0)) {
+    const dropParts = new Set(mapParts);
+    const dropCollected = new Set(mapCollected);
+    const keptParts = parts.filter((_, i) => !dropParts.has(i));
+    parts.length = 0;
+    parts.push(...keptParts);
+    const keptCollected = collected.filter((_, i) => !dropCollected.has(i));
+    collected.length = 0;
+    collected.push(...keptCollected);
   }
   if (flightBodies.length > 0) parts.push(flightLoaderText(flightBodies, (t) => !scriptTypeRuns(t)));
   const markup = parts.join("\n");
