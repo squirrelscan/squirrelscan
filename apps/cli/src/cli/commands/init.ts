@@ -3,9 +3,8 @@
 import { defineCommand } from "citty";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { stringify as stringifyTOML } from "smol-toml";
 
-import { initConfig } from "@/controllers/init";
+import { initConfig, renderInitToml } from "@/controllers/init";
 import { safeExit } from "@/self/updater";
 
 const CONFIG_FILENAME = "squirrel.toml";
@@ -43,7 +42,7 @@ export const init = defineCommand({
     }
 
     // Write the config file
-    writeFileSync(configPath, stringifyTOML(result.data.config));
+    writeFileSync(configPath, renderInitToml(result.data.config));
     console.log(`Created: ${configPath}`);
   },
 });
