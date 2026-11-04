@@ -462,3 +462,24 @@ describe("a bare loader of a ref that is next/script elsewhere on the page (#148
     }
   }, 60_000);
 });
+
+// #1507: a text row (`T` row) is a string React serialises for text children. An element tree written inside it is content,
+// not a use, so a strategy use there does not promote its ref (probed on main: the bare loader beside it is not read).
+describe("a strategy use inside a text row does not promote its ref (#1507)", () => {
+  const textRow = (id: string, text: string): string => `${id}:T${Buffer.byteLength(text).toString(16)},${text}`;
+  const flightPage = (chunks: string[]): string =>
+    `<!doctype html><html><head></head><body>${chunks.map((c) => `<script>self.__next_f.push([1,${JSON.stringify(c)}])</script>`).join("")}</body></html>`;
+  const found = (html: string): string[] => detectTechnologies({ url: "https://example.com/", headers: {}, html }).map((t) => t.id);
+  const tuple = (type: string, props: object): unknown => ["$", type, null, props];
+  const use = JSON.stringify(tuple("$L13", { src: "https://cdn.example.invalid/lib.js", strategy: "afterInteractive" }));
+  const bareHead = JSON.stringify(tuple("head", { children: [tuple("$L13", { type: "text/javascript", children: SNIPPET })] }));
+
+  test("the bare loader is not read when the only strategy use is text", () => {
+    const text = `${use}${" pad".repeat(300)}`;
+    expect(found(flightPage([`13:I[479520,["a"],""]\n${textRow("14", text)}5:${bareHead}\n`]))).not.toContain("clarity");
+  });
+
+  test("control: the same use as a real row promotes the ref", () => {
+    expect(found(flightPage([`13:I[479520,["a"],""]\n6:${use}\n5:${bareHead}\n`]))).toContain("clarity");
+  });
+});
