@@ -185,6 +185,14 @@ describe("an invalid functional pseudo argument or a selector after a pseudo-ele
     }
   });
 
+  test("a pseudo-element inside the `of` list of :nth-child() is accepted by Chrome: a cover rule using it is never silent", () => {
+    const OF_LISTS = [":nth-child(2 of ::before)", ":nth-child(2n+1 of .a::before)", ":nth-child(2n+1 of .a, ::before)", ":nth-child(2 of :before)", ":nth-last-child(2 of ::part(x))", ":nth-child(2 of ::selection)", ":nth-child(2 of ::marker)"];
+    for (const sel of OF_LISTS) {
+      expect(fires(`.cover, ${sel}{${FIXED}}`), sel).toBe(true);
+      expect(fires(`${COVER}.cover, ${sel}{${STATIC}}`), `a decoy with ${sel} hides the cover`).toBe(false);
+    }
+  }, 30_000);
+
   test("a prelude of capital OF keywords is read in linear time", () => {
     const time = (n: number): number => {
       const started = performance.now();
