@@ -42,6 +42,7 @@ import {
   type LinkData,
 } from "@squirrelscan/core-contracts";
 
+import { MAX_ANCHOR_PART_LENGTH, MAX_ANCHOR_PARTS } from "@squirrelscan/parser";
 import { getPathname } from "@squirrelscan/utils";
 import { normalizePageUrl } from "@squirrelscan/utils/url";
 import { EEAT_PAGE_PATTERNS } from "@squirrelscan/utils/constants";
@@ -407,7 +408,11 @@ export class AnchorGraphBuilder {
       if (link.textGlued && link.textParts) {
         for (const part of link.textParts) {
           this.addPairTokens(pair, pair.partTokens, tokenize(part).tokens, false);
+          // A part cut at the stored length lost its tail: the missing words could be the match.
+          if (part.length >= MAX_ANCHOR_PART_LENGTH) pair.truncated = true;
         }
+        // A full list may have dropped later parts.
+        if (link.textParts.length >= MAX_ANCHOR_PARTS) pair.truncated = true;
       }
       // A blank anchor (empty, or only stop words) is not a distinct anchor text: recording it
       // would hide the "only contextual anchor text" escalation.
@@ -484,6 +489,28 @@ interface Mismatch {
   onlyAnchor: boolean;
 }
 
+/**
+ * The shared front-door test treats any URL whose path is `/` as the homepage. Here a target with
+ * a query string is a different page (WordPress `/?p=123`, `/?page_id=5`), so it is the front door
+ * only when it is exactly the base or an entry URL, query included.
+ */
+function anchorFrontDoorTest(
+  baseUrl: string,
+  entryUrls: readonly string[],
+): (url: string) => boolean {
+  const shared = frontDoorTest(baseUrl, entryUrls);
+  const exact = new Set([baseUrl, ...entryUrls].map((u) => normalizePageUrl(u)));
+  return (url) => {
+    let hasQuery = false;
+    try {
+      hasQuery = new URL(url).search !== "";
+    } catch {
+      // Not an absolute URL: the shared test decides.
+    }
+    return hasQuery ? exact.has(normalizePageUrl(url)) : shared(url);
+  };
+}
+
 /** Judge every pair; shared by both paths. */
 export function evaluateAnchorGraph(
   graph: AnchorGraph,
@@ -491,7 +518,7 @@ export function evaluateAnchorGraph(
   entryUrls: readonly string[],
   capped: boolean,
 ): CheckResult {
-  const isFrontDoor = frontDoorTest(baseUrl, entryUrls);
+  const isFrontDoor = anchorFrontDoorTest(baseUrl, entryUrls);
   interface TargetWords {
     tokens: string[];
     truncated: boolean;

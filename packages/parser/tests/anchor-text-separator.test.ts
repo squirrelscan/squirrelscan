@@ -6,7 +6,12 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { anchorText, anchorTextResult } from "../src/extractors/anchor-text";
+import {
+  anchorText,
+  anchorTextResult,
+  MAX_ANCHOR_PART_LENGTH,
+  MAX_ANCHOR_PARTS,
+} from "../src/extractors/anchor-text";
 import { extractLinks } from "../src/extractors/links";
 import { parseHTML } from "../src/dom";
 import { parsePage } from "../src/html";
@@ -157,5 +162,22 @@ describe("anchor text edge cases", () => {
       textGlued: true,
       textParts: ["LG", "See details"],
     });
+  });
+
+  test("parts are capped in length and count, and the caps are exported so a reader can tell", () => {
+    const glue = (html: string) => {
+      const { document } = parseHTML(`<html><body>${html}</body></html>`);
+      return anchorTextResult(document.querySelector("a")!);
+    };
+    const long = glue(
+      `<a href="/b"><span>${"item ".repeat(50)}LG</span><span>See details</span></a>`,
+    );
+    expect(long.parts?.[0]).toHaveLength(MAX_ANCHOR_PART_LENGTH);
+    expect(long.parts?.[0]).not.toContain("LG");
+    expect(long.parts?.[1]).toBe("See details");
+    const many = glue(
+      `<a href="/b">${Array.from({ length: 40 }, (_, i) => `<span>p${i}</span>`).join("")}</a>`,
+    );
+    expect(many.parts).toHaveLength(MAX_ANCHOR_PARTS);
   });
 });

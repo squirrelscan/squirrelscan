@@ -164,6 +164,7 @@ async function runBothWays(
     url: p.normalizedUrl,
     finalUrl: p.finalUrl,
     statusCode: p.status,
+    headers: p.contentType ? { "content-type": p.contentType } : {},
     parsed: {
       links: parseLinks(p.parsedData),
       ...parseHeadInfo(p.parsedData),
@@ -798,6 +799,63 @@ describe("SiteQuery dual-path: links/anchor-mismatch (#110)", () => {
     expect(streamed).toEqual(legacy);
     expect(legacy[0]?.status).toBe("pass");
     expect((legacy[0]?.details as { judged: number }).judged).toBe(2);
+    await run(store.close());
+  }, 30_000);
+
+  test("glued card parts, a PDF target and a heading cut by the word cap are not judged, identically on both paths (#110)", async () => {
+    const store = await freshStore();
+    // The parser clips each stored part at 200 characters: the brand sits past the clip.
+    const gluedText = `${"item ".repeat(50)}LG`;
+    const glued: LinkData = {
+      url: "/brands/lg",
+      text: `${gluedText}See details`,
+      isInternal: true,
+      textGlued: true,
+      textParts: [gluedText.slice(0, 200), "See details"],
+    };
+    const words = Array.from(
+      { length: 70 },
+      (_, i) => `topic${String.fromCharCode(97 + (i % 26))}${String.fromCharCode(97 + Math.floor(i / 26))}`,
+    );
+    const pdf = titled("https://example.com/guide.pdf", "Totally unrelated", []);
+    pdf.contentType = "application/pdf";
+    const pages = [
+      titled(BASE, "Home", [
+        glued,
+        text("/guide.pdf", "click here"),
+        text("/long", words[69]!),
+        text("/fridge", "Fridges"),
+      ]),
+      titled("https://example.com/brands/lg", "LG", []),
+      pdf,
+      titled("https://example.com/long", words.join(" "), []),
+      titled("https://example.com/fridge", "Fridge repairs", []),
+    ];
+    for (const p of pages) await run(store.upsertPage(CRAWL, p));
+    const { legacy, streamed } = await runBothWays(store, anchorMismatchRule, {});
+    expect(streamed).toEqual(legacy);
+    expect(legacy[0]?.status).toBe("pass");
+    expect(legacy[0]?.details as { judged: number; notJudged: number }).toMatchObject({
+      judged: 1,
+      notJudged: 3,
+    });
+    await run(store.close());
+  }, 30_000);
+
+  test("a query-string target on the front door path is judged, identically on both paths (#110)", async () => {
+    const store = await freshStore();
+    const pages = [
+      titled(BASE, "Home", [text("/?p=123", "click here"), text("/fridge", "Fridge")]),
+      titled("https://example.com/?p=123", "Freezer repairs", []),
+      titled("https://example.com/fridge", "Fridge repairs", []),
+    ];
+    for (const p of pages) await run(store.upsertPage(CRAWL, p));
+    const { legacy, streamed } = await runBothWays(store, anchorMismatchRule, {});
+    expect(streamed).toEqual(legacy);
+    expect(legacy[0]?.status).toBe("warn");
+    expect(legacy[0]?.items?.map((i) => i.id)).toEqual([
+      "https://example.com/ -> https://example.com/?p=123",
+    ]);
     await run(store.close());
   }, 30_000);
 });

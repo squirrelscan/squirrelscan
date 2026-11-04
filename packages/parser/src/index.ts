@@ -21,7 +21,12 @@ export {
   type ParsedPageCache,
 } from "./html";
 
-export { anchorText, anchorTextResult } from "./extractors/anchor-text";
+export {
+  anchorText,
+  anchorTextResult,
+  MAX_ANCHOR_PART_LENGTH,
+  MAX_ANCHOR_PARTS,
+} from "./extractors/anchor-text";
 
 export { detectPageType, type PageType } from "./page-type";
 
