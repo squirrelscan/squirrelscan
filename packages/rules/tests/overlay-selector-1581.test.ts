@@ -185,11 +185,12 @@ describe("an invalid functional pseudo argument or a selector after a pseudo-ele
     }
   });
 
-  test("a pseudo-element inside the `of` list of :nth-child() is accepted by Chrome: a cover rule using it is never silent", () => {
+  test("a pseudo-element inside the `of` list of :nth-child() is doubtful: a cover rule using it is never silent and a decoy using it cannot hide a cover", () => {
     const OF_LISTS = [":nth-child(2 of ::before)", ":nth-child(2n+1 of .a::before)", ":nth-child(2n+1 of .a, ::before)", ":nth-child(2 of :before)", ":nth-last-child(2 of ::part(x))", ":nth-child(2 of ::selection)", ":nth-child(2 of ::marker)"];
     for (const sel of OF_LISTS) {
       expect(fires(`.cover, ${sel}{${FIXED}}`), sel).toBe(true);
-      expect(fires(`${COVER}.cover, ${sel}{${STATIC}}`), `a decoy with ${sel} hides the cover`).toBe(false);
+      // doubtful, not valid: a browser may reject a pseudo-element in an `of` list, so a decoy using it cannot hide the cover
+      expect(fires(`${COVER}.cover, ${sel}{${STATIC}}`), `a decoy with ${sel} must not hide the cover`).toBe(true);
     }
   }, 30_000);
 
