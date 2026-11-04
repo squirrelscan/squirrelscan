@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+## v0.0.164 (2026-11-04)
+
+A typo in `[rules] enable` or `disable` now says so instead of silently running the rule, and `squirrel init` writes a commented `[rules]` block.
+
 ### Added
 
 - `squirrel audit` warns once on stderr when an entry in `[rules] enable` or `disable` matches no rule, naming each entry with the closest rule id. The audit is otherwise unchanged. A signed-in audit also prints a `Cloud` line with what cloud checks cost (#1587)
