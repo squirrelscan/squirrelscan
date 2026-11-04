@@ -15,6 +15,7 @@ import type { SiteContextPage } from "../../src/audit/adapter";
 
 import {
   detectLocalTechnologies,
+  localTechBundleLimits,
   mergeLocalTechnologies,
   resolveTechnologiesSection,
   runCloudTechDetect,
@@ -234,4 +235,68 @@ describe("resolveTechnologiesSection forwards scriptsNotRead (#1406)", () => {
     const cloud = section([tech("react")], { source: "cloud" });
     expect(resolveTechnologiesSection(cloud, none)?.truncated).toBeUndefined();
   });
+});
+
+// The audit controller builds the section as runCloudTechDetect(...).technologies, then
+// resolveTechnologiesSection(cloud, { ..., limits: localTechBundleLimits(config) }). This runs that same
+// chain with the cloud client stubbed, on a bundle with a fingerprint 400 KB in (past the payload cap).
+describe("controller path: signed-in audit with a fingerprint past the payload cap (#1406)", () => {
+  const html = `<html><body><div id="root"></div><script src="/assets/index.js"></script></body></html>`;
+  const siteContext = [
+    {
+      page: {
+        url: BASE,
+        finalUrl: BASE,
+        status: 200,
+        html,
+        headers: {},
+        securityHeaders: {},
+      },
+      parsed: null,
+    },
+  ] as unknown as SiteContextPage[];
+  const marker = `const sb=createClient("https://${REF}.supabase.co","k");`;
+  const scripts = [
+    {
+      url: `${BASE}assets/index.js`,
+      content: `${"/* pad */ ".repeat(40_000)}${marker}${"/* pad */ ".repeat(40_000)}`,
+      sourcePages: [BASE],
+    },
+  ];
+
+  test("the section holds the cloud's technology and the one found only past the cap", async () => {
+    const client = {
+      detectTechnologies: async () => ({
+        technologies: [tech("react")],
+        added: ["react"],
+        removed: [],
+        firstScan: false,
+      }),
+    } as unknown as CloudServicesClient;
+    const config = getDefaultConfig();
+    const cloud = await runCloudTechDetect({
+      client,
+      config,
+      auditId: "a1",
+      baseUrl: BASE,
+      siteContext,
+      scripts,
+    });
+    const resolved = resolveTechnologiesSection(cloud?.technologies ?? null, {
+      baseUrl: BASE,
+      siteContext,
+      scripts,
+      scriptsNotRead: 0,
+      limits: localTechBundleLimits(config),
+    });
+    expect(resolved?.source).toBe("cloud");
+    expect(resolved?.added).toEqual(["react"]);
+    expect(resolved?.items.find((t) => t.id === "supabase")?.origin).toBe(
+      "local"
+    );
+    expect(
+      resolved?.items.find((t) => t.id === "react")?.origin
+    ).toBeUndefined();
+    expect(resolved?.truncated).toBeUndefined();
+  }, 30_000);
 });
