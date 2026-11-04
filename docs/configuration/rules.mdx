@@ -241,6 +241,10 @@ Warning: no rule matches "eeat/nope" in [rules] disable; "crawl/robot-txt" in [r
 
 A `category/*` glob for a real category, such as `eeat/*`, never warns. Only entries in `squirrel.toml` are checked: `--rule-include` and `--rule-exclude` already reject an unknown category before the crawl. To waive a rule for some urls or items only, use an [`[[ignore]]` table](/configuration/ignore) instead of `disable`.
 
+### Local runs and cloud audits
+
+`squirrel.toml` is read by the CLI and the local MCP server. A cloud audit (hosted MCP `run_audit`, the dashboard, a schedule) cannot see your repository, so it uses the website's stored `disable_rules` instead: exact ids and `category/*` globs, the same patterns as `disable`. See [Tailor each website with rules](/developers/mcp#tailor-each-website-with-rules).
+
 ### Retired rules
 
 `content/quality` and `ai/ai-content` are retired: they never load, whatever `enable` says, so a `disable` entry for either one does nothing and can be removed.

@@ -110,7 +110,7 @@ Compromise detection, the `integrity/*` rules (injected pages, phishing kits, ma
 
 - Waivers apply when the findings are produced. A smart audit that carries findings forward from pages this run did not crawl replays what an earlier audit recorded; when the ignore list changed since then, the report says those carried findings may still include waived items. Re-run without a page limit, or with `--refresh`.
 - Editing an entry re-evaluates only the rules it names; cached results for other rules stay valid.
-- Cloud audits do not read `squirrel.toml`. Website-level ignore settings for cloud audits are tracked separately.
+- Cloud audits do not read `squirrel.toml`. A website's stored [`disable_rules`](/developers/mcp#tailor-each-website-with-rules) switches rules off for its cloud audits; `[[ignore]]` waivers have no cloud equivalent yet.
 
 ## Limits
 
