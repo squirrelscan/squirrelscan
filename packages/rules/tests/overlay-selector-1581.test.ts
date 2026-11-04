@@ -44,6 +44,10 @@ const INVALID = [
   ":nth-of-type(2n of .a)",
   ":lang()",
   ":lang(en,)",
+  ":lang(en fr)",
+  ":lang(1)",
+  ":nth-child(\u00a02n)",
+  ":nth-child(2n\u00a0)",
   ":dir()",
   ":dir(1)",
   ":dir(ltr rtl)",
@@ -58,7 +62,7 @@ const INVALID = [
   ".x:before .y",
 ];
 /** Names a browser may accept (Chrome does not support the media-state ones): read as undecided, never as an error. */
-const DOUBTFUL = [":nth-child(2n+1 of :bogus)", ":playing", ":muted", ":seeking", ":buffering", ":stalled", ":current(.a)", ":dir(foo)", ":nth-child(\\32 n)"];
+const DOUBTFUL = [":nth-child(2n+1 of :bogus)", ":playing", ":muted", ":seeking", ":buffering", ":stalled", ":current(.a)", ":dir(foo)", ":nth-child(\\32 n)", ":nth-child(2n+1 Of .a)", ":lang(en, fr)", ':lang("en")', ':lang("")', ":lang(*-Latn)", "::part(x):first-child", "::slotted(a):hover", "::selection:hover", "::highlight(x):hover", "::view-transition-old(root):hover", ":paused", ":volume-locked"];
 /** Valid in Chrome (checked in headless Chrome 151). */
 const VALID = [
   ":nth-child(2n + 1)",
@@ -70,6 +74,22 @@ const VALID = [
   ":nth-child(2n+1 of .a, .b)",
   ":nth-of-type(2n+1)",
   ":lang(en)",
+  ":lang(en-US)",
+  ":lang(\\*-Latn)",
+  ":nth-child(2n+1 of.a)",
+  ":nth-child(2n+1 of#a)",
+  ":nth-child(2n+1 of[a])",
+  ":nth-child(2n+1 of:hover)",
+  ":nth-child(2n+1 of*)",
+  "::before:is(.a)",
+  "::before:where(.a)",
+  "::after:is(.a)",
+  "::marker:where(.a)",
+  "::placeholder:is(.a)",
+  "::backdrop:where(.a)",
+  "::first-line:is(.a)",
+  "::first-letter:where(.a)",
+  "::part(x):focus-visible",
   ":dir(ltr)",
   ":dir(RTL)",
   ":current",
@@ -116,6 +136,29 @@ describe("an invalid functional pseudo argument or a selector after a pseudo-ele
     for (const bad of INVALID) {
       expect(fires(`.cover, ${bad}{${FIXED}}`), bad).toBe(false);
       expect(fires(`@media screen{.cover, ${bad}{${FIXED}}}`), `@media ${bad}`).toBe(false);
+    }
+  });
+
+  test("a cover rule using a form Chrome accepts is never silent, and the valid ones hide a cover as decoys (top level, @media, nested)", () => {
+    for (const sel of VALID.filter((v) => /of[.#[:*]|:is\(|:where\(|\\\*-Latn/.test(v))) {
+      expect(fires(`.cover, ${sel}{${FIXED}}`), sel).toBe(true);
+      expect(fires(`@media screen{.cover, ${sel}{${FIXED}}}`), `@media ${sel}`).toBe(true);
+      expect(nestedCover(`main{${STATIC};${sel}{${FIXED}}}`) || nestedCover(`.cover{${STATIC};&, ${sel}{${FIXED}}}`), `nested ${sel}`).toBe(true);
+    }
+  });
+
+  test("a decoy with a list, string or wildcard :lang() cannot hide a cover Chrome keeps", () => {
+    for (const sel of [":lang(en, fr)", ':lang("en")', ":lang(*-Latn)", ':lang("")']) {
+      expect(fires(`${COVER}.cover, ${sel}{${STATIC}}`), sel).toBe(true);
+      expect(fires(`${COVER}@media screen{.cover, ${sel}{${STATIC}}}`), `@media ${sel}`).toBe(true);
+      expect(nestedCover(`.cover{${FIXED};&, ${sel}{${STATIC}}}`), `nested ${sel}`).toBe(true);
+    }
+  });
+
+  test(":is() and :where() after a pseudo-element are not an error, any other pseudo-class still is", () => {
+    for (const el of ["before", "after", "marker", "placeholder", "backdrop", "first-line", "first-letter"]) {
+      for (const f of ["is", "where"]) expect(selectorListState(`::${el}:${f}(.a)`, false), `${el} ${f}`).toBe("valid");
+      expect(selectorListState(`::${el}:hover`, false), el).toBe("invalid");
     }
   });
 });

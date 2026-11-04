@@ -397,6 +397,21 @@ function identEnd(text: string, at: number): number {
  * rule index need the folded form, and the attribute name and flag where they are read.
  */
 function lowerSelector(selector: string): string {
+  return keepOfKeywordCase(selector, foldSelector(selector));
+}
+
+/** An `of` keyword of `:nth-child()` written in another case keeps it, so the validity check can see it (Chrome only takes `of`). */
+const OF_KEYWORD = /[ \t\n\r\f][oO][fF](?![A-Za-z0-9_\-\\]|[^\x00-\x7f])/g;
+function keepOfKeywordCase(original: string, lowered: string): string {
+  if (!/[OF]/.test(original)) return lowered;
+  let out = lowered;
+  for (const m of original.matchAll(OF_KEYWORD)) {
+    if (m[0].slice(1) !== "of") out = out.slice(0, m.index + 1) + m[0].slice(1) + out.slice(m.index + 3);
+  }
+  return out;
+}
+
+function foldSelector(selector: string): string {
   if (!/[[.#]/.test(selector)) return asciiLower(selector);
   const n = selector.length;
   let out = "";
@@ -676,6 +691,27 @@ function validAttribute(inner: string, d: Doubt): boolean {
 /** Pseudo-elements after which a pseudo-class is never valid (`::before:hover`); the others take some (`::part(x):hover`, `::-webkit-scrollbar:horizontal`). */
 const NO_PSEUDO_CLASS_AFTER: ReadonlySet<string> = new Set(["after", "backdrop", "before", "first-letter", "first-line", "marker", "placeholder"]);
 
+/** Pseudo-classes Chrome accepts after a pseudo-element that otherwise takes none (checked in headless Chrome); any other is read as doubtful. */
+const PSEUDO_CLASS_AFTER_ELEMENT: ReadonlyMap<string, ReadonlySet<string>> = new Map([
+  ["part", new Set(["hover", "focus", "active", "focus-visible"])],
+  ["file-selector-button", new Set(["hover", "focus", "active"])],
+  ["selection", new Set(["window-inactive"])],
+  ["scroll-marker", new Set(["target-current"])],
+  ["view-transition-group", new Set(["only-child"])],
+  ["view-transition-image-pair", new Set(["only-child"])],
+  ["view-transition-old", new Set(["only-child"])],
+  ["view-transition-new", new Set(["only-child"])],
+]);
+
+/** `trim()` also strips NBSP and other Unicode spaces, which CSS reads as identifier characters: only the CSS whitespace set goes. */
+function trimCss(text: string): string {
+  let a = 0;
+  let b = text.length;
+  while (a < b && isCssSpace(text[a])) a++;
+  while (b > a && isCssSpace(text[b - 1])) b--;
+  return text.slice(a, b);
+}
+
 const AN_PLUS_B = /^(?:even|odd|[+-]?\d+|[+-]?\d*n(?:[ \t\n\r\f]*[+-][ \t\n\r\f]*\d+)?)$/i;
 
 /**
@@ -683,7 +719,7 @@ const AN_PLUS_B = /^(?:even|odd|[+-]?\d+|[+-]?\d*n(?:[ \t\n\r\f]*[+-][ \t\n\r\f]
  * `:nth-child()`, `:lang()`, `:dir()`). An escape or a nested `of` selector this cannot decide is `doubtful`. Linear.
  */
 function pseudoArgsState(name: string, args: string, depth: number, d: Doubt): boolean {
-  const text = args.trim();
+  const text = trimCss(args);
   if (name === "nth-child" || name === "nth-last-child" || name === "nth-of-type" || name === "nth-last-of-type") {
     if (text.includes("\\")) {
       d.doubtful = true;
@@ -692,10 +728,13 @@ function pseudoArgsState(name: string, args: string, depth: number, d: Doubt): b
     let formula = text;
     let list: string | undefined;
     if (name.endsWith("child")) {
-      const of = /[ \t\n\r\f]of[ \t\n\r\f]/i.exec(text);
+      // `of` after white space, ended by anything that cannot continue an identifier (`of.a`, `of:hover`, `of*` are valid)
+      const of = /[ \t\n\r\f]of(?![A-Za-z0-9_\-\\]|[^\x00-\x7f])/i.exec(text);
       if (of) {
-        formula = text.slice(0, of.index).trim();
+        formula = trimCss(text.slice(0, of.index));
         list = text.slice(of.index + of[0].length);
+        // a browser reads the keyword without case; not every one does, so a capital is not a certain error
+        if (!/^\sof$/.test(of[0])) d.doubtful = true;
       }
     }
     if (!AN_PLUS_B.test(formula)) return false;
@@ -707,8 +746,19 @@ function pseudoArgsState(name: string, args: string, depth: number, d: Doubt): b
     return true;
   }
   if (name === "lang") {
-    // a comma list of identifiers or strings; an empty list or an empty part is invalid
-    return splitTopLevel(text, ",").every((part) => part.trim() !== "");
+    // Only a single identifier is certainly valid (`en`, `en-US`, `\*-Latn`). A string, a wildcard or a comma list is accepted by
+    // some engines and not by Chrome: doubtful. An empty part, a number or several words (`en fr`) is invalid everywhere.
+    const parts = splitTopLevel(text, ",").map(trimCss);
+    for (const part of parts) {
+      if (part === "") return false;
+      if (part[0] === '"' || part[0] === "'" || part[0] === "*") continue;
+      if (validIdentEnd(part, 0) !== part.length) return false;
+    }
+    if (parts.length > 1 || parts[0]![0] === '"' || parts[0]![0] === "'" || parts[0]![0] === "*") {
+      // a string or a wildcard is only doubtful when it is well formed enough to be one
+      d.doubtful = true;
+    }
+    return true;
   }
   if (name === "dir") {
     if (text.includes("\\")) {
@@ -793,9 +843,12 @@ function validCompound(text: string, at: number, depth: number, d: Doubt): numbe
         // a name this list does not know may be valid in some engine (`::-moz-selection`): doubtful
         if (!PSEUDO_ELEMENTS.has(name) && !name.startsWith("-webkit-")) d.doubtful = true;
         else if (PSEUDO_ELEMENTS.has(name)) element = name;
-      } else if (element !== undefined && NO_PSEUDO_CLASS_AFTER.has(element)) {
+      } else if (element !== undefined && NO_PSEUDO_CLASS_AFTER.has(element) && name !== "is" && name !== "where") {
+        // `:is()` and `:where()` are accepted after a pseudo-element by some browsers: they are read like any pseudo-class
         return -1;
       } else if (!name.startsWith("-webkit-")) {
+        // after a pseudo-element that takes some pseudo-classes, only a verified one is certainly valid
+        if (element !== undefined && !NO_PSEUDO_CLASS_AFTER.has(element) && !PSEUDO_CLASS_AFTER_ELEMENT.get(element)?.has(name)) d.doubtful = true;
         if (args === undefined ? !PLAIN_PSEUDO_CLASSES.has(name) : !FUNCTIONAL_PSEUDO_CLASSES.has(name)) d.doubtful = true;
         // `:not()` and `:has()` are strict lists (`:is()` and `:where()` forgive an invalid argument, so they are not read).
         else if (args !== undefined && (name === "not" || name === "has") && depth < MAX_VALIDATE_DEPTH) {
