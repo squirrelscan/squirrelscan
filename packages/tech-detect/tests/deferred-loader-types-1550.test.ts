@@ -49,6 +49,12 @@ describe("the same text in data stays cut", () => {
     "text/x-handlebars-template", "text/ng-template", "text/x-jquery-tmpl", "text/css", "text/markdown", "application/x-custom",
     "text/x-custom", "text/jsx", "text/typescript", "text/javascript1.6", "text/javascript;charset=utf-8", "text/javascript; charset=utf-8",
     "application/json+lazyload", "application/lazy-config+json", "application/javascript-template", "text/x-lazy-template", "text/x-handlebars",
+    // A custom data type that happens to carry a delay word or a javascript word: a vendor URL held as data in it is not a detection.
+    "application/x-lazy-config", "text/x-delayed-queue", "text/x-deferred-data", "application/x-defer-config", "text/lazy-data",
+    "application/vnd.delayed", "application/x-later-queue", "text/x-blocked-list", "application/blocked", "text/x-lazysizes",
+    "application/x-javascript-config", "application/javascript-data", "text/javascript-data", "application/x-ecmascript-config",
+    "text/javascript.config", "text/x-delay-settings", "text/x-lazy-state", "text/x-defer-manifest", "text/x-delay-schema", "text/x-lazy-store",
+    "TEXT/X-LAZY-CONFIG",
   ];
   for (const type of DATA_TYPES) {
     test(type, () => {
@@ -58,6 +64,14 @@ describe("the same text in data stays cut", () => {
       expect(scriptTypeRuns(type)).toBe(false);
     });
   }
+  test("a guard word only counts as a whole token: a wrapper that merely contains one still reads", () => {
+    for (const type of ["pmdelayedscript_datalayer", "lazyloadstore", "text/delayed-javascript", "text/lazyload-metadata", "text/lazy-datasets"]) {
+      expect([type, scriptTypeRuns(type)]).toEqual([type, true]);
+    }
+    for (const type of ["text/lazyload-list-free", "text/lazy_data", "text/lazy.data", "lazy+data", "text/lazy-data-v2"]) {
+      expect([type, scriptTypeRuns(type)]).toEqual([type, false]);
+    }
+  });
   test("a comment and a template holding a wrapper script are cut", () => {
     const wrapped = `<script type="rocketlazyloadscript">${CLARITY}</script>`;
     expect(ids(page(`<!-- ${wrapped} -->`))).not.toContain("clarity");
@@ -67,6 +81,19 @@ describe("the same text in data stays cut", () => {
   test("a wrapper-looking word outside a type is not a type", () => {
     expect(ids(page(`<script type="application/json" data-kind="rocketlazyloadscript">${JSON.stringify(CLARITY)}</script>`))).not.toContain("clarity");
   });
+});
+
+describe("the type is trimmed before it is bounded", () => {
+  test("more than 2048 spaces before a data type do not turn it into an empty (running) type", () => {
+    for (const type of ["application/json", "importmap", "text/x-lazy-config"]) {
+      expect([type, scriptTypeRuns(`${" ".repeat(3_000)}${type}`)]).toEqual([type, false]);
+      expect([type, scriptTypeRuns(`${"\n\t ".repeat(2_000)}${type}${" ".repeat(3_000)}`)]).toEqual([type, false]);
+    }
+    expect(scriptTypeRuns(`${" ".repeat(3_000)}text/javascript`)).toBe(true);
+    expect(scriptTypeRuns(`${" ".repeat(3_000)}`)).toBe(true);
+    const html = wrap(`${" ".repeat(3_000)}application/json`, JSON.stringify({ loader: CLARITY }));
+    expect(ids(html)).not.toContain("clarity");
+  }, 10_000);
 });
 
 describe("hostile input stays linear", () => {
