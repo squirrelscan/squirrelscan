@@ -20,6 +20,7 @@ How it works:
 ### Fixed
 
 - **Technology detection no longer counts a vendor that only sits in content the browser does not run or show.** A vendor URL or tag inside the text of a script the browser does not run (JSON, JSON-LD, an import map, or any `type` that is not empty, `module` or a JavaScript MIME type), inside `<template>` content, or inside an HTML comment (commented-out code) was detected by the `html` detectors, and a `<script src>` or iframe inside a `<template>` by the script-URL ones. The page is now read once, and those regions are left out of what the detectors read. Only the detector that matches a comment on purpose reads comments (WordPress plugin banners, Jekyll, Mailchimp, Klaviyo's app block marker, Font Awesome's banner), so a commented-out Klaviyo or Font Awesome loader no longer counts, and CSS in `<style>` still does. Script ends need `</script` plus a space, `/` or `>`, a self-closing `<template/>` opens a template, and only a `shadowrootmode` of `open` or `closed` makes a shadow root, as in a browser. A region is only left out when the pass saw both of its edges: a comment with no `-->`, a `<template>` with no `</template>`, and everything after a tag over 64 KB stay as written. (#1550)
+- The `security/leaked-secrets` docs now record which caps bounded its findings before the per-page cap: the report's 1,000 items per check and the 1 MiB published-report cap, both downstream of the rule (#1554)
 
 ## v0.0.164 (2026-11-04)
 
