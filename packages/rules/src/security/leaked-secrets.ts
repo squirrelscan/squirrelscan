@@ -3343,6 +3343,8 @@ export interface FindingSink {
   omittedSerious(): boolean;
   /** What was kept, in scan order. */
   result(): LeakedSecret[];
+  /** The JWT decoy retries this sink's scan may still spend (see {@link JWT_RETRY_CAP}); `reported` once the cut was counted. */
+  jwtRetries: { left: number; reported: boolean };
   /**
    * Which part of the page the next findings come from. Scan order within the page is canonical: a lower phase comes before a
    * higher one in the result and in the rule's dedupe ("the last of equals wins"), whatever order the phases were scanned in.
@@ -3354,6 +3356,13 @@ export interface FindingSink {
   child(): FindingSink;
 }
 
+/**
+ * The most decoy-retry steps (#1530) one page scan spends. Each step is one sticky match attempt, so the cost is bounded; a run of
+ * short `eyJ` segments would otherwise be walked end to end. Past it the match is kept as found and the page is counted as having
+ * findings left out, not passed in silence.
+ */
+const JWT_RETRY_CAP = 1000;
+
 /** Every finding, in scan order, no cap and no dedupe: the contract of `scanContent` and `scanPageForSecrets`. */
 export function createListSink(): FindingSink {
   const phases = new Map<number, LeakedSecret[]>();
@@ -3362,6 +3371,7 @@ export function createListSink(): FindingSink {
   return {
     add: (finding) => void current.push(finding),
     omit: () => undefined,
+    jwtRetries: { left: JWT_RETRY_CAP, reported: false },
     omittedSerious: () => false,
     phase(phase) {
       let list = phases.get(phase);
@@ -3527,6 +3537,7 @@ export function createFindingSink(cap: number = PAGE_FINDINGS_CAP): FindingSink 
       if (serious && count > 0) seriousOmitted = true;
     },
     omittedSerious: () => seriousOmitted,
+    jwtRetries: { left: JWT_RETRY_CAP, reported: false },
     phase(phase) {
       base = phase * 2 ** 32;
       seq = 0;
@@ -3847,10 +3858,19 @@ function scanInto(
     // The start of the last segment a failed chain reached: a later match that starts at or before it was already tried.
     let jwtTriedTo = -1;
     while ((match = pattern.exec(content)) !== null) {
-      if (jwtRetry && match.index > jwtTriedTo && jwtMatchIsSuspect(match[0])) {
+      if (jwtRetry && match.index > jwtTriedTo && found.jwtRetries.left > 0 && jwtMatchIsSuspect(match[0])) {
         let current: RegExpExecArray = match;
         let real: RegExpExecArray | undefined;
         for (;;) {
+          if (found.jwtRetries.left <= 0) {
+            // out of retries: the match stays as found, and the page says that something on it was not read through
+            if (!found.jwtRetries.reported) {
+              found.jwtRetries.reported = true;
+              found.omit(1);
+            }
+            break;
+          }
+          found.jwtRetries.left--;
           jwtRetry.lastIndex = current.index + current[0].indexOf(".") + 1;
           const next = jwtRetry.exec(content);
           // the real token starts inside the match it hides in; one that starts past it is another token

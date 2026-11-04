@@ -3,7 +3,7 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { scanContent, type SecretLocation } from "../../src/security/leaked-secrets";
+import { scanContent, scanContentBounded, type SecretLocation } from "../../src/security/leaked-secrets";
 import { runOf, seededRng } from "./leaked-secrets/generators";
 
 const LOWER = "abcdefghijklmnopqrstuvwxyz";
@@ -102,16 +102,49 @@ describe("a decoy segment before a real token", () => {
     }
   });
 
+  test("mixed valid decoys, with and without an alg, in either order, 2 and 3 deep: the real token is found and no decoy is reported", () => {
+    const withAlg = (pad: string) => b64u({ alg: "HS256", pad: pad.repeat(30) });
+    const noAlg = (pad: string) => b64u({ a: pad.repeat(30) });
+    const orders: Array<[string, string[]]> = [
+      ["alg then none", [withAlg("a"), noAlg("b")]],
+      ["none then alg", [noAlg("a"), withAlg("b")]],
+      ["alg, none, alg", [withAlg("a"), noAlg("b"), withAlg("c")]],
+      ["none, alg, none", [noAlg("a"), withAlg("b"), noAlg("c")]],
+      ["alg, none, none", [withAlg("a"), noAlg("b"), noAlg("c")]],
+      ["alg, alg, none", [withAlg("a"), withAlg("b"), noAlg("c")]],
+    ];
+    for (const [name, decoys] of orders) {
+      const found = scan(`${decoys.join(".")}.${real}`);
+      expect([name, found.map((f) => [f.type, f.value])]).toEqual([name, [["Supabase Service Role JWT", real]]]);
+    }
+  });
+
   test("a real token with an unrelated token after it is not replaced", () => {
     const other = `${b64u({ alg: "HS256" })}.${b64u({ sub: "u2", pad: "p".repeat(40) })}.${sig()}`;
     expect(scan(`${real} ${other}`).map((f) => f.type)).toEqual(["Supabase Service Role JWT", "JSON Web Token"]);
     expect(scan(`${other} ${real}`).map((f) => f.type)).toEqual(["JSON Web Token", "Supabase Service Role JWT"]);
   });
 
-  test("a run of eyJ segments with no real token reports nothing", () => {
+  test("a run of eyJ segments that do not decode, with no real token, reports nothing", () => {
     expect(types(`var t="${[decoy("a"), decoy("b"), decoy("c"), decoy("d")].join(".")}";`)).toEqual([]);
     expect(types(`var t="${decoy("a")}.${decoy("b")}.${sig()}";`)).toEqual([]);
   });
+
+  test("999 decoys in a row still find the real token (the retry cap is 1,000 steps a page)", () => {
+    const decoys = Array.from({ length: 999 }, () => decoy("a")).join(".");
+    const found = scanContentBounded(`var t="${decoys}.${real}";`, "inline-script", PAGE);
+    expect(found.secrets.map((f) => [f.type, f.value])).toEqual([["Supabase Service Role JWT", real]]);
+    expect(found.omitted).toBe(0);
+  }, 30_000);
+
+  test("10 MB of 13-character eyJ segments finishes fast and the page is reported as not fully read", () => {
+    const text = `var t="${"eyJaaaaaaaaaa.".repeat(Math.ceil(10_000_000 / 14))}";`;
+    const started = performance.now();
+    const found = scanContentBounded(text, "inline-script", PAGE);
+    const ms = performance.now() - started;
+    expect(ms).toBeLessThan(1_000);
+    expect(found.omitted).toBeGreaterThan(0);
+  }, 30_000);
 
   test("a run of eyJ segments stays linear, with and without a real token at the end", () => {
     const time = (text: string) => {
@@ -129,7 +162,9 @@ describe("a decoy segment before a real token", () => {
     expect(none.found).toEqual([]);
     expect(none.ms).toBeLessThan(2_000);
     const withReal = time(`var t="${run}${real}";`);
-    expect(withReal.found).toEqual(["Supabase Service Role JWT"]);
+    // past the retry cap (1,000 steps) the real token behind 8,000 decoys is not looked for: the page is reported as partial instead
+    expect(withReal.found).toEqual([]);
+    expect(scanContentBounded(`var t="${run}${real}";`, "inline-script", PAGE).omitted).toBeGreaterThan(0);
     expect(withReal.ms).toBeLessThan(2_000);
     // separate runs, each ending without a real token, many times over
     const many = time(`${`var t="${decoy("a")}.${decoy("b")}.${decoy("c")}";`}\n`.repeat(2_000));
