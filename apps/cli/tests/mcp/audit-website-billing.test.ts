@@ -577,14 +577,27 @@ describe("local runs make no cloud call", () => {
     expect(cloudCalls()).toEqual([]);
   });
 
-  test("a local host is never billed, signed in", async () => {
-    const out = await call("audit_website", {
-      url: "http://localhost:9/",
-      maxPages: 1,
-      level: "quick",
-      confirm: true,
-    });
-    expect(out.text).toContain("not reachable by squirrelscan's cloud");
-    expect(registered()).toBe(false);
-  });
+  // #1572: the special-use literals the narrow classifier does not name (NAT64, 6to4, documentation, site-local, benchmarking) are
+  // unreachable by the cloud too. A planner left on the narrow classifier would bill the run.
+  test.each([
+    "http://localhost:9/",
+    "http://[64:ff9b::a00:1]:9/",
+    "http://[2002:a00:1::]:9/",
+    "http://[2001:db8::1]:9/",
+    "http://[fec0::1]:9/",
+    "http://192.0.2.1:9/",
+    "http://198.18.0.1:9/",
+  ])(
+    "a local or special-use host is never billed, signed in: %s",
+    async (url) => {
+      const out = await call("audit_website", {
+        url,
+        maxPages: 1,
+        level: "quick",
+        confirm: true,
+      });
+      expect(out.text).toContain("not reachable by squirrelscan's cloud");
+      expect(registered()).toBe(false);
+    }
+  );
 });
