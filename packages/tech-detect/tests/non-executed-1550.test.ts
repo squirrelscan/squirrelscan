@@ -46,7 +46,7 @@ describe("data script bodies", () => {
 describe("script types: only what a browser runs is read (HTML spec, checked in Chrome 156)", () => {
   const hit = (attrs: string): boolean => ids(page(`<script${attrs}>document.write(${json(YT)})</script>`)).includes("youtube-embed");
   test("an unknown or custom type is data: a tag written as a JSON string in it is not detected", () => {
-    for (const type of ["application/x-custom", "text/x-custom", "application/x-stripe-config", "text/jsx", "text/babel", "text/typescript", "application/octet-stream", "text/javascript1.6"]) {
+    for (const type of ["application/x-custom", "text/x-custom", "application/x-stripe-config", "text/jsx", "text/typescript", "application/octet-stream", "text/javascript1.6"]) {
       expect(hit(` type="${type}"`), type).toBe(false);
     }
     const stripe = `<script type="application/x-custom">{"loader":${json(STRIPE_TAG)}}</script>`;
@@ -82,7 +82,7 @@ describe("script types: only what a browser runs is read (HTML spec, checked in 
     expect(hit(' type="text&#x2f;javascript"')).toBe(true);
   });
   test("the wrappers a cache, CDN or consent tool runs later stay read (#1435)", () => {
-    for (const type of ["litespeed/javascript", "text/plain", "text/partytown", "0123456789abcdef0123456789abcdef-text/javascript"]) {
+    for (const type of ["litespeed/javascript", "text/plain", "text/partytown", "0123456789abcdef0123456789abcdef-text/javascript", "text/babel", "rocketlazyloadscript"]) {
       expect(hit(` type="${type}"`), type).toBe(true);
     }
   });
