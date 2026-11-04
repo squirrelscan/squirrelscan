@@ -22,7 +22,7 @@ They go to your account address unless the website has its own. Set one in the *
 
 ### Audit complete
 
-Arrives when an audit of the website finishes and its report reaches the cloud. That covers dashboard runs, scheduled runs, and CLI, API and GitHub audits that publish their report. It carries the health score and the error, warning and passing counts. The button opens the dashboard rather than that specific report, so you pick the run from the website's audit history.
+Arrives when an audit of the website finishes and its report reaches the cloud. That covers dashboard runs, scheduled runs, and CLI, API and GitHub audits that publish their report. It carries the health score and the error, warning and passing counts. The button opens that audit's report. It falls back to the dashboard home only when the audit has no website or report to link to.
 
 A scheduled run normally sends the [digest](#scheduled-audit-digest) instead, so a run never sends both a completion email and a digest.
 
