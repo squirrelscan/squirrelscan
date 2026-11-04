@@ -30,6 +30,8 @@ export const FONT_FINGERPRINTS: TechFingerprint[] = [
     website: "https://fontawesome.com",
     icon: "font-awesome",
     detectors: [
+      // The banner Font Awesome's SVG output carries (`<!--!Font Awesome Free 6.5.1 by @fontawesome ... -->`): a comment read on purpose (#1550).
+      { type: "html", pattern: /<!--!?\s*Font Awesome\b/i, comments: true },
       { type: "html", pattern: /fontawesome/i },
       { type: "html", pattern: /fa-(?:solid|regular|light|brands)/i },
       { type: "script-url", pattern: /fontawesome/i },

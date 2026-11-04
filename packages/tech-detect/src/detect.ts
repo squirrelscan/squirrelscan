@@ -87,16 +87,17 @@ function matchesInCode(
 
 /**
  * The regions a browser neither runs nor shows (#1550), found by the page pass in `pageMarkup` and cut out of the text the `html`
- * detectors read: the body of a data script (the one {@link DATA_SCRIPT_TYPE} list: JSON, JSON-LD, import maps and the other
- * non-JavaScript types), the content of a `<template>`, and HTML comments. `<style>` text is CSS evidence and stays. The page's own
- * `<script src>`, inline loaders and a comment a fingerprint matches on purpose (see {@link readsComments}) are kept.
+ * detectors read: the body of a data script (any script the browser does not run: {@link scriptRuns}), the content of a `<template>`, and HTML
+ * comments. `<style>` text is CSS evidence and stays. The page's own
+ * `<script src>`, inline loaders and a comment a detector matches on purpose (see {@link readsComments}) are kept.
  *
  * Fail closed: a region is cut only when the pass saw both of its edges, so a comment with no `-->`, a `<template>` with no
  * `</template>`, a data script with no `</script` and everything after a tag over {@link MAX_TAG_CHARS} stay in the text. A
  * comment ends at `-->` or `--!>`, and `<!-->` and `<!--->` are empty comments. Raw-text elements (`<style>`, `<textarea>`,
  * `<title>`, `<xmp>`, `<iframe>`, `<noembed>`, `<noframes>`, and `<script>`) are skipped whole, so a `<template` or `<!--` inside
- * one opens nothing. `</template>` pairs innermost first with the `<template>` tags the pass read as tags; a declarative shadow
- * root (`shadowrootmode`) is rendered, so it pairs but is not cut. SVG and MathML are not treated specially.
+ * one opens nothing. `</template>` pairs innermost first with the `<template>` tags the pass read as tags, a self-closing `<template/>` included (HTML
+ * ignores the slash on a non-void element); a declarative shadow root (`shadowrootmode` of `open` or `closed`, exactly, as the
+ * first such attribute) is rendered, so it pairs but is not cut. SVG and MathML are not treated specially.
  */
 interface InertRange {
   from: number;
@@ -106,20 +107,22 @@ interface InertRange {
 }
 
 const RAW_TEXT_TAGS: ReadonlySet<string> = new Set(["style", "textarea", "title", "xmp", "iframe", "noembed", "noframes"]);
-const TYPE_ONLY: ReadonlySet<string> = new Set(["type"]);
-const SHADOW_ROOT: ReadonlySet<string> = new Set(["shadowrootmode", "shadowroot"]);
+const SHADOW_ROOT: ReadonlySet<string> = new Set(["shadowrootmode"]);
+const SCRIPT_TYPE_ATTRS: ReadonlySet<string> = new Set(["type", "language"]);
 const COMMENT_END = /--!?>/g;
 const RAW_TEXT_CLOSERS: ReadonlyMap<string, RegExp> = new Map([...RAW_TEXT_TAGS].map((name) => [name, new RegExp(`</${name}(?=[\\t\\n\\f\\r />])`, "gi")]));
 
-/** The fingerprints that match a comment on purpose though no pattern says `<!--`: Klaviyo's Shopify app block marker and Font Awesome's banner. */
-const COMMENT_EVIDENCE_IDS: ReadonlySet<string> = new Set(["klaviyo", "font-awesome"]);
-const commentCache = new WeakMap<TechFingerprint, boolean>();
-/** Whether a fingerprint reads HTML comments: a pattern that opens at `<!--`, or one of {@link COMMENT_EVIDENCE_IDS}. */
-function readsComments(fp: TechFingerprint): boolean {
-  let known = commentCache.get(fp);
+const commentCache = new WeakMap<Detector, boolean>();
+/**
+ * Whether a detector reads HTML comments: a pattern that opens at `<!--` (a plugin banner), or an `html` detector marked `comments`
+ * (Klaviyo's Shopify app block marker). Per detector, not per fingerprint: the same fingerprint's loader detectors still read the
+ * page without comments, so a commented-out loader is no evidence.
+ */
+function readsComments(detector: Detector): boolean {
+  let known = commentCache.get(detector);
   if (known === undefined) {
-    known = COMMENT_EVIDENCE_IDS.has(fp.id) || fp.detectors.some((d) => "pattern" in d && d.pattern.source.includes("<!--"));
-    commentCache.set(fp, known);
+    known = (detector.type === "html" && detector.comments === true) || ("pattern" in detector && detector.pattern.source.includes("<!--"));
+    commentCache.set(detector, known);
   }
   return known;
 }
@@ -187,13 +190,62 @@ function flightKind(body: string): "f" | "s" | null {
 const URL_TAGS = new Set(["script", "link", "img", "iframe", "embed", "object", "source"]);
 const INLINE_LOADER_MAX_CHARS = 16 * 1024;
 /**
- * Script types that hold data, not code the browser runs: JSON (JSON-LD, `__NEXT_DATA__`, `__nuxt_data__`), import
- * maps, speculation rules and templates. Every other type is read: a cache or CDN wraps a loader in its own type
- * to defer it (`litespeed/javascript`, Cloudflare Rocket Loader's `<hash>-text/javascript`, Partytown, a consent
- * tool's `text/plain`) and the browser runs it all the same.
+ * What the HTML spec's "JavaScript MIME type essence match" accepts, lower case: a script with one of these as its `type` is
+ * classic JavaScript. The match is on the whole string (a `;charset=` parameter is not part of an essence, and Chrome does not
+ * run `text/javascript;charset=utf-8` either), ASCII case-insensitive, after trimming ASCII whitespace.
  */
-const DATA_SCRIPT_TYPE =
-  /json|importmap|speculationrules|template|x-(?:tmpl|mustache|handlebars|jquery-tmpl|jsrender|underscore|ejs)|shader|octet-stream|^text\/(?:html|css|markdown|csv|xml)\b|^application\/(?:xml|xhtml)/i;
+const JS_MIME_ESSENCES: ReadonlySet<string> = new Set([
+  "application/ecmascript",
+  "application/javascript",
+  "application/x-ecmascript",
+  "application/x-javascript",
+  "text/ecmascript",
+  "text/javascript",
+  "text/javascript1.0",
+  "text/javascript1.1",
+  "text/javascript1.2",
+  "text/javascript1.3",
+  "text/javascript1.4",
+  "text/javascript1.5",
+  "text/jscript",
+  "text/livescript",
+  "text/x-ecmascript",
+  "text/x-javascript",
+]);
+/**
+ * Types a cache, CDN or consent tool gives a loader it runs itself later (LiteSpeed Cache, Cloudflare Rocket Loader's
+ * `<hash>-text/javascript`, Partytown, a consent tool's `text/plain`; #1435). A browser alone does not run them, but the page does,
+ * so their text stays evidence. Every other type that is not JavaScript is data (#1550).
+ */
+const DEFERRED_LOADER_TYPE = /^(?:litespeed\/javascript|text\/(?:plain|partytown)|[0-9a-f]{8,64}-text\/javascript)$/;
+const isAsciiSpace = (code: number): boolean => code === 9 || code === 10 || code === 12 || code === 13 || code === 32;
+
+/** `value` without leading and trailing ASCII whitespace (not `String.trim`, which also strips U+00A0 and the like). */
+function asciiTrim(value: string): string {
+  let from = 0;
+  let to = value.length;
+  while (from < to && isAsciiSpace(value.charCodeAt(from))) from++;
+  while (to > from && isAsciiSpace(value.charCodeAt(to - 1))) to--;
+  return value.slice(from, to);
+}
+
+/**
+ * Whether a script of this `type` string runs, by the HTML spec: an empty type, `module`, a JavaScript MIME type essence (or a
+ * {@link DEFERRED_LOADER_TYPE}). Anything else is data (JSON, JSON-LD, import maps, speculation rules, templates, `text/x-*`, a
+ * custom type). A type with a character reference (`&`) is not decoded, so it cannot be proved data and counts as running.
+ */
+export function scriptTypeRuns(typeString: string): boolean {
+  const type = asciiTrim(typeString.slice(0, 2048)).toLowerCase();
+  return type === "" || type === "module" || type.includes("&") || JS_MIME_ESSENCES.has(type) || DEFERRED_LOADER_TYPE.test(type);
+}
+
+/** Whether a `<script>` with these attributes (`type`, `language`) runs: a `type` decides; else a `language` is the type `text/<language>`. */
+function scriptRuns(attrs: ReadonlyMap<string, string>): boolean {
+  const type = attrs.get("type");
+  if (type !== undefined) return scriptTypeRuns(type);
+  const language = attrs.get("language");
+  return language === undefined || language === "" || scriptTypeRuns(`text/${language}`);
+}
 /**
  * A Next.js App Router flight script (`self.__next_f.push(...)`) carries the layout's `next/script` snippets as
  * strings, so it is decoded up to this size for the script elements it holds; any other script over the
@@ -279,6 +331,12 @@ function tagEnd(html: string, open: number): number {
   return html.indexOf(">", open + 1);
 }
 
+/** A `<template>` start tag that is a declarative shadow root: its first `shadowrootmode` is exactly `open` or `closed` (ASCII case-insensitive, not trimmed). */
+function isDeclarativeShadowRoot(tag: string): boolean {
+  const mode = parseTagAttributes(tag.slice(0, MAX_TAG_CHARS), SHADOW_ROOT, false).get("shadowrootmode")?.toLowerCase();
+  return mode === "open" || mode === "closed";
+}
+
 let lastMarkup:
   | { html: string; attrs: ReadonlySet<string>; markup: string; tags: CollectedTag[]; importMapSkipped: number; ranges: InertRange[]; views: Partial<Record<"clean" | "commented", string>> }
   | undefined;
@@ -298,7 +356,7 @@ const MAX_ATTRIBUTE_VALUE_CHARS = 2_048;
  * values; names lower case; first wins (as in a browser). Other attributes are walked past, not kept: a page of tags
  * with a hundred attributes each must not cost a hundred map entries per tag. The walk itself is bounded.
  */
-function parseTagAttributes(tag: string, wanted: ReadonlySet<string>): Map<string, string> {
+function parseTagAttributes(tag: string, wanted: ReadonlySet<string>, trim = true): Map<string, string> {
   const attrs = new Map<string, string>();
   let i = tag.search(/[\s/]/);
   if (i === -1) return attrs;
@@ -326,7 +384,8 @@ function parseTagAttributes(tag: string, wanted: ReadonlySet<string>): Map<strin
       }
     }
     if (name && wanted.has(name) && !attrs.has(name)) {
-      attrs.set(name, (value.length > MAX_ATTRIBUTE_VALUE_CHARS ? value.slice(0, MAX_ATTRIBUTE_VALUE_CHARS) : value).trim());
+      const capped = value.length > MAX_ATTRIBUTE_VALUE_CHARS ? value.slice(0, MAX_ATTRIBUTE_VALUE_CHARS) : value;
+      attrs.set(name, trim ? capped.trim() : capped);
     }
   }
   return attrs;
@@ -365,7 +424,8 @@ export function pageMarkup(html: string): string {
   const parts: string[] = [];
   const collected: CollectedTag[] = [];
   const flightBodies: string[] = [];
-  const scriptEnd = /<\/script/gi;
+  /** The end tag of a script: `</script` and a tag name boundary (whitespace, `/` or `>`), so `</scriptx>` ends nothing. */
+  const scriptEnd = /<\/script(?=[\t\n\f\r />])/gi;
   let inlineText = 0;
   let importMapSkipped = 0;
   let importMapUrlCount = 0;
@@ -408,7 +468,7 @@ export function pageMarkup(html: string): string {
     if (!name) continue;
     const tagName = name[2]!.toLowerCase();
     // Template content is inert (#1539, #1550): what the pass kept inside a template that closes is taken back. A `<template/>`
-    // is read as not opening one (a browser opens it), so what follows stays: the fail-closed side.
+    // opens one too: HTML ignores the self-closing slash on a non-void element.
     if (tagName === "template") {
       if (name[1] === "/") {
         const t = templates.pop();
@@ -420,8 +480,8 @@ export function pageMarkup(html: string): string {
           while (ranges.length > 0 && ranges[ranges.length - 1]!.from >= t.contentStart) ranges.pop();
           ranges.push({ from: t.contentStart, to: open, comment: false });
         }
-      } else if (!tag.endsWith("/>")) {
-        const cut = !parseTagAttributes(tag.slice(0, MAX_TAG_CHARS), SHADOW_ROOT).size;
+      } else {
+        const cut = !isDeclarativeShadowRoot(tag);
         templates.push({ contentStart: pos, cut, parts: parts.length, collected: collected.length, flight: flightBodies.length, state: [inlineText, importMapSkipped, importMapUrlCount, importMapMarkup] });
       }
     }
@@ -435,11 +495,13 @@ export function pageMarkup(html: string): string {
       const endMatch = scriptEnd.exec(html);
       const end = endMatch?.index ?? html.length;
       parts.push(tag);
-      const type = parseTagAttributes(tag.slice(0, MAX_TAG_CHARS), TYPE_ONLY).get("type") ?? "";
+      const scriptAttrs = parseTagAttributes(tag.slice(0, MAX_TAG_CHARS), SCRIPT_TYPE_ATTRS);
+      const type = scriptAttrs.get("type") ?? "";
+      const runs = scriptRuns(scriptAttrs);
       const length = end - pos;
-      // A data script's text is not read by the `html` detectors either (one list: DATA_SCRIPT_TYPE); an unclosed one stays.
-      if (length > 0 && endMatch && !halted && DATA_SCRIPT_TYPE.test(type.slice(0, 256))) ranges.push({ from: pos, to: end, comment: false });
-      if (length > 0 && /^importmap$/i.test(type.slice(0, 32))) {
+      // A script the browser does not run is data: its text is not read by the `html` detectors either; an unclosed one stays.
+      if (length > 0 && endMatch && !halted && !runs) ranges.push({ from: pos, to: end, comment: false });
+      if (length > 0 && /^importmap$/i.test(asciiTrim(type).slice(0, 32))) {
         // The page loads these as modules: each is a script URL, for the URL patterns (as one tag in the markup) and for the
         // tag attribute detectors (as a collected script). The map itself stays out of the markup: it is data.
         if (length > IMPORTMAP_MAX_CHARS) importMapSkipped++;
@@ -459,7 +521,7 @@ export function pageMarkup(html: string): string {
           }
         }
       }
-      if (length > 0 && !DATA_SCRIPT_TYPE.test(type.slice(0, 256)) && inlineText < INLINE_TEXT_BUDGET) {
+      if (length > 0 && runs && inlineText < INLINE_TEXT_BUDGET) {
         const head = html.slice(pos, Math.min(end, pos + 512));
         // A flight script (`self.__next_f`) is read with the page's other flight scripts, for the script
         // elements they carry, not as text (#1437). One with no readable chunk is read like any other script.
@@ -487,7 +549,7 @@ export function pageMarkup(html: string): string {
       else rawMissing.add(tagName);
     }
   }
-  if (flightBodies.length > 0) parts.push(flightLoaderText(flightBodies, (t) => DATA_SCRIPT_TYPE.test(t)));
+  if (flightBodies.length > 0) parts.push(flightLoaderText(flightBodies, (t) => !scriptTypeRuns(t)));
   const markup = parts.join("\n");
   lastMarkup = { html, attrs: wanted, markup, tags: collected, importMapSkipped, ranges, views: {} };
   return markup;
@@ -747,10 +809,9 @@ function detectOnePage(
       break;
     }
     let matchedDetector: Detector | null = null;
-    // The page without what a browser does not run or show; comments stay only for a fingerprint that matches one (#1550).
-    const html = pageHtml(input.html, readsComments(fp));
-
     for (const detector of fp.detectors) {
+      // The page without what a browser does not run or show; comments stay only for a detector that matches one (#1550).
+      const html = pageHtml(input.html, readsComments(detector));
       if (matchDetector(detector, input, html, views, maxChars)) {
         matchedDetector = detector;
         break; // ANY match = detected

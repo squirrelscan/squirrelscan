@@ -59,7 +59,8 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
       },
       { type: "script-content", pattern: /_learnq\.push\(/i },
       // The Shopify theme app block of Klaviyo's onsite embed.
-      { type: "html", pattern: /shopify:\/\/apps\/klaviyo-email-marketing-sms\//i, requires: "shopify://apps/" },
+      // It sits in a comment (`<!-- BEGIN app block: shopify://apps/... -->`): the one Klaviyo detector that reads comments (#1550).
+      { type: "html", pattern: /shopify:\/\/apps\/klaviyo-email-marketing-sms\//i, requires: "shopify://apps/", comments: true },
       // The inline onsite loader: `window._klOnsite=window._klOnsite||[]` and the `window.klaviyo` proxy.
       { type: "script-content", pattern: /window\._klOnsite\s*=\s*window\._klOnsite\s*\|\|/ },
       { type: "script-content", pattern: /window\.klaviyo\s*=\s*(?:window\.klaviyo\s*\|\||new\s+Proxy\s*\()/ },

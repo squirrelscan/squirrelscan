@@ -61,7 +61,8 @@ export type Detector =
     }
   // `requires`: literal that must appear in the html (case-sensitive) before the
   // pattern runs, a cheap gate for patterns that scan a bounded window per tag.
-  | { type: "html"; pattern: RegExp; requires?: string }
+  // `comments`: this detector also reads HTML comments (a marker comment such as an app block banner); no other detector does (#1550).
+  | { type: "html"; pattern: RegExp; requires?: string; comments?: true }
   | { type: "dom"; selector: string }
   | { type: "url-path"; pattern: RegExp }
   // Matches the audited page's own host name only, never its HTML: a third-party app a page loads
@@ -84,8 +85,8 @@ export interface TechFingerprint {
   versionPattern?: RegExp;
   /**
    * No effect since #1550: html and script detectors always read the page with HTML comments, data
-   * script bodies and template content removed, so a commented-out tag is not evidence. A fingerprint
-   * whose pattern opens at `<!--` (and the ids in `COMMENT_EVIDENCE_IDS`) reads the comments too.
+   * script bodies and template content removed, so a commented-out tag is not evidence. Only a detector
+   * whose pattern opens at `<!--`, or an `html` detector marked `comments`, reads the comments too.
    */
   ignoreComments?: boolean;
   /** Drop this detection when any of these fingerprint ids is also detected. */
