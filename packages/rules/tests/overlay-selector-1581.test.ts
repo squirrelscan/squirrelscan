@@ -76,9 +76,21 @@ const INVALID = [
   "::slotted()",
   "::slotted(a, b)",
   "::before:not(.a)",
+  // residuals: a highlight pseudo-element takes no further one, ::slotted() and :host() take one compound selector
+  "::selection::before",
+  "::highlight(x)::after",
+  "::spelling-error::marker",
+  "::slotted(a b)",
+  "::slotted(a > b)",
+  "::slotted(a + b)",
+  ":host(::before)",
+  ":host(.a::before)",
+  ":host(a b)",
+  ":host(a > b)",
+  ":host-context(a b)",
 ];
 /** Names a browser may accept (Chrome does not support the media-state ones): read as undecided, never as an error. */
-const DOUBTFUL = ["::before:not(:is(.a))", "::after:not(:is(.a))", "::before:not(:where(.a))", "::marker:not(:is(.a))", "::before:not(:is(:hover))", ":nth-child(2n+1 of :bogus)", ":playing", ":muted", ":seeking", ":buffering", ":stalled", ":current(.a)", ":dir(foo)", ":nth-child(\\32 n)", ":nth-child(2n+1 Of .a)", ":lang(en, fr)", ':lang("en")', ':lang("")', ":lang(*-Latn)", "::part(x):first-child", "::slotted(a):hover", "::selection:hover", "::highlight(x):hover", "::view-transition-old(root):hover", ":paused", ":volume-locked"];
+const DOUBTFUL = ["::before:not(:is(.a))", "::after:not(:is(.a))", "::before:not(:where(.a))", "::marker:not(:is(.a))", "::before:not(:is(:hover))", ":nth-child(2n+1 of :bogus)", ":playing", ":muted", ":seeking", ":buffering", ":stalled", ":current(.a)", ":dir(foo)", ":nth-child(\\32 n)", ":nth-child(2n+1 Of .a)", ":host(a, b)", ":lang(en, fr)", ':lang("en")', ':lang("")', ":lang(*-Latn)", "::part(x):first-child", "::slotted(a):hover", "::selection:hover", "::highlight(x):hover", "::view-transition-old(root):hover", ":paused", ":volume-locked"];
 /** Valid in Chrome (checked in headless Chrome 151). */
 const VALID = [
   "::before::marker",
@@ -121,6 +133,14 @@ const VALID = [
   "::-webkit-scrollbar:horizontal",
   "::file-selector-button:hover",
   ".x::before",
+  "::slotted(a.b:hover)",
+  "::slotted(*)",
+  ":host",
+  ":host(.a)",
+  ":host(.a:hover)",
+  ":host-context(.a)",
+  "::selection",
+  "::selection:window-inactive",
 ];
 
 describe("an invalid functional pseudo argument or a selector after a pseudo-element is a certain syntax error (#1581)", () => {
@@ -145,6 +165,14 @@ describe("an invalid functional pseudo argument or a selector after a pseudo-ele
     }
     expect(fires(`${COVER}@media screen{.cover, :nth-child(2n+1){${STATIC}}}`)).toBe(false);
     expect(nestedCover(`.cover{${FIXED};&, :nth-child(2n+1){${STATIC}}}`)).toBe(false);
+  });
+
+  test("a decoy with a valid ::selection, ::slotted() or :host() form still hides the cover (control, top level, @media, nested)", () => {
+    for (const ok of ["::selection", "::slotted(a.b:hover)", ":host(.a)", ":host(.a:hover)"]) {
+      expect(fires(`${COVER}.cover, ${ok}{${STATIC}}`), ok).toBe(false);
+      expect(fires(`${COVER}@media screen{.cover, ${ok}{${STATIC}}}`), `@media ${ok}`).toBe(false);
+      expect(nestedCover(`.cover{${FIXED};&, ${ok}{${STATIC}}}`), `nested ${ok}`).toBe(false);
+    }
   });
 
   test("an input a browser may accept keeps the rule undecided: a decoy cannot hide the cover, a cover rule is not silent", () => {
