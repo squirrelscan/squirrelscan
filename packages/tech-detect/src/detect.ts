@@ -195,8 +195,9 @@ function flightKind(body: string): "f" | "s" | null {
  * names nothing.
  */
 const LOADING_LINK_RELS = new Set(["stylesheet", "preload", "modulepreload", "prefetch", "prerender", "preconnect", "dns-prefetch"]);
+const LINK_REL = new Set(["rel"]);
 function linkLoads(tag: string): boolean {
-  const rel = attributeValue(tag.length > MAX_TAG_CHARS ? tag.slice(0, MAX_TAG_CHARS) : tag, "rel");
+  const rel = parseTagAttributes(tag.length > MAX_TAG_CHARS ? tag.slice(0, MAX_TAG_CHARS) : tag, LINK_REL).get("rel");
   if (!rel) return false;
   // HTML ASCII whitespace separates the tokens, as in a browser.
   for (const token of rel.slice(0, 256).split(/[ \t\n\f\r]+/)) if (LOADING_LINK_RELS.has(token.toLowerCase())) return true;
