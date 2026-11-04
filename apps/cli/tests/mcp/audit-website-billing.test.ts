@@ -272,7 +272,8 @@ describe("a start URL that redirects to another site is estimated, registered an
     expect(body.estimate).toBeUndefined();
     expect(registered()).toBe(false);
     expect(cloudCalls()).toEqual([]);
-  });
+    // The first call in this block starts the MCP server: it took 5.0 s on a Boat VM, past the 5 s default.
+  }, 30_000);
 
   test("with consent the estimate is returned without registering, and nothing in it names the shortener", async () => {
     const out = await call("audit_website", { ...SHORT, followRedirect: true });
