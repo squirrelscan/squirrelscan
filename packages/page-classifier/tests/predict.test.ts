@@ -102,6 +102,24 @@ describe("the rules path, with no model at all", () => {
     expect(isRootPath("not a URL")).toBe(false);
   });
 
+  test("only the root /index.html document is a root; the other names and extensions are pinned as not (#902)", () => {
+    // The root document name that cleared the precision bar.
+    expect(isRootPath("https://example.com/index.html?utm=1")).toBe(true);
+    expect(isRootPath("https://example.com/index.html#top")).toBe(true);
+    // The other names and extensions did not clear 0.90 on the measured sample.
+    for (const name of ["index", "default", "home"]) {
+      for (const ext of ["htm", "php", "asp", "aspx", "jsp", "html"]) {
+        if (name === "index" && ext === "html") continue;
+        expect(isRootPath(`https://example.com/${name}.${ext}`)).toBe(false);
+      }
+    }
+    // Nested documents and case variants are not the root.
+    expect(isRootPath("https://example.com/blog/index.html")).toBe(false);
+    expect(isRootPath("https://example.com/en/index.html")).toBe(false);
+    expect(isRootPath("https://example.com/en/")).toBe(false);
+    expect(isRootPath("https://example.com/Index.html")).toBe(false);
+  });
+
   test("a page with no structured data and no landmarks is unknown, not a guess", () => {
     const soup = `<!doctype html><html><head><title>T</title></head><body>
       <div class="wrap"><div class="row"><p>Text that makes this a candidate node.</p></div></div>
