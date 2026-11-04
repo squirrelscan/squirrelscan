@@ -85,19 +85,55 @@ function matchesInCode(
   return false;
 }
 
-/** Remove `<!-- ... -->` comments in one pass; an unterminated one is kept as is. */
-function stripHtmlComments(html: string): string {
-  let out = "";
-  let pos = 0;
-  for (;;) {
-    const open = html.indexOf("<!--", pos);
-    if (open === -1) break;
-    const close = html.indexOf("-->", open + 4);
-    if (close === -1) break;
-    out += html.slice(pos, open);
-    pos = close + 3;
+/**
+ * The regions a browser neither runs nor shows (#1550), found by the page pass in `pageMarkup` and cut out of the text the `html`
+ * detectors read: the body of a data script (the one {@link DATA_SCRIPT_TYPE} list: JSON, JSON-LD, import maps and the other
+ * non-JavaScript types), the content of a `<template>`, and HTML comments. `<style>` text is CSS evidence and stays. The page's own
+ * `<script src>`, inline loaders and a comment a fingerprint matches on purpose (see {@link readsComments}) are kept.
+ *
+ * Fail closed: a region is cut only when the pass saw both of its edges, so a comment with no `-->`, a `<template>` with no
+ * `</template>`, a data script with no `</script` and everything after a tag over {@link MAX_TAG_CHARS} stay in the text. A
+ * comment ends at `-->` or `--!>`, and `<!-->` and `<!--->` are empty comments. Raw-text elements (`<style>`, `<textarea>`,
+ * `<title>`, `<xmp>`, `<iframe>`, `<noembed>`, `<noframes>`, and `<script>`) are skipped whole, so a `<template` or `<!--` inside
+ * one opens nothing. `</template>` pairs innermost first with the `<template>` tags the pass read as tags; a declarative shadow
+ * root (`shadowrootmode`) is rendered, so it pairs but is not cut. SVG and MathML are not treated specially.
+ */
+interface InertRange {
+  from: number;
+  to: number;
+  /** A comment (kept for the fingerprints that match one); every other region is cut from every view. */
+  comment: boolean;
+}
+
+const RAW_TEXT_TAGS: ReadonlySet<string> = new Set(["style", "textarea", "title", "xmp", "iframe", "noembed", "noframes"]);
+const TYPE_ONLY: ReadonlySet<string> = new Set(["type"]);
+const SHADOW_ROOT: ReadonlySet<string> = new Set(["shadowrootmode", "shadowroot"]);
+const COMMENT_END = /--!?>/g;
+const RAW_TEXT_CLOSERS: ReadonlyMap<string, RegExp> = new Map([...RAW_TEXT_TAGS].map((name) => [name, new RegExp(`</${name}(?=[\\t\\n\\f\\r />])`, "gi")]));
+
+/** The fingerprints that match a comment on purpose though no pattern says `<!--`: Shopify's app block marker and Font Awesome's banner. */
+const COMMENT_EVIDENCE_IDS: ReadonlySet<string> = new Set(["klaviyo", "font-awesome"]);
+const commentCache = new WeakMap<TechFingerprint, boolean>();
+/** Whether a fingerprint reads HTML comments: a pattern that opens at `<!--`, or one of {@link COMMENT_EVIDENCE_IDS}. */
+function readsComments(fp: TechFingerprint): boolean {
+  let known = commentCache.get(fp);
+  if (known === undefined) {
+    known = COMMENT_EVIDENCE_IDS.has(fp.id) || fp.detectors.some((d) => "pattern" in d && d.pattern.source.includes("<!--"));
+    commentCache.set(fp, known);
   }
-  return out + html.slice(pos);
+  return known;
+}
+
+/** `html` without the `ranges` (sorted, non-overlapping), and without comments unless `keepComments`. */
+function cutRanges(html: string, ranges: readonly InertRange[], keepComments: boolean): string {
+  let out = "";
+  let at = 0;
+  for (const r of ranges) {
+    if (r.comment && keepComments) continue;
+    out += html.slice(at, r.from);
+    at = r.to;
+  }
+  return out + html.slice(at);
 }
 
 /**
@@ -243,12 +279,9 @@ function tagEnd(html: string, open: number): number {
   return html.indexOf(">", open + 1);
 }
 
-function attributeValue(tag: string, name: string): string | null {
-  const m = new RegExp(`\\s${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, "i").exec(tag);
-  return m ? (m[1] ?? m[2] ?? m[3] ?? "") : null;
-}
-
-let lastMarkup: { html: string; attrs: ReadonlySet<string>; markup: string; tags: CollectedTag[]; importMapSkipped: number } | undefined;
+let lastMarkup:
+  | { html: string; attrs: ReadonlySet<string>; markup: string; tags: CollectedTag[]; importMapSkipped: number; ranges: InertRange[]; views: Partial<Record<"clean" | "commented", string>> }
+  | undefined;
 
 /** A tag the page pass kept, with its attributes as written (names lower case, first wins). */
 interface CollectedTag {
@@ -335,20 +368,34 @@ export function pageMarkup(html: string): string {
   const scriptEnd = /<\/script/gi;
   let inlineText = 0;
   let importMapSkipped = 0;
-  let templateDepth = 0;
   let importMapUrlCount = 0;
   let importMapMarkup = 0;
+  const ranges: InertRange[] = [];
+  // Open `<template>` tags, innermost last; what the pass kept up to the tag is restored when a cut template closes.
+  const templates: Array<{ contentStart: number; cut: boolean; parts: number; collected: number; flight: number; state: number[] }> = [];
+  const rawMissing = new Set<string>();
+  /** Set by a tag over {@link MAX_TAG_CHARS}: the pass can no longer prove where a region ends, so it cuts nothing more. */
+  let halted = false;
   let pos = 0;
   for (;;) {
     const open = html.indexOf("<", pos);
     if (open === -1) break;
     if (html.startsWith("<!--", open)) {
-      const close = html.indexOf("-->", open + 4);
-      if (close === -1) break;
-      pos = close + 3;
+      let end: number;
+      if (html.startsWith(">", open + 4)) end = open + 5;
+      else if (html.startsWith("->", open + 4)) end = open + 6;
+      else {
+        COMMENT_END.lastIndex = open + 4;
+        const found = COMMENT_END.exec(html);
+        if (!found) break; // an unterminated comment: the rest of the page stays, as written
+        end = found.index + found[0].length;
+      }
+      if (!halted) ranges.push({ from: open, to: end, comment: true });
+      pos = end;
       continue;
     }
     const close = tagEnd(html, open);
+    if (close - open >= MAX_TAG_CHARS) halted = true;
     if (close === -1) {
       const rest = html.slice(open);
       const lone = /^<([a-zA-Z][a-zA-Z0-9-]*)/.exec(rest)?.[1]?.toLowerCase();
@@ -360,10 +407,23 @@ export function pageMarkup(html: string): string {
     const name = /^<(\/?)([a-zA-Z][a-zA-Z0-9-]*)/.exec(tag);
     if (!name) continue;
     const tagName = name[2]!.toLowerCase();
-    // Template content is inert: an import map in it never applies (#1539). Depth follows the tags as written.
+    // Template content is inert (#1539, #1550): what the pass kept inside a template that closes is taken back. A `<template/>`
+    // is read as not opening one (a browser opens it), so what follows stays: the fail-closed side.
     if (tagName === "template") {
-      if (name[1] === "/") templateDepth = Math.max(0, templateDepth - 1);
-      else if (!tag.endsWith("/>")) templateDepth++;
+      if (name[1] === "/") {
+        const t = templates.pop();
+        if (t && t.cut && !halted) {
+          parts.length = t.parts;
+          collected.length = t.collected;
+          flightBodies.length = t.flight;
+          [inlineText, importMapSkipped, importMapUrlCount, importMapMarkup] = t.state as [number, number, number, number];
+          while (ranges.length > 0 && ranges[ranges.length - 1]!.from >= t.contentStart) ranges.pop();
+          ranges.push({ from: t.contentStart, to: open, comment: false });
+        }
+      } else if (!tag.endsWith("/>")) {
+        const cut = !parseTagAttributes(tag.slice(0, MAX_TAG_CHARS), SHADOW_ROOT).size;
+        templates.push({ contentStart: pos, cut, parts: parts.length, collected: collected.length, flight: flightBodies.length, state: [inlineText, importMapSkipped, importMapUrlCount, importMapMarkup] });
+      }
     }
     if (name[1] === "/") continue;
     if (COLLECTED_TAGS.has(tagName) && collected.length < MAX_COLLECTED_TAGS) {
@@ -372,11 +432,14 @@ export function pageMarkup(html: string): string {
     }
     if (tagName === "script" && !tag.endsWith("/>")) {
       scriptEnd.lastIndex = pos;
-      const end = scriptEnd.exec(html)?.index ?? html.length;
+      const endMatch = scriptEnd.exec(html);
+      const end = endMatch?.index ?? html.length;
       parts.push(tag);
-      const type = attributeValue(tag.slice(0, MAX_TAG_CHARS), "type")?.trim() ?? "";
+      const type = parseTagAttributes(tag.slice(0, MAX_TAG_CHARS), TYPE_ONLY).get("type") ?? "";
       const length = end - pos;
-      if (length > 0 && templateDepth === 0 && /^importmap$/i.test(type.slice(0, 32))) {
+      // A data script's text is not read by the `html` detectors either (one list: DATA_SCRIPT_TYPE); an unclosed one stays.
+      if (length > 0 && endMatch && !halted && DATA_SCRIPT_TYPE.test(type.slice(0, 256))) ranges.push({ from: pos, to: end, comment: false });
+      if (length > 0 && /^importmap$/i.test(type.slice(0, 32))) {
         // The page loads these as modules: each is a script URL, for the URL patterns (as one tag in the markup) and for the
         // tag attribute detectors (as a collected script). The map itself stays out of the markup: it is data.
         if (length > IMPORTMAP_MAX_CHARS) importMapSkipped++;
@@ -415,11 +478,31 @@ export function pageMarkup(html: string): string {
     } else if (URL_TAGS.has(tagName)) {
       parts.push(tag);
     }
+    // Raw text (style, textarea, title...) has no markup in it: a `<template` or `<!--` there opens nothing. No closer, no skip.
+    if (RAW_TEXT_TAGS.has(tagName) && !rawMissing.has(tagName)) {
+      const closer = RAW_TEXT_CLOSERS.get(tagName)!;
+      closer.lastIndex = pos;
+      const found = closer.exec(html);
+      if (found) pos = found.index;
+      else rawMissing.add(tagName);
+    }
   }
   if (flightBodies.length > 0) parts.push(flightLoaderText(flightBodies, (t) => DATA_SCRIPT_TYPE.test(t)));
   const markup = parts.join("\n");
-  lastMarkup = { html, attrs: wanted, markup, tags: collected, importMapSkipped };
+  lastMarkup = { html, attrs: wanted, markup, tags: collected, importMapSkipped, ranges, views: {} };
   return markup;
+}
+
+/**
+ * The page's HTML the `html` detectors read: without the inert regions (data script bodies, `<template>` content) and, unless
+ * `keepComments`, without comments. Built once per page and view from the ranges the single page pass found.
+ */
+function pageHtml(html: string, keepComments: boolean): string {
+  pageMarkup(html);
+  const page = lastMarkup;
+  if (!page || page.ranges.length === 0) return html;
+  const key = keepComments ? "commented" : "clean";
+  return (page.views[key] ??= cutRanges(html, page.ranges, keepComments));
 }
 
 /** How many import map entries (a bound, an unsafe value, a map over its size) the page pass left out: see {@link IMPORTMAP_MAX_CHARS}. */
@@ -658,20 +741,14 @@ function detectOnePage(
       ? rawInput
       : { ...rawInput, meta: extractMetaFromHtml(rawInput.html) };
 
-  // Linear scan; computed once and only for fingerprints that ask for it.
-  let markupHtml: string | null = null;
-
   for (const fp of fingerprints) {
     if (performance.now() > deadline) {
       options.onBudgetExceeded?.();
       break;
     }
     let matchedDetector: Detector | null = null;
-    let html = input.html;
-    if (fp.ignoreComments) {
-      markupHtml ??= stripHtmlComments(input.html);
-      html = markupHtml;
-    }
+    // The page without what a browser does not run or show; comments stay only for a fingerprint that matches one (#1550).
+    const html = pageHtml(input.html, readsComments(fp));
 
     for (const detector of fp.detectors) {
       if (matchDetector(detector, input, html, views, maxChars)) {

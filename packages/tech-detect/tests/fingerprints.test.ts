@@ -344,15 +344,15 @@ describe("Angular false positive on Tailwind class soup (#1097)", () => {
   });
 
   // Detection is headerless HTML-string scanning (no DOM), so real Angular
-  // attribute syntax appearing anywhere in the byte stream — including inside
-  // an HTML comment, an inline <script> string literal, or an unescaped code
-  // sample — still detects. This residual is inherent to every html-type
+  // attribute syntax appearing in the live byte stream, including inside
+  // an inline <script> string literal or an unescaped code
+  // sample: still detects (an HTML comment no longer does, #1550). This residual is inherent to every html-type
   // detector here (ng-version=" in a docs code sample would FP the same way)
   // and isn't something this fix set out to (or can cheaply) close.
-  test("[residual, accepted] ng-app inside an HTML comment still detects Angular", () => {
+  test("ng-app inside an HTML comment no longer detects Angular (#1550)", () => {
     const html = `<html><body><!-- Example: <html ng-app="myApp"> --></body></html>`;
     const ids = detectTechnologies(input({ html })).map((t) => t.id);
-    expect(ids).toContain("angular");
+    expect(ids).not.toContain("angular");
   });
 
   test("[residual, accepted] ng-app inside an inline <script> string literal still detects Angular", () => {

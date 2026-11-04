@@ -83,8 +83,9 @@ export interface TechFingerprint {
   confidence?: "high" | "medium" | "low";
   versionPattern?: RegExp;
   /**
-   * Match html and script detectors against the markup with HTML comments
-   * removed, so a commented-out tag is not evidence.
+   * No effect since #1550: html and script detectors always read the page with HTML comments, data
+   * script bodies and template content removed, so a commented-out tag is not evidence. A fingerprint
+   * whose pattern opens at `<!--` (and the ids in `COMMENT_EVIDENCE_IDS`) reads the comments too.
    */
   ignoreComments?: boolean;
   /** Drop this detection when any of these fingerprint ids is also detected. */
