@@ -806,6 +806,9 @@ function pseudoArgsState(name: string, args: string, depth: number, d: Doubt): b
       const inner = selectorListState(list, false, depth + 1, false);
       if (inner === "invalid") return false;
       if (inner === "doubtful") d.doubtful = true;
+      // The grammar of `of` takes real selectors and a browser may reject a pseudo-element there (Chrome 156 accepts it): not certain either way,
+      // so the part is doubtful: a cover rule using it is still read, and a decoy using it cannot hide a cover.
+      if (/::|:(?:before|after|first-line|first-letter)(?![A-Za-z0-9_-])/i.test(list)) d.doubtful = true;
     }
     return true;
   }
