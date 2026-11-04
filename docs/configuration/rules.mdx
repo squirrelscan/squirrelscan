@@ -231,6 +231,16 @@ enable = ["core/*", "social/*"]  # All core and social rules
 disable = ["core/og-tags", "social/og-image-size", "social/og-url-match"]  # Except the Open Graph ones
 ```
 
+### Unknown entries
+
+An `enable` or `disable` entry that matches no rule does nothing, which usually means a typo. `squirrel audit` prints one warning on stderr naming every such entry in both lists, with the closest rule id when one is near. The audit itself runs unchanged.
+
+```text
+Warning: no rule matches "eeat/nope" in [rules] disable; "crawl/robot-txt" in [rules] disable (did you mean "crawl/robots-txt"?). Ids look like category/rule and globs like eeat/* work; ids are listed at https://docs.squirrelscan.com/rules.
+```
+
+A `category/*` glob for a real category, such as `eeat/*`, never warns. Only entries in `squirrel.toml` are checked: `--rule-include` and `--rule-exclude` already reject an unknown category before the crawl. To waive a rule for some urls or items only, use an [`[[ignore]]` table](/configuration/ignore) instead of `disable`.
+
 ### Retired rules
 
 `content/quality` and `ai/ai-content` are retired: they never load, whatever `enable` says, so a `disable` entry for either one does nothing and can be removed.

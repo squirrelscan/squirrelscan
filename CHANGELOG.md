@@ -17,6 +17,14 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- `squirrel audit` warns once on stderr when an entry in `[rules] enable` or `disable` matches no rule, naming each entry with the closest rule id. The audit is otherwise unchanged. A signed-in audit also prints a `Cloud` line with what cloud checks cost (#1587)
+
+### Fixed
+
+- `squirrel init` writes a blank line between `[crawler.headers]` and `[rules]` (and before every table), and comments `[project] domains` and `[rules]`: ids are `category/rule`, globs like `eeat/*` work, `[[ignore]]` waives per url or rule (#1587)
+
 ## v0.0.163 (2026-11-04)
 
 Security-rule hardening from the v0.0.162 reviews: the fake-auth overlay rule reads namespaced selectors and no longer lets an invalid-looking selector hide a cover, `security/leaked-secrets` finds a real JWT behind decoy segments, and every class consumer splits on HTML whitespace only.

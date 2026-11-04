@@ -26,6 +26,7 @@ import {
 import { AUDIT_LEVEL_PRESETS } from "@squirrelscan/core-contracts/audit-levels";
 import { isAuditFailureReasonCode } from "@squirrelscan/core-contracts/failure-reason";
 import { fullScanHint } from "@squirrelscan/report";
+import { loadAllRules } from "@squirrelscan/rules";
 import { isValidHeaderHost } from "@squirrelscan/utils/headers";
 import { ownHostsPinned } from "@squirrelscan/utils/public-egress";
 import { defineCommand } from "citty";
@@ -71,6 +72,10 @@ import {
 } from "@/audit/rule-filter";
 import { preflightRuleOptions } from "@/audit/rule-options-preflight";
 import { stopInterruptedCrawls } from "@/audit/stop-interrupted-crawl";
+import {
+  findUnknownRulePatterns,
+  formatUnknownRuleWarning,
+} from "@/audit/unknown-rule-patterns";
 import { emitRedirectedOutcome, resolveAuditStart } from "@/cli/start-redirect";
 import { emitUnreachableOutcome, unreachableOutcome } from "@/cli/unreachable";
 import { findConfigFile, getGlobalConfigPath, loadConfig } from "@/config";
@@ -135,6 +140,7 @@ import {
   resetDateLabel,
   upgradeUrl,
 } from "@/lib/upgrade";
+import { RULE_CATEGORY_VALUES } from "@/rules/categories";
 import { getApiUrl } from "@/self/api";
 import {
   API_TOKEN_ENV_VAR,
@@ -1634,6 +1640,26 @@ export const audit = defineCommand({
         }
       }
 
+      // #1587: an `enable`/`disable` entry in squirrel.toml that matches no rule
+      // is a typo that leaves the rule running; warn once, never fail.
+      {
+        const registry = loadAllRules({ includeOptIn: true });
+        const ids = [...registry.keys()];
+        const unknownWarning = formatUnknownRuleWarning(
+          findUnknownRulePatterns(
+            config.rules.disable,
+            ids,
+            RULE_CATEGORY_VALUES
+          ),
+          findUnknownRulePatterns(
+            config.rules.enable,
+            ids,
+            RULE_CATEGORY_VALUES
+          )
+        );
+        if (unknownWarning) console.error(fmt.yellow(unknownWarning));
+      }
+
       // A rule option of the wrong type fails the audit once its rule runs,
       // after the crawl and the run registration: stop before either, naming
       // the table and the key. Options that change nothing only warn. pub#510
@@ -1768,6 +1794,13 @@ export const audit = defineCommand({
             kv(
               "Account",
               `${accountLabel} · ${fmt.bold(formatBalance(balance.total, unlimitedCredits))} credits`
+            );
+            // #1587: say plainly that cloud checks are on and what they cost.
+            kv(
+              "Cloud",
+              unlimitedCredits
+                ? "checks on (unmetered account)"
+                : `checks on · ${AUDIT_BASE_CREDITS} credits + ${AUDIT_PAGE_CREDITS} per audited page (--offline runs local-only for free)`
             );
           }
         } catch (error) {

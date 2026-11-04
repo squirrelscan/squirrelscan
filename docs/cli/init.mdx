@@ -24,6 +24,8 @@ This creates `squirrel.toml` in your current directory.
 The generated config contains all available settings with sensible defaults:
 
 ```toml
+# Extra hostnames the crawl may follow (example.com also allows its subdomains).
+# Example: domains = ["example.com"]. Empty means the seed URL domain only.
 [project]
 domains = []
 
@@ -50,6 +52,11 @@ use_cache_control = true
 max_staleness_seconds = 86400
 
 [crawler.headers]
+
+# Rule ids look like category/rule (for example security/csp). Globs work: eeat/* is a whole category.
+# An id or glob that matches no rule is reported as a warning when you audit.
+# List ids at https://docs.squirrelscan.com/rules. disable wins over enable.
+# To waive a rule for some urls or items only, use an [[ignore]] table instead.
 [rules]
 enable = [ "*" ]
 disable = []
@@ -87,6 +94,7 @@ enabled = false
 feed_ttl_hours = 24
 
 [intel.providers]
+
 [integrity.cloaking_probe]
 enabled = false
 max_pages = 10
