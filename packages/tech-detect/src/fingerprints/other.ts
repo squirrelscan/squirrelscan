@@ -307,6 +307,10 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
         "src|srcset|data-src|poster|href",
         String.raw`https:\/\/(?!your)[a-z0-9]{20}\.supabase\.co\/(?:storage|rest|auth|realtime|functions|graphql)\/v1`,
       ),
+      // A bare project origin in a `<link href>`: a `preconnect` or `dns-prefetch` names the origin with no /rest/v1 path. Only a
+      // link whose `rel` loads or connects counts (#1539), so `alternate` and `canonical` do not; the ref is not a placeholder
+      // or one repeated character.
+      resourceAttr("link", "href", String.raw`https:\/\/(?!your)(?!([a-z0-9])\1{19}\.)[a-z0-9]{20}\.supabase\.co\/?$`),
       {
         type: "html",
         pattern:
