@@ -200,7 +200,7 @@ function linkLoads(tag: string): boolean {
   const rel = parseTagAttributes(tag.length > MAX_TAG_CHARS ? tag.slice(0, MAX_TAG_CHARS) : tag, LINK_REL).get("rel");
   if (!rel) return false;
   // HTML ASCII whitespace separates the tokens, as in a browser.
-  for (const token of rel.slice(0, 256).split(/[ \t\n\f\r]+/)) if (LOADING_LINK_RELS.has(token.toLowerCase())) return true;
+  for (const token of rel.split(/[ \t\n\f\r]+/)) if (LOADING_LINK_RELS.has(token.toLowerCase())) return true;
   return false;
 }
 
