@@ -108,3 +108,43 @@ describe("a hostile origin in a loaded report is never emitted (#1406)", () => {
     expect(techLocalOnlyNote(r.technologies as never)).toBeNull();
   });
 });
+
+describe("a hostile source, truncated reason or first-scan in a loaded report is never emitted (#1406)", () => {
+  const evil = 'x"/><injected/><!--';
+  const loaded = (over: object): AuditReport =>
+    ({
+      ...report([item("react")]),
+      technologies: { ...base, items: [item("react")], ...over },
+    }) as unknown as AuditReport;
+
+  test("xml and llm open tags carry only closed-set values", () => {
+    for (const over of [
+      { source: evil },
+      { source: "local", truncated: { reasons: [evil, "script-limit"], scripts: 1 } },
+      { source: "cloud", firstScan: evil },
+    ]) {
+      for (const out of [String(renderXml(loaded(over))), String(renderLlm(loaded(over)))]) {
+        expect(out).not.toContain("<injected");
+        expect(out).not.toContain("<!--");
+      }
+    }
+  });
+
+  test("valid values are kept, hostile reasons dropped", () => {
+    const out = String(
+      renderXml(loaded({ source: "local", truncated: { reasons: [evil, "script-limit"], scripts: 1 } })),
+    );
+    expect(out).toContain('<technologies source="local" truncated="script-limit">');
+    const llm = String(renderLlm(loaded({ source: "cloud", firstScan: evil, truncated: undefined })));
+    expect(llm).toContain('<technologies source="cloud" first-scan="false"');
+    expect(String(renderLlm(loaded({ source: evil })))).toContain('<technologies first-scan="false"');
+  });
+
+  test("the summary note ignores a reason outside the set", () => {
+    const note = techChangeSummary(
+      loaded({ source: "local", truncated: { reasons: [evil], scripts: 1 } }).technologies as never,
+    );
+    expect(note).not.toContain("undefined");
+    expect(note).not.toContain("<injected");
+  });
+});
