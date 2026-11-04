@@ -13,7 +13,7 @@ import { detachedList } from "../src/shared/detach";
 
 const PAGES = 100;
 const PAD = 2_000_000;
-const LIMIT_MB = 40;
+const MARGIN_MB = 12;
 const url = (i: number) => `https://shop.example/p${i}`;
 
 /** A page of small attribute values inside about 1 MB of comment padding and inline script. */
@@ -23,6 +23,18 @@ function page(i: number): string {
   const anchors = Array.from({ length: 30 }, (_, k) => `<h2 id="sec-${i}-${k}">S</h2><a href="#sec-${i}-${k}">go</a>`).join("");
   const scripts = Array.from({ length: 20 }, (_, k) => `<script src="https://cdn${k}.example/p${i}/app-${k}.js"></script>`).join("");
   return `<!doctype html><html><head><title>P${i}</title><link rel="stylesheet" href="https://static.example/p${i}/theme.css"><style>:root{--brand-${i}:red}</style>${scripts}</head><body class="theme-${i} wide">${pad}${script}<nav>n</nav>${anchors}<footer>f</footer></body></html>`;
+}
+
+/** About 1 MB of comment around many small values: 500 ids and fragments, 100 stylesheets, css variables and body classes, 100 scripts. */
+function heavyPage(i: number): string {
+  const pad = `<!-- ${"padding ".repeat(1_000_000 / 8)}-->`;
+  const n = 100;
+  const links = Array.from({ length: n }, (_, k) => `<link rel="stylesheet" href="https://static.example/p${i}/theme-${k}.css">`).join("");
+  const vars = Array.from({ length: n }, (_, k) => `--v${i}-${k}:1;`).join("");
+  const scripts = Array.from({ length: n }, (_, k) => `<script src="https://cdn${k}.example/p${i}/app-${k}.js"></script>`).join("");
+  const classes = Array.from({ length: 50 }, (_, k) => `c${i}-${k}`).join(" ");
+  const anchors = Array.from({ length: 500 }, (_, k) => `<h2 id="section-heading-${i}-${k}">S</h2><a href="#section-heading-${i}-${k}">go</a><a name="legacy-${i}-${k}"></a>`).join("");
+  return `<!doctype html><html><head><title>P${i}</title>${links}<style>:root{${vars}}</style>${scripts}</head><body class="${classes}">${pad}<nav>n</nav>${anchors}<footer>f</footer></body></html>`;
 }
 
 const heapMb = (): number => {
@@ -44,33 +56,35 @@ const copied: Record<string, Extract> = {
 };
 
 /** Heap kept by holding `extract`'s result for PAGES freshly parsed pages (the document itself is dropped each time). */
-function retained(extract: Extract): number {
-  for (let i = 0; i < 10; i++) extract(parsePage(page(i), url(i)), i);
+function retained(extract: Extract, build: (i: number) => string = page): number {
+  for (let i = 0; i < 10; i++) extract(parsePage(build(i), url(i)), i);
   const base = heapMb();
   const kept: unknown[] = [];
-  for (let i = 0; i < PAGES; i++) kept.push(extract(parsePage(page(i), url(i)), i));
+  for (let i = 0; i < PAGES; i++) kept.push(extract(parsePage(build(i), url(i)), i));
   const grown = heapMb() - base;
   expect(kept.length).toBe(PAGES);
   return grown;
 }
 
+/** Heap kept by holding nothing of the page but its index: what parsing N padded pages alone leaves behind. */
+const parseOnly = (): number => retained((_p, i) => i);
+
 // The collector's secrets scan serialises the document first, which flattens attribute strings, so a build through
 // `buildCollectedPageSignal` hides most of this on some engine versions. Measuring the fields off an unserialised document
-// shows what the copy is for; the raw extractor is the control that the test can see retention at all.
+// shows what the copy is for. Each field is held to the parse-only heap (plus a margin for the copy's own strings), and the raw
+// extractor is the control that the fixture can see retention at all, so removing a copy fails its own test.
 describe("a collected signal field does not keep its page", () => {
   for (const field of ["scriptSrcs", "fingerprint", "anchors"]) {
-    test(`${field}: the copy keeps under ${LIMIT_MB} MB of ${PAGES} pages of about ${(PAD * 1.25) / 1e6} MB each`, () => {
-      const grown = retained(copied[field]!);
-      expect(grown, `${field} copy kept ${grown.toFixed(1)} MB`).toBeLessThan(LIMIT_MB);
-    }, 180_000);
+    test(`${field}: the copy keeps close to the parse-only heap, the uncopied field keeps clearly more`, () => {
+      const base = parseOnly();
+      const copy = retained(copied[field]!, heavyPage);
+      const uncopied = retained(raw[field]!, heavyPage);
+      const floor = Math.max(base, 0);
+      const msg = `${field}: parse-only ${base.toFixed(1)} MB, copy ${copy.toFixed(1)} MB, uncopied ${uncopied.toFixed(1)} MB`;
+      expect(copy, msg).toBeLessThan(floor + MARGIN_MB);
+      expect(uncopied, msg).toBeGreaterThan(copy + MARGIN_MB);
+    }, 300_000);
   }
-
-  test("control: the uncopied script sources do keep their pages", () => {
-    // a ratio against the copy, not an absolute size: a runtime that flattens strings earlier shrinks both sides
-    const grown = retained(raw.scriptSrcs!);
-    const copy = retained(copied.scriptSrcs!);
-    expect(grown, `raw kept ${grown.toFixed(1)} MB, the copy ${copy.toFixed(1)} MB`).toBeGreaterThan(copy * 2);
-  }, 180_000);
 
   test("the collector's record carries the copied fields", () => {
     const html = page(1);
