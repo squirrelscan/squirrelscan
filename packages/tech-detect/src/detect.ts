@@ -248,44 +248,54 @@ const JS_MIME_ESSENCES: ReadonlySet<string> = new Set([
 ]);
 /**
  * Types a cache, CDN, delay plugin or consent tool gives a loader it runs itself later. A browser alone does not run them, but the
- * page does, so their text stays evidence (#1435, #1550). Every other type that is not JavaScript is data. Each family is a
- * whole-string, linear match on the (at most 2048 character) type, named after the tool that writes it:
+ * page does, so their text stays evidence (#1435, #1550). Every other type that is not JavaScript is data, and the list is
+ * explicit: a type is matched whole (trimmed, ASCII case-insensitive), never by a word in it, because a custom type such as
+ * `text/x-lazy-cache` or `application/javascript-example` holds data whatever its name says. An unknown wrapper type is cut until
+ * corpus evidence adds it here. Each name is the one its tool writes:
  *
- * - {@link DEFERRED_LOADER_TYPE}: exact names. LiteSpeed Cache (`litespeed/javascript`), a consent tool's `text/plain` and
- *   Partytown's `text/partytown`, NitroPack (`nitropack/inlinescript`, `nitropack/javascript`), `o/js-lzl` and the bundler type
- *   `__bundler/ext_resources` (a JSON list of the external scripts a standalone-HTML bundler loads), both seen in the PH corpus
- *   with no plugin named, and `text/babel` (Babel standalone compiles and runs it).
- * - {@link ROCKET_LOADER_TYPE}: Cloudflare Rocket Loader's `<hash>-text/javascript` and, for a module, `<hash>-module`.
- * - {@link DELAY_WORD_TYPE}: a name that says the script is held back and run later: WP Rocket (`rocketlazyloadscript`,
- *   `text/rocketlazyloadscript`), Perfmatters (`pmdelayedscript`), SiteGround Optimizer (`text/sg-delayed-inline`) and the
- *   other `lazy`/`delay`/`defer` names the corpus holds (`bv_inline_delayed_js`, `pslazyscript`, `airfleetlazyloadscript`,
- *   `lazyjs`, `text/prosyo-later`).
- * - {@link JS_WORD_TYPE}: a `javascript` or `ecmascript` word set off by `/`, `_`, `-` or `.`, which a consent blocker writes
- *   when it parks a script (`javascript/blocked`, a cookie-consent plugin; `text/javascript-blocked`).
+ * - WP Rocket: `rocketlazyloadscript`, `text/rocketlazyloadscript`. Perfmatters: `pmdelayedscript`. SiteGround Optimizer:
+ *   `text/sg-delayed-inline`. NitroPack: `nitropack/inlinescript`, `nitropack/javascript`. LiteSpeed Cache: `litespeed/javascript`.
+ * - Delay plugins seen in the PH corpus with no plugin named: `bv_inline_delayed_js`, `pslazyscript`, `airfleetlazyloadscript`,
+ *   `lazyjs`, `text/prosyo-later`, `o/js-lzl`.
+ * - Consent blockers: `javascript/blocked`, `text/javascript-blocked`, `text/javascript_blocked`, `application/ecmascript-blocked`,
+ *   `text/blocked`, and a consent tool's `text/plain`. Partytown: `text/partytown`.
+ * - Babel standalone compiles and runs `text/babel`; `__bundler/ext_resources` is a JSON list of the external scripts a
+ *   standalone-HTML bundler loads.
+ * - Cloudflare Rocket Loader ({@link ROCKET_LOADER_TYPE}): `<hash>-text/javascript`, `<hash>-application/javascript` and, for a
+ *   module, `<hash>-module`, where the hash is hex.
  *
- * The last two are skipped for a type with a MIME parameter or whitespace (`text/javascript; charset=utf-8` is data, see
- * {@link scriptTypeRuns}) and for a type that names data: {@link DATA_TYPE_HINT} (`json`, `template`, `tmpl` anywhere, or a whole
- * token `config`, `data`, `queue`, `list`, `settings`, `state`, `manifest`, `schema`, `store` or `lazysizes`, set off by `/`,
- * `_`, `.`, `+`, `-` or an end), so a custom data type that happens to hold a delay word or a javascript word
- * (`application/x-lazy-config`, `text/x-delayed-queue`, `text/javascript-data`, `text/x-lazysizes`) stays cut. The delay-word
- * family also skips every `application/` type (`application/blocked`, `application/vnd.delayed`: that tree is data; the wrappers
- * above are bare names or `text/`, and a Rocket Loader `application/javascript` has its own family). The javascript-word family
- * matches a bare `javascript` or `ecmascript` on purpose, because a consent tool writes it to park a script even though a
- * browser treats it as data.
+ * A type with a MIME parameter or a space (`text/javascript; charset=utf-8`) matches none of these and is data, see
+ * {@link scriptTypeRuns}.
  */
-const DEFERRED_LOADER_TYPE =
-  /^(?:litespeed\/javascript|text\/(?:plain|partytown|babel)|nitropack\/(?:inline)?script|nitropack\/javascript|o\/js-lzl|__bundler\/ext_resources)$/;
+const DEFERRED_LOADER_TYPES: ReadonlySet<string> = new Set([
+  "rocketlazyloadscript",
+  "text/rocketlazyloadscript",
+  "pmdelayedscript",
+  "text/sg-delayed-inline",
+  "nitropack/inlinescript",
+  "nitropack/javascript",
+  "litespeed/javascript",
+  "bv_inline_delayed_js",
+  "pslazyscript",
+  "airfleetlazyloadscript",
+  "lazyjs",
+  "text/prosyo-later",
+  "o/js-lzl",
+  "javascript/blocked",
+  "text/javascript-blocked",
+  "text/javascript_blocked",
+  "application/ecmascript-blocked",
+  "text/blocked",
+  "text/plain",
+  "text/partytown",
+  "text/babel",
+  "__bundler/ext_resources",
+]);
 const ROCKET_LOADER_TYPE = /^[0-9a-f]{8,64}-(?:module|(?:text|application)\/(?:x-)?(?:java|ecma)script)$/;
-const DELAY_WORD_TYPE = /lazy|delay|defer|(?:^|[/_.-])later(?:$|[/_.-])|(?:^|[/_.-])blocked(?:$|[/_.-])/;
-const JS_WORD_TYPE = /(?:^|[/_.-])(?:java|ecma)script(?:$|[/_.-])/;
-const DATA_TYPE_HINT = /json|templat|tmpl|(?:^|[/_.+-])(?:config|data|queue|list|settings|state|manifest|schema|store|lazysizes)(?:$|[/_.+-])/;
-const TYPE_PARAMETER = /[;\s]/;
 
-/** Whether a type that is not JavaScript is a wrapper a tool runs later: see {@link DEFERRED_LOADER_TYPE}. */
+/** Whether a type that is not JavaScript is a wrapper a tool runs later: see {@link DEFERRED_LOADER_TYPES}. */
 function isDeferredLoaderType(type: string): boolean {
-  if (DEFERRED_LOADER_TYPE.test(type) || ROCKET_LOADER_TYPE.test(type)) return true;
-  if (TYPE_PARAMETER.test(type) || DATA_TYPE_HINT.test(type)) return false;
-  return (!type.startsWith("application/") && DELAY_WORD_TYPE.test(type)) || JS_WORD_TYPE.test(type);
+  return DEFERRED_LOADER_TYPES.has(type) || ROCKET_LOADER_TYPE.test(type);
 }
 const isAsciiSpace = (code: number): boolean => code === 9 || code === 10 || code === 12 || code === 13 || code === 32;
 
