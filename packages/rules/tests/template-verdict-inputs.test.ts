@@ -333,15 +333,34 @@ function templateRuleReads(): Map<string, string[]> {
     if (!/verdictScope:\s*"template"/.test(text)) continue;
     const id = text.match(/\bid:\s*"([^"]+)"/)?.[1];
     if (!id) throw new Error(`no rule id in ${file}`);
-    const reads = new Set(scanReads(text));
-    const helpers = localHelperFiles(text, file);
-    for (const read of [...reads]) {
-      const helperFile = read.startsWith("helper:") ? helpers.get(read.slice(7)) : undefined;
-      if (helperFile) for (const r of scanReads(readFileSync(helperFile, "utf-8"))) reads.add(r);
-    }
-    out.set(id, [...reads].sort());
+    out.set(id, ruleReads(text, file));
   }
   return out;
+}
+
+/** The reads of one rule source, plus those of the package helpers it hands its document to. */
+function ruleReads(text: string, file: string): string[] {
+  const reads = new Set(scanReads(text));
+  const helpers = localHelperFiles(text, file);
+  for (const read of [...reads]) {
+    const helperFile = read.startsWith("helper:") ? helpers.get(read.slice(7)) : undefined;
+    if (helperFile) for (const r of scanReads(readFileSync(helperFile, "utf-8"))) reads.add(r);
+  }
+  return [...reads].sort();
+}
+
+/**
+ * The reads that differ from the rule's REVIEWED entry, in both directions: a
+ * read nobody reviewed ("+") and a reviewed entry the rule no longer makes ("-").
+ * Empty means the declaration matches the source.
+ */
+function reviewDifference(id: string, reads: string[]): string[] {
+  const reviewed = REVIEWED[id] ?? { keyed: [], unkeyed: [] };
+  const declared = new Set([...reviewed.keyed, ...reviewed.unkeyed]);
+  return [
+    ...reads.filter((r) => !declared.has(r)).map((r) => `+${r}`),
+    ...[...declared].filter((r) => !reads.includes(r)).map((r) => `-${r}`),
+  ];
 }
 
 describe("template-declared rules read only reviewed inputs (#614)", () => {
@@ -408,6 +427,29 @@ describe("template-declared rules read only reviewed inputs (#614)", () => {
     // A helper from this package is scanned too: getCWVHints reads preconnect links.
     expect(scanned.get("perf/preconnect")).toContain('link[rel="preconnect"]');
   });
+
+  test("a read added to a declared rule without updating its declaration fails the scan (#585)", () => {
+    // Real sources, edited in memory: nothing on disk or on a prototype changes.
+    const cases: Array<[id: string, file: string, injected: string, expected: string]> = [
+      ["a11y/zoom-disabled", "a11y/zoom-disabled.ts", `el.getAttribute("data-undeclared");`, "+@data-undeclared"],
+      ["core/doctype", "core/doctype.ts", `el.querySelector("aside.fake-input");`, "+aside.fake-input"],
+      ["perf/preconnect", "performance/preconnect.ts", `el.matches(undeclaredSelector);`, "+matches:undeclaredSelector"],
+    ];
+    for (const [id, rel, injected, expected] of cases) {
+      const file = sourceFiles(SRC).find((f) => f.endsWith(`/${rel}`));
+      expect(file).toBeDefined();
+      const original = readFileSync(file!, "utf-8");
+      // Unmodified source: the declaration holds.
+      expect(reviewDifference(id, ruleReads(original, file!))).toEqual([]);
+      // The same source with one undeclared read appended: the scan reports it.
+      const mutated = `${original}\nfunction fakeUndeclaredRead(el: any) { ${injected} }\n`;
+      expect(reviewDifference(id, ruleReads(mutated, file!))).toEqual([expected]);
+    }
+    // The other direction: a declared read the rule stopped making is stale.
+    const zoom = sourceFiles(SRC).find((f) => f.endsWith("/a11y/zoom-disabled.ts"))!;
+    const stripped = readFileSync(zoom, "utf-8").replaceAll("getAttribute(", "noop(");
+    expect(reviewDifference("a11y/zoom-disabled", ruleReads(stripped, zoom)).some((d) => d.startsWith("-"))).toBe(true);
+  }, 30_000);
 
   test("the VerdictScope doc names every rule with an UNKEYED read", () => {
     const types = readFileSync(join(SRC, "types.ts"), "utf-8");
