@@ -40,6 +40,8 @@ import {
   getGroupName,
   getSubcategoryName,
   groupTechnologies,
+  isLocalOnlyTech,
+  TECH_LOCAL_MARK,
   itemsNotListed,
   itemsNotListedLine,
   passedRuleScope,
@@ -607,7 +609,10 @@ function printTechnologies(tech: ReportTechnologies): void {
   log("");
   for (const group of groupTechnologies(tech.items)) {
     const names = group.items
-      .map((t) => `${t.name}${t.version ? fmt.dim(` ${t.version}`) : ""}`)
+      .map(
+        (t) =>
+          `${t.name}${t.version ? fmt.dim(` ${t.version}`) : ""}${isLocalOnlyTech(t) ? fmt.dim(` ${TECH_LOCAL_MARK}`) : ""}`
+      )
       .join(fmt.dim(" · "));
     log(`${group.emoji} ${fmt.bold(group.label.padEnd(22))} ${names}`);
   }

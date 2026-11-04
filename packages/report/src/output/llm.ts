@@ -32,7 +32,7 @@ import { domainAgeYears } from "../site-metadata";
 import { lockedRulesMessage } from "../locked-rules";
 import { privateTargetLine, privateTargetSkippedRules } from "../private-target";
 import { notCheckedLine, notCheckedRules } from "../not-checked";
-import { techOpenTag } from "../technologies";
+import { techOpenTag, techOriginAttr } from "../technologies";
 import { editorSummaryView } from "../editor-summary";
 import { collectInfoChecks } from "../info-checks";
 import {
@@ -546,7 +546,7 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
     for (const t of tech.items) {
       const ver = t.version ? ` version="${escapeXml(t.version)}"` : "";
       lines.push(
-        `${indent(1)}<tech name="${escapeXml(t.name)}" cat="${escapeXml(t.category)}"${ver}${t.origin ? ` origin="${t.origin}"` : ""}/>`,
+        `${indent(1)}<tech name="${escapeXml(t.name)}" cat="${escapeXml(t.category)}"${ver}${techOriginAttr(t)}/>`,
       );
     }
     lines.push("</technologies>");

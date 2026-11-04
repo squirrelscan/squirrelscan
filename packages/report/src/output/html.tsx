@@ -120,7 +120,7 @@ import {
   structureRows,
   structureTotalsLine,
 } from "../structure";
-import { groupTechnologies, techChangeSummary, techIconUrl } from "../technologies";
+import { groupTechnologies, isLocalOnlyTech, TECH_LOCAL_MARK, techChangeSummary, techIconUrl } from "../technologies";
 import type { AuditReport } from "../types";
 import { getPathname } from "../url";
 import { formatBytes, sanitizeUrl } from "../utils";
@@ -1553,6 +1553,9 @@ function SiteContext({ report, offline }: { report: AuditReport; offline: boolea
                             {t.name}
                             {t.version && (
                               <span className="text-muted-foreground">{t.version}</span>
+                            )}
+                            {isLocalOnlyTech(t) && (
+                              <span className="text-muted-foreground">{TECH_LOCAL_MARK}</span>
                             )}
                           </Badge>
                         ))}

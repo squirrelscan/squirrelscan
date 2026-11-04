@@ -52,7 +52,7 @@ import {
   structureRows,
   structureTotalsLine,
 } from "../structure";
-import { groupTechnologies, techChangeSummary } from "../technologies";
+import { groupTechnologies, isLocalOnlyTech, TECH_LOCAL_MARK, techChangeSummary } from "../technologies";
 import { SITE_PROFILE_NOTE, siteProfileFlags, siteProfileRows } from "../site-metadata";
 import { EDITOR_SUMMARY_NOTE, editorSummaryView, priorityEffortLabel } from "../editor-summary";
 import { getGroupName, getSubcategoryName, severityLabel } from "../categories";
@@ -413,7 +413,7 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
     write("");
     for (const group of groupTechnologies(tech.items)) {
       const names = group.items
-        .map((t) => `${t.name}${t.version ? ` v${t.version}` : ""}`)
+        .map((t) => `${t.name}${t.version ? ` v${t.version}` : ""}${isLocalOnlyTech(t) ? ` ${TECH_LOCAL_MARK}` : ""}`)
         .join(", ");
       write(`${group.emoji} ${group.label}: ${names}`);
     }
