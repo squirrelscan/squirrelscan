@@ -66,8 +66,10 @@ describe("a collected signal field does not keep its page", () => {
   }
 
   test("control: the uncopied script sources do keep their pages", () => {
+    // a ratio against the copy, not an absolute size: a runtime that flattens strings earlier shrinks both sides
     const grown = retained(raw.scriptSrcs!);
-    expect(grown, `raw kept ${grown.toFixed(1)} MB`).toBeGreaterThan(LIMIT_MB);
+    const copy = retained(copied.scriptSrcs!);
+    expect(grown, `raw kept ${grown.toFixed(1)} MB, the copy ${copy.toFixed(1)} MB`).toBeGreaterThan(copy * 2);
   }, 180_000);
 
   test("the collector's record carries the copied fields", () => {
