@@ -262,6 +262,8 @@ function isAlwaysRefusedIpv6(g: number[]): boolean {
   // RFC 6052 offsets, so the embedded address cannot be read reliably.
   if (g0 === 0x64 && g[1] === 0xff9b && g[2] === 1) return true;
   if (METADATA_IPV6.some((m) => m.every((x, i) => g[i] === x))) return true;
+  // ISATAP (#1577): an identifier `0:5efe:a.b.c.d` or `200:5efe:a.b.c.d` embedding a link-local or metadata IPv4 is refused under allowPrivate too.
+  if ((g[4] === 0 || g[4] === 0x200) && g[5] === 0x5efe && isAlwaysRefusedIpv4(octetsOf(g[6] ?? 0, g[7] ?? 0))) return true;
   const v4 = embeddedIpv4(g);
   return v4 !== null && isAlwaysRefusedIpv4(v4);
 }
@@ -277,7 +279,8 @@ function isNonPublicIpv6(g: number[]): boolean {
   if (g0 === 0x64 && g[1] === 0xff9b && g[2] === 1) return true; // local-use NAT64
   // ISATAP (#1577): an interface identifier `0:5efe:a.b.c.d` or `200:5efe:a.b.c.d` on any prefix embeds an IPv4 address, judged as
   // that address, as `isSpecialUseIpv6` does for the policy layer.
-  if ((g[4] === 0 || g[4] === 0x200) && g[5] === 0x5efe) return isNonPublicIpv4(octetsOf(g[6] ?? 0, g[7] ?? 0));
+  // It does not return early: a 6to4 prefix can carry an ISATAP identifier, and the prefix's embedded address is judged too.
+  if ((g[4] === 0 || g[4] === 0x200) && g[5] === 0x5efe && isNonPublicIpv4(octetsOf(g[6] ?? 0, g[7] ?? 0))) return true;
   const v4 = embeddedIpv4(g);
   return v4 !== null && isNonPublicIpv4(v4);
 }
