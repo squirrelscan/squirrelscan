@@ -1,6 +1,6 @@
 // #1550 follow-up: a delay or consent plugin parks a real loader in a script type the browser does not run, and the page runs it
 // later. Those wrapper types stay evidence (a Clarity or GTM loader in one detects); JSON, JSON-LD, import maps, templates and
-// comments stay cut. Wrapper names are the ones the plugins write: WP Rocket, Perfmatters, NitroPack, SiteGround Optimizer,
+// comments stay cut. Wrapper names are an explicit list, the ones the plugins write: WP Rocket, Perfmatters, NitroPack, SiteGround Optimizer,
 // Cloudflare Rocket Loader, a cookie-consent blocker, Babel standalone, and delay plugins seen in the PH corpus.
 
 import { describe, expect, test } from "bun:test";
@@ -50,6 +50,8 @@ describe("the same text in data stays cut", () => {
     "text/x-custom", "text/jsx", "text/typescript", "text/javascript1.6", "text/javascript;charset=utf-8", "text/javascript; charset=utf-8",
     "application/json+lazyload", "application/lazy-config+json", "application/javascript-template", "text/x-lazy-template", "text/x-handlebars",
     // A custom data type that happens to carry a delay word or a javascript word: a vendor URL held as data in it is not a detection.
+    // Only the exact wrapper names read as code, so none of these is one.
+    "text/x-lazy-cache", "application/javascript-example",
     "application/x-lazy-config", "text/x-delayed-queue", "text/x-deferred-data", "application/x-defer-config", "text/lazy-data",
     "application/vnd.delayed", "application/x-later-queue", "text/x-blocked-list", "application/blocked", "text/x-lazysizes",
     "application/x-javascript-config", "application/javascript-data", "text/javascript-data", "application/x-ecmascript-config",
@@ -64,12 +66,16 @@ describe("the same text in data stays cut", () => {
       expect(scriptTypeRuns(type)).toBe(false);
     });
   }
-  test("a guard word only counts as a whole token: a wrapper that merely contains one still reads", () => {
-    for (const type of ["pmdelayedscript_datalayer", "lazyloadstore", "text/delayed-javascript", "text/lazyload-metadata", "text/lazy-datasets"]) {
-      expect([type, scriptTypeRuns(type)]).toEqual([type, true]);
-    }
-    for (const type of ["text/lazyload-list-free", "text/lazy_data", "text/lazy.data", "lazy+data", "text/lazy-data-v2"]) {
+  test("a name that only contains a wrapper word is not a wrapper: the list is explicit", () => {
+    for (const type of ["pmdelayedscript_datalayer", "lazyloadstore", "text/delayed-javascript", "text/lazyload-metadata", "text/x-lazy-cache", "rocketlazyloadscript2", "xpslazyscript", "javascript/blocked-x", "text/javascript-later"]) {
       expect([type, scriptTypeRuns(type)]).toEqual([type, false]);
+    }
+  });
+  test("the exact Codex fixture: a youtube embed and a clarity URL held as data in text/x-lazy-cache are not detected", () => {
+    const body = '{"video":"https://www.youtube.com/embed/abc","loader":"https://www.clarity.ms/tag/abc"}';
+    for (const type of ["text/x-lazy-cache", "application/javascript-example"]) {
+      const found = ids(wrap(type, body));
+      expect([type, found.includes("clarity"), found.includes("youtube-embed")]).toEqual([type, false, false]);
     }
   });
   test("a comment and a template holding a wrapper script are cut", () => {
