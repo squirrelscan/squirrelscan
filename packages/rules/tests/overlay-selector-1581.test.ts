@@ -184,7 +184,10 @@ describe("an invalid functional pseudo argument or a selector after a pseudo-ele
     for (const s of DOUBTFUL) {
       expect(fires(`${COVER}.cover, ${s}{${STATIC}}`), s).toBe(true);
       expect(fires(`${COVER}@media screen{.cover, ${s}{${STATIC}}}`), `@media ${s}`).toBe(true);
+      expect(fires(`${COVER}@media screen{@media (min-width:1px){.cover, ${s}{${STATIC}}}}`), `nested @media ${s}`).toBe(true);
+      expect(nestedCover(`.cover{${FIXED};&, ${s}{${STATIC}}}`), `nested ${s}`).toBe(true);
       expect(fires(`.cover, ${s}{${FIXED}}`), `cover ${s}`).toBe(true);
+      expect(fires(`@media screen{.cover, ${s}{${FIXED}}}`), `cover @media ${s}`).toBe(true);
     }
   }, 30_000);
 
