@@ -9,6 +9,7 @@
 import type { Document, Element } from "linkedom";
 
 import { collectTextExcluding, tagExcluder } from "@squirrelscan/parser/extractors";
+import { CLASS_SPLIT } from "@squirrelscan/parser/dom";
 
 const SCRIPT_LIKE_TAGS = ["script", "style", "noscript"] as const;
 
@@ -101,7 +102,7 @@ function isScriptCodeOrUnrendered(el: Element): boolean {
   if (!className) return false;
   // split() over classList: linkedom exposes both, and the split is the cheaper
   // of the two on an element that usually has no interesting class at all.
-  return className.split(/\s+/).some(isCodeContainerClass);
+  return className.split(CLASS_SPLIT).some(isCodeContainerClass);
 }
 
 /**

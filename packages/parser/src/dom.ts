@@ -143,7 +143,8 @@ function cutNotices(cut: number[]): string[] {
 
 /** The five characters the HTML spec splits a class value on (tab, line feed, form feed, carriage return, space): not JavaScript's `\s`. */
 const isClassSpace = (code: number): boolean => code === 32 || code === 9 || code === 10 || code === 12 || code === 13;
-const CLASS_SPLIT = /[ \t\n\f\r]+/;
+/** Split a class value as HTML does; every consumer that tokenises `class` uses this, not `\s` (#1567). */
+export const CLASS_SPLIT = /[ \t\n\f\r]+/;
 
 /**
  * Make linkedom split a class value as HTML does (#1567). Its `className` setter splits on JavaScript's `\s`, which also holds NBSP,

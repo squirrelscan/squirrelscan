@@ -23,6 +23,8 @@
 // makes its own `commentRule()` pass, so an edit to the page between calls is
 // always seen.
 
+import { CLASS_SPLIT } from "@squirrelscan/parser/dom";
+
 type El = Element & { parentElement: El | null };
 
 // The page is attacker-controlled, so every walk and every split is bounded: a chain of thousands of
@@ -121,7 +123,7 @@ function tokensFrom(id: string | null, cls: string | null): Array<[string, "id" 
   if (id) out.push([id.slice(0, MAX_ID_CHARS).trim(), "id"]);
   if (cls) {
     let kept = 0;
-    for (const c of cls.slice(0, MAX_CLASS_CHARS).split(/\s+/)) {
+    for (const c of cls.slice(0, MAX_CLASS_CHARS).split(CLASS_SPLIT)) {
       if (!c) continue;
       out.push([c.length > MAX_TOKEN_CHARS ? c.slice(0, MAX_TOKEN_CHARS) : c, "class"]);
       if (++kept === MAX_CLASS_TOKENS) break;

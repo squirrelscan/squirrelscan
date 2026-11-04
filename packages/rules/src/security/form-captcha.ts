@@ -2,6 +2,7 @@
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 import { elementsWithAttribute } from "../shared/attribute-lookup";
+import { CLASS_SPLIT } from "@squirrelscan/parser/dom";
 
 // CAPTCHA provider detection patterns
 const CAPTCHA_PATTERNS = {
@@ -326,7 +327,7 @@ function getElementIdentifiers(el: Element): string[] {
   if (id) identifiers.push(id);
   const className = el.getAttribute("class");
   if (className) {
-    for (const cls of className.split(/\s+/)) {
+    for (const cls of className.split(CLASS_SPLIT)) {
       if (cls) identifiers.push(cls);
     }
   }
