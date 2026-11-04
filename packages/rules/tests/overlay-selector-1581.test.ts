@@ -60,11 +60,34 @@ const INVALID = [
   ".x::before .y",
   ".x::before > .y",
   ".x:before .y",
+  // two pseudo-elements, or an argument a pseudo-element does not take
+  "::before:is(.a)::after",
+  "::before:is(.a)::before",
+  "::before:where(.a)::part(x)",
+  "::first-line:is(.a)::after",
+  "::placeholder:is(.a)::before",
+  "::before::after",
+  "::part(x)::part(y)",
+  "::slotted(a)::first-line",
+  ":not(::before)",
+  ":not(:before)",
+  "::part()",
+  "::part(1)",
+  "::slotted()",
+  "::slotted(a, b)",
+  "::before:not(.a)",
 ];
 /** Names a browser may accept (Chrome does not support the media-state ones): read as undecided, never as an error. */
-const DOUBTFUL = [":nth-child(2n+1 of :bogus)", ":playing", ":muted", ":seeking", ":buffering", ":stalled", ":current(.a)", ":dir(foo)", ":nth-child(\\32 n)", ":nth-child(2n+1 Of .a)", ":lang(en, fr)", ':lang("en")', ':lang("")', ":lang(*-Latn)", "::part(x):first-child", "::slotted(a):hover", "::selection:hover", "::highlight(x):hover", "::view-transition-old(root):hover", ":paused", ":volume-locked"];
+const DOUBTFUL = ["::before:not(:is(.a))", "::after:not(:is(.a))", "::before:not(:where(.a))", "::marker:not(:is(.a))", "::before:not(:is(:hover))", ":nth-child(2n+1 of :bogus)", ":playing", ":muted", ":seeking", ":buffering", ":stalled", ":current(.a)", ":dir(foo)", ":nth-child(\\32 n)", ":nth-child(2n+1 Of .a)", ":lang(en, fr)", ':lang("en")', ':lang("")', ":lang(*-Latn)", "::part(x):first-child", "::slotted(a):hover", "::selection:hover", "::highlight(x):hover", "::view-transition-old(root):hover", ":paused", ":volume-locked"];
 /** Valid in Chrome (checked in headless Chrome 151). */
 const VALID = [
+  "::before::marker",
+  "::after::marker",
+  "::part(x)::before",
+  "::part(x y)",
+  "::part(x)::first-line",
+  "::slotted(a)::before",
+  "::slotted(a)::marker",
   ":nth-child(2n + 1)",
   ":nth-child(-n+3)",
   ":nth-child(even)",
@@ -161,4 +184,18 @@ describe("an invalid functional pseudo argument or a selector after a pseudo-ele
       expect(selectorListState(`::${el}:hover`, false), el).toBe("invalid");
     }
   });
+
+  test("a prelude of capital OF keywords is read in linear time", () => {
+    const time = (n: number): number => {
+      const started = performance.now();
+      fires(`${COVER}.cover, :nth-child(2n${" OF".repeat(n)}){${STATIC}}`);
+      return performance.now() - started;
+    };
+    time(2_000);
+    const small = Math.max(time(20_000), 5);
+    const large = time(80_000);
+    expect(large, `80k took ${large.toFixed(0)} ms`).toBeLessThan(1_500);
+    // linear is 4, quadratic is 16
+    expect(large / small, `${small.toFixed(0)} ms to ${large.toFixed(0)} ms`).toBeLessThan(10);
+  }, 60_000);
 });
