@@ -111,7 +111,7 @@ const SHADOW_ROOT: ReadonlySet<string> = new Set(["shadowrootmode", "shadowroot"
 const COMMENT_END = /--!?>/g;
 const RAW_TEXT_CLOSERS: ReadonlyMap<string, RegExp> = new Map([...RAW_TEXT_TAGS].map((name) => [name, new RegExp(`</${name}(?=[\\t\\n\\f\\r />])`, "gi")]));
 
-/** The fingerprints that match a comment on purpose though no pattern says `<!--`: Shopify's app block marker and Font Awesome's banner. */
+/** The fingerprints that match a comment on purpose though no pattern says `<!--`: Klaviyo's Shopify app block marker and Font Awesome's banner. */
 const COMMENT_EVIDENCE_IDS: ReadonlySet<string> = new Set(["klaviyo", "font-awesome"]);
 const commentCache = new WeakMap<TechFingerprint, boolean>();
 /** Whether a fingerprint reads HTML comments: a pattern that opens at `<!--`, or one of {@link COMMENT_EVIDENCE_IDS}. */
