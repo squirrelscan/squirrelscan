@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+## v0.0.167 (2026-11-05)
+
+Technology detection reads `shopify-payments` again: a corpus re-detect showed v0.0.165 had lost almost every detection of it, because its evidence sits in a JSON data script. Also the docs and tests behind the last two releases are tightened.
+
 ### Fixed
 
 - Technology detection: `shopify-payments` reads the text of data scripts again. #1550 cut it from every html detector, which hid the `"shopifyPaymentsEnabled":true` flag a Shopify storefront embeds as JSON (for example in `shopify-features`): 75 of 76 corpus detections were lost. The signature opts in per detector (`dataScripts`); comments and `<template>` content stay cut for it, and a vendor URL in a data script is still not a detection.
