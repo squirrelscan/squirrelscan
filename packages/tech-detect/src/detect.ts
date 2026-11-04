@@ -247,11 +247,39 @@ const JS_MIME_ESSENCES: ReadonlySet<string> = new Set([
   "text/x-javascript",
 ]);
 /**
- * Types a cache, CDN or consent tool gives a loader it runs itself later (LiteSpeed Cache, Cloudflare Rocket Loader's
- * `<hash>-text/javascript`, Partytown, a consent tool's `text/plain`; #1435). A browser alone does not run them, but the page does,
- * so their text stays evidence. Every other type that is not JavaScript is data (#1550).
+ * Types a cache, CDN, delay plugin or consent tool gives a loader it runs itself later. A browser alone does not run them, but the
+ * page does, so their text stays evidence (#1435, #1550). Every other type that is not JavaScript is data. Each family is a
+ * whole-string, linear match on the (at most 2048 character) type, named after the tool that writes it:
+ *
+ * - {@link DEFERRED_LOADER_TYPE}: exact names. LiteSpeed Cache (`litespeed/javascript`), a consent tool's `text/plain` and
+ *   Partytown's `text/partytown`, NitroPack (`nitropack/inlinescript`, `nitropack/javascript`), `o/js-lzl` and the bundler type
+ *   `__bundler/ext_resources` (a JSON list of the external scripts a standalone-HTML bundler loads), both seen in the PH corpus
+ *   with no plugin named, and `text/babel` (Babel standalone compiles and runs it).
+ * - {@link ROCKET_LOADER_TYPE}: Cloudflare Rocket Loader's `<hash>-text/javascript` and, for a module, `<hash>-module`.
+ * - {@link DELAY_WORD_TYPE}: a name that says the script is held back and run later: WP Rocket (`rocketlazyloadscript`,
+ *   `text/rocketlazyloadscript`), Perfmatters (`pmdelayedscript`), SiteGround Optimizer (`text/sg-delayed-inline`) and the
+ *   other `lazy`/`delay`/`defer` names the corpus holds (`bv_inline_delayed_js`, `pslazyscript`, `airfleetlazyloadscript`,
+ *   `lazyjs`, `text/prosyo-later`).
+ * - {@link JS_WORD_TYPE}: a `javascript` or `ecmascript` word set off by `/`, `_`, `-` or `.`, which a consent blocker writes
+ *   when it parks a script (`javascript/blocked`, a cookie-consent plugin; `text/javascript-blocked`).
+ *
+ * The last two are skipped for a type with a MIME parameter or whitespace (`text/javascript; charset=utf-8` is data, see
+ * {@link scriptTypeRuns}) and for a type that names data (`json`, `template`, `tmpl`): the JSON family and templates stay cut.
  */
-const DEFERRED_LOADER_TYPE = /^(?:litespeed\/javascript|text\/(?:plain|partytown)|[0-9a-f]{8,64}-text\/javascript)$/;
+const DEFERRED_LOADER_TYPE =
+  /^(?:litespeed\/javascript|text\/(?:plain|partytown|babel)|nitropack\/(?:inline)?script|nitropack\/javascript|o\/js-lzl|__bundler\/ext_resources)$/;
+const ROCKET_LOADER_TYPE = /^[0-9a-f]{8,64}-(?:module|(?:text|application)\/(?:x-)?(?:java|ecma)script)$/;
+const DELAY_WORD_TYPE = /lazy|delay|defer|(?:^|[/_.-])later(?:$|[/_.-])|(?:^|[/_.-])blocked(?:$|[/_.-])/;
+const JS_WORD_TYPE = /(?:^|[/_.-])(?:java|ecma)script(?:$|[/_.-])/;
+const DATA_TYPE_HINT = /json|templat|tmpl/;
+const TYPE_PARAMETER = /[;\s]/;
+
+/** Whether a type that is not JavaScript is a wrapper a tool runs later: see {@link DEFERRED_LOADER_TYPE}. */
+function isDeferredLoaderType(type: string): boolean {
+  if (DEFERRED_LOADER_TYPE.test(type) || ROCKET_LOADER_TYPE.test(type)) return true;
+  if (TYPE_PARAMETER.test(type) || DATA_TYPE_HINT.test(type)) return false;
+  return DELAY_WORD_TYPE.test(type) || JS_WORD_TYPE.test(type);
+}
 const isAsciiSpace = (code: number): boolean => code === 9 || code === 10 || code === 12 || code === 13 || code === 32;
 
 /** `value` without leading and trailing ASCII whitespace (not `String.trim`, which also strips U+00A0 and the like). */
@@ -265,12 +293,12 @@ function asciiTrim(value: string): string {
 
 /**
  * Whether a script of this `type` string runs, by the HTML spec: an empty type, `module`, a JavaScript MIME type essence (or a
- * {@link DEFERRED_LOADER_TYPE}). Anything else is data (JSON, JSON-LD, import maps, speculation rules, templates, `text/x-*`, a
+ * wrapper a tool runs later: {@link isDeferredLoaderType}). Anything else is data (JSON, JSON-LD, import maps, speculation rules, templates, `text/x-*`, a
  * custom type). A type with a character reference (`&`) is not decoded, so it cannot be proved data and counts as running.
  */
 export function scriptTypeRuns(typeString: string): boolean {
   const type = asciiTrim(typeString.slice(0, 2048)).toLowerCase();
-  return type === "" || type === "module" || type.includes("&") || JS_MIME_ESSENCES.has(type) || DEFERRED_LOADER_TYPE.test(type);
+  return type === "" || type === "module" || type.includes("&") || JS_MIME_ESSENCES.has(type) || isDeferredLoaderType(type);
 }
 
 /** Whether a `<script>` with these attributes (`type`, `language`) runs: a `type` decides; else a `language` is the type `text/<language>`. */
