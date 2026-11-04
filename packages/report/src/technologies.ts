@@ -141,10 +141,24 @@ const TRUNCATION_REASON_TEXT: Record<NonNullable<ReportTechnologies["truncated"]
   "script-limit": "the audit's script limit left some scripts unread",
 };
 
+/**
+ * The truncation reasons of a section that are in the closed set. A report loaded from JSON is not validated
+ * at runtime, so anything else (a string that looks like markup, say) is dropped, never printed.
+ */
+export function techTruncationReasons(tech: ReportTechnologies): string[] {
+  const reasons: unknown = tech.truncated?.reasons;
+  if (!Array.isArray(reasons)) return [];
+  return reasons.filter(
+    (r): r is string => typeof r === "string" && Object.hasOwn(TRUNCATION_REASON_TEXT, r),
+  );
+}
+
 /** One sentence saying detection was cut short (#1387), or null when it read everything. */
 export function techTruncationNote(tech: ReportTechnologies): string | null {
   if (!tech.truncated) return null;
-  const why = tech.truncated.reasons.map((r) => TRUNCATION_REASON_TEXT[r]).join("; ");
+  const why = techTruncationReasons(tech)
+    .map((r) => TRUNCATION_REASON_TEXT[r as keyof typeof TRUNCATION_REASON_TEXT])
+    .join("; ");
   return `Detection was cut short (${why}), so technologies the site runs may be missing`;
 }
 
@@ -204,8 +218,10 @@ export function techNameMap(items: ReportTechnology[]): Map<string, string> {
  * keeps them, with `source` when it has one.
  */
 export function techOpenTag(name: string, tech: ReportTechnologies, indent: string): string {
-  const source = tech.source ? ` source="${tech.source}"` : "";
-  const cut = tech.truncated ? ` truncated="${tech.truncated.reasons.join(" ")}"` : "";
+  // Only closed-set values reach the markup: a stored report is not validated, so `source`, the
+  // truncation reasons and `first-scan` are never interpolated as they were read.
+  const source = tech.source === "local" || tech.source === "cloud" ? ` source="${tech.source}"` : "";
+  const cut = tech.truncated ? ` truncated="${techTruncationReasons(tech).join(" ")}"` : "";
   if (tech.source === "local") return `${indent}<${name}${source}${cut}>`;
-  return `${indent}<${name}${source}${cut} first-scan="${tech.firstScan}" added="${tech.added.length}" removed="${tech.removed.length}">`;
+  return `${indent}<${name}${source}${cut} first-scan="${tech.firstScan === true}" added="${tech.added.length}" removed="${tech.removed.length}">`;
 }
