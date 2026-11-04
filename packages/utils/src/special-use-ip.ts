@@ -25,7 +25,8 @@ export function isSpecialUseIpv4(host: string): boolean {
   if (a === 169 && b === 254) return true; // link-local, the metadata address
   if (a === 172 && b >= 16 && b <= 31) return true; // private
   if (a === 192 && b === 168) return true; // private
-  if (a === 192 && b === 0 && (c === 0 || c === 2)) return true; // IETF protocol assignments, TEST-NET-1
+  if (a === 192 && b === 0 && c === 0) return octets[3] !== 9 && octets[3] !== 10; // IETF protocol assignments, minus the PCP and TURN anycast addresses (192.0.0.9, 192.0.0.10: globally reachable)
+  if (a === 192 && b === 0 && c === 2) return true; // TEST-NET-1
   if (a === 192 && b === 88 && c === 99) return true; // 6to4 relay anycast (deprecated)
   if (a === 198 && (b === 18 || b === 19)) return true; // benchmarking
   if (a === 198 && b === 51 && c === 100) return true; // TEST-NET-2
@@ -66,6 +67,14 @@ function ipv6Bytes(host: string): number[] | null {
 
 const v4 = (bytes: number[], at: number): string => `${bytes[at]}.${bytes[at + 1]}.${bytes[at + 2]}.${bytes[at + 3]}`;
 
+/** The globally reachable exceptions inside `2001::/23`: PCP, TURN and DNS-SD anycast (`2001:1::1` to `2001:1::3`), AMT (`2001:3::/32`) and AS112-v6 (`2001:4:112::/48`). */
+function isGloballyReachableIetf(bytes: number[], second: number): boolean {
+  const allZero = (from: number, to: number) => bytes.slice(from, to).every((b) => b === 0);
+  if (second === 0x0001 && allZero(4, 14) && bytes[14] === 0 && bytes[15]! >= 1 && bytes[15]! <= 3) return true;
+  if (second === 0x0003) return true;
+  return second === 0x0004 && bytes[4] === 0x01 && bytes[5] === 0x12;
+}
+
 /**
  * Whether an IPv6 literal is not a public unicast address: unspecified and loopback, link-local, site-local and unique-local,
  * multicast, the documentation prefixes, the discard prefix, the transition and translation prefixes (NAT64 `64:ff9b::/96` and
@@ -86,7 +95,9 @@ export function isSpecialUseIpv6(host: string): boolean {
   if (allZero(0, 8) && bytes[8] === 0xff && bytes[9] === 0xff && bytes[10] === 0 && bytes[11] === 0) return isSpecialUseIpv4(v4(bytes, 12)); // ::ffff:0:a.b.c.d
   if (first === 0x64 && second === 0xff9b) return true; // NAT64: 64:ff9b::/96, and 64:ff9b:1::/48 treated alike
   if (first === 0x0100 && allZero(2, 8)) return true; // 100::/64, discard-only
-  if (first === 0x2001 && (second & 0xfe00) === 0) return true; // 2001::/23: Teredo, benchmarking, ORCHID
+  if (first === 0x0100 && allZero(2, 6) && bytes[6] === 0 && bytes[7] === 1) return true; // 100:0:0:1::/64, dummy IPv6 prefix (RFC 9780)
+  if (first === 0x5f00) return true; // 5f00::/16, SRv6 SIDs
+  if (first === 0x2001 && (second & 0xfe00) === 0) return !isGloballyReachableIetf(bytes, second); // 2001::/23: Teredo, benchmarking, ORCHID
   if (first === 0x2001 && second === 0x0db8) return true; // documentation
   if (first === 0x3fff && (second & 0xf000) === 0) return true; // 3fff::/20 documentation
   if (first === 0x2002) return true; // 6to4

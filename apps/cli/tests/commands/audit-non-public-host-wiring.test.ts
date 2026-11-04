@@ -44,9 +44,30 @@ const originalFetch = globalThis.fetch;
 const originalExit = process.exit;
 const originalEnv = { ...process.env };
 let requested: string[] = [];
+/** The credit balance the stubbed `/v1/credits` reports. Reset per test. */
+let balance = 5000;
+/** Everything the run printed, for the credit-clamp notice. */
+let printed: string[] = [];
+const originalLog = console.log;
+const originalError = console.error;
+
+/** Special-use literals the narrow classifier does not name (#1560, #1572): the policy gate must still hold the handoff. */
+const SPECIAL_USE_HOSTS = [
+  "http://[64:ff9b::a00:1]:9/",
+  "http://[2002:a00:1::]:9/",
+  "http://[2001:db8::1]:9/",
+  "http://[fec0::1]:9/",
+  "http://192.0.2.1:9/",
+  "http://198.51.100.1:9/",
+  "http://198.18.0.1:9/",
+];
 
 beforeEach(() => {
   requested = [];
+  balance = 5000;
+  printed = [];
+  console.log = (...args: unknown[]) => printed.push(args.join(" "));
+  console.error = (...args: unknown[]) => printed.push(args.join(" "));
   process.env.SQUIRREL_API_TOKEN = "sqcli_test_token";
   process.env.SQUIRREL_DISABLE_TELEMETRY = "1";
   // The site is a stubbed fetch keyed by name: send its hosts by name
@@ -64,7 +85,7 @@ beforeEach(() => {
     // every run reads as logged out and the gate under test never matters.
     if (url.includes("/v1/credits")) {
       return Response.json({
-        balance: { total: 5000, monthly: 5000, pack: 0, periodEnd: null },
+        balance: { total: balance, monthly: balance, pack: 0, periodEnd: null },
         plan: { id: "pro", monthlyCredits: 5000 },
         branding: null,
       });
@@ -85,6 +106,8 @@ beforeEach(() => {
 afterEach(() => {
   globalThis.fetch = originalFetch;
   process.exit = originalExit;
+  console.log = originalLog;
+  console.error = originalError;
   process.env = { ...originalEnv };
 });
 
@@ -132,6 +155,36 @@ describe("squirrel audit — a host no hosted runner can reach (#1841)", () => {
     expect(requested.some((u) => u.includes("/v1/services/render"))).toBe(
       false
     );
+  });
+
+  // #1572: the policy gate reads the WIDE classifier. A special-use literal (NAT64, 6to4, documentation, site-local, benchmarking)
+  // is not reachable by a hosted runner either, and the narrow classifier does not name it, so a call site left on the narrow
+  // one registers the run and publishes it.
+  test.each(SPECIAL_USE_HOSTS.map((u) => [u]))(
+    "%s registers nothing and publishes nothing",
+    async (url) => {
+      await runAudit(url, { publish: true });
+      expect(handoffs()).toEqual([]);
+    }
+  );
+
+  // The credit-clamp gate sits behind the same decision: a low balance must not clamp the page cap, or print a top-up warning,
+  // for a run that never registers. The control below proves the stub does clamp a public host.
+  test.each(SPECIAL_USE_HOSTS.map((u) => [u]))(
+    "%s is not credit-clamped on a low balance",
+    async (url) => {
+      balance = 100;
+      await runAudit(url, { "max-pages": "50" });
+      expect(printed.join("\n")).not.toMatch(
+        /covers \d+ of the 50 pages requested/
+      );
+    }
+  );
+
+  test("control: a public host on a low balance IS credit-clamped", async () => {
+    balance = 100;
+    await runAudit("https://example.com/", { "max-pages": "50" });
+    expect(printed.join("\n")).toMatch(/covers \d+ of the 50 pages requested/);
   });
 
   // THE CONTROL. Without it the tests above would pass just as happily if the

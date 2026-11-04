@@ -161,6 +161,14 @@ describe("squirrel report --publish — a host no hosted runner can reach (#1841
     ["http://169.254.169.254/"],
     ["http://box.local/"],
     ["http://metadata.google.internal/"],
+    // #1572: special-use literals the narrow classifier does not name.
+    ["http://[64:ff9b::a00:1]/"],
+    ["http://[2002:a00:1::]/"],
+    ["http://[2001:db8::1]/"],
+    ["http://[fec0::1]/"],
+    ["http://192.0.2.1/"],
+    ["http://198.51.100.1/"],
+    ["http://198.18.0.1/"],
   ])("%s sends nothing to the API", async (baseUrl) => {
     await runReport(baseUrl);
     expect(requested).toEqual([]);
