@@ -1,0 +1,581 @@
+// links/anchor-mismatch: inbound anchor text vs the target's title, H1 and slug (#110).
+
+import { describe, expect, test } from "bun:test";
+
+import { parsePage } from "@squirrelscan/parser";
+
+import {
+  AnchorGraphBuilder,
+  anchorMismatchRule,
+  evaluateAnchorGraph,
+  meaningfulTokens,
+  tokenize,
+  tokensMatch,
+} from "../src/links/anchor-mismatch";
+import type { CheckResult, ParsedPage, RuleContext } from "../src/types";
+import type { LinkData } from "@squirrelscan/core-contracts";
+
+const BASE = "https://example.com/";
+
+function body(url: string, text: string): LinkData {
+  return { url, text, isInternal: true, isChrome: false };
+}
+function chrome(url: string, text: string): LinkData {
+  return { url, text, isInternal: true, isChrome: true };
+}
+
+interface PageSpec {
+  url: string;
+  title?: string;
+  h1?: string[];
+  links?: LinkData[];
+}
+
+function ctx(pages: PageSpec[], extra: Record<string, unknown> = {}): RuleContext {
+  return {
+    page: { url: BASE, html: "", statusCode: 200, loadTime: 0, headers: {} },
+    parsed: {} as ParsedPage,
+    site: {
+      baseUrl: BASE,
+      pages: pages.map((p) => ({
+        url: p.url,
+        finalUrl: p.url,
+        statusCode: 200,
+        parsed: {
+          meta: { title: p.title ?? null },
+          h1: { count: p.h1?.length ?? 0, texts: p.h1 ?? [] },
+          links: p.links ?? [],
+        } as unknown as ParsedPage,
+      })),
+      robotsTxt: null,
+      sitemaps: null,
+      ...extra,
+    },
+    options: {},
+  } as unknown as RuleContext;
+}
+
+function check(pages: PageSpec[], extra?: Record<string, unknown>): CheckResult {
+  const result = anchorMismatchRule.run(ctx(pages, extra));
+  return (result as { checks: CheckResult[] }).checks[0]!;
+}
+
+const HOME: PageSpec = { url: BASE, title: "Home" };
+
+describe("links/anchor-mismatch tokens", () => {
+  test("plurals and short brands match", () => {
+    expect(tokensMatch("fridges", "fridge")).toBe(true);
+    expect(tokensMatch("lg", "lg")).toBe(true);
+    expect(tokensMatch("lg", "lgs")).toBe(false);
+    expect(tokensMatch("car", "carpentry")).toBe(false);
+    expect(meaningfulTokens("LG")).toEqual(["lg"]);
+    expect(meaningfulTokens("a b")).toEqual([]);
+  });
+});
+
+describe("links/anchor-mismatch", () => {
+  test("Fridges -> Fridge repairs at /repairs/fridge does not warn", () => {
+    const c = check([
+      { ...HOME, links: [body("/repairs/fridge", "Fridges")] },
+      { url: "https://example.com/repairs/fridge", title: "Fridge repairs" },
+    ]);
+    expect(c.status).toBe("pass");
+  });
+
+  test("LG -> /brands/lg does not warn", () => {
+    const c = check([
+      { ...HOME, links: [body("/brands/lg", "LG")] },
+      { url: "https://example.com/brands/lg", title: "Appliance brand" },
+    ]);
+    expect(c.status).toBe("pass");
+  });
+
+  test("/privacy linked as Privacy from every page does not warn", () => {
+    const c = check([
+      { ...HOME, links: [body("/privacy", "Legal notes"), body("/fridge", "Fridge")] },
+      { url: "https://example.com/fridge", title: "Fridge repairs" },
+      {
+        url: "https://example.com/a",
+        title: "Alpha",
+        links: [body("/privacy", "Fine print")],
+      },
+      { url: "https://example.com/privacy", title: "Our data promise" },
+      { url: "https://example.com/contact", title: "Reach us" },
+    ]);
+    expect(c.status).toBe("pass");
+    // Only the fridge pair was judged: the privacy pairs are not targets at all.
+    expect((c.details as { judged: number }).judged).toBe(1);
+  });
+
+  test("click here -> Commercial freezer repairs warns and names anchor, URL and title", () => {
+    const c = check([
+      { ...HOME, links: [body("/freezers", "click here")] },
+      { url: "https://example.com/freezers", title: "Commercial freezer repairs" },
+    ]);
+    expect(c.status).toBe("warn");
+    expect(c.items?.[0]?.label).toContain('"click here"');
+    expect(c.items?.[0]?.label).toContain("https://example.com/freezers");
+    expect(c.items?.[0]?.label).toContain("Commercial freezer repairs");
+  });
+
+  test("chrome links are excluded entirely", () => {
+    const c = check([
+      { ...HOME, links: [chrome("/freezers", "click here"), body("/fridge", "Fridge")] },
+      { url: "https://example.com/freezers", title: "Commercial freezer repairs" },
+      { url: "https://example.com/fridge", title: "Fridge repairs" },
+    ]);
+    expect(c.status).toBe("pass");
+    expect((c.details as { judged: number }).judged).toBe(1);
+  });
+
+  test("the pair's combined anchor text is judged, per pair not per link", () => {
+    const c = check([
+      {
+        ...HOME,
+        links: [
+          body("/freezers", "click here"),
+          body("/freezers", "click here"),
+          body("/freezers", "Freezer repair"),
+        ],
+      },
+      { url: "https://example.com/freezers", title: "Commercial freezer repairs" },
+    ]);
+    expect(c.status).toBe("pass");
+  });
+
+  test("a card text with child nodes already separated matches the H1", () => {
+    const c = check([
+      {
+        ...HOME,
+        links: [body("/carpentry", "Carpentry Structural & finish carpentry See details")],
+      },
+      { url: "https://example.com/carpentry", title: "Services", h1: ["Carpentry"] },
+    ]);
+    expect(c.status).toBe("pass");
+  });
+
+  test("escalates when the mismatch is the only contextual anchor text", () => {
+    const only = check([
+      { ...HOME, links: [body("/engage", "how I work")] },
+      { url: "https://example.com/a", title: "Alpha", links: [body("/engage", "how I work")] },
+      { url: "https://example.com/engage", title: "Engage a consultant" },
+    ]);
+    expect(only.status).toBe("warn");
+    expect(only.message).toContain("only contextual anchor text");
+    expect(only.items?.length).toBe(2);
+
+    const mixed = check([
+      { ...HOME, links: [body("/engage", "how I work")] },
+      { url: "https://example.com/a", title: "Alpha", links: [body("/engage", "go there")] },
+      { url: "https://example.com/engage", title: "Engage a consultant" },
+    ]);
+    expect(mixed.status).toBe("warn");
+    expect(mixed.message).not.toContain("only contextual anchor text");
+  });
+
+  test("stop-word-only anchors are counted as not judged, not dropped", () => {
+    const c = check([
+      { ...HOME, links: [body("/freezers", "the")] },
+      { url: "https://example.com/freezers", title: "Commercial freezer repairs" },
+    ]);
+    expect(c.status).toBe("skipped");
+    expect((c.details as { notJudged: number }).notJudged).toBe(1);
+  });
+
+  test("skips on a single page", () => {
+    expect(check([HOME]).status).toBe("skipped");
+  });
+
+  test("skips, not a vacuous pass, when nothing was judged", () => {
+    const c = check([
+      { ...HOME, links: [body("/privacy", "Legal")] },
+      { url: "https://example.com/privacy", title: "Our data promise" },
+    ]);
+    expect(c.status).toBe("skipped");
+  });
+
+  test("non-Latin text is not judged by shared words", () => {
+    const cjk = check([
+      { ...HOME, links: [body("/tokyo", "东京")] },
+      { url: "https://example.com/tokyo", title: "东京旅行指南 | 旅行网站" },
+    ]);
+    expect(cjk.status).toBe("skipped");
+    expect((cjk.details as { notJudged: number }).notJudged).toBe(1);
+
+    const ja = check([
+      { ...HOME, links: [body("/plans", "料金")] },
+      { url: "https://example.com/plans", title: "料金プラン" },
+    ]);
+    expect(ja.status).toBe("skipped");
+
+    const th = check([
+      { ...HOME, links: [body("/menu", "เมนูอาหาร")] },
+      { url: "https://example.com/menu", title: "เมนูอาหารไทย" },
+    ]);
+    expect(th.status).toBe("skipped");
+  });
+
+  test("diacritics are folded", () => {
+    const c = check([
+      { ...HOME, links: [body("/menu", "Café")] },
+      { url: "https://example.com/menu", title: "Cafe menu" },
+    ]);
+    expect(c.status).toBe("pass");
+    expect(meaningfulTokens("Café Zürich")).toEqual(["cafe", "zurich"]);
+  });
+
+  test("a matching word past the display clip still counts", () => {
+    const long = `${"filler ".repeat(40)}freezer repairs`;
+    const c = check([
+      { ...HOME, links: [body("/freezers", long)] },
+      { url: "https://example.com/freezers", title: "Commercial freezer repairs" },
+    ]);
+    expect(c.status).toBe("pass");
+  });
+
+  test("real HTML through parsePage: a card link separates its words for the rule", () => {
+    const page = (url: string, html: string): PageSpec => {
+      const parsed = parsePage(html, url);
+      return {
+        url,
+        title: parsed.meta.title ?? undefined,
+        h1: parsed.h1.texts,
+        links: parsed.links,
+      };
+    };
+    const card =
+      '<main><a href="/carpentry"><h3>Carpentry</h3><p>Structural &amp; finish</p></a></main>';
+    const good = check([
+      page(BASE, `<html><head><title>Home</title></head><body>${card}</body></html>`),
+      page(
+        "https://example.com/carpentry",
+        "<html><head><title>Structural work</title></head><body><h1>Finish</h1></body></html>",
+      ),
+    ]);
+    // "Structural" is a whole word only because the extractor separated the child nodes.
+    expect(good.status).toBe("pass");
+
+    const bad = check([
+      page(
+        BASE,
+        '<html><head><title>Home</title></head><body><main><a href="/freezers"><div>click</div><div>here</div></a></main></body></html>',
+      ),
+      page(
+        "https://example.com/freezers",
+        "<html><head><title>Commercial freezer repairs</title></head><body></body></html>",
+      ),
+    ]);
+    expect(bad.status).toBe("warn");
+    expect(bad.items?.[0]?.label).toContain('"click here"');
+  }, 30_000);
+
+  test("any dropped pair turns the only-anchor escalation off and is reported", () => {
+    const build = (maxPairs: number) => {
+      const b = new AnchorGraphBuilder(maxPairs);
+      b.addPage(BASE, {
+        title: "Home",
+        links: [body("/engage", "how I work"), body("/other", "how I work")],
+        status: 200,
+      });
+      b.addPage("https://example.com/engage", { title: "Engage a consultant", status: 200 });
+      b.addPage("https://example.com/other", { title: "Other", status: 200 });
+      return evaluateAnchorGraph(b.build(), BASE, [], false);
+    };
+    expect(build(10).message).toContain("only contextual anchor text");
+    const capped = build(1);
+    expect(capped.status).toBe("warn");
+    expect(capped.message).not.toContain("only contextual anchor text");
+    expect((capped.details as { droppedPairs: number }).droppedPairs).toBe(1);
+  });
+
+  test("a truncated token list never yields a definitive warning", () => {
+    const filler = Array.from(
+      { length: 300 },
+      (_, i) => `filler${String.fromCharCode(97 + (i % 26))}${i}`,
+    ).join(" ");
+    const pages = (anchor: string): PageSpec[] => [
+      { ...HOME, links: [body("/freezer", anchor), body("/fridge", "Fridge")] },
+      { url: "https://example.com/freezer", title: "Freezer repairs" },
+      { url: "https://example.com/fridge", title: "Fridge repairs" },
+    ];
+    const c = check(pages(`${filler} freezer`));
+    expect(c.status).toBe("pass");
+    const d = c.details as { judged: number; notJudged: number };
+    expect(d.notJudged).toBe(1);
+    // Without truncation the same mismatch warns.
+    expect(check(pages("click here")).status).toBe("warn");
+  });
+
+  test("the token budget truncates too, and a refused pair leaves no bucket", () => {
+    const b = new AnchorGraphBuilder(1, 1_000);
+    const links = Array.from({ length: 100 }, (_, i) => body(`/t${i}`, "x word"));
+    b.addPage(BASE, { title: "Home", links, status: 200 });
+    for (let i = 0; i < 100; i++)
+      b.addPage(`https://example.com/t${i}`, { title: "T", status: 200 });
+    const internals = b as unknown as { pairs: Map<string, unknown>; dropped: number };
+    expect(internals.pairs.size).toBe(1);
+    expect(b.build().droppedPairs).toBe(99);
+
+    const small = new AnchorGraphBuilder(10, 2);
+    small.addPage(BASE, { title: "Home", links: [body("/a", "alpha beta gamma")], status: 200 });
+    small.addPage("https://example.com/a", { title: "Zeta", status: 200 });
+    expect(small.build().pairs[0]).toMatchObject({ truncated: true, tokens: ["alpha", "beta"] });
+  });
+
+  test("mixed-script anchor or target title is not judged", () => {
+    const mixedAnchor = check([
+      { ...HOME, links: [body("/services", "お問い合わせ Contact us")] },
+      { url: "https://example.com/services", title: "サービス一覧" },
+    ]);
+    expect(mixedAnchor.status).toBe("skipped");
+    const jaTitle = check([
+      { ...HOME, links: [body("/p/123", "Read article")] },
+      { url: "https://example.com/p/123", title: "東京の旅行ガイド" },
+    ]);
+    expect(jaTitle.status).toBe("skipped");
+    const latinAnchorJaTitleSlug = check([
+      { ...HOME, links: [body("/services", "Services")] },
+      { url: "https://example.com/services", title: "サービス一覧" },
+    ]);
+    expect(latinAnchorJaTitleSlug.status).toBe("skipped");
+    expect(meaningfulTokens("Łódź Øre Straße Æble")).toEqual(["lodz", "ore", "strasse", "aeble"]);
+  });
+
+  test("only 2xx HTML targets are judged", () => {
+    const base: PageSpec[] = [
+      {
+        ...HOME,
+        links: [body("/gone", "click here"), body("/f", "click here"), body("/pdf", "click here")],
+      },
+    ];
+    const c = ctx([
+      ...base,
+      { url: "https://example.com/gone", title: "404 Not Found" },
+      { url: "https://example.com/f", title: "Moved" },
+      { url: "https://example.com/pdf", title: "Brochure" },
+    ]);
+    const pages = (
+      c.site as {
+        pages: Array<{ url: string; statusCode: number; headers?: Record<string, string> }>;
+      }
+    ).pages;
+    pages[1]!.statusCode = 404;
+    pages[2]!.statusCode = 301;
+    pages[3]!.headers = { "content-type": "application/pdf" };
+    const out = (anchorMismatchRule.run(c) as { checks: CheckResult[] }).checks[0]!;
+    expect(out.status).toBe("skipped");
+    expect((out.details as { notJudged: number }).notJudged).toBe(3);
+  });
+
+  test("fragment links, pagination and nofollow links are not compared", () => {
+    const c = check([
+      {
+        ...HOME,
+        links: [
+          body("/docs/api#authentication", "Authentication"),
+          { ...body("/blog/page/2", "Older"), rel: ["next"] },
+          body("/archive/page/3", "More"),
+          body("/list?page=4", "Next"),
+          { url: "/promo", text: "click here", isInternal: true, isNofollow: true },
+          body("/fridge", "Fridge"),
+        ],
+      },
+      { url: "https://example.com/docs/api", title: "API reference" },
+      { url: "https://example.com/blog/page/2", title: "Blog archive" },
+      { url: "https://example.com/archive/page/3", title: "Archive" },
+      { url: "https://example.com/list", title: "Listing" },
+      { url: "https://example.com/promo", title: "Promotion" },
+      { url: "https://example.com/fridge", title: "Fridge repairs" },
+    ]);
+    expect(c.status).toBe("pass");
+    expect((c.details as { judged: number }).judged).toBe(1);
+  });
+
+  test("two different long anchors stay two anchors for the only-anchor escalation", () => {
+    const prefix = "filler ".repeat(25);
+    const c = check([
+      { ...HOME, links: [body("/engage", `${prefix} alpha`)] },
+      { url: "https://example.com/a", title: "Alpha", links: [body("/engage", `${prefix} beta`)] },
+      { url: "https://example.com/engage", title: "Engage a consultant" },
+    ]);
+    expect(c.status).toBe("warn");
+    expect(c.message).not.toContain("only contextual anchor text");
+  });
+
+  test("a card glued by CSS the parse cannot see does not create a warning", () => {
+    const glued = { url: "/freezers", text: "Freezerrepairs", isInternal: true, textGlued: true };
+    const pages = (link: LinkData): PageSpec[] => [
+      { ...HOME, links: [link, body("/fridge", "Fridge")] },
+      { url: "https://example.com/freezers", title: "Commercial freezer repairs" },
+      { url: "https://example.com/fridge", title: "Fridge repairs" },
+    ];
+    expect(check(pages(glued)).status).toBe("pass");
+    // The same text not flagged as glued is a mismatch.
+    expect(check(pages({ ...glued, textGlued: false })).status).toBe("warn");
+  });
+
+  test("a bare numeric slug with no title is not judged", () => {
+    const c = check([
+      { ...HOME, links: [body("/p/123", "Read article"), body("/fridge", "Fridge")] },
+      { url: "https://example.com/p/123" },
+      { url: "https://example.com/fridge", title: "Fridge repairs" },
+    ]);
+    expect(c.status).toBe("pass");
+    expect(c.details as { judged: number; notJudged: number }).toMatchObject({
+      judged: 1,
+      notJudged: 1,
+    });
+  });
+
+  test("refused pairs are counted once each, and uncrawled targets use no capacity", () => {
+    const b = new AnchorGraphBuilder(
+      1,
+      1_000,
+      new Set(["https://example.com/", "https://example.com/a", "https://example.com/b"]),
+    );
+    b.addPage(BASE, {
+      title: "Home",
+      status: 200,
+      links: [
+        body("/a", "alpha"),
+        body("/gone1", "x"),
+        body("/gone2", "x"),
+        body("/b", "beta"),
+        body("/b", "beta"),
+        body("/b", "beta"),
+      ],
+    });
+    b.addPage("https://example.com/a", { title: "A", status: 200 });
+    b.addPage("https://example.com/b", { title: "B", status: 200 });
+    const graph = b.build();
+    expect(graph.pairs).toHaveLength(1);
+    expect(graph.droppedPairs).toBe(1);
+  });
+
+  test("a title is clipped and the H1 count capped when stored", () => {
+    const b = new AnchorGraphBuilder();
+    b.addPage(BASE, {
+      title: "t".repeat(5_000),
+      h1: Array.from({ length: 50 }, () => "h"),
+      status: 200,
+    });
+    const page = b.build().pages.get(BASE)!;
+    expect(page.title!.length).toBe(300);
+    expect(page.h1).toHaveLength(5);
+  });
+
+  test("pages that differ only by query are separate targets", () => {
+    const c = check([
+      {
+        url: BASE,
+        title: "Home",
+        links: [body("/p?id=1", "Red apple"), body("/p?id=2", "Blue car")],
+      },
+      { url: "https://example.com/p?id=1", title: "Red apple" },
+      { url: "https://example.com/p?id=2", title: "Blue car" },
+    ]);
+    expect(c.status).toBe("pass");
+    expect((c.details as { judged: number }).judged).toBe(2);
+  });
+
+  test("the full title and every H1 are tokenised, not the clipped copies", () => {
+    const longTitle = `${"word ".repeat(70)}carpentry`;
+    const longTitleCheck = check([
+      { ...HOME, links: [body("/c", "carpentry"), body("/fridge", "Fridge")] },
+      { url: "https://example.com/c", title: longTitle },
+      { url: "https://example.com/fridge", title: "Fridge repairs" },
+    ]);
+    expect(longTitleCheck.status).toBe("pass");
+    expect((longTitleCheck.details as { judged: number }).judged).toBe(2);
+
+    const sixthH1 = check([
+      { ...HOME, links: [body("/c", "carpentry"), body("/fridge", "Fridge")] },
+      {
+        url: "https://example.com/c",
+        title: "Services",
+        h1: ["a1", "b2", "c3", "d4", "e5", "Carpentry"],
+      },
+      { url: "https://example.com/fridge", title: "Fridge repairs" },
+    ]);
+    expect(sixthH1.status).toBe("pass");
+
+    const repeated = check([
+      { ...HOME, links: [body("/p/123", "Freezer"), body("/fridge", "Fridge")] },
+      { url: "https://example.com/p/123", title: `${"Company services ".repeat(25)}Freezer` },
+      { url: "https://example.com/fridge", title: "Fridge repairs" },
+    ]);
+    expect(repeated.status).toBe("pass");
+  });
+
+  test("a title cut off by the word cap is not judged when nothing matched", () => {
+    const words = Array.from(
+      { length: 100 },
+      (_, i) => `term${String.fromCharCode(97 + (i % 26))}${i}x`,
+    );
+    const c = check([
+      { ...HOME, links: [body("/t", "click here"), body("/fridge", "Fridge")] },
+      { url: "https://example.com/t", title: words.join(" ") },
+      { url: "https://example.com/fridge", title: "Fridge repairs" },
+    ]);
+    expect(c.status).toBe("pass");
+    expect(c.details as { judged: number; notJudged: number }).toMatchObject({
+      judged: 1,
+      notJudged: 1,
+    });
+  });
+
+  test("an over-long word is dropped and the pair is not judged; the character budget bites", () => {
+    const huge = "x".repeat(5_000);
+    const c = check([
+      { ...HOME, links: [body("/freezers", `${huge} thing`), body("/fridge", "Fridge")] },
+      { url: "https://example.com/freezers", title: "Commercial freezer repairs" },
+      { url: "https://example.com/fridge", title: "Fridge repairs" },
+    ]);
+    expect(c.status).toBe("pass");
+    expect((c.details as { notJudged: number }).notJudged).toBe(1);
+    expect(tokenize(`${huge} word`)).toEqual({ tokens: ["word"], lost: true });
+
+    const b = new AnchorGraphBuilder(10, 1_000, undefined, 6);
+    b.addPage(BASE, { title: "Home", links: [body("/a", "alpha beta gamma")], status: 200 });
+    b.addPage("https://example.com/a", { title: "Zeta", status: 200 });
+    const pair = b.build().pairs[0]!;
+    expect(pair.truncated).toBe(true);
+    expect(pair.tokens.join("").length).toBeLessThanOrEqual(6);
+  });
+
+  test("a two-character brand in a glued card matches through the card's own pieces", () => {
+    const glued = {
+      url: "/brands/lg",
+      text: "LGSee details",
+      isInternal: true,
+      textGlued: true,
+      textParts: ["LG", "See details"],
+    };
+    const pages = (link: LinkData): PageSpec[] => [
+      { ...HOME, links: [link, body("/fridge", "Fridge")] },
+      { url: "https://example.com/brands/lg", title: "LG" },
+      { url: "https://example.com/fridge", title: "Fridge repairs" },
+    ];
+    expect(check(pages(glued)).status).toBe("pass");
+    expect(check(pages({ ...glued, textParts: undefined })).status).toBe("warn");
+  });
+
+  test("?p=123 is a real WordPress permalink, not pagination", () => {
+    const c = check([
+      { ...HOME, links: [body("/blog?p=123", "click here")] },
+      { url: "https://example.com/blog?p=123", title: "Freezer maintenance" },
+    ]);
+    expect(c.status).toBe("warn");
+  });
+
+  test("blank and stop-word-only anchors do not hide the only-anchor escalation", () => {
+    const c = check([
+      { ...HOME, links: [body("/engage", "how I work")] },
+      { url: "https://example.com/a", title: "Alpha", links: [body("/engage", "")] },
+      { url: "https://example.com/b", title: "Beta", links: [body("/engage", "the")] },
+      { url: "https://example.com/engage", title: "Engage a consultant" },
+    ]);
+    expect(c.status).toBe("warn");
+    expect(c.message).toContain("only contextual anchor text");
+  });
+});

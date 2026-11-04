@@ -36,6 +36,7 @@ These carry the highest severity and weight in the category.
 
 | Rule | What it flags | Severity | Scope |
 |---|---|---|---|
+| [Anchor text that does not match the page it links to](/rules/links/anchor-mismatch) | A link that says how I work and points at a page about engagements tells a crawler nothing. squirrel compares inbound anchor text with the target's title, H1 and URL. | warning | Site-wide |
 | [Cloud dead-link checking: the shared external link cache](/rules/links/dead-links) | Checking every external link from your machine is slow and rude to the sites you link to. The cloud service checks against a shared cache instead. | info | Site-wide |
 | [Dead-end page: no outgoing internal links to continue with](/rules/links/dead-end-pages) | A page with no onward links leaves the reader and the crawler with nowhere to go. squirrel counts outgoing internal links, excluding self-links. | warning | Per-page |
 | [Empty and generic anchor text: click here and icons](/rules/links/anchor-text) | A link with no text has no name, and click here describes nothing. squirrel groups links by destination and checks each group for a descriptive name. | warning | Per-page |

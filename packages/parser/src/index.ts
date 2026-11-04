@@ -21,6 +21,8 @@ export {
   type ParsedPageCache,
 } from "./html";
 
+export { anchorText, anchorTextResult } from "./extractors/anchor-text";
+
 export { detectPageType, type PageType } from "./page-type";
 
 export { isHiddenFromMarkup } from "./hidden-markup";

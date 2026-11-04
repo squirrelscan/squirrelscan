@@ -9,6 +9,8 @@ import {
   isCloudflareEmailProtectionUrl,
 } from "@squirrelscan/utils";
 
+import { anchorText } from "@squirrelscan/parser";
+
 import { pageRegionsField } from "../links/link-section-label";
 import {
   createStaticVisibility,
@@ -234,7 +236,7 @@ function linkPlacements(ctx: RuleContext): (anchor: Element, href: string) => Li
     }
     // Cloudflare's email-protection link is a contact, not a page: never in `parsed.links` (pub#811).
     if (isCloudflareEmailProtectionUrl(url)) return undefined;
-    const section = queues.get(`${url}\u0000${anchor.textContent?.trim() ?? ""}`)?.shift();
+    const section = queues.get(`${url}\u0000${anchorText(anchor)}`)?.shift();
     return section === "unknown" ? undefined : section;
   };
 }

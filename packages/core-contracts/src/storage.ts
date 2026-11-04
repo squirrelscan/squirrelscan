@@ -1018,6 +1018,51 @@ export interface TemplateCluster {
  * a later PR alongside the streaming loop. Declared here so `packages/rules` can
  * depend on the shape without importing crawler internals.
  */
+/** A crawled page's title and H1 texts, as `links/anchor-mismatch` compares anchors against them. */
+export interface AnchorGraphPage {
+  title: string | null;
+  h1: string[];
+  /** HTTP status, null when unknown. */
+  status: number | null;
+  contentType: string | null;
+  /** A title or H1 exists (the full text, not the clipped copies above). */
+  hasHeading: boolean;
+  /** The title or an H1 has letters in a script written without spaces. */
+  headingForeign: boolean;
+  /** Folded words of the FULL title and ALL H1s (capped); the clipped copies are display only. */
+  headingTokens: string[];
+  /** A cap or an over-long word cut the word list: a pair with no shared word is not judged. */
+  headingTruncated: boolean;
+}
+
+/** The distinct contextual anchor texts one source page uses to link one target page. */
+export interface AnchorGraphPair {
+  source: string;
+  target: string;
+  /** Distinct anchor texts, clipped for display and capped per pair. */
+  texts: string[];
+  /** Identity of each text from its FULL content (the display text is clipped), same order. */
+  textKeys: string[];
+  /** Distinct folded words of the FULL anchor texts (before clipping), capped per pair. */
+  tokens: string[];
+  /** Words of each piece of a glued text (see LinkData.textParts), compared one by one. */
+  partTokens: string[];
+  /** The token list was cut off by a cap: a pair with no shared word is then not judged. */
+  truncated: boolean;
+  /** A text had letters in a script written without spaces (CJK, Thai): the pair is not judged. */
+  unspaced: boolean;
+  /** A link text joined adjacent elements with no boundary: its words may be separate. */
+  glued: boolean;
+}
+
+/** Pairs sorted by (target, source); keys are normalized URLs. */
+export interface AnchorGraph {
+  pages: Map<string, AnchorGraphPage>;
+  pairs: AnchorGraphPair[];
+  /** Pairs not recorded because the builder hit its pair cap; reported, never silent. */
+  droppedPairs: number;
+}
+
 export interface SiteQuery {
   /** Number of accumulated page rows for the crawl. */
   pageCount(): number;
@@ -1046,6 +1091,13 @@ export interface SiteQuery {
    * implementation without section data omits it, and the rules then say nothing about placement.
    */
   inboundSectionCounts?(): Map<string, LinkSectionCounts>;
+  /**
+   * The contextual (non-chrome) anchor text per (source page, target page) pair, plus each crawled
+   * page's title and H1s (#110), for `links/anchor-mismatch`. Optional: an implementation without
+   * it makes the rule skip. Built by the same `AnchorGraphBuilder` the legacy path uses, so both
+   * paths hand the rule identical data.
+   */
+  anchorGraph?(): AnchorGraph;
   /** Normalized URLs of pages classified as `type`. */
   pagesByType(type: string): string[];
   /** URL sets sharing one template fingerprint (count > 1). */
@@ -1356,6 +1408,9 @@ export interface PaginationOptions {
 export interface PageLinkRow {
   normalizedUrl: string;
   parsedData: string | null;
+  /** HTTP status and content type of the stored response (#110: only 2xx HTML is judged). */
+  status?: number | null;
+  contentType?: string | null;
 }
 
 export interface StorageOptions {

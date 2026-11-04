@@ -52,6 +52,10 @@ export interface ExtractedLink {
    * which also matches on class/id substrings.
    */
   isChrome: boolean;
+  /** The text joined adjacent elements with no whitespace or boundary (see anchorTextResult). */
+  textGlued?: boolean;
+  /** The text's pieces cut where elements were joined, with `textGlued`. */
+  textParts?: string[];
   /** Part of the page the anchor sits in; see ./link-section.ts. */
   section: LinkSection;
   /** "model" when the page classifier answered `section`; absent means the markup rules did. */

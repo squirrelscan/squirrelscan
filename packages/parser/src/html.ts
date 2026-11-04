@@ -32,7 +32,9 @@ import type {
 } from "@squirrelscan/core-contracts";
 
 import { runClassifier, type ParsePageOptions } from "./classifier-hook";
+import { anchorText, anchorTextResult } from "./extractors/anchor-text";
 import { createSiteChromeTest } from "./extractors/chrome";
+import { hasNofollow, parseRel } from "./extractors/links";
 import { makeLinkSectionResolver, type LinkPlacer } from "./extractors/link-section";
 import { isHiddenFromMarkup } from "./hidden-markup";
 
@@ -191,7 +193,7 @@ export function extractLinks(doc: Document, baseUrl: string, placeLink?: LinkPla
       const url = new URL(normalizedHref, baseUrl).toString();
       // pub#811: an obfuscated email address, carried in `contactLinks`.
       if (isCloudflareEmailProtectionUrl(url)) continue;
-      const text = (anchor as Element).textContent?.trim() ?? "";
+      const { text, glued, parts } = anchorTextResult(anchor as Element);
       const isInternal = new URL(url).hostname === baseUrlObj.hostname;
       // Whether the anchor sat in sitewide chrome (#109). This extractor is the
       // one whose output the crawler SERIALIZES into `parsedData`, which both the
@@ -200,12 +202,25 @@ export function extractLinks(doc: Document, baseUrl: string, placeLink?: LinkPla
       // matters. Cheap: an ancestor tagName walk, no attribute reads.
       const isChrome = isInSiteChrome(anchor as Element);
 
-      links.push({ url, text, isInternal, isChrome, ...sectionOf(anchor as Element) });
+      // The stored parse marks nofollow like extractors/links.ts does, so the link-graph rules
+      // that read parsedData (the streaming path) exclude the same links as the legacy path.
+      const rel = parseRel((anchor as Element).getAttribute("rel"));
+      const nofollow = hasNofollow(rel);
+      links.push({
+        url,
+        text,
+        isInternal,
+        isChrome,
+        ...(glued ? { textGlued: true, textParts: parts } : {}),
+        ...(rel.length > 0 ? { rel } : {}),
+        ...(nofollow ? { isNofollow: true } : {}),
+        ...sectionOf(anchor as Element),
+      });
     } catch {
       // Skip invalid URLs. Still placed: `links/invalid-links` says where the bad link sits.
       links.push({
         url: href.trim(),
-        text: (anchor as Element).textContent?.trim() ?? "",
+        text: anchorText(anchor as Element),
         isInternal: false,
         error: "Invalid URL format",
         ...sectionOf(anchor as Element),

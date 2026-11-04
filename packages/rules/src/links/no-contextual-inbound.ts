@@ -94,7 +94,7 @@ const LEGAL_PATH_PATTERNS: readonly RegExp[] = [
 ];
 
 /** Whether the URL's path names a legal page (privacy, terms, imprint, legal). */
-function isLegalPage(url: string): boolean {
+export function isLegalPage(url: string): boolean {
   const path = getPathname(url);
   return LEGAL_PATH_PATTERNS.some((re) => re.test(path));
 }

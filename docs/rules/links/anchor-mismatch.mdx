@@ -1,0 +1,111 @@
+---
+title: "Anchor text that does not match the page it links to"
+description: "A link that says how I work and points at a page about engagements tells a crawler nothing. squirrel compares inbound anchor text with the target's title, H1 and URL."
+---
+
+## What an anchor mismatch is
+
+[links/anchor-text](/rules/links/anchor-text) reads a page's outgoing links and asks whether the text is empty or generic. This rule asks the question that matters for topical relevance: does the text pointing at a page share anything with that page?
+
+A consultancy site linked `how I work` to its engagement page twelve times, and it was the only anchor text that page ever received. A blog index received `View all posts` eighteen times. Neither link is broken or generic in the sense of the other rule, but neither tells a crawler or a reader what the destination is about.
+
+## What squirrel checks
+
+The rule is site-wide and emits a single check named `anchor-mismatch`. It judges each pair of a source page and a target page, never each link: twelve links with the same text on one page are one observation, and the pair's anchor texts are combined before they are compared.
+
+- Only contextual links count. Links inside a `nav`, `header`, `footer` or `aside` landmark are template text and are left out entirely.
+- The combined anchor text is compared with the target's title, its H1 and the words in its URL path. The pair warns only when no meaningful word is shared.
+- Words match when they are equal, or when one is a prefix of the other (three or more shared characters, at most three left over), so `Fridges` matches `/repairs/fridge`. Two-character words are real words and match by equality, so `LG` matches `/brands/lg`.
+- Anchor text keeps a space between block-level child nodes, so a card that wraps a heading and a description reads as separate words. Block-level means headings, paragraphs, list items, table cells, buttons, labels and `svg`. Inline elements add no gap: `Re<b>start</b>` is one word. Text inside `script`, `style`, `template` and `noscript` is not anchor text. Boundaries come from the tag name and an inline `style="display:block"` (or `flex`, `grid`, `table`, `list-item`); CSS from a stylesheet or a class cannot be seen at parse time. When a link's text joins adjacent elements with no whitespace and no boundary (a card whose blocks come from a class), a target word that sits inside the joined text counts as shared, the leniency applies where a target word of three or more characters sits inside an anchor word, or where one of the card's own pieces shares a word with the target (including two-character brands such as `LG`). It does not turn every glued card into a pass.
+- Letters are compared without accents, so `Café` matches `Cafe menu`.
+- Only words written with spaces between them (Latin, Cyrillic and Greek) are compared. A pair whose anchor text or target has none, such as Chinese, Japanese or Thai text, cannot be judged by shared words and is counted in `details.notJudged`. The whole anchor text is compared however long, up to 64 distinct words per pair; a longer text with no shared word in its first 64 is counted as not judged, never warned on.
+- The target's full title and every H1 are compared, however long; a word longer than 64 characters, or a word list cut off by the per-page cap of 64 distinct words, leaves the pair not judged unless a word was already shared. `?p=123` is a real page address (WordPress's default permalink), not pagination; only `page`, `paged` and `pagenum` parameters and `/page/N` paths are.
+- Pages are matched by the exact URL the crawler stored, query string included: a tracking-parameter variant such as `?utm_source=news` of a link counts only when the crawler stored that exact URL.
+- Empty anchor text and anchor text made only of stop words does not count as a distinct anchor text, so it cannot hide the escalation clause.
+- A target with no title or H1 whose URL has no alphabetic word (`/p/123`) is not judged. Pages that differ only by query string (`?id=1`, `?id=2`) are separate pages.
+- Only pages that answered 2xx with HTML are targets. A 404 titled `404 Not Found`, a redirect and a PDF are counted in `details.notJudged`. Fragment links (`/docs/api#authentication`), links marked `rel="next"` or `rel="prev"`, `nofollow` links and links to paginated URLs (`/page/2`, `?page=3`) are left out.
+- If the target's title or H1 is in a script written without spaces, or gives no word at all, only its URL words would remain to compare against, so the pair is not judged. The same holds when the anchor text mixes in such a script.
+- Letters that do not decompose (`ø`, `ł`, `ß`, `æ`, `đ`, `þ`) are folded to `o`, `l`, `ss`, `ae`, `d`, `th`.
+- Privacy, terms, contact, legal, cookie, accessibility, sitemap, sign-in, cart and search pages are never targets, and neither is the homepage or the page the audit started from.
+- A pair that cannot be judged (empty anchor text, only stop words such as `the`, or a target with no title, H1 or URL words) is counted in `details.notJudged`, not dropped silently.
+
+Outcomes:
+
+- Skipped when there are too few pages. Message: `Insufficient pages for anchor text analysis`.
+- Warn when at least one pair shares no word. Message: `2 link pair(s) to 1 page(s) use anchor text that shares no word with the target; for 1 of them it is the only contextual anchor text the page receives`. Each item gives the source and target, the anchor text, the target URL and the target's title. The escalation clause appears when the mismatching text is the only distinct contextual anchor text a page receives. It is left out for a crawl that stopped at its page cap, because the claim rests on links not seen. Severity warning, weight 3.
+- Skipped when nothing could be compared. Message: `No link pair had anchor text and a target to compare`. A pass needs at least one judged pair.
+- Pass otherwise. Message: `Anchor text shares a word with the page it points at`.
+
+`details` carries `judged`, `notJudged`, `total` (all mismatching pairs; the item list is capped at 100) and `droppedPairs` (distinct link pairs to crawled pages that were not recorded on a very large crawl; any dropped pair also turns the escalation clause off).
+
+## How to fix it
+
+Rewrite the anchor so it names the destination, using the words the target's title or heading uses: `how I work` becomes `how we engage with clients`, and `View all posts` becomes `Read the blog`. If a page's title does not describe the page, fix the title instead.
+
+| | |
+|---|---|
+| **Rule ID** | `links/anchor-mismatch` |
+| **Category** | [Links](/rules/links) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 3/10 |
+
+## Options
+
+This rule has no options.
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["links/anchor-mismatch"]
+```
+
+### Disable all Links rules
+
+```toml squirrel.toml
+[rules]
+disable = ["links/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["links/anchor-mismatch"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Related rules
+
+- [links/anchor-text](/rules/links/anchor-text): empty and generic anchor text on a page's outgoing links.
+- [links/no-contextual-inbound](/rules/links/no-contextual-inbound): pages linked only from sitewide chrome.
+- [links/internal-links](/rules/links/internal-links): how many internal links a page carries.
+
+Links findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+{/* glossary:backlinks:start */}
+
+Glossary: [Anchor text](/glossary/anchor-text), [Internal linking](/glossary/internal-linking).
+
+{/* glossary:backlinks:end */}
+
+## References
+
+- [Link best practices, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/links-crawlable#anchor-text-placement)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Links section of the report. Each mismatching pair is listed with its anchor text and target. Signed-out local audits need no account and cost nothing. Signed-in audits spend credits.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Links section looks like on a real site.
+  </Card>
+</CardGroup>

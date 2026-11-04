@@ -2083,7 +2083,7 @@ export class SQLiteStorage implements CrawlStorage {
       try: () => {
         const db = this.getDb();
         let query =
-          "SELECT normalized_url, parsed_data FROM pages WHERE crawl_id = ? ORDER BY normalized_url ASC";
+          "SELECT normalized_url, parsed_data, status, content_type FROM pages WHERE crawl_id = ? ORDER BY normalized_url ASC";
         const params: unknown[] = [crawlId];
 
         if (options?.limit) {
@@ -2105,6 +2105,8 @@ export class SQLiteStorage implements CrawlStorage {
         return rows.map((row) => ({
           normalizedUrl: row.normalized_url as string,
           parsedData: row.parsed_data as string | null,
+          status: (row.status as number | null) ?? null,
+          contentType: (row.content_type as string | null) ?? null,
         }));
       },
       catch: (e) => StorageError.read(e),

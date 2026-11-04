@@ -76,7 +76,11 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // security score just past the point where the weighted overall rounds up,
       // the same shape as 48 -> 49 above. main alone is 50 (verified with the rule
       // removed), so the move comes from this deliberate rule addition.
-      expect(v1.healthScore.overall).toBe(51);
+      // 51 -> 52 (#110): links/anchor-mismatch judges 1,547 link pairs on the synthetic site and
+      // passes (a real pass, not a vacuous one: a run that judges nothing is skipped), and that
+      // one extra pass lifts the weighted overall past a rounding boundary. A deliberate rule
+      // addition again; without the rule the number is 51.
+      expect(v1.healthScore.overall).toBe(52);
       // 97711 -> 98211: content/hidden-text emits one page check across the 500
       // fixture pages that have a document, and passes on every one of them. The
       // overall score is unmoved.
@@ -200,7 +204,9 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // 103244 -> 103744: perf/framework-data-payload is page-scoped and adds one check on each
       // of the 500 pages with a document (518 minus the 18 without one).
       // 103744 -> 103745: perf/content-in-js-bundle is site-scoped and adds one check (the fixture has no chunk large enough).
-      expect(v1.findings.length).toBe(103745);
+      // 103745 -> 103746: links/anchor-mismatch is site-scoped and adds one check (the synthetic
+      // site's pairs are judged and all share a word, so the rule emits its single pass row).
+      expect(v1.findings.length).toBe(103746);
       // Tripwire: EXTENDING a rule must never add a tally key, so a change here
       // is only correct alongside a deliberate new rule id. 266 -> 267 is
       // content/hidden-text, 267 -> 268 content/thin-vs-site-norm, 268 -> 269
@@ -229,9 +235,10 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // 308 -> 309 mobile/input-zoom,
       // 309 -> 310 images/hotlinked, 310 -> 311 content/h1-title-alignment,
       // 311 -> 312 schema/expected-type, 312 -> 313 security/tls-certificate,
-      // 313 -> 314 crawl/single-page-site, 314 -> 315 perf/framework-data-payload, 315 -> 316 perf/content-in-js-bundle;
+      // 313 -> 314 crawl/single-page-site, 314 -> 315 perf/framework-data-payload, 315 -> 316 perf/content-in-js-bundle,
+      // 316 -> 317 links/anchor-mismatch;
       // anything else means a rule id leaked in, so fix that rather than this number.
-      expect(v1.perRuleTally.length).toBe(316);
+      expect(v1.perRuleTally.length).toBe(317);
       expect(v1.perRuleTally.find((t) => t.ruleId === "security/tls-certificate")).toEqual({
         ruleId: "security/tls-certificate",
         pass: 0,

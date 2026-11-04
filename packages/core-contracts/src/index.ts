@@ -2156,6 +2156,14 @@ export interface LinkData {
    */
   isChrome?: boolean;
   /**
+   * The link text joined text of adjacent elements with no whitespace or block boundary, so its
+   * words may really be separate (#110). Present only when true; a reader comparing the text
+   * should then be lenient.
+   */
+  textGlued?: boolean;
+  /** With `textGlued`: the text cut at each join, so a reader can compare each piece's own words. */
+  textParts?: string[];
+  /**
    * Part of the page the anchor sat in (#2307). Optional: crawls stored before this field existed
    * omit it; readers treat `undefined` as unknown and say nothing about placement.
    */
