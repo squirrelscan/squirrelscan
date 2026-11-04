@@ -560,14 +560,17 @@ function parseCompound(text: string): ParsedSelector | undefined {
 }
 
 // Selector syntax, as far as a browser decides a rule's fate by it. A browser drops a style rule whose selector list has one
-// invalid part (`.cover, :bogus {...}`, `.cover, [x=y s] {...}`, `.cover, !! {...}`), so the part that would have matched a cover
-// never applies, and a decoy rule's list is dropped the same way. Only what is certainly invalid is rejected: a pseudo-class
-// name that is not known, a malformed attribute selector or identifier, an empty part, a doubled combinator, a named
-// namespace. `:is()` and `:where()` are forgiving lists (an invalid argument there is ignored), so they are not read.
+// invalid part (`.cover, !! {...}`), so the part that would have matched a cover never applies. But engines differ on what is
+// valid (`:-moz-any-link`, `::-moz-selection`, `:target-current`, `::search-text`, `ns|name` after an `@namespace`), so a rule is
+// dropped only on a certain, browser-independent syntax error: a stray character, an empty part, a doubled combinator, a bad
+// identifier or attribute syntax. A part that may be valid in some engine (an unknown or engine-prefixed pseudo name, a named
+// namespace, the `s` flag, an unterminated construct) keeps the rule, read as of unknown applicability: the full reading applies
+// it (a lone signal), the decided one does not, so it can never hide a cover and never silently drops one. `:is()` and
+// `:where()` are forgiving lists (an invalid argument there is ignored), so they are not read.
 
 /** Pseudo-classes written without arguments (Chrome). `-webkit-` ones are all accepted: Chrome has several and the list moves. */
 const PLAIN_PSEUDO_CLASSES: ReadonlySet<string> = new Set(
-  "active any-link autofill buffering checked current default defined disabled empty enabled first-child first-of-type focus focus-visible focus-within fullscreen future host hover in-range indeterminate interest-source interest-target invalid last-child last-of-type link modal muted only-child only-of-type open optional out-of-range past paused picture-in-picture placeholder-shown playing popover-open read-only read-write required root scope seeking stalled target user-invalid user-valid valid visited volume-locked xr-overlay active-view-transition".split(" "),
+  "active any-link autofill buffering checked current default defined disabled empty enabled first-child first-of-type focus focus-visible focus-within fullscreen future host hover in-range indeterminate interest-source interest-target invalid last-child last-of-type link modal muted only-child only-of-type open optional out-of-range past paused picture-in-picture placeholder-shown playing popover-open read-only read-write required root scope seeking stalled target user-invalid user-valid valid visited volume-locked xr-overlay active-view-transition target-current target-before target-after horizontal vertical start end decrement increment double-button single-button no-button corner-present window-inactive".split(" "),
 );
 /** Pseudo-classes that take an argument in parentheses. */
 const FUNCTIONAL_PSEUDO_CLASSES: ReadonlySet<string> = new Set(
@@ -575,7 +578,7 @@ const FUNCTIONAL_PSEUDO_CLASSES: ReadonlySet<string> = new Set(
 );
 /** Pseudo-elements, with or without arguments (`::part(x)`). */
 const PSEUDO_ELEMENTS: ReadonlySet<string> = new Set(
-  "after backdrop before checkmark column cue cue-region details-content file-selector-button first-letter first-line grammar-error highlight marker part picker picker-icon placeholder scroll-button scroll-marker scroll-marker-group selection slotted spelling-error target-text view-transition view-transition-group view-transition-image-pair view-transition-new view-transition-old".split(" "),
+  "after backdrop before checkmark column cue cue-region details-content file-selector-button first-letter first-line grammar-error highlight marker part picker picker-icon placeholder scroll-button scroll-marker scroll-marker-group search-text selection slotted spelling-error target-text view-transition view-transition-group view-transition-image-pair view-transition-new view-transition-old".split(" "),
 );
 /** Pseudo-elements a browser also accepts with one colon. */
 const LEGACY_PSEUDO_ELEMENTS: ReadonlySet<string> = new Set(["after", "before", "first-letter", "first-line"]);
@@ -620,7 +623,7 @@ function blockEnd(text: string, from: number, closer: string): number {
 }
 
 /** The text between the brackets of an attribute selector is `name`, `name op value` or `name op value flag`. */
-function validAttribute(inner: string): boolean {
+function validAttribute(inner: string, d: Doubt): boolean {
   const n = inner.length;
   let i = 0;
   const skip = (): void => {
@@ -632,8 +635,11 @@ function validAttribute(inner: string): boolean {
   const nameEnd = validIdentEnd(inner, i);
   if (nameEnd < 0) return false;
   i = nameEnd;
-  // `ns|name` with a named namespace: none is declared in a style block, so the rule is invalid.
-  if (inner[i] === "|" && inner[i + 1] !== "=") return false;
+  // `ns|name` with a named namespace: valid after an `@namespace` rule, so the rule is kept as undecided.
+  if (inner[i] === "|" && inner[i + 1] !== "=") {
+    d.doubtful = true;
+    return true;
+  }
   skip();
   if (i >= n) return true;
   const op = inner[i] === "=" ? "=" : inner[i + 1] === "=" ? inner.slice(i, i + 2) : "";
@@ -644,7 +650,11 @@ function validAttribute(inner: string): boolean {
   if (q === '"' || q === "'") {
     let j = i + 1;
     while (j < n && inner[j] !== q) j += inner[j] === "\\" ? 2 : 1;
-    if (j >= n) return false;
+    // an unterminated string runs to the end of the sheet in some engines: doubtful, not a certain error
+    if (j >= n) {
+      d.doubtful = true;
+      return true;
+    }
     i = j + 1;
   } else {
     const end = validIdentEnd(inner, i);
@@ -655,15 +665,16 @@ function validAttribute(inner: string): boolean {
   }
   skip();
   if (i >= n) return true;
-  // Only `i` is a flag a browser reads: `s` and anything else make the selector, and with it the whole rule, invalid.
-  if (inner[i] !== "i" && inner[i] !== "I") return false;
+  // `i` is read; `s` is a flag some engines support and some do not (doubtful); any other flag is invalid in every engine.
+  if (inner[i] === "s" || inner[i] === "S") d.doubtful = true;
+  else if (inner[i] !== "i" && inner[i] !== "I") return false;
   i++;
   skip();
   return i >= n;
 }
 
 /** The end of the valid compound selector at `at`, or -1 when none starts there or it is invalid. */
-function validCompound(text: string, at: number, depth: number): number {
+function validCompound(text: string, at: number, depth: number, d: Doubt): number {
   const n = text.length;
   let i = at;
   const first = text[i];
@@ -677,7 +688,7 @@ function validCompound(text: string, at: number, depth: number): number {
     } else {
       const end = first === "*" ? i + 1 : validIdentEnd(text, i);
       if (text[end] === "|" && text[end + 1] !== "=") {
-        if (first !== "*") return -1;
+        if (first !== "*") d.doubtful = true;
         p = end + 1;
         named = true;
       } else i = end;
@@ -697,7 +708,12 @@ function validCompound(text: string, at: number, depth: number): number {
     } else if (c === "&") i++;
     else if (c === "[") {
       const close = blockEnd(text, i + 1, "]");
-      if (close < 0 || !validAttribute(text.slice(i + 1, close))) return -1;
+      if (close < 0) {
+        // unterminated: the sheet's end closes it in a browser, so it is not a certain error
+        d.doubtful = true;
+        return n;
+      }
+      if (!validAttribute(text.slice(i + 1, close), d)) return -1;
       i = close + 1;
     } else if (c === ":") {
       const element = text[i + 1] === ":";
@@ -709,16 +725,24 @@ function validCompound(text: string, at: number, depth: number): number {
       let args: string | undefined;
       if (text[nameEnd] === "(") {
         const close = blockEnd(text, nameEnd + 1, ")");
-        if (close < 0) return -1;
+        if (close < 0) {
+          d.doubtful = true;
+          return n;
+        }
         args = text.slice(nameEnd + 1, close);
         after = close + 1;
       }
       if (element || LEGACY_PSEUDO_ELEMENTS.has(name)) {
-        if (!PSEUDO_ELEMENTS.has(name) && !name.startsWith("-webkit-")) return -1;
+        // a name this list does not know may be valid in some engine (`::-moz-selection`): doubtful
+        if (!PSEUDO_ELEMENTS.has(name) && !name.startsWith("-webkit-")) d.doubtful = true;
       } else if (!name.startsWith("-webkit-")) {
-        if (args === undefined ? !PLAIN_PSEUDO_CLASSES.has(name) : !FUNCTIONAL_PSEUDO_CLASSES.has(name)) return -1;
+        if (args === undefined ? !PLAIN_PSEUDO_CLASSES.has(name) : !FUNCTIONAL_PSEUDO_CLASSES.has(name)) d.doubtful = true;
         // `:not()` and `:has()` are strict lists (`:is()` and `:where()` forgive an invalid argument, so they are not read).
-        if (args !== undefined && (name === "not" || name === "has") && depth < MAX_VALIDATE_DEPTH && !validSelectorList(args, name === "has", depth + 1)) return -1;
+        else if (args !== undefined && (name === "not" || name === "has") && depth < MAX_VALIDATE_DEPTH) {
+          const inner = selectorListState(args, name === "has", depth + 1);
+          if (inner === "invalid") return -1;
+          if (inner === "doubtful") d.doubtful = true;
+        }
       }
       i = after;
     } else break;
@@ -727,7 +751,7 @@ function validCompound(text: string, at: number, depth: number): number {
 }
 
 /** One complex selector: compounds joined by descendant, `>`, `+` and `~` combinators (a leading one only in a relative selector). */
-function validComplexSelector(text: string, relative: boolean, depth: number): boolean {
+function validComplexSelector(text: string, relative: boolean, depth: number, d: Doubt): boolean {
   const n = text.length;
   let i = 0;
   const skip = (): void => {
@@ -742,7 +766,7 @@ function validComplexSelector(text: string, relative: boolean, depth: number): b
     skip();
   }
   for (;;) {
-    const end = validCompound(text, i, depth);
+    const end = validCompound(text, i, depth, d);
     if (end < 0) return false;
     i = end;
     const spaced = i;
@@ -756,16 +780,26 @@ function validComplexSelector(text: string, relative: boolean, depth: number): b
   }
 }
 
+/** Set when a part may be valid in some engine though this check does not know it. */
+interface Doubt {
+  doubtful: boolean;
+}
+
 /**
- * Whether every part of a selector list is valid, as a browser drops the whole rule otherwise. A part past the size bound is not
- * read (the caller already reports it) and counts as valid. `relative`: a part may start with a combinator (nested rules, `:has()`).
+ * `invalid`: a part has a certain, browser-independent syntax error, so a browser drops the whole rule. `doubtful`: no certain
+ * error, but a part may be valid in some engine (see the header above): the rule is kept as undecided. `valid` otherwise. A part
+ * past the size bound is not read (the caller already reports it) and counts as valid. `relative`: a part may start with a
+ * combinator (nested rules, `:has()`).
  */
-export function validSelectorList(selector: string, relative: boolean, depth = 0): boolean {
+export type SelectorListState = "valid" | "doubtful" | "invalid";
+
+export function selectorListState(selector: string, relative: boolean, depth = 0): SelectorListState {
+  const d: Doubt = { doubtful: false };
   for (const part of splitTopLevel(selector, ",")) {
     if (part.length > MAX_SELECTOR_CHARS + 64) continue;
-    if (!validComplexSelector(part, relative, depth)) return false;
+    if (!validComplexSelector(part, relative, depth, d)) return "invalid";
   }
-  return true;
+  return d.doubtful ? "doubtful" : "valid";
 }
 
 /** Starts a part of a nested selector whose ancestors were dropped: the part is read, as one whose applicability is unknown. */
@@ -824,9 +858,11 @@ const countChar = (text: string, char: string): number => {
  * {@link MAX_SELECTOR_CHARS} (its length is worked out before it is built, so a run of `&` is not expanded), and a shared
  * budget of produced selectors. Whatever one of those drops makes `cut` true: the caller reports the CSS truncated.
  */
-function nestSelector(parent: string, child: string, budget: NestBudget): { selector: string; cut: boolean; invalid?: boolean } {
-  // A child list with an invalid part is dropped whole, with the rules nested in it.
-  if (!validSelectorList(child, true)) return { selector: "", cut: false, invalid: true };
+function nestSelector(parent: string, child: string, budget: NestBudget): { selector: string; cut: boolean; invalid?: boolean; doubtful?: boolean } {
+  // A child list with a certainly invalid part is dropped whole, with the rules nested in it.
+  const state = selectorListState(child, true);
+  if (state === "invalid") return { selector: "", cut: false, invalid: true };
+  const doubtful = state === "doubtful";
   if (budget.selectors <= 0) return { selector: "", cut: true };
   let cut = false;
   const parentParts = splitTopLevel(parent, ",");
@@ -881,7 +917,7 @@ function nestSelector(parent: string, child: string, budget: NestBudget): { sele
       emit((parent.unknown || subject !== text ? UNKNOWN_MARK : "") + subject.replaceAll("&", parent.subject));
     }
   }
-  return { selector: out.join(","), cut };
+  return { selector: out.join(","), cut, doubtful };
 }
 
 /** The index key (`.c`, `#i`, `iframe`, or `*` for attributes alone) of a selector when every token could match an iframe on the page. */
@@ -1233,9 +1269,14 @@ function sheetFor(doc: Document, wanted: Wanted, reading: Reading): Sheet {
      * browser orders them; a nested block is never part of a declaration.
      */
     const addRule = (selector: string, body: string, depth: number, atUnknown: boolean): void => {
-      // A browser drops the whole rule, and the rules nested in it, when a part of its list is invalid. (A nested rule's own list
-      // was checked by nestSelector.)
-      if (depth === 0 && !validSelectorList(selector, false)) return;
+      // A browser drops the whole rule, and the rules nested in it, when a part of its list is invalid: done only for a certain
+      // syntax error. A part that may be valid in some engine keeps the rule as undecided. (A nested rule's own list was checked
+      // by nestSelector.)
+      if (depth === 0) {
+        const state = selectorListState(selector, false);
+        if (state === "invalid") return;
+        if (state === "doubtful") atUnknown = true;
+      }
       const { selectors, oversized } = parseFrameSelectorList(selector);
       // a selector longer than the bound is not read and could match any iframe on the page
       if (oversized && wanted.frames > 0) cut.dropped = true;
@@ -1258,7 +1299,7 @@ function sheetFor(doc: Document, wanted: Wanted, reading: Reading): Sheet {
             const nested = nestSelector(selector, inner, nest);
             if (nested.invalid) return;
             if (nested.cut) cut.dropped = true;
-            addRule(nested.selector, innerBody, depth + 1, atUnknown || innerUnknown);
+            addRule(nested.selector, innerBody, depth + 1, atUnknown || innerUnknown || nested.doubtful === true);
           },
           reading,
           undefined,

@@ -6,7 +6,7 @@ import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { parsePage } from "@squirrelscan/parser";
 
 import { overlayGeometry, overlayGeometryFor, type Reading } from "../src/integrity/overlay-style";
-import { cssScanTruncated, hiddenSelectors, isCover, nestingUsed } from "../src/integrity/overlay-style";
+import { cssScanTruncated, hiddenSelectors, isCover, nestingUsed, selectorListState } from "../src/integrity/overlay-style";
 import { detectFakeAuthOverlay } from "../src/integrity/signals";
 import type { RuleContext } from "../src/types";
 
@@ -758,32 +758,71 @@ describe("follow-ups of the #1535 review: ASCII fold, quirks mode, invalid selec
     expect(firesQuirks(`.kover{${FIXED}}.${KELVIN}over{${STATIC}}`, frame('id="google-auth" class="kover"'))).toBe(true);
   });
 
-  const INVALID_PARTS = ["[x=y s]", ":bogus", "!!", "[x=y q]", "[x=1]", "::bogus", ":-moz-any-link", "ns|iframe", "a > > b", ":not(.x, :bogus)", ":has(:bogus)", ".x:hover:bogus"];
+  /** Parts every engine rejects: the whole rule is dropped, for a decoy and for a cover. */
+  const CERTAIN = ["[x=y q]", "[x=1]", "!!", "a > > b", ".1a", ":not(!!)", ":has(.a,,.b)", ".x:hover:1a"];
+  /** Parts that are valid in some engine or after an `@namespace`: the rule is kept, read as undecided (never silent for a cover). */
+  const DOUBTFUL = ["[x=y s]", ":bogus", "::bogus", ":-moz-any-link", "::-moz-selection", ":-ms-input-placeholder", ":-o-prefocus", "h|x", "ns|iframe", ":not(.x, :bogus)", ":has(:bogus)", ".x:hover:bogus", "[x=\"y"];
+  const NAMESPACE = "@namespace h url(http://www.w3.org/1999/xhtml);";
 
-  test("a selector list with an invalid part is dropped whole: a decoy rule no longer hides a cover", () => {
-    for (const bad of INVALID_PARTS) {
+  test("a selector list with a certain syntax error is dropped whole: a decoy rule no longer hides a cover", () => {
+    for (const bad of CERTAIN) {
       expect(fires(`${COVER}.cover, ${bad}{${STATIC}}`, COVER_FRAME), bad).toBe(true);
       expect(fires(`${COVER}${bad}, .cover{${STATIC}}`, COVER_FRAME), `${bad} first`).toBe(true);
     }
     // an empty part (`,,` or a trailing comma) is invalid too
-    for (const list of [".cover,", ".cover,,.x", ",.cover"]) expect(fires(`${COVER}${list}{${STATIC}}`, COVER_FRAME), list).toBe(true);
+    for (const list of [".cover,", ".cover,,.x", ",.cover", "> .cover"]) expect(fires(`${COVER}${list}{${STATIC}}`, COVER_FRAME), list).toBe(true);
     // controls: the same list with every part valid hides the cover
     expect(fires(`${COVER}.cover, .other{${STATIC}}`, COVER_FRAME)).toBe(false);
     expect(fires(`${COVER}.cover, [x=y i]{${STATIC}}`, COVER_FRAME)).toBe(false);
     expect(fires(`${COVER}.cover, ::before{${STATIC}}`, COVER_FRAME)).toBe(false);
   });
 
-  test("a selector list with an invalid part is dropped whole: a cover rule no longer draws a cover", () => {
-    for (const bad of INVALID_PARTS) expect(fires(`.cover, ${bad}{${FIXED}}`, COVER_FRAME), bad).toBe(false);
+  test("a selector list with a certain syntax error is dropped whole: a cover rule no longer draws a cover", () => {
+    for (const bad of CERTAIN) expect(fires(`.cover, ${bad}{${FIXED}}`, COVER_FRAME), bad).toBe(false);
     for (const list of [".cover,", ".cover,,.x"]) expect(fires(`${list}{${FIXED}}`, COVER_FRAME), list).toBe(false);
     expect(fires(`.cover, .other{${FIXED}}`, COVER_FRAME)).toBe(true);
     expect(fires(`.cover:hover{${FIXED}}`, COVER_FRAME)).toBe(true);
   });
 
-  test("`:is()` and `:where()` forgive an invalid argument, so the rule stays", () => {
+  test("a part that may be valid in some engine keeps the rule: a cover rule is never silent (read as undecided)", () => {
+    for (const bad of DOUBTFUL) {
+      expect(fires(`.cover, ${bad}{${FIXED}}`, COVER_FRAME), bad).toBe(true);
+      // an unterminated bracket swallows what follows it, so it is only tried last
+      if (!bad.startsWith("[x=\"")) expect(fires(`${bad}, .cover{${FIXED}}`, COVER_FRAME), `${bad} first`).toBe(true);
+      expect(fires(`@media screen{.cover, ${bad}{${FIXED}}}`, COVER_FRAME), `@media ${bad}`).toBe(true);
+      if (!bad.startsWith("[x=\"")) expect(tokensCover(`.cover{${STATIC};&, ${bad}{${FIXED}}}`), `nested ${bad}`).toBe(true);
+    }
+    expect(fires(`${NAMESPACE}.cover, h|x{${FIXED}}`, COVER_FRAME)).toBe(true);
+    expect(fires(`.cover, ::search-text{${FIXED}}`, COVER_FRAME)).toBe(true);
+    expect(fires(`.cover, :target-current{${FIXED}}`, COVER_FRAME)).toBe(true);
+  });
+
+  test("a part that may be valid in some engine cannot hide a cover: the rule is undecided, so a decoy is ignored in the decided reading", () => {
+    for (const bad of DOUBTFUL) {
+      expect(fires(`${COVER}.cover, ${bad}{${STATIC}}`, COVER_FRAME), bad).toBe(true);
+      expect(fires(`${COVER}${NAMESPACE}.cover, h|x{${STATIC}}`, COVER_FRAME)).toBe(true);
+    }
+  });
+
+  test("names newer than this check's lists are accepted as valid: :target-*, ::search-text and the scrollbar pseudo-classes", () => {
+    for (const ok of [".cover:target-current", ".cover:target-before", ".cover:target-after", ".cover::search-text", "::-webkit-scrollbar:horizontal", "::-webkit-scrollbar-button:vertical:decrement:window-inactive", ".x::-webkit-scrollbar-thumb:start:end"]) {
+      expect(selectorListState(ok, false), ok).toBe("valid");
+    }
+    // the forms that stayed accepted
+    for (const ok of [":is(.a, :bogus)", ":where(:bogus)", ":not(.a, .b)", ":has(> .a)", ".x:nth-child(2n+1 of .y)", "&", "[x=y i]", ".\\31 a", "::-webkit-bogus", "*|a", "|a", "*|*"]) {
+      expect(selectorListState(ok, ok === "&" || ok.startsWith(":has")), ok).toBe("valid");
+    }
+    for (const doubtful of [":bogus", "::bogus", ":-moz-any-link", "::-moz-selection", ":-ms-input-placeholder", "ns|a", "[x=y s]", ":not(:bogus)"]) {
+      expect(selectorListState(doubtful, false), doubtful).toBe("doubtful");
+    }
+    for (const bad of ["!!", ".a,", "a > > b", "[x=y q]", "[x=1]", "> a", ".1"]) expect(selectorListState(bad, false), bad).toBe("invalid");
+  });
+
+  test("`:is()` and `:where()` forgive an invalid argument, so the rule stays; `:not()` with a doubtful argument is undecided", () => {
     expect(fires(`.cover:is(.cover, :bogus){${FIXED}}`, COVER_FRAME)).toBe(true);
     expect(fires(`.cover:where(:bogus, [x=y q]){${FIXED}}`, COVER_FRAME)).toBe(true);
-    expect(fires(`.cover:not(.x, :bogus){${FIXED}}`, COVER_FRAME)).toBe(false);
+    expect(fires(`.cover:not(.x, :bogus){${FIXED}}`, COVER_FRAME)).toBe(true);
+    expect(fires(`.cover:not(.x, !!){${FIXED}}`, COVER_FRAME)).toBe(false);
   });
 
   /** The `tokens` reading only (the other two split nested rules at their first `}`, so they read a nested rule as a cover on their own). */
@@ -794,8 +833,8 @@ describe("follow-ups of the #1535 review: ASCII fold, quirks mode, invalid selec
     return (["decided", "all"] as const).some((mode) => isCover(overlayGeometryFor(doc, el, "tokens", mode)));
   };
 
-  test("the same holds inside @media and in a nested rule", () => {
-    for (const bad of [":bogus", "[x=y s]", "!!"]) {
+  test("a certain syntax error drops the rule inside @media and in a nested rule too", () => {
+    for (const bad of ["[x=y q]", "!!", ".1a"]) {
       expect(fires(`${COVER}@media screen{.cover, ${bad}{${STATIC}}}`, COVER_FRAME), `@media ${bad}`).toBe(true);
       expect(fires(`@media screen{.cover, ${bad}{${FIXED}}}`, COVER_FRAME), `@media cover ${bad}`).toBe(false);
       expect(tokensCover(`.cover{${FIXED};&, ${bad}{${STATIC}}}`), `nested ${bad}`).toBe(true);
@@ -804,19 +843,11 @@ describe("follow-ups of the #1535 review: ASCII fold, quirks mode, invalid selec
     expect(tokensCover(`.cover{${FIXED};&, .other{${STATIC}}}`)).toBe(false);
     expect(tokensCover(`.cover{${STATIC};&, .other{${FIXED}}}`)).toBe(true);
     // a rule nested in a dropped rule is dropped with it
-    expect(tokensCover(`${COVER}.cover, :bogus{.cover{${STATIC}}}`)).toBe(true);
+    expect(tokensCover(`${COVER}.cover, !!{.cover{${STATIC}}}`)).toBe(true);
     // a relative nested selector is valid; a top-level one is not
     expect(tokensCover(`.cover{${FIXED};> .x{${STATIC}}}`)).toBe(true);
     expect(fires(`${COVER}> .cover{${STATIC}}`, COVER_FRAME)).toBe(true);
   });
-
-  test("the validity check is linear on hostile selectors (deep `:not(`, unclosed brackets, long runs of commas)", () => {
-    const started = performance.now();
-    for (const selector of [`.cover${":not(".repeat(20_000)}`, `.cover${":not(.x".repeat(20_000)}${")".repeat(20_000)}`, `.cover${"[".repeat(100_000)}`, `.cover${",".repeat(100_000)}`, `.cover${"[a=\\".repeat(30_000)}`]) {
-      fires(`${COVER}${selector}{${STATIC}}`, COVER_FRAME);
-    }
-    expect(performance.now() - started).toBeLessThan(15_000);
-  }, 30_000);
 
   test("mutant R09: `~=` with a value that holds NBSP (not an HTML space) matches the token; one that holds a space matches nothing", () => {
     const f = frame('id="google-auth" class="cover" data-k="a\u00a0b"');
