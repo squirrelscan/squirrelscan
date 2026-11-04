@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+## v0.0.163 (2026-11-04)
+
+Security-rule hardening from the v0.0.162 reviews: the fake-auth overlay rule reads namespaced selectors and no longer lets an invalid-looking selector hide a cover, `security/leaked-secrets` finds a real JWT behind decoy segments, and every class consumer splits on HTML whitespace only.
+
 ### Fixed
 
 - `integrity/fake-auth-overlay` drops a selector list that a browser drops: an invalid argument of `:nth-child()`, `:nth-last-child()`, `:nth-of-type()`, `:nth-last-of-type()`, `:lang()` or `:dir()`, or any selector after a pseudo-element (`::before.x`, `::before:hover`, `.x::before .y`). A decoy rule using one no longer hides a cover. The media-state pseudo-classes Chrome does not support (`:playing`, `:muted`, `:seeking`, `:buffering`, `:stalled`, `:paused`, `:volume-locked`, `:current(.a)`) are read as doubtful, not valid (#1581)
