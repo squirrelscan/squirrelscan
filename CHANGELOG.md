@@ -20,6 +20,7 @@ How it works:
 ### Fixed
 
 - **A signed-in audit's technologies section now includes what the local whole-bundle scan finds.** The cloud scan sees each bundle cut to 64 KB, so a framework or library deep in a large bundle was missing from the signed-in section while the free scan found it. The local scan now always runs beside the cloud one and its extra technologies are merged into the one section, marked `origin: "local"` in the JSON, xml and llm reports and `(local scan)` after the name in the text, markdown, console and HTML reports (no scan diff, never in `added`; `meta.schemaVersion` 1.6; any other `origin` value in a loaded report is ignored, never printed); the cloud history is kept, the local scan's bytes are never sent, and `truncated` no longer reports the payload cut once the local scan read those bundles. See [Technologies](https://docs.squirrelscan.com/cloud/technologies). (#1406)
+- **Technology detection no longer reads a vendor URL from a `<link>` that only describes a page.** A `<link rel="canonical">`, `alternate`, `author`, `license`, `help`, `next`, `prev`, `me`, `icon`, `manifest` or `search` (or a link with no `rel`) whose `href` was a vendor script URL, for example `three.module.js`, was read as that library loaded. A link now counts only with a `rel` that loads or connects to what it names: `stylesheet`, `preload`, `modulepreload`, `prefetch`, `prerender`, `preconnect` or `dns-prefetch`. The CDN-host detectors that read the raw page (for example `jsdelivr`) are unchanged. (#1539)
 
 ## v0.0.165 (2026-11-04)
 

@@ -187,6 +187,22 @@ function flightKind(body: string): "f" | "s" | null {
   return null;
 }
 
+/**
+ * The `rel` tokens of a `<link>` that make the browser fetch the URL it names (stylesheet, preload, modulepreload, prefetch,
+ * prerender) or open a connection to the origin of a service the page is about to use (preconnect, dns-prefetch: a project's own
+ * API host in a preconnect is how Supabase shows). Every other rel (canonical, alternate, author, license, help, next, prev, me,
+ * icon, manifest, search) describes or relates a URL, so a vendor URL there is not a vendor loaded (#1539). A link with no rel
+ * names nothing.
+ */
+const LOADING_LINK_RELS = new Set(["stylesheet", "preload", "modulepreload", "prefetch", "prerender", "preconnect", "dns-prefetch"]);
+function linkLoads(tag: string): boolean {
+  const rel = attributeValue(tag.length > MAX_TAG_CHARS ? tag.slice(0, MAX_TAG_CHARS) : tag, "rel");
+  if (!rel) return false;
+  // HTML ASCII whitespace separates the tokens, as in a browser.
+  for (const token of rel.slice(0, 256).split(/[ \t\n\f\r]+/)) if (LOADING_LINK_RELS.has(token.toLowerCase())) return true;
+  return false;
+}
+
 const URL_TAGS = new Set(["script", "link", "img", "iframe", "embed", "object", "source"]);
 const INLINE_LOADER_MAX_CHARS = 16 * 1024;
 /**
@@ -497,6 +513,7 @@ export function pageMarkup(html: string): string {
       }
     }
     if (name[1] === "/") continue;
+    if (tagName === "link" && !linkLoads(tag)) continue;
     if (COLLECTED_TAGS.has(tagName) && collected.length < MAX_COLLECTED_TAGS) {
       const attrs = parseTagAttributes(tag.length > MAX_TAG_CHARS ? tag.slice(0, MAX_TAG_CHARS) : tag, wanted);
       if (attrs.size > 0) collected.push({ tag: tagName, attrs });
