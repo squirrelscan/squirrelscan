@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+## v0.0.168 (2026-11-05)
+
+Technology detection reads real loaders again where #1550 had hidden them: scripts held back by a delay or consent plugin (WP Rocket, Perfmatters, NitroPack, SiteGround, Rocket Loader and others), and a preconnect to a Supabase project origin.
+
 ### Fixed
 
 - **Technology detection reads a loader a delay or consent plugin parks in a wrapper script type again (#1550).** v0.0.165 treated every script type that is not JavaScript as data, so a Clarity, Tag Manager, Facebook Pixel or Google Analytics loader that WP Rocket (`rocketlazyloadscript`), Perfmatters (`pmdelayedscript`), NitroPack (`nitropack/inlinescript`), SiteGround Optimizer (`text/sg-delayed-inline`), a cookie-consent blocker (`javascript/blocked`) or Cloudflare Rocket Loader (`<hash>-module`) swaps to JavaScript later was no longer detected (about 100 pairs on 76 of 37,248 corpus sites, Clarity the hardest hit). `text/babel` and a bundler's `__bundler/ext_resources` list are read too. The rule stays narrow: JSON, JSON-LD, import maps, templates and comments are still cut, and a type is a wrapper only by name: an exact name, a Rocket Loader `<hash>-` type, or a name with a `lazy`, `delay`, `defer`, `later`, `blocked`, `javascript` or `ecmascript` word. A type with a MIME parameter or a space, one that contains `json`, `template` or `tmpl`, one with a whole word `config`, `data`, `queue`, `list`, `settings`, `state`, `manifest`, `schema`, `store` or `lazysizes` (`application/x-lazy-config`, `text/x-delayed-queue`, `text/javascript-data`), and any `application/` type for the delay words (`application/blocked`) is data. A script type of more than 2,048 spaces followed by `application/json` was read as an empty (running) type: it is trimmed before it is bounded now. A framework's `scriptLoader` JSON that names `gtag/js` is still data.
