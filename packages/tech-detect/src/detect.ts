@@ -264,21 +264,28 @@ const JS_MIME_ESSENCES: ReadonlySet<string> = new Set([
  *   when it parks a script (`javascript/blocked`, a cookie-consent plugin; `text/javascript-blocked`).
  *
  * The last two are skipped for a type with a MIME parameter or whitespace (`text/javascript; charset=utf-8` is data, see
- * {@link scriptTypeRuns}) and for a type that names data (`json`, `template`, `tmpl`): the JSON family and templates stay cut.
+ * {@link scriptTypeRuns}) and for a type that names data: {@link DATA_TYPE_HINT} (`json`, `template`, `tmpl` anywhere, or a whole
+ * token `config`, `data`, `queue`, `list`, `settings`, `state`, `manifest`, `schema`, `store` or `lazysizes`, set off by `/`,
+ * `_`, `.`, `+`, `-` or an end), so a custom data type that happens to hold a delay word or a javascript word
+ * (`application/x-lazy-config`, `text/x-delayed-queue`, `text/javascript-data`, `text/x-lazysizes`) stays cut. The delay-word
+ * family also skips every `application/` type (`application/blocked`, `application/vnd.delayed`: that tree is data; the wrappers
+ * above are bare names or `text/`, and a Rocket Loader `application/javascript` has its own family). The javascript-word family
+ * matches a bare `javascript` or `ecmascript` on purpose, because a consent tool writes it to park a script even though a
+ * browser treats it as data.
  */
 const DEFERRED_LOADER_TYPE =
   /^(?:litespeed\/javascript|text\/(?:plain|partytown|babel)|nitropack\/(?:inline)?script|nitropack\/javascript|o\/js-lzl|__bundler\/ext_resources)$/;
 const ROCKET_LOADER_TYPE = /^[0-9a-f]{8,64}-(?:module|(?:text|application)\/(?:x-)?(?:java|ecma)script)$/;
 const DELAY_WORD_TYPE = /lazy|delay|defer|(?:^|[/_.-])later(?:$|[/_.-])|(?:^|[/_.-])blocked(?:$|[/_.-])/;
 const JS_WORD_TYPE = /(?:^|[/_.-])(?:java|ecma)script(?:$|[/_.-])/;
-const DATA_TYPE_HINT = /json|templat|tmpl/;
+const DATA_TYPE_HINT = /json|templat|tmpl|(?:^|[/_.+-])(?:config|data|queue|list|settings|state|manifest|schema|store|lazysizes)(?:$|[/_.+-])/;
 const TYPE_PARAMETER = /[;\s]/;
 
 /** Whether a type that is not JavaScript is a wrapper a tool runs later: see {@link DEFERRED_LOADER_TYPE}. */
 function isDeferredLoaderType(type: string): boolean {
   if (DEFERRED_LOADER_TYPE.test(type) || ROCKET_LOADER_TYPE.test(type)) return true;
   if (TYPE_PARAMETER.test(type) || DATA_TYPE_HINT.test(type)) return false;
-  return DELAY_WORD_TYPE.test(type) || JS_WORD_TYPE.test(type);
+  return (!type.startsWith("application/") && DELAY_WORD_TYPE.test(type)) || JS_WORD_TYPE.test(type);
 }
 const isAsciiSpace = (code: number): boolean => code === 9 || code === 10 || code === 12 || code === 13 || code === 32;
 
@@ -297,7 +304,8 @@ function asciiTrim(value: string): string {
  * custom type). A type with a character reference (`&`) is not decoded, so it cannot be proved data and counts as running.
  */
 export function scriptTypeRuns(typeString: string): boolean {
-  const type = asciiTrim(typeString.slice(0, 2048)).toLowerCase();
+  // Trim first, then bound: slicing first would turn 2048 spaces before `application/json` into "" (an empty type runs).
+  const type = asciiTrim(typeString).slice(0, 2048).toLowerCase();
   return type === "" || type === "module" || type.includes("&") || JS_MIME_ESSENCES.has(type) || isDeferredLoaderType(type);
 }
 
@@ -446,8 +454,9 @@ function parseTagAttributes(tag: string, wanted: ReadonlySet<string>, trim = tru
       }
     }
     if (name && wanted.has(name) && !attrs.has(name)) {
-      const capped = value.length > MAX_ATTRIBUTE_VALUE_CHARS ? value.slice(0, MAX_ATTRIBUTE_VALUE_CHARS) : value;
-      attrs.set(name, trim ? capped.trim() : capped);
+      // Trim first, then cap: a cap first would turn 2048 spaces before `application/json` into "" (an empty script type runs).
+      const whole = trim ? value.trim() : value;
+      attrs.set(name, whole.length > MAX_ATTRIBUTE_VALUE_CHARS ? whole.slice(0, MAX_ATTRIBUTE_VALUE_CHARS) : whole);
     }
   }
   return attrs;
