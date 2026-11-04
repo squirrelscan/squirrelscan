@@ -147,4 +147,18 @@ describe("a hostile source, truncated reason or first-scan in a loaded report is
     expect(note).not.toContain("undefined");
     expect(note).not.toContain("<injected");
   });
+  test("added and removed that are not arrays never print their own length (#1406)", () => {
+    const hostile = { length: evil };
+    for (const over of [
+      { source: "cloud", added: hostile, removed: hostile },
+      { source: "cloud", added: evil, removed: [] },
+    ]) {
+      for (const out of [String(renderXml(loaded(over))), String(renderLlm(loaded(over)))]) {
+        expect(out).not.toContain("<injected");
+        expect(out).not.toContain("<!--");
+        expect(out).toContain('added="0"');
+      }
+      expect(techChangeSummary(loaded(over).technologies as never)).not.toContain("<injected");
+    }
+  });
 });
