@@ -333,9 +333,42 @@ describe("scopes, templates and entries the page never imports", () => {
     expect(ids(page(`<template />${map}</template>`))).not.toContain("threejs");
     expect(ids(page(`<template/><template>${map}</template></template>`))).not.toContain("threejs");
     expect(ids(page(`<template/></template>${map}`))).toContain("threejs");
-    // no `</template>` anywhere: nothing proves where it ends, so the map is read
-    expect(ids(page(`<template/>${map}`))).toContain("threejs");
+    // no `</template>` anywhere: a browser keeps everything after the open tag inert, so the map is not read (it was, before)
+    expect(ids(page(`<template/>${map}`))).not.toContain("threejs");
   });
+
+  // An import map is newly read (#1539), so unlike the other tags it has no older behaviour to keep: a template still open at the end
+  // of the page holds it inert, and it is not read. A tag over 64 KB can hide a `</template>` from the pass, so it fails open.
+  test("a map inside a template that never closes is not read; one after a closed template still is", () => {
+    const map = importmap({ three: url });
+    const unclosed = `<template>${map}`;
+    expect(ids(page(unclosed))).not.toContain("threejs");
+    expect(ids(page("", unclosed))).not.toContain("threejs");
+    expect(synthetic(page(unclosed))).toBe(0);
+    expect(ids(page(`<template><p>x</p></template>${map}`))).toContain("threejs");
+    expect(ids(page(`<template>${importmap({ a: "https://example.com/a.js" })}</template>${map}`))).toContain("threejs");
+    // after an unclosed template too, and the outer one decides: the inner pair closes, the outer stays open
+    expect(ids(page(`<template><template></template>${map}`))).not.toContain("threejs");
+    expect(ids(page(`<template>${map}<template></template>`))).not.toContain("threejs");
+    // only the map entries inside the open template are dropped: a map before it is kept
+    expect(synthetic(page(`${map}<template>${map}`))).toBe(1);
+    expect(ids(page(`${map}<template>${map}`))).toContain("threejs");
+    // a declarative shadow root is rendered, so a map in one is read even though it never closes
+    expect(ids(page(`<template shadowrootmode="open">${map}`))).toContain("threejs");
+    // an unclosed comment or data script is a different region: its own documented behaviour is untouched
+    expect(ids(page(`<template>${map}</template><!-- ${map}`))).not.toContain("threejs");
+    // the pass cannot tell where the template ends after an over-long tag: the old behaviour, the map is read
+    expect(ids(page(`<div data-x="${"a".repeat(70_000)}"><template>${map}`))).toContain("threejs");
+  });
+
+  test("many maps and unclosed templates stay linear", () => {
+    const map = importmap({ three: url });
+    for (const body of [`<template>${map}`.repeat(5_000), `<template>`.repeat(50_000) + map.repeat(200), `${map}<template></template>`.repeat(20_000)]) {
+      const started = performance.now();
+      ids(page(body));
+      expect(performance.now() - started).toBeLessThan(4_000);
+    }
+  }, 60_000);
 });
 
 describe("precision", () => {
