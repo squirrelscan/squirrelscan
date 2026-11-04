@@ -324,14 +324,17 @@ describe("scopes, templates and entries the page never imports", () => {
     expect(synthetic(page(`<template>${map}</template>`))).toBe(0);
   });
 
-  // Pins CURRENT behaviour, not a decision. The tag reader does not count a self-closing `<template/>` as an open template, so a map after
-  // it is read. An HTML parser ignores the slash on a non-void element and treats `<template/>` as an open tag, so a browser would treat
-  // that map as inert: the reader errs toward reading it. A change to this is deliberate and flips these expectations.
-  test("pins current behaviour: a self-closing template tag does not open a template, so a map after it is read", () => {
+  // #1550 flipped this pin. It said a self-closing `<template/>` opened nothing, so a map after it was read: the reader erred toward
+  // reading. An HTML parser ignores the slash on a non-void element, so `<template/>` is an open tag (checked in Chrome 156: the
+  // content up to `</template>` lands in the template), and a map inside it is inert. The reader now follows the browser.
+  test("a self-closing template tag opens a template, as in a browser, so a map inside it is inert", () => {
     const map = importmap({ three: url });
+    expect(ids(page(`<template/>${map}</template>`))).not.toContain("threejs");
+    expect(ids(page(`<template />${map}</template>`))).not.toContain("threejs");
+    expect(ids(page(`<template/><template>${map}</template></template>`))).not.toContain("threejs");
+    expect(ids(page(`<template/></template>${map}`))).toContain("threejs");
+    // no `</template>` anywhere: nothing proves where it ends, so the map is read
     expect(ids(page(`<template/>${map}`))).toContain("threejs");
-    expect(ids(page(`<template />${map}`))).toContain("threejs");
-    expect(ids(page(`<template/><template>${map}</template>`))).not.toContain("threejs");
   });
 });
 

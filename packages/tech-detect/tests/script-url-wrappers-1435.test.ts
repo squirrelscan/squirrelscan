@@ -32,9 +32,11 @@ describe("a loader wrapped by a cache or CDN is still read", () => {
   });
 
   test("other executable wrappers: Partytown and a consent tool's text/plain", () => {
-    for (const type of ["text/partytown", "text/plain", "text/javascript", "module", "application/javascript; charset=utf-8"]) {
+    for (const type of ["text/partytown", "text/plain", "text/javascript", "module"]) {
       expect(ids(page(`<script type="${type}">${SNIPPET}</script>`))).toContain("clarity");
     }
+    // #1550: a MIME parameter is not part of a JavaScript essence (Chrome does not run it), so this type is data, not a wrapper.
+    expect(ids(page(`<script type="application/javascript; charset=utf-8">${SNIPPET}</script>`))).not.toContain("clarity");
   });
 });
 
