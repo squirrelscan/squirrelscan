@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { isNonPublicAddress } from "../src/public-egress";
+import { isLinkLocalOrMetadataAddress, isNonPublicAddress } from "../src/public-egress";
 import { isNonPublicHostname, isNonPublicHostnameForPolicy } from "../src/non-public-host";
 import { isSpecialUseIpLiteral, isSpecialUseIpv4, isSpecialUseIpv6 } from "../src/special-use-ip";
 
@@ -104,6 +104,8 @@ describe("the policy classifier is the narrow one plus the special-use literals"
 // #1577: the connect-time egress classifier and the policy classifier agree on ISATAP literals.
 const ISATAP: Array<[string, string, boolean]> = [
   ["ISATAP embedding 10.0.0.1", "::5efe:10.0.0.1", true],
+  ["6to4 prefix for 10.0.0.1 with an ISATAP identifier of a public IPv4", "2002:a00:1::5efe:808:808", true],
+  ["6to4 prefix for 127.0.0.1 with the u-bit ISATAP identifier", "2002:7f00:1::200:5efe:808:808", true],
   ["ISATAP embedding 10.0.0.1, hex tail", "::5efe:a00:1", true],
   ["ISATAP on a global prefix embedding 10.0.0.1", "2a00::5efe:a00:1", true],
   ["ISATAP with the u bit embedding 10.0.0.1", "2a00::200:5efe:a00:1", true],
@@ -113,6 +115,16 @@ const ISATAP: Array<[string, string, boolean]> = [
   ["ISATAP on a global prefix embedding 8.8.8.8", "2a00:1450::5efe:808:808", false],
   ["ISATAP with the u bit embedding 8.8.8.8", "2a00::200:5efe:808:808", false],
 ];
+
+describe("ISATAP under allowPrivate (#1577)", () => {
+  test.each(["2a00::5efe:a9fe:a9fe", "2a00::200:5efe:a9fe:a9fe", "::5efe:169.254.169.254"])("%s: link-local and metadata are always refused", (host) => {
+    expect(isLinkLocalOrMetadataAddress(host)).toBe(true);
+  });
+  test("an ISATAP identifier of a public or private (not link-local) IPv4 is not an always-refused address", () => {
+    expect(isLinkLocalOrMetadataAddress("2a00::5efe:808:808")).toBe(false);
+    expect(isLinkLocalOrMetadataAddress("2a00::5efe:a00:1")).toBe(false);
+  });
+});
 
 describe("ISATAP literals: the egress classifier and the policy classifier agree", () => {
   test.each(ISATAP)("%s (%s)", (_label, host, nonPublic) => {
