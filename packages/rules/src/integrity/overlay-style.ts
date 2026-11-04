@@ -746,12 +746,30 @@ function trimCss(text: string): string {
   return text.slice(a, b);
 }
 
+/** Highlight pseudo-elements: only a few pseudo-classes may follow them, never another pseudo-element. */
+const HIGHLIGHT_PSEUDO_ELEMENTS: ReadonlySet<string> = new Set(["selection", "highlight", "spelling-error", "grammar-error", "target-text", "search-text"]);
+
+/**
+ * `text` must be exactly one compound selector: a combinator, a space-separated complex selector or a pseudo-element
+ * (when `forbidElement`) is a certain error. The result is `invalid`, or `valid` with `d.doubtful` set when unsure.
+ */
+function exactCompound(text: string, depth: number, d: Doubt, forbidElement: boolean): boolean {
+  if (depth >= MAX_VALIDATE_DEPTH) return true;
+  const inner: Doubt = { doubtful: false, forbidElement };
+  const end = validCompound(text, 0, depth + 1, inner);
+  if (end < 0 || end < text.length) return false;
+  if (inner.doubtful) d.doubtful = true;
+  return true;
+}
+
 /** Can a pseudo-element follow another one? Chrome takes `::part(x)::before`, `::slotted(a)::before` and `::before::marker`, not the rest. */
 function secondElementValid(previous: string, next: string): boolean {
   if (next === "part" || next === "slotted") return false;
   if (previous === "before" || previous === "after") return next === "marker";
   if (previous === "first-letter" || previous === "first-line" || previous === "marker" || previous === "placeholder" || previous === "backdrop") return false;
   if (previous === "slotted") return next !== "first-line" && next !== "first-letter";
+  // a highlight pseudo-element takes no further pseudo-element (`::selection::before`)
+  if (HIGHLIGHT_PSEUDO_ELEMENTS.has(previous)) return false;
   return true;
 }
 
@@ -769,11 +787,7 @@ function pseudoElementArgsValid(name: string, args: string, depth: number, d: Do
     return true;
   }
   if (splitTopLevel(text, ",").length > 1) return false;
-  if (depth >= MAX_VALIDATE_DEPTH) return true;
-  const inner = selectorListState(text, false, depth + 1, true);
-  if (inner === "invalid") return false;
-  if (inner === "doubtful") d.doubtful = true;
-  return true;
+  return exactCompound(text, depth, d, true);
 }
 
 const AN_PLUS_B = /^(?:even|odd|[+-]?\d+|[+-]?\d*n(?:[ \t\n\r\f]*[+-][ \t\n\r\f]*\d+)?)$/i;
@@ -826,6 +840,16 @@ function pseudoArgsState(name: string, args: string, depth: number, d: Doubt): b
       d.doubtful = true;
     }
     return true;
+  }
+  if (name === "host" || name === "host-context") {
+    // one compound selector, with no pseudo-element and no combinator: `:host(a b)`, `:host(::before)` are invalid
+    if (text === "") return false;
+    // a list is not in the grammar, but an engine may forgive it: not a certain error
+    if (splitTopLevel(text, ",").length > 1) {
+      d.doubtful = true;
+      return true;
+    }
+    return exactCompound(text, depth, d, true);
   }
   if (name === "dir") {
     if (text.includes("\\")) {
