@@ -803,7 +803,7 @@ function pseudoArgsState(name: string, args: string, depth: number, d: Doubt): b
     }
     if (!AN_PLUS_B.test(formula)) return false;
     if (list !== undefined && depth < MAX_VALIDATE_DEPTH) {
-      const inner = selectorListState(list, false, depth + 1, true);
+      const inner = selectorListState(list, false, depth + 1, false);
       if (inner === "invalid") return false;
       if (inner === "doubtful") d.doubtful = true;
     }
