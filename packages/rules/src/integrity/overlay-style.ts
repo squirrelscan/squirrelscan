@@ -517,10 +517,25 @@ function parseCompound(text: string): ParsedSelector | undefined {
   const out: ParsedSelector = { tag: false, classes: [], ids: [], classesExact: [], idsExact: [], attrs: [], specificity: 0, unknown: false };
   let i = 0;
   let classLike = 0;
-  if (text[0] === "*") i = 1;
-  else if (text[0] !== "." && text[0] !== "#" && text[0] !== "[" && text[0] !== ":") {
-    const end = identEnd(text, 0);
-    if (end === 0 || asciiLower(unescapeCss(text.slice(0, end))) !== "iframe") return undefined;
+  // A namespace prefix: `*|` (any) is read away. `|` (no namespace) is accepted but Chrome does not apply it to an HTML element
+  // (they are in the XHTML namespace), and a named one (`h|`) needs an `@namespace` rule this check does not follow: both are read
+  // as of unknown applicability (a cover rule is never silent, a decoy never hides a cover).
+  if (text[0] === "|") {
+    out.unknown = true;
+    i = 1;
+  } else if (text[0] === "*" && text[1] === "|") i = 2;
+  else {
+    const end = text[0] === "*" ? 1 : identEnd(text, 0);
+    if (end > 0 && text[end] === "|") {
+      out.unknown = true;
+      i = end + 1;
+    }
+  }
+  if (i > 0 && i >= text.length) return undefined;
+  if (text[i] === "*") i++;
+  else if (text[i] !== "." && text[i] !== "#" && text[i] !== "[" && text[i] !== ":") {
+    const end = identEnd(text, i);
+    if (end === i || asciiLower(unescapeCss(text.slice(i, end))) !== "iframe") return undefined;
     out.tag = true;
     i = end;
   }
@@ -551,7 +566,20 @@ function parseCompound(text: string): ParsedSelector | undefined {
         } else if (d === '"' || d === "'") quote = d;
         else if (d === "]") break;
       }
-      const attr = parseAttr(text.slice(i + 1, j));
+      let inner = text.slice(i + 1, j);
+      // an attribute namespace: `*|` and `|` are read away (HTML attributes have none, so `[*|id]` is `[id]`); a named one is unknown
+      const lead = inner.length - inner.trimStart().length;
+      inner = inner.slice(lead);
+      if (inner[0] === "|" && inner[1] !== "=") inner = inner.slice(1);
+      else if (inner[0] === "*" && inner[1] === "|" && inner[2] !== "=") inner = inner.slice(2);
+      else {
+        const nsEnd = identEnd(inner, 0);
+        if (nsEnd > 0 && inner[nsEnd] === "|" && inner[nsEnd + 1] !== "=") {
+          out.unknown = true;
+          inner = inner.slice(nsEnd + 1);
+        }
+      }
+      const attr = parseAttr(inner);
       if (!attr) return undefined;
       out.attrs.push(attr);
       classLike++;
