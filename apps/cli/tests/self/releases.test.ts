@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import type { GitHubRelease, ReleaseManifest } from "@/self/types";
 
@@ -9,6 +9,7 @@ import {
   compareVersions,
   getLatestRelease,
 } from "@/self/releases";
+import { initRequestTool } from "@/tools/request";
 
 const originalFetch = globalThis.fetch;
 
@@ -38,6 +39,12 @@ const mockRelease: GitHubRelease = {
 };
 
 describe("releases noRetry option", () => {
+  beforeEach(() => {
+    // The request config is module-level: an earlier file in the same process
+    // may have set retryAttempts to 0. Start from the defaults (#1586).
+    initRequestTool({});
+  });
+
   afterEach(() => {
     globalThis.fetch = originalFetch;
   });
@@ -170,7 +177,7 @@ describe("releases noRetry option", () => {
 
     expect(result.ok).toBe(true);
     expect(callCount).toBeGreaterThan(1);
-  });
+  }, 15000);
 
   test("fetchReleases with noRetry fails on first network error", async () => {
     globalThis.fetch = (async () => {
