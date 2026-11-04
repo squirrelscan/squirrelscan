@@ -18,6 +18,7 @@ import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { parseRules } from "../content/hidden-text";
 import { skipComment, skipString, stepBlocks } from "../shared/css-tokens";
+import { CLASS_SPLIT } from "@squirrelscan/parser/dom";
 
 /** iOS Safari zooms a focused field below this size. */
 const MIN_FIELD_PX = 16;
@@ -340,7 +341,7 @@ function mentions(selector: string, field: Element): boolean {
   if (id && selector.includes(`#${id}`)) return true;
   for (const cls of (field.getAttribute("class") || "")
     .slice(0, MAX_INLINE_STYLE_CHARS)
-    .split(/\s+/)) {
+    .split(CLASS_SPLIT)) {
     if (cls && selector.includes(`.${cls}`)) return true;
   }
   return false;

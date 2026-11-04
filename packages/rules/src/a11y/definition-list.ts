@@ -1,6 +1,7 @@
 // a11y/definition-list - Definition lists are properly structured
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
+import { CLASS_SPLIT } from "@squirrelscan/parser/dom";
 
 export const definitionListRule: Rule = {
   meta: {
@@ -53,7 +54,7 @@ export const definitionListRule: Rule = {
 
       if (hasInvalidChild) {
         const id = dl.getAttribute("id");
-        const cls = dl.getAttribute("class")?.split(" ")[0];
+        const cls = dl.getAttribute("class")?.split(CLASS_SPLIT).find(Boolean);
         invalidDls.push(id ? `dl#${id}` : cls ? `dl.${cls}` : "dl");
       }
     }

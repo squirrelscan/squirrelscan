@@ -12,6 +12,7 @@ import { SITE_TYPES, type SiteType } from "@squirrelscan/core-contracts";
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 import { isGdprJurisdiction } from "./jurisdiction";
+import { CLASS_SPLIT } from "@squirrelscan/parser/dom";
 
 // Vendor tokens matched ONLY against structural attributes (script src/id,
 // element id/class) — never against page prose — so a blog post that merely
@@ -178,7 +179,6 @@ function hasCmpResource(doc: Document): boolean {
 // against the raw attribute (no lowercasing), so this does too.
 const COOKIE_RE = /cookie/i;
 const CONSENT_RE = /consent/i;
-const WHITESPACE_RE = /\s+/;
 
 interface ElementScan {
   /** A known CMP banner container is mounted. */
@@ -197,7 +197,7 @@ function scanElements(doc: Document): ElementScan {
     const cls = el.getAttribute("class");
     if (id !== null && CMP_IDS.has(id)) return { container: true, regions };
     if (cls !== null && cls !== "") {
-      for (const token of cls.split(WHITESPACE_RE)) {
+      for (const token of cls.split(CLASS_SPLIT)) {
         if (CMP_CLASSES.has(token)) return { container: true, regions };
       }
     }

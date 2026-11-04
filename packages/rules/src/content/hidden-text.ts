@@ -682,7 +682,7 @@ export function buildStyleIndex(styleTexts: string[]): StyleIndex {
 function classTokens(el: Element): string[] {
   const cls = el.getAttribute("class");
   if (!cls) return [];
-  return cls.split(/\s+/).filter(Boolean);
+  return cls.split(CLASS_SPLIT).filter(Boolean);
 }
 
 /** Class tokens split further on `-` and `_` and lower-cased, for allowlists. */

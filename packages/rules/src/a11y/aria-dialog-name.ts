@@ -9,6 +9,7 @@ import {
   unconfirmedRow,
   type UnnamedControls,
 } from "../shared/static-hidden";
+import { CLASS_SPLIT } from "@squirrelscan/parser/dom";
 
 // Classes kept in an id-less dialog's descriptor: enough to tell a page's
 // drawers and popups apart without echoing a utility-class soup.
@@ -37,8 +38,7 @@ function describeDialog(el: Element, withId: string, withoutId: string): string 
   const id = el.getAttribute("id");
   if (id) return `${withId}#${id}`;
   const classes = (el.getAttribute("class") || "")
-    .trim()
-    .split(/\s+/)
+    .split(CLASS_SPLIT)
     .filter(Boolean)
     .slice(0, MAX_DESCRIPTOR_CLASSES);
   return withoutId + classes.map((cls) => `.${cls}`).join("");

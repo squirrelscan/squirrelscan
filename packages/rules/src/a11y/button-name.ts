@@ -5,6 +5,7 @@ import type { CheckItem, CheckResult, Rule, RuleContext, RuleResult } from "../t
 import { UNCONFIRMED_CHECK_SUFFIX } from "@squirrelscan/core-contracts/resolution";
 
 import { createStaticVisibility, unconfirmedItem, unconfirmedMessage } from "../shared/static-hidden";
+import { CLASS_SPLIT } from "@squirrelscan/parser/dom";
 
 function hasAccessibleName(el: Element): boolean {
   // Check aria-label
@@ -91,7 +92,7 @@ export const buttonNameRule: Rule = {
       if (!hasAccessibleName(btn)) {
         const tagName = btn.tagName.toLowerCase();
         const id = btn.getAttribute("id");
-        const cls = btn.getAttribute("class")?.split(" ")[0];
+        const cls = btn.getAttribute("class")?.split(CLASS_SPLIT).find(Boolean);
         classify(btn, id ? `${tagName}#${id}` : cls ? `${tagName}.${cls}` : tagName);
       }
     }
