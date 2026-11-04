@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+## v0.0.166 (2026-11-05)
+
+A signed-in audit keeps what its local bundle scan finds, local-only technologies are marked in every report format, a `<link>` that only describes a page no longer counts as a vendor loaded, and the fake-auth overlay rule reads three more selector shapes a browser drops.
+
 ### Fixed
 
 - **A signed-in audit's technologies section now includes what the local whole-bundle scan finds.** The cloud scan sees each bundle cut to 64 KB, so a framework or library deep in a large bundle was missing from the signed-in section while the free scan found it. The local scan now always runs beside the cloud one and its extra technologies are merged into the one section, marked `origin: "local"` in the JSON, xml and llm reports and `(local scan)` after the name in the text, markdown, console and HTML reports (no scan diff, never in `added`; `meta.schemaVersion` 1.6; any other `origin` value in a loaded report is ignored, never printed); the cloud history is kept, the local scan's bytes are never sent, and `truncated` no longer reports the payload cut once the local scan read those bundles. See [Technologies](https://docs.squirrelscan.com/cloud/technologies). (#1406)
