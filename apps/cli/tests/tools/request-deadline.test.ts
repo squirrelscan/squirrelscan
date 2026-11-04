@@ -60,6 +60,9 @@ beforeAll(() => {
 
 afterAll(() => {
   server.stop(true);
+  // The request config is module-level state: restore the defaults so later
+  // files in the one-process release gate do not inherit retryAttempts 0 (#1586).
+  initRequestTool({});
 });
 
 beforeEach(() => {
