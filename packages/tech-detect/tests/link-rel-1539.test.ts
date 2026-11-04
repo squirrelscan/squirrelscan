@@ -45,3 +45,10 @@ describe("a link that loads its resource still counts", () => {
     expect(ids(page(link("canonical") + `<script type="module" src="${THREE}"></script>`))).toContain("threejs");
   });
 });
+
+describe("a long rel is read in whole tokens, never cut mid-token", () => {
+  test("a stylesheet token after 128 other tokens still loads; a near-miss token at the old cut does not", () => {
+    expect(ids(page(link(`${"x ".repeat(128)}stylesheet`)))).toEqual(ids(page(link("stylesheet"))));
+    expect(ids(page(link(`${"x ".repeat(123)}stylesheet-nope`)))).toEqual([]);
+  }, 30_000);
+});
