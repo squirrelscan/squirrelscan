@@ -404,11 +404,17 @@ function lowerSelector(selector: string): string {
 const OF_KEYWORD = /[ \t\n\r\f][oO][fF](?![A-Za-z0-9_\-\\]|[^\x00-\x7f])/g;
 function keepOfKeywordCase(original: string, lowered: string): string {
   if (!/[OF]/.test(original)) return lowered;
-  let out = lowered;
+  // the replaced keywords are collected and the string is rebuilt once: one slice per match was quadratic
+  const chunks: string[] = [];
+  let from = 0;
   for (const m of original.matchAll(OF_KEYWORD)) {
-    if (m[0].slice(1) !== "of") out = out.slice(0, m.index + 1) + m[0].slice(1) + out.slice(m.index + 3);
+    if (m[0].slice(1) === "of") continue;
+    chunks.push(lowered.slice(from, m.index + 1), m[0].slice(1));
+    from = m.index + 3;
   }
-  return out;
+  if (from === 0) return lowered;
+  chunks.push(lowered.slice(from));
+  return chunks.join("");
 }
 
 function foldSelector(selector: string): string {
@@ -712,6 +718,36 @@ function trimCss(text: string): string {
   return text.slice(a, b);
 }
 
+/** Can a pseudo-element follow another one? Chrome takes `::part(x)::before`, `::slotted(a)::before` and `::before::marker`, not the rest. */
+function secondElementValid(previous: string, next: string): boolean {
+  if (next === "part" || next === "slotted") return false;
+  if (previous === "before" || previous === "after") return next === "marker";
+  if (previous === "first-letter" || previous === "first-line" || previous === "marker" || previous === "placeholder" || previous === "backdrop") return false;
+  if (previous === "slotted") return next !== "first-line" && next !== "first-letter";
+  return true;
+}
+
+/** `::part(a b)` takes one or more identifiers, `::slotted(compound)` one compound selector. */
+function pseudoElementArgsValid(name: string, args: string, depth: number, d: Doubt): boolean {
+  const text = trimCss(args);
+  if (text === "") return false;
+  if (name === "part") {
+    let start = 0;
+    for (let i = 0; i <= text.length; i++) {
+      if (i < text.length && !isCssSpace(text[i])) continue;
+      if (i > start && validIdentEnd(text.slice(start, i), 0) !== i - start) return false;
+      start = i + 1;
+    }
+    return true;
+  }
+  if (splitTopLevel(text, ",").length > 1) return false;
+  if (depth >= MAX_VALIDATE_DEPTH) return true;
+  const inner = selectorListState(text, false, depth + 1, true);
+  if (inner === "invalid") return false;
+  if (inner === "doubtful") d.doubtful = true;
+  return true;
+}
+
 const AN_PLUS_B = /^(?:even|odd|[+-]?\d+|[+-]?\d*n(?:[ \t\n\r\f]*[+-][ \t\n\r\f]*\d+)?)$/i;
 
 /**
@@ -739,7 +775,7 @@ function pseudoArgsState(name: string, args: string, depth: number, d: Doubt): b
     }
     if (!AN_PLUS_B.test(formula)) return false;
     if (list !== undefined && depth < MAX_VALIDATE_DEPTH) {
-      const inner = selectorListState(list, false, depth + 1);
+      const inner = selectorListState(list, false, depth + 1, true);
       if (inner === "invalid") return false;
       if (inner === "doubtful") d.doubtful = true;
     }
@@ -840,19 +876,30 @@ function validCompound(text: string, at: number, depth: number, d: Doubt): numbe
         after = close + 1;
       }
       if (isElement || LEGACY_PSEUDO_ELEMENTS.has(name)) {
+        if (d.forbidElement) return -1;
+        if (element !== undefined && !secondElementValid(element, name)) return -1;
+        if (isElement && (name === "part" || name === "slotted") && (args === undefined || !pseudoElementArgsValid(name, args, depth, d))) return -1;
         // a name this list does not know may be valid in some engine (`::-moz-selection`): doubtful
         if (!PSEUDO_ELEMENTS.has(name) && !name.startsWith("-webkit-")) d.doubtful = true;
         else if (PSEUDO_ELEMENTS.has(name)) element = name;
-      } else if (element !== undefined && NO_PSEUDO_CLASS_AFTER.has(element) && name !== "is" && name !== "where") {
+      } else if (
+        element !== undefined &&
+        NO_PSEUDO_CLASS_AFTER.has(element) &&
+        name !== "is" &&
+        name !== "where" &&
+        // `:not(:is(.a))` after a pseudo-element is accepted by some browsers: doubtful, not an error
+        !((name === "not" || name === "has") && args !== undefined && /:(?:is|where)\(/.test(args))
+      ) {
         // `:is()` and `:where()` are accepted after a pseudo-element by some browsers: they are read like any pseudo-class
         return -1;
       } else if (!name.startsWith("-webkit-")) {
         // after a pseudo-element that takes some pseudo-classes, only a verified one is certainly valid
         if (element !== undefined && !NO_PSEUDO_CLASS_AFTER.has(element) && !PSEUDO_CLASS_AFTER_ELEMENT.get(element)?.has(name)) d.doubtful = true;
+        if (element !== undefined && NO_PSEUDO_CLASS_AFTER.has(element) && (name === "not" || name === "has")) d.doubtful = true;
         if (args === undefined ? !PLAIN_PSEUDO_CLASSES.has(name) : !FUNCTIONAL_PSEUDO_CLASSES.has(name)) d.doubtful = true;
         // `:not()` and `:has()` are strict lists (`:is()` and `:where()` forgive an invalid argument, so they are not read).
         else if (args !== undefined && (name === "not" || name === "has") && depth < MAX_VALIDATE_DEPTH) {
-          const inner = selectorListState(args, name === "has", depth + 1);
+          const inner = selectorListState(args, name === "has", depth + 1, true);
           if (inner === "invalid") return -1;
           if (inner === "doubtful") d.doubtful = true;
         } else if (args !== undefined && !pseudoArgsState(name, args, depth, d)) return -1;
@@ -902,6 +949,8 @@ interface Doubt {
   doubtful: boolean;
   /** The last compound read ended in a pseudo-element, so no combinator may follow it. */
   element?: boolean;
+  /** Reading the argument of `:not()`, `:has()` or an `of` list, where a pseudo-element is invalid. */
+  forbidElement?: boolean;
 }
 
 /**
@@ -912,8 +961,8 @@ interface Doubt {
  */
 export type SelectorListState = "valid" | "doubtful" | "invalid";
 
-export function selectorListState(selector: string, relative: boolean, depth = 0): SelectorListState {
-  const d: Doubt = { doubtful: false };
+export function selectorListState(selector: string, relative: boolean, depth = 0, forbidElement = false): SelectorListState {
+  const d: Doubt = { doubtful: false, forbidElement };
   for (const part of splitTopLevel(selector, ",")) {
     if (part.length > MAX_SELECTOR_CHARS + 64) continue;
     if (!validComplexSelector(part, relative, depth, d)) return "invalid";
