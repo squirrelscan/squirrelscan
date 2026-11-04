@@ -23,6 +23,9 @@ export {
   ruleApplies,
 } from "./applicability";
 export { setRequestAsync, setLlmCall } from "./tools";
+// The anchor graph `links/anchor-mismatch` judges. audit-engine's SiteQuery builds it with the
+// SAME builder the rule's legacy path uses, so the two paths cannot diverge (#110).
+export { AnchorGraphBuilder } from "./links/anchor-mismatch";
 // Which pages count as noindex, and the homepage exception, shared by the runner
 // gate, the site rules and audit-engine's SiteData assembly (pub#457).
 export {

@@ -129,7 +129,12 @@ describe("getPageLinkRows", () => {
     // Compared RAW, with no `?? null` on either side: normalizing here would
     // hide exactly the kind of divergence this test exists to catch.
     expect(projected).toEqual(
-      full.map((p) => ({ normalizedUrl: p.normalizedUrl, parsedData: p.parsedData })),
+      full.map((p) => ({
+        normalizedUrl: p.normalizedUrl,
+        parsedData: p.parsedData,
+        status: p.status,
+        contentType: p.contentType,
+      })),
     );
     expect(projected.map((r) => r.normalizedUrl)).toEqual([...urls].sort());
     // The one page stored without a parse (inserted third, sorts second).
@@ -164,6 +169,8 @@ describe("getPageLinkRows", () => {
           (a.ok as PageRecord[]).map((p) => ({
             normalizedUrl: p.normalizedUrl,
             parsedData: p.parsedData,
+            status: p.status,
+            contentType: p.contentType,
           })),
         );
       }
@@ -190,7 +197,12 @@ describe("getPageLinkRows", () => {
     const projected = await run(store.getPageLinkRows(mine));
     const full = await run(store.getPages(mine));
     expect(projected).toEqual(
-      full.map((p) => ({ normalizedUrl: p.normalizedUrl, parsedData: p.parsedData })),
+      full.map((p) => ({
+        normalizedUrl: p.normalizedUrl,
+        parsedData: p.parsedData,
+        status: p.status,
+        contentType: p.contentType,
+      })),
     );
     // The other crawl's extra page must not appear, and its rows must not win.
     expect(projected).toHaveLength(2);
@@ -214,7 +226,12 @@ describe("getPageLinkRows", () => {
     const projected = await run(store.getPageLinkRows(crawlId));
     const full = await run(store.getPages(crawlId));
     expect(projected).toEqual(
-      full.map((p) => ({ normalizedUrl: p.normalizedUrl, parsedData: p.parsedData })),
+      full.map((p) => ({
+        normalizedUrl: p.normalizedUrl,
+        parsedData: p.parsedData,
+        status: p.status,
+        contentType: p.contentType,
+      })),
     );
     expect(projected.find((r) => r.normalizedUrl.endsWith("/empty"))!.parsedData).toBe("");
     expect(projected.find((r) => r.normalizedUrl.endsWith("/null"))!.parsedData).toBeNull();
@@ -247,7 +264,14 @@ describe("getPageLinkRows", () => {
 
     reads = 0;
     const rows = await run(store.getPageLinkRows(crawlId));
-    expect(rows).toEqual([{ normalizedUrl: "https://example.com/a", parsedData: '{"links":[]}' }]);
+    expect(rows).toEqual([
+      {
+        normalizedUrl: "https://example.com/a",
+        parsedData: '{"links":[]}',
+        status: 200,
+        contentType: "text/html",
+      },
+    ]);
     expect(reads).toBe(0);
 
     // The control: the full read DOES go to the content store for the same row.

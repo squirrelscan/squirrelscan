@@ -651,6 +651,7 @@
         "links/internal-links",
         "links/weak-internal-links",
         "links/no-contextual-inbound",
+        "links/anchor-mismatch",
         "links/dead-end-pages",
         "links/orphan-pages",
         "links/nofollow-internal"
@@ -747,6 +748,7 @@
       "definition": "The visible, clickable text of a link, which tells readers and search engines what the target is about.",
       "rules": [
         "links/anchor-text",
+        "links/anchor-mismatch",
         "a11y/link-text",
         "a11y/identical-links-same-purpose"
       ],

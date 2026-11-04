@@ -1,6 +1,7 @@
 // Link extractor - works with pre-parsed Document
 // Extracts all links with position detection and rel attributes
 
+import { anchorTextResult } from "./anchor-text";
 import type { Document, Element } from "linkedom";
 
 import {
@@ -119,7 +120,7 @@ export function createLinkPositionTest(): (element: Element) => LinkPosition {
 /**
  * Parse rel attribute into array
  */
-function parseRel(rel: string | null): string[] {
+export function parseRel(rel: string | null): string[] {
   if (!rel) return [];
   return rel
     .toLowerCase()
@@ -130,7 +131,7 @@ function parseRel(rel: string | null): string[] {
 /**
  * Check if link has nofollow
  */
-function hasNofollow(relArray: string[]): boolean {
+export function hasNofollow(relArray: string[]): boolean {
   return (
     relArray.includes("nofollow") || relArray.includes("sponsored") || relArray.includes("ugc")
   );
@@ -169,7 +170,7 @@ export function extractLinks(
       // pub#811: an obfuscated email address, not a page: never crawled or
       // checked, on this site or another (`extractContactLinks` carries it).
       if (isCloudflareEmailProtectionUrl(url)) continue;
-      const text = element.textContent?.trim() ?? "";
+      const { text, glued, parts } = anchorTextResult(element);
       const isInternal = resolvedUrl.hostname === baseUrlObj.hostname;
       const position = detectLinkPosition(element);
       const rel = parseRel(element.getAttribute("rel"));
@@ -183,6 +184,7 @@ export function extractLinks(
         isNofollow: hasNofollow(rel),
         // Landmark-strict, unlike `position` above (#109) — see ./chrome.ts.
         isChrome: isInSiteChrome(element),
+        ...(glued ? { textGlued: true, textParts: parts } : {}),
         ...sectionOf(element),
       });
     } catch {
@@ -208,6 +210,7 @@ export function toLinkData(link: ExtractedLink): LinkData {
     rel: link.rel,
     isNofollow: link.isNofollow,
     isChrome: link.isChrome,
+    ...(link.textGlued ? { textGlued: true, textParts: link.textParts } : {}),
     section: link.section,
     ...(link.sectionSource
       ? { sectionSource: link.sectionSource, sectionConfidence: link.sectionConfidence }

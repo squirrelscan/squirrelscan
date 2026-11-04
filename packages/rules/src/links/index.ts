@@ -2,6 +2,7 @@
 
 import type { Rule } from "../types";
 
+import { anchorMismatchRule } from "./anchor-mismatch";
 import { anchorTextRule } from "./anchor-text";
 import { brokenAnchorsRule } from "./broken-anchors";
 import { brokenExternalLinksRule } from "./broken-external-links";
@@ -36,12 +37,14 @@ export const rules: Rule[] = [
   noContextualInboundRule,
   deadEndPages,
   anchorTextRule,
+  anchorMismatchRule,
   httpsDowngradeRule,
   telMailtoRule,
 ];
 
 export {
   anchorTextRule,
+  anchorMismatchRule,
   brokenAnchorsRule,
   brokenExternalLinksRule,
   brokenLinksRule,

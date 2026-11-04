@@ -3769,6 +3769,15 @@ export function runStreamingRules(
       createSiteQuery(storage, crawlId, {
         universe: parsedPages.map((p) => p.url),
         pageScanBatchSize: batchSize,
+        // Only a run with links/anchor-mismatch enabled pays for the anchor graph (#110).
+        anchorGraph: isRuleEnabled(
+          "links/anchor-mismatch",
+          config.rules?.enable ?? [],
+          config.rules?.disable ?? [],
+          (config.rule_options as Record<string, { enabled?: boolean }> | undefined)?.[
+            "links/anchor-mismatch"
+          ],
+        ),
       }).pipe(Effect.orDie),
     );
 

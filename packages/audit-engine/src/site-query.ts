@@ -13,10 +13,13 @@
 
 import { Effect } from "effect";
 
+import { AnchorGraphBuilder } from "@squirrelscan/rules";
 import { normalizeUrl } from "@squirrelscan/utils";
+import { normalizePageUrl } from "@squirrelscan/utils/url";
 
 import type { SQLiteStorage } from "@squirrelscan/crawler";
 import type {
+  AnchorGraph,
   DuplicateGroup,
   LinkData,
   LinkSectionCounts,
@@ -67,6 +70,12 @@ export function createSiteQuery(
      * streamed walks use. Unset → {@link PAGE_SCAN_BATCH}.
      */
     pageScanBatchSize?: number;
+    /**
+     * Build the anchor graph `links/anchor-mismatch` reads (#110). Default true; the audit passes
+     * false when the rule is disabled, so no pair is collected for a rule that will not run, and
+     * `anchorGraph()` is then absent.
+     */
+    anchorGraph?: boolean;
   }
 ): Effect.Effect<SiteQuery, StorageError, never> {
   return Effect.gen(function* () {
@@ -80,6 +89,7 @@ export function createSiteQuery(
       crawlId,
       opts?.universe,
       pageScanBatch,
+      opts?.anchorGraph ?? true,
     );
 
     // page_features rollups (PR-A read API). All bounded by construction.
@@ -104,6 +114,7 @@ export function createSiteQuery(
       incomingLinkCounts: () => incoming.all,
       contextualIncomingLinkCounts: () => incoming.contextual,
       inboundSectionCounts: () => incoming.sections,
+      ...(incoming.anchorGraph ? { anchorGraph: () => incoming.anchorGraph! } : {}),
       homepage: () => homepageRow,
       duplicateGroups: (field) => duplicates[field] ?? [],
       templateClusters: () => templateGroups,
@@ -155,12 +166,14 @@ function buildIncomingLinkCounts(
   storage: SQLiteStorage,
   crawlId: string,
   universe: readonly string[] | undefined,
-  pageScanBatch: number
+  pageScanBatch: number,
+  collectAnchors: boolean
 ): Effect.Effect<
   {
     all: Map<string, number>;
     contextual: Map<string, number>;
     sections: Map<string, LinkSectionCounts>;
+    anchorGraph: AnchorGraph | null;
   },
   StorageError,
   never
@@ -177,6 +190,8 @@ function buildIncomingLinkCounts(
     // (its parsedData is populated but v1 excludes it from site.pages) never inflate
     // a target's incoming count. Undefined → count from every stored page (legacy).
     const universeSet = universe ? new Set(universe) : null;
+    // #110: contextual anchor text per (source, target) pair, plus each page's title and H1s.
+    let anchors: AnchorGraphBuilder | null = null;
 
     // Pass A: the audit universe. With `universe` this is v1's site.pages set/order
     // exactly; otherwise the raw crawled-page set (getPages orders by normalized_url
@@ -195,12 +210,30 @@ function buildIncomingLinkCounts(
       });
     }
 
+    // Created once the page universe is known: a link to anything else never uses the pair cap.
+    if (collectAnchors) {
+      anchors = new AnchorGraphBuilder(
+        undefined,
+        undefined,
+        new Set(orderedUrls.map((u) => normalizePageUrl(u))),
+      );
+    }
+    const anchorBuilder = anchors;
+
     // Pass B: count internal dofollow links whose resolved+normalized target is a
     // crawled page. A second scan keeps at most one page batch resident (vs.
     // holding every page's links). Only pages in the universe are valid sources.
     yield* streamPageLinkRows(storage, crawlId, pageScanBatch, (page) => {
       if (universeSet && !universeSet.has(page.normalizedUrl)) return;
-      for (const link of parseLinks(page.parsedData)) {
+      const parsed = parseLinkPage(page.parsedData);
+      anchorBuilder?.addPage(page.normalizedUrl, {
+        title: parsed.title,
+        h1: parsed.h1,
+        links: parsed.links,
+        status: page.status,
+        contentType: page.contentType,
+      });
+      for (const link of parsed.links) {
         if (link.isInternal && link.url && !link.isNofollow) {
           try {
             const target = normalizeUrl(new URL(link.url, page.normalizedUrl).href);
@@ -235,7 +268,7 @@ function buildIncomingLinkCounts(
       const placed = sectionBucket.get(key);
       if (placed) sections.set(url, placed);
     }
-    return { all, contextual, sections };
+    return { all, contextual, sections, anchorGraph: anchorBuilder ? anchorBuilder.build() : null };
   });
 }
 
@@ -299,14 +332,26 @@ function streamPageLinkRows(
   });
 }
 
-/** Parse the stored parsedData blob's link list; [] for error/non-HTML pages. */
-function parseLinks(parsedData: string | null): LinkData[] {
-  if (!parsedData) return [];
+/** Parse the stored parsedData blob's links, title and H1s; empty for error/non-HTML pages. */
+function parseLinkPage(parsedData: string | null): {
+  links: LinkData[];
+  title: string | null;
+  h1: string[];
+} {
+  if (!parsedData) return { links: [], title: null, h1: [] };
   try {
-    const parsed = JSON.parse(parsedData) as { links?: LinkData[] };
-    return parsed.links ?? [];
+    const parsed = JSON.parse(parsedData) as {
+      links?: LinkData[];
+      meta?: { title?: string | null };
+      h1?: { texts?: string[] };
+    };
+    return {
+      links: parsed.links ?? [],
+      title: parsed.meta?.title ?? null,
+      h1: parsed.h1?.texts ?? [],
+    };
   } catch {
-    return [];
+    return { links: [], title: null, h1: [] };
   }
 }
 

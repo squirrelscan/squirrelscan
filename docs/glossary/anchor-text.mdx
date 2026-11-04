@@ -27,6 +27,7 @@ Screen reader users often pull up a list of a page's links and move through it o
 | Rule | What it flags | Severity |
 |---|---|---|
 | [Empty and generic anchor text: click here and icons](/rules/links/anchor-text) | A link with no text has no name, and click here describes nothing. squirrel groups links by destination and checks each group for a descriptive name. | warning |
+| [Anchor text that does not match the page it links to](/rules/links/anchor-mismatch) | A link that says how I work and points at a page about engagements tells a crawler nothing. squirrel compares inbound anchor text with the target's title, H1 and URL. | warning |
 | [Link text: why 'click here' fails and what to use](/rules/a11y/link-text) | Links reading 'click here', and links wrapping an unlabeled icon, give screen reader users nothing to go on. squirrel lists both kinds. | warning |
 | [Identical link text pointing at different pages](/rules/a11y/identical-links-same-purpose) | Two links reading 'Learn more' that go to different places are indistinguishable in a screen reader's link list. squirrel finds them. | warning |
 
@@ -51,7 +52,7 @@ When the design needs a short visible label, keep it and put the full phrase in 
 {/* glossary:run:start */}
 
 ```bash
-squirrel audit https://example.com --rule-include links/anchor-text,a11y/link-text,a11y/identical-links-same-purpose
+squirrel audit https://example.com --rule-include links/anchor-text,links/anchor-mismatch,a11y/link-text,a11y/identical-links-same-purpose
 ```
 
 {/* glossary:run:end */}

@@ -253,6 +253,7 @@
                   "rules/links/no-contextual-inbound",
                   "rules/links/dead-end-pages",
                   "rules/links/anchor-text",
+                  "rules/links/anchor-mismatch",
                   "rules/links/https-downgrade",
                   "rules/links/tel-mailto"
                 ]

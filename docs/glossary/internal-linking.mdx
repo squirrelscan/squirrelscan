@@ -29,6 +29,7 @@ The rules count crawlable, resolvable internal links, and leave `nofollow` links
 | [Internal link count per page: too few and too many](/rules/links/internal-links) | A page with no internal links leads nowhere and a page with hundreds dilutes each one. squirrel counts internal links against a configurable range. | warning |
 | [Pages with only one internal link pointing to them](/rules/links/weak-internal-links) | One inbound link is enough to be found and not enough to look important. squirrel lists every page whose dofollow inbound count is exactly one. | warning |
 | [Linked only from the nav and footer: no editorial links](/rules/links/no-contextual-inbound) | A footer link on every page looks like hundreds of inbound links and carries none of the signal. squirrel counts only links outside sitewide chrome. | warning |
+| [Anchor text that does not match the page it links to](/rules/links/anchor-mismatch) | A link that says how I work and points at a page about engagements tells a crawler nothing. squirrel compares inbound anchor text with the target's title, H1 and URL. | warning |
 | [Dead-end page: no outgoing internal links to continue with](/rules/links/dead-end-pages) | A page with no onward links leaves the reader and the crawler with nowhere to go. squirrel counts outgoing internal links, excluding self-links. | warning |
 | [Orphan pages: pages with too few inbound internal links](/rules/links/orphan-pages) | A page nothing links to is hard to discover and reads as unimportant. squirrel counts dofollow inbound internal links for every crawled page. | warning |
 | [rel=nofollow on an internal link: usually a mistake](/rules/links/nofollow-internal) | Nofollow on your own links tells search engines to ignore your site's internal structure. squirrel flags every internal link carrying it. | warning |
@@ -53,7 +54,7 @@ Add links from the hub or category page and from articles on the same topic ([th
 {/* glossary:run:start */}
 
 ```bash
-squirrel audit https://example.com --rule-include links/internal-links,links/weak-internal-links,links/no-contextual-inbound,links/dead-end-pages,links/orphan-pages,links/nofollow-internal
+squirrel audit https://example.com --rule-include links/internal-links,links/weak-internal-links,links/no-contextual-inbound,links/anchor-mismatch,links/dead-end-pages,links/orphan-pages,links/nofollow-internal
 ```
 
 {/* glossary:run:end */}

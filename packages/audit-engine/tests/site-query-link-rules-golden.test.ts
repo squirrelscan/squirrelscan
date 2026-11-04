@@ -44,6 +44,7 @@ const rules = loadAllRules();
 const orphanRule = rules.get("links/orphan-pages")!;
 const weakRule = rules.get("links/weak-internal-links")!;
 const contextualRule = rules.get("links/no-contextual-inbound")!;
+const anchorMismatchRule = rules.get("links/anchor-mismatch")!;
 
 // ── fixture builders ──────────────────────────────────────────────────────────
 
@@ -143,6 +144,12 @@ function parseLinks(parsedData: string | null): LinkData[] {
   }
 }
 
+function parseHeadInfo(parsedData: string | null): Record<string, unknown> {
+  if (!parsedData) return {};
+  const { meta, h1 } = JSON.parse(parsedData) as Record<string, unknown>;
+  return { meta, h1 };
+}
+
 // Run `rule` both ways over the seeded crawl. Legacy: materialized site.pages
 // (mapped exactly as the engine builds it — url = normalizedUrl, parsed.links from
 // parsedData). Streaming: siteQuery from the factory + EMPTY site.pages.
@@ -157,7 +164,10 @@ async function runBothWays(
     url: p.normalizedUrl,
     finalUrl: p.finalUrl,
     statusCode: p.status,
-    parsed: { links: parseLinks(p.parsedData) } as ParsedPage,
+    parsed: {
+      links: parseLinks(p.parsedData),
+      ...parseHeadInfo(p.parsedData),
+    } as ParsedPage,
   }));
 
   const base = {
@@ -701,4 +711,93 @@ describe("createSiteQuery — page_features-backed aggregates", () => {
     expect(seen).toEqual([]);
     await run(store.close());
   });
+});
+
+describe("SiteQuery dual-path: links/anchor-mismatch (#110)", () => {
+  function titled(url: string, title: string, links: LinkData[]): PageRecord {
+    const row = pageRow(url, links);
+    row.parsedData = JSON.stringify({ links, meta: { title }, h1: { count: 0, texts: [] } });
+    return row;
+  }
+  const text = (url: string, anchor: string, chromeLink = false): LinkData => ({
+    url,
+    text: anchor,
+    isInternal: true,
+    isChrome: chromeLink,
+  });
+
+  test("streaming path is deep-equal to legacy AND flags only the mismatch", async () => {
+    const store = await freshStore();
+    const pages = [
+      titled(BASE, "Home", [
+        text("/fridge", "Fridges"),
+        text("/engage", "how I work"),
+        text("/brands/lg", "LG"),
+        text("/privacy", "Legal", false),
+        text("/freezers", "click here", true),
+      ]),
+      titled("https://example.com/a", "Alpha", [text("/engage", "how I work")]),
+      titled("https://example.com/fridge", "Fridge repairs", []),
+      titled("https://example.com/engage", "Engage a consultant", []),
+      titled("https://example.com/brands/lg", "Brand", []),
+      titled("https://example.com/privacy", "Our data promise", []),
+      titled("https://example.com/freezers", "Commercial freezer repairs", []),
+    ];
+    for (const p of pages) await run(store.upsertPage(CRAWL, p));
+
+    const { legacy, streamed } = await runBothWays(store, anchorMismatchRule, {});
+    expect(streamed).toEqual(legacy);
+    expect(legacy[0]?.status).toBe("warn");
+    expect(legacy[0]?.items?.map((i) => i.id)).toEqual([
+      "https://example.com/ -> https://example.com/engage",
+      "https://example.com/a -> https://example.com/engage",
+    ]);
+    expect(legacy[0]?.message).toContain("only contextual anchor text");
+    await run(store.close());
+  }, 30_000);
+
+  test("the anchor graph is not built when the rule is disabled for the run", async () => {
+    const store = await freshStore();
+    await seedFixture(store);
+    const off = await run(createSiteQuery(store, CRAWL, { anchorGraph: false }));
+    expect(off.anchorGraph).toBeUndefined();
+    const on = await run(createSiteQuery(store, CRAWL));
+    expect(on.anchorGraph?.().pages.size).toBeGreaterThan(1);
+    await run(store.close());
+  }, 30_000);
+
+  test("a non-2xx target is not judged, identically on both paths", async () => {
+    const store = await freshStore();
+    const gone = titled("https://example.com/gone", "404 Not Found", []);
+    gone.status = 404;
+    const pages = [
+      titled(BASE, "Home", [text("/gone", "click here"), text("/fridge", "Fridge")]),
+      gone,
+      titled("https://example.com/fridge", "Fridge repairs", []),
+    ];
+    for (const p of pages) await run(store.upsertPage(CRAWL, p));
+    const { legacy, streamed } = await runBothWays(store, anchorMismatchRule, {});
+    expect(streamed).toEqual(legacy);
+    expect(legacy[0]?.status).toBe("pass");
+    expect((legacy[0]?.details as { judged: number; notJudged: number })).toMatchObject({
+      judged: 1,
+      notJudged: 1,
+    });
+    await run(store.close());
+  }, 30_000);
+
+  test("pages that differ only by query are separate targets, identically on both paths", async () => {
+    const store = await freshStore();
+    const pages = [
+      titled(BASE, "Home", [text("/p?id=1", "Red apple"), text("/p?id=2", "Blue car")]),
+      titled("https://example.com/p?id=1", "Red apple", []),
+      titled("https://example.com/p?id=2", "Blue car", []),
+    ];
+    for (const p of pages) await run(store.upsertPage(CRAWL, p));
+    const { legacy, streamed } = await runBothWays(store, anchorMismatchRule, {});
+    expect(streamed).toEqual(legacy);
+    expect(legacy[0]?.status).toBe("pass");
+    expect((legacy[0]?.details as { judged: number }).judged).toBe(2);
+    await run(store.close());
+  }, 30_000);
 });

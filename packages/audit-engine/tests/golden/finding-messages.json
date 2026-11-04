@@ -2261,6 +2261,12 @@
    "terms-of-service|info|No terms of service link found|\"Consider adding terms of service for legal protection\"|"
   ]
  },
+ "links/anchor-mismatch": {
+  "digest": "32724780283872",
+  "lines": [
+   "anchor-mismatch|pass|Anchor text shares a word with the page it points at||"
+  ]
+ },
  "links/anchor-text": {
   "digest": "211457743537868",
   "lines": [
