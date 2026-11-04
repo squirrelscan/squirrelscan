@@ -19,6 +19,7 @@ How it works:
 
 ### Fixed
 
+- Technology detection: `shopify-payments` reads the text of data scripts again. #1550 cut it from every html detector, which hid the `"shopifyPaymentsEnabled":true` flag a Shopify storefront embeds as JSON (`shopify-features`): 75 of 76 corpus detections were lost. The signature opts in per detector (`dataScripts`); comments and `<template>` content stay cut for it, and a vendor URL in a data script is still not a detection.
 - The Technologies docs table now says the local scan also runs beside the cloud scan on a signed-in audit and that the cloud payload carries each bundle cut to the caps; a test runs the controller's cloud-then-merge path with the cloud client stubbed and a fingerprint 400 KB into a bundle (#1406)
 - The `integrity/fake-auth-overlay` docs now state the `<style media>` and `<style type>` limit exactly: every `<style>` block is read as applying, whatever its `media` or `type`, so a rule in a print-only or ignored-type block can hide a cover a browser still draws (#1566)
 
