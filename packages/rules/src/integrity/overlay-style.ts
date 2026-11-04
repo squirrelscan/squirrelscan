@@ -99,6 +99,14 @@ const READINGS: readonly Reading[] = ["tokens", "naive", "plain"];
 
 const isIdentChar = (c: string): boolean => /[\w-]/.test(c) || c >= "\u0080";
 
+/**
+ * Lower-cases A-Z only, as a browser folds selectors, attribute values and keywords: JavaScript `toLowerCase` also folds the
+ * Kelvin sign U+212A to `k`, so `[type="K"]` (Kelvin) would match a frame's `type=k` here and not in a browser. Linear.
+ */
+export function asciiLower(text: string): string {
+  return text.replace(/[A-Z]+/g, (m) => m.toLowerCase());
+}
+
 /** CSS preprocessing: a CRLF, a lone CR and a form feed are each one newline (a string ends at one). */
 function preprocess(text: string): string {
   return /[\r\f]/.test(text) ? text.replace(/\r\n?|\f/g, "\n") : text;
@@ -165,7 +173,7 @@ function walk(
       quote = c;
       continue;
     }
-    if (c === "(" && ident !== "" && unescapeCss(ident).toLowerCase() === "url" && !opensQuoted(text, i + 1)) {
+    if (c === "(" && ident !== "" && asciiLower(unescapeCss(ident)) === "url" && !opensQuoted(text, i + 1)) {
       let j = i + 1;
       for (; j < n && text[j] !== ")"; j++) if (text[j] === "\\") j = escapeEnd(text, j);
       i = j;
@@ -256,8 +264,8 @@ function parseDeclarations(text: string, reading: Reading = "tokens"): Declarati
   for (const raw of raws) {
     const idx = raw.indexOf(":");
     if (idx === -1) continue;
-    const property = decode(raw.slice(0, idx)).trim().toLowerCase();
-    let value = decode(raw.slice(idx + 1)).trim().toLowerCase();
+    const property = asciiLower(decode(raw.slice(0, idx)).trim());
+    let value = asciiLower(decode(raw.slice(idx + 1)).trim());
     // Anchored on the literal `!` (no leading `\s*`), so a long run of spaces cannot backtrack.
     const important = /!\s*important$/.test(value);
     if (important) value = value.replace(/!\s*important$/, "").trim();
@@ -295,8 +303,8 @@ function parseSelectorList(selector: string): { selectors: ParsedSelector[]; ove
     const tokens = match[2]!.match(/[.#][\w-]+/g) ?? [];
     out.push({
       tag: match[1] !== undefined,
-      classes: tokens.filter((t) => t[0] === ".").map((t) => t.slice(1).toLowerCase()),
-      ids: tokens.filter((t) => t[0] === "#").map((t) => t.slice(1).toLowerCase()),
+      classes: tokens.filter((t) => t[0] === ".").map((t) => asciiLower(t.slice(1))),
+      ids: tokens.filter((t) => t[0] === "#").map((t) => asciiLower(t.slice(1))),
       classesExact: [],
       idsExact: [],
       attrs: [],
@@ -319,7 +327,7 @@ function splitTopLevel(text: string, separator: string): string[] {
   for (let i = 0; i < text.length; i++) {
     const c = text[i]!;
     if (c === "\\") {
-      i++;
+      i = escapeEnd(text, i);
       continue;
     }
     if (quote) {
@@ -350,7 +358,8 @@ function subjectCompound(selector: string): string {
   for (let i = 0; i < selector.length; i++) {
     const c = selector[i]!;
     if (c === "\\") {
-      i++;
+      // a hex escape takes one optional space (`.\63 over`): it is not a descendant combinator
+      i = escapeEnd(selector, i);
       continue;
     }
     if (quote) {
@@ -388,13 +397,13 @@ function identEnd(text: string, at: number): number {
  * rule index need the folded form, and the attribute name and flag where they are read.
  */
 function lowerSelector(selector: string): string {
-  if (!/[[.#]/.test(selector)) return selector.toLowerCase();
+  if (!/[[.#]/.test(selector)) return asciiLower(selector);
   const n = selector.length;
   let out = "";
   let from = 0;
   let i = 0;
   const keep = (start: number, end: number): void => {
-    out += selector.slice(from, start).toLowerCase() + selector.slice(start, end);
+    out += asciiLower(selector.slice(from, start)) + selector.slice(start, end);
     from = end;
   };
   while (i < n) {
@@ -432,7 +441,7 @@ function lowerSelector(selector: string): string {
       i = j;
     } else i++;
   }
-  return out + selector.slice(from).toLowerCase();
+  return out + asciiLower(selector.slice(from));
 }
 
 /** Attributes whose values HTML compares without case in an attribute selector (the Selectors spec list). */
@@ -448,7 +457,7 @@ const ATTR_OPS = new Set(["=", "~=", "|=", "^=", "$=", "*="]);
 /** `[name]`, `[name=value]`, `[name op "value" i]` from the text between the brackets, or undefined. */
 function parseAttr(inner: string): AttrCondition | undefined {
   const nameEnd = identEnd(inner, 0);
-  const name = unescapeCss(inner.slice(0, nameEnd)).trim().toLowerCase();
+  const name = asciiLower(unescapeCss(inner.slice(0, nameEnd)).trim());
   if (!name) return undefined;
   let i = nameEnd;
   while (inner[i] === " ") i++;
@@ -470,7 +479,7 @@ function parseAttr(inner: string): AttrCondition | undefined {
     value = inner.slice(i, end);
     i = end;
   }
-  const flag = inner.slice(i).trim().toLowerCase();
+  const flag = asciiLower(inner.slice(i).trim());
   // `s` is not read: a browser that does not support the flag drops the whole rule, so such a rule is not modelled.
   if (flag !== "" && flag !== "i") return undefined;
   return { name, op: op as AttrCondition["op"], value: unescapeCss(value), ci: flag === "i" };
@@ -490,7 +499,7 @@ function parseCompound(text: string): ParsedSelector | undefined {
   if (text[0] === "*") i = 1;
   else if (text[0] !== "." && text[0] !== "#" && text[0] !== "[" && text[0] !== ":") {
     const end = identEnd(text, 0);
-    if (end === 0 || unescapeCss(text.slice(0, end)).toLowerCase() !== "iframe") return undefined;
+    if (end === 0 || asciiLower(unescapeCss(text.slice(0, end))) !== "iframe") return undefined;
     out.tag = true;
     i = end;
   }
@@ -500,7 +509,7 @@ function parseCompound(text: string): ParsedSelector | undefined {
       const end = identEnd(text, i + 1);
       if (end === i + 1) return undefined;
       const written = unescapeCss(text.slice(i + 1, end));
-      const name = written.toLowerCase();
+      const name = asciiLower(written);
       if (c === ".") {
         out.classes.push(name);
         out.classesExact.push(written);
@@ -530,7 +539,7 @@ function parseCompound(text: string): ParsedSelector | undefined {
       if (text[i + 1] === ":") return undefined; // a pseudo-element is not the iframe
       const end = identEnd(text, i + 1);
       if (end === i + 1) return undefined;
-      const name = unescapeCss(text.slice(i + 1, end)).toLowerCase();
+      const name = asciiLower(unescapeCss(text.slice(i + 1, end)));
       i = end;
       if (text[i] === "(") {
         let depth = 0;
@@ -548,6 +557,215 @@ function parseCompound(text: string): ParsedSelector | undefined {
   }
   out.specificity = cap99(out.ids.length) * 10_000 + cap99(classLike) * 100 + (out.tag ? 1 : 0);
   return out;
+}
+
+// Selector syntax, as far as a browser decides a rule's fate by it. A browser drops a style rule whose selector list has one
+// invalid part (`.cover, :bogus {...}`, `.cover, [x=y s] {...}`, `.cover, !! {...}`), so the part that would have matched a cover
+// never applies, and a decoy rule's list is dropped the same way. Only what is certainly invalid is rejected: a pseudo-class
+// name that is not known, a malformed attribute selector or identifier, an empty part, a doubled combinator, a named
+// namespace. `:is()` and `:where()` are forgiving lists (an invalid argument there is ignored), so they are not read.
+
+/** Pseudo-classes written without arguments (Chrome). `-webkit-` ones are all accepted: Chrome has several and the list moves. */
+const PLAIN_PSEUDO_CLASSES: ReadonlySet<string> = new Set(
+  "active any-link autofill buffering checked current default defined disabled empty enabled first-child first-of-type focus focus-visible focus-within fullscreen future host hover in-range indeterminate interest-source interest-target invalid last-child last-of-type link modal muted only-child only-of-type open optional out-of-range past paused picture-in-picture placeholder-shown playing popover-open read-only read-write required root scope seeking stalled target user-invalid user-valid valid visited volume-locked xr-overlay active-view-transition".split(" "),
+);
+/** Pseudo-classes that take an argument in parentheses. */
+const FUNCTIONAL_PSEUDO_CLASSES: ReadonlySet<string> = new Set(
+  "active-view-transition-type current dir has host host-context is lang not nth-child nth-last-child nth-last-of-type nth-of-type state where".split(" "),
+);
+/** Pseudo-elements, with or without arguments (`::part(x)`). */
+const PSEUDO_ELEMENTS: ReadonlySet<string> = new Set(
+  "after backdrop before checkmark column cue cue-region details-content file-selector-button first-letter first-line grammar-error highlight marker part picker picker-icon placeholder scroll-button scroll-marker scroll-marker-group selection slotted spelling-error target-text view-transition view-transition-group view-transition-image-pair view-transition-new view-transition-old".split(" "),
+);
+/** Pseudo-elements a browser also accepts with one colon. */
+const LEGACY_PSEUDO_ELEMENTS: ReadonlySet<string> = new Set(["after", "before", "first-letter", "first-line"]);
+
+/** Deepest `:not()` / `:has()` read: past it the arguments are not checked (they are taken as valid). */
+const MAX_VALIDATE_DEPTH = 8;
+
+const isCssSpace = (c: string | undefined): boolean => c === " " || c === "\t" || c === "\n" || c === "\r" || c === "\f";
+
+/** The end of a valid identifier at `at` (not starting with a digit, nor `-` and a digit), or -1. */
+function validIdentEnd(text: string, at: number): number {
+  let i = at;
+  if (text[i] === "-") {
+    i++;
+    if (text[i] === "-") return identEnd(text, i + 1);
+  }
+  const c = text[i];
+  if (c === undefined) return -1;
+  if (c === "\\") {
+    if (text[i + 1] === undefined || text[i + 1] === "\n") return -1;
+  } else if (!/[A-Za-z_]/.test(c) && c < "\u0080") return -1;
+  return identEnd(text, i);
+}
+
+/** The index of the `]` or `)` that closes the block opened just before `from`, past strings and escapes, or -1. */
+function blockEnd(text: string, from: number, closer: string): number {
+  let quote = "";
+  let depth = 0;
+  for (let i = from; i < text.length; i++) {
+    const c = text[i]!;
+    if (c === "\\") i++;
+    else if (quote) {
+      if (c === quote) quote = "";
+    } else if (c === '"' || c === "'") quote = c;
+    else if (c === "(" || c === "[") depth++;
+    else if (c === ")" || c === "]") {
+      if (depth === 0) return c === closer ? i : -1;
+      depth--;
+    }
+  }
+  return -1;
+}
+
+/** The text between the brackets of an attribute selector is `name`, `name op value` or `name op value flag`. */
+function validAttribute(inner: string): boolean {
+  const n = inner.length;
+  let i = 0;
+  const skip = (): void => {
+    while (i < n && isCssSpace(inner[i])) i++;
+  };
+  skip();
+  if (inner[i] === "*" && inner[i + 1] === "|" && inner[i + 2] !== "=") i += 2;
+  else if (inner[i] === "|" && inner[i + 1] !== "=") i++;
+  const nameEnd = validIdentEnd(inner, i);
+  if (nameEnd < 0) return false;
+  i = nameEnd;
+  // `ns|name` with a named namespace: none is declared in a style block, so the rule is invalid.
+  if (inner[i] === "|" && inner[i + 1] !== "=") return false;
+  skip();
+  if (i >= n) return true;
+  const op = inner[i] === "=" ? "=" : inner[i + 1] === "=" ? inner.slice(i, i + 2) : "";
+  if (op !== "=" && !ATTR_OPS.has(op)) return false;
+  i += op.length;
+  skip();
+  const q = inner[i];
+  if (q === '"' || q === "'") {
+    let j = i + 1;
+    while (j < n && inner[j] !== q) j += inner[j] === "\\" ? 2 : 1;
+    if (j >= n) return false;
+    i = j + 1;
+  } else {
+    const end = validIdentEnd(inner, i);
+    if (end < 0) return false;
+    i = end;
+    // an unquoted value is followed by white space before a flag
+    if (i < n && !isCssSpace(inner[i])) return false;
+  }
+  skip();
+  if (i >= n) return true;
+  // Only `i` is a flag a browser reads: `s` and anything else make the selector, and with it the whole rule, invalid.
+  if (inner[i] !== "i" && inner[i] !== "I") return false;
+  i++;
+  skip();
+  return i >= n;
+}
+
+/** The end of the valid compound selector at `at`, or -1 when none starts there or it is invalid. */
+function validCompound(text: string, at: number, depth: number): number {
+  const n = text.length;
+  let i = at;
+  const first = text[i];
+  if (first === "*" || first === "|" || (first !== undefined && first !== "&" && validIdentEnd(text, i) >= 0)) {
+    // a type selector, with an optional namespace prefix: only `*|` and `|` name a namespace that exists
+    let p = i;
+    let named = false;
+    if (first === "|") {
+      p++;
+      named = true;
+    } else {
+      const end = first === "*" ? i + 1 : validIdentEnd(text, i);
+      if (text[end] === "|" && text[end + 1] !== "=") {
+        if (first !== "*") return -1;
+        p = end + 1;
+        named = true;
+      } else i = end;
+    }
+    if (named) {
+      const end = text[p] === "*" ? p + 1 : validIdentEnd(text, p);
+      if (end < 0) return -1;
+      i = end;
+    }
+  }
+  while (i < n) {
+    const c = text[i]!;
+    if (c === "." || c === "#") {
+      const end = validIdentEnd(text, i + 1);
+      if (end < 0) return -1;
+      i = end;
+    } else if (c === "&") i++;
+    else if (c === "[") {
+      const close = blockEnd(text, i + 1, "]");
+      if (close < 0 || !validAttribute(text.slice(i + 1, close))) return -1;
+      i = close + 1;
+    } else if (c === ":") {
+      const element = text[i + 1] === ":";
+      const start = i + (element ? 2 : 1);
+      const nameEnd = validIdentEnd(text, start);
+      if (nameEnd < 0) return -1;
+      const name = asciiLower(unescapeCss(text.slice(start, nameEnd)));
+      let after = nameEnd;
+      let args: string | undefined;
+      if (text[nameEnd] === "(") {
+        const close = blockEnd(text, nameEnd + 1, ")");
+        if (close < 0) return -1;
+        args = text.slice(nameEnd + 1, close);
+        after = close + 1;
+      }
+      if (element || LEGACY_PSEUDO_ELEMENTS.has(name)) {
+        if (!PSEUDO_ELEMENTS.has(name) && !name.startsWith("-webkit-")) return -1;
+      } else if (!name.startsWith("-webkit-")) {
+        if (args === undefined ? !PLAIN_PSEUDO_CLASSES.has(name) : !FUNCTIONAL_PSEUDO_CLASSES.has(name)) return -1;
+        // `:not()` and `:has()` are strict lists (`:is()` and `:where()` forgive an invalid argument, so they are not read).
+        if (args !== undefined && (name === "not" || name === "has") && depth < MAX_VALIDATE_DEPTH && !validSelectorList(args, name === "has", depth + 1)) return -1;
+      }
+      i = after;
+    } else break;
+  }
+  return i > at ? i : -1;
+}
+
+/** One complex selector: compounds joined by descendant, `>`, `+` and `~` combinators (a leading one only in a relative selector). */
+function validComplexSelector(text: string, relative: boolean, depth: number): boolean {
+  const n = text.length;
+  let i = 0;
+  const skip = (): void => {
+    while (i < n && isCssSpace(text[i])) i++;
+  };
+  const combinator = (c: string | undefined): boolean => c === ">" || c === "+" || c === "~";
+  skip();
+  if (i >= n) return false;
+  if (combinator(text[i])) {
+    if (!relative) return false;
+    i++;
+    skip();
+  }
+  for (;;) {
+    const end = validCompound(text, i, depth);
+    if (end < 0) return false;
+    i = end;
+    const spaced = i;
+    skip();
+    if (i >= n) return true;
+    if (combinator(text[i])) {
+      i++;
+      skip();
+      if (i >= n || combinator(text[i])) return false;
+    } else if (i === spaced) return false;
+  }
+}
+
+/**
+ * Whether every part of a selector list is valid, as a browser drops the whole rule otherwise. A part past the size bound is not
+ * read (the caller already reports it) and counts as valid. `relative`: a part may start with a combinator (nested rules, `:has()`).
+ */
+export function validSelectorList(selector: string, relative: boolean, depth = 0): boolean {
+  for (const part of splitTopLevel(selector, ",")) {
+    if (part.length > MAX_SELECTOR_CHARS + 64) continue;
+    if (!validComplexSelector(part, relative, depth)) return false;
+  }
+  return true;
 }
 
 /** Starts a part of a nested selector whose ancestors were dropped: the part is read, as one whose applicability is unknown. */
@@ -606,7 +824,9 @@ const countChar = (text: string, char: string): number => {
  * {@link MAX_SELECTOR_CHARS} (its length is worked out before it is built, so a run of `&` is not expanded), and a shared
  * budget of produced selectors. Whatever one of those drops makes `cut` true: the caller reports the CSS truncated.
  */
-function nestSelector(parent: string, child: string, budget: NestBudget): { selector: string; cut: boolean } {
+function nestSelector(parent: string, child: string, budget: NestBudget): { selector: string; cut: boolean; invalid?: boolean } {
+  // A child list with an invalid part is dropped whole, with the rules nested in it.
+  if (!validSelectorList(child, true)) return { selector: "", cut: false, invalid: true };
   if (budget.selectors <= 0) return { selector: "", cut: true };
   let cut = false;
   const parentParts = splitTopLevel(parent, ",");
@@ -749,11 +969,11 @@ const MAX_AT_PRELUDE = 2_048;
  */
 function atRuleKind(prelude: string): { descend: boolean; known: boolean } {
   const head = prelude.length > 64 ? prelude.slice(0, 64) : prelude;
-  const name = /^@([\w-]+)/.exec((head.includes("\\") ? unescapeCss(head) : head).toLowerCase());
+  const name = /^@([\w-]+)/.exec(asciiLower(head.includes("\\") ? unescapeCss(head) : head));
   if (!name || !GROUP_AT_RULES.has(name[1]!)) return { descend: false, known: false };
   if (name[1] !== "media") return { descend: true, known: false };
   if (prelude.length > MAX_AT_PRELUDE) return { descend: true, known: false };
-  const text = (prelude.includes("\\") ? unescapeCss(prelude) : prelude).toLowerCase().slice(name[0].length);
+  const text = asciiLower(prelude.includes("\\") ? unescapeCss(prelude) : prelude).slice(name[0].length);
   let descend = false;
   let known = false;
   for (const q of splitTopLevel(text, ",")) {
@@ -944,6 +1164,8 @@ interface Sheet {
   truncated: boolean;
   /** Rule visits left for frames (see {@link SHEET_WORK_BUDGET}). */
   work: number;
+  /** The page has no doctype: a browser is in quirks mode and compares class and id names without case. */
+  quirks: boolean;
 }
 
 const sheetCache = new WeakMap<object, Partial<Record<Reading, Sheet>>>();
@@ -990,7 +1212,7 @@ function sheetFor(doc: Document, wanted: Wanted, reading: Reading): Sheet {
           if (attr.op !== "" && !attr.ci) hasUnknown.value = true;
         }
         // A class or id written with capitals reads differently under a browser's case-sensitive match: the decided reading too.
-        if (parsed.classesExact.some((c) => c !== c.toLowerCase()) || parsed.idsExact.some((i) => i !== i.toLowerCase())) hasUnknown.value = true;
+        if (parsed.classesExact.some((c) => c !== asciiLower(c)) || parsed.idsExact.some((i) => i !== asciiLower(i))) hasUnknown.value = true;
       }
       if (atUnknown || selectors.some((parsed) => parsed.unknown)) hasUnknown.value = true;
       for (const key of keys) {
@@ -1011,6 +1233,9 @@ function sheetFor(doc: Document, wanted: Wanted, reading: Reading): Sheet {
      * browser orders them; a nested block is never part of a declaration.
      */
     const addRule = (selector: string, body: string, depth: number, atUnknown: boolean): void => {
+      // A browser drops the whole rule, and the rules nested in it, when a part of its list is invalid. (A nested rule's own list
+      // was checked by nestSelector.)
+      if (depth === 0 && !validSelectorList(selector, false)) return;
       const { selectors, oversized } = parseFrameSelectorList(selector);
       // a selector longer than the bound is not read and could match any iframe on the page
       if (oversized && wanted.frames > 0) cut.dropped = true;
@@ -1031,6 +1256,7 @@ function sheetFor(doc: Document, wanted: Wanted, reading: Reading): Sheet {
             }
             nest.rules++;
             const nested = nestSelector(selector, inner, nest);
+            if (nested.invalid) return;
             if (nested.cut) cut.dropped = true;
             addRule(nested.selector, innerBody, depth + 1, atUnknown || innerUnknown);
           },
@@ -1053,7 +1279,7 @@ function sheetFor(doc: Document, wanted: Wanted, reading: Reading): Sheet {
       if ((nested && wanted.frames > 0) || (oversized && wanted.frames > 0) || selectors.some((parsed) => ruleKey(parsed, wanted))) cut.dropped = true;
     }, true);
   }
-  const sheet: Sheet = { byKey, attrNames, nest, hasUnknown: hasUnknown.value, memo: new Map(), truncated: truncated || cut.dropped, work: SHEET_WORK_BUDGET };
+  const sheet: Sheet = { byKey, attrNames, nest, hasUnknown: hasUnknown.value, memo: new Map(), truncated: truncated || cut.dropped, work: SHEET_WORK_BUDGET, quirks: !doc.doctype };
   byReading[reading] = sheet;
   return sheet;
 }
@@ -1065,8 +1291,8 @@ function attrMatches(condition: AttrCondition, raw: string | undefined, foldAll:
   if (condition.op === "") return true;
   // A browser compares a value case-sensitively unless the selector says `i`; the full cascade also reads it case-folded, so a
   // decoy that only matches once case is ignored can still hide a cover there but never counts as a decided match.
-  const have = condition.ci || fold ? raw.toLowerCase() : raw;
-  const want = condition.ci || fold ? condition.value.toLowerCase() : condition.value;
+  const have = condition.ci || fold ? asciiLower(raw) : raw;
+  const want = condition.ci || fold ? asciiLower(condition.value) : condition.value;
   switch (condition.op) {
     case "=":
       return have === want;
@@ -1095,8 +1321,8 @@ function matchedSpecificity(rule: Rule, frame: FrameNames, attr: (name: string) 
     if (selector.specificity <= best) continue;
     if (decided && selector.unknown) continue;
     if (
-      // The decided reading compares a class and an id as a browser does, case-sensitively; the full reading folds case.
-      (decided
+      // The decided reading compares a class and an id as a browser does: case-sensitively in standards mode, folded in quirks mode (no doctype); the full reading always folds case.
+      (decided && !frame.quirks
         ? selector.classesExact.every((c) => frame.rawClasses.has(c)) && selector.idsExact.every((i) => i === frame.rawId)
         : selector.classes.every((c) => frame.classes.has(c)) && selector.ids.every((i) => i === frame.id)) &&
       selector.attrs.every((a) => attrMatches(a, attr(a.name), !decided))
@@ -1151,6 +1377,8 @@ interface FrameNames {
   classes: Set<string>;
   rawId: string;
   rawClasses: Set<string>;
+  /** Quirks mode: the decided reading compares class and id names folded too. */
+  quirks: boolean;
 }
 
 /** The stylesheet's contribution to one iframe, memoised per (id, classes): pages repeat them. */
@@ -1218,7 +1446,7 @@ function sheetLayers(
 /** The iframe's resolved style properties, lower-cased: stylesheet, then inline, `!important` over either. */
 function resolvedStyle(sheet: Sheet, frame: Element, reading: Reading, mode: Mode): Map<string, string> {
   const rawId = getAttrCI(frame, "id") ?? "";
-  const id = rawId.toLowerCase();
+  const id = asciiLower(rawId);
   // The class attribute is charged to the page's budget by length, so padding it costs the page, not the scan.
   const classAttr = getAttrCI(frame, "class") ?? "";
   sheet.work -= Math.ceil(classAttr.length / CLASS_CHARS_PER_VISIT);
@@ -1228,14 +1456,14 @@ function resolvedStyle(sheet: Sheet, frame: Element, reading: Reading, mode: Mod
     for (const c of classAttr.split(HTML_SPACES)) {
       if (!c) continue;
       rawClasses.add(c);
-      classes.add(c.toLowerCase());
+      classes.add(asciiLower(c));
     }
   } else sheet.truncated = true;
   const attr = (name: string): string | undefined => {
     const value = getAttrCI(frame, name);
     return value === undefined || value === null ? undefined : value.slice(0, MAX_ATTR_CHARS);
   };
-  const [normal, important] = sheetLayers(sheet, { id, classes, rawId, rawClasses }, attr, sheet.memo, mode) as [Declaration[], Declaration[]];
+  const [normal, important] = sheetLayers(sheet, { id, classes, rawId, rawClasses, quirks: sheet.quirks }, attr, sheet.memo, mode) as [Declaration[], Declaration[]];
   const inline = parseDeclarations(getAttrCI(frame, "style") ?? "", reading);
   const layers: Declaration[][] = [
     normal,
@@ -1321,9 +1549,9 @@ function wantedFor(doc: Document): Wanted {
   const wanted: Wanted = { ids: new Set(), classes: new Set(), frames: 0 };
   for (const frame of doc.querySelectorAll("iframe")) {
     wanted.frames++;
-    const id = (getAttrCI(frame, "id") ?? "").toLowerCase();
+    const id = asciiLower(getAttrCI(frame, "id") ?? "");
     if (id) wanted.ids.add(id);
-    for (const c of (getAttrCI(frame, "class") ?? "").toLowerCase().split(HTML_SPACES)) if (c) wanted.classes.add(c);
+    for (const c of asciiLower(getAttrCI(frame, "class") ?? "").split(HTML_SPACES)) if (c) wanted.classes.add(c);
   }
   wantedCache.set(doc, wanted);
   return wanted;

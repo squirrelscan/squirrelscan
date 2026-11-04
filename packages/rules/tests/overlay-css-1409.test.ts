@@ -713,3 +713,139 @@ describe("the nesting budget spent exactly: each early exit reports the cut (#14
     expect(probe("a,b{ &.x{border:0} }")).toEqual({ used: 20_000, truncated: true });
   });
 });
+
+describe("follow-ups of the #1535 review: ASCII fold, quirks mode, invalid selector-list parts, surviving mutants (#1566)", () => {
+  const COVER = `.cover{${FIXED}}`;
+  const STATIC = "position:static";
+  const KELVIN = "K";
+  const frame = (attrs: string): string => `<iframe ${attrs} srcdoc=""></iframe>`;
+  const COVER_FRAME = frame('id="google-auth" class="cover"');
+  /** The same page with no doctype: a browser renders it in quirks mode. */
+  const firesQuirks = (css: string, f: string): boolean => {
+    const html = `<html><head><title>F</title><style>${css}</style></head><body><main><h1>F</h1>${f}</main></body></html>`;
+    const parsed = parsePage(html, url);
+    expect(parsed.document!.doctype).toBeNull();
+    return detectFakeAuthOverlay({ page: { url, html, statusCode: 200, loadTime: 0, headers: {}, parsed }, parsed, options: {} } as unknown as RuleContext) !== null;
+  };
+
+  test("the case fold is ASCII only: the Kelvin sign is not `k`, in an attribute value, with the `i` flag, and for a cover", () => {
+    const f = frame('id="google-auth" class="cover" type="k" data-k="k"');
+    // a browser does not match them, so the decoy does not hide the cover
+    expect(fires(`${COVER}[type="${KELVIN}"]{${STATIC}}`, f)).toBe(true);
+    expect(fires(`${COVER}[data-k="${KELVIN}" i]{${STATIC}}`, f)).toBe(true);
+    expect(fires(`${COVER}[data-k="${KELVIN}"]{${STATIC}}`, f)).toBe(true);
+    // ASCII capitals still fold: the same decoy written with `K` applies
+    expect(fires(`${COVER}[type="K"]{${STATIC}}`, f)).toBe(false);
+    expect(fires(`${COVER}[data-k="K" i]{${STATIC}}`, f)).toBe(false);
+    // and a cover that only matches through the Kelvin sign is not drawn by a browser
+    expect(fires(`[type="${KELVIN}"]{${FIXED}}`, f)).toBe(false);
+    expect(fires(`[type="K"]{${FIXED}}`, f)).toBe(true);
+    // a class or id: the Kelvin sign is not `k` there either
+    expect(fires(`.kover{${FIXED}}.${KELVIN}over{${STATIC}}`, frame('id="google-auth" class="kover"'))).toBe(true);
+  });
+
+  test("in quirks mode (no doctype) a class and an id are compared without case, as in a browser", () => {
+    const f = frame('id="google-auth" class="cover"');
+    expect(firesQuirks(`${COVER}.COVER{${STATIC}}`, f)).toBe(false);
+    expect(firesQuirks(`${COVER}#GOOGLE-AUTH{${STATIC}}`, f)).toBe(false);
+    expect(firesQuirks(`.Cover{${FIXED}}.cover{${STATIC}}`, frame('id="google-auth" class="Cover"'))).toBe(false);
+    // standards mode keeps the exact reading
+    expect(fires(`${COVER}.COVER{${STATIC}}`, f)).toBe(true);
+    expect(fires(`${COVER}#GOOGLE-AUTH{${STATIC}}`, f)).toBe(true);
+    // an attribute value is still case-sensitive in quirks mode
+    expect(firesQuirks(`${COVER}[data-k=V]{${STATIC}}`, frame('id="google-auth" class="cover" data-k="v"'))).toBe(true);
+    // and the Kelvin sign is still not `k`
+    expect(firesQuirks(`.kover{${FIXED}}.${KELVIN}over{${STATIC}}`, frame('id="google-auth" class="kover"'))).toBe(true);
+  });
+
+  const INVALID_PARTS = ["[x=y s]", ":bogus", "!!", "[x=y q]", "[x=1]", "::bogus", ":-moz-any-link", "ns|iframe", "a > > b", ":not(.x, :bogus)", ":has(:bogus)", ".x:hover:bogus"];
+
+  test("a selector list with an invalid part is dropped whole: a decoy rule no longer hides a cover", () => {
+    for (const bad of INVALID_PARTS) {
+      expect(fires(`${COVER}.cover, ${bad}{${STATIC}}`, COVER_FRAME), bad).toBe(true);
+      expect(fires(`${COVER}${bad}, .cover{${STATIC}}`, COVER_FRAME), `${bad} first`).toBe(true);
+    }
+    // an empty part (`,,` or a trailing comma) is invalid too
+    for (const list of [".cover,", ".cover,,.x", ",.cover"]) expect(fires(`${COVER}${list}{${STATIC}}`, COVER_FRAME), list).toBe(true);
+    // controls: the same list with every part valid hides the cover
+    expect(fires(`${COVER}.cover, .other{${STATIC}}`, COVER_FRAME)).toBe(false);
+    expect(fires(`${COVER}.cover, [x=y i]{${STATIC}}`, COVER_FRAME)).toBe(false);
+    expect(fires(`${COVER}.cover, ::before{${STATIC}}`, COVER_FRAME)).toBe(false);
+  });
+
+  test("a selector list with an invalid part is dropped whole: a cover rule no longer draws a cover", () => {
+    for (const bad of INVALID_PARTS) expect(fires(`.cover, ${bad}{${FIXED}}`, COVER_FRAME), bad).toBe(false);
+    for (const list of [".cover,", ".cover,,.x"]) expect(fires(`${list}{${FIXED}}`, COVER_FRAME), list).toBe(false);
+    expect(fires(`.cover, .other{${FIXED}}`, COVER_FRAME)).toBe(true);
+    expect(fires(`.cover:hover{${FIXED}}`, COVER_FRAME)).toBe(true);
+  });
+
+  test("`:is()` and `:where()` forgive an invalid argument, so the rule stays", () => {
+    expect(fires(`.cover:is(.cover, :bogus){${FIXED}}`, COVER_FRAME)).toBe(true);
+    expect(fires(`.cover:where(:bogus, [x=y q]){${FIXED}}`, COVER_FRAME)).toBe(true);
+    expect(fires(`.cover:not(.x, :bogus){${FIXED}}`, COVER_FRAME)).toBe(false);
+  });
+
+  /** The `tokens` reading only (the other two split nested rules at their first `}`, so they read a nested rule as a cover on their own). */
+  const tokensCover = (css: string): boolean => {
+    const { parsed } = page(css, COVER_FRAME);
+    const doc = parsed.document!;
+    const el = doc.querySelector("iframe")!;
+    return (["decided", "all"] as const).some((mode) => isCover(overlayGeometryFor(doc, el, "tokens", mode)));
+  };
+
+  test("the same holds inside @media and in a nested rule", () => {
+    for (const bad of [":bogus", "[x=y s]", "!!"]) {
+      expect(fires(`${COVER}@media screen{.cover, ${bad}{${STATIC}}}`, COVER_FRAME), `@media ${bad}`).toBe(true);
+      expect(fires(`@media screen{.cover, ${bad}{${FIXED}}}`, COVER_FRAME), `@media cover ${bad}`).toBe(false);
+      expect(tokensCover(`.cover{${FIXED};&, ${bad}{${STATIC}}}`), `nested ${bad}`).toBe(true);
+      expect(tokensCover(`.cover{${STATIC};&, ${bad}{${FIXED}}}`), `nested cover ${bad}`).toBe(false);
+    }
+    expect(tokensCover(`.cover{${FIXED};&, .other{${STATIC}}}`)).toBe(false);
+    expect(tokensCover(`.cover{${STATIC};&, .other{${FIXED}}}`)).toBe(true);
+    // a rule nested in a dropped rule is dropped with it
+    expect(tokensCover(`${COVER}.cover, :bogus{.cover{${STATIC}}}`)).toBe(true);
+    // a relative nested selector is valid; a top-level one is not
+    expect(tokensCover(`.cover{${FIXED};> .x{${STATIC}}}`)).toBe(true);
+    expect(fires(`${COVER}> .cover{${STATIC}}`, COVER_FRAME)).toBe(true);
+  });
+
+  test("the validity check is linear on hostile selectors (deep `:not(`, unclosed brackets, long runs of commas)", () => {
+    const started = performance.now();
+    for (const selector of [`.cover${":not(".repeat(20_000)}`, `.cover${":not(.x".repeat(20_000)}${")".repeat(20_000)}`, `.cover${"[".repeat(100_000)}`, `.cover${",".repeat(100_000)}`, `.cover${"[a=\\".repeat(30_000)}`]) {
+      fires(`${COVER}${selector}{${STATIC}}`, COVER_FRAME);
+    }
+    expect(performance.now() - started).toBeLessThan(15_000);
+  }, 30_000);
+
+  test("mutant R09: `~=` with a value that holds NBSP (not an HTML space) matches the token; one that holds a space matches nothing", () => {
+    const f = frame('id="google-auth" class="cover" data-k="a\u00a0b"');
+    expect(fires(`${COVER}[data-k~="a\u00a0b"]{${STATIC}}`, f)).toBe(false);
+    expect(fires(`${COVER}[data-k~="a b"]{${STATIC}}`, f)).toBe(true);
+  });
+
+  test("mutants R13 and R14: `rel` and `http-equiv` are compared without case", () => {
+    const f = frame('id="google-auth" class="cover" rel="nofollow" http-equiv="refresh"');
+    expect(fires(`${COVER}[rel="NoFollow"]{${STATIC}}`, f)).toBe(false);
+    expect(fires(`${COVER}[http-equiv="REFRESH"]{${STATIC}}`, f)).toBe(false);
+    expect(fires(`${COVER}[data-rel="NoFollow"]{${STATIC}}`, frame('id="google-auth" class="cover" data-rel="nofollow"'))).toBe(true);
+  });
+
+  test("mutants R20 and R21: an uppercase name after a CSS escape keeps its case", () => {
+    // `\43 ` is `C`: the name is `COVER`, and only a frame class written `COVER` is hit by it
+    const upper = frame('id="google-auth" class="COVER"');
+    const mixed = frame('id="google-auth" class="Cover"');
+    for (const decoy of [".\\43 OVER", ".\\43OVER", ".\\000043 OVER"]) {
+      expect(fires(`.COVER{${FIXED}}${decoy}{${STATIC}}`, upper), decoy).toBe(false);
+      expect(fires(`.Cover{${FIXED}}${decoy}{${STATIC}}`, mixed), `${decoy} on Cover`).toBe(true);
+    }
+    // an escape with its optional space is not a combinator: a cover written `.\63 over` is a cover
+    expect(fires(`.\\63 over{${FIXED}}`, frame('id="google-auth" class="cover"'))).toBe(true);
+    expect(fires(`${COVER}.\\63 over{${STATIC}}`, frame('id="google-auth" class="cover"'))).toBe(false);
+    // a single-character escape (`\-`) in the middle of an uppercase name
+    const dashed = frame('id="google-auth" class="a-B"');
+    expect(fires(`.a-B{${FIXED}}.a\\-B{${STATIC}}`, dashed)).toBe(false);
+    expect(fires(`.a-B{${FIXED}}.a\\-b{${STATIC}}`, dashed)).toBe(true);
+    expect(fires(`.a-b{${FIXED}}.a\\-B{${STATIC}}`, frame('id="google-auth" class="a-b"'))).toBe(true);
+  });
+});
