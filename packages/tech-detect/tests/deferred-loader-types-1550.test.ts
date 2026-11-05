@@ -6,7 +6,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { detectTechnologies } from "../src";
-import { scriptTypeRuns } from "../src/detect";
+import { pageImportMapSkipped, scriptTypeRuns } from "../src/detect";
 
 const ids = (html: string): string[] => detectTechnologies({ url: "https://example.com/", headers: {}, html }).map((t) => t.id);
 const page = (body: string): string => `<!doctype html><html><head><title>t</title></head><body>${body}</body></html>`;
@@ -24,6 +24,7 @@ const WRAPPERS: Record<string, string[]> = {
   "cookie-consent blockers": ["javascript/blocked", "text/javascript-blocked", "text/javascript_blocked", "text/blocked", "application/ecmascript-blocked"],
   "Rocket Loader": [`${HASH}-text/javascript`, `${HASH}-module`, `${HASH}-application/javascript`, "AB12CD34-MODULE"],
   "Babel standalone": ["text/babel"],
+  "consent and delay tools seen in the corpus": ["easyoptscript", "application/x-imovisor-consent", "EasyOptScript"],
   "an existing wrapper (#1435)": ["litespeed/javascript", "text/plain", "text/partytown"],
 };
 
@@ -100,6 +101,80 @@ describe("the type is trimmed before it is bounded", () => {
     const html = wrap(`${" ".repeat(3_000)}application/json`, JSON.stringify({ loader: CLARITY }));
     expect(ids(html)).not.toContain("clarity");
   }, 10_000);
+});
+
+// `__bundler/ext_resources` is a JSON list a standalone-HTML bundler loads scripts from. It is data like an import map: only the
+// `uri` and `url` fields are script URLs; a description or any other text in the list stays inert.
+describe("a bundler's ext_resources list is read like an import map", () => {
+  const BUNDLER = "__bundler/ext_resources";
+  const THREE = "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
+  const list = (body: string): string => wrap(BUNDLER, body);
+  test("it is data, not a running type", () => {
+    expect(scriptTypeRuns(BUNDLER)).toBe(false);
+  });
+  test("the exact Codex fixture: a vendor URL in a description is not a detection, the local script is the only one loaded", () => {
+    const found = ids(list('[{"id":"a","uri":"./local.js","description":"See https://www.youtube.com/embed/abc for instructions"}]'));
+    expect(found).not.toContain("youtube-embed");
+    expect(found).not.toContain("clarity");
+  });
+  test("a vendor script in a uri or url field is detected (the corpus shape: an array of objects with a uri)", () => {
+    expect(ids(list(`[{"id":"a","uri":"${THREE}"}]`))).toContain("threejs");
+    expect(ids(list(`[{"id":"a","url":"${THREE}"}]`))).toContain("threejs");
+    const corpus = list(
+      JSON.stringify([
+        { id: "clarity", uri: "https://www.clarity.ms/tag/abc", description: "See https://www.youtube.com/embed/abc" },
+        { id: "gtm", uri: "https://www.googletagmanager.com/gtm.js?id=GTM-ABC123", integrity: "sha384-x" },
+        { id: "local", uri: "./local.js" },
+      ]),
+    );
+    const found = ids(corpus);
+    expect(found).toContain("clarity");
+    expect(found).toContain("google-tag-manager");
+    expect(found).not.toContain("youtube-embed");
+    expect(ids(wrap("__BUNDLER/EXT_RESOURCES", `[{"uri":"${THREE}"}]`))).toContain("threejs");
+  });
+  test("every other field, a non-list shape, a bare name and an unsafe value stay inert", () => {
+    for (const body of [
+      `[{"id":"${THREE}","src":"${THREE}","href":"${THREE}","name":"${THREE}"}]`,
+      `{"uri":"${THREE}"}`,
+      `{"resources":[{"uri":"${THREE}"}]}`,
+      `[["${THREE}"],"${THREE}",null,1,{"uri":5,"url":["${THREE}"]}]`,
+      '[{"uri":"three.module.js"},{"uri":"data:text/javascript,1"},{"uri":"javascript:alert(1)"}]',
+      `[{"uri":"${THREE} onload=x"},{"uri":"https://a.test/\"><script src=${THREE}>"}]`,
+      `[{"uri":"${THREE}"`,
+      `not json ${THREE}`,
+      "",
+    ]) {
+      expect([body, ids(list(body))]).toEqual([body, []]);
+    }
+  });
+  test("a list in a template or a comment is not read", () => {
+    expect(ids(page(`<template><script type="${BUNDLER}">[{"uri":"${THREE}"}]</script></template>`))).not.toContain("threejs");
+    expect(ids(page(`<!-- <script type="${BUNDLER}">[{"uri":"${THREE}"}]</script> -->`))).not.toContain("threejs");
+  });
+  test("bounds: a list over 64 KB is skipped, 256 URLs a list are read, malformed and huge lists are bounded", () => {
+    const entry = (i: number): string => `{"uri":"https://cdn.example.com/a${i}.js"}`;
+    const big = list(`[${Array.from({ length: 4_000 }, (_, i) => entry(i)).join(",")}]`);
+    expect(pageImportMapSkipped(big)).toBe(1);
+    const many = list(`[${Array.from({ length: 1_000 }, (_, i) => entry(i)).join(",")}]`);
+    expect(pageImportMapSkipped(many)).toBe(1_000 - 256);
+    expect(ids(big)).toEqual(ids(page("")));
+  }, 30_000);
+  test("hostile input stays linear", () => {
+    const shapes: Record<string, string> = {
+      "many empty lists": `<script type="${BUNDLER}">[]</script>`.repeat(30_000),
+      "many one-entry lists": `<script type="${BUNDLER}">[{"uri":"${THREE}"}]</script>`.repeat(5_000),
+      "unclosed lists": `<script type="${BUNDLER}">[{"uri":"`.repeat(30_000),
+      "deep nesting": `<script type="${BUNDLER}">${"[".repeat(30_000)}</script>`.repeat(5),
+      "one huge list": `<script type="${BUNDLER}">[${'{"uri":"https://cdn.example.com/a.js"},'.repeat(200_000)}{}]</script>`,
+      "long uri": `<script type="${BUNDLER}">[{"uri":"https://a.test/${"x".repeat(60_000)}"}]</script>`.repeat(50),
+    };
+    for (const [name, body] of Object.entries(shapes)) {
+      const started = performance.now();
+      ids(page(body));
+      expect(performance.now() - started, name).toBeLessThan(4_000);
+    }
+  }, 30_000);
 });
 
 describe("hostile input stays linear", () => {
