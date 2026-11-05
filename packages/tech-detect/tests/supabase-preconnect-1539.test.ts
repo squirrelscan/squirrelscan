@@ -40,6 +40,20 @@ describe("what is not a connection to a project origin is not supabase", () => {
   test("an anchor to the bare origin", () => {
     expect(ids(page(`<a href="${ORIGIN}/">x</a><a href="${ORIGIN}">y</a>`))).not.toContain("supabase");
   });
+  test("the origin must be the whole href: a list that only contains it is a connection to the first host", () => {
+    for (const href of [
+      `https://example.com/,${ORIGIN}/`,
+      `https://example.com/ ${ORIGIN}/`,
+      `${ORIGIN}/ https://example.com/`,
+      `${ORIGIN}/,https://example.com/`,
+      `https://example.com/\n${ORIGIN}/`,
+    ]) {
+      expect([href, ids(page(`<link rel="preconnect" href="${href}">`))]).toEqual([href, []]);
+    }
+  });
+  test("surrounding whitespace around the whole value still detects", () => {
+    expect(ids(page(`<link rel="preconnect" href="  ${ORIGIN}/ ">`))).toContain("supabase");
+  });
   test("a placeholder ref and a repeated-character ref", () => {
     for (const ref of ["your-project-ref-12345", "yourprojectref123456", `your${"a".repeat(16)}`, "a".repeat(20), "0".repeat(20), "AAAAAAAAAAAAAAAAAAAA"]) {
       expect([ref, ids(page(`<link rel="preconnect" href="https://${ref}.supabase.co/">`))]).toEqual([ref, []]);

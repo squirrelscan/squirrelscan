@@ -259,13 +259,14 @@ const JS_MIME_ESSENCES: ReadonlySet<string> = new Set([
  *   `lazyjs`, `text/prosyo-later`, `o/js-lzl`.
  * - Consent blockers: `javascript/blocked`, `text/javascript-blocked`, `text/javascript_blocked`, `application/ecmascript-blocked`,
  *   `text/blocked`, and a consent tool's `text/plain`. Partytown: `text/partytown`.
- * - Babel standalone compiles and runs `text/babel`; `__bundler/ext_resources` is a JSON list of the external scripts a
- *   standalone-HTML bundler loads.
+ * - Babel standalone compiles and runs `text/babel`; two consent tools seen in the PH corpus: `easyoptscript` and
+ *   `application/x-imovisor-consent`.
  * - Cloudflare Rocket Loader ({@link ROCKET_LOADER_TYPE}): `<hash>-text/javascript`, `<hash>-application/javascript` and, for a
  *   module, `<hash>-module`, where the hash is hex.
  *
  * A type with a MIME parameter or a space (`text/javascript; charset=utf-8`) matches none of these and is data, see
- * {@link scriptTypeRuns}.
+ * {@link scriptTypeRuns}. `__bundler/ext_resources` (a JSON list of the external scripts a standalone-HTML bundler loads) is not in
+ * the list: it is data like an import map, and only its script URLs are read ({@link bundlerResourceUrls}).
  */
 const DEFERRED_LOADER_TYPES: ReadonlySet<string> = new Set([
   "rocketlazyloadscript",
@@ -289,7 +290,8 @@ const DEFERRED_LOADER_TYPES: ReadonlySet<string> = new Set([
   "text/plain",
   "text/partytown",
   "text/babel",
-  "__bundler/ext_resources",
+  "easyoptscript",
+  "application/x-imovisor-consent",
 ]);
 const ROCKET_LOADER_TYPE = /^[0-9a-f]{8,64}-(?:module|(?:text|application)\/(?:x-)?(?:java|ecma)script)$/;
 
@@ -387,6 +389,38 @@ function importMapUrls(text: string, limit: number): { urls: string[]; skipped: 
   if (!isTable(map)) return { urls, skipped };
   take(map.imports);
   if (isTable(map.scopes)) for (const scope of Object.values(map.scopes)) take(scope);
+  return { urls, skipped };
+}
+
+/** The `type` of the script a standalone-HTML bundler writes its external script list in: data, read like an import map. */
+const BUNDLER_RESOURCES_TYPE = /^__bundler\/ext_resources$/i;
+
+/**
+ * The script URLs of a standalone-HTML bundler's `__bundler/ext_resources` list (a JSON array of objects, each with a `uri` or
+ * `url` string), at most `limit` of them, and how many were left out (a bound or an unsafe value). Only those two fields are
+ * URLs; every other string in the list (a description, an id) stays inert. Same bounds and rules as {@link importMapUrls}; a list
+ * that is not a JSON array has none.
+ */
+function bundlerResourceUrls(text: string, limit: number): { urls: string[]; skipped: number } {
+  let list: unknown;
+  try {
+    list = JSON.parse(text);
+  } catch {
+    return { urls: [], skipped: 0 };
+  }
+  const urls: string[] = [];
+  let skipped = 0;
+  if (!Array.isArray(list)) return { urls, skipped };
+  for (const entry of list) {
+    if (entry === null || typeof entry !== "object" || Array.isArray(entry)) continue;
+    const record = entry as Record<string, unknown>;
+    for (const field of ["uri", "url"]) {
+      const value = record[field];
+      if (typeof value !== "string") continue;
+      if (urls.length >= limit || !isImportMapUrl(value)) skipped++;
+      else urls.push(value);
+    }
+  }
   return { urls, skipped };
 }
 
@@ -594,12 +628,14 @@ export function pageMarkup(html: string): string {
       const length = end - pos;
       // A script the browser does not run is data: its text is not read by the `html` detectors either; an unclosed one stays.
       if (length > 0 && endMatch && !halted && !runs) ranges.push({ from: pos, to: end, comment: false, data: true });
-      if (length > 0 && /^importmap$/i.test(asciiTrim(type).slice(0, 32))) {
-        // The page loads these as modules: each is a script URL, for the URL patterns (as one tag in the markup) and for the
+      const bundlerList = BUNDLER_RESOURCES_TYPE.test(asciiTrim(type).slice(0, 32));
+      if (length > 0 && (bundlerList || /^importmap$/i.test(asciiTrim(type).slice(0, 32)))) {
+        // The page loads these as modules (a bundler's list: as scripts): each is a script URL, for the URL patterns (as one tag in the markup) and for the
         // tag attribute detectors (as a collected script). The map itself stays out of the markup: it is data.
         if (length > IMPORTMAP_MAX_CHARS) importMapSkipped++;
         else {
-          const { urls, skipped } = importMapUrls(html.slice(pos, end), Math.min(IMPORTMAP_MAX_URLS_PER_MAP, IMPORTMAP_MAX_URLS_PER_PAGE - importMapUrlCount));
+          const readUrls = bundlerList ? bundlerResourceUrls : importMapUrls;
+          const { urls, skipped } = readUrls(html.slice(pos, end), Math.min(IMPORTMAP_MAX_URLS_PER_MAP, IMPORTMAP_MAX_URLS_PER_PAGE - importMapUrlCount));
           importMapSkipped += skipped;
           for (const url of urls) {
             const synthetic = `<script type="module" src="${url}"></script>`;

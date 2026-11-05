@@ -309,8 +309,14 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
       ),
       // A bare project origin in a `<link href>`: a `preconnect` or `dns-prefetch` names the origin with no /rest/v1 path. Only a
       // link whose `rel` loads or connects counts (#1539), so `alternate` and `canonical` do not; the ref is not a placeholder
-      // or one repeated character.
-      resourceAttr("link", "href", String.raw`https:\/\/(?!your)(?!([a-z0-9])\1{19}\.)[a-z0-9]{20}\.supabase\.co\/?$`),
+      // or one repeated character. The whole `href` is the origin: not `resourceAttr`, which also tests each comma or space
+      // separated token (a `srcset` rule), so `href="https://example.com/,https://<ref>.supabase.co/"` is not a match.
+      {
+        type: "tag-attr",
+        tags: ["link"],
+        attrs: ["href"],
+        pattern: /^https:\/\/(?!your)(?!([a-z0-9])\1{19}\.)[a-z0-9]{20}\.supabase\.co\/?$/i,
+      },
       {
         type: "html",
         pattern:
