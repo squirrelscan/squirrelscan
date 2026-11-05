@@ -128,6 +128,39 @@ describe("links/anchor-mismatch hyphenated compounds (#1598)", () => {
   });
 });
 
+describe("links/anchor-mismatch hyphen scan stays linear (#1598)", () => {
+  const N = 128_000;
+  const inputs: Array<[string, string]> = [
+    ["one 128k word, no hyphen", "a".repeat(N)],
+    ["one 128k run of hyphens between letters", "a-".repeat(N / 2)],
+    ["many short hyphen runs", Array.from({ length: N / 8 }, (_, i) => `a${i}-b${i}`).join(" ")],
+    ["128k letters then one hyphen", `${"a".repeat(N)}-b`],
+    ["many hyphens, no letters", "-".repeat(N)],
+  ];
+  for (const [name, text] of inputs) {
+    test(`${name}: tokenize stays under 500 ms`, () => {
+      const start = performance.now();
+      tokenize(text);
+      expect(performance.now() - start).toBeLessThan(500);
+    });
+  }
+
+  test("results are unchanged around runs, double hyphens and stray hyphens", () => {
+    expect(tokenize("Online-Shop").tokens).toEqual(["online", "shop", "onlineshop"]);
+    expect(tokenize("online-shop-agentur").tokens).toEqual([
+      "online",
+      "shop",
+      "agentur",
+      "onlineshopagentur",
+      "onlineshop",
+      "shopagentur",
+    ]);
+    expect(tokenize("foo--bar").tokens).toEqual(["foo", "bar"]);
+    expect(tokenize("-foo-bar-").tokens).toEqual(["foo", "bar", "foobar"]);
+    expect(tokenize("a-b").tokens).toEqual([]);
+  });
+});
+
 describe("links/anchor-mismatch", () => {
   test("Fridges -> Fridge repairs at /repairs/fridge does not warn", () => {
     const c = check([
