@@ -9,6 +9,8 @@ A plugin is a TypeScript or JavaScript file that registers audit rules. `squirre
 
 A plugin is code, and it runs with your permissions. Read [the security model](#security-model) before you turn one on.
 
+A plugin file must be self-contained: bundle its dependencies into the one file. The file is loaded from a verified copy (see [the security model](#security-model)), so a relative or package import inside it does not resolve and fails the load.
+
 ## Write a plugin
 
 A plugin file has one default export with a `register` function. Call `registerRule` once per rule.
@@ -83,13 +85,21 @@ entry = "./acme-pack.ts"
 allow = ["rules"]
 ```
 
-Then approve it in your own `~/.squirrel/settings.json`:
+Then approve it in your own `~/.squirrel/settings.json`. An approval names the plugin id, the absolute path of the file, and the SHA-256 of the file's contents:
 
 ```json ~/.squirrel/settings.json
 {
-  "plugin_allowlist": ["acme-pack"]
+  "plugin_allowlist": [
+    {
+      "id": "acme-pack",
+      "entry": "/home/you/projects/site/acme-pack.ts",
+      "sha256": "3f2a...64 hex characters...9c1e"
+    }
+  ]
 }
 ```
+
+You do not have to work the line out by hand. Run the audit once: it skips the plugin and prints the exact line to add, with the path and hash of the file it found. Read the file, then paste the line in. To compute the hash yourself, run `shasum -a 256 /home/you/projects/site/acme-pack.ts` (or `sha256sum` on Linux).
 
 Run the audit as usual. The plugin's issues appear in the report under its namespace.
 
@@ -106,30 +116,26 @@ squirrel audit https://example.com
 
 ## Security model
 
-The project's `squirrel.toml` can only ask for a plugin. It can never make `squirrel audit` run one.
+The project's `squirrel.toml` can only ask for a plugin. It can never make `squirrel audit` run one, and it can only select among files you have approved.
 
-- A plugin loads only when its `id` is in `plugin_allowlist` in `~/.squirrel/settings.json`. That file is the only place the decision is read. A project's `.squirrel/settings.json`, an environment variable and `squirrel.toml` itself cannot approve a plugin.
-- Without the allowlist entry the plugin file is not imported, so none of its code runs. The audit prints one line per plugin it skipped, with the reason.
+- Your `~/.squirrel/settings.json` pins each approved plugin to one file: the `id`, the absolute `entry` path and the `sha256` of the file. That file is the only place the decision is read. A project's `.squirrel/settings.json`, an environment variable and `squirrel.toml` itself cannot approve a plugin.
+- A plugin loads only when the `entry` in `squirrel.toml` is the pinned file and the file's hash equals the pin. Both paths have symlinks resolved before they are compared, so a symlink cannot stand in for the pinned file. A config that names the same `id` with another file is refused, and so is a pinned file whose content has changed.
+- A bare id in `plugin_allowlist` (such as `"acme-pack"`) approves nothing. An entry whose `entry` is not an absolute path, or that has no valid `sha256`, approves nothing either. The audit prints why, and the line to add.
+- Without an approval the plugin file is not imported, so none of its code runs. The audit prints one line per plugin it skipped, with the reason.
 - If `settings.json` cannot be read, nothing is allowed.
-- An allowlisted plugin that cannot be loaded (a bad id, an id that clashes with a built-in rule, a rule the manifest did not allow) stops the audit before the crawl. Nothing is dropped silently.
+- An approved plugin that cannot be loaded (a bad id, an id that clashes with a built-in rule, a rule the entry did not allow, a module or `register` function that throws) stops the audit before the crawl, with an error that names the plugin. Nothing is dropped silently.
 
-An id in the allowlist approves whatever file a config names under that id. To approve one file only, pin it:
-
-```json ~/.squirrel/settings.json
-{
-  "plugin_allowlist": [{ "id": "acme-pack", "entry": "/home/you/plugins/acme-pack.ts" }]
-}
-```
-
-A config that names the same id with another file is then refused.
+squirrel reads the file once, checks the hash, and imports exactly the bytes it hashed. It writes them to a private copy in a new temporary directory (mode 0700), imports from that copy, and deletes the copy once the plugin is loaded. A change to the original file between the check and the import therefore cannot run different code. The residual risk: while the copy exists, another process running as your user could modify it, but that user can already edit your `settings.json`, so it is not a new boundary. Imports inside the plugin are not covered by the hash and do not resolve from the copy, which is why a plugin must be one bundled file.
 
 <Warning>
-Only allowlist plugin files you wrote or have read. A plugin runs in the `squirrel` process with your permissions, and a rule can read the environment, the file system and the network. The checks above decide whether a plugin loads, not what it does once it runs.
+Only approve plugin files you wrote or have read. Approval is trust, not containment: once a plugin is approved it runs fully trusted, in the `squirrel` process, with your permissions. It can read your environment variables and files, use the network and run commands. The `allow` list below is not a sandbox. It restricts what an honest plugin may register, and it does nothing to stop a malicious one, because a malicious plugin does not need the registration API to do harm. The hash pin makes sure the code you read is the code that runs, nothing more.
 </Warning>
 
 ### Capabilities
 
-The `allow` list in each `[[plugins.items]]` entry says what the plugin may register: `"rules"` and `"listeners"`. Registering something the entry does not allow fails the load.
+The `allow` list in each `[[plugins.items]]` entry says what the plugin may register: `"rules"` and `"listeners"`. Registering something the entry does not allow fails the load. This is a check on honest plugins, which catches a mistake or a surprise in a pack you trust. It is not a security boundary, because plugin code runs fully trusted.
+
+`register` may be async. squirrel waits for it before the audit starts, and a `register` that throws or rejects fails the load with an error that names the plugin.
 
 A listener subscribes to an event name. The rules phase emits `audit:rules-phase` with `{ phase, boundary }`. A listener that throws is logged and ignored.
 
