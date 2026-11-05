@@ -67,8 +67,38 @@ interface LoaderOptions {
   includeOptIn?: boolean;
 }
 
+/** Every built-in rule id, disabled and opt-in ones included. */
+export function getBuiltInRuleIds(): Set<string> {
+  const ids = new Set<string>();
+  for (const ns of builtInNamespaces) {
+    for (const rule of ns.rules) ids.add(rule.meta.id);
+  }
+  return ids;
+}
+
+/** The built-in namespace names: a plugin may not reuse one (#1599). */
+export function getBuiltInNamespaceNames(): Set<string> {
+  return new Set(builtInNamespaces.map((ns) => ns.name));
+}
+
 function getRuleNamespaces(options: LoaderOptions = {}): RuleNamespace[] {
-  return [...builtInNamespaces, ...(options.additionalNamespaces ?? [])];
+  const additional = options.additionalNamespaces ?? [];
+  if (additional.length > 0) {
+    // A rule from outside the built-in set may never replace a built-in one:
+    // the Map below keeps the last writer, so a clash would silently swap the
+    // audit's own rule for foreign code (#1599). Fail loudly instead.
+    const builtIn = getBuiltInRuleIds();
+    for (const ns of additional) {
+      for (const rule of ns.rules) {
+        if (builtIn.has(rule.meta.id)) {
+          throw new Error(
+            `Rule id "${rule.meta.id}" from namespace "${ns.name}" clashes with a built-in rule and cannot replace it`
+          );
+        }
+      }
+    }
+  }
+  return [...builtInNamespaces, ...additional];
 }
 
 // Load runnable rules into a Map by ID. Opt-in rules join the candidate set
