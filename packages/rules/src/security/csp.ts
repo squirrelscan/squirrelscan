@@ -17,6 +17,24 @@ const _RECOMMENDED_DIRECTIVES = [
 // host to one domain's subdomains and is not one of them.
 const WEAK_VALUES = ["*", "data:", "blob:", "'unsafe-inline'", "'unsafe-eval'"];
 
+/**
+ * Same-origin path prefixes that sites commonly rewrite to a third-party
+ * analytics host (#1604). A policy that allows only 'self' lets such a path
+ * load third-party code, and the header alone cannot show it. Matched on whole
+ * path segments: `/ingest` and `/ingest/x.js` match, `/ingestor.js` does not.
+ * Keep this list small and documented in docs/rules/security/csp.mdx.
+ */
+export const CSP_PROXY_PATHS: readonly string[] = [
+  "/_vercel/insights",
+  "/_vercel/speed-insights",
+  "/ingest",
+  "/stats",
+  "/plausible",
+  "/umami",
+];
+/** Most crawled script URLs inspected for a proxy path. */
+const MAX_PROXY_SCAN = 2000;
+
 export const cspRule: Rule = {
   meta: {
     id: "security/csp",
@@ -151,6 +169,21 @@ export const cspRule: Rule = {
       }
     }
 
+    // A 'self' script list also trusts any same-origin path that proxies
+    // third-party code (#1604). Needs the crawled script URLs, no network.
+    if (!isReportOnly && sourceTokens(elemSrc).has("'self'")) {
+      const paths = proxyPathsLoaded(ctx, firstPage.url);
+      if (paths.length > 0) {
+        checks.push({
+          name: "csp-self-proxy-script",
+          status: "info",
+          message: `CSP 'self' allows first-party proxy path ${paths.join(", ")}`,
+          value: "A same-origin path that proxies third-party code runs under 'self'",
+          expected: "Confirm the proxied script is trusted, or pin it with a nonce or hash",
+        });
+      }
+    }
+
     // Check for frame-ancestors (clickjacking protection)
     if (!directives.has("frame-ancestors")) {
       const xfo = headers["x-frame-options"];
@@ -177,6 +210,35 @@ export const cspRule: Rule = {
     return { checks };
   },
 };
+
+/** Known proxy prefixes that a crawled same-origin script URL falls under. */
+function proxyPathsLoaded(ctx: RuleContext, pageUrl: string): string[] {
+  let origin: string;
+  try {
+    origin = new URL(ctx.site?.baseUrl || pageUrl).origin;
+  } catch {
+    return [];
+  }
+  const found = new Set<string>();
+  const scripts = ctx.site?.scripts ?? [];
+  const limit = Math.min(scripts.length, MAX_PROXY_SCAN);
+  for (let i = 0; i < limit && found.size < CSP_PROXY_PATHS.length; i++) {
+    const script = scripts[i]!;
+    if (script.status !== null && script.status >= 400) continue;
+    let url: URL;
+    try {
+      url = new URL(script.url, origin);
+    } catch {
+      continue;
+    }
+    if (url.origin !== origin) continue;
+    const path = url.pathname.toLowerCase();
+    for (const prefix of CSP_PROXY_PATHS) {
+      if (path === prefix || path.startsWith(`${prefix}/`)) found.add(prefix);
+    }
+  }
+  return CSP_PROXY_PATHS.filter((p) => found.has(p));
+}
 
 /** The weak entries of WEAK_VALUES in one script directive's value. */
 function weakScriptSources(scriptSrc: string): string[] {

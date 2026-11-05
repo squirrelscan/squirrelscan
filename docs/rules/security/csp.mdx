@@ -23,6 +23,8 @@ The rule reads the response headers of the first crawled page and can emit sever
 - `csp-no-frame-ancestors` reports info when `frame-ancestors` is absent and no `X-Frame-Options` header is set either. Message: `CSP missing frame-ancestors directive`.
 - `csp-no-object-src` reports info when neither `object-src` nor `default-src` is declared. Message: `CSP missing object-src directive`.
 
+- `csp-self-proxy-script` reports info when `'self'` is in the effective script list for script elements (`script-src-elem`, else `script-src`, else `default-src`), the policy is enforced, and a crawled script is loaded from a known first-party proxy path. Message: `CSP 'self' allows first-party proxy path <paths>`.
+
 The effective script source is `script-src` when it is present and non-empty, otherwise `default-src`. `script-src-elem` overrides it for `<script>` elements, so `'unsafe-inline'` and wildcard sources are judged on `script-src-elem` when it is set, in both directions: a strict `script-src-elem` clears a loose `script-src`, and a loose one is flagged next to a strict `script-src`. Inline event handlers such as `onerror=` are not script elements: `'unsafe-inline'` is also judged on `script-src-attr`, which falls back to `script-src`, then `default-src`, and never to `script-src-elem`, so a strict `script-src-elem` does not clear an `'unsafe-inline'` that still allows handlers through `script-src` unless `script-src-attr` is set as well. `'unsafe-eval'` is still read from `script-src` or `default-src`, because no element or attribute directive controls `eval()`. Its sources are compared as whole tokens, ignoring case, the way browsers read them: `'UNSAFE-INLINE'` is `'unsafe-inline'`, and a host that merely contains one of these strings is not a match. A header that carries several comma-separated policies is read as one list. Severity is warning and the scope is site-wide.
 
 Some sources are ignored by browsers when the same list carries others (CSP Level 3), and squirrel ignores them too:
@@ -32,6 +34,21 @@ Some sources are ignored by browsers when the same list carries others (CSP Leve
 - Neither changes `'unsafe-eval'`, which always warns.
 
 So a strict policy of the shape Google recommends, such as `script-src 'nonce-r4nd0m' 'strict-dynamic' https: 'unsafe-inline'`, passes: `https:` and `'unsafe-inline'` are only there as a fallback for browsers older than CSP Level 3. Only the directive's own list counts, so a nonce after a comma, in a second policy's other directive, does not switch a warning off.
+
+## First-party proxy paths
+
+A policy such as `default-src 'self'; script-src 'self'` looks tight, but a same-origin path can be a rewrite that serves third-party code, so `'self'` trusts that code too. The header alone cannot show it, so squirrel compares the crawled script URLs of the site with a fixed list of path prefixes that analytics products commonly use for such rewrites. No request is made. A prefix matches whole path segments, so `/ingest/static/array.js` matches and `/ingestor.js` does not. A script on another origin never matches.
+
+| Path prefix | Typical use |
+|---|---|
+| `/_vercel/insights` | Vercel Web Analytics script |
+| `/_vercel/speed-insights` | Vercel Speed Insights script |
+| `/ingest` | Analytics reverse proxy (for example a PostHog rewrite) |
+| `/stats` | Analytics reverse proxy (for example a Plausible or Umami rewrite) |
+| `/plausible` | Plausible proxy |
+| `/umami` | Umami proxy |
+
+The check is info, not a failure: a proxy is often a deliberate way to avoid ad blockers. What to do: confirm you trust the code behind the path and that the upstream is pinned to a version you review. Where you control the page, serve such scripts with a nonce or hash and drop `'self'` for scripts, so a compromised or changed proxy target is not allowed by default.
 
 ## How to fix it
 

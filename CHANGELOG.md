@@ -23,6 +23,7 @@ How it works:
 
 ### Fixed
 
+- **`security/csp` reports a first-party proxy path that `'self'` trusts (#1604).** A policy that allows only `'self'` for scripts also allows a same-origin path that proxies third-party code. When a crawled script loads from a documented proxy prefix (`/_vercel/insights`, `/_vercel/speed-insights`, `/ingest`, `/stats`, `/plausible`, `/umami`), the rule adds an info check `csp-self-proxy-script` naming the path. The list is a fixed constant and the check reads only the header and the crawled script URLs, with no network. No rule meta text changed.
 - **Leaked-secrets findings cap the stored value length (#1592).** The caps counted findings, not bytes, so one generic assignment with a 1 MB value was kept whole and 100 such pages held about 100 MB of value text. A stored value is now cut to 2,048 characters, which covers the longest ordinary structured secret (a 2048-bit PEM private key is about 1,675 characters); classification still sees the full value, a cut finding is still reported and marked with `truncated: true` in the check item, and `length` keeps the full length. Check items gain the `truncated` field, so consumers of the rule output that regenerate from check metadata should pick it up.
 
 ## v0.0.170 (2026-11-05)
