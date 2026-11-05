@@ -71,21 +71,29 @@ export const MAX_UPDATE_CHECK_INTERVAL_HOURS = 744; // 31 days
 
 // Zod v4 schema for user settings
 // User settings stored in ~/.squirrel/settings.json (user) and .squirrel/settings.json (local)
-// A plugin the user approved (#1599): its id, or its id pinned to one entry file.
-// Read from the user-level settings file only, never from project config.
+// A plugin the user approved (#1599): its id pinned to one file by absolute path
+// and SHA-256 of the file's contents. Read from the user-level settings file only,
+// never from project config. The fields past `id` are optional and a bare string is
+// still accepted so an older or hand-edited settings file keeps parsing, but an
+// entry without both approves nothing: `squirrel audit` says what to add.
 export const PluginAllowEntrySchema = z.union([
   z.string().min(1),
-  z.object({ id: z.string().min(1), entry: z.string().min(1) }),
+  z.object({
+    id: z.string().min(1),
+    entry: z.string().min(1).optional(),
+    sha256: z.string().optional(),
+  }),
 ]);
 export type PluginAllowEntry = z.infer<typeof PluginAllowEntrySchema>;
 
 export const UserSettingsSchema = z.object({
   /**
-   * Plugin ids `squirrel audit` may load from `[plugins]` in squirrel.toml. This
-   * is the only approval there is: a project config alone never runs code. Only
-   * `~/.squirrel/settings.json` is read for it (a project's `.squirrel/settings.json`
-   * is ignored), so a cloned repository cannot approve itself. An object form
-   * `{ id, entry }` also pins the plugin to one file.
+   * Plugins `squirrel audit` may load from `[plugins]` in squirrel.toml, each as
+   * `{ "id", "entry" (absolute path), "sha256" (of the file) }`. This is the only
+   * approval there is: a project config alone never runs code, and it can only
+   * select among the files pinned here. Only `~/.squirrel/settings.json` is read
+   * for it (a project's `.squirrel/settings.json` is ignored), so a cloned
+   * repository cannot approve itself. A bare id string approves nothing.
    */
   plugin_allowlist: z.array(PluginAllowEntrySchema).optional(),
   // Writable settings
