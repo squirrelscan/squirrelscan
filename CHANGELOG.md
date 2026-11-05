@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- `links/anchor-mismatch` no longer warns when a hyphenated compound in the anchor, joined, equals a word of the target (`Online-Shop` and `Onlineshop`, `E-Mail` and `Email`), or the reverse. #1598
+
 ## v0.0.169 (2026-11-05)
 
 Technology detection reads the script URLs of a bundler resource list again: v0.0.168 looked for `uri` and `url` fields, but the lists use `id`.

@@ -27,6 +27,8 @@
 //     rather than dropped silently. So is any pair whose text has no whitespace-delimited Latin,
 //     Cyrillic or Greek word (CJK, Thai, Indic): shared words cannot be told apart there. When
 //     nothing at all was judged the check is skipped, never a vacuous pass.
+//   * HYPHENATED COMPOUNDS. "Online-Shop" and "Onlineshop" are one word: a hyphenated run also
+//     yields its joined form as a token, on both the anchor and the target side (#1598).
 //   * DIACRITICS. Words are folded (NFD, marks stripped), so `Café` meets `Cafe menu`.
 //
 // Both paths feed `evaluateAnchorGraph` the same `AnchorGraph` (built by the same
@@ -200,7 +202,34 @@ export function tokenize(text: string): { tokens: string[]; lost: boolean } {
     }
     tokens.push(raw);
   }
+  for (const joined of hyphenJoins(folded)) {
+    if (!tokens.includes(joined)) tokens.push(joined);
+  }
   return { tokens, lost };
+}
+
+// A hyphenated compound ("Online-Shop") and its closed form ("Onlineshop") are one word in
+// German and often elsewhere. The parts stay tokens; the joined form is added so either spelling
+// meets the other. In a longer run (a slug such as `online-shop-agentur`) each adjacent pair is
+// joined too, since the hyphen there is a separator. Single-letter parts count ("E-Mail" joins to
+// "email") and stop words are not filtered, because the joined form is a spelling, not a topic.
+const HYPHEN_RUN = /[\p{L}\p{N}]+(?:[-\u2010\u2011][\p{L}\p{N}]+)+/gu;
+const MAX_JOIN_PARTS = 8;
+
+function hyphenJoins(folded: string): string[] {
+  const out: string[] = [];
+  for (const run of folded.match(HYPHEN_RUN) ?? []) {
+    const parts = run.split(/[-\u2010\u2011]/).slice(0, MAX_JOIN_PARTS);
+    const forms = [parts.join("")];
+    if (parts.length > 2) {
+      for (let i = 0; i + 1 < parts.length; i++) forms.push(parts[i]! + parts[i + 1]!);
+    }
+    for (const form of forms) {
+      if (form.length >= 3 && form.length <= MAX_TOKEN_LENGTH && SPACED_WORD.test(form))
+        out.push(form);
+    }
+  }
+  return out;
 }
 
 function safeDecode(path: string): string {
