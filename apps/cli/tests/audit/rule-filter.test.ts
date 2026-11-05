@@ -5,6 +5,7 @@ import {
   isCategoryExcluded,
   normalizeRuleFilterArgs,
   parseRuleFilters,
+  resolvePendingRuleFilters,
   resolveRulesConfig,
 } from "../../src/audit/rule-filter";
 
@@ -252,5 +253,36 @@ describe("filterResolvesToZeroCategories", () => {
         disable: ["ax/*"],
       })
     ).toBe(true);
+  });
+});
+
+describe("plugin namespaces in --rule-include / --rule-exclude (#1599)", () => {
+  test("a loaded plugin namespace is a selection of its own, bare or with a rule name", () => {
+    const r = parseRuleFilters(undefined, ["acme", "acme/page-note"], {
+      pluginNamespaces: new Set(["acme"]),
+    });
+    expect(r.errors).toEqual([]);
+    expect(r.disable).toEqual(["acme/*", "acme/page-note"]);
+  });
+
+  test("without the plugin, the same token is still an unknown category", () => {
+    const r = parseRuleFilters(undefined, ["acme"]);
+    expect(r.errors[0]).toContain("unknown category");
+  });
+
+  test("deferUnknown keeps the token pending until the plugins are known, then a typo still fails", () => {
+    const r = parseRuleFilters(undefined, ["acme", "acmee/x", "core"], {
+      deferUnknown: true,
+    });
+    expect(r.errors).toEqual([]);
+    expect(r.disable).toEqual(["acme/*", "acmee/x", "core/*"]);
+    expect(r.pending?.map((p) => p.namespace)).toEqual(["acme", "acmee"]);
+    const errors = resolvePendingRuleFilters(
+      r.pending ?? [],
+      new Set(["acme"])
+    );
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain('"acmee/x"');
+    expect(errors[0]).toContain("plugin namespaces: acme");
   });
 });

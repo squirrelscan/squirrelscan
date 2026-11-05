@@ -14,7 +14,27 @@ import {
   RULE_CATEGORY_VALUES,
 } from "@/rules/categories";
 
+/** A token that names no built-in category: valid only if a loaded plugin owns the namespace (#1599). */
+export interface PendingRuleFilterToken {
+  flag: "--rule-include" | "--rule-exclude";
+  token: string;
+  namespace: string;
+}
+
+export interface RuleFilterParseOptions {
+  /** Namespaces of the plugins loaded for this run: a token naming one is a plugin rule selection. */
+  pluginNamespaces?: ReadonlySet<string>;
+  /**
+   * Plugins load after the flags are parsed. With this on, a token whose category is
+   * unknown is kept (and listed in `pending`) instead of failing; the caller settles
+   * it with {@link resolvePendingRuleFilters} once the plugins are known.
+   */
+  deferUnknown?: boolean;
+}
+
 export interface RuleFilterParseResult {
+  /** Tokens waiting on the plugin namespaces; present only with `deferUnknown` and an unknown category. */
+  pending?: PendingRuleFilterToken[];
   /** Resolved enable patterns from --rule-include; empty when not passed. */
   enable: string[];
   /** Resolved disable patterns from --rule-exclude; empty when not passed. */
@@ -37,9 +57,23 @@ export function normalizeRuleFilterArgs(
 
 function expandToken(
   token: string,
-  flag: "--rule-include" | "--rule-exclude"
-): { pattern: string } | { error: string } {
+  flag: "--rule-include" | "--rule-exclude",
+  options: RuleFilterParseOptions = {}
+): { pattern: string; pending?: PendingRuleFilterToken } | { error: string } {
   const slash = token.indexOf("/");
+  const namespace = slash === -1 ? token : token.slice(0, slash);
+  if (!isValidCategory(normalizeCategoryCode(namespace))) {
+    // A plugin namespace is a selection of its own (#1599).
+    if (options.pluginNamespaces?.has(namespace)) {
+      return { pattern: slash === -1 ? `${token}/*` : token };
+    }
+    if (options.deferUnknown) {
+      return {
+        pattern: slash === -1 ? `${token}/*` : token,
+        pending: { flag, token, namespace },
+      };
+    }
+  }
   if (slash === -1) {
     // Bare token — must name a known category (the CLI-only upgrade this
     // module exists for; see file header).
@@ -67,24 +101,54 @@ function expandToken(
  * typo errors before crawling rather than silently matching nothing. */
 export function parseRuleFilters(
   includeArgs: string | string[] | undefined,
-  excludeArgs: string | string[] | undefined
+  excludeArgs: string | string[] | undefined,
+  options: RuleFilterParseOptions = {}
 ): RuleFilterParseResult {
   const errors: string[] = [];
   const enable: string[] = [];
   const disable: string[] = [];
+  const pending: PendingRuleFilterToken[] = [];
 
   for (const token of normalizeRuleFilterArgs(includeArgs)) {
-    const r = expandToken(token, "--rule-include");
+    const r = expandToken(token, "--rule-include", options);
     if ("error" in r) errors.push(r.error);
-    else enable.push(r.pattern);
+    else {
+      enable.push(r.pattern);
+      if (r.pending) pending.push(r.pending);
+    }
   }
   for (const token of normalizeRuleFilterArgs(excludeArgs)) {
-    const r = expandToken(token, "--rule-exclude");
+    const r = expandToken(token, "--rule-exclude", options);
     if ("error" in r) errors.push(r.error);
-    else disable.push(r.pattern);
+    else {
+      disable.push(r.pattern);
+      if (r.pending) pending.push(r.pending);
+    }
   }
 
-  return { enable, disable, errors };
+  return {
+    enable,
+    disable,
+    errors,
+    ...(pending.length > 0 ? { pending } : {}),
+  };
+}
+
+/**
+ * Settle the tokens {@link parseRuleFilters} deferred, now that the plugin
+ * namespaces are known. One that no loaded plugin owns is the same error an
+ * unknown category always was, so a typo still fails before the crawl.
+ */
+export function resolvePendingRuleFilters(
+  pending: readonly PendingRuleFilterToken[],
+  pluginNamespaces: ReadonlySet<string>
+): string[] {
+  return pending
+    .filter((p) => !pluginNamespaces.has(p.namespace))
+    .map(
+      (p) =>
+        `${p.flag} "${p.token}": unknown category "${p.namespace}". Valid categories: ${RULE_CATEGORY_VALUES.join(", ")}${pluginNamespaces.size > 0 ? `; plugin namespaces: ${[...pluginNamespaces].join(", ")}` : ""}`
+    );
 }
 
 /** Merge CLI --rule-include/--rule-exclude patterns into the config's

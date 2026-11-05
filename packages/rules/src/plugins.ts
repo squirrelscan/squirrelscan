@@ -3,6 +3,7 @@ import { pathToFileURL } from "node:url";
 
 import { z } from "zod";
 
+import { isValidCategory, normalizeCategoryCode } from "./categories";
 import { getBuiltInNamespaceNames, getBuiltInRuleIds, type RuleNamespace } from "./loader";
 import type { Rule } from "./types";
 
@@ -69,7 +70,11 @@ export function assertPluginRuleId(ruleId: string, owner = "a plugin"): void {
       `Rule id "${ruleId}" from ${owner} must look like <namespace>/<name> (lowercase letters, digits and hyphens)`,
     );
   }
-  if (getBuiltInNamespaceNames().has(match[1] as string)) {
+  // A category name or alias is reserved too: `--rule-exclude <word>` reads a bare word as a category first.
+  if (
+    getBuiltInNamespaceNames().has(match[1] as string) ||
+    isValidCategory(normalizeCategoryCode(match[1] as string))
+  ) {
     throw new PluginLoadError(
       `Rule id "${ruleId}" from ${owner} uses the built-in namespace "${match[1]}"; pick a namespace of your own`,
     );

@@ -15,7 +15,11 @@ import { redactUrl } from "@squirrelscan/core-contracts/seed-redirect";
 import { unstoredPageRow } from "@squirrelscan/report";
 import { summarizeIgnored } from "@squirrelscan/report/ignored";
 import { createStructureBuilder } from "@squirrelscan/report/structure";
-import { loadAllRules, type RuleRunResult } from "@squirrelscan/rules";
+import {
+  loadAllRules,
+  type RuleNamespace,
+  type RuleRunResult,
+} from "@squirrelscan/rules";
 import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
 import { Effect } from "effect";
 
@@ -283,6 +287,12 @@ export interface ReconstructOptions {
    * `GROUP BY` over every stored check, and only `--include-pages` reads it.
    */
   includePageRuleCounts?: boolean;
+  /**
+   * Plugin rule namespaces the audit ran with (#1599), so a plugin finding keeps
+   * its own name, category and weight instead of the fallback meta of a rule that
+   * is "not in the registry".
+   */
+  additionalNamespaces?: RuleNamespace[];
 }
 
 /**
@@ -471,7 +481,10 @@ export function reconstructReport(
     // 7. Load rule registry to get metadata
     // Stored results can include explicitly enabled opt-in rules. Reconstruction
     // needs their metadata even though a default audit does not select them.
-    const ruleRegistry = loadAllRules({ includeOptIn: true });
+    const ruleRegistry = loadAllRules({
+      includeOptIn: true,
+      additionalNamespaces: options?.additionalNamespaces,
+    });
 
     // 8. Build PageAudit[] from page records with parsed data and rule results
     const pages: PageAudit[] = [];

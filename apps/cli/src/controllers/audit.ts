@@ -48,7 +48,12 @@ import {
   createFetchDocumentFetcher,
 } from "@squirrelscan/fetchers";
 import { summarizeIgnored } from "@squirrelscan/report/ignored";
-import { isRuleEnabled, type RuleNamespace } from "@squirrelscan/rules";
+import {
+  isRuleEnabled,
+  pluginNamespaces,
+  type PluginRegistrySnapshot,
+  type RuleNamespace,
+} from "@squirrelscan/rules";
 import {
   configuredPagePaths,
   createProbeBudget,
@@ -101,6 +106,7 @@ import {
   wasCut,
   type DurationCut,
 } from "@/audit/max-duration";
+import { configDir, loadConfiguredPlugins } from "@/audit/plugins";
 import {
   RetentionReclaimError,
   auditMayRetire,
@@ -124,6 +130,7 @@ import {
 } from "@/audit/stream-batch";
 import { createTlsProbe } from "@/audit/tls-probe";
 import {
+  findConfigFile,
   loadConfig,
   DEFAULT_CRAWLER_CONCURRENCY,
   DEFAULT_CRAWLER_PER_HOST_CONCURRENCY,
@@ -234,11 +241,17 @@ export type CrawlerEventCallback = (event: CrawlerEvent) => void;
 
 export interface RunAuditOptions extends AuditOptions {
   /**
-   * Plugin rule namespaces for this run (#1375). The CLI loads none today; when it
-   * does, the one list reaches both the rule runner and `selectDiscoveryProbes`, so a
-   * plugin rule that reads a probe keeps it under `--rule-exclude ax`.
+   * Plugin rule namespaces for this run (#1375): the one list reaches both the rule
+   * runner and `selectDiscoveryProbes`, so a plugin rule that reads a probe keeps it
+   * under `--rule-exclude ax`. Plugins named in `[plugins]` go through `plugins`.
    */
   pluginNamespaces?: RuleNamespace[];
+  /**
+   * An already-loaded plugin pack (#1599). Omitted: the audit loads the plugins the
+   * project config names that the user also allowlisted in `~/.squirrel/settings.json`.
+   * Passing `{ rules: [], listeners: new Map() }` turns config plugins off.
+   */
+  plugins?: PluginRegistrySnapshot;
   onProgress?: ProgressCallback;
   onEvent?: CrawlerEventCallback;
   configPath?: string;
@@ -936,6 +949,34 @@ export async function runAudit(
   // Silent since CLI already logged the config path
   const config = await loadConfig(options.configPath, { silent: true });
   const mergedConfig = mergeOptionsToConfig(config, options);
+
+  // #1599: plugins named in squirrel.toml load only when the user's own
+  // ~/.squirrel/settings.json allowlists them (see audit/plugins.ts). A failure to
+  // load an approved plugin stops the audit before any crawl.
+  let pluginPack: PluginRegistrySnapshot;
+  if (options.plugins) {
+    pluginPack = options.plugins;
+  } else {
+    try {
+      const configFile = options.configPath ?? findConfigFile();
+      const loaded = await loadConfiguredPlugins(mergedConfig.plugins, {
+        baseDir: configDir(configFile ?? undefined, process.cwd()),
+      });
+      for (const notice of loaded.notices) console.error(notice);
+      pluginPack = loaded.snapshot;
+    } catch (error) {
+      return err(
+        commandError(
+          ErrorCodes.INVALID_CONFIG,
+          `Plugin load failed: ${error instanceof Error ? error.message : String(error)}`
+        )
+      );
+    }
+  }
+  const pluginRuleNamespaces: RuleNamespace[] = [
+    ...(options.pluginNamespaces ?? []),
+    ...(pluginPack.rules.length > 0 ? pluginNamespaces(pluginPack) : []),
+  ];
   // `[[ignore]]` entries that ran over their regex work budget this run (#1262).
   let ignoreTimedOut: number[] = [];
 
@@ -1256,7 +1297,7 @@ export async function runAudit(
             string,
             { enabled?: boolean }
           >,
-          additionalNamespaces: options.pluginNamespaces,
+          additionalNamespaces: pluginRuleNamespaces,
         }),
         // #1428: pages the E-E-A-T rules are configured with that the crawl does not reach are asked for once.
         configuredPagePaths: configuredPagePaths(
@@ -2198,6 +2239,9 @@ export async function runAudit(
             : {}),
           pageSink,
           retainPageResults: false,
+          ...(pluginPack.rules.length > 0 || pluginPack.listeners.size > 0
+            ? { plugins: pluginPack }
+            : {}),
           // repo#3430: the end-of-crawl probes vet and pin the site's own hosts.
           pinOwnHosts: pinOwnHosts(),
           // --offline: the soft-404 and cloaking probes stay on the audited site (#819).
@@ -2382,6 +2426,7 @@ export async function runAudit(
           batchSize: streamBatchSize,
           // #1260: only the JSON pages list reads the per-page rule counts.
           includePageRuleCounts: options.includePages === true,
+          additionalNamespaces: pluginRuleNamespaces,
         })
       );
 
