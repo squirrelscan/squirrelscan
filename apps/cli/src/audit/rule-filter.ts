@@ -245,12 +245,22 @@ function idsFiledOutsidePrefix(category: string): string[] {
  * such a rule's category still reads as excluded. */
 export function isCategoryExcluded(
   category: string,
-  resolved: { enable: string[]; disable: string[] }
+  resolved: { enable: string[]; disable: string[] },
+  /** Rules of the plugins loaded for this run (#1599): their ids and categories count like built-ins'. */
+  pluginRules: readonly { id: string; category: string }[] = []
 ): boolean {
   // pub#836: a rule can be filed under a category its id prefix does not
   // name (`links/broken-links` is a Reliability rule), so a pattern reaches
   // the category through that rule's id too.
-  const foreign = idsFiledOutsidePrefix(category);
+  // A plugin rule always sits in a namespace of its own, so it is filed outside
+  // the category's prefix whatever category it reports under (#1599).
+  const wanted = normalizeCategoryCode(category);
+  const foreign = [
+    ...idsFiledOutsidePrefix(category),
+    ...pluginRules
+      .filter((r) => normalizeCategoryCode(r.category) === wanted)
+      .map((r) => r.id),
+  ];
   const touches = (p: string) =>
     patternTouchesCategory(p, category) ||
     foreign.some((id) => matchesRulePattern(id, p));

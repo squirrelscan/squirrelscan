@@ -318,4 +318,45 @@ describe("plugin namespaces in --rule-include / --rule-exclude (#1599)", () => {
     expect(error).toContain("unknown category. Valid categories:");
     expect(error).toContain("plugin namespaces: acme");
   });
+
+  describe("isCategoryExcluded counts plugin rules (#1599)", () => {
+    const acme = [{ id: "acme/page-note", category: "content" }];
+
+    test("--rule-include acme keeps the plugin rule's category in play for --fail-on score:content", () => {
+      const resolved = { enable: ["acme/*"], disable: [] };
+      // Without the plugin registry only built-in rules are known: content reads as excluded.
+      expect(isCategoryExcluded("content", resolved)).toBe(true);
+      expect(isCategoryExcluded("content", resolved, acme)).toBe(false);
+    });
+
+    test("an exact plugin rule include reaches its category too", () => {
+      expect(
+        isCategoryExcluded(
+          "content",
+          { enable: ["acme/page-note"], disable: [] },
+          acme
+        )
+      ).toBe(false);
+    });
+
+    test("a plugin rule in another category does not rescue this one", () => {
+      expect(
+        isCategoryExcluded(
+          "security",
+          { enable: ["acme/*"], disable: [] },
+          acme
+        )
+      ).toBe(true);
+    });
+
+    test("disable still wins over the plugin include", () => {
+      expect(
+        isCategoryExcluded(
+          "content",
+          { enable: ["acme/*"], disable: ["acme/*"] },
+          acme
+        )
+      ).toBe(true);
+    });
+  });
 });
