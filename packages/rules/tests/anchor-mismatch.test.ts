@@ -73,6 +73,61 @@ describe("links/anchor-mismatch tokens", () => {
   });
 });
 
+describe("links/anchor-mismatch hyphenated compounds (#1598)", () => {
+  test("Online-Shop Umsetzung -> /onlineshop-agentur does not warn (German pair from the report)", () => {
+    const c = check([
+      { ...HOME, links: [body("/onlineshop-agentur", "Online-Shop Umsetzung")] },
+      {
+        url: "https://example.com/onlineshop-agentur",
+        title: "Onlineshop Agentur: Shopsystem, Relaunch, Betreuung | ONEDOT",
+      },
+    ]);
+    expect(c.status).toBe("pass");
+  });
+
+  test("E-Mail and Web-Seite match their closed forms in the title", () => {
+    for (const [anchor, title] of [
+      ["E-Mail Versand", "Email Marketing Tool"],
+      ["Web-Seite erstellen", "Webseite Baukasten"],
+    ] as const) {
+      const c = check([
+        { ...HOME, links: [body("/t", anchor)] },
+        { url: "https://example.com/t", title },
+      ]);
+      expect(c.status).toBe("pass");
+    }
+  });
+
+  test("the reverse: a closed anchor word matches a hyphenated title word", () => {
+    const c = check([
+      { ...HOME, links: [body("/shop", "Onlineshop Umsetzung")] },
+      { url: "https://example.com/shop", title: "Online-Shop Agentur Berlin" },
+    ]);
+    expect(c.status).toBe("pass");
+  });
+
+  test("the reverse against a hyphenated slug inside a longer slug", () => {
+    const c = check([
+      { ...HOME, links: [body("/online-shop-agentur", "Onlineshop")] },
+      { url: "https://example.com/online-shop-agentur", title: "Ihre Agentur" },
+    ]);
+    expect(c.status).toBe("pass");
+  });
+
+  test("a hyphenated anchor that only shares a short prefix still warns", () => {
+    const c = check([
+      { ...HOME, links: [body("/onlineshop-agentur", "Online-Marketing Umsetzung")] },
+      { url: "https://example.com/onlineshop-agentur", title: "Onlineshop Agentur" },
+    ]);
+    expect(c.status).toBe("warn");
+  });
+
+  test("joined forms are tokens, the parts stay tokens", () => {
+    expect(meaningfulTokens("Online-Shop")).toEqual(["online", "shop", "onlineshop"]);
+    expect(meaningfulTokens("E-Mail")).toEqual(["mail", "email"]);
+  });
+});
+
 describe("links/anchor-mismatch", () => {
   test("Fridges -> Fridge repairs at /repairs/fridge does not warn", () => {
     const c = check([
