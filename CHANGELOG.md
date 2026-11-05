@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+## v0.0.169 (2026-11-05)
+
+Technology detection reads the script URLs of a bundler resource list again: v0.0.168 looked for `uri` and `url` fields, but the lists use `id`.
+
 ### Fixed
 
 - **Technology detection reads a bundler's `__bundler/ext_resources` list through its `id` field again (#1550).** v0.0.168 read only the `uri` and `url` fields of the list, but the lists on real standalone-HTML bundles are arrays of `{"id": "<script URL>", "uuid": "<uuid>"}` objects, so none of the 20 loaders in them were detected. An `id` now counts as a script URL when it is an http or https URL or a path starting with `/`, `./` or `../` (same bounds, unsafe-character rules and skip counter as an import map); a bare token or UUID id, the `uuid` and every other text in the list (a description) stay inert.
