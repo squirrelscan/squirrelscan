@@ -87,15 +87,19 @@ export const cspRule: Rule = {
 
     // Check for critical directives
     const hasDefaultSrc = directives.has("default-src");
-    const hasScriptSrc =
-      directives.has("script-src") || directives.has("script-src-elem");
+    // `script-src-elem` and `script-src-attr` each cover one surface (script
+    // elements, inline handlers) and leave eval() and the other surface
+    // unrestricted, so neither alone is script control (#1600).
+    const hasScriptSrc = directives.has("script-src");
 
     if (!hasDefaultSrc && !hasScriptSrc) {
       checks.push({
         name: "csp-no-script-control",
         status: "warn",
         message: "CSP has no script-src or default-src directive",
-        value: "Scripts from any source are allowed",
+        value: directives.has("script-src-elem")
+          ? "Inline event handlers and eval() are not restricted by script-src-elem"
+          : "Scripts from any source are allowed",
         expected: "Add script-src or default-src directive",
       });
     }
