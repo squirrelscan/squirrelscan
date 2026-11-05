@@ -24,8 +24,9 @@ export const gtmPresentRule: Rule = {
 
     const analyticsFound: string[] = [];
 
-    // Check for Google Tag Manager
-    if (html.includes("googletagmanager.com") || html.includes("gtm.js")) {
+    // Check for Google Tag Manager: a container loader or its noscript frame.
+    // gtag.js is also served from googletagmanager.com but is GA4, not a container (#1600).
+    if (/googletagmanager\.com\/(?:gtm\.js|ns\.html)/i.test(html) || html.includes("gtm.js")) {
       analyticsFound.push("GTM");
     }
 
@@ -61,7 +62,18 @@ export const gtmPresentRule: Rule = {
     // Deduplicate
     const uniqueAnalytics = [...new Set(analyticsFound)];
 
-    if (uniqueAnalytics.length > 0) {
+    if (uniqueAnalytics.includes("GTM")) {
+      // A tag manager runs whatever its container holds, and anyone who can
+      // publish to it can inject code into every page: it is not a pass (#1600).
+      checks.push({
+        name: "gtm-present",
+        status: "info",
+        message: `Google Tag Manager detected (${uniqueAnalytics.length} analytics platform(s))`,
+        value:
+          "A tag manager can inject arbitrary code into the page: restrict who can publish its container and review what it loads",
+        items: uniqueAnalytics.map((analytics) => ({ id: analytics })),
+      });
+    } else if (uniqueAnalytics.length > 0) {
       checks.push({
         name: "gtm-present",
         status: "pass",
