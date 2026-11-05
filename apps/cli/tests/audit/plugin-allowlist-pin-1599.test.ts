@@ -19,7 +19,7 @@ import {
 import { homedir, tmpdir } from "node:os";
 import { join, relative } from "node:path";
 
-import { loadConfiguredPlugins } from "@/audit/plugins";
+import { loadConfiguredPlugins, MAX_PLUGIN_BYTES } from "@/audit/plugins";
 
 // Under the OS temp dir, which is a symlink on macOS: realpath is part of what is tested.
 const root = mkdtempSync(join(tmpdir(), "squirrel-plugin-pin-1599-"));
@@ -103,7 +103,9 @@ describe("pinned plugin allowlist (#1599)", () => {
     expect(said).toContain('"acme-pack"');
     expect(said).toContain("plugin_allowlist");
     expect(said).toContain(realpathSync(file));
-    expect(said).toContain(sha(src));
+    // The unapproved file is not opened, so its hash is for the user to compute.
+    expect(said).toContain("shasum -a 256");
+    expect(said).not.toContain(sha(src));
   });
 
   test("an object entry without a sha256 approves nothing", async () => {
@@ -401,4 +403,119 @@ export default { name: "p", version: "1", capabilities: [], register() {} };
       }
     }
   );
+
+  describe("config-named paths are not touched before approval", () => {
+    const canFifo = process.platform !== "win32";
+    const makeFifo = (path: string) => {
+      const r = Bun.spawnSync(["mkfifo", path]);
+      if (r.exitCode !== 0) throw new Error("mkfifo failed");
+    };
+
+    /** loadConfiguredPlugins in a child process, killed after 15 s. */
+    async function inChild(entry: string, cacheName = `cache-${seq}`) {
+      const child = Bun.spawn(
+        [
+          process.execPath,
+          "run",
+          join(import.meta.dir, "../helpers/load-plugins-child.ts"),
+          JSON.stringify({
+            entry,
+            baseDir: projectDir,
+            settingsPath,
+            cacheRoot: join(root, cacheName),
+          }),
+        ],
+        { stdout: "pipe", stderr: "pipe", cwd: join(import.meta.dir, "../..") }
+      );
+      let timedOut = false;
+      const timer = setTimeout(() => {
+        timedOut = true;
+        child.kill("SIGKILL");
+      }, 15_000);
+      const out = await new Response(child.stdout).text();
+      await child.exited;
+      clearTimeout(timer);
+      const line = out.trim().split("\n").at(-1) ?? "";
+      return {
+        timedOut,
+        result: timedOut
+          ? undefined
+          : (JSON.parse(line) as {
+              rules?: number;
+              notices?: string[];
+              error?: string;
+            }),
+      };
+    }
+
+    test.skipIf(!canFifo)(
+      "a FIFO named by the config with an empty allowlist returns promptly with a refusal",
+      async () => {
+        makeFifo(join(projectDir, "trap.ts"));
+        settings([]);
+        const { timedOut, result } = await inChild("./trap.ts");
+        expect(timedOut).toBe(false);
+        expect(result?.rules).toBe(0);
+        expect(result?.notices?.join("\n")).toContain("not allowlisted");
+      },
+      30_000
+    );
+
+    test.skipIf(!canFifo)(
+      "a FIFO named by the config under a bare-id allowlist is not opened either",
+      async () => {
+        makeFifo(join(projectDir, "trap2.ts"));
+        settings(["acme-pack"]);
+        const { timedOut, result } = await inChild("./trap2.ts");
+        expect(timedOut).toBe(false);
+        expect(result?.rules).toBe(0);
+      },
+      30_000
+    );
+
+    test.skipIf(!canFifo)(
+      "a pinned file that is not a regular file (a FIFO) is refused, not read",
+      async () => {
+        const fifo = join(pluginDir, "pinned-fifo.ts");
+        makeFifo(fifo);
+        settings([{ id: "acme-pack", entry: fifo, sha256: sha("x") }]);
+        const { timedOut, result } = await inChild(fifo);
+        expect(timedOut).toBe(false);
+        expect(result?.rules).toBe(0);
+        expect(result?.notices?.join("\n")).toContain("regular file");
+      },
+      30_000
+    );
+
+    test.skipIf(process.platform === "win32")(
+      "a pinned /dev/zero is refused as not a regular file",
+      async () => {
+        settings([{ id: "acme-pack", entry: "/dev/zero", sha256: sha("x") }]);
+        const { timedOut, result } = await inChild("/dev/zero");
+        expect(timedOut).toBe(false);
+        expect(result?.rules).toBe(0);
+        expect(result?.notices?.join("\n")).toContain("regular file");
+      },
+      30_000
+    );
+
+    test("a pinned directory is refused as not a regular file", async () => {
+      const dir = join(pluginDir, "a-dir.ts");
+      mkdirSync(dir);
+      settings([{ id: "acme-pack", entry: dir, sha256: sha("x") }]);
+      const r = await load(dir);
+      expect(ruleIds(r)).toEqual([]);
+      expect(r.notices.join("\n")).toContain("regular file");
+    });
+
+    test("a pinned file over the size cap is refused with a clear message and never imported", async () => {
+      const big = `${pluginSource("big")}\n// ${"x".repeat(MAX_PLUGIN_BYTES)}\n`;
+      const file = write(join(pluginDir, "big.ts"), big);
+      settings([{ id: "acme-pack", entry: file, sha256: sha(big) }]);
+      const r = await load(file);
+      expect(ruleIds(r)).toEqual([]);
+      expect(ran("big")).toBe(false);
+      expect(r.notices.join("\n")).toContain("larger than 4 MiB");
+    });
+  });
 });

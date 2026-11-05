@@ -7,11 +7,15 @@ import {
 } from "@squirrelscan/rules";
 import { createHash } from "node:crypto";
 import {
+  closeSync,
+  constants,
   existsSync,
+  fstatSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
-  readFileSync,
+  openSync,
+  readSync,
   realpathSync,
   rmSync,
   writeFileSync,
@@ -34,6 +38,11 @@ import { loadUserSettings } from "@/self/settings";
 // after realpath, is the pinned path (also realpath'd) AND the file's SHA-256
 // equals the pin. Nothing else is read for the decision: not a bare id, not the
 // project's `.squirrel/settings.json`, not an env var, not the config file.
+//
+// Approval is decided from the id and the paths alone, before any file the config
+// names is opened: only a pinned file is ever read, and only if it is a regular file
+// of at most MAX_PLUGIN_BYTES, so a FIFO, a device or a huge file in a cloned repo's
+// config cannot hang or exhaust the audit.
 //
 // What is imported is what was hashed: the bytes are read once, hashed, written to
 // a private copy and imported from there, so a swap of the original between the
@@ -99,46 +108,95 @@ export function pinLine(id: string, entry: string, sha256: string): string {
   return JSON.stringify({ id, entry, sha256 });
 }
 
-interface PluginFile {
-  /** The entry with symlinks resolved: the path a pin is compared to. */
-  real: string;
-  bytes: Uint8Array;
-  sha256: string;
-}
+/** The largest plugin file squirrel will read: a plugin is one bundled module, not a data file. */
 
-/** Resolve a config `entry` (a path or a `file:` URL) to a real file and read its bytes once. */
-function readPluginFile(
+/** The largest plugin file squirrel will read: a plugin is one bundled module, not a data file. */
+export const MAX_PLUGIN_BYTES = 4 * 1024 * 1024;
+
+/**
+ * Resolve a config `entry` (a path or a `file:` URL) to the real path a pin is
+ * compared to. This only follows symlinks (it never opens the file), so it is
+ * safe to do before the approval decision; reading the file is not.
+ */
+function resolveEntry(
   entry: string,
   baseDir: string
-): PluginFile | { error: string } {
+): { real: string } | { error: string } {
   try {
     const lexical = entry.startsWith("file:")
       ? fileURLToPath(entry)
       : isAbsolute(entry)
         ? entry
         : resolve(baseDir, entry);
-    const real = realpathSync(lexical);
-    const bytes = readFileSync(real);
-    return { real, bytes, sha256: sha256Hex(bytes) };
+    return { real: realpathSync(lexical) };
   } catch (error) {
     return { error: error instanceof Error ? error.message : String(error) };
   }
 }
 
-type Verdict = { kind: "ok" } | { kind: "refused"; reason: string };
+/**
+ * Read an approved plugin file once, bounded. The path is `lstat`ed first so a
+ * FIFO or device is never opened; the open refuses a symlink in the last
+ * component and does not block, and the descriptor is checked again with `fstat`
+ * before any byte is read. Never called for a path the allowlist has not approved.
+ */
+function readPluginFile(
+  real: string
+): { bytes: Uint8Array; sha256: string } | { error: string } {
+  const cap = `${MAX_PLUGIN_BYTES / (1024 * 1024)} MiB`;
+  try {
+    if (!lstatSync(real).isFile()) return { error: "is not a regular file" };
+    const fd = openSync(
+      real,
+      constants.O_RDONLY |
+        (constants.O_NOFOLLOW ?? 0) |
+        (constants.O_NONBLOCK ?? 0)
+    );
+    try {
+      const info = fstatSync(fd);
+      if (!info.isFile()) return { error: "is not a regular file" };
+      if (info.size > MAX_PLUGIN_BYTES)
+        return { error: `is larger than ${cap}` };
+      const buffer = Buffer.allocUnsafe(info.size + 1);
+      let total = 0;
+      for (;;) {
+        const n = readSync(fd, buffer, total, buffer.length - total, null);
+        if (n === 0) break;
+        total += n;
+        if (total === buffer.length) {
+          return { error: "grew while it was being read" };
+        }
+      }
+      const bytes = buffer.subarray(0, total);
+      return { bytes, sha256: sha256Hex(bytes) };
+    } finally {
+      closeSync(fd);
+    }
+  } catch (error) {
+    return {
+      error: `cannot be read (${error instanceof Error ? error.message : String(error)})`,
+    };
+  }
+}
+
+type Selection =
+  | { kind: "refused"; reason: string }
+  /** The sha256 values of the pins whose path is this file; the file is still to be hashed. */
+  | { kind: "pinned"; shas: string[] };
 
 /**
- * Compare one plugin file to the allowlist. Only an object entry with the same
- * id, an absolute pinned path that resolves to this file, and the file's own
- * SHA-256 approves it. The reason names what to change, in the user's terms.
+ * Decide from ids and paths alone, before the file is opened, whether the
+ * allowlist has a pin for this file: an object entry with the same id and an
+ * absolute path that resolves to it. The hash is checked by the caller, after the
+ * one bounded read. The reason names what to change, in the user's terms.
  */
-function judge(
+function selectPins(
   id: string,
-  file: PluginFile,
+  real: string,
   allow: PluginAllowEntry[],
   settingsPath: string
-): Verdict {
-  const add = `Read the file first, then add this to "plugin_allowlist" in ${settingsPath}: ${pinLine(id, file.real, file.sha256)} (the hash is \`shasum -a 256 ${JSON.stringify(file.real)}\`).`;
+): Selection {
+  const add = `Read the file first, then add this to "plugin_allowlist" in ${settingsPath}: ${pinLine(id, real, "<output of the shasum command>")} where the hash is \`shasum -a 256 ${JSON.stringify(real)}\`.`;
   const quotedId = JSON.stringify(id);
   const mine = allow.filter((a) => (typeof a === "string" ? a : a.id) === id);
   if (mine.length === 0) {
@@ -148,7 +206,7 @@ function judge(
     };
   }
 
-  let changed: string | undefined;
+  const shas: string[] = [];
   const problems: string[] = [];
   for (const a of mine) {
     if (typeof a === "string") {
@@ -180,17 +238,10 @@ function judge(
       );
       continue;
     }
-    if (pinnedReal !== file.real) continue;
-    if (a.sha256.toLowerCase() === file.sha256) return { kind: "ok" };
-    changed = `the file changed since it was pinned (pinned sha256 ${a.sha256.toLowerCase()}, file is ${file.sha256})`;
+    if (pinnedReal === real) shas.push(a.sha256.toLowerCase());
   }
 
-  if (changed) {
-    return {
-      kind: "refused",
-      reason: `Plugin ${quotedId} was not loaded: ${changed}. If you trust the new content, replace the pin. ${add}`,
-    };
-  }
+  if (shas.length > 0) return { kind: "pinned", shas };
   if (problems.length > 0) {
     return {
       kind: "refused",
@@ -199,7 +250,7 @@ function judge(
   }
   return {
     kind: "refused",
-    reason: `Plugin ${quotedId} is allowlisted in ${settingsPath} for a different file than the config names (${file.real}), so it was not loaded. To approve this file instead: ${add}`,
+    reason: `Plugin ${quotedId} is allowlisted in ${settingsPath} for a different file than the config names (${real}), so it was not loaded. To approve this file instead: ${add}`,
   };
 }
 
@@ -279,30 +330,54 @@ export async function loadConfiguredPlugins(
 
   try {
     for (const item of items) {
-      const file = readPluginFile(item.entry, options.baseDir);
-      if ("error" in file) {
+      const resolved = resolveEntry(item.entry, options.baseDir);
+      if ("error" in resolved) {
         notices.push(
-          `Plugin ${JSON.stringify(item.id)} was not loaded: its entry ${JSON.stringify(item.entry)} cannot be read (${file.error}).`
+          `Plugin ${JSON.stringify(item.id)} was not loaded: its entry ${JSON.stringify(item.entry)} cannot be resolved (${resolved.error}).`
         );
         continue;
       }
-      const verdict = judge(item.id, file, entries, settingsPath);
-      if (verdict.kind === "refused") {
-        notices.push(verdict.reason);
+      // Approval is decided from the id and the path first. A path the allowlist
+      // does not pin is never opened, so a FIFO, a device or a huge file named by
+      // a cloned project's config cannot hang or exhaust the audit.
+      const selection = selectPins(
+        item.id,
+        resolved.real,
+        entries,
+        settingsPath
+      );
+      if (selection.kind === "refused") {
+        notices.push(selection.reason);
+        continue;
+      }
+      const file = readPluginFile(resolved.real);
+      if ("error" in file) {
+        notices.push(
+          `Plugin ${JSON.stringify(item.id)} was not loaded: ${resolved.real} ${file.error}.`
+        );
+        continue;
+      }
+      if (!selection.shas.includes(file.sha256)) {
+        notices.push(
+          `Plugin ${JSON.stringify(item.id)} was not loaded: the file changed since it was pinned (pinned sha256 ${selection.shas.join(" or ")}, file is ${file.sha256}). If you trust the new content, replace the pin with ${pinLine(item.id, resolved.real, file.sha256)} in ${settingsPath}.`
+        );
         continue;
       }
       // Hash verified. Import a private copy of exactly these bytes, never the path again.
-      options.afterVerify?.(item.id, file.real);
+      options.afterVerify?.(item.id, resolved.real);
       cache ??= preparePluginCache(
         options.cacheRoot ?? join(getSquirrelPaths().data, "plugin-cache")
       );
       const dir = mkdtempSync(join(cache, "run-"));
       tempDirs.push(dir);
-      const copy = join(dir, `${file.sha256}${extname(file.real) || ".js"}`);
+      const copy = join(
+        dir,
+        `${file.sha256}${extname(resolved.real) || ".js"}`
+      );
       writeFileSync(copy, file.bytes, { flag: "wx", mode: 0o600 });
-      const resolved = { ...item, entry: file.real };
-      verified.set(file.real, copy);
-      approved.push(resolved);
+      const manifest = { ...item, entry: resolved.real };
+      verified.set(resolved.real, copy);
+      approved.push(manifest);
       allowIds.add(item.id);
     }
 
