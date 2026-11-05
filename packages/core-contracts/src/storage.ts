@@ -1031,6 +1031,8 @@ export interface AnchorGraphPage {
   headingForeign: boolean;
   /** Folded words of the FULL title and ALL H1s (capped); the clipped copies are display only. */
   headingTokens: string[];
+  /** Closed forms of hyphenated compounds in the title and H1s; compared by equality only. */
+  headingJoined?: string[];
   /** A cap or an over-long word cut the word list: a pair with no shared word is not judged. */
   headingTruncated: boolean;
 }
@@ -1047,6 +1049,8 @@ export interface AnchorGraphPair {
   tokens: string[];
   /** Words of each piece of a glued text (see LinkData.textParts), compared one by one. */
   partTokens: string[];
+  /** Closed forms of hyphenated compounds in the anchor texts; compared by equality only. */
+  joined?: string[];
   /** The token list was cut off by a cap: a pair with no shared word is then not judged. */
   truncated: boolean;
   /** A text had letters in a script written without spaces (CJK, Thai): the pair is not judged. */

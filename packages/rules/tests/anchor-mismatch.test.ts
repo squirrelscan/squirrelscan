@@ -122,9 +122,43 @@ describe("links/anchor-mismatch hyphenated compounds (#1598)", () => {
     expect(c.status).toBe("warn");
   });
 
-  test("joined forms are tokens, the parts stay tokens", () => {
-    expect(meaningfulTokens("Online-Shop")).toEqual(["online", "shop", "onlineshop"]);
-    expect(meaningfulTokens("E-Mail")).toEqual(["mail", "email"]);
+  test("joined forms are kept apart from the tokens; the parts stay tokens", () => {
+    expect(meaningfulTokens("Online-Shop")).toEqual(["online", "shop"]);
+    expect(tokenize("Online-Shop")).toEqual({
+      tokens: ["online", "shop"],
+      joined: ["onlineshop"],
+      lost: false,
+    });
+    expect(meaningfulTokens("E-Mail")).toEqual(["mail"]);
+    expect(tokenize("E-Mail").joined).toEqual(["email"]);
+  });
+
+  test("a joined form matches by equality only, never by prefix or suffix", () => {
+    // "foobar" is neither part of the target, and is not equal to its word "foobarxyz".
+    const c = check([
+      { ...HOME, links: [body("/t", "Foo-Bar")] },
+      { url: "https://example.com/t", title: "Foobarxyz" },
+    ]);
+    expect(c.status).toBe("warn");
+    // The reverse: a hyphenated target word must equal the anchor word.
+    const r = check([
+      { ...HOME, links: [body("/t", "Foobarxyz")] },
+      { url: "https://example.com/t", title: "Foo-Bar" },
+    ]);
+    expect(r.status).toBe("warn");
+  });
+
+  test("a joined form still equals a closed word, and an ordinary token keeps its tolerance", () => {
+    const eq = check([
+      { ...HOME, links: [body("/t", "Foo-Bar")] },
+      { url: "https://example.com/t", title: "Foobar" },
+    ]);
+    expect(eq.status).toBe("pass");
+    const tol = check([
+      { ...HOME, links: [body("/t", "Fridges")] },
+      { url: "https://example.com/t", title: "Fridge repairs" },
+    ]);
+    expect(tol.status).toBe("pass");
   });
 });
 
@@ -146,18 +180,15 @@ describe("links/anchor-mismatch hyphen scan stays linear (#1598)", () => {
   }
 
   test("results are unchanged around runs, double hyphens and stray hyphens", () => {
-    expect(tokenize("Online-Shop").tokens).toEqual(["online", "shop", "onlineshop"]);
-    expect(tokenize("online-shop-agentur").tokens).toEqual([
-      "online",
-      "shop",
-      "agentur",
+    expect(tokenize("Online-Shop").joined).toEqual(["onlineshop"]);
+    expect(tokenize("online-shop-agentur").joined).toEqual([
       "onlineshopagentur",
       "onlineshop",
       "shopagentur",
     ]);
-    expect(tokenize("foo--bar").tokens).toEqual(["foo", "bar"]);
-    expect(tokenize("-foo-bar-").tokens).toEqual(["foo", "bar", "foobar"]);
-    expect(tokenize("a-b").tokens).toEqual([]);
+    expect(tokenize("foo--bar").joined).toEqual([]);
+    expect(tokenize("-foo-bar-").joined).toEqual(["foobar"]);
+    expect(tokenize("a-b").joined).toEqual([]);
   });
 });
 
@@ -621,7 +652,7 @@ describe("links/anchor-mismatch", () => {
     ]);
     expect(c.status).toBe("pass");
     expect((c.details as { notJudged: number }).notJudged).toBe(1);
-    expect(tokenize(`${huge} word`)).toEqual({ tokens: ["word"], lost: true });
+    expect(tokenize(`${huge} word`)).toEqual({ tokens: ["word"], joined: [], lost: true });
 
     const b = new AnchorGraphBuilder(10, 1_000, undefined, 6);
     b.addPage(BASE, { title: "Home", links: [body("/a", "alpha beta gamma")], status: 200 });
