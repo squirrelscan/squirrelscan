@@ -21,6 +21,7 @@ import { SERVICE_LIMITS } from "@squirrelscan/core-contracts/limits";
 import type { Config } from "@squirrelscan/config";
 import { buildEditorSummaryRequest, toEditorSummary } from "@squirrelscan/report/editor-summary";
 import { filterRules, loadAllRules, type RuleCloudSpec } from "@squirrelscan/rules";
+import { truncateToBytes } from "@squirrelscan/utils/bytes";
 import { getHostname, getOrigin, getPathname, hasUnsafeUrlScheme } from "@squirrelscan/utils/url";
 import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils/dom";
 
@@ -50,15 +51,6 @@ const MAX_EXCERPT_BYTES = 6_000;
 const MAX_TITLE_CHARS = 300;
 const MAX_DESCRIPTION_CHARS = 500;
 const MAX_HEADING_CHARS = 200;
-
-/** Truncate to a UTF-8 BYTE budget without splitting a code point (mirrors the CLI). */
-export function truncateUtf8Bytes(text: string, maxBytes: number): string {
-  const sliced = text.slice(0, maxBytes);
-  const encoded = new TextEncoder().encode(sliced);
-  if (encoded.length <= maxBytes) return sliced;
-  const decoded = new TextDecoder().decode(encoded.slice(0, maxBytes));
-  return decoded.replace(/�+$/, "");
-}
 
 /** Cloud-gated rules that are enabled under this config (drives which services run). */
 export function selectCloudRules(config: Config): Array<{ id: string; cloud: RuleCloudSpec }> {
@@ -92,15 +84,15 @@ export function buildCloudPagePayloads(siteContext: SiteContextPage[]): CloudPag
       // slice pins the buffer it was cut from (#240). One payload per page, so
       // this is the page-count-scaled term the streamed pre-rules walk exists to
       // remove: the 6 KB excerpt alone held a megabyte per page on the sites
-      // that OOM-killed #1862. `truncateUtf8Bytes` returns the slice UNCHANGED
-      // whenever it already fits the byte budget, which is every all-ASCII page,
-      // so it detaches nothing on its own. Invisible in `heapUsed` and in RSS;
-      // it shows only in `process.memoryUsage().external`.
+      // that OOM-killed #1862. The title, description and heading slices below
+      // are still attached to their page, so the detach stays whatever
+      // `truncateToBytes` does with the excerpt. Invisible in `heapUsed` and in
+      // RSS; it shows only in `process.memoryUsage().external`.
       detachFromPage(
         {
           url: page.url,
           title: parsed.meta.title?.slice(0, MAX_TITLE_CHARS) ?? undefined,
-          textExcerpt: truncateUtf8Bytes(parsed.content.textContent, MAX_EXCERPT_BYTES),
+          textExcerpt: truncateToBytes(parsed.content.textContent, MAX_EXCERPT_BYTES),
           meta: Object.keys(meta).length > 0 ? meta : undefined,
           headings: parsed.headings.headings
             .slice(0, 20)

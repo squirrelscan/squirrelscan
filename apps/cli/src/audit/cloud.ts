@@ -54,6 +54,7 @@ import {
   type RuleCloudSpec,
 } from "@squirrelscan/rules";
 import { hasUnsafeUrlScheme } from "@squirrelscan/utils";
+import { truncateToBytes } from "@squirrelscan/utils/bytes";
 import {
   overlayTechHeaders,
   techCookieNames,
@@ -90,23 +91,6 @@ const MAX_HEADING_CHARS = 200;
 /** Tech-detect body budget as a fraction of maxBodyBytes; slack absorbs JSON escaping + envelope. */
 const TECH_DETECT_BODY_BUDGET_RATIO = 0.9;
 
-/**
- * Truncate to a UTF-8 BYTE budget (not UTF-16 code units — `slice(0, n)` can
- * yield up to 3× the bytes on multi-byte text, blowing the per-page cap and
- * the batch body limit). Never splits a code point.
- */
-export function truncateUtf8Bytes(text: string, maxBytes: number): string {
-  // ≤ maxBytes chars is always enough chars to fill maxBytes bytes.
-  const sliced = text.slice(0, maxBytes);
-  const encoded = new TextEncoder().encode(sliced);
-  if (encoded.length <= maxBytes) return sliced;
-  const decoded = new TextDecoder("utf-8", { fatal: false }).decode(
-    encoded.subarray(0, maxBytes)
-  );
-  // Drop the replacement char(s) a mid-sequence cut produces.
-  return decoded.replace(/�+$/, "");
-}
-
 /** Bytes of the JSON-serialized value — what the API's body limit measures. */
 function jsonByteLength(value: unknown): number {
   return new TextEncoder().encode(JSON.stringify(value)).length;
@@ -129,7 +113,7 @@ function shrinkHomeHtmlToFit(
   let best: TechDetectPagePayload = { ...home, html: "" };
   while (lo < hi) {
     const mid = Math.ceil((lo + hi) / 2);
-    const candidate = { ...home, html: truncateUtf8Bytes(home.html, mid) };
+    const candidate = { ...home, html: truncateToBytes(home.html, mid) };
     if (jsonByteLength([candidate]) <= budget) {
       lo = mid;
       best = candidate; // reuse the accepted candidate instead of re-truncating
@@ -227,7 +211,7 @@ export function buildCloudPagePayloads(
         {
           url: page.url,
           title: parsed.meta.title?.slice(0, MAX_TITLE_CHARS) ?? undefined,
-          textExcerpt: truncateUtf8Bytes(
+          textExcerpt: truncateToBytes(
             parsed.content.textContent,
             MAX_EXCERPT_BYTES
           ),
@@ -1071,7 +1055,7 @@ export function buildTechPageInputs(
   ];
   const cap = SERVICE_LIMITS.techDetectMaxHtmlBytes;
   const sources = ordered.map(({ page }) => {
-    const html = truncateUtf8Bytes(page.html ?? "", cap);
+    const html = truncateToBytes(page.html ?? "", cap);
     return {
       url: page.finalUrl || page.url,
       requestedUrl: page.url,
