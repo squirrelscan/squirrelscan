@@ -20,6 +20,7 @@ How it works:
 ### Fixed
 
 - `links/anchor-mismatch` no longer warns when a hyphenated compound in the anchor, joined, equals a word of the target (`Online-Shop` and `Onlineshop`, `E-Mail` and `Email`), or the reverse. #1598
+- `security/csp` reads `script-src-elem`, which overrides `script-src` for script elements, so a stricter or looser element directive is judged as the browser applies it (#1600).
 
 ## v0.0.169 (2026-11-05)
 

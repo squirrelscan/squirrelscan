@@ -87,7 +87,8 @@ export const cspRule: Rule = {
 
     // Check for critical directives
     const hasDefaultSrc = directives.has("default-src");
-    const hasScriptSrc = directives.has("script-src");
+    const hasScriptSrc =
+      directives.has("script-src") || directives.has("script-src-elem");
 
     if (!hasDefaultSrc && !hasScriptSrc) {
       checks.push({
@@ -99,23 +100,17 @@ export const cspRule: Rule = {
       });
     }
 
-    // Check for unsafe values in script-src
+    // `script-src-elem` overrides `script-src` (and `default-src`) for <script>
+    // elements, so inline, wildcard, data: and blob: sources are judged on it
+    // when present (#1600). 'unsafe-eval' governs eval(), which no element
+    // directive controls, so it stays on script-src / default-src.
     const scriptSrc =
       directives.get("script-src") || directives.get("default-src") || "";
-    const sources = sourceTokens(scriptSrc);
-    // CSP3: a nonce or hash in the list makes browsers ignore 'unsafe-inline',
-    // and 'strict-dynamic' ignores it along with every host and scheme source
-    // (#441). Read from the directive's own list only: tokens after a comma
-    // belong to a comma-joined second policy, maybe to another directive. On
-    // purpose this still warns when that second policy is itself strict.
-    const ownSources = sourceTokens(scriptSrc.split(",", 1)[0] ?? "");
-    const strictDynamic = ownSources.has("'strict-dynamic'");
-    const inlineIgnored = strictDynamic || [...ownSources].some(isNonceOrHashSource);
-    const weakValues = WEAK_VALUES.filter((v) => {
-      if (v === "*") return !strictDynamic && [...sources].some(isAnyHostSource);
-      if (v === "'unsafe-inline'" && inlineIgnored) return false;
-      return sources.has(v);
-    });
+    const elemSrc = directives.get("script-src-elem") ?? scriptSrc;
+    const weakValues = [
+      ...weakScriptSources(elemSrc).filter((v) => v !== "'unsafe-eval'"),
+      ...weakScriptSources(scriptSrc).filter((v) => v === "'unsafe-eval'"),
+    ];
 
     if (weakValues.length > 0) {
       // unsafe-inline and unsafe-eval are critical weaknesses
@@ -170,6 +165,24 @@ export const cspRule: Rule = {
     return { checks };
   },
 };
+
+/** The weak entries of WEAK_VALUES in one script directive's value. */
+function weakScriptSources(scriptSrc: string): string[] {
+  const sources = sourceTokens(scriptSrc);
+  // CSP3: a nonce or hash in the list makes browsers ignore 'unsafe-inline',
+  // and 'strict-dynamic' ignores it along with every host and scheme source
+  // (#441). Read from the directive's own list only: tokens after a comma
+  // belong to a comma-joined second policy, maybe to another directive. On
+  // purpose this still warns when that second policy is itself strict.
+  const ownSources = sourceTokens(scriptSrc.split(",", 1)[0] ?? "");
+  const strictDynamic = ownSources.has("'strict-dynamic'");
+  const inlineIgnored = strictDynamic || [...ownSources].some(isNonceOrHashSource);
+  return WEAK_VALUES.filter((v) => {
+    if (v === "*") return !strictDynamic && [...sources].some(isAnyHostSource);
+    if (v === "'unsafe-inline'" && inlineIgnored) return false;
+    return sources.has(v);
+  });
+}
 
 /**
  * The source expressions of one directive value, lowercased. Keywords,
