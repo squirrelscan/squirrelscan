@@ -1,0 +1,153 @@
+---
+title: "Plugins: run your own audit rules"
+sidebarTitle: "Plugins"
+icon: "puzzle"
+description: "Write a rule pack in TypeScript, name it in squirrel.toml, approve it in your user settings, and run it with squirrel audit"
+---
+
+A plugin is a TypeScript or JavaScript file that registers audit rules. `squirrel audit` runs them in the same pass as the built-in rules, so `[rules]`, `--rule-include`, `--rule-exclude`, `[[ignore]]`, scoring and the report treat them the same way.
+
+A plugin is code, and it runs with your permissions. Read [the security model](#security-model) before you turn one on.
+
+## Write a plugin
+
+A plugin file has one default export with a `register` function. Call `registerRule` once per rule.
+
+```ts acme-pack.ts
+export default {
+  name: "Acme pack",
+  version: "1.0.0",
+  capabilities: ["rules"],
+  register(ctx) {
+    ctx.registerRule({
+      meta: {
+        id: "acme/no-lorem-ipsum",
+        name: "No placeholder text",
+        description: "Flags pages that still contain lorem ipsum",
+        solution: "Replace the placeholder text with real copy.",
+        category: "content",
+        scope: "page",
+        verdictScope: "page",
+        severity: "warning",
+        weight: 3,
+      },
+      run(ctx) {
+        const text = ctx.parsed.document?.body?.textContent ?? "";
+        const found = /lorem ipsum/i.test(text);
+        return {
+          checks: [
+            {
+              name: "no-lorem-ipsum",
+              status: found ? "warn" : "pass",
+              message: found ? "Placeholder text found" : "No placeholder text",
+            },
+          ],
+        };
+      },
+    });
+  },
+};
+```
+
+### Rule ids and namespaces
+
+A rule id is `<namespace>/<name>`: lowercase letters, digits and hyphens. Pick a namespace of your own, and use it for every rule in the pack.
+
+- A plugin rule can never replace or shadow a built-in rule. An id that equals a built-in id fails the load with an error that names the id, and no built-in rule changes.
+- A built-in namespace (`core`, `content`, `security` and the rest) and a rule category code (such as `other`) are not available.
+- Registering the same id twice fails the load.
+
+### Page rules and site rules
+
+Set `scope` to `"page"` or `"site"`. Always set `verdictScope: "page"` on a page rule. That keeps the engine from copying one page's verdict to other pages that share a template.
+
+Page rules get the page's parsed document in `ctx.parsed`, its response in `ctx.page`, and the rule's options in `ctx.options`.
+
+<Warning>
+Site rules get no DOM. In `squirrel audit` the pages of `ctx.site.pages` carry no document and `ctx.page.html` is an empty string. A site rule reads page facts (URL, status, headers), `ctx.siteQuery` and the signals the engine collected. To look at markup, write a page rule.
+</Warning>
+
+Both kinds of rule get the same context as a built-in rule, including `ctx.cloudResults` when the audit fetched cloud results, and `ctx.siteMetadata`.
+
+## Run a plugin
+
+Name the plugin in `squirrel.toml`. A relative `entry` is resolved from the directory of the config file.
+
+```toml squirrel.toml
+[plugins]
+enabled = true
+
+[[plugins.items]]
+id = "acme-pack"
+entry = "./acme-pack.ts"
+allow = ["rules"]
+```
+
+Then approve it in your own `~/.squirrel/settings.json`:
+
+```json ~/.squirrel/settings.json
+{
+  "plugin_allowlist": ["acme-pack"]
+}
+```
+
+Run the audit as usual. The plugin's issues appear in the report under its namespace.
+
+```bash
+squirrel audit https://example.com
+```
+
+### Select and ignore plugin rules
+
+- `--rule-exclude acme` skips every rule in the `acme` namespace. `--rule-exclude acme/no-lorem-ipsum` skips one.
+- `--rule-include` replaces the `[rules] enable` list, so name the namespace there too: `--rule-include core,acme`.
+- `[[ignore]]` entries work as they do for built-in rules. See [Ignore](/configuration/ignore).
+- `[rule_options."acme/no-lorem-ipsum"]` passes options to a rule that declares an `optionsSchema`.
+
+## Security model
+
+The project's `squirrel.toml` can only ask for a plugin. It can never make `squirrel audit` run one.
+
+- A plugin loads only when its `id` is in `plugin_allowlist` in `~/.squirrel/settings.json`. That file is the only place the decision is read. A project's `.squirrel/settings.json`, an environment variable and `squirrel.toml` itself cannot approve a plugin.
+- Without the allowlist entry the plugin file is not imported, so none of its code runs. The audit prints one line per plugin it skipped, with the reason.
+- If `settings.json` cannot be read, nothing is allowed.
+- An allowlisted plugin that cannot be loaded (a bad id, an id that clashes with a built-in rule, a rule the manifest did not allow) stops the audit before the crawl. Nothing is dropped silently.
+
+An id in the allowlist approves whatever file a config names under that id. To approve one file only, pin it:
+
+```json ~/.squirrel/settings.json
+{
+  "plugin_allowlist": [{ "id": "acme-pack", "entry": "/home/you/plugins/acme-pack.ts" }]
+}
+```
+
+A config that names the same id with another file is then refused.
+
+<Warning>
+Only allowlist plugin files you wrote or have read. A plugin runs in the `squirrel` process with your permissions, and a rule can read the environment, the file system and the network. The checks above decide whether a plugin loads, not what it does once it runs.
+</Warning>
+
+### Capabilities
+
+The `allow` list in each `[[plugins.items]]` entry says what the plugin may register: `"rules"` and `"listeners"`. Registering something the entry does not allow fails the load.
+
+A listener subscribes to an event name. The rules phase emits `audit:rules-phase` with `{ phase, boundary }`. A listener that throws is logged and ignored.
+
+## What a plugin rule does not change
+
+- Public rule counts, the rule reference pages and the rule-count checks count built-in rules only.
+- An audit with plugin rules does not reuse cached per-page results, because the cache key cannot see a plugin's code.
+- `squirrel config validate` reports `[rule_options]` and `[[ignore]]` entries for a plugin rule as unknown, because validation does not load plugins.
+- `squirrel report` on an older audit shows a plugin rule's issues under a generic category, because the plugin is not loaded then.
+
+## Embed the engine
+
+A host that runs the audit engine in its own process, and keeps `externalPlugins` off, can still add a rule pack. It passes an in-process snapshot to `runStreamingRules` as the `plugins` option. No file is loaded, and the same id checks apply.
+
+```ts
+await Effect.runPromise(
+  runStreamingRules(storage, crawlId, config, assets, undefined, {
+    plugins: { rules: [myRule], listeners: new Map() },
+  }),
+);
+```
