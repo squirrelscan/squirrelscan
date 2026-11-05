@@ -344,8 +344,11 @@ export default { name: "p", version: "1", capabilities: [], register() {} };
     expect(ran("ancestor")).toBe(false);
   });
 
-  // The cache must sit outside the OS temp dir for this to mean anything, so it goes in
-  // the home directory (a uniquely named sibling that is removed afterwards).
+  // The plugin file sits under `root`, so `root/node_modules` is a node_modules ABOVE the
+  // source (what the OS temp dir's node_modules used to be). The private copy lives in the
+  // home directory instead, so the import must not find it. Everything planted is inside
+  // `root`, a directory this test file created with mkdtemp (0700): no predictable name is
+  // created in the shared OS temp dir.
   const homeHasNodeModules = (() => {
     let dir = homedir();
     for (;;) {
@@ -357,21 +360,26 @@ export default { name: "p", version: "1", capabilities: [], register() {} };
   })();
 
   test.skipIf(homeHasNodeModules)(
-    "a node_modules planted in the OS temp dir is not resolved by the plugin",
+    "a node_modules above the plugin's source is not resolved by the plugin",
     async () => {
       const pkg = `squirrel-planted-${process.pid}-${seq}`;
-      const tmpNodeModules = join(tmpdir(), "node_modules");
-      const hadNodeModules = existsSync(tmpNodeModules);
+      const planted = join(mkdtempSync(join(root, "above-")), "node_modules");
       const markerFile = join(root, `planted-${seq}.marker`);
-      mkdirSync(join(tmpNodeModules, pkg), { recursive: true });
+      mkdirSync(join(planted, pkg), { recursive: true, mode: 0o700 });
       writeFileSync(
-        join(tmpNodeModules, pkg, "package.json"),
-        JSON.stringify({ name: pkg, main: "index.js" })
+        join(planted, pkg, "package.json"),
+        JSON.stringify({ name: pkg, main: "index.js" }),
+        { flag: "wx", mode: 0o600 }
       );
       writeFileSync(
-        join(tmpNodeModules, pkg, "index.js"),
-        `require("node:fs").writeFileSync(${JSON.stringify(markerFile)}, "planted code ran");`
+        join(planted, pkg, "index.js"),
+        `require("node:fs").writeFileSync(${JSON.stringify(markerFile)}, "planted code ran");`,
+        { flag: "wx", mode: 0o600 }
       );
+      // the plugin source lives beside the planted node_modules, so Node resolution
+      // from the source's own location WOULD find it
+      const sourceDir = join(planted, "..", "src");
+      mkdirSync(sourceDir, { recursive: true, mode: 0o700 });
       const homeBase = mkdtempSync(
         join(homedir(), ".squirrel-plugin-cache-test-")
       );
@@ -379,7 +387,11 @@ export default { name: "p", version: "1", capabilities: [], register() {} };
         const src = `import ${JSON.stringify(pkg)};
 export default { name: "p", version: "1", capabilities: [], register() {} };
 `;
-        const file = write(join(pluginDir, "imports-planted.ts"), src);
+        const file = write(join(sourceDir, "imports-planted.ts"), src);
+        // positive control: run from its own location, the planted package IS resolved
+        Bun.spawnSync([process.execPath, file]);
+        expect(existsSync(markerFile)).toBe(true);
+        rmSync(markerFile);
         settings([{ id: "acme-pack", entry: file, sha256: sha(src) }]);
         await expect(
           loadConfiguredPlugins(
@@ -397,9 +409,6 @@ export default { name: "p", version: "1", capabilities: [], register() {} };
         expect(existsSync(markerFile)).toBe(false);
       } finally {
         rmSync(homeBase, { recursive: true, force: true });
-        if (hadNodeModules)
-          rmSync(join(tmpNodeModules, pkg), { recursive: true, force: true });
-        else rmSync(tmpNodeModules, { recursive: true, force: true });
       }
     }
   );
