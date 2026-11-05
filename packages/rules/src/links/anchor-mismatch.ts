@@ -188,7 +188,10 @@ const MAX_TOKEN_LENGTH = 64;
  * Tokens as {@link meaningfulTokens}; the closed forms of hyphenated compounds, kept apart
  * because they match by equality only; and whether an over-long word was dropped.
  */
-export function tokenize(text: string): { tokens: string[]; joined: string[]; lost: boolean } {
+export function tokenize(
+  text: string,
+  options: { slug?: boolean } = {},
+): { tokens: string[]; joined: string[]; lost: boolean } {
   const tokens: string[] = [];
   let lost = false;
   const folded = foldLatin(
@@ -205,15 +208,18 @@ export function tokenize(text: string): { tokens: string[]; joined: string[]; lo
     }
     tokens.push(raw);
   }
-  const joined = [...new Set(hyphenJoins(folded))];
+  const joined = [...new Set(hyphenJoins(folded, options.slug === true))];
   return { tokens, joined, lost };
 }
 
 // A hyphenated compound ("Online-Shop") and its closed form ("Onlineshop") are one word in
 // German and often elsewhere. The parts stay tokens; the joined form is kept in a separate list so
 // either spelling meets the other, and it is compared by equality only (a joined form is a
-// spelling of one word, not a stem that tolerates a suffix). In a longer run (a slug such as `online-shop-agentur`) each adjacent pair is
-// joined too, since the hyphen there is a separator. Single-letter parts count ("E-Mail" joins to
+// spelling of one word, not a stem that tolerates a suffix). The whole run is the only joined form
+// of an anchor, title or heading: a hyphenated compound is one word, so a partial join would
+// invent one. In a URL slug (`online-shop-agentur`) the hyphen is a separator, so each adjacent
+// pair is joined too. A run over the part cap gets no whole-run form: a truncated run is not a
+// compound. Single-letter parts count ("E-Mail" joins to
 // "email") and stop words are not filtered, because the joined form is a spelling, not a topic.
 const HYPHEN = /[-\u2010\u2011]/;
 const MAX_JOIN_PARTS = 8;
@@ -223,15 +229,16 @@ const MAX_JOINS = 4096;
 // One linear pass: a run is a maximal list of non-empty alphanumeric parts separated by a single
 // hyphen (a doubled or a non-word separator ends it). A regex with an unbounded leading word
 // retries at every position of a long hyphen-free word, which is quadratic.
-function hyphenJoins(folded: string): string[] {
+function hyphenJoins(folded: string, adjacent: boolean): string[] {
   const out: string[] = [];
   let run: string[] = [];
   const flush = (): void => {
     if (run.length >= 2) {
-      const parts = run.slice(0, MAX_JOIN_PARTS);
-      const forms = [parts.join("")];
-      if (parts.length > 2) {
-        for (let i = 0; i + 1 < parts.length; i++) forms.push(parts[i]! + parts[i + 1]!);
+      const forms: string[] = [];
+      if (run.length <= MAX_JOIN_PARTS) forms.push(run.join(""));
+      if (adjacent && run.length > 2) {
+        for (let i = 0; i + 1 < run.length && i < 2 * MAX_JOIN_PARTS; i++)
+          forms.push(run[i]! + run[i + 1]!);
       }
       for (const form of forms) {
         if (form.length >= 3 && form.length <= MAX_TOKEN_LENGTH && SPACED_WORD.test(form))
@@ -612,7 +619,7 @@ export function evaluateAnchorGraph(
       // slug to compare against: too thin to warn on.
       const noWord = page.hasHeading && page.headingTokens.length === 0 && !page.headingTruncated;
       if (!page.headingForeign && !noWord) {
-        const slug = tokenize(safeDecode(getPathname(target)));
+        const slug = tokenize(safeDecode(getPathname(target)), { slug: true });
         const all = [...page.headingTokens, ...slug.tokens];
         // A bare id (`/p/123`) is no topic: with no title or H1 there is nothing to compare.
         if (all.some((t) => /\p{L}/u.test(t)))

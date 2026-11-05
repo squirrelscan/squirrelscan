@@ -162,6 +162,42 @@ describe("links/anchor-mismatch hyphenated compounds (#1598)", () => {
   });
 });
 
+describe("links/anchor-mismatch joined forms are whole compounds (#1598)", () => {
+  test("a run longer than the part cap emits no joined form, never a truncated compound", () => {
+    const nine = "one-two-three-four-five-six-seven-eight-nine";
+    expect(tokenize(nine).joined).toEqual([]);
+    expect(tokenize(nine, { slug: true }).joined).not.toContain("onetwothreefourfivesixseveneight");
+    const c = check([
+      { ...HOME, links: [body("/t", nine)] },
+      { url: "https://example.com/t", title: "Onetwothreefourfivesixseveneight" },
+    ]);
+    expect(c.status).toBe("warn");
+  });
+
+  test("adjacent-pair joins are for URL slugs only, not anchors or titles", () => {
+    expect(tokenize("Online-Shop-Software").joined).toEqual(["onlineshopsoftware"]);
+    const anchor = check([
+      { ...HOME, links: [body("/t", "Online-Shop-Software")] },
+      { url: "https://example.com/t", title: "Onlineshop" },
+    ]);
+    expect(anchor.status).toBe("warn");
+    const title = check([
+      { ...HOME, links: [body("/t", "Onlineshop")] },
+      { url: "https://example.com/t", title: "Online-Shop-Software" },
+    ]);
+    expect(title.status).toBe("warn");
+  });
+
+  test("a hyphenated URL slug still joins neighbouring parts, kept apart from the tokens", () => {
+    const c = check([
+      { ...HOME, links: [body("/online-shop-agentur", "Onlineshop")] },
+      { url: "https://example.com/online-shop-agentur", title: "Ihre Agentur" },
+    ]);
+    expect(c.status).toBe("pass");
+    expect(meaningfulTokens("online-shop-agentur")).toEqual(["online", "shop", "agentur"]);
+  });
+});
+
 describe("links/anchor-mismatch hyphen scan stays linear (#1598)", () => {
   const N = 128_000;
   const inputs: Array<[string, string]> = [
@@ -181,7 +217,8 @@ describe("links/anchor-mismatch hyphen scan stays linear (#1598)", () => {
 
   test("results are unchanged around runs, double hyphens and stray hyphens", () => {
     expect(tokenize("Online-Shop").joined).toEqual(["onlineshop"]);
-    expect(tokenize("online-shop-agentur").joined).toEqual([
+    expect(tokenize("online-shop-agentur").joined).toEqual(["onlineshopagentur"]);
+    expect(tokenize("online-shop-agentur", { slug: true }).joined).toEqual([
       "onlineshopagentur",
       "onlineshop",
       "shopagentur",
