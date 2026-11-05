@@ -11,12 +11,13 @@ The reason to inventory them is that they accumulate. A site often ends up carry
 
 ## What squirrel checks
 
-The rule runs on every crawled page. It matches the raw HTML against three substring tests and reads every `script[src]` for nine more. It emits a single check named `gtm-present`:
+The rule runs on every crawled page. It matches the raw HTML against three tests and reads every `script[src]` for nine more. It emits a single check named `gtm-present`:
 
-- Pass when any platform is detected. Message: `2 analytics platform(s) detected`, listing the deduplicated names.
+- Info when Google Tag Manager is detected, whatever else is on the page. Message: `Google Tag Manager detected (2 analytics platform(s))`, listing the deduplicated names. A tag manager runs whatever its container holds, so anyone who can publish to the container can inject code into every page: it is a code-injection surface to control, not a pass.
+- Pass when any other platform is detected. Message: `2 analytics platform(s) detected`, listing the deduplicated names.
 - Info when none is. Message: `No analytics tracking detected`, with `Consider adding analytics to measure performance` as the value.
 
-From the HTML it detects `GTM` from `googletagmanager.com` or `gtm.js`, `GA4` from `gtag/js` or `googletagmanager.com/gtag`, and `UA (legacy)` from `analytics.js` or `ga.js`. From script sources it detects Plausible, Fathom, Matomo including its former name Piwik, Segment, Mixpanel, Amplitude, Heap, Hotjar and Microsoft Clarity, each by a substring of the URL.
+From the HTML it detects `GTM` from a `googletagmanager.com/gtm.js` or `googletagmanager.com/ns.html` URL or `gtm.js` (a `gtag.js` URL from the same host is `GA4`, not `GTM`), `GA4` from `gtag/js` or `googletagmanager.com/gtag`, and `UA (legacy)` from `analytics.js` or `ga.js`. From script sources it detects Plausible, Fathom, Matomo including its former name Piwik, Segment, Mixpanel, Amplitude, Heap, Hotjar and Microsoft Clarity, each by a substring of the URL.
 
 A tool loaded through a tag manager rather than as its own script tag is not detected separately. Severity info, weight 3.
 
