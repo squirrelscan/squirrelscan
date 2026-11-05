@@ -285,4 +285,37 @@ describe("plugin namespaces in --rule-include / --rule-exclude (#1599)", () => {
     expect(errors[0]).toContain('"acmee/x"');
     expect(errors[0]).toContain("plugin namespaces: acme");
   });
+
+  test("with no plugin loaded, a deferred typo reads byte for byte as it does without plugin support", () => {
+    for (const token of ["bogus", "bogus/thing"]) {
+      const plain = parseRuleFilters(undefined, [token]);
+      const deferred = parseRuleFilters(undefined, [token], {
+        deferUnknown: true,
+      });
+      const settled = resolvePendingRuleFilters(
+        deferred.pending ?? [],
+        new Set()
+      );
+      expect(settled).toEqual(plain.errors);
+    }
+    expect(
+      resolvePendingRuleFilters(
+        parseRuleFilters(["bogus"], undefined, { deferUnknown: true })
+          .pending ?? [],
+        new Set()
+      )[0]
+    ).toStartWith(
+      '--rule-include "bogus": unknown category. Valid categories:'
+    );
+  });
+
+  test("where plugins are loaded the error also lists their namespaces", () => {
+    const [error] = resolvePendingRuleFilters(
+      parseRuleFilters(undefined, ["acmee"], { deferUnknown: true }).pending ??
+        [],
+      new Set(["acme"])
+    );
+    expect(error).toContain("unknown category. Valid categories:");
+    expect(error).toContain("plugin namespaces: acme");
+  });
 });
