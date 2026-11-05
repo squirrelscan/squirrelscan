@@ -27,6 +27,15 @@ import {
 // THE canonical fixture (fixed seed + shape) now lives in ./helpers/golden-baseline
 // so the v1 capture here and the v2 streaming gate build the IDENTICAL crawl.
 
+// bun's per-test timeout is wall-clock, and every capture runs the whole rule
+// set over ~518 pages, so its cost grows with each rule added. The budget is
+// per capture (a standalone capture is ~30 s; two timed out at 91 s under load,
+// #1504) so a test that captures N times gets N budgets. A timeout here reads as
+// "the engine is non-deterministic" when it is only a slow runner, so keep wide
+// headroom (the sibling streaming-rules-canonical-golden test uses 180 s).
+const CAPTURE_BUDGET_MS = 120_000;
+const DETERMINISM_TIMEOUT_MS = 2 * CAPTURE_BUDGET_MS;
+
 const tmpDir = mkdtempSync(join(tmpdir(), "squirrelscan-golden-baseline-"));
 
 afterAll(() => {
@@ -63,7 +72,7 @@ describe("v1 golden baseline — 500-page canonical fixture", () => {
       expect(diff.identical).toBe(true);
       expect(diff.totalDivergences).toBe(0);
     },
-    60_000,
+    DETERMINISM_TIMEOUT_MS,
   );
 
   test(
@@ -108,7 +117,7 @@ describe("v1 golden baseline — 500-page canonical fixture", () => {
           `passed=${snapshot.healthScore.passedCount}`,
       );
     },
-    60_000,
+    CAPTURE_BUDGET_MS,
   );
 
   test("diffBaselines reports zero divergences comparing a snapshot to itself", async () => {
@@ -122,7 +131,7 @@ describe("v1 golden baseline — 500-page canonical fixture", () => {
 
     const diff = diffBaselines(snapshot, snapshot);
     expect(diff).toEqual({ identical: true, divergences: [], totalDivergences: 0 });
-  }, 60_000);
+  }, CAPTURE_BUDGET_MS);
 
   test("diffBaselines detects and reports an injected divergence, grouped by rule", async () => {
     const model = buildGoldenBaselineModel();
@@ -148,7 +157,7 @@ describe("v1 golden baseline — 500-page canonical fixture", () => {
     // Sorted by ruleId — the report is actually readable, not insertion-order noise.
     const ruleIds = diff.divergences.map((d) => d.ruleId);
     expect(ruleIds).toEqual([...ruleIds].sort((a, b) => a.localeCompare(b)));
-  }, 60_000);
+  }, CAPTURE_BUDGET_MS);
 
   test("diffBaselines caps the divergence list but reports the true total", async () => {
     const model = buildGoldenBaselineModel();
@@ -167,5 +176,5 @@ describe("v1 golden baseline — 500-page canonical fixture", () => {
     expect(diff.identical).toBe(false);
     expect(diff.divergences.length).toBe(5);
     expect(diff.totalDivergences).toBeGreaterThan(5);
-  }, 60_000);
+  }, CAPTURE_BUDGET_MS);
 });
