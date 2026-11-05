@@ -448,7 +448,7 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
     website: "https://partytown.builder.io",
     icon: "partytown",
     detectors: [
-      ...scriptSrc(String.raw`(?:(?:https?:)?\/\/[^\/?#]+)?\/(?:[^\/?#]+\/)*~partytown\/(?:debug\/)?partytown(?:-[a-z-]+)?\.js`),
+      ...scriptSrc(String.raw`(?:(?:https?:)?\/\/[^\/?#]+)?\/(?:[^\/?#]+\/)*~partytown\/(?:debug\/)?partytown(?:-[a-z-]+)?\.js(?![\w.-])`),
       { type: "tag-attr", tags: ["script"], attrs: ["type"], pattern: /^text\/partytown$/i },
     ],
     confidence: "high",
@@ -491,7 +491,7 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
     website: "https://vercel.com/analytics",
     icon: "vercel",
     detectors: scriptSrc(
-      String.raw`(?:(?:(?:https?:)?\/\/[^\/?#]+)?\/_vercel\/insights\/script(?:\.debug)?\.js|(?:https?:)?\/\/va\.vercel-scripts\.com\/v1\/script(?:\.debug)?\.js)`,
+      String.raw`(?:(?:(?:https?:)?\/\/[^\/?#]+)?\/_vercel\/insights\/script(?:\.debug)?\.js(?![\w.-])|(?:https?:)?\/\/va\.vercel-scripts\.com\/v1\/script(?:\.debug)?\.js(?![\w.-]))`,
     ),
     confidence: "high",
   },
@@ -502,7 +502,7 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
     website: "https://vercel.com/docs/speed-insights",
     icon: "vercel",
     detectors: scriptSrc(
-      String.raw`(?:(?:(?:https?:)?\/\/[^\/?#]+)?\/_vercel\/speed-insights\/script(?:\.debug)?\.js|(?:https?:)?\/\/va\.vercel-scripts\.com\/v1\/speed-insights\/script(?:\.debug)?\.js)`,
+      String.raw`(?:(?:(?:https?:)?\/\/[^\/?#]+)?\/_vercel\/speed-insights\/script(?:\.debug)?\.js(?![\w.-])|(?:https?:)?\/\/va\.vercel-scripts\.com\/v1\/speed-insights\/script(?:\.debug)?\.js(?![\w.-]))`,
     ),
     confidence: "high",
   },

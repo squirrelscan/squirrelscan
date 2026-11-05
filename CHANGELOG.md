@@ -21,7 +21,7 @@ How it works:
 
 - `links/anchor-mismatch` no longer warns when a hyphenated compound in the anchor, joined, exactly equals a word of the target (`Online-Shop` and `Onlineshop`, `E-Mail` and `Email`), or the reverse. Only the whole hyphenated run is joined; neighbouring parts are joined only in a URL slug. #1598
 - `security/csp` reads `script-src-elem`, which overrides `script-src` for script elements, so a stricter or looser element directive is judged as the browser applies it, while inline event handlers stay judged on `script-src-attr` (falling back to `script-src`, then `default-src`); `script-src-elem` alone is not script control (#1600).
-- Technology detection recognizes DebugBear, Partytown, AppsFlyer, WalletConnect / Reown, Magic and Vercel Web Analytics and Speed Insights, finds Microsoft Advertising UET loaded from `bat.bing.net`, and reports the Cloudflare beacon as one technology, Cloudflare Web Analytics, instead of two (#1600).
+- Technology detection recognizes DebugBear, Partytown, AppsFlyer, WalletConnect / Reown, Magic and Vercel Web Analytics and Speed Insights, finds Microsoft Advertising UET loaded from `bat.bing.net`, and reports the Cloudflare beacon as one technology, Cloudflare Web Analytics, instead of two (#1600); script filenames must end at a URL boundary, so `script.json` or `partytown.js.map` is not a match.
 - `analytics/gtm-present` reports Google Tag Manager as info, a code-injection surface to control, instead of a pass, and no longer reads a `gtag.js` URL as a Tag Manager container (#1600).
 
 ## v0.0.169 (2026-11-05)

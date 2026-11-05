@@ -106,7 +106,7 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://about.ads.microsoft.com",
     icon: "microsoft-uet",
     detectors: [
-      { type: "script-url", pattern: new RegExp("bat\\.bing\\.(?:com|net)/bat\\.js", "i") },
+      { type: "script-url", pattern: new RegExp("bat\\.bing\\.(?:com|net)/bat\\.js(?![\\w.-])", "i") },
       { type: "script-content", pattern: new RegExp("window\\.uetq\\s*=\\s*window\\.uetq\\s*\\|\\|\\s*\\[\\]", "i") },
       { type: "header", name: "set-cookie", pattern: new RegExp("_uetsid=", "i") },
     ],
@@ -390,9 +390,9 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://www.cloudflare.com/web-analytics/",
     icon: "cloudflare-web-analytics",
     detectors: [
-      { type: "script-url", pattern: new RegExp("static\\.cloudflareinsights\\.com/beacon(\\.min)?\\.js", "i") },
+      { type: "script-url", pattern: new RegExp("static\\.cloudflareinsights\\.com/beacon(\\.min)?\\.js(?![\\w.-])", "i") },
       { type: "html", pattern: new RegExp("data-cf-beacon\\s*=", "i") },
-      { type: "script-url", pattern: new RegExp("cloudflareinsights\\.com/cdn-cgi/rum", "i") },
+      { type: "script-url", pattern: new RegExp("cloudflareinsights\\.com/cdn-cgi/rum(?![\\w-])", "i") },
     ],
     confidence: "high",
   },
