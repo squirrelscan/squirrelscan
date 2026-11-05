@@ -109,8 +109,6 @@ export function pinLine(id: string, entry: string, sha256: string): string {
 }
 
 /** The largest plugin file squirrel will read: a plugin is one bundled module, not a data file. */
-
-/** The largest plugin file squirrel will read: a plugin is one bundled module, not a data file. */
 export const MAX_PLUGIN_BYTES = 4 * 1024 * 1024;
 
 /**
@@ -135,17 +133,19 @@ function resolveEntry(
 }
 
 /**
- * Read an approved plugin file once, bounded. The path is `lstat`ed first so a
- * FIFO or device is never opened; the open refuses a symlink in the last
- * component and does not block, and the descriptor is checked again with `fstat`
- * before any byte is read. Never called for a path the allowlist has not approved.
+ * Read an approved plugin file once, bounded, through ONE descriptor. The path was resolved with
+ * `realpath` before this (see resolveEntry); here it is opened with O_NOFOLLOW (a symlink in the
+ * last component is refused) and O_NONBLOCK (a FIFO opens at once instead of waiting for a
+ * writer), then everything is decided on the descriptor: `fstat` must say regular file and
+ * a size under the cap, and the bytes are read from that same descriptor. The path is never
+ * stat'ed, so nothing can change between a check and the read. Never called for a path the
+ * allowlist has not approved.
  */
 function readPluginFile(
   real: string
 ): { bytes: Uint8Array; sha256: string } | { error: string } {
   const cap = `${MAX_PLUGIN_BYTES / (1024 * 1024)} MiB`;
   try {
-    if (!lstatSync(real).isFile()) return { error: "is not a regular file" };
     const fd = openSync(
       real,
       constants.O_RDONLY |
