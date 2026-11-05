@@ -512,7 +512,8 @@ test("many links with huge queries do not make the brand check slow", () => {
   const t = performance.now();
   for (const c of contexts) detectBrandImpersonation(c);
   expect(performance.now() - t).toBeLessThan(1_500);
-});
+  // building about 100 MB of page strings is not timed but counts against the 5 s default, which a loaded runner can exceed
+}, 30_000);
 
 // ── survivors of the #1494 review ────────────────────────────────────────────────────────────────────────────
 
