@@ -396,10 +396,12 @@ function importMapUrls(text: string, limit: number): { urls: string[]; skipped: 
 const BUNDLER_RESOURCES_TYPE = /^__bundler\/ext_resources$/i;
 
 /**
- * The script URLs of a standalone-HTML bundler's `__bundler/ext_resources` list (a JSON array of objects, each with a `uri` or
- * `url` string), at most `limit` of them, and how many were left out (a bound or an unsafe value). Only those two fields are
- * URLs; every other string in the list (a description, an id) stays inert. Same bounds and rules as {@link importMapUrls}; a list
- * that is not a JSON array has none.
+ * The script URLs of a standalone-HTML bundler's `__bundler/ext_resources` list (a JSON array of objects), at most `limit` of
+ * them, and how many were left out (a bound or an unsafe value). Three string fields can hold one: `uri` and `url`, and `id`,
+ * which is what the bundler writes in the corpus (`{"id": "<script URL>", "uuid": "<uuid>"}`). The two named fields count when
+ * they pass {@link isImportMapUrl}; an `id` counts only when it is an address (http(s), or a path starting with `/`, `./` or
+ * `../`), so a bare token id (`"a"`, a UUID) is not a URL and is not counted as skipped. `uuid`, a description and every other
+ * string stay inert. Same bounds and rules as {@link importMapUrls}; a list that is not a JSON array has none.
  */
 function bundlerResourceUrls(text: string, limit: number): { urls: string[]; skipped: number } {
   let list: unknown;
@@ -414,9 +416,10 @@ function bundlerResourceUrls(text: string, limit: number): { urls: string[]; ski
   for (const entry of list) {
     if (entry === null || typeof entry !== "object" || Array.isArray(entry)) continue;
     const record = entry as Record<string, unknown>;
-    for (const field of ["uri", "url"]) {
+    for (const field of ["uri", "url", "id"]) {
       const value = record[field];
       if (typeof value !== "string") continue;
+      if (field === "id" && !IMPORTMAP_ADDRESS.test(value)) continue;
       if (urls.length >= limit || !isImportMapUrl(value)) skipped++;
       else urls.push(value);
     }
