@@ -31,10 +31,10 @@ describe("security/csp script-src-elem (#1600)", () => {
     expect(checkNames("script-src 'self'; script-src-elem 'self' https://*")).toContain("csp-wildcard");
   });
 
-  test("script-src-elem overrides default-src too, and alone it is script control", () => {
+  test("script-src-elem overrides default-src too", () => {
     const names = checkNames("default-src 'self'; script-src-elem 'self' 'unsafe-inline'");
     expect(names).toContain("csp-unsafe-scripts");
-    expect(checkNames("script-src-elem 'self'")).not.toContain("csp-no-script-control");
+    expect(checkNames("script-src-elem 'self'; default-src 'self'")).not.toContain("csp-no-script-control");
   });
 
   test("unsafe-eval is a script-src matter: script-src-elem does not hide it", () => {
@@ -72,5 +72,24 @@ describe("security/csp inline event handlers stay judged on script-src-attr (#16
 
   test("a wildcard or data: source is an element matter: script-src-attr does not raise csp-wildcard", () => {
     expect(checkNames("script-src 'self'; script-src-attr *")).not.toContain("csp-wildcard");
+  });
+});
+
+describe("security/csp an element-only directive is not script control (#1600)", () => {
+  test("script-src-elem 'none' alone leaves handlers and eval uncontrolled: still no script control", () => {
+    const names = checkNames("script-src-elem 'none'; object-src 'none'; frame-ancestors 'none'");
+    expect(names).toContain("csp-no-script-control");
+  });
+
+  test("script-src-elem 'none' with script-src-attr 'none' still leaves eval uncontrolled", () => {
+    const names = checkNames(
+      "script-src-elem 'none'; script-src-attr 'none'; object-src 'none'; frame-ancestors 'none'",
+    );
+    expect(names).toContain("csp-no-script-control");
+  });
+
+  test("script-src or default-src next to script-src-elem is script control", () => {
+    expect(checkNames("script-src 'self'; script-src-elem 'none'")).not.toContain("csp-no-script-control");
+    expect(checkNames("default-src 'self'; script-src-elem 'none'")).not.toContain("csp-no-script-control");
   });
 });
