@@ -1,24 +1,27 @@
 import {
   loadPlugins,
+  PluginLoadError,
   type PluginManifestItem,
   type PluginRegistrySnapshot,
   type SquirrelPlugin,
 } from "@squirrelscan/rules";
 import { createHash } from "node:crypto";
 import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   realpathSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
 import { dirname, extname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import type { PluginAllowEntry } from "@/self/types";
 
-import { getSettingsPath } from "@/self/paths";
+import { getSettingsPath, getSquirrelPaths } from "@/self/paths";
 import { loadUserSettings } from "@/self/settings";
 
 // Plugin rule packs for `squirrel audit` (#1599).
@@ -33,14 +36,25 @@ import { loadUserSettings } from "@/self/settings";
 // project's `.squirrel/settings.json`, not an env var, not the config file.
 //
 // What is imported is what was hashed: the bytes are read once, hashed, written to
-// a private temp copy and imported from there, so a swap of the original between
-// the check and the import runs nothing different. Residual risk: the copy is a
-// single file, so a plugin must be self-contained (bundle its dependencies); a
-// relative or package import in it does not resolve and fails the load, and such
-// files would not be covered by the hash anyway. The copy sits in a 0700 temp
-// directory that is deleted once the plugin has been imported; anything else
-// running as the same user could still touch it in that window, but the same user
-// can already edit settings.json, so that boundary is not a new one.
+// a private copy and imported from there, so a swap of the original between the
+// check and the import runs nothing different. The copy goes under
+// `<squirrel data dir>/plugin-cache/` (`~/.squirrel/plugin-cache/`), never the
+// shared system temp dir: every directory squirrel creates there is mode 0700, an
+// existing plugin-cache must be a real directory owned by this user that nobody
+// else can write to, each run gets its own `mkdtemp` directory, and that directory
+// is deleted in a `finally` once the plugins are loaded.
+//
+// The copy is a single file and module resolution from it walks up the ancestor
+// directories looking for `node_modules`. So a plugin must be self-contained
+// (bundle its dependencies): a relative import does not resolve, and a package
+// import resolves only if some ancestor holds a `node_modules`. The load refuses to
+// run when any ancestor of the plugin cache (the cache itself included) has one,
+// since a bare import could then pull unhashed code in; a missing package makes
+// the import fail, and the load with it. Residual risk: while the copy exists,
+// another process running as the same user could modify it, but that user can
+// already edit settings.json, so that boundary is not a new one. Not covered:
+// code a plugin fetches or reads at run time once it is approved, which is fully
+// trusted.
 
 export interface ConfiguredPlugins {
   snapshot: PluginRegistrySnapshot;
@@ -60,8 +74,8 @@ export interface LoadConfiguredPluginsOptions {
   /** Where relative `entry` paths resolve from: the directory of the config file that named them. */
   baseDir: string;
   settingsPath?: string;
-  /** Where the verified copy of each plugin is written. Defaults to the OS temp dir. */
-  tmpRoot?: string;
+  /** Where the verified copy of each plugin is written. Defaults to `<squirrel data dir>/plugin-cache`. */
+  cacheRoot?: string;
   /** Test seam: runs after a plugin file's hash is verified and before it is imported. */
   afterVerify?: (id: string, file: string) => void;
 }
@@ -190,6 +204,44 @@ function judge(
 }
 
 /**
+ * Make sure the plugin cache exists, is ours alone and has no `node_modules` above
+ * it, and return its real path. Every directory created here is mode 0700.
+ */
+function preparePluginCache(root: string): string {
+  mkdirSync(root, { recursive: true, mode: 0o700 });
+  const info = lstatSync(root);
+  if (!info.isDirectory()) {
+    throw new PluginLoadError(
+      `The plugin cache ${root} is not a directory (a symlink or a file), so no plugin was loaded.`
+    );
+  }
+  if (process.platform !== "win32") {
+    const uid = process.getuid?.();
+    if (uid !== undefined && info.uid !== uid) {
+      throw new PluginLoadError(
+        `The plugin cache ${root} is owned by another user, so no plugin was loaded.`
+      );
+    }
+    if ((info.mode & 0o022) !== 0) {
+      throw new PluginLoadError(
+        `The plugin cache ${root} can be written by other users (mode ${(info.mode & 0o777).toString(8)}); run chmod 700 on it. No plugin was loaded.`
+      );
+    }
+  }
+  const real = realpathSync(root);
+  for (let dir = real; ; dir = dirname(dir)) {
+    const planted = join(dir, "node_modules");
+    if (existsSync(planted)) {
+      throw new PluginLoadError(
+        `${planted} sits above the plugin cache ${real}, and a plugin's imports resolve through node_modules directories above it, so no plugin was loaded. Remove it or move the squirrel data directory.`
+      );
+    }
+    if (dirname(dir) === dir) break;
+  }
+  return real;
+}
+
+/**
  * Resolve the `[plugins]` section of the project config against the user's
  * allowlist and load what both agree on. Throws (naming the plugin or rule id)
  * when an approved plugin cannot be loaded, so a broken pack stops the audit
@@ -223,6 +275,7 @@ export async function loadConfiguredPlugins(
   const approved: PluginManifestItem[] = [];
   const allowIds = new Set<string>();
   const tempDirs: string[] = [];
+  let cache: string | undefined;
 
   try {
     for (const item of items) {
@@ -240,9 +293,10 @@ export async function loadConfiguredPlugins(
       }
       // Hash verified. Import a private copy of exactly these bytes, never the path again.
       options.afterVerify?.(item.id, file.real);
-      const dir = mkdtempSync(
-        join(options.tmpRoot ?? tmpdir(), "squirrel-plugin-")
+      cache ??= preparePluginCache(
+        options.cacheRoot ?? join(getSquirrelPaths().data, "plugin-cache")
       );
+      const dir = mkdtempSync(join(cache, "run-"));
       tempDirs.push(dir);
       const copy = join(dir, `${file.sha256}${extname(file.real) || ".js"}`);
       writeFileSync(copy, file.bytes, { flag: "wx", mode: 0o600 });
