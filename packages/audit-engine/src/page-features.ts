@@ -25,7 +25,7 @@ import { extractSiteChromeSignal, fingerprintPage } from "@squirrelscan/rules";
 import type { PageRecord, PageFeatureRow } from "@squirrelscan/core-contracts";
 import type { PageFingerprint, ParsedPage } from "@squirrelscan/rules";
 
-import { buildHeadersMap, hasAuditableHtmlBody, isHtmlContentType } from "./adapter";
+import { buildHeadersMap, hasAuditableHtmlBody, isHtmlContentType } from "./site-fetch";
 import { templateFingerprintKey } from "./template-key";
 import { redirectedAway } from "@squirrelscan/utils/url";
 
