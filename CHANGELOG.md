@@ -17,8 +17,13 @@ How it works:
 
 ## [Unreleased]
 
+## v0.0.170 (2026-11-05)
+
+A hyphenated word in an anchor now matches its closed form, the CSP rule reads `script-src-elem`, and technology detection knows seven more third-party scripts.
+
 ### Fixed
 
+- The console report counts the affected pages of a check from its items as well as its page list, so a check whose pages sit on its items shows its page count like the other formats do (#1307).
 - `links/anchor-mismatch` no longer warns when a hyphenated compound in the anchor, joined, exactly equals a word of the target (`Online-Shop` and `Onlineshop`, `E-Mail` and `Email`), or the reverse. Only the whole hyphenated run is joined; neighbouring parts are joined only in a URL slug. #1598
 - `security/csp` reads `script-src-elem`, which overrides `script-src` for script elements, so a stricter or looser element directive is judged as the browser applies it, while inline event handlers stay judged on `script-src-attr` (falling back to `script-src`, then `default-src`); `script-src-elem` alone is not script control (#1600).
 - Technology detection recognizes DebugBear, Partytown, AppsFlyer, WalletConnect / Reown, Magic and Vercel Web Analytics and Speed Insights, finds Microsoft Advertising UET loaded from `bat.bing.net`, and reports the Cloudflare beacon as one technology, Cloudflare Web Analytics, instead of two (#1600); script filenames must end at a URL boundary, so `script.json` or `partytown.js.map` is not a match.
