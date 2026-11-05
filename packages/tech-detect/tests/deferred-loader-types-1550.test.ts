@@ -104,7 +104,7 @@ describe("the type is trimmed before it is bounded", () => {
 });
 
 // `__bundler/ext_resources` is a JSON list a standalone-HTML bundler loads scripts from. It is data like an import map: only the
-// `uri` and `url` fields are script URLs; a description or any other text in the list stays inert.
+// `uri`, `url` and (the corpus shape) `id` fields are script URLs; a description or any other text in the list stays inert.
 describe("a bundler's ext_resources list is read like an import map", () => {
   const BUNDLER = "__bundler/ext_resources";
   const THREE = "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
@@ -133,9 +133,50 @@ describe("a bundler's ext_resources list is read like an import map", () => {
     expect(found).not.toContain("youtube-embed");
     expect(ids(wrap("__BUNDLER/EXT_RESOURCES", `[{"uri":"${THREE}"}]`))).toContain("threejs");
   });
+  test("the corpus shape: an id that is the script URL and a uuid, an array of objects with exactly those two keys", () => {
+    const UUID = "0b1f9c1e-7d3a-4c55-9a1e-2f4d6b8c0e11";
+    expect(ids(list(`[{"id":"${THREE}","uuid":"${UUID}"}]`))).toContain("threejs");
+    expect(ids(list(`[{"id":"https://unpkg.com/react@18.2.0/umd/react.production.min.js","uuid":"${UUID}"}]`))).toContain("react");
+    const found = ids(list(`[{"id":"https://www.clarity.ms/tag/abc","uuid":"${UUID}"}]`));
+    expect(found).toContain("clarity");
+    // a mixed list: URL ids are read, bare token ids and a uuid are not, and a relative path loads nothing a vendor owns
+    const mixed = ids(
+      list(
+        JSON.stringify([
+          { id: "https://www.clarity.ms/tag/abc", uuid: UUID },
+          { id: "a", uuid: "https://www.googletagmanager.com/gtm.js?id=GTM-ABC123" },
+          { id: UUID, uuid: UUID },
+          { id: "./local.js", uuid: UUID },
+          { id: THREE, uuid: UUID },
+        ]),
+      ),
+    );
+    expect(mixed).toContain("clarity");
+    expect(mixed).toContain("threejs");
+    expect(mixed).not.toContain("google-tag-manager");
+  });
+  test("an id that is not an address, and a uuid or description holding a URL, are inert", () => {
+    for (const body of [
+      '[{"id":"a","uuid":"0b1f9c1e-7d3a-4c55-9a1e-2f4d6b8c0e11"}]',
+      '[{"id":"0b1f9c1e-7d3a-4c55-9a1e-2f4d6b8c0e11","uuid":"0b1f9c1e-7d3a-4c55-9a1e-2f4d6b8c0e11"}]',
+      `[{"id":"a","uuid":"${THREE}"}]`,
+      `[{"id":"a","uuid":"x","description":"${THREE}"}]`,
+      `[{"id":"three.module.js","uuid":"x"},{"id":"data:text/javascript,1","uuid":"x"},{"id":"${THREE} onload=x","uuid":"x"},{"id":"${THREE}\"><b>","uuid":"x"}]`,
+    ]) {
+      expect([body, ids(list(body))]).toEqual([body, []]);
+    }
+  });
+  test("an id URL over the bounds is skipped and counted, a token id is not counted", () => {
+    expect(pageImportMapSkipped(list(`[{"id":"https://a.test/${"x".repeat(2_100)}","uuid":"x"}]`))).toBe(1);
+    expect(pageImportMapSkipped(list('[{"id":"a","uuid":"x"},{"id":"b","uuid":"y"}]'))).toBe(0);
+    const entry = (i: number): string => `{"id":"https://cdn.example.com/a${i}.js","uuid":"x"}`;
+    expect(pageImportMapSkipped(list(`[${Array.from({ length: 1_000 }, (_, i) => entry(i)).join(",")}]`))).toBe(1_000 - 256);
+    expect(pageImportMapSkipped(list(`[${Array.from({ length: 4_000 }, (_, i) => entry(i)).join(",")}]`))).toBe(1);
+  }, 30_000);
   test("every other field, a non-list shape, a bare name and an unsafe value stay inert", () => {
     for (const body of [
-      `[{"id":"${THREE}","src":"${THREE}","href":"${THREE}","name":"${THREE}"}]`,
+      `[{"src":"${THREE}","href":"${THREE}","name":"${THREE}","uuid":"${THREE}"}]`,
+      `[{"id":"a","uuid":"${THREE}"},{"id":"0b1f9c1e-7d3a-4c55-9a1e-2f4d6b8c0e11","uuid":"${THREE}"}]`,
       `{"uri":"${THREE}"}`,
       `{"resources":[{"uri":"${THREE}"}]}`,
       `[["${THREE}"],"${THREE}",null,1,{"uri":5,"url":["${THREE}"]}]`,
@@ -167,6 +208,8 @@ describe("a bundler's ext_resources list is read like an import map", () => {
       "unclosed lists": `<script type="${BUNDLER}">[{"uri":"`.repeat(30_000),
       "deep nesting": `<script type="${BUNDLER}">${"[".repeat(30_000)}</script>`.repeat(5),
       "one huge list": `<script type="${BUNDLER}">[${'{"uri":"https://cdn.example.com/a.js"},'.repeat(200_000)}{}]</script>`,
+      "one huge list of ids": `<script type="${BUNDLER}">[${'{"id":"https://cdn.example.com/a.js","uuid":"x"},'.repeat(200_000)}{}]</script>`,
+      "long id": `<script type="${BUNDLER}">[{"id":"https://a.test/${"x".repeat(60_000)}","uuid":"x"}]</script>`.repeat(50),
       "long uri": `<script type="${BUNDLER}">[{"uri":"https://a.test/${"x".repeat(60_000)}"}]</script>`.repeat(50),
     };
     for (const [name, body] of Object.entries(shapes)) {
