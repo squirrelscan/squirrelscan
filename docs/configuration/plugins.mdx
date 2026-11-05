@@ -99,7 +99,7 @@ Then approve it in your own `~/.squirrel/settings.json`. An approval names the p
 }
 ```
 
-You do not have to work the line out by hand. Run the audit once: it skips the plugin and prints the exact line to add, with the path and hash of the file it found. Read the file, then paste the line in. To compute the hash yourself, run `shasum -a 256 /home/you/projects/site/acme-pack.ts` (or `sha256sum` on Linux).
+You do not have to work the line out by hand. Run the audit once: it skips the plugin and prints the line to add, with the real path of the file it found and the command that gives its hash. Read the file, then run `shasum -a 256 /home/you/projects/site/acme-pack.ts` (or `sha256sum` on Linux) and paste the line in with that hash. squirrel does not open or hash a file you have not approved, so the hash is for you to compute.
 
 Run the audit as usual. The plugin's issues appear in the report under its namespace.
 
@@ -125,7 +125,7 @@ The project's `squirrel.toml` can only ask for a plugin. It can never make `squi
 - If `settings.json` cannot be read, nothing is allowed.
 - An approved plugin that cannot be loaded (a bad id, an id that clashes with a built-in rule, a rule the entry did not allow, a module or `register` function that throws) stops the audit before the crawl, with an error that names the plugin. Nothing is dropped silently.
 
-squirrel reads the file once, checks the hash, and imports exactly the bytes it hashed. It writes them to a private copy under `~/.squirrel/plugin-cache/`, never the shared system temp directory. Every directory squirrel creates there is mode 0700, each run gets its own subdirectory, and the subdirectory is deleted as soon as the plugin is loaded, even when the load fails. squirrel refuses to load any plugin if `~/.squirrel/plugin-cache/` is a symlink, is owned by another user, or can be written by other users. A change to the original file between the check and the import therefore cannot run different code.
+squirrel decides from the id and the path alone whether a file is approved, before it opens anything. A file named by `squirrel.toml` that no pin covers is never opened, so a FIFO, a device or a huge file there cannot hang or exhaust the audit. A pinned file must be a regular file of at most 4 MiB, or the plugin is refused with a message that says so. squirrel then reads it once, checks the hash, and imports exactly the bytes it hashed. It writes them to a private copy under `~/.squirrel/plugin-cache/`, never the shared system temp directory. Every directory squirrel creates there is mode 0700, each run gets its own subdirectory, and the subdirectory is deleted as soon as the plugin is loaded, even when the load fails. squirrel refuses to load any plugin if `~/.squirrel/plugin-cache/` is a symlink, is owned by another user, or can be written by other users. A change to the original file between the check and the import therefore cannot run different code.
 
 Module resolution from the copy walks up the directories above it looking for `node_modules`. If any directory above `~/.squirrel/plugin-cache/` (the directory itself included, so also your home directory and `/`) holds a `node_modules`, squirrel refuses to load plugins and names it, because a package import in a plugin could then pull in code the hash does not cover. That is why a plugin must be self-contained.
 

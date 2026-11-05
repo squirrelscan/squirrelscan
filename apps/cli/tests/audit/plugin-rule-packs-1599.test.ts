@@ -267,7 +267,7 @@ describe("plugin rule packs through squirrel audit (#1599)", () => {
     expect(pluginRule(report, "acme/page-title-note")).toBeUndefined();
     const said = stderr.join("\n");
     expect(said).toContain("bare id");
-    expect(said).toContain(pin().sha256);
+    expect(said).toContain("shasum -a 256");
   }, 60_000);
 
   test("the cloned-repo exploit: the user pinned the good file, the project config names ./evil.ts under the same id", async () => {
