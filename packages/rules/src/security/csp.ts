@@ -102,14 +102,22 @@ export const cspRule: Rule = {
 
     // `script-src-elem` overrides `script-src` (and `default-src`) for <script>
     // elements, so inline, wildcard, data: and blob: sources are judged on it
-    // when present (#1600). 'unsafe-eval' governs eval(), which no element
-    // directive controls, so it stays on script-src / default-src.
+    // when present (#1600). Inline event handlers (onerror=) are a separate
+    // surface: `script-src-attr` governs them and falls back to `script-src`,
+    // then `default-src`, never to `script-src-elem`, so 'unsafe-inline' there
+    // is still judged from that chain. 'unsafe-eval' governs eval(), which no
+    // element or attribute directive controls, so it stays on script-src /
+    // default-src.
     const scriptSrc =
       directives.get("script-src") || directives.get("default-src") || "";
     const elemSrc = directives.get("script-src-elem") ?? scriptSrc;
+    const attrSrc = directives.get("script-src-attr") ?? scriptSrc;
     const weakValues = [
-      ...weakScriptSources(elemSrc).filter((v) => v !== "'unsafe-eval'"),
-      ...weakScriptSources(scriptSrc).filter((v) => v === "'unsafe-eval'"),
+      ...new Set([
+        ...weakScriptSources(elemSrc).filter((v) => v !== "'unsafe-eval'"),
+        ...weakScriptSources(attrSrc).filter((v) => v === "'unsafe-inline'"),
+        ...weakScriptSources(scriptSrc).filter((v) => v === "'unsafe-eval'"),
+      ]),
     ];
 
     if (weakValues.length > 0) {
