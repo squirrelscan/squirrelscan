@@ -103,8 +103,8 @@ describe("bounds (review of #1467)", () => {
   test("a 5 MB page of closed script, img and link tags is read once for every signature", () => {
     const unit = '<script src="https://cdn.example.net/a.js"></script><img src="https://cdn.example.net/i.png"><link rel="stylesheet" href="https://cdn.example.net/s.css">';
     const { ms, exceeded } = timed(page("", unit.repeat(Math.ceil(5_000_000 / unit.length))));
-    // 1.3 to 1.6 s now; a rescan of the page for each signature is over the 5 s per-page budget.
-    expect(ms).toBeLessThan(2_500);
+    // 1.2 to 1.6 s locally and about 1.6 s on a CI runner (2.8 s on a slow one); a rescan of the page for each signature is over the 5 s per-page budget, so 4 s still catches it.
+    expect(ms).toBeLessThan(4_000);
     expect(exceeded).toBe(0);
   }, 120_000);
 
