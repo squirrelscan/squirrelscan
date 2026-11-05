@@ -171,14 +171,23 @@ export const cspRule: Rule = {
 
     // A 'self' script list also trusts any same-origin path that proxies
     // third-party code (#1604). Needs the crawled script URLs, no network.
-    if (!isReportOnly && sourceTokens(elemSrc).has("'self'")) {
+    // Skipped when 'strict-dynamic' makes browsers ignore 'self', and when
+    // several comma-joined policies are in play (they intersect, so 'self'
+    // may be blocked by another one).
+    const elemTokens = sourceTokens(elemSrc);
+    if (
+      !isReportOnly &&
+      elemTokens.has("'self'") &&
+      !elemTokens.has("'strict-dynamic'") &&
+      !elemSrc.includes(",")
+    ) {
       const paths = proxyPathsLoaded(ctx, firstPage.url);
       if (paths.length > 0) {
         checks.push({
           name: "csp-self-proxy-script",
           status: "info",
-          message: `CSP 'self' allows first-party proxy path ${paths.join(", ")}`,
-          value: "A same-origin path that proxies third-party code runs under 'self'",
+          message: `CSP 'self' allows a possible first-party proxy path ${paths.join(", ")}`,
+          value: "A same-origin path of this kind may proxy third-party code that runs under 'self'",
           expected: "Confirm the proxied script is trusted, or pin it with a nonce or hash",
         });
       }

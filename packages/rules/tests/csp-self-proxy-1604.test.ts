@@ -63,10 +63,30 @@ describe("security/csp first-party proxy paths (#1604)", () => {
     expect(run("script-src https://x.test; script-src-elem 'self'", ["https://example.com/ingest/a.js"])).toBeDefined();
   });
 
-  test("bounded: many scripts list at most 10 paths", () => {
+  test("bounded: a script past the scan cap is not seen, the list stays short", () => {
     const urls = Array.from({ length: 5000 }, (_, i) => `https://example.com/ingest/${i}.js`);
     const check = run(SELF, [...urls, "https://example.com/stats/a.js"]);
     expect(check).toBeDefined();
+    expect(String(check?.message)).toContain("/ingest");
+    expect(String(check?.message)).not.toContain("/stats");
     expect(String(check?.value).length).toBeLessThan(500);
   }, 20000);
+
+  test("'strict-dynamic' makes browsers ignore 'self': no check", () => {
+    const urls = ["https://example.com/ingest/a.js"];
+    expect(run("script-src 'self' 'strict-dynamic' 'nonce-abc'", urls)).toBeUndefined();
+    expect(run("script-src-elem 'self' 'strict-dynamic'; script-src 'self'", urls)).toBeUndefined();
+    expect(run("script-src 'self' 'nonce-abc'", urls)).toBeDefined();
+  });
+
+  test("comma-joined policies intersect, so no check is raised", () => {
+    const urls = ["https://example.com/ingest/a.js"];
+    expect(run("script-src 'self', script-src https://cdn.x.test", urls)).toBeUndefined();
+    expect(run("script-src 'self', default-src 'none'", urls)).toBeUndefined();
+  });
+
+  test("the message says 'possible' (a hit may be an app route)", () => {
+    const check = run(SELF, ["https://example.com/stats/page.js"]);
+    expect(check?.message).toContain("possible");
+  });
 });
