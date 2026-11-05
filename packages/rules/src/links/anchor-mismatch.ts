@@ -184,8 +184,11 @@ export function meaningfulTokens(text: string): string[] {
 // comparison is never trusted as complete.
 const MAX_TOKEN_LENGTH = 64;
 
-/** Tokens as {@link meaningfulTokens}, and whether an over-long word was dropped. */
-export function tokenize(text: string): { tokens: string[]; lost: boolean } {
+/**
+ * Tokens as {@link meaningfulTokens}; the closed forms of hyphenated compounds, kept apart
+ * because they match by equality only; and whether an over-long word was dropped.
+ */
+export function tokenize(text: string): { tokens: string[]; joined: string[]; lost: boolean } {
   const tokens: string[] = [];
   let lost = false;
   const folded = foldLatin(
@@ -202,18 +205,14 @@ export function tokenize(text: string): { tokens: string[]; lost: boolean } {
     }
     tokens.push(raw);
   }
-  const have = new Set(tokens);
-  for (const joined of hyphenJoins(folded)) {
-    if (have.has(joined)) continue;
-    have.add(joined);
-    tokens.push(joined);
-  }
-  return { tokens, lost };
+  const joined = [...new Set(hyphenJoins(folded))];
+  return { tokens, joined, lost };
 }
 
 // A hyphenated compound ("Online-Shop") and its closed form ("Onlineshop") are one word in
-// German and often elsewhere. The parts stay tokens; the joined form is added so either spelling
-// meets the other. In a longer run (a slug such as `online-shop-agentur`) each adjacent pair is
+// German and often elsewhere. The parts stay tokens; the joined form is kept in a separate list so
+// either spelling meets the other, and it is compared by equality only (a joined form is a
+// spelling of one word, not a stem that tolerates a suffix). In a longer run (a slug such as `online-shop-agentur`) each adjacent pair is
 // joined too, since the hyphen there is a separator. Single-letter parts count ("E-Mail" joins to
 // "email") and stop words are not filtered, because the joined form is a spelling, not a topic.
 const HYPHEN = /[-\u2010\u2011]/;
@@ -283,6 +282,20 @@ function sharesToken(anchor: readonly string[], target: readonly string[]): bool
   return anchor.some((a) => target.some((t) => tokensMatch(a, t)));
 }
 
+// A joined form ("foobar" from Foo-Bar) is a spelling of one word: it must equal a word, or a
+// joined form, of the other side. It gets no prefix or suffix allowance.
+function sharesJoined(
+  anchor: readonly string[],
+  anchorJoined: readonly string[],
+  target: readonly string[],
+  targetJoined: readonly string[],
+): boolean {
+  return (
+    anchorJoined.some((j) => target.includes(j) || targetJoined.includes(j)) ||
+    anchor.some((a) => targetJoined.includes(a))
+  );
+}
+
 function clipTitle(text: string | null): string | null {
   return text !== null && text.length > MAX_TITLE_LENGTH ? text.slice(0, MAX_TITLE_LENGTH) : text;
 }
@@ -333,6 +346,7 @@ interface PairState {
   keys: string[];
   tokens: string[];
   partTokens: string[];
+  joined: string[];
   truncated: boolean;
   unspaced: boolean;
   glued: boolean;
@@ -381,23 +395,29 @@ export class AnchorGraphBuilder {
     // The target side tokenises the FULL title and every H1; only the displayed copies are clipped.
     const heading = [input.title ?? "", ...(input.h1 ?? [])].join(" ").trim();
     const headingTokens: string[] = [];
+    const headingJoined: string[] = [];
     let headingTruncated = false;
     if (heading !== "" && !hasForeignScript(heading)) {
       const found = tokenize(heading);
       headingTruncated = found.lost;
-      for (const token of found.tokens) {
-        if (headingTokens.includes(token)) continue;
-        if (
-          headingTokens.length >= MAX_TOKENS_PER_PAGE ||
-          this.pageTokenCount >= this.maxTotalTokens ||
-          this.pageTokenChars + token.length > this.maxTotalTokenChars
-        ) {
-          headingTruncated = true;
-          continue;
+      for (const [into, words] of [
+        [headingTokens, found.tokens],
+        [headingJoined, found.joined],
+      ] as const) {
+        for (const token of words) {
+          if (into.includes(token)) continue;
+          if (
+            into.length >= MAX_TOKENS_PER_PAGE ||
+            this.pageTokenCount >= this.maxTotalTokens ||
+            this.pageTokenChars + token.length > this.maxTotalTokenChars
+          ) {
+            headingTruncated = true;
+            continue;
+          }
+          into.push(this.intern(token));
+          this.pageTokenCount += 1;
+          this.pageTokenChars += token.length;
         }
-        headingTokens.push(this.intern(token));
-        this.pageTokenCount += 1;
-        this.pageTokenChars += token.length;
       }
     }
     this.pages.set(key, {
@@ -408,6 +428,7 @@ export class AnchorGraphBuilder {
       hasHeading: heading !== "",
       headingForeign: heading !== "" && hasForeignScript(heading),
       headingTokens,
+      headingJoined,
       headingTruncated,
     });
     for (const link of input.links ?? []) {
@@ -441,6 +462,7 @@ export class AnchorGraphBuilder {
             keys: [],
             tokens: [],
             partTokens: [],
+            joined: [],
             truncated: false,
             unspaced: false,
             glued: false,
@@ -455,9 +477,12 @@ export class AnchorGraphBuilder {
       const found = tokenize(text);
       if (found.lost) pair.truncated = true;
       this.addPairTokens(pair, pair.tokens, found.tokens, true);
+      this.addPairTokens(pair, pair.joined, found.joined, true);
       if (link.textGlued && link.textParts) {
         for (const part of link.textParts) {
-          this.addPairTokens(pair, pair.partTokens, tokenize(part).tokens, false);
+          const piece = tokenize(part);
+          this.addPairTokens(pair, pair.partTokens, piece.tokens, false);
+          this.addPairTokens(pair, pair.joined, piece.joined, false);
           // A part cut at the stored length lost its tail: the missing words could be the match.
           if (part.length >= MAX_ANCHOR_PART_LENGTH) pair.truncated = true;
         }
@@ -516,6 +541,7 @@ export class AnchorGraphBuilder {
           textKeys: pair.keys,
           tokens: pair.tokens,
           partTokens: pair.partTokens,
+          joined: pair.joined,
           truncated: pair.truncated,
           unspaced: pair.unspaced,
           glued: pair.glued,
@@ -571,6 +597,7 @@ export function evaluateAnchorGraph(
   const isFrontDoor = anchorFrontDoorTest(baseUrl, entryUrls);
   interface TargetWords {
     tokens: string[];
+    joined: string[];
     truncated: boolean;
   }
   const targetTokens = new Map<string, TargetWords | null>();
@@ -585,10 +612,15 @@ export function evaluateAnchorGraph(
       // slug to compare against: too thin to warn on.
       const noWord = page.hasHeading && page.headingTokens.length === 0 && !page.headingTruncated;
       if (!page.headingForeign && !noWord) {
-        const all = [...page.headingTokens, ...meaningfulTokens(safeDecode(getPathname(target)))];
+        const slug = tokenize(safeDecode(getPathname(target)));
+        const all = [...page.headingTokens, ...slug.tokens];
         // A bare id (`/p/123`) is no topic: with no title or H1 there is nothing to compare.
         if (all.some((t) => /\p{L}/u.test(t)))
-          words = { tokens: all, truncated: page.headingTruncated };
+          words = {
+            tokens: all,
+            joined: [...(page.headingJoined ?? []), ...slug.joined],
+            truncated: page.headingTruncated,
+          };
       }
     }
     targetTokens.set(target, words);
@@ -619,9 +651,15 @@ export function evaluateAnchorGraph(
       notJudged += 1;
       continue;
     }
+    const anchorJoined = pair.joined ?? [];
+    const targetJoined = targetWords!.joined;
     if (
       sharesToken(anchor, target) ||
-      (pair.glued && (sharesInsideGlue(anchor, target) || sharesToken(pair.partTokens, target)))
+      sharesJoined(anchor, anchorJoined, target, targetJoined) ||
+      (pair.glued &&
+        (sharesInsideGlue(anchor, target) ||
+          sharesToken(pair.partTokens, target) ||
+          sharesJoined(pair.partTokens, anchorJoined, target, targetJoined)))
     ) {
       judged += 1;
       continue;
