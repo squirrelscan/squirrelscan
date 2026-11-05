@@ -32,7 +32,7 @@ import type { PageFingerprint, RuleRunResult, SiteData, PageData, ParsedPage } f
 import type { RuleRunner } from "@squirrelscan/rules";
 import { detachFingerprint, fingerprintPage, mergeRuleRunResult } from "@squirrelscan/rules";
 
-import { buildSiteContext, buildHeadersMap, isRenderedFetch } from "./adapter";
+import { buildSiteContext, buildHeadersMap, isRenderedFetch } from "./site-fetch";
 import { collectDroppedBatch } from "./batch-gc";
 import { detachFromPage } from "./detach";
 import { extractPageFeatures, isAuditablePage } from "./page-features";
