@@ -1671,7 +1671,11 @@ export const audit = defineCommand({
           if (
             c.metric === "category-score" &&
             c.category &&
-            isCategoryExcluded(c.category, resolvedRules)
+            isCategoryExcluded(
+              c.category,
+              resolvedRules,
+              pluginPack.rules.map((r) => r.meta)
+            )
           ) {
             console.error(
               `--fail-on "${c.raw}": category "${c.category}" is excluded by --rule-include/--rule-exclude this run`
