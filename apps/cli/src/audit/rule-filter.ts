@@ -19,6 +19,8 @@ export interface PendingRuleFilterToken {
   flag: "--rule-include" | "--rule-exclude";
   token: string;
   namespace: string;
+  /** No `/` in the token: the error then reads as it always did for a bare typo. */
+  bare: boolean;
 }
 
 export interface RuleFilterParseOptions {
@@ -70,7 +72,7 @@ function expandToken(
     if (options.deferUnknown) {
       return {
         pattern: slash === -1 ? `${token}/*` : token,
-        pending: { flag, token, namespace },
+        pending: { flag, token, namespace, bare: slash === -1 },
       };
     }
   }
@@ -143,11 +145,16 @@ export function resolvePendingRuleFilters(
   pending: readonly PendingRuleFilterToken[],
   pluginNamespaces: ReadonlySet<string>
 ): string[] {
+  const suffix =
+    pluginNamespaces.size > 0
+      ? `; plugin namespaces: ${[...pluginNamespaces].join(", ")}`
+      : "";
   return pending
     .filter((p) => !pluginNamespaces.has(p.namespace))
     .map(
       (p) =>
-        `${p.flag} "${p.token}": unknown category "${p.namespace}". Valid categories: ${RULE_CATEGORY_VALUES.join(", ")}${pluginNamespaces.size > 0 ? `; plugin namespaces: ${[...pluginNamespaces].join(", ")}` : ""}`
+        // Same text as expandToken's errors, so a run without plugins is unchanged.
+        `${p.flag} "${p.token}": unknown category${p.bare ? "" : ` "${p.namespace}"`}. Valid categories: ${RULE_CATEGORY_VALUES.join(", ")}${suffix}`
     );
 }
 
