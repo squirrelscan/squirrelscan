@@ -71,7 +71,23 @@ export const MAX_UPDATE_CHECK_INTERVAL_HOURS = 744; // 31 days
 
 // Zod v4 schema for user settings
 // User settings stored in ~/.squirrel/settings.json (user) and .squirrel/settings.json (local)
+// A plugin the user approved (#1599): its id, or its id pinned to one entry file.
+// Read from the user-level settings file only, never from project config.
+export const PluginAllowEntrySchema = z.union([
+  z.string().min(1),
+  z.object({ id: z.string().min(1), entry: z.string().min(1) }),
+]);
+export type PluginAllowEntry = z.infer<typeof PluginAllowEntrySchema>;
+
 export const UserSettingsSchema = z.object({
+  /**
+   * Plugin ids `squirrel audit` may load from `[plugins]` in squirrel.toml. This
+   * is the only approval there is: a project config alone never runs code. Only
+   * `~/.squirrel/settings.json` is read for it (a project's `.squirrel/settings.json`
+   * is ignored), so a cloned repository cannot approve itself. An object form
+   * `{ id, entry }` also pins the plugin to one file.
+   */
+  plugin_allowlist: z.array(PluginAllowEntrySchema).optional(),
   // Writable settings
   channel: z.enum(["stable", "beta"], {
     error: "channel must be 'stable' or 'beta'",

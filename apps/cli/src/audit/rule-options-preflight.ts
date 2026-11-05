@@ -11,7 +11,9 @@ import {
   checkRuleOptions,
   filterRules,
   loadAllRules,
+  loadKnownRules,
   type IgnoreEntry,
+  type RuleNamespace,
 } from "@squirrelscan/rules";
 
 export interface RuleOptionsPreflight {
@@ -24,20 +26,25 @@ export interface RuleOptionsPreflight {
 export function preflightRuleOptions(
   ruleOptions: Record<string, Record<string, unknown>>,
   rules: { enable: string[]; disable: string[] },
-  ignore?: readonly IgnoreEntry[]
+  ignore?: readonly IgnoreEntry[],
+  /** Plugin rule namespaces loaded for this run (#1599), so their ids are known rules. */
+  additionalNamespaces?: RuleNamespace[]
 ): RuleOptionsPreflight {
   // `[[ignore]]` problems (#1262) change nothing at audit time (the entry or matcher
   // is skipped), so they only warn here; `squirrel config validate` fails on them.
+  const known = additionalNamespaces?.length
+    ? loadKnownRules({ additionalNamespaces })
+    : undefined;
   const problems = [
-    ...checkRuleOptions(ruleOptions),
-    ...checkIgnoreEntries(ignore),
+    ...checkRuleOptions(ruleOptions, known),
+    ...checkIgnoreEntries(ignore, known),
   ];
   const result: RuleOptionsPreflight = { errors: [], warnings: [] };
   if (problems.length === 0) return result;
 
   // The same selection the runner makes, so a rule this audit skips cannot
   // stop it.
-  const registry = loadAllRules({ includeOptIn: true });
+  const registry = loadAllRules({ includeOptIn: true, additionalNamespaces });
   const running = new Set(
     filterRules(
       [...registry.keys()],

@@ -26,7 +26,11 @@ import {
 import { AUDIT_LEVEL_PRESETS } from "@squirrelscan/core-contracts/audit-levels";
 import { isAuditFailureReasonCode } from "@squirrelscan/core-contracts/failure-reason";
 import { fullScanHint } from "@squirrelscan/report";
-import { loadKnownRules } from "@squirrelscan/rules";
+import {
+  loadKnownRules,
+  pluginNamespaces,
+  type PluginRegistrySnapshot,
+} from "@squirrelscan/rules";
 import { isValidHeaderHost } from "@squirrelscan/utils/headers";
 import { ownHostsPinned } from "@squirrelscan/utils/public-egress";
 import { defineCommand } from "citty";
@@ -54,6 +58,7 @@ import {
 } from "@/audit/headers";
 import { localUnverifiedLinksNotice } from "@/audit/local-link-notice";
 import { MAX_DURATION_MAX_SECONDS } from "@/audit/max-duration";
+import { configDir, loadConfiguredPlugins } from "@/audit/plugins";
 import {
   generateConsoleReport,
   generateTextReport,
@@ -68,6 +73,7 @@ import {
   filterResolvesToZeroCategories,
   isCategoryExcluded,
   parseRuleFilters,
+  resolvePendingRuleFilters,
   resolveRulesConfig,
 } from "@/audit/rule-filter";
 import { preflightRuleOptions } from "@/audit/rule-options-preflight";
@@ -1491,7 +1497,9 @@ export const audit = defineCommand({
     // before crawling (same widening as --fail-on/--header). #1066
     const ruleFilter = parseRuleFilters(
       args["rule-include"] as string | string[] | undefined,
-      args["rule-exclude"] as string | string[] | undefined
+      args["rule-exclude"] as string | string[] | undefined,
+      // Plugins load after this point: a token naming no category waits for them (#1599).
+      { deferUnknown: true }
     );
     if (ruleFilter.errors.length > 0) {
       for (const e of ruleFilter.errors) console.error(e);
@@ -1604,6 +1612,40 @@ export const audit = defineCommand({
       const configPath = getGlobalConfigPath() ?? findConfigFile() ?? undefined;
       const config = await loadConfig(configPath, { silent: true });
 
+      // #1599: plugins named in squirrel.toml load only when the user's own
+      // ~/.squirrel/settings.json allowlists them. Loaded once here and handed to
+      // runAudit, so the rule-name checks below know the plugin rules and the
+      // notices print a single time.
+      let pluginPack: PluginRegistrySnapshot;
+      try {
+        const loaded = await loadConfiguredPlugins(config.plugins, {
+          baseDir: configDir(configPath, process.cwd()),
+        });
+        for (const notice of loaded.notices) {
+          console.error(fmt.yellow(`Warning: ${notice}`));
+        }
+        pluginPack = loaded.snapshot;
+      } catch (error) {
+        console.error(
+          `${fmt.red("Error:")} Plugin load failed: ${error instanceof Error ? error.message : String(error)}`
+        );
+        process.exitCode = 1;
+        return;
+      }
+      const pluginRuleNamespaces =
+        pluginPack.rules.length > 0 ? pluginNamespaces(pluginPack) : [];
+      {
+        const pendingErrors = resolvePendingRuleFilters(
+          ruleFilter.pending ?? [],
+          new Set(pluginRuleNamespaces.map((ns) => ns.name))
+        );
+        if (pendingErrors.length > 0) {
+          for (const e of pendingErrors) console.error(e);
+          process.exitCode = 1;
+          return;
+        }
+      }
+
       // #3649: `[cloud] ephemeral` is the default, the flags override it per run.
       const ephemeral = hasNegatedFlag(rawArgs, "ephemeral")
         ? false
@@ -1643,7 +1685,10 @@ export const audit = defineCommand({
       // #1587: an `enable`/`disable` entry in squirrel.toml that matches no rule
       // is a typo that leaves the rule running; warn once, never fail.
       {
-        const registry = loadKnownRules({ includeOptIn: true });
+        const registry = loadKnownRules({
+          includeOptIn: true,
+          additionalNamespaces: pluginRuleNamespaces,
+        });
         const ids = [...registry.keys()];
         const unknownWarning = formatUnknownRuleWarning(
           findUnknownRulePatterns(
@@ -1666,7 +1711,8 @@ export const audit = defineCommand({
       const optionsCheck = preflightRuleOptions(
         config.rule_options,
         resolveRulesConfig(config.rules, ruleFilter),
-        noIgnore ? undefined : config.ignore
+        noIgnore ? undefined : config.ignore,
+        pluginRuleNamespaces
       );
       for (const warning of optionsCheck.warnings) {
         console.error(fmt.yellow(`Warning: ${warning}`));
@@ -2699,6 +2745,7 @@ export const audit = defineCommand({
 
         result = await runAudit({
           ...options,
+          plugins: pluginPack,
           confirmCloudSpend,
           // #1134: resolver so render debits during the crawl are tagged with the
           // async-registered run id. #2290: it WAITS for register to settle

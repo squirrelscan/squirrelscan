@@ -60,6 +60,12 @@ describe("plugin rule ids (#1599)", () => {
     ).rejects.toThrow(/built-in namespace "core"/);
   });
 
+  test("a category code is not a free namespace", () => {
+    for (const id of ["other/x", "a11y/x", "security/x"]) {
+      expect(() => pluginNamespaces({ rules: [rule(id)] })).toThrow(PluginLoadError);
+    }
+  });
+
   test("an id without a namespace is refused", () => {
     expect(() => pluginNamespaces({ rules: [rule("noslash")] })).toThrow(PluginLoadError);
   });
@@ -91,8 +97,8 @@ describe("plugin rule ids (#1599)", () => {
 
   test("plugin rules never reach the built-in counts", () => {
     const before = getAllRuleIds().length;
-    const namespaces = pluginNamespaces({ rules: [rule("acme/a"), rule("acme/b"), rule("other/c")] });
-    expect(namespaces.map((n) => n.name)).toEqual(["acme", "other"]);
+    const namespaces = pluginNamespaces({ rules: [rule("acme/a"), rule("acme/b"), rule("extra/c")] });
+    expect(namespaces.map((n) => n.name)).toEqual(["acme", "extra"]);
     expect(getAllRuleIds().length).toBe(before);
     expect(loadAllRules().has("acme/a")).toBe(false);
     // Only a caller that passes the namespaces sees them.
