@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- **`squirrel audit` runs audit rules from a plugin (#1599).** A plugin file that registers page and site rules, named in `[plugins]` in `squirrel.toml`, runs in the same pass as the built-in rules, so `--rule-include`, `--rule-exclude`, `[[ignore]]`, scoring and the report treat its issues the same way. The plugin loads only when its id is also in `plugin_allowlist` in `~/.squirrel/settings.json`: a project config alone never loads or runs a plugin file, and the audit prints why a named plugin was skipped. A plugin rule id lives in a namespace of its own and cannot replace a built-in rule: a clash fails the load and names the id. Plugin rules are left out of the public rule counts. An embedding host can pass an in-process plugin snapshot to `runStreamingRules`. See [Plugins](https://docs.squirrelscan.com/configuration/plugins).
+
 ### Fixed
 
 - **Leaked-secrets findings cap the stored value length (#1592).** The caps counted findings, not bytes, so one generic assignment with a 1 MB value was kept whole and 100 such pages held about 100 MB of value text. A stored value is now cut to 2,048 characters, which covers the longest ordinary structured secret (a 2048-bit PEM private key is about 1,675 characters); classification still sees the full value, a cut finding is still reported and marked with `truncated: true` in the check item, and `length` keeps the full length. Check items gain the `truncated` field, so consumers of the rule output that regenerate from check metadata should pick it up.
