@@ -78,6 +78,14 @@ describe("Cloudflare beacon (#1600)", () => {
       expect(found, html).toEqual(["cloudflare-web-analytics"]);
     }
   });
+  test("whitespace around the attribute equals is tolerated, as before the merge", () => {
+    for (const attr of ["data-cf-beacon = '{\"token\":\"x\"}'", "data-cf-beacon\t=\n'{\"token\":\"x\"}'"]) {
+      const found = ids(page(`<script src="/local.js" ${attr}></script>`)).filter(
+        (id) => id.startsWith("cloudflare-") && id !== "cloudflare-cdn",
+      );
+      expect(found, attr).toEqual(["cloudflare-web-analytics"]);
+    }
+  });
   test("the rum endpoint alone is still detected, once", () => {
     const found = withScripts(page(""), ["https://cloudflareinsights.com/cdn-cgi/rum"]).filter((id) => id.startsWith("cloudflare-"));
     expect(found).toEqual(["cloudflare-web-analytics"]);
