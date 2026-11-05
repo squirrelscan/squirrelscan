@@ -10,7 +10,7 @@ import type {
   ParsedPage,
 } from "../types";
 
-import { REPORT_LIMITS } from "@squirrelscan/core-contracts";
+import { REPORT_LIMITS, clampItemString } from "@squirrelscan/core-contracts";
 import { SECRET_KEY_LOOKBEHIND_SIZE } from "@squirrelscan/utils/constants";
 
 import { shannonEntropy } from "../integrity/signals";
@@ -1539,12 +1539,14 @@ export function classifyKeyContext(
 export interface LeakedSecret {
   type: string;
   value: string;
+  /** Set when `value` was cut to STORED_VALUE_MAX_LENGTH; `length` still holds the full length. */
+  truncated?: boolean;
   /** `info`: expired, or a session token the crawl itself was issued. Never a leak. */
   confidence: Confidence;
   publicByDesign: boolean;
   /** Where it was read, with ` (base64)` when it sat inside a decoded blob. */
   location: ReportedLocation;
-  /** Character length of the secret value, excluding an assignment key or quotes. */
+  /** Character length of the secret value, excluding an assignment key or quotes. The full length, even when `value` was cut. */
   length: number;
   /** Zero-based character offset of the secret in the scanned source body. */
   offset: number;
@@ -3661,6 +3663,19 @@ export function scanContent(
   return sink.result();
 }
 
+/**
+ * Longest value a finding keeps (#1592). The caps count findings, not bytes,
+ * so one generic assignment with a 1 MB value was kept whole, and 100 such
+ * pages held about 100 MB of value text. 2,048 keeps the longest ordinary
+ * structured secret whole (a 2048-bit PEM private key is about 1,675
+ * characters; fixed-format tokens and connection strings are far shorter)
+ * while bounding a site at the site cap to about 20M characters of value
+ * text. Classification still sees the full value: only the stored record is
+ * cut, and `length` keeps the full length, so a cut finding is still
+ * reported, never skipped. The cut is surrogate-safe via clampItemString.
+ */
+export const STORED_VALUE_MAX_LENGTH = 2048;
+
 function scanInto(
   found: FindingSink,
   content: string,
@@ -3696,9 +3711,11 @@ function scanInto(
     // script text whose offset this record describes.
     if (adjustedOffset < 0) return null;
     const extra = known || refined?.extra ? { ...known, ...refined?.extra } : undefined;
+    const truncated = value.length > STORED_VALUE_MAX_LENGTH;
     return {
       type: refined?.type ?? name,
-      value,
+      value: truncated ? clampItemString(value, STORED_VALUE_MAX_LENGTH) : value,
+      ...(truncated ? { truncated: true } : {}),
       confidence: refined?.confidence ?? confidence,
       publicByDesign: refined?.publicByDesign ?? publicByDesign,
       location,
@@ -4583,6 +4600,7 @@ export const leakedSecretsRule: Rule = {
         length: s.length,
         offset: s.offset,
         ...(s.scriptIndex !== undefined ? { scriptIndex: s.scriptIndex } : {}),
+        ...(s.truncated ? { truncated: true } : {}),
       },
     });
 
