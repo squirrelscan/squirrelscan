@@ -13,10 +13,12 @@ import {
   spyOn,
   test,
 } from "bun:test";
+import { createHash } from "node:crypto";
 import {
   copyFileSync,
   mkdirSync,
   readFileSync,
+  realpathSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -119,6 +121,15 @@ function writeConfig(extra = ""): void {
   );
 }
 
+/** The allowlist entry that pins the current plugin file: path and content hash. */
+function pin(): { id: string; entry: string; sha256: string } {
+  return {
+    id: "acme-pack",
+    entry: realpathSync(pluginPath),
+    sha256: createHash("sha256").update(readFileSync(pluginPath)).digest("hex"),
+  };
+}
+
 function writeSettings(body: Record<string, unknown> | null): void {
   const path = getSettingsPath();
   if (body === null) {
@@ -181,7 +192,7 @@ describe("plugin rule packs through squirrel audit (#1599)", () => {
   test("named in squirrel.toml and allowlisted in settings.json: the page and the site rule both report, under their own namespace", async () => {
     installPlugin();
     writeConfig();
-    writeSettings({ plugin_allowlist: ["acme-pack"] });
+    writeSettings({ plugin_allowlist: [pin()] });
     const report = await okAudit();
     expect(markerExists()).toBe(true);
     const page = pluginRule(report, "acme/page-title-note");
@@ -218,7 +229,7 @@ describe("plugin rule packs through squirrel audit (#1599)", () => {
     mkdirSync(join(projectDir, ".squirrel"), { recursive: true });
     writeFileSync(
       join(projectDir, ".squirrel", "settings.json"),
-      JSON.stringify({ plugin_allowlist: ["acme-pack"] })
+      JSON.stringify({ plugin_allowlist: [pin()] })
     );
     const report = await okAudit();
     expect(markerExists()).toBe(false);
@@ -228,10 +239,10 @@ describe("plugin rule packs through squirrel audit (#1599)", () => {
   test("an allowlist entry pinned to another file does not approve this entry", async () => {
     installPlugin();
     writeConfig();
+    const elsewhere = join(scratch, "elsewhere.ts");
+    writeFileSync(elsewhere, "export default {};");
     writeSettings({
-      plugin_allowlist: [
-        { id: "acme-pack", entry: join(scratch, "elsewhere.ts") },
-      ],
+      plugin_allowlist: [{ ...pin(), entry: elsewhere }],
     });
     const report = await okAudit();
     expect(markerExists()).toBe(false);
@@ -239,14 +250,43 @@ describe("plugin rule packs through squirrel audit (#1599)", () => {
     expect(stderr.join("\n")).toContain("different file");
   }, 60_000);
 
-  test("an allowlist entry pinned to this file loads it", async () => {
+  test("an allowlist entry pinned to this file and hash loads it", async () => {
     installPlugin();
     writeConfig();
-    writeSettings({
-      plugin_allowlist: [{ id: "acme-pack", entry: pluginPath }],
-    });
+    writeSettings({ plugin_allowlist: [pin()] });
     const report = await okAudit();
     expect(pluginRule(report, "acme/page-title-note")).toBeDefined();
+  }, 60_000);
+
+  test("a bare id in the allowlist approves nothing: the file is not imported and the audit says how to approve", async () => {
+    installPlugin();
+    writeConfig();
+    writeSettings({ plugin_allowlist: ["acme-pack"] });
+    const report = await okAudit();
+    expect(markerExists()).toBe(false);
+    expect(pluginRule(report, "acme/page-title-note")).toBeUndefined();
+    const said = stderr.join("\n");
+    expect(said).toContain("bare id");
+    expect(said).toContain(pin().sha256);
+  }, 60_000);
+
+  test("the cloned-repo exploit: the user pinned the good file, the project config names ./evil.ts under the same id", async () => {
+    installPlugin();
+    const goodPin = pin();
+    const evilPath = join(projectDir, "evil.ts");
+    writeFileSync(
+      evilPath,
+      `import { writeFileSync } from "node:fs";\nwriteFileSync(${JSON.stringify(markerPath)}, "pwned");\nexport default { name: "e", version: "1", capabilities: [], register() {} };\n`
+    );
+    writeFileSync(
+      configPath,
+      `[plugins]\nenabled = true\n\n[[plugins.items]]\nid = "acme-pack"\nentry = "./evil.ts"\nallow = ["rules"]\n`
+    );
+    writeSettings({ plugin_allowlist: [goodPin] });
+    const report = await okAudit();
+    expect(markerExists()).toBe(false);
+    expect(pluginRule(report, "acme/page-title-note")).toBeUndefined();
+    expect(stderr.join("\n")).toContain("different file");
   }, 60_000);
 
   test("[plugins] enabled = false loads nothing even when allowlisted, and says so", async () => {
@@ -274,7 +314,7 @@ describe("plugin rule packs through squirrel audit (#1599)", () => {
     );
     writeFileSync(pluginPath, src);
     writeConfig();
-    writeSettings({ plugin_allowlist: ["acme-pack"] });
+    writeSettings({ plugin_allowlist: [pin()] });
     const result = await audit();
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -285,7 +325,7 @@ describe("plugin rule packs through squirrel audit (#1599)", () => {
   test("--rule-exclude of the plugin namespace suppresses its findings", async () => {
     installPlugin();
     writeConfig();
-    writeSettings({ plugin_allowlist: ["acme-pack"] });
+    writeSettings({ plugin_allowlist: [pin()] });
     const report = await okAudit(["acme/*"]);
     expect(pluginRule(report, "acme/page-title-note")).toBeUndefined();
     expect(pluginRule(report, "acme/site-note")).toBeUndefined();
@@ -296,7 +336,7 @@ describe("plugin rule packs through squirrel audit (#1599)", () => {
     writeConfig(
       '[[ignore]]\nrule = "acme/page-title-note"\nitems = ["alpha", "beta"]\nreason = "accepted"\n'
     );
-    writeSettings({ plugin_allowlist: ["acme-pack"] });
+    writeSettings({ plugin_allowlist: [pin()] });
     const report = await okAudit();
     const page = pluginRule(report, "acme/page-title-note");
     expect(page?.checks.length).toBeGreaterThan(0);
