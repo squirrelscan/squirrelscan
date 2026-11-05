@@ -32,6 +32,32 @@ describe("sitemap entity expansion", () => {
     expect(JSON.stringify(result)).not.toContain("injected-value");
   });
 
+  // The classic billion-laughs shape from #1421: a short entity repeated by a
+  // second entity, referenced from a loc. Behavioural: it asserts on the parse
+  // result and on the clock, not on the option. The direct `&lol;&lol;` loc is
+  // what trips when the flag flips (it becomes "lollol"); the nested `&lol2;`
+  // is the bomb shape and guards a parser swap.
+  test("a billion-laughs payload stays inert and parses promptly", () => {
+    const xml = `<?xml version="1.0"?>
+<!DOCTYPE urlset [
+  <!ENTITY lol "lol">
+  <!ENTITY lol2 "&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;">
+]>
+<urlset>
+  <url><loc>https://example.com/&lol2;</loc></url>
+  <url><loc>https://example.com/&lol;&lol;</loc></url>
+</urlset>`;
+
+    const started = performance.now();
+    const result = parseSitemap(xml, SITEMAP_URL);
+    const elapsedMs = performance.now() - started;
+
+    expect(JSON.stringify(result)).not.toContain("lollol");
+    // Generous: the payload is a few hundred bytes, so this only trips on a
+    // hang or exponential expansion, not on a slow runner.
+    expect(elapsedMs).toBeLessThan(2000);
+  });
+
   // Not a flag guard — fast-xml-parser does not expand nested entities even with
   // entities enabled. Guards against swapping in a parser that does.
   test("parser-level: a nested entity chain does not expand", () => {

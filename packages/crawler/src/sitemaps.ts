@@ -298,6 +298,9 @@ export function parseSitemap(content: string, url: string): SitemapData {
     ignoreAttributes: false,
     attributeNamePrefix: "@_",
     trimValues: true,
+    // SECURITY CONTROL, not a formatting preference: sitemaps are attacker
+    // controlled, and this stops declared-entity substitution (billion-laughs,
+    // XXE). Do not remove; sitemap-entity-expansion.test.ts fails if it goes.
     processEntities: false,
     // #687: keep every value as the text the sitemap wrote. Number parsing
     // turned `<lastmod>2024</lastmod>`, a valid W3C Datetime, into the number
