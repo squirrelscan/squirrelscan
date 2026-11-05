@@ -202,8 +202,11 @@ export function tokenize(text: string): { tokens: string[]; lost: boolean } {
     }
     tokens.push(raw);
   }
+  const have = new Set(tokens);
   for (const joined of hyphenJoins(folded)) {
-    if (!tokens.includes(joined)) tokens.push(joined);
+    if (have.has(joined)) continue;
+    have.add(joined);
+    tokens.push(joined);
   }
   return { tokens, lost };
 }
@@ -213,21 +216,39 @@ export function tokenize(text: string): { tokens: string[]; lost: boolean } {
 // meets the other. In a longer run (a slug such as `online-shop-agentur`) each adjacent pair is
 // joined too, since the hyphen there is a separator. Single-letter parts count ("E-Mail" joins to
 // "email") and stop words are not filtered, because the joined form is a spelling, not a topic.
-const HYPHEN_RUN = /[\p{L}\p{N}]+(?:[-\u2010\u2011][\p{L}\p{N}]+)+/gu;
+const HYPHEN = /[-\u2010\u2011]/;
 const MAX_JOIN_PARTS = 8;
+// Distinct joined forms kept per text; the rest are not needed to bound the work.
+const MAX_JOINS = 4096;
 
+// One linear pass: a run is a maximal list of non-empty alphanumeric parts separated by a single
+// hyphen (a doubled or a non-word separator ends it). A regex with an unbounded leading word
+// retries at every position of a long hyphen-free word, which is quadratic.
 function hyphenJoins(folded: string): string[] {
   const out: string[] = [];
-  for (const run of folded.match(HYPHEN_RUN) ?? []) {
-    const parts = run.split(/[-\u2010\u2011]/).slice(0, MAX_JOIN_PARTS);
-    const forms = [parts.join("")];
-    if (parts.length > 2) {
-      for (let i = 0; i + 1 < parts.length; i++) forms.push(parts[i]! + parts[i + 1]!);
+  let run: string[] = [];
+  const flush = (): void => {
+    if (run.length >= 2) {
+      const parts = run.slice(0, MAX_JOIN_PARTS);
+      const forms = [parts.join("")];
+      if (parts.length > 2) {
+        for (let i = 0; i + 1 < parts.length; i++) forms.push(parts[i]! + parts[i + 1]!);
+      }
+      for (const form of forms) {
+        if (form.length >= 3 && form.length <= MAX_TOKEN_LENGTH && SPACED_WORD.test(form))
+          out.push(form);
+      }
     }
-    for (const form of forms) {
-      if (form.length >= 3 && form.length <= MAX_TOKEN_LENGTH && SPACED_WORD.test(form))
-        out.push(form);
+    run = [];
+  };
+  for (const chunk of folded.split(/[^\p{L}\p{N}\-\u2010\u2011]+/u)) {
+    if (out.length >= MAX_JOINS) break;
+    if (!chunk.includes("-") && !chunk.includes("\u2010") && !chunk.includes("\u2011")) continue;
+    for (const part of chunk.split(HYPHEN)) {
+      if (part === "") flush();
+      else run.push(part);
     }
+    flush();
   }
   return out;
 }
