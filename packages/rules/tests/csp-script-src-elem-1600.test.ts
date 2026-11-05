@@ -21,7 +21,7 @@ function checkNames(policy: string): string[] {
 
 describe("security/csp script-src-elem (#1600)", () => {
   test("stricter script-src-elem than script-src: script elements are judged on the strict list", () => {
-    const names = checkNames("script-src 'self' 'unsafe-inline' *; script-src-elem 'self'");
+    const names = checkNames("script-src 'self' 'unsafe-inline' *; script-src-elem 'self'; script-src-attr 'none'");
     expect(names).not.toContain("csp-unsafe-scripts");
     expect(names).not.toContain("csp-wildcard");
   });
@@ -45,5 +45,32 @@ describe("security/csp script-src-elem (#1600)", () => {
   test("without script-src-elem nothing changes", () => {
     expect(checkNames("script-src 'self' 'unsafe-inline'")).toContain("csp-unsafe-scripts");
     expect(checkNames("script-src 'self'")).not.toContain("csp-unsafe-scripts");
+  });
+});
+
+describe("security/csp inline event handlers stay judged on script-src-attr (#1600)", () => {
+  test("a strict script-src-elem does not hide 'unsafe-inline' that still allows onerror= through script-src", () => {
+    const names = checkNames(
+      "script-src 'self' 'unsafe-inline'; script-src-elem 'self'; object-src 'none'; frame-ancestors 'none'",
+    );
+    expect(names).toContain("csp-unsafe-scripts");
+  });
+
+  test("script-src-attr falls back to script-src, then default-src", () => {
+    expect(checkNames("default-src 'self' 'unsafe-inline'; script-src-elem 'self'")).toContain("csp-unsafe-scripts");
+    expect(checkNames("default-src 'self'; script-src 'self' 'unsafe-inline'; script-src-elem 'self'")).toContain(
+      "csp-unsafe-scripts",
+    );
+  });
+
+  test("script-src-attr overrides script-src, in both directions", () => {
+    expect(
+      checkNames("script-src 'self' 'unsafe-inline'; script-src-elem 'self'; script-src-attr 'none'"),
+    ).not.toContain("csp-unsafe-scripts");
+    expect(checkNames("script-src 'self'; script-src-attr 'unsafe-inline'")).toContain("csp-unsafe-scripts");
+  });
+
+  test("a wildcard or data: source is an element matter: script-src-attr does not raise csp-wildcard", () => {
+    expect(checkNames("script-src 'self'; script-src-attr *")).not.toContain("csp-wildcard");
   });
 });
