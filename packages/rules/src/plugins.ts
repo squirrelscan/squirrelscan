@@ -32,7 +32,7 @@ export interface SquirrelPlugin {
   name: string;
   version: string;
   capabilities: PluginCapability[];
-  register(ctx: PluginRegistrationContext): void;
+  register(ctx: PluginRegistrationContext): void | Promise<void>;
 }
 
 export interface PluginRegistrySnapshot {
@@ -135,6 +135,16 @@ export type PluginSkipReason = "not-allowlisted" | "no-default-export";
 export interface LoadPluginsOptions {
   /** Called for each manifest entry that was not loaded, so the caller can say why. */
   onSkipped?: (id: string, reason: PluginSkipReason) => void;
+  /**
+   * Import the plugin module of an approved manifest. The default imports
+   * `manifest.entry` from disk. A caller that has verified the file's bytes
+   * (see the CLI's pinned allowlist) supplies this to import exactly those bytes.
+   */
+  importPlugin?: (manifest: PluginManifestItem) => Promise<{ default?: SquirrelPlugin }>;
+}
+
+function describeFailure(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 /**
@@ -142,7 +152,9 @@ export interface LoadPluginsOptions {
  * is the caller's, never the manifest's: a manifest comes from project config and
  * must not be able to approve itself. `entry` must be an absolute path or a
  * `file:` URL. A registration the manifest did not grant, a bad rule id or a
- * built-in clash throws; nothing is dropped silently.
+ * built-in clash throws, as does a module that throws while it loads or a
+ * `register` that throws or rejects (the error names the plugin); nothing is
+ * dropped silently. `register` is awaited before the snapshot is taken.
  */
 export async function loadPlugins(
   manifests: PluginManifestItem[],
@@ -165,8 +177,16 @@ export async function loadPlugins(
       );
     }
     const specifier = isFileUrl ? parsed.entry : pathToFileURL(parsed.entry).href;
-    const mod = (await import(specifier)) as { default?: SquirrelPlugin };
-    const plugin = mod.default;
+    let plugin: SquirrelPlugin | undefined;
+    try {
+      const mod = options.importPlugin
+        ? await options.importPlugin(parsed)
+        : ((await import(specifier)) as { default?: SquirrelPlugin });
+      plugin = mod.default;
+    } catch (error) {
+      if (error instanceof PluginLoadError) throw error;
+      throw new PluginLoadError(`Plugin "${parsed.id}" failed to load: ${describeFailure(error)}`);
+    }
     if (!plugin) {
       options.onSkipped?.(parsed.id, "no-default-export");
       continue;
@@ -193,7 +213,14 @@ export async function loadPlugins(
       },
     };
 
-    plugin.register(safeContext);
+    try {
+      await plugin.register(safeContext);
+    } catch (error) {
+      if (error instanceof PluginLoadError) throw error;
+      throw new PluginLoadError(
+        `Plugin "${parsed.id}" failed in register(): ${describeFailure(error)}`,
+      );
+    }
   }
 
   return registry.snapshot();
