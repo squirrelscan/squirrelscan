@@ -210,7 +210,10 @@ export interface PageRuleCacheEntry {
  * `refresh-requested` and `disabled-by-env`), which is why the report field is a
  * plain string rather than this union.
  */
-export type RuleCacheDisabledReason = "threat-intel-enabled" | "unhashable-run-context";
+export type RuleCacheDisabledReason =
+  | "threat-intel-enabled"
+  | "plugin-rules"
+  | "unhashable-run-context";
 
 // ============================================
 // HASHING

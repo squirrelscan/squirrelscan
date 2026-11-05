@@ -19,6 +19,8 @@ import {
   isRuleEnabled,
   isSiteIndexable,
   mergeRuleRunResult,
+  pluginNamespaces,
+  type PluginRegistrySnapshot,
   type RunnerScope,
 } from "@squirrelscan/rules";
 import { Duration, Effect } from "effect";
@@ -3086,6 +3088,27 @@ function runSitePass(
 }
 
 /**
+ * Tell the plugin listeners registered for `eventName` (#1599). A listener is
+ * foreign code on the audit's hot path: its throw or rejection is logged and
+ * dropped, never allowed to fail the audit or hold it up.
+ */
+function notifyPluginListeners(
+  listeners: PluginRegistrySnapshot["listeners"],
+  eventName: string,
+  payload: Record<string, unknown>,
+): void {
+  for (const listener of listeners.get(eventName) ?? []) {
+    try {
+      void Promise.resolve(listener(eventName, payload)).catch((error: unknown) => {
+        logger.warn("plugin listener failed", { eventName, error: String(error) });
+      });
+    } catch (error) {
+      logger.warn("plugin listener failed", { eventName, error: String(error) });
+    }
+  }
+}
+
+/**
  * The sub-phases of {@link runStreamingRules}, in execution order. Named so a
  * memory or wall-clock step can be attributed to one of them instead of to
  * "rules" as a whole (#1860).
@@ -3253,13 +3276,35 @@ export function runStreamingRules(
      * `pageSink`, or the run's page-level findings go nowhere.
      */
     retainPageResults?: boolean;
+    /**
+     * Plugin rule pack (#1599): rules and listeners that are not built in. The
+     * rules run in the same pass as the built-in ones, so `[rules]` selection,
+     * `[[ignore]]` entries, scoring, dedupe and the report treat them alike. No
+     * file is loaded here: the caller (the CLI, or an embedding host) builds the
+     * snapshot, so a runtime that keeps `externalPlugins: false` can still pass
+     * its own pack. Ids are validated like the loader's (a clash with a built-in
+     * rule throws). Omitted or empty → byte-identical to a run without plugins.
+     *
+     * A run with plugin rules does not use `ruleCache`: its key hashes the rule
+     * catalog's build, which says nothing about foreign rule code.
+     */
+    plugins?: PluginRegistrySnapshot;
   },
 ): Effect.Effect<StreamingRuleExecutionResult, never, never> {
   return Effect.gen(function* () {
     // Clamped — see streaming.ts; a 0 batch would loop forever over the crawl.
     const batchSize = Math.max(1, opts?.batchSize ?? STREAM_PAGE_BATCH);
     const retainPageResults = opts?.retainPageResults ?? true;
-    const onPhase = opts?.onPhase;
+    const plugins = opts?.plugins;
+    const pluginRulePack = plugins && plugins.rules.length > 0 ? pluginNamespaces(plugins) : [];
+    const pluginListeners = plugins && plugins.listeners.size > 0 ? plugins.listeners : undefined;
+    const userOnPhase = opts?.onPhase;
+    const onPhase: typeof userOnPhase = pluginListeners
+      ? (name, boundary) => {
+          userOnPhase?.(name, boundary);
+          notifyPluginListeners(pluginListeners, "audit:rules-phase", { phase: name, boundary });
+        }
+      : userOnPhase;
     const phase = <T,>(name: StreamingRulePhase, body: () => Effect.Effect<T, never, never>) =>
       Effect.gen(function* () {
         onPhase?.(name, "start");
@@ -3269,8 +3314,15 @@ export function runStreamingRules(
       });
 
     // Threat-intel scope + runner (mirror of runRulesOnStorage).
-    const effectiveScope =
+    const intelScope =
       config.intel?.enabled && !scope?.intel ? { ...scope, intel: localIntelContext() } : scope;
+    const effectiveScope =
+      pluginRulePack.length > 0
+        ? {
+            ...intelScope,
+            additionalNamespaces: [...(intelScope?.additionalNamespaces ?? []), ...pluginRulePack],
+          }
+        : intelScope;
     const runner = createRunner(config, effectiveScope, {
       onIgnoreTimeout: opts?.onIgnoreTimeout,
     });
@@ -3321,6 +3373,8 @@ export function runStreamingRules(
     if (ruleCacheOpts) {
       if (effectiveScope?.intel) {
         ruleCacheDisabled = "threat-intel-enabled";
+      } else if (pluginRulePack.length > 0) {
+        ruleCacheDisabled = "plugin-rules";
       } else {
         const ctxHash = yield* Effect.promise(() =>
           computeRunContextHash({
