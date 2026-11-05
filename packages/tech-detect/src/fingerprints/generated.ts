@@ -391,7 +391,7 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     icon: "cloudflare-web-analytics",
     detectors: [
       { type: "script-url", pattern: new RegExp("static\\.cloudflareinsights\\.com/beacon(\\.min)?\\.js", "i") },
-      { type: "html", pattern: new RegExp("data-cf-beacon=", "i") },
+      { type: "html", pattern: new RegExp("data-cf-beacon\\s*=", "i") },
       { type: "script-url", pattern: new RegExp("cloudflareinsights\\.com/cdn-cgi/rum", "i") },
     ],
     confidence: "high",
