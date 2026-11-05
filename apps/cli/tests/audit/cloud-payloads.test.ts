@@ -12,7 +12,6 @@ import { buildSiteContext } from "../../src/audit/adapter";
 import {
   buildCloudPagePayloads,
   buildMetadataPayload,
-  truncateUtf8Bytes,
 } from "../../src/audit/cloud";
 import { gateStage1 } from "../../src/audit/cloud-gating";
 
@@ -62,32 +61,6 @@ function pageRecord(html: string, url = "https://example.com/"): PageRecord {
 }
 
 const utf8Bytes = (s: string) => new TextEncoder().encode(s).length;
-
-describe("truncateUtf8Bytes", () => {
-  test("returns short text unchanged", () => {
-    expect(truncateUtf8Bytes("hello", 100)).toBe("hello");
-  });
-
-  test("caps ASCII text at the byte budget", () => {
-    const out = truncateUtf8Bytes("x".repeat(10_000), 6_000);
-    expect(out.length).toBe(6_000);
-    expect(utf8Bytes(out)).toBe(6_000);
-  });
-
-  test("caps multi-byte text by BYTES, not code units", () => {
-    // "你" is 3 bytes in UTF-8 — slice(0, 6000) would yield 18KB.
-    const out = truncateUtf8Bytes("你".repeat(6_000), 6_000);
-    expect(utf8Bytes(out)).toBeLessThanOrEqual(6_000);
-    expect(out.length).toBe(2_000);
-  });
-
-  test("never splits a code point mid-sequence", () => {
-    // 4-byte emoji; a 6-byte budget cuts the second one mid-sequence.
-    const out = truncateUtf8Bytes("😀😀", 6);
-    expect(out).toBe("😀");
-    expect(out.includes("�")).toBe(false);
-  });
-});
 
 describe("buildCloudPagePayloads", () => {
   test("bounds every per-page field so batch bodies stay small", async () => {

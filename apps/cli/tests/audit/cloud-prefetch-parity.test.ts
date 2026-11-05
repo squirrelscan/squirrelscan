@@ -5,7 +5,6 @@ import {
   buildBlocklistPayload as aeBuildBlocklistPayload,
   buildGapsPayloads as aeBuildGapsPayloads,
   gateStage1 as aeGateStage1,
-  truncateUtf8Bytes as aeTruncate,
 } from "@squirrelscan/audit-engine";
 import { getDefaultConfig } from "@squirrelscan/config";
 import {
@@ -19,7 +18,6 @@ import {
   selectCloudRules as cliSelectCloudRules,
   buildCloudPagePayloads as cliBuildCloudPagePayloads,
   buildMetadataPayload as cliBuildMetadataPayload,
-  truncateUtf8Bytes as cliTruncate,
 } from "../../src/audit/cloud";
 import { gateStage1 as cliGateStage1 } from "../../src/audit/cloud-gating";
 import { buildBlocklistPayload as cliBuildBlocklistPayload } from "../../src/audit/cloud-payloads-blocklist";
@@ -131,19 +129,6 @@ describe("cloud prefetch input parity (container replica == CLI)", () => {
     expect(ae).toEqual(cli);
     expect(ae).toHaveLength(1);
     expect(ae[0]?.metaTags?.["og:site_name"]).toBe("Acme Inc");
-  });
-
-  test("truncateUtf8Bytes: replica matches the CLI (incl. multi-byte boundary)", () => {
-    const samples = [
-      "plain ascii",
-      "héllo wörld ".repeat(20),
-      "日本語テキスト".repeat(30),
-    ];
-    for (const s of samples) {
-      for (const cap of [5, 16, 64, 1000]) {
-        expect(aeTruncate(s, cap)).toBe(cliTruncate(s, cap));
-      }
-    }
   });
 
   function siteUnitFixture() {

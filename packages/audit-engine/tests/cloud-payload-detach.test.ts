@@ -9,9 +9,8 @@
 // to remove, and the walk drops each batch right after the collector absorbs
 // it, so nothing else is keeping those pages alive.
 //
-// `truncateUtf8Bytes` is not a detach. It returns `text.slice(0, maxBytes)`
-// unchanged whenever the sliced text already fits the byte budget, which is
-// every all-ASCII page, so the excerpt comes back still attached.
+// A bare `text.slice(0, maxBytes)` is not a detach: the excerpt stays attached
+// to the page's buffer. The attached arm below models that.
 //
 // The measurement reads `external` and subtracts a retain-nothing control, and
 // fails loudly when it did not reproduce the retention — see helpers/retention.ts.
@@ -22,7 +21,7 @@ import { describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
 import { buildSiteContext } from "../src/adapter";
-import { buildCloudPagePayloads, truncateUtf8Bytes } from "../src/cloud-prefetch-run";
+import { buildCloudPagePayloads } from "../src/cloud-prefetch-run";
 import { compareRetention, expectDetached, MB } from "./helpers/retention";
 
 const MAX_EXCERPT_BYTES = 6_000;
@@ -103,7 +102,7 @@ function attachedPayload(i: number, bytes: number) {
   return {
     url: entry.page.url,
     title: parsed.meta.title?.slice(0, MAX_TITLE_CHARS) ?? undefined,
-    textExcerpt: truncateUtf8Bytes(parsed.content.textContent, MAX_EXCERPT_BYTES),
+    textExcerpt: parsed.content.textContent.slice(0, MAX_EXCERPT_BYTES),
     meta: Object.keys(meta).length > 0 ? meta : undefined,
     headings: parsed.headings.headings.slice(0, 20).map((h) => h.text.slice(0, MAX_HEADING_CHARS)),
   };
@@ -143,14 +142,5 @@ describe("cloud-prefetch page payloads (#253)", () => {
     expect(detached?.meta?.description).toBe("Description 7 for this page");
     expect(detached?.headings).toEqual(["Heading 7"]);
     expect(detached?.textExcerpt.length).toBeGreaterThan(0);
-  });
-
-  test("truncateUtf8Bytes returns an ASCII slice unchanged, so it detaches nothing", () => {
-    // The reason the excerpt was attached in the first place: the byte-budget
-    // path only round-trips through TextEncoder when the slice OVERFLOWS the
-    // budget. Documented as a test so a future reader does not mistake it for
-    // a detach.
-    const source = "a".repeat(10_000);
-    expect(truncateUtf8Bytes(source, MAX_EXCERPT_BYTES)).toBe(source.slice(0, MAX_EXCERPT_BYTES));
   });
 });
