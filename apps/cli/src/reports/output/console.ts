@@ -13,7 +13,6 @@ import {
 import {
   affectedPages,
   affectedPagesSuffix,
-  hasItemSources,
   checkPagesScopedAway,
   checkScopeLine,
   itemLabel,
@@ -345,13 +344,13 @@ export function generateConsoleReport(
 
         for (const check of rule.checks) {
           const statusIcon = icon(check.status as "fail" | "warn");
-          const pageCount = check.pages.length;
-          // pub#837: a check whose items are links counts the pages that carry them.
-          const countStr = hasItemSources(check)
-            ? affectedPagesSuffix(check, affectedPages(check).count)
-            : pageCount > 1
-              ? ` (${pageCount} pages)`
-              : "";
+          // #1307: the page count comes from the shared accessor, never from
+          // `check.pages.length`: a sampled report lists fewer pages than it
+          // affects (`details.pagesTruncated`), and every other format reads the
+          // true total from here. pub#837: a check whose items are links counts
+          // the pages that carry them.
+          const ap = affectedPages(check);
+          const countStr = affectedPagesSuffix(check, ap.count);
           const carried = fmt.dim(carriedTag(check));
           log(
             box.line(
@@ -369,7 +368,7 @@ export function generateConsoleReport(
                 : check.pages;
           // pub#846: a check that only reads one shared region names it, and a
           // check whose findings name their regions leaves its page list out.
-          const affected = affectedPages(check).count;
+          const affected = ap.count;
           // pub#857: and so does a check on every page of one page type.
           const checkScope = checkScopeLine(check, affected, report.structure);
           if (checkScope) {
@@ -391,12 +390,16 @@ export function generateConsoleReport(
             for (const page of pagesToShow) {
               log(box.line(`     ${fmt.dim(`→ ${pathOnly(page)}`)}`));
             }
-            if (uncovered.length > maxPages) {
-              log(
-                box.line(
-                  `     ${fmt.dim(`... +${uncovered.length - maxPages} more`)}`
-                )
-              );
+            // Pages the report itself left out of `check.pages` (a sampled
+            // check keeps examples), beyond those past this preview.
+            const clipped =
+              coverage.mode === "none"
+                ? Math.max(0, ap.count - ap.sample.length)
+                : 0;
+            const morePages =
+              Math.max(0, uncovered.length - maxPages) + clipped;
+            if (morePages > 0) {
+              log(box.line(`     ${fmt.dim(`... +${morePages} more`)}`));
             }
           }
           // Show structured items (preferred), narrowed to what the printed
