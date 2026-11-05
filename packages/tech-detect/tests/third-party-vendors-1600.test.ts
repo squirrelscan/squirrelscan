@@ -91,3 +91,34 @@ describe("Cloudflare beacon (#1600)", () => {
     expect(found).toEqual(["cloudflare-web-analytics"]);
   });
 });
+
+describe("filename patterns end at a URL boundary (#1600)", () => {
+  const FILES: Array<{ id: string; url: (ext: string) => string }> = [
+    { id: "partytown", url: (e) => `/~partytown/partytown${e}` },
+    { id: "partytown", url: (e) => `/~partytown/debug/partytown-sw${e}` },
+    { id: "vercel-web-analytics", url: (e) => `/_vercel/insights/script${e}` },
+    { id: "vercel-web-analytics", url: (e) => `https://va.vercel-scripts.com/v1/script.debug${e}` },
+    { id: "vercel-speed-insights", url: (e) => `/_vercel/speed-insights/script${e}` },
+    { id: "vercel-speed-insights", url: (e) => `https://va.vercel-scripts.com/v1/speed-insights/script${e}` },
+    { id: "microsoft-uet", url: (e) => `https://bat.bing.com/bat${e}` },
+    { id: "microsoft-uet", url: (e) => `https://bat.bing.net/bat${e}` },
+    { id: "cloudflare-web-analytics", url: (e) => `https://static.cloudflareinsights.com/beacon.min${e}` },
+    { id: "cloudflare-web-analytics", url: (e) => `https://static.cloudflareinsights.com/beacon${e}` },
+  ];
+  const tag = (src: string) => page(`<script src="${src}"></script>`);
+
+  for (const f of FILES) {
+    test(`${f.id} ${f.url(".js")}: .js, .js?v=1 and .js#x detect`, () => {
+      for (const ext of [".js", ".js?v=1", ".js#x"]) {
+        expect(ids(tag(f.url(ext))), f.url(ext)).toContain(f.id);
+        expect(withScripts(page(""), [f.url(ext)]), f.url(ext)).toContain(f.id);
+      }
+    });
+    test(`${f.id} ${f.url(".js")}: .json, .jsx, .js.map and .jsonp do not`, () => {
+      for (const ext of [".json", ".jsx", ".js.map", ".jsonp"]) {
+        expect(ids(tag(f.url(ext))), f.url(ext)).not.toContain(f.id);
+        expect(withScripts(page(""), [f.url(ext)]), f.url(ext)).not.toContain(f.id);
+      }
+    });
+  }
+});
