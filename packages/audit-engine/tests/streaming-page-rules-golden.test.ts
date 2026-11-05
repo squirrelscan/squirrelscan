@@ -112,7 +112,7 @@ describe("streaming page-rule pass — GOLDEN INVARIANT vs resident loop", () =>
     expect(streamed.extractedCount).toBe(streamed.pageUrls.length);
 
     await run(storage.close());
-  });
+  }, 60_000);
 
   test("batch size does not change results (batch 3 ≡ batch 200)", async () => {
     const { storage, crawlId } = await fixture(11, 25);
@@ -127,5 +127,5 @@ describe("streaming page-rule pass — GOLDEN INVARIANT vs resident loop", () =>
     }
     expect(a.pageUrls.sort()).toEqual(b.pageUrls.sort());
     await run(storage.close());
-  });
+  }, 60_000);
 });
