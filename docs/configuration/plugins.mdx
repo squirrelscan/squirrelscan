@@ -9,7 +9,7 @@ A plugin is a TypeScript or JavaScript file that registers audit rules. `squirre
 
 A plugin is code, and it runs with your permissions. Read [the security model](#security-model) before you turn one on.
 
-A plugin file must be self-contained: bundle its dependencies into the one file. The file is loaded from a verified copy (see [the security model](#security-model)), so a relative or package import inside it does not resolve and fails the load.
+A plugin file must be self-contained: bundle its dependencies into the one file. The file is loaded from a verified copy in `~/.squirrel/plugin-cache/` (see [the security model](#security-model)), so a relative import inside it does not resolve, and a package import fails the load unless the package is bundled in.
 
 ## Write a plugin
 
@@ -125,7 +125,11 @@ The project's `squirrel.toml` can only ask for a plugin. It can never make `squi
 - If `settings.json` cannot be read, nothing is allowed.
 - An approved plugin that cannot be loaded (a bad id, an id that clashes with a built-in rule, a rule the entry did not allow, a module or `register` function that throws) stops the audit before the crawl, with an error that names the plugin. Nothing is dropped silently.
 
-squirrel reads the file once, checks the hash, and imports exactly the bytes it hashed. It writes them to a private copy in a new temporary directory (mode 0700), imports from that copy, and deletes the copy once the plugin is loaded. A change to the original file between the check and the import therefore cannot run different code. The residual risk: while the copy exists, another process running as your user could modify it, but that user can already edit your `settings.json`, so it is not a new boundary. Imports inside the plugin are not covered by the hash and do not resolve from the copy, which is why a plugin must be one bundled file.
+squirrel reads the file once, checks the hash, and imports exactly the bytes it hashed. It writes them to a private copy under `~/.squirrel/plugin-cache/`, never the shared system temp directory. Every directory squirrel creates there is mode 0700, each run gets its own subdirectory, and the subdirectory is deleted as soon as the plugin is loaded, even when the load fails. squirrel refuses to load any plugin if `~/.squirrel/plugin-cache/` is a symlink, is owned by another user, or can be written by other users. A change to the original file between the check and the import therefore cannot run different code.
+
+Module resolution from the copy walks up the directories above it looking for `node_modules`. If any directory above `~/.squirrel/plugin-cache/` (the directory itself included, so also your home directory and `/`) holds a `node_modules`, squirrel refuses to load plugins and names it, because a package import in a plugin could then pull in code the hash does not cover. That is why a plugin must be self-contained.
+
+The residual risk: while the copy exists, another process running as your user could modify it. That user can already edit your `settings.json`, so it is not a new boundary.
 
 <Warning>
 Only approve plugin files you wrote or have read. Approval is trust, not containment: once a plugin is approved it runs fully trusted, in the `squirrel` process, with your permissions. It can read your environment variables and files, use the network and run commands. The `allow` list below is not a sandbox. It restricts what an honest plugin may register, and it does nothing to stop a malicious one, because a malicious plugin does not need the registration API to do harm. The hash pin makes sure the code you read is the code that runs, nothing more.

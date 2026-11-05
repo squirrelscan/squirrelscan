@@ -4,16 +4,19 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
+  readFileSync,
   realpathSync,
   rmSync,
+  statSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join, relative } from "node:path";
 
 import { loadConfiguredPlugins } from "@/audit/plugins";
@@ -71,7 +74,7 @@ function settings(allow: unknown[]): void {
 function load(entry: string, id = "acme-pack") {
   return loadConfiguredPlugins(
     { enabled: true, items: [{ id, entry, allow: ["rules"] }] },
-    { baseDir: projectDir, settingsPath, tmpRoot: root }
+    { baseDir: projectDir, settingsPath, cacheRoot: join(root, `cache-${seq}`) }
   );
 }
 
@@ -235,7 +238,7 @@ describe("pinned plugin allowlist (#1599)", () => {
       {
         baseDir: projectDir,
         settingsPath,
-        tmpRoot: root,
+        cacheRoot: join(root, `cache-${seq}`),
         // The hash has passed; an attacker now overwrites the file on disk.
         afterVerify: () => write(file, pluginSource("swapevil")),
       }
@@ -246,21 +249,18 @@ describe("pinned plugin allowlist (#1599)", () => {
   });
 
   test("the verified copy is removed after the load, on success and on failure", async () => {
-    const leftovers = () =>
-      readdirSync(root).filter(
-        (n) =>
-          n.startsWith("squirrel-plugin-") && n !== relative(tmpdir(), root)
-      );
-    const before = leftovers();
+    const cacheRoot = join(root, `cache-${seq}`);
+    const entries = () => (existsSync(cacheRoot) ? readdirSync(cacheRoot) : []);
     const good = pluginSource("clean");
     const file = write(join(pluginDir, "clean.ts"), good);
     settings([{ id: "acme-pack", entry: file, sha256: sha(good) }]);
     await load(file);
+    expect(entries()).toEqual([]);
     const broken = `export default { name: "b", version: "1", capabilities: [], register() { throw new Error("nope"); } };`;
     const brokenFile = write(join(pluginDir, "broken.ts"), broken);
     settings([{ id: "acme-pack", entry: brokenFile, sha256: sha(broken) }]);
     await expect(load(brokenFile)).rejects.toThrow('"acme-pack"');
-    expect(leftovers()).toEqual(before);
+    expect(entries()).toEqual([]);
   });
 
   test("a pinned plugin that fails to register stops the load, naming the plugin", async () => {
@@ -282,4 +282,123 @@ describe("pinned plugin allowlist (#1599)", () => {
     expect(ruleIds(await load(`file://${other}`))).toEqual([]);
     expect(ran("fileurl-evil")).toBe(false);
   });
+
+  test("the copy lives in a 0700 directory inside a 0700 cache root that squirrel created", async () => {
+    const cacheRoot = join(root, `cache-${seq}`, "nested", "plugin-cache");
+    const probe = join(root, `probe-${seq}.json`);
+    const src = `import { statSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
+const dir = import.meta.dir;
+writeFileSync(${JSON.stringify(probe)}, JSON.stringify({ dir, mode: statSync(dir).mode & 0o777, parentMode: statSync(dirname(dir)).mode & 0o777 }));
+export default { name: "p", version: "1", capabilities: [], register() {} };
+`;
+    const file = write(join(pluginDir, "probe.ts"), src);
+    settings([{ id: "acme-pack", entry: file, sha256: sha(src) }]);
+    await loadConfiguredPlugins(
+      { enabled: true, items: [{ id: "acme-pack", entry: file, allow: [] }] },
+      { baseDir: projectDir, settingsPath, cacheRoot }
+    );
+    const seen = JSON.parse(readFileSync(probe, "utf8")) as {
+      dir: string;
+      mode: number;
+      parentMode: number;
+    };
+    expect(seen.dir.startsWith(realpathSync(cacheRoot))).toBe(true);
+    expect(seen.mode).toBe(0o700);
+    expect(seen.parentMode).toBe(0o700);
+    expect(statSync(join(root, `cache-${seq}`, "nested")).mode & 0o777).toBe(
+      0o700
+    );
+    expect(readdirSync(cacheRoot)).toEqual([]);
+  });
+
+  test("a cache root that others can write to is refused before anything is imported", async () => {
+    const cacheRoot = join(root, `cache-${seq}`);
+    mkdirSync(cacheRoot, { recursive: true });
+    chmodSync(cacheRoot, 0o777);
+    const src = pluginSource("loosecache");
+    const file = write(join(pluginDir, "loosecache.ts"), src);
+    settings([{ id: "acme-pack", entry: file, sha256: sha(src) }]);
+    await expect(load(file)).rejects.toThrow(/plugin cache/);
+    expect(ran("loosecache")).toBe(false);
+  });
+
+  test("a node_modules above the cache is refused: imports from the copy would walk into it", async () => {
+    const planted = join(root, `nm-${seq}`);
+    mkdirSync(join(planted, "node_modules", "plantedpkg"), { recursive: true });
+    const src = pluginSource("ancestor");
+    const file = write(join(pluginDir, "ancestor.ts"), src);
+    settings([{ id: "acme-pack", entry: file, sha256: sha(src) }]);
+    await expect(
+      loadConfiguredPlugins(
+        { enabled: true, items: [{ id: "acme-pack", entry: file, allow: [] }] },
+        {
+          baseDir: projectDir,
+          settingsPath,
+          cacheRoot: join(planted, "plugin-cache"),
+        }
+      )
+    ).rejects.toThrow(/node_modules/);
+    expect(ran("ancestor")).toBe(false);
+  });
+
+  // The cache must sit outside the OS temp dir for this to mean anything, so it goes in
+  // the home directory (a uniquely named sibling that is removed afterwards).
+  const homeHasNodeModules = (() => {
+    let dir = homedir();
+    for (;;) {
+      if (existsSync(join(dir, "node_modules"))) return true;
+      const up = join(dir, "..");
+      if (up === dir) return false;
+      dir = up;
+    }
+  })();
+
+  test.skipIf(homeHasNodeModules)(
+    "a node_modules planted in the OS temp dir is not resolved by the plugin",
+    async () => {
+      const pkg = `squirrel-planted-${process.pid}-${seq}`;
+      const tmpNodeModules = join(tmpdir(), "node_modules");
+      const hadNodeModules = existsSync(tmpNodeModules);
+      const markerFile = join(root, `planted-${seq}.marker`);
+      mkdirSync(join(tmpNodeModules, pkg), { recursive: true });
+      writeFileSync(
+        join(tmpNodeModules, pkg, "package.json"),
+        JSON.stringify({ name: pkg, main: "index.js" })
+      );
+      writeFileSync(
+        join(tmpNodeModules, pkg, "index.js"),
+        `require("node:fs").writeFileSync(${JSON.stringify(markerFile)}, "planted code ran");`
+      );
+      const homeBase = mkdtempSync(
+        join(homedir(), ".squirrel-plugin-cache-test-")
+      );
+      try {
+        const src = `import ${JSON.stringify(pkg)};
+export default { name: "p", version: "1", capabilities: [], register() {} };
+`;
+        const file = write(join(pluginDir, "imports-planted.ts"), src);
+        settings([{ id: "acme-pack", entry: file, sha256: sha(src) }]);
+        await expect(
+          loadConfiguredPlugins(
+            {
+              enabled: true,
+              items: [{ id: "acme-pack", entry: file, allow: [] }],
+            },
+            {
+              baseDir: projectDir,
+              settingsPath,
+              cacheRoot: join(homeBase, ".squirrel", "plugin-cache"),
+            }
+          )
+        ).rejects.toThrow(/"acme-pack"/);
+        expect(existsSync(markerFile)).toBe(false);
+      } finally {
+        rmSync(homeBase, { recursive: true, force: true });
+        if (hadNodeModules)
+          rmSync(join(tmpNodeModules, pkg), { recursive: true, force: true });
+        else rmSync(tmpNodeModules, { recursive: true, force: true });
+      }
+    }
+  );
 });
