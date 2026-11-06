@@ -63,6 +63,39 @@ and never charged. To check a site's links, run an audit
 `squirrel audit`.
 </Note>
 
+## Start a run with a rule filter
+
+`POST /v1/agent-runs` takes the run's settings as a `config` object. This request audits one page, runs only the `ax` rules plus `core/robots-meta`, skips the headless browser and treats the site as a one-shot check:
+
+```bash
+curl -X POST https://api.squirrelscan.com/v1/agent-runs \
+  -H "Authorization: Bearer $SQUIRREL_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://example.com",
+    "config": {
+      "maxPages": 1,
+      "enabledRulePatterns": ["ax/*", "core/robots-meta"],
+      "render": false,
+      "ephemeral": true
+    }
+  }'
+```
+
+The response is `201` with the run `id`. Poll `GET /v1/agent-runs/{id}` until `status` is `completed`, then read `GET /v1/agent-runs/{id}/report`. `trigger` defaults to `api`, and `config` may also be sent as a JSON-encoded string, the older form.
+
+| `config` key | What it does |
+|--------------|--------------|
+| `enabledRulePatterns` | Run only the rules these patterns select. A pattern is a category (`ax`), a category glob (`ax/*`) or an exact rule id (`core/robots-meta`), the same patterns and the same matching as the CLI's [`--rule-include`](/cli/audit). List ids with `GET /v1/rules`. At most 50 patterns of at most 100 characters, using letters, digits and `-_./*`. The website's `disable_rules` and `disabledRulePatterns` still apply on top. Opt-in rules (`gaps/*`) cannot be selected. |
+| `render` | `false` fetches every page over plain HTTP with no per-page headless browser. `true` renders every page, within what the plan allows. Leave it out to follow the website's setting. Rendering does not change the price. |
+| `ephemeral` | The same one-shot check as `ephemeral` on the MCP `run_audit`. If the run creates the website, that website skips the plan's website limit, stays out of website listings and is removed once the run ends. The run and its report are **not** purged: `GET /v1/agent-runs/{id}` and the report keep working, and the run stays in `GET /v1/agent-runs`. If the organization already tracks the domain, or you send `websiteId`, the run uses that website, nothing is deleted, and the response has `ephemeral: false` with an `ephemeralIgnoredReason`. |
+
+A `config` the API cannot honour is a `400` with code `VALIDATION_ERROR`, and nothing is charged or started: invalid JSON, a value that is not an object, an unknown key, a `render` or `ephemeral` that is not a boolean, or a bad `enabledRulePatterns`. For the filter, `error.patterns` lists the entries at fault: an unknown category, a pattern that matches no rule (`core/robots-metaa`), a list over the caps, or a list the disable settings leave with no rule to run.
+
+<Note>
+`ax/*` selects every rule filed under the `ax` category, including the three that kept the older `ai/` id prefix (`ai/llm-parsability`, `ai/page-type-match`, `ai/site-metadata`), exactly as `squirrel audit --rule-include ax` does. To leave some out, add their exact ids to `disabledRulePatterns`. A run that selects a subset reports only those rules, so its overall score is not comparable to a full audit's.
+</Note>
+
 ## Error envelope
 
 All errors use one stable, typed shape:
