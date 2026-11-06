@@ -109,7 +109,31 @@ A request the API cannot honour as written is a `400` with code `VALIDATION_ERRO
 
 The create response carries `editorSummary` (boolean) and, when it is `false`, `editorSummarySkippedReason` (`rule-filtered run` or `disabled by the run config`). Both appear only when `enabledRulePatterns` or `editorSummary` was sent.
 
-The config a run reports in `GET /v1/agent-runs/{id}` can be sent back: the keys the server writes into it (`auditLevel`, `pageLimitNotice`, `creditClamp`, `renderMode` and the like) are accepted and dropped. The report of a run started with `enabledRulePatterns` is **partial**: it carries `partial: true`, its `healthScore` and every category `score` are `null` (a score from a subset of the rules is not the site's score), and a sibling `includeFilter` says which rules ran (the patterns and how many). The counts and `topIssues` still cover the rules that ran. A run with no `enabledRulePatterns` is unchanged: no `partial` key, scores as before. The hosted MCP `get_report` returns the same `partial` flag and null scores, and prints the score as N/A in its `llm` and `markdown` formats.
+The config a run reports in `GET /v1/agent-runs/{id}` can be sent back: the keys the server writes into it (`auditLevel`, `pageLimitNotice`, `creditClamp`, `renderMode` and the like) are accepted and dropped. The report of a run started with `enabledRulePatterns` is **partial**: it carries `partial: true`, its `healthScore` and every category `score` are `null` (a score from a subset of the rules is not the site's score), and a sibling `includeFilter` says which rules ran (the patterns and how many). The counts and `topIssues` still cover the rules that ran.
+
+A partial report also carries `results`: one entry for every rule the run selected, so a rule that passed is told apart from one that did not run (`topIssues` lists only warnings and failures, as text). Each entry has the `ruleId`, `category`, `name` and `severity`, a `status` (`pass`, `warn`, `fail`, `info`, `skipped` or `not_applicable`), a `skipReason` for the last two, and an `evidence` object:
+
+```json
+{
+  "ruleId": "ax/ai-crawlers",
+  "category": "ax",
+  "name": "AI Crawler Access",
+  "severity": "warning",
+  "status": "info",
+  "evidence": {
+    "checks": { "pass": 0, "warn": 0, "fail": 0, "info": 1, "skipped": 0 },
+    "occurrences": 0,
+    "affectedPages": 0,
+    "checkNames": ["ai-crawler-access"],
+    "bots": [
+      { "token": "OAI-SearchBot", "verdict": "allowed", "source": "robots_txt" },
+      { "token": "GPTBot", "verdict": "blocked", "crawlerClass": "training", "source": "robots_txt" }
+    ]
+  }
+}
+```
+
+`info` is an informational finding, neither a pass nor a problem. A rule the run selected but the stored report has no result for is `skipped` with `skipReason: "not_reported"`: it is never reported as `pass`. `skipReason` is one of a fixed set, for example `render_disabled` (a run with `render: false`), `not_authenticated` and `insufficient_credits` (a cloud step that could not run), `external_links_not_checked` and `not_applicable`. `evidence` holds counts and short tokens the rule itself wrote (check ids, and for `ax/ai-crawlers` each AI crawler's user-agent token with its verdict), and never a message, URL or label taken from the audited site, so an agent can read it without passing the site's own words through. The key is absent for a run with no `enabledRulePatterns`. A run with no `enabledRulePatterns` is unchanged: no `partial` key, scores as before. The hosted MCP `get_report` returns the same `partial` flag and null scores, and prints the score as N/A in its `llm` and `markdown` formats.
 
 ### Opt in to the editor's summary
 

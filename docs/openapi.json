@@ -1205,6 +1205,11 @@
                 "const": true,
                 "description": "Present, and `true`, only when the run was started with `config.enabledRulePatterns`: the report covers a subset of the rules, so a score computed from it would not be the site's score. `healthScore` and every `categories[].score` are `null` on a partial report (the counts still cover the rules that ran), and the top-level `includeFilter` says which rules ran. The key is absent for a run without an include filter, whose report is unchanged. A `disabledRulePatterns` list on its own does not make a report partial."
               },
+              "results": {
+                "type": "array",
+                "description": "Present only on a `partial` report: one entry for EVERY rule the run selected (the include filter less the disable lists), sorted by `ruleId`, so a client can tell a rule that passed from one that did not run. `topIssues` stays the human summary of warnings and failures. Nothing in an entry is text from the audited site: every field is an enum, a number, a boolean or a short token the rule itself wrote (a check id, an AI crawler's user-agent token). The key is absent for a run without an include filter.",
+                "items": { "$ref": "#/components/schemas/RuleResult" }
+              },
               "healthScore": {
                 "type": ["number", "null"],
                 "description": "The precise overall score from the report (a float, e.g. 82.5), read straight from the report JSON. Intentionally a `number` here — the rounded `integer` `healthScore` on `AuditRun`/`Report` mirrors the persisted DB column, while this is the unrounded source value. `null` for a failed or empty audit and for a `partial` report."
@@ -1562,6 +1567,64 @@
             "type": "array",
             "description": "Edges pointing at this node.",
             "items": { "$ref": "#/components/schemas/EntityMapEdge" }
+          }
+        }
+      },
+      "RuleResult": {
+        "type": "object",
+        "description": "What one rule a filtered run selected found, structured. Built from the stored report: a rule is `pass` only when it reported a passing check and nothing worse.",
+        "required": ["ruleId", "category", "name", "severity", "status", "evidence"],
+        "properties": {
+          "ruleId": { "type": "string", "description": "The rule id, as listed by `GET /v1/rules`." },
+          "category": { "type": "string" },
+          "name": { "type": "string", "description": "The rule's title." },
+          "severity": { "type": "string", "enum": ["error", "warning", "info"], "description": "The rule's default severity." },
+          "status": {
+            "type": "string",
+            "enum": ["pass", "warn", "fail", "info", "skipped", "not_applicable"],
+            "description": "The worst thing the rule reported, in the order `fail`, `warn`, `pass`, `info`. `info` is an informational finding that is neither a pass nor a problem. `skipped`: every check was skipped, or the stored report holds no result for the rule (`skipReason: not_reported`, never a pass). `not_applicable`: every skip says the rule does not apply to this site or page."
+          },
+          "skipReason": {
+            "type": "string",
+            "enum": ["not_authenticated", "insufficient_credits", "service_unavailable", "payload_too_large", "credit_cap_reached", "render_failed", "render_disabled", "not_prefetched", "not_applicable", "noindex", "page_type", "private_target", "ignored", "external_links_not_checked", "link_targets_not_fetched", "external_links_over_cap", "external_links_out_of_time", "tls_certificate_not_checked", "crawl_capped", "timed_out", "not_reported", "other"],
+            "description": "Why the rule was skipped or did not apply. Present only when `status` is `skipped` or `not_applicable`. `render_disabled` is a run with `render: false`; the cloud ones (`not_authenticated` .. `not_prefetched`) are the cloud steps the catalogue marks `requiresCloud` and `requiresRender`."
+          },
+          "evidence": { "$ref": "#/components/schemas/RuleResultEvidence" }
+        }
+      },
+      "RuleResultEvidence": {
+        "type": "object",
+        "description": "Typed evidence of one rule: counts and rule-authored tokens only, never a message, URL or label from the audited site.",
+        "required": ["checks", "occurrences", "affectedPages", "checkNames"],
+        "properties": {
+          "checks": {
+            "type": "object",
+            "description": "The rule's checks by status (across pages for a page rule). On a capped report the counts are the report's tallies.",
+            "required": ["pass", "warn", "fail", "info", "skipped"],
+            "properties": {
+              "pass": { "type": "integer" },
+              "warn": { "type": "integer" },
+              "fail": { "type": "integer" },
+              "info": { "type": "integer" },
+              "skipped": { "type": "integer" }
+            }
+          },
+          "occurrences": { "type": "integer", "description": "Failing and warning occurrences, a folded check counted by what it stands for." },
+          "affectedPages": { "type": "integer", "description": "Pages the widest failing or warning finding affects." },
+          "checkNames": { "type": "array", "items": { "type": "string" }, "description": "The rule's own check ids that ran, sorted, at most 20. An id that is not a plain token is left out." },
+          "bots": {
+            "type": "array",
+            "description": "Per-bot verdicts. Present only for `ax/ai-crawlers`.",
+            "items": {
+              "type": "object",
+              "required": ["token", "verdict", "source"],
+              "properties": {
+                "token": { "type": "string", "description": "The crawler's user-agent token from the rule's fixed list, for example `GPTBot`." },
+                "verdict": { "type": "string", "enum": ["allowed", "blocked"] },
+                "crawlerClass": { "type": "string", "enum": ["training", "ai-search", "user-action", "archive"], "description": "What the crawler is for. Present for blocked bots the rule classed." },
+                "source": { "type": "string", "enum": ["robots_txt"], "description": "Where the verdict was read from." }
+              }
+            }
           }
         }
       },
