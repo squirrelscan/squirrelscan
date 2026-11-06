@@ -17,10 +17,15 @@ How it works:
 
 ## [Unreleased]
 
+## v0.0.171 (2026-11-06)
+
+Audit rules can come from an allowlisted plugin, the CSP rule names first-party proxy paths, leaked-secret values are capped, and the cloud REST API documents a rule filter.
+
 ### Added
 
 - **`security/csp` reports a first-party proxy path that `'self'` trusts (#1604).** A policy that allows only `'self'` for scripts also allows a same-origin path that proxies third-party code. When a crawled script loads from a documented proxy prefix (`/_vercel/insights`, `/_vercel/speed-insights`, `/ingest`, `/stats`, `/plausible`, `/umami`), the rule adds an info check `csp-self-proxy-script` naming the path. The list is a fixed constant and the check reads only the header and the crawled script URLs, with no network. No rule meta text changed.
 - **`squirrel audit` runs audit rules from a plugin (#1599).** A plugin file that registers page and site rules, named in `[plugins]` in `squirrel.toml`, runs in the same pass as the built-in rules, so `--rule-include`, `--rule-exclude`, `[[ignore]]`, scoring and the report treat its issues the same way. A plugin loads only when `plugin_allowlist` in `~/.squirrel/settings.json` pins it: the id, the absolute path of the file and the SHA-256 of its contents. A project config alone never loads or runs a plugin file and can only select among pinned files, a bare id approves nothing, and the audit prints why a named plugin was skipped and the line to add. The pinned bytes are hashed and imported from a private copy under `~/.squirrel/plugin-cache/` (mode 0700, deleted after the load, refused when a `node_modules` sits above it), so a swap after the check runs nothing different. An approved plugin runs fully trusted: `allow` limits what an honest plugin registers and is not a sandbox. `register` may be async, and a throw or rejection fails the load naming the plugin. A plugin rule id lives in a namespace of its own and cannot replace a built-in rule: a clash fails the load and names the id. Plugin rules are left out of the public rule counts. An embedding host can pass an in-process plugin snapshot to `runStreamingRules`. See [Plugins](https://docs.squirrelscan.com/configuration/plugins).
+- The REST API docs describe `POST /v1/agent-runs` with a `config` object, an include-only `enabledRulePatterns` rule filter that uses the same matching as `--rule-include`, and `render` and `ephemeral` flags. The rule include and exclude matcher now lives in `@squirrelscan/rules`, so the CLI and the cloud API share one implementation; CLI behaviour is unchanged.
 
 ### Fixed
 
