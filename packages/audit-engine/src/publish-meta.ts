@@ -6,6 +6,7 @@
 import { NOT_CHECKED_SKIP_REASONS, type LockedRule } from "@squirrelscan/core-contracts";
 import {
   isNotApplicableCloudSkip,
+  isRenderDisabledCloudSkip,
   loadAllRules,
   UNWIRED_CLOUD_SERVICES,
   type Rule,
@@ -81,6 +82,13 @@ export function computeLockedRules(
       checks.length > 0 &&
       checks.every((c) => isNotApplicableCloudSkip(c.skipReason));
     if (notApplicable) continue;
+    // private#3792: a run configured not to render (`render: false`) skips the render
+    // rule on purpose; a paid run would skip it the same way, so it is not an upsell.
+    const renderDisabled =
+      checks != null &&
+      checks.length > 0 &&
+      checks.every((c) => isRenderDisabledCloudSkip(c.skipReason));
+    if (renderDisabled) continue;
     // repo#2729: a check the audit's settings turned off (external link
     // checking) is not something a cloud audit unlocks; the report's "Not
     // checked" note says what does.
