@@ -1177,7 +1177,7 @@
         "properties": {
           "includeFilter": {
             "type": "object",
-            "description": "Present only when the run was started with `config.enabledRulePatterns`: the report covers just that rule selection, so its scores and issue counts are not comparable to a full audit's.",
+            "description": "Present only when the run was started with `config.enabledRulePatterns`: the report covers just that rule selection, so its issue counts are not comparable to a full audit's and the report is `partial` (`report.partial` is true, and the overall and category scores are null).",
             "required": ["patterns", "rulesSelected", "rulesTotal", "note"],
             "properties": {
               "patterns": { "type": "array", "items": { "type": "string" } },
@@ -1200,11 +1200,20 @@
               "failed": { "type": "integer" },
               "warnings": { "type": "integer" },
               "passed": { "type": "integer" },
+              "partial": {
+                "type": "boolean",
+                "const": true,
+                "description": "Present, and `true`, only when the run was started with `config.enabledRulePatterns`: the report covers a subset of the rules, so a score computed from it would not be the site's score. `healthScore` and every `categories[].score` are `null` on a partial report (the counts still cover the rules that ran), and the top-level `includeFilter` says which rules ran. The key is absent for a run without an include filter, whose report is unchanged. A `disabledRulePatterns` list on its own does not make a report partial."
+              },
               "healthScore": {
                 "type": ["number", "null"],
-                "description": "The precise overall score from the report (a float, e.g. 82.5), read straight from the report JSON. Intentionally a `number` here — the rounded `integer` `healthScore` on `AuditRun`/`Report` mirrors the persisted DB column, while this is the unrounded source value."
+                "description": "The precise overall score from the report (a float, e.g. 82.5), read straight from the report JSON. Intentionally a `number` here — the rounded `integer` `healthScore` on `AuditRun`/`Report` mirrors the persisted DB column, while this is the unrounded source value. `null` for a failed or empty audit and for a `partial` report."
               },
-              "categories": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+              "categories": {
+                "type": "array",
+                "description": "Per-category counts and score. On a `partial` report each `score` is `null`.",
+                "items": { "type": "object", "properties": { "score": { "type": ["number", "null"] } }, "additionalProperties": true }
+              },
               "topIssues": {
                 "type": "array",
                 "description": "Up to 25 failing/warning checks, fails first.",

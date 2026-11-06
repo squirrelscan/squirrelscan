@@ -109,7 +109,7 @@ A request the API cannot honour as written is a `400` with code `VALIDATION_ERRO
 
 The create response carries `editorSummary` (boolean) and, when it is `false`, `editorSummarySkippedReason` (`rule-filtered run` or `disabled by the run config`). Both appear only when `enabledRulePatterns` or `editorSummary` was sent.
 
-The config a run reports in `GET /v1/agent-runs/{id}` can be sent back: the keys the server writes into it (`auditLevel`, `pageLimitNotice`, `creditClamp`, `renderMode` and the like) are accepted and dropped. The report of a run started with `enabledRulePatterns` carries a sibling `includeFilter` (the patterns and how many rules ran), because its scores and issue counts are not comparable to a full audit's.
+The config a run reports in `GET /v1/agent-runs/{id}` can be sent back: the keys the server writes into it (`auditLevel`, `pageLimitNotice`, `creditClamp`, `renderMode` and the like) are accepted and dropped. The report of a run started with `enabledRulePatterns` is **partial**: it carries `partial: true`, its `healthScore` and every category `score` are `null` (a score from a subset of the rules is not the site's score), and a sibling `includeFilter` says which rules ran (the patterns and how many). The counts and `topIssues` still cover the rules that ran. A run with no `enabledRulePatterns` is unchanged: no `partial` key, scores as before. The hosted MCP `get_report` returns the same `partial` flag and null scores, and prints the score as N/A in its `llm` and `markdown` formats.
 
 ### Opt in to the editor's summary
 
