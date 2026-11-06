@@ -326,7 +326,7 @@ squirrel report -f html -o report.html
 open report.html
 ```
 
-The local file and the published report at reports.squirrelscan.com are the same page. [See a live one](<https://reports.squirrelscan.com/01M5NJH51Q6FNRAA3QGW8GYWB6>), or read [how to read your report](/guides/read-your-report) for a walk through it.
+The local file and the published report are the same page. [See a live one](<https://reports.squirrelscan.com/01M5NJH51Q6FNRAA3QGW8GYWB6>), or read [how to read your report](/guides/read-your-report) for a walk through it.
 
 ![A squirrelscan report for squirrelscan.com. The header shows the site, 220 of 220 pages scanned, the Full audit level and a health score of 79 (C). A notice says 912 of 1412 external links were not checked. Four group cards show SEO 86 (B), Performance 59 (F), Security 95 (A) and Agents 42 (F), each with its error and warning counts. Below are pass, warning and fail totals, an auto-generated summary, and the first three ranked issues, each with a Copy fix prompt button.](/images/report/example-report.webp)
 
@@ -752,7 +752,7 @@ rm -rf ~/.local/share/squirrel/audits.db
 
 ## Publishing reports
 
-Share audit reports online by publishing to `reports.squirrelscan.com`. Published reports can be shared with clients, included in documentation, or consumed programmatically by LLMs and CI pipelines.
+Share audit reports online by publishing them. Each org's reports live on their own address under `squirrel.report` (see [Report address](#report-address)). Published reports can be shared with clients, included in documentation, or consumed programmatically by LLMs and CI pipelines.
 
 <Note>
 Publishing requires authentication. Run `squirrel auth login` first.
@@ -794,8 +794,21 @@ squirrel report a7b3c2d1 --publish --visibility unlisted
 The CLI prints the published URL:
 
 ```text
-https://reports.squirrelscan.com/SJEItpldwW
+https://acme.squirrel.report/SJEItpldwW
 ```
+
+### Report address
+
+Published reports are served from `squirrel.report`, a domain of their own that shares nothing with the app, so a report page never sits next to your signed-in session.
+
+- Your org's reports live at `https://<address>.squirrel.report/<report id>`. Owners and admins set the address in the dashboard under Settings, Details, Report address.
+- An org that has not set one is served from the shared address, `https://r.squirrel.report/<report id>`.
+- The address is separate from your org slug. Renaming the slug does not change it.
+- Links never break. A report asked for on any other address redirects to its own, so changing your address, or an old `reports.squirrelscan.com` or `rep.squirrelscan.com` link, still lands on the report.
+- Reports are not indexed by search engines unless their visibility is `public`.
+- Report pages set no cookies and load their images from `assets.squirrel.report`.
+
+Badges stay at `reports.squirrelscan.com/b/...`, so embeds keep working. See [badges](/guides/badges).
 
 ### Visibility
 
@@ -832,26 +845,28 @@ Published reports support multiple output formats. Append a file extension to th
 
 | Format | URL | Use Case |
 |--------|-----|----------|
-| HTML | [/SJEItpldwW](https://reports.squirrelscan.com/SJEItpldwW) | Browser viewing (default) |
-| JSON | [/SJEItpldwW.json](https://reports.squirrelscan.com/SJEItpldwW.json) | CI/CD, programmatic access |
-| Markdown | [/SJEItpldwW.md](https://reports.squirrelscan.com/SJEItpldwW.md) | Documentation, READMEs |
-| Plain Text | [/SJEItpldwW.txt](https://reports.squirrelscan.com/SJEItpldwW.txt) | Email, logs |
-| XML | [/SJEItpldwW.xml](https://reports.squirrelscan.com/SJEItpldwW.xml) | Enterprise integration |
-| LLM | [/SJEItpldwW.llm](https://reports.squirrelscan.com/SJEItpldwW.llm) | Coding agents, token-efficient |
+| HTML | [/SJEItpldwW](https://r.squirrel.report/SJEItpldwW) | Browser viewing (default) |
+| JSON | [/SJEItpldwW.json](https://r.squirrel.report/SJEItpldwW.json) | CI/CD, programmatic access |
+| Markdown | [/SJEItpldwW.md](https://r.squirrel.report/SJEItpldwW.md) | Documentation, READMEs |
+| Plain Text | [/SJEItpldwW.txt](https://r.squirrel.report/SJEItpldwW.txt) | Email, logs |
+| XML | [/SJEItpldwW.xml](https://r.squirrel.report/SJEItpldwW.xml) | Enterprise integration |
+| LLM | [/SJEItpldwW.llm](https://r.squirrel.report/SJEItpldwW.llm) | Coding agents, token-efficient |
 
 Every format is the same capped summary, the JSON included: each issue keeps up to 10 example pages and 5 items beside its true counts, which the JSON carries in a sampled check's `details` (`pagesTruncated` for pages, `occurrences` for per-page checks, `additional` for items left out). The HTML, markdown and text formats print that count beside the items they list, for example `1 item, 37 more not listed`, or on its own (`1,500 items not listed`) for an issue that lists none. The console adds it to its `... +N more` line after the first 5 items, or prints it on its own the same way. The llm format counts it in each rule's item total (`Items (5/1152):`, or `Items (0/1500): none listed` when nothing is listed), and the XML gives it as a `not-listed` attribute on the check's `<items>` element (`<items count="0" not-listed="1500"/>` when nothing is listed). When a rule's issues reach different pages, the JSON's top-level `rulePageCounts` gives that rule's exact page count, which adding up its sampled issues cannot. Its top-level `linkTargetSets` holds, for each link rule, short hashes of every target the rule reported broken and every one it could not verify, so a later audit can tell a newly broken link from one that was already broken. A set marked `complete: false` holds only some of them. No format renders it. A capped report says so in its top-level `detail` field, and every format of a capped report prints one line saying where the full list is. See [size cap on large sites](#size-cap-on-large-sites).
+
+Any address works for a published report: one that is not the report's own redirects to it, so `curl` needs `-L`.
 
 Without an extension, the format is determined by the `Accept` header. Browsers receive HTML, while tools like `curl` can request specific formats:
 
 ```bash
 # Get JSON via Accept header
-curl -H "Accept: application/json" https://reports.squirrelscan.com/SJEItpldwW
+curl -L -H "Accept: application/json" https://r.squirrel.report/SJEItpldwW
 
 # Get JSON via extension (simpler)
-curl https://reports.squirrelscan.com/SJEItpldwW.json
+curl -L https://r.squirrel.report/SJEItpldwW.json
 
 # Pipe LLM format to Claude
-curl -s https://reports.squirrelscan.com/SJEItpldwW.llm | claude "prioritize fixes"
+curl -sL https://r.squirrel.report/SJEItpldwW.llm | claude "prioritize fixes"
 ```
 
 ### Size cap on large sites
