@@ -61,7 +61,7 @@ const builtInNamespaces: RuleNamespace[] = [
   { name: "gaps", rules: gapsRules },
 ];
 
-interface LoaderOptions {
+export interface LoaderOptions {
   additionalNamespaces?: RuleNamespace[];
   /** Include available rules that require an explicit selection. */
   includeOptIn?: boolean;
