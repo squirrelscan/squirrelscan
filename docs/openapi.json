@@ -34,6 +34,10 @@
       "description": "Publish, list, and manage audit reports."
     },
     {
+      "name": "Rules",
+      "description": "The audit rule catalogue, for building `enabledRulePatterns` and `disabledRulePatterns`."
+    },
+    {
       "name": "Credits",
       "description": "Read the active organization's credit balance and pricing."
     },
@@ -584,6 +588,26 @@
           "401": { "$ref": "#/components/responses/Unauthorized" },
           "403": { "$ref": "#/components/responses/Forbidden" },
           "404": { "$ref": "#/components/responses/NotFound" },
+          "429": { "$ref": "#/components/responses/RateLimited" }
+        }
+      }
+    },
+    "/v1/rules": {
+      "get": {
+        "tags": ["Rules"],
+        "summary": "List audit rules",
+        "description": "The rule catalogue, grouped by category and sorted by category priority. Use it to build `enabledRulePatterns` and `disabledRulePatterns` for `POST /v1/agent-runs`: a pattern is a category code (`ax`), a category glob (`ax/*`) or an exact rule `id` (`core/robots-meta`). Each rule says whether it `requiresCloud` (reads a cloud-backed step: slower and credit-metered) and whether it `requiresRender` (reads the render step, so it is skipped on a run with `render: false`). The catalogue is the same for every caller and changes only when a new engine version ships, so the response is cacheable (`Cache-Control: public, max-age=3600`). Opt-in rules (`gaps/*`) are not listed and cannot be selected. The hosted MCP `list_rules` and `get_rule` tools return the same fields as `requires_cloud` and `requires_render`.",
+        "operationId": "listRules",
+        "responses": {
+          "200": {
+            "description": "The rule catalogue.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/RuleCatalog" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
           "429": { "$ref": "#/components/responses/RateLimited" }
         }
       }
@@ -1530,6 +1554,46 @@
             "description": "Edges pointing at this node.",
             "items": { "$ref": "#/components/schemas/EntityMapEdge" }
           }
+        }
+      },
+      "RuleCatalogEntry": {
+        "type": "object",
+        "description": "One audit rule.",
+        "required": ["id", "name", "description", "category", "severity", "weight", "cloud", "requiresCloud", "requiresRender"],
+        "properties": {
+          "id": { "type": "string", "description": "The rule id (`category/slug`), also an exact pattern for `enabledRulePatterns` and `disabledRulePatterns`.", "examples": ["core/robots-meta"] },
+          "name": { "type": "string", "description": "The rule's title." },
+          "description": { "type": "string", "description": "What the rule checks." },
+          "category": { "type": "string", "description": "The category code the rule sits in (the same as its parent category's `code`)." },
+          "severity": { "type": "string", "enum": ["error", "warning", "info"], "description": "The rule's default severity." },
+          "weight": { "type": "number", "description": "The rule's weight in the score." },
+          "solution": { "type": "string", "description": "How to fix what the rule reports, when the rule has guidance." },
+          "cloud": { "type": "boolean", "description": "The same as `requiresCloud`, kept for older clients." },
+          "requiresCloud": { "type": "boolean", "description": "True when the rule reads a cloud-backed step. Such rules are slower and credit-metered." },
+          "requiresRender": { "type": "boolean", "description": "True when the rule reads the render step (a headless-browser pass). It is skipped on a run with `render: false`." },
+          "creditFeature": { "type": "string", "description": "The credit feature a cloud-backed rule is billed under. Present only when `requiresCloud` is true." },
+          "creditCost": { "type": "number", "description": "Credits per unit for `creditFeature`. Present only when `requiresCloud` is true." },
+          "creditUnit": { "type": "string", "description": "The billing unit for `creditCost` (`page`, `url`, `run`, ...). Present only when `requiresCloud` is true." }
+        }
+      },
+      "RuleCatalogCategory": {
+        "type": "object",
+        "required": ["code", "name", "description", "priority", "group", "rules"],
+        "properties": {
+          "code": { "type": "string", "description": "The category code: a bare pattern for `enabledRulePatterns` (`ax`) or a glob with `/*` (`ax/*`)." },
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "priority": { "type": "integer", "description": "Sort order: categories are listed by descending priority." },
+          "group": { "type": "string", "description": "The top-level group the category rolls up into (for example `seo`)." },
+          "rules": { "type": "array", "items": { "$ref": "#/components/schemas/RuleCatalogEntry" } }
+        }
+      },
+      "RuleCatalog": {
+        "type": "object",
+        "required": ["totalRules", "categories"],
+        "properties": {
+          "totalRules": { "type": "integer", "description": "Rules in the catalogue, across all categories." },
+          "categories": { "type": "array", "items": { "$ref": "#/components/schemas/RuleCatalogCategory" } }
         }
       },
       "CreditsResponse": {

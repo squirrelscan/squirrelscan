@@ -152,6 +152,7 @@
               "api/audits/list",
               "api/audits/get",
               "api/audits/get-report",
+              "api/rules/list",
               "api/reports/publish",
               "api/reports/list",
               "api/reports/get",
