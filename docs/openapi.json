@@ -47,7 +47,7 @@
       "post": {
         "tags": ["Audits"],
         "summary": "Create an audit run",
-        "description": "Start a new cloud audit run. Send a `url` and, optionally, a `config` object (for example `{\"maxPages\":1,\"enabledRulePatterns\":[\"ax/*\",\"core/robots-meta\"],\"render\":false,\"ephemeral\":true}`). With `trigger: \"api\"` (the default) the run is dispatched to the cloud crawler immediately and progresses asynchronously; poll `GET /v1/agent-runs/{id}` for status. Cloud features are credit-gated. If the requested page count exceeds the org's plan ceiling, the run still starts at the plan's max (clamp, never a hard error) and the response carries a `notice` field (`type: \"page_limit_clamped\"`) saying so.",
+        "description": "Start a new cloud audit run. Send a `url` and, optionally, a `config` object (for example `{\"maxPages\":1,\"enabledRulePatterns\":[\"ax/*\",\"core/robots-meta\"],\"disabledRulePatterns\":[\"ai/page-type-match\",\"ai/site-metadata\",\"ai/llm-parsability\"],\"render\":false,\"externalLinksEnabled\":false,\"ephemeral\":true}`). With an API key the run is dispatched to the cloud crawler immediately (`trigger` defaults to `api`) and progresses asynchronously; poll `GET /v1/agent-runs/{id}` for status. Cloud features are credit-gated. If the requested page count exceeds the org's plan ceiling, the run still starts at the plan's max (clamp, never a hard error) and the response carries a `notice` field (`type: \"page_limit_clamped\"`) saying so. A request the API cannot honour as written (an unknown `config` key, a rule pattern that matches nothing, a selection that leaves no rule to run) is a 400 `VALIDATION_ERROR` and nothing is charged or started.",
         "operationId": "createAuditRun",
         "requestBody": {
           "required": true,
@@ -66,9 +66,92 @@
               }
             }
           },
-          "400": { "$ref": "#/components/responses/ValidationError" },
+          "400": {
+            "description": "Request failed validation, or a `config` the API cannot honour: invalid JSON, a non-object, an unknown key, a wrongly typed `maxPages`, `coverageMode`, `externalLinksEnabled`, `render` or `ephemeral`, a bad `enabledRulePatterns` or `disabledRulePatterns` (unknown category, a pattern that matches no rule, over the caps; `error.patterns` lists the entries at fault), a rule selection the disable list leaves empty, `auditId` sent with `config.ephemeral`, or a session caller omitting `trigger`. Also `INVALID_URL` and `NON_PUBLIC_HOST` for a URL that cannot be audited. `error.issues` lists up to 10 failed fields (`{ path, message }`); `error.truncated: true` and `error.totalIssues` give the full count.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "error": {
+                    "code": "VALIDATION_ERROR",
+                    "message": "Request failed validation",
+                    "patterns": ["core/robots-metaa"],
+                    "issues": [
+                      {
+                        "path": "config.enabledRulePatterns",
+                        "message": "enabledRulePatterns has entries that match no rule: core/robots-metaa. A pattern is a category (ax), a category glob (ax/*) or an exact rule id (core/robots-meta), as listed by GET /v1/rules."
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
           "401": { "$ref": "#/components/responses/Unauthorized" },
-          "429": { "$ref": "#/components/responses/RateLimited" },
+          "402": {
+            "description": "Not enough credits for the audit base (`INSUFFICIENT_CREDITS`, with `error.required`, `error.balance` and, when an upgrade is on offer, `error.upgrade`), a per-audit credit cap smaller than a one-page audit (`CAP_EXCEEDED`), or a website limit reached (`WEBSITE_LIMIT`). Nothing is started.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "error": {
+                    "code": "INSUFFICIENT_CREDITS",
+                    "message": "Insufficient credits for the audit base",
+                    "required": 52,
+                    "balance": { "total": 10 }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "No active organization (`NO_ORG`), the organization is locked (`ORG_LOCKED`), or the credential may not run audits here (`FORBIDDEN`).",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": { "error": { "code": "NO_ORG", "message": "No active organization" } }
+              }
+            }
+          },
+          "404": {
+            "description": "`websiteId` names no website the caller can use (`WEBSITE_NOT_FOUND`).",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": { "error": { "code": "WEBSITE_NOT_FOUND", "message": "Website not found" } }
+              }
+            }
+          },
+          "409": {
+            "description": "`auditId` already names an audit on this website (`AUDIT_ID_IN_USE`).",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "error": {
+                    "code": "AUDIT_ID_IN_USE",
+                    "message": "auditId already exists on this website. Omit it to have one generated."
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (`RATE_LIMITED`), the organization's audit queue is full (`QUEUE_FULL`, with `error.queued` and `error.maxQueued`), the target host is at its crawl limit (`HOST_RATE_LIMITED`, with `Retry-After`), or the organization already holds the maximum live one-shot websites for `config.ephemeral` (`EPHEMERAL_LIMIT`, with `error.active` and `error.limit`). Nothing is charged.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "error": {
+                    "code": "EPHEMERAL_LIMIT",
+                    "message": "This organization already has 5 one-shot audits in flight (the limit is 5). Wait for them to finish, or audit a website the organization tracks.",
+                    "active": 5,
+                    "limit": 5
+                  }
+                }
+              }
+            }
+          },
           "502": {
             "description": "Failed to dispatch the cloud audit (upstream crawler/sandbox unavailable). Typed envelope with code `UPSTREAM_ERROR`; the upstream cause is carried under `error.reason`.",
             "content": {
@@ -908,12 +991,12 @@
             "type": "string",
             "enum": ["api"],
             "default": "api",
-            "description": "Run origin. Optional: public API callers get `api`, which dispatches the cloud crawler, whether they send it or not. (`cli`/`github`/`scheduled` are internal-origin values that skip cloud dispatch and are not accepted here.)"
+            "description": "Run origin. Optional for an API key, which gets `api` (it dispatches the cloud crawler) whether it sends it or not. A signed-in session must send it: omitting it is a 400. (`cli`/`github`/`scheduled` are internal-origin values that skip cloud dispatch and are not accepted here.)"
           },
           "mode": { "allOf": [{ "$ref": "#/components/schemas/AuditRunMode" }], "default": "audit" },
           "model": { "type": "string" },
           "config": {
-            "description": "Optional run config: an object (preferred) or the same object as a JSON-encoded string (the older form, still accepted). A string that is not valid JSON, a value that is not an object, a key outside the list below, or a bad value for `enabledRulePatterns`, `render` or `ephemeral` is a 400 `VALIDATION_ERROR` (nothing is started or charged); it is never silently ignored. Keys the server owns (such as `renderMode`, `maxDepth`, `maxCredits`) are accepted from an echoed run config and dropped. `AuditRun.config` is returned as a parsed object.",
+            "description": "Optional run config: an object (preferred) or the same object as a JSON-encoded string (the older form, still accepted). A string that is not valid JSON, a value that is not an object, a key outside `CreateAuditRunConfig`, or a wrongly typed or invalid value is a 400 `VALIDATION_ERROR` (nothing is started or charged); it is never silently ignored. The config a run reports back in `GET /v1/agent-runs/{id}` can be sent again: the keys the server writes into it (listed in `CreateAuditRunConfig`) are accepted and dropped, and the run's own values are used instead. A completed run's config can also hold keys written during the run (timings, billing, failure detail); those are not accepted.",
             "oneOf": [
               { "$ref": "#/components/schemas/CreateAuditRunConfig" },
               { "type": "string", "description": "The config object, JSON-encoded." }
@@ -926,22 +1009,26 @@
       },
       "CreateAuditRunConfig": {
         "type": "object",
-        "additionalProperties": false,
-        "description": "The `config` of a create-run request. Unknown keys are refused.",
+        "description": "The `config` of a create-run request. Unknown keys are refused. Also accepted and dropped, because the server writes them into a run's config and a caller may echo it back: `maxCredits`, `renderMode`, `maxDepth`, `respectRobots`, `pageLimitNotice`, `creditClamp`, `levelLimitNotice`, `auditLevel`, `ruleSelection`, `crawlScope`, `crawlPolicy`, `containerPlanId`, `containerClassName`, `dispatchSite`, `source`, `internal`.",
         "properties": {
-          "coverageMode": { "type": "string", "description": "Crawl depth for this run (held to what the plan may crawl)." },
-          "maxPages": { "type": "integer", "description": "Pages to audit. `1` audits just the entry URL. Above the plan ceiling the run is clamped and the response carries a `notice`." },
-          "disabledRulePatterns": { "type": "array", "items": { "type": "string" }, "description": "Rules to switch off for this run: rule ids (`eeat/about-page`) or category globs (`eeat/*`), added to the website's own disable list." },
+          "coverageMode": { "type": "string", "enum": ["quick", "surface", "full"], "description": "Crawl depth for this run (held to what the plan may crawl)." },
+          "maxPages": { "type": "integer", "minimum": 1, "description": "Pages to audit. `1` audits just the entry URL. Above the plan ceiling the run is clamped and the response carries a `notice`." },
+          "disabledRulePatterns": {
+            "type": "array",
+            "maxItems": 50,
+            "items": { "type": "string", "maxLength": 100, "pattern": "^[A-Za-z0-9_./*-]+$" },
+            "description": "Rules that do NOT run, added to the website's own disable list. The same patterns, matching, limits and errors as `enabledRulePatterns` (a category, a category glob or an exact rule id; an unknown category or a pattern that matches no rule is a 400 listing it in `error.patterns`). May be empty. **Disable wins:** a rule named here does not run even when `enabledRulePatterns` selects it, as in a lint config. Caution: `ai/*` is an alias of the whole `ax` category and switches off every `ax` rule; name the three legacy `ai/` rule ids exactly (`ai/llm-parsability`, `ai/page-type-match`, `ai/site-metadata`)."
+          },
           "enabledRulePatterns": {
             "type": "array",
             "minItems": 1,
             "maxItems": 50,
             "items": { "type": "string", "maxLength": 100, "pattern": "^[A-Za-z0-9_./*-]+$" },
-            "description": "Run ONLY the rules these patterns select (an include filter). A pattern is a category (`ax`), a category glob (`ax/*`) or an exact rule id (`core/robots-meta`): the same patterns, with the same meaning, as the CLI's `--rule-include` (list them with `GET /v1/rules`). At most 50 patterns of at most 100 characters; letters, digits and `-_./*` only (no commas, spaces, regular expressions or control characters). A pattern that matches no rule, an unknown category, or a list that `disabledRulePatterns` (or the website's disable list) leaves with no rule is a 400 `VALIDATION_ERROR` whose `error.patterns` lists the offenders: it never starts an empty run. Opt-in rules (`gaps/*`) are not selectable here. The report covers only the selected rules (its overall score is not comparable to a full audit's). Price is unchanged."
+            "description": "Run ONLY the rules these patterns select (an include filter). A pattern is a category (`ax`), a category glob (`ax/*`) or an exact rule id (`core/robots-meta`): the same patterns, with the same meaning, as the CLI's `--rule-include` (list them with `GET /v1/rules`). At most 50 patterns of at most 100 characters; letters, digits and `-_./*` only (no commas, spaces, regular expressions or control characters). A pattern that matches no rule, an unknown category, or a selection that `disabledRulePatterns` (or the website's disable list) leaves with no rule is a 400 `VALIDATION_ERROR` whose `error.patterns` lists the offenders: it never starts an empty run. `ax` includes the three rules that kept the legacy `ai/` id prefix (`ai/llm-parsability`, `ai/page-type-match`, `ai/site-metadata`): they are the cloud-backed ones, slower and credit-metered, so a caller that wants the plain robots, llms.txt and agent-signal rules disables those three by exact id. Opt-in rules (`gaps/*`) are not selectable here. The report covers only the selected rules (`includeFilter` on `GET /v1/agent-runs/{id}/report` says so); its overall score is not comparable to a full audit's. Price is unchanged."
           },
-          "externalLinksEnabled": { "type": "boolean", "description": "Check external links for this run (each distinct link the cloud verifies costs 1 credit). Overrides the website's setting." },
+          "externalLinksEnabled": { "type": "boolean", "description": "Check external links for this run (each distinct link the cloud verifies costs 1 credit). Overrides the website's setting; a run with no website follows the default, which is on." },
           "render": { "type": "boolean", "description": "Browser-render the pages the crawl fetches. `false` fetches every page over plain HTTP, with no per-page headless browser; `true` renders every page, held to what the plan may render. Omit it to follow the website's setting (a run with no website renders). Same meaning as `render` on the MCP `run_audit`. Price is unchanged." },
-          "ephemeral": { "type": "boolean", "description": "One-shot check, with the exact semantics of `ephemeral` on the MCP `run_audit`: when the run creates the website, that website is exempt from the plan's website cap, is hidden from website listings, and is removed automatically once the run finishes. The RUN and its report are NOT purged: `GET /v1/agent-runs/{id}` and `/report` keep working and the run stays in `GET /v1/agent-runs`. Ignored when the domain is already tracked by the organization or `websiteId` is sent (the run goes against the existing website, nothing is deleted); the response then carries `ephemeral: false` and `ephemeralIgnoredReason`." }
+          "ephemeral": { "type": "boolean", "description": "One-shot check, with the exact semantics of `ephemeral` on the MCP `run_audit`: when the run creates the website, that website is exempt from the plan's website cap, is hidden from website listings, and is ARCHIVED automatically once the run finishes. The RUN and its report are NOT purged (a purge is planned, not shipped): `GET /v1/agent-runs/{id}` and `/report` keep working and the run stays in `GET /v1/agent-runs`. At most 5 one-shot websites may be live per organization (429 `EPHEMERAL_LIMIT`), and the credit check happens before the hidden website is created. Ignored when the organization already tracks the domain, or `websiteId` is sent (the run goes against that website, nothing is deleted); the response then carries `ephemeral: false` and an `ephemeralIgnoredReason`. Cannot be combined with `auditId`." }
         }
       },
       "CreateAuditRunResponse": {
@@ -949,9 +1036,10 @@
         "required": ["id", "status", "createdAt"],
         "properties": {
           "id": { "type": "string" },
-          "status": { "type": "string", "const": "pending" },
+          "status": { "type": "string", "enum": ["pending", "queued"], "description": "`pending` once dispatched; `queued` when the run is waiting for a container slot and starts by itself (the response then carries `queue`)." },
           "createdAt": { "type": "string", "format": "date-time" },
           "notice": { "$ref": "#/components/schemas/PageLimitClampNotice" },
+          "disabledRulePatterns": { "type": "array", "items": { "type": "string" }, "description": "The disable list this request sent, as expanded. Present only when `config.disabledRulePatterns` was sent and not empty." },
           "enabledRulePatterns": { "type": "array", "items": { "type": "string" }, "description": "The include filter the run applies, as expanded (`ax` becomes `ax/*`). Present only when `config.enabledRulePatterns` was sent." },
           "render": { "type": "boolean", "description": "Whether the run renders pages. Present only when `config.render` was sent." },
           "ephemeral": { "type": "boolean", "description": "Whether the one-shot treatment applies. Present only when `config.ephemeral` was sent." },
@@ -1060,6 +1148,17 @@
         "description": "Summarized report data + top scored issues for a completed run, wrapped under `report`.",
         "required": ["report"],
         "properties": {
+          "includeFilter": {
+            "type": "object",
+            "description": "Present only when the run was started with `config.enabledRulePatterns`: the report covers just that rule selection, so its scores and issue counts are not comparable to a full audit's.",
+            "required": ["patterns", "rulesSelected", "rulesTotal", "note"],
+            "properties": {
+              "patterns": { "type": "array", "items": { "type": "string" } },
+              "rulesSelected": { "type": "integer", "description": "Rules the filter selects, after the disable lists." },
+              "rulesTotal": { "type": "integer" },
+              "note": { "type": "string" }
+            }
+          },
           "report": {
             "type": "object",
             "required": ["id", "url", "visibility", "baseUrl"],

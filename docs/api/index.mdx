@@ -65,7 +65,7 @@ and never charged. To check a site's links, run an audit
 
 ## Start a run with a rule filter
 
-`POST /v1/agent-runs` takes the run's settings as a `config` object. This request audits one page, runs only the `ax` rules plus `core/robots-meta`, skips the headless browser and treats the site as a one-shot check:
+`POST /v1/agent-runs` takes the run's settings as a `config` object. This request audits one page and runs the `ax` rules plus `core/robots-meta`, minus the three cloud-backed `ai/` rules. It skips the headless browser and external link checks, and treats the site as a one-shot check:
 
 ```bash
 curl -X POST https://api.squirrelscan.com/v1/agent-runs \
@@ -76,24 +76,40 @@ curl -X POST https://api.squirrelscan.com/v1/agent-runs \
     "config": {
       "maxPages": 1,
       "enabledRulePatterns": ["ax/*", "core/robots-meta"],
+      "disabledRulePatterns": ["ai/page-type-match", "ai/site-metadata", "ai/llm-parsability"],
       "render": false,
+      "externalLinksEnabled": false,
       "ephemeral": true
     }
   }'
 ```
 
-The response is `201` with the run `id`. Poll `GET /v1/agent-runs/{id}` until `status` is `completed`, then read `GET /v1/agent-runs/{id}/report`. `trigger` defaults to `api`, and `config` may also be sent as a JSON-encoded string, the older form.
+The response is `201` with the run `id`. Poll `GET /v1/agent-runs/{id}` until `status` is `completed`, then read `GET /v1/agent-runs/{id}/report`. With an API key `trigger` defaults to `api`; a signed-in session has to send it. `config` may also be sent as a JSON-encoded string, the older form.
+
+### Two sets, like a lint config
+
+`enabledRulePatterns` is the include set: only the rules it selects run. `disabledRulePatterns` is the disable set: the rules it names do not run. A run's rules are the include set minus the disable set, and **disable wins**: a rule named in both does not run. Leave `enabledRulePatterns` out to start from every rule. The website's own `disable_rules` are added to the disable set.
+
+Both lists take the same patterns, with the same matching, limits and errors as the CLI's [`--rule-include` and `--rule-exclude`](/cli/audit): a category (`ax`), a category glob (`ax/*`) or an exact rule id (`core/robots-meta`). List ids with `GET /v1/rules`. At most 50 patterns of at most 100 characters each, using letters, digits and `-_./*`: no commas, spaces, regular expressions or control characters. Opt-in rules (`gaps/*`) cannot be selected.
+
+<Warning>
+`ax` includes three rules that kept the older `ai/` id prefix: `ai/llm-parsability`, `ai/page-type-match` and `ai/site-metadata`. They are the cloud-backed ones (the ai-parse and site-metadata services), so they are slower and credit-metered, and `ax/*` and `--rule-include ax` select them exactly as the CLI does. To leave them out, name their three exact ids in `disabledRulePatterns`, as in the example. Do not disable `ai/*`: `ai` is an alias of the whole `ax` category, so that glob switches off every `ax` rule.
+</Warning>
 
 | `config` key | What it does |
 |--------------|--------------|
-| `enabledRulePatterns` | Run only the rules these patterns select. A pattern is a category (`ax`), a category glob (`ax/*`) or an exact rule id (`core/robots-meta`), the same patterns and the same matching as the CLI's [`--rule-include`](/cli/audit). List ids with `GET /v1/rules`. At most 50 patterns of at most 100 characters, using letters, digits and `-_./*`. The website's `disable_rules` and `disabledRulePatterns` still apply on top. Opt-in rules (`gaps/*`) cannot be selected. |
+| `enabledRulePatterns` | The include set, above. Never empty. |
+| `disabledRulePatterns` | The disable set, above. May be empty. |
 | `render` | `false` fetches every page over plain HTTP with no per-page headless browser. `true` renders every page, within what the plan allows. Leave it out to follow the website's setting. Rendering does not change the price. |
-| `ephemeral` | The same one-shot check as `ephemeral` on the MCP `run_audit`. If the run creates the website, that website skips the plan's website limit, stays out of website listings and is removed once the run ends. The run and its report are **not** purged: `GET /v1/agent-runs/{id}` and the report keep working, and the run stays in `GET /v1/agent-runs`. If the organization already tracks the domain, or you send `websiteId`, the run uses that website, nothing is deleted, and the response has `ephemeral: false` with an `ephemeralIgnoredReason`. |
+| `externalLinksEnabled` | Check external links for this run. Each distinct link the cloud verifies costs 1 credit, so a one-page check that does not need them sends `false`. |
+| `ephemeral` | The same one-shot check as `ephemeral` on the MCP `run_audit`. If the run creates the website, that website skips the plan's website limit, stays out of website listings and is **archived** once the run ends. The run and its report are **not purged**, until a purge ships: `GET /v1/agent-runs/{id}` and the report keep working, and the run stays in `GET /v1/agent-runs`. An organization can hold at most 5 live one-shot websites (`429`, code `EPHEMERAL_LIMIT`). If the organization already tracks the domain, or you send `websiteId`, the run uses that website, nothing is deleted, and the response has `ephemeral: false` with an `ephemeralIgnoredReason`. Cannot be combined with `auditId`. |
 
-A `config` the API cannot honour is a `400` with code `VALIDATION_ERROR`, and nothing is charged or started: invalid JSON, a value that is not an object, an unknown key, a `render` or `ephemeral` that is not a boolean, or a bad `enabledRulePatterns`. For the filter, `error.patterns` lists the entries at fault: an unknown category, a pattern that matches no rule (`core/robots-metaa`), a list over the caps, or a list the disable settings leave with no rule to run.
+A request the API cannot honour as written is a `400` with code `VALIDATION_ERROR`, and nothing is charged or started: invalid JSON, a value that is not an object, an unknown `config` key, a wrongly typed `maxPages`, `coverageMode`, `externalLinksEnabled`, `render` or `ephemeral`, or a bad rule list. For a rule list, `error.patterns` names the entries at fault: an unknown category, a pattern that matches no rule (`core/robots-metaa`), or a list over the limits. A selection that the disable set leaves with no rule to run is refused too. The other refusals use their own codes: `402` `INSUFFICIENT_CREDITS` (checked before a one-shot website is created), `429` `QUEUE_FULL` and `EPHEMERAL_LIMIT`, `404` `WEBSITE_NOT_FOUND`, `409` `AUDIT_ID_IN_USE`.
+
+The config a run reports in `GET /v1/agent-runs/{id}` can be sent back: the keys the server writes into it (`auditLevel`, `pageLimitNotice`, `creditClamp`, `renderMode` and the like) are accepted and dropped. The report of a run started with `enabledRulePatterns` carries a sibling `includeFilter` (the patterns and how many rules ran), because its scores and issue counts are not comparable to a full audit's.
 
 <Note>
-`ax/*` selects every rule filed under the `ax` category, including the three that kept the older `ai/` id prefix (`ai/llm-parsability`, `ai/page-type-match`, `ai/site-metadata`), exactly as `squirrel audit --rule-include ax` does. To leave some out, add their exact ids to `disabledRulePatterns`. A run that selects a subset reports only those rules, so its overall score is not comparable to a full audit's.
+The hosted MCP `run_audit` takes the same two sets as `rules` and `disable_rules`, with the same validation and the same errors. See [MCP](/developers/mcp).
 </Note>
 
 ## Error envelope
@@ -119,7 +135,7 @@ Common codes: `UNAUTHORIZED`, `FORBIDDEN`, `NO_ORG`, `NOT_FOUND`,
 `VALIDATION_ERROR`, `INVALID_JSON`, `PAYLOAD_TOO_LARGE`, `SECURITY_VIOLATION`,
 `INSUFFICIENT_CREDITS` (with `error.required` / `error.balance`),
 `DUPLICATE_REQUEST`, `RUN_NOT_ACTIVE`, `UPSTREAM_ERROR` (with `error.reason`),
-`RATE_LIMITED`.
+`RATE_LIMITED`, `QUEUE_FULL`, `EPHEMERAL_LIMIT`.
 
 `SECURITY_VIOLATION` (`400`) is returned by `POST /v1/reports` when the report
 payload trips the content security scanner; `error.threats` lists the matched
