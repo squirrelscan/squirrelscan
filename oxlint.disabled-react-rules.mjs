@@ -25,7 +25,7 @@ export const disabledReactRules = {
   "react/react-compiler": "off",
   "react/self-closing-comp": "off",
 
-  // react-doctor (40 rules)
+  // react-doctor (41 rules)
   "react-doctor/async-await-in-loop": "off",
   "react-doctor/async-defer-await": "off",
   "react-doctor/async-parallel": "off",
@@ -42,6 +42,7 @@ export const disabledReactRules = {
   "react-doctor/no-derived-state": "off",
   "react-doctor/no-derived-state-effect": "off",
   "react-doctor/no-derived-useState": "off",
+  "react-doctor/no-dynamic-import-path": "off",
   "react-doctor/no-effect-chain": "off",
   "react-doctor/no-event-handler": "off",
   "react-doctor/no-fetch-in-effect": "off",
