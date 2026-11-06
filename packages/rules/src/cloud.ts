@@ -19,6 +19,7 @@ export type CloudSkipReason =
   | "credit-cap-reached" // hit `[cloud].max_credits_per_audit`
   | "not-applicable" // Stage-1 gating (via the Stage-0 site metadata) ruled this service out for this site type
   | "render-failed" // service rendered ok but this page failed (nav timeout / JS error)
+  | "render-disabled" // the run was configured not to render (render: false): the render service was never asked
   | "not-prefetched"; // rule enabled but prefetch never ran for it
 
 /**
@@ -106,6 +107,8 @@ export function humanizeCloudSkip(reason: CloudSkipReason): string {
       return "Cloud analysis skipped — not applicable to this site type.";
     case "render-failed":
       return "Cloud analysis skipped — the page could not be rendered (navigation timeout or JS error).";
+    case "render-disabled":
+      return "Cloud analysis skipped — render disabled by the run config.";
     case "not-prefetched":
       return "Cloud analysis skipped — no result was prefetched for this page.";
   }
