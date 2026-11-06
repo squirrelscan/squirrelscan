@@ -5,6 +5,7 @@ export * from "./collected-signals";
 export * from "./endpoint-surface";
 export * from "./categories";
 export * from "./filter";
+export * from "./rule-filter";
 export * from "./runner";
 export * from "./rule-budget";
 export * from "./probe-budget";
