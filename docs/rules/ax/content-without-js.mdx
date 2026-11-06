@@ -13,7 +13,7 @@ Server rendering or static generation puts the text in the initial HTML, which i
 
 The rule compares the raw crawl HTML with a browser-rendered copy of the same page, extracting words from both with the same pipeline so the two counts are comparable. Rendering is a cloud service, so the check needs a cloud audit. It emits one check:
 
-- `content-without-js`, skipped with the message `Raw-vs-rendered content comparison skipped` in two cases: the crawl itself was browser-rendered, which would make the comparison self-identical, or the render service was not available for the audit. When the service ran but returned no HTML for this page the message is `No rendered HTML returned for this page` instead. The skip reason names which.
+- `content-without-js`, skipped with the message `Raw-vs-rendered content comparison skipped` in three cases: the crawl itself was browser-rendered, which would make the comparison self-identical (the rendered crawl keeps its own text); the render service was not available for the audit (an outage); or the run was configured not to render (`render: false` in the REST config or the MCP arguments, or a website whose render setting is off). In the last case the message says `render disabled by the run config`, and no browser is used or paid for. When the service ran but returned no HTML for this page the message is `No rendered HTML returned for this page` instead. The skip reason names which.
 - `content-without-js`, at info status with the message `~N% of this page's content (M words) appears only after JavaScript runs — agents that read raw HTML won't see it`.
 - `content-without-js`, passing with the message `Raw HTML already contains the bulk of the rendered content`.
 

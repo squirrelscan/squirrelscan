@@ -6,7 +6,7 @@ icon: "newspaper"
 
 Signed-in audits get an **editor's summary** at the top of the report: a couple of plain-English paragraphs on the state of the site and a one-line verdict, followed by a ranked **Priorities** list of what to do next. Think of it as the quick note you'd email a manager: the bottom line, then the to-do list, not a wall of checks.
 
-It's generated automatically for every signed-in cloud audit (like the [site profile](/cloud/site-metadata) and [technology detection](/cloud/technologies)) and is **informational: it never affects your health score**.
+It's generated automatically for every signed-in cloud audit, except a run started with a rule filter (see [Filtered runs](#filtered-runs)), like the [site profile](/cloud/site-metadata) and [technology detection](/cloud/technologies)) and is **informational: it never affects your health score**.
 
 ## What it looks like
 
@@ -65,6 +65,14 @@ The model writes the prose, so the numbers in it are checked against the audit:
 - **Never blank.** If no sentence passes, the summary falls back to the audit's own totals.
 
 Reports apply the score and page-count checks when they render, so summaries stored before these checks existed read the same way.
+
+## Filtered runs
+
+A run started with a rule filter (`enabledRulePatterns` on [`POST /v1/agent-runs`](/api#start-a-run-with-a-rule-filter), `rules` on the MCP `run_audit`) skips the summary by default. Send `editorSummary: true` (MCP: `editor_summary: true`) to bring it back, or `false` to skip it on any run. The default is the same everywhere: no filter means built, filter means skipped.
+
+Why skip it: it is about 30 seconds of a one-page run, and it describes a whole audit, which a filtered run does not have.
+
+When it is skipped, the report has no editor's summary (the field is absent), the run timeline shows `editor_summary skipped` with the reason (`rule-filtered run` or `disabled by the run config`), and no credits are charged or refunded, because the summary has no credit price either way. It never affects the health score, built or skipped.
 
 ## Requirements
 

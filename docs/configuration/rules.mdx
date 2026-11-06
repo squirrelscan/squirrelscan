@@ -245,7 +245,7 @@ A `category/*` glob for a real category, such as `eeat/*`, never warns. Only ent
 
 `squirrel.toml` is read by the CLI and the local MCP server. A cloud audit (hosted MCP `run_audit`, the dashboard, a schedule) cannot see your repository, so it uses the website's stored `disable_rules` instead: exact ids and `category/*` globs, the same patterns as `disable`. See [Tailor each website with rules](/developers/mcp#tailor-each-website-with-rules).
 
-A cloud audit can also run only some rules, the way `--rule-include` and `--rule-exclude` do: pass `rules` and `disable_rules` to the hosted MCP `run_audit`, or `config.enabledRulePatterns` and `config.disabledRulePatterns` to [`POST /v1/agent-runs`](/api#start-a-run-with-a-rule-filter). They take the same patterns, refuse a pattern that matches no rule, and disable wins over include.
+A cloud audit can also run only some rules, the way `--rule-include` and `--rule-exclude` do: pass `rules` and `disable_rules` to the hosted MCP `run_audit`, or `config.enabledRulePatterns` and `config.disabledRulePatterns` to [`POST /v1/agent-runs`](/api#start-a-run-with-a-rule-filter). They take the same patterns, refuse a pattern that matches no rule, and disable wins over include. A filtered cloud run also skips the editor's summary by default and any cloud step no selected rule reads.
 
 ### Retired rules
 

@@ -51,6 +51,10 @@ A cloud rule never fails your audit. When it can't run, it reports `skipped` wit
 | `insufficient-credits` | Balance too low - top up or lower the page count |
 | `credit-cap-reached` | The audit hit `max_credits_per_audit`; work was truncated at the cap |
 | `service-unavailable` | The cloud service errored; charges for failed calls are refunded |
+| `not-applicable` | The site profile rules the service out for this site type |
+| `render-disabled` | The run was configured not to render (`render: false`, or a website whose render setting is off), so the render service was never asked. Shown as `render disabled by the run config` |
+
+`render-disabled` is not a locked-rule upsell: the rule is not locked, the run chose not to render. Turn rendering on for the run or the website and it runs.
 
 ## Controlling spend
 
