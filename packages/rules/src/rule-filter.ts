@@ -1,7 +1,11 @@
 // --rule-include / --rule-exclude (#1066): run-time rule filtering for
 // `squirrel audit`, and the cloud API's `enabledRulePatterns` (private#3785):
 // ONE implementation so the two surfaces cannot drift. Moved here from
-// apps/cli/src/audit/rule-filter.ts (which re-exports it). Wiring only — actual enable/disable resolution stays in
+// apps/cli/src/audit/rule-filter.ts (which re-exports it). Deliberately free of
+// the rule loader (and so of linkedom): the cloud API is a Cloudflare Worker and
+// imports this through the `@squirrelscan/rules/rule-filter` subpath, with rule
+// ids from its generated catalog. `isCategoryExcluded`, which needs the loaded
+// rules, stays in the CLI. Wiring only — actual enable/disable resolution stays in
 // packages/rules/src/filter.ts (isRuleEnabled); this module is the CLI-side
 // upgrade that lets a bare token mean "this whole category" instead of
 // falling back to matchesRulePattern's bare-token = exact-rule-id semantics
@@ -14,7 +18,6 @@ import {
   normalizeCategoryCode,
   RULE_CATEGORY_VALUES,
 } from "./categories";
-import { loadAllRules, type LoaderOptions } from "./loader";
 
 /** A token that names no built-in category: valid only if a loaded plugin owns the namespace (#1599). */
 export interface PendingRuleFilterToken {
@@ -202,75 +205,6 @@ export function filterResolvesToZeroCategories(
   return enable.every(wiped);
 }
 
-/** True when `pattern` could enable/disable at least one rule in `category` —
- * `*`, `category/*`, and exact `category/rule` (any rule) all count, alias-
- * aware on the category half. Deliberately category-level, NOT delegated to
- * matchesRulePattern with a fake probe id: an exact `category/rule` pattern
- * would never match a synthetic rule id (matchesRulePattern requires the
- * exact rest to match), which previously made `isCategoryExcluded` treat
- * `--rule-include core/meta-title` as excluding all of `core`. */
-function patternTouchesCategory(pattern: string, category: string): boolean {
-  if (pattern === "*") return true;
-  const slash = pattern.indexOf("/");
-  if (slash === -1) return false; // shouldn't occur post-parseRuleFilters
-  return (
-    normalizeCategoryCode(pattern.slice(0, slash)) ===
-    normalizeCategoryCode(category)
-  );
-}
-
-let filedOutsidePrefix: Map<string, string[]> | null = null;
-
-/** Ids of the rules in `category` whose id prefix names another category. */
-function idsFiledOutsidePrefix(category: string): string[] {
-  if (!filedOutsidePrefix) {
-    filedOutsidePrefix = new Map();
-    for (const rule of loadAllRules().values()) {
-      const code = normalizeCategoryCode(rule.meta.category);
-      const prefix = normalizeCategoryCode(rule.meta.id.split("/")[0] ?? "");
-      if (code === prefix) continue;
-      const ids = filedOutsidePrefix.get(code) ?? [];
-      ids.push(rule.meta.id);
-      filedOutsidePrefix.set(code, ids);
-    }
-  }
-  return filedOutsidePrefix.get(normalizeCategoryCode(category)) ?? [];
-}
-
-/** True when the resolved enable/disable patterns leave `category` with zero
- * rules that could run — disable wins over enable (mirrors isRuleEnabled's
- * precedence), and an enable list that never mentions the category means
- * nothing in it was turned on. Used to reject `--fail-on score:<category>`
- * against an excluded category before crawling starts.
- * Known limitation: per-rule `rule_options.<id>.enabled = true` overrides
- * (which outrank disable patterns in isRuleEnabled) aren't visible here, so
- * such a rule's category still reads as excluded. */
-export function isCategoryExcluded(
-  category: string,
-  resolved: { enable: string[]; disable: string[] },
-  /** Rules of the plugins loaded for this run (#1599): their ids and categories count like built-ins'. */
-  pluginRules: readonly { id: string; category: string }[] = []
-): boolean {
-  // pub#836: a rule can be filed under a category its id prefix does not
-  // name (`links/broken-links` is a Reliability rule), so a pattern reaches
-  // the category through that rule's id too.
-  // A plugin rule always sits in a namespace of its own, so it is filed outside
-  // the category's prefix whatever category it reports under (#1599).
-  const wanted = normalizeCategoryCode(category);
-  const foreign = [
-    ...idsFiledOutsidePrefix(category),
-    ...pluginRules
-      .filter((r) => normalizeCategoryCode(r.category) === wanted)
-      .map((r) => r.id),
-  ];
-  const touches = (p: string) =>
-    patternTouchesCategory(p, category) ||
-    foreign.some((id) => matchesRulePattern(id, p));
-  if (resolved.disable.some(touches)) return true;
-  if (resolved.enable.length === 0) return true;
-  return !resolved.enable.some(touches);
-}
-
 /** The patterns that match NO rule id in `ruleIds`. The category check in
  * parseRuleFilters is category-only (`core/robots-metaa` passes it and silently
  * selects nothing), so a surface that must refuse a dead pattern (the cloud
@@ -283,15 +217,4 @@ export function findUnmatchedRulePatterns(
 ): string[] {
   const ids = [...ruleIds];
   return patterns.filter((p) => !ids.some((id) => matchesRulePattern(id, p)));
-}
-
-/** Ids of every built-in rule that `enable` selects (disable not applied):
- * the selection an include filter makes, for validation and reporting. */
-export function selectRuleIds(
-  enable: readonly string[],
-  options: LoaderOptions = {}
-): string[] {
-  return [...loadAllRules(options).keys()].filter((id) =>
-    enable.some((p) => matchesRulePattern(id, p))
-  );
 }

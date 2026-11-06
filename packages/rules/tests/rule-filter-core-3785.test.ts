@@ -1,11 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-  findUnmatchedRulePatterns,
-  loadAllRules,
-  parseRuleFilters,
-  selectRuleIds,
-} from "../src";
+import { matchesRulePattern } from "@squirrelscan/utils/rule-pattern";
+
+import { loadAllRules } from "../src";
+import { findUnmatchedRulePatterns, parseRuleFilters } from "../src/rule-filter";
+
+const selectRuleIds = (enable: string[]): string[] =>
+  [...loadAllRules().keys()].filter((id) => enable.some((p) => matchesRulePattern(id, p)));
 
 describe("rule-filter core (shared by the CLI and the cloud API, private#3785)", () => {
   test("parseRuleFilters expands bare categories and validates the category half", () => {
