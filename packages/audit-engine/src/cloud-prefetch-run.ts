@@ -607,6 +607,11 @@ export interface ContainerPrefetchInput {
    */
   crawlRendered: boolean;
   /**
+   * The run was configured not to render (`render: false`): the `render` service is
+   * skipped as `render-disabled` rather than `not-applicable` (private#3792).
+   */
+  renderDisabled?: boolean;
+  /**
    * Wall-clock bound on the prefetch phase, in ms (#280). When it fires, the
    * result is what had already returned (rules use those results, spend covers
    * exactly the calls known to be charged), never a rejection that discards
@@ -651,6 +656,7 @@ export async function runContainerCloudPrefetch(
       auditId: input.auditId,
       remainingBudget: input.remainingBudget,
       crawlRendered: input.crawlRendered,
+      renderDisabled: input.renderDisabled,
       deadlineMs: input.deadlineMs,
       accumulator: input.accumulator,
     },
@@ -697,6 +703,7 @@ export async function runContainerCloudPrefetchFromPayloads(
     // Sourced from the container's actual render decision (see ContainerPrefetchInput.crawlRendered) —
     // config.cloud.rendering is unset on this path, so reading it here would leave render charged+discarded.
     crawlRendered: input.crawlRendered,
+    ...(input.renderDisabled ? { renderDisabled: true } : {}),
     // Per-page render provenance (#673/#964): the render service skips pages the crawl already rendered, so an
     // "auto" hybrid crawl doesn't pay to re-render its upgraded pages.
     renderedPageUrls: payloads.renderedPageUrls,

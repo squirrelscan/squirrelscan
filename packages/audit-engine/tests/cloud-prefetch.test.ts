@@ -10,7 +10,7 @@ import type {
   SiteMetadataPagePayload,
   SiteMetadataResponse,
 } from "@squirrelscan/core-contracts";
-import { CLOUD_SITE_KEY } from "@squirrelscan/rules";
+import { CLOUD_SITE_KEY, humanizeCloudSkip } from "@squirrelscan/rules";
 
 import {
   BATCH_BYTE_BUDGET,
@@ -1141,6 +1141,32 @@ describe("prefetchCloudData — render service (#673)", () => {
     expect(render?.get(pages[0].url)?.status).toBe("skipped");
     expect(render?.get(pages[0].url)?.skipReason).toBe("not-applicable");
     expect(res.spend).toEqual([]);
+  });
+
+  // private#3792. A run configured not to render (`render: false`) never asks the
+  // render service, and the rule says so: "render disabled by the run config", not
+  // the "not applicable to this site type" a gated service reads as.
+  test("renderDisabled: render is skipped render-disabled and never submitted; wins over crawlRendered", async () => {
+    for (const crawlRendered of [false, true]) {
+      let submitted = false;
+      const client = renderClient({
+        render: async () => {
+          submitted = true;
+          return { jobId: "j", status: "queued" };
+        },
+      });
+      const res = await prefetchCloudData(
+        input({ client, rules: RENDER_RULES, renderDisabled: true, crawlRendered }),
+      );
+      expect(submitted).toBe(false);
+      const env = res.store.get("render")?.get(pages[0].url);
+      expect(env?.status).toBe("skipped");
+      expect(env?.skipReason).toBe("render-disabled");
+      expect(humanizeCloudSkip("render-disabled")).toBe(
+        "Cloud analysis skipped — render disabled by the run config.",
+      );
+      expect(res.spend).toEqual([]);
+    }
   });
 
   // #1841. Render is the only prefetch service that asks the cloud to FETCH the

@@ -117,6 +117,14 @@ export interface CloudPrefetchInput {
    */
   crawlRendered?: boolean;
   /**
+   * True when the run was configured NOT to render (`render: false`, a plain-HTTP
+   * crawl): the `render` service is then never asked, so no browser is paid for, and
+   * the rule that reads it says why (`render-disabled`: "render disabled by the run
+   * config") instead of the "not applicable to this site type" a gated service gets.
+   * Wins over `crawlRendered` when both are set (private#3792).
+   */
+  renderDisabled?: boolean;
+  /**
    * True when the audited site lives somewhere no HOSTED runner can reach:
    * loopback, RFC1918, link-local. The caller owns the classification (this
    * engine stays policy-free, and host-blocking a CRAWL would be a regression —
@@ -763,10 +771,16 @@ async function runPrefetch(
   // loopback / private-network target the hosted renderer is refused access to.
   // Both are "this comparison cannot happen for this run", both must land
   // BEFORE the charge, so they share one skip.
-  if (input.crawlRendered || input.hostUnreachableByCloud) {
+  if (input.crawlRendered || input.hostUnreachableByCloud || input.renderDisabled) {
     const spec = specs.get("render");
     if (spec) {
-      skipService(store, "render", spec.unit, input.pages, "not-applicable");
+      skipService(
+        store,
+        "render",
+        spec.unit,
+        input.pages,
+        input.renderDisabled ? "render-disabled" : "not-applicable",
+      );
       specs.delete("render");
     }
   }
