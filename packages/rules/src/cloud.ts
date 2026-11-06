@@ -123,3 +123,13 @@ export function humanizeCloudSkip(reason: CloudSkipReason): string {
 export function isNotApplicableCloudSkip(skipReason: string | undefined): boolean {
   return skipReason === humanizeCloudSkip("not-applicable");
 }
+
+/**
+ * True when a stored check's `skipReason` is the run-configured "render disabled"
+ * skip (`render-disabled`, private#3792). Like not-applicable, it is the run's own
+ * choice, not something a paid run would unlock, so it must stay off the locked-rules
+ * upsell. Same single-place matching of the humanized sentence as above.
+ */
+export function isRenderDisabledCloudSkip(skipReason: string | undefined): boolean {
+  return skipReason === humanizeCloudSkip("render-disabled");
+}

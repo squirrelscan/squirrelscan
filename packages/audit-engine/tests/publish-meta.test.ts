@@ -117,6 +117,41 @@ describe("computeLockedRules", () => {
     expect(computeLockedRules(gatedOut, rules)).toEqual([]);
   });
 
+  // private#3792: `render: false` skips the render rule on purpose, on a paid run too.
+  test("does not lock a rule whose every check skipped as render-disabled; a mixed or real lock still locks", () => {
+    const rules = [rule("ax/content-without-js", "Content Without JavaScript", true, "render")];
+    const disabled = reportWith({
+      "ax/content-without-js": {
+        checks: [
+          { status: "skipped", skipReason: humanizeCloudSkip("render-disabled") },
+          { status: "skipped", skipReason: humanizeCloudSkip("render-disabled") },
+        ],
+      },
+    });
+    expect(computeLockedRules(disabled, rules)).toEqual([]);
+
+    // not-applicable is unchanged: still exempt.
+    const gatedOut = reportWith({
+      "ax/content-without-js": {
+        checks: [{ status: "skipped", skipReason: humanizeCloudSkip("not-applicable") }],
+      },
+    });
+    expect(computeLockedRules(gatedOut, rules)).toEqual([]);
+
+    // A real locked reason is still locked, alone or beside a render-disabled skip.
+    for (const checks of [
+      [{ status: "skipped", skipReason: humanizeCloudSkip("not-authenticated") }],
+      [
+        { status: "skipped", skipReason: humanizeCloudSkip("render-disabled") },
+        { status: "skipped", skipReason: humanizeCloudSkip("not-authenticated") },
+      ],
+    ]) {
+      expect(computeLockedRules(reportWith({ "ax/content-without-js": { checks } }), rules)).toEqual(
+        [{ id: "ax/content-without-js", name: "Content Without JavaScript" }],
+      );
+    }
+  });
+
   test("still locks when skips are lockable (logged out) or mixed", () => {
     const rules = [rule("eeat/authority-signals", "Authority Signals", true, "authority-signals")];
     const mixed = reportWith({

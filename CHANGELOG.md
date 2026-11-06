@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **A hosted run with rendering switched off no longer lists `ax/content-without-js` as a locked rule (private#3792).** The "render disabled by the run config" skip is the run's own choice, so it stays off the "check didn't run, re-run without `--http`" banner and the locked-rules list, as `not applicable` already did.
+
 ## v0.0.171 (2026-11-06)
 
 Audit rules can come from an allowlisted plugin, the CSP rule names first-party proxy paths, leaked-secret values are capped, and the cloud REST API documents a rule filter.
