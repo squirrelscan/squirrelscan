@@ -102,14 +102,53 @@ Both lists take the same patterns, with the same matching, limits and errors as 
 | `disabledRulePatterns` | The disable set, above. May be empty. |
 | `render` | `false` fetches every page over plain HTTP with no per-page headless browser. `true` renders every page, within what the plan allows. Leave it out to follow the website's setting. Rendering does not change the price. |
 | `externalLinksEnabled` | Check external links for this run. Each distinct link the cloud verifies costs 1 credit, so a one-page check that does not need them sends `false`. |
+| `editorSummary` | Build the [editor's summary](/cloud/editor-summary), an LLM-written overview of the whole report that adds about 30 seconds to a run. Leave it out for the default: skipped when `enabledRulePatterns` is set (a filtered run), built on every other run. `true` builds it on a filtered run. `false` skips it on any run. No credit effect: the summary has no credit charge, built or skipped. |
 | `ephemeral` | The same one-shot check as `ephemeral` on the MCP `run_audit`. If the run creates the website, that website skips the plan's website limit, stays out of website listings and is **archived** once the run ends. The run and its report are **not purged**, until a purge ships: `GET /v1/agent-runs/{id}` and the report keep working, and the run stays in `GET /v1/agent-runs`. An organization can hold at most 5 live one-shot websites (`429`, code `EPHEMERAL_LIMIT`). If the organization already tracks the domain, or you send `websiteId`, the run uses that website, nothing is deleted, and the response has `ephemeral: false` with an `ephemeralIgnoredReason`. Cannot be combined with `auditId`. |
 
-A request the API cannot honour as written is a `400` with code `VALIDATION_ERROR`, and nothing is charged or started: invalid JSON, a value that is not an object, an unknown `config` key, a wrongly typed `maxPages`, `coverageMode`, `externalLinksEnabled`, `render` or `ephemeral`, or a bad rule list. For a rule list, `error.patterns` names the entries at fault: an unknown category, a pattern that matches no rule (`core/robots-metaa`), or a list over the limits. A selection that the disable set leaves with no rule to run is refused too. The other refusals use their own codes: `402` `INSUFFICIENT_CREDITS` (checked before a one-shot website is created), `429` `QUEUE_FULL` and `EPHEMERAL_LIMIT`, `404` `WEBSITE_NOT_FOUND`, `409` `AUDIT_ID_IN_USE`.
+A request the API cannot honour as written is a `400` with code `VALIDATION_ERROR`, and nothing is charged or started: invalid JSON, a value that is not an object, an unknown `config` key, a wrongly typed `maxPages`, `coverageMode`, `externalLinksEnabled`, `render`, `editorSummary` or `ephemeral` (the issue path is `config.editorSummary` for the summary flag), or a bad rule list. For a rule list, `error.patterns` names the entries at fault: an unknown category, a pattern that matches no rule (`core/robots-metaa`), or a list over the limits. A selection that the disable set leaves with no rule to run is refused too. The other refusals use their own codes: `402` `INSUFFICIENT_CREDITS` (checked before a one-shot website is created), `429` `QUEUE_FULL` and `EPHEMERAL_LIMIT`, `404` `WEBSITE_NOT_FOUND`, `409` `AUDIT_ID_IN_USE`.
+
+The create response carries `editorSummary` (boolean) and, when it is `false`, `editorSummarySkippedReason` (`rule-filtered run` or `disabled by the run config`). Both appear only when `enabledRulePatterns` or `editorSummary` was sent.
 
 The config a run reports in `GET /v1/agent-runs/{id}` can be sent back: the keys the server writes into it (`auditLevel`, `pageLimitNotice`, `creditClamp`, `renderMode` and the like) are accepted and dropped. The report of a run started with `enabledRulePatterns` carries a sibling `includeFilter` (the patterns and how many rules ran), because its scores and issue counts are not comparable to a full audit's.
 
+### Opt in to the editor's summary
+
+A filtered run skips the editor's summary by default, so the one-page request above needs no flag. To get it back, send `editorSummary: true`:
+
+```json
+{
+  "url": "https://example.com",
+  "config": {
+    "maxPages": 1,
+    "enabledRulePatterns": ["ax/*", "core/robots-meta"],
+    "render": false,
+    "ephemeral": true,
+    "editorSummary": true
+  }
+}
+```
+
+A skipped summary is absent from `GET /v1/agent-runs/{id}/report` (the `editorSummary` field is not there, not `null`). With `editorSummary: true` it is present as on any other run.
+
+### Speed of a filtered run
+
+A one-page filtered run skips the work no selected rule reads: the editor's summary, the external link check (when no selected rule reads link results: `links/dead-links`, `links/broken-external-links`, `reliability/broken-forms`, `integrity/known-malicious-url`) and any cloud service no selected rule reads. Skipped steps are recorded in the run timeline, below. How long a run takes still depends on the site, so treat any timing as an estimate.
+
+### Run timeline and skipped steps
+
+While a run is `pending` or `running`, `GET /v1/agent-runs/{id}` returns its latest `progress` event (`phase`, a message and a page count). A step the run skips is recorded as a single `skipped` event with a reason and no duration, for example `editor_summary skipped: rule-filtered run`. The phase names a polling client may see for skipped steps are:
+
+| Phase | Reasons |
+|-------|---------|
+| `editor_summary` | `rule-filtered run`, `disabled by the run config` |
+| `cloud_prefetch` | `no enabled rule reads a cloud service` |
+| `external_links` | `no enabled rule reads external link results` |
+| `render_prefetch` | `render disabled by the run config`, `the crawl rendered every page` (filtered runs only) |
+
+The set of phase names is not a stable enum: match on the ones you know and ignore the rest. An API key sees only the latest phase through `progress`. The full event list is a signed-in view in the [dashboard](/dashboard). Skipping a step never changes the price of the steps that ran, and nothing is charged or refunded for a skipped one.
+
 <Note>
-The hosted MCP `run_audit` takes the same two sets as `rules` and `disable_rules`, with the same validation and the same errors. See [MCP](/developers/mcp).
+The hosted MCP `run_audit` takes the same two sets as `rules` and `disable_rules`, with the same validation and the same errors, plus `editor_summary` for `config.editorSummary`. See [MCP](/developers/mcp).
 </Note>
 
 ## Error envelope
