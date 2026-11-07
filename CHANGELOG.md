@@ -19,6 +19,7 @@ How it works:
 
 ### Fixed
 
+- **`links/broken-anchors` no longer calls a runtime-created id definitely missing on an unrendered page (#1616).** A server-rendered page can add a target id from inline script at init (`el.id = "size"`). Fetched without a browser, the id is not in the HTML, so the link was reported as broken. When an inline script on the target page names the missing fragment as a quoted string, or the page's inline scripts are too large to read in full, the link is now listed under `unconfirmed-anchors` (info). A missing id no script names still warns, a static id still passes, and a rendered audit reads the initialized DOM as before. The `unconfirmed-anchors` message now reads "target a page that was not rendered and may add the id with JavaScript".
 - **A hosted run with rendering switched off no longer lists `ax/content-without-js` as a locked rule (private#3792).** The "render disabled by the run config" skip is the run's own choice, so it stays off the "check didn't run, re-run without `--http`" banner and the locked-rules list, as `not applicable` already did.
 
 ## v0.0.171 (2026-11-06)
