@@ -1143,7 +1143,12 @@
             "type": ["integer", "null"],
             "minimum": 0,
             "maximum": 100,
-            "description": "Rounded score from the persisted `health_score` DB column (an integer). The unrounded float is available as `report.healthScore` on `GET /v1/agent-runs/{id}/report`."
+            "description": "Rounded score from the persisted `health_score` DB column (an integer). The unrounded float is available as `report.healthScore` on `GET /v1/agent-runs/{id}/report`. `null` while the run has no score yet, for a blocked or unreachable site, and for a `partial` run: one started with `config.enabledRulePatterns` covers only the rules it selected, so a score computed from them is not the site's score and is withheld. A run with no include filter, or with only `disabledRulePatterns`, is scored as before."
+          },
+          "partial": {
+            "type": "boolean",
+            "const": true,
+            "description": "Present, and `true`, only when the run was started with `config.enabledRulePatterns`: its `healthScore` is `null` because the rules it ran are a subset of the audit. The key is absent for a run without an include filter, and for one with only `disabledRulePatterns`. The same marker, with the same meaning, is on `GET /v1/agent-runs/{id}/report`."
           },
           "issuesFound": { "type": ["integer", "null"] },
           "issuesFixed": { "type": ["integer", "null"] },
