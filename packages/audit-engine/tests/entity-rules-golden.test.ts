@@ -408,7 +408,8 @@ describe("the acceptance-criteria snapshots", () => {
   });
 });
 
-// #1615: the real builder's map, the real rule, and the hreflang pages the rule reads.
+// #1615: the real builder's map, the real rule, and the hreflang pages the rule reads, on both the
+// v1 path (pages) and the streaming path (SiteQuery rows).
 describe("schema/entity-conflicts localized Service aliases (#1615)", () => {
   const EN = "https://example.com/en/service";
   const DK = "https://example.com/en-dk/service";
@@ -430,7 +431,9 @@ describe("schema/entity-conflicts localized Service aliases (#1615)", () => {
     { hreflang: "en", href: EN },
     { hreflang: "en-dk", href: DK },
   ];
-  const withPages = (entityMap: EntityMap, reciprocal: boolean): RuleContext => ({
+  const alternatesFor = (url: string, reciprocal: boolean) =>
+    reciprocal || url === EN ? alternates : [];
+  const viaPages = (entityMap: EntityMap, reciprocal: boolean): RuleContext => ({
     ...ctx(entityMap),
     site: {
       baseUrl: BASE,
@@ -439,39 +442,102 @@ describe("schema/entity-conflicts localized Service aliases (#1615)", () => {
         statusCode: 200,
         parsed: {
           meta: { canonical: url },
-          hreflangAlternates: reciprocal || url === EN ? alternates : [],
+          hreflangAlternates: alternatesFor(url, reciprocal),
         } as unknown as ParsedPage,
       })),
       robotsTxt: null,
       sitemaps: null,
     } as RuleContext["site"],
   });
-  const run = async (entityMap: EntityMap, reciprocal: boolean) =>
-    (await Promise.resolve(rule("schema/entity-conflicts").run(withPages(entityMap, reciprocal))))
-      .checks[0]!;
-
-  test("reciprocal alternates passes, one-way still warns", async () => {
-    const map = mapOf([serviceAt(EN), serviceAt(DK)]);
-    expect((await run(map, true)).status).toBe("pass");
-    expect((await run(map, false)).status).toBe("warn");
-  });
-
-  test("a divergent provider or legal identifier on the localized pages still warns", async () => {
-    const otherProvider = serviceAt(DK, {
-      provider: {
-        "@type": "Organization",
-        "@id": "https://example.com/#other",
-        name: "Other provider",
+  const viaSiteQuery = (entityMap: EntityMap, reciprocal: boolean): RuleContext => {
+    const rows = [EN, DK].map((url) => ({
+      normalizedUrl: url,
+      canonical: url,
+      hreflangAlternates: alternatesFor(url, reciprocal),
+    }));
+    const unused = (): never => {
+      throw new Error("not used by entity-conflicts");
+    };
+    const siteQuery = {
+      pageCount: () => rows.length,
+      duplicateGroups: unused,
+      incomingLinkCounts: unused,
+      pagesByType: unused,
+      templateClusters: unused,
+      sumTransferBytes: unused,
+      sumSecretHits: unused,
+      homepage: unused,
+      async *pagesMatching(pred: (row: (typeof rows)[number]) => boolean) {
+        for (const row of rows) if (pred(row)) yield row;
       },
-    });
-    expect((await run(mapOf([serviceAt(EN), otherProvider]), true)).status).toBe("warn");
+    } as unknown as NonNullable<RuleContext["siteQuery"]>;
+    return { ...ctx(entityMap), siteQuery };
+  };
 
-    const mapVat = mapOf([
-      serviceAt(EN, { vatID: "DE123456789" }),
-      serviceAt(DK, { vatID: "DK12345678" }),
-    ]);
-    const vat = await run(mapVat, true);
-    expect(vat.status).toBe("warn");
-    expect(vat.items!.map((item) => item.meta?.property).sort()).toEqual(["url", "vatID"]);
-  });
+  const PATHS: Array<[string, (m: EntityMap, r: boolean) => RuleContext]> = [
+    ["pages (v1)", viaPages],
+    ["site query (streaming)", viaSiteQuery],
+  ];
+  for (const [path, build] of PATHS) {
+    const run = async (entityMap: EntityMap, reciprocal: boolean) =>
+      (await Promise.resolve(rule("schema/entity-conflicts").run(build(entityMap, reciprocal))))
+        .checks[0]!;
+
+    describe(path, () => {
+      test("reciprocal alternates passes, one-way still warns", async () => {
+        const map = mapOf([serviceAt(EN), serviceAt(DK)]);
+        expect((await run(map, true)).status).toBe("pass");
+        expect((await run(map, false)).status).toBe("warn");
+      });
+
+      test("a divergent provider reference still warns", async () => {
+        const otherProvider = serviceAt(DK, {
+          provider: {
+            "@type": "Organization",
+            "@id": "https://example.com/#other",
+            name: "Other provider",
+          },
+        });
+        expect((await run(mapOf([serviceAt(EN), otherProvider]), true)).status).toBe("warn");
+      });
+
+      test("bare-string providers: identical on every page passes, differing or partial warns", async () => {
+        const literal = (provider?: string) => (url: string) =>
+          serviceAt(url, provider === undefined ? { provider: undefined } : { provider });
+        const same = mapOf([literal("Acme GmbH")(EN), literal("acme  GmbH")(DK)]);
+        expect((await run(same, true)).status).toBe("pass");
+        const differing = mapOf([literal("Acme GmbH")(EN), literal("Totally Other Ltd")(DK)]);
+        const result = await run(differing, true);
+        expect(result.status).toBe("warn");
+        expect(result.items!.map((item) => item.meta?.property)).toEqual(["url"]);
+        const partial = mapOf([literal("Acme GmbH")(EN), literal(undefined)(DK)]);
+        expect((await run(partial, true)).status).toBe("warn");
+      });
+
+      test("a divergent legal identifier still warns, url included, with the page's own spelling", async () => {
+        const map = mapOf([
+          serviceAt(EN, { vatID: "DE 123 456 789" }),
+          serviceAt(DK, { vatID: "DK 12345678" }),
+        ]);
+        const result = await run(map, true);
+        expect(result.status).toBe("warn");
+        expect(result.items!.map((item) => item.meta?.property).sort()).toEqual(["url", "vatID"]);
+        const vat = result.items!.find((item) => item.meta?.property === "vatID")!;
+        expect(vat.label).toContain("DE 123 456 789");
+        expect(vat.label).toContain("DK 12345678");
+      });
+
+      test("a legal name translated per locale is a conflict, so the url alias is not excused", async () => {
+        const map = mapOf([
+          serviceAt(EN, { legalName: "Example Trading Ltd" }),
+          serviceAt(DK, { legalName: "Beispiel Handels GmbH" }),
+        ]);
+        const result = await run(map, true);
+        expect(result.items!.map((item) => item.meta?.property).sort()).toEqual([
+          "legalName",
+          "url",
+        ]);
+      });
+    });
+  }
 });

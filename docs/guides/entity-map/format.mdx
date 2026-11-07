@@ -140,7 +140,9 @@ The `@id` is **resolved against the page it was declared on**. A relative `#orga
 
 ### `conflicts`
 
-Populated when two declarations of one entity disagree on a kept property, on `@type`, or on a legal identifier: `legalName`, `vatID`, `taxID`, `leiCode`, `duns` or `iso6523Code`. The legal identifiers are compared but not kept in `properties`. Registry numbers are compared without case, spaces, dots or hyphens, so `DE 123 456 789` and `de123456789` agree. A page that omits an identifier is absence, not disagreement.
+Populated when two declarations of one entity disagree on a kept property, on `@type`, or on a legal identifier: `legalName`, `vatID`, `taxID`, `leiCode`, `duns` or `iso6523Code`. The legal identifiers are compared but not kept in `properties`, and the conflict entry shows each page's own spelling. Two values are one when they agree without case, spaces, dots or hyphens, so `DE 123 456 789` and `de123456789` agree. A page that omits an identifier is absence, not disagreement. A `legalName` translated per locale is two values on purpose.
+
+A node that also has a `url` conflict can carry one more entry, with the pseudo-property `@identity`. It means the node's `author`, `brand`, `creator`, `member`, `provider`, `publisher` or `worksFor` differ between its pages, as a reference, a nested object or a bare string, or are present on some pages only. Its values are readable signatures such as `provider=text:acme gmbh`. It exists so [schema/entity-conflicts](/rules/schema/entity-conflicts) can refuse to excuse a localized URL alias, it is never emitted on a node without a `url` conflict, and the rule does not report it as a finding.
 
 ```json
 "conflicts": [
@@ -154,7 +156,7 @@ Populated when two declarations of one entity disagree on a kept property, on `@
 ]
 ```
 
-At least two entries, sorted by value, each capped at 10 pages. Conflict detection covers the nine kept properties plus `@type`, so a disagreement anywhere else is invisible here.
+At least two entries, sorted by value, each capped at 10 pages. Conflict detection covers the nine kept properties, the six legal identifiers and `@type`, plus the `@identity` guard described above, so a disagreement anywhere else is invisible here.
 
 <Note>
 The sample maps on this page have no conflicts and no dangling references, which is what a well-formed site looks like. The shapes above and below are from the schema rather than from those files.
@@ -194,7 +196,7 @@ How a predicate's value is treated depends on its shape, and the difference deci
 
 That last row is why a `sameAs` listing five social profiles does not produce five dangling references. A bare string is a value, not a promise. Only an explicit `{"@id": …}` claims that something exists, so only an explicit reference can be broken.
 
-A property that is neither a followed predicate nor one of the nine the map keeps is **discarded** when the map is built. A `Product`'s `sku` is not stored anywhere in this document; the page's own JSON-LD still has it.
+A property that is neither a followed predicate, one of the nine the map keeps, nor one of the six legal identifiers it compares is **discarded** when the map is built. The legal identifiers are compared and then dropped; they are not stored. A `Product`'s `sku` is not stored anywhere in this document; the page's own JSON-LD still has it.
 
 ### `pages`
 

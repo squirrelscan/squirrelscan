@@ -670,8 +670,8 @@ describe("legal identifier conflicts (#1615)", () => {
     ]);
     expect(Value.Check(EntityMapSchema, map)).toBe(true);
     expect(conflictOf(map, "vatID")?.values.map((v) => v.value)).toEqual([
-      "de123456789",
-      "dk87654321",
+      "DE 123 456 789",
+      "DK 87654321",
     ]);
     expect(map.nodes[0]!.properties).not.toHaveProperty("vatID");
   });
@@ -709,5 +709,116 @@ describe("legal identifier conflicts (#1615)", () => {
       page("https://example.com/dk", service({})),
     ]);
     expect(map.nodes[0]!.conflicts).toEqual([]);
+  });
+  test("the conflict shows the page's own spelling, trimmed and bounded", () => {
+    const long = `${"X".repeat(300)}`;
+    const map = build([
+      page("https://example.com/en", service({ vatID: "  de 123.456  ", legalName: long })),
+      page("https://example.com/dk", service({ vatID: "DK-1", legalName: "Other" })),
+    ]);
+    expect(conflictOf(map, "vatID")?.values.map((v) => v.value)).toEqual(["de 123.456", "DK-1"]);
+    const legal = conflictOf(map, "legalName")!.values.map((v) => v.value);
+    expect(legal.every((value) => value.length <= 200)).toBe(true);
+  });
+
+  test("two spellings of one number show the lowest-sorting one, in any page order", () => {
+    const pages = [
+      page("https://example.com/a", service({ vatID: "DE 123" })),
+      page("https://example.com/b", service({ vatID: "de-123" })),
+      page("https://example.com/c", service({ vatID: "FR 9" })),
+    ];
+    const forward = conflictOf(build(pages), "vatID")!.values.map((v) => v.value);
+    const backward = conflictOf(build([...pages].reverse()), "vatID")!.values.map((v) => v.value);
+    expect(forward).toEqual(["DE 123", "FR 9"]);
+    expect(backward).toEqual(forward);
+  });
+
+  test("a legal name in two languages is intentionally a conflict", () => {
+    // The map never translates or guesses: two names are two values, so a localized pair that also
+    // translates its legalName is reported and its url alias is not excused.
+    const map = build([
+      page("https://example.com/en", service({ legalName: "Example Trading Ltd" })),
+      page("https://example.com/de", service({ legalName: "Beispiel Handels GmbH" })),
+    ]);
+    expect(conflictOf(map, "legalName")?.values).toHaveLength(2);
+  });
+});
+
+// #1615: the identity guard, emitted only beside a `url` conflict.
+describe("identity guard conflicts (#1615)", () => {
+  const svc = (url: string, extra: Record<string, unknown> = {}) =>
+    page(url, {
+      "@context": "https://schema.org",
+      "@type": "Service",
+      "@id": "https://example.com/b2b#service",
+      name: "B2B orders",
+      url,
+      ...extra,
+    });
+  const guard = (map: ReturnType<typeof build>) =>
+    map.nodes[0]!.conflicts.find((c) => c.property === "@identity");
+  const EN = "https://example.com/en/service";
+  const DK = "https://example.com/en-dk/service";
+
+  test("identical bare-string providers on every page: no guard", () => {
+    const map = build([svc(EN, { provider: "Acme GmbH" }), svc(DK, { provider: " acme  gmbh " })]);
+    expect(map.nodes[0]!.conflicts.map((c) => c.property)).toEqual(["url"]);
+  });
+
+  test("differing bare-string providers: a guard conflict (no edge exists for a string)", () => {
+    const map = build([
+      svc(EN, { provider: "Acme GmbH" }),
+      svc(DK, { provider: "Totally Other Ltd" }),
+    ]);
+    expect(map.edges).toEqual([]);
+    expect(guard(map)?.values.map((v) => v.value)).toEqual([
+      "provider=text:acme gmbh",
+      "provider=text:totally other ltd",
+    ]);
+  });
+
+  test("a provider on one page only, or a string against a reference, is a guard conflict", () => {
+    expect(guard(build([svc(EN, { provider: "Acme GmbH" }), svc(DK)]))?.values).toHaveLength(2);
+    const mixed = build([
+      svc(EN, { provider: "Acme GmbH" }),
+      svc(DK, { provider: { "@id": "https://example.com/#p" } }),
+    ]);
+    expect(guard(mixed)?.values).toHaveLength(2);
+  });
+
+  test("the same reference or the same nested provider on every page: no guard", () => {
+    const ref = { provider: { "@id": "https://example.com/#p" } };
+    expect(guard(build([svc(EN, ref), svc(DK, ref)]))).toBeUndefined();
+    const nested = { provider: { "@type": "Organization", name: "Acme GmbH" } };
+    expect(guard(build([svc(EN, nested), svc(DK, nested)]))).toBeUndefined();
+  });
+
+  test("every identity predicate is compared", () => {
+    for (const predicate of ["brand", "publisher", "creator", "author", "worksFor", "member"]) {
+      const map = build([svc(EN, { [predicate]: "One" }), svc(DK, { [predicate]: "Two" })]);
+      expect(guard(map)).toBeDefined();
+    }
+  });
+
+  test("a node without a url conflict carries no guard", () => {
+    const map = build([
+      svc(EN, { provider: "Acme GmbH" }),
+      page("https://example.com/other", {
+        "@context": "https://schema.org",
+        "@type": "Service",
+        "@id": "https://example.com/b2b#service",
+        name: "B2B orders",
+        url: EN,
+        provider: "Totally Other Ltd",
+      }),
+    ]);
+    expect(map.nodes[0]!.conflicts).toEqual([]);
+  });
+
+  test("a long token stays distinguishable once shortened", () => {
+    const base = "p".repeat(300);
+    const map = build([svc(EN, { provider: `${base}a` }), svc(DK, { provider: `${base}b` })]);
+    expect(guard(map)?.values).toHaveLength(2);
+    expect(guard(map)!.values.every((v) => v.value.length < 200)).toBe(true);
   });
 });

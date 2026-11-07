@@ -22,25 +22,29 @@ The rule runs once per crawl, reads the [entity map](/guides/entity-map) rather 
 - Passes with the message `Every entity agrees with itself across the pages that declare it`.
 - Warns with the message `N properties disagree across pages, on N entities`, plus ` (+N more properties)` when more matched than are listed.
 
-Nine properties are compared: `name`, `url`, `logo`, `image`, `sameAs`, `telephone`, `email`, `address` and `description`. Six legal identifiers are compared as well: `legalName`, `vatID`, `taxID`, `leiCode`, `duns` and `iso6523Code`. Registry numbers are compared without case, spaces, dots or hyphens, and a page that omits one is absence, not disagreement.
-
-### Localized URL aliases
-
-One service served under a different URL per locale is not a conflict. A `url` disagreement is excused only when all of these hold, and the rule never infers identity from similar names:
-
-- `url` is the only property the entity disagrees on. A differing `name`, `telephone`, legal identifier or any other property means the pages may describe two entities, so every row for that entity is reported.
-- Each `url` value is the address of one of the pages that declare the entity, so it names the page itself and not another site or section.
-- Every pair of pages that declare different `url` values list each other as hreflang alternates (reciprocal, in any language, and neither page canonicalises to another URL). A one-way reference is not enough.
-- The entity's `provider`, `brand`, `publisher`, `creator`, `author`, `worksFor` and `member` references are present on every one of those pages, to the same target. A Service whose provider differs between two locales is two services.
-- Every declaring page is known: a conflict that lists more pages than the map stores is reported.
-
-A verified alias adds nothing to the findings and is counted in `details.localizedUrlAliases` on the check. The same pages without reciprocal hreflang annotations still warn on `url`.
+Nine properties are compared: `name`, `url`, `logo`, `image`, `sameAs`, `telephone`, `email`, `address` and `description`. Six legal identifiers are compared as well: `legalName`, `vatID`, `taxID`, `leiCode`, `duns` and `iso6523Code`. Two values of an identifier are one when they agree without case, spaces, dots or hyphens (`DE 123 456 789` and `de123456789`), and a page that omits one is absence, not disagreement. The finding shows each page's own spelling. A `legalName` that is translated per locale is two values on purpose: the map never translates or guesses, so it is reported as a conflict.
 
 One item per entity and property pair, not per entity. An organization whose logo and telephone both disagree has two things to fix, and collapsing them would hide the second behind the first. Each item names up to three of the conflicting values with the number of pages carrying each.
 
 A disagreement about `@type` is reported by [schema/entity-type-drift](/rules/schema/entity-type-drift) instead, so one defect is never billed to two rules.
 
 Findings are capped at 10 items, and the count in the message is always the true total rather than the capped length. Run `squirrel entities --problem conflict` for the full list.
+
+### Localized URL aliases
+
+One service served under a different URL per locale is not a conflict. A `url` disagreement is excused only when all of these hold, and the rule never infers identity from similar names:
+
+- `url` is the only property the entity disagrees on. A differing `name`, `telephone`, legal identifier or any other property means the pages may describe two entities, so every row for that entity is reported.
+- Each `url` value is the address of one of the pages that declare the entity, so it names the page itself and not another site or section. Page addresses are compared without a trailing slash or fragment.
+- Every pair of pages that declare different `url` values list each other as hreflang alternates: reciprocal, in any language, and neither page canonicalises to another URL. A one-way reference is not enough, and `x-default` names no page and never counts.
+- The entity says the same thing about `provider`, `brand`, `publisher`, `creator`, `author`, `worksFor` and `member` on every page that declares it. Each of these may be a reference, a nested object or a bare string. For each one, either it is absent everywhere or every page gives the same value. A provider that differs between two locales, a bare-string provider that reads differently, or one present on some pages only means two services, not one, and blocks the excuse.
+- Every declaring page is known and there are at most 40 of them. A conflict that lists more pages than the map stores, or more than 40 pages, is reported, because a set that large is not provably one entity under localized URLs.
+
+Only those seven predicates are compared. `offers`, `areaServed`, `serviceType`, `isPartOf`, `mainEntityOfPage` and every other property or reference may differ per locale without blocking the excuse. Currency, local offers and the locale's own website are expected to vary.
+
+A verified alias adds nothing to the findings and is counted in `details.localizedUrlAliases` on the check. The same pages without reciprocal hreflang annotations still warn on `url`.
+
+The entity map itself is built before hreflang is checked, so it still lists the `url` conflict for an aliased entity, and `squirrel entities --problem conflict` and the entity viewer show it even though this rule passes it. The rule is the verdict; the map is the raw record.
 
 ## How to fix it
 
