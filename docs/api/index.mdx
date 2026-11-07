@@ -220,17 +220,43 @@ code and retry idempotent reads with backoff.
 
 ## Rate limiting
 
-Rate limiting is being rolled out. When enforced, throttled requests return
-`429 Too Many Requests` with these headers:
+The hosted API limits how fast one API key can send requests to the endpoints that start or publish work. Read endpoints are not metered by this limiter.
+
+| Endpoint | Limited |
+|----------|---------|
+| `POST /v1/agent-runs` | Yes |
+| `POST /v1/reports` | Yes |
+| `GET /v1/agent-runs`, `GET /v1/agent-runs/{id}`, `GET /v1/agent-runs/{id}/report` | No |
+| `GET /v1/reports` and the other report, rules, credits and organization reads | No |
+
+The budget is counted per API key, in a fixed one-minute window, and it is one shared budget for every limited endpoint the key calls. The hosted MCP server counts against the same budget when you call it with the same key. A request counts once it has passed authentication and the scope check, so a request the API rejects afterwards (a `400` for a bad body, a `402` for credits) still uses one request from the window.
+
+| Plan of the key's organization | Requests per minute per key |
+|--------------------------------|-----------------------------|
+| Free | 60 |
+| Starter | 300 |
+| Team | 300 |
+| Enterprise | 300 |
+
+Enterprise gets the same budget as Starter and Team: being unmetered for credits does not change the request limit. These are the current values and they can change, so read the headers rather than hard-coding the number.
+
+Every response from a limited endpoint carries the window state, not only the `429`:
 
 | Header | Meaning |
 |--------|---------|
-| `RateLimit-Limit` | Request quota for the current window |
-| `RateLimit-Remaining` | Requests remaining in the window |
+| `RateLimit-Limit` | Request budget for the window |
+| `RateLimit-Remaining` | Requests left in the window |
 | `RateLimit-Reset` | Seconds until the window resets |
-| `Retry-After` | Seconds to wait before retrying |
 
-Back off on `Retry-After` and retry idempotent reads.
+A request over the budget gets `429 Too Many Requests` with the same headers plus `Retry-After` (seconds to wait). The body is a plain string, not the typed error envelope above:
+
+```json
+{ "error": "Rate limit exceeded. Slow down and retry shortly." }
+```
+
+Back off for `Retry-After` seconds, then retry. The counter is approximate: it is held in memory per key and can reset early, so do not rely on it as a guarantee of when you will be throttled.
+
+Other `429` responses on `POST /v1/agent-runs` are not this limit. They use the typed envelope and say why: `QUEUE_FULL`, `EPHEMERAL_LIMIT` and `HOST_RATE_LIMITED` (the audited host's own crawl limit, with its own `Retry-After`).
 
 ## Credits
 

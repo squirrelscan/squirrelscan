@@ -141,7 +141,7 @@
             }
           },
           "429": {
-            "description": "Rate limited (`RATE_LIMITED`), the organization's audit queue is full (`QUEUE_FULL`, with `error.queued` and `error.maxQueued`), the target host is at its crawl limit (`HOST_RATE_LIMITED`, with `Retry-After`), or the organization already holds the maximum live one-shot websites for `config.ephemeral` (`EPHEMERAL_LIMIT`, with `error.active` and `error.limit`). Nothing is charged.",
+            "description": "Rate limited (the per-key request budget: a plain `{ \"error\": \"...\" }` string body with `RateLimit-*` and `Retry-After` headers, see Rate limiting), the organization's audit queue is full (`QUEUE_FULL`, with `error.queued` and `error.maxQueued`), the target host is at its crawl limit (`HOST_RATE_LIMITED`, with `Retry-After`), or the organization already holds the maximum live one-shot websites for `config.ephemeral` (`EPHEMERAL_LIMIT`, with `error.active` and `error.limit`). Nothing is charged.",
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/Error" },
@@ -224,8 +224,7 @@
               }
             }
           },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "429": { "$ref": "#/components/responses/RateLimited" }
+          "401": { "$ref": "#/components/responses/Unauthorized" }
         }
       }
     },
@@ -246,8 +245,7 @@
             }
           },
           "401": { "$ref": "#/components/responses/Unauthorized" },
-          "404": { "$ref": "#/components/responses/NotFound" },
-          "429": { "$ref": "#/components/responses/RateLimited" }
+          "404": { "$ref": "#/components/responses/NotFound" }
         }
       }
     },
@@ -285,8 +283,7 @@
                 }
               }
             }
-          },
-          "429": { "$ref": "#/components/responses/RateLimited" }
+          }
         }
       }
     },
@@ -364,8 +361,7 @@
               }
             }
           },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "429": { "$ref": "#/components/responses/RateLimited" }
+          "401": { "$ref": "#/components/responses/Unauthorized" }
         }
       }
     },
@@ -386,8 +382,7 @@
               }
             }
           },
-          "404": { "$ref": "#/components/responses/NotFound" },
-          "429": { "$ref": "#/components/responses/RateLimited" }
+          "404": { "$ref": "#/components/responses/NotFound" }
         }
       },
       "patch": {
@@ -447,8 +442,7 @@
                 }
               }
             }
-          },
-          "429": { "$ref": "#/components/responses/RateLimited" }
+          }
         }
       },
       "delete": {
@@ -471,8 +465,7 @@
             }
           },
           "401": { "$ref": "#/components/responses/Unauthorized" },
-          "404": { "$ref": "#/components/responses/NotFound" },
-          "429": { "$ref": "#/components/responses/RateLimited" }
+          "404": { "$ref": "#/components/responses/NotFound" }
         }
       }
     },
@@ -557,8 +550,7 @@
           "400": { "$ref": "#/components/responses/ValidationError" },
           "401": { "$ref": "#/components/responses/Unauthorized" },
           "403": { "$ref": "#/components/responses/Forbidden" },
-          "404": { "$ref": "#/components/responses/NotFound" },
-          "429": { "$ref": "#/components/responses/RateLimited" }
+          "404": { "$ref": "#/components/responses/NotFound" }
         }
       }
     },
@@ -587,8 +579,7 @@
           },
           "401": { "$ref": "#/components/responses/Unauthorized" },
           "403": { "$ref": "#/components/responses/Forbidden" },
-          "404": { "$ref": "#/components/responses/NotFound" },
-          "429": { "$ref": "#/components/responses/RateLimited" }
+          "404": { "$ref": "#/components/responses/NotFound" }
         }
       }
     },
@@ -607,8 +598,7 @@
               }
             }
           },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "429": { "$ref": "#/components/responses/RateLimited" }
+          "401": { "$ref": "#/components/responses/Unauthorized" }
         }
       }
     },
@@ -637,8 +627,7 @@
             }
           },
           "401": { "$ref": "#/components/responses/Unauthorized" },
-          "403": { "$ref": "#/components/responses/Forbidden" },
-          "429": { "$ref": "#/components/responses/RateLimited" }
+          "403": { "$ref": "#/components/responses/Forbidden" }
         }
       }
     },
@@ -667,8 +656,7 @@
           },
           "401": { "$ref": "#/components/responses/Unauthorized" },
           "403": { "$ref": "#/components/responses/Forbidden" },
-          "404": { "$ref": "#/components/responses/NotFound" },
-          "429": { "$ref": "#/components/responses/RateLimited" }
+          "404": { "$ref": "#/components/responses/NotFound" }
         }
       }
     },
@@ -751,8 +739,7 @@
                 }
               }
             }
-          },
-          "429": { "$ref": "#/components/responses/RateLimited" }
+          }
         }
       },
       "delete": {
@@ -778,8 +765,7 @@
           },
           "401": { "$ref": "#/components/responses/Unauthorized" },
           "403": { "$ref": "#/components/responses/Forbidden" },
-          "404": { "$ref": "#/components/responses/NotFound" },
-          "429": { "$ref": "#/components/responses/RateLimited" }
+          "404": { "$ref": "#/components/responses/NotFound" }
         }
       }
     }
@@ -952,7 +938,7 @@
         }
       },
       "RateLimited": {
-        "description": "Too many requests. Retry after the window resets. (Rate limiting is planned — issue #69 — these headers document the intended contract.)",
+        "description": "Too many requests: the API key (or organization) exceeded its request budget for the current one-minute window. Back off for `Retry-After` seconds. The body is a plain `{ \"error\": \"...\" }` string, not the typed error envelope.",
         "headers": {
           "RateLimit-Limit": { "$ref": "#/components/headers/RateLimitLimit" },
           "RateLimit-Remaining": { "$ref": "#/components/headers/RateLimitRemaining" },
@@ -961,8 +947,8 @@
         },
         "content": {
           "application/json": {
-            "schema": { "$ref": "#/components/schemas/Error" },
-            "example": { "error": { "code": "RATE_LIMITED", "message": "Too many requests" } }
+            "schema": { "type": "object", "required": ["error"], "properties": { "error": { "type": "string" } } },
+            "example": { "error": "Rate limit exceeded. Slow down and retry shortly." }
           }
         }
       }
