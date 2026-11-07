@@ -183,6 +183,20 @@ export function encodeIndexGaps(sortedIndexes: readonly number[]): number[] {
 export const SCAN_TRUNCATED_SKIP_REASON = "scan-truncated";
 
 /**
+ * `skipReason` of a page rule the runner did not run because the page could not be parsed and was read as an empty document
+ * (#1570). A rule-wide GAP like {@link RULE_TIMED_OUT_SKIP_REASON}: nothing was looked at, so a prior finding on the page is
+ * carried, not resolved. Also the skip's `details.foldKey`.
+ */
+export const UNREAD_PAGE_SKIP_REASON = "unread-page";
+
+/**
+ * Skip reasons that are a gap of a WHOLE rule on a page (its real check names are unknown, the skip is named after the rule): the
+ * rule did not look at the page, so a prior finding of any of its checks there carries, keyed `<ruleId>|*`.
+ */
+export const isRuleWideGapSkipReason = (reason: string | undefined): boolean =>
+  reason === RULE_TIMED_OUT_SKIP_REASON || reason === UNREAD_PAGE_SKIP_REASON;
+
+/**
  * `skipReason` of the `<rule>-error` check of a rule abandoned for its time
  * budget (pub#960). The rule did not finish on that page, so nothing was found
  * there: a not-evaluated state, never a failed finding. A skip that is neither a

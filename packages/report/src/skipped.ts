@@ -14,6 +14,7 @@
 import {
   RULE_TIMED_OUT_SKIP_REASON,
   SCAN_TRUNCATED_SKIP_REASON,
+  UNREAD_PAGE_SKIP_REASON,
 } from "@squirrelscan/core-contracts/resolution";
 import type { CheckResult } from "@squirrelscan/core-contracts";
 import { stripUnsafeLineText } from "@squirrelscan/core-contracts/control-chars";
@@ -25,6 +26,7 @@ export const RULE_ERRORED_REASON = "rule-errored";
 
 const LISTED_SKIP_REASONS: ReadonlySet<string> = new Set([
   SCAN_TRUNCATED_SKIP_REASON,
+  UNREAD_PAGE_SKIP_REASON,
   RULE_TIMED_OUT_SKIP_REASON,
   RULE_ERRORED_REASON,
 ]);

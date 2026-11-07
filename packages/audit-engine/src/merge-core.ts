@@ -20,8 +20,8 @@ import { packSiteResourceOccurrences } from "@squirrelscan/core-contracts/site-r
 import {
   CHECK_NOT_APPLICABLE_SKIP_REASON,
   isRuleNotApplicableReason,
-  RULE_TIMED_OUT_SKIP_REASON,
   SCAN_TRUNCATED_SKIP_REASON,
+  isRuleWideGapSkipReason,
   resolutionRuleKey,
   resolutionUrlHash,
 } from "@squirrelscan/core-contracts/resolution";
@@ -273,7 +273,7 @@ export function createNotEvaluatedCollector(normalize: (url: string) => string):
       // on the pages it names (every page when it names none). A replayed row
       // (carried or unrendered) is an earlier run's, not this one's.
       const replayed = check.provenance === "carried" || check.provenance === "unrendered";
-      const timedOut = check.status === "skipped" && check.skipReason === RULE_TIMED_OUT_SKIP_REASON;
+      const timedOut = check.status === "skipped" && isRuleWideGapSkipReason(check.skipReason);
       const thrown = check.status === "fail" && check.name === `${ruleId}-error`;
       if ((timedOut || thrown) && !replayed) {
         const at = check.pageUrl ?? pageUrl;

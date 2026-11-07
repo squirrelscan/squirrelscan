@@ -245,6 +245,18 @@ describe("local merge, no signal (#508)", () => {
     expect(merge([pass(A), pass(B)], true).state).toBe("resolved");
   });
 
+  test("a rule skipped on an unread page keeps its prior; the rule-wide gap does not touch other pages (#1570)", () => {
+    const unreadRow = (url: string): CheckResult => ({
+      name: RULE,
+      status: "skipped",
+      message: "Not evaluated: unread page",
+      skipReason: "unread-page",
+      pageUrl: url,
+    });
+    expect(merge([unreadRow(A), pass(B)], true).state).toBe("open");
+    expect(merge([pass(A), unreadRow(B)], true).state).toBe("resolved");
+  });
+
   test("a rule that threw on the page keeps its prior", () => {
     expect(merge([thrownRow(A), pass(B)], true).state).toBe("open");
   });

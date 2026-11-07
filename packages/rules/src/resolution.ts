@@ -29,11 +29,11 @@ import {
   encodeIndexGaps,
   CHECK_NOT_APPLICABLE_SKIP_REASON,
   isRuleNotApplicableReason,
-  RULE_TIMED_OUT_SKIP_REASON,
   resolutionRuleKey,
   resolutionCheckKey,
   resolutionUrlHash,
   SCAN_TRUNCATED_SKIP_REASON,
+  isRuleWideGapSkipReason,
   UNCONFIRMED_CHECK_SUFFIX,
 } from "@squirrelscan/core-contracts/resolution";
 import { byteLength } from "@squirrelscan/utils/bytes";
@@ -162,7 +162,7 @@ function collectResolutionEvidence(
   let timedOutRules = 0;
   for (const [ruleId, rule] of Object.entries(ruleResults)) {
     if (
-      rule.checks.some((c) => c.skipReason === RULE_TIMED_OUT_SKIP_REASON || isThrownRuleRow(ruleId, c))
+      rule.checks.some((c) => isRuleWideGapSkipReason(c.skipReason) || isThrownRuleRow(ruleId, c))
     )
       timedOutRules++;
   }
@@ -224,7 +224,7 @@ function collectResolutionEvidence(
         continue;
       }
       const timeoutSkip =
-        check.status === "skipped" && check.skipReason === RULE_TIMED_OUT_SKIP_REASON;
+        check.status === "skipped" && isRuleWideGapSkipReason(check.skipReason);
       // (pub#999) A rule that THREW is the same gap: the runner records it as a
       // failed `<rule>-error`, which names none of the rule's real checks either.
       // Unlike the timeout skip it is a real (failed) row, so it falls through to

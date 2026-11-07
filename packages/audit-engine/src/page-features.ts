@@ -27,6 +27,7 @@ import type { PageFingerprint, ParsedPage } from "@squirrelscan/rules";
 
 import { buildHeadersMap, hasAuditableHtmlBody, isHtmlContentType } from "./site-fetch";
 import { templateFingerprintKey } from "./template-key";
+import { auditedEmpty } from "@squirrelscan/parser";
 import { redirectedAway } from "@squirrelscan/utils/url";
 
 /**
@@ -105,6 +106,7 @@ export function extractPageFeatures(
   opts?: { fingerprint?: PageFingerprint | null; crawledUrls?: ReadonlySet<string> }
 ): PageFeatureRow {
   const headers = buildHeadersMap(page);
+  const unread = auditedEmpty(parsed);
   // meta+header indexability only; the robots.txt reason is site-level and is
   // appended by the rules from ctx.site.robotsTxt at run time.
   const indexability = isPageIndexable(parsed, headers);
@@ -136,8 +138,9 @@ export function extractPageFeatures(
     description,
     descHash: hashNormalized(description),
     contentHash: page.contentHash ?? null,
-    wordCount: parsed.content?.wordCount ?? null,
-    pageType: parsed.pageType ?? null,
+    // An unread page (#1570) has no words and no type, not zero words: left out of the site-norm sample, not counted as thin.
+    wordCount: unread ? null : (parsed.content?.wordCount ?? null),
+    pageType: unread ? null : (parsed.pageType ?? null),
     schemaTypes: parsed.schemas?.types ?? [],
     // Combined meta-OR-header noindex. `indexability` is the 2-arg (meta+header)
     // verdict, so !isIndexable == a meta/header noindex reason is present.
