@@ -45,7 +45,7 @@ import {
   type StreamRuleCache,
 } from "./rule-cache";
 import { foldRuleResultIntoTallies, type RuleTally } from "./scoring";
-import { AUDITED_EMPTY_NOTICE_SUFFIX } from "@squirrelscan/parser";
+import { auditedEmpty } from "@squirrelscan/parser";
 import { templateFingerprintKey } from "./template-key";
 import {
   createTemplateFanout,
@@ -546,7 +546,7 @@ export function streamPageRules(
           : null;
         const fanned = fanout?.take(clusterKey);
         // An unread page (#1570) skips its markup rules: its skips are not a template verdict to hand to siblings.
-        const unread = parsed.parseNotices?.some((notice) => notice.endsWith(AUDITED_EMPTY_NOTICE_SUFFIX)) === true;
+        const unread = auditedEmpty(parsed);
 
         const raw = yield* Effect.promise(() =>
           runner.runPageRules(

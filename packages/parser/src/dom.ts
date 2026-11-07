@@ -98,9 +98,18 @@ const PARSE_NOTICES = new WeakMap<object, string[]>();
 /** Ends the notice of a page that could not be read at all, so it was audited as an empty document (#1570). */
 export const AUDITED_EMPTY_NOTICE_SUFFIX = "so it was audited empty";
 
-/** True when the document was read as empty because the page could not be parsed: nothing it lacks is a finding. */
-export function auditedEmpty(document: unknown): boolean {
-  return parseNotices(document).some((notice) => notice.endsWith(AUDITED_EMPTY_NOTICE_SUFFIX));
+/** True when `notices` say the page could not be parsed and was read as an empty document: nothing it lacks is a finding. */
+export function noticesAuditedEmpty(notices: readonly string[] | undefined): boolean {
+  return notices?.some((notice) => notice.endsWith(AUDITED_EMPTY_NOTICE_SUFFIX)) === true;
+}
+
+/** The same for a document the parser degraded (its notices live beside it), or for a parsed page that carries them. */
+export function auditedEmpty(source: unknown): boolean {
+  if (typeof source === "object" && source !== null && ("parseNotices" in source || "document" in source)) {
+    const page = source as { parseNotices?: string[]; document?: unknown };
+    return noticesAuditedEmpty(page.parseNotices) || noticesAuditedEmpty(parseNotices(page.document));
+  }
+  return noticesAuditedEmpty(parseNotices(source));
 }
 
 /** The notices of a document `parseHTML` had to degrade to parse (an empty list for any other): see {@link parseContained}. */

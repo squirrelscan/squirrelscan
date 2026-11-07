@@ -1,5 +1,6 @@
-// #1570 end to end: a local audit of a page with a 640,000-token class attribute (it used to fail with `Maximum call stack size
-// exceeded` and no report) and a normal page exits 0, writes the report, audits both pages and warns `html-parse` on the big one only.
+// #1570 end to end, class-cut path: a local audit of a page with a 640,000-token class attribute (it used to fail with
+// `Maximum call stack size exceeded` and no report) and a normal page exits 0, writes the report and warns `html-parse` on the big
+// page only. It does NOT reach the empty-document path (no input known today does); that is covered by unit tests.
 
 import { afterAll, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";

@@ -35,6 +35,24 @@ function rule(id: string, name: string, checks: ReportRuleResult["checks"]): Rep
 }
 
 describe("renderJson skipped checks (#518)", () => {
+  test("an unread-page skip (a page that could not be parsed) is listed, never an issue (#1570)", () => {
+    const parsed = JSON.parse(
+      renderJson(
+        baseReport({
+          ruleResults: {
+            "core/h1": rule("core/h1", "H1", [
+              { name: "core/h1", status: "skipped", message: "Not evaluated", pageUrl: "https://example.com/unread", skipReason: "unread-page" },
+            ]),
+          },
+        }),
+      ),
+    );
+    expect(parsed.skippedChecks).toEqual([
+      { ruleId: "core/h1", name: "H1", check: "core/h1", reason: "unread-page", pages: ["https://example.com/unread"], pagesCount: 1, pagesHasMore: false },
+    ]);
+    expect(parsed.issues).toEqual([]);
+  });
+
   test("a per-page scan-truncated skip appears with its rule id and page URL", () => {
     const parsed = JSON.parse(
       renderJson(

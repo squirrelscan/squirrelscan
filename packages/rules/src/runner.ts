@@ -2,7 +2,8 @@ import { logger, profileRules } from "./logger";
 // Rule runner - executes rules with context
 
 import { PRIVATE_TARGET_SKIP_REASON, RULE_TIMED_OUT_SKIP_REASON } from "@squirrelscan/core-contracts";
-import { AUDITED_EMPTY_NOTICE_SUFFIX, detectSoft404, parsePage } from "@squirrelscan/parser";
+import { UNREAD_PAGE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
+import { auditedEmpty, detectSoft404, parsePage } from "@squirrelscan/parser";
 import { stripShadowIdScopes } from "@squirrelscan/parser/dom";
 import { mapWithConcurrency } from "@squirrelscan/utils";
 import { nonPublicHostLabel } from "@squirrelscan/utils/non-public-host";
@@ -268,23 +269,40 @@ function privateTargetSkip(ruleId: string): CheckResult {
   };
 }
 
-/** Skip reason of a page rule on a page that could not be parsed and was read as an empty document (#1570). */
-export const UNREAD_PAGE_SKIP_REASON = "unread-page";
+export { UNREAD_PAGE_SKIP_REASON };
 
-/** Page rules that judge the response (headers, scheme, size), not the markup: they still run on an unread page. */
-const RUNS_ON_UNREAD_PAGE: ReadonlySet<string> = new Set([
+/**
+ * Page rules that still run on an unread page (#1570): they judge the response (URL, headers, timing, size, MIME type), the raw
+ * `page.html` string or the cloud analysis, none of which the failed parse touched. Every other page rule reads the parsed markup
+ * and is skipped. `unread-page-gate-1570.test.ts` fails for a page rule that is in neither group, so a new response-only rule is
+ * classified when it is added. `integrity/kit-signature` reads parsed fields too but matches the raw HTML and is compromise
+ * detection (not ignorable), so it keeps running.
+ */
+export const RUNS_ON_UNREAD_PAGE: ReadonlySet<string> = new Set([
+  "a11y/focus-visible",
+  "ai/llm-parsability",
+  "analytics/consent-mode",
+  "content/mime-type",
+  "core/doctype",
   "crawl/html-size",
-  "security/https",
-  "security/cookie-flags",
+  "eeat/authority-signals",
+  "integrity/kit-signature",
+  "perf/browser-required",
   "perf/cache-headers",
   "perf/compression",
   "perf/http2",
+  "perf/ttfb",
+  "security/cookie-flags",
+  "security/https",
+  "url/hyphens",
+  "url/length",
+  "url/lowercase",
+  "url/parameters",
+  "url/slug-keywords",
+  "url/special-chars",
+  "url/stop-words",
+  "url/trailing-slash",
 ]);
-
-/** True when `ctx`'s page could not be parsed, so the empty document it carries says nothing about the page. */
-export function pageUnread(ctx: RuleContext): boolean {
-  return ctx.parsed?.parseNotices?.some((notice) => notice.endsWith(AUDITED_EMPTY_NOTICE_SUFFIX)) === true;
-}
 
 export class RuleRunner {
   private rules: Map<string, Rule>;
@@ -527,7 +545,7 @@ export class RuleRunner {
     // Unread-page gate (#1570): a page whose markup could not be parsed is audited as an empty document, so every rule that reads the
     // markup would report what the page was never seen to have (no title, no H1, no viewport, thin content). They are not evaluated,
     // never findings; `crawl/html-size` still warns `html-parse` on the page, and the rules that judge only the response still run.
-    if (rule.meta.scope === "page" && !RUNS_ON_UNREAD_PAGE.has(rule.meta.id) && pageUnread(ctx)) {
+    if (rule.meta.scope === "page" && !RUNS_ON_UNREAD_PAGE.has(rule.meta.id) && auditedEmpty(ctx.parsed)) {
       return {
         meta: rule.meta,
         checks: [
