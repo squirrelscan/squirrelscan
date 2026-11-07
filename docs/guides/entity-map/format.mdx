@@ -140,7 +140,7 @@ The `@id` is **resolved against the page it was declared on**. A relative `#orga
 
 ### `conflicts`
 
-Populated when two declarations of one entity disagree on a kept property, or on `@type`.
+Populated when two declarations of one entity disagree on a kept property, on `@type`, or on a legal identifier: `legalName`, `vatID`, `taxID`, `leiCode`, `duns` or `iso6523Code`. The legal identifiers are compared but not kept in `properties`. Registry numbers are compared without case, spaces, dots or hyphens, so `DE 123 456 789` and `de123456789` agree. A page that omits an identifier is absence, not disagreement.
 
 ```json
 "conflicts": [

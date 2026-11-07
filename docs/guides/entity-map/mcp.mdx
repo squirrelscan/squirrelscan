@@ -65,7 +65,7 @@ Page-local entities are hidden by default because they usually outnumber everyth
 
 One entity as the map recorded it, by key, `@id` or name: the properties the map keeps, the pages that declare it, the properties whose values disagree between those pages, and the references in and out.
 
-The map keeps nine properties, not all of them: `name`, `url`, `logo`, `image`, `sameAs`, `telephone`, `email`, `address`, `description`, plus `@type`. A property missing here may still be in the page's JSON-LD, and a disagreement in a property outside that set is not detected. A `Product` with conflicting `sku` values across pages reads as consistent.
+The map keeps nine properties, not all of them: `name`, `url`, `logo`, `image`, `sameAs`, `telephone`, `email`, `address`, `description`, plus `@type`. A property missing here may still be in the page's JSON-LD, and a disagreement in a property outside that set is not detected, except for the legal identifiers (`legalName`, `vatID`, `taxID`, `leiCode`, `duns`, `iso6523Code`), which are compared for conflicts but not stored. A `Product` with conflicting `sku` values across pages reads as consistent.
 
 The lookup resolves in order of certainty: an exact `@id`, then an exact key, then the key formed by prefixing your value with `id:`, then an exact name, and only then a name substring. The first match wins.
 
