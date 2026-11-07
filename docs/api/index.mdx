@@ -198,7 +198,7 @@ Common codes: `UNAUTHORIZED`, `FORBIDDEN`, `NO_ORG`, `NOT_FOUND`,
 `VALIDATION_ERROR`, `INVALID_JSON`, `PAYLOAD_TOO_LARGE`, `SECURITY_VIOLATION`,
 `INSUFFICIENT_CREDITS` (with `error.required` / `error.balance`),
 `DUPLICATE_REQUEST`, `RUN_NOT_ACTIVE`, `UPSTREAM_ERROR` (with `error.reason`),
-`RATE_LIMITED`, `QUEUE_FULL`, `EPHEMERAL_LIMIT`.
+`QUEUE_FULL`, `EPHEMERAL_LIMIT`.
 
 `SECURITY_VIOLATION` (`400`) is returned by `POST /v1/reports` when the report
 payload trips the content security scanner; `error.threats` lists the matched
@@ -220,7 +220,7 @@ code and retry idempotent reads with backoff.
 
 ## Rate limiting
 
-The hosted API limits how fast one API key can send requests to the endpoints that start or publish work. Read endpoints are not metered by this limiter.
+The hosted API limits how fast a caller can send requests to the endpoints that start or publish work. The metered endpoints below are the documented ones; read endpoints are not metered by this limiter.
 
 | Endpoint | Limited |
 |----------|---------|
@@ -229,7 +229,7 @@ The hosted API limits how fast one API key can send requests to the endpoints th
 | `GET /v1/agent-runs`, `GET /v1/agent-runs/{id}`, `GET /v1/agent-runs/{id}/report` | No |
 | `GET /v1/reports` and the other report, rules, credits and organization reads | No |
 
-The budget is counted per API key, in a fixed one-minute window, and it is one shared budget for every limited endpoint the key calls. The hosted MCP server counts against the same budget when you call it with the same key. A request counts once it has passed authentication and the scope check, so a request the API rejects afterwards (a `400` for a bad body, a `402` for credits) still uses one request from the window.
+The budget is counted per API key, in a fixed one-minute window, and it is one shared budget for every limited endpoint the key calls. The hosted MCP server counts against the same budget when you call it with the same key, and so do the other run endpoints an API key can reach in CI (`POST /v1/agent-runs/org/register` and `PATCH /v1/agent-runs/org/{id}`, which the CLI uses). A request counts once it has passed authentication and the scope check, so a request the API rejects afterwards (a `400` for a bad body, a `402` for credits) still uses one request from the window.
 
 | Plan of the key's organization | Requests per minute per key |
 |--------------------------------|-----------------------------|
@@ -240,7 +240,9 @@ The budget is counted per API key, in a fixed one-minute window, and it is one s
 
 Enterprise gets the same budget as Starter and Team: being unmetered for credits does not change the request limit. These are the current values and they can change, so read the headers rather than hard-coding the number.
 
-Every response from a limited endpoint carries the window state, not only the `429`:
+Per API key applies to API-key auth. A caller that signs in with the CLI login, a session or OAuth is counted per organization with the same plan budgets, and an unauthenticated request is counted per IP address at 30 requests per minute.
+
+Every response from a limited endpoint carries the window state once authentication has succeeded (a `401` or `403` has none), not only the `429`. The REST API does not expose these headers to browsers across origins, so they are for server-side clients:
 
 | Header | Meaning |
 |--------|---------|
@@ -255,6 +257,8 @@ A request over the budget gets `429 Too Many Requests` with the same headers plu
 ```
 
 Back off for `Retry-After` seconds, then retry. The counter is approximate: it is held in memory per key and can reset early, so do not rely on it as a guarantee of when you will be throttled.
+
+If the limiter itself fails, the request gets a `500` (a `503` on the MCP server): retry with backoff.
 
 Other `429` responses on `POST /v1/agent-runs` are not this limit. They use the typed envelope and say why: `QUEUE_FULL`, `EPHEMERAL_LIMIT` and `HOST_RATE_LIMITED` (the audited host's own crawl limit, with its own `Retry-After`).
 
