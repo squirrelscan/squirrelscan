@@ -29,6 +29,12 @@
 //     nothing at all was judged the check is skipped, never a vacuous pass.
 //   * HYPHENATED COMPOUNDS. "Online-Shop" and "Onlineshop" are one word: a hyphenated run also
 //     yields its joined form as a token, on both the anchor and the target side (#1598).
+//   * COMPOUND CONSTITUENTS. An anchor word of 5+ characters that ends a target word with 3+
+//     characters in front of it matches ("Handschuhe" in "Fahrradhandschuhe"): German and Dutch build nouns by
+//     prefixing, so the anchor is often the head noun of the title's compound (#1626).
+//   * LISTING LABELS. "Alle Artikel" or "View all posts" pointing at a blog, news or article
+//     listing names the listing by context, not by the title's words: such a pair is not judged
+//     (#1626).
 //   * DIACRITICS. Words are folded (NFD, marks stripped), so `Café` meets `Cafe menu`.
 //
 // Both paths feed `evaluateAnchorGraph` the same `AnchorGraph` (built by the same
@@ -272,6 +278,81 @@ export function tokensMatch(a: string, b: string): boolean {
   if (a === b) return true;
   const [short, long] = a.length <= b.length ? [a, b] : [b, a];
   return short.length >= 3 && long.length - short.length <= 3 && long.startsWith(short);
+}
+
+// An anchor word that ends a longer target word with at least three characters in front of it:
+// the head noun of the target's closed compound ("Handschuhe" in "Fahrradhandschuhe"). Five
+// characters keeps short endings ("care", "ware") from matching by chance. One direction only:
+// a target word inside a longer anchor word is the glued-card case, judged separately.
+const MIN_COMPOUND_PART = 5;
+const MIN_COMPOUND_PREFIX = 3;
+
+function sharesCompoundPart(anchor: readonly string[], target: readonly string[]): boolean {
+  return anchor.some(
+    (a) =>
+      a.length >= MIN_COMPOUND_PART &&
+      target.some((t) => t.length - a.length >= MIN_COMPOUND_PREFIX && t.endsWith(a)),
+  );
+}
+
+// Words that name a listing of articles, folded like tokens (NFD, no marks, ß -> ss).
+const LISTING_NOUNS: ReadonlySet<string> = new Set([
+  "article",
+  "articles",
+  "artikel",
+  "articulos",
+  "articulo",
+  "artigos",
+  "post",
+  "posts",
+  "beitrage",
+  "beitrag",
+  "blog",
+  "news",
+  "stories",
+  "nachrichten",
+  "neuigkeiten",
+  "noticias",
+  "actualites",
+  "archive",
+  "archiv",
+]);
+
+// Words that only say "go to the list": quantifiers and navigation verbs.
+const LISTING_LABEL_WORDS: ReadonlySet<string> = new Set([
+  "all",
+  "alle",
+  "alles",
+  "view",
+  "show",
+  "see",
+  "browse",
+  "more",
+  "mehr",
+  "read",
+  "lesen",
+  "latest",
+  "recent",
+  "neueste",
+  "todos",
+  "todas",
+  "tous",
+  "toutes",
+  "ver",
+]);
+
+/** An anchor made only of listing words, with at least one naming a listing ("Alle Artikel"). */
+function isListingLabel(anchor: readonly string[]): boolean {
+  return (
+    anchor.some((t) => LISTING_NOUNS.has(t)) &&
+    anchor.every((t) => LISTING_NOUNS.has(t) || LISTING_LABEL_WORDS.has(t))
+  );
+}
+
+function isListingTarget(target: string): boolean {
+  return tokenize(safeDecode(getPathname(target)), { slug: true }).tokens.some((t) =>
+    LISTING_NOUNS.has(t),
+  );
 }
 
 function isJudgeableTarget(page: AnchorGraphPage): boolean {
@@ -663,12 +744,18 @@ export function evaluateAnchorGraph(
     if (
       sharesToken(anchor, target) ||
       sharesJoined(anchor, anchorJoined, target, targetJoined) ||
+      sharesCompoundPart(anchor, target) ||
       (pair.glued &&
         (sharesInsideGlue(anchor, target) ||
           sharesToken(pair.partTokens, target) ||
           sharesJoined(pair.partTokens, anchorJoined, target, targetJoined)))
     ) {
       judged += 1;
+      continue;
+    }
+    // A generic listing label on a listing page: the context names the target, not the words.
+    if (isListingLabel(anchor) && isListingTarget(pair.target)) {
+      notJudged += 1;
       continue;
     }
     // No shared word, but the anchor's word list was cut off: not a definitive mismatch.
