@@ -1296,7 +1296,15 @@
         "properties": {
           "id": { "type": "string" },
           "baseUrl": { "type": "string", "format": "uri" },
-          "healthScore": { "type": ["integer", "null"] },
+          "healthScore": {
+            "type": ["integer", "null"],
+            "description": "Rounded overall score. `null` for a blocked or unreachable site and for a `partial` report: one whose run was started with `config.enabledRulePatterns` covers only the rules it selected, so its score is not the site's score and is withheld."
+          },
+          "partial": {
+            "type": "boolean",
+            "const": true,
+            "description": "Present, and `true`, only when the report's run was started with `config.enabledRulePatterns`; `healthScore` is then `null`. The key is absent otherwise."
+          },
           "pageCount": { "type": ["integer", "null"] },
           "errorCount": { "type": ["integer", "null"] },
           "warningCount": { "type": ["integer", "null"] },

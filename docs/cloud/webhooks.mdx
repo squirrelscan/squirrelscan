@@ -63,7 +63,7 @@ Every delivery is a JSON body with a stable, versioned envelope:
 - `event` is one of the [event types](#event-types) above; `data` is the payload for that event.
 - `id` is the delivery's unique ID (also sent in `X-Squirrel-Delivery`) - use it to dedupe retries.
 
-The `data` shape varies by event. `issues.detected` carries `created`/`updated`/`resolved` counts; `schedule.completed` carries the completed run + report identifiers and `healthScore`.
+The `data` shape varies by event. `issues.detected` carries `created`/`updated`/`resolved` counts; `schedule.completed` carries the completed run + report identifiers and `healthScore` (`null` for a failed or rule-filtered run).
 
 ## Headers
 
