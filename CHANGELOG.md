@@ -17,12 +17,21 @@ How it works:
 
 ## [Unreleased]
 
+## v0.0.172 (2026-11-07)
+
+Three rule false positives are fixed (entity-conflicts, broken-anchors, mojibake), the entity map compares legal identifiers, and the REST API docs cover the rules catalogue, partial reports for rule-filtered runs and per-rule results.
+
+### Added
+
+- **`ax/content-without-js` says why it did not run when a hosted run has rendering switched off.** A run configured with `render: false` never asks the cloud render service, and the rule now skips with "render disabled by the run config" instead of "not applicable to this site type". No browser is paid for, as before; only the reason changed.
+- The REST API docs describe `GET /v1/rules` (the rule catalogue with `requiresCloud` and `requiresRender`), the partial report of a rule-filtered run (`report.partial`, null scores), the typed `results[]` list with its status and skip reason values, and a null run-level `healthScore` with `partial: true` for such runs.
+
 ### Fixed
 
 - **`schema/entity-conflicts` no longer reports a localized `url` alias of one entity (#1615).** A Service with one `@id`, the same name and provider, and a page-specific `url` on reciprocal hreflang alternates was reported as a conflicting URL. That is now excused when `url` is the entity's only disagreement, each `url` is the address of a declaring page, every pair of pages with different values lists each other as hreflang alternates (reciprocal, neither page canonicalised elsewhere, `x-default` never counts), at most 40 pages declare the entity, and the entity says the same thing about `provider`, `brand`, `publisher`, `creator`, `author`, `worksFor` and `member` on every page, whether as a reference, a nested object or a bare string. Other properties, such as `offers` or `areaServed`, may differ per locale. Without reciprocal alternates it still warns, and a differing telephone, provider or legal identifier is never excused. The entity map still lists the `url` conflict for an aliased entity; the rule is the verdict.
 - **`links/broken-anchors` no longer calls an id that an inline script names definitely missing on an unrendered page (#1616).** A server-rendered page can add a target id from inline script at init (`el.id = "size"`). Fetched without a browser, the id is not in the HTML, so the link was reported as broken. When a quoted string of up to 64 characters in an inline script of the target page equals the missing fragment, the link is now listed under `unconfirmed-anchors` (info). This is a name match, not a creation test, so a generic fragment such as `#contact` can be unconfirmed by an unrelated mention. Reading is capped at 256 KB of script text and 1,024 distinct strings per page, and truncation demotes nothing: later strings are not read. A missing id no script names still warns, a static id still passes, and a rendered audit reads the initialized DOM as before. The `unconfirmed-anchors` message now reads "target a page that was not rendered and may add the id with JavaScript".
 - **`content/mojibake` no longer flags valid uppercase Portuguese words (#1617).** `MANHÃ`, `IRMÃ` and `MAÇÃ` before a space were reported as `utf8-as-latin1` corruption because the sequence for `à` was written with a regular space. Decoding the UTF-8 bytes C3 A0 as latin1 gives `Ã` plus a no-break space (U+00A0), so the rule now matches that, and the same for `Â`. Genuine corruption such as `cafÃ` plus a no-break space still reports.
-- **A hosted run with rendering switched off no longer lists `ax/content-without-js` as a locked rule (private#3792).** The "render disabled by the run config" skip is the run's own choice, so it stays off the "check didn't run, re-run without `--http`" banner and the locked-rules list, as `not applicable` already did.
+- **A hosted run with rendering switched off no longer lists `ax/content-without-js` as a locked rule.** The "render disabled by the run config" skip is the run's own choice, so it stays off the "check didn't run, re-run without `--http`" banner and the locked-rules list, as `not applicable` already did.
 
 ### Changed
 
@@ -40,7 +49,6 @@ Audit rules can come from an allowlisted plugin, the CSP rule names first-party 
 
 ### Fixed
 
-- **`ax/content-without-js` says why it did not run when a hosted run has rendering switched off (private#3792).** A run configured with `render: false` never asks the cloud render service, and the rule now skips with "render disabled by the run config" instead of "not applicable to this site type". No browser is paid for, as before; only the reason changed.
 - **Leaked-secrets findings cap the stored value length (#1592).** The caps counted findings, not bytes, so one generic assignment with a 1 MB value was kept whole and 100 such pages held about 100 MB of value text. A stored value is now cut to 2,048 characters, which covers the longest ordinary structured secret (a 2048-bit PEM private key is about 1,675 characters); classification still sees the full value, a cut finding is still reported and marked with `truncated: true` in the check item, and `length` keeps the full length. Check items gain the `truncated` field, so consumers of the rule output that regenerate from check metadata should pick it up.
 
 ## v0.0.170 (2026-11-05)
