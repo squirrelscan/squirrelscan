@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+## v0.0.173 (2026-11-08)
+
+A page the parser cannot read no longer reports missing titles and headings, `content/mojibake` and `links/anchor-mismatch` handle more real text correctly, `ax/ai-crawlers` reports search-engine bots, the macOS Intel binary runs on older CPUs, and the REST API docs cover rate limits and unknown request fields.
+
 ### Added
 
 - The REST API docs and the OpenAPI file state that `POST /v1/agent-runs` from an API key answers an unknown top-level field with a `400` `VALIDATION_ERROR` naming it, so a typo such as `conifg` fails instead of running a default audit, and list the accepted top-level fields.
