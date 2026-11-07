@@ -45,6 +45,7 @@ import {
   type StreamRuleCache,
 } from "./rule-cache";
 import { foldRuleResultIntoTallies, type RuleTally } from "./scoring";
+import { AUDITED_EMPTY_NOTICE_SUFFIX } from "@squirrelscan/parser";
 import { templateFingerprintKey } from "./template-key";
 import {
   createTemplateFanout,
@@ -544,6 +545,8 @@ export function streamPageRules(
             )
           : null;
         const fanned = fanout?.take(clusterKey);
+        // An unread page (#1570) skips its markup rules: its skips are not a template verdict to hand to siblings.
+        const unread = parsed.parseNotices?.some((notice) => notice.endsWith(AUDITED_EMPTY_NOTICE_SUFFIX)) === true;
 
         const raw = yield* Effect.promise(() =>
           runner.runPageRules(
@@ -595,7 +598,7 @@ export function streamPageRules(
         // BEFORE `pageUrl` is stamped below, so what a member inherits is
         // page-identity-free and its own stamp is a first write (#1951). Only when
         // this page ran the rules itself — a member has nothing new to say.
-        if (!fanned) fanout?.record(clusterKey, result.ruleResults);
+        if (!fanned && !unread) fanout?.record(clusterKey, result.ruleResults);
 
         // Stamp the page URL FIRST, then every consumer — the sink, the retained
         // maps and the fold — sees identical checks and they stay byte-consistent

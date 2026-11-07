@@ -2,7 +2,7 @@ import { logger, profileRules } from "./logger";
 // Rule runner - executes rules with context
 
 import { PRIVATE_TARGET_SKIP_REASON, RULE_TIMED_OUT_SKIP_REASON } from "@squirrelscan/core-contracts";
-import { detectSoft404, parsePage } from "@squirrelscan/parser";
+import { AUDITED_EMPTY_NOTICE_SUFFIX, detectSoft404, parsePage } from "@squirrelscan/parser";
 import { stripShadowIdScopes } from "@squirrelscan/parser/dom";
 import { mapWithConcurrency } from "@squirrelscan/utils";
 import { nonPublicHostLabel } from "@squirrelscan/utils/non-public-host";
@@ -268,6 +268,24 @@ function privateTargetSkip(ruleId: string): CheckResult {
   };
 }
 
+/** Skip reason of a page rule on a page that could not be parsed and was read as an empty document (#1570). */
+export const UNREAD_PAGE_SKIP_REASON = "unread-page";
+
+/** Page rules that judge the response (headers, scheme, size), not the markup: they still run on an unread page. */
+const RUNS_ON_UNREAD_PAGE: ReadonlySet<string> = new Set([
+  "crawl/html-size",
+  "security/https",
+  "security/cookie-flags",
+  "perf/cache-headers",
+  "perf/compression",
+  "perf/http2",
+]);
+
+/** True when `ctx`'s page could not be parsed, so the empty document it carries says nothing about the page. */
+export function pageUnread(ctx: RuleContext): boolean {
+  return ctx.parsed?.parseNotices?.some((notice) => notice.endsWith(AUDITED_EMPTY_NOTICE_SUFFIX)) === true;
+}
+
 export class RuleRunner {
   private rules: Map<string, Rule>;
   private enabledRuleIds: string[];
@@ -504,6 +522,24 @@ export class RuleRunner {
     // times. Decided by the audit URL, so it is constant for the whole run.
     if (rule.meta.skipOnPrivateTarget && this.isPrivateTarget(ctx)) {
       return { meta: rule.meta, checks: [privateTargetSkip(rule.meta.id)] };
+    }
+
+    // Unread-page gate (#1570): a page whose markup could not be parsed is audited as an empty document, so every rule that reads the
+    // markup would report what the page was never seen to have (no title, no H1, no viewport, thin content). They are not evaluated,
+    // never findings; `crawl/html-size` still warns `html-parse` on the page, and the rules that judge only the response still run.
+    if (rule.meta.scope === "page" && !RUNS_ON_UNREAD_PAGE.has(rule.meta.id) && pageUnread(ctx)) {
+      return {
+        meta: rule.meta,
+        checks: [
+          {
+            name: rule.meta.id,
+            status: "skipped",
+            message: "Not evaluated: the page's markup could not be parsed, so it was audited as an empty document (see the html-parse warning on crawl/html-size)",
+            skipReason: UNREAD_PAGE_SKIP_REASON,
+            details: { foldKey: UNREAD_PAGE_SKIP_REASON },
+          },
+        ],
+      };
     }
 
     // Soft-404 gate: skip page content/mechanism rules on a URL that serves 404
