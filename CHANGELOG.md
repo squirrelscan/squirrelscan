@@ -20,6 +20,7 @@ How it works:
 ### Added
 
 - **`ax/ai-crawlers` reports Googlebot, Bingbot and Applebot with a path-aware verdict.** A new info check, `search-engine-access`, evaluates each search-engine bot against the audited URL with the shared robots.txt matcher and says whether it is allowed, blocked from the site root, blocked for that path only, or blocked at the root but re-permitted for that path by an `Allow` rule. Applebot with no group of its own follows the Googlebot group, as Apple documents. The 24 AI tokens and their checks are unchanged.
+- The REST API docs state the per-key request limit: 60 requests per minute on Free, 300 on Starter, Team and Enterprise, for `POST /v1/agent-runs` and `POST /v1/reports` (the read endpoints are not metered), with the `RateLimit-*` and `Retry-After` headers and the plain string `429` body. The OpenAPI file no longer lists the limiter's `429` on the read endpoints and shows the real body.
 
 ### Fixed
 
