@@ -6,7 +6,13 @@ import { describe, expect, test } from "bun:test";
 import type { CheckResult, RobotsTxtData } from "@squirrelscan/core-contracts";
 import { parseRobotsTxt } from "@squirrelscan/utils/robots-txt";
 
-import { aiCrawlersRule, evaluateAiCrawlers, AI_CRAWLERS } from "../src/ax/ai-crawlers";
+import {
+  aiCrawlersRule,
+  evaluateAiCrawlers,
+  evaluateSearchEngineBots,
+  AI_CRAWLERS,
+  SEARCH_ENGINE_BOTS,
+} from "../src/ax/ai-crawlers";
 import type { ParsedPage, RuleContext } from "../src/types";
 
 type Group = RobotsTxtData["rules"][number];
@@ -170,5 +176,72 @@ describe("ax/ai-crawlers", () => {
     ).length;
     expect(warn?.status).toBe("warn");
     expect(warn?.items?.length).toBe(answerCount);
+  });
+});
+
+// squirrelscan/repo#3789: search-engine bot class with a per-bot, path-aware verdict.
+describe("ax/ai-crawlers search-engine bots", () => {
+  const verdictOf = (data: RobotsTxtData, url: string, token: string) =>
+    evaluateSearchEngineBots(data, url).find((v) => v.token === token);
+
+  test("Googlebot, Bingbot and Applebot are classified as search-engine", () => {
+    expect(SEARCH_ENGINE_BOTS.map((b) => b.token)).toEqual(["Googlebot", "Bingbot", "Applebot"]);
+    const all = evaluateSearchEngineBots(robots([]), "https://example.com/");
+    expect(all.every((v) => v.crawlerClass === "search-engine" && v.verdict === "allowed")).toBe(
+      true,
+    );
+    // Not mixed into the AI crawler list.
+    expect(AI_CRAWLERS.some((c) => c.token === "Googlebot")).toBe(false);
+  });
+
+  test("root block: Disallow / on a named bot is root-blocked, others stay allowed", () => {
+    const data = robots([{ userAgent: "Bingbot", rules: [{ type: "disallow", path: "/" }] }]);
+    const bing = verdictOf(data, "https://example.com/docs/page", "Bingbot");
+    expect(bing?.verdict).toBe("root-blocked");
+    expect(bing?.explicitlyListed).toBe(true);
+    expect(verdictOf(data, "https://example.com/docs/page", "Googlebot")?.verdict).toBe("allowed");
+  });
+
+  test("path block: the root is open but the audited path is disallowed", () => {
+    const data = robots([{ userAgent: "*", rules: [{ type: "disallow", path: "/private" }] }]);
+    const hit = verdictOf(data, "https://example.com/private/report", "Googlebot");
+    expect(hit?.verdict).toBe("path-blocked");
+    expect(hit?.rootBlocked).toBe(false);
+    expect(hit?.pathBlocked).toBe(true);
+    expect(hit?.explicitlyListed).toBe(false);
+    expect(verdictOf(data, "https://example.com/public", "Googlebot")?.verdict).toBe("allowed");
+  });
+
+  test("allow override: root disallowed, the audited path re-permitted by a longer Allow", () => {
+    const data = robots([
+      {
+        userAgent: "Applebot",
+        rules: [
+          { type: "disallow", path: "/" },
+          { type: "allow", path: "/docs/" },
+        ],
+      },
+    ]);
+    expect(verdictOf(data, "https://example.com/docs/intro", "Applebot")?.verdict).toBe(
+      "allow-override",
+    );
+    expect(verdictOf(data, "https://example.com/other", "Applebot")?.verdict).toBe("root-blocked");
+  });
+
+  test("the rule reports the search-engine check for the entry URL, info only", () => {
+    const c = ctx(robots([{ userAgent: "*", rules: [{ type: "disallow", path: "/private" }] }]));
+    c.site!.entryUrls = ["https://example.com/private/start"];
+    const checks = aiCrawlersRule.run(c).checks;
+    const check = checks.find((x) => x.name === "search-engine-access");
+    expect(check?.status).toBe("info");
+    expect(check?.message).toContain("Googlebot blocked for this path only");
+    expect((check?.details as { auditedUrl: string }).auditedUrl).toBe(
+      "https://example.com/private/start",
+    );
+    expect(check?.items?.map((i) => i.id)).toEqual(["Googlebot", "Bingbot", "Applebot"]);
+  });
+
+  test("no robots.txt: no search-engine check, everything is allowed by default", () => {
+    expect(run(null).some((c) => c.name === "search-engine-access")).toBe(false);
   });
 });
