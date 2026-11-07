@@ -20,6 +20,8 @@ How it works:
 ### Fixed
 
 - The macOS Intel (`darwin-x64`) binary is now built with Bun's baseline target, like the other x64 builds, so it no longer dies with an illegal instruction (exit 132) on Intel Macs whose CPU lacks AVX instructions #1562
+- **`content/mojibake` reports the Portuguese and Spanish lowercase accents.** `Ã£`, `Ã¡`, `Ã³`, `Ãº`, `Ã` plus a soft hyphen, `Ã¢`, `Ãª` and `Ãµ` in place of ã, á, ó, ú, í, â, ê and õ are detected, while correctly encoded text and uppercase words such as `MANHÃ` stay clean. (#1623)
+- **`links/anchor-mismatch` no longer warns on a German compound head noun or a generic listing label.** `Handschuhe` linking to a page titled `Fahrradhandschuhe` shares a word, and a label made only of listing words (`Alle Artikel`, `View all posts`) pointing at an article or blog listing is counted as not judged. An unrelated anchor still warns. (#1626)
 
 ## v0.0.172 (2026-11-07)
 
