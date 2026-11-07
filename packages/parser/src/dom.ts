@@ -95,6 +95,14 @@ export const MAX_CLASS_TOKENS = 20_000;
 const MAX_PARSE_NOTICES = 5;
 const PARSE_NOTICES = new WeakMap<object, string[]>();
 
+/** Ends the notice of a page that could not be read at all, so it was audited as an empty document (#1570). */
+export const AUDITED_EMPTY_NOTICE_SUFFIX = "so it was audited empty";
+
+/** True when the document was read as empty because the page could not be parsed: nothing it lacks is a finding. */
+export function auditedEmpty(document: unknown): boolean {
+  return parseNotices(document).some((notice) => notice.endsWith(AUDITED_EMPTY_NOTICE_SUFFIX));
+}
+
 /** The notices of a document `parseHTML` had to degrade to parse (an empty list for any other): see {@link parseContained}. */
 export function parseNotices(document: unknown): string[] {
   return (typeof document === "object" && document !== null ? PARSE_NOTICES.get(document) : undefined) ?? [];
@@ -130,7 +138,7 @@ export function parseContainedWith(
       }
     }
     const parsed = parse("<html><head></head><body></body></html>", ...rest);
-    PARSE_NOTICES.set(parsed.document, [`the page could not be read (${error instanceof Error ? error.message.slice(0, 120) : "parse error"}), so it was audited empty`]);
+    PARSE_NOTICES.set(parsed.document, [`the page could not be read (${error instanceof Error ? error.message.slice(0, 120) : "parse error"}), ${AUDITED_EMPTY_NOTICE_SUFFIX}`]);
     return parsed;
   }
 }
