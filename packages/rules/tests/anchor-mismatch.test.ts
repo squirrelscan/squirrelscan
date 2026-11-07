@@ -866,4 +866,45 @@ describe("links/anchor-mismatch compounds and listing labels (#1626)", () => {
     ]);
     expect(c.status).toBe("warn");
   });
+
+  test("one article under a listing section is a real target, so a listing label still warns", () => {
+    const cases: [string, string, string][] = [
+      ["View all posts", "/blog/how-to-fix-roof", "How to fix a roof"],
+      ["Alle Artikel", "/news/acme-acquires-foo", "Acme acquires Foo"],
+      ["More news", "/products/blog-widget", "Blog widget"],
+    ];
+    for (const [text, path, title] of cases) {
+      const c = check([
+        { ...HOME, links: [body(path, text)] },
+        { url: `https://example.com${path}`, title },
+      ]);
+      expect(c.status).toBe("warn");
+    }
+  });
+
+  test("a listing may carry a page number or a trailing slash (/page/N is dropped before this as pagination)", () => {
+    for (const path of ["/blog/", "/blog/2", "/articles.html", "/en/news"]) {
+      const c = check([
+        { ...HOME, links: [body(path, "View all posts")] },
+        { url: `https://example.com${path}`, title: "Notes from the workshop" },
+      ]);
+      expect([path, (c.details as { notJudged: number }).notJudged]).toEqual([path, 1]);
+    }
+  });
+
+  // Known limitation: the anchor graph carries no page language, so the compound match is not
+  // gated to compounding languages and English look-alikes pass too.
+  test("known limitation: English suffix look-alikes match as compounds", () => {
+    for (const [text, title] of [
+      ["Press", "Compress images"],
+      ["Stand", "Understand taxes"],
+      ["Board", "Dashboard tour"],
+    ] as const) {
+      const c = check([
+        { ...HOME, links: [body("/t", text)] },
+        { url: "https://example.com/t", title },
+      ]);
+      expect(c.status).toBe("pass");
+    }
+  });
 });
