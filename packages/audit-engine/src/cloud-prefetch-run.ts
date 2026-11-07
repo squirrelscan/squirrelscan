@@ -40,6 +40,7 @@ import {
   type SiteContextPage,
 } from "./adapter";
 import { detachFromPage } from "./detach";
+import { auditedEmpty } from "@squirrelscan/parser";
 import { CLASS_SPLIT } from "@squirrelscan/parser/dom";
 
 // The parsed page's linkedom Document, without adding a direct linkedom dep here.
@@ -76,6 +77,8 @@ export function buildCloudPagePayloads(siteContext: SiteContextPage[]): CloudPag
   const payloads: CloudPagePayload[] = [];
   for (const { page, parsed } of siteContext) {
     if (!parsed || page.status < 200 || page.status >= 300) continue;
+    // An unread page (#1570) would send an empty excerpt for the cloud to score as an empty document, and cost credits.
+    if (auditedEmpty(parsed)) continue;
     const meta: Record<string, string> = {};
     if (parsed.meta.description)
       meta.description = parsed.meta.description.slice(0, MAX_DESCRIPTION_CHARS);

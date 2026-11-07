@@ -44,6 +44,7 @@ import {
   parseUnverifiedReason,
 } from "@squirrelscan/core-contracts";
 import { SERVICE_LIMITS } from "@squirrelscan/core-contracts/limits";
+import { auditedEmpty } from "@squirrelscan/parser";
 import {
   buildEditorSummaryRequest,
   toEditorSummary,
@@ -194,6 +195,8 @@ export function buildCloudPagePayloads(
   const payloads: CloudPagePayload[] = [];
   for (const { page, parsed } of siteContext) {
     if (!parsed || page.status < 200 || page.status >= 300) continue;
+    // An unread page (#1570) would send an empty excerpt for the cloud to score as an empty document, and cost credits.
+    if (auditedEmpty(parsed)) continue;
     const meta: Record<string, string> = {};
     if (parsed.meta.description)
       meta.description = parsed.meta.description.slice(

@@ -273,19 +273,17 @@ export { UNREAD_PAGE_SKIP_REASON };
 
 /**
  * Page rules that still run on an unread page (#1570): they judge the response (URL, headers, timing, size, MIME type), the raw
- * `page.html` string or the cloud analysis, none of which the failed parse touched. Every other page rule reads the parsed markup
+ * `page.html` string, none of which the failed parse touched. Every other page rule reads the parsed markup
  * and is skipped. `unread-page-gate-1570.test.ts` fails for a page rule that is in neither group, so a new response-only rule is
  * classified when it is added. `integrity/kit-signature` reads parsed fields too but matches the raw HTML and is compromise
  * detection (not ignorable), so it keeps running.
  */
 export const RUNS_ON_UNREAD_PAGE: ReadonlySet<string> = new Set([
   "a11y/focus-visible",
-  "ai/llm-parsability",
   "analytics/consent-mode",
   "content/mime-type",
   "core/doctype",
   "crawl/html-size",
-  "eeat/authority-signals",
   "integrity/kit-signature",
   "perf/browser-required",
   "perf/cache-headers",

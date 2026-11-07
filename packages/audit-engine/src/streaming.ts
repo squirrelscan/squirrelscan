@@ -636,14 +636,19 @@ export function streamPageRules(
         // `!isAuditablePage(page)` continue above already guarantees this page is
         // auditable, so no second gate is needed here. `shared` was built before
         // the rules ran (see above); it is the same object either way.
-        const features = extractPageFeatures(page, parsed, { ...shared, crawledUrls });
-        yield* storage
-          .upsertPageFeatures(crawlId, features)
-          .pipe(Effect.catchAll(() => Effect.void));
-        extractedCount++;
+        // An unread page (#1570) is left out of page_features and the collectors: its empty parse would read as a page with no
+        // favicon, theme color, og:image, canonical or NAP and a blank template, and the site rules (asset divergence, NAP
+        // consistency, template discontinuity, the word-count norm, duplicate titles) would judge the site on it.
+        const features = unread ? null : extractPageFeatures(page, parsed, { ...shared, crawledUrls });
+        if (features) {
+          yield* storage
+            .upsertPageFeatures(crawlId, features)
+            .pipe(Effect.catchAll(() => Effect.void));
+          extractedCount++;
+        }
         const signals: Record<string, unknown> = {};
-        let signalsCacheable = true;
-        for (const c of collectors) {
+        let signalsCacheable = !unread;
+        for (const c of unread ? [] : collectors) {
           const snapshot = c.collect(page, parsed, shared);
           // `undefined` is a collector saying its contribution cannot be
           // reproduced from data; the page is then scored normally and simply
@@ -658,7 +663,7 @@ export function streamPageRules(
           checks.some((c) => c.details?.timedOut === true),
         );
         const cacheKey = keyByUrl.get(pageUrl);
-        if (ruleCache && cacheKey && signalsCacheable && !timedOut) {
+        if (ruleCache && cacheKey && features && signalsCacheable && !timedOut) {
           // The checks stored are the ones whose `pageUrl` was just stamped, so a
           // replay's own stamping loop is a no-op and the two paths agree. They
           // are the SAME objects the run already retains, so recording them here

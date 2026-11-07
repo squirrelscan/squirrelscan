@@ -686,7 +686,7 @@ Top-level keys. Keys marked optional are omitted when they do not apply.
 | `ruleId` | Rule that skipped, e.g. `content/hidden-text` |
 | `name` | Rule display name |
 | `check` | Check name within the rule |
-| `reason` | Why it was skipped: `scan-truncated` (the page hit the rule's scan limit and was only partly scanned: `content/hidden-text`, `content/dev-leakage`) `rule-timed-out` (the rule ran past its time budget and was not evaluated; the audit records it once, and `pagesCount` is how many pages hit the budget, so `pages` may be shorter or empty) or `rule-errored` (the rule hit an internal squirrelscan error and was not evaluated: a defect in squirrel, not in your pages). More reasons may be added, so treat unknown values as a skip |
+| `reason` | Why it was skipped: `scan-truncated` (the page hit the rule's scan limit and was only partly scanned: `content/hidden-text`, `content/dev-leakage`) `unread-page` (the page's markup could not be parsed and it was read as an empty document, so the rules that read the markup were not evaluated on it; `check` is the rule id and a prior finding on that page carries) `rule-timed-out` (the rule ran past its time budget and was not evaluated; the audit records it once, and `pagesCount` is how many pages hit the budget, so `pages` may be shorter or empty) or `rule-errored` (the rule hit an internal squirrelscan error and was not evaluated: a defect in squirrel, not in your pages). More reasons may be added, so treat unknown values as a skip |
 | `pages` | Skipped page URLs. A sample when `pagesHasMore` is true |
 | `pagesCount` | True number of skipped pages |
 | `pagesHasMore` | `pagesCount` is larger than `pages.length` |
