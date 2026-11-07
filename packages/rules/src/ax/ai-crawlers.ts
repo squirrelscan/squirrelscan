@@ -2,6 +2,7 @@
 // classified into the three purposes those crawlers actually serve.
 
 import type { RobotsTxtData } from "@squirrelscan/core-contracts";
+import { isRobotsTxtDisallowed } from "@squirrelscan/utils/robots-txt";
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
@@ -73,6 +74,77 @@ function groupsForToken(robotsTxt: RobotsTxtData, token: string) {
   // "*" is always literal, no case-folding needed.
   return { groups: robotsTxt.rules.filter((g) => g.userAgent === "*"), explicit: false };
 }
+
+/** A search-engine crawler token. Not an AI crawler: reported beside them for context. */
+interface SearchEngineBot {
+  /** robots.txt user-agent token (matched case-insensitively). */
+  token: string;
+  vendor: string;
+}
+
+/** The search-engine bot class (squirrelscan/repo#3789): the crawlers that index a site for web search. */
+export const SEARCH_ENGINE_BOTS: SearchEngineBot[] = [
+  { token: "Googlebot", vendor: "Google" },
+  { token: "Bingbot", vendor: "Microsoft" },
+  { token: "Applebot", vendor: "Apple" },
+];
+
+/**
+ * How robots.txt treats a bot for the audited URL, against the site root:
+ * - `allowed`: the audited path is allowed and so is the root.
+ * - `root-blocked`: the root is disallowed and so is the audited path.
+ * - `path-blocked`: the root is allowed, but a rule disallows the audited path.
+ * - `allow-override`: the root is disallowed, but an `Allow` rule re-permits the audited path.
+ */
+export type SearchEngineVerdictKind = "allowed" | "root-blocked" | "path-blocked" | "allow-override";
+
+export interface SearchEngineVerdict extends SearchEngineBot {
+  crawlerClass: "search-engine";
+  /** robots.txt names this token in its own group (vs only covered by `*`). */
+  explicitlyListed: boolean;
+  rootBlocked: boolean;
+  pathBlocked: boolean;
+  verdict: SearchEngineVerdictKind;
+}
+
+/** Per-bot verdict for `auditedUrl`, using the same longest-match evaluation as the crawl rules. */
+export function evaluateSearchEngineBots(
+  robotsTxt: RobotsTxtData,
+  auditedUrl: string,
+): SearchEngineVerdict[] {
+  let rootUrl = auditedUrl;
+  try {
+    rootUrl = new URL("/", auditedUrl).toString();
+  } catch {
+    // An unparseable URL is never disallowed (isRobotsTxtDisallowed returns false for it too).
+  }
+  return SEARCH_ENGINE_BOTS.map((bot) => {
+    const rootBlocked = isRobotsTxtDisallowed(rootUrl, robotsTxt, bot.token);
+    const pathBlocked = isRobotsTxtDisallowed(auditedUrl, robotsTxt, bot.token);
+    const verdict: SearchEngineVerdictKind = pathBlocked
+      ? rootBlocked
+        ? "root-blocked"
+        : "path-blocked"
+      : rootBlocked
+        ? "allow-override"
+        : "allowed";
+    return {
+      ...bot,
+      crawlerClass: "search-engine",
+      explicitlyListed: groupsForToken(robotsTxt, bot.token).explicit,
+      rootBlocked,
+      pathBlocked,
+      verdict,
+    };
+  });
+}
+
+const SEARCH_VERDICT_LABEL: Record<SearchEngineVerdictKind, string> = {
+  allowed: "allowed",
+  "root-blocked": "blocked from the site root",
+  "path-blocked": "blocked for this path only",
+  "allow-override": "root blocked, this path allowed by an Allow rule",
+};
 
 /** Classify every known AI crawler against the parsed robots.txt. */
 export function evaluateAiCrawlers(robotsTxt: RobotsTxtData): AiCrawlerVerdict[] {
@@ -205,6 +277,35 @@ export const aiCrawlersRule: Rule = {
         details: { archive: archiveBlocked.map((b) => b.token) },
       });
     }
+
+    // Search-engine bots (squirrelscan/repo#3789): per-bot verdict for the audited URL. Info only:
+    // a search-engine block is an indexing decision the crawl rules own, not an AI-access finding.
+    const auditedUrl = ctx.site?.entryUrls?.[0] ?? ctx.site?.baseUrl ?? ctx.page.url;
+    const search = evaluateSearchEngineBots(robotsTxt, auditedUrl);
+    const searchBlocked = search.filter((v) => v.verdict !== "allowed");
+    checks.push({
+      name: "search-engine-access",
+      status: "info",
+      message: `Search-engine bots for ${auditedUrl}: ${search
+        .map((v) => `${v.token} ${SEARCH_VERDICT_LABEL[v.verdict]}`)
+        .join("; ")}`,
+      value: `${search.length - searchBlocked.length}/${search.length} allowed`,
+      items: searchBlocked.map((v) => ({
+        id: v.token,
+        label: `${v.token} (${v.vendor}, search engine): ${SEARCH_VERDICT_LABEL[v.verdict]}`,
+      })),
+      details: {
+        auditedUrl,
+        bots: search.map((v) => ({
+          token: v.token,
+          crawlerClass: v.crawlerClass,
+          verdict: v.verdict,
+          rootBlocked: v.rootBlocked,
+          pathBlocked: v.pathBlocked,
+          explicitlyListed: v.explicitlyListed,
+        })),
+      },
+    });
 
     return { checks };
   },

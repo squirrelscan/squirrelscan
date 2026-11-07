@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- **`ax/ai-crawlers` reports Googlebot, Bingbot and Applebot with a path-aware verdict.** A new info check, `search-engine-access`, evaluates each search-engine bot against the audited URL with the shared robots.txt matcher and says whether it is allowed, blocked from the site root, blocked for that path only, or blocked at the root but re-permitted for that path by an `Allow` rule. The 24 AI tokens and their checks are unchanged. (squirrelscan/repo#3789)
+
 ### Fixed
 
 - A page whose markup could not be parsed at all (read as an empty document, with the `html-parse` warning on `crawl/html-size`) no longer reports what it was never seen to have. The page rules that read the markup (title, H1, meta description, `lang`, viewport, thin content, no `<main>` and the rest) are skipped as not evaluated with the reason `unread-page`: it is listed under `skippedChecks`, and a prior finding on that page carries instead of resolving. The rules that judge the URL, the response (headers, timing, size, MIME type), or the raw HTML still run: `a11y/focus-visible`, `analytics/consent-mode`, `content/mime-type`, `core/doctype`, `crawl/html-size`, `integrity/kit-signature`, `perf/browser-required`, `perf/cache-headers`, `perf/compression`, `perf/http2`, `perf/ttfb`, `security/cookie-flags`, `security/https` and the `url/*` rules. The cloud analysis rules (`ai/llm-parsability`, `eeat/authority-signals`) are skipped too, and the page is not sent to the cloud, so it costs no credits. The page is left out of the site-level data (no page_features row, no collectors), so the site rules that compare pages (word-count norm, asset divergence, NAP consistency, template discontinuity, duplicate titles) never count it, and it is not the template representative whose verdicts are copied to its cluster. Known gaps: the page's outgoing links are not read, so `links/orphan-pages` can flag a page only it linked to, and the site-metadata payload still includes the page. No input known today reaches this path (a class attribute is cut instead), so this is a safeguard (#1570)
