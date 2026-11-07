@@ -139,7 +139,13 @@ export function detachFingerprint(fp: PageFingerprint | null): PageFingerprint |
 /** The anchor signal with every string copied out of the page. */
 export function detachAnchors(a: PageAnchorSignal | null): PageAnchorSignal | null {
   if (!a) return a;
-  return { ...a, ids: detachedList(a.ids), skipFragments: detachedList(a.skipFragments), selfFragments: detachedList(a.selfFragments) };
+  return {
+    ...a,
+    ids: detachedList(a.ids),
+    skipFragments: detachedList(a.skipFragments),
+    selfFragments: detachedList(a.selfFragments),
+    ...(a.scriptIds ? { scriptIds: detachedList(a.scriptIds) } : {}),
+  };
 }
 
 /**
