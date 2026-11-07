@@ -69,13 +69,18 @@ const sources = (dir: string): string[] =>
 const readsParsed = (text: string): boolean =>
   text.split("\n").some((line) => !/^\s*(\/\/|\*|\/\*)/.test(line) && /\bparsed\b/.test(line.replace(/"(?:[^"\\]|\\.)*"|`[^`]*`/g, "")));
 // Rules whose source reads parsed fields but that still run: the raw HTML is what they judge.
+// Rules that hand `ctx` to a helper, checked by hand: none of the helpers read the parse.
+const HELPER_CHECKED = new Set<string>();
+// Rules that read only the cloud results, but the cloud payload is built from the parsed page (title, text, headings), so an unread
+// page would be scored as an empty document (and cost credits): skipped, and the payload builders leave the page out.
+const CLOUD_FED = new Set(["ai/llm-parsability", "eeat/authority-signals"]);
 const READS_PARSED_BUT_RUNS = new Set(["crawl/html-size", "integrity/kit-signature"]);
 
 describe("every page rule is classified for an unread page (#1570)", () => {
   const files = new Map<string, string>();
   for (const file of sources(SRC)) {
     const text = readFileSync(file, "utf8");
-    for (const m of text.matchAll(/\bid: "([a-z0-9-]+\/[a-z0-9-]+)"/g)) if (!files.has(m[1]!)) files.set(m[1]!, text);
+    for (const m of text.matchAll(/\bmeta:\s*\{\s*id: "([a-z0-9-]+\/[a-z0-9-]+)"/g)) if (!files.has(m[1]!)) files.set(m[1]!, text);
   }
   const pageRules = [...loadAllRules({ includeOptIn: true }).values()].filter((r) => r.meta.scope === "page").map((r) => r.meta.id);
 
@@ -88,10 +93,15 @@ describe("every page rule is classified for an unread page (#1570)", () => {
         wrong.push(`${id}: source not found`);
         continue;
       }
+      // A read the scan cannot see: bracket access, or the whole `ctx` handed to a helper (which may read the parse). Check by hand.
+      const reads0 = readsParsed(text);
+      if (!reads0 && RUNS_ON_UNREAD_PAGE.has(id) && (/ctx\[\s*["'`]parsed/.test(text) || /\b\w+\(\s*ctx\s*[,)]/.test(text))) {
+        if (!HELPER_CHECKED.has(id)) wrong.push(`${id}: uses bracket access or hands ctx to a helper; check the helper's reads by hand before classifying`);
+      }
       const runs = RUNS_ON_UNREAD_PAGE.has(id);
       const reads = readsParsed(text);
       if (reads && runs && !READS_PARSED_BUT_RUNS.has(id)) wrong.push(`${id}: reads parsed fields but runs on an unread page`);
-      if (!reads && !runs) wrong.push(`${id}: reads no parsed field but is skipped on an unread page (add it to RUNS_ON_UNREAD_PAGE)`);
+      if (!reads && !runs && !CLOUD_FED.has(id)) wrong.push(`${id}: reads no parsed field but is skipped on an unread page (add it to RUNS_ON_UNREAD_PAGE)`);
     }
     expect(wrong).toEqual([]);
   });
