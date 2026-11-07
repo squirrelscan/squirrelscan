@@ -179,7 +179,7 @@ describe("ax/ai-crawlers", () => {
   });
 });
 
-// squirrelscan/repo#3789: search-engine bot class with a per-bot, path-aware verdict.
+// Search-engine bot class with a per-bot, path-aware verdict.
 describe("ax/ai-crawlers search-engine bots", () => {
   const verdictOf = (data: RobotsTxtData, url: string, token: string) =>
     evaluateSearchEngineBots(data, url).find((v) => v.token === token);
@@ -243,5 +243,25 @@ describe("ax/ai-crawlers search-engine bots", () => {
 
   test("no robots.txt: no search-engine check, everything is allowed by default", () => {
     expect(run(null).some((c) => c.name === "search-engine-access")).toBe(false);
+  });
+
+  test("Applebot with no group of its own follows the Googlebot group before *", () => {
+    const data = robots([
+      { userAgent: "Googlebot", rules: [{ type: "disallow", path: "/x" }] },
+      { userAgent: "*", rules: [] },
+    ]);
+    expect(verdictOf(data, "https://example.com/x", "Applebot")?.verdict).toBe("path-blocked");
+    expect(verdictOf(data, "https://example.com/x", "Googlebot")?.verdict).toBe("path-blocked");
+    expect(verdictOf(data, "https://example.com/x", "Bingbot")?.verdict).toBe("allowed");
+    // An Applebot group wins over the Googlebot one, and Applebot-Extended is a different token.
+    const own = robots([
+      { userAgent: "Googlebot", rules: [{ type: "disallow", path: "/x" }] },
+      { userAgent: "Applebot", rules: [{ type: "allow", path: "/" }] },
+    ]);
+    expect(verdictOf(own, "https://example.com/x", "Applebot")?.verdict).toBe("allowed");
+    const extended = robots([
+      { userAgent: "Applebot-Extended", rules: [{ type: "disallow", path: "/" }] },
+    ]);
+    expect(verdictOf(extended, "https://example.com/x", "Applebot")?.verdict).toBe("allowed");
   });
 });

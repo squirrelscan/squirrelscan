@@ -19,7 +19,7 @@ How it works:
 
 ### Added
 
-- **`ax/ai-crawlers` reports Googlebot, Bingbot and Applebot with a path-aware verdict.** A new info check, `search-engine-access`, evaluates each search-engine bot against the audited URL with the shared robots.txt matcher and says whether it is allowed, blocked from the site root, blocked for that path only, or blocked at the root but re-permitted for that path by an `Allow` rule. The 24 AI tokens and their checks are unchanged. (squirrelscan/repo#3789)
+- **`ax/ai-crawlers` reports Googlebot, Bingbot and Applebot with a path-aware verdict.** A new info check, `search-engine-access`, evaluates each search-engine bot against the audited URL with the shared robots.txt matcher and says whether it is allowed, blocked from the site root, blocked for that path only, or blocked at the root but re-permitted for that path by an `Allow` rule. Applebot with no group of its own follows the Googlebot group, as Apple documents. The 24 AI tokens and their checks are unchanged.
 
 ### Fixed
 

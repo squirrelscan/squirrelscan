@@ -82,7 +82,7 @@ interface SearchEngineBot {
   vendor: string;
 }
 
-/** The search-engine bot class (squirrelscan/repo#3789): the crawlers that index a site for web search. */
+/** The search-engine bot class: the crawlers that index a site for web search. */
 export const SEARCH_ENGINE_BOTS: SearchEngineBot[] = [
   { token: "Googlebot", vendor: "Google" },
   { token: "Bingbot", vendor: "Microsoft" },
@@ -119,8 +119,15 @@ export function evaluateSearchEngineBots(
     // An unparseable URL is never disallowed (isRobotsTxtDisallowed returns false for it too).
   }
   return SEARCH_ENGINE_BOTS.map((bot) => {
-    const rootBlocked = isRobotsTxtDisallowed(rootUrl, robotsTxt, bot.token);
-    const pathBlocked = isRobotsTxtDisallowed(auditedUrl, robotsTxt, bot.token);
+    // Per Apple, Applebot with no group of its own follows the Googlebot group before `*`.
+    const evalToken =
+      bot.token === "Applebot" && !groupsForToken(robotsTxt, "Applebot").explicit
+        ? groupsForToken(robotsTxt, "Googlebot").explicit
+          ? "Googlebot"
+          : bot.token
+        : bot.token;
+    const rootBlocked = isRobotsTxtDisallowed(rootUrl, robotsTxt, evalToken);
+    const pathBlocked = isRobotsTxtDisallowed(auditedUrl, robotsTxt, evalToken);
     const verdict: SearchEngineVerdictKind = pathBlocked
       ? rootBlocked
         ? "root-blocked"
@@ -278,7 +285,7 @@ export const aiCrawlersRule: Rule = {
       });
     }
 
-    // Search-engine bots (squirrelscan/repo#3789): per-bot verdict for the audited URL. Info only:
+    // Search-engine bots: per-bot verdict for the audited URL. Info only:
     // a search-engine block is an indexing decision the crawl rules own, not an AI-access finding.
     const auditedUrl = ctx.site?.entryUrls?.[0] ?? ctx.site?.baseUrl ?? ctx.page.url;
     const search = evaluateSearchEngineBots(robotsTxt, auditedUrl);
