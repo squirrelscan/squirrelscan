@@ -164,12 +164,12 @@ describe("links/anchor-mismatch hyphenated compounds (#1598)", () => {
 
 describe("links/anchor-mismatch joined forms are whole compounds (#1598)", () => {
   test("a run longer than the part cap emits no joined form, never a truncated compound", () => {
-    const nine = "one-two-three-four-five-six-seven-eight-nine";
+    const nine = "one-two-three-four-five-six-sev-ate-nin";
     expect(tokenize(nine).joined).toEqual([]);
-    expect(tokenize(nine, { slug: true }).joined).not.toContain("onetwothreefourfivesixseveneight");
+    expect(tokenize(nine, { slug: true }).joined).not.toContain("onetwothreefourfivesixsevate");
     const c = check([
       { ...HOME, links: [body("/t", nine)] },
-      { url: "https://example.com/t", title: "Onetwothreefourfivesixseveneight" },
+      { url: "https://example.com/t", title: "Onetwothreefourfivesixsevate" },
     ]);
     expect(c.status).toBe("warn");
   });
@@ -786,5 +786,84 @@ describe("links/anchor-mismatch", () => {
     ]);
     expect(c.status).toBe("warn");
     expect(c.message).toContain("only contextual anchor text");
+  });
+});
+
+describe("links/anchor-mismatch compounds and listing labels (#1626)", () => {
+  test("Handschuhe -> Fahrradhandschuhe does not warn (suffix compound)", () => {
+    const c = check([
+      { ...HOME, links: [body("/gloves", "Handschuhe")] },
+      { url: "https://example.com/gloves", title: "Fahrradhandschuhe" },
+    ]);
+    expect(c.status).toBe("pass");
+  });
+
+  test("the target's word inside a longer anchor word is not a compound match", () => {
+    const c = check([
+      { ...HOME, links: [body("/gloves", "Fahrradhandschuhe")] },
+      { url: "https://example.com/gloves", title: "Handschuhe" },
+    ]);
+    expect(c.status).toBe("warn");
+  });
+
+  test("a short ending or a short prefix is not a compound", () => {
+    expect(tokensMatch("care", "healthcare")).toBe(false);
+    const c = check([
+      { ...HOME, links: [body("/health", "Care")] },
+      { url: "https://example.com/health", title: "Healthcare plans" },
+    ]);
+    expect(c.status).toBe("warn");
+    // A two-character prefix is too little in front of the ending.
+    expect(tokensMatch("shoes", "ab" + "shoes")).toBe(false);
+    const d = check([
+      { ...HOME, links: [body("/x", "Shoes")] },
+      { url: "https://example.com/x", title: "Abshoes" },
+    ]);
+    expect(d.status).toBe("warn");
+  });
+
+  test("Alle Artikel -> an article listing is not judged, not a mismatch", () => {
+    const c = check([
+      { ...HOME, links: [body("/articles", "Alle Artikel"), body("/gloves", "Handschuhe")] },
+      { url: "https://example.com/articles", title: "Tipps & Tricks rund ums Radfahren" },
+      { url: "https://example.com/gloves", title: "Fahrradhandschuhe" },
+    ]);
+    expect(c.status).toBe("pass");
+    const details = c.details as { judged: number; notJudged: number };
+    expect(details.judged).toBe(1);
+    expect(details.notJudged).toBe(1);
+  });
+
+  test("View all posts -> /blog is not judged; alone it skips rather than passes", () => {
+    const c = check([
+      { ...HOME, links: [body("/blog", "View all posts")] },
+      { url: "https://example.com/blog", title: "Notes from the workshop" },
+    ]);
+    expect(c.status).toBe("skipped");
+    expect((c.details as { notJudged: number }).notJudged).toBe(1);
+  });
+
+  test("a listing label pointing at a page that is not a listing still warns", () => {
+    const c = check([
+      { ...HOME, links: [body("/gloves", "Alle Artikel")] },
+      { url: "https://example.com/gloves", title: "Fahrradhandschuhe" },
+    ]);
+    expect(c.status).toBe("warn");
+  });
+
+  test("positive control: an unrelated visible anchor on a listing page still warns", () => {
+    const c = check([
+      { ...HOME, links: [body("/articles", "Gartenmoebel")] },
+      { url: "https://example.com/articles", title: "Tipps & Tricks rund ums Radfahren" },
+    ]);
+    expect(c.status).toBe("warn");
+  });
+
+  test("a listing word mixed with an unrelated word is still judged", () => {
+    const c = check([
+      { ...HOME, links: [body("/articles", "Gartenmoebel Artikel")] },
+      { url: "https://example.com/articles", title: "Tipps & Tricks rund ums Radfahren" },
+    ]);
+    expect(c.status).toBe("warn");
   });
 });
