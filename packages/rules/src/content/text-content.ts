@@ -38,9 +38,9 @@ export function getTextExcludingScripts(element: Element): string {
  *
  * Skipping a subtree glues its neighbours: `Ã<code>x</code>©` would otherwise
  * read back as `Ã©` and look like corruption that is in neither fragment. A
- * space does not fix that — `"Ã "` (à) and `"Â "` (nbsp) are themselves mojibake
- * sequences, so a space boundary trades one false positive for another. No
- * mojibake sequence contains a newline.
+ * non-breaking space would not be safe either — `"Ã"` + U+00A0 (à) and `"Â"` + U+00A0
+ * (nbsp) are themselves mojibake sequences, so that boundary trades one false
+ * positive for another. No mojibake sequence contains a newline.
  */
 const SKIPPED_SUBTREE_BOUNDARY = "\n";
 

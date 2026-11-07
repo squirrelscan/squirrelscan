@@ -19,6 +19,7 @@ How it works:
 
 ### Fixed
 
+- **`content/mojibake` no longer flags valid uppercase Portuguese words (#1617).** `MANHÃ`, `IRMÃ` and `MAÇÃ` before a space were reported as `utf8-as-latin1` corruption because the sequence for `à` was written with a regular space. Decoding the UTF-8 bytes C3 A0 as latin1 gives `Ã` plus a no-break space (U+00A0), so the rule now matches that, and the same for `Â`. Genuine corruption such as `cafÃ` plus a no-break space still reports.
 - **A hosted run with rendering switched off no longer lists `ax/content-without-js` as a locked rule (private#3792).** The "render disabled by the run config" skip is the run's own choice, so it stays off the "check didn't run, re-run without `--http`" banner and the locked-rules list, as `not applicable` already did.
 
 ## v0.0.171 (2026-11-06)
