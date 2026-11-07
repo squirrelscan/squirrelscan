@@ -54,6 +54,38 @@ describe("findMojibake", () => {
   });
 });
 
+// #1617: latin1/cp1252 decoding of the UTF-8 bytes for "à" (C3 A0) is "Ã" + U+00A0, never "Ã" + U+0020.
+// The regular-space form matched every uppercase Portuguese word ending in "Ã" before a space.
+describe("uppercase Portuguese words ending in Ã (#1617)", () => {
+  test("MANHÃ, IRMÃ and MAÇÃ before a space are not corruption", () => {
+    expect(findMojibake("Abrimos de MANHÃ e à tarde.")).toEqual([]);
+    expect(findMojibake("IRMÃ mais velha")).toEqual([]);
+    expect(findMojibake("MAÇÃ verde")).toEqual([]);
+  });
+
+  test("the rule passes a page with the uppercase words", () => {
+    const [check] = run(page("<p>Abrimos de MANHÃ e à tarde. IRMÃ e MAÇÃ.</p>"));
+    expect(check?.status).toBe("pass");
+  });
+
+  test("genuine mojibake for à (Ã then U+00A0) is still reported", () => {
+    const found = findMojibake("cafÃ  au lait");
+    expect(found.find((f) => f.kind === "utf8-as-latin1")?.count).toBe(1);
+    const [check] = run(page("<p>Itâ€™s cafÃ  time</p>"));
+    expect(check?.status).toBe("warn");
+    expect(check?.value).toBe(2);
+  });
+
+  test("genuine mojibake for a non-breaking space (Â then U+00A0) is still reported", () => {
+    expect(findMojibake("5Â km")[0]?.kind).toBe("utf8-as-latin1");
+  });
+
+  test("a regular space after Â is not corruption", () => {
+    expect(findMojibake("ÂTE ÂGE")).toEqual([]);
+    expect(findMojibake("LÂ ")).toEqual([]);
+  });
+});
+
 describe("declaredCharset", () => {
   test("reads <meta charset> and the http-equiv form", () => {
     const a = parseHTML('<html><head><meta charset="UTF-8"></head><body></body></html>').document;
@@ -174,9 +206,9 @@ describe("mojibakeRule", () => {
       expect(check?.status).toBe("pass");
     });
 
-    // The boundary must be a newline, NOT a space: `Ã ` (à) and `Â ` (nbsp) are
-    // themselves mojibake sequences, so a space boundary would trade one false
-    // positive for another. This fixture fails if anyone "simplifies" it to " ".
+    // The boundary must be a newline, NOT a non-breaking space: `Ã` + U+00A0 (à) and
+    // `Â` + U+00A0 (nbsp) are themselves mojibake sequences, so that boundary would
+    // trade one false positive for another. This fixture fails if anyone changes it.
     test("the boundary itself cannot form a sequence with the text before it", () => {
       expect(run(page("<p>Ã<code>sample</code></p>"))[0]?.status).toBe("pass");
       expect(run(page("<p>Â<pre>sample</pre></p>"))[0]?.status).toBe("pass");
