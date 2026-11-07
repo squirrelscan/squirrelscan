@@ -38,7 +38,6 @@ const MOJIBAKE_SEQUENCES = [
   "Ã¡", // á (C3 A1)
   "Ã³", // ó (C3 B3)
   "Ãº", // ú (C3 BA)
-  "Ã\u00AD", // í (C3 AD): the second byte decodes to the invisible soft hyphen
   "Ã¢", // â (C3 A2)
   "Ãª", // ê (C3 AA)
   "Ãµ", // õ (C3 B5)
@@ -63,11 +62,15 @@ type Corruption = { kind: string; sample: string; count: number };
  * honest.
  */
 const MOJIBAKE_RE = new RegExp(
-  [...MOJIBAKE_SEQUENCES]
-    .sort((a, b) => b.length - a.length)
-    .map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
-    .join("|"),
-  "g",
+  [
+    ...[...MOJIBAKE_SEQUENCES]
+      .sort((a, b) => b.length - a.length)
+      .map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
+    // í (C3 AD): the second byte decodes to the invisible soft hyphen. Not before an uppercase
+    // letter: all-caps text hyphenated after "Ã" (MANHÃ&shy;ZINHA) is valid copy.
+    "Ã\u00AD(?!\\p{Lu})",
+  ].join("|"),
+  "gu",
 );
 
 /** Every corruption family present in `text`, with a sample and a count for each. */

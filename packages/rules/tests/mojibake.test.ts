@@ -310,4 +310,10 @@ describe("Portuguese and Spanish lowercase accent mojibake (#1623)", () => {
     const [check] = run(page("<p>Não sei. Está aí, você também. MANHÃ ÃO.</p>"));
     expect(check?.status).toBe("pass");
   });
+
+  test("all-caps words hyphenated after A-tilde stay clean; the real sequence still flags", () => {
+    expect(findMojibake("IRM\u00C3\u00ADZINHA e MANH\u00C3\u00ADZINHA")).toEqual([]);
+    expect(findMojibake("tia\u00C3\u00ADzinha").length).toBe(1);
+    expect(findMojibake("pa\u00C3\u00ADs vazio").length).toBe(1);
+  });
 });

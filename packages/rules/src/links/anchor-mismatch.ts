@@ -280,6 +280,9 @@ export function tokensMatch(a: string, b: string): boolean {
   return short.length >= 3 && long.length - short.length <= 3 && long.startsWith(short);
 }
 
+// Not language-gated: the graph carries no page language, so English look-alikes ("Press" in
+// "Compress images", "Stand" in "Understand taxes") also match. Accepted as a known limitation;
+// the 5-character floor and the 3-character prefix keep it rare.
 // An anchor word that ends a longer target word with at least three characters in front of it:
 // the head noun of the target's closed compound ("Handschuhe" in "Fahrradhandschuhe"). Five
 // characters keeps short endings ("care", "ware") from matching by chance. One direction only:
@@ -349,9 +352,24 @@ function isListingLabel(anchor: readonly string[]): boolean {
   );
 }
 
+// A listing is the LAST path segment, optionally followed by a page number (`/blog/page/2`,
+// `/blog/2`) or a trailing slash. A noun earlier in the path ("/blog/how-to-fix-roof") is one
+// article under a section, and every word of the segment must be a listing word, so
+// "/products/blog-widget" is not a listing either.
 function isListingTarget(target: string): boolean {
-  return tokenize(safeDecode(getPathname(target)), { slug: true }).tokens.some((t) =>
-    LISTING_NOUNS.has(t),
+  const segments = safeDecode(getPathname(target))
+    .split("/")
+    .filter((seg) => seg !== "");
+  if (segments.length > 0 && /^\d+$/.test(segments[segments.length - 1]!)) {
+    segments.pop();
+    if (segments[segments.length - 1]?.toLowerCase() === "page") segments.pop();
+  }
+  const last = segments[segments.length - 1];
+  if (last === undefined) return false;
+  const tokens = tokenize(last.replace(/\.html?$/i, "")).tokens;
+  return (
+    tokens.some((t) => LISTING_NOUNS.has(t)) &&
+    tokens.every((t) => LISTING_NOUNS.has(t) || LISTING_LABEL_WORDS.has(t))
   );
 }
 
@@ -822,7 +840,7 @@ export const anchorMismatchRule: Rule = {
     description:
       "Detects contextual links whose anchor text shares no word with the title, H1 or URL slug of the page they point at",
     solution:
-      "Anchor text tells search engines and readers what the target page is about. When every link to a page says something unrelated (for example 'how I work' or 'view all posts'), the page earns no topical signal from its inbound links. Rewrite the anchor to name the destination using the words its title or heading uses. Links in the navigation, header, footer and sidebar are ignored, and so are privacy, terms and contact pages.",
+      "Anchor text tells search engines and readers what the target page is about. When every link to a page says something unrelated (for example 'how I work' or 'our services' on a page about wholesale orders), the page earns no topical signal from its inbound links. Rewrite the anchor to name the destination using the words its title or heading uses. Links in the navigation, header, footer and sidebar are ignored, and so are privacy, terms and contact pages.",
     category: "links",
     scope: "site",
     severity: "warning",
