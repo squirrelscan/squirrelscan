@@ -36,22 +36,27 @@ const SELF_FRAGMENTS_CAP = 256;
 const CLIENT_SHELL_TEXT_LIMIT = 200;
 
 /**
- * Most characters of inline script text read per unrendered page for the ids a script
- * names. Past it the page is marked {@link PageAnchorSignal.scriptIdsTruncated} and no
- * missing id on it is called definitely missing (#1616).
+ * Most characters of inline script text read per unrendered page for the ids a script names. Text
+ * past it is not read: a script that names an id only after that point is not seen (#1616).
  */
 const SCRIPT_SCAN_LIMIT = 256 * 1024;
 
-/** Most distinct id-like tokens kept from a page's inline scripts. Bounds the per-page record in a 25k-page stream. */
-export const SCRIPT_IDS_CAP = 256;
+/**
+ * Most distinct id-like tokens kept from a page's inline scripts. Tokens past it are not kept, so an
+ * id named only by a later one is not seen. Truncation never demotes anything: a missing fragment
+ * that no kept token names stays definitely missing. Bounds the per-page record in a 25k-page
+ * stream, together with the 64-character token limit.
+ */
+export const SCRIPT_IDS_CAP = 1024;
 
 /**
- * A quoted token of 1 to 128 characters with no whitespace, quote, backslash or angle bracket in it:
+ * A quoted token of 1 to 64 characters with no whitespace, quote, backslash or angle bracket in it:
  * `"size"`, `'size'`, and the `\"size\"` of an attribute written inside a string (`<h2 id="size">`).
  * Nothing about the text between two quotes matters, so a stray apostrophe elsewhere in the script
- * cannot shift which tokens are read, and the bound keeps the scan linear.
+ * cannot shift which tokens are read, and the bound keeps the scan linear and caps the memory a
+ * page's record can take.
  */
-const SCRIPT_TOKEN_RE = /(["'`])([^\s"'`\\<>]{1,128})\\?\1/g;
+const SCRIPT_TOKEN_RE = /(["'`])([^\s"'`\\<>]{1,64})\\?\1/g;
 
 /** `<script type>` values the browser runs as code. Anything else (JSON-LD, import maps, templates) is data. */
 const EXECUTABLE_SCRIPT_TYPE_RE = /^(?:module|(?:text|application)\/(?:x-)?(?:java|ecma)script)$/i;
@@ -84,55 +89,39 @@ export interface PageAnchorSignal {
    * Quoted id-like tokens from the page's inline scripts, kept only when the page was fetched
    * without rendering and has some (#1616). A missing fragment that a script names may be created
    * at init, so it is reported as unconfirmed, not as definitely missing. Capped at
-   * {@link SCRIPT_IDS_CAP}.
+   * {@link SCRIPT_IDS_CAP}; a token past the cap is not kept and demotes nothing.
    */
   scriptIds?: string[];
-  /** The inline scripts had more tokens, or more text, than were kept: no missing id on the page is confirmed. */
-  scriptIdsTruncated?: boolean;
 }
 
 /**
- * The quoted id-like tokens in the page's inline scripts. Only code is read, never a JSON-LD or
- * template block. Returns null when the page has no inline script.
+ * The quoted id-like tokens in the page's inline scripts, up to the caps. Only code is read, never
+ * a JSON-LD or template block. A token is matched wherever it appears as a quoted string, not only
+ * where an id is assigned. Returns an empty list when the page has no inline script.
  */
-function inlineScriptIds(
-  doc: NonNullable<ParsedPage["document"]>,
-): { ids: string[]; truncated: boolean } | null {
+function inlineScriptIds(doc: NonNullable<ParsedPage["document"]>): string[] {
   const ids = new Set<string>();
-  let truncated = false;
-  let read = 0;
-  let any = false;
+  let remaining = SCRIPT_SCAN_LIMIT;
   for (const el of doc.querySelectorAll("script:not([src])")) {
+    if (remaining <= 0 || ids.size >= SCRIPT_IDS_CAP) break;
     const type = (el.getAttribute("type") ?? "").trim();
     if (type !== "" && !EXECUTABLE_SCRIPT_TYPE_RE.test(type)) continue;
-    const text = el.textContent ?? "";
-    if (text.trim() === "") continue;
-    any = true;
-    if (read + text.length > SCRIPT_SCAN_LIMIT) {
-      truncated = true;
-      break;
-    }
-    read += text.length;
+    const full = el.textContent ?? "";
+    const text = full.length > remaining ? full.slice(0, remaining) : full;
+    remaining -= text.length;
     for (const match of text.matchAll(SCRIPT_TOKEN_RE)) {
-      const token = match[2]!;
-      if (ids.has(token)) continue;
-      if (ids.size >= SCRIPT_IDS_CAP) {
-        truncated = true;
-        break;
-      }
-      ids.add(token);
+      ids.add(match[2]!);
+      if (ids.size >= SCRIPT_IDS_CAP) break;
     }
-    if (truncated) break;
   }
-  return any ? { ids: [...ids], truncated } : null;
+  return [...ids];
 }
 
 /**
- * Whether a script on the page may create `fragment` after load, so a miss is not confirmed:
- * a script names it, or the scripts were too large to read in full.
+ * Whether an inline script on the page names `fragment` as a quoted string, so a script may create
+ * it after load and a miss is not confirmed. It is a name match, not a creation test.
  */
 export function scriptMayCreateId(rec: PageAnchorSignal, fragment: string): boolean {
-  if (rec.scriptIdsTruncated) return true;
   return rec.scriptIds?.includes(fragment) === true;
 }
 
@@ -245,7 +234,7 @@ export function buildPageAnchorSignal(input: {
   }
 
   // Unrendered pages only: a rendered page's DOM already holds what its scripts created.
-  const scripts = !input.rendered ? inlineScriptIds(doc) : null;
+  const scripts = input.rendered ? [] : inlineScriptIds(doc);
 
   const signal: PageAnchorSignal = {
     ids,
@@ -255,7 +244,6 @@ export function buildPageAnchorSignal(input: {
   };
   if (idsTruncated) signal.idsTruncated = true;
   if (repeated) signal.selfFragmentLinks = selfFragmentLinks;
-  if (scripts && scripts.ids.length > 0) signal.scriptIds = scripts.ids;
-  if (scripts?.truncated) signal.scriptIdsTruncated = true;
+  if (scripts.length > 0) signal.scriptIds = scripts;
   return signal;
 }

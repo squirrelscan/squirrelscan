@@ -466,11 +466,35 @@ for (const [engine, build] of ENGINES) {
       expect(w.items!.map((i) => i.label)).toEqual([`${BASE}/#missing`]);
     });
 
-    test("an inline script too large to scan cannot confirm a miss", () => {
-      const big = `<script>${"var a = 1;\n".repeat(40000)}</script>`;
+    test("a big inline script does not silence a genuinely broken id", () => {
+      // 1500 distinct quoted tokens, past the 1024 cap, as a framework data stream would carry.
+      const tokens = Array.from({ length: 1500 }, (_, i) => `"tok${i}"`).join(",");
+      const big = `<script>document.querySelector("img").id="size"; var t=[${tokens}];</script>`;
       const checks = run(build([{ path: "/", html: doc(big) }]));
-      expect(warning(checks)).toBeUndefined();
-      expect(check(checks, "unconfirmed-anchors")?.items).toHaveLength(2);
+      expect(warning(checks)!.items!.map((i) => i.label)).toEqual([`${BASE}/#missing`]);
+      expect(check(checks, "unconfirmed-anchors")?.items?.map((i) => i.label)).toEqual([
+        `${BASE}/#size`,
+      ]);
+    });
+
+    test("script text past the scan limit is not read and demotes nothing", () => {
+      const filler = `<script>${"var a = 1;\n".repeat(40000)}</script>`;
+      const late = '<script>document.querySelector("img").id="size"</script>';
+      const checks = run(build([{ path: "/", html: doc(filler + late) }]));
+      // `size` is named only after the 256 KB limit, so it is reported, like `missing`.
+      expect(
+        warning(checks)!
+          .items!.map((i) => i.label)
+          .sort(),
+      ).toEqual([`${BASE}/#missing`, `${BASE}/#size`]);
+      expect(check(checks, "unconfirmed-anchors")).toBeUndefined();
+    });
+
+    test("a name match is not a creation test: a quoted string anywhere in the script counts", () => {
+      const checks = run(build([{ path: "/", html: doc('<script>track("size");</script>') }]));
+      expect(check(checks, "unconfirmed-anchors")?.items?.map((i) => i.label)).toEqual([
+        `${BASE}/#size`,
+      ]);
     });
   });
 }
