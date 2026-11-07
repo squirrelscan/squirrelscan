@@ -12,6 +12,9 @@
 // only stored (see ./html for the escaping side).
 
 import {
+  ENTITY_IDENTITY_GUARD_PROPERTY,
+  ENTITY_IDENTITY_PREDICATES,
+  ENTITY_LEGAL_IDENTIFIER_KEYS,
   ENTITY_MAP_CONFLICT_PAGES_CAP,
   ENTITY_MAP_DESCRIPTION_MAX,
   ENTITY_MAP_FORMAT,
@@ -60,21 +63,8 @@ const MAX_CONFLICT_VALUES = 50;
  */
 const TYPE_CONFLICT_PROPERTY = "@type";
 
-/**
- * Legal identifiers compared per node, beside `@type` and the nine properties (#1615). They are not
- * kept on the node (`properties` stays the nine), only compared: two pages that declare one `@id`
- * with different VAT numbers or legal names are two legal entities however alike their markup is.
- * `schema/entity-conflicts` reports them, and never excuses a localized URL alias on a node that
- * disagrees on any of them.
- */
-const LEGAL_IDENTIFIER_KEYS = [
-  "legalName",
-  "vatID",
-  "taxID",
-  "leiCode",
-  "duns",
-  "iso6523Code",
-] as const;
+/** Longest raw legal identifier kept for display in a conflict entry. */
+const LEGAL_IDENTIFIER_DISPLAY_MAX = 200;
 
 /** Guard against a page declaring a pathologically deep nested object. */
 const MAX_NESTING_DEPTH = 12;
@@ -303,6 +293,8 @@ interface NodeAccumulator {
   /** property -> value text -> pages carrying it. */
   values: Map<string, Map<string, Set<string>>>;
   danglingRefs: number;
+  /** `<legal identifier>\0<compared text>` -> the page's own spelling shown in the conflict entry. */
+  shown: Map<string, string>;
 }
 
 type EdgeKind = "node" | "idref" | "soft";
@@ -454,6 +446,7 @@ function registerNode(
       pages: new Set(),
       values: new Map(),
       danglingRefs: 0,
+      shown: new Map(),
     };
     nodes.set(key, accumulator);
   }
@@ -472,6 +465,7 @@ function registerNode(
   recordTypeSet(accumulator, types, origin);
   mergeProperties(accumulator, properties, origin);
   recordLegalIdentifiers(accumulator, raw, origin);
+  recordIdentitySignature(accumulator, raw, origin, counter.index);
 
   if (depth < MAX_NESTING_DEPTH) {
     collectEdges(raw, key, pageUrl, page, nodes, candidates, counter, depth);
@@ -507,30 +501,112 @@ function recordTypeSet(
 }
 
 /**
- * Remember this occurrence's legal identifiers for conflict detection. Registry numbers are compared
- * without case, spaces, dots or hyphens (`DE 123.456` is `de123456`), a legal name without case or
- * runs of spaces, and a multi-valued identifier as a sorted set, so only a real difference is a value.
+ * Remember this occurrence's legal identifiers for conflict detection. Two values are one when they
+ * agree without case, spaces, dots or hyphens (`DE 123.456` is `de123456`; a legal name: without case
+ * or runs of spaces), and a multi-valued identifier is compared as a sorted set. The comparison key
+ * is that normalised text; the conflict entry shows the page's own value (trimmed, bounded), the
+ * lowest-sorting one when several spellings share a key, so the output does not depend on arrival
+ * order. A legal name in two languages is two values: that is intentionally a conflict.
  */
 function recordLegalIdentifiers(
   accumulator: NodeAccumulator,
   raw: JsonObject,
   origin: Origin,
 ): void {
-  for (const key of LEGAL_IDENTIFIER_KEYS) {
-    const entries = toStringList(raw[key]).map((entry) =>
-      key === "legalName" ? normalizeText(entry) : entry.toLowerCase().replace(/[\s.-]+/g, ""),
-    );
-    const text = [...new Set(entries.filter((entry) => entry !== ""))]
-      .sort(compareStrings)
-      .join(", ");
-    if (text === "") continue;
+  for (const key of ENTITY_LEGAL_IDENTIFIER_KEYS) {
+    const pairs = toStringList(raw[key]).map((entry) => ({
+      shown: entry.slice(0, LEGAL_IDENTIFIER_DISPLAY_MAX),
+      compared:
+        key === "legalName" ? normalizeText(entry) : entry.toLowerCase().replace(/[\s.-]+/g, ""),
+    }));
+    const byCompared = new Map<string, string>();
+    for (const pair of pairs) {
+      if (pair.compared === "") continue;
+      const seen = byCompared.get(pair.compared);
+      if (seen === undefined || compareStrings(pair.shown, seen) < 0) {
+        byCompared.set(pair.compared, pair.shown);
+      }
+    }
+    if (byCompared.size === 0) continue;
+    const compared = [...byCompared.keys()].sort(compareStrings);
+    const text = compared.join(", ");
+    const shown = compared.map((entry) => byCompared.get(entry)!).join(", ");
     let values = accumulator.values.get(key);
     if (!values) {
       values = new Map();
       accumulator.values.set(key, values);
     }
     recordValue(values, text, origin.page);
+    const slot = `${key}\u0000${text}`;
+    const kept = accumulator.shown.get(slot);
+    if (kept === undefined || compareStrings(shown, kept) < 0) accumulator.shown.set(slot, shown);
   }
+}
+
+/** 32-bit FNV-1a, so a long token stays distinguishable once shortened. */
+function fnv1a(text: string): string {
+  let hash = -2128831035; // 0x811c9dc5 as a signed 32-bit integer
+  for (let i = 0; i < text.length; i++) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return hash.toString(16);
+}
+
+/** A token of an identity signature, shortened with a hash when long so the text stays bounded. */
+function signatureToken(token: string): string {
+  return token.length <= 120 ? token : `${token.slice(0, 100)}#${fnv1a(token)}`;
+}
+
+/**
+ * What one identity predicate points at, written so two pages agree exactly when they say the same
+ * thing: a reference by its resolved `@id`, a nested object by the key the builder would give it
+ * (an object with no name, url or sameAs is unique to its page, so it never agrees), a bare string
+ * by its normalised text.
+ */
+function identityTarget(entry: unknown, pageUrl: string, index: number): string | null {
+  if (typeof entry === "string") {
+    const text = normalizeText(entry);
+    return text === "" ? null : `text:${signatureToken(text)}`;
+  }
+  if (!isObject(entry)) return null;
+  const rawId = typeof entry["@id"] === "string" ? entry["@id"] : null;
+  if (rawId && !isBlankNodeId(rawId)) return `id:${signatureToken(resolveId(rawId, pageUrl))}`;
+  return signatureToken(
+    syntheticKey(readTypes(entry), readProperties(entry, pageUrl), pageUrl, index),
+  );
+}
+
+/**
+ * The occurrence's identity references as one text: every predicate in `ENTITY_IDENTITY_PREDICATES`
+ * with its sorted targets, or `(none)`. Bare strings count, which the edge list never sees, and a
+ * predicate present on some pages only makes two texts. See `ENTITY_IDENTITY_GUARD_PROPERTY`.
+ */
+function identitySignature(raw: JsonObject, pageUrl: string, index: number): string {
+  const parts: string[] = [];
+  for (const predicate of ENTITY_IDENTITY_PREDICATES) {
+    const targets = new Set<string>();
+    for (const entry of toArray(raw[predicate])) {
+      const target = identityTarget(entry, pageUrl, index);
+      if (target) targets.add(target);
+    }
+    if (targets.size > 0) parts.push(`${predicate}=${[...targets].sort(compareStrings).join(", ")}`);
+  }
+  return parts.length > 0 ? parts.join("; ") : "(none)";
+}
+
+function recordIdentitySignature(
+  accumulator: NodeAccumulator,
+  raw: JsonObject,
+  origin: Origin,
+  index: number,
+): void {
+  let values = accumulator.values.get(ENTITY_IDENTITY_GUARD_PROPERTY);
+  if (!values) {
+    values = new Map();
+    accumulator.values.set(ENTITY_IDENTITY_GUARD_PROPERTY, values);
+  }
+  recordValue(values, identitySignature(raw, origin.page, index), origin.page);
 }
 
 /**
@@ -840,17 +916,37 @@ function assemble(
     for (const property of [
       TYPE_CONFLICT_PROPERTY,
       ...ENTITY_MAP_PROPERTY_KEYS,
-      ...LEGAL_IDENTIFIER_KEYS,
+      ...ENTITY_LEGAL_IDENTIFIER_KEYS,
     ]) {
       const values = accumulator.values.get(property);
       if (!values || values.size < 2) continue;
       const entries = [...values.entries()].sort((a, b) => compareStrings(a[0], b[0]));
+      const legal = (ENTITY_LEGAL_IDENTIFIER_KEYS as readonly string[]).includes(property);
       conflicts.push({
         property,
         values: entries.map(([value, pages]) => {
           const capped = capPages(pages, ENTITY_MAP_CONFLICT_PAGES_CAP);
-          return { value, pages: capped.pages, morePages: capped.morePages };
+          // A legal identifier shows the page's own spelling, compared by its normalised text.
+          const shown = legal
+            ? (accumulator.shown.get(`${property}\u0000${value}`) ?? value)
+            : value;
+          return { value: shown, pages: capped.pages, morePages: capped.morePages };
         }),
+      });
+    }
+
+    // The identity guard rides along only on a node that already has a `url` conflict: its one
+    // reader decides whether that conflict is a localized alias, so anywhere else it is noise.
+    const guard = accumulator.values.get(ENTITY_IDENTITY_GUARD_PROPERTY);
+    if (guard && guard.size >= 2 && conflicts.some((conflict) => conflict.property === "url")) {
+      conflicts.push({
+        property: ENTITY_IDENTITY_GUARD_PROPERTY,
+        values: [...guard.entries()]
+          .sort((a, b) => compareStrings(a[0], b[0]))
+          .map(([value, pages]) => {
+            const capped = capPages(pages, ENTITY_MAP_CONFLICT_PAGES_CAP);
+            return { value, pages: capped.pages, morePages: capped.morePages };
+          }),
       });
     }
 

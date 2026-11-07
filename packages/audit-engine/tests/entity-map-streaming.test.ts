@@ -122,3 +122,43 @@ describe("collector", () => {
     expect(map.summary.pagesWithoutEntities).toBe(1);
   });
 });
+
+// #1615: the incremental (streaming) builder keeps the page's own legal identifier and the identity
+// guard, whatever order pages arrive in.
+describe("legal identifiers and the identity guard through the incremental builder (#1615)", () => {
+  const EN = "https://example.com/en/service";
+  const DK = "https://example.com/en-dk/service";
+  const service = (url: string, extra: Record<string, unknown>) => ({
+    url,
+    raw: JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "Service",
+      "@id": "https://example.com/b2b#service",
+      name: "B2B orders",
+      url,
+      ...extra,
+    }),
+  });
+  const built = (order: Array<{ url: string; raw: string }>) => {
+    const builder = createEntityMapBuilder();
+    for (const page of order) builder.addPage(page.url, page.raw);
+    return builder.finish(SITE, { generatedAt: AT });
+  };
+  const pages = [
+    service(EN, { vatID: "DE 123", provider: "Acme GmbH" }),
+    service(DK, { vatID: "de-123", provider: "Totally Other Ltd" }),
+  ];
+
+  test("same output in any arrival order, spelling kept, guard present", () => {
+    const forward = built(pages);
+    const reversed = built([...pages].reverse());
+    expect(JSON.stringify(reversed)).toBe(JSON.stringify(forward));
+    const conflicts = forward.nodes[0]!.conflicts;
+    // `DE 123` and `de-123` are one number, so only url and the guard disagree.
+    expect(conflicts.map((c) => c.property)).toEqual(["url", "@identity"]);
+    const withVat = built([service(EN, { vatID: "DE 123" }), service(DK, { vatID: "dk 9" })]);
+    expect(
+      withVat.nodes[0]!.conflicts.find((c) => c.property === "vatID")!.values.map((v) => v.value),
+    ).toEqual(["DE 123", "dk 9"]);
+  });
+});

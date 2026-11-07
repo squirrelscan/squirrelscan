@@ -252,6 +252,43 @@ export const ENTITY_MAP_PROPERTY_KEYS = [
   "description",
 ] as const satisfies readonly (keyof EntityMapProperties)[];
 
+/**
+ * Legal identifiers compared per node beside the nine properties (#1615). They are compared and
+ * reported as conflicts but never stored in `properties`. The conflict entry shows the page's own
+ * value; two values are one when they agree without case, spaces, dots or hyphens.
+ */
+export const ENTITY_LEGAL_IDENTIFIER_KEYS = [
+  "legalName",
+  "vatID",
+  "taxID",
+  "leiCode",
+  "duns",
+  "iso6523Code",
+] as const;
+
+/**
+ * Predicates that say who is behind an entity. A localized URL alias must carry the same value
+ * for each on every page, whether it is a reference or a bare string (#1615).
+ */
+export const ENTITY_IDENTITY_PREDICATES = [
+  "author",
+  "brand",
+  "creator",
+  "member",
+  "provider",
+  "publisher",
+  "worksFor",
+] as const;
+
+/**
+ * The pseudo-property of a guard conflict: the occurrences of one node disagree about the values
+ * of {@link ENTITY_IDENTITY_PREDICATES} (a reference or a bare string, or present on some pages
+ * only). The builder emits it only on a node that also has a `url` conflict, because its one
+ * reader is the localized-alias check in `schema/entity-conflicts`, which refuses to excuse such a
+ * node. It is not itself a finding and the rule does not report it.
+ */
+export const ENTITY_IDENTITY_GUARD_PROPERTY = "@identity";
+
 // ── Conflicts ──────────────────────────────────────────────────────
 
 /** One distinct value of a conflicting property and where it was declared. */
