@@ -71,7 +71,7 @@
             }
           },
           "400": {
-            "description": "Request failed validation, or a `config` the API cannot honour: invalid JSON, a non-object, an unknown key, a wrongly typed `maxPages`, `coverageMode`, `externalLinksEnabled`, `render` or `ephemeral`, a bad `enabledRulePatterns` or `disabledRulePatterns` (unknown category, a pattern that matches no rule, over the caps; `error.patterns` lists the entries at fault), a rule selection the disable list leaves empty, `auditId` sent with `config.ephemeral`, or a session caller omitting `trigger`. Also `INVALID_URL` and `NON_PUBLIC_HOST` for a URL that cannot be audited. `error.issues` lists up to 10 failed fields (`{ path, message }`); `error.truncated: true` and `error.totalIssues` give the full count.",
+            "description": "Request failed validation, or an unknown top-level request field (API-key callers: a typo such as `conifg` is named in `error.issues[].path` instead of being dropped, and nothing is started or charged), or a `config` the API cannot honour: invalid JSON, a non-object, an unknown key, a wrongly typed `maxPages`, `coverageMode`, `externalLinksEnabled`, `render` or `ephemeral`, a bad `enabledRulePatterns` or `disabledRulePatterns` (unknown category, a pattern that matches no rule, over the caps; `error.patterns` lists the entries at fault), a rule selection the disable list leaves empty, `auditId` sent with `config.ephemeral`, or a session caller omitting `trigger`. Also `INVALID_URL` and `NON_PUBLIC_HOST` for a URL that cannot be audited. `error.issues` lists up to 10 failed fields (`{ path, message }`); `error.truncated: true` and `error.totalIssues` give the full count.",
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/Error" },
@@ -994,6 +994,7 @@
       },
       "CreateAuditRunRequest": {
         "type": "object",
+        "description": "The top-level fields are `url`, `trigger`, `mode`, `model`, `config`, `websiteId` and `auditId`. An API-key request carrying any other top-level field is a 400 `VALIDATION_ERROR` naming it (nothing is started or charged); it is never silently dropped.",
         "required": ["url"],
         "properties": {
           "url": { "type": "string", "format": "uri", "description": "Site URL to audit." },
