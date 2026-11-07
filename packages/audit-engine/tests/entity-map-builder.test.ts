@@ -822,3 +822,48 @@ describe("identity guard conflicts (#1615)", () => {
     expect(guard(map)!.values.every((v) => v.value.length < 200)).toBe(true);
   });
 });
+
+// #1615 robustness: the identity signature and the legal identifier spellings stay bounded.
+describe("bounded identity signature and legal identifier spellings (#1615)", () => {
+  const svc = (url: string, extra: Record<string, unknown>) =>
+    page(url, {
+      "@context": "https://schema.org",
+      "@type": "Service",
+      "@id": "https://example.com/b2b#service",
+      name: "B2B orders",
+      url,
+      ...extra,
+    });
+  const members = (prefix: string, n: number) =>
+    Array.from({ length: n }, (_, i) => ({ "@id": `https://example.com/${prefix}/member-${i}` }));
+
+  test("a huge member array gives one bounded signature that still tells two lists apart", () => {
+    const map = build([
+      svc("https://example.com/en/service", { member: members("a", 400) }),
+      svc("https://example.com/dk/service", { member: members("b", 400) }),
+    ]);
+    const guard = map.nodes[0]!.conflicts.find((c) => c.property === "@identity")!;
+    expect(guard.values).toHaveLength(2);
+    expect(guard.values.every((v) => v.value.length <= 500)).toBe(true);
+    // Identical long lists are still one signature.
+    const same = build([
+      svc("https://example.com/en/service", { member: members("a", 400) }),
+      svc("https://example.com/dk/service", { member: members("a", 400) }),
+    ]);
+    expect(same.nodes[0]!.conflicts.map((c) => c.property)).toEqual(["url"]);
+  });
+
+  test("more than 50 distinct vatIDs keep the 50 lowest, each with its own spelling", () => {
+    const pages = Array.from({ length: 80 }, (_, i) =>
+      svc(`https://example.com/p${i}`, { vatID: `XX ${String(i).padStart(3, "0")}` }),
+    );
+    const forward = build(pages).nodes[0]!.conflicts.find((c) => c.property === "vatID")!;
+    const backward = build([...pages].reverse()).nodes[0]!.conflicts.find(
+      (c) => c.property === "vatID",
+    )!;
+    expect(forward.values).toHaveLength(50);
+    expect(forward.values[0]!.value).toBe("XX 000");
+    expect(forward.values[49]!.value).toBe("XX 049");
+    expect(backward.values.map((v) => v.value)).toEqual(forward.values.map((v) => v.value));
+  });
+});

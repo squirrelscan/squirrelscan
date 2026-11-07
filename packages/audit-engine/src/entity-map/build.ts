@@ -537,9 +537,21 @@ function recordLegalIdentifiers(
       accumulator.values.set(key, values);
     }
     recordValue(values, text, origin.page);
-    const slot = `${key}\u0000${text}`;
-    const kept = accumulator.shown.get(slot);
-    if (kept === undefined || compareStrings(shown, kept) < 0) accumulator.shown.set(slot, shown);
+    // `recordValue` may have dropped this value or evicted another: keep a spelling only for the
+    // values it still holds, so the map stays as small as the conflict values themselves.
+    if (values.has(text)) {
+      const slot = `${key}\u0000${text}`;
+      const kept = accumulator.shown.get(slot);
+      if (kept === undefined || compareStrings(shown, kept) < 0) accumulator.shown.set(slot, shown);
+    }
+    if (values.size >= MAX_CONFLICT_VALUES) {
+      const prefix = `${key}\u0000`;
+      for (const slot of accumulator.shown.keys()) {
+        if (slot.startsWith(prefix) && !values.has(slot.slice(prefix.length))) {
+          accumulator.shown.delete(slot);
+        }
+      }
+    }
   }
 }
 
@@ -552,6 +564,9 @@ function fnv1a(text: string): string {
   }
   return hash.toString(16);
 }
+
+/** Longest identity signature kept; a longer one is cut and ends with the hash of the whole text. */
+const SIGNATURE_MAX = 500;
 
 /** A token of an identity signature, shortened with a hash when long so the text stays bounded. */
 function signatureToken(token: string): string {
@@ -592,7 +607,10 @@ function identitySignature(raw: JsonObject, pageUrl: string, index: number): str
     }
     if (targets.size > 0) parts.push(`${predicate}=${[...targets].sort(compareStrings).join(", ")}`);
   }
-  return parts.length > 0 ? parts.join("; ") : "(none)";
+  if (parts.length === 0) return "(none)";
+  const text = parts.join("; ");
+  // Bounded as a whole as well as per token: a long member list must not make one huge signature.
+  return text.length <= SIGNATURE_MAX ? text : `${text.slice(0, SIGNATURE_MAX - 20)}#${fnv1a(text)}`;
 }
 
 function recordIdentitySignature(
