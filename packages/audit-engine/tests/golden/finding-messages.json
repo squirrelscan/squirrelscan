@@ -424,9 +424,10 @@
   ]
  },
  "ax/ai-crawlers": {
-  "digest": "26757528424455",
+  "digest": "167970919770969",
   "lines": [
-   "ai-crawler-access|info|#/# known AI crawlers allowed|\"#/# allowed\"|"
+   "ai-crawler-access|info|#/# known AI crawlers allowed|\"#/# allowed\"|",
+   "search-engine-access|info|Search-engine bots for http://synthetic.example.com: Googlebot allowed; Bingbot allowed; Applebot allowed|\"#/# allowed\"|"
   ]
  },
  "ax/api-discovery": {
