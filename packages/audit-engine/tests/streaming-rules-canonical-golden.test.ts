@@ -206,7 +206,9 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // 103744 -> 103745: perf/content-in-js-bundle is site-scoped and adds one check (the fixture has no chunk large enough).
       // 103745 -> 103746: links/anchor-mismatch is site-scoped and adds one check (the synthetic
       // site's pairs are judged and all share a word, so the rule emits its single pass row).
-      expect(v1.findings.length).toBe(103746);
+      // 103746 -> 103747: ax/ai-crawlers adds one info check, search-engine-access (Googlebot,
+      // Bingbot and Applebot against the audited URL); no new rule id.
+      expect(v1.findings.length).toBe(103747);
       // Tripwire: EXTENDING a rule must never add a tally key, so a change here
       // is only correct alongside a deliberate new rule id. 266 -> 267 is
       // content/hidden-text, 267 -> 268 content/thin-vs-site-norm, 268 -> 269
