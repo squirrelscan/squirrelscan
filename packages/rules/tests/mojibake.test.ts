@@ -272,3 +272,42 @@ describe("mojibakeRule — what a reader never sees", () => {
     expect(status("<table><tr><td>Ã</td><td> x</td></tr></table>")).toBe("pass");
   });
 });
+
+// #1623: lowercase Portuguese and Spanish accents decoded as latin1. The sequences are
+// built from escapes so the fixture survives editors that strip the soft hyphen.
+describe("Portuguese and Spanish lowercase accent mojibake (#1623)", () => {
+  const cases: [string, string][] = [
+    ["Ã£", "ã"],
+    ["Ã¡", "á"],
+    ["Ã³", "ó"],
+    ["Ãº", "ú"],
+    ["Ã­", "í"],
+    ["Ã¢", "â"],
+    ["Ãª", "ê"],
+    ["Ãµ", "õ"],
+  ];
+
+  for (const [seq, letter] of cases) {
+    test(`${JSON.stringify(seq)} in place of ${letter} is reported`, () => {
+      const found = findMojibake(`palavra x${seq}y aqui`);
+      const hit = found.find((f) => f.kind === "utf8-as-latin1");
+      expect(hit?.count).toBe(1);
+      expect(hit?.sample).toBe(seq);
+      const [check] = run(page(`<p>palavra x${seq}y aqui</p>`));
+      expect(check?.status).toBe("warn");
+    });
+  }
+
+  test("nÃ£o is reported", () => {
+    expect(findMojibake("nÃ£o sei").length).toBe(1);
+  });
+
+  test("correctly encoded text with these letters is clean, uppercase words included", () => {
+    expect(findMojibake("não, está, avó, país, açúcar, tía, várias, você, põe, lâmpada")).toEqual(
+      [],
+    );
+    expect(findMojibake("Abrimos de MANHÃ. IRMÃ e MAÇÃO, ÁGUA, ÓTIMO, AÇÃO, NÃO")).toEqual([]);
+    const [check] = run(page("<p>Não sei. Está aí, você também. MANHÃ ÃO.</p>"));
+    expect(check?.status).toBe("pass");
+  });
+});

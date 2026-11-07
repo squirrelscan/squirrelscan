@@ -31,6 +31,17 @@ const MOJIBAKE_SEQUENCES = [
   "Â©", // ©
   "Â®", // ®
   "Â°", // °
+  // Portuguese and Spanish lowercase accents (#1623): the lead byte C3 plus a second
+  // byte in A1..B5 decodes to "Ã" followed by a symbol or punctuation character, a
+  // pair that never occurs in correctly encoded copy.
+  "Ã£", // ã (C3 A3)
+  "Ã¡", // á (C3 A1)
+  "Ã³", // ó (C3 B3)
+  "Ãº", // ú (C3 BA)
+  "Ã\u00AD", // í (C3 AD): the second byte decodes to the invisible soft hyphen
+  "Ã¢", // â (C3 A2)
+  "Ãª", // ê (C3 AA)
+  "Ãµ", // õ (C3 B5)
 ] as const;
 
 /** U+FFFD: the decoder already gave up on these bytes. Unambiguous corruption. */
