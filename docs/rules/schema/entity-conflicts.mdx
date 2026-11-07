@@ -22,7 +22,19 @@ The rule runs once per crawl, reads the [entity map](/guides/entity-map) rather 
 - Passes with the message `Every entity agrees with itself across the pages that declare it`.
 - Warns with the message `N properties disagree across pages, on N entities`, plus ` (+N more properties)` when more matched than are listed.
 
-Nine properties are compared: `name`, `url`, `logo`, `image`, `sameAs`, `telephone`, `email`, `address` and `description`.
+Nine properties are compared: `name`, `url`, `logo`, `image`, `sameAs`, `telephone`, `email`, `address` and `description`. Six legal identifiers are compared as well: `legalName`, `vatID`, `taxID`, `leiCode`, `duns` and `iso6523Code`. Registry numbers are compared without case, spaces, dots or hyphens, and a page that omits one is absence, not disagreement.
+
+### Localized URL aliases
+
+One service served under a different URL per locale is not a conflict. A `url` disagreement is excused only when all of these hold, and the rule never infers identity from similar names:
+
+- `url` is the only property the entity disagrees on. A differing `name`, `telephone`, legal identifier or any other property means the pages may describe two entities, so every row for that entity is reported.
+- Each `url` value is the address of one of the pages that declare the entity, so it names the page itself and not another site or section.
+- Every pair of pages that declare different `url` values list each other as hreflang alternates (reciprocal, in any language, and neither page canonicalises to another URL). A one-way reference is not enough.
+- The entity's `provider`, `brand`, `publisher`, `creator`, `author`, `worksFor` and `member` references are present on every one of those pages, to the same target. A Service whose provider differs between two locales is two services.
+- Every declaring page is known: a conflict that lists more pages than the map stores is reported.
+
+A verified alias adds nothing to the findings and is counted in `details.localizedUrlAliases` on the check. The same pages without reciprocal hreflang annotations still warn on `url`.
 
 One item per entity and property pair, not per entity. An organization whose logo and telephone both disagree has two things to fix, and collapsing them would hide the second behind the first. Each item names up to three of the conflicting values with the number of pages carrying each.
 

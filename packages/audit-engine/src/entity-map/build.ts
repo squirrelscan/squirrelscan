@@ -60,6 +60,22 @@ const MAX_CONFLICT_VALUES = 50;
  */
 const TYPE_CONFLICT_PROPERTY = "@type";
 
+/**
+ * Legal identifiers compared per node, beside `@type` and the nine properties (#1615). They are not
+ * kept on the node (`properties` stays the nine), only compared: two pages that declare one `@id`
+ * with different VAT numbers or legal names are two legal entities however alike their markup is.
+ * `schema/entity-conflicts` reports them, and never excuses a localized URL alias on a node that
+ * disagrees on any of them.
+ */
+const LEGAL_IDENTIFIER_KEYS = [
+  "legalName",
+  "vatID",
+  "taxID",
+  "leiCode",
+  "duns",
+  "iso6523Code",
+] as const;
+
 /** Guard against a page declaring a pathologically deep nested object. */
 const MAX_NESTING_DEPTH = 12;
 
@@ -455,6 +471,7 @@ function registerNode(
   // allows, so this is additive to a v1 document rather than a shape change.
   recordTypeSet(accumulator, types, origin);
   mergeProperties(accumulator, properties, origin);
+  recordLegalIdentifiers(accumulator, raw, origin);
 
   if (depth < MAX_NESTING_DEPTH) {
     collectEdges(raw, key, pageUrl, page, nodes, candidates, counter, depth);
@@ -487,6 +504,33 @@ function recordTypeSet(
     accumulator.values.set(TYPE_CONFLICT_PROPERTY, values);
   }
   recordValue(values, text, origin.page);
+}
+
+/**
+ * Remember this occurrence's legal identifiers for conflict detection. Registry numbers are compared
+ * without case, spaces, dots or hyphens (`DE 123.456` is `de123456`), a legal name without case or
+ * runs of spaces, and a multi-valued identifier as a sorted set, so only a real difference is a value.
+ */
+function recordLegalIdentifiers(
+  accumulator: NodeAccumulator,
+  raw: JsonObject,
+  origin: Origin,
+): void {
+  for (const key of LEGAL_IDENTIFIER_KEYS) {
+    const entries = toStringList(raw[key]).map((entry) =>
+      key === "legalName" ? normalizeText(entry) : entry.toLowerCase().replace(/[\s.-]+/g, ""),
+    );
+    const text = [...new Set(entries.filter((entry) => entry !== ""))]
+      .sort(compareStrings)
+      .join(", ");
+    if (text === "") continue;
+    let values = accumulator.values.get(key);
+    if (!values) {
+      values = new Map();
+      accumulator.values.set(key, values);
+    }
+    recordValue(values, text, origin.page);
+  }
 }
 
 /**
@@ -793,7 +837,11 @@ function assemble(
     const conflicts: EntityMapConflict[] = [];
     // `@type` first: a node that disagrees about what it IS is a different and
     // larger problem than one that disagrees about its logo, so it leads.
-    for (const property of [TYPE_CONFLICT_PROPERTY, ...ENTITY_MAP_PROPERTY_KEYS]) {
+    for (const property of [
+      TYPE_CONFLICT_PROPERTY,
+      ...ENTITY_MAP_PROPERTY_KEYS,
+      ...LEGAL_IDENTIFIER_KEYS,
+    ]) {
       const values = accumulator.values.get(property);
       if (!values || values.size < 2) continue;
       const entries = [...values.entries()].sort((a, b) => compareStrings(a[0], b[0]));

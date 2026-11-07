@@ -649,3 +649,65 @@ describe("conflict values are bounded and order-independent", () => {
     expect(map.nodes[0]!.conflicts.some((c) => c.property === "@type")).toBe(false);
   });
 });
+
+// #1615: legal identifiers are compared, never stored. A localized alias of one @id must not hide that
+// two pages claim different legal entities.
+describe("legal identifier conflicts (#1615)", () => {
+  const service = (extra: Record<string, unknown>) => ({
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "@id": "https://example.com/#legal",
+    name: "Example Ltd",
+    ...extra,
+  });
+  const conflictOf = (map: ReturnType<typeof build>, property: string) =>
+    map.nodes[0]!.conflicts.find((c) => c.property === property);
+
+  test("a differing vatID is a conflict and is not kept on the node", () => {
+    const map = build([
+      page("https://example.com/en", service({ vatID: "DE 123 456 789" })),
+      page("https://example.com/dk", service({ vatID: "DK 87654321" })),
+    ]);
+    expect(Value.Check(EntityMapSchema, map)).toBe(true);
+    expect(conflictOf(map, "vatID")?.values.map((v) => v.value)).toEqual([
+      "de123456789",
+      "dk87654321",
+    ]);
+    expect(map.nodes[0]!.properties).not.toHaveProperty("vatID");
+  });
+
+  test("the same registry number written with other spacing is not a conflict", () => {
+    const map = build([
+      page("https://example.com/en", service({ vatID: "DE 123 456 789", taxID: "12-345.678" })),
+      page("https://example.com/dk", service({ vatID: "de123456789", taxID: "12345678" })),
+    ]);
+    expect(map.nodes[0]!.conflicts).toEqual([]);
+  });
+
+  test("legalName, leiCode, duns and iso6523Code are compared too", () => {
+    const map = build([
+      page(
+        "https://example.com/en",
+        service({ legalName: "Example Ltd", leiCode: "AAAA", duns: "1", iso6523Code: "0060:1" }),
+      ),
+      page(
+        "https://example.com/dk",
+        service({ legalName: "Example ApS", leiCode: "BBBB", duns: "2", iso6523Code: "0060:2" }),
+      ),
+    ]);
+    expect(map.nodes[0]!.conflicts.map((c) => c.property).sort()).toEqual([
+      "duns",
+      "iso6523Code",
+      "legalName",
+      "leiCode",
+    ]);
+  });
+
+  test("a page that omits the identifier is absence, not disagreement", () => {
+    const map = build([
+      page("https://example.com/en", service({ vatID: "DE123456789" })),
+      page("https://example.com/dk", service({})),
+    ]);
+    expect(map.nodes[0]!.conflicts).toEqual([]);
+  });
+});

@@ -407,3 +407,71 @@ describe("the acceptance-criteria snapshots", () => {
     }
   });
 });
+
+// #1615: the real builder's map, the real rule, and the hreflang pages the rule reads.
+describe("schema/entity-conflicts localized Service aliases (#1615)", () => {
+  const EN = "https://example.com/en/service";
+  const DK = "https://example.com/en-dk/service";
+  const serviceAt = (url: string, extra: Record<string, unknown> = {}) =>
+    page(url, {
+      "@context": "https://schema.org",
+      "@type": "Service",
+      "@id": "https://example.com/b2b#service",
+      name: "B2B orders",
+      url,
+      provider: {
+        "@type": "Organization",
+        "@id": "https://example.com/#provider",
+        name: "Example provider",
+      },
+      ...extra,
+    });
+  const alternates = [
+    { hreflang: "en", href: EN },
+    { hreflang: "en-dk", href: DK },
+  ];
+  const withPages = (entityMap: EntityMap, reciprocal: boolean): RuleContext => ({
+    ...ctx(entityMap),
+    site: {
+      baseUrl: BASE,
+      pages: [EN, DK].map((url) => ({
+        url,
+        statusCode: 200,
+        parsed: {
+          meta: { canonical: url },
+          hreflangAlternates: reciprocal || url === EN ? alternates : [],
+        } as unknown as ParsedPage,
+      })),
+      robotsTxt: null,
+      sitemaps: null,
+    } as RuleContext["site"],
+  });
+  const run = async (entityMap: EntityMap, reciprocal: boolean) =>
+    (await Promise.resolve(rule("schema/entity-conflicts").run(withPages(entityMap, reciprocal))))
+      .checks[0]!;
+
+  test("reciprocal alternates passes, one-way still warns", async () => {
+    const map = mapOf([serviceAt(EN), serviceAt(DK)]);
+    expect((await run(map, true)).status).toBe("pass");
+    expect((await run(map, false)).status).toBe("warn");
+  });
+
+  test("a divergent provider or legal identifier on the localized pages still warns", async () => {
+    const otherProvider = serviceAt(DK, {
+      provider: {
+        "@type": "Organization",
+        "@id": "https://example.com/#other",
+        name: "Other provider",
+      },
+    });
+    expect((await run(mapOf([serviceAt(EN), otherProvider]), true)).status).toBe("warn");
+
+    const mapVat = mapOf([
+      serviceAt(EN, { vatID: "DE123456789" }),
+      serviceAt(DK, { vatID: "DK12345678" }),
+    ]);
+    const vat = await run(mapVat, true);
+    expect(vat.status).toBe("warn");
+    expect(vat.items!.map((item) => item.meta?.property).sort()).toEqual(["url", "vatID"]);
+  });
+});

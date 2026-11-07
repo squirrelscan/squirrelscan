@@ -51,6 +51,15 @@ function primaryLanguage(hreflang: string): string | null {
   return value.split(/[-_]/)[0] || null;
 }
 
+function identitySet(urls: Iterable<string>): Set<string> {
+  const out = new Set<string>();
+  for (const url of urls) {
+    const id = identity(url);
+    if (id !== null) out.add(id);
+  }
+  return out;
+}
+
 export class RegionVariantIndex {
   /** Index the in-memory pages whose URL is in `urls` (the legacy path). */
   static fromPages(
@@ -79,6 +88,42 @@ export class RegionVariantIndex {
     const index = new RegionVariantIndex();
     if (wanted.size === 0) return index;
     for await (const row of siteQuery.pagesMatching((r) => wanted.has(r.normalizedUrl))) {
+      index.add(row.normalizedUrl, row.canonical, row.hreflangAlternates);
+    }
+    return index;
+  }
+
+  /**
+   * Index the in-memory pages whose identity is in `urls` (the legacy path). Matches by page
+   * identity, so a URL written with a trailing slash or a fragment still finds its page.
+   */
+  static fromPagesByIdentity(
+    pages: Iterable<{ url: string; parsed: ParsedPage }>,
+    urls: Iterable<string>,
+  ): RegionVariantIndex {
+    const wanted = identitySet(urls);
+    const index = new RegionVariantIndex();
+    if (wanted.size === 0) return index;
+    for (const page of pages) {
+      const id = identity(page.url);
+      if (id === null || !wanted.has(id)) continue;
+      index.add(page.url, page.parsed.meta?.canonical, page.parsed.hreflangAlternates);
+    }
+    return index;
+  }
+
+  /** The streaming counterpart of {@link fromPagesByIdentity}. */
+  static async fromSiteQueryByIdentity(
+    siteQuery: SiteQuery,
+    urls: Iterable<string>,
+  ): Promise<RegionVariantIndex> {
+    const wanted = identitySet(urls);
+    const index = new RegionVariantIndex();
+    if (wanted.size === 0) return index;
+    for await (const row of siteQuery.pagesMatching((r) => {
+      const id = identity(r.normalizedUrl);
+      return id !== null && wanted.has(id);
+    })) {
       index.add(row.normalizedUrl, row.canonical, row.hreflangAlternates);
     }
     return index;
@@ -123,6 +168,19 @@ export class RegionVariantIndex {
     if (!bLangs || !aLangs) return false;
     for (const lang of bLangs) if (aLangs.has(lang)) return true;
     return false;
+  }
+
+  /**
+   * Whether `a` and `b` list each other as hreflang alternates, in any language (#1615). A
+   * one-way reference proves nothing about the other page, and a page that canonicalises
+   * elsewhere declares no alternates, so neither counts. Unlike {@link isVariantPair} the two
+   * languages need not match: a German and an English page of one service are alternates too.
+   */
+  areReciprocalAlternates(a: string, b: string): boolean {
+    const idA = identity(a);
+    const idB = identity(b);
+    if (idA === null || idB === null || idA === idB) return false;
+    return this.declared.get(idA)?.has(idB) === true && this.declared.get(idB)?.has(idA) === true;
   }
 
   /**
