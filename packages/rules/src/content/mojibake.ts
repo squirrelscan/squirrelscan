@@ -26,8 +26,8 @@ const MOJIBAKE_SEQUENCES = [
   "Ã¼", // ü
   "Ã±", // ñ
   "Ã§", // ç
-  "Ã ", // à
-  "Â ", // non-breaking space
+  "Ã\u00A0", // à (C3 A0): the second byte decodes to U+00A0, never a regular space (#1617)
+  "Â\u00A0", // non-breaking space (C2 A0)
   "Â©", // ©
   "Â®", // ®
   "Â°", // °
