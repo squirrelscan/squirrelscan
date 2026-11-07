@@ -19,6 +19,7 @@ How it works:
 
 ### Fixed
 
+- **`schema/entity-conflicts` no longer reports a localized `url` alias of one entity (#1615).** A Service with one `@id`, the same name and provider, and a page-specific `url` on reciprocal hreflang alternates was reported as a conflicting URL. That is now excused when `url` is the entity's only disagreement, each `url` is the address of a declaring page, every pair of pages with different values lists each other as alternates, and the entity's provider, brand, publisher, creator, author, worksFor and member references are on every one of those pages. Without reciprocal alternates it still warns, and a differing telephone, provider or legal identifier is never excused. The entity map now also compares `legalName`, `vatID`, `taxID`, `leiCode`, `duns` and `iso6523Code` per entity, so a divergent legal identifier is reported; they are compared, not stored in `properties`.
 - **A hosted run with rendering switched off no longer lists `ax/content-without-js` as a locked rule (private#3792).** The "render disabled by the run config" skip is the run's own choice, so it stays off the "check didn't run, re-run without `--http`" banner and the locked-rules list, as `not applicable` already did.
 
 ## v0.0.171 (2026-11-06)
