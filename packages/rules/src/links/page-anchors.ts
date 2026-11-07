@@ -35,6 +35,27 @@ const SELF_FRAGMENTS_CAP = 256;
  */
 const CLIENT_SHELL_TEXT_LIMIT = 200;
 
+/**
+ * Most characters of inline script text read per unrendered page for the ids a script
+ * names. Past it the page is marked {@link PageAnchorSignal.scriptIdsTruncated} and no
+ * missing id on it is called definitely missing (#1616).
+ */
+const SCRIPT_SCAN_LIMIT = 256 * 1024;
+
+/** Most distinct id-like tokens kept from a page's inline scripts. Bounds the per-page record in a 25k-page stream. */
+export const SCRIPT_IDS_CAP = 256;
+
+/**
+ * A quoted token of 1 to 128 characters with no whitespace, quote, backslash or angle bracket in it:
+ * `"size"`, `'size'`, and the `\"size\"` of an attribute written inside a string (`<h2 id="size">`).
+ * Nothing about the text between two quotes matters, so a stray apostrophe elsewhere in the script
+ * cannot shift which tokens are read, and the bound keeps the scan linear.
+ */
+const SCRIPT_TOKEN_RE = /(["'`])([^\s"'`\\<>]{1,128})\\?\1/g;
+
+/** `<script type>` values the browser runs as code. Anything else (JSON-LD, import maps, templates) is data. */
+const EXECUTABLE_SCRIPT_TYPE_RE = /^(?:module|(?:text|application)\/(?:x-)?(?:java|ecma)script)$/i;
+
 export interface PageAnchorSignal {
   /** Distinct `id` attribute values and `<a name>` values, capped at {@link ANCHOR_IDS_CAP}. */
   ids: string[];
@@ -59,6 +80,60 @@ export interface PageAnchorSignal {
    * shell, so a missing id may be added by JavaScript. Reported as unconfirmed.
    */
   clientShell: boolean;
+  /**
+   * Quoted id-like tokens from the page's inline scripts, kept only when the page was fetched
+   * without rendering and has some (#1616). A missing fragment that a script names may be created
+   * at init, so it is reported as unconfirmed, not as definitely missing. Capped at
+   * {@link SCRIPT_IDS_CAP}.
+   */
+  scriptIds?: string[];
+  /** The inline scripts had more tokens, or more text, than were kept: no missing id on the page is confirmed. */
+  scriptIdsTruncated?: boolean;
+}
+
+/**
+ * The quoted id-like tokens in the page's inline scripts. Only code is read, never a JSON-LD or
+ * template block. Returns null when the page has no inline script.
+ */
+function inlineScriptIds(
+  doc: NonNullable<ParsedPage["document"]>,
+): { ids: string[]; truncated: boolean } | null {
+  const ids = new Set<string>();
+  let truncated = false;
+  let read = 0;
+  let any = false;
+  for (const el of doc.querySelectorAll("script:not([src])")) {
+    const type = (el.getAttribute("type") ?? "").trim();
+    if (type !== "" && !EXECUTABLE_SCRIPT_TYPE_RE.test(type)) continue;
+    const text = el.textContent ?? "";
+    if (text.trim() === "") continue;
+    any = true;
+    if (read + text.length > SCRIPT_SCAN_LIMIT) {
+      truncated = true;
+      break;
+    }
+    read += text.length;
+    for (const match of text.matchAll(SCRIPT_TOKEN_RE)) {
+      const token = match[2]!;
+      if (ids.has(token)) continue;
+      if (ids.size >= SCRIPT_IDS_CAP) {
+        truncated = true;
+        break;
+      }
+      ids.add(token);
+    }
+    if (truncated) break;
+  }
+  return any ? { ids: [...ids], truncated } : null;
+}
+
+/**
+ * Whether a script on the page may create `fragment` after load, so a miss is not confirmed:
+ * a script names it, or the scripts were too large to read in full.
+ */
+export function scriptMayCreateId(rec: PageAnchorSignal, fragment: string): boolean {
+  if (rec.scriptIdsTruncated) return true;
+  return rec.scriptIds?.includes(fragment) === true;
 }
 
 /** Percent-decode a fragment the way the browser matches it; a malformed escape stays as written. */
@@ -169,6 +244,9 @@ export function buildPageAnchorSignal(input: {
     clientShell = visible < CLIENT_SHELL_TEXT_LIMIT;
   }
 
+  // Unrendered pages only: a rendered page's DOM already holds what its scripts created.
+  const scripts = !input.rendered ? inlineScriptIds(doc) : null;
+
   const signal: PageAnchorSignal = {
     ids,
     skipFragments,
@@ -177,5 +255,7 @@ export function buildPageAnchorSignal(input: {
   };
   if (idsTruncated) signal.idsTruncated = true;
   if (repeated) signal.selfFragmentLinks = selfFragmentLinks;
+  if (scripts && scripts.ids.length > 0) signal.scriptIds = scripts.ids;
+  if (scripts?.truncated) signal.scriptIdsTruncated = true;
   return signal;
 }

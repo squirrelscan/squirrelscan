@@ -23,7 +23,12 @@ import {
   withSection,
   type SourceTally,
 } from "./link-section-label";
-import { buildPageAnchorSignal, decodeFragment, isJudgeableFragment } from "./page-anchors";
+import {
+  buildPageAnchorSignal,
+  decodeFragment,
+  isJudgeableFragment,
+  scriptMayCreateId,
+} from "./page-anchors";
 
 interface AnchorGroup {
   /** The first link seen to this target and fragment, as written (absolute). */
@@ -36,7 +41,10 @@ interface AnchorGroup {
    */
   sources: SourceTally;
   skipLink: boolean;
-  /** The target is an unrendered client-side shell: the id may come from JavaScript. */
+  /**
+   * The target was not rendered and the id may come from JavaScript: it is an empty client-side
+   * shell, or an inline script on it names the id (#1616).
+   */
   unconfirmed: boolean;
 }
 
@@ -176,7 +184,8 @@ export const brokenAnchorsRule: Rule = {
           url: link.url,
           sources: new Map(),
           skipLink: false,
-          unconfirmed: link.targetRecord.clientShell,
+          unconfirmed:
+            link.targetRecord.clientShell || scriptMayCreateId(link.targetRecord, link.fragment),
         };
         groups.set(groupKey, group);
       }
@@ -278,7 +287,7 @@ export const brokenAnchorsRule: Rule = {
       checks.push({
         name: "unconfirmed-anchors",
         status: "info",
-        message: `${unconfirmed.length} in-page anchor link(s) target a client-rendered page that was not rendered, so the id may be added by JavaScript`,
+        message: `${unconfirmed.length} in-page anchor link(s) target a page that was not rendered and may add the id with JavaScript`,
         items: unconfirmed.map((g) => {
           const { sourcePages, sources, sections, regions } = tallyFields(g.sources);
           return {

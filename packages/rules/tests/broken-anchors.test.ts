@@ -367,3 +367,110 @@ for (const [engine, build] of ENGINES) {
     });
   });
 }
+
+// #1616: a server-rendered page can add a target id from inline script at init. Fetched without a browser
+// the id is not in the HTML, but the script names it, so the link is unverified rather than definitely broken.
+// A fragment no script mentions is still a real miss, and a rendered fetch reads the initialized DOM.
+for (const [engine, build] of ENGINES) {
+  describe(`links/broken-anchors runtime-created ids (#1616): ${engine}`, () => {
+    // Invented fixture text. The long paragraph keeps the page from reading as an empty client-side shell.
+    const prose = `<p>${"Sizing notes for the example garment, written for the fixture only. ".repeat(6)}</p>`;
+    const sizeImg = '<img alt="Size chart" src="data:image/gif;base64,R0lGODlhAQABAAAAACw=">';
+    const links =
+      '<a href="#size">Size chart</a><a href="#missing">Missing control</a><a href="#static">Static control</a>';
+    const doc = (script: string, extra = "") =>
+      page(`${prose}${links}${sizeImg}<div id="static">Static</div>${script}${extra}`);
+
+    test("a target id set by inline script is unconfirmed, a missing one is still a warning", () => {
+      const checks = run(
+        build([
+          { path: "/", html: doc('<script>document.querySelector("img").id="size"</script>') },
+        ]),
+      );
+      const w = warning(checks)!;
+      expect(w.items).toHaveLength(1);
+      expect(w.items![0]!.label).toBe(`${BASE}/#missing`);
+      const info = check(checks, "unconfirmed-anchors")!;
+      expect(info.status).toBe("info");
+      expect(info.items).toHaveLength(1);
+      expect(info.items![0]!.label).toBe(`${BASE}/#size`);
+      expect(info.items![0]!.meta).toMatchObject({ rendered: false });
+    });
+
+    test("a static id passes and is in neither check", () => {
+      const checks = run(build([{ path: "/", html: doc("<script>var n = 1;</script>") }]));
+      const labels = [
+        ...(check(checks, "broken-anchors")?.items ?? []),
+        ...(check(checks, "unconfirmed-anchors")?.items ?? []),
+      ].map((i) => i.label);
+      expect(labels.some((l) => l.includes("#static"))).toBe(false);
+    });
+
+    test("a script on the page does not excuse an id no script names", () => {
+      const checks = run(build([{ path: "/", html: doc("<script>var n = 1;</script>") }]));
+      const w = warning(checks)!;
+      expect(w.items!.map((i) => i.label).sort()).toEqual([`${BASE}/#missing`, `${BASE}/#size`]);
+      expect(check(checks, "unconfirmed-anchors")).toBeUndefined();
+    });
+
+    test("an id written inside an HTML string is recognised", () => {
+      const checks = run(
+        build([
+          {
+            path: "/",
+            html: doc("<script>host.innerHTML = '<h2 id=\"size\">Size</h2>';</script>"),
+          },
+        ]),
+      );
+      expect(check(checks, "unconfirmed-anchors")?.items?.map((i) => i.label)).toEqual([
+        `${BASE}/#size`,
+      ]);
+    });
+
+    test("a cross-page link into a page whose script sets the id is unconfirmed", () => {
+      const checks = run(
+        build([
+          {
+            path: "/",
+            html: page('<a href="/sizes#size">Sizes</a><a href="/sizes#nope">Nope</a>'),
+          },
+          { path: "/sizes", html: page(`${prose}<script>el.setAttribute("id", "size")</script>`) },
+        ]),
+      );
+      expect(check(checks, "unconfirmed-anchors")?.items?.map((i) => i.label)).toEqual([
+        `${BASE}/sizes#size`,
+      ]);
+      expect(warning(checks)!.items!.map((i) => i.label)).toEqual([`${BASE}/sizes#nope`]);
+    });
+
+    test("scripts that are data, not code, do not count", () => {
+      const checks = run(
+        build([
+          {
+            path: "/",
+            html: doc('<script type="application/ld+json">{"name":"size"}</script>'),
+          },
+        ]),
+      );
+      expect(check(checks, "unconfirmed-anchors")).toBeUndefined();
+      expect(warning(checks)!.items).toHaveLength(2);
+    });
+
+    test("a rendered fetch reads the initialized DOM: the runtime id passes, a missing one fails", () => {
+      const initialized = page(
+        `${prose}${links}<img id="size" alt="Size chart" src="data:image/gif;base64,R0lGODlhAQABAAAAACw="><div id="static">Static</div><script>document.querySelector("img").id="size"; var missing = "missing";</script>`,
+      );
+      const checks = run(build([{ path: "/", html: initialized, rendered: true }]));
+      expect(check(checks, "unconfirmed-anchors")).toBeUndefined();
+      const w = warning(checks)!;
+      expect(w.items!.map((i) => i.label)).toEqual([`${BASE}/#missing`]);
+    });
+
+    test("an inline script too large to scan cannot confirm a miss", () => {
+      const big = `<script>${"var a = 1;\n".repeat(40000)}</script>`;
+      const checks = run(build([{ path: "/", html: doc(big) }]));
+      expect(warning(checks)).toBeUndefined();
+      expect(check(checks, "unconfirmed-anchors")?.items).toHaveLength(2);
+    });
+  });
+}
