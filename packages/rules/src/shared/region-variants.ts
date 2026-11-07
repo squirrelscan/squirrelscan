@@ -179,7 +179,12 @@ export class RegionVariantIndex {
   areReciprocalAlternates(a: string, b: string): boolean {
     const idA = identity(a);
     const idB = identity(b);
-    if (idA === null || idB === null || idA === idB) return false;
+    return idA !== null && idB !== null && this.areReciprocalIds(idA, idB);
+  }
+
+  /** {@link areReciprocalAlternates} for page identities already computed by the caller. */
+  areReciprocalIds(idA: string, idB: string): boolean {
+    if (idA === idB) return false;
     return this.declared.get(idA)?.has(idB) === true && this.declared.get(idB)?.has(idA) === true;
   }
 
