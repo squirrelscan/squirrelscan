@@ -128,7 +128,9 @@ describe("hostile input stays linear", () => {
       const small = build(Math.ceil(262_144 / unit));
       const large = build(Math.ceil(1_048_576 / unit));
       const warm = time(small);
-      const ratioBase = Math.max(warm, 1);
+      // A warm run can finish in about 1 ms, which turns timer noise into a ratio over 12 while the
+      // body still scans in milliseconds: floor the base so only a real blowup trips the ratio.
+      const ratioBase = Math.max(warm, 25);
       const elapsed = time(large);
       // The scan reads a bounded prefix, so a 4x larger body must not cost 4x, and certainly not quadratic.
       expect(elapsed).toBeLessThan(750);
