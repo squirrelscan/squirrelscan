@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **`core/h1` tells hidden H1s apart from visible ones.** A page with one shown H1 and two alternatives under `hidden` or an inline `display:none` no longer reads `Multiple H1 tags found (3)` like a page with three shown H1s: the shown H1 is checked as the page's single H1, and the details keep the raw count as `rawCount` beside `exposedCount` and `hiddenCount`. Two or more shown H1s still warn, on the exposed count, and an H1 a style may hide but squirrel cannot settle is reported on `h1-unconfirmed`. The messages say that an HTTP-only audit cannot resolve visibility set by external stylesheets or scripts. A page whose H1s are all shown reads as before. (#1636)
+
 ## v0.0.173 (2026-11-08)
 
 A page the parser cannot read no longer reports missing titles and headings, `content/mojibake` and `links/anchor-mismatch` handle more real text correctly, `ax/ai-crawlers` reports search-engine bots, the macOS Intel binary runs on older CPUs, and the REST API docs cover rate limits and unknown request fields.
