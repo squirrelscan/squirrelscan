@@ -18,7 +18,16 @@ The rule runs on every crawled page against the parsed heading data. It emits on
 - Warning with the message `H1 tag is empty` and an empty value when there is exactly one H1 with no text.
 - Passing with the message `Single H1 tag present` and the heading text as the value.
 
-The four outcomes are exclusive and the rule stops at the first that applies, so a page with two H1s is reported for the count and never checked for emptiness. Severity is error and weight is 7, behind only the title and description checks in this category.
+When a page has more than one H1, each is sorted by what the markup says about its visibility: the `hidden` attribute, an inline `display:none` or `visibility:hidden`, a closed `<dialog>`, or a `<style>` rule squirrel can decide. `aria-hidden` is not counted, since it hides a heading from screen readers, not from the page. The raw count (every `<h1>` in the HTML, which crawlers that do not render the page still read) is kept as `rawCount` in the check's details, with `exposedCount` and `hiddenCount` beside it:
+
+- With every H1 exposed, or every one hidden, the warning is `Multiple H1 tags found (N)` as above.
+- With more than one exposed and some hidden, it reads `Multiple H1 tags found (2 exposed, 3 in the HTML; ...)`, with the exposed count as the value.
+- With one exposed and the rest hidden, the remaining H1 is checked as a single H1: it passes with `Single H1 tag present (3 in the HTML, 2 hidden; ...)`, or warns `H1 tag is empty`.
+- When an H1 a style may hide but squirrel cannot settle (a pseudo-class, a media query, a page that also loads an external stylesheet) would make a duplicate, the check is `h1-unconfirmed` and warns that it may be hidden.
+
+These messages say that visibility is read from the HTML, inline styles and `<style>` blocks only, because an HTTP-only audit cannot resolve visibility set by an external stylesheet or a script.
+
+The outcomes are exclusive and the rule stops at the first that applies, so a page with two H1s is reported for the count and never checked for emptiness. Severity is error and weight is 7, behind only the title and description checks in this category.
 
 Pages kept out of the search index are skipped. A page whose `<meta name="robots">` tag or `X-Robots-Tag` header contains `noindex` (a header scoped to one crawler, such as `googlebot: noindex`, counts too) gets one skipped check named `core/h1` with the message `Skipped: page is set to noindex via robots meta tag` (or `via X-Robots-Tag header`) instead, because the page never appears in search results. Skipped checks do not count toward the score. Pages are skipped only on a site that is itself being indexed, judged by its homepage, or by the page the audit started from when the homepage was not fetched. When that page is noindex, as on a staging site or a preview deployment (Vercel, Netlify and Cloudflare Pages previews send `X-Robots-Tag: noindex` by default), nothing is skipped: the whole host is out of search and the audit is most likely checking it before launch. When neither page was fetched, nothing is skipped either. See [pages kept out of search](/rules#pages-kept-out-of-search) for the full list of rules that do this.
 
