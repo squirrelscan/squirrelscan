@@ -102,6 +102,19 @@ describe("#1640 presentational-children ancestors", () => {
     expect(run(`<div role="region" aria-label="x"><li>Orphan</li></div>`).items).toEqual([ORPHAN_LI]);
   });
 
+  test("a presentational ancestor exempts every descendant, not only direct children", () => {
+    // WAI-ARIA 1.2: all descendants of a role with presentational children are presentational.
+    expect(run(`<div role="progressbar" aria-label="x"><div role="region"><li>a</li></div></div>`).status).toBe(
+      "pass"
+    );
+  });
+
+  test("a <progress> or <meter> with an unrelated explicit role does not grant the exception", () => {
+    // The author overrode the native role, so the explicit role decides.
+    expect(run(`<progress role="region" aria-label="x"><li>a</li></progress>`).items).toEqual([ORPHAN_LI]);
+    expect(run(`<meter role="region" aria-label="x"><li>a</li></meter>`).items).toEqual([ORPHAN_LI]);
+  });
+
   test("explicit child roles under a progressbar are still checked", () => {
     const check = run(`<div role="progressbar" aria-label="x"><span role="tab">t</span></div>`);
     expect(check.items).toEqual([{ id: 'span[role="tab"]: needs parent with role=tablist' }]);
