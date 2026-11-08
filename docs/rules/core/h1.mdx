@@ -22,10 +22,10 @@ When a page has more than one H1, each is sorted by what the markup says about i
 
 - With every H1 exposed, or every one hidden, the warning is `Multiple H1 tags found (N)` as above.
 - With more than one exposed and some hidden, it reads `Multiple H1 tags found (2 exposed, 3 in the HTML; ...)`, with the exposed count as the value.
-- With one exposed and the rest hidden, the remaining H1 is checked as a single H1: it passes with `Single H1 tag present (3 in the HTML, 2 hidden; ...)`, or warns `H1 tag is empty`.
+- With one exposed and the rest hidden, the remaining H1 is checked as a single H1: it passes with `Single H1 tag present (3 in the HTML, 2 hidden; ...)`, or warns `H1 tag is empty`. When that remaining H1 may itself be hidden by a style squirrel cannot settle, it is still checked as the single H1, and the message adds that it may be hidden (unconfirmed).
 - When an H1 a style may hide but squirrel cannot settle (a pseudo-class, a media query, a page that also loads an external stylesheet) would make a duplicate, the check is `h1-unconfirmed` and warns that it may be hidden.
 
-These messages say that visibility is read from the HTML, inline styles and `<style>` blocks only, because an HTTP-only audit cannot resolve visibility set by an external stylesheet or a script.
+These messages end by noting that an HTTP-only audit cannot resolve CSS or script visibility, and the check's `note` detail says in full that visibility is read from the HTML, inline styles and `<style>` blocks only.
 
 The outcomes are exclusive and the rule stops at the first that applies, so a page with two H1s is reported for the count and never checked for emptiness. Severity is error and weight is 7, behind only the title and description checks in this category.
 

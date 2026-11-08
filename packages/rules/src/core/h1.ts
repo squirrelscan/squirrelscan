@@ -5,9 +5,12 @@ import { UNCONFIRMED_CHECK_SUFFIX } from "@squirrelscan/core-contracts/resolutio
 import { createStaticVisibility } from "../shared/static-hidden";
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
-/** Appended when some H1s are hidden or may be: the audit reads markup, not rendered CSS. */
+/** On the details when some H1s are hidden or may be: the audit reads markup, not rendered CSS. */
 const RENDERING_NOTE =
   "visibility is read from the HTML, inline styles and <style> blocks; an HTTP-only audit cannot resolve visibility set by external stylesheets or scripts";
+
+/** The same limit, short enough for the message, which the report groups across pages. */
+const RENDERING_LIMIT = "an HTTP-only audit cannot resolve CSS or script visibility";
 
 /** How many of the page's H1s are exposed, hidden, or hidden by a style squirrel cannot settle. */
 interface H1Exposure {
@@ -22,8 +25,9 @@ interface H1Exposure {
 
 /**
  * Sorts the page's H1s by static visibility (#1636): the `hidden` attribute, an
- * inline `display:none` or `visibility:hidden`, a closed `<dialog>`, a
- * `<template>`, or a `<style>` rule squirrel can decide. `aria-hidden` is not
+ * inline `display:none` or `visibility:hidden`, a closed `<dialog>`, or a
+ * `<style>` rule squirrel can decide. (`<template>` content never reaches the
+ * count: the parser keeps it out of the document.) `aria-hidden` is not
  * read: it hides a heading from assistive technology, not from the page.
  * Null when the parsed texts do not line up with the document's H1s.
  */
@@ -36,16 +40,16 @@ function h1Exposure(ctx: RuleContext): H1Exposure | null {
 
   const visibility = createStaticVisibility({ ariaHidden: false });
   const result: H1Exposure = { raw: h1.count, exposed: 0, hidden: 0, unconfirmed: 0, visibleTexts: [] };
-  elements.forEach((el, i) => {
+  for (const [i, el] of elements.entries()) {
     const seen = visibility.visibility(el);
     if (seen.state === "hidden") {
       result.hidden++;
-      return;
+      continue;
     }
     if (seen.state === "unknown") result.unconfirmed++;
     else result.exposed++;
     result.visibleTexts.push(h1.texts[i] ?? "");
-  });
+  }
   return result;
 }
 
@@ -114,7 +118,7 @@ export const h1Rule: Rule = {
         checks.push({
           name: "h1",
           status: "warn",
-          message: `Multiple H1 tags found (${seen.exposed} exposed, ${seen.raw} in the HTML; ${RENDERING_NOTE})`,
+          message: `Multiple H1 tags found (${seen.exposed} exposed, ${seen.raw} in the HTML; ${RENDERING_LIMIT})`,
           value: seen.exposed,
           expected: 1,
           details,
@@ -126,7 +130,7 @@ export const h1Rule: Rule = {
         checks.push({
           name: `h1${UNCONFIRMED_CHECK_SUFFIX}`,
           status: "warn",
-          message: `Multiple H1 tags found (${seen.raw} in the HTML), ${seen.unconfirmed} may be hidden by a style (unconfirmed; ${RENDERING_NOTE})`,
+          message: `Multiple H1 tags found (${seen.raw} in the HTML), ${seen.unconfirmed} may be hidden by a style (unconfirmed; ${RENDERING_LIMIT})`,
           value: seen.exposed + seen.unconfirmed,
           expected: 1,
           details,
@@ -134,14 +138,18 @@ export const h1Rule: Rule = {
         return { checks };
       }
 
-      // One H1 is left and the rest are hidden: check that one.
+      // One H1 is left and the rest are hidden: check that one. When that one
+      // may itself be hidden by a style (unconfirmed), it is still the only
+      // candidate heading, so it is checked as the single H1 and the message
+      // says it may be hidden; there is no duplicate to report.
       h1Text = seen.visibleTexts[0];
       exposureDetails = details;
       if (h1Text && h1Text.length > 0) {
+        const maybe = seen.unconfirmed > 0 ? ", and it may be hidden by a style (unconfirmed)" : "";
         checks.push({
           name: "h1",
           status: "pass",
-          message: `Single H1 tag present (${seen.raw} in the HTML, ${seen.hidden} hidden; ${RENDERING_NOTE})`,
+          message: `Single H1 tag present (${seen.raw} in the HTML, ${seen.hidden} hidden${maybe}; ${RENDERING_LIMIT})`,
           value: h1Text,
           details,
         });
