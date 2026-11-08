@@ -5,12 +5,12 @@
 // raw count stays on the check as `rawCount`, the exposed count is reported
 // beside it, and the message says the audit reads markup, not rendered CSS.
 
+import { parsePage } from "@squirrelscan/parser";
 import { describe, expect, test } from "bun:test";
 
-import { parsePage } from "@squirrelscan/parser";
+import type { CheckResult, RuleContext } from "../src/types";
 
 import { h1Rule } from "../src/core/h1";
-import type { CheckResult, RuleContext } from "../src/types";
 
 function run(body: string, head = ""): CheckResult[] {
   const html = `<!doctype html><html lang="en"><head><title>t</title>${head}</head><body>${body}</body></html>`;
@@ -30,12 +30,14 @@ function only(checks: CheckResult[]): CheckResult {
   return checks[0] as CheckResult;
 }
 
-const NOTE = "an HTTP-only audit cannot resolve visibility set by external stylesheets or scripts";
+const NOTE = "an HTTP-only audit cannot resolve CSS or script visibility";
 
 describe("#1636 raw and exposed H1 counts", () => {
   test("/hidden-h1: one exposed H1 and two hidden alternatives is not three visible headings", () => {
     const check = only(
-      run(`<h1>Primary</h1><h1 style="display:none">Alternative</h1><h1 hidden>Alternative</h1>`)
+      run(
+        `<h1>Primary</h1><h1 style="display:none">Alternative</h1><h1 hidden>Alternative</h1>`
+      )
     );
     expect(check.name).toBe("h1");
     expect(check.status).toBe("pass");
@@ -43,7 +45,11 @@ describe("#1636 raw and exposed H1 counts", () => {
     expect(check.message).toContain("3 in the HTML, 2 hidden");
     expect(check.message).toContain(NOTE);
     expect(check.value).toBe("Primary");
-    expect(check.details).toMatchObject({ rawCount: 3, exposedCount: 1, hiddenCount: 2 });
+    expect(check.details).toMatchObject({
+      rawCount: 3,
+      exposedCount: 1,
+      hiddenCount: 2,
+    });
   });
 
   test("/visible-h1: three exposed H1s still warn as multiple, message unchanged", () => {
@@ -58,10 +64,16 @@ describe("#1636 raw and exposed H1 counts", () => {
     const check = only(run(`<h1>One</h1><h1>Two</h1><h1 hidden>Three</h1>`));
     expect(check.name).toBe("h1");
     expect(check.status).toBe("warn");
-    expect(check.message).toContain("Multiple H1 tags found (2 exposed, 3 in the HTML;");
+    expect(check.message).toContain(
+      "Multiple H1 tags found (2 exposed, 3 in the HTML;"
+    );
     expect(check.message).toContain(NOTE);
     expect(check.value).toBe(2);
-    expect(check.details).toMatchObject({ rawCount: 3, exposedCount: 2, hiddenCount: 1 });
+    expect(check.details).toMatchObject({
+      rawCount: 3,
+      exposedCount: 2,
+      hiddenCount: 1,
+    });
   });
 
   test("an H1 a style may hide is reported as unconfirmed, not as a visible duplicate", () => {
@@ -73,19 +85,58 @@ describe("#1636 raw and exposed H1 counts", () => {
     expect(check.name).toBe("h1-unconfirmed");
     expect(check.status).toBe("warn");
     expect(check.message).toContain("1 may be hidden by a style (unconfirmed;");
-    expect(check.details).toMatchObject({ rawCount: 2, exposedCount: 1, hiddenCount: 0, unconfirmedCount: 1 });
+    expect(check.details).toMatchObject({
+      rawCount: 2,
+      exposedCount: 1,
+      hiddenCount: 0,
+      unconfirmedCount: 1,
+    });
+  });
+
+  test("the one H1 left after hidden ones may itself be hidden: checked as single, flagged in the message", () => {
+    const check = only(
+      run(
+        `<h1 class="alt">Maybe</h1><h1 hidden>Alternative</h1>`,
+        `<link rel="stylesheet" href="/site.css"><style>.alt { display: none }</style>`
+      )
+    );
+    expect(check.name).toBe("h1");
+    expect(check.status).toBe("pass");
+    expect(check.message).toContain(
+      "2 in the HTML, 1 hidden, and it may be hidden by a style (unconfirmed)"
+    );
+    expect(check.details).toMatchObject({
+      rawCount: 2,
+      exposedCount: 0,
+      hiddenCount: 1,
+      unconfirmedCount: 1,
+    });
+  });
+
+  test("the full rendering note stays on the details", () => {
+    const check = only(run(`<h1>Primary</h1><h1 hidden>Alternative</h1>`));
+    expect(String(check.details?.note)).toContain(
+      "external stylesheets or scripts"
+    );
   });
 
   test("an H1 in a closed <dialog> is excluded too", () => {
     const check = only(run(`<h1>Primary</h1><dialog><h1>D</h1></dialog>`));
     expect(check.status).toBe("pass");
-    expect(check.details).toMatchObject({ rawCount: 2, exposedCount: 1, hiddenCount: 1 });
+    expect(check.details).toMatchObject({
+      rawCount: 2,
+      exposedCount: 1,
+      hiddenCount: 1,
+    });
   });
 
   test("an H1 inside <template> is not in the raw count at all", () => {
     // The parser keeps template contents out of the document, as browsers do.
     const check = only(run(`<h1>Primary</h1><template><h1>T</h1></template>`));
-    expect(check).toMatchObject({ status: "pass", message: "Single H1 tag present" });
+    expect(check).toMatchObject({
+      status: "pass",
+      message: "Single H1 tag present",
+    });
   });
 
   test("aria-hidden does not hide an H1 from the page", () => {
@@ -97,19 +148,36 @@ describe("#1636 raw and exposed H1 counts", () => {
     const check = only(run(`<h1></h1><h1 hidden>Alternative</h1>`));
     expect(check.status).toBe("warn");
     expect(check.message).toBe("H1 tag is empty");
-    expect(check.details).toMatchObject({ rawCount: 2, exposedCount: 1, hiddenCount: 1 });
+    expect(check.details).toMatchObject({
+      rawCount: 2,
+      exposedCount: 1,
+      hiddenCount: 1,
+    });
   });
 
   test("when every H1 is hidden the raw count is still reported", () => {
     const check = only(run(`<h1 hidden>One</h1><h1 hidden>Two</h1>`));
     expect(check.status).toBe("warn");
     expect(check.message).toBe("Multiple H1 tags found (2)");
-    expect(check.details).toMatchObject({ rawCount: 2, exposedCount: 0, hiddenCount: 2 });
+    expect(check.details).toMatchObject({
+      rawCount: 2,
+      exposedCount: 0,
+      hiddenCount: 2,
+    });
   });
 
   test("single and missing H1 behaviour is unchanged", () => {
-    expect(only(run(`<h1>Only</h1>`))).toMatchObject({ status: "pass", message: "Single H1 tag present" });
-    expect(only(run(`<p>none</p>`))).toMatchObject({ status: "fail", message: "No H1 tag found" });
-    expect(only(run(`<h1 hidden>Only</h1>`))).toMatchObject({ status: "pass", message: "Single H1 tag present" });
+    expect(only(run(`<h1>Only</h1>`))).toMatchObject({
+      status: "pass",
+      message: "Single H1 tag present",
+    });
+    expect(only(run(`<p>none</p>`))).toMatchObject({
+      status: "fail",
+      message: "No H1 tag found",
+    });
+    expect(only(run(`<h1 hidden>Only</h1>`))).toMatchObject({
+      status: "pass",
+      message: "Single H1 tag present",
+    });
   });
 });
