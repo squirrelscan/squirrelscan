@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **`a11y/table-duplicate-name` counts only tables in the accessibility tree.** A table inside a closed `<dialog>`, or under a `hidden` (not `hidden="until-found"`), `inert`, `aria-hidden="true"` or `display:none` ancestor, is no longer compared with the exposed tables, so two "Size" tables in separate closed dialogs are not a duplicate. Excluded tables are counted as `hiddenTables` on the check's details, and a table a style may hide but squirrel cannot settle is reported on `table-duplicate-name-unconfirmed` instead of as a duplicate. Two exposed tables with the same name still warn. (#1637)
+
 ## v0.0.173 (2026-11-08)
 
 A page the parser cannot read no longer reports missing titles and headings, `content/mojibake` and `links/anchor-mismatch` handle more real text correctly, `ax/ai-crawlers` reports search-engine bots, the macOS Intel binary runs on older CPUs, and the REST API docs cover rate limits and unknown request fields.
