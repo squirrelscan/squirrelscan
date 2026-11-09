@@ -13,9 +13,12 @@ With one table on the page the name is a convenience. With several it is the onl
 
 Two check names, at rule severity warning and weight 3. The rule looks at tables that are not `role="presentation"` or `role="none"`, and does nothing at all unless there is more than one: with none it returns info with `No data tables found`, and with exactly one it returns info with `Only one table found`.
 
+Only tables in the accessibility tree are compared. A table inside a closed `<dialog>`, or under a `hidden` (other than `hidden="until-found"`), `inert`, `aria-hidden="true"` or `display:none` ancestor, is not in a screen reader's table list until it is shown, so it is left out and counted as `hiddenTables` in the check's details. A `<style>` rule squirrel can decide counts too; external stylesheets are not read.
+
 A name is taken from `aria-label`, from `aria-labelledby` pointing at elements with text, or from a `<caption>`.
 
 - `table-duplicate-name` warns with `N duplicate table name(s) found` when two or more tables share a name, compared lowercased and trimmed. Items read `"revenue by quarter" (2 tables)`, and the finding suggests `Give each table a unique caption or aria-label`.
+- `table-duplicate-name-unconfirmed` warns with `N duplicate table name(s) may be hidden by a style (unconfirmed)` when a name is shared only with a table a style may hide but squirrel cannot settle (a pseudo-class, a media query, a page that also loads an external stylesheet).
 - `tables-without-names` warns with `N table(s) without accessible names`, noting `Add caption or aria-label to distinguish tables`.
 - `table-duplicate-name` passes with `All tables have unique accessible names` when neither problem appears.
 
