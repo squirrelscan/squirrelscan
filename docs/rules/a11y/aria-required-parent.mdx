@@ -19,6 +19,8 @@ For each element it walks up the ancestor chain comparing effective roles. An ef
 
 The second pass repeats the test for native elements carrying no explicit role: `<li>`, `<option>`, `<tr>`, `<td>`, `<th>`, `<thead>`, `<tbody>` and `<tfoot>`.
 
+The second pass skips an element inside an ancestor whose children are presentational: an explicit role of `button`, `checkbox`, `img`, `menuitemcheckbox`, `menuitemradio`, `meter`, `option`, `progressbar`, `radio`, `scrollbar`, `slider`, `switch` or `tab`, or a native `<progress>` or `<meter>`. Browsers remove those descendants from the accessibility tree, so the `<li>` items of an `<ol role="progressbar">` are not listitems that need a list. An element with a `tabindex` or `contenteditable` stays exposed and is still checked, and implicit roles (a `<button>` or `<summary>`) do not grant the exception. The exception covers every descendant, not only direct children. A `<progress>` or `<meter>` that carries another explicit role (such as `role="region"`) is judged by that role, so its fallback content is checked.
+
 - Fail with `N element(s) missing required parent role`. Items read `div[role="tab"]: needs parent with role=tablist`, or `li (implicit role="listitem"): needs parent with role=list|group`, up to ten with a count of the rest.
 - Pass with `All elements have required parent roles`.
 

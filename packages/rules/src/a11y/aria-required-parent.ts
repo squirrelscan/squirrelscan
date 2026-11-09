@@ -1,6 +1,8 @@
 // a11y/aria-required-parent - Required parent for ARIA roles
 // Based on WAI-ARIA 1.2 specification for required parent roles
 
+import { getAttrCI, hasAttrCI } from "@squirrelscan/utils";
+
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { requiredParentByRole } from "./aria-data";
@@ -133,6 +135,63 @@ function hasRequiredParent(element: Element, requiredRoles: string[]): boolean {
   return false;
 }
 
+/**
+ * Roles whose children are presentational (WAI-ARIA 1.2, "Children
+ * Presentational: True"). A browser removes the descendants of such an
+ * element from the accessibility tree, so an implicit `listitem` under
+ * `ol[role=progressbar]` is never exposed and needs no list parent (#1640).
+ * `separator` is left out: it has presentational children only when it is
+ * not focusable, and a focusable separator (a splitter) keeps them.
+ */
+const CHILDREN_PRESENTATIONAL_ROLES = new Set([
+  "button",
+  "checkbox",
+  "img",
+  "menuitemcheckbox",
+  "menuitemradio",
+  "meter",
+  "option",
+  "progressbar",
+  "radio",
+  "scrollbar",
+  "slider",
+  "switch",
+  "tab",
+]);
+
+/**
+ * Whether the element is focusable, which keeps it in the accessibility tree
+ * under a presentational-children ancestor: a `tabindex` (any value) or a
+ * `contenteditable` other than "false". None of the native elements checked
+ * here (li, option, tr, td, th, thead, tbody, tfoot) is focusable without one.
+ */
+function isFocusable(element: Element): boolean {
+  if (hasAttrCI(element, "tabindex")) return true;
+  const editable = getAttrCI(element, "contenteditable");
+  return editable !== null && editable.trim().toLowerCase() !== "false";
+}
+
+/** Native elements whose content is fallback the browser does not expose. */
+const CHILDREN_PRESENTATIONAL_TAGS = new Set(["meter", "progress"]);
+
+/**
+ * Whether an ancestor makes the element's own semantics presentational: an
+ * explicit role (its first token) from the list above, or a native `<progress>`
+ * or `<meter>`. Implicit roles are not read, since `<summary>` maps to button
+ * here but keeps its children exposed in browsers.
+ */
+function isPresentationalDescendant(element: Element): boolean {
+  if (isFocusable(element)) return false;
+  for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+    const role = getAttrCI(parent, "role")?.trim().toLowerCase().split(/\s+/)[0];
+    const presentational = role
+      ? CHILDREN_PRESENTATIONAL_ROLES.has(role)
+      : CHILDREN_PRESENTATIONAL_TAGS.has(parent.tagName.toLowerCase());
+    if (presentational) return true;
+  }
+  return false;
+}
+
 export const ariaRequiredParentRule: Rule = {
   meta: {
     id: "a11y/aria-required-parent",
@@ -204,6 +263,9 @@ export const ariaRequiredParentRule: Rule = {
       for (const el of elements) {
         // Skip if element has an explicit role (already checked above)
         if (el.hasAttribute("role")) continue;
+        // #1640: under a role with presentational children the element is
+        // not exposed with its implicit role, unless it is focusable.
+        if (isPresentationalDescendant(el)) continue;
 
         if (!hasRequiredParent(el, check.parentRoles)) {
           const tagName = el.tagName.toLowerCase();
