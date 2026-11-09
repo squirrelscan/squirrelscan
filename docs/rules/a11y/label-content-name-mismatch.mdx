@@ -15,6 +15,8 @@ One check, `label-content-name-mismatch`, at severity error. It looks at element
 
 Visible text is gathered by walking the element's child nodes, skipping any subtree marked `aria-hidden="true"` or carrying the `hidden` attribute. Both strings are lowercased and their whitespace collapsed before comparison.
 
+Two kinds of control are left out. Visible text with no letter or digit (`✕`, `×`, `✖`, `☰`, `›`, punctuation, emoji) is a symbol used as an icon, not a label a user would speak, so it is not compared with the accessible name: `<button aria-label="Schließen">✕</button>` passes. WCAG 2.5.3 excludes symbolic characters, and a symbol next to real text still counts, since the whole visible text is compared. A control that is not rendered (a `hidden` or `display:none` ancestor, an `aria-hidden` ancestor, a closed `<dialog>`, a `<style>` rule squirrel can decide) is out of the accessibility tree and is skipped. A control a style may hide but squirrel cannot settle (a pseudo-class, a media query, a page that also loads an external stylesheet) is reported as `label-content-name-mismatch-unconfirmed`, a warning, not as a failure.
+
 - Fail when the `aria-label` does not contain the visible text as a substring. Report message: `N element(s) where visible text doesn't match accessible name`. Items read `button: visible="search" vs aria-label="find products"`, truncating each side at 20 characters, up to ten with a count of the rest. The finding carries the issue `Voice control users may not be able to activate these controls`.
 - Pass with `Visible labels match accessible names`.
 - Info with `No elements with aria-label and visible text found`.
