@@ -1,6 +1,12 @@
 // a11y/label-content-name-mismatch - Label text matches accessible name
 
 import { elementSelector } from "../element-path";
+import {
+  type ControlItem,
+  createStaticVisibility,
+  unconfirmedItem,
+  unconfirmedRow,
+} from "../shared/static-hidden";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 function getVisibleText(el: Element): string {
@@ -29,6 +35,10 @@ function getVisibleText(el: Element): string {
   return text.trim().toLowerCase();
 }
 
+// Visible text with no letter or digit (✕ × ✖ ☰ › punctuation, emoji) is a symbol used as an icon,
+// not a label a user would speak: WCAG 2.5.3 excludes it, as does axe-core's rule of the same name.
+const HAS_LETTER_OR_DIGIT = /[\p{L}\p{N}]/u;
+
 export const labelContentNameMismatchRule: Rule = {
   meta: {
     id: "a11y/label-content-name-mismatch",
@@ -56,6 +66,9 @@ export const labelContentNameMismatchRule: Rule = {
     );
 
     const mismatches: Array<{ id: string; selector?: string }> = [];
+    const unconfirmed: ControlItem[] = [];
+    // A control that is not rendered is out of the accessibility tree, so it has no label to speak.
+    const visibility = createStaticVisibility({ ariaHidden: true });
 
     for (const el of elementsWithAriaLabel) {
       const ariaLabel =
@@ -64,6 +77,7 @@ export const labelContentNameMismatchRule: Rule = {
 
       const visibleText = getVisibleText(el);
       if (!visibleText) continue; // No visible text to compare
+      if (!HAS_LETTER_OR_DIGIT.test(visibleText)) continue; // A symbol used as an icon
 
       // Check if visible text is contained in aria-label
       // Normalize for comparison
@@ -71,9 +85,17 @@ export const labelContentNameMismatchRule: Rule = {
       const normalizedAriaLabel = ariaLabel.replace(/\s+/g, " ");
 
       if (!normalizedAriaLabel.includes(normalizedVisible)) {
+        const seen = visibility.visibility(el);
+        if (seen.state === "hidden") continue;
         const tagName = el.tagName.toLowerCase();
+        const id = `${tagName}: visible="${normalizedVisible.slice(0, 20)}" vs aria-label="${normalizedAriaLabel.slice(0, 20)}"`;
+        if (seen.state === "unknown") {
+          const item = unconfirmedItem(id, seen) as Exclude<ControlItem, string>;
+          unconfirmed.push(ctx.wantsItemSelectors ? { ...item, selector: elementSelector(el) } : item);
+          continue;
+        }
         mismatches.push({
-          id: `${tagName}: visible="${normalizedVisible.slice(0, 20)}" vs aria-label="${normalizedAriaLabel.slice(0, 20)}"`,
+          id,
           ...(ctx.wantsItemSelectors ? { selector: elementSelector(el) } : {}),
         });
       }
@@ -93,13 +115,17 @@ export const labelContentNameMismatchRule: Rule = {
             : {}),
         },
       });
-    } else if (elementsWithAriaLabel.length > 0) {
+    }
+    if (unconfirmed.length > 0) {
+      checks.push(unconfirmedRow("label-content-name-mismatch", "control(s) with a mismatched name", unconfirmed));
+    }
+    if (mismatches.length === 0 && unconfirmed.length === 0 && elementsWithAriaLabel.length > 0) {
       checks.push({
         name: "label-content-name-mismatch",
         status: "pass",
         message: "Visible labels match accessible names",
       });
-    } else {
+    } else if (mismatches.length === 0 && unconfirmed.length === 0) {
       checks.push({
         name: "label-content-name-mismatch",
         status: "info",
