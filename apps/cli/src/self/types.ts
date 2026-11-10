@@ -22,6 +22,9 @@ export const AuthSchema = z
     email: z.string().email(),
     name: z.string().nullable().optional(),
     expiresAt: z.string(), // ISO date
+    // When the server answered 401 to this token (#1666). Set once, so later commands say
+    // "rejected" without asking again; a new login writes a fresh auth object without it.
+    rejectedAt: z.string().optional(),
   })
   .nullable();
 

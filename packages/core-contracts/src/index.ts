@@ -4,6 +4,7 @@ export * from "./refused-fetch";
 export * from "./waf-block";
 // `[[ignore]]` waivers (#1262): what a waiver leaves in a check and a report.
 export * from "./ignore";
+export * from "./rule-outcome";
 // Start URL redirects (#1281): chain, outcome and exit-code contract.
 export * from "./seed-redirect";
 
@@ -83,6 +84,7 @@ import type {
 import type { SiteMetadata } from "./site-metadata";
 import type { CompactResolutionSignal, ResolutionSignal } from "./resolution";
 import { RULE_TIMED_OUT_SKIP_REASON } from "./resolution";
+import { SKIP_REASON_CLASSES } from "./rule-outcome";
 import type { AuditStatusReasonCode } from "./failure-reason";
 import type { RefusedFetch } from "./refused-fetch";
 import type { WafBlockedSummary, WafSuspectSummary } from "./waf-block";
@@ -449,17 +451,9 @@ export const TLS_CERTIFICATE_NOT_CHECKED_SKIP_REASON = "tls-certificate-not-chec
  * report renders as a visible "Not checked" line instead of leaving the rule
  * looking clean (repo#2729), and which never resolve an open finding.
  */
-export const NOT_CHECKED_SKIP_REASONS: ReadonlySet<string> = new Set([
-  TLS_CERTIFICATE_NOT_CHECKED_SKIP_REASON,
-  EXTERNAL_LINKS_NOT_CHECKED_SKIP_REASON,
-  LINK_TARGETS_NOT_FETCHED_SKIP_REASON,
-  EXTERNAL_LINKS_OVER_CAP_SKIP_REASON,
-  EXTERNAL_LINKS_OUT_OF_TIME_SKIP_REASON,
-  // A rule abandoned for its time budget did not check that page (pub#960).
-  RULE_TIMED_OUT_SKIP_REASON,
-  // A capped crawl cannot count a page's inbound links (#1144).
-  CRAWL_CAPPED_SKIP_REASON,
-]);
+export const NOT_CHECKED_SKIP_REASONS: ReadonlySet<string> = new Set(
+  Object.keys(SKIP_REASON_CLASSES).filter((reason) => SKIP_REASON_CLASSES[reason]!.notChecked),
+);
 
 export type RuleScope = "page" | "site";
 export type RuleSeverity = "error" | "warning" | "info";
@@ -657,8 +651,54 @@ export interface UnstoredPage {
   reason: UnstoredPageReason;
 }
 
+/** Why a requested resume started a new crawl instead (#1658). */
+export type ResumeRefusalReason =
+  | "no-prior-crawl"
+  | "refresh-requested"
+  | "reclaimed"
+  | "crawl-finished"
+  | "crawl-failed"
+  | "config-changed"
+  | "lease-held"
+  | "lease-unavailable";
+
+export interface ResumeOutcome {
+  requested: true;
+  resumed: boolean;
+  reason?: ResumeRefusalReason;
+  message?: string;
+}
+
+/**
+ * What the publish phase of an audit did (#1657). `failed` carries the structured error code as its
+ * reason (never the server's message) and whether publishing was asked for (`explicit`, `--publish`)
+ * or was the automatic side effect of a signed-in audit.
+ */
+export type PublishOutcome =
+  | { status: "skipped"; reason: string }
+  | { status: "published"; id: string }
+  | { status: "failed"; reason: string; explicit: boolean };
+
+/** The facts a CI gate or an agent reads off a finished audit (#1657). */
+export interface AuditOutcome {
+  /** The exit code the command ends with. */
+  exit_code: number;
+  /** The report's status. */
+  status: AuditStatus;
+  publish: {
+    status: "skipped" | "published" | "failed";
+    /** Why publishing was skipped, or the error code of a failed publish. */
+    reason?: string;
+  };
+}
+
 export interface AuditReport {
   crawlId?: string;
+  /**
+   * What `--resume` came to, present only when the run was asked to resume (#1658). `resumed` is false
+   * when a new crawl started instead, with the `reason` code and the `message` printed on stderr.
+   */
+  resume?: ResumeOutcome;
   baseUrl: string;
   /** The deep page the user asked for when the audit scope is the whole site. */
   requestedUrl?: string;
@@ -701,6 +741,8 @@ export interface AuditReport {
    * absent ⇒ `completed`. Renderers suppress the grade ring for `failed`/`blocked`.
    */
   status?: AuditStatus;
+  /** Exit code, audit status and publish result, stamped before the report is written (#1657). */
+  outcome?: AuditOutcome;
   /** Short human reason shown when `status` is failed/blocked (e.g. "No pages were crawled"). */
   statusReason?: string;
   /**
@@ -2532,8 +2574,11 @@ export function triggerToAuditSource(trigger: string | null | undefined): AuditS
 
 // ── Agent-run lifecycle & org-sync `runs` delta ────────────────────
 
-/** Hosted agent-run status lifecycle. */
-export type AgentRunStatus = "pending" | "running" | "completed" | "failed" | "cancelled";
+/**
+ * Hosted agent-run status lifecycle. `queued` is a run waiting for a container slot that starts by
+ * itself (#1665): the cloud has always stored it, but clients typed it away. It is not terminal.
+ */
+export type AgentRunStatus = "queued" | "pending" | "running" | "completed" | "failed" | "cancelled";
 
 /**
  * Statuses where a run is finished — it leaves live "running now" feeds and
@@ -2548,6 +2593,37 @@ export const TERMINAL_AGENT_RUN_STATUSES: ReadonlySet<string> = new Set<AgentRun
 ]);
 
 /**
+ * The phases of an audit a person watching it sees, in the order a run goes through them. The CLI's
+ * progress line and a hosted run's live progress use the same names.
+ */
+export const RUN_PHASES = ["crawling", "external-links", "cloud", "rules", "walk", "complete"] as const;
+export type RunPhase = (typeof RUN_PHASES)[number];
+
+/**
+ * Events a run reports that are not a phase: they say something happened (memory was tight, the crawl
+ * scope was cut) and must never replace the visible phase.
+ */
+export const RUN_NOTICES = ["memory_pressure", "crawl_scope"] as const;
+export type RunNotice = (typeof RUN_NOTICES)[number];
+
+export function isRunPhase(value: unknown): value is RunPhase {
+  return typeof value === "string" && (RUN_PHASES as readonly string[]).includes(value);
+}
+
+export function isRunNotice(value: unknown): value is RunNotice {
+  return typeof value === "string" && (RUN_NOTICES as readonly string[]).includes(value);
+}
+
+/**
+ * The phase to show after a run reports `incoming` while `current` is showing. A phase replaces the
+ * current one; a notice, a stage name this version does not know, an empty value or null leaves it
+ * alone, so a notice cannot overwrite the phase.
+ */
+export function nextVisiblePhase(current: RunPhase | null, incoming: string | null | undefined): RunPhase | null {
+  return isRunPhase(incoming) ? incoming : current;
+}
+
+/**
  * Coarse org-sync `runs` oplog payload — produced by the api tee
  * (`buildRunEventChange`/`buildRunStatusChange`, #459), consumed by the
  * dashboard live-sync (#460). Partial delta merged by runId. `progress` is the
@@ -2557,7 +2633,8 @@ export const TERMINAL_AGENT_RUN_STATUSES: ReadonlySet<string> = new Set<AgentRun
  */
 export interface RunSyncDelta {
   status?: AgentRunStatus;
-  phase?: string | null;
+  /** The visible phase of the run, never a notice (see {@link RunNotice} and {@link nextVisiblePhase}). */
+  phase?: RunPhase | null;
   progress?: { fetched?: number; total?: number } | null;
 }
 

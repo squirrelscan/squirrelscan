@@ -16,6 +16,11 @@ import {
   SCAN_TRUNCATED_SKIP_REASON,
   UNREAD_PAGE_SKIP_REASON,
 } from "@squirrelscan/core-contracts/resolution";
+import {
+  classifyRuleOutcome,
+  skipReasonClass,
+  type RuleOutcome,
+} from "@squirrelscan/core-contracts/rule-outcome";
 import type { CheckResult } from "@squirrelscan/core-contracts";
 import { stripUnsafeLineText } from "@squirrelscan/core-contracts/control-chars";
 import type { ReportRuleResult } from "./types";
@@ -31,6 +36,11 @@ const LISTED_SKIP_REASONS: ReadonlySet<string> = new Set([
   RULE_ERRORED_REASON,
 ]);
 
+/** The outcome of a listed skip reason: `rule-errored` is the thrown rule, the rest are coded reasons. */
+function outcomeOfListedReason(reason: string): RuleOutcome {
+  return reason === RULE_ERRORED_REASON ? "errored" : (skipReasonClass(reason)?.outcome ?? "not_applicable");
+}
+
 export interface SkippedCheck {
   ruleId: string;
   /** Rule display name. */
@@ -39,6 +49,8 @@ export interface SkippedCheck {
   check: string;
   /** Why the check did not evaluate, e.g. "scan-truncated". */
   reason: string;
+  /** What became of the rule, so a consumer does not parse `reason` (#1661): `coverage_gap`, `timed_out` or `errored`. */
+  outcome: RuleOutcome;
   /** Skipped page URLs: a sample when `pagesHasMore`. */
   pages: string[];
   /** Authoritative number of skipped pages. */
@@ -68,9 +80,7 @@ export function collectSkippedChecks(
       const recorded = check.skipReason;
       // A rule that threw is recorded as a timed-out skip with `details.errored`.
       const reason =
-        recorded === RULE_TIMED_OUT_SKIP_REASON && check.details?.errored === true
-          ? RULE_ERRORED_REASON
-          : recorded;
+        classifyRuleOutcome(check) === "errored" ? RULE_ERRORED_REASON : recorded;
       if (check.status !== "skipped" || reason === undefined || !LISTED_SKIP_REASONS.has(reason)) {
         continue;
       }
@@ -110,6 +120,7 @@ export function collectSkippedChecks(
         name: result.meta.name,
         check: g.check,
         reason: g.reason,
+        outcome: outcomeOfListedReason(g.reason),
         pages,
         pagesCount: Math.max(g.total, pages.length),
         pagesHasMore: g.total > pages.length,
@@ -164,6 +175,7 @@ export function parseSkippedChecks(value: unknown): SkippedCheck[] {
       name: typeof e.name === "string" && e.name.length <= 200 ? stripUnsafeLineText(e.name) : e.ruleId,
       check: stripUnsafeLineText(e.check),
       reason: e.reason,
+      outcome: outcomeOfListedReason(e.reason),
       pages,
       pagesCount,
       pagesHasMore: pagesCount > pages.length,

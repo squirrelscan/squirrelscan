@@ -21,6 +21,8 @@ import {
   TLS_CERTIFICATE_NOT_CHECKED_SKIP_REASON,
 } from "@squirrelscan/core-contracts";
 
+import { classifyRuleOutcome, type RuleOutcome } from "@squirrelscan/core-contracts/rule-outcome";
+
 import type { ReportRuleResult } from "./types";
 
 export interface NotCheckedRule {
@@ -31,6 +33,8 @@ export interface NotCheckedRule {
   check: string;
   /** Why it did not run, e.g. "external-links-not-checked". */
   reason: string;
+  /** What became of the rule (#1661): `coverage_gap`, `timed_out` or `errored`. */
+  outcome: RuleOutcome;
   /** The rule's own message: what was not checked, and why. */
   message: string;
   /** What to run to check it. */
@@ -101,7 +105,7 @@ function linkTargetsHint(details: Record<string, unknown> | undefined): string {
 }
 
 function hintFor(check: { skipReason?: string; details?: Record<string, unknown> }): string {
-  if (check.skipReason === RULE_TIMED_OUT_SKIP_REASON && check.details?.errored === true)
+  if (classifyRuleOutcome({ status: "skipped", ...check }) === "errored")
     return "This is a defect in squirrelscan, not a problem with your pages, and no finding there is not a clean result. Update squirrel and run the audit again, or report it at https://github.com/squirrelscan/squirrelscan/issues.";
   if (check.skipReason === LINK_TARGETS_NOT_FETCHED_SKIP_REASON)
     return linkTargetsHint(check.details);
@@ -148,7 +152,7 @@ export function timedOutRules(report: NotCheckedReportShape): TimedOutRule[] {
     if (skipped.length === 0) continue;
     const num = (value: unknown): number | undefined =>
       typeof value === "number" && Number.isFinite(value) ? value : undefined;
-    const errored = skipped.some((c) => c.details?.errored === true);
+    const errored = skipped.some((c) => classifyRuleOutcome(c) === "errored");
     const summary = result.checks.find((c) => c.name === `${ruleId}-${errored ? "errors" : "timeouts"}`);
     // The summary's count is final. Without it (a published report may have cut the
     // row) the most any skipped row says: a fold keeps the pages it covered in
@@ -200,7 +204,7 @@ export function timedOutMessage(rule: TimedOutRule): string {
 function erroredPages(result: ReportRuleResult): string[] {
   const out = new Set<string>();
   for (const c of result.checks) {
-    if (c.status !== "skipped" || c.skipReason !== RULE_TIMED_OUT_SKIP_REASON || c.details?.errored !== true) continue;
+    if (classifyRuleOutcome(c) !== "errored") continue;
     if (c.pageUrl) out.add(c.pageUrl);
     for (const p of c.pages ?? []) out.add(p);
     if (out.size >= MAX_NOT_CHECKED_PAGES) break;
@@ -229,6 +233,7 @@ export function notCheckedRules(report: NotCheckedReportShape): NotCheckedRule[]
       name: result.meta.name,
       check: check.name,
       reason: check.skipReason,
+      outcome: classifyRuleOutcome(check),
       // A timeout names the rule and the pages it did not check.
       message: timedOut ? timedOutMessage(timedOut) : check.message,
       hint: hintFor(check),

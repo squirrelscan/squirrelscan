@@ -142,6 +142,8 @@ export const AUTO_UPDATE_DISABLED_REMINDER_DAYS = 7;
 // after which the CLI stops the reassuring "updating in the background" line
 // and shows the loud manual-update box instead (#1085/#1074).
 export const AUTO_UPDATE_FALLBACK_THRESHOLD = 2;
+// Hours between background install attempts (throttle).
+export const AUTO_UPDATE_ATTEMPT_INTERVAL_HOURS = 1;
 
 // Breadth-first crawling constants
 export const CRAWL_BREADTH_DEPTH_PENALTY = 1000;

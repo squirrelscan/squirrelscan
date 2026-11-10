@@ -14,10 +14,13 @@ import type { TlsEvent } from "@/crawler/fetcher";
 import type { CrawlerConfigSnapshot } from "@/crawler/storage/types";
 import type { CoverageMode } from "@/types";
 
+import { startLeaseForStorage } from "@/audit/crawl-lease";
 import {
-  formatResumeClaimWarning,
-  startLeaseForStorage,
-} from "@/audit/crawl-lease";
+  decideResume,
+  formatResumeRefusal,
+  isDirtyConfig,
+  type ResumeDecision,
+} from "@/audit/resume-decision";
 import { createTlsProbe } from "@/audit/tls-probe";
 import { loadConfig } from "@/config";
 import { MAX_PAGES_CAP } from "@/constants";
@@ -54,36 +57,6 @@ import { getHostname, isLoopbackHost, parseUserUrl } from "@/utils/url";
 import { resolveStickyUserAgent } from "@/utils/user-agent";
 
 export type { CrawlerEvent } from "@/crawler/core/types";
-
-/**
- * Fields that affect crawl scope - changes require fresh crawl_id
- * Type-checked against CrawlerConfigSnapshot to catch field renames at compile time
- */
-const DIRTY_CONFIG_FIELDS = [
-  "include",
-  "exclude",
-  "allowedDomains",
-  "allowQueryParams",
-  "dropQueryPrefixes",
-] as const satisfies ReadonlyArray<keyof CrawlerConfigSnapshot>;
-
-/**
- * Check if config changes require a fresh crawl (scope-affecting fields changed)
- */
-function isDirtyConfig(
-  oldConfig: CrawlerConfigSnapshot,
-  newConfig: Partial<CrawlerConfigSnapshot>
-): boolean {
-  for (const field of DIRTY_CONFIG_FIELDS) {
-    const oldVal = JSON.stringify(oldConfig[field]);
-    const newVal = JSON.stringify(newConfig[field]);
-    if (oldVal !== newVal) {
-      logger.debug("dirty config field", field, oldVal, "→", newVal);
-      return true;
-    }
-  }
-  return false;
-}
 
 export interface CrawlProgress {
   phase: "crawling" | "complete";
@@ -397,57 +370,31 @@ export async function runCrawl(
         },
       };
 
-      // Resume decision logic
-      const resumeCandidate =
-        options.resume && // User explicitly requested resume
-        !!existingCrawl &&
-        !options.refresh && // Can't resume if refresh requested
-        // "stopped" = interrupted mid-frontier by the crawl-phase backstop
-        // (#969); the frontier still has pending URLs, so resume continues it.
-        (existingCrawl.status === "running" ||
-          existingCrawl.status === "paused" ||
-          existingCrawl.status === "stopped") &&
-        !isDirtyConfig(existingCrawl.config, crawlerConfig);
-      const resumeClaim =
-        resumeCandidate && existingCrawl
-          ? crawlLease.claim(existingCrawl.id)
-          : null;
-      const shouldResume = resumeCandidate && resumeClaim?.acquired === true;
+      // Resume decision (#1658): the same function `squirrel audit` uses.
+      const lease = crawlLease;
+      const resumeDecision: ResumeDecision | null = options.resume
+        ? decideResume({
+            existingCrawl,
+            crawlerConfig,
+            refresh: options.refresh === true,
+            claim: (id) => lease.claim(id),
+          })
+        : null;
+      const resumeTarget =
+        resumeDecision?.resume === true ? existingCrawl : null;
+      if (resumeDecision && !resumeDecision.resume) {
+        process.stderr.write(`${formatResumeRefusal(resumeDecision)}\n`);
+      }
 
       let crawlId: string;
-      if (shouldResume) {
+      if (resumeTarget) {
         // Resume interrupted crawl
-        logger.info(`resuming interrupted crawl ${existingCrawl.id}`);
-        await warnEvictedPages(storage, existingCrawl.id, "resume");
-        await Effect.runPromise(crawler.resumeFromStorage(existingCrawl.id));
-        crawlId = existingCrawl.id;
+        logger.info(`resuming interrupted crawl ${resumeTarget.id}`);
+        await warnEvictedPages(storage, resumeTarget.id, "resume");
+        await Effect.runPromise(crawler.resumeFromStorage(resumeTarget.id));
+        crawlId = resumeTarget.id;
       } else {
         // Create new crawl
-        // Warn if resume conditions not met
-        if (resumeClaim && !resumeClaim.acquired && existingCrawl) {
-          logger.warn(formatResumeClaimWarning(existingCrawl.id, resumeClaim));
-        } else if (options.resume && !existingCrawl) {
-          logger.warn("--resume requested but no previous crawl found");
-        } else if (
-          options.resume &&
-          existingCrawl &&
-          existingCrawl.status === "completed"
-        ) {
-          logger.warn(
-            "--resume requested but previous crawl completed, starting new"
-          );
-        } else if (
-          options.resume &&
-          existingCrawl &&
-          isDirtyConfig(existingCrawl.config, crawlerConfig)
-        ) {
-          logger.warn("--resume requested but config changed, starting new");
-        } else if (options.resume && options.refresh) {
-          logger.warn(
-            "--resume and --refresh are mutually exclusive, using --refresh"
-          );
-        }
-
         // Log reason for new crawl
         if (options.refresh) {
           logger.debug("refresh requested, starting new crawl");

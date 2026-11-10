@@ -1,6 +1,7 @@
 // Type definitions for SEO audit
 
 import type { ProbeLevel } from "@squirrelscan/config";
+import type { AuditOutcome, ResumeOutcome } from "@squirrelscan/core-contracts";
 import type {
   AuditLevel,
   ResolvedAuditSettings,
@@ -463,6 +464,8 @@ export interface ReportRuleResult {
 export interface AuditReport {
   crawlId?: string; // UUID of the crawl this report was generated from
   baseUrl: string;
+  /** What `--resume` came to (#1658); present only when the run was asked to resume. Mirrors core-contracts `AuditReport`. */
+  resume?: ResumeOutcome;
   /** The deep page the user asked for when the audit scope is the whole site. */
   requestedUrl?: string;
   /** URLs the crawl requested but stored no page for, for `--include-pages` (#1396). Mirrors core-contracts `AuditReport`. */
@@ -487,6 +490,8 @@ export interface AuditReport {
   failed: number;
   /** Audit validity (#489) — set only when not `completed`; absent ⇒ completed. */
   status?: AuditStatus;
+  /** Exit code, audit status and publish result (#1657). Mirrors core-contracts `AuditReport`. */
+  outcome?: AuditOutcome;
   /** Short human reason shown when `status` is failed/blocked. */
   statusReason?: string;
   /**

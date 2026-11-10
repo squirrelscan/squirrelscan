@@ -256,6 +256,16 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
     lines.push("</rate-limited>");
   }
 
+  // #1657: what the command exits with and what publishing did, so an agent does not wait for
+  // the process to end to read it. Present on a report an audit just wrote.
+  if (report.outcome) {
+    const o = report.outcome;
+    const reasonAttr = o.publish.reason ? ` publish-reason="${escapeXml(o.publish.reason)}"` : "";
+    lines.push(
+      `<outcome exit-code="${o.exit_code}" status="${escapeXml(o.status)}" publish="${o.publish.status}"${reasonAttr}/>`,
+    );
+  }
+
   if (report.status === "partial" && report.statusReason) {
     lines.push(`<status state="partial" reason="${escapeXml(report.statusReason)}">`);
     lines.push(

@@ -1,7 +1,10 @@
 import {
   chmodSync,
+  closeSync,
   existsSync,
+  fstatSync,
   mkdirSync,
+  openSync,
   readFileSync,
   renameSync,
   statSync,
@@ -517,32 +520,223 @@ export function setSettingValue(
 
   const parsedValue = parseResult.data;
 
-  // Load existing settings for this scope
-  const existingResult = loadSettingsFromScope(scope);
-  if (!existingResult.ok) return existingResult;
+  // Read, merge and write under the scope's lock (#1660): a concurrent writer's keys are kept.
+  const lockPath = `${getPathForScope(scope)}.lock`;
+  return withFileLock(lockPath, () => {
+    const existingResult = loadSettingsFromScope(scope);
+    if (!existingResult.ok) return existingResult;
 
-  const existing = existingResult.data;
+    const updated = applySettingsPatch(existingResult.data, {
+      [key]: parsedValue,
+    });
+    const saveResult = saveSettingsToScope(updated, scope);
+    if (!saveResult.ok) return saveResult;
 
-  // Update and save
-  const updated = { ...existing, [key]: parsedValue };
-  const saveResult = saveSettingsToScope(updated, scope);
-  if (!saveResult.ok) return saveResult;
+    return ok({ key, value: parsedValue, scope });
+  });
+}
 
-  return ok({ key, value: parsedValue, scope });
+// ── Read-modify-write under a lock (#1660) ────────────────────────────────────────────────────────────────────────────────
+//
+// Each write was atomic (temp file and rename) but the read before it was not part of it: the detached auto-updater and a
+// foreground command (login, logout, register-install) both read the file, changed their own keys and wrote the whole file back,
+// so whichever wrote second dropped the other's change. A lost `auth` is a silent logout; a lost `auto_update_applied` or
+// `pending_update_notification` re-prompts or re-spawns updates. Now the read, the merge and the write happen under one lock file,
+// and a writer sets only the keys of its own patch on what the file holds at that moment.
+
+/** How long a writer waits for the lock, and how old a lock must be to be taken over as left behind by a crash. */
+const SETTINGS_LOCK_TIMEOUT_MS = 2_000;
+const SETTINGS_LOCK_STALE_MS = 10_000;
+const SETTINGS_LOCK_POLL_MS = 5;
+
+function sleepMs(ms: number): void {
+  // Synchronous on purpose: updateSettings is synchronous and called from signal-free startup paths.
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+function processAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    // EPERM: it exists, we may not signal it. Only ESRCH says it is gone.
+    return (error as NodeJS.ErrnoException).code === "EPERM";
+  }
+}
+
+/**
+ * How old a lock file is and what it holds, from ONE open file: the age comes from `fstat` on the descriptor and the text from
+ * a read of the same descriptor, so what was measured and what was read are the same file even if the path is replaced in
+ * between (a separate `stat` then `read` of the path can describe two different files). Null when it cannot be opened
+ * (vanished, unreadable).
+ */
+function readLockFile(path: string): { ageMs: number; text: string } | null {
+  let fd: number | undefined;
+  try {
+    fd = openSync(path, "r");
+    const { mtimeMs } = fstatSync(fd);
+    return { ageMs: Date.now() - mtimeMs, text: readFileSync(fd, "utf-8") };
+  } catch {
+    return null;
+  } finally {
+    if (fd !== undefined) {
+      try {
+        closeSync(fd);
+      } catch {
+        // nothing to do
+      }
+    }
+  }
+}
+
+/** Whether the lock at `lockPath` was left behind: its owner is gone, or it is older than the stale bound. */
+function lockIsStale(lockPath: string, staleMs: number): boolean {
+  const lock = readLockFile(lockPath);
+  // vanished while we looked: not stale yet
+  if (!lock) return false;
+  if (lock.ageMs > staleMs) return true;
+  try {
+    const owner = JSON.parse(lock.text) as { pid?: number };
+    return typeof owner.pid === "number" && !processAlive(owner.pid);
+  } catch {
+    // unreadable (being written): not stale yet
+    return false;
+  }
+}
+
+/**
+ * Remove a stale lock, as the one waiter holding the takeover gate. Without the gate two waiters can both judge the same lock
+ * stale; the first removes it and creates a fresh one, and the second, acting on its earlier check, would remove that fresh lock
+ * too, leaving two holders. Inside the gate the staleness is checked again, so a lock created since is left alone. A gate
+ * itself older than the stale bound (its holder died in this short window) is removed. Returns whether the lock path is now
+ * free to try; false means retry after a pause (gate busy, or the removal failed).
+ */
+function removeStaleLock(lockPath: string, staleMs: number): boolean {
+  const gate = `${lockPath}.takeover`;
+  try {
+    writeFileSync(gate, String(process.pid), { flag: "wx", mode: 0o600 });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "EEXIST") {
+      try {
+        const held = readLockFile(gate);
+        if (held && held.ageMs > staleMs) unlinkSync(gate);
+      } catch {
+        // gate vanished or cannot be removed: retry after a pause
+      }
+    }
+    return false;
+  }
+  try {
+    if (lockIsStale(lockPath, staleMs)) unlinkSync(lockPath);
+    return true;
+  } catch {
+    return false;
+  } finally {
+    try {
+      unlinkSync(gate);
+    } catch {
+      // already gone
+    }
+  }
+}
+
+/**
+ * Run `fn` holding an exclusive lock file next to the settings file. A lock whose owner died, or that is older than the stale
+ * bound, is taken over. If the lock cannot be had within the timeout (a read-only directory, a wedged holder) the write goes
+ * ahead unlocked: a lost update is the old behaviour, a login that cannot be saved is worse.
+ */
+export function withFileLock<T>(
+  lockPath: string,
+  fn: () => T,
+  options: { timeoutMs?: number; staleMs?: number; pollMs?: number } = {}
+): T {
+  const timeoutMs = options.timeoutMs ?? SETTINGS_LOCK_TIMEOUT_MS;
+  const staleMs = options.staleMs ?? SETTINGS_LOCK_STALE_MS;
+  const pollMs = options.pollMs ?? SETTINGS_LOCK_POLL_MS;
+  const payload = JSON.stringify({
+    pid: process.pid,
+    at: new Date().toISOString(),
+  });
+
+  try {
+    mkdirSync(dirname(lockPath), { recursive: true });
+  } catch {
+    // the write below surfaces a real problem
+  }
+
+  const deadline = Date.now() + timeoutMs;
+  let held = false;
+  for (;;) {
+    try {
+      writeFileSync(lockPath, payload, { flag: "wx", mode: 0o600 });
+      held = true;
+      break;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") break; // cannot lock here: go unlocked
+    }
+    if (lockIsStale(lockPath, staleMs)) {
+      const removed = removeStaleLock(lockPath, staleMs);
+      if (Date.now() >= deadline) break;
+      if (removed) continue;
+    }
+    if (Date.now() >= deadline) break;
+    sleepMs(pollMs);
+  }
+
+  try {
+    return fn();
+  } finally {
+    if (held) {
+      try {
+        // Only our own lock: after a stale takeover another process may hold a newer one.
+        const owner = JSON.parse(readFileSync(lockPath, "utf-8")) as {
+          pid?: number;
+        };
+        if (owner.pid === process.pid) unlinkSync(lockPath);
+      } catch {
+        // already gone
+      }
+    }
+  }
+}
+
+/**
+ * The file's new contents when `patch` is applied to what it holds now: the patch's keys are set (a key whose value is
+ * `undefined` is removed when written), every other key is exactly as it was. Pure: the whole of what makes a writer touch only
+ * its own keys.
+ */
+export function applySettingsPatch<T extends object>(
+  current: T,
+  patch: Partial<T>
+): T {
+  return { ...current, ...patch };
+}
+
+/**
+ * Update the user settings under the lock: read what the file holds now, ask `build` for the keys to set (it sees the fresh
+ * settings, for a decision that depends on them), merge and write. Returns the settings as written.
+ */
+export function updateSettingsWith(
+  build: (current: UserSettings) => Partial<UserSettings>
+): Result<UserSettings> {
+  const path = getSettingsPath();
+  return withFileLock(`${path}.lock`, () => {
+    const result = loadUserSettings(path);
+    if (!result.ok) return result;
+
+    const updated = applySettingsPatch(result.data, build(result.data));
+    const saveResult = saveSettings(updated);
+    if (!saveResult.ok) return saveResult;
+
+    return ok(updated);
+  });
 }
 
 // Backwards compatible updateSettings (updates user scope)
 export function updateSettings(
   updates: Partial<UserSettings>
 ): Result<UserSettings> {
-  const result = loadUserSettings();
-  if (!result.ok) return result;
-
-  const updated = { ...result.data, ...updates };
-  const saveResult = saveSettings(updated);
-  if (!saveResult.ok) return saveResult;
-
-  return ok(updated);
+  return updateSettingsWith(() => updates);
 }
 
 export function shouldCheckForUpdates(settings: UserSettings): boolean {

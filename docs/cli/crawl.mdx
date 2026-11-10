@@ -90,6 +90,8 @@ squirrel crawl https://example.com --refresh
 squirrel crawl https://example.com --resume
 ```
 
+Resume continues the latest crawl of the site only when it is unfinished, its include, exclude and URL settings match and this process can claim it. Otherwise a new crawl starts and the reason is printed on stderr, as in [`squirrel audit --resume`](/cli/audit#resume-an-interrupted-crawl).
+
 Resume only continues a crawl when this process can claim it. If another live
 process already owns that crawl, the command names its PID and host and starts a
 new crawl instead. A lease becomes stale after 5 minutes without a heartbeat;

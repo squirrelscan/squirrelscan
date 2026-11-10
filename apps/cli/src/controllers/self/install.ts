@@ -2,6 +2,7 @@ import { mkdirSync, copyFileSync, chmodSync } from "node:fs";
 import { dirname } from "node:path";
 
 import type { InstallResult } from "@/self/types";
+import type { UserSettings } from "@/self/types";
 
 import { type Result, ok, err, commandError } from "@/controllers/types";
 import { readInstallSourceEnv, readPathSetupEnv } from "@/self/install-meta";
@@ -14,8 +15,8 @@ import {
   isBinInPath,
 } from "@/self/paths";
 import {
-  loadUserSettings,
   saveSettings,
+  updateSettingsWith,
   DEFAULT_SETTINGS,
 } from "@/self/settings";
 
@@ -58,24 +59,21 @@ export async function runSelfInstall(
 
     // Initialize settings — preserve anything already there (auth, telemetry
     // opt-out, channel); a reinstall/upgrade must never reset user state.
-    const existing = loadUserSettings();
-    const settingsResult = saveSettings({
-      ...DEFAULT_SETTINGS,
-      ...(existing.ok ? existing.data : {}),
+    // Under the settings lock (#1660): an auto-updater or a login running at the same time keeps its keys.
+    const patch = (existing: Partial<UserSettings>): Partial<UserSettings> => ({
       last_update_check: new Date().toISOString(),
       // Remember a custom bin dir so future updates flip the right symlink
       install_bin_dir: options.binDir ?? null,
       // Registration runs on the next command, where the env var is gone.
       // Persist a valid stamp; keep any earlier one when this run has none.
-      install_source:
-        readInstallSourceEnv() ??
-        (existing.ok ? existing.data.install_source : undefined) ??
-        null,
-      path_setup:
-        readPathSetupEnv() ??
-        (existing.ok ? existing.data.path_setup : undefined) ??
-        null,
+      install_source: readInstallSourceEnv() ?? existing.install_source ?? null,
+      path_setup: readPathSetupEnv() ?? existing.path_setup ?? null,
     });
+    let settingsResult: Result<unknown> = updateSettingsWith(patch);
+    if (!settingsResult.ok) {
+      // Settings that cannot be read (corrupt) are reset to defaults by an install, as before.
+      settingsResult = saveSettings({ ...DEFAULT_SETTINGS, ...patch({}) });
+    }
 
     if (!settingsResult.ok) {
       return settingsResult;

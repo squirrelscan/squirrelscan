@@ -259,6 +259,8 @@ squirrel audit https://example.com --refresh
 squirrel audit https://example.com --resume
 ```
 
+Resume continues the latest crawl of the site only when it can: the crawl must still be unfinished (`running`, `paused` or `stopped`), the include, exclude and URL settings must match the crawl's, `--refresh` must not be set, its data must not have been reclaimed, and this process must be able to claim it. When any of these fails, the audit starts a new crawl and says why on stderr, for example `--resume requested but not resuming (crawl-finished): previous crawl 3f2a finished (analyzed), nothing left to resume; starting a new crawl`. The reason is one of `no-prior-crawl`, `refresh-requested`, `reclaimed`, `crawl-finished`, `crawl-failed`, `config-changed`, `lease-held` or `lease-unavailable`. With `--format json` the report carries `meta.resume`: `requested` (always `true` when present), `resumed`, and, when `resumed` is `false`, the `reason` code and the `message` printed on stderr. `meta.resume` is absent when `--resume` was not passed. `squirrel crawl --resume` makes the same decision and prints the same line.
+
 Resume only continues a crawl when this process can claim it. If another live
 process already owns that crawl, the command names its PID and host and starts a
 new crawl instead. A lease becomes stale after 5 minutes without a heartbeat;
@@ -780,6 +782,38 @@ Change the window, or turn it off, with
 | `3` | The audited page was blocked, so nothing was audited: a WAF or bot manager challenge or block page, or a bare 403 or 429 from the server (see [blocked by a WAF or bot manager](/guides/failed-audits#blocked-by-waf)). Every report with `status: "blocked"` exits `3` |
 | `4` | The start URL redirected to another site and the run was not told to follow it (or the chain looped, passed 5 hops, or reached a refused hop), so nothing was audited. See [Start URLs that redirect](#start-urls-that-redirect) |
 | `5` | The start URL could not be reached (DNS failure, connect timeout, connection reset or refused, a TLS error), so nothing was audited. With `-f json`, `-f xml` or `-f llm` the run still writes a report with `status: "unreachable"` (see [Unreachable start URLs](#unreachable-start-urls)) |
+
+### Which code wins
+
+The code is computed once, at the end of the run, from what happened. The first row that applies decides it:
+
+| Order | What happened | Code |
+|-------|---------------|------|
+| 1 | The start URL could not be reached | `5` |
+| 2 | The start URL redirected to another site and was not followed | `4` |
+| 3 | The run stopped before a report: bad flags, a refused start URL, a store problem, a plugin that would not load, an audit error | `1` |
+| 4 | The report is `blocked` | `3` |
+| 5 | The report is `failed` | `1` |
+| 6 | An explicit `--publish` failed | `1`; the `--fail-on` gate is not evaluated |
+| 7 | A [`--fail-on`](#gate-ci-on-audit-results) threshold tripped | `2` |
+| 8 | Anything else, including a `partial` report | `0` |
+
+An **automatic** publish that fails (a signed-in audit publishes on its own) does not change the code: the audit itself succeeded, so the run exits `0` unless a row above applies, the failure is printed on stderr, and the run is recorded as an error in your dashboard history. A script that must know reads `outcome.publish` in the report. A blocked site with an explicit `--publish` that fails exits `3`, not `1`: the audit's own outcome outranks the publish.
+
+`--format json` and `--format llm` carry the answer in the report itself, so a CI step or an agent does not have to wait for the process to end:
+
+```json
+{
+  "status": "completed",
+  "outcome": {
+    "exit_code": 0,
+    "status": "completed",
+    "publish": { "status": "skipped", "reason": "offline" }
+  }
+}
+```
+
+`publish.status` is `published`, `skipped` or `failed`. `publish.reason` is why publishing was skipped (`offline`, `no-publish`, `config-off`, `signed-out`, `rule-filter`, `ephemeral`, `non-public-host`, `server-ignored-ephemeral`) or the error code of a failed publish (for example `PAYLOAD_TOO_LARGE`). The LLM report has the same facts as `<outcome exit-code="0" status="completed" publish="skipped" publish-reason="offline"/>`. The JSON and LLM reports are written after publishing finishes, so they can include its result.
 
 ### Unreachable start URLs
 

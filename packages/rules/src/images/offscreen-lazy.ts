@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 
+import { elementSelector } from "../element-path";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
@@ -15,6 +16,37 @@ export const optionsSchema = z.object({
       "Number of content images considered above the fold (icons and logos declared with width and height do not count)"
     ),
 });
+
+const SNIPPET_MAX_CHARS = 160;
+
+function filenameOf(url: string): string {
+  return url.split("/").pop()?.split("?")[0] || url;
+}
+
+/** The first URL of a `srcset`/`data-srcset` value (the part before a width or density descriptor). */
+function firstSrcsetUrl(value: string | null): string {
+  return value?.trim().split(/[\s,]+/)[0] ?? "";
+}
+
+/**
+ * How an item names its image. A real `src` gives its filename, as before. An empty `src` (the
+ * source is filled in later by script) falls back to the `data-src` file, then the `srcset` or
+ * `data-srcset` file, then the element's selector with a short snippet of its tag (#1644), so an
+ * item never has an empty id.
+ */
+function itemFor(img: Element): { id: string; snippet?: string } {
+  const src = (img.getAttribute("src") || "").trim();
+  if (src) return { id: filenameOf(src) };
+  const fallback =
+    (img.getAttribute("data-src") || "").trim() ||
+    firstSrcsetUrl(img.getAttribute("srcset")) ||
+    firstSrcsetUrl(img.getAttribute("data-srcset"));
+  if (fallback) return { id: filenameOf(fallback) };
+  const tag = (img.outerHTML || "<img>").replace(/\s+/g, " ");
+  const snippet =
+    tag.length > SNIPPET_MAX_CHARS ? `${tag.slice(0, SNIPPET_MAX_CHARS - 1)}…` : tag;
+  return { id: elementSelector(img), snippet };
+}
 
 export const offscreenLazyRule: Rule = {
   meta: {
@@ -75,7 +107,7 @@ export const offscreenLazyRule: Rule = {
 
     let lazyCount = 0;
     let eagerBelowFold = 0;
-    const missingLazy: string[] = [];
+    const missingLazy: Array<{ id: string; snippet?: string }> = [];
 
     for (const img of belowFoldImages) {
       const loading = img.getAttribute("loading");
@@ -90,8 +122,7 @@ export const offscreenLazyRule: Rule = {
         eagerBelowFold++;
       } else {
         // No loading attribute - suggest lazy
-        const filename = src.split("/").pop()?.split("?")[0] || src;
-        missingLazy.push(filename);
+        missingLazy.push(itemFor(img));
       }
     }
 
@@ -101,11 +132,14 @@ export const offscreenLazyRule: Rule = {
         name: "offscreen-images-not-lazy",
         status: "warn",
         message: `${missingLazy.length} below-fold image(s) without lazy loading`,
-        items: missingLazy.slice(0, 10).map((id) => ({ id })),
-        details:
-          missingLazy.length > 10
-            ? { additional: missingLazy.length - 10 }
-            : undefined,
+        items: missingLazy.slice(0, 10),
+        details: {
+          // How "below the fold" was decided: document order, no layout (#1644).
+          aboveFoldCount: opts.above_fold_count,
+          belowFoldBasis:
+            "images after the first above_fold_count content images in document order; no viewport is measured in an HTTP-only audit",
+          ...(missingLazy.length > 10 ? { additional: missingLazy.length - 10 } : {}),
+        },
       });
     }
 

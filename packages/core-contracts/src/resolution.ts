@@ -15,6 +15,8 @@
 // deflated and indexed in a fixed byte budget ({@link CompactResolutionSignal});
 // the server decodes it back to the same {@link ResolutionSignal}.
 
+import { skipReasonClass } from "./rule-outcome";
+
 /**
  * The signal object attached to `AuditReport.resolutionSignal` by the publish
  * producers (CLI `slimForPublish`, worker-agent `truncateReportForPublish`)
@@ -193,8 +195,10 @@ export const UNREAD_PAGE_SKIP_REASON = "unread-page";
  * Skip reasons that are a gap of a WHOLE rule on a page (its real check names are unknown, the skip is named after the rule): the
  * rule did not look at the page, so a prior finding of any of its checks there carries, keyed `<ruleId>|*`.
  */
-export const isRuleWideGapSkipReason = (reason: string | undefined): boolean =>
-  reason === RULE_TIMED_OUT_SKIP_REASON || reason === UNREAD_PAGE_SKIP_REASON;
+export const isRuleWideGapSkipReason = (reason: string | undefined): boolean => {
+  const cls = skipReasonClass(reason);
+  return cls?.scope === "rule" && (cls.outcome === "timed_out" || cls.outcome === "coverage_gap");
+};
 
 /**
  * `skipReason` of the `<rule>-error` check of a rule abandoned for its time
@@ -223,7 +227,8 @@ export const PAGE_TYPE_SKIP_REASON = "page-type";
 
 /** Whether a skip reason is a rule-wide "does not apply" verdict (the noindex and page-type gates). */
 export function isRuleNotApplicableReason(reason: string | undefined): boolean {
-  return reason === NOT_APPLICABLE_SKIP_REASON || reason === PAGE_TYPE_SKIP_REASON;
+  const cls = skipReasonClass(reason);
+  return cls?.scope === "rule" && cls.outcome === "not_applicable";
 }
 
 /**

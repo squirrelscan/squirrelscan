@@ -7,6 +7,9 @@ import { formatBalance, isUnlimitedBalance } from "@/lib/balance";
 import {
   API_TOKEN_ENV_VAR,
   activeEnvTokenVar,
+  credentialState,
+  setStaleLoginNoted,
+  staleLoginNote,
   warnIfSessionUnreadable,
 } from "@/self/credentials";
 import { safeExit } from "@/self/updater";
@@ -101,17 +104,26 @@ async function runStatusCommand(jsonOutput: boolean): Promise<void> {
   // would silently print "Not signed in" instead of hinting at the real
   // problem — exactly the silent-degrade-to-anonymous case #805/#1062 covers,
   // and arguably the single most relevant command for it.
+  // This command reports the credential state itself (#1666), so the per-command note would repeat it.
+  setStaleLoginNoted(true);
   warnIfSessionUnreadable();
   const { runAuthStatus } = await import("@/controllers/auth/status");
   const result = await runAuthStatus();
 
   if (!result.ok) {
     if (result.error.code === "NOT_AUTHENTICATED") {
+      // #1666: an expired or rejected login is not the same as never having signed in.
+      const state = credentialState();
       if (jsonOutput) {
-        console.log(JSON.stringify({ authenticated: false }));
-      } else {
         console.log(
-          `Not signed in — run ${fmt.bold("squirrel auth login")} to unlock cloud features.`
+          JSON.stringify({ authenticated: false, credentialState: state })
+        );
+      } else {
+        const stale = staleLoginNote(state);
+        console.log(
+          stale
+            ? `Not signed in: ${state === "expired" ? "your login has expired" : "the server rejected your login"}. Run ${fmt.bold("squirrel auth login")} to sign in again.`
+            : `Not signed in — run ${fmt.bold("squirrel auth login")} to unlock cloud features.`
         );
         console.log(
           `${fmt.dim(`Or set ${API_TOKEN_ENV_VAR} with an org API key for headless / CI use.`)}`
@@ -131,6 +143,8 @@ async function runStatusCommand(jsonOutput: boolean): Promise<void> {
     console.log(
       JSON.stringify({
         authenticated: true,
+        // The credential the CLI is using: `env` or `login` (#1666).
+        credentialState: source,
         source,
         ...(shadowedLoginEmail ? { shadowedLoginEmail } : {}),
         user,
