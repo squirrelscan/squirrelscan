@@ -179,6 +179,37 @@ export type CrawlStatus =
   | "failed";
 
 /**
+ * The legal moves of `crawls.status` (#1659), as "to: the statuses it may be written from". Storage
+ * checks it on every write that carries a status; a write the table does not list changes nothing
+ * (a debug log, never a throw), so a late `stop()` cannot turn a finished crawl back into `paused`.
+ *
+ * ```
+ * to         from
+ * running    any            a crawl starts, resumes (paused, stopped) or is re-crawled (any finished status)
+ * paused     running        stop() while the crawl loop is live
+ * completed  running, paused   the loop drained (a stop() may have written paused first)
+ * stopped    running, paused   the crawl-phase backstop cut the loop
+ * crawled    running, paused, completed, stopped   the crawl is over and the audit moves on
+ * analyzed   those, and crawled, analyzed          the rules phase ran (a re-analysis stays analyzed)
+ * failed     running, paused   the crawl could not continue
+ * ```
+ */
+export const CRAWL_STATUS_TRANSITIONS: Readonly<Record<CrawlStatus, readonly CrawlStatus[]>> = {
+  running: ["running", "paused", "crawled", "analyzed", "completed", "stopped", "failed"],
+  paused: ["running", "paused"],
+  completed: ["running", "paused", "completed"],
+  stopped: ["running", "paused", "stopped"],
+  crawled: ["running", "paused", "completed", "stopped", "crawled"],
+  analyzed: ["running", "paused", "completed", "stopped", "crawled", "analyzed"],
+  failed: ["running", "paused", "failed"],
+};
+
+/** Whether a crawl whose status is `from` may be written `to`. */
+export function canTransitionCrawl(from: CrawlStatus, to: CrawlStatus): boolean {
+  return CRAWL_STATUS_TRANSITIONS[to].includes(from);
+}
+
+/**
  * Why a fetch was avoided (cache hit). Spans pages AND sub-resources (#107).
  * - `max-age`/`s-maxage`/`expires`/`immutable`: origin freshness honored — NO
  *   request was made at all (the cheapest, full bandwidth saving).
@@ -553,6 +584,34 @@ export interface PageRecord {
 // ============================================
 
 export type FrontierStatus = "pending" | "fetching" | "done" | "failed" | "skipped";
+
+/**
+ * The legal moves of `frontier.status` (#1659), as "to: the statuses it may be written from". A URL
+ * is reserved (`pending` to `fetching`) by the pop that hands it to a worker, and only that worker's
+ * result may finish it (`fetching` to `done`, `failed` or `skipped`). A resume puts a reserved but
+ * unfinished URL back (`fetching` to `pending`). A write the table does not list changes nothing.
+ *
+ * ```
+ * to        from
+ * fetching  pending
+ * done      fetching
+ * failed    fetching
+ * skipped   fetching
+ * pending   fetching       resetStaleFetching on resume
+ * ```
+ */
+export const FRONTIER_STATUS_TRANSITIONS: Readonly<Record<FrontierStatus, readonly FrontierStatus[]>> = {
+  pending: ["fetching"],
+  fetching: ["pending"],
+  done: ["fetching"],
+  failed: ["fetching"],
+  skipped: ["fetching"],
+};
+
+/** Whether a frontier entry whose status is `from` may be written `to`. */
+export function canTransitionFrontier(from: FrontierStatus, to: FrontierStatus): boolean {
+  return FRONTIER_STATUS_TRANSITIONS[to].includes(from);
+}
 
 // "carried" = a page holding open carried findings, pre-seeded ahead of generic
 // discovery so its findings get re-checked within budget (#1146).

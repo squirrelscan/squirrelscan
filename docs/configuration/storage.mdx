@@ -48,6 +48,22 @@ finished audit. A crawl newer than the newest finished audit, or one still
 fetching pages, is never touched, because it may be a live audit or a crawl
 waiting for `squirrel analyze`.
 
+### Crawl status
+
+A crawl's status only moves along the edges below, so a late write can never undo a finished crawl: Ctrl-C or the crawl-phase time limit calling `stop()` after the crawl completed leaves it `completed` instead of turning it back into `paused`. A write the table does not allow changes nothing (it is ignored, never an error, and never stops a crawl).
+
+| To | Allowed from | When |
+|----|--------------|------|
+| `running` | any status | the crawl starts, `--resume` continues a `paused` or `stopped` crawl, or a re-crawl restarts the row |
+| `paused` | `running` | `stop()` while the crawl is live |
+| `completed` | `running`, `paused` | the crawl drained |
+| `stopped` | `running`, `paused` | the crawl-phase time limit cut it |
+| `crawled` | `running`, `paused`, `completed`, `stopped` | the crawl is over and the audit moves on |
+| `analyzed` | any of those, and `crawled` | the rules ran |
+| `failed` | `running`, `paused` | the crawl could not continue |
+
+Each URL the crawl queues has a status of its own: it is `pending`, becomes `fetching` when a worker takes it, and finishes as `done`, `failed` or `skipped` only from `fetching`. A finished URL is never rewritten, and `--resume` puts a URL that was `fetching` when the crawl died back to `pending` so it is fetched again.
+
 While a command runs on a crawl it writes a lease on it (the process id, host
 name and a heartbeat every 15 seconds), cleared when the command ends. Retention
 reads it: a crawl with a live lease is never retired, even when a later audit
