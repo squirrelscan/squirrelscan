@@ -4,6 +4,7 @@ export * from "./refused-fetch";
 export * from "./waf-block";
 // `[[ignore]]` waivers (#1262): what a waiver leaves in a check and a report.
 export * from "./ignore";
+export * from "./rule-outcome";
 // Start URL redirects (#1281): chain, outcome and exit-code contract.
 export * from "./seed-redirect";
 
@@ -83,6 +84,7 @@ import type {
 import type { SiteMetadata } from "./site-metadata";
 import type { CompactResolutionSignal, ResolutionSignal } from "./resolution";
 import { RULE_TIMED_OUT_SKIP_REASON } from "./resolution";
+import { SKIP_REASON_CLASSES } from "./rule-outcome";
 import type { AuditStatusReasonCode } from "./failure-reason";
 import type { RefusedFetch } from "./refused-fetch";
 import type { WafBlockedSummary, WafSuspectSummary } from "./waf-block";
@@ -449,17 +451,9 @@ export const TLS_CERTIFICATE_NOT_CHECKED_SKIP_REASON = "tls-certificate-not-chec
  * report renders as a visible "Not checked" line instead of leaving the rule
  * looking clean (repo#2729), and which never resolve an open finding.
  */
-export const NOT_CHECKED_SKIP_REASONS: ReadonlySet<string> = new Set([
-  TLS_CERTIFICATE_NOT_CHECKED_SKIP_REASON,
-  EXTERNAL_LINKS_NOT_CHECKED_SKIP_REASON,
-  LINK_TARGETS_NOT_FETCHED_SKIP_REASON,
-  EXTERNAL_LINKS_OVER_CAP_SKIP_REASON,
-  EXTERNAL_LINKS_OUT_OF_TIME_SKIP_REASON,
-  // A rule abandoned for its time budget did not check that page (pub#960).
-  RULE_TIMED_OUT_SKIP_REASON,
-  // A capped crawl cannot count a page's inbound links (#1144).
-  CRAWL_CAPPED_SKIP_REASON,
-]);
+export const NOT_CHECKED_SKIP_REASONS: ReadonlySet<string> = new Set(
+  Object.keys(SKIP_REASON_CLASSES).filter((reason) => SKIP_REASON_CLASSES[reason]!.notChecked),
+);
 
 export type RuleScope = "page" | "site";
 export type RuleSeverity = "error" | "warning" | "info";

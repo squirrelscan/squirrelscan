@@ -11,6 +11,7 @@ import type {
   WafBlockedSummary,
   WafSuspectSummary,
 } from "@squirrelscan/core-contracts";
+import type { RuleOutcome } from "@squirrelscan/core-contracts/rule-outcome";
 import type { ResolvedAuditSettings } from "@squirrelscan/core-contracts/audit-levels";
 import type {
   AuditReport,
@@ -480,6 +481,8 @@ interface SlimJsonReport {
     name: string;
     check: string;
     reason: string;
+    /** What became of the rule (#1661): `coverage_gap`, `timed_out` or `errored`. */
+    outcome: RuleOutcome;
     message: string;
     /** A rule that hit an internal error: the first pages it was not evaluated on (#1291). */
     pages?: string[];
@@ -874,6 +877,7 @@ function buildSlimReport(
             name: r.name,
             check: r.check,
             reason: r.reason,
+            outcome: r.outcome,
             message: notCheckedLine(r),
             ...(r.pages && r.pages.length > 0 ? { pages: r.pages } : {}),
           })),
