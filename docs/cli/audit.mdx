@@ -259,6 +259,8 @@ squirrel audit https://example.com --refresh
 squirrel audit https://example.com --resume
 ```
 
+Resume continues the latest crawl of the site only when it can: the crawl must still be unfinished (`running`, `paused` or `stopped`), the include, exclude and URL settings must match the crawl's, `--refresh` must not be set, its data must not have been reclaimed, and this process must be able to claim it. When any of these fails, the audit starts a new crawl and says why on stderr, for example `--resume requested but not resuming (crawl-finished): previous crawl 3f2a finished (analyzed), nothing left to resume; starting a new crawl`. The reason is one of `no-prior-crawl`, `refresh-requested`, `reclaimed`, `crawl-finished`, `crawl-failed`, `config-changed`, `lease-held` or `lease-unavailable`. With `--format json` the report carries `meta.resume`: `requested` (always `true` when present), `resumed`, and, when `resumed` is `false`, the `reason` code and the `message` printed on stderr. `meta.resume` is absent when `--resume` was not passed. `squirrel crawl --resume` makes the same decision and prints the same line.
+
 Resume only continues a crawl when this process can claim it. If another live
 process already owns that crawl, the command names its PID and host and starts a
 new crawl instead. A lease becomes stale after 5 minutes without a heartbeat;

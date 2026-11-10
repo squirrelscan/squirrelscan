@@ -657,8 +657,31 @@ export interface UnstoredPage {
   reason: UnstoredPageReason;
 }
 
+/** Why a requested resume started a new crawl instead (#1658). */
+export type ResumeRefusalReason =
+  | "no-prior-crawl"
+  | "refresh-requested"
+  | "reclaimed"
+  | "crawl-finished"
+  | "crawl-failed"
+  | "config-changed"
+  | "lease-held"
+  | "lease-unavailable";
+
+export interface ResumeOutcome {
+  requested: true;
+  resumed: boolean;
+  reason?: ResumeRefusalReason;
+  message?: string;
+}
+
 export interface AuditReport {
   crawlId?: string;
+  /**
+   * What `--resume` came to, present only when the run was asked to resume (#1658). `resumed` is false
+   * when a new crawl started instead, with the `reason` code and the `message` printed on stderr.
+   */
+  resume?: ResumeOutcome;
   baseUrl: string;
   /** The deep page the user asked for when the audit scope is the whole site. */
   requestedUrl?: string;
