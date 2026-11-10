@@ -41,7 +41,6 @@ import { createEntityMapCollector } from "@squirrelscan/audit-engine/entity-map/
 import { offlineAuditSettings } from "@squirrelscan/core-contracts/audit-levels";
 import { computeCost } from "@squirrelscan/core-contracts/credits";
 import { classifyAuditFailureReasonText } from "@squirrelscan/core-contracts/failure-reason";
-import { maxDurationReason } from "@squirrelscan/core-contracts/failure-reason";
 import { PLANS } from "@squirrelscan/core-contracts/plans";
 import {
   redactUrl,
@@ -180,7 +179,7 @@ import {
 import { isPermanentStorageError } from "@/crawler/storage/types";
 import { preflightBalanceOf } from "@/lib/balance";
 import { resolvePageLimit } from "@/lib/page-limit";
-import { reconstructReport } from "@/reports/reconstruct";
+import { reconstructReport, withMaxDurationCut } from "@/reports/reconstruct";
 import { detectRunner } from "@/self/install-meta";
 import { createCloudClientFromSettings } from "@/tools/cloud";
 import { initRequestTool } from "@/tools/request";
@@ -2495,10 +2494,20 @@ export async function runAudit(
             scanScope.stopReason = "time";
             scanScope.maxDuration = cut;
             report.maxDuration = cut;
-            if (report.status === undefined || report.status === "completed") {
-              report.status = "partial";
-              report.statusReason = maxDurationReason(cut);
-              report.statusReasonCode = "max_duration";
+            // The same rule `squirrel report` applies when it rebuilds this audit from
+            // the stored scope (#1662).
+            const cutStatus = withMaxDurationCut(
+              {
+                status: report.status,
+                reason: report.statusReason,
+                reasonCode: report.statusReasonCode,
+              },
+              cut
+            );
+            if (cutStatus.status !== (report.status ?? "completed")) {
+              report.status = cutStatus.status;
+              report.statusReason = cutStatus.reason;
+              report.statusReasonCode = cutStatus.reasonCode;
             }
           }
         }

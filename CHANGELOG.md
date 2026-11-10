@@ -17,6 +17,9 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **A report's "failed or blocked" and `--max-duration` partial status each have one definition.** `isAuditFailed` and `isScoreless` in `@squirrelscan/core-contracts` replace the check that was written out in about fifteen places, and one function, `withMaxDurationCut`, now makes a time-limited audit `partial` for both the live run and `squirrel report` rebuilding it from the store, so the two cannot disagree. Reports read as before. (#1662)
 ### Added
 
 - **A render that fell back to plain HTTP is visible in the report.** When cloud rendering stops partway (out of credits, the render service failing, a signed-out or unreachable cloud), the audit now prints one line with the reason and how many pages were rendered, and the JSON report gets a `render` block (`requested`, `mode`, `pagesRendered`, `pagesFetchedPlain` and a `fallbackReason`) with a matching `<render>` element in the LLM report, so an agent can tell rendered pages from plain-HTTP ones. (#1664)
