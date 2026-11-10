@@ -208,6 +208,14 @@ describe("decideResume names why it did not resume", () => {
     });
   }
 
+  test("a running crawl whose data was reclaimed is refused as reclaimed (the one intended change from the old predicate)", () => {
+    for (const status of ["running", "paused", "stopped"] as const) {
+      const d = decide(crawl(status, { retiredAt: 5 }));
+      expect(d.resume).toBe(false);
+      expect(!d.resume && d.reason).toBe("reclaimed");
+    }
+  });
+
   test("running, paused and stopped crawls resume", () => {
     for (const status of ["running", "paused", "stopped"] as const) {
       expect(decide(crawl(status))).toEqual({ resume: true });
