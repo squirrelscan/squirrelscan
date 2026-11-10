@@ -675,6 +675,29 @@ export interface ResumeOutcome {
   message?: string;
 }
 
+/**
+ * What the publish phase of an audit did (#1657). `failed` carries the structured error code as its
+ * reason (never the server's message) and whether publishing was asked for (`explicit`, `--publish`)
+ * or was the automatic side effect of a signed-in audit.
+ */
+export type PublishOutcome =
+  | { status: "skipped"; reason: string }
+  | { status: "published"; id: string }
+  | { status: "failed"; reason: string; explicit: boolean };
+
+/** The facts a CI gate or an agent reads off a finished audit (#1657). */
+export interface AuditOutcome {
+  /** The exit code the command ends with. */
+  exit_code: number;
+  /** The report's status. */
+  status: AuditStatus;
+  publish: {
+    status: "skipped" | "published" | "failed";
+    /** Why publishing was skipped, or the error code of a failed publish. */
+    reason?: string;
+  };
+}
+
 export interface AuditReport {
   crawlId?: string;
   /**
@@ -724,6 +747,8 @@ export interface AuditReport {
    * absent ⇒ `completed`. Renderers suppress the grade ring for `failed`/`blocked`.
    */
   status?: AuditStatus;
+  /** Exit code, audit status and publish result, stamped before the report is written (#1657). */
+  outcome?: AuditOutcome;
   /** Short human reason shown when `status` is failed/blocked (e.g. "No pages were crawled"). */
   statusReason?: string;
   /**
