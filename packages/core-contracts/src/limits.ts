@@ -481,8 +481,8 @@ export const JSON_REPORT_PAGES = {
   maxEntries: 2_000,
 } as const;
 
-/** The JSON report's schema version (`meta.schemaVersion`): major.minor. 1.1 added the opt-in `pages` list (#1260); 1.2 added `meta.requestedUrl` (#1369) and `finalUrl` and `outcome` on the pages rows (#1260); 1.3 added `technologies.truncated` (#1387); 1.4 added `meta.ignored` (#1262); 1.5 added `executedRules` and, with `--include-pages`, rows with outcome `skipped` or `error` and a `reason` for URLs the crawl requested but stored no page for (#1396); 1.6 added `technologies.items[].origin` (#1406); 1.7 added `meta.resume` (#1658). */
-export const JSON_REPORT_SCHEMA_VERSION = "1.7";
+/** The JSON report's schema version (`meta.schemaVersion`): major.minor. 1.1 added the opt-in `pages` list (#1260); 1.2 added `meta.requestedUrl` (#1369) and `finalUrl` and `outcome` on the pages rows (#1260); 1.3 added `technologies.truncated` (#1387); 1.4 added `meta.ignored` (#1262); 1.5 added `executedRules` and, with `--include-pages`, rows with outcome `skipped` or `error` and a `reason` for URLs the crawl requested but stored no page for (#1396); 1.6 added `technologies.items[].origin` (#1406); 1.7 added `meta.resume` (#1658); 1.8 added the top-level `outcome` (#1657). */
+export const JSON_REPORT_SCHEMA_VERSION = "1.8";
 
 // ── LLM Report Output ──────────────────────────────────────────
 export const LLM_REPORT = {
