@@ -18,6 +18,7 @@ import type { Config } from "@squirrelscan/config";
 import type { ResolvedAuditSettings } from "@squirrelscan/core-contracts/audit-levels";
 
 import { CloudClientError } from "@squirrelscan/cloud-client";
+import { isAuditFailed } from "@squirrelscan/core-contracts";
 import {
   CREDIT_PRICING_VERSION,
   minimumAuditCredits,
@@ -454,7 +455,7 @@ export function startMcpRunHeartbeat(
 
 /** An audit that did not really happen (site down, blocked, no page read). */
 function isInvalidAudit(report: AuditReport): boolean {
-  return report.status === "failed" || report.status === "blocked";
+  return isAuditFailed(report.status);
 }
 
 /**

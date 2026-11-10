@@ -18,6 +18,7 @@ import type {
   CoverageMode,
   LockedRule,
 } from "@squirrelscan/core-contracts";
+import { isAuditFailed } from "@squirrelscan/core-contracts";
 
 export type LockedRulesAudience =
   | "audit-failed"
@@ -68,7 +69,7 @@ export function lockedRulesMessage(report: LockedRulesReportShape): LockedRulesM
   const signedIn = plan === "free" || plan === "paid";
   const optedOut = report.cloudMode === "http";
   const isQuick = report.coverageMode === "quick";
-  const auditFailed = report.status === "failed" || report.status === "blocked";
+  const auditFailed = isAuditFailed(report.status);
   const count = locked.length;
   const noun = count === 1 ? "check" : "checks";
   const heading = signedIn

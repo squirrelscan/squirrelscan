@@ -4,6 +4,7 @@
 // exits 2 when ANY threshold trips (distinct from 1 = operational error,
 // 0 = passed). Grammar is intentionally tiny: `<metric><op><value>`.
 
+import { isAuditFailed } from "@squirrelscan/core-contracts";
 import { timedOutRules, type TimedOutRule } from "@squirrelscan/report";
 
 import type { AuditReport } from "@/types";
@@ -196,7 +197,7 @@ export function evaluateFailOn(
   // Failed/blocked audit (#489/#586): no real results, and healthScore.overall is
   // null (N/A), so a `score<N` gate has nothing to compare on an unreachable site.
   // Skip all conditions — the failed audit itself is the signal, not a gate trip.
-  if (report.status === "failed" || report.status === "blocked") {
+  if (isAuditFailed(report.status)) {
     notes.push(
       `audit ${report.status} — fail-on conditions skipped (no audit data)`
     );

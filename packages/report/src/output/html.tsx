@@ -1,4 +1,5 @@
 import React from "react";
+import { isAuditFailed } from "@squirrelscan/core-contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
   PiArrowSquareOut,
@@ -1765,7 +1766,7 @@ function ReportPage({
   const description = report.homepage?.description?.trim();
   const score = report.healthScore?.overall;
   const groups = report.healthScore?.groups ?? [];
-  const failedRun = report.status === "failed" || report.status === "blocked";
+  const failedRun = isAuditFailed(report.status);
   const issues = flattenIssuesBySeverity(
     groupIssuesByCategory(report.ruleResults, report.checkTallies),
   );

@@ -13,6 +13,7 @@ import type {
   WafBlockedSummary,
   WafSuspectSummary,
 } from "@squirrelscan/core-contracts";
+import { isAuditFailed } from "@squirrelscan/core-contracts";
 import type { RuleOutcome } from "@squirrelscan/core-contracts/rule-outcome";
 import type { ResolvedAuditSettings } from "@squirrelscan/core-contracts/audit-levels";
 import type {
@@ -648,7 +649,7 @@ function buildSlimReport(
     // #1822: a programmatic consumer branches on the class, not on the prose.
     // Derived when the stored report predates the field, so a CI gate reading
     // it does not have to special-case older reports.
-    ...(report.status === "failed" || report.status === "blocked"
+    ...(isAuditFailed(report.status)
       ? { statusReasonCode: reportFailureReasonCode(report) }
       : report.status === "partial" && report.statusReasonCode === "max_duration"
         ? { statusReasonCode: report.statusReasonCode }
