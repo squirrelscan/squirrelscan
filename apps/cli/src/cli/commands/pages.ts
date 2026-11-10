@@ -320,7 +320,7 @@ export const pages = defineCommand({
     const { crawl } = loaded.data;
     const all = loaded.data.rows;
     const rows = hasPageMapFilters(filters) ? filterPageMap(all, filters) : all;
-    const meta = pageMapMeta(crawl, all.length);
+    const meta = pageMapMeta(crawl, all.length, loaded.data.storeIntegrity);
 
     const format: PagesFormat | undefined = args.format as
       | PagesFormat

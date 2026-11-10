@@ -39,7 +39,7 @@ import {
   type OutputFormat,
 } from "@/constants";
 import { getGlobalContentStore } from "@/crawler/storage/content-store";
-import { warnEvictedPages } from "@/crawler/storage/eviction-notice";
+import { checkStoreIntegrity } from "@/crawler/storage/eviction-notice";
 import { SQLiteStorage } from "@/crawler/storage/sqlite";
 import {
   reconstructReport,
@@ -654,7 +654,8 @@ export async function getStoredAudit(
           );
         })
       );
-      await warnEvictedPages(storage, auditId, "report");
+      const integrity = await checkStoreIntegrity(storage, auditId, "report");
+      if (integrity.status === "evicted") report.storeIntegrity = integrity;
 
       const validated = validateReportData(report, auditId);
       if (!validated.ok) {
@@ -767,7 +768,12 @@ export async function getStoredAuditByPrefix(
         );
       })
     );
-    await warnEvictedPages(storage, match.crawl.id, "report");
+    const integrity = await checkStoreIntegrity(
+      storage,
+      match.crawl.id,
+      "report"
+    );
+    if (integrity.status === "evicted") report.storeIntegrity = integrity;
     const validated = validateReportData(report, match.crawl.id);
     if (validated.ok && source) source.dbPath = match.dbPath;
     return validated;
@@ -918,7 +924,12 @@ export async function getLatestAudit(
           return reconstructed;
         })
       );
-      await warnEvictedPages(storage, latest.crawl.id, "report");
+      const integrity = await checkStoreIntegrity(
+        storage,
+        latest.crawl.id,
+        "report"
+      );
+      if (integrity.status === "evicted") report.storeIntegrity = integrity;
 
       const validated = validateReportData(report, latest.crawl.id);
       if (validated.ok && source) source.dbPath = latest.dbPath;

@@ -2,7 +2,10 @@
 // store. Everything is already stored by the crawl (the pages, their features, the link graph and
 // the rule results), so nothing is fetched or recomputed.
 
-import type { PageFeatureRow } from "@squirrelscan/core-contracts";
+import type {
+  PageFeatureRow,
+  StoreIntegrityEvicted,
+} from "@squirrelscan/core-contracts";
 
 import {
   PAGE_MAP_FLAG_RULES,
@@ -28,12 +31,15 @@ import {
   ErrorCodes,
 } from "@/controllers/types";
 import { getGlobalContentStore } from "@/crawler/storage/content-store";
+import { checkStoreIntegrity } from "@/crawler/storage/eviction-notice";
 import { SQLiteStorage } from "@/crawler/storage/sqlite";
 
 /** One audit's page map, with the audit it came from. */
 export interface StoredPageMap {
   crawl: CrawlMetadata;
   rows: PageMapRow[];
+  /** Set when page bodies of this audit are gone from the content store (#1667); absent when none are. */
+  storeIntegrity?: StoreIntegrityEvicted;
 }
 
 /** Pages read per batch, so a 10,000 page audit is never one resident array. */
@@ -328,7 +334,14 @@ export async function loadPageMap(
         return out;
       })
     );
-    return ok({ crawl, rows, warnings });
+    // The rows come from the page data stored with the audit, but an evicted body is worth one line (#1667).
+    const integrity = await checkStoreIntegrity(storage, crawl.id, "read");
+    return ok({
+      crawl,
+      rows,
+      warnings,
+      ...(integrity.status === "evicted" ? { storeIntegrity: integrity } : {}),
+    });
   } catch (error) {
     return err(
       commandError(

@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- **`squirrel pages` and `squirrel entities` say when page bodies were evicted, and `report` puts the count in its JSON.** Content-store eviction is global by size cap, so an audit's page bodies can be gone later, and only `report`, `--resume` and re-audits said so. `pages` and `entities` now print the same notice on stderr (their rows are built from stored page data, so the output is complete), and with `--format json` all three carry `storeIntegrity` (`status: "evicted"`, `evicted`, `stored`): `meta.storeIntegrity` in the `report` JSON, a top-level field in `pages` and `entities`. It is absent when every body is still there. All readers share one census. (#1667)
+
 ## v0.0.174 (2026-11-11)
 
 Reports say why a rule did not give a verdict (JSON schema 1.9), `squirrel audit` has one exit code precedence with the outcome in the JSON and LLM reports, `--resume` says why it started a new crawl, an expired login is called out, settings writes no longer lose each other, and five rules stop flagging hidden, presentational and symbol-only content.

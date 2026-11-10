@@ -239,16 +239,36 @@ export interface PageMapMeta {
   startedAt: number;
   /** Pages in the audit, before any filter. */
   total: number;
+  /** Page bodies evicted from the content store since the audit ran (#1667); absent when none were. */
+  storeIntegrity?: { status: "evicted"; evicted: number; stored: number };
 }
 
 /** The audit that produced a map, as {@link PageMapMeta}. */
-export function pageMapMeta(crawl: { id: string; baseUrl: string; startedAt: number }, total: number): PageMapMeta {
-  return { site: crawl.baseUrl, crawlId: crawl.id, startedAt: crawl.startedAt, total };
+export function pageMapMeta(
+  crawl: { id: string; baseUrl: string; startedAt: number },
+  total: number,
+  storeIntegrity?: PageMapMeta["storeIntegrity"],
+): PageMapMeta {
+  return {
+    site: crawl.baseUrl,
+    crawlId: crawl.id,
+    startedAt: crawl.startedAt,
+    total,
+    ...(storeIntegrity ? { storeIntegrity } : {}),
+  };
 }
 
 export function renderPageMapJson(rows: readonly PageMapRow[], meta: PageMapMeta): string {
   return `${escapeJsonUnsafe(JSON.stringify(
-    { site: meta.site, crawlId: meta.crawlId, startedAt: new Date(meta.startedAt).toISOString(), total: meta.total, filtered: rows.length, pages: rows },
+    {
+      site: meta.site,
+      crawlId: meta.crawlId,
+      startedAt: new Date(meta.startedAt).toISOString(),
+      total: meta.total,
+      filtered: rows.length,
+      ...(meta.storeIntegrity ? { storeIntegrity: meta.storeIntegrity } : {}),
+      pages: rows,
+    },
     null,
     2,
   ))}\n`;
