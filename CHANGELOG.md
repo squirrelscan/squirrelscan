@@ -61,6 +61,7 @@ Structured data checks now say what they could and could not read. The schema pr
 
 ### Fixed
 
+- **The Quick level summary says what Quick does not check.** The line shown on the level picker now says Quick does not follow links (a linked page outside the sitemap gets a status check only and is not audited) and skips the cloud checks, so a Quick audit with no broken links reads as what it is. (#2729)
 - **Behaviour change:** `squirrel report --publish` now publishes as `unlisted` by default; it was `public`. `squirrel audit`, the docs and the agent skill already said `unlisted`, and the help now matches. Pass `--visibility public` to publish publicly (#1730)
 - `squirrel skills status` reads the version of a skill symlinked from a checkout, marks it `(linked)` and flags it behind the latest, instead of showing `-`; the checkout is never written (#1730)
 - Docs: any command can trigger the CLI auto-update and `squirrel --version` may differ after one; offline and cloud scores are not comparable; the schema-noindex-conflict page says a `header:noindex` source lives outside the page source (#1730)
