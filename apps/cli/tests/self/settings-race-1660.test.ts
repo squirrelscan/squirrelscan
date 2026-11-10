@@ -4,6 +4,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import {
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
@@ -240,4 +241,61 @@ describe("withFileLock (#1660)", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  test("an unremovable stale lock does not hang the writer past its timeout", () => {
+    const dir = lockDir();
+    const lock = join(dir, "settings.json.lock");
+    try {
+      // A non-empty directory in the lock's place: it exists (EEXIST), reads as old, and unlink on it fails.
+      mkdirSync(lock);
+      writeFileSync(join(lock, "keep"), "x");
+      const old = new Date(Date.now() - 60_000);
+      utimesSync(lock, old, old);
+      const started = Date.now();
+      const ran = withFileLock(lock, () => "ran", {
+        timeoutMs: 300,
+        staleMs: 10_000,
+      });
+      expect(ran).toBe("ran");
+      expect(Date.now() - started).toBeLessThan(2_000);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("waiters racing to take over one stale lock never hold it together", async () => {
+    const dir = lockDir();
+    const lock = join(dir, "settings.json.lock");
+    const guard = join(dir, "inside");
+    const violations = join(dir, "violations");
+    const worker = join(import.meta.dir, "helpers", "lock-worker.ts");
+    try {
+      for (let round = 0; round < 15; round++) {
+        writeFileSync(
+          lock,
+          JSON.stringify({ pid: 2_147_483_646, at: new Date().toISOString() })
+        );
+        const startAt = Date.now() + 400;
+        const procs = Array.from({ length: 4 }, () =>
+          Bun.spawn(
+            [
+              process.execPath,
+              "run",
+              worker,
+              lock,
+              guard,
+              violations,
+              String(startAt),
+            ],
+            { stdout: "ignore", stderr: "ignore" }
+          )
+        );
+        const codes = await Promise.all(procs.map((proc) => proc.exited));
+        expect(codes).toEqual([0, 0, 0, 0]);
+        expect(existsSync(violations)).toBe(false);
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 60_000);
 });

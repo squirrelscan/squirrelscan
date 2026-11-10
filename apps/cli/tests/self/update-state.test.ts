@@ -6,6 +6,7 @@ import { DEFAULT_SETTINGS } from "@/self/settings";
 import {
   describeUpdate,
   isAttemptThrottled,
+  isPromptSnoozed,
   isVersionDismissed,
   updateState,
   type UpdateState,
@@ -250,5 +251,27 @@ describe("primitives", () => {
     expect(
       isAttemptThrottled({ last_auto_update_attempt: iso(HOUR + 1) }, NOW)
     ).toBe(false);
+  });
+  test("isPromptSnoozed holds whatever the derived state is", () => {
+    const snoozed = {
+      update_prompt_snoozed_until: new Date(NOW + HOUR).toISOString(),
+    };
+    expect(isPromptSnoozed(snoozed, NOW)).toBe(true);
+    expect(
+      isPromptSnoozed({ update_prompt_snoozed_until: iso(HOUR) }, NOW)
+    ).toBe(false);
+    expect(isPromptSnoozed({}, NOW)).toBe(false);
+    // applied outranks snoozed in updateState, but the prompt gate must still see the snooze
+    const applied = s({
+      ...snoozed,
+      pending_update_notification: pending,
+      auto_update_applied: {
+        from_version: "0.0.1",
+        to_version: "0.0.2",
+        at: iso(HOUR),
+      },
+    });
+    expect(updateState(applied, { managed: true, now: NOW })).toBe("applied");
+    expect(isPromptSnoozed(applied, NOW)).toBe(true);
   });
 });

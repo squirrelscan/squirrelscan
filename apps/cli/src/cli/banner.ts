@@ -22,6 +22,7 @@ import {
 } from "@/constants";
 import { getUnmanagedUpdateHint, isManagedInstall } from "@/self/paths";
 import { trackTelemetryEvent } from "@/self/telemetry";
+import { isPromptSnoozed } from "@/self/update-state";
 import {
   isAutoUpdateEligible,
   currentUpdateState,
@@ -319,7 +320,8 @@ export async function promptForUpdate(
     !args.output;
   if (!isInteractive) return;
 
-  if (state === "snoozed") return;
+  // Snooze suppresses the prompt whatever else the state is (it outranks applied and fallback here).
+  if (isPromptSnoozed(settings, Date.now())) return;
 
   // Prompt user
   const rl = createInterface({

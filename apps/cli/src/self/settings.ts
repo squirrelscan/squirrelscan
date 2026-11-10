@@ -577,6 +577,41 @@ function lockIsStale(lockPath: string, staleMs: number): boolean {
 }
 
 /**
+ * Remove a stale lock, as the one waiter holding the takeover gate. Without the gate two waiters can both judge the same lock
+ * stale; the first removes it and creates a fresh one, and the second, acting on its earlier check, would remove that fresh lock
+ * too, leaving two holders. Inside the gate the staleness is checked again, so a lock created since is left alone. A gate
+ * itself older than the stale bound (its holder died in this short window) is removed. Returns whether the lock path is now
+ * free to try; false means retry after a pause (gate busy, or the removal failed).
+ */
+function removeStaleLock(lockPath: string, staleMs: number): boolean {
+  const gate = `${lockPath}.takeover`;
+  try {
+    writeFileSync(gate, String(process.pid), { flag: "wx", mode: 0o600 });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "EEXIST") {
+      try {
+        if (Date.now() - statSync(gate).mtimeMs > staleMs) unlinkSync(gate);
+      } catch {
+        // gate vanished or cannot be removed: retry after a pause
+      }
+    }
+    return false;
+  }
+  try {
+    if (lockIsStale(lockPath, staleMs)) unlinkSync(lockPath);
+    return true;
+  } catch {
+    return false;
+  } finally {
+    try {
+      unlinkSync(gate);
+    } catch {
+      // already gone
+    }
+  }
+}
+
+/**
  * Run `fn` holding an exclusive lock file next to the settings file. A lock whose owner died, or that is older than the stale
  * bound, is taken over. If the lock cannot be had within the timeout (a read-only directory, a wedged holder) the write goes
  * ahead unlocked: a lost update is the old behaviour, a login that cannot be saved is worse.
@@ -611,13 +646,9 @@ export function withFileLock<T>(
       if ((error as NodeJS.ErrnoException).code !== "EEXIST") break; // cannot lock here: go unlocked
     }
     if (lockIsStale(lockPath, staleMs)) {
-      // Unlink then exclusive-create, so two waiters on one stale lock cannot both win.
-      try {
-        unlinkSync(lockPath);
-      } catch {
-        // someone else removed it first
-      }
-      continue;
+      const removed = removeStaleLock(lockPath, staleMs);
+      if (Date.now() >= deadline) break;
+      if (removed) continue;
     }
     if (Date.now() >= deadline) break;
     sleepMs(pollMs);

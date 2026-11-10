@@ -57,6 +57,15 @@ export function isAttemptThrottled(
   return hours < AUTO_UPDATE_ATTEMPT_INTERVAL_HOURS;
 }
 
+/** True while the user's "not now" on the update prompt is still running. */
+export function isPromptSnoozed(
+  settings: Partial<Pick<UserSettings, "update_prompt_snoozed_until">>,
+  now: number
+): boolean {
+  const until = settings.update_prompt_snoozed_until;
+  return !!until && Date.parse(until) > now;
+}
+
 export function updateState(
   settings: UserSettings,
   ctx: UpdateStateContext
@@ -80,8 +89,7 @@ export function updateState(
     return "fallback";
   }
 
-  const snoozedUntil = settings.update_prompt_snoozed_until;
-  if (snoozedUntil && Date.parse(snoozedUntil) > ctx.now) return "snoozed";
+  if (isPromptSnoozed(settings, ctx.now)) return "snoozed";
 
   if (eligible && isAttemptThrottled(settings, ctx.now)) return "attempting";
   return "pending";
