@@ -275,6 +275,7 @@ describe("every format shows it, never as an issue", () => {
         name: "Broken External Links",
         check: "broken-external-links",
         reason: EXTERNAL_LINKS_NOT_CHECKED_SKIP_REASON,
+        outcome: "coverage_gap",
         message: EXTERNAL_LINE,
       },
       {
@@ -282,6 +283,7 @@ describe("every format shows it, never as an issue", () => {
         name: "Broken Links",
         check: "broken-links",
         reason: LINK_TARGETS_NOT_FETCHED_SKIP_REASON,
+        outcome: "coverage_gap",
         message: INTERNAL_LINE,
       },
     ]);

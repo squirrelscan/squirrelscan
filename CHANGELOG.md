@@ -19,6 +19,7 @@ How it works:
 
 ### Added
 
+- **Reports carry a typed `outcome` for a rule that did not give a verdict.** `skippedChecks` and `notChecked` entries in the JSON report have `outcome`: `coverage_gap`, `timed_out` or `errored` (a rule that threw is told apart from one that ran out of time), beside the `reason` string, which is unchanged. One table in `@squirrelscan/core-contracts` now says what each coded skip reason means (`classifyRuleOutcome`, with `not_applicable`, `ran` and `disabled` as the other outcomes), and the checks that read skip reasons (`isRuleNotApplicableReason`, `isRuleWideGapSkipReason`, the not-checked set) derive from it, so a new reason without an entry fails a test instead of being misclassified. The JSON schema version is 1.9. (#1661)
 - **`queued` is a run status, and a run's phase is a typed list.** `AgentRunStatus` in `@squirrelscan/core-contracts` now includes `queued` (a run waiting for a container slot, which starts by itself; not terminal), so a client no longer types it away, and the REST API docs and the `list_audits` tool say queued runs are listed. `RunPhase` (`crawling`, `external-links`, `cloud`, `rules`, `walk`, `complete`) and `RunNotice` (`memory_pressure`, `crawl_scope`) are exported, `RunSyncDelta.phase` is `RunPhase | null`, and `nextVisiblePhase` keeps a notice from overwriting the phase shown. (#1665)
 
 ### Fixed

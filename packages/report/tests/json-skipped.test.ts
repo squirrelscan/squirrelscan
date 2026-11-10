@@ -48,7 +48,7 @@ describe("renderJson skipped checks (#518)", () => {
       ),
     );
     expect(parsed.skippedChecks).toEqual([
-      { ruleId: "core/h1", name: "H1", check: "core/h1", reason: "unread-page", pages: ["https://example.com/unread"], pagesCount: 1, pagesHasMore: false },
+      { ruleId: "core/h1", name: "H1", check: "core/h1", reason: "unread-page", outcome: "coverage_gap", pages: ["https://example.com/unread"], pagesCount: 1, pagesHasMore: false },
     ]);
     expect(parsed.issues).toEqual([]);
   });
@@ -83,6 +83,7 @@ describe("renderJson skipped checks (#518)", () => {
         name: "Hidden text",
         check: "hidden-text",
         reason: "scan-truncated",
+        outcome: "coverage_gap",
         pages: ["https://example.com/big"],
         pagesCount: 1,
         pagesHasMore: false,
