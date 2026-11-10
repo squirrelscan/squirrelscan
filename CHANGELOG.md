@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+## v0.0.174 (2026-11-11)
+
+Reports say why a rule did not give a verdict (JSON schema 1.9), `squirrel audit` has one exit code precedence with the outcome in the JSON and LLM reports, `--resume` says why it started a new crawl, an expired login is called out, settings writes no longer lose each other, and five rules stop flagging hidden, presentational and symbol-only content.
+
 ### Added
 
 - **Reports carry a typed `outcome` for a rule that did not give a verdict.** `skippedChecks` and `notChecked` entries in the JSON report have `outcome`: `coverage_gap`, `timed_out` or `errored` (a rule that threw is told apart from one that ran out of time), beside the `reason` string, which is unchanged. One table in `@squirrelscan/core-contracts` now says what each coded skip reason means (`classifyRuleOutcome`, with `not_applicable`, `ran` and `disabled` as the other outcomes), and the checks that read skip reasons (`isRuleNotApplicableReason`, `isRuleWideGapSkipReason`, the not-checked set) derive from it, so a new reason without an entry fails a test instead of being misclassified. The JSON schema version is 1.9. (#1661)
