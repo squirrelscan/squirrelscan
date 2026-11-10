@@ -5,6 +5,7 @@ import type {
   EditorSummaryPriority,
   MaxDurationCut,
   RefusedFetch,
+  ResumeOutcome,
   UnstoredPageReason,
   WafBlockedSummary,
   WafSuspectSummary,
@@ -188,6 +189,8 @@ interface SlimJsonReport {
     baseUrl: string;
     /** The deep page requested when `baseUrl` describes the site-wide scope. */
     requestedUrl?: string;
+    /** What `--resume` came to (#1658); present only when the run was asked to resume. */
+    resume?: ResumeOutcome;
     /**
      * A refused off-site seed redirect (#1418). Present only when the seed
      * redirected off its own registrable domain and the crawler declined to
@@ -572,6 +575,9 @@ function buildSlimReport(
       schemaVersion: JSON_REPORT_SCHEMA_VERSION,
       baseUrl: report.baseUrl,
       ...(report.requestedUrl ? { requestedUrl: report.requestedUrl } : {}),
+      // #1658: what `--resume` came to. Present only when the run was asked to resume, so a
+      // consumer can tell a resumed crawl from a fresh one and read why it started fresh.
+      ...(report.resume ? { resume: report.resume } : {}),
       // Sits next to the `baseUrl` it qualifies (#1418): a consumer reading the
       // graded URL sees, in the same object, that the seed pointed elsewhere.
       ...(refusedSeedRedirect
