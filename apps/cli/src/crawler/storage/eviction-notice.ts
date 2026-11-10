@@ -20,6 +20,8 @@ const pages = (n: number) => `${count(n)} page${n === 1 ? "" : "s"}`;
 export type EvictedPagesNotice =
   /** `squirrel report` over a stored audit whose bodies were evicted since. */
   | { kind: "report"; evicted: number; stored: number; capBytes: number }
+  /** `squirrel pages` or `squirrel entities` reading a stored audit whose bodies were evicted since (#1667). */
+  | { kind: "read"; evicted: number; stored: number; capBytes: number }
   /** A resumed crawl whose earlier pages were evicted while it was paused. */
   | { kind: "resume"; evicted: number; stored: number; capBytes: number }
   /** A re-audit whose cached pages were evicted, and so fetched again. */
@@ -33,11 +35,93 @@ export function formatEvictedPagesNotice(notice: EvictedPagesNotice): string {
   switch (notice.kind) {
     case "report":
       return `Content store: ${count(notice.evicted)} of ${pages(notice.stored)} stored for this audit are no longer in the local content store, ${cap}. Findings are unaffected; anything rebuilt from page HTML is missing for them. ${HINT}`;
+    case "read":
+      return `Content store: ${count(notice.evicted)} of ${pages(notice.stored)} stored for this audit are no longer in the local content store, ${cap}. This output is built from the page data stored with the audit and does not read their HTML, but anything that needs it (re-running the rules with \`squirrel analyze\`) cannot see those pages. ${HINT}`;
     case "resume":
       return `Content store: ${count(notice.evicted)} of ${pages(notice.stored)} crawled before the interruption are no longer in the local content store, ${cap}, so this audit cannot read them. Run without --resume to fetch them again. ${HINT}`;
     case "refetched":
       return `Content store: ${pages(notice.evicted)} cached from an earlier audit were no longer in the local content store, ${cap}, so they were requested again in full instead of revalidated. ${HINT}`;
   }
+}
+
+/**
+ * Whether a stored audit's page bodies are all still in the content store (#1667): `full`, or
+ * `evicted` with how many of the stored bodies are gone. Derived from the census counts, so every
+ * reader of a stored audit says the same thing.
+ */
+export type StoreIntegrity =
+  | { status: "full" }
+  | { status: "evicted"; evicted: number; stored: number };
+
+export function deriveStoreIntegrity(counts: {
+  evicted: number;
+  stored: number;
+}): StoreIntegrity {
+  return counts.evicted > 0
+    ? { status: "evicted", evicted: counts.evicted, stored: counts.stored }
+    : { status: "full" };
+}
+
+/** The part of {@link StoreIntegrity} a report or export carries: present only when bodies are missing. */
+export type EvictedStoreIntegrity = Extract<
+  StoreIntegrity,
+  { status: "evicted" }
+>;
+
+/**
+ * Read a stored crawl's integrity without saying anything (#1667): the census of evicted bodies as a
+ * {@link StoreIntegrity}. For a reader that picks one crawl out of several and warns only for it.
+ * Never fails the caller: a census that cannot run says `full`, as it said nothing before.
+ */
+export async function readStoreIntegrity(
+  storage: CrawlStorage,
+  crawlId: string
+): Promise<StoreIntegrity> {
+  if (!(storage instanceof SQLiteStorage)) return { status: "full" };
+  const counts = await Effect.runPromise(
+    storage
+      .countEvictedPageBodies(crawlId)
+      .pipe(Effect.catchAll(() => Effect.succeed({ evicted: 0, stored: 0 })))
+  );
+  return deriveStoreIntegrity(counts);
+}
+
+/** Print the notice for `kind` when `integrity` says bodies are gone. */
+export function warnStoreIntegrity(
+  integrity: StoreIntegrity,
+  kind: "report" | "resume" | "read"
+): void {
+  if (integrity.status !== "evicted") return;
+  logger.warn(
+    formatEvictedPagesNotice({
+      kind,
+      evicted: integrity.evicted,
+      stored: integrity.stored,
+      capBytes: getGlobalContentStore().getMaxBytes(),
+    })
+  );
+}
+
+/**
+ * {@link readStoreIntegrity} and {@link warnStoreIntegrity} in one: the entry for a command that reads
+ * one stored audit (#1667). A resume first protects the surviving bodies for the run (under its lease,
+ * best effort), so the pages it skips as done stay put until the rules phase reads them.
+ */
+export async function checkStoreIntegrity(
+  storage: CrawlStorage,
+  crawlId: string,
+  kind: "report" | "resume" | "read"
+): Promise<StoreIntegrity> {
+  if (storage instanceof SQLiteStorage && kind === "resume") {
+    await Effect.runPromise(
+      storage
+        .retainPageBodies(crawlId)
+        .pipe(Effect.catchAll(() => Effect.succeed(0)))
+    );
+  }
+  const integrity = await readStoreIntegrity(storage, crawlId);
+  warnStoreIntegrity(integrity, kind);
+  return integrity;
 }
 
 /**
@@ -52,31 +136,8 @@ export async function warnEvictedPages(
   crawlId: string,
   kind: "report" | "resume"
 ): Promise<number> {
-  if (!(storage instanceof SQLiteStorage)) return 0;
-  if (kind === "resume") {
-    // Under the run's lease, so the pages the resume skips as done stay put
-    // until the rules phase reads them. Best effort: a store that cannot be
-    // touched leaves them as exposed as they were, and the census still runs.
-    await Effect.runPromise(
-      storage
-        .retainPageBodies(crawlId)
-        .pipe(Effect.catchAll(() => Effect.succeed(0)))
-    );
-  }
-  const counts = await Effect.runPromise(
-    storage
-      .countEvictedPageBodies(crawlId)
-      .pipe(Effect.catchAll(() => Effect.succeed({ evicted: 0, stored: 0 })))
-  );
-  if (counts.evicted === 0) return 0;
-  logger.warn(
-    formatEvictedPagesNotice({
-      kind,
-      ...counts,
-      capBytes: getGlobalContentStore().getMaxBytes(),
-    })
-  );
-  return counts.evicted;
+  const integrity = await checkStoreIntegrity(storage, crawlId, kind);
+  return integrity.status === "evicted" ? integrity.evicted : 0;
 }
 
 /**

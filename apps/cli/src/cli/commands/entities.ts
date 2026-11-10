@@ -9,6 +9,7 @@
 // answer, not an error. Only a usage mistake or an unreadable store exits 1.
 
 import type { EntityMap } from "@squirrelscan/audit-engine/entity-map";
+import type { StoreIntegrityEvicted } from "@squirrelscan/core-contracts";
 
 import {
   renderEntityMapHtml,
@@ -42,6 +43,7 @@ import {
   loadEntityMapFile,
 } from "@/controllers/entities";
 import { ErrorCodes } from "@/controllers/types";
+import { warnStoreIntegrity } from "@/crawler/storage/eviction-notice";
 import {
   ENTITY_PROBLEMS,
   filterEntityMap,
@@ -89,7 +91,8 @@ const DIFF_FORMATS = ["markdown", "json"] as const;
 function renderMap(
   map: EntityMap,
   format: EntityFormat,
-  site: EntityMap
+  site: EntityMap,
+  storeIntegrity?: StoreIntegrityEvicted
 ): string {
   const counts = filteredCounts(map);
   switch (format) {
@@ -97,7 +100,8 @@ function renderMap(
       // `summary` is the site-wide one, and `filtered` is what survived the
       // filters: the same pair the hosted API returns as `summary` and
       // `meta.counts`, so a script reads one number on every surface.
-      return `${JSON.stringify({ ...map, filtered: counts }, null, 2)}\n`;
+      // `storeIntegrity` (#1667) is present only when page bodies of the audit were evicted.
+      return `${JSON.stringify({ ...map, filtered: counts, ...(storeIntegrity ? { storeIntegrity } : {}) }, null, 2)}\n`;
     case "jsonld":
       return `${JSON.stringify(toJsonLd(map), null, 2)}\n`;
     case "html":
@@ -608,6 +612,7 @@ export const entities = defineCommand({
     // ── one map ──────────────────────────────────────────────────────
     let map: EntityMap;
     let crawlLabel: string;
+    let storeIntegrity: StoreIntegrityEvicted | undefined;
 
     if (inputs.length > 0) {
       if (inputs.length > 1) {
@@ -636,6 +641,9 @@ export const entities = defineCommand({
       }
       map = loaded.data.map;
       crawlLabel = `${loaded.data.crawl.id.slice(0, 8)} · ${new Date(loaded.data.crawl.startedAt).toLocaleString()}`;
+      // #1667: evicted page bodies are worth one line, though the map is built from stored entity rows.
+      storeIntegrity = loaded.data.storeIntegrity;
+      if (storeIntegrity) warnStoreIntegrity(storeIntegrity, "read");
       for (const warning of loaded.data.warnings ?? []) {
         // An answer drawn from part of the data says so.
         console.error(
@@ -670,7 +678,7 @@ export const entities = defineCommand({
         );
         return safeExit(1);
       }
-      emit(renderMap(filtered, args.format, map), args.output);
+      emit(renderMap(filtered, args.format, map, storeIntegrity), args.output);
       return;
     }
 

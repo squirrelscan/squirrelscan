@@ -1,7 +1,11 @@
 // Type definitions for SEO audit
 
 import type { ProbeLevel } from "@squirrelscan/config";
-import type { AuditOutcome, ResumeOutcome } from "@squirrelscan/core-contracts";
+import type {
+  AuditOutcome,
+  ResumeOutcome,
+  StoreIntegrityEvicted,
+} from "@squirrelscan/core-contracts";
 import type {
   AuditLevel,
   ResolvedAuditSettings,
@@ -492,6 +496,8 @@ export interface AuditReport {
   status?: AuditStatus;
   /** Exit code, audit status and publish result (#1657). Mirrors core-contracts `AuditReport`. */
   outcome?: AuditOutcome;
+  /** Page bodies evicted from the local content store since this audit ran (#1667); absent when none were. Mirrors core-contracts `AuditReport`. */
+  storeIntegrity?: StoreIntegrityEvicted;
   /** Short human reason shown when `status` is failed/blocked. */
   statusReason?: string;
   /**

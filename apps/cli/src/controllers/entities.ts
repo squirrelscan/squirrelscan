@@ -5,6 +5,8 @@
 // with SQLiteStorage, close it in a `finally`. Nothing here renders; the command
 // layer picks a format.
 
+import type { StoreIntegrityEvicted } from "@squirrelscan/core-contracts";
+
 import { Value } from "@sinclair/typebox/value";
 import {
   ENTITY_MAP_FORMAT,
@@ -34,12 +36,18 @@ import {
   ErrorCodes,
 } from "@/controllers/types";
 import { getGlobalContentStore } from "@/crawler/storage/content-store";
+import { readStoreIntegrity } from "@/crawler/storage/eviction-notice";
 import { SQLiteStorage } from "@/crawler/storage/sqlite";
 
 /** One crawl's entity map, with the crawl it came from. */
 export interface StoredEntityMap {
   crawl: CrawlMetadata;
   map: EntityMap;
+  /**
+   * Page bodies of this audit that are gone from the content store (#1667); absent when none are. The
+   * map is built from stored entity rows and does not read them, but the reader is told.
+   */
+  storeIntegrity?: StoreIntegrityEvicted;
   /**
    * The newest crawl, in ANY project, passed over for storing no entity rows.
    *
@@ -373,9 +381,16 @@ export async function loadEntityMap(
           const pageUrls = await Effect.runPromise(
             storage.getCrawlPageUrls(crawl.id)
           );
+          const integrity = await readStoreIntegrity(storage, crawl.id);
           out.push({
             kind: "map",
-            entry: { crawl, map: reassembleMap(crawl, rows, pageUrls) },
+            entry: {
+              crawl,
+              map: reassembleMap(crawl, rows, pageUrls),
+              ...(integrity.status === "evicted"
+                ? { storeIntegrity: integrity }
+                : {}),
+            },
           });
           // One per project is enough: the newest with a map.
           break;

@@ -95,7 +95,7 @@ With no `--format` you get a console table of the first 50 pages on a terminal, 
 
 | Format | What you get |
 |--------|--------------|
-| `json` | `{ site, crawlId, startedAt, total, filtered, pages: [...] }`: `total` is every page in the audit, `filtered` is how many matched, `pages` holds the rows with every column |
+| `json` | `{ site, crawlId, startedAt, total, filtered, pages: [...] }`: `total` is every page in the audit, `filtered` is how many matched, `pages` holds the rows with every column. `storeIntegrity` (`{ status: "evicted", evicted, stored }`) appears between them only when some of the audit's page bodies have been evicted from the content store, see [Eviction is reported](/configuration/storage#content_store_max_bytes) |
 | `csv` | One header row and a row per page. List columns (`schemaTypes`, `externalDomains`, `flags`) join with a space. A cell that starts with `=`, `+`, `-` or `@` is prefixed with an apostrophe so a spreadsheet does not run it as a formula |
 | `html` | One standalone page, no network requests, with the table sortable by any column and filterable by text and by flag. At most 5,000 rows are inlined (the page says when more matched; use `csv` or `json` for all of them) |
 | `markdown` | A table of the columns a person scans: URL, status, title and length, description and length, H1 count, words, schema, in and out links, flags |
