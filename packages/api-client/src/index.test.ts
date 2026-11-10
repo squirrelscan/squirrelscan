@@ -117,3 +117,60 @@ describe("createApiClient", () => {
     expect(urls).toEqual(["https://a.test/p", "https://b.test/p"]);
   });
 });
+
+describe("onUnauthorized (#1666)", () => {
+  test("is told the token a 401 was sent with, and the result is unchanged", async () => {
+    stubFetch(() => Response.json({ error: "no" }, { status: 401 }));
+    const seen: string[] = [];
+    const result = await client({ onUnauthorized: (t) => void seen.push(t) }).request("/v1/x");
+    expect(seen).toEqual(["tok_123"]);
+    expect(result).toEqual({ ok: false, status: 401, data: { error: "no" } });
+  });
+
+  test("an explicit token is the one reported", async () => {
+    stubFetch(() => new Response(null, { status: 401 }));
+    const seen: string[] = [];
+    await client({ onUnauthorized: (t) => void seen.push(t) }).request("/v1/x", { token: "tok_other" });
+    expect(seen).toEqual(["tok_other"]);
+  });
+
+  test("send() reports it too", async () => {
+    stubFetch(() => new Response(null, { status: 401 }));
+    const seen: string[] = [];
+    await client({ onUnauthorized: (t) => void seen.push(t) }).send("/v1/x", { method: "PATCH", body: {} });
+    expect(seen).toEqual(["tok_123"]);
+  });
+
+  test("a 200, a 403 and a 500 are not an unauthorized", async () => {
+    const seen: string[] = [];
+    for (const status of [200, 403, 500]) {
+      stubFetch(() => new Response(null, { status }));
+      await client({ onUnauthorized: (t) => void seen.push(t) }).request("/v1/x");
+    }
+    expect(seen).toEqual([]);
+  });
+
+  test("an anonymous request has no token to report", async () => {
+    stubFetch(() => new Response(null, { status: 401 }));
+    const seen: string[] = [];
+    await client({ getToken: () => null, onUnauthorized: (t) => void seen.push(t) }).request("/v1/x");
+    expect(seen).toEqual([]);
+  });
+
+  test("a hook that throws does not turn the 401 into a transport failure", async () => {
+    stubFetch(() => new Response(null, { status: 401 }));
+    const result = await client({
+      onUnauthorized: () => {
+        throw new Error("boom");
+      },
+    }).request("/v1/x");
+    expect(result.status).toBe(401);
+  });
+
+  test("is told the request path too, so a caller can tell a token-death route from any other", async () => {
+    stubFetch(() => new Response(null, { status: 401 }));
+    const seen: Array<[string, string]> = [];
+    await client({ onUnauthorized: (t, p) => void seen.push([t, p]) }).request("/v1/auth/whoami");
+    expect(seen).toEqual([["tok_123", "/v1/auth/whoami"]]);
+  });
+});
