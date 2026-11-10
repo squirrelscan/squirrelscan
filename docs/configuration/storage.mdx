@@ -55,12 +55,14 @@ A crawl's status only moves along the edges below, so a late write can never und
 | To | Allowed from | When |
 |----|--------------|------|
 | `running` | any status | the crawl starts, `--resume` continues a `paused` or `stopped` crawl, or a re-crawl restarts the row |
-| `paused` | `running` | `stop()` while the crawl is live |
-| `completed` | `running`, `paused` | the crawl drained |
-| `stopped` | `running`, `paused` | the crawl-phase time limit cut it |
-| `crawled` | `running`, `paused`, `completed`, `stopped` | the crawl is over and the audit moves on |
-| `analyzed` | any of those, and `crawled` | the rules ran |
-| `failed` | `running`, `paused` | the crawl could not continue |
+| `paused` | `running`, `paused` | `stop()` while the crawl is live |
+| `completed` | `running`, `paused`, `completed` | the crawl drained |
+| `stopped` | `running`, `paused`, `stopped` | the crawl-phase time limit cut it |
+| `crawled` | `running`, `paused`, `completed`, `stopped`, `crawled` | the crawl is over and the audit moves on |
+| `analyzed` | `running`, `paused`, `completed`, `stopped`, `crawled`, `analyzed` | the rules ran (a re-analysis stays `analyzed`) |
+| `failed` | `running`, `paused`, `failed` | the crawl could not continue |
+
+Writing a status a crawl already has is always allowed, so a repeated write is harmless.
 
 Each URL the crawl queues has a status of its own: it is `pending`, becomes `fetching` when a worker takes it, and finishes as `done`, `failed` or `skipped` only from `fetching`. A finished URL is never rewritten, and `--resume` puts a URL that was `fetching` when the crawl died back to `pending` so it is fetched again.
 
