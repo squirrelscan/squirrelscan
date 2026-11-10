@@ -3650,8 +3650,7 @@ export const audit = defineCommand({
       // First-run funnel: the install's first audit reports once, as success
       // or a bounded failure class (never a URL, host or message).
       if (!args.offline) {
-        const failed =
-          report.status === "failed" || report.status === "blocked";
+        const failed = auditStatusToLifecycle(report.status) === "failed";
         trackFirstAudit(
           failed
             ? {
