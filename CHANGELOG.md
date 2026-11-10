@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- **`queued` is a run status, and a run's phase is a typed list.** `AgentRunStatus` in `@squirrelscan/core-contracts` now includes `queued` (a run waiting for a container slot, which starts by itself; not terminal), so a client no longer types it away, and the REST API docs and the `list_audits` tool say queued runs are listed. `RunPhase` (`crawling`, `external-links`, `cloud`, `rules`, `walk`, `complete`) and `RunNotice` (`memory_pressure`, `crawl_scope`) are exported, `RunSyncDelta.phase` is `RunPhase | null`, and `nextVisiblePhase` keeps a notice from overwriting the phase shown. (#1665)
+
 ### Fixed
 
 - **An expired or rejected login says so.** Both used to read as signed out with no message, so a run quietly lost its cloud features, and a login the server had revoked was sent again on every command. Now the credential has a state (`env`, `login`, `expired`, `rejected` or `none`): the commands that run the session check print one stderr line naming `squirrel auth login` when the stored login is expired or rejected, a 401 from the production API on an account route (`/v1/auth/*`) is remembered for 24 hours so later commands do not send the login again, and `squirrel auth status` (and `--json`, as `credentialState`) reports the state. A 401 from another route, or from a server set with `SQUIRREL_API_SERVER`, is not remembered, and a login with an unreadable expiry reads as expired. (#1666)
