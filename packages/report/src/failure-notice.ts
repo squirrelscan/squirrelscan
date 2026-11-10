@@ -6,6 +6,7 @@
 // consumer; pure so it can be unit-tested without rendering a page.
 
 import {
+  isAuditFailed,
   summarizeRefusedFetches,
   wafBlockHeadline,
   type AuditFailureReasonCode,
@@ -68,7 +69,7 @@ export function getAuditFailureNotice(
    */
   wafSeed?: WafBlockedPage,
 ): AuditFailureNotice | null {
-  if (status !== "blocked" && status !== "failed") return null;
+  if (!isAuditFailed(status)) return null;
 
   const cliCommand = `squirrel audit ${target}`;
 
