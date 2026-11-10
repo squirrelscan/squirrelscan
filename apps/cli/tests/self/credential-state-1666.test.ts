@@ -41,6 +41,7 @@ const {
   deriveCredentialState,
   markLoginRejected,
   noteStaleLogin,
+  REJECTED_LOGIN_TTL_MS,
   resolveCredential,
   setStaleLoginNoted,
   staleLoginNote,
@@ -50,6 +51,7 @@ const {
 const NOW = Date.parse("2026-11-10T12:00:00.000Z");
 const FUTURE = new Date(NOW + 86_400_000).toISOString();
 const PAST = new Date(NOW - 86_400_000).toISOString();
+const RECENT = new Date(NOW - 3_600_000).toISOString();
 
 const auth = (over: Partial<Auth> = {}): Auth => ({
   token: "sqcli_test",
@@ -66,7 +68,7 @@ describe("deriveCredentialState", () => {
   > = [
     [
       "an env token wins over everything",
-      { envToken: true, auth: auth({ rejectedAt: PAST }) },
+      { envToken: true, auth: auth({ rejectedAt: RECENT }) },
       "env",
     ],
     ["no login and no env", { envToken: false, auth: undefined }, "none"],
@@ -83,13 +85,51 @@ describe("deriveCredentialState", () => {
     ],
     [
       "a rejected login",
-      { envToken: false, auth: auth({ rejectedAt: PAST }) },
+      { envToken: false, auth: auth({ rejectedAt: RECENT }) },
       "rejected",
     ],
     [
       "rejected outranks expired",
-      { envToken: false, auth: auth({ rejectedAt: PAST, expiresAt: PAST }) },
+      { envToken: false, auth: auth({ rejectedAt: RECENT, expiresAt: PAST }) },
       "rejected",
+    ],
+    [
+      "a rejection older than the window is tried again",
+      {
+        envToken: false,
+        auth: auth({
+          rejectedAt: new Date(NOW - REJECTED_LOGIN_TTL_MS - 1).toISOString(),
+        }),
+      },
+      "login",
+    ],
+    [
+      "a rejection exactly at the window is tried again",
+      {
+        envToken: false,
+        auth: auth({
+          rejectedAt: new Date(NOW - REJECTED_LOGIN_TTL_MS).toISOString(),
+        }),
+      },
+      "login",
+    ],
+    [
+      "an unreadable rejection stamp fails closed",
+      { envToken: false, auth: auth({ rejectedAt: "garbage" }) },
+      "rejected",
+    ],
+    [
+      "an unreadable expiry fails closed, as telemetry does",
+      { envToken: false, auth: auth({ expiresAt: "garbage" }) },
+      "expired",
+    ],
+    [
+      "an expiry of exactly now is expired",
+      {
+        envToken: false,
+        auth: auth({ expiresAt: new Date(NOW).toISOString() }),
+      },
+      "expired",
     ],
   ];
   for (const [name, input, expected] of table) {
@@ -106,6 +146,7 @@ beforeEach(() => {
   process.env = { ...originalEnv };
   delete process.env.SQUIRRELSCAN_API_KEY;
   delete process.env.SQUIRREL_API_TOKEN;
+  delete process.env.SQUIRREL_API_SERVER;
   stubbedAuth = null;
   updates.length = 0;
   setStaleLoginNoted(false);
@@ -154,14 +195,87 @@ describe("markLoginRejected", () => {
     expect(updates).toEqual([]);
   });
 
-  test("an already rejected login is not rewritten", () => {
-    stubbedAuth = auth({ rejectedAt: PAST });
+  test("a rejection still inside the window is not rewritten; one past it is refreshed", () => {
+    stubbedAuth = auth({
+      rejectedAt: new Date(Date.now() - 3_600_000).toISOString(),
+    });
     markLoginRejected("sqcli_test");
     expect(updates).toEqual([]);
+    stubbedAuth = auth({
+      rejectedAt: new Date(
+        Date.now() - REJECTED_LOGIN_TTL_MS - 60_000
+      ).toISOString(),
+    });
+    markLoginRejected("sqcli_test");
+    expect(updates).toHaveLength(1);
   });
 
   test("with no login stored it writes nothing", () => {
     markLoginRejected("sqcli_test");
+    expect(updates).toEqual([]);
+  });
+
+  test("a 401 from an overridden API host says nothing about the production login: nothing is written", () => {
+    stubbedAuth = auth();
+    for (const server of [
+      "http://localhost:8787",
+      "http://127.0.0.1:1",
+      "https://staging.example.com",
+    ]) {
+      process.env.SQUIRREL_API_SERVER = server;
+      markLoginRejected("sqcli_test");
+    }
+    expect(updates).toEqual([]);
+  });
+});
+
+describe("which 401s mark a login rejected", () => {
+  const realFetch = globalThis.fetch;
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+  });
+
+  async function request(path: string, status = 401): Promise<void> {
+    globalThis.fetch = (() =>
+      Promise.resolve(
+        new Response(null, { status })
+      )) as unknown as typeof fetch;
+    const { cliApi } = await import("@/lib/api-client");
+    await cliApi.request(path, { auth: "required" });
+  }
+  const live = () =>
+    auth({ expiresAt: new Date(Date.now() + 86_400_000).toISOString() });
+
+  test("a 401 on an account route (/v1/auth/*) marks it", async () => {
+    stubbedAuth = live();
+    await request("/v1/auth/whoami");
+    expect(updates).toHaveLength(1);
+    expect(updates[0]!.auth!.rejectedAt).toBeTruthy();
+  });
+
+  test("a 401 on any other route does not: it may be a gateway glitch, not the token's death", async () => {
+    stubbedAuth = live();
+    for (const path of [
+      "/v1/organizations",
+      "/v1/agent-runs/register",
+      "/v1/reports",
+      "/v1/credits/balance",
+    ]) {
+      await request(path);
+    }
+    expect(updates).toEqual([]);
+  });
+
+  test("a 401 on an account route from an overridden host does not mark it", async () => {
+    stubbedAuth = live();
+    process.env.SQUIRREL_API_SERVER = "http://localhost:8787";
+    await request("/v1/auth/whoami");
+    expect(updates).toEqual([]);
+  });
+
+  test("a 200 on an account route does not", async () => {
+    stubbedAuth = live();
+    await request("/v1/auth/whoami", 200);
     expect(updates).toEqual([]);
   });
 });

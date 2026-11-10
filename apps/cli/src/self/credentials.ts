@@ -22,7 +22,7 @@ import type { Result } from "@/controllers/types";
 
 import type { AuthState, UserSettings } from "./types";
 
-import { getApiUrl } from "./api";
+import { DEFAULT_API_URL, getApiUrl } from "./api";
 import {
   formatSessionLoadWarning,
   loadUserSettings,
@@ -96,7 +96,14 @@ export function isEnvTokenSet(): boolean {
  */
 export type CredentialState = "env" | "login" | "expired" | "rejected" | "none";
 
-/** The state, from what is stored and the clock. Pure, so every edge is a table row. */
+/** How long a rejection is remembered before the login is tried once more: a revoked token stays dead, a gateway glitch does not. */
+export const REJECTED_LOGIN_TTL_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * The state, from what is stored and the clock. Pure, so every edge is a table row. An unparseable
+ * date fails closed, as `telemetry.ts` does for the same expiry: a stamp or an expiry the CLI cannot
+ * read is not evidence the login works.
+ */
 export function deriveCredentialState(input: {
   envToken: boolean;
   auth: AuthState | undefined;
@@ -105,10 +112,15 @@ export function deriveCredentialState(input: {
   if (input.envToken) return "env";
   const auth = input.auth;
   if (!auth?.token) return "none";
-  if (auth.rejectedAt) return "rejected";
-  // expiresAt is an ISO date written by the API at login, so a Date comparison is safe here.
-  if (auth.expiresAt && new Date(auth.expiresAt).getTime() < input.now)
-    return "expired";
+  if (auth.rejectedAt) {
+    const rejected = Date.parse(auth.rejectedAt);
+    if (Number.isNaN(rejected) || input.now - rejected < REJECTED_LOGIN_TTL_MS)
+      return "rejected";
+  }
+  if (auth.expiresAt) {
+    const expires = Date.parse(auth.expiresAt);
+    if (Number.isNaN(expires) || expires <= input.now) return "expired";
+  }
   return "login";
 }
 
@@ -123,22 +135,27 @@ export function credentialState(): CredentialState {
 }
 
 /**
- * Record that the server answered 401 to this LOGIN token, so the next command reads it as
- * rejected without another request (#1666). A token that is not the stored one (an env token, or a
- * login replaced since) is left alone: the env token is never written to settings.
+ * Record that the PRODUCTION server answered 401 to this LOGIN token on an account route, so the next
+ * command reads it as rejected without another request (#1666). Callers pass only token-death routes
+ * (`/v1/auth/*`): a 401 from any other route may be a gateway glitch and must not disable a working login.
+ *
+ * Nothing is written when the API is overridden (`SQUIRREL_API_SERVER`): a local or dev server's 401 says
+ * nothing about the production login. A token that is not the stored one (an env token, or a login
+ * replaced since) is left alone: the env token is never written to settings.
  */
 export function markLoginRejected(token: string): void {
+  if (getApiUrl() !== DEFAULT_API_URL) return;
   const settings = loadUserSettings();
   if (!settings.ok) return;
   const auth = settings.data.auth;
-  if (!auth || auth.token !== token || auth.rejectedAt) return;
+  if (!auth || auth.token !== token) return;
+  // Already remembered and still within the window: nothing to refresh.
+  if (
+    auth.rejectedAt &&
+    Date.now() - Date.parse(auth.rejectedAt) < REJECTED_LOGIN_TTL_MS
+  )
+    return;
   updateSettings({ auth: { ...auth, rejectedAt: new Date().toISOString() } });
-}
-
-/** {@link markLoginRejected} for whichever credential is active now, when it is a login (a call site that got a 401 and has no token in hand). */
-export function markActiveLoginRejected(): void {
-  const credential = resolveCredential();
-  if (credential?.source === "login") markLoginRejected(credential.token);
 }
 
 /** The one line a command prints to stderr when the stored login cannot be used. Null for any other state. */

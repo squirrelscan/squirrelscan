@@ -166,4 +166,11 @@ describe("onUnauthorized (#1666)", () => {
     }).request("/v1/x");
     expect(result.status).toBe(401);
   });
+
+  test("is told the request path too, so a caller can tell a token-death route from any other", async () => {
+    stubFetch(() => new Response(null, { status: 401 }));
+    const seen: Array<[string, string]> = [];
+    await client({ onUnauthorized: (t, p) => void seen.push([t, p]) }).request("/v1/auth/whoami");
+    expect(seen).toEqual([["tok_123", "/v1/auth/whoami"]]);
+  });
 });

@@ -154,7 +154,6 @@ import {
   describeEnvToken,
   envTokenRejectedMessage,
   getEnvApiToken,
-  markActiveLoginRejected,
   warnIfSessionUnreadable,
 } from "@/self/credentials";
 import { detectRunner } from "@/self/install-meta";
@@ -1872,8 +1871,6 @@ export const audit = defineCommand({
           // 5xx, DNS) → API unreachable. Either way cloud is unusable this run,
           // so every cloud step is skipped (cloudAvailable=false below).
           if (invalidCredential) {
-            // Remember it, so the next command reads this login as rejected (#1666).
-            markActiveLoginRejected();
             cloudOutage = "expired";
             kv(
               "Account",

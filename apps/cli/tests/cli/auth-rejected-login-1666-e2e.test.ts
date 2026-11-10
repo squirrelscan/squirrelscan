@@ -1,6 +1,10 @@
 // A login the server rejects is remembered (#1666), end to end with the real CLI in a subprocess
-// against a local API that answers 401: the first `auth status` asks the server and is told no, the
-// next command reports the login as rejected WITHOUT another request, and says it once on stderr.
+// (HOME and SQUIRREL_API_SERVER are in the child's env, never changed in this process).
+//
+// The local API answers 401 to everything. Because it is NOT the production API, asking it must never
+// stamp the stored login rejected: a local or dev server's 401 says nothing about the production
+// login. The stamp itself is read here from settings written ahead of time, and written by the unit
+// tests (credential-state-1666.test.ts) against the production host.
 
 import { afterAll, describe, expect, test } from "bun:test";
 import {
@@ -35,7 +39,11 @@ afterAll(() => {
   rmSync(scratch, { recursive: true, force: true });
 });
 
-function writeLogin(expiresAt: string): void {
+const HOUR = 3_600_000;
+
+function writeLogin(
+  opts: { expiresInMs?: number; rejectedAgoMs?: number } = {}
+): void {
   mkdirSync(join(home, ".squirrel"), { recursive: true });
   writeFileSync(
     settingsPath,
@@ -45,7 +53,16 @@ function writeLogin(expiresAt: string): void {
         userId: "u1",
         email: "you@example.com",
         name: null,
-        expiresAt,
+        expiresAt: new Date(
+          Date.now() + (opts.expiresInMs ?? 24 * HOUR)
+        ).toISOString(),
+        ...(opts.rejectedAgoMs !== undefined
+          ? {
+              rejectedAt: new Date(
+                Date.now() - opts.rejectedAgoMs
+              ).toISOString(),
+            }
+          : {}),
       },
     }),
     { mode: 0o600 }
@@ -80,20 +97,29 @@ async function squirrel(...args: string[]) {
   return { out, err, code };
 }
 
-describe("a login the server rejects", () => {
-  test("the first command asks and is rejected; the next one says so without another request", async () => {
-    writeLogin(new Date(Date.now() + 86_400_000).toISOString());
-
+describe("a 401 from an overridden API host", () => {
+  test("is asked every time and never stamps the production login", async () => {
+    writeLogin();
+    const before = hits;
     const first = await squirrel("auth", "status");
     expect(first.code).toBe(1);
-    expect(hits).toBe(1);
+    expect(hits).toBe(before + 1);
     expect(
       JSON.parse(readFileSync(settingsPath, "utf8")).auth.rejectedAt
-    ).toBeTruthy();
+    ).toBeUndefined();
 
+    const second = await squirrel("auth", "status");
+    expect(second.code).toBe(1);
+    expect(hits).toBe(before + 2);
+  }, 60_000);
+});
+
+describe("a login remembered as rejected", () => {
+  test("auth status reports it, with no request", async () => {
+    writeLogin({ rejectedAgoMs: HOUR });
     const before = hits;
-    const second = await squirrel("auth", "status", "--json");
-    expect(JSON.parse(second.out)).toEqual({
+    const status = await squirrel("auth", "status", "--json");
+    expect(JSON.parse(status.out)).toEqual({
       authenticated: false,
       credentialState: "rejected",
     });
@@ -101,6 +127,7 @@ describe("a login the server rejects", () => {
   }, 60_000);
 
   test("another command says it once on stderr and sends no request", async () => {
+    writeLogin({ rejectedAgoMs: HOUR });
     const before = hits;
     const r = await squirrel("config", "path");
     const notes = r.err
@@ -111,18 +138,25 @@ describe("a login the server rejects", () => {
     expect(hits).toBe(before);
   }, 60_000);
 
-  test("signing in again clears it: a fresh login has no rejection", async () => {
-    writeLogin(new Date(Date.now() + 86_400_000).toISOString());
-    const r = await squirrel("auth", "status", "--json");
-    // The server still says 401, so it is asked once more and rejected again, which proves the
-    // rejection was not carried over by the new login.
-    expect(r.code).toBe(1);
+  test("after a day it is tried once more", async () => {
+    writeLogin({ rejectedAgoMs: 25 * HOUR });
+    const before = hits;
+    const r = await squirrel("auth", "status");
+    expect(r.err).not.toContain("rejected your squirrelscan login");
+    expect(hits).toBe(before + 1);
+  }, 60_000);
+
+  test("a new login has no stamp, so it is used", async () => {
+    writeLogin();
+    const before = hits;
+    await squirrel("auth", "status");
+    expect(hits).toBe(before + 1);
   }, 60_000);
 });
 
 describe("an expired login", () => {
   test("is reported as expired by auth status, with no request, and once on stderr elsewhere", async () => {
-    writeLogin(new Date(Date.now() - 86_400_000).toISOString());
+    writeLogin({ expiresInMs: -24 * HOUR });
     const before = hits;
     const status = await squirrel("auth", "status", "--json");
     expect(JSON.parse(status.out)).toEqual({
@@ -134,5 +168,27 @@ describe("an expired login", () => {
       other.err.split("\n").filter((l) => l.includes("login has expired"))
     ).toHaveLength(1);
     expect(hits).toBe(before);
+  }, 60_000);
+
+  test("a login with an unreadable expiry is read as expired too", async () => {
+    mkdirSync(join(home, ".squirrel"), { recursive: true });
+    writeFileSync(
+      settingsPath,
+      JSON.stringify({
+        auth: {
+          token: "sqcli_test_token",
+          userId: "u1",
+          email: "you@example.com",
+          name: null,
+          expiresAt: "not a date",
+        },
+      }),
+      { mode: 0o600 }
+    );
+    const status = await squirrel("auth", "status", "--json");
+    expect(JSON.parse(status.out)).toEqual({
+      authenticated: false,
+      credentialState: "expired",
+    });
   }, 60_000);
 });

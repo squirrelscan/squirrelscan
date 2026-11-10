@@ -41,11 +41,11 @@ export interface ApiClientConfig {
   /** Sink for best-effort `send()` non-2xx traces. Default: noop. */
   onDebug?: (message: string, meta?: Record<string, unknown>) => void;
   /**
-   * Told when `request()` (and so `send()`) got a 401 for the bearer token it sent, with that token,
-   * so a caller can remember the token is dead instead of sending it again. Never throws into the
+   * Told when `request()` (and so `send()`) got a 401 for the bearer token it sent, with that token and the
+   * request path, so a caller can remember the token is dead instead of sending it again. Never throws into the
    * request: an error from the hook is swallowed.
    */
-  onUnauthorized?: (token: string) => void;
+  onUnauthorized?: (token: string, path: string) => void;
 }
 
 export interface ApiRequestInit {
@@ -172,7 +172,7 @@ export function createApiClient(config: ApiClientConfig): ApiClient {
       );
       if (response.status === 401 && token) {
         try {
-          config.onUnauthorized?.(token);
+          config.onUnauthorized?.(token, path);
         } catch {
           // A hook must not turn a 401 into a transport failure.
         }
