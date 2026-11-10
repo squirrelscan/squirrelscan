@@ -15,7 +15,12 @@ import {
   packComponentOccurrences,
   unpackComponentOccurrences,
 } from "@squirrelscan/core-contracts/component-evidence";
-import { isCacheHitReason, parseUnverifiedReason } from "@squirrelscan/core-contracts";
+import {
+  CRAWL_STATUS_TRANSITIONS,
+  FRONTIER_STATUS_TRANSITIONS,
+  isCacheHitReason,
+  parseUnverifiedReason,
+} from "@squirrelscan/core-contracts";
 import { urlHostKey } from "@squirrelscan/utils/url";
 
 import type {
@@ -1429,6 +1434,16 @@ function capBatchPerHost(
 }
 
 export class SQLiteStorage implements CrawlStorage {
+  /**
+   * Told about each status write the transition table refused (#1659): a debug aid and a test hook.
+   * A refused write is never an error, so nothing else reports it.
+   */
+  onIgnoredTransition?: (info: {
+    kind: "crawl" | "frontier";
+    id: string;
+    from: string;
+    to: string;
+  }) => void;
   private db: Database | null = null;
   private readonly path: string;
   /** The database file, for a second connection (the crawl lease heartbeat). */
@@ -1782,10 +1797,40 @@ export class SQLiteStorage implements CrawlStorage {
           // next. `Database.MAX_QUERY_CACHE_SIZE` raises the limit (30 caches
           // all 25), but the default is what ships. The crawl loop writes only
           // `stats`, once per page (#1911).
+          //
+          // #1659: a write that carries a status is checked against the transition
+          // table INSIDE the statement, so the check and the write are one step. The
+          // allowed-from list is a bound parameter (`,a,b,`), not part of the text, so
+          // the statement text, and the cache above, are the same with or without it.
+          // A write the table does not allow changes nothing, the other columns it
+          // carried included.
+          const allowedFrom =
+            updates.status !== undefined
+              ? `,${CRAWL_STATUS_TRANSITIONS[updates.status].join(",")},`
+              : null;
           const stmt = db.query(
-            `UPDATE crawls SET ${sets.join(", ")} WHERE id = ?`
+            `UPDATE crawls SET ${sets.join(", ")} WHERE id = ? AND (? IS NULL OR instr(?, ',' || status || ',') > 0)`
           );
-          stmt.run(...(values as (string | number | null)[]));
+          const result = stmt.run(
+            ...(values as (string | number | null)[]),
+            allowedFrom,
+            allowedFrom
+          );
+          if (updates.status !== undefined && result.changes === 0) {
+            const row = db
+              .query("SELECT status FROM crawls WHERE id = ?")
+              .get(id) as { status: string } | undefined;
+            // A missing crawl is the same quiet no-op it always was; an existing one
+            // refused the move.
+            if (row) {
+              this.onIgnoredTransition?.({
+                kind: "crawl",
+                id,
+                from: row.status,
+                to: updates.status,
+              });
+            }
+          }
         }
       },
       catch: (e) => StorageError.write(e),
@@ -2812,20 +2857,45 @@ export class SQLiteStorage implements CrawlStorage {
         const fetchedAt =
           status === "done" || status === "failed" ? Date.now() : null;
 
-        if (reason !== undefined) {
-          const stmt = db.query(`
+        // #1659: only the allowed-from statuses move (see FRONTIER_STATUS_TRANSITIONS):
+        // a URL finishes from `fetching`, so a late worker cannot rewrite one a resume
+        // already re-queued, and a URL that was never reserved cannot be marked done.
+        // The list is a bound parameter so the statement text stays one per shape.
+        const allowedFrom = `,${FRONTIER_STATUS_TRANSITIONS[status].join(",")},`;
+        const result =
+          reason !== undefined
+            ? db
+                .query(
+                  `
             UPDATE frontier
             SET status = ?, reason = ?, fetched_at = COALESCE(?, fetched_at)
-            WHERE crawl_id = ? AND normalized_url = ?
-          `);
-          stmt.run(status, reason, fetchedAt, crawlId, normalizedUrl);
-        } else {
-          const stmt = db.query(`
+            WHERE crawl_id = ? AND normalized_url = ? AND instr(?, ',' || status || ',') > 0
+          `
+                )
+                .run(status, reason, fetchedAt, crawlId, normalizedUrl, allowedFrom)
+            : db
+                .query(
+                  `
             UPDATE frontier
             SET status = ?, fetched_at = COALESCE(?, fetched_at)
-            WHERE crawl_id = ? AND normalized_url = ?
-          `);
-          stmt.run(status, fetchedAt, crawlId, normalizedUrl);
+            WHERE crawl_id = ? AND normalized_url = ? AND instr(?, ',' || status || ',') > 0
+          `
+                )
+                .run(status, fetchedAt, crawlId, normalizedUrl, allowedFrom);
+        if (result.changes === 0) {
+          const row = db
+            .query(
+              "SELECT status FROM frontier WHERE crawl_id = ? AND normalized_url = ?"
+            )
+            .get(crawlId, normalizedUrl) as { status: string } | undefined;
+          if (row) {
+            this.onIgnoredTransition?.({
+              kind: "frontier",
+              id: normalizedUrl,
+              from: row.status,
+              to: status,
+            });
+          }
         }
       },
       catch: (e) => StorageError.write(e),
