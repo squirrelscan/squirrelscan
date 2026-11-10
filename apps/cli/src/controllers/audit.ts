@@ -17,7 +17,11 @@ import { createCrawler } from "@/crawler/core";
 
 export type { CrawlerEvent } from "@/crawler/core/types";
 
-import type { EntityMap, RenderChargeLine } from "@squirrelscan/core-contracts";
+import type {
+  EntityMap,
+  RenderChargeLine,
+  RunPhase,
+} from "@squirrelscan/core-contracts";
 import type { ParsedPageCache } from "@squirrelscan/parser";
 
 import {
@@ -194,13 +198,8 @@ import { resolveStickyUserAgent } from "@/utils/user-agent";
 import { version as cliVersion } from "../../package.json";
 
 export interface AuditProgress {
-  phase:
-    | "crawling"
-    | "external-links"
-    | "cloud"
-    | "rules"
-    | "walk"
-    | "complete";
+  /** The same names a hosted run reports (`RunPhase`), so one list says what a person watching sees. */
+  phase: RunPhase;
   current?: number;
   total?: number;
   /**

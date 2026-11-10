@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- **`queued` is a run status, and a run's phase is a typed list.** `AgentRunStatus` in `@squirrelscan/core-contracts` now includes `queued` (a run waiting for a container slot, which starts by itself; not terminal), so a client no longer types it away, and the REST API docs and the `list_audits` tool say queued runs are listed. `RunPhase` (`crawling`, `external-links`, `cloud`, `rules`, `walk`, `complete`) and `RunNotice` (`memory_pressure`, `crawl_scope`) are exported, `RunSyncDelta.phase` is `RunPhase | null`, and `nextVisiblePhase` keeps a notice from overwriting the phase shown. (#1665)
+
 ### Fixed
 
 - **`squirrel audit` computes its exit code in one place, and the JSON and LLM reports carry it.** The code came from 34 assignments that overwrote each other, and an explicit `--publish` that failed returned early and skipped the blocked code and the `--fail-on` gate. Now one precedence table decides it (documented under Exit codes): a blocked site with a failed explicit `--publish` exits `3` instead of `1`. A failed automatic publish still exits `0`, the documented choice, and is now visible: `--format json` has `outcome` (`exit_code`, `status`, `publish` with `status` and `reason`) and `--format llm` an `<outcome>` element. Both reports are written after publishing, so they can include its result. (#1657)

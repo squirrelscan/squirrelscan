@@ -2580,8 +2580,11 @@ export function triggerToAuditSource(trigger: string | null | undefined): AuditS
 
 // ── Agent-run lifecycle & org-sync `runs` delta ────────────────────
 
-/** Hosted agent-run status lifecycle. */
-export type AgentRunStatus = "pending" | "running" | "completed" | "failed" | "cancelled";
+/**
+ * Hosted agent-run status lifecycle. `queued` is a run waiting for a container slot that starts by
+ * itself (#1665): the cloud has always stored it, but clients typed it away. It is not terminal.
+ */
+export type AgentRunStatus = "queued" | "pending" | "running" | "completed" | "failed" | "cancelled";
 
 /**
  * Statuses where a run is finished — it leaves live "running now" feeds and
@@ -2596,6 +2599,37 @@ export const TERMINAL_AGENT_RUN_STATUSES: ReadonlySet<string> = new Set<AgentRun
 ]);
 
 /**
+ * The phases of an audit a person watching it sees, in the order a run goes through them. The CLI's
+ * progress line and a hosted run's live progress use the same names.
+ */
+export const RUN_PHASES = ["crawling", "external-links", "cloud", "rules", "walk", "complete"] as const;
+export type RunPhase = (typeof RUN_PHASES)[number];
+
+/**
+ * Events a run reports that are not a phase: they say something happened (memory was tight, the crawl
+ * scope was cut) and must never replace the visible phase.
+ */
+export const RUN_NOTICES = ["memory_pressure", "crawl_scope"] as const;
+export type RunNotice = (typeof RUN_NOTICES)[number];
+
+export function isRunPhase(value: unknown): value is RunPhase {
+  return typeof value === "string" && (RUN_PHASES as readonly string[]).includes(value);
+}
+
+export function isRunNotice(value: unknown): value is RunNotice {
+  return typeof value === "string" && (RUN_NOTICES as readonly string[]).includes(value);
+}
+
+/**
+ * The phase to show after a run reports `incoming` while `current` is showing. A phase replaces the
+ * current one; a notice, a stage name this version does not know, an empty value or null leaves it
+ * alone, so a notice cannot overwrite the phase.
+ */
+export function nextVisiblePhase(current: RunPhase | null, incoming: string | null | undefined): RunPhase | null {
+  return isRunPhase(incoming) ? incoming : current;
+}
+
+/**
  * Coarse org-sync `runs` oplog payload — produced by the api tee
  * (`buildRunEventChange`/`buildRunStatusChange`, #459), consumed by the
  * dashboard live-sync (#460). Partial delta merged by runId. `progress` is the
@@ -2605,7 +2639,8 @@ export const TERMINAL_AGENT_RUN_STATUSES: ReadonlySet<string> = new Set<AgentRun
  */
 export interface RunSyncDelta {
   status?: AgentRunStatus;
-  phase?: string | null;
+  /** The visible phase of the run, never a notice (see {@link RunNotice} and {@link nextVisiblePhase}). */
+  phase?: RunPhase | null;
   progress?: { fetched?: number; total?: number } | null;
 }
 

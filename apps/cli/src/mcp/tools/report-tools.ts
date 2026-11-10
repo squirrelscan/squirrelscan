@@ -1,6 +1,7 @@
 // Cloud report tools (authed): fetch a published report, list active runs.
 
 import type { McpServer } from "@modelcontextprotocol/server";
+import type { AgentRunStatus } from "@squirrelscan/core-contracts";
 
 import { z } from "zod";
 
@@ -28,6 +29,8 @@ interface ActiveRunPageLimitNotice {
 // object comes straight off an `as`-cast JSON response, so nothing has
 // actually verified its shape yet. isPageLimitNotice() below does that.
 interface ActiveRunSummary {
+  /** `queued` (waiting for a container slot), `pending` or `running`: every non-terminal status. */
+  status?: AgentRunStatus;
   url: string;
   domain?: string;
   pageLimitNotice?: unknown;
@@ -88,7 +91,7 @@ export function registerReportTools(
     {
       title: "List active audits",
       description:
-        "List your organization's currently running or pending audits. Returns each run's url, status, and trigger as JSON." +
+        "List your organization's currently queued, pending or running audits. Returns each run's url, status, and trigger as JSON." +
         authNote(TOOL_AUTH.list_audits),
       inputSchema: z.object({}),
     },
