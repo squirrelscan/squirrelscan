@@ -162,7 +162,7 @@ A one-page filtered run skips the work no selected rule reads: the editor's summ
 
 ### Run timeline and skipped steps
 
-While a run is `pending` or `running`, `GET /v1/agent-runs/{id}` returns its latest `progress` event (`phase`, a message and a page count). A step the run skips is recorded as a single `skipped` event with a reason and no duration, for example `editor_summary skipped: rule-filtered run`. The phase names a polling client may see for skipped steps are:
+While a run is `queued`, `pending` or `running`, `GET /v1/agent-runs/{id}` returns its latest `progress` event (`phase`, a message and a page count). A step the run skips is recorded as a single `skipped` event with a reason and no duration, for example `editor_summary skipped: rule-filtered run`. The phase names a polling client may see for skipped steps are:
 
 | Phase | Reasons |
 |-------|---------|

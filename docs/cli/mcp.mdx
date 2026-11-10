@@ -26,7 +26,7 @@ The server runs in the foreground and speaks JSON-RPC on stdin/stdout. You rarel
 | `quick_check` | None | Fast, local-only audit at the quick level: the URL and its sitemaps, up to 25 pages, no link following, no cloud checks. Internal link targets are status-checked, external links are not. Works offline. |
 | `list_rules` | None | List all built-in audit rules. |
 | `get_rule` | None | Full definition of one rule by id. |
-| `list_audits` | Login | Your org's running/pending audits. Prints a one-line `⚠ Page limit: ...` warning for any run whose page count was clamped to the plan's ceiling. |
+| `list_audits` | Login | Your org's queued, pending and running audits (`queued` is a run waiting for a container slot, which starts by itself). Prints a one-line `⚠ Page limit: ...` warning for any run whose page count was clamped to the plan's ceiling. |
 | `get_report` | Login | Fetch a published report by audit id. |
 | `list_issues` | Login | Supplant-aware issue state for a website. |
 | `get_issue` | Login | A single issue by website + number. |

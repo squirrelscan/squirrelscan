@@ -232,7 +232,7 @@
       "get": {
         "tags": ["Audits"],
         "summary": "Get an audit run",
-        "description": "Fetch full detail for a single audit run owned by the authenticated user. While `status` is `pending`/`running`, `progress` carries the latest phase/page-count event streamed by the run, when one has been recorded. `notice` carries a `page_limit_clamped` signal when the run's requested page count was clamped down to the org's plan ceiling at dispatch time (never a hard error — the run itself still completed normally). `renderFallback` carries a `render_fallback` signal, with the page count, when pages that asked for rendering were audited from their unrendered source instead.",
+        "description": "Fetch full detail for a single audit run owned by the authenticated user. While `status` is `queued`/`pending`/`running`, `progress` carries the latest phase/page-count event streamed by the run, when one has been recorded. `notice` carries a `page_limit_clamped` signal when the run's requested page count was clamped down to the org's plan ceiling at dispatch time (never a hard error — the run itself still completed normally). `renderFallback` carries a `render_fallback` signal, with the page count, when pages that asked for rendering were audited from their unrendered source instead.",
         "operationId": "getAuditRun",
         "parameters": [{ "$ref": "#/components/parameters/RunId" }],
         "responses": {
@@ -253,7 +253,7 @@
       "get": {
         "tags": ["Audits"],
         "summary": "Get an audit run's report",
-        "description": "Fetch the summarized report data for a completed run.\n\n**Polling pattern:** this endpoint returns `404` both when the run/report does not exist AND while a valid run's report is not generated yet. To distinguish the two, poll `GET /v1/agent-runs/{id}` and wait for `status: \"completed\"` before fetching the report — that is the canonical way to track progress. As a convenience, the \"not ready yet\" 404 additionally carries the run's current status under `error.runStatus` (e.g. `{ \"error\": { \"code\": \"NOT_FOUND\", \"message\": \"Report not available yet\", \"runStatus\": \"running\" } }`), so a client can keep polling this endpoint alone if it prefers. **Footgun:** only keep polling while `error.runStatus` is a non-terminal state (`pending`/`running`); a `404` with `error.runStatus: \"completed\"` (or `\"failed\"`/`\"cancelled\"`, or a `404` with NO `error.runStatus` at all) means the report is genuinely missing/unavailable — stop polling.",
+        "description": "Fetch the summarized report data for a completed run.\n\n**Polling pattern:** this endpoint returns `404` both when the run/report does not exist AND while a valid run's report is not generated yet. To distinguish the two, poll `GET /v1/agent-runs/{id}` and wait for `status: \"completed\"` before fetching the report — that is the canonical way to track progress. As a convenience, the \"not ready yet\" 404 additionally carries the run's current status under `error.runStatus` (e.g. `{ \"error\": { \"code\": \"NOT_FOUND\", \"message\": \"Report not available yet\", \"runStatus\": \"running\" } }`), so a client can keep polling this endpoint alone if it prefers. **Footgun:** only keep polling while `error.runStatus` is a non-terminal state (`queued`/`pending`/`running`); a `404` with `error.runStatus: \"completed\"` (or `\"failed\"`/`\"cancelled\"`, or a `404` with NO `error.runStatus` at all) means the report is genuinely missing/unavailable — stop polling.",
         "operationId": "getAuditRunReport",
         "parameters": [{ "$ref": "#/components/parameters/RunId" }],
         "responses": {
@@ -267,7 +267,7 @@
           },
           "401": { "$ref": "#/components/responses/Unauthorized" },
           "404": {
-            "description": "Run or report not found, OR the run's report is not generated yet. When not-ready, `error.runStatus` holds the run's current status (`pending`/`running`/...); keep polling.",
+            "description": "Run or report not found, OR the run's report is not generated yet. When not-ready, `error.runStatus` holds the run's current status (`queued`/`pending`/`running`/...); keep polling.",
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/Error" },
@@ -986,7 +986,7 @@
       },
       "AuditRunStatus": {
         "type": "string",
-        "enum": ["pending", "running", "completed", "failed", "cancelled"]
+        "enum": ["queued", "pending", "running", "completed", "failed", "cancelled"]
       },
       "AuditRunMode": {
         "type": "string",
@@ -1098,7 +1098,7 @@
               "orgId": { "type": ["string", "null"] },
               "progress": {
                 "type": ["object", "null"],
-                "description": "Live progress while `status` is `pending`/`running` (#692): the latest phase/page-count event streamed by the run. Null once the run is terminal, or if no progress event has been recorded yet.",
+                "description": "Live progress while `status` is `queued`/`pending`/`running` (#692): the latest phase/page-count event streamed by the run. Null once the run is terminal, or if no progress event has been recorded yet.",
                 "properties": {
                   "phase": { "type": ["string", "null"] },
                   "message": { "type": ["string", "null"] },

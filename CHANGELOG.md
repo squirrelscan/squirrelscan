@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- **`queued` is a run status, and a run's phase is a typed list.** `AgentRunStatus` in `@squirrelscan/core-contracts` now includes `queued` (a run waiting for a container slot, which starts by itself; not terminal), so a client no longer types it away, and the REST API docs and the `list_audits` tool say queued runs are listed. `RunPhase` (`crawling`, `external-links`, `cloud`, `rules`, `walk`, `complete`) and `RunNotice` (`memory_pressure`, `crawl_scope`) are exported, `RunSyncDelta.phase` is `RunPhase | null`, and `nextVisiblePhase` keeps a notice from overwriting the phase shown. (#1665)
+
 ### Fixed
 
 - **Settings writes no longer lose each other, and one update state drives the banner, the prompt and doctor.** Two commands saving different settings at the same moment (a background auto-update and a foreground `squirrel login`, for example) both persist: each writer changes only its own keys under a lock file beside `settings.json`, and a lock left by a dead process is taken over. Whether an update is pending, being attempted, failed (fallback), snoozed, dismissed or applied is now derived in one place, and `squirrel self doctor` shows it next to the pending version. (#1660)

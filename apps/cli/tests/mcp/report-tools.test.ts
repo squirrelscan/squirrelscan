@@ -72,6 +72,81 @@ const notice = {
     "Upgrade to Pro for up to 2,000 pages per cloud audit: https://squirrelscan.com/pricing",
 };
 
+describe("list_audits handles every non-terminal run status (#1665)", () => {
+  test("a queued run is listed beside a pending and a running one, with no warn line", async () => {
+    stubActiveRunsFetch({
+      runs: [
+        {
+          id: "run_q",
+          url: "https://example.com",
+          domain: "example.com",
+          status: "queued",
+        },
+        {
+          id: "run_p",
+          url: "https://example.org",
+          domain: "example.org",
+          status: "pending",
+        },
+        {
+          id: "run_r",
+          url: "https://example.net",
+          domain: "example.net",
+          status: "running",
+        },
+      ],
+    });
+    const client = await connect();
+    const result = await client.callTool({
+      name: "list_audits",
+      arguments: {},
+    });
+    expect(result.isError).toBeFalsy();
+    const content = result.content as Array<{ type: string; text?: string }>;
+    expect(content).toHaveLength(1);
+    const parsed = JSON.parse(content[0]!.text!) as {
+      runs: Array<{ status: string }>;
+    };
+    expect(parsed.runs.map((r) => r.status)).toEqual([
+      "queued",
+      "pending",
+      "running",
+    ]);
+  });
+
+  test("a clamped queued run still gets its page-limit warning", async () => {
+    stubActiveRunsFetch({
+      runs: [
+        {
+          id: "run_q",
+          url: "https://example.com",
+          domain: "example.com",
+          status: "queued",
+          pageLimitNotice: {
+            requested: 500,
+            applied: 100,
+            upgradeHint: "Upgrade for more pages.",
+          },
+        },
+      ],
+    });
+    const client = await connect();
+    const result = await client.callTool({
+      name: "list_audits",
+      arguments: {},
+    });
+    const content = result.content as Array<{ type: string; text?: string }>;
+    expect(content[0]!.text).toContain("example.com was capped to 100 pages");
+  });
+
+  test("the tool says it lists queued runs", async () => {
+    const client = await connect();
+    const tools = await client.listTools();
+    const tool = tools.tools.find((t) => t.name === "list_audits");
+    expect(tool?.description).toContain("queued, pending or running");
+  });
+});
+
 describe("list_audits page-limit notice rendering", () => {
   test("no clamped runs: single JSON block, no warn line", async () => {
     stubActiveRunsFetch({
