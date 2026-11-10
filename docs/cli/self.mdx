@@ -256,6 +256,17 @@ Passed: 5 | Warnings: 1 | Failed: 0
 - Content store size, its cap and the last eviction
 - The bundled page classifier: its artifact version, the featurizer it was built for and its load time
 
+When an update is waiting, the auto-update line ends with its state in brackets, for example `update ready: v0.0.42 → v0.0.43 (attempting)`. The same state decides what the banner prints and whether the update prompt shows:
+
+| State | Meaning |
+|-------|---------|
+| `pending` | An update is waiting and nothing is in flight |
+| `attempting` | A background install was tried within the last hour; the next try waits for that window |
+| `fallback` | The background install failed to land the same version twice; the banner asks you to run `squirrel self update` |
+| `snoozed` | You declined the update prompt; it stays quiet until the snooze ends |
+| `dismissed` | You dismissed this version with `squirrel self update --dismiss` |
+| `applied` | The update already took effect |
+
 The content store line reads like this:
 
 ```text
@@ -537,6 +548,8 @@ Output:
 ## settings
 
 Manage CLI settings stored at `~/.squirrel/settings.json` or `.squirrel/settings.json` (local project).
+
+Writes are safe to overlap. Each writer changes only its own keys under a short-lived lock file (`settings.json.lock` beside the settings file), so a background auto-update can no longer wipe the login token or another setting that a foreground command saved at the same moment. A lock left by a dead or hung process is taken over after 10 seconds.
 
 ### Subcommands
 

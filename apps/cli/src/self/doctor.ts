@@ -42,6 +42,7 @@ import {
   loadUserSettings,
   DEFAULT_UPDATE_CHECK_INTERVAL_HOURS,
 } from "./settings";
+import { currentUpdateState } from "./updater";
 
 export function runDoctorChecks(
   options: { extraChecks?: DoctorCheck[] } = {}
@@ -407,7 +408,7 @@ function checkUpdateStatus(): DoctorCheck {
   // version still surfaces even when automatic updates are off.
   const pending = settings.pending_update_notification;
   const pendingNote = pending
-    ? ` — update ready: v${pending.from_version} → v${pending.to_version}`
+    ? ` — update ready: v${pending.from_version} → v${pending.to_version} (${currentUpdateState(settings)})`
     : "";
 
   if (!settings.auto_update) {

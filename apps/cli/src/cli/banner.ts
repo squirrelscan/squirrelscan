@@ -22,9 +22,10 @@ import {
 } from "@/constants";
 import { getUnmanagedUpdateHint, isManagedInstall } from "@/self/paths";
 import { trackTelemetryEvent } from "@/self/telemetry";
+import { isPromptSnoozed } from "@/self/update-state";
 import {
   isAutoUpdateEligible,
-  isAutoUpdateFallbackActive,
+  currentUpdateState,
   updateLandingWarnings,
 } from "@/self/updater";
 
@@ -84,15 +85,15 @@ export function printUpdateNotification(settings: UserSettings) {
   // Validate version strings
   if (!notification.from_version || !notification.to_version) return;
 
-  // Check if this version was dismissed
-  if (settings.dismissed_update_version === notification.to_version) return;
+  const state = currentUpdateState(settings);
+  if (state === "dismissed") return;
 
   // #1085: a background updater that keeps dying (Windows job teardown, #1074)
   // would otherwise reassure the user "handled in the background" forever. Once
   // it has failed the same version enough times, show the loud manual box with
   // one honest line instead — always the managed hint, since fallback requires
   // an eligible (managed) install.
-  if (isAutoUpdateFallbackActive(settings)) {
+  if (state === "fallback") {
     const box = buildUpdateBox([
       `Update available: v${notification.from_version} → v${notification.to_version}`,
       "Background update didn't complete on this system.",
@@ -157,7 +158,7 @@ export function printUpdateNotification(settings: UserSettings) {
  */
 export function printEndOfRunUpdateReminder(settings: UserSettings): void {
   if (!settings.notifications) return;
-  if (!isAutoUpdateFallbackActive(settings)) return;
+  if (currentUpdateState(settings) !== "fallback") return;
 
   const notification = settings.pending_update_notification;
   if (!notification?.to_version) return;
@@ -302,8 +303,8 @@ export async function promptForUpdate(
   const notification = settings.pending_update_notification;
   if (!notification) return;
 
-  // Check if this version was dismissed
-  if (settings.dismissed_update_version === notification.to_version) return;
+  const state = currentUpdateState(settings);
+  if (state === "dismissed") return;
 
   // The background auto-updater handles eligible installs — never prompt
   // on top of an in-flight silent update. Unmanaged installs can't be
@@ -319,11 +320,8 @@ export async function promptForUpdate(
     !args.output;
   if (!isInteractive) return;
 
-  // Check if snoozed
-  if (settings.update_prompt_snoozed_until) {
-    const snoozedUntil = new Date(settings.update_prompt_snoozed_until);
-    if (snoozedUntil > new Date()) return; // Still snoozed
-  }
+  // Snooze suppresses the prompt whatever else the state is (it outranks applied and fallback here).
+  if (isPromptSnoozed(settings, Date.now())) return;
 
   // Prompt user
   const rl = createInterface({
