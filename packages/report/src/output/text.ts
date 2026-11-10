@@ -1,6 +1,7 @@
 // Plain text report output
 
 import type { ReportBranding } from "@squirrelscan/core-contracts";
+import { isAuditFailed } from "@squirrelscan/core-contracts";
 import type { AuditReport, CheckResult } from "../types";
 import { AUDIT_FAILURE_NEXT_STEP } from "@squirrelscan/core-contracts/failure-reason";
 import { cacheReasonsLabel, cacheStatsSummaryLine } from "../cache-stats";
@@ -307,7 +308,7 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
   // Failed/blocked audit (#489): show the state, never a "0/100 (F)" grade.
   // #792: a block is the SITE refusing our crawler, not our infra; say so and
   // give actionable next steps.
-  if (report.status === "failed" || report.status === "blocked") {
+  if (isAuditFailed(report.status)) {
     const blocked = report.status === "blocked";
     const throttled = !!report.rateLimited && report.rateLimited.pages > 0;
     write(blocked ? "AUDIT BLOCKED" : "AUDIT FAILED");
@@ -565,7 +566,7 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
       }
       write("");
     }
-  } else if (report.status !== "failed" && report.status !== "blocked") {
+  } else if (!isAuditFailed(report.status)) {
     // #792: don't claim "No issues found" for a 0-page failed/blocked run —
     // nothing was audited (state shown above), the site isn't necessarily clean.
     write("No issues found");

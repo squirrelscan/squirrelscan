@@ -613,7 +613,27 @@ export type AuditStatus = "completed" | "failed" | "blocked" | "partial";
 export function auditStatusToLifecycle(
   status: AuditStatus | null | undefined,
 ): "completed" | "failed" {
-  return status === "failed" || status === "blocked" ? "failed" : "completed";
+  return isAuditFailed(status) ? "failed" : "completed";
+}
+
+/**
+ * Whether the audit did not really happen: the site was down, walled or had no auditable page, so
+ * `failed` or `blocked` (#1662). `partial` is not failed: a real audit ran and covered less than
+ * the whole site. An absent status is `completed`, so it is not failed either. This is the one
+ * definition behind every "failed or blocked" check, so a report rebuilt by `squirrel report` and
+ * the live run cannot read the same status differently.
+ */
+export function isAuditFailed(status: AuditStatus | null | undefined): boolean {
+  return status === "failed" || status === "blocked";
+}
+
+/**
+ * Whether the health score must read N/A for this status. The same statuses as {@link isAuditFailed}
+ * today (a `partial` audit keeps the score of the pages it graded, #1829); it is a separate name so
+ * a status that fails but keeps a score, or the reverse, changes one place.
+ */
+export function isScoreless(status: AuditStatus | null | undefined): boolean {
+  return isAuditFailed(status);
 }
 
 /**

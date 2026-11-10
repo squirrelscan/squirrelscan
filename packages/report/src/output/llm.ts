@@ -1,6 +1,7 @@
 // Compact LLM-optimized report
 
 import type { AuditReport, CheckItem } from "../types";
+import { isAuditFailed } from "@squirrelscan/core-contracts";
 import { getScoreGrade } from "../scoring";
 import { getGroupName } from "../categories";
 import { groupIssuesByCategory, flattenIssuesBySeverity, reportPassedRules } from "../grouping";
@@ -274,7 +275,7 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
     lines.push("</status>");
   }
 
-  if (report.status === "failed" || report.status === "blocked") {
+  if (isAuditFailed(report.status)) {
     const reasonAttr = report.statusReason ? ` reason="${escapeXml(report.statusReason)}"` : "";
     const throttled = !!report.rateLimited && report.rateLimited.pages > 0;
     lines.push(`<status state="${report.status}"${reasonAttr}>`);
@@ -347,7 +348,7 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
   // #1258: pages that look like a provider's refusal but carry no block marker. They were audited,
   // so say plainly that their findings may describe the provider's page, not the site's.
   const wafSuspect = safeWafSuspect(report);
-  if (wafSuspect && report.status !== "failed" && report.status !== "blocked") {
+  if (wafSuspect && !isAuditFailed(report.status)) {
     const providers = escapeXml(wafSuspect.providers.join(", "));
     lines.push(`<waf-suspect pages="${wafSuspect.total}" providers="${providers}">`);
     lines.push(

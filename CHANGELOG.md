@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **A report's "failed or blocked" and `--max-duration` partial status each have one definition.** `isAuditFailed` and `isScoreless` in `@squirrelscan/core-contracts` replace the check that was written out in about fifteen places, and one function, `withMaxDurationCut`, now makes a time-limited audit `partial` for both the live run and `squirrel report` rebuilding it from the store, so the two cannot disagree. Reports read as before. (#1662)
+
 ## v0.0.174 (2026-11-11)
 
 Reports say why a rule did not give a verdict (JSON schema 1.9), `squirrel audit` has one exit code precedence with the outcome in the JSON and LLM reports, `--resume` says why it started a new crawl, an expired login is called out, settings writes no longer lose each other, and five rules stop flagging hidden, presentational and symbol-only content.

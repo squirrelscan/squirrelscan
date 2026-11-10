@@ -2,6 +2,7 @@
 
 import type { EditorSummaryView } from "@squirrelscan/report";
 
+import { isAuditFailed } from "@squirrelscan/core-contracts";
 import { stripControlCharsPreservingSgr } from "@squirrelscan/core-contracts/control-chars";
 import { AUDIT_FAILURE_NEXT_STEP } from "@squirrelscan/core-contracts/failure-reason";
 import {
@@ -139,7 +140,7 @@ export function generateConsoleReport(
   // Failed/blocked audit (#489): no real audit happened — show the state, not
   // a (meaningless) grade. Skip the score line and category breakdown entirely.
   // (`partial`/`completed`/absent fall through to the normal score below.)
-  if (report.status === "failed" || report.status === "blocked") {
+  if (isAuditFailed(report.status)) {
     const throttled = !!report.rateLimited && report.rateLimited.pages > 0;
     const label =
       report.status === "blocked"
