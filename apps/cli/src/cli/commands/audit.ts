@@ -46,6 +46,14 @@ import type { AuditOptions } from "@/types";
 import { isEmptyCutTechnologies } from "@/audit/cloud";
 import { decodeFailureLines, isDecodeFailure } from "@/audit/decode-failures";
 import {
+  buildOutcome,
+  computeExitCode,
+  exitWith,
+  applyExitCode,
+  publishSkipReason,
+  type PublishOutcome,
+} from "@/audit/exit-code";
+import {
   normalizeFailOnArgs,
   parseFailOn,
   evaluateFailOn,
@@ -87,9 +95,6 @@ import { emitUnreachableOutcome, unreachableOutcome } from "@/cli/unreachable";
 import { findConfigFile, getGlobalConfigPath, loadConfig } from "@/config";
 import {
   DASHBOARD_URL,
-  EXIT_CODE_REDIRECTED,
-  EXIT_CODE_UNREACHABLE,
-  EXIT_CODE_WAF_BLOCKED,
   MAX_PAGES_CAP,
   MAX_CRAWL_CONCURRENCY,
   STATUS_REQUEST_TIMEOUT_MS,
@@ -1372,7 +1377,7 @@ export const audit = defineCommand({
       console.error(
         `${fmt.red("Error:")} ${startCheck.ok ? "Invalid URL" : startCheck.error}`
       );
-      process.exitCode = 1;
+      exitWith({ early: "validation" });
       return;
     }
     if (startCheck.ok && startCheck.strippedCredentials) {
@@ -1440,7 +1445,7 @@ export const audit = defineCommand({
     });
     if (flagError) {
       console.error(flagError);
-      process.exitCode = 1;
+      exitWith({ early: "validation" });
       return;
     }
 
@@ -1450,7 +1455,7 @@ export const audit = defineCommand({
       const formatResult = validateFormat(args.format);
       if (!formatResult.ok) {
         console.error(`${fmt.red("Error:")} ${formatResult.error.message}`);
-        process.exitCode = 1;
+        exitWith({ early: "validation" });
         return;
       }
     }
@@ -1463,7 +1468,7 @@ export const audit = defineCommand({
     );
     if (failOn.errors.length > 0) {
       for (const e of failOn.errors) console.error(e);
-      process.exitCode = 1;
+      exitWith({ early: "validation" });
       return;
     }
 
@@ -1474,7 +1479,7 @@ export const audit = defineCommand({
     );
     if (headerParse.errors.length > 0) {
       for (const e of headerParse.errors) console.error(e);
-      process.exitCode = 1;
+      exitWith({ early: "validation" });
       return;
     }
     const customHeaders = headerParse.headers;
@@ -1489,7 +1494,7 @@ export const audit = defineCommand({
       console.error(
         `Invalid --header-host "${badHeaderHost}": use a host name, optionally with an http:// or https:// prefix (no wildcard or userinfo)`
       );
-      process.exitCode = 1;
+      exitWith({ early: "validation" });
       return;
     }
 
@@ -1503,7 +1508,7 @@ export const audit = defineCommand({
     );
     if (ruleFilter.errors.length > 0) {
       for (const e of ruleFilter.errors) console.error(e);
-      process.exitCode = 1;
+      exitWith({ early: "validation" });
       return;
     }
     const ruleFilterActive =
@@ -1521,7 +1526,7 @@ export const audit = defineCommand({
     );
     if (spacedValue) {
       console.error(`${fmt.red("Error:")} ${spacedValue}`);
-      process.exitCode = 1;
+      exitWith({ early: "validation" });
       return;
     }
 
@@ -1534,7 +1539,7 @@ export const audit = defineCommand({
     const levelFlag = readLevelFlag(args);
     if (!levelFlag.ok) {
       console.error(`${fmt.red("Error:")} ${levelFlag.error}`);
-      process.exitCode = 1;
+      exitWith({ early: "validation" });
       return;
     }
 
@@ -1547,7 +1552,7 @@ export const audit = defineCommand({
     });
     if (!probeFlagCheck.ok) {
       console.error(`${fmt.red("Error:")} ${probeFlagCheck.error}`);
-      process.exitCode = 1;
+      exitWith({ early: "validation" });
       return;
     }
 
@@ -1560,7 +1565,7 @@ export const audit = defineCommand({
       console.error(
         `${fmt.red("Error:")} ${unknownLevelMessage(levelFlag.raw)}`
       );
-      process.exitCode = 1;
+      exitWith({ early: "validation" });
       return;
     }
 
@@ -1570,7 +1575,7 @@ export const audit = defineCommand({
       console.error(
         `--summary only applies to console output, got --format ${args.format}`
       );
-      process.exitCode = 1;
+      exitWith({ early: "validation" });
       return;
     }
 
@@ -1629,7 +1634,7 @@ export const audit = defineCommand({
         console.error(
           `${fmt.red("Error:")} Plugin load failed: ${error instanceof Error ? error.message : String(error)}`
         );
-        process.exitCode = 1;
+        exitWith({ early: "validation" });
         return;
       }
       const pluginRuleNamespaces =
@@ -1641,7 +1646,7 @@ export const audit = defineCommand({
         );
         if (pendingErrors.length > 0) {
           for (const e of pendingErrors) console.error(e);
-          process.exitCode = 1;
+          exitWith({ early: "validation" });
           return;
         }
       }
@@ -1664,7 +1669,7 @@ export const audit = defineCommand({
           console.error(
             "--rule-include/--rule-exclude contradict each other: every included category is also excluded, so no rules would run"
           );
-          process.exitCode = 1;
+          exitWith({ early: "validation" });
           return;
         }
         for (const c of failOn.conditions) {
@@ -1680,7 +1685,7 @@ export const audit = defineCommand({
             console.error(
               `--fail-on "${c.raw}": category "${c.category}" is excluded by --rule-include/--rule-exclude this run`
             );
-            process.exitCode = 1;
+            exitWith({ early: "validation" });
             return;
           }
         }
@@ -1728,7 +1733,7 @@ export const audit = defineCommand({
         console.error(
           "Check every rule option with `squirrel config validate`."
         );
-        process.exitCode = 1;
+        exitWith({ early: "validation" });
         return;
       }
 
@@ -1864,7 +1869,7 @@ export const audit = defineCommand({
           if (invalidCredential && credentialSource === "env") {
             log("");
             console.error(envTokenRejectedMessage());
-            process.exitCode = 1;
+            exitWith({ early: "validation" });
             return;
           }
           // 401 → token expired/revoked server-side; anything else (timeout,
@@ -1920,7 +1925,7 @@ export const audit = defineCommand({
         console.error(
           `${fmt.red("Error:")} ${unknownLevelMessage(levelInput)}`
         );
-        process.exitCode = 1;
+        exitWith({ early: "validation" });
         return;
       }
 
@@ -1943,7 +1948,7 @@ export const audit = defineCommand({
       });
       if (!probeResolution.ok) {
         console.error(`${fmt.red("Error:")} ${probeResolution.error}`);
-        process.exitCode = 1;
+        exitWith({ early: "validation" });
         return;
       }
       const probing = probeResolution.value;
@@ -1963,7 +1968,7 @@ export const audit = defineCommand({
         console.error(
           `${fmt.red("Error:")} unknown --render-mode '${renderModeArg}'. Valid: off, auto, all.`
         );
-        process.exitCode = 1;
+        exitWith({ early: "validation" });
         return;
       }
       // The render setting the user chose (flags > [cloud] render > [cloud]
@@ -1990,7 +1995,7 @@ export const audit = defineCommand({
         console.error(
           `${fmt.red("Error:")} --max-pages must be a positive integer (got '${args["max-pages"]}').`
         );
-        process.exitCode = 1;
+        exitWith({ early: "validation" });
         return;
       }
       // Clamp and SAY SO (#1909). Silently applying the cap made a request for
@@ -2032,7 +2037,7 @@ export const audit = defineCommand({
           console.error(
             `${fmt.red("Error:")} --max-depth must be a positive integer (got '${args["max-depth"]}').`
           );
-          process.exitCode = 1;
+          exitWith({ early: "validation" });
           return;
         }
         maxDepth = parsed;
@@ -2055,7 +2060,7 @@ export const audit = defineCommand({
         perHostConcurrency === null ||
         maxDurationSeconds === null
       ) {
-        process.exitCode = 1;
+        exitWith({ early: "validation" });
         return;
       }
 
@@ -2093,7 +2098,7 @@ export const audit = defineCommand({
         if (earlyStoreProblems.length > 0) {
           commandResult = "error";
           log(`✗ ${formatStoreProblems(earlyStoreProblems)}`);
-          process.exitCode = 1;
+          exitWith({ early: "validation" });
           return;
         }
         const reportGoesToStdoutEarly =
@@ -2117,7 +2122,7 @@ export const audit = defineCommand({
             format: args.format,
             output: args.output,
           });
-          process.exitCode = EXIT_CODE_REDIRECTED;
+          exitWith({ early: "redirected" });
           return;
         }
         if (resolved.url !== startParsed.url) {
@@ -2279,7 +2284,7 @@ export const audit = defineCommand({
       if (storeProblems.length > 0) {
         commandResult = "error";
         log(`✗ ${formatStoreProblems(storeProblems)}`);
-        process.exitCode = 1;
+        exitWith({ early: "validation" });
         return;
       }
 
@@ -2969,7 +2974,7 @@ export const audit = defineCommand({
           // diagnosable from telemetry without prod-DB forensics.
           phaseTimingsMs: phaseTimingsFromError(result.error.details),
         });
-        process.exitCode = 1;
+        exitWith({ early: "error" });
         // #1269: an unreachable start URL is a report, not a bare failure: the
         // format asked for says so, and the exit code is its own.
         if (result.error.code === ErrorCodes.UNREACHABLE) {
@@ -2986,7 +2991,7 @@ export const audit = defineCommand({
             ),
             { format: args.format, output: args.output }
           );
-          process.exitCode = EXIT_CODE_UNREACHABLE;
+          exitWith({ early: "unreachable" });
         }
         return;
       }
@@ -3197,54 +3202,61 @@ export const audit = defineCommand({
           `--include-pages only applies to --format json; the ${format} report has no pages list`
         );
       }
-      if (format === "console") {
-        generateConsoleReport(report, {
-          summaryOnly: args.summary,
-          includePassed,
-          ...(ruleFilterActive ? { ruleFilter } : {}),
-        });
-      } else if (format === "text") {
-        generateTextReport(
-          report,
-          options.outputPath,
-          reportBranding,
-          includePassed
-        );
-      } else if (format === "json") {
-        // stdout by default, file if -o provided
-        generateJsonReport(
-          report,
-          options.outputPath,
-          includePassed,
-          includePages
-        );
-      } else if (format === "html") {
-        // file by default - HTML needs a browser
-        const hostname = new URL(report.baseUrl).hostname;
-        const htmlPath = options.outputPath ?? `${hostname}-report.html`;
-        generateHtmlReport(report, htmlPath, reportBranding, includePassed);
-      } else if (format === "markdown") {
-        generateMarkdownReport(
-          report,
-          options.outputPath,
-          reportBranding,
-          includePassed
-        );
-      } else if (format === "xml") {
-        generateXmlReport(
-          report,
-          options.outputPath,
-          reportBranding,
-          includePassed
-        );
-      } else if (format === "llm") {
-        generateLlmReport(
-          report,
-          options.outputPath,
-          includePassed,
-          includeInfo
-        );
-      }
+      // The JSON and LLM reports carry the outcome (exit code, status, publish result), which
+      // is only known once the publish phase has run, so they are written after it (#1657).
+      // Every other format is written here, as before.
+      const emitReport = (): void => {
+        if (format === "console") {
+          generateConsoleReport(report, {
+            summaryOnly: args.summary,
+            includePassed,
+            ...(ruleFilterActive ? { ruleFilter } : {}),
+          });
+        } else if (format === "text") {
+          generateTextReport(
+            report,
+            options.outputPath,
+            reportBranding,
+            includePassed
+          );
+        } else if (format === "json") {
+          // stdout by default, file if -o provided
+          generateJsonReport(
+            report,
+            options.outputPath,
+            includePassed,
+            includePages
+          );
+        } else if (format === "html") {
+          // file by default - HTML needs a browser
+          const hostname = new URL(report.baseUrl).hostname;
+          const htmlPath = options.outputPath ?? `${hostname}-report.html`;
+          generateHtmlReport(report, htmlPath, reportBranding, includePassed);
+        } else if (format === "markdown") {
+          generateMarkdownReport(
+            report,
+            options.outputPath,
+            reportBranding,
+            includePassed
+          );
+        } else if (format === "xml") {
+          generateXmlReport(
+            report,
+            options.outputPath,
+            reportBranding,
+            includePassed
+          );
+        } else if (format === "llm") {
+          generateLlmReport(
+            report,
+            options.outputPath,
+            includePassed,
+            includeInfo
+          );
+        }
+      };
+      const deferEmission = format === "json" || format === "llm";
+      if (!deferEmission) emitReport();
 
       // Publish to the dashboard (auto when signed in + online, or forced with
       // --publish). Opt out per-run with --no-publish/--offline, persistently
@@ -3324,6 +3336,42 @@ export const audit = defineCommand({
       // breakdown. NOT a try/finally: the two early returns below already
       // call finalizeCompleted() synchronously before a finally would run,
       // so a finally-based approach would record it AFTER that read.
+      // #1657: what the publish phase did, set once on every path out of it.
+      let publishOutcome: PublishOutcome = {
+        status: "skipped",
+        reason: publishSkipReason({
+          nonPublicHost: !!nonPublicHost,
+          serverIgnoredEphemeral: !!serverIgnoredEphemeral,
+          offline: !!args.offline,
+          ephemeral: !!ephemeral,
+          explicitPublish: !!args.publish,
+          ruleFilterActive: !!ruleFilterActive,
+          noPublish: !!noPublish,
+          configPublish: config.cloud.publish,
+        }),
+      };
+      // The `--fail-on` verdict, computed once the publish phase is over. An explicit publish
+      // that failed outranks the gate, which is then not evaluated (see computeExitCode).
+      let gateEvaluation: ReturnType<typeof evaluateFailOn> | null = null;
+      // The one exit point of a finished audit (#1657): computes the code from the report status,
+      // the publish outcome and the gate, stamps the outcome on the report, writes the JSON or
+      // LLM report that was held back for it, and sets the exit code.
+      const settle = (): void => {
+        const explicitPublishFailed =
+          publishOutcome.status === "failed" && publishOutcome.explicit;
+        gateEvaluation =
+          failOn.conditions.length > 0 && !explicitPublishFailed
+            ? evaluateFailOn(failOn.conditions, report)
+            : null;
+        const { code } = computeExitCode({
+          auditStatus: report.status,
+          publish: publishOutcome,
+          gateTripped: (gateEvaluation?.trips.length ?? 0) > 0,
+        });
+        report.outcome = buildOutcome(code, report.status, publishOutcome);
+        if (deferEmission) emitReport();
+        applyExitCode(code);
+      };
       const publishPhaseStart = performance.now();
       const recordPublishPhase = (): void => {
         report.phaseTimingsMs = {
@@ -3352,10 +3400,15 @@ export const audit = defineCommand({
           log(
             `Invalid visibility: ${visibility}. Use: public, unlisted, or private`
           );
+          publishOutcome = {
+            status: "failed",
+            reason: "invalid-visibility",
+            explicit: !isAutoPublish,
+          };
           if (!isAutoPublish) {
             recordPublishPhase();
             finalizeCompleted(null);
-            process.exitCode = 1;
+            settle();
             return;
           }
           autoPublishError = `Auto-publish skipped: invalid visibility "${visibility}"`;
@@ -3379,6 +3432,11 @@ export const audit = defineCommand({
                 : `Failed to publish: ${publishResult.error.message}`
             );
             printDatabaseLockWarningIfNeeded(publishResult.error.message, log);
+            publishOutcome = {
+              status: "failed",
+              reason: String(publishResult.error.code ?? "unknown"),
+              explicit: !isAutoPublish,
+            };
             if (!isAutoPublish) {
               recordPublishPhase();
               finalizeCompleted(
@@ -3386,13 +3444,14 @@ export const audit = defineCommand({
                 publishResult.error.message,
                 publishResult.error.code
               );
-              process.exitCode = 1;
+              settle();
               return;
             }
             autoPublishError = publishResult.error.message;
             autoPublishErrorCode = publishResult.error.code;
           } else {
             publishedReportId = publishResult.data.id;
+            publishOutcome = { status: "published", id: publishResult.data.id };
             // #1179: the server re-merges the published payload against the
             // cross-audit finding store, so its score can differ from the local
             // estimate the console report above already printed. Adopt the
@@ -3460,6 +3519,7 @@ export const audit = defineCommand({
         }
         recordPublishPhase();
       }
+      settle();
 
       // Sync detected tech to the dashboard (per-website + global per-domain).
       // Non-published path only — a published run syncs in the report-publish
@@ -3579,22 +3639,6 @@ export const audit = defineCommand({
         if (fresh.ok) printEndOfRunUpdateReminder(fresh.data);
       }
 
-      // Failed/blocked audit (#489): the audit didn't really happen (down/403/
-      // 0-page), so exit non-zero even without an explicit --fail-on gate, so CI
-      // doesn't read a down site as success: 1 = operational failure, 3 = blocked
-      // (#1269). An unreachable start URL never gets here: it exits 5 above.
-      if (report.status === "failed" || report.status === "blocked") {
-        process.exitCode = 1;
-        // #1253: the audited page was a WAF or bot-manager challenge or block
-        // page. A distinct code, so a batch or CI job can tell "the site's
-        // perimeter refused us" from a down site. #1269: every blocked report
-        // gets it, whether or not a vendor was identified (a bare 403 or 429
-        // "Request blocked by server" has no wafBlocked record).
-        if (report.status === "blocked") {
-          process.exitCode = EXIT_CODE_WAF_BLOCKED;
-        }
-      }
-
       // First-run funnel: the install's first audit reports once, as success
       // or a bounded failure class (never a URL, host or message).
       if (!args.offline) {
@@ -3613,16 +3657,11 @@ export const audit = defineCommand({
         );
       }
 
-      // CI/agent gating: evaluate --fail-on against the finished report and
-      // set a non-zero exit code (2 = gate tripped) so CI can fail the build.
-      // Report + footer already printed above so the gate never hides output.
-      // (A failed/blocked audit already skips the gate — see evaluateFailOn.)
-      if (failOn.conditions.length > 0) {
-        const evaluation = evaluateFailOn(failOn.conditions, report);
-        for (const line of formatFailOnSummary(evaluation)) log(line);
-        if (evaluation.trips.length > 0) {
-          process.exitCode = 2;
-        }
+      // CI/agent gating: the --fail-on verdict was computed in settle() so it takes part in the
+      // exit code; the summary prints here, after the report and footer, so the gate never hides
+      // output. (A failed/blocked audit skips the gate, see evaluateFailOn.)
+      if (gateEvaluation) {
+        for (const line of formatFailOnSummary(gateEvaluation)) log(line);
       }
     } catch (e) {
       commandResult = "error";
