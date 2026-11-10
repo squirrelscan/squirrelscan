@@ -13,7 +13,6 @@ import {
 import { constants as osConstants, platform } from "node:os";
 import { basename, dirname, join } from "node:path";
 
-import { AUTO_UPDATE_FALLBACK_THRESHOLD } from "@/constants";
 import { type Result, ok, err, commandError } from "@/controllers/types";
 import { logger } from "@/utils/logger";
 
@@ -51,9 +50,14 @@ import {
   shouldCheckForUpdates,
 } from "./settings";
 import { trackTelemetryEvent } from "./telemetry";
+import {
+  isAttemptThrottled,
+  isVersionDismissed,
+  updateState,
+  type UpdateState,
+} from "./update-state";
 
 const BACKGROUND_CHECK_TIMEOUT_MS = 10000; // 10s max for background check
-const AUTO_UPDATE_ATTEMPT_INTERVAL_HOURS = 1; // throttle background installs
 // Grace given to a still-running in-process (Windows) auto-update after the
 // command finishes: enough to let an almost-done download complete, short
 // enough that the CLI never feels hung. Aborted attempts retry on a later
@@ -102,34 +106,12 @@ export function isAutoUpdateEligible(settings: UserSettings): boolean {
   return settings.auto_update && isManagedInstall();
 }
 
-/**
- * True when an eligible install's background auto-update has failed to land
- * the SAME pending version AUTO_UPDATE_FALLBACK_THRESHOLD+ times — the #1074
- * signature (a killed updater tells the user "handled in the background" on
- * every run while nothing ever installs). In this state the CLI drops the
- * reassuring one-liner for the loud "run: squirrel self update" box.
- *
- * Requires the counter's version to still match the pending notification and
- * the update never to have applied for that version.
- */
-export function isAutoUpdateFallbackActive(settings: UserSettings): boolean {
-  if (!isAutoUpdateEligible(settings)) return false;
-
-  const notification = settings.pending_update_notification;
-  if (!notification?.to_version) return false;
-  if (settings.dismissed_update_version === notification.to_version)
-    return false;
-
-  const attempts = settings.auto_update_attempts;
-  if (!attempts || attempts.version !== notification.to_version) return false;
-  if (attempts.count < AUTO_UPDATE_FALLBACK_THRESHOLD) return false;
-
-  // A successful install for this exact version clears the counter, but guard
-  // anyway: never nag when the applied marker already matches the target.
-  const applied = settings.auto_update_applied;
-  if (applied && applied.to_version === notification.to_version) return false;
-
-  return true;
+/** The derived update state for this install (#1660). */
+export function currentUpdateState(settings: UserSettings): UpdateState {
+  return updateState(settings, {
+    managed: isManagedInstall(),
+    now: Date.now(),
+  });
 }
 
 /**
@@ -268,7 +250,7 @@ async function doBackgroundUpdateCheck(
     }
 
     // Don't notify if this version was already dismissed
-    if (settings.dismissed_update_version === manifest.version) {
+    if (isVersionDismissed(settings, manifest.version)) {
       logger.debug("update-check: update dismissed by user");
       await updateSettings({ last_update_check: timestamp });
       return;
@@ -345,14 +327,14 @@ export function maybeSpawnAutoUpdate(settings: UserSettings): void {
     skip(settings.auto_update ? "unmanaged_install" : "auto_update_disabled");
     return;
   }
-  if (settings.dismissed_update_version === notification.to_version) {
+  if (isVersionDismissed(settings, notification.to_version)) {
     skip("dismissed");
     return;
   }
 
   // Silent: fires on every run inside the window; the attempt it throttles
   // against was already reported.
-  if (isAutoUpdateAttemptThrottled(settings)) return;
+  if (isAttemptThrottled(settings, Date.now())) return;
 
   // Record intent-to-attempt before dispatch — a crashing/killed updater must
   // not retry on every subsequent run. This is the THROTTLE only; it does not
@@ -420,20 +402,6 @@ function spawnDetachedAutoUpdate(): boolean {
 }
 
 /**
- * Hourly throttle shared by every auto-install dispatch path (background spawn,
- * Windows inline, foreground apply): one download attempt per hour, however
- * often the CLI runs. A corrupt timestamp parses to NaN and every comparison
- * with NaN is false, so it reads as "not throttled" — the safe direction.
- */
-function isAutoUpdateAttemptThrottled(settings: UserSettings): boolean {
-  if (!settings.last_auto_update_attempt) return false;
-  const hoursSinceAttempt =
-    (Date.now() - Date.parse(settings.last_auto_update_attempt)) /
-    (1000 * 60 * 60);
-  return hoursSinceAttempt < AUTO_UPDATE_ATTEMPT_INTERVAL_HOURS;
-}
-
-/**
  * Advance the per-version failed-attempt counter, but ONLY when an update
  * genuinely starts (#1085): an inline start deferred by commandSettled, or a
  * spawn that throws, never runs — counting it would trip the loud fallback
@@ -493,9 +461,8 @@ export function foregroundUpdateTarget(settings: UserSettings): string | null {
 
   if (updateSuppressedReason()) return null; // CI / SQUIRREL_NO_UPDATE
   if (!isAutoUpdateEligible(settings)) return null; // opted out / unmanaged
-  if (settings.dismissed_update_version === notification.to_version)
-    return null;
-  if (isAutoUpdateAttemptThrottled(settings)) return null;
+  if (isVersionDismissed(settings, notification.to_version)) return null;
+  if (isAttemptThrottled(settings, Date.now())) return null;
   // Another updater already owns the install. Gate on it HERE, not by letting
   // runAutoUpdate fail on the lock: reaching that point would already have
   // announced an update to the user and burnt the hourly throttle for work
@@ -561,7 +528,7 @@ export async function applyPendingUpdateInForeground(
     const applied = current.data.auto_update_applied;
     const alreadyInstalled =
       applied?.to_version === target &&
-      current.data.dismissed_update_version !== target
+      !isVersionDismissed(current.data, target)
         ? releaseBinaryIfPresent(target)
         : null;
     if (alreadyInstalled) {
@@ -961,7 +928,7 @@ export async function runAutoUpdate(options?: {
     }
 
     const manifest = updateResult.data.manifest;
-    if (settings.dismissed_update_version === manifest.version) return null;
+    if (isVersionDismissed(settings, manifest.version)) return null;
 
     const applyResult = await performUpdate(manifest, settings, {
       ...options,
@@ -1174,7 +1141,7 @@ async function performUpdate(
   // update outranks an earlier dismissal.
   if (options?.abortIfDismissed) {
     const fresh = loadSettings();
-    if (fresh.ok && fresh.data.dismissed_update_version === manifest.version) {
+    if (fresh.ok && isVersionDismissed(fresh.data, manifest.version)) {
       return err(
         commandError(
           "UPDATE_DISMISSED",

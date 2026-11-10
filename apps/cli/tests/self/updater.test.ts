@@ -43,7 +43,7 @@ import {
   finishInlineAutoUpdate,
   FOREGROUND_UPDATE_ENV,
   foregroundUpdateTarget,
-  isAutoUpdateFallbackActive,
+  currentUpdateState,
   maybeSpawnAutoUpdate,
   reexecIntoUpdatedBinary,
   resetUpdaterStateForTests,
@@ -786,7 +786,7 @@ describe("updater", () => {
 
   // #1085: the predicate the banner uses to switch from the reassuring
   // one-liner to the loud manual-update box.
-  describe("isAutoUpdateFallbackActive (#1085)", () => {
+  describe("fallback update state (#1085, #1660)", () => {
     function fallbackSettings(
       overrides: Partial<UserSettings> = {}
     ): UserSettings {
@@ -804,35 +804,35 @@ describe("updater", () => {
 
     test("true after threshold failures for the pending version (managed)", () => {
       spyOn(pathsModule, "isManagedInstall").mockReturnValue(true);
-      expect(isAutoUpdateFallbackActive(fallbackSettings())).toBe(true);
+      expect(currentUpdateState(fallbackSettings())).toBe("fallback");
     });
 
     test("false below the threshold", () => {
       spyOn(pathsModule, "isManagedInstall").mockReturnValue(true);
       expect(
-        isAutoUpdateFallbackActive(
+        currentUpdateState(
           fallbackSettings({
             auto_update_attempts: { version: "0.0.2", count: 1 },
           })
         )
-      ).toBe(false);
+      ).not.toBe("fallback");
     });
 
     test("false when the counter is for a different version", () => {
       spyOn(pathsModule, "isManagedInstall").mockReturnValue(true);
       expect(
-        isAutoUpdateFallbackActive(
+        currentUpdateState(
           fallbackSettings({
             auto_update_attempts: { version: "0.0.1", count: 9 },
           })
         )
-      ).toBe(false);
+      ).not.toBe("fallback");
     });
 
     test("false once the update has applied for that version", () => {
       spyOn(pathsModule, "isManagedInstall").mockReturnValue(true);
       expect(
-        isAutoUpdateFallbackActive(
+        currentUpdateState(
           fallbackSettings({
             auto_update_applied: {
               from_version: "0.0.1",
@@ -841,21 +841,21 @@ describe("updater", () => {
             },
           })
         )
-      ).toBe(false);
+      ).not.toBe("fallback");
     });
 
     test("false for an unmanaged (ineligible) install", () => {
       spyOn(pathsModule, "isManagedInstall").mockReturnValue(false);
-      expect(isAutoUpdateFallbackActive(fallbackSettings())).toBe(false);
+      expect(currentUpdateState(fallbackSettings())).not.toBe("fallback");
     });
 
     test("false when the pending version was dismissed", () => {
       spyOn(pathsModule, "isManagedInstall").mockReturnValue(true);
       expect(
-        isAutoUpdateFallbackActive(
+        currentUpdateState(
           fallbackSettings({ dismissed_update_version: "0.0.2" })
         )
-      ).toBe(false);
+      ).not.toBe("fallback");
     });
   });
 
