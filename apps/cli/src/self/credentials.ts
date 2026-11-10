@@ -26,7 +26,7 @@ import { DEFAULT_API_URL, getApiUrl } from "./api";
 import {
   formatSessionLoadWarning,
   loadUserSettings,
-  updateSettings,
+  updateSettingsWith,
 } from "./settings";
 
 /** Preferred env var that supplies a bearer token for headless / CI auth. */
@@ -145,17 +145,23 @@ export function credentialState(): CredentialState {
  */
 export function markLoginRejected(token: string): void {
   if (getApiUrl() !== DEFAULT_API_URL) return;
+  // A cheap read outside the lock, so a 401 for a token that is not the stored login (an env token) never
+  // takes the lock or rewrites the file. It decides nothing: the compare is made again below, under the lock.
   const settings = loadUserSettings();
-  if (!settings.ok) return;
-  const auth = settings.data.auth;
-  if (!auth || auth.token !== token) return;
-  // Already remembered and still within the window: nothing to refresh.
-  if (
-    auth.rejectedAt &&
-    Date.now() - Date.parse(auth.rejectedAt) < REJECTED_LOGIN_TTL_MS
-  )
-    return;
-  updateSettings({ auth: { ...auth, rejectedAt: new Date().toISOString() } });
+  if (!settings.ok || settings.data.auth?.token !== token) return;
+  // The compare and the write happen under the settings lock (#1660): a login that landed since the read above
+  // has replaced `auth` wholesale, and stamping the old token's `auth` over it would undo that login.
+  updateSettingsWith((current) => {
+    const auth = current.auth;
+    if (!auth || auth.token !== token) return {};
+    // Already remembered and still within the window: nothing to refresh.
+    if (
+      auth.rejectedAt &&
+      Date.now() - Date.parse(auth.rejectedAt) < REJECTED_LOGIN_TTL_MS
+    )
+      return {};
+    return { auth: { ...auth, rejectedAt: new Date().toISOString() } };
+  });
 }
 
 /** The one line a command prints to stderr when the stored login cannot be used. Null for any other state. */

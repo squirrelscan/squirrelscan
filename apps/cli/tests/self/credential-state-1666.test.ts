@@ -25,12 +25,21 @@ const updates: Array<Partial<UserSettings>> = [];
 const loadSpy = spyOn(settingsModule, "loadUserSettings").mockImplementation(
   () => ok({ ...settingsModule.DEFAULT_SETTINGS, auth: stubbedAuth })
 );
-const updateSpy = spyOn(settingsModule, "updateSettings").mockImplementation(
-  (u) => {
-    updates.push(u);
-    return ok({ ...settingsModule.DEFAULT_SETTINGS, ...u });
-  }
-);
+// What the file holds once the lock is taken. Unset means what the earlier read saw; a test sets it to
+// stand for a login that landed in between.
+let lockedAuth: Auth | null | undefined;
+const updateSpy = spyOn(
+  settingsModule,
+  "updateSettingsWith"
+).mockImplementation((build) => {
+  const current = {
+    ...settingsModule.DEFAULT_SETTINGS,
+    auth: lockedAuth === undefined ? stubbedAuth : lockedAuth,
+  };
+  const patch = build(current);
+  if (Object.keys(patch).length > 0) updates.push(patch);
+  return ok({ ...current, ...patch });
+});
 afterAll(() => {
   loadSpy.mockRestore();
   updateSpy.mockRestore();
@@ -148,6 +157,7 @@ beforeEach(() => {
   delete process.env.SQUIRREL_API_TOKEN;
   delete process.env.SQUIRREL_API_SERVER;
   stubbedAuth = null;
+  lockedAuth = undefined;
   updates.length = 0;
   setStaleLoginNoted(false);
 });
@@ -208,6 +218,28 @@ describe("markLoginRejected", () => {
     });
     markLoginRejected("sqcli_test");
     expect(updates).toHaveLength(1);
+  });
+
+  test("the token is compared again under the lock: a login that landed since the read is not stamped", () => {
+    stubbedAuth = auth({ token: "sqcli_old" });
+    // By the time the lock is held, another process has logged in with a new token.
+    lockedAuth = auth({ token: "sqcli_new" });
+    markLoginRejected("sqcli_old");
+    expect(updates).toEqual([]);
+  });
+
+  test("a login that was removed since the read is not written back", () => {
+    stubbedAuth = auth();
+    lockedAuth = null;
+    markLoginRejected("sqcli_test");
+    expect(updates).toEqual([]);
+  });
+
+  test("a token that is not the stored one never takes the lock", () => {
+    stubbedAuth = auth();
+    const before = updateSpy.mock.calls.length;
+    markLoginRejected("sq_env_key");
+    expect(updateSpy.mock.calls.length).toBe(before);
   });
 
   test("with no login stored it writes nothing", () => {
