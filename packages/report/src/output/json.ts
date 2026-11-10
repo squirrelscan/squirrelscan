@@ -3,6 +3,7 @@
 import type {
   AuditOutcome,
   AuditStatusReasonCode,
+  StoreIntegrityEvicted,
   EditorSummaryPriority,
   MaxDurationCut,
   RefusedFetch,
@@ -193,6 +194,8 @@ interface SlimJsonReport {
     requestedUrl?: string;
     /** What `--resume` came to (#1658); present only when the run was asked to resume. */
     resume?: ResumeOutcome;
+    /** Page bodies evicted from the local content store since this audit ran (#1667); absent when none were. */
+    storeIntegrity?: StoreIntegrityEvicted;
     /**
      * A refused off-site seed redirect (#1418). Present only when the seed
      * redirected off its own registrable domain and the crawler declined to
@@ -584,6 +587,8 @@ function buildSlimReport(
       // #1658: what `--resume` came to. Present only when the run was asked to resume, so a
       // consumer can tell a resumed crawl from a fresh one and read why it started fresh.
       ...(report.resume ? { resume: report.resume } : {}),
+      // #1667: page bodies the local content store has evicted since this audit ran. Absent when none were.
+      ...(report.storeIntegrity ? { storeIntegrity: report.storeIntegrity } : {}),
       // Sits next to the `baseUrl` it qualifies (#1418): a consumer reading the
       // graded URL sees, in the same object, that the seed pointed elsewhere.
       ...(refusedSeedRedirect

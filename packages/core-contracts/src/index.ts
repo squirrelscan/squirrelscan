@@ -692,6 +692,18 @@ export interface AuditOutcome {
   };
 }
 
+/**
+ * Set on a report rebuilt from the store when some of its page bodies are gone from the local content
+ * store (#1667). Absent when all are there. The findings in the report do not depend on the bodies.
+ */
+export interface StoreIntegrityEvicted {
+  status: "evicted";
+  /** Stored page bodies no longer in the content store. */
+  evicted: number;
+  /** Page bodies the audit stored. */
+  stored: number;
+}
+
 export interface AuditReport {
   crawlId?: string;
   /**
@@ -743,6 +755,8 @@ export interface AuditReport {
   status?: AuditStatus;
   /** Exit code, audit status and publish result, stamped before the report is written (#1657). */
   outcome?: AuditOutcome;
+  /** Page bodies evicted from the local content store since this audit ran (#1667); absent when none were. */
+  storeIntegrity?: StoreIntegrityEvicted;
   /** Short human reason shown when `status` is failed/blocked (e.g. "No pages were crawled"). */
   statusReason?: string;
   /**
