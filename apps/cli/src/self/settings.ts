@@ -1,7 +1,10 @@
 import {
   chmodSync,
+  closeSync,
   existsSync,
+  fstatSync,
   mkdirSync,
+  openSync,
   readFileSync,
   renameSync,
   statSync,
@@ -561,17 +564,42 @@ function processAlive(pid: number): boolean {
   }
 }
 
+/**
+ * How old a lock file is and what it holds, from ONE open file: the age comes from `fstat` on the descriptor and the text from
+ * a read of the same descriptor, so what was measured and what was read are the same file even if the path is replaced in
+ * between (a separate `stat` then `read` of the path can describe two different files). Null when it cannot be opened
+ * (vanished, unreadable).
+ */
+function readLockFile(path: string): { ageMs: number; text: string } | null {
+  let fd: number | undefined;
+  try {
+    fd = openSync(path, "r");
+    const { mtimeMs } = fstatSync(fd);
+    return { ageMs: Date.now() - mtimeMs, text: readFileSync(fd, "utf-8") };
+  } catch {
+    return null;
+  } finally {
+    if (fd !== undefined) {
+      try {
+        closeSync(fd);
+      } catch {
+        // nothing to do
+      }
+    }
+  }
+}
+
 /** Whether the lock at `lockPath` was left behind: its owner is gone, or it is older than the stale bound. */
 function lockIsStale(lockPath: string, staleMs: number): boolean {
+  const lock = readLockFile(lockPath);
+  // vanished while we looked: not stale yet
+  if (!lock) return false;
+  if (lock.ageMs > staleMs) return true;
   try {
-    const age = Date.now() - statSync(lockPath).mtimeMs;
-    if (age > staleMs) return true;
-    const owner = JSON.parse(readFileSync(lockPath, "utf-8")) as {
-      pid?: number;
-    };
+    const owner = JSON.parse(lock.text) as { pid?: number };
     return typeof owner.pid === "number" && !processAlive(owner.pid);
   } catch {
-    // vanished while we looked, or unreadable (being written): not stale yet
+    // unreadable (being written): not stale yet
     return false;
   }
 }
@@ -590,7 +618,8 @@ function removeStaleLock(lockPath: string, staleMs: number): boolean {
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "EEXIST") {
       try {
-        if (Date.now() - statSync(gate).mtimeMs > staleMs) unlinkSync(gate);
+        const held = readLockFile(gate);
+        if (held && held.ageMs > staleMs) unlinkSync(gate);
       } catch {
         // gate vanished or cannot be removed: retry after a pause
       }
