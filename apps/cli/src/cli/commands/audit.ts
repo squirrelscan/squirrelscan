@@ -47,7 +47,7 @@ import { isEmptyCutTechnologies } from "@/audit/cloud";
 import { decodeFailureLines, isDecodeFailure } from "@/audit/decode-failures";
 import {
   buildOutcome,
-  computeExitCode,
+  createSettler,
   exitWith,
   applyExitCode,
   publishSkipReason,
@@ -1594,6 +1594,8 @@ export const audit = defineCommand({
       input: FinalizeRunInput
     ) => Promise<void> = async () => {};
     let removeSignalHandlers: () => void = () => {};
+    // Settles the finished audit from a path that cannot reach the normal exit point (#1657); set once the report exists.
+    let finishReport: ((reason: string) => void) | undefined;
     try {
       if (!args.offline) {
         trackTelemetryEvent("audit", effectiveSettings);
@@ -2634,6 +2636,12 @@ export const audit = defineCommand({
         if (storeProject) {
           stopInterruptedCrawls(resolveProjectDbPath(storeProject));
         }
+        // #1657: an interrupt during publishing must not lose a report that was held back for it.
+        try {
+          finishReport?.("interrupted");
+        } catch {
+          // Nothing to do: the process is about to be killed by the signal.
+        }
         void finalizeTracked({
           status: "cancelled",
           completedAt: new Date().toISOString(),
@@ -3350,28 +3358,28 @@ export const audit = defineCommand({
           configPublish: config.cloud.publish,
         }),
       };
-      // The `--fail-on` verdict, computed once the publish phase is over. An explicit publish
-      // that failed outranks the gate, which is then not evaluated (see computeExitCode).
-      let gateEvaluation: ReturnType<typeof evaluateFailOn> | null = null;
       // The one exit point of a finished audit (#1657): computes the code from the report status,
-      // the publish outcome and the gate, stamps the outcome on the report, writes the JSON or
-      // LLM report that was held back for it, and sets the exit code.
-      const settle = (): void => {
-        const explicitPublishFailed =
-          publishOutcome.status === "failed" && publishOutcome.explicit;
-        gateEvaluation =
-          failOn.conditions.length > 0 && !explicitPublishFailed
+      // the publish outcome and the `--fail-on` gate, stamps the outcome on the report, sets the
+      // exit code and writes the JSON or LLM report that was held back for it. It runs once, and
+      // `finishReport` runs it from the paths that cannot reach `settle()`: a step of the publish
+      // phase that throws (the catch below) and an interrupt (onSignal).
+      const settler = createSettler({
+        auditStatus: report.status,
+        getPublish: () => publishOutcome,
+        evaluateGate: () =>
+          failOn.conditions.length > 0
             ? evaluateFailOn(failOn.conditions, report)
-            : null;
-        const { code } = computeExitCode({
-          auditStatus: report.status,
-          publish: publishOutcome,
-          gateTripped: (gateEvaluation?.trips.length ?? 0) > 0,
-        });
-        report.outcome = buildOutcome(code, report.status, publishOutcome);
-        if (deferEmission) emitReport();
-        applyExitCode(code);
-      };
+            : null,
+        stamp: (outcome) => {
+          report.outcome = outcome;
+        },
+        emit: () => {
+          if (deferEmission) emitReport();
+        },
+        apply: applyExitCode,
+      });
+      const settle = settler.settle;
+      finishReport = settler.finish;
       const publishPhaseStart = performance.now();
       const recordPublishPhase = (): void => {
         report.phaseTimingsMs = {
@@ -3660,11 +3668,19 @@ export const audit = defineCommand({
       // CI/agent gating: the --fail-on verdict was computed in settle() so it takes part in the
       // exit code; the summary prints here, after the report and footer, so the gate never hides
       // output. (A failed/blocked audit skips the gate, see evaluateFailOn.)
+      const gateEvaluation = settler.gate();
       if (gateEvaluation) {
         for (const line of formatFailOnSummary(gateEvaluation)) log(line);
       }
     } catch (e) {
       commandResult = "error";
+      // A report held back for the outcome (JSON, LLM) is written even though the run threw after
+      // the audit finished; the error still propagates below.
+      try {
+        finishReport?.("exception");
+      } catch {
+        // The original error is the one to surface.
+      }
       const errMessage = e instanceof Error ? e.message : String(e);
       logger.error("audit exception", { error: errMessage });
       // #332: a crash after register leaves the skeleton pending → finalize it.

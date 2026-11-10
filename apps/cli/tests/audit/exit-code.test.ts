@@ -5,7 +5,9 @@ import { describe, expect, test } from "bun:test";
 import {
   buildOutcome,
   computeExitCode,
+  createSettler,
   publishSkipReason,
+  type AuditOutcome,
   type ExitInput,
   type PublishOutcome,
 } from "@/audit/exit-code";
@@ -200,4 +202,136 @@ describe("publishSkipReason follows the publish decision's order", () => {
       );
     });
   }
+});
+
+describe("createSettler: the report is written and the code set however the publish phase ends", () => {
+  function setup(
+    opts: {
+      status?: "completed" | "blocked" | "failed" | "partial";
+      publish?: PublishOutcome;
+      trips?: number;
+      emitThrows?: boolean;
+    } = {}
+  ) {
+    const log: string[] = [];
+    let outcome: AuditOutcome | undefined;
+    let code: number | undefined;
+    let gateCalls = 0;
+    let publish: PublishOutcome = opts.publish ?? skipped;
+    const settler = createSettler({
+      auditStatus: opts.status ?? "completed",
+      getPublish: () => publish,
+      evaluateGate: () => {
+        gateCalls++;
+        return { trips: Array.from({ length: opts.trips ?? 0 }, () => 0) };
+      },
+      stamp: (o) => {
+        outcome = o;
+        log.push("stamp");
+      },
+      emit: () => {
+        log.push("emit");
+        if (opts.emitThrows) throw new Error("disk full");
+      },
+      apply: (c) => {
+        code = c;
+        log.push("apply");
+      },
+    });
+    return {
+      settler,
+      log,
+      get outcome() {
+        return outcome;
+      },
+      get code() {
+        return code;
+      },
+      get gateCalls() {
+        return gateCalls;
+      },
+      setPublish: (p: PublishOutcome) => {
+        publish = p;
+      },
+    };
+  }
+
+  test("the normal path stamps, sets the code, then writes the report, once", () => {
+    const t = setup({ trips: 1 });
+    t.settler.settle();
+    t.settler.settle();
+    expect(t.log).toEqual(["stamp", "apply", "emit"]);
+    expect(t.code).toBe(2);
+    expect(t.outcome).toEqual({
+      exit_code: 2,
+      status: "completed",
+      publish: { status: "skipped", reason: "offline" },
+    });
+    expect(t.settler.gate()?.trips.length).toBe(1);
+  });
+
+  test("a publish-phase step that throws: finish() still writes the report with a failed publish and sets the code", () => {
+    const t = setup();
+    // The publish phase threw after the audit finished, before settle() was reached.
+    const phase = () => {
+      throw new Error("could not record the published report");
+    };
+    expect(phase).toThrow();
+    t.settler.finish("exception");
+    expect(t.log).toEqual(["stamp", "apply", "emit"]);
+    expect(t.code).toBe(1);
+    expect(t.outcome?.publish).toEqual({
+      status: "failed",
+      reason: "exception",
+    });
+    expect(t.settler.settled()).toBe(true);
+  });
+
+  test("an interrupt settles the same way", () => {
+    const t = setup();
+    t.settler.finish("interrupted");
+    expect(t.outcome?.publish).toEqual({
+      status: "failed",
+      reason: "interrupted",
+    });
+    expect(t.code).toBe(1);
+  });
+
+  test("finish() after settle() does nothing (the report is not written twice)", () => {
+    const t = setup();
+    t.settler.settle();
+    t.settler.finish("exception");
+    expect(t.log).toEqual(["stamp", "apply", "emit"]);
+    expect(t.code).toBe(0);
+  });
+
+  test("a blocked audit keeps its code when the publish phase threw", () => {
+    const t = setup({ status: "blocked" });
+    t.settler.finish("exception");
+    expect(t.code).toBe(3);
+  });
+
+  test("a failed explicit publish does not evaluate the gate; an auto-publish failure does", () => {
+    const explicit = setup({ publish: explicitFail, trips: 1 });
+    explicit.settler.settle();
+    expect(explicit.gateCalls).toBe(0);
+    expect(explicit.code).toBe(1);
+    const auto = setup({ publish: autoFail, trips: 1 });
+    auto.settler.settle();
+    expect(auto.gateCalls).toBe(1);
+    expect(auto.code).toBe(2);
+  });
+
+  test("the code is set even when writing the report throws", () => {
+    const t = setup({ emitThrows: true });
+    expect(() => t.settler.settle()).toThrow("disk full");
+    expect(t.code).toBe(0);
+  });
+
+  test("the publish outcome is read when settle() runs, not when the settler is built", () => {
+    const t = setup();
+    t.setPublish({ status: "published", id: "r1" });
+    t.settler.settle();
+    expect(t.outcome?.publish).toEqual({ status: "published" });
+  });
 });

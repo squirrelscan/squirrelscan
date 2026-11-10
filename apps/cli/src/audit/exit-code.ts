@@ -142,3 +142,53 @@ export function applyExitCode(code: number): number {
 export function exitWith(input: ExitInput): number {
   return applyExitCode(computeExitCode(input).code);
 }
+
+/**
+ * The end of a finished audit, run exactly once however the publish phase went (#1657).
+ *
+ * `settle()` is the normal path, called when the publish phase is over. `finish(reason)` is for a
+ * path that cannot reach it: a step of the publish phase threw, or the run was interrupted. It
+ * settles with a failed explicit publish carrying `reason`, so the report is still written (it was
+ * held back for the outcome) and the exit code is set. A second call does nothing.
+ */
+export function createSettler<G extends { trips: readonly unknown[] }>(deps: {
+  auditStatus: AuditStatus | undefined;
+  getPublish: () => PublishOutcome;
+  /** Evaluates the `--fail-on` gate; not called when an explicit publish failed (it outranks the gate). */
+  evaluateGate: () => G | null;
+  /** Puts the outcome on the report. */
+  stamp: (outcome: AuditOutcome) => void;
+  /** Writes the report that was held back for the outcome. */
+  emit: () => void;
+  apply: (code: number) => void;
+}): {
+  settle: () => void;
+  finish: (reason: string) => void;
+  gate: () => G | null;
+  settled: () => boolean;
+} {
+  let done = false;
+  let gate: G | null = null;
+  const run = (publish: PublishOutcome): void => {
+    if (done) return;
+    done = true;
+    const explicitPublishFailed =
+      publish.status === "failed" && publish.explicit;
+    gate = explicitPublishFailed ? null : deps.evaluateGate();
+    const { code } = computeExitCode({
+      auditStatus: deps.auditStatus,
+      publish,
+      gateTripped: (gate?.trips.length ?? 0) > 0,
+    });
+    deps.stamp(buildOutcome(code, deps.auditStatus, publish));
+    // The code first: a report that fails to write must not leave the exit code unset.
+    deps.apply(code);
+    deps.emit();
+  };
+  return {
+    settle: () => run(deps.getPublish()),
+    finish: (reason) => run({ status: "failed", reason, explicit: true }),
+    gate: () => gate,
+    settled: () => done,
+  };
+}
