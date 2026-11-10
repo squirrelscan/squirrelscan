@@ -33,6 +33,7 @@ import { DEFAULT_API_URL, getApiUrl } from "@/self/api";
 import {
   API_TOKEN_ENV_VAR,
   envTokenRejectedMessage,
+  markLoginRejected,
   resolveCredential,
 } from "@/self/credentials";
 import { loadUserSettings, updateSettings } from "@/self/settings";
@@ -327,6 +328,8 @@ export async function publishReport(
     if (!response.ok) {
       // Handle specific error codes
       if (response.status === 401) {
+        // A login the server rejects is remembered, so later commands say so (#1666).
+        if (credential.source === "login") markLoginRejected(credential.token);
         // Fail-closed for env-supplied tokens: envTokenRejectedMessage names
         // the actual active env var as authoritative rather than telling the
         // user to log in.

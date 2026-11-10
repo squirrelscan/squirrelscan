@@ -20,10 +20,14 @@ import { isApiKey, parseKeyEnv } from "@squirrelscan/core-contracts/api-keys";
 
 import type { Result } from "@/controllers/types";
 
-import type { UserSettings } from "./types";
+import type { AuthState, UserSettings } from "./types";
 
 import { getApiUrl } from "./api";
-import { formatSessionLoadWarning, loadUserSettings } from "./settings";
+import {
+  formatSessionLoadWarning,
+  loadUserSettings,
+  updateSettings,
+} from "./settings";
 
 /** Preferred env var that supplies a bearer token for headless / CI auth. */
 export const API_TOKEN_ENV_VAR = "SQUIRRELSCAN_API_KEY";
@@ -83,6 +87,90 @@ export function isEnvTokenSet(): boolean {
 }
 
 /**
+ * What the CLI knows about the credential it would send (#1666):
+ * - `env`: SQUIRRELSCAN_API_KEY (or its alias) is set. Its validity is the server's call.
+ * - `login`: a stored login session that has not expired and was not rejected.
+ * - `expired`: a stored login whose expiry has passed. Read as signed out.
+ * - `rejected`: a stored login the server answered 401 to. Read as signed out, and not retried.
+ * - `none`: nothing.
+ */
+export type CredentialState = "env" | "login" | "expired" | "rejected" | "none";
+
+/** The state, from what is stored and the clock. Pure, so every edge is a table row. */
+export function deriveCredentialState(input: {
+  envToken: boolean;
+  auth: AuthState | undefined;
+  now: number;
+}): CredentialState {
+  if (input.envToken) return "env";
+  const auth = input.auth;
+  if (!auth?.token) return "none";
+  if (auth.rejectedAt) return "rejected";
+  // expiresAt is an ISO date written by the API at login, so a Date comparison is safe here.
+  if (auth.expiresAt && new Date(auth.expiresAt).getTime() < input.now)
+    return "expired";
+  return "login";
+}
+
+/** {@link deriveCredentialState} over the real environment and settings file. */
+export function credentialState(): CredentialState {
+  const settings = loadUserSettings();
+  return deriveCredentialState({
+    envToken: isEnvTokenSet(),
+    auth: settings.ok ? (settings.data.auth ?? undefined) : undefined,
+    now: Date.now(),
+  });
+}
+
+/**
+ * Record that the server answered 401 to this LOGIN token, so the next command reads it as
+ * rejected without another request (#1666). A token that is not the stored one (an env token, or a
+ * login replaced since) is left alone: the env token is never written to settings.
+ */
+export function markLoginRejected(token: string): void {
+  const settings = loadUserSettings();
+  if (!settings.ok) return;
+  const auth = settings.data.auth;
+  if (!auth || auth.token !== token || auth.rejectedAt) return;
+  updateSettings({ auth: { ...auth, rejectedAt: new Date().toISOString() } });
+}
+
+/** {@link markLoginRejected} for whichever credential is active now, when it is a login (a call site that got a 401 and has no token in hand). */
+export function markActiveLoginRejected(): void {
+  const credential = resolveCredential();
+  if (credential?.source === "login") markLoginRejected(credential.token);
+}
+
+/** The one line a command prints to stderr when the stored login cannot be used. Null for any other state. */
+export function staleLoginNote(state: CredentialState): string | null {
+  if (state === "expired") {
+    return "Your squirrelscan login has expired, so this run is signed out (local checks only). Run `squirrel auth login` to sign in again.";
+  }
+  if (state === "rejected") {
+    return "The server rejected your squirrelscan login (revoked or expired), so this run is signed out (local checks only). Run `squirrel auth login` to sign in again.";
+  }
+  return null;
+}
+
+let staleLoginNoted = false;
+
+/** Print {@link staleLoginNote} to stderr, once per process. */
+export function noteStaleLogin(
+  state: CredentialState = credentialState()
+): void {
+  const note = staleLoginNote(state);
+  if (note === null || staleLoginNoted) return;
+  staleLoginNoted = true;
+  console.error(note);
+  console.error("");
+}
+
+/** For a command that reports the credential state itself (`auth status`): no second line on stderr. Tests also reset with `false`. */
+export function setStaleLoginNoted(noted: boolean): void {
+  staleLoginNoted = noted;
+}
+
+/**
  * Resolve the active credential per the precedence above. Does NOT validate the
  * token against the server — validity (and fail-closed erroring) is enforced at
  * the call site, since only a live request can tell a revoked key from a good
@@ -105,11 +193,14 @@ export function resolveCredential(): ResolvedCredential | null {
   const auth = settings.data.auth;
   if (!auth?.token) return null;
 
-  // expiresAt is an ISO date written by the API at login — toISOString
-  // comparison is safe here (unlike DB-side Postgres-format timestamps).
-  if (auth.expiresAt && new Date(auth.expiresAt).getTime() < Date.now()) {
-    return null;
-  }
+  // An expired or rejected login reads as signed out (#1666): no doomed request, and a rejected
+  // token is never retried. `warnIfSessionUnreadable` says so once per command.
+  const state = deriveCredentialState({
+    envToken: false,
+    auth,
+    now: Date.now(),
+  });
+  if (state !== "login") return null;
 
   return { token: auth.token, source: "login", expiresAt: auth.expiresAt };
 }
@@ -228,5 +319,17 @@ export function warnIfSessionUnreadable(
   if (!settings.ok && !isEnvTokenSet()) {
     console.error(formatSessionLoadWarning(settings.error));
     console.error("");
+    return;
+  }
+  // #1666: a login that expired or was rejected is signed out with no other word, so say so,
+  // once per command. The entry point every command already calls is the one place for it.
+  if (settings.ok) {
+    noteStaleLogin(
+      deriveCredentialState({
+        envToken: isEnvTokenSet(),
+        auth: settings.data.auth ?? undefined,
+        now: Date.now(),
+      })
+    );
   }
 }

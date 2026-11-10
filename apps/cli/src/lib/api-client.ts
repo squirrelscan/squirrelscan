@@ -13,7 +13,7 @@
 import { createApiClient } from "@squirrelscan/api-client";
 
 import { getApiUrl } from "@/self/api";
-import { resolveCredential } from "@/self/credentials";
+import { markLoginRejected, resolveCredential } from "@/self/credentials";
 import { logger } from "@/utils/logger";
 
 import { version } from "../../package.json";
@@ -21,6 +21,8 @@ import { version } from "../../package.json";
 export const cliApi = createApiClient({
   baseUrl: getApiUrl,
   getToken: () => resolveCredential()?.token ?? null,
+  // #1666: a login the server rejects is remembered, so the next command says so without asking again.
+  onUnauthorized: (token) => markLoginRejected(token),
   userAgent: `squirrel/${version}`,
   onDebug: (message, meta) => logger.debug(message, meta),
 });

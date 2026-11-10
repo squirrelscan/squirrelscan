@@ -313,9 +313,23 @@ For a login session the same call reports the active org and the org count:
 }
 ```
 
+### Credential state
+
+`status` says which state the credential is in, in text and as `credentialState` in `--json`:
+
+| `credentialState` | Meaning |
+|-------------------|---------|
+| `env` | `SQUIRRELSCAN_API_KEY` (or `SQUIRREL_API_TOKEN`) is set. The server decides whether it is valid, and a rejected one is an error, never a fall back to a login |
+| `login` | A stored login that has not expired and was not rejected |
+| `expired` | A stored login past its expiry. The CLI reads it as signed out and sends nothing |
+| `rejected` | A stored login the server answered 401 to (revoked or expired server side). The CLI remembers it, reads it as signed out and does not send it again |
+| `none` | No credential |
+
+For `expired`, `rejected` and `none` the JSON is `{ "authenticated": false, "credentialState": "rejected" }`. A rejected or expired login used to read as signed out with no word, so a run quietly lost its cloud features. Every other command now prints one line on stderr when the stored login is expired or rejected, once per command, naming `squirrel auth login`. After a 401 the next command does not ask the server again. Signing in again clears it.
+
 <Note>
 **`--json` schema additions.** The `user` and `token` objects are unchanged. New
-fields are **additive**: `source` (`"env"` | `"login"`); `apiKey` (name, scopes,
+fields are **additive**: `credentialState` (see above); `source` (`"env"` | `"login"`); `apiKey` (name, scopes,
 keyEnv) when authenticated with an API key; `org` (id, slug, name) and
 `orgCount`; plus `shadowedLoginEmail` when an env token is overriding a login
 session. `org.slug` is `null` for an API-key credential, and `org` / `orgCount`
