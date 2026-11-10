@@ -32,6 +32,16 @@ describe("mergeCheckMessages", () => {
     );
   });
 
+  // core/h1 gives the exposed and raw H1 counts separately when some H1s are
+  // hidden (#1636), so pages with different counts still fold into one row.
+  test("core/h1 exposed and raw counts merge into ranges", () => {
+    const h1 = (exposed: number, raw: number) =>
+      `Multiple H1 tags found (${exposed} exposed, ${raw} in the HTML; an HTTP-only audit cannot resolve CSS or script visibility)`;
+    expect(mergeCheckMessages([h1(1, 3), h1(2, 3), h1(1, 4)])).toBe(
+      "Multiple H1 tags found (1 to 2 exposed, 3 to 4 in the HTML; an HTTP-only audit cannot resolve CSS or script visibility)"
+    );
+  });
+
   test("the range spans every message, not just the first and last", () => {
     expect(mergeCheckMessages([thin(233), thin(197), thin(400)])).toBe(
       "Thin content: 197 to 400 words (min 300)"

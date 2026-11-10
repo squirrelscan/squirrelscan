@@ -33,18 +33,16 @@ function only(checks: CheckResult[]): CheckResult {
 const NOTE = "an HTTP-only audit cannot resolve CSS or script visibility";
 
 describe("#1636 raw and exposed H1 counts", () => {
-  test("/hidden-h1: one exposed H1 and two hidden alternatives is not three visible headings", () => {
+  test("/hidden-h1: one exposed H1 and two hidden alternatives warn as 1 exposed of 3, not three visible headings", () => {
     const check = only(
-      run(
-        `<h1>Primary</h1><h1 style="display:none">Alternative</h1><h1 hidden>Alternative</h1>`
-      )
+      run(`<h1>Primary</h1><h1 style="display:none">Alternative</h1><h1 hidden>Alternative</h1>`),
     );
     expect(check.name).toBe("h1");
-    expect(check.status).toBe("pass");
-    expect(check.message).not.toContain("Multiple");
-    expect(check.message).toContain("3 in the HTML, 2 hidden");
+    expect(check.status).toBe("warn");
+    expect(check.message).toContain("Multiple H1 tags found (1 exposed, 3 in the HTML;");
     expect(check.message).toContain(NOTE);
-    expect(check.value).toBe("Primary");
+    expect(check.value).toBe(3);
+    expect(check.expected).toBe(1);
     expect(check.details).toMatchObject({
       rawCount: 3,
       exposedCount: 1,
@@ -64,9 +62,7 @@ describe("#1636 raw and exposed H1 counts", () => {
     const check = only(run(`<h1>One</h1><h1>Two</h1><h1 hidden>Three</h1>`));
     expect(check.name).toBe("h1");
     expect(check.status).toBe("warn");
-    expect(check.message).toContain(
-      "Multiple H1 tags found (2 exposed, 3 in the HTML;"
-    );
+    expect(check.message).toContain("Multiple H1 tags found (2 exposed, 3 in the HTML;");
     expect(check.message).toContain(NOTE);
     expect(check.value).toBe(2);
     expect(check.details).toMatchObject({
@@ -79,7 +75,7 @@ describe("#1636 raw and exposed H1 counts", () => {
   test("an H1 a style may hide is reported as unconfirmed, not as a visible duplicate", () => {
     const checks = run(
       `<h1>Primary</h1><h1 class="alt">Alternative</h1>`,
-      `<link rel="stylesheet" href="/site.css"><style>.alt { display: none }</style>`
+      `<link rel="stylesheet" href="/site.css"><style>.alt { display: none }</style>`,
     );
     const check = only(checks);
     expect(check.name).toBe("h1-unconfirmed");
@@ -93,18 +89,19 @@ describe("#1636 raw and exposed H1 counts", () => {
     });
   });
 
-  test("the one H1 left after hidden ones may itself be hidden: checked as single, flagged in the message", () => {
+  test("the one H1 left after hidden ones may itself be hidden: warns, flagged in the message", () => {
     const check = only(
       run(
         `<h1 class="alt">Maybe</h1><h1 hidden>Alternative</h1>`,
-        `<link rel="stylesheet" href="/site.css"><style>.alt { display: none }</style>`
-      )
+        `<link rel="stylesheet" href="/site.css"><style>.alt { display: none }</style>`,
+      ),
     );
     expect(check.name).toBe("h1");
-    expect(check.status).toBe("pass");
+    expect(check.status).toBe("warn");
     expect(check.message).toContain(
-      "2 in the HTML, 1 hidden, and it may be hidden by a style (unconfirmed)"
+      "Multiple H1 tags found (0 exposed, 2 in the HTML, 1 may be hidden by a style (unconfirmed);",
     );
+    expect(check.value).toBe(2);
     expect(check.details).toMatchObject({
       rawCount: 2,
       exposedCount: 0,
@@ -115,14 +112,13 @@ describe("#1636 raw and exposed H1 counts", () => {
 
   test("the full rendering note stays on the details", () => {
     const check = only(run(`<h1>Primary</h1><h1 hidden>Alternative</h1>`));
-    expect(String(check.details?.note)).toContain(
-      "external stylesheets or scripts"
-    );
+    expect(String(check.details?.note)).toContain("external stylesheets or scripts");
   });
 
   test("an H1 in a closed <dialog> is excluded too", () => {
     const check = only(run(`<h1>Primary</h1><dialog><h1>D</h1></dialog>`));
-    expect(check.status).toBe("pass");
+    expect(check.status).toBe("warn");
+    expect(check.message).toContain("Multiple H1 tags found (1 exposed, 2 in the HTML;");
     expect(check.details).toMatchObject({
       rawCount: 2,
       exposedCount: 1,
