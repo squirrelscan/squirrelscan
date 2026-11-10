@@ -20,6 +20,7 @@ import {
   type CredentialSource,
   describeEnvToken,
   envTokenRejectedMessage,
+  markLoginRejected,
   resolveCredential,
 } from "@/self/credentials";
 import { loadUserSettings } from "@/self/settings";
@@ -144,6 +145,8 @@ export async function runAuthStatus(): Promise<Result<StatusResult>> {
             )
           );
         }
+        // A login the server rejects is remembered, so later commands say so (#1666).
+        markLoginRejected(credential.token);
         return err(
           commandError(
             "TOKEN_INVALID",

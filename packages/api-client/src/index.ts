@@ -40,6 +40,12 @@ export interface ApiClientConfig {
   defaultTimeoutMs?: number;
   /** Sink for best-effort `send()` non-2xx traces. Default: noop. */
   onDebug?: (message: string, meta?: Record<string, unknown>) => void;
+  /**
+   * Told when `request()` (and so `send()`) got a 401 for the bearer token it sent, with that token and the
+   * request path, so a caller can remember the token is dead instead of sending it again. Never throws into the
+   * request: an error from the hook is swallowed.
+   */
+  onUnauthorized?: (token: string, path: string) => void;
 }
 
 export interface ApiRequestInit {
@@ -164,6 +170,13 @@ export function createApiClient(config: ApiClientConfig): ApiClient {
         },
         { timeoutMs: init.timeoutMs, retries: init.retries },
       );
+      if (response.status === 401 && token) {
+        try {
+          config.onUnauthorized?.(token, path);
+        } catch {
+          // A hook must not turn a 401 into a transport failure.
+        }
+      }
       return { ok: response.ok, status: response.status, data: await parseJson<T>(response) };
     } catch {
       return { ok: false, status: 0, data: null };
