@@ -59,7 +59,7 @@ export const h1Rule: Rule = {
     name: "H1 Tag",
     description: "Validates H1 tag presence and uniqueness",
     solution:
-      "Each page should have exactly one H1 tag that clearly describes the main topic. The H1 is the primary heading users and search engines see, and it should align with the page title while being more detailed. If missing, add an H1 at the top of your main content. If you have multiple H1s, demote extras to H2 or lower. Ensure the H1 is descriptive and contains relevant keywords naturally. When a page has several H1s and only one is shown (the others carry the hidden attribute or display:none), the extra headings are counted separately and not reported as visible duplicates, though crawlers that do not render the page still read them.",
+      "Each page should have exactly one H1 tag that clearly describes the main topic. The H1 is the primary heading users and search engines see, and it should align with the page title while being more detailed. If missing, add an H1 at the top of your main content. If you have multiple H1s, demote extras to H2 or lower. Ensure the H1 is descriptive and contains relevant keywords naturally. When a page has several H1s and only one is shown (the others carry the hidden attribute or display:none), it still warns, because crawlers that do not render the page read every H1, and the message gives the shown count beside the count in the HTML.",
     category: "core",
     scope: "page",
     verdictScope: "page",
@@ -138,19 +138,24 @@ export const h1Rule: Rule = {
         return { checks };
       }
 
-      // One H1 is left and the rest are hidden: check that one. When that one
-      // may itself be hidden by a style (unconfirmed), it is still the only
-      // candidate heading, so it is checked as the single H1 and the message
-      // says it may be hidden; there is no duplicate to report.
+      // One H1 is left and the rest are hidden. Crawlers that do not render the
+      // page still read every H1, so this warns on the raw count, with the
+      // exposed count beside it; an empty one left warns as empty below. When
+      // the one left may itself be hidden by a style (unconfirmed), the message
+      // says so.
       h1Text = seen.visibleTexts[0];
       exposureDetails = details;
       if (h1Text && h1Text.length > 0) {
-        const maybe = seen.unconfirmed > 0 ? ", and it may be hidden by a style (unconfirmed)" : "";
+        const maybe =
+          seen.unconfirmed > 0
+            ? `, ${seen.unconfirmed} may be hidden by a style (unconfirmed)`
+            : "";
         checks.push({
           name: "h1",
-          status: "pass",
-          message: `Single H1 tag present (${seen.raw} in the HTML, ${seen.hidden} hidden${maybe}; ${RENDERING_LIMIT})`,
-          value: h1Text,
+          status: "warn",
+          message: `Multiple H1 tags found (${seen.exposed} exposed, ${seen.raw} in the HTML${maybe}; ${RENDERING_LIMIT})`,
+          value: seen.raw,
+          expected: 1,
           details,
         });
         return { checks };
