@@ -116,8 +116,8 @@ export const AUDIT_LEVEL_COPY: Readonly<
   quick: {
     label: "Quick",
     summary: EXTERNAL_LINKS_DEFAULT_ON
-      ? `A fast look at the seed page and sitemaps: ${COVERAGE_PAGE_LIMITS.quick} pages, rendered in the cloud, with internal and external link checks. Costs credits: 50, plus 2 per page and 1 per external link checked, up to ${50 + 3 * COVERAGE_PAGE_LIMITS.quick}.`
-      : `A fast look at the seed page and sitemaps: ${COVERAGE_PAGE_LIMITS.quick} pages, rendered in the cloud, with internal link checks. Costs credits: 50 plus 2 per page, up to ${50 + 2 * COVERAGE_PAGE_LIMITS.quick}.`,
+      ? `A fast look at the seed page and sitemaps: ${COVERAGE_PAGE_LIMITS.quick} pages, rendered in the cloud, with internal and external link checks. It does not follow links, so a linked page outside the sitemap gets a status check only and is not audited, and it skips the cloud checks. Costs credits: 50, plus 2 per page and 1 per external link checked, up to ${50 + 3 * COVERAGE_PAGE_LIMITS.quick}.`
+      : `A fast look at the seed page and sitemaps: ${COVERAGE_PAGE_LIMITS.quick} pages, rendered in the cloud, with internal link checks. It does not follow links, so a linked page outside the sitemap gets a status check only and is not audited, and it skips the cloud checks. Costs credits: 50 plus 2 per page, up to ${50 + 2 * COVERAGE_PAGE_LIMITS.quick}.`,
   },
   surface: {
     label: "Surface",
