@@ -79,6 +79,12 @@ interface Json {
     };
   };
   pages?: Array<{ url: string; status: number; reason?: string }>;
+  rules?: Array<{
+    ruleId: string;
+    status: string;
+    scope: { pages?: number; origin?: string };
+    reason?: string;
+  }>;
   pagesTotal?: number;
 }
 
@@ -130,6 +136,16 @@ describe("--target-url", () => {
     // The report says what ran: no links were checked, whatever the level says (#1777).
     expect(json.meta.auditLevel?.targeted).toBe(true);
     expect(json.meta.auditLevel?.settings?.externalLinks).toBe(false);
+    // The per-rule statement (#1747): a page rule ran over the three pages, a whole-site rule did not run.
+    const byRule = new Map((json.rules ?? []).map((r) => [r.ruleId, r]));
+    expect(byRule.get("core/meta-title")).toMatchObject({
+      status: "ran",
+      scope: { pages: 3 },
+    });
+    expect(byRule.get("links/orphan-pages")).toMatchObject({
+      status: "skipped",
+      reason: "targeted-run",
+    });
     // Every URL given is accounted for: the off-site one is listed with a reason, not dropped.
     expect(json.meta.targeted?.requested).toBe(4);
     expect(json.meta.targeted?.audited).toBe(3);
