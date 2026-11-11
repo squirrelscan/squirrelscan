@@ -4,6 +4,14 @@ import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 import { getCWVHints } from "./cwv";
 
+function absoluteUrl(src: string, base: string): string {
+  try {
+    return new URL(src, base).toString();
+  } catch {
+    return src;
+  }
+}
+
 export const clsHintsRule: Rule = {
   meta: {
     id: "perf/cls-hints",
@@ -22,15 +30,18 @@ export const clsHintsRule: Rule = {
     const hints = getCWVHints(ctx.parsed.document, ctx.page.html, ctx.page.url);
     const checks: CheckResult[] = [];
 
-    // Check images without dimensions
+    // Images without dimensions are owned by images/dimensions (#1768): it flags a
+    // superset of what this rule would (it also flags an image with only one
+    // attribute or sized by inline style), so warning here counted the same image
+    // twice. This check stays as an info row pointing there, keyed by the same
+    // absolute URL, and never affects the score.
     if (hints.imagesWithoutDimensions.length > 0) {
-      const severity =
-        hints.imagesWithoutDimensions.length > 5 ? "fail" : "warn";
+      const urls = [...new Set(hints.imagesWithoutDimensions.map((src) => absoluteUrl(src, ctx.page.url)))];
       checks.push({
         name: "cls-images",
-        status: severity,
-        message: `${hints.imagesWithoutDimensions.length} image(s) without width/height (CLS risk)`,
-        items: hints.imagesWithoutDimensions.map((url) => ({ id: url })),
+        status: "info",
+        message: `${urls.length} image(s) without width/height: reported by images/dimensions`,
+        items: urls.map((url) => ({ id: url })),
       });
     } else {
       checks.push({

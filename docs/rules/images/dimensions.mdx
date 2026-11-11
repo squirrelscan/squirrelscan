@@ -17,6 +17,8 @@ The rule runs on every crawled page over the images the parser extracted. It emi
 - Warn when any image is missing `width` or `height`, or has either set to a falsy value. Message: `5 image(s) missing width/height (causes CLS)`, with the count as the value and each image listed with a markup snippet. Severity warning, weight 4.
 - Pass otherwise. Message: `All 12 image(s) have dimensions`, with the count as the value.
 
+This rule owns missing image dimensions: an image with no `width` and `height` produces this one warning, and [perf/cls-hints](/rules/perf/cls-hints) only points back here with an info row that does not affect the score. Items are keyed by the image's absolute URL in both rules.
+
 Both attributes are required for a finding to pass; one on its own does not give a ratio.
 
 Elements inside `<noscript>` are skipped: a browser with scripting enabled reads `<noscript>` content as plain text, so nothing in it loads or renders. See [content inside noscript](/rules#content-inside-noscript).
@@ -67,7 +69,7 @@ enable = ["images/dimensions"]
 ## Related rules
 
 - [images/aspect-mismatch](/rules/images/aspect-mismatch): dimensions that disagree with the CSS box, which distorts the image.
-- [perf/cls-hints](/rules/perf/cls-hints): the other sources of layout shift on the page.
+- [perf/cls-hints](/rules/perf/cls-hints): the other sources of layout shift on the page (iframes); it does not warn about missing image dimensions.
 - [images/offscreen-lazy](/rules/images/offscreen-lazy): lazy images, which shift the layout hardest without dimensions.
 - [images/srcset](/rules/images/srcset): serving the right file for the reserved space.
 
