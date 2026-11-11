@@ -240,7 +240,6 @@
   "perf/lcp-hints",
   "perf/legacy-js",
   "perf/preconnect",
-  "perf/render-blocking",
   "perf/source-maps",
   "perf/total-byte-weight",
   "perf/ttfb",
