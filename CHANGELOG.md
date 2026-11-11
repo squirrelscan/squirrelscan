@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- New rule `analytics/duplicate-tags`: warns when one page installs the same Google Analytics 4 measurement ID, Google Tag Manager container or analytics site ID more than once, which counts every visit twice (#1691).
+
 ## v0.0.174 (2026-11-11)
 
 Reports say why a rule did not give a verdict (JSON schema 1.9), `squirrel audit` has one exit code precedence with the outcome in the JSON and LLM reports, `--resume` says why it started a new crawl, an expired login is called out, settings writes no longer lose each other, and five rules stop flagging hidden, presentational and symbol-only content.
