@@ -101,10 +101,6 @@ const REVIEWED: Record<string, Reviewed> = {
     // The first main's id and class, which its message names.
     unkeyed: ["@class", "@id"],
   },
-  "a11y/meta-refresh": {
-    keyed: ["@content", "@http-equiv", "meta"],
-    unkeyed: [],
-  },
   "a11y/zoom-disabled": {
     keyed: ["@content", 'meta[name="viewport"]', "meta[name='viewport']"],
     unkeyed: [],

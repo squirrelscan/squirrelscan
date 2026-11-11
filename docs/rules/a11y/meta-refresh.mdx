@@ -1,11 +1,13 @@
 ---
-title: "meta http-equiv=refresh: redirects and auto-refresh"
-description: "A timed redirect moves the page out from under a screen reader user mid-sentence. squirrel reads the content value and grades it."
+title: "meta http-equiv=refresh and the Refresh header: redirects and auto-refresh"
+description: "A timed redirect moves the page out from under a screen reader user mid-sentence. squirrel grades the meta tag and the Refresh response header."
 ---
 
 ## What meta refresh is
 
 `<meta http-equiv="refresh" content="5;url=/new">` asks the browser to load another page after a delay. With no `url` it reloads the current page on a timer instead.
+
+The same instruction can be sent as a response header, `Refresh: 5; url=/new`. A browser treats it like the meta tag: it loads the page, then moves on after the delay. Search engines treat both as a weaker signal than a real redirect.
 
 Both take control away from the reader. Someone using a screen reader, or reading slowly, or filling in a form, gets moved without warning and with no way to stop it. WCAG success criterion 2.2.1 Timing Adjustable, Level A, covers time limits like this, and techniques F40 and F41 name meta refresh specifically as a way to fail it.
 
@@ -21,7 +23,17 @@ One check name per case, at rule severity error. The rule finds the first `<meta
 
 Every finding carries the raw `content` string as its value. The 20 second boundary is squirrel's own, not a threshold from the standard.
 
-Two gaps are worth knowing. Only the first matching `<meta>` is examined, and a `content="0"` with no url matches none of the branches, so it produces no finding at all.
+### The Refresh header
+
+The rule also reads the `Refresh` response header, matched in any letter case. The value is a delay, then optionally a separator (`;`, `,` or whitespace) and a URL, which may start with `url=` and may be quoted. A value with no leading number is ignored, as browsers ignore it. The rule runs per page, because a response header is not part of a page template.
+
+- `refresh-header-redirect` warns with `Immediate Refresh header redirect to <url>` for a zero delay, and fails with `Refresh header redirect to <url> after N seconds` otherwise.
+- `refresh-header-reload` is a header with no url, a timed reload of the same page. It fails with `Page reloads every N seconds (Refresh header)` under 20 seconds, warns at 20 or more, and fails with `Refresh header reloads the page immediately` at zero, because that reloads forever.
+- `refresh-header-and-meta` is one finding for a page that has the header and a meta tag that produced a finding. It names both sources, takes the worse status, and quotes both values as `Refresh: <header>; meta: <content>`.
+
+A header finding quotes the header value, capped at 200 characters. A page with neither source still passes with `No meta refresh found`.
+
+Two gaps are worth knowing about the meta tag. Only the first matching `<meta>` is examined, and a `content="0"` with no url matches none of the branches, so it produces no finding at all.
 
 Elements inside `<noscript>` are skipped: a browser with scripting enabled reads `<noscript>` content as plain text, so nothing in it loads or renders. See [content inside noscript](/rules#content-inside-noscript).
 
@@ -34,7 +46,7 @@ HTTP/1.1 301 Moved Permanently
 Location: https://example.com/new
 ```
 
-A 301 or 302 never renders the old page, so nothing is read out and then replaced. It is also the version search engines follow cleanly.
+A 301 or 308 for a permanent move (302 or 307 for a temporary one) never renders the old page, so nothing is read out and then replaced. It is also the version search engines follow cleanly. For a header, replace `Refresh: 0; url=/new` with a `Location` header and a redirect status.
 
 For content that has to stay current, fetch and update the region in place with `aria-live="polite"` rather than reloading the document, and give the user a control to pause it.
 
@@ -94,7 +106,7 @@ Glossary: [Client-side redirect](/glossary#client-side-redirect).
 
 ## Check your site
 
-Run `squirrel audit https://example.com` and open the Accessibility section of the report. The finding quotes the raw content value so you can see the delay and the target. Signed-out local audits need no account and cost nothing. Signed-in audits spend credits.
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. The finding quotes the raw content value or header value so you can see the delay and the target. Signed-out local audits need no account and cost nothing. Signed-in audits spend credits.
 
 <CardGroup cols={2}>
   <Card title="Install squirrel" icon="terminal" href="/quickstart">

@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- `a11y/meta-refresh` also reports a `Refresh` response header: a redirect names the target and delay, a header with no URL is a reload, and a page with both the header and a meta refresh gets one finding naming both. The rule now runs per page, and its solution recommends a 301 or 308 redirect.
+
 ## v0.0.174 (2026-11-11)
 
 Reports say why a rule did not give a verdict (JSON schema 1.9), `squirrel audit` has one exit code precedence with the outcome in the JSON and LLM reports, `--resume` says why it started a new crawl, an expired login is called out, settings writes no longer lose each other, and five rules stop flagging hidden, presentational and symbol-only content.
