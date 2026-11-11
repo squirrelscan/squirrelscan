@@ -126,7 +126,13 @@ for (let offset = 0; ; offset += BATCH) {
     if (KEEP_COLLECTED) {
       collectedPages.push(
         detachFromPage(
-          buildCollectedPageSignal({ url: page.normalizedUrl, finalUrl: page.finalUrl, parsed }),
+          buildCollectedPageSignal({
+            url: page.normalizedUrl,
+            finalUrl: page.finalUrl,
+            parsed,
+            // i18n/hreflang-targets reads X-Robots-Tag noindex from these.
+            headers: buildHeadersMap(page),
+          }),
           "collected-signal",
         ),
       );
