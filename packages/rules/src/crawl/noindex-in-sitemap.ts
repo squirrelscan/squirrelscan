@@ -1,7 +1,11 @@
 // crawl/noindex-in-sitemap - Noindexed pages shouldn't be in sitemap
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
-import type { SitemapDiscovery, SiteQuery } from "@squirrelscan/core-contracts";
+import type { RobotsTxtData, SitemapDiscovery, SiteQuery } from "@squirrelscan/core-contracts";
+
+import { isPageIndexable } from "@squirrelscan/utils";
+
+import { evaluateIndexSignals, type IndexSignalPage } from "./conflicting-index-signals";
 
 function collectSitemapUrls(sitemaps: SitemapDiscovery): Set<string> {
   const sitemapUrls = new Set<string>();
@@ -14,13 +18,24 @@ function collectSitemapUrls(sitemaps: SitemapDiscovery): Set<string> {
 }
 
 // Shared output builder — identical CheckResult given the same collected list.
-function buildCheck(noindexInSitemap: string[]): CheckResult {
+// `consolidated` are the noindexed pages that crawl/conflicting-index-signals also reports (three or more
+// contradictory signals): this finding stays (it is true on its own) and points at the combined one.
+function buildCheck(noindexInSitemap: string[], consolidated: ReadonlySet<string>): CheckResult {
   if (noindexInSitemap.length > 0) {
+    const pointers = noindexInSitemap.filter((u) => consolidated.has(u));
     return {
       name: "noindex-in-sitemap",
       status: "warn",
       message: `${noindexInSitemap.length} noindexed page(s) found in sitemap`,
       items: noindexInSitemap.map((url) => ({ id: url })),
+      ...(pointers.length > 0
+        ? {
+            details: {
+              alsoReportedBy: "crawl/conflicting-index-signals",
+              alsoReportedPages: pointers.slice(0, 50),
+            },
+          }
+        : {}),
     };
   }
   return {
@@ -32,20 +47,39 @@ function buildCheck(noindexInSitemap: string[]): CheckResult {
 
 // Streaming path (#1022): meta-only noindex is the pre-extracted `metaNoindex`
 // scalar; sitemap membership stays a run-time cross-ref against ctx.site.sitemaps.
+function consolidatedPages(
+  rows: readonly IndexSignalPage[],
+  sitemapUrls: ReadonlySet<string>,
+  robotsTxt: RobotsTxtData | null | undefined,
+): Set<string> {
+  const verdict = evaluateIndexSignals(rows, sitemapUrls, robotsTxt);
+  return new Set(verdict.kind === "conflicts" ? verdict.pages.map((p) => p.url) : []);
+}
+
 async function runViaSiteQuery(
   siteQuery: SiteQuery,
-  sitemaps: SitemapDiscovery
+  sitemaps: SitemapDiscovery,
+  robotsTxt: RobotsTxtData | null | undefined,
 ): Promise<RuleResult> {
   const sitemapUrls = collectSitemapUrls(sitemaps);
   const noindexInSitemap: string[] = [];
+  const signalRows: IndexSignalPage[] = [];
   // row.normalizedUrl is the same value the legacy path reads as page.url
   // (site.pages[].url === PageRecord.normalizedUrl), so sitemap membership matches.
   for await (const row of siteQuery.pagesMatching(() => true)) {
+    signalRows.push({
+      url: row.normalizedUrl,
+      status: row.status,
+      canonical: row.canonical,
+      reasons: row.indexableReasons,
+    });
     if (row.metaNoindex && sitemapUrls.has(row.normalizedUrl)) {
       noindexInSitemap.push(row.normalizedUrl);
     }
   }
-  return { checks: [buildCheck(noindexInSitemap)] };
+  return {
+    checks: [buildCheck(noindexInSitemap, consolidatedPages(signalRows, sitemapUrls, robotsTxt))],
+  };
 }
 
 export const noindexInSitemapRule: Rule = {
@@ -76,7 +110,7 @@ export const noindexInSitemapRule: Rule = {
           ],
         };
       }
-      return runViaSiteQuery(ctx.siteQuery, sitemaps);
+      return runViaSiteQuery(ctx.siteQuery, sitemaps, ctx.site?.robotsTxt);
     }
 
     const checks: CheckResult[] = [];
@@ -110,6 +144,19 @@ export const noindexInSitemapRule: Rule = {
       }
     }
 
-    return { checks: [buildCheck(noindexInSitemap)] };
+    const signalRows: IndexSignalPage[] = pages.map((page) => ({
+      url: page.url,
+      status: page.statusCode ?? 200,
+      canonical: page.parsed.meta.canonical ?? null,
+      reasons: isPageIndexable(page.parsed, page.headers).reasons,
+    }));
+    return {
+      checks: [
+        buildCheck(
+          noindexInSitemap,
+          consolidatedPages(signalRows, sitemapUrls, ctx.site?.robotsTxt),
+        ),
+      ],
+    };
   },
 };

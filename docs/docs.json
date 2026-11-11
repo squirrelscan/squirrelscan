@@ -201,6 +201,7 @@
                   "rules/crawl/sitemap-valid",
                   "rules/crawl/robots-meta-conflict",
                   "rules/crawl/noindex-in-sitemap",
+                  "rules/crawl/conflicting-index-signals",
                   "rules/crawl/canonical-chain",
                   "rules/crawl/pagination",
                   "rules/crawl/redirect-chain",

@@ -2803,6 +2803,12 @@
    "canonical-chain|pass|Canonical URL appears direct||"
   ]
  },
+ "crawl/conflicting-index-signals": {
+  "digest": "166687031224775",
+  "lines": [
+   "conflicting-index-signals|pass|No page sends contradictory indexing signals||"
+  ]
+ },
  "crawl/html-size": {
   "digest": "153079876188729",
   "lines": [

@@ -17,7 +17,9 @@ The rule is site-wide. It collects every `<loc>` from every discovered sitemap, 
 - Warn when at least one noindexed page appears in a sitemap. Message: `3 noindexed page(s) found in sitemap`, with each URL listed. Severity warning, weight 5.
 - Pass otherwise. Message: `No noindexed pages in sitemap`.
 
-The `robots` meta value is lowercased and split on commas before the `noindex` token is looked for, so `noindex, follow` matches. Only the meta tag is read here: an `X-Robots-Tag` response header carrying `noindex` is not part of this comparison, and `crawl/all-noindex-pages` covers that case.
+The `robots` meta value is lowercased and split on commas before the `noindex` token is looked for, so `noindex, follow` matches. When a noindexed page also carries another signal that keeps it out of the index (an `X-Robots-Tag` noindex, a canonical to another URL or a robots.txt block), [crawl/conflicting-index-signals](/rules/crawl/conflicting-index-signals) reports it as well, and this finding carries `alsoReportedBy` and `alsoReportedPages` details pointing at it. The finding itself does not change.
+
+Only the meta tag is read here: an `X-Robots-Tag` response header carrying `noindex` is not part of this comparison, and `crawl/all-noindex-pages` covers that case.
 
 ## How to fix it
 
