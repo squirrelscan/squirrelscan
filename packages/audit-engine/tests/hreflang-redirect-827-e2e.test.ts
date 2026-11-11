@@ -99,9 +99,11 @@ for (const engine of ["v1", "v2"] as const) {
   describe(`i18n/hreflang on a redirected page (pub#827, ${engine})`, () => {
     test("the self reference is compared with the URL the page ended on", async () => {
       const { on } = await audit(engine);
-      // The target references itself; it has no x-default, which is a real
-      // finding about that markup.
-      expect(on("/en/old-slug")).toEqual(["hreflang-xdefault:warn", "hreflang:pass"]);
+      // The redirecting URL is a redirect, not a page (#1762): nothing is graded against it.
+      expect(on("/en/old-slug")).toEqual([]);
+      // The target is audited as itself and references itself; it has no x-default, which is
+      // a real finding about that markup.
+      expect(on("/en/new-slug")).toEqual(["hreflang-xdefault:warn", "hreflang:pass"]);
       // A 200 page with no self reference still warns.
       expect(on("/no-self")).toContain("hreflang-self:warn");
     });

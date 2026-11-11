@@ -315,3 +315,35 @@ describe("crawl/canonical-chain — canonical-redirects needs the same evidence"
     );
   });
 });
+
+describe("crawl/canonical-chain: a redirecting URL has no document of its own (#1762)", () => {
+  const O = "https://example.com";
+  const hops = chain(`${O}/old`, `${O}/new`, [hop(`${O}/old`, 301), hop(`${O}/new`, 200)]);
+  const source = { url: `${O}/old`, finalUrl: `${O}/new`, redirectChain: hops, statusCode: 301 };
+
+  test("the redirect source reports its hops without a document", () => {
+    const result = canonicalChainRule.run({
+      page: { ...source, html: "" },
+      parsed: { document: null },
+      options: {},
+    } as unknown as RuleContext);
+    expect(result.checks.map((c) => c.name)).toEqual(["page-redirect-chain"]);
+  });
+
+  test("a destination whose canonical names the redirect source still gets canonical-redirects", () => {
+    const base = ctx({ url: `${O}/new`, canonical: `${O}/old` });
+    const withSite = {
+      ...base,
+      site: { pages: [source, { url: `${O}/new`, finalUrl: `${O}/new`, statusCode: 200 }] },
+    } as unknown as RuleContext;
+    const check = canonicalChainRule.run(withSite).checks.find((c) => c.name === "canonical-redirects");
+    expect(check?.status).toBe("warn");
+    expect(check?.items?.[0]?.label).toContain("/old");
+  });
+
+  test("a canonical naming a URL that did not redirect here reports nothing", () => {
+    const base = ctx({ url: `${O}/other`, canonical: `${O}/old` });
+    const withSite = { ...base, site: { pages: [source] } } as unknown as RuleContext;
+    expect(canonicalChainRule.run(withSite).checks.find((c) => c.name === "canonical-redirects")).toBeUndefined();
+  });
+});

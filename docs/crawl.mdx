@@ -126,6 +126,10 @@ Before crawling begins, SquirrelScan:
 2. Fetches the target page and checks for client-side redirects
 3. Continues following redirects up to 10 hops
 4. Detects and prevents redirect loops
+
+### Redirecting URLs are not pages
+
+A URL found in a link, the sitemap or a known-URL list that redirects to another page is recorded as a redirect (the URL, its hops and its destination) and is not audited as a page. Its content belongs to the destination, which is audited once under its own URL, even when nothing else links to it. The redirect rules (`crawl/redirect-chain`, `crawl/canonical-chain`, `links/redirect-chains`) still report the redirecting URL and its hops, and the report's page counts leave it out. A redirect that leaves the site is not followed into the audit.
 5. Uses the final URL as the crawl base URL
 
 ### Example: Geo-targeted redirects

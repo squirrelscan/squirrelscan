@@ -929,6 +929,17 @@ export function createCrawler(
       return { normalized, decision };
     };
 
+    /**
+     * The URL a fetch landed on when that is a different page from the one asked for
+     * (the frontier's own normalization, so `/a` and `/a/` or a stripped tracking
+     * parameter are not a redirect), else null.
+     */
+    const redirectTargetOf = (requested: string, landed: string | undefined): string | null => {
+      if (!landed) return null;
+      const { normalized } = normalizeAndCheckScope(landed);
+      return normalized !== null && normalized !== requested ? landed : null;
+    };
+
     // An absolute include that allowedDomains refused is almost certainly a
     // config the user expected to work, so say so once per include and host.
     const vetoWarned = new Set<string>();
@@ -1204,6 +1215,18 @@ export function createCrawler(
           parentUrl: entry.parentUrl,
         });
         pagesCommitted++;
+
+        // A cached redirect keeps its destination in the crawl (#1762).
+        const cachedRedirectTarget = redirectTargetOf(entry.normalizedUrl, cachedPage.finalUrl);
+        if (cachedRedirectTarget) {
+          yield* enqueueUrl(
+            crawlId,
+            cachedRedirectTarget,
+            entry.depth,
+            entry.normalizedUrl,
+            "discovered",
+          );
+        }
 
         // Copy links + images from the cached page.
         const cachedLinks = yield* storage.getLinksByPage(entry.normalizedUrl);
@@ -1988,6 +2011,61 @@ export function createCrawler(
           if (entry.source === "seed") {
             const landedHost = sameSiteHostOtherThanBase(result.finalUrl);
             if (landedHost) yield* reportSeedBaseMismatch(landedHost, "landed on");
+          }
+
+          // A URL that redirected to another page is recorded as a redirect (source,
+          // hops, destination) and nothing else (#1762). Its body is the destination's,
+          // which is crawled and audited as itself: keeping it here would count the
+          // destination twice and file its findings against a URL the owner cannot fix
+          // them on. The destination is queued so it is audited once even when nothing
+          // else links to it (a no-op when it is already known or out of scope).
+          const redirectTarget = redirectTargetOf(entry.normalizedUrl, result.finalUrl);
+          if (redirectTarget) {
+            yield* storage.upsertPage(crawlId, {
+              url: entry.rawUrl,
+              normalizedUrl: entry.normalizedUrl,
+              finalUrl: result.finalUrl,
+              depth: entry.depth,
+              parentUrl: entry.parentUrl,
+              redirectChain: result.redirectChain,
+              status: result.status,
+              contentType: result.contentType,
+              sizeBytes: 0,
+              loadTimeMs: result.loadTime,
+              ttfb: result.ttfb,
+              downloadTime: result.downloadTime,
+              fetchedAt: Date.now(),
+              etag: null,
+              lastModified: null,
+              contentHash: "",
+              html: null,
+              parsedData: null,
+              headers,
+              securityHeaders,
+              requestHeaders: requestContext,
+              fetcherId: result.fetcherId,
+              fallbackReason: result.fallbackReason,
+            });
+            pagesCommitted++;
+            yield* storage.updateFrontierStatus(crawlId, entry.normalizedUrl, "done");
+            yield* emit({
+              type: "page:fetched",
+              url: entry.normalizedUrl,
+              status: result.status,
+              loadTimeMs: result.loadTime,
+              ttfbMs: result.ttfb,
+              sizeBytes: 0,
+              depth: entry.depth,
+              fetcherId: result.fetcherId,
+              timestamp: Date.now(),
+              renderTimeMs: result.renderTimeMs,
+              queueWaitMs: result.queueWaitMs,
+            });
+            yield* updateStats(crawlId, { pagesFetched: 1, bytesTotal: 0 });
+            markPrefixCrawled(entry.normalizedUrl, entry.depth);
+            yield* enqueueUrl(crawlId, redirectTarget, entry.depth, entry.normalizedUrl, "discovered");
+            yield* emitProgress(crawlId);
+            return;
           }
 
           // Parse and discover URLs if HTML (before storing page)
