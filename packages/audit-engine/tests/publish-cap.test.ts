@@ -1381,6 +1381,33 @@ describe("capReportForPublish: link target sets (repo#2861)", () => {
     expect(has(sets.broken, `${SITE}/fine`)).toBe(false);
   });
 
+  test("a link in site-wide chrome is in the broken set too, with or without a content check beside it (#1772)", () => {
+    const wide = targets(2, `${SITE}/footer-gone-`);
+    const content = targets(1, `${SITE}/body-gone-`);
+    const both = capReportForPublish({
+      ruleResults: {
+        "links/broken-links": {
+          meta: linkMeta("links/broken-links"),
+          checks: [row("broken-links", "fail", content), row("broken-links-sitewide", "fail", wide)],
+        },
+      },
+    } as Report);
+    const bothSet = both.linkTargetSets!["links/broken-links"]!.broken;
+    for (const url of [...wide, ...content]) expect(has(bothSet, url)).toBe(true);
+    // Only the site-wide check: the rule ran and failed, so the set exists and holds the footer links.
+    const only = capReportForPublish({
+      ruleResults: {
+        "links/broken-links": {
+          meta: linkMeta("links/broken-links"),
+          checks: [row("broken-links-sitewide", "fail", wide)],
+        },
+      },
+    } as Report);
+    const onlySet = only.linkTargetSets!["links/broken-links"]!.broken;
+    expect(onlySet).toMatchObject({ count: 2, complete: true });
+    for (const url of wide) expect(has(onlySet, url)).toBe(true);
+  });
+
   test("a rule that passed carries empty sets; one that did not run carries none", () => {
     const input: Report = {
       ruleResults: {

@@ -85,6 +85,8 @@ describe("meta.checks declarations (#1741)", () => {
     expect(withSuperseded.map((r) => r.meta.id).sort()).toEqual([
       "core/meta-description",
       "core/meta-title",
+      "links/broken-external-links",
+      "links/broken-links",
       "links/internal-links",
     ]);
     for (const { meta } of withSuperseded) {
@@ -93,7 +95,12 @@ describe("meta.checks declarations (#1741)", () => {
         expect(successors, `${meta.id}: ${oldName} supersedes itself`).not.toContain(oldName);
         expect(new Set(successors).size, `${meta.id}: duplicate successor`).toBe(successors.length);
         for (const s of successors) {
-          expect(meta.supersededChecks![s], `${meta.id}: ${s} is itself superseded`).toBeUndefined();
+          // No chains. The one allowed shape is a pair of peers that name each other (a link that moves between
+          // two checks, #1772): the merge decides one level, so a pair cannot loop.
+          const back = meta.supersededChecks![s];
+          if (back !== undefined) {
+            expect(back, `${meta.id}: ${s} is itself superseded, but not by ${oldName}`).toEqual([oldName]);
+          }
         }
       }
     }
