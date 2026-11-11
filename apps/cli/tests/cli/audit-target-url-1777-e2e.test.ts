@@ -105,12 +105,14 @@ describe("--target-url", () => {
     expect(r.code).toBe(0);
     const json = JSON.parse(r.out) as Json;
 
-    // The pages fetched are the listed ones and robots.txt: no start URL, no sitemap, no probe, no link
-    // followed. (The links the three pages carry are status-checked with HEAD, as in any audit.)
-    const gets = new Set(
-      hits.filter((h) => h.startsWith("GET ")).map((h) => h.slice(4))
-    );
-    expect([...gets].sort()).toEqual(["/p/1", "/p/2", "/p/3", "/robots.txt"]);
+    // The site saw the three pages and robots.txt: no start URL, no sitemap, no probe, no link followed, and
+    // no status check of the links on the pages (the link rules are site-wide and skip).
+    expect([...new Set(hits)].sort()).toEqual([
+      "GET /p/1",
+      "GET /p/2",
+      "GET /p/3",
+      "GET /robots.txt",
+    ]);
     expect(hits.some((h) => /sitemap|llms|well-known/.test(h))).toBe(false);
 
     // The pages list also names the refused URL (status 0, with its reason); the audited pages are the three.

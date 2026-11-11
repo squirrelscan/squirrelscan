@@ -193,3 +193,27 @@ describe("resolveRegisterDecision", () => {
     );
   });
 });
+
+describe("resolvePublishDecision: targeted run (#1777)", () => {
+  test("a --target-url run is not auto-published: it would replace the site's latest audit with a few pages", () => {
+    expect(resolvePublishDecision(opts({ targeted: true }))).toBe(false);
+    // Signed in, config on: it is the targeted flag alone that stops it.
+    expect(resolvePublishDecision(opts({ targeted: false }))).toBe(true);
+  });
+
+  test("an explicit --publish still publishes it", () => {
+    expect(
+      resolvePublishDecision(opts({ targeted: true, explicitPublish: true }))
+    ).toBe(true);
+  });
+
+  test("offline and a non-public host still win over --publish", () => {
+    const over = { targeted: true, explicitPublish: true };
+    expect(resolvePublishDecision(opts({ ...over, offline: true }))).toBe(
+      false
+    );
+    expect(resolvePublishDecision(opts({ ...over, nonPublicHost: true }))).toBe(
+      false
+    );
+  });
+});
