@@ -763,3 +763,118 @@ describe("per-crawler rows that became one wildcard row (#1780)", () => {
     expect(diffReports(before, now).removed).toHaveLength(2);
   });
 });
+
+// #1781: a rule that caps its item list lists the first N and counts the rest in `details.additional`.
+describe("a rule that capped its item list (#1781)", () => {
+  const LINKS_RULE = "links/broken-links";
+  const items = (ids: string[]) => ids.map((id) => ({ id, sourcePages: [A] }));
+  const check = (ids: string[], additional?: number): CheckResult => ({
+    name: "broken-links",
+    status: "fail",
+    message: `${ids.length} broken`,
+    items: items(ids),
+    ...(additional === undefined ? {} : { details: { additional } }),
+  });
+  const at = (c: CheckResult) =>
+    report({ [LINKS_RULE]: rule(LINKS_RULE, [c], "site") });
+  const before = () => at(check([`${BASE}/x`, `${BASE}/y`]));
+
+  test("a baseline item missing from a capped list is not compared, never fixed", () => {
+    const d = diffReports(before(), at(check([`${BASE}/x`], 40)));
+    expect(d.removed).toHaveLength(0);
+    expect(reasonOf(d)).toEqual([["items-capped", undefined]]);
+  });
+
+  test("control: the same missing item with no cap is fixed", () => {
+    const d = diffReports(before(), at(check([`${BASE}/x`])));
+    expect(d.removed).toHaveLength(1);
+    expect(d.notCompared).toBeUndefined();
+  });
+
+  test("control: additional of 0 is not a cap", () => {
+    expect(
+      diffReports(before(), at(check([`${BASE}/x`], 0))).removed
+    ).toHaveLength(1);
+  });
+
+  test("a capped check does not hold back an item that is still listed", () => {
+    const d = diffReports(before(), at(check([`${BASE}/x`, `${BASE}/y`], 40)));
+    expect(d.removed).toHaveLength(0);
+    expect(d.notCompared).toBeUndefined();
+  });
+
+  test("a cap on another page's check does not hold back this page's fix (#1781 review)", () => {
+    // A page rule's per-page checks: page Q listed only some of its items; page P's list is whole and no longer has x.
+    const perPage = (
+      page: string,
+      ids: string[],
+      additional?: number
+    ): CheckResult => ({
+      name: "broken-links",
+      status: "fail",
+      message: `${ids.length} broken`,
+      pageUrl: page,
+      items: ids.map((id) => ({ id, sourcePages: [page] })),
+      ...(additional === undefined ? {} : { details: { additional } }),
+    });
+    const base = report({
+      [LINKS_RULE]: rule(LINKS_RULE, [perPage(A, [`${BASE}/x`])], "page"),
+    });
+    const now = (aChecks: CheckResult) =>
+      report({
+        [LINKS_RULE]: rule(
+          LINKS_RULE,
+          [aChecks, perPage(B, [`${BASE}/q`], 40)],
+          "page"
+        ),
+      });
+    // P (= A) is fixed while Q (= B) is capped: P reads fixed.
+    const fixed = diffReports(
+      base,
+      now({ name: "broken-links", status: "pass", message: "ok", pageUrl: A })
+    );
+    expect(fixed.removed).toHaveLength(1);
+    expect(fixed.notCompared).toBeUndefined();
+    // The same cap on P's own check holds it back.
+    const held = diffReports(base, now(perPage(A, [`${BASE}/y`], 40)));
+    expect(held.removed).toHaveLength(0);
+    expect(reasonOf(held)).toEqual([["items-capped", undefined]]);
+  });
+
+  test("a slim export keeps the cap: the same item is not fixed there either", () => {
+    const slim = convertSlimReport({
+      meta: {
+        version: "1",
+        baseUrl: BASE,
+        timestamp: "2026-11-12T00:00:00.000Z",
+        totalPages: 2,
+      },
+      score: { overall: 80, grade: "B", categories: [] },
+      summary: { passed: 0, warnings: 0, failed: 1 },
+      issues: [
+        {
+          ruleId: LINKS_RULE,
+          name: LINKS_RULE,
+          description: "",
+          domain: "links",
+          severity: "error",
+          checks: [
+            {
+              name: "broken-links",
+              status: "fail",
+              message: "1 broken",
+              affectedPages: [],
+              affectedPagesHasMore: false,
+              items: items([`${BASE}/x`]),
+              details: { additional: 40 },
+            },
+          ],
+        },
+      ],
+      rules: [{ ruleId: LINKS_RULE, status: "ran", scope: { origin: BASE } }],
+    } as never);
+    const d = diffReports(before(), slim);
+    expect(d.removed).toHaveLength(0);
+    expect(reasonOf(d)).toEqual([["items-capped", undefined]]);
+  });
+});

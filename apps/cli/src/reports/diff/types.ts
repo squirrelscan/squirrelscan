@@ -68,6 +68,11 @@ export type NotComparedReason =
   /** The rule skipped the issue's page in the current audit (a noindex or unreadable page; `detail` is the page). */
   | "rule-skipped-on-page"
   /**
+   * The current report's check lists only the first N of its items and counts the rest in `details.additional`
+   * (#1781): a baseline item missing from the list may be among the ones left out, so it is not shown fixed.
+   */
+  | "items-capped"
+  /**
    * The current report was rebuilt from a slim JSON export (`report --input`), which keeps a sample of each
    * check's pages and no passing rows: a finding's absence from it is not evidence it was fixed.
    */

@@ -9,6 +9,8 @@ const REASON_TEXT: Record<NotComparedIssue["reason"], string> = {
   "rule-not-run-in-baseline": "the rule did not run in the baseline audit",
   "page-not-crawled": "the page was not crawled in the current audit",
   "rule-skipped-on-page": "the rule skipped the page in the current audit",
+  "items-capped":
+    "the rule listed only some of its items in the current audit, and this one may be among the rest",
   "sampled-report":
     "the current report is a sampled export that cannot show the finding is gone",
   "targeted-run":

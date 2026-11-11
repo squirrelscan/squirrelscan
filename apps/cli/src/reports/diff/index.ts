@@ -444,6 +444,41 @@ function makeNotComparedJudge(
       }
     }
 
+    // A rule that caps its item list lists the first N and counts the rest in `details.additional` (#1781). A
+    // baseline item missing from such a list may be one of the rest: still failing, just not listed.
+    if (issue.target.type === "item") {
+      const names = new Set([
+        issue.checkName,
+        ...(
+          superseded.get(resolutionCheckKey(issue.ruleId, issue.checkName)) ??
+          []
+        ).map((s) => splitSuccessor(s).check),
+      ]);
+      // A check that sits on its own page(s) (a page rule's per-page check) caps only that page's items: another
+      // page's capped list says nothing about this item. A site-scope check has no page, so it covers them all.
+      const issuePages = new Set((issue.sourcePages ?? []).map(norm));
+      const capped = (reportRule(current, issue.ruleId)?.checks ?? []).some(
+        (c) => {
+          if (
+            !names.has(c.name) ||
+            c.status === "skipped" ||
+            typeof c.details?.additional !== "number" ||
+            c.details.additional <= 0
+          ) {
+            return false;
+          }
+          const own = [
+            ...(c.pageUrl ? [c.pageUrl] : []),
+            ...(c.pages ?? []),
+          ].map(norm);
+          // No page: a site-wide cap. An item with no page of its own cannot be placed: capped, the safe side.
+          if (own.length === 0 || issuePages.size === 0) return true;
+          return own.some((p) => issuePages.has(p));
+        }
+      );
+      if (capped) return { reason: "items-capped" };
+    }
+
     // The pages the issue sits on: its target for a page issue, its source pages for an item.
     const pages =
       issue.target.type === "page"
