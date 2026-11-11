@@ -227,3 +227,16 @@ describe("canonical-to-homepage in the rule", () => {
     expect(checks.filter((c) => c.name === "canonical-to-homepage")).toHaveLength(1);
   });
 });
+
+describe("declared severity agrees with the statuses the rule emits (#1746)", () => {
+  test("a rule that emits fail is declared error", () => {
+    const pages: Array<[string, { canonical?: string | null }]> = [
+      ["https://example.com/a", { canonical: "/a" }],
+      ["https://example.com/a", { canonical: "https://example.com/" }],
+      ["https://example.com/a", { canonical: "http://[bad" }],
+    ];
+    const emitsFail = pages.some(([url, opts]) => run(url, opts).some((c) => c.status === "fail"));
+    expect(emitsFail).toBe(true);
+    expect(canonicalRule.meta.severity).toBe("error");
+  });
+});

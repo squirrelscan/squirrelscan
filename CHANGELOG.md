@@ -36,6 +36,7 @@ How it works:
 - `squirrel skills status` reads the version of a skill symlinked from a checkout, marks it `(linked)` and flags it behind the latest, instead of showing `-`; the checkout is never written (#1730)
 - Docs: any command can trigger the CLI auto-update and `squirrel --version` may differ after one; offline and cloud scores are not comparable; the schema-noindex-conflict page says a `header:noindex` source lives outside the page source (#1730)
 - `links/anchor-mismatch` no longer reports a "page -> target" pair as the affected page: each item names its source page alone, and the target and anchor text stay in the label, so the llm, markdown, JSON and cloud views agree (#1729).
+- **Behaviour change:** the llm report format labels its two kinds of score (`scope="group"` on each `<group>`, `scope="category"` on each `<cat>`) and prints the version recorded in the report as the `<audit version>`, so a stored report no longer reads `0.0.0`. `core/canonical` is now declared severity `error`, matching the `fail` results it emits (relative or invalid canonical, canonical to the home page); its `warn` results stay warnings, and a failing canonical now reports as an error instead of a warning (#1746).
 
 ## v0.0.177 (2026-11-11)
 

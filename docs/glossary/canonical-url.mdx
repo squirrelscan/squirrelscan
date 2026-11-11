@@ -26,7 +26,7 @@ When one page is reachable at several URLs, links and other signals split betwee
 
 | Rule | What it flags | Severity |
 |---|---|---|
-| [rel=canonical: presence, absolute form and self-reference](/rules/core/canonical) | A page with no canonical link, a relative one, or one that points somewhere else. squirrel checks every crawled page. | warning |
+| [rel=canonical: presence, absolute form and self-reference](/rules/core/canonical) | A page with no canonical link, a relative one, or one that points somewhere else. squirrel checks every crawled page. | error |
 | [Link rel=canonical header vs the HTML tag: the mismatch](/rules/core/canonical-header) | A page declaring one canonical in an HTTP header and a different one in the markup. squirrel parses the header and compares. | warning |
 | [Canonicals in two forms: www, scheme and trailing slash](/rules/core/canonical-form-drift) | Half the site canonicalising to www and half to the apex domain. squirrel compares four form axes across the crawl. | warning |
 | [Canonical URL resolves through a redirect: how to spot it](/rules/crawl/canonical-chain) | A canonical that redirects sends search engines on an extra hop before the real URL. squirrel checks the tag against the page's own redirect chain. | warning |

@@ -68,7 +68,9 @@ export const canonicalRule: Rule = {
     category: "core",
     scope: "page",
     verdictScope: "page",
-    severity: "warning",
+    // "error" because this rule emits `fail` (relative or invalid canonical, canonical to the home page):
+    // the effective severity of a failing rule is its declared one (#1746). Missing and locale-home are `warn`.
+    severity: "error",
     weight: 6,
   },
 

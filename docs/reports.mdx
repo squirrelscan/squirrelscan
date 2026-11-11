@@ -446,9 +446,10 @@ squirrel report -f llm | claude "analyze this audit and prioritize fixes"
 <audit version="0.0.13">
 <site url="https://example.com" crawled="42" date="2025-01-18T10:30:00Z"/>
 <score overall="87" grade="B">
- <cat name="Core SEO" score="100"/>
- <cat name="Links" score="85"/>
- <cat name="Images" score="72"/>
+ <group name="SEO" score="91" scope="group" errors="2" warnings="5"/>
+ <cat name="Core SEO" score="100" scope="category"/>
+ <cat name="Links" score="85" scope="category"/>
+ <cat name="Images" score="72" scope="category"/>
 </score>
 <summary passed="83" warnings="13" failed="9"/>
 <issues>
@@ -477,6 +478,8 @@ squirrel report -f llm | claude "analyze this audit and prioritize fixes"
 </locked-rules>
 </audit>
 ```
+
+`<score>` carries two kinds of score, and each line says which: `<group scope="group">` is the score of a top-level group (SEO, Performance, Security, and so on) with its error and warning counts, and `<cat scope="category">` is the score of one finer category inside a group. They are different numbers on different scales of detail, so do not compare a group score with a category score. The `<audit version>` attribute is the version of squirrelscan that produced the report: for a stored or published report it is the version recorded in that report, and it is `0.0.0` only when the report records none and the renderer was given none.
 
 `<info-checks>` holds the notes rules recorded that are neither findings nor skips (status `info`). It is left out unless you pass `--include-info` (the LLM report is read against a token budget, and most info checks are "nothing to check" notes); the JSON report always has them. They never change the score. It lists the first 25 with up to three pages each and a `<more count>` for the rest; the JSON report's `infoChecks` has them all.
 
