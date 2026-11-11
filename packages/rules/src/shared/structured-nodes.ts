@@ -228,6 +228,14 @@ function microdataValue(el: Element): string {
   }
 }
 
+/**
+ * A Microdata `itemtype` token that names a schema.org type: an http or https URL on schema.org (with or
+ * without www). Anchored on the scheme and host, so `https://evil.example/schema.org/Product` is not one.
+ */
+function isSchemaOrgType(token: string): boolean {
+  return /^https?:\/\/(?:www\.)?schema\.org\//i.test(token.trim());
+}
+
 export function readMicrodata(doc: Document): MarkupRead {
   return readScopes(doc, {
     scopeSelector: "[itemscope]",
@@ -235,7 +243,7 @@ export function readMicrodata(doc: Document): MarkupRead {
     propsOf: (el) => tokens(el.getAttribute("itemprop")).map(localName),
     typesOf: (el) =>
       tokens(el.getAttribute("itemtype"))
-        .filter((t) => /schema\.org/i.test(t))
+        .filter(isSchemaOrgType)
         .map(localName),
     valueOf: microdataValue,
     unsupported: (el) => el.hasAttribute("itemref"),
@@ -261,7 +269,7 @@ export function readRdfa(doc: Document): MarkupRead {
     typesOf: (el) => {
       const inVocab = !!el.closest('[vocab*="schema.org" i]');
       return tokens(el.getAttribute("typeof"))
-        .filter((t) => /schema\.org|^schema:/i.test(t) || (inVocab && !/[:/]/.test(t)))
+        .filter((t) => isSchemaOrgType(t) || /^schema:/i.test(t) || (inVocab && !/[:/]/.test(t)))
         .map(localName);
     },
     valueOf: rdfaValue,

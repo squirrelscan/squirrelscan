@@ -144,10 +144,22 @@ function productSignals(ctx: RuleContext, doc: Document): boolean {
   return false;
 }
 
+/** Whether `text` names the schema.org `Product` or `ProductGroup` type (`schema.org/Product`, then a non-word character). A plain scan, not a host-anchored match: it looks for a type name inside script text. */
+function mentionsProductType(text: string): boolean {
+  const needle = "schema.org/Product";
+  const word = /[A-Za-z0-9_]/;
+  for (let at = text.indexOf(needle); at !== -1; at = text.indexOf(needle, at + 1)) {
+    let end = at + needle.length;
+    if (text.startsWith("Group", end)) end += "Group".length;
+    if (end >= text.length || !word.test(text.charAt(end))) return true;
+  }
+  return false;
+}
+
 function scriptBuildsProduct(doc: Document): boolean {
   for (const s of Array.from(doc.querySelectorAll("script:not([type='application/ld+json'])"))) {
     const t = s.textContent ?? "";
-    if (t.length > 0 && t.length < 500_000 && /schema\.org\/Product(?:Group)?\b/.test(t)) return true;
+    if (t.length > 0 && t.length < 500_000 && mentionsProductType(t)) return true;
   }
   return false;
 }
