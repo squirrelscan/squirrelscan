@@ -27,12 +27,13 @@ export const NOT_CHECKED = "not-checked";
  * or the crawler kept no result, which is either (llms, markdown and RSL store
  * no row in both cases).
  */
-export type NotCheckedReason = "not-sent" | "no-answer" | "no-result";
+export type NotCheckedReason = "not-sent" | "no-answer" | "no-result" | "blocked";
 
 const REASON_TEXT: Record<NotCheckedReason, string> = {
   "not-sent": "the discovery probe was not sent",
   "no-answer": "the discovery probe got no answer",
   "no-result": "the discovery probe was not sent or got no answer",
+  blocked: "the discovery probe was refused or throttled",
 };
 
 /** An info check saying `subject` was not checked, and why. */

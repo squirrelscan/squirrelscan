@@ -38,6 +38,21 @@ function sweep(probes: WellKnownProbe[]): WellKnownProbe[] {
   );
 }
 
+const CATALOG_BODY =
+  '{"linkset":[{"anchor":"https://example.invalid/","item":[{"href":"https://example.invalid/api"}]}]}';
+
+function catalog(body: string, over: Partial<WellKnownProbe> = {}): WellKnownProbe {
+  return probe({
+    status: 200,
+    contentType: "application/linkset+json",
+    bodySize: body.length,
+    jsonValid: true,
+    jsonKeys: ["linkset"],
+    excerpt: body,
+    ...over,
+  });
+}
+
 function ctx(probes: WellKnownProbe[] | null | undefined, raw = false): RuleContext {
   const wk: WellKnownProbeData | null = probes ? { probes: raw ? probes : sweep(probes) } : null;
   return {
@@ -87,10 +102,94 @@ describe("ax/api-discovery", () => {
   });
 
   test("api-catalog hit → present", () => {
-    const checks = run([
-      probe({ path: "/.well-known/api-catalog", status: 200, jsonValid: true, jsonKeys: ["linkset"] }),
-    ]);
+    const checks = run([catalog(CATALOG_BODY)]);
     expect(checks.find((c) => c.name === "api-discovery")?.value).toBe("present");
+  });
+
+  // #1650: the catalog is validated as a non-empty linkset and each failure has its own state.
+  describe("api-catalog states (#1650)", () => {
+    const api = (probes: WellKnownProbe[]) => run(probes).find((c) => c.name === "api-discovery");
+
+    test("non-empty linkset → present, media type recorded", () => {
+      const c = api([catalog(CATALOG_BODY)]);
+      expect(c?.value).toBe("present");
+      expect(c?.details).toMatchObject({ apiCatalogState: "present", apiCatalogMediaTypeOk: true });
+    });
+
+    test("wrong media type still present, flagged in details", () => {
+      const c = api([catalog(CATALOG_BODY, { contentType: "application/json" })]);
+      expect(c?.value).toBe("present");
+      expect(c?.details).toMatchObject({ apiCatalogMediaTypeOk: false });
+    });
+
+    test("truncated excerpt of a large catalog is still present", () => {
+      const c = api([catalog(CATALOG_BODY.slice(0, 40))]);
+      expect(c?.value).toBe("present");
+    });
+
+    test("empty linkset → empty-linkset", () => {
+      expect(api([catalog('{"linkset":[]}')])?.value).toBe("empty-linkset");
+    });
+
+    test("linkset with no link objects is empty, a non-list is invalid-linkset", () => {
+      expect(api([catalog('{"linkset":["x"]}')])?.value).toBe("empty-linkset");
+      expect(api([catalog('{"linkset":"x"}')])?.value).toBe("invalid-linkset");
+    });
+
+    test("JSON without linkset → not-a-catalog; OpenAPI document is told apart", () => {
+      expect(api([catalog('{"a":1}', { jsonKeys: ["a"] })])?.value).toBe("not-a-catalog");
+      expect(
+        api([catalog('{"openapi":"3.0.0"}', { jsonKeys: ["openapi"] })])?.value,
+      ).toBe("openapi-document");
+    });
+
+    test("malformed JSON → malformed-json", () => {
+      const c = api([catalog('{"linkset":[', { jsonValid: false, jsonKeys: [] })]);
+      expect(c?.value).toBe("malformed-json");
+    });
+
+    test("200 HTML fallback → html-fallback", () => {
+      const c = api([
+        catalog("<!doctype html><html></html>", {
+          looksHtml: true,
+          jsonValid: false,
+          jsonKeys: [],
+          contentType: "text/html",
+        }),
+      ]);
+      expect(c?.value).toBe("html-fallback");
+    });
+
+    test("the five states are distinct", () => {
+      const values = [
+        catalog(CATALOG_BODY),
+        catalog('{"linkset":[]}'),
+        catalog("{", { jsonValid: false, jsonKeys: [] }),
+        catalog("<html>", { looksHtml: true, jsonValid: false, jsonKeys: [] }),
+      ].map((p) => api([p])?.value);
+      expect(new Set(values).size).toBe(values.length);
+    });
+
+    test.each([401, 403, 429, 503])("HTTP %d → not checked, never absent", (status) => {
+      const c = api([probe({ status })]);
+      expect(c?.value).toBe("not-checked");
+      expect(c?.status).toBe("info");
+      expect(c?.details).toMatchObject({ blocked: { "/.well-known/api-catalog": status } });
+    });
+
+    test("404 on every API path stays absent", () => {
+      expect(api([])?.value).toBe("absent");
+    });
+
+    test("a blocked OpenAPI path is not checked even when the catalog was 404", () => {
+      const c = api([probe({ path: "/openapi.json", status: 403 })]);
+      expect(c?.value).toBe("not-checked");
+    });
+
+    test("a catalog hit still wins over a blocked OpenAPI path", () => {
+      const c = api([catalog(CATALOG_BODY), probe({ path: "/openapi.json", status: 429 })]);
+      expect(c?.value).toBe("present");
+    });
   });
 
   test("openapi.json validated by jsonKeys → present", () => {
