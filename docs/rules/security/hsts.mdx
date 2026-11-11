@@ -11,17 +11,17 @@ The header only takes effect over HTTPS, and it is ignored on a plain HTTP respo
 
 ## What squirrel checks
 
-The rule reads the response headers of the first crawled page and emits a single check named `hsts`:
+The rule reads the response headers of the first crawled page and emits one check, and its name says which outcome it found (#1737):
 
-- Skipped when the crawl produced no pages. Message: `No pages to check`.
-- Info when that page's URL is not HTTPS, since the header would be ignored. Message: `HSTS not applicable - site not served over HTTPS`.
-- Warn when the header is absent. Message: `Missing Strict-Transport-Security header`, with `Add: Strict-Transport-Security: max-age=31536000` as the value.
-- Warn when the header is present but contains no `max-age=<digits>` directive, which makes it inert. Message: `Malformed HSTS header — no valid max-age directive`.
-- Warn when `max-age=0`, which instructs browsers to drop the policy. Message: `HSTS disabled — max-age=0 tells browsers to stop enforcing HTTPS`.
-- Warn when `max-age` is below 15768000 seconds, six months. Message: `HSTS max-age too short (30 days)`, with the age rounded to whole days.
-- Pass otherwise. Message: `HSTS configured correctly`, with the raw header as the value.
+- `hsts-no-pages`: Skipped when the crawl produced no pages. Message: `No pages to check`.
+- `hsts-not-applicable`: Info when that page's URL is not HTTPS, since the header would be ignored. Message: `HSTS not applicable - site not served over HTTPS`.
+- `hsts-missing`: Warn when the header is absent. Message: `Missing Strict-Transport-Security header`, with `Add: Strict-Transport-Security: max-age=31536000` as the value.
+- `hsts-malformed`: Warn when the header is present but contains no `max-age=<digits>` directive, which makes it inert. Message: `Malformed HSTS header — no valid max-age directive`.
+- `hsts-disabled`: Warn when `max-age=0`, which instructs browsers to drop the policy. Message: `HSTS disabled — max-age=0 tells browsers to stop enforcing HTTPS`.
+- `hsts-max-age-short`: Warn when `max-age` is below 15768000 seconds, six months. Message: `HSTS max-age too short (30 days)`, with the age rounded to whole days.
+- `hsts`: Pass otherwise. Message: `HSTS configured correctly`, with the raw header as the value.
 
-Severity is warning and the scope is site-wide, so the verdict comes from one page's headers rather than from every page.
+The names are distinct so a report, an agent or the cloud can tell a site with no header (`hsts-missing`) from one whose header is present but weak (`hsts-malformed`, `hsts-disabled`, `hsts-max-age-short`), and advise raising a `max-age` instead of adding a header that exists. Earlier versions named every outcome `hsts`; findings from that name are re-keyed once on the next audit. Severity is warning and the scope is site-wide, so the verdict comes from one page's headers rather than from every page.
 
 On a local or private-network host, such as `localhost` or `192.168.1.10`, the rule is skipped and left out of the score, because a dev server is not the production edge. See [Transport and delivery rules do not apply](/guides/local-audits-cli#transport-and-delivery-rules-do-not-apply).
 

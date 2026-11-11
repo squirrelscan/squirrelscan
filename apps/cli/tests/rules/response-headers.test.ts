@@ -27,7 +27,7 @@ describe("security/hsts", () => {
       ? { "strict-transport-security": value }
       : {};
     const { checks } = hstsRule.run(siteCtx(url, headers)) as { checks: any[] };
-    return checks.find((c) => c.name === "hsts");
+    return checks[0];
   }
 
   test("max-age=0 is flagged as disabled, not 'too short'", () => {
