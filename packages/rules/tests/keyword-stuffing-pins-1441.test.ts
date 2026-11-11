@@ -2,9 +2,10 @@
 //
 // These are NOT wishes: each case states what the rule does with a page shaped like the reported ones, and why. The
 // anti-stuffing bounds that decide them are deliberate (a spammer can dress a phrase as card microcopy or a menu):
-// text is deducted only when it varies between cards, at most 20% of a page's words in total, and a menu of plain
-// `div` links counts like any other copy. If the product decision on #1441 loosens a bound, these tests are the ones
-// to change, on purpose.
+// text is deducted when it varies between 3+ cards or is identical on 5+ cards (#1441), at most 20% of a page's words
+// in total, and a menu of plain `div` links counts like any other copy. If the product decision on #1441 loosens a
+// bound, these tests are the ones to change, on purpose. The 20% cap (AC1/AC3 of #1441: a card-dominated page, and
+// raising the cap on large grids) awaits that decision.
 
 import { describe, expect, test } from "bun:test";
 import { parseHTML } from "@squirrelscan/parser/dom";
@@ -58,10 +59,11 @@ describe("a card-dominated category page still counts the microcopy past the 20%
     // The cap on the deduction (20% of the page's words) leaves most of the cards' words counted.
     for (const word of ["durchschnittliche", "bewertung", "sternen", "zahlen", "raten"]) expect(out).toContain(word);
   });
-  test("24 English cards beside 60 words of copy: a price that is identical on every card is not deducted at all", () => {
+  test("24 English cards beside 60 words of copy: the identical shipping note is card microcopy too, but the 20% cap leaves it counted", () => {
     const out = flagged(page("en", `<main>${grid(enCard, 24)}<p>${copy(60)}</p></main>`));
-    // "Shipping costs from $4.90, free returns" is the same on every card: no number varies, so it is not card
-    // microcopy by the rule's definition (a spammer can dress a phrase in one fixed price).
+    // "Shipping costs from $4.90, free returns" is the same on every card. Since the #1441 relaxation an identical
+    // price line on 5+ cards is deducted like a varying one, but the total deduction is capped at 20% of the page's
+    // words and the largest texts go first, so on a page this dominated by cards most of the note still counts.
     for (const word of ["shipping", "costs", "free", "returns"]) expect(out).toContain(word);
     // The rating sentence varies by number, so it is deducted and not flagged.
     for (const word of ["average", "rating", "stars"]) expect(out).not.toContain(word);
@@ -103,5 +105,49 @@ describe("a menu of plain div links on a contact page (#1441)", () => {
   test("under 100 words in total the page is too short to measure, menu or not", () => {
     const shared = menu((i) => `bademode ${["neu", "sale", "alle", "top", "mehr"][i % 5]}`);
     expect(check(contact(shared, 40)).status).toBe("info");
+  });
+});
+
+describe("an identical price or rating line repeated across 5+ cards is card microcopy (#1441)", () => {
+  const note = "Shipping costs from $4.90, shipping fee, shipping";
+  const cardsOf = (n: number, text: string) =>
+    `<div class="grid">${Array.from({ length: n }, (_, i) => `<div class="card"><h3>zq${letters(i)}</h3><span>${text}</span></div>`).join("")}</div>`;
+
+  test("12 cards with the same shipping note beside 200 words of copy raise nothing (they were flagged before)", () => {
+    const html = page("en", `<main>${cardsOf(12, "Shipping costs from $4.90")}<p>${copy(200)}</p></main>`);
+    expect(flagged(html)).toEqual([]);
+  });
+  test("the bar is 5 wrappers: 5 identical notes are deducted, 4 are not", () => {
+    expect(check(page("en", `<main>${cardsOf(5, note)}<p>${copy(120)}</p></main>`)).status).toBe("pass");
+    expect(flagged(page("en", `<main>${cardsOf(4, note)}<p>${copy(120)}</p></main>`))).toEqual(["shipping"]);
+  });
+  test("it stays bounded: a phrase dressed in one price is still flagged when it dominates the page", () => {
+    // Six cards of one stuffed phrase with a fixed price: the word is far past the raw-density limit, so the
+    // deduction does not touch it (a spammer cannot launder a keyword through a price).
+    const spam = "Plumber London from $49 plumber london plumber london plumber";
+    expect(flagged(page("en", `<main>${cardsOf(6, spam)}<p>${copy(100)}</p></main>`))).toContain("plumber");
+  });
+  test("a price-less repeated line is never deducted, however many cards repeat it", () => {
+    expect(flagged(page("en", `<main>${cardsOf(12, "Shipping fee shipping costs shipping")}<p>${copy(100)}</p></main>`))).toContain("shipping");
+  });
+});
+
+describe("a short contact page with a large plain menu (#1441, pinned trade-off)", () => {
+  const cats = ["bademode", "curvy", "waesche", "kleider"];
+  const links = (label: (i: number) => string) =>
+    `<div id="menu">${Array.from({ length: 20 }, (_, i) => `<div><a href="/c/${i}">${label(i)}</a></div>`).join("")}</div>`;
+  const contact = (menu: string, words: number) => page("de", `<body>${menu}<main><h1>Kontakt</h1><p>${copy(words)}</p></main></body>`);
+
+  test("under 100 words of copy, the menu's own words are measured with it: 60 words of copy plus 20 two-word links is 100 words, so a shared category word IS counted and flagged", () => {
+    // By design: with no landmark or menu signal a plain `div` menu is page copy (hidden stuffing looks the
+    // same), and the 100-word minimum counts every measured word, the menu's included. This is the reported
+    // contact page's shape (the main copy under 100 words, a mega menu of category names).
+    const shared = links((i) => `bademode ${["neu", "sale", "alle", "top", "mehr"][i % 5]}`);
+    expect(flagged(contact(shared, 60))).toEqual(["bademode"]);
+  });
+  test("the same menu with varied category words raises nothing, and a page of 40 words of copy is too short to measure", () => {
+    const varied = links((i) => `${cats[i % 4]}${letters(i)} ${["neu", "sale", "alle", "top", "mehr"][i % 5]}`);
+    expect(check(contact(varied, 60)).status).toBe("pass");
+    expect(check(contact(links((i) => `bademode ${["neu", "sale", "alle", "top", "mehr"][i % 5]}`), 40)).status).toBe("info");
   });
 });
