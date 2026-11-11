@@ -60,6 +60,7 @@ import type {
 } from "@squirrelscan/core-contracts";
 import type { ParsedPage, RuleRunResult } from "@squirrelscan/rules";
 import { isScoreless } from "@squirrelscan/core-contracts";
+import { isRedirectSourcePage } from "./redirect-source";
 
 // ============================================
 // SITE-RECORD BUILDERS
@@ -579,6 +580,8 @@ export function buildV1Report(
       if (batch.length === 0) break;
 
       for (const page of batch) {
+        // A redirecting URL is a redirect, not a page (#1762): not in pages[], not in the totals.
+        if (isRedirectSourcePage(page)) continue;
         pagesCrawled++;
         pageStatuses.push({ status: page.status });
         // A variant is not a page of its own in the report (#858): it is counted with its canonical.
@@ -938,6 +941,8 @@ export function buildV2Report(
       if (batch.length === 0) break;
 
       for (const page of batch) {
+        // A redirecting URL is a redirect, not a page (#1762): not in the totals.
+        if (isRedirectSourcePage(page)) continue;
         pagesCrawled++;
         if (page.status >= 200 && page.status < 300) contentPages++;
         if (page.status === 401 || page.status === 403) blockedPages++;

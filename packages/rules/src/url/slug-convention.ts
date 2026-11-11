@@ -500,6 +500,8 @@ export const slugConventionRule: Rule = {
 
     const rollup = emptyRollup();
     for (const page of pages) {
+      // A URL that redirected is not a page of the site (#1762).
+      if (page.redirectSource) continue;
       // An error page with no document (v1 appends one per 4xx/5xx it could not parse) is not a page of the
       // site's own URLs: the streaming universe has no row for it, so neither count includes it (#1359).
       if (page.statusCode >= 400 && !page.parsed?.document && (!page.parsed?.pageType || page.parsed.pageType === "unknown")) continue;

@@ -7,25 +7,6 @@ import { formatRedirectHop } from "@squirrelscan/core-contracts";
 import { didRedirect, requestTarget } from "../shared/redirect-evidence";
 import { CHECK_NOT_APPLICABLE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
 
-type SitePages = NonNullable<RuleContext["site"]>["pages"];
-
-/** The URLs that redirected, by request target, built once per page list (every page asks). */
-const redirectSourceCache = new WeakMap<SitePages, Map<string, SitePages[number]>>();
-
-function redirectSourcesOf(pages: SitePages): Map<string, SitePages[number]> {
-  let sources = redirectSourceCache.get(pages);
-  if (!sources) {
-    sources = new Map();
-    for (const p of pages) {
-      if (p.redirectChain && didRedirect(p.url, p.finalUrl, p.redirectChain)) {
-        sources.set(requestTarget(p.url), p);
-      }
-    }
-    redirectSourceCache.set(pages, sources);
-  }
-  return sources;
-}
-
 export const canonicalChainRule: Rule = {
   meta: {
     id: "crawl/canonical-chain",
@@ -168,27 +149,14 @@ export const canonicalChainRule: Rule = {
     // `/page?x=1` are different requests, and only the one we actually fetched
     // is the one whose chain we hold. Folding them together hands this page's
     // chain to a canonical that never redirected (#1510).
-    // A URL that redirected holds no content of its own (#1762): the page the canonical names is
-    // a redirect source in the site's page list, and this page is where it landed.
     const canonicalTarget = requestTarget(absoluteCanonical);
-    const ownChain =
+    const canonicalChain =
       canonicalTarget === requestTarget(pageUrl) &&
       requestTarget(finalUrl) !== canonicalTarget &&
       redirectChain &&
       didRedirect(pageUrl, finalUrl, redirectChain)
         ? redirectChain
         : undefined;
-    const sourcePage = ownChain
-      ? undefined
-      : ctx.site && redirectSourcesOf(ctx.site.pages).get(canonicalTarget);
-    const canonicalChain =
-      ownChain ??
-      (sourcePage &&
-      sourcePage.finalUrl !== undefined &&
-      requestTarget(sourcePage.url) !== requestTarget(pageUrl) &&
-      requestTarget(sourcePage.finalUrl) === requestTarget(pageUrl)
-        ? sourcePage.redirectChain
-        : undefined);
     if (canonicalChain) {
       checks.push({
         name: "canonical-redirects",
@@ -198,7 +166,7 @@ export const canonicalChainRule: Rule = {
           {
             id: absoluteCanonical,
             label: canonicalChain.hops.map((hop) => formatRedirectHop(hop)).join(" → "),
-            meta: { chain: canonicalChain, finalUrl: ownChain ? finalUrl : pageUrl },
+            meta: { chain: canonicalChain, finalUrl },
           },
         ],
       });

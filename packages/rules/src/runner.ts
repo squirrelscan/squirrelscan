@@ -218,6 +218,34 @@ export interface PageRuleRunOptions {
   redirectSource?: boolean;
 }
 
+/**
+ * Site rules that read a redirecting URL's hops, its landing page or its identity, and so see
+ * `redirectSource` entries in `site.pages` (#1762). Every other rule reads pages as content
+ * and gets the list without them.
+ */
+export const REDIRECT_AWARE_SITE_RULE_IDS: ReadonlySet<string> = new Set([
+  "crawl/redirect-chain",
+  "links/redirect-chains",
+  "i18n/hreflang-targets",
+  "crawl/sitemap-coverage",
+  "crawl/single-page-site",
+  "security/http-to-https",
+  "links/broken-anchors",
+]);
+
+const contentViews = new WeakMap<SiteData, SiteData>();
+
+/** `siteData` without its redirect sources: what every rule that reads pages as content sees. */
+function contentView(siteData: SiteData | undefined): SiteData | undefined {
+  if (!siteData || !siteData.pages.some((p) => p.redirectSource)) return siteData;
+  let view = contentViews.get(siteData);
+  if (!view) {
+    view = { ...siteData, pages: siteData.pages.filter((p) => !p.redirectSource) };
+    contentViews.set(siteData, view);
+  }
+  return view;
+}
+
 /** Page rules that still run on a redirecting URL, to report its hops. */
 export const REDIRECT_SOURCE_RULE_IDS: ReadonlySet<string> = new Set(["crawl/canonical-chain"]);
 
@@ -928,7 +956,7 @@ export class RuleRunner {
 
         // For site-scope rules, we need to provide page context: use the first
         // page or a dummy if no pages. Built once and shared (read-only).
-        const firstPage = siteData.pages[0];
+        const firstPage = siteData.pages.find((p) => !p.redirectSource);
         const sitePage = firstPage
           ? {
               url: firstPage.url,
@@ -962,7 +990,7 @@ export class RuleRunner {
             const ctx: RuleContext = {
               page: sitePage,
               parsed: siteParsed,
-              site: siteData,
+              site: REDIRECT_AWARE_SITE_RULE_IDS.has(rule.meta.id) ? siteData : contentView(siteData),
               siteQuery,
               collectedSignals,
               endpointSurface,

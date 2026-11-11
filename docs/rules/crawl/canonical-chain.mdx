@@ -19,7 +19,7 @@ The rule runs on every audited page. A URL that redirects is recorded as a redir
 - `canonical-protocol` warns when the page is HTTPS and the canonical is HTTP. Message: `Canonical points to HTTP instead of HTTPS`.
 - `canonical-chain` warns when the canonical URL matches one of the redirect-looking patterns `/?...redirect`, `/go/`, `/out/`, `/link/` or `/r/`. Message: `Canonical URL may be a redirect`. It passes otherwise with `Canonical URL appears direct`.
 - `canonical-target` reports info when the canonical names a different URL from the page, ignoring a trailing slash difference. Message: `Page canonicalizes to different URL`.
-- `canonical-redirects` warns when the canonical names the exact URL that was requested and that request redirected, or a URL the crawl saw redirect to this page. Message: `Canonical URL resolves through a redirect chain`, with the hops listed.
+- `canonical-redirects` warns when the canonical names the exact URL that was requested and that request redirected. Message: `Canonical URL resolves through a redirect chain`, with the hops listed.
 
 The last check compares request targets, not normalised forms, so `/page`, `/page/` and `/page?x=1` are treated as distinct. Only the one that was actually fetched carries the chain. Severity warning, weight 5.
 

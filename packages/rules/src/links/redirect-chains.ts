@@ -3,7 +3,7 @@
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 import { formatRedirectHop, type RedirectChain } from "@squirrelscan/core-contracts";
 
-import { didRedirect, targetKey } from "../shared/redirect-evidence";
+import { didRedirect, requestTarget, targetKey } from "../shared/redirect-evidence";
 import {
   regionsField,
   sectionMeta,
@@ -175,6 +175,41 @@ export const redirectChainsRule: Rule = {
         }),
         details: { total: linksToRedirect.size },
       });
+    }
+
+    // A page whose canonical names a URL that redirected to it (#1762). The redirecting URL is not
+    // a page of its own, so this is where the canonical-names-a-redirect finding lives now.
+    if (redirectTargets.size > 0) {
+      const byRequest = new Map<string, (typeof redirectTargets extends Map<string, infer V> ? V : never)>();
+      for (const target of redirectTargets.values()) byRequest.set(requestTarget(target.originalUrl), target);
+      const canonicalToRedirect: Array<{ page: string; canonical: string; label: string; chain?: RedirectChain }> = [];
+      for (const page of pages) {
+        const canonical = page.parsed?.meta?.canonical;
+        if (!canonical || page.redirectSource) continue;
+        try {
+          const absolute = new URL(canonical, page.url).href;
+          const redirect = byRequest.get(requestTarget(absolute));
+          if (redirect && requestTarget(redirect.finalUrl) === requestTarget(page.url)) {
+            canonicalToRedirect.push({ page: page.url, canonical: absolute, label: redirect.chainLabel, chain: redirect.chain });
+          }
+        } catch {
+          continue;
+        }
+      }
+      if (canonicalToRedirect.length > 0) {
+        checks.push({
+          name: "canonical-redirects",
+          status: "warn",
+          message: `${canonicalToRedirect.length} page(s) declare a canonical URL that redirects to them`,
+          items: canonicalToRedirect.map((c) => ({
+            id: c.canonical,
+            label: c.label,
+            sourcePages: [c.page],
+            meta: { chain: c.chain, finalUrl: c.page },
+          })),
+          details: { total: canonicalToRedirect.length },
+        });
+      }
     }
 
     if (checks.length === 0) {

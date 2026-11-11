@@ -108,6 +108,7 @@ export const totalByteWeightRule: Rule = {
       : pages
           // A bodiless error page (one v1 appends per 4xx/5xx it could not parse) has no weight to average in,
           // and the streaming universe has no record of it (#1359).
+          .filter((page) => !page.redirectSource)
           .filter((page) => !(page.statusCode >= 400 && !page.parsed?.document && (!page.parsed?.pageType || page.parsed.pageType === "unknown")))
           .map((page) => {
             const s = page.parsed?.document
