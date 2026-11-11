@@ -115,6 +115,7 @@ const runWithCurlShim = async (
     altBody = "",
     env = {},
     settleMs = 0,
+    untilPost = false,
   }: {
     cut?: "body" | "preamble";
     /** Shell run BEFORE the installer is sourced (a function that shadows a command, say). */
@@ -129,6 +130,12 @@ const runWithCurlShim = async (
     env?: Record<string, string | undefined>;
     /** How long to wait for a detached (backgrounded) curl to log its argv. */
     settleMs?: number;
+    /**
+     * Keep waiting until a POST (the report itself) is logged, not just any complete record. The
+     * detached reporter probes the IP family first, with its own curl (`-v`), and POSTs after: waiting
+     * for the first complete record returns between the two, which is a race a slower Linux runner loses.
+     */
+    untilPost?: boolean;
   } = {},
 ): Promise<CurlShimRun> => {
   const dir = mkdtempSync(join(tmpdir(), "install-curl-shim-"));
@@ -172,7 +179,10 @@ const runWithCurlShim = async (
     // Wait for a COMPLETE record, not merely a non-empty file: a half-written
     // one would parse into an argv with no --data and fail as a JSON error.
     let raw = await Bun.file(log).text();
-    for (let waited = 0; waited < settleMs && !raw.endsWith("\u001e"); waited += 50) {
+    const settled = (text: string) =>
+      text.endsWith("\u001e") &&
+      (!untilPost || parseCurlLog(text).some((argv) => argv.includes("POST")));
+    for (let waited = 0; waited < settleMs && !settled(raw); waited += 50) {
       await Bun.sleep(50);
       raw = await Bun.file(log).text();
     }
@@ -772,6 +782,7 @@ describe("install.sh report_error payload", () => {
         cut: "preamble",
         env: { NO_TELEMETRY: undefined, ...env },
         settleMs: 5000,
+        untilPost: true,
       });
       const posts = calls.filter((argv) => argv.includes("POST"));
       expect(posts).toHaveLength(1);
@@ -933,7 +944,7 @@ describe("install.sh report_error payload", () => {
     test("a download that timed out, then succeeded, leaves no host, family or probe for the next error", async () => {
       const { calls } = await runWithCurlShim(
         `${FLAKY_CURL}; ( fetch_with_retry "https://github.com/a/b" /dev/null 2>/dev/null; LAST_ERROR_MSG="Checksum mismatch"; (exit 1) || report_on_exit ); sleep 1`,
-        { cut: "body", env: { NO_TELEMETRY: undefined, SHIM_TRACE: "*   Trying 1.2.3.4:443..." }, settleMs: 5000 },
+        { cut: "body", env: { NO_TELEMETRY: undefined, SHIM_TRACE: "*   Trying 1.2.3.4:443..." }, settleMs: 5000, untilPost: true },
       );
       const posts = calls.filter((argv) => argv.includes("POST"));
       expect(posts).toHaveLength(1);
@@ -947,7 +958,7 @@ describe("install.sh report_error payload", () => {
     test("a download that fails every attempt still names its host and family", async () => {
       const { calls } = await runWithCurlShim(
         `cnt=$(mktemp); sleep() { :; }; curl() { case " $* " in *" -X POST "*|*" -v "*) command curl "$@"; return $? ;; esac; return 7; }; ( fetch_with_retry "https://github.com/a/b" /dev/null 2>/dev/null || true; LAST_ERROR_MSG="Download failed"; (exit 1) || report_on_exit ); sleep 1`,
-        { cut: "body", env: { NO_TELEMETRY: undefined, SHIM_TRACE: "*   Trying [2606:4700::1]:443..." }, settleMs: 5000 },
+        { cut: "body", env: { NO_TELEMETRY: undefined, SHIM_TRACE: "*   Trying [2606:4700::1]:443..." }, settleMs: 5000, untilPost: true },
       );
       const posts = calls.filter((argv) => argv.includes("POST"));
       expect(posts).toHaveLength(1);
@@ -999,7 +1010,7 @@ describe("install.sh report_error payload", () => {
     test("a slow probe does not delay the install: the exit trap returns at once and the report still lands", async () => {
       const { calls, stdout } = await runWithCurlShim(
         `( ${request}; s=$SECONDS; (exit 7) || report_on_exit; echo "trap-seconds=$((SECONDS - s))" ); sleep 4`,
-        { cut: "preamble", env: { NO_TELEMETRY: undefined, SHIM_PROBE_SLEEP: "2", SHIM_TRACE: "*   Trying 1.2.3.4:443..." }, settleMs: 8000 },
+        { cut: "preamble", env: { NO_TELEMETRY: undefined, SHIM_PROBE_SLEEP: "2", SHIM_TRACE: "*   Trying 1.2.3.4:443..." }, settleMs: 8000, untilPost: true },
       );
       expect(stdout).toMatch(/trap-seconds=[01]\b/);
       const posts = calls.filter((argv) => argv.includes("POST"));
