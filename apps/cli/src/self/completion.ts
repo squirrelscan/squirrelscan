@@ -225,7 +225,7 @@ _squirrel_completions() {
           return 0
           ;;
       esac
-      COMPREPLY=( $(compgen -W "--max-pages -m --max-depth --concurrency --per-host --level --coverage -C --format -f --output -o --refresh -r --fresh-ua --store-scripts --no-store-scripts --incremental --no-incremental --resume --verbose -v --debug --trace --project-name -n --publish -p --no-publish --ephemeral --no-ephemeral --visibility --follow-redirect --no-follow-redirect --yes -y --render --render-mode --http --offline --external-links --no-external-links --no-internal-links --no-classifier --fail-on --header -H --header-host --rule-include --rule-exclude --disable-discovery-probes --probe -P --passive --aggressive --probe-budget --pentest --summary --include-passed --help --include-info --include-pages --max-duration --no-ignore" -- "\${cur}") )
+      COMPREPLY=( $(compgen -W "--max-pages -m --max-depth --concurrency --per-host --level --coverage -C --format -f --output -o --refresh -r --fresh-ua --store-scripts --no-store-scripts --incremental --no-incremental --resume --verbose -v --debug --trace --project-name -n --publish -p --no-publish --ephemeral --no-ephemeral --visibility --follow-redirect --no-follow-redirect --yes -y --render --render-mode --http --offline --external-links --no-external-links --no-internal-links --no-classifier --fail-on --header -H --header-host --rule-include --rule-exclude --disable-discovery-probes --probe -P --passive --aggressive --probe-budget --pentest --summary --include-passed --help --include-info --include-pages --max-duration --crawl-timeout --no-ignore" -- "\${cur}") )
       return 0
       ;;
     entities)
@@ -546,6 +546,7 @@ _squirrel() {
             '(-m --max-pages)'{-m,--max-pages}'[Maximum pages to crawl]:number' \\
             '--max-depth[Maximum crawl depth from the seed]:number' \\
             '--max-duration[Wall-clock budget for the whole audit, in seconds]:seconds' \\
+            '--crawl-timeout[Crawl-phase wall-clock backstop, in seconds]:seconds' \\
             '--concurrency[Global crawl worker pool size]:number' \\
             '--per-host[Max concurrent requests per host]:number' \\
             '(-C --coverage --level)--level[Audit level]:level:(${levelValues})' \\
@@ -831,6 +832,7 @@ complete -c squirrel -n "__fish_seen_subcommand_from config; and __fish_seen_sub
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -s m -l max-pages -d "Maximum pages to crawl"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l max-depth -d "Maximum crawl depth from the seed"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l max-duration -d "Wall-clock budget for the whole audit, in seconds"
+complete -c squirrel -n "__fish_seen_subcommand_from audit" -l crawl-timeout -d "Crawl-phase wall-clock backstop, in seconds"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l concurrency -d "Global crawl worker pool size"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l per-host -d "Max concurrent requests per host"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l level -a "${levelValues}" -d "Audit level"
