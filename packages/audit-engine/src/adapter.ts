@@ -21,6 +21,7 @@ import {
   mergeRuleRunResult,
   pluginNamespaces,
   stylesheetBackgroundOf,
+  stylesheetBackgroundSelectorsOf,
   type PluginRegistrySnapshot,
   type RunnerScope,
 } from "@squirrelscan/rules";
@@ -1529,15 +1530,18 @@ export function fetchAssetsFromOccurrences(
         : {}),
       ...(probeStylesheetBackgrounds
         ? {
-            stylesheetBackgrounds: resourceResults.stylesheets.map((fetch) => ({
-              url: fetch.url,
-              status: fetch.status,
-              error: fetch.error,
-              background:
-                fetch.content !== null && !/html/i.test(fetch.contentType ?? "")
-                  ? stylesheetBackgroundOf(fetch.content)
-                  : null,
-            })),
+            stylesheetBackgrounds: resourceResults.stylesheets.map((fetch) => {
+              const readable = fetch.content !== null && !/html/i.test(fetch.contentType ?? "");
+              const other = readable ? stylesheetBackgroundSelectorsOf(fetch.content as string) : null;
+              return {
+                url: fetch.url,
+                status: fetch.status,
+                error: fetch.error,
+                background: readable ? stylesheetBackgroundOf(fetch.content as string) : null,
+                ...(other && other.selectors.length > 0 ? { selectors: other.selectors } : {}),
+                ...(other?.truncated ? { selectorsTruncated: true } : {}),
+              };
+            }),
           }
         : {}),
       ...(storedOnlyScripts.length > 0

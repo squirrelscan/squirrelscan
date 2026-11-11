@@ -532,6 +532,10 @@ export interface StylesheetBackgroundData {
   error: string | null;
   /** Null when the stylesheet could not be read (a failed, refused, skipped, oversized or non-CSS response). */
   background: StylesheetBackground | null;
+  /** Selectors other than html/body/:root that the stylesheet gives a background; text inside a match is not measured. */
+  selectors?: string[];
+  /** More selectors than were kept had a background: treat any text as possibly inside one. */
+  selectorsTruncated?: boolean;
 }
 
 export interface SiteData {

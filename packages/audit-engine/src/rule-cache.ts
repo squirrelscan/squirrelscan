@@ -194,7 +194,7 @@ export function pageRuleSiteContext(siteData: SiteData): Record<string, unknown>
     // distinct so the key says exactly what the run saw.
     siteIndexable: siteData.siteIndexable ?? null,
     // Only what the rule reads of each stylesheet: its url and the background it sets (#1756).
-    stylesheetBackgrounds: (siteData.stylesheetBackgrounds ?? []).map((s) => [s.url, s.background]),
+    stylesheetBackgrounds: (siteData.stylesheetBackgrounds ?? []).map((s) => [s.url, s.background, s.selectors ?? null, s.selectorsTruncated === true]),
     scripts: projectEntries(siteData.scripts, PAGE_RULE_SCRIPT_FIELDS),
     preloadedScripts: projectEntries(siteData.preloadedScripts, PAGE_RULE_SCRIPT_FIELDS),
     resourceSizes: resourceSizes
