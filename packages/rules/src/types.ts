@@ -554,6 +554,11 @@ export interface SiteData {
     parsed: ParsedPage;
     headers?: Record<string, string>;
     redirectChain?: RedirectChain;
+    /**
+     * A URL that redirected (#1762): kept so the redirect rules see its hops, but it is not a
+     * page. It has no content, and the runner hides it from every rule that is not redirect-aware.
+     */
+    redirectSource?: boolean;
     /** Bytes of the stored HTML response, when the crawler recorded them. */
     sizeBytes?: number | null;
     /**

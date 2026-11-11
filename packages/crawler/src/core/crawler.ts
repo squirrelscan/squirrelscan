@@ -934,6 +934,14 @@ export function createCrawler(
      * (the frontier's own normalization, so `/a` and `/a/` or a stripped tracking
      * parameter are not a redirect), else null.
      */
+    /** A redirect row's status: its first HTTP hop's 3xx, else 302 (a client-side hop has no status of its own). */
+    const redirectRowStatus = (chain: PageRecord["redirectChain"]): number => {
+      const first = chain?.hops[0];
+      return first && first.type === "http" && first.statusCode >= 300 && first.statusCode < 400
+        ? first.statusCode
+        : 302;
+    };
+
     const redirectTargetOf = (requested: string, landed: string | undefined): string | null => {
       if (!landed) return null;
       const { normalized } = normalizeAndCheckScope(landed);
@@ -1214,10 +1222,11 @@ export function createCrawler(
           depth: entry.depth,
           parentUrl: entry.parentUrl,
         });
-        pagesCommitted++;
-
-        // A cached redirect keeps its destination in the crawl (#1762).
+        // A cached redirect keeps its destination in the crawl and takes no page slot (#1762).
         const cachedRedirectTarget = redirectTargetOf(entry.normalizedUrl, cachedPage.finalUrl);
+        if (!(cachedRedirectTarget && cachedPage.status >= 300 && cachedPage.status < 400)) {
+          pagesCommitted++;
+        }
         if (cachedRedirectTarget) {
           yield* enqueueUrl(
             crawlId,
@@ -2028,7 +2037,8 @@ export function createCrawler(
               depth: entry.depth,
               parentUrl: entry.parentUrl,
               redirectChain: result.redirectChain,
-              status: result.status,
+              // The marker the engine reads (#1762): the status the URL itself answered with.
+              status: redirectRowStatus(result.redirectChain),
               contentType: result.contentType,
               sizeBytes: 0,
               loadTimeMs: result.loadTime,
@@ -2046,7 +2056,8 @@ export function createCrawler(
               fetcherId: result.fetcherId,
               fallbackReason: result.fallbackReason,
             });
-            pagesCommitted++;
+            // Not counted against maxPages: a redirect is not a page, and spending a slot on it
+            // would starve its destination.
             yield* storage.updateFrontierStatus(crawlId, entry.normalizedUrl, "done");
             yield* emit({
               type: "page:fetched",

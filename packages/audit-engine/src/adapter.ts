@@ -1657,6 +1657,7 @@ export function runRulesOnStorage(
       sizeBytes?: number | null;
       rendered?: boolean;
       versionHeadersRecorded?: boolean;
+      redirectSource?: boolean;
     }> = [];
     const wafBlockedPages: Array<{
       url: string;
@@ -1683,8 +1684,9 @@ export function runRulesOnStorage(
 
     for (const { page, parsed } of siteContext) {
       if (isRedirectSourcePage(page)) {
-        redirectSourcePages.push(redirectSourceEntry(page, EMPTY_PARSED_PAGE));
-        fetchedTargets.push({ url: page.normalizedUrl, status: page.status });
+        const entry = redirectSourceEntry(page, EMPTY_PARSED_PAGE);
+        redirectSourcePages.push(entry);
+        fetchedTargets.push({ url: page.normalizedUrl, status: entry.statusCode });
         continue;
       }
       if (!parsed) {
@@ -1973,7 +1975,7 @@ export function runRulesOnStorage(
         {
           baseUrl: crawl?.baseUrl ?? "",
           entryUrls: crawlEntryUrls(crawl),
-          pages: parsedPages.map((p) => ({
+          pages: parsedPages.filter((p) => !p.redirectSource).map((p) => ({
             url: p.url,
             statusCode: p.statusCode,
             parsed: { links: p.parsed.links },
@@ -2395,6 +2397,8 @@ type StreamParsedPage = {
   sizeBytes?: number | null;
   rendered?: boolean;
   versionHeadersRecorded?: boolean;
+  /** A URL that redirected: in the list for its hops, not a page (#1762). */
+  redirectSource?: boolean;
 };
 
 /**
@@ -2481,8 +2485,9 @@ function createParsedUniverseAccumulator(): {
       for (const { page, parsed } of siteContext) {
         // A redirecting URL is a redirect, not a page (#1762): no page rule, no page count.
         if (isRedirectSourcePage(page)) {
-          redirectSources.push(redirectSourceEntry(page, EMPTY_PARSED_PAGE));
-          fetchedTargets.push({ url: page.normalizedUrl, status: page.status });
+          const entry = redirectSourceEntry(page, EMPTY_PARSED_PAGE);
+          redirectSources.push(entry);
+          fetchedTargets.push({ url: page.normalizedUrl, status: entry.statusCode });
           continue;
         }
         // Error-page candidates are collected for EVERY page (parsed or not),
@@ -2865,7 +2870,7 @@ function buildStreamingSiteData(
     const cloakingSite = {
       baseUrl: crawl?.baseUrl ?? "",
       entryUrls: crawlEntryUrls(crawl),
-      pages: parsedPages.map((p) => ({
+      pages: parsedPages.filter((p) => !p.redirectSource).map((p) => ({
         url: p.url,
         statusCode: p.statusCode,
         parsed: { links: p.parsed.links },
@@ -3587,7 +3592,7 @@ export function runStreamingRules(
     // graph's membership/order/sources match v1 exactly (E-E2 (b) reconciliation).
     const siteQuery = yield* phase("site-query", () =>
       createSiteQuery(storage, crawlId, {
-        universe: parsedPages.map((p) => p.url),
+        universe: parsedPages.filter((p) => !p.redirectSource).map((p) => p.url),
         pageScanBatchSize: batchSize,
         // Only a run with links/anchor-mismatch enabled pays for the anchor graph (#110).
         anchorGraph: isRuleEnabled(

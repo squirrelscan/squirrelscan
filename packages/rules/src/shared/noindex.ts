@@ -66,6 +66,8 @@ export interface SiteIndexablePage {
   statusCode: number;
   parsed: ParsedPage;
   headers?: Record<string, string>;
+  /** A URL that redirected is not a fetched page (#1762). */
+  redirectSource?: boolean;
 }
 
 /**
@@ -89,7 +91,7 @@ export function isSiteIndexable(
   baseUrl: string,
   entryUrls: ReadonlyArray<string | undefined> = [],
 ): boolean | undefined {
-  const fetched = pages.filter((page) => page.statusCode < 400);
+  const fetched = pages.filter((page) => page.statusCode < 400 && !page.redirectSource);
   const verdict = (refs: SiteIndexablePage[]): boolean | undefined =>
     refs.length === 0
       ? undefined

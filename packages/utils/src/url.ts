@@ -444,19 +444,6 @@ export function redirectedAway(
 }
 
 /**
- * True when a fetch of `url` landed on a different page (#1762). The crawler files
- * a redirect's response under the requested url, so this is what tells a redirecting
- * URL (recorded as a redirect, its content belonging to the destination) from a page
- * that answered as itself. Same canonicalisation as {@link normalizePageUrl}, so a
- * trailing slash or a fragment is not a redirect. Unlike {@link redirectedAway} it
- * does not ask whether the destination was crawled: the crawler queues it.
- */
-export function landedElsewhere(url: string, finalUrl: string | null | undefined): boolean {
-  if (!finalUrl) return false;
-  return normalizePageUrl(finalUrl) !== normalizePageUrl(url);
-}
-
-/**
  * Drop a normalized page URL's query string — the pre-#2063 page identity.
  *
  * Exists ONLY for backward compatibility at version boundaries: a publisher on

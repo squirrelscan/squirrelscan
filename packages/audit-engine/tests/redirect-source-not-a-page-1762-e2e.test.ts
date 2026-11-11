@@ -1,10 +1,15 @@
 // #1762: a URL that redirects is recorded as a redirect, not audited as a page with the
-// destination's content. Real crawler against a local site, both rule engines. The site:
-//   /r1 -> /linked                      (single redirect, destination also linked)
-//   /r3 -> /h2 -> /h3 -> /three         (three-hop chain, /three linked from nowhere)
-//   /gone -> /uncrawled                 (destination linked from nowhere, only the redirect is)
-//   /out -> other host                  (external, never audited)
-//   /carried -> /carried-dest           (supplied as a carried seed, not linked)
+// destination's content. Real crawler against a local site, every rule enabled, both rule
+// engines and both report assemblers. The site:
+//   /r1 -> /linked                      single redirect, destination also linked
+//   /r3 -> /h2 -> /h3 -> /three         three-hop chain, /three linked from nowhere
+//   /gone -> /uncrawled                 destination linked from nowhere
+//   /out -> other host                  external, never audited
+//   /carried -> /carried-dest           supplied as a carried seed, not linked
+//   /slash -> /slash/  and  /rslash/ -> /rslash   slash redirects, each way (#1510)
+//   /trk -> /trk?utm_source=x           the same page once tracking is stripped
+//   /aq -> /aq?foo=1                    the same page under allowQueryParams: ["id"]
+//   sitemap lists /sm -> /sm-dest       (sitemap only, /sm-dest linked from nowhere)
 
 import { afterEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
@@ -13,7 +18,8 @@ import type { Config } from "@squirrelscan/config";
 import type { CheckResult } from "@squirrelscan/core-contracts";
 import { createCrawler, SQLiteStorage } from "@squirrelscan/crawler";
 
-import { buildSiteContext, runRulesOnStorage, runStreamingRules } from "../src/adapter";
+import { buildSiteContext, generateReportFromStorage, runRulesOnStorage, runStreamingRules } from "../src/adapter";
+import { buildV2Report } from "../src/report-stream";
 import { runStreamingPreRules } from "../src/streaming-pre-rules";
 
 const servers: Array<{ stop: (closeActive?: boolean) => void }> = [];
@@ -25,7 +31,7 @@ const words = (n: number) => Array.from({ length: n }, (_, i) => `word${i}`).joi
 const html = (title: string, body: string) =>
   `<!doctype html><html lang="en"><head><title>${title}</title></head><body><main><h1>${title}</h1><p>${words(40)}</p>${body}</main></body></html>`;
 
-function serve(): { origin: string } {
+function serve(links: string): { origin: string } {
   const other = Bun.serve({
     port: 0,
     fetch: () => new Response(html("Elsewhere", ""), { headers: { "content-type": "text/html" } }),
@@ -35,16 +41,14 @@ function serve(): { origin: string } {
     port: 0,
     fetch(req) {
       const url = new URL(req.url);
+      const origin = `http://localhost:${server.port}`;
       const ok = (title: string, body = "") =>
         new Response(html(title, body), { headers: { "content-type": "text/html" } });
       const redirect = (to: string, status = 301) =>
         new Response(null, { status, headers: { location: to } });
       switch (url.pathname) {
         case "/":
-          return ok(
-            "Home",
-            `<a href="/linked">L</a><a href="/r1">R1</a><a href="/r3">R3</a><a href="/gone">G</a><a href="/out">O</a>`,
-          );
+          return ok("Home", links);
         case "/linked":
           return ok("Linked");
         case "/r1":
@@ -67,6 +71,28 @@ function serve(): { origin: string } {
           return redirect("/carried-dest");
         case "/carried-dest":
           return ok("Carried dest");
+        case "/slash":
+          return redirect("/slash/");
+        case "/slash/":
+          return ok("Slash");
+        case "/rslash/":
+          return redirect("/rslash");
+        case "/rslash":
+          return ok("Reverse slash");
+        case "/trk":
+          return url.search ? ok("Tracked") : redirect("/trk?utm_source=x");
+        case "/aq":
+          return url.search ? ok("Allow query") : redirect("/aq?foo=1");
+        case "/sm":
+          return redirect("/sm-dest");
+        case "/sm-dest":
+          return ok("Sitemap dest");
+        case "/sitemap.xml":
+          if (links !== FULL_LINKS) return new Response("nf", { status: 404 });
+          return new Response(
+            `<?xml version="1.0"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>${origin}/</loc></url><url><loc>${origin}/sm</loc></url></urlset>`,
+            { headers: { "content-type": "application/xml" } },
+          );
         default:
           return new Response("nf", { status: 404, headers: { "content-type": "text/html" } });
       }
@@ -76,30 +102,39 @@ function serve(): { origin: string } {
   return { origin: `http://localhost:${server.port}` };
 }
 
-const RULES = ["content/word-count", "crawl/canonical-chain", "links/redirect-chains", "crawl/redirect-chain"];
-const CONFIG = {
-  rule_options: { "crawl/redirect-chain": { maxHops: 1 } },
-  rules: { enable: RULES },
-  crawler: { max_pages: 30, exclude: [] },
-  external_links: { enabled: false },
-  internal_links: { enabled: true },
-} as unknown as Config;
+const FULL_LINKS =
+  `<a href="/linked">L</a><a href="/r1">R1</a><a href="/r3">R3</a><a href="/gone">G</a><a href="/out">O</a>` +
+  `<a href="/slash">S</a><a href="/rslash/">RS</a><a href="/trk">T</a><a href="/aq">A</a>`;
 
+const configFor = (maxPages: number) =>
+  ({
+    rule_options: {},
+    rules: { enable: ["*"] },
+    crawler: { max_pages: maxPages, exclude: [] },
+    external_links: { enabled: false },
+    internal_links: { enabled: true },
+  }) as unknown as Config;
+
+type RuleChecks = Map<string, { checks: CheckResult[] }>;
 interface Outcome {
+  origin: string;
   stored: Map<string, { status: number; html: string | null; finalUrl: string }>;
-  pagesCrawled: number | undefined;
-  byRule: Map<string, CheckResult[]>;
+  rules: RuleChecks;
+  v1Report: { totalPages: number; pages: Array<{ url: string }> };
+  v2Report: { totalPages: number };
 }
 
 async function run(
   engine: "v1" | "v2",
-  legacy = false,
-): Promise<{ origin: string; out: Outcome }> {
-  const { origin } = serve();
+  opts: { maxPages?: number; links?: string; carried?: boolean; legacy?: boolean } = {},
+): Promise<Outcome> {
+  const maxPages = opts.maxPages ?? 40;
+  const { origin } = serve(opts.links ?? FULL_LINKS);
+  const config = configFor(maxPages);
   const crawler = await Effect.runPromise(
     createCrawler({
       config: {
-        maxPages: 30,
+        maxPages,
         concurrency: 1,
         perHostConcurrency: 1,
         delayMs: 0,
@@ -109,15 +144,16 @@ async function run(
         respectRobots: false,
         incremental: false,
         useCacheControl: false,
-        carriedSeedUrls: [`${origin}/carried`],
+        allowQueryParams: ["id"],
+        ...(opts.carried === false ? {} : { carriedSeedUrls: [`${origin}/carried`] }),
       },
     }),
   );
   const storage = crawler.storage as SQLiteStorage;
   const crawlId = await Effect.runPromise(crawler.start(`${origin}/`, `${origin}/`));
-  const out = await Effect.runPromise(
+  return Effect.runPromise(
     Effect.gen(function* () {
-      if (legacy) {
+      if (opts.legacy) {
         // A page stored by an older crawl: the destination's markup filed under the redirecting URL.
         const [linked] = (yield* storage.getPages(crawlId)).filter((p) => p.normalizedUrl === `${origin}/linked`);
         const url = `${origin}/legacy`;
@@ -137,80 +173,127 @@ async function run(
           } as typeof linked.redirectChain,
         });
       }
-      const preRules = yield* runStreamingPreRules(storage, crawlId, CONFIG, {});
+      const preRules = yield* runStreamingPreRules(storage, crawlId, config, {});
       const pages = yield* storage.getPages(crawlId);
       const stored = new Map(
         pages.map((p) => [p.normalizedUrl, { status: p.status, html: p.html, finalUrl: p.finalUrl }]),
       );
-      if (engine === "v1") {
-        const ctx = yield* buildSiteContext(pages);
-        const ran = yield* runRulesOnStorage(storage, crawlId, ctx, CONFIG, preRules.assets);
-        return { stored, pagesCrawled: undefined, byRule: ran.ruleResultsMap } as unknown as Outcome;
-      }
-      const ran = yield* runStreamingRules(storage, crawlId, CONFIG, preRules.assets);
-      return { stored, pagesCrawled: undefined, byRule: ran.ruleResultsMap } as unknown as Outcome;
+      const ran =
+        engine === "v1"
+          ? yield* runRulesOnStorage(storage, crawlId, yield* buildSiteContext(pages), config, preRules.assets)
+          : yield* runStreamingRules(storage, crawlId, config, preRules.assets);
+      const v1Report = yield* generateReportFromStorage(storage, crawlId, ran as never);
+      const v2Report = yield* buildV2Report(storage, crawlId, { ...(ran as object), tallies: (ran as { tallies?: Map<never, never> }).tallies ?? new Map() } as never);
+      return { origin, stored, rules: ran.ruleResultsMap as unknown as RuleChecks, v1Report, v2Report } as Outcome;
     }) as Effect.Effect<Outcome, never, never>,
   );
-  return { origin, out };
 }
 
+/** Rules that report a redirect itself, so they may name the redirecting URL. */
+const REDIRECT_RULES = new Set([
+  "crawl/canonical-chain",
+  "crawl/redirect-chain",
+  "links/redirect-chains",
+  "i18n/hreflang-targets",
+  "crawl/sitemap-coverage",
+]);
+
 function pageUrlsOf(out: Outcome, ruleId: string): string[] {
-  const result = (out.byRule as unknown as Map<string, { checks: CheckResult[] }>).get(ruleId);
   const urls = new Set<string>();
-  for (const check of result?.checks ?? []) {
+  for (const check of out.rules.get(ruleId)?.checks ?? []) {
     if (check.pageUrl) urls.add(check.pageUrl);
     for (const item of check.items ?? []) urls.add(item.id);
   }
   return [...urls];
 }
 
+const REDIRECTS = ["/r1", "/r3", "/gone", "/carried", "/slash", "/rslash/", "/sm"];
+const AUDITED = ["/linked", "/three", "/uncrawled", "/carried-dest", "/slash/", "/rslash", "/sm-dest"];
+
 describe.each(["v1", "v2"] as const)("redirecting URLs are not pages (#1762, %s)", (engine) => {
-  test("crawler records redirects without a body and queues the destinations", async () => {
-    const { origin, out } = await run(engine);
-    for (const path of ["/r1", "/r3", "/gone", "/carried"]) {
-      const row = out.stored.get(`${origin}${path}`);
+  test("the crawler records redirects without a body (slash each way included) and queues destinations", async () => {
+    const { origin, stored } = await run(engine);
+    for (const path of REDIRECTS) {
+      const row = stored.get(`${origin}${path}`);
       expect(row, path).toBeDefined();
       expect(row!.html, path).toBeNull();
-      expect(row!.finalUrl, path).not.toBe(`${origin}${path}`);
+      expect(row!.status, path).toBeGreaterThanOrEqual(300);
+      expect(row!.status, path).toBeLessThan(400);
     }
-    // Destinations are audited once, as themselves, even when nothing else links to them.
-    for (const path of ["/linked", "/three", "/uncrawled", "/carried-dest"]) {
-      expect(out.stored.get(`${origin}${path}`)?.html, path).toBeTruthy();
-    }
+    for (const path of AUDITED) expect(stored.get(`${origin}${path}`)?.html, path).toBeTruthy();
     // External redirect: refused, never stored with the other site's content.
-    expect(out.stored.get(`${origin}/out`)?.html ?? null).toBeNull();
-  }, 30_000);
+    expect(stored.get(`${origin}/out`)?.html ?? null).toBeNull();
+  }, 60_000);
 
-  test("page rules run once, on the final URL only", async () => {
-    const { origin, out } = await run(engine);
+  test("a redirect that is the same page after the frontier's normalization keeps its content (utm, allowQueryParams)", async () => {
+    const { origin, stored, rules } = await run(engine);
+    for (const path of ["/trk", "/aq"]) {
+      expect(stored.get(`${origin}${path}`)?.status, path).toBe(200);
+      expect(stored.get(`${origin}${path}`)?.html, path).toBeTruthy();
+      expect(pageUrlsOf({ rules } as Outcome, "content/word-count"), path).toContain(`${origin}${path}`);
+    }
+  }, 60_000);
+
+  test("no page-level rule lists a redirecting URL, destinations are audited once", async () => {
+    const out = await run(engine);
+    for (const [ruleId, result] of out.rules) {
+      if (REDIRECT_RULES.has(ruleId)) continue;
+      for (const check of result.checks) {
+        for (const path of REDIRECTS) {
+          expect(check.pageUrl, `${ruleId} ${check.name}`).not.toBe(`${out.origin}${path}`);
+        }
+      }
+    }
     const audited = pageUrlsOf(out, "content/word-count");
-    for (const path of ["/r1", "/r3", "/gone", "/carried", "/out"]) {
-      expect(audited, path).not.toContain(`${origin}${path}`);
+    for (const path of [...REDIRECTS, "/out"]) expect(audited, path).not.toContain(`${out.origin}${path}`);
+    for (const path of AUDITED) {
+      expect(audited.filter((u) => u === `${out.origin}${path}`), path).toHaveLength(1);
     }
-    for (const path of ["/linked", "/three", "/uncrawled", "/carried-dest"]) {
-      expect(audited.filter((u) => u === `${origin}${path}`), path).toHaveLength(1);
-    }
-  }, 30_000);
+  }, 60_000);
 
   test("redirect rules still report the redirecting URL and its hops", async () => {
-    const { origin, out } = await run(engine);
+    const out = await run(engine);
     const chains = pageUrlsOf(out, "links/redirect-chains");
-    for (const path of ["/r1", "/r3", "/gone", "/carried"]) expect(chains).toContain(`${origin}${path}`);
-    expect(pageUrlsOf(out, "crawl/redirect-chain")).toContain(`${origin}/r3`);
-    const canonical = pageUrlsOf(out, "crawl/canonical-chain");
-    expect(canonical).toContain(`${origin}/r3`);
-    const checks = (out.byRule as unknown as Map<string, { checks: CheckResult[] }>).get("links/redirect-chains")!.checks;
+    for (const path of REDIRECTS.filter((p) => p !== "/sm")) {
+      expect(chains, path).toContain(`${out.origin}${path}`);
+    }
+    expect(pageUrlsOf(out, "crawl/canonical-chain")).toEqual(
+      expect.arrayContaining([`${out.origin}/r3`, `${out.origin}/slash`, `${out.origin}/rslash/`]),
+    );
+    const checks = out.rules.get("links/redirect-chains")!.checks;
     const multi = checks.find((c) => c.name === "redirect-chain-multi-hop");
-    expect(multi?.items?.find((i) => i.id === `${origin}/r3`)?.label).toContain("/h2");
-  }, 30_000);
-});
+    expect(multi?.items?.find((i) => i.id === `${out.origin}/r3`)?.label).toContain("/h2");
+    expect(pageUrlsOf(out, "crawl/redirect-chain")).toContain(`${out.origin}/r3`);
+  }, 60_000);
 
-describe.each(["v1", "v2"] as const)("a stored redirecting URL that still holds the destination's markup (#1762, %s)", (engine) => {
-  test("is not audited as a page, and its hops are still reported", async () => {
-    const { origin, out } = await run(engine, true);
-    expect(pageUrlsOf(out, "content/word-count")).not.toContain(`${origin}/legacy`);
-    expect(pageUrlsOf(out, "content/word-count").filter((u) => u === `${origin}/linked`)).toHaveLength(1);
-    expect(pageUrlsOf(out, "links/redirect-chains")).toContain(`${origin}/legacy`);
-    expect(pageUrlsOf(out, "crawl/canonical-chain")).toContain(`${origin}/legacy`);
-  }, 30_000);
+  test("the report's page totals and page list leave redirecting URLs out, in both assemblers", async () => {
+    const out = await run(engine);
+    const contentRows = [...out.stored.entries()].filter(([, row]) => row.status < 300 || row.status >= 400);
+    expect(out.v1Report.totalPages).toBe(contentRows.length);
+    expect(out.v2Report.totalPages).toBe(contentRows.length);
+    expect(out.v1Report.pages).toHaveLength(contentRows.length);
+    const listed = out.v1Report.pages.map((p) => p.url);
+    for (const path of REDIRECTS) expect(listed, path).not.toContain(`${out.origin}${path}`);
+    for (const path of AUDITED) expect(listed, path).toContain(`${out.origin}${path}`);
+  }, 60_000);
+
+  test("redirect rows take no maxPages slot: with maxPages 2 the destination is still audited", async () => {
+    const out = await run(engine, {
+      maxPages: 2,
+      carried: false,
+      links: `<a href="/r1">R1</a>`,
+    });
+    expect(out.stored.get(`${out.origin}/linked`)?.html).toBeTruthy();
+    expect(out.v1Report.pages.map((p) => p.url).sort()).toEqual([`${out.origin}/`, `${out.origin}/linked`].sort());
+    expect(out.v1Report.totalPages).toBe(2);
+  }, 60_000);
+
+  test("a stored redirecting URL that still holds the destination's markup is not audited, and its hops are reported", async () => {
+    const out = await run(engine, { legacy: true });
+    expect(pageUrlsOf(out, "content/word-count")).not.toContain(`${out.origin}/legacy`);
+    expect(pageUrlsOf(out, "content/word-count").filter((u) => u === `${out.origin}/linked`)).toHaveLength(1);
+    expect(pageUrlsOf(out, "links/redirect-chains")).toContain(`${out.origin}/legacy`);
+    expect(pageUrlsOf(out, "crawl/canonical-chain")).toContain(`${out.origin}/legacy`);
+    expect(out.v1Report.pages.map((p) => p.url)).not.toContain(`${out.origin}/legacy`);
+  }, 60_000);
 });
