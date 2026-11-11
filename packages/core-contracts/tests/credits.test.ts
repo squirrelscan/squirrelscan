@@ -3,6 +3,7 @@
 // from (CLI preflight, dashboard estimate, the API's run cap and gate).
 
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 
 import type { CloudServiceId } from "../src/services";
 import {
@@ -242,5 +243,40 @@ describe("top-up bonus curve (repo#3888)", () => {
   test("the curve numbers live in one object", () => {
     expect(TOPUP_BONUS_CURVE).toEqual({ floorUsd: 50, capPercent: 20, exponent: 0.7 });
     expect(CREDIT_TOPUP).toEqual({ minUsd: 10, maxUsd: 1_000, creditsPerUsd: 100 });
+  });
+
+  test("a non-finite or non-positive amount is a zero quote, never NaN or negative", () => {
+    const zero = { usd: 0, baseCredits: 0, bonusCredits: 0, totalCredits: 0, bonusPercent: 0 };
+    for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, 0, -5, -0.5, 0.9]) {
+      expect(topupQuote(bad)).toEqual(zero);
+      expect(topupCreditsForUsd(bad)).toBe(0);
+      expect(topupBonusPercent(bad)).toBe(0);
+    }
+  });
+
+  test("totalCredits for every whole dollar $10 to $1,000 matches the pinned list (a diff here is a price change)", () => {
+    // Math.pow can differ in the last bits across engines; topupQuote rounds with toFixed(6) before flooring,
+    // so the pinned list holds in Bun, workerd and browsers. Regenerate only when the curve is changed on purpose.
+    const pinned = JSON.parse(
+      readFileSync(new URL("./fixtures/topup-total-credits.json", import.meta.url), "utf8"),
+    ) as Record<string, number>;
+    const actual: Record<string, number> = {};
+    for (let usd = CREDIT_TOPUP.minUsd; usd <= CREDIT_TOPUP.maxUsd; usd++) actual[String(usd)] = topupCreditsForUsd(usd);
+    expect(Object.keys(pinned).length).toBe(991);
+    expect(actual).toEqual(pinned);
+  });
+
+  test("the eight table rows are spelled out in the pinned list", () => {
+    const pinned = JSON.parse(
+      readFileSync(new URL("./fixtures/topup-total-credits.json", import.meta.url), "utf8"),
+    ) as Record<string, number>;
+    expect(pinned["100"]).toBe(10_254);
+    expect(pinned["250"]).toBe(26_679);
+    expect(pinned["500"]).toBe(55_927);
+    expect(pinned["750"]).toBe(87_113);
+    expect(pinned["1000"]).toBe(120_000);
+    expect(pinned["50"]).toBe(5_000);
+    expect(pinned["75"]).toBe(7_617);
+    expect(pinned["150"]).toBe(15_620);
   });
 });
