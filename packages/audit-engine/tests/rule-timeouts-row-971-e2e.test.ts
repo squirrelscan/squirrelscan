@@ -157,6 +157,9 @@ describe("a page-time extractor timeout leaves the row too (pub#971)", () => {
       rule_options: {},
       rules: { enable: ["security/leaked-secrets"], time_budget_ms: 1 },
     } as unknown as Config;
+    // The budget is 1 ms: a cold first run (module warm-up, JIT) can spend it on the small page too, which is
+    // not what this pins. Run once to warm up and read the second.
+    await audit("streaming", config, body);
     const result = await audit("streaming", config, body);
 
     const checks = result.siteRuleResults.get("security/leaked-secrets") ?? [];

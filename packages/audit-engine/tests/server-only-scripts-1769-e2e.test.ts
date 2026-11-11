@@ -58,6 +58,9 @@ function serveSite(): string {
   return `http://localhost:${server.port}`;
 }
 
+/** What the page looks like after hydration: the same page, its head scripts gone. Written out, not derived from the served markup by a pattern. */
+const HYDRATED_BODY = `<!doctype html><html lang="en"><head><title>Product</title></head><body><h1>Product</h1></body></html>`;
+
 /** A render that hydrated: the DOM comes back without the head scripts. `delayMs` is a slow render. */
 function hydratedRender(http: DocumentFetcher, delayMs: number, keepScripts: boolean): DocumentFetcher {
   return {
@@ -66,7 +69,7 @@ function hydratedRender(http: DocumentFetcher, delayMs: number, keepScripts: boo
     async fetch(req) {
       const res = await http.fetch(req);
       if (delayMs > 0) await new Promise((r) => setTimeout(r, delayMs));
-      const body = keepScripts ? res.body : res.body.replace(/<script[\s\S]*?<\/script>/g, "");
+      const body = keepScripts ? res.body : HYDRATED_BODY;
       return { ...res, body, fetcherMethod: "cloud-render" };
     },
   };
