@@ -160,6 +160,11 @@ export class RegionVariantIndex {
     if (targets.size > 0) this.declared.set(self, targets);
   }
 
+  /** Identities a page (by identity) declares as alternates, in any language. */
+  declaredTargets(id: string): Iterable<string> {
+    return this.declared.get(id)?.keys() ?? [];
+  }
+
   /** Whether `a` and `b` are reciprocal same-language variants of one page. */
   private isVariantPair(a: string, b: string): boolean {
     // What `a` calls `b` is b's language; what `b` calls `a` is a's language.

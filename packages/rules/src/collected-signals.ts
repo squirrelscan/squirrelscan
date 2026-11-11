@@ -21,6 +21,7 @@ import type { PageMisspellings } from "./content/common-misspellings";
 import type { ParsedPage } from "./types";
 import type { HreflangPageSignal } from "./i18n/hreflang-signal";
 import { buildHreflangSignal } from "./i18n/hreflang-signal";
+import { fingerprintForPage, type ContentFingerprint } from "./content/duplicate-content";
 
 import { logger, profileRules } from "./logger";
 import { detectPageSignals } from "./integrity/signals";
@@ -115,6 +116,12 @@ export interface CollectedPageSignal {
    * existed, which reads as not judged.
    */
   hreflang?: HreflangPageSignal;
+  /**
+   * content/duplicate-content: hash and word count of the page's rendered body text. Null when the
+   * page has no body or is a redirect. Absent on a record cached before the field existed, which
+   * reads as not judged.
+   */
+  contentFingerprint?: ContentFingerprint | null;
   /**
    * Rules whose page-time extractor ran past its time budget on this page and was
    * abandoned (its field holds the empty value). The site pass records each as a
@@ -217,6 +224,7 @@ export function buildCollectedPageSignal(input: {
       contentSentences: [],
       edgeMarkers: [],
       hreflang: buildHreflangSignal(parsed, input.headers, url),
+      contentFingerprint: null,
     };
   }
 
@@ -321,6 +329,9 @@ export function buildCollectedPageSignal(input: {
     edgeMarkers: timed("perf/bad-caching", [] as string[], () => (hasJavaScriptDetections(doc) ? ["cf-jsd"] : [])),
     // Strings cut from the page are copied so the record does not keep it (#1565).
     hreflang: detachHreflang(buildHreflangSignal(parsed, input.headers, url)),
+    contentFingerprint: timed("content/duplicate-content", null as ContentFingerprint | null, () =>
+      fingerprintForPage(doc, url, finalUrl)
+    ),
   };
   // The one record serves both rules: a timeout is reported against both.
   if (timedOutRuleIds.includes("eeat/about-page")) timedOutRuleIds.push("eeat/contact-page");
