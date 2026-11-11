@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- New rule `url/session-ids`: a page URL or an internal link carrying a session ID (`PHPSESSID`, `jsessionid` in the query or as a `;jsessionid=` path parameter, `sid`, `sessionid`, `session_id`, `ASPSESSIONID*`, `CFID` with `CFTOKEN`) is a warning, with the value masked. Short values such as `sid=2` are ignored.
+
 ## v0.0.174 (2026-11-11)
 
 Reports say why a rule did not give a verdict (JSON schema 1.9), `squirrel audit` has one exit code precedence with the outcome in the JSON and LLM reports, `--resume` says why it started a new crawl, an expired login is called out, settings writes no longer lose each other, and five rules stop flagging hidden, presentational and symbol-only content.

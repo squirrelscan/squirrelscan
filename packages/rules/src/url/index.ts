@@ -7,6 +7,7 @@ import { urlHyphensRule } from "./hyphens";
 import { urlLengthRule } from "./length";
 import { urlLowercaseRule } from "./lowercase";
 import { urlParametersRule } from "./parameters";
+import { sessionIdsRule } from "./session-ids";
 import { slugConventionRule } from "./slug-convention";
 import { slugKeywordsRule } from "./slug-keywords";
 import { specialCharsRule } from "./special-chars";
@@ -23,9 +24,11 @@ export const rules: Rule[] = [
   specialCharsRule,
   stopWordsRule,
   slugConventionRule,
+  sessionIdsRule,
 ];
 
 export {
+  sessionIdsRule,
   slugConventionRule,
   slugKeywordsRule,
   specialCharsRule,

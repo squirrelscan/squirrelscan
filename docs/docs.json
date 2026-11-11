@@ -447,6 +447,7 @@
                   "rules/url/lowercase",
                   "rules/url/trailing-slash",
                   "rules/url/parameters",
+                  "rules/url/session-ids",
                   "rules/url/special-chars",
                   "rules/url/stop-words",
                   "rules/url/slug-convention"

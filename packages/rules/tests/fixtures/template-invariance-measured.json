@@ -107,6 +107,7 @@
         "security/third-party-cookies",
         "social/share-buttons",
         "url/parameters",
+        "url/session-ids",
         "url/special-chars"
       ],
       "varyingRules": [
@@ -372,6 +373,7 @@
         "security/third-party-cookies",
         "social/og-url-match",
         "url/parameters",
+        "url/session-ids",
         "url/special-chars",
         "url/trailing-slash",
         "video/video-accessible",
