@@ -46,6 +46,14 @@
 //     chrome here, and the label counts it apart as a template link inside the page content
 //     instead of naming the content as a place the page is linked from. A crawl without sections
 //     keeps the bare `{ id }` items.
+//   * NOT A PAGE (#1760). Only a URL that resolved to an auditable page in this crawl (a 2xx
+//     answer) can need a contextual link. A target that answered 4xx or 5xx (a footer link to a
+//     page that 404s) is `links/broken-links`' finding, and asking for a body link to it would add
+//     another broken link, so it is never reported here. A URL that redirects is judged at its
+//     final destination: its inbound links are added to the destination's and the redirecting URL
+//     itself is not reported. A chrome-only target the crawl never fetched (outside the page cap,
+//     blocked, timed out, links not followed) cannot be judged: it is left out and counted in a
+//     skipped check with the shared not-fetched reason, never reported and never silently dropped.
 //   * OLD CRAWLS. `isChrome` is optional on `LinkData` (crawls stored before
 //     #109 omit it). `undefined` counts as contextual on BOTH paths, so an old DB
 //     produces contextual == raw and this rule simply passes — never a site-wide
@@ -59,7 +67,11 @@
 import { z } from "zod";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
-import { CRAWL_CAPPED_SKIP_REASON, type LinkData } from "@squirrelscan/core-contracts";
+import {
+  CRAWL_CAPPED_SKIP_REASON,
+  LINK_TARGETS_NOT_FETCHED_SKIP_REASON,
+  type LinkData,
+} from "@squirrelscan/core-contracts";
 
 import { matchesExcludePattern } from "@squirrelscan/utils";
 import { EEAT_PAGE_PATTERNS } from "@squirrelscan/utils/constants";
@@ -166,6 +178,68 @@ function buildCheck(
   };
 }
 
+/** What the crawl recorded about one fetched page, keyed by its normalized URL. */
+interface PageFacts {
+  status: number;
+  /** Normalized final URL when it differs from the page's own URL (the page redirected). */
+  redirectsTo?: string;
+}
+
+function pageFactsOf(pages: NonNullable<RuleContext["site"]>["pages"] | undefined): Map<string, PageFacts> {
+  const facts = new Map<string, PageFacts>();
+  for (const page of pages ?? []) {
+    const key = normalizeUrl(page.url);
+    let redirectsTo: string | undefined;
+    if (page.finalUrl) {
+      const finalKey = normalizeUrl(page.finalUrl);
+      if (finalKey !== key) redirectsTo = finalKey;
+    }
+    facts.set(key, { status: page.statusCode, ...(redirectsTo ? { redirectsTo } : {}) });
+  }
+  return facts;
+}
+
+/**
+ * Keep only the entries that are auditable pages, judged at their final destination (#1760):
+ * 4xx/5xx and other non-2xx answers are dropped, and a redirecting URL hands its inbound counts
+ * to its destination (when the destination was crawled) and is dropped itself. Entries with no
+ * recorded facts are kept as they are (a context without page statuses).
+ */
+function resolveEntries(
+  entries: Array<[string, InboundCounts]>,
+  facts: ReadonlyMap<string, PageFacts>,
+  uncrawled: Map<string, InboundCounts>
+): Array<[string, InboundCounts]> {
+  const rows = entries.map(([url, counts]) => ({
+    url,
+    key: normalizeUrl(url),
+    counts: { ...counts },
+    keep: true,
+  }));
+  const firstByKey = new Map<string, (typeof rows)[number]>();
+  for (const row of rows) if (!firstByKey.has(row.key)) firstByKey.set(row.key, row);
+  for (const row of rows) {
+    const fact = facts.get(row.key);
+    if (!fact) continue;
+    if (fact.status < 200 || fact.status > 299) {
+      row.keep = false;
+    } else if (fact.redirectsTo !== undefined) {
+      row.keep = false;
+      const dest = firstByKey.get(fact.redirectsTo);
+      const into = dest ? dest.counts : uncrawledCounts(uncrawled, fact.redirectsTo);
+      into.all += row.counts.all;
+      into.contextual += row.counts.contextual;
+    }
+  }
+  return rows.filter((row) => row.keep).map((row) => [row.url, row.counts]);
+}
+
+function uncrawledCounts(map: Map<string, InboundCounts>, key: string): InboundCounts {
+  let counts = map.get(key);
+  if (!counts) map.set(key, (counts = { all: 0, contextual: 0 }));
+  return counts;
+}
+
 // Given per-page counts in the crawl's stable order, flag the pages that are
 // neither the homepage nor excluded, have NO contextual inbound link, and carry
 // enough raw inbound links that `links/orphan-pages` stays silent about them.
@@ -193,6 +267,51 @@ function collectChromeOnlyPages(
     }
   }
   return flagged;
+}
+
+/**
+ * Count the inbound links to internal targets the crawl holds no page for, into `uncrawled`. A
+ * target with a known answer (fetched outside the page list, or a probed 4xx/5xx) is left out:
+ * it is not an unfetched page.
+ */
+function countUncrawledTargets(
+  site: RuleContext["site"],
+  facts: ReadonlyMap<string, PageFacts>,
+  uncrawled: Map<string, InboundCounts>
+): void {
+  const answered = new Set<string>();
+  for (const fetched of site?.fetchedTargets ?? []) answered.add(normalizeUrl(fetched.url));
+  for (const probe of site?.linkTargetStatuses ?? []) {
+    if (typeof probe.status === "number" && probe.status >= 400) answered.add(normalizeUrl(probe.url));
+  }
+  for (const page of site?.pages ?? []) {
+    for (const link of page.parsed?.links ?? []) {
+      if (!isGraphLink(link)) continue;
+      let target: string;
+      try {
+        target = normalizeUrl(new URL(link.url, page.url).href);
+      } catch {
+        continue;
+      }
+      if (facts.has(target) || answered.has(target)) continue;
+      const counts = uncrawledCounts(uncrawled, target);
+      counts.all += 1;
+      if (!link.isChrome) counts.contextual += 1;
+    }
+  }
+}
+
+/** The check for chrome-only targets the crawl never fetched, or null when there are none. */
+function unjudgedCheck(unjudged: string[]): CheckResult | null {
+  if (unjudged.length === 0) return null;
+  return {
+    name: "no-contextual-inbound",
+    status: "skipped",
+    message: `${unjudged.length} URL(s) linked only from sitewide chrome were not fetched in this crawl, so they could not be judged as pages`,
+    skipReason: LINK_TARGETS_NOT_FETCHED_SKIP_REASON,
+    value: unjudged.length,
+    details: { unjudged: unjudged.length },
+  };
 }
 
 /** A link that participates in the internal link graph (mirrors the orphan rules). */
@@ -263,18 +382,23 @@ export const noContextualInboundRule: Rule = {
       // #2307: where the counted inbound links sit. Optional on the query: one without section
       // data leaves the items bare, exactly as before.
       const sections = ctx.siteQuery.inboundSectionCounts?.();
+      const facts = pageFactsOf(ctx.site?.pages);
+      const uncrawled = new Map<string, InboundCounts>();
+      countUncrawledTargets(ctx.site, facts, uncrawled);
+      const resolved = resolveEntries(entries, facts, uncrawled);
+      const totals = new Map(resolved.map(([url, c]) => [url, c.all]));
+      const baseUrl = ctx.site?.baseUrl || "";
+      const entryUrls = ctx.site?.entryUrls ?? [];
       checks.push(
         buildCheck(
-          collectChromeOnlyPages(
-            entries,
-            minInboundLinks,
-            excludePatterns,
-            ctx.site?.baseUrl || "",
-            ctx.site?.entryUrls ?? []
-          ),
-          sections ? (url) => inboundSections(sections.get(url), all.get(url) ?? 0) : undefined
+          collectChromeOnlyPages(resolved, minInboundLinks, excludePatterns, baseUrl, entryUrls),
+          sections ? (url) => inboundSections(sections.get(url), totals.get(url) ?? 0) : undefined
         )
       );
+      const gap = unjudgedCheck(
+        collectChromeOnlyPages(uncrawled, minInboundLinks, excludePatterns, baseUrl, entryUrls)
+      );
+      if (gap) checks.push(gap);
       return { checks };
     }
 
@@ -332,8 +456,12 @@ export const noContextualInboundRule: Rule = {
       );
     }
 
-    // Phase 3: flag the chrome-only pages (use cached normalized URLs).
-    const flagged = collectChromeOnlyPages(
+    // Phase 3: judge the pages that resolved (2xx, redirects at their destination), then flag the
+    // chrome-only ones (use cached normalized URLs).
+    const facts = pageFactsOf(pages);
+    const uncrawled = new Map<string, InboundCounts>();
+    countUncrawledTargets(ctx.site, facts, uncrawled);
+    const resolved = resolveEntries(
       pages.map(
         (page) =>
           [
@@ -341,20 +469,26 @@ export const noContextualInboundRule: Rule = {
             counts.get(normalizedCache.get(page.url)!) ?? { all: 0, contextual: 0 },
           ] as [string, InboundCounts]
       ),
-      minInboundLinks,
-      excludePatterns,
-      ctx.site?.baseUrl || "",
-      ctx.site?.entryUrls ?? []
+      facts,
+      uncrawled
     );
+    const totals = new Map(resolved.map(([url, c]) => [url, c.all]));
+    const baseUrl = ctx.site?.baseUrl || "";
+    const entryUrls = ctx.site?.entryUrls ?? [];
+    const flagged = collectChromeOnlyPages(resolved, minInboundLinks, excludePatterns, baseUrl, entryUrls);
 
     checks.push(
       buildCheck(flagged, (url) => {
         const key = normalizedCache.get(url);
         return key === undefined
           ? undefined
-          : inboundSections(sections.get(key), counts.get(key)?.all ?? 0);
+          : inboundSections(sections.get(key), totals.get(url) ?? 0);
       })
     );
+    const gap = unjudgedCheck(
+      collectChromeOnlyPages(uncrawled, minInboundLinks, excludePatterns, baseUrl, entryUrls)
+    );
+    if (gap) checks.push(gap);
 
     return { checks };
   },

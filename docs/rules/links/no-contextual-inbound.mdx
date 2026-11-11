@@ -16,7 +16,10 @@ The rule is site-wide. For each crawled page it counts internal, resolvable, dof
 - Skipped when there are too few pages. Message: `Insufficient pages for contextual inbound link analysis`.
 - Skipped when the crawl stopped at its page cap. Message: `Crawl stopped at its 10-page cap, so a contextual link may sit on a page not crawled`. The finding rests on a link being absent, and a capped crawl has not seen every page that could carry one. Raise `max_pages` or use a deeper coverage profile to get a verdict. Every report shows the rule as **Not checked** with that reason, and a finding it reported on an earlier audit stays open.
 - Warn for pages with zero contextual inbound links. Message: `9 page(s) are linked only from sitewide chrome`. The value lists up to five paths with a `+N more` suffix, and every URL is listed as an item. Severity warning, weight 4.
+- Skipped, with the not-fetched reason, when pages linked only from chrome were never fetched in this crawl (outside the page cap, blocked, timed out, or links not followed). Message: `2 URL(s) linked only from sitewide chrome were not fetched in this crawl, so they could not be judged as pages`. It sits beside the other check and never replaces it.
 - Pass otherwise. Message: `All pages have at least one contextual inbound link`.
+
+Only a URL that resolved to a page in this crawl is considered. A footer link to a URL that answers 404, 410 or any other 4xx or 5xx is reported by [links/broken-links](/rules/links/broken-links), not here: the URL is not a page, so it cannot need a contextual link. A URL that redirects is judged at its final destination: its inbound links count toward the destination and the redirecting URL is not reported.
 
 A page is only considered when its raw inbound count is at or above `minInboundLinks`, default 2. Below that it is already reported by `links/orphan-pages`, and the two thresholds should be kept in sync when either is tuned. The homepage is skipped, since it is linked from every header by design, and so is the page the audit started from: the URL you gave and where its redirects landed (a root that redirects to `/en/`).
 
