@@ -352,8 +352,12 @@ function handshake(args: {
  * design: the audit reads the certificate the server presents, trusted or not,
  * and judges it on the facts (`authorized`, `authorizationError`, the names and
  * dates), so an expired, self-signed or mismatched certificate is REPORTED
- * instead of aborting the handshake. No request, header or credential is sent
- * over this connection. `hostname` is the SNI name (an IP literal has none).
+ * instead of aborting the handshake. This connection is NEVER used for a request:
+ * no request, header or credential is sent over it, so nothing is exposed to an
+ * unverified peer. Verification happens separately, on the facts read here
+ * (`authorized` and `authorizationError` from the handshake, the names and the
+ * dates), and the audit reports a certificate that fails them. `hostname` is the
+ * SNI name (an IP literal has none).
  */
 function connectForFacts(options: {
   hostname: string;
@@ -367,6 +371,7 @@ function connectForFacts(options: {
   return connect({
     ...target,
     ...(isIP(hostname) === 0 ? { servername: hostname } : {}),
+    // Intentional: see above. Read-only certificate probe; nothing is sent, trust is judged on the facts.
     rejectUnauthorized: false,
     ...(ca !== undefined ? { ca } : {}),
   });

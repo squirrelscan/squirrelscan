@@ -38,6 +38,7 @@ import { isIP } from "node:net";
 
 import { isCloudMetadataHostname, isNonPublicHostname } from "./non-public-host";
 import { isPrivateOrReservedHost } from "./url";
+import { trimTrailing } from "./trim";
 
 /** Every address a hostname resolves to. */
 export type ResolveHost = (hostname: string) => Promise<string[]>;
@@ -175,7 +176,7 @@ export class EgressUnresolvableError extends EgressRefusedError {
  * names on real private networks, and stay refused. A private-network audit allows all of them.
  */
 export function isReservedUnresolvableHostname(rawHost: string): boolean {
-  const host = rawHost.toLowerCase().replace(/\.+$/, "");
+  const host = trimTrailing(rawHost.toLowerCase(), 46); // a linear trim: /\.+$/ is quadratic on a host of many dots
   return ["test", "example", "invalid"].some((zone) => host === zone || host.endsWith(`.${zone}`));
 }
 

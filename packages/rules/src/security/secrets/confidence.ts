@@ -1,4 +1,5 @@
 import { createHmac } from "node:crypto";
+import { trimTrailing } from "@squirrelscan/utils/trim";
 
 // security/leaked-secrets — token decoders (#361).
 //
@@ -483,7 +484,7 @@ function verifiesUnderSampleSecret(token: string, header: Record<string, unknown
   const lastDot = token.lastIndexOf(".");
   if (hash === undefined || lastDot === -1) return false;
   const signed = token.slice(0, lastDot);
-  const signature = token.slice(lastDot + 1).replace(/=+$/, "");
+  const signature = trimTrailing(token.slice(lastDot + 1), 61);
   return JWT_IO_SECRETS.some((secret) => createHmac(hash, secret).update(signed).digest("base64url") === signature);
 }
 
