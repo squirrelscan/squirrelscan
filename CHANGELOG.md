@@ -19,6 +19,7 @@ How it works:
 
 ### Added
 
+- **`crawl/indexable-search-results` reports internal search result pages that search engines can index.** A `/search` path with a query, a search parameter (`s`, `q`, `query`, `search`, `keyword`) on a page that shows results, or a URL matching the site's WebSite `SearchAction` target counts as a search result. Pages with `noindex`, a robots.txt `Disallow` or a canonical to a non-search page are not listed. The finding says how many were found and how many are indexable, and names both fixes. (#1696)
 - New rule `url/session-ids`: a page URL or an internal link carrying a session ID (`PHPSESSID`, `jsessionid` in the query or as a `;jsessionid=` path parameter, `sid`, `sessionid`, `session_id`, `ASPSESSIONID*`, `CFID` with `CFTOKEN`) is a warning, with the value masked. The value must look generated: short values, all-digit ids and hyphenated labels are ignored, and `sid` and `sessionid` need a stricter form than the unambiguous names.
 - New rule `url/session-ids`: a page URL or an internal link carrying a session ID (`PHPSESSID`, `jsessionid` in the query or as a `;jsessionid=` path parameter, `sid`, `sessionid`, `session_id`, `ASPSESSIONID*`, `CFID` with `CFTOKEN`) is a warning, with the value masked. Short values such as `sid=2` are ignored.
 - New rule `security/password-form-get`: a form with a password field that submits by GET (an explicit `method="get"`, a form with an `action` and no method, or a GET `formmethod` on a submit button) is an error. A form with no method and no action, which is how a React, Vue or Svelte login form looks in the DOM, is a warning (it falls back to GET only if its script fails; `method="post"` removes the risk), and one submitted by an inline handler with no action is reported as not determined. The action a finding shows has its query, fragment and credentials removed.
@@ -3045,6 +3046,7 @@ Browse the full rule set → https://docs.squirrelscan.com/rules
 
 - Cloud audits that stall past their deadline are now finalized automatically instead of hanging.
 - More efficient handling of error and empty pages during analysis.
+
 
 
 
