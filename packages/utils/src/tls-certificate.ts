@@ -3,7 +3,7 @@
 // The facts and what they mean live here, so the `security/tls-certificate`
 // rule and the crawl's TLS failure message share one definition. The handshake
 // itself does NOT: this package has no socket code. A runtime that can open a
-// TLS socket injects a `TlsProbeFn` (the CLI does, in apps/cli/src/audit/
+// TLS socket injects a `TlsProbeFn` (the CLI does, from packages/fetchers/src/
 // tls-probe.ts, behind the egress guard); everywhere else there is no probe and
 // the rule says "not checked".
 //
@@ -17,6 +17,8 @@
 //   only speaks TLS 1.0 or 1.1 ends the handshake (`not checked`) and never reaches a protocol check.
 //   Ed25519, Ed448, DSA, RSA-PSS, P-521 and secp256k1 leaves also fail the runtime's handshake, so the
 //   key facts for them are read only when a runtime can handshake with them (#1259).
+
+import { getDomain } from "tldts";
 
 const DAY_MS = 86_400_000;
 
@@ -311,4 +313,22 @@ export function daysUntil(date: Date, now: Date): number {
 /** The YYYY-MM-DD form of a certificate date, in UTC. */
 export function isoDate(date: Date): string {
   return date.toISOString().slice(0, 10);
+}
+
+/**
+ * The www/apex counterpart of a hostname, from its registrable domain only:
+ * `www.example.com` for `example.com` and the reverse. Undefined for any other
+ * subdomain (`blog.example.com` has no counterpart here, and `www.blog.example.com`
+ * is not derived), for an IP, and for a name with no registrable domain
+ * (`localhost`, a bare public suffix). Private suffixes count as registrable
+ * (`acme.pages.dev`), so another tenant's name is never derived.
+ */
+export function wwwVariant(hostname: string): string | undefined {
+  const host = hostname.toLowerCase().replace(/\.$/, "");
+  if (/^[\d.]+$/.test(host) || host.includes(":")) return undefined;
+  const registrable = getDomain(host, { allowPrivateDomains: true });
+  if (!registrable) return undefined;
+  if (host === registrable) return `www.${registrable}`;
+  if (host === `www.${registrable}`) return registrable;
+  return undefined;
 }
