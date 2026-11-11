@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+## v0.0.178 (2026-11-11)
+
+Structured data checks now say what they could and could not read. The schema product rule reports each of name, description, image, price and availability as present, absent or unknown, and two new informational checks report merchant identity for a confirmed shop and the contact channels an organization publishes. Products written as Microdata or RDFa, and a ProductGroup with its variants, are now read as products, a price of 0 counts as declared, and price or availability is found on any offer or variant. A truncated or failed read, or a JavaScript-only product shell, leaves the fields unknown with an info result where the missing-field checks used to warn, so some pages move between info and warn. The api-catalog check accepts only a non-empty linkset and reports a 403 or 429 as not checked, the Agents score line says it covers the scored agent experience rules, with llms.txt, Markdown response and AGENTS.md listed separately, and the editor summary request now carries check-level evidence so it stops recommending what a site already has.
+
 ### Added
 
 - `schema/product` reports name, description, image, price and availability as present, absent or unknown in a new informational `product-field-evidence` check, with the representation each was read from (JSON-LD, Microdata or RDFa). Scoring and severity change on some pages: products written as Microdata or RDFa, and a `ProductGroup` with its variants, are now read as products, so a page that used to get the info result `No Product schema found` can now warn on `product-required` or `product-offer-details`. A price of 0 now counts as declared, and price or availability found on any offer, variant or `AggregateOffer` counts, not only the first offer. In the other direction, a truncated or failed read, and a JavaScript-only product shell, now leave the fields unknown with an info result where the missing-field checks used to warn, so some pages move from info to warn and others from warn to info. The CLI decides from the page markup alone: the ecommerce shop profile comes from cloud site metadata (#1652).
