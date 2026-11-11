@@ -4,6 +4,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   PROBE_PATH_NOT_APPROVED_ERROR,
+  PROBE_REDIRECT_NOT_FOLLOWED_ERROR,
   PROBE_STOPPED_ERROR,
 } from "@squirrelscan/core-contracts/storage";
 
@@ -78,5 +79,18 @@ describe("path not approved (#1655)", () => {
     expect(checks).toHaveLength(1);
     expect(checks[0]?.value).toBe("not-checked");
     expect(checks[0]?.message).toContain("path not approved");
+  });
+
+  test("ax/agents-md: a redirect that was not followed says the request was sent", () => {
+    const checks = agentsMdRule.run(
+      ctx({
+        probes: ["/AGENTS.md", "/agents.md", "/.well-known/agents.md", "/docs/AGENTS.md"].map((p) =>
+          probe(p, { error: PROBE_REDIRECT_NOT_FOLLOWED_ERROR }),
+        ),
+      }),
+    ).checks;
+    expect(checks[0]?.value).toBe("not-checked");
+    expect(checks[0]?.message).toContain("redirect to another path was not followed");
+    expect(checks[0]?.message).not.toContain("was not sent");
   });
 });

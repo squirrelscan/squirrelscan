@@ -1154,7 +1154,7 @@ squirrel audit https://example.com --discovery-probe-path /llms.txt --discovery-
 With the list set:
 
 - A probe left out is not sent. Its rule reports **not checked (path not approved)**, never a missing file.
-- A redirect from a listed path may change the scheme, host or query (an `http` to `https` or apex to `www` canonical hop) but not the path. A redirect to another path is not followed, and the probe reports not checked.
+- A redirect from a listed path may change the scheme, host or query (an `http` to `https` or apex to `www` canonical hop) but not the path. A redirect to another path is not followed, and the probe reports not checked. The path is compared exactly: a canonical redirect that adds or drops a trailing slash (`/x` to `/x/`), changes the case, or doubles a slash is a different path and is not followed. The request was sent, so the report says the redirect was not followed, not that the probe was not sent.
 - The per-host limits (`per_host_concurrency`, `per_host_delay_ms`) still apply.
 - `robots.txt` and sitemap discovery are not probes and always run.
 - The markdown, agent-access and RSL probes are not path-shaped and are not gated by the list. They stay under rule selection and `disable_discovery_probes`.
@@ -1163,7 +1163,7 @@ A path that is not one of the probe paths is a config error.
 
 ### Block signals stop the optional probes
 
-On a 429 or a bot challenge (`cf-mitigated: challenge`), the crawl sends no further optional probe: the discovery probes and the post-crawl configured-page requests that have not gone out yet are skipped and report not checked, and the probe that met the block is no answer either. A lone 403 does not stop them, since sites answer 403 for a single protected path. `robots.txt`, sitemaps and the pages themselves are not optional probes and keep their own handling.
+On a 429 or a bot challenge (`cf-mitigated: challenge`), the crawl sends no further optional probe: the discovery probes and the post-crawl configured-page requests that have not gone out yet are skipped and report not checked, and the probe that met the block is no answer either. A block only counts when it comes from the audited host or its `www` or apex twin: a 429 from a third-party sitemap host or CDN does not stop the probes. The agent access probe notes its block after all three identities ran, so they stay comparable. A lone 403 does not stop them, since sites answer 403 for a single protected path. `robots.txt`, sitemaps and the pages themselves are not optional probes and keep their own handling.
 
 ### Or let squirrelscan through
 

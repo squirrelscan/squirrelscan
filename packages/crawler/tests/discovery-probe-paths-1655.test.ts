@@ -13,6 +13,10 @@ import {
 } from "@squirrelscan/core-contracts/storage";
 
 import { createCrawler } from "../src/core/crawler";
+import { createPhaseBudget, samePathRedirect } from "../src/deadline";
+import { probeAgentAccess } from "../src/agent-access";
+import { probeConfiguredPage } from "../src/well-known";
+import { RefusalLog } from "../src/refusals";
 import type { CrawlerConfig } from "../src/core/types";
 
 const PAGE = `<!doctype html><html><head><title>t</title></head><body>
@@ -266,4 +270,83 @@ describe("block signals stop the optional probes (#1655)", () => {
     expect(new Set(probeHits(origin.hits))).toEqual(new Set(PROBE_ONLY_PATHS));
     expect(out.wellKnown?.probes.find((p) => p.path === "/openapi.json")?.status).toBe(403);
   }, 20_000);
+});
+
+describe("block scope (#1655)", () => {
+  test("a 429 from an off-origin sitemap host does not stop the optional probes", async () => {
+    // 127.0.0.1 is another host than localhost: a third-party sitemap host.
+    const other = serve(() => new Response("slow down", { status: 429 }));
+    const otherSitemap = `${other.url.replace("localhost", "127.0.0.1")}third.xml`;
+    const origin = serve((path, base) =>
+      path === "/robots.txt"
+        ? new Response(`User-agent: *\nSitemap: ${otherSitemap}\nSitemap: ${base}/sitemap.xml\n`)
+        : undefined,
+    );
+    await crawl(origin.url, { discoveryProbes: PATH_PROBES, respectRobots: true });
+
+    expect(other.hits.some((h) => h.path === "/third.xml")).toBe(true);
+    expect(new Set(probeHits(origin.hits))).toEqual(new Set(PROBE_ONLY_PATHS));
+  }, 20_000);
+
+  test("a 429 from the audited host's own robots.txt stops the optional probes", async () => {
+    const origin = serve((path) =>
+      path === "/robots.txt" ? new Response("slow down", { status: 429 }) : undefined,
+    );
+    await crawl(origin.url, { discoveryProbes: PATH_PROBES, respectRobots: true });
+    expect(probeHits(origin.hits)).toEqual([]);
+  }, 20_000);
+
+  test("RefusalLog counts the audited host and its www twin, not another host", () => {
+    const blocked = { status: 429, headers: new Headers() };
+    const log = new RefusalLog("https://example.com/");
+    expect(log.observe(blocked, "https://cdn.example.net/s.xml")).toBe(false);
+    expect(log.observe({ ...blocked, url: "https://other.test/x" }, "https://example.com/s.xml")).toBe(false);
+    expect(log.blocked).toBe(false);
+    expect(log.observe(blocked, "https://www.example.com/s.xml")).toBe(true);
+    expect(log.blocked).toBe(true);
+  });
+
+  test("a block signal on an agent access probe stops the probes after it, not its siblings", async () => {
+    const origin = serve((path) => (path === "/" ? new Response("slow", { status: 429 }) : undefined));
+    const refusals = new RefusalLog(origin.url);
+    const budget = createPhaseBudget(30_000, Date.now(), refusals);
+    const data = await Effect.runPromise(probeAgentAccess(origin.url, "browser-ua", undefined, budget));
+    expect(data.probes.map((p) => p.status)).toEqual([429, 429, 429]);
+    expect(refusals.blocked).toBe(true);
+  }, 20_000);
+
+  test("a 429 on a configured page is not checked, never a missing page", async () => {
+    const origin = serve(() => new Response("slow", { status: 429 }));
+    const refusals = new RefusalLog(origin.url);
+    const budget = createPhaseBudget(30_000, Date.now(), refusals);
+    const probe = await Effect.runPromise(
+      probeConfiguredPage(origin.url, "/about", "squirrel-test", { budget }),
+    );
+    expect(probe.status).toBe(0);
+    expect(probe.configuredPage).toBe(true);
+    expect(refusals.blocked).toBe(true);
+  }, 20_000);
+});
+
+describe("samePathRedirect (#1655)", () => {
+  const from = "https://example.com/llms.txt";
+  test("followed: scheme, host, query and www changes keep the path", () => {
+    expect(samePathRedirect(from, "http://www.example.com/llms.txt")).toBe(true);
+    expect(samePathRedirect(from, "https://example.com/llms.txt?x=1")).toBe(true);
+  });
+  test("a trailing-slash canonical redirect is not followed", () => {
+    expect(samePathRedirect("https://example.com/x", "https://example.com/x/")).toBe(false);
+  });
+  test("a case change is not followed", () => {
+    expect(samePathRedirect(from, "https://example.com/LLMS.txt")).toBe(false);
+  });
+  test("a dot-segment path that resolves to another path is not followed", () => {
+    expect(samePathRedirect(from, "https://example.com/a/%2e%2e/admin")).toBe(false);
+    expect(samePathRedirect(from, "https://example.com/admin/%2E%2E/llms.txt")).toBe(true);
+  });
+  test("a doubled slash or an encoded slash is another path", () => {
+    expect(samePathRedirect(from, "https://example.com//llms.txt")).toBe(false);
+    expect(samePathRedirect(from, "https://example.com/llms%2Ftxt")).toBe(false);
+    expect(samePathRedirect(from, "https://example.com/%6Clms.txt")).toBe(false);
+  });
 });

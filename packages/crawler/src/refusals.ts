@@ -15,7 +15,16 @@ import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
 import { detectWafFromHeaders, getWafProviderName } from "@squirrelscan/utils/waf";
 
 /** What a refusal check needs from a response. */
-export type RefusalCandidate = Pick<Response, "status" | "headers">;
+export type RefusalCandidate = Pick<Response, "status" | "headers"> & { url?: string };
+
+/** The host without a leading `www.`, lowercased, so the audited host and its www/apex twin compare equal. */
+function siteHost(url: string): string | null {
+  try {
+    return new URL(url).hostname.toLowerCase().replace(/^www\./, "");
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Whether a response is the site refusing the crawler rather than answering.
@@ -43,22 +52,41 @@ export function isBlockSignal(response: RefusalCandidate): boolean {
 export class RefusalLog {
   private readonly byUrl = new Map<string, RefusedFetch>();
   private blockSeen = false;
+  private readonly auditedHost: string | null;
+
+  /**
+   * @param auditedUrl the audited site. A block signal only stops the optional probes when the
+   *   response came from its host or the www/apex twin: a third-party sitemap host or CDN that
+   *   answers 429 says nothing about the audited host (#1655). Without it every block counts.
+   */
+  constructor(auditedUrl?: string) {
+    this.auditedHost = auditedUrl ? siteHost(auditedUrl) : null;
+  }
+
+  private onAuditedHost(...urls: Array<string | undefined>): boolean {
+    if (this.auditedHost === null) return true;
+    return urls.every((u) => !u || siteHost(u) === this.auditedHost);
+  }
 
   /** True once any response of the crawl was a block signal; the optional probes stop at it. */
   get blocked(): boolean {
     return this.blockSeen;
   }
 
-  /** Notes a block signal without recording a refusal, for probes whose resource is not a refusal kind. */
-  observe(response: RefusalCandidate): boolean {
+  /**
+   * Notes a block signal without recording a refusal, for probes whose resource is not a refusal kind.
+   * `requestedUrl` and the response's own URL (the last hop) must both be on the audited host.
+   */
+  observe(response: RefusalCandidate, requestedUrl?: string): boolean {
     if (!isBlockSignal(response)) return false;
+    if (!this.onAuditedHost(requestedUrl, response.url)) return false;
     this.blockSeen = true;
     return true;
   }
 
   /** Records `response` when it is a refusal. Returns whether it was one. */
   note(url: string, resource: RefusedResource, response: RefusalCandidate): boolean {
-    this.observe(response);
+    this.observe(response, url);
     if (!isRefusal(response)) return false;
     if (this.byUrl.has(url) || this.byUrl.size >= MAX_REFUSED_FETCHES) return true;
     const waf = detectWafFromHeaders(response.headers);
