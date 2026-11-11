@@ -56,21 +56,11 @@ import type {
   TwitterData,
 } from "@squirrelscan/core-contracts";
 import type { ParsedPage, RuleRunResult } from "@squirrelscan/rules";
+import { isScoreless } from "@squirrelscan/core-contracts";
 
 // ============================================
 // SITE-RECORD BUILDERS
 // ============================================
-
-/**
- * Statuses that mean no real audit happened, so the score must read N/A.
- *
- * `partial` is NOT one of them (#1829): a crawl that lost some pages to rate
- * limiting still graded everything it did fetch, and blanking that score would
- * hide a usable report behind a coverage gap.
- */
-function isScorelessStatus(status: AuditStatus): boolean {
-  return status === "failed" || status === "blocked";
-}
 
 /**
  * Hosts named in a rate-limit reason. Crawl-level throttling is by definition
@@ -772,7 +762,7 @@ export function buildV1Report(
       // `partial` is deliberately excluded (#1829): a crawl that audited most
       // of a site and lost a few pages to throttling has a real score, and
       // nulling it would hide the whole report over a coverage gap.
-      if (isScorelessStatus(runStatus.status) && result.healthScore) {
+      if (isScoreless(runStatus.status) && result.healthScore) {
         result.healthScore = withoutUnobservedScores(result.healthScore);
       }
     }
@@ -1070,7 +1060,7 @@ export function buildV2Report(
       result.status = runStatus.status;
       result.statusReason = runStatus.reason;
       result.statusReasonCode = runStatus.reasonCode;
-      if (isScorelessStatus(runStatus.status) && result.healthScore) {
+      if (isScoreless(runStatus.status) && result.healthScore) {
         result.healthScore = withoutUnobservedScores(result.healthScore);
       }
     }

@@ -3,6 +3,7 @@
 // crawler-level Disallow rules.
 
 import type { RobotsTxtData } from "@squirrelscan/core-contracts";
+import { ROBOTS_MAX_BYTES } from "@squirrelscan/utils/constants";
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 import { type CrawlerClass, evaluateAiCrawlers } from "./ai-crawlers";
@@ -156,6 +157,34 @@ export function findContradictions(
   return out;
 }
 
+/**
+ * Decoded size at which a read counts as possibly cut short. The capped read
+ * decodes UTF-8 and drops a leading BOM (3 bytes) and may turn a split multibyte
+ * character into a replacement character, so a file cut at the cap reports a few
+ * bytes under it. The margin keeps that file from being called complete.
+ */
+export const ROBOTS_CAP_MARGIN_BYTES = 4;
+
+/**
+ * Why robots.txt cannot support a claim that no policy is declared, or null when
+ * the answer is definite. A 404 is definite (RFC 9309: no policy declared; the
+ * crawl/robots-txt and ax/ai-crawlers rules read it the same way), and is stored
+ * as exists:false with no error. A refused, failed or budget-cut read records an
+ * error, and a read that reached the cap may hide a directive past it.
+ */
+export function robotsNotReadReason(robotsTxt: RobotsTxtData | null | undefined): string | null {
+  if (!robotsTxt) return "robots.txt was not read in this audit";
+  const error = robotsTxt.errors[0];
+  if (error) return `robots.txt could not be read (${error})`;
+  if (robotsTxt.exists && robotsTxt.content === null) {
+    return "robots.txt was reported present but its content was not read";
+  }
+  if (robotsTxt.sizeBytes >= ROBOTS_MAX_BYTES - ROBOTS_CAP_MARGIN_BYTES) {
+    return `robots.txt reached the ${ROBOTS_MAX_BYTES / 1024} KiB read cap, so a Content-Signal past it would not be seen`;
+  }
+  return null;
+}
+
 export const contentSignalsRule: Rule = {
   meta: {
     id: "ax/content-signals",
@@ -179,13 +208,27 @@ export const contentSignalsRule: Rule = {
 
     const directives = content ? parseContentSignals(content) : [];
 
-    // No Content-Signal anywhere → informational, never a failure.
     if (directives.length === 0) {
+      // Absent only when robots.txt was read completely; otherwise unknown.
+      const notRead = robotsNotReadReason(robotsTxt);
+      if (notRead !== null) {
+        checks.push({
+          name: "content-signals",
+          status: "skipped",
+          message: `Content-Signal policy not checked: ${notRead}`,
+          value: "not-checked",
+          skipReason: notRead,
+          details: { state: "not-checked" },
+        });
+        return { checks };
+      }
+      // No Content-Signal anywhere → informational, never a failure.
       checks.push({
         name: "content-signals",
         status: "info",
         message: "No Content-Signal declared in robots.txt (optional per-purpose AI policy)",
         value: "absent",
+        details: { state: "absent" },
       });
       return { checks };
     }
@@ -208,6 +251,7 @@ export const contentSignalsRule: Rule = {
           : "Content-Signal present but declares no recognized signal",
       value: "present",
       details: {
+        state: policyParts.length > 0 ? "declared" : "invalid",
         signals: Object.fromEntries(declared),
         scopedUserAgents: [...new Set(directives.flatMap((d) => d.userAgents))],
       },
@@ -226,7 +270,7 @@ export const contentSignalsRule: Rule = {
         message: `Content-Signal has invalid syntax — ${notes.join("; ")}. Valid form is comma-separated key=value using search/ai-input/ai-train with yes/no.`,
         value: "invalid-syntax",
         items: [...unknownKeys, ...malformed].map((t) => ({ id: t, label: t })),
-        details: { unknownKeys, malformed },
+        details: { state: "invalid", unknownKeys, malformed },
       });
     }
 

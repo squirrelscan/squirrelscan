@@ -14,6 +14,11 @@ export {
   type CrawlLeaseOptions,
 } from "./crawl-lease";
 export {
+  CRAWL_STATUS_GUARD_SQL,
+  crawlStatusAllowedFrom,
+  writeCrawlStatusGuarded,
+} from "./crawl-status-write";
+export {
   isCrawlAbandoned,
   isPidAlive,
   REAL_LEASE_ENV,

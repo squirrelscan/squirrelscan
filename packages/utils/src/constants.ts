@@ -90,6 +90,10 @@ export const SECRET_KEY_LOOKBEHIND_SIZE = 64;
 // reason, and the dashboard's error check all key off this single string (#562).
 export const CLOUD_AUDIT_CAP_EXCEEDED = "CLOUD_AUDIT_CAP_EXCEEDED";
 
+// The most robots.txt the crawler reads; Google documents the same limit and ignores the rest.
+// A read that reaches it may have been cut short, so no rule may claim a directive is absent.
+export const ROBOTS_MAX_BYTES = 512 * 1024;
+
 // Googlebot crawl size limits (Feb 2026)
 export const GOOGLEBOT_HTML_MAX_BYTES = 2 * 1024 * 1024; // 2MB
 export const GOOGLEBOT_HTML_WARN_BYTES = 1 * 1024 * 1024; // 1MB

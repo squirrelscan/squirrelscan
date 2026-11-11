@@ -1,6 +1,7 @@
 // Markdown report output
 
 import type { ReportBranding } from "@squirrelscan/core-contracts";
+import { isAuditFailed } from "@squirrelscan/core-contracts";
 import type { AuditReport } from "../types";
 import { AUDIT_FAILURE_NEXT_STEP } from "@squirrelscan/core-contracts/failure-reason";
 import { cacheReasonsLabel, cacheStatsSummaryLine } from "../cache-stats";
@@ -366,7 +367,7 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
   // Failed/blocked audit (#489): show the state, never a "0/100 (F)" grade.
   // #792: a block is the SITE refusing our crawler, not our infra; say so and
   // give the owner actionable next steps instead of a bare reason line.
-  if (report.status === "failed" || report.status === "blocked") {
+  if (isAuditFailed(report.status)) {
     const blocked = report.status === "blocked";
     const throttled = !!report.rateLimited && report.rateLimited.pages > 0;
     lines.push(`## ${blocked ? "Audit blocked" : "Audit failed"}`);
@@ -776,7 +777,7 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
       lines.push("---");
       lines.push("");
     }
-  } else if (report.status !== "failed" && report.status !== "blocked") {
+  } else if (!isAuditFailed(report.status)) {
     // #792: only claim "No issues found" for a real completed audit. A 0-page
     // failed/blocked run has no issues because nothing was audited (state shown
     // above), not because the site is clean.

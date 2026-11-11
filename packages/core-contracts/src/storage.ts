@@ -165,8 +165,8 @@ export function isPermanentStorageError(error: unknown): boolean {
 // CRAWL METADATA
 // ============================================
 
-// "stopped" = the crawl loop was hard-interrupted mid-frontier by the wall-clock
-// backstop (stop()), NOT drained to completion (#969). Distinct from "completed"
+// "stopped" = the crawl loop was hard-interrupted mid-frontier, by the wall-clock
+// backstop (stop()) or by Ctrl-C (#1672), NOT drained to completion (#969). Distinct from "completed"
 // so a direct CrawlStorage consumer can't read a partial crawl as a full one; the
 // pages collected before the interrupt are still analyzable/resumable.
 export type CrawlStatus =
@@ -188,7 +188,7 @@ export type CrawlStatus =
  * running    any            a crawl starts, resumes (paused, stopped) or is re-crawled (any finished status)
  * paused     running        stop() while the crawl loop is live
  * completed  running, paused   the loop drained (a stop() may have written paused first)
- * stopped    running, paused   the crawl-phase backstop cut the loop
+ * stopped    running, paused   the crawl-phase backstop cut the loop, or Ctrl-C (which may find the paused a stop() wrote)
  * crawled    running, paused, completed, stopped   the crawl is over and the audit moves on
  * analyzed   those, and crawled, analyzed          the rules phase ran (a re-analysis stays analyzed)
  * failed     running, paused   the crawl could not continue

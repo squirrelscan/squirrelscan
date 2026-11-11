@@ -1,6 +1,7 @@
 // Category-grouped issues derived from rule results
 
-import type { CheckTallies, LinkSection } from "@squirrelscan/core-contracts";
+import type { AuditStatus, CheckTallies, LinkSection } from "@squirrelscan/core-contracts";
+import { isAuditFailed } from "@squirrelscan/core-contracts";
 import { addRegions, pageRegions } from "@squirrelscan/core-contracts/item-sources";
 import { PUBLISH_LIMITS } from "@squirrelscan/core-contracts/limits";
 import type {
@@ -833,10 +834,10 @@ export function listPassedRules(
  * against the seed) say nothing about the site.
  */
 export function reportPassedRules(
-  report: { status?: string; ruleResults: Parameters<typeof listPassedRules>[0] },
+  report: { status?: AuditStatus; ruleResults: Parameters<typeof listPassedRules>[0] },
   includePassed: boolean | undefined
 ): PassedRule[] {
-  if (!includePassed || report.status === "failed" || report.status === "blocked") return [];
+  if (!includePassed || isAuditFailed(report.status)) return [];
   return listPassedRules(report.ruleResults);
 }
 

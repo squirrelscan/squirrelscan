@@ -57,3 +57,40 @@ describe("resolveDocumentFetcher — cloudAvailable gate", () => {
     ).toBe(custom);
   });
 });
+
+// #1664: a render that was asked for and could not run says why, for the report.
+describe("resolveDocumentFetcher — fallback reason hook (#1664)", () => {
+  test("cloud unavailable with rendering=browser reports why", () => {
+    const config = getDefaultConfig();
+    config.cloud.enabled = true;
+    config.cloud.rendering = "browser";
+    const reasons: string[] = [];
+    resolveDocumentFetcher(
+      opts({ cloudAvailable: false }),
+      config,
+      undefined,
+      false,
+      {
+        onFallbackReason: (reason) => reasons.push(reason),
+      }
+    );
+    expect(reasons).toEqual(["cloud unavailable (signed out or unreachable)"]);
+  });
+
+  test("rendering=http was never asked for, so there is no reason", () => {
+    const config = getDefaultConfig();
+    config.cloud.enabled = true;
+    config.cloud.rendering = "http";
+    const reasons: string[] = [];
+    resolveDocumentFetcher(
+      opts({ cloudAvailable: true }),
+      config,
+      undefined,
+      false,
+      {
+        onFallbackReason: (reason) => reasons.push(reason),
+      }
+    );
+    expect(reasons).toEqual([]);
+  });
+});

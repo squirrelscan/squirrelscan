@@ -140,27 +140,32 @@ export interface CloudFetcherOptions {
   runId?: string | (() => string | undefined | Promise<string | undefined>);
 }
 
+/**
+ * Where one waiter is in its life. Replaces three booleans (`settled`, `dispatched`, `racing`) whose
+ * legal combinations lived only in comments; only these four were ever legal, and the illegal ones
+ * (`racing` without `dispatched`, `racing` and `settled`) cannot be written now.
+ *
+ *   queued     buffered, or its batch is in flight; the render may still answer it.
+ *   dispatched terminal handling is committed: it was resolved, or the one-and-only fallback fetch
+ *              started and has not settled it yet (a fallback settles asynchronously). Set
+ *              synchronously by {@link claim}, so a re-sent `completed` item (#992) or an
+ *              overlapping fallback sweep skips an already-handled waiter.
+ *   racing     the headroom timer started the fallback while the render is still in flight: the two
+ *              race, a good render item may still resolve the waiter, and no second fallback may
+ *              start for it. Left once a render item or the fallback settles it.
+ *   settled    the terminal outcome was delivered (resolve or reject done).
+ *
+ * queued -> dispatched | racing -> settled, and queued -> settled (an abort or a render item).
+ */
+export type WaiterState = "queued" | "dispatched" | "racing" | "settled";
+
 /** A buffered per-page render request awaiting its batch. */
 interface Waiter {
   req: FetchRequest;
   resolve: (resp: FetchResponse) => void;
   reject: (err: unknown) => void;
-  /** Terminal outcome delivered (resolve/reject done). */
-  settled: boolean;
-  /**
-   * Terminal handling committed — resolved, or the one-and-only fallback fetch
-   * started (fallback settles asynchronously, so `settled` lags). Set
-   * synchronously so re-sent `completed` items (#992) and overlapping fallback
-   * sweeps skip an already-handled waiter instead of double-fetching.
-   */
-  dispatched: boolean;
-  /**
-   * The fallback was started by the headroom timer while the render is still
-   * in flight, and the two are racing: a good render item may still resolve
-   * this waiter, and no second fallback may start for it. Cleared once a
-   * render item settles it. Only ever true together with `dispatched`.
-   */
-  racing: boolean;
+  /** Where the waiter is: see {@link WaiterState}. */
+  state: WaiterState;
   /** When `fetch()` accepted the request; the outer deadline counts from here. */
   enqueuedAt: number;
   /** Outer deadline for the whole fetch (render + fallback), in ms. */
@@ -374,18 +379,16 @@ export function createCloudDocumentFetcher(
   }
 
   function resolveWaiter(w: Waiter, resp: FetchResponse): void {
-    if (w.settled) return;
-    w.settled = true;
-    w.racing = false;
+    if (w.state === "settled") return;
+    w.state = "settled";
     detach(w);
     w.resolve(resp);
     w.onSettled?.();
   }
 
   function rejectWaiter(w: Waiter, err: unknown): void {
-    if (w.settled) return;
-    w.settled = true;
-    w.racing = false;
+    if (w.state === "settled") return;
+    w.state = "settled";
     detach(w);
     w.reject(err);
     w.onSettled?.();
@@ -398,8 +401,8 @@ export function createCloudDocumentFetcher(
   // idempotent (no double-fetch, no double-settle). Synchronous: no await
   // between the check and the set, so within a demux pass it can't race.
   function claim(w: Waiter): boolean {
-    if (w.settled || w.dispatched) return false;
-    w.dispatched = true;
+    if (w.state !== "queued") return false;
+    w.state = "dispatched";
     return true;
   }
 
@@ -411,7 +414,7 @@ export function createCloudDocumentFetcher(
   // full timeout again: render + fallback fit inside one deadline (#2026). The
   // headroom timer guarantees that remainder is at least the headroom.
   async function fallbackWaiter(w: Waiter, fallbackReason?: string): Promise<void> {
-    if (w.settled) return;
+    if (w.state === "settled") return;
     if (w.req.signal?.aborted) {
       rejectWaiter(w, abortError());
       return;
@@ -424,7 +427,7 @@ export function createCloudDocumentFetcher(
       // still in flight must not throw the render away: hold the failure until
       // the outer deadline, and let a render item that lands first win. The
       // caller's own abort still rejects at once through onAbort.
-      if (w.racing && !w.settled && !w.req.signal?.aborted) {
+      if (w.state === "racing" && !w.req.signal?.aborted) {
         w.raceTimer = setTimeout(() => {
           w.raceTimer = undefined;
           rejectWaiter(w, err);
@@ -439,13 +442,13 @@ export function createCloudDocumentFetcher(
   // settled starts its fallback and keeps racing the render (#2026). Fires
   // during a slow submit too — the fallback must not wait on the cloud.
   function armRace(w: Waiter): void {
-    if (w.settled || w.dispatched || w.raceTimer !== undefined) return;
+    if (w.state !== "queued" || w.raceTimer !== undefined) return;
     const startAt = w.enqueuedAt + w.outerMs - headroomFor(w);
     w.raceTimer = setTimeout(
       () => {
         w.raceTimer = undefined;
         if (!claim(w)) return;
-        w.racing = true;
+        w.state = "racing";
         void fallbackWaiter(w);
       },
       Math.max(0, startAt - Date.now()),
@@ -500,7 +503,7 @@ export function createCloudDocumentFetcher(
       // flight — but a GOOD render item still wins it (paid work, inside the
       // deadline). A bad item changes nothing: the running fallback covers it,
       // and a second one must not start.
-      const racing = w.racing && !w.settled;
+      const racing = w.state === "racing";
       if (!racing && !claim(w)) continue;
       if (item.error) {
         // Per-url render error (truthy string) → fall back for this url only.
@@ -579,7 +582,7 @@ export function createCloudDocumentFetcher(
     for (const w of waiters) {
       if (w.req.signal?.aborted) {
         rejectWaiter(w, abortError());
-      } else if (w.settled || (w.dispatched && !w.racing)) {
+      } else if (w.state === "settled" || w.state === "dispatched") {
         continue;
       } else {
         active.push(w);
@@ -623,7 +626,7 @@ export function createCloudDocumentFetcher(
     // fallback is in flight but a render item can still win it, so the loop
     // keeps polling for it until one of the two settles it.
     const allRetired = () =>
-      active.every((w) => w.settled || (w.dispatched && !w.racing));
+      active.every((w) => w.state === "settled" || w.state === "dispatched");
 
     // Shared cancellation: a single url's watchdog rejects just that waiter and
     // keeps the rest of the batch rendering; the cloud POLLING is abandoned only
@@ -823,9 +826,7 @@ export function createCloudDocumentFetcher(
           req,
           resolve,
           reject,
-          settled: false,
-          dispatched: false,
-          racing: false,
+          state: "queued",
           enqueuedAt: Date.now(),
           // The request's own timeout is the outer deadline of the whole fetch;
           // a request without one gets the batch budget (#2026).

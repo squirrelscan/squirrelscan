@@ -1,14 +1,19 @@
 // Reconstruct AuditReport from SQLite storage
 // Rebuilds full report structure from crawl data
 
-import type { PageFeatureRow } from "@squirrelscan/core-contracts";
+import type {
+  AuditStatus,
+  AuditStatusReasonCode,
+  MaxDurationCut,
+  PageFeatureRow,
+} from "@squirrelscan/core-contracts";
 
 import {
   canonicalVariantMap,
   detachFromPage,
   foldChecksToCanonical,
 } from "@squirrelscan/audit-engine";
-import { buildCacheStats } from "@squirrelscan/core-contracts";
+import { buildCacheStats, isScoreless } from "@squirrelscan/core-contracts";
 import { maxDurationReason } from "@squirrelscan/core-contracts/failure-reason";
 import { JSON_REPORT_PAGES } from "@squirrelscan/core-contracts/limits";
 import { redactUrl } from "@squirrelscan/core-contracts/seed-redirect";
@@ -112,6 +117,45 @@ export function deriveCrawlRunStatus(
     // #1253: a blocked seed fails the audit whatever else was crawled.
     crawl.stats?.wafBlocked?.seed
   );
+}
+
+/**
+ * The audit's own `--max-duration` cut applied to a run status (#1662): a run that was `completed`
+ * (or had no status yet) and was cut by the time limit is `partial`, with the cut's reason and the
+ * `max_duration` code. A run that already failed, was blocked or was already partial keeps its own
+ * status, because the cut is not the more important thing to say about it.
+ *
+ * The live audit and the report rebuilt from the store both call this with the same cut, so the
+ * same run reads the same either way. It is applied after the smart-audit carried-page override,
+ * not inside {@link deriveCrawlRunStatus}: that override sets `completed`, and a cut applied before
+ * it would be swallowed.
+ */
+export function withMaxDurationCut<
+  R extends {
+    status: AuditStatus | undefined;
+    reason?: string | undefined;
+    reasonCode?: AuditStatusReasonCode | undefined;
+  },
+>(
+  run: R,
+  cut: MaxDurationCut | undefined
+): {
+  status: AuditStatus;
+  reason: string | undefined;
+  reasonCode: AuditStatusReasonCode | undefined;
+} {
+  if (cut && (run.status === undefined || run.status === "completed")) {
+    return {
+      status: "partial",
+      reason: maxDurationReason(cut),
+      reasonCode: "max_duration",
+    };
+  }
+  return {
+    status: run.status ?? "completed",
+    reason: run.reason,
+    reasonCode: run.reasonCode,
+  };
 }
 
 export interface SmartMergeOverride {
@@ -980,23 +1024,15 @@ export function reconstructReport(
 
     // #1271: the audit's own `--max-duration` cut, restored from the stored scope.
     const durationCut = crawl.scanScope?.maxDuration;
-    const auditStatus =
-      durationCut && baseAuditStatus.status === "completed"
-        ? {
-            status: "partial" as const,
-            reason: maxDurationReason(durationCut),
-            reasonCode: "max_duration" as const,
-          }
-        : baseAuditStatus;
+    const auditStatus = withMaxDurationCut(baseAuditStatus, durationCut);
 
     // No real audit ⇒ null score (N/A), not 0. Parity with the cloud/live
     // builder (generateReportFromStorage) + the API's failed-report persist (#586).
     // `partial` keeps its score (#1829): the pages that WERE audited were graded
     // normally, and only the coverage is incomplete.
-    const reportHealthScore =
-      auditStatus.status === "failed" || auditStatus.status === "blocked"
-        ? withoutUnobservedScores(healthScore)
-        : healthScore;
+    const reportHealthScore = isScoreless(auditStatus.status)
+      ? withoutUnobservedScores(healthScore)
+      : healthScore;
 
     // 14. Build final report
     // #512: pages recovered via a non-browser fallback after a render block.

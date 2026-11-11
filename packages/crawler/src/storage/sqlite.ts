@@ -16,13 +16,13 @@ import {
   unpackComponentOccurrences,
 } from "@squirrelscan/core-contracts/component-evidence";
 import {
-  CRAWL_STATUS_TRANSITIONS,
   FRONTIER_STATUS_TRANSITIONS,
   isCacheHitReason,
   parseUnverifiedReason,
 } from "@squirrelscan/core-contracts";
 import { urlHostKey } from "@squirrelscan/utils/url";
 
+import { CRAWL_STATUS_GUARD_SQL, crawlStatusAllowedFrom } from "./crawl-status-write";
 import type {
   CrawlStorage,
   CrawlMetadata,
@@ -1805,11 +1805,9 @@ export class SQLiteStorage implements CrawlStorage {
           // A write the table does not allow changes nothing, the other columns it
           // carried included.
           const allowedFrom =
-            updates.status !== undefined
-              ? `,${CRAWL_STATUS_TRANSITIONS[updates.status].join(",")},`
-              : null;
+            updates.status !== undefined ? crawlStatusAllowedFrom(updates.status) : null;
           const stmt = db.query(
-            `UPDATE crawls SET ${sets.join(", ")} WHERE id = ? AND (? IS NULL OR instr(?, ',' || status || ',') > 0)`
+            `UPDATE crawls SET ${sets.join(", ")} WHERE id = ? AND ${CRAWL_STATUS_GUARD_SQL}`
           );
           const result = stmt.run(
             ...(values as (string | number | null)[]),

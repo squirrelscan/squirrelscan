@@ -3,14 +3,17 @@
 import type {
   AuditOutcome,
   AuditStatusReasonCode,
+  StoreIntegrityEvicted,
   EditorSummaryPriority,
   MaxDurationCut,
   RefusedFetch,
+  ReportRender,
   ResumeOutcome,
   UnstoredPageReason,
   WafBlockedSummary,
   WafSuspectSummary,
 } from "@squirrelscan/core-contracts";
+import { isAuditFailed } from "@squirrelscan/core-contracts";
 import type { RuleOutcome } from "@squirrelscan/core-contracts/rule-outcome";
 import type { ResolvedAuditSettings } from "@squirrelscan/core-contracts/audit-levels";
 import type {
@@ -193,6 +196,8 @@ interface SlimJsonReport {
     requestedUrl?: string;
     /** What `--resume` came to (#1658); present only when the run was asked to resume. */
     resume?: ResumeOutcome;
+    /** Page bodies evicted from the local content store since this audit ran (#1667); absent when none were. */
+    storeIntegrity?: StoreIntegrityEvicted;
     /**
      * A refused off-site seed redirect (#1418). Present only when the seed
      * redirected off its own registrable domain and the crawler declined to
@@ -271,6 +276,8 @@ interface SlimJsonReport {
   status: AuditStatus;
   /** Exit code, audit status and publish result (#1657); present on a report an audit just wrote. */
   outcome?: AuditOutcome;
+  /** What cloud rendering did (#1664): mode, pages rendered and fetched plain, and why it fell back; present on a report an audit just wrote. */
+  render?: ReportRender;
   /** Short human reason, present when `status` is failed/blocked. */
   statusReason?: string;
   /**
@@ -584,6 +591,8 @@ function buildSlimReport(
       // #1658: what `--resume` came to. Present only when the run was asked to resume, so a
       // consumer can tell a resumed crawl from a fresh one and read why it started fresh.
       ...(report.resume ? { resume: report.resume } : {}),
+      // #1667: page bodies the local content store has evicted since this audit ran. Absent when none were.
+      ...(report.storeIntegrity ? { storeIntegrity: report.storeIntegrity } : {}),
       // Sits next to the `baseUrl` it qualifies (#1418): a consumer reading the
       // graded URL sees, in the same object, that the seed pointed elsewhere.
       ...(refusedSeedRedirect
@@ -635,11 +644,12 @@ function buildSlimReport(
     // #1657: the exit code the command ends with, the audit status and what publishing did, so a
     // CI gate or an agent reads them from the report. Present on a report an audit just wrote.
     ...(report.outcome ? { outcome: report.outcome } : {}),
+    ...(report.render ? { render: report.render } : {}),
     ...(report.statusReason ? { statusReason: report.statusReason } : {}),
     // #1822: a programmatic consumer branches on the class, not on the prose.
     // Derived when the stored report predates the field, so a CI gate reading
     // it does not have to special-case older reports.
-    ...(report.status === "failed" || report.status === "blocked"
+    ...(isAuditFailed(report.status)
       ? { statusReasonCode: reportFailureReasonCode(report) }
       : report.status === "partial" && report.statusReasonCode === "max_duration"
         ? { statusReasonCode: report.statusReasonCode }

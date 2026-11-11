@@ -65,6 +65,8 @@ The lookup prints the entity's properties, every page that declares it, its outg
 
 ## Filters
 
+When some of the audit's page bodies have been evicted from the content store, `squirrel entities` says how many on stderr, and `-f json` adds a top-level `storeIntegrity` (`{ status: "evicted", evicted, stored }`) next to `filtered`. The map itself is built from stored entity rows and is unchanged. See [Eviction is reported](/configuration/storage#content_store_max_bytes).
+
 `--type`, `--page` and `--problem` apply to **every** output format, not just the console view. `-f graphml --type Organization` hands your graph tool the filtered graph, and the summary counts describe what survived the filter rather than the whole site.
 
 ```bash

@@ -50,14 +50,14 @@ waiting for `squirrel analyze`.
 
 ### Crawl status
 
-A crawl's status only moves along the edges below, so a late write can never undo a finished crawl: Ctrl-C or the crawl-phase time limit calling `stop()` after the crawl completed leaves it `completed` instead of turning it back into `paused`. A write the table does not allow changes nothing (it is ignored, never an error, and never stops a crawl).
+A crawl's status only moves along the edges below, so a late write can never undo a finished crawl: Ctrl-C or the crawl-phase time limit calling `stop()` after the crawl completed leaves it `completed` instead of turning it back into `paused`. A write the table does not allow changes nothing (it is ignored, never an error, and never stops a crawl). Ctrl-C ends the crawl as `stopped`, from `running` or from the `paused` that `stop()` writes first while the crawl is live, through the same guarded write, so `squirrel audit --resume` still continues it and a crawl that already finished stays as it was.
 
 | To | Allowed from | When |
 |----|--------------|------|
 | `running` | any status | the crawl starts, `--resume` continues a `paused` or `stopped` crawl, or a re-crawl restarts the row |
 | `paused` | `running`, `paused` | `stop()` while the crawl is live |
 | `completed` | `running`, `paused`, `completed` | the crawl drained |
-| `stopped` | `running`, `paused`, `stopped` | the crawl-phase time limit cut it |
+| `stopped` | `running`, `paused`, `stopped` | the crawl-phase time limit cut it, or Ctrl-C |
 | `crawled` | `running`, `paused`, `completed`, `stopped`, `crawled` | the crawl is over and the audit moves on |
 | `analyzed` | `running`, `paused`, `completed`, `stopped`, `crawled`, `analyzed` | the rules ran (a re-analysis stays `analyzed`) |
 | `failed` | `running`, `paused`, `failed` | the crawl could not continue |
@@ -263,7 +263,7 @@ does not change its findings, which are stored separately, but anything rebuilt
 from page HTML is missing for those pages. When that happens squirrelscan says
 how many pages are affected:
 
-- `squirrel report` on an audit whose pages were evicted since it ran.
+- `squirrel report`, `squirrel pages` and `squirrel entities` on an audit whose pages were evicted since it ran. `pages` and `entities` are built from the page data stored with the audit and do not read the HTML, so their rows are complete, but the notice still names how many pages' HTML is gone. With `--format json` the same count is in the output, as `storeIntegrity` (below).
 - A re-audit, which requests evicted pages again in full instead of reusing
   them as unchanged, and says how many.
 - `squirrel audit --resume` and `squirrel crawl --resume`, when pages the
@@ -272,6 +272,14 @@ how many pages are affected:
 ```text
 Content store: 812 of 4,000 pages stored for this audit are no longer in the local content store, most likely evicted by its size cap (now 1.0 GB). Findings are unaffected; anything rebuilt from page HTML is missing for them. Raise [storage] content_store_max_bytes or SQUIRREL_CONTENT_STORE_MAX_BYTES to keep more.
 ```
+
+In JSON, `squirrel report` carries it as `meta.storeIntegrity`, `squirrel pages -f json` and `squirrel entities -f json` as a top-level `storeIntegrity`:
+
+```json
+{ "storeIntegrity": { "status": "evicted", "evicted": 812, "stored": 4000 } }
+```
+
+`evicted` is how many of the `stored` page bodies are gone. The field is absent when every body is still in the store, so absent means intact. It reports the content store only: findings, scores and the rows `pages` and `entities` list do not change.
 
 [`squirrel self doctor`](/cli/self#doctor) shows the store's size, the cap and
 the last eviction.

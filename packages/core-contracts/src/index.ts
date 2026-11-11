@@ -83,7 +83,6 @@ import type {
 } from "./storage";
 import type { SiteMetadata } from "./site-metadata";
 import type { CompactResolutionSignal, ResolutionSignal } from "./resolution";
-import { RULE_TIMED_OUT_SKIP_REASON } from "./resolution";
 import { SKIP_REASON_CLASSES } from "./rule-outcome";
 import type { AuditStatusReasonCode } from "./failure-reason";
 import type { RefusedFetch } from "./refused-fetch";
@@ -394,13 +393,18 @@ export const LINK_TARGETS_NOT_FETCHED_SKIP_REASON = "link-targets-not-fetched";
 /**
  * `details` keys `links/broken-links` sets on every row it emits (pub#794): how
  * many distinct internal link targets the pages link, how many nothing fetched,
- * how many the internal link check answered, and why the unfetched ones were
- * left out. They describe what the audit covered, not any one broken link.
+ * how many the internal link check answered, how many answered a refusal
+ * (401/403, a bot-wall challenge) or a throttle (429; pub#1679: counted neither
+ * as broken nor as unfetched, and nothing is known of the page), and why the
+ * unfetched ones were left out. They describe what the audit covered, not any
+ * one broken link.
  */
 export const LINK_COVERAGE_DETAIL_KEYS = [
   "linkTargets",
   "unfetchedTargets",
   "probedTargets",
+  "refusedTargets",
+  "rateLimitedTargets",
   "notFetched",
 ] as const;
 
@@ -613,7 +617,27 @@ export type AuditStatus = "completed" | "failed" | "blocked" | "partial";
 export function auditStatusToLifecycle(
   status: AuditStatus | null | undefined,
 ): "completed" | "failed" {
-  return status === "failed" || status === "blocked" ? "failed" : "completed";
+  return isAuditFailed(status) ? "failed" : "completed";
+}
+
+/**
+ * Whether the audit did not really happen: the site was down, walled or had no auditable page, so
+ * `failed` or `blocked` (#1662). `partial` is not failed: a real audit ran and covered less than
+ * the whole site. An absent status is `completed`, so it is not failed either. This is the one
+ * definition behind every "failed or blocked" check, so a report rebuilt by `squirrel report` and
+ * the live run cannot read the same status differently.
+ */
+export function isAuditFailed(status: AuditStatus | null | undefined): boolean {
+  return status === "failed" || status === "blocked";
+}
+
+/**
+ * Whether the health score must read N/A for this status. The same statuses as {@link isAuditFailed}
+ * today (a `partial` audit keeps the score of the pages it graded, #1829); it is a separate name so
+ * a status that fails but keeps a score, or the reverse, changes one place.
+ */
+export function isScoreless(status: AuditStatus | null | undefined): boolean {
+  return isAuditFailed(status);
 }
 
 /**
@@ -692,6 +716,42 @@ export interface AuditOutcome {
   };
 }
 
+/**
+ * Set on a report rebuilt from the store when some of its page bodies are gone from the local content
+ * store (#1667). Absent when all are there. The findings in the report do not depend on the bodies.
+ */
+export interface StoreIntegrityEvicted {
+  status: "evicted";
+  /** Stored page bodies no longer in the content store. */
+  evicted: number;
+  /** Page bodies the audit stored. */
+  stored: number;
+}
+
+/** How the crawl fetched pages: plain HTTP, HTTP first with a render for client-rendered shells, or a render for every page. */
+export type ReportRenderMode = "http" | "auto" | "all";
+
+/**
+ * What cloud rendering did on this audit (#1664), so a user paying for it, or an agent reading the
+ * report, can tell rendered pages from plain-HTTP ones and see why rendering stopped.
+ */
+export interface ReportRender {
+  /** Cloud browser rendering was asked for (a flag, the config or the level), whether or not it ran. */
+  requested: boolean;
+  /** What the crawl did: see {@link ReportRenderMode}. `http` when nothing was rendered or rendering was unavailable. */
+  mode: ReportRenderMode;
+  /**
+   * Why rendering fell back to plain HTTP when it was asked for and did not carry the crawl: the
+   * cloud was unreachable or signed out, the balance ran out, the run ended, or the render service
+   * kept failing. Absent when rendering was not asked for, or ran to the end.
+   */
+  fallbackReason?: string;
+  /** Pages this audit fetched through a browser render. */
+  pagesRendered: number;
+  /** Pages this audit fetched over plain HTTP, including those a fallback served. */
+  pagesFetchedPlain: number;
+}
+
 export interface AuditReport {
   crawlId?: string;
   /**
@@ -743,6 +803,10 @@ export interface AuditReport {
   status?: AuditStatus;
   /** Exit code, audit status and publish result, stamped before the report is written (#1657). */
   outcome?: AuditOutcome;
+  /** Page bodies evicted from the local content store since this audit ran (#1667); absent when none were. */
+  storeIntegrity?: StoreIntegrityEvicted;
+  /** What cloud rendering did on this audit (#1664). Set by `squirrel audit`. */
+  render?: ReportRender;
   /** Short human reason shown when `status` is failed/blocked (e.g. "No pages were crawled"). */
   statusReason?: string;
   /**

@@ -11,7 +11,7 @@ runtime dependency closure of `apps/cli`.
 | `@cfworker/json-schema@4.1.1` | MIT | [source](https://github.com/cfworker/cfworker) |
 | `@modelcontextprotocol/core@2.4.0` | Apache-2.0 | [source](https://github.com/modelcontextprotocol/typescript-sdk) |
 | `@modelcontextprotocol/server@2.4.0` | Apache-2.0 | [source](https://github.com/modelcontextprotocol/typescript-sdk) |
-| `@nodable/entities@3.0.0` | MIT | [source](https://github.com/nodable/val-parsers) |
+| `@nodable/entities@3.1.0` | MIT | [source](https://github.com/nodable/val-parsers) |
 | `@sinclair/typebox@0.34.52` | MIT | [source](https://github.com/sinclairzx81/sinclair-typebox) |
 | `@standard-schema/spec@1.1.0` | MIT | [source](https://github.com/standard-schema/standard-schema) |
 | `@types/tinycolor2@1.4.6` | MIT | [source](https://github.com/DefinitelyTyped/DefinitelyTyped) |
@@ -41,12 +41,12 @@ runtime dependency closure of `apps/cli`.
 | `fast-check@3.23.2` | MIT | [source](https://github.com/dubzzz/fast-check) |
 | `fast-deep-equal@3.1.3` | MIT | [source](https://github.com/epoberezkin/fast-deep-equal) |
 | `fast-uri@3.1.8` | BSD-3-Clause | [source](https://github.com/fastify/fast-uri) |
-| `fast-xml-builder@1.3.0` | MIT | [source](https://github.com/NaturalIntelligence/fast-xml-builder) |
-| `fast-xml-parser@5.10.1` | MIT | [source](https://github.com/NaturalIntelligence/fast-xml-parser) |
+| `fast-xml-builder@1.3.1` | MIT | [source](https://github.com/NaturalIntelligence/fast-xml-builder) |
+| `fast-xml-parser@5.12.0` | MIT | [source](https://github.com/NaturalIntelligence/fast-xml-parser) |
 | `gradient-string@3.0.0` | MIT | [source](https://github.com/bokub/gradient-string) |
 | `html-escaper@3.0.3` | MIT | [source](https://github.com/WebReflection/html-escaper) |
 | `htmlparser2@10.1.0` | MIT | [source](https://github.com/fb55/htmlparser2) |
-| `is-unsafe@2.0.0` | MIT | [source](https://github.com/NaturalIntelligence/is-unsafe) |
+| `is-unsafe@2.0.3` | MIT | [source](https://github.com/NaturalIntelligence/is-unsafe) |
 | `json-schema-traverse@1.0.0` | MIT | [source](https://github.com/epoberezkin/json-schema-traverse) |
 | `linkedom@0.18.13` | ISC | [source](https://github.com/WebReflection/linkedom) |
 | `nth-check@3.0.1` | BSD-2-Clause | [source](https://github.com/fb55/nth-check) |
@@ -60,7 +60,7 @@ runtime dependency closure of `apps/cli`.
 | `sax@1.6.0` | BlueOak-1.0.0 | [source](https://github.com/isaacs/sax-js) |
 | `scheduler@0.27.0` | MIT | [source](https://github.com/facebook/react) |
 | `smol-toml@1.9.0` | BSD-3-Clause | [source](github:squirrelchat/smol-toml) |
-| `strnum@2.4.1` | MIT | [source](https://github.com/NaturalIntelligence/strnum) |
+| `strnum@2.5.1` | MIT | [source](https://github.com/NaturalIntelligence/strnum) |
 | `tinycolor2@1.6.0` | MIT | [source](https://github.com/bgrins/TinyColor) |
 | `tinygradient@1.1.5` | MIT | [source](https://github.com/mistic100/tinygradient) |
 | `tldts-core@7.4.9` | MIT | [source](https://github.com/remusao/tldts) |
@@ -708,7 +708,7 @@ Packages: `tldts-core@7.4.9`, `tldts@7.4.9`
 
 ### LICENSE (4599a6248168)
 
-Packages: `strnum@2.4.1`
+Packages: `strnum@2.5.1`
 
     MIT License
 
@@ -786,7 +786,7 @@ Packages: `consola@3.4.2`
 
 ### LICENSE (5cf3020eeb91)
 
-Packages: `anynum@1.0.1`, `fast-xml-builder@1.3.0`, `is-unsafe@2.0.0`, `xml-naming@0.3.0`
+Packages: `anynum@1.0.1`, `fast-xml-builder@1.3.1`, `is-unsafe@2.0.3`, `xml-naming@0.3.0`
 
     MIT License
 
@@ -1179,7 +1179,7 @@ Packages: `react-dom@19.2.8`, `react@19.2.8`, `scheduler@0.27.0`
 
 ### LICENSE (d354addcc529)
 
-Packages: `fast-xml-parser@5.10.1`
+Packages: `fast-xml-parser@5.12.0`
 
     MIT License
 

@@ -11,13 +11,25 @@ It is a hint rather than an instruction, and search engines can pick a different
 
 ## What squirrel checks
 
-The rule runs on every crawled page against the parsed canonical value. It emits one check named `canonical`:
+The rule runs on every crawled page against the parsed canonical value. It emits one check named `canonical`, and a second one, `canonical-to-homepage`, only when a page is flagged for it (below):
 
 - Warning with the message `Missing canonical URL` and a null value when there is no canonical.
 - Failing with the message `Canonical URL should be absolute` and the expectation `Absolute URL starting with https://` when the value does not begin with `http`.
 - Failing with the message `Invalid canonical URL format` when the value begins with `http` but does not parse as a URL.
 - At info status with the message `Canonical points to different URL` when it parses and does not match the page's own URL exactly.
 - Passing with the message `Self-referential canonical present` when it matches.
+
+### A canonical that points at the home page
+
+A template that hard-codes the canonical to the site root tells search engines that every page it renders is a duplicate of the home page, and those pages drop out of the index. The URL is well formed, so the `canonical` check passes it. `canonical-to-homepage` catches it:
+
+- A page that is not the home page whose canonical is the site root fails, with a message that names the page URL and the canonical, `details.pageUrl`, `details.canonical` and `details.source` (`tag` or `header`).
+- A locale home page (a single locale segment such as `/en/`, `/de` or `/pt-br/`) whose canonical is `/` is a warning instead: that can be deliberate when the root is the one version you want indexed. The match is any two-letter first segment, so `/ai/` or `/tv/` get the warning rather than the error.
+- Root variants are one thing: a trailing slash, a directory index file (`/index.html`, `/index.htm`, `/index.php`, `/index.asp`, `/index.aspx`, `/default.asp`, `/default.aspx`, `/default.htm`, `/default.html`, in any letter case), the ordinary second addresses of a home page (`/home`, `/home/`, `/index`, `/home.html`), and the `www` and bare form of the same host. A root with a query string is not the root (`/?page_id=5` is a real WordPress page), and another site's root is not this site's.
+- The home page with a canonical to itself, in any of those spellings, is not flagged. A page that redirects to the home page is the home page, because the page's own URL is the one the redirect ended on.
+- A single-page app that ships a static canonical to `/` in its HTML shell is flagged on every route other than the home page. That is intended: crawlers that read the shell see each route as a duplicate of the home page. Render the canonical per route.
+- The canonical in the `Link` header is read like the tag: the tag first, then the header. A page flagged on both is reported once.
+- Every other page gets exactly the `canonical` result described above, and no `canonical-to-homepage` check.
 
 For a URL that answers with an HTTP redirect, the page's own URL is the one the redirect ended on, since that is the page whose canonical is read: `/en/old-slug` redirecting to `/en/new-slug` is self-referential when `/en/new-slug` names itself. The crawled URL is used when no HTTP redirect was observed, when any hop was a client-side one (JavaScript or meta refresh), or when the final URL does not parse.
 
