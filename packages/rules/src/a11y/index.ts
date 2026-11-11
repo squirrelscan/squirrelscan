@@ -54,6 +54,7 @@ import { objectAltRule } from "./object-alt";
 import { pasteInputsRule } from "./paste-inputs";
 import { selectNameRule } from "./select-name";
 import { skipLinkRule } from "./skip-link";
+import { svgImgAltRule } from "./svg-img-alt";
 import { tabindexRule } from "./tabindex";
 import { tableDuplicateNameRule } from "./table-duplicate-name";
 import { tableHeadersRule } from "./table-headers";
@@ -106,6 +107,7 @@ export const rules: Rule[] = [
   buttonNameRule,
   inputImageAltRule,
   selectNameRule,
+  svgImgAltRule,
   frameTitleRule,
   objectAltRule,
   emptyHeadingRule,
@@ -206,6 +208,7 @@ export {
   pasteInputsRule,
   selectNameRule,
   skipLinkRule,
+  svgImgAltRule,
   tableDuplicateNameRule,
   tabindexRule,
   tableHeadersRule,

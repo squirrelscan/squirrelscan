@@ -1,0 +1,101 @@
+---
+title: "SVG images with role=img and no accessible name"
+description: "An inline svg marked role=img is announced as an image. With no name it reads as 'image' or is skipped. squirrel checks every one on the page."
+---
+
+## What an svg image name is
+
+`<svg role="img">` tells assistive technology to treat the drawing as a single image, which it then announces by role: "image". Without a name that is all a screen reader user gets, or nothing at all when the reader skips an unnamed image. A chart, a logo or an icon that carries meaning is lost.
+
+The name comes from a `<title>` element that is a direct child of the `<svg>`, from `aria-label`, or from `aria-labelledby` pointing at text on the page. A `<title>` nested deeper, inside a `<g>`, is not read as the name. For the widest support, give the `<title>` an `id` and point `aria-labelledby` at it as well.
+
+## What squirrel checks
+
+One check, `svg-img-alt`, at severity error and weight 6. It covers every inline `<svg>` whose `role` is `img` (read without case, and as the first token of the attribute).
+
+An svg is named by a non-empty direct `<title>` child, a non-empty `aria-label`, or an `aria-labelledby` where at least one of its ids resolves, in this document, to an element with text.
+
+- Fail with `N <svg role="img"> element(s) without an accessible name`. Each offender is listed by its selector path (`html > body > main > svg#chart.big`) with its opening tag as the snippet, and a label that says whether it has no name at all or its `aria-labelledby` points at an id that is not on the page (or at an element with no text). Up to ten are listed, with the rest counted in `details.additional`.
+- Pass with `All <svg role="img"> elements have accessible names`.
+- `svg-img-alt-unconfirmed` warns with `N <svg role="img"> element(s) without an accessible name may be hidden by a style (unconfirmed)` for an unnamed svg a style may hide in a way squirrel cannot settle.
+- Nothing at all when the page has no `<svg role="img">`.
+
+### What is not checked
+
+- An svg with no `role`, or with `role="presentation"` or `role="none"`: it is not announced as an image.
+- An svg with `aria-hidden="true"` on itself or an ancestor, or hidden from view: an ancestor with the `hidden` attribute, `display: none` set inline or by a `<style>` rule squirrel can decide, or a closed `<dialog>`. It still needs a name before it is shown. The `hidden` attribute on the svg itself hides nothing, because an svg element ignores it.
+- A clickable svg (`onclick` or `tabindex`) with no name at all: [a11y/aria-labels](/rules/a11y/aria-labels) already reports it, so it is not reported twice. A clickable svg that `aria-labels` accepts, for instance because its `<title>` is empty, is still reported here.
+
+squirrel reads the markup, inline styles and the page's `<style>` blocks, the same way as [button-name](/rules/a11y/button-name). External stylesheets are not read.
+
+## How to fix it
+
+```html
+<svg role="img" viewBox="0 0 120 40" aria-labelledby="logo-title">
+  <title id="logo-title">Acme Inc</title>
+  <path d="M0 0h120v40H0z" />
+</svg>
+```
+
+Name an svg that carries meaning, and keep the name short: it is what a person hears in place of the picture. A purely decorative svg should not be an image at all: drop the `role` or use `aria-hidden="true"`.
+
+| | |
+|---|---|
+| **Rule ID** | `a11y/svg-img-alt` |
+| **Category** | [Accessibility](/rules/a11y) |
+| **Scope** | Per-page |
+| **Severity** | error |
+| **Weight** | 6/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/svg-img-alt"]
+```
+
+### Disable all Accessibility rules
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["a11y/svg-img-alt"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Related rules
+
+- [a11y/aria-labels](/rules/a11y/aria-labels): interactive elements, including clickable svgs, with no accessible name.
+- [images/svg-inline](/rules/images/svg-inline): how much inline svg a page carries.
+- [images/alt-text](/rules/images/alt-text): the same requirement for `<img>`.
+- [a11y/button-name](/rules/a11y/button-name): buttons that hold only an svg icon.
+
+Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Understanding SC 1.1.1 Non-text Content, W3C](https://www.w3.org/WAI/WCAG22/Understanding/non-text-content.html)
+- [svg-img-alt, axe-core rule description, Deque](https://dequeuniversity.com/rules/axe/html/svg-img-alt)
+- [Accessible SVGs, W3C WAI tutorials](https://www.w3.org/WAI/tutorials/images/complex/)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. Every unnamed svg image is listed up to ten, with the count of the rest. Signed-out local audits need no account and cost nothing. Signed-in audits spend credits.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Accessibility section looks like on a real site.
+  </Card>
+</CardGroup>

@@ -394,6 +394,7 @@
                   "rules/a11y/button-name",
                   "rules/a11y/input-image-alt",
                   "rules/a11y/select-name",
+                  "rules/a11y/svg-img-alt",
                   "rules/a11y/frame-title",
                   "rules/a11y/object-alt",
                   "rules/a11y/definition-list",

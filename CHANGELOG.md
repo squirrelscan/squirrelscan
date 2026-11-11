@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- New rule `a11y/svg-img-alt`: an inline `<svg role="img">` with no accessible name (no direct `<title>`, `aria-label` or resolving `aria-labelledby`) is an error. Hidden svgs and clickable ones `a11y/aria-labels` already reports are left out.
+
 ## v0.0.174 (2026-11-11)
 
 Reports say why a rule did not give a verdict (JSON schema 1.9), `squirrel audit` has one exit code precedence with the outcome in the JSON and LLM reports, `--resume` says why it started a new crawl, an expired login is called out, settings writes no longer lose each other, and five rules stop flagging hidden, presentational and symbol-only content.
