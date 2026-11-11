@@ -103,4 +103,71 @@ describe("analytics/duplicate-tags (#1691)", () => {
     expect(c[0]!.message).toContain("G-abcd1234");
     expect((await run(""))[0]!.status).toBe("pass");
   });
+
+  describe("lookalike Google Tag Manager URLs are not loaders (CodeQL missing-regexp-anchor)", () => {
+    const GTM_LOOKALIKES = [
+      "https://evil.example/?x=googletagmanager.com/gtm.js&id=GTM-ABCD123",
+      "https://googletagmanager.com.evil.example/gtm.js?id=GTM-ABCD123",
+      "https://evil-googletagmanager.com/gtm.js?id=GTM-ABCD123",
+      "https://evil.example/googletagmanager.com/gtm.js?id=GTM-ABCD123",
+      "https://sub.googletagmanager.com/gtm.js?id=GTM-ABCD123",
+      "https://www.googletagmanager.com/gtm.json?id=GTM-ABCD123",
+      "https://www.googletagmanager.com/other/gtm.js?id=GTM-ABCD123",
+    ];
+    for (const src of GTM_LOOKALIKES) {
+      test(`GTM script ${src} is not counted`, async () => {
+        const c = await run(s(src) + s(src));
+        expect(warns(c)).toHaveLength(0);
+      });
+    }
+
+    test("GA4 lookalikes are not counted", async () => {
+      for (const src of [
+        "https://evil.example/?x=googletagmanager.com/gtag/js&id=G-ABC1234",
+        "https://googletagmanager.com.evil.example/gtag/js?id=G-ABC1234",
+        "https://www.googletagmanager.com/gtag/jsx?id=G-ABC1234",
+      ]) {
+        expect(warns(await run(s(src) + s(src)))).toHaveLength(0);
+      }
+    });
+
+    test("a lookalike ns.html iframe is not counted", async () => {
+      const frame = (src: string) => `<noscript><iframe src="${src}"></iframe></noscript>`;
+      for (const src of [
+        "https://evil.example/?x=googletagmanager.com/ns.html&id=GTM-ABCD123",
+        "https://googletagmanager.com.evil.example/ns.html?id=GTM-ABCD123",
+      ]) {
+        expect(warns(await run("", frame(src) + frame(src)))).toHaveLength(0);
+      }
+    });
+
+    test("an inline script that only mentions a lookalike gtm.js URL does not count its container", async () => {
+      const mention = (url: string) =>
+        inline(`var x='${url}'; (function(i){})('GTM-ABCD123');`);
+      for (const url of [
+        "https://evil.example/?x=googletagmanager.com/gtm.js",
+        "https://googletagmanager.com.evil.example/gtm.js",
+        "see googletagmanager.com/gtm.js for details",
+      ]) {
+        expect(warns(await run(mention(url) + mention(url)))).toHaveLength(0);
+      }
+    });
+
+    test("the real hosts still count: bare, www, protocol-relative, uppercase, and a port-less https URL", async () => {
+      for (const src of [
+        "https://googletagmanager.com/gtm.js?id=GTM-ABCD123",
+        "https://www.googletagmanager.com/gtm.js?id=GTM-ABCD123",
+        "//www.googletagmanager.com/gtm.js?id=GTM-ABCD123",
+        "HTTPS://WWW.GOOGLETAGMANAGER.COM/GTM.JS?id=GTM-ABCD123",
+        "https://www.googletagmanager.com/gtm.js?l=dataLayer&id=GTM-ABCD123#x",
+      ]) {
+        expect(warns(await run(s(src) + s(src)))).toHaveLength(1);
+      }
+    });
+
+    test("the standard inline snippet in both quote styles still counts", async () => {
+      const dq = (id: string) => inline(`j.src="https://www.googletagmanager.com/gtm.js?id="+i;})(window,document,"script","dataLayer","${id}");`);
+      expect(warns(await run(GTM_SNIPPET("GTM-ABCD123") + dq("GTM-ABCD123")))).toHaveLength(1);
+    });
+  });
 });
