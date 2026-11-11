@@ -12,6 +12,8 @@ import { parsePage } from "@squirrelscan/parser";
 import type { CloudResultEnvelope, CloudResultStore } from "../src/cloud";
 import {
   canonicalKey,
+  collectRobotsDirectives,
+  directivesSayNoindex,
   renderedSignalMismatchRule,
   robotsSaysNoindex,
 } from "../src/crawl/rendered-signal-mismatch";
@@ -24,12 +26,14 @@ interface Signals {
   canonical?: string;
   robots?: string;
   h1?: string;
+  /** Raw head markup appended after the rest, for a second robots tag or an odd `name`. */
+  extraHead?: string;
 }
 
 function html(s: Signals): string {
   return `<!DOCTYPE html><html><head>${s.title === undefined ? "" : `<title>${s.title}</title>`}${
     s.canonical === undefined ? "" : `<link rel="canonical" href="${s.canonical}">`
-  }${s.robots === undefined ? "" : `<meta name="robots" content="${s.robots}">`}</head><body>${
+  }${s.robots === undefined ? "" : `<meta name="robots" content="${s.robots}">`}${s.extraHead ?? ""}</head><body>${
     s.h1 === undefined ? "" : `<h1>${s.h1}</h1>`
   }<p>body</p></body></html>`;
 }
@@ -115,13 +119,40 @@ describe("crawl/rendered-signal-mismatch", () => {
       });
     });
 
-    test("a canonical only the render adds, or only the render removes, fails", () => {
-      const added = run({ ...SAME, canonical: undefined }, SAME)["canonical-mismatch"]!;
+    test("a canonical only the render adds, when it points elsewhere, fails; one it removes fails", () => {
+      const added = run(
+        { ...SAME, canonical: undefined },
+        { ...SAME, canonical: "https://example.com/elsewhere" },
+      )["canonical-mismatch"]!;
       expect(added.status).toBe("fail");
       expect(added.message).toContain("adds a canonical");
       const removed = run(SAME, { ...SAME, canonical: undefined })["canonical-mismatch"]!;
       expect(removed.status).toBe("fail");
       expect(removed.message).toContain("removes the canonical");
+    });
+
+    test("the standard SPA shape, no raw canonical and the script adds the page's own URL, warns", () => {
+      for (const rendered of [
+        "https://example.com/page",
+        "https://example.com/page/",
+        "/page",
+        "https://EXAMPLE.com/page#top",
+      ]) {
+        const c = run({ ...SAME, canonical: undefined }, { ...SAME, canonical: rendered })[
+          "canonical-mismatch"
+        ]!;
+        expect(c.status).toBe("warn");
+        expect(c.message).toContain("this page's own URL");
+        expect(c.details).toMatchObject({ raw: null, selfCanonicalAddedByScript: true });
+      }
+    });
+
+    test("a script that changes a canonical the raw HTML had still fails, even to the page's own URL", () => {
+      const c = run(
+        { ...SAME, canonical: "https://example.com/other" },
+        { ...SAME, canonical: "https://example.com/page" },
+      )["canonical-mismatch"]!;
+      expect(c.status).toBe("fail");
     });
 
     test("no canonical on either side passes", () => {
@@ -185,6 +216,72 @@ describe("crawl/rendered-signal-mismatch", () => {
       expect(robotsSaysNoindex("max-snippet:-1, noindex")).toBe(true);
       expect(robotsSaysNoindex("none")).toBe(true);
       expect(robotsSaysNoindex("noindexed")).toBe(false);
+    });
+
+    test("a second robots tag a script appends is a mismatch: the first tag alone would read equal", () => {
+      const raw = { ...SAME, robots: "index, follow" };
+      const rendered = { ...SAME, robots: "index, follow", extraHead: '<meta name="robots" content="noindex">' };
+      const c = run(raw, rendered)["noindex-mismatch"]!;
+      expect(c.status).toBe("fail");
+      expect(c.details).toMatchObject({ raw: false, rendered: true, carriedBy: "rendered" });
+      expect((c.details as { renderedRobots: string }).renderedRobots).toBe("index, follow | noindex");
+    });
+
+    test("a second tag in the raw HTML that the script removes is a mismatch too", () => {
+      const raw = { ...SAME, robots: "index", extraHead: '<meta name="robots" content="noindex">' };
+      const c = run(raw, { ...SAME, robots: "index" })["noindex-mismatch"]!;
+      expect(c.status).toBe("fail");
+      expect(c.details).toMatchObject({ raw: true, rendered: false, carriedBy: "raw" });
+    });
+
+    test("a googlebot tag counts: only the render adds a googlebot noindex fails; on both sides passes", () => {
+      const noindex = '<meta name="googlebot" content="noindex, nofollow">';
+      const added = run({ ...SAME }, { ...SAME, extraHead: noindex })["noindex-mismatch"]!;
+      expect(added.status).toBe("fail");
+      const both = run({ ...SAME, extraHead: noindex }, { ...SAME, extraHead: noindex })[
+        "noindex-mismatch"
+      ]!;
+      expect(both.status).toBe("pass");
+    });
+
+    test("the name is matched without regard to case", () => {
+      const upper = run(
+        { ...SAME },
+        { ...SAME, extraHead: '<meta NAME="ROBOTS" content="NoIndex">' },
+      )["noindex-mismatch"]!;
+      expect(upper.status).toBe("fail");
+      const mixed = run(
+        { ...SAME },
+        { ...SAME, extraHead: '<meta name="GoogleBot" content="none">' },
+      )["noindex-mismatch"]!;
+      expect(mixed.status).toBe("fail");
+    });
+
+    test("other meta names are not robots directives", () => {
+      const c = run(
+        { ...SAME },
+        { ...SAME, extraHead: '<meta name="bingbot" content="noindex"><meta name="keywords" content="noindex">' },
+      )["noindex-mismatch"]!;
+      expect(c.status).toBe("pass");
+    });
+
+    test("the raw document is read again from the raw HTML when the crawl released it", () => {
+      const ctx = makeCtx({ ...SAME, robots: "index, follow" }, envelope(html({ ...SAME, robots: "index", extraHead: '<meta name="robots" content="noindex">' })));
+      // A large crawl drops each page's document as it goes: the rule falls back to page.html.
+      (ctx.parsed as { document: unknown }).document = null;
+      const out = (renderedSignalMismatchRule.run(ctx) as { checks: CheckResult[] }).checks;
+      expect(out.find((c) => c.name === "noindex-mismatch")!.status).toBe("fail");
+    });
+
+    test("collectRobotsDirectives lists every robots and googlebot tag, and directivesSayNoindex reads them all", () => {
+      const doc = parsePage(
+        html({ robots: "index", extraHead: '<meta name="Googlebot" content="noindex"><meta name="x" content="noindex">' }),
+        URL,
+      ).document!;
+      expect(collectRobotsDirectives(doc)).toEqual(["index", "noindex"]);
+      expect(directivesSayNoindex(["index", "follow"])).toBe(false);
+      expect(directivesSayNoindex(["index", "none"])).toBe(true);
+      expect(directivesSayNoindex([])).toBe(false);
     });
   });
 
