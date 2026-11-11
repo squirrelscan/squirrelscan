@@ -53,7 +53,7 @@ _squirrel_completions() {
   local global_opts="--config-file -c"
 
   # Top-level commands
-  local commands="setup audit auth crawl credits analyze entities pages init config report feedback keys mcp channel self skills"
+  local commands="setup audit auth crawl ci credits analyze entities pages init config report feedback keys mcp channel self skills"
 
   # Auth subcommands
   local auth_commands="login logout status whoami"
@@ -260,6 +260,16 @@ _squirrel_completions() {
       COMPREPLY=( $(compgen -W "--max-pages -m --concurrency --per-host --level --coverage -C --refresh -r --fresh-ua --resume --disable-discovery-probes --discovery-probe-path --help" -- "\${cur}") )
       return 0
       ;;
+    ci)
+      case "\${prev}" in
+        --fail-on-new)
+          COMPREPLY=( $(compgen -W "error warning info" -- "\${cur}") )
+          return 0
+          ;;
+      esac
+      COMPREPLY=( $(compgen -W "--website --fail-on-new --max-pages --timeout --json --help" -- "\${cur}") )
+      return 0
+      ;;
     credits)
       COMPREPLY=( $(compgen -W "--json --upgrade --help" -- "\${cur}") )
       return 0
@@ -343,6 +353,7 @@ _squirrel() {
     'audit:Run audit on a URL'
     'auth:Authentication commands'
     'crawl:Crawl a website (no analysis)'
+    'ci:Audit a deployed URL in the cloud and fail on new findings'
     'credits:Show cloud credit balance and pricing'
     'analyze:Run audit rules on stored crawl'
     'pages:List the pages of a stored audit as a table'
@@ -638,6 +649,15 @@ _squirrel() {
             '--disable-discovery-probes[Skip the pre-crawl discovery probes for this run]' \\
             '*--discovery-probe-path[Only send the discovery probe for this path (repeatable)]:path'
           ;;
+        ci)
+          _arguments \\
+            '1:url:_urls' \\
+            '--website[Website id the audit belongs to]:website-id:' \\
+            '--fail-on-new[Fail on new findings at or above this severity]:severity:(error warning info)' \\
+            '--max-pages[Page limit for the cloud audit]:number' \\
+            '--timeout[Minutes to wait for the audit]:minutes' \\
+            '--json[Print the result as JSON]'
+          ;;
         credits)
           _arguments \\
             '--json[Output as JSON]' \\
@@ -709,6 +729,7 @@ complete -c squirrel -n "__fish_use_subcommand" -a setup -d "Sign in, install th
 complete -c squirrel -n "__fish_use_subcommand" -a audit -d "Run audit on a URL"
 complete -c squirrel -n "__fish_use_subcommand" -a auth -d "Authentication commands"
 complete -c squirrel -n "__fish_use_subcommand" -a crawl -d "Crawl a website (no analysis)"
+complete -c squirrel -n "__fish_use_subcommand" -a ci -d "Audit a deployed URL in the cloud and fail on new findings"
 complete -c squirrel -n "__fish_use_subcommand" -a credits -d "Show cloud credit balance and pricing"
 complete -c squirrel -n "__fish_use_subcommand" -a analyze -d "Run audit rules on stored crawl"
 complete -c squirrel -n "__fish_use_subcommand" -a pages -d "List the pages of a stored audit as a table"
@@ -908,6 +929,13 @@ complete -c squirrel -n "__fish_seen_subcommand_from pages" -l too-long -d "Only
 complete -c squirrel -n "__fish_seen_subcommand_from pages" -l orphan -d "Only pages the audit flags as orphans"
 complete -c squirrel -n "__fish_seen_subcommand_from pages" -l section -d "Only pages under this URL path"
 complete -c squirrel -n "__fish_seen_subcommand_from pages" -l page -d "Only pages whose URL contains this text"
+
+# Ci options
+complete -c squirrel -n "__fish_seen_subcommand_from ci" -l website -x -d "Website id the audit belongs to"
+complete -c squirrel -n "__fish_seen_subcommand_from ci" -l fail-on-new -x -a "error warning info" -d "Fail on new findings at or above this severity"
+complete -c squirrel -n "__fish_seen_subcommand_from ci" -l max-pages -x -d "Page limit for the cloud audit"
+complete -c squirrel -n "__fish_seen_subcommand_from ci" -l timeout -x -d "Minutes to wait for the audit"
+complete -c squirrel -n "__fish_seen_subcommand_from ci" -l json -d "Print the result as JSON"
 
 # Credits options
 complete -c squirrel -n "__fish_seen_subcommand_from credits" -l json -d "Output as JSON"

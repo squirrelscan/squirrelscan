@@ -95,6 +95,7 @@ describe("light startup path (#2023)", () => {
       "auth",
       "crawl",
       "credits",
+      "ci",
       "analyze",
       "init",
       "config",
