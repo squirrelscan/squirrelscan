@@ -11,13 +11,13 @@ An internal search page exists for a visitor who typed a query. For a search eng
 
 The rule is site-wide and reads only the crawl's page data (URL, status, headers, robots meta, canonical, title, first heading, Open Graph title and WebSite structured data). Only pages with a 2xx status that are not soft 404s are considered. A URL counts as an internal search result when:
 
-- Its last path segment is `search` and the query string has at least one non-empty value, such as `/search?q=shoes`.
-- It has one of the parameters `s`, `q`, `query`, `search` or `keyword` with a value, and the page shows it renders results: the value appears in the title, the first heading or the Open Graph title, or the page declares a `SearchResultsPage`. A URL with such a parameter and no sign of results is not counted. It is reported as unconfirmed instead of being dropped.
+- Its last path segment is `search` and the query string has a non-empty search parameter (`s`, `q`, `query`, `search`, `keyword`, or one named in a declared SearchAction), such as `/search?q=shoes`. Tracking, paging and sort parameters (`utm_*`, `page`, `sort`, `ref`, `fbclid`) alone do not make a search URL.
+- It has one of the parameters `s`, `q`, `query`, `search` or `keyword` with a value, and the page shows it renders results: the value (3 or more characters) appears as a whole word in the first heading or the Open Graph title (a title match alone is not enough), or the page declares a `SearchResultsPage`. A URL with such a parameter and no sign of results is not counted. It is reported as unconfirmed instead of being dropped.
 - It matches the `SearchAction` target in the site's `WebSite` structured data, such as `/?s={search_term_string}` or `/find?term={q}`. A path template such as `/search/{term}` matches by path prefix. At most 10 templates are used.
 
 A page with only a search form and no query in its URL is never a search result.
 
-A search URL is found but not listed when it is not indexable: a `noindex` robots meta tag, an `X-Robots-Tag: noindex` header, or a robots.txt `Disallow` for it. It is also not listed when its canonical points to a different page that is not itself a search URL. A canonical to itself or to another search URL still lists it.
+A search URL is found but not listed when it is not indexable: a `noindex` robots meta tag, an `X-Robots-Tag: noindex` header (`none` counts as noindex in both), or a robots.txt `Disallow` for it. It is also not listed when its canonical points to a different page that is not itself a search URL. A canonical to itself or to another search URL still lists it.
 
 The check is named `indexable-search-results`:
 
