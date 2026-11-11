@@ -23,12 +23,19 @@ import {
 import { looksLikeAnAction } from "@squirrelscan/utils/link-actions";
 import {
   EgressRefusedError,
+  EgressUnresolvableError,
+  isReservedUnresolvableHostname,
+  resolveHostAddresses,
   egressGuardedSend,
   refusedWithoutLookup,
   type EgressPolicy,
 } from "@squirrelscan/utils/public-egress";
 import { isHttpOrHttpsUrl } from "@squirrelscan/utils/safe-fetch";
-import type { UnverifiedReason } from "@squirrelscan/core-contracts";
+import {
+  EXTERNAL_LINK_HOST_UNRESOLVED_ERROR,
+  EXTERNAL_LINK_INVALID_SUFFIX_ERROR,
+  type UnverifiedReason,
+} from "@squirrelscan/core-contracts";
 import { detectWaf, detectWafChallengePage, type WafProvider } from "@squirrelscan/waf-detect";
 
 // ============================================
@@ -310,6 +317,89 @@ interface CheckUrlResult {
   refused?: boolean;
 }
 
+function hasReservedSuffix(url: string, egress: EgressPolicy): boolean {
+  try {
+    const parsed = new URL(url);
+    if (egress.allowPrivateNetwork || egress.allowPrivateTarget?.(parsed) === true) return false;
+    return isReservedUnresolvableHostname(parsed.hostname);
+  } catch {
+    return false;
+  }
+}
+
+/** How a failed name lookup ended: a definitive "no such host", or a resolver that did not answer (#1740). */
+type DnsFailure = "nxdomain" | "temporary";
+
+/**
+ * Whether `error` is a DNS failure, and which kind. `ENOTFOUND` (getaddrinfo's NXDOMAIN or no address
+ * records) and an empty answer are definitive; a timeout, SERVFAIL or any other resolver failure (`EAI_AGAIN`,
+ * `ESERVFAIL`, `ETIMEOUT`, `EREFUSED`) says nothing about the host and is only "could not verify".
+ */
+function dnsFailureOf(error: unknown): DnsFailure | null {
+  if (error instanceof EgressUnresolvableError) return "nxdomain";
+  const e = error as { code?: unknown; syscall?: unknown } | null;
+  const code = typeof e?.code === "string" ? e.code : "";
+  if (code === "ENOTFOUND") return "nxdomain";
+  if (
+    code === "EAI_AGAIN" ||
+    code === "ESERVFAIL" ||
+    code === "ETIMEOUT" ||
+    code === "EREFUSED" ||
+    (e?.syscall === "getaddrinfo" && code !== "")
+  ) {
+    return "temporary";
+  }
+  return null;
+}
+
+/** The host a DNS failure was about, when the error names it. */
+function dnsFailureHost(error: unknown): string | null {
+  const host = (error as { hostname?: unknown } | null)?.hostname;
+  return typeof host === "string" ? host.toLowerCase().replace(/\.$/, "") : null;
+}
+
+const UNREACHABLE: CheckUrlResult = {
+  status: null,
+  error: null,
+  redirectTarget: null,
+  wafBlocked: true,
+  wafProvider: "unknown",
+  unverifiedReason: "unreachable",
+};
+
+/**
+ * The verdict for a first-request failure that was a DNS failure of the link's own host (#1740), or null when
+ * it was anything else (a hop's host, a connect failure, a refusal). A definitive "no such host" is asked a
+ * second time before it counts: a host that now resolves, or a resolver that now fails to answer, is
+ * unverifiable, never broken, so one resolver hiccup cannot mark a live host dead. A resolver that failed on
+ * the first ask is unverifiable straight away.
+ */
+async function dnsVerdict(
+  error: unknown,
+  href: string,
+  options: ExternalCheckerOptions,
+): Promise<CheckUrlResult | null> {
+  const kind = dnsFailureOf(error);
+  if (kind === null) return null;
+  let host: string;
+  try {
+    host = new URL(href).hostname.toLowerCase().replace(/\.$/, "");
+  } catch {
+    return null;
+  }
+  const named = dnsFailureHost(error);
+  // A redirect hop's host failing is the redirect's problem: the link itself answered.
+  if (named !== null && named !== host) return null;
+  if (kind === "temporary") return UNREACHABLE;
+  try {
+    const answers = await (options.egress?.resolve ?? resolveHostAddresses)(host);
+    if (answers.length > 0) return UNREACHABLE; // it resolves now: the first answer was the odd one
+  } catch (second) {
+    if (dnsFailureOf(second) !== "nxdomain") return UNREACHABLE;
+  }
+  return { status: null, error: EXTERNAL_LINK_HOST_UNRESOLVED_ERROR, redirectTarget: null };
+}
+
 /**
  * What a site answers a request it takes for a robot's: a sign-in or bot wall
  * (401, 403), a method or content refusal bot rules send (405, 406), and
@@ -451,6 +541,10 @@ async function checkSingleUrlAsync(
         };
       }
     } catch (error) {
+      // The link's own host does not resolve (#1740): a dead host, once confirmed; or a resolver that
+      // did not answer, which is unverifiable. Before the refusal below, which it is a kind of.
+      const dns = await dnsVerdict(error, href, options);
+      if (dns) return dns;
       // Refused by the egress policy: the GET would be refused too. Not
       // checked, so unresolved: never broken.
       if (error instanceof EgressRefusedError) {
@@ -520,6 +614,8 @@ async function checkSingleUrlAsync(
 
     return { status: getResponse.status, error: null, redirectTarget };
   } catch (error) {
+    const dns = await dnsVerdict(error, href, options);
+    if (dns) return dns;
     if (error instanceof EgressRefusedError) {
       return { status: null, error: null, redirectTarget: null, refused: true };
     }
@@ -571,6 +667,16 @@ export function checkExternalLinks(
     for (const url of new Set(urls)) {
       if (looksLikeAnAction(url)) {
         results.push({ href: url, status: null, error: null, redirectTarget: null, fromCache: false });
+      } else if (hasReservedSuffix(url, egress)) {
+        // #1740: .invalid, .test and .example never resolve in public DNS (RFC 6761): a dead link for every
+        // visitor, answered without a lookup, and not a refusal. A private-network audit looks them up.
+        results.push({
+          href: url,
+          status: null,
+          error: EXTERNAL_LINK_INVALID_SUFFIX_ERROR,
+          redirectTarget: null,
+          fromCache: false,
+        });
       } else if (refusedWithoutLookup(url, egress)) {
         results.push({
           href: url,
@@ -626,7 +732,10 @@ export function checkExternalLinks(
       // pub#775: a public service, so never sent a link whose URL names a
       // non-public host, whatever this audit's policy allows. Those take the
       // local check, which a private site's audit may make.
-      const bulkUrls = urlsToCheck.filter((url) => !refusedWithoutLookup(url, DEFAULT_EGRESS));
+      // A reserved never-resolving name (.invalid, .test, .example) is never sent out either (#1740).
+      const bulkUrls = urlsToCheck.filter(
+        (url) => !refusedWithoutLookup(url, DEFAULT_EGRESS) && !hasReservedSuffix(url, DEFAULT_EGRESS),
+      );
       const answeredBefore = results.length;
       const bulkResolved =
         bulkUrls.length > 0

@@ -164,7 +164,7 @@ const PENDING = "https://pending.example.com/page";
 
 for (const engine of ["v1", "v2"] as const) {
   describe(`an audit carries the reason to the report (pub#821, ${engine})`, () => {
-    test("the cloud's awaiting-confirmation answer is labelled; a local wall keeps its label", async () => {
+    test("the cloud's awaiting-confirmation answer is its own warning check; a local wall keeps its label", async () => {
       const { home, walled } = serveSite();
       const crawler = await Effect.runPromise(
         createCrawler({
@@ -227,12 +227,13 @@ for (const engine of ["v1", "v2"] as const) {
           return yield* runStreamingRules(storage, crawlId, config, pre.assets);
         }) as Effect.Effect<{ siteRuleResults: Map<string, CheckResult[]> }, never, never>,
       );
-      const row = (ran.siteRuleResults.get("links/broken-external-links") ?? []).find(
-        (c) => c.name === "waf-blocked-external-links",
-      );
-      expect(row?.items?.map((i) => i.label).sort()).toEqual(
-        [`${PENDING} (unverified: awaiting confirmation)`, `${walled} (unverified: cloudflare)`].sort(),
-      );
+      const checks = ran.siteRuleResults.get("links/broken-external-links") ?? [];
+      // #1739: the cloud's first-404 answer is likely broken: its own warning check, not listed as blocked.
+      const awaiting = checks.find((c) => c.name === "awaiting-confirmation-external-links");
+      expect(awaiting?.status).toBe("warn");
+      expect(awaiting?.items?.map((i) => i.label)).toEqual([`${PENDING} (failed once, being confirmed)`]);
+      const row = checks.find((c) => c.name === "waf-blocked-external-links");
+      expect(row?.items?.map((i) => i.label)).toEqual([`${walled} (unverified: cloudflare)`]);
       expect(row?.items?.find((i) => i.id === walled)?.meta).toMatchObject({ unverifiedReason: "blocked" });
     });
   });

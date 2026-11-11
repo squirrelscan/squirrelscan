@@ -251,7 +251,8 @@ describe("a local site's external links and the dead-links service", () => {
     ]);
     // And the per-link finding names the 404 the local check found.
     const broken = checksOf("links/broken-external-links");
-    expect(broken.map((c) => c.status)).toEqual(["warn"]);
+    // A 404 is confirmed broken, so it fails (#1739).
+    expect(broken.map((c) => c.status)).toEqual(["fail"]);
     expect(broken[0]!.items?.map((i) => i.id)).toEqual([`http://127.0.0.1:${port}/gone`]);
   });
 });
