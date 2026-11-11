@@ -172,7 +172,12 @@ export function scanScopeLine(report: AuditReport): string | null {
  */
 export function scanScopeTargeted(
   report: Pick<AuditReport, "scanScope">,
-): { requested: number; audited: number; unaudited: Array<{ url: string; reason: string; destination?: string }> } | null {
+): {
+  requested: number;
+  audited: number;
+  overLimit?: number;
+  unaudited: Array<{ url: string; reason: string; destination?: string }>;
+} | null {
   const t = report.scanScope?.targeted;
   if (!t || typeof t !== "object") return null;
   const whole = (v: unknown): number | undefined =>
@@ -192,7 +197,8 @@ export function scanScopeTargeted(
       ...(typeof r.destination === "string" ? { destination: r.destination.slice(0, 2048) } : {}),
     });
   }
-  return { requested, audited, unaudited };
+  const overLimit = whole(t.overLimit);
+  return { requested, audited, ...(overLimit ? { overLimit } : {}), unaudited };
 }
 
 /**
