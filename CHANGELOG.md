@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Changed
+
+- **`ax/ai-crawlers` warns when Googlebot is blocked for the audited URL.** The `search-engine-access` check was info only. A robots.txt that blocks Googlebot from the site root or for the entry URL usually means the site is not indexed, often by a staging `Disallow: /` left in, so that check now warns and counts toward the score. An `Allow` override, an allowed Googlebot and a block of any other engine (`Bingbot`, `Applebot`) stay info, and `details.bots` still lists every bot. (#1680)
+
 ## v0.0.174 (2026-11-11)
 
 Reports say why a rule did not give a verdict (JSON schema 1.9), `squirrel audit` has one exit code precedence with the outcome in the JSON and LLM reports, `--resume` says why it started a new crawl, an expired login is called out, settings writes no longer lose each other, and five rules stop flagging hidden, presentational and symbol-only content.
