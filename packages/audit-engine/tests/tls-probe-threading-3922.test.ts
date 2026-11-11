@@ -35,9 +35,9 @@ const CONFIG = {
   internal_links: { enabled: false },
 } as unknown as Config;
 
-async function auditChecks(tlsProbe?: TlsProbeFn): Promise<CheckResult[]> {
+async function auditChecks(tlsProbe?: TlsProbeFn, hosted = false): Promise<CheckResult[]> {
   const model = generateSiteModel({ seed: "tls-threading-3922", pageCount: 3, templateCount: 1 });
-  const dbPath = join(tmpDir, `${tlsProbe ? "with" : "without"}-probe.sqlite`);
+  const dbPath = join(tmpDir, `${tlsProbe ? "with" : "without"}-probe-${hosted ? "hosted" : "local"}.sqlite`);
   const { storage: writer } = await writeCrawlToStorage(model, dbPath, {
     baseUrl: `https://${HOST}`,
   });
@@ -53,7 +53,7 @@ async function auditChecks(tlsProbe?: TlsProbeFn): Promise<CheckResult[]> {
         crawlId,
         CONFIG,
         {} as never,
-        tlsProbe ? { tlsProbe } : undefined,
+        { ...(tlsProbe ? { tlsProbe } : {}), ...(hosted ? { hosted: true } : {}) },
         { batchSize: 10 },
       ),
     );
@@ -92,5 +92,31 @@ describe("runStreamingRules threads tlsProbe to security/tls-certificate (#3922)
     expect(checks).toHaveLength(1);
     expect(checks[0]!.status).toBe("skipped");
     expect(checks[0]!.message).toContain("does not open TLS connections");
+  }, 30_000);
+
+  test("the probe changes the verdict: a failing certificate becomes a failure, not a skip", async () => {
+    const probe: TlsProbeFn = async () => ({
+      kind: "certificate",
+      certificate: {
+        names: [HOST],
+        issuer: "squirrel test intermediate",
+        validFrom: new Date(Date.now() - 400 * DAY_MS),
+        validTo: new Date(Date.now() - DAY_MS),
+        rsaBits: 2048,
+      },
+      trusted: false,
+      trustError: "CERT_HAS_EXPIRED",
+    });
+    const checks = await auditChecks(probe);
+    expect(checks.some((c) => c.status === "fail" && c.message.includes("expired"))).toBe(true);
+    expect(checks.some((c) => c.status === "skipped")).toBe(false);
+  }, 30_000);
+
+  test("a hosted run without a probe reports not checked in the hosted wording", async () => {
+    const checks = await auditChecks(undefined, true);
+    expect(checks).toHaveLength(1);
+    expect(checks[0]).toMatchObject({ status: "skipped", details: { environment: "cloud" } });
+    expect(checks[0]!.message).toContain("the hosted audit could not open a TLS connection");
+    expect(checks[0]!.message).not.toMatch(/[Pp]roxy|--offline|[Nn]etwork|CONNECT/);
   }, 30_000);
 });

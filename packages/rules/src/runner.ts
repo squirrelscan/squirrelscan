@@ -114,6 +114,13 @@ export interface RunnerScope {
    */
   tlsProbe?: TlsProbeFn;
   /**
+   * This run is a hosted (cloud) audit, threaded into `ctx.hosted` on site
+   * rules. It only changes wording: a check that was not made says so without
+   * advice about networks, proxies or `--offline`, which a hosted user cannot
+   * act on (#3922). Undefined = a local (CLI) run.
+   */
+  hosted?: boolean;
+  /**
    * Extra rule namespaces (plugins / tests) merged on top of the built-ins. Scope
    * rather than a runner-only option so `createRunner` carries it, and so the audit
    * controller can hand the same list to `selectDiscoveryProbes` (#1375).
@@ -358,6 +365,7 @@ export class RuleRunner {
   private readonly entityMap: EntityMap | undefined;
   private readonly probe: ProbeBudget | undefined;
   private readonly tlsProbe: TlsProbeFn | undefined;
+  private readonly hosted: boolean | undefined;
   // The audited url last classified by `isPrivateTarget`, and the verdict. One
   // audit has one base url, so this is a single classification per run; keyed on
   // the url so a runner reused for another site cannot carry a stale verdict.
@@ -371,6 +379,7 @@ export class RuleRunner {
     this.entityMap = options.entityMap;
     this.probe = options.probe;
     this.tlsProbe = options.tlsProbe;
+    this.hosted = options.hosted;
     this.ruleConcurrency = Math.max(
       1,
       options.ruleConcurrency ?? DEFAULT_RULE_CONCURRENCY
@@ -905,6 +914,7 @@ export class RuleRunner {
         const entityMap = this.entityMap;
         const probe = this.probe;
         const tlsProbe = this.tlsProbe;
+        const hosted = this.hosted;
 
         // For site-scope rules, we need to provide page context: use the first
         // page or a dummy if no pages. Built once and shared (read-only).
@@ -952,6 +962,7 @@ export class RuleRunner {
               entityMap,
               probe,
               tlsProbe,
+              hosted,
               options: getRuleOptions(rule, this.config),
             };
             return Promise.resolve(

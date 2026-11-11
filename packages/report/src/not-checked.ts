@@ -70,6 +70,11 @@ const HINTS: Record<string, string> = {
     "Raise the page limit (--max-pages, or crawler.max_pages) so the crawl reaches every page, to check them.",
 };
 
+// #3922: a hosted audit's user cannot change where it runs, so no advice about
+// networks, proxies or --offline.
+const TLS_CLOUD_HINT =
+  "The audit needs to open a TLS connection to the site and could not. Run the audit again, make sure the site accepts TLS connections on its port from public addresses, or check the certificate with a TLS tool.";
+
 const DEFAULT_HINT = "Run a Surface or Full audit to check them.";
 
 /**
@@ -109,6 +114,11 @@ function hintFor(check: { skipReason?: string; details?: Record<string, unknown>
     return "This is a defect in squirrelscan, not a problem with your pages, and no finding there is not a clean result. Update squirrel and run the audit again, or report it at https://github.com/squirrelscan/squirrelscan/issues.";
   if (check.skipReason === LINK_TARGETS_NOT_FETCHED_SKIP_REASON)
     return linkTargetsHint(check.details);
+  if (
+    check.skipReason === TLS_CERTIFICATE_NOT_CHECKED_SKIP_REASON &&
+    check.details?.environment === "cloud"
+  )
+    return TLS_CLOUD_HINT;
   return (check.skipReason && HINTS[check.skipReason]) || DEFAULT_HINT;
 }
 

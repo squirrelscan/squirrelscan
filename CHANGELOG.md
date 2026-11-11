@@ -59,7 +59,8 @@ The installer's failure report now says where a failed request was going and whi
 - **Approve discovery probes one path at a time.** `[crawler] discovery_probe_paths` (and `--discovery-probe-path`, repeatable) lists the probe paths an audit may request, so `/llms.txt` can go out without `/llms-full.txt`, `/.well-known/llms.txt` or `/docs/llms.txt`, and `/AGENTS.md` without its variants. A probe left out is not sent and its rule reports not checked (path not approved), never missing; a redirect from a listed path may not change the path, and the per-host limits, `robots.txt` and sitemap discovery are unchanged. A 429 or a bot challenge from the audited host (or its `www` or apex twin) now also stops the optional probes still waiting, which report not checked; a 429 from another host, such as a third-party sitemap host, does not. Unset keeps today's behaviour. (#1655)
 ### Fixed
 
-- The TLS certificate handshake behind `security/tls-certificate` now lives in a shared package (`@squirrelscan/fetchers/tls-probe`) with the same egress checks and proxy handling, so hosted audits can run the rule instead of reporting it as not checked. CLI behaviour is unchanged. (#3922)
+- The TLS certificate handshake behind `security/tls-certificate` now lives in a shared package (`@squirrelscan/fetchers/tls-probe`) with the same egress checks and proxy handling, and accepts an explicit CONNECT proxy URL. CLI behaviour is unchanged. (#3922)
+- When a hosted audit cannot check the TLS certificate, `security/tls-certificate` now says so in plain words, with no advice about networks, proxies or `--offline`. The local wording is unchanged. (#3922)
 
 ## v0.0.176 (2026-11-11)
 
