@@ -1109,7 +1109,12 @@
                 }
               },
               "notice": { "$ref": "#/components/schemas/PageLimitClampNotice" },
-              "renderFallback": { "$ref": "#/components/schemas/RenderFallbackNotice" }
+              "renderFallback": { "$ref": "#/components/schemas/RenderFallbackNotice" },
+              "reportAvailability": {
+                "type": "string",
+                "enum": ["ready", "pending", "none"],
+                "description": "Whether this run's report exists, so a client stops guessing from a missing report: `ready` (a report is stored for the run, not verified readable; a failed run that wrote a failure notice has one), `pending` (the run is still going, or it completed and its report is being finalized), `none` (the run failed or was cancelled without writing a report and none will come). Additive."
+              }
             },
             "additionalProperties": true
           }

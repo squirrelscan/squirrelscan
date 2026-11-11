@@ -84,7 +84,7 @@ curl -X POST https://api.squirrelscan.com/v1/agent-runs \
   }'
 ```
 
-The response is `201` with the run `id`. Poll `GET /v1/agent-runs/{id}` until `status` is `completed`, then read `GET /v1/agent-runs/{id}/report`. With an API key `trigger` defaults to `api`; a signed-in session has to send it. `config` may also be sent as a JSON-encoded string, the older form.
+The response is `201` with the run `id`. Poll `GET /v1/agent-runs/{id}` until `status` is `completed`, then read `GET /v1/agent-runs/{id}/report`. `GET /v1/agent-runs/{id}` also carries `reportAvailability`, so a client does not have to guess from a missing report: `ready` (a report is stored for the run; not verified readable), `pending` (the run is still going, or it completed and its report is being finalized) or `none` (the run failed or was cancelled without writing a report, and none will come). With an API key `trigger` defaults to `api`; a signed-in session has to send it. `config` may also be sent as a JSON-encoded string, the older form.
 
 ### Two sets, like a lint config
 
