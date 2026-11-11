@@ -187,6 +187,10 @@ export interface JsonRenderOptions {
   pages?: readonly JsonPageRow[];
   /** The real number of rows when `pages` carries fewer than there are (unstored URLs past the loaded cap), for `pagesTotal`. */
   pagesTotal?: number;
+  /** URLs recorded as redirects, not pages (#1762), listed beside `pages`: `{ url, finalUrl, status, hops }` each. */
+  redirects?: readonly { url: string; finalUrl: string; status: number; hops: number }[];
+  /** The real number of redirects when `redirects` is cut. */
+  redirectsTotal?: number;
 }
 
 interface SlimJsonReport {
@@ -364,6 +368,9 @@ interface SlimJsonReport {
   pages?: JsonPageRow[];
   pagesTotal?: number;
   pagesTruncated?: boolean;
+  /** URLs that redirected, listed beside `pages` with `--include-pages` (#1762, schema 1.15). */
+  redirects?: Array<{ url: string; finalUrl: string; status: number; hops: number }>;
+  redirectsTotal?: number;
   issues: Array<{
     ruleId: string;
     name: string;
@@ -587,7 +594,9 @@ function buildSlimReport(
   version: string,
   includePassed: boolean,
   pages?: readonly JsonPageRow[],
-  pagesTotal?: number
+  pagesTotal?: number,
+  redirects?: JsonRenderOptions["redirects"],
+  redirectsTotal?: number
 ): SlimJsonReport {
   const siteWide = siteWideContext(report);
   const categoryIssues = groupIssuesByCategory(report.ruleResults, report.checkTallies);
@@ -750,6 +759,18 @@ function buildSlimReport(
           })),
           pagesTotal: Math.max(pages.length, pagesTotal ?? 0),
           pagesTruncated: Math.max(pages.length, pagesTotal ?? 0) > JSON_REPORT_PAGES.maxEntries,
+          // #1762: a URL that redirected is not a page; it is listed here, with where it went.
+          ...(redirects && redirects.length > 0
+            ? {
+                redirects: redirects.slice(0, JSON_REPORT_PAGES.maxEntries).map((r) => ({
+                  url: r.url,
+                  finalUrl: r.finalUrl,
+                  status: r.status,
+                  hops: r.hops,
+                })),
+                redirectsTotal: Math.max(redirects.length, redirectsTotal ?? 0),
+              }
+            : {}),
         }
       : {}),
     issues: flattenIssuesBySeverity(categoryIssues).map((rule) => ({
@@ -1011,6 +1032,14 @@ function buildSlimReport(
 
 export function renderJson(report: AuditReport, options?: JsonRenderOptions): string {
   const version = options?.version ?? "";
-  const slim = buildSlimReport(report, version, options?.includePassed ?? false, options?.pages, options?.pagesTotal);
+  const slim = buildSlimReport(
+    report,
+    version,
+    options?.includePassed ?? false,
+    options?.pages,
+    options?.pagesTotal,
+    options?.redirects,
+    options?.redirectsTotal
+  );
   return JSON.stringify(slim, null, 2);
 }

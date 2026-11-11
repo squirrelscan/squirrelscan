@@ -39,6 +39,14 @@ export function generateJsonReport(
           pagesTotal:
             report.pages.length +
             (report.unstoredPagesTotal ?? report.unstoredPages?.length ?? 0),
+          // #1762: URLs that redirected are not pages; they are listed beside them, with where each one went.
+          ...(report.redirects && report.redirects.length > 0
+            ? {
+                redirects: report.redirects,
+                redirectsTotal:
+                  report.redirectsTotal ?? report.redirects.length,
+              }
+            : {}),
         }
       : {}),
   });

@@ -683,6 +683,16 @@ export const UNSTORED_PAGE_REASONS = [
 export type UnstoredPageReason = (typeof UNSTORED_PAGE_REASONS)[number] | `http-${number}`;
 
 /** A URL the crawl requested but could not store a page for (#1396), listed by `--include-pages`. */
+/** A URL that redirected, in the `--include-pages` JSON `redirects` list (#1762). */
+export interface RedirectRow {
+  url: string;
+  finalUrl: string;
+  /** The status the URL itself answered with: its first hop's 3xx. */
+  status: number;
+  /** Redirect responses before the landing page. */
+  hops: number;
+}
+
 export interface UnstoredPage {
   /** As the crawl recorded it, cut at 2,048 characters. */
   url: string;
@@ -784,6 +794,13 @@ export interface AuditReport {
    */
   unstoredPages?: UnstoredPage[];
   unstoredPagesTotal?: number;
+  /**
+   * URLs the crawl recorded as redirects, not pages (#1762), for `--include-pages`: they are not in `pages`, and a
+   * consumer that read `finalUrl` from a page row finds it here. At most `JSON_REPORT_PAGES.maxEntries`, with
+   * `redirectsTotal` the real count.
+   */
+  redirects?: RedirectRow[];
+  redirectsTotal?: number;
   /**
    * Where the seed URL's redirects resolved to, when that is a DIFFERENT site
    * from `baseUrl` — i.e. the redirect left the seed's registrable domain and
