@@ -104,6 +104,18 @@ the work to do first:
 Categories are not top-level sections: a category with both an error and a
 warning appears under both severities.
 
+### How a finding on many pages is worded
+
+A check that fires on many pages is stored once, with the pages it covers. Its message never states one page's problem for all of them:
+
+- One item on many pages: `1 image missing alt attribute, shown on 16 pages`. It is the same single image, so the fix is one attribute.
+- Different items on many pages: `14 images missing alt attribute across 9 pages`.
+- The same sentence with different counts: the counts become a range, `Title too long (65 to 114 chars, max 60)`.
+- Pages that disagree: each message is listed with its page count, `Multiple H1 tags found (2 to 5) (3 pages); H1 tag is empty (2 pages)`. Three messages are listed, the rest are counted as `N other messages`.
+- Anything else keeps the first page's sentence with `(+N more pages)`.
+
+In the JSON report the check's `details` carries `distinctItems` (the number of distinct items, a floor when the item list was clipped before the report), `pageMessage` (the sentence one page shows) and, when pages disagree, `messages` (each message with its page count).
+
 ### Findings in a shared page region
 
 A finding that sits in a part of the page every page repeats is one thing to
@@ -669,6 +681,8 @@ Compare the latest report for a domain against a baseline audit:
 ```bash
 squirrel report --regression-since example.com --format llm
 ```
+
+A baseline finding stored under a check name a rule has since replaced (a rule lists these in `supersededChecks`, for example `core/meta-title`'s old `meta-title` now `meta-title-too-short` and `meta-title-too-long`) is judged by the new checks on the same target: gone when they all passed, shown as a change when one still fails, and listed under `notChecked` in the JSON diff when one was not checked, so it is never counted as fixed.
 
 <Note>
 Diff mode supports `console`, `text`, `json`, `llm`, and `markdown`. `html` and `xml` are not supported in diff mode. Diff reports cannot be published with `--publish`.
