@@ -10,10 +10,14 @@ function hostFamily(host: string): string {
   return host.toLowerCase().replace(/^www\./, "");
 }
 
-/** `/index.html`, `/index.php`, `/index.htm`, `/index.asp(x)`, `/default.asp(x)`, `/default.htm(l)` and kin. */
-const HOME_FILE = /^\/(?:index|default)\.(?:html?|php|aspx?)$/i;
+/**
+ * Ordinary second addresses of a home page: `/home`, `/home/`, `/index`, `/home.<ext>` (a CMS Home slug or a
+ * router alias), and the directory index files `/index|default.(htm|html|php|asp|aspx)`. Case-insensitive.
+ * `/homepage-design` and `/home/pricing` are not home pages.
+ */
+const HOME_FILE = /^\/(?:(?:index|default)\.(?:html?|php|aspx?)|home\/?|index|home\.[a-z0-9]{1,5})$/i;
 
-/** A path the site serves its home page at: the root, or a directory index file spelled any of the usual ways. */
+/** A path the site serves its home page at: the root, or one of the home spellings above. */
 function isRootPath(pathname: string): boolean {
   return pathname === "/" || HOME_FILE.test(pathname);
 }
