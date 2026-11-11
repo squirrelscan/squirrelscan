@@ -15,7 +15,17 @@ import { normalizeUrl } from "./frontier";
 
 export type RedirectRow = Pick<PageRecord, "status" | "normalizedUrl" | "finalUrl" | "redirectChain"> & {
   html?: string | null;
+  /**
+   * A read without bodies (`getPagesWithoutBodies`) has `html` null whatever the row holds, but it still
+   * has the content hash, which a stored body always has and a redirect marker row (no body) does not.
+   */
+  contentHash?: string | null;
 };
+
+/** The row holds a body: its markup, or the hash of the one the content store keeps. */
+function hasBody(page: RedirectRow): boolean {
+  return !!page.html || !!page.contentHash;
+}
 
 function pathKey(url: string, base: string): string | null {
   const normalized = normalizeUrl(url, { baseUrl: base, allowQueryParams: [], dropQueryPrefixes: [] });
@@ -47,7 +57,7 @@ export function isRedirectRecord(page: RedirectRow): boolean {
  * purpose because the destination is out of scope (`redirectChain.keptAsPage`), so it stays a page.
  */
 export function isLegacyRedirectRow(page: RedirectRow): boolean {
-  if (page.status < 200 || page.status >= 300 || !page.html || !page.finalUrl) return false;
+  if (page.status < 200 || page.status >= 300 || !hasBody(page) || !page.finalUrl) return false;
   if (page.redirectChain?.keptAsPage) return false;
   const from = pathKey(page.normalizedUrl, page.normalizedUrl);
   const to = pathKey(page.finalUrl, page.normalizedUrl);
