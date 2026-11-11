@@ -24,6 +24,7 @@ import {
   itemLabel,
   regionScopeLine,
 } from "../region-scope";
+import { isVersionLike } from "../coverage";
 import { hasCarriedPages } from "../page-type-scope";
 
 /** "in the site footer, ..." from "In the site footer, ...", to sit inside a sentence. */
@@ -167,7 +168,11 @@ export function serializeMetaValue(value: unknown): string {
 export function renderLlm(report: AuditReport, options?: LlmRenderOptions): string {
   const lines: string[] = [];
   const siteWide = siteWideContext(report, options?.siteWideCollapse !== false);
-  const version = options?.version ?? "0.0.0";
+  // The report's own generator version wins: a report read back from storage or the cloud was written by
+  // the version that audited it, not by the process that renders it. "0.0.0" is only the no-version fallback.
+  const version = isVersionLike(report.generatorVersion)
+    ? report.generatorVersion
+    : (options?.version ?? "0.0.0");
 
   let baseOrigin = "";
   try {
@@ -392,11 +397,11 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
   // Top-level group scores (#626), above the finer per-category scores.
   for (const g of report.healthScore?.groups ?? []) {
     lines.push(
-      `${indent(1)}<group name="${escapeXml(getGroupName(g.group))}" score="${g.score}" errors="${g.failed}" warnings="${g.warnings}"/>`,
+      `${indent(1)}<group name="${escapeXml(getGroupName(g.group))}" score="${g.score}" scope="group" errors="${g.failed}" warnings="${g.warnings}"/>`,
     );
   }
   for (const cat of report.healthScore?.categories ?? []) {
-    lines.push(`${indent(1)}<cat name="${escapeXml(cat.name)}" score="${cat.score}"/>`);
+    lines.push(`${indent(1)}<cat name="${escapeXml(cat.name)}" score="${cat.score}" scope="category"/>`);
   }
   lines.push("</score>");
 
