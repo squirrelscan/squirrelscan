@@ -6,6 +6,8 @@
 // rule that declares nothing fails here, so the list never grows.
 import { describe, expect, test } from "bun:test";
 
+import { splitSuccessor } from "@squirrelscan/core-contracts/resolution";
+
 import { loadAllRules } from "../src/loader";
 import undeclaredBaseline from "./fixtures/rule-checks-undeclared.json";
 
@@ -83,6 +85,7 @@ describe("meta.checks declarations (#1741)", () => {
   test("supersededChecks (#1765) name successors, never the old name itself", () => {
     const withSuperseded = rules.filter((r) => r.meta.supersededChecks !== undefined);
     expect(withSuperseded.map((r) => r.meta.id).sort()).toEqual([
+      "ax/ai-crawlers",
       "core/meta-description",
       "core/meta-title",
       "links/broken-external-links",
@@ -92,9 +95,11 @@ describe("meta.checks declarations (#1741)", () => {
     for (const { meta } of withSuperseded) {
       for (const [oldName, successors] of Object.entries(meta.supersededChecks!)) {
         expect(successors.length, `${meta.id}: ${oldName} has no successor`).toBeGreaterThan(0);
-        expect(successors, `${meta.id}: ${oldName} supersedes itself`).not.toContain(oldName);
+        // A successor is a check name, or `check@locator` (#1780).
+        const names = successors.map((x) => splitSuccessor(x).check);
+        expect(names, `${meta.id}: ${oldName} supersedes itself`).not.toContain(oldName);
         expect(new Set(successors).size, `${meta.id}: duplicate successor`).toBe(successors.length);
-        for (const s of successors) {
+        for (const s of names) {
           // No chains. The one allowed shape is a pair of peers that name each other (a link that moves between
           // two checks, #1772): the merge decides one level, so a pair cannot loop.
           const back = meta.supersededChecks![s];

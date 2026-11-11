@@ -165,17 +165,79 @@ describe("ax/ai-crawlers", () => {
     expect(warn?.message).toContain("ClaudeBot");
   });
 
-  test("blocking everything lists all as items and warns on the answer-engine subset", () => {
+  test("a wildcard block is ONE warning row, not a row per crawler (#1780)", () => {
     const checks = run(blockAll());
     const summary = checks[0];
     expect(summary?.status).toBe("info");
     expect(summary?.items?.length).toBe(AI_CRAWLERS.length);
-    const warn = checks.find((c) => c.name === "ai-answer-access");
-    const answerCount = AI_CRAWLERS.filter(
-      (c) => c.crawlerClass === "ai-search" || c.crawlerClass === "user-action",
-    ).length;
-    expect(warn?.status).toBe("warn");
-    expect(warn?.items?.length).toBe(answerCount);
+    // No per-crawler warning checks: the crawlers are not named in the file.
+    expect(checks.find((c) => c.name === "ai-answer-access")).toBeUndefined();
+    expect(checks.find((c) => c.name === "archive-crawler-access")).toBeUndefined();
+    const wildcard = checks.filter((c) => c.name === "ai-crawlers-wildcard-blocked");
+    expect(wildcard).toHaveLength(1);
+    const row = wildcard[0]!;
+    expect(row.status).toBe("warn");
+    expect(row.message).toContain("all");
+    expect(row.message).toContain("wildcard group");
+    expect(row.message).toContain("crawl/robots-txt");
+    // One item, so a comparison sees one finding; the affected crawlers are listed in it.
+    expect(row.items).toHaveLength(1);
+    expect(row.items![0]!.id).toBe("User-agent: *");
+    expect(row.items![0]!.meta?.crawlers).toEqual(AI_CRAWLERS.map((c) => c.token));
+    expect(row.details?.crawlers).toEqual(AI_CRAWLERS.map((c) => c.token));
+    // One warning row for the AI crawlers. (Googlebot, blocked by the same wildcard, keeps its own
+    // `search-engine-access` row: a different set of bots, and unchanged.)
+    expect(checks.filter((c) => c.status === "warn" && c.name !== "search-engine-access")).toHaveLength(1);
+  });
+
+  const named = (token: string) => ({ userAgent: token, rules: [{ type: "disallow" as const, path: "/" }] });
+
+  test("crawlers blocked by their own group keep their own rows (no wildcard)", () => {
+    const checks = run(robots([named("OAI-SearchBot"), named("CCBot")]));
+    expect(checks.find((c) => c.name === "ai-crawlers-wildcard-blocked")).toBeUndefined();
+    expect(checks.find((c) => c.name === "ai-answer-access")?.items?.map((i) => i.id)).toEqual(["OAI-SearchBot"]);
+    expect(checks.find((c) => c.name === "archive-crawler-access")?.items?.map((i) => i.id)).toEqual(["CCBot"]);
+  });
+
+  test("a wildcard block and a named block together: the named one is its own row, the rest are the wildcard row", () => {
+    const checks = run(
+      robots([{ userAgent: "*", rules: [{ type: "disallow", path: "/" }] }, named("OAI-SearchBot")])
+    );
+    expect(checks.find((c) => c.name === "ai-answer-access")?.items?.map((i) => i.id)).toEqual(["OAI-SearchBot"]);
+    const wide = checks.find((c) => c.name === "ai-crawlers-wildcard-blocked")!;
+    const crawlers = wide.items![0]!.meta?.crawlers as string[];
+    expect(crawlers).not.toContain("OAI-SearchBot");
+    expect(crawlers).toHaveLength(AI_CRAWLERS.length - 1);
+  });
+
+  test("a crawler the file allows by name while the wildcard blocks everything is not listed as blocked", () => {
+    const checks = run(
+      robots([
+        { userAgent: "*", rules: [{ type: "disallow", path: "/" }] },
+        { userAgent: "GPTBot", rules: [{ type: "allow", path: "/" }] },
+      ])
+    );
+    const wide = checks.find((c) => c.name === "ai-crawlers-wildcard-blocked")!;
+    expect(wide.items![0]!.meta?.crawlers).not.toContain("GPTBot");
+    expect(checks[0]?.details?.blocked).not.toContain("GPTBot");
+  });
+
+  test("the row's identity is stable between audits: same check name and item id however the crawler list moves", () => {
+    const before = run(blockAll()).find((c) => c.name === "ai-crawlers-wildcard-blocked")!;
+    const after = run(
+      robots([{ userAgent: "*", rules: [{ type: "disallow", path: "/" }] }, named("ClaudeBot")])
+    ).find((c) => c.name === "ai-crawlers-wildcard-blocked")!;
+    expect([before.name, before.items![0]!.id]).toEqual([after.name, after.items![0]!.id]);
+  });
+
+  test("a wildcard that blocks only crawlers whose block never warns is an info row", () => {
+    // Every consequential crawler is allowed by name, so only training crawlers are left to the wildcard.
+    const consequential = AI_CRAWLERS.filter((c) => c.crawlerClass !== "training").map((c) => ({
+      userAgent: c.token,
+      rules: [{ type: "allow" as const, path: "/" }],
+    }));
+    const checks = run(robots([{ userAgent: "*", rules: [{ type: "disallow", path: "/" }] }, ...consequential]));
+    expect(checks.find((c) => c.name === "ai-crawlers-wildcard-blocked")?.status).toBe("info");
   });
 });
 

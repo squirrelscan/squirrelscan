@@ -172,6 +172,10 @@ const CLASS_LABEL: Record<CrawlerClass, string> = {
   archive: "archive crawler",
 };
 
+/** The one row for the crawlers that only the wildcard group blocks (#1780), and its stable item id. */
+const WILDCARD_CHECK = "ai-crawlers-wildcard-blocked";
+const WILDCARD_LOCATOR = "User-agent: *";
+
 export const aiCrawlersRule: Rule = {
   meta: {
     id: "ax/ai-crawlers",
@@ -189,6 +193,15 @@ export const aiCrawlersRule: Rule = {
     // warn checks. So the meta sits at "warning" to let that escalation happen.
     severity: "warning",
     weight: 1,
+    // One `User-agent: *` / `Disallow: /` used to give a warning row per crawler (#1780). The crawlers only the
+    // wildcard blocks are now one row under one locator, so a finding stored for any of them continues in that
+    // row: the merge and `report --diff` judge it by the successor `check@locator` and nothing is reported fixed.
+    supersededChecks: {
+      // `|crawlers`: only a crawler the wildcard row LISTS continues in it. One allowed by name while the wildcard
+      // still blocks the others is not in the list and is judged on its own: fixed.
+      "ai-answer-access": [`${WILDCARD_CHECK}@${WILDCARD_LOCATOR}|crawlers`],
+      "archive-crawler-access": [`${WILDCARD_CHECK}@${WILDCARD_LOCATOR}|crawlers`],
+    },
   },
 
   run(ctx: RuleContext): RuleResult {
@@ -236,8 +249,43 @@ export const aiCrawlersRule: Rule = {
       },
     });
 
+    // The crawlers only the wildcard group blocks (#1780): one decision of the owner, one row. A crawler the
+    // file blocks by its own group is a separate decision and keeps its own row below.
+    const wildcardBlocked = blocked.filter((b) => !b.explicitlyListed);
+    const namedBlocked = blocked.filter((b) => b.explicitlyListed);
+    if (wildcardBlocked.length > 0) {
+      const wildcardClasses = (cls: CrawlerClass) =>
+        wildcardBlocked.filter((b) => b.crawlerClass === cls).map((b) => b.token);
+      // Warn when the wildcard takes an answer engine, a live fetch or an archive with it, as naming them would.
+      const consequential = wildcardBlocked.some((b) => b.crawlerClass !== "training");
+      checks.push({
+        name: WILDCARD_CHECK,
+        status: consequential ? "warn" : "info",
+        message: `robots.txt blocks ${wildcardBlocked.length === verdicts.length ? "all" : wildcardBlocked.length} known AI crawlers through the wildcard group (User-agent: * with Disallow: /), not by name (${wildcardBlocked.map((b) => b.token).join(", ")}). This is the same rule crawl/robots-txt reports as blocking all crawling: removing it lets them all in, and naming a crawler in its own group decides it separately.`,
+        value: `${wildcardBlocked.length} crawler(s) blocked by the wildcard`,
+        // ONE item: a comparison counts every item as a finding, and this is one change.
+        items: [
+          {
+            id: WILDCARD_LOCATOR,
+            label: `User-agent: * (Disallow: /) blocks ${wildcardBlocked.length} AI crawlers: ${wildcardBlocked.map((b) => b.token).join(", ")}`,
+            meta: { crawlers: wildcardBlocked.map((b) => b.token) },
+          },
+        ],
+        details: {
+          crawlers: wildcardBlocked.map((b) => b.token),
+          blockedByClass: {
+            training: wildcardClasses("training"),
+            "ai-search": wildcardClasses("ai-search"),
+            "user-action": wildcardClasses("user-action"),
+            archive: wildcardClasses("archive"),
+          },
+          seeRule: "crawl/robots-txt",
+        },
+      });
+    }
+
     // Blocking an answer-engine or live user fetch is usually accidental → warn.
-    const answerBlocked = blocked.filter(
+    const answerBlocked = namedBlocked.filter(
       (b) => b.crawlerClass === "ai-search" || b.crawlerClass === "user-action",
     );
     if (answerBlocked.length > 0) {
@@ -245,15 +293,15 @@ export const aiCrawlersRule: Rule = {
       const user = answerBlocked.filter((b) => b.crawlerClass === "user-action");
       const parts: string[] = [];
       if (search.length > 0)
-        parts.push(`AI-search indexers (${search.map((b) => b.token).join(", ")}) — lost AI citations`);
+        parts.push(`AI-search indexers (${search.map((b) => b.token).join(", ")}) : lost AI citations`);
       if (user.length > 0)
         parts.push(
-          `user-action fetchers (${user.map((b) => b.token).join(", ")}) — breaks live requests users made inside an assistant`,
+          `user-action fetchers (${user.map((b) => b.token).join(", ")}) : breaks live requests users made inside an assistant`,
         );
       checks.push({
         name: "ai-answer-access",
         status: "warn",
-        message: `robots.txt blocks ${parts.join("; ")}. These are separate user-agents from the training bots — blocking ClaudeBot (training) does not block Claude-User (user-action); check the block was intended.`,
+        message: `robots.txt blocks ${parts.join("; ")}. These are separate user-agents from the training bots: blocking ClaudeBot (training) does not block Claude-User (user-action); check the block was intended.`,
         value: `${answerBlocked.length} answer-engine bot(s) blocked`,
         items: answerBlocked.map((b) => ({
           id: b.token,
@@ -270,12 +318,12 @@ export const aiCrawlersRule: Rule = {
     // the Common Crawl corpus — the sources AI labs train from. Blocking them
     // removes the site from those archives entirely, a bigger decision than
     // opting out of one vendor's training bot.
-    const archiveBlocked = blocked.filter((b) => b.crawlerClass === "archive");
+    const archiveBlocked = namedBlocked.filter((b) => b.crawlerClass === "archive");
     if (archiveBlocked.length > 0) {
       checks.push({
         name: "archive-crawler-access",
         status: "warn",
-        message: `robots.txt blocks archive crawlers — this removes the site from the Wayback Machine and/or the Common Crawl corpus, the archives AI training sets are built from. Blocking CCBot opts you out of every model trained on Common Crawl, not just one vendor.`,
+        message: `robots.txt blocks archive crawlers: this removes the site from the Wayback Machine and/or the Common Crawl corpus, the archives AI training sets are built from. Blocking CCBot opts you out of every model trained on Common Crawl, not just one vendor.`,
         value: `${archiveBlocked.length} archive crawler(s) blocked`,
         items: archiveBlocked.map((b) => ({
           id: b.token,
