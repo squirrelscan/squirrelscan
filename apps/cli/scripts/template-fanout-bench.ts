@@ -4,6 +4,13 @@
 //   bun run scripts/template-fanout-bench.ts --db ~/.squirrel/projects/rl-e2e/project.db
 //   bun run scripts/template-fanout-bench.ts --db <path> --verify       # equivalence, not timing
 //   bun run scripts/template-fanout-bench.ts --db <path> --profile      # per-rule attribution
+//   bun run scripts/template-fanout-bench.ts --db <path> --coverage [--signature derived|current]
+//
+// `--coverage` (#1373) is not a timing run either: it groups the crawl's pages by the
+// fan-out key and reports how many would inherit a verdict, with the signature as
+// it is today (`current`, the default) or derived from every selector and attribute
+// the declared rules read (`derived`). Run both and compare. Parse only, no rules.
+// On an authored or synthetic corpus the number is a CEILING, not an estimate.
 //
 // It measures the STREAMED PAGE-RULE PASS only (`streamPageRules`) — the phase
 // the change is in. That pass is pure sync CPU over stored HTML: no site rules, so
@@ -45,7 +52,7 @@
 import type { CheckResult } from "@squirrelscan/core-contracts";
 import type { SiteData } from "@squirrelscan/rules";
 
-import { streamPageRules } from "@squirrelscan/audit-engine";
+import { measureSignatureCoverage, streamPageRules } from "@squirrelscan/audit-engine";
 import { SQLiteStorage } from "@squirrelscan/crawler";
 import { createRunner } from "@squirrelscan/rules";
 import { Effect } from "effect";
@@ -85,6 +92,11 @@ function positiveInt(name: string, fallback: string): number {
     process.exit(1);
   }
   return Number.parseInt(raw, 10);
+}
+const SIGNATURE = arg("signature", "current");
+if (SIGNATURE !== "current" && SIGNATURE !== "derived") {
+  console.error(`--signature must be "current" or "derived", got ${JSON.stringify(SIGNATURE)}`);
+  process.exit(1);
 }
 const REPEATS = positiveInt("repeat", "3");
 const BATCH = positiveInt("batch", "200");
@@ -185,7 +197,7 @@ try {
   // an unwarmed first run pays for a migration and for INSERTs where every later
   // run pays for UPDATEs. Whichever arm went first would carry that, and it is
   // exactly the arm this change is supposed to beat.
-  {
+  if (!flag("coverage")) {
     const warm = await openCrawl(corpus.db);
     await run(
       streamPageRules(
@@ -202,7 +214,22 @@ try {
     await run(warm.storage.close());
   }
 
-  if (flag("verify")) {
+  if (flag("coverage")) {
+    const { storage, crawlId } = await openCrawl(corpus.db);
+    const pages: Array<{ url: string; html: string }> = [];
+    for (let offset = 0; ; offset += BATCH) {
+      const batch = await run(storage.getPages(crawlId, { limit: BATCH, offset }));
+      if (batch.length === 0) break;
+      for (const p of batch) if (p.html) pages.push({ url: p.url, html: p.html });
+    }
+    await run(storage.close());
+    console.log(`db          ${DB}`);
+    const c = measureSignatureCoverage(pages, SIGNATURE);
+    console.log(`signature   ${c.mode}`);
+    console.log(`pages       ${c.pages} (${c.keyed} keyed)`);
+    console.log(`clusters    ${c.clusters} (${c.singletons} singletons)`);
+    console.log(`coverage    ${(c.coverage * 100).toFixed(1)}% (${c.fannedPages} pages would inherit a verdict)`);
+  } else if (flag("verify")) {
     // Not a timing run: one process, both arms, complete comparison.
     const { storage, crawlId, siteData } = await openCrawl(corpus.db);
     const plain = await run(
