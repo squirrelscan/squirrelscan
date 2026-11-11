@@ -17,6 +17,9 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- **`crawl/rendered-signal-mismatch` flags a canonical, noindex, title or H1 that JavaScript changes after load.** It compares the raw HTML with the cloud render of the same page and reports four checks: `canonical-mismatch` and `noindex-mismatch` fail, `title-modified` and `h1-modified` warn, each showing the raw and the rendered value. A canonical that differs only by trailing slash, host case, default port or fragment is the same canonical. It reads the render `ax/content-without-js` already reads, so it adds no credit charge beyond the page's audit, and it reports one skipped check, never a pass, on a browser-rendered crawl or when there is no render result. (#1684)
 
 ## v0.0.175 (2026-11-11)
 
@@ -3037,3 +3040,4 @@ Browse the full rule set → https://docs.squirrelscan.com/rules
 
 - Cloud audits that stall past their deadline are now finalized automatically instead of hanging.
 - More efficient handling of error and empty pages during analysis.
+

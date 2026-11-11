@@ -12,6 +12,7 @@ import { noindexInSitemapRule } from "./noindex-in-sitemap";
 import { paginationRule } from "./pagination";
 import { pdfSizeRule } from "./pdf-size";
 import { redirectChainRule } from "./redirect-chain";
+import { renderedSignalMismatchRule } from "./rendered-signal-mismatch";
 import { robotsMetaConflictRule } from "./robots-meta-conflict";
 import { robotsTxtRule } from "./robots-txt";
 import { schemaNoindexConflict } from "./schema-noindex-conflict";
@@ -47,6 +48,7 @@ export const rules: Rule[] = [
   pdfSizeRule,
   soft404Rule,
   singlePageSiteRule,
+  renderedSignalMismatchRule,
 ];
 
 export {
@@ -59,6 +61,7 @@ export {
   paginationRule,
   pdfSizeRule,
   redirectChainRule,
+  renderedSignalMismatchRule,
   robotsMetaConflictRule,
   robotsTxtRule,
   schemaNoindexConflict,
