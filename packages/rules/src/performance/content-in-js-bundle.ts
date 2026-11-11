@@ -60,6 +60,19 @@ interface ChunkFinding {
   pagesWithContent: string[];
   /** Pages that load the chunk and have their own content in it. */
   loadingPages: string[];
+  /** Pages that could be compared against the chunk (own sentences, not boilerplate). */
+  eligiblePages: number;
+  /** The count is a floor: pages were sampled out, or the search stopped early. */
+  atLeast: boolean;
+}
+
+const byText = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+
+/** "N pages" or, when the count is a floor, "at least N pages (M checked)". */
+function pagesPhrase(f: ChunkFinding): string {
+  const n = f.pagesWithContent.length;
+  const noun = n === 1 ? "page" : "pages";
+  return f.atLeast ? `at least ${n} ${noun} (${f.eligiblePages} checked)` : `${n} ${noun}`;
 }
 
 export const contentInJsBundleRule: Rule = {
@@ -146,11 +159,13 @@ export const contentInJsBundleRule: Rule = {
 
     const candidates = scripts
       .filter((s) => s.content !== null && (s.sizeBytes ?? s.content.length) >= opts.min_chunk_bytes)
-      .sort((a, b) => (b.sizeBytes ?? b.content!.length) - (a.sizeBytes ?? a.content!.length));
+      .sort((a, b) => (b.sizeBytes ?? b.content!.length) - (a.sizeBytes ?? a.content!.length) || byText(a.url, b.url));
     const searched = candidates.slice(0, opts.max_chunks);
     const skippedLarge: string[] = [];
 
-    const checkedPages = [...needlesByPage.keys()];
+    // Sorted: the crawl hands pages over in arrival order, and neither the sample
+    // below nor the report may depend on it.
+    const checkedPages = [...needlesByPage.keys()].sort(byText);
     const findings: ChunkFinding[] = [];
     const deadline = performance.now() + SEARCH_BUDGET_MS;
     let outOfTime = false;
@@ -181,6 +196,7 @@ export const contentInJsBundleRule: Rule = {
 
       const index = buildNeedleIndex(sampled.flatMap((url) => needlesByPage.get(url)!));
       const search = findNeedles(decoded, index, deadline);
+      const sampledOut = sampled.length < checkedPages.length;
       if (search.truncated) {
         if (performance.now() > deadline) outOfTime = true;
         else verificationCapped = true;
@@ -199,23 +215,31 @@ export const contentInJsBundleRule: Rule = {
         proseShare: estimateProseShare(decoded),
         pagesWithContent,
         loadingPages,
+        eligiblePages: checkedPages.length,
+        atLeast: sampledOut || search.truncated,
       });
     }
 
     const checks: CheckResult[] = [];
     const itemOf = (f: ChunkFinding) => ({
       id: f.url,
-      sourcePages: f.loadingPages,
+      sourcePages: [...f.loadingPages].sort(byText),
       meta: {
         size: formatBytes(f.sizeBytes),
         sizeBytes: f.sizeBytes,
         ...(f.gzipBytes !== undefined ? { gzipSize: formatBytes(f.gzipBytes), gzipBytes: f.gzipBytes } : {}),
         pagesWithContent: f.pagesWithContent.length,
         otherPagesWithContent: Math.max(0, f.pagesWithContent.length - 1),
+        pagesChecked: f.eligiblePages,
+        pageCountIsFloor: f.atLeast,
         proseShareEstimate: `${Math.round(f.proseShare * 100)}%`,
       },
     });
 
+    // Largest chunk first, then the one holding most pages, then by URL: never arrival order.
+    findings.sort(
+      (a, b) => b.sizeBytes - a.sizeBytes || b.pagesWithContent.length - a.pagesWithContent.length || byText(a.url, b.url),
+    );
     const escalated = findings.filter((f) => f.pagesWithContent.length - 1 >= opts.escalate_other_pages);
     const own = findings.filter((f) => !escalated.includes(f));
 
@@ -225,7 +249,7 @@ export const contentInJsBundleRule: Rule = {
         name: "content-in-js-bundle-sitewide",
         // A warning until the escalation is measured against real sites.
         status: "warn",
-        message: `${escalated.length} JS chunk(s) hold the text of several pages: ${worst.url} carries the content of ${worst.pagesWithContent.length} pages (${formatBytes(worst.sizeBytes)}) in every page's bundle`,
+        message: `${escalated.length} JS chunk(s) hold the text of several pages: ${worst.url} carries the content of ${pagesPhrase(worst)} (${formatBytes(worst.sizeBytes)}) in every page's bundle`,
         items: escalated.map(itemOf),
         details: { suggestion: "Render the bodies on the server and import only frontmatter on the client" },
       });
@@ -236,7 +260,9 @@ export const contentInJsBundleRule: Rule = {
         // One page's copy in a chunk is also what a hard-coded route component looks like
         // (4 of 36 real documentation sites, none of them an MDX bundle): information, not a warning.
         status: "info",
-        message: `${own.length} JS chunk(s) contain the page's own content as script`,
+        // The measured count is stated here too: a site near the escalation threshold
+        // reports the same number whichever side of it an audit lands on.
+        message: `${own.length} JS chunk(s) contain the page's own content as script (${own.map((f) => pagesPhrase(f)).join("; ")}; the site-wide warning starts at ${opts.escalate_other_pages + 1} pages)`,
         items: own.map(itemOf),
         details: { suggestion: "Render static content on the server and keep it out of the client bundle" },
       });
