@@ -40,6 +40,14 @@ export interface RedirectChain {
    * so chains persisted before #1829 read back unchanged.
    */
   endsRateLimited?: boolean;
+  /**
+   * The crawler followed this redirect and deliberately kept the row as a PAGE: the destination
+   * is outside the crawl's scope (excluded, another site), so there is no page of its own to
+   * audit it under and the source row holds the content (#1762). It has a 2xx status and a
+   * different final URL, the shape of a row an older crawler stored for a redirect, so the
+   * engine reads this flag to leave it a page. Optional: rows stored before it read back unchanged.
+   */
+  keptAsPage?: boolean;
   httpsToHttp: boolean;
   httpToHttps: boolean;
 }

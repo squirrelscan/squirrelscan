@@ -36,6 +36,7 @@ import {
   type PageResultSink,
   unfetchedFrontierCount,
   pageTypeCoverageFor,
+  isRedirectSourcePage,
 } from "@squirrelscan/audit-engine";
 import { foldEntityMapVariants } from "@squirrelscan/audit-engine/entity-map";
 import { createEntityMapCollector } from "@squirrelscan/audit-engine/entity-map/collect";
@@ -1785,7 +1786,11 @@ export async function runAudit(
       // normalizedUrl + status per page, for the smart-audits merge and nothing
       // else — two scalars a page instead of the PageRecord it used to slice
       // them off.
-      const pageStatuses: Array<{ normalizedUrl: string; status: number }> = [];
+      const pageStatuses: Array<{
+        normalizedUrl: string;
+        status: number;
+        redirect?: true;
+      }> = [];
       // Distinct external link urls, sized exactly as countExternalLinks does,
       // so the dead-links spend estimate is the number v1 showed. Only
       // accumulated when a paid checker could ask for it — this is the one
@@ -1897,6 +1902,11 @@ export async function runAudit(
               pageStatuses.push({
                 normalizedUrl: page.normalizedUrl,
                 status: page.status,
+                // A redirect row (#1762) is re-observed, so its stale findings resolve, but it is
+                // not a page: "audited N of M" leaves it out.
+                ...(isRedirectSourcePage(page)
+                  ? { redirect: true as const }
+                  : {}),
               });
             }
             pagesWalked += batchContext.length;

@@ -8,6 +8,7 @@
     "./create-crawler": "./src/create-crawler.ts",
     "./fetcher": "./src/fetcher.ts",
     "./frontier": "./src/frontier.ts",
+    "./redirect-row": "./src/redirect-row.ts",
     "./robots": "./src/robots.ts",
     "./seed-redirect": "./src/seed-redirect.ts",
     "./sitemaps": "./src/sitemaps.ts",

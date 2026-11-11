@@ -171,6 +171,41 @@ describe("runSmartAudits end-to-end (no inflation)", () => {
     await run(store.close());
   });
 
+  test("a redirecting URL is not a page of the coverage counts (#1762)", async () => {
+    const store = new SQLiteStorage(":memory:");
+    await run(store.init());
+    // Run 1: three pages, one of which will later turn into a redirect.
+    const first = pageRuleRun(3, 1);
+    await run(
+      runSmartAudits({
+        storage: store,
+        crawlId: "crawl-1",
+        siteKey: SITE,
+        ...first,
+        pages: [0, 1, 2].map((i) => ({ normalizedUrl: url(i), status: 200 })),
+      })
+    );
+    // Run 2: page 2 now redirects (a marker row the walk flags), pages 0 and 1 are re-crawled.
+    const second = pageRuleRun(2, 1);
+    const result = await run(
+      runSmartAudits({
+        storage: store,
+        crawlId: "crawl-2",
+        siteKey: SITE,
+        ...second,
+        pages: [
+          { normalizedUrl: url(0), status: 200 },
+          { normalizedUrl: url(1), status: 200 },
+          { normalizedUrl: url(2), status: 301, redirect: true as const },
+        ],
+      })
+    );
+    // "audited 2 of 2 known pages": the redirecting URL is neither audited nor known as a page.
+    expect(result.coverage.auditedPages).toBe(2);
+    expect(result.coverage.knownPages).toBe(2);
+    await run(store.close());
+  });
+
   test("404 on re-audit removes the page + stales its findings", async () => {
     const store = new SQLiteStorage(":memory:");
     await run(store.init());

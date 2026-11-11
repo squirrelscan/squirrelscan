@@ -129,7 +129,7 @@ Before crawling begins, SquirrelScan:
 
 ### Redirecting URLs are not pages
 
-A URL found in a link, the sitemap or a known-URL list that redirects to another page is recorded as a redirect (the URL, its hops and its destination) and is not audited as a page. Its content belongs to the destination, which is audited once under its own URL, even when nothing else links to it. The redirect rules (`crawl/redirect-chain`, `crawl/canonical-chain`, `links/redirect-chains`) still report the redirecting URL and its hops, and the report's page counts leave it out. A redirect that leaves the site is not followed into the audit.
+A URL found in a link, the sitemap or a known-URL list that redirects to another page is recorded as a redirect (the URL, its hops and its destination) and is not audited as a page. Its content belongs to the destination, which is audited once under its own URL, even when nothing else links to it. The redirect rules (`crawl/redirect-chain`, `crawl/canonical-chain`, `links/redirect-chains`) still report the redirecting URL and its hops, and the report's page counts leave it out. Findings stored against a redirecting URL resolve on the next audit. Three redirects stay pages: one that ends in an error (a 404 at its destination), one that loops, and one whose destination the crawl will not visit (an excluded or not-included path). The first two keep the error they answered, as before. For the third, the source URL keeps the destination's content and is audited and counted as a page, because there is no page of its own to audit it under. A redirect that leaves the site is not followed into the audit.
 5. Uses the final URL as the crawl base URL
 
 ### Scripts the server sent that the browser removed
