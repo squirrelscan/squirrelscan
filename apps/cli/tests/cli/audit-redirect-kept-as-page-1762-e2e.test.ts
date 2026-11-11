@@ -51,7 +51,7 @@ afterAll(() => {
 });
 
 interface Json {
-  pages?: Array<{ url: string; status: number }>;
+  pages?: Array<{ url: string; status: number; ruleCount?: number }>;
   pagesTotal?: number;
   redirects?: Array<{ url: string }>;
   summary?: { pagesAudited?: number };
@@ -114,6 +114,11 @@ describe("a redirect to a destination the crawl will not visit stays a page", ()
     const json = await audit();
     const paths = (json.pages ?? []).map((p) => new URL(p.url).pathname);
     expect(paths).toContain("/docs/");
+    // Audited as a page, not listed empty: rules reported on its content.
+    const docs = (json.pages ?? []).find(
+      (p) => new URL(p.url).pathname === "/docs/"
+    );
+    expect(docs?.ruleCount).toBeGreaterThan(0);
     expect(paths).not.toContain("/old");
     expect((json.redirects ?? []).map((r) => new URL(r.url).pathname)).toEqual([
       "/old",
