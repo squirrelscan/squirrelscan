@@ -20,6 +20,7 @@ import {
   isSiteIndexable,
   mergeRuleRunResult,
   pluginNamespaces,
+  stylesheetBackgroundOf,
   type PluginRegistrySnapshot,
   type RunnerScope,
 } from "@squirrelscan/rules";
@@ -51,6 +52,7 @@ import type {
   ParsedPage,
   RuleRunResult,
   SiteData,
+  StylesheetBackgroundData,
   WebAppManifestData,
 } from "@squirrelscan/rules";
 import type { SQLiteStorage } from "@squirrelscan/crawler";
@@ -347,6 +349,13 @@ export interface ResourceCheckOverrides {
 /** Most preloaded chunks fetched per audit, on top of the regular script fetch. */
 const PRELOAD_CHUNK_FETCH_LIMIT = 20;
 
+/** The one rule that reads the page background a linked stylesheet sets (#1756). */
+const COLOR_CONTRAST_RULE_ID = "a11y/color-contrast";
+/** Same-site stylesheets read for the page background (#1756): the most widely linked first. */
+const STYLESHEET_BACKGROUND_FETCH_LIMIT = 20;
+/** A stylesheet over this many decoded bytes is not read (#1756). */
+const STYLESHEET_BACKGROUND_MAX_BYTES = 1024 * 1024;
+
 /** The one rule that reads the third-party asset pools (#703). */
 const BROKEN_RESOURCES_RULE_ID = "reliability/broken-resources";
 
@@ -403,6 +412,11 @@ export interface PreFetchedAssets {
    * run fetched them for storage but the rules never see their content. Absent when none were held back.
    */
   scriptsNotReadUrls?: string[];
+  /**
+   * The page background each same-site linked stylesheet sets (#1756), for `a11y/color-contrast`. Absent
+   * when the rule is off or the phase did not run: the rule then reads every linked stylesheet as unread.
+   */
+  stylesheetBackgrounds?: StylesheetBackgroundData[];
   /**
    * Same-site chunks a page preloads (`modulepreload`, `preload as=script`) that
    * no `<script src>` names. Held apart from `scripts` so the file-size,
@@ -1113,6 +1127,18 @@ export function fetchAssetsFromOccurrences(
           BROKEN_RESOURCES_RULE_ID
         ],
       );
+    const probeStylesheetBackgrounds = isRuleEnabled(
+      COLOR_CONTRAST_RULE_ID,
+      config.rules?.enable ?? [],
+      config.rules?.disable ?? [],
+      (config.rule_options as Record<string, { enabled?: boolean }> | undefined)?.[
+        COLOR_CONTRAST_RULE_ID
+      ],
+    );
+    const stylesheetTargets = Array.from(resourceOccurrences.css.entries())
+      .sort((a, b) => b[1].size - a[1].size)
+      .map(([url]) => url)
+      .slice(0, STYLESHEET_BACKGROUND_FETCH_LIMIT);
     const probeWebAppManifests = isRuleEnabled(
       WEB_APP_MANIFEST_RULE_ID,
       config.rules?.enable ?? [],
@@ -1216,6 +1242,16 @@ export function fetchAssetsFromOccurrences(
             maxScripts: Math.min(preloadFetchOptions.maxScripts ?? PRELOAD_CHUNK_FETCH_LIMIT, PRELOAD_CHUNK_FETCH_LIMIT),
           },
         ),
+        // Only the html/body background is kept (#1756); same egress and budget as the scripts.
+        stylesheets: probeStylesheetBackgrounds
+          ? fetchScriptContents(stylesheetTargets, {
+              ...nonStoreScriptOptions,
+              fetchAll: true,
+              anyContentType: true,
+              maxScripts: STYLESHEET_BACKGROUND_FETCH_LIMIT,
+              maxSizeBytes: STYLESHEET_BACKGROUND_MAX_BYTES,
+            })
+          : Effect.succeed([] as ScriptFetchResult[]),
         pdfs: checkResourceSizes(
           Array.from(pdfUrls.keys()).slice(0, pdfCheckLimit),
           resourceCheckOptions,
@@ -1322,6 +1358,7 @@ export function fetchAssetsFromOccurrences(
               images: [] as ResourceCheckResult[],
               fonts: [] as ResourceCheckResult[],
               scripts: [] as ScriptFetchResult[],
+              stylesheets: [] as ScriptFetchResult[],
               preloads: [] as ScriptFetchResult[],
               pdfs: [] as ResourceCheckResult[],
               sitemap: [] as ResourceCheckResult[],
@@ -1489,6 +1526,19 @@ export function fetchAssetsFromOccurrences(
       scripts: ruleScripts.map(toScriptData),
       ...(resourceOccurrences.scripts.size > ruleScripts.length
         ? { scriptsNotRead: resourceOccurrences.scripts.size - ruleScripts.length }
+        : {}),
+      ...(probeStylesheetBackgrounds
+        ? {
+            stylesheetBackgrounds: resourceResults.stylesheets.map((fetch) => ({
+              url: fetch.url,
+              status: fetch.status,
+              error: fetch.error,
+              background:
+                fetch.content !== null && !/html/i.test(fetch.contentType ?? "")
+                  ? stylesheetBackgroundOf(fetch.content)
+                  : null,
+            })),
+          }
         : {}),
       ...(storedOnlyScripts.length > 0
         ? { scriptsNotReadUrls: storedOnlyScripts.slice(0, SCRIPTS_NOT_READ_URLS_CAP).map((f) => f.url) }
@@ -1934,6 +1984,7 @@ export function runRulesOnStorage(
       externalAssets,
       assetCapDropped,
       scriptsNotReadUrls,
+      stylesheetBackgrounds,
       pdfSizes,
       sitemapUrlStatuses,
       webAppManifests,
@@ -2044,6 +2095,7 @@ export function runRulesOnStorage(
       externalAssets,
       assetCapDropped,
       scriptsNotReadUrls,
+      stylesheetBackgrounds,
       pdfSizes,
       sitemapUrlStatuses,
       webAppManifests,
@@ -2795,6 +2847,7 @@ function buildStreamingSiteData(
       externalAssets,
       assetCapDropped,
       scriptsNotReadUrls,
+      stylesheetBackgrounds,
       pdfSizes,
       sitemapUrlStatuses,
       webAppManifests,
@@ -2918,6 +2971,7 @@ function buildStreamingSiteData(
       externalAssets,
       assetCapDropped,
       scriptsNotReadUrls,
+      stylesheetBackgrounds,
       pdfSizes,
       sitemapUrlStatuses,
       webAppManifests,

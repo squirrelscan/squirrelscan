@@ -519,6 +519,21 @@ export interface FetchedTarget {
   wafChallenge?: boolean;
 }
 
+/** What a stylesheet says about the colour behind the page: only its `html`, `body` and `:root` rules are read (#1756). */
+export type StylesheetBackground =
+  | { kind: "none" }
+  | { kind: "color"; value: string }
+  | { kind: "unresolved" };
+
+export interface StylesheetBackgroundData {
+  /** The absolute URL the pages reference. */
+  url: string;
+  status: number | null;
+  error: string | null;
+  /** Null when the stylesheet could not be read (a failed, refused, skipped, oversized or non-CSS response). */
+  background: StylesheetBackground | null;
+}
+
 export interface SiteData {
   baseUrl: string;
   /**
@@ -645,6 +660,12 @@ export interface SiteData {
     css: ResourceSizeData[];
     fonts: ResourceSizeData[];
   };
+  /**
+   * The page background each same-site linked stylesheet sets, read by `a11y/color-contrast` (#1756). One
+   * entry per stylesheet the asset phase requested; a stylesheet with no entry, or with `background: null`,
+   * was not read. Absent when the asset phase did not run or the rule is off.
+   */
+  stylesheetBackgrounds?: StylesheetBackgroundData[];
   /**
    * Referenced URLs the asset fetch caps (`maxScripts`, `maxResources`) left
    * unfetched, per kind (#703). Absent or zero means nothing was dropped.
