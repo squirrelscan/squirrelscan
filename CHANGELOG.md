@@ -19,6 +19,8 @@ How it works:
 
 ### Added
 
+- `squirrel audit --crawl-timeout` and `[crawler] crawl_timeout` set the crawl-phase backstop, bounded at 6 hours. Unset, it is derived from the page budget and the effective per-host rate instead of a fixed 30 minutes, capped at 60 minutes (an explicit value can go to 6 hours, which weakens the wedge backstop). A crawl stopped by it reports `status: "partial"`, reason code `crawl_timeout` and a `crawlPhase` coverage object with `linkGraphComplete: false` (#1639).
+
 ### Fixed
 
 - `perf/lcp-hints`: a grouped `lcp-preload` finding over several pages now lists each page's own candidate images in `details.pageEvidence` (capped at 25 pages, with `pageEvidenceOmittedPages` counting the rest) instead of keeping one page's candidates (#1656).

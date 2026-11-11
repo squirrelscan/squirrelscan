@@ -11,7 +11,7 @@ import type { Config } from "@/config";
 import type { CrawlerEvent, RateLimitEvent } from "@/crawler/core/types";
 import type { TlsEvent } from "@/crawler/fetcher";
 import type { CrawlerConfigSnapshot } from "@/crawler/storage/types";
-import type { AuditReport, AuditOptions, CrawlPhaseCut } from "@/types";
+import type { AuditReport, AuditOptions } from "@/types";
 
 import { createCrawler } from "@/crawler/core";
 
@@ -146,6 +146,7 @@ import {
   DEFAULT_CRAWLER_PER_HOST_DELAY_MS,
 } from "@/config";
 import {
+  CRAWL_PHASE_DERIVED_MAX_TIMEOUT_MS,
   CRAWL_PHASE_MAX_TIMEOUT_MS,
   CRAWL_PHASE_MIN_TIMEOUT_MS,
   CRAWL_PHASE_PER_PAGE_BUDGET_MS,
@@ -181,7 +182,7 @@ import { preflightBalanceOf } from "@/lib/balance";
 import { resolvePageLimit } from "@/lib/page-limit";
 import {
   reconstructReport,
-  withCrawlPhaseCut,
+  stampCrawlPhaseCut,
   withMaxDurationCut,
 } from "@/reports/reconstruct";
 import { detectRunner } from "@/self/install-meta";
@@ -710,7 +711,7 @@ export function resolveCrawlPhaseTimeoutMs(
     CRAWL_PHASE_SETUP_SLACK_MS;
   const derived = Math.min(
     Math.max(est, CRAWL_PHASE_MIN_TIMEOUT_MS),
-    CRAWL_PHASE_MAX_TIMEOUT_MS
+    CRAWL_PHASE_DERIVED_MAX_TIMEOUT_MS
   );
   // The whole-run budget stops the crawl first anyway; do not exceed it.
   return maxDurationMs && maxDurationMs > 0
@@ -2547,30 +2548,12 @@ export async function runAudit(
         // incomplete. Applied after the time limit so an already-partial run keeps
         // its own reason, as `squirrel report` does when it rebuilds it.
         if (crawlPhaseStopped) {
-          const phaseCut: CrawlPhaseCut = {
+          stampCrawlPhaseCut(report, scanScope, {
             seconds: crawlPhaseCutRef.seconds,
             pagesCollected: crawlPhaseCutRef.pagesCollected,
-            ...(crawlerConfig.maxPages > 0
-              ? { pageBudget: crawlerConfig.maxPages }
-              : {}),
+            pageBudget: crawlerConfig.maxPages,
             unfetchedPages: unfetched,
-            linkGraphComplete: false,
-          };
-          scanScope.crawlPhase = phaseCut;
-          report.crawlPhase = phaseCut;
-          const phaseStatus = withCrawlPhaseCut(
-            {
-              status: report.status,
-              reason: report.statusReason,
-              reasonCode: report.statusReasonCode,
-            },
-            phaseCut
-          );
-          if (phaseStatus.status !== (report.status ?? "completed")) {
-            report.status = phaseStatus.status;
-            report.statusReason = phaseStatus.reason;
-            report.statusReasonCode = phaseStatus.reasonCode;
-          }
+          });
         }
         // #1262: reconstruction ran before the entries were stamped, so build the
         // summary again from the same checks with them.

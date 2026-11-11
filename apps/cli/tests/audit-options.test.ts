@@ -4,6 +4,7 @@ import { describe, expect, test } from "bun:test";
 
 import { getDefaultConfig } from "../src/config";
 import {
+  CRAWL_PHASE_DERIVED_MAX_TIMEOUT_MS,
   CRAWL_PHASE_MAX_TIMEOUT_MS,
   CRAWL_PHASE_MIN_TIMEOUT_MS,
   CRAWL_PHASE_PER_PAGE_BUDGET_MS,
@@ -267,20 +268,25 @@ describe("resolveCrawlPhaseTimeoutMs", () => {
       CRAWL_PHASE_MIN_TIMEOUT_MS
     );
     expect(resolveCrawlPhaseTimeoutMs(opts(), 100_000, 1)).toBe(
-      CRAWL_PHASE_MAX_TIMEOUT_MS
+      CRAWL_PHASE_DERIVED_MAX_TIMEOUT_MS
     );
   });
 
   test("ceiling is above the old 30 minute clamp and still finite (#1639)", () => {
     expect(CRAWL_PHASE_MAX_TIMEOUT_MS).toBeGreaterThan(1_800_000);
     expect(Number.isFinite(CRAWL_PHASE_MAX_TIMEOUT_MS)).toBe(true);
+    // The derived default stays low; 6 h is only for an explicit value.
+    expect(CRAWL_PHASE_DERIVED_MAX_TIMEOUT_MS).toBe(3_600_000);
+    expect(CRAWL_PHASE_DERIVED_MAX_TIMEOUT_MS).toBeLessThan(
+      CRAWL_PHASE_MAX_TIMEOUT_MS
+    );
   });
 
   test("a polite single-host crawl of 3,913 pages is no longer cut at 30 minutes", () => {
     // 3,913 pages, per-host concurrency 1: the pool size does not help.
     const ms = resolveCrawlPhaseTimeoutMs(opts(), 3913, 8, 1);
     expect(ms).toBeGreaterThan(1_800_000);
-    expect(ms).toBeLessThanOrEqual(CRAWL_PHASE_MAX_TIMEOUT_MS);
+    expect(ms).toBeLessThanOrEqual(CRAWL_PHASE_DERIVED_MAX_TIMEOUT_MS);
   });
 
   test("the per-host limit bounds the effective parallelism", () => {
@@ -297,6 +303,16 @@ describe("resolveCrawlPhaseTimeoutMs", () => {
         1
       )
     ).toBe(CRAWL_PHASE_MAX_TIMEOUT_MS);
+  });
+
+  test("an explicit value above the derived cap is honoured up to 6 h", () => {
+    expect(
+      resolveCrawlPhaseTimeoutMs(
+        opts({ crawlPhaseTimeoutMs: 4 * 3_600_000 }),
+        25,
+        1
+      )
+    ).toBe(4 * 3_600_000);
   });
 
   test("the derived value does not exceed the whole-run budget", () => {
