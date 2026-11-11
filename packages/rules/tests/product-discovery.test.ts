@@ -2,7 +2,7 @@
 // the sitemap's read state, never a missing-product claim.
 
 import { describe, expect, test } from "bun:test";
-import { parseHTML } from "linkedom";
+import { parseHTML } from "@squirrelscan/parser/dom";
 
 import type { SitemapDiscovery, SitemapReadState } from "@squirrelscan/core-contracts";
 
