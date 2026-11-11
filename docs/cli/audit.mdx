@@ -64,6 +64,7 @@ squirrel audit <url> [options]
 | `--rule-include` | | Only run these rule categories or rules, e.g. `ax,perf` or `core/meta-title` (repeatable / comma-separated). Replaces `[rules] enable` for this run | none |
 | `--rule-exclude` | | Skip these rule categories or rules, e.g. `images,social` (repeatable / comma-separated). Adds to `[rules] disable` for this run | none |
 | `--disable-discovery-probes` | | Skip the pre-crawl discovery probes (`llms.txt`, `/.well-known/*`, `/swagger.json` and the rest) for this run. Overrides `[crawler] disable_discovery_probes`; `=false` sends them even when the config turns them off, and a space before the value (`--disable-discovery-probes false`) is refused. See [Discovery probes](/configuration/crawler#discovery-probes) | `false` |
+| `--discovery-probe-path` | | Only send the discovery probe for this path (repeatable / comma-separated), e.g. `/llms.txt` or `/AGENTS.md`. A probe for any other path is not sent and reports not checked, and a redirect from it may not change the path. Replaces `[crawler] discovery_probe_paths`. See [`discovery_probe_paths`](/configuration/crawler#discovery_probe_paths) | none |
 | `--probe` | `-P` | Probing intensity: `passive`, `active` or `aggressive`. Overrides `[security] probe`. See [Probing intensity](#probing-intensity) | the level's: `passive` for quick, `active` for surface and full |
 | `--passive` | | Shortcut for `--probe passive` | `false` |
 | `--aggressive` | | Shortcut for `--probe aggressive` | `false` |

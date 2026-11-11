@@ -5,6 +5,7 @@ import type { ResolvedAuditSettings } from "@squirrelscan/core-contracts/audit-l
 import { defineCommand } from "citty";
 import { platform } from "node:os";
 
+import { parseDiscoveryProbePaths } from "@/audit/probe-paths";
 import { getGlobalConfigPath, loadConfig } from "@/config";
 import { MAX_PAGES_CAP } from "@/constants";
 import { runCrawl, type CrawlerEvent } from "@/controllers/crawl";
@@ -161,6 +162,11 @@ export const crawl = defineCommand({
       type: "boolean",
       description: "Resume interrupted crawl for this domain",
     },
+    "discovery-probe-path": {
+      type: "string",
+      description:
+        "Only send the discovery probe for this path (repeatable or comma-separated), e.g. /llms.txt or /AGENTS.md; a probe for any other path is not sent and reports not checked, and a redirect from it may not change the path. Replaces [crawler] discovery_probe_paths. Markdown, agent-access and RSL probes are not gated",
+    },
     "disable-discovery-probes": {
       type: "boolean",
       description:
@@ -178,6 +184,15 @@ export const crawl = defineCommand({
       process.exitCode = 1;
       return;
     }
+    const probePathsParse = parseDiscoveryProbePaths(
+      args["discovery-probe-path"] as string | string[] | undefined
+    );
+    if (!probePathsParse.ok) {
+      console.error(probePathsParse.error);
+      process.exitCode = 1;
+      return;
+    }
+    const discoveryProbePaths = probePathsParse.paths;
     const disableDiscoveryProbes = lastFlagValue(
       args["disable-discovery-probes"] as boolean | boolean[] | undefined
     );
@@ -305,6 +320,7 @@ export const crawl = defineCommand({
           ...(disableDiscoveryProbes !== undefined
             ? { disableDiscoveryProbes }
             : {}),
+          ...(discoveryProbePaths.length > 0 ? { discoveryProbePaths } : {}),
           projectName,
           ...(concurrency !== undefined ? { concurrency } : {}),
           ...(perHostConcurrency !== undefined ? { perHostConcurrency } : {}),

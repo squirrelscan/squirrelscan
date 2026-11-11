@@ -30,12 +30,35 @@ export function isRefusal(response: RefusalCandidate): boolean {
   return status === 503 && response.headers.get("cf-mitigated") === "challenge";
 }
 
+/**
+ * Whether a response is a block signal that should stop the optional probes (#1655): throttling
+ * (429/430) or a bot challenge (`cf-mitigated: challenge`, on any status). A lone 401/403 is not
+ * one: sites answer those for a single protected path without banning anyone.
+ */
+export function isBlockSignal(response: RefusalCandidate): boolean {
+  return isRateLimitStatus(response.status) || response.headers.get("cf-mitigated") === "challenge";
+}
+
 /** Collects the refusals of one crawl, deduplicated by URL and bounded. */
 export class RefusalLog {
   private readonly byUrl = new Map<string, RefusedFetch>();
+  private blockSeen = false;
+
+  /** True once any response of the crawl was a block signal; the optional probes stop at it. */
+  get blocked(): boolean {
+    return this.blockSeen;
+  }
+
+  /** Notes a block signal without recording a refusal, for probes whose resource is not a refusal kind. */
+  observe(response: RefusalCandidate): boolean {
+    if (!isBlockSignal(response)) return false;
+    this.blockSeen = true;
+    return true;
+  }
 
   /** Records `response` when it is a refusal. Returns whether it was one. */
   note(url: string, resource: RefusedResource, response: RefusalCandidate): boolean {
+    this.observe(response);
     if (!isRefusal(response)) return false;
     if (this.byUrl.has(url) || this.byUrl.size >= MAX_REFUSED_FETCHES) return true;
     const waf = detectWafFromHeaders(response.headers);

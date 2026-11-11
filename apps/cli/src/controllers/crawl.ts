@@ -81,6 +81,8 @@ export interface CrawlOptions {
   refresh?: boolean;
   /** --disable-discovery-probes[=false] (#422); undefined: the config decides. */
   disableDiscoveryProbes?: boolean;
+  /** --discovery-probe-path (#1655); replaces [crawler] discovery_probe_paths for this run. */
+  discoveryProbePaths?: string[];
   freshUa?: boolean; // re-roll the project's sticky random user-agent (#875)
   resume?: boolean;
   onProgress?: CrawlProgressCallback;
@@ -281,6 +283,18 @@ export async function runCrawl(
             ...((options.disableDiscoveryProbes ??
               config.crawler.disable_discovery_probes === true) === true
               ? { discoveryProbes: [] }
+              : {}),
+            // Per-path allowlist over the probes that do go out (#1655).
+            ...((
+              options.discoveryProbePaths?.length
+                ? options.discoveryProbePaths
+                : config.crawler.discovery_probe_paths
+            )
+              ? {
+                  discoveryProbePaths: options.discoveryProbePaths?.length
+                    ? options.discoveryProbePaths
+                    : config.crawler.discovery_probe_paths,
+                }
               : {}),
             // #1428: pages the E-E-A-T rules are configured with that the crawl does not reach are asked for once.
             configuredPagePaths: configuredPagePaths(

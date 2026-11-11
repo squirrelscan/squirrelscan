@@ -4,7 +4,7 @@ import { createHeaderScope, mergeHeaderRecords, type HeaderScope } from "@squirr
 import { isHttpOrHttpsUrl } from "@squirrelscan/utils/safe-fetch";
 import { readBodyCapped } from "@squirrelscan/utils/response-body";
 
-import { BUDGET_EXHAUSTED_ERROR, budgetedTimeoutMs, safeFetchWithDeadline, ungated } from "./deadline";
+import { optionalProbeTimeoutMs, safeFetchWithDeadline, skippedProbeError, ungated } from "./deadline";
 
 import type { PhaseBudget, ProbeGate } from "./deadline";
 import type { RslData, RslLicenseDoc } from "@squirrelscan/core-contracts";
@@ -68,8 +68,8 @@ async function fetchLicenseDoc(
   customHeaders?: Record<string, string>,
   budget?: PhaseBudget,
 ): Promise<RslLicenseDoc> {
-  const timeoutMs = budgetedTimeoutMs(budget, PROBE_TIMEOUT_MS);
-  if (timeoutMs === null) return unreachableDoc(url, BUDGET_EXHAUSTED_ERROR);
+  const timeoutMs = optionalProbeTimeoutMs(budget, PROBE_TIMEOUT_MS);
+  if (timeoutMs === null) return unreachableDoc(url, skippedProbeError(budget));
   try {
     return await safeFetchWithDeadline(
       url,
@@ -136,7 +136,7 @@ export function fetchRslLicensing(
     let robotsUnanswered = robotsRead ? !robotsRead.answered : false;
     // The crawl's own read stands in for a second request when it made one.
     if (!robotsRead) await gate(robotsUrl, async () => {
-      const robotsTimeoutMs = budgetedTimeoutMs(budget, PROBE_TIMEOUT_MS);
+      const robotsTimeoutMs = optionalProbeTimeoutMs(budget, PROBE_TIMEOUT_MS);
       if (robotsTimeoutMs === null) robotsUnanswered = true;
       try {
         if (robotsTimeoutMs !== null) {

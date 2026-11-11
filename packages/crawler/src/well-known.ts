@@ -2,9 +2,21 @@ import { Effect } from "effect";
 import { byteLength, truncateToBytes } from "@squirrelscan/utils/bytes";
 import { readBodyCapped } from "@squirrelscan/utils/response-body";
 
-import { WELL_KNOWN_PATHS } from "@squirrelscan/core-contracts/storage";
+import {
+  PROBE_PATH_NOT_APPROVED_ERROR,
+  PROBE_REDIRECT_NOT_FOLLOWED_ERROR,
+  WELL_KNOWN_PATHS,
+} from "@squirrelscan/core-contracts/storage";
 
-import { BUDGET_EXHAUSTED_ERROR, budgetedTimeoutMs, safeFetchWithDeadline, ungated } from "./deadline";
+import {
+  RedirectNotFollowedError,
+  optionalProbeTimeoutMs,
+  safeFetchWithDeadline,
+  samePathRedirect,
+  skippedProbeError,
+  ungated,
+} from "./deadline";
+import { isBlockSignal } from "./refusals";
 
 import type { PhaseBudget, ProbeGate } from "./deadline";
 import type { WellKnownProbe, WellKnownProbeData } from "@squirrelscan/core-contracts";
@@ -111,10 +123,11 @@ async function probeOne(
   customHeaders?: Record<string, string>,
   budget?: PhaseBudget,
   countWords = false,
+  pathLocked = false,
 ): Promise<WellKnownProbe> {
   const url = new URL(path, baseUrl).toString();
-  const timeoutMs = budgetedTimeoutMs(budget, PROBE_TIMEOUT_MS);
-  if (timeoutMs === null) return unreachableProbe(path, url, BUDGET_EXHAUSTED_ERROR);
+  const timeoutMs = optionalProbeTimeoutMs(budget, PROBE_TIMEOUT_MS);
+  if (timeoutMs === null) return unreachableProbe(path, url, skippedProbeError(budget));
   try {
     return await safeFetchWithDeadline(
       url,
@@ -126,6 +139,14 @@ async function probeOne(
       },
       timeoutMs,
       async (response) => {
+        // A 429 or a bot wall is no answer about this path, and it stops the optional probes that
+        // have not gone out yet (#1655). A lone 403 stays the answer it was.
+        // A configured page (#1428) keeps the answer it got: its rule reads the status.
+        if (!countWords && isBlockSignal(response)) {
+          budget?.refusals?.observe(response);
+          await response.body?.cancel().catch(() => {});
+          return unreachableProbe(path, url, `refused by the site (HTTP ${response.status})`);
+        }
         const contentType = response.headers.get("content-type");
         const isOAuth = isOAuthMetadataPath(path);
         // Skip reading a pathologically large body (18 probes run concurrently).
@@ -178,10 +199,19 @@ async function probeOne(
         };
       },
       budget?.egress,
+      pathLocked ? samePathRedirect : undefined,
     );
   } catch (e) {
+    if (e instanceof RedirectNotFollowedError) {
+      return unreachableProbe(path, url, PROBE_REDIRECT_NOT_FOLLOWED_ERROR);
+    }
     return unreachableProbe(path, url, (e as Error).message);
   }
+}
+
+/** The record for a path left out by `[crawler] discovery_probe_paths` (#1655): never requested, so not checked. */
+export function notApprovedProbe(baseUrl: string, path: string): WellKnownProbe {
+  return unreachableProbe(path, new URL(path, baseUrl).toString(), PROBE_PATH_NOT_APPROVED_ERROR);
 }
 
 // Probe the well-known/agent-file list once per audit: every path by default,
@@ -192,14 +222,19 @@ export function probeWellKnown(
   userAgent: string,
   customHeaders?: Record<string, string>,
   budget?: PhaseBudget,
-  options: { paths?: readonly string[]; gate?: ProbeGate } = {},
+  options: {
+    paths?: readonly string[];
+    gate?: ProbeGate;
+    /** A path approved one by one (#1655): a redirect may not leave it. */
+    pathLocked?: boolean;
+  } = {},
 ): Effect.Effect<WellKnownProbeData, never, never> {
-  const { paths = WELL_KNOWN_PATHS, gate = ungated } = options;
+  const { paths = WELL_KNOWN_PATHS, gate = ungated, pathLocked = false } = options;
   return Effect.promise(async () => {
     const probes = await Promise.all(
       paths.map((path) =>
         gate(new URL(path, baseUrl).toString(), () =>
-          probeOne(baseUrl, path, userAgent, customHeaders, budget),
+          probeOne(baseUrl, path, userAgent, customHeaders, budget, false, pathLocked),
         ),
       ),
     );
