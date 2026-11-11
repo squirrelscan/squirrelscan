@@ -33,10 +33,10 @@ const parse = (options?: Parameters<typeof renderJson>[1]) =>
   };
 
 describe("meta.schemaVersion", () => {
-  test("is 1.10, the version that added meta.storeIntegrity, on every JSON report", () => {
-    expect(JSON_REPORT_SCHEMA_VERSION).toBe("1.10");
-    expect(parse().meta.schemaVersion).toBe("1.10");
-    expect(parse({ pages: rows(1) }).meta.schemaVersion).toBe("1.10");
+  test("is 1.11, the version that added the render block, on every JSON report", () => {
+    expect(JSON_REPORT_SCHEMA_VERSION).toBe("1.11");
+    expect(parse().meta.schemaVersion).toBe("1.11");
+    expect(parse({ pages: rows(1) }).meta.schemaVersion).toBe("1.11");
   });
 });
 
