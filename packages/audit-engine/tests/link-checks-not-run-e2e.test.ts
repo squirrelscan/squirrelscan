@@ -166,6 +166,8 @@ for (const engine of ["v1", "v2"] as const) {
         linkTargets: 3,
         unfetchedTargets: 1,
         probedTargets: 0,
+        refusedTargets: 0,
+        rateLimitedTargets: 0,
         notFetched: { off: 1 },
       });
       expect(internal[0]!.message).toContain("internal link checks were off");

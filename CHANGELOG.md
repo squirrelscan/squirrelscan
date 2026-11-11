@@ -17,6 +17,9 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- **`links/broken-links` counts the targets that answered a refusal or a throttle.** Every `broken-links` row now carries `refusedTargets` (a 401, a 403 or a bot-wall challenge) and `rateLimitedTargets` (a 429) in its coverage details, next to `linkTargets`, `probedTargets` and `unfetchedTargets`. Those targets are not broken and not unfetched, and nothing is known of the page behind them, so `linkTargets` less `unfetchedTargets` over-counts what was observed; subtract these two as well. No check message, item or status changes. (#1679)
 ### Changed
 
 - **`ax/ai-crawlers` warns when Googlebot is blocked for the audited URL.** The `search-engine-access` check was info only. A robots.txt that blocks Googlebot from the site root or for the entry URL usually means the site is not indexed, often by a staging `Disallow: /` left in, so that check now warns and counts toward the score. An `Allow` override, an allowed Googlebot and a block of any other engine (`Bingbot`, `Applebot`) stay info, and `details.bots` still lists every bot. (#1680)

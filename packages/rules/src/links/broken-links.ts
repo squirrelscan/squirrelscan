@@ -130,6 +130,12 @@ export const brokenLinksRule: Rule = {
     // `/a#x` are one target.
     const unansweredTargets = new Set<string>();
     const untrustedTargets = new Set<string>();
+    // Distinct targets (normalized, like `allTargets`) whose answer was a refusal (401/403 or a
+    // bot-wall challenge) or a throttle (429): the status exists but says nothing about the page
+    // (pub#1679). They are not in `unfetchedTargets`, so a reader that wants targets actually
+    // observed subtracts them from `linkTargets - unfetchedTargets`.
+    const refusedTargets = new Set<string>();
+    const rateLimitedTargets = new Set<string>();
 
     for (const [target, sources] of linkTargets) {
       // Normalize target URL to match crawler's normalization
@@ -140,10 +146,12 @@ export const brokenLinksRule: Rule = {
       if (statusCode === undefined) {
         const fetched = fetchedOutside.get(normalizedTarget);
         if (fetched?.rateLimited) {
+          rateLimitedTargets.add(normalizedTarget);
           rateLimitedLinks.push({ url: target, sources, statusCode: fetched.status });
           continue;
         }
         if (fetched?.wafChallenge) {
+          refusedTargets.add(normalizedTarget);
           refusedLinks.push({ url: target, sources, statusCode: fetched.status, wafChallenge: true });
           continue;
         }
@@ -154,12 +162,14 @@ export const brokenLinksRule: Rule = {
         const probe = probedStatuses.get(normalizedTarget);
         if (probe?.rateLimited) {
           probedTargets.add(normalizedTarget);
+          rateLimitedTargets.add(normalizedTarget);
           rateLimitedLinks.push({ url: target, sources, statusCode: probe.status ?? 429 });
           continue;
         }
         if (typeof probe?.status === "number" && probe.status > 0) {
           probedTargets.add(normalizedTarget);
           if (probe.status === 401 || probe.status === 403) {
+            refusedTargets.add(normalizedTarget);
             refusedLinks.push({ url: target, sources, statusCode: probe.status });
             continue;
           }
@@ -182,6 +192,7 @@ export const brokenLinksRule: Rule = {
       // the rules another way (a stored page from an older crawl, a cloud
       // render result). Must precede the >= 400 test.
       if (isRateLimitStatus(statusCode)) {
+        rateLimitedTargets.add(normalizedTarget);
         rateLimitedLinks.push({ url: target, sources, statusCode });
         continue;
       }
@@ -215,6 +226,8 @@ export const brokenLinksRule: Rule = {
       linkTargets: allTargets.size,
       unfetchedTargets: unfetchedTargets.size,
       probedTargets: probedTargets.size,
+      refusedTargets: refusedTargets.size,
+      rateLimitedTargets: rateLimitedTargets.size,
       notFetched: { ...notFetched },
       ...(emailProtectionLinks > 0 ? { emailProtectionLinks } : {}),
     });
