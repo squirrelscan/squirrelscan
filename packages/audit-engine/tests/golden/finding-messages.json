@@ -1932,6 +1932,12 @@
    "conflicts|pass|No indexability conflicts detected||"
   ]
  },
+ "crawl/indexable-search-results": {
+  "digest": "150065371305239",
+  "lines": [
+   "indexable-search-results|skipped|No internal search result URLs in the crawl||"
+  ]
+ },
  "crawl/noindex-in-sitemap": {
   "digest": "273026584428389",
   "lines": [
