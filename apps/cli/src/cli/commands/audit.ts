@@ -1331,6 +1331,11 @@ export const audit = defineCommand({
       description:
         "Host that also gets the custom headers on page and asset requests, over https (repeatable or comma-separated), e.g. assets.example.com; prefix http:// to allow plain http. Only the audited origin gets them by default",
     },
+    "target-url": {
+      type: "string",
+      description:
+        "Audit exactly this URL and nothing else (repeatable), absolute or a path on the site, e.g. /pricing. No sitemap, probes or link following; site-wide rules skip with the reason targeted-run, and the report lists every URL not audited and why. maxPages caps the list",
+    },
     "rule-include": {
       type: "string",
       description:
@@ -1528,6 +1533,14 @@ export const audit = defineCommand({
       exitWith({ early: "validation" });
       return;
     }
+
+    // --target-url (#1777): repeatable, one URL or path per flag. Not split on commas: a comma is legal in a
+    // URL. A URL that is not one is still passed on, and the report lists it as not audited with its reason.
+    const targetUrls = (() => {
+      const raw = args["target-url"] as string | string[] | undefined;
+      const list = raw === undefined ? [] : Array.isArray(raw) ? raw : [raw];
+      return list.map((v) => String(v).trim()).filter((v) => v.length > 0);
+    })();
 
     // Parse --rule-include/--rule-exclude early so an unknown category fails
     // before crawling (same widening as --fail-on/--header). #1066
@@ -2147,19 +2160,26 @@ export const audit = defineCommand({
         }
         const reportGoesToStdoutEarly =
           !isConsoleFormat && args.format !== "html" && !args.output;
-        const resolved = await resolveAuditStart({
-          url: startParsed.url,
-          follow:
-            lastFlagValue(
-              args["follow-redirect"] as boolean | boolean[] | undefined
-            ) ?? config.crawler.follow_redirect === true,
-          interactive:
-            !!process.stdin.isTTY &&
-            !!process.stdout.isTTY &&
-            !reportGoesToStdoutEarly,
-          userAgent: config.crawler.user_agent || undefined,
-          pin: ownHostsPinned({ pinOwnHosts: pinOwnHosts() }),
-        });
+        // --target-url (#1777): the start URL is the site's base, not a page to request, so its redirect
+        // is not resolved (give the final host).
+        const resolved: Pick<
+          Awaited<ReturnType<typeof resolveAuditStart>>,
+          "url" | "record" | "stop"
+        > = targetUrls.length > 0
+          ? { url: startParsed.url }
+          : await resolveAuditStart({
+              url: startParsed.url,
+              follow:
+                lastFlagValue(
+                  args["follow-redirect"] as boolean | boolean[] | undefined
+                ) ?? config.crawler.follow_redirect === true,
+              interactive:
+                !!process.stdin.isTTY &&
+                !!process.stdout.isTTY &&
+                !reportGoesToStdoutEarly,
+              userAgent: config.crawler.user_agent || undefined,
+              pin: ownHostsPinned({ pinOwnHosts: pinOwnHosts() }),
+            });
         if (resolved.stop) {
           commandResult = "error";
           emitRedirectedOutcome(resolved.stop, {
@@ -2250,6 +2270,7 @@ export const audit = defineCommand({
           ? { headers: customHeaders }
           : {}),
         ...(headerHosts.length > 0 ? { headerHosts } : {}),
+        ...(targetUrls.length > 0 ? { targetUrls } : {}),
         ...(ruleFilter.enable.length > 0
           ? { ruleInclude: ruleFilter.enable }
           : {}),

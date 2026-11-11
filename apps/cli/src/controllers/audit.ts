@@ -37,6 +37,7 @@ import {
   unfetchedFrontierCount,
   pageTypeCoverageFor,
   isRedirectSourcePage,
+  targetedCoverageFor,
 } from "@squirrelscan/audit-engine";
 import { foldEntityMapVariants } from "@squirrelscan/audit-engine/entity-map";
 import { createEntityMapCollector } from "@squirrelscan/audit-engine/entity-map/collect";
@@ -1046,10 +1047,21 @@ export async function runAudit(
     });
 
     // Check reachability
-    logger.debug("checking reachability", redactUrl(url));
+    // A targeted run (#1777) asks only for the URLs it was given: the site's reachability is read off the
+    // first one rather than off the start URL, which is the site's base and not a page of the audit.
+    const reachabilityUrl = (() => {
+      const first = options.targetUrls?.[0];
+      if (!first) return url;
+      try {
+        return new URL(first, url).toString();
+      } catch {
+        return url;
+      }
+    })();
+    logger.debug("checking reachability", redactUrl(reachabilityUrl));
     // --offline: the start URL's redirects stay on the audited site (#819).
     const reachability = await checkReachability(
-      url,
+      reachabilityUrl,
       options.offline
         ? { ownSiteOnly: true, domains: mergedConfig.project?.domains }
         : undefined,
@@ -1338,6 +1350,10 @@ export async function runAudit(
         maxPrefixBudgetRatio: mergedConfig.crawler.max_prefix_budget,
         coverageMode,
         disableLinkDiscovery: isQuickMode,
+        // #1777: audit exactly these URLs; no sitemap, probes or link following.
+        ...(options.targetUrls && options.targetUrls.length > 0
+          ? { targetUrls: options.targetUrls }
+          : {}),
         documentFetcher,
         onTlsEvent: (event: TlsEvent) => {
           // Surface TLS/status-0 failures + standard-fetch fallbacks so they
@@ -1384,15 +1400,20 @@ export async function runAudit(
 
       // Detect redirects first so we can look up by final URL
       // (before subscribing to events to avoid counting redirect requests)
-      const finalUrl = await Effect.runPromise(
-        // #1271: the seed redirect probe is inside the budget too.
-        crawler.detectRedirects(
-          url,
-          durationBudget
-            ? { deadlineAt: durationBudget.crawlStopAt }
-            : undefined
-        )
-      );
+      // A targeted run (#1777) requests only the URLs it was given: the start URL is the site's base and is
+      // not probed for a redirect.
+      const finalUrl =
+        options.targetUrls && options.targetUrls.length > 0
+          ? url
+          : await Effect.runPromise(
+              // #1271: the seed redirect probe is inside the budget too.
+              crawler.detectRedirects(
+                url,
+                durationBudget
+                  ? { deadlineAt: durationBudget.crawlStopAt }
+                  : undefined
+              )
+            );
 
       // Subscribe to crawler events to emit progress updates
       let pagesProcessed = 0;
@@ -2481,6 +2502,17 @@ export async function runAudit(
             report.pages.map((p) => p.url)
           )
         );
+        // A targeted run (#1777) accounts for every URL it was given.
+        const targeted =
+          options.targetUrls && options.targetUrls.length > 0
+            ? await Effect.runPromise(
+                targetedCoverageFor(
+                  sqliteStorage,
+                  crawlId,
+                  report.pages.map((p) => p.url)
+                )
+              )
+            : undefined;
         const scanScope: NonNullable<AuditReport["scanScope"]> = {
           origin: detectRunner().ci ? "ci" : "cli",
           maxPages: scopeMaxPages,
@@ -2497,6 +2529,7 @@ export async function runAudit(
             : {}),
           ...(unfetched > 0 ? { unfetched } : {}),
           ...(pageTypes.length > 0 ? { pageTypes } : {}),
+          ...(targeted ? { targeted } : {}),
           ...(options.startRedirect
             ? { startRedirect: options.startRedirect }
             : {}),

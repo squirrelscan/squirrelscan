@@ -780,6 +780,11 @@ export interface AuditOptions {
    */
   requestedMaxPages?: number;
   maxDepth?: number; // optional crawl-depth ceiling (#318); unset = unlimited
+  /**
+   * Audit exactly these URLs and nothing else (`--target-url`, #1777): absolute, or a path on the audited
+   * site. No sitemap, discovery probes or link following; site-wide rules skip with `targeted-run`.
+   */
+  targetUrls?: string[];
   /** Wall-clock budget for the whole audit, seconds (#1271); unset = no limit. */
   maxDurationSeconds?: number;
   /** Epoch ms the budget counts from (the command's start); unset = when the audit starts. */
