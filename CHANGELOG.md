@@ -19,6 +19,7 @@ How it works:
 
 ### Added
 
+- **`core/canonical` flags a page whose canonical points at the home page.** A template that hard-codes the canonical to the site root tells search engines that every page it renders duplicates the home page, and the pages drop out of the index; the URL is well formed, so the rule passed it. A new `canonical-to-homepage` check fails when a page that is not the home page declares the site root as its canonical (the tag first, then the `Link` header), and warns for a locale home page such as `/en/`. The root with a trailing slash, `/index.html` or the `www` or bare host is one root, a root with a query string is not, a page that redirects to the home page is not flagged, and every other page gets the same result as before. (#1685)
 - **`links/broken-links` counts the targets that answered a refusal or a throttle.** Every `broken-links` row now carries `refusedTargets` (a 401, a 403 or a bot-wall challenge) and `rateLimitedTargets` (a 429) in its coverage details, next to `linkTargets`, `probedTargets` and `unfetchedTargets`. Those targets are not broken and not unfetched, and nothing is known of the page behind them, so `linkTargets` less `unfetchedTargets` over-counts what was observed; subtract these two as well. No check message, item or status changes. (#1679)
 ### Changed
 
