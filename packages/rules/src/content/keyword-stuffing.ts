@@ -422,6 +422,12 @@ export function brandTerms(
 const CARD_TEXT_SELECTOR = "p, span, div, li, dd, dt, small";
 const CARD_TEXT_MAX_CHARS = 160;
 const CARD_MIN_PARENTS = 3;
+/**
+ * Wrappers a price- or rating-shaped text must repeat in when NO number varies between them (#1441): a price
+ * or a rating line identical on every card ("Shipping costs from $4.90, free returns"). A higher bar than
+ * {@link CARD_MIN_PARENTS}, because a spammer can dress one phrase in one fixed price; the shares below still bound it.
+ */
+const CARD_IDENTICAL_MIN_PARENTS = 5;
 /** Candidate leaf texts looked at per page, and the elements scanned to find them. Both are bounds. */
 const CARD_MAX_ELEMENTS = 4000;
 const CARD_MAX_SCANNED = 40_000;
@@ -443,13 +449,14 @@ const CARD_RAW_DENSITY_LIMIT = 10;
  * Rating and price microcopy repeated once per card (#1315): "Average rating 4.5 of 5 stars", "from 12,90 EUR in
  * instalments". `text -> occurrences` for every text that, with its rating- or price-shaped numbers replaced, is
  * the whole text of a leaf element in at least {@link CARD_MIN_PARENTS} different parent wrappers AND whose
- * numbers differ between occurrences. Text with no such number is never deducted, nor is one whose only numbers
- * are bare ("emergency plumber london 17", "plumber 49.99"). The deduction is bounded, because a spammer can dress
+ * numbers differ between occurrences, or in at least {@link CARD_IDENTICAL_MIN_PARENTS} wrappers when the numbers
+ * are identical (a price or rating line the same on every card). Text with no such number is never deducted, nor
+ * is one whose only numbers are bare ("emergency plumber london 17", "plumber 49.99"). The deduction is bounded, because a spammer can dress
  * a phrase in a price: at most {@link CARD_MAX_SHARE} of the page's words in total (the largest texts first, clamped),
  * never below {@link CARD_FLOOR_SHARE} of the density threshold for any one word, and not at all for a word that is
  * {@link CARD_RAW_DENSITY_LIMIT}% or more of the page before it.
- * The trade-offs: non-numeric card microcopy ("In stock"), a price identical on every card and a bare count
- * ("12 reviews" is covered, "12 items" is not) still count toward density. The total deducted is capped at
+ * The trade-offs: non-numeric card microcopy ("In stock") and a bare count ("12 reviews" is covered, "12 items"
+ * is not) still count toward density; an identical price needs 5 cards, not 3. The total deducted is capped at
  * {@link CARD_MAX_SHARE} of the page's words.
  *
  * Linear in the page: each leaf is read once, with no parent text read at all.
@@ -486,7 +493,8 @@ function repeatedCardText(root: Element, excluded: ((element: Element) => boolea
   }
   const out = new Map<string, number>();
   for (const [text, entry] of byText) {
-    if (entry.parents.size >= CARD_MIN_PARENTS && entry.raws.size >= 2) out.set(text, entry.count);
+    const varies = entry.raws.size >= 2 && entry.parents.size >= CARD_MIN_PARENTS;
+    if (varies || entry.parents.size >= CARD_IDENTICAL_MIN_PARENTS) out.set(text, entry.count);
   }
   return out;
 }
