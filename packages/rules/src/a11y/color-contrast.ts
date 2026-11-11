@@ -255,13 +255,22 @@ function backgroundOf(declarations: Declaration[]): Background {
  * through only where the body has none. One linear pass: the blocks are
  * site-controlled and can hold hundreds of KB of base64.
  */
+/** Selectors with a background kept per stylesheet (#1756); past this the list says "more existed". */
+const MAX_BACKGROUND_SELECTORS = 200;
+
 function styleBlockRules(css: string): {
   html: Declaration[];
   body: Declaration[];
   otherBackground: boolean;
   /** An at-rule (`@media`, `@supports`) sets the background of `html`/`body`/`:root`: it can override the plain rule. */
   atRuleRootBackground: boolean;
+  /** The selectors, other than html/body/:root, whose rule sets a background (inside an at-rule too), capped. */
+  otherSelectors: string[];
+  /** More than {@link MAX_BACKGROUND_SELECTORS} such selectors existed: the list is not all of them. */
+  otherSelectorsTruncated: boolean;
 } {
+  const otherSelectors: string[] = [];
+  let otherSelectorsTruncated = false;
   const html: Declaration[] = [];
   const body: Declaration[] = [];
   // A background set by any other selector (or inside an at-rule) can sit behind
@@ -285,6 +294,14 @@ function styleBlockRules(css: string): {
     i = j;
     if (selector.startsWith("@")) {
       if (/background/i.test(block)) otherBackground = true;
+      if (/background/i.test(block) && !/^@(font-face|keyframes|-webkit-keyframes|property)\b/i.test(selector) && depth === 0) {
+        const inner = styleBlockRules(block);
+        for (const s of inner.otherSelectors) {
+          if (otherSelectors.length >= MAX_BACKGROUND_SELECTORS) otherSelectorsTruncated = true;
+          else otherSelectors.push(s);
+        }
+        if (inner.otherSelectorsTruncated) otherSelectorsTruncated = true;
+      }
       if (!/^@(font-face|keyframes|-webkit-keyframes|property)\b/i.test(selector) && depth === 0) {
         const inner = styleBlockRules(block);
         const sets = (d: Declaration[]): boolean =>
@@ -297,10 +314,16 @@ function styleBlockRules(css: string): {
       const target = part.trim().toLowerCase();
       if (target === "body") body.push(...parseDeclarations(block));
       else if (target === "html" || target === ":root") html.push(...parseDeclarations(block));
-      else if (/background/i.test(block)) otherBackground = true;
+      else if (/background/i.test(block)) {
+        otherBackground = true;
+        if (part.trim()) {
+          if (otherSelectors.length >= MAX_BACKGROUND_SELECTORS) otherSelectorsTruncated = true;
+          else otherSelectors.push(part.trim());
+        }
+      }
     }
   }
-  return { html, body, otherBackground, atRuleRootBackground };
+  return { html, body, otherBackground, atRuleRootBackground, otherSelectors, otherSelectorsTruncated };
 }
 
 function stripCssComments(css: string): string {
@@ -337,6 +360,16 @@ export function stylesheetBackgroundOf(css: string): StylesheetBackground {
   return { kind: "unresolved" };
 }
 
+/**
+ * The selectors, other than `html`, `body` and `:root`, that a stylesheet gives a background (#1756): a
+ * container such as `.hero { background: #111 }` can paint under text whose own color is light. The
+ * resolver does not read their colors; it treats text that sits inside a match as not measurable.
+ */
+export function stylesheetBackgroundSelectorsOf(css: string): { selectors: string[]; truncated: boolean } {
+  const rules = styleBlockRules(stripCssComments(css));
+  return { selectors: rules.otherSelectors, truncated: rules.otherSelectorsTruncated };
+}
+
 function createBackgroundResolver(
   doc: Document,
   pageUrl: string,
@@ -344,6 +377,24 @@ function createBackgroundResolver(
 ): { resolve(el: Element): ResolvedBackground } {
   const memo = new Map<Element, ResolvedBackground>();
   let page: ResolvedBackground | null = null;
+  // Backgrounds a linked stylesheet gives other selectors (#1756): its html/body rule is read, a container
+  // painting under the text is not, so text inside a match is unresolved rather than measured against the page.
+  const guard: { selectors: string[]; all: boolean } = { selectors: [], all: false };
+  const insideGuardedSelector = (el: Element): boolean => {
+    if (guard.all) return true;
+    if (guard.selectors.length === 0) return false;
+    for (let node: Element | null = el; node; node = node.parentElement) {
+      for (const selector of guard.selectors) {
+        try {
+          if (node.matches(selector)) return true;
+        } catch {
+          // A selector the DOM cannot evaluate could match: not provable, so not measured.
+          return true;
+        }
+      }
+    }
+    return false;
+  };
 
   // What is behind everything the element's ancestors leave open. Computed once,
   // and only when an inline-colored element needs it.
@@ -383,7 +434,11 @@ function createBackgroundResolver(
     const sources: Array<{ kind: "color"; rgb: Rgb; raw: string }> = [];
     if (fromStyle) sources.push(fromStyle);
     const byUrl = new Map((stylesheets ?? []).map((s) => [s.url, s.background]));
+    const dataByUrl = new Map((stylesheets ?? []).map((s) => [s.url, s]));
     for (const url of new Set(linkedUrls)) {
+      const data = dataByUrl.get(url);
+      if (data?.selectors) guard.selectors.push(...data.selectors);
+      if (data?.selectorsTruncated) guard.all = true;
       const read = byUrl.get(url);
       if (!read || read.kind === "unresolved") {
         return (page = { kind: "unresolved", reason: "stylesheet" });
@@ -434,7 +489,11 @@ function createBackgroundResolver(
         chain.push(node);
         node = node.parentElement;
       }
-      const result = found ?? pageBackground();
+      let result = found ?? pageBackground();
+      // The page background was the answer: a linked stylesheet's container rule may sit under the text.
+      if (!found && result.kind === "color" && insideGuardedSelector(el)) {
+        result = { kind: "unresolved", reason: "stylesheet" };
+      }
       for (const visited of chain) memo.set(visited, result);
       return result;
     },

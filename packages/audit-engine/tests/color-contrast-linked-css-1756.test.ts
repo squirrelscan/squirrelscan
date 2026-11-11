@@ -48,6 +48,9 @@ beforeAll(() => {
           { headers: CSS },
         );
       }
+      if (pathname === "/hero.css") {
+        return new Response("body { background: #ffffff } .hero { background: #111111; padding: 2rem }", { headers: CSS });
+      }
       if (pathname === "/boom.css") return new Response("boom", { status: 500 });
       if (pathname === "/soft404.css") {
         return new Response("<html>not found</html>", { headers: { "content-type": "text/html" } });
@@ -64,11 +67,15 @@ afterAll(() => {
 
 const TAGLINE = '<p style="color:#b9b9b9">Fresh roasted every morning</p>';
 
-async function contrastFor(links: string[], config: Config = CONFIG): Promise<CheckResult[]> {
+async function contrastFor(
+  links: string[],
+  config: Config = CONFIG,
+  body: string = TAGLINE,
+): Promise<CheckResult[]> {
   const url = `${base}/`;
   const markup = `<!doctype html><html><head><title>x</title>${links
     .map((l) => `<link rel="stylesheet" href="${l}">`)
-    .join("")}</head><body>${TAGLINE}</body></html>`;
+    .join("")}</head><body>${body}</body></html>`;
   const document = parseDocument(markup);
   const occurrences = emptySiteAssetOccurrences();
   absorbResourceOccurrences(
@@ -113,6 +120,16 @@ describe("a11y/color-contrast reads same-site linked stylesheets (#1756)", () =>
   test("a linked stylesheet with no page background keeps the white default", async () => {
     const checks = await contrastFor(["/plain.css"]);
     expect(named(checks, "color-contrast").some((c) => c.status === "warn")).toBe(true);
+  });
+
+  test("light text inside a container a linked sheet paints dark is unresolved, not a warning", async () => {
+    // body is light in the same sheet, so measured against the page it would warn: the .hero rule says why not.
+    const inside = await contrastFor(["/hero.css"], CONFIG, `<div class="hero"><section>${TAGLINE}</section></div>`);
+    expect(named(inside, "color-contrast").some((c) => c.status === "warn")).toBe(false);
+    expect(named(inside, "color-contrast-unresolved")).toHaveLength(1);
+    // The same sheet and the same text outside the container is still measured against the light body.
+    const outside = await contrastFor(["/hero.css"], CONFIG, `<div class="hero"><p>Title</p></div>${TAGLINE}`);
+    expect(named(outside, "color-contrast").some((c) => c.status === "warn")).toBe(true);
   });
 
   test("a stylesheet that fails to load keeps the pair unresolved, never white", async () => {

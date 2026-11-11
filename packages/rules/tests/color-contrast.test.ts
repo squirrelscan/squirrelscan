@@ -14,7 +14,7 @@ import { describe, expect, test } from "bun:test";
 
 import { parsePage } from "@squirrelscan/parser";
 
-import { colorContrastRule, stylesheetBackgroundOf } from "../src/a11y/color-contrast";
+import { colorContrastRule, stylesheetBackgroundOf, stylesheetBackgroundSelectorsOf } from "../src/a11y/color-contrast";
 import type { CheckResult, RuleContext } from "../src/types";
 
 function ctx(html: string): RuleContext {
@@ -333,6 +333,57 @@ describe("linear in what it reads", () => {
   ])("an inline style with %s", (_label, style) => {
     // 200KB: the quadratic form of the alpha pattern takes seconds here.
     expect(timeRule(page({ body: `<p style="${style(200_000)}">Text</p>` }))).toBeLessThan(500);
+  });
+});
+
+describe("a linked stylesheet's other background selectors guard the pair (#1756)", () => {
+  const sheet = (extra: Record<string, unknown>) => ({
+    url: "https://example.com/styles.css",
+    status: 200,
+    error: null,
+    background: { kind: "color", value: "#fff" },
+    ...extra,
+  });
+  const run = (body: string, extra: Record<string, unknown>) =>
+    colorContrastRule.run({
+      ...ctx(page({ head: '<link rel="stylesheet" href="/styles.css">', body })),
+      site: { baseUrl: "https://example.com", pages: [], robotsTxt: null, sitemaps: null, stylesheetBackgrounds: [sheet(extra)] },
+    } as unknown as RuleContext).checks as CheckResult[];
+  const TEXT = '<p style="color:#b9b9b9">Tagline</p>';
+
+  test("text inside an element matching a selector with a background is unresolved, by class, id and tag", () => {
+    for (const [selector, wrapped] of [
+      [".hero", `<div class="hero">${TEXT}</div>`],
+      ["#top", `<header id="top"><div>${TEXT}</div></header>`],
+      ["footer", `<footer>${TEXT}</footer>`],
+    ] as const) {
+      const checks = run(wrapped, { selectors: [selector] });
+      expect(checks.some((c) => c.status === "warn"), selector).toBe(false);
+      expect(checks.some((c) => c.name === "color-contrast-unresolved"), selector).toBe(true);
+    }
+  });
+
+  test("text outside every matching element is still measured; a truncated list guards everything", () => {
+    expect(run(TEXT, { selectors: [".hero"] }).some((c) => c.status === "warn")).toBe(true);
+    expect(run(TEXT, { selectors: [".hero"], selectorsTruncated: true }).some((c) => c.status === "warn")).toBe(false);
+  });
+
+  test("a selector the DOM cannot evaluate is not provable, so the pair is unresolved", () => {
+    expect(run(TEXT, { selectors: ["div:not("] }).some((c) => c.status === "warn")).toBe(false);
+  });
+});
+
+describe("stylesheetBackgroundSelectorsOf lists the other background selectors (#1756)", () => {
+  test("html/body are excluded; at-rules and the cap are reported", () => {
+    expect(stylesheetBackgroundSelectorsOf("body{background:#fff}.hero,.card{background:#111}p{color:red}")).toEqual({
+      selectors: [".hero", ".card"],
+      truncated: false,
+    });
+    expect(stylesheetBackgroundSelectorsOf("@media (max-width:600px){.nav{background:#000}}").selectors).toEqual([".nav"]);
+    const many = Array.from({ length: 205 }, (_, i) => `.c${i}{background:#000}`).join("");
+    const r = stylesheetBackgroundSelectorsOf(many);
+    expect(r.selectors).toHaveLength(200);
+    expect(r.truncated).toBe(true);
   });
 });
 
