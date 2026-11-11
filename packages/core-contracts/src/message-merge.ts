@@ -32,6 +32,11 @@ export interface MessageShape {
 
 const DIGIT_RUN_RE = /\d+/g;
 
+// A unit written straight after a measurement that stands alone in parentheses, `(850ms)`: a per-page value
+// the way `(3)` is a per-page count. A unit value anywhere else (`>3KB each`, `the 3MB error threshold`,
+// `Googlebot 15MB limit`) is a limit or a threshold, the same on every page, and must never widen.
+const MEASUREMENT_UNIT_RE = /^(?:ms|s|KB|MB|GB|px|%)\)/;
+
 // A character that makes the digits beside it part of something else: a word
 // (`H1`, `4KB`), a decimal or version (`4.3`), a date or a negative (`2024-01`,
 // `-5`), a time (`05:30`), a ratio (`10/10`), a grouped number (`1,024`), an
@@ -67,7 +72,9 @@ export function isCountToken(message: string, start: number, end: number): boole
   if (text.length > 1 && text.startsWith("0")) return false;
   // A four-digit year is indistinguishable from a count of that many things,
   // and getting it wrong writes a false date, so it is never widened.
-  if (text.length === 4 && Number(text) >= 1000 && Number(text) <= 2999) return false;
+  // A four-digit value alone in parentheses with a unit after it (`(1200ms)`) is not a year.
+  const measured = message[start - 1] === "(" && MEASUREMENT_UNIT_RE.test(message.slice(end));
+  if (!measured && text.length === 4 && Number(text) >= 1000 && Number(text) <= 2999) return false;
   // Only the character BEFORE needs testing against the glue set: the two
   // positive tests below already demand a space or a `)` after the run, so a
   // `.`, `-`, `:`, `/`, `,` or letter on the right can never reach them. The
@@ -75,6 +82,9 @@ export function isCountToken(message: string, start: number, end: number): boole
   if (GLUED_RE.test(message[start - 1] ?? "")) return false;
   // Alone in parentheses.
   if (message[start - 1] === "(" && message[end] === ")") return true;
+  // A measurement in a known unit alone in parentheses (`(850ms)`): two pages may differ in it, and the merged
+  // sentence says the range (`(850 to 1200ms)`), so the slowest page is not hidden behind the first one's value.
+  if (measured) return true;
   // In front of the thing it counts.
   return message[end] === " " && /[A-Za-z]/.test(message[end + 1] ?? "");
 }

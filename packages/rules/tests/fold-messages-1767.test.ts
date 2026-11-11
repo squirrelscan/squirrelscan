@@ -70,7 +70,7 @@ describe("pages that disagree", () => {
       h1(page(3), "Multiple H1 tags found (5)"),
       h1(page(4), "Multiple H1 tags found (2)"),
     ]);
-    expect(agg.message).toBe("Multiple H1 tags found (2 to 5) (3 pages); H1 tag is empty (2 pages)");
+    expect(agg.message).toBe("Multiple H1 tags found (2 to 5) on 3 pages; H1 tag is empty on 2 pages");
     expect(agg.message).not.toBe("H1 tag is empty (+4 more pages)");
   });
 
@@ -86,7 +86,7 @@ describe("pages that disagree", () => {
       { ...LIMITS, maxChecks: 2 },
     );
     const warn = slow.find((c) => c.status === "warn")!;
-    expect(warn.message).toBe("Slow server response (1200ms) (1 page); Slow server response (850ms) (1 page)");
+    expect(warn.message).toBe("Slow server response (850 to 1200ms) on 2 pages");
     // A different status stays its own aggregate and its own sentence.
     const fail = slow.find((c) => c.status === "fail")!;
     expect(fail.message).toBe("Very slow server response (4100ms)");
