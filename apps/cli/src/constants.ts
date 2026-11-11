@@ -181,9 +181,14 @@ export const CRAWL_PHASE_SETUP_SLACK_MS = 60_000;
 /** Floor — never cap a crawl below this regardless of page count. */
 export const CRAWL_PHASE_MIN_TIMEOUT_MS = 120_000;
 /**
- * Ceiling: the finite absolute backstop, for both the derived default and an
- * explicit `--crawl-timeout` / `[crawler] crawl_timeout`. Raised from 30 min so
- * a polite single-host crawl of a few thousand pages can finish (#1639).
+ * Ceiling of the DERIVED default (#1639). Kept low so the backstop still catches a
+ * wedged crawl quickly when the user set nothing; raised from 30 min only to 60.
+ */
+export const CRAWL_PHASE_DERIVED_MAX_TIMEOUT_MS = 3_600_000; // 60 min
+/**
+ * Ceiling for an EXPLICIT `--crawl-timeout` / `[crawler] crawl_timeout`: the finite
+ * absolute backstop, so a polite single-host crawl of a few thousand pages can
+ * finish when the user asks for it (#1639).
  */
 export const CRAWL_PHASE_MAX_TIMEOUT_MS = 21_600_000; // 6 h
 

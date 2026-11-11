@@ -195,6 +195,51 @@ export function withCrawlPhaseCut<
   };
 }
 
+/**
+ * Stamp a crawl-phase backstop cut on the live report and its scan scope (#1639):
+ * `crawlPhase` on both, and the status made `partial` with code `crawl_timeout`
+ * unless the run already has its own non-completed status.
+ */
+export function stampCrawlPhaseCut(
+  report: {
+    status?: AuditStatus | undefined;
+    statusReason?: string | undefined;
+    statusReasonCode?: AuditStatusReasonCode | undefined;
+    crawlPhase?: CrawlPhaseCut | undefined;
+  },
+  scanScope: { crawlPhase?: CrawlPhaseCut | undefined },
+  input: {
+    seconds: number;
+    pagesCollected: number;
+    pageBudget: number;
+    unfetchedPages: number;
+  }
+): CrawlPhaseCut {
+  const phaseCut: CrawlPhaseCut = {
+    seconds: input.seconds,
+    pagesCollected: input.pagesCollected,
+    ...(input.pageBudget > 0 ? { pageBudget: input.pageBudget } : {}),
+    unfetchedPages: input.unfetchedPages,
+    linkGraphComplete: false,
+  };
+  scanScope.crawlPhase = phaseCut;
+  report.crawlPhase = phaseCut;
+  const next = withCrawlPhaseCut(
+    {
+      status: report.status,
+      reason: report.statusReason,
+      reasonCode: report.statusReasonCode,
+    },
+    phaseCut
+  );
+  if (next.status !== (report.status ?? "completed")) {
+    report.status = next.status;
+    report.statusReason = next.reason;
+    report.statusReasonCode = next.reasonCode;
+  }
+  return phaseCut;
+}
+
 export interface SmartMergeOverride {
   /**
    * The CARRIED half of the smart-audit union, per rule (#2343). The fresh half
