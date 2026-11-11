@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- **`core/canonical` flags a page whose canonical points at the home page.** A template that hard-codes the canonical to the site root tells search engines that every page it renders duplicates the home page, and the pages drop out of the index; the URL is well formed, so the rule passed it. A new `canonical-to-homepage` check fails when a page that is not the home page declares the site root as its canonical (the tag first, then the `Link` header), and warns for a locale home page such as `/en/`. The root with a trailing slash, `/index.html` or the `www` or bare host is one root, a root with a query string is not, a page that redirects to the home page is not flagged, and every other page gets the same result as before. (#1685)
+
 ## v0.0.174 (2026-11-11)
 
 Reports say why a rule did not give a verdict (JSON schema 1.9), `squirrel audit` has one exit code precedence with the outcome in the JSON and LLM reports, `--resume` says why it started a new crawl, an expired login is called out, settings writes no longer lose each other, and five rules stop flagging hidden, presentational and symbol-only content.
