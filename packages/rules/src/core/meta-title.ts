@@ -39,6 +39,8 @@ export const metaTitleRule: Rule = {
     severity: "error",
     weight: 8,
     optionsSchema,
+    // The old name carried both directions (pub#1765).
+    supersededChecks: { "meta-title": ["meta-title-too-short", "meta-title-too-long"] },
   },
 
   run(ctx: RuleContext): RuleResult {

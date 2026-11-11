@@ -26,6 +26,7 @@ import {
   type NotEvaluatedEvidence,
   type RuleTally,
 } from "@squirrelscan/audit-engine";
+import { buildSupersededIndex } from "@squirrelscan/core-contracts/resolution";
 import { loadAllRules, type RuleRunResult } from "@squirrelscan/rules";
 import { isNonPublicUrl } from "@squirrelscan/utils/non-public-host";
 import { Effect } from "effect";
@@ -177,6 +178,9 @@ export function runSmartAudits(
       freshFindings,
       removedUrls,
       severityByRule,
+      supersededChecks: buildSupersededIndex(
+        [...ruleMeta.values()].map((t) => t.meta)
+      ),
       statusByUrl,
       ...(notEvaluated ? { notEvaluated } : {}),
     });

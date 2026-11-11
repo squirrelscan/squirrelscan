@@ -63,6 +63,8 @@ A rule id is `<namespace>/<name>`: lowercase letters, digits and hyphens. Pick a
 
 Set `scope` to `"page"` or `"site"`. Always set `verdictScope: "page"` on a page rule. That keeps the engine from copying one page's verdict to other pages that share a template.
 
+If a rule renames a check or splits one into several, list the old name in `meta.supersededChecks` with its replacements: `supersededChecks: { "meta-title": ["meta-title-too-short", "meta-title-too-long"] }`. Findings recorded under the old name are then judged by the new checks on the same page when a later audit or `squirrel report --diff` compares them: resolved when every replacement passed, still failing when one failed, not checked when one was not checked. A replacement that clears a page must emit a pass for it.
+
 Page rules get the page's parsed document in `ctx.parsed`, its response in `ctx.page`, and the rule's options in `ctx.options`.
 
 <Warning>

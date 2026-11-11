@@ -259,6 +259,41 @@ export function resolutionCheckKey(ruleId: string, checkName: string): string {
   return `${ruleId}|${checkName}`;
 }
 
+/** How one successor check judged a page, for a finding stored under a superseded check name. */
+export type SupersededOutcome = "passed" | "failing" | "not-checked";
+/** The verdict on the superseded finding. */
+export type SupersededVerdict = "resolved" | "failing" | "not-checked";
+
+/**
+ * `${ruleId}|${oldCheck}` -> successor check names, from the rules' `supersededChecks`
+ * declarations. Empty for rules that declare none.
+ */
+export function buildSupersededIndex(
+  metas: Iterable<{ id: string; supersededChecks?: Record<string, string[]> }>,
+): Map<string, readonly string[]> {
+  const index = new Map<string, readonly string[]>();
+  for (const meta of metas) {
+    for (const [oldName, successors] of Object.entries(meta.supersededChecks ?? {})) {
+      if (successors.length > 0) index.set(resolutionCheckKey(meta.id, oldName), successors);
+    }
+  }
+  return index;
+}
+
+/**
+ * A finding stored under a superseded check name is judged by its successors on that page:
+ * still failing when any successor fails, else not checked when any was not checked, else
+ * resolved (every successor passed, or did not apply and so counts as passed).
+ */
+export function judgeSuperseded(outcomes: Iterable<SupersededOutcome>): SupersededVerdict {
+  let notChecked = false;
+  for (const outcome of outcomes) {
+    if (outcome === "failing") return "failing";
+    if (outcome === "not-checked") notChecked = true;
+  }
+  return notChecked ? "not-checked" : "resolved";
+}
+
 /**
  * Check-name half of a rule-wide `notEvaluated` key (pub#968): `<ruleId>|*`
  * lists the crawled pages on which the rule as a whole did not run (it timed

@@ -79,4 +79,26 @@ describe("meta.checks declarations (#1741)", () => {
       expect(rule?.meta.checks?.some((c) => c.outcome === "clean"), id).toBe(true);
     }
   });
+
+  test("supersededChecks (#1765) name successors, never the old name itself", () => {
+    const withSuperseded = rules.filter((r) => r.meta.supersededChecks !== undefined);
+    expect(withSuperseded.map((r) => r.meta.id).sort()).toEqual([
+      "core/meta-description",
+      "core/meta-title",
+      "links/internal-links",
+    ]);
+    for (const { meta } of withSuperseded) {
+      for (const [oldName, successors] of Object.entries(meta.supersededChecks!)) {
+        expect(successors.length, `${meta.id}: ${oldName} has no successor`).toBeGreaterThan(0);
+        expect(successors, `${meta.id}: ${oldName} supersedes itself`).not.toContain(oldName);
+        expect(new Set(successors).size, `${meta.id}: duplicate successor`).toBe(successors.length);
+        for (const s of successors) {
+          expect(meta.supersededChecks![s], `${meta.id}: ${s} is itself superseded`).toBeUndefined();
+        }
+      }
+    }
+    expect(withSuperseded.find((r) => r.meta.id === "core/meta-title")!.meta.supersededChecks).toEqual({
+      "meta-title": ["meta-title-too-short", "meta-title-too-long"],
+    });
+  });
 });

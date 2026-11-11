@@ -28,6 +28,8 @@ export const metaDescriptionRule: Rule = {
     severity: "error",
     weight: 7,
     optionsSchema,
+    // The old name carried both directions (pub#1765).
+    supersededChecks: { "meta-description": ["meta-description-too-short", "meta-description-too-long"] },
   },
 
   run(ctx: RuleContext): RuleResult {
