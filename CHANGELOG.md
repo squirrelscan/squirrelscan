@@ -19,6 +19,7 @@ How it works:
 
 ### Added
 
+- New rule `security/password-form-get`: a form with a password field that submits by GET (an explicit `method="get"`, a form with an `action` and no method, or a GET `formmethod` on a submit button) is an error. A form with no method and no action, which is how a React, Vue or Svelte login form looks in the DOM, is a warning (it falls back to GET only if its script fails; `method="post"` removes the risk), and one submitted by an inline handler with no action is reported as not determined. The action a finding shows has its query, fragment and credentials removed.
 - New rule `security/password-form-get`: a form with a password field that submits by GET (`method="get"` or no method, or a GET `formmethod` on a submit button) is an error. Forms submitted by script with no action are reported as not determined.
 - New rule `a11y/svg-img-alt`: an inline `<svg role="img">` with no accessible name (no direct `<title>`, `aria-label` or resolving `aria-labelledby`) is an error. Hidden svgs and clickable ones `a11y/aria-labels` already reports are left out.
 - **`crawl/rendered-signal-mismatch` flags a canonical, noindex, title or H1 that JavaScript changes after load.** It compares the raw HTML with the cloud render of the same page and reports four checks: `canonical-mismatch` and `noindex-mismatch` fail, `title-modified` and `h1-modified` warn, each showing the raw and the rendered value. A canonical that differs only by trailing slash, host case, default port or fragment is the same canonical. `noindex` is read from every robots and googlebot meta tag, so a second tag a script appends counts, and a canonical the script adds that is the page's own URL is a warning rather than an error. It reads the render `ax/content-without-js` already reads, so it adds no credit charge beyond the page's audit, and it reports one skipped check, never a pass, on a browser-rendered crawl or when there is no render result. (#1684)
@@ -3042,4 +3043,5 @@ Browse the full rule set → https://docs.squirrelscan.com/rules
 
 - Cloud audits that stall past their deadline are now finalized automatically instead of hanging.
 - More efficient handling of error and empty pages during analysis.
+
 
