@@ -240,6 +240,7 @@ An issue that is gone from the current report is **not compared** when:
 | `rule-not-run-in-baseline` | The rule judged nothing in the baseline either: the finding there was only carried from an older audit |
 | `page-not-crawled` | The issue's page (or one of an item's source pages) is not among the pages the current audit crawled. `detail` is the page |
 | `rule-skipped-on-page` | The rule skipped the issue's page in the current audit, for example a `noindex` page. `detail` is the page |
+| `targeted-run` | The current audit was a [targeted audit](/cli/audit#targeted-audits) and the finding names no page (a whole-site check, or an item with no source page): a run over a few pages cannot say it is gone. This holds unless the baseline was a targeted audit over the very same URL list (the report's `meta.targeted.digest`), because two targeted audits over different lists judged different pages |
 | `sampled-report` | The current report was rebuilt from a slim JSON export (`squirrel report --input`), which keeps a sample of each check's pages and no passing rows. A finding is fixed only when the export's `rules` list says the rule ran and the check's page list is complete; an older export without `rules`, or a check whose pages were cut (`affectedPagesHasMore`), is never read as fixed |
 | `not-evaluated` | The rule answered with a check its metadata declares as "not checked" and no clean check that supersedes the problem |
 
