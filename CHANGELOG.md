@@ -20,7 +20,7 @@ How it works:
 ### Fixed
 
 - `crawl/soft-404` states one source of evidence: the server's HTML (and that a client-rendered page could differ) or the rendered page content, never both, and no longer says it cannot verify without rendering when it read a render (#1766).
-- An image with no `width` and `height` is reported once: `images/dimensions` owns it, and `perf/cls-hints` `cls-images` is now an info row pointing there. Both key the image by its absolute URL (#1768).
+- An image with no `width` and `height` is reported once: `images/dimensions` owns it, and `perf/cls-hints` `cls-images` is now an info row pointing there. Both key the image by its absolute URL, so the `cls-images` finding you were tracking (which keyed the image by its raw `src`) is resolved on your next audit, and the same image stays open under `images/dimensions`. The score is the same as with `images/dimensions` alone (#1768).
 
 ## v0.0.179 (2026-11-12)
 
