@@ -42,6 +42,7 @@ beforeAll(() => {
       const { pathname } = new URL(req.url);
       if (pathname === "/ok.js") return new Response("var x = 1;", { headers: { "content-type": "text/javascript" } });
       if (pathname === "/ok2.js") return new Response("var y = 2;", { headers: { "content-type": "text/javascript" } });
+      if (/^\/bulk\d+\.js$/.test(pathname)) return new Response("var z = 3;", { headers: { "content-type": "text/javascript" } });
       if (pathname === "/gone.js") return new Response("gone", { status: 404 });
       if (pathname === "/boom.js") return new Response("boom", { status: 500 });
       if (pathname === "/waf.js") {
@@ -60,7 +61,7 @@ afterAll(() => {
   server.stop(true);
 });
 
-async function assetsFor(srcs: string[], overrides?: Overrides) {
+async function assetsFor(srcs: string[], overrides?: Overrides, config: Config = NO_CONFIG) {
   const url = `${base}/`;
   const markup = `<!doctype html><html><head><title>x</title>${srcs
     .map((s) => `<script src="${s}"></script>`)
@@ -73,7 +74,7 @@ async function assetsFor(srcs: string[], overrides?: Overrides) {
   );
   occurrences.pageCount = 1;
   return Effect.runPromise(
-    fetchAssetsFromOccurrences(storageFor(base), "fixture-crawl", occurrences, NO_CONFIG, overrides),
+    fetchAssetsFromOccurrences(storageFor(base), "fixture-crawl", occurrences, config, overrides),
   );
 }
 
@@ -88,6 +89,7 @@ function leakChecks(assets: Awaited<ReturnType<typeof assetsFor>>): CheckResult[
       sitemaps: null,
       scripts: assets.scripts,
       assetCapDropped: assets.assetCapDropped,
+      scriptsNotReadUrls: assets.scriptsNotReadUrls,
     },
     options: {},
   }).checks as CheckResult[];
@@ -126,4 +128,23 @@ describe("security/leaked-secrets reports the scripts it could not read (#1749)"
     expect(unfetched?.details).toMatchObject({ unfetched: 0, capDropped: 1 });
     expect(unfetched?.message).toContain("asset fetch cap");
   });
+
+  test("scripts a store_scripts run fetched beyond the rule limit are counted as unread", async () => {
+    const srcs = Array.from({ length: 14 }, (_, i) => `/bulk${i}.js`);
+    const config = {
+      rules: { enable: ["*"], disable: [] },
+      storage: { store_scripts: true },
+    } as unknown as Config;
+    const assets = await assetsFor(srcs, undefined, config);
+    expect(assets.scripts.length).toBe(10);
+    expect(assets.storedOnlyScripts?.length).toBe(4);
+    expect(assets.scriptsNotRead).toBe(4);
+    const checks = leakChecks(assets);
+    const unfetched = named(checks, "leaked-secrets-unfetched");
+    expect(unfetched?.details).toMatchObject({ unfetched: 0, capDropped: 4 });
+    expect(named(checks, "leaked-secrets")).toBeUndefined();
+    expect(assets.scriptsNotReadUrls).toHaveLength(4);
+    expect(unfetched?.items?.map((i) => i.id)).toEqual(assets.scriptsNotReadUrls);
+    expect(unfetched?.items?.[0]?.label).toContain("script limit");
+  }, 30_000);
 });

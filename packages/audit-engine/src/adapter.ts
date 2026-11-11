@@ -353,6 +353,9 @@ const BROKEN_RESOURCES_RULE_ID = "reliability/broken-resources";
 /** The one rule that reads the web app manifest fetch (#710). */
 const WEB_APP_MANIFEST_RULE_ID = "mobile/web-app-manifest";
 
+/** Most script URLs kept for scripts held back from the rules (#1757). */
+export const SCRIPTS_NOT_READ_URLS_CAP = 20;
+
 /**
  * Referenced URLs each fetch cap left unfetched, per kind (#703): the count of
  * URLs the pages reference minus the rows the fetch returned.
@@ -395,6 +398,11 @@ export interface PreFetchedAssets {
    * them as truncated. Optional: assets built by hand have none.
    */
   scriptsNotRead?: number;
+  /**
+   * Up to {@link SCRIPTS_NOT_READ_URLS_CAP} of the scripts `scriptsNotRead` counts (#1757): a `store_scripts`
+   * run fetched them for storage but the rules never see their content. Absent when none were held back.
+   */
+  scriptsNotReadUrls?: string[];
   /**
    * Same-site chunks a page preloads (`modulepreload`, `preload as=script`) that
    * no `<script src>` names. Held apart from `scripts` so the file-size,
@@ -1483,6 +1491,9 @@ export function fetchAssetsFromOccurrences(
         ? { scriptsNotRead: resourceOccurrences.scripts.size - ruleScripts.length }
         : {}),
       ...(storedOnlyScripts.length > 0
+        ? { scriptsNotReadUrls: storedOnlyScripts.slice(0, SCRIPTS_NOT_READ_URLS_CAP).map((f) => f.url) }
+        : {}),
+      ...(storedOnlyScripts.length > 0
         ? { storedOnlyScripts: storedOnlyScripts.map(toScriptData) }
         : {}),
       ...(storeScripts
@@ -1922,6 +1933,7 @@ export function runRulesOnStorage(
       preloadedScripts,
       externalAssets,
       assetCapDropped,
+      scriptsNotReadUrls,
       pdfSizes,
       sitemapUrlStatuses,
       webAppManifests,
@@ -2031,6 +2043,7 @@ export function runRulesOnStorage(
       preloadedScripts,
       externalAssets,
       assetCapDropped,
+      scriptsNotReadUrls,
       pdfSizes,
       sitemapUrlStatuses,
       webAppManifests,
@@ -2781,6 +2794,7 @@ function buildStreamingSiteData(
       preloadedScripts,
       externalAssets,
       assetCapDropped,
+      scriptsNotReadUrls,
       pdfSizes,
       sitemapUrlStatuses,
       webAppManifests,
@@ -2903,6 +2917,7 @@ function buildStreamingSiteData(
       preloadedScripts,
       externalAssets,
       assetCapDropped,
+      scriptsNotReadUrls,
       pdfSizes,
       sitemapUrlStatuses,
       webAppManifests,

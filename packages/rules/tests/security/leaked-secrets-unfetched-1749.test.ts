@@ -63,7 +63,7 @@ describe("security/leaked-secrets-unfetched (#1749)", () => {
   test("scripts dropped by the asset cap are counted even when every fetched script was read", () => {
     const checks = run([script({ status: 200, content: "var a = 1;" })], { scripts: 7 });
     expect(unfetched(checks)?.details).toMatchObject({ unfetched: 0, capDropped: 7 });
-    expect(unfetched(checks)?.message).toContain("7 script(s) were not requested");
+    expect(unfetched(checks)?.message).toContain("7 script(s) were not scanned");
     expect(checks.some((c) => c.name === "leaked-secrets")).toBe(false);
   });
 });
