@@ -19,6 +19,7 @@ The rule reads every `script[type="application/ld+json"]` on the page and keeps 
 - `organization-social`: passes with the message `N social profile(s) linked`, counting the string entries in `sameAs`. With no string entries it reports at info status with `No sameAs social profiles` and the value `Link to social profiles for brand verification`.
 - `organization-sameas-missing`: emitted only when the site profile already knows official social accounts for the site and `sameAs` omits one or more of them. It warns with the message `N known social account(s) missing from schema sameAs`, the value `Add detected official profiles to Organization sameAs`, and one item per account labelled with its platform.
 - `organization-merchant-identity`: emitted only for a confirmed shop, always at info status and never a failure. It reports whether the markup declares an actual organization name plus an address or a tax/company identifier. See below.
+- `organization-contact-channels`: informational, never a failure. It reports which contact channels this page shows, kept apart: `structured-telephone` and `structured-email` (from `telephone` and `email` on the organization or on a `ContactPoint`, inline or linked by `@id`, in JSON-LD, Microdata or RDFa), `mailto-link` and `tel-link` (visible links with a usable address or number), and `contact-form` (a form with a message box or that names itself a contact form; search and login forms are ignored).
 
 `logo` is not part of the required set even though the missing-logo result mentions the knowledge panel. A page with `name` and `url` and no logo passes `organization-required` and gets the separate info result. Every property test is a truthiness test rather than a presence test, so a property present but empty, `0` or `false` counts as missing. The cross-check in the last bullet is a no-op when the audit has no site metadata, so an offline run behaves as if it were not there.
 
@@ -32,6 +33,10 @@ A page counts as a confirmed shop when the site profile says ecommerce or market
 - `unknown`: the read failed or looks truncated (`incomplete-read`), or no organization could be identified (`no-organization`). A read that could not be completed never proves absence.
 
 This reports observable markup only. It does not assess legal compliance, does not ask you to publish any private data, and never invents an identifier. The existing organization checks and their results are unchanged and are not repeated.
+
+### Contact channels
+
+Each channel is `present` (with where it was read from), `absent` or `unknown`. A channel is `absent` only when the HTML was read completely; a failed or truncated read leaves unobserved channels `unknown` and keeps the ones it did see. The summary names what was seen, for example `contact form only` when a form is the sole channel. The check describes this page only and implies no requirement to publish a telephone number or email address. It is emitted when the page has an organization, a confirmed shop or any contact channel. The existing organization checks and the E-E-A-T contact-page rules are unchanged.
 
 ## How to fix it
 

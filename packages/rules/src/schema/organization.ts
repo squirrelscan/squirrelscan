@@ -9,7 +9,13 @@ import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 import { flattenJsonLdNodes } from "@squirrelscan/utils";
 
-import { merchantIdentityCheck, readMerchantIdentity, readOrganizations } from "./merchant-evidence";
+import { contactChannelsCheck, readContactEvidence } from "./contact-evidence";
+import {
+  isConfirmedShop,
+  merchantIdentityCheck,
+  readMerchantIdentity,
+  readOrganizations,
+} from "./merchant-evidence";
 import { crossCheckSocials, socialPlatformLabel } from "../social/social-match";
 
 const REQUIRED_PROPS = ["name", "url"];
@@ -65,8 +71,11 @@ export const organizationSchemaRule: Rule = {
     // Informational evidence, appended after the existing checks so they are
     // unchanged. Only emitted for a confirmed shop.
     const withEvidence = (): RuleResult => {
-      const merchant = readMerchantIdentity(ctx, readOrganizations(ctx, pageNodes));
+      const org = readOrganizations(ctx, pageNodes);
+      const merchant = readMerchantIdentity(ctx, org);
       if (merchant) checks.push(merchantIdentityCheck(merchant));
+      const contact = readContactEvidence(ctx, org, isConfirmedShop(ctx, org.allNodes));
+      if (contact) checks.push(contactChannelsCheck(contact));
       return { checks };
     };
 
