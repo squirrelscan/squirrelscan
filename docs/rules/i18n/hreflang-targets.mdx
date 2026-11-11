@@ -1,0 +1,95 @@
+---
+title: "hreflang targets: redirects, errors, noindex and missing return links"
+description: "An hreflang link is ignored when its target redirects, errors, is noindex, canonicalises elsewhere or does not link back. squirrel checks each target the crawl fetched."
+---
+
+## What this checks
+
+[hreflang](/rules/i18n/hreflang) says which pages are the language versions of each other. Search engines only use the pair when both ends agree, so a link that points at the wrong kind of page is dropped without a warning, and the wrong language version is shown.
+
+This is a site rule. It reads the hreflang links collected during the crawl and judges each target the crawl already fetched. It makes no request of its own.
+
+| Check | Fires when | Status |
+|---|---|---|
+| `hreflang-to-redirect` | the target answers with a redirect. The finding names the source page, the target and the URL it ends on | warn |
+| `hreflang-to-broken` | the target answers 4xx or 5xx. The finding carries the status code | fail |
+| `hreflang-to-non-indexable` | the target is `noindex` (robots meta tag or `X-Robots-Tag` header), or its canonical is a different URL. The finding gives the reason | warn |
+| `hreflang-no-return-link` | the target has hreflang links and none of them point back at the source page. Each pair is reported once, with both URLs | fail |
+
+A set where every page names every other page and itself passes all four.
+
+## What is not checked
+
+A target the crawl did not fetch is never passed or failed. That includes targets on other hosts the crawl did not visit, pages beyond the page limit, targets that answered with rate limiting or a bot-wall challenge, and non-HTML targets. They are counted in an `hreflang-not-checked` info check with the list. A target with no hreflang links at all is not reported as missing a return link: that case is for the page's own [hreflang](/rules/i18n/hreflang) check.
+
+Only a link that names the URL a redirect starts from is reported as a redirect. A link that names the final URL a redirect ends on is a link to that final page: it is judged when the crawl fetched that page, and counted as not checked when it did not.
+
+`noindex` is judged from the robots meta tag and the `X-Robots-Tag` header only, where the value contains `noindex`. A `googlebot`-specific meta tag with `noindex`, and `robots="none"` (which means `noindex, nofollow`), are not detected.
+
+A target that redirects is reported as a redirect and not judged further, since its stored markup belongs to the page it ends on.
+
+When the site has no hreflang links to other pages, the rule is skipped with the reason `No hreflang links`.
+
+hreflang is read from `<link rel="alternate" hreflang>` tags. hreflang declared in a `Link` header or in a sitemap is not collected by the crawl yet, so it is not judged.
+
+## How to fix it
+
+Point every hreflang link at the final URL of that language version, one that returns 200, is not `noindex`, and names itself as its canonical. Then make each version list every other version and itself.
+
+```html
+<link rel="alternate" hreflang="en" href="https://example.com/en/pricing" />
+<link rel="alternate" hreflang="de" href="https://example.com/de/preise" />
+<link rel="alternate" hreflang="x-default" href="https://example.com/en/pricing" />
+```
+
+Generate the set from one source so the pairs cannot drift apart when a URL changes.
+
+| | |
+|---|---|
+| **Rule ID** | `i18n/hreflang-targets` |
+| **Category** | [Internationalization](/rules/i18n) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 5/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["i18n/hreflang-targets"]
+```
+
+### Disable all Internationalization rules
+
+```toml squirrel.toml
+[rules]
+disable = ["i18n/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["i18n/hreflang-targets"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Related rules
+
+- [i18n/hreflang](/rules/i18n/hreflang): the tags on one page, their codes, `x-default` and the self reference.
+- [crawl/canonical-chain](/rules/crawl/canonical-chain): the canonical tag each version needs.
+- [crawl/indexability](/rules/crawl/indexability): which pages are kept out of the index.
+- [links/broken-links](/rules/links/broken-links): broken links in the page body.
+
+Internationalization findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+{/* glossary:backlinks:start */}
+
+{/* glossary:backlinks:end */}
+
+## References
+
+- [Localized versions of your pages, Google Search Central](https://developers.google.com/search/docs/specialty/international/localized-versions)

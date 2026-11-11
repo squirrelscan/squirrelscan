@@ -462,7 +462,8 @@
                 "pages": [
                   "rules/i18n/index",
                   "rules/i18n/lang-attribute",
-                  "rules/i18n/hreflang"
+                  "rules/i18n/hreflang",
+                  "rules/i18n/hreflang-targets"
                 ]
               },
               {

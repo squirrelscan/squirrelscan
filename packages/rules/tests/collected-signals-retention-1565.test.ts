@@ -5,9 +5,11 @@
 import { describe, expect, test } from "bun:test";
 import { parsePage } from "@squirrelscan/parser";
 
-import { buildCollectedPageSignal, detachAnchors, detachFingerprint } from "../src/collected-signals";
+import { buildCollectedPageSignal, detachAnchors, detachFingerprint, detachHreflang } from "../src/collected-signals";
 import { pageScriptSrcs } from "../src/adblock/blocked-links";
+import { buildHreflangSignal } from "../src/i18n/hreflang-signal";
 import { fingerprintPage, type PageFingerprint } from "../src/integrity/fingerprint";
+import type { HreflangPageSignal } from "../src/i18n/hreflang-signal";
 import { buildPageAnchorSignal, type PageAnchorSignal } from "../src/links/page-anchors";
 import { detachedList } from "../src/shared/detach";
 
@@ -34,7 +36,8 @@ function heavyPage(i: number): string {
   const scripts = Array.from({ length: n }, (_, k) => `<script src="https://cdn${k}.example/p${i}/app-${k}.js"></script>`).join("");
   const classes = Array.from({ length: 50 }, (_, k) => `c${i}-${k}`).join(" ");
   const anchors = Array.from({ length: 500 }, (_, k) => `<h2 id="section-heading-${i}-${k}">S</h2><a href="#section-heading-${i}-${k}">go</a><a name="legacy-${i}-${k}"></a>`).join("");
-  return `<!doctype html><html><head><title>P${i}</title>${links}<style>:root{${vars}}</style>${scripts}</head><body class="${classes}">${pad}<nav>n</nav>${anchors}<footer>f</footer></body></html>`;
+  const alternates = Array.from({ length: n }, (_, k) => `<link rel="alternate" hreflang="x-${k}" href="https://alt${k}.example/p${i}/page-${k}">`).join("");
+  return `<!doctype html><html><head><title>P${i}</title>${links}${alternates}<style>:root{${vars}}</style>${scripts}</head><body class="${classes}">${pad}<nav>n</nav>${anchors}<footer>f</footer></body></html>`;
 }
 
 const heapMb = (): number => {
@@ -48,11 +51,13 @@ const raw: Record<string, Extract> = {
   scriptSrcs: (p) => pageScriptSrcs(p.document!),
   fingerprint: (p, i) => fingerprintPage(p, url(i)),
   anchors: (p) => buildPageAnchorSignal({ parsed: p, rendered: false }),
+  hreflang: (p, i) => buildHreflangSignal(p, {}, url(i)),
 };
 const copied: Record<string, Extract> = {
   scriptSrcs: (p, i) => detachedList(raw.scriptSrcs!(p, i) as string[]),
   fingerprint: (p, i) => detachFingerprint(raw.fingerprint!(p, i) as PageFingerprint),
   anchors: (p, i) => detachAnchors(raw.anchors!(p, i) as PageAnchorSignal),
+  hreflang: (p, i) => detachHreflang(raw.hreflang!(p, i) as HreflangPageSignal),
 };
 
 /** Heap kept by holding `extract`'s result for PAGES freshly parsed pages (the document itself is dropped each time). */
@@ -74,7 +79,7 @@ const parseOnly = (): number => retained((_p, i) => i);
 // shows what the copy is for. Each field is held to the parse-only heap (plus a margin for the copy's own strings), and the raw
 // extractor is the control that the fixture can see retention at all, so removing a copy fails its own test.
 describe("a collected signal field does not keep its page", () => {
-  for (const field of ["scriptSrcs", "fingerprint", "anchors"]) {
+  for (const field of ["scriptSrcs", "fingerprint", "anchors", "hreflang"]) {
     test(`${field}: the copy keeps close to the parse-only heap, the uncopied field keeps clearly more`, () => {
       const base = parseOnly();
       const copy = retained(copied[field]!, heavyPage);
@@ -92,6 +97,7 @@ describe("a collected signal field does not keep its page", () => {
     expect(signal.scriptSrcs.length).toBe(20);
     expect(signal.anchors?.ids.length).toBe(30);
     expect(signal.fingerprint?.stylesheetHrefs.size).toBe(1);
+    expect(signal.hreflang).toBeDefined();
   }, 30_000);
 });
 
