@@ -10,11 +10,17 @@ import { isCloudflareEmailProtectionUrl, normalizeUrl } from "@squirrelscan/util
 import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
 
 import {
+  chromeReach,
+  chromeSectionOf,
+  htmlPageCount,
+  isSitewide,
   regionsField,
   sectionMeta,
+  sitewideMessageHead,
   tallyFields,
   tallySource,
   withSection,
+  type ChromeReach,
   type SourceTally,
 } from "./link-section-label";
 
@@ -31,6 +37,13 @@ export const brokenLinksRule: Rule = {
     scope: "site",
     severity: "error",
     weight: 7,
+    // A link moves between the content check and the site-wide check as the pages that carry it change (#1772).
+    // A finding stored under one name is judged by the other, so a link that only changed check is not
+    // resolved (and reported fixed) under its old name: it continues under the new one.
+    supersededChecks: {
+      "broken-links": ["broken-links-sitewide"],
+      "broken-links-sitewide": ["broken-links"],
+    },
   },
 
   run(ctx: RuleContext): RuleResult {
@@ -49,6 +62,8 @@ export const brokenLinksRule: Rule = {
     // Every link target, with the pages that link it: each page once, with its links there and
     // where on the page they sit (#2307, pub#837).
     const linkTargets = new Map<string, SourceTally>();
+    // The same placements, only where the markup or a confident model placed them: what decides "site-wide".
+    const chromeTargets = new Map<string, SourceTally>();
     // pub#811: Cloudflare's email obfuscation rewrites `mailto:` links to
     // `/cdn-cgi/l/email-protection#<hex>`, which answers an error status but
     // is an email address, not a page. The parser carries them as contact
@@ -66,6 +81,9 @@ export const brokenLinksRule: Rule = {
           let tally = linkTargets.get(link.url);
           if (!tally) linkTargets.set(link.url, (tally = new Map()));
           tallySource(tally, page.url, link.section);
+          let chrome = chromeTargets.get(link.url);
+          if (!chrome) chromeTargets.set(link.url, (chrome = new Map()));
+          tallySource(chrome, page.url, chromeSectionOf(link));
         }
       }
       for (const contact of page.parsed.contactLinks ?? []) {
@@ -232,35 +250,67 @@ export const brokenLinksRule: Rule = {
       ...(emailProtectionLinks > 0 ? { emailProtectionLinks } : {}),
     });
 
-    if (brokenLinks.length > 0) {
+    // A broken link that sits in the header, navigation or footer of most pages is its own check (#1772): a
+    // visitor meets it on every page, and one fix in the template closes it. Links in page content stay here.
+    const itemOf = (b: (typeof brokenLinks)[number]) => {
+      const { sourcePages, sources, sections, regions } = tallyFields(b.sources);
+      return {
+        reach: chromeReach(tallyFields(chromeTargets.get(b.url) ?? new Map()).sources),
+        item: {
+          id: b.url,
+          label: withSection(`${b.url} (${b.statusCode})`, sections),
+          sourcePages,
+          sources,
+          ...regionsField(regions),
+          meta: {
+            statusCode: b.statusCode,
+            ...sectionMeta(sections),
+            // Pages, as the report counts them; `sources` says how many links each one has.
+            linkedFrom: sourcePages.length,
+            ...(b.probed ? { probed: true } : {}),
+          },
+        },
+      };
+    };
+    // The pages a footer is read on: parsed HTML pages, not redirect entries, error pages or files.
+    const crawledHtmlPages = htmlPageCount(pages);
+    const contentBroken: ReturnType<typeof itemOf>[] = [];
+    const sitewideBroken: ReturnType<typeof itemOf>[] = [];
+    for (const b of brokenLinks) {
+      const built = itemOf(b);
+      (isSitewide(built.reach, crawledHtmlPages) ? sitewideBroken : contentBroken).push(built);
+    }
+
+    if (contentBroken.length > 0) {
       checks.push({
         name: "broken-links",
         status: "fail",
-        message: `${brokenLinks.length} broken internal link(s) (4xx/5xx)`,
-        items: brokenLinks.map((b) => {
-          const { sourcePages, sources, sections, regions } = tallyFields(b.sources);
-          return {
-            id: b.url,
-            label: withSection(`${b.url} (${b.statusCode})`, sections),
-            sourcePages,
-            sources,
-            ...regionsField(regions),
-            meta: {
-              statusCode: b.statusCode,
-              ...sectionMeta(sections),
-              // Pages, as the report counts them; `sources` says how many links each one has.
-              linkedFrom: sourcePages.length,
-              ...(b.probed ? { probed: true } : {}),
-            },
-          };
-        }),
+        // Once a site-wide check sits beside it, the message says which links are its own.
+        message:
+          sitewideBroken.length > 0
+            ? `${contentBroken.length} broken internal ${contentBroken.length === 1 ? "link" : "links"} in page content (4xx/5xx)`
+            : `${contentBroken.length} broken internal link(s) (4xx/5xx)`,
+        items: contentBroken.map((b) => b.item),
         details: coverage(),
       });
-    } else if (!notFollowed) {
+    } else if (!notFollowed && sitewideBroken.length === 0) {
+      // With only site-wide links broken there is no pass row: the rule still fails once, as it did, so one
+      // footer link costs what it always cost, and no clean row says "no broken links" beside a broken one.
       checks.push({
         name: "broken-links",
         status: "pass",
         message: "No broken internal links detected",
+        details: coverage(),
+      });
+    }
+
+    if (sitewideBroken.length > 0) {
+      const reaches: ChromeReach[] = sitewideBroken.map((b) => b.reach);
+      checks.push({
+        name: "broken-links-sitewide",
+        status: "fail",
+        message: `${sitewideMessageHead("internal", reaches)} (4xx/5xx)`,
+        items: sitewideBroken.map((b) => b.item),
         details: coverage(),
       });
     }

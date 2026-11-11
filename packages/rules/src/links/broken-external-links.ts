@@ -16,6 +16,11 @@ import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
 import type { Rule, RuleContext, RuleResult, CheckResult, SiteData } from "../types";
 
 import {
+  chromeReach,
+  chromeSectionOf,
+  htmlPageCount,
+  isSitewide,
+  sitewideMessageHead,
   regionsField,
   sectionMeta,
   tallyFields,
@@ -83,6 +88,8 @@ interface ExternalPlacement {
   sources(href: string, sourcePages: readonly string[]): CheckItemSource[] | undefined;
   /** Audited pages linking it, per section (pub#846), or undefined when none placed it. */
   regions(href: string): SectionCounts | undefined;
+  /** Per page: the link's chrome placement, only where the markup or a confident model placed it (#1772). */
+  chromeSources(href: string): CheckItemSource[];
 }
 
 /**
@@ -98,10 +105,19 @@ function externalPlacement(
   wantedMasked: ReadonlySet<string>
 ): ExternalPlacement {
   const byHref = new Map<string, SourceTally>();
-  const count = (key: string, page: string, section: LinkSection | undefined): void => {
+  const chromeByHref = new Map<string, SourceTally>();
+  const count = (
+    key: string,
+    page: string,
+    section: LinkSection | undefined,
+    chromeSection: LinkSection | undefined
+  ): void => {
     let tally = byHref.get(key);
     if (!tally) byHref.set(key, (tally = new Map()));
     tallySource(tally, page, section);
+    let chrome = chromeByHref.get(key);
+    if (!chrome) chromeByHref.set(key, (chrome = new Map()));
+    tallySource(chrome, page, chromeSection);
   };
   if (wanted.size > 0 || wantedMasked.size > 0) {
     // Distinct URLs are far fewer than links, and masking parses the URL.
@@ -109,12 +125,12 @@ function externalPlacement(
     for (const page of pages ?? []) {
       for (const link of page.parsed?.links ?? []) {
         if (link.isInternal || !link.url) continue;
-        if (wanted.has(link.url)) count(link.url, page.url, link.section);
+        if (wanted.has(link.url)) count(link.url, page.url, link.section, chromeSectionOf(link));
         if (wantedMasked.size === 0) continue;
         let key = masked.get(link.url);
         if (key === undefined) masked.set(link.url, (key = maskLinkTokens(link.url)));
         // A link written without a token masks to itself and was counted above.
-        if (key !== link.url && wantedMasked.has(key)) count(key, page.url, link.section);
+        if (key !== link.url && wantedMasked.has(key)) count(key, page.url, link.section, chromeSectionOf(link));
       }
     }
   }
@@ -137,6 +153,10 @@ function externalPlacement(
     regions(href) {
       const regions = fieldsOf(href)?.regions;
       return regions && Object.keys(regions).length > 0 ? regions : undefined;
+    },
+    chromeSources(href) {
+      const tally = chromeByHref.get(href);
+      return tally ? tallyFields(tally).sources : [];
     },
   };
 }
@@ -299,6 +319,11 @@ export const brokenExternalLinksRule: Rule = {
     // links that may be broken warn, and links that cannot be verified inform.
     severity: "error",
     weight: 5,
+    // A link moves between the content check and the site-wide check (#1772): see links/broken-links.
+    supersededChecks: {
+      "broken-external-links": ["broken-external-links-sitewide"],
+      "broken-external-links-sitewide": ["broken-external-links"],
+    },
   },
 
   run(ctx: RuleContext): RuleResult {
@@ -484,27 +509,57 @@ export const brokenExternalLinksRule: Rule = {
       });
     } else {
       if (confirmedBroken.length > 0) {
-        const byReason = new Map<string, number>();
-        for (const link of confirmedBroken) {
-          const key = brokenReason(link);
-          byReason.set(key, (byReason.get(key) ?? 0) + 1);
-        }
-        const parts = [...byReason].map(([reason, n]) =>
-          /^\d+$/.test(reason) ? `${n} with ${reason}` : `${n} ${reason}`,
-        );
-        checks.push({
-          name: "broken-external-links",
-          status: "fail",
-          message: `${confirmedBroken.length} broken external link(s): ${parts.join(", ")}`,
-          items: brokenItems(confirmedBroken),
-          details: {
-            totalBroken: confirmedBroken.length,
-            totalChecked: checkedCount,
-            deadHosts: confirmedBroken.filter((l) => l.error !== null && isDeadHostError(l.error)).length,
-            verifiedWorking,
-            totalFound: found,
-          },
+        // A broken link in the header, navigation or footer of most pages is its own check (#1772); the
+        // links in page content stay in `broken-external-links`. Possibly-broken links are not split.
+        const crawledPages = htmlPageCount(ctx.site?.pages ?? []);
+        const all = brokenItems(confirmedBroken).map((item, i) => ({
+          link: confirmedBroken[i]!,
+          item,
+          reach: chromeReach(placement.chromeSources(item.id)),
+        }));
+        const sitewide = all.filter((b) => isSitewide(b.reach, crawledPages));
+        const content = all.filter((b) => !isSitewide(b.reach, crawledPages));
+        const reasons = (list: typeof all): string => {
+          const byReason = new Map<string, number>();
+          for (const { link } of list) {
+            const key = brokenReason(link);
+            byReason.set(key, (byReason.get(key) ?? 0) + 1);
+          }
+          return [...byReason]
+            .map(([reason, n]) => (/^\d+$/.test(reason) ? `${n} with ${reason}` : `${n} ${reason}`))
+            .join(", ");
+        };
+        const detailsOf = (list: typeof all) => ({
+          totalBroken: list.length,
+          totalChecked: checkedCount,
+          deadHosts: list.filter((b) => b.link.error !== null && isDeadHostError(b.link.error)).length,
+          verifiedWorking,
+          totalFound: found,
         });
+        if (content.length > 0) {
+          checks.push({
+            name: "broken-external-links",
+            status: "fail",
+            message:
+              sitewide.length > 0
+                ? `${content.length} broken external ${content.length === 1 ? "link" : "links"} in page content: ${reasons(content)}`
+                : `${content.length} broken external link(s): ${reasons(content)}`,
+            items: content.map((b) => b.item),
+            details: detailsOf(content),
+          });
+        }
+        if (sitewide.length > 0) {
+          checks.push({
+            name: "broken-external-links-sitewide",
+            status: "fail",
+            message: `${sitewideMessageHead(
+              "external",
+              sitewide.map((b) => b.reach),
+            )}: ${reasons(sitewide)}`,
+            items: sitewide.map((b) => b.item),
+            details: detailsOf(sitewide),
+          });
+        }
       }
       if (possiblyBroken.length > 0) {
         const byStatus = new Map<string, number>();
