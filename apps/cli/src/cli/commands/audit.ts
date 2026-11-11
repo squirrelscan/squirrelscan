@@ -67,6 +67,7 @@ import {
 import { localUnverifiedLinksNotice } from "@/audit/local-link-notice";
 import { MAX_DURATION_MAX_SECONDS } from "@/audit/max-duration";
 import { configDir, loadConfiguredPlugins } from "@/audit/plugins";
+import { renderFallbackLine } from "@/audit/render-summary";
 import {
   generateConsoleReport,
   generateTextReport,
@@ -3154,6 +3155,9 @@ export const audit = defineCommand({
       if (report.cloudSpend && report.cloudSpend.totalSpent > 0) {
         log(formatCloudSpendSummary(report.cloudSpend));
       }
+      // #1664: a render that fell back is a quality loss a paying user must see.
+      const renderLine = renderFallbackLine(report.render);
+      if (renderLine) log(fmt.yellow(`⚠ ${renderLine}`));
       // Partial cloud coverage must be loud: failed batches are uncharged and
       // produce no spend line, so the credits line alone can look healthy
       // while half the cloud-backed checks silently skipped.

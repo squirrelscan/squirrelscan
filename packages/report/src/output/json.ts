@@ -7,6 +7,7 @@ import type {
   EditorSummaryPriority,
   MaxDurationCut,
   RefusedFetch,
+  ReportRender,
   ResumeOutcome,
   UnstoredPageReason,
   WafBlockedSummary,
@@ -274,6 +275,8 @@ interface SlimJsonReport {
   status: AuditStatus;
   /** Exit code, audit status and publish result (#1657); present on a report an audit just wrote. */
   outcome?: AuditOutcome;
+  /** What cloud rendering did (#1664): mode, pages rendered and fetched plain, and why it fell back; present on a report an audit just wrote. */
+  render?: ReportRender;
   /** Short human reason, present when `status` is failed/blocked. */
   statusReason?: string;
   /**
@@ -640,6 +643,7 @@ function buildSlimReport(
     // #1657: the exit code the command ends with, the audit status and what publishing did, so a
     // CI gate or an agent reads them from the report. Present on a report an audit just wrote.
     ...(report.outcome ? { outcome: report.outcome } : {}),
+    ...(report.render ? { render: report.render } : {}),
     ...(report.statusReason ? { statusReason: report.statusReason } : {}),
     // #1822: a programmatic consumer branches on the class, not on the prose.
     // Derived when the stored report predates the field, so a CI gate reading

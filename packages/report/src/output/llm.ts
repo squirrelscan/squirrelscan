@@ -266,6 +266,16 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
     );
   }
 
+  // #1664: how pages were fetched, so an agent can tell rendered pages from plain-HTTP ones and
+  // sees why a render fell back. Present on a report an audit just wrote.
+  if (report.render) {
+    const r = report.render;
+    const reasonAttr = r.fallbackReason ? ` fallback-reason="${escapeXml(r.fallbackReason)}"` : "";
+    lines.push(
+      `<render requested="${r.requested}" mode="${r.mode}" pages-rendered="${r.pagesRendered}" pages-fetched-plain="${r.pagesFetchedPlain}"${reasonAttr}/>`,
+    );
+  }
+
   if (report.status === "partial" && report.statusReason) {
     lines.push(`<status state="partial" reason="${escapeXml(report.statusReason)}">`);
     lines.push(
