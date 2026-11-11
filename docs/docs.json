@@ -253,6 +253,7 @@
                   "rules/links/nofollow-internal",
                   "rules/links/orphan-pages",
                   "rules/links/weak-internal-links",
+                  "rules/links/click-depth",
                   "rules/links/no-contextual-inbound",
                   "rules/links/dead-end-pages",
                   "rules/links/anchor-text",
