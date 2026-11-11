@@ -132,6 +132,9 @@ for (const engine of ["v1", "streaming"] as const) {
         linkTargets: 4,
         unfetchedTargets: 0,
         probedTargets: 0,
+        refusedTargets: 0,
+        // The rate-limited /pricing (pub#1679).
+        rateLimitedTargets: 1,
         notFetched: {},
       });
       const rateLimited = checks.find((c) => c.name === "rate-limited-links");

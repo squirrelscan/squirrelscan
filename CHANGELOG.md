@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- **`links/broken-links` counts the targets that answered a refusal or a throttle.** Every `broken-links` row now carries `refusedTargets` (a 401, a 403 or a bot-wall challenge) and `rateLimitedTargets` (a 429) in its coverage details, next to `linkTargets`, `probedTargets` and `unfetchedTargets`. Those targets are not broken and not unfetched, and nothing is known of the page behind them, so `linkTargets` less `unfetchedTargets` over-counts what was observed; subtract these two as well. No check message, item or status changes. (#1679)
+
 ## v0.0.174 (2026-11-11)
 
 Reports say why a rule did not give a verdict (JSON schema 1.9), `squirrel audit` has one exit code precedence with the outcome in the JSON and LLM reports, `--resume` says why it started a new crawl, an expired login is called out, settings writes no longer lose each other, and five rules stop flagging hidden, presentational and symbol-only content.

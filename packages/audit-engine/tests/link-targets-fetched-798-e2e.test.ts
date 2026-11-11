@@ -158,6 +158,9 @@ for (const engine of ["v1", "streaming"] as const) {
         linkTargets: 5,
         unfetchedTargets: 1,
         probedTargets: 0,
+        // The throttled /busy and the walled target (pub#1679): answered, so not unfetched.
+        refusedTargets: 1,
+        rateLimitedTargets: 1,
         notFetched: { noAnswer: 1 },
       });
       const rateLimited = checks.find((c) => c.name === "rate-limited-links");

@@ -394,13 +394,18 @@ export const LINK_TARGETS_NOT_FETCHED_SKIP_REASON = "link-targets-not-fetched";
 /**
  * `details` keys `links/broken-links` sets on every row it emits (pub#794): how
  * many distinct internal link targets the pages link, how many nothing fetched,
- * how many the internal link check answered, and why the unfetched ones were
- * left out. They describe what the audit covered, not any one broken link.
+ * how many the internal link check answered, how many answered a refusal
+ * (401/403, a bot-wall challenge) or a throttle (429; pub#1679: counted neither
+ * as broken nor as unfetched, and nothing is known of the page), and why the
+ * unfetched ones were left out. They describe what the audit covered, not any
+ * one broken link.
  */
 export const LINK_COVERAGE_DETAIL_KEYS = [
   "linkTargets",
   "unfetchedTargets",
   "probedTargets",
+  "refusedTargets",
+  "rateLimitedTargets",
   "notFetched",
 ] as const;
 
