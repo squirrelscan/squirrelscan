@@ -53,63 +53,92 @@ describe("sessionParamsOf table", () => {
   }
 });
 
+// Built from parts so no fixture reads as a real credential.
+const ASP_UPPER = ["ABCDEFGH", "IJKLMNOP"].join(""); // 16 uppercase letters, as real ASP ids are
+const B64URL = ["Xk3Q", "abc-def", "Z9mP2Lw8", "Rt5Vn7Hs4Jb1Y"].join(""); // mixed case and digits around `abc-def`
+const DOTTED = ["ABCDEF", "0123456789", ".node1"].join("");
+const BANG = ["ABCDEF", "0123456789", "!12345"].join("");
+
 describe("looksLikeSessionValue", () => {
-  // [value, loose (unambiguous names), strict (sid, sessionid)]
+  // [value, unambiguous names (loose), weak names sid and sessionid (strict)]
   const table: [string, boolean, boolean][] = [
     ["", false, false],
     ["2", false, false],
     ["main", false, false],
     ["abcdefg", false, false],
-    ["abcdefgh", false, false],
-    ["abcd1234", true, true],
+    ["abcdefgh", true, false],
     ["12345678", false, false],
-    ["abcdefghijklmnop", false, false],
-    ["summer-collection-2024", false, false],
-    ["my_cart_items_list", false, false],
     ["1234567890123456", false, false],
     ["1730000000000000000", false, false],
-    ["SummerCollectionOnlineStoreHome", true, true],
-    ["SummerCollectionOnline", true, false],
+    ["summer-collection-2024", true, false],
+    ["summer-collection", false, false],
+    ["my_cart_items_list", false, false],
+    ["category-12345", true, false],
+    ["item20241105", true, false],
+    ["summer2024", true, false],
+    ["abcd1234", true, false],
+    ["abcdefghijklmnop", true, false],
+    [ASP_UPPER, true, false],
+    [B64URL, true, false],
+    [DOTTED, true, true],
+    [BANG, true, true],
     [HEX32, true, true],
     [ALNUM26, true, true],
     ["0123456789abcdef", true, true],
-    ["ab-12cd34ef56", true, true],
   ];
   for (const [value, loose, strict] of table) {
-    test(`${JSON.stringify(value)}: loose ${loose}, strict ${strict}`, () => {
+    test(`${JSON.stringify(value)}: unambiguous ${loose}, weak ${strict}`, () => {
       expect(looksLikeSessionValue(value)).toBe(loose);
       expect(looksLikeSessionValue(value, true)).toBe(strict);
     });
   }
 });
 
-describe("weak names need the strict value, unambiguous names the looser one", () => {
-  const long = "SummerCollectionOnline"; // 22 mixed-case letters: loose only
-  const cases: [string, boolean][] = [
-    [`https://x.test/?sid=${long}`, false],
-    [`https://x.test/?sessionid=${long}`, false],
-    [`https://x.test/?PHPSESSID=${long}`, true],
-    [`https://x.test/?jsessionid=${long}`, true],
-    [`https://x.test/?session_id=${long}`, true],
-    [`https://x.test/?ASPSESSIONIDQQQQ=${long}`, true],
-    [`https://x.test/p;sid=${long}`, false],
-    [`https://x.test/p;jsessionid=${long}`, true],
+describe("two name classes", () => {
+  const queryAndPath = (name: string, value: string) => [
+    `https://x.test/?${name}=${value}`,
+    `https://x.test/p;${name}=${value}`,
   ];
-  for (const [url, flagged] of cases) test(url, () => expect(sessionParamsOf(url).length > 0).toBe(flagged));
+  const flagged = (name: string, value: string) =>
+    queryAndPath(name, value).map((u) => sessionParamsOf(u).length > 0);
 
-  test("long human labels and all-digit ids are not sessions under any name", () => {
-    for (const name of ["sid", "sessionid", "PHPSESSID", "jsessionid", "session_id"]) {
-      expect(sessionParamsOf(`https://x.test/?${name}=summer-collection-2024`)).toEqual([]);
-      expect(sessionParamsOf(`https://x.test/?${name}=1234567890123456`)).toEqual([]);
-      expect(sessionParamsOf(`https://x.test/?${name}=my_long_human_label`)).toEqual([]);
+  test("unambiguous names: real ids of every shape are flagged, in query and path form", () => {
+    for (const name of ["PHPSESSID", "jsessionid", "session_id", "ASPSESSIONIDQQQRSTUV"]) {
+      for (const value of [ASP_UPPER, ALNUM26, HEX32, B64URL, DOTTED, BANG]) {
+        expect(flagged(name, value)).toEqual([true, true]);
+      }
     }
   });
 
-  test("a real 32-hex and a 26-char alphanumeric are flagged under every name", () => {
-    for (const name of ["sid", "sessionid", "PHPSESSID", "jsessionid"]) {
-      expect(sessionParamsOf(`https://x.test/?${name}=${HEX32}`)).toHaveLength(1);
-      expect(sessionParamsOf(`https://x.test/?${name}=${ALNUM26}`)).toHaveLength(1);
+  test("unambiguous names: short, all-digit and all-lowercase phrases are not", () => {
+    for (const name of ["PHPSESSID", "jsessionid", "session_id", "ASPSESSIONIDQQQRSTUV"]) {
+      for (const value of ["abc", "1234567890123456", "summer-collection", "my_cart_items_list"]) {
+        expect(flagged(name, value)).toEqual([false, false]);
+      }
     }
+  });
+
+  test("weak names: only a long generated value, never a label, a counter or a short mixed id", () => {
+    for (const name of ["sid", "sessionid"]) {
+      for (const value of [HEX32, ALNUM26, DOTTED, BANG]) expect(flagged(name, value)).toEqual([true, true]);
+      for (const value of [
+        "category-12345",
+        "item20241105",
+        "summer2024",
+        "summer-collection-2024",
+        "1234567890123456",
+        ASP_UPPER,
+        "main",
+        "2",
+      ]) {
+        expect(flagged(name, value)).toEqual([false, false]);
+      }
+    }
+  });
+
+  test("CFID with CFTOKEN keeps its own test: the pair, with a token of 8 or more characters", () => {
+    expect(sessionParamsOf("https://x.test/?CFID=1234567&CFTOKEN=98765432").map((p) => p.name)).toEqual(["CFID", "CFTOKEN"]);
+    expect(sessionParamsOf("https://x.test/?CFID=1&CFTOKEN=2")).toEqual([]);
   });
 });
 

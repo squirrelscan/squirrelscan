@@ -27,29 +27,30 @@ function isSessionName(name: string): boolean {
   return SESSION_NAMES.has(lower) || lower.startsWith("aspsessionid");
 }
 
-/** Words joined by a separator (`summer-collection`, `my_cart_items`): a label a person wrote, not a generated ID. */
-const WORD_SEPARATOR = /[A-Za-z]{3,}[-_][A-Za-z]{3,}/;
+/** All-lowercase words joined by `-` or `_` (`summer-collection`, `my_cart_items`): a phrase a person wrote. */
+const HUMAN_PHRASE = /^[a-z]+(?:[-_][a-z]+)+$/;
+
+/** Two words of three or more letters joined by `-` or `_` anywhere in the value. */
+const WORD_PAIR = /[A-Za-z]{3,}[-_][A-Za-z]{3,}/;
 
 /**
- * A value that looks generated, as a session ID is, rather than written by a person or counted:
+ * Whether a value looks like a generated session ID, by name class.
  *
- * - never all digits (a counter, a timestamp, a numeric id) and never words joined by `-` or `_`;
- * - the looser test, for names that only mean a session: 8 or more characters with a letter and a
- *   digit, or 16 or more with at least two of {a letter, a digit, mixed case};
- * - the strict test, for the weak names `sid` and `sessionid`: 8 or more characters with a letter and a
- *   digit, or 24 or more in mixed case.
- *
- * `sid=2`, `sid=main`, `sid=summer-collection-2024` and `sid=1234567890123456` are not sessions.
+ * - Unambiguous names (`PHPSESSID`, `jsessionid`, `session_id`, `ASPSESSIONID*`): 8 or more characters,
+ *   not all digits, and not a human phrase (all-lowercase words joined by `-` or `_`). Real ids pass:
+ *   16 to 24 uppercase letters (ASP), 26 to 32 character alphanumerics, base64url tokens that happen to
+ *   hold `abc-def`, `ABCDEF0123456789.node1`, `...!12345`.
+ * - Weak names (`sid`, `sessionid`; `strict` is true): 16 or more characters, a letter and a digit, no pair of
+ *   words of three or more letters joined by `-` or `_`. So `category-12345`, `item20241105`,
+ *   `summer2024`, `summer-collection-2024` and `1234567890123456` are not sessions; a 32-hex and a
+ *   26-character alphanumeric are.
  */
 export function looksLikeSessionValue(value: string, strict = false): boolean {
-  if (value.length < MIN_SESSION_VALUE) return false;
-  if (/^\d+$/.test(value) || WORD_SEPARATOR.test(value)) return false;
-  const letter = /[a-z]/i.test(value);
-  const digit = /\d/.test(value);
-  const mixedCase = /[a-z]/.test(value) && /[A-Z]/.test(value);
-  if (letter && digit) return true;
-  if (strict) return value.length >= 24 && mixedCase;
-  return value.length >= 16 && [letter, digit, mixedCase].filter(Boolean).length >= 2;
+  if (/^\d+$/.test(value)) return false;
+  if (strict) {
+    return value.length >= 16 && /[a-z]/i.test(value) && /\d/.test(value) && !WORD_PAIR.test(value);
+  }
+  return value.length >= MIN_SESSION_VALUE && !HUMAN_PHRASE.test(value);
 }
 
 /** The value test for a parameter name: strict for `sid` and `sessionid`, looser for the rest. */
