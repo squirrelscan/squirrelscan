@@ -1,5 +1,5 @@
 /**
- * Report publishing controller - publishes audit reports to reports.squirrelscan.com
+ * Report publishing controller - publishes audit reports to a shareable report link
  */
 
 import type { WebsiteScheduleSummary } from "@squirrelscan/cloud-client";

@@ -1223,7 +1223,7 @@ export const audit = defineCommand({
       type: "boolean",
       alias: "p",
       description:
-        "Publish report to reports.squirrelscan.com (now the default when signed in)",
+        "Publish report to a shareable report link (now the default when signed in)",
     },
     // Declared for help and completions only: citty delivers --no-publish as
     // publish: false and never sets this arg, so run() reads it from rawArgs.
