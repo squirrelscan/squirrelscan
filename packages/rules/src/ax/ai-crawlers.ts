@@ -285,15 +285,18 @@ export const aiCrawlersRule: Rule = {
       });
     }
 
-    // Search-engine bots: per-bot verdict for the audited URL. Info only:
-    // a search-engine block is an indexing decision the crawl rules own, not an AI-access finding.
+    // Search-engine bots: per-bot verdict for the audited URL. Googlebot blocked (from the root or for this
+    // path) warns, since it usually means the site is deindexed, often by a staging `Disallow: /` left in; every
+    // other engine stays info, as does an allowed Googlebot and an `Allow` override.
     const auditedUrl = ctx.site?.entryUrls?.[0] ?? ctx.site?.baseUrl ?? ctx.page.url;
     const search = evaluateSearchEngineBots(robotsTxt, auditedUrl);
     const searchBlocked = search.filter((v) => v.verdict !== "allowed");
+    const googlebot = search.find((v) => v.token === "Googlebot");
+    const googlebotBlocked = googlebot?.verdict === "root-blocked" || googlebot?.verdict === "path-blocked";
     checks.push({
       name: "search-engine-access",
-      status: "info",
-      message: `Search-engine bots for ${auditedUrl}: ${search
+      status: googlebotBlocked ? "warn" : "info",
+      message: `${googlebotBlocked ? `robots.txt blocks Googlebot (${SEARCH_VERDICT_LABEL[googlebot.verdict]}), which usually means the site is not indexed: check the block was intended. ` : ""}Search-engine bots for ${auditedUrl}: ${search
         .map((v) => `${v.token} ${SEARCH_VERDICT_LABEL[v.verdict]}`)
         .join("; ")}`,
       value: `${search.length - searchBlocked.length}/${search.length} allowed`,

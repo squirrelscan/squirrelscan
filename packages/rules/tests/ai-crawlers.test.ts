@@ -228,12 +228,12 @@ describe("ax/ai-crawlers search-engine bots", () => {
     expect(verdictOf(data, "https://example.com/other", "Applebot")?.verdict).toBe("root-blocked");
   });
 
-  test("the rule reports the search-engine check for the entry URL, info only", () => {
+  test("the rule reports the search-engine check for the entry URL; Googlebot blocked for it warns", () => {
     const c = ctx(robots([{ userAgent: "*", rules: [{ type: "disallow", path: "/private" }] }]));
     c.site!.entryUrls = ["https://example.com/private/start"];
     const checks = aiCrawlersRule.run(c).checks;
     const check = checks.find((x) => x.name === "search-engine-access");
-    expect(check?.status).toBe("info");
+    expect(check?.status).toBe("warn");
     expect(check?.message).toContain("Googlebot blocked for this path only");
     expect((check?.details as { auditedUrl: string }).auditedUrl).toBe(
       "https://example.com/private/start",
@@ -263,5 +263,77 @@ describe("ax/ai-crawlers search-engine bots", () => {
       { userAgent: "Applebot-Extended", rules: [{ type: "disallow", path: "/" }] },
     ]);
     expect(verdictOf(extended, "https://example.com/x", "Applebot")?.verdict).toBe("allowed");
+  });
+
+  describe("search-engine-access status (Googlebot decides)", () => {
+    const status = (rules: Group[], url = "https://example.com/") => {
+      const c = ctx(robots(rules));
+      c.site!.entryUrls = [url];
+      const check = aiCrawlersRule.run(c).checks.find((x) => x.name === "search-engine-access");
+      return { check, status: check?.status };
+    };
+    const deny = (path: string) => [{ type: "disallow" as const, path }];
+
+    test("Googlebot blocked from the root warns", () => {
+      const r = status([{ userAgent: "Googlebot", rules: deny("/") }]);
+      expect(r.status).toBe("warn");
+      expect(r.check?.message).toContain("robots.txt blocks Googlebot (blocked from the site root)");
+    });
+
+    test("Googlebot blocked for the entry path warns", () => {
+      const r = status([{ userAgent: "*", rules: deny("/shop") }], "https://example.com/shop/a");
+      expect(r.status).toBe("warn");
+      expect(r.check?.message).toContain("Googlebot (blocked for this path only)");
+    });
+
+    test("a wildcard Disallow / warns too, since Googlebot falls under it", () => {
+      expect(status([{ userAgent: "*", rules: deny("/") }]).status).toBe("warn");
+    });
+
+    test("an Allow override for the entry path stays info", () => {
+      const r = status(
+        [{ userAgent: "Googlebot", rules: [...deny("/"), { type: "allow", path: "/docs/" }] }],
+        "https://example.com/docs/intro",
+      );
+      expect(r.status).toBe("info");
+      expect(r.check?.message).not.toContain("robots.txt blocks Googlebot");
+    });
+
+    test("Googlebot allowed while another engine is blocked stays info", () => {
+      for (const token of ["Bingbot", "Applebot-Extended"]) {
+        const r = status([{ userAgent: token, rules: deny("/") }]);
+        expect(r.status, token).toBe("info");
+        expect(r.check?.message).not.toContain("robots.txt blocks Googlebot");
+      }
+      // Bingbot listed as blocked, but only as an item: it is still reported.
+      const bing = status([{ userAgent: "Bingbot", rules: deny("/") }]);
+      expect(bing.check?.items?.map((i) => i.id)).toEqual(["Bingbot"]);
+    });
+
+    test("a robots.txt that allows everything stays info", () => {
+      expect(status([]).status).toBe("info");
+    });
+
+    test("details.bots still lists every bot with its class, warn or not", () => {
+      for (const rules of [[], [{ userAgent: "Googlebot", rules: deny("/") }]] as Group[][]) {
+        const bots = (status(rules).check?.details as { bots: Array<{ token: string; crawlerClass: string }> }).bots;
+        expect(bots.map((b) => [b.token, b.crawlerClass])).toEqual([
+          ["Googlebot", "search-engine"],
+          ["Bingbot", "search-engine"],
+          ["Applebot", "search-engine"],
+        ]);
+      }
+    });
+
+    test("a missing robots.txt emits no search-engine check at all", () => {
+      expect(run(null).some((c) => c.name === "search-engine-access")).toBe(false);
+    });
+
+    test("the AI-crawler checks keep their own statuses beside a Googlebot warn", () => {
+      const checks = aiCrawlersRule.run(ctx(blockAll())).checks;
+      expect(checks[0]?.name).toBe("ai-crawler-access");
+      expect(checks[0]?.status).toBe("info");
+      expect(checks.find((c) => c.name === "search-engine-access")?.status).toBe("warn");
+    });
   });
 });
