@@ -258,6 +258,8 @@ export {
   carriedTag,
   timeAgo,
   scanScopeLine,
+  targetedRunNote,
+  scanScopeTargeted,
   scanScopeUnfetched,
   scanScopePageTypes,
   pageTypeCoverageLine,

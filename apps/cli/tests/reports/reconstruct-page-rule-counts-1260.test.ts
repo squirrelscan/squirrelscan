@@ -277,7 +277,7 @@ describe("URLs with no stored page, executed rules (#1396)", () => {
         pagesTotal: number;
         executedRules?: string[];
       };
-      expect(json.meta.schemaVersion).toBe("1.15");
+      expect(json.meta.schemaVersion).toBe("1.16");
       expect(json.pages).toHaveLength(5 + 4);
       expect(json.pagesTotal).toBe(9);
       expect(
