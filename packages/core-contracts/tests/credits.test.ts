@@ -4,6 +4,7 @@
 
 import { describe, expect, test } from "bun:test";
 
+import type { CloudServiceId } from "../src/services";
 import {
   auditCreditsPerPage,
   clampAuditPages,
@@ -125,5 +126,22 @@ describe("clampAuditPages", () => {
         );
       }
     }
+  });
+});
+
+describe("third-party scan plumbing", () => {
+  test("third_party_scan is a free ledger feature, however many units", () => {
+    expect(CREDIT_COSTS.third_party_scan).toEqual({ cost: 0, per: 1, unit: "run" });
+    expect(computeCost("third_party_scan", 1)).toBe(0);
+    expect(computeCost("third_party_scan", 40)).toBe(0);
+  });
+
+  test("it does not move the audit price", () => {
+    expect(minimumAuditCredits()).toBe(52);
+  });
+
+  test("third-party-scan is a cloud service id", () => {
+    const id: CloudServiceId = "third-party-scan";
+    expect(id).toBe("third-party-scan");
   });
 });

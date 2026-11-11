@@ -17,17 +17,18 @@ How it works:
 
 ## [Unreleased]
 
-### Changed
-
-- The `--publish` help text and the shell completions no longer name `reports.squirrelscan.com`: published reports now live at your organization's address on `squirrel.report`, and links on the old host redirect there.
-
-## v0.0.179 (2026-11-11)
-
-Audits that hit a slow or blocking site now end cleanly: the crawl phase has its own time budget (`--crawl-timeout`, `[crawler] crawl_timeout`), a crawl it stops reports a partial status with a `crawl_timeout` reason, sitemap URLs that answered with a rate limit or a bot wall are listed as unverified instead of as orphans, and the JSON report carries a `crawlPhase` block (schema 1.12). `crawl/sitemap-coverage` says where a shop's product URLs were found, grouped `lcp-preload` findings keep each page's own candidates, and `[crawler] discovery_probe_paths` (or `--discovery-probe-path`) approves discovery probes one path at a time. The TLS probe is now shared, with a plain message when the certificate was not checked.
-
 ### Added
 
+- `crawl/sitemap-coverage` reports where a shop's product URLs were found (#1651). For a site with commerce evidence (a top-level `Product` or `ProductGroup` JSON-LD node or `og:type` product on at least three crawled pages, or on one product-path page plus a cart or checkout link; a nested `Product` in a review, list or offer does not count) it adds an info check `product-discovery`: how many product URLs came from the sitemap, from crawl links or from both, and whether the sitemaps were read `complete`, `partial` or `unreadable`. A crawl stopped at its page limit is reported as bounded coverage. It never claims a product is missing, because neither a sampled crawl nor a sitemap is a product inventory. Sites without commerce evidence see no change.
 - `squirrel audit --crawl-timeout` and `[crawler] crawl_timeout` set the crawl-phase backstop, bounded at 6 hours. Unset, it is derived from the page budget and the effective per-host rate instead of a fixed 30 minutes, capped at 60 minutes (an explicit value can go to 6 hours, which weakens the wedge backstop). A crawl stopped by it reports `status: "partial"`, reason code `crawl_timeout` and a `crawlPhase` coverage object with `linkGraphComplete: false` (#1639).
+- **Approve discovery probes one path at a time.** `[crawler] discovery_probe_paths` (and `--discovery-probe-path`, repeatable) lists the probe paths an audit may request, so `/llms.txt` can go out without `/llms-full.txt`, `/.well-known/llms.txt` or `/docs/llms.txt`, and `/AGENTS.md` without its variants. A probe left out is not sent and its rule reports not checked (path not approved), never missing; a redirect from a listed path may not change the path, and the per-host limits, `robots.txt` and sitemap discovery are unchanged. A 429 or a bot challenge from the audited host (or its `www` or apex twin) now also stops the optional probes still waiting, which report not checked; a 429 from another host, such as a third-party sitemap host, does not. Unset keeps today's behaviour. (#1655)
+- `third-party-scan` is a known cloud service id and `third_party_scan` a known credit feature, both free (cost 0). Plumbing for the cloud third-party script scan: no CLI behaviour changes.
+
+### Changed
+
+- The TLS certificate handshake behind `security/tls-certificate` now lives in a shared package (`@squirrelscan/fetchers/tls-probe`) with the same egress checks and proxy handling, and accepts an explicit CONNECT proxy URL. CLI behaviour is unchanged. (#3922)
+- When a hosted audit cannot check the TLS certificate, `security/tls-certificate` now says so in plain words, with no advice about networks, proxies or `--offline`. The local wording is unchanged. (#3922)
+- The `--publish` help text and the shell completions no longer name `reports.squirrelscan.com`: published reports now live at your organization's address on `squirrel.report`, and links on the old host redirect there.
 
 ### Fixed
 
