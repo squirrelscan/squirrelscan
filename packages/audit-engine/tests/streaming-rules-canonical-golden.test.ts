@@ -88,7 +88,10 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // 53 -> 54 (#1741): the integrity page rules (brand-impersonation, fake-auth-overlay, obfuscated-script,
       // seo-doorway) now PASS on every page they read instead of saying nothing, which lifts the weighted overall
       // past one more rounding boundary. A deliberate change: a clean run is a check, not an empty list.
-      expect(v1.healthScore.overall).toBe(54);
+      // 54 -> 56 (#1765): core/meta-title, core/meta-description and links/internal-links report too short and too
+      // long as separate checks, so a page inside both limits records two passes where it recorded one. More
+      // passes lift the weighted overall past two more rounding boundaries. Failing pages are unchanged.
+      expect(v1.healthScore.overall).toBe(56);
       // 97711 -> 98211: content/hidden-text emits one page check across the 500
       // fixture pages that have a document, and passes on every one of them. The
       // overall score is unmoved.
@@ -230,7 +233,8 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // each for the run (the probe and threat intelligence are off).
       // 108253 -> 108254: crawl/conflicting-index-signals is site-scoped and adds one pass row (no page
       // sends contradictory signals), so healthScore.overall is unmoved.
-      expect(v1.findings.length).toBe(108254);
+      // 108254 -> 109734 (#1765): the split checks add a pass row per page and per direction (1,480 rows).
+      expect(v1.findings.length).toBe(109734);
       // Tripwire: EXTENDING a rule must never add a tally key, so a change here
       // is only correct alongside a deliberate new rule id. 266 -> 267 is
       // content/hidden-text, 267 -> 268 content/thin-vs-site-norm, 268 -> 269
