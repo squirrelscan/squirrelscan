@@ -387,6 +387,83 @@ describe("stylesheetBackgroundSelectorsOf lists the other background selectors (
   });
 });
 
+describe("a hostile stylesheet cannot make the parser superlinear (#1756)", () => {
+  const timed = <T,>(fn: () => T): [T, number] => {
+    const start = performance.now();
+    const out = fn();
+    return [out, performance.now() - start];
+  };
+
+  test("40 nested @media blocks finish fast and a background in them is unresolved, never a color", () => {
+    const nested = (levels: number, inner: string) =>
+      "@media (min-width:1px){".repeat(levels) + inner + "}".repeat(levels);
+    const css = "body{background:#fff}" + nested(40, ".x{background:#000} body{background:#000}");
+    const [bg, ms] = timed(() => stylesheetBackgroundOf(css));
+    expect(bg).toEqual({ kind: "unresolved" });
+    expect(ms).toBeLessThan(100);
+    const [sel, ms2] = timed(() => stylesheetBackgroundSelectorsOf(css));
+    expect(sel.truncated).toBe(true);
+    expect(ms2).toBeLessThan(100);
+  });
+
+  test("nesting with no background inside is ignored at any depth", () => {
+    const css = "body{background:#fff}" + "@media (min-width:1px){".repeat(40) + ".x{color:red}" + "}".repeat(40);
+    const [bg, ms] = timed(() => stylesheetBackgroundOf(css));
+    expect(bg).toEqual({ kind: "color", value: "#fff" });
+    expect(ms).toBeLessThan(100);
+  });
+
+  test("a 1 MB stylesheet of many blocks is read in one pass", () => {
+    const rule = ".c{margin:0;padding:0}\n";
+    const css = "body{background:#fff}\n" + rule.repeat(Math.ceil((1024 * 1024) / rule.length));
+    expect(css.length).toBeGreaterThan(1024 * 1024);
+    const [bg, ms] = timed(() => stylesheetBackgroundOf(css));
+    expect(bg).toEqual({ kind: "color", value: "#fff" });
+    expect(ms).toBeLessThan(100);
+    const manyBackgrounds = "body{background:#fff}" + ".b{background:#000}".repeat(60_000);
+    const [sel, ms2] = timed(() => stylesheetBackgroundSelectorsOf(manyBackgrounds));
+    expect(sel.selectors).toHaveLength(200);
+    expect(sel.truncated).toBe(true);
+    expect(ms2).toBeLessThan(100);
+  });
+
+  test("a body block with hundreds of thousands of declarations does not overflow the call", () => {
+    const css = "body{" + "a:b;".repeat(300_000) + "background:#fff}";
+    const [bg, ms] = timed(() => stylesheetBackgroundOf(css));
+    expect(bg).toEqual({ kind: "color", value: "#fff" });
+    expect(ms).toBeLessThan(500);
+  });
+
+  test("a page nested thousands deep and a stylesheet with many selectors finish, with the pair unresolved", () => {
+    const depth = 3000;
+    const body = "<div>".repeat(depth) + '<p style="color:#b9b9b9">Tagline</p>' + "</div>".repeat(depth);
+    const selectors = Array.from({ length: 200 }, (_, i) => `.n${i}`);
+    const start = performance.now();
+    const checks = colorContrastRule.run({
+      ...ctx(page({ head: '<link rel="stylesheet" href="/s.css">', body })),
+      site: {
+        baseUrl: "https://example.com",
+        pages: [],
+        robotsTxt: null,
+        sitemaps: null,
+        stylesheetBackgrounds: [
+          {
+            url: "https://example.com/s.css",
+            status: 200,
+            error: null,
+            background: { kind: "color", value: "#fff" },
+            selectors,
+          },
+        ],
+      },
+    } as unknown as RuleContext).checks as CheckResult[];
+    expect(performance.now() - start).toBeLessThan(5000);
+    // 3000 ancestors x 200 selectors is past the match budget: not provable, so not a warning.
+    expect(checks.some((c) => c.status === "warn")).toBe(false);
+    expect(checks.some((c) => c.name === "color-contrast-unresolved")).toBe(true);
+  });
+});
+
 describe("stylesheetBackgroundOf keeps only the html/body background (#1756)", () => {
   test.each([
     ["a body color", "body{margin:0;background:#101010}", { kind: "color", value: "#101010" }],

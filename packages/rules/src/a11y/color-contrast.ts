@@ -258,7 +258,13 @@ function backgroundOf(declarations: Declaration[]): Background {
 /** Selectors with a background kept per stylesheet (#1756); past this the list says "more existed". */
 const MAX_BACKGROUND_SELECTORS = 200;
 
-function styleBlockRules(css: string): {
+/** At-rules nested deeper than this are not read; a background in one is unresolved (never a color). */
+const MAX_AT_RULE_DEPTH = 8;
+
+/** Selector matches the guard may spend per page before the rest is read as not provable. */
+const GUARD_MATCH_BUDGET = 50_000;
+
+function styleBlockRules(css: string, level = 0): {
   html: Declaration[];
   body: Declaration[];
   otherBackground: boolean;
@@ -293,27 +299,38 @@ function styleBlockRules(css: string): {
     const block = css.slice(open + 1, depth === 0 ? j - 1 : j);
     i = j;
     if (selector.startsWith("@")) {
-      if (/background/i.test(block)) otherBackground = true;
-      if (/background/i.test(block) && !/^@(font-face|keyframes|-webkit-keyframes|property)\b/i.test(selector) && depth === 0) {
-        const inner = styleBlockRules(block);
-        for (const s of inner.otherSelectors) {
-          if (otherSelectors.length >= MAX_BACKGROUND_SELECTORS) otherSelectorsTruncated = true;
-          else otherSelectors.push(s);
-        }
-        if (inner.otherSelectorsTruncated) otherSelectorsTruncated = true;
-      }
+      const mentionsBackground = /background/i.test(block);
+      if (mentionsBackground) otherBackground = true;
       if (!/^@(font-face|keyframes|-webkit-keyframes|property)\b/i.test(selector) && depth === 0) {
-        const inner = styleBlockRules(block);
-        const sets = (d: Declaration[]): boolean =>
-          d.some((x) => /^background(-color|-image)?$/.test(x.property));
-        if (sets(inner.html) || sets(inner.body) || inner.atRuleRootBackground) atRuleRootBackground = true;
+        if (level >= MAX_AT_RULE_DEPTH) {
+          // Nested past what is read: a background in there is not provable, so it is never a color.
+          if (mentionsBackground) {
+            atRuleRootBackground = true;
+            otherSelectorsTruncated = true;
+          }
+        } else {
+          // ONE recursive call per at-rule: its result serves every purpose below. Two calls per level would
+          // cost 2^depth on a stylesheet that nests at-rules, and linked stylesheets are site-controlled.
+          const inner = styleBlockRules(block, level + 1);
+          const sets = (d: Declaration[]): boolean =>
+            d.some((x) => /^background(-color|-image)?$/.test(x.property));
+          if (sets(inner.html) || sets(inner.body) || inner.atRuleRootBackground) atRuleRootBackground = true;
+          if (mentionsBackground) {
+            for (const sel of inner.otherSelectors) {
+              if (otherSelectors.length >= MAX_BACKGROUND_SELECTORS) otherSelectorsTruncated = true;
+              else otherSelectors.push(sel);
+            }
+            if (inner.otherSelectorsTruncated) otherSelectorsTruncated = true;
+          }
+        }
       }
       continue;
     }
     for (const part of selector.split(",")) {
       const target = part.trim().toLowerCase();
-      if (target === "body") body.push(...parseDeclarations(block));
-      else if (target === "html" || target === ":root") html.push(...parseDeclarations(block));
+      // Looped, not spread: a block with a few hundred thousand declarations would overflow the call's arguments.
+      if (target === "body") for (const d of parseDeclarations(block)) body.push(d);
+      else if (target === "html" || target === ":root") for (const d of parseDeclarations(block)) html.push(d);
       else if (/background/i.test(block)) {
         otherBackground = true;
         if (part.trim()) {
@@ -380,20 +397,43 @@ function createBackgroundResolver(
   // Backgrounds a linked stylesheet gives other selectors (#1756): its html/body rule is read, a container
   // painting under the text is not, so text inside a match is unresolved rather than measured against the page.
   const guard: { selectors: string[]; all: boolean } = { selectors: [], all: false };
-  const insideGuardedSelector = (el: Element): boolean => {
-    if (guard.all) return true;
-    if (guard.selectors.length === 0) return false;
-    for (let node: Element | null = el; node; node = node.parentElement) {
-      for (const selector of guard.selectors) {
-        try {
-          if (node.matches(selector)) return true;
-        } catch {
-          // A selector the DOM cannot evaluate could match: not provable, so not measured.
-          return true;
-        }
+  // One answer per node (does it, or an ancestor, match a guarded selector), and a bound on the matching work:
+  // up to 200 selectors against every ancestor of every inline-colored element is attacker-sized on a big page.
+  const guardMemo = new Map<Element, boolean>();
+  let guardBudget = GUARD_MATCH_BUDGET;
+  const matchesGuarded = (el: Element): boolean => {
+    for (const selector of guard.selectors) {
+      if (guardBudget-- <= 0) return true; // out of work: not provable, so not measured
+      try {
+        if (el.matches(selector)) return true;
+      } catch {
+        return true; // a selector the DOM cannot evaluate could match
       }
     }
     return false;
+  };
+  const insideGuardedSelector = (el: Element): boolean => {
+    if (guard.all) return true;
+    if (guard.selectors.length === 0) return false;
+    // Iterative: walk up to the first node with an answer, then settle the nodes below it from the top. A page
+    // nested ten thousand deep must not overflow the stack.
+    const path: Element[] = [];
+    let node: Element | null = el;
+    let inside = false;
+    while (node) {
+      const known = guardMemo.get(node);
+      if (known !== undefined) {
+        inside = known;
+        break;
+      }
+      path.push(node);
+      node = node.parentElement;
+    }
+    for (let k = path.length - 1; k >= 0; k--) {
+      if (!inside) inside = matchesGuarded(path[k]!);
+      guardMemo.set(path[k]!, inside);
+    }
+    return inside;
   };
 
   // What is behind everything the element's ancestors leave open. Computed once,
@@ -489,12 +529,14 @@ function createBackgroundResolver(
         chain.push(node);
         node = node.parentElement;
       }
-      let result = found ?? pageBackground();
-      // The page background was the answer: a linked stylesheet's container rule may sit under the text.
-      if (!found && result.kind === "color" && insideGuardedSelector(el)) {
-        result = { kind: "unresolved", reason: "stylesheet" };
-      }
+      const pageResult = pageBackground();
+      const result = found ?? pageResult;
       for (const visited of chain) memo.set(visited, result);
+      // The page background was the answer (not an inline one on an ancestor): a linked stylesheet's container
+      // rule may sit under the text. Judged per element, not per memoized chain, so a sibling is not skipped.
+      if (result === pageResult && result.kind === "color" && insideGuardedSelector(el)) {
+        return { kind: "unresolved", reason: "stylesheet" };
+      }
       return result;
     },
   };
