@@ -231,6 +231,8 @@ export const REDIRECT_AWARE_SITE_RULE_IDS: ReadonlySet<string> = new Set([
   "crawl/single-page-site",
   "security/http-to-https",
   "links/broken-anchors",
+  // Judges a redirecting URL at its destination (#1760), so it must see the redirect rows.
+  "links/no-contextual-inbound",
 ]);
 
 const contentViews = new WeakMap<SiteData, SiteData>();
