@@ -64,6 +64,23 @@ enable = ["security/x-frame-options"]
 
 `enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
 
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `x-frame-options-missing` | Problem |  |
+| `x-frame-options-invalid` | Problem |  |
+| `x-frame-options-allow-from` | Problem |  |
+| `x-frame-options` | Clean | `x-frame-options-missing`, `x-frame-options-invalid`, `x-frame-options-allow-from` |
+| `x-frame-options-csp-frame-ancestors` | Clean | `x-frame-options-missing`, `x-frame-options-invalid`, `x-frame-options-allow-from` |
+| `x-frame-options-no-pages` | Not checked |  |
+
+{/* rule-checks:end */}
+
 ## Related rules
 
 - [security/csp](/rules/security/csp): where `frame-ancestors` lives and what else the policy should say.
