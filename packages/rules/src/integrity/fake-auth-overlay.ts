@@ -24,13 +24,28 @@ export const fakeAuthOverlayRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 8,
+    // Check names by outcome class (#1741).
+    checks: [
+      { name: "fake-auth-overlay", outcome: "problem" },
+      { name: "fake-auth-overlay", outcome: "clean", clears: ["fake-auth-overlay"] },
+      { name: "fake-auth-overlay", outcome: "skipped" },
+    ],
     // Compromise detection: an ignore could hide a compromised site (#1262).
     ignorable: false,
   },
 
   run(ctx: RuleContext): RuleResult {
     const checks: CheckResult[] = [];
-    if (!ctx.parsed.document) return { checks };
+    if (!ctx.parsed.document) {
+      checks.push({
+        name: "fake-auth-overlay",
+        status: "skipped",
+        message: "No document available",
+        pageUrl: ctx.page.url,
+        skipReason: "unread-page",
+      });
+      return { checks };
+    }
 
     const hit = detectFakeAuthOverlay(ctx);
     if (!hit) {
@@ -42,6 +57,13 @@ export const fakeAuthOverlayRule: Rule = {
           message: "Some of the page's CSS was not applied to its iframes (it is long, or has more rules for the same iframes than squirrel reads); an overlay styled in the part that was not used would not be seen",
           pageUrl: ctx.page.url,
           details: { scanTruncated: true, ...notes },
+        });
+      } else {
+        checks.push({
+          name: "fake-auth-overlay",
+          status: "pass",
+          message: "No fake authentication overlay found on this page",
+          pageUrl: ctx.page.url,
         });
       }
       return { checks };

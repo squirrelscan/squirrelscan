@@ -85,7 +85,10 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // analytics/duplicate-tags, i18n/hreflang-targets, content/duplicate-content). Their passes lift the weighted
       // overall past one more rounding boundary. The skipped and info rows among them do not score; the one warn row, links/click-depth
       // on the synthetic site, is also a finding (it is among the 105251 below) and counts in that move too.
-      expect(v1.healthScore.overall).toBe(53);
+      // 53 -> 54 (#1741): the integrity page rules (brand-impersonation, fake-auth-overlay, obfuscated-script,
+      // seo-doorway) now PASS on every page they read instead of saying nothing, which lifts the weighted overall
+      // past one more rounding boundary. A deliberate change: a clean run is a check, not an empty list.
+      expect(v1.healthScore.overall).toBe(54);
       // 97711 -> 98211: content/hidden-text emits one page check across the 500
       // fixture pages that have a document, and passes on every one of them. The
       // overall score is unmoved.
@@ -220,7 +223,12 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // add a pass row on each of the 500 pages with a document; the four site-scoped rules (crawl/indexable-
       // search-results, links/click-depth, i18n/hreflang-targets, content/duplicate-content) add one row each.
       // svg-img-alt and password-form-get say nothing on a page with no svg role=img or password form.
-      expect(v1.findings.length).toBe(105251);
+      // 105251 -> 108253 (#1741): a rule that ran never returns an empty list. brand-impersonation,
+      // fake-auth-overlay, obfuscated-script and seo-doorway add a pass row on each of the 500 pages with a
+      // document; schema/rating-scope and content/date-agreement add a skipped row (no rating markup, no schema
+      // date) on each of those pages; integrity/cloaking and integrity/known-malicious-url add one skipped row
+      // each for the run (the probe and threat intelligence are off).
+      expect(v1.findings.length).toBe(108253);
       // Tripwire: EXTENDING a rule must never add a tally key, so a change here
       // is only correct alongside a deliberate new rule id. 266 -> 267 is
       // content/hidden-text, 267 -> 268 content/thin-vs-site-norm, 268 -> 269

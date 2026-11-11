@@ -28,13 +28,28 @@ export const brandImpersonationRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 8,
+    // Check names by outcome class (#1741).
+    checks: [
+      { name: "brand-impersonation", outcome: "problem" },
+      { name: "brand-impersonation", outcome: "clean", clears: ["brand-impersonation"] },
+      { name: "brand-impersonation", outcome: "skipped" },
+    ],
     // Compromise detection: an ignore could hide a compromised site (#1262).
     ignorable: false,
   },
 
   run(ctx: RuleContext): RuleResult {
     const checks: CheckResult[] = [];
-    if (!ctx.parsed.document) return { checks };
+    if (!ctx.parsed.document) {
+      checks.push({
+        name: "brand-impersonation",
+        status: "skipped",
+        message: "No document available",
+        pageUrl: ctx.page.url,
+        skipReason: "unread-page",
+      });
+      return { checks };
+    }
 
     const hit = detectBrandImpersonation(ctx);
     if (!hit) {
@@ -55,6 +70,13 @@ export const brandImpersonationRule: Rule = {
           message: `${parts.join("; ")} (scan work limit); no brand impersonation was found in what was read`,
           pageUrl: ctx.page.url,
           details: { scanTruncated: true, ...notes },
+        });
+      } else {
+        checks.push({
+          name: "brand-impersonation",
+          status: "pass",
+          message: "No brand impersonation found on this page",
+          pageUrl: ctx.page.url,
         });
       }
       return { checks };

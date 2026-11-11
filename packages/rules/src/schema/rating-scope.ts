@@ -170,6 +170,14 @@ export const ratingScopeRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 4,
+    // Check names by outcome class (#1741).
+    checks: [
+      { name: "rating-visible", outcome: "problem" },
+      { name: "rating-subject", outcome: "problem" },
+      { name: "rating-visible", outcome: "clean", clears: ["rating-visible"] },
+      { name: "rating-subject", outcome: "clean", clears: ["rating-subject"] },
+      { name: "rating-visible", outcome: "skipped" },
+    ],
     // A soft-404 page serves the site template (rating block included) for a URL
     // that does not exist — don't argue about scope on a broken URL.
     skipOnSoft404: true,
@@ -177,10 +185,35 @@ export const ratingScopeRule: Rule = {
 
   run(ctx: RuleContext): RuleResult {
     const doc = ctx.parsed.document;
-    if (!doc) return { checks: [] };
+    if (!doc) {
+      return {
+        checks: [
+          {
+            name: VISIBILITY_CHECK,
+            status: "skipped",
+            message: "No document available",
+            pageUrl: ctx.page.url,
+            skipReason: "unread-page",
+          },
+        ],
+      };
+    }
 
     const entities = collectRatedEntities(ctx);
-    if (entities.length === 0) return { checks: [] };
+    // No rating markup: nothing to scope. Not a clean verdict on a rating, so a skip, not a pass.
+    if (entities.length === 0) {
+      return {
+        checks: [
+          {
+            name: VISIBILITY_CHECK,
+            status: "skipped",
+            message: "No rating markup on this page",
+            pageUrl: ctx.page.url,
+            skipReason: "not-applicable",
+          },
+        ],
+      };
+    }
 
     const checks: CheckResult[] = [];
     const kind = ineligiblePageKind(ctx);

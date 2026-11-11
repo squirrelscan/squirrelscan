@@ -58,6 +58,7 @@ const BYLINE_CHECK = "byline-vs-schema-date";
 const VISIBLE_MISSING_CHECK = "visible-date-missing";
 const URL_TITLE_CHECK = "url-title-year";
 const SCHEMA_SOURCE_CHECK = "schema-date-source";
+const CLEAN_CHECK = "date-agreement";
 
 const MS_PER_DAY = 86_400_000;
 
@@ -657,6 +658,17 @@ export const dateAgreementRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 4,
+    // Check names by outcome class (#1741).
+    checks: [
+      { name: "byline-vs-schema-date", outcome: "problem" },
+      { name: "visible-date-missing", outcome: "problem" },
+      { name: "url-title-year", outcome: "problem" },
+      { name: "schema-date-source", outcome: "problem" },
+      { name: "byline-vs-schema-date", outcome: "clean", clears: ["byline-vs-schema-date"] },
+      { name: "url-title-year", outcome: "clean", clears: ["url-title-year"] },
+      { name: "date-agreement", outcome: "clean", clears: ["byline-vs-schema-date", "visible-date-missing", "url-title-year", "schema-date-source"] },
+      { name: "date-agreement", outcome: "skipped" },
+    ],
     optionsSchema,
     // A soft-404 serves the site template for a URL that does not exist; its
     // dates describe nothing, so arguing about them is noise.
@@ -666,7 +678,19 @@ export const dateAgreementRule: Rule = {
   run(ctx: RuleContext): RuleResult {
     const opts = optionsSchema.parse(ctx.options);
     const doc = ctx.parsed.document;
-    if (!doc) return { checks: [] };
+    if (!doc) {
+      return {
+        checks: [
+          {
+            name: CLEAN_CHECK,
+            status: "skipped",
+            message: "No document available",
+            pageUrl: ctx.page.url,
+            skipReason: "unread-page",
+          },
+        ],
+      };
+    }
 
     const schema = collectSchemaDates(rawJsonLd(ctx, doc));
     const visibleDates = findVisibleDates(doc);
@@ -704,7 +728,18 @@ export const dateAgreementRule: Rule = {
           ],
         };
       }
-      return { checks: [] };
+      // Nothing on the page states a date to hold the other signals against.
+      return {
+        checks: [
+          {
+            name: CLEAN_CHECK,
+            status: "skipped",
+            message: "No schema date describes this page, so there is nothing to compare",
+            pageUrl: ctx.page.url,
+            skipReason: "not-applicable",
+          },
+        ],
+      };
     }
 
     const docNode = schema.document;
@@ -806,6 +841,15 @@ export const dateAgreementRule: Rule = {
               details: { ...baseDetails, claimedYear, claimedYearSource: where },
             },
       );
+    }
+
+    if (checks.length === 0) {
+      checks.push({
+        name: CLEAN_CHECK,
+        status: "pass",
+        message: "The dates on this page agree with its schema",
+        pageUrl: ctx.page.url,
+      });
     }
 
     return { checks };

@@ -650,6 +650,12 @@ export const devLeakageRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 6,
+    // Check names by outcome class (#1741).
+    checks: [
+      { name: "dev-leakage", outcome: "problem" },
+      { name: "dev-leakage", outcome: "clean", clears: ["dev-leakage"] },
+      { name: "dev-leakage", outcome: "skipped" },
+    ],
     skipOnSoft404: true,
   },
 

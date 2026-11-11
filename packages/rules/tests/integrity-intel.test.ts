@@ -105,6 +105,7 @@ describe("integrity/kit-signature", () => {
 
   test("no-op when intel is absent (opt-in off)", () => {
     const ctx = pageCtx(`${SITE}/calendly?token=x`, KIT); // no intel
+    // Off for the whole run: no per-page check (a pass would claim a verdict nobody reached).
     expect(checks(kitSignatureRule.run(ctx) as { checks: CheckResult[] })).toHaveLength(0);
   });
 
@@ -117,13 +118,14 @@ describe("integrity/kit-signature", () => {
     expect(out[0]?.details?.severity).toBe("critical");
   });
 
-  test("silent on a clean page even with intel on", () => {
+  test("a clean page with intel on emits a clean check, never an empty list (#1741)", () => {
     const ctx = pageCtx(
       `${SITE}/about`,
       "<html><body>clean</body></html>",
       signatureIntel("__KIT__"),
     );
-    expect(checks(kitSignatureRule.run(ctx) as { checks: CheckResult[] })).toHaveLength(0);
+    const out = checks(kitSignatureRule.run(ctx) as { checks: CheckResult[] });
+    expect(out.map((c) => [c.name, c.status])).toEqual([["kit-signature", "pass"]]);
   });
 
   test("matches against external script bodies for the page", () => {
@@ -189,9 +191,12 @@ describe("integrity/known-malicious-url", () => {
     return { url, statusCode: 200, parsed: parsePage("<html></html>", url) };
   }
 
-  test("no-op when intel is absent (opt-in off)", () => {
+  test("says it did not run when intel is absent (opt-in off), never clean (#1741)", () => {
     const ctx = siteCtx([pageEntry(`${SITE}/`)]);
-    expect(checks(knownMaliciousUrlRule.run(ctx) as { checks: CheckResult[] })).toHaveLength(0);
+    const out = checks(knownMaliciousUrlRule.run(ctx) as { checks: CheckResult[] });
+    expect(out.map((c) => [c.name, c.status, c.skipReason])).toEqual([
+      ["known-malicious-url", "skipped", "not-applicable"],
+    ]);
   });
 
   test("flags a site page listed by a feed", () => {
@@ -231,7 +236,7 @@ describe("integrity/known-malicious-url", () => {
     expect(out[0]?.status).toBe("pass");
   });
 
-  test("stays silent when NO provider was consulted (checked=false everywhere)", () => {
+  test("says skipped, not clean, when NO provider was consulted (checked=false everywhere)", () => {
     const intel: IntelContext = {
       providers: [],
       signatureCount: 0,
@@ -239,6 +244,7 @@ describe("integrity/known-malicious-url", () => {
       lookupUrl: (url) => ({ url, listed: false, checked: false, sources: [] }),
     };
     const ctx = siteCtx([pageEntry(`${SITE}/`)], { intel });
-    expect(checks(knownMaliciousUrlRule.run(ctx) as { checks: CheckResult[] })).toHaveLength(0);
+    const out = checks(knownMaliciousUrlRule.run(ctx) as { checks: CheckResult[] });
+    expect(out.map((c) => [c.name, c.status])).toEqual([["known-malicious-url", "skipped"]]);
   });
 });
