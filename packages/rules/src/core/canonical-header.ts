@@ -5,7 +5,7 @@ import { CHECK_NOT_APPLICABLE_SKIP_REASON } from "@squirrelscan/core-contracts/r
 
 // Parse Link header for canonical URL
 // Format: Link: <https://example.com/page>; rel="canonical"
-function parseLinkHeaderCanonical(
+export function parseLinkHeaderCanonical(
   linkHeader: string | undefined
 ): string | null {
   if (!linkHeader) return null;
