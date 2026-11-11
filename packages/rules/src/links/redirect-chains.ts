@@ -24,6 +24,14 @@ export const redirectChainsRule: Rule = {
     scope: "site",
     severity: "warning",
     weight: 4,
+    // Check names by outcome class (#1741).
+    checks: [
+      { name: "redirect-pages", outcome: "problem" },
+      { name: "links-to-redirect", outcome: "problem" },
+      { name: "redirect-chain-multi-hop", outcome: "problem" },
+      { name: "redirect-chains", outcome: "clean", clears: ["redirect-pages", "links-to-redirect", "redirect-chain-multi-hop"] },
+      { name: "redirect-chains", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {
@@ -45,6 +53,7 @@ export const redirectChainsRule: Rule = {
         originalUrl: string;
         finalUrl: string;
         chainLabel: string;
+        hopCount: number;
         chain?: RedirectChain;
       }
     >();
@@ -56,14 +65,20 @@ export const redirectChainsRule: Rule = {
       const original = targetKey(page.url);
 
       if (didRedirect(page.url, page.finalUrl, chain)) {
-        const chainLabel =
+        // Redirect responses followed before the landing page: the last hop is the
+        // destination, so a chain of N hops holds N-1 redirects. Unobserved chains
+        // (no hop list) still count as one (#1750).
+        const hopCount = chain && chain.hops.length > 1 ? chain.hops.length - 1 : 1;
+        const path =
           chain && chain.hops.length > 1
             ? chain.hops.map((hop) => formatRedirectHop(hop)).join(" → ")
             : `${page.url} → ${page.finalUrl}`;
+        const chainLabel = hopCount > 1 ? `${hopCount} hops: ${path}` : path;
         redirectTargets.set(original, {
           originalUrl: page.url,
           finalUrl: page.finalUrl,
           chainLabel,
+          hopCount,
           chain,
         });
       }
@@ -79,11 +94,35 @@ export const redirectChainsRule: Rule = {
           label: target.chainLabel,
           meta: {
             targetUrl: target.finalUrl,
+            hopCount: target.hopCount,
             chain: target.chain,
           },
         })),
         details: { total: redirectTargets.size },
       });
+
+      // A chain of two or more redirects costs a round trip per hop and is the
+      // one to collapse first, so it gets its own failing check (#1750).
+      const chained = [...redirectTargets.values()].filter((t) => t.hopCount > 1);
+      if (chained.length > 0) {
+        const longest = Math.max(...chained.map((t) => t.hopCount));
+        checks.push({
+          name: "redirect-chain-multi-hop",
+          // `warn`, like the rule's declared severity: a rule that declares warning must not emit fail (#1746).
+          status: "warn",
+          message: `${chained.length} redirect chain(s) of 2 or more hops (longest: ${longest} hops). Point links and the first URL straight at the final destination`,
+          items: chained.map((target) => ({
+            id: target.originalUrl,
+            label: target.chainLabel,
+            meta: {
+              targetUrl: target.finalUrl,
+              hopCount: target.hopCount,
+              chain: target.chain,
+            },
+          })),
+          details: { total: chained.length, longestHops: longest },
+        });
+      }
     }
 
     // The pages linking each redirecting target: each page once, with its links there and where

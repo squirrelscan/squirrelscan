@@ -15,6 +15,7 @@ The rule is site-wide and works in two passes. First it finds crawled pages that
 
 - Skipped when no pages are available. Message: `No pages available for redirect analysis`.
 - `redirect-pages` warns for the redirecting URLs themselves. Message: `5 page(s) redirect to another URL`. A multi-hop chain is labelled with full URLs and status codes, `https://example.com/old (301) → https://example.com/new (200)`. With no multi-hop chain the label falls back to `original → final` with no status codes.
+- `redirect-chain-multi-hop` warns when a redirecting URL goes through two or more redirects before it lands. Message: `1 redirect chain(s) of 2 or more hops (longest: 3 hops). Point links and the first URL straight at the final destination`. Each item is labelled with the hop count and every hop in order, `3 hops: https://example.com/r1 (301) → https://example.com/r2 (301) → https://example.com/r3 (301) → https://example.com/new (200)`, and `meta.hopCount` carries the count. The `redirect-pages` and `links-to-redirect` labels of a chain of two or more hops carry the same `N hops:` prefix.
 - `links-to-redirect` warns for the link targets. Message: `3 link target(s) point to redirecting URLs`, each item carrying the chain and every page that links to it.
 - `redirect-chains` passes when neither fired. Message: `No redirects detected`.
 
