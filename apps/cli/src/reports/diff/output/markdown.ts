@@ -2,6 +2,8 @@ import { writeReportFile } from "@/reports/utils";
 
 import type { DiffChange, DiffReport, IssueInstance } from "../types";
 
+import { notComparedRows } from "../not-compared";
+
 function formatIssue(issue: IssueInstance): string {
   const label = issue.target.label ? ` (${issue.target.label})` : "";
   const target = `${issue.target.type}:${issue.target.id}${label}`;
@@ -43,8 +45,9 @@ export function renderDiffMarkdown(diff: DiffReport): string {
   lines.push(
     `**Base URL:** ${diff.baseline.baseUrl} → ${diff.current.baseUrl}`
   );
+  const notCompared = notComparedRows(diff);
   lines.push(
-    `**Summary:** ${diff.summary.added} added, ${diff.summary.removed} removed, ${diff.summary.changed} changed (Regressions: ${diff.summary.regressions}, Improvements: ${diff.summary.improvements})`
+    `**Summary:** ${diff.summary.added} added, ${diff.summary.removed} removed, ${diff.summary.changed} changed (Regressions: ${diff.summary.regressions}, Improvements: ${diff.summary.improvements})${notCompared.length > 0 ? `, ${notCompared.length} not compared` : ""}`
   );
   lines.push("");
 
@@ -72,6 +75,19 @@ export function renderDiffMarkdown(diff: DiffReport): string {
       "| --- | --- | --- | --- | --- | --- |",
     ])
   );
+
+  if (notCompared.length > 0) {
+    lines.push(
+      ...renderSection(
+        "Not compared (not counted as fixed)",
+        notCompared.map((r) => `${formatIssue(r.issue)} | ${r.text}`),
+        [
+          "| Rule | Check | Severity | Target | Fingerprint | Why |",
+          "| --- | --- | --- | --- | --- | --- |",
+        ]
+      )
+    );
+  }
 
   return lines.join("\n");
 }

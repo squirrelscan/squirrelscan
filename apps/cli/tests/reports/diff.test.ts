@@ -154,6 +154,10 @@ describe("diff reports", () => {
           items: [{ id: "https://example.com/a" }],
         },
       ]),
+      // The rule ran again and no longer reports it: fixed (#1748).
+      "core/removed": makeRuleResult("core/removed", [
+        { name: "removed", status: "pass", message: "ok" },
+      ]),
       "core/added": makeRuleResult("core/added", [
         {
           name: "added",

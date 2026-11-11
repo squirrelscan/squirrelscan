@@ -3,6 +3,7 @@ import { writeReportFile } from "@/reports/utils";
 import type { DiffChange, DiffReport, IssueInstance } from "../types";
 
 import { version } from "../../../../package.json";
+import { notComparedRows } from "../not-compared";
 
 function escapeXml(str: string): string {
   return str
@@ -117,7 +118,11 @@ export function generateDiffLlm(diff: DiffReport, outputPath?: string): void {
       diff.summary.removed
     }" changed="${diff.summary.changed}" regressions="${
       diff.summary.regressions
-    }" improvements="${diff.summary.improvements}"/>`
+    }" improvements="${diff.summary.improvements}"${
+      diff.summary.notCompared
+        ? ` not-compared="${diff.summary.notCompared}"`
+        : ""
+    }/>`
   );
 
   lines.push(`${indent(1)}<added>`);
@@ -137,6 +142,20 @@ export function generateDiffLlm(diff: DiffReport, outputPath?: string): void {
     lines.push(...formatChange(change, 2));
   }
   lines.push(`${indent(1)}</changed>`);
+
+  // Gone from the current report but not counted as fixed (#1748): the rule did not run over the same scope.
+  const notCompared = notComparedRows(diff);
+  if (notCompared.length > 0) {
+    lines.push(`${indent(1)}<not-compared>`);
+    for (const row of notCompared) {
+      lines.push(
+        `${indent(2)}<not-compared-issue reason="${escapeXml(row.reason)}" why="${escapeXml(row.text)}">`
+      );
+      lines.push(...formatIssue(row.issue, 3));
+      lines.push(`${indent(2)}</not-compared-issue>`);
+    }
+    lines.push(`${indent(1)}</not-compared>`);
+  }
 
   lines.push("</diff>");
 
