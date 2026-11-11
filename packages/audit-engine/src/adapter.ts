@@ -9,7 +9,6 @@ import {
   extractScripts,
   extractStylesheets,
   isSameDomainScript,
-  EMPTY_SCHEMA_COLLECTION,
 } from "@squirrelscan/parser";
 import {
   applySiteFindingBudget,
@@ -57,6 +56,8 @@ import type {
   WebAppManifestData,
 } from "@squirrelscan/rules";
 import type { SQLiteStorage } from "@squirrelscan/crawler";
+import { EMPTY_PARSED_PAGE } from "./empty-parsed-page";
+import { isRedirectSourcePage, redirectSourceEntry } from "./redirect-source";
 import type {
   CheckResult,
   CloakingProbeData,
@@ -213,50 +214,6 @@ export { setAdapterLogger, type AdapterLogger } from "./adapter-logger";
 // CONSTANTS
 // ============================================
 
-/**
- * Empty ParsedPage for error pages (4xx/5xx) that have no HTML content.
- * Used in site context for broken link detection - only statusCode matters.
- */
-const EMPTY_PARSED_PAGE: ParsedPage = {
-  document: null,
-  meta: { title: null, description: null, canonical: null, robots: null },
-  h1: { count: 0, texts: [] },
-  og: {
-    title: null,
-    description: null,
-    url: null,
-    type: null,
-    image: null,
-    siteName: null,
-  },
-  twitter: { card: null, title: null, description: null, image: null },
-  links: [],
-  images: [],
-  headings: {
-    headings: [],
-    h1Count: 0,
-    h1Texts: [],
-    hasSkippedLevels: false,
-    skippedLevels: [],
-    emptyHeadings: [],
-    longHeadings: [],
-    duplicateHeadings: [],
-    outline: "",
-  },
-  content: {
-    wordCount: 0,
-    textLength: 0,
-    htmlLength: 0,
-    textToHtmlRatio: 0,
-    isThinContent: true,
-    contentHash: "",
-    textContent: "",
-  },
-  schemas: EMPTY_SCHEMA_COLLECTION,
-  author: null,
-  pageType: "unknown",
-  schema: { types: [], valid: true, errors: [], raw: null },
-};
 
 function buildLlmsTxtData(llms: LlmsTxtRecord | null): LlmsTxtData | null {
   if (!llms) return null;
@@ -1721,7 +1678,15 @@ export function runRulesOnStorage(
       }
     >();
 
+    // URLs that redirected (#1762): recorded as redirects, never audited as pages.
+    const redirectSourcePages: ReturnType<typeof redirectSourceEntry>[] = [];
+
     for (const { page, parsed } of siteContext) {
+      if (isRedirectSourcePage(page)) {
+        redirectSourcePages.push(redirectSourceEntry(page, EMPTY_PARSED_PAGE));
+        fetchedTargets.push({ url: page.normalizedUrl, status: page.status });
+        continue;
+      }
       if (!parsed) {
         // Skip non-HTML or failed parses. One that answered is still a known
         // status for a link to it (pub#798); 4xx/5xx join site.pages below. A
@@ -1802,6 +1767,9 @@ export function runRulesOnStorage(
         });
       }
     }
+
+    // The redirect rules still see a redirecting URL and its hops (#1762).
+    parsedPages.push(...redirectSourcePages);
 
     const robots = yield* storage
       .getRobotsTxt(crawlId)
@@ -2109,7 +2077,7 @@ export function runRulesOnStorage(
       // sitemap-coverage can tell "crawl budget truncated this run" apart
       // from a genuine coverage gap.
       crawlLimits: {
-        pagesCrawled: siteContext.length,
+        pagesCrawled: siteContext.length - redirectSourcePages.length,
         maxPages: config.crawler?.max_pages ?? 100,
       },
       unfetchedPages,
@@ -2166,6 +2134,31 @@ export function runRulesOnStorage(
       for (const [ruleId, ruleResult] of ruleResults) {
         for (const check of ruleResult.checks) {
           if (!check.pageUrl) check.pageUrl = pageUrl;
+        }
+        mergeRuleRunResult(ruleResultsMap, ruleId, ruleResult);
+      }
+    }
+    // A redirecting URL has no content to audit: only the rules that report the redirect itself run on it (#1762).
+    for (const entry of redirectSourcePages) {
+      const raw = yield* Effect.promise(() =>
+        runner.runPageRules(
+          {
+            url: entry.url,
+            html: "",
+            statusCode: entry.statusCode,
+            loadTime: 0,
+            headers: {},
+            parsed: entry.parsed,
+            finalUrl: entry.finalUrl,
+            redirectChain: entry.redirectChain,
+          },
+          siteDataForPageRules,
+          { redirectSource: true },
+        ),
+      );
+      for (const [ruleId, ruleResult] of raw.ruleResults) {
+        for (const check of ruleResult.checks) {
+          if (!check.pageUrl) check.pageUrl = entry.url;
         }
         mergeRuleRunResult(ruleResultsMap, ruleId, ruleResult);
       }
@@ -2441,6 +2434,8 @@ interface ParsedUniverse {
   pageDataMap: Map<string, StreamPageIdentity>;
   /** Pages the crawl fetched that site.pages leaves out (pub#798). */
   fetchedTargets: NonNullable<SiteData["fetchedTargets"]>;
+  /** URLs that redirected: in `parsedPages` for their hops, in no page total (#1762). */
+  redirectSourceCount: number;
 }
 
 /**
@@ -2479,10 +2474,17 @@ function createParsedUniverseAccumulator(): {
   // AFTER the whole first loop. Batching means a later batch can still add to
   // that map, so the error-page decision is deferred to `build`.
   const errorCandidates: StreamParsedPage[] = [];
+  const redirectSources: StreamParsedPage[] = [];
 
   return {
     absorb(siteContext: SiteContextPage[]): void {
       for (const { page, parsed } of siteContext) {
+        // A redirecting URL is a redirect, not a page (#1762): no page rule, no page count.
+        if (isRedirectSourcePage(page)) {
+          redirectSources.push(redirectSourceEntry(page, EMPTY_PARSED_PAGE));
+          fetchedTargets.push({ url: page.normalizedUrl, status: page.status });
+          continue;
+        }
         // Error-page candidates are collected for EVERY page (parsed or not),
         // mirroring v1's second loop, which iterates the whole site context.
         if (page.status >= 400) {
@@ -2586,7 +2588,8 @@ function createParsedUniverseAccumulator(): {
         }
       }
       return {
-        parsedPages: [...htmlPages, ...errorPages],
+        parsedPages: [...htmlPages, ...errorPages, ...redirectSources],
+        redirectSourceCount: redirectSources.length,
         wafBlockedPages,
         wafBlockedPageSet,
         rateLimitedPages,
@@ -2636,7 +2639,8 @@ function streamParsedUniverse(
       if (batch.length < batchSize) break;
     }
 
-    return { ...universe.build(), totalPageCount };
+    const built = universe.build();
+    return { ...built, totalPageCount: totalPageCount - built.redirectSourceCount };
   });
 }
 

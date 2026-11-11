@@ -211,7 +211,15 @@ export interface PageRuleRunOptions {
    * exactly today's behaviour.
    */
   fannedRuleChecks?: ReadonlyMap<string, CheckResult[]>;
+  /**
+   * The page is a URL that redirected (#1762): it has no content of its own, so only the rules that
+   * report the redirect itself run on it ({@link REDIRECT_SOURCE_RULE_IDS}).
+   */
+  redirectSource?: boolean;
 }
+
+/** Page rules that still run on a redirecting URL, to report its hops. */
+export const REDIRECT_SOURCE_RULE_IDS: ReadonlySet<string> = new Set(["crawl/canonical-chain"]);
 
 export interface SiteRunResult {
   checks: CheckResult[];
@@ -837,7 +845,9 @@ export class RuleRunner {
 
         // Filter to page-scope rules only
         const pageRules = this.getEnabledRules().filter(
-          (r) => r.meta.scope === "page"
+          (r) =>
+            r.meta.scope === "page" &&
+            (!opts?.redirectSource || REDIRECT_SOURCE_RULE_IDS.has(r.meta.id))
         );
 
         // Per-run Stage-0 metadata + cloud store + intel (captured at
