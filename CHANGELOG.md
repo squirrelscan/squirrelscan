@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+## v0.0.176 (2026-11-11)
+
+Nine new audit rules: crawl/rendered-signal-mismatch (a canonical, noindex, title or H1 that JavaScript changes after load), crawl/indexable-search-results (internal search pages open to indexing), links/click-depth (indexable pages too many clicks from the homepage), content/duplicate-content (indexable pages with identical body text), i18n/hreflang-targets (hreflang links that point at the wrong place), analytics/duplicate-tags (the same analytics tag installed twice), url/session-ids (session IDs in URLs), security/password-form-get (password forms sent by GET) and a11y/svg-img-alt (SVG images with no accessible name). Two things change for existing audits: each site's first audit after the upgrade re-collects its page signals once, and health scores can shift by a point or so because the new rules add passes and findings.
+
 ### Added
 
 - New rule `url/session-ids`: a page URL or an internal link carrying a session ID (`PHPSESSID`, `jsessionid` in the query or as a `;jsessionid=` path parameter, `sid`, `sessionid`, `session_id`, `ASPSESSIONID*`, `CFID` with `CFTOKEN`) is a warning, with the value masked. The value must look generated, by name class: `PHPSESSID`, `jsessionid`, `session_id` and `ASPSESSIONID*` flag any value of 8 or more characters that is not all digits or an all-lowercase hyphenated phrase, while `sid` and `sessionid` need 16 or more characters with a letter and a digit and no hyphenated word pair.
