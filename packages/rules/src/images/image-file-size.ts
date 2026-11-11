@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
+import type { Rule, RuleContext, RuleResult, CheckResult, CheckItem } from "../types";
 
 import { RESOURCE_SIZE_LIMITS } from "@squirrelscan/utils/constants";
 
@@ -14,6 +14,41 @@ function formatBytes(bytes: number): string {
     return `${(bytes / 1024).toFixed(1)} KB`;
   }
   return `${bytes} B`;
+}
+
+// Pages named in an item's meta, so a format that prints no `sourcePages` still
+// says where the file is embedded (#1753).
+const MAX_PAGES_IN_META = 10;
+
+interface SizedImage {
+  url: string;
+  sizeBytes: number | null;
+  status?: number | null;
+  contentType?: string | null;
+  sourcePages: string[];
+}
+
+function sizedItem(resource: SizedImage): CheckItem {
+  const pages = [...new Set(resource.sourcePages)];
+  const size = formatBytes(resource.sizeBytes ?? 0);
+  return {
+    id: resource.url,
+    // Said in the label too: the text and markdown formats print the label, not meta.
+    label:
+      pages.length > 0
+        ? `${resource.url} (${size}, embedded on ${pages.length} page${pages.length === 1 ? "" : "s"})`
+        : `${resource.url} (${size}, no crawled page recorded as embedding it)`,
+    sourcePages: pages,
+    meta: {
+      sizeBytes: resource.sizeBytes,
+      size,
+      status: resource.status ?? undefined,
+      contentType: resource.contentType ?? undefined,
+      pageCount: pages.length,
+      ...(pages.length > 0 ? { pages: pages.slice(0, MAX_PAGES_IN_META) } : {}),
+      ...(pages.length > MAX_PAGES_IN_META ? { pagesNotListed: pages.length - MAX_PAGES_IN_META } : {}),
+    },
+  };
 }
 
 export const optionsSchema = z.object({
@@ -73,16 +108,7 @@ export const imageFileSizeRule: Rule = {
         name: "image-file-size",
         status: "fail",
         message: `${errorFiles.length} image(s) exceed ${formatBytes(opts.error_bytes)}`,
-        items: errorFiles.map((resource) => ({
-          id: resource.url,
-          sourcePages: resource.sourcePages,
-          meta: {
-            sizeBytes: resource.sizeBytes,
-            size: formatBytes(resource.sizeBytes ?? 0),
-            status: resource.status ?? undefined,
-            contentType: resource.contentType ?? undefined,
-          },
-        })),
+        items: errorFiles.map(sizedItem),
         details: {
           thresholdBytes: opts.error_bytes,
           total: errorFiles.length,
@@ -95,16 +121,7 @@ export const imageFileSizeRule: Rule = {
         name: "image-file-size-warn",
         status: "warn",
         message: `${warnFiles.length} image(s) exceed ${formatBytes(opts.warn_bytes)}`,
-        items: warnFiles.map((resource) => ({
-          id: resource.url,
-          sourcePages: resource.sourcePages,
-          meta: {
-            sizeBytes: resource.sizeBytes,
-            size: formatBytes(resource.sizeBytes ?? 0),
-            status: resource.status ?? undefined,
-            contentType: resource.contentType ?? undefined,
-          },
-        })),
+        items: warnFiles.map(sizedItem),
         details: {
           thresholdBytes: opts.warn_bytes,
           total: warnFiles.length,

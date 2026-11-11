@@ -229,6 +229,21 @@ export const totalByteWeightRule: Rule = {
       return { rec, kb: bytes / 1024, parts, lazyImages: sumBucket(rec.deferredImages) };
     });
 
+    // The largest file the heaviest page loads, so the verdict names what to fix
+    // rather than only the page (#1753). Lazy images below the fold are not in
+    // `external`, so they are not named: they are not what the page loads.
+    const largestResource = (
+      rec: PageWeight | undefined,
+    ): { url: string; size: number; kind: string } | undefined => {
+      let best: { url: string; size: number; kind: string } | undefined;
+      for (const kind of ["css", "js", "images", "fonts"] as const) {
+        for (const [url, size] of rec?.external?.[kind] ?? []) {
+          if (size > 0 && (!best || size > best.size)) best = { url, size, kind };
+        }
+      }
+      return best;
+    };
+
     const isEstimate = !hasExternalResourceData && scored.length > 0;
     const heaviest = scored.reduce<Scored | undefined>(
       (best, cur) => (!best || cur.kb > best.kb ? cur : best),
@@ -257,6 +272,12 @@ export const totalByteWeightRule: Rule = {
       if (heaviest.parts.images > 0) details.images = kb(heaviest.parts.images);
       if (heaviest.parts.fonts > 0) details.fonts = kb(heaviest.parts.fonts);
       if (heaviest.lazyImages > 0) details.lazyImages = kb(heaviest.lazyImages);
+      const largest = largestResource(heaviest.rec);
+      if (largest) {
+        details.heaviestResource = largest.url;
+        details.heaviestResourceKb = kb(largest.size);
+        details.heaviestResourceKind = largest.kind;
+      }
     }
     if (isEstimate) details.estimated = true;
     if (unsized.size > 0) details.unsizedResources = unsized.size;
@@ -281,8 +302,12 @@ export const totalByteWeightRule: Rule = {
     }
 
     const label = isEstimate ? "Estimated heaviest page" : "Heaviest page";
+    const heaviestResource =
+      heaviest && typeof details.heaviestResource === "string"
+        ? `, largest resource ${details.heaviestResource} ${details.heaviestResourceKb}`
+        : "";
     const where = heaviest
-      ? `${heaviest.rec.url} ${heaviestKb.toFixed(0)}KB`
+      ? `${heaviest.rec.url} ${heaviestKb.toFixed(0)}KB${heaviestResource}`
       : "no pages";
     const counts = `${overWarn} over ${opts.warn_threshold_kb}KB, ${overError} over ${opts.error_threshold_kb}KB`;
     const note =
