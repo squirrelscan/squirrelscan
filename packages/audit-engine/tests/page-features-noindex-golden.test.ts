@@ -246,6 +246,15 @@ describe("PR-D dual-path golden — noindex family (extractor → siteQuery)", (
     // /private/x has rich schema (Recipe) AND is blocked.
     expect(legacy[0]!.status).toBe("fail");
     expect(String(legacy[0]!.value)).toContain("Schema: Recipe");
+    // #1735: the same evidence as structured fields, on both paths (`toEqual` above), with no DOM.
+    const check = streamed[0]!;
+    expect(check.pages).toEqual(["https://example.com/private/x"]);
+    expect(check.items).toHaveLength(1);
+    expect(check.items![0]).toMatchObject({
+      id: "https://example.com/private/x",
+      meta: { schemaTypes: ["Recipe"], blockedBy: ["meta:noindex", "robots.txt:disallowed"] },
+    });
+    expect(check.details).toMatchObject({ occurrences: 1, pagesTruncated: 1 });
   });
 });
 

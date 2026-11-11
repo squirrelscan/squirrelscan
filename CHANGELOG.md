@@ -19,6 +19,7 @@ How it works:
 
 ### Added
 
+- `crawl/schema-noindex-conflict` and `security/csp` now emit structured evidence: the conflict rule lists its pages (a capped sample with the true count in `details`) and each page's blocking source and schema types; the CSP rule names the page the header was read from, the header, and the directive carrying `'unsafe-inline'` with its value. Cloud issue views and `affectedPages()` show them instead of only prose (#1735)
 - Locked and not-checked rules can carry a machine-readable reason (`plan`, `provider_error` or `unsupported_environment`, with a short detail), and every report format says what it means: a plan exclusion names the plan, a provider failure says a re-run may help, an unsupported environment says where the check can run. The JSON report gains `lockedRules` and `cause`/`causeDetail` on `notChecked` entries (JSON schema 1.12). Reports with no reason keep today's wording (#1734)
 
 ### Fixed
