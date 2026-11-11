@@ -119,11 +119,18 @@ function lcpPageEvidenceDetails(byPage: Map<string, unknown[]>): {
   pageEvidenceOmittedPages: number;
 } {
   const pages = [...byPage.keys()].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+  const pageEvidence: LcpPageEvidence[] = [];
+  // Page and image URLs can be 2048 chars, so the count cap alone does not
+  // bound the bytes. Trailing pages (URL-sorted) are dropped until the list
+  // fits the byte budget, and every dropped page is counted.
+  for (const page of pages.slice(0, LCP_PAGE_EVIDENCE.maxPages)) {
+    const next = [...pageEvidence, { page, candidates: byPage.get(page)! }];
+    if (JSON.stringify(next).length > LCP_PAGE_EVIDENCE.maxBytes) break;
+    pageEvidence.push(next[next.length - 1]!);
+  }
   return {
-    pageEvidence: pages
-      .slice(0, LCP_PAGE_EVIDENCE.maxPages)
-      .map((page) => ({ page, candidates: byPage.get(page)! })),
-    pageEvidenceOmittedPages: Math.max(0, pages.length - LCP_PAGE_EVIDENCE.maxPages),
+    pageEvidence,
+    pageEvidenceOmittedPages: pages.length - pageEvidence.length,
   };
 }
 
