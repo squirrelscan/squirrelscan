@@ -1591,3 +1591,49 @@ describe("capReportForPublish: determinism", () => {
     expect(JSON.stringify(input)).toBe(before);
   });
 });
+
+describe("capReportForPublish: coverage-gap skip rows (#1775)", () => {
+  const RULE = "content/gap-rule";
+  const skip = (page: number, skipReason: string): CheckResult => ({
+    name: "gap-check",
+    status: "skipped",
+    message: "skipped",
+    pageUrl: pageUrl(page),
+    skipReason,
+  });
+  const build = (gapPages: number[], naPages: number, naReason = "not-applicable") => {
+    const input = report(3, { rules: PAGE_RULES.slice(0, 2) });
+    input.ruleResults[RULE] = {
+      meta: meta({ id: RULE, category: "content", severity: "warning", weight: 3, names: [] }, "page"),
+      checks: [
+        ...Array.from({ length: naPages }, (_, i) => skip(100 + i, naReason)),
+        ...gapPages.map((p) => skip(p, "scan-truncated")),
+      ],
+    };
+    return input;
+  };
+
+  test("a scan-truncated row survives among many not-applicable skips; they do not", () => {
+    const capped = capReportForPublish(build([7], 400));
+    const kept = capped.ruleResults[RULE]!.checks;
+    expect(kept.filter((c) => c.skipReason === "scan-truncated").map((c) => c.pageUrl)).toEqual([pageUrl(7)]);
+    // The does-not-apply skips are one folded class, never rows per page.
+    expect(kept.filter((c) => c.skipReason === "not-applicable" && c.pageUrl)).toEqual([]);
+    expect(capped.checkTallies[RULE]!["gap-check"]).toEqual({ skipped: 401, gaps: { "scan-truncated": 1 } });
+  }, SLOW);
+
+  test("past the row bound the gap stays as a per-reason class and in the tally", () => {
+    const capped = capReportForPublish(build(Array.from({ length: 30 }, (_, i) => i), 50));
+    const kept = capped.ruleResults[RULE]!.checks.filter((c) => c.skipReason === "scan-truncated");
+    expect(kept.filter((c) => c.pageUrl).length).toBe(5);
+    expect(kept.some((c) => c.details?.aggregated === true && (c.details.pagesTruncated as number) === 25)).toBe(true);
+    expect(capped.checkTallies[RULE]!["gap-check"]!.gaps).toEqual({ "scan-truncated": 30 });
+  }, SLOW);
+
+  test("does-not-apply skips are never marked as a gap", () => {
+    for (const reason of ["not-applicable", "noindex", "page-type", "free text reason"]) {
+      const capped = capReportForPublish(build([], 40, reason));
+      expect(capped.checkTallies[RULE]!["gap-check"]).toEqual({ skipped: 40 });
+    }
+  }, SLOW);
+});

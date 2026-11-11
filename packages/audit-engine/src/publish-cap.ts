@@ -55,6 +55,7 @@ import type {
   RuleMetaLite,
 } from "@squirrelscan/core-contracts";
 import {
+  classifyRuleOutcome,
   isCoverageGapCheck,
   LINK_COVERAGE_DETAIL_KEYS,
   LINK_TARGET_SET_RULES,
@@ -286,6 +287,17 @@ function buildLinkTargetSets(
 // ── Tallies ─────────────────────────────────────────────────────
 
 /**
+ * A skipped check that is a gap, not a "does not apply" (#1775): the rule did
+ * not look at everything (`coverage_gap`), ran out of time or threw. A
+ * `not-applicable`, `noindex`, `page-type` or free-text skip is never one.
+ */
+function isSkipGap(check: CheckResult): boolean {
+  if (check.status !== "skipped") return false;
+  const outcome = classifyRuleOutcome(check);
+  return outcome === "coverage_gap" || outcome === "timed_out" || outcome === "errored";
+}
+
+/**
  * This run's fresh evaluated checks per rule and check name (see
  * {@link CheckTally}). Counted over the UNFOLDED checks with the scorer's own
  * `addChecksToTally`, exactly as the server rescore counts a published report
@@ -323,7 +335,16 @@ export function buildCheckTallies(
       const tally = emptyTally();
       addChecksToTally(tally, checks, advisory);
       let skipped = 0;
-      for (const check of checks) if (check.status === "skipped") skipped++;
+      let gaps: Record<string, number> | undefined;
+      for (const check of checks) {
+        if (check.status !== "skipped") continue;
+        skipped++;
+        if (isSkipGap(check)) {
+          const reason = check.skipReason ?? "unknown";
+          gaps ??= {};
+          gaps[reason] = (gaps[reason] ?? 0) + 1;
+        }
+      }
       const entry: CheckTally = {};
       if (tally.passed > 0) entry.passed = tally.passed;
       if (tally.warnings > 0) entry.warnings = tally.warnings;
@@ -331,6 +352,7 @@ export function buildCheckTallies(
       if (tally.warnUnits > 0) entry.warnUnits = tally.warnUnits;
       if (tally.failUnits > 0) entry.failUnits = tally.failUnits;
       if (skipped > 0) entry.skipped = skipped;
+      if (gaps) entry.gaps = gaps;
       // A class of info checks only scores nothing and says nothing a reader
       // needs; leaving it out keeps the tallies to the classes that count.
       if (Object.keys(entry).length === 0) continue;
@@ -444,7 +466,7 @@ function occurrencesOf(check: CheckResult): number {
  */
 function isNotCheckedUnit(unit: ClassUnit): boolean {
   const { status, skipReason } = unit.check;
-  if (isCoverageGapCheck(unit.check)) return true;
+  if (isCoverageGapCheck(unit.check) || isSkipGap(unit.check)) return true;
   return status === "skipped" && skipReason !== undefined && NOT_CHECKED_SKIP_REASONS.has(skipReason);
 }
 
@@ -663,12 +685,29 @@ function affectedBeforeBounds(originals: CheckResult[], bounded: CheckResult): n
   return pages.size;
 }
 
+/** Gap skip rows a rule keeps one by one, with their `pageUrl` (#1775). The rest fold per reason. */
+const GAP_ROWS_PER_RULE = 5;
+
 function foldRule(ruleId: string, rule: { meta: CappableRuleMeta; checks: CheckResult[] }): FoldedRule {
   const originals = Array.isArray(rule.checks) ? rule.checks : [];
   // Every clamp maps one check to one check, so index i is the same check in both.
   const checks = boundChecks(originals);
   const site: Array<{ check: CheckResult; original: CheckResult }> = [];
   const classes = new Map<string, { members: CheckResult[]; originals: CheckResult[] }>();
+  // Per-page gap skips, kept as rows while the per-rule bound allows (#1775).
+  const gapRows = new Set<number>();
+  const candidates: number[] = [];
+  for (let i = 0; i < checks.length; i++) {
+    const c = checks[i]!;
+    if (c.pageUrl && c.details?.aggregated !== true && isSkipGap(c)) candidates.push(i);
+  }
+  candidates.sort((a, b) => {
+    const ca = checks[a]!;
+    const cb = checks[b]!;
+    return compareMembers(ca, cb) || (ca.skipReason ?? "").localeCompare(cb.skipReason ?? "") || a - b;
+  });
+  for (const i of candidates.slice(0, GAP_ROWS_PER_RULE)) gapRows.add(i);
+  const rows: Array<{ check: CheckResult; original: CheckResult }> = [];
   for (let i = 0; i < checks.length; i++) {
     const check = checks[i]!;
     const original = originals[i]!;
@@ -677,9 +716,17 @@ function foldRule(ruleId: string, rule: { meta: CappableRuleMeta; checks: CheckR
       site.push({ check, original });
       continue;
     }
+    if (gapRows.has(i)) {
+      rows.push({ check, original });
+      continue;
+    }
     // A page passing renders nothing; its count is in the tallies.
     if (check.status === "pass") continue;
-    const key = foldGroupKey(check);
+    // A gap never folds with a "does not apply" skip of the same check: the
+    // aggregate would take whichever skipReason came first. One class per reason.
+    const key = isSkipGap(check)
+      ? `${foldGroupKey(check)}\u0000gap\u0000${check.skipReason ?? ""}`
+      : foldGroupKey(check);
     const entry = classes.get(key);
     if (entry) {
       entry.members.push(check);
@@ -700,6 +747,9 @@ function foldRule(ruleId: string, rule: { meta: CappableRuleMeta; checks: CheckR
       affected: affectedBeforeBounds([original], check),
       key: siteCheckKey(original, check),
     })),
+    ...rows
+      .sort((a, b) => compareMembers(a.check, b.check))
+      .map(({ check, original }) => ({ check, affected: affectedBeforeBounds([original], check) })),
     ...folded,
   ];
   const units = entries.map((entry, order) =>
