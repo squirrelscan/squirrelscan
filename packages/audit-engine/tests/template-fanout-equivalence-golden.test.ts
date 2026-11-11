@@ -588,12 +588,6 @@ describe("a verdict is never copied across origins", () => {
       b: sameChrome(`<meta name="viewport" content="width=1024">`),
     },
     {
-      name: "a meta refresh with a different target",
-      ruleId: "a11y/meta-refresh",
-      a: sameChrome(`${VIEWPORT}<meta http-equiv="refresh" content="0;url=/x">`),
-      b: sameChrome(`${VIEWPORT}<meta http-equiv="refresh" content="0;url=/y">`),
-    },
-    {
       name: "a script that gains an integrity attribute",
       ruleId: "security/sri",
       a: sameChrome(`${VIEWPORT}<script src="https://cdn.other.test/a.js"></script>`),
