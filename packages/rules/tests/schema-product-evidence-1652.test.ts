@@ -284,3 +284,32 @@ describe("schema/product field evidence (#1652): hostile markup stays bounded", 
     30_000,
   );
 });
+
+describe("schema/product Microdata itemtype host is anchored", () => {
+  const product = (type: string) =>
+    `<div itemscope itemtype="${type}"><span itemprop="name">N</span></div>`;
+
+  test("http, https and www schema.org types are read", () => {
+    for (const type of ["https://schema.org/Product", "http://schema.org/Product", "https://www.schema.org/Product"]) {
+      expect(run(page("", product(type))).fields["name"]).toBe("present (microdata)");
+    }
+  });
+
+  test("a lookalike host or a bare token is not a schema.org type", () => {
+    for (const type of [
+      "https://evil.example/schema.org/Product",
+      "https://schema.org.evil.example/Product",
+      "schema.org/Product",
+    ]) {
+      expect(run(page("", product(type))).fields["name"]).toBeUndefined();
+    }
+  });
+
+  test("script text that names schema.org/Product or ProductGroup is a product shell, a longer word is not", () => {
+    const shell = (t: string) => `<script>var t = "${t}";</script>`;
+    for (const t of ["https://schema.org/Product", "https://schema.org/ProductGroup"]) {
+      expect(run(page(shell(t))).fields["name"]).toBe("unknown (rendered-only)");
+    }
+    expect(run(page(shell("https://schema.org/Productivity"))).fields["name"]).toBeUndefined();
+  });
+});

@@ -4,7 +4,7 @@
 
 import type { DocumentFetcher, FetchResponse } from "@squirrelscan/fetchers";
 
-import { describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
 import type { CrawlStorage } from "../src/storage/types";
@@ -13,6 +13,24 @@ import { createCrawler } from "../src/core/crawler";
 import { createTestStorage } from "../src/storage";
 
 const ORIGIN = "https://h.invalid";
+
+// The crawler also asks the network for robots.txt and the like, outside the mock document fetcher.
+// Those requests go to `.invalid` hosts, which never resolve: a real resolver may take seconds to say
+// so (a slow CI runner timed this file out at 5 s), so they fail at once here and the test never
+// depends on DNS.
+const realFetch = globalThis.fetch;
+beforeAll(() => {
+  globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+    if (new URL(url).hostname.endsWith(".invalid")) {
+      return Promise.reject(new TypeError("fetch failed: host does not resolve (test stub)"));
+    }
+    return realFetch(input, init);
+  }) as typeof fetch;
+});
+afterAll(() => {
+  globalThis.fetch = realFetch;
+});
 const TOKEN = { "X-Audit-Token": "secret" };
 
 const PAGE = "<!doctype html><html><head><title>t</title></head><body></body></html>";
