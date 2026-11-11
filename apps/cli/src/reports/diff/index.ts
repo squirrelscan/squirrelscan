@@ -8,7 +8,9 @@ import {
   resolutionCheckKey,
   type SupersededOutcome,
 } from "@squirrelscan/core-contracts/resolution";
-import { loadAllRules } from "@squirrelscan/rules";
+import { skipReasonClass } from "@squirrelscan/core-contracts/rule-outcome";
+import { ruleRuns, type RuleRun } from "@squirrelscan/report";
+import { loadAllRules, type RuleCheckDecl } from "@squirrelscan/rules";
 
 import type { SeverityLevel } from "@/reports/filters";
 import type {
@@ -28,6 +30,7 @@ import type {
   DiffReport,
   DiffSide,
   IssueInstance,
+  NotComparedIssue,
 } from "./types";
 
 import {
@@ -285,6 +288,12 @@ function sortChanges(changes: DiffChange[]): DiffChange[] {
   });
 }
 
+function sortNotCompared(items: NotComparedIssue[]): NotComparedIssue[] {
+  const order = sortIssues(items.map((i) => i.issue));
+  const byIssue = new Map(items.map((i) => [i.issue, i]));
+  return order.map((issue) => byIssue.get(issue)!);
+}
+
 function buildSide(report: AuditReport): DiffSide {
   // A failed/0-page side has no score — keep it null (N/A), never coerce to 0,
   // else a diff shows a bogus "-85 point / F regression" for a failed run (#586).
@@ -298,6 +307,163 @@ function buildSide(report: AuditReport): DiffSide {
       overall,
       grade: overall === null ? "N/A" : getScoreGrade(overall),
     },
+  };
+}
+
+/** A check this audit produced and judged: not skipped, and not a finding carried over from an earlier audit. */
+const judgedCheck = (c: CheckResult): boolean =>
+  c.status !== "skipped" && c.provenance !== "carried";
+
+function reportRule(
+  report: AuditReport,
+  ruleId: string
+): ReportRuleResult | undefined {
+  return report.ruleResults instanceof Map
+    ? report.ruleResults.get(ruleId)
+    : report.ruleResults[ruleId];
+}
+
+function originOf(url: string): string {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return url;
+  }
+}
+
+/**
+ * Decides, for a baseline issue the current report no longer has, whether the absence means "fixed" (#1748).
+ * It does only when the rule ran in both audits over the same scope: same origin, the rule judged something
+ * in each report, the issue's pages were crawled in the current audit and not skipped by the rule there, and
+ * the rule did not report a check its metadata declares as "not checked" in place of the clean check that
+ * supersedes the problem. Returns null for fixed, else why not.
+ */
+function makeNotComparedJudge(
+  baseline: AuditReport,
+  current: AuditReport,
+  checkDecls: ReadonlyMap<string, readonly RuleCheckDecl[]>,
+  superseded: ReadonlyMap<string, readonly string[]>
+): (issue: IssueInstance) => Omit<NotComparedIssue, "issue"> | null {
+  const sameOrigin = originOf(baseline.baseUrl) === originOf(current.baseUrl);
+  const baseRuns = new Map<string, RuleRun>(
+    ruleRuns(baseline).map((r) => [r.ruleId, r])
+  );
+  // A report rebuilt from a slim JSON export (`report --input`) has only the sampled failing rows: its rule
+  // statuses are the export's own `rules` list, and without one nothing says what ran.
+  const slim = current.slimSource;
+  const currentRuns = new Map<string, RuleRun>(
+    (slim ? (slim.rules ?? []) : ruleRuns(current)).map((r) => [r.ruleId, r])
+  );
+  const norm = (url: string) => normalizeTargetId(url, current.baseUrl);
+  // Empty when the report does not list its pages: nothing then says a page was not crawled.
+  const crawled = new Set((current.pages ?? []).map((p) => norm(p.url)));
+
+  return (issue) => {
+    if (!sameOrigin) return { reason: "different-scope" };
+
+    const base = baseRuns.get(issue.ruleId);
+    if (base?.status !== "ran") return { reason: "rule-not-run-in-baseline" };
+
+    // A slim export samples the pages of each check (`affectedPagesHasMore`) and records no passing row, so an
+    // issue's absence from it proves nothing unless the export says the rule ran and listed the check whole.
+    if (slim) {
+      if (!slim.rules) return { reason: "sampled-report" };
+      const names = [
+        issue.checkName,
+        ...(superseded.get(resolutionCheckKey(issue.ruleId, issue.checkName)) ??
+          []),
+      ];
+      if (
+        names.some((n) => slim.truncatedChecks.includes(`${issue.ruleId}|${n}`))
+      ) {
+        return { reason: "sampled-report" };
+      }
+    }
+
+    const run = currentRuns.get(issue.ruleId);
+    if (!run) return { reason: "rule-not-run" };
+    if (run.status === "timed_out") return { reason: "rule-timed-out" };
+    if (run.status === "skipped") {
+      return {
+        reason: "rule-skipped",
+        ...(run.reason ? { detail: run.reason } : {}),
+      };
+    }
+
+    // A pageless skip row of the issue's own check (or its peer) is a coverage gap of that check: the external
+    // link checks past their cap or out of time, internal link targets not fetched. The issue may be among the
+    // links not checked, so its absence is no evidence (the page-based rows below only see per-page skips).
+    {
+      const names = new Set([
+        issue.checkName,
+        ...(superseded.get(resolutionCheckKey(issue.ruleId, issue.checkName)) ??
+          []),
+      ]);
+      const gap = (reportRule(current, issue.ruleId)?.checks ?? []).find(
+        (c) =>
+          c.status === "skipped" &&
+          !c.pageUrl &&
+          !(c.pages && c.pages.length > 0) &&
+          names.has(c.name) &&
+          skipReasonClass(c.skipReason)?.notChecked === true
+      );
+      if (gap) {
+        return {
+          reason: "rule-skipped",
+          ...(gap.skipReason ? { detail: gap.skipReason } : {}),
+        };
+      }
+    }
+
+    // The pages the issue sits on: its target for a page issue, its source pages for an item.
+    const pages =
+      issue.target.type === "page"
+        ? [issue.target.id]
+        : (issue.sourcePages ?? []).map(norm);
+    if (pages.length > 0) {
+      const rule = reportRule(current, issue.ruleId);
+      const skippedHere = new Set<string>();
+      for (const c of rule?.checks ?? []) {
+        if (c.status !== "skipped") continue;
+        if (c.pageUrl) skippedHere.add(norm(c.pageUrl));
+        for (const p of c.pages ?? []) skippedHere.add(norm(p));
+      }
+      for (const page of pages) {
+        if (crawled.size > 0 && !crawled.has(page)) {
+          return { reason: "page-not-crawled", detail: page };
+        }
+        if (skippedHere.has(page)) {
+          return { reason: "rule-skipped-on-page", detail: page };
+        }
+      }
+    }
+
+    // The declared linkage (#1741): a clean check that supersedes the problem is the evidence of a fix. A rule
+    // that answered with a check it declares as "not checked" and no such clean check evaluated nothing.
+    const decls = checkDecls.get(issue.ruleId);
+    if (decls) {
+      const clears = new Set(
+        decls
+          .filter(
+            (d) => d.outcome === "clean" && d.clears?.includes(issue.checkName)
+          )
+          .map((d) => d.name)
+      );
+      const notChecked = new Set(
+        decls.filter((d) => d.outcome === "skipped").map((d) => d.name)
+      );
+      const judged = (reportRule(current, issue.ruleId)?.checks ?? []).filter(
+        judgedCheck
+      );
+      if (
+        clears.size > 0 &&
+        judged.some((c) => notChecked.has(c.name)) &&
+        !judged.some((c) => clears.has(c.name))
+      ) {
+        return { reason: "not-evaluated" };
+      }
+    }
+    return null;
   };
 }
 
@@ -346,7 +512,22 @@ export function diffReports(
   const superseded =
     options.supersededChecks ??
     buildSupersededIndex([...loadAllRules().values()].map((r) => r.meta));
+  const checkDecls =
+    options.checkDecls ??
+    new Map(
+      [...loadAllRules().values()]
+        .filter((r) => r.meta.checks !== undefined)
+        .map((r) => [r.meta.id, r.meta.checks!] as const)
+    );
+  const judge = makeNotComparedJudge(baseline, current, checkDecls, superseded);
   const notChecked: IssueInstance[] = [];
+  const notCompared: NotComparedIssue[] = [];
+  // An issue that is gone is removed (fixed) only when its rule ran over the same scope; else it is not compared.
+  const removeOrNotCompare = (issue: IssueInstance) => {
+    const why = judge(issue);
+    if (why) notCompared.push({ issue, ...why });
+    else removed.push(issue);
+  };
   for (const [fingerprint, issue] of baselineMap) {
     if (currentMap.has(fingerprint)) continue;
     const successors = superseded.get(
@@ -356,7 +537,7 @@ export function diffReports(
       // A rule whose discovery probe gave no verdict (#1794) says nothing about the finding: keep it open.
       if (probeGap(current, issue.ruleId, issue.checkName))
         notChecked.push(issue);
-      else removed.push(issue);
+      else removeOrNotCompare(issue);
       continue;
     }
     const outcomes: SupersededOutcome[] = [];
@@ -373,7 +554,17 @@ export function diffReports(
       if (hit) {
         outcomes.push("failing");
         successor ??= hit;
-      } else if (!ranCheck(current, issue.ruleId, name))
+      } else if (
+        !ranCheck(current, issue.ruleId, name) &&
+        // Peers (#1772): a link moves between two checks of one run of the rule, so the old name having been
+        // judged this run says the successor was too (it emits no pass row when it has no link to report).
+        !(
+          superseded
+            .get(resolutionCheckKey(issue.ruleId, name))
+            ?.includes(issue.checkName) &&
+          ranCheck(current, issue.ruleId, issue.checkName)
+        )
+      )
         outcomes.push("not-checked");
       else outcomes.push("passed");
     }
@@ -384,7 +575,7 @@ export function diffReports(
       if (addedAt >= 0) added.splice(addedAt, 1);
       changed.push({ before: issue, after: successor, changeType: "change" });
     } else if (verdict === "not-checked") notChecked.push(issue);
-    else removed.push(issue);
+    else removeOrNotCompare(issue);
   }
 
   const sortedAdded = sortIssues(added);
@@ -407,11 +598,15 @@ export function diffReports(
       changed: sortedChanged.length,
       regressions,
       improvements,
+      ...(notCompared.length > 0 ? { notCompared: notCompared.length } : {}),
     },
     added: sortedAdded,
     removed: sortedRemoved,
     changed: sortedChanged,
     ...(notChecked.length > 0 ? { notChecked: sortIssues(notChecked) } : {}),
+    ...(notCompared.length > 0
+      ? { notCompared: sortNotCompared(notCompared) }
+      : {}),
   };
 }
 

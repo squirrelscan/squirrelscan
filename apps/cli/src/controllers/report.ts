@@ -190,6 +190,8 @@ interface SlimJsonReport {
   skippedChecks?: unknown[];
   /** Info checks (#669). Not read back: they are notes, not findings. */
   infoChecks?: unknown[];
+  /** The per-rule status list (schema 1.17). Untrusted; read back only to tell a comparison what ran. */
+  rules?: unknown[];
   issues: Array<{
     ruleId: string;
     name: string;
@@ -205,6 +207,8 @@ interface SlimJsonReport {
       status: "fail" | "warn";
       message: string;
       affectedPages: string[];
+      /** The page sample was cut (`affectedPages` lists only some of them). Absent in older exports. */
+      affectedPagesHasMore?: boolean;
       items?: Array<{ id: string; label?: string; sourcePages?: string[] }>;
       details?: Record<string, unknown>;
       /**
@@ -265,8 +269,9 @@ const CATEGORY_BY_NAME = new Map(
   Object.values(CATEGORIES).map((c) => [c.name.toLowerCase(), c.code as string])
 );
 
-function convertSlimReport(report: SlimJsonReport): AuditReport {
+export function convertSlimReport(report: SlimJsonReport): AuditReport {
   const ruleResults: Record<string, ReportRuleResult> = {};
+  const truncatedChecks: string[] = [];
 
   for (const issue of report.issues) {
     // The issue's category NAME is what the export was rendered with, so it
@@ -286,6 +291,15 @@ function convertSlimReport(report: SlimJsonReport): AuditReport {
     const checks: CheckResult[] = [];
 
     for (const check of issue.checks) {
+      if (check.affectedPagesHasMore !== false) {
+        // Cut, or from an export that never said: either way the list is not the whole of it.
+        if (
+          check.affectedPagesHasMore === true ||
+          check.affectedPages.length > 0
+        ) {
+          truncatedChecks.push(`${issue.ruleId}|${check.name}`);
+        }
+      }
       // One check per affected page, so evidence is partitioned by page rather
       // than copied onto every row — the same rule `unfoldAggregateCheck`
       // follows. Copying the whole array onto each page would multiply every
@@ -515,7 +529,38 @@ function convertSlimReport(report: SlimJsonReport): AuditReport {
       passedCount: report.summary.passed,
     },
     ruleResults,
+    slimSource: { rules: slimRuleRuns(report.rules), truncatedChecks },
   };
+}
+
+/** The export's `rules` list, validated: a user-supplied file keeps only well-formed rows. */
+function slimRuleRuns(
+  value: unknown
+): NonNullable<AuditReport["slimSource"]>["rules"] {
+  if (!Array.isArray(value)) return undefined;
+  const rows: NonNullable<NonNullable<AuditReport["slimSource"]>["rules"]> = [];
+  for (const r of value) {
+    const status = (r as { status?: unknown })?.status;
+    const ruleId = (r as { ruleId?: unknown })?.ruleId;
+    const scope = (r as { scope?: { pages?: unknown; origin?: unknown } })
+      ?.scope;
+    if (
+      typeof ruleId !== "string" ||
+      (status !== "ran" && status !== "skipped" && status !== "timed_out")
+    ) {
+      continue;
+    }
+    const pages = typeof scope?.pages === "number" ? scope.pages : undefined;
+    const origin = typeof scope?.origin === "string" ? scope.origin : undefined;
+    const reason = (r as { reason?: unknown }).reason;
+    rows.push({
+      ruleId,
+      status,
+      scope: pages !== undefined ? { pages } : { origin: origin ?? "" },
+      ...(typeof reason === "string" ? { reason } : {}),
+    });
+  }
+  return rows;
 }
 
 /**

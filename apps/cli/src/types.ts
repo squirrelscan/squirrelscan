@@ -471,6 +471,21 @@ export interface ReportRuleResult {
 }
 
 export interface AuditReport {
+  /**
+   * Set on a report rebuilt from a slim JSON export (`squirrel report --input`, #1748): that file carries a
+   * sample of each check's pages and no passing rows, so a comparison cannot read an absent finding as fixed.
+   * `rules` is the export's per-rule status list when it has one (schema 1.17); `truncatedChecks` are the
+   * `<ruleId>|<check>` whose page list was cut. LOCAL ONLY, never published.
+   */
+  slimSource?: {
+    rules?: Array<{
+      ruleId: string;
+      status: "ran" | "skipped" | "timed_out";
+      scope: { pages: number } | { origin: string; targeted?: true };
+      reason?: string;
+    }>;
+    truncatedChecks: string[];
+  };
   crawlId?: string; // UUID of the crawl this report was generated from
   baseUrl: string;
   /** What `--resume` came to (#1658); present only when the run was asked to resume. Mirrors core-contracts `AuditReport`. */
