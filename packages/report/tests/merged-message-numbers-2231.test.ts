@@ -352,7 +352,10 @@ describe("#2231 guard: every rule's message templates survive a merge", () => {
       const b = fill(template, 17);
       for (const message of grouped([a, b]).map((c) => c.message)) {
         if (message === a || message === b) continue;
-        const rebuilt = message.replace(/(?<![A-Za-z0-9._:/,#-])(\d+) to (\d+)(?![A-Za-z0-9._:/,#-])/g, "3");
+        const rebuilt = message
+          .replace(/(?<![A-Za-z0-9._:/,#-])(\d+) to (\d+)(?![A-Za-z0-9._:/,#-])/g, "3")
+          // A per-page measurement alone in parentheses widens too: `(850 to 1200ms)` (#1767).
+          .replace(/(?<=\()(\d+) to (\d+)(?=(?:ms|s|KB|MB|GB|px|%)\))/g, "3");
         if (rebuilt !== a) offenders.push(`${file}\n  in : ${a}\n  out: ${message}`);
       }
     }

@@ -1001,12 +1001,18 @@ function composeFoldedMessage(
         ? `1 ${counted[1]!.replace(/\(s\)/g, "")}, shown on ${pagesWord(occurrences)}`
         : `${distinctItems} ${counted[1]!.replace(/\(s\)/g, "s")} across ${pagesWord(occurrences)}`;
     }
-    return `${text} (+${occurrences - 1} more pages)`;
+    // Pages that disagreed on a count or a measurement say so as a range and the pages it covers
+    // ("Slow server response (850 to 1200ms) on 2 pages"); a message every page agrees on keeps its tail.
+    return variants.size > 1
+      ? `${text} on ${pagesWord(occurrences)}`
+      : `${text} (+${occurrences - 1} more pages)`;
   }
-  const shown = merged.slice(0, 3).map((g) => `${g.text} (${pagesWord(g.count)})`);
+  // "on N pages", not "(N pages)": a count in parentheses after a message that ends in a parenthesised
+  // value reads as two values ("(2 to 5) (3 pages)").
+  const shown = merged.slice(0, 3).map((g) => `${g.text} on ${pagesWord(g.count)}`);
   const rest = merged.slice(3);
   if (rest.length > 0) {
-    shown.push(`${rest.length} other messages (${pagesWord(rest.reduce((n, g) => n + g.count, 0))})`);
+    shown.push(`${rest.length} other messages on ${pagesWord(rest.reduce((n, g) => n + g.count, 0))}`);
   }
   return shown.join("; ");
 }
