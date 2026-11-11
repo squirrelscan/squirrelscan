@@ -226,6 +226,31 @@ describe("schema/product field evidence (#1652): JavaScript shells and truncated
     expect(r.checks.some((c) => c.status === "warn")).toBe(false);
   });
 
+  // htmlReadState is a heuristic: a page that ends in </html> or </body> was served whole.
+  test("valid HTML that omits </html> but ends in </body> is a complete read", () => {
+    const html = `<!doctype html><html><head><title>t</title>${ld({ "@type": "Product", name: "N" })}</head><body><p>done</p></body>`;
+    const r = run(html);
+    expect(r.fields["image"]).toBe("absent");
+    expect(r.fields["name"]).toBe("present (json-ld)");
+  });
+
+  test("a long tail after </html> (more than 4 KB of comments and whitespace) is still a complete read", () => {
+    const tail = `<!-- ${"analytics snippet ".repeat(800)} -->\n${" ".repeat(2000)}`;
+    expect(tail.length).toBeGreaterThan(8000);
+    const r = run(page(ld({ "@type": "Product", name: "N" })) + tail);
+    expect(r.fields["image"]).toBe("absent");
+  });
+
+  test("a page with neither </html> nor </body> near its end stays a truncated read", () => {
+    const html = `<!doctype html><html><head>${ld({ "@type": "Product", name: "N" })}</head><body><p>cut ${"x".repeat(9000)}`;
+    expect(run(html).fields["image"]).toBe("unknown (incomplete-read)");
+  });
+
+  test("a closing tag far from the end (past the tail searched) does not make a cut-off page complete", () => {
+    const html = `<!doctype html><html><head>${ld({ "@type": "Product", name: "N" })}</head><body></body></html>${"x".repeat(80_000)}<p>cut`;
+    expect(run(html).fields["image"]).toBe("unknown (incomplete-read)");
+  });
+
   test("a failed read (error status) never proves absence", () => {
     const html = page(ld({ "@type": "Product", name: "N" }));
     const r = run(html, { page: { url: BASE, html, statusCode: 503, loadTime: 0, headers: {} } } as never);
@@ -238,6 +263,9 @@ describe("schema/product field evidence (#1652): JavaScript shells and truncated
   });
 });
 
+// Measured at about 150 ms on a quiet machine; the budget leaves room for a loaded CI runner and still fails a 100x slowdown.
+const HOSTILE_BUDGET_MS = 2000;
+
 describe("schema/product field evidence (#1652): hostile markup stays bounded", () => {
   test(
     "deeply nested and very many Microdata scopes finish and still answer",
@@ -246,8 +274,12 @@ describe("schema/product field evidence (#1652): hostile markup stays bounded", 
         '<div itemprop="offers" itemscope>'.repeat(3000) +
         "</div>".repeat(3000) + "</div>";
       const many = '<div itemscope itemtype="https://schema.org/Thing"></div>'.repeat(20000);
+      const started = performance.now();
       const r = run(page("", deep + many));
+      const elapsed = performance.now() - started;
       expect(r.fields["name"]).toBe("present (microdata)");
+      // The caps keep this linear. A 100x slowdown (a quadratic walk) fails here, not just at the 30 s timeout.
+      expect(elapsed).toBeLessThan(HOSTILE_BUDGET_MS);
     },
     30_000,
   );

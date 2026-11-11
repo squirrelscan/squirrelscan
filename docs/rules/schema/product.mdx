@@ -25,7 +25,7 @@ The rule reads every `script[type="application/ld+json"]` on the page and keeps 
 A field is `present` when it is declared with a value. `description` is judged on presence only, with no length threshold, and a price of `0` is declared. A field is `absent` only when the HTML was read completely and no supported representation carries it. Otherwise it is `unknown`, with one of these reasons:
 
 - `incomplete-read`: the read failed (an error status or no document) or looks truncated (no closing `</html>`, or an unterminated `<script>`). Fields already found stay present; the rest are unknown.
-- `rendered-only`: no product markup is in the raw HTML, but the page looks like a JavaScript shell for a product (product Open Graph tags or an ecommerce site profile with almost no visible text, or a script that builds schema.org Product data). The rule does not run a browser, so it reports every field as unknown rather than missing.
+- `rendered-only`: no product markup is in the raw HTML, but the page looks like a JavaScript shell for a product (product Open Graph tags or an ecommerce site profile with almost no visible text, or a script that builds schema.org Product data). The ecommerce site profile comes from cloud site metadata, so an offline CLI audit has none and decides from the page markup alone. The rule does not run a browser, so it reports every field as unknown rather than missing.
 - `unsupported`: the Microdata uses `itemref`, which this reader does not follow.
 - `unresolved-reference`: the field is a `{"@id": "..."}` reference that no node on the page defines.
 

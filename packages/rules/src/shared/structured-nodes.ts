@@ -32,14 +32,16 @@ const MAX_VISITED = 5000;
 const MAX_MARKUP_SCOPES = 2000;
 const MAX_PROPS_PER_SCOPE = 200;
 const MAX_TEXT = 300;
-const TAIL_CHARS = 4096;
+// How much of the end of the page is searched for its closing markup. Valid pages can carry a long tail
+// after `</html>` (comments, tracking snippets, whitespace), so this is generous.
+const TAIL_CHARS = 64 * 1024;
 
 /**
  * Whether the HTML was read completely. A read that failed (no document, an
  * error status) or was cut short (no closing `</html>` in the tail, or an
  * unterminated `<script>`) cannot prove that a field is absent, so callers
- * report unchecked fields as unknown. A page that merely omits `</html>` is
- * also read as truncated: the cost is an `unknown` where `absent` might have
+ * report unchecked fields as unknown. A page with neither `</html>` nor `</body>` near
+ * its end is also read as truncated: the cost is an `unknown` where `absent` might have
  * been said, never a false "missing".
  */
 export function htmlReadState(ctx: RuleContext): ReadState {
@@ -51,8 +53,11 @@ export function htmlReadState(ctx: RuleContext): ReadState {
   if (!html) return "complete";
   if (page.rendered) return "complete";
   const tail = html.length > TAIL_CHARS ? html.slice(-TAIL_CHARS) : html;
-  if (!/<\/html\s*>/i.test(tail)) return "truncated";
   const lower = tail.toLowerCase();
+  // Heuristic: a page that ends in `</html>` or `</body>` was served whole. Valid HTML may omit `</html>`
+  // (and even `</body>`), so a page with neither reads as truncated and its unchecked fields as unknown,
+  // never as a false "missing". lastIndexOf, not a regex over the tail: the tail can be large.
+  if (lower.lastIndexOf("</html") < 0 && lower.lastIndexOf("</body") < 0) return "truncated";
   if (lower.lastIndexOf("<script") > lower.lastIndexOf("</script")) return "truncated";
   return "complete";
 }
