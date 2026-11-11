@@ -5,6 +5,8 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
+import { MAX_TARGET_URLS } from "@squirrelscan/core-contracts/limits";
+
 import { createCrawler } from "../src/core/crawler";
 import type { CrawlerConfig } from "../src/core/types";
 import { applyStatusGuards, type CrawlFetcher } from "../src/fetcher";
@@ -244,6 +246,31 @@ describe("targetUrls (#1777)", () => {
     expect(r.fetched).not.toContain(`${ORIGIN}/p/6`);
     const skipped = r.frontier.find((f) => f.reason === "redirect_not_targeted");
     expect(skipped).toMatchObject({ url: `${ORIGIN}/p/6`, parent: `${ORIGIN}/redir-away` });
+  });
+
+  test("the list is bounded: the excess is a count, not frontier rows, and an oversize raw URL is skipped unnormalised", async () => {
+    const targets = Array.from({ length: MAX_TARGET_URLS + 5 }, (_, i) => `${ORIGIN}/p/${(i % 19) + 1}?n=${i}`);
+    // The oversize value goes first so it is inside the bounded part.
+    const huge = `${ORIGIN}/${"x".repeat(5000)}`;
+    const r = await run({ targetUrls: [huge, ...targets], maxPages: 3, allowQueryParams: ["n"] }, bigSite(), other);
+    expect(r.stats.targetsOverLimit).toBe(6);
+    // Rows: at most MAX_TARGET_URLS, and the oversize one is stored cut short with its reason.
+    expect(r.frontier.length).toBeLessThanOrEqual(MAX_TARGET_URLS);
+    const tooLong = r.frontier.filter((f) => f.reason === "url_too_long");
+    expect(tooLong).toHaveLength(1);
+    expect(tooLong[0]!.url.length).toBeLessThanOrEqual(200);
+    expect(r.fetched).toHaveLength(3);
+  });
+
+  test("a Cloudflare email-protection URL given as a target is a skipped row with a reason, not dropped", async () => {
+    const r = await run(
+      { targetUrls: [`${ORIGIN}/cdn-cgi/l/email-protection#abc123`, `${ORIGIN}/p/1`] },
+      bigSite(),
+      other,
+    );
+    expect(r.fetched).toEqual([`${ORIGIN}/p/1`]);
+    const row = r.frontier.find((f) => f.url.includes("email-protection"));
+    expect(row).toMatchObject({ status: "skipped", reason: "email_protection" });
   });
 
   test("without targetUrls the same crawl follows links and reads the sitemap as ever", async () => {

@@ -41,8 +41,10 @@ function serve(): { origin: string; hits: string[] } {
       }
       // No <title> on odd pages: core/meta-title has a finding to give on them.
       const title = Number(pathname.split("/").pop()) % 2 === 0 ? "<title>A page</title>" : "";
+      // A canonical to the page without its query: `?ref=` variants are one page.
+      const canonical = `<link rel="canonical" href="http://localhost:${server.port}${pathname}">`;
       return new Response(
-        `<!doctype html><html lang="en"><head>${title}</head><body><h1>Page</h1>${links}</body></html>`,
+        `<!doctype html><html lang="en"><head>${title}${canonical}</head><body><h1>Page</h1>${links}</body></html>`,
         { headers: { "content-type": "text/html; charset=utf-8" } },
       );
     },
@@ -50,6 +52,9 @@ function serve(): { origin: string; hits: string[] } {
   servers.push(server);
   return { origin: `http://localhost:${server.port}`, hits };
 }
+
+import type { FrontierRecord } from "@squirrelscan/core-contracts/storage";
+import { targetedCoverage } from "../src/report-stream";
 
 const CONFIG = {
   rule_options: {},
@@ -59,7 +64,12 @@ const CONFIG = {
   internal_links: { enabled: false },
 } as unknown as Config;
 
-async function audit(engine: "v1" | "v2", targets: (origin: string) => string[], maxPages = 50) {
+async function audit(
+  engine: "v1" | "v2",
+  targets: (origin: string) => string[],
+  maxPages = 50,
+  crawlerExtra: Record<string, unknown> = {},
+) {
   const { origin, hits } = serve();
   const crawler = await Effect.runPromise(
     createCrawler({
@@ -75,6 +85,7 @@ async function audit(engine: "v1" | "v2", targets: (origin: string) => string[],
         incremental: false,
         useCacheControl: false,
         targetUrls: targets(origin),
+        ...crawlerExtra,
       },
     }),
   );
@@ -94,13 +105,7 @@ async function audit(engine: "v1" | "v2", targets: (origin: string) => string[],
   const checks = (id: string) => (ran.ruleResultsMap.get(id)?.checks ?? []) as CheckResult[];
   // The audited pages are the report's: a redirect row is recorded, not a page (#1762).
   const auditedPages = stored.filter((p) => !isRedirectSourcePage(p));
-  const coverage = await Effect.runPromise(
-    targetedCoverageFor(
-      storage,
-      crawlId,
-      auditedPages.map((p) => p.url),
-    ),
-  );
+  const coverage = await Effect.runPromise(targetedCoverageFor(storage, crawlId));
   return { origin, hits, checks, coverage, stored: auditedPages };
 }
 
@@ -138,6 +143,19 @@ for (const engine of ["v1", "v2"] as const) {
       expect(r.coverage).toEqual({ requested: 3, audited: 3, unaudited: [] });
     });
 
+    test("query and canonical variants are audited pages, never reported as redirected (#1777 review)", async () => {
+      // `ref` is an allowed query parameter, so each value is its own URL; both name the same canonical page.
+      const r = await audit(
+        engine,
+        (o) => [`${o}/p/1?ref=a`, `${o}/p/1?ref=b`, `${o}/p/3`],
+        50,
+        { allowQueryParams: ["ref"] },
+      );
+      expect(r.coverage.requested).toBe(3);
+      expect(r.coverage.audited).toBe(3);
+      expect(r.coverage.unaudited).toEqual([]);
+    });
+
     test("every URL given is accounted for: refused, over the cap, redirected", async () => {
       const r = await audit(
         engine,
@@ -161,3 +179,34 @@ for (const engine of ["v1", "v2"] as const) {
     });
   });
 }
+
+describe("targetedCoverage (pure)", () => {
+  const row = (url: string, status: FrontierRecord["status"], extra: Partial<FrontierRecord> = {}): FrontierRecord => ({
+    normalizedUrl: url,
+    rawUrl: url,
+    depth: 0,
+    priority: 0,
+    status,
+    source: "carried",
+    enqueuedAt: 0,
+    retryCount: 0,
+    ...extra,
+  });
+
+  test("a done row is audited unless its stored row is a redirect", () => {
+    const c = targetedCoverage(
+      [row("https://e.test/a", "done"), row("https://e.test/old", "done"), row("https://e.test/b?ref=1", "done")],
+      ["https://e.test/old"],
+    );
+    expect(c).toEqual({
+      requested: 3,
+      audited: 2,
+      unaudited: [{ url: "https://e.test/old", reason: "redirected" }],
+    });
+  });
+
+  test("the URLs past the limit are counted as requested and not audited, without rows", () => {
+    const c = targetedCoverage([row("https://e.test/a", "done")], [], 7);
+    expect(c).toMatchObject({ requested: 8, audited: 1, overLimit: 7 });
+  });
+});

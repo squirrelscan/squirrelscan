@@ -339,6 +339,8 @@ export interface CrawlStats {
    * followed, no sitemap read, no discovery probes. Site-scope rules read this and skip.
    */
   targetedRun?: boolean;
+  /** Targeted run: URLs in the list past `MAX_TARGET_URLS`, counted and not stored (#1777). */
+  targetsOverLimit?: number;
   /**
    * External link checking this run (repo#2729): distinct external links the
    * pages carry, how many were checked, and the per-audit limit that capped it.
@@ -472,6 +474,11 @@ export interface CrawlerConfigSnapshot {
   allowQueryParams: string[];
   dropQueryPrefixes: string[];
   allowedDomains: string[];
+  /**
+   * The URL list of a targeted run (#1777), kept so a resume under another list, or a normal one, is
+   * refused: it would mix two scopes in one crawl. Absent on a normal crawl.
+   */
+  targetUrls?: string[];
 }
 
 // ============================================

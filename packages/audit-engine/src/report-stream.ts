@@ -23,7 +23,6 @@ import {
 } from "@squirrelscan/rules";
 import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
 import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
-import { normalizePageUrl } from "@squirrelscan/utils/url";
 import { parseRobotsTxt, resolveRobotsSitemapUrls } from "@squirrelscan/utils/robots-txt";
 
 import { logger } from "./adapter-logger";
@@ -160,14 +159,18 @@ const TARGETED_UNAUDITED_MAX = 100;
 /**
  * What a targeted run (#1777) did with the URLs it was given: every one is audited or listed with its
  * reason. The frontier holds exactly the targets (no discovery), plus a skipped row for the destination of a
- * target that redirected to a URL not in the list. Pure: the caller reads the frontier and the audited pages.
+ * target that redirected to a URL not in the list. `redirectSources` are the normalised URLs of the stored
+ * redirect rows (see `isRedirectSourcePage`): a target is `redirected` because its stored row says so, never
+ * because it is missing from the report's pages, so a canonical or query variant that was folded into
+ * another page still counts as audited. `overLimit` is the count of URLs past `MAX_TARGET_URLS`. Pure: the
+ * caller reads the frontier, the pages and the crawl stats.
  */
 export function targetedCoverage(
   entries: readonly FrontierRecord[],
-  auditedUrls: Iterable<string>,
+  redirectSources: Iterable<string>,
+  overLimit = 0,
 ): ScanScopeTargeted {
-  const audited = new Set<string>();
-  for (const url of auditedUrls) audited.add(normalizePageUrl(url));
+  const redirects = new Set<string>(redirectSources);
   const redirectDestinations = new Map<string, string>();
   for (const e of entries) {
     if (e.reason === "redirect_not_targeted" && e.parentUrl) {
@@ -178,29 +181,30 @@ export function targetedCoverage(
   const unaudited: TargetedRunUnaudited[] = [];
   let auditedCount = 0;
   for (const e of targets) {
-    if (audited.has(normalizePageUrl(e.normalizedUrl))) {
-      auditedCount += 1;
-      continue;
-    }
     if (e.status === "skipped") {
       unaudited.push({ url: e.normalizedUrl, reason: e.reason ?? "skipped" });
     } else if (e.status === "failed") {
       unaudited.push({ url: e.normalizedUrl, reason: "failed" });
     } else if (e.status === "done") {
-      const destination = redirectDestinations.get(e.normalizedUrl);
-      unaudited.push({
-        url: e.normalizedUrl,
-        reason: "redirected",
-        ...(destination ? { destination } : {}),
-      });
+      if (redirects.has(e.normalizedUrl)) {
+        const destination = redirectDestinations.get(e.normalizedUrl);
+        unaudited.push({
+          url: e.normalizedUrl,
+          reason: "redirected",
+          ...(destination ? { destination } : {}),
+        });
+      } else {
+        auditedCount += 1;
+      }
     } else {
       // Still pending or fetching when the crawl stopped (a time limit, an interrupted run).
       unaudited.push({ url: e.normalizedUrl, reason: "not_reached" });
     }
   }
   return {
-    requested: targets.length,
+    requested: targets.length + overLimit,
     audited: auditedCount,
+    ...(overLimit > 0 ? { overLimit } : {}),
     unaudited: unaudited.slice(0, TARGETED_UNAUDITED_MAX),
   };
 }
@@ -209,11 +213,18 @@ export function targetedCoverage(
 export function targetedCoverageFor(
   storage: CrawlStorage,
   crawlId: string,
-  auditedUrls: Iterable<string>,
 ): Effect.Effect<ScanScopeTargeted, never, never> {
-  return storage.getAllFrontierEntries(crawlId).pipe(
-    Effect.map((entries) => targetedCoverage(entries, auditedUrls)),
-    Effect.catchAll(() => Effect.succeed({ requested: 0, audited: 0, unaudited: [] })),
+  return Effect.gen(function* () {
+    const entries = yield* storage.getAllFrontierEntries(crawlId);
+    const pages = yield* storage.getPages(crawlId);
+    const stats = yield* storage.getStats(crawlId);
+    return targetedCoverage(
+      entries,
+      pages.filter((p) => isRedirectSourcePage(p)).map((p) => p.normalizedUrl),
+      stats?.targetsOverLimit ?? 0,
+    );
+  }).pipe(
+    Effect.catchAll(() => Effect.succeed({ requested: 0, audited: 0, unaudited: [] } as ScanScopeTargeted)),
   );
 }
 

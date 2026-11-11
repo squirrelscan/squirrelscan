@@ -23,7 +23,7 @@ import { decodedPageBytes } from "@squirrelscan/utils/bytes";
 import { classifyWafResponse } from "@squirrelscan/utils/waf";
 import { WELL_KNOWN_PATHS, isPermanentStorageError } from "@squirrelscan/core-contracts/storage";
 import { auditFailureDetail } from "@squirrelscan/core-contracts/failure-reason";
-import { COVERAGE_PAGE_LIMITS, REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
+import { COVERAGE_PAGE_LIMITS, MAX_TARGET_URLS, REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
 
 import { extractCrawlableUrls, mergeServerOnlyScripts } from "@squirrelscan/parser/extractors";
 import {
@@ -1214,6 +1214,37 @@ export function createCrawler(
     // ----------------------------------------
     // Reuse a cached page (304 / hash-match / origin-fresh / SWR)
     // ----------------------------------------
+    // Where a redirecting page's destination goes (#1762, #1777), from a fresh fetch and from a cached row
+    // alike. A normal crawl queues it so it is audited once even when nothing links to it. A targeted run
+    // audits it only when it is in the list too (then it is already in the frontier and nothing is added);
+    // otherwise it is kept as a `redirect_not_targeted` row so the report can name it.
+    const enqueueRedirectDestination = (
+      crawlId: string,
+      redirectTarget: string,
+      entry: FrontierRecord,
+    ): Effect.Effect<void, StorageError, never> =>
+      Effect.gen(function* () {
+        if (!isTargetedRun()) {
+          yield* enqueueUrl(crawlId, redirectTarget, entry.depth, entry.normalizedUrl, "discovered");
+          return;
+        }
+        const destination = normalizeAndCheckScope(redirectTarget).normalized;
+        if (destination && !(yield* storage.hasFrontierEntry(crawlId, destination))) {
+          yield* storage.upsertFrontier(crawlId, {
+            normalizedUrl: destination,
+            rawUrl: redirectTarget,
+            depth: entry.depth,
+            parentUrl: entry.normalizedUrl,
+            priority: 0,
+            status: "skipped",
+            source: "discovered",
+            enqueuedAt: Date.now(),
+            retryCount: 0,
+            reason: "redirect_not_targeted",
+          });
+        }
+      });
+
     // Whether a processed page's outlinks may be followed. Quick/sitemap-only
     // crawls (disableLinkDiscovery) fall back to discovery only when the sitemap
     // yielded nothing to crawl. Read at call time: the pending count changes as
@@ -1253,13 +1284,7 @@ export function createCrawler(
         if (cachedIsRedirect) redirectRowsThisRun++;
         else pagesCommitted++;
         if (cachedRedirectTarget) {
-          yield* enqueueUrl(
-            crawlId,
-            cachedRedirectTarget,
-            entry.depth,
-            entry.normalizedUrl,
-            "discovered",
-          );
+          yield* enqueueRedirectDestination(crawlId, cachedRedirectTarget, entry);
         }
 
         // Copy links + images from the cached page.
@@ -2101,27 +2126,7 @@ export function createCrawler(
             });
             yield* updateStats(crawlId, { pagesFetched: 1, bytesTotal: 0 });
             markPrefixCrawled(entry.normalizedUrl, entry.depth);
-            if (isTargetedRun()) {
-              // The destination is audited only when it is in the list too (#1777); it is then already in
-              // the frontier and the dedupe in enqueueUrl leaves it alone.
-              const destination = normalizeAndCheckScope(redirectTarget).normalized;
-              if (destination && !(yield* storage.hasFrontierEntry(crawlId, destination))) {
-                yield* storage.upsertFrontier(crawlId, {
-                  normalizedUrl: destination,
-                  rawUrl: redirectTarget,
-                  depth: entry.depth,
-                  parentUrl: entry.normalizedUrl,
-                  priority: 0,
-                  status: "skipped",
-                  source: "discovered",
-                  enqueuedAt: Date.now(),
-                  retryCount: 0,
-                  reason: "redirect_not_targeted",
-                });
-              }
-            } else {
-              yield* enqueueUrl(crawlId, redirectTarget, entry.depth, entry.normalizedUrl, "discovered");
-            }
+            yield* enqueueRedirectDestination(crawlId, redirectTarget, entry);
             yield* emitProgress(crawlId);
             return;
           }
@@ -3250,6 +3255,7 @@ export function createCrawler(
             allowQueryParams: config.allowQueryParams,
             dropQueryPrefixes: config.dropQueryPrefixes,
             allowedDomains: config.allowedDomains,
+            ...(isTargetedRun() ? { targetUrls: config.targetUrls!.slice(0, MAX_TARGET_URLS) } : {}),
           },
           stats: {
             pagesTotal: 0,
@@ -3322,45 +3328,57 @@ export function createCrawler(
         // for. No discovery probes, no sitemaps, no links; only the listed URLs, through the same scope,
         // robots and length checks as any URL, each refusal kept with its reason.
         if (isTargetedRun()) {
-          yield* storage.updateStats(crawlId, { targetedRun: true, linkDiscoveryOff: true });
+          const all = config.targetUrls ?? [];
+          // Bounded input: the list is cut at MAX_TARGET_URLS and the rest only counted.
+          const targets = all.slice(0, MAX_TARGET_URLS);
+          const overLimit = Math.max(0, all.length - targets.length);
+          yield* storage.updateStats(crawlId, {
+            targetedRun: true,
+            linkDiscoveryOff: true,
+            ...(overLimit > 0 ? { targetsOverLimit: overLimit } : {}),
+          });
+          const skippedRow = (key: string, rawUrl: string, reason: string) =>
+            storage.upsertFrontier(crawlId, {
+              normalizedUrl: key,
+              rawUrl,
+              depth: 0,
+              priority: 0,
+              status: "skipped",
+              // "carried": the targets are the whole frontier, so the source only has to be a non-seed one.
+              source: "carried",
+              enqueuedAt: Date.now(),
+              retryCount: 0,
+              reason,
+            });
           let accepted = 0;
           const seen = new Set<string>();
-          for (const target of config.targetUrls ?? []) {
+          for (const target of targets) {
+            // The raw string first: an oversize value is never normalised or stored whole.
+            if (target.length > REPORT_LIMITS.maxUrlLength) {
+              yield* skippedRow(target.slice(0, 200), target.slice(0, 200), "url_too_long");
+              continue;
+            }
             const { normalized } = normalizeAndCheckScope(target);
             if (!normalized) {
               // Not a URL at all: still accounted for, never silently dropped.
-              yield* storage.upsertFrontier(crawlId, {
-                normalizedUrl: target.slice(0, 2048),
-                rawUrl: target.slice(0, 2048),
-                depth: 0,
-                priority: 0,
-                status: "skipped",
-                source: "carried",
-                enqueuedAt: Date.now(),
-                retryCount: 0,
-                reason: "invalid_url",
-              });
+              yield* skippedRow(target, target, "invalid_url");
               continue;
             }
             if (seen.has(normalized)) continue;
             seen.add(normalized);
+            const rawUrl = new URL(target, baseUrl).toString();
+            // Cloudflare's email-protection link is an address, never a page; enqueueUrl leaves it out
+            // silently for any non-seed source, so a target naming one is recorded here with a reason.
+            if (isCloudflareEmailProtectionUrl(normalized)) {
+              yield* skippedRow(normalized, rawUrl, "email_protection");
+              continue;
+            }
             if (accepted >= config.maxPages) {
               // Over the cap: listed as not audited, never silently dropped.
-              yield* storage.upsertFrontier(crawlId, {
-                normalizedUrl: normalized,
-                rawUrl: new URL(target, baseUrl).toString(),
-                depth: 0,
-                priority: 0,
-                status: "skipped",
-                source: "carried",
-                enqueuedAt: Date.now(),
-                retryCount: 0,
-                reason: "over_max_pages",
-              });
+              yield* skippedRow(normalized, rawUrl, "over_max_pages");
               continue;
             }
             const before = yield* storage.getPendingCount(crawlId);
-            // "carried": the targets are the whole frontier, so the source only has to be a non-seed one.
             yield* enqueueUrl(crawlId, target, 0, undefined, "carried");
             if ((yield* storage.getPendingCount(crawlId)) > before) accepted++;
           }
