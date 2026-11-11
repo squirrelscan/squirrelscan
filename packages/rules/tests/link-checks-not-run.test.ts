@@ -149,7 +149,7 @@ describe("links/broken-external-links when external link checking did not run", 
     expect(checks[0]!.details).toEqual({ externalLinksFound: 1 });
   });
 
-  test("checked links still warn on a 404", () => {
+  test("a checked link answering 404 fails (confirmed broken, #1739)", () => {
     const { checks } = brokenExternalLinksRule.run(
       ctx([{ url: `${BASE}/`, statusCode: 200 }], {
         externalLinks: [
@@ -157,7 +157,7 @@ describe("links/broken-external-links when external link checking did not run", 
         ],
       }),
     );
-    expect(checks[0]!.status).toBe("warn");
+    expect(checks[0]!.status).toBe("fail");
   });
 
   test("links over the per-audit limit are not checked, next to the result for the rest", () => {

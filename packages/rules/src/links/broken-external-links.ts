@@ -2,6 +2,8 @@
 // Uses cached check results from external link checker
 
 import {
+  EXTERNAL_LINK_HOST_UNRESOLVED_ERROR,
+  EXTERNAL_LINK_INVALID_SUFFIX_ERROR,
   EXTERNAL_LINKS_NOT_CHECKED_SKIP_REASON,
   EXTERNAL_LINKS_OUT_OF_TIME_SKIP_REASON,
   EXTERNAL_LINKS_OVER_CAP_SKIP_REASON,
@@ -33,6 +35,28 @@ import {
  */
 function isRateLimitedLink(link: { status: number | null; rateLimited?: boolean }): boolean {
   return link.rateLimited === true || isRateLimitStatus(link.status);
+}
+
+/**
+ * An external link CONFIRMED broken (#1739): the target answered 404 or 410, or its host was confirmed not to
+ * resolve (#1740). A definite answer, so it fails. Anything else wrong with a link (5xx, a timeout, a TLS or
+ * connection error, another 4xx) may be transient or specific to where it was asked from, and only warns.
+ */
+function isConfirmedBroken(link: { status: number | null; error: string | null }): boolean {
+  if (link.error) return isDeadHostError(link.error);
+  return link.status === 404 || link.status === 410;
+}
+
+/** A host that cannot be reached by any visitor: it does not exist, or sits under a suffix that never resolves. */
+function isDeadHostError(error: string): boolean {
+  return error === EXTERNAL_LINK_HOST_UNRESOLVED_ERROR || error === EXTERNAL_LINK_INVALID_SUFFIX_ERROR;
+}
+
+/** What a confirmed-broken link answered, for the message and the label. */
+function brokenReason(link: { status: number | null; error: string | null }): string {
+  if (link.error === EXTERNAL_LINK_INVALID_SUFFIX_ERROR) return "no such domain suffix";
+  if (link.error === EXTERNAL_LINK_HOST_UNRESOLVED_ERROR) return "domain does not exist";
+  return String(link.status);
 }
 
 /**
@@ -201,7 +225,9 @@ function refusedCheck(
   return {
     name: "refused-external-links",
     status: "info",
-    message: `${count} external link(s) point at a private, link-local or cloud metadata address, or a name public DNS does not resolve, so they were not requested and their status was not checked`,
+    // A name public DNS does not resolve is NOT here (#1740): that is a dead host, reported as broken. Only an
+    // address the egress policy refuses for safety, whose status really is unknown.
+    message: `${count} external link(s) point at a private, loopback, link-local or cloud metadata address, so they were not requested and their status was not checked`,
     value: count,
     items: sample.map((l) => ({
       id: l.href,
@@ -261,14 +287,17 @@ export const brokenExternalLinksRule: Rule = {
   meta: {
     id: "links/broken-external-links",
     name: "Broken External Links",
-    description: "Detects external links returning 4xx/5xx errors or timeouts",
+    description:
+      "Detects external links that are confirmed broken (a 404 or 410, or a host that does not resolve) and links that may be broken (5xx, timeouts, TLS errors)",
     solution:
-      "Broken external links hurt user experience and credibility. Regularly audit external links using automated tools. Remove or replace broken links with working alternatives. Consider using archived versions (archive.org) if the original content is gone. For important resources, consider hosting your own copies of critical documentation or linking to more stable sources.",
+      "Broken external links hurt user experience and credibility. A link to a host that no longer resolves is also a risk: a lapsed domain can be registered by someone else, who then receives your visitors and the link equity you send. Remove or replace broken links with working alternatives, and take a link to a lapsed domain off the page before anyone else claims the name. Consider using archived versions (archive.org) if the original content is gone. For important resources, consider hosting your own copies of critical documentation or linking to more stable sources.",
     // pub#836/#843: a dead link is a reliability problem, scored under
     // Performance; the id keeps its `links/` prefix so configs keep working.
     category: "reliability",
     scope: "site",
-    severity: "warning",
+    // #1739: a link confirmed broken (404, 410, a host that does not resolve) fails, like an internal one;
+    // links that may be broken warn, and links that cannot be verified inform.
+    severity: "error",
     weight: 5,
   },
 
@@ -375,7 +404,12 @@ export const brokenExternalLinksRule: Rule = {
     });
 
     // Links nobody could verify either way (status unverifiable)
-    const wafBlockedLinks = externalLinks.filter((link) => link.wafBlocked);
+    // #1739: a first failure still waiting for its confirming check is likely broken, not blocked: its own
+    // check, as a warning, until the second check confirms it (then it is a 404 and moves to the failing check).
+    const isAwaiting = (link: { wafBlocked?: boolean; unverifiedReason?: string }) =>
+      link.wafBlocked === true && link.unverifiedReason === "awaiting-confirmation";
+    const awaitingLinks = externalLinks.filter(isAwaiting);
+    const wafBlockedLinks = externalLinks.filter((link) => link.wafBlocked && !isAwaiting(link));
 
     // Same bucket, different cause: throttled targets (#1829).
     const rateLimitedLinks = externalLinks.filter((link) => isRateLimitedLink(link));
@@ -383,6 +417,50 @@ export const brokenExternalLinksRule: Rule = {
     const checkedCount = externalLinks.filter(
       (l) => l.status !== null || l.error !== null
     ).length;
+
+    // #1739: confirmed broken (404, 410, a host that does not resolve) fails; the rest of the broken
+    // links (5xx, timeouts, TLS and connection errors, other 4xx) may be transient or specific to where
+    // they were asked from, and only warn, under their own check.
+    const confirmedBroken = brokenLinks.filter(isConfirmedBroken);
+    const possiblyBroken = brokenLinks.filter((l) => !isConfirmedBroken(l));
+    // #1740: how many were verified working out of how many were found, so the pass never reads as
+    // "all working" while some were broken, unverified or never requested.
+    const found = Math.max(linkCheck?.found ?? 0, externalLinks.length);
+    const verifiedWorking = externalLinks.filter(
+      (l) =>
+        l.error === null &&
+        !l.wafBlocked &&
+        !isRateLimitedLink(l) &&
+        l.status !== null &&
+        l.status < 400,
+    ).length;
+
+    const brokenItems = (links: typeof brokenLinks) =>
+      links.map((l) => {
+        const sections = placement.sections(l.href);
+        const sources = placement.sources(l.href, l.sourcePages);
+        const deadHost = l.error !== null && isDeadHostError(l.error);
+        return {
+          id: l.href,
+          label: withSection(
+            deadHost
+              ? `${l.href} (${brokenReason(l)})`
+              : l.error
+                ? `${l.href} (Error: ${l.error})`
+                : `${l.href} (${l.status})`,
+            sections,
+          ),
+          sourcePages: l.sourcePages,
+          ...(sources ? { sources } : {}),
+          ...regionsField(placement.regions(l.href)),
+          meta: {
+            status: l.status,
+            error: l.error,
+            ...(deadHost ? { deadHost: true } : {}),
+            ...sectionMeta(sections),
+          },
+        };
+      });
 
     if (brokenLinks.length === 0 && checkedCount === 0) {
       // Every link is still unresolved: "All 0 external link(s) are working"
@@ -394,55 +472,62 @@ export const brokenExternalLinksRule: Rule = {
         ),
       );
     } else if (brokenLinks.length === 0) {
+      const unverified = found - verifiedWorking;
       checks.push({
         name: "broken-external-links",
         status: "pass",
-        message: `All ${checkedCount} external link(s) are working`,
+        message:
+          unverified <= 0
+            ? `All ${verifiedWorking} external link(s) are working`
+            : `${verifiedWorking} of ${found} external link(s) verified working; ${unverified} could not be verified or were not checked`,
+        details: { verifiedWorking, totalFound: found },
       });
     } else {
-      // Group by status code for better reporting
-      const byStatus = new Map<string, typeof brokenLinks>();
-      for (const link of brokenLinks) {
-        const key = link.error ? "error" : String(link.status);
-        const group = byStatus.get(key) ?? [];
-        group.push(link);
-        byStatus.set(key, group);
-      }
-
-      // Create a summary of broken links
-      const summaryParts: string[] = [];
-      for (const [status, links] of byStatus) {
-        if (status === "error") {
-          summaryParts.push(`${links.length} failed`);
-        } else {
-          summaryParts.push(`${links.length} with ${status}`);
+      if (confirmedBroken.length > 0) {
+        const byReason = new Map<string, number>();
+        for (const link of confirmedBroken) {
+          const key = brokenReason(link);
+          byReason.set(key, (byReason.get(key) ?? 0) + 1);
         }
+        const parts = [...byReason].map(([reason, n]) =>
+          /^\d+$/.test(reason) ? `${n} with ${reason}` : `${n} ${reason}`,
+        );
+        checks.push({
+          name: "broken-external-links",
+          status: "fail",
+          message: `${confirmedBroken.length} broken external link(s): ${parts.join(", ")}`,
+          items: brokenItems(confirmedBroken),
+          details: {
+            totalBroken: confirmedBroken.length,
+            totalChecked: checkedCount,
+            deadHosts: confirmedBroken.filter((l) => l.error !== null && isDeadHostError(l.error)).length,
+            verifiedWorking,
+            totalFound: found,
+          },
+        });
       }
-
-      checks.push({
-        name: "broken-external-links",
-        status: "warn",
-        message: `${brokenLinks.length} broken external link(s): ${summaryParts.join(", ")}`,
-        items: brokenLinks.map((l) => {
-          const sections = placement.sections(l.href);
-          const sources = placement.sources(l.href, l.sourcePages);
-          return {
-            id: l.href,
-            label: withSection(
-              l.error ? `${l.href} (Error: ${l.error})` : `${l.href} (${l.status})`,
-              sections,
-            ),
-            sourcePages: l.sourcePages,
-            ...(sources ? { sources } : {}),
-            ...regionsField(placement.regions(l.href)),
-            meta: { status: l.status, error: l.error, ...sectionMeta(sections) },
-          };
-        }),
-        details: {
-          totalBroken: brokenLinks.length,
-          totalChecked: checkedCount,
-        },
-      });
+      if (possiblyBroken.length > 0) {
+        const byStatus = new Map<string, number>();
+        for (const link of possiblyBroken) {
+          const key = link.error ? "error" : String(link.status);
+          byStatus.set(key, (byStatus.get(key) ?? 0) + 1);
+        }
+        const parts = [...byStatus].map(([status, n]) =>
+          status === "error" ? `${n} failed` : `${n} with ${status}`,
+        );
+        checks.push({
+          name: "possibly-broken-external-links",
+          status: "warn",
+          message: `${possiblyBroken.length} external link(s) may be broken: ${parts.join(", ")}`,
+          items: brokenItems(possiblyBroken),
+          details: {
+            totalPossiblyBroken: possiblyBroken.length,
+            totalChecked: checkedCount,
+            verifiedWorking,
+            totalFound: found,
+          },
+        });
+      }
     }
 
     // repo#2613 first: a report shows one "Not checked" line per rule, and a
@@ -454,6 +539,27 @@ export const brokenExternalLinksRule: Rule = {
 
     if (notRequested) checks.push(notRequested);
     if (refused) checks.push(refused);
+
+    if (awaitingLinks.length > 0) {
+      checks.push({
+        name: "awaiting-confirmation-external-links",
+        status: "warn",
+        message: `${awaitingLinks.length} external link(s) failed a first check and are likely broken, being confirmed`,
+        items: awaitingLinks.map((l) => {
+          const sections = placement.sections(l.href);
+          const sources = placement.sources(l.href, l.sourcePages);
+          return {
+            id: l.href,
+            label: withSection(`${l.href} (failed once, being confirmed)`, sections),
+            sourcePages: l.sourcePages,
+            ...(sources ? { sources } : {}),
+            ...regionsField(placement.regions(l.href)),
+            meta: { unverifiedReason: "awaiting-confirmation", ...sectionMeta(sections) },
+          };
+        }),
+        details: { totalAwaitingConfirmation: awaitingLinks.length },
+      });
+    }
 
     // Report unverifiable links as info, not broken. Not all of them met a
     // firewall: a timeout, a CDN origin error or a first 404 still waiting for

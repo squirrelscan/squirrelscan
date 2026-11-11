@@ -392,7 +392,7 @@ describe("an audit with external link checks on (repo#2759)", () => {
       "broken-external-links:pass",
       "not-requested-external-links:info",
     ]);
-    expect(checks[0]!.message).toBe("All 3 external link(s) are working");
+    expect(checks[0]!.message).toBe("3 of 6 external link(s) verified working; 3 could not be verified or were not checked");
     const info = checks[1]!;
     expect(info.message).toBe(
       "3 external link(s) were not requested because they look like actions (log out, unsubscribe) or carry a token or signature in the URL, so their status was not checked",
