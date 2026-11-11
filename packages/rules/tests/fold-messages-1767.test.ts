@@ -115,3 +115,24 @@ describe("unfolding", () => {
     expect(merged[0]!.message).toBe("1 image missing alt attribute, shown on 5 pages");
   });
 });
+
+describe("unfolding an older aggregate that kept no pageMessage", () => {
+  test("strips the 'on N pages' tail as well as '(+N more pages)'", () => {
+    const aggregate = (message: string): CheckResult => ({
+      name: "ttfb",
+      status: "warn",
+      message,
+      pages: [page(0), page(1)],
+      details: { aggregated: true, occurrences: 2 },
+    });
+    expect(unfoldAggregateCheck(aggregate("Slow server response (850 to 1200ms) on 2 pages")).map((c) => c.message)).toEqual([
+      "Slow server response (850 to 1200ms)",
+      "Slow server response (850 to 1200ms)",
+    ]);
+    expect(unfoldAggregateCheck(aggregate("Slow server response (850ms) (+1 more pages)")).map((c) => c.message)).toEqual([
+      "Slow server response (850ms)",
+      "Slow server response (850ms)",
+    ]);
+  });
+});
+

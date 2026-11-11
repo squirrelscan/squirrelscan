@@ -70,7 +70,9 @@ export function canonicalElsewhere(canonical: string | null, pageUrl: string): s
 export function sitemapUrlSet(sitemaps: SitemapDiscovery | undefined): Set<string> {
   const set = new Set<string>();
   for (const sitemap of sitemaps?.discovered ?? []) {
-    for (const entry of sitemap.urls) set.add(entry.loc);
+    // Compared on the normalized URL (slash, fragment, default port): the page rows of both engines carry
+    // normalized URLs and a sitemap lists whatever the site wrote, so a raw match would miss `/a` vs `/a/`.
+    for (const entry of sitemap.urls) set.add(comparableUrl(entry.loc, entry.loc) ?? entry.loc);
   }
   return set;
 }
@@ -104,7 +106,7 @@ export function evaluateIndexSignals(
     const disallowed = !!robotsTxt && isRobotsTxtDisallowed(page.url, robotsTxt);
     if (disallowed) against.push("blocked by robots.txt");
     if (meta || header || disallowed) closed++;
-    if (against.length >= 2 && sitemapUrls.has(page.url)) {
+    if (against.length >= 2 && sitemapUrls.has(comparableUrl(page.url, page.url) ?? page.url)) {
       conflicts.push({
         url: page.url,
         against,
@@ -207,8 +209,8 @@ export const conflictingIndexSignalsRule: Rule = {
     // Check names by outcome class (#1741).
     checks: [
       { name: "conflicting-index-signals", outcome: "problem" },
-      { name: "site-wide-noindex", outcome: "problem" },
-      { name: "conflicting-index-signals", outcome: "clean", clears: ["conflicting-index-signals", "site-wide-noindex"] },
+      { name: "site-wide-noindex", outcome: "skipped" },
+      { name: "conflicting-index-signals", outcome: "clean", clears: ["conflicting-index-signals"] },
       { name: "conflicting-index-signals", outcome: "skipped" },
     ],
   },

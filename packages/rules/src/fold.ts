@@ -942,7 +942,8 @@ export function clampReportPagesToBudget(
 /** Distinct per-page messages an aggregate remembers in `details.messages`. */
 const MAX_MESSAGE_VARIANTS = 20;
 
-const MORE_PAGES_SUFFIX = / \(\+\d+ more pages\)$/;
+// Both tails an aggregate's message can end in: "(+N more pages)" and, since #1767, "on N pages".
+const MORE_PAGES_SUFFIX = /(?: \(\+\d+ more pages\)| on \d+ pages?)$/;
 
 function occurrencesOf(check: CheckResult): number {
   const prior = check.details?.occurrences;
@@ -1207,7 +1208,8 @@ function foldGroup(group: CheckResult[], limits: FoldLimits): CheckResult {
   // messages are listed with their page counts, and a group whose items carry
   // ids says how many DISTINCT items there are and how many pages show them.
   const distinctItems = Math.max(
-    itemMap.size + droppedIds.size + additional,
+    // `additional` is a count of dropped OCCURRENCES, not distinct items: it is not added here.
+    itemMap.size + droppedIds.size,
     ...group.map((c) =>
       typeof c.details?.distinctItems === "number" ? Math.floor(c.details.distinctItems) : 0,
     ),

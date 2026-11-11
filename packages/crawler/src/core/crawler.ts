@@ -644,6 +644,9 @@ export function createCrawler(
     // runCrawlLoop start (resume-safe), bumped per upsertPage — avoids a
     // hot-path COUNT(*) per enqueue/dispatch (#268).
     let pagesCommitted = 0;
+    // Redirect rows stored this run: they are not pages and spend no slot, so they are not attempts the zero-success
+    // breaker may count either (a sitemap of unslashed URLs that all redirect is a working crawl).
+    let redirectRowsThisRun = 0;
     // URLs this run recorded as rate-limited instead of fetching (#1829). Counts
     // against maxPages alongside `pagesCommitted`: the budget is a number of
     // URLs the crawl will ATTEMPT, and once a host is exhausted every remaining
@@ -942,10 +945,21 @@ export function createCrawler(
         : 302;
     };
 
-    const redirectTargetOf = (requested: string, landed: string | undefined): string | null => {
+    const redirectTargetOf = (
+      requested: string,
+      landed: string | undefined,
+      chain?: PageRecord["redirectChain"],
+    ): string | null => {
       if (!landed) return null;
-      const { normalized } = normalizeAndCheckScope(landed);
-      return normalized !== null && normalized !== requested ? landed : null;
+      // ONE rule with the engine's marker predicate: a redirect that ended in an error or looped is not a
+      // redirect row. It stays an ordinary row (the error the fetch answered), so a link to it is still a
+      // broken link and the chain still reaches the redirect rules as before (#1762).
+      if (chain && (chain.endsInError || chain.isLoop)) return null;
+      const { normalized, decision } = normalizeAndCheckScope(landed);
+      // A destination the crawl would not visit (excluded, outside `include`, another site) would leave the
+      // redirect source stored as a redirect with no page behind it: keep the old behaviour, a page.
+      if (normalized === null || !decision.allowed) return null;
+      return normalized !== requested ? landed : null;
     };
 
     // An absolute include that allowedDomains refused is almost certainly a
@@ -1223,10 +1237,14 @@ export function createCrawler(
           parentUrl: entry.parentUrl,
         });
         // A cached redirect keeps its destination in the crawl and takes no page slot (#1762).
-        const cachedRedirectTarget = redirectTargetOf(entry.normalizedUrl, cachedPage.finalUrl);
-        if (!(cachedRedirectTarget && cachedPage.status >= 300 && cachedPage.status < 400)) {
-          pagesCommitted++;
-        }
+        // Only a marker row (a 3xx stored by this crawler) is a redirect here. A legacy 2xx row that holds the
+        // destination's markup is still a page: it takes its slot and queues nothing, as before.
+        const cachedRedirectTarget =
+          cachedPage.status >= 300 && cachedPage.status < 400
+            ? redirectTargetOf(entry.normalizedUrl, cachedPage.finalUrl, cachedPage.redirectChain)
+            : null;
+        if (cachedRedirectTarget) redirectRowsThisRun++;
+        else pagesCommitted++;
         if (cachedRedirectTarget) {
           yield* enqueueUrl(
             crawlId,
@@ -2028,7 +2046,7 @@ export function createCrawler(
           // destination twice and file its findings against a URL the owner cannot fix
           // them on. The destination is queued so it is audited once even when nothing
           // else links to it (a no-op when it is already known or out of scope).
-          const redirectTarget = redirectTargetOf(entry.normalizedUrl, result.finalUrl);
+          const redirectTarget = redirectTargetOf(entry.normalizedUrl, result.finalUrl, result.redirectChain);
           if (redirectTarget) {
             yield* storage.upsertPage(crawlId, {
               url: entry.rawUrl,
@@ -2059,10 +2077,12 @@ export function createCrawler(
             // Not counted against maxPages: a redirect is not a page, and spending a slot on it
             // would starve its destination.
             yield* storage.updateFrontierStatus(crawlId, entry.normalizedUrl, "done");
+            redirectRowsThisRun++;
             yield* emit({
               type: "page:fetched",
               url: entry.normalizedUrl,
-              status: result.status,
+              // What the URL itself answered (its first hop's 3xx), not the destination's status.
+              status: redirectRowStatus(result.redirectChain),
               loadTimeMs: result.loadTime,
               ttfbMs: result.ttfb,
               sizeBytes: 0,
@@ -2411,6 +2431,7 @@ export function createCrawler(
         // made every upsertPage throw).
         const zeroSuccessAbortThreshold = Math.max(8, config.concurrency * 2);
         let attemptsFinished = 0;
+        redirectRowsThisRun = 0;
         // Tracks how long we've been waiting on "fetching" rows that no
         // in-process fiber owns (orphaned by a crash/interrupt) — the pool
         // would otherwise spin on sleep indefinitely.
@@ -2622,7 +2643,7 @@ export function createCrawler(
             if (
               !stopRequested &&
               pagesCommitted === 0 &&
-              attemptsFinished >= zeroSuccessAbortThreshold
+              attemptsFinished - redirectRowsThisRun >= zeroSuccessAbortThreshold
             ) {
               stopRequested = true;
               logger.warn(
