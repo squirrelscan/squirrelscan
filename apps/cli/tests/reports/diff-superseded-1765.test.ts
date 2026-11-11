@@ -102,8 +102,15 @@ describe("diff with a superseded check name", () => {
 
   test("a title missing in both audits is the same finding: not fixed, not changed, not added", () => {
     // A missing title is still emitted as `meta-title`; neither successor fires on a page with no title.
-    const missing = (): CheckResult => ({ name: "meta-title", status: "warn", message: "Missing title tag" });
-    const diff = diffReports(report([missing()], "before"), report([missing()], "after"));
+    const missing = (): CheckResult => ({
+      name: "meta-title",
+      status: "warn",
+      message: "Missing title tag",
+    });
+    const diff = diffReports(
+      report([missing()], "before"),
+      report([missing()], "after")
+    );
     expect(diff.removed).toEqual([]);
     expect(diff.added).toEqual([]);
     expect(diff.changed).toEqual([]);

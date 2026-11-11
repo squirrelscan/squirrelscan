@@ -34,6 +34,9 @@ How it works:
 
 - New rule `crawl/conflicting-index-signals` finds pages that say "index me" and "do not index me" at once: a page listed in a sitemap that also carries at least two signals keeping it out of the index (noindex in the robots meta tag or the `X-Robots-Tag` header, a canonical to another URL, a robots.txt block). It lists each page once, with the signals found and the related rules, and asks whether the page should be indexed. A site that is closed as a whole (80% or more of at least three pages noindexed or blocked) gets a single `site-wide-noindex` info check instead. `crawl/noindex-in-sitemap` keeps reporting and now names this rule on the pages both find (#1771)
 
+### Changed
+
+- The TLS certificate handshake (`security/tls-certificate`) moves back from `packages/fetchers` into the CLI (`apps/cli/src/audit/tls-probe.ts`), its only user, so the shared packages the hosted container loads hold no raw socket code (#2410). CLI behaviour is unchanged. When the cloud wires the TLS check in, the probe needs a refuse-without-proxy mode first: without a proxy URL it dials the vetted address directly.
 
 ## v0.0.179 (2026-11-12)
 

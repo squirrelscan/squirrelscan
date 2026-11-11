@@ -230,16 +230,17 @@ describe("tlsFailureCause", () => {
 describe("shared packages open no raw socket", () => {
   // #716: a raw socket from a shared package would go around the hosted
   // engine's request-level network policy. The TLS handshake is injected
-  // (`TlsProbeFn`); the one implementation is packages/fetchers/src/tls-probe.ts
-  // (#3922), allowlisted below: no other file may open a socket, no rule or
-  // engine code imports it, and every handshake passes the egress guard first.
+  // (`TlsProbeFn`); the one implementation is apps/cli/src/audit/tls-probe.ts,
+  // outside every shared package, so no file scanned below may open a socket (#2410:
+  // the hosted container must stay free of raw sockets). Its handshake passes the
+  // egress guard first.
   // `isIP` from node:net is an
   // address helper, not a socket, and stays allowed; type-only imports open
   // nothing. Tests are not shipped, and their fixture servers are sockets.
   const packagesRoot = join(import.meta.dir, "..", "..");
-  const TLS_PROBE_FILE = "fetchers/src/tls-probe.ts";
+  const TLS_PROBE_FILE = join("..", "apps", "cli", "src", "audit", "tls-probe.ts");
   const files = [...new Bun.Glob("*/src/**/*.{ts,tsx,js,mjs,cjs}").scanSync({ cwd: packagesRoot })].filter(
-    (file) => !/\.test\.[cm]?[jt]sx?$/.test(file) && file !== TLS_PROBE_FILE,
+    (file) => !/\.test\.[cm]?[jt]sx?$/.test(file),
   );
   const SOCKET_MODULE =
     /(?:(?:import|export)\s*(\{[^}]*\}|\*\s+as\s+\w+|\*|\w+)?\s*(?:from\s*)?|import\s*\(\s*|require\s*\(\s*)["'](?:node:)?(tls|net|http2|dgram)["']/g;
@@ -287,7 +288,7 @@ describe("shared packages open no raw socket", () => {
     expect(offendersIn('import type { TLSSocket } from "node:tls";')).toEqual([]);
   });
 
-  test("the allowlisted probe is the only socket site and stays vetted", () => {
+  test("the probe is the only socket site, outside the shared packages, and stays vetted", () => {
     const text = readFileSync(join(packagesRoot, TLS_PROBE_FILE), "utf8");
     expect(offendersIn(text)).not.toEqual([]);
     expect(text).toContain("vetEgressTarget");
