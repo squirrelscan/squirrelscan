@@ -9,7 +9,11 @@ import type { CheckResult, RuleContext, SiteData } from "../src/types";
 
 const URL = "https://example.com/";
 
-function run(head: string, timings: Record<string, number | undefined>): CheckResult[] {
+function run(
+  head: string,
+  timings: Record<string, number | undefined>,
+  hostFirst: string[] = [],
+): CheckResult[] {
   const html = `<!doctype html><html><head><title>scripts</title>${head}</head><body><h1>Test</h1></body></html>`;
   const parsed = parsePage(html, URL);
   const scripts = Object.entries(timings).map(([path, responseMs]) => ({
@@ -21,6 +25,7 @@ function run(head: string, timings: Record<string, number | undefined>): CheckRe
     content: "x",
     sourcePages: [URL],
     ...(responseMs === undefined ? {} : { responseMs }),
+    ...(hostFirst.includes(path) ? { hostFirst: true } : {}),
   }));
   const ctx: RuleContext = {
     page: { url: URL, html, statusCode: 200, loadTime: 0, headers: {}, parsed },
@@ -55,6 +60,19 @@ describe("perf/render-blocking script reporting (#1751)", () => {
         meta: { responseMs: 2512, thresholdMs: 1000 },
       },
     ]);
+  });
+
+  test("hysteresis: 1 to 2 s counts only from a warm host, over 2 s always counts (#1751)", () => {
+    const head = `<script src="/cold.js"></script>`;
+    // The first script of its host paid for DNS and TLS in that time: not reported at 1.5 s.
+    expect(named(run(head, { "/cold.js": 1500 }, ["/cold.js"]), "slow-blocking-script")).toBeUndefined();
+    // The same time from a warm host is a slow script.
+    expect(named(run(head, { "/cold.js": 1500 }), "slow-blocking-script")?.status).toBe("warn");
+    // Over 2 s is reported whatever the connection cost.
+    expect(named(run(head, { "/cold.js": 2001 }, ["/cold.js"]), "slow-blocking-script")?.status).toBe("warn");
+    // The boundaries are exclusive.
+    expect(named(run(head, { "/cold.js": 1000 }), "slow-blocking-script")).toBeUndefined();
+    expect(named(run(head, { "/cold.js": 2000 }, ["/cold.js"]), "slow-blocking-script")).toBeUndefined();
   });
 
   test("fast, unmeasured and non-blocking scripts raise nothing", () => {

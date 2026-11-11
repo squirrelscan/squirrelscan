@@ -1345,6 +1345,22 @@ export function fetchAssetsFromOccurrences(
       : resourceResults.scripts.length;
     const ruleScripts = resourceResults.scripts.slice(0, ruleScriptCount);
     const storedOnlyScripts = resourceResults.scripts.slice(ruleScriptCount);
+    // The first timed script of each origin carries the connection setup in its response time (#1751).
+    const timedHosts = new Set<string>();
+    const hostFirstOf = (fetch: ScriptFetchResult): boolean | undefined => {
+      if (fetch.responseMs === undefined) return undefined;
+      let origin: string;
+      try {
+        origin = new URL(fetch.url).origin;
+      } catch {
+        return undefined;
+      }
+      if (timedHosts.has(origin)) return false;
+      timedHosts.add(origin);
+      return true;
+    };
+    const hostFirst = new Map<string, boolean | undefined>();
+    for (const fetch of resourceResults.scripts) hostFirst.set(fetch.url, hostFirstOf(fetch));
     const toScriptData = (fetch: ScriptFetchResult): ScriptContentData => ({
         url: fetch.url,
         status: fetch.status,
@@ -1354,7 +1370,9 @@ export function fetchAssetsFromOccurrences(
         content: fetch.content,
         sourcePages: Array.from(resourceOccurrences.scripts.get(fetch.url) ?? []),
         ...(fetch.fetchSkipReason ? { fetchSkipReason: fetch.fetchSkipReason } : {}),
-        ...(fetch.responseMs !== undefined ? { responseMs: fetch.responseMs } : {}),
+        ...(fetch.responseMs !== undefined
+          ? { responseMs: fetch.responseMs, ...(hostFirst.get(fetch.url) ? { hostFirst: true } : {}) }
+          : {}),
         rateLimited: fetch.rateLimited,
         wafBlocked: fetch.wafBlocked,
         ...(withheld(fetch.url, fetch.status, fetch.finalUrl) ? { headersWithheld: true } : {}),

@@ -2515,6 +2515,11 @@ export interface ScriptContentData {
    * error, or a content-store cache hit. Treat that as unknown, never as fast.
    */
   responseMs?: number;
+  /**
+   * This was the first script fetched from its host in the audit, so `responseMs` includes the connection
+   * setup (DNS, TLS) a later script on that host does not pay (#1751). Absent when `responseMs` is.
+   */
+  hostFirst?: boolean;
 }
 
 export interface SitemapUrl {
