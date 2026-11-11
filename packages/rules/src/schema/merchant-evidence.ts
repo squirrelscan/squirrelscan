@@ -34,8 +34,14 @@ const IDENTIFIER_PROPS = [
   "leiCode",
   "naics",
   "globalLocationNumber",
-  "identifier",
 ];
+/**
+ * The generic `identifier` property holds anything (a SKU-like internal id, a site id), so it counts as a
+ * company identifier only as a PropertyValue whose `propertyID` names one: a VAT or tax id, a company or
+ * business registration number, or a well-known registry.
+ */
+const LEGAL_PROPERTY_ID =
+  /\b(?:vat|vatid|tax|taxid|ein|tin|abn|acn|crn|company|companyid|companynumber|registration|registered|siret|siren|kvk|duns|lei|gln|nip|cvr|orgnr|uid)\b|\b(?:company|business)\s*(?:no|number|id)\b/i;
 const ADDRESS_PROPS = ["address", "legalAddress"];
 const ADDRESS_PARTS = ["streetAddress", "addressLocality", "postalCode", "addressRegion", "addressCountry", "postOfficeBoxNumber"];
 const PLACEHOLDER_NAMES = /^(organi[sz]ation|company|store|shop|name|business|your (company|store|name)|example|test|untitled|n\/a|tbd)$/i;
@@ -91,6 +97,12 @@ function addressOk(node: StructuredNode, resolve: Resolve): boolean {
 }
 
 function identifierOk(node: StructuredNode, resolve: Resolve): boolean {
+  for (const raw of asList(node["identifier"])) {
+    const v = resolve(raw);
+    if (!v || typeof v !== "object" || isDanglingRef(v)) continue;
+    const o = v as StructuredNode;
+    if (typeof o["propertyID"] === "string" && LEGAL_PROPERTY_ID.test(o["propertyID"]) && isFilled(o["value"])) return true;
+  }
   for (const prop of IDENTIFIER_PROPS) {
     for (const raw of asList(node[prop])) {
       const v = resolve(raw);

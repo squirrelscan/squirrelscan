@@ -61,6 +61,25 @@ describe("schema/organization merchant identity (#1653)", () => {
     expect(r.fields["identifier"]).toBe("present (json-ld)");
   });
 
+  test("a generic identifier is not a company identifier: a plain string, or a PropertyValue that is not a legal id", () => {
+    for (const identifier of [
+      "SKU-12345",
+      42,
+      { "@type": "PropertyValue", propertyID: "internal-site-id", value: "9981" },
+      { "@type": "PropertyValue", value: "12345678" },
+    ]) {
+      const r = run(page(ld(store({ identifier }))));
+      expect(r.fields["identifier"]).toBe("absent");
+    }
+  });
+
+  test("PropertyValue identifiers that name a legal id count", () => {
+    for (const propertyID of ["VAT", "vatID", "Company number", "ABN", "DUNS", "tax id", "EIN"]) {
+      const r = run(page(ld(store({ identifier: { "@type": "PropertyValue", propertyID, value: "12345678" } }))));
+      expect(r.fields["identifier"]).toBe("present (json-ld)");
+    }
+  });
+
   test("entities linked by @id count the same as nested ones", () => {
     const nested = run(page(ld(store({ address: { "@type": "PostalAddress", streetAddress: "1 Main St" } }))));
     const linked = run(
