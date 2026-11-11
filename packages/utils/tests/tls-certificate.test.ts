@@ -1,5 +1,5 @@
 // The certificate facts and what they mean (#712). This module is pure: the
-// handshake is injected by the runtime (the implementation is packages/fetchers/src/tls-probe.ts),
+// handshake is injected by the runtime (the implementation is apps/cli/src/audit/tls-probe.ts),
 // whose real-socket tests live in apps/cli/tests/audit/tls-probe.test.ts.
 
 import { describe, expect, test } from "bun:test";

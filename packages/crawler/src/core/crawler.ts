@@ -109,6 +109,7 @@ import {
   normalizeUrl,
   resolveSeedRedirect,
 } from "../frontier";
+import { isRedirectSourcePage } from "../redirect-row";
 import {
   buildConditionalHeaders,
   extractChangeDetection,
@@ -1236,14 +1237,16 @@ export function createCrawler(
           depth: entry.depth,
           parentUrl: entry.parentUrl,
         });
-        // A cached redirect keeps its destination in the crawl and takes no page slot (#1762).
-        // Only a marker row (a 3xx stored by this crawler) is a redirect here. A legacy 2xx row that holds the
-        // destination's markup is still a page: it takes its slot and queues nothing, as before.
-        const cachedRedirectTarget =
-          cachedPage.status >= 300 && cachedPage.status < 400
-            ? redirectTargetOf(entry.normalizedUrl, cachedPage.finalUrl, cachedPage.redirectChain)
-            : null;
-        if (cachedRedirectTarget) redirectRowsThisRun++;
+        // A cached redirect keeps its destination in the crawl and takes no page slot (#1762). A row is a
+        // redirect here by the engine's own predicate: a 3xx marker this crawler stored, or a legacy 2xx
+        // row holding the destination's markup under the source URL (the engine drops both from the
+        // report, so the crawl must not count a page slot for either). The destination is queued when
+        // the crawl would visit it; a legacy row whose destination is out of scope still takes no slot.
+        const cachedIsRedirect = isRedirectSourcePage(cachedPage);
+        const cachedRedirectTarget = cachedIsRedirect
+          ? redirectTargetOf(entry.normalizedUrl, cachedPage.finalUrl, cachedPage.redirectChain)
+          : null;
+        if (cachedIsRedirect) redirectRowsThisRun++;
         else pagesCommitted++;
         if (cachedRedirectTarget) {
           yield* enqueueUrl(
@@ -2220,13 +2223,19 @@ export function createCrawler(
             parsedData = JSON.stringify(serializableParsed);
           }
 
+          // A redirect kept as a page (its destination is out of scope, so no page of its own exists)
+          // is marked so the engine does not read it as a legacy redirect row and drop its content.
+          const keptRedirectChain =
+            result.redirectChain && result.finalUrl && result.finalUrl !== entry.normalizedUrl
+              ? { ...result.redirectChain, keptAsPage: true }
+              : result.redirectChain;
           const pageRecord: PageRecord = {
             url: entry.rawUrl,
             normalizedUrl: entry.normalizedUrl,
             finalUrl: result.finalUrl,
             depth: entry.depth,
             parentUrl: entry.parentUrl,
-            redirectChain: result.redirectChain,
+            redirectChain: keptRedirectChain,
             status: result.status,
             contentType: result.contentType,
             sizeBytes: result.sizeBytes,
