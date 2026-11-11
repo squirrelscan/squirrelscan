@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Changed
+
+- `ax/content-signals` tells absent, declared, invalid and not checked apart (`details.state`). A robots.txt that was missing, refused, failed or cut at the 512 KiB read cap is now not checked instead of reported as no Content-Signal declared.
+
 ## v0.0.174 (2026-11-11)
 
 Reports say why a rule did not give a verdict (JSON schema 1.9), `squirrel audit` has one exit code precedence with the outcome in the JSON and LLM reports, `--resume` says why it started a new crawl, an expired login is called out, settings writes no longer lose each other, and five rules stop flagging hidden, presentational and symbol-only content.

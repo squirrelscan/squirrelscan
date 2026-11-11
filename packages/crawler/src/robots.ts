@@ -10,11 +10,9 @@ import { BUDGET_EXHAUSTED_ERROR, budgetedTimeoutMs, safeFetchWithDeadline } from
 import { noteRefusal } from "./refusals";
 
 import type { PhaseBudget } from "./deadline";
+import { ROBOTS_MAX_BYTES } from "@squirrelscan/utils/constants";
 import { mergeHeaderRecords } from "@squirrelscan/utils/headers";
 
-// Matches the limit Google documents for robots.txt; anything past it is
-// ignored by real crawlers, so there is nothing to gain by reading further.
-const ROBOTS_MAX_BYTES = 512 * 1024;
 const ROBOTS_FETCH_TIMEOUT_MS = 30_000;
 
 export interface RobotsEvaluator {
