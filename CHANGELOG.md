@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- **New rule `i18n/hreflang-targets`: hreflang links that point at the wrong place.** It judges each hreflang target the crawl already fetched, with no extra requests: a redirect (warning, with the final URL), a 4xx or 5xx (error, with the status), a `noindex` page or one whose canonical is another URL (warning, with the reason), and a target that has hreflang links but none back to the source page (error, each pair once). Targets the crawl did not fetch are counted as not checked, and a site with no hreflang links gets a skipped result. (#1686)
+
 ## v0.0.174 (2026-11-11)
 
 Reports say why a rule did not give a verdict (JSON schema 1.9), `squirrel audit` has one exit code precedence with the outcome in the JSON and LLM reports, `--resume` says why it started a new crawl, an expired login is called out, settings writes no longer lose each other, and five rules stop flagging hidden, presentational and symbol-only content.
