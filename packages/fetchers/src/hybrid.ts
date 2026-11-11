@@ -50,7 +50,8 @@ export function createHybridDocumentFetcher(opts: HybridFetcherOptions): Documen
 
       opts.onUpgrade?.(req.url);
       try {
-        return await opts.render.fetch(req);
+        const rendered = await opts.render.fetch(req);
+        return { ...rendered, serverHtml: httpResp.body };
       } catch (err) {
         // If the crawl was interrupted mid-upgrade (per-URL watchdog / stop),
         // propagate so the fiber unwinds promptly — don't mask the abort by

@@ -25,7 +25,7 @@ import { WELL_KNOWN_PATHS, isPermanentStorageError } from "@squirrelscan/core-co
 import { auditFailureDetail } from "@squirrelscan/core-contracts/failure-reason";
 import { COVERAGE_PAGE_LIMITS, REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
 
-import { extractCrawlableUrls } from "@squirrelscan/parser/extractors";
+import { extractCrawlableUrls, mergeServerOnlyScripts } from "@squirrelscan/parser/extractors";
 import {
   parseDocument,
   parsePage,
@@ -2081,6 +2081,9 @@ export function createCrawler(
 
           // Parse and discover URLs if HTML (before storing page)
           let parsedData: string | null = null;
+          // The stored page is the rendered DOM plus the scripts the server sent and client code
+          // removed (#1769): the same set for a fast and a slow render.
+          let pageHtml = result.body;
           if (
             (isHtmlContentType(result.contentType) ||
               (!result.contentType && looksLikeHtml(result.body))) &&
@@ -2089,7 +2092,10 @@ export function createCrawler(
             !(config.maxParseBytes !== undefined && decodedPageBytes(result.sizeBytes, result.body) > config.maxParseBytes)
           ) {
             // Parse page data once (includes parseDocument internally)
-            const parsed = parsePage(result.body, result.finalUrl, { classify: options.classify });
+            if (result.serverHtml) {
+              pageHtml = mergeServerOnlyScripts(result.body, result.serverHtml, result.finalUrl).html;
+            }
+            const parsed = parsePage(pageHtml, result.finalUrl, { classify: options.classify });
 
             // Retain the live ParsedPage so a same-process audit reuses its
             // DOM (#267) — capped: each retained DOM costs MBs for the rest
@@ -2211,7 +2217,7 @@ export function createCrawler(
             etag: changeDetection.etag,
             lastModified: changeDetection.lastModified,
             contentHash: changeDetection.contentHash,
-            html: result.body,
+            html: pageHtml,
             parsedData, // Parsed above if HTML
             headers,
             securityHeaders,
