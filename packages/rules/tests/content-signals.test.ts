@@ -8,6 +8,7 @@ import {
   contentSignalsRule,
   parseContentSignals,
   findContradictions,
+  robotsNotReadReason,
 } from "../src/ax/content-signals";
 import type { ParsedPage, RuleContext } from "../src/types";
 
@@ -147,9 +148,11 @@ describe("ax/content-signals rule", () => {
     expect(checks[0]?.message).toContain("No Content-Signal");
   });
 
-  test("no robots.txt at all still reports info", () => {
+  test("no robots.txt read is not checked, never absent (#1649)", () => {
     const checks = run(null);
-    expect(checks[0]?.status).toBe("info");
+    expect(checks).toHaveLength(1);
+    expect(checks[0]).toMatchObject({ name: "content-signals", status: "skipped", value: "not-checked" });
+    expect(checks[0]?.details).toMatchObject({ state: "not-checked" });
   });
 
   test("a clean policy reports the declared signals as info", () => {
@@ -184,5 +187,73 @@ describe("ax/content-signals rule", () => {
     const contradiction = checks.find((c) => c.name === "content-signals-contradiction");
     expect(contradiction?.status).toBe("warn");
     expect(contradiction?.message).toContain("ClaudeBot");
+  });
+});
+
+describe("absent, declared, invalid and not checked are four states (#1649)", () => {
+  const stateOf = (checks: CheckResult[]) => checks.map((c) => (c.details as { state?: string } | undefined)?.state);
+
+  test("a complete robots.txt with no Content-Signal is absent, as information", () => {
+    const checks = run(robots("User-agent: *\nDisallow: /admin\nSitemap: https://example.com/s.xml"));
+    expect(checks).toHaveLength(1);
+    expect(checks[0]).toMatchObject({ status: "info", value: "absent" });
+    expect(stateOf(checks)).toEqual(["absent"]);
+  });
+
+  test("a valid directive is declared", () => {
+    const checks = run(robots("User-agent: *\nContent-Signal: search=yes, ai-train=no"));
+    expect(stateOf(checks)).toEqual(["declared"]);
+  });
+
+  test("a malformed directive is invalid, separately from absent", () => {
+    const checks = run(robots("User-agent: *\nContent-Signal: search=maybe"));
+    expect(checks.find((c) => c.value === "absent")).toBeUndefined();
+    expect(stateOf(checks)).toEqual(["invalid", "invalid"]);
+    expect(checks.map((c) => c.name)).toEqual(["content-signals-policy", "content-signals-syntax"]);
+  });
+
+  test("a valid directive next to a malformed one is declared and invalid syntax is reported", () => {
+    const checks = run(robots("User-agent: *\nContent-Signal: search=yes, ai-train=maybe"));
+    expect(stateOf(checks)).toEqual(["declared", "invalid"]);
+  });
+
+  test("a failed read is not checked, never absent", () => {
+    const failed: RobotsTxtData = { exists: false, url: "https://example.com/robots.txt", content: null, sizeBytes: 0, sitemaps: [], rules: [], errors: ["HTTP 403"] };
+    const checks = run(failed);
+    expect(checks).toHaveLength(1);
+    expect(checks[0]).toMatchObject({ status: "skipped", value: "not-checked" });
+    expect(checks[0]?.message).toContain("HTTP 403");
+  });
+
+  test("a missing robots.txt (or one never read) is not checked", () => {
+    const missing: RobotsTxtData = { exists: false, url: "https://example.com/robots.txt", content: null, sizeBytes: 0, sitemaps: [], rules: [], errors: [] };
+    expect(run(missing)[0]).toMatchObject({ status: "skipped", value: "not-checked" });
+  });
+
+  test("a read that reached the 512 KiB cap is not checked: the policy may sit past it", () => {
+    const big = { ...robots("User-agent: *\nDisallow: /a"), sizeBytes: 512 * 1024 };
+    expect(run(big)[0]).toMatchObject({ status: "skipped", value: "not-checked" });
+    expect(robotsNotReadReason(big)).toContain("512 KiB");
+    const justUnder = { ...robots("User-agent: *\nDisallow: /a"), sizeBytes: 512 * 1024 - 1 };
+    expect(run(justUnder)[0]).toMatchObject({ status: "info", value: "absent" });
+  });
+
+  test("a directive found in a capped read is still reported as declared", () => {
+    const big = { ...robots("User-agent: *\nContent-Signal: search=yes"), sizeBytes: 512 * 1024 };
+    expect(stateOf(run(big))).toEqual(["declared"]);
+  });
+
+  test("an empty but readable robots.txt is absent", () => {
+    expect(run(robots(""))[0]).toMatchObject({ status: "info", value: "absent" });
+  });
+
+  test("the rule only reads data already fetched: no probe, no extra request", () => {
+    const source = Bun.file(new URL("../src/ax/content-signals.ts", import.meta.url));
+    return source.text().then((text) => expect(text).not.toMatch(/fetch\(|safeFetch|ctx\.probe/));
+  });
+
+  test("absent is info and not-checked is skipped: neither is a finding", () => {
+    expect(run(robots("User-agent: *\nDisallow: /a")).every((c) => c.status === "info")).toBe(true);
+    expect(run(null).every((c) => c.status === "skipped")).toBe(true);
   });
 });
