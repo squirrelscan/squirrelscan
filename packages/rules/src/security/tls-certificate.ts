@@ -11,15 +11,17 @@ import {
   daysUntil,
   isoDate,
   untrustedRootText,
+  wwwVariant,
   type TlsCertificate,
   type TlsProbeFn,
   type TlsProblem,
   type TlsProbe,
 } from "@squirrelscan/utils/tls-certificate";
-import { getDomain } from "tldts";
 import { z } from "zod";
 
 import { TLS_CERTIFICATE_NOT_CHECKED_SKIP_REASON } from "@squirrelscan/core-contracts";
+
+export { wwwVariant };
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
@@ -502,24 +504,6 @@ function notChecked(hostname: string, probe: Exclude<TlsProbe, { kind: "certific
   return skipped(
     `TLS certificate not checked: no TLS handshake with ${hostname}, error ${probe.code}`,
   );
-}
-
-/**
- * The www/apex counterpart of a hostname, from its registrable domain only:
- * `www.example.com` for `example.com` and the reverse. Undefined for any other
- * subdomain (`blog.example.com` has no counterpart here, and `www.blog.example.com`
- * is not derived), for an IP, and for a name with no registrable domain
- * (`localhost`, a bare public suffix). Private suffixes count as registrable
- * (`acme.pages.dev`), so another tenant's name is never derived.
- */
-export function wwwVariant(hostname: string): string | undefined {
-  const host = hostname.toLowerCase().replace(/\.$/, "");
-  if (/^[\d.]+$/.test(host) || host.includes(":")) return undefined;
-  const registrable = getDomain(host, { allowPrivateDomains: true });
-  if (!registrable) return undefined;
-  if (host === registrable) return `www.${registrable}`;
-  if (host === `www.${registrable}`) return registrable;
-  return undefined;
 }
 
 /** SAN names listed in a message; the rest are counted. A shared certificate can carry hundreds. */

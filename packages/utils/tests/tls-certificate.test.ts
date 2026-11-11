@@ -1,6 +1,6 @@
 // The certificate facts and what they mean (#712). This module is pure: the
-// handshake is injected by the CLI (apps/cli/src/audit/tls-probe.ts), whose
-// real-socket tests live in apps/cli/tests/audit/tls-probe.test.ts.
+// handshake is injected by the runtime (the implementation is packages/fetchers/src/tls-probe.ts),
+// whose real-socket tests live in apps/cli/tests/audit/tls-probe.test.ts.
 
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
@@ -230,12 +230,16 @@ describe("tlsFailureCause", () => {
 describe("shared packages open no raw socket", () => {
   // #716: a raw socket from a shared package would go around the hosted
   // engine's request-level network policy. The TLS handshake is injected
-  // (`TlsProbeFn`); only apps/cli holds one. `isIP` from node:net is an
+  // (`TlsProbeFn`); the one implementation is packages/fetchers/src/tls-probe.ts
+  // (#3922), allowlisted below: no other file may open a socket, no rule or
+  // engine code imports it, and every handshake passes the egress guard first.
+  // `isIP` from node:net is an
   // address helper, not a socket, and stays allowed; type-only imports open
   // nothing. Tests are not shipped, and their fixture servers are sockets.
   const packagesRoot = join(import.meta.dir, "..", "..");
+  const TLS_PROBE_FILE = "fetchers/src/tls-probe.ts";
   const files = [...new Bun.Glob("*/src/**/*.{ts,tsx,js,mjs,cjs}").scanSync({ cwd: packagesRoot })].filter(
-    (file) => !/\.test\.[cm]?[jt]sx?$/.test(file),
+    (file) => !/\.test\.[cm]?[jt]sx?$/.test(file) && file !== TLS_PROBE_FILE,
   );
   const SOCKET_MODULE =
     /(?:(?:import|export)\s*(\{[^}]*\}|\*\s+as\s+\w+|\*|\w+)?\s*(?:from\s*)?|import\s*\(\s*|require\s*\(\s*)["'](?:node:)?(tls|net|http2|dgram)["']/g;
@@ -281,6 +285,12 @@ describe("shared packages open no raw socket", () => {
     }
     expect(offendersIn('import { isIP } from "node:net";')).toEqual([]);
     expect(offendersIn('import type { TLSSocket } from "node:tls";')).toEqual([]);
+  });
+
+  test("the allowlisted probe is the only socket site and stays vetted", () => {
+    const text = readFileSync(join(packagesRoot, TLS_PROBE_FILE), "utf8");
+    expect(offendersIn(text)).not.toEqual([]);
+    expect(text).toContain("vetEgressTarget");
   });
 
   test("no shared package opens one", () => {
