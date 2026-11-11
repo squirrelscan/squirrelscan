@@ -17,6 +17,14 @@ How it works:
 
 ## [Unreleased]
 
+### Changed
+
+- The `--publish` help text and the shell completions no longer name `reports.squirrelscan.com`: published reports now live at your organization's address on `squirrel.report`, and links on the old host redirect there.
+
+## v0.0.179 (2026-11-11)
+
+Audits that hit a slow or blocking site now end cleanly: the crawl phase has its own time budget (`--crawl-timeout`, `[crawler] crawl_timeout`), a crawl it stops reports a partial status with a `crawl_timeout` reason, sitemap URLs that answered with a rate limit or a bot wall are listed as unverified instead of as orphans, and the JSON report carries a `crawlPhase` block (schema 1.12). `crawl/sitemap-coverage` says where a shop's product URLs were found, grouped `lcp-preload` findings keep each page's own candidates, and `[crawler] discovery_probe_paths` (or `--discovery-probe-path`) approves discovery probes one path at a time. The TLS probe is now shared, with a plain message when the certificate was not checked.
+
 ### Added
 
 - `squirrel audit --crawl-timeout` and `[crawler] crawl_timeout` set the crawl-phase backstop, bounded at 6 hours. Unset, it is derived from the page budget and the effective per-host rate instead of a fixed 30 minutes, capped at 60 minutes (an explicit value can go to 6 hours, which weakens the wedge backstop). A crawl stopped by it reports `status: "partial"`, reason code `crawl_timeout` and a `crawlPhase` coverage object with `linkGraphComplete: false` (#1639).

@@ -564,7 +564,7 @@ _squirrel() {
             '--debug[Enable debug logging]' \\
             '--trace[Enable performance tracing]' \\
             '(-n --project-name)'{-n,--project-name}'[Project name (overrides config and prompts)]:name' \\
-            '(-p --publish)'{-p,--publish}'[Publish to reports.squirrelscan.com (default when signed in)]' \\
+            '(-p --publish)'{-p,--publish}'[Publish to a shareable report link (default when signed in)]' \\
             '--no-publish[Skip auto-publishing this run]' \\
             '--ephemeral[Use cloud features for this run only: no dashboard site, no schedule, no publish]' \\
             '--no-ephemeral[Override [cloud] ephemeral = true for this run]' \\
@@ -678,7 +678,7 @@ _squirrel() {
             '--allow-cross-site[Allow diff across different base URLs]' \\
             '(-o --output)'{-o,--output}'[Output file path]:file:_files' \\
             '(-i --input)'{-i,--input}'[Load from JSON file]:file:_files -g "*.json"' \\
-            '(-p --publish)'{-p,--publish}'[Publish to reports.squirrelscan.com]' \\
+            '(-p --publish)'{-p,--publish}'[Publish to a shareable report link]' \\
             '--visibility[Visibility when publishing]:visibility:(public unlisted private)' \\
             '--summary[Print score, category breakdown, and issue counts only]' \\
             '--include-passed[Also list the rules that passed]' \\
@@ -852,7 +852,7 @@ complete -c squirrel -n "__fish_seen_subcommand_from audit" -s v -l verbose -d "
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l debug -d "Enable debug logging"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l trace -d "Enable performance tracing"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -s n -l project-name -d "Project name (overrides config and prompts)"
-complete -c squirrel -n "__fish_seen_subcommand_from audit" -s p -l publish -d "Publish to reports.squirrelscan.com (default when signed in)"
+complete -c squirrel -n "__fish_seen_subcommand_from audit" -s p -l publish -d "Publish to a shareable report link (default when signed in)"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l no-publish -d "Skip auto-publishing this run"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l ephemeral -d "Use cloud features for this run only: no dashboard site, no schedule, no publish"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l no-ephemeral -d "Override [cloud] ephemeral = true for this run"
@@ -942,7 +942,7 @@ complete -c squirrel -n "__fish_seen_subcommand_from report" -l regression-since
 complete -c squirrel -n "__fish_seen_subcommand_from report" -l allow-cross-site -d "Allow diff across different base URLs"
 complete -c squirrel -n "__fish_seen_subcommand_from report" -s o -l output -d "Output file path"
 complete -c squirrel -n "__fish_seen_subcommand_from report" -s i -l input -d "Load from JSON file"
-complete -c squirrel -n "__fish_seen_subcommand_from report" -s p -l publish -d "Publish to reports.squirrelscan.com"
+complete -c squirrel -n "__fish_seen_subcommand_from report" -s p -l publish -d "Publish to a shareable report link"
 complete -c squirrel -n "__fish_seen_subcommand_from report" -l visibility -a "public unlisted private" -d "Visibility when publishing"
 complete -c squirrel -n "__fish_seen_subcommand_from report" -l summary -d "Print score, category breakdown, and issue counts only"
 complete -c squirrel -n "__fish_seen_subcommand_from report" -l include-passed -d "Also list the rules that passed"

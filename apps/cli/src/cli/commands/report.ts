@@ -220,7 +220,7 @@ export const report = defineCommand({
     publish: {
       type: "boolean",
       alias: "p",
-      description: "Publish report to reports.squirrelscan.com",
+      description: "Publish report to a shareable report link",
     },
     visibility: {
       type: "string",
