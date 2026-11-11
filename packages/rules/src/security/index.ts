@@ -15,6 +15,7 @@ import { httpsRule } from "./https";
 import { leakedSecretsRule } from "./leaked-secrets";
 import { mixedContentRule } from "./mixed-content";
 import { newTabRule } from "./new-tab";
+import { passwordFormGetRule } from "./password-form-get";
 import { permissionsPolicyRule } from "./permissions-policy";
 import { referrerPolicyRule } from "./referrer-policy";
 import { sriRule } from "./sri";
@@ -41,6 +42,7 @@ export const rules: Rule[] = [
   formHttpsRule,
   formCaptchaRule,
   newTabRule,
+  passwordFormGetRule,
   leakedSecretsRule,
   tokenStorageRule,
   thirdPartyCookiesRule,
@@ -66,6 +68,7 @@ export {
   leakedSecretsRule,
   mixedContentRule,
   newTabRule,
+  passwordFormGetRule,
   permissionsPolicyRule,
   referrerPolicyRule,
   securityTxtRule,

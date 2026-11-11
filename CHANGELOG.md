@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- New rule `security/password-form-get`: a form with a password field that submits by GET (`method="get"` or no method, or a GET `formmethod` on a submit button) is an error. Forms submitted by script with no action are reported as not determined.
+
 ## v0.0.174 (2026-11-11)
 
 Reports say why a rule did not give a verdict (JSON schema 1.9), `squirrel audit` has one exit code precedence with the outcome in the JSON and LLM reports, `--resume` says why it started a new crawl, an expired login is called out, settings writes no longer lose each other, and five rules stop flagging hidden, presentational and symbol-only content.
