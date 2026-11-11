@@ -21,7 +21,7 @@ const page = (head: string, title: string) =>
 
 const PAGES = ["/", "/a", "/b", "/c"];
 
-function serve(slowMs: number): string {
+function serve(slowMs: number, warmFirst: boolean): string {
   const server = Bun.serve({
     port: 0,
     async fetch(req) {
@@ -32,6 +32,7 @@ function serve(slowMs: number): string {
         await Bun.sleep(slowMs);
         return ok("window.slow = 1;", "application/javascript");
       }
+      if (url.pathname === "/warm.js") return ok("window.warm = 1;", "application/javascript");
       if (url.pathname === "/site.css") return ok("body{margin:0}", "text/css");
       if (url.pathname === "/sitemap.xml") {
         const locs = PAGES.map((p) => `<url><loc>${url.origin}${p}</loc></url>`).join("");
@@ -43,7 +44,8 @@ function serve(slowMs: number): string {
       if (url.pathname === "/robots.txt") return ok("User-agent: *\nAllow: /\n", "text/plain");
       if (PAGES.includes(url.pathname)) {
         const css = `<link rel="stylesheet" href="/site.css">`;
-        const head = url.pathname === "/" ? `${css}<script src="/slow.js"></script>` : css;
+        const warm = warmFirst ? `<script src="/warm.js"></script>` : "";
+        const head = url.pathname === "/" ? `${css}${warm}<script src="/slow.js"></script>` : css;
         return ok(page(head, `Page ${url.pathname}`));
       }
       return new Response("nope", { status: 404 });
@@ -53,8 +55,8 @@ function serve(slowMs: number): string {
   return `http://localhost:${server.port}`;
 }
 
-async function audit(slowMs: number) {
-  const origin = serve(slowMs);
+async function audit(slowMs: number, warmFirst = false) {
+  const origin = serve(slowMs, warmFirst);
   const crawler = await Effect.runPromise(
     createCrawler({
       config: {
@@ -109,8 +111,13 @@ describe("perf/render-blocking lists a synchronous head script (#1751)", () => {
     expect(home.find((c) => c.name === "slow-blocking-script")).toBeUndefined();
   }, 20_000);
 
-  test("a blocking script slower than 1 s is a warning with its measured time, on its page only", async () => {
+  test("the first script of its host is not reported at 1 to 2 s: its time includes the connection setup", async () => {
     const byPath = await audit(1200);
+    expect(byPath.get("/")!.some((c) => c.name === "slow-blocking-script")).toBe(false);
+  }, 20_000);
+
+  test("a blocking script slower than 1 s from a warm host is a warning with its measured time, on its page only", async () => {
+    const byPath = await audit(1200, true);
     const slow = byPath.get("/")!.find((c) => c.name === "slow-blocking-script")!;
     expect(slow.status).toBe("warn");
     expect(slow.items).toHaveLength(1);
@@ -121,5 +128,12 @@ describe("perf/render-blocking lists a synchronous head script (#1751)", () => {
     for (const path of ["/a", "/b", "/c"]) {
       expect(byPath.get(path)!.some((c) => c.name === "slow-blocking-script")).toBe(false);
     }
+  }, 20_000);
+
+  test("a blocking script over 2 s is reported even as the first of its host", async () => {
+    const byPath = await audit(2200);
+    const slow = byPath.get("/")!.find((c) => c.name === "slow-blocking-script")!;
+    expect(slow.status).toBe("warn");
+    expect(slow.items![0]!.meta?.responseMs as number).toBeGreaterThanOrEqual(2200);
   }, 20_000);
 });

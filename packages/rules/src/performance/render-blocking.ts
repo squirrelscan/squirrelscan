@@ -1,7 +1,7 @@
 // perf/render-blocking - Render-blocking resources
 
 import { querySelectorAllOutsideNoscript, resolveUrl } from "@squirrelscan/utils";
-import { SLOW_BLOCKING_SCRIPT_MS } from "@squirrelscan/utils/constants";
+import { isSlowBlockingScript, SLOW_BLOCKING_SCRIPT_MS } from "@squirrelscan/utils/constants";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
@@ -13,19 +13,20 @@ function slowBlockingScripts(ctx: RuleContext): CheckResult | null {
   const head = ctx.parsed.document?.head;
   const scripts = ctx.site?.scripts;
   if (!head || !scripts || scripts.length === 0) return null;
-  const timed = new Map<string, number>();
+  const timed = new Map<string, { ms: number; hostFirst: boolean }>();
   for (const script of scripts) {
     if (script.responseMs === undefined) continue;
-    timed.set(script.url, script.responseMs);
-    if (script.finalUrl) timed.set(script.finalUrl, script.responseMs);
+    const entry = { ms: script.responseMs, hostFirst: script.hostFirst === true };
+    timed.set(script.url, entry);
+    if (script.finalUrl) timed.set(script.finalUrl, entry);
   }
   const slow = new Map<string, number>();
   for (const el of querySelectorAllOutsideNoscript(head, "script[src]")) {
     const src = el.getAttribute("src");
     if (!src || scriptLoading(el) !== "blocking") continue;
     const url = resolveUrl(src, ctx.page.url);
-    const ms = url ? timed.get(url) : undefined;
-    if (url && ms !== undefined && ms > SLOW_BLOCKING_SCRIPT_MS) slow.set(url, ms);
+    const entry = url ? timed.get(url) : undefined;
+    if (url && entry && isSlowBlockingScript(entry.ms, entry.hostFirst)) slow.set(url, entry.ms);
   }
   if (slow.size === 0) return null;
   const ranked = [...slow].sort((a, b) => b[1] - a[1]);
