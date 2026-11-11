@@ -28,7 +28,7 @@ The rules read the HTML and inline styles, and the `<style>` blocks where a rule
 
 | Rule | What it flags | Severity |
 |---|---|---|
-| [Color contrast: the 4.5:1 rule and how to check it](/rules/a11y/color-contrast) | Light gray text on white fails WCAG AA. squirrel measures the contrast of text whose color and background are both set inline, and reports pairs under 4.5:1. | warning |
+| [Color contrast: the 4.5:1 rule and how to check it](/rules/a11y/color-contrast) | Light gray text on white fails WCAG AA. squirrel measures text with an inline color against the background the markup determines, reports pairs under 4.5:1 and counts the text it could not measure. | warning |
 | [Form labels: which inputs need one and how to check](/rules/a11y/form-labels) | An input labelled only by its placeholder loses its label the moment someone types. squirrel lists every unlabeled input, textarea and select. | error |
 | [Link text: why 'click here' fails and what to use](/rules/a11y/link-text) | Links reading 'click here', and links wrapping an unlabeled icon, give screen reader users nothing to go on. squirrel lists both kinds. | warning |
 | [Heading order: why skipping from h1 to h3 matters](/rules/a11y/heading-order) | Screen reader users navigate by heading level, and a skipped level makes the outline harder to follow. squirrel checks document order on every page. | warning |
