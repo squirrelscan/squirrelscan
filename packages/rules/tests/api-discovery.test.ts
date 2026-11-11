@@ -160,14 +160,25 @@ describe("ax/api-discovery", () => {
       expect(c?.value).toBe("html-fallback");
     });
 
-    test("the five states are distinct", () => {
+    test("the six states that are not a catalog are distinct, and none is the present state", () => {
       const values = [
-        catalog(CATALOG_BODY),
         catalog('{"linkset":[]}'),
+        catalog('{"linkset":"x"}'),
+        catalog('{"a":1}', { jsonKeys: ["a"] }),
+        catalog('{"openapi":"3.0.0"}', { jsonKeys: ["openapi"] }),
         catalog("{", { jsonValid: false, jsonKeys: [] }),
         catalog("<html>", { looksHtml: true, jsonValid: false, jsonKeys: [] }),
       ].map((p) => api([p])?.value);
-      expect(new Set(values).size).toBe(values.length);
+      expect(values).toEqual([
+        "empty-linkset",
+        "invalid-linkset",
+        "not-a-catalog",
+        "openapi-document",
+        "malformed-json",
+        "html-fallback",
+      ]);
+      expect(new Set(values).size).toBe(6);
+      expect(values).not.toContain("present");
     });
 
     test.each([401, 403, 429, 503])("HTTP %d → not checked, never absent", (status) => {

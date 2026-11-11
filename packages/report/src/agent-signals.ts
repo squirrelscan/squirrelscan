@@ -3,13 +3,13 @@
 // ax/llms-txt, ax/markdown-response and ax/agents-md are advisory: they never
 // count toward the Agents score (#1386). Without this, a reader sees a low or
 // high Agents number and assumes it reflects agent support. The score covers
-// page weight and crawler access, so the three signals are listed beside it
+// the scored agent experience rules, so the three signals are listed beside it
 // instead of inside it.
 
 import type { AuditReport, ReportRuleResult } from "./types";
 
 export const AGENTS_SCORE_MEASURES =
-  "The Agents score measures page weight and crawler access; it does not measure agent support, which is shown separately as site-level signals.";
+  "The Agents score covers the scored agent experience rules; it does not include llms.txt, Markdown response or AGENTS.md, which are shown separately as site-level signals.";
 
 export type AgentSignalStatus = "present" | "missing" | "unchecked";
 
