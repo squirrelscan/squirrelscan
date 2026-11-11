@@ -262,6 +262,15 @@ describe("targetUrls (#1777)", () => {
     expect(r.fetched).toHaveLength(3);
   });
 
+  test("two oversize targets with the same prefix are two rows, not one", async () => {
+    const prefix = `${ORIGIN}/${"y".repeat(3000)}`;
+    const r = await run({ targetUrls: [`${prefix}a`, `${prefix}b`, `${ORIGIN}/p/1`] }, bigSite(), other);
+    const tooLong = r.frontier.filter((f) => f.reason === "url_too_long");
+    expect(tooLong).toHaveLength(2);
+    expect(new Set(tooLong.map((f) => f.url)).size).toBe(2);
+    expect(r.fetched).toEqual([`${ORIGIN}/p/1`]);
+  });
+
   test("a Cloudflare email-protection URL given as a target is a skipped row with a reason, not dropped", async () => {
     const r = await run(
       { targetUrls: [`${ORIGIN}/cdn-cgi/l/email-protection#abc123`, `${ORIGIN}/p/1`] },

@@ -5,7 +5,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { AuditReport } from "../src/types";
-import { fullScanHint, scanScopeLine } from "../src/coverage";
+import { auditLevelLine, fullScanHint, scanScopeLine } from "../src/coverage";
 import { renderText } from "../src/output/text";
 import { renderMarkdown } from "../src/output/markdown";
 import { renderHtml } from "../src/output/html";
@@ -394,5 +394,24 @@ describe("targeted run note (#1777)", () => {
   test("counts that are not whole numbers read as no note", () => {
     expect(scanScopeLine(scope({ requested: "x", audited: 1 }))).not.toContain("Targeted run");
     expect(scanScopeLine(scope({ requested: -1, audited: 1 }))).not.toContain("Targeted run");
+  });
+});
+
+describe("audit level line of a targeted run (#1777)", () => {
+  const level = (extra: Record<string, unknown>) =>
+    baseReport({
+      auditLevel: {
+        level: "surface",
+        basedOn: "surface",
+        changes: [],
+        settings: { pages: 10, crawlStrategy: "pattern-sampled", cloudChecks: true, render: "auto", externalLinks: false, probe: "active" },
+        ...extra,
+      } as never,
+    });
+  test("says only the listed URLs were audited and no links were checked", () => {
+    expect(auditLevelLine(level({ targeted: true }))).toContain("Targeted: only the listed URLs were audited, and no links were checked.");
+  });
+  test("an ordinary run's line is unchanged", () => {
+    expect(auditLevelLine(level({}))).toBe("Audit level: Surface.");
   });
 });

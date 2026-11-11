@@ -41,7 +41,10 @@ import {
 } from "@squirrelscan/audit-engine";
 import { foldEntityMapVariants } from "@squirrelscan/audit-engine/entity-map";
 import { createEntityMapCollector } from "@squirrelscan/audit-engine/entity-map/collect";
-import { offlineAuditSettings } from "@squirrelscan/core-contracts/audit-levels";
+import {
+  offlineAuditSettings,
+  targetedAuditSettings,
+} from "@squirrelscan/core-contracts/audit-levels";
 import { computeCost } from "@squirrelscan/core-contracts/credits";
 import { classifyAuditFailureReasonText } from "@squirrelscan/core-contracts/failure-reason";
 import { PLANS } from "@squirrelscan/core-contracts/plans";
@@ -2672,9 +2675,14 @@ export async function runAudit(
       // what ran even after a level's definition changes. REPORT-ONLY.
       // An --offline run records what ran, not the level's cloud defaults (#1275).
       if (options.auditLevel) {
-        report.auditLevel = options.offline
+        // A targeted run checks no links, so it records that too (#1777).
+        const ran = options.offline
           ? offlineAuditSettings(options.auditLevel)
           : options.auditLevel;
+        report.auditLevel =
+          options.targetUrls && options.targetUrls.length > 0
+            ? targetedAuditSettings(ran)
+            : ran;
       }
 
       // How many first-party scripts the script rules saw (#1280).
