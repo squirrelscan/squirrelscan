@@ -82,6 +82,21 @@ enable = ["crawl/conflicting-index-signals"]
 
 `enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
 
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `conflicting-index-signals` | Problem |  |
+| `site-wide-noindex` | Not checked |  |
+| `conflicting-index-signals` | Clean | `conflicting-index-signals` |
+| `conflicting-index-signals` | Not checked |  |
+
+{/* rule-checks:end */}
+
 ## Related rules
 
 - [crawl/noindex-in-sitemap](/rules/crawl/noindex-in-sitemap): the noindex half of the contradiction on its own.
