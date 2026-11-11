@@ -17,12 +17,14 @@ How it works:
 
 ## [Unreleased]
 
+
+## v0.0.175 (2026-11-11)
+
+Reports now say what happened to the local store and to cloud rendering: `meta.storeIntegrity` tells you when page bodies were evicted since an audit ran (JSON schema 1.10), and a `render` block records the render mode, the pages rendered and fetched plain, and why rendering fell back (schema 1.11), with a line on the console. `squirrel audit` and the MCP server share one run lifecycle, so the terminal status is sent once and a second Ctrl-C still lets it land, and a Ctrl-C'd crawl is recorded as stopped and resumes. `links/broken-links` counts the targets that answered a refusal or a throttle, `ax/ai-crawlers` warns when Googlebot is blocked for the audited URL, `core/canonical` flags a canonical that points at the home page, `a11y/meta-refresh` reads the Refresh response header, `ax/content-signals` tells absent, declared, invalid and not checked apart, and the cloud fetcher's waiter has one state instead of three booleans.
+
 ### Added
 
 - `ax/content-signals` tells absent, declared, invalid and not checked apart (`details.state`). A robots.txt that was refused, failed or cut at the 512 KiB read cap is reported as not checked instead of as no Content-Signal declared; a plain 404 still counts as absent.
-- `ax/content-signals` tells absent, declared, invalid and not checked apart (`details.state`). A robots.txt that was missing, refused, failed or cut at the 512 KiB read cap is now not checked instead of reported as no Content-Signal declared.
-### Added
-
 - `a11y/meta-refresh` also reports a `Refresh` response header: a redirect names the target and delay, a header with no URL is a reload, and a page with both the header and a meta refresh gets one finding naming both. The rule now runs per page, and its solution recommends a 301 or 308 redirect.
 - **`core/canonical` flags a page whose canonical points at the home page.** A template that hard-codes the canonical to the site root tells search engines that every page it renders duplicates the home page, and the pages drop out of the index; the URL is well formed, so the rule passed it. A new `canonical-to-homepage` check fails when a page that is not the home page declares the site root as its canonical (the tag first, then the `Link` header), and warns for a locale home page such as `/en/`. The root with a trailing slash, `/index.html` or the `www` or bare host is one root, a root with a query string is not, a page that redirects to the home page is not flagged, and every other page gets the same result as before. (#1685)
 - **`links/broken-links` counts the targets that answered a refusal or a throttle.** Every `broken-links` row now carries `refusedTargets` (a 401, a 403 or a bot-wall challenge) and `rateLimitedTargets` (a 429) in its coverage details, next to `linkTargets`, `probedTargets` and `unfetchedTargets`. Those targets are not broken and not unfetched, and nothing is known of the page behind them, so `linkTargets` less `unfetchedTargets` over-counts what was observed; subtract these two as well. No check message, item or status changes. (#1679)
