@@ -1304,6 +1304,15 @@ export interface MaxDurationCut {
   probesSkipped?: string[];
 }
 
+export interface ScanScopePageType {
+  /** The crawler's URL-based page type, e.g. `product`, `article`, `home`, or `unknown`. */
+  type: string;
+  /** Pages of this type the crawl knows of: audited plus discovered (links, sitemap) and not fetched. */
+  discovered: number;
+  /** Pages of this type that were fetched and audited. */
+  audited: number;
+}
+
 /** Where an audit executed + how much of the site it crawled (#1180). */
 export interface ScanScope {
   /** "cli" = local machine, "ci" = CI runner, "cloud" = squirrelscan cloud container. */
@@ -1343,6 +1352,14 @@ export interface ScanScope {
    * when nothing was left over, and on reports from before it. REPORT-ONLY.
    */
   unfetched?: number;
+  /**
+   * Discovered and audited page counts per page type (#1744), so a sampled audit can say
+   * "1 of 36 product pages". `discovered >= audited` for every row, and `discovered` is
+   * `audited` plus the queued-but-unfetched pages of that type, so a complete crawl has equal
+   * counts. Types come from the URL (the only label an unfetched page has). Most pages
+   * first. Absent on reports from before it. REPORT-ONLY.
+   */
+  pageTypes?: ScanScopePageType[];
   /**
    * The start URL's followed redirect (#1281), kept here so a report rebuilt
    * from the crawl later still names the URL the user gave. The report's

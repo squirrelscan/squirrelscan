@@ -65,7 +65,7 @@ import { isLocalOnlyTech, techIconUrl } from "../technologies";
 import { domainAgeYears, siteProfileRows } from "../site-metadata";
 import { editorSummaryView } from "../editor-summary";
 import type { IgnoreSummary } from "@squirrelscan/core-contracts/ignore";
-import { canonicalVariantCount, followedStartRedirect, scanScopeUnfetched, seedRedirect } from "../coverage";
+import { canonicalVariantCount, followedStartRedirect, scanScopePageTypes, scanScopeUnfetched, seedRedirect } from "../coverage";
 import { safeIgnored } from "../ignored";
 import { privateTargetLine, privateTargetSkippedRules } from "../private-target";
 import { notCheckedLine, notCheckedRules } from "../not-checked";
@@ -638,6 +638,8 @@ function buildSlimReport(
         ? { stopReason: report.scanScope.stopReason }
         : {}),
       ...(unfetched > 0 ? { unfetched } : {}),
+      // #1744: pages known and pages audited per URL-based page type.
+      ...(scanScopePageTypes(report).length > 0 ? { pageTypes: scanScopePageTypes(report) } : {}),
       // Query-string variants counted with their canonical page; `totalPages` excludes them (#858).
       ...(canonicalVariantCount(report) > 0 ? { canonicalVariants: canonicalVariantCount(report) } : {}),
       ...(canonicalVariantCount(report) > 0 && report.canonicalVariantPages?.length

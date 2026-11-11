@@ -35,6 +35,7 @@ import {
   type FlatFinding,
   type PageResultSink,
   unfetchedFrontierCount,
+  pageTypeCoverageFor,
 } from "@squirrelscan/audit-engine";
 import { foldEntityMapVariants } from "@squirrelscan/audit-engine/entity-map";
 import { createEntityMapCollector } from "@squirrelscan/audit-engine/entity-map/collect";
@@ -2425,6 +2426,14 @@ export async function runAudit(
         const unfetched = await Effect.runPromise(
           unfetchedFrontierCount(sqliteStorage, crawlId)
         );
+        // Per page type: what the crawl knew of against what it audited (#1744).
+        const pageTypes = await Effect.runPromise(
+          pageTypeCoverageFor(
+            sqliteStorage,
+            crawlId,
+            report.pages.map((p) => p.url)
+          )
+        );
         const scanScope: NonNullable<AuditReport["scanScope"]> = {
           origin: detectRunner().ci ? "ci" : "cli",
           maxPages: scopeMaxPages,
@@ -2440,6 +2449,7 @@ export async function runAudit(
             ? { canonicalVariants: report.canonicalVariants }
             : {}),
           ...(unfetched > 0 ? { unfetched } : {}),
+          ...(pageTypes.length > 0 ? { pageTypes } : {}),
           ...(options.startRedirect
             ? { startRedirect: options.startRedirect }
             : {}),

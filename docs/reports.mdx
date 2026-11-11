@@ -205,6 +205,15 @@ lists. Nothing about how a finding is detected, its severity or the score
 changes. Only `schema/expected-type` is scoped this way today: it is the one
 rule that records a page type from the classifier on its findings.
 
+### Pages known and pages audited, per page type
+
+A capped audit (a page limit, a time limit, or the Surface level) audits a sample of the pages it finds. To say which pages the sample came from, the report counts, for each page type the crawler can tell from the URL (`home`, `article`, `product`, `category`, `faq`, `contact`, `about`, `search`, `profile`, `event`, and `unknown` for everything else), how many pages the crawl knows of and how many it audited. The text, markdown and console reports print one line, for example `Page types audited: 1 of 36 product pages, 12 of 12 article pages.`, and the JSON, XML and llm reports carry the counts as fields.
+
+- `discovered`: the pages audited plus the pages found (in links or a sitemap) and queued but never fetched.
+- `audited`: the pages fetched and audited.
+
+On a complete audit the two are equal for every type. When the crawl stopped with pages still queued, `discovered` is larger than `audited` for each type it left pages of. Types come from the URL alone, because that is all an unfetched page has, so a page type here can differ from the page type the classifier gives an audited page in the report's structure section. The counts are a floor: links on pages that were never fetched are unknown. They never change the score. In the JSON report they are `meta.pageTypes`, a list of `{ "type", "discovered", "audited" }` objects, most pages first; the llm and XML reports print one `<page-type name discovered audited/>` element for each, next to `<scan-scope>`. A report from before this field has none.
+
 ### console (default)
 
 Human-readable terminal output with colors and formatting.
@@ -538,6 +547,7 @@ squirrel report -f xml -o report.xml
     <pages-crawled>42</pages-crawled>
     <audit-date>2025-01-18T10:30:00.000Z</audit-date>
     <scan-scope origin="cli" crawled="42" max-pages="100" capped="false"/>
+    <page-type name="product" discovered="36" audited="1"/>
   </site>
   <health-score overall="87" grade="B">
     <category name="Core SEO" score="100"/>

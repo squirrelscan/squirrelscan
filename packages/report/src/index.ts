@@ -249,6 +249,8 @@ export {
   timeAgo,
   scanScopeLine,
   scanScopeUnfetched,
+  scanScopePageTypes,
+  pageTypeCoverageLine,
   publishedReportNote,
   seedRedirect,
   seedRedirectFollowUp,
