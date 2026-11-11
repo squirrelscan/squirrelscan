@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { assertInstallerEnvCannotReachProduction, DEAD_ERROR_ENDPOINT } from "./install-test-env";
 import {
   chmodSync,
   existsSync,
@@ -148,8 +149,7 @@ const runWithCurlShim = async (
   await Bun.write(log, "");
 
   try {
-    const proc = Bun.spawn(["bash", "-c", `${prelude}\nsource "$1"; ${script}`, "--", sourced], {
-      env: {
+    const spawnEnv = {
         ...process.env,
         NO_TELEMETRY: "1",
         // Keep the ambient environment out of the recorded argv. A GITHUB_TOKEN
@@ -158,7 +158,8 @@ const runWithCurlShim = async (
         GITHUB_TOKEN: undefined,
         SQUIRREL_CHANNEL: undefined,
         SQUIRREL_VERSION: undefined,
-        SQUIRREL_ERROR_ENDPOINT: undefined,
+        // #3896: never the production default: a shim that fails to intercept must not reach it.
+        SQUIRREL_ERROR_ENDPOINT: DEAD_ERROR_ENDPOINT,
         SQUIRREL_RELEASES_ENDPOINT: undefined,
         PATH: `${dir}:${process.env.PATH ?? ""}`,
         SHIM_LOG: log,
@@ -167,7 +168,10 @@ const runWithCurlShim = async (
         SHIM_ALT_MATCH: altMatch,
         SHIM_ALT_BODY: altBody,
         ...env,
-      } as Record<string, string>,
+      } as Record<string, string>;
+    assertInstallerEnvCannotReachProduction(spawnEnv);
+    const proc = Bun.spawn(["bash", "-c", `${prelude}\nsource "$1"; ${script}`, "--", sourced], {
+      env: spawnEnv,
       stdout: "pipe",
       stderr: "pipe",
     });
@@ -1300,7 +1304,11 @@ describe("install.sh curl transport hardening", () => {
     });
     expect(calls).toHaveLength(1);
     expect(missingFromArgv(calls[0])).toEqual([]);
-    expect(calls[0]).toContain("https://install.squirrelscan.com/error");
+    // The run goes to the dead endpoint (#3896); the production default is pinned in the script itself.
+    expect(calls[0]).toContain(DEAD_ERROR_ENDPOINT);
+    expect(shellInstaller).toContain(
+      'ERROR_ENDPOINT="${SQUIRREL_ERROR_ENDPOINT:-https://install.squirrelscan.com/error}"',
+    );
     // Same detached-POST shape as the two payload tests, so the same budget:
     // the script sleeps 1s and the harness can wait 5s more on a loaded runner.
   }, 15_000);

@@ -2,6 +2,7 @@
 // noexec temp dirs. Each test runs the WHOLE installer (bash install.sh) against a shimmed curl and
 // uname and a fake release binary, in a throwaway HOME and TMPDIR, never touching the real ones.
 
+import { assertInstallerEnvCannotReachProduction, DEAD_ERROR_ENDPOINT } from "./install-test-env";
 import { afterAll, describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 import {
@@ -164,6 +165,8 @@ async function install(options: Options = {}): Promise<Result> {
     SQUIRREL_NO_MODIFY_PATH: "1",
     CI: "true",
     LC_ALL: "C",
+    // #3896: a shim that fails to intercept must never reach the production error endpoint.
+    SQUIRREL_ERROR_ENDPOINT: DEAD_ERROR_ENDPOINT,
     ...(options.unsetHome ? {} : { HOME: home }),
   };
   if (options.stall) env.SHIM_STALL = "1";
@@ -173,6 +176,7 @@ async function install(options: Options = {}): Promise<Result> {
     if (v === undefined) delete env[k];
     else env[k] = v;
   }
+  assertInstallerEnvCannotReachProduction(env);
   const prefix = options.umask ? `umask ${options.umask}; ` : "";
   const proc = Bun.spawn(["bash", "-c", `${prefix}exec bash "$1"`, "--", installer], {
     env,
