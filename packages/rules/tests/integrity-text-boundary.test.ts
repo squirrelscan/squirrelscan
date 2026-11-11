@@ -35,14 +35,14 @@ test("control: a lone overlay remains info", () => {
   const ctx = context(` ${overlay}`);
   expect([...detectPageSignals(ctx)]).toEqual(["fake-auth-overlay"]);
   expect(fakeAuthOverlayRule.run(ctx).checks[0]?.status).toBe("info");
-  expect(brandImpersonationRule.run(ctx).checks).toEqual([]);
+  expect(brandImpersonationRule.run(ctx).checks.map((c) => c.status)).toEqual(["pass"]); // clean, not empty (#1741)
 });
 
 test("control: an ordinary iframe has no compromise signal", () => {
   const ctx = context(' <iframe title="Ordinary content" srcdoc="" style="width:300px;height:150px"></iframe>');
   expect([...detectPageSignals(ctx)]).toEqual([]);
-  expect(fakeAuthOverlayRule.run(ctx).checks).toEqual([]);
-  expect(brandImpersonationRule.run(ctx).checks).toEqual([]);
+  expect(fakeAuthOverlayRule.run(ctx).checks.map((c) => c.status)).toEqual(["pass"]); // clean, not empty (#1741)
+  expect(brandImpersonationRule.run(ctx).checks.map((c) => c.status)).toEqual(["pass"]); // clean, not empty (#1741)
 });
 
 // ── what the fix must not change ────────────────────────────────────
@@ -50,7 +50,7 @@ test("control: an ordinary iframe has no compromise signal", () => {
 test("a compact, legitimate Sign in with Google link is not impersonation", () => {
   const ctx = context('<a href="https://accounts.google.com/o/oauth2/auth">Sign in with Google</a>');
   expect(detectPageSignals(ctx).has("brand-impersonation")).toBe(false);
-  expect(brandImpersonationRule.run(ctx).checks).toEqual([]);
+  expect(brandImpersonationRule.run(ctx).checks.map((c) => c.status)).toEqual(["pass"]); // clean, not empty (#1741)
 });
 
 test("a compact off-brand link with no overlay is a lone signal: info", () => {
@@ -108,7 +108,7 @@ test("a link labelled only verify or continue with is not a credential affordanc
   ]) {
     const ctx = context(` ${anchor}`);
     expect(detectPageSignals(ctx).has("brand-impersonation")).toBe(false);
-    expect(brandImpersonationRule.run(ctx).checks).toEqual([]);
+    expect(brandImpersonationRule.run(ctx).checks.map((c) => c.status)).toEqual(["pass"]); // clean, not empty (#1741)
   }
 });
 

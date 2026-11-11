@@ -18,6 +18,7 @@ import { parsePage } from "@squirrelscan/parser";
 
 import { dateAgreementRule, looksLikeDate, matchDate } from "../src/content/date-agreement";
 import type { ParsedPage, RuleContext } from "../src/types";
+import { expectDeclaredChecks } from "./helpers/declared-checks";
 
 function run(
   html: string,
@@ -29,7 +30,14 @@ function run(
     parsed: parsePage(html, url) as ParsedPage,
     options: {},
   };
-  return dateAgreementRule.run(ctx).checks as CheckResult[];
+  const out = dateAgreementRule.run(ctx).checks as CheckResult[];
+  expectDeclaredChecks(dateAgreementRule, out);
+  return out;
+}
+
+/** Findings only: a pass or a skip is the rule saying "clean" or "nothing to compare" (#1741). */
+function findings(checks: CheckResult[]): CheckResult[] {
+  return checks.filter((c) => c.status !== "pass" && c.status !== "skipped");
 }
 
 function check(checks: CheckResult[], name: string): CheckResult | undefined {
@@ -350,7 +358,7 @@ describe("content/date-agreement — must not fire", () => {
       `<main><article><h1>Cache</h1><p>Opublikowano 8 stycznia 2026</p>${PROSE}</article></main>`,
     );
 
-    expect(run(html).length).toBe(0);
+    expect(findings(run(html)).length).toBe(0);
   });
 
   test("a year in a URL slug that is not a publication date is not reported", () => {
@@ -401,7 +409,10 @@ describe("content/date-agreement — must not fire", () => {
       "Contact us",
     );
 
-    expect(run(html, "https://example.com/contact").length).toBe(0);
+    const out = run(html, "https://example.com/contact");
+    expect(findings(out).length).toBe(0);
+    // Evaluated and found nothing to report: a clean check, not an empty list (#1741).
+    expect(out.map((c) => [c.name, c.status])).toEqual([["date-agreement", "pass"]]);
   });
 
   test("an archive listing one date per entry is not a page-level disagreement", () => {
@@ -429,7 +440,12 @@ describe("content/date-agreement — must not fire", () => {
   });
 
   test("a page with no date signals at all stays silent", () => {
-    expect(run(page(null, `<main><h1>Hello</h1>${PROSE}</main>`)).length).toBe(0);
+    const none = run(page(null, `<main><h1>Hello</h1>${PROSE}</main>`));
+    expect(findings(none).length).toBe(0);
+    // Nothing to compare is said, not left empty (#1741).
+    expect(none.map((c) => [c.name, c.status, c.skipReason])).toEqual([
+      ["date-agreement", "skipped", "not-applicable"],
+    ]);
   });
 
   test("a visible 'Updated' date that matches dateModified rather than datePublished", () => {
@@ -598,7 +614,7 @@ describe("content/date-agreement — schema date source", () => {
   test("a non-document schema date with no visible date says nothing", () => {
     // Otherwise every page of every site carrying a sitewide dated node would
     // report this.
-    expect(run(page(SITEWIDE_APP, `<main>${PROSE}</main>`)).length).toBe(0);
+    expect(findings(run(page(SITEWIDE_APP, `<main>${PROSE}</main>`))).length).toBe(0);
   });
 });
 

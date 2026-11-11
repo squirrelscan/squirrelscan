@@ -13,6 +13,16 @@ export const hstsRule: Rule = {
     scope: "site",
     severity: "warning",
     weight: 6,
+    // Check names by outcome class (#1741).
+    checks: [
+      { name: "hsts-missing", outcome: "problem" },
+      { name: "hsts-malformed", outcome: "problem" },
+      { name: "hsts-disabled", outcome: "problem" },
+      { name: "hsts-max-age-short", outcome: "problem" },
+      { name: "hsts", outcome: "clean", clears: ["hsts-missing", "hsts-malformed", "hsts-disabled", "hsts-max-age-short"] },
+      { name: "hsts-no-pages", outcome: "skipped" },
+      { name: "hsts-not-applicable", outcome: "skipped" },
+    ],
     // A dev server or private-network host is not the delivery edge (pub#629).
     skipOnPrivateTarget: true,
   },

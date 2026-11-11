@@ -529,6 +529,12 @@
    "common-misspellings|pass|No known misspellings or doubled words on English pages||"
   ]
  },
+ "content/date-agreement": {
+  "digest": "179024305377535",
+  "lines": [
+   "date-agreement|skipped|No schema date describes this page, so there is nothing to compare||"
+  ]
+ },
  "content/dev-leakage": {
   "digest": "215027923798382",
   "lines": [
@@ -2256,10 +2262,46 @@
    "svg-inline|info|No inline SVGs found||"
   ]
  },
+ "integrity/brand-impersonation": {
+  "digest": "102550352790668",
+  "lines": [
+   "brand-impersonation|pass|No brand impersonation found on this page||"
+  ]
+ },
+ "integrity/cloaking": {
+  "digest": "228774818430987",
+  "lines": [
+   "cloaking|skipped|The cloaking probe did not run||"
+  ]
+ },
+ "integrity/fake-auth-overlay": {
+  "digest": "119326214241370",
+  "lines": [
+   "fake-auth-overlay|pass|No fake authentication overlay found on this page||"
+  ]
+ },
+ "integrity/known-malicious-url": {
+  "digest": "255628568870148",
+  "lines": [
+   "known-malicious-url|skipped|Threat intelligence is not enabled, so no URL was checked||"
+  ]
+ },
+ "integrity/obfuscated-script": {
+  "digest": "42033148035214",
+  "lines": [
+   "obfuscated-script|pass|No obfuscated inline script found on this page||"
+  ]
+ },
  "integrity/orphan-page": {
   "digest": "187130470953025",
   "lines": [
    "orphan-page|pass|No hidden pages (all crawled pages are linked or in a sitemap)||"
+  ]
+ },
+ "integrity/seo-doorway": {
+  "digest": "237160537863319",
+  "lines": [
+   "seo-doorway|pass|No SEO doorway signals found on this page||"
   ]
  },
  "integrity/template-discontinuity": {
@@ -2799,6 +2841,12 @@
   "digest": "73606885425679",
   "lines": [
    "product-schema|info|No Product schema found||"
+  ]
+ },
+ "schema/rating-scope": {
+  "digest": "162812079113959",
+  "lines": [
+   "rating-visible|skipped|No rating markup on this page||"
   ]
  },
  "schema/review": {

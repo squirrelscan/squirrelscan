@@ -9,6 +9,7 @@ import type { CheckResult, CloakingProbeData } from "@squirrelscan/core-contract
 
 import { cloakingRule } from "../src/integrity/cloaking";
 import type { ParsedPage, RuleContext, SiteData } from "../src/types";
+import { expectDeclaredChecks } from "./helpers/declared-checks";
 
 const SITE = "https://example.com";
 
@@ -49,12 +50,16 @@ function siteCtx(cloakingProbes: CloakingProbeData[] | undefined): RuleContext {
 }
 
 function run(probes: CloakingProbeData[] | undefined): CheckResult[] {
-  return cloakingRule.run(siteCtx(probes)).checks;
+  const out = cloakingRule.run(siteCtx(probes)).checks;
+  expectDeclaredChecks(cloakingRule, out);
+  return out;
 }
 
 describe("integrity/cloaking", () => {
-  test("no-op when probe is off (cloakingProbes undefined)", () => {
-    expect(run(undefined)).toEqual([]);
+  test("says it did not run when the probe is off (cloakingProbes undefined), never clean (#1741)", () => {
+    expect(run(undefined).map((c) => [c.name, c.status, c.skipReason])).toEqual([
+      ["cloaking", "skipped", "not-applicable"],
+    ]);
   });
 
   test("pass when probe ran but found no suspicious paths (empty array)", () => {

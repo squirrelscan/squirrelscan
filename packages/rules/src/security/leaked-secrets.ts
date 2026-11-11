@@ -4473,6 +4473,18 @@ export const leakedSecretsRule: Rule = {
     scope: "site",
     severity: "error",
     weight: 10,
+    // Check names by outcome class (#1741).
+    checks: [
+      { name: "leaked-secrets-critical", outcome: "problem" },
+      { name: "leaked-secrets-high", outcome: "problem" },
+      { name: "leaked-secrets-medium", outcome: "problem" },
+      { name: "leaked-secrets-public", outcome: "problem" },
+      { name: "leaked-secrets-info", outcome: "problem" },
+      { name: "leaked-secrets-omitted", outcome: "problem" },
+      { name: "leaked-secrets-partial", outcome: "problem" },
+      { name: "leaked-secrets", outcome: "clean", clears: ["leaked-secrets-critical", "leaked-secrets-high", "leaked-secrets-medium", "leaked-secrets-public", "leaked-secrets-info", "leaked-secrets-omitted", "leaked-secrets-partial"] },
+      { name: "leaked-secrets-unscanned", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

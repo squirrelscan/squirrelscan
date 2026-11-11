@@ -23,6 +23,7 @@ import { parsePage } from "@squirrelscan/parser";
 import { ratingScopeRule } from "../src/schema/rating-scope";
 import { rules as schemaRules } from "../src/schema";
 import type { ParsedPage, Rule, RuleContext } from "../src/types";
+import { expectDeclaredChecks } from "./helpers/declared-checks";
 
 function pageCtx(html: string, url = "https://example.com/"): RuleContext {
   return {
@@ -33,7 +34,9 @@ function pageCtx(html: string, url = "https://example.com/"): RuleContext {
 }
 
 function run(rule: Rule, ctx: RuleContext): CheckResult[] {
-  return rule.run(ctx).checks as CheckResult[];
+  const out = rule.run(ctx).checks as CheckResult[];
+  expectDeclaredChecks(rule, out);
+  return out;
 }
 
 function check(checks: CheckResult[], name: string): CheckResult | undefined {
@@ -139,13 +142,16 @@ describe("schema/rating-scope — visibility", () => {
     expect(check(checks, "rating-visible")?.message).toContain("review widget");
   });
 
-  test("no AggregateRating anywhere → the rule says nothing at all", () => {
+  test("no AggregateRating anywhere → one skipped check, no finding (#1741)", () => {
     const html = page(
       { "@context": "https://schema.org", "@type": "Organization", name: "Northgate" },
       "<h1>Northgate</h1><p>We fix cars.</p>",
     );
 
-    expect(run(ratingScopeRule, pageCtx(html, "https://example.com/"))).toEqual([]);
+    const out = run(ratingScopeRule, pageCtx(html, "https://example.com/"));
+    expect(out.map((c) => [c.name, c.status, c.skipReason])).toEqual([
+      ["rating-visible", "skipped", "not-applicable"],
+    ]);
   });
 
   test("array-wrapped aggregateRating (#721) is still read", () => {
