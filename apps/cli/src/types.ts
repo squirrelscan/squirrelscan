@@ -3,6 +3,7 @@
 import type { ProbeLevel } from "@squirrelscan/config";
 import type {
   AuditOutcome,
+  ReportRender,
   ResumeOutcome,
   StoreIntegrityEvicted,
 } from "@squirrelscan/core-contracts";
@@ -498,6 +499,8 @@ export interface AuditReport {
   outcome?: AuditOutcome;
   /** Page bodies evicted from the local content store since this audit ran (#1667); absent when none were. Mirrors core-contracts `AuditReport`. */
   storeIntegrity?: StoreIntegrityEvicted;
+  /** What cloud rendering did on this audit (#1664). Mirrors core-contracts `AuditReport`. */
+  render?: ReportRender;
   /** Short human reason shown when `status` is failed/blocked. */
   statusReason?: string;
   /**

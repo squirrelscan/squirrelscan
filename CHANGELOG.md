@@ -19,6 +19,7 @@ How it works:
 
 ### Added
 
+- **A render that fell back to plain HTTP is visible in the report.** When cloud rendering stops partway (out of credits, the render service failing, a signed-out or unreachable cloud), the audit now prints one line with the reason and how many pages were rendered, and the JSON report gets a `render` block (`requested`, `mode`, `pagesRendered`, `pagesFetchedPlain` and a `fallbackReason`) with a matching `<render>` element in the LLM report, so an agent can tell rendered pages from plain-HTTP ones. (#1664)
 - **`squirrel pages` and `squirrel entities` say when page bodies were evicted, and `report` puts the count in its JSON.** Content-store eviction is global by size cap, so an audit's page bodies can be gone later, and only `report`, `--resume` and re-audits said so. `pages` and `entities` now print the same notice on stderr (their rows are built from stored page data, so the output is complete), and with `--format json` all three carry `storeIntegrity` (`status: "evicted"`, `evicted`, `stored`): `meta.storeIntegrity` in the `report` JSON, a top-level field in `pages` and `entities`. It is absent when every body is still there. All readers share one census. (#1667)
 
 ## v0.0.174 (2026-11-11)
