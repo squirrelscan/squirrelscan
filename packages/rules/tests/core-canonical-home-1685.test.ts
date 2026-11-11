@@ -93,6 +93,26 @@ describe("homepageCanonicalVerdict", () => {
     ["the home page without a slash", "https://example.com", "https://example.com/", "none"],
     ["/index.html with a canonical to /", "https://example.com/index.html", "https://example.com/", "none"],
     ["/ with a canonical to /index.html", "https://example.com/", "https://example.com/index.html", "none"],
+    ["/index.php with a canonical to /", "https://example.com/index.php", "https://example.com/", "none"],
+    ["/index.php is the root", "https://example.com/about", "https://example.com/index.php", "error"],
+    ["/index.htm with a canonical to /", "https://example.com/index.htm", "https://example.com/", "none"],
+    ["/index.htm is the root", "https://example.com/about", "https://example.com/index.htm", "error"],
+    ["/index.asp with a canonical to /", "https://example.com/index.asp", "https://example.com/", "none"],
+    ["/index.asp is the root", "https://example.com/about", "https://example.com/index.asp", "error"],
+    ["/index.aspx with a canonical to /", "https://example.com/index.aspx", "https://example.com/", "none"],
+    ["/index.aspx is the root", "https://example.com/about", "https://example.com/index.aspx", "error"],
+    ["/default.asp with a canonical to /", "https://example.com/default.asp", "https://example.com/", "none"],
+    ["/default.asp is the root", "https://example.com/about", "https://example.com/default.asp", "error"],
+    ["/default.aspx with a canonical to /", "https://example.com/default.aspx", "https://example.com/", "none"],
+    ["/default.aspx is the root", "https://example.com/about", "https://example.com/default.aspx", "error"],
+    ["/default.htm with a canonical to /", "https://example.com/default.htm", "https://example.com/", "none"],
+    ["/default.htm is the root", "https://example.com/about", "https://example.com/default.htm", "error"],
+    ["/default.html with a canonical to /", "https://example.com/default.html", "https://example.com/", "none"],
+    ["/default.html is the root", "https://example.com/about", "https://example.com/default.html", "error"],
+    ["/INDEX.PHP with a canonical to /", "https://example.com/INDEX.PHP", "https://example.com/", "none"],
+    ["/INDEX.PHP is the root", "https://example.com/about", "https://example.com/INDEX.PHP", "error"],
+    ["a similar name is not a home file", "https://example.com/index.json", "https://example.com/", "error"],
+    ["a home file in a subdirectory is not the root", "https://example.com/blog/index.php", "https://example.com/", "error"],
     ["the home page with a tracking query", "https://example.com/?utm_source=x", "https://example.com/", "none"],
     ["www home page with a bare canonical", "https://www.example.com/", "https://example.com/", "none"],
     ["a canonical to another page", "https://example.com/a", "https://example.com/b", "none"],
@@ -115,6 +135,11 @@ describe("homepageCanonicalVerdict", () => {
 });
 
 describe("canonical-to-homepage in the rule", () => {
+  test("a home page served at /index.php with a canonical to / is not flagged", () => {
+    const checks = run("https://example.com/index.php", { canonical: "https://example.com/" });
+    expect(home(checks)).toBeUndefined();
+  });
+
   test("a page whose tag canonical is the site root fails, naming the page and the canonical", () => {
     const check = home(run("https://example.com/pricing", { canonical: "https://example.com/" }));
     expect(check?.status).toBe("fail");
