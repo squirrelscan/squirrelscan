@@ -23,6 +23,8 @@ The count is a count of blocking resources rather than a measured chain depth, s
 
 Elements inside `<noscript>` are skipped: a browser with scripting enabled reads `<noscript>` content as plain text, so nothing in it loads or renders. See [content inside noscript](/rules#content-inside-noscript).
 
+A rendered page's script set is the union of the scripts in the server HTML and in the rendered DOM (#1769). Client code can remove server-rendered head scripts after hydration (TanStack Router's `Script` component does), so a snapshot's content would otherwise depend on render timing. A script only the server HTML holds is added to the stored page, marked `data-sq-server-only`, in the part (head or body) it came from, deduped by normalized URL and inline-body hash, at most 50 per page (the number left out is recorded on the `<html>` element as `data-sq-server-scripts-omitted`). This rule counts such a script as a server-sent resource of the chain: the browser requested it before it was removed.
+
 ## How to fix it
 
 ```html

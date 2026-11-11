@@ -105,6 +105,12 @@ export interface FetchResponse {
    */
   sourceHash?: string;
   /**
+   * The HTML the server sent for this URL, set only on a rendered response whose
+   * plain-HTTP probe succeeded (#1769). The crawler adds the scripts it holds and
+   * the rendered DOM lacks, since client code may remove them after hydration.
+   */
+  serverHtml?: string;
+  /**
    * Browser render cost only (page.goto + content + link extraction), as
    * measured server-side by crawler-worker — set only by the browser-queue
    * fetcher (#826). Absent for every non-rendered fetch.
