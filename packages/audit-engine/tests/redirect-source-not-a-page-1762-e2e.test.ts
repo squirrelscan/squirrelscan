@@ -283,6 +283,21 @@ describe.each(["v1", "v2"] as const)("redirecting URLs are not pages (#1762, %s)
     for (const path of AUDITED) expect(listed, path).toContain(`${out.origin}${path}`);
   }, 60_000);
 
+  test("both assemblers carry the crawl's redirect rows as transport evidence for the signal (#1759)", async () => {
+    const out = await run(engine);
+    const redirected = [...out.stored.entries()].filter(([, row]) => row.status >= 300 && row.status < 400);
+    expect(redirected.length).toBeGreaterThan(0);
+    for (const report of [out.v1Report, out.v2Report]) {
+      const rows = new Map((report.redirectedPages ?? []).map((r) => [r.url, r]));
+      expect(rows.size).toBe(redirected.length);
+      for (const [url, stored] of redirected) {
+        expect(rows.get(url)?.finalUrl, url).toBe(stored.finalUrl);
+        expect(rows.get(url)!.status).toBeGreaterThanOrEqual(300);
+      }
+      expect(report.redirectedPagesTotal).toBeUndefined();
+    }
+  }, 60_000);
+
   test("redirect rows take no maxPages slot: with maxPages 2 the destination is still audited", async () => {
     const out = await run(engine, {
       maxPages: 2,

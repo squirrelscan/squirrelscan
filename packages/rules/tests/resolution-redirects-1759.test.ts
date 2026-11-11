@@ -111,3 +111,30 @@ describe("redirect evidence in the compact signal", () => {
     expect(signal.crawledUrls.length).toBe(2);
   });
 });
+
+describe("the count of recorded redirects survives a dropped list", () => {
+  test("redirectsTotal rides alone when the list does not fit, and a clipped list keeps the true count", async () => {
+    const many = Array.from({ length: 400 }, (_, i) => ({
+      url: `https://x.test/${Math.random().toString(36)}-${i}`,
+      status: 301,
+      to: `https://x.test/${Math.random().toString(36)}`,
+    }));
+    const budget = JSON.stringify(buildCompactResolutionSignal(rules, crawled)!).length + 60;
+    const dropped = await decodeResolutionSignal(
+      buildCompactResolutionSignal(rules, crawled, budget, [], { redirects: many })!,
+    );
+    expect(dropped.redirectedUrls).toBeUndefined();
+    expect(dropped.redirectedCount).toBe(400);
+
+    const clipped = await decodeResolutionSignal(
+      buildCompactResolutionSignal(rules, crawled, undefined, [], { redirects: many.slice(0, 5), redirectsTotal: 900 })!,
+    );
+    expect(Object.keys(clipped.redirectedUrls ?? {}).length).toBe(5);
+    expect(clipped.redirectedCount).toBe(900);
+  });
+
+  test("a signal built without redirects has neither field", async () => {
+    const signal = await decodeResolutionSignal(buildCompactResolutionSignal(rules, crawled)!);
+    expect(signal.redirectedCount).toBeUndefined();
+  });
+});

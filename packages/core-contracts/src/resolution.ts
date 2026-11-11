@@ -96,13 +96,21 @@ export interface ResolutionSignal {
    */
   crawledHashes?: string[];
   /**
-   * (#1759) Crawled pages that now redirect off their URL (a #1762 redirect row, status 3xx), by raw source
-   * URL, with the status the URL itself answered and the page it lands on. OPTIONAL and EVIDENCE ONLY: the
-   * merge resolves such a page's findings the way it always did (the page was crawled and no check fails
-   * there) and records this as the reason on each resolved row (`resolvedBy`). A reader that ignores it, or
-   * a producer that never sends it, changes no verdict. At most RESOLUTION_SIGNAL_LIMITS.maxRedirects.
+   * (#1759) Pages that now redirect off their URL (a #1762 redirect row, status 3xx), by raw source URL, with the
+   * status the URL itself answered and the page it lands on. OPTIONAL. A page named here was looked at: the merge
+   * resolves its findings (the page no longer serves them) and records this as the reason on each resolved row
+   * (`resolvedBy`), unless the destination is the same page, which the ordinary rules judge. A page NOT named is
+   * judged as before, whatever the crawl recorded (see `redirectedCount`), so a clipped or dropped list only costs
+   * resolutions, never causes one. A signal that never sends it changes nothing. At most
+   * RESOLUTION_SIGNAL_LIMITS.maxRedirects.
    */
   redirectedUrls?: Record<string, ResolutionRedirect>;
+  /**
+   * (#1759) How many redirected pages the crawl recorded, whether or not `redirectedUrls` names them all (a
+   * budget or the cap may have dropped some, or all). Present whenever the crawl recorded any. A page the
+   * list does not name is NOT thereby known not to redirect: the merge resolves only the pages it names.
+   */
+  redirectedCount?: number;
 }
 
 /** Where a crawled URL redirected (#1759): its own first-hop 3xx and the landing URL. */
@@ -146,6 +154,8 @@ export interface CompactResolutionPayload {
   v: 1;
   /** (#1759) Redirected pages as `[sourceUrl, status, destinationUrl]`, bounded; see ResolutionSignal.redirectedUrls. */
   redirects?: Array<[string, number, string]>;
+  /** (#1759) Redirected pages the crawl recorded, when more than `redirects` lists (or the list was dropped). */
+  redirectsTotal?: number;
   /** Crawled pages, NORMALIZED, deduped, sorted. All of them when `complete`. */
   urls: string[];
   /**

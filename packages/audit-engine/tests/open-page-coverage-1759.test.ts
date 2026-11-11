@@ -347,35 +347,87 @@ describe("resolvedBy on findings that resolve because their page changed (#1759 
     expect(by(store, 0)).toBeUndefined();
   });
 
+  // The cloud shape: a redirect row is not among the crawled pages, so the signal never names it and the
+  // check has no result for it. Before the redirect list its findings carried for ever.
+  const cloud = (extra: Record<string, unknown> = {}) => {
+    const rr = ruleResults([failing(0), passing(1)]);
+    return {
+      ...partial({ ruleResults: rr }),
+      resolutionSignal: { ...buildResolutionSignal(rr, [page(0), page(1)]), ...extra },
+    };
+  };
+
+  test("a cloud merge resolves a redirected page's findings, with the reason (AC1)", async () => {
+    const store = await seeded();
+    const r = await runCloudSmartAudits({ store, ...cloud({ redirectedUrls: redirects, redirectedCount: 1 }) });
+    expect(row(store, 2).state).toBe("resolved");
+    expect(by(store, 2)).toEqual({ kind: "redirected", status: 301, to: "https://x.test/new-2" });
+    // the other uncrawled pages still carry
+    expect(row(store, 3).state).toBe("open");
+    expect(r.coverage.openPages).toMatchObject({ reverified: 3, carried: 3 });
+  });
+
+  test("an old signal without the field carries the page, as before", async () => {
+    const store = await seeded();
+    await runCloudSmartAudits({ store, ...cloud() });
+    expect(row(store, 2).state).toBe("open");
+  });
+
+  test("a dropped or clipped list never resolves by absence: the count alone, or other pages, resolve nothing", async () => {
+    const store = await seeded();
+    await runCloudSmartAudits({
+      store,
+      ...cloud({
+        redirectedCount: 40,
+        redirectedUrls: { [page(5)]: { status: 302, to: "https://x.test/new-5" } },
+      }),
+    });
+    expect(row(store, 2).state).toBe("open");
+    expect(row(store, 5).state).toBe("resolved");
+  });
+
+  test("a redirect that lands on the same page is judged by the ordinary rules, not resolved", async () => {
+    const store = await seeded();
+    await runCloudSmartAudits({
+      store,
+      ...cloud({ redirectedUrls: { [page(2)]: { status: 301, to: `${page(2)}/` } } }),
+    });
+    expect(row(store, 2).state).toBe("open");
+  });
+
   test("an oversized, non-http or script destination is dropped before it reaches a row", async () => {
     const huge = `https://x.test/${"a".repeat(2100)}`;
     for (const to of [huge, "javascript:alert(1)", "data:text/html,x", "ftp://x.test/f", "not a url", ""]) {
       const store = await seeded();
-      await runCloudSmartAudits({ store, ...withRedirect({ redirectedUrls: { [page(2)]: { status: 301, to } } }) });
-      // the page still resolves (the check ran clean there); only the evidence is refused
-      expect(row(store, 2).state, to.slice(0, 30)).toBe("resolved");
-      expect(by(store, 2), to.slice(0, 30)).toBeUndefined();
+      await runCloudSmartAudits({
+        store,
+        ...cloud({ redirectedUrls: { [page(2)]: { status: 301, to } } }),
+      });
+      expect(row(store, 2).state, to.slice(0, 30)).toBe("open");
+      expect(by(store, 2)).toBeUndefined();
     }
+    // an oversized source is dropped too
     const store = await seeded();
     await runCloudSmartAudits({
       store,
-      ...withRedirect({ redirectedUrls: { [`${page(2)}/${"s".repeat(2100)}`]: { status: 301, to: "https://x.test/n" } } }),
+      ...cloud({ redirectedUrls: { [`${page(2)}/${"s".repeat(2100)}`]: { status: 301, to: "https://x.test/n" } } }),
     });
-    expect(by(store, 2)).toBeUndefined();
+    expect(row(store, 2).state).toBe("open");
   });
 
-  test("the cap counts rows visited, not accepted: a valid row past 10k junk rows is never reached, and __proto__ is only a key", async () => {
+  test("the cap counts rows visited, not accepted: 10k junk rows stop at it, and a source named __proto__ is only a key", async () => {
     const junk: Record<string, unknown> = {};
     for (let i = 0; i < 10_000; i++) junk[`https://x.test/junk-${i}`] = { status: 200, to: 5 };
+    // a valid row past the cap is never reached; one before it is
+    const early = { [page(5)]: { status: 302, to: "https://x.test/n5" } };
     junk[page(2)] = { status: 301, to: "https://x.test/n2" };
     const store = await seeded();
     await runCloudSmartAudits({
       store,
-      ...withRedirect({
-        redirectedUrls: { ...junk, ["__proto__" as string]: { status: 301, to: "https://x.test/p" } } as never,
-      }),
+      ...cloud({ redirectedUrls: { ...early, ...junk, ["__proto__" as string]: { status: 301, to: "https://x.test/p" } } as never }),
     });
-    expect(by(store, 2)).toBeUndefined();
+    expect(row(store, 5).state).toBe("resolved");
+    expect(row(store, 2).state).toBe("open");
     expect(({} as { status?: unknown }).status).toBeUndefined();
   });
 

@@ -809,6 +809,15 @@ export interface AuditReport {
   redirects?: RedirectRow[];
   redirectsTotal?: number;
   /**
+   * TRANSPORT ONLY (#1759): the redirect rows the crawl recorded (#1762), whether or not `--include-pages` asked for
+   * the list, at most RESOLUTION_SIGNAL_LIMITS.maxRedirects. Never rendered or published as a field: the publish
+   * capper turns it into the resolution signal's `redirectedUrls`, so a cloud merge can tell a page that now
+   * redirects from one nothing looked at.
+   */
+  redirectedPages?: RedirectRow[];
+  /** TRANSPORT ONLY (#1759): how many redirect rows the crawl recorded, when more than `redirectedPages` lists. */
+  redirectedPagesTotal?: number;
+  /**
    * Where the seed URL's redirects resolved to, when that is a DIFFERENT site
    * from `baseUrl` — i.e. the redirect left the seed's registrable domain and
    * was refused rather than adopted. `baseUrl` always stays the site the user

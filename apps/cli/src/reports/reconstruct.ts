@@ -15,6 +15,7 @@ import {
   canonicalVariantMap,
   detachFromPage,
   foldChecksToCanonical,
+  createRedirectCollector,
   isRedirectSourcePage,
 } from "@squirrelscan/audit-engine";
 import { buildCacheStats, isScoreless } from "@squirrelscan/core-contracts";
@@ -613,6 +614,8 @@ export function reconstructReport(
     // keeps where each one went. Capped like the pages list, with the real count.
     const redirectRows: RedirectRow[] = [];
     let redirectsTotal = 0;
+    // Transport only (#1759): the same rows, collected whether or not the list was asked for.
+    const redirectCollector = createRedirectCollector();
 
     // 7. Load rule registry to get metadata
     // Stored results can include explicitly enabled opt-in rules. Reconstruction
@@ -687,6 +690,7 @@ export function reconstructReport(
       for (const page of batch) {
         // A redirecting URL is a redirect, not a page (#1762): not in pages[], not in the totals.
         if (isRedirectSourcePage(page)) {
+          redirectCollector.note(page);
           if (options?.includePageRuleCounts) {
             redirectsTotal++;
             if (redirectRows.length < JSON_REPORT_PAGES.maxEntries) {
@@ -1187,6 +1191,7 @@ export function reconstructReport(
       ...(redirectsTotal > 0
         ? { redirects: redirectRows, redirectsTotal }
         : {}),
+      ...redirectCollector.fields(),
       // #1829: coverage lost to throttling, in a form renderers can count
       // rather than parse out of the reason prose.
       ...(rateLimitedCount > 0

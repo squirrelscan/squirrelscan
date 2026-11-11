@@ -896,8 +896,8 @@ export async function runCloudSmartAudits(
   // array. The session settles the site's page set up front (it reads `priorPages`,
   // never a prior FINDING), which is what lets `carriedPageUrls` — and with it the
   // carried scoring fold — exist before the first prior arrives.
-  // (#1759) Evidence for the rows that resolve because their page now redirects: normalized, and bounded
-  // by the contract's cap whatever the body held. Never an input to a verdict.
+  // (#1759) The pages the crawl found redirecting, normalized and bounded by the contract's cap whatever the
+  // body held. A prior on one of them resolves (merge-core); a page the list does not name is judged as before.
   const redirects = redirectEvidenceOf(input.resolutionSignal);
   const priorPages = await store.getSitePages(siteKey);
   let onPersist: (record: PageFindingRecord) => void = () => {};

@@ -5,6 +5,8 @@
 // still see its hops. It is out of the page-rule universe, the page totals and every
 // content check.
 
+import type { RedirectRow as RedirectRow_ } from "@squirrelscan/core-contracts";
+import { RESOLUTION_SIGNAL_LIMITS } from "@squirrelscan/core-contracts/limits";
 import type { PageRecord } from "@squirrelscan/core-contracts/storage";
 import type { ParsedPage } from "@squirrelscan/rules";
 
@@ -57,4 +59,35 @@ export function pageRedirectEvidence(
 ): { status: number; to: string } | null {
   if (!page.finalUrl || !isRedirectSourcePage(page)) return null;
   return { status: redirectSourceEntry(page, {} as ParsedPage).statusCode, to: page.finalUrl };
+}
+
+/**
+ * Collects the crawl's redirect rows for the report's transport fields (#1759), at most RESOLUTION_SIGNAL_LIMITS.maxRedirects
+ * of them, counting every one. Call `note` for each stored page in the walk that already tests `isRedirectSourcePage`.
+ */
+export function createRedirectCollector(): {
+  note(page: RedirectRow): void;
+  fields(): { redirectedPages?: RedirectRow_[]; redirectedPagesTotal?: number };
+} {
+  const rows: RedirectRow_[] = [];
+  let total = 0;
+  return {
+    note(page) {
+      const evidence = pageRedirectEvidence(page);
+      if (!evidence) return;
+      total += 1;
+      if (rows.length < RESOLUTION_SIGNAL_LIMITS.maxRedirects) {
+        rows.push({
+          url: page.normalizedUrl,
+          finalUrl: evidence.to,
+          status: evidence.status,
+          hops: Math.max(1, (page.redirectChain?.hops.length ?? 2) - 1),
+        });
+      }
+    },
+    fields: () =>
+      total === 0
+        ? {}
+        : { redirectedPages: rows, ...(total > rows.length ? { redirectedPagesTotal: total } : {}) },
+  };
 }

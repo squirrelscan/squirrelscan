@@ -203,9 +203,14 @@ export function runSmartAudits(
       ...(redirects && redirects.length > 0
         ? {
             redirects: new Map(
+              // Keyed as the priors are (`page_findings` keys carry no trailing slash), not as the crawler
+              // keeps its own URLs, so `/old/` resolves the findings stored under `/old`.
               redirects.map(
                 (r) =>
-                  [r.normalizedUrl, { status: r.status, to: r.to }] as const
+                  [
+                    normalizePageUrl(r.normalizedUrl),
+                    { status: r.status, to: r.to },
+                  ] as const
               )
             ),
           }

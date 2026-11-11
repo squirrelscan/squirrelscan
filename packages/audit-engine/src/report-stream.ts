@@ -63,7 +63,7 @@ import type {
 } from "@squirrelscan/core-contracts";
 import type { ParsedPage, RuleRunResult } from "@squirrelscan/rules";
 import { isScoreless } from "@squirrelscan/core-contracts";
-import { isRedirectSourcePage } from "./redirect-source";
+import { createRedirectCollector, isRedirectSourcePage } from "./redirect-source";
 
 // ============================================
 // SITE-RECORD BUILDERS
@@ -668,6 +668,7 @@ export function buildV1Report(
     // read, and 8 bytes a page instead of a megabyte.
     const pageStatuses: Array<{ status: number }> = [];
     let pagesCrawled = 0;
+    const redirectCollector = createRedirectCollector();
     for (let offset = 0; ; offset += batchSize) {
       // Fail-loud, and a deliberate change from the single resident read this
       // replaced. That read degraded to `[]` on failure, which produced a
@@ -684,7 +685,10 @@ export function buildV1Report(
 
       for (const page of batch) {
         // A redirecting URL is a redirect, not a page (#1762): not in pages[], not in the totals.
-        if (isRedirectSourcePage(page)) continue;
+        if (isRedirectSourcePage(page)) {
+          redirectCollector.note(page);
+          continue;
+        }
         pagesCrawled++;
         pageStatuses.push({ status: page.status });
         // A variant is not a page of its own in the report (#858): it is counted with its canonical.
@@ -816,6 +820,8 @@ export function buildV1Report(
       ...(refusedSeedRedirect ? { finalUrl: refusedSeedRedirect } : {}),
       timestamp: new Date().toISOString(),
       totalPages: pagesCrawled - variantPages,
+      // Transport only (#1759): where the crawl's redirected pages went, for the resolution signal.
+      ...redirectCollector.fields(),
       passed,
       warnings,
       failed,
@@ -1034,6 +1040,7 @@ export function buildV2Report(
     // (matches streamPageRules / site-query.ts).
     const summaryPassSpan = logger.traceStart("v2:summaryPass");
     let pagesCrawled = 0;
+    const redirectCollector = createRedirectCollector();
     let contentPages = 0;
     let blockedPages = 0;
     let rateLimitedPages = 0;
@@ -1045,7 +1052,10 @@ export function buildV2Report(
 
       for (const page of batch) {
         // A redirecting URL is a redirect, not a page (#1762): not in the totals.
-        if (isRedirectSourcePage(page)) continue;
+        if (isRedirectSourcePage(page)) {
+          redirectCollector.note(page);
+          continue;
+        }
         pagesCrawled++;
         if (page.status >= 200 && page.status < 300) contentPages++;
         if (page.status === 401 || page.status === 403) blockedPages++;
@@ -1139,6 +1149,8 @@ export function buildV2Report(
       ...(refusedSeedRedirect ? { finalUrl: refusedSeedRedirect } : {}),
       timestamp: new Date().toISOString(),
       totalPages: pagesCrawled,
+      // Transport only (#1759): where the crawl's redirected pages went, for the resolution signal.
+      ...redirectCollector.fields(),
       passed,
       warnings,
       failed,

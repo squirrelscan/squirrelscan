@@ -122,6 +122,9 @@ export interface CappableReport {
   pageStatuses?: Array<{ url: string; status: number }> | null;
   /** URLs that redirected (#1762), when the report lists them (`--include-pages`): evidence for the signal (#1759). */
   redirects?: ReadonlyArray<{ url?: unknown; finalUrl?: unknown; status?: unknown }> | null;
+  /** Transport only (#1759): the crawl's redirect rows, always collected. Read into the signal, never published. */
+  redirectedPages?: ReadonlyArray<{ url?: unknown; finalUrl?: unknown; status?: unknown }> | null;
+  redirectedPagesTotal?: number | null;
   /** Never published: the capper builds the compact signal from `pages` itself. */
   resolutionSignal?: ResolutionSignal | null;
   /** Never trusted from the input: the capper builds its own from `pages`. */
@@ -1247,15 +1250,27 @@ function transportPages(report: CappableReport): Array<{ url: string; statusCode
   });
 }
 
-/** The report's redirect rows as the signal's evidence (#1759); anything malformed is left out. */
-function redirectEvidence(report: CappableReport): Array<{ url: string; status: number; to: string }> {
-  const out: Array<{ url: string; status: number; to: string }> = [];
-  for (const row of Array.isArray(report.redirects) ? report.redirects : []) {
-    if (typeof row?.url === "string" && typeof row.finalUrl === "string" && typeof row.status === "number") {
-      out.push({ url: row.url, status: row.status, to: row.finalUrl });
+/**
+ * The report's redirect rows as the signal's evidence (#1759): the crawl's own list first, then the
+ * `--include-pages` one, each source once; anything malformed is left out. `redirectsTotal` is how many the
+ * crawl recorded, so a list the budget later drops still says there were some.
+ */
+function redirectEvidence(report: CappableReport): {
+  redirects: Array<{ url: string; status: number; to: string }>;
+  redirectsTotal: number;
+} {
+  const out = new Map<string, { url: string; status: number; to: string }>();
+  for (const list of [report.redirectedPages, report.redirects]) {
+    for (const row of Array.isArray(list) ? list : []) {
+      if (typeof row?.url !== "string" || typeof row.finalUrl !== "string" || typeof row.status !== "number") continue;
+      if (!out.has(row.url)) out.set(row.url, { url: row.url, status: row.status, to: row.finalUrl });
     }
   }
-  return out;
+  const claimed = report.redirectedPagesTotal;
+  return {
+    redirects: [...out.values()],
+    redirectsTotal: Math.max(out.size, typeof claimed === "number" && Number.isSafeInteger(claimed) ? claimed : 0),
+  };
 }
 
 // ── Assembly ────────────────────────────────────────────────────
@@ -1343,7 +1358,7 @@ export function capReportForPublish<T extends CappableReport>(
     },
     // The capped report carries `checkTallies`, the one reader of the page
     // hashes a clipped list ships (#2673).
-    { pageHashes: true, redirects: redirectEvidence(report) },
+    { pageHashes: true, ...redirectEvidence(report) },
   );
   const pageStatuses = built.pageStatuses;
   const crawled = Array.isArray(report.pages) && report.pages.length > 0;
@@ -1397,6 +1412,8 @@ export function capReportForPublish<T extends CappableReport>(
     resolutionSignal: _resolutionSignal,
     resolutionSignalCompact: _resolutionSignalCompact,
     pageStatuses: _pageStatuses,
+    redirectedPages: _redirectedPages,
+    redirectedPagesTotal: _redirectedPagesTotal,
     ...rest
   } = report;
   const sections = (mode: SectionMode): Loose => ({

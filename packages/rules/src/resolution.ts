@@ -48,6 +48,8 @@ import { clipPageStatusesToBytes } from "./fold";
 interface ResolutionEvidence {
   /** (#1759) Redirected pages as `[source, status, destination]`, bounded; dropped first when the budget bites. */
   redirects: Array<[string, number, string]>;
+  /** (#1759) Redirected pages the crawl recorded, whether or not `redirects` names them all. Survives a drop. */
+  redirectsTotal: number;
   /** The crawled list as given, clipped to `maxCrawledUrls` (the original shape ships these). */
   crawledRaw: string[];
   /** `crawledRaw` normalized and deduped, in crawl order. */
@@ -455,6 +457,7 @@ function collectResolutionEvidence(
     hash,
     removed: new Map(),
     redirects: [],
+    redirectsTotal: 0,
   };
 }
 
@@ -718,6 +721,7 @@ function compactPayload(
     ...(hashes.length > 0 ? { hashes: hashes.join("") } : {}),
     ...(hashesNotEvaluated.size > 0 ? { hashesNotEvaluated: gaps(hashesNotEvaluated) } : {}),
     ...(evidence.redirects.length > 0 ? { redirects: evidence.redirects } : {}),
+    ...(evidence.redirectsTotal > 0 ? { redirectsTotal: evidence.redirectsTotal } : {}),
   };
 }
 
@@ -790,10 +794,18 @@ export function buildCompactResolutionSignal(
     pageHashes?: boolean;
     /** (#1759) Pages that redirected, as the crawl recorded them. Evidence only, bounded, never costs a resolution. */
     redirects?: ReadonlyArray<{ url: string; status: number; to: string }>;
+    /** (#1759) How many redirected pages the crawl recorded, when more than `redirects` lists. */
+    redirectsTotal?: number;
   } = {},
 ): CompactResolutionSignal | undefined {
   const evidence = collectResolutionEvidence(ruleResults, crawledPageUrls);
-  for (const r of options.redirects ?? []) {
+  const recorded = options.redirects ?? [];
+  const total = options.redirectsTotal;
+  evidence.redirectsTotal = Math.min(
+    Math.max(recorded.length, typeof total === "number" && Number.isSafeInteger(total) && total > 0 ? total : 0),
+    REPORT_LIMITS.maxPages,
+  );
+  for (const r of recorded) {
     if (evidence.redirects.length >= RESOLUTION_SIGNAL_LIMITS.maxRedirects) break;
     if (typeof r?.url !== "string" || typeof r?.to !== "string") continue;
     if (!Number.isSafeInteger(r.status) || r.status < 300 || r.status > 399) continue;
@@ -971,6 +983,7 @@ export function buildPublishResolution(
   options: {
     pageHashes?: boolean;
     redirects?: ReadonlyArray<{ url: string; status: number; to: string }>;
+    redirectsTotal?: number;
   } = {},
 ): PublishResolution {
   const crawled: string[] = [];

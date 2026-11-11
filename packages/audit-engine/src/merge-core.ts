@@ -33,6 +33,8 @@ import {
   resolutionUrlHash,
 } from "@squirrelscan/core-contracts/resolution";
 
+import { normalizePageUrl } from "@squirrelscan/utils/url";
+
 import { findingFingerprint } from "./fingerprint";
 import type { PageUrlSet } from "./scoring";
 
@@ -1167,6 +1169,7 @@ export function createMergeSession(
     passedCheckPages,
     notApplicablePages,
     notEvaluated,
+    redirects,
   } = input;
 
   // (#1759) Why a page's findings resolved, when the page itself changed: it redirects now, or it is gone.
@@ -1484,6 +1487,22 @@ export function createMergeSession(
       return;
     }
 
+    // (#1759) The page now redirects off its URL (a #1762 redirect row): it no longer serves the finding, so it
+    // resolves, whether or not the crawl listed it among the pages and whatever the checks said about a page
+    // with no body. Only a redirect to a DIFFERENT page counts: one that lands on the same page (a slash, a
+    // protocol) is that page, which the rules below judge as they always did. A page the crawl did not name as
+    // redirected is judged as before; absence of evidence resolves nothing.
+    const redirect = redirects?.get(prior.normalizedUrl);
+    if (redirect && normalizePageUrl(redirect.to) !== prior.normalizedUrl) {
+      sink.persist({
+        ...prior,
+        state: "resolved",
+        lastSeenCrawlId: crawlId,
+        lastSeenAt: now,
+      });
+      return;
+    }
+
     if (wasCrawled || signalCrawled) {
       // (#508) The check was skipped on this page this run while it ran elsewhere:
       // it was not evaluated, so its absence from the fresh findings proves
@@ -1697,6 +1716,8 @@ export function createMergeSession(
         const looked =
           crawledUrls.has(url) ||
           removedUrls.has(url) ||
+          // (#1759) A page found redirecting was looked at: its findings resolve.
+          (redirects?.has(url) ?? false) ||
           (resolution?.crawledUrls.has(url) ?? false);
         (looked ? openPages.reverified : openPages.carried).add(url);
         addPrior(prior);

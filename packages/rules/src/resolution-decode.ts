@@ -230,9 +230,18 @@ export async function decodeResolutionSignal(
   // `fromEntries` defines own properties, so a source URL named `__proto__` cannot reach the prototype.
   const redirectedUrls = Object.fromEntries(redirects);
 
+  // How many the crawl recorded, whatever the list kept; never below what it names, never past the crawl ceiling.
+  const recordedRedirects =
+    typeof payload.redirectsTotal === "number" &&
+    Number.isSafeInteger(payload.redirectsTotal) &&
+    payload.redirectsTotal > 0
+      ? Math.min(Math.max(payload.redirectsTotal, redirects.size), REPORT_LIMITS.maxPages)
+      : redirects.size;
+
   return {
     crawledUrls: urls,
     ...(redirects.size > 0 ? { redirectedUrls } : {}),
+    ...(recordedRedirects > 0 ? { redirectedCount: recordedRedirects } : {}),
     failing,
     ...(Object.keys(notEvaluated).length > 0 ? { notEvaluated } : {}),
     ...(truncated.length > 0 ? { truncated } : {}),

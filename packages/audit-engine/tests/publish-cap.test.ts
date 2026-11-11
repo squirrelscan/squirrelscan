@@ -1664,3 +1664,37 @@ describe("capReportForPublish: coverage-gap skip rows (#1775)", () => {
     }
   }, SLOW);
 });
+
+describe("capReportForPublish: redirect evidence for the resolution signal (#1759)", () => {
+  const rows = [
+    { url: `${SITE}/old-a`, finalUrl: `${SITE}/new-a`, status: 301, hops: 1 },
+    { url: `${SITE}/old-b`, finalUrl: `${SITE}/new-b`, status: 302, hops: 1 },
+  ];
+
+  test("the crawl's own redirect rows ride in the signal and never in the published body", async () => {
+    const input = { ...report(5), redirectedPages: rows, redirectedPagesTotal: 40 } as Report;
+    const capped = capReportForPublish(input);
+    const signal = await decodeResolutionSignal(capped.resolutionSignalCompact!);
+    expect(signal.redirectedUrls).toEqual({
+      [`${SITE}/old-a`]: { status: 301, to: `${SITE}/new-a` },
+      [`${SITE}/old-b`]: { status: 302, to: `${SITE}/new-b` },
+    });
+    // the crawl recorded more than the list names: the count survives
+    expect(signal.redirectedCount).toBe(40);
+    expect("redirectedPages" in capped).toBe(false);
+    expect("redirectedPagesTotal" in capped).toBe(false);
+  });
+
+  test("the --include-pages list is used too, each source once", async () => {
+    const input = { ...report(5), redirects: rows, redirectedPages: [rows[0]!] } as Report;
+    const signal = await decodeResolutionSignal(capReportForPublish(input).resolutionSignalCompact!);
+    expect(Object.keys(signal.redirectedUrls ?? {}).sort()).toEqual([`${SITE}/old-a`, `${SITE}/old-b`]);
+    expect(signal.redirectedCount).toBe(2);
+  });
+
+  test("a report with no redirects publishes a signal with neither field", async () => {
+    const signal = await decodeResolutionSignal(capReportForPublish(report(5)).resolutionSignalCompact!);
+    expect(signal.redirectedUrls).toBeUndefined();
+    expect(signal.redirectedCount).toBeUndefined();
+  });
+});

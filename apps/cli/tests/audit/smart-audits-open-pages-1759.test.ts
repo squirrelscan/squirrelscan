@@ -301,6 +301,92 @@ describe("resolvedBy on the local merge (#1759 b)", () => {
     await run(store.close());
   });
 
+  test("a redirect row the crawl did not list as a page still resolves the page's findings (AC1)", async () => {
+    const store = await seededStore();
+    await run(
+      runSmartAudits({
+        storage: store,
+        crawlId: "c2",
+        siteKey: SITE,
+        ...failingRun([0, 1, 3, 4, 5]),
+        // /page-2 is in no page row this run, as in a cloud audit; only the redirect list names it
+        pages: [0, 1, 3, 4, 5].map((i) => ({
+          normalizedUrl: url(i),
+          status: 200,
+        })),
+        redirects: [
+          { normalizedUrl: url(2), status: 301, to: `${SITE}/new-2` },
+        ],
+      })
+    );
+    expect(await payloadOf(store, url(2))).toEqual({
+      state: "resolved",
+      by: { kind: "redirected", status: 301, to: `${SITE}/new-2` },
+    });
+    await run(store.close());
+  });
+
+  test("a redirect row the crawler keeps with a trailing slash resolves the findings stored without one", async () => {
+    const store = new SQLiteStorage(":memory:");
+    await run(store.init());
+    // `page_findings` keys carry no trailing slash; the crawler's own URL for the redirecting page does (#1510)
+    const bare = `${SITE}/old`;
+    await run(
+      runSmartAudits({
+        storage: store,
+        crawlId: "c1",
+        siteKey: SITE,
+        freshFindings: flattenChecks(bare, META.id, [
+          {
+            name: META.name,
+            status: "fail",
+            message: "Missing meta title",
+            pageUrl: bare,
+          },
+        ]),
+        scoredPageUrls: [bare],
+        ruleMeta: RULE_META,
+        pages: [{ normalizedUrl: bare, status: 200 }],
+      })
+    );
+    await run(
+      runSmartAudits({
+        storage: store,
+        crawlId: "c2",
+        siteKey: SITE,
+        ...failingRun([0]),
+        pages: [{ normalizedUrl: url(0), status: 200 }],
+        redirects: [
+          { normalizedUrl: `${bare}/`, status: 301, to: `${SITE}/new/` },
+        ],
+      })
+    );
+    expect(await payloadOf(store, bare)).toEqual({
+      state: "resolved",
+      by: { kind: "redirected", status: 301, to: `${SITE}/new/` },
+    });
+    await run(store.close());
+  });
+
+  test("a redirect to the same page resolves nothing", async () => {
+    const store = await seededStore();
+    await run(
+      runSmartAudits({
+        storage: store,
+        crawlId: "c2",
+        siteKey: SITE,
+        ...failingRun([0, 1, 3, 4, 5]),
+        pages: [0, 1, 3, 4, 5].map((i) => ({
+          normalizedUrl: url(i),
+          status: 200,
+        })),
+        redirects: [{ normalizedUrl: url(2), status: 301, to: `${url(2)}/` }],
+      })
+    );
+    expect(await payloadOf(store, url(2))).toMatchObject({ state: "open" });
+    await run(store.close());
+  });
+
   test("no redirect evidence, no reason: the resolution is the same", async () => {
     const store = await seededStore();
     await run(
