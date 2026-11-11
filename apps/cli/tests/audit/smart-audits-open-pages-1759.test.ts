@@ -235,3 +235,90 @@ describe("coverage.openPages (#1759)", () => {
     await run(store.close());
   });
 });
+
+describe("resolvedBy on the local merge (#1759 b)", () => {
+  const payloadOf = async (store: SQLiteStorage, page: string) => {
+    const rows = await run(store.getFindings(SITE));
+    const row = rows.find((f) => f.normalizedUrl === page);
+    return {
+      state: row?.state,
+      by: (JSON.parse(row?.payload ?? "{}") as { resolvedBy?: unknown })
+        .resolvedBy,
+    };
+  };
+
+  test("a redirect row's findings resolve with the status and destination", async () => {
+    const store = await seededStore();
+    await run(
+      runSmartAudits({
+        storage: store,
+        crawlId: "c2",
+        siteKey: SITE,
+        ...failingRun([0, 1, 3, 4, 5]),
+        pages: [0, 1, 2, 3, 4, 5].map((i) => ({
+          normalizedUrl: url(i),
+          status: i === 2 ? 301 : 200,
+        })),
+        redirects: [
+          { normalizedUrl: url(2), status: 301, to: `${SITE}/new-2` },
+        ],
+      })
+    );
+    expect(await payloadOf(store, url(2))).toEqual({
+      state: "resolved",
+      by: { kind: "redirected", status: 301, to: `${SITE}/new-2` },
+    });
+    // a page that still fails keeps its row and gains no reason
+    expect(await payloadOf(store, url(0))).toMatchObject({
+      state: "open",
+      by: undefined,
+    });
+    await run(store.close());
+  });
+
+  test("a 410 page is staled with the status in its evidence, a 404 too", async () => {
+    const store = await seededStore();
+    await run(
+      runSmartAudits({
+        storage: store,
+        crawlId: "c2",
+        siteKey: SITE,
+        ...failingRun([0, 1, 4, 5]),
+        pages: [0, 1, 2, 3, 4, 5].map((i) => ({
+          normalizedUrl: url(i),
+          status: i === 2 ? 410 : i === 3 ? 404 : 200,
+        })),
+      })
+    );
+    expect(await payloadOf(store, url(2))).toEqual({
+      state: "stale",
+      by: { kind: "removed", status: 410 },
+    });
+    expect(await payloadOf(store, url(3))).toEqual({
+      state: "stale",
+      by: { kind: "removed", status: 404 },
+    });
+    await run(store.close());
+  });
+
+  test("no redirect evidence, no reason: the resolution is the same", async () => {
+    const store = await seededStore();
+    await run(
+      runSmartAudits({
+        storage: store,
+        crawlId: "c2",
+        siteKey: SITE,
+        ...failingRun([0, 1, 3, 4, 5]),
+        pages: [0, 1, 2, 3, 4, 5].map((i) => ({
+          normalizedUrl: url(i),
+          status: i === 2 ? 301 : 200,
+        })),
+      })
+    );
+    expect(await payloadOf(store, url(2))).toEqual({
+      state: "resolved",
+      by: undefined,
+    });
+    await run(store.close());
+  });
+});

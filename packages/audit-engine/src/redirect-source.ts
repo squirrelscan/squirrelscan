@@ -8,7 +8,12 @@
 import type { PageRecord } from "@squirrelscan/core-contracts/storage";
 import type { ParsedPage } from "@squirrelscan/rules";
 
-export { isRedirectSourcePage } from "@squirrelscan/crawler/redirect-row";
+import { isRedirectSourcePage } from "@squirrelscan/crawler/redirect-row";
+
+export { isRedirectSourcePage };
+
+/** A stored page as the redirect predicate reads it. */
+type RedirectRow = Parameters<typeof isRedirectSourcePage>[0];
 
 /** The status the redirecting URL itself answered with: its first hop's 3xx when the crawl saw one. */
 export function redirectSourceStatus(page: Pick<PageRecord, "redirectChain">): number {
@@ -41,4 +46,15 @@ export function redirectSourceEntry(
     redirectChain: page.redirectChain,
     redirectSource: true,
   };
+}
+
+/**
+ * Where a redirect source page lands, as evidence for the findings that resolve on it (#1759): the status
+ * its own URL answered and the destination, or null when the page is not a redirect row.
+ */
+export function pageRedirectEvidence(
+  page: RedirectRow,
+): { status: number; to: string } | null {
+  if (!page.finalUrl || !isRedirectSourcePage(page)) return null;
+  return { status: redirectSourceEntry(page, {} as ParsedPage).statusCode, to: page.finalUrl };
 }

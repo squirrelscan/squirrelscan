@@ -23,6 +23,8 @@ import {
   splitSuccessor,
   successorListsLocator,
   resolutionCheckKey,
+  type ResolutionRedirect,
+  type ResolvedBy,
   type SupersededOutcome,
   isRuleNotApplicableReason,
   SCAN_TRUNCATED_SKIP_REASON,
@@ -173,6 +175,12 @@ export interface ComputeMergeInput {
   supersededChecks?: ReadonlyMap<string, readonly string[]>;
   /** Real per-page HTTP status (normalizedUrl -> status) for site_pages. */
   statusByUrl: Map<string, number>;
+  /**
+   * (#1759) Pages this run found redirecting off their URL (a #1762 redirect row), by normalized source
+   * URL. EVIDENCE ONLY: a finding on such a page resolves or carries exactly as it would without this; a
+   * row that resolves gets `resolvedBy` in its payload, naming the status and destination.
+   */
+  redirects?: ReadonlyMap<string, ResolutionRedirect>;
   /** Prior OPEN findings for the site (caller loads with state ["open"]). */
   priorFindings: PageFindingRecord[];
   /** Prior site pages for the site. */
@@ -1085,6 +1093,41 @@ function dedupeByKey(
   return out.length === priors.length ? priors : out;
 }
 
+/** The page-level reason a record resolved or went stale, or undefined when it is not one (#1759). */
+function resolvedByFor(
+  record: PageFindingRecord,
+  input: Pick<MergeSessionInput, "redirects" | "removedUrls" | "statusByUrl">
+): ResolvedBy | undefined {
+  if (record.state === "stale" && input.removedUrls.has(record.normalizedUrl)) {
+    return { kind: "removed", status: input.statusByUrl.get(record.normalizedUrl) ?? 404 };
+  }
+  if (record.state === "resolved") {
+    const redirect = input.redirects?.get(record.normalizedUrl);
+    if (redirect) return { kind: "redirected", status: redirect.status, to: redirect.to };
+  }
+  return undefined;
+}
+
+/** Whether a record's payload names why its page changed (#1759). */
+export function hasResolvedBy(record: PageFindingRecord): boolean {
+  return record.payload?.includes('"resolvedBy"') ?? false;
+}
+
+/** The record with `resolvedBy` merged into its payload; a payload that is not a JSON object is kept as it is. */
+function withResolvedBy(record: PageFindingRecord, by: ResolvedBy): PageFindingRecord {
+  let payload: Record<string, unknown> = {};
+  if (record.payload) {
+    try {
+      const parsed: unknown = JSON.parse(record.payload);
+      if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return record;
+      payload = parsed as Record<string, unknown>;
+    } catch {
+      return record;
+    }
+  }
+  return { ...record, payload: JSON.stringify({ ...payload, resolvedBy: by }) };
+}
+
 /**
  * The merge as a resumable state machine (#1876), so prior findings can arrive
  * from a cursor in bounded batches instead of as one materialized array.
@@ -1104,7 +1147,7 @@ function dedupeByKey(
  */
 export function createMergeSession(
   input: MergeSessionInput,
-  sink: MergePriorSink
+  outerSink: MergePriorSink
 ): MergeSession {
   const {
     siteKey,
@@ -1125,6 +1168,16 @@ export function createMergeSession(
     notApplicablePages,
     notEvaluated,
   } = input;
+
+  // (#1759) Why a page's findings resolved, when the page itself changed: it redirects now, or it is gone.
+  // Added at the sink so every path that resolves or stales a row (crawled clean, signal, removal) says it.
+  const sink: MergePriorSink = {
+    active: (finding) => outerSink.active(finding),
+    persist: (record) => {
+      const by = resolvedByFor(record, input);
+      outerSink.persist(by ? withResolvedBy(record, by) : record);
+    },
+  };
 
   // Index fresh findings by key (latest wins on dup keys within a run).
   const freshByKey = new Map<string, FlatFinding>();

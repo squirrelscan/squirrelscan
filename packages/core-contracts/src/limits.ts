@@ -577,6 +577,9 @@ export const RESOLUTION_SIGNAL_LIMITS = {
   // Max `${ruleId}|${checkName}` keys (catalog ≈ 261 rules × a few check
   // classes each; 2000 is generous headroom).
   maxChecks: 2_000,
+  // (#1759) Redirected pages named in a resolution signal (`redirectedUrls`). Evidence for a resolved
+  // finding, never a verdict: a clipped list only costs the "now redirects to X" line.
+  maxRedirects: 500,
 } as const;
 
 // #2658: one byte budget for the two publish fields sized by pages CRAWLED rather

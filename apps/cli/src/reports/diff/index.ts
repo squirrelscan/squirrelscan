@@ -1,3 +1,5 @@
+import type { ResolvedBy } from "@squirrelscan/core-contracts/resolution";
+
 import { LINK_COVERAGE_DETAIL_KEYS } from "@squirrelscan/core-contracts";
 import {
   buildSupersededIndex,
@@ -347,7 +349,9 @@ function makeNotComparedJudge(
   current: AuditReport,
   checkDecls: ReadonlyMap<string, readonly RuleCheckDecl[]>,
   superseded: ReadonlyMap<string, readonly string[]>
-): (issue: IssueInstance) => Omit<NotComparedIssue, "issue"> | null {
+): ((issue: IssueInstance) => Omit<NotComparedIssue, "issue"> | null) & {
+  changedPages: ReadonlyMap<string, ResolvedBy>;
+} {
   const sameOrigin = originOf(baseline.baseUrl) === originOf(current.baseUrl);
   const targetDigest = (r: AuditReport) => r.scanScope?.targeted?.digest;
   const sameTargetList =
@@ -367,8 +371,14 @@ function makeNotComparedJudge(
   const norm = (url: string) => normalizeTargetId(url, current.baseUrl);
   // Empty when the report does not list its pages: nothing then says a page was not crawled.
   const crawled = new Set((current.pages ?? []).map((p) => norm(p.url)));
+  // (#1759) Pages the current audit fetched and found changed: a redirect row (#1762) is not in `pages`, and a
+  // 404 or 410 is a page the crawl could not store. Neither is "not crawled": the audit looked, and the page
+  // is gone from its URL, which is what resolves the findings it held.
+  const changedPages = changedPageEvidence(current, norm);
 
-  return (issue) => {
+  const judge = (
+    issue: IssueInstance
+  ): Omit<NotComparedIssue, "issue"> | null => {
     if (!sameOrigin) return { reason: "different-scope" };
 
     const base = baseRuns.get(issue.ruleId);
@@ -493,7 +503,7 @@ function makeNotComparedJudge(
         for (const p of c.pages ?? []) skippedHere.add(norm(p));
       }
       for (const page of pages) {
-        if (crawled.size > 0 && !crawled.has(page)) {
+        if (crawled.size > 0 && !crawled.has(page) && !changedPages.has(page)) {
           return { reason: "page-not-crawled", detail: page };
         }
         if (skippedHere.has(page)) {
@@ -529,6 +539,29 @@ function makeNotComparedJudge(
     }
     return null;
   };
+  return Object.assign(judge, { changedPages });
+}
+
+/** Why each page of the current audit that is neither stored as a page nor still there reads as changed (#1759). */
+function changedPageEvidence(
+  current: AuditReport,
+  norm: (url: string) => string
+): Map<string, ResolvedBy> {
+  const out = new Map<string, ResolvedBy>();
+  for (const row of current.unstoredPages ?? []) {
+    const match = /^http-(404|410)$/.exec(row.reason);
+    if (match)
+      out.set(norm(row.url), { kind: "removed", status: Number(match[1]) });
+  }
+  // A redirect row wins over an unstored row for the same URL: it names where the page went.
+  for (const row of current.redirects ?? []) {
+    out.set(norm(row.url), {
+      kind: "redirected",
+      status: row.status,
+      to: row.finalUrl,
+    });
+  }
+  return out;
 }
 
 export function diffReports(
@@ -590,8 +623,21 @@ export function diffReports(
   // An issue that is gone is removed (fixed) only when its rule ran over the same scope; else it is not compared.
   const removeOrNotCompare = (issue: IssueInstance) => {
     const why = judge(issue);
-    if (why) notCompared.push({ issue, ...why });
-    else removed.push(issue);
+    if (why) {
+      notCompared.push({ issue, ...why });
+      return;
+    }
+    // (#1759) Gone because its page redirects or is gone, not because the markup was fixed: say so.
+    const pages =
+      issue.target.type === "page"
+        ? [issue.target.id]
+        : (issue.sourcePages ?? []).map((p) =>
+            normalizeTargetId(p, current.baseUrl)
+          );
+    const by = pages
+      .map((p) => judge.changedPages.get(p))
+      .find((b) => b !== undefined);
+    removed.push(by ? { ...issue, resolvedBy: by } : issue);
   };
   for (const [fingerprint, issue] of baselineMap) {
     if (currentMap.has(fingerprint)) continue;

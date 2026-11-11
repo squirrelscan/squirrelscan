@@ -72,7 +72,7 @@ export {
   robotsBlockedPageCount,
   targetedCoverageFor,
 } from "./report-stream";
-export { isRedirectSourcePage } from "./redirect-source";
+export { isRedirectSourcePage, pageRedirectEvidence } from "./redirect-source";
 export { summarizeOpenPages } from "./open-page-coverage";
 export type { FrontierReach, OpenPageCoverageInput, UntouchedPageCounts } from "./open-page-coverage";
 export type {
@@ -113,6 +113,7 @@ export {
   computeMerge,
   createNotEvaluatedCollector,
 } from "./merge";
+export { hasResolvedBy } from "./merge-core";
 export type {
   FlatFinding,
   MergedFinding,

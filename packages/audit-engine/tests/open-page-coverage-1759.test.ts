@@ -283,3 +283,109 @@ describe("summarizeOpenPages", () => {
     ).toEqual({ reverified: 0, carried: 3, skippedByBudget: 1, notFetched: 1, noLongerLinked: 1 });
   });
 });
+
+describe("resolvedBy on findings that resolve because their page changed (#1759 b)", () => {
+  const redirects = { [page(2)]: { status: 301, to: "https://x.test/new-2" } };
+  const withRedirect = (extra: Record<string, unknown> = {}) => {
+    // The evidence only labels a resolution the signal already licenses: here the check ran clean on the page.
+    const rr = ruleResults([failing(0), passing(1), passing(2)]);
+    return {
+      ...partial({ ruleResults: rr }),
+      pageStatuses: [...statuses(0, 1), { url: page(2), status: 301 }],
+      resolutionSignal: { ...buildResolutionSignal(rr, [page(0), page(1), page(2)]), ...extra },
+    };
+  };
+  const row = (store: MemStore, i: number) =>
+    [...store.findings.values()].find((f) => f.normalizedUrl === page(i))!;
+  const by = (store: MemStore, i: number): unknown =>
+    (JSON.parse(row(store, i).payload ?? "{}") as { resolvedBy?: unknown }).resolvedBy;
+
+  test("a 301 page resolves with the status and destination in the row's evidence", async () => {
+    const store = await seeded();
+    await runCloudSmartAudits({ store, ...withRedirect({ redirectedUrls: redirects }) });
+    expect(row(store, 2).state).toBe("resolved");
+    expect(by(store, 2)).toEqual({ kind: "redirected", status: 301, to: "https://x.test/new-2" });
+    // a page fixed in place carries no page-level reason
+    expect(row(store, 1).state).toBe("resolved");
+    expect(by(store, 1)).toBeUndefined();
+  });
+
+  test("a signal without the field still merges, and the resolution is the same", async () => {
+    const store = await seeded();
+    await runCloudSmartAudits({ store, ...withRedirect() });
+    expect(row(store, 2).state).toBe("resolved");
+    expect(by(store, 2)).toBeUndefined();
+  });
+
+  test("a 410 page goes stale and names 410; a 404 names 404", async () => {
+    const store = await seeded();
+    await runCloudSmartAudits({
+      store,
+      ...partial({
+        pageStatuses: [...statuses(0, 1), { url: page(2), status: 410 }, { url: page(3), status: 404 }],
+      }),
+    });
+    expect(row(store, 2).state).toBe("stale");
+    expect(by(store, 2)).toEqual({ kind: "removed", status: 410 });
+    expect(by(store, 3)).toEqual({ kind: "removed", status: 404 });
+  });
+
+  test("evidence never changes a verdict: a redirect named for a page that still fails does not resolve it", async () => {
+    const store = await seeded();
+    const rr = ruleResults([failing(0), passing(1)]);
+    await runCloudSmartAudits({
+      store,
+      ...partial({
+        ruleResults: rr,
+        resolutionSignal: {
+          ...buildResolutionSignal(rr, [page(0), page(1)]),
+          redirectedUrls: { [page(0)]: { status: 301, to: "https://x.test/elsewhere" } },
+        },
+      }),
+    });
+    expect(row(store, 0).state).toBe("open");
+    expect(by(store, 0)).toBeUndefined();
+  });
+
+  test("an oversized, non-http or script destination is dropped before it reaches a row", async () => {
+    const huge = `https://x.test/${"a".repeat(2100)}`;
+    for (const to of [huge, "javascript:alert(1)", "data:text/html,x", "ftp://x.test/f", "not a url", ""]) {
+      const store = await seeded();
+      await runCloudSmartAudits({ store, ...withRedirect({ redirectedUrls: { [page(2)]: { status: 301, to } } }) });
+      // the page still resolves (the check ran clean there); only the evidence is refused
+      expect(row(store, 2).state, to.slice(0, 30)).toBe("resolved");
+      expect(by(store, 2), to.slice(0, 30)).toBeUndefined();
+    }
+    const store = await seeded();
+    await runCloudSmartAudits({
+      store,
+      ...withRedirect({ redirectedUrls: { [`${page(2)}/${"s".repeat(2100)}`]: { status: 301, to: "https://x.test/n" } } }),
+    });
+    expect(by(store, 2)).toBeUndefined();
+  });
+
+  test("the cap counts rows visited, not accepted: a valid row past 10k junk rows is never reached, and __proto__ is only a key", async () => {
+    const junk: Record<string, unknown> = {};
+    for (let i = 0; i < 10_000; i++) junk[`https://x.test/junk-${i}`] = { status: 200, to: 5 };
+    junk[page(2)] = { status: 301, to: "https://x.test/n2" };
+    const store = await seeded();
+    await runCloudSmartAudits({
+      store,
+      ...withRedirect({
+        redirectedUrls: { ...junk, ["__proto__" as string]: { status: 301, to: "https://x.test/p" } } as never,
+      }),
+    });
+    expect(by(store, 2)).toBeUndefined();
+    expect(({} as { status?: unknown }).status).toBeUndefined();
+  });
+
+  test("malformed evidence is ignored, not an error", async () => {
+    const store = await seeded();
+    await runCloudSmartAudits({
+      store,
+      ...withRedirect({ redirectedUrls: { [page(2)]: { status: 200, to: 5 } } as never }),
+    });
+    expect(row(store, 2).state).toBe("resolved");
+    expect(by(store, 2)).toBeUndefined();
+  });
+});

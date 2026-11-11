@@ -20,8 +20,20 @@ import {
 import {
   type CompactResolutionPayload,
   type CompactResolutionSignal,
+  type ResolutionRedirect,
   resolutionUrlHash,
 } from "@squirrelscan/core-contracts/resolution";
+
+/** A destination worth keeping as evidence: bounded, and http(s) only (never `javascript:` or `data:`). */
+const isHttpUrl = (value: string): boolean => {
+  if (value.length === 0 || value.length > REPORT_LIMITS.maxUrlLength) return false;
+  try {
+    const protocol = new URL(value).protocol;
+    return protocol === "http:" || protocol === "https:";
+  } catch {
+    return false;
+  }
+};
 
 const isStringArray = (value: unknown, max: number, maxLength: number): value is string[] =>
   Array.isArray(value) &&
@@ -194,8 +206,33 @@ export async function decodeResolutionSignal(
     throw new Error("compact resolution payload: bad removedCount");
   }
 
+  // (#1759) Evidence only: a malformed row is dropped, never a reason to refuse the signal.
+  const redirects = new Map<string, ResolutionRedirect>();
+  if (Array.isArray(payload.redirects) && payload.redirects.length <= limits.maxRedirects) {
+    for (const row of payload.redirects) {
+      if (
+        !Array.isArray(row) ||
+        row.length !== 3 ||
+        typeof row[0] !== "string" ||
+        typeof row[1] !== "number" ||
+        typeof row[2] !== "string" ||
+        !Number.isSafeInteger(row[1]) ||
+        row[1] < 300 ||
+        row[1] > 399 ||
+        row[0].length > REPORT_LIMITS.maxUrlLength ||
+        !isHttpUrl(row[2])
+      ) {
+        continue;
+      }
+      redirects.set(row[0], { status: row[1], to: row[2] });
+    }
+  }
+  // `fromEntries` defines own properties, so a source URL named `__proto__` cannot reach the prototype.
+  const redirectedUrls = Object.fromEntries(redirects);
+
   return {
     crawledUrls: urls,
+    ...(redirects.size > 0 ? { redirectedUrls } : {}),
     failing,
     ...(Object.keys(notEvaluated).length > 0 ? { notEvaluated } : {}),
     ...(truncated.length > 0 ? { truncated } : {}),

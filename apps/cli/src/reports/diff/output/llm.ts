@@ -55,6 +55,15 @@ function formatIssue(issue: IssueInstance, level: number): string[] {
     lines.push(`${indent(level + 1)}Meta: ${metaParts}`);
   }
 
+  const by = issue.resolvedBy;
+  if (by) {
+    lines.push(
+      `${indent(level + 1)}<resolved-by kind="${by.kind}" status="${by.status}"${
+        by.kind === "redirected" ? ` to="${escapeXml(by.to)}"` : ""
+      }/>`
+    );
+  }
+
   lines.push(`${indent(level)}</issue>`);
   return lines;
 }

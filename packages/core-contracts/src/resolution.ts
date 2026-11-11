@@ -95,7 +95,29 @@ export interface ResolutionSignal {
    * evaluated that page.
    */
   crawledHashes?: string[];
+  /**
+   * (#1759) Crawled pages that now redirect off their URL (a #1762 redirect row, status 3xx), by raw source
+   * URL, with the status the URL itself answered and the page it lands on. OPTIONAL and EVIDENCE ONLY: the
+   * merge resolves such a page's findings the way it always did (the page was crawled and no check fails
+   * there) and records this as the reason on each resolved row (`resolvedBy`). A reader that ignores it, or
+   * a producer that never sends it, changes no verdict. At most RESOLUTION_SIGNAL_LIMITS.maxRedirects.
+   */
+  redirectedUrls?: Record<string, ResolutionRedirect>;
 }
+
+/** Where a crawled URL redirected (#1759): its own first-hop 3xx and the landing URL. */
+export interface ResolutionRedirect {
+  status: number;
+  to: string;
+}
+
+/**
+ * Why a finding resolved or went stale because its PAGE changed (#1759), written into the resolved row's
+ * payload as `resolvedBy`: the page now redirects (status and destination), or answered 404/410 (status).
+ */
+export type ResolvedBy =
+  | { kind: "redirected"; status: number; to: string }
+  | { kind: "removed"; status: number };
 
 /**
  * (#2658) The resolution signal as the publish producers send it now:
@@ -122,6 +144,8 @@ export interface CompactResolutionSignal {
  */
 export interface CompactResolutionPayload {
   v: 1;
+  /** (#1759) Redirected pages as `[sourceUrl, status, destinationUrl]`, bounded; see ResolutionSignal.redirectedUrls. */
+  redirects?: Array<[string, number, string]>;
   /** Crawled pages, NORMALIZED, deduped, sorted. All of them when `complete`. */
   urls: string[];
   /**

@@ -20,12 +20,13 @@ import type {
   SitePageRecord,
   OpenPageCoverage,
 } from "@squirrelscan/core-contracts";
-import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
+import { REPORT_LIMITS, RESOLUTION_SIGNAL_LIMITS } from "@squirrelscan/core-contracts/limits";
 import {
   buildSupersededIndex,
   isRuleNotApplicableReason,
   resolutionCheckKey,
   resolutionUrlHash,
+  type ResolutionRedirect,
 } from "@squirrelscan/core-contracts/resolution";
 // `/types` (leaf type module) not the barrel — see scoring.ts. (#195)
 import { unfoldAggregateCheck } from "@squirrelscan/rules/fold";
@@ -37,6 +38,7 @@ import {
   createMergeSession,
   createNotEvaluatedCollector,
   flattenChecks,
+  hasResolvedBy,
   isRunLocalRuleErrorFinding,
   itemListComplete,
   pageCheckKey,
@@ -894,6 +896,9 @@ export async function runCloudSmartAudits(
   // array. The session settles the site's page set up front (it reads `priorPages`,
   // never a prior FINDING), which is what lets `carriedPageUrls` — and with it the
   // carried scoring fold — exist before the first prior arrives.
+  // (#1759) Evidence for the rows that resolve because their page now redirects: normalized, and bounded
+  // by the contract's cap whatever the body held. Never an input to a verdict.
+  const redirects = redirectEvidenceOf(input.resolutionSignal);
   const priorPages = await store.getSitePages(siteKey);
   let onPersist: (record: PageFindingRecord) => void = () => {};
   let onActive: (finding: MergedFinding) => void = () => {};
@@ -916,6 +921,7 @@ export async function runCloudSmartAudits(
       passedCheckPages,
       notApplicablePages,
       notEvaluated,
+      ...(redirects ? { redirects } : {}),
     },
     {
       persist: (record) => onPersist(record),
@@ -1023,7 +1029,8 @@ export async function runCloudSmartAudits(
     persistedFindings += 1;
     // Findings on a page that 404/410'd are staled transactionally by
     // `markPagesRemoved` below, so the row written here would be overwritten.
-    if (removedUrls.has(record.normalizedUrl)) return;
+    // (#1759) Unless the row carries the reason the page is gone: the bulk stale write leaves its payload be.
+    if (removedUrls.has(record.normalizedUrl) && !hasResolvedBy(record)) return;
     (persistWhileStreaming ? pendingWrites : deferredWrites).push(record);
   };
 
@@ -1337,6 +1344,51 @@ export async function runCloudSmartAudits(
     replayedUnknownPages,
     completeStore: !!completeStore,
   };
+}
+
+/** A redirect destination worth recording as evidence: a bounded http(s) URL, never a script or data scheme. */
+function isHttpUrl(value: unknown): value is string {
+  if (typeof value !== "string" || value.length === 0 || value.length > REPORT_LIMITS.maxUrlLength) return false;
+  try {
+    const protocol = new URL(value).protocol;
+    return protocol === "http:" || protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The signal's redirected pages by normalized source URL, or undefined when it names none (#1759).
+ *
+ * The field comes from a client body, so it gets the decoder's checks and one more: the cap counts what is
+ * VISITED, not what is accepted, so an object of junk rows cannot make this scan for ever. A source or
+ * destination past the URL length bound, a destination that is not http(s), and a status outside 3xx are
+ * dropped. A Map keys the result, so a source named `__proto__` is only a key.
+ */
+function redirectEvidenceOf(
+  signal: ResolutionSignal | undefined,
+): ReadonlyMap<string, ResolutionRedirect> | undefined {
+  const raw = signal?.redirectedUrls;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const out = new Map<string, ResolutionRedirect>();
+  let visited = 0;
+  for (const source in raw) {
+    if (++visited > RESOLUTION_SIGNAL_LIMITS.maxRedirects) break;
+    if (!Object.hasOwn(raw, source) || source.length > REPORT_LIMITS.maxUrlLength) continue;
+    const row = (raw as Record<string, ResolutionRedirect | undefined>)[source];
+    if (
+      !row ||
+      typeof row !== "object" ||
+      !Number.isSafeInteger(row.status) ||
+      row.status < 300 ||
+      row.status > 399 ||
+      !isHttpUrl(row.to)
+    ) {
+      continue;
+    }
+    out.set(normalizePageUrl(source), { status: row.status, to: row.to });
+  }
+  return out.size > 0 ? out : undefined;
 }
 
 /** Pages in either set, each once: a page can have both a prior row and one written over its twin. */

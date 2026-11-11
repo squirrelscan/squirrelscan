@@ -2,13 +2,14 @@ import { writeReportFile } from "@/reports/utils";
 
 import type { DiffChange, DiffReport, IssueInstance } from "../types";
 
-import { notComparedRows } from "../not-compared";
+import { notComparedRows, resolvedByText } from "../not-compared";
 
 function formatIssue(issue: IssueInstance): string {
   const label = issue.target.label ? ` (${issue.target.label})` : "";
   const target = `${issue.target.type}:${issue.target.id}${label}`;
   const status = issue.status === "fail" ? "ERROR" : "WARN";
-  return `${status} ${issue.ruleId} ${issue.checkName} - ${issue.message} [${target}] (${issue.fingerprint})`;
+  const resolved = resolvedByText(issue);
+  return `${status} ${issue.ruleId} ${issue.checkName} - ${issue.message} [${target}] (${issue.fingerprint})${resolved ? ` - resolved: ${resolved}` : ""}`;
 }
 
 function formatChange(change: DiffChange): string {

@@ -46,6 +46,8 @@ import { clipPageStatusesToBytes } from "./fold";
  * the input both signal shapes are encoded from.
  */
 interface ResolutionEvidence {
+  /** (#1759) Redirected pages as `[source, status, destination]`, bounded; dropped first when the budget bites. */
+  redirects: Array<[string, number, string]>;
   /** The crawled list as given, clipped to `maxCrawledUrls` (the original shape ships these). */
   crawledRaw: string[];
   /** `crawledRaw` normalized and deduped, in crawl order. */
@@ -452,6 +454,7 @@ function collectResolutionEvidence(
     truncated,
     hash,
     removed: new Map(),
+    redirects: [],
   };
 }
 
@@ -714,6 +717,7 @@ function compactPayload(
       : {}),
     ...(hashes.length > 0 ? { hashes: hashes.join("") } : {}),
     ...(hashesNotEvaluated.size > 0 ? { hashesNotEvaluated: gaps(hashesNotEvaluated) } : {}),
+    ...(evidence.redirects.length > 0 ? { redirects: evidence.redirects } : {}),
   };
 }
 
@@ -782,9 +786,21 @@ export function buildCompactResolutionSignal(
   // the capped rescore reads them (it needs `checkTallies`), so only a producer
   // that sends tallies (the report capper) asks: for any other a hash only takes
   // room the listed prefix could use.
-  options: { pageHashes?: boolean } = {},
+  options: {
+    pageHashes?: boolean;
+    /** (#1759) Pages that redirected, as the crawl recorded them. Evidence only, bounded, never costs a resolution. */
+    redirects?: ReadonlyArray<{ url: string; status: number; to: string }>;
+  } = {},
 ): CompactResolutionSignal | undefined {
   const evidence = collectResolutionEvidence(ruleResults, crawledPageUrls);
+  for (const r of options.redirects ?? []) {
+    if (evidence.redirects.length >= RESOLUTION_SIGNAL_LIMITS.maxRedirects) break;
+    if (typeof r?.url !== "string" || typeof r?.to !== "string") continue;
+    if (!Number.isSafeInteger(r.status) || r.status < 300 || r.status > 399) continue;
+    if (r.url.length > REPORT_LIMITS.maxUrlLength || r.to.length > REPORT_LIMITS.maxUrlLength) continue;
+    if (!/^https?:\/\//i.test(r.to)) continue;
+    evidence.redirects.push([r.url, r.status, r.to]);
+  }
   if (evidence.crawled.length === 0 && evidence.failing.size === 0) return undefined;
   for (const { url, status } of removedPages) {
     if (!REMOVED_PAGE_STATUSES.has(status)) continue;
@@ -801,7 +817,12 @@ export function buildCompactResolutionSignal(
   const clipModes = options.pageHashes ? [true, false] : [false];
 
   const all = evidence.crawled.length;
-  const whole = fit(all);
+  let whole = fit(all);
+  // Evidence is the first thing to give up: a redirect list that does not fit must not cost a resolution.
+  if (!whole && evidence.redirects.length > 0) {
+    evidence.redirects = [];
+    whole = fit(all);
+  }
   if (whole) return whole;
 
   // Past here the budget bites. The API reports it to Sentry on decode
@@ -947,7 +968,10 @@ export function buildPublishResolution(
   pages: ReadonlyArray<{ url?: unknown; statusCode?: unknown }>,
   limits: { maxBytes: number; maxPageStatusBytes: number } = RESOLUTION_PUBLISH_LIMITS,
   // See buildCompactResolutionSignal: only a producer that sends `checkTallies`.
-  options: { pageHashes?: boolean } = {},
+  options: {
+    pageHashes?: boolean;
+    redirects?: ReadonlyArray<{ url: string; status: number; to: string }>;
+  } = {},
 ): PublishResolution {
   const crawled: string[] = [];
   let statuses: Array<{ url: string; status: number }> = [];

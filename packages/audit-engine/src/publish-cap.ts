@@ -120,6 +120,8 @@ export interface CappableReport {
   siteChecks?: CheckResult[] | null;
   pages?: ReadonlyArray<{ url?: unknown; statusCode?: unknown }> | null;
   pageStatuses?: Array<{ url: string; status: number }> | null;
+  /** URLs that redirected (#1762), when the report lists them (`--include-pages`): evidence for the signal (#1759). */
+  redirects?: ReadonlyArray<{ url?: unknown; finalUrl?: unknown; status?: unknown }> | null;
   /** Never published: the capper builds the compact signal from `pages` itself. */
   resolutionSignal?: ResolutionSignal | null;
   /** Never trusted from the input: the capper builds its own from `pages`. */
@@ -1245,6 +1247,17 @@ function transportPages(report: CappableReport): Array<{ url: string; statusCode
   });
 }
 
+/** The report's redirect rows as the signal's evidence (#1759); anything malformed is left out. */
+function redirectEvidence(report: CappableReport): Array<{ url: string; status: number; to: string }> {
+  const out: Array<{ url: string; status: number; to: string }> = [];
+  for (const row of Array.isArray(report.redirects) ? report.redirects : []) {
+    if (typeof row?.url === "string" && typeof row.finalUrl === "string" && typeof row.status === "number") {
+      out.push({ url: row.url, status: row.status, to: row.finalUrl });
+    }
+  }
+  return out;
+}
+
 // ── Assembly ────────────────────────────────────────────────────
 
 function bytesOf(value: unknown): number {
@@ -1330,7 +1343,7 @@ export function capReportForPublish<T extends CappableReport>(
     },
     // The capped report carries `checkTallies`, the one reader of the page
     // hashes a clipped list ships (#2673).
-    { pageHashes: true },
+    { pageHashes: true, redirects: redirectEvidence(report) },
   );
   const pageStatuses = built.pageStatuses;
   const crawled = Array.isArray(report.pages) && report.pages.length > 0;

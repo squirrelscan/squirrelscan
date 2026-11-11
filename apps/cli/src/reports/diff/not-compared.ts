@@ -50,3 +50,28 @@ export function notComparedRows(diff: DiffReport): NotComparedRow[] {
   }
   return rows;
 }
+
+/** A destination a site chose (its `Location`), made safe to print: no control characters or escape sequences. */
+function printable(value: string): string {
+  // eslint-disable-next-line no-control-regex
+  return value.replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, "");
+}
+
+/**
+ * The page-level reason a `removed` issue is gone (#1759), in words: `now redirects to X (301)` or `now
+ * returns 410`. Null when the issue was fixed on its page. The destination is the site's own text, so it
+ * is printed without control characters.
+ */
+export function resolvedByText(issue: IssueInstance): string | null {
+  const by = issue.resolvedBy;
+  if (!by) return null;
+  return by.kind === "redirected"
+    ? `now redirects to ${printable(by.to)} (${by.status})`
+    : `now returns ${by.status}`;
+}
+
+/** The same text inside a markdown table cell: `|` and backticks escaped, so a destination cannot break the row. */
+export function resolvedByCell(issue: IssueInstance): string | null {
+  const text = resolvedByText(issue);
+  return text === null ? null : text.replace(/[\\|`]/g, (c) => `\\${c}`);
+}

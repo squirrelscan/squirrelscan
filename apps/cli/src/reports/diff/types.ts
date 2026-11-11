@@ -1,3 +1,4 @@
+import type { ResolvedBy } from "@squirrelscan/core-contracts/resolution";
 import type { RuleCheckDecl } from "@squirrelscan/rules";
 
 import type { SeverityLevel } from "@/reports/filters";
@@ -25,6 +26,11 @@ export interface IssueInstance {
   target: IssueTarget;
   sourcePages?: string[];
   meta?: Record<string, unknown>;
+  /**
+   * Set on a `removed` issue whose page changed rather than its markup (#1759): the page now redirects
+   * (status and destination) or answers 404/410 (status). Absent when the finding was fixed on the page.
+   */
+  resolvedBy?: ResolvedBy;
 }
 
 export interface DiffSide {

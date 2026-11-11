@@ -39,6 +39,7 @@ import {
   isRedirectSourcePage,
   targetedCoverageFor,
   robotsBlockedPageCount,
+  pageRedirectEvidence,
 } from "@squirrelscan/audit-engine";
 import { foldEntityMapVariants } from "@squirrelscan/audit-engine/entity-map";
 import { createEntityMapCollector } from "@squirrelscan/audit-engine/entity-map/collect";
@@ -1816,6 +1817,12 @@ export async function runAudit(
         status: number;
         redirect?: true;
       }> = [];
+      // (#1759) Redirect rows seen in the walk: evidence for the findings that resolve on them.
+      const redirectedPages: Array<{
+        normalizedUrl: string;
+        status: number;
+        to: string;
+      }> = [];
       // Distinct external link urls, sized exactly as countExternalLinks does,
       // so the dead-links spend estimate is the number v1 showed. Only
       // accumulated when a paid checker could ask for it — this is the one
@@ -1933,6 +1940,13 @@ export async function runAudit(
                   ? { redirect: true as const }
                   : {}),
               });
+              const redirect = pageRedirectEvidence(page);
+              if (redirect) {
+                redirectedPages.push({
+                  normalizedUrl: page.normalizedUrl,
+                  ...redirect,
+                });
+              }
             }
             pagesWalked += batchContext.length;
             onProgress({
@@ -2438,6 +2452,7 @@ export async function runAudit(
               // Collected during the pre-rules walk in the same
               // normalized_url order `getPages` returns (#1913).
               pages: pageStatuses,
+              redirects: redirectedPages,
             })
           );
           // The site checks as produced, so the report's union keeps each

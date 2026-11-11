@@ -21,6 +21,7 @@ import type {
 
 import {
   buildScoringResultsFromMerged,
+  hasResolvedBy,
   mergeFindings,
   summarizeOpenPages,
   type CarriedFinding,
@@ -132,6 +133,12 @@ export interface RunSmartAuditsInput {
   ruleMeta: ReadonlyMap<string, RuleTally>;
   /** All page records for this crawl (status used to detect 404/410). */
   pages: Array<{ normalizedUrl: string; status: number; redirect?: true }>;
+  /** (#1759) Pages that redirected off their URL this crawl: evidence for the findings that resolve on them. */
+  redirects?: ReadonlyArray<{
+    normalizedUrl: string;
+    status: number;
+    to: string;
+  }>;
 }
 
 /**
@@ -150,6 +157,7 @@ export function runSmartAudits(
     scoredPageUrls,
     ruleMeta,
     pages,
+    redirects,
   } = input;
 
   return Effect.gen(function* () {
@@ -192,6 +200,16 @@ export function runSmartAudits(
       ),
       statusByUrl,
       ...(notEvaluated ? { notEvaluated } : {}),
+      ...(redirects && redirects.length > 0
+        ? {
+            redirects: new Map(
+              redirects.map(
+                (r) =>
+                  [r.normalizedUrl, { status: r.status, to: r.to }] as const
+              )
+            ),
+          }
+        : {}),
     });
 
     // Persist: removed pages (transactional stale) first, then the rest.
@@ -200,8 +218,10 @@ export function runSmartAudits(
       yield* storage.markPageRemoved(siteKey, url, crawlId, status);
     }
     // upsert non-removed findings + site pages (removed already handled).
+    // (#1759) A removed page's rows are staled by `markPageRemoved`; one that names why (status, destination) is
+    // written too, since the stale write leaves its payload be.
     const findingsToPersist: PageFindingRecord[] = merged.persisted.filter(
-      (f) => !removedUrls.has(f.normalizedUrl)
+      (f) => !removedUrls.has(f.normalizedUrl) || hasResolvedBy(f)
     );
     yield* storage.upsertFindings(findingsToPersist);
     const sitePagesToPersist: SitePageRecord[] = merged.sitePages.filter(
