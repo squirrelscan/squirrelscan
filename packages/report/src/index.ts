@@ -507,3 +507,12 @@ export type {
   PageMapDiffMeta,
 } from "./page-map-diff";
 export { PAGE_MAP_HTML_ROW_CAP, renderPageMapHtml } from "./page-map-html";
+
+// Top line of a report: section scores + counts, shared with the dashboard
+export {
+  discoveredCount,
+  discoveredPages,
+  reportTopLineCounts,
+  sectionScoreRows,
+} from "./top-line";
+export type { ReportTopLineCounts, SectionScoreRow } from "./top-line";

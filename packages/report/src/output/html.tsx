@@ -16,7 +16,6 @@ import type {
   EditorSummaryPriority,
   ReportBranding,
   ReportStructure,
-  SitemapDiscovery,
 } from "@squirrelscan/core-contracts";
 
 import {
@@ -62,7 +61,6 @@ import {
   fullScanHint,
   publishedReportNote,
   ruleCarriedRollupLine,
-  scanScopeUnfetched,
   seedRedirectLine,
   startRedirectLine,
   clampedPageLimit,
@@ -107,6 +105,7 @@ import {
   regionScopeLine,
 } from "../region-scope";
 import { GROUP_COLORS, getGroupColor, getScoreGrade } from "../scoring";
+import { count, discoveredPages } from "../top-line";
 import { siteProfileFlags, siteProfileRows } from "../site-metadata";
 import {
   ruleSiteResourceCoverage,
@@ -191,43 +190,6 @@ const RenderAssets = React.createContext<{ techIconBaseUrl?: string }>({});
 /** The default link for a published report id, before #3182's per-org hosts. */
 function defaultReportUrl(reportId: string): string {
   return `https://reports.squirrelscan.com/${reportId}`;
-}
-
-/**
- * Pages the audit knows exist: every sitemap URL plus the crawled pages no
- * sitemap lists, or the crawled pages plus the in-scope URLs the crawl queued
- * but never fetched (`scanScope.unfetched`), whichever is larger. The links on
- * the pages still queued are unknown and sitemap intake is capped, so a capped
- * crawl's count is a floor.
- */
-function discoveredPages(report: AuditReport): {
-  total: number;
-  sitemap: number;
-  crawlOnly: number;
-  unfetched: number;
-} {
-  // Written by the engine's report stream but not on the AuditReport type; read defensively.
-  const sm = (
-    report as AuditReport & {
-      sitemaps?: Partial<Pick<SitemapDiscovery, "totalUrls" | "missingPages">>;
-    }
-  ).sitemaps;
-  const sitemap = count(sm?.totalUrls);
-  const crawlOnly = Array.isArray(sm?.missingPages) ? sm.missingPages.length : 0;
-  const unfetched = scanScopeUnfetched(report);
-  const total = Math.max(
-    count(report.totalPages),
-    count(report.coverage?.knownPages),
-    sitemap + crawlOnly,
-    // Fetched and still-queued URLs are disjoint, so their sum is a floor too.
-    count(report.scanScope?.pagesCrawled) + unfetched,
-  );
-  return { total, sitemap, crawlOnly, unfetched };
-}
-
-/** A non-negative whole number off report JSON, or 0 (stored reports of any origin). */
-function count(v: unknown): number {
-  return typeof v === "number" && Number.isFinite(v) && v >= 0 ? Math.floor(v) : 0;
 }
 
 const STRATEGIC_SEVERITIES = new Set(["critical", "high", "medium", "low"]);
