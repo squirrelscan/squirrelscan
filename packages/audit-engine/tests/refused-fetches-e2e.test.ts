@@ -105,7 +105,9 @@ for (const engine of ["v1", "v2"] as const) {
 
       const refused = report.refusedFetches ?? [];
       const resources = new Set(refused.map((r) => r.resource));
-      for (const resource of ["robots.txt", "sitemap", "llms.txt", "markdown"]) {
+      // robots.txt and the sitemaps are required reads. The optional probes (llms.txt, markdown) stop once the
+      // wall is seen (#1655), so whether they are requested depends on timing: a refusal of them is reported when it happens, and not required.
+      for (const resource of ["robots.txt", "sitemap"]) {
         expect(resources.has(resource)).toBe(true);
       }
       expect(refused.every((r) => r.status === 403 && r.provider === "Cloudflare")).toBe(true);

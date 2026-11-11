@@ -220,15 +220,16 @@ test("under a moved <base>, a local link whose text read is cut is counted: it r
   expect(details(moved.checks, "brand-impersonation")).toMatchObject({ scanTruncated: true, controlsUnread: 1 });
   // the same link without the base is the site's own and is not read
   const own = await run(body);
-  expect(own.checks.some((c) => c.name === "brand-impersonation")).toBe(false);
+  // not a finding or a note: only the clean pass the rule now records (#1741)
+  expect(own.checks.some((c) => c.name === "brand-impersonation" && c.status !== "pass")).toBe(false);
 }, 60_000);
 
 test("hiddenCssTruncated: not on a page with no control, and the note names the cause", async () => {
   const pad = `--p:${"a".repeat(300_000)};`;
   const none = await run("<p>no controls here</p>", `<style>.h{${pad}display:none}</style>`);
-  expect(none.checks.some((c) => c.name === "brand-impersonation")).toBe(false);
+  expect(none.checks.some((c) => c.name === "brand-impersonation" && c.status !== "pass")).toBe(false);
   const clean = await run('<a href="/about" aria-label="Sign in">Sign in</a>', `<style>.h{${pad}display:none}</style>`);
-  const note = clean.checks.find((c) => c.name === "brand-impersonation") as { message?: string; details?: Record<string, unknown> } | undefined;
+  const note = clean.checks.find((c) => c.name === "brand-impersonation" && c.status !== "pass") as { message?: string; details?: Record<string, unknown> } | undefined;
   expect(note?.details).toMatchObject({ hiddenCssTruncated: true });
   expect(note?.message).toContain("a CSS rule too large to read may hide text in a sign-in label");
   // a finding carries the detail as well
