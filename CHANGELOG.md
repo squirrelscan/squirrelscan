@@ -82,6 +82,7 @@ Structured data checks now say what they could and could not read. The schema pr
 - `perf/bad-caching` no longer blames Cloudflare for a missing ETag or Last-Modified on pages that send `Cache-Control: no-store`: the validators message names `no-store`, and the freshness check tells `no-store` apart from no caching policy (#1754).
 - `security/leaked-secrets` findings now name the pages they sit on: a key in an external script lists the pages that load it in `sourcePages`, and an inline copy on a page is listed with that page in `meta.occurrences`, so `affectedPagesCount` is no longer 0. The rule is renamed from "Leaked Environment Variables" to "Leaked Secrets and API Keys", since a hard-coded key is not an environment variable (#1755).
 - `content/dev-leakage` no longer reports an `http://` link to the audited site's own host (for example its logo) as a development host; that is mixed content, covered by `security/mixed-content` and `links/https-downgrade`. #1758
+- Docs: issues are now described as action plans that cover findings (cloud only), with the new `list_issues` and `get_issue` fields (`priority`, `type`, `effort`, `labels`, `state_reason`, `covered_findings` and the rest) and a note that the older one-rule fields are kept but partial #1738
 
 ## v0.0.177 (2026-11-11)
 
