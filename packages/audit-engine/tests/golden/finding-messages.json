@@ -2292,6 +2292,12 @@
    "broken-links|pass|No broken internal links detected||"
   ]
  },
+ "links/click-depth": {
+  "digest": "262848436124335",
+  "lines": [
+   "click-depth|warn|# indexable page(s) are more than # clicks from the homepage, deepest at #.|\"/landing/# (# clicks)\\n/product/# (# clicks)\\n/category/# (# clicks)\\n/landing/# (# clicks)\\n/product/# (# clicks)\\n+# more\"|"
+  ]
+ },
  "links/dead-end-pages": {
   "digest": "79483300861932",
   "lines": [

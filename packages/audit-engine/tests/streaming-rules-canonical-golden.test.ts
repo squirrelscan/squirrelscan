@@ -80,7 +80,10 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // passes (a real pass, not a vacuous one: a run that judges nothing is skipped), and that
       // one extra pass lifts the weighted overall past a rounding boundary. A deliberate rule
       // addition again; without the rule the number is 51.
-      expect(v1.healthScore.overall).toBe(52);
+      // 52 -> 51 (#1688): links/click-depth warns once (262 indexable pages sit more than 3 clicks
+      // from the homepage in the synthetic link graph, the same BFS depth the fixture writer stores).
+      // A real finding at advisory weight 1, so the weighted overall drops one point; not a false positive.
+      expect(v1.healthScore.overall).toBe(51);
       // 97711 -> 98211: content/hidden-text emits one page check across the 500
       // fixture pages that have a document, and passes on every one of them. The
       // overall score is unmoved.
@@ -208,7 +211,8 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // site's pairs are judged and all share a word, so the rule emits its single pass row).
       // 103746 -> 103747: ax/ai-crawlers adds one info check, search-engine-access (Googlebot,
       // Bingbot and Applebot against the audited URL); no new rule id.
-      expect(v1.findings.length).toBe(103747);
+      // 103747 -> 103748: links/click-depth is site-scoped and adds one check (a warn on the deep pages).
+      expect(v1.findings.length).toBe(103748);
       // Tripwire: EXTENDING a rule must never add a tally key, so a change here
       // is only correct alongside a deliberate new rule id. 266 -> 267 is
       // content/hidden-text, 267 -> 268 content/thin-vs-site-norm, 268 -> 269
@@ -238,9 +242,9 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // 309 -> 310 images/hotlinked, 310 -> 311 content/h1-title-alignment,
       // 311 -> 312 schema/expected-type, 312 -> 313 security/tls-certificate,
       // 313 -> 314 crawl/single-page-site, 314 -> 315 perf/framework-data-payload, 315 -> 316 perf/content-in-js-bundle,
-      // 316 -> 317 links/anchor-mismatch;
+      // 316 -> 317 links/anchor-mismatch, 317 -> 318 links/click-depth;
       // anything else means a rule id leaked in, so fix that rather than this number.
-      expect(v1.perRuleTally.length).toBe(317);
+      expect(v1.perRuleTally.length).toBe(318);
       expect(v1.perRuleTally.find((t) => t.ruleId === "security/tls-certificate")).toEqual({
         ruleId: "security/tls-certificate",
         pass: 0,
