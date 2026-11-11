@@ -55,6 +55,7 @@ import type {
   RuleMetaLite,
 } from "@squirrelscan/core-contracts";
 import {
+  isCoverageGapCheck,
   LINK_COVERAGE_DETAIL_KEYS,
   LINK_TARGET_SET_RULES,
   NOT_CHECKED_SKIP_REASONS,
@@ -438,10 +439,12 @@ function occurrencesOf(check: CheckResult): number {
 /**
  * A "not checked" skip (repo#2729) is what stops the report and the server's
  * issue sync reading the rule as clean, and it is one small row, so no cut may
- * drop it ahead of anything else.
+ * drop it ahead of anything else. The same holds for a coverage gap (#1749):
+ * an unread page, a truncated scan, a `*-unscanned`, `*-omitted` or `*-unfetched` row.
  */
 function isNotCheckedUnit(unit: ClassUnit): boolean {
   const { status, skipReason } = unit.check;
+  if (isCoverageGapCheck(unit.check)) return true;
   return status === "skipped" && skipReason !== undefined && NOT_CHECKED_SKIP_REASONS.has(skipReason);
 }
 
