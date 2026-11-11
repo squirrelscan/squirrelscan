@@ -19,7 +19,7 @@ How it works:
 
 ### Added
 
-- New rule `security/password-form-get`: a form with a password field that submits by GET (`method="get"` or no method, or a GET `formmethod` on a submit button) is an error. Forms submitted by script with no action are reported as not determined.
+- New rule `security/password-form-get`: a form with a password field that submits by GET (an explicit `method="get"`, a form with an `action` and no method, or a GET `formmethod` on a submit button) is an error. A form with no method and no action, which is how a React, Vue or Svelte login form looks in the DOM, is a warning (it falls back to GET only if its script fails; `method="post"` removes the risk), and one submitted by an inline handler with no action is reported as not determined. The action a finding shows has its query, fragment and credentials removed.
 
 ## v0.0.174 (2026-11-11)
 
