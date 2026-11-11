@@ -61,6 +61,7 @@ squirrel audit <url> [options]
 | `--no-classifier` | | Do not run the bundled page classifier: link sections in findings come from page markup only. Same as `[classifier] enabled = false`. See [Page Classifier](/configuration/classifier) | on |
 | `--header` | `-H` | Custom HTTP header on every crawl request, `Name: Value` (repeatable). Merges over `[crawler] headers`; values are redacted in output. See [Web Bot Auth](/guides/web-bot-auth) | none |
 | `--fail-on` | | Exit `2` when a threshold trips, for CI gating (repeatable / comma-separated) | none |
+| `--target-url` | | Audit exactly this URL and nothing else (repeatable), absolute or a path on the audited site such as `/pricing`. No sitemap, probes or link following. See [Targeted audits](#targeted-audits) | none |
 | `--rule-include` | | Only run these rule categories or rules, e.g. `ax,perf` or `core/meta-title` (repeatable / comma-separated). Replaces `[rules] enable` for this run | none |
 | `--rule-exclude` | | Skip these rule categories or rules, e.g. `images,social` (repeatable / comma-separated). Adds to `[rules] disable` for this run | none |
 | `--disable-discovery-probes` | | Skip the pre-crawl discovery probes (`llms.txt`, `/.well-known/*`, `/swagger.json` and the rest) for this run. Overrides `[crawler] disable_discovery_probes`; `=false` sends them even when the config turns them off, and a space before the value (`--disable-discovery-probes false`) is refused. See [Discovery probes](/configuration/crawler#discovery-probes) | `false` |
@@ -590,6 +591,37 @@ stderr instead, so the report body itself is unchanged. An unknown category
 errors before crawling, listing the valid category codes. `--fail-on score:<category>`
 referencing an excluded category also errors up front, since it could never
 trip.
+
+### Targeted audits
+
+Use `--target-url` to audit exactly the pages you name, for a quick re-check of the pages a change touched. Repeat the flag for each URL. A URL is absolute, or a path on the site you are auditing:
+
+```bash
+squirrel audit https://example.com --target-url /pricing --target-url https://example.com/blog/launch
+```
+
+A targeted audit fetches `robots.txt` (and honours it) and then those URLs, and no other page: no sitemap, no discovery probes, no link following, and no request for the start URL itself unless you list it. The links on the listed pages are status-checked as in any audit (internal ones with `--no-internal-links` off, external ones as the level says). Pass the site's final host as the start URL, because its redirect is not resolved, and the first listed URL stands in for it in the reachability check. Each listed URL goes through the same scope, robots and length checks as any page, and `--max-pages` caps the list.
+
+How a targeted audit differs from a full one:
+
+- **Whole-site rules do not run.** Rules that judge the whole site (inbound links, sitemap coverage, discovery probes, security headers read from the entry page) are skipped with the reason `targeted-run`: they report **Not checked**, never a pass or a finding. `crawl/robots-txt` still runs, because the file is always fetched. A finding from an earlier audit that depends on a skipped rule is not resolved by the targeted run.
+- **The score covers the listed pages.** The health score is computed from the pages and rules that ran, so it is not comparable with a full audit's score.
+- **Every URL is accounted for.** The report's `scanScope.targeted` says how many URLs were requested and audited, and lists each one that was not, with its reason, up to 100: `robots_disallowed`, `over_max_pages` (past the `--max-pages` cap), `url_too_long`, `invalid_url`, `failed`, a scope reason for a URL on another site, or `redirected`.
+- **A redirecting URL is recorded as a redirect.** Its destination is audited only when you list it too. When you do not, the report names it as the `destination` of the redirected URL.
+
+```json
+{
+  "scanScope": {
+    "targeted": {
+      "requested": 3,
+      "audited": 2,
+      "unaudited": [{ "url": "https://example.com/old", "reason": "redirected", "destination": "https://example.com/new" }]
+    }
+  }
+}
+```
+
+The JSON report carries the same as `meta.targeted` (schema 1.16), and the console scan line adds `Targeted run: 2 of 3 URLs given were audited; site-wide rules were not run.`
 
 ### Summary output
 
