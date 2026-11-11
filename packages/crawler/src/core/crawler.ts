@@ -3352,10 +3352,12 @@ export function createCrawler(
             });
           let accepted = 0;
           const seen = new Set<string>();
-          for (const target of targets) {
-            // The raw string first: an oversize value is never normalised or stored whole.
+          for (const [index, target] of targets.entries()) {
+            // The raw string first: an oversize value is never normalised or stored whole. It is stored cut
+            // short, and keyed with its list position so two oversize targets sharing a prefix stay two rows.
             if (target.length > REPORT_LIMITS.maxUrlLength) {
-              yield* skippedRow(target.slice(0, 200), target.slice(0, 200), "url_too_long");
+              const cut = target.slice(0, 180);
+              yield* skippedRow(`${cut}#too-long-${index}`, cut, "url_too_long");
               continue;
             }
             const { normalized } = normalizeAndCheckScope(target);

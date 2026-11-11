@@ -71,6 +71,7 @@ const base = () => `http://127.0.0.1:${site.port}/`;
 
 interface Json {
   meta: {
+    auditLevel?: { targeted?: boolean; settings?: { externalLinks?: boolean } };
     targeted?: {
       requested: number;
       audited: number;
@@ -126,6 +127,9 @@ describe("--target-url", () => {
     expect(rows.find((p) => p.status === 0)?.url).toContain(
       "elsewhere.example.org"
     );
+    // The report says what ran: no links were checked, whatever the level says (#1777).
+    expect(json.meta.auditLevel?.targeted).toBe(true);
+    expect(json.meta.auditLevel?.settings?.externalLinks).toBe(false);
     // Every URL given is accounted for: the off-site one is listed with a reason, not dropped.
     expect(json.meta.targeted?.requested).toBe(4);
     expect(json.meta.targeted?.audited).toBe(3);
@@ -133,6 +137,25 @@ describe("--target-url", () => {
     expect(json.meta.targeted?.unaudited[0]?.url).toContain(
       "elsewhere.example.org"
     );
+  });
+
+  test("--external-links with --target-url prints one note that it is ignored", async () => {
+    const r = await squirrel(
+      join(scratch, "home3"),
+      "audit",
+      base(),
+      "--http",
+      "-f",
+      "json",
+      "--external-links",
+      "--target-url",
+      "/p/1"
+    );
+    expect(r.code).toBe(0);
+    expect(r.err).toContain("--external-links is ignored on a targeted audit");
+    expect(
+      (JSON.parse(r.out) as Json).meta.auditLevel?.settings?.externalLinks
+    ).toBe(false);
   });
 
   test("an ordinary audit of the same site has no meta.targeted", async () => {

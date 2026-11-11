@@ -22,6 +22,7 @@ import {
   parseLegacyCloudDepth,
   parseResolvedAuditSettings,
   resolveAuditSettings,
+  targetedAuditSettings,
 } from "../src/audit-levels";
 import { COVERAGE_PAGE_LIMITS } from "../src/limits";
 import { PLANS } from "../src/plans";
@@ -366,5 +367,25 @@ describe("offlineAuditSettings", () => {
     const offline = offlineAuditSettings(resolveAuditSettings("quick"));
     expect(parseResolvedAuditSettings(JSON.parse(JSON.stringify(offline)))?.offline).toBe(true);
     expect(parseResolvedAuditSettings({ ...offline, offline: "yes" })?.offline).toBeUndefined();
+  });
+});
+
+describe("targetedAuditSettings (#1777)", () => {
+  test("records what ran: external link checks off, the level it was asked for kept", () => {
+    const asked = resolveAuditSettings("full");
+    expect(asked.settings.externalLinks).toBe(true);
+    const ran = targetedAuditSettings(asked);
+    expect(ran.settings.externalLinks).toBe(false);
+    expect(ran.targeted).toBe(true);
+    expect(ran.level).toBe(asked.level);
+    expect(ran.basedOn).toBe(asked.basedOn);
+    // The input is not changed.
+    expect(asked.settings.externalLinks).toBe(true);
+  });
+
+  test("survives a read back, and an ordinary snapshot has no marker", () => {
+    const ran = targetedAuditSettings(resolveAuditSettings("surface"));
+    expect(parseResolvedAuditSettings(JSON.parse(JSON.stringify(ran)))?.targeted).toBe(true);
+    expect(parseResolvedAuditSettings(resolveAuditSettings("surface"))).not.toHaveProperty("targeted");
   });
 });
