@@ -83,6 +83,12 @@ function serve(links: string): { origin: string } {
           return url.search ? ok("Tracked") : redirect("/trk?utm_source=x");
         case "/aq":
           return url.search ? ok("Allow query") : redirect("/aq?foo=1");
+        case "/dead":
+          return redirect("/nowhere");
+        case "/loop-a":
+          return redirect("/loop-b");
+        case "/loop-b":
+          return redirect("/loop-a");
         case "/sm":
           return redirect("/sm-dest");
         case "/sm-dest":
@@ -297,3 +303,28 @@ describe.each(["v1", "v2"] as const)("redirecting URLs are not pages (#1762, %s)
     expect(out.v1Report.pages.map((p) => p.url)).not.toContain(`${out.origin}/legacy`);
   }, 60_000);
 });
+
+describe.each(["v1", "v2"] as const)("a redirect that ends in an error or loops stays an ordinary row (#1762, %s)", (engine) => {
+  const links = `<a href="/linked">L</a><a href="/dead">D</a><a href="/loop-a">LA</a>`;
+
+  test("/dead -> 301 -> /nowhere (404) is stored as the error it answered, and the link to it is still broken", async () => {
+    const out = await run(engine, { links, carried: false });
+    const dead = out.stored.get(`${out.origin}/dead`);
+    expect(dead).toBeDefined();
+    // Not a redirect marker (a 3xx that resolved): the row an error redirect always was.
+    expect(dead!.status).toBeGreaterThanOrEqual(400);
+    expect(pageUrlsOf(out, "links/broken-links")).toContain(`${out.origin}/dead`);
+    // It counts as a page row like any 404 page (not excluded as a redirect).
+    expect(out.v1Report.pages.some((p) => p.url === `${out.origin}/dead`)).toBe(true);
+  }, 60_000);
+
+  test("/loop-a <-> /loop-b is not a redirect row either", async () => {
+    const out = await run(engine, { links, carried: false });
+    const loop = out.stored.get(`${out.origin}/loop-a`);
+    expect(loop).toBeDefined();
+    // A loop never resolved: it is not the 3xx marker with a resolved chain the engine reads as a redirect.
+    expect(loop!.html ?? "").toBe("");
+    expect(out.v1Report.pages.some((p) => p.url === `${out.origin}/loop-a`)).toBe(true);
+  }, 60_000);
+});
+

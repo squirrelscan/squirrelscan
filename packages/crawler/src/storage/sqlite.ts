@@ -2198,8 +2198,10 @@ export class SQLiteStorage implements CrawlStorage {
     return Effect.try({
       try: () => {
         const db = this.getDb();
+        // Pages, not redirect rows (#1762): a 3xx whose final URL is another URL is a redirect marker, which takes
+        // no maxPages slot and is not in the report's totals.
         const stmt = db.prepare(
-          "SELECT COUNT(*) as count FROM pages WHERE crawl_id = ?"
+          "SELECT COUNT(*) as count FROM pages WHERE crawl_id = ? AND NOT (status BETWEEN 300 AND 399 AND final_url IS NOT NULL AND final_url <> normalized_url)"
         );
         const row = stmt.get(crawlId) as { count: number };
         return row.count;

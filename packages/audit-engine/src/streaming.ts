@@ -409,6 +409,9 @@ export function streamPageRules(
               ? universe.has(page.normalizedUrl)
               : isAuditablePage(page);
             if (!inUniverse) continue;
+            // A redirect row (#1762) is not a page and runs only the redirect rules: it has no cached entry,
+            // and a key built from its empty record must never be looked up as if it did.
+            if (isRedirectSourcePage(page)) continue;
             const key = await cache.keyFor(page, soft404?.get(page.normalizedUrl));
             if (key) {
               keyByUrl.set(page.normalizedUrl, key);

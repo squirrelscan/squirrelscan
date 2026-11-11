@@ -7,7 +7,7 @@ import type { CheckResult } from "@squirrelscan/core-contracts";
 import { parsePage } from "@squirrelscan/parser";
 import { parseRobotsTxt } from "@squirrelscan/utils/robots-txt";
 
-import { conflictingIndexSignalsRule } from "../src/crawl/conflicting-index-signals";
+import { conflictingIndexSignalsRule, evaluateIndexSignals, sitemapUrlSet } from "../src/crawl/conflicting-index-signals";
 import { noindexInSitemapRule } from "../src/crawl/noindex-in-sitemap";
 import type { ParsedPage, RuleContext } from "../src/types";
 
@@ -146,3 +146,24 @@ describe("crawl/conflicting-index-signals (#1771)", () => {
     expect(check.details?.alsoReportedPages).toEqual([`${BASE}/p/x`]);
   });
 });
+
+describe("the sitemap is matched on normalized URLs (both engines share this)", () => {
+  test("a sitemap entry with a trailing slash, a fragment or a different slash form still matches the page", () => {
+    const sitemaps = {
+      discovered: [{ url: "https://x.test/sitemap.xml", type: "urlset", urls: [{ loc: "https://x.test/a/" }, { loc: "https://x.test/b#top" }] }],
+    } as never;
+    const urls = sitemapUrlSet(sitemaps);
+    const page = (url: string) => ({
+      url,
+      status: 200,
+      canonical: "https://x.test/elsewhere",
+      reasons: ["meta:noindex"],
+    });
+    for (const url of ["https://x.test/a", "https://x.test/b"]) {
+      const verdict = evaluateIndexSignals([page(url)], urls, null);
+      expect(verdict.kind).toBe("conflicts");
+    }
+    expect(evaluateIndexSignals([page("https://x.test/c")], urls, null).kind).toBe("none");
+  });
+});
+
