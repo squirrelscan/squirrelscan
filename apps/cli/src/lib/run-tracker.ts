@@ -678,6 +678,141 @@ export async function finalizeRun(
 }
 
 /**
+ * One tracked run's life from register to its terminal PATCH (#1663). The CLI audit and the MCP
+ * server each used to drive this themselves (a finalizer here, a lifecycle map in
+ * `mcp/billed-audit.ts`), and each reimplemented the same two rules, which now live in one place:
+ *
+ *  - `close` sends the terminal state AT MOST ONCE, whichever exit path calls it first (the audit
+ *    finishing, an error, a signal, a shutdown). Every later call waits for that one PATCH rather than
+ *    returning at once, so an interrupt arriving while an error path's finalize is still in flight
+ *    does not exit before it lands.
+ *  - `markRunning` never lands after the terminal state. The API applies whichever status arrives
+ *    LAST, so a late `running` would flip a finished run back and have it reaped as stalled.
+ */
+export interface RunLifecycle {
+  /** The registered run, or null when there is none (register failed, or nothing was registered). */
+  readonly registered: Promise<RegisteredRun | null>;
+  /**
+   * Flip the run to running, once. Waits for the register, never throws, and is a no-op without a
+   * run, on a second call, and once `close` has been called.
+   */
+  markRunning: (startedAt: string) => Promise<void>;
+  /**
+   * PATCH the run to its terminal state at most once. Waits for the register and for the
+   * `markRunning` PATCH to settle first. No registered run: resolves without sending anything.
+   */
+  close: (input: FinalizeRunInput) => Promise<void>;
+  /** `close` has been called: a terminal state is chosen (its PATCH may still be in flight). */
+  isClosed: () => boolean;
+}
+
+export interface RunLifecycleOptions {
+  /**
+   * A markRunning the caller already sent, which the terminal PATCH then waits for. Used by
+   * {@link createRunFinalizer}; a caller that goes through {@link RunLifecycle.markRunning} omits it.
+   */
+  running?: Promise<unknown>;
+  /** Stop the module's progress heartbeat before the terminal PATCH (#1583). Default true: the CLI's. */
+  stopHeartbeat?: boolean;
+  /** Called once with the run as soon as register answers with one. Must not throw. */
+  onRegistered?: (run: RegisteredRun) => void;
+  /** The PATCHes, swappable in tests. */
+  deps?: {
+    markRunning: typeof markRunning;
+    finalizeRun: typeof finalizeRun;
+  };
+}
+
+export function createRunLifecycle(
+  registered: Promise<RegisteredRun | null>,
+  options: RunLifecycleOptions = {}
+): RunLifecycle {
+  const send = options.deps ?? { markRunning, finalizeRun };
+  const stopHeartbeat = options.stopHeartbeat ?? true;
+  let running: Promise<unknown> | undefined = options.running;
+  let closing: Promise<void> | null = null;
+  void registered.then(
+    (run) => {
+      if (run) options.onRegistered?.(run);
+    },
+    () => {}
+  );
+  return {
+    registered,
+    markRunning: (startedAt) => {
+      // After close, a no-op: the terminal state is chosen and `running` would overwrite it.
+      if (closing !== null) return Promise.resolve();
+      running ??= (async () => {
+        const run = await registered.catch(() => null);
+        // `close` may have been called while the register was in flight: running must not follow it.
+        if (!run || closing !== null) return;
+        await send.markRunning(run.runId, startedAt, run.lifecycleBase);
+      })().catch(() => {});
+      return running.then(
+        () => {},
+        () => {}
+      );
+    },
+    close: (input) => {
+      closing ??= (async () => {
+        // #1583: stopping BEFORE the terminal PATCH means a beat can never race in behind it and
+        // re-stamp activity on a finished run.
+        if (stopHeartbeat) stopRunHeartbeat();
+        const run = await registered.catch(() => null);
+        await running?.catch(() => {});
+        if (run) await send.finalizeRun(run.runId, input, run.lifecycleBase);
+      })();
+      return closing;
+    },
+    isClosed: () => closing !== null,
+  };
+}
+
+/**
+ * How long a second interrupt waits for the terminal PATCH the first one started before it lets the
+ * process die. The PATCH has its own timeout and retries, so this is the user's patience, not the
+ * PATCH's: a second Ctrl-C means "now", but "now" still gets a short chance to land the status.
+ */
+export const SECOND_INTERRUPT_WAIT_MS = 3_000;
+
+/**
+ * The signal half of the lifecycle (#1663): finalize the run on the first SIGINT, SIGTERM or SIGHUP,
+ * then re-raise it so the process ends the way the signal says.
+ *
+ * It must be installed with `process.on`, not `process.once`. With `once` the first signal removes the
+ * handler, so a second Ctrl-C during the terminal PATCH took the runtime's default, killed the process
+ * under the PATCH, and left the run waiting for the server's reaper. Here a later signal waits for the
+ * PATCH already in flight (it never starts a second one: `close` is at most once), but no longer than
+ * `waitMs`, and then exits.
+ *
+ * `finalize` is called on the first signal only. `exit` re-raises the signal; it may run more than
+ * once (the first signal's finalize settling after a second signal already exited) and must be safe to.
+ */
+export function createInterruptHandler(options: {
+  finalize: () => Promise<void>;
+  exit: (signal: NodeJS.Signals) => void;
+  waitMs?: number;
+}): (signal: NodeJS.Signals) => void {
+  const waitMs = options.waitMs ?? SECOND_INTERRUPT_WAIT_MS;
+  let finalizing: Promise<void> | null = null;
+  return (signal) => {
+    if (finalizing === null) {
+      finalizing = options.finalize().catch(() => {});
+      void finalizing.finally(() => options.exit(signal));
+      return;
+    }
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const cap = new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, waitMs);
+    });
+    void Promise.race([finalizing, cap]).finally(() => {
+      clearTimeout(timer);
+      options.exit(signal);
+    });
+  };
+}
+
+/**
  * Build a finalizer that PATCHes the registered run to a terminal state AT MOST
  * ONCE (#332). Resolves the run id by awaiting `registerPromise` (its own
  * timeout bounds the wait), so a finalize racing an in-flight register still
@@ -691,26 +826,12 @@ export async function finalizeRun(
  * `failed` overwritten by `running` and was reaped an hour later as "CLI audit
  * stopped reporting progress before it finished". markRunning never throws and
  * is bounded by its own timeout, so the wait is too.
+ *
+ * The `close` of {@link createRunLifecycle}, for a caller that sent its own markRunning.
  */
 export function createRunFinalizer(
   registerPromise: Promise<RegisteredRun | null>,
   running?: Promise<unknown>
 ): (input: FinalizeRunInput) => Promise<void> {
-  // The first call's PATCH, which every later call waits on rather than
-  // returning at once: a Ctrl-C arriving while an error path's fire-and-forget
-  // finalize is still in flight must not exit before that PATCH lands.
-  let inFlight: Promise<void> | null = null;
-  return (input: FinalizeRunInput): Promise<void> => {
-    inFlight ??= (async () => {
-      // #1583: the finalizer is the one guarded path every exit funnels through
-      // (success, error, publish failure, Ctrl-C), so stopping the heartbeat here
-      // covers them all — and stopping BEFORE the terminal PATCH means a beat can
-      // never race in behind it and re-stamp activity on a finished run.
-      stopRunHeartbeat();
-      const run = await registerPromise.catch(() => null);
-      await running?.catch(() => {});
-      if (run) await finalizeRun(run.runId, input, run.lifecycleBase);
-    })();
-    return inFlight;
-  };
+  return createRunLifecycle(registerPromise, running ? { running } : {}).close;
 }
