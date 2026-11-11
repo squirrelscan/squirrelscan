@@ -159,6 +159,13 @@ export type RuleSeverity = "error" | "warning" | "info";
  * selectors, all inside `link[rel*="icon"]`) is reviewed by hand, and the test
  * checks that each rule with an unkeyed read is named above, not every input.
  * Deriving the key from what the rules read is squirrelscan/squirrelscan#585.
+ * #1373 took the measurement half: `SIGNATURE_SELECTORS` / `SIGNATURE_ATTRIBUTES`
+ * (template-signature-reads.ts) list every selector and attribute a declared rule
+ * reads, a read outside them fails `template-verdict-inputs.test.ts`, and
+ * `template-fanout-bench.ts --coverage --signature derived|current` reports how many
+ * pages would still share a cluster if the signature were derived from them.
+ * Whole-document reads stay reviewed UNKEYED entries. The production signature is
+ * unchanged until that measurement is run on real crawls.
  *
  * A declaration is a claim, not a proof, and it has two falsifiers.
  * `template-fanout-parity-golden.test.ts` runs in CI over an authored corpus with
