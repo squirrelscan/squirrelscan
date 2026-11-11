@@ -88,6 +88,7 @@ describe("meta.checks declarations (#1741)", () => {
       "ax/ai-crawlers",
       "core/meta-description",
       "core/meta-title",
+      "crawl/robots-txt",
       "links/broken-external-links",
       "links/broken-links",
       "links/internal-links",
@@ -99,12 +100,25 @@ describe("meta.checks declarations (#1741)", () => {
         const names = successors.map((x) => splitSuccessor(x).check);
         expect(names, `${meta.id}: ${oldName} supersedes itself`).not.toContain(oldName);
         expect(new Set(successors).size, `${meta.id}: duplicate successor`).toBe(successors.length);
+        // `|` is the members separator (the LAST one): `chk@a|b` is locator `a` and members `b`, so a locator
+        // containing `|` would be misread. At most one `|`, and what follows it is a meta key.
+        for (const x of successors) {
+          const bars = x.split("|").length - 1;
+          expect(bars, `${meta.id}: ${oldName} successor "${x}" has more than one "|" (a locator cannot contain one)`).toBeLessThanOrEqual(1);
+          if (bars === 1) {
+            expect(x.split("|")[1], `${meta.id}: successor "${x}" has a "|" but no members key after it`).toMatch(/^[a-z][A-Za-z0-9]*$/);
+            expect(x.includes("@"), `${meta.id}: successor "${x}" lists members without a locator`).toBe(true);
+          }
+        }
         for (const s of names) {
           // No chains. The one allowed shape is a pair of peers that name each other (a link that moves between
           // two checks, #1772): the merge decides one level, so a pair cannot loop.
           const back = meta.supersededChecks![s];
           if (back !== undefined) {
-            expect(back, `${meta.id}: ${s} is itself superseded, but not by ${oldName}`).toEqual([oldName]);
+            expect(
+              back.map((x) => splitSuccessor(x).check),
+              `${meta.id}: ${s} is itself superseded, but not by ${oldName}`
+            ).toEqual([oldName]);
           }
         }
       }

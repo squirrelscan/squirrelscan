@@ -878,3 +878,58 @@ describe("a rule that capped its item list (#1781)", () => {
     expect(reasonOf(d)).toEqual([["items-capped", undefined]]);
   });
 });
+
+// #1783: `robots-txt-disallow` (every crawler blocked) and `robots-txt-disallow-wildcard` (blocked except the ones a
+// named group re-allows) are peers: a site that moves between them has not fixed anything.
+describe("robots-txt disallow and its wildcard peer (#1783)", () => {
+  const ROBOTS = "crawl/robots-txt";
+  const disallow = (status: "fail" | "pass"): CheckResult => ({
+    name: "robots-txt-disallow",
+    status,
+    message:
+      status === "fail"
+        ? "robots.txt blocks all crawling"
+        : "robots.txt does not block every crawler",
+  });
+  const wildcard: CheckResult = {
+    name: "robots-txt-disallow-wildcard",
+    status: "warn",
+    message: "still allowed by name: Googlebot",
+  };
+  const at = (checks: CheckResult[]) =>
+    report({ [ROBOTS]: rule(ROBOTS, checks, "site") });
+
+  test("a named allow is added: the fail becomes the wildcard warn, one change and nothing fixed", () => {
+    const d = diffReports(
+      at([disallow("fail")]),
+      at([disallow("pass"), wildcard])
+    );
+    expect(d.removed).toHaveLength(0);
+    expect(d.added).toHaveLength(0);
+    expect(d.changed).toHaveLength(1);
+  });
+
+  test("the named allow is removed: the wildcard warn becomes the fail, one change and nothing fixed", () => {
+    const d = diffReports(
+      at([disallow("pass"), wildcard]),
+      at([disallow("fail")])
+    );
+    expect(d.removed).toHaveLength(0);
+    expect(d.added).toHaveLength(0);
+    expect(d.changed).toHaveLength(1);
+  });
+
+  test("control: the wildcard block is gone, so both are fixed", () => {
+    const clean: CheckResult = {
+      name: "robots-txt-disallow",
+      status: "pass",
+      message: "robots.txt does not block all crawling",
+    };
+    expect(
+      diffReports(at([disallow("fail")]), at([clean])).removed
+    ).toHaveLength(1);
+    expect(
+      diffReports(at([disallow("pass"), wildcard]), at([clean])).removed
+    ).toHaveLength(1);
+  });
+});

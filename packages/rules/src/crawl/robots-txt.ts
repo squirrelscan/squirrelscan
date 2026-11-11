@@ -2,6 +2,8 @@
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
+import type { RobotsTxtData } from "@squirrelscan/core-contracts";
+import { isRobotsTxtDisallowed } from "@squirrelscan/utils/robots-txt";
 import { describeRefusedFetch } from "@squirrelscan/core-contracts";
 
 import { refusalReason, refusedFor } from "../refused";
@@ -50,6 +52,74 @@ function crawlDelayCheck(userAgent: string, delay: number): CheckResult | null {
   };
 }
 
+/**
+ * The search crawlers whose being let in makes "robots.txt blocks all crawling" untrue enough to downgrade (#1783):
+ * the ones that decide whether a site is found. A named re-allow of an AI crawler or a niche bot (a
+ * `User-agent: GPTBot` / `Allow: /` beside the wildcard block) leaves Google and Bing out, so the site is still
+ * effectively blocked and the finding stays a failure.
+ */
+export const MAJOR_SEARCH_CRAWLERS: readonly string[] = [
+  "Googlebot",
+  "Bingbot",
+  "DuckDuckBot",
+  "YandexBot",
+  "Applebot",
+];
+
+/**
+ * Two paths no real rule names, probed beside the root (#1783): a rule that blocks only the homepage
+ * (`Disallow: /$`) or re-permits only the homepage (`Allow: /$`) says nothing about the rest of the site, and the
+ * matcher asked about "/" alone cannot tell the difference. A pattern that blocks the whole site (`/`, `/*`) blocks
+ * both paths. Two, with unlike first characters, so a real prefix rule (`Disallow: /s`) cannot take both: it would
+ * have to be a rule for the whole site to match `/~` and `/z` alike.
+ */
+const ROBOTS_PROBE_PATHS = ["/~sq-probe-0/x", "/zz-sq-probe-1/y"] as const;
+
+function rootAndProbes(robotsTxt: RobotsTxtData): { root: string; probes: string[] } {
+  try {
+    return {
+      root: new URL("/", robotsTxt.url).toString(),
+      probes: ROBOTS_PROBE_PATHS.map((p) => new URL(p, robotsTxt.url).toString()),
+    };
+  } catch {
+    // an unparseable robots.txt URL: nothing can be judged by the matcher
+    return { root: "/", probes: ["/", "/"] };
+  }
+}
+
+/** The distinct named user-agent tokens of the file, as written (the wildcard excluded). */
+function namedTokens(groups: RobotsTxtData["rules"]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const g of groups) {
+    const key = g.userAgent.toLowerCase();
+    if (g.userAgent === "*" || seen.has(key)) continue;
+    seen.add(key);
+    out.push(g.userAgent);
+  }
+  return out;
+}
+
+/**
+ * What a `User-agent: *` / `Disallow: /` still lets in because a group of its own re-allows it (#1783), decided with
+ * the matcher the crawl uses (longest match, `Allow` wins a tie, stacked agents), so `Disallow: /*` blocks the root
+ * and `Allow: /$` re-allows it. `major` are the {@link MAJOR_SEARCH_CRAWLERS} let in (matched by their own group:
+ * with none the wildcard governs them and they are blocked); `other` is every other named token let in.
+ */
+function crawlersAllowedByName(robotsTxt: RobotsTxtData): { major: string[]; other: string[] } {
+  const { probes } = rootAndProbes(robotsTxt);
+  // "Let in" means let in beyond the homepage: the DEEP probes are judged, not the root, so a group that only
+  // re-permits the homepage (`Disallow: /` with `Allow: /$`) is not a re-allow of the site.
+  // Let in when either deep path is: a group that blocks both is blocking the site.
+  const allowed = (token: string) => probes.some((p) => !isRobotsTxtDisallowed(p, robotsTxt, token));
+  const named = namedTokens(robotsTxt.rules);
+  const lower = new Set(named.map((t) => t.toLowerCase()));
+  const major = MAJOR_SEARCH_CRAWLERS.filter((t) => lower.has(t.toLowerCase()) && allowed(t));
+  const majorLower = new Set(MAJOR_SEARCH_CRAWLERS.map((t) => t.toLowerCase()));
+  const other = named.filter((t) => !majorLower.has(t.toLowerCase()) && allowed(t));
+  return { major, other };
+}
+
 export const robotsTxtRule: Rule = {
   meta: {
     id: "crawl/robots-txt",
@@ -61,6 +131,16 @@ export const robotsTxtRule: Rule = {
     scope: "site",
     severity: "error",
     weight: 8,
+    // A site moves between "every crawler is blocked" and "blocked except the ones a named group re-allows" when
+    // such a group is added or removed (#1783). The two checks are peers: a finding tracked under one continues
+    // under the other and is not reported fixed. The empty locator is the whole-check finding's.
+    // The rule stays on the undeclared-`checks` baseline (#1741): its checks mix unrelated outcomes (exists, syntax,
+    // crawl delay, sitemap, the disallow pair), and declaring them is the migration's job, not this change's. The
+    // tracking key that moves is covered by the peers below.
+    supersededChecks: {
+      "robots-txt-disallow": ["robots-txt-disallow-wildcard@"],
+      "robots-txt-disallow-wildcard": ["robots-txt-disallow@"],
+    },
   },
 
   run(ctx: RuleContext): RuleResult {
@@ -139,12 +219,18 @@ export const robotsTxtRule: Rule = {
       });
     }
 
-    // Check for full disallow
-    const hasFullDisallow = robotsTxt.rules.some(
-      (rule) =>
-        rule.userAgent === "*" &&
-        rule.rules.some((r) => r.type === "disallow" && r.path === "/")
-    );
+    // Check for full disallow: a literal `Disallow: /` under `*`, or a pattern that blocks the whole site the way
+    // the crawl matches it (`Disallow: /*`, #1783). Whole site means the root AND a deep path no rule names: a
+    // homepage-only rule (`Disallow: /$`) is not "blocks all crawling".
+    const { root: rootUrl, probes } = rootAndProbes(robotsTxt);
+    const hasFullDisallow =
+      robotsTxt.rules.some(
+        (rule) =>
+          rule.userAgent === "*" &&
+          rule.rules.some((r) => r.type === "disallow" && r.path === "/")
+      ) ||
+      (isRobotsTxtDisallowed(rootUrl, robotsTxt, "*") &&
+        probes.every((p) => isRobotsTxtDisallowed(p, robotsTxt, "*")));
 
     if (hasFullDisallow) {
       // Check if there are allow rules that might permit some crawling
@@ -154,12 +240,33 @@ export const robotsTxtRule: Rule = {
       );
 
       if (!hasAllowRules) {
-        checks.push({
-          name: "robots-txt-disallow",
-          status: "fail",
-          message: "robots.txt blocks all crawling",
-          value: "Disallow: / with no Allow rules",
-        });
+        // A named group can re-allow a crawler the wildcard blocks (#1783). Only when a MAJOR search crawler is
+        // let in is "blocks all crawling" untrue enough to downgrade: a GPTBot-only re-allow leaves Google and
+        // Bing out, so the site is still effectively blocked and the finding stays a failure.
+        const { major, other } = crawlersAllowedByName(robotsTxt);
+        if (major.length > 0) {
+          checks.push({
+            name: "robots-txt-disallow",
+            status: "pass",
+            message: "robots.txt does not block every crawler",
+          });
+          checks.push({
+            name: "robots-txt-disallow-wildcard",
+            status: "warn",
+            message: `robots.txt blocks every crawler without a group of its own (User-agent: * with Disallow: /); still allowed by name: ${major.join(", ")}`,
+            value: "Disallow: / under User-agent: *, re-allowed for named crawlers",
+            details: { allowed: major, ...(other.length > 0 ? { otherAllowed: other } : {}) },
+          });
+        } else {
+          checks.push({
+            name: "robots-txt-disallow",
+            status: "fail",
+            message: "robots.txt blocks all crawling",
+            value: "Disallow: / with no Allow rules",
+            // Crawlers a group of their own lets in that are not a major search engine (an AI crawler, say).
+            ...(other.length > 0 ? { details: { allowedByName: other } } : {}),
+          });
+        }
       } else {
         checks.push({
           name: "robots-txt-disallow",

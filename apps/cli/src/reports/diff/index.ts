@@ -612,7 +612,8 @@ export function diffReports(
           issue.ruleId,
           name,
           issue.target.type,
-          locator ?? issue.target.id
+          // A whole-check finding's identity is its check name, which for a successor is the successor's (#1783).
+          issue.target.type === "check" ? name : (locator ?? issue.target.id)
         )
       );
       // A successor that lists its members (#1780) takes the old row only when its list names it.
