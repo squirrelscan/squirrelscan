@@ -10,7 +10,7 @@ import type {
   ParsedPage,
 } from "../types";
 
-import { REPORT_LIMITS, clampItemString } from "@squirrelscan/core-contracts";
+import { REPORT_LIMITS, clampItemString, type ScriptContentData } from "@squirrelscan/core-contracts";
 import { SECRET_KEY_LOOKBEHIND_SIZE } from "@squirrelscan/utils/constants";
 
 import { shannonEntropy } from "../integrity/signals";
@@ -4457,6 +4457,25 @@ export function scanPageForSecrets(
   return sink.result().map(detachSecret);
 }
 
+/**
+ * Why a referenced script has no content, or null when it is simply gone (a 404 or 410: the file does not
+ * exist, so there is nothing left to leak) (#1749).
+ */
+function unfetchedReason(script: ScriptContentData): string | null {
+  if (script.status === 404 || script.status === 410) return null;
+  // Read and empty: nothing in it to leak.
+  if (script.content === "" && script.status !== null && script.status < 400) return null;
+  if (script.fetchSkipReason) {
+    return script.fetchSkipReason === "memory-cap" ? "not fetched (memory cap)" : "not fetched (time budget)";
+  }
+  if (script.wafBlocked) return "blocked by a WAF or bot challenge";
+  if (script.rateLimited) return "rate limited";
+  if (script.status === null) return script.error ? `request failed (${script.error})` : "not fetched";
+  if (script.status >= 500) return `server error (${script.status})`;
+  if (script.status >= 400) return `refused (${script.status})`;
+  return "no content returned";
+}
+
 export const leakedSecretsRule: Rule = {
   meta: {
     id: "security/leaked-secrets",
@@ -4484,6 +4503,7 @@ export const leakedSecretsRule: Rule = {
       { name: "leaked-secrets-partial", outcome: "problem" },
       { name: "leaked-secrets", outcome: "clean", clears: ["leaked-secrets-critical", "leaked-secrets-high", "leaked-secrets-medium", "leaked-secrets-public", "leaked-secrets-info", "leaked-secrets-omitted", "leaked-secrets-partial"] },
       { name: "leaked-secrets-unscanned", outcome: "skipped" },
+      { name: "leaked-secrets-unfetched", outcome: "skipped" },
     ],
   },
 
@@ -4539,6 +4559,8 @@ export const leakedSecretsRule: Rule = {
     }
 
     // Scan external JavaScript files
+    // Scripts the audit referenced but could not read (#1749): a secret in one is unknown, not absent.
+    const unfetchedScripts: Array<{ url: string; reason: string }> = [];
     if (ctx.site?.scripts) {
       for (const script of ctx.site.scripts) {
         if (script.content) {
@@ -4546,9 +4568,14 @@ export const leakedSecretsRule: Rule = {
           const kept = admitted(scanned.secrets, scanned.omitted, scanned.omittedSerious);
           append(kept.secrets);
           noteOmitted(script.url, kept.omitted, kept.serious);
+        } else {
+          const reason = unfetchedReason(script);
+          if (reason) unfetchedScripts.push({ url: script.url, reason });
         }
       }
     }
+    // Scripts the asset fetch caps never requested: counted, not named (the crawl dropped them before they had a record).
+    const capDropped = ctx.site?.assetCapDropped?.scripts ?? 0;
 
     // Deduplicate by value (same secret may appear in multiple places).
     // The same value can be classified twice — the whole-document scan sees
@@ -4719,7 +4746,21 @@ export const leakedSecretsRule: Rule = {
       });
     }
 
-    if (realSecrets.length === 0 && unscanned.length === 0) {
+    if (unfetchedScripts.length > 0 || capDropped > 0) {
+      const named = unfetchedScripts.length;
+      const parts: string[] = [];
+      if (named > 0) parts.push(`${named} script(s) could not be read`);
+      if (capDropped > 0) parts.push(`${capDropped} script(s) were not requested because the asset fetch cap was reached`);
+      checks.push({
+        name: "leaked-secrets-unfetched",
+        status: "info",
+        message: `${parts.join(" and ")}, so a secret in them would not be found: no finding there is not a clean result`,
+        details: { unfetched: named, capDropped },
+        items: unfetchedScripts.slice(0, 20).map((u) => ({ id: u.url, label: u.reason })),
+      });
+    }
+
+    if (realSecrets.length === 0 && unscanned.length === 0 && unfetchedScripts.length === 0 && capDropped === 0) {
       checks.push({
         name: "leaked-secrets",
         status: "pass",

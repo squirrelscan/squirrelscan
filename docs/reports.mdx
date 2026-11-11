@@ -895,6 +895,8 @@ When a crawl is bigger than that:
 - An issue on one of those pages is never closed early: it stays open until an audit can confirm the fix.
 - The checks that cost the most to list, such as one failing on about half the pages with no pattern, can be dropped first. Their issues stay open the same way.
 
+A row that says part of the site was not read is never dropped to fit the size budget: a page that could not be parsed (`unread-page`), a scan that stopped at a work cap (`scan-truncated`), and a rule's `*-unscanned`, `*-omitted` or `*-unfetched` check (for example `leaked-secrets-unfetched`, scripts the audit could not read). Dropping one would read as a clean result, so it outranks every ordinary check when the report is cut.
+
 The full per-page results are never cut. They stay in your local project: run `squirrel report --format json` or `squirrel report --format llm` to read every page and every finding.
 
 ### Managing published reports
