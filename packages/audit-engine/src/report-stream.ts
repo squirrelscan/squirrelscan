@@ -23,6 +23,7 @@ import {
 } from "@squirrelscan/rules";
 import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
 import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
+import { normalizePageUrl } from "@squirrelscan/utils/url";
 import { parseRobotsTxt, resolveRobotsSitemapUrls } from "@squirrelscan/utils/robots-txt";
 
 import { logger } from "./adapter-logger";
@@ -38,6 +39,7 @@ import {
 
 import type {
   CrawlStorage,
+  FrontierRecord,
   RobotsTxtRecord,
   ImageAppearanceRecord,
 } from "@squirrelscan/core-contracts/storage";
@@ -50,6 +52,8 @@ import type {
   OpenGraphData,
   RedirectChain,
   ScanScopePageType,
+  ScanScopeTargeted,
+  TargetedRunUnaudited,
   ReportRuleResult,
   ResourceSizeData,
   RobotsTxtData,
@@ -147,6 +151,69 @@ export function pageTypeCoverageFor(
       ),
     ),
     Effect.catchAll(() => Effect.succeed([] as ScanScopePageType[])),
+  );
+}
+
+/** Rows `scanScope.targeted.unaudited` lists at most; `requested - audited` stays the true count. */
+const TARGETED_UNAUDITED_MAX = 100;
+
+/**
+ * What a targeted run (#1777) did with the URLs it was given: every one is audited or listed with its
+ * reason. The frontier holds exactly the targets (no discovery), plus a skipped row for the destination of a
+ * target that redirected to a URL not in the list. Pure: the caller reads the frontier and the audited pages.
+ */
+export function targetedCoverage(
+  entries: readonly FrontierRecord[],
+  auditedUrls: Iterable<string>,
+): ScanScopeTargeted {
+  const audited = new Set<string>();
+  for (const url of auditedUrls) audited.add(normalizePageUrl(url));
+  const redirectDestinations = new Map<string, string>();
+  for (const e of entries) {
+    if (e.reason === "redirect_not_targeted" && e.parentUrl) {
+      redirectDestinations.set(e.parentUrl, e.normalizedUrl);
+    }
+  }
+  const targets = entries.filter((e) => e.reason !== "redirect_not_targeted");
+  const unaudited: TargetedRunUnaudited[] = [];
+  let auditedCount = 0;
+  for (const e of targets) {
+    if (audited.has(normalizePageUrl(e.normalizedUrl))) {
+      auditedCount += 1;
+      continue;
+    }
+    if (e.status === "skipped") {
+      unaudited.push({ url: e.normalizedUrl, reason: e.reason ?? "skipped" });
+    } else if (e.status === "failed") {
+      unaudited.push({ url: e.normalizedUrl, reason: "failed" });
+    } else if (e.status === "done") {
+      const destination = redirectDestinations.get(e.normalizedUrl);
+      unaudited.push({
+        url: e.normalizedUrl,
+        reason: "redirected",
+        ...(destination ? { destination } : {}),
+      });
+    } else {
+      // Still pending or fetching when the crawl stopped (a time limit, an interrupted run).
+      unaudited.push({ url: e.normalizedUrl, reason: "not_reached" });
+    }
+  }
+  return {
+    requested: targets.length,
+    audited: auditedCount,
+    unaudited: unaudited.slice(0, TARGETED_UNAUDITED_MAX),
+  };
+}
+
+/** {@link targetedCoverage} for a stored crawl. A failed read gives an empty answer, never a failed report. */
+export function targetedCoverageFor(
+  storage: CrawlStorage,
+  crawlId: string,
+  auditedUrls: Iterable<string>,
+): Effect.Effect<ScanScopeTargeted, never, never> {
+  return storage.getAllFrontierEntries(crawlId).pipe(
+    Effect.map((entries) => targetedCoverage(entries, auditedUrls)),
+    Effect.catchAll(() => Effect.succeed({ requested: 0, audited: 0, unaudited: [] })),
   );
 }
 

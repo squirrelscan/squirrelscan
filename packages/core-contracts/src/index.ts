@@ -383,6 +383,13 @@ export const PRIVATE_TARGET_SKIP_REASON = "private-target";
 export const EXTERNAL_LINKS_NOT_CHECKED_SKIP_REASON = "external-links-not-checked";
 
 /**
+ * `skipReason` of a site-scope rule in a targeted run (#1777: `--target-url`, `targetUrls`). The run fetched
+ * only the listed URLs, so a rule that judges the whole site (inbound links, sitemap coverage, discovery
+ * probes) has nothing to judge. An evaluation gap, not a pass: never scored, never a finding.
+ */
+export const TARGETED_RUN_SKIP_REASON = "targeted-run";
+
+/**
  * The `error` a link row carries when its host was CONFIRMED not to resolve (#1740): a definitive "no such
  * host" answer (NXDOMAIN, or no address records) that held on a second lookup. It is a verdict, stored like a
  * status (so it survives the cache and the database with no new column), and `links/broken-external-links`
@@ -1358,6 +1365,32 @@ export interface ScanScopePageType {
   audited: number;
 }
 
+/** Why a URL named by `targetUrls` was not audited (#1777). */
+export interface TargetedRunUnaudited {
+  url: string;
+  /**
+   * Why: `robots_disallowed`, `url_too_long`, `over_max_pages`, `invalid_url`, `failed`, `redirected` (the URL
+   * redirects, so it is recorded as a redirect and not audited as a page), or the crawler's scope reason for
+   * a URL outside the site or the include and exclude rules.
+   */
+  reason: string;
+  /** Where a `redirected` URL led, when that destination was NOT audited (it was not in the list). */
+  destination?: string;
+}
+
+/**
+ * A targeted run (#1777): the audit fetched exactly the URLs it was given and nothing else. Every URL given
+ * is accounted for: audited, or listed in `unaudited` with its reason.
+ */
+export interface ScanScopeTargeted {
+  /** URLs given, after dropping duplicates. */
+  requested: number;
+  /** URLs fetched and audited. */
+  audited: number;
+  /** The URLs given that were not audited, with the reason (capped at 100 rows; `requested - audited` is the true count). */
+  unaudited: TargetedRunUnaudited[];
+}
+
 /** Where an audit executed + how much of the site it crawled (#1180). */
 export interface ScanScope {
   /** "cli" = local machine, "ci" = CI runner, "cloud" = squirrelscan cloud container. */
@@ -1405,6 +1438,11 @@ export interface ScanScope {
    * first. Absent on reports from before it. REPORT-ONLY.
    */
   pageTypes?: ScanScopePageType[];
+  /**
+   * Present only on a targeted run (#1777): the audit was given an explicit URL list and fetched those URLs
+   * only, so site-wide rules skipped with `targeted-run` and the score covers just these pages.
+   */
+  targeted?: ScanScopeTargeted;
   /**
    * The start URL's followed redirect (#1281), kept here so a report rebuilt
    * from the crawl later still names the URL the user gave. The report's

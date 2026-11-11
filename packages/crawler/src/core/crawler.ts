@@ -984,6 +984,10 @@ export function createCrawler(
         });
       });
 
+    // A targeted run (#1777) fetches exactly `config.targetUrls`: read at call time, since a resumed crawl
+    // merges its stored config in after the crawler is built.
+    const isTargetedRun = (): boolean => (config.targetUrls?.length ?? 0) > 0;
+
     // ----------------------------------------
     // Enqueue URL
     // ----------------------------------------
@@ -1216,7 +1220,7 @@ export function createCrawler(
     // the crawl runs. Shared by the fetch path and reuseCachedPage so the two
     // can never disagree about it (#354).
     const linkDiscoveryAllowed = (): boolean =>
-      !config.disableLinkDiscovery || config.sitemapPendingCount === 0;
+      !isTargetedRun() && (!config.disableLinkDiscovery || config.sitemapPendingCount === 0);
 
     // Shared by every "no real fetch needed" path: copy the cached page +
     // links + images into the current crawl for reporting, re-discover links to
@@ -2097,7 +2101,27 @@ export function createCrawler(
             });
             yield* updateStats(crawlId, { pagesFetched: 1, bytesTotal: 0 });
             markPrefixCrawled(entry.normalizedUrl, entry.depth);
-            yield* enqueueUrl(crawlId, redirectTarget, entry.depth, entry.normalizedUrl, "discovered");
+            if (isTargetedRun()) {
+              // The destination is audited only when it is in the list too (#1777); it is then already in
+              // the frontier and the dedupe in enqueueUrl leaves it alone.
+              const destination = normalizeAndCheckScope(redirectTarget).normalized;
+              if (destination && !(yield* storage.hasFrontierEntry(crawlId, destination))) {
+                yield* storage.upsertFrontier(crawlId, {
+                  normalizedUrl: destination,
+                  rawUrl: redirectTarget,
+                  depth: entry.depth,
+                  parentUrl: entry.normalizedUrl,
+                  priority: 0,
+                  status: "skipped",
+                  source: "discovered",
+                  enqueuedAt: Date.now(),
+                  retryCount: 0,
+                  reason: "redirect_not_targeted",
+                });
+              }
+            } else {
+              yield* enqueueUrl(crawlId, redirectTarget, entry.depth, entry.normalizedUrl, "discovered");
+            }
             yield* emitProgress(crawlId);
             return;
           }
@@ -3136,7 +3160,11 @@ export function createCrawler(
         const seedPhase = createPhaseBudget(discoveryBudgetMs(config.timeoutMs, config.discoveryDeadlineAt), Date.now(), refusals);
 
         // Follow redirects to get final URL (both HTTP and client-side)
-        const rawFinalTargetUrl = yield* detectRedirects(targetUrl, seedPhase);
+        // A targeted run (#1777) asks for exactly the URLs it was given: the start URL is the site's base,
+        // not a page to request, so its redirect is not probed (give the final host).
+        const rawFinalTargetUrl = isTargetedRun()
+          ? targetUrl
+          : yield* detectRedirects(targetUrl, seedPhase);
         // SECURITY (#1396) defense-in-depth: detectRedirects follows client-side
         // redirects (meta refresh / JS) whose target is page-controlled.
         // findMetaRefresh / findJavaScriptRedirect already restrict to
@@ -3288,6 +3316,59 @@ export function createCrawler(
             // established was missing (squirrelscan/repo#1733).
             error: robotsResult.right.data.errors[0] ?? null,
           });
+        }
+
+        // A targeted run (#1777) stops here: robots.txt is fetched (and honoured), nothing else is asked
+        // for. No discovery probes, no sitemaps, no links; only the listed URLs, through the same scope,
+        // robots and length checks as any URL, each refusal kept with its reason.
+        if (isTargetedRun()) {
+          yield* storage.updateStats(crawlId, { targetedRun: true, linkDiscoveryOff: true });
+          let accepted = 0;
+          const seen = new Set<string>();
+          for (const target of config.targetUrls ?? []) {
+            const { normalized } = normalizeAndCheckScope(target);
+            if (!normalized) {
+              // Not a URL at all: still accounted for, never silently dropped.
+              yield* storage.upsertFrontier(crawlId, {
+                normalizedUrl: target.slice(0, 2048),
+                rawUrl: target.slice(0, 2048),
+                depth: 0,
+                priority: 0,
+                status: "skipped",
+                source: "carried",
+                enqueuedAt: Date.now(),
+                retryCount: 0,
+                reason: "invalid_url",
+              });
+              continue;
+            }
+            if (seen.has(normalized)) continue;
+            seen.add(normalized);
+            if (accepted >= config.maxPages) {
+              // Over the cap: listed as not audited, never silently dropped.
+              yield* storage.upsertFrontier(crawlId, {
+                normalizedUrl: normalized,
+                rawUrl: new URL(target, baseUrl).toString(),
+                depth: 0,
+                priority: 0,
+                status: "skipped",
+                source: "carried",
+                enqueuedAt: Date.now(),
+                retryCount: 0,
+                reason: "over_max_pages",
+              });
+              continue;
+            }
+            const before = yield* storage.getPendingCount(crawlId);
+            // "carried": the targets are the whole frontier, so the source only has to be a non-seed one.
+            yield* enqueueUrl(crawlId, target, 0, undefined, "carried");
+            if ((yield* storage.getPendingCount(crawlId)) > before) accepted++;
+          }
+          if (accepted === 0) {
+            logger.warn("nothing to crawl", "every target URL was refused (scope, robots or length)");
+          }
+          yield* runCrawlLoop(crawlId);
+          return crawlId;
         }
 
         yield* sendDiscoveryProbes(crawlId, preamble);
