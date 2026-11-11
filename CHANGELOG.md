@@ -19,6 +19,7 @@ How it works:
 
 ### Added
 
+- **New rule `i18n/hreflang-targets`: hreflang links that point at the wrong place.** It judges each hreflang target the crawl already fetched, with no extra requests: a redirect (warning, with the final URL), a 4xx or 5xx (error, with the status), a `noindex` page or one whose canonical is another URL (warning, with the reason), and a target that has hreflang links but none back to the source page (error, each pair once). Targets the crawl did not fetch are counted as not checked, and a site with no hreflang links gets a skipped result. (#1686)
 - New rule `analytics/duplicate-tags`: warns when one page installs the same Google Analytics 4 measurement ID, Google Tag Manager container or analytics site ID more than once, which counts every visit twice (#1691).
 - New rule `links/click-depth` lists indexable pages more than 3 clicks from the homepage by shortest link path, deepest first with each depth. The threshold is the `maxDepth` rule option, a crawl stopped at its page cap says depths are a lower bound, and pages with no link path are left to `links/orphan-pages`. Advisory weight.
 - **`crawl/indexable-search-results` reports internal search result pages that search engines can index.** A `/search` path with a query, a search parameter (`s`, `q`, `query`, `search`, `keyword`) on a page that shows results, or a URL matching the site's WebSite `SearchAction` target counts as a search result. Pages with `noindex`, a robots.txt `Disallow` or a canonical to a non-search page are not listed. The finding says how many were found and how many are indexable, and names both fixes. (#1696)
@@ -3048,6 +3049,7 @@ Browse the full rule set → https://docs.squirrelscan.com/rules
 
 - Cloud audits that stall past their deadline are now finalized automatically instead of hanging.
 - More efficient handling of error and empty pages during analysis.
+
 
 
 
