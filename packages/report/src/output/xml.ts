@@ -398,8 +398,10 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
     lines.push(`${indent(1)}</not-checked>`);
   }
 
-  // #1734: cloud checks that did not run, with the reason each carries.
-  const locked = lockedRulesMessage(report);
+  // #1734: cloud checks that did not run, with the reason each carries. Omitted for white-label reports, like
+  // the HTML, text and markdown sections: the message and its call to action name squirrelscan signup,
+  // credits and the dashboard.
+  const locked = options?.branding?.whiteLabel ? null : lockedRulesMessage(report);
   if (locked) {
     lines.push(`${indent(1)}<locked-rules count="${locked.count}" audience="${locked.audience}">`);
     lines.push(`${indent(2)}<message>${escapeXml(locked.action)}</message>`);
