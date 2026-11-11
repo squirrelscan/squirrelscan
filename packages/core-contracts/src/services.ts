@@ -22,6 +22,7 @@ export type CloudServiceId =
   | "editor-summary"
   | "domain-stats"
   | "archive-indexing"
+  | "third-party-scan"
   | "render";
 
 // Slim per-page payload sent from the CLI for AI analysis.
