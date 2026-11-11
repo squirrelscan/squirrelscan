@@ -1956,6 +1956,12 @@
    "redirect-chain|pass|No redirect chains exceed # hops||"
   ]
  },
+ "crawl/rendered-signal-mismatch": {
+  "digest": "236652191728355",
+  "lines": [
+   "rendered-signal-mismatch|skipped|Raw-vs-rendered signal comparison skipped||"
+  ]
+ },
  "crawl/robots-meta-conflict": {
   "digest": "106374371578280",
   "lines": [

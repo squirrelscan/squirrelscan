@@ -216,7 +216,8 @@
                   "rules/crawl/html-size",
                   "rules/crawl/pdf-size",
                   "rules/crawl/soft-404",
-                  "rules/crawl/single-page-site"
+                  "rules/crawl/single-page-site",
+                  "rules/crawl/rendered-signal-mismatch"
                 ]
               },
               {
