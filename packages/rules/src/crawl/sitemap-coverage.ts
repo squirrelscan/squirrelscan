@@ -6,6 +6,7 @@ import { normalizeUrl } from "@squirrelscan/utils";
 
 import { excludesNoindexPage, noindexSource, skipsNoindexPages } from "../shared/noindex";
 import { sampleUrlItems } from "../shared/sample-items";
+import { productDiscoveryCheck } from "./product-discovery";
 
 function normalizedOrNull(url: string): string | null {
   try {
@@ -15,7 +16,7 @@ function normalizedOrNull(url: string): string | null {
   }
 }
 
-export const sitemapCoverageRule: Rule = {
+const coverageRule: Rule = {
   meta: {
     id: "crawl/sitemap-coverage",
     name: "Sitemap Coverage",
@@ -185,5 +186,17 @@ export const sitemapCoverageRule: Rule = {
     }
 
     return { checks };
+  },
+};
+
+export const sitemapCoverageRule: Rule = {
+  ...coverageRule,
+  run(ctx: RuleContext): RuleResult {
+    const result = coverageRule.run(ctx) as RuleResult;
+    // After the coverage verdict, on every path: a failed or absent sitemap read is exactly
+    // when the provenance of a shop's product URLs is worth stating.
+    const discovery = productDiscoveryCheck(ctx);
+    if (discovery) result.checks.push(discovery);
+    return result;
   },
 };

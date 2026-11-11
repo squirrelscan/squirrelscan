@@ -2489,6 +2489,14 @@ export interface SitemapFetchFailure {
   error: string;
 }
 
+/**
+ * How completely the sitemap walk read the sitemaps:
+ * - `complete`: every sitemap it found was read, with no URL cap, walk deadline or child failure.
+ * - `partial`: something was read, but a child failed, an entry point failed, or a cap or deadline stopped the walk.
+ * - `unreadable`: the root sitemap(s) the site declared could not be read.
+ */
+export type SitemapReadState = "complete" | "partial" | "unreadable";
+
 export interface SitemapDiscovery {
   discovered: SitemapData[];
   sources: { robotsTxt: string[]; commonLocations: string[] };
@@ -2509,6 +2517,11 @@ export interface SitemapDiscovery {
    * Optional: absent reads as "the walk completed".
    */
   truncated?: boolean;
+  /**
+   * How completely the sitemaps were read. Absent reads as unknown (a crawl
+   * stored before it was recorded), never as complete.
+   */
+  readState?: SitemapReadState;
 }
 
 export interface SitemapUrlStatusData {

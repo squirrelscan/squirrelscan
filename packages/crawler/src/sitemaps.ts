@@ -4,6 +4,7 @@ import { Effect } from "effect";
 import { XMLParser, XMLValidator } from "fast-xml-parser";
 
 import type {
+  SitemapReadState,
   RobotsTxtData,
   SitemapData,
   SitemapFetchFailure,
@@ -1030,6 +1031,56 @@ export interface SitemapDiscoveryResult {
    * Consumers must report unknown rather than missing when this is set.
    */
   truncated: boolean;
+}
+
+/**
+ * How completely a sitemap walk read the site's sitemaps. A common-location
+ * 404 is not a failure (the site just has no file there); a failed robots.txt
+ * `Sitemap:` entry is, because the site declared it.
+ *
+ * - `unreadable`: nothing was read, and the site declared a sitemap that failed
+ *   (or the walk stopped before reading anything).
+ * - `partial`: something was read, but an entry point the site declared failed,
+ *   an index child is missing from what was read, or the URL cap, the depth
+ *   cap or the walk deadline stopped the walk.
+ * - `complete`: everything found was read with none of the above.
+ *
+ * Returns `null` when no sitemap was found and none was declared: there is no
+ * state to report, and `crawl/sitemap-exists` owns that case.
+ */
+export function classifySitemapReadState(
+  result: Pick<SitemapDiscoveryResult, "discovered" | "all" | "failed" | "truncated">,
+): SitemapReadState | null {
+  const declaredFailures = result.failed.filter(
+    (failure) =>
+      failure.source === "robots.txt" && failure.error !== SITEMAP_OFF_SITE_SKIPPED_ERROR,
+  );
+  if (result.discovered.length === 0) {
+    return declaredFailures.length > 0 || result.truncated ? "unreadable" : null;
+  }
+  if (declaredFailures.length > 0 || result.truncated) return "partial";
+
+  const read = new Set(result.all.map((sitemap) => sitemap.url));
+  for (const sitemap of result.all) {
+    if (sitemap.type !== "index") continue;
+    let host: string;
+    try {
+      host = new URL(sitemap.url).host;
+    } catch {
+      continue;
+    }
+    for (const child of sitemap.childSitemaps) {
+      // Cross-host children are skipped on purpose by the walk, not failed.
+      let childHost: string;
+      try {
+        childHost = new URL(child).host;
+      } catch {
+        continue;
+      }
+      if (childHost === host && !read.has(child)) return "partial";
+    }
+  }
+  return "complete";
 }
 
 export interface DiscoverSitemapsOptions {

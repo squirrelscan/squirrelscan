@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- `crawl/sitemap-coverage` reports where a shop's product URLs were found (#1651). For a site with commerce evidence (`Product` JSON-LD or `og:type` product on at least three crawled pages, or one plus a cart or checkout link) it adds an info check `product-discovery`: how many product URLs came from the sitemap, from crawl links or from both, and whether the sitemaps were read `complete`, `partial` or `unreadable`. A crawl stopped at its page limit is reported as bounded coverage. It never claims a product is missing, because neither a sampled crawl nor a sitemap is a product inventory. Sites without commerce evidence see no change.
+
 ## v0.0.178 (2026-11-11)
 
 Structured data checks now say what they could and could not read. The schema product rule reports each of name, description, image, price and availability as present, absent or unknown, and two new informational checks report merchant identity for a confirmed shop and the contact channels an organization publishes. Products written as Microdata or RDFa, and a ProductGroup with its variants, are now read as products, a price of 0 counts as declared, and price or availability is found on any offer or variant. A truncated or failed read, or a JavaScript-only product shell, leaves the fields unknown with an info result where the missing-field checks used to warn, so some pages move between info and warn. The api-catalog check accepts only a non-empty linkset and reports a 403 or 429 as not checked, the Agents score line says it covers the scored agent experience rules, with llms.txt, Markdown response and AGENTS.md listed separately, and the editor summary request now carries check-level evidence so it stops recommending what a site already has.

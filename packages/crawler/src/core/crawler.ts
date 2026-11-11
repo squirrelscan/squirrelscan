@@ -63,6 +63,7 @@ import { RefusalLog } from "../refusals";
 import { memoizeTlsProbe, withTlsCause } from "../tls-cause";
 import {
   computeSitemapUrlCap,
+  classifySitemapReadState,
   discoverSitemaps,
   selectSitemapUrls,
   SITEMAP_WALK_TOTAL_MS,
@@ -3223,6 +3224,11 @@ export function createCrawler(
             "the walk stopped before visiting every entry point; absence is unconfirmed",
           );
           yield* storage.updateStats(crawlId, { sitemapDiscoveryTruncated: true });
+        }
+
+        const sitemapReadState = classifySitemapReadState(sitemapResult);
+        if (sitemapReadState) {
+          yield* storage.updateStats(crawlId, { sitemapReadState });
         }
 
         const sitemapByUrl = new Map(sitemapResult.all.map((sitemap) => [sitemap.url, sitemap]));
