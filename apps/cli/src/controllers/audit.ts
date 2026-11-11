@@ -2675,7 +2675,7 @@ export async function runAudit(
       // what ran even after a level's definition changes. REPORT-ONLY.
       // An --offline run records what ran, not the level's cloud defaults (#1275).
       if (options.auditLevel) {
-        // A targeted run checks no links, so it records that too (#1777).
+        // A targeted run is marked, as an offline one is (#1777).
         const ran = options.offline
           ? offlineAuditSettings(options.auditLevel)
           : options.auditLevel;
@@ -3088,7 +3088,6 @@ export function mergeOptionsToConfig(
   config: Config,
   options: RunAuditOptions
 ): Config {
-  const targetedRun = (options.targetUrls?.length ?? 0) > 0;
   const nextExternalLinks = {
     ...config.external_links,
     ...(typeof options.externalLinksEnabled === "boolean"
@@ -3197,15 +3196,13 @@ export function mergeOptionsToConfig(
     },
     // --offline promises no network beyond the audited site itself, so
     // external-link probing (fetches to third-party URLs) is disabled too.
-    // A targeted run (#1777) checks no links: the link rules are site-wide and skip, so the status
-    // requests (and the cloud link credits) would be spent for nothing.
-    external_links:
-      options.offline || targetedRun
-        ? { ...nextExternalLinks, enabled: false }
-        : nextExternalLinks,
+    external_links: options.offline
+      ? { ...nextExternalLinks, enabled: false }
+      : nextExternalLinks,
     // repo#2729: the internal link probe only requests the audited site, so
-    // --offline keeps it; --no-internal-links turns it off.
-    ...(options.internalLinksEnabled === false || targetedRun
+    // --offline keeps it; --no-internal-links turns it off. A targeted run (#1777, #1778) keeps both link
+    // checks: the link rules read the links on the listed pages, and only those links are checked.
+    ...(options.internalLinksEnabled === false
       ? { internal_links: { ...config.internal_links, enabled: false } }
       : {}),
     // #2307: --no-classifier turns the page classifier off; absent keeps the config's choice.

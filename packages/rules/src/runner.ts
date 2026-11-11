@@ -166,11 +166,27 @@ const DEFAULT_RULE_CONCURRENCY = 8;
 const ROOT_RESOURCE_RULES: ReadonlySet<string> = new Set(["crawl/sitemap-exists"]);
 
 /**
- * Site rules that still run in a targeted run (#1777): they judge a file the crawl fetches whatever it is
- * given (robots.txt). Every other site rule judges the whole site, or a resource only a probe or the entry
- * page would have fetched, and skips.
+ * Site rules that still run in a targeted run (#1777, #1778): the ones that can be judged from the listed
+ * pages alone. `crawl/robots-txt` judges a file the crawl fetches whatever it is given. The link rules read the
+ * links ON the listed pages (broken-links and broken-external-links through the link checks, which are on for a
+ * targeted run and check only those links; broken-anchors judges only targets the crawl fetched). The secret
+ * and header rules read the listed pages and the scripts they load: leaked-secrets, and csp, hsts and
+ * x-frame-options, which judge the first listed page's headers. Every other site rule judges the whole site
+ * (orphans, sitemap coverage, duplicates across pages, discovery probes) and skips.
+ *
+ * A rule on this list sees only the listed pages, so what it reports names those pages and nothing else: a
+ * comparison reads a finding on an unlisted page as not compared, never as fixed (see `report --diff`).
  */
-const SITE_RULES_ON_TARGETED_RUN: ReadonlySet<string> = new Set(["crawl/robots-txt"]);
+const SITE_RULES_ON_TARGETED_RUN: ReadonlySet<string> = new Set([
+  "crawl/robots-txt",
+  "links/broken-links",
+  "links/broken-anchors",
+  "links/broken-external-links",
+  "security/leaked-secrets",
+  "security/csp",
+  "security/hsts",
+  "security/x-frame-options",
+]);
 
 /** Whether a rule's findings are about root resources (a discovery probe or the sitemap). */
 function judgesRootResource(rule: Rule): boolean {

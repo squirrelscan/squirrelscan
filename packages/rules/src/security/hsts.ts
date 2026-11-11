@@ -1,8 +1,9 @@
 // security/hsts - HTTP Strict Transport Security header
 
+import { judgedPage, namingPage } from "./judged-page";
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
-export const hstsRule: Rule = {
+const baseHstsRule: Rule = {
   meta: {
     id: "security/hsts",
     name: "HSTS Header",
@@ -29,7 +30,7 @@ export const hstsRule: Rule = {
 
   run(ctx: RuleContext): RuleResult {
     const checks: CheckResult[] = [];
-    const firstPage = ctx.site?.pages[0];
+    const firstPage = judgedPage(ctx.site?.pages);
 
     if (!firstPage) {
       checks.push({
@@ -112,5 +113,15 @@ export const hstsRule: Rule = {
     }
 
     return { checks };
+  },
+};
+
+/** The header rule, with each finding naming the page the header was read from (#1778). */
+export const hstsRule: Rule = {
+  ...baseHstsRule,
+  run(ctx: RuleContext): RuleResult {
+    const out = baseHstsRule.run(ctx) as RuleResult;
+    const page = judgedPage(ctx.site?.pages);
+    return page ? { ...out, checks: namingPage(out.checks, page.url) } : out;
   },
 };

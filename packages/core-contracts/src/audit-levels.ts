@@ -166,8 +166,8 @@ export interface ResolvedAuditSettings {
    */
   offline?: true;
   /**
-   * Set on a targeted run (`--target-url`, #1777): `settings` are then what actually ran, with external link
-   * checks off (a targeted run checks no links), while `level` and `basedOn` still name the level asked for.
+   * Set on a targeted run (`--target-url`, #1777): the audit fetched only the URLs it was given, so the score
+   * and every site-scope rule describe those pages. `settings`, `level` and `basedOn` are as asked for.
    */
   targeted?: true;
 }
@@ -185,16 +185,9 @@ export function offlineAuditSettings(resolved: ResolvedAuditSettings): ResolvedA
   };
 }
 
-/**
- * The snapshot of a targeted run (#1777): the settings that ran, not the level's defaults. A targeted run
- * fetches only the URLs it was given and checks no links, so `externalLinks` is off whatever the level says.
- */
+/** The snapshot of a targeted run (#1777): the level's settings, marked as targeted. */
 export function targetedAuditSettings(resolved: ResolvedAuditSettings): ResolvedAuditSettings {
-  return {
-    ...resolved,
-    settings: { ...resolved.settings, externalLinks: false },
-    targeted: true,
-  };
+  return { ...resolved, targeted: true };
 }
 
 /** Settings of a level with overrides applied. Pages are clamped to 1..AUDIT_MAX_PAGES. */

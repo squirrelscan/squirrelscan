@@ -23,7 +23,9 @@ const site = Bun.serve({
     hits.push(`${req.method} ${pathname}`);
     if (pathname.startsWith("/p/") || pathname === "/") {
       return new Response(
-        `<!doctype html><html lang="en"><head><title>Page ${pathname}</title></head><body><h1>Hello</h1>${links}</body></html>`,
+        // Each page also links to a path of its own that does not exist: `/from/<page>` is a dead link found
+        // only on that page.
+        `<!doctype html><html lang="en"><head><title>Page ${pathname}</title></head><body><h1>Hello</h1>${links}<a href="/from${pathname}">dead</a><a href="/p/2#no-such-section">anchor</a></body></html>`,
         { headers: { "content-type": "text/html; charset=utf-8" } }
       );
     }
@@ -71,7 +73,7 @@ const base = () => `http://127.0.0.1:${site.port}/`;
 
 interface Json {
   meta: {
-    auditLevel?: { targeted?: boolean; settings?: { externalLinks?: boolean } };
+    auditLevel?: { targeted?: boolean };
     targeted?: {
       requested: number;
       audited: number;
@@ -112,14 +114,21 @@ describe("--target-url", () => {
     expect(r.code).toBe(0);
     const json = JSON.parse(r.out) as Json;
 
-    // The site saw the three pages and robots.txt: no start URL, no sitemap, no probe, no link followed, and
-    // no status check of the links on the pages (the link rules are site-wide and skip).
-    expect([...new Set(hits)].sort()).toEqual([
+    // The site saw the three pages and robots.txt as GETs: no start URL, no sitemap, no probe, no link followed.
+    const gets = [...new Set(hits.filter((h) => h.startsWith("GET ")))].sort();
+    expect(gets).toEqual([
       "GET /p/1",
       "GET /p/2",
       "GET /p/3",
       "GET /robots.txt",
     ]);
+    // Link status checks (#1778): only links found on the three listed pages are checked, each once. The dead
+    // link of a listed page is asked for; the dead link of an unlisted page never is.
+    const heads = hits.filter((h) => h.startsWith("HEAD "));
+    expect(new Set(heads).size).toBe(heads.length);
+    expect(heads).toContain("HEAD /from/p/1");
+    expect(heads).toContain("HEAD /from/p/3");
+    expect(heads).not.toContain("HEAD /from/p/4");
     expect(hits.some((h) => /sitemap|llms|well-known/.test(h))).toBe(false);
 
     // The pages list also names the refused URL (status 0, with its reason); the audited pages are the three.
@@ -133,9 +142,8 @@ describe("--target-url", () => {
     expect(rows.find((p) => p.status === 0)?.url).toContain(
       "elsewhere.example.org"
     );
-    // The report says what ran: no links were checked, whatever the level says (#1777).
+    // The report says the run was targeted (#1777).
     expect(json.meta.auditLevel?.targeted).toBe(true);
-    expect(json.meta.auditLevel?.settings?.externalLinks).toBe(false);
     // The per-rule statement (#1747): a page rule ran over the three pages, a whole-site rule did not run.
     const byRule = new Map((json.rules ?? []).map((r) => [r.ruleId, r]));
     expect(byRule.get("core/meta-title")).toMatchObject({
@@ -146,6 +154,15 @@ describe("--target-url", () => {
       status: "skipped",
       reason: "targeted-run",
     });
+    // The site rules that can be judged from the listed pages run (#1778) and report the dead links on them.
+    for (const id of ["links/broken-links", "security/csp"]) {
+      expect(byRule.get(id)?.status, id).toBe("ran");
+    }
+    // An anchor to a listed page that has no such id is found (#1778); the rule judges only targets it fetched.
+    expect(byRule.get("links/broken-anchors")?.status).toBe("ran");
+    expect(r.out).toContain("no-such-section");
+    expect(r.out).toContain("/from/p/1");
+    expect(r.out).not.toContain("/from/p/4");
     // Every URL given is accounted for: the off-site one is listed with a reason, not dropped.
     expect(json.meta.targeted?.requested).toBe(4);
     expect(json.meta.targeted?.audited).toBe(3);
@@ -153,25 +170,6 @@ describe("--target-url", () => {
     expect(json.meta.targeted?.unaudited[0]?.url).toContain(
       "elsewhere.example.org"
     );
-  });
-
-  test("--external-links with --target-url prints one note that it is ignored", async () => {
-    const r = await squirrel(
-      join(scratch, "home3"),
-      "audit",
-      base(),
-      "--http",
-      "-f",
-      "json",
-      "--external-links",
-      "--target-url",
-      "/p/1"
-    );
-    expect(r.code).toBe(0);
-    expect(r.err).toContain("--external-links is ignored on a targeted audit");
-    expect(
-      (JSON.parse(r.out) as Json).meta.auditLevel?.settings?.externalLinks
-    ).toBe(false);
   });
 
   test("an ordinary audit of the same site has no meta.targeted", async () => {

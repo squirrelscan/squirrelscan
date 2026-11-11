@@ -1,5 +1,6 @@
 // security/x-frame-options - Clickjacking protection
 
+import { judgedPage, namingPage } from "./judged-page";
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 /** Trim + uppercase; a header repeated with the same value ("DENY, DENY") collapses to it. */
@@ -24,7 +25,7 @@ function printable(raw: string): string {
   return clean.length > 80 ? `${clean.slice(0, 80)}...` : clean;
 }
 
-export const xFrameOptionsRule: Rule = {
+const baseXFrameOptionsRule: Rule = {
   meta: {
     id: "security/x-frame-options",
     name: "X-Frame-Options",
@@ -48,7 +49,7 @@ export const xFrameOptionsRule: Rule = {
 
   run(ctx: RuleContext): RuleResult {
     const checks: CheckResult[] = [];
-    const firstPage = ctx.site?.pages[0];
+    const firstPage = judgedPage(ctx.site?.pages);
 
     if (!firstPage) {
       checks.push({
@@ -111,5 +112,15 @@ export const xFrameOptionsRule: Rule = {
     }
 
     return { checks };
+  },
+};
+
+/** The header rule, with each finding naming the page the header was read from (#1778). */
+export const xFrameOptionsRule: Rule = {
+  ...baseXFrameOptionsRule,
+  run(ctx: RuleContext): RuleResult {
+    const out = baseXFrameOptionsRule.run(ctx) as RuleResult;
+    const page = judgedPage(ctx.site?.pages);
+    return page ? { ...out, checks: namingPage(out.checks, page.url) } : out;
   },
 };

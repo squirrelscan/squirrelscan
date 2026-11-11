@@ -274,11 +274,13 @@ export const brokenLinksRule: Rule = {
     };
     // The pages a footer is read on: parsed HTML pages, not redirect entries, error pages or files.
     const crawledHtmlPages = htmlPageCount(pages);
+    // A targeted run (#1777) audits a few listed pages: a link in all of them is not "site-wide", so nothing splits.
+    const split = ctx.site?.targetedRun !== true;
     const contentBroken: ReturnType<typeof itemOf>[] = [];
     const sitewideBroken: ReturnType<typeof itemOf>[] = [];
     for (const b of brokenLinks) {
       const built = itemOf(b);
-      (isSitewide(built.reach, crawledHtmlPages) ? sitewideBroken : contentBroken).push(built);
+      (split && isSitewide(built.reach, crawledHtmlPages) ? sitewideBroken : contentBroken).push(built);
     }
 
     if (contentBroken.length > 0) {

@@ -408,8 +408,8 @@ describe("audit level line of a targeted run (#1777)", () => {
         ...extra,
       } as never,
     });
-  test("says only the listed URLs were audited and no links were checked", () => {
-    expect(auditLevelLine(level({ targeted: true }))).toContain("Targeted: only the listed URLs were audited, and no links were checked.");
+  test("says only the listed URLs were audited", () => {
+    expect(auditLevelLine(level({ targeted: true }))).toContain("Targeted: only the listed URLs were audited.");
   });
   test("an ordinary run's line is unchanged", () => {
     expect(auditLevelLine(level({}))).toBe("Audit level: Surface.");

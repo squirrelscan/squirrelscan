@@ -20,7 +20,7 @@ import { checkAffectedPages } from "./affected-pages";
 import { reportFailureReasonCode } from "./failure-notice";
 
 const OFFLINE_NOTE = " Offline: cloud checks, rendering and external link checks did not run.";
-const TARGETED_NOTE = " Targeted: only the listed URLs were audited, and no links were checked.";
+const TARGETED_NOTE = " Targeted: only the listed URLs were audited.";
 
 /**
  * One-line audit level summary, e.g.

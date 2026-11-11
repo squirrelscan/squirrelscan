@@ -517,8 +517,10 @@ export const brokenExternalLinksRule: Rule = {
           item,
           reach: chromeReach(placement.chromeSources(item.id)),
         }));
-        const sitewide = all.filter((b) => isSitewide(b.reach, crawledPages));
-        const content = all.filter((b) => !isSitewide(b.reach, crawledPages));
+        // A targeted run audits a few listed pages: nothing on them is "site-wide" (#1777).
+        const split = ctx.site?.targetedRun !== true;
+        const sitewide = all.filter((b) => split && isSitewide(b.reach, crawledPages));
+        const content = all.filter((b) => !(split && isSitewide(b.reach, crawledPages)));
         const reasons = (list: typeof all): string => {
           const byReason = new Map<string, number>();
           for (const { link } of list) {

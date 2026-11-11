@@ -58,7 +58,21 @@ import { targetedCoverage } from "../src/report-stream";
 
 const CONFIG = {
   rule_options: {},
-  rules: { enable: ["core/meta-title", "links/click-depth", "crawl/robots-txt", "crawl/sitemap-exists"] },
+  rules: {
+    enable: [
+      "core/meta-title",
+      "links/click-depth",
+      "crawl/robots-txt",
+      "crawl/sitemap-exists",
+      // The site rules that can be judged from the listed pages (#1778).
+      "links/broken-links",
+      "links/broken-anchors",
+      "security/leaked-secrets",
+      "security/csp",
+      "security/hsts",
+      "security/x-frame-options",
+    ],
+  },
   crawler: { max_pages: 50, exclude: [] },
   external_links: { enabled: false },
   internal_links: { enabled: false },
@@ -123,6 +137,19 @@ for (const engine of ["v1", "v2"] as const) {
         const c = r.checks(id);
         expect(c.length, id).toBeGreaterThan(0);
         expect(c.every((x) => x.status === "skipped" && x.skipReason === TARGETED_RUN_SKIP_REASON), id).toBe(true);
+      }
+      // The site rules that can be judged from the listed pages run (#1778): none of them skips as targeted-run.
+      for (const id of [
+        "links/broken-links",
+        "links/broken-anchors",
+        "security/leaked-secrets",
+        "security/csp",
+        "security/hsts",
+        "security/x-frame-options",
+      ]) {
+        const c = r.checks(id);
+        expect(c.length, id).toBeGreaterThan(0);
+        expect(c.some((x) => x.skipReason === TARGETED_RUN_SKIP_REASON), id).toBe(false);
       }
       // robots.txt is fetched whatever is given, so its rule still runs.
       expect(r.checks("crawl/robots-txt").some((x) => x.skipReason === TARGETED_RUN_SKIP_REASON)).toBe(false);

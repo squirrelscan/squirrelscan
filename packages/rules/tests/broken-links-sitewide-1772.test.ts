@@ -256,3 +256,17 @@ describe("what counts toward site-wide (#1772 review)", () => {
     expect(named(run2(withConfidence("model", 0.9)), "broken-links-sitewide")).toHaveLength(1);
   });
 });
+
+describe("a targeted run does not split (#1772 nit)", () => {
+  test("a link in the footer of all 3 listed pages stays content: three listed pages are not a site", () => {
+    const c = ctx(site(3, () => [{ url: footerGone, section: "footer" }]), { [footerGone]: 404 }) as unknown as {
+      site: { targetedRun?: boolean };
+    };
+    c.site.targetedRun = true;
+    const checks = run(c as unknown as RuleContext);
+    expect(named(checks, "broken-links-sitewide")).toHaveLength(0);
+    expect(named(checks, "broken-links")[0]?.status).toBe("fail");
+    // The same pages on an ordinary audit are site-wide.
+    expect(named(run(ctx(site(3, () => [{ url: footerGone, section: "footer" }]), { [footerGone]: 404 })), "broken-links-sitewide")).toHaveLength(1);
+  });
+});

@@ -698,6 +698,13 @@ export interface AuditReport {
     unfetched?: number;
     /** Discovered and audited page counts per URL-based page type (#1744). */
     pageTypes?: Array<{ type: string; discovered: number; audited: number }>;
+    /** Present on a targeted run (#1777): which URLs were given and which were not audited. Mirrors core-contracts `ScanScope`. */
+    targeted?: {
+      requested: number;
+      audited: number;
+      overLimit?: number;
+      unaudited: Array<{ url: string; reason: string; destination?: string }>;
+    };
     /** The start URL's followed redirect (#1281), so a rebuilt report still carries it. */
     startRedirect?: SeedRedirectRecord;
     /** What the `--max-duration` time limit cut (#1271), so a rebuilt report is still partial. */

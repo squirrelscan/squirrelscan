@@ -45,11 +45,12 @@ function closure(entry: string): string[] {
 }
 
 describe("@squirrelscan/rules/security-headers", () => {
-  test("loads only the six header rule files at runtime", () => {
+  test("loads only the six header rule files and their shared page picker at runtime", () => {
     expect(closure(ENTRY)).toEqual([
       "security-headers.ts",
       "security/csp.ts",
       "security/hsts.ts",
+      "security/judged-page.ts",
       "security/permissions-policy.ts",
       "security/referrer-policy.ts",
       "security/x-content-type.ts",

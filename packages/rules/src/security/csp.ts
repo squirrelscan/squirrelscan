@@ -1,5 +1,6 @@
 // security/csp - Content Security Policy header
 
+import { judgedPage } from "./judged-page";
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 // Key CSP directives that should be present for XSS protection
@@ -64,7 +65,7 @@ export const cspRule: Rule = {
 
   run(ctx: RuleContext): RuleResult {
     const checks: CheckResult[] = [];
-    const firstPage = ctx.site?.pages[0];
+    const firstPage = judgedPage(ctx.site?.pages);
 
     if (!firstPage) {
       checks.push({
