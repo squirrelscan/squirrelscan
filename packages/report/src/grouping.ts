@@ -3,7 +3,7 @@
 import type { AuditStatus, CheckTallies, LinkSection } from "@squirrelscan/core-contracts";
 import { isAuditFailed } from "@squirrelscan/core-contracts";
 import { addRegions, pageRegions } from "@squirrelscan/core-contracts/item-sources";
-import { PUBLISH_LIMITS } from "@squirrelscan/core-contracts/limits";
+import { LCP_PAGE_EVIDENCE, PUBLISH_LIMITS } from "@squirrelscan/core-contracts/limits";
 import type {
   ReportRuleResult,
   CheckItem,
@@ -78,6 +78,53 @@ export interface GroupedCheck {
   // which on these pages (and on every first run) is false. No `lastSeenAt`
   // counterpart — there is no earlier observation to date.
   unrenderedCount?: number;
+}
+
+/** One page's own LCP candidates inside a grouped `lcp-preload` finding (#1656). */
+export interface LcpPageEvidence {
+  page: string;
+  candidates: unknown[];
+}
+
+const LCP_PRELOAD_RULE = "perf/lcp-hints";
+const LCP_PRELOAD_CHECK = "lcp-preload";
+
+/**
+ * Record this page's candidates under this page only. The grouped `details`
+ * spread keeps whichever page merged last, so per-page evidence has to be
+ * collected from each check's own details before that overwrite happens.
+ */
+function recordLcpEvidence(
+  byPage: Map<string, unknown[]>,
+  details: Record<string, unknown> | undefined,
+  pageUrl: string | undefined,
+): void {
+  const page = typeof details?.page === "string" ? details.page : pageUrl;
+  if (!page || !Array.isArray(details?.candidates)) return;
+  const kept = byPage.get(page) ?? [];
+  for (const candidate of details.candidates as unknown[]) {
+    if (kept.length >= LCP_PAGE_EVIDENCE.maxCandidatesPerPage) break;
+    const src = (candidate as { src?: unknown } | null)?.src;
+    // The same page can arrive twice (a carried finding re-merged with its
+    // fresh re-observation); a repeated image is one candidate, not two.
+    if (typeof src === "string" && kept.some((k) => (k as { src?: unknown })?.src === src)) continue;
+    kept.push(candidate);
+  }
+  byPage.set(page, kept);
+}
+
+/** Sorted so the listed subset does not depend on rule execution order. */
+function lcpPageEvidenceDetails(byPage: Map<string, unknown[]>): {
+  pageEvidence: LcpPageEvidence[];
+  pageEvidenceOmittedPages: number;
+} {
+  const pages = [...byPage.keys()].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+  return {
+    pageEvidence: pages
+      .slice(0, LCP_PAGE_EVIDENCE.maxPages)
+      .map((page) => ({ page, candidates: byPage.get(page)! })),
+    pageEvidenceOmittedPages: Math.max(0, pages.length - LCP_PAGE_EVIDENCE.maxPages),
+  };
 }
 
 export interface GroupedRule {
@@ -299,6 +346,8 @@ export function groupIssuesByCategory(
         carriedPageSet: Set<string>;
         /** The message's literal parts and the counts merged so far. */
         messageShape: MessageShape;
+        /** #1656: lcp-preload candidates keyed by the page that owns them. */
+        lcpEvidence?: Map<string, unknown[]>;
       }
     >();
     // #1135: the "fixed on all pages checked this run" note reads every
@@ -370,7 +419,14 @@ export function groupIssuesByCategory(
           ? { id: pageUrl, label: checkMessage }
           : undefined;
 
+      const tracksLcpEvidence =
+        ruleId === LCP_PRELOAD_RULE && checkName === LCP_PRELOAD_CHECK;
+
       if (existing) {
+        if (tracksLcpEvidence) {
+          existing.lcpEvidence ??= new Map();
+          recordLcpEvidence(existing.lcpEvidence, details, pageUrl);
+        }
         existing.count += occurrences;
         if (isUnrendered) {
           existing.unrenderedCount = (existing.unrenderedCount ?? 0) + occurrences;
@@ -473,6 +529,11 @@ export function groupIssuesByCategory(
             initialPageSet.add(page);
           }
         }
+        let lcpEvidence: Map<string, unknown[]> | undefined;
+        if (tracksLcpEvidence) {
+          lcpEvidence = new Map();
+          recordLcpEvidence(lcpEvidence, details, pageUrl);
+        }
         const initialCarriedPages = isCarried ? [...allPages] : [];
         const initialCarriedPageSet = new Set(initialCarriedPages);
         checkMap.set(key, {
@@ -490,6 +551,7 @@ export function groupIssuesByCategory(
           carriedPages: initialCarriedPages.length > 0 ? initialCarriedPages : undefined,
           carriedPageSet: initialCarriedPageSet,
           details: details ? { ...details } : undefined,
+          lcpEvidence,
           componentOccurrences: componentOccurrences ? [...componentOccurrences] : undefined,
           siteResourceOccurrences: siteResourceOccurrences
             ? dedupeSiteResources(siteResourceOccurrences)
@@ -517,8 +579,13 @@ export function groupIssuesByCategory(
         itemSeen: _____,
         carriedPageSet: ___,
         messageShape: ____,
+        lcpEvidence,
         ...check
       }) => {
+        if (lcpEvidence && lcpEvidence.size > 0) {
+          // Added beside the legacy single-page fields, which stay for compatibility.
+          check.details = { ...check.details, ...lcpPageEvidenceDetails(lcpEvidence) };
+        }
         check.pages = [...check.pages].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
         if (itemById.size > 0) {
           check.items = [...itemById.values()].sort((a, b) =>
