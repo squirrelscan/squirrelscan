@@ -483,12 +483,14 @@ export const JSON_REPORT_PAGES = {
 
 // ── Grouped lcp-preload evidence (#1656) ───────────────────────
 // A grouped `lcp-preload` finding lists each affected page's own candidates in
-// `details.pageEvidence`. Bounded so a site with hundreds of affected pages
-// stays inside the per-finding payload cap (REPORT_LIMITS.maxFindingPayload);
-// pages past the cap are counted in `details.pageEvidenceOmittedPages`.
+// `details.pageEvidence`. Bounded by page count and by serialized bytes
+// (`maxBytes`, well under REPORT_LIMITS.maxFindingPayload: ingest drops a whole
+// finding payload that is over it, and URLs can be 2048 chars). Pages past
+// either cap are counted in `details.pageEvidenceOmittedPages`.
 export const LCP_PAGE_EVIDENCE = {
   maxPages: 25,
   maxCandidatesPerPage: 3,
+  maxBytes: 4 * 1024,
 } as const;
 
 /** The JSON report's schema version (`meta.schemaVersion`): major.minor. 1.1 added the opt-in `pages` list (#1260); 1.2 added `meta.requestedUrl` (#1369) and `finalUrl` and `outcome` on the pages rows (#1260); 1.3 added `technologies.truncated` (#1387); 1.4 added `meta.ignored` (#1262); 1.5 added `executedRules` and, with `--include-pages`, rows with outcome `skipped` or `error` and a `reason` for URLs the crawl requested but stored no page for (#1396); 1.6 added `technologies.items[].origin` (#1406); 1.7 added `meta.resume` (#1658); 1.8 added the top-level `outcome` (#1657); 1.9 added `outcome` on `skippedChecks` and `notChecked` entries (#1661); 1.10 added `meta.storeIntegrity` (#1667); 1.11 added the top-level `render` (#1664). */
