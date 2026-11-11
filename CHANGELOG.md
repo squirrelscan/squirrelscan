@@ -23,7 +23,6 @@ How it works:
 
 ### Added
 
-- Credit top-ups above $50 earn bonus credits on a smooth curve, to 20% at $1,000 (`topupQuote`, `topupBonusSchedule` and `TOPUP_BONUS_CURVE` in `@squirrelscan/core-contracts`). Base and bonus credits are returned separately. The docs list the schedule.
 - Published reports carry an optional `pageMap` section (the rows of `squirrel pages`, failed pages included), so the hosted API and MCP can list a stored report's pages. `squirrel audit --publish` and `squirrel report --publish` send it. It is capped at 1,000 pages (shallowest first) with `truncated`, `stored` and `total` counts, and the publish capper drops it (`detail.pageMapDropped`) before reducing any issue sample if the report would not fit. Core contracts gain `PageMapSchema`, `PageMapRowSchema` and `PAGE_MAP_PUBLISH_LIMITS`; the engine side is `readPageMapRows` (`@squirrelscan/audit-engine/page-map-rows`, shared by the CLI and the cloud runtime) and `buildPageMap` and `projectPageMap` (`@squirrelscan/report/page-map-publish`). The public API docs gain `GET /v1/reports/{id}/pages`. squirrelscan/repo#4172, #701
 
 ## v0.0.181 (2026-11-13)

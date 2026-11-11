@@ -251,9 +251,15 @@ export const topupBonusPercent = (usd: number): number => {
 /** Base and bonus credits for a top-up amount. Everything else derives from this. */
 export const topupQuote = (usd: number): TopupQuote => {
   const amount = Math.floor(usd);
+  // NaN, Infinity and zero or negative amounts are not purchasable: a zero quote, never NaN or negative.
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return { usd: 0, baseCredits: 0, bonusCredits: 0, totalCredits: 0, bonusPercent: 0 };
+  }
   const baseCredits = amount * CREDIT_TOPUP.creditsPerUsd;
   const bonusPercent = topupBonusPercent(amount);
-  // Round away float noise before flooring, so an exact 20% of $1,000 is 20,000 and not 19,999.
+  // Round away float noise before flooring, so an exact 20% of $1,000 is 20,000 and not 19,999. `**` (Math.pow)
+  // may differ in the last bits across engines (browser, workerd, Bun); the toFixed(6) step keeps the floored
+  // credits identical, and tests/fixtures/topup-total-credits.json pins every whole dollar so a drift shows as a diff.
   const bonusCredits = Math.floor(Number(((baseCredits * bonusPercent) / 100).toFixed(6)));
   return { usd: amount, baseCredits, bonusCredits, totalCredits: baseCredits + bonusCredits, bonusPercent };
 };
