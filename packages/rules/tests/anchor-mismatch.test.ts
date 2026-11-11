@@ -274,6 +274,19 @@ describe("links/anchor-mismatch", () => {
     expect(c.items?.[0]?.label).toContain("Commercial freezer repairs");
   });
 
+  // #1729: the item id is the "source -> target" pair; the affected PAGE is the source only.
+  test("each item names the source page alone as its page, the target stays in the label", () => {
+    const c = check([
+      { ...HOME, links: [body("/freezers", "click here")] },
+      { url: "https://example.com/freezers", title: "Commercial freezer repairs" },
+    ]);
+    const item = c.items![0]!;
+    expect(item.sourcePages).toEqual([HOME.url]);
+    expect(item.sourcePages!.join(" ")).not.toContain("->");
+    expect(item.id).toContain(" -> ");
+    expect(item.label).toContain("https://example.com/freezers");
+  });
+
   test("chrome links are excluded entirely", () => {
     const c = check([
       { ...HOME, links: [chrome("/freezers", "click here"), body("/fridge", "Fridge")] },
