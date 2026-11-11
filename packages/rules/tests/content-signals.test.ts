@@ -252,6 +252,17 @@ describe("absent, declared, invalid and not checked are four states (#1649)", ()
     expect(run(bomCut)[0]).toMatchObject({ status: "skipped", value: "not-checked" });
   });
 
+  // The margin's own boundary (ROBOTS_CAP_MARGIN_BYTES = 4): cap - 4 is the first size that counts as possibly cut short, cap - 5 the last
+  // that reads as complete. Pinned so the margin cannot drift by one in either direction without a test saying so.
+  test("the margin boundary: cap minus 4 is not checked, cap minus 5 is absent", () => {
+    const at = { ...robots("User-agent: *\nDisallow: /a"), sizeBytes: 512 * 1024 - 4 };
+    expect(run(at)[0]).toMatchObject({ status: "skipped", value: "not-checked" });
+    expect(robotsNotReadReason(at)).toContain("512 KiB");
+    const below = { ...robots("User-agent: *\nDisallow: /a"), sizeBytes: 512 * 1024 - 5 };
+    expect(run(below)[0]).toMatchObject({ status: "info", value: "absent" });
+    expect(robotsNotReadReason(below)).toBeNull();
+  });
+
   test("exactly the cap and one byte over are not checked", () => {
     for (const sizeBytes of [512 * 1024, 512 * 1024 + 1]) {
       const r = { ...robots("User-agent: *\nDisallow: /a"), sizeBytes };
