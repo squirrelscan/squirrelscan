@@ -854,6 +854,10 @@ export function resolvePublishDecision(opts: {
   // report in the dashboard, so treat it like an implicit --no-publish
   // unless the user explicitly asks with --publish.
   ruleFilterActive?: boolean;
+  // #1777: a --target-url run audits only the listed URLs. Publishing it would replace the site's latest
+  // audit with a few pages (and #1776 `squirrel ci` reads the latest audit as its baseline), so it is
+  // treated like a rule-filtered run: not published unless --publish is explicit.
+  targeted?: boolean;
   // #1841: the audited host is loopback / RFC1918 / link-local, so no hosted
   // service can ever reach it.
   nonPublicHost?: boolean;
@@ -872,6 +876,7 @@ export function resolvePublishDecision(opts: {
   if (opts.ephemeral && !opts.explicitPublish) return false;
   if (opts.explicitPublish) return true; // explicit --publish overrides opt-outs (still needs login; publishReport errors otherwise)
   if (opts.ruleFilterActive) return false;
+  if (opts.targeted) return false;
   if (opts.noPublish || !opts.configPublish) return false;
   return opts.signedIn; // default: publish when signed in
 }
@@ -3365,6 +3370,7 @@ export const audit = defineCommand({
           noPublish,
           configPublish: config.cloud.publish,
           ruleFilterActive,
+          targeted: targetUrls.length > 0,
           nonPublicHost: !!nonPublicHost,
           ephemeral,
         });
@@ -3391,6 +3397,7 @@ export const audit = defineCommand({
           noPublish,
           configPublish: config.cloud.publish,
           ruleFilterActive,
+          targeted: targetUrls.length > 0,
           nonPublicHost: false,
           ephemeral,
         })
@@ -3415,6 +3422,25 @@ export const audit = defineCommand({
             "Rule filter active — auto-publish skipped for this partial run (use --publish to publish anyway)."
           )
         );
+      } else if (
+        !shouldPublish &&
+        targetUrls.length > 0 &&
+        resolvePublishDecision({
+          signedIn,
+          offline: !!args.offline,
+          explicitPublish: !!args.publish,
+          noPublish,
+          configPublish: config.cloud.publish,
+          ruleFilterActive,
+          nonPublicHost: !!nonPublicHost,
+          ephemeral,
+        })
+      ) {
+        log(
+          fmt.dim(
+            "Targeted audit: auto-publish skipped, it covers only the URLs you listed (use --publish to publish anyway)."
+          )
+        );
       }
       // #857: publish runs here (after runAudit returns), not inside the
       // controller. recordPublishPhase() is called at every exit from the
@@ -3433,6 +3459,7 @@ export const audit = defineCommand({
           ephemeral: !!ephemeral,
           explicitPublish: !!args.publish,
           ruleFilterActive: !!ruleFilterActive,
+          targeted: targetUrls.length > 0,
           noPublish: !!noPublish,
           configPublish: config.cloud.publish,
         }),
@@ -3695,7 +3722,7 @@ export const audit = defineCommand({
               everPublished: hasEverPublished(effectiveSettings),
               nudgeShown: effectiveSettings?.publish_nudge_shown === true,
               nonPublicHost: !!nonPublicHost,
-              ruleFilterActive,
+              ruleFilterActive: ruleFilterActive || targetUrls.length > 0,
               stderrIsTTY: process.stderr.isTTY === true,
               isConsoleFormat,
               outputPath: args.output,

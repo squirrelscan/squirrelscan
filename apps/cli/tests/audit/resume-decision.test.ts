@@ -265,3 +265,40 @@ describe("isDirtyConfig", () => {
     ).toBe(false);
   });
 });
+
+describe("a targeted run and --resume (#1777)", () => {
+  const targeted = (urls: string[]) =>
+    ({ ...baseConfig, targetUrls: urls }) as CrawlerConfigSnapshot;
+  const decide = (stored: CrawlerConfigSnapshot, now: CrawlerConfigSnapshot) =>
+    decideResume({
+      existingCrawl: crawl("paused", { config: stored }),
+      crawlerConfig: now,
+      refresh: false,
+      claim: () => ACQUIRED,
+    });
+
+  test("a normal crawl is not resumed by a targeted run", () => {
+    const d = decide(baseConfig, targeted(["https://example.com/pricing"]));
+    expect(d).toMatchObject({ resume: false, reason: "config-changed" });
+  });
+
+  test("a targeted crawl is not resumed by a normal run", () => {
+    const d = decide(targeted(["https://example.com/pricing"]), baseConfig);
+    expect(d).toMatchObject({ resume: false, reason: "config-changed" });
+  });
+
+  test("a targeted crawl is not resumed under a different list", () => {
+    const d = decide(
+      targeted(["https://example.com/pricing"]),
+      targeted(["https://example.com/pricing", "https://example.com/about"])
+    );
+    expect(d).toMatchObject({ resume: false, reason: "config-changed" });
+  });
+
+  test("the same list resumes", () => {
+    const list = ["https://example.com/pricing"];
+    expect(decide(targeted(list), targeted([...list]))).toEqual({
+      resume: true,
+    });
+  });
+});
