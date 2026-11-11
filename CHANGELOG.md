@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- New rule `links/click-depth` lists indexable pages more than 3 clicks from the homepage by shortest link path, deepest first with each depth. The threshold is the `maxDepth` rule option, a crawl stopped at its page cap says depths are a lower bound, and pages with no link path are left to `links/orphan-pages`. Advisory weight.
+
 ## v0.0.174 (2026-11-11)
 
 Reports say why a rule did not give a verdict (JSON schema 1.9), `squirrel audit` has one exit code precedence with the outcome in the JSON and LLM reports, `--resume` says why it started a new crawl, an expired login is called out, settings writes no longer lose each other, and five rules stop flagging hidden, presentational and symbol-only content.

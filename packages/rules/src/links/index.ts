@@ -7,6 +7,7 @@ import { anchorTextRule } from "./anchor-text";
 import { brokenAnchorsRule } from "./broken-anchors";
 import { brokenExternalLinksRule } from "./broken-external-links";
 import { brokenLinksRule } from "./broken-links";
+import { clickDepthRule } from "./click-depth";
 import { deadEndPages } from "./dead-end-pages";
 import { deadLinksRule } from "./dead-links";
 import { externalLinksRule } from "./external-links";
@@ -34,6 +35,7 @@ export const rules: Rule[] = [
   nofollowInternalRule,
   orphanPagesRule,
   weakInternalLinksRule,
+  clickDepthRule,
   noContextualInboundRule,
   deadEndPages,
   anchorTextRule,
@@ -48,6 +50,7 @@ export {
   brokenAnchorsRule,
   brokenExternalLinksRule,
   brokenLinksRule,
+  clickDepthRule,
   deadEndPages,
   deadLinksRule,
   externalLinksRule,
