@@ -365,3 +365,34 @@ describe("XML scan scope (#350)", () => {
     expect(out).not.toContain('origin=""><x');
   });
 });
+
+describe("targeted run note (#1777)", () => {
+  const scope = (targeted: unknown) =>
+    baseReport({
+      scanScope: {
+        origin: "cli",
+        maxPages: 100,
+        pagesCrawled: 3,
+        capped: false,
+        targeted,
+      } as never,
+    });
+
+  test("an ordinary audit has no note and its line is unchanged", () => {
+    expect(scanScopeLine(scope(undefined))).toBe("Scan: 3 pages crawled from the CLI (page limit 100).");
+  });
+
+  test("says how many of the given URLs were audited and that site-wide rules did not run", () => {
+    expect(scanScopeLine(scope({ requested: 4, audited: 3, unaudited: [] }))).toBe(
+      "Scan: 3 pages crawled from the CLI (page limit 100). Targeted run: 3 of 4 URLs given were audited; site-wide rules were not run.",
+    );
+    expect(scanScopeLine(scope({ requested: 1, audited: 1, unaudited: [] }))).toContain(
+      "1 of 1 URL given was audited",
+    );
+  });
+
+  test("counts that are not whole numbers read as no note", () => {
+    expect(scanScopeLine(scope({ requested: "x", audited: 1 }))).not.toContain("Targeted run");
+    expect(scanScopeLine(scope({ requested: -1, audited: 1 }))).not.toContain("Targeted run");
+  });
+});

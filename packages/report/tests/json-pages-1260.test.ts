@@ -33,10 +33,10 @@ const parse = (options?: Parameters<typeof renderJson>[1]) =>
   };
 
 describe("meta.schemaVersion", () => {
-  test("is 1.15, the version that added redirects beside pages, on every JSON report", () => {
-    expect(JSON_REPORT_SCHEMA_VERSION).toBe("1.15");
-    expect(parse().meta.schemaVersion).toBe("1.15");
-    expect(parse({ pages: rows(1) }).meta.schemaVersion).toBe("1.15");
+  test("is 1.16, the version that added `meta.targeted`, on every JSON report", () => {
+    expect(JSON_REPORT_SCHEMA_VERSION).toBe("1.16");
+    expect(parse().meta.schemaVersion).toBe("1.16");
+    expect(parse({ pages: rows(1) }).meta.schemaVersion).toBe("1.16");
   });
 });
 

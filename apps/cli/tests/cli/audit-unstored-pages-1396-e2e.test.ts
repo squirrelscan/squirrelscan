@@ -113,7 +113,7 @@ async function audit(...extra: string[]): Promise<Json> {
 describe("--include-pages lists URLs with no stored page", () => {
   test("an errored fetch, an excluded URL and a robots-blocked one, after the crawled pages", async () => {
     const json = await audit("--include-pages");
-    expect(json.meta.schemaVersion).toBe("1.15");
+    expect(json.meta.schemaVersion).toBe("1.16");
     const rows = json.pages ?? [];
     const byPath = new Map(rows.map((row) => [new URL(row.url).pathname, row]));
     expect(byPath.get("/")).toMatchObject({ status: 200, outcome: "ok" });

@@ -160,7 +160,50 @@ export function scanScopeLine(report: AuditReport): string | null {
   ].filter(Boolean);
   const cap = parts.length > 0 ? ` (${parts.join("; ")})` : "";
   const types = pageTypeCoverageLine(report);
-  return `Scan: ${s.pagesCrawled} page${s.pagesCrawled === 1 ? "" : "s"} crawled from ${origin}${version}${cap}.${canonicalVariantsNote(report)}${types ? ` ${types}` : ""}`;
+  const targeted = targetedRunNote(report);
+  return `Scan: ${s.pagesCrawled} page${s.pagesCrawled === 1 ? "" : "s"} crawled from ${origin}${version}${cap}.${canonicalVariantsNote(report)}${types ? ` ${types}` : ""}${targeted ? ` ${targeted}` : ""}`;
+}
+
+/**
+ * `scanScope.targeted` as the JSON report's `meta.targeted` (#1777), read off a stored report of any origin:
+ * counts that are not whole numbers read as absent (null), a row without a string URL is left out, a reason
+ * that is not a short code reads as `other`, and the list is cut at 100 rows (`requested - audited` stays
+ * the true count).
+ */
+export function scanScopeTargeted(
+  report: Pick<AuditReport, "scanScope">,
+): { requested: number; audited: number; unaudited: Array<{ url: string; reason: string; destination?: string }> } | null {
+  const t = report.scanScope?.targeted;
+  if (!t || typeof t !== "object") return null;
+  const whole = (v: unknown): number | undefined =>
+    typeof v === "number" && Number.isSafeInteger(v) && v >= 0 ? v : undefined;
+  const requested = whole(t.requested);
+  const audited = whole(t.audited);
+  if (requested === undefined || audited === undefined) return null;
+  const rows = Array.isArray(t.unaudited) ? t.unaudited : [];
+  const unaudited: Array<{ url: string; reason: string; destination?: string }> = [];
+  for (const r of rows) {
+    if (unaudited.length >= 100) break;
+    if (typeof r?.url !== "string") continue;
+    const reason = typeof r.reason === "string" && /^[A-Za-z0-9_:. -]{1,60}$/.test(r.reason) ? r.reason : "other";
+    unaudited.push({
+      url: r.url.slice(0, 2048),
+      reason,
+      ...(typeof r.destination === "string" ? { destination: r.destination.slice(0, 2048) } : {}),
+    });
+  }
+  return { requested, audited, unaudited };
+}
+
+/**
+ * "Targeted run: 3 of 4 URLs given were audited; site-wide rules were not run." (#1777), or null for an
+ * ordinary audit. Read off a stored report of any origin: counts that are not whole numbers read as absent.
+ */
+export function targetedRunNote(report: Pick<AuditReport, "scanScope">): string | null {
+  const t = scanScopeTargeted(report);
+  if (!t) return null;
+  const { requested, audited } = t;
+  return `Targeted run: ${audited} of ${requested} URL${requested === 1 ? "" : "s"} given ${audited === 1 ? "was" : "were"} audited; site-wide rules were not run.`;
 }
 
 /** How many page types the per-type line names before it folds the rest into "other". */
