@@ -53,6 +53,8 @@ Structured data checks now say what they could and could not read. The schema pr
 
 - The editor summary request now carries check-level evidence (`checks`: the checks that failed or warned, and the security and agent-experience checks that ran clean), so cloud summaries stop recommending headers or files the site already has (#3944).
 - `ax/api-discovery` validates `/.well-known/api-catalog` as a non-empty JSON linkset instead of accepting any JSON 200. An empty linkset, a `linkset` that is not a list, JSON without a `linkset` member, an OpenAPI document at the catalog path, malformed JSON and a 200 HTML fallback each report their own state (`details.apiCatalogState`), and HTTP 401, 403, 408, 429 and 5xx on the API paths report not checked instead of missing. No new probes. (#1650)
+- Locked and not-checked rules can carry a machine-readable reason (`plan`, `provider_error` or `unsupported_environment`, with a short detail), and every report format says what it means: a plan exclusion names the plan, a provider failure says a re-run may help, an unsupported environment says where the check can run. The JSON report gains `lockedRules` and `cause`/`causeDetail` on `notChecked` entries (JSON schema 1.13). Reports with no reason keep today's wording (#1734)
+
 ### Fixed
 
 - **Behaviour change:** `squirrel report --publish` now publishes as `unlisted` by default; it was `public`. `squirrel audit`, the docs and the agent skill already said `unlisted`, and the help now matches. Pass `--visibility public` to publish publicly (#1730)

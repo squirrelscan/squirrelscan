@@ -17,8 +17,9 @@ import type {
   CloudRenderMode,
   CoverageMode,
   LockedRule,
+  LockedRuleReason,
 } from "@squirrelscan/core-contracts";
-import { isAuditFailed } from "@squirrelscan/core-contracts";
+import { isAuditFailed, isLockedRuleReason } from "@squirrelscan/core-contracts";
 
 export type LockedRulesAudience =
   | "audit-failed"
@@ -46,6 +47,101 @@ export interface LockedRulesMessage {
   /** Optional call to action, rendered as its own link after `action`. */
   cta?: LockedRulesCta;
   rules: LockedRule[];
+  /**
+   * Present only when at least one rule carries a reason (#1734): the rules by
+   * cause, each with the sentence that matches it. `action` is then those
+   * sentences joined, so a renderer that prints `action` alone is still right.
+   */
+  groups?: LockedRulesGroup[];
+}
+
+/** The rules locked for one reason; `reason` is absent for rules from a publisher that sent none. */
+export interface LockedRulesGroup {
+  reason?: LockedRuleReason;
+  count: number;
+  /** One sentence, plain text, no links. */
+  text: string;
+  rules: LockedRule[];
+}
+
+/** Longest `detail` shown: it is publisher-supplied free text. */
+const MAX_DETAIL_CHARS = 200;
+
+/** A rule's reason when it is one of the closed set; anything else reads as no reason. */
+export function lockedRuleReason(rule: LockedRule): LockedRuleReason | undefined {
+  return isLockedRuleReason(rule.reason) ? rule.reason : undefined;
+}
+
+/**
+ * Publisher-supplied text as one plain line: control characters (an ANSI escape in a terminal
+ * report, a NUL, a line break) become spaces. Markup is NOT touched here: each renderer escapes
+ * for its own format, since this text is shared by the text, markdown, HTML, XML and JSON outputs.
+ */
+function plainLine(value: string): string {
+  // eslint-disable-next-line no-control-regex
+  return value.replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]+/g, " ").replace(/\s+/g, " ").trim();
+}
+
+/** A rule's detail as one short line, or undefined. */
+export function lockedRuleDetail(rule: LockedRule): string | undefined {
+  if (typeof rule.detail !== "string") return undefined;
+  const line = plainLine(rule.detail);
+  if (!line) return undefined;
+  return line.length > MAX_DETAIL_CHARS ? `${line.slice(0, MAX_DETAIL_CHARS - 1)}…` : line;
+}
+
+/** A locked rule as every renderer lists it: reason only when it is in the closed set, detail as one short line. */
+export function lockedRuleView(rule: LockedRule): {
+  id: string;
+  name: string;
+  reason?: LockedRuleReason;
+  detail?: string;
+} {
+  const reason = lockedRuleReason(rule);
+  const detail = lockedRuleDetail(rule);
+  return {
+    id: plainLine(String(rule.id)),
+    name: plainLine(String(rule.name)),
+    ...(reason ? { reason } : {}),
+    ...(detail ? { detail } : {}),
+  };
+}
+
+/** Short label for a reason, for a list beside a rule. */
+export const LOCKED_REASON_LABELS: Record<LockedRuleReason, string> = {
+  plan: "not in your plan",
+  provider_error: "a service failed, a re-run may help",
+  unsupported_environment: "cannot run in this environment",
+};
+
+const PLAN_NAMES: Record<CloudPlanTier, string> = {
+  anonymous: "a signed-out audit (no account)",
+  free: "the Free plan",
+  paid: "your plan",
+};
+
+const UNSUPPORTED_DEFAULT =
+  "They run in a cloud audit, or from the squirrel CLI on a machine with direct network access.";
+
+/** The sentence for one group of rules locked for the same reason. */
+function groupText(
+  reason: LockedRuleReason | undefined,
+  rules: LockedRule[],
+  plan: CloudPlanTier,
+  legacyAction: string,
+): string {
+  const n = rules.length;
+  const these = n === 1 ? "This check" : `These ${n} checks`;
+  const details = [...new Set(rules.map(lockedRuleDetail).filter((d): d is string => !!d))];
+  const detail = details.length > 0 ? ` ${details.map((d) => (/[.!?]$/.test(d) ? d : `${d}.`)).join(" ")}` : "";
+  if (reason === "plan") return `${these} ${n === 1 ? "is" : "are"} not included in ${PLAN_NAMES[plan]}.${detail}`;
+  if (reason === "provider_error") {
+    return `${these} did not run because a service ${n === 1 ? "it" : "they"} depend${n === 1 ? "s" : ""} on failed during this audit. Re-running the audit may include ${n === 1 ? "it" : "them"}.${detail}`;
+  }
+  if (reason === "unsupported_environment") {
+    return `${these} can't run in the environment this audit ran in.${detail || ` ${UNSUPPORTED_DEFAULT}`}`;
+  }
+  return legacyAction;
 }
 
 /** The slice of AuditReport this helper needs — kept narrow so any report-shaped object works. */
@@ -60,8 +156,49 @@ export interface LockedRulesReportShape {
 /**
  * Resolve the audience-aware "checks not run" message for a report, or
  * `null` when there's nothing locked (no section should render).
+ *
+ * Rules that carry a reason (#1734) are grouped by it and each group gets the
+ * sentence for its cause, so a plan exclusion, a provider failure and an
+ * unsupported environment never read alike. Rules with no reason (an older
+ * publisher) keep the audience wording unchanged, and a failed audit keeps its
+ * own message: nothing ran, whatever the reasons say.
  */
 export function lockedRulesMessage(report: LockedRulesReportShape): LockedRulesMessage | null {
+  const legacy = audienceMessage(report);
+  const locked = report.lockedRules;
+  if (!legacy || !locked || legacy.audience === "audit-failed") return legacy;
+  if (!locked.some((r) => lockedRuleReason(r))) return legacy;
+
+  const plan = report.cloudPlan ?? "anonymous";
+  const order: Array<LockedRuleReason | undefined> = [
+    "plan",
+    "provider_error",
+    "unsupported_environment",
+    undefined,
+  ];
+  const groups: LockedRulesGroup[] = [];
+  for (const reason of order) {
+    const rules = locked.filter((r) => lockedRuleReason(r) === reason);
+    if (rules.length === 0) continue;
+    groups.push({
+      ...(reason ? { reason } : {}),
+      count: rules.length,
+      text: groupText(reason, rules, plan, legacy.action),
+      rules,
+    });
+  }
+  // The upsell link only goes with a plan exclusion or a rule with no reason.
+  const upsell = groups.some((g) => g.reason === undefined || g.reason === "plan");
+  const { cta: _cta, ...rest } = legacy;
+  return {
+    ...rest,
+    action: groups.map((g) => g.text).join(" "),
+    groups,
+    ...(upsell && legacy.cta ? { cta: legacy.cta } : {}),
+  };
+}
+
+function audienceMessage(report: LockedRulesReportShape): LockedRulesMessage | null {
   const locked = report.lockedRules;
   if (!locked || locked.length === 0) return null;
 
