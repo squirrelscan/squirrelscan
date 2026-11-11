@@ -19,6 +19,7 @@ How it works:
 
 ### Added
 
+- New rule `analytics/duplicate-tags`: warns when one page installs the same Google Analytics 4 measurement ID, Google Tag Manager container or analytics site ID more than once, which counts every visit twice (#1691).
 - New rule `links/click-depth` lists indexable pages more than 3 clicks from the homepage by shortest link path, deepest first with each depth. The threshold is the `maxDepth` rule option, a crawl stopped at its page cap says depths are a lower bound, and pages with no link path are left to `links/orphan-pages`. Advisory weight.
 - **`crawl/indexable-search-results` reports internal search result pages that search engines can index.** A `/search` path with a query, a search parameter (`s`, `q`, `query`, `search`, `keyword`) on a page that shows results, or a URL matching the site's WebSite `SearchAction` target counts as a search result. Pages with `noindex`, a robots.txt `Disallow` or a canonical to a non-search page are not listed. The finding says how many were found and how many are indexable, and names both fixes. (#1696)
 - New rule `url/session-ids`: a page URL or an internal link carrying a session ID (`PHPSESSID`, `jsessionid` in the query or as a `;jsessionid=` path parameter, `sid`, `sessionid`, `session_id`, `ASPSESSIONID*`, `CFID` with `CFTOKEN`) is a warning, with the value masked. The value must look generated: short values, all-digit ids and hyphenated labels are ignored, and `sid` and `sessionid` need a stricter form than the unambiguous names.
@@ -3047,6 +3048,7 @@ Browse the full rule set → https://docs.squirrelscan.com/rules
 
 - Cloud audits that stall past their deadline are now finalized automatically instead of hanging.
 - More efficient handling of error and empty pages during analysis.
+
 
 
 

@@ -509,6 +509,7 @@
                 "pages": [
                   "rules/analytics/index",
                   "rules/analytics/gtm-present",
+                  "rules/analytics/duplicate-tags",
                   "rules/analytics/consent-mode"
                 ]
               },
