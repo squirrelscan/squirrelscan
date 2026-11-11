@@ -170,4 +170,72 @@ describe("analytics/duplicate-tags (#1691)", () => {
       expect(warns(await run(GTM_SNIPPET("GTM-ABCD123") + dq("GTM-ABCD123")))).toHaveLength(1);
     });
   });
+
+  describe("follow-ups: id case, host shapes, template literals, other vendors", () => {
+    test("the id parameter is read in any letter case", async () => {
+      for (const key of ["id", "ID", "Id"]) {
+        const gtm = `https://www.googletagmanager.com/gtm.js?${key}=GTM-ABCD123`;
+        expect(warns(await run(s(gtm) + s(gtm)))).toHaveLength(1);
+        const ga4 = `https://www.googletagmanager.com/gtag/js?${key}=G-ABC1234`;
+        expect(warns(await run(s(ga4) + s(ga4)))).toHaveLength(1);
+        const ns = GTM_NS("GTM-ABCD123").replace("?id=", `?${key}=`);
+        expect(warns(await run("", ns + ns))).toHaveLength(1);
+      }
+    });
+
+    test("a port, userinfo or leading whitespace on the real host still counts", async () => {
+      for (const src of [
+        "https://www.googletagmanager.com:443/gtm.js?id=GTM-ABCD123",
+        "https://user:pw@www.googletagmanager.com/gtm.js?id=GTM-ABCD123",
+        "   https://www.googletagmanager.com/gtm.js?id=GTM-ABCD123",
+        "\thttps://www.googletagmanager.com/gtm.js?id=GTM-ABCD123",
+      ]) {
+        expect(warns(await run(s(src) + s(src)))).toHaveLength(1);
+      }
+    });
+
+    test("a host that only looks like the vendor's through userinfo or a port does not count", async () => {
+      for (const src of [
+        "https://www.googletagmanager.com@evil.example/gtm.js?id=GTM-ABCD123",
+        "https://www.googletagmanager.com:pw@evil.example/gtm.js?id=GTM-ABCD123",
+        "https://evil.example:443/www.googletagmanager.com/gtm.js?id=GTM-ABCD123",
+        "https://evil.example\\@www.googletagmanager.com/gtm.js?id=GTM-ABCD123",
+      ]) {
+        expect(warns(await run(s(src) + s(src)))).toHaveLength(0);
+      }
+    });
+
+    test("a template-literal inline snippet counts like a quoted one", async () => {
+      const tpl = (id: string) =>
+        inline("j.src=`https://www.googletagmanager.com/gtm.js?id=${i}`;})(window,document,'script','dataLayer','" + id + "');");
+      expect(warns(await run(tpl("GTM-ABCD123") + tpl("GTM-ABCD123")))).toHaveLength(1);
+      const lookalike = inline("j.src=`https://evil.example/?x=googletagmanager.com/gtm.js`;})(window,document,'script','dataLayer','GTM-ABCD123');");
+      expect(warns(await run(lookalike + lookalike))).toHaveLength(0);
+    });
+
+    const VENDORS: Array<[string, string, string]> = [
+      ["Segment", "https://cdn.segment.com/analytics.js/v1/WRITEKEY123/analytics.min.js", "https://evil.example/?x=cdn.segment.com/analytics.js/v1/WRITEKEY123/analytics.min.js"],
+      ["Segment (.io)", "https://cdn.segment.io/analytics.js/v1/WRITEKEY123/analytics.js", "https://cdn.segment.io.evil.example/analytics.js/v1/WRITEKEY123/analytics.js"],
+      ["Amplitude", "https://cdn.amplitude.com/script/APIKEY123.js", "https://evil.example/cdn.amplitude.com/script/APIKEY123.js"],
+      ["Amplitude (EU)", "https://cdn.eu.amplitude.com/script/APIKEY123.js", "https://cdn.eu.amplitude.com.evil.example/script/APIKEY123.js"],
+      ["Heap", "https://cdn.heapanalytics.com/js/heap-1234567.js", "https://evil-heapanalytics.com/js/heap-1234567.js"],
+      ["Hotjar", "https://static.hotjar.com/c/hotjar-123456.js", "https://static.hotjar.com.evil.example/c/hotjar-123456.js"],
+      ["Clarity", "https://www.clarity.ms/tag/abc123xyz", "https://evil.example/?x=clarity.ms/tag/abc123xyz"],
+    ];
+    for (const [name, real, fake] of VENDORS) {
+      test(`${name}: the real loader counts twice as a duplicate, a lookalike does not`, async () => {
+        expect(warns(await run(s(real) + s(real)))).toHaveLength(1);
+        expect(warns(await run(s(fake) + s(fake)))).toHaveLength(0);
+      });
+    }
+
+    test("an inline Clarity snippet needs the loader URL as a quoted host, not a mention", async () => {
+      const snippet = (host: string) =>
+        inline(`(function(c,l,a,r,i,t,y){t=l.createElement(r);t.src="${host}/tag/"+i;})(window,document,"clarity","script","abc123xyz");`);
+      const real = snippet("https://www.clarity.ms");
+      expect(warns(await run(real + real))).toHaveLength(1);
+      const fake = snippet("https://evil.example/?x=clarity.ms");
+      expect(warns(await run(fake + fake))).toHaveLength(0);
+    });
+  });
 });

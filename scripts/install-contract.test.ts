@@ -45,6 +45,16 @@ if [ -n "\${SHIM_FAIL_MATCH:-}" ]; then
   done
 fi
 
+# The family probe (-v) reads curl's "Trying <address>" line from stderr: SHIM_TRACE stands in for it.
+# SHIM_PROBE_SLEEP makes the probe slow and SHIM_PROBE_FAIL makes it die with curl's timeout code.
+for a in "$@"; do
+  if [ "$a" = "-v" ]; then
+    [ -n "\${SHIM_PROBE_SLEEP:-}" ] && sleep "$SHIM_PROBE_SLEEP"
+    [ -n "\${SHIM_PROBE_FAIL:-}" ] && exit 28
+    [ -n "\${SHIM_TRACE:-}" ] && printf '%s\\n' "$SHIM_TRACE" >&2
+  fi
+done
+
 # A second body for URLs matching SHIM_ALT_MATCH, so one source can answer with
 # something the other does not: a 200 carrying HTML from one host and a real
 # manifest from the other is the scenario this whole fallback exists for.
@@ -98,14 +108,18 @@ const runWithCurlShim = async (
   script: string,
   {
     cut = "body",
+    prelude = "",
     body = "",
     failMatch = "",
     altMatch = "",
     altBody = "",
     env = {},
     settleMs = 0,
+    untilPost = false,
   }: {
     cut?: "body" | "preamble";
+    /** Shell run BEFORE the installer is sourced (a function that shadows a command, say). */
+    prelude?: string;
     /** What the shim answers with: written to `-o <file>` when given, else stdout. */
     body?: string;
     /** The shim exits 22 (curl's HTTP-error code) when any argv contains this. */
@@ -116,6 +130,12 @@ const runWithCurlShim = async (
     env?: Record<string, string | undefined>;
     /** How long to wait for a detached (backgrounded) curl to log its argv. */
     settleMs?: number;
+    /**
+     * Keep waiting until a POST (the report itself) is logged, not just any complete record. The
+     * detached reporter probes the IP family first, with its own curl (`-v`), and POSTs after: waiting
+     * for the first complete record returns between the two, which is a race a slower Linux runner loses.
+     */
+    untilPost?: boolean;
   } = {},
 ): Promise<CurlShimRun> => {
   const dir = mkdtempSync(join(tmpdir(), "install-curl-shim-"));
@@ -128,7 +148,7 @@ const runWithCurlShim = async (
   await Bun.write(log, "");
 
   try {
-    const proc = Bun.spawn(["bash", "-c", `source "$1"; ${script}`, "--", sourced], {
+    const proc = Bun.spawn(["bash", "-c", `${prelude}\nsource "$1"; ${script}`, "--", sourced], {
       env: {
         ...process.env,
         NO_TELEMETRY: "1",
@@ -159,7 +179,10 @@ const runWithCurlShim = async (
     // Wait for a COMPLETE record, not merely a non-empty file: a half-written
     // one would parse into an argv with no --data and fail as a JSON error.
     let raw = await Bun.file(log).text();
-    for (let waited = 0; waited < settleMs && !raw.endsWith("\u001e"); waited += 50) {
+    const settled = (text: string) =>
+      text.endsWith("\u001e") &&
+      (!untilPost || parseCurlLog(text).some((argv) => argv.includes("POST")));
+    for (let waited = 0; waited < settleMs && !settled(raw); waited += 50) {
       await Bun.sleep(50);
       raw = await Bun.file(log).text();
     }
@@ -296,8 +319,8 @@ describe("PowerShell installer transport security", () => {
 // made a real Windows break undiagnosable (#1538). Both installers now capture
 // the command's own output and carry a bounded, scrubbed tail of it.
 describe("self install failure reporting", () => {
-  test("both installers send error_output at report version 3", () => {
-    expect(shellInstaller).toContain('INSTALLER_REPORT_VERSION="3"');
+  test("both installers send error_output; install.sh is at report version 4 (host and ip_family), install.ps1 at 3", () => {
+    expect(shellInstaller).toContain('INSTALLER_REPORT_VERSION="4"');
     expect(shellInstaller).toContain('"error_output":"%s"');
     expect(powershellInstaller).toContain('$InstallerReportVersion = "3"');
     expect(powershellInstaller).toContain("error_output   = $scrubbedOutput");
@@ -699,7 +722,7 @@ describe("install.sh report_error payload", () => {
     expect(calls).toHaveLength(1);
     const report = JSON.parse(curlDataArg(calls[0])) as Record<string, unknown>;
     expect(report.step).toBe("self_install");
-    expect(report.script_version).toBe("3");
+    expect(report.script_version).toBe("4");
     const errorOutput = report.error_output as string;
     expect(errorOutput.length).toBe(1000); // bounded
     // Tail kept: the failure is at the END of a command's output.
@@ -716,8 +739,10 @@ describe("install.sh report_error payload", () => {
         env: { NO_TELEMETRY: undefined },
         settleMs: 5000,
       });
-      expect(calls).toHaveLength(1);
-      return JSON.parse(curlDataArg(calls[0])) as Record<string, unknown>;
+      // The family probe is a second curl call: the report is the one that POSTs.
+      const posts = calls.filter((argv) => argv.includes("POST"));
+      expect(posts).toHaveLength(1);
+      return JSON.parse(curlDataArg(posts[0] as string[])) as Record<string, unknown>;
     };
     for (const code of [6, 7, 28]) {
       const report = await run(
@@ -737,8 +762,9 @@ describe("install.sh report_error payload", () => {
       '( note_fetch_host "https://api.github.com/x"; LAST_ERROR_MSG="Self install failed"; (exit 7) || report_on_exit ); sleep 1',
       { cut: "preamble", env: { NO_TELEMETRY: undefined }, settleMs: 5000 },
     );
-    expect(calls).toHaveLength(1);
-    const report = JSON.parse(curlDataArg(calls[0])) as Record<string, unknown>;
+    const posts = calls.filter((argv) => argv.includes("POST"));
+    expect(posts).toHaveLength(1);
+    const report = JSON.parse(curlDataArg(posts[0] as string[])) as Record<string, unknown>;
     expect(report.error_line).toBe("Self install failed");
     const plain = await runWithCurlShim('( (exit 1) || report_on_exit ); sleep 1', {
       cut: "preamble",
@@ -747,6 +773,367 @@ describe("install.sh report_error payload", () => {
     });
     expect((JSON.parse(curlDataArg(plain.calls[0])) as Record<string, unknown>).error_line).toBe("");
   }, 30_000);
+
+  // #1681: the report names the host and the IP family the connection was attempted on, for every
+  // curl network failure code, and never carries a name from the user's own network.
+  describe("host and ip_family (#1681)", () => {
+    const post = async (script: string, env: Record<string, string | undefined> = {}) => {
+      const { calls } = await runWithCurlShim(script, {
+        cut: "preamble",
+        env: { NO_TELEMETRY: undefined, ...env },
+        settleMs: 5000,
+        untilPost: true,
+      });
+      const posts = calls.filter((argv) => argv.includes("POST"));
+      expect(posts).toHaveLength(1);
+      return {
+        report: JSON.parse(curlDataArg(posts[0] as string[])) as Record<string, unknown>,
+        probes: calls.filter((argv) => argv.includes("-v")),
+      };
+    };
+    const request = 'note_fetch_host "https://user:pw@install.squirrelscan.com:443/releases/stable?token=abc"';
+
+    test.each([6, 7, 28, 35, 52, 56])("exit %i carries the host and a family", async (code) => {
+      const { report } = await post(
+        `( ${request}; (exit ${code}) || report_on_exit ); sleep 1`,
+        { SHIM_TRACE: "*   Trying 104.21.1.2:443..." },
+      );
+      expect(report.exit_code).toBe(code);
+      expect(report.host).toBe("install.squirrelscan.com");
+      expect(report.ip_family).toBe("v4");
+      expect(report.step).toBe("startup");
+      expect(JSON.stringify(report)).not.toMatch(/pw|token=abc|\/releases/);
+    });
+
+    const families: Array<[string, string, string]> = [
+      ["an IPv4 address", "*   Trying 104.21.1.2:443...", "v4"],
+      ["an IPv6 address (curl 7.81)", "*   Trying 2606:4700::6810:84e5:443...", "v6"],
+      ["an IPv6 address (curl 8, bracketed)", "*   Trying [2606:4700::6810:84e5]:443...", "v6"],
+      ["no address tried (the name did not resolve)", "", "unknown"],
+      ["something that is not an address line", "* Could not resolve host: install.squirrelscan.com", "unknown"],
+    ];
+    for (const [name, trace, want] of families) {
+      test(`the family is read from ${name}`, async () => {
+        const { report, probes } = await post(
+          `( ${request}; (exit 7) || report_on_exit ); sleep 1`,
+          { SHIM_TRACE: trace },
+        );
+        expect(report.ip_family).toBe(want);
+        // One probe, against our own host, with the transport hardening and a bound.
+        expect(probes).toHaveLength(1);
+        expect(probes[0]).toContain("https://install.squirrelscan.com/");
+        expect(probes[0]).toContain("--connect-timeout");
+        expect(missingFromArgv(probes[0] as string[])).toEqual([]);
+      });
+    }
+
+    test("a host the script was pointed at is reported as custom, with no probe and no name", async () => {
+      const { report, probes } = await post(
+        '( note_fetch_host "https://mirror.corp.internal/releases/stable"; (exit 7) || report_on_exit ); sleep 1',
+        { SHIM_TRACE: "*   Trying 10.0.0.9:443..." },
+      );
+      expect(report.host).toBe("custom");
+      expect(report.ip_family).toBe("unknown");
+      expect(report.error_line).toBe("curl exit 7 reaching custom");
+      expect(probes).toHaveLength(0);
+      expect(JSON.stringify(report)).not.toMatch(/corp|internal|10\.0\.0\.9/);
+    });
+
+    test("the GitHub hosts the assets live on are named", async () => {
+      for (const host of ["api.github.com", "github.com", "objects.githubusercontent.com", "release-assets.githubusercontent.com", "x.githubusercontent.com"]) {
+        const { report } = await post(
+          `( note_fetch_host "https://${host}/a/b"; (exit 6) || report_on_exit ); sleep 1`,
+        );
+        expect(report.host).toBe(host);
+      }
+    }, 30_000);
+
+    test("a request made in a command substitution still names its host", async () => {
+      // get_latest_version runs as version=$(...): the variable it sets dies with the subshell.
+      const { report } = await post(
+        `v=$( ${request}; true ); ( (exit 7) || report_on_exit ); sleep 1`,
+        { SHIM_TRACE: "*   Trying [2606:4700::1]:443..." },
+      );
+      expect(report.host).toBe("install.squirrelscan.com");
+      expect(report.error_line).toBe("curl exit 7 reaching install.squirrelscan.com");
+      expect(report.ip_family).toBe("v6");
+    });
+
+    // error() exits 1, so a download or release fetch that failed on the network reports exit code 1:
+    // the host and family still ride along, from the curl code the failing request recorded.
+    test("a failed request whose report carries the installer's own exit code still names host and family", async () => {
+      const { report } = await post(
+        `( ${request}; note_fetch_rc 7; LAST_ERROR_MSG="Failed to fetch releases"; (exit 1) || report_on_exit ); sleep 1`,
+        { SHIM_TRACE: "*   Trying [2606:4700::1]:443..." },
+      );
+      expect(report.exit_code).toBe(1);
+      expect(report.error_line).toBe("Failed to fetch releases");
+      expect(report.host).toBe("install.squirrelscan.com");
+      expect(report.ip_family).toBe("v6");
+    });
+
+    test("an HTTP error, or a request made after the failure, does not carry the failure forward", async () => {
+      const http = await post(
+        `( ${request}; note_fetch_rc 22; LAST_ERROR_MSG="x"; (exit 1) || report_on_exit ); sleep 1`,
+      );
+      expect("host" in http.report).toBe(false);
+      const later = await post(
+        `( ${request}; note_fetch_rc 7; note_fetch_host "https://github.com/x"; LAST_ERROR_MSG="Checksum mismatch"; (exit 1) || report_on_exit ); sleep 1`,
+      );
+      expect("host" in later.report).toBe(false);
+    });
+
+    test("a failure recorded in a command substitution reaches the exit trap", async () => {
+      const { report } = await post(
+        `v=$( ${request}; note_fetch_rc 28; true ); ( LAST_ERROR_MSG="Failed to fetch releases"; (exit 1) || report_on_exit ); sleep 1`,
+        { SHIM_TRACE: "*   Trying 1.2.3.4:443..." },
+      );
+      expect(report.host).toBe("install.squirrelscan.com");
+      expect(report.ip_family).toBe("v4");
+    });
+
+    test("every request site records the failure's curl code", () => {
+      expect(shellInstaller).toContain('note_fetch_rc "$rc"');
+      expect(shellInstaller.match(/note_fetch_rc "\$fetch_rc"/g)?.length).toBe(2);
+    });
+
+    // The LAST request decides (#1681 review): a failure that a retry then cured, or a later request
+    // that ended another way, must not leave host and family behind for an unrelated error.
+    test("a failed attempt that a retry cured leaves no host, family or probe for a later error", async () => {
+      const { report, probes } = await post(
+        `( ${request}; note_fetch_rc 28; note_fetch_rc 0; LAST_ERROR_MSG="Checksum mismatch"; (exit 1) || report_on_exit ); sleep 1`,
+        { SHIM_TRACE: "*   Trying 1.2.3.4:443..." },
+      );
+      expect(report.error_line).toBe("Checksum mismatch");
+      expect("host" in report).toBe(false);
+      expect("ip_family" in report).toBe(false);
+      expect(probes).toHaveLength(0);
+    });
+
+    test("a request that fails another way (an HTTP error) also forgets an earlier network failure", async () => {
+      const { report, probes } = await post(
+        `( ${request}; note_fetch_rc 7; note_fetch_rc 22; LAST_ERROR_MSG="x"; (exit 1) || report_on_exit ); sleep 1`,
+      );
+      expect("host" in report).toBe(false);
+      expect(probes).toHaveLength(0);
+    });
+
+    test("a cured failure inside a command substitution is forgotten by the exit trap too", async () => {
+      const { report } = await post(
+        `v=$( ${request}; note_fetch_rc 28; note_fetch_rc 0; true ); ( LAST_ERROR_MSG="Checksum mismatch"; (exit 1) || report_on_exit ); sleep 1`,
+      );
+      expect("host" in report).toBe(false);
+    });
+
+    // A curl whose first call times out (28) and whose second succeeds. It runs in a background subshell
+    // (fetch_with_retry waits on it), so its call count lives in a file.
+    const FLAKY_CURL =
+      'cnt=$(mktemp); : > "$cnt"; sleep() { :; }; curl() { case " $* " in *" -X POST "*|*" -v "*) command curl "$@"; return $? ;; esac; c=$(cat "$cnt"); echo $((c + 1)) > "$cnt"; if [ -z "$c" ] || [ "$c" = 0 ]; then return 28; fi; return 0; }';
+
+    test("fetch_with_retry forgets the first attempt's failure when the second succeeds", async () => {
+      const { stdout } = await runWithCurlShim(
+        `${FLAKY_CURL}; fetch_with_retry "https://github.com/a/b" /dev/null 2>/dev/null; echo "rc=$?"; echo "var=[\${LAST_CURL_CODE}]"; echo "file=$(cat "$FETCH_HOST_FILE")"`,
+        { cut: "body", env: { NO_TELEMETRY: "1" } },
+      );
+      expect(stdout).toContain("rc=0");
+      expect(stdout).toContain("var=[]");
+      expect(stdout).toContain("file=github.com|");
+      expect(stdout).not.toContain("|28");
+    });
+
+    test("a download that timed out, then succeeded, leaves no host, family or probe for the next error", async () => {
+      const { calls } = await runWithCurlShim(
+        `${FLAKY_CURL}; ( fetch_with_retry "https://github.com/a/b" /dev/null 2>/dev/null; LAST_ERROR_MSG="Checksum mismatch"; (exit 1) || report_on_exit ); sleep 1`,
+        { cut: "body", env: { NO_TELEMETRY: undefined, SHIM_TRACE: "*   Trying 1.2.3.4:443..." }, settleMs: 5000, untilPost: true },
+      );
+      const posts = calls.filter((argv) => argv.includes("POST"));
+      expect(posts).toHaveLength(1);
+      const report = JSON.parse(curlDataArg(posts[0] as string[])) as Record<string, unknown>;
+      expect(report.error_line).toBe("Checksum mismatch");
+      expect("host" in report).toBe(false);
+      expect("ip_family" in report).toBe(false);
+      expect(calls.filter((argv) => argv.includes("-v"))).toHaveLength(0);
+    });
+
+    test("a download that fails every attempt still names its host and family", async () => {
+      const { calls } = await runWithCurlShim(
+        `cnt=$(mktemp); sleep() { :; }; curl() { case " $* " in *" -X POST "*|*" -v "*) command curl "$@"; return $? ;; esac; return 7; }; ( fetch_with_retry "https://github.com/a/b" /dev/null 2>/dev/null || true; LAST_ERROR_MSG="Download failed"; (exit 1) || report_on_exit ); sleep 1`,
+        { cut: "body", env: { NO_TELEMETRY: undefined, SHIM_TRACE: "*   Trying [2606:4700::1]:443..." }, settleMs: 5000, untilPost: true },
+      );
+      const posts = calls.filter((argv) => argv.includes("POST"));
+      expect(posts).toHaveLength(1);
+      const report = JSON.parse(curlDataArg(posts[0] as string[])) as Record<string, unknown>;
+      expect(report.host).toBe("github.com");
+      expect(report.ip_family).toBe("v6");
+    });
+
+    // The host is the authority of the URL, and a fragment ends it.
+    test.each([
+      ["https://evil.com#x@install.squirrelscan.com/a", "custom"],
+      ["https://evil.com?x=@install.squirrelscan.com/a", "custom"],
+      ["https://user@install.squirrelscan.com/a", "install.squirrelscan.com"],
+      ["https://install.squirrelscan.com:443/a#frag", "install.squirrelscan.com"],
+      ["https://install.squirrelscan.com.evil.com/a", "custom"],
+    ])("%s is reported as %s", async (url, want) => {
+      const { report } = await post(
+        `( note_fetch_host "${url}"; (exit 7) || report_on_exit ); sleep 1`,
+      );
+      expect(report.host).toBe(want);
+    });
+
+    // The probe is a short, bounded request to our own host that ignores proxy settings, and a failing
+    // or slow one never changes the report or delays the install.
+    test("the probe ignores proxy environment variables and is bounded", async () => {
+      const { probes } = await post(
+        `( ${request}; (exit 7) || report_on_exit ); sleep 1`,
+        { SHIM_TRACE: "*   Trying 1.2.3.4:443...", https_proxy: "http://proxy.corp.example:3128" },
+      );
+      expect(probes).toHaveLength(1);
+      const argv = probes[0] as string[];
+      expect(argv[argv.indexOf("--noproxy") + 1]).toBe("*");
+      expect(argv).toContain("--connect-timeout");
+      expect(argv).toContain("--max-time");
+      expect(argv.join(" ")).not.toContain("proxy.corp.example");
+    });
+
+    test("a probe that fails (curl exit 28) leaves ip_family unknown and the report still goes", async () => {
+      const { report, probes } = await post(
+        `( ${request}; (exit 7) || report_on_exit ); sleep 1`,
+        { SHIM_PROBE_FAIL: "1" },
+      );
+      expect(probes).toHaveLength(1);
+      expect(report.host).toBe("install.squirrelscan.com");
+      expect(report.ip_family).toBe("unknown");
+      expect(report.exit_code).toBe(7);
+    });
+
+    test("a slow probe does not delay the install: the exit trap returns at once and the report still lands", async () => {
+      const { calls, stdout } = await runWithCurlShim(
+        `( ${request}; s=$SECONDS; (exit 7) || report_on_exit; echo "trap-seconds=$((SECONDS - s))" ); sleep 4`,
+        { cut: "preamble", env: { NO_TELEMETRY: undefined, SHIM_PROBE_SLEEP: "2", SHIM_TRACE: "*   Trying 1.2.3.4:443..." }, settleMs: 8000, untilPost: true },
+      );
+      expect(stdout).toMatch(/trap-seconds=[01]\b/);
+      const posts = calls.filter((argv) => argv.includes("POST"));
+      expect(posts).toHaveLength(1);
+      expect((JSON.parse(curlDataArg(posts[0] as string[])) as Record<string, unknown>).ip_family).toBe("v4");
+    }, 30_000);
+
+    // The state file never outlives the run, on any exit path.
+    describe("the state file", () => {
+      const fileAfter = async (script: string, prelude = "") => {
+        const { stdout } = await runWithCurlShim(
+          `f="$FETCH_HOST_FILE"; ${script}; if [ -n "$f" ] && [ -e "$f" ]; then echo present; else echo gone; fi`,
+          { cut: "preamble", prelude, env: { NO_TELEMETRY: "1" } },
+        );
+        return stdout.trim().split("\n").pop();
+      };
+
+      test("it exists while the run is going", async () => {
+        const { stdout } = await runWithCurlShim(
+          `${request}; [ -f "$FETCH_HOST_FILE" ] && echo present`,
+          { cut: "preamble", env: { NO_TELEMETRY: "1" } },
+        );
+        expect(stdout.trim()).toBe("present");
+      });
+
+      test("a normal exit removes it", async () => {
+        expect(await fileAfter(`( ${request}; (exit 0) || true; report_on_exit )`)).toBe("gone");
+      });
+
+      test.each([1, 7, 129, 130, 143])("exit code %i removes it", async (code) => {
+        expect(await fileAfter(`( ${request}; note_fetch_rc 7; (exit ${code}) || report_on_exit )`)).toBe("gone");
+      });
+
+      test("a run that never made a request removes it too", async () => {
+        expect(await fileAfter("( (exit 1) || report_on_exit )")).toBe("gone");
+      });
+
+      test("when mktemp fails there is no file, nothing is written, and the host is still reported", async () => {
+        const { calls, stdout, stderr } = await runWithCurlShim(
+          `echo "file=[$FETCH_HOST_FILE]"; ( ${request}; note_fetch_rc 7; (exit 1) || report_on_exit ); sleep 1`,
+          {
+            cut: "preamble",
+            prelude: "mktemp() { return 1; }",
+            env: { NO_TELEMETRY: undefined, SHIM_TRACE: "*   Trying 1.2.3.4:443..." },
+            settleMs: 5000,
+          },
+        );
+        expect(stdout).toContain("file=[]");
+        expect(stderr).not.toMatch(/No such file|Permission denied|unbound/);
+        const posts = calls.filter((argv) => argv.includes("POST"));
+        expect(posts).toHaveLength(1);
+        const report = JSON.parse(curlDataArg(posts[0] as string[])) as Record<string, unknown>;
+        // Same shell, so the variable carries it; only a subshell's request needs the file.
+        expect(report.host).toBe("install.squirrelscan.com");
+        expect(report.ip_family).toBe("v4");
+      });
+
+      test("when mktemp fails a request in a command substitution is lost quietly, not fatally", async () => {
+        const { calls, stderr } = await runWithCurlShim(
+          `v=$( ${request}; note_fetch_rc 7; true ); ( LAST_ERROR_MSG="Failed to fetch releases"; (exit 1) || report_on_exit ); sleep 1`,
+          { cut: "preamble", prelude: "mktemp() { return 1; }", env: { NO_TELEMETRY: undefined }, settleMs: 5000 },
+        );
+        expect(stderr).not.toMatch(/No such file|Permission denied|unbound/);
+        const posts = calls.filter((argv) => argv.includes("POST"));
+        expect(posts).toHaveLength(1);
+        expect("host" in (JSON.parse(curlDataArg(posts[0] as string[])) as Record<string, unknown>)).toBe(false);
+      });
+    });
+
+    test("before any request, or for a code that is not a network failure, there is no host or family", async () => {
+      const early = await post("( (exit 7) || report_on_exit ); sleep 1");
+      expect("host" in early.report).toBe(false);
+      expect("ip_family" in early.report).toBe(false);
+      expect(early.probes).toHaveLength(0);
+      const plain = await post(`( ${request}; (exit 1) || report_on_exit ); sleep 1`);
+      expect("host" in plain.report).toBe(false);
+      expect("ip_family" in plain.report).toBe(false);
+    });
+
+    test("the report is still one valid JSON object with the fields it always had", async () => {
+      const { report } = await post(
+        `( ${request}; (exit 7) || report_on_exit ); sleep 1`,
+        { SHIM_TRACE: "*   Trying 1.2.3.4:443..." },
+      );
+      for (const key of ["script", "script_version", "channel", "os", "arch", "step", "exit_code", "error_line", "error_output"]) {
+        expect(key in report).toBe(true);
+      }
+      expect(report.script_version).toBe("4");
+    });
+  });
+
+  // #1681: a report is never sent with step `init`.
+  describe("the step is always a named one (#1681)", () => {
+    const stepOf = async (script: string) => {
+      const { calls } = await runWithCurlShim(script, {
+        cut: "preamble",
+        env: { NO_TELEMETRY: undefined },
+        settleMs: 5000,
+      });
+      const posts = calls.filter((argv) => argv.includes("POST"));
+      expect(posts).toHaveLength(1);
+      return (JSON.parse(curlDataArg(posts[0] as string[])) as Record<string, unknown>).step;
+    };
+
+    test("the observed payload (exit 7 before any step) now reports `startup`, not `init`", async () => {
+      expect(await stepOf("( (exit 7) || report_on_exit ); sleep 1")).toBe("startup");
+    });
+
+    test("an empty step, or the old `init`, reads as `startup`", async () => {
+      expect(await stepOf('report_error "" 1 "x" ""; sleep 1')).toBe("startup");
+      expect(await stepOf('report_error init 1 "x" ""; sleep 1')).toBe("startup");
+    });
+
+    test("a named step is sent as it is", async () => {
+      expect(await stepOf('report_error fetch_releases 7 "x" ""; sleep 1')).toBe("fetch_releases");
+    });
+
+    test("the script's default step is `startup`, and `init` is not a step anywhere in it", () => {
+      expect(shellInstaller).toContain('CURRENT_STEP="startup"');
+      expect(shellInstaller).not.toContain('CURRENT_STEP="init"');
+      expect(shellInstaller).not.toMatch(/CURRENT_STEP="init/);
+    });
+  });
 
   test("every install.sh request site records its host", () => {
     expect(shellInstaller).toContain('note_fetch_host "$url"');
@@ -833,10 +1220,10 @@ describe("install.sh curl transport hardening", () => {
     const invocations = curlInvocations(shellInstaller);
     // The count is pinned only so a refactor that hides an EXISTING call site
     // from the scan fails instead of passing vacuously. It cannot notice a new
-    // call site the scan is blind to; only the scan itself can. Five today:
-    // the fetcher, both release-metadata fetches, the failure-report POST, and
-    // the POSIX-sh re-exec.
-    expect(invocations.map((found) => found.line)).toHaveLength(5);
+    // call site the scan is blind to; only the scan itself can. Six today:
+    // the fetcher, both release-metadata fetches, the failure-report POST, the
+    // IP family probe, and the POSIX-sh re-exec.
+    expect(invocations.map((found) => found.line)).toHaveLength(6);
     for (const { line, text } of invocations) {
       expect([line, missingHardening(shellInstaller, text)]).toEqual([line, []]);
     }
