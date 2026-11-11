@@ -82,7 +82,7 @@ describe("crawl/indexable-search-results", () => {
   });
 
   test("/Search/ trailing slash is case-insensitive", () => {
-    expect(check([page("/Search/?foo=bar")]).status).toBe("warn");
+    expect(check([page("/Search/?q=bar")]).status).toBe("warn");
   });
 
   test("meta noindex: not listed, still counted as found", () => {
@@ -153,9 +153,60 @@ describe("crawl/indexable-search-results", () => {
     expect(withSearch.value).toContain("1 unconfirmed");
   });
 
-  test("query value in h1 (or title) confirms a param URL", () => {
+  test("query value in h1 or og:title confirms a param URL", () => {
     expect(check([page("/?s=red+shoes", { h1: "Results for Red  Shoes" })]).status).toBe("warn");
-    expect(check([page("/?q=boots", { title: "boots - Example" })]).status).toBe("warn");
+    expect(
+      check([
+        page("/?q=boots", {
+          title: "Example",
+          head: '<meta property="og:title" content="Boots results">',
+        }),
+      ]).status,
+    ).toBe("warn");
+  });
+
+  test("a title-only match is weak evidence: stays unconfirmed, counted in value", () => {
+    const c = check([page("/?q=boots", { title: "boots - Example" })]);
+    expect(c.status).toBe("skipped");
+    expect(c.value).toContain("1 URL(s)");
+    const filter = check([
+      page("/shop?q=red", { title: "Red shoes", h1: "Footwear" }),
+      page("/search?q=x"),
+    ]);
+    expect(filter.value).toContain("1 unconfirmed");
+  });
+
+  test("values under 3 chars never confirm, even when the h1 contains them", () => {
+    expect(check([page("/cat?q=a", { title: "a", h1: "a b c" })]).status).toBe("skipped");
+    expect(check([page("/cat?q=ab", { title: "ab", h1: "ab" })]).status).toBe("skipped");
+  });
+
+  test("evidence is whole-word: 'red' does not match 'tired'", () => {
+    expect(check([page("/cat?q=red", { h1: "Tired shoes" })]).status).toBe("skipped");
+    expect(check([page("/cat?q=red", { h1: "Red, shoes" })]).status).toBe("warn");
+  });
+
+  test("/search with only tracking, paging or sort params is not a search URL", () => {
+    for (const q of ["utm_source=x", "page=2", "sort=price", "ref=nav", "fbclid=", "fbclid=abc"]) {
+      expect(check([page(`/search?${q}`)]).status).toBe("skipped");
+    }
+    expect(check([page("/search?q=shoes&utm_source=x")]).status).toBe("warn");
+    expect(check([page("/search?q=shoes")]).status).toBe("warn");
+  });
+
+  test("/search with a param named in a SearchAction template counts", () => {
+    const home = page("/", { head: searchActionLd(`${ORIGIN}/search?term={search_term_string}`) });
+    expect(check([home, page("/search?term=boots")]).status).toBe("warn");
+    expect(check([home, page("/search?page=2")]).status).toBe("skipped");
+  });
+
+  test("meta robots none (and X-Robots-Tag none) counts as noindex", () => {
+    const m = check([page("/search?q=a", { head: '<meta name="robots" content="none">' })]);
+    expect(m.status).toBe("pass");
+    expect(m.message).toContain("none indexable");
+    const h = check([page("/search?q=a", { headers: { "x-robots-tag": "none" } })]);
+    expect(h.status).toBe("pass");
+    expect(check([page("/search?q=a", { head: '<meta name="robots" content="nofollow">' })]).status).toBe("warn");
   });
 
   test("SearchAction /?s={search_term_string} recognises /?s=foo without evidence", () => {
