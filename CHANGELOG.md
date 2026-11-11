@@ -17,6 +17,9 @@ How it works:
 
 ## [Unreleased]
 
+### Changed
+
+- `ax/content-signals` tells absent, declared, invalid and not checked apart (`details.state`). A robots.txt that was missing, refused, failed or cut at the 512 KiB read cap is now not checked instead of reported as no Content-Signal declared.
 ### Added
 
 - `a11y/meta-refresh` also reports a `Refresh` response header: a redirect names the target and delay, a header with no URL is a reload, and a page with both the header and a meta refresh gets one finding naming both. The rule now runs per page, and its solution recommends a 301 or 308 redirect.

@@ -3,6 +3,7 @@
 // crawler-level Disallow rules.
 
 import type { RobotsTxtData } from "@squirrelscan/core-contracts";
+import { ROBOTS_MAX_BYTES } from "@squirrelscan/utils/constants";
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 import { type CrawlerClass, evaluateAiCrawlers } from "./ai-crawlers";
@@ -156,6 +157,24 @@ export function findContradictions(
   return out;
 }
 
+/**
+ * Why robots.txt cannot support a claim that no policy is declared, or null when
+ * it was read completely. "Absent" is only true of a document that was fully read:
+ * a missing, refused, failed or cut-short read says nothing about the policy.
+ */
+export function robotsNotReadReason(robotsTxt: RobotsTxtData | null | undefined): string | null {
+  if (!robotsTxt) return "robots.txt was not read in this audit";
+  const error = robotsTxt.errors[0];
+  if (error) return `robots.txt could not be read (${error})`;
+  if (!robotsTxt.exists || robotsTxt.content === null) {
+    return "No robots.txt was read (it is missing, or reading it was switched off)";
+  }
+  if (robotsTxt.sizeBytes >= ROBOTS_MAX_BYTES) {
+    return `robots.txt reached the ${ROBOTS_MAX_BYTES / 1024} KiB read cap, so a Content-Signal past it would not be seen`;
+  }
+  return null;
+}
+
 export const contentSignalsRule: Rule = {
   meta: {
     id: "ax/content-signals",
@@ -179,13 +198,27 @@ export const contentSignalsRule: Rule = {
 
     const directives = content ? parseContentSignals(content) : [];
 
-    // No Content-Signal anywhere → informational, never a failure.
     if (directives.length === 0) {
+      // Absent only when robots.txt was read completely; otherwise unknown.
+      const notRead = robotsNotReadReason(robotsTxt);
+      if (notRead !== null) {
+        checks.push({
+          name: "content-signals",
+          status: "skipped",
+          message: `Content-Signal policy not checked: ${notRead}`,
+          value: "not-checked",
+          skipReason: notRead,
+          details: { state: "not-checked" },
+        });
+        return { checks };
+      }
+      // No Content-Signal anywhere → informational, never a failure.
       checks.push({
         name: "content-signals",
         status: "info",
         message: "No Content-Signal declared in robots.txt (optional per-purpose AI policy)",
         value: "absent",
+        details: { state: "absent" },
       });
       return { checks };
     }
@@ -208,6 +241,7 @@ export const contentSignalsRule: Rule = {
           : "Content-Signal present but declares no recognized signal",
       value: "present",
       details: {
+        state: policyParts.length > 0 ? "declared" : "invalid",
         signals: Object.fromEntries(declared),
         scopedUserAgents: [...new Set(directives.flatMap((d) => d.userAgents))],
       },
@@ -226,7 +260,7 @@ export const contentSignalsRule: Rule = {
         message: `Content-Signal has invalid syntax — ${notes.join("; ")}. Valid form is comma-separated key=value using search/ai-input/ai-train with yes/no.`,
         value: "invalid-syntax",
         items: [...unknownKeys, ...malformed].map((t) => ({ id: t, label: t })),
-        details: { unknownKeys, malformed },
+        details: { state: "invalid", unknownKeys, malformed },
       });
     }
 
