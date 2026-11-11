@@ -2,11 +2,32 @@
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
-import { describeRefusedFetch } from "@squirrelscan/core-contracts";
+import { describeRefusedFetch, type RobotsTxtData } from "@squirrelscan/core-contracts";
+import { isRobotsTxtDisallowed } from "@squirrelscan/utils";
 
 import { refusalReason, refusedFor } from "../refused";
 
 const SEARCH_CRAWL_DELAY_AGENTS = new Set(["*", "bingbot", "msnbot", "yandex", "googlebot"]);
+
+// Major search crawlers whose own group can let them in when `User-agent: *` blocks the site.
+const MAJOR_SEARCH_CRAWLERS = ["Googlebot", "Bingbot"];
+
+/**
+ * The major search crawlers that have a group of their own (matched without case,
+ * as `isRobotsTxtDisallowed` reads it) under which the site root is not disallowed.
+ */
+function crawlersStillAllowed(robotsTxt: RobotsTxtData): string[] {
+  let root: string;
+  try {
+    root = new URL("/", robotsTxt.url).href;
+  } catch {
+    return [];
+  }
+  return MAJOR_SEARCH_CRAWLERS.filter((agent) => {
+    const named = robotsTxt.rules.some((group) => group.userAgent.toLowerCase() === agent.toLowerCase());
+    return named && !isRobotsTxtDisallowed(root, robotsTxt, agent);
+  });
+}
 
 function formatInteger(value: number): string {
   return String(value).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
@@ -61,6 +82,24 @@ export const robotsTxtRule: Rule = {
     scope: "site",
     severity: "error",
     weight: 8,
+    checks: [
+      { name: "robots-txt-exists", outcome: "problem" },
+      { name: "robots-txt-exists", outcome: "skipped" },
+      { name: "robots-txt-exists", outcome: "clean", clears: ["robots-txt-exists"] },
+      { name: "robots-txt-syntax", outcome: "problem" },
+      { name: "robots-txt-syntax", outcome: "clean", clears: ["robots-txt-syntax"] },
+      { name: "robots-txt-disallow", outcome: "problem" },
+      { name: "robots-txt-disallow-wildcard", outcome: "problem" },
+      {
+        name: "robots-txt-disallow",
+        outcome: "clean",
+        clears: ["robots-txt-disallow", "robots-txt-disallow-wildcard"],
+      },
+      { name: "robots-txt-crawl-delay", outcome: "problem" },
+      { name: "robots-txt-sitemap", outcome: "problem" },
+      { name: "robots-txt-sitemap", outcome: "clean", clears: ["robots-txt-sitemap"] },
+      { name: "robots-txt-size", outcome: "problem" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {
@@ -146,7 +185,19 @@ export const robotsTxtRule: Rule = {
         rule.rules.some((r) => r.type === "disallow" && r.path === "/")
     );
 
-    if (hasFullDisallow) {
+    const stillAllowed = hasFullDisallow ? crawlersStillAllowed(robotsTxt) : [];
+
+    if (stillAllowed.length > 0) {
+      // A named group lets a major search crawler in, so not every crawler is
+      // blocked: report the wildcard block on its own, below the full-block failure.
+      checks.push({
+        name: "robots-txt-disallow-wildcard",
+        status: "warn",
+        message: "robots.txt blocks crawlers without a group of their own",
+        value: `User-agent: * has Disallow: /; still allowed: ${stillAllowed.join(", ")}`,
+        items: stillAllowed.map((agent) => ({ id: agent, label: `User-agent: ${agent} may crawl /` })),
+      });
+    } else if (hasFullDisallow) {
       // Check if there are allow rules that might permit some crawling
       const hasAllowRules = robotsTxt.rules.some(
         (rule) =>

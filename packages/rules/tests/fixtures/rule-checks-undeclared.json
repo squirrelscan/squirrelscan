@@ -133,7 +133,6 @@
   "crawl/redirect-chain",
   "crawl/rendered-signal-mismatch",
   "crawl/robots-meta-conflict",
-  "crawl/robots-txt",
   "crawl/schema-noindex-conflict",
   "crawl/single-page-site",
   "crawl/sitemap-4xx",
