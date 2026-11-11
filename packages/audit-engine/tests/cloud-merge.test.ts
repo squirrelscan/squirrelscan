@@ -186,6 +186,48 @@ describe("runCloudSmartAudits — cloud parity", () => {
     expect(second.coverage.pagesWithStaleCarry).toBeUndefined();
   });
 
+  // #1031: a capped run that rotates the pages it audits. The carried findings of the pages it left
+  // out are counted in `carriedFindings`, and every page holding one is a known page, so a consumer can
+  // tell findings from pages outside this crawl are being carried: `carriedFindings > 0` implies
+  // `knownPages > auditedPages` whenever the carried pages have records.
+  test("a capped run over a rotated page set counts the out-of-crawl carried pages as known (#1031)", async () => {
+    const pages = Array.from({ length: 6 }, (_, i) => `https://x.test/p${i + 1}`);
+    const store = new MemStore();
+    const run = async (crawlId: string, crawled: string[]) =>
+      (
+        await runCloudSmartAudits({
+          store,
+          siteKey: "web_1",
+          crawlId,
+          // Every page fails the rule, so each page holds one open finding.
+          ruleResults: ruleResultsFor(crawled, []),
+          pageStatuses: crawled.map((url) => ({ url, status: 200 })),
+        })
+      ).coverage;
+
+    const first = await run("audit_1", pages.slice(0, 3));
+    expect(first.carriedFindings ?? 0).toBe(0);
+    expect(first.knownPages).toBe(first.auditedPages);
+
+    // Run 2 crawls the other three: the first three are out of its crawl, still open.
+    const second = await run("audit_2", pages.slice(3));
+    expect(second.auditedPages).toBe(3);
+    expect(second.carriedFindings).toBe(3);
+    expect(second.knownPages).toBe(6);
+
+    // Run 3 is capped at two pages that were both seen before: four pages are out of the crawl.
+    const third = await run("audit_3", pages.slice(0, 2));
+    expect(third.auditedPages).toBe(2);
+    expect(third.carriedFindings).toBe(4);
+    expect(third.knownPages).toBe(6);
+
+    // The documented invariant, on every run that carried anything.
+    for (const coverage of [second, third]) {
+      expect(coverage.carriedFindings).toBeGreaterThan(0);
+      expect(coverage.knownPages).toBeGreaterThan(coverage.auditedPages);
+    }
+  });
+
   test("a 404 page stales its carried finding (recovers the score)", async () => {
     const store = new MemStore();
     await runCloudSmartAudits({
