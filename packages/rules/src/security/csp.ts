@@ -66,6 +66,13 @@ export const cspRule: Rule = {
     const headers = firstPage.headers ?? {};
     const csp = headers["content-security-policy"];
     const cspReportOnly = headers["content-security-policy-report-only"];
+    // #1735: every check names the page the header was read from and the header it read, as
+    // structured evidence (`pages` is what affectedPages() counts; the header is what it says).
+    const headerName = csp || !cspReportOnly ? "content-security-policy" : "content-security-policy-report-only";
+    const evidence = (extra: Record<string, unknown> = {}) => ({
+      pages: [firstPage.url],
+      details: { pageUrl: firstPage.url, header: headerName, ...extra },
+    });
 
     // No CSP at all - this is a warning now, not just info
     if (!csp && !cspReportOnly) {
@@ -75,6 +82,7 @@ export const cspRule: Rule = {
         message: "No Content-Security-Policy header",
         value: "Site vulnerable to XSS without CSP",
         expected: "Content-Security-Policy header with script-src directive",
+        ...evidence(),
       });
       return { checks };
     }
@@ -93,6 +101,7 @@ export const cspRule: Rule = {
         message: "CSP in report-only mode (not enforced)",
         value: "Policy violations are logged but not blocked",
         expected: "Use Content-Security-Policy to enforce",
+        ...evidence(),
       });
     } else {
       checks.push({
@@ -100,6 +109,7 @@ export const cspRule: Rule = {
         status: "pass",
         message: "CSP header present and enforced",
         value: policy.substring(0, 100) + (policy.length > 100 ? "..." : ""),
+        ...evidence(),
       });
     }
 
@@ -119,6 +129,7 @@ export const cspRule: Rule = {
           ? "Inline event handlers and eval() are not restricted by script-src-elem"
           : "Scripts from any source are allowed",
         expected: "Add script-src or default-src directive",
+        ...evidence(),
       });
     }
 
@@ -142,6 +153,10 @@ export const cspRule: Rule = {
       ]),
     ];
 
+    // #1735: which directive carries each weak source, with its value, as structured details.
+    const carriers = weakCarriers(directives, elemSrc, attrSrc, scriptSrc);
+    const carrier = (source: string) => carriers.find((c) => c.sources.includes(source));
+
     if (weakValues.length > 0) {
       // unsafe-inline and unsafe-eval are critical weaknesses
       const hasUnsafeInline = weakValues.includes("'unsafe-inline'");
@@ -154,6 +169,16 @@ export const cspRule: Rule = {
           message: `CSP allows ${[hasUnsafeInline && "'unsafe-inline'", hasUnsafeEval && "'unsafe-eval'"].filter(Boolean).join(" and ")}`,
           value: "Weakens XSS protection significantly",
           expected: "Use nonces or hashes instead of unsafe-inline",
+          ...evidence({
+            // The directive carrying 'unsafe-inline' (else 'unsafe-eval') and its value.
+            ...(carrier("'unsafe-inline'") ?? carrier("'unsafe-eval'")
+              ? {
+                  directive: (carrier("'unsafe-inline'") ?? carrier("'unsafe-eval'"))!.directive,
+                  value: (carrier("'unsafe-inline'") ?? carrier("'unsafe-eval'"))!.value,
+                }
+              : {}),
+            directives: carriers,
+          }),
         });
       }
 
@@ -165,6 +190,10 @@ export const cspRule: Rule = {
           message: "CSP script-src allows wildcard (*)",
           value: "Scripts can load from any domain",
           expected: "Restrict to specific trusted domains",
+          ...evidence({
+            ...(carrier("*") ? { directive: carrier("*")!.directive, value: carrier("*")!.value } : {}),
+            directives: carriers,
+          }),
         });
       }
     }
@@ -189,6 +218,7 @@ export const cspRule: Rule = {
           message: `CSP 'self' allows a possible first-party proxy path ${paths.join(", ")}`,
           value: "A same-origin path of this kind may proxy third-party code that runs under 'self'",
           expected: "Confirm the proxied script is trusted, or pin it with a nonce or hash",
+          ...evidence({ paths }),
         });
       }
     }
@@ -202,6 +232,7 @@ export const cspRule: Rule = {
           status: "info",
           message: "CSP missing frame-ancestors directive",
           value: "Consider adding for clickjacking protection",
+          ...evidence(),
         });
       }
     }
@@ -213,12 +244,48 @@ export const cspRule: Rule = {
         status: "info",
         message: "CSP missing object-src directive",
         value: "Consider blocking plugins with object-src 'none'",
+        ...evidence(),
       });
     }
 
     return { checks };
   },
 };
+
+/** Longest directive value kept in evidence (the policy itself can be long). */
+const MAX_DIRECTIVE_VALUE = 300;
+
+/**
+ * The directives that carry a weak script source, as evidence (#1735): the name
+ * browsers read it from (`script-src-elem`, `script-src-attr`, `script-src` or
+ * the `default-src` fallback), that directive's value, and which weak sources
+ * it holds. Mirrors the checks above: elements are judged on script-src-elem,
+ * inline handlers on script-src-attr ('unsafe-inline' only), eval on script-src.
+ */
+function weakCarriers(
+  directives: Map<string, string>,
+  elemSrc: string,
+  attrSrc: string,
+  scriptSrc: string,
+): Array<{ directive: string; value: string; sources: string[] }> {
+  const named = (specific: string) =>
+    directives.has(specific) ? specific : directives.has("script-src") ? "script-src" : "default-src";
+  const rows = new Map<string, Set<string>>();
+  const add = (directive: string, sources: string[]) => {
+    if (sources.length === 0) return;
+    const set = rows.get(directive) ?? new Set<string>();
+    for (const source of sources) set.add(source);
+    rows.set(directive, set);
+  };
+  add(named("script-src-elem"), weakScriptSources(elemSrc).filter((v) => v !== "'unsafe-eval'"));
+  add(named("script-src-attr"), weakScriptSources(attrSrc).filter((v) => v === "'unsafe-inline'"));
+  add(named("script-src"), weakScriptSources(scriptSrc).filter((v) => v === "'unsafe-eval'"));
+  return [...rows].map(([directive, sources]) => ({
+    directive,
+    value: (directives.get(directive) ?? "").slice(0, MAX_DIRECTIVE_VALUE),
+    sources: [...sources],
+  }));
+}
 
 /** Known proxy prefixes that a crawled same-origin script URL falls under. */
 function proxyPathsLoaded(ctx: RuleContext, pageUrl: string): string[] {
