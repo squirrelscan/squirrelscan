@@ -55,6 +55,32 @@ export function robotsSaysNoindex(robots: string | null): boolean {
     .some((token) => token === "noindex" || token === "none");
 }
 
+/** The meta names a robots directive can sit under that a search engine acts on. */
+const ROBOTS_META_NAMES: ReadonlySet<string> = new Set(["robots", "googlebot"]);
+
+/**
+ * The `content` of EVERY robots-directive meta tag in a document: `robots` and `googlebot`, the name
+ * matched without regard to case. Not just the first one: a script that appends a second tag (the raw
+ * page says `index, follow`, JavaScript adds another that says `noindex`) must read as a mismatch, and
+ * the first tag alone reads the same on both sides.
+ */
+export function collectRobotsDirectives(doc: Document): string[] {
+  const out: string[] = [];
+  for (const node of doc.querySelectorAll("meta")) {
+    const el = node as Element;
+    const name = el.getAttribute("name")?.trim().toLowerCase();
+    if (!name || !ROBOTS_META_NAMES.has(name)) continue;
+    const content = el.getAttribute("content");
+    if (content !== null) out.push(content);
+  }
+  return out;
+}
+
+/** Whether any of the directives asks not to index. */
+export function directivesSayNoindex(directives: readonly string[]): boolean {
+  return directives.some((value) => robotsSaysNoindex(value));
+}
+
 /** Text compared after whitespace and case are normalised. */
 function normalizedText(text: string | null | undefined): string | null {
   if (text === null || text === undefined) return null;
@@ -130,6 +156,16 @@ export const renderedSignalMismatchRule: Rule = {
     const renderedH1 = extractH1(renderedDoc).texts[0] ?? null;
     const raw = ctx.parsed;
     const rawH1 = raw.h1.texts[0] ?? null;
+    // The raw side's robots tags: every one of them, from the crawl's document, or the raw HTML
+    // parsed again when the document was released (a large crawl drops it as it goes), or, with
+    // neither, the first tag the crawl kept.
+    const rawDoc = raw.document ?? (ctx.page.html ? parseDocument(ctx.page.html) : null);
+    const rawDirectives = rawDoc
+      ? collectRobotsDirectives(rawDoc)
+      : raw.meta.robots !== null
+        ? [raw.meta.robots]
+        : [];
+    const renderedDirectives = collectRobotsDirectives(renderedDoc);
     const url = ctx.page.url;
     const checks: CheckResult[] = [];
 
@@ -140,7 +176,25 @@ export const renderedSignalMismatchRule: Rule = {
       raw: shown(raw.meta.canonical?.trim() || null),
       rendered: shown(renderedMeta.canonical?.trim() || null),
     };
-    if (rawCanonical !== renderedCanonical) {
+    // The standard single-page-app shape: no canonical in the server HTML, and the script adds one that
+    // is the page's own URL. A crawler that reads the raw HTML sees no canonical (it picks one itself),
+    // but the signal it would get is the right one, so this warns instead of failing. A canonical the
+    // script adds that points elsewhere, or one it changes or removes, still fails.
+    const pageKey = canonicalKey(url, url);
+    if (
+      rawCanonical === null &&
+      renderedCanonical !== null &&
+      pageKey !== null &&
+      renderedCanonical === pageKey
+    ) {
+      checks.push({
+        name: CANONICAL,
+        status: "warn",
+        message: `JavaScript adds a canonical (${canonicalDetails.rendered}) that is this page's own URL; the raw HTML has none, so crawlers that do not run JavaScript pick one themselves`,
+        pageUrl: url,
+        details: { ...canonicalDetails, selfCanonicalAddedByScript: true },
+      });
+    } else if (rawCanonical !== renderedCanonical) {
       const message =
         rawCanonical === null
           ? `JavaScript adds a canonical (${canonicalDetails.rendered}); the raw HTML has none`
@@ -164,13 +218,13 @@ export const renderedSignalMismatchRule: Rule = {
     }
 
     // Noindex: present on only one side.
-    const rawNoindex = robotsSaysNoindex(raw.meta.robots);
-    const renderedNoindex = robotsSaysNoindex(renderedMeta.robots);
+    const rawNoindex = directivesSayNoindex(rawDirectives);
+    const renderedNoindex = directivesSayNoindex(renderedDirectives);
     const noindexDetails = {
       raw: rawNoindex,
       rendered: renderedNoindex,
-      rawRobots: shown(raw.meta.robots),
-      renderedRobots: shown(renderedMeta.robots),
+      rawRobots: shown(rawDirectives.length > 0 ? rawDirectives.join(" | ") : null),
+      renderedRobots: shown(renderedDirectives.length > 0 ? renderedDirectives.join(" | ") : null),
     };
     if (rawNoindex !== renderedNoindex) {
       checks.push({
