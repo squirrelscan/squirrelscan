@@ -405,6 +405,12 @@
    "consent-mode|skipped|No Google tags detected (consent mode not applicable)||"
   ]
  },
+ "analytics/duplicate-tags": {
+  "digest": "88383657681492",
+  "lines": [
+   "duplicate-tags|pass|No analytics tag is installed more than once||"
+  ]
+ },
  "analytics/gtm-present": {
   "digest": "52644714990033",
   "lines": [
