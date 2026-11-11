@@ -1,0 +1,103 @@
+---
+title: "Click depth: indexable pages many clicks from the homepage"
+description: "Pages that take many clicks to reach are crawled less often and get little internal link weight. squirrel measures the shortest link path from the homepage and lists the pages past a threshold."
+---
+
+## What click depth is
+
+Click depth is the number of links a visitor, or a crawler, follows from the homepage to reach a page. The homepage is depth 0, a page linked from it is depth 1, and so on.
+
+Search engines crawl shallow pages more often and read the links on them as a sign of importance. A page buried five clicks down is visited less, passes on less internal link weight, and is easy to forget when the site grows. Nothing is broken, which is why the rule is advisory: some pages are deep on purpose.
+
+## What squirrel checks
+
+The rule is site-wide. It builds the graph of dofollow internal links found in the crawl and finds the shortest path from the homepage to every page by breadth-first search. The depth is a property of the link graph, not of the order the crawler visited pages: a page the homepage links to is depth 1 however it was queued. It emits a single check named `click-depth`:
+
+- Skipped for a single-page audit, or when the homepage was not among the crawled pages. The check says why.
+- Warn when an indexable page is more than the threshold (default 3) clicks away. Message: `2 indexable page(s) are more than 3 clicks from the homepage, deepest at 5.` Items are ordered deepest first, each with its depth, and `details` carries the total, the deepest depth and the threshold used.
+- Pass otherwise. Message: `No indexable page is more than 3 clicks from the homepage.`
+- When the crawl stopped at its page cap the message adds that depths are a lower bound, and `details.lowerBound` is true. Raise `max_pages` for a complete picture.
+
+What is left out, on purpose:
+
+- **Pages with no link path.** A page found only through the sitemap is not given a depth. `links/orphan-pages` reports those.
+- **Noindex pages, redirects and error responses** are never listed. A noindex page still passes on its links, so pages behind it keep their shorter path. A page reached only through a redirect has no seen path and is not listed.
+- **Nofollow links** are not followed. Links from the page the audit started on count as depth 1, the same as links from the homepage.
+
+## How to fix it
+
+Shorten the path to the pages that matter. Link them from the homepage, a hub or category page, or the main navigation. Breadcrumbs, related-content blocks and "latest" lists add shortcuts without a redesign. Pagination is a common cause: a post on page 12 of an archive is 13 clicks deep, and a link from a topic page fixes that.
+
+If a page is deep on purpose, raise the threshold or disable the rule.
+
+| | |
+|---|---|
+| **Rule ID** | `links/click-depth` |
+| **Category** | [Links](/rules/links) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 1/10 |
+
+## Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `maxDepth` | integer (1 or more) | `3` | Pages more than this many clicks from the homepage are listed |
+
+### Configuration example
+
+```toml squirrel.toml
+[rule_options."links/click-depth"]
+maxDepth = 5
+```
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["links/click-depth"]
+```
+
+### Disable all Links rules
+
+```toml squirrel.toml
+[rules]
+disable = ["links/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["links/click-depth"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Related rules
+
+- [links/orphan-pages](/rules/links/orphan-pages): pages with no link path at all.
+- [links/weak-internal-links](/rules/links/weak-internal-links): pages with a single inbound link.
+- [links/no-contextual-inbound](/rules/links/no-contextual-inbound): pages linked only from sitewide chrome.
+- [links/dead-end-pages](/rules/links/dead-end-pages): the outbound side of the same structure.
+
+Links findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Make your links crawlable, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/links-crawlable)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Links section of the report. Every indexable page past the threshold is listed with its depth. Signed-out local audits need no account and cost nothing. Signed-in audits spend credits.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Links section looks like on a real site.
+  </Card>
+</CardGroup>
