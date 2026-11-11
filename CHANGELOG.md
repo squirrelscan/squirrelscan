@@ -17,8 +17,9 @@ How it works:
 
 ## [Unreleased]
 
-### Changed
+### Added
 
+- `ax/content-signals` tells absent, declared, invalid and not checked apart (`details.state`). A robots.txt that was refused, failed or cut at the 512 KiB read cap is reported as not checked instead of as no Content-Signal declared; a plain 404 still counts as absent.
 - `ax/content-signals` tells absent, declared, invalid and not checked apart (`details.state`). A robots.txt that was missing, refused, failed or cut at the 512 KiB read cap is now not checked instead of reported as no Content-Signal declared.
 ### Added
 
