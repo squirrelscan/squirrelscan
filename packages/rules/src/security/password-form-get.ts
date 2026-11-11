@@ -2,7 +2,7 @@
 
 import type { CheckItem } from "@squirrelscan/core-contracts";
 
-import { fieldSnippet, formSelector } from "../shared/form-fields";
+import { formSelector } from "../shared/form-fields";
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 type Method = "get" | "post" | "dialog";
@@ -38,18 +38,37 @@ function belongsTo(el: Element, form: Element): boolean {
   return el.closest("form") === form;
 }
 
+/** One way of submitting a form: the method it would use, and whether markup SAID so. */
+export interface Submission {
+  method: Method;
+  /** A `method` (or the control's `formmethod`) attribute is present: the author chose it, even to an invalid value. */
+  explicit: boolean;
+}
+
 /**
  * The method each way of submitting this form would use: one entry per submit
  * control (its `formmethod`, else the form's `method`), or the form's own
- * method when there is no submit control and only Enter submits it.
+ * method when there is no submit control and only Enter submits it. `explicit`
+ * is false when neither attribute is there and GET is only the default: that is
+ * the shape of a React, Vue or Svelte form, whose script submits it.
  */
-export function submitMethods(form: Element, controls: Element[]): Method[] {
-  const formMethod = methodOf(form.getAttribute("method"));
+export function submissions(form: Element, controls: Element[]): Submission[] {
+  const formMethod: Submission = {
+    method: methodOf(form.getAttribute("method")),
+    explicit: form.hasAttribute("method"),
+  };
   const submitters = controls.filter(isSubmitControl);
   if (submitters.length === 0) return [formMethod];
   return submitters.map((el) =>
-    el.hasAttribute("formmethod") ? methodOf(el.getAttribute("formmethod")) : formMethod,
+    el.hasAttribute("formmethod")
+      ? { method: methodOf(el.getAttribute("formmethod")), explicit: true }
+      : formMethod,
   );
+}
+
+/** The method each way of submitting this form would use (see {@link submissions}). */
+export function submitMethods(form: Element, controls: Element[]): Method[] {
+  return submissions(form, controls).map((entry) => entry.method);
 }
 
 /**
@@ -59,15 +78,56 @@ export function submitMethods(form: Element, controls: Element[]): Method[] {
  * their attributes.
  */
 function scriptSubmits(form: Element, controls: Element[]): boolean {
-  const action = (form.getAttribute("action") ?? "").trim();
-  const noAction = action === "" || /^javascript:/i.test(action);
-  if (!noAction) return false;
+  if (!hasNoUsableAction(form)) return false;
   return form.hasAttribute("onsubmit") || controls.some((el) => el.hasAttribute("onclick"));
 }
 
-function describeAction(form: Element): string {
-  const action = (form.getAttribute("action") ?? "").trim().slice(0, 120);
-  return action === "" ? "(no action)" : action;
+/** No `action`, an empty one, or a `javascript:` one (what React puts there for a form action function). */
+function hasNoUsableAction(form: Element): boolean {
+  const action = (form.getAttribute("action") ?? "").trim();
+  return action === "" || /^javascript:/i.test(action);
+}
+
+/**
+ * The action as the finding shows it: without its credentials, query and fragment. An action can
+ * carry a token (`/login?token=...`), and the label and meta are stored and sent on.
+ */
+export function describeAction(form: Element): string {
+  const raw = (form.getAttribute("action") ?? "").trim();
+  if (raw === "") return "(no action)";
+  const bare = raw
+    .replace(/^([a-z][a-z0-9+.-]*:)?\/\/[^/?#]*@/i, "$1//")
+    .split(/[?#]/)[0]!
+    .slice(0, 120);
+  return bare === "" ? "(this page)" : bare;
+}
+
+/**
+ * The form's opening tag as the finding stores it, with its `action` cut to {@link describeAction}:
+ * the shared snippet helper prints every attribute whole, and the action is the one that can carry a
+ * token. Same cap and whitespace handling as that helper.
+ */
+function safeFormSnippet(form: Element, max: number): string {
+  let out = "<form";
+  for (const attr of form.attributes) {
+    const value =
+      attr.name.toLowerCase() === "action"
+        ? describeAction(form)
+        : attr.value.slice(0, max).replace(/\s+/g, " ").trim();
+    out += ` ${attr.name}="${value}"`;
+    if (out.length >= max) break;
+  }
+  out += ">";
+  return out.length > max ? `${out.slice(0, max - 1)}…` : out;
+}
+
+/** The form's selector, with an `action`-based one carrying the bare action, never its query or credentials. */
+function safeFormSelector(form: Element, index: number): string {
+  const selector = formSelector(form, index);
+  const action = form.getAttribute("action");
+  return action && selector === `form[action="${action}"]`
+    ? `form[action="${describeAction(form)}"]`
+    : selector;
 }
 
 export const passwordFormGetRule: Rule = {
@@ -76,7 +136,7 @@ export const passwordFormGetRule: Rule = {
     name: "Password form method",
     description: "Checks that forms with a password field do not submit by GET",
     solution:
-      'A form with a password field and method="get", or no method (GET is the default), puts the password in the URL when it is submitted. From there it lands in browser history, server and proxy logs, analytics and the Referer header sent to other sites. Set method="post" on the form, and check formmethod on every submit button, because one GET button is enough to expose the password. A form whose submit is handled by script and has no action is reported as not determined, not as a failure.',
+      'A form with a password field and method="get", or no method (GET is the default), puts the password in the URL when it is submitted. From there it lands in browser history, server and proxy logs, analytics and the Referer header sent to other sites. Set method="post" on the form, and check formmethod on every submit button, because one GET button is enough to expose the password. A form with no method and no action, which is how a script-driven login form (React, Vue, Svelte) looks in the DOM, is a warning: it falls back to GET if its script has not loaded or fails, and method="post" removes that risk. A form whose submit is handled by an inline handler and has no action is reported as not determined, not as a failure.',
     category: "security",
     scope: "page",
     verdictScope: "page",
@@ -92,6 +152,7 @@ export const passwordFormGetRule: Rule = {
     const allControls = [...doc.querySelectorAll("button, input")];
     const failing: CheckItem[] = [];
     const undetermined: CheckItem[] = [];
+    const noMethod: CheckItem[] = [];
     let assessed = 0;
 
     forms.forEach((form, index) => {
@@ -105,15 +166,16 @@ export const passwordFormGetRule: Rule = {
       if (!hasPassword) return;
       assessed++;
 
-      const methods = submitMethods(form, controls);
-      if (!methods.includes("get")) return;
+      const ways = submissions(form, controls);
+      const getWays = ways.filter((way) => way.method === "get");
+      if (getWays.length === 0) return;
 
       const action = describeAction(form);
       const position = `form ${index + 1} of ${forms.length}`;
       const item = (label: string, reason: string): CheckItem => ({
-        id: formSelector(form, index),
+        id: safeFormSelector(form, index),
         label,
-        snippet: fieldSnippet(form, 240),
+        snippet: safeFormSnippet(form, 240),
         meta: { reason, action, position: index + 1, forms: forms.length },
       });
 
@@ -122,6 +184,19 @@ export const passwordFormGetRule: Rule = {
           item(
             `${position} (${action}) has a password field and no action, and a script may submit it: not determined`,
             "script-submit",
+          ),
+        );
+        return;
+      }
+      // GET only because nothing said otherwise, and nothing says where it goes: the shape of a
+      // script-driven form (React, Vue, Svelte), which the script submits. It is GET only if that
+      // script has not loaded or fails, so it is a warning, not a failure.
+      const onlyByDefault = getWays.every((way) => !way.explicit);
+      if (onlyByDefault && hasNoUsableAction(form)) {
+        noMethod.push(
+          item(
+            `${position} (${action}) has a password field and no method: it falls back to GET, putting the password in the URL, if its script has not loaded or fails; method="post" removes the risk`,
+            "no-method",
           ),
         );
         return;
@@ -153,7 +228,21 @@ export const passwordFormGetRule: Rule = {
         details: { formsChecked: forms.length, passwordForms: assessed },
       });
     }
-    if (failing.length === 0 && undetermined.length === 0 && assessed > 0) {
+    if (noMethod.length > 0) {
+      checks.push({
+        name: "password-form-get-no-method",
+        status: "warn",
+        message: `${noMethod.length} password form(s) with no method and no action fall back to GET if their script fails`,
+        items: noMethod,
+        details: { formsChecked: forms.length, passwordForms: assessed },
+      });
+    }
+    if (
+      failing.length === 0 &&
+      undetermined.length === 0 &&
+      noMethod.length === 0 &&
+      assessed > 0
+    ) {
       checks.push({
         name: "password-form-get",
         status: "pass",
