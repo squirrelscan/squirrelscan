@@ -14,7 +14,7 @@ import { describe, expect, test } from "bun:test";
 
 import { parsePage } from "@squirrelscan/parser";
 
-import { colorContrastRule } from "../src/a11y/color-contrast";
+import { colorContrastRule, stylesheetBackgroundOf } from "../src/a11y/color-contrast";
 import type { CheckResult, RuleContext } from "../src/types";
 
 function ctx(html: string): RuleContext {
@@ -333,5 +333,48 @@ describe("linear in what it reads", () => {
   ])("an inline style with %s", (_label, style) => {
     // 200KB: the quadratic form of the alpha pattern takes seconds here.
     expect(timeRule(page({ body: `<p style="${style(200_000)}">Text</p>` }))).toBeLessThan(500);
+  });
+});
+
+describe("stylesheetBackgroundOf keeps only the html/body background (#1756)", () => {
+  test.each([
+    ["a body color", "body{margin:0;background:#101010}", { kind: "color", value: "#101010" }],
+    ["body over html", "html{background:#fff}body{background-color:#000}", { kind: "color", value: "#000" }],
+    ["a :root color", ":root{background:navy}", { kind: "color", value: "navy" }],
+    ["another selector is not read", ".hero{background:#000}p{color:red}", { kind: "none" }],
+    ["a gradient on body", "body{background:linear-gradient(#000,#111)}", { kind: "unresolved" }],
+    ["a variable", "body{background:var(--bg)}", { kind: "unresolved" }],
+    ["an import", '@import url("a.css");body{background:#fff}', { kind: "unresolved" }],
+    [
+      "a media override of the body",
+      "body{background:#fff}@media (prefers-color-scheme: dark){body{background:#000}}",
+      { kind: "unresolved" },
+    ],
+    ["a media rule for another selector", "@media (max-width:600px){.nav{background:#000}}body{background:#fff}", { kind: "color", value: "#fff" }],
+  ])("%s", (_label, css, expected) => {
+    expect(stylesheetBackgroundOf(css)).toEqual(expected as never);
+  });
+
+  test("a linked stylesheet with no read result stays unresolved, one with a read color is measured", () => {
+    const html = page({
+      head: '<link rel="stylesheet" href="/styles.css">',
+      body: '<p style="color:#b9b9b9">Tagline</p>',
+    });
+    const base = ctx(html);
+    const none = colorContrastRule.run(base).checks;
+    expect(none.some((c) => c.name === "color-contrast-unresolved")).toBe(true);
+    const read = colorContrastRule.run({
+      ...base,
+      site: {
+        baseUrl: "https://example.com",
+        pages: [],
+        robotsTxt: null,
+        sitemaps: null,
+        stylesheetBackgrounds: [
+          { url: "https://example.com/styles.css", status: 200, error: null, background: { kind: "color", value: "#fff" } },
+        ],
+      },
+    } as unknown as RuleContext).checks as CheckResult[];
+    expect(read.find((c) => c.status === "warn")?.items?.[0]?.id).toContain("#b9b9b9 on #fff");
   });
 });

@@ -79,6 +79,7 @@ import type { ParsedPage, RuleMeta, SiteData } from "@squirrelscan/rules";
 
 /**
  * Bumped when the payload shape or the key's ingredients change; old rows then miss.
+ * prc-6: `stylesheetBackgrounds` joins the run context (a11y/color-contrast, #1756).
  * prc-5: `features.reportScalars.structure` (#2307). A prc-4 row would replay a page's features
  * without its link sections and page type, and the report's page structure block would read
  * that page as having none.
@@ -87,7 +88,7 @@ import type { ParsedPage, RuleMeta, SiteData } from "@squirrelscan/rules";
  * without it, which the store reads as "no alternates" and exempts nothing, so
  * the bump is about getting the new field filled, not about safety.
  */
-export const RULE_CACHE_FORMAT = "prc-5";
+export const RULE_CACHE_FORMAT = "prc-6";
 
 /**
  * The `SiteData` keys page-scope rules read, and therefore the only ones the run
@@ -108,6 +109,7 @@ export const PAGE_RULE_SITE_FIELDS = [
   "preloadedScripts",
   "resourceSizes",
   "siteIndexable",
+  "stylesheetBackgrounds",
 ] as const;
 
 /**
@@ -191,6 +193,8 @@ export function pageRuleSiteContext(siteData: SiteData): Record<string, unknown>
     // the key. Tri-state: undefined skips nothing, like false, but is kept
     // distinct so the key says exactly what the run saw.
     siteIndexable: siteData.siteIndexable ?? null,
+    // Only what the rule reads of each stylesheet: its url and the background it sets (#1756).
+    stylesheetBackgrounds: (siteData.stylesheetBackgrounds ?? []).map((s) => [s.url, s.background]),
     scripts: projectEntries(siteData.scripts, PAGE_RULE_SCRIPT_FIELDS),
     preloadedScripts: projectEntries(siteData.preloadedScripts, PAGE_RULE_SCRIPT_FIELDS),
     resourceSizes: resourceSizes
@@ -422,6 +426,7 @@ export async function computeRunContextHash(
         ["scripts", projection.scripts],
         ["preloadedScripts", projection.preloadedScripts],
         ["resourceSizes", projection.resourceSizes],
+        ["stylesheetBackgrounds", projection.stylesheetBackgrounds],
         ["siteMetadata", input.siteMetadata ?? null],
         ["cloudResults", input.cloudResults ?? null],
         ["ignoreApplicability", input.ignoreApplicability],
