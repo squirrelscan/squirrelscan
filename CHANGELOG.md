@@ -19,12 +19,18 @@ How it works:
 
 ### Added
 
-- `schema/organization` reports contact channels separately in a new informational `organization-contact-channels` check: structured ContactPoint (or organization) telephone and email, `@id`-linked entities, visible `mailto:` and `tel:` links, and a contact form. A truncated or failed read leaves unobserved channels unknown rather than missing, and no requirement to publish contact details is implied (#1654).
-- `schema/organization` reports machine-readable merchant identity for a confirmed shop in a new informational `organization-merchant-identity` check: an actual name plus a declared address or tax/company identifier is present, text-only (visible legal-notice text), absent or unknown. `@id`-linked entities count like nested ones, a failed or truncated read is unknown rather than absent, and it makes no legal-compliance claim (#1653).
-- `schema/product` reports name, description, image, price and availability as present, absent or unknown in a new informational `product-field-evidence` check, with the representation each was read from (JSON-LD, Microdata or RDFa). `ProductGroup` variants resolve like a `Product`, a truncated or failed read and a JavaScript-only shell leave unchecked fields unknown instead of missing, and the existing missing-field warnings only fire on a complete read (#1652).
+- `squirrel audit --crawl-timeout` and `[crawler] crawl_timeout` set the crawl-phase backstop, bounded at 6 hours. Unset, it is derived from the page budget and the effective per-host rate instead of a fixed 30 minutes. A crawl stopped by it reports `status: "partial"`, reason code `crawl_timeout` and a `crawlPhase` coverage object with `linkGraphComplete: false` (#1639).
+
+### Changed
+
+- Reports state what the Agents score measures (page weight and crawler access) and list `llms.txt`, Markdown response and `AGENTS.md` as separate site-level signals that never move the score (#1386).
 
 ### Fixed
 
+- `crawl/sitemap-coverage` no longer reports a sitemap URL that answered 429 or a bot-wall challenge as a `sitemap-orphans` warning. It is listed in an informational `sitemap-unverified` check with its status, and sitemap URLs a stopped crawl never reached are informational too (#1639).
+- `schema/organization` reports contact channels separately in a new informational `organization-contact-channels` check: structured ContactPoint (or organization) telephone and email, `@id`-linked entities, visible `mailto:` and `tel:` links, and a contact form. A truncated or failed read leaves unobserved channels unknown rather than missing, and no requirement to publish contact details is implied (#1654).
+- `schema/organization` reports machine-readable merchant identity for a confirmed shop in a new informational `organization-merchant-identity` check: an actual name plus a declared address or tax/company identifier is present, text-only (visible legal-notice text), absent or unknown. `@id`-linked entities count like nested ones, a failed or truncated read is unknown rather than absent, and it makes no legal-compliance claim (#1653).
+- `schema/product` reports name, description, image, price and availability as present, absent or unknown in a new informational `product-field-evidence` check, with the representation each was read from (JSON-LD, Microdata or RDFa). `ProductGroup` variants resolve like a `Product`, a truncated or failed read and a JavaScript-only shell leave unchecked fields unknown instead of missing, and the existing missing-field warnings only fire on a complete read (#1652).
 - `ax/api-discovery` validates `/.well-known/api-catalog` as a non-empty JSON linkset instead of accepting any JSON 200. An empty linkset, a JSON document without `linkset`, an OpenAPI document at the catalog path, malformed JSON and a 200 HTML fallback each report their own state (`details.apiCatalogState`), and HTTP 401, 403, 408, 429 and 5xx on the API paths report not checked instead of missing. No new probes. (#1650)
 
 ## v0.0.177 (2026-11-11)

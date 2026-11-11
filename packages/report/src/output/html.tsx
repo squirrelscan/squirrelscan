@@ -38,6 +38,7 @@ import {
   ruleFixCoverage,
   type FixCoverage,
 } from "../component-presentation";
+import { agentSignalLines } from "../agent-signals";
 import {
   getBadgeName,
   getBadgeTitle,
@@ -1766,6 +1767,7 @@ function ReportPage({
   const description = report.homepage?.description?.trim();
   const score = report.healthScore?.overall;
   const groups = report.healthScore?.groups ?? [];
+  const agentLines = agentSignalLines(report);
   const failedRun = isAuditFailed(report.status);
   const issues = flattenIssuesBySeverity(
     groupIssuesByCategory(report.ruleResults, report.checkTallies),
@@ -2159,6 +2161,18 @@ function ReportPage({
                         </>
                       )}
                     </p>
+                    {g.group === "ai" && agentLines.length > 0 && (
+                      <p
+                        className="mt-1.5 text-xs text-muted-foreground"
+                        data-agent-signals
+                      >
+                        {agentLines.map((l) => (
+                          <span key={l} className="block">
+                            {l}
+                          </span>
+                        ))}
+                      </p>
+                    )}
                   </>
                 );
                 return issueGroups.has(g.group) ? (

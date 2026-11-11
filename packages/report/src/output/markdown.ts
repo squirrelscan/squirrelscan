@@ -50,6 +50,7 @@ import { groupTechnologies, isLocalOnlyTech, TECH_LOCAL_MARK, techChangeSummary,
 import { SITE_PROFILE_NOTE, siteProfileFlags, siteProfileRows } from "../site-metadata";
 import { EDITOR_SUMMARY_NOTE, editorSummaryView, priorityEffortLabel } from "../editor-summary";
 import { getGroupName, getSubcategoryName, severityLabel } from "../categories";
+import { agentSignalLines } from "../agent-signals";
 import {
   carriedTag,
   coverageLine,
@@ -473,6 +474,9 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
       lines.push(`| ${cat.name} | ${cat.score}/100 |`);
     }
     lines.push("");
+    if ((report.healthScore.groups ?? []).some((g) => g.group === "ai")) {
+      for (const l of agentSignalLines(report)) lines.push(`_${l}_`, "");
+    }
   }
 
   // Site profile — report-only section (Stage-0 context), never part of the score.

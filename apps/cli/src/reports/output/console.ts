@@ -70,6 +70,7 @@ import {
   SITE_PROFILE_NOTE,
   siteProfileFlags,
   siteProfileRows,
+  agentSignalLines,
 } from "@squirrelscan/report";
 
 import type {
@@ -237,7 +238,7 @@ export function generateConsoleReport(
   // Category breakdown
   if (report.healthScore) {
     log("");
-    printCategoryBreakdown(report.healthScore);
+    printCategoryBreakdown(report.healthScore, report);
   }
 
   // Site profile — report-only Stage-0 context, separate from issues, not scored.
@@ -773,7 +774,7 @@ function printEntities(map: EntityMap): void {
   }
 }
 
-function printGroupBreakdown(groups: GroupScore[]): void {
+function printGroupBreakdown(groups: GroupScore[], report: AuditReport): void {
   if (groups.length === 0) return;
 
   log(fmt.bold("Group Breakdown:"));
@@ -801,12 +802,14 @@ function printGroupBreakdown(groups: GroupScore[]): void {
         : fmt.dim(`✗${String(g.failed).padStart(maxF)}`);
 
     log(`${name} ${bar}  ${pct}   ${p}  ${w}  ${f}`);
+    if (g.group === "ai")
+      for (const l of agentSignalLines(report)) log(`  ${fmt.dim(l)}`);
   }
 
   log("");
 }
 
-function printCategoryBreakdown(score: HealthScore): void {
+function printCategoryBreakdown(score: HealthScore, report: AuditReport): void {
   if (score.overall === null) {
     log(`Health Score: ${fmt.dim("N/A")} ${fmt.dim("(no auditable pages)")}`);
     log("");
@@ -821,7 +824,7 @@ function printCategoryBreakdown(score: HealthScore): void {
   // The 4 top-level group scores (#1017), above the finer categories — mirrors
   // text.ts's/markdown.ts's "Group Breakdown" so the console default matches
   // the other report formats and cloud's group-score summary.
-  printGroupBreakdown(score.groups ?? []);
+  printGroupBreakdown(score.groups ?? [], report);
 
   if (score.categories.length === 0) return;
 
