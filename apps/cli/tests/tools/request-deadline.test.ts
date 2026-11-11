@@ -139,9 +139,10 @@ describe("request helpers: regression for healthy responses", () => {
 // stalled body; the CLI's own robots fetcher was removed (#756).
 describe("callers covered through the shared helper", () => {
   test("checkReachability returns instead of hanging on a stalled body", async () => {
-    // 127.0.0.2 is loopback but not on the localhost fast path, so this goes
-    // through the request tool.
-    const url = `http://127.0.0.2:${server.port}/stall`;
+    // 0.0.0.0 reaches this machine on macOS and Linux alike (127.0.0.2 only
+    // routes on Linux, #1733) and is not on the localhost fast path, so this
+    // goes through the request tool.
+    const url = `http://0.0.0.0:${server.port}/stall`;
     const started = Date.now();
     const result = await checkReachability(url);
     expect(Date.now() - started).toBeLessThan(MAX_ELAPSED_MS);
