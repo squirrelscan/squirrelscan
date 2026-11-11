@@ -29,6 +29,7 @@ How it works:
 
 ### Fixed
 
+- The editor summary request now carries check-level evidence (`checks`: the checks that failed or warned, and the security and agent-experience checks that ran clean), so cloud summaries stop recommending headers or files the site already has (#3944).
 - `ax/api-discovery` validates `/.well-known/api-catalog` as a non-empty JSON linkset instead of accepting any JSON 200. An empty linkset, a `linkset` that is not a list, JSON without a `linkset` member, an OpenAPI document at the catalog path, malformed JSON and a 200 HTML fallback each report their own state (`details.apiCatalogState`), and HTTP 401, 403, 408, 429 and 5xx on the API paths report not checked instead of missing. No new probes. (#1650)
 
 ## v0.0.177 (2026-11-11)
