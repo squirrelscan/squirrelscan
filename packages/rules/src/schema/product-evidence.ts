@@ -17,6 +17,7 @@ import {
   makeRefResolver,
   readMicrodata,
   readRdfa,
+  visibleText,
   type EvidenceSource,
   type ReadState,
   type StructuredNode,
@@ -128,14 +129,9 @@ function lookup(field: ProductField, members: StructuredNode[], resolve: Resolve
   return dangling ? "dangling" : "no";
 }
 
-/** Page text a human sees, without scripts and styles; used only to recognise an empty JavaScript shell. */
+/** An empty JavaScript shell: almost no visible text and scripts that would fill it. */
 function looksLikeJsShell(doc: Document): boolean {
-  const body = doc.body;
-  if (!body) return false;
-  const clone = body.cloneNode(true) as Element;
-  for (const el of Array.from(clone.querySelectorAll("script, style, noscript, template"))) el.remove();
-  const visible = (clone.textContent ?? "").replace(/\s+/g, " ").trim();
-  return visible.length < 200 && doc.querySelectorAll("script").length > 0;
+  return visibleText(doc).length < 200 && doc.querySelectorAll("script").length > 0;
 }
 
 /** Signals that the page is a product page whose markup is built by script. */

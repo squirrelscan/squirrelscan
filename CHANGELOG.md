@@ -19,6 +19,7 @@ How it works:
 
 ### Added
 
+- `schema/organization` reports machine-readable merchant identity for a confirmed shop in a new informational `organization-merchant-identity` check: an actual name plus a declared address or tax/company identifier is present, text-only (visible legal-notice text), absent or unknown. `@id`-linked entities count like nested ones, a failed or truncated read is unknown rather than absent, and it makes no legal-compliance claim (#1653).
 - `schema/product` reports name, description, image, price and availability as present, absent or unknown in a new informational `product-field-evidence` check, with the representation each was read from (JSON-LD, Microdata or RDFa). `ProductGroup` variants resolve like a `Product`, a truncated or failed read and a JavaScript-only shell leave unchecked fields unknown instead of missing, and the existing missing-field warnings only fire on a complete read (#1652).
 
 ## v0.0.177 (2026-11-11)
