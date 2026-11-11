@@ -117,11 +117,7 @@ function buildTopIssues(report: AuditReport, max: number): EditorSummaryIssueInp
  * offline audit did not check links instead of calling the site clean.
  */
 function buildNotChecked(report: AuditReport): EditorSummaryNotCheckedInput[] {
-  return notCheckedRules(report).map((r) => ({
-    ruleId: r.ruleId,
-    title: r.name,
-    reason: r.reason,
-  }));
+  return notCheckedRules(report).map((r) => ({ ruleId: r.ruleId, title: r.name, reason: r.reason }));
 }
 
 /** Build the per-category score lines (worst first), capped. */
@@ -175,34 +171,62 @@ function buildFailingRuleIds(report: AuditReport, max: number): string[] {
 const CONFIRMABLE_RULE_PREFIXES = ["security/", "ax/"];
 
 /**
+ * `info` values that say the thing is THERE. An `info` check is also how a rule
+ * says it did not look ("not-checked", "refused"), or that the check does not
+ * apply (HSTS on a site not served over HTTPS), so `info` alone proves nothing:
+ * only a positive value does. Enumerated from the security and ax rule sources.
+ */
+const POSITIVE_INFO_VALUES = new Set(["present", "available", "valid"]);
+
+/** Families first, so a cap on the lists drops the least useful keys, never a security header. */
+const CHECK_KEY_PRIORITY = ["security/", "ax/", "perf/", "images/"];
+const priorityOf = (ruleId: string): number => {
+  const i = CHECK_KEY_PRIORITY.findIndex((p) => ruleId.startsWith(p));
+  return i === -1 ? CHECK_KEY_PRIORITY.length : i;
+};
+
+/**
  * Check-level evidence (#3944): every check that failed or warned, and the
- * security and agent-experience checks that ran and found nothing wrong, as
- * `ruleId|checkName`. The summary uses the second list to avoid recommending
- * what the site already has. An `info` check counts only when it is not
- * inconclusive (a gap, not a finding). Capped at `max` per list.
+ * security and agent-experience checks that ran and POSITIVELY found the thing
+ * (a pass, or an info with a positive value), as `ruleId|checkName`. The summary
+ * uses the second list to avoid recommending what the site already has, so a
+ * check that did not run is never in it. A key is never in both lists. Rules are
+ * visited security, ax, perf, images first, so the per-list cap is not decided
+ * by report order.
  */
 function buildChecks(
   report: AuditReport,
-  max: number,
+  max: number
 ): { failing: string[]; confirmed: string[] } | undefined {
   const failing = new Set<string>();
   const confirmed = new Set<string>();
   const key = (ruleId: string, name: string) =>
     clampItemString(`${ruleId}|${name}`, EDITOR_SUMMARY_FIELD_MAX);
-  for (const [ruleId, rr] of Object.entries(report.ruleResults)) {
+  const entries = Object.entries(report.ruleResults)
+    .map((entry, order) => ({ entry, order }))
+    .sort((a, b) => priorityOf(a.entry[0]) - priorityOf(b.entry[0]) || a.order - b.order);
+  for (const {
+    entry: [ruleId, rr],
+  } of entries) {
     const family = CONFIRMABLE_RULE_PREFIXES.some((p) => ruleId.startsWith(p));
     for (const c of rr.checks) {
       if (c.status === "fail" || c.status === "warn") {
-        if (failing.size < max) failing.add(key(ruleId, c.name));
-      } else if (family && (c.status === "pass" || c.status === "info")) {
-        if (c.status === "info" && c.details?.inconclusive === true) continue;
-        if (confirmed.size < max) confirmed.add(key(ruleId, c.name));
+        failing.add(key(ruleId, c.name));
+      } else if (family) {
+        const positive =
+          c.status === "pass" ||
+          (c.status === "info" &&
+            c.details?.inconclusive !== true &&
+            POSITIVE_INFO_VALUES.has(String(c.value)));
+        if (positive) confirmed.add(key(ruleId, c.name));
       }
     }
   }
+  for (const k of failing) confirmed.delete(k);
+  const capped = (set: Set<string>) => [...set].slice(0, max);
   return failing.size === 0 && confirmed.size === 0
     ? undefined
-    : { failing: [...failing], confirmed: [...confirmed] };
+    : { failing: capped(failing), confirmed: capped(confirmed) };
 }
 
 /** A count the engine wrote, or undefined when absent or not a whole non-negative number. */
@@ -386,11 +410,7 @@ function guardedSummary(summary: EditorSummary, report: AuditReport): EditorSumm
 
 /** Display label for a priority's effort. */
 export function priorityEffortLabel(effort: EditorSummaryPriority["effort"]): string {
-  return effort === "quick-win"
-    ? "Quick win"
-    : effort === "significant"
-      ? "Significant"
-      : "Moderate";
+  return effort === "quick-win" ? "Quick win" : effort === "significant" ? "Significant" : "Moderate";
 }
 
 /**
@@ -440,9 +460,7 @@ export function summaryPageCounts(report: AuditReport): number[] {
     ...(unfetched > 0 ? [unfetched, (report.scanScope?.pagesCrawled ?? 0) + unfetched] : []),
     ...buildTopIssues(report, Number.POSITIVE_INFINITY).map((i) => i.occurrences),
   ];
-  return counts.filter(
-    (n): n is number => typeof n === "number" && Number.isSafeInteger(n) && n > 0,
-  );
+  return counts.filter((n): n is number => typeof n === "number" && Number.isSafeInteger(n) && n > 0);
 }
 
 /** The summary prose when no model sentence survives the text rules. */

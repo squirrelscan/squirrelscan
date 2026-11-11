@@ -385,8 +385,8 @@ export interface EditorSummaryRequest {
   /**
    * Check-level evidence as `ruleId|checkName` keys (#3944): the checks that
    * failed or warned, and the security and agent-experience checks that ran and
-   * found nothing wrong (a pass or an info note, such as a CSP that is present
-   * or an llms.txt that exists). Lets the summary recommend only what the site
+   * positively found the thing (a pass, or an info note with a positive value such
+   * as an llms.txt that is present; a check that did not run is never listed). Lets the summary recommend only what the site
    * lacks. Capped by the client; absent when there is nothing to send. Older
    * servers ignore it.
    */
