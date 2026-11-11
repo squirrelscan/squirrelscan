@@ -4476,10 +4476,65 @@ function unfetchedReason(script: ScriptContentData): string | null {
   return "no content returned";
 }
 
+/** Pages and occurrences kept per value: a key on every page of a large site must not grow without bound (#1755). */
+const ORIGIN_PAGES_CAP = 50;
+const ORIGIN_OCCURRENCES_CAP = 20;
+
+interface ValueOrigins {
+  pages: Set<string>;
+  /** More pages than {@link ORIGIN_PAGES_CAP} carried the value: `pages` is the first ones. */
+  pagesTruncated: boolean;
+  /** One entry per distinct place: the page for html and inline-script, the script URL for external-script. */
+  occurrences: Map<string, { location: string; page?: string; script?: string; loadedBy?: number }>;
+  occurrencesTruncated: boolean;
+}
+
+function noteOrigin(
+  origins: Map<string, ValueOrigins>,
+  finding: LeakedSecret,
+  source: string,
+  loadedBy: readonly string[] | undefined
+): void {
+  let entry = origins.get(finding.value);
+  if (!entry) {
+    entry = { pages: new Set(), pagesTruncated: false, occurrences: new Map(), occurrencesTruncated: false };
+    origins.set(finding.value, entry);
+  }
+  const addPage = (page: string): void => {
+    if (entry.pages.has(page)) return;
+    if (entry.pages.size >= ORIGIN_PAGES_CAP) entry.pagesTruncated = true;
+    else entry.pages.add(page);
+  };
+  const external = finding.location.startsWith("external-script");
+  if (external) for (const page of loadedBy ?? []) addPage(page);
+  else addPage(source);
+  const key = `${finding.location}\u0000${source}`;
+  if (entry.occurrences.has(key)) return;
+  if (entry.occurrences.size >= ORIGIN_OCCURRENCES_CAP) {
+    entry.occurrencesTruncated = true;
+    return;
+  }
+  entry.occurrences.set(
+    key,
+    external
+      ? { location: finding.location, script: source, loadedBy: loadedBy?.length ?? 0 }
+      : { location: finding.location, page: source }
+  );
+}
+
+/** The `meta` for an item's places. Only URLs and counts, never the value. */
+function occurrencesMeta(entry: ValueOrigins | undefined): Record<string, unknown> {
+  if (!entry || entry.occurrences.size === 0) return {};
+  return {
+    occurrences: [...entry.occurrences.values()],
+    ...(entry.occurrencesTruncated || entry.pagesTruncated ? { occurrencesTruncated: true } : {}),
+  };
+}
+
 export const leakedSecretsRule: Rule = {
   meta: {
     id: "security/leaked-secrets",
-    name: "Leaked Environment Variables",
+    name: "Leaked Secrets and API Keys",
     description:
       "Checks for exposed API keys, secrets, and credentials in HTML/JS",
     solution:
@@ -4515,8 +4570,14 @@ export const leakedSecretsRule: Rule = {
     const omittedPages: Array<{ url: string; omitted: number }> = [];
     // Appended one at a time: spreading a large array into `push` throws RangeError past the engine's argument limit
     // (#1554), and the whole site's result went with it.
-    const append = (found: readonly LeakedSecret[]): void => {
-      for (const finding of found) leakedSecrets.push(finding);
+    // Where each value was seen (#1755): the dedupe below keeps one record per value, so the pages and scripts it sat on are
+    // collected here, bounded, and read back by `item`. Pages a script loads count as pages of the finding in that script.
+    const origins = new Map<string, ValueOrigins>();
+    const append = (found: readonly LeakedSecret[], page: string, loadedBy?: readonly string[]): void => {
+      for (const finding of found) {
+        leakedSecrets.push(finding);
+        noteOrigin(origins, finding, page, loadedBy);
+      }
     };
     // Pages the collector kept were already admitted by the crawl's budget (see `createSiteFindingBudget`). The legacy page
     // path and the external scripts, which are scanned here, go through THE SAME budget when the collector handed it over,
@@ -4544,7 +4605,7 @@ export const leakedSecretsRule: Rule = {
     // so the per-page secret list and its order are byte-identical.
     if (ctx.collectedSignals) {
       for (const rec of ctx.collectedSignals.pages) {
-        append(rec.secrets);
+        append(rec.secrets, rec.url);
         noteOmitted(rec.url, rec.secretsOmitted ?? 0, rec.secretsOmittedSerious ?? true);
       }
     } else if (ctx.site?.pages) {
@@ -4553,7 +4614,7 @@ export const leakedSecretsRule: Rule = {
         if (!doc) continue;
         const scanned = scanPageBounded(doc, page.url);
         const kept = admitted(scanned.secrets, scanned.omitted, scanned.omittedSerious);
-        append(kept.secrets);
+        append(kept.secrets, page.url);
         noteOmitted(page.url, kept.omitted, kept.serious);
       }
     }
@@ -4566,7 +4627,7 @@ export const leakedSecretsRule: Rule = {
         if (script.content) {
           const scanned = scanContentBounded(script.content, "external-script", script.url);
           const kept = admitted(scanned.secrets, scanned.omitted, scanned.omittedSerious);
-          append(kept.secrets);
+          append(kept.secrets, script.url, script.sourcePages);
           noteOmitted(script.url, kept.omitted, kept.serious);
         } else {
           const reason = unfetchedReason(script);
@@ -4634,8 +4695,11 @@ export const leakedSecretsRule: Rule = {
     const item = (s: LeakedSecret): CheckItem => ({
       id: `${s.type}: ${maskSecret(s.value)}`,
       label: `Found in ${s.location}${s.sourceUrl ? ` (${s.sourceUrl})` : ""}`,
+      // Each page the value sat on, whether in its HTML or inline script or through a script it loads.
+      ...(origins.get(s.value)?.pages.size ? { sourcePages: [...origins.get(s.value)!.pages] } : {}),
       meta: {
         ...(s.extra ?? {}),
+        ...occurrencesMeta(origins.get(s.value)),
         length: s.length,
         offset: s.offset,
         ...(s.scriptIndex !== undefined ? { scriptIndex: s.scriptIndex } : {}),
