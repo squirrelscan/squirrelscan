@@ -657,6 +657,11 @@ export interface SiteData {
     externalCss?: number;
     externalFonts?: number;
   };
+  /**
+   * URLs (capped) of scripts fetched for storage but held back from `scripts` by the script rule limit (#1757).
+   * Their count is already in `assetCapDropped.scripts`. Absent when none were held back.
+   */
+  scriptsNotReadUrls?: string[];
   pdfSizes?: ResourceSizeData[];
   sitemapUrlStatuses?: SitemapUrlStatusData[];
   // Sitemap URLs on another site an own-site-only audit (`--offline`) left

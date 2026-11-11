@@ -4637,6 +4637,8 @@ export const leakedSecretsRule: Rule = {
     }
     // Scripts the asset fetch caps never requested: counted, not named (the crawl dropped them before they had a record).
     const capDropped = ctx.site?.assetCapDropped?.scripts ?? 0;
+    // Scripts a `store_scripts` run fetched for storage but the script rule limit kept from this rule (#1757).
+    const heldBackUrls = ctx.site?.scriptsNotReadUrls ?? [];
 
     // Deduplicate by value (same secret may appear in multiple places).
     // The same value can be classified twice — the whole-document scan sees
@@ -4814,13 +4816,16 @@ export const leakedSecretsRule: Rule = {
       const named = unfetchedScripts.length;
       const parts: string[] = [];
       if (named > 0) parts.push(`${named} script(s) could not be read`);
-      if (capDropped > 0) parts.push(`${capDropped} script(s) were not requested because the asset fetch cap was reached`);
+      if (capDropped > 0) parts.push(`${capDropped} script(s) were not scanned because the script limit or the asset fetch cap was reached`);
       checks.push({
         name: "leaked-secrets-unfetched",
         status: "info",
         message: `${parts.join(" and ")}, so a secret in them would not be found: no finding there is not a clean result`,
         details: { unfetched: named, capDropped },
-        items: unfetchedScripts.slice(0, 20).map((u) => ({ id: u.url, label: u.reason })),
+        items: [
+          ...unfetchedScripts.map((u) => ({ id: u.url, label: u.reason })),
+          ...heldBackUrls.map((url) => ({ id: url, label: "not scanned (script limit)" })),
+        ].slice(0, 20),
       });
     }
 

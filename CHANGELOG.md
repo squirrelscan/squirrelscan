@@ -64,6 +64,7 @@ Audits that hit a slow or blocking site now end cleanly: the crawl phase has its
 - `content/dev-leakage` no longer reports an `http://` link to the audited site's own host (for example its logo) as a development host; that is mixed content, covered by `security/mixed-content` and `links/https-downgrade`. #1758
 - Docs: issues are now described as action plans that cover findings (cloud only), with the new `list_issues` and `get_issue` fields (`priority`, `type`, `effort`, `labels`, `state_reason`, `covered_findings` and the rest) and a note that the older one-rule fields are kept but partial #1738
 - Docs: a Cloud version page explaining that the cloud has its own version (`1.1.0-dev<N>` onward, separate from the CLI's `v0.0.x`) and where to read it: the dashboard sidebar badge, `GET /health` and the MCP `serverInfo.version` #1743
+- `security/leaked-secrets` now lists the scripts a `store_scripts` run fetched but the script rule limit kept from the rule: they are counted in `leaked-secrets-unfetched` and up to 20 are named (`not scanned (script limit)`), and the rule withholds its pass while any exist. The check's message now says "the script limit or the asset fetch cap" where it said only the asset fetch cap (#1757)
 
 ## v0.0.178 (2026-11-11)
 
