@@ -312,6 +312,12 @@ export interface CrawlStats {
    */
   sitemapDiscoveryTruncated?: boolean;
   /**
+   * How completely the sitemap walk read the site's sitemaps (see
+   * `SitemapReadState`). Optional: stats persisted before it existed omit it,
+   * which reads as unknown, never as complete.
+   */
+  sitemapReadState?: "complete" | "partial" | "unreadable";
+  /**
    * The crawl did not follow links: it fetched the seed and the sitemap URLs
    * only (Quick level, sitemap scope), so internal link targets outside them
    * were never fetched and their status is unknown (repo#2729). Not set when

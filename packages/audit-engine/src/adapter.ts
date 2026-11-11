@@ -841,6 +841,7 @@ export function fetchAssetsFromOccurrences(
       // truncation flag has to be here or crawl/sitemap-exists still reports
       // "No XML sitemap found" for a walk that never looked (#1733).
       truncated: crawl?.stats?.sitemapDiscoveryTruncated ?? false,
+      ...(crawl?.stats?.sitemapReadState ? { readState: crawl.stats.sitemapReadState } : {}),
     };
 
     // Every orphan the coverage pass found, in its order. These are the
@@ -1874,6 +1875,7 @@ export function runRulesOnStorage(
       // truncation flag has to be here or crawl/sitemap-exists still reports
       // "No XML sitemap found" for a walk that never looked (#1733).
       truncated: crawl?.stats?.sitemapDiscoveryTruncated ?? false,
+      ...(crawl?.stats?.sitemapReadState ? { readState: crawl.stats.sitemapReadState } : {}),
     };
 
     // Sitemap array limits must match the API schema caps (REPORT_LIMITS.maxPages).
@@ -2736,6 +2738,7 @@ function buildStreamingSiteData(
       // truncation flag has to be here or crawl/sitemap-exists still reports
       // "No XML sitemap found" for a walk that never looked (#1733).
       truncated: crawl?.stats?.sitemapDiscoveryTruncated ?? false,
+      ...(crawl?.stats?.sitemapReadState ? { readState: crawl.stats.sitemapReadState } : {}),
     };
 
     const SITEMAP_ARRAY_CAP = REPORT_LIMITS.maxPages;
