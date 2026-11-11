@@ -287,6 +287,78 @@
         }
       }
     },
+    "/v1/websites/{websiteId}/audits/compare": {
+      "get": {
+        "tags": ["Audits"],
+        "summary": "Compare two audits of a website, and gate a CI job on new findings",
+        "description": "What changed between two completed audits of one website: findings that are `new`, `resolved`, `worsened`, `improved`, `unchanged`, `still_open`, `not_crawled` or `not_checked`. Without `head` and `base` it compares the website's latest completed audit with the one before it. A finding on a page the newer audit did not crawl (`not_crawled`) or from a rule it did not run (`not_checked`) is neither new nor resolved; `totals` counts them, and `resolutionEvidence` says what backs the `resolved` verdicts (`none` means nothing is reported as fixed). `totals` and `newBySeverity` count every finding; `findings` is clipped by `limit`.\n\n**CI gate.** Pass `fail_on` and the response carries `gate`: `status` is `fail` when the newer audit has findings at or above that severity that the previous completed audit did not have, `pass` when it has none, `no_baseline` for the first audit of a website (it passes), and `not_evaluated` when the comparison cannot say (the audit ended `failed` or `blocked`, or a report exceeded the comparison's finding cap). Resolved findings are counted in `gate.resolved` and never fail it, and `gate.notCompared` says how many older findings the newer audit could not judge. A CI job starts the audit with `POST /v1/agent-runs` (send `websiteId`), polls `GET /v1/agent-runs/{id}` until `completed`, then calls this endpoint with `head` set to that run id and exits non-zero on `gate.status: \"fail\"`. Requires the `audits:read` scope.",
+        "operationId": "compareWebsiteAudits",
+        "parameters": [
+          {
+            "name": "websiteId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "The website id (`websiteId` on an audit run)."
+          },
+          {
+            "name": "head",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string" },
+            "description": "The newer run id. Default: the website's latest completed run with a report."
+          },
+          {
+            "name": "base",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string" },
+            "description": "The older run id. Default: the completed run immediately before `head`."
+          },
+          {
+            "name": "fail_on",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string", "enum": ["error", "warning", "info"] },
+            "description": "Evaluate the CI gate at this severity: `error` fails on new errors only, `warning` on new errors and warnings, `info` on any new finding. Adds `gate` to the response."
+          },
+          {
+            "name": "include",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string" },
+            "description": "Comma-separated extra kinds to list in `findings`: `unchanged`, `still_open`, `not_crawled`, `not_checked`. New, worsened, resolved and improved are always listed."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "minimum": 1, "maximum": 500 },
+            "description": "Most rows in `findings` (default 100). `totals`, `newBySeverity` and `gate` are never clipped."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The comparison, and the gate when `fail_on` was sent.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["comparison"],
+                  "properties": {
+                    "comparison": { "$ref": "#/components/schemas/AuditComparison" },
+                    "gate": { "$ref": "#/components/schemas/CompareGate" }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/ValidationError" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
     "/v1/reports": {
       "post": {
         "tags": ["Reports"],
@@ -1119,6 +1191,72 @@
             "additionalProperties": true
           }
         ]
+      },
+      "AuditComparison": {
+        "type": "object",
+        "description": "What changed between two completed audits of a website. Only the fields a CI client needs are listed; others may be present.",
+        "properties": {
+          "base": { "type": ["object", "null"], "description": "The older run (`runId`, `reportId`, `auditedAt`, `healthScore`), or null for the first audit." },
+          "head": { "type": "object", "description": "The newer run (`runId`, `reportId`, `auditedAt`, `healthScore`, `failed`, `warnings`, `passed`, `totalPages`, `status`)." },
+          "firstRun": { "type": "boolean", "description": "True when there is no earlier completed audit: nothing is compared." },
+          "changed": { "type": "boolean" },
+          "totals": {
+            "type": "object",
+            "description": "Findings per kind, counted over every finding.",
+            "additionalProperties": { "type": "integer" }
+          },
+          "newBySeverity": {
+            "type": "object",
+            "description": "Findings of kind `new` by rule severity (`error`, `warning`, `info`), counted over every finding.",
+            "additionalProperties": { "type": "integer" }
+          },
+          "findings": {
+            "type": "array",
+            "description": "Rows, ordered new, worsened, resolved, improved, then the kinds asked for with `include`; clipped by `limit`.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "kind": { "type": "string", "enum": ["new", "resolved", "worsened", "improved", "unchanged", "still_open", "not_crawled", "not_checked"] },
+                "ruleId": { "type": "string" },
+                "ruleName": { "type": "string" },
+                "severity": { "type": "string", "enum": ["error", "warning", "info"] },
+                "pageUrl": { "type": ["string", "null"] },
+                "locator": { "type": ["string", "null"] },
+                "skipReason": { "type": "string", "description": "Why a `not_checked` finding was not judged." }
+              },
+              "additionalProperties": true
+            }
+          },
+          "findingsTruncated": { "type": "boolean" },
+          "comparisonIncomplete": { "type": "boolean", "description": "A report exceeded the comparison's finding cap: new and resolved counts are not reliable." },
+          "resolutionEvidence": { "type": "string", "enum": ["page_findings", "signal", "none"] },
+          "notes": { "type": "array", "items": { "type": "string" } }
+        },
+        "additionalProperties": true
+      },
+      "CompareGate": {
+        "type": "object",
+        "description": "The CI gate over a comparison, evaluated at `fail_on`.",
+        "required": ["failOn", "status", "newAtOrAbove", "resolved", "notCompared", "reason"],
+        "properties": {
+          "failOn": { "type": "string", "enum": ["error", "warning", "info"] },
+          "status": {
+            "type": "string",
+            "enum": ["pass", "fail", "no_baseline", "not_evaluated"],
+            "description": "`fail`: new findings at or above `failOn`. `pass`: none. `no_baseline`: the first audit of the website, which passes. `not_evaluated`: the audit ended `failed` or `blocked`, or the comparison hit its finding cap; neither a pass nor a fail."
+          },
+          "newAtOrAbove": { "type": "integer", "description": "New findings at or above `failOn`, over every finding (not only the listed rows)." },
+          "resolved": { "type": "integer", "description": "Resolved findings: listed, never failing." },
+          "notCompared": {
+            "type": "object",
+            "description": "Older findings the newer audit could not judge, neither new nor resolved.",
+            "properties": {
+              "notCrawled": { "type": "integer" },
+              "notChecked": { "type": "integer" }
+            }
+          },
+          "reason": { "type": "string", "description": "One line for the CI log." }
+        }
       },
       "AuditRunListItem": {
         "type": "object",
