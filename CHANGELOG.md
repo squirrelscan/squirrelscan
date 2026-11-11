@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **A second Ctrl-C no longer leaves the run waiting for the server to reap it.** `squirrel audit` handled the first interrupt with `process.once`, so a second Ctrl-C while the "cancelled" status was being sent killed the process under it, and the run sat pending until the server's reaper closed it as failed. The handler now stays installed: a later signal waits for the status already in flight, for at most 3 seconds, and then exits. The CLI and the MCP server also share one run lifecycle now, so the terminal status is sent at most once on every exit path and "running" can never be sent after it. (#1663)
+
 ## v0.0.174 (2026-11-11)
 
 Reports say why a rule did not give a verdict (JSON schema 1.9), `squirrel audit` has one exit code precedence with the outcome in the JSON and LLM reports, `--resume` says why it started a new crawl, an expired login is called out, settings writes no longer lose each other, and five rules stop flagging hidden, presentational and symbol-only content.

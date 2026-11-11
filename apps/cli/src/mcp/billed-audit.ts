@@ -38,15 +38,15 @@ import { auditedPageCount } from "@/controllers/audit";
 import { isUnlimitedBalance } from "@/lib/balance";
 import { nonPublicHostLabel } from "@/lib/non-public-host";
 import {
+  createRunLifecycle,
   type FinalizeRunInput,
-  finalizeRun,
-  markRunning,
   registerableUrl,
   registerRun,
   reportProgress,
   type RegisteredRun,
   type RegisterFailure,
   resolveRunFinalizeScore,
+  type RunLifecycle,
 } from "@/lib/run-tracker";
 import {
   AUDIT_BASE_CREDITS,
@@ -105,22 +105,22 @@ const PRICING = `${AUDIT_BASE_CREDITS} base + ${AUDIT_PAGE_CREDITS} per audited 
 const PRICING_WITH_LINKS = `${PRICING} + ${EXTERNAL_LINK_CREDITS} per external link the cloud verifies, at most 1 per page of the page limit`;
 
 /**
- * One billed run from register to its terminal PATCH. `running` is the
- * markRunning call, which the terminal PATCH waits on; `closed` is the one
- * terminal PATCH, set by whichever closes it first (the audit finishing, or a
- * shutdown), so two terminal states can never race.
+ * One billed run from register to its terminal PATCH: the shared `RunLifecycle` (#1663), with the
+ * markRunning it sent. `closed` on the lifecycle is the one terminal PATCH, set by whichever closes it
+ * first (the audit finishing, or a shutdown), so two terminal states can never race.
  */
-interface RunLifecycle {
+interface TrackedRun {
   run: RegisteredRun;
+  life: RunLifecycle;
+  /** The markRunning PATCH, which the terminal PATCH waits on. */
   running: Promise<void>;
-  closed: Promise<void> | null;
 }
 
 // The server is long-lived and can run several billed audits at once. On
 // shutdown every run here that is not closed yet is closed as cancelled, and
 // every register still in flight is waited for and closed the same way, so no
 // charged run is left pending (see cancelActiveMcpRuns).
-const lifecycles = new Map<string, RunLifecycle>();
+const lifecycles = new Map<string, TrackedRun>();
 const registering = new Set<Promise<RegisteredRun | null>>();
 // Set when a shutdown begins: no new register starts after it, so none can
 // slip past the shutdown's snapshot and be charged without being closed.
@@ -140,33 +140,29 @@ export function resetBilledRunsForTests(): void {
 }
 
 /** Start tracking a registered run (once), flipping it to running. */
-function trackRun(run: RegisteredRun): RunLifecycle {
-  let life = lifecycles.get(run.runId);
-  if (!life) {
-    life = {
+function trackRun(run: RegisteredRun): TrackedRun {
+  let tracked = lifecycles.get(run.runId);
+  if (!tracked) {
+    // The server has no progress heartbeat (that is the CLI's), so there is none to stop.
+    const life = createRunLifecycle(Promise.resolve(run), {
+      stopHeartbeat: false,
+    });
+    tracked = {
       run,
-      running: markRunning(
-        run.runId,
-        new Date().toISOString(),
-        run.lifecycleBase
-      ).catch(() => {}),
-      closed: null,
+      life,
+      running: life.markRunning(new Date().toISOString()),
     };
-    lifecycles.set(run.runId, life);
+    lifecycles.set(run.runId, tracked);
   }
-  return life;
+  return tracked;
 }
 
 /** Close a run once: the first terminal state wins, later calls wait on it. */
 function closeRun(run: RegisteredRun, input: FinalizeRunInput): Promise<void> {
-  const life = trackRun(run);
   // The entry stays after it closes, so a late second close (the audit
   // finishing after a shutdown closed it) finds it and sends nothing. One small
   // entry per billed audit, each of which cost credits: not worth evicting.
-  life.closed ??= life.running.then(() =>
-    finalizeRun(run.runId, input, run.lifecycleBase)
-  );
-  return life.closed;
+  return trackRun(run).life.close(input);
 }
 
 const LOCAL_HINT = "Pass offline: true for a local-only audit.";
@@ -398,11 +394,11 @@ export async function planMcpAudit(input: {
       "The server did not confirm this run as ephemeral (it may predate the option), so the site may have been added to the dashboard and scheduled."
     );
   }
-  const life = trackRun(run);
-  await life.running;
+  const tracked = trackRun(run);
+  await tracked.running;
   // A shutdown that arrived while the register was in flight has already
   // closed this run as cancelled: do not start the audit.
-  if (life.closed) {
+  if (tracked.life.isClosed()) {
     return {
       kind: "stop",
       result: errorResult(`${SHUTTING_DOWN} Its run was closed as cancelled.`),
@@ -537,8 +533,8 @@ export async function cancelActiveMcpRuns(): Promise<void> {
   for (const run of fresh) if (run) trackRun(run);
   const completedAt = new Date().toISOString();
   await Promise.all(
-    [...lifecycles.values()].map((life) =>
-      closeRun(life.run, {
+    [...lifecycles.values()].map((tracked) =>
+      closeRun(tracked.run, {
         status: "cancelled",
         completedAt,
         completionReason: "user_cancel",

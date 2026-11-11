@@ -126,7 +126,8 @@ import {
 } from "@/lib/non-public-host";
 import { pageLimitNotice, resolvePageLimit } from "@/lib/page-limit";
 import {
-  createRunFinalizer,
+  createInterruptHandler,
+  createRunLifecycle,
   type FinalizeRunInput,
   markRunning,
   auditableUrl,
@@ -2589,27 +2590,42 @@ export const audit = defineCommand({
       let trackedRunId: string | null = null;
       // Base path resolved once at register; reused so the lifecycle stays consistent.
       let trackedBase: string | undefined;
-      // Kept, not fired and forgotten: the terminal PATCH waits for this one
-      // (see createRunFinalizer), or an audit that fails before it lands is
-      // flipped back to running and reaped as stalled an hour later.
-      const runningPromise = registerPromise
-        .then(async (run) => {
-          if (!run) return;
+      // #1663: one lifecycle for the run, shared with the MCP server: markRunning never lands after
+      // the terminal PATCH, and the terminal PATCH is sent at most once for every exit path
+      // (--no-publish, error, Ctrl-C, crash), so none leaves the run pending to be reaped (#332).
+      // The terminal PATCH waits for markRunning, or an audit that fails before it lands is flipped
+      // back to running and reaped as stalled an hour later.
+      const lifecycle = createRunLifecycle(registerPromise, {
+        onRegistered: (run) => {
           trackedRunId = run.runId;
           trackedBase = run.lifecycleBase;
-          await markRunning(
-            run.runId,
-            new Date(startTime).toISOString(),
-            run.lifecycleBase
-          );
-        })
-        .catch(() => {});
-
-      // #332: one guarded finalizer for every exit path (--no-publish, error, Ctrl-C, crash) so none leaves the run pending to be reaped.
-      finalizeTracked = createRunFinalizer(registerPromise, runningPromise);
+        },
+      });
+      void lifecycle.markRunning(new Date(startTime).toISOString());
+      finalizeTracked = lifecycle.close;
 
       // #332: on interrupt, await a "cancelled" PATCH before re-raising so it lands instead of being reaped as a failure.
+      let interrupted = false;
+      const interrupt = createInterruptHandler({
+        finalize: () =>
+          finalizeTracked({
+            status: "cancelled",
+            completedAt: new Date().toISOString(),
+            completionReason: "user_cancel",
+          }),
+        exit: (signal) => {
+          removeSignalHandlers();
+          process.kill(process.pid, signal);
+        },
+      });
       const onSignal = (signal: NodeJS.Signals): void => {
+        // #1663: a second signal while the first one's PATCH is in flight only waits for it (bounded);
+        // the messages and the crawl bookkeeping below belong to the first.
+        if (interrupted) {
+          interrupt(signal);
+          return;
+        }
+        interrupted = true;
         // SIGHUP means the terminal is gone: a write to it fails with EIO,
         // and an unhandled stream error (the progress spinner keeps writing)
         // would take the process down before the PATCH lands. Say nothing,
@@ -2642,14 +2658,7 @@ export const audit = defineCommand({
         } catch {
           // Nothing to do: the process is about to be killed by the signal.
         }
-        void finalizeTracked({
-          status: "cancelled",
-          completedAt: new Date().toISOString(),
-          completionReason: "user_cancel",
-        }).finally(() => {
-          removeSignalHandlers();
-          process.kill(process.pid, signal);
-        });
+        interrupt(signal);
       };
       removeSignalHandlers = (): void => {
         // Cast: bun-types >=1.4 declares off/removeListener("memoryPressure")
@@ -2661,11 +2670,12 @@ export const audit = defineCommand({
         emitter.off("SIGTERM", onSignal);
         emitter.off("SIGHUP", onSignal);
       };
-      process.once("SIGINT", onSignal);
-      process.once("SIGTERM", onSignal);
+      // `on`, not `once` (#1663): see createInterruptHandler.
+      process.on("SIGINT", onSignal);
+      process.on("SIGTERM", onSignal);
       // Closing the terminal (or its window on Windows) aborts the audit as
       // surely as Ctrl-C does; without this the run was left to be reaped.
-      process.once("SIGHUP", onSignal);
+      process.on("SIGHUP", onSignal);
 
       // #271 phase 5: coarse page-progress, throttled to ≤1/s. `crawlPagesFailed`
       // is tallied from the raw crawler events (onEvent) since onProgress only
