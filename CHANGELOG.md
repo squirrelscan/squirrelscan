@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- The editor summary request now carries check-level evidence (`checks`: the checks that failed or warned, and the security and agent-experience checks that ran clean), so cloud summaries stop recommending headers or files the site already has (#3944).
+
 ## v0.0.177 (2026-11-11)
 
 The installer's failure report now says where a failed request was going and which IP family it used, so a report from a machine that cannot reach us can be diagnosed from the report alone. After a failed request to squirrelscan or GitHub it makes one short, bounded request to that same host, outside any proxy, only to read the family, and sends nothing else. A host you set yourself is reported as custom and never probed, a request that failed and then succeeded on a retry is no longer blamed for a later unrelated error, and a failure before the first named step reports startup. The analytics duplicate-tags rule now reads every vendor loader as a URL: an uppercase ID parameter counts, and a lookalike host is no longer mistaken for Segment, Amplitude, Heap, Hotjar or Clarity. The fake-auth-overlay docs state every selector limit exactly, including that a style block is read as applying whatever its media or type attribute says, and the Security rules page shows the right rule count.

@@ -383,6 +383,15 @@ export interface EditorSummaryRequest {
    */
   failingRuleIds?: string[];
   /**
+   * Check-level evidence as `ruleId|checkName` keys (#3944): the checks that
+   * failed or warned, and the security and agent-experience checks that ran and
+   * found nothing wrong (a pass or an info note, such as a CSP that is present
+   * or an llms.txt that exists). Lets the summary recommend only what the site
+   * lacks. Capped by the client; absent when there is nothing to send. Older
+   * servers ignore it.
+   */
+  checks?: { failing: string[]; confirmed: string[] };
+  /**
    * How much of the site this audit covered, so the summary can say plainly
    * when it read only part of it and suggest a deeper audit. Engine counts,
    * never estimated. Absent when the report has no scan scope. Older servers

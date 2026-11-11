@@ -844,6 +844,8 @@ export const SERVICE_LIMITS = {
   editorSummaryMaxTechnologies: 60,
   /** Max failing rule ids sent per editor-summary call (the catalog has about 320 rules). */
   editorSummaryMaxFailingRuleIds: 500,
+  /** Most `ruleId|checkName` keys per list of the editor summary's check evidence (#3944). */
+  editorSummaryMaxCheckKeys: 600,
   /** Max ranked priorities kept in a stored editor's summary. */
   editorSummaryMaxPriorities: 8,
   blocklistBatchValues: 2000,
