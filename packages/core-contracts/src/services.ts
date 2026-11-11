@@ -624,6 +624,13 @@ export interface RenderResultItem {
   headers?: Record<string, string>;
   error?: string | null;
   redirectChain?: { url: string; status: number }[];
+  /**
+   * The HTML the server sent for the main document, before any script ran (#1769, private half repo#4022).
+   * Capped by the render service. Absent from services that do not send it, and then nothing changes: the
+   * crawler stores the rendered DOM only. When present the crawler adds the scripts the server sent and client
+   * code removed after hydration, so the script rules still see them.
+   */
+  serverHtml?: string;
   /** Browser render cost only, mirrored from crawler-worker. Absent on a render-cache hit (#826). */
   renderTimeMs?: number;
   /** Queue delivery lag + browser-pool acquisition + concurrency-slot wait before rendering started. Absent on a render-cache hit (#826). */

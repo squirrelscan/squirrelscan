@@ -263,6 +263,9 @@ export function mapRenderItemToResponse(
       httpToHttps: requestUrl.startsWith("http://") && finalUrl.startsWith("https://"),
     },
     fetcherMethod: "cloud-render",
+    // The server's own HTML, when the render service sent it (#1769): only then does the crawler merge the
+    // scripts hydration removed. Absent, the response is exactly what it was.
+    ...(typeof item.serverHtml === "string" && item.serverHtml.length > 0 ? { serverHtml: item.serverHtml } : {}),
     // Queue-wait vs render-time breakdown, absent on a render-cache hit (#826).
     renderTimeMs: item.renderTimeMs,
     queueWaitMs: item.queueWaitMs,
