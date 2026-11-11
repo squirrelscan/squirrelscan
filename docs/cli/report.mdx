@@ -223,6 +223,30 @@ Compare the latest report for a domain against a baseline audit:
 squirrel report --regression-since example.com --format llm
 ```
 
+#### What counts as fixed
+
+`--diff` reports an issue as **removed** (fixed) only when its rule ran in both audits over the same scope and the current report no longer has the finding. A finding is not fixed just because it is missing: the rule may not have run, may have timed out, or the page may not have been crawled this time. Those are listed apart under **Not compared** and are never counted in `removed`.
+
+"Same scope" is judged per finding, not by comparing the `scope.pages` counts of the two reports: the audits must be of the same site (origin), and the page or pages the finding names must have been examined by the rule in the current audit (crawled, and not skipped by the rule there). The page counts in each report's per-rule `scope` are for reading, and two audits of different sizes are still compared on the pages they share.
+
+An issue that is gone from the current report is **not compared** when:
+
+| Reason | Meaning |
+|--------|---------|
+| `different-scope` | The two reports audit different sites |
+| `rule-not-run` | The rule has no result in the current report (it was off, or did not run) |
+| `rule-skipped` | Every check of the rule was skipped in the current report, or the issue's own check (or the check it moves to, for a link between `broken-links` and `broken-links-sitewide`) has a coverage gap with no page: external links past their cap or out of time, internal link targets not fetched. The coded skip reason is in `detail`, for example `targeted-run` for an audit given [`--target-url`](/cli/audit#targeted-audits) |
+| `rule-timed-out` | The rule ran past its time budget in the current audit |
+| `rule-not-run-in-baseline` | The rule judged nothing in the baseline either: the finding there was only carried from an older audit |
+| `page-not-crawled` | The issue's page (or one of an item's source pages) is not among the pages the current audit crawled. `detail` is the page |
+| `rule-skipped-on-page` | The rule skipped the issue's page in the current audit, for example a `noindex` page. `detail` is the page |
+| `sampled-report` | The current report was rebuilt from a slim JSON export (`squirrel report --input`), which keeps a sample of each check's pages and no passing rows. A finding is fixed only when the export's `rules` list says the rule ran and the check's page list is complete; an older export without `rules`, or a check whose pages were cut (`affectedPagesHasMore`), is never read as fixed |
+| `not-evaluated` | The rule answered with a check its metadata declares as "not checked" and no clean check that supersedes the problem |
+
+A clean check that supersedes the problem check is the evidence of a fix: on a rule that declares its check names (the **Check names by outcome** table on its [rule page](/rules)), `security/leaked-secrets` reporting `leaked-secrets` where it reported `leaked-secrets-critical` is a fix. An issue stored under a retired check name is judged by the checks that replaced it: fixed when they all passed, and not compared when one was not checked. The statuses come from the [per-rule status](/configuration/output#per-rule-status-and-deciding-fixed) of each report.
+
+The text, markdown and llm formats print a **Not compared** section after **Changed** with the reason for each issue, and the JSON diff has a `notCompared` list of `{ issue, reason, detail? }` (and `summary.notCompared`, the count, when there are any). Neither `removed` nor `summary.removed` includes them. A diff with nothing not compared has none of these.
+
 <Note>
 Diff mode supports `console`, `text`, `json`, `llm`, and `markdown`. `html` and `xml` are not supported in diff mode.
 </Note>
