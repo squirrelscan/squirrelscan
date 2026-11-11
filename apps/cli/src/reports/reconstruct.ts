@@ -7,6 +7,7 @@ import type {
   CrawlPhaseCut,
   MaxDurationCut,
   PageFeatureRow,
+  RedirectRow,
 } from "@squirrelscan/core-contracts";
 
 import {
@@ -605,6 +606,11 @@ export function reconstructReport(
           )
       : null;
 
+    // URLs recorded as redirects, not pages (#1762), for `--include-pages`: they are out of `pages`, so the list
+    // keeps where each one went. Capped like the pages list, with the real count.
+    const redirectRows: RedirectRow[] = [];
+    let redirectsTotal = 0;
+
     // 7. Load rule registry to get metadata
     // Stored results can include explicitly enabled opt-in rules. Reconstruction
     // needs their metadata even though a default audit does not select them.
@@ -677,7 +683,20 @@ export function reconstructReport(
 
       for (const page of batch) {
         // A redirecting URL is a redirect, not a page (#1762): not in pages[], not in the totals.
-        if (isRedirectSourcePage(page)) continue;
+        if (isRedirectSourcePage(page)) {
+          if (options?.includePageRuleCounts) {
+            redirectsTotal++;
+            if (redirectRows.length < JSON_REPORT_PAGES.maxEntries) {
+              redirectRows.push({
+                url: page.normalizedUrl,
+                finalUrl: page.finalUrl ?? page.normalizedUrl,
+                status: page.status,
+                hops: Math.max(1, (page.redirectChain?.hops.length ?? 2) - 1),
+              });
+            }
+          }
+          continue;
+        }
         // Advance the features walk to (at least) this page. Degrades to "no
         // row" rather than failing the report: the fallback parse produces the
         // same answer, just slower.
@@ -1161,6 +1180,9 @@ export function reconstructReport(
             unstoredPages: unstoredRead.entries.map(unstoredPageRow),
             unstoredPagesTotal: unstoredRead.total,
           }
+        : {}),
+      ...(redirectsTotal > 0
+        ? { redirects: redirectRows, redirectsTotal }
         : {}),
       // #1829: coverage lost to throttling, in a form renderers can count
       // rather than parse out of the reason prose.
