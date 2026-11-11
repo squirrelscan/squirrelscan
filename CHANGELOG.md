@@ -19,7 +19,7 @@ How it works:
 
 ### Added
 
-- **`crawl/rendered-signal-mismatch` flags a canonical, noindex, title or H1 that JavaScript changes after load.** It compares the raw HTML with the cloud render of the same page and reports four checks: `canonical-mismatch` and `noindex-mismatch` fail, `title-modified` and `h1-modified` warn, each showing the raw and the rendered value. A canonical that differs only by trailing slash, host case, default port or fragment is the same canonical. It reads the render `ax/content-without-js` already reads, so it adds no credit charge beyond the page's audit, and it reports one skipped check, never a pass, on a browser-rendered crawl or when there is no render result. (#1684)
+- **`crawl/rendered-signal-mismatch` flags a canonical, noindex, title or H1 that JavaScript changes after load.** It compares the raw HTML with the cloud render of the same page and reports four checks: `canonical-mismatch` and `noindex-mismatch` fail, `title-modified` and `h1-modified` warn, each showing the raw and the rendered value. A canonical that differs only by trailing slash, host case, default port or fragment is the same canonical. `noindex` is read from every robots and googlebot meta tag, so a second tag a script appends counts, and a canonical the script adds that is the page's own URL is a warning rather than an error. It reads the render `ax/content-without-js` already reads, so it adds no credit charge beyond the page's audit, and it reports one skipped check, never a pass, on a browser-rendered crawl or when there is no render result. (#1684)
 
 ## v0.0.175 (2026-11-11)
 

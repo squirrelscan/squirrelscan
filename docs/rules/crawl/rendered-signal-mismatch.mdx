@@ -17,13 +17,14 @@ It compares the raw HTML the crawl fetched with the DOM from the cloud render of
 
 | Check | Fires when | Severity |
 |---|---|---|
-| `canonical-mismatch` | the canonical URL differs, or exists on only one side | error |
-| `noindex-mismatch` | robots `noindex` is present on only one side | error |
+| `canonical-mismatch` | the canonical URL differs, or the script removes it or adds one that points elsewhere | error |
+| `noindex-mismatch` | `noindex` is present on only one side, in any robots or googlebot meta tag | error |
 | `title-modified` | the title text differs after whitespace and case are normalised | warning |
 | `h1-modified` | the first H1 differs, or exists on only one side | warning |
 
 - Canonical URLs are resolved against the page before they are compared, so a relative canonical equals the same absolute one. A trailing slash, the case of the host, a default port (`:443`) and a `#fragment` do not count as a difference. A different path, query, scheme or host does.
-- `noindex` is read from `<meta name="robots">`, as a token in the comma-separated list. `none` counts as `noindex`. The finding says which side carries it: `raw` or `rendered`.
+- A raw page with no canonical where the script adds one that is the page's own URL is a **warning**, not an error. That is the usual shape of a single-page app: crawlers that do not run JavaScript pick a canonical themselves, and the one the script adds is the right one. A canonical the script adds that points anywhere else, one it changes, and one it removes still fail.
+- `noindex` is read from every `<meta name="robots">` and `<meta name="googlebot">` tag on the page, on both sides, with the name matched without regard to case; the page is `noindex` when any of them says `noindex` or `none`, as a token in the comma-separated list. A script that appends a second tag, so that the first still reads `index, follow`, is a mismatch. The finding says which side carries it: `raw` or `rendered`.
 - Only the first `<h1>` is compared.
 - Titles and H1s compare equal when only whitespace or letter case differs. A finding shows both texts, cut at 200 characters.
 
