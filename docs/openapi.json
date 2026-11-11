@@ -1197,7 +1197,7 @@
         "description": "What changed between two completed audits of a website. Only the fields a CI client needs are listed; others may be present.",
         "properties": {
           "base": { "type": ["object", "null"], "description": "The older run (`runId`, `reportId`, `auditedAt`, `healthScore`), or null for the first audit." },
-          "head": { "type": "object", "description": "The newer run (`runId`, `reportId`, `auditedAt`, `healthScore`, `failed`, `warnings`, `passed`, `totalPages`, `status`)." },
+          "head": { "type": "object", "description": "The newer run (`runId`, `reportId`, `auditedAt`, `healthScore`, `failed`, `warnings`, `passed`, `totalPages`, `status`, and `statusReasonCode` when the audit is `failed`, `blocked` or `partial`: `dns`, `tls`, `connection`, `timeout`, `http_4xx`, `http_5xx`, `redirect`, `robots`, `unknown`, `max_duration` or `crawl_timeout`)." },
           "firstRun": { "type": "boolean", "description": "True when there is no earlier completed audit: nothing is compared." },
           "changed": { "type": "boolean" },
           "totals": {
