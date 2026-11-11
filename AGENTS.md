@@ -131,6 +131,7 @@ Conventions and traps:
    - Write `docs/rules/<rule id>.mdx`; the path must equal the id. Copy a sibling page, including its ``| **Rule ID** | `<id>` |`` row.
    - Add the page to `docs/docs.json` and add a row to `docs/rules/<category>/index.mdx`.
    - Bump the category's "(N rules)" in `docs/rules/index.mdx` and in its score group page (`docs/rules/{seo,performance,security,agents}/index.mdx`).
+   - Bump the category's row in the "Rule categories" tables of `README.md` and `docs/index.mdx` as well (the "Rules" count, and the "What it covers" text when the rule adds a new theme). These two are easy to miss.
    - Rounded totals ("300+", `PUBLIC_RULE_COUNT_FLOOR`) are rounded down to a multiple of 50 on purpose and change only when the live count crosses the next one. Do update the "currently N enabled rules" comment beside the floor in `packages/utils/src/constants.ts`.
 6. **Move the golden pins.** Run `bun test ./packages/audit-engine/tests/streaming-rules-canonical-golden.test.ts`.
    - The finding messages are pinned too: after a change to a rule's message or fix text, run `UPDATE_GOLDEN=1 bun test packages/audit-engine/tests/golden-finding-messages-229.test.ts` and review the diff of the snapshot.
@@ -147,6 +148,7 @@ Conventions and traps:
 
    `meta-string-limits` caps meta strings at the published report's limits. `max-rules-limit` keeps 25 rules of headroom under `REPORT_LIMITS.maxRules` in `packages/core-contracts/src/limits.ts`; if it trips, raise the cap in the same PR.
 8. **Add a CHANGELOG bullet** under `## [Unreleased]`, in `### Added`.
+   - **Check the agent skill.** The PR description must say whether the squirrelscan agent skill (`squirrelscan/skills`, `skills/*/SKILL.md`) needs a change. The skills do not list rules by name or count, so most new rules need none; a change is needed only when an agent should act differently because of the rule. When it does, file a private issue labelled `skills` and say so in the PR.
 9. **Smoke-test an accusatory rule on real pages.** For a rule that accuses a website of something (hidden text, spam, broken markup), fetch about 25 well-known websites, run `rule.run()` over `parsePage(html, url)` and read every non-pass. Unit fixtures only encode the false positives you already thought of. Report the residual honestly instead of tuning it to zero.
 
 A new category is a bigger change (loader namespace, `RuleCategory`, docs hub, the configuration table, scoring group). Open an issue first.
