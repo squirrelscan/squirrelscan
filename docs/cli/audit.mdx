@@ -347,6 +347,27 @@ Rendering is the only part that runs in the cloud: with `--render` or any `--ren
 
 For finer control, `--render-mode auto` renders **only** pages that need it (client-side-rendered shells) and uses fast plain HTTP for the rest. To set the behavior permanently, use `render` in `[cloud]` - see the [browser rendering guide](/guides/browser-rendering).
 
+#### When rendering falls back
+
+Rendering can stop partway: you ran out of credits, the render service kept failing, the run ended, you are signed out, or the cloud was unreachable. The pages after that are fetched over plain HTTP, and the audit carries on. The audit says so instead of leaving you to find out from the log:
+
+- A line after the scan summary, for example `Cloud rendering fell back to plain HTTP (out of credits): 12 of 40 pages were rendered, the rest fetched as plain HTML.`
+- A `render` block in the JSON report, and a `<render>` element in the LLM report:
+
+```json
+{
+  "render": {
+    "requested": true,
+    "mode": "all",
+    "fallbackReason": "out of credits",
+    "pagesRendered": 12,
+    "pagesFetchedPlain": 28
+  }
+}
+```
+
+`requested` is whether cloud rendering was asked for (a flag, the config or the level). `mode` is what the crawl did: `all` (every page rendered), `auto` (HTTP first, rendered only for client-rendered shells) or `http` (nothing rendered, including when rendering was asked for and could not run). `pagesRendered` and `pagesFetchedPlain` count the pages this audit fetched, by whether a browser rendered them; a page reused unchanged from an earlier audit is in neither. `fallbackReason` appears only when rendering was asked for and did not carry the crawl: `out of credits`, `not authenticated`, `run no longer active`, `N consecutive cloud failures`, `not logged in`, or `cloud unavailable (signed out or unreachable)`. The LLM report has the same facts as `<render requested="true" mode="all" pages-rendered="12" pages-fetched-plain="28" fallback-reason="out of credits"/>`. A single page the render could not reach (a site that walls the renderer) is fetched directly and counted as plain, without a `fallbackReason`.
+
 ### Start URL rules
 
 The start URL must be `http://` or `https://` with a host. A bare domain gets `https://` (`http://` for a local name), and `localhost:3000` or `example.com:8080` keep their port. Credentials (`user:password@`) and the `#fragment` are dropped before anything is crawled, logged, registered or sent to the cloud, with a note on stderr; the query string is kept. Use `--header "Authorization: Basic ..."` to crawl a site behind basic auth. A URL longer than 2048 characters is audited but not registered as a dashboard run.

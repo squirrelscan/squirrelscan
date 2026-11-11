@@ -692,6 +692,30 @@ export interface AuditOutcome {
   };
 }
 
+/** How the crawl fetched pages: plain HTTP, HTTP first with a render for client-rendered shells, or a render for every page. */
+export type ReportRenderMode = "http" | "auto" | "all";
+
+/**
+ * What cloud rendering did on this audit (#1664), so a user paying for it, or an agent reading the
+ * report, can tell rendered pages from plain-HTTP ones and see why rendering stopped.
+ */
+export interface ReportRender {
+  /** Cloud browser rendering was asked for (a flag, the config or the level), whether or not it ran. */
+  requested: boolean;
+  /** What the crawl did: see {@link ReportRenderMode}. `http` when nothing was rendered or rendering was unavailable. */
+  mode: ReportRenderMode;
+  /**
+   * Why rendering fell back to plain HTTP when it was asked for and did not carry the crawl: the
+   * cloud was unreachable or signed out, the balance ran out, the run ended, or the render service
+   * kept failing. Absent when rendering was not asked for, or ran to the end.
+   */
+  fallbackReason?: string;
+  /** Pages this audit fetched through a browser render. */
+  pagesRendered: number;
+  /** Pages this audit fetched over plain HTTP, including those a fallback served. */
+  pagesFetchedPlain: number;
+}
+
 export interface AuditReport {
   crawlId?: string;
   /**
@@ -743,6 +767,8 @@ export interface AuditReport {
   status?: AuditStatus;
   /** Exit code, audit status and publish result, stamped before the report is written (#1657). */
   outcome?: AuditOutcome;
+  /** What cloud rendering did on this audit (#1664). Set by `squirrel audit`. */
+  render?: ReportRender;
   /** Short human reason shown when `status` is failed/blocked (e.g. "No pages were crawled"). */
   statusReason?: string;
   /**

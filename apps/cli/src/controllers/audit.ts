@@ -108,6 +108,7 @@ import {
   type DurationCut,
 } from "@/audit/max-duration";
 import { configDir, loadConfiguredPlugins } from "@/audit/plugins";
+import { buildReportRender, createRenderTally } from "@/audit/render-summary";
 import {
   decideResume,
   formatResumeRefusal,
@@ -328,6 +329,12 @@ export interface RunAuditOptions extends AuditOptions {
  * uses an HTTP-first hybrid: plain HTTP for every page, re-rendering ONLY pages
  * detected as client-side-rendered shells. surface/full still render every page.
  */
+/** What the controller wants to hear from the render fetcher beyond its log lines (#1664). */
+export interface ResolveFetcherHooks {
+  /** Rendering was asked for and did not carry the crawl: the reason, for the report. */
+  onFallbackReason?: (reason: string) => void;
+}
+
 export function resolveDocumentFetcher(
   options: RunAuditOptions,
   mergedConfig: Config,
@@ -336,7 +343,8 @@ export function resolveDocumentFetcher(
     credits: number,
     breakdown: RenderChargeLine[]
   ) => void,
-  isQuickMode = false
+  isQuickMode = false,
+  hooks: ResolveFetcherHooks = {}
 ): DocumentFetcher | undefined {
   if (options.documentFetcher) return options.documentFetcher;
   // Cloud unusable (expired/unreachable) → no render fetcher even for explicit
@@ -353,6 +361,7 @@ export function resolveDocumentFetcher(
       logger.warn(
         "Cloud rendering requested but cloud is unavailable (signed out / API unreachable); using plain HTTP fetch"
       );
+      hooks.onFallbackReason?.("cloud unavailable (signed out or unreachable)");
     }
     return undefined;
   }
@@ -361,16 +370,19 @@ export function resolveDocumentFetcher(
     logger.warn(
       "Cloud rendering requested but you are not logged in; using plain HTTP fetch"
     );
+    hooks.onFallbackReason?.("not logged in");
     return undefined;
   }
 
   const httpFetcher = createFetchDocumentFetcher();
   const renderFetcher = createCloudDocumentFetcher(client, {
     fallback: httpFetcher,
-    onFallback: (reason) =>
+    onFallback: (reason) => {
       logger.warn(
         `Cloud rendering unavailable (${reason}); continuing with plain HTTP fetch`
-      ),
+      );
+      hooks.onFallbackReason?.(reason);
+    },
     onRenderBlock: (url) =>
       // info (not debug): on a site that walls the renderer, the user should see
       // pages are silently dropping to plain HTTP (not JS-rendered results).
@@ -1162,13 +1174,21 @@ export async function runAudit(
       const cloudChecks =
         options.auditLevel?.settings.cloudChecks ?? !isQuickMode;
 
+      // #1664: what rendering did, for the report's `render` block.
+      const renderTally = createRenderTally();
+      let renderFallbackReason: string | undefined;
       const documentFetcher = resolveDocumentFetcher(
         options,
         mergedConfig,
         (_units, _credits, breakdown) => {
           renderCharges.push(...breakdown);
         },
-        isQuickMode
+        isQuickMode,
+        {
+          onFallbackReason: (reason) => {
+            renderFallbackReason ??= reason;
+          },
+        }
       );
       // Plan-gated render concurrency: Free=2, Pro=5, Team=10 (cloud renders only).
       // cloudAvailable check is belt-and-suspenders — resolveDocumentFetcher
@@ -1386,6 +1406,7 @@ export async function runAudit(
                 break;
               }
               case "page:fetched":
+                renderTally.note(event.fetcherId);
                 if (
                   event.renderTimeMs !== undefined &&
                   event.queueWaitMs !== undefined
@@ -2719,6 +2740,17 @@ export async function runAudit(
           : []),
         ...(cloudResult?.spend ?? []),
       ];
+      // #1664: what cloud rendering did, so a render that fell back is visible in the report.
+      {
+        const { rendered, plain } = renderTally.counts();
+        report.render = buildReportRender({
+          requested: mergedConfig.cloud.rendering === "browser",
+          fetcherId: documentFetcher?.id,
+          fallbackReason: renderFallbackReason,
+          rendered,
+          plain,
+        });
+      }
       const totalSpent = spendLines.reduce((sum, l) => sum + l.credits, 0);
       if (totalSpent > 0) {
         report.cloudSpend = {
