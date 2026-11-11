@@ -28,8 +28,8 @@ The server runs in the foreground and speaks JSON-RPC on stdin/stdout. You rarel
 | `get_rule` | None | Full definition of one rule by id. |
 | `list_audits` | Login | Your org's queued, pending and running audits (`queued` is a run waiting for a container slot, which starts by itself). Prints a one-line `⚠ Page limit: ...` warning for any run whose page count was clamped to the plan's ceiling. |
 | `get_report` | Login | Fetch a published report by audit id. |
-| `list_issues` | Login | Issues for a website: action plans that each cover one or more findings (cloud only). |
-| `get_issue` | Login | A single issue by website + number, with the findings it covers. |
+| `list_issues` | Login | Supplant-aware issue state for a website. |
+| `get_issue` | Login | A single issue by website + number. |
 | `comment_on_issue` | Login | Comment on an audit issue. |
 | `list_entities` | None | The entities a site declares, collapsed across every crawled page, with filters and paging. |
 | `get_entity` | None | One entity as the map recorded it: the nine kept properties, declaring pages, conflicts (including legal identifiers), and references in and out. |
@@ -40,8 +40,6 @@ The server runs in the foreground and speaks JSON-RPC on stdin/stdout. You rarel
 | `send_feedback` | None | Send feedback to the squirrelscan team: a bug, a missing feature, what worked. Needs the network and an email to reply to: pass `email`, or it uses the one [`squirrel feedback`](/cli/feedback) saved, then your signed-in account's. |
 
 `list_pages` and the five entity tools read the local project store, so they need no account and spend no credits. They answer questions about audits you have already run: see [the entity map for agents](/guides/entity-map/mcp) for the fix-and-verify loop they are built around.
-
-An **issue** is an action plan that covers one or more findings. Issues exist in the cloud only. A **finding** is one rule result from the report. The CLI shows findings only: issues are a cloud feature, so `list_issues`, `get_issue` and `comment_on_issue` need a login. The issue fields are listed under [Issues and findings](/developers/mcp#issues-and-findings).
 
 ## Billing a signed-in audit
 

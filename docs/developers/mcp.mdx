@@ -4,7 +4,7 @@ description: "Connect any MCP client to the hosted squirrelscan MCP server: clou
 icon: "plug"
 ---
 
-squirrelscan runs a hosted [Model Context Protocol](https://modelcontextprotocol.io) server in the cloud. Point any MCP client at it and your agent gets tools for running cloud audits, reading and comparing reports, working the per-website issue tracker (issues are action plans that cover findings), catching up on notifications, sending product feedback, and browsing the 300+ rule catalog. Nothing to install, nothing to keep running:
+squirrelscan runs a hosted [Model Context Protocol](https://modelcontextprotocol.io) server in the cloud. Point any MCP client at it and your agent gets tools for running cloud audits, reading and comparing reports, working the per-website issue tracker, catching up on notifications, sending product feedback, and browsing the 300+ rule catalog. Nothing to install, nothing to keep running:
 
 ```text
 https://mcp.squirrelscan.com/mcp
@@ -87,8 +87,8 @@ All tools require authentication. Write tools are marked; everything else only r
 | `update_website_settings` | Change those settings for one website, including `schedule` (`off`, `daily`, `weekly` or `monthly`), `broken_link_alerts` (Pro and Team; turning it on is refused on Free) and `disable_rules` (rule ids and category globs the website's cloud audits skip, see [Tailor each website with rules](#tailor-each-website-with-rules)). Omitted fields stay as they are, values are checked like the dashboard's, and the result shows what is stored afterwards with the fields that were `applied`. Confirm rail for anything that raises spend, see below. Needs `audits:write`. | Write |
 | `delete_website` | Soft-delete a website (confirm rail). Past audits, reports, and issues are preserved and published report links keep working; the site leaves listings and frees a slot under the plan's website limit. Re-adding the domain later creates a fresh website with a new id. | Write |
 | `delete_websites` | Soft-delete up to 50 websites in one call, with the same confirm rail and the same soft delete as `delete_website`. Each result names the domain behind its id whenever it can be found, and an id that does not resolve is reported on its own rather than failing the call. | Write |
-| `list_issues` | Issues for a website: action plans that each cover one or more findings. Sorted by priority, then severity, then reach; filterable by status, severity, and category. Rows omit the long recommendation unless `include_recommendation` is set; `website_totals` counts the whole website, `total` counts the filtered set. `website_totals` replaces the earlier `severity_summary` and `status_counts` fields, an intentional change: read the counts there. Each row carries the plan fields and the findings it covers: see [Issues and findings](#issues-and-findings). After a smart audit each row also carries `provenance` and `last_seen_at`: see [issue provenance](#issue-provenance). | Read |
-| `get_issue` | One issue with full detail: the plan fields including `body_md`, the findings it covers, per-occurrence detail from the latest report (which pages/images, capped and countable via `occurrence_limit`), and its comment thread. It carries `provenance` and `last_seen_at` as `list_issues` does. See [Issues and findings](#issues-and-findings). | Read |
+| `list_issues` | Audit issues for a website, sorted by severity, filterable by status, severity, and category. Rows omit the long recommendation unless `include_recommendation` is set; `website_totals` counts the whole website, `total` counts the filtered set. `website_totals` replaces the earlier `severity_summary` and `status_counts` fields, an intentional change: read the counts there. After a smart audit each row also carries `provenance` and `last_seen_at`: see [issue provenance](#issue-provenance). | Read |
+| `get_issue` | One issue with full detail, per-occurrence detail from the latest report (which pages/images, capped and countable via `occurrence_limit`), and its comment thread. It carries `provenance` and `last_seen_at` as `list_issues` does. | Read |
 | `comment_on_issue` | Post a markdown comment on an issue, visible in the dashboard thread. | Write |
 | `list_rules` | Browse the audit rule catalog by category or keyword. | Read |
 | `get_rule` | One rule's full definition by id, e.g. `crawl/canonical-chain`, including its fix recommendation and docs link. | Read |
@@ -115,35 +115,6 @@ A few tools deserve a closer look:
 - **`update_website_settings` has a confirm rail for spend.** Turning recurring audits on, changing their cadence, or a change that raises the most one audit can cost (a bigger page cap, external link checks) returns `confirmation_required` with the estimate and changes nothing; the agent shows it to you and calls again with `confirm: true`. Turning the schedule off, and changes that cost nothing more (crawl scope, patterns, depth, `internal_links`, a cheaper level), apply straight away. A cadence your plan does not run is set to one it does, and a page cap above your plan's ceiling is stored and held to the ceiling when audits run; the result says so in both cases.
 - **Your role sets what an OAuth sign-in can do.** The approval screen offers only the scopes your [role](/cloud/team#roles) in the chosen organization holds: a viewer's sign-in reads but cannot run audits or change websites, and a billing member's holds `credits:read` and `org:read` only. A tool outside them returns `FORBIDDEN` with your `role` and the `missing_scope`. If your role later changes to one with less access, the sign-in ends and the client asks you to sign in again.
 - **`create_api_key` is scope-gated.** It needs credentials carrying the reserved `keys:write` scope. OAuth login grants it to organization owners and admins (you consented on the approval screen); an editor, viewer or billing member's sign-in works without it. The tool also checks your current role, the same rule as creating a key in the dashboard, so a member who is demoted or removed can no longer mint keys. Plain API keys never carry the scope, and keys minted by this tool can't mint further keys. No escalation loops.
-
-### Issues and findings
-
-An **issue** is an action plan that covers one or more findings. Issues exist in the cloud only. A **finding** is one rule result from the report. A finding is not an issue: one issue can cover findings from several rules, and a rule that fails on 600 pages is still one finding in the report.
-
-`list_issues` returns issues ordered by priority, then severity, then reach (how much of the site the issue touches). `list_issues` and `get_issue` return these plan fields on each issue:
-
-- `priority`: `critical`, `high`, `medium` or `low`, how soon the plan should be worked relative to the website's other issues. It is the first sort key; an issue with no priority yet sorts by its `severity`.
-- `type`: the kind of work the plan describes: `bug`, `task` or `feature`.
-- `effort`: a rough estimate of how much work the plan is: `quick-win`, `moderate` or `significant`.
-- `labels`: free-form tags on the issue.
-- `state_reason`: why the issue is in its current state: `completed`, `not_planned` or `reopened`.
-- `source`: where the issue came from.
-- `assigned_to`: who the issue is assigned to, when someone is.
-- `closed_at`: an ISO 8601 UTC timestamp, present once the issue has closed.
-- `body_md`: the plan itself, as markdown. `get_issue` only: `list_issues` leaves it out to keep rows small.
-
-They also return the findings the issue covers:
-
-- `covered_findings`: the covered findings, each with `finding_id`, `rule_id`, `check_name`, `locator`, `active` (`false` once the issue closed or the link was released) and `linked_at`. They are ids to look up in the report (see `get_report`), not the findings' data. `list_issues` rows hold the first 10 and `get_issue` up to 100.
-- `covered_finding_count`: how many findings the issue covers in total.
-- `active_covered_finding_count`: how many of those are still failing in the latest audit.
-- `covered_findings_truncated`: `true` when `covered_findings` holds fewer entries than `covered_finding_count`.
-
-Each active finding belongs to at most one open issue. An issue closes when every finding it covers is resolved, so `active_covered_finding_count` falling to `0` is the signal that the work is done.
-
-#### Older one-rule fields
-
-The fields from when an issue was one failing rule are kept unchanged: `rule_id`, `occurrences`, and `affected_pages`. They describe a single rule only. For an issue that covers several rules they are partial: read `covered_findings` and the counts above for the whole picture, and use the one-rule fields only for the rule they name.
 
 ### Issue provenance
 
@@ -194,11 +165,7 @@ Three tools report counts that look comparable and are not. The published report
 
 **Compare runs on `health_score`.** It is the one number rescored consistently across the whole site, so a move between two runs means the site moved.
 
-Do not compare `issues_found` with the open count from `list_issues`. The tracker folds a rule failing on 600 pages into one finding, and groups findings into issues, and keeps an issue open until an audit re-checks it, so its count is legitimately much smaller and moves on its own schedule.
-
-## Server version
-
-The `serverInfo.version` the server returns in its `initialize` response is the [cloud version](/cloud/version) (for example `1.1.0-dev7`), not the CLI's `v0.0.x` number and not a fixed value. It changes with cloud deploys, so do not pin a client to it. The suffix `-dev<N>` is the Nth deploy toward a release: compare builds by the `sha` from `GET /health`, never by parsing the string.
+Do not compare `issues_found` with the open count from `list_issues`. The tracker folds a rule failing on 600 pages into one issue and keeps an issue open until an audit re-checks it, so its count is legitimately much smaller and moves on its own schedule.
 
 ## Credits
 
@@ -245,4 +212,3 @@ Full setup and tool reference: [`squirrel mcp`](/cli/mcp).
 - [`squirrel keys`](/cli/keys) - mint and manage keys from the terminal
 - [`squirrel mcp`](/cli/mcp) - the local stdio server
 - [Cloud credits](/cloud/credits) - how audits are metered
-- [Cloud version](/cloud/version) - what `serverInfo.version` means
