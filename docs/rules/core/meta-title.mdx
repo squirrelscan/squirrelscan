@@ -11,11 +11,13 @@ Length matters because of where it is displayed rather than because of any rule.
 
 ## What squirrel checks
 
-The rule runs on every crawled page against the parsed title. It emits one or two checks:
+The rule runs on every crawled page against the parsed title. Too short and too long are separate checks, so a page never reports the wrong direction, and every page reports both sides. It emits these checks:
 
 - `meta-title` and `document-title`, both failing with the messages `Missing page title` and `Missing document title` and a null value, when there is no title or the title holds only whitespace. These are the only two checks emitted in that case.
-- `meta-title`, warning with the message `Title too short` when the title is under the minimum, or `Title too long` when it is over the maximum. Both carry the title as the value, `<min>-<max> characters` as the expectation, and an item holding the page URL with the first 50 characters of the title and its length. The defaults are 30 and 75 and both are configurable below.
-- `meta-title`, passing with the message `Title length OK` and the title as the value.
+- `meta-title-too-short`, warning with the message `Title too short (29 chars, min 30)` when the title is under the minimum. It carries the title as the value, `<min>-<max> characters` as the expectation, and an item holding the page URL with the first 50 characters of the title and its length, such as `Page not found | The Nut Shop (29 chars, under 30)`. Otherwise it passes with `Title is long enough`.
+- `meta-title-too-long`, warning with the message `Title too long (93 chars, max 75)` when the title is over the maximum, with the same value and expectation and an item such as `Classic trail mix: a generous, hand-mixed blend of (93 chars, over 75)`. Otherwise it passes with `Title is short enough`.
+
+The defaults are 30 and 75 and both are configurable below. Earlier versions reported both directions under one check named `meta-title`; that name now appears only for a missing title.
 
 A title that prints a missing value, such as `undefined | Acme` or `[object Object] | Acme`, is reported by [content/placeholder-text](/rules/content/placeholder-text), not by this rule.
 
@@ -23,7 +25,7 @@ The title is measured as a browser displays it: runs of spaces, tabs and line br
 
 Pages kept out of the search index are skipped. A page whose `<meta name="robots">` tag or `X-Robots-Tag` header contains `noindex` (a header scoped to one crawler, such as `googlebot: noindex`, counts too) gets one skipped check named `core/meta-title` with the message `Skipped: page is set to noindex via robots meta tag` (or `via X-Robots-Tag header`) instead, because its title never appears in a search result. Skipped checks do not count toward the score. Pages are skipped only on a site that is itself being indexed, judged by its homepage, or by the page the audit started from when the homepage was not fetched. When that page is noindex, as on a staging site or a preview deployment (Vercel, Netlify and Cloudflare Pages previews send `X-Robots-Tag: noindex` by default), nothing is skipped: the whole host is out of search and the audit is most likely checking it before launch. When neither page was fetched, nothing is skipped either. See [pages kept out of search](/rules#pages-kept-out-of-search) for the full list of rules that do this.
 
-The "too short" finding is skipped on a contact or legal page. When the page classifier's model labels a page `contact` or `legal` with a confidence of at least 0.9, a short title is normal there, and the page gets one skipped check, `Skipped: The title length floor is not judged on a contact page`, in place of the finding. "Too long" and a missing title still apply, and a rules-fallback label never skips. See [pages short by nature](/rules#pages-short-by-nature).
+The "too short" finding is skipped on a contact or legal page. When the page classifier's model labels a page `contact` or `legal` with a confidence of at least 0.9, a short title is normal there, and the page gets one skipped `meta-title-too-short` check, `Skipped: The title length floor is not judged on a contact page`, in place of the finding. "Too long" and a missing title still apply, and a rules-fallback label never skips. See [pages short by nature](/rules#pages-short-by-nature).
 
 ## How to fix it
 

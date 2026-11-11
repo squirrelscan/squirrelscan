@@ -11,11 +11,12 @@ The floor catches pages that lead nowhere. The ceiling catches the opposite, usu
 
 ## What squirrel checks
 
-The rule runs on every crawled page and counts links the parser marked as internal, including navigation and footer links. It emits a single check named `internal-links`:
+The rule runs on every crawled page and counts links the parser marked as internal, including navigation and footer links. It emits two checks per page, one for each side of the range:
 
-- Warn below `min_internal_links`, default 1. Message: `Too few internal links (0, min 1)`, with the count as the value and the threshold as the expected value.
-- Warn above `max_internal_links`, default 100. Message: `Too many internal links (240, max 100)`.
-- Pass otherwise. Message: `42 internal link(s)`, with the count as the value.
+- `internal-links-too-few`: warn below `min_internal_links`, default 1. Message: `Too few internal links (0, min 1)`, with the count as the value and the threshold as the expected value. Otherwise it passes with `42 internal link(s)`.
+- `internal-links-too-many`: warn above `max_internal_links`, default 100. Message: `Too many internal links (240, max 100)`. Otherwise it passes with `42 internal link(s)`.
+
+Earlier versions reported both under one check named `internal-links`.
 
 Severity warning, weight 4. Every internal link on the page counts, so a large sitewide navigation pushes every page toward the ceiling. Raise the ceiling rather than removing navigation if that is the shape of the site.
 

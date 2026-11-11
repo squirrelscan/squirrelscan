@@ -11,17 +11,19 @@ That still makes it worth writing. When the page has no description, the snippet
 
 ## What squirrel checks
 
-The rule runs on every crawled page against the parsed description. It emits one check named `meta-description`:
+The rule runs on every crawled page against the parsed description. Too short and too long are separate checks, and every page reports both sides:
 
-- Failing with the message `Missing meta description` and a null value when there is none.
-- Warning with the message `Description too short` under the minimum, or `Description too long` over the maximum. Both carry the description as the value, `<min>-<max> characters` as the expectation, and an item holding the page URL with the first 50 characters and the length. The defaults are 120 and 160 and both are configurable below.
-- Passing with the message `Description length OK` and the description as the value.
+- `meta-description`, failing with the message `Missing meta description` and a null value when there is none.
+- `meta-description-too-short`, warning with the message `Description too short (80 chars, min 120)` under the minimum. It carries the description as the value, `<min>-<max> characters` as the expectation, and an item holding the page URL with the first 50 characters and the length, for example `(80 chars, under 120)`. Otherwise it passes with `Description is long enough`.
+- `meta-description-too-long`, warning with the message `Description too long (190 chars, max 160)` over the maximum, with an item ending `(190 chars, over 160)`. Otherwise it passes with `Description is short enough`.
+
+The defaults are 120 and 160 and both are configurable below. Earlier versions reported both directions under one check named `meta-description`; that name now appears only for a missing description.
 
 Length is counted in characters of the parsed description. Severity is error and weight is 7.
 
 Pages kept out of the search index are skipped. A page whose `<meta name="robots">` tag or `X-Robots-Tag` header contains `noindex` (a header scoped to one crawler, such as `googlebot: noindex`, counts too) gets one skipped check named `core/meta-description` with the message `Skipped: page is set to noindex via robots meta tag` (or `via X-Robots-Tag header`) instead, because its description never appears in a search result. Skipped checks do not count toward the score. Pages are skipped only on a site that is itself being indexed, judged by its homepage, or by the page the audit started from when the homepage was not fetched. When that page is noindex, as on a staging site or a preview deployment (Vercel, Netlify and Cloudflare Pages previews send `X-Robots-Tag: noindex` by default), nothing is skipped: the whole host is out of search and the audit is most likely checking it before launch. When neither page was fetched, nothing is skipped either. See [pages kept out of search](/rules#pages-kept-out-of-search) for the full list of rules that do this.
 
-The "too short" finding is skipped on a contact or legal page. When the page classifier's model labels a page `contact` or `legal` with a confidence of at least 0.9, a short description is normal there, and the page gets one skipped check, `Skipped: The description length floor is not judged on a contact page`, in place of the finding. "Too long" and a missing description still apply, and a rules-fallback label never skips. See [pages short by nature](/rules#pages-short-by-nature).
+The "too short" finding is skipped on a contact or legal page. When the page classifier's model labels a page `contact` or `legal` with a confidence of at least 0.9, a short description is normal there, and the page gets one skipped `meta-description-too-short` check, `Skipped: The description length floor is not judged on a contact page`, in place of the finding. "Too long" and a missing description still apply, and a rules-fallback label never skips. See [pages short by nature](/rules#pages-short-by-nature).
 
 ## How to fix it
 
