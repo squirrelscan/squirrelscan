@@ -38,7 +38,8 @@ describe("unverifiable links are never broken (pub#800)", () => {
   test("broken-external-links lists them as unverifiable and counts only the 404", () => {
     const { checks } = brokenExternalLinksRule.run(externalCtx([...walled, timedOut, dead]));
     const broken = checks.find((c) => c.name === "broken-external-links")!;
-    expect(broken.status).toBe("warn");
+    // #1739: the 404 is confirmed broken, so it fails.
+    expect(broken.status).toBe("fail");
     expect(broken.items?.map((i) => i.id)).toEqual(["https://gone.example/"]);
     const unverified = checks.find((c) => c.name === "waf-blocked-external-links")!;
     expect(unverified.items?.map((i) => i.id).sort()).toEqual(

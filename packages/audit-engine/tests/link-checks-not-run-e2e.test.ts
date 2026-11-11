@@ -210,7 +210,7 @@ for (const engine of ["v1", "v2"] as const) {
       expect(stats?.externalLinkCheck).toEqual({ found: 2, checked: 1, cap: 1 });
       expect(statuses(external)).toEqual(["pass:", "skipped:external-links-over-cap"]);
       // /elsewhere is on both pages, /elsewhere-two on one: the first is the one checked.
-      expect(external[0]!.message).toBe("All 1 external link(s) are working");
+      expect(external[0]!.message).toBe("1 of 2 external link(s) verified working; 1 could not be verified or were not checked");
       expect(external[1]!.message).toBe(
         "1 of 2 external link(s) were not checked: over this audit's limit of 1, which checks the most-linked first",
       );

@@ -383,6 +383,22 @@ export const PRIVATE_TARGET_SKIP_REASON = "private-target";
 export const EXTERNAL_LINKS_NOT_CHECKED_SKIP_REASON = "external-links-not-checked";
 
 /**
+ * The `error` a link row carries when its host was CONFIRMED not to resolve (#1740): a definitive "no such
+ * host" answer (NXDOMAIN, or no address records) that held on a second lookup. It is a verdict, stored like a
+ * status (so it survives the cache and the database with no new column), and `links/broken-external-links`
+ * reads it as confirmed broken. A resolver that failed to answer (a timeout, SERVFAIL) is never this: that
+ * link is unverifiable. The same wording the cloud link checker already reports for a dead domain.
+ */
+export const EXTERNAL_LINK_HOST_UNRESOLVED_ERROR = "domain does not exist";
+
+/**
+ * The `error` for a link whose host sits under a name that can never resolve (#1740): a suffix RFC 6761 reserves
+ * (`.invalid`, `.test`, `.example`). A verdict without a lookup, in the cloud link checker's wording for an
+ * invalid link, and a confirmed broken link for every visitor.
+ */
+export const EXTERNAL_LINK_INVALID_SUFFIX_ERROR = "invalid link: no such domain suffix";
+
+/**
  * `skipReason` of `links/broken-links` when the crawl did not follow links
  * (the Quick level, or a sitemap-scoped crawl) and some internal link targets
  * were never fetched (repo#2729). Their status is unknown, so the rule cannot

@@ -58,7 +58,9 @@ describe("links/broken-external-links: links never requested (repo#2759)", () =>
       "broken-external-links:pass",
       "not-requested-external-links:info",
     ]);
-    expect(checks[0]!.message).toBe("All 1 external link(s) are working");
+    expect(checks[0]!.message).toBe(
+      "1 of 3 external link(s) verified working; 2 could not be verified or were not checked",
+    );
     expect(checks[1]).toMatchObject({
       message:
         "2 external link(s) were not requested because they look like actions (log out, unsubscribe) or carry a token or signature in the URL, so their status was not checked",
@@ -194,10 +196,12 @@ describe("links/broken-external-links: links never requested (repo#2759)", () =>
       "broken-external-links:pass",
       "refused-external-links:info",
     ]);
-    expect(checks[0]!.message).toBe("All 1 external link(s) are working");
+    expect(checks[0]!.message).toBe(
+      "1 of 2 external link(s) verified working; 1 could not be verified or were not checked",
+    );
     expect(checks[1]).toMatchObject({
       message:
-        "1 external link(s) point at a private, link-local or cloud metadata address, or a name public DNS does not resolve, so they were not requested and their status was not checked",
+        "1 external link(s) point at a private, loopback, link-local or cloud metadata address, so they were not requested and their status was not checked",
       items: [{ id: "http://192.168.1.1/admin", sourcePages: [`${BASE}/`] }],
       details: { refused: 1 },
     });
