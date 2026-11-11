@@ -50,6 +50,9 @@ How it works:
 - The editor summary request now carries check-level evidence (`checks`: the checks that failed or warned, and the security and agent-experience checks that ran clean), so cloud summaries stop recommending headers or files the site already has (#3944).
 - `ax/api-discovery` validates `/.well-known/api-catalog` as a non-empty JSON linkset instead of accepting any JSON 200. An empty linkset, a `linkset` that is not a list, JSON without a `linkset` member, an OpenAPI document at the catalog path, malformed JSON and a 200 HTML fallback each report their own state (`details.apiCatalogState`), and HTTP 401, 403, 408, 429 and 5xx on the API paths report not checked instead of missing. No new probes. (#1650)
 - `links/redirect-chains` now labels a chain of two or more redirects with its hop count and every hop (`3 hops: r1 (301) → r2 (301) → r3 (301) → final (200)`) and reports it in its own `redirect-chain-multi-hop` warning, so it no longer reads like a single redirect (#1750).
+- `perf/bad-caching` no longer blames Cloudflare for a missing ETag or Last-Modified on pages that send `Cache-Control: no-store`: the validators message names `no-store`, and the freshness check tells `no-store` apart from no caching policy (#1754).
+- The editor summary request now carries check-level evidence (`checks`: the checks that failed or warned, and the security and agent-experience checks that ran clean), so cloud summaries stop recommending headers or files the site already has (#3944).
+- `ax/api-discovery` validates `/.well-known/api-catalog` as a non-empty JSON linkset instead of accepting any JSON 200. An empty linkset, a `linkset` that is not a list, JSON without a `linkset` member, an OpenAPI document at the catalog path, malformed JSON and a 200 HTML fallback each report their own state (`details.apiCatalogState`), and HTTP 401, 403, 408, 429 and 5xx on the API paths report not checked instead of missing. No new probes. (#1650)
 
 ### Changed
 
