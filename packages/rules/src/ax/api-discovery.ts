@@ -27,6 +27,68 @@ function looksLikeOpenApiDoc(p: WellKnownProbe): boolean {
   return /"(openapi|swagger)"\s*:/.test(p.excerpt);
 }
 
+// A refusal, a throttle or a server error says nothing about whether the file
+// exists, so it is "not checked", never "missing" (#1650).
+function isBlockedStatus(status: number): boolean {
+  return status === 401 || status === 403 || status === 408 || status === 429 || status >= 500;
+}
+
+export type ApiCatalogState =
+  | "present"
+  | "empty-linkset"
+  | "invalid-linkset"
+  | "not-a-catalog"
+  | "openapi-document"
+  | "malformed-json"
+  | "html-fallback"
+  | "blocked"
+  | "absent"
+  | "not-requested";
+
+/** The shape of the `linkset` member: a non-empty array holding at least one link context object. */
+function linksetShape(p: WellKnownProbe): "non-empty" | "empty" | "invalid" {
+  try {
+    const parsed: unknown = JSON.parse(p.excerpt);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      const linkset = (parsed as Record<string, unknown>).linkset;
+      if (!Array.isArray(linkset)) return "invalid";
+      return linkset.some((e) => e !== null && typeof e === "object" && !Array.isArray(e))
+        ? "non-empty"
+        : "empty";
+    }
+    return "invalid";
+  } catch {
+    // The excerpt is capped, so a large catalog is cut mid-document. The crawler
+    // already parsed the whole body (`jsonValid`, `jsonKeys`); read the head only.
+    if (/"linkset"\s*:\s*\[\s*\]/.test(p.excerpt)) return "empty";
+    if (/"linkset"\s*:\s*\[\s*\{/.test(p.excerpt)) return "non-empty";
+    return "invalid";
+  }
+}
+
+export function classifyApiCatalog(p: WellKnownProbe | undefined): ApiCatalogState {
+  if (!p) return "not-requested";
+  if (p.status === 0) return "not-requested";
+  if (isBlockedStatus(p.status)) return "blocked";
+  if (p.status !== 200) return "absent";
+  if (p.looksHtml) return "html-fallback";
+  if (!p.jsonValid) return "malformed-json";
+  if (looksLikeOpenApiDoc(p)) return "openapi-document";
+  if (!p.jsonKeys.some((k) => k === "linkset")) return "not-a-catalog";
+  const shape = linksetShape(p);
+  if (shape === "non-empty") return "present";
+  return shape === "empty" ? "empty-linkset" : "invalid-linkset";
+}
+
+const CATALOG_STATE_TEXT: Partial<Record<ApiCatalogState, string>> = {
+  "empty-linkset": "the api-catalog at /.well-known/api-catalog has an empty linkset",
+  "invalid-linkset": "the api-catalog at /.well-known/api-catalog has a linkset that is not a list of link objects",
+  "not-a-catalog": "/.well-known/api-catalog is JSON without a linkset member",
+  "openapi-document": "/.well-known/api-catalog serves an OpenAPI document, not a linkset catalog",
+  "malformed-json": "/.well-known/api-catalog does not parse as JSON",
+  "html-fallback": "/.well-known/api-catalog returned an HTML page, not a catalog",
+};
+
 export const apiDiscoveryRule: Rule = {
   meta: {
     id: "ax/api-discovery",
@@ -51,20 +113,53 @@ export const apiDiscoveryRule: Rule = {
       return { checks };
     }
 
-    const apiCatalogHit = wk.probes.find((p) => p.path === API_CATALOG_PATH && isRealHit(p));
+    const catalogProbe = wk.probes.find((p) => p.path === API_CATALOG_PATH);
+    const catalogState = classifyApiCatalog(catalogProbe);
+    const apiCatalogHit = catalogState === "present" ? catalogProbe : undefined;
     const openapiHit = wk.probes.find(
       (p) => includesPath(OPENAPI_PATHS, p.path) && isRealHit(p) && looksLikeOpenApiDoc(p),
     );
 
     const apiDocs = answeredWellKnown(wk, API_DOC_PATHS);
-    if (!apiCatalogHit && !openapiHit && apiDocs.unchecked.length > 0) {
+    const blockedPaths = apiDocs.answered
+      .filter((p) => isBlockedStatus(p.status))
+      .map((p) => p.path as WellKnownPath);
+    const unchecked = [...apiDocs.unchecked, ...blockedPaths];
+    const catalogText = CATALOG_STATE_TEXT[catalogState];
+    if (!apiCatalogHit && !openapiHit && catalogText) {
+      // The catalog answered, with something that is not a usable catalog: name
+      // which kind of not-usable, whatever the other paths did.
+      checks.push({
+        name: "api-discovery",
+        status: "info",
+        message: `No valid api-catalog: ${catalogText}`,
+        value: catalogState,
+        details: {
+          apiCatalogState: catalogState,
+          apiCatalogPath: API_CATALOG_PATH,
+          ...(unchecked.length > 0 ? { notChecked: unchecked } : {}),
+        },
+      });
+    } else if (!apiCatalogHit && !openapiHit && unchecked.length > 0) {
       // Absence is only established for paths that got an answer.
       checks.push(
         notCheckedCheck(
           "api-discovery",
           "API discovery documents",
-          { notChecked: apiDocs.unchecked },
-          apiDocs.reason,
+          {
+            notChecked: unchecked,
+            apiCatalogState: catalogState,
+            ...(blockedPaths.length > 0
+              ? {
+                  blocked: Object.fromEntries(
+                    apiDocs.answered
+                      .filter((p) => isBlockedStatus(p.status))
+                      .map((p) => [p.path, p.status]),
+                  ),
+                }
+              : {}),
+          },
+          blockedPaths.length > 0 && apiDocs.unchecked.length === 0 ? "blocked" : apiDocs.reason,
         ),
       );
     } else if (!apiCatalogHit && !openapiHit) {
@@ -87,6 +182,14 @@ export const apiDiscoveryRule: Rule = {
         details: {
           apiCatalogPath: apiCatalogHit?.path ?? null,
           openapiPath: openapiHit?.path ?? null,
+          apiCatalogState: catalogState,
+          ...(apiCatalogHit
+            ? {
+                apiCatalogMediaTypeOk: /application\/linkset\+json/i.test(
+                  apiCatalogHit.contentType ?? "",
+                ),
+              }
+            : {}),
         },
       });
     }
