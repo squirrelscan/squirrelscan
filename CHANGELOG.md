@@ -29,6 +29,7 @@ How it works:
 - `schema/coverage-outlier` no longer reports a noindex page (robots meta tag or `X-Robots-Tag` header) for missing the structured data its siblings have. Noindex pages are also left out of the group that sets the norm, and a site where every page is noindex is reported as not applicable instead of passing. (#1770)
 - `local/nap-consistency` and `social/asset-divergence` leave noindex pages (robots meta tag or `X-Robots-Tag`) out of their cross-page comparison on an indexed site, on both engine paths, so a staging copy or thank-you page with different details no longer makes the site look inconsistent. A site whose compared pages are all noindex is reported as not applicable instead of a pass (#1773).
 - A check folded across pages whose messages differ by a per-page measurement in parentheses states the range and the pages, for example "Slow server response (850 to 1200ms) on 2 pages", and a list of distinct problems reads "Multiple H1 tags found (2 to 5) on 3 pages; H1 tag is empty on 2 pages" instead of repeating the sentence per value (#1767).
+- `crawl/robots-txt` no longer says every crawler is blocked when `User-agent: *` has `Disallow: /` but a `Googlebot` or `Bingbot` group allows the site. That file now gets a new warning, `robots-txt-disallow-wildcard`, which names the crawlers still allowed. `robots-txt-disallow` keeps its meaning: it fails only when every crawler is blocked. The two checks are never reported together. The rule now declares its checks (`meta.checks`).
 
 ### Added
 
