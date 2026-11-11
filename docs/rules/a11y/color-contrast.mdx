@@ -1,6 +1,6 @@
 ---
 title: "Color contrast: the 4.5:1 rule and how to check it"
-description: "Light gray text on white fails WCAG AA. squirrel measures the contrast of text whose color and background are both set inline, and reports pairs under 4.5:1."
+description: "Light gray text on white fails WCAG AA. squirrel measures text with an inline color against the background the markup determines, reports pairs under 4.5:1 and counts the text it could not measure."
 ---
 
 ## What color contrast is
@@ -11,18 +11,21 @@ The ratio is a property of the rendered pixels, so it depends on the stylesheet,
 
 ## What squirrel checks
 
-One check, `color-contrast`, at severity warning. It reports an element only when it has measured the element's contrast ratio and the ratio is under 4.5:1. The 3:1 large-text allowance is not applied, so a large heading at 3.5:1 is still reported.
+Two checks. `color-contrast` is at severity warning: it reports an element only when it has measured the element's contrast ratio and the ratio is under 4.5:1. The 3:1 large-text allowance is not applied, so a large heading at 3.5:1 is still reported. `color-contrast-unresolved` is an info check that counts the text squirrel could not measure.
 
-A pair is measured when the element's own `style` attribute settles on both a `color` and an opaque background color, and the element has text. Within the attribute the last declaration of a property wins, and an `!important` one beats later ones without it. The background color comes from `background-color`, or from a `background` shorthand whose whole value is one color; any other shorthand, and a `background-image` other than `none`, leaves the background unresolved. A color counts when its whole value is a hex value (`#rgb`, `#rrggbb`, or a 4- or 8-digit hex whose alpha is fully opaque), an `rgb()`/`rgba()` value with three comma-separated channels of 0 to 255 and, if present, an alpha of 1 or 100%, or one of 31 named colors. squirrel computes the WCAG ratio and reports anything under 4.5:1 as `span: #999 on #fff (2.85:1)`.
+An element is a candidate when its own `style` attribute settles on an opaque `color` and the element has text. Within the attribute the last declaration of a property wins, and an `!important` one beats later ones without it. A color counts when its whole value is a hex value (`#rgb`, `#rrggbb`, or a 4- or 8-digit hex whose alpha is fully opaque), an `rgb()`/`rgba()` value with three comma-separated channels of 0 to 255 and, if present, an alpha of 1 or 100%, or one of 31 named colors.
 
-Everything else is left unresolved, and an unresolved pair is not a finding. axe-core treats it the same way, as "incomplete" rather than a violation. That covers:
+The background behind the text is resolved in this order:
 
-- colors set in a stylesheet, whether external or in a `<style>` block, or inherited from an ancestor;
-- class names, including Tailwind's `text-gray-300` and Bootstrap's `text-muted`. A class says nothing about the surface the text lands on;
-- `transparent`, any alpha below 1, `inherit`, `currentcolor`, `var()` and other syntax, because the color behind the text or of the text is not in the value. This holds when such a value is the winning declaration, even if an earlier one in the same attribute could be measured;
-- a background that may layer an image or a gradient, because there is no single color behind the text.
+1. The nearest inline background on the element or an ancestor. It comes from `background-color`, or from a `background` shorthand whose whole value is one color. If that element has a `background-image` other than `none`, a gradient, a shorthand that is not one color, a color that is not opaque, or a legacy `bgcolor` attribute, the pair is unresolved and the walk stops there.
+2. A plain `html`, `body` or `:root` rule in a `<style>` block with a one-color background. `body` wins over `html`. Rules inside `@media` and other at-rules are not read, and a value that is not one opaque color leaves the pair unresolved. It is used only when the page links no stylesheet and no other rule in a `<style>` block (or at-rule) sets a background, since either could override it.
+3. White, the browser's default canvas, when the page links no stylesheet (one inside `<noscript>` does not load), has no `@import`, and no `<style>` block mentions a background at all.
 
-Findings are deduplicated, and the check reports `N color contrast issue(s) below 4.5:1` with up to ten items and the count of measured pairs. With nothing under the threshold it passes as `No obvious contrast issues detected` whenever the page has any element with a `style` or `class` attribute, and on a page with neither it returns info with `Limited contrast analysis available`.
+Otherwise a stylesheet squirrel does not read may set the background, so the pair is unresolved: it is never reported as a finding, and axe-core treats it the same way, as "incomplete". squirrel computes the WCAG ratio for a measured pair and reports it as `span: #999 on #fff (2.85:1)`, or `p: #b9b9b9 on white (1.96:1)` when the background is the default white.
+
+Unresolved text is counted by `color-contrast-unresolved`, which says `N inline-colored text element(s) could not be measured: <reason>`. The reasons are a background set by a stylesheet the audit does not read, a background image or gradient behind the text, and a color that is transparent, translucent or not a plain color value. Each item names the element, its color and the ratio against white, for orientation only: `p: #b9b9b9 (1.96:1 against white)`. The check carries the inconclusive marker, so it is a "could not judge", not a pass. Text that only inherits its color (`inherit`, `currentcolor`), and classes and `<style>` colors with no inline `color`, are not counted: nothing in the markup says what they are.
+
+Findings are deduplicated, and `color-contrast` reports `N color contrast issue(s) below 4.5:1` with up to ten items and the count of measured pairs. With nothing under the threshold it passes as `No obvious contrast issues detected`, and the check's `note` says `No inline text colors to measure` when no pair was measured. That includes a page with no inline text color at all, which no longer returns info. A page rule cannot attach a note to the audited site as a whole, so each such page carries its own pass.
 
 ## How to fix it
 

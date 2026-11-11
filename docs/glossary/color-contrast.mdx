@@ -28,7 +28,7 @@ W3C's Understanding document starts from the plain case: some people cannot read
 
 | Rule | What it flags | Severity |
 |---|---|---|
-| [Color contrast: the 4.5:1 rule and how to check it](/rules/a11y/color-contrast) | Light gray text on white fails WCAG AA. squirrel measures the contrast of text whose color and background are both set inline, and reports pairs under 4.5:1. | warning |
+| [Color contrast: the 4.5:1 rule and how to check it](/rules/a11y/color-contrast) | Light gray text on white fails WCAG AA. squirrel measures text with an inline color against the background the markup determines, reports pairs under 4.5:1 and counts the text it could not measure. | warning |
 | [Links in a paragraph told apart by color alone](/rules/a11y/link-in-text-block) | A link inside body text needs more than color to be visible. squirrel flags links whose markup removes the underline. | warning |
 
 {/* glossary:rules:end */}
