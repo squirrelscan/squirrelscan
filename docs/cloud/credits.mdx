@@ -13,11 +13,28 @@ Cloud audits are priced in **credits** - small integers, not dollars. A signed-i
 | Free plan | 500/month | One account per email inbox, no card required; resets monthly on your signup date ([details](#one-free-allowance-per-inbox)) |
 | Pro plan ($19/mo or $190/yr) | 3,000/month | Resets each billing period; unused monthly credits expire |
 | Team plan ($29/seat/mo or $290/seat/yr) | 3,000/seat/month | Pooled across the org; see [Team plan](/cloud/team) for seat billing rules |
-| Credit top-up (min $10) | 100 per $1 | Paid plan only; pick any amount; never expire |
+| Credit top-up ($10 to $1,000) | 100 per $1, plus a [bonus](#top-up-bonus) above $50 | Paid plan only; pick any amount; never expire |
 
 Annual billing is 12 months for the price of 10. Your monthly credits still arrive every month; you just pay once a year.
 
 Monthly credits are spent before purchased top-up credits. Subscribe and top up from the **Billing & Credits** page in the [dashboard](/dashboard).
+
+### Top-up bonus
+
+A top-up of $50 or less is 100 credits per $1. Above $50 the bonus rises smoothly with the amount, to a cap of 20% at the $1,000 maximum. The schedule is the same on Pro and Team. The bonus is `20% x ((amount - $50) / $950) ^ 0.7`, and credits are rounded down to a whole credit.
+
+| Top-up | Bonus | Credits | Credits per $1 |
+|--------|-------|---------|----------------|
+| $50 | 0% | 5,000 | 100 |
+| $75 | 1.6% | 7,617 | 101.6 |
+| $100 | 2.5% | 10,254 | 102.5 |
+| $150 | 4.1% | 15,620 | 104.1 |
+| $250 | 6.7% | 26,679 | 106.7 |
+| $500 | 11.9% | 55,927 | 111.9 |
+| $750 | 16.2% | 87,113 | 116.2 |
+| $1,000 | 20% | 120,000 | 120 |
+
+Any whole-dollar amount from $10 to $1,000 works, and a larger amount never gives fewer credits than a smaller one. Plan credits are still cheaper per credit than a top-up: Pro is about 158 per $1.
 
 ### One free allowance per inbox
 

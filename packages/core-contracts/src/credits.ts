@@ -210,9 +210,77 @@ export const CREDIT_TOPUP = {
   creditsPerUsd: 100,
 } as const;
 
-/** Credits granted for a whole-dollar top-up amount. */
-export const topupCreditsForUsd = (usd: number): number =>
-  Math.floor(usd) * CREDIT_TOPUP.creditsPerUsd;
+/**
+ * The top-up bonus curve (squirrelscan/repo#3888). One object, so changing the floor, the cap or the
+ * exponent is a one-line change. The bonus percent is 0 at or below `floorUsd`, then
+ * `capPercent x ((usd - floorUsd) / (CREDIT_TOPUP.maxUsd - floorUsd)) ^ exponent`, never above `capPercent`.
+ * Larger bonuses are kept for enterprise purchases above the maximum.
+ */
+export const TOPUP_BONUS_CURVE = {
+  floorUsd: 50,
+  capPercent: 20,
+  exponent: 0.7,
+} as const;
+
+/** The amounts the published schedule lists (the dashboard chart, `GET /v1/billing`, the docs table). */
+export const TOPUP_SCHEDULE_USD = [50, 75, 100, 150, 250, 500, 750, 1_000] as const;
+
+/** One top-up priced: the base credits at the flat rate, the bonus on top, and their sum. */
+export interface TopupQuote {
+  /** The whole-dollar amount priced (a fractional amount is floored). */
+  usd: number;
+  /** `usd x CREDIT_TOPUP.creditsPerUsd`: what the ledger records as the base grant. */
+  baseCredits: number;
+  /** Bonus credits, rounded down to a whole credit: what the ledger records as the bonus. */
+  bonusCredits: number;
+  /** `baseCredits + bonusCredits`: what is granted. */
+  totalCredits: number;
+  /** The curve's bonus percent for this amount, unrounded. */
+  bonusPercent: number;
+}
+
+/** The curve's bonus percent for an amount: 0 at or below the floor, capped at `capPercent`. */
+export const topupBonusPercent = (usd: number): number => {
+  const { floorUsd, capPercent, exponent } = TOPUP_BONUS_CURVE;
+  const amount = Math.floor(usd);
+  if (!Number.isFinite(amount) || amount <= floorUsd) return 0;
+  const fraction = (amount - floorUsd) / (CREDIT_TOPUP.maxUsd - floorUsd);
+  return Math.min(capPercent, capPercent * fraction ** exponent);
+};
+
+/** Base and bonus credits for a top-up amount. Everything else derives from this. */
+export const topupQuote = (usd: number): TopupQuote => {
+  const amount = Math.floor(usd);
+  const baseCredits = amount * CREDIT_TOPUP.creditsPerUsd;
+  const bonusPercent = topupBonusPercent(amount);
+  // Round away float noise before flooring, so an exact 20% of $1,000 is 20,000 and not 19,999.
+  const bonusCredits = Math.floor(Number(((baseCredits * bonusPercent) / 100).toFixed(6)));
+  return { usd: amount, baseCredits, bonusCredits, totalCredits: baseCredits + bonusCredits, bonusPercent };
+};
+
+/** Credits granted for a whole-dollar top-up amount (base plus bonus). */
+export const topupCreditsForUsd = (usd: number): number => topupQuote(usd).totalCredits;
+
+/** One row of the published bonus schedule. */
+export interface TopupScheduleRow extends TopupQuote {
+  /** `bonusPercent` rounded to one decimal, as the docs table and the dialog show it. */
+  bonusPercentRounded: number;
+  /** `totalCredits / usd`, rounded to one decimal. */
+  creditsPerUsd: number;
+}
+
+/** The bonus schedule for the dashboard chart and `GET /v1/billing`; default amounts are `TOPUP_SCHEDULE_USD`. */
+export const topupBonusSchedule = (
+  amounts: readonly number[] = TOPUP_SCHEDULE_USD,
+): TopupScheduleRow[] =>
+  amounts.map((usd) => {
+    const quote = topupQuote(usd);
+    return {
+      ...quote,
+      bonusPercentRounded: Math.round(quote.bonusPercent * 10) / 10,
+      creditsPerUsd: quote.usd > 0 ? Math.round((quote.totalCredits / quote.usd) * 10) / 10 : 0,
+    };
+  });
 
 // ── Legacy credit packs (DEPRECATED) ────────────────────────────
 // No longer purchasable. Kept ONLY so the Stripe webhook can honor checkout
