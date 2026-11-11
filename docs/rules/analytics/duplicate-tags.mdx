@@ -1,0 +1,88 @@
+---
+title: "Duplicate analytics tags: the same tag installed twice"
+description: "squirrel warns when one page loads the same Google Analytics 4 ID, Tag Manager container or analytics site ID more than once, which counts every visit twice."
+---
+
+## Why a double install matters
+
+When the same analytics tag loads twice on a page, every pageview and event is counted twice. Sessions inflate, bounce rate and conversion rate drift, and nobody notices because both numbers look plausible. It usually happens when a tag is added in the site template and again through a tag manager or a plugin. [Analytics tracking](/rules/analytics/gtm-present) lists which platforms a page has, and it deduplicates that list, so a double install passes there.
+
+## What squirrel checks
+
+The rule runs on every crawled page and reads only the page's own markup. It makes no request to any analytics vendor. It counts installs per platform and ID, and warns when one ID has more than one install:
+
+- Google Analytics 4: the same measurement ID (`G-...`).
+- Google Tag Manager: the same container ID (`GTM-...`).
+- Plausible, Fathom, Matomo, Segment, Mixpanel, Amplitude, Heap, Hotjar and Microsoft Clarity: the same loader with the same site, project, token or key.
+
+Each duplicate is one warning, for example `Google Analytics 4 measurement ID G-ABC1234 is installed 2 times`. IDs are shown as they appear in the page. A page with no duplicate passes. When the same duplicate appears on many pages the report groups it as one issue with the affected pages listed.
+
+What counts as one install:
+
+- A GTM container script plus its `noscript` frame is one install.
+- A GA4 `gtag.js` loader plus its own `config` call for the same ID is one install.
+- A loader script plus the inline call that configures it (Amplitude `init`, Segment `load`, Hotjar settings) is one install.
+- `preload`, `preconnect` and `dns-prefetch` hints are not installs.
+- Two different IDs for the same platform are not flagged: that is a deliberate second property.
+
+Tags that a tag manager injects after the page loads are not in the markup and are not seen. Severity warning, weight 4.
+
+## How to fix it
+
+Keep one install per ID. Find where the second one comes from: the site template, a CMS or SEO plugin that offers its own analytics field, or a tag inside the tag manager container that loads the same measurement ID. Remove the one you control least, then check the page's network requests to confirm each tag fires once.
+
+| | |
+|---|---|
+| **Rule ID** | `analytics/duplicate-tags` |
+| **Category** | [Analytics](/rules/analytics) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 4/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["analytics/duplicate-tags"]
+```
+
+### Disable all Analytics rules
+
+```toml squirrel.toml
+[rules]
+disable = ["analytics/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["analytics/duplicate-tags"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Related rules
+
+- [analytics/gtm-present](/rules/analytics/gtm-present): which analytics platforms a page loads.
+- [analytics/consent-mode](/rules/analytics/consent-mode): whether Google Consent Mode markers appear in the markup.
+
+## References
+
+- [Install the Google tag](https://support.google.com/analytics/answer/9304153)
+- [Google Tag Manager quick start](https://developers.google.com/tag-platform/tag-manager/web)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Analytics section of the report. Signed-out local audits need no account and cost nothing. Signed-in audits spend credits.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Analytics section looks like on a real site.
+  </Card>
+</CardGroup>
