@@ -18,11 +18,13 @@
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
-// The signal reads the server's raw HTML response, which can differ from what a
-// browser renders — surfaced in every variant so an owner seeing live content
-// understands the finding rather than dismissing it as a false positive.
+// Exactly one evidence source is stated per finding (#1766): the server's HTML
+// for every verdict except `unconfirmed-rendered`, where the crawl content came
+// from a JS render and the verdict reads the rendered page.
 const SERVER_HTML_CAVEAT =
-  "This check reads the server's HTML response and can differ from what a browser shows.";
+  "This verdict comes from the server's HTML only, so a client-rendered page could differ in a browser.";
+const RENDERED_CAVEAT =
+  "This verdict comes from the rendered page content, so it matches what a browser shows.";
 
 export const soft404Rule: Rule = {
   meta: {
@@ -60,7 +62,7 @@ export const soft404Rule: Rule = {
       confirmation === "intermittent"
         ? "Page intermittently serves 404 error content with HTTP 200"
         : confirmation === "unconfirmed-rendered"
-          ? "Page serves 404 content with HTTP 200 (based on the rendered crawl observation; cannot verify without JS rendering)"
+          ? "Page serves 404 content with HTTP 200 (based on a single crawl observation)"
           : confirmation === "unconfirmed"
             ? "Page serves 404 content with HTTP 200 (based on a single crawl observation)"
             : "Page serves 404 content with HTTP 200";
@@ -68,7 +70,7 @@ export const soft404Rule: Rule = {
     checks.push({
       name: "soft-404",
       status: "warn",
-      message: `${message}. ${SERVER_HTML_CAVEAT}`,
+      message: `${message}. ${confirmation === "unconfirmed-rendered" ? RENDERED_CAVEAT : SERVER_HTML_CAVEAT}`,
       value: `HTTP ${ctx.page.statusCode}`,
       details: {
         confirmation,

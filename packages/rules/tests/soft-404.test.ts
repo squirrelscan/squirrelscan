@@ -70,7 +70,9 @@ describe("soft404Rule.run (direct)", () => {
     expect(checks[0]?.status).toBe("warn");
     expect(checks[0]?.message).toContain("Page serves 404 content with HTTP 200");
     expect(checks[0]?.message).not.toContain("intermittently");
-    expect(checks[0]?.message).toContain("server's HTML response");
+    expect(checks[0]?.message).toBe(
+      "Page serves 404 content with HTTP 200. This verdict comes from the server's HTML only, so a client-rendered page could differ in a browser.",
+    );
     expect((checks[0]?.details as { confirmation?: string })?.confirmation).toBe("confirmed");
   });
 
@@ -78,22 +80,30 @@ describe("soft404Rule.run (direct)", () => {
     const checks = soft404Rule.run(baseCtx(true, "intermittent")).checks;
     expect(checks[0]?.status).toBe("warn");
     expect(checks[0]?.message).toContain("intermittently serves 404 error content");
-    expect(checks[0]?.message).toContain("server's HTML response");
+    expect(checks[0]?.message).toBe(
+      "Page intermittently serves 404 error content with HTTP 200. This verdict comes from the server's HTML only, so a client-rendered page could differ in a browser.",
+    );
     expect((checks[0]?.details as { confirmation?: string })?.confirmation).toBe("intermittent");
   });
 
   test("unconfirmed: warn annotated as a single observation (never dropped)", () => {
     const checks = soft404Rule.run(baseCtx(true, "unconfirmed")).checks;
     expect(checks[0]?.status).toBe("warn");
-    expect(checks[0]?.message).toContain("single crawl observation");
+    expect(checks[0]?.message).toBe(
+      "Page serves 404 content with HTTP 200 (based on a single crawl observation). This verdict comes from the server's HTML only, so a client-rendered page could differ in a browser.",
+    );
+    expect(checks[0]?.message).not.toContain("rendered page content");
     expect((checks[0]?.details as { confirmation?: string })?.confirmation).toBe("unconfirmed");
   });
 
   test("unconfirmed-rendered: warn with render-specific annotation", () => {
     const checks = soft404Rule.run(baseCtx(true, "unconfirmed-rendered")).checks;
     expect(checks[0]?.status).toBe("warn");
-    expect(checks[0]?.message).toContain("cannot verify without JS rendering");
-    expect(checks[0]?.message).toContain("rendered crawl observation");
+    expect(checks[0]?.message).toBe(
+      "Page serves 404 content with HTTP 200 (based on a single crawl observation). This verdict comes from the rendered page content, so it matches what a browser shows.",
+    );
+    expect(checks[0]?.message).not.toContain("cannot verify");
+    expect(checks[0]?.message).not.toContain("server's HTML");
     expect((checks[0]?.details as { confirmation?: string })?.confirmation).toBe(
       "unconfirmed-rendered",
     );
