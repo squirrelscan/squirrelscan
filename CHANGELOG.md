@@ -19,6 +19,7 @@ How it works:
 
 ### Added
 
+- **`content/duplicate-content` reports indexable pages that share identical body text.** Pages are grouped by a hash of their rendered body text (titles and markup are not part of it), and each group of two or more pages that do not resolve to one canonical is reported once, largest first, with every URL. Noindex pages, redirects, error responses, pagination pages, localised versions that list each other as hreflang alternates and pages under 100 words are left out and counted in the details. A group whose URLs differ only by tracking parameters, trailing slash or letter case is flagged as a URL form problem. Exact matches only. (#1690)
 - **New rule `i18n/hreflang-targets`: hreflang links that point at the wrong place.** It judges each hreflang target the crawl already fetched, with no extra requests: a redirect (warning, with the final URL), a 4xx or 5xx (error, with the status), a `noindex` page or one whose canonical is another URL (warning, with the reason), and a target that has hreflang links but none back to the source page (error, each pair once). Targets the crawl did not fetch are counted as not checked, and a site with no hreflang links gets a skipped result. (#1686)
 - New rule `analytics/duplicate-tags`: warns when one page installs the same Google Analytics 4 measurement ID, Google Tag Manager container or analytics site ID more than once, which counts every visit twice (#1691).
 - New rule `links/click-depth` lists indexable pages more than 3 clicks from the homepage by shortest link path, deepest first with each depth. The threshold is the `maxDepth` rule option, a crawl stopped at its page cap says depths are a lower bound, and pages with no link path are left to `links/orphan-pages`. Advisory weight.
@@ -3049,6 +3050,8 @@ Browse the full rule set → https://docs.squirrelscan.com/rules
 
 - Cloud audits that stall past their deadline are now finalized automatically instead of hanging.
 - More efficient handling of error and empty pages during analysis.
+
+
 
 
 
