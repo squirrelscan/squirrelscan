@@ -27,7 +27,7 @@ The capped case matters because a shallow crawl profile against a large sitemap 
 
 ### Product discovery
 
-A site has commerce evidence when at least three crawled pages carry `Product` JSON-LD or `og:type` product, or one such page and an internal link to a cart or checkout path. Without that evidence the check is absent. The evidence is read from page data the crawl already collected, so it needs no extra requests.
+A site has commerce evidence when at least three crawled pages are product pages, or one product page whose own path looks like a product path (`/product/`, `/products/`, `/p/` or `/item/`) plus an internal link to a cart or checkout path. A product page carries a top-level `Product` or `ProductGroup` JSON-LD node, or `og:type` product. A `Product` nested inside another node (a `Review.itemReviewed`, an `ItemList` entry or an `Offer.itemOffered`) is not product evidence. Without that evidence the check is absent. The evidence is read from page data the crawl already collected, so it needs no extra requests.
 
 The check says how each product URL was found, not how many products the site has. A crawled product page counts as `both` when it is in a sitemap and another crawled page links to it, `sitemap only` when it is only in a sitemap or the crawl did not follow links, and `crawl only` when it is in no sitemap. Product-shaped sitemap URLs (a slug under `/product/`, `/products/`, `/p/` or `/item/`, or any URL in a sitemap whose name contains `product`) that the crawl did not fetch count as `sitemap only`.
 
@@ -35,8 +35,8 @@ The sitemap state describes how fully squirrel read the sitemaps, not the catalo
 
 - `complete`: every sitemap found was read, with no URL cap, walk deadline or failed child sitemap.
 - `partial`: a child sitemap or a declared sitemap failed, or a cap or the walk deadline stopped the walk. The sitemap product list is a lower bound.
-- `unreadable`: the sitemap the site declared in robots.txt could not be read.
-- `unknown`: the audit was stored before the state was recorded.
+- `unreadable`: the sitemap the site declared in robots.txt could not be read, or the walk was truncated before it read anything.
+- `unknown` (shown as `not recorded`): the audit was stored before the state was recorded. A report rebuilt from a stored report also reads `not recorded`, because the stored report does not carry the state.
 
 A crawl stopped at its page limit is reported as bounded coverage. No product is ever reported as missing: neither a sampled crawl nor a sitemap is a product inventory.
 
