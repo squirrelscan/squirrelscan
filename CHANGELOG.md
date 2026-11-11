@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **A failed `install.sh` network request says where it was going and over which IP family.** The failure report (report version 4) now carries `host` (`install.squirrelscan.com`, a GitHub host, or `custom` for an endpoint you set yourself, never a custom name) and `ip_family` (`v4`, `v6` or `unknown`), read from curl's own "Trying" line by a detached probe that never delays the install. A request made inside a command substitution used to lose its host, so a report said "an unknown host" for a request that had been made; the host is now kept in a small state file. A failure before the first named step reports `startup`, not `init`. (#1681)
+
 ## v0.0.174 (2026-11-11)
 
 Reports say why a rule did not give a verdict (JSON schema 1.9), `squirrel audit` has one exit code precedence with the outcome in the JSON and LLM reports, `--resume` says why it started a new crawl, an expired login is called out, settings writes no longer lose each other, and five rules stop flagging hidden, presentational and symbol-only content.
