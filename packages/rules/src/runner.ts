@@ -1,7 +1,11 @@
 import { logger, profileRules } from "./logger";
 // Rule runner - executes rules with context
 
-import { PRIVATE_TARGET_SKIP_REASON, RULE_TIMED_OUT_SKIP_REASON } from "@squirrelscan/core-contracts";
+import {
+  PRIVATE_TARGET_SKIP_REASON,
+  RULE_TIMED_OUT_SKIP_REASON,
+  TARGETED_RUN_SKIP_REASON,
+} from "@squirrelscan/core-contracts";
 import { UNREAD_PAGE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
 import { auditedEmpty, detectSoft404, parsePage } from "@squirrelscan/parser";
 import { stripShadowIdScopes } from "@squirrelscan/parser/dom";
@@ -160,6 +164,13 @@ const DEFAULT_RULE_CONCURRENCY = 8;
 
 /** Site rules that report the absence of a root resource, beyond the discovery-probe readers. */
 const ROOT_RESOURCE_RULES: ReadonlySet<string> = new Set(["crawl/sitemap-exists"]);
+
+/**
+ * Site rules that still run in a targeted run (#1777): they judge a file the crawl fetches whatever it is
+ * given (robots.txt). Every other site rule judges the whole site, or a resource only a probe or the entry
+ * page would have fetched, and skips.
+ */
+const SITE_RULES_ON_TARGETED_RUN: ReadonlySet<string> = new Set(["crawl/robots-txt"]);
 
 /** Whether a rule's findings are about root resources (a discovery probe or the sitemap). */
 function judgesRootResource(rule: Rule): boolean {
@@ -585,6 +596,27 @@ export class RuleRunner {
     // times. Decided by the audit URL, so it is constant for the whole run.
     if (rule.meta.skipOnPrivateTarget && this.isPrivateTarget(ctx)) {
       return { meta: rule.meta, checks: [privateTargetSkip(rule.meta.id)] };
+    }
+
+    // Targeted-run gate (#1777): the crawl fetched an explicit URL list, so a site-wide rule has nothing to
+    // judge. Skipped with a reason, never a pass or a finding.
+    if (
+      rule.meta.scope === "site" &&
+      ctx.site?.targetedRun === true &&
+      !SITE_RULES_ON_TARGETED_RUN.has(rule.meta.id)
+    ) {
+      return {
+        meta: rule.meta,
+        checks: [
+          {
+            name: rule.meta.id,
+            status: "skipped",
+            message: "Skipped: this run audited only the URLs it was given, not the whole site",
+            skipReason: TARGETED_RUN_SKIP_REASON,
+            details: { foldKey: TARGETED_RUN_SKIP_REASON },
+          },
+        ],
+      };
     }
 
     // Unread-page gate (#1570): a page whose markup could not be parsed is audited as an empty document, so every rule that reads the

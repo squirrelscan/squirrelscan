@@ -188,6 +188,15 @@ export interface CrawlerConfig {
    */
   carriedSeedUrls?: string[];
   /**
+   * Audit exactly these URLs and nothing else (#1777). The crawl fetches robots.txt (it is honoured), then only
+   * the listed URLs that pass the scope, robots and length checks: no sitemap, no discovery probes, no link
+   * following. A URL refused is kept as a skipped frontier entry with its reason; URLs past `maxPages` are
+   * skipped as `over_max_pages`; a target that redirects is recorded as a redirect and its destination is
+   * audited only when it is in the list too (`redirect_not_targeted` otherwise). The start URL is the site's base:
+   * it is not requested and its own redirect is not probed, so give the final host. Empty/unset = a normal crawl.
+   */
+  targetUrls?: string[];
+  /**
    * Recently-removed (404/410) page URLs (#1146). De-prioritized in the frontier
    * so dead URLs stop eating budget slots ahead of live pages. Empty/unset = no
    * de-prioritization.

@@ -2058,6 +2058,7 @@ export function runRulesOnStorage(
       // links/broken-external-links reports "not checked" instead of passing.
       externalLinks: config.external_links?.enabled === false ? undefined : externalLinksData,
       linkDiscoveryOff: crawl?.stats?.linkDiscoveryOff === true,
+      ...(crawl?.stats?.targetedRun === true ? { targetedRun: true } : {}),
       externalLinkCheck: crawl?.stats?.externalLinkCheck,
       linkTargetStatuses: assets.linkTargetStatuses,
       internalLinkProbe: assets.internalLinkProbe,
@@ -2973,6 +2974,7 @@ function buildStreamingSiteData(
       // repo#2729: see runRulesOnStorage — undefined means "not checked".
       externalLinks: config.external_links?.enabled === false ? undefined : externalLinksData,
       linkDiscoveryOff: crawl?.stats?.linkDiscoveryOff === true,
+      ...(crawl?.stats?.targetedRun === true ? { targetedRun: true } : {}),
       externalLinkCheck: crawl?.stats?.externalLinkCheck,
       linkTargetStatuses: assets.linkTargetStatuses,
       internalLinkProbe: assets.internalLinkProbe,
