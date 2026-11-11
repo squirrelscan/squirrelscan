@@ -773,6 +773,9 @@ note_fetch_host() {
   local rest="${1#*://}"
   rest="${rest%%/*}"
   rest="${rest%%\?*}"
+  # A fragment ends the authority too: in `https://evil.com#x@install.squirrelscan.com/` the host is
+  # evil.com, and reading past the `#` would label it as ours.
+  rest="${rest%%#*}"
   rest="${rest##*@}"
   LAST_FETCH_HOST="${rest%%:*}"
   LAST_CURL_CODE=""
@@ -784,12 +787,17 @@ write_fetch_state() {
   [ -n "${FETCH_HOST_FILE:-}" ] && printf '%s|%s' "$LAST_FETCH_HOST" "$LAST_CURL_CODE" >"$FETCH_HOST_FILE" 2>/dev/null || true
 }
 
-# Record that the request just made failed with curl's exit code `$1`, when it is a network failure.
-note_fetch_failed() {
+# Record how the request just made ended, by curl's exit code `$1`: a network failure is remembered (so a
+# report can name where it was going), and anything else, success included, forgets an earlier one. The
+# LAST request decides: a download that timed out and then succeeded on its retry must not leave a
+# failure behind for an unrelated error later in the run to inherit.
+note_fetch_rc() {
   if is_curl_network_code "$1"; then
     LAST_CURL_CODE="$1"
-    write_fetch_state
+  else
+    LAST_CURL_CODE=""
   fi
+  write_fetch_state
 }
 
 # Fill LAST_FETCH_HOST and LAST_CURL_CODE from the file a subshell wrote, where this shell has none.
@@ -821,10 +829,12 @@ reportable_host() {
 # Which IP family a connection to `host` is attempted on: v4, v6, or unknown (no address was tried:
 # the name did not resolve, or the probe could not run). Read from curl's own "Trying <address>" line
 # of a verbose request; an IPv4 address with its port has one colon, an IPv6 one has more. Only ever
-# run against one of our own hosts, from the detached reporter, never on the install path.
+# run against one of our own hosts, from the detached reporter, never on the install path. It ignores
+# proxy settings (--noproxy '*'): behind a proxy the "Trying" line is the proxy's address, which says
+# nothing about the family of the connection that failed, so a proxy-only network reads as unknown.
 probe_ip_family() {
   local trace addr
-  trace=$(curl "${CURL_TLS_ARGS[@]}" -sS -I -o /dev/null -v --connect-timeout 3 --max-time 5 \
+  trace=$(curl "${CURL_TLS_ARGS[@]}" -sS -I -o /dev/null -v --noproxy '*' --connect-timeout 3 --max-time 5 \
     "https://${1}/" 2>&1 | grep -m1 'Trying ' || true)
   addr="${trace#*Trying }"
   addr="${addr%%...*}"
@@ -1005,10 +1015,10 @@ fetch_with_retry() {
     local rc=0
     wait_child || rc=$?
     CHILD_PID=""
+    note_fetch_rc "$rc"
     if [ "$rc" -eq 0 ]; then
       return 0
     fi
-    note_fetch_failed "$rc"
     if [ "$i" -lt "$attempts" ]; then
       warn "Download failed, retrying ($i/$attempts)..."
       sleep 2 &
@@ -1392,7 +1402,7 @@ get_latest_version() {
   response=$(curl "${CURL_TLS_ARGS[@]}" -fsSL -H "User-Agent: squirrelscan-installer" \
       --connect-timeout 5 --max-time 15 \
       "${RELEASES_ENDPOINT}/${channel}" 2>/dev/null) || fetch_rc=$?
-  note_fetch_failed "$fetch_rc"
+  note_fetch_rc "$fetch_rc"
   if [ "$fetch_rc" -eq 0 ]; then
     if [ "$USE_JQ" = true ]; then
       version=$(echo "$response" | jq -r '.version // empty')
@@ -1416,8 +1426,8 @@ get_latest_version() {
   note_fetch_host "$api_url"
   fetch_rc=0
   response=$(curl "${curl_args[@]}" "$api_url" 2>&1) || fetch_rc=$?
+  note_fetch_rc "$fetch_rc"
   if [ "$fetch_rc" -ne 0 ]; then
-    note_fetch_failed "$fetch_rc"
     error "Failed to fetch releases\n  URL: $api_url\n  Response: $response"
   fi
 
