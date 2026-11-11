@@ -1387,6 +1387,8 @@ export interface ScanScopeTargeted {
   requested: number;
   /** URLs fetched and audited. */
   audited: number;
+  /** URLs in the list past the limit (`MAX_TARGET_URLS`), counted in `requested` and not audited. Absent when none. */
+  overLimit?: number;
   /** The URLs given that were not audited, with the reason (capped at 100 rows; `requested - audited` is the true count). */
   unaudited: TargetedRunUnaudited[];
 }
