@@ -64,3 +64,28 @@ describe("meta.targeted", () => {
     expect(meta(report({ requested: "3", audited: 1 }))).not.toHaveProperty("targeted");
   });
 });
+
+describe("meta.respectRobots and meta.robotsBlockedPages (#1782)", () => {
+  const withScope = (extra: Record<string, unknown>) =>
+    ({
+      baseUrl: "https://example.com",
+      timestamp: "2026-11-12T00:00:00.000Z",
+      totalPages: 2,
+      passed: 1,
+      warnings: 0,
+      failed: 0,
+      ruleResults: {},
+      scanScope: { origin: "cli", maxPages: 50, pagesCrawled: 2, capped: false, ...extra },
+    }) as unknown as AuditReport;
+
+  test("carries both, and the count is 0 when robots.txt was not honoured", () => {
+    expect(meta(withScope({ respectRobots: true, robotsBlockedPages: 4 }))).toMatchObject({ respectRobots: true, robotsBlockedPages: 4 });
+    expect(meta(withScope({ respectRobots: false, robotsBlockedPages: 0 }))).toMatchObject({ respectRobots: false, robotsBlockedPages: 0 });
+  });
+
+  test("absent on a report from before the field", () => {
+    const m = meta(withScope({}));
+    expect(m).not.toHaveProperty("respectRobots");
+    expect(m).not.toHaveProperty("robotsBlockedPages");
+  });
+});

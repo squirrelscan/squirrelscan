@@ -302,3 +302,32 @@ describe("a targeted run and --resume (#1777)", () => {
     });
   });
 });
+
+describe("--resume and robots.txt (#1782)", () => {
+  const withRobots = (respectRobots: boolean) =>
+    ({ ...baseConfig, respectRobots }) as CrawlerConfigSnapshot;
+  const decide = (stored: CrawlerConfigSnapshot, now: CrawlerConfigSnapshot) =>
+    decideResume({
+      existingCrawl: crawl("paused", { config: stored }),
+      crawlerConfig: now,
+      refresh: false,
+      claim: () => ACQUIRED,
+    });
+
+  test("a flipped respect_robots starts fresh, in both directions", () => {
+    expect(decide(withRobots(true), withRobots(false))).toMatchObject({
+      resume: false,
+      reason: "config-changed",
+    });
+    expect(decide(withRobots(false), withRobots(true))).toMatchObject({
+      resume: false,
+      reason: "config-changed",
+    });
+  });
+
+  test("the same setting resumes", () => {
+    expect(decide(withRobots(true), withRobots(true))).toEqual({
+      resume: true,
+    });
+  });
+});

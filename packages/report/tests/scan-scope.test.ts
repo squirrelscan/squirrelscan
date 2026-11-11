@@ -5,7 +5,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { AuditReport } from "../src/types";
-import { auditLevelLine, fullScanHint, scanScopeLine } from "../src/coverage";
+import { auditLevelLine, fullScanHint, robotsTxtLine, scanScopeLine } from "../src/coverage";
 import { renderText } from "../src/output/text";
 import { renderMarkdown } from "../src/output/markdown";
 import { renderHtml } from "../src/output/html";
@@ -413,5 +413,36 @@ describe("audit level line of a targeted run (#1777)", () => {
   });
   test("an ordinary run's line is unchanged", () => {
     expect(auditLevelLine(level({}))).toBe("Audit level: Surface.");
+  });
+});
+
+describe("robots.txt sentence (#1782)", () => {
+  const rb = (respectRobots: unknown, robotsBlockedPages?: unknown) =>
+    baseReport({
+      scanScope: { origin: "cli", maxPages: 100, pagesCrawled: 3, capped: false, respectRobots, robotsBlockedPages } as never,
+    });
+
+  test("honoured with skipped pages: how many, singular and plural", () => {
+    expect(robotsTxtLine(rb(true, 12))).toBe("robots.txt was honoured: 12 URLs it disallows were not audited.");
+    expect(robotsTxtLine(rb(true, 1))).toBe("robots.txt was honoured: 1 URL it disallows was not audited.");
+  });
+
+  test("honoured with nothing skipped, and not honoured", () => {
+    expect(robotsTxtLine(rb(true, 0))).toBe("robots.txt was honoured.");
+    expect(robotsTxtLine(rb(false, 0))).toBe("robots.txt was not honoured: pages it disallows were audited anyway.");
+  });
+
+  test("a report from before the field says nothing; a bad count reads as none", () => {
+    expect(robotsTxtLine(baseReport())).toBeNull();
+    expect(robotsTxtLine(rb(undefined))).toBeNull();
+    expect(robotsTxtLine(rb(true, -3))).toBe("robots.txt was honoured.");
+    expect(robotsTxtLine(rb(true, "x"))).toBe("robots.txt was honoured.");
+  });
+
+  test("the scan line carries it, and an ordinary report's line is unchanged", () => {
+    expect(scanScopeLine(rb(true, 2))).toContain("robots.txt was honoured: 2 URLs it disallows were not audited.");
+    expect(scanScopeLine(baseReport({ scanScope: { origin: "cli", maxPages: 100, pagesCrawled: 3, capped: false } as never }))).toBe(
+      "Scan: 3 pages crawled from the CLI (page limit 100)."
+    );
   });
 });

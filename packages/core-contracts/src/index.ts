@@ -1449,6 +1449,17 @@ export interface ScanScope {
    */
   pageTypes?: ScanScopePageType[];
   /**
+   * Whether the crawl honoured robots.txt (`[crawler] respect_robots`, #1782). Absent on a report from before it.
+   * With `false`, pages robots.txt disallows were audited like any other.
+   */
+  respectRobots?: boolean;
+  /**
+   * URLs the crawl skipped because robots.txt disallows them (frontier rows skipped as `robots_disallowed`, #1782).
+   * Zero when it was honoured and nothing was disallowed, and always zero when `respectRobots` is false. Absent on
+   * a report from before it.
+   */
+  robotsBlockedPages?: number;
+  /**
    * Present only on a targeted run (#1777): the audit was given an explicit URL list and fetched those URLs
    * only, so site-wide rules skipped with `targeted-run` and the score covers just these pages.
    */

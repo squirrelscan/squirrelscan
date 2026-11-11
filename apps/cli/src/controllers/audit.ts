@@ -38,6 +38,7 @@ import {
   pageTypeCoverageFor,
   isRedirectSourcePage,
   targetedCoverageFor,
+  robotsBlockedPageCount,
 } from "@squirrelscan/audit-engine";
 import { foldEntityMapVariants } from "@squirrelscan/audit-engine/entity-map";
 import { createEntityMapCollector } from "@squirrelscan/audit-engine/entity-map/collect";
@@ -2512,6 +2513,10 @@ export async function runAudit(
                 targetedCoverageFor(sqliteStorage, crawlId)
               )
             : undefined;
+        // #1782: whether robots.txt was honoured, and how many URLs it kept out of the crawl.
+        const robotsBlockedPages = await Effect.runPromise(
+          robotsBlockedPageCount(sqliteStorage, crawlId)
+        );
         const scanScope: NonNullable<AuditReport["scanScope"]> = {
           origin: detectRunner().ci ? "ci" : "cli",
           maxPages: scopeMaxPages,
@@ -2527,6 +2532,8 @@ export async function runAudit(
             ? { canonicalVariants: report.canonicalVariants }
             : {}),
           ...(unfetched > 0 ? { unfetched } : {}),
+          respectRobots: mergedConfig.crawler.respect_robots === true,
+          robotsBlockedPages,
           ...(pageTypes.length > 0 ? { pageTypes } : {}),
           ...(targeted ? { targeted } : {}),
           ...(options.startRedirect

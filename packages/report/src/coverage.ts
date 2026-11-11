@@ -162,7 +162,32 @@ export function scanScopeLine(report: AuditReport): string | null {
   const cap = parts.length > 0 ? ` (${parts.join("; ")})` : "";
   const types = pageTypeCoverageLine(report);
   const targeted = targetedRunNote(report);
-  return `Scan: ${s.pagesCrawled} page${s.pagesCrawled === 1 ? "" : "s"} crawled from ${origin}${version}${cap}.${canonicalVariantsNote(report)}${types ? ` ${types}` : ""}${targeted ? ` ${targeted}` : ""}`;
+  const robots = robotsTxtLine(report);
+  return `Scan: ${s.pagesCrawled} page${s.pagesCrawled === 1 ? "" : "s"} crawled from ${origin}${version}${cap}.${canonicalVariantsNote(report)}${types ? ` ${types}` : ""}${targeted ? ` ${targeted}` : ""}${robots ? ` ${robots}` : ""}`;
+}
+
+/**
+ * Whether the crawl honoured robots.txt, in one plain sentence (#1782), or null for a report from before the field:
+ * "robots.txt was honoured: 12 URLs it disallows were not audited.", "robots.txt was honoured.", or "robots.txt was
+ * not honoured: pages it disallows were audited anyway." Read off a stored report of any origin: a count that is not
+ * a whole number reads as absent, and `respectRobots` must be a boolean. It says URLs, not pages: the count is of the
+ * URLs the crawl skipped as `robots_disallowed`, found by a link, a sitemap or a target, and some are found past the
+ * page cap, so they are not all pages the audit would have reached.
+ */
+export function robotsTxtLine(report: Pick<AuditReport, "scanScope">): string | null {
+  const honoured = report.scanScope?.respectRobots;
+  if (typeof honoured !== "boolean") return null;
+  if (!honoured) return "robots.txt was not honoured: pages it disallows were audited anyway.";
+  const n = robotsBlockedCount(report);
+  return n > 0
+    ? `robots.txt was honoured: ${n} URL${n === 1 ? "" : "s"} it disallows ${n === 1 ? "was" : "were"} not audited.`
+    : "robots.txt was honoured.";
+}
+
+/** `scanScope.robotsBlockedPages`, as a whole number or 0 (#1782). */
+export function robotsBlockedCount(report: Pick<AuditReport, "scanScope">): number {
+  const n = report.scanScope?.robotsBlockedPages;
+  return typeof n === "number" && Number.isSafeInteger(n) && n > 0 ? n : 0;
 }
 
 /**

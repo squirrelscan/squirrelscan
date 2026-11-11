@@ -258,6 +258,8 @@ export {
   carriedTag,
   timeAgo,
   scanScopeLine,
+  robotsTxtLine,
+  robotsBlockedCount,
   targetedRunNote,
   scanScopeTargeted,
   scanScopeUnfetched,

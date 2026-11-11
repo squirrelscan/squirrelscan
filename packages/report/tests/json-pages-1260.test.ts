@@ -33,10 +33,10 @@ const parse = (options?: Parameters<typeof renderJson>[1]) =>
   };
 
 describe("meta.schemaVersion", () => {
-  test("is 1.17, the version that added the per-rule `rules`, on every JSON report", () => {
-    expect(JSON_REPORT_SCHEMA_VERSION).toBe("1.17");
-    expect(parse().meta.schemaVersion).toBe("1.17");
-    expect(parse({ pages: rows(1) }).meta.schemaVersion).toBe("1.17");
+  test("is 1.18, the version that added `meta.respectRobots`, on every JSON report", () => {
+    expect(JSON_REPORT_SCHEMA_VERSION).toBe("1.18");
+    expect(parse().meta.schemaVersion).toBe("1.18");
+    expect(parse({ pages: rows(1) }).meta.schemaVersion).toBe("1.18");
   });
 });
 

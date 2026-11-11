@@ -10,7 +10,7 @@ import { affectedPages, itemsNotListed } from "../affected-pages";
 import { domainAgeYears } from "../site-metadata";
 import { editorSummaryView } from "../editor-summary";
 import { entityPageTotal, stableIdPercent } from "../entities";
-import { followedStartRedirect, scanScopePageTypes, scanScopeUnfetched, seedRedirect } from "../coverage";
+import { followedStartRedirect, robotsBlockedCount, robotsTxtLine, scanScopePageTypes, scanScopeUnfetched, seedRedirect } from "../coverage";
 import { ignoredLine, safeIgnored } from "../ignored";
 import { notCheckedLine, notCheckedRules } from "../not-checked";
 import { lockedRuleView, lockedRulesMessage } from "../locked-rules";
@@ -79,6 +79,13 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
     lines.push(
       `${indent(2)}<scan-scope origin="${escapeXml(s.origin)}" crawled="${s.pagesCrawled}"${cap}${requested} capped="${s.capped}"${stop}${unfetched}/>`,
     );
+    // #1782: whether robots.txt was honoured, and how many pages it kept out.
+    const robots = robotsTxtLine(report);
+    if (robots) {
+      lines.push(
+        `${indent(2)}<robots-txt honoured="${s.respectRobots === true}" blocked-pages="${robotsBlockedCount(report)}">${escapeXml(robots)}</robots-txt>`,
+      );
+    }
     // Pages known against pages audited, per URL-based page type (#1744).
     for (const t of scanScopePageTypes(report)) {
       lines.push(

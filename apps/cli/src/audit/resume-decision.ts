@@ -27,6 +27,8 @@ const DIRTY_CONFIG_FIELDS = [
   "allowedDomains",
   "allowQueryParams",
   "dropQueryPrefixes",
+  // #1782: a crawl that honoured robots.txt and one that did not covered different pages.
+  "respectRobots",
   // #1777: a targeted run and a normal one (or two different lists) are different scopes either way.
   "targetUrls",
 ] as const satisfies ReadonlyArray<keyof CrawlerConfigSnapshot>;

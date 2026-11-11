@@ -698,6 +698,10 @@ export interface AuditReport {
     unfetched?: number;
     /** Discovered and audited page counts per URL-based page type (#1744). */
     pageTypes?: Array<{ type: string; discovered: number; audited: number }>;
+    /** Whether the crawl honoured robots.txt (#1782). Mirrors core-contracts `ScanScope`. */
+    respectRobots?: boolean;
+    /** URLs robots.txt kept out of the crawl: frontier rows skipped as `robots_disallowed` (#1782). */
+    robotsBlockedPages?: number;
     /** Present on a targeted run (#1777): which URLs were given and which were not audited. Mirrors core-contracts `ScanScope`. */
     targeted?: {
       requested: number;

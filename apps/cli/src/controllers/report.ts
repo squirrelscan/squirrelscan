@@ -161,6 +161,9 @@ interface SlimJsonReport {
     auditLevel?: unknown;
     /** A targeted run's URL accounting (schema 1.16, #1777). Untrusted; read back so a comparison knows. */
     targeted?: unknown;
+    /** Whether robots.txt was honoured and how many URLs it kept out (schema 1.18, #1782). Untrusted. */
+    respectRobots?: unknown;
+    robotsBlockedPages?: unknown;
   };
   // Audit validity (#801): absent in slim JSON written before #801 ⇒ completed.
   status?: AuditStatus;
@@ -469,7 +472,9 @@ export function convertSlimReport(report: SlimJsonReport): AuditReport {
     // Without this, re-rendering a saved report loses both page limits and a
     // clamped run reads exactly like an unclamped one — which is the bug this
     // change exists to fix, reappearing one round trip later.
-    ...(report.meta.maxPages !== undefined || slimTargeted(report.meta.targeted)
+    ...(report.meta.maxPages !== undefined ||
+    slimTargeted(report.meta.targeted) ||
+    typeof report.meta.respectRobots === "boolean"
       ? {
           scanScope: {
             origin: "cli" as const,
@@ -486,6 +491,14 @@ export function convertSlimReport(report: SlimJsonReport): AuditReport {
               report.meta.maxPages !== undefined &&
               crawled >= report.meta.maxPages,
             ...(unfetched !== undefined ? { unfetched } : {}),
+            // #1782: the robots.txt statement survives a round trip, so a re-render still makes it.
+            ...(typeof report.meta.respectRobots === "boolean"
+              ? {
+                  respectRobots: report.meta.respectRobots,
+                  robotsBlockedPages:
+                    wholeCount(report.meta.robotsBlockedPages) ?? 0,
+                }
+              : {}),
             // #1777: a targeted export stays targeted, so a comparison does not read its site rules as whole-site.
             ...(slimTargeted(report.meta.targeted)
               ? { targeted: slimTargeted(report.meta.targeted)! }

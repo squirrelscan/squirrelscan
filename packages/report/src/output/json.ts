@@ -67,7 +67,7 @@ import { domainAgeYears, siteProfileRows } from "../site-metadata";
 import { editorSummaryView } from "../editor-summary";
 import type { IgnoreSummary } from "@squirrelscan/core-contracts/ignore";
 import { ruleRuns, type RuleRun } from "../rule-runs";
-import { canonicalVariantCount, followedStartRedirect, scanScopePageTypes, scanScopeTargeted, scanScopeUnfetched, seedRedirect } from "../coverage";
+import { canonicalVariantCount, followedStartRedirect, scanScopePageTypes, scanScopeTargeted, scanScopeUnfetched, seedRedirect, robotsBlockedCount } from "../coverage";
 import { safeIgnored } from "../ignored";
 import { privateTargetLine, privateTargetSkippedRules } from "../private-target";
 import { notCheckedLine, notCheckedRules } from "../not-checked";
@@ -662,6 +662,10 @@ function buildSlimReport(
       ...(unfetched > 0 ? { unfetched } : {}),
       // #1744: pages known and pages audited per URL-based page type.
       ...(scanScopePageTypes(report).length > 0 ? { pageTypes: scanScopePageTypes(report) } : {}),
+      // #1782: whether robots.txt was honoured and how many URLs it kept out of the crawl.
+      ...(typeof report.scanScope?.respectRobots === "boolean"
+        ? { respectRobots: report.scanScope.respectRobots, robotsBlockedPages: robotsBlockedCount(report) }
+        : {}),
       // #1777: a targeted run says which URLs it was given and which it did not audit.
       ...(scanScopeTargeted(report) ? { targeted: scanScopeTargeted(report) } : {}),
       // Query-string variants counted with their canonical page; `totalPages` excludes them (#858).

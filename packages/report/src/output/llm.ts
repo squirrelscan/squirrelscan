@@ -24,7 +24,9 @@ import {
   itemLabel,
   regionScopeLine,
 } from "../region-scope";
-import { isVersionLike } from "../coverage";
+import {
+  robotsBlockedCount,
+  robotsTxtLine, isVersionLike } from "../coverage";
 import { hasCarriedPages } from "../page-type-scope";
 
 /** "in the site footer, ..." from "In the site footer, ...", to sit inside a sentence. */
@@ -450,6 +452,13 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
     lines.push(
       `<scan-scope origin="${s.origin}" crawled="${s.pagesCrawled}"${cap}${requested} capped="${s.capped}"${stop}${unfetched}${variants}/>`,
     );
+    // #1782: whether robots.txt was honoured, and how many pages it kept out, in one sentence.
+    const robots = robotsTxtLine(report);
+    if (robots) {
+      lines.push(
+        `<robots-txt honoured="${s.respectRobots === true}" blocked-pages="${robotsBlockedCount(report)}">${escapeXml(robots)}</robots-txt>`,
+      );
+    }
     // Pages known against pages audited, per URL-based page type (#1744).
     for (const t of scanScopePageTypes(report)) {
       lines.push(`<page-type name="${escapeXml(t.type)}" discovered="${t.discovered}" audited="${t.audited}"/>`);

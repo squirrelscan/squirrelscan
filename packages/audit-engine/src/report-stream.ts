@@ -153,6 +153,20 @@ export function pageTypeCoverageFor(
   );
 }
 
+/**
+ * How many URLs robots.txt kept out of the crawl (#1782): frontier rows skipped as `robots_disallowed` (a link, a
+ * sitemap entry or a target the file disallows). A failed read gives zero, never a failed report.
+ */
+export function robotsBlockedPageCount(
+  storage: CrawlStorage,
+  crawlId: string,
+): Effect.Effect<number, never, never> {
+  return storage.getAllFrontierEntries(crawlId).pipe(
+    Effect.map((entries) => entries.filter((e) => e.status === "skipped" && e.reason === "robots_disallowed").length),
+    Effect.catchAll(() => Effect.succeed(0)),
+  );
+}
+
 /** Pages read per batch when looking for the redirect rows of a targeted run. */
 const TARGETED_PAGE_BATCH = 50;
 

@@ -54,6 +54,7 @@ import {
   REPORT_SOURCE_PAGES_PREVIEW,
 } from "../constants";
 import {
+  robotsTxtLine,
   auditLevelLine,
   checkCarriedLabel,
   checkUnrenderedLabel,
@@ -1802,6 +1803,8 @@ function ReportPage({
   const startRedirect = startRedirectLine(report);
   const ignoredNote = ignoredLine(report);
   const priv = privateTargetLine(report);
+  // #1782: whether robots.txt was honoured, in one sentence.
+  const robots = robotsTxtLine(report);
   // repo#2729: checks this audit did not run, so a skipped check never reads as a clean one.
   const notChecked = notCheckedLines(report);
   // repo#2661: a capped published report lists samples; said once, in the footer.
@@ -1813,7 +1816,7 @@ function ReportPage({
   const blockedNote = blockedSummary
     ? `${blockedSummary}${blockedListed.length > 0 ? ` ${blockedListed.slice(0, 3).join("; ")}` : ""}`
     : null;
-  const notes = [cov, priv, ...notChecked, seed, startRedirect, ignoredNote, blockedNote, hint].filter(
+  const notes = [cov, priv, robots, ...notChecked, seed, startRedirect, ignoredNote, blockedNote, hint].filter(
     (t): t is string => !!t,
   );
   const reportKey = coverageNoticeKey(report, reportId);

@@ -69,6 +69,7 @@ export {
   pageTypeCoverage,
   pageTypeCoverageFor,
   targetedCoverage,
+  robotsBlockedPageCount,
   targetedCoverageFor,
 } from "./report-stream";
 export { isRedirectSourcePage } from "./redirect-source";
