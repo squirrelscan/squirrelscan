@@ -58,9 +58,9 @@ The audit is the same underneath. Pick whichever surface fits how you work.
 
 ## The per-website issue tracker
 
-Cloud audits register the website and keep a tracker of its open issues, so findings persist across runs instead of scrolling past in your terminal. This is the backbone of the fix loop: an issue stays open until a later audit finds its rule no longer firing, then it closes on its own.
+Cloud audits register the website and keep a tracker of its open issues, so work persists across runs instead of scrolling past in your terminal. An **issue** is an action plan that covers one or more findings. Issues exist in the cloud only. A **finding** is one rule result from the report. The CLI shows findings only. This is the backbone of the fix loop: an issue stays open until a later audit finds that every finding it covers is resolved, then it closes on its own.
 
-You work the tracker in the [dashboard](/dashboard), or your agent works it over MCP with `list_issues`, `get_issue`, and `comment_on_issue`. Recording a decision on an issue (why you are not fixing something, or what a fix changed) keeps the context with the finding for your team and the next audit.
+You work the tracker in the [dashboard](/dashboard), or your agent works it over MCP with `list_issues`, `get_issue`, and `comment_on_issue`; the fields are listed under [Issues and findings](/developers/mcp#issues-and-findings). Recording a decision on an issue (why you are not fixing something, or what a fix changed) keeps the context with the finding for your team and the next audit.
 
 ## Published reports
 
