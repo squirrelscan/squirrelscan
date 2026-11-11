@@ -71,6 +71,8 @@ You usually don't need this command. With `auto_update` enabled (the default), s
 ✓ squirrel auto-updated v0.0.42 → v0.0.43
 ```
 
+Any command can trigger this, including read-only ones such as `squirrel auth status`, so the binary can change between two commands of one session, and `squirrel --version` after a command may print a newer version than the one that command ran. The notice line above is the record of the switch. A script or agent that needs to know which version produced a result should read it from that command's own output (the `llm` format opens with `<audit version="...">`), or pin it by turning auto-update off for the session, or by setting `SQUIRREL_NO_UPDATE=1`.
+
 A download that stops sending data for a minute, or has not finished after 20 minutes, is abandoned and tried again on a later run. The running process is never interrupted - the new version takes effect on the next run. From v0.0.99, that run also refreshes the squirrelscan agent skills you have installed, in the background (see [skills](/cli/skills#automatic-updates); turn just that off with `squirrel self settings set skills_auto_update false`). Turn this off with:
 
 ```bash

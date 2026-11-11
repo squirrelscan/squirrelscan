@@ -14,7 +14,7 @@ Markup on a page that is blocked from indexing produces nothing. It is not harmf
 The rule is site-wide. For each crawled page it extracts the rich-result types from the page's structured data, skips pages with none, then runs the shared indexability test over the head, headers, URL and robots.txt. It emits a single check named `schema-noindex`:
 
 - Skipped when there are no pages. Message: `No pages to check`.
-- Fail when at least one page has rich-result schema and is not indexable. Message: `3 page(s) have rich schema but are blocked from indexing`. The value lists up to five as the path, the schema types found, and the reasons it is blocked, such as `meta:noindex` or `robots.txt:disallowed`.
+- Fail when at least one page has rich-result schema and is not indexable. Message: `3 page(s) have rich schema but are blocked from indexing`. The value lists up to five as the path, the schema types found, and the reasons it is blocked, such as `meta:noindex` (a robots meta tag), `header:noindex` (an `X-Robots-Tag` response header) or `robots.txt:disallowed`.
 - Pass otherwise. Message: `No schema+noindex conflicts`.
 
 Severity error, weight 8. The types that count come from a fixed list: `Article`, `NewsArticle`, `BlogPosting`, `Product`, `Review`, `Recipe`, `Event`, `FAQPage`, `HowTo`, `LocalBusiness`, `Organization`, `Person`, `VideoObject`, `BreadcrumbList`, `WebSite` and `SearchAction`. A plain `WebPage` node does not trigger the rule. The list is squirrel's own and is not tied to what Google currently supports: `HowTo` is on it although its Google rich result was retired.
@@ -26,6 +26,8 @@ Severity error, weight 8. The types that count come from a fixed list: `Article`
 ```
 
 Decide which of the two is wrong. If the page should rank with a rich result, remove the directive the report names. If it should stay out of the index, remove the structured data from that template so the markup stops being generated.
+
+The finding names where each page's block comes from. `meta:noindex` is a tag in the page's own HTML. `header:noindex` and `robots.txt:disallowed` are not in the page source: an `X-Robots-Tag` header is set by your server, CDN, proxy or framework configuration, so one header can block every page at once, and `robots.txt` is a separate file. When the finding names a header, check it with `curl -I https://example.com/page` and remove it where it is set; editing the page's template or metadata will not change it.
 
 | | |
 |---|---|

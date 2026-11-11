@@ -345,6 +345,18 @@ export function isOurSkill(dir: string, name: string): boolean {
   return found === name && author?.toLowerCase() === "squirrelscan";
 }
 
+/** Whether skill version `a` is older than `b` (dotted numbers, "1.23" < "2.9"). */
+export function skillVersionBehind(a: string, b: string): boolean {
+  const parts = (v: string) =>
+    v.split(".").map((n) => Number.parseInt(n, 10) || 0);
+  const [x, y] = [parts(a), parts(b)];
+  for (let i = 0; i < Math.max(x.length, y.length); i++) {
+    const d = (x[i] ?? 0) - (y[i] ?? 0);
+    if (d !== 0) return d < 0;
+  }
+  return false;
+}
+
 /** The version a SKILL.md on disk declares, for installs we didn't record. */
 function versionOnDisk(dir: string): string | undefined {
   return frontmatter(dir)?.match(/^\s+version:\s*["']?([^"'\s]+)/m)?.[1];
@@ -1334,6 +1346,8 @@ export interface TargetStatus {
   version?: string;
   editedFiles: string[];
   linkTo?: string;
+  /** A link to a checkout of our own skill: its version is read, never written (#1730). */
+  linked?: boolean;
   /** Out of date against the manifest (kept edits aside). */
   outdated: boolean;
   /** Left by `uninstall` with edited files in it: updates leave it alone. */
@@ -1390,13 +1404,23 @@ export function skillsStatus(
         const probe = kind.kind === "npx-link" ? kind.to : dir;
         if (kind.kind === "foreign" || !isOurSkill(probe, name)) {
           if (kind.kind === "foreign" || existsSync(join(probe, "SKILL.md"))) {
+            // #1730: a link into a checkout of OUR skill is not ours to write, but its
+            // version is readable and "behind the latest" is exactly what a dev needs to see.
+            const linkTo = "to" in kind ? kind.to : undefined;
+            const linked = linkTo !== undefined && isOurSkill(linkTo, name);
+            const version = linked ? versionOnDisk(linkTo) : undefined;
             targets.push({
               dir,
               root,
               managedBy: "other",
-              linkTo: "to" in kind ? kind.to : undefined,
+              linkTo,
+              ...(linked ? { linked, ...(version ? { version } : {}) } : {}),
               editedFiles: [],
-              outdated: false,
+              outdated: !!(
+                version &&
+                skill?.version &&
+                skillVersionBehind(version, skill.version)
+              ),
             });
           }
           continue;
