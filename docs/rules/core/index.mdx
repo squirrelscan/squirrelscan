@@ -21,8 +21,8 @@ These carry the highest severity and weight in the category.
 - [Title tag length: the 30 to 75 character range squirrel uses](/rules/core/meta-title): A page with no title element, or one outside 30 to 75 characters. squirrel measures the title on every crawled page.
 - [Meta description length: the 120 to 160 character range](/rules/core/meta-description): A page with no meta description, or one outside 120 to 160 characters. squirrel measures it on every crawled page.
 - [Missing or multiple H1: what squirrel expects on a page](/rules/core/h1): A page with no H1, more than one, or an empty one. squirrel checks the heading on every crawled page.
+- [rel=canonical: presence, absolute form and self-reference](/rules/core/canonical): A page with no canonical link, a relative one, or one that points somewhere else. squirrel checks every crawled page.
 - [Link rel=canonical header vs the HTML tag: the mismatch](/rules/core/canonical-header): A page declaring one canonical in an HTTP header and a different one in the markup. squirrel parses the header and compares.
-- [nosnippet and max-snippet:0: pages with no search snippet](/rules/core/nosnippet): A robots directive that stops search engines showing any description under the result. squirrel reads the robots meta on every page.
 
 {/* hub:start-here:end */}
 
@@ -43,7 +43,7 @@ These carry the highest severity and weight in the category.
 | [No favicon found: the link rel icon tags squirrel looks for](/rules/core/favicon) | A page with no icon link at all, or only one format. squirrel reads the rel and the file extension on every link. | warning | Per-page |
 | [noindex in a robots meta tag or X-Robots-Tag header: what squirrel reports per page](/rules/core/robots-meta) | A page declaring noindex or nofollow in its robots meta tag or X-Robots-Tag header. squirrel reads both on every crawled page and names the directive and where it was set. | warning | Per-page |
 | [nosnippet and max-snippet:0: pages with no search snippet](/rules/core/nosnippet) | A robots directive that stops search engines showing any description under the result. squirrel reads the robots meta on every page. | warning | Per-page |
-| [rel=canonical: presence, absolute form and self-reference](/rules/core/canonical) | A page with no canonical link, a relative one, or one that points somewhere else. squirrel checks every crawled page. | warning | Per-page |
+| [rel=canonical: presence, absolute form and self-reference](/rules/core/canonical) | A page with no canonical link, a relative one, or one that points somewhere else. squirrel checks every crawled page. | error | Per-page |
 | [Title tag length: the 30 to 75 character range squirrel uses](/rules/core/meta-title) | A page with no title element, or one outside 30 to 75 characters. squirrel measures the title on every crawled page. | error | Per-page |
 | [twitter:card: the card types and the Open Graph fallback](/rules/core/twitter-cards) | A page with no twitter:card, an unrecognised type, or a large-image card with no image. squirrel checks the type and the fallback. | info | Per-page |
 

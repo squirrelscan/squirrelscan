@@ -109,7 +109,7 @@ export function clampedPageLimit(
  * printing only the requested one describes a crawl that did not happen.
  */
 /** `0.0.137`, `1.2.3-beta.1+build`: letters, digits, `.`, `_`, `+` and `-`, nothing else. */
-function isVersionLike(value: unknown): value is string {
+export function isVersionLike(value: unknown): value is string {
   return typeof value === "string" && /^[0-9A-Za-z][0-9A-Za-z._+-]{0,63}$/.test(value);
 }
 
