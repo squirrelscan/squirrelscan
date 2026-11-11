@@ -2,8 +2,11 @@
 // the sitemap's read state, never a missing-product claim.
 
 import { describe, expect, test } from "bun:test";
+import { parseHTML } from "linkedom";
 
 import type { SitemapDiscovery, SitemapReadState } from "@squirrelscan/core-contracts";
+
+import { parseSchemas } from "@squirrelscan/parser";
 
 import { sitemapCoverageRule } from "../src/crawl/sitemap-coverage";
 import type { CheckResult, ParsedPage, RuleContext, SiteData } from "../src/types";
@@ -189,5 +192,67 @@ describe("crawl/sitemap-coverage product discovery (#1651)", () => {
   test("the existing coverage verdict is untouched", () => {
     const checks = run({ ...boundedShop(), sitemaps: sitemaps(INVENTORY, "complete") });
     expect(checks.map((c) => c.name)).toContain("sitemap-coverage");
+  });
+
+  // Real parser output, so the nested-type cases run against what a crawl actually stores.
+  function jsonLdPage(url: string, ld: unknown, links: string[] = []) {
+    const { document } = parseHTML(
+      `<html><head><script type="application/ld+json">${JSON.stringify(ld)}</script></head><body></body></html>`,
+    );
+    return {
+      url,
+      statusCode: 200,
+      parsed: {
+        meta: {},
+        og: { type: null },
+        schemas: parseSchemas(document as never),
+        links: links.map((l) => link(l)),
+      } as unknown as ParsedPage,
+    };
+  }
+
+  test("a Product nested in a Review, ItemList or Offer is not a product page", () => {
+    const product = { "@type": "Product", name: "Widget" };
+    const pages = [
+      jsonLdPage(`${BASE}/reviews/a`, { "@type": "Review", itemReviewed: product }),
+      jsonLdPage(`${BASE}/reviews/b`, { "@type": "Review", itemReviewed: product }),
+      jsonLdPage(`${BASE}/reviews/c`, { "@type": "Review", itemReviewed: product }),
+    ];
+    expect(discovery(run({ pages, sitemaps: sitemaps(INVENTORY, "complete") }))).toBeUndefined();
+
+    const list = {
+      "@type": "ItemList",
+      itemListElement: [1, 2, 3].map((position) => ({ "@type": "ListItem", position, item: product })),
+    };
+    const category = [
+      jsonLdPage(`${BASE}/products/shoes`, list, [`${BASE}/cart`]),
+      jsonLdPage(`${BASE}/products/hats`, list, [`${BASE}/cart`]),
+      jsonLdPage(`${BASE}/products/bags`, list, [`${BASE}/cart`]),
+    ];
+    expect(discovery(run({ pages: category }))).toBeUndefined();
+
+    const offered = jsonLdPage(
+      `${BASE}/products/x`,
+      { "@type": "Offer", itemOffered: product },
+      [`${BASE}/cart`],
+    );
+    expect(discovery(run({ pages: [offered] }))).toBeUndefined();
+  });
+
+  test("top-level Product, ProductGroup and @graph Product count", () => {
+    const pages = [
+      jsonLdPage(`${BASE}/products/a`, { "@type": "Product" }),
+      jsonLdPage(`${BASE}/products/b`, { "@type": "ProductGroup" }),
+      jsonLdPage(`${BASE}/products/c`, { "@graph": [{ "@type": "WebPage" }, { "@type": ["Product"] }] }),
+    ];
+    expect(discovery(run({ pages }))?.details).toMatchObject({ crawledProductPages: 3 });
+  });
+
+  test("one embedded Product page plus a nav cart link needs a product-shaped path of its own", () => {
+    const nav = [`${BASE}/cart`];
+    const blog = jsonLdPage(`${BASE}/blog/post`, { "@type": "Product" }, nav);
+    expect(discovery(run({ pages: [blog] }))).toBeUndefined();
+    const shop = jsonLdPage(`${BASE}/products/post`, { "@type": "Product" }, nav);
+    expect(discovery(run({ pages: [shop] }))?.status).toBe("info");
   });
 });

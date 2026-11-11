@@ -4,7 +4,7 @@
 import type { Effect } from "effect";
 
 import type { AuditFailureDetail } from "./failure-reason";
-import type { ClassifiedPageType, LinkSection, LinkSectionCounts, ScanScope } from "./index";
+import type { ClassifiedPageType, LinkSection, LinkSectionCounts, ScanScope, SitemapReadState } from "./index";
 import type { RefusedFetch } from "./refused-fetch";
 import type { WafBlockedSummary, WafSuspectSummary } from "./waf-block";
 import type { UnverifiedReason } from "./services";
@@ -316,7 +316,7 @@ export interface CrawlStats {
    * `SitemapReadState`). Optional: stats persisted before it existed omit it,
    * which reads as unknown, never as complete.
    */
-  sitemapReadState?: "complete" | "partial" | "unreadable";
+  sitemapReadState?: SitemapReadState;
   /**
    * The crawl did not follow links: it fetched the seed and the sitemap URLs
    * only (Quick level, sitemap scope), so internal link targets outside them
