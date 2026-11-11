@@ -1321,6 +1321,15 @@
               "note": { "type": "string" }
             }
           },
+          "robots": {
+            "type": "object",
+            "description": "Present only for an audit dispatched in the cloud: whether it honoured the site's robots.txt, so the findings are read as what robots.txt allowed (`honoured: true`) or everything the crawler could reach (`false`). The same object, with the same meaning, is on the MCP `get_report` tool (summary and rule_ids formats).",
+            "required": ["honoured", "note"],
+            "properties": {
+              "honoured": { "type": "boolean", "description": "True when robots.txt was applied to the crawl." },
+              "note": { "type": "string", "description": "One plain sentence saying it, with the reason when it was not honoured and, when the cloud reports it, the number of pages left out." }
+            }
+          },
           "report": {
             "type": "object",
             "required": ["id", "url", "visibility", "baseUrl"],
