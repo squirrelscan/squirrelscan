@@ -180,8 +180,47 @@ describe("links/redirect-chains — genuine redirects still report", () => {
     ];
 
     expect(check(pages, "redirect-pages")?.items?.[0]?.label).toBe(
-      "http://example.com/old (301) → https://example.com/old (302) → https://example.com/new/ (200)",
+      "2 hops: http://example.com/old (301) → https://example.com/old (302) → https://example.com/new/ (200)",
     );
+  });
+
+  test("a three-hop chain names every hop, the hop count and gets its own failing check (#1750)", () => {
+    const b = "https://nutshop.example";
+    const pages: PageInput[] = [
+      {
+        url: `${b}/_fault/r1`,
+        finalUrl: `${b}/categories/gift-boxes`,
+        redirectChain: chain(`${b}/_fault/r1`, `${b}/categories/gift-boxes`, [
+          hop(`${b}/_fault/r1`, 301),
+          hop(`${b}/_fault/r2`, 301),
+          hop(`${b}/_fault/r3`, 301),
+          hop(`${b}/categories/gift-boxes`, 200),
+        ]),
+      },
+      { url: `${b}/`, finalUrl: `${b}/`, links: [`${b}/_fault/r1`] },
+    ];
+    const { checks } = redirectChainsRule.run(ctx(pages));
+    const label = check(pages, "redirect-pages")?.items?.[0]?.label ?? "";
+    expect(label.startsWith("3 hops: ")).toBe(true);
+    for (const part of ["r1", "r2", "r3", "gift-boxes"]) expect(label).toContain(part);
+    const multi = checks.find((c) => c.name === "redirect-chain-multi-hop");
+    expect(multi?.status).toBe("warn");
+    expect(multi?.details).toMatchObject({ longestHops: 3 });
+    expect(check(pages, "links-to-redirect")?.items?.[0]?.label).toContain("3 hops");
+  });
+
+  test("a single redirect has no multi-hop check", () => {
+    const pages: PageInput[] = [
+      {
+        url: "https://example.com/a",
+        finalUrl: "https://example.com/b",
+        redirectChain: chain("https://example.com/a", "https://example.com/b", [
+          hop("https://example.com/a", 301),
+          hop("https://example.com/b", 200),
+        ]),
+      },
+    ];
+    expect(check(pages, "redirect-chain-multi-hop")).toBeUndefined();
   });
 
   test("a SLASH-ONLY move with unobserved hop statuses is still reported", () => {
