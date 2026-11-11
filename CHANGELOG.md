@@ -17,6 +17,9 @@ How it works:
 
 ## [Unreleased]
 
+### Changed
+
+- **`ax/ai-crawlers` warns when Googlebot is blocked for the audited URL.** The `search-engine-access` check was info only. A robots.txt that blocks Googlebot from the site root or for the entry URL usually means the site is not indexed, often by a staging `Disallow: /` left in, so that check now warns and counts toward the score. An `Allow` override, an allowed Googlebot and a block of any other engine (`Bingbot`, `Applebot`) stay info, and `details.bots` still lists every bot. (#1680)
 ### Fixed
 
 - **A report's "failed or blocked" and `--max-duration` partial status each have one definition.** `isAuditFailed` and `isScoreless` in `@squirrelscan/core-contracts` replace the check that was written out in about fifteen places, and one function, `withMaxDurationCut`, now makes a time-limited audit `partial` for both the live run and `squirrel report` rebuilding it from the store, so the two cannot disagree. Reports read as before. (#1662)
