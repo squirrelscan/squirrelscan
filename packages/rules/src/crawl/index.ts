@@ -8,6 +8,7 @@ import { canonicalChainRule } from "./canonical-chain";
 import { htmlSizeRule } from "./html-size";
 import { indexabilityCheck } from "./indexability";
 import { indexabilityConflicts } from "./indexability-conflicts";
+import { indexableSearchResults } from "./indexable-search-results";
 import { noindexInSitemapRule } from "./noindex-in-sitemap";
 import { paginationRule } from "./pagination";
 import { pdfSizeRule } from "./pdf-size";
@@ -39,6 +40,7 @@ export const rules: Rule[] = [
   indexabilityCheck,
   allNoindexPages,
   indexabilityConflicts,
+  indexableSearchResults,
   schemaNoindexConflict,
   canonicalChainRule,
   paginationRule,
@@ -55,6 +57,7 @@ export {
   htmlSizeRule,
   indexabilityCheck,
   indexabilityConflicts,
+  indexableSearchResults,
   noindexInSitemapRule,
   paginationRule,
   pdfSizeRule,

@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- **`crawl/indexable-search-results` reports internal search result pages that search engines can index.** A `/search` path with a query, a search parameter (`s`, `q`, `query`, `search`, `keyword`) on a page that shows results, or a URL matching the site's WebSite `SearchAction` target counts as a search result. Pages with `noindex`, a robots.txt `Disallow` or a canonical to a non-search page are not listed. The finding says how many were found and how many are indexable, and names both fixes. (#1696)
+
 ## v0.0.174 (2026-11-11)
 
 Reports say why a rule did not give a verdict (JSON schema 1.9), `squirrel audit` has one exit code precedence with the outcome in the JSON and LLM reports, `--resume` says why it started a new crawl, an expired login is called out, settings writes no longer lose each other, and five rules stop flagging hidden, presentational and symbol-only content.
