@@ -13,6 +13,7 @@ import {
   canonicalVariantMap,
   detachFromPage,
   foldChecksToCanonical,
+  isRedirectSourcePage,
 } from "@squirrelscan/audit-engine";
 import { buildCacheStats, isScoreless } from "@squirrelscan/core-contracts";
 import {
@@ -675,6 +676,8 @@ export function reconstructReport(
       if (batch.length === 0) break;
 
       for (const page of batch) {
+        // A redirecting URL is a redirect, not a page (#1762): not in pages[], not in the totals.
+        if (isRedirectSourcePage(page)) continue;
         // Advance the features walk to (at least) this page. Degrades to "no
         // row" rather than failing the report: the fallback parse produces the
         // same answer, just slower.
