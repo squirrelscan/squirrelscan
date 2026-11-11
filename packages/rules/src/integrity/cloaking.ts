@@ -52,6 +52,13 @@ export const cloakingRule: Rule = {
     scope: "site",
     severity: "error",
     weight: 7,
+    // Check names by outcome class (#1741).
+    checks: [
+      { name: "cloaking", outcome: "problem" },
+      { name: "cloaking", outcome: "clean", clears: ["cloaking"] },
+      { name: "cloaking-token-gated", outcome: "problem" },
+      { name: "cloaking", outcome: "skipped" },
+    ],
     // Compromise detection: an ignore could hide a compromised site (#1262).
     ignorable: false,
   },
@@ -60,9 +67,16 @@ export const cloakingRule: Rule = {
     const checks: CheckResult[] = [];
     const probes = ctx.site?.cloakingProbes;
 
-    // Opt-in: undefined means the probe never ran — contribute nothing rather
-    // than imply a clean bill of health.
-    if (!probes) return { checks };
+    // Opt-in: undefined means the probe never ran. Say so rather than imply a clean bill of health.
+    if (!probes) {
+      checks.push({
+        name: "cloaking",
+        status: "skipped",
+        message: "The cloaking probe did not run",
+        skipReason: "not-applicable",
+      });
+      return { checks };
+    }
 
     if (probes.length === 0) {
       checks.push({

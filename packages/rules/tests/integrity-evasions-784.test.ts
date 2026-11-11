@@ -54,7 +54,7 @@ test("overlapping attribute windows find a phrase at every offset around their c
 
 test("a long ordinary title is not unread until the 16,000-character bound", async () => {
   const ordinary = await brandImpersonationRule.run(context(`<a href="${OFF}" title="${"a".repeat(400)}">Elsewhere</a>`));
-  expect(ordinary.checks).toHaveLength(0);
+  expect(ordinary.checks.map((c) => c.status)).toEqual(["pass"]); // clean, not empty (#1741)
 
   const bounded = await brandImpersonationRule.run(context(`<a href="${OFF}" title="${"a".repeat(16_001)}">Elsewhere</a>`));
   expect(bounded.checks).toHaveLength(1);

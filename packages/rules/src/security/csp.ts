@@ -47,6 +47,19 @@ export const cspRule: Rule = {
     scope: "site",
     severity: "warning",
     weight: 6,
+    // Check names by outcome class (#1741).
+    checks: [
+      { name: "csp-missing", outcome: "problem" },
+      { name: "csp-report-only", outcome: "problem" },
+      { name: "csp-no-script-control", outcome: "problem" },
+      { name: "csp-unsafe-scripts", outcome: "problem" },
+      { name: "csp-wildcard", outcome: "problem" },
+      { name: "csp-self-proxy-script", outcome: "problem" },
+      { name: "csp-no-frame-ancestors", outcome: "problem" },
+      { name: "csp-no-object-src", outcome: "problem" },
+      { name: "csp-present", outcome: "clean", clears: ["csp-missing", "csp-report-only"] },
+      { name: "csp", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

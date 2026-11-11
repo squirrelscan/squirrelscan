@@ -24,16 +24,37 @@ export const obfuscatedScriptRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 8,
+    // Check names by outcome class (#1741).
+    checks: [
+      { name: "obfuscated-script", outcome: "problem" },
+      { name: "obfuscated-script", outcome: "clean", clears: ["obfuscated-script"] },
+      { name: "obfuscated-script", outcome: "skipped" },
+    ],
     // Compromise detection: an ignore could hide a compromised site (#1262).
     ignorable: false,
   },
 
   run(ctx: RuleContext): RuleResult {
     const checks: CheckResult[] = [];
-    if (!ctx.parsed.document) return { checks };
+    if (!ctx.parsed.document) {
+      checks.push({
+        name: "obfuscated-script",
+        status: "skipped",
+        message: "No document available",
+        pageUrl: ctx.page.url,
+        skipReason: "unread-page",
+      });
+      return { checks };
+    }
 
     const hit = detectObfuscatedScript(ctx);
     if (!hit) {
+      checks.push({
+        name: "obfuscated-script",
+        status: "pass",
+        message: "No obfuscated inline script found on this page",
+        pageUrl: ctx.page.url,
+      });
       return { checks };
     }
 

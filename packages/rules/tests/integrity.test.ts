@@ -17,6 +17,8 @@ import type { CheckResult } from "@squirrelscan/core-contracts";
 
 import { parsePage } from "@squirrelscan/parser";
 
+import { expectDeclaredChecks } from "./helpers/declared-checks";
+
 import { brandImpersonationRule } from "../src/integrity/brand-impersonation";
 import { fakeAuthOverlayRule } from "../src/integrity/fake-auth-overlay";
 import { obfuscatedScriptRule } from "../src/integrity/obfuscated-script";
@@ -192,10 +194,16 @@ function siteCtx(pages: SiteData["pages"], opts?: {
 function run(rule: Rule, ctx: RuleContext): CheckResult[] {
   const schema = rule.meta.optionsSchema;
   const options = schema ? schema.parse(ctx.options ?? {}) : ctx.options;
-  return (rule.run({ ...ctx, options }) as { checks: CheckResult[] }).checks;
+  const out = (rule.run({ ...ctx, options }) as { checks: CheckResult[] }).checks;
+  expectDeclaredChecks(rule, out);
+  return out;
 }
 function find(checks: CheckResult[], name: string): CheckResult | undefined {
   return checks.find((c) => c.name === name);
+}
+// A finding: a pass or a skip is the rule saying "clean" or "not evaluated" (#1741), not a finding.
+function finding(checks: CheckResult[], name: string): CheckResult | undefined {
+  return checks.find((c) => c.name === name && c.status !== "pass" && c.status !== "skipped");
 }
 
 // Build a realistic site: 4 clean themed pages + the kit + the doorway.
@@ -251,7 +259,7 @@ describe("integrity/brand-impersonation", () => {
       brandImpersonationRule,
       pageCtx(`${SITE}/calendly`, kitPageHtml())
     );
-    const c = find(checks, "brand-impersonation");
+    const c = finding(checks, "brand-impersonation");
     expect(c?.status).toBe("fail");
     expect(c?.details?.escalated).toBe(true);
   });
@@ -261,15 +269,30 @@ describe("integrity/brand-impersonation", () => {
       brandImpersonationRule,
       pageCtx(`${SITE}/integrations`, legitCalendlyPageHtml())
     );
-    expect(find(checks, "brand-impersonation")).toBeUndefined();
+    expect(finding(checks, "brand-impersonation")).toBeUndefined();
   });
 
-  test("clean themed page → no finding", () => {
+  test("clean themed page → no finding, and a clean check (#1741)", () => {
     const checks = run(
       brandImpersonationRule,
       pageCtx(`${SITE}/about`, themed("About", CLEAN_BODY))
     );
-    expect(find(checks, "brand-impersonation")).toBeUndefined();
+    expect(finding(checks, "brand-impersonation")).toBeUndefined();
+    expect(checks.map((c) => [c.name, c.status])).toEqual([["brand-impersonation", "pass"]]);
+  });
+
+  test("a clean page is never an empty list for any page-scope integrity rule (#1741)", () => {
+    const ctx = pageCtx(`${SITE}/about`, themed("About", CLEAN_BODY));
+    for (const rule of [
+      brandImpersonationRule,
+      fakeAuthOverlayRule,
+      obfuscatedScriptRule,
+      seoDoorwayRule,
+    ]) {
+      const out = run(rule, ctx);
+      expect(out.length, rule.meta.id).toBeGreaterThan(0);
+      expect(out.every((c) => c.status === "pass"), rule.meta.id).toBe(true);
+    }
   });
 
   test("single brand signal alone → info, not fail", () => {
@@ -281,7 +304,7 @@ describe("integrity/brand-impersonation", () => {
     const ctx = pageCtx(`${SITE}/x`, html);
     const signals = detectPageSignals(ctx);
     expect(signals.size).toBe(1);
-    const c = find(run(brandImpersonationRule, ctx), "brand-impersonation");
+    const c = finding(run(brandImpersonationRule, ctx), "brand-impersonation");
     expect(c?.status).toBe("info");
     expect(c?.details?.escalated).toBe(false);
   });
@@ -291,7 +314,7 @@ describe("integrity/brand-impersonation", () => {
 
 describe("integrity/obfuscated-script", () => {
   test("kit page → fail (corroborated)", () => {
-    const c = find(
+    const c = finding(
       run(obfuscatedScriptRule, pageCtx(`${SITE}/calendly`, kitPageHtml())),
       "obfuscated-script"
     );
@@ -299,7 +322,7 @@ describe("integrity/obfuscated-script", () => {
   });
 
   test("clean themed page with normal scripts → no finding", () => {
-    const c = find(
+    const c = finding(
       run(obfuscatedScriptRule, pageCtx(`${SITE}/about`, themed("About", CLEAN_BODY))),
       "obfuscated-script"
     );
@@ -310,7 +333,7 @@ describe("integrity/obfuscated-script", () => {
     const html = `<!DOCTYPE html><html><head><title>Page</title>
       <script>${obfuscatedPayload()}</script></head>
       <body><p>${CLEAN_BODY}</p></body></html>`;
-    const c = find(
+    const c = finding(
       run(obfuscatedScriptRule, pageCtx(`${SITE}/x`, html)),
       "obfuscated-script"
     );
@@ -322,7 +345,7 @@ describe("integrity/obfuscated-script", () => {
 
 describe("integrity/fake-auth-overlay", () => {
   test("kit page full-viewport #google-auth iframe → fail (corroborated)", () => {
-    const c = find(
+    const c = finding(
       run(fakeAuthOverlayRule, pageCtx(`${SITE}/calendly`, kitPageHtml())),
       "fake-auth-overlay"
     );
@@ -334,7 +357,7 @@ describe("integrity/fake-auth-overlay", () => {
       "Home",
       `${CLEAN_BODY}<iframe style="position:fixed;bottom:0;left:0;width:100%;height:60px;z-index:5" src="https://cdn.sydneyav.com/cookie.html"></iframe>`
     );
-    const c = find(
+    const c = finding(
       run(fakeAuthOverlayRule, pageCtx(`${SITE}/`, html)),
       "fake-auth-overlay"
     );
@@ -346,7 +369,7 @@ describe("integrity/fake-auth-overlay", () => {
 
 describe("integrity/seo-doorway", () => {
   test("doorway page → finding", () => {
-    const c = find(
+    const c = finding(
       run(seoDoorwayRule, pageCtx(`${SITE}/blog/x`, doorwayPageHtml())),
       "seo-doorway"
     );
@@ -354,7 +377,7 @@ describe("integrity/seo-doorway", () => {
   });
 
   test("legit Calendly page → no doorway finding", () => {
-    const c = find(
+    const c = finding(
       run(seoDoorwayRule, pageCtx(`${SITE}/integrations`, legitCalendlyPageHtml())),
       "seo-doorway"
     );
@@ -367,7 +390,7 @@ describe("integrity/seo-doorway", () => {
       `<article><h1>AV gear review</h1><p>${CLEAN_BODY}</p>
        <p>This post contains affiliate links (affiliate disclosure).</p></article>`
     );
-    const c = find(
+    const c = finding(
       run(seoDoorwayRule, pageCtx(`${SITE}/blog/review`, html)),
       "seo-doorway"
     );
@@ -634,7 +657,7 @@ describe("integrity — false-positive regressions", () => {
     const ctx = pageCtx(`${SITE}/login`, html);
     expect(detectBrandImpersonation(ctx)).toBeNull();
     expect(
-      find(run(brandImpersonationRule, ctx), "brand-impersonation")
+      finding(run(brandImpersonationRule, ctx), "brand-impersonation")
     ).toBeUndefined();
   });
 
@@ -677,7 +700,7 @@ describe("integrity — false-positive regressions", () => {
     const ctx = pageCtx(`${SITE}/app`, html);
     expect(detectFakeAuthOverlay(ctx)).toBeNull();
     expect(
-      find(run(fakeAuthOverlayRule, ctx), "fake-auth-overlay")
+      finding(run(fakeAuthOverlayRule, ctx), "fake-auth-overlay")
     ).toBeUndefined();
   });
 
@@ -1320,9 +1343,9 @@ describe("a credential control with its attributes pushed past the 64th", () => 
   test("the kit page stays a fail with the credential link's href at the 64th, 65th, 101st and 4,000th attribute", () => {
     for (const n of [63, 64, 65, 101, 4_000]) {
       const html = kitWith(`<a ${junk(n)} href="https://accounts-google.tk/oauth">Sign in with Google</a>`);
-      const brand = find(run(brandImpersonationRule, pageCtx(`${SITE}/calendly`, html)), "brand-impersonation");
+      const brand = finding(run(brandImpersonationRule, pageCtx(`${SITE}/calendly`, html)), "brand-impersonation");
       expect([n, brand?.status, brand?.details?.escalated]).toEqual([n, "fail", true]);
-      const obf = find(run(obfuscatedScriptRule, pageCtx(`${SITE}/calendly`, html)), "obfuscated-script");
+      const obf = finding(run(obfuscatedScriptRule, pageCtx(`${SITE}/calendly`, html)), "obfuscated-script");
       expect([n, obf?.status]).toEqual([n, "fail"]);
     }
   });

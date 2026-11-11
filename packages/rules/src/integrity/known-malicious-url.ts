@@ -52,14 +52,28 @@ export const knownMaliciousUrlRule: Rule = {
     scope: "site",
     severity: "error",
     weight: 9,
+    // Check names by outcome class (#1741).
+    checks: [
+      { name: "known-malicious-url", outcome: "problem" },
+      { name: "known-malicious-url", outcome: "clean", clears: ["known-malicious-url"] },
+      { name: "known-malicious-url", outcome: "skipped" },
+    ],
     // Compromise detection: an ignore could hide a compromised site (#1262).
     ignorable: false,
   },
 
   run(ctx: RuleContext): RuleResult {
     const checks: CheckResult[] = [];
-    // Opt-in: no intel handle means the feature is off — contribute nothing.
-    if (!ctx.intel) return { checks };
+    // Opt-in: no intel handle means the feature is off. Say it did not run, never that the site is clean.
+    if (!ctx.intel) {
+      checks.push({
+        name: "known-malicious-url",
+        status: "skipped",
+        message: "Threat intelligence is not enabled, so no URL was checked",
+        skipReason: "not-applicable",
+      });
+      return { checks };
+    }
 
     const candidates = collectCandidates(ctx);
     let anyChecked = false;
@@ -90,8 +104,18 @@ export const knownMaliciousUrlRule: Rule = {
     }
 
     // Nothing was actually consulted (no provider configured/reachable for any
-    // candidate) — stay silent rather than imply a clean bill of health.
-    if (!anyChecked) return { checks };
+    // candidate): say so rather than imply a clean bill of health.
+    if (!anyChecked) {
+      if (checks.length === 0) {
+        checks.push({
+          name: "known-malicious-url",
+          status: "skipped",
+          message: "No threat-intel provider could check any URL",
+          skipReason: "not-applicable",
+        });
+      }
+      return { checks };
+    }
 
     // Consulted and clean → one reassuring pass for the report.
     if (checks.length === 0) {

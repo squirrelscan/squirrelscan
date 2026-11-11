@@ -196,6 +196,26 @@ export interface RuleApplicability {
 }
 
 // Rule metadata - describes the rule
+/**
+ * What a check means to a consumer comparing two audits (#1741):
+ * - `problem`: a finding (a fail, warn or advisory info the rule raises about the page or site).
+ * - `clean`: the rule ran over what it covers and found nothing; it supersedes the problem checks it `clears`.
+ * - `skipped`: the rule did not evaluate (nothing to look at, unread page, feature off, incomplete scan).
+ *   A skipped check never clears a problem: the finding was not compared.
+ */
+export type RuleCheckOutcome = "problem" | "clean" | "skipped";
+
+/** One check name a rule can emit, declared in `RuleMeta.checks`. */
+export interface RuleCheckDecl {
+  name: string;
+  outcome: RuleCheckOutcome;
+  /**
+   * `clean` checks only: the `problem` check names (of this rule) that this check supersedes. A finding
+   * whose check is listed here is fixed when the rule ran over the same scope and emitted this check.
+   */
+  clears?: string[];
+}
+
 export interface RuleMeta {
   id: string; // "core/meta-title"
   name: string; // "Meta Title"
@@ -208,6 +228,12 @@ export interface RuleMeta {
   weight: number; // scoring weight (1-10)
   // Zod schema for rule options - self-describing with defaults
   optionsSchema?: z.ZodObject<z.ZodRawShape>;
+  /**
+   * The check names this rule can emit, by outcome class (#1741). Optional while rules adopt it: a test pins
+   * the ones that have not yet (`tests/rule-check-declarations.test.ts`) and fails for a new rule without it.
+   * A name can be declared twice, once as `problem` and once as `clean`, when a rule reuses a name for both.
+   */
+  checks?: RuleCheckDecl[];
   disabled?: boolean; // Internal flag - hides rule from all listings and execution
   /**
    * `false` keeps a `[[ignore]]` entry from waiving this rule's findings (#1262).
