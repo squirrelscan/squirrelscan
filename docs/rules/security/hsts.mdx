@@ -66,6 +66,24 @@ enable = ["security/hsts"]
 
 `enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
 
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `hsts-missing` | Problem |  |
+| `hsts-malformed` | Problem |  |
+| `hsts-disabled` | Problem |  |
+| `hsts-max-age-short` | Problem |  |
+| `hsts` | Clean | `hsts-missing`, `hsts-malformed`, `hsts-disabled`, `hsts-max-age-short` |
+| `hsts-no-pages` | Not checked |  |
+| `hsts-not-applicable` | Not checked |  |
+
+{/* rule-checks:end */}
+
 ## Related rules
 
 - [security/https](/rules/security/https): whether the pages themselves are served over HTTPS in the first place.
