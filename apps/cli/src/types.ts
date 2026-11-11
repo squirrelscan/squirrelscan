@@ -678,6 +678,8 @@ export interface AuditReport {
     stopReason?: "time";
     /** In-scope URLs left queued, never fetched, when the crawl stopped. */
     unfetched?: number;
+    /** Discovered and audited page counts per URL-based page type (#1744). */
+    pageTypes?: Array<{ type: string; discovered: number; audited: number }>;
     /** The start URL's followed redirect (#1281), so a rebuilt report still carries it. */
     startRedirect?: SeedRedirectRecord;
     /** What the `--max-duration` time limit cut (#1271), so a rebuilt report is still partial. */

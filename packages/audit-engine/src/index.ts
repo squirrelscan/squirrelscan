@@ -65,6 +65,7 @@ export {
   carriedFindingToCheck,
 } from "./scoring";
 export type { AuditStatusSignals } from "./scoring";
+export { pageTypeCoverage, pageTypeCoverageFor } from "./report-stream";
 export type {
   ScoringContext,
   CarriedFinding,
