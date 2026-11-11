@@ -19,11 +19,11 @@ A resource shared by several pages counts toward every page that loads it, and c
 - Warning when the heaviest page is from 1,600 KB up to but not including 5,000 KB, with `(heavy page)` after the message.
 - Failing when the heaviest page is 5,000 KB or above, with `(very heavy)` after the message.
 
-The message names the heaviest page and its weight, and how many pages are over each threshold: `Heaviest page: https://example.com/gallery 5510KB (2 over 1600KB, 1 over 5000KB)`. A page over 5,000 KB is also counted as over 1,600 KB. The threshold comparison uses the unrounded weight, while the message prints it rounded.
+The message names the heaviest page and its weight, and how many pages are over each threshold: `Heaviest page: https://example.com/gallery 5510KB (2 over 1600KB, 1 over 5000KB)`. When the heaviest page loads sized external files, the message also names the largest one with its size, between the page and the counts: `Heaviest page: https://example.com/gallery 5510KB, largest resource https://example.com/hero.svg 2500KB (2 over 1600KB, 1 over 5000KB)`. A lazy image below the initial viewport is not a candidate, since it is not part of the page's weight. A page over 5,000 KB is also counted as over 1,600 KB. The threshold comparison uses the unrounded weight, while the message prints it rounded.
 
 When the crawl produced no resource-size record and no script record at all, the rule estimates the first page instead, at 30 KB per stylesheet, 50 KB per script and 100 KB per image. An empty record still counts as present, so a crawl that collected the containers but measured nothing reports each page by its HTML only. In that case the message opens `Estimated heaviest page:` and the details record that it is an estimate.
 
-The details carry the heaviest page's URL and weight, the number of pages analyzed, the number over each threshold, and that page's breakdown: the HTML total, inline code included, and the external CSS, JavaScript, image and font totals. A bucket with nothing in it is left out. When lazy images were left out, `lazyImages` gives their total for that page.
+The details carry the heaviest page's URL and weight, the number of pages analyzed, the number over each threshold, and that page's breakdown: the HTML total, inline code included, and the external CSS, JavaScript, image and font totals. A bucket with nothing in it is left out. When lazy images were left out, `lazyImages` gives their total for that page. `heaviestResource`, `heaviestResourceKb` and `heaviestResourceKind` (`css`, `js`, `images` or `fonts`) name the largest sized external file on that page, and are absent when it has none.
 
 ### Site total and average page weight
 
