@@ -1211,6 +1211,14 @@ export interface CheckTally {
   warnUnits?: number;
   failUnits?: number;
   skipped?: number;
+  /**
+   * Of the `skipped` checks, the ones that are a gap rather than a "does not
+   * apply" (`classifyRuleOutcome` of `coverage_gap`, `timed_out` or `errored`),
+   * counted by skip reason (#1775). Present only when a gap exists, so a reader
+   * of a capped report sees one even when no gap row survived the cap. A
+   * `skipped` with no `gaps` entry is not a gap.
+   */
+  gaps?: Record<string, number>;
 }
 
 /** `ruleId` → `checkName` → {@link CheckTally}. */
