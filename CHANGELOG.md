@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- **`content/duplicate-content` reports indexable pages that share identical body text.** Pages are grouped by a hash of their rendered body text (titles and markup are not part of it), and each group of two or more pages that do not resolve to one canonical is reported once, largest first, with every URL. Noindex pages, redirects, error responses, pagination pages, localised versions that list each other as hreflang alternates and pages under 100 words are left out and counted in the details. A group whose URLs differ only by tracking parameters, trailing slash or letter case is flagged as a URL form problem. Exact matches only. (#1690)
+
 ## v0.0.174 (2026-11-11)
 
 Reports say why a rule did not give a verdict (JSON schema 1.9), `squirrel audit` has one exit code precedence with the outcome in the JSON and LLM reports, `--resume` says why it started a new crawl, an expired login is called out, settings writes no longer lose each other, and five rules stop flagging hidden, presentational and symbol-only content.

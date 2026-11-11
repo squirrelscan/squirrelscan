@@ -1,0 +1,116 @@
+---
+title: "Duplicate content: pages that share identical body text"
+description: "Two indexable pages with the same body text split ranking between them. squirrel groups crawled pages by a hash of their body text and reports each group that does not resolve to one canonical."
+---
+
+## What duplicate content is
+
+Duplicate content is the same body text served on more than one URL. Search engines pick one URL to show and fold the rest away, and the one they pick is not always the one you wanted. Links and signals are split between the copies.
+
+Typical causes are mechanical: a page reachable with and without tracking parameters, with and without a trailing slash or in different letter case, a product repeated under several category paths, a staging copy left crawlable, or a template that renders the same text under different titles.
+
+## What squirrel checks
+
+The rule is site-wide. For every crawled page it hashes the rendered body text, lowercased with whitespace collapsed, and groups pages by that hash. Only exact matches are reported: near-duplicates are not compared. Titles and markup are not part of the hash, so two pages with different titles and the same body are still a group. It emits a single check named `duplicate-content`:
+
+- Skipped when fewer than two pages have enough text to compare. Message: `Insufficient pages to check for duplicate content`.
+- Warn when at least one group remains. Message: `2 duplicate content group(s) found across 7 pages`. Each item is one group, labelled `3 pages share identical content (240 words)`, with the URLs that share it. Groups are ordered largest first, then by first URL, and URLs within a group are sorted. Severity warning, weight 5.
+- Pass otherwise. Message: `No pages share identical body content`.
+
+The check's details give `totalGroups` and `totalPages`. At most 50 groups are listed as items and at most 20 URLs per group; `omittedGroups` and each item's `omittedUrls` say how many were left off the list, and the totals still count them.
+
+### What is left out
+
+A page is left out of every group when it is:
+
+- shorter than 100 words of body text. The minimum is fixed and cannot be configured; it keeps empty shells and login walls from grouping together.
+- a redirect: a page whose final URL is a different page than the one requested.
+- an error or other non-2xx response.
+- marked `noindex`, by a `<meta name="robots">` tag or an `X-Robots-Tag` header. Unlike the duplicate title rule, noindex pages are always left out, whether or not the site as a whole is indexed.
+- a pagination page: a URL with a `page`, `p`, `pg`, `offset` or `start` query parameter, or a path ending in `/page/N`.
+
+Pages are never dropped silently. The details count them under `excluded`: `thin`, `noindex`, `notOk` (error and other non-2xx responses), `pagination` and `hreflang`. Redirects have no body fingerprint and are not counted.
+
+### Pages that resolve to one canonical
+
+Each page's `rel="canonical"` is resolved against its own URL, and a page with no canonical counts as canonical to itself. A group is reported only when two or more pages remain and their canonicals are not all the same. A group whose pages all declare one canonical is working as intended and is not reported; the details count these as `canonicalisedGroups`.
+
+### Localised versions
+
+Pages that list each other as `<link rel="alternate" hreflang>` alternates, in any language, are treated as versions of one page and not as duplicates of one another. A group is dropped when all its pages are connected this way (counted under `excluded.hreflang`), and is reported when it also holds a page outside that set. A one-way reference does not connect two pages. Only hreflang tags in the page's HTML are read.
+
+### URL form
+
+When every page in a group is the same URL after dropping tracking parameters (`utm_*`, `gclid`, `fbclid`, `msclkid`, `mc_cid`, `mc_eid`, `_ga`, `ref` and a few others), stripping the trailing slash and lowercasing, the cause is the URL form. The item's label then says so, its `meta.urlFormOnly` is true and the details count `urlFormGroups`. When only some pages in a group differ that way, the label counts them and `meta.urlFormVariants` holds the number.
+
+## How to fix it
+
+```html
+<link rel="canonical" href="https://example.com/running-shoes" />
+```
+
+Pick the one URL that should rank and point every copy at it with a canonical tag, or redirect the extra URLs to it with a 301. If the copies differ only by tracking parameters, a trailing slash or letter case, canonicalise or redirect to one form. If the pages should both exist, rewrite them so each says something different.
+
+| | |
+|---|---|
+| **Rule ID** | `content/duplicate-content` |
+| **Category** | [Content](/rules/content) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 5/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["content/duplicate-content"]
+```
+
+### Disable all Content rules
+
+```toml squirrel.toml
+[rules]
+disable = ["content/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["content/duplicate-content"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Related rules
+
+- [content/duplicate-title](/rules/content/duplicate-title): the same title on several pages.
+- [content/duplicate-description](/rules/content/duplicate-description): the same meta description on several pages.
+- [crawl/pagination](/rules/crawl/pagination): the paginated pages this rule leaves out.
+- [core/canonical](/rules/core/canonical): the canonical tag that resolves a group.
+
+Content findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+{/* glossary:backlinks:start */}
+
+{/* glossary:backlinks:end */}
+
+## References
+
+- [Consolidate duplicate URLs, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls)
+- [Tell Google about localized versions of your page, Google Search Central](https://developers.google.com/search/docs/specialty/international/localized-versions)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Content section of the report. Each group of duplicated pages is listed with the pages that share it. Signed-out local audits need no account and cost nothing. Signed-in audits spend credits.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Content section looks like on a real site.
+  </Card>
+</CardGroup>
