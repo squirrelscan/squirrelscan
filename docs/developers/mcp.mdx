@@ -196,6 +196,10 @@ Three tools report counts that look comparable and are not. The published report
 
 Do not compare `issues_found` with the open count from `list_issues`. The tracker folds a rule failing on 600 pages into one finding, and groups findings into issues, and keeps an issue open until an audit re-checks it, so its count is legitimately much smaller and moves on its own schedule.
 
+## Server version
+
+The `serverInfo.version` the server returns in its `initialize` response is the [cloud version](/cloud/version) (for example `1.1.0-dev7`), not the CLI's `v0.0.x` number and not a fixed value. It changes with cloud deploys, so do not pin a client to it. The suffix `-dev<N>` is the Nth deploy toward a release: compare builds by the `sha` from `GET /health`, never by parsing the string.
+
 ## Credits
 
 Cloud audits are pay-as-you-go: credits are spent while the audit runs, and nothing is charged up front. From the agent's side a paid audit looks like this:
@@ -241,3 +245,4 @@ Full setup and tool reference: [`squirrel mcp`](/cli/mcp).
 - [`squirrel keys`](/cli/keys) - mint and manage keys from the terminal
 - [`squirrel mcp`](/cli/mcp) - the local stdio server
 - [Cloud credits](/cloud/credits) - how audits are metered
+- [Cloud version](/cloud/version) - what `serverInfo.version` means

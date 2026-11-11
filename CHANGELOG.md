@@ -63,6 +63,7 @@ Structured data checks now say what they could and could not read. The schema pr
 - The report counts, per URL-based page type, the pages the crawl knows of and the pages it audited (`scanScope.pageTypes`, JSON `meta.pageTypes` as schema 1.14, `<page-type>` in the llm and XML reports, and a `Page types audited:` line in the text, markdown and console reports), so a capped or Surface audit can say "1 of 36 product pages". A complete audit reports equal counts (#1744).
 - The report counts, per URL-based page type, the pages the crawl knows of and the pages it audited (`scanScope.pageTypes`, JSON `meta.pageTypes` as schema 1.13, `<page-type>` in the llm and XML reports, and a `Page types audited:` line in the text, markdown and console reports), so a capped or Surface audit can say "1 of 36 product pages". A complete audit reports equal counts (#1744).
 - The local MCP server has a `list_pages` tool: the page map of a stored audit (the rows of `squirrel pages -f json`) with the `missing`, `duplicate`, `too_long`, `orphan`, `section` and `page` filters and `limit`, `offset` and `hasMore` paging. It reads the project store, so it needs no login and uses no credits. #701
+- Docs: a Cloud version page explaining that the cloud has its own version (`1.1.0-dev<N>` onward, separate from the CLI's `v0.0.x`) and where to read it: the dashboard sidebar badge, `GET /health` and the MCP `serverInfo.version` #1743
 
 ### Fixed
 
