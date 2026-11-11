@@ -73,7 +73,7 @@
 // them compose means caching the cluster's verdict against its representative's
 // identity, which is a whole-crawl property rather than a per-page one.
 
-import { SLOW_BLOCKING_SCRIPT_MS } from "@squirrelscan/utils/constants";
+import { isSlowBlockingScript } from "@squirrelscan/utils/constants";
 import type { CheckResult, PageFeatureRow, PageRecord } from "@squirrelscan/core-contracts";
 import type { ParsedPage, RuleMeta, SiteData } from "@squirrelscan/rules";
 
@@ -127,8 +127,8 @@ export const PAGE_RULE_SCRIPT_FIELDS = [
   "content",
   "sourceMapHeader",
   "sourcePages",
-  // Hashed as whether it is over SLOW_BLOCKING_SCRIPT_MS, never as the number
-  // (see `scriptEntryValue`): a timing differs on every run, and the key would too.
+  // Hashed as whether it counts as a slow blocking script (`isSlowBlockingScript`, which also reads
+  // `hostFirst`), never as the number: a timing differs on every run, and the key would too.
   "responseMs",
 ] as const;
 
@@ -160,18 +160,18 @@ function projectEntries(
   if (!Array.isArray(entries)) return null;
   return entries.map((entry) => {
     const record = (entry ?? {}) as Record<string, unknown>;
-    return fields.map((field) => entryValue(field, record[field]));
+    return fields.map((field) => entryValue(field, record[field], record));
   });
 }
 
-// `responseMs` is a measurement of THIS run. A rule only branches on whether it is
-// over SLOW_BLOCKING_SCRIPT_MS, so that is what the key sees: an unchanged site then
+// `responseMs` is a measurement of THIS run. A rule only branches on whether it counts as
+// slow (`isSlowBlockingScript`: over 2 s, or over 1 s from a warm host), so that is what the key sees: an unchanged site then
 // keeps its reuse, while a script turning slow (or fast) still invalidates the
 // pages that reference it. The cost is that a replayed message can quote the
 // previous run's milliseconds.
-function entryValue(field: string, value: unknown): unknown {
+function entryValue(field: string, value: unknown, record: Record<string, unknown>): unknown {
   if (field !== "responseMs") return value;
-  return typeof value === "number" ? value > SLOW_BLOCKING_SCRIPT_MS : null;
+  return typeof value === "number" ? isSlowBlockingScript(value, record.hostFirst === true) : null;
 }
 
 /**

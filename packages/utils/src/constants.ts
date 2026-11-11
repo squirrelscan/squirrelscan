@@ -50,6 +50,24 @@ export const ASSET_COMPRESSION_LIMITS = {
  */
 export const SLOW_BLOCKING_SCRIPT_MS = 1000;
 
+/**
+ * A script this slow is reported whether or not it was the first request to its host (#1751).
+ * Under it, a time over {@link SLOW_BLOCKING_SCRIPT_MS} counts only for a warm host.
+ */
+export const SLOW_BLOCKING_SCRIPT_HARD_MS = 2000;
+
+/**
+ * Whether a measured script response time is a slow blocking script. Hysteresis, because the time is a
+ * wall-clock reading of one request and a run that crosses 1000 ms and one that does not would open and
+ * close the same issue: over 2000 ms always counts; over 1000 ms counts only when the script was not the
+ * first one fetched from its host, since that request also pays for DNS and the TLS handshake.
+ */
+export function isSlowBlockingScript(responseMs: number | undefined, hostFirst: boolean | undefined): boolean {
+  if (responseMs === undefined) return false;
+  if (responseMs > SLOW_BLOCKING_SCRIPT_HARD_MS) return true;
+  return responseMs > SLOW_BLOCKING_SCRIPT_MS && hostFirst !== true;
+}
+
 // Script content fetch limits (for security scanning)
 export const SCRIPT_FETCH_LIMITS = {
   MAX_SCRIPTS_TO_FETCH: 50,
