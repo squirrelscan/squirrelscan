@@ -39,24 +39,46 @@ interface Tally {
 const GTM_ID = String.raw`GTM-[A-Z0-9]{3,}`;
 const GA4_ID = String.raw`G-[A-Z0-9]{4,}`;
 
-/**
- * A Google Tag Manager URL, read as a URL rather than matched as text: a lookalike such as
- * `https://evil.example/?x=googletagmanager.com/gtm.js` or `googletagmanager.com.evil.example` contains the
- * same characters but is not Google's. Returns the exact pathname (lowercased) and the `id` query value when
- * the host is `googletagmanager.com` or `www.googletagmanager.com`, else null. A relative `src` resolves
- * against a placeholder host, so it never matches; a protocol-relative one (`//www.googletagmanager.com/...`) keeps
- * its own host.
- */
-function googleTagManagerUrl(src: string): { path: string; id: string | null } | null {
-  let url: URL;
+/** A `src`, resolved as a browser would. A relative one resolves against a placeholder host, so it never matches a vendor host. */
+function parseSrc(src: string): URL | null {
   try {
-    url = new URL(src.trim(), "https://x.invalid/");
+    return new URL(src.trim(), "https://x.invalid/");
   } catch {
     return null;
   }
+}
+
+/** A query parameter, found whatever its letter case (`?id=`, `?ID=`). The first one wins, as `URLSearchParams.get` does. */
+function queryParam(url: URL, name: string): string | null {
+  for (const [key, value] of url.searchParams) if (key.toLowerCase() === name) return value;
+  return null;
+}
+
+/**
+ * A vendor URL, read as a URL rather than matched as text: a lookalike such as
+ * `https://evil.example/?x=googletagmanager.com/gtm.js` or `googletagmanager.com.evil.example` contains the
+ * same characters but is not the vendor's. Returns the pathname and the URL when the host is one of `hosts`
+ * exactly (`subdomains` also accepts any subdomain of them), else null. Port, userinfo and leading
+ * whitespace do not change the host.
+ */
+function vendorUrl(
+  src: string,
+  hosts: readonly string[],
+  subdomains = false,
+): { path: string; url: URL } | null {
+  const url = parseSrc(src);
+  if (!url) return null;
   const host = url.hostname.toLowerCase();
-  if (host !== "googletagmanager.com" && host !== "www.googletagmanager.com") return null;
-  return { path: url.pathname.toLowerCase(), id: url.searchParams.get("id") };
+  const ok = hosts.some((h) => host === h || (subdomains && host.endsWith(`.${h}`)));
+  return ok ? { path: url.pathname, url } : null;
+}
+
+const GTM_HOSTS = ["googletagmanager.com", "www.googletagmanager.com"] as const;
+
+/** A Google Tag Manager URL: the lowercased pathname and the `id` parameter, in any letter case. */
+function googleTagManagerUrl(src: string): { path: string; id: string | null } | null {
+  const found = vendorUrl(src, GTM_HOSTS);
+  return found ? { path: found.path.toLowerCase(), id: queryParam(found.url, "id") } : null;
 }
 
 /**
@@ -65,6 +87,9 @@ function googleTagManagerUrl(src: string): { path: string; id: string | null } |
  * text (a query string, a path segment, a longer hostname) from counting.
  */
 const INLINE_GTM_LOADER = /['"`](?:https?:)?\/\/(?:www\.)?googletagmanager\.com\/gtm\.js(?=[?#'"`])/i;
+
+/** The Clarity loader as an inline script writes it, anchored the same way. */
+const INLINE_CLARITY_LOADER = /['"`](?:https?:)?\/\/(?:www\.)?clarity\.ms\/tag(?=[/?#'"`])/i;
 
 export const duplicateTagsRule: Rule = {
   meta: {
@@ -112,15 +137,27 @@ export const duplicateTagsRule: Rule = {
       } else if (/fathom/i.test(src) && /\.js(\?|#|$)/i.test(src)) {
         const id = script.getAttribute("data-site");
         if (id) bump(FATHOM, id, "loader");
-      } else if ((m = /cdn\.segment\.(?:com|io)\/analytics\.js\/v1\/([\w-]+)\/analytics(?:\.min)?\.js/i.exec(src))) {
+      } else if (
+        (m = /^\/analytics\.js\/v1\/([\w-]+)\/analytics(?:\.min)?\.js$/i.exec(
+          vendorUrl(src, ["cdn.segment.com", "cdn.segment.io"])?.path ?? "",
+        ))
+      ) {
         bump(SEGMENT, m[1]!, "loader");
-      } else if ((m = /cdn\.(?:eu\.)?amplitude\.com\/script\/([\w-]+)\.js/i.exec(src))) {
+      } else if (
+        (m = /^\/script\/([\w-]+)\.js$/i.exec(
+          vendorUrl(src, ["cdn.amplitude.com", "cdn.eu.amplitude.com"])?.path ?? "",
+        ))
+      ) {
         bump(AMPLITUDE, m[1]!, "loader");
-      } else if ((m = /heapanalytics\.com\/js\/heap-([\w-]+)\.js/i.exec(src))) {
+      } else if (
+        (m = /^\/js\/heap-([\w-]+)\.js$/i.exec(vendorUrl(src, ["heapanalytics.com"], true)?.path ?? ""))
+      ) {
         bump(HEAP, m[1]!, "loader");
-      } else if ((m = /static\.hotjar\.com\/c\/hotjar-([\w-]+)\.js/i.exec(src))) {
+      } else if (
+        (m = /^\/c\/hotjar-([\w-]+)\.js$/i.exec(vendorUrl(src, ["static.hotjar.com"])?.path ?? ""))
+      ) {
         bump(HOTJAR, m[1]!, "loader");
-      } else if ((m = /clarity\.ms\/tag\/([\w-]+)/i.exec(src))) {
+      } else if ((m = /^\/tag\/([\w-]+)/i.exec(vendorUrl(src, ["clarity.ms"], true)?.path ?? ""))) {
         bump(CLARITY, m[1]!, "loader");
       }
     }
@@ -155,7 +192,7 @@ export const duplicateTagsRule: Rule = {
       each(/\bamplitude\.init\s*\(\s*['"]([\w-]+)['"]/gi, AMPLITUDE);
       each(/\bheap\.load\s*\(\s*['"]([\w-]+)['"]/gi, HEAP);
       each(/\bhjid\s*:\s*['"]?(\d+)/gi, HOTJAR);
-      if (/clarity\.ms\/tag/i.test(text)) {
+      if (INLINE_CLARITY_LOADER.test(text)) {
         each(/['"]clarity['"]\s*,\s*['"]script['"]\s*,\s*['"]([\w-]+)['"]/gi, CLARITY);
       }
     }
