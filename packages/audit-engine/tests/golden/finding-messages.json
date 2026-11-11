@@ -2124,6 +2124,12 @@
    "hreflang|info|No hreflang tags found (not required for single-language sites)|null|"
   ]
  },
+ "i18n/hreflang-targets": {
+  "digest": "126204994959906",
+  "lines": [
+   "hreflang-targets|skipped|No hreflang links to other pages were found in the crawl||"
+  ]
+ },
  "i18n/lang-attribute": {
   "digest": "187066589627962",
   "lines": [

@@ -208,7 +208,9 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // site's pairs are judged and all share a word, so the rule emits its single pass row).
       // 103746 -> 103747: ax/ai-crawlers adds one info check, search-engine-access (Googlebot,
       // Bingbot and Applebot against the audited URL); no new rule id.
-      expect(v1.findings.length).toBe(103747);
+      // 103747 -> 103748: i18n/hreflang-targets is site-scoped and adds one check (the synthetic
+      // site has no hreflang links, so the rule emits its single skipped row).
+      expect(v1.findings.length).toBe(103748);
       // Tripwire: EXTENDING a rule must never add a tally key, so a change here
       // is only correct alongside a deliberate new rule id. 266 -> 267 is
       // content/hidden-text, 267 -> 268 content/thin-vs-site-norm, 268 -> 269
@@ -238,9 +240,9 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // 309 -> 310 images/hotlinked, 310 -> 311 content/h1-title-alignment,
       // 311 -> 312 schema/expected-type, 312 -> 313 security/tls-certificate,
       // 313 -> 314 crawl/single-page-site, 314 -> 315 perf/framework-data-payload, 315 -> 316 perf/content-in-js-bundle,
-      // 316 -> 317 links/anchor-mismatch;
+      // 316 -> 317 links/anchor-mismatch, 317 -> 318 i18n/hreflang-targets;
       // anything else means a rule id leaked in, so fix that rather than this number.
-      expect(v1.perRuleTally.length).toBe(317);
+      expect(v1.perRuleTally.length).toBe(318);
       expect(v1.perRuleTally.find((t) => t.ruleId === "security/tls-certificate")).toEqual({
         ruleId: "security/tls-certificate",
         pass: 0,
