@@ -225,17 +225,38 @@ describe("absent, declared, invalid and not checked are four states (#1649)", ()
     expect(checks[0]?.message).toContain("HTTP 403");
   });
 
-  test("a missing robots.txt (or one never read) is not checked", () => {
+  test("a definite 404 (exists false, no error) is absent: no policy declared", () => {
     const missing: RobotsTxtData = { exists: false, url: "https://example.com/robots.txt", content: null, sizeBytes: 0, sitemaps: [], rules: [], errors: [] };
-    expect(run(missing)[0]).toMatchObject({ status: "skipped", value: "not-checked" });
+    expect(run(missing)[0]).toMatchObject({ status: "info", value: "absent" });
+  });
+
+  test("robots.txt never read in this audit is not checked", () => {
+    expect(run(null)[0]).toMatchObject({ status: "skipped", value: "not-checked" });
+  });
+
+  test("a robots.txt reported present without content is not checked", () => {
+    const odd: RobotsTxtData = { exists: true, url: "https://example.com/robots.txt", content: null, sizeBytes: 0, sitemaps: [], rules: [], errors: [] };
+    expect(run(odd)[0]).toMatchObject({ status: "skipped", value: "not-checked" });
   });
 
   test("a read that reached the 512 KiB cap is not checked: the policy may sit past it", () => {
     const big = { ...robots("User-agent: *\nDisallow: /a"), sizeBytes: 512 * 1024 };
     expect(run(big)[0]).toMatchObject({ status: "skipped", value: "not-checked" });
     expect(robotsNotReadReason(big)).toContain("512 KiB");
-    const justUnder = { ...robots("User-agent: *\nDisallow: /a"), sizeBytes: 512 * 1024 - 1 };
+    const justUnder = { ...robots("User-agent: *\nDisallow: /a"), sizeBytes: 512 * 1024 - 5 };
     expect(run(justUnder)[0]).toMatchObject({ status: "info", value: "absent" });
+  });
+
+  test("a BOM-prefixed file cut at the cap (decoded size cap minus 3) is not checked, not absent", () => {
+    const bomCut = { ...robots("User-agent: *\nDisallow: /a"), sizeBytes: 512 * 1024 - 3 };
+    expect(run(bomCut)[0]).toMatchObject({ status: "skipped", value: "not-checked" });
+  });
+
+  test("exactly the cap and one byte over are not checked", () => {
+    for (const sizeBytes of [512 * 1024, 512 * 1024 + 1]) {
+      const r = { ...robots("User-agent: *\nDisallow: /a"), sizeBytes };
+      expect(run(r)[0]).toMatchObject({ status: "skipped", value: "not-checked" });
+    }
   });
 
   test("a directive found in a capped read is still reported as declared", () => {
