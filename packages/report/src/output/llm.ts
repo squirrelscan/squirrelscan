@@ -62,6 +62,7 @@ import {
   followedStartRedirect,
   publishedReportNote,
   scanScopeUnfetched,
+  scanScopePageTypes,
   seedRedirect,
   seedRedirectFollowUp,
 } from "../coverage";
@@ -449,6 +450,10 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
     lines.push(
       `<scan-scope origin="${s.origin}" crawled="${s.pagesCrawled}"${cap}${requested} capped="${s.capped}"${stop}${unfetched}${variants}/>`,
     );
+    // Pages known against pages audited, per URL-based page type (#1744).
+    for (const t of scanScopePageTypes(report)) {
+      lines.push(`<page-type name="${escapeXml(t.type)}" discovered="${t.discovered}" audited="${t.audited}"/>`);
+    }
   }
 
   // repo#2661: a capped published report lists a sample of each issue's pages

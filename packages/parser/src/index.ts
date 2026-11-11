@@ -28,7 +28,7 @@ export {
   MAX_ANCHOR_PARTS,
 } from "./extractors/anchor-text";
 
-export { detectPageType, type PageType } from "./page-type";
+export { detectPageType, pageTypeFromUrl, type PageType } from "./page-type";
 
 export { isHiddenFromMarkup } from "./hidden-markup";
 
