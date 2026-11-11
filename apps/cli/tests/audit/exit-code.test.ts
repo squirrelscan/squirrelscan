@@ -170,6 +170,7 @@ describe("publishSkipReason follows the publish decision's order", () => {
     ephemeral: false,
     explicitPublish: false,
     ruleFilterActive: false,
+    targeted: false,
     noPublish: false,
     configPublish: true,
   };
@@ -191,6 +192,8 @@ describe("publishSkipReason follows the publish decision's order", () => {
       { ruleFilterActive: true, noPublish: true },
       "rule-filter",
     ],
+    // #1777: a --target-url run is skipped like a rule-filtered one.
+    ["a targeted run", { targeted: true, noPublish: true }, "targeted"],
     ["--no-publish", { noPublish: true }, "no-publish"],
     ["[cloud] publish = false", { configPublish: false }, "config-off"],
     ["nothing else: signed out", {}, "signed-out"],

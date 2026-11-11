@@ -90,6 +90,7 @@ export type PublishSkipReason =
   | "offline"
   | "ephemeral"
   | "rule-filter"
+  | "targeted"
   | "no-publish"
   | "config-off"
   | "signed-out";
@@ -101,6 +102,8 @@ export function publishSkipReason(opts: {
   ephemeral: boolean;
   explicitPublish: boolean;
   ruleFilterActive: boolean;
+  /** #1777: a `--target-url` run. Not published unless --publish is explicit. */
+  targeted?: boolean;
   noPublish: boolean;
   configPublish: boolean;
 }): PublishSkipReason {
@@ -109,6 +112,7 @@ export function publishSkipReason(opts: {
   if (opts.offline) return "offline";
   if (opts.ephemeral && !opts.explicitPublish) return "ephemeral";
   if (opts.ruleFilterActive) return "rule-filter";
+  if (opts.targeted) return "targeted";
   if (opts.noPublish) return "no-publish";
   if (!opts.configPublish) return "config-off";
   return "signed-out";

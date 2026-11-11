@@ -2506,11 +2506,7 @@ export async function runAudit(
         const targeted =
           options.targetUrls && options.targetUrls.length > 0
             ? await Effect.runPromise(
-                targetedCoverageFor(
-                  sqliteStorage,
-                  crawlId,
-                  report.pages.map((p) => p.url)
-                )
+                targetedCoverageFor(sqliteStorage, crawlId)
               )
             : undefined;
         const scanScope: NonNullable<AuditReport["scanScope"]> = {
@@ -3084,6 +3080,7 @@ export function mergeOptionsToConfig(
   config: Config,
   options: RunAuditOptions
 ): Config {
+  const targetedRun = (options.targetUrls?.length ?? 0) > 0;
   const nextExternalLinks = {
     ...config.external_links,
     ...(typeof options.externalLinksEnabled === "boolean"
@@ -3192,12 +3189,15 @@ export function mergeOptionsToConfig(
     },
     // --offline promises no network beyond the audited site itself, so
     // external-link probing (fetches to third-party URLs) is disabled too.
-    external_links: options.offline
-      ? { ...nextExternalLinks, enabled: false }
-      : nextExternalLinks,
+    // A targeted run (#1777) checks no links: the link rules are site-wide and skip, so the status
+    // requests (and the cloud link credits) would be spent for nothing.
+    external_links:
+      options.offline || targetedRun
+        ? { ...nextExternalLinks, enabled: false }
+        : nextExternalLinks,
     // repo#2729: the internal link probe only requests the audited site, so
     // --offline keeps it; --no-internal-links turns it off.
-    ...(options.internalLinksEnabled === false
+    ...(options.internalLinksEnabled === false || targetedRun
       ? { internal_links: { ...config.internal_links, enabled: false } }
       : {}),
     // #2307: --no-classifier turns the page classifier off; absent keeps the config's choice.
