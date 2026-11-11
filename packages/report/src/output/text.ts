@@ -57,6 +57,7 @@ import { groupTechnologies, isLocalOnlyTech, TECH_LOCAL_MARK, techChangeSummary 
 import { SITE_PROFILE_NOTE, siteProfileFlags, siteProfileRows } from "../site-metadata";
 import { EDITOR_SUMMARY_NOTE, editorSummaryView, priorityEffortLabel } from "../editor-summary";
 import { getGroupName, getSubcategoryName, severityLabel } from "../categories";
+import { agentSignalLines } from "../agent-signals";
 import {
   carriedTag,
   coverageLine,
@@ -97,7 +98,8 @@ function pathOnly(url: string): string {
   }
 }
 
-function formatHealthScoreText(score: AuditReport["healthScore"]): string {
+function formatHealthScoreText(report: AuditReport): string {
+  const score = report.healthScore;
   if (!score) return "";
   const lines: string[] = [];
   lines.push(
@@ -117,6 +119,7 @@ function formatHealthScoreText(score: AuditReport["healthScore"]): string {
       // apply to already-stored reports.
       lines.push(`${getGroupName(g.group).padEnd(20)} ${bar} ${g.score}%`);
       lines.push(`  Passed: ${g.passed} | Warnings: ${g.warnings} | Failed: ${g.failed}`);
+      if (g.group === "ai") for (const l of agentSignalLines(report)) lines.push(`  ${l}`);
     }
     lines.push("");
   }
@@ -362,7 +365,7 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
       write(`PARTIAL AUDIT: ${report.statusReason}`);
       write("");
     }
-    write(formatHealthScoreText(report.healthScore));
+    write(formatHealthScoreText(report));
     write("");
   }
 
