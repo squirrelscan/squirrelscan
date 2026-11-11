@@ -841,6 +841,12 @@ export interface AuditReport {
    */
   maxDuration?: MaxDurationCut;
   /**
+   * Present when the crawl-phase backstop (`--crawl-timeout`, #1639) stopped the crawl;
+   * with it `status` is `partial` and `statusReasonCode` is `crawl_timeout` (unless the
+   * run was already failed or blocked). `linkGraphComplete` is false.
+   */
+  crawlPhase?: CrawlPhaseCut;
+  /**
    * Machine-readable class of the failure behind `statusReason` (#1822), so the
    * email template, the dashboard, the MCP tools and Sentry can branch on the
    * cause instead of substring-matching prose. Set alongside `statusReason`;
@@ -1268,6 +1274,20 @@ export interface PublishedReportDetail {
   classesDropped?: number;
 }
 
+/** What the crawl-phase backstop cut from a run (#1639). */
+export interface CrawlPhaseCut {
+  /** The crawl-phase budget that fired, in seconds. */
+  seconds: number;
+  /** Pages the crawl had collected when it stopped. */
+  pagesCollected: number;
+  /** Page cap in effect, when there was one. */
+  pageBudget?: number;
+  /** Discovered pages never fetched. */
+  unfetchedPages: number;
+  /** Always false: site-wide link and sitemap conclusions rest on an incomplete graph. */
+  linkGraphComplete: false;
+}
+
 /** What a `--max-duration` time limit cut from a run (#1271). */
 export interface MaxDurationCut {
   /** The budget, in seconds. */
@@ -1338,6 +1358,8 @@ export interface ScanScope {
    * from the crawl later is still `partial` with reason code `max_duration`.
    */
   maxDuration?: MaxDurationCut;
+  /** The crawl-phase backstop cut (#1639), kept so a rebuilt report is still partial. */
+  crawlPhase?: CrawlPhaseCut;
   /**
    * The config's `[[ignore]]` list as this audit ran it (#1262): each entry's rule
    * pattern and reason, in order, so a report rebuilt later can name the entries

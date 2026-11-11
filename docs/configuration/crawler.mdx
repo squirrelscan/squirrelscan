@@ -18,6 +18,7 @@ per_host_concurrency = 5
 per_host_delay_ms = 50
 max_backoff_ms = 300000
 # max_duration = 240   # seconds, whole audit; unset = no limit
+# crawl_timeout = 7200 # seconds, crawl phase only; unset = derived from pages and per-host rate
 include = []
 exclude = []
 allow_query_params = []
@@ -82,6 +83,22 @@ max_duration = 240
 ```
 
 **CLI override:** `--max-duration <seconds>`. See [Time limit](/cli/audit#time-limit) for what the report says and what is cut.
+
+### `crawl_timeout`
+
+**Type:** `number` (seconds)
+**Default:** unset (derived)
+
+A wall-clock backstop for the crawl phase alone, separate from the whole-run `max_duration`. When it fires the crawler stops, the audit continues on the pages collected and the report has `status: "partial"`, reason code `crawl_timeout` and a `crawlPhase` object (`seconds`, `pagesCollected`, `pageBudget`, `unfetchedPages`, `linkGraphComplete: false`). The link graph is incomplete in that case, so site-wide link and sitemap conclusions may be wrong. Must be greater than zero and at most 21600 (6 hours).
+
+Unset, the backstop is derived from the page budget and the effective per-host rate (the smaller of `concurrency` and `per_host_concurrency`), at 60 seconds per page plus setup slack, never below 2 minutes, never above 6 hours and never above `max_duration` when that is set. A polite single-host crawl of a few thousand pages therefore gets the time it needs. Per-request watchdogs are not affected by this setting.
+
+```toml
+[crawler]
+crawl_timeout = 7200
+```
+
+**CLI override:** `--crawl-timeout <seconds>`.
 
 ### `coverage`
 

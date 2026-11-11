@@ -25,6 +25,7 @@ squirrel audit <url> [options]
 | `--max-pages` | `-m` | Maximum pages to crawl | the [level's](/guides/audit-levels) page budget |
 | `--max-depth` | | Maximum crawl depth from the seed (start page = 0) | unlimited |
 | `--max-duration` | | Wall-clock budget for the whole audit, in seconds. At the limit the audit stops launching new work and writes a `partial` report (see [Time limit](#time-limit)) | no limit |
+| `--crawl-timeout` | | Wall-clock backstop for the crawl phase alone, in seconds (max 21600). At the limit the crawl stops and the audit writes a `partial` report with reason code `crawl_timeout` and a `crawlPhase` object. See [`crawl_timeout`](/configuration/crawler#crawl_timeout) | derived from pages and per-host rate |
 | `--concurrency` | | Global crawl worker pool size (overrides `[crawler] concurrency`) | `5` |
 | `--per-host` | | Max concurrent requests per host (overrides `[crawler] per_host_concurrency`) | `5` |
 | `--level` | | [Audit level](/guides/audit-levels): `quick`, `surface`, `full` | auth-aware (see below) |

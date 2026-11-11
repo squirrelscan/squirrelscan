@@ -270,4 +270,38 @@ describe("resolveCrawlPhaseTimeoutMs", () => {
       CRAWL_PHASE_MAX_TIMEOUT_MS
     );
   });
+
+  test("ceiling is above the old 30 minute clamp and still finite (#1639)", () => {
+    expect(CRAWL_PHASE_MAX_TIMEOUT_MS).toBeGreaterThan(1_800_000);
+    expect(Number.isFinite(CRAWL_PHASE_MAX_TIMEOUT_MS)).toBe(true);
+  });
+
+  test("a polite single-host crawl of 3,913 pages is no longer cut at 30 minutes", () => {
+    // 3,913 pages, per-host concurrency 1: the pool size does not help.
+    const ms = resolveCrawlPhaseTimeoutMs(opts(), 3913, 8, 1);
+    expect(ms).toBeGreaterThan(1_800_000);
+    expect(ms).toBeLessThanOrEqual(CRAWL_PHASE_MAX_TIMEOUT_MS);
+  });
+
+  test("the per-host limit bounds the effective parallelism", () => {
+    expect(resolveCrawlPhaseTimeoutMs(opts(), 25, 5, 1)).toBe(
+      25 * CRAWL_PHASE_PER_PAGE_BUDGET_MS + CRAWL_PHASE_SETUP_SLACK_MS
+    );
+  });
+
+  test("an explicit value is bounded by the ceiling", () => {
+    expect(
+      resolveCrawlPhaseTimeoutMs(
+        opts({ crawlPhaseTimeoutMs: 10 * CRAWL_PHASE_MAX_TIMEOUT_MS }),
+        25,
+        1
+      )
+    ).toBe(CRAWL_PHASE_MAX_TIMEOUT_MS);
+  });
+
+  test("the derived value does not exceed the whole-run budget", () => {
+    expect(resolveCrawlPhaseTimeoutMs(opts(), 3913, 1, 1, 600_000)).toBe(
+      600_000
+    );
+  });
 });

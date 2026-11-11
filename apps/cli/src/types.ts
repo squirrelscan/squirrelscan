@@ -202,6 +202,7 @@ import type {
   AuditStatus as _AS,
   AuditStatusReasonCode as _ASRC,
   MaxDurationCut as _MDC,
+  CrawlPhaseCut as _CPC,
   CacheStats as _CST,
   CategoryScore as _CS,
   CheckItemSource,
@@ -225,6 +226,7 @@ export type AuditStatus = _AS;
 export type AuditFailureReasonCode = _AFRC;
 export type AuditStatusReasonCode = _ASRC;
 export type MaxDurationCut = _MDC;
+export type CrawlPhaseCut = _CPC;
 export type CategoryScore = _CS;
 export type GroupScore = _GS;
 export type HealthScore = _HS;
@@ -518,6 +520,8 @@ export interface AuditReport {
   statusReasonCode?: AuditStatusReasonCode;
   /** What the `--max-duration` time limit cut (#1271). Mirrors core-contracts `AuditReport`. */
   maxDuration?: MaxDurationCut;
+  /** What the crawl-phase backstop cut (#1639). Mirrors core-contracts `AuditReport`. */
+  crawlPhase?: CrawlPhaseCut;
   /**
    * Root fetches the site refused (401/403/429, a bot wall). Mirrors the field
    * on the engine's AuditReport; the two types are structurally different, so
@@ -678,6 +682,8 @@ export interface AuditReport {
     startRedirect?: SeedRedirectRecord;
     /** What the `--max-duration` time limit cut (#1271), so a rebuilt report is still partial. */
     maxDuration?: MaxDurationCut;
+    /** The crawl-phase backstop cut (#1639), so a rebuilt report is still partial. */
+    crawlPhase?: CrawlPhaseCut;
     /** The `[[ignore]]` list as this audit ran it (#1262). */
     ignore?: {
       entries: Array<{ rule: string; reason?: string }>;
