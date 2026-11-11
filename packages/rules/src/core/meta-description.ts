@@ -47,44 +47,41 @@ export const metaDescriptionRule: Rule = {
 
     const len = description.length;
 
-    if (len < opts.min_length && skippablePageType(ctx.parsed, SHORT_OK_PAGE_TYPES) !== null) {
+    // Separate checks per side, both reported on every page: see core/meta-title (pub#1765).
+    const label = (bound: "under" | "over", limit: number) => [
+      { id: ctx.page.url, label: `${description.slice(0, 50)} (${len} chars, ${bound} ${limit})` },
+    ];
+    const expected = `${opts.min_length}-${opts.max_length} characters`;
+    const tooShort = len < opts.min_length;
+    const tooLong = len > opts.max_length;
+    const skipType = tooShort ? skippablePageType(ctx.parsed, SHORT_OK_PAGE_TYPES) : null;
+
+    if (tooShort && skipType !== null) {
       // A contact or legal page is not a search target worth a long snippet (pub#841). Too long still applies.
-      checks.push(pageTypeSkip("meta-description", skippablePageType(ctx.parsed, SHORT_OK_PAGE_TYPES)!, "The description length floor"));
-    } else if (len < opts.min_length) {
+      checks.push(pageTypeSkip("meta-description-too-short", skipType, "The description length floor"));
+    } else if (tooShort) {
       checks.push({
-        name: "meta-description",
+        name: "meta-description-too-short",
         status: "warn",
-        message: "Description too short",
+        message: `Description too short (${len} chars, min ${opts.min_length})`,
         value: description,
-        expected: `${opts.min_length}-${opts.max_length} characters`,
-        items: [
-          {
-            id: ctx.page.url,
-            label: `${description.slice(0, 50)} (${len} chars)`,
-          },
-        ],
-      });
-    } else if (len > opts.max_length) {
-      checks.push({
-        name: "meta-description",
-        status: "warn",
-        message: "Description too long",
-        value: description,
-        expected: `${opts.min_length}-${opts.max_length} characters`,
-        items: [
-          {
-            id: ctx.page.url,
-            label: `${description.slice(0, 50)} (${len} chars)`,
-          },
-        ],
+        expected,
+        items: label("under", opts.min_length),
       });
     } else {
+      checks.push({ name: "meta-description-too-short", status: "pass", message: "Description is long enough", value: description });
+    }
+    if (tooLong) {
       checks.push({
-        name: "meta-description",
-        status: "pass",
-        message: "Description length OK",
+        name: "meta-description-too-long",
+        status: "warn",
+        message: `Description too long (${len} chars, max ${opts.max_length})`,
         value: description,
+        expected,
+        items: label("over", opts.max_length),
       });
+    } else {
+      checks.push({ name: "meta-description-too-long", status: "pass", message: "Description is short enough", value: description });
     }
 
     return { checks };

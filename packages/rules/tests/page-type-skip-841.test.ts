@@ -72,8 +72,8 @@ describe("before: no trusted label keeps today's findings", () => {
     test(`${name}: thin, short title and short description are still reported`, async () => {
       const get = await run(page({ ...CONTACT, classification }));
       expect(get("content/word-count")[0]?.status).toBe("warn");
-      expect(get("core/meta-title")[0]?.message).toBe("Title too short");
-      expect(get("core/meta-description")[0]?.message).toBe("Description too short");
+      expect(get("core/meta-title").find((c) => c.name === "meta-title-too-short")?.message).toContain("Title too short");
+      expect(get("core/meta-description").find((c) => c.name === "meta-description-too-short")?.message).toContain("Description too short");
     });
   }
 });
@@ -87,8 +87,8 @@ describe("after: a trusted contact or legal label skips them, and counts the ski
     expect(wc.details).toMatchObject({ pageType: "contact", skippedByType: 1, foldKey: "page-type" });
     // The in-rule skips carry the check's REAL name: the resolution signal keys on ruleId|checkName.
     for (const [id, name] of [
-      ["core/meta-title", "meta-title"],
-      ["core/meta-description", "meta-description"],
+      ["core/meta-title", "meta-title-too-short"],
+      ["core/meta-description", "meta-description-too-short"],
     ] as const) {
       const check = get(id).find((c) => c.name === name)!;
       expect(check.status).toBe("skipped");
@@ -108,8 +108,8 @@ describe("after: a trusted contact or legal label skips them, and counts the ski
   test("a title or description that is too LONG still applies on a contact page", async () => {
     const long = "x".repeat(200);
     const get = await run(page({ title: long, description: long, body: CONTACT.body, classification: cls("contact", 0.99) }));
-    expect(get("core/meta-title")[0]?.message).toBe("Title too long");
-    expect(get("core/meta-description")[0]?.message).toBe("Description too long");
+    expect(get("core/meta-title").find((c) => c.name === "meta-title-too-long")?.message).toContain("Title too long");
+    expect(get("core/meta-description").find((c) => c.name === "meta-description-too-long")?.message).toContain("Description too long");
   });
 
   test("a missing title or description is still reported on a legal page", async () => {
@@ -127,8 +127,8 @@ describe("pages of other types are unchanged", () => {
     test(`${label} (model 0.99) keeps the 300-word floor and the length floors`, async () => {
       const get = await run(page({ ...CONTACT, classification: cls(label, 0.99) }));
       expect(statuses(get("content/word-count"))).toEqual(["warn"]);
-      expect(get("core/meta-title")[0]?.message).toBe("Title too short");
-      expect(get("core/meta-description")[0]?.message).toBe("Description too short");
+      expect(get("core/meta-title").find((c) => c.name === "meta-title-too-short")?.message).toContain("Title too short");
+      expect(get("core/meta-description").find((c) => c.name === "meta-description-too-short")?.message).toContain("Description too short");
     });
   }
 });
@@ -206,14 +206,14 @@ describe("resolution signal: a page-type skip resolves the earlier finding, it d
   test("the title and description floors resolve on the contact page, keyword-stuffing on the legal page", async () => {
     const signal = await collect();
     for (const check of ["meta-title", "meta-description"]) {
-      const key = resolutionCheckKey(`core/${check}`, check);
+      const key = resolutionCheckKey(`core/${check}`, `${check}-too-short`);
       expect(signal.notEvaluated?.[key] ?? []).not.toContain(h(CONTACT_URL));
     }
     const stuffing = resolutionCheckKey("content/keyword-stuffing", "keyword-stuffing");
     expect(signal.notEvaluated?.[stuffing] ?? []).not.toContain(h(LEGAL_URL));
     expect(signal.failing[stuffing] ?? []).not.toContain(h(LEGAL_URL));
     // The marketing page's short title is still a finding.
-    expect(signal.failing[resolutionCheckKey("core/meta-title", "meta-title")]).toContain(h(MARKETING_URL));
+    expect(signal.failing[resolutionCheckKey("core/meta-title", "meta-title-too-short")]).toContain(h(MARKETING_URL));
   });
 });
 
