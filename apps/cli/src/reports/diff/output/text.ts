@@ -2,6 +2,8 @@ import { writeReportFile } from "@/reports/utils";
 
 import type { DiffChange, DiffReport, IssueInstance } from "../types";
 
+import { notComparedRows } from "../not-compared";
+
 function formatIssue(issue: IssueInstance): string {
   const label = issue.target.label ? ` (${issue.target.label})` : "";
   const target = `${issue.target.type}:${issue.target.id}${label}`;
@@ -41,14 +43,24 @@ export function renderDiffText(diff: DiffReport): string {
   lines.push("");
 
   lines.push("SUMMARY");
+  const notCompared = notComparedRows(diff);
   lines.push(
-    `Added: ${diff.summary.added} | Removed: ${diff.summary.removed} | Changed: ${diff.summary.changed} | Regressions: ${diff.summary.regressions} | Improvements: ${diff.summary.improvements}`
+    `Added: ${diff.summary.added} | Removed: ${diff.summary.removed} | Changed: ${diff.summary.changed} | Regressions: ${diff.summary.regressions} | Improvements: ${diff.summary.improvements}${notCompared.length > 0 ? ` | Not compared: ${notCompared.length}` : ""}`
   );
   lines.push("");
 
   lines.push(...renderSection("ADDED", diff.added.map(formatIssue)));
   lines.push(...renderSection("REMOVED", diff.removed.map(formatIssue)));
   lines.push(...renderSection("CHANGED", diff.changed.map(formatChange)));
+  // Gone from the current report but not counted as fixed: the rule did not run over the same scope (#1748).
+  if (notCompared.length > 0) {
+    lines.push(
+      ...renderSection(
+        "NOT COMPARED (not counted as fixed)",
+        notCompared.map((r) => `${formatIssue(r.issue)} - ${r.text}`)
+      )
+    );
+  }
 
   return lines.join("\n");
 }
