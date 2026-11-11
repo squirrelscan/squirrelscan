@@ -1354,6 +1354,7 @@ export function fetchAssetsFromOccurrences(
         content: fetch.content,
         sourcePages: Array.from(resourceOccurrences.scripts.get(fetch.url) ?? []),
         ...(fetch.fetchSkipReason ? { fetchSkipReason: fetch.fetchSkipReason } : {}),
+        ...(fetch.responseMs !== undefined ? { responseMs: fetch.responseMs } : {}),
         rateLimited: fetch.rateLimited,
         wafBlocked: fetch.wafBlocked,
         ...(withheld(fetch.url, fetch.status, fetch.finalUrl) ? { headersWithheld: true } : {}),

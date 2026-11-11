@@ -44,6 +44,12 @@ export interface ScriptFetchResult {
   wafBlocked?: boolean;
   /** Never requested: the `maxTotalBytes` or `totalTimeoutMs` bound was reached (#1255). */
   fetchSkipReason?: "memory-cap" | "time-budget";
+  /**
+   * Milliseconds this audit's request took to answer, body included (#1751). Set only
+   * for a request that got an HTTP answer; absent for a skip, a refusal, a network
+   * error or timeout, and for a script the CLI content store served without a request.
+   */
+  responseMs?: number;
 }
 
 export interface ScriptFetcherOptions {
@@ -365,8 +371,11 @@ function fetchSingleScript(
       result.error === ASSET_FETCH_REFUSED_ERROR
         ? "ok"
         : scriptOutcome(result, options.anyContentType === true);
-    options.budget?.record(url, Date.now() - startedAt, outcome);
-    return result;
+    const elapsed = Date.now() - startedAt;
+    options.budget?.record(url, elapsed, outcome);
+    return result.status !== null && result.error !== ASSET_FETCH_REFUSED_ERROR
+      ? { ...result, responseMs: elapsed }
+      : result;
   });
 }
 

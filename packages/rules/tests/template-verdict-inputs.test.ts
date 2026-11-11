@@ -33,7 +33,7 @@ const WHOLE_DOCUMENT = new Set(["page.html", "page.url", "textContent", "innerHT
 type Reviewed = { keyed: string[]; unkeyed: string[] };
 
 /**
- * `getCWVHints` (src/performance/cwv.ts), which three rules hand their document
+ * `getCWVHints` (src/performance/cwv.ts), which two template rules hand their document
  * and raw HTML to. The scan counts every read in that file, so this is all of
  * them: preload, prefetch, preconnect and dns-prefetch links, script `type`,
  * `async`, `defer` and `nomodule`, stylesheet `media`, images and iframes with
@@ -165,7 +165,6 @@ const REVIEWED: Record<string, Reviewed> = {
     ],
   },
   "perf/preconnect": CWV_HINTS,
-  "perf/render-blocking": CWV_HINTS,
   "perf/unminified-css": {
     keyed: ["@href"],
     // An exact `rel="stylesheet"`: the key matches the token, so

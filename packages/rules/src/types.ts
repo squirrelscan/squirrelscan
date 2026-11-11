@@ -128,10 +128,9 @@ export type RuleSeverity = "error" | "warning" | "info";
  *
  *  - the raw HTML (`ctx.page.html`): `core/doctype`, `a11y/focus-visible`,
  *    `analytics/consent-mode`, `analytics/gtm-present`, `perf/js-libraries`;
- *  - everything `getCWVHints` reads, which `perf/font-loading`,
- *    `perf/preconnect` and `perf/render-blocking` hand their document and raw
- *    HTML to: preload, prefetch, preconnect and dns-prefetch links, script
- *    `type`, `async`, `defer` and `nomodule`, stylesheet `media`, and images and
+ *  - everything `getCWVHints` reads, which `perf/font-loading` and
+ *    `perf/preconnect` hand their document and raw HTML to: preload, prefetch,
+ *    preconnect and dns-prefetch links, script `type`, `async`, `defer` and `nomodule`, stylesheet `media`, and images and
  *    iframes with their size and style (`perf/font-loading` also reads every
  *    `<link href>`);
  *  - inline `<script>` and `<style>` bodies and the script `type`: `perf/legacy-js`
