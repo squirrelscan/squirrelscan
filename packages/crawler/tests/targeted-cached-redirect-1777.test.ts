@@ -34,8 +34,13 @@ function response(url: string, redirectTo?: string): FetchResponse {
     redirectChain: {
       sourceUrl: url,
       finalUrl,
+      // A followed redirect's chain lists the source and where it landed, as the real fetchers record it:
+      // the engine reads a redirect marker by that second hop (#1762).
       hops: redirectTo
-        ? [{ url, statusCode: 301, type: "http" as const }]
+        ? [
+            { url, statusCode: 301, type: "http" as const },
+            { url: finalUrl, statusCode: 200, type: "http" as const },
+          ]
         : [{ url, statusCode: 200, type: "http" as const }],
       chainLength: redirectTo ? 1 : 0,
       isLoop: false,
