@@ -3,6 +3,7 @@ import type { RobotsTxtData, SiteQuery } from "@squirrelscan/core-contracts";
 
 import { isPageIndexable, getRichResultTypes, isRobotsTxtDisallowed } from "@squirrelscan/utils";
 import { getPathname } from "@squirrelscan/utils";
+import { sampleUrlItems } from "../shared/sample-items";
 
 interface Conflict {
   url: string;
@@ -17,7 +18,9 @@ const SKIP_CHECK: CheckResult = {
 };
 
 // Shared output builder — identical CheckResult given the same conflict list.
-function buildCheck(conflicts: Conflict[]): CheckResult {
+function buildCheck(unsorted: Conflict[]): CheckResult {
+  // Sorted, so the sample (and the finding's identity) does not follow crawl order.
+  const conflicts = [...unsorted].sort((a, b) => a.url.localeCompare(b.url));
   if (conflicts.length > 0) {
     const details = conflicts
       .slice(0, 5)
@@ -29,11 +32,23 @@ function buildCheck(conflicts: Conflict[]): CheckResult {
       )
       .join("\n\n");
     const suffix = conflicts.length > 5 ? `\n\n+${conflicts.length - 5} more` : "";
+    // #1735: the page list and each page's evidence as structured data, not only in `value`.
+    // `pages` and the items are the capped sample; `pagesTruncated` and `occurrences` hold the true count.
+    const sample = sampleUrlItems(
+      conflicts.map((c) => ({
+        id: c.url,
+        label: `Schema: ${c.schemaTypes.join(", ")}. Blocked by: ${c.blockSource.join(", ")}`,
+        meta: { schemaTypes: c.schemaTypes, blockedBy: c.blockSource },
+      })),
+    );
     return {
       name: "schema-noindex",
       status: "fail",
       message: `${conflicts.length} page(s) have rich schema but are blocked from indexing`,
       value: details + suffix,
+      pages: sample.items.map((item) => item.id),
+      items: sample.items,
+      details: { occurrences: conflicts.length, pagesTruncated: conflicts.length, ...sample.truncation },
     };
   }
   return {
