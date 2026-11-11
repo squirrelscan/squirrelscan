@@ -1,0 +1,91 @@
+---
+title: "Session IDs in URLs: duplicate pages and shareable sessions"
+description: "A session ID in the URL gives every visit its own address for the same page. squirrel finds PHPSESSID, jsessionid, sid and friends in the page URL and in internal links."
+---
+
+## What a session ID in a URL costs
+
+Some servers fall back to putting the session in the URL (`?PHPSESSID=...` or `;jsessionid=...`) when a client does not accept cookies. A crawler does not, so every crawler visit gets its own session and every link it follows carries a new one. The same page then exists at an unlimited number of addresses, which wastes crawl budget and splits ranking signals across duplicates.
+
+The URL is also the credential. A link copied from the address bar and sent to someone else can hand them the visitor's session, and the ID leaks through the `Referer` header to other sites and into server and analytics logs. [url/parameters](/rules/url/parameters) counts parameters and flags tracking ones, but does not recognise session IDs.
+
+## What squirrel checks
+
+The rule runs on every crawled page and reads the page URL and its internal links. It never requests anything.
+
+A parameter counts as a session ID when its name is one of `PHPSESSID`, `jsessionid`, `sid`, `sessionid`, `session_id` or starts with `ASPSESSIONID` (any letter case), or it is the ColdFusion pair `CFID` with `CFTOKEN`, and its value looks generated: at least 8 characters with a letter and a digit, or 16 or more characters. `sid=2` and `sid=main` are not flagged, and neither is a lone `CFID`. The query form (`?PHPSESSID=...`) and the path form (`/page;jsessionid=...`) are both detected.
+
+- Warn `session-id-in-url`: `Page URL carries a session ID (PHPSESSID)`. The item is the page URL with the value replaced by `…`.
+- Warn `session-id-links`: `12 internal link(s) carry a session ID (jsessionid)`. Distinct links are counted, ten are listed, and `details.additional` counts the rest. Links to other hosts are not reported.
+- Pass `session-ids`: `No session IDs in URLs`.
+
+The session value is masked wherever it appears: in the item, the message and the details. The rest of the URL is kept so you can find the link.
+
+## How to fix it
+
+Keep the session in a cookie and stop the server from rewriting URLs.
+
+- PHP: `session.use_only_cookies=1` and `session.use_trans_sid=0`.
+- Java servlet containers: set the tracking mode to cookie only, or disable URL rewriting.
+- ASP.NET: `cookieless="false"` in the session state settings.
+
+Redirect the old URLs to the clean ones, and add a self-referencing canonical on the clean page.
+
+| | |
+|---|---|
+| **Rule ID** | `url/session-ids` |
+| **Category** | [URL Structure](/rules/url) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 5/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["url/session-ids"]
+```
+
+### Disable all URL Structure rules
+
+```toml squirrel.toml
+[rules]
+disable = ["url/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["url/session-ids"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Related rules
+
+- [url/parameters](/rules/url/parameters): parameter counts and tracking parameters.
+- [crawl/canonical-chain](/rules/crawl/canonical-chain): where the canonical for these URLs points.
+- [security/referrer-policy](/rules/security/referrer-policy): limits what the Referer header carries to other sites.
+
+URL Structure findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Consolidate duplicate URLs, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls)
+- [Session Management Cheat Sheet, OWASP](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the URL Structure section of the report. Each affected page is listed with the masked URLs of its session-carrying links. Signed-out local audits need no account and cost nothing. Signed-in audits spend credits.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the URL Structure section looks like on a real site.
+  </Card>
+</CardGroup>

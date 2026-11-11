@@ -2982,6 +2982,12 @@
    "url-parameters|pass|URL has no query parameters||"
   ]
  },
+ "url/session-ids": {
+  "digest": "244562015277631",
+  "lines": [
+   "session-ids|pass|No session IDs in URLs||"
+  ]
+ },
  "url/slug-convention": {
   "digest": "56809138480500",
   "lines": [
