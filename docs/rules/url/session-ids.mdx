@@ -13,7 +13,14 @@ The URL is also the credential. A link copied from the address bar and sent to s
 
 The rule runs on every crawled page and reads the page URL and its internal links. It never requests anything.
 
-A parameter counts as a session ID when its name is one of `PHPSESSID`, `jsessionid`, `sid`, `sessionid`, `session_id` or starts with `ASPSESSIONID` (any letter case), or it is the ColdFusion pair `CFID` with `CFTOKEN`, and its value looks generated: at least 8 characters with a letter and a digit, or 16 or more characters. `sid=2` and `sid=main` are not flagged, and neither is a lone `CFID`. The query form (`?PHPSESSID=...`) and the path form (`/page;jsessionid=...`) are both detected.
+A parameter counts as a session ID when its name is one of `PHPSESSID`, `jsessionid`, `sid`, `sessionid`, `session_id` or starts with `ASPSESSIONID` (any letter case), or it is the ColdFusion pair `CFID` with `CFTOKEN` (the token at least 8 characters), and its value looks generated rather than written or counted. The query form (`?PHPSESSID=...`) and the path form (`/page;jsessionid=...`) are both detected.
+
+The value test has two levels. Neither accepts a value of fewer than 8 characters, one made only of digits (a counter, a timestamp, a numeric id), or one with words joined by `-` or `_` (`summer-collection-2024`).
+
+- `PHPSESSID`, `jsessionid`, `session_id` and `ASPSESSIONID*` only ever mean a session, so they take the looser test: 8 or more characters with a letter and a digit, or 16 or more characters with at least two of a letter, a digit and mixed case.
+- `sid` and `sessionid` are ordinary words in other systems, so they take the strict test: 8 or more characters with a letter and a digit, or 24 or more characters in mixed case.
+
+So `sid=2`, `sid=main`, `sid=summer-collection-2024`, `sid=1234567890123456` and a lone `CFID` are not flagged.
 
 - Warn `session-id-in-url`: `Page URL carries a session ID (PHPSESSID)`. The item is the page URL with the value replaced by `…`.
 - Warn `session-id-links`: `12 internal link(s) carry a session ID (jsessionid)`. Distinct links are counted, ten are listed, and `details.additional` counts the rest. Links to other hosts are not reported.
