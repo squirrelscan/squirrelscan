@@ -2,6 +2,8 @@ import { LINK_COVERAGE_DETAIL_KEYS } from "@squirrelscan/core-contracts";
 import {
   buildSupersededIndex,
   judgeSuperseded,
+  splitSuccessor,
+  successorListsLocator,
   resolutionCheckKey,
   type SupersededOutcome,
 } from "@squirrelscan/core-contracts/resolution";
@@ -378,8 +380,10 @@ function makeNotComparedJudge(
       if (!slim.rules) return { reason: "sampled-report" };
       const names = [
         issue.checkName,
-        ...(superseded.get(resolutionCheckKey(issue.ruleId, issue.checkName)) ??
-          []),
+        ...(
+          superseded.get(resolutionCheckKey(issue.ruleId, issue.checkName)) ??
+          []
+        ).map((s) => splitSuccessor(s).check),
       ];
       if (
         names.some((n) => slim.truncatedChecks.includes(`${issue.ruleId}|${n}`))
@@ -419,8 +423,10 @@ function makeNotComparedJudge(
     {
       const names = new Set([
         issue.checkName,
-        ...(superseded.get(resolutionCheckKey(issue.ruleId, issue.checkName)) ??
-          []),
+        ...(
+          superseded.get(resolutionCheckKey(issue.ruleId, issue.checkName)) ??
+          []
+        ).map((s) => splitSuccessor(s).check),
       ]);
       const gap = (reportRule(current, issue.ruleId)?.checks ?? []).find(
         (c) =>
@@ -545,6 +551,7 @@ export function diffReports(
   const judge = makeNotComparedJudge(baseline, current, checkDecls, superseded);
   const notChecked: IssueInstance[] = [];
   const notCompared: NotComparedIssue[] = [];
+  const mergedSuccessors = new Set<IssueInstance>();
   // An issue that is gone is removed (fixed) only when its rule ran over the same scope; else it is not compared.
   const removeOrNotCompare = (issue: IssueInstance) => {
     const why = judge(issue);
@@ -562,26 +569,39 @@ export function diffReports(
     }
     const outcomes: SupersededOutcome[] = [];
     let successor: IssueInstance | undefined;
-    for (const name of successors) {
-      const hit = currentMap.get(
+    for (const spec of successors) {
+      // A successor can report the finding under one locator of its own (#1780).
+      const { check: name, locator, members } = splitSuccessor(spec);
+      let hit = currentMap.get(
         fingerprintForIssue(
           issue.ruleId,
           name,
           issue.target.type,
-          issue.target.id
+          locator ?? issue.target.id
         )
       );
+      // A successor that lists its members (#1780) takes the old row only when its list names it.
+      if (
+        hit &&
+        members &&
+        !successorListsLocator(hit.meta, members, issue.target.id)
+      ) {
+        hit = undefined;
+      }
       if (hit) {
         outcomes.push("failing");
         successor ??= hit;
       } else if (
+        // A grouped successor (#1780) emits nothing when there is nothing to group, so it ran whenever the rule
+        // did; any other successor must have emitted a judged check of its own.
+        !(locator !== undefined && ruleJudged(current, issue.ruleId)) &&
         !ranCheck(current, issue.ruleId, name) &&
         // Peers (#1772): a link moves between two checks of one run of the rule, so the old name having been
         // judged this run says the successor was too (it emits no pass row when it has no link to report).
         !(
           superseded
             .get(resolutionCheckKey(issue.ruleId, name))
-            ?.includes(issue.checkName) &&
+            ?.some((s) => splitSuccessor(s).check === issue.checkName) &&
           ranCheck(current, issue.ruleId, issue.checkName)
         )
       )
@@ -590,10 +610,14 @@ export function diffReports(
     }
     const verdict = judgeSuperseded(outcomes);
     if (verdict === "failing" && successor) {
-      // Still failing under the new name: one change, not a removal plus an addition.
+      // Still failing under the new name: one change, not a removal plus an addition. Several old rows that
+      // became one grouped row (#1780) are one change, for the first of them.
       const addedAt = added.indexOf(successor);
       if (addedAt >= 0) added.splice(addedAt, 1);
-      changed.push({ before: issue, after: successor, changeType: "change" });
+      if (!mergedSuccessors.has(successor)) {
+        mergedSuccessors.add(successor);
+        changed.push({ before: issue, after: successor, changeType: "change" });
+      }
     } else if (verdict === "not-checked") notChecked.push(issue);
     else removeOrNotCompare(issue);
   }
@@ -628,6 +652,15 @@ export function diffReports(
       ? { notCompared: sortNotCompared(notCompared) }
       : {}),
   };
+}
+
+/** True when the rule produced any judged check in the report (a pass, warn or fail that is not carried). */
+function ruleJudged(report: AuditReport, ruleId: string): boolean {
+  const rule: ReportRuleResult | undefined =
+    report.ruleResults instanceof Map
+      ? report.ruleResults.get(ruleId)
+      : report.ruleResults[ruleId];
+  return rule?.checks.some(judgedCheck) ?? false;
 }
 
 /** True when the report holds a check of that name for the rule that was evaluated (not only skipped). */

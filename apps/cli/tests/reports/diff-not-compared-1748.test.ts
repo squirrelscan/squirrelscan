@@ -710,3 +710,56 @@ describe("a targeted run that hits the external link cap (#1778)", () => {
     expect(reasonOf(d)).toEqual([["rule-skipped", "external-links-over-cap"]]);
   });
 });
+
+// #1780: eleven per-crawler rows became one wildcard row.
+describe("per-crawler rows that became one wildcard row (#1780)", () => {
+  const AI = "ax/ai-crawlers";
+  const warnRow = (name: string, ids: string[]): CheckResult => ({
+    name,
+    status: "warn",
+    message: "blocked",
+    items: ids.map((id) => ({ id })),
+  });
+  const at = (checks: CheckResult[]) =>
+    report({ [AI]: rule(AI, checks, "site") });
+
+  test("the old rows are one change into the new row: nothing fixed, one finding not added", () => {
+    const before = at([
+      warnRow("ai-answer-access", ["OAI-SearchBot", "ChatGPT-User"]),
+      warnRow("archive-crawler-access", ["CCBot"]),
+    ]);
+    const now = at([
+      warnRow("ai-crawlers-wildcard-blocked", ["User-agent: *"]),
+    ]);
+    const d = diffReports(before, now);
+    expect(d.removed).toHaveLength(0);
+    expect(d.added).toHaveLength(0);
+    expect(d.changed).toHaveLength(1);
+  });
+
+  test("only a crawler the wildcard row lists continues in it: one allowed by name is fixed (#1780 review)", () => {
+    const before = at([
+      warnRow("ai-answer-access", ["OAI-SearchBot", "ChatGPT-User"]),
+    ]);
+    const wildcard: CheckResult = {
+      name: "ai-crawlers-wildcard-blocked",
+      status: "warn",
+      message: "blocked",
+      items: [{ id: "User-agent: *", meta: { crawlers: ["OAI-SearchBot"] } }],
+    };
+    const d = diffReports(before, at([wildcard]));
+    expect(d.removed.map((i) => i.target.id)).toEqual(["ChatGPT-User"]);
+    expect(d.changed).toHaveLength(1);
+    expect(d.added).toHaveLength(0);
+  });
+
+  test("control: the wildcard is gone, so the old rows are fixed", () => {
+    const before = at([
+      warnRow("ai-answer-access", ["OAI-SearchBot", "ChatGPT-User"]),
+    ]);
+    const now = at([
+      { name: "ai-crawler-access", status: "info", message: "all allowed" },
+    ]);
+    expect(diffReports(before, now).removed).toHaveLength(2);
+  });
+});

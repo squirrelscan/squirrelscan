@@ -259,6 +259,37 @@ export function resolutionCheckKey(ruleId: string, checkName: string): string {
   return `${ruleId}|${checkName}`;
 }
 
+/**
+ * A successor in `supersededChecks` is a check name, `check@locator` when the successor reports the same finding
+ * under ONE locator whatever the old finding's locator was (#1780: eleven `ai-answer-access` rows, one per
+ * crawler, became a single `ai-crawlers-wildcard-blocked` row under the locator `User-agent: *`), and
+ * `check@locator|members` when the old row continues in that one only if its locator is LISTED in the successor
+ * item's `meta[members]` array (the row of a crawler that was since allowed by name is not in the list, so it is
+ * judged on its own and reads as fixed). Without a locator the successor keeps the old finding's own. A locator
+ * never contains `|` (the last `|` starts the members suffix, so `chk@a|b` is locator `a`, members `b`); a test
+ * over every declaration enforces it.
+ */
+export function splitSuccessor(successor: string): { check: string; locator?: string; members?: string } {
+  const bar = successor.lastIndexOf("|");
+  const members = bar >= 0 ? successor.slice(bar + 1) : undefined;
+  const rest = bar >= 0 ? successor.slice(0, bar) : successor;
+  const at = rest.indexOf("@");
+  return {
+    check: at < 0 ? rest : rest.slice(0, at),
+    ...(at >= 0 ? { locator: rest.slice(at + 1) } : {}),
+    ...(members ? { members } : {}),
+  };
+}
+
+/**
+ * Whether a successor item's `meta[members]` list names `locator`. `read` is the item's meta as the caller has it;
+ * a list that cannot be read counts as covering (the safe side: the old row continues, nothing is called fixed).
+ */
+export function successorListsLocator(meta: unknown, members: string, locator: string): boolean {
+  const list = (meta as Record<string, unknown> | null | undefined)?.[members];
+  return Array.isArray(list) ? list.includes(locator) : true;
+}
+
 /** How one successor check judged a page, for a finding stored under a superseded check name. */
 export type SupersededOutcome = "passed" | "failing" | "not-checked";
 /** The verdict on the superseded finding. */

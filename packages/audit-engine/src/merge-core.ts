@@ -20,6 +20,8 @@ import { packSiteResourceOccurrences } from "@squirrelscan/core-contracts/site-r
 import {
   CHECK_NOT_APPLICABLE_SKIP_REASON,
   judgeSuperseded,
+  splitSuccessor,
+  successorListsLocator,
   resolutionCheckKey,
   type SupersededOutcome,
   isRuleNotApplicableReason,
@@ -1291,14 +1293,35 @@ export function createMergeSession(
     ) {
       return decidePrior(prior, sink);
     }
+    // A successor that lists its members (#1780) takes the old row only when the list names it: a crawler since
+    // allowed by name is no longer in the wildcard row's list, so the old row is judged on its own.
+    const applicable = successors.filter((spec) => {
+      const { check, locator, members } = splitSuccessor(spec);
+      if (!members) return true;
+      const fresh = freshByKey.get(
+        findingKey(prior.normalizedUrl, prior.ruleId, check, locator ?? prior.locator)
+      );
+      if (!fresh) return true; // nothing fresh to list it: the successor did not fire, judged as before
+      let meta: unknown;
+      try {
+        meta = (JSON.parse(fresh.payload ?? "null") as { items?: Array<{ meta?: unknown }> } | null)?.items?.[0]
+          ?.meta;
+      } catch {
+        meta = undefined;
+      }
+      return successorListsLocator(meta, members, prior.locator);
+    });
+    if (applicable.length === 0) return decidePrior(prior, sink);
     const outcomes: SupersededOutcome[] = [];
     let carried: { record: PageFindingRecord; merged?: MergedFinding } | undefined;
-    for (const successor of successors) {
-      const asSuccessor: PageFindingRecord = { ...prior, checkName: successor };
+    for (const spec of applicable) {
+      const { check: successor, locator: successorLocator } = splitSuccessor(spec);
+      const locator = successorLocator ?? prior.locator;
+      const asSuccessor: PageFindingRecord = { ...prior, checkName: successor, locator };
       const persisted: PageFindingRecord[] = [];
       let merged: MergedFinding | undefined;
       const freshHere = freshByKey.has(
-        findingKey(prior.normalizedUrl, prior.ruleId, successor, prior.locator)
+        findingKey(prior.normalizedUrl, prior.ruleId, successor, locator)
       );
       decidePrior(asSuccessor, {
         persist: (record) => persisted.push(record),
@@ -1307,19 +1330,19 @@ export function createMergeSession(
       const record = persisted[0];
       if (record?.state === "stale") {
         // Page gone: stale under any name.
-        sink.persist({ ...record, checkName: prior.checkName });
+        sink.persist({ ...record, checkName: prior.checkName, locator: prior.locator });
         return;
       }
       if (freshHere) outcomes.push("failing");
       else if (merged && record) {
         outcomes.push("not-checked");
-        carried ??= { record: { ...record, checkName: prior.checkName }, merged };
+        carried ??= { record: { ...record, checkName: prior.checkName, locator: prior.locator }, merged };
       } else outcomes.push("passed");
     }
     const verdict = judgeSuperseded(outcomes);
     if (verdict === "not-checked" && carried) {
       sink.persist(carried.record);
-      if (carried.merged) sink.active({ ...carried.merged, checkName: prior.checkName });
+      if (carried.merged) sink.active({ ...carried.merged, checkName: prior.checkName, locator: prior.locator });
       return;
     }
     sink.persist({
@@ -1343,7 +1366,8 @@ export function createMergeSession(
     // prior's first-seen (a finding that resolved and returned must not reset it),
     // which is the ONLY thing the pre-#1876 whole-prior index was for.
     if (freshByKey.has(key)) {
-      firstSeenByFreshKey.set(key, prior.firstSeenAt);
+      // Several priors can map onto one fresh key (a grouped row, #1780): the earliest first-seen wins.
+      firstSeenByFreshKey.set(key, Math.min(firstSeenByFreshKey.get(key) ?? prior.firstSeenAt, prior.firstSeenAt));
       return;
     }
 
