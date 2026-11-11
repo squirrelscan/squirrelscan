@@ -19,6 +19,7 @@ How it works:
 
 ### Added
 
+- New rule `url/session-ids`: a page URL or an internal link carrying a session ID (`PHPSESSID`, `jsessionid` in the query or as a `;jsessionid=` path parameter, `sid`, `sessionid`, `session_id`, `ASPSESSIONID*`, `CFID` with `CFTOKEN`) is a warning, with the value masked. The value must look generated: short values, all-digit ids and hyphenated labels are ignored, and `sid` and `sessionid` need a stricter form than the unambiguous names.
 - New rule `url/session-ids`: a page URL or an internal link carrying a session ID (`PHPSESSID`, `jsessionid` in the query or as a `;jsessionid=` path parameter, `sid`, `sessionid`, `session_id`, `ASPSESSIONID*`, `CFID` with `CFTOKEN`) is a warning, with the value masked. Short values such as `sid=2` are ignored.
 - New rule `security/password-form-get`: a form with a password field that submits by GET (an explicit `method="get"`, a form with an `action` and no method, or a GET `formmethod` on a submit button) is an error. A form with no method and no action, which is how a React, Vue or Svelte login form looks in the DOM, is a warning (it falls back to GET only if its script fails; `method="post"` removes the risk), and one submitted by an inline handler with no action is reported as not determined. The action a finding shows has its query, fragment and credentials removed.
 - New rule `security/password-form-get`: a form with a password field that submits by GET (`method="get"` or no method, or a GET `formmethod` on a submit button) is an error. Forms submitted by script with no action are reported as not determined.
@@ -3044,6 +3045,7 @@ Browse the full rule set → https://docs.squirrelscan.com/rules
 
 - Cloud audits that stall past their deadline are now finalized automatically instead of hanging.
 - More efficient handling of error and empty pages during analysis.
+
 
 
 

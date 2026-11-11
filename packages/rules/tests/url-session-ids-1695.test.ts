@@ -5,7 +5,10 @@ import { describe, expect, test } from "bun:test";
 import type { CheckResult, RuleContext } from "../src/types";
 import { looksLikeSessionValue, sessionIdsRule, sessionParamsOf } from "../src/url/session-ids";
 
-const SID = "a1b2c3d4e5f6a7b8c9d0";
+// Built from parts so no fixture reads as a real credential.
+const SID = ["a1b2c3d4", "e5f6a7b8", "c9d0"].join("");
+const HEX32 = ["0f1e2d3c", "4b5a6978", "8796a5b4", "c3d2e1f0"].join("");
+const ALNUM26 = ["Qx7Lm2Vn", "Rt9Ys4Kd", "Hw3Bp6Fz", "Gc"].join("");
 
 function run(pageUrl: string, links: { url: string; isInternal: boolean }[] = []): CheckResult[] {
   const ctx = {
@@ -51,18 +54,63 @@ describe("sessionParamsOf table", () => {
 });
 
 describe("looksLikeSessionValue", () => {
-  const table: [string, boolean][] = [
-    ["", false],
-    ["2", false],
-    ["main", false],
-    ["abcdefg", false],
-    ["abcdefgh", false],
-    ["abcd1234", true],
-    ["12345678", false],
-    ["abcdefghijklmnop", true],
-    ["0123456789abcdef", true],
+  // [value, loose (unambiguous names), strict (sid, sessionid)]
+  const table: [string, boolean, boolean][] = [
+    ["", false, false],
+    ["2", false, false],
+    ["main", false, false],
+    ["abcdefg", false, false],
+    ["abcdefgh", false, false],
+    ["abcd1234", true, true],
+    ["12345678", false, false],
+    ["abcdefghijklmnop", false, false],
+    ["summer-collection-2024", false, false],
+    ["my_cart_items_list", false, false],
+    ["1234567890123456", false, false],
+    ["1730000000000000000", false, false],
+    ["SummerCollectionOnlineStoreHome", true, true],
+    ["SummerCollectionOnline", true, false],
+    [HEX32, true, true],
+    [ALNUM26, true, true],
+    ["0123456789abcdef", true, true],
+    ["ab-12cd34ef56", true, true],
   ];
-  for (const [value, want] of table) test(`${JSON.stringify(value)} is ${want}`, () => expect(looksLikeSessionValue(value)).toBe(want));
+  for (const [value, loose, strict] of table) {
+    test(`${JSON.stringify(value)}: loose ${loose}, strict ${strict}`, () => {
+      expect(looksLikeSessionValue(value)).toBe(loose);
+      expect(looksLikeSessionValue(value, true)).toBe(strict);
+    });
+  }
+});
+
+describe("weak names need the strict value, unambiguous names the looser one", () => {
+  const long = "SummerCollectionOnline"; // 22 mixed-case letters: loose only
+  const cases: [string, boolean][] = [
+    [`https://x.test/?sid=${long}`, false],
+    [`https://x.test/?sessionid=${long}`, false],
+    [`https://x.test/?PHPSESSID=${long}`, true],
+    [`https://x.test/?jsessionid=${long}`, true],
+    [`https://x.test/?session_id=${long}`, true],
+    [`https://x.test/?ASPSESSIONIDQQQQ=${long}`, true],
+    [`https://x.test/p;sid=${long}`, false],
+    [`https://x.test/p;jsessionid=${long}`, true],
+  ];
+  for (const [url, flagged] of cases) test(url, () => expect(sessionParamsOf(url).length > 0).toBe(flagged));
+
+  test("long human labels and all-digit ids are not sessions under any name", () => {
+    for (const name of ["sid", "sessionid", "PHPSESSID", "jsessionid", "session_id"]) {
+      expect(sessionParamsOf(`https://x.test/?${name}=summer-collection-2024`)).toEqual([]);
+      expect(sessionParamsOf(`https://x.test/?${name}=1234567890123456`)).toEqual([]);
+      expect(sessionParamsOf(`https://x.test/?${name}=my_long_human_label`)).toEqual([]);
+    }
+  });
+
+  test("a real 32-hex and a 26-char alphanumeric are flagged under every name", () => {
+    for (const name of ["sid", "sessionid", "PHPSESSID", "jsessionid"]) {
+      expect(sessionParamsOf(`https://x.test/?${name}=${HEX32}`)).toHaveLength(1);
+      expect(sessionParamsOf(`https://x.test/?${name}=${ALNUM26}`)).toHaveLength(1);
+    }
+  });
 });
 
 describe("page URL", () => {

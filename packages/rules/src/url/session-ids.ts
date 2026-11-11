@@ -4,8 +4,13 @@ import type { CheckItem } from "@squirrelscan/core-contracts";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
-/** Session parameter names, lowercased. `aspsessionid*` is matched by prefix, `cfid` needs `cftoken`. */
+/**
+ * Session parameter names, lowercased. `aspsessionid*` is matched by prefix, `cfid` needs `cftoken`.
+ * `sid` and `sessionid` are also ordinary words in other systems, so they need the strict generated
+ * form; the other names are unambiguous and take the looser one.
+ */
 const SESSION_NAMES = new Set(["phpsessid", "jsessionid", "sid", "sessionid", "session_id"]);
+const WEAK_NAMES = new Set(["sid", "sessionid"]);
 
 const MIN_SESSION_VALUE = 8;
 const SAMPLE_LIMIT = 10;
@@ -22,14 +27,34 @@ function isSessionName(name: string): boolean {
   return SESSION_NAMES.has(lower) || lower.startsWith("aspsessionid");
 }
 
+/** Words joined by a separator (`summer-collection`, `my_cart_items`): a label a person wrote, not a generated ID. */
+const WORD_SEPARATOR = /[A-Za-z]{3,}[-_][A-Za-z]{3,}/;
+
 /**
- * A value that looks like a generated session ID: at least 8 characters, with a
- * letter and a digit, or 16 or more of anything. `sid=2` or `sid=main` is a
- * counter or a label, not a session.
+ * A value that looks generated, as a session ID is, rather than written by a person or counted:
+ *
+ * - never all digits (a counter, a timestamp, a numeric id) and never words joined by `-` or `_`;
+ * - the looser test, for names that only mean a session: 8 or more characters with a letter and a
+ *   digit, or 16 or more with at least two of {a letter, a digit, mixed case};
+ * - the strict test, for the weak names `sid` and `sessionid`: 8 or more characters with a letter and a
+ *   digit, or 24 or more in mixed case.
+ *
+ * `sid=2`, `sid=main`, `sid=summer-collection-2024` and `sid=1234567890123456` are not sessions.
  */
-export function looksLikeSessionValue(value: string): boolean {
-  if (value.length >= 16) return true;
-  return value.length >= MIN_SESSION_VALUE && /[a-z]/i.test(value) && /\d/.test(value);
+export function looksLikeSessionValue(value: string, strict = false): boolean {
+  if (value.length < MIN_SESSION_VALUE) return false;
+  if (/^\d+$/.test(value) || WORD_SEPARATOR.test(value)) return false;
+  const letter = /[a-z]/i.test(value);
+  const digit = /\d/.test(value);
+  const mixedCase = /[a-z]/.test(value) && /[A-Z]/.test(value);
+  if (letter && digit) return true;
+  if (strict) return value.length >= 24 && mixedCase;
+  return value.length >= 16 && [letter, digit, mixedCase].filter(Boolean).length >= 2;
+}
+
+/** The value test for a parameter name: strict for `sid` and `sessionid`, looser for the rest. */
+function valueFits(name: string, value: string): boolean {
+  return looksLikeSessionValue(value, WEAK_NAMES.has(name.toLowerCase()));
 }
 
 function decodeSafe(value: string): string {
@@ -60,7 +85,7 @@ export function sessionParamsOf(rawUrl: string): SessionParam[] {
   const query = new Map<string, string>();
   for (const [name, value] of url.searchParams) {
     if (!query.has(name.toLowerCase())) query.set(name.toLowerCase(), value);
-    if (isSessionName(name) && looksLikeSessionValue(value)) add(name, "query");
+    if (isSessionName(name) && valueFits(name, value)) add(name, "query");
   }
   // ColdFusion sends the pair: CFID alone is a short counter.
   const cftoken = query.get("cftoken");
@@ -71,7 +96,7 @@ export function sessionParamsOf(rawUrl: string): SessionParam[] {
 
   for (const match of url.pathname.matchAll(/;([A-Za-z0-9_]+)=([^;/?#]*)/g)) {
     const name = match[1]!;
-    if (isSessionName(name) && looksLikeSessionValue(decodeSafe(match[2]!))) add(name, "path");
+    if (isSessionName(name) && valueFits(name, decodeSafe(match[2]!))) add(name, "path");
   }
   return found;
 }
