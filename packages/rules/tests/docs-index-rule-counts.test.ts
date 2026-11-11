@@ -198,3 +198,91 @@ describe("rules page category cards", () => {
     expect(owed).toEqual([]);
   });
 });
+
+// Counts the rules pages state in PROSE rather than in a card, and every other count sentence in the
+// README and the docs index. The cards and the category tables are guarded above; a sentence like
+// "HTTPS, headers, and safe link practices (23 rules)" under a group page's own heading was not, so
+// the Security count sat one behind the registry until the private gitlink bump caught it. Listed
+// rather than inferred (a bare "N rules" cannot be attributed to a category by guessing), and a SWEEP
+// makes any new, unlisted count sentence fail, so a number nobody listed cannot drift silently.
+describe("rule counts stated in prose", () => {
+  const RULES_DOCS_DIR = "docs/rules";
+  const read = (file: string) => readFileSync(join(ROOT, file), "utf8");
+
+  // `against` is the category code the number describes, or "total" for the whole catalog, which
+  // pages state as the advertised floor ("300+"), not the exact total.
+  const PROSE_COUNTS: Array<{ file: string; against: string; re: RegExp }> = [
+    { file: `${RULES_DOCS_DIR}/index.mdx`, against: "total", re: /All (\d+)\+ audit rules/ },
+    {
+      file: `${RULES_DOCS_DIR}/index.mdx`,
+      against: "total",
+      // The paired bold counts ("**300+ rules** across **22 categories**") make this a whole-catalog claim.
+      re: /\*\*(\d+)\+ rules\*\*\s+\S+\s+\*\*\d+ categories\*\*/,
+    },
+    {
+      // The Security group page documents three categories as cards and its own `security/*`
+      // category as a sentence under the next heading.
+      file: `${RULES_DOCS_DIR}/security/index.mdx`,
+      against: "security",
+      re: /safe link practices \((\d+) rules\)/,
+    },
+  ];
+
+  const expected = (against: string): number | undefined =>
+    against === "total" ? PUBLIC_RULE_COUNT_FLOOR : registry.get(against);
+
+  for (const { file, against, re } of PROSE_COUNTS) {
+    test(`${file}: the prose count for "${against}" matches`, () => {
+      const found = [...read(file).matchAll(new RegExp(re.source, "g"))];
+      expect(`${file}: ${found.length} match(es) of ${re}`).toBe(`${file}: 1 match(es) of ${re}`);
+      const live = expected(against);
+      if (live === undefined) throw new Error(`${file}: "${against}" is not a live category or "total"`);
+      expect(Number(found[0]![1])).toBe(live);
+    });
+  }
+
+  // Everything that says "N rules" outside a code fence and outside a category card must be one of the
+  // sentences above. Cards are removed first (their counts are the cards test's job).
+  const CARD_RE = /<Card\b[^>]*\bhref="\/rules\/[a-z0-9-]+"[^>]*>[\s\S]*?<\/Card>/g;
+  const FENCE_RE = /```[\s\S]*?```/g;
+  const STATED_RE = /\b(\d+)\+?\s+(?:audit\s+)?rules\b/g;
+  const pages = [
+    `${RULES_DOCS_DIR}/index.mdx`,
+    ...readdirSync(join(ROOT, RULES_DOCS_DIR), { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => `${RULES_DOCS_DIR}/${entry.name}/index.mdx`)
+      .sort(),
+  ].filter((file) => {
+    try {
+      readFileSync(join(ROOT, file), "utf8");
+      return true;
+    } catch {
+      return false;
+    }
+  });
+
+  for (const file of pages) {
+    test(`${file}: no count sentence is left unchecked`, () => {
+      let rest = read(file).replace(FENCE_RE, "").replace(CARD_RE, "");
+      for (const entry of PROSE_COUNTS.filter((p) => p.file === file)) {
+        rest = rest.replace(new RegExp(entry.re.source), "");
+      }
+      const loose = [...rest.matchAll(STATED_RE)].map((m) => m[0]);
+      expect(loose).toEqual([]);
+    });
+  }
+
+  // The README and docs/index.mdx state the floor and the category count in running text; every one of
+  // those sentences must agree with the constants, not only the two the tests above name.
+  for (const file of ["README.md", "docs/index.mdx"]) {
+    test(`${file}: every "N+ rules" is the advertised floor and every "N categories" the live count`, () => {
+      const text = read(file).replace(FENCE_RE, "");
+      const floors = [...text.matchAll(/(\d+)\+\s+rules\b/g)].map((m) => Number(m[1]));
+      const categories = [...text.matchAll(/(\d+)\s+categories\b/g)].map((m) => Number(m[1]));
+      expect(floors.length).toBeGreaterThan(0);
+      expect(categories.length).toBeGreaterThan(0);
+      for (const n of floors) expect(n).toBe(PUBLIC_RULE_COUNT_FLOOR);
+      for (const n of categories) expect(n).toBe(PUBLIC_CATEGORY_COUNT);
+    });
+  }
+});
