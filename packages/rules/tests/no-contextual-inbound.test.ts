@@ -14,6 +14,7 @@ import { weakInternalLinksRule } from "../src/links/weak-internal-links";
 import type { CheckResult, ParsedPage, Rule, RuleContext, RuleResult } from "../src/types";
 import {
   CRAWL_CAPPED_SKIP_REASON,
+  LINK_TARGETS_NOT_FETCHED_SKIP_REASON,
   NOT_CHECKED_SKIP_REASONS,
   type LinkData,
 } from "@squirrelscan/core-contracts";
@@ -36,6 +37,8 @@ function legacyLink(url: string): LinkData {
 interface PageSpec {
   url: string;
   links: LinkData[];
+  status?: number;
+  finalUrl?: string;
 }
 
 function ctx(pages: PageSpec[], options: Record<string, unknown> = {}): RuleContext {
@@ -46,8 +49,8 @@ function ctx(pages: PageSpec[], options: Record<string, unknown> = {}): RuleCont
       baseUrl: BASE,
       pages: pages.map((p) => ({
         url: p.url,
-        finalUrl: p.url,
-        statusCode: 200,
+        finalUrl: p.finalUrl ?? p.url,
+        statusCode: p.status ?? 200,
         parsed: { links: p.links } as ParsedPage,
       })),
       robotsTxt: null,
@@ -529,5 +532,85 @@ describe("links/no-contextual-inbound: legal pages", () => {
   test("a slug that merely contains a legal word is still reported", () => {
     const result = check(noContextualInboundRule, ctx(footerOnly("/legalese-guide")));
     expect(ids(result)).toEqual(["https://example.com/legalese-guide"]);
+  });
+});
+
+describe("links/no-contextual-inbound: only auditable pages (#1760)", () => {
+  // /gone is linked from every page's footer, and is not a page.
+  const withTarget = (target: PageSpec): PageSpec[] => [
+    { url: BASE, links: [body("/a"), body("/b"), chrome("/gone")] },
+    { url: "https://example.com/a", links: [body("/b"), chrome("/gone")] },
+    { url: "https://example.com/b", links: [body("/a"), chrome("/gone")] },
+    target,
+  ];
+
+  test("a 404 target linked only from the footer is not reported", () => {
+    const c = check(
+      noContextualInboundRule,
+      ctx(withTarget({ url: "https://example.com/gone", links: [], status: 404 }))
+    );
+    expect(c.status).toBe("pass");
+    expect(ids(c)).toEqual([]);
+  });
+
+  test("a 410 target linked only from the footer is not reported", () => {
+    const c = check(
+      noContextualInboundRule,
+      ctx(withTarget({ url: "https://example.com/gone", links: [], status: 410 }))
+    );
+    expect(c.status).toBe("pass");
+  });
+
+  test("a 500 target linked only from the footer is not reported", () => {
+    const c = check(
+      noContextualInboundRule,
+      ctx(withTarget({ url: "https://example.com/gone", links: [], status: 500 }))
+    );
+    expect(c.status).toBe("pass");
+  });
+
+  test("a real page linked only from the footer still warns", () => {
+    const c = check(
+      noContextualInboundRule,
+      ctx(withTarget({ url: "https://example.com/gone", links: [], status: 200 }))
+    );
+    expect(c.status).toBe("warn");
+    expect(ids(c)).toEqual(["https://example.com/gone"]);
+  });
+
+  test("a redirecting URL is judged at its destination, and is not reported itself", () => {
+    // /gone redirects to /new; /new is linked from body copy, so nothing is flagged.
+    const withBody: PageSpec[] = [
+      { url: BASE, links: [body("/a"), body("/new"), chrome("/gone")] },
+      { url: "https://example.com/a", links: [body("/new"), chrome("/gone")] },
+      { url: "https://example.com/gone", finalUrl: "https://example.com/new", links: [] },
+      { url: "https://example.com/new", links: [] },
+    ];
+    expect(check(noContextualInboundRule, ctx(withBody)).status).toBe("pass");
+
+    // Linked from the footer only, through the redirect: reported once, at /new.
+    const footerOnly: PageSpec[] = [
+      { url: BASE, links: [body("/a"), chrome("/gone")] },
+      { url: "https://example.com/a", links: [body("/"), chrome("/gone")] },
+      { url: "https://example.com/gone", finalUrl: "https://example.com/new", links: [] },
+      { url: "https://example.com/new", links: [] },
+    ];
+    expect(ids(check(noContextualInboundRule, ctx(footerOnly)))).toEqual([
+      "https://example.com/new",
+    ]);
+  });
+
+  test("a chrome-only URL that was not fetched is not reported; the check says it could not judge it", () => {
+    const pages: PageSpec[] = [
+      { url: BASE, links: [body("/a"), body("/b"), chrome("/unfetched")] },
+      { url: "https://example.com/a", links: [body("/b"), chrome("/unfetched")] },
+      { url: "https://example.com/b", links: [body("/a")] },
+    ];
+    const result = noContextualInboundRule.run(ctx(pages)) as RuleResult;
+    expect(result.checks[0]!.status).toBe("pass");
+    const gap = result.checks[1]!;
+    expect(gap.status).toBe("skipped");
+    expect(gap.skipReason).toBe(LINK_TARGETS_NOT_FETCHED_SKIP_REASON);
+    expect(NOT_CHECKED_SKIP_REASONS.has(gap.skipReason!)).toBe(true);
   });
 });
