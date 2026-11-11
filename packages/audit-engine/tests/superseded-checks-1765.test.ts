@@ -12,6 +12,7 @@ import type { ParsedPage } from "@squirrelscan/rules/types";
 
 import { computeMerge, findingKey, flattenChecks } from "../src/merge-core";
 import { runCloudSmartAudits, type SmartAuditStore } from "../src/merge-promise";
+import { describeSitePagesContract } from "./helpers/site-pages-contract";
 
 class MemStore implements SmartAuditStore {
   findings = new Map<string, PageFindingRecord>();
@@ -35,6 +36,8 @@ class MemStore implements SmartAuditStore {
     return 0;
   }
 }
+
+describeSitePagesContract("superseded-checks-1765.test.ts MemStore", () => new MemStore());
 
 const metaTitleRule = loadAllRules().get("core/meta-title")!;
 const SITE = "web_1765";

@@ -47,7 +47,8 @@ function serve(): { origin: string; hits: string[] } {
             alt("es", "/es") +
             alt("it", "/it") +
             alt("pt", "/pt") +
-            alt("fi", "/fi"),
+            alt("fi", "/fi") +
+            alt("sv", "/sv"),
         );
       }
       if (url.pathname === "/de") return page(alt("de", "/de") + alt("en", "/en"));
@@ -120,9 +121,11 @@ for (const engine of ["v1", "v2"] as const) {
   describe(`i18n/hreflang-targets over a crawled site (#1686, ${engine})`, () => {
     test("reports the redirect, the 404, the noindex page and the missing return link", async () => {
       const r = (results[engine] = await audit(engine));
-      // /fi is only the final URL of /old-fi: it is not a redirect, and it was never crawled.
+      // /fi is the final URL of /old-fi: it is not a redirect, and the redirect's destination is
+      // crawled as a page of its own (#1762), so it is checked. /sv is linked from nowhere and
+      // never crawled.
       expect(r.ids("hreflang-to-redirect")).toEqual(["/en -> /old-de"]);
-      expect(r.ids("hreflang-not-checked")).toEqual(["/fi"]);
+      expect(r.ids("hreflang-not-checked")).toEqual(["/sv"]);
       expect(r.ids("hreflang-to-broken")).toEqual(["/en -> /gone"]);
       expect(r.ids("hreflang-to-non-indexable")).toEqual(["/en -> /es"]);
       // /en names /old-de, not /de, so /de has no return link to /en either.
