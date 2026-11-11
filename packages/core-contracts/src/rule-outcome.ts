@@ -74,6 +74,21 @@ export function skipReasonClass(reason: string | undefined): SkipReasonClass | u
     : undefined;
 }
 
+/**
+ * A check that says part of the site was NOT read (#1749): a coded coverage-gap skip (`unread-page`,
+ * `scan-truncated`, ...) or a check named `*-unscanned`, `*-omitted` or `*-unfetched` (a rule that found less
+ * than it could, whatever its status). Dropping one reads as "clean" to a comparison, so the publish capper
+ * keeps every one, like the not-checked skips.
+ */
+export function isCoverageGapCheck(check: {
+  name: string;
+  status: string;
+  skipReason?: string | undefined;
+}): boolean {
+  if (check.status === "skipped") return skipReasonClass(check.skipReason)?.outcome === "coverage_gap";
+  return /-(unscanned|omitted|unfetched)$/.test(check.name);
+}
+
 /** The slice of a check {@link classifyRuleOutcome} reads. */
 export interface ClassifiableCheck {
   status: string;
