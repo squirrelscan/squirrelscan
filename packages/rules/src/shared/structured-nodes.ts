@@ -17,7 +17,12 @@ export type StructuredNode = Record<string, unknown>;
 export type EvidenceSource = "json-ld" | "microdata" | "rdfa";
 
 /** Why a field could not be checked. */
-export type UnknownReason = "incomplete-read" | "rendered-only" | "unsupported" | "unresolved-reference";
+export type UnknownReason =
+  | "incomplete-read"
+  | "rendered-only"
+  | "unsupported"
+  | "unresolved-reference"
+  | "no-organization";
 
 /** How much of the page the rule could read. */
 export type ReadState = "complete" | "truncated" | "failed";
@@ -268,4 +273,15 @@ export function isFilled(value: unknown): boolean {
     return Object.entries(node).some(([k, v]) => !k.startsWith("@") && isFilled(v)) || typeof node["@id"] === "string";
   }
   return false;
+}
+
+const MAX_VISIBLE_CHARS = 200_000;
+
+/** The text a visitor sees (scripts, styles, templates and noscript removed), bounded. */
+export function visibleText(doc: Document): string {
+  const body = doc.body;
+  if (!body) return "";
+  const clone = body.cloneNode(true) as Element;
+  for (const el of Array.from(clone.querySelectorAll("script, style, noscript, template"))) el.remove();
+  return (clone.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, MAX_VISIBLE_CHARS);
 }

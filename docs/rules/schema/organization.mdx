@@ -18,8 +18,20 @@ The rule reads every `script[type="application/ld+json"]` on the page and keeps 
 - `organization-logo`: emitted only when `logo` is absent, at info status, with the message `Organization missing logo` and the value `Add logo for knowledge panel`.
 - `organization-social`: passes with the message `N social profile(s) linked`, counting the string entries in `sameAs`. With no string entries it reports at info status with `No sameAs social profiles` and the value `Link to social profiles for brand verification`.
 - `organization-sameas-missing`: emitted only when the site profile already knows official social accounts for the site and `sameAs` omits one or more of them. It warns with the message `N known social account(s) missing from schema sameAs`, the value `Add detected official profiles to Organization sameAs`, and one item per account labelled with its platform.
+- `organization-merchant-identity`: emitted only for a confirmed shop, always at info status and never a failure. It reports whether the markup declares an actual organization name plus an address or a tax/company identifier. See below.
 
 `logo` is not part of the required set even though the missing-logo result mentions the knowledge panel. A page with `name` and `url` and no logo passes `organization-required` and gets the separate info result. Every property test is a truthiness test rather than a presence test, so a property present but empty, `0` or `false` counts as missing. The cross-check in the last bullet is a no-op when the audit has no site metadata, so an offline run behaves as if it were not there.
+
+### Merchant identity evidence
+
+A page counts as a confirmed shop when the site profile says ecommerce or marketplace, when it carries an `OnlineStore`, or when it has `Product` or `ProductGroup` markup. The check reads `Organization`, `Corporation`, `OnlineStore`, `OnlineBusiness` and `Store` entities from JSON-LD (nested ones too), Microdata and RDFa in the raw HTML, and follows `{"@id": "..."}` references, so a linked address or entity counts the same as a nested one. It reports `name`, `address` and `identifier` (`vatID`, `taxID`, `iso6523Code`, `duns`, `leiCode`, `naics`, `globalLocationNumber` or `identifier`) separately, and one overall status:
+
+- `present`: an actual name (not an empty or placeholder value such as `Company`) plus an address with at least one real part, or an identifier.
+- `text-only`: the markup does not declare that, but visible text looks like a legal notice (an identifier label such as VAT or company number followed by digits, a registered office, an Impressum or a legal notice). Text is not structured identity.
+- `absent`: the HTML was read completely, an organization was found, and it declares neither.
+- `unknown`: the read failed or looks truncated (`incomplete-read`), or no organization could be identified (`no-organization`). A read that could not be completed never proves absence.
+
+This reports observable markup only. It does not assess legal compliance, does not ask you to publish any private data, and never invents an identifier. The existing organization checks and their results are unchanged and are not repeated.
 
 ## How to fix it
 
