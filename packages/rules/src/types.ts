@@ -240,6 +240,12 @@ export interface RuleMeta {
    * A name can be declared twice, once as `problem` and once as `clean`, when a rule reuses a name for both.
    */
   checks?: RuleCheckDecl[];
+  /**
+   * Check names this rule no longer emits, each with the checks that replace it: `{ "meta-title": ["meta-title-too-short", "meta-title-too-long"] }`.
+   * A consumer resolving a finding stored under a superseded name judges it by its successors on the same page: resolved when
+   * every successor passed, still failing when any failed, not checked when any was not checked (#1765).
+   */
+  supersededChecks?: Record<string, string[]>;
   disabled?: boolean; // Internal flag - hides rule from all listings and execution
   /**
    * `false` keeps a `[[ignore]]` entry from waiving this rule's findings (#1262).

@@ -57,8 +57,12 @@ export interface DiffReport {
   added: IssueInstance[];
   removed: IssueInstance[];
   changed: DiffChange[];
+  /** Baseline issues stored under a superseded check name whose successors were not checked this run (#1765). Not fixed, not failing. */
+  notChecked?: IssueInstance[];
 }
 
 export interface DiffOptions {
   severity?: SeverityLevel;
+  /** `${ruleId}|${oldCheck}` -> successor checks; defaults to the loaded rules' `supersededChecks`. */
+  supersededChecks?: ReadonlyMap<string, readonly string[]>;
 }

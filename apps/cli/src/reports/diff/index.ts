@@ -1,4 +1,11 @@
 import { LINK_COVERAGE_DETAIL_KEYS } from "@squirrelscan/core-contracts";
+import {
+  buildSupersededIndex,
+  judgeSuperseded,
+  resolutionCheckKey,
+  type SupersededOutcome,
+} from "@squirrelscan/core-contracts/resolution";
+import { loadAllRules } from "@squirrelscan/rules";
 
 import type { SeverityLevel } from "@/reports/filters";
 import type {
@@ -334,10 +341,46 @@ export function diffReports(
     }
   }
 
+  // A baseline issue stored under a superseded check name (#1765) is judged by its successors on the same target.
+  const superseded =
+    options.supersededChecks ??
+    buildSupersededIndex([...loadAllRules().values()].map((r) => r.meta));
+  const notChecked: IssueInstance[] = [];
   for (const [fingerprint, issue] of baselineMap) {
-    if (!currentMap.has(fingerprint)) {
+    if (currentMap.has(fingerprint)) continue;
+    const successors = superseded.get(
+      resolutionCheckKey(issue.ruleId, issue.checkName)
+    );
+    if (!successors) {
       removed.push(issue);
+      continue;
     }
+    const outcomes: SupersededOutcome[] = [];
+    let successor: IssueInstance | undefined;
+    for (const name of successors) {
+      const hit = currentMap.get(
+        fingerprintForIssue(
+          issue.ruleId,
+          name,
+          issue.target.type,
+          issue.target.id
+        )
+      );
+      if (hit) {
+        outcomes.push("failing");
+        successor ??= hit;
+      } else if (!ranCheck(current, issue.ruleId, name))
+        outcomes.push("not-checked");
+      else outcomes.push("passed");
+    }
+    const verdict = judgeSuperseded(outcomes);
+    if (verdict === "failing" && successor) {
+      // Still failing under the new name: one change, not a removal plus an addition.
+      const addedAt = added.indexOf(successor);
+      if (addedAt >= 0) added.splice(addedAt, 1);
+      changed.push({ before: issue, after: successor, changeType: "change" });
+    } else if (verdict === "not-checked") notChecked.push(issue);
+    else removed.push(issue);
   }
 
   const sortedAdded = sortIssues(added);
@@ -364,7 +407,21 @@ export function diffReports(
     added: sortedAdded,
     removed: sortedRemoved,
     changed: sortedChanged,
+    ...(notChecked.length > 0 ? { notChecked: sortIssues(notChecked) } : {}),
   };
+}
+
+/** True when the report holds a check of that name for the rule that was evaluated (not only skipped). */
+function ranCheck(report: AuditReport, ruleId: string, name: string): boolean {
+  const rule: ReportRuleResult | undefined =
+    report.ruleResults instanceof Map
+      ? report.ruleResults.get(ruleId)
+      : report.ruleResults[ruleId];
+  return (
+    rule?.checks.some(
+      (c: CheckResult) => c.name === name && c.status !== "skipped"
+    ) ?? false
+  );
 }
 
 export function isSameBaseUrl(a: AuditReport, b: AuditReport): boolean {

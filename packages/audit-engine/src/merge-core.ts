@@ -19,6 +19,9 @@ import { packComponentOccurrences } from "@squirrelscan/core-contracts/component
 import { packSiteResourceOccurrences } from "@squirrelscan/core-contracts/site-resource-evidence";
 import {
   CHECK_NOT_APPLICABLE_SKIP_REASON,
+  judgeSuperseded,
+  resolutionCheckKey,
+  type SupersededOutcome,
   isRuleNotApplicableReason,
   SCAN_TRUNCATED_SKIP_REASON,
   isRuleWideGapSkipReason,
@@ -148,6 +151,11 @@ export interface ComputeMergeInput {
   removedUrls: Set<string>;
   /** Rule severity lookup (ruleId -> severity) for surfacing carried findings. */
   severityByRule: Map<string, string>;
+  /**
+   * `${ruleId}|${oldCheck}` -> successor checks (`buildSupersededIndex`). A prior finding stored under an old
+   * name is judged by its successors on the same page (#1765). Absent: names are matched literally.
+   */
+  supersededChecks?: ReadonlyMap<string, readonly string[]>;
   /** Real per-page HTTP status (normalizedUrl -> status) for site_pages. */
   statusByUrl: Map<string, number>;
   /** Prior OPEN findings for the site (caller loads with state ["open"]). */
@@ -1087,6 +1095,7 @@ export function createMergeSession(
     freshFindings,
     removedUrls,
     severityByRule,
+    supersededChecks,
     statusByUrl,
     priorPages,
     now,
@@ -1264,8 +1273,57 @@ export function createMergeSession(
     return { persisted, active };
   };
 
-  /** Prior OPEN findings (we only ever load "open"): resolve, stale, or carry. */
+  /**
+   * A prior stored under a superseded check name is decided once per successor, by the same logic as any
+   * other prior (so every signal and guard applies), and the outcomes are combined: resolved when every
+   * successor passed, retired when one fails fresh (the finding lives on under the new name and inherits
+   * its first-seen), carried unchanged when one could not be checked (#1765).
+   */
   const addPrior = (prior: PageFindingRecord): void => {
+    const successors = supersededChecks?.get(resolutionCheckKey(prior.ruleId, prior.checkName));
+    if (!successors) return decidePrior(prior, sink);
+    const outcomes: SupersededOutcome[] = [];
+    let carried: { record: PageFindingRecord; merged?: MergedFinding } | undefined;
+    for (const successor of successors) {
+      const asSuccessor: PageFindingRecord = { ...prior, checkName: successor };
+      const persisted: PageFindingRecord[] = [];
+      let merged: MergedFinding | undefined;
+      const freshHere = freshByKey.has(
+        findingKey(prior.normalizedUrl, prior.ruleId, successor, prior.locator)
+      );
+      decidePrior(asSuccessor, {
+        persist: (record) => persisted.push(record),
+        active: (finding) => (merged = finding),
+      });
+      const record = persisted[0];
+      if (record?.state === "stale") {
+        // Page gone: stale under any name.
+        sink.persist({ ...record, checkName: prior.checkName });
+        return;
+      }
+      if (freshHere) outcomes.push("failing");
+      else if (merged && record) {
+        outcomes.push("not-checked");
+        carried ??= { record: { ...record, checkName: prior.checkName }, merged };
+      } else outcomes.push("passed");
+    }
+    const verdict = judgeSuperseded(outcomes);
+    if (verdict === "not-checked" && carried) {
+      sink.persist(carried.record);
+      if (carried.merged) sink.active({ ...carried.merged, checkName: prior.checkName });
+      return;
+    }
+    sink.persist({
+      ...prior,
+      // "failing": the successor's fresh finding stands for it, so the old row retires from the union.
+      state: verdict === "failing" ? "stale" : "resolved",
+      lastSeenCrawlId: crawlId,
+      lastSeenAt: now,
+    });
+  };
+
+  /** Prior OPEN findings (we only ever load "open"): resolve, stale, or carry. */
+  const decidePrior = (prior: PageFindingRecord, sink: MergePriorSink): void => {
     const key = findingKey(
       prior.normalizedUrl,
       prior.ruleId,

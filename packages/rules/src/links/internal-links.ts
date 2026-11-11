@@ -25,6 +25,8 @@ export const internalLinksRule: Rule = {
     severity: "warning",
     weight: 4,
     optionsSchema,
+    // The old name carried both directions (pub#1765).
+    supersededChecks: { "internal-links": ["internal-links-too-few", "internal-links-too-many"] },
   },
 
   run(ctx: RuleContext): RuleResult {
