@@ -23,6 +23,7 @@ import { buildEndpointSurface, extractEndpointRefsFromDocument } from "@squirrel
 import { detectTechnologies } from "@squirrelscan/tech-detect";
 
 import type { PageSignalCollector } from "./streaming";
+import { trimTrailing } from "@squirrelscan/utils/trim";
 
 /**
  * Distinct refs the collector retains across the whole crawl. The final list is
@@ -50,7 +51,7 @@ export function isSamePage(a: string, b: string): boolean {
   try {
     const x = new URL(a);
     const y = new URL(b);
-    const path = (u: URL) => u.pathname.replace(/\/+$/, "");
+    const path = (u: URL) => trimTrailing(u.pathname, 47);
     return x.origin === y.origin && path(x) === path(y);
   } catch {
     return false;

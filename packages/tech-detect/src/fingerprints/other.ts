@@ -16,7 +16,9 @@ const KLAVIYO_ATTR_VALUE = String.raw`(?:"\s*${KLAVIYO_SCRIPT_URL}[^"]*"|'\s*${K
 function isClerkPublishableKey(match: RegExpExecArray): boolean {
   const body = match[1];
   if (!body) return false;
-  const unpadded = body.replace(/-/g, "+").replace(/_/g, "/").replace(/=+$/, "");
+  let end = body.length;
+  while (end > 0 && body.charCodeAt(end - 1) === 61) end--; // a linear "=" trim: /=+$/ is quadratic on a long run
+  const unpadded = body.slice(0, end).replace(/-/g, "+").replace(/_/g, "/");
   const padded = unpadded + "=".repeat((4 - (unpadded.length % 4)) % 4);
   try {
     const decoded = atob(padded);

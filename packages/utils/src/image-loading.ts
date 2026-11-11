@@ -9,6 +9,8 @@
 // so it runs on parsed `ImageData` and on live elements alike.
 
 /** Reference viewport width, in CSS pixels, for `sizes` media conditions and `vw` lengths. */
+import { trimTrailing } from "./trim";
+
 export const REFERENCE_VIEWPORT_WIDTH = 1280;
 /** Reference device pixel ratio the selected `srcset` candidate must cover. */
 export const REFERENCE_DPR = 2;
@@ -44,7 +46,7 @@ export function parseSrcset(value: string | null | undefined): SrcsetCandidate[]
     let descriptors = "";
     if (url.endsWith(",")) {
       // "a.jpg, b.jpg 2x": the comma ends the candidate, there are no descriptors.
-      url = url.replace(/,+$/, "");
+      url = trimTrailing(url, 44);
     } else {
       const descStart = i;
       while (i < text.length && text[i] !== ",") i++;
