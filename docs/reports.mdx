@@ -487,8 +487,20 @@ squirrel report -f llm | claude "analyze this audit and prioritize fixes"
 - **Text prefixes** - `Desc:`, `Fix:`, `Pages (n):`, `Items (n):`
 - **Comma-separated lists** - pages and URLs formatted inline
 - **Hybrid structure** - XML tags for parsing, text for readability
-- **`<locked-rules>`** - cloud-gated checks that didn't run this audit (logged out, the quick level, out of credits), with an audience-aware action and, for anonymous/free runs, a signup or credits link. Absent when every eligible check ran.
+- **`<locked-rules>`** - cloud-gated checks that didn't run this audit (logged out, the quick level, out of credits), with an audience-aware action and, for anonymous/free runs, a signup or credits link. Absent when every eligible check ran. When the audit says why a rule did not run, each `<rule>` carries `reason` (see [Why a check did not run](#why-a-check-did-not-run)) and the action text has one sentence per cause.
 - **`<audit-level>`** - the [audit level](/guides/audit-levels) the audit ran at: `level` (`quick`, `surface`, `full` or `custom`), `based-on`, the `changes` made to it (setting names, comma-separated) and the page budget. On an `--offline` run it also carries `offline="true"`, `cloud-checks="false"`, `render="off"` and `external-links="false"`: the settings that ran, not the level's cloud defaults. Absent on reports from before audit levels.
+
+### Why a check did not run
+
+A rule that did not run (a locked cloud check, or a check listed under not checked) can carry a reason from a closed set, so an agent can tell a plan exclusion from a failed service from an environment that cannot run the check, and neither retry what a re-run will not change nor trust a result that never ran.
+
+| Reason | Meaning | What a report says |
+|--------|---------|--------------------|
+| `plan` | The check is not part of the plan this audit ran under. | Names the plan ("not included in the Free plan", "in your plan", or a signed-out audit) and keeps the upgrade link. A re-run will not include it. |
+| `provider_error` | A service the check depends on failed during the audit. | Says a re-run may include it. |
+| `unsupported_environment` | The check cannot run where the audit ran. | Says where it can run: a cloud audit, or the squirrel CLI on a machine with direct network access, or the place the report's detail names. |
+
+A rule may also carry a short free-text `detail` for its reason. Every format shows the same sentence: the text, markdown, HTML, `llm` and XML reports print it in the checks-not-run section and label each rule, and the JSON report has `lockedRules` (`count`, `audience`, `message` and each rule's `id`, `name`, `reason` and `detail`). A `notChecked` entry in the JSON and XML reports carries the same code as `cause` (and `causeDetail`), and its hint follows the cause. A report whose rules carry no reason, such as one from an older publisher, keeps the wording chosen by plan and coverage alone, unchanged. A failed audit keeps its own message: nothing ran, whatever the reasons say.
 
 **Token Efficiency:**
 The LLM format achieves significant size reduction through:

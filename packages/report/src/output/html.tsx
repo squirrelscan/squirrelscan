@@ -93,7 +93,7 @@ import {
   moreSourcePages,
   type ItemSourceRow,
 } from "../item-sources";
-import { lockedRulesMessage } from "../locked-rules";
+import { LOCKED_REASON_LABELS, lockedRuleView, lockedRulesMessage } from "../locked-rules";
 import { notCheckedLines } from "../not-checked";
 import { safeWafBlocked, wafBlockedPagesLines } from "../waf-blocked";
 import { privateTargetLine } from "../private-target";
@@ -2323,10 +2323,17 @@ function ReportPage({
                 )}
               </p>
               <div className="flex flex-wrap gap-1.5">
-                {locked.rules.map((r) => (
-                  <Badge color="neutral" size="md" key={r.id}>
-                    {r.name}
-                  </Badge>
+                {locked.rules.map(lockedRuleView).map((r) => (
+                  <span
+                    key={r.id}
+                    title={r.reason ? LOCKED_REASON_LABELS[r.reason] : undefined}
+                    data-locked-reason={r.reason}
+                  >
+                    <Badge color="neutral" size="md">
+                      {r.name}
+                      {r.reason ? ` (${LOCKED_REASON_LABELS[r.reason]})` : ""}
+                    </Badge>
+                  </span>
                 ))}
               </div>
             </details>
