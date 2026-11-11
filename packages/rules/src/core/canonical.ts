@@ -10,9 +10,12 @@ function hostFamily(host: string): string {
   return host.toLowerCase().replace(/^www\./, "");
 }
 
-/** A path the site serves its home page at: the root and `/index.html`. */
+/** `/index.html`, `/index.php`, `/index.htm`, `/index.asp(x)`, `/default.asp(x)`, `/default.htm(l)` and kin. */
+const HOME_FILE = /^\/(?:index|default)\.(?:html?|php|aspx?)$/i;
+
+/** A path the site serves its home page at: the root, or a directory index file spelled any of the usual ways. */
 function isRootPath(pathname: string): boolean {
-  return pathname === "/" || pathname === "/index.html";
+  return pathname === "/" || HOME_FILE.test(pathname);
 }
 
 /** `/en/`, `/de`, `/pt-br/`: one locale segment, the usual shape of a localized home page. */
