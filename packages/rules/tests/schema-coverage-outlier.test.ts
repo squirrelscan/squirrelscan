@@ -26,6 +26,10 @@ interface PageSpec {
   pageType: string | null;
   schemaTypes: string[];
   status?: number;
+  /** Robots meta noindex (legacy: parsed.robots meta; streaming: robotsNoindex). */
+  noindex?: boolean;
+  /** X-Robots-Tag header noindex (legacy path only; the row carries the combined flag). */
+  headerNoindex?: boolean;
 }
 
 function url(i: number): string {
@@ -55,7 +59,9 @@ function legacyCtx(specs: PageSpec[]): RuleContext {
         parsed: {
           pageType: spec.pageType,
           schemas: { types: spec.schemaTypes },
+          meta: { robots: spec.noindex ? "noindex, follow" : undefined },
         } as unknown as ParsedPage,
+        headers: spec.headerNoindex ? { "x-robots-tag": "noindex" } : undefined,
       })),
       robotsTxt: null,
       sitemaps: null,
@@ -76,7 +82,7 @@ function featureRow(spec: PageSpec, i: number): PageFeatureRow {
     wordCount: null,
     pageType: spec.pageType,
     schemaTypes: spec.schemaTypes,
-    robotsNoindex: false,
+    robotsNoindex: Boolean(spec.noindex || spec.headerNoindex),
     canonical: null,
     visibleAuthor: false,
     visibleDate: false,
@@ -317,5 +323,52 @@ describe("schema/coverage-outlier — legacy-path edge cases", () => {
     expect(result).toHaveLength(1);
     expect(result[0]?.status).toBe("skipped");
     expect(result[0]?.message).toBe("No pages available for analysis");
+  });
+});
+
+describe("schema/coverage-outlier: noindex pages (#1770)", () => {
+  // 10 indexable products carry Product schema, plus noindex products without it.
+  const indexable = uniform("product", ["Product"], 10);
+
+  test("a noindex page (meta or header) is never reported and not counted in the group", async () => {
+    const specs: PageSpec[] = [
+      ...indexable,
+      { pageType: "product", schemaTypes: [], noindex: true },
+      { pageType: "product", schemaTypes: [], headerNoindex: true },
+    ];
+    const result = await bothPaths(specs);
+    expect(result.status).toBe("pass");
+    expect(result.message).toContain("All 10 comparable page(s)");
+  });
+
+  test("an indexable page missing the siblings' schema is still reported, among indexable pages only", async () => {
+    const specs: PageSpec[] = [
+      ...indexable,
+      { pageType: "product", schemaTypes: [] },
+      { pageType: "product", schemaTypes: [], noindex: true },
+    ];
+    const result = await bothPaths(specs);
+    expect(result.status).toBe("warn");
+    expect(result.message).toContain("1 of 11 page(s)");
+    expect(result.items?.[0]?.sourcePages).toHaveLength(1);
+  });
+
+  test("noindex pages do not count toward the site floor", async () => {
+    const specs: PageSpec[] = [
+      ...uniform("product", ["Product"], SCHEMA_NORM_MIN_PAGES - 1),
+      { pageType: "product", schemaTypes: [], noindex: true },
+    ];
+    const result = await bothPaths(specs);
+    expect(result.status).toBe("skipped");
+  });
+
+  test("a site where every page is noindex is not applicable, not a pass", async () => {
+    const specs: PageSpec[] = uniform("product", ["Product"], 12).map((s, i) =>
+      i % 2 ? { ...s, noindex: true } : { ...s, headerNoindex: true }
+    );
+    const result = await bothPaths(specs);
+    expect(result.status).toBe("skipped");
+    expect(result.message).toContain("Not applicable");
+    expect(result.message).toContain("noindex");
   });
 });
