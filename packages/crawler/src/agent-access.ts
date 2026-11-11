@@ -73,6 +73,7 @@ async function probeOne(
   identity: ProbeIdentity,
   customHeaders?: Record<string, string>,
   budget?: PhaseBudget,
+  seen?: Response[],
 ): Promise<AgentAccessProbe> {
   const timeoutMs = optionalProbeTimeoutMs(budget, PROBE_TIMEOUT_MS);
   if (timeoutMs === null) return unreachableProbe(identity, skippedProbeError(budget));
@@ -94,6 +95,7 @@ async function probeOne(
       },
       timeoutMs,
       async (response) => {
+        seen?.push(response);
         const raw = await readBodyCapped(response, AGENT_ACCESS_MAX_BYTES);
         const body = truncateToBytes(raw, AGENT_ACCESS_MAX_BYTES);
         const challengeSignal = detectChallenge(response.headers, body);
@@ -133,9 +135,13 @@ export function probeAgentAccess(
     { label: "claude-user", ua: CLAUDE_USER_UA },
   ];
   return Effect.promise(async () => {
+    // The three identities are compared with each other, so a block signal on one must not
+    // skip the others: it is noted after all three ran, and stops the probes after this one (#1655).
+    const seen: Response[] = [];
     const probes = await Promise.all(
-      identities.map((id) => gate(homeUrl, () => probeOne(homeUrl, id, customHeaders, budget))),
+      identities.map((id) => gate(homeUrl, () => probeOne(homeUrl, id, customHeaders, budget, seen))),
     );
+    for (const response of seen) budget?.refusals?.observe(response, homeUrl);
     return { probes };
   });
 }

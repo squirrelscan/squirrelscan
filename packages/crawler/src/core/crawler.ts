@@ -3006,7 +3006,7 @@ export function createCrawler(
         //
         // The log rides on the budget so every root probe can note a request the
         // site refused; persisted below so the rules say "refused", not "absent".
-        const refusals = new RefusalLog();
+        const refusals = new RefusalLog(targetUrl);
         crawlRefusals = refusals;
         const seedPhase = createPhaseBudget(discoveryBudgetMs(config.timeoutMs, config.discoveryDeadlineAt), Date.now(), refusals);
 
@@ -3625,7 +3625,7 @@ export function createCrawler(
 
         // One wall-clock budget for this restart's preamble, same as start().
         // The log carries only the block signal here: a resumed crawl does not persist refusals (#1655).
-        crawlRefusals = new RefusalLog();
+        crawlRefusals = new RefusalLog(baseUrl);
         const preamble = createPhaseBudget(
           discoveryBudgetMs(config.timeoutMs, config.discoveryDeadlineAt),
           Date.now(),

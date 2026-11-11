@@ -141,9 +141,10 @@ async function probeOne(
       async (response) => {
         // A 429 or a bot wall is no answer about this path, and it stops the optional probes that
         // have not gone out yet (#1655). A lone 403 stays the answer it was.
-        // A configured page (#1428) keeps the answer it got: its rule reads the status.
-        if (!countWords && isBlockSignal(response)) {
-          budget?.refusals?.observe(response);
+        // A configured page (#1428) too: the rule leaves a status 0 probe out ("not checked") instead
+        // of reading the 429 as a missing page.
+        if (isBlockSignal(response)) {
+          budget?.refusals?.observe(response, url);
           await response.body?.cancel().catch(() => {});
           return unreachableProbe(path, url, `refused by the site (HTTP ${response.status})`);
         }

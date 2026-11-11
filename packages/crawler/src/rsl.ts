@@ -81,6 +81,8 @@ async function fetchLicenseDoc(
       },
       timeoutMs,
       async (response) => {
+        // A 429 or a bot wall on a license doc stops the optional probes still waiting (#1655).
+        budget?.refusals?.observe(response, url);
         const contentType = response.headers.get("content-type");
         const raw = await readBodyCapped(response, RSL_MAX_BYTES);
         const body = truncateToBytes(raw, RSL_MAX_BYTES);

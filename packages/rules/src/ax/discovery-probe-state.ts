@@ -12,6 +12,7 @@
 import {
   PROBE_NOT_SENT_ERRORS,
   PROBE_PATH_NOT_APPROVED_ERROR,
+  PROBE_REDIRECT_NOT_FOLLOWED_ERROR,
 } from "@squirrelscan/core-contracts/storage";
 
 import type {
@@ -30,7 +31,13 @@ export const NOT_CHECKED = "not-checked";
  * or the crawler kept no result, which is either (llms, markdown and RSL store
  * no row in both cases).
  */
-export type NotCheckedReason = "not-sent" | "no-answer" | "no-result" | "blocked" | "not-approved";
+export type NotCheckedReason =
+  | "not-sent"
+  | "no-answer"
+  | "no-result"
+  | "blocked"
+  | "not-approved"
+  | "redirect-not-followed";
 
 const REASON_TEXT: Record<NotCheckedReason, string> = {
   "not-sent": "the discovery probe was not sent",
@@ -38,6 +45,8 @@ const REASON_TEXT: Record<NotCheckedReason, string> = {
   "no-result": "the discovery probe was not sent or got no answer",
   blocked: "the discovery probe was refused or throttled",
   "not-approved": "path not approved ([crawler] discovery_probe_paths)",
+  "redirect-not-followed":
+    "the request was sent but its redirect to another path was not followed ([crawler] discovery_probe_paths)",
 };
 
 /** An info check saying `subject` was not checked, and why. */
@@ -80,6 +89,11 @@ export function notCheckedReason(
   probes: ReadonlyArray<{ status: number; error: string | null } | undefined>,
 ): NotCheckedReason {
   if (probes.some((p) => p !== undefined && wasSent(p))) return "no-answer";
+  // The request went out and was redirected off its approved path: it was sent, so never say "not sent".
+  const present0 = probes.filter((p) => p !== undefined);
+  if (present0.length > 0 && present0.every((p) => p.error === PROBE_REDIRECT_NOT_FOLLOWED_ERROR)) {
+    return "redirect-not-followed";
+  }
   // Every silent path was left out by the allowlist: say so, rather than blaming a block or a budget.
   const present = probes.filter((p) => p !== undefined);
   if (present.length > 0 && present.every((p) => p.error === PROBE_PATH_NOT_APPROVED_ERROR)) {
