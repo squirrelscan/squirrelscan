@@ -110,7 +110,7 @@ interface Json {
 describe("robots.txt in the report (#1782)", () => {
   test("honoured, on a site that disallows /private/: the JSON carries the flag and the skipped count", async () => {
     const json = JSON.parse(await audit(true)) as Json;
-    expect(json.meta.schemaVersion).toBe("1.18");
+    expect(json.meta.schemaVersion).toBe("1.19");
     expect(json.meta.respectRobots).toBe(true);
     expect(json.meta.robotsBlockedPages).toBe(2);
   });

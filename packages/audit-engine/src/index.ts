@@ -73,6 +73,8 @@ export {
   targetedCoverageFor,
 } from "./report-stream";
 export { isRedirectSourcePage } from "./redirect-source";
+export { summarizeOpenPages } from "./open-page-coverage";
+export type { FrontierReach, OpenPageCoverageInput, UntouchedPageCounts } from "./open-page-coverage";
 export type {
   ScoringContext,
   CarriedFinding,

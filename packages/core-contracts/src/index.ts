@@ -1011,6 +1011,14 @@ export interface AuditReport {
      * no verdict there). Omitted when none.
      */
     pagesWithStaleCarry?: number;
+    /**
+     * (#1759) Known pages that held open findings before this run: how many this run re-fetched
+     * and how many it left alone. Present only on a smart-audit merge that had such pages; a fresh
+     * audit has none. The split of `carried` is present when the producer could read the crawl's
+     * frontier, and then `skippedByBudget + noLongerLinked + notFetched = carried` (omitted zeros
+     * aside): found but not fetched, never found, and found but failed or skipped.
+     */
+    openPages?: OpenPageCoverage;
   };
   /**
    * Scan scope disclosure (#1180): where the audit ran and how much of the site
@@ -3217,4 +3225,20 @@ export interface RecommendationOutput {
     platformGuide: string;
     effort: IssueEffort;
   }>;
+}
+
+/**
+ * (#1759) Pages with open findings, split by what this run did about them.
+ * `reverified` pages were re-fetched (crawled, or gone with a 404/410), so their findings
+ * were judged on fresh evidence. `carried` pages were left alone and their findings carry.
+ */
+export interface OpenPageCoverage {
+  reverified: number;
+  carried: number;
+  /** Carried pages the crawl found (queued) and did not reach before the page budget or time ran out. */
+  skippedByBudget?: number;
+  /** Carried pages the crawl never found a link or sitemap entry to. */
+  noLongerLinked?: number;
+  /** Carried pages the crawl found but could not or would not fetch (failed, blocked, out of scope). */
+  notFetched?: number;
 }

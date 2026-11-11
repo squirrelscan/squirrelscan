@@ -217,6 +217,14 @@ What the coverage counts mean:
 - **pagesWithStaleCarry** counts pages this run did re-crawl that still carry a
   finding from an earlier run, because a rule gave no verdict there (skipped, or
   inconclusive). It does not count pages outside the crawl.
+- **openPages** counts the known pages that held open findings before this run:
+  **reverified** is the ones this run fetched again (crawled, or gone with a 404
+  or 410), so their findings were judged on fresh evidence, and **carried** is
+  the ones it left alone. Carried pages split by why: **skippedByBudget** were
+  found and queued but the page limit or time ran out first, **noLongerLinked**
+  were not found at all (unlinked, moved or dropped from the sitemap, so their
+  findings may be stale), and **notFetched** were found but the fetch failed or
+  was skipped. A first run has no such pages, and the field is left out.
 
 Carried findings do not expire on a timer: they last until you re-crawl the page
 (the fresh result replaces them) or it is removed. If a capped run rotates the

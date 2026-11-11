@@ -76,8 +76,34 @@ export function coverageLine(report: AuditReport): string | null {
   if (Number.isSafeInteger(stale) && stale > 0) {
     notes.push(`${stale} re-crawled page${stale === 1 ? "" : "s"} still carry${stale === 1 ? "s" : ""} earlier findings`);
   }
+  const open = openPagesNote(c.openPages);
+  if (open) notes.push(open);
   const suffix = notes.length > 0 ? ` (${notes.join("; ")})` : "";
   return `Coverage: audited ${c.auditedPages} of ${c.knownPages} known page${c.knownPages === 1 ? "" : "s"}${suffix}.`;
+}
+
+/**
+ * (#1759) What became of the pages that held open findings, e.g.
+ *   "12 pages with open findings re-verified, 28 left carried: 20 skipped by the page budget, 8 no longer linked"
+ * A page skipped by the budget was found and queued; one no longer linked was not found at all, so
+ * its findings may be stale. Counts come from a stored or fetched report, so only safe integers print.
+ * Returns null when no page held an open finding, or the figures are not counts.
+ */
+export function openPagesNote(open: NonNullable<AuditReport["coverage"]>["openPages"]): string | null {
+  if (!open) return null;
+  const count = (n: unknown): number => (typeof n === "number" && Number.isSafeInteger(n) && n > 0 ? n : 0);
+  const reverified = count(open.reverified);
+  const carried = count(open.carried);
+  if (reverified + carried === 0) return null;
+  const pages = (n: number) => `${n} page${n === 1 ? "" : "s"}`;
+  const split = [
+    [count(open.skippedByBudget), "skipped by the page budget"],
+    [count(open.noLongerLinked), "no longer linked"],
+    [count(open.notFetched), "found but not fetched"],
+  ] as const;
+  const why = split.filter(([n]) => n > 0).map(([n, label]) => `${n} ${label}`);
+  const left = carried > 0 ? `${carried} left carried${why.length > 0 ? `: ${why.join(", ")}` : ""}` : "none left carried";
+  return `${pages(reverified)} with open findings re-verified, ${left}`;
 }
 
 /**

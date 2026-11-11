@@ -66,8 +66,11 @@ class MemStore implements SmartAuditStore {
     return [...this.pages.values()];
   }
   async upsertFindings(findings: PageFindingRecord[]): Promise<void> {
+    // The server's upsert keeps the earlier first-seen (LEAST), so a row a run writes over a prior one still says it was there before.
     for (const f of findings) {
-      this.findings.set(findingKey(f.normalizedUrl, f.ruleId, f.checkName, f.locator), { ...f });
+      const key = findingKey(f.normalizedUrl, f.ruleId, f.checkName, f.locator);
+      const before = this.findings.get(key);
+      this.findings.set(key, { ...f, firstSeenAt: Math.min(f.firstSeenAt, before?.firstSeenAt ?? f.firstSeenAt) });
     }
   }
   async upsertSitePages(pages: SitePageRecord[]): Promise<void> {
@@ -897,6 +900,8 @@ async function publishChunked(
     siteKey: "site",
     crawlId,
     now,
+    // The ingest above wrote this run's rows at `now`; anything first seen before it was there already.
+    ingestStartedAt: now,
     ruleResults: body.ruleResults,
     pageStatuses: body.pageStatuses,
     ...(opts.signal === false ? {} : { resolutionSignal: body.resolutionSignal }),

@@ -6,6 +6,7 @@ import type {
   ReportRender,
   ResumeOutcome,
   StoreIntegrityEvicted,
+  OpenPageCoverage,
 } from "@squirrelscan/core-contracts";
 import type {
   AuditLevel,
@@ -677,6 +678,8 @@ export interface AuditReport {
     unrenderedFindings?: number;
     /** Re-crawled pages that still carry earlier findings (#1031). */
     pagesWithStaleCarry?: number;
+    /** Pages with open findings: how many this run re-fetched, how many it left carried (#1759). */
+    openPages?: OpenPageCoverage;
   };
   /**
    * Scan scope disclosure (#1180): where the audit ran and how much of the site

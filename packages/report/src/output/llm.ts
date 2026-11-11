@@ -424,8 +424,15 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
     const unrenderedAttr = unrendered > 0 ? ` unrendered="${unrendered}"` : "";
     // Re-crawled pages that still carry earlier findings (#1031); omitted when none.
     const stale = Number.isSafeInteger(c.pagesWithStaleCarry) && (c.pagesWithStaleCarry ?? 0) > 0 ? ` stale-carry-pages="${c.pagesWithStaleCarry}"` : "";
+    // (#1759) Pages with open findings, re-fetched vs left carried; the split only when known.
+    const open = c.openPages;
+    const openAttr = (name: string, n: unknown): string =>
+      typeof n === "number" && Number.isSafeInteger(n) && n > 0 ? ` ${name}="${n}"` : "";
+    const openAttrs = open
+      ? `${openAttr("open-pages-reverified", open.reverified)}${openAttr("open-pages-carried", open.carried)}${openAttr("open-pages-skipped-by-budget", open.skippedByBudget)}${openAttr("open-pages-no-longer-linked", open.noLongerLinked)}${openAttr("open-pages-not-fetched", open.notFetched)}`
+      : "";
     lines.push(
-      `<coverage audited="${c.auditedPages}" known="${c.knownPages}" carried="${c.carriedFindings}"${unrenderedAttr}${stale}/>`,
+      `<coverage audited="${c.auditedPages}" known="${c.knownPages}" carried="${c.carriedFindings}"${unrenderedAttr}${stale}${openAttrs}/>`,
     );
   }
 

@@ -173,6 +173,15 @@ export interface UntouchedCarriedAggregate {
   findings: number;
   /** Of those, the ones on pages no audit has rendered (no `site_pages` row). */
   unrenderedFindings: number;
+  /**
+   * (#1759) Distinct untouched pages holding those findings, and how many of them
+   * `CompleteStoreScope.queuedUnfetchedUrls` names. Absent from a store that does not
+   * count them: the report then makes no claim about its carried pages.
+   */
+  pages?: number;
+  pagesQueued?: number;
+  /** Of those pages, how many `CompleteStoreScope.notFetchedUrls` names. */
+  pagesNotFetched?: number;
   /** Per rule, page-scope or not: the fold drops the rules it cannot score. */
   rules: readonly UntouchedRuleTotals[];
   /** Per rule and report class, for the report sample's stamps. */
@@ -1121,7 +1130,9 @@ export function untouchedCarriedFinding(
  * Throws on a row outside {@link isAggregatableCarriedRow}.
  */
 export function aggregateUntouchedCarried(
-  pages: Iterable<UntouchedCarriedPage>
+  pages: Iterable<UntouchedCarriedPage>,
+  queuedUnfetchedUrls?: ReadonlySet<string>,
+  notFetchedUrls?: ReadonlySet<string>
 ): UntouchedCarriedReference {
   const rules = new Map<string, UntouchedRuleTotals>();
   const classes = new Map<
@@ -1133,6 +1144,9 @@ export function aggregateUntouchedCarried(
   const sample: UntouchedSamplePage[] = [];
   let findings = 0;
   let unrenderedFindings = 0;
+  let pageCount = 0;
+  let pagesQueued = 0;
+  let pagesNotFetched = 0;
 
   for (const page of pages) {
     const neverRendered = !page.rendered;
@@ -1143,6 +1157,11 @@ export function aggregateUntouchedCarried(
     const rows = page.rows.filter((row) => !isRunLocalRuleErrorFinding(row));
     findings += rows.length;
     if (neverRendered) unrenderedFindings += rows.length;
+    if (rows.length > 0) {
+      pageCount += 1;
+      if (queuedUnfetchedUrls?.has(page.normalizedUrl)) pagesQueued += 1;
+      else if (notFetchedUrls?.has(page.normalizedUrl)) pagesNotFetched += 1;
+    }
 
     // Row indices per rule, in cursor order: one `addChecksToTally` call each.
     const byRule = new Map<string, number[]>();
@@ -1214,6 +1233,9 @@ export function aggregateUntouchedCarried(
     aggregate: {
       findings,
       unrenderedFindings,
+      pages: pageCount,
+      pagesQueued,
+      pagesNotFetched,
       rules: [...rules.values()],
       classes: Array.from(classes.values(), ({ totals, counts }) => ({
         ...totals,

@@ -8,6 +8,7 @@ import type {
   MaxDurationCut,
   PageFeatureRow,
   RedirectRow,
+  OpenPageCoverage,
 } from "@squirrelscan/core-contracts";
 
 import {
@@ -273,6 +274,8 @@ export interface SmartMergeOverride {
     unrenderedFindings?: number;
     /** Re-crawled pages that still carry earlier findings (#1031). */
     pagesWithStaleCarry?: number;
+    /** Pages with open findings: how many this run re-fetched, how many it left carried (#1759). */
+    openPages?: OpenPageCoverage;
   };
   carriedLastSeen: Map<string, number>;
 }

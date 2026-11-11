@@ -18,6 +18,7 @@ import type {
   PageFindingRecord,
   ResolutionSignal,
   SitePageRecord,
+  OpenPageCoverage,
 } from "@squirrelscan/core-contracts";
 import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
 import {
@@ -55,6 +56,7 @@ import {
   type UntouchedCarriedAggregate,
   type UntouchedSamplePage,
 } from "./complete-store-fold";
+import { summarizeOpenPages, type FrontierReach } from "./open-page-coverage";
 import { isReplayedCheck, REMOVED_STATUSES } from "./published-checks";
 import type { SkippedPassCounts } from "./stream-findings";
 import {
@@ -114,6 +116,14 @@ export type OpenFindingPageSource = AsyncIterable<OpenFindingPage>;
 export interface CompleteStoreScope {
   crawledUrls: ReadonlySet<string>;
   removedUrls: ReadonlySet<string>;
+  /**
+   * (#1759) The pages this run queued and never fetched, and the ones it found and failed or skipped,
+   * normalized, present only when the producer sent both complete lists
+   * ({@link CloudSmartAuditsInput.frontier}). A store that counts untouched pages for
+   * `UntouchedCarriedAggregate.pages` counts how many of them are in each set too.
+   */
+  queuedUnfetchedUrls?: ReadonlySet<string>;
+  notFetchedUrls?: ReadonlySet<string>;
 }
 
 /**
@@ -363,6 +373,33 @@ export interface CloudSmartAuditsInput {
    * input, because no audit has seen them.
    */
   unfetchedPages?: number;
+  /**
+   * (#1759) Where the crawl's frontier ended, so the report can split the open-finding pages it left
+   * carried into "skipped by the page budget" (queued, never fetched), "found but not fetched"
+   * (failed or skipped) and "no longer linked" (not in the frontier at all). Every field is the
+   * producer's complete list and its length, as the frontier counted it. The split is emitted only
+   * when BOTH lists are present and each `urls.length` equals its count: a missing or partial list
+   * would put the pages past it under "no longer linked". Otherwise `coverage.openPages` carries
+   * `reverified` and `carried` only.
+   */
+  frontier?: {
+    queuedUnfetchedUrls: string[];
+    queuedUnfetchedCount: number;
+    notFetchedUrls: string[];
+    notFetchedCount: number;
+  };
+  /**
+   * (#1759) The epoch ms the store's ingest of THIS run's findings began, which is what tells a row
+   * that replaced an earlier finding (first seen before it) from a new one. Required for a complete
+   * store to report `coverage.openPages`: its ingest has already written this run's rows over the
+   * priors, so the priors cannot say which pages held open findings before. Without it a complete-store
+   * merge leaves `openPages` out. Ignored by the sampled merge, which reads the priors directly.
+   *
+   * Pass the same `now` the producer gave `buildStreamFindings` when it stamped the rows' `firstSeenAt`
+   * (one clock), never a server timestamp: the comparison is `row.firstSeenAt < ingestStartedAt`, and a
+   * second clock turns clock skew into pages that look re-verified or new.
+   */
+  ingestStartedAt?: number;
 }
 
 export interface CloudSmartAuditsResult {
@@ -413,6 +450,8 @@ export interface CloudSmartAuditsResult {
      * zero so a report without any is byte-identical to before.
      */
     pagesWithStaleCarry?: number;
+    /** (#1759) Pages with open findings: re-fetched this run vs left carried, and why. Omitted when none. */
+    openPages?: OpenPageCoverage;
   };
   /**
    * `${normalizedUrl}|${ruleId}|${checkName}` → lastSeenAt for tagging report
@@ -942,8 +981,27 @@ export async function runCloudSmartAudits(
 
   // (pub#497) Asked for only once the page scope is settled: which pages are
   // untouched depends on it.
+  const frontierIn = input.frontier;
+  const frontierKnown =
+    !!frontierIn &&
+    Array.isArray(frontierIn.queuedUnfetchedUrls) &&
+    Array.isArray(frontierIn.notFetchedUrls) &&
+    frontierIn.queuedUnfetchedUrls.length === frontierIn.queuedUnfetchedCount &&
+    frontierIn.notFetchedUrls.length === frontierIn.notFetchedCount;
+  const queuedUnfetched = frontierKnown
+    ? new Set(frontierIn.queuedUnfetchedUrls.map((url) => normalizePageUrl(url)))
+    : undefined;
+  const notFetched = frontierKnown
+    ? new Set(frontierIn.notFetchedUrls.map((url) => normalizePageUrl(url)))
+    : undefined;
   const split = completeStore?.untouchedCarried
-    ? await completeStore.untouchedCarried({ crawledUrls, removedUrls })
+    ? await completeStore.untouchedCarried({
+        crawledUrls,
+        removedUrls,
+        ...(queuedUnfetched && notFetched
+          ? { queuedUnfetchedUrls: queuedUnfetched, notFetchedUrls: notFetched }
+          : {}),
+      })
     : undefined;
   const streamedComplete = split?.pages ?? completeStore?.openPages;
   // Writing as the merge streams is safe ONLY when the reader is a cursor that has
@@ -1001,6 +1059,17 @@ export async function runCloudSmartAudits(
     }
   };
 
+  // (#1759) A complete store's ingest has already written this run's rows over the priors they replace,
+  // so a page that still fails is read here as a page with a row from before this run (the store keeps
+  // the earlier first-seen on conflict), not off its prior rows, which the overwrite took.
+  const ingestStartedAt = input.ingestStartedAt;
+  const freshReverified = new Set<string>();
+  const noteFreshRows = (rows: readonly PageFindingRecord[]): void => {
+    for (const row of rows) {
+      if (ingestStartedAt !== undefined && row.firstSeenAt < ingestStartedAt) freshReverified.add(row.normalizedUrl);
+    }
+  };
+
   if (streamedComplete) {
     const fold = createCompleteStoreTallyFold({
       ruleResults: shellResults ?? input.ruleResults,
@@ -1045,6 +1114,7 @@ export async function runCloudSmartAudits(
       }
       pageCarried.length = 0;
       session.addPriorFindings(page.prior);
+      noteFreshRows(page.fresh);
       fold.foldPage(page.normalizedUrl, page.fresh, pageCarried);
       if (pendingWrites.length >= MERGE_PERSIST_BATCH) await flushWrites();
     }
@@ -1093,7 +1163,7 @@ export async function runCloudSmartAudits(
     if (completeStore) {
       scoringTallies = await foldCompleteStoreTallies({
         ruleResults: shellResults ?? input.ruleResults,
-        findingPages: completeStore.findingPages ?? emptyPageSource(),
+        findingPages: noteFindingPages(completeStore.findingPages ?? emptyPageSource(), noteFreshRows),
         crawledUrls,
         crawledCount: completeStore.crawledCount,
         skippedPassCounts: completeStore.skippedPassCounts,
@@ -1203,6 +1273,43 @@ export async function runCloudSmartAudits(
     reportTotals = tallyReportTotals(scoringTallies, completeTallies);
   }
 
+  // (#1759) Open-finding pages this run re-fetched against the ones it left carried. A clipped
+  // signal lists only part of the crawl, so a page it leaves out may have been fetched: no claim.
+  // An untouched aggregate the store counted no pages for leaves the carried side unknown too.
+  const untouchedAggregate = split?.aggregate;
+  const untouchedPages =
+    untouchedAggregate === undefined || untouchedAggregate.findings === 0
+      ? { pages: 0, pending: 0 }
+      : untouchedAggregate.pages === undefined
+        ? undefined
+        : {
+            pages: untouchedAggregate.pages,
+            ...(queuedUnfetched &&
+            untouchedAggregate.pagesQueued !== undefined &&
+            untouchedAggregate.pagesNotFetched !== undefined
+              ? {
+                  pending: untouchedAggregate.pagesQueued,
+                  notFetched: untouchedAggregate.pagesNotFetched,
+                }
+              : {}),
+          };
+  const openPages =
+    input.resolutionSignal?.crawledComplete === false ||
+    !untouchedPages ||
+    (completeStore && ingestStartedAt === undefined)
+      ? undefined
+      : summarizeOpenPages({
+          reverified: reverifiedCount(session.openPages.reverified, freshReverified),
+          carried: session.openPages.carried,
+          ...(untouchedPages.pages > 0 ? { untouched: untouchedPages } : {}),
+          ...(queuedUnfetched && notFetched
+            ? {
+                reach: (url: string): FrontierReach =>
+                  queuedUnfetched.has(url) ? "pending" : notFetched.has(url) ? "other" : "unseen",
+              }
+            : {}),
+        });
+
   return {
     unionRuleResults,
     ...(scoringTallies ? { scoringTallies } : {}),
@@ -1221,6 +1328,7 @@ export async function runCloudSmartAudits(
       carriedFindings: carriedCount - unrenderedCount,
       ...(unrenderedCount > 0 ? { unrenderedFindings: unrenderedCount } : {}),
       ...(staleCarryPages.size > 0 ? { pagesWithStaleCarry: staleCarryPages.size } : {}),
+      ...(openPages ? { openPages } : {}),
     },
     carriedLastSeen: shownLastSeen,
     persistedFindings,
@@ -1229,6 +1337,24 @@ export async function runCloudSmartAudits(
     replayedUnknownPages,
     completeStore: !!completeStore,
   };
+}
+
+/** Pages in either set, each once: a page can have both a prior row and one written over its twin. */
+function reverifiedCount(a: ReadonlySet<string>, b: ReadonlySet<string>): number {
+  let n = a.size;
+  for (const url of b) if (!a.has(url)) n += 1;
+  return n;
+}
+
+/** The finding pages as they came, each one shown to `note` on its way past. */
+async function* noteFindingPages(
+  pages: FindingPageSource,
+  note: (rows: readonly PageFindingRecord[]) => void,
+): AsyncGenerator<PageFindingRecord[]> {
+  for await (const rows of pages) {
+    note(rows);
+    yield rows as PageFindingRecord[];
+  }
 }
 
 /**

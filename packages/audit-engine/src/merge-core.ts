@@ -139,6 +139,19 @@ export interface MergedState {
   sitePages: SitePageRecord[];
   /** Normalized URLs of pages active (non-removed) after the merge. */
   activePageUrls: Set<string>;
+  /** Pages that held open findings before this run, by whether this run looked at them (#1759). */
+  openPages: OpenFindingPages;
+}
+
+/**
+ * The pages that held a prior OPEN finding, split by whether this run re-fetched
+ * them (#1759). `reverified` pages were crawled or came back 404/410, so their
+ * findings were decided on fresh evidence. `carried` pages were not looked at:
+ * their findings carry unchanged.
+ */
+export interface OpenFindingPages {
+  reverified: ReadonlySet<string>;
+  carried: ReadonlySet<string>;
 }
 
 /** Inputs to {@link computeMerge}: this run's evidence + already-loaded prior state. */
@@ -951,6 +964,8 @@ export interface MergeSession {
    */
   readonly sitePages: SitePageRecord[];
   readonly activePageUrls: Set<string>;
+  /** Pages the priors added so far held open findings on, split by whether this run looked at them (#1759). */
+  readonly openPages: OpenFindingPages;
   /**
    * (#497) What the streaming caller asks of the site's pages, answered without
    * copying them: `sitePages` and `activePageUrls` are built on first read, and
@@ -1029,6 +1044,7 @@ export function computeMerge(input: ComputeMergeInput): MergedState {
     persisted: [...fresh.persisted, ...priorPersisted],
     sitePages: session.sitePages,
     activePageUrls: session.activePageUrls,
+    openPages: session.openPages,
   };
 }
 
@@ -1600,6 +1616,8 @@ export function createMergeSession(
     sink.active(toMerged(carried, unrendered));
   };
 
+  const openPages = { reverified: new Set<string>(), carried: new Set<string>() };
+
   return {
     get sitePages() {
       return (sitePages ??= buildSitePages());
@@ -1619,8 +1637,17 @@ export function createMergeSession(
     isActivePage: (url) => pageOf(url)?.state === "active",
     everRendered: (url) => known.index.has(url),
     carriedPageUrls,
+    openPages,
     addPriorFindings: (priors) => {
-      for (const prior of priors) addPrior(prior);
+      for (const prior of priors) {
+        const url = prior.normalizedUrl;
+        const looked =
+          crawledUrls.has(url) ||
+          removedUrls.has(url) ||
+          (resolution?.crawledUrls.has(url) ?? false);
+        (looked ? openPages.reverified : openPages.carried).add(url);
+        addPrior(prior);
+      }
     },
     finish: emitFresh,
   };

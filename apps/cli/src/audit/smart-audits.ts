@@ -14,6 +14,7 @@
 import type {
   CheckResult,
   CrawlStorage,
+  OpenPageCoverage,
   PageFindingRecord,
   SitePageRecord,
 } from "@squirrelscan/core-contracts";
@@ -21,7 +22,9 @@ import type {
 import {
   buildScoringResultsFromMerged,
   mergeFindings,
+  summarizeOpenPages,
   type CarriedFinding,
+  type FrontierReach,
   type FlatFinding,
   type NotEvaluatedEvidence,
   type RuleTally,
@@ -29,6 +32,7 @@ import {
 import { buildSupersededIndex } from "@squirrelscan/core-contracts/resolution";
 import { loadAllRules, type RuleRunResult } from "@squirrelscan/rules";
 import { isNonPublicUrl } from "@squirrelscan/utils/non-public-host";
+import { normalizePageUrl } from "@squirrelscan/utils/url";
 import { Effect } from "effect";
 
 /**
@@ -97,6 +101,8 @@ export interface SmartAuditResult {
      * copied straight into `report.coverage`.
      */
     unrenderedFindings?: number;
+    /** Pages with open findings: re-fetched this run vs left carried, and why (#1759). */
+    openPages?: OpenPageCoverage;
   };
   /**
    * carriedKey → lastSeenAt (epoch ms) for tagging report checks as carried.
@@ -288,6 +294,35 @@ export function runSmartAudits(
       ruleMetaIndex,
     });
 
+    // (#1759) How far each carried open-finding page got through this crawl's frontier: queued
+    // and never fetched (the page budget ran out), found and failed or skipped, or never found.
+    // The frontier is keyed by the crawler's own normalization (a trailing slash is a different URL,
+    // #1510); the carried pages are `page_findings` keys, which are not. Read once and index by the
+    // findings' normalization, so a still-queued `/blog/post/` is not read as unlinked. A page both
+    // spellings name counts as queued if either is.
+    const frontier = yield* Effect.catchAll(
+      storage.getAllFrontierEntries(crawlId),
+      () => Effect.succeed(null)
+    );
+    const reach = frontier ? new Map<string, FrontierReach>() : undefined;
+    if (frontier && reach) {
+      for (const entry of frontier) {
+        const key = normalizePageUrl(entry.normalizedUrl);
+        const here: FrontierReach =
+          entry.status === "pending" || entry.status === "fetching"
+            ? "pending"
+            : "other";
+        if (reach.get(key) !== "pending") reach.set(key, here);
+      }
+    }
+    const openPages = summarizeOpenPages({
+      reverified: merged.openPages.reverified.size,
+      carried: merged.openPages.carried,
+      ...(reach
+        ? { reach: (url: string): FrontierReach => reach.get(url) ?? "unseen" }
+        : {}),
+    });
+
     return {
       carriedRuleResults,
       removedUrls,
@@ -301,6 +336,7 @@ export function runSmartAudits(
         ).length,
         carriedFindings: carriedFindings.length - unrenderedCount,
         ...(unrenderedCount > 0 ? { unrenderedFindings: unrenderedCount } : {}),
+        ...(openPages ? { openPages } : {}),
       },
       carriedLastSeen,
     };
