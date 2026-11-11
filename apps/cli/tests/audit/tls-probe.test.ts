@@ -789,7 +789,7 @@ describe("behind an HTTP proxy from the environment (#1259)", () => {
     });
   });
 
-  test("a proxy that never answers times out as not checked", async () => {
+  test("a proxy that never answers CONNECT times out as not checked (the proxy's stall)", async () => {
     await via("hang");
     const { probe } = probeVia();
     const started = Date.now();
@@ -800,7 +800,7 @@ describe("behind an HTTP proxy from the environment (#1259)", () => {
     });
     expect(result).toMatchObject({
       kind: "unreachable",
-      code: "PROXY_TIMEOUT",
+      code: "PROXY_CONNECT_TIMEOUT",
     });
     expect(Date.now() - started).toBeLessThan(3_000);
   });
