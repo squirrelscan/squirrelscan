@@ -718,6 +718,10 @@ export interface RuleContext {
   // embedder, tests) means the rule reports "not checked". Site rules only.
   tlsProbe?: TlsProbeFn;
 
+  // A hosted (cloud) audit. Wording only: a check that was not made says so
+  // without advice about networks, proxies or --offline (#3922). Site rules only.
+  hosted?: boolean;
+
   // Resolved Stage-0 site profile (cloud). Undefined offline / free / no-credits
   // / no-consent — rules must treat undefined as "run as today" (no gating).
   siteMetadata?: SiteMetadata;
