@@ -1,0 +1,108 @@
+---
+title: "Indexable internal search results: thin pages and a spam route"
+description: "Internal search result pages are thin, endless in number and open to anyone who links to a query. squirrel finds the ones search engines can index."
+---
+
+## What the problem is
+
+An internal search page exists for a visitor who typed a query. For a search engine it is a thin page with no editorial value, and the number of them is unbounded: every string anyone can type is another URL. Left indexable they spend crawl budget on pages that will never rank, and they are a spam route. Anyone can link to `/search?q=` followed by their own text, and your domain then serves a page that repeats it.
+
+## What squirrel checks
+
+The rule is site-wide and reads only the crawl's page data (URL, status, headers, robots meta, canonical, title, first heading, Open Graph title and WebSite structured data). Only pages with a 2xx status that are not soft 404s are considered. A URL counts as an internal search result when:
+
+- Its last path segment is `search` and the query string has a non-empty search parameter (`s`, `q`, `query`, `search`, `keyword`, or one named in a declared SearchAction), such as `/search?q=shoes`. Tracking, paging and sort parameters (`utm_*`, `page`, `sort`, `ref`, `fbclid`) alone do not make a search URL.
+- It has one of the parameters `s`, `q`, `query`, `search` or `keyword` with a value, and the page shows it renders results: the value (3 or more characters) appears as a whole word in the first heading or the Open Graph title (a title match alone is not enough), or the page declares a `SearchResultsPage`. A URL with such a parameter and no sign of results is not counted. It is reported as unconfirmed instead of being dropped.
+- It matches the `SearchAction` target in the site's `WebSite` structured data, such as `/?s={search_term_string}` or `/find?term={q}`. A path template such as `/search/{term}` matches by path prefix. At most 10 templates are used.
+
+A page with only a search form and no query in its URL is never a search result.
+
+A search URL is found but not listed when it is not indexable: a `noindex` robots meta tag, an `X-Robots-Tag: noindex` header (`none` counts as noindex in both), or a robots.txt `Disallow` for it. It is also not listed when its canonical points to a different page that is not itself a search URL. A canonical to itself or to another search URL still lists it.
+
+The check is named `indexable-search-results`:
+
+- Skipped when no search result URL is in the crawl. Message: `No internal search result URLs in the crawl`.
+- Pass when search URLs exist and none is indexable. Message: `4 internal search result URL(s) found, none indexable`.
+- Warn when some are indexable. Message: `4 internal search result URL(s) found, 2 indexable`. The value lists up to five as path and query, sorted by URL, then `+K more`, plus the count excluded by noindex, robots.txt or canonical and the count of unconfirmed URLs.
+
+Severity warning, weight 4. The result does not depend on crawl order.
+
+## How to fix it
+
+Keep results out of the index with one of two fixes. Add `noindex` to the search results template, as a meta tag or an `X-Robots-Tag` header:
+
+```html
+<meta name="robots" content="noindex, follow" />
+```
+
+Or add a Disallow rule for the search path in robots.txt:
+
+```text
+User-agent: *
+Disallow: /search
+```
+
+A robots.txt block stops crawling, so a search URL that is already indexed and blocked can stay in the index without its content. Use `noindex` to remove pages that are indexed, and leave them crawlable until they drop out.
+
+| | |
+|---|---|
+| **Rule ID** | `crawl/indexable-search-results` |
+| **Category** | [Crawlability](/rules/crawl) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 4/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["crawl/indexable-search-results"]
+```
+
+### Disable all Crawlability rules
+
+```toml squirrel.toml
+[rules]
+disable = ["crawl/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["crawl/indexable-search-results"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Related rules
+
+- [crawl/indexability](/rules/crawl/indexability): the per-page verdict and which directive produced it.
+- [crawl/all-noindex-pages](/rules/crawl/all-noindex-pages): every page blocked from indexing.
+- [crawl/indexability-conflicts](/rules/crawl/indexability-conflicts): pages robots.txt blocks that carry no noindex.
+
+Crawlability findings ship in every audit next to the SEO, performance and agent experience rules. See [The Screaming Frog alternative for agents](https://squirrelscan.com/learn/screaming-frog-alternative) for how an agent works through a report.
+
+{/* glossary:backlinks:start */}
+
+{/* glossary:backlinks:end */}
+
+## References
+
+- [Block search indexing with noindex, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/block-indexing)
+- [Sitelinks search box structured data, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/sitelinks-searchbox)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Crawlability section of the report. The finding lists the indexable search URLs. Signed-out local audits need no account and cost nothing. Signed-in audits spend credits.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Crawlability section looks like on a real site.
+  </Card>
+</CardGroup>

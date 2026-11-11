@@ -405,6 +405,12 @@
    "consent-mode|skipped|No Google tags detected (consent mode not applicable)||"
   ]
  },
+ "analytics/duplicate-tags": {
+  "digest": "88383657681492",
+  "lines": [
+   "duplicate-tags|pass|No analytics tag is installed more than once||"
+  ]
+ },
  "analytics/gtm-present": {
   "digest": "52644714990033",
   "lines": [
@@ -527,6 +533,12 @@
   "digest": "215027923798382",
   "lines": [
    "dev-leakage|pass|No development, private or preview hosts referenced||"
+  ]
+ },
+ "content/duplicate-content": {
+  "digest": "159512273923587",
+  "lines": [
+   "duplicate-content|pass|No pages share identical body content||"
   ]
  },
  "content/duplicate-description": {
@@ -1932,6 +1944,12 @@
    "conflicts|pass|No indexability conflicts detected||"
   ]
  },
+ "crawl/indexable-search-results": {
+  "digest": "150065371305239",
+  "lines": [
+   "indexable-search-results|skipped|No internal search result URLs in the crawl||"
+  ]
+ },
  "crawl/noindex-in-sitemap": {
   "digest": "273026584428389",
   "lines": [
@@ -1954,6 +1972,12 @@
   "digest": "32444540050803",
   "lines": [
    "redirect-chain|pass|No redirect chains exceed # hops||"
+  ]
+ },
+ "crawl/rendered-signal-mismatch": {
+  "digest": "236652191728355",
+  "lines": [
+   "rendered-signal-mismatch|skipped|Raw-vs-rendered signal comparison skipped||"
   ]
  },
  "crawl/robots-meta-conflict": {
@@ -2124,6 +2148,12 @@
    "hreflang|info|No hreflang tags found (not required for single-language sites)|null|"
   ]
  },
+ "i18n/hreflang-targets": {
+  "digest": "126204994959906",
+  "lines": [
+   "hreflang-targets|skipped|No hreflang links to other pages were found in the crawl||"
+  ]
+ },
  "i18n/lang-attribute": {
   "digest": "187066589627962",
   "lines": [
@@ -2290,6 +2320,12 @@
   "digest": "15928128205869",
   "lines": [
    "broken-links|pass|No broken internal links detected||"
+  ]
+ },
+ "links/click-depth": {
+  "digest": "262848436124335",
+  "lines": [
+   "click-depth|warn|# indexable page(s) are more than # clicks from the homepage, deepest at #.|\"/landing/# (# clicks)\\n/product/# (# clicks)\\n/category/# (# clicks)\\n/landing/# (# clicks)\\n/product/# (# clicks)\\n+# more\"|"
   ]
  },
  "links/dead-end-pages": {
@@ -2974,6 +3010,12 @@
   "digest": "41923556769410",
   "lines": [
    "url-parameters|pass|URL has no query parameters||"
+  ]
+ },
+ "url/session-ids": {
+  "digest": "244562015277631",
+  "lines": [
+   "session-ids|pass|No session IDs in URLs||"
   ]
  },
  "url/slug-convention": {

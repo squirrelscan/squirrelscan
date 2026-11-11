@@ -208,6 +208,7 @@
                   "rules/crawl/indexability",
                   "rules/crawl/indexability-conflicts",
                   "rules/crawl/schema-noindex-conflict",
+                  "rules/crawl/indexable-search-results",
                   "rules/crawl/sitemap-4xx",
                   "rules/crawl/sitemap-coverage",
                   "rules/crawl/sitemap-domain",
@@ -216,7 +217,8 @@
                   "rules/crawl/html-size",
                   "rules/crawl/pdf-size",
                   "rules/crawl/soft-404",
-                  "rules/crawl/single-page-site"
+                  "rules/crawl/single-page-site",
+                  "rules/crawl/rendered-signal-mismatch"
                 ]
               },
               {
@@ -251,6 +253,7 @@
                   "rules/links/nofollow-internal",
                   "rules/links/orphan-pages",
                   "rules/links/weak-internal-links",
+                  "rules/links/click-depth",
                   "rules/links/no-contextual-inbound",
                   "rules/links/dead-end-pages",
                   "rules/links/anchor-text",
@@ -268,6 +271,7 @@
                   "rules/content/hidden-text",
                   "rules/content/word-count",
                   "rules/content/duplicate-title",
+                  "rules/content/duplicate-content",
                   "rules/content/duplicate-description",
                   "rules/content/keyword-stuffing",
                   "rules/content/broken-html",
@@ -394,6 +398,7 @@
                   "rules/a11y/button-name",
                   "rules/a11y/input-image-alt",
                   "rules/a11y/select-name",
+                  "rules/a11y/svg-img-alt",
                   "rules/a11y/frame-title",
                   "rules/a11y/object-alt",
                   "rules/a11y/definition-list",
@@ -447,6 +452,7 @@
                   "rules/url/lowercase",
                   "rules/url/trailing-slash",
                   "rules/url/parameters",
+                  "rules/url/session-ids",
                   "rules/url/special-chars",
                   "rules/url/stop-words",
                   "rules/url/slug-convention"
@@ -457,7 +463,8 @@
                 "pages": [
                   "rules/i18n/index",
                   "rules/i18n/lang-attribute",
-                  "rules/i18n/hreflang"
+                  "rules/i18n/hreflang",
+                  "rules/i18n/hreflang-targets"
                 ]
               },
               {
@@ -504,6 +511,7 @@
                 "pages": [
                   "rules/analytics/index",
                   "rules/analytics/gtm-present",
+                  "rules/analytics/duplicate-tags",
                   "rules/analytics/consent-mode"
                 ]
               },
@@ -607,6 +615,7 @@
                   "rules/security/form-https",
                   "rules/security/form-captcha",
                   "rules/security/new-tab",
+                  "rules/security/password-form-get",
                   "rules/security/leaked-secrets",
                   "rules/security/token-storage",
                   "rules/security/graphql-introspection",

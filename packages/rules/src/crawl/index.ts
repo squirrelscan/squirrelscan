@@ -8,10 +8,12 @@ import { canonicalChainRule } from "./canonical-chain";
 import { htmlSizeRule } from "./html-size";
 import { indexabilityCheck } from "./indexability";
 import { indexabilityConflicts } from "./indexability-conflicts";
+import { indexableSearchResults } from "./indexable-search-results";
 import { noindexInSitemapRule } from "./noindex-in-sitemap";
 import { paginationRule } from "./pagination";
 import { pdfSizeRule } from "./pdf-size";
 import { redirectChainRule } from "./redirect-chain";
+import { renderedSignalMismatchRule } from "./rendered-signal-mismatch";
 import { robotsMetaConflictRule } from "./robots-meta-conflict";
 import { robotsTxtRule } from "./robots-txt";
 import { schemaNoindexConflict } from "./schema-noindex-conflict";
@@ -39,6 +41,7 @@ export const rules: Rule[] = [
   indexabilityCheck,
   allNoindexPages,
   indexabilityConflicts,
+  indexableSearchResults,
   schemaNoindexConflict,
   canonicalChainRule,
   paginationRule,
@@ -47,6 +50,7 @@ export const rules: Rule[] = [
   pdfSizeRule,
   soft404Rule,
   singlePageSiteRule,
+  renderedSignalMismatchRule,
 ];
 
 export {
@@ -55,10 +59,12 @@ export {
   htmlSizeRule,
   indexabilityCheck,
   indexabilityConflicts,
+  indexableSearchResults,
   noindexInSitemapRule,
   paginationRule,
   pdfSizeRule,
   redirectChainRule,
+  renderedSignalMismatchRule,
   robotsMetaConflictRule,
   robotsTxtRule,
   schemaNoindexConflict,

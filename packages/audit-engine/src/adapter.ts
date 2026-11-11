@@ -3410,10 +3410,11 @@ export function runStreamingRules(
     // One budget of kept leaked-secrets findings for the whole crawl (#1568), applied as a page joins the list.
     const secretsBudget = createSiteFindingBudget();
     const signalCollector: PageSignalCollector = {
-      // Renamed from "site-dom-signals" when edgeMarkers joined the record (#605): a cached entry
+      // Renamed to -v3 when hreflang joined the record (#1686); earlier: "site-dom-signals" when edgeMarkers joined the record (#605): a cached entry
       // written before it lacks the field, and a replay would read that as "no marker". The new id
       // makes every older entry a miss, so each site's first audit after the upgrade runs fresh once.
-      id: "site-dom-signals-v2",
+      // v4: contentFingerprint joined the record too (content/duplicate-content, #1690), same reason.
+      id: "site-dom-signals-v4",
       collect(page, parsed, shared) {
         const signal = detachFromPage(
           // `shared.fingerprint` is the one the loop already built for
@@ -3428,6 +3429,8 @@ export function runStreamingRules(
             htmlBytes: page.sizeBytes,
             // links/broken-anchors: an unrendered client shell's ids are unconfirmed.
             rendered: isRenderedFetch(page.fetcherId),
+            // i18n/hreflang-targets reads X-Robots-Tag noindex from these.
+            headers: buildHeadersMap(page),
             // The extractors are rules' per-page work, so they share the rules'
             // budget, including a `[rules] time_budget_ms` override (#578).
             budgetMs: runner.ruleTimeBudgetMs,

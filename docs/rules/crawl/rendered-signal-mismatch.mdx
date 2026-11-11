@@ -1,0 +1,97 @@
+---
+title: "Rendered signal mismatch: JavaScript changes the canonical, noindex, title or H1"
+description: "A script that rewrites the canonical, adds or removes a robots noindex, or replaces the title or first H1 makes crawlers that read raw HTML see a different page from a browser."
+---
+
+## What it is
+
+Crawlers and agents that do not run JavaScript read the raw HTML the server sends. A browser shows the page after scripts have run. When a script rewrites the canonical URL, adds or removes a robots `noindex`, or replaces the title or first `<h1>`, the two readers get different pages.
+
+The signals that matter most are the canonical and `noindex`. A canonical or `noindex` that differs between the raw and the rendered page is a common cause of pages dropping out of the index after a framework migration: the server sends one thing, the client script sends another, and which one a search engine acts on depends on whether it renders the page.
+
+[`ax/content-without-js`](/rules/ax/content-without-js) already compares the body content of the raw and the rendered page. This rule compares these four head signals.
+
+## What squirrel checks
+
+It compares the raw HTML the crawl fetched with the DOM from the cloud render of the same page, and emits four checks:
+
+| Check | Fires when | Severity |
+|---|---|---|
+| `canonical-mismatch` | the canonical URL differs, or the script removes it or adds one that points elsewhere | error |
+| `noindex-mismatch` | `noindex` is present on only one side, in any robots or googlebot meta tag | error |
+| `title-modified` | the title text differs after whitespace and case are normalised | warning |
+| `h1-modified` | the first H1 differs, or exists on only one side | warning |
+
+- Canonical URLs are resolved against the page before they are compared, so a relative canonical equals the same absolute one. A trailing slash, the case of the host, a default port (`:443`) and a `#fragment` do not count as a difference. A different path, query, scheme or host does.
+- A raw page with no canonical where the script adds one that is the page's own URL is a **warning**, not an error. That is the usual shape of a single-page app: crawlers that do not run JavaScript pick a canonical themselves, and the one the script adds is the right one. A canonical the script adds that points anywhere else, one it changes, and one it removes still fail.
+- `noindex` is read from every `<meta name="robots">` and `<meta name="googlebot">` tag on the page, on both sides, with the name matched without regard to case; the page is `noindex` when any of them says `noindex` or `none`, as a token in the comma-separated list. A script that appends a second tag, so that the first still reads `index, follow`, is a mismatch. The finding says which side carries it: `raw` or `rendered`.
+- Only the first `<h1>` is compared.
+- Titles and H1s compare equal when only whitespace or letter case differs. A finding shows both texts, cut at 200 characters.
+
+A page whose signals are the same on both sides passes all four checks.
+
+## When it does not run
+
+The rule reports one skipped check, named `rendered-signal-mismatch`, with the reason, and never a pass or a fail, when:
+
+- the crawl browser-rendered the page, because the raw and the rendered HTML are then the same document. Run an audit that does not render the page to compare them;
+- there is no render result for the page: a CLI audit without the cloud, `--offline`, a render that was disabled, or one that returned no HTML;
+- the page is a soft 404, because both sides are then the error shell.
+
+## Cost
+
+The rule reads the same cloud render that `ax/content-without-js` reads, which runs inside the audit and is billed as the page's own audit charge. It adds no credits.
+
+## How to fix it
+
+Put the canonical and the robots meta in the HTML the server sends, and make client code leave them alone.
+
+```html
+<head>
+  <title>Pricing</title>
+  <link rel="canonical" href="https://example.com/pricing">
+  <meta name="robots" content="index, follow">
+</head>
+```
+
+In a framework that sets head tags on the client (a head manager, a router hook), move those tags into the server render, or into a static page, so they are in the first response. Keep the title and the first `<h1>` in the server HTML for the same reason: what a crawler reads should be what a visitor sees, not a placeholder such as `Loading...` that a script replaces.
+
+| | |
+|---|---|
+| **Rule ID** | `crawl/rendered-signal-mismatch` |
+| **Category** | [Crawlability](/rules/crawl) |
+| **Scope** | Per-page |
+| **Severity** | error |
+| **Weight** | 6/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["crawl/rendered-signal-mismatch"]
+```
+
+### Disable all Crawlability rules
+
+```toml squirrel.toml
+[rules]
+disable = ["crawl/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["crawl/rendered-signal-mismatch"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Related rules
+
+- [ax/content-without-js](/rules/ax/content-without-js): body content that only exists after JavaScript runs.
+- [core/canonical](/rules/core/canonical): the canonical on the raw page.
+- [core/robots-meta](/rules/core/robots-meta): the robots meta on the raw page.
+- [crawl/indexability](/rules/crawl/indexability): whether the page can be indexed at all.

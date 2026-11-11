@@ -8,6 +8,7 @@ import { brokenHtmlRule } from "./broken-html";
 import { commonMisspellingsRule } from "./common-misspellings";
 import { dateAgreementRule } from "./date-agreement";
 import { devLeakageRule } from "./dev-leakage";
+import { duplicateContentRule } from "./duplicate-content";
 import { duplicateDescriptionRule } from "./duplicate-description";
 import { duplicateTitleRule } from "./duplicate-title";
 import { freshnessRule } from "./freshness";
@@ -35,6 +36,7 @@ export const rules: Rule[] = [
   wordCountRule,
   contentQualityRule,
   duplicateTitleRule,
+  duplicateContentRule,
   duplicateDescriptionRule,
   keywordStuffingRule,
   hiddenTextRule,

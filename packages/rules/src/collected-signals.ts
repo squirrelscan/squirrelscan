@@ -19,6 +19,9 @@ import type { LeakedSecret } from "./security/leaked-secrets";
 import type { PageFingerprint } from "./integrity/fingerprint";
 import type { PageMisspellings } from "./content/common-misspellings";
 import type { ParsedPage } from "./types";
+import type { HreflangPageSignal } from "./i18n/hreflang-signal";
+import { buildHreflangSignal } from "./i18n/hreflang-signal";
+import { fingerprintForPage, type ContentFingerprint } from "./content/duplicate-content";
 
 import { logger, profileRules } from "./logger";
 import { detectPageSignals } from "./integrity/signals";
@@ -35,7 +38,7 @@ import { RULE_TIME_BUDGET_MS, RuleTimeoutError, runWithinBudget } from "./rule-b
 import { startPageScan, type SiteFindingBudget } from "./security/leaked-secrets";
 import { extractContentSentences } from "./shared/content-in-script";
 import { hasJavaScriptDetections } from "@squirrelscan/utils/cdn";
-import { detachedList, detachedSet } from "./shared/detach";
+import { detached, detachedList, detachedSet } from "./shared/detach";
 
 /**
  * The per-page DOM-derived signal for the six all-pages site rules, captured while
@@ -108,6 +111,18 @@ export interface CollectedPageSignal {
    */
   edgeMarkers?: string[];
   /**
+   * i18n/hreflang-targets: the page's hreflang alternates, noindex source and resolved canonical,
+   * read from the parsed page and headers (no DOM). Absent on a record cached before the field
+   * existed, which reads as not judged.
+   */
+  hreflang?: HreflangPageSignal;
+  /**
+   * content/duplicate-content: hash and word count of the page's rendered body text. Null when the
+   * page has no body or is a redirect. Absent on a record cached before the field existed, which
+   * reads as not judged.
+   */
+  contentFingerprint?: ContentFingerprint | null;
+  /**
    * Rules whose page-time extractor ran past its time budget on this page and was
    * abandoned (its field holds the empty value). The site pass records each as a
    * rule error for this page. Absent when nothing timed out.
@@ -148,6 +163,15 @@ export function detachAnchors(a: PageAnchorSignal | null): PageAnchorSignal | nu
   };
 }
 
+/** The hreflang signal with every string copied out of the page. */
+export function detachHreflang(h: HreflangPageSignal): HreflangPageSignal {
+  return {
+    alternates: h.alternates.map((a) => ({ hreflang: detached(a.hreflang), href: detached(a.href) })),
+    noindex: h.noindex,
+    canonical: h.canonical === null ? null : detached(h.canonical),
+  };
+}
+
 /**
  * Build the per-page signal from a live parsed page. Called once per auditable
  * page during the stream (DOM live). Delegates every extraction to the owning
@@ -172,6 +196,8 @@ export function buildCollectedPageSignal(input: {
   htmlBytes?: number | null;
   /** The page's HTML came from a browser render (links/broken-anchors reads it). */
   rendered?: boolean;
+  /** The page's response headers, for the X-Robots-Tag noindex read by i18n/hreflang-targets. */
+  headers?: Record<string, string>;
 }): CollectedPageSignal {
   const { url, finalUrl, parsed } = input;
   const htmlBytes = input.htmlBytes ?? 0;
@@ -197,6 +223,8 @@ export function buildCollectedPageSignal(input: {
       misspellings: { english: false, occurrences: [] },
       contentSentences: [],
       edgeMarkers: [],
+      hreflang: buildHreflangSignal(parsed, input.headers, url),
+      contentFingerprint: null,
     };
   }
 
@@ -299,6 +327,11 @@ export function buildCollectedPageSignal(input: {
         : timed("perf/content-in-js-bundle", [] as string[], () => extractContentSentences(doc)),
     ...(input.rendered === true ? { contentRendered: true as const } : {}),
     edgeMarkers: timed("perf/bad-caching", [] as string[], () => (hasJavaScriptDetections(doc) ? ["cf-jsd"] : [])),
+    // Strings cut from the page are copied so the record does not keep it (#1565).
+    hreflang: detachHreflang(buildHreflangSignal(parsed, input.headers, url)),
+    contentFingerprint: timed("content/duplicate-content", null as ContentFingerprint | null, () =>
+      fingerprintForPage(doc, url, finalUrl)
+    ),
   };
   // The one record serves both rules: a timeout is reported against both.
   if (timedOutRuleIds.includes("eeat/about-page")) timedOutRuleIds.push("eeat/contact-page");

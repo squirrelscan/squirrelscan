@@ -80,7 +80,12 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // passes (a real pass, not a vacuous one: a run that judges nothing is skipped), and that
       // one extra pass lifts the weighted overall past a rounding boundary. A deliberate rule
       // addition again; without the rule the number is 51.
-      expect(v1.healthScore.overall).toBe(52);
+      // 52 -> 53: the 2026-11 rule batch (nine new rules: crawl/rendered-signal-mismatch, a11y/svg-img-alt,
+      // security/password-form-get, url/session-ids, crawl/indexable-search-results, links/click-depth,
+      // analytics/duplicate-tags, i18n/hreflang-targets, content/duplicate-content). Their passes lift the weighted
+      // overall past one more rounding boundary. The skipped and info rows among them do not score; the one warn row, links/click-depth
+      // on the synthetic site, is also a finding (it is among the 105251 below) and counts in that move too.
+      expect(v1.healthScore.overall).toBe(53);
       // 97711 -> 98211: content/hidden-text emits one page check across the 500
       // fixture pages that have a document, and passes on every one of them. The
       // overall score is unmoved.
@@ -208,7 +213,14 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // site's pairs are judged and all share a word, so the rule emits its single pass row).
       // 103746 -> 103747: ax/ai-crawlers adds one info check, search-engine-access (Googlebot,
       // Bingbot and Applebot against the audited URL); no new rule id.
-      expect(v1.findings.length).toBe(103747);
+      // 103747 -> 104247: crawl/rendered-signal-mismatch is page-scoped and adds one skipped
+      // check on each of the 500 pages with a document (the harness has no render result).
+      // Skipped checks do not score, so healthScore.overall is unmoved.
+      // 104247 -> 105251: the 2026-11 batch. url/session-ids and analytics/duplicate-tags are page-scoped and
+      // add a pass row on each of the 500 pages with a document; the four site-scoped rules (crawl/indexable-
+      // search-results, links/click-depth, i18n/hreflang-targets, content/duplicate-content) add one row each.
+      // svg-img-alt and password-form-get say nothing on a page with no svg role=img or password form.
+      expect(v1.findings.length).toBe(105251);
       // Tripwire: EXTENDING a rule must never add a tally key, so a change here
       // is only correct alongside a deliberate new rule id. 266 -> 267 is
       // content/hidden-text, 267 -> 268 content/thin-vs-site-norm, 268 -> 269
@@ -238,9 +250,9 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // 309 -> 310 images/hotlinked, 310 -> 311 content/h1-title-alignment,
       // 311 -> 312 schema/expected-type, 312 -> 313 security/tls-certificate,
       // 313 -> 314 crawl/single-page-site, 314 -> 315 perf/framework-data-payload, 315 -> 316 perf/content-in-js-bundle,
-      // 316 -> 317 links/anchor-mismatch;
+      // 316 -> 317 links/anchor-mismatch, 317 -> 326 the 2026-11 batch of nine rules (crawl/rendered-signal-mismatch, a11y/svg-img-alt, security/password-form-get, url/session-ids, crawl/indexable-search-results, links/click-depth, analytics/duplicate-tags, i18n/hreflang-targets, content/duplicate-content);
       // anything else means a rule id leaked in, so fix that rather than this number.
-      expect(v1.perRuleTally.length).toBe(317);
+      expect(v1.perRuleTally.length).toBe(326);
       expect(v1.perRuleTally.find((t) => t.ruleId === "security/tls-certificate")).toEqual({
         ruleId: "security/tls-certificate",
         pass: 0,

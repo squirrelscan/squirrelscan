@@ -18,11 +18,11 @@ squirrel audit https://example.com --rule-include url
 
 These carry the highest severity and weight in the category.
 
+- [Session IDs in URLs: duplicate pages and shareable sessions](/rules/url/session-ids): A session ID in the URL gives every visit its own address for the same page. squirrel finds PHPSESSID, jsessionid, sid and friends in the page URL and in internal links.
 - [Special characters in a URL path: what breaks and why](/rules/url/special-chars): Spaces, percent signs and non-ASCII characters in a path break when copied and pasted. squirrel decodes the path and reports what it finds.
 - [Underscores in URLs: why hyphens separate words](/rules/url/hyphens): Google reads blue-shoes as two words and blue_shoes as one. squirrel flags every crawled path containing an underscore.
 - [Uppercase in a URL: the duplicate content it creates](/rules/url/lowercase): Most servers treat /Page and /page as two URLs serving the same content. squirrel flags every crawled path containing a capital letter.
 - [Mixed URL conventions: finding the minority form](/rules/url/slug-convention): Half your paths ending in a slash and half not is how canonical bugs start. squirrel computes your site's own norm and reports what deviates.
-- [Non-descriptive URL slug: numeric IDs and generic patterns](/rules/url/slug-keywords): A slug like /p/48213 tells a reader and a crawler nothing. squirrel classifies the last path segment and flags the ID-shaped ones.
 
 {/* hub:start-here:end */}
 
@@ -34,6 +34,7 @@ These carry the highest severity and weight in the category.
 |---|---|---|---|
 | [Mixed URL conventions: finding the minority form](/rules/url/slug-convention) | Half your paths ending in a slash and half not is how canonical bugs start. squirrel computes your site's own norm and reports what deviates. | warning | Site-wide |
 | [Non-descriptive URL slug: numeric IDs and generic patterns](/rules/url/slug-keywords) | A slug like /p/48213 tells a reader and a crawler nothing. squirrel classifies the last path segment and flags the ID-shaped ones. | info | Per-page |
+| [Session IDs in URLs: duplicate pages and shareable sessions](/rules/url/session-ids) | A session ID in the URL gives every visit its own address for the same page. squirrel finds PHPSESSID, jsessionid, sid and friends in the page URL and in internal links. | warning | Per-page |
 | [Special characters in a URL path: what breaks and why](/rules/url/special-chars) | Spaces, percent signs and non-ASCII characters in a path break when copied and pasted. squirrel decodes the path and reports what it finds. | warning | Per-page |
 | [Stop words in a URL slug: when to drop them](/rules/url/stop-words) | the, of and for add characters without adding meaning to a slug. squirrel counts them in each path and only reports the pile-ups. | info | Per-page |
 | [Trailing slash: /page and /page/ are two different URLs](/rules/url/trailing-slash) | A file URL with a trailing slash is a mistake; a directory URL either has one or does not, consistently. squirrel reports the state of each path. | info | Per-page |
