@@ -22,6 +22,8 @@ A page's phone numbers come from its `tel:` links first, then from the `telephon
 
 Both consistency checks skip rather than guess when the evidence is thin. Fewer than 10 pages declaring the signal skips with `Only N page(s) declare a phone number; 10 needed to judge consistency`. No page declaring it skips with `No phone number declared on any page`. When the most common value appears on less than 70% of the samples, the site is treated as genuinely varied and the check skips with `No dominant phone number across N pages (the most common appears on X%), so the site is too varied to judge`. A crawl with no pages emits a single `nap-consistency` check, skipped, with `No pages available for analysis`.
 
+On an indexed site, pages marked `noindex` (a robots meta tag or an `X-Robots-Tag` header) are excluded: they are not compared, not counted as samples and never reported, because a staging copy or a thank-you page can carry different details on purpose. If every page that answered with a 2xx status is noindex, the rule emits a single `nap-consistency` check, skipped as not applicable (`details.skippedNoindexPages` records how many pages were left out), rather than a pass. When the homepage is itself noindex, as on a staging or preview deployment, nothing is excluded; see [pages kept out of search](/rules#pages-kept-out-of-search).
+
 Reported items and example URLs are both capped at 10, so a large site with a widespread problem lists a sample rather than every page. The whole rule is skipped, with the reason shown in the report, when the site profile says the site is not a local business.
 
 ## How to fix it
