@@ -2862,9 +2862,9 @@
   ]
  },
  "security/hsts": {
-  "digest": "101256462094307",
+  "digest": "62097097889729",
   "lines": [
-   "hsts|info|HSTS not applicable - site not served over HTTPS||"
+   "hsts-not-applicable|info|HSTS not applicable - site not served over HTTPS||"
   ]
  },
  "security/http-to-https": {
@@ -2952,9 +2952,9 @@
   ]
  },
  "security/x-frame-options": {
-  "digest": "136353071579448",
+  "digest": "124740142804742",
   "lines": [
-   "x-frame-options|warn|No clickjacking protection|\"Add X-Frame-Options: DENY or CSP frame-ancestors\"|"
+   "x-frame-options-missing|warn|No clickjacking protection|\"Add X-Frame-Options: DENY or CSP frame-ancestors\"|"
   ]
  },
  "social/asset-divergence": {
