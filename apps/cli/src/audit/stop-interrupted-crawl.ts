@@ -1,14 +1,22 @@
-// Record an interrupted crawl as `stopped` (#941).
+// Record an interrupted crawl as `stopped` (#941, #1672).
 //
 // SIGINT/SIGTERM/SIGHUP used to finalize only the cloud run record, so a Ctrl-C
 // left the crawl at `running`, indistinguishable from a `kill -9`. `stopped` is
 // the state `--resume` already continues, and it says the interruption was
-// seen. Runs inside a signal handler, so it is synchronous, best-effort and
+// seen. The crawler's own `stop()` may have written `paused` first (it does,
+// while the loop is live), so the write is allowed from `paused` as well as
+// `running`: the transition table in core-contracts lists both as legal sources
+// of `stopped`, and the write goes through the same guarded statement every
+// other status write uses, never a status filter of its own (#1672). Runs
+// inside a signal handler, so it is synchronous, best-effort and
 // never throws: a failed write leaves the crawl exactly as it was before. The
 // mark is best-effort: the 1 s busy timeout can lose it to a writer holding the
 // lock, so nothing the user sees may claim it was recorded.
 
-import { releaseActiveLeases } from "@squirrelscan/crawler";
+import {
+  releaseActiveLeases,
+  writeCrawlStatusGuarded,
+} from "@squirrelscan/crawler";
 import { Database } from "bun:sqlite";
 
 let ownedCrawlId: () => string | null = () => null;
@@ -24,7 +32,8 @@ export function registerOwnedCrawl(getId: () => string | null): void {
 }
 
 /**
- * Mark the crawl this process owns as `stopped`, if it is still `running`.
+ * Mark the crawl this process owns as `stopped`, if the transition table allows
+ * it from where the crawl is now (`running`, or the `paused` a `stop()` left).
  * Returns the number marked.
  */
 export function stopInterruptedCrawls(dbPath: string): number {
@@ -42,11 +51,7 @@ export function stopInterruptedCrawls(dbPath: string): number {
     // Never create a database from a signal handler: a missing file is a no-op.
     db = new Database(dbPath, { readwrite: true, create: false });
     db.exec("PRAGMA busy_timeout = 1000");
-    const result = db
-      .prepare(
-        "UPDATE crawls SET status = 'stopped' WHERE id = ? AND status = 'running'"
-      )
-      .run(id);
+    const changed = writeCrawlStatusGuarded(db, id, "stopped");
     // `finally` blocks do not run on this path, so drop the crawl lease too
     // (#946). Separate from the status write: a failure here changes nothing.
     try {
@@ -56,7 +61,7 @@ export function stopInterruptedCrawls(dbPath: string): number {
     } catch {
       // the lease goes stale on its own
     }
-    return Number(result.changes ?? 0);
+    return changed;
   } catch {
     return 0;
   } finally {

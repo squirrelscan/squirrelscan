@@ -17,6 +17,9 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **A Ctrl-C'd crawl is recorded as `stopped`, not left `paused`.** The crawler's own `stop()` writes `paused` first, and the interrupt handler only marked crawls that were still `running`, so the stored status said paused where the audit was stopped. The handler now writes through the same guarded status write as every other change, which allows `stopped` from `running` or `paused` and never touches a crawl that already finished. `--resume` continues it as before. (#1672)
 ### Added
 
 - **`core/canonical` flags a page whose canonical points at the home page.** A template that hard-codes the canonical to the site root tells search engines that every page it renders duplicates the home page, and the pages drop out of the index; the URL is well formed, so the rule passed it. A new `canonical-to-homepage` check fails when a page that is not the home page declares the site root as its canonical (the tag first, then the `Link` header), and warns for a locale home page such as `/en/`. The root with a trailing slash, `/index.html` or the `www` or bare host is one root, a root with a query string is not, a page that redirects to the home page is not flagged, and every other page gets the same result as before. (#1685)
