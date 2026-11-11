@@ -117,7 +117,11 @@ function buildTopIssues(report: AuditReport, max: number): EditorSummaryIssueInp
  * offline audit did not check links instead of calling the site clean.
  */
 function buildNotChecked(report: AuditReport): EditorSummaryNotCheckedInput[] {
-  return notCheckedRules(report).map((r) => ({ ruleId: r.ruleId, title: r.name, reason: r.reason }));
+  return notCheckedRules(report).map((r) => ({
+    ruleId: r.ruleId,
+    title: r.name,
+    reason: r.reason,
+  }));
 }
 
 /** Build the per-category score lines (worst first), capped. */
@@ -165,6 +169,40 @@ function buildFailingRuleIds(report: AuditReport, max: number): string[] {
     if (ids.length >= max) break;
   }
   return ids;
+}
+
+/** Rule families whose clean checks are sent as "confirmed in place" (#3944). */
+const CONFIRMABLE_RULE_PREFIXES = ["security/", "ax/"];
+
+/**
+ * Check-level evidence (#3944): every check that failed or warned, and the
+ * security and agent-experience checks that ran and found nothing wrong, as
+ * `ruleId|checkName`. The summary uses the second list to avoid recommending
+ * what the site already has. An `info` check counts only when it is not
+ * inconclusive (a gap, not a finding). Capped at `max` per list.
+ */
+function buildChecks(
+  report: AuditReport,
+  max: number,
+): { failing: string[]; confirmed: string[] } | undefined {
+  const failing = new Set<string>();
+  const confirmed = new Set<string>();
+  const key = (ruleId: string, name: string) =>
+    clampItemString(`${ruleId}|${name}`, EDITOR_SUMMARY_FIELD_MAX);
+  for (const [ruleId, rr] of Object.entries(report.ruleResults)) {
+    const family = CONFIRMABLE_RULE_PREFIXES.some((p) => ruleId.startsWith(p));
+    for (const c of rr.checks) {
+      if (c.status === "fail" || c.status === "warn") {
+        if (failing.size < max) failing.add(key(ruleId, c.name));
+      } else if (family && (c.status === "pass" || c.status === "info")) {
+        if (c.status === "info" && c.details?.inconclusive === true) continue;
+        if (confirmed.size < max) confirmed.add(key(ruleId, c.name));
+      }
+    }
+  }
+  return failing.size === 0 && confirmed.size === 0
+    ? undefined
+    : { failing: [...failing], confirmed: [...confirmed] };
 }
 
 /** A count the engine wrote, or undefined when absent or not a whole non-negative number. */
@@ -230,6 +268,7 @@ export function buildEditorSummaryRequest(
   const technologies = buildTechnologies(report, SERVICE_LIMITS.editorSummaryMaxTechnologies);
   const failingRuleIds = buildFailingRuleIds(report, SERVICE_LIMITS.editorSummaryMaxFailingRuleIds);
   const coverage = buildCoverage(report);
+  const checks = buildChecks(report, SERVICE_LIMITS.editorSummaryMaxCheckKeys);
   return {
     ...(opts.auditId ? { auditId: opts.auditId } : {}),
     ...(opts.websiteId ? { websiteId: opts.websiteId } : {}),
@@ -246,6 +285,7 @@ export function buildEditorSummaryRequest(
     ...(notChecked.length > 0 ? { notChecked } : {}),
     ...(technologies.length > 0 ? { technologies } : {}),
     ...(failingRuleIds.length > 0 ? { failingRuleIds } : {}),
+    ...(checks ? { checks } : {}),
     ...(coverage ? { coverage } : {}),
   };
 }
@@ -346,7 +386,11 @@ function guardedSummary(summary: EditorSummary, report: AuditReport): EditorSumm
 
 /** Display label for a priority's effort. */
 export function priorityEffortLabel(effort: EditorSummaryPriority["effort"]): string {
-  return effort === "quick-win" ? "Quick win" : effort === "significant" ? "Significant" : "Moderate";
+  return effort === "quick-win"
+    ? "Quick win"
+    : effort === "significant"
+      ? "Significant"
+      : "Moderate";
 }
 
 /**
@@ -396,7 +440,9 @@ export function summaryPageCounts(report: AuditReport): number[] {
     ...(unfetched > 0 ? [unfetched, (report.scanScope?.pagesCrawled ?? 0) + unfetched] : []),
     ...buildTopIssues(report, Number.POSITIVE_INFINITY).map((i) => i.occurrences),
   ];
-  return counts.filter((n): n is number => typeof n === "number" && Number.isSafeInteger(n) && n > 0);
+  return counts.filter(
+    (n): n is number => typeof n === "number" && Number.isSafeInteger(n) && n > 0,
+  );
 }
 
 /** The summary prose when no model sentence survives the text rules. */
