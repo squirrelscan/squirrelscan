@@ -225,7 +225,7 @@ export const report = defineCommand({
     visibility: {
       type: "string",
       description:
-        "Visibility when publishing: public, unlisted, private (default: public)",
+        "Visibility when publishing: public, unlisted, private (default: unlisted)",
     },
     summary: {
       type: "boolean",
@@ -528,7 +528,7 @@ export const report = defineCommand({
         "unlisted",
         "private",
       ];
-      const visibility = (args.visibility as ReportVisibility) ?? "public";
+      const visibility = (args.visibility as ReportVisibility) ?? "unlisted";
 
       if (!validVisibilities.includes(visibility)) {
         console.error(

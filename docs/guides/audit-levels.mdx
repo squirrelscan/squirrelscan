@@ -70,6 +70,10 @@ Set your own default for a project with `[crawler] coverage` in `squirrel.toml`:
 coverage = "full"
 ```
 
+## Scores from offline and cloud audits do not compare
+
+A score is computed over the rules that ran, so an `--offline` audit and a cloud audit of the same site produce different scores, and the gap is not a regression. Offline runs the local rules only: the cloud checks, the editor's summary and cloud rendering are absent, and a rule that reads what the cloud adds reports differently or not at all. The report says which audit it was: an `--offline` run carries `offline="true"` and `cloud-checks="false"` on its `<audit-level>` line. Compare a score with an earlier one only when both came from the same kind of audit, and from the same level and page budget.
+
 ## Custom levels
 
 Change any setting and the audit becomes **custom**: it keeps the level it started from and records which settings you changed. A level is a starting point, not a lock.

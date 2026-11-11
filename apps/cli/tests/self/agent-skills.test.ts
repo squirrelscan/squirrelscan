@@ -30,6 +30,7 @@ import {
   runSkillsAutoRefresh,
   skillsNotices,
   skillsStatus,
+  skillVersionBehind,
   syncSkills,
   uninstallSkills,
 } from "@/self/agent-skills";
@@ -871,6 +872,36 @@ describe("status and uninstall", () => {
     });
     expect(read(join(left, "references", "a.md"))).toBe("ref a v2");
     expect(readState(e).released).toBeUndefined();
+  });
+
+  // #1730: a link into a dev checkout of OUR skill is left alone, but its version is read
+  // and "behind the latest" is shown, where it used to read "No skills installed".
+  test("status reports the version of a symlinked checkout and flags it behind the latest", async () => {
+    const checkout = join(root, "dev", "squirrelscan");
+    put(join(checkout, "SKILL.md"), skillMd("squirrelscan", "1.9"));
+    mkdirSync(agents, { recursive: true });
+    symlinkSync(checkout, join(agents, "squirrelscan"), "dir");
+    const manifest = parseManifest(
+      manifestFor(V1, { ...VERSIONS, squirrelscan: "1.23" }),
+      SHA
+    );
+    const target = skillsStatus(manifest, e)
+      .find((x) => x.name === "squirrelscan")!
+      .targets.find((x) => x.dir === join(agents, "squirrelscan"));
+    expect(target).toMatchObject({
+      managedBy: "other",
+      linked: true,
+      version: "1.9",
+      outdated: true,
+    });
+    // Numeric, not lexical: 1.9 is older than 1.23, and a current link is not flagged.
+    expect(skillVersionBehind("1.9", "1.23")).toBe(true);
+    expect(skillVersionBehind("1.23", "1.23")).toBe(false);
+    expect(skillVersionBehind("2.9", "1.23")).toBe(false);
+    // The checkout is never written.
+    expect(read(join(checkout, "SKILL.md"))).toBe(
+      skillMd("squirrelscan", "1.9")
+    );
   });
 
   test("status marks a copy squirrel did not install as out of date when update would take it over", async () => {
