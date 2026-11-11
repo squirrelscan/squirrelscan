@@ -39,10 +39,32 @@ interface Tally {
 const GTM_ID = String.raw`GTM-[A-Z0-9]{3,}`;
 const GA4_ID = String.raw`G-[A-Z0-9]{4,}`;
 
-function qs(url: string, name: string): string | null {
-  const m = new RegExp(`[?&]${name}=([^&#\\s"']+)`, "i").exec(url);
-  return m ? m[1]! : null;
+/**
+ * A Google Tag Manager URL, read as a URL rather than matched as text: a lookalike such as
+ * `https://evil.example/?x=googletagmanager.com/gtm.js` or `googletagmanager.com.evil.example` contains the
+ * same characters but is not Google's. Returns the exact pathname (lowercased) and the `id` query value when
+ * the host is `googletagmanager.com` or `www.googletagmanager.com`, else null. A relative `src` resolves
+ * against a placeholder host, so it never matches; a protocol-relative one (`//www.googletagmanager.com/...`) keeps
+ * its own host.
+ */
+function googleTagManagerUrl(src: string): { path: string; id: string | null } | null {
+  let url: URL;
+  try {
+    url = new URL(src.trim(), "https://x.invalid/");
+  } catch {
+    return null;
+  }
+  const host = url.hostname.toLowerCase();
+  if (host !== "googletagmanager.com" && host !== "www.googletagmanager.com") return null;
+  return { path: url.pathname.toLowerCase(), id: url.searchParams.get("id") };
 }
+
+/**
+ * The GTM loader URL as an inline script writes it: a quoted string that starts at the host, optionally after
+ * `https:` or `http:`. Anchoring on the opening quote and `//` is what keeps a URL that merely contains the
+ * text (a query string, a path segment, a longer hostname) from counting.
+ */
+const INLINE_GTM_LOADER = /['"`](?:https?:)?\/\/(?:www\.)?googletagmanager\.com\/gtm\.js(?=[?#'"`])/i;
 
 export const duplicateTagsRule: Rule = {
   meta: {
@@ -77,11 +99,12 @@ export const duplicateTagsRule: Rule = {
     for (const script of doc.querySelectorAll("script[src]")) {
       const src = script.getAttribute("src") || "";
       let m: RegExpExecArray | null;
-      if (/googletagmanager\.com\/gtm\.js/i.test(src)) {
-        const id = qs(src, "id");
+      const gtmUrl = googleTagManagerUrl(src);
+      if (gtmUrl?.path === "/gtm.js") {
+        const id = gtmUrl.id;
         if (id && new RegExp(`^${GTM_ID}$`, "i").test(id)) bump(GTM, id, "loader");
-      } else if (/googletagmanager\.com\/gtag\/js/i.test(src)) {
-        const id = qs(src, "id");
+      } else if (gtmUrl?.path === "/gtag/js") {
+        const id = gtmUrl.id;
         if (id && new RegExp(`^${GA4_ID}$`, "i").test(id)) bump(GA4, id, "loader");
       } else if (/plausible/i.test(src) && /\.js(\?|#|$)/i.test(src)) {
         const id = script.getAttribute("data-domain") || /\/pa-([\w-]+)\.js/i.exec(src)?.[1];
@@ -104,8 +127,9 @@ export const duplicateTagsRule: Rule = {
 
     for (const frame of doc.querySelectorAll("iframe[src]")) {
       const src = frame.getAttribute("src") || "";
-      if (!/googletagmanager\.com\/ns\.html/i.test(src)) continue;
-      const id = qs(src, "id");
+      const nsUrl = googleTagManagerUrl(src);
+      if (nsUrl?.path !== "/ns.html") continue;
+      const id = nsUrl.id;
       if (id && new RegExp(`^${GTM_ID}$`, "i").test(id)) bump(GTM, id, "init");
     }
 
@@ -122,7 +146,7 @@ export const duplicateTagsRule: Rule = {
       each(new RegExp(String.raw`gtag\s*\(\s*['"]config['"]\s*,\s*['"](${GA4_ID})['"]`, "gi"), GA4);
       // The standard GTM snippet names its container as the last argument; the
       // gtm.js URL in the same script proves it is the loader and not a mention.
-      if (/googletagmanager\.com\/gtm\.js/i.test(text)) {
+      if (INLINE_GTM_LOADER.test(text)) {
         each(new RegExp(String.raw`['"](${GTM_ID})['"]\s*\)`, "gi"), GTM, "loader");
       }
       each(/\[\s*['"]setSiteId['"]\s*,\s*['"]?(\d+)['"]?\s*\]/gi, MATOMO);
