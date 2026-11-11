@@ -67,6 +67,7 @@ import {
 import { localUnverifiedLinksNotice } from "@/audit/local-link-notice";
 import { MAX_DURATION_MAX_SECONDS } from "@/audit/max-duration";
 import { configDir, loadConfiguredPlugins } from "@/audit/plugins";
+import { parseDiscoveryProbePaths } from "@/audit/probe-paths";
 import { renderFallbackLine } from "@/audit/render-summary";
 import {
   generateConsoleReport,
@@ -1340,6 +1341,11 @@ export const audit = defineCommand({
       description:
         "Skip these rule categories or rules (repeatable or comma-separated), e.g. images,social. Adds to [rules] disable for this run",
     },
+    "discovery-probe-path": {
+      type: "string",
+      description:
+        "Only send the discovery probe for this path (repeatable or comma-separated), e.g. /llms.txt or /AGENTS.md; a probe for any other path is not sent and reports not checked, and a redirect from it may not change the path. Replaces [crawler] discovery_probe_paths. Markdown, agent-access and RSL probes are not gated",
+    },
     "disable-discovery-probes": {
       type: "boolean",
       description:
@@ -1542,6 +1548,15 @@ export const audit = defineCommand({
     // --disable-discovery-probes (#409): a plain boolean, so citty delivers
     // true, or false for `=false` (which turns the probes back on over a config
     // that disables them). A repeated flag arrives as an array; the last wins.
+    const probePathsParse = parseDiscoveryProbePaths(
+      args["discovery-probe-path"] as string | string[] | undefined
+    );
+    if (!probePathsParse.ok) {
+      console.error(probePathsParse.error);
+      exitWith({ early: "validation" });
+      return;
+    }
+    const discoveryProbePaths = probePathsParse.paths;
     const disableDiscoveryProbes = lastFlagValue(
       args["disable-discovery-probes"] as boolean | boolean[] | undefined
     );
@@ -2244,6 +2259,7 @@ export const audit = defineCommand({
         ...(disableDiscoveryProbes !== undefined
           ? { disableDiscoveryProbes }
           : {}),
+        ...(discoveryProbePaths.length > 0 ? { discoveryProbePaths } : {}),
         probe: { level: probing.level, budgetMs: probing.budgetMs },
         ...(noIgnore ? { noIgnore: true } : {}),
         ...(startRedirect ? { startRedirect } : {}),

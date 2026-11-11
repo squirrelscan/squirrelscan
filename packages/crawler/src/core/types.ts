@@ -93,6 +93,15 @@ export interface CrawlerConfig {
    */
   discoveryProbes?: readonly DiscoveryProbe[];
   /**
+   * An allowlist over the path-shaped discovery probes (`[crawler] discovery_probe_paths`,
+   * `--discovery-probe-path`, #1655), on top of `discoveryProbes`: only a probe whose path is listed
+   * is sent (`/llms.txt` and `/llms-full.txt` each count as their own path), a probe left out stores a
+   * "path not approved" record, and a redirect from an approved path may not change the path. Unset:
+   * every selected probe goes out and redirects behave as before. The markdown, agent-access and RSL
+   * probes are not path-shaped and stay under `discoveryProbes`.
+   */
+  discoveryProbePaths?: readonly string[];
+  /**
    * Concrete page paths (`/agentur`) the E-E-A-T rules are configured with (#1428). Each one the crawl did
    * not reach is requested once after the crawl, when the `configured-pages` probe is selected, so the rule
    * can tell a page that exists but is not linked from a page that is missing. robots.txt and the per-host

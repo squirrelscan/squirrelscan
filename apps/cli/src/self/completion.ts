@@ -225,7 +225,7 @@ _squirrel_completions() {
           return 0
           ;;
       esac
-      COMPREPLY=( $(compgen -W "--max-pages -m --max-depth --concurrency --per-host --level --coverage -C --format -f --output -o --refresh -r --fresh-ua --store-scripts --no-store-scripts --incremental --no-incremental --resume --verbose -v --debug --trace --project-name -n --publish -p --no-publish --ephemeral --no-ephemeral --visibility --follow-redirect --no-follow-redirect --yes -y --render --render-mode --http --offline --external-links --no-external-links --no-internal-links --no-classifier --fail-on --header -H --header-host --rule-include --rule-exclude --disable-discovery-probes --probe -P --passive --aggressive --probe-budget --pentest --summary --include-passed --help --include-info --include-pages --max-duration --crawl-timeout --no-ignore" -- "\${cur}") )
+      COMPREPLY=( $(compgen -W "--max-pages -m --max-depth --concurrency --per-host --level --coverage -C --format -f --output -o --refresh -r --fresh-ua --store-scripts --no-store-scripts --incremental --no-incremental --resume --verbose -v --debug --trace --project-name -n --publish -p --no-publish --ephemeral --no-ephemeral --visibility --follow-redirect --no-follow-redirect --yes -y --render --render-mode --http --offline --external-links --no-external-links --no-internal-links --no-classifier --fail-on --header -H --header-host --rule-include --rule-exclude --disable-discovery-probes --discovery-probe-path --crawl-timeout --probe -P --passive --aggressive --probe-budget --pentest --summary --include-passed --help --include-info --include-pages --max-duration --no-ignore" -- "\${cur}") )
       return 0
       ;;
     entities)
@@ -257,7 +257,7 @@ _squirrel_completions() {
           return 0
           ;;
       esac
-      COMPREPLY=( $(compgen -W "--max-pages -m --concurrency --per-host --level --coverage -C --refresh -r --fresh-ua --resume --disable-discovery-probes --help" -- "\${cur}") )
+      COMPREPLY=( $(compgen -W "--max-pages -m --concurrency --per-host --level --coverage -C --refresh -r --fresh-ua --resume --disable-discovery-probes --discovery-probe-path --help" -- "\${cur}") )
       return 0
       ;;
     credits)
@@ -587,6 +587,7 @@ _squirrel() {
             '*--rule-include[Only run these rule categories or rules]:pattern' \\
             '*--rule-exclude[Skip these rule categories or rules]:pattern' \\
             '--disable-discovery-probes[Skip the pre-crawl discovery probes (llms.txt, well-known files, swagger.json)]' \\
+            '*--discovery-probe-path[Only send the discovery probe for this path (repeatable)]:path' \\
             '(-P --probe)'{-P,--probe}'[Probing intensity]:level:(passive active aggressive)' \\
             '--passive[Probing intensity passive: no probe rules]' \\
             '--aggressive[Probing intensity aggressive: loud probes, can trip a WAF]' \\
@@ -634,7 +635,8 @@ _squirrel() {
             '(-r --refresh)'{-r,--refresh}'[Ignore cache, fetch all pages fresh]' \\
             '--fresh-ua[Re-roll the pinned random user-agent]' \\
             '--resume[Resume interrupted crawl]' \\
-            '--disable-discovery-probes[Skip the pre-crawl discovery probes for this run]'
+            '--disable-discovery-probes[Skip the pre-crawl discovery probes for this run]' \\
+            '*--discovery-probe-path[Only send the discovery probe for this path (repeatable)]:path'
           ;;
         credits)
           _arguments \\
@@ -873,6 +875,7 @@ complete -c squirrel -n "__fish_seen_subcommand_from audit" -l header-host -d "H
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l rule-include -d "Only run these rule categories or rules"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l rule-exclude -d "Skip these rule categories or rules"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l disable-discovery-probes -d "Skip the pre-crawl discovery probes (llms.txt, well-known files, swagger.json)"
+complete -c squirrel -n "__fish_seen_subcommand_from audit" -l discovery-probe-path -r -d "Only send the discovery probe for this path (repeatable)"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -s P -l probe -a "passive active aggressive" -d "Probing intensity"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l passive -d "Probing intensity passive: no probe rules"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l aggressive -d "Probing intensity aggressive: loud probes, can trip a WAF"
@@ -920,6 +923,7 @@ complete -c squirrel -n "__fish_seen_subcommand_from crawl" -s r -l refresh -d "
 complete -c squirrel -n "__fish_seen_subcommand_from crawl" -l fresh-ua -d "Re-roll the pinned random user-agent"
 complete -c squirrel -n "__fish_seen_subcommand_from crawl" -l resume -d "Resume interrupted crawl"
 complete -c squirrel -n "__fish_seen_subcommand_from crawl" -l disable-discovery-probes -d "Skip the pre-crawl discovery probes for this run"
+complete -c squirrel -n "__fish_seen_subcommand_from crawl" -l discovery-probe-path -r -d "Only send the discovery probe for this path (repeatable)"
 
 # Analyze options
 complete -c squirrel -n "__fish_seen_subcommand_from analyze" -l id -d "Crawl ID to analyze"

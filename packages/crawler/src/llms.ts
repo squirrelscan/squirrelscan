@@ -2,7 +2,7 @@ import { Effect } from "effect";
 import { byteLength, truncateToBytes } from "@squirrelscan/utils/bytes";
 import { readBodyCapped } from "@squirrelscan/utils/response-body";
 
-import { budgetedTimeoutMs, safeFetchWithDeadline, ungated } from "./deadline";
+import { optionalProbeTimeoutMs, safeFetchWithDeadline, samePathRedirect, ungated } from "./deadline";
 import { noteRefusal } from "./refusals";
 
 import type { PhaseBudget, ProbeGate } from "./deadline";
@@ -26,8 +26,9 @@ async function fetchOne(
   userAgent: string,
   customHeaders?: Record<string, string>,
   budget?: PhaseBudget,
+  pathLocked = false,
 ): Promise<LlmsTxtFile | null> {
-  const timeoutMs = budgetedTimeoutMs(budget, LLMS_FETCH_TIMEOUT_MS);
+  const timeoutMs = optionalProbeTimeoutMs(budget, LLMS_FETCH_TIMEOUT_MS);
   if (timeoutMs === null) return null;
   try {
     return await safeFetchWithDeadline(
@@ -66,6 +67,8 @@ async function fetchOne(
         return { url, exists: true, content, sizeBytes: byteLength(content) };
       },
       budget?.egress,
+      // Approved path by path (#1655): a redirect to another path is no answer, so no file is recorded.
+      pathLocked ? samePathRedirect : undefined,
     );
   } catch {
     return null;
@@ -82,13 +85,22 @@ export function fetchLlmsTxt(
   customHeaders?: Record<string, string>,
   budget?: PhaseBudget,
   gate: ProbeGate = ungated,
+  options: {
+    /** Request /llms-full.txt too. False when `[crawler] discovery_probe_paths` leaves it out (#1655). */
+    fetchFull?: boolean;
+    /** The paths are approved one by one: a redirect may not leave its path. */
+    pathLocked?: boolean;
+  } = {},
 ): Effect.Effect<LlmsTxtData | null, never, never> {
+  const { fetchFull = true, pathLocked = false } = options;
   const llmsUrl = new URL("/llms.txt", baseUrl).toString();
   const fullUrl = new URL("/llms-full.txt", baseUrl).toString();
   return Effect.promise(async () => {
     const [llmsTxt, llmsFullTxt] = await Promise.all([
-      gate(llmsUrl, () => fetchOne(llmsUrl, userAgent, customHeaders, budget)),
-      gate(fullUrl, () => fetchOne(fullUrl, userAgent, customHeaders, budget)),
+      gate(llmsUrl, () => fetchOne(llmsUrl, userAgent, customHeaders, budget, pathLocked)),
+      fetchFull
+        ? gate(fullUrl, () => fetchOne(fullUrl, userAgent, customHeaders, budget, pathLocked))
+        : Promise.resolve(null),
     ]);
     if (!llmsTxt) return null;
     // A skipped /llms-full.txt only ever costs the rule a note, so it records as absent.

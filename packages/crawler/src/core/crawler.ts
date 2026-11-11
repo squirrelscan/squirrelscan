@@ -134,10 +134,12 @@ import {
   RECENTLY_REMOVED_PENALTY,
 } from "../priority";
 import { fetchLlmsTxt } from "../llms";
+import { LLMS_TXT_PATHS } from "@squirrelscan/core-contracts/storage";
+import type { WellKnownProbe } from "@squirrelscan/core-contracts";
 import { probeMarkdownResponse } from "../markdown";
 import { fetchRobotsEvaluator as fetchRobots } from "../robots";
 import { probeConfiguredPage } from "../well-known";
-import { probeWellKnown } from "../well-known";
+import { notApprovedProbe, probeWellKnown } from "../well-known";
 import { probeAgentAccess } from "../agent-access";
 import { fetchRslLicensing } from "../rsl";
 import { createTestStorage } from "../storage";
@@ -798,6 +800,9 @@ export function createCrawler(
      * `interrupted` aborts them: nothing still queued goes out after the crawl
      * was stopped.
      */
+    // The current crawl's refusal log, for the post-crawl configured-pages probe (#1655).
+    let crawlRefusals: RefusalLog | undefined;
+
     const probeGate =
       (budget: PhaseBudget, interrupted: AbortSignal): ProbeGate =>
       (url, send) => {
@@ -2828,7 +2833,8 @@ export function createCrawler(
         const budget = createPhaseBudget(
           discoveryBudgetMs(config.timeoutMs, config.discoveryDeadlineAt),
           Date.now(),
-          undefined,
+          // The crawl's refusal log, so a block signal seen earlier stops these requests too (#1655).
+          crawlRefusals,
           crawlEgress,
         );
         const gate = probeGate(budget, interrupted.signal);
@@ -2869,14 +2875,26 @@ export function createCrawler(
           logger.debug("discovery probes off", "no llms, markdown, well-known, agent or RSL requests");
         }
 
-        // llms.txt + llms-full.txt at the root once, independent of robots.
-        if (wants("llms-txt")) {
+        // The allowlist over the path-shaped probes (#1655). A probe the rules selected but the
+        // allowlist left out is not sent; it stores a "path not approved" record instead.
+        const approvedPaths = config.discoveryProbePaths ? new Set(config.discoveryProbePaths) : null;
+        const approved = (path: string): boolean => !approvedPaths || approvedPaths.has(path);
+        const notApproved: WellKnownProbe[] = [];
+
+        // llms.txt + llms-full.txt at the root once, independent of robots. /llms-full.txt only
+        // rides along with /llms.txt: the rule reads it as a note on the file it reports.
+        const llmsApproved = approved(LLMS_TXT_PATHS[0]);
+        if (wants("llms-txt") && !llmsApproved) {
+          notApproved.push(notApprovedProbe(baseUrl, LLMS_TXT_PATHS[0]));
+        }
+        if (wants("llms-txt") && llmsApproved) {
           const llms = yield* fetchLlmsTxt(
             baseUrl,
             config.userAgent,
             customHeadersFor(baseUrl),
             preamble,
             gate,
+            { fetchFull: approved(LLMS_TXT_PATHS[1]), pathLocked: approvedPaths !== null },
           );
           // null: the budget ran out first. No row, so the rule says "not checked".
           if (llms) {
@@ -2928,15 +2946,23 @@ export function createCrawler(
 
         // Well-known and agent files, then RSL licensing.
         const wellKnownPaths = WELL_KNOWN_PATHS.filter(wants);
-        if (wellKnownPaths.length > 0) {
-          const wellKnown = yield* probeWellKnown(
-            baseUrl,
-            config.userAgent,
-            customHeadersFor(baseUrl),
-            preamble,
-            { paths: wellKnownPaths, gate },
-          );
-          yield* storage.setWellKnownProbe(crawlId, { ...wellKnown, fetchedAt: Date.now() });
+        const sentPaths = wellKnownPaths.filter(approved);
+        for (const path of wellKnownPaths) {
+          if (!approved(path)) notApproved.push(notApprovedProbe(baseUrl, path));
+        }
+        if (sentPaths.length > 0 || notApproved.length > 0) {
+          const wellKnown =
+            sentPaths.length > 0
+              ? yield* probeWellKnown(baseUrl, config.userAgent, customHeadersFor(baseUrl), preamble, {
+                  paths: sentPaths,
+                  gate,
+                  pathLocked: approvedPaths !== null,
+                })
+              : { probes: [] };
+          yield* storage.setWellKnownProbe(crawlId, {
+            probes: [...wellKnown.probes, ...notApproved],
+            fetchedAt: Date.now(),
+          });
         }
 
         if (wants("rsl")) {
@@ -2981,6 +3007,7 @@ export function createCrawler(
         // The log rides on the budget so every root probe can note a request the
         // site refused; persisted below so the rules say "refused", not "absent".
         const refusals = new RefusalLog();
+        crawlRefusals = refusals;
         const seedPhase = createPhaseBudget(discoveryBudgetMs(config.timeoutMs, config.discoveryDeadlineAt), Date.now(), refusals);
 
         // Follow redirects to get final URL (both HTTP and client-side)
@@ -3597,10 +3624,12 @@ export function createCrawler(
         });
 
         // One wall-clock budget for this restart's preamble, same as start().
+        // The log carries only the block signal here: a resumed crawl does not persist refusals (#1655).
+        crawlRefusals = new RefusalLog();
         const preamble = createPhaseBudget(
           discoveryBudgetMs(config.timeoutMs, config.discoveryDeadlineAt),
           Date.now(),
-          undefined,
+          crawlRefusals,
           crawlEgress,
         );
 

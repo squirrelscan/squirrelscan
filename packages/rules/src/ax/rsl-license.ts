@@ -1,6 +1,6 @@
 // ax/rsl-license - detect a robots.txt License: directive pointing to a valid RSL document
 
-import { PROBE_NOT_ATTEMPTED_ERROR } from "@squirrelscan/core-contracts/storage";
+import { PROBE_NOT_SENT_ERRORS } from "@squirrelscan/core-contracts/storage";
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
@@ -64,7 +64,7 @@ export const rslLicenseRule: Rule = {
     // only the never-attempted case degrades to unknown. Both look like
     // `status: 0`, so the recorded reason is the only discriminator.
     const notAttempted = rsl.documents.filter(
-      (d) => d.status === 0 && d.error === PROBE_NOT_ATTEMPTED_ERROR,
+      (d) => d.status === 0 && d.error !== null && PROBE_NOT_SENT_ERRORS.includes(d.error),
     );
     const brokenDocs = rsl.documents.filter(
       (d) => !notAttempted.includes(d) && !(d.status === 200 && d.xmlValid && d.looksRsl),

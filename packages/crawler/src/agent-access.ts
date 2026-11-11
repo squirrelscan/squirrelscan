@@ -3,7 +3,7 @@ import { byteLength, truncateToBytes } from "@squirrelscan/utils/bytes";
 import { readBodyCapped } from "@squirrelscan/utils/response-body";
 import { CLOUDFLARE_CHALLENGE_SCRIPT } from "@squirrelscan/utils/waf";
 
-import { BUDGET_EXHAUSTED_ERROR, budgetedTimeoutMs, safeFetchWithDeadline, ungated } from "./deadline";
+import { optionalProbeTimeoutMs, safeFetchWithDeadline, skippedProbeError, ungated } from "./deadline";
 
 import type { PhaseBudget, ProbeGate } from "./deadline";
 import { mergeHeaderRecords } from "@squirrelscan/utils/headers";
@@ -74,8 +74,8 @@ async function probeOne(
   customHeaders?: Record<string, string>,
   budget?: PhaseBudget,
 ): Promise<AgentAccessProbe> {
-  const timeoutMs = budgetedTimeoutMs(budget, PROBE_TIMEOUT_MS);
-  if (timeoutMs === null) return unreachableProbe(identity, BUDGET_EXHAUSTED_ERROR);
+  const timeoutMs = optionalProbeTimeoutMs(budget, PROBE_TIMEOUT_MS);
+  if (timeoutMs === null) return unreachableProbe(identity, skippedProbeError(budget));
   try {
     // #1395: manual redirects — per-hop scheme allowlist + strip secret
     // customHeaders on cross-origin redirects (native redirect:"follow" leaks them).

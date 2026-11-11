@@ -1,7 +1,10 @@
 // Request deadlines that survive into the body read (#1699), and the phase
 // budget that bounds a whole sequence of them (squirrelscan/repo#1733).
 
-import { PROBE_NOT_ATTEMPTED_ERROR } from "@squirrelscan/core-contracts/storage";
+import {
+  PROBE_NOT_ATTEMPTED_ERROR,
+  PROBE_STOPPED_ERROR,
+} from "@squirrelscan/core-contracts/storage";
 import { egressGuardedSend, type EgressPolicy } from "@squirrelscan/utils/public-egress";
 import { fetchUndecoded } from "@squirrelscan/utils/response-body";
 import { safeRedirectFetch } from "@squirrelscan/utils/safe-fetch";
@@ -63,14 +66,43 @@ export function safeFetchWithDeadline<T>(
   timeoutMs: number,
   use: (response: Response) => Promise<T>,
   egress?: EgressPolicy,
+  shouldFollow?: (from: string, to: string) => boolean,
 ): Promise<T> {
   const send = egress ? egressGuardedSend(fetchUndecoded, egress) : fetchUndecoded;
   return withRequestDeadline(
     timeoutMs,
-    (signal) =>
-      safeRedirectFetch(url, { ...options, signal }, send).then((result) => result.response),
+    async (signal) => {
+      const result = await safeRedirectFetch(url, { ...options, signal }, send, shouldFollow);
+      if (result.unfollowed !== undefined) {
+        // The 3xx says nothing about the approved path itself, so the probe records no answer.
+        await result.response.body?.cancel().catch(() => {});
+        throw new RedirectNotFollowedError(result.unfollowed);
+      }
+      return result.response;
+    },
     use,
   );
+}
+
+/** A probe's redirect was not followed because it left the approved path (#1655). */
+export class RedirectNotFollowedError extends Error {
+  constructor(readonly target: string) {
+    super("redirect to another path not followed");
+    this.name = "RedirectNotFollowedError";
+  }
+}
+
+/**
+ * The redirect rule for a path-approved probe (#1655): a hop may change scheme, host or the query
+ * but not the path, so `/llms.txt` can canonicalise to `https://www.example.com/llms.txt` and never
+ * wander off to an excluded path. The egress policy still vets every hop that is followed.
+ */
+export function samePathRedirect(from: string, to: string): boolean {
+  try {
+    return new URL(from).pathname === new URL(to).pathname;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -116,6 +148,24 @@ export interface PhaseBudget {
    * (repo#2830), carried here for the same reason. Absent outside a crawl.
    */
   readonly egress?: EgressPolicy;
+}
+
+/**
+ * The deadline an OPTIONAL probe request may use (#1655): `budgetedTimeoutMs`, but `null` too once the
+ * crawl has seen a block signal, so the probes still waiting stop instead of each asking a host that
+ * has started refusing. robots.txt and the sitemaps are not optional and keep `budgetedTimeoutMs`.
+ */
+export function optionalProbeTimeoutMs(
+  budget: PhaseBudget | undefined,
+  requestTimeoutMs: number,
+): number | null {
+  if (budget?.refusals?.blocked) return null;
+  return budgetedTimeoutMs(budget, requestTimeoutMs);
+}
+
+/** The `error` a skipped optional probe records: stopped by a block, else the budget. */
+export function skippedProbeError(budget: PhaseBudget | undefined): string {
+  return budget?.refusals?.blocked ? PROBE_STOPPED_ERROR : BUDGET_EXHAUSTED_ERROR;
 }
 
 /**

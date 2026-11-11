@@ -1313,6 +1313,10 @@ export async function runAudit(
           >,
           additionalNamespaces: pluginRuleNamespaces,
         }),
+        // Per-path allowlist over those probes (#1655); unset sends every selected one.
+        ...(mergedConfig.crawler.discovery_probe_paths
+          ? { discoveryProbePaths: mergedConfig.crawler.discovery_probe_paths }
+          : {}),
         // #1428: pages the E-E-A-T rules are configured with that the crawl does not reach are asked for once.
         configuredPagePaths: configuredPagePaths(
           mergedConfig.rule_options as Record<string, unknown>
@@ -3127,6 +3131,10 @@ export function mergeOptionsToConfig(
       // disable_discovery_probes (#409), in both directions.
       ...(typeof options.disableDiscoveryProbes === "boolean"
         ? { disable_discovery_probes: options.disableDiscoveryProbes }
+        : {}),
+      // --discovery-probe-path replaces [crawler] discovery_probe_paths (#1655).
+      ...(options.discoveryProbePaths && options.discoveryProbePaths.length > 0
+        ? { discovery_probe_paths: options.discoveryProbePaths }
         : {}),
     },
     // --offline promises no network beyond the audited site itself, so

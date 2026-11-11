@@ -31,6 +31,7 @@ squirrel crawl <url> [options]
 | `--fresh-ua` | | Re-roll the project's pinned random user-agent (the new one is pinned for later runs) | `false` |
 | `--resume` | | Resume interrupted crawl | `false` |
 | `--disable-discovery-probes` | | Skip the pre-crawl [discovery probes](/configuration/crawler#discovery-probes) for this run. Overrides `[crawler] disable_discovery_probes`; `--disable-discovery-probes=false` sends them even when the config turns them off. A space before the value (`--disable-discovery-probes false`) is refused | `false` |
+| `--discovery-probe-path` | | Only send the discovery probe for this path (repeatable / comma-separated), e.g. `/llms.txt` or `/AGENTS.md`. A probe for any other path is not sent and reports not checked, and a redirect from it may not change the path. Replaces `[crawler] discovery_probe_paths`. See [`discovery_probe_paths`](/configuration/crawler#discovery_probe_paths) | none |
 
 `--concurrency` and `--per-host` also suppress the localhost fast path (see
 [Crawler Configuration](/configuration/crawler)): against your own dev server, `crawl`

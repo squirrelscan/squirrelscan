@@ -828,6 +828,8 @@ export interface AuditOptions {
   // disable_discovery_probes for this run, either way (`=false` turns the
   // probes back on). Undefined → config decides.
   disableDiscoveryProbes?: boolean;
+  /** `--discovery-probe-path`: replaces [crawler] discovery_probe_paths for this run (#1655). */
+  discoveryProbePaths?: string[];
   // Probing intensity, resolved by the command (resolveProbeIntensity): the
   // level and the wall-clock cap for ALL probing rules together. The controller
   // turns it into the shared `ctx.probe` budget. Undefined → passive.
