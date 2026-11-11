@@ -518,6 +518,11 @@ export interface SiteData {
      * before they were recorded, where absence proves nothing.
      */
     versionHeadersRecorded?: boolean;
+    /**
+     * The stored page's content hash (the same value `page_features.contentHash` holds), read by
+     * content/duplicate-content on the v1 path. Absent when the caller did not record it.
+     */
+    contentHash?: string | null;
   }>;
   robotsTxt: RobotsTxtData | null;
   sitemaps: SitemapDiscovery | null;

@@ -269,6 +269,7 @@
                   "rules/content/word-count",
                   "rules/content/duplicate-title",
                   "rules/content/duplicate-description",
+                  "rules/content/duplicate-content",
                   "rules/content/keyword-stuffing",
                   "rules/content/broken-html",
                   "rules/content/reading-level",

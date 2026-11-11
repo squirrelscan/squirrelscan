@@ -529,6 +529,12 @@
    "dev-leakage|pass|No development, private or preview hosts referenced||"
   ]
  },
+ "content/duplicate-content": {
+  "digest": "205336651470018",
+  "lines": [
+   "duplicate-content|pass|No duplicate content found||"
+  ]
+ },
  "content/duplicate-description": {
   "digest": "68469577753771",
   "lines": [

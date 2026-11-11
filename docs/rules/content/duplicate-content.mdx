@@ -1,0 +1,111 @@
+---
+title: "Duplicate content: different URLs serving the same page"
+description: "Several indexable URLs with identical body content and no shared canonical split signals between the copies. squirrel groups pages by their content hash."
+---
+
+## What duplicate content is
+
+When several indexable URLs serve the same content and do not point their canonical at one of them, search engines choose one themselves and split signals such as links between the copies. [content/duplicate-title](/rules/content/duplicate-title) and [content/duplicate-description](/rules/content/duplicate-description) catch shared metadata, but two pages with different titles and the same body pass both.
+
+The usual causes are mechanical: the same page reachable with and without a trailing slash, in two letter cases or with tracking parameters, a product listed under several category paths, or a staging copy left reachable.
+
+## What squirrel checks
+
+The rule is site-wide. Every crawled page stores a hash of its HTML with whitespace normalised, and the rule groups indexable pages by it. Matches are exact: near-duplicates are out of scope. Because the whole document is hashed, two URLs match only when their HTML is identical, head included. A copy that carries its own self-referencing `<link rel="canonical">` or a different `<title>` has different HTML and is not matched. It emits a single check named `duplicate-content`:
+
+- Skipped below two pages. Message: `Insufficient pages to check for duplicate content`.
+- Warn when groups exist. Message: `3 group(s) of duplicate content across 9 pages`. Each item is one group, labelled `3 pages with identical content`, with the URLs in it. Groups are ordered largest first, then by first URL. At most 50 groups are listed, each with up to 25 URLs, and `details.additional` and `meta.additionalPages` count the rest. Severity warning, weight 4.
+- Pass otherwise. Message: `No duplicate content found`.
+
+A group is not reported when every page in it declares the same canonical URL. A page with no canonical counts as canonical to itself, so a copy that points at the original resolves the group, while two pages with no canonical, or pointing at different URLs, do not.
+
+These pages are left out of every group:
+
+- pages that are `noindex`, by `<meta name="robots">` or an `X-Robots-Tag` header, whatever the rest of the site does;
+- redirects and error responses: only 2xx pages are compared;
+- pages with fewer words than `minWords`, so empty shells and login walls do not form a group;
+- paginated pages, recognised by the URL as in [crawl/pagination](/rules/crawl/pagination): a `page`, `p`, `pg`, `offset` or `start` parameter, or a `/page/N` path;
+- regional versions of one page: reciprocal `hreflang` alternates that share a language (`en-gb` and `en-us`), with neither page canonical to a different URL, count as one page. See the same rule in [content/duplicate-title](/rules/content/duplicate-title) for how that is judged.
+
+When every URL in a group is one URL written differently, the item says so: `2 URLs for one page: the URL form is the cause (tracking parameters)`. The causes are tracking parameters (`utm_*`, `fbclid`, `gclid`, `ref`, `source`), a trailing slash and letter case, and `meta.urlFormCause` lists them.
+
+## How to fix it
+
+```html
+<link rel="canonical" href="https://example.com/shoes/running" />
+```
+
+Choose the URL to index and point the canonical of every copy at it, or redirect the copies with a 301 or 308. When the cause is the URL form, link to one form everywhere and redirect the others to it. Pages that are meant to differ keep a self-referencing canonical, and locale variants keep reciprocal hreflang.
+
+| | |
+|---|---|
+| **Rule ID** | `content/duplicate-content` |
+| **Category** | [Content](/rules/content) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 4/10 |
+
+## Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `minWords` | integer, 0 or more | `50` | Pages with fewer words are left out, so empty shells and login walls do not form a group |
+
+### Configuration example
+
+```toml squirrel.toml
+[rule_options."content/duplicate-content"]
+minWords = 100
+```
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["content/duplicate-content"]
+```
+
+### Disable all Content rules
+
+```toml squirrel.toml
+[rules]
+disable = ["content/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["content/duplicate-content"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Related rules
+
+- [content/duplicate-title](/rules/content/duplicate-title): the same problem in the title.
+- [content/duplicate-description](/rules/content/duplicate-description): the same problem in the meta description.
+- [core/canonical](/rules/core/canonical): the canonical tag on each page.
+- [crawl/pagination](/rules/crawl/pagination): the paginated pages this rule leaves out.
+
+Content findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Consolidate duplicate URLs, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls)
+- [What is URL canonicalization, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/canonicalization)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Content section of the report. Each group is listed with the pages that share the content. Signed-out local audits need no account and cost nothing. Signed-in audits spend credits.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Content section looks like on a real site.
+  </Card>
+</CardGroup>
