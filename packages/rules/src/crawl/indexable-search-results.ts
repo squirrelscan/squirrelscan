@@ -47,19 +47,36 @@ function safeUrl(raw: string, base?: string): URL | null {
   }
 }
 
-function hasNonEmptyParam(u: URL, names?: string[]): boolean {
+function hasNonEmptyParam(u: URL, names: string[]): boolean {
   for (const [k, v] of u.searchParams) {
     if (v.trim() === "") continue;
-    if (!names || names.includes(k.toLowerCase())) return true;
+    if (names.includes(k.toLowerCase())) return true;
   }
   return false;
 }
 
-/** Pattern A: final path segment is `search` and the query has a non-empty value. */
-function isPatternA(u: URL): boolean {
+/** Query parameter names declared by SearchAction templates on this URL's host. */
+function templateParams(u: URL, templates: SearchTemplate[]): string[] {
+  const host = u.hostname.toLowerCase();
+  const out: string[] = [];
+  for (const t of templates) {
+    if (t.kind === "query" && t.host === host) out.push(t.param.toLowerCase());
+  }
+  return out;
+}
+
+/**
+ * Pattern A: final path segment is `search` and a search parameter (SEARCH_PARAMS or one named in
+ * a declared SearchAction) has a non-empty value. utm_*, page, sort, ref, fbclid never count.
+ */
+function isPatternA(u: URL, templates: SearchTemplate[]): boolean {
   const segments = u.pathname.split("/").filter((s) => s !== "");
   const last = segments[segments.length - 1];
-  return last !== undefined && last.toLowerCase() === "search" && hasNonEmptyParam(u);
+  return (
+    last !== undefined &&
+    last.toLowerCase() === "search" &&
+    hasNonEmptyParam(u, [...SEARCH_PARAMS, ...templateParams(u, templates)])
+  );
 }
 
 /** Pattern C: matches a SearchAction template declared by the site. */
@@ -78,7 +95,7 @@ function matchesTemplate(u: URL, templates: SearchTemplate[]): boolean {
 }
 
 function isPatternUrl(u: URL, templates: SearchTemplate[]): boolean {
-  return isPatternA(u) || matchesTemplate(u, templates);
+  return isPatternA(u, templates) || matchesTemplate(u, templates);
 }
 
 function normalizeText(s: string): string {
@@ -113,22 +130,42 @@ interface PageLike {
   };
 }
 
+const MIN_EVIDENCE_LEN = 3;
+
+function containsWord(haystack: string, needle: string): boolean {
+  const esc = needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(?<![\\p{L}\\p{N}])${esc}(?![\\p{L}\\p{N}])`, "iu").test(haystack);
+}
+
+/**
+ * Evidence the page renders results for the query: the value (3+ chars, whole word) appears in the
+ * h1 or og:title, or the page declares SearchResultsPage. A <title> match alone is weak evidence.
+ */
 function hasResultsEvidence(page: PageLike, u: URL): boolean {
-  const haystacks: string[] = [];
-  const title = page.parsed.meta?.title;
-  if (typeof title === "string") haystacks.push(normalizeText(title));
+  const strong: string[] = [];
   for (const t of page.parsed.h1?.texts ?? []) {
-    if (typeof t === "string") haystacks.push(normalizeText(t));
+    if (typeof t === "string") strong.push(normalizeText(t));
   }
   const ogTitle = page.parsed.og?.title;
-  if (typeof ogTitle === "string") haystacks.push(normalizeText(ogTitle));
-  if (paramValues(u).some((v) => haystacks.some((h) => h.includes(v)))) return true;
+  if (typeof ogTitle === "string") strong.push(normalizeText(ogTitle));
+  const values = paramValues(u).filter((v) => v.length >= MIN_EVIDENCE_LEN);
+  if (values.some((v) => strong.some((h) => containsWord(h, v)))) return true;
   const schemas = page.parsed.schemas as { hasType?: (t: string) => boolean } | undefined;
   try {
     return typeof schemas?.hasType === "function" && schemas.hasType("SearchResultsPage") === true;
   } catch {
     return false;
   }
+}
+
+/** Robots `none` means noindex,nofollow; shared isPageIndexable only checks "noindex". */
+function hasRobotsNone(page: PageLike): boolean {
+  const tokens = (v: string | undefined | null) =>
+    (v ?? "").toLowerCase().split(/[\s,]+/).filter(Boolean);
+  const meta = (page.parsed.meta as { robots?: string | null } | undefined)?.robots;
+  if (tokens(meta).includes("none")) return true;
+  const xr = page.headers?.["x-robots-tag"];
+  return tokens(xr).includes("none");
 }
 
 function targetStrings(target: unknown): string[] {
@@ -249,7 +286,7 @@ export const indexableSearchResults: Rule = {
         page.headers,
         page.url,
         robotsTxt,
-      ).isIndexable;
+      ).isIndexable && !hasRobotsNone(page);
       if (!indexable) {
         excluded++;
         continue;
