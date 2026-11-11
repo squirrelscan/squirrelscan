@@ -527,3 +527,186 @@ describe("a current side rebuilt from a slim JSON export (#1748 review)", () => 
     expect(d.removed).toHaveLength(1);
   });
 });
+
+// #1778: a targeted audit runs the site rules that can be judged from the listed pages. A finding that names a
+// page is compared by that page; one that names none is about the whole site and a targeted run cannot speak for it.
+describe("a targeted current audit against a full baseline (#1778)", () => {
+  const SITE_RULE = "security/csp";
+  const withTargeted = (r: AuditReport): AuditReport =>
+    ({
+      ...r,
+      scanScope: {
+        origin: "cli",
+        pagesCrawled: 1,
+        capped: false,
+        targeted: { requested: 1, audited: 1, unaudited: [] },
+      },
+    }) as unknown as AuditReport;
+  const siteRule = (checks: CheckResult[]) => rule(SITE_RULE, checks, "site");
+
+  test("a whole-site finding with no page is not compared, never fixed", () => {
+    const before = report({
+      [SITE_RULE]: siteRule([
+        { name: "csp-missing", status: "fail", message: "no CSP" },
+      ]),
+    });
+    const now = withTargeted(
+      report({
+        [SITE_RULE]: siteRule([
+          { name: "csp-present", status: "pass", message: "ok" },
+        ]),
+      })
+    );
+    const d = diffReports(before, now);
+    expect(d.removed).toHaveLength(0);
+    expect(reasonOf(d)).toEqual([["targeted-run", undefined]]);
+  });
+
+  test("a finding that names its page is compared by that page: a listed page resolves, an unlisted one is not compared", () => {
+    const named = (page: string): CheckResult => ({
+      name: "broken-links",
+      status: "fail",
+      message: "1 broken",
+      items: [{ id: `${BASE}/gone`, sourcePages: [page] }],
+    });
+    const links = (checks: CheckResult[]) => ({
+      "links/broken-links": rule("links/broken-links", checks, "site"),
+    });
+    const clean: CheckResult = {
+      name: "broken-links",
+      status: "pass",
+      message: "ok",
+    };
+    const now = withTargeted(report(links([clean]), { pages: [A] }));
+    expect(diffReports(report(links([named(A)])), now).removed).toHaveLength(1);
+    const d = diffReports(report(links([named(B)])), now);
+    expect(d.removed).toHaveLength(0);
+    expect(reasonOf(d)).toEqual([["page-not-crawled", B]]);
+  });
+
+  test("two targeted reports over the same list are compared; over different lists they are not (#1778 review)", () => {
+    const tgt = (r: AuditReport, digest?: string): AuditReport =>
+      ({
+        ...r,
+        scanScope: {
+          origin: "cli",
+          pagesCrawled: 1,
+          capped: false,
+          targeted: {
+            requested: 1,
+            audited: 1,
+            unaudited: [],
+            ...(digest ? { digest } : {}),
+          },
+        },
+      }) as unknown as AuditReport;
+    const missing = () =>
+      report({
+        [SITE_RULE]: siteRule([
+          { name: "csp-missing", status: "fail", message: "x" },
+        ]),
+      });
+    const present = () =>
+      report({
+        [SITE_RULE]: siteRule([
+          { name: "csp-present", status: "pass", message: "ok" },
+        ]),
+      });
+    // [/a] then [/a]: the same page judged twice, so the fix is real.
+    expect(
+      diffReports(tgt(missing(), "aaa"), tgt(present(), "aaa")).removed
+    ).toHaveLength(1);
+    // [/a] then [/b]: csp-missing was read off /a, the pass off /b: nothing is fixed.
+    const other = diffReports(tgt(missing(), "aaa"), tgt(present(), "bbb"));
+    expect(other.removed).toHaveLength(0);
+    expect(reasonOf(other)).toEqual([["targeted-run", undefined]]);
+    // A report from before the digest cannot show the lists match.
+    expect(diffReports(tgt(missing()), tgt(present())).removed).toHaveLength(0);
+  });
+
+  test("a site-rule item with no source page is not compared either (#1778 review)", () => {
+    const SECRETS = "security/leaked-secrets";
+    const before = report({
+      [SECRETS]: rule(
+        SECRETS,
+        [
+          {
+            name: "leaked-secrets-high",
+            status: "fail",
+            message: "1 secret",
+            items: [{ id: "AKIA…" }],
+          },
+        ],
+        "site"
+      ),
+    });
+    const now = withTargeted(
+      report({
+        [SECRETS]: rule(
+          SECRETS,
+          [{ name: "leaked-secrets", status: "pass", message: "ok" }],
+          "site"
+        ),
+      })
+    );
+    const d = diffReports(before, now);
+    expect(d.removed).toHaveLength(0);
+    expect(reasonOf(d)).toEqual([["targeted-run", undefined]]);
+  });
+});
+
+// #1778: a targeted run emits the link checks too, so one that hits the external cap must not fix a baseline link.
+describe("a targeted run that hits the external link cap (#1778)", () => {
+  const EXT = "links/broken-external-links";
+  const x = "https://dead.example-live.net/x";
+  test("a baseline broken external link is not fixed by a targeted run that left links unchecked", () => {
+    const before = report({
+      [EXT]: rule(
+        EXT,
+        [
+          {
+            name: "broken-external-links",
+            status: "fail",
+            message: "1 broken",
+            items: [{ id: x, sourcePages: [A] }],
+          },
+        ],
+        "site"
+      ),
+    });
+    const now = report({
+      [EXT]: rule(
+        EXT,
+        [
+          {
+            name: "broken-external-links",
+            status: "fail",
+            message: "1 broken",
+            items: [
+              { id: "https://dead.example-live.net/y", sourcePages: [A] },
+            ],
+          },
+          {
+            name: "broken-external-links",
+            status: "skipped",
+            message: "over the cap",
+            skipReason: "external-links-over-cap",
+          },
+        ],
+        "site"
+      ),
+    });
+    const targeted = {
+      ...now,
+      scanScope: {
+        origin: "cli",
+        pagesCrawled: 1,
+        capped: false,
+        targeted: { requested: 1, audited: 1, unaudited: [] },
+      },
+    } as unknown as AuditReport;
+    const d = diffReports(before, targeted);
+    expect(d.removed).toHaveLength(0);
+    expect(reasonOf(d)).toEqual([["rule-skipped", "external-links-over-cap"]]);
+  });
+});

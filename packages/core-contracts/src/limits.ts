@@ -500,6 +500,22 @@ export const LCP_PAGE_EVIDENCE = {
  */
 export const MAX_TARGET_URLS = 1000;
 
+/** A short, stable fingerprint of the WHOLE list a targeted run was given (#1778): order-free, 53 bits (cyrb53), 14 hex characters. */
+export function targetListDigest(urls: readonly string[], extra = 0): string {
+  const text = `${[...urls].sort().join("\n")}\n+${extra}`;
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c6ce57;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(16).padStart(14, "0");
+}
+
+
 /** The JSON report's schema version (`meta.schemaVersion`): major.minor. 1.1 added the opt-in `pages` list (#1260); 1.2 added `meta.requestedUrl` (#1369) and `finalUrl` and `outcome` on the pages rows (#1260); 1.3 added `technologies.truncated` (#1387); 1.4 added `meta.ignored` (#1262); 1.5 added `executedRules` and, with `--include-pages`, rows with outcome `skipped` or `error` and a `reason` for URLs the crawl requested but stored no page for (#1396); 1.6 added `technologies.items[].origin` (#1406); 1.7 added `meta.resume` (#1658); 1.8 added the top-level `outcome` (#1657); 1.9 added `outcome` on `skippedChecks` and `notChecked` entries (#1661); 1.10 added `meta.storeIntegrity` (#1667); 1.11 added the top-level `render` (#1664); 1.12 added the top-level `crawlPhase` (#1639) and `details.pageEvidence` on a grouped `lcp-preload` finding (#1656); 1.13 added the top-level `lockedRules` and `cause` and `causeDetail` on `notChecked` entries (#1734); 1.14 added `meta.pageTypes` (#1744); 1.15 added `redirects` and `redirectsTotal` beside `pages` with `--include-pages` (#1762); 1.16 added `meta.targeted` on a targeted run (#1777); 1.17 added the top-level `rules`, the status and scope of every rule (#1747). */
 export const JSON_REPORT_SCHEMA_VERSION = "1.17";
 

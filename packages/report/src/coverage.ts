@@ -177,6 +177,7 @@ export function scanScopeTargeted(
   requested: number;
   audited: number;
   overLimit?: number;
+  digest?: string;
   unaudited: Array<{ url: string; reason: string; destination?: string }>;
 } | null {
   const t = report.scanScope?.targeted;
@@ -199,7 +200,8 @@ export function scanScopeTargeted(
     });
   }
   const overLimit = whole(t.overLimit);
-  return { requested, audited, ...(overLimit ? { overLimit } : {}), unaudited };
+  const digest = typeof t.digest === "string" && /^[0-9a-f]{1,32}$/.test(t.digest) ? t.digest : undefined;
+  return { requested, audited, ...(overLimit ? { overLimit } : {}), ...(digest ? { digest } : {}), unaudited };
 }
 
 /**

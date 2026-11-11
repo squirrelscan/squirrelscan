@@ -167,7 +167,7 @@ for (const engine of ["v1", "v2"] as const) {
         metaTitle.every((x) => ["/p/1", "/p/3", "/p/4"].includes(new URL(x.pageUrl ?? "").pathname)),
       ).toBe(true);
 
-      expect(r.coverage).toEqual({ requested: 3, audited: 3, unaudited: [] });
+      expect(r.coverage).toMatchObject({ requested: 3, audited: 3, unaudited: [] });
     });
 
     test("query and canonical variants are audited pages, never reported as redirected (#1777 review)", async () => {
@@ -225,11 +225,12 @@ describe("targetedCoverage (pure)", () => {
       [row("https://e.test/a", "done"), row("https://e.test/old", "done"), row("https://e.test/b?ref=1", "done")],
       ["https://e.test/old"],
     );
-    expect(c).toEqual({
+    expect(c).toMatchObject({
       requested: 3,
       audited: 2,
       unaudited: [{ url: "https://e.test/old", reason: "redirected" }],
     });
+    expect(c.digest).toMatch(/^[0-9a-f]{14}$/);
   });
 
   test("the URLs past the limit are counted as requested and not audited, without rows", () => {
@@ -316,5 +317,19 @@ describe("targetedCoverageFor reads the pages in batches (#1777 review)", () => 
     );
     expect(coverage).toMatchObject({ requested: 131, audited: 130 });
     expect(coverage.unaudited).toEqual([{ url: `${base}/z-old`, reason: "redirected" }]);
+  });
+});
+
+describe("targetListDigest (#1778 review)", () => {
+  test("is order-free and tells two lists apart", async () => {
+    const { MAX_TARGET_URLS, targetListDigest } = await import("@squirrelscan/core-contracts/limits");
+    const a = ["https://e.test/a", "https://e.test/b"];
+    expect(targetListDigest(a)).toBe(targetListDigest([...a].reverse()));
+    expect(targetListDigest(a)).not.toBe(targetListDigest(["https://e.test/a"]));
+    expect(targetListDigest(a)).toMatch(/^[0-9a-f]{14}$/);
+    // A list that differs only PAST the limit is a different list: the digest is of the whole thing.
+    const big = Array.from({ length: MAX_TARGET_URLS + 5 }, (_, i) => `https://e.test/p/${i}`);
+    const other = [...big.slice(0, -1), "https://e.test/different"];
+    expect(targetListDigest(big)).not.toBe(targetListDigest(other));
   });
 });

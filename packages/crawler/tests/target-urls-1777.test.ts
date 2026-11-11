@@ -254,6 +254,10 @@ describe("targetUrls (#1777)", () => {
     const huge = `${ORIGIN}/${"x".repeat(5000)}`;
     const r = await run({ targetUrls: [huge, ...targets], maxPages: 3, allowQueryParams: ["n"] }, bigSite(), other);
     expect(r.stats.targetsOverLimit).toBe(6);
+    // The digest is of the whole list, so a list that differs only past the limit gets another.
+    const again = await run({ targetUrls: [huge, ...targets.slice(0, -1), `${ORIGIN}/p/other`], maxPages: 3, allowQueryParams: ["n"] }, bigSite(), []);
+    expect(typeof r.stats.targetsDigest).toBe("string");
+    expect(again.stats.targetsDigest).not.toBe(r.stats.targetsDigest);
     // Rows: at most MAX_TARGET_URLS, and the oversize one is stored cut short with its reason.
     expect(r.frontier.length).toBeLessThanOrEqual(MAX_TARGET_URLS);
     const tooLong = r.frontier.filter((f) => f.reason === "url_too_long");

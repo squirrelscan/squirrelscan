@@ -341,6 +341,8 @@ export interface CrawlStats {
   targetedRun?: boolean;
   /** Targeted run: URLs in the list past `MAX_TARGET_URLS`, counted and not stored (#1777). */
   targetsOverLimit?: number;
+  /** Targeted run: a fingerprint of the WHOLE list given, the part past `MAX_TARGET_URLS` included (#1778). */
+  targetsDigest?: string;
   /**
    * External link checking this run (repo#2729): distinct external links the
    * pages carry, how many were checked, and the per-audit limit that capped it.

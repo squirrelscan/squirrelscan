@@ -12,7 +12,7 @@ import type { AuditReport, CheckResult, ReportRuleResult } from "./types";
 export type RuleRunStatus = "ran" | "skipped" | "timed_out";
 
 /** What a rule covered: the pages a page rule examined, or the origin a site rule judged. */
-export type RuleRunScope = { pages: number } | { origin: string };
+export type RuleRunScope = { pages: number } | { origin: string; targeted?: true };
 
 export interface RuleRun {
   ruleId: string;
@@ -22,7 +22,8 @@ export interface RuleRun {
   reason?: string;
 }
 
-type RuleRunInput = Pick<AuditReport, "ruleResults" | "totalPages" | "baseUrl">;
+type RuleRunInput = Pick<AuditReport, "ruleResults" | "totalPages" | "baseUrl"> &
+  Partial<Pick<AuditReport, "scanScope">>;
 
 /** A check this audit produced and judged: not skipped, and not a finding carried over from an earlier audit. */
 const judged = (c: CheckResult): boolean => c.status !== "skipped" && c.provenance !== "carried";
@@ -62,6 +63,9 @@ function entries(ruleResults: RuleRunInput["ruleResults"]): Array<[string, Repor
  */
 export function ruleRuns(report: RuleRunInput): RuleRun[] {
   const origin = originOf(report.baseUrl);
+  // A targeted run (#1777): a site rule that ran judged the listed pages, not the origin.
+  const siteScope: RuleRunScope =
+    report.scanScope?.targeted !== undefined ? { origin, targeted: true } : { origin };
   const rows: RuleRun[] = [];
   for (const [ruleId, rule] of entries(report.ruleResults)) {
     const checks = rule?.checks ?? [];
@@ -73,7 +77,7 @@ export function ruleRuns(report: RuleRunInput): RuleRun[] {
       rows.push({
         ruleId,
         status: "ran",
-        scope: isPage ? { pages: Math.max(0, (report.totalPages ?? 0) - skipped) } : { origin },
+        scope: isPage ? { pages: Math.max(0, (report.totalPages ?? 0) - skipped) } : siteScope,
       });
       continue;
     }
@@ -82,7 +86,7 @@ export function ruleRuns(report: RuleRunInput): RuleRun[] {
     rows.push({
       ruleId,
       status: timedOut ? "timed_out" : "skipped",
-      scope: isPage ? { pages: 0 } : { origin },
+      scope: isPage ? { pages: 0 } : siteScope,
       ...(reason ? { reason } : {}),
     });
   }

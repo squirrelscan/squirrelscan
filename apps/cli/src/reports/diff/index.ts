@@ -74,6 +74,9 @@ function issueDetails(
   if (!details) return undefined;
   const out = { ...details };
   for (const key of LINK_COVERAGE_DETAIL_KEYS) delete out[key];
+  // The page a header rule read its headers from (#1778) describes the audit, not the finding: an audit from
+  // before it names none, and the first diff across the upgrade must read the same finding as unchanged.
+  delete out.pageUrl;
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
@@ -344,6 +347,12 @@ function makeNotComparedJudge(
   superseded: ReadonlyMap<string, readonly string[]>
 ): (issue: IssueInstance) => Omit<NotComparedIssue, "issue"> | null {
   const sameOrigin = originOf(baseline.baseUrl) === originOf(current.baseUrl);
+  const targetDigest = (r: AuditReport) => r.scanScope?.targeted?.digest;
+  const sameTargetList =
+    current.scanScope?.targeted !== undefined &&
+    baseline.scanScope?.targeted !== undefined &&
+    targetDigest(current) !== undefined &&
+    targetDigest(current) === targetDigest(baseline);
   const baseRuns = new Map<string, RuleRun>(
     ruleRuns(baseline).map((r) => [r.ruleId, r])
   );
@@ -377,6 +386,21 @@ function makeNotComparedJudge(
       ) {
         return { reason: "sampled-report" };
       }
+    }
+
+    // A targeted audit (#1777, #1778) runs the site rules that can be judged from the listed pages. A finding
+    // that names a page is compared by that page (below); one that names none (a whole-site check, or an item
+    // with no source page) is about the whole site, which a run over a few pages cannot speak for. That holds
+    // whenever the current run is targeted, unless the baseline was targeted over the very same list: two
+    // targeted runs over [/a] and [/b] judged different pages.
+    if (
+      current.scanScope?.targeted !== undefined &&
+      !sameTargetList &&
+      (issue.target.type === "check" ||
+        (issue.target.type === "item" &&
+          (issue.sourcePages?.length ?? 0) === 0))
+    ) {
+      return { reason: "targeted-run" };
     }
 
     const run = currentRuns.get(issue.ruleId);

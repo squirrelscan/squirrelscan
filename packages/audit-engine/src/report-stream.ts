@@ -21,7 +21,7 @@ import {
   maxChecksTruncated,
   stampChecksTruncated,
 } from "@squirrelscan/rules";
-import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
+import { REPORT_LIMITS, targetListDigest } from "@squirrelscan/core-contracts/limits";
 import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
 import { parseRobotsTxt, resolveRobotsSitemapUrls } from "@squirrelscan/utils/robots-txt";
 
@@ -172,6 +172,7 @@ export function targetedCoverage(
   entries: readonly FrontierRecord[],
   redirectSources: Iterable<string>,
   overLimit = 0,
+  digest?: string,
 ): ScanScopeTargeted {
   const redirects = new Set<string>(redirectSources);
   const redirectDestinations = new Map<string, string>();
@@ -207,6 +208,9 @@ export function targetedCoverage(
   return {
     requested: targets.length + overLimit,
     audited: auditedCount,
+    // Of the whole list the run was given, the part past MAX_TARGET_URLS included (the crawl hashes it); from the
+    // stored rows only when a crawl from before it recorded none.
+    digest: digest ?? targetListDigest(targets.map((e) => e.normalizedUrl), overLimit),
     ...(overLimit > 0 ? { overLimit } : {}),
     unaudited: unaudited.slice(0, TARGETED_UNAUDITED_MAX),
   };
@@ -229,7 +233,7 @@ export function targetedCoverageFor(
       if (batch.length < TARGETED_PAGE_BATCH) break;
     }
     const stats = yield* storage.getStats(crawlId);
-    return targetedCoverage(entries, redirectSources, stats?.targetsOverLimit ?? 0);
+    return targetedCoverage(entries, redirectSources, stats?.targetsOverLimit ?? 0, stats?.targetsDigest);
   }).pipe(
     Effect.catchAll(() => Effect.succeed({ requested: 0, audited: 0, unaudited: [] } as ScanScopeTargeted)),
   );

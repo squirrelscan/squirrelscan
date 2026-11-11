@@ -72,6 +72,11 @@ export type NotComparedReason =
    * check's pages and no passing rows: a finding's absence from it is not evidence it was fixed.
    */
   | "sampled-report"
+  /**
+   * The current audit was a targeted one (#1777) and the baseline was not, and the issue names no page: a rule
+   * run over the listed pages alone cannot say a whole-site finding is gone.
+   */
+  | "targeted-run"
   /** The rule emitted a check its metadata declares as "not checked" and no clean check that supersedes the problem. */
   | "not-evaluated";
 

@@ -159,6 +159,8 @@ interface SlimJsonReport {
     coverage?: { auditedPages?: unknown };
     /** The audit level snapshot; absent in slim JSON written before audit levels. Untrusted. */
     auditLevel?: unknown;
+    /** A targeted run's URL accounting (schema 1.16, #1777). Untrusted; read back so a comparison knows. */
+    targeted?: unknown;
   };
   // Audit validity (#801): absent in slim JSON written before #801 ⇒ completed.
   status?: AuditStatus;
@@ -467,17 +469,27 @@ export function convertSlimReport(report: SlimJsonReport): AuditReport {
     // Without this, re-rendering a saved report loses both page limits and a
     // clamped run reads exactly like an unclamped one — which is the bug this
     // change exists to fix, reappearing one round trip later.
-    ...(report.meta.maxPages !== undefined
+    ...(report.meta.maxPages !== undefined || slimTargeted(report.meta.targeted)
       ? {
           scanScope: {
             origin: "cli" as const,
-            maxPages: report.meta.maxPages,
-            ...(report.meta.requestedMaxPages !== undefined
-              ? { requestedMaxPages: report.meta.requestedMaxPages }
+            ...(report.meta.maxPages !== undefined
+              ? {
+                  maxPages: report.meta.maxPages,
+                  ...(report.meta.requestedMaxPages !== undefined
+                    ? { requestedMaxPages: report.meta.requestedMaxPages }
+                    : {}),
+                }
               : {}),
             pagesCrawled: crawled,
-            capped: crawled >= report.meta.maxPages,
+            capped:
+              report.meta.maxPages !== undefined &&
+              crawled >= report.meta.maxPages,
             ...(unfetched !== undefined ? { unfetched } : {}),
+            // #1777: a targeted export stays targeted, so a comparison does not read its site rules as whole-site.
+            ...(slimTargeted(report.meta.targeted)
+              ? { targeted: slimTargeted(report.meta.targeted)! }
+              : {}),
           },
         }
       : {}),
@@ -522,6 +534,53 @@ export function convertSlimReport(report: SlimJsonReport): AuditReport {
   };
 }
 
+/** The export's `meta.targeted`, validated: a user-supplied file keeps only whole counts, a hex digest and short rows. */
+function slimTargeted(
+  value: unknown
+): NonNullable<NonNullable<AuditReport["scanScope"]>["targeted"]> | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const t = value as {
+    requested?: unknown;
+    audited?: unknown;
+    overLimit?: unknown;
+    digest?: unknown;
+    unaudited?: unknown;
+  };
+  const whole = (v: unknown) =>
+    typeof v === "number" && Number.isSafeInteger(v) && v >= 0 ? v : undefined;
+  const requested = whole(t.requested);
+  const audited = whole(t.audited);
+  if (requested === undefined || audited === undefined) return undefined;
+  const unaudited: Array<{
+    url: string;
+    reason: string;
+    destination?: string;
+  }> = [];
+  for (const r of Array.isArray(t.unaudited) ? t.unaudited.slice(0, 100) : []) {
+    const row = r as { url?: unknown; reason?: unknown; destination?: unknown };
+    if (typeof row.url !== "string" || typeof row.reason !== "string") continue;
+    unaudited.push({
+      url: row.url.slice(0, 2048),
+      reason: row.reason.slice(0, 60),
+      ...(typeof row.destination === "string"
+        ? { destination: row.destination.slice(0, 2048) }
+        : {}),
+    });
+  }
+  const overLimit = whole(t.overLimit);
+  const digest =
+    typeof t.digest === "string" && /^[0-9a-f]{1,32}$/.test(t.digest)
+      ? t.digest
+      : undefined;
+  return {
+    requested,
+    audited,
+    ...(overLimit ? { overLimit } : {}),
+    ...(digest ? { digest } : {}),
+    unaudited,
+  };
+}
+
 /** The export's `rules` list, validated: a user-supplied file keeps only well-formed rows. */
 function slimRuleRuns(
   value: unknown
@@ -531,8 +590,9 @@ function slimRuleRuns(
   for (const r of value) {
     const status = (r as { status?: unknown })?.status;
     const ruleId = (r as { ruleId?: unknown })?.ruleId;
-    const scope = (r as { scope?: { pages?: unknown; origin?: unknown } })
-      ?.scope;
+    const scope = (
+      r as { scope?: { pages?: unknown; origin?: unknown; targeted?: unknown } }
+    )?.scope;
     if (
       typeof ruleId !== "string" ||
       (status !== "ran" && status !== "skipped" && status !== "timed_out")
@@ -545,7 +605,13 @@ function slimRuleRuns(
     rows.push({
       ruleId,
       status,
-      scope: pages !== undefined ? { pages } : { origin: origin ?? "" },
+      scope:
+        pages !== undefined
+          ? { pages }
+          : {
+              origin: origin ?? "",
+              ...(scope?.targeted === true ? { targeted: true as const } : {}),
+            },
       ...(typeof reason === "string" ? { reason } : {}),
     });
   }

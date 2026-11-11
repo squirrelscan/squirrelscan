@@ -128,3 +128,13 @@ describe("JSON report `rules`", () => {
     expect(JSON.parse(renderJson(empty))).not.toHaveProperty("rules");
   });
 });
+
+describe("a targeted report (#1777, #1778)", () => {
+  test("a site rule's scope says it judged the listed pages, not the origin", () => {
+    const targeted = { ...report, scanScope: { origin: "cli", pagesCrawled: 3, capped: false, targeted: { requested: 3, audited: 3, unaudited: [] } } } as unknown as AuditReport;
+    const by = Object.fromEntries(ruleRuns(targeted).map((r) => [r.ruleId, r]));
+    expect(by["crawl/robots-txt"]?.scope).toEqual({ origin: "https://example.com", targeted: true });
+    // A page rule is unchanged.
+    expect(by["core/meta-title"]?.scope).toEqual({ pages: 10 });
+  });
+});

@@ -23,7 +23,7 @@ import { decodedPageBytes } from "@squirrelscan/utils/bytes";
 import { classifyWafResponse } from "@squirrelscan/utils/waf";
 import { WELL_KNOWN_PATHS, isPermanentStorageError } from "@squirrelscan/core-contracts/storage";
 import { auditFailureDetail } from "@squirrelscan/core-contracts/failure-reason";
-import { COVERAGE_PAGE_LIMITS, MAX_TARGET_URLS, REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
+import { COVERAGE_PAGE_LIMITS, MAX_TARGET_URLS, REPORT_LIMITS, targetListDigest } from "@squirrelscan/core-contracts/limits";
 
 import { extractCrawlableUrls, mergeServerOnlyScripts } from "@squirrelscan/parser/extractors";
 import {
@@ -3336,6 +3336,8 @@ export function createCrawler(
             targetedRun: true,
             linkDiscoveryOff: true,
             ...(overLimit > 0 ? { targetsOverLimit: overLimit } : {}),
+            // Of the whole list as given (trimmed, sorted), so a list that differs only past the limit differs.
+            targetsDigest: targetListDigest(all),
           });
           const skippedRow = (key: string, rawUrl: string, reason: string) =>
             storage.upsertFrontier(crawlId, {

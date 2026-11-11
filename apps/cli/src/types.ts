@@ -703,6 +703,7 @@ export interface AuditReport {
       requested: number;
       audited: number;
       overLimit?: number;
+      digest?: string;
       unaudited: Array<{ url: string; reason: string; destination?: string }>;
     };
     /** The start URL's followed redirect (#1281), so a rebuilt report still carries it. */

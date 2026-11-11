@@ -11,6 +11,8 @@ const REASON_TEXT: Record<NotComparedIssue["reason"], string> = {
   "rule-skipped-on-page": "the rule skipped the page in the current audit",
   "sampled-report":
     "the current report is a sampled export that cannot show the finding is gone",
+  "targeted-run":
+    "the current audit covered only the URLs it was given, and this finding names no page",
   "not-evaluated": "the rule did not evaluate it in the current audit",
 };
 
