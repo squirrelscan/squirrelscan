@@ -609,6 +609,7 @@
                   "rules/security/form-https",
                   "rules/security/form-captcha",
                   "rules/security/new-tab",
+                  "rules/security/password-form-get",
                   "rules/security/leaked-secrets",
                   "rules/security/token-storage",
                   "rules/security/graphql-introspection",
