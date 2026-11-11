@@ -192,7 +192,9 @@ export function fanoutInputSignature(
     // Each part is prefixed with its attribute, so `name="x"` and `property="x"`
     // differ. `content` is included only for the metas a declared rule reads the
     // VALUE of: `mobile/viewport`, `a11y/zoom-disabled`, `mobile/viewport-zoom`,
-    // `local/geo-meta` and `a11y/meta-refresh` (kept honest by a test).
+    // `local/geo-meta` (kept honest by a test). A refresh `content` stays in the signature
+    // although `a11y/meta-refresh` is page-scoped now (it reads the Refresh header), so a
+    // refresh target still splits clusters.
     const readsContent =
       CONTENT_READ_METAS.has((name ?? "").toLowerCase()) ||
       (httpEquiv ?? "").toLowerCase() === "refresh";

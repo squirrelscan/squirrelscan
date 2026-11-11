@@ -17,6 +17,9 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- `a11y/meta-refresh` also reports a `Refresh` response header: a redirect names the target and delay, a header with no URL is a reload, and a page with both the header and a meta refresh gets one finding naming both. The rule now runs per page, and its solution recommends a 301 or 308 redirect.
 ### Fixed
 
 - **A Ctrl-C'd crawl is recorded as `stopped`, not left `paused`.** The crawler's own `stop()` writes `paused` first, and the interrupt handler only marked crawls that were still `running`, so the stored status said paused where the audit was stopped. The handler now writes through the same guarded status write as every other change, which allows `stopped` from `running` or `paused` and never touches a crawl that already finished. `--resume` continues it as before. (#1672)
