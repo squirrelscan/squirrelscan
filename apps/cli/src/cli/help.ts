@@ -27,6 +27,7 @@ export const COMMAND_GROUPS: readonly CommandGroup[] = [
       ["analyze", "Run the audit rules on a stored crawl"],
       ["entities", "Query the entity map of a stored audit"],
       ["pages", "List the pages of a stored audit as a table"],
+      ["ci", "Audit a deployed URL in the cloud and fail on new findings"],
       ["init", "Create a squirrel.toml for this project"],
     ],
   },
@@ -71,6 +72,10 @@ export const EXAMPLES: Readonly<Record<string, readonly string[]>> = {
   audit: [
     "squirrel audit https://example.com",
     "squirrel audit https://example.com --max-pages 50 --format llm",
+  ],
+  ci: [
+    "squirrel ci https://example.com --website <id>",
+    "squirrel ci https://example.com --website <id> --fail-on-new warning",
   ],
   crawl: ["squirrel crawl https://example.com"],
   analyze: ["squirrel analyze"],

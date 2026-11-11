@@ -1,0 +1,78 @@
+---
+title: "ci"
+icon: "git-branch"
+description: "Audit a deployed URL in the cloud and fail the job on findings new since the previous audit"
+---
+
+The `ci` command audits a deployed URL in the cloud as one of your websites, waits for the audit, and exits
+non-zero when it has findings that the previous completed audit of that website did not have.
+
+It is a real [cloud audit](/guides/cloud-audits): it appears in the website's audit history in the dashboard and is
+charged like any cloud audit. It is not a local `squirrel audit`, and it is separate from `--fail-on`, which gates on
+thresholds. The comparison is made by the API (`GET /v1/websites/{websiteId}/audits/compare`), so the CLI, a plain
+`curl` and any other client read new-versus-previous the same way. See
+[Fail the build on new findings](/guides/ci#fail-the-build-on-new-findings).
+
+## Usage
+
+```bash
+squirrel ci <url> --website <id> [options]
+```
+
+It needs an org API key with the `audits:read` and `audits:write` scopes in `SQUIRRELSCAN_API_KEY` (mint one with
+[`squirrel keys create`](/cli/keys)). `--website` is the website's id: the id shown in the dashboard, or the
+`websiteId` of any earlier audit of it.
+
+## Options
+
+| Option | Description |
+|--------|-------------|
+| `--website <id>` | The website the audit belongs to. Its previous completed audit is the baseline. Required |
+| `--fail-on-new <severity>` | Fail on new findings at or above `error` (default), `warning` or `info` |
+| `--max-pages <n>` | Page limit for the cloud audit. A smaller crawl than the baseline leaves findings on the pages it skipped as not compared, never as resolved |
+| `--timeout <minutes>` | How long to wait for the audit (default 30). The run keeps going in the cloud if the wait ends |
+| `--json` | Print one JSON object on stdout instead of the text summary |
+
+Progress goes to stderr, so `--json` keeps stdout clean.
+
+## Exit codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | No new findings at or above the severity, or this is the first audit of the website (no baseline) |
+| `2` | New findings at or above `--fail-on-new` since the previous completed audit |
+| `3` | The site blocked the crawler (a WAF or bot manager), so nothing was compared |
+| `5` | The site could not be reached, so nothing was compared |
+| `1` | An operational error: bad flags or key, the audit could not start (for example no credits), did not finish in time, failed, or the comparison could not say (`gate.status: not_evaluated`) |
+
+A blocked or unreachable site never exits `2`, and `not_evaluated` is never a pass: its reason is printed. Findings
+that were resolved since the previous audit are listed and never fail the job. Findings on pages the new audit did
+not crawl, or from rules it did not run, are neither new nor resolved; the output says how many.
+
+## Output
+
+```text
+Audit of https://shop.example.com/ (run 01J0RUNEXAMPLE): completed, health score 81
+Gate (fail on new error): FAIL: 1 new error since the previous audit
+
+New findings (1):
+  error    links/broken-internal  https://shop.example.com/products/a
+
+Resolved findings (1, never fail the job):
+  warning  core/meta-title  https://shop.example.com/about
+
+Not compared: 2 on pages not crawled, 3 from rules not run (neither new nor resolved)
+Report: https://reports.squirrelscan.com/01J0REPORTEXAMPLE
+Credits used: 52 (balance 400 -> 348; other runs on the org in the same window count too)
+```
+
+The credits line is the balance change across the run, read from `GET /v1/credits` before and after, so another run
+on the same organization in that window counts too. On an unmetered plan it says usage is invoiced instead.
+The first audit of a website prints `No baseline` and exits `0`.
+
+## Example
+
+```bash
+export SQUIRRELSCAN_API_KEY=...   # an org API key, kept in your CI secrets
+squirrel ci https://staging.example.com --website "$WEBSITE_ID" --fail-on-new warning
+```
