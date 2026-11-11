@@ -165,6 +165,11 @@ export interface ResolvedAuditSettings {
    * `basedOn` still name the level the audit was asked for.
    */
   offline?: true;
+  /**
+   * Set on a targeted run (`--target-url`, #1777): `settings` are then what actually ran, with external link
+   * checks off (a targeted run checks no links), while `level` and `basedOn` still name the level asked for.
+   */
+  targeted?: true;
 }
 
 /**
@@ -177,6 +182,18 @@ export function offlineAuditSettings(resolved: ResolvedAuditSettings): ResolvedA
     ...resolved,
     settings: { ...resolved.settings, cloudChecks: false, render: "off", externalLinks: false },
     offline: true,
+  };
+}
+
+/**
+ * The snapshot of a targeted run (#1777): the settings that ran, not the level's defaults. A targeted run
+ * fetches only the URLs it was given and checks no links, so `externalLinks` is off whatever the level says.
+ */
+export function targetedAuditSettings(resolved: ResolvedAuditSettings): ResolvedAuditSettings {
+  return {
+    ...resolved,
+    settings: { ...resolved.settings, externalLinks: false },
+    targeted: true,
   };
 }
 
@@ -289,6 +306,7 @@ export function parseResolvedAuditSettings(value: unknown): ResolvedAuditSetting
     settings: resolved.settings,
     changes,
     ...(v.offline === true ? { offline: true as const } : {}),
+    ...(v.targeted === true ? { targeted: true as const } : {}),
   };
 }
 

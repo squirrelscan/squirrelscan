@@ -210,3 +210,84 @@ describe("targetedCoverage (pure)", () => {
     expect(c).toMatchObject({ requested: 8, audited: 1, overLimit: 7 });
   });
 });
+
+describe("targetedCoverageFor reads the pages in batches (#1777 review)", () => {
+  test("a redirect row past the first batch is still found, and a page count above one batch is audited", async () => {
+    const { SQLiteStorage } = await import("@squirrelscan/crawler");
+    const storage = new SQLiteStorage(":memory:");
+    const base = "https://batch.test";
+    const frontier = (url: string) => ({
+      normalizedUrl: url,
+      rawUrl: url,
+      depth: 0,
+      priority: 0,
+      status: "done" as const,
+      source: "carried" as const,
+      enqueuedAt: 0,
+      retryCount: 0,
+    });
+    const page = (url: string, redirectTo?: string) =>
+      ({
+        url,
+        normalizedUrl: url,
+        finalUrl: redirectTo ?? url,
+        depth: 0,
+        status: redirectTo ? 301 : 200,
+        contentType: "text/html",
+        sizeBytes: 1,
+        loadTimeMs: 1,
+        fetchedAt: 1,
+        etag: null,
+        lastModified: null,
+        contentHash: url,
+        html: redirectTo ? "" : "<html></html>",
+        parsedData: null,
+        headers: { contentType: "text/html" },
+        securityHeaders: {},
+        redirectChain: {
+          sourceUrl: url,
+          finalUrl: redirectTo ?? url,
+          hops: redirectTo
+            ? [
+                { url, statusCode: 301, type: "http" as const },
+                { url: redirectTo, statusCode: 200, type: "http" as const },
+              ]
+            : [],
+          chainLength: redirectTo ? 1 : 0,
+          isLoop: false,
+          endsInError: false,
+          httpsToHttp: false,
+          httpToHttps: false,
+        },
+      }) as never;
+    const coverage = await Effect.runPromise(
+      Effect.gen(function* () {
+        yield* storage.init();
+        const crawlId = yield* storage.createCrawl({
+          baseUrl: base,
+          seedUrl: `${base}/`,
+          originalUrl: `${base}/`,
+          startedAt: 1,
+          status: "completed",
+          config: {} as never,
+          stats: {
+            pagesTotal: 0, pagesFetched: 0, pagesFailed: 0, pagesSkipped: 0, pagesUnchanged: 0,
+            linksTotal: 0, imagesTotal: 0, bytesTotal: 0, avgLoadTimeMs: 0,
+          },
+        } as never);
+        // 130 audited pages (three batches of 50) and one redirect that sorts last.
+        for (let i = 0; i < 130; i++) {
+          const url = `${base}/a/${String(i).padStart(3, "0")}`;
+          yield* storage.upsertFrontier(crawlId, frontier(url));
+          yield* storage.upsertPage(crawlId, page(url));
+        }
+        const old = `${base}/z-old`;
+        yield* storage.upsertFrontier(crawlId, frontier(old));
+        yield* storage.upsertPage(crawlId, page(old, `${base}/a/000`));
+        return yield* targetedCoverageFor(storage, crawlId);
+      }).pipe(Effect.ensuring(storage.close().pipe(Effect.orDie))) as Effect.Effect<never, never, never>,
+    );
+    expect(coverage).toMatchObject({ requested: 131, audited: 130 });
+    expect(coverage.unaudited).toEqual([{ url: `${base}/z-old`, reason: "redirected" }]);
+  });
+});

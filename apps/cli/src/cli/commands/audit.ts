@@ -1547,6 +1547,13 @@ export const audit = defineCommand({
       return list.map((v) => String(v).trim()).filter((v) => v.length > 0);
     })();
 
+    // A targeted run checks no links, so a request to turn external link checks ON has no effect (#1777).
+    if (targetUrls.length > 0 && externalLinksOn) {
+      process.stderr.write(
+        "--external-links is ignored on a targeted audit (--target-url): no links are checked.\n"
+      );
+    }
+
     // Parse --rule-include/--rule-exclude early so an unknown category fails
     // before crawling (same widening as --fail-on/--header). #1066
     const ruleFilter = parseRuleFilters(

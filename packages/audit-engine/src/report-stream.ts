@@ -153,6 +153,9 @@ export function pageTypeCoverageFor(
   );
 }
 
+/** Pages read per batch when looking for the redirect rows of a targeted run. */
+const TARGETED_PAGE_BATCH = 50;
+
 /** Rows `scanScope.targeted.unaudited` lists at most; `requested - audited` stays the true count. */
 const TARGETED_UNAUDITED_MAX = 100;
 
@@ -216,13 +219,17 @@ export function targetedCoverageFor(
 ): Effect.Effect<ScanScopeTargeted, never, never> {
   return Effect.gen(function* () {
     const entries = yield* storage.getAllFrontierEntries(crawlId);
-    const pages = yield* storage.getPages(crawlId);
+    // The stored redirect rows, read in batches: a PageRecord carries the page's full html (#1860), and the
+    // legacy-redirect test needs it, so a single `getPages(crawlId)` would hold every body at once.
+    const redirectSources: string[] = [];
+    for (let offset = 0; ; offset += TARGETED_PAGE_BATCH) {
+      const batch = yield* storage.getPages(crawlId, { limit: TARGETED_PAGE_BATCH, offset });
+      if (batch.length === 0) break;
+      for (const page of batch) if (isRedirectSourcePage(page)) redirectSources.push(page.normalizedUrl);
+      if (batch.length < TARGETED_PAGE_BATCH) break;
+    }
     const stats = yield* storage.getStats(crawlId);
-    return targetedCoverage(
-      entries,
-      pages.filter((p) => isRedirectSourcePage(p)).map((p) => p.normalizedUrl),
-      stats?.targetsOverLimit ?? 0,
-    );
+    return targetedCoverage(entries, redirectSources, stats?.targetsOverLimit ?? 0);
   }).pipe(
     Effect.catchAll(() => Effect.succeed({ requested: 0, audited: 0, unaudited: [] } as ScanScopeTargeted)),
   );
