@@ -14,6 +14,7 @@ import type { CrawlMetadata } from "@/crawler/storage/types";
 
 import { SQLiteStorage } from "@/crawler/storage/sqlite";
 
+import { decideResume } from "../../src/audit/resume-decision";
 import {
   registerOwnedCrawl,
   stopInterruptedCrawls,
@@ -83,8 +84,9 @@ describe("stopInterruptedCrawls", () => {
     expect(statusOf(mine)).toBe("stopped");
     expect(statusOf(other)).toBe("running");
     expect(statusOf(done)).toBe("analyzed");
-    // Already stopped: a second signal changes nothing.
-    expect(stopInterruptedCrawls(dbPath)).toBe(0);
+    // Already stopped: a second signal leaves it stopped (the table lists stopped -> stopped).
+    stopInterruptedCrawls(dbPath);
+    expect(statusOf(mine)).toBe("stopped");
   });
 
   test("drops this process's crawl lease, and only this process's (#946)", async () => {
@@ -145,5 +147,55 @@ describe("stopInterruptedCrawls", () => {
     expect(stopInterruptedCrawls(join(dir, "nope.db"))).toBe(0);
     writeFileSync(dbPath, "not a database".repeat(50));
     expect(stopInterruptedCrawls(dbPath)).toBe(0);
+  });
+
+  // #1672: the crawler's own stop() writes `paused` first while the loop is live, so a filter on
+  // `running` matched nothing and a Ctrl-C'd crawl stayed `paused`. The write now goes through the
+  // transition table's guarded statement: `stopped` is legal from `paused` as well as `running`.
+  test("a crawl whose stop() already wrote `paused` is recorded `stopped` (#1672)", async () => {
+    const { mine } = await seed();
+    const store = new SQLiteStorage(dbPath);
+    await run(store.init());
+    await run(store.updateCrawl(mine, { status: "paused" }));
+    await run(store.close());
+    expect(statusOf(mine)).toBe("paused");
+    registerOwnedCrawl(() => mine);
+    expect(stopInterruptedCrawls(dbPath)).toBe(1);
+    expect(statusOf(mine)).toBe("stopped");
+  });
+
+  test.each(["completed", "crawled", "analyzed", "failed"] as const)(
+    "a crawl already %s is not turned into `stopped` (#1672)",
+    async (finished) => {
+      const { mine } = await seed();
+      const db = new Database(dbPath);
+      db.prepare("UPDATE crawls SET status = ? WHERE id = ?").run(
+        finished,
+        mine
+      );
+      db.close();
+      registerOwnedCrawl(() => mine);
+      expect(stopInterruptedCrawls(dbPath)).toBe(0);
+      expect(statusOf(mine)).toBe(finished);
+    }
+  );
+
+  test("after a Ctrl-C the stopped crawl still resumes (#1672)", async () => {
+    const { mine } = await seed();
+    const store = new SQLiteStorage(dbPath);
+    await run(store.init());
+    await run(store.updateCrawl(mine, { status: "paused" }));
+    registerOwnedCrawl(() => mine);
+    expect(stopInterruptedCrawls(dbPath)).toBe(1);
+    const existing = await run(store.getCrawl(mine));
+    await run(store.close());
+    expect(existing?.status).toBe("stopped");
+    const decision = decideResume({
+      existingCrawl: existing ?? null,
+      crawlerConfig: existing?.config ?? {},
+      refresh: false,
+      claim: () => ({ acquired: true }) as never,
+    });
+    expect(decision).toEqual({ resume: true });
   });
 });

@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **A Ctrl-C'd crawl is recorded as `stopped`, not left `paused`.** The crawler's own `stop()` writes `paused` first, and the interrupt handler only marked crawls that were still `running`, so the stored status said paused where the audit was stopped. The handler now writes through the same guarded status write as every other change, which allows `stopped` from `running` or `paused` and never touches a crawl that already finished. `--resume` continues it as before. (#1672)
+
 ## v0.0.174 (2026-11-11)
 
 Reports say why a rule did not give a verdict (JSON schema 1.9), `squirrel audit` has one exit code precedence with the outcome in the JSON and LLM reports, `--resume` says why it started a new crawl, an expired login is called out, settings writes no longer lose each other, and five rules stop flagging hidden, presentational and symbol-only content.
