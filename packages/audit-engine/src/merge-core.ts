@@ -1281,7 +1281,16 @@ export function createMergeSession(
    */
   const addPrior = (prior: PageFindingRecord): void => {
     const successors = supersededChecks?.get(resolutionCheckKey(prior.ruleId, prior.checkName));
-    if (!successors) return decidePrior(prior, sink);
+    // A superseded name can still be emitted for a case the successors do not cover (a MISSING title is still
+    // `meta-title`, only a short or long one moved to `-too-short` / `-too-long`). When this run failed under the
+    // old name itself, the prior is still failing: the ordinary logic keeps it open and keeps its first-seen,
+    // instead of resolving it because no successor fired on a page that has no value to measure.
+    if (
+      !successors ||
+      freshByKey.has(findingKey(prior.normalizedUrl, prior.ruleId, prior.checkName, prior.locator))
+    ) {
+      return decidePrior(prior, sink);
+    }
     const outcomes: SupersededOutcome[] = [];
     let carried: { record: PageFindingRecord; merged?: MergedFinding } | undefined;
     for (const successor of successors) {
