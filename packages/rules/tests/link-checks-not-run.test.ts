@@ -242,6 +242,8 @@ describe("links/broken-links when the crawl did not follow links", () => {
       linkTargets: 4,
       unfetchedTargets: 2,
       probedTargets: 0,
+      refusedTargets: 0,
+      rateLimitedTargets: 0,
       notFetched: { off: 2 },
     });
   });
@@ -276,6 +278,8 @@ describe("links/broken-links when the crawl did not follow links", () => {
       linkTargets: 2,
       unfetchedTargets: 0,
       probedTargets: 0,
+      refusedTargets: 0,
+      rateLimitedTargets: 0,
       notFetched: {},
     });
   });
@@ -289,6 +293,8 @@ describe("links/broken-links when the crawl did not follow links", () => {
       linkTargets: 4,
       unfetchedTargets: 2,
       probedTargets: 0,
+      refusedTargets: 0,
+      rateLimitedTargets: 0,
       notFetched: { off: 2 },
     });
   });
@@ -560,6 +566,8 @@ describe("links/broken-links coverage on every row", () => {
       linkTargets: 3,
       unfetchedTargets: 0,
       probedTargets: 0,
+      refusedTargets: 0,
+      rateLimitedTargets: 0,
       notFetched: {},
     });
   });
@@ -581,6 +589,8 @@ describe("links/broken-links coverage on every row", () => {
       linkTargets: 7,
       unfetchedTargets: 3,
       probedTargets: 1,
+      refusedTargets: 0,
+      rateLimitedTargets: 0,
       notFetched: { overLimit: 1, skipped: 2 },
     });
   });
@@ -603,6 +613,8 @@ describe("links/broken-links coverage on every row", () => {
       linkTargets: 4,
       unfetchedTargets: 2,
       probedTargets: 0,
+      refusedTargets: 0,
+      rateLimitedTargets: 0,
       notFetched: { skipped: 2 },
     });
   });
@@ -655,6 +667,9 @@ describe("links/broken-links and pages the crawl fetched outside site.pages", ()
       linkTargets: 4,
       unfetchedTargets: 0,
       probedTargets: 0,
+      // pub#1679: the walled and the throttled target, counted now, still not unfetched.
+      refusedTargets: 1,
+      rateLimitedTargets: 1,
       notFetched: {},
     });
     const rateLimited = checks.find((c) => c.name === "rate-limited-links");
