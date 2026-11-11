@@ -23,6 +23,7 @@
     "./api-keys": "./src/api-keys.ts",
     "./threat-intel": "./src/threat-intel.ts",
     "./resolution": "./src/resolution.ts",
+    "./message-merge": "./src/message-merge.ts",
     "./rule-outcome": "./src/rule-outcome.ts",
     "./entity-map": "./src/entity-map.ts",
     "./entity-map-project": "./src/entity-map-project.ts",
