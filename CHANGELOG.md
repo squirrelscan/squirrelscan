@@ -17,6 +17,9 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **A second Ctrl-C no longer leaves the run waiting for the server to reap it.** `squirrel audit` handled the first interrupt with `process.once`, so a second Ctrl-C while the "cancelled" status was being sent killed the process under it, and the run sat pending until the server's reaper closed it as failed. The handler now stays installed: a later signal waits for the status already in flight, for at most 3 seconds, and then exits. The CLI and the MCP server also share one run lifecycle now, so the terminal status is sent at most once on every exit path and "running" can never be sent after it. (#1663)
 ### Added
 
 - `a11y/meta-refresh` also reports a `Refresh` response header: a redirect names the target and delay, a header with no URL is a reload, and a page with both the header and a meta refresh gets one finding naming both. The rule now runs per page, and its solution recommends a 301 or 308 redirect.
