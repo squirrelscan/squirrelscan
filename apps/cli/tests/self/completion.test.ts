@@ -7,6 +7,7 @@ import { describe, expect, test } from "bun:test";
 
 import { AUDIT_LEVELS } from "@/cli/audit-level";
 import { audit } from "@/cli/commands/audit";
+import { ci } from "@/cli/commands/ci";
 import { credits } from "@/cli/commands/credits";
 import { feedback } from "@/cli/commands/feedback";
 import { keys } from "@/cli/commands/keys";
@@ -49,6 +50,7 @@ function commandFlags(cmd: { args?: unknown }): {
 const auditDef = commandFlags(audit);
 const reportDef = commandFlags(report);
 const creditsDef = commandFlags(credits);
+const ciDef = commandFlags(ci);
 const feedbackDef = commandFlags(feedback);
 const pagesDef = commandFlags(pages);
 
@@ -59,6 +61,7 @@ const ALLOWED_EXTRAS: Record<string, string[]> = {
   report: ["help"],
   // citty auto-negates booleans, and bash/zsh offer --help.
   credits: ["help", "no-json", "no-upgrade"],
+  ci: ["help", "no-json"],
   feedback: ["help", "no-json"],
 };
 
@@ -79,7 +82,8 @@ function script(shell: Shell): string {
 const BASH_BLOCK_END: Record<string, string> = {
   audit: "entities)",
   pages: "crawl)",
-  crawl: "credits)",
+  crawl: "ci)",
+  ci: "credits)",
   report: "feedback)",
   credits: "analyze)",
   // The last command arm; the default arm follows it.
@@ -286,6 +290,33 @@ describe.each(shells)("%s completion", (shell) => {
           : formatListIn(shell, block);
       expect(list).toEqual([...PAGES_FORMATS]);
       expect(text).toContain("pages");
+    });
+  });
+
+  // #1776: `squirrel ci` and its gate flags.
+  describe("ci", () => {
+    const block = commandBlock(shell, text, "ci");
+
+    test("every citty flag is offered", () => {
+      expect(ciDef.flags).toContain("fail-on-new");
+      for (const flag of ciDef.flags) {
+        expectOffersFlag(shell, block, flag);
+      }
+    });
+
+    test("every offered flag exists on the citty def", () => {
+      const allowed = new Set([...ciDef.flags, ...ALLOWED_EXTRAS.ci!]);
+      for (const offered of longFlagsIn(shell, block)) {
+        expect(allowed).toContain(offered);
+      }
+    });
+
+    test("--fail-on-new completes the three severities", () => {
+      expect(block).toContain("error warning info");
+    });
+
+    test("the top-level command list names ci", () => {
+      expect(text).toMatch(/\bci\b/);
     });
   });
 

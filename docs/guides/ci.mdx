@@ -10,9 +10,11 @@ audit exits non-zero when one trips, so your pipeline fails like any other
 check.
 
 `--fail-on` compares each run against the thresholds you set, not against an
-earlier audit. There is no baseline gating: the build does not fail because a
-score dropped since the last run, only because it is below your threshold. To
-see what changed between two audits, use
+earlier audit: the build does not fail because a score dropped since the last
+run, only because it is below your threshold. To fail when a deploy introduces
+findings the previous audit did not have, run a cloud audit of the website and
+gate on the comparison: see [Fail the build on new findings](#fail-the-build-on-new-findings).
+To read what changed between two local audits, use
 [`squirrel report --regression-since`](/cli/report), which prints the
 comparison but does not set a failing exit code.
 
@@ -28,6 +30,9 @@ apart from a *broken run*:
 | `1` | Operational error (bad flags, a crash, a site that answered with an error, etc.) |
 | `3` | The audited page was blocked (a WAF or bot manager, or a bare 403 or 429), so nothing was audited. See [blocked by a WAF or bot manager](/guides/failed-audits#blocked-by-waf) |
 | `5` | The start URL could not be reached (DNS, timeout, connection or TLS failure), so nothing was audited. See [unreachable start URLs](/cli/audit#unreachable-start-urls) |
+
+[`squirrel ci`](/cli/ci), the new-findings gate below, uses the same codes: `2` means new findings at or above the
+severity, `3` blocked, `5` unreachable and `1` an operational error, including a gate that could not be evaluated.
 
 Gate your build with [`--fail-on`](/cli/audit); quote each expression, since
 shells treat bare `<`/`>` as redirection:
@@ -102,6 +107,105 @@ squirrel audit https://example.com \
 ```
 
 The command exits `2` if a threshold trips, so the script stops there.
+
+## Fail the build on new findings
+
+`--fail-on` gates on thresholds. To fail when a deploy introduces findings the previous audit did not have,
+run a cloud audit of the website and gate on the comparison. The audit is a real cloud run: it appears in the
+website's audit history and is charged like any [cloud audit](/guides/cloud-audits).
+
+This needs an org API key with the `audits:write` and `audits:read` scopes (set it as the CI secret
+`SQUIRRELSCAN_API_KEY`) and the website's id (the `websiteId` of any earlier audit of it, or the id shown in
+the dashboard).
+
+### With the CLI
+
+[`squirrel ci`](/cli/ci) starts the run, waits for it, reads the comparison and exits `2` when there are new
+findings at or above `--fail-on-new` (default `error`):
+
+```yaml
+name: Audit after deploy
+on:
+  deployment_status:
+
+jobs:
+  audit:
+    if: github.event.deployment_status.state == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          curl -fsSL --connect-timeout 10 --max-time 120 https://install.squirrelscan.com | bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Audit and fail on new errors
+        env:
+          SQUIRRELSCAN_API_KEY: ${{ secrets.SQUIRRELSCAN_API_KEY }}
+        run: |
+          squirrel ci "${{ github.event.deployment_status.environment_url }}" \
+            --website "${{ vars.SQUIRRELSCAN_WEBSITE_ID }}" --fail-on-new error
+```
+
+The output lists each new finding (rule, severity, page) and each resolved one, how many older findings the new
+audit could not judge, a link to the report and the credits the run used. The first audit of a website prints that
+there is no baseline and exits `0`.
+
+### With curl
+
+Any runner that can run a shell can call the API directly:
+
+```yaml
+name: Audit after deploy
+on:
+  deployment_status:
+
+jobs:
+  audit:
+    if: github.event.deployment_status.state == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Audit and fail on new errors
+        env:
+          SQUIRRELSCAN_API_KEY: ${{ secrets.SQUIRRELSCAN_API_KEY }}
+          WEBSITE_ID: ${{ vars.SQUIRRELSCAN_WEBSITE_ID }}
+          URL: ${{ github.event.deployment_status.environment_url }}
+        run: |
+          set -euo pipefail
+          api=https://api.squirrelscan.com
+          auth="Authorization: Bearer $SQUIRRELSCAN_API_KEY"
+
+          run=$(curl -fsS -X POST "$api/v1/agent-runs" -H "$auth" -H 'Content-Type: application/json' \
+            -d "$(jq -n --arg url "$URL" --arg site "$WEBSITE_ID" '{url:$url, websiteId:$site}')" | jq -r .id)
+
+          # wait for a terminal state
+          while :; do
+            status=$(curl -fsS "$api/v1/agent-runs/$run" -H "$auth" | jq -r .status)
+            case "$status" in completed|failed|cancelled) break ;; esac
+            sleep 10
+          done
+          [ "$status" = completed ] || { echo "audit $status"; exit 1; }
+
+          # the comparison with the previous completed audit, gated at "error"
+          out=$(curl -fsS "$api/v1/websites/$WEBSITE_ID/audits/compare?head=$run&fail_on=error&limit=100" -H "$auth")
+          echo "$out" | jq -r '.gate.reason'
+          echo "$out" | jq -r '.comparison.findings[] | select(.kind=="new" or .kind=="resolved")
+            | "\(.kind)\t\(.severity)\t\(.ruleId)\t\(.pageUrl // "(site)")"'
+          echo "not compared: $(echo "$out" | jq -c .gate.notCompared)"
+          [ "$(echo "$out" | jq -r .gate.status)" != fail ]
+```
+
+### What the gate says
+
+`gate.status` in the [comparison](/api/audits/compare):
+
+| `gate.status` | Meaning | Job |
+|---|---|---|
+| `pass` | No new findings at or above the severity | passes |
+| `fail` | New findings at or above the severity since the previous completed audit | fails (`squirrel ci` exits `2`) |
+| `no_baseline` | The first audit of the website: nothing to compare with | passes |
+| `not_evaluated` | The audit ended `failed` or `blocked`, or a report was too large to compare | decide in your script (`squirrel ci` exits `1`, or `3` for a blocked site) |
+
+`fail_on` takes `error`, `warning` or `info`. Findings on pages the new audit did not crawl, or from rules it
+did not run, are neither new nor resolved: `gate.notCompared` says how many. Resolved findings are listed and
+never fail the job.
 
 ## Authentication
 
