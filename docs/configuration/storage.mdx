@@ -50,14 +50,14 @@ waiting for `squirrel analyze`.
 
 ### Crawl status
 
-A crawl's status only moves along the edges below, so a late write can never undo a finished crawl: Ctrl-C or the crawl-phase time limit calling `stop()` after the crawl completed leaves it `completed` instead of turning it back into `paused`. A write the table does not allow changes nothing (it is ignored, never an error, and never stops a crawl).
+A crawl's status only moves along the edges below, so a late write can never undo a finished crawl: Ctrl-C or the crawl-phase time limit calling `stop()` after the crawl completed leaves it `completed` instead of turning it back into `paused`. A write the table does not allow changes nothing (it is ignored, never an error, and never stops a crawl). Ctrl-C ends the crawl as `stopped`, from `running` or from the `paused` that `stop()` writes first while the crawl is live, through the same guarded write, so `squirrel audit --resume` still continues it and a crawl that already finished stays as it was.
 
 | To | Allowed from | When |
 |----|--------------|------|
 | `running` | any status | the crawl starts, `--resume` continues a `paused` or `stopped` crawl, or a re-crawl restarts the row |
 | `paused` | `running`, `paused` | `stop()` while the crawl is live |
 | `completed` | `running`, `paused`, `completed` | the crawl drained |
-| `stopped` | `running`, `paused`, `stopped` | the crawl-phase time limit cut it |
+| `stopped` | `running`, `paused`, `stopped` | the crawl-phase time limit cut it, or Ctrl-C |
 | `crawled` | `running`, `paused`, `completed`, `stopped`, `crawled` | the crawl is over and the audit moves on |
 | `analyzed` | `running`, `paused`, `completed`, `stopped`, `crawled`, `analyzed` | the rules ran (a re-analysis stays `analyzed`) |
 | `failed` | `running`, `paused`, `failed` | the crawl could not continue |
