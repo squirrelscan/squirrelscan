@@ -204,6 +204,13 @@ export const conflictingIndexSignalsRule: Rule = {
     scope: "site",
     severity: "warning",
     weight: 4,
+    // Check names by outcome class (#1741).
+    checks: [
+      { name: "conflicting-index-signals", outcome: "problem" },
+      { name: "site-wide-noindex", outcome: "problem" },
+      { name: "conflicting-index-signals", outcome: "clean", clears: ["conflicting-index-signals", "site-wide-noindex"] },
+      { name: "conflicting-index-signals", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult | Promise<RuleResult> {
