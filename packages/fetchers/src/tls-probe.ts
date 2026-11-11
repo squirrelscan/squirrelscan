@@ -578,12 +578,19 @@ function tunnelHandshake(args: {
     };
     const fail = (code: string, message: string) =>
       finish({ kind: "unreachable", code, message });
+    // Two stalls, told apart by PHASE: the proxy never answered CONNECT (the proxy's), or the tunnel
+    // was up and the handshake through it never finished (the audited host's).
     const timer = setTimeout(
       () =>
-        fail(
-          "PROXY_TIMEOUT",
-          `no TLS handshake with ${hostname} through the proxy ${proxyName} within ${timeoutMs}ms`
-        ),
+        secure
+          ? fail(
+              "PROXY_TLS_TIMEOUT",
+              `no TLS handshake with ${hostname} through the proxy ${proxyName} within ${timeoutMs}ms`
+            )
+          : fail(
+              "PROXY_CONNECT_TIMEOUT",
+              `the proxy ${proxyName} did not answer CONNECT within ${timeoutMs}ms`
+            ),
       timeoutMs
     );
 
