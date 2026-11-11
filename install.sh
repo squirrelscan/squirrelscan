@@ -104,7 +104,10 @@ info() { echo -e "${BLUE}::${NC} $1" >&2; }
 # (os/arch/step/exit code) — never paths, env, hostname, or secrets. #1013
 # v2 adds `error_output` — the tail of the failing command's own output (#1538).
 # v3 adds `version` (the release being installed) and, on Linux, `libc`.
-INSTALLER_REPORT_VERSION="3"
+# v4 adds, for a curl network failure, `host` (one of OUR hosts, else "custom"; never a path, query
+# or credentials) and `ip_family` (v4, v6 or unknown: the family the connection was attempted on),
+# and the step before the first named one is `startup`, not `init` (#1681).
+INSTALLER_REPORT_VERSION="4"
 # The release being installed, bare ("0.0.73"), set as soon as it is known
 # (pinned or resolved). Empty before that, and then the report omits the field.
 INSTALLER_RELEASE_VERSION=""
@@ -120,7 +123,9 @@ DOWNLOAD_ENDPOINT="${SQUIRREL_DOWNLOAD_ENDPOINT:-https://install.squirrelscan.co
 ERROR_LINE_MAX=200
 # Chars of captured command output carried in a report. The worker clamps again.
 ERROR_OUTPUT_MAX=1000
-CURRENT_STEP="init"
+# The step before main() names its first one. Never `init`: a report with that step, as INSTALLER-WORKER-7
+# had, cannot be told from a run of a script that predates the named steps (#1681).
+CURRENT_STEP="startup"
 LAST_ERROR_MSG=""
 # Captured stdout/stderr of the step that failed, when we ran it under tee.
 LAST_ERROR_OUTPUT=""
@@ -133,6 +138,10 @@ STAGE_TO_CLEAN=""
 CHILD_PID=""
 # Survives command-substitution subshells where LAST_ERROR_MSG can't (see error()).
 ERROR_MSG_FILE="$(mktemp 2>/dev/null || true)"
+# Where the last request went, kept in a file as well as in LAST_FETCH_HOST: a fetch inside a
+# command substitution (version=$(get_latest_version)) sets the variable in a subshell the exit trap
+# never sees, which is how a report came to say "an unknown host" for a request that had been made.
+FETCH_HOST_FILE="$(mktemp 2>/dev/null || true)"
 
 # Make a value safe inside a JSON string: keep only printable ASCII (drops
 # control chars incl. ESC from ANSI colour codes, AND non-ASCII bytes — either
@@ -191,6 +200,8 @@ detect_libc() {
 
 report_error() {
   local step="$1" code="$2" line="${3:-}" output="${4:-}"
+  # A report always names a step: `init` (the old default) and an empty one read as `startup` (#1681).
+  case "$step" in "" | init) step=startup ;; esac
   # Presence of NO_TELEMETRY disables reporting, including an explicitly empty
   # value; so does DO_NOT_TRACK=1 or true (mirrors the CLI).
   [ "${NO_TELEMETRY+x}" = x ] && return 0
@@ -231,14 +242,29 @@ report_error() {
     "$(json_escape "$scrubbed")" \
     "$(json_escape "$scrubbed_output")")
 
+  # A curl network failure also says where it was going and on which IP family (#1681): the host is
+  # one of ours or "custom", and the family is probed in the detached reporter below, so the install
+  # never waits for it.
+  local host=""
+  if is_curl_network_code "${code:-1}" || is_curl_network_code "$LAST_CURL_CODE"; then
+    host=$(reportable_host "$LAST_FETCH_HOST")
+  fi
+
   # Fire-and-forget: run the POST in a DETACHED subshell so it never blocks the
-  # installer. `( cmd & )` backgrounds curl and lets the subshell exit
-  # immediately (non-blocking); curl is reparented to init so it still gets to
+  # installer. `( cmd & )` backgrounds the group and lets the subshell exit
+  # immediately (non-blocking); the group is reparented to init so it still gets to
   # finish after the script exits. Tight timeouts are the backstop; stdio
   # discarded so a closed pipe can't SIGPIPE it.
-  ( curl "${CURL_TLS_ARGS[@]}" -fsS -m 3 --connect-timeout 2 -X POST \
-      -H 'Content-Type: application/json' \
-      --data "$payload" "$ERROR_ENDPOINT" >/dev/null 2>&1 & ) 2>/dev/null || true
+  ( {
+      if [ -n "$host" ]; then
+        ip_family=unknown
+        [ "$host" != custom ] && ip_family=$(probe_ip_family "$host")
+        payload="${payload%?},\"host\":\"$(json_escape "$host")\",\"ip_family\":\"$ip_family\"}"
+      fi
+      curl "${CURL_TLS_ARGS[@]}" -fsS -m 3 --connect-timeout 2 -X POST \
+        -H 'Content-Type: application/json' \
+        --data "$payload" "$ERROR_ENDPOINT"
+    } >/dev/null 2>&1 & ) 2>/dev/null || true
 }
 
 # --- Killed-process diagnosis ---------------------------------------------
@@ -740,12 +766,73 @@ binary_unrunnable_guidance() {
 # "curl exit 7" (INSTALLER-WORKER-7: 82 events that could not be told apart). Host
 # only: no path, query or credentials, which a report must never carry.
 LAST_FETCH_HOST=""
+# curl's exit code of the last request that failed with a network code (see is_curl_network_code), so a
+# report whose own exit code is the installer's (error() exits 1) can still name the host and family.
+LAST_CURL_CODE=""
 note_fetch_host() {
   local rest="${1#*://}"
   rest="${rest%%/*}"
   rest="${rest%%\?*}"
   rest="${rest##*@}"
   LAST_FETCH_HOST="${rest%%:*}"
+  LAST_CURL_CODE=""
+  write_fetch_state
+}
+
+# The state file holds `host|code`: written from any subshell, read once by the exit trap.
+write_fetch_state() {
+  [ -n "${FETCH_HOST_FILE:-}" ] && printf '%s|%s' "$LAST_FETCH_HOST" "$LAST_CURL_CODE" >"$FETCH_HOST_FILE" 2>/dev/null || true
+}
+
+# Record that the request just made failed with curl's exit code `$1`, when it is a network failure.
+note_fetch_failed() {
+  if is_curl_network_code "$1"; then
+    LAST_CURL_CODE="$1"
+    write_fetch_state
+  fi
+}
+
+# Fill LAST_FETCH_HOST and LAST_CURL_CODE from the file a subshell wrote, where this shell has none.
+load_fetch_state() {
+  local state=""
+  if [ -n "${FETCH_HOST_FILE:-}" ] && [ -f "$FETCH_HOST_FILE" ]; then
+    state=$(cat "$FETCH_HOST_FILE" 2>/dev/null)
+  fi
+  [ -z "$state" ] && return 0
+  [ -z "$LAST_FETCH_HOST" ] && LAST_FETCH_HOST="${state%%|*}"
+  [ -z "$LAST_CURL_CODE" ] && LAST_CURL_CODE="${state#*|}"
+  return 0
+}
+
+# A host a report may name: ours, or the GitHub hosts the release assets live on. Anything else (a
+# SQUIRREL_RELEASES_ENDPOINT or SQUIRREL_DOWNLOAD_ENDPOINT override, a proxy, an internal mirror) is
+# reported as "custom": an installer report never carries a name from the user's own network.
+reportable_host() {
+  case "$1" in
+    install.squirrelscan.com | github.com | api.github.com | objects.githubusercontent.com | release-assets.githubusercontent.com)
+      printf '%s' "$1" ;;
+    *.githubusercontent.com)
+      printf '%s' "$1" ;;
+    "") ;;
+    *) printf 'custom' ;;
+  esac
+}
+
+# Which IP family a connection to `host` is attempted on: v4, v6, or unknown (no address was tried:
+# the name did not resolve, or the probe could not run). Read from curl's own "Trying <address>" line
+# of a verbose request; an IPv4 address with its port has one colon, an IPv6 one has more. Only ever
+# run against one of our own hosts, from the detached reporter, never on the install path.
+probe_ip_family() {
+  local trace addr
+  trace=$(curl "${CURL_TLS_ARGS[@]}" -sS -I -o /dev/null -v --connect-timeout 3 --max-time 5 \
+    "https://${1}/" 2>&1 | grep -m1 'Trying ' || true)
+  addr="${trace#*Trying }"
+  addr="${addr%%...*}"
+  case "$addr" in
+    "") printf 'unknown' ;;
+    *:*:*) printf 'v6' ;;
+    *) printf 'v4' ;;
+  esac
 }
 
 # curl's own exit codes for "could not reach the server": 6 host not resolved,
@@ -773,6 +860,10 @@ report_on_exit() {
     msg=$(cat "$ERROR_MSG_FILE" 2>/dev/null)
   fi
   [ -n "${ERROR_MSG_FILE:-}" ] && rm -f "$ERROR_MSG_FILE"
+  # Read the host a subshell wrote, then remove the file on every exit path (a signal returns below).
+  load_fetch_state
+  [ -n "${FETCH_HOST_FILE:-}" ] && rm -f "$FETCH_HOST_FILE"
+  FETCH_HOST_FILE=""
   [ "$code" -eq 0 ] && return 0
   # An interrupt, hangup or terminate is the user (or the system) stopping the run, not an installer failure:
   # no report, or every Ctrl-C during a verify step would read as a broken published binary.
@@ -783,7 +874,8 @@ report_on_exit() {
   # A bare curl failure under `set -e` leaves no message: name the host it was
   # talking to (a hostname only) so the report says where, not just which code.
   if [ -z "$msg" ] && is_curl_network_code "$code"; then
-    msg="curl exit $code reaching ${LAST_FETCH_HOST:-an unknown host (before the first request)}"
+    msg="curl exit $code reaching $(reportable_host "$LAST_FETCH_HOST")"
+    [ "$msg" = "curl exit $code reaching " ] && msg="curl exit $code reaching an unknown host (before the first request)"
   fi
   report_error "$CURRENT_STEP" "$code" "$msg" "$LAST_ERROR_OUTPUT"
 }
@@ -910,11 +1002,13 @@ fetch_with_retry() {
     # handled at once (bash defers a trap while a foreground command runs); the exit trap then ends curl.
     curl "${CURL_TLS_ARGS[@]}" -fsSL --connect-timeout "$timeout_connect" --max-time "$timeout_max" "$url" -o "$output" 2>/dev/null &
     CHILD_PID=$!
-    if wait_child; then
-      CHILD_PID=""
+    local rc=0
+    wait_child || rc=$?
+    CHILD_PID=""
+    if [ "$rc" -eq 0 ]; then
       return 0
     fi
-    CHILD_PID=""
+    note_fetch_failed "$rc"
     if [ "$i" -lt "$attempts" ]; then
       warn "Download failed, retrying ($i/$attempts)..."
       sleep 2 &
@@ -1294,9 +1388,12 @@ get_latest_version() {
   info "Fetching releases (channel: $channel)..."
 
   note_fetch_host "${RELEASES_ENDPOINT}/${channel}"
-  if response=$(curl "${CURL_TLS_ARGS[@]}" -fsSL -H "User-Agent: squirrelscan-installer" \
+  local fetch_rc=0
+  response=$(curl "${CURL_TLS_ARGS[@]}" -fsSL -H "User-Agent: squirrelscan-installer" \
       --connect-timeout 5 --max-time 15 \
-      "${RELEASES_ENDPOINT}/${channel}" 2>/dev/null); then
+      "${RELEASES_ENDPOINT}/${channel}" 2>/dev/null) || fetch_rc=$?
+  note_fetch_failed "$fetch_rc"
+  if [ "$fetch_rc" -eq 0 ]; then
     if [ "$USE_JQ" = true ]; then
       version=$(echo "$response" | jq -r '.version // empty')
     else
@@ -1317,7 +1414,10 @@ get_latest_version() {
   fi
 
   note_fetch_host "$api_url"
-  if ! response=$(curl "${curl_args[@]}" "$api_url" 2>&1); then
+  fetch_rc=0
+  response=$(curl "${curl_args[@]}" "$api_url" 2>&1) || fetch_rc=$?
+  if [ "$fetch_rc" -ne 0 ]; then
+    note_fetch_failed "$fetch_rc"
     error "Failed to fetch releases\n  URL: $api_url\n  Response: $response"
   fi
 

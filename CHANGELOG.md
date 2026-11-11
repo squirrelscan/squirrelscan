@@ -17,6 +17,9 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **A failed `install.sh` network request says where it was going and over which IP family.** The failure report (report version 4) now carries `host` (`install.squirrelscan.com`, a GitHub host, or `custom` for an endpoint you set yourself, never a custom name) and `ip_family` (`v4`, `v6` or `unknown`), read from curl's own "Trying" line by a detached probe that never delays the install. A request made inside a command substitution used to lose its host, so a report said "an unknown host" for a request that had been made; the host is now kept in a small state file. A failure before the first named step reports `startup`, not `init`. (#1681)
 ## v0.0.176 (2026-11-11)
 
 Nine new audit rules: crawl/rendered-signal-mismatch (a canonical, noindex, title or H1 that JavaScript changes after load), crawl/indexable-search-results (internal search pages open to indexing), links/click-depth (indexable pages too many clicks from the homepage), content/duplicate-content (indexable pages with identical body text), i18n/hreflang-targets (hreflang links that point at the wrong place), analytics/duplicate-tags (the same analytics tag installed twice), url/session-ids (session IDs in URLs), security/password-form-get (password forms sent by GET) and a11y/svg-img-alt (SVG images with no accessible name). Two things change for existing audits: each site's first audit after the upgrade re-collects its page signals once, and health scores can shift by a point or so because the new rules add passes and findings.
@@ -3052,3 +3055,4 @@ Browse the full rule set → https://docs.squirrelscan.com/rules
 
 - Cloud audits that stall past their deadline are now finalized automatically instead of hanging.
 - More efficient handling of error and empty pages during analysis.
+
