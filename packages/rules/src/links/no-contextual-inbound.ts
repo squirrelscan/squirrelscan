@@ -190,6 +190,7 @@ function pageFactsOf(pages: NonNullable<RuleContext["site"]>["pages"] | undefine
   for (const page of pages ?? []) {
     const key = normalizeUrl(page.url);
     let redirectsTo: string | undefined;
+    // A redirect row (#1762: stored with the first hop's 3xx and no body) or a legacy row whose final URL differs.
     if (page.finalUrl) {
       const finalKey = normalizeUrl(page.finalUrl);
       if (finalKey !== key) redirectsTo = finalKey;
@@ -221,14 +222,15 @@ function resolveEntries(
   for (const row of rows) {
     const fact = facts.get(row.key);
     if (!fact) continue;
-    if (fact.status < 200 || fact.status > 299) {
-      row.keep = false;
-    } else if (fact.redirectsTo !== undefined) {
+    if (fact.redirectsTo !== undefined) {
+      // Judged at its destination, whatever status the redirect row itself carries (a 3xx marker, #1762).
       row.keep = false;
       const dest = firstByKey.get(fact.redirectsTo);
       const into = dest ? dest.counts : uncrawledCounts(uncrawled, fact.redirectsTo);
       into.all += row.counts.all;
       into.contextual += row.counts.contextual;
+    } else if (fact.status < 200 || fact.status > 299) {
+      row.keep = false;
     }
   }
   return rows.filter((row) => row.keep).map((row) => [row.url, row.counts]);

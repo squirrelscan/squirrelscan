@@ -614,3 +614,22 @@ describe("links/no-contextual-inbound: only auditable pages (#1760)", () => {
     expect(NOT_CHECKED_SKIP_REASONS.has(gap.skipReason!)).toBe(true);
   });
 });
+
+describe("a redirect row (#1762) is judged at its destination (#1760)", () => {
+  test("a chrome-only link to a URL that redirects counts for the destination, which is the one reported", () => {
+    const pages: PageSpec[] = [
+      { url: BASE, links: [body("/about"), chrome("/old")] },
+      { url: `${BASE}about`, links: [body("/"), chrome("/old")] },
+      { url: `${BASE}new`, links: [body("/")] },
+      // The crawler's redirect row: the first hop's 3xx, no body and the landing URL, flagged as a source.
+      { url: `${BASE}old`, links: [], status: 301, finalUrl: `${BASE}new` },
+    ];
+    const c = ctx(pages);
+    (c.site!.pages[3] as { redirectSource?: boolean }).redirectSource = true;
+    const out = check(noContextualInboundRule, c);
+    expect(out.status).toBe("warn");
+    expect(ids(out)).toEqual([`${BASE}new`]);
+    // The redirecting URL itself is never reported.
+    expect(ids(out)).not.toContain(`${BASE}old`);
+  });
+});
