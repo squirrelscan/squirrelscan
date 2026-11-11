@@ -43,6 +43,13 @@ export const ASSET_COMPRESSION_LIMITS = {
   MIN_BYTES: 100 * 1024, // 100KB
 } as const;
 
+/**
+ * A render-blocking `<script src>` that took longer than this to answer is reported by
+ * perf/render-blocking as a slow blocking script (#1751). One second is where a
+ * synchronous head script alone puts First Contentful Paint past a "good" score.
+ */
+export const SLOW_BLOCKING_SCRIPT_MS = 1000;
+
 // Script content fetch limits (for security scanning)
 export const SCRIPT_FETCH_LIMITS = {
   MAX_SCRIPTS_TO_FETCH: 50,

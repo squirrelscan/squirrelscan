@@ -2531,6 +2531,12 @@ export interface ScriptContentData {
    * run bounded its fetch (#1255): the memory or time budget ran out.
    */
   fetchSkipReason?: "memory-cap" | "time-budget";
+  /**
+   * Milliseconds this audit's request for the script took to answer (#1751).
+   * `undefined` when no request was timed: a skipped or refused fetch, a network
+   * error, or a content-store cache hit. Treat that as unknown, never as fast.
+   */
+  responseMs?: number;
 }
 
 export interface SitemapUrl {
