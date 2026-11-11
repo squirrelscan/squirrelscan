@@ -60,6 +60,8 @@ export const SKIP_REASON_CLASSES: Readonly<Record<string, SkipReasonClass>> = {
   "link-targets-not-fetched": gap(true),
   "external-links-over-cap": gap(true),
   "external-links-out-of-time": gap(true),
+  // A targeted run (#1777) fetched only the URLs it was given: a whole-site rule has nothing to judge.
+  "targeted-run": gap(true, "rule"),
   // Prose rather than an id: published reports already carry this exact text.
   "Crawl capped before the frontier was exhausted": gap(true),
   // Left out on purpose.

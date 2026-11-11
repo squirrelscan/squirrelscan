@@ -335,6 +335,11 @@ export interface CrawlStats {
    */
   linkDiscoveryOff?: boolean;
   /**
+   * The crawl was given an explicit URL list (`targetUrls`, #1777) and fetched exactly those: no links
+   * followed, no sitemap read, no discovery probes. Site-scope rules read this and skip.
+   */
+  targetedRun?: boolean;
+  /**
    * External link checking this run (repo#2729): distinct external links the
    * pages carry, how many were checked, and the per-audit limit that capped it.
    * Set by the external-link phase when it ran; absent when it did not.
