@@ -98,3 +98,4 @@ export const RULE_MODULES = [
   "analytics",
   "eeat",
 ] as const;
+export * from "./template-signature-reads";
