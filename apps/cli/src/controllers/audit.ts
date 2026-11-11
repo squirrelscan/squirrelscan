@@ -11,7 +11,7 @@ import type { Config } from "@/config";
 import type { CrawlerEvent, RateLimitEvent } from "@/crawler/core/types";
 import type { TlsEvent } from "@/crawler/fetcher";
 import type { CrawlerConfigSnapshot } from "@/crawler/storage/types";
-import type { AuditReport, AuditOptions } from "@/types";
+import type { AuditReport, AuditOptions, CrawlPhaseCut } from "@/types";
 
 import { createCrawler } from "@/crawler/core";
 
@@ -179,7 +179,11 @@ import {
 import { isPermanentStorageError } from "@/crawler/storage/types";
 import { preflightBalanceOf } from "@/lib/balance";
 import { resolvePageLimit } from "@/lib/page-limit";
-import { reconstructReport, withMaxDurationCut } from "@/reports/reconstruct";
+import {
+  reconstructReport,
+  withCrawlPhaseCut,
+  withMaxDurationCut,
+} from "@/reports/reconstruct";
 import { detectRunner } from "@/self/install-meta";
 import { createCloudClientFromSettings } from "@/tools/cloud";
 import { initRequestTool } from "@/tools/request";
@@ -682,22 +686,36 @@ export function formatPhaseTimings(phases: Record<string, number>): string {
 export function resolveCrawlPhaseTimeoutMs(
   options: RunAuditOptions,
   maxPages: number,
-  concurrency: number
+  concurrency: number,
+  perHostConcurrency?: number,
+  maxDurationMs?: number
 ): number | undefined {
   if (typeof options.crawlPhaseTimeoutMs === "number") {
     return options.crawlPhaseTimeoutMs > 0
-      ? Math.floor(options.crawlPhaseTimeoutMs)
+      ? Math.min(
+          Math.floor(options.crawlPhaseTimeoutMs),
+          CRAWL_PHASE_MAX_TIMEOUT_MS
+        )
       : undefined;
   }
-  const conc = Math.max(1, concurrency);
+  // A single-host crawl cannot go faster than its per-host limit, whatever the
+  // global pool size, so the per-host cap bounds the effective parallelism (#1639).
+  const conc = Math.max(
+    1,
+    Math.min(concurrency, perHostConcurrency ?? concurrency)
+  );
   const pages = Math.max(1, maxPages);
   const est =
     Math.ceil(pages / conc) * CRAWL_PHASE_PER_PAGE_BUDGET_MS +
     CRAWL_PHASE_SETUP_SLACK_MS;
-  return Math.min(
+  const derived = Math.min(
     Math.max(est, CRAWL_PHASE_MIN_TIMEOUT_MS),
     CRAWL_PHASE_MAX_TIMEOUT_MS
   );
+  // The whole-run budget stops the crawl first anyway; do not exceed it.
+  return maxDurationMs && maxDurationMs > 0
+    ? Math.max(Math.min(derived, maxDurationMs), CRAWL_PHASE_MIN_TIMEOUT_MS)
+    : derived;
 }
 
 /**
@@ -1485,11 +1503,21 @@ export async function runAudit(
       // pool), stop() just sets isRunning=false and the crawl ends with 0 pages
       // → the "no pages collected" branch below reports it clearly. Safe.
       const crawlPhaseTimeoutMs = resolveCrawlPhaseTimeoutMs(
-        options,
+        mergedConfig.crawler.crawl_timeout !== undefined &&
+          options.crawlPhaseTimeoutMs === undefined
+          ? {
+              ...options,
+              crawlPhaseTimeoutMs: mergedConfig.crawler.crawl_timeout * 1000,
+            }
+          : options,
         crawlerConfig.maxPages,
-        crawlConcurrency.concurrency
+        crawlConcurrency.concurrency,
+        crawlConcurrency.perHostConcurrency,
+        durationBudget?.budgetMs
       );
       let crawlPhaseStopped = false;
+      // Filled when the backstop fires; stamped on the report at the end (#1639).
+      const crawlPhaseCutRef = { seconds: 0, pagesCollected: 0 };
       let crawlPhaseTimer: ReturnType<typeof setTimeout> | undefined;
       if (crawlPhaseTimeoutMs) {
         crawlPhaseTimer = setTimeout(() => {
@@ -1623,6 +1651,10 @@ export async function runAudit(
         );
       }
       if (crawlPhaseStopped) {
+        crawlPhaseCutRef.seconds = Math.round(
+          (crawlPhaseTimeoutMs ?? 0) / 1000
+        );
+        crawlPhaseCutRef.pagesCollected = pageCount;
         logger.warn(
           "partial crawl",
           `analyzing ${pageCount} page(s) collected before the crawl-phase timeout`
@@ -2509,6 +2541,35 @@ export async function runAudit(
               report.statusReason = cutStatus.reason;
               report.statusReasonCode = cutStatus.reasonCode;
             }
+          }
+        }
+        // #1639: the crawl-phase backstop stopped the crawl, so the link graph is
+        // incomplete. Applied after the time limit so an already-partial run keeps
+        // its own reason, as `squirrel report` does when it rebuilds it.
+        if (crawlPhaseStopped) {
+          const phaseCut: CrawlPhaseCut = {
+            seconds: crawlPhaseCutRef.seconds,
+            pagesCollected: crawlPhaseCutRef.pagesCollected,
+            ...(crawlerConfig.maxPages > 0
+              ? { pageBudget: crawlerConfig.maxPages }
+              : {}),
+            unfetchedPages: unfetched,
+            linkGraphComplete: false,
+          };
+          scanScope.crawlPhase = phaseCut;
+          report.crawlPhase = phaseCut;
+          const phaseStatus = withCrawlPhaseCut(
+            {
+              status: report.status,
+              reason: report.statusReason,
+              reasonCode: report.statusReasonCode,
+            },
+            phaseCut
+          );
+          if (phaseStatus.status !== (report.status ?? "completed")) {
+            report.status = phaseStatus.status;
+            report.statusReason = phaseStatus.reason;
+            report.statusReasonCode = phaseStatus.reasonCode;
           }
         }
         // #1262: reconstruction ran before the entries were stamped, so build the

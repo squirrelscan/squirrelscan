@@ -44,8 +44,10 @@ export function isAuditFailureReasonCode(value: unknown): value is AuditFailureR
  * Why a `partial` report is partial, when the cause is not a failure to fetch (#1271).
  * `max_duration`: the run hit `squirrel audit --max-duration` and stopped launching
  * new work; the report covers what was fetched and evaluated by then.
+ * `crawl_timeout`: the crawl-phase backstop (`--crawl-timeout`, #1639) stopped the crawl
+ * before the site was exhausted, so the link graph is incomplete.
  */
-export const AUDIT_PARTIAL_REASON_CODES = ["max_duration"] as const;
+export const AUDIT_PARTIAL_REASON_CODES = ["max_duration", "crawl_timeout"] as const;
 
 export type AuditPartialReasonCode = (typeof AUDIT_PARTIAL_REASON_CODES)[number];
 
@@ -588,4 +590,13 @@ export function maxDurationReason(cut: {
     );
   }
   return `${stopped ? "Stopped at" : "Run under"} the ${cut.seconds} s time limit (--max-duration)${parts.length > 0 ? `: ${parts.join(", ")}` : ""}`;
+}
+
+/** The one-sentence `statusReason` of a report whose crawl hit the crawl-phase backstop (#1639). */
+export function crawlTimeoutReason(cut: {
+  seconds: number;
+  pagesCollected: number;
+  unfetchedPages: number;
+}): string {
+  return `The crawl stopped at the ${cut.seconds} s crawl-phase limit (--crawl-timeout) after ${cut.pagesCollected} page${cut.pagesCollected === 1 ? "" : "s"}${cut.unfetchedPages > 0 ? `, ${cut.unfetchedPages} discovered page${cut.unfetchedPages === 1 ? " was" : "s were"} not fetched` : ""}; the link graph is incomplete, so site-wide link and sitemap conclusions may be wrong`;
 }

@@ -19,11 +19,10 @@ How it works:
 
 ### Added
 
-- `crawl/sitemap-coverage` reports where a shop's product URLs were found (#1651). For a site with commerce evidence (a top-level `Product` or `ProductGroup` JSON-LD node or `og:type` product on at least three crawled pages, or on one product-path page plus a cart or checkout link; a nested `Product` in a review, list or offer does not count) it adds an info check `product-discovery`: how many product URLs came from the sitemap, from crawl links or from both, and whether the sitemaps were read `complete`, `partial` or `unreadable`. A crawl stopped at its page limit is reported as bounded coverage. It never claims a product is missing, because neither a sampled crawl nor a sitemap is a product inventory. Sites without commerce evidence see no change.
-
 ### Fixed
 
 - `perf/lcp-hints`: a grouped `lcp-preload` finding over several pages now lists each page's own candidate images in `details.pageEvidence` (capped at 25 pages, with `pageEvidenceOmittedPages` counting the rest) instead of keeping one page's candidates (#1656).
+- `crawl/sitemap-coverage` no longer reports a sitemap URL that answered 429 or a bot-wall challenge as a `sitemap-orphans` warning. It is listed in an informational `sitemap-unverified` check with its status, and sitemap URLs a stopped crawl never reached are informational too (#1639).
 
 ## v0.0.178 (2026-11-11)
 

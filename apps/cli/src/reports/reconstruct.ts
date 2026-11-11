@@ -4,6 +4,7 @@
 import type {
   AuditStatus,
   AuditStatusReasonCode,
+  CrawlPhaseCut,
   MaxDurationCut,
   PageFeatureRow,
 } from "@squirrelscan/core-contracts";
@@ -14,7 +15,10 @@ import {
   foldChecksToCanonical,
 } from "@squirrelscan/audit-engine";
 import { buildCacheStats, isScoreless } from "@squirrelscan/core-contracts";
-import { maxDurationReason } from "@squirrelscan/core-contracts/failure-reason";
+import {
+  crawlTimeoutReason,
+  maxDurationReason,
+} from "@squirrelscan/core-contracts/failure-reason";
 import { JSON_REPORT_PAGES } from "@squirrelscan/core-contracts/limits";
 import { redactUrl } from "@squirrelscan/core-contracts/seed-redirect";
 import { unstoredPageRow } from "@squirrelscan/report";
@@ -149,6 +153,39 @@ export function withMaxDurationCut<
       status: "partial",
       reason: maxDurationReason(cut),
       reasonCode: "max_duration",
+    };
+  }
+  return {
+    status: run.status ?? "completed",
+    reason: run.reason,
+    reasonCode: run.reasonCode,
+  };
+}
+
+/**
+ * The crawl-phase backstop cut applied to a run status (#1639): same rule as
+ * {@link withMaxDurationCut}, so a crawl stopped by the backstop is `partial` with
+ * code `crawl_timeout`, live and rebuilt alike.
+ */
+export function withCrawlPhaseCut<
+  R extends {
+    status: AuditStatus | undefined;
+    reason?: string | undefined;
+    reasonCode?: AuditStatusReasonCode | undefined;
+  },
+>(
+  run: R,
+  cut: CrawlPhaseCut | undefined
+): {
+  status: AuditStatus;
+  reason: string | undefined;
+  reasonCode: AuditStatusReasonCode | undefined;
+} {
+  if (cut && (run.status === undefined || run.status === "completed")) {
+    return {
+      status: "partial",
+      reason: crawlTimeoutReason(cut),
+      reasonCode: "crawl_timeout",
     };
   }
   return {
@@ -1024,7 +1061,11 @@ export function reconstructReport(
 
     // #1271: the audit's own `--max-duration` cut, restored from the stored scope.
     const durationCut = crawl.scanScope?.maxDuration;
-    const auditStatus = withMaxDurationCut(baseAuditStatus, durationCut);
+    const phaseCut = crawl.scanScope?.crawlPhase;
+    const auditStatus = withCrawlPhaseCut(
+      withMaxDurationCut(baseAuditStatus, durationCut),
+      phaseCut
+    );
 
     // No real audit ⇒ null score (N/A), not 0. Parity with the cloud/live
     // builder (generateReportFromStorage) + the API's failed-report persist (#586).
@@ -1103,6 +1144,7 @@ export function reconstructReport(
       // old crawl rows have no stamp and deliberately gain no inferred one.
       ...(crawl.scanScope ? { scanScope: crawl.scanScope } : {}),
       ...(durationCut ? { maxDuration: durationCut } : {}),
+      ...(phaseCut ? { crawlPhase: phaseCut } : {}),
       ...(ignored ? { ignored } : {}),
       // The start URL's followed redirect (#1281), persisted with the scan scope.
       ...(crawl.scanScope?.startRedirect

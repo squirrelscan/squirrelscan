@@ -180,8 +180,12 @@ export const CRAWL_PHASE_PER_PAGE_BUDGET_MS = 60_000;
 export const CRAWL_PHASE_SETUP_SLACK_MS = 60_000;
 /** Floor — never cap a crawl below this regardless of page count. */
 export const CRAWL_PHASE_MIN_TIMEOUT_MS = 120_000;
-/** Ceiling — absolute backstop for very large crawls. */
-export const CRAWL_PHASE_MAX_TIMEOUT_MS = 1_800_000; // 30 min
+/**
+ * Ceiling: the finite absolute backstop, for both the derived default and an
+ * explicit `--crawl-timeout` / `[crawler] crawl_timeout`. Raised from 30 min so
+ * a polite single-host crawl of a few thousand pages can finish (#1639).
+ */
+export const CRAWL_PHASE_MAX_TIMEOUT_MS = 21_600_000; // 6 h
 
 // CSR-shell thresholds (#294) moved to @squirrelscan/fetchers csr-detect.ts.
 

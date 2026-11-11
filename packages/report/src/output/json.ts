@@ -6,6 +6,7 @@ import type {
   StoreIntegrityEvicted,
   EditorSummaryPriority,
   MaxDurationCut,
+  CrawlPhaseCut,
   RefusedFetch,
   ReportRender,
   ResumeOutcome,
@@ -293,6 +294,8 @@ interface SlimJsonReport {
   statusReasonCode?: AuditStatusReasonCode;
   /** What the `--max-duration` time limit cut (#1271). Present only when it cut something. */
   maxDuration?: MaxDurationCut;
+  /** What the crawl-phase backstop cut (#1639): the link graph is incomplete. */
+  crawlPhase?: CrawlPhaseCut;
   /**
    * Root fetches (robots.txt, sitemaps, llms.txt, Markdown) the site refused
    *. Their absence is unknown, not confirmed. Present only when
@@ -655,6 +658,7 @@ function buildSlimReport(
         ? { statusReasonCode: report.statusReasonCode }
         : {}),
     ...(report.maxDuration ? { maxDuration: report.maxDuration } : {}),
+    ...(report.crawlPhase ? { crawlPhase: report.crawlPhase } : {}),
     ...(report.rateLimited && report.rateLimited.pages > 0
       ? { rateLimited: report.rateLimited }
       : {}),

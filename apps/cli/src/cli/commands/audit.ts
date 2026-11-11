@@ -98,6 +98,7 @@ import {
   DASHBOARD_URL,
   MAX_PAGES_CAP,
   MAX_CRAWL_CONCURRENCY,
+  CRAWL_PHASE_MAX_TIMEOUT_MS,
   STATUS_REQUEST_TIMEOUT_MS,
 } from "@/constants";
 import {
@@ -1092,6 +1093,23 @@ export function parseMaxDurationFlag(
   return parsed;
 }
 
+/** `--crawl-timeout` seconds (#1639): a positive number up to the 6 h crawl-phase ceiling. */
+export function parseCrawlTimeoutFlag(
+  raw: string | undefined
+): number | undefined | null {
+  if (raw === undefined) return undefined;
+  const text = raw.trim();
+  const parsed = /^\d+(?:\.\d+)?$/.test(text) ? Number(text) : Number.NaN;
+  const maxSeconds = CRAWL_PHASE_MAX_TIMEOUT_MS / 1000;
+  if (!Number.isFinite(parsed) || parsed <= 0 || parsed > maxSeconds) {
+    console.error(
+      `${fmt.red("Error:")} --crawl-timeout must be a positive number of seconds, at most ${maxSeconds} (6 hours), got '${raw}'.`
+    );
+    return null;
+  }
+  return parsed;
+}
+
 export const audit = defineCommand({
   meta: {
     name: "audit",
@@ -1117,6 +1135,11 @@ export const audit = defineCommand({
       type: "string",
       description:
         "Wall-clock budget for the whole audit, in seconds. At the limit the audit stops launching new work, finishes in-flight pages, runs rules on what it has and writes a report with status partial and reason code max_duration. Exits within max(10% of the budget, 15 s) of the limit. Overrides [crawler] max_duration; unset means no limit",
+    },
+    "crawl-timeout": {
+      type: "string",
+      description:
+        "Wall-clock backstop for the crawl phase alone, in seconds (max 21600). At the limit the crawl stops and the audit continues on the pages collected, with status partial and reason code crawl_timeout. Overrides [crawler] crawl_timeout; unset derives it from the page budget and per-host rate. Per-request watchdogs are unaffected",
     },
     concurrency: {
       type: "string",
@@ -2059,7 +2082,9 @@ export const audit = defineCommand({
         "--per-host"
       );
       const maxDurationSeconds = parseMaxDurationFlag(args["max-duration"]);
+      const crawlTimeoutSeconds = parseCrawlTimeoutFlag(args["crawl-timeout"]);
       if (
+        crawlTimeoutSeconds === null ||
         concurrency === null ||
         perHostConcurrency === null ||
         maxDurationSeconds === null
@@ -2202,6 +2227,9 @@ export const audit = defineCommand({
           ? { includePages: true }
           : {}),
         ...(maxDurationSeconds !== undefined ? { maxDurationSeconds } : {}),
+        ...(crawlTimeoutSeconds !== undefined
+          ? { crawlPhaseTimeoutMs: Math.round(crawlTimeoutSeconds * 1000) }
+          : {}),
         maxDurationStartedAt: commandStartedAt,
         ...(Object.keys(customHeaders).length > 0
           ? { headers: customHeaders }
