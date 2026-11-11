@@ -83,7 +83,6 @@ import type {
 } from "./storage";
 import type { SiteMetadata } from "./site-metadata";
 import type { CompactResolutionSignal, ResolutionSignal } from "./resolution";
-import { RULE_TIMED_OUT_SKIP_REASON } from "./resolution";
 import { SKIP_REASON_CLASSES } from "./rule-outcome";
 import type { AuditStatusReasonCode } from "./failure-reason";
 import type { RefusedFetch } from "./refused-fetch";
