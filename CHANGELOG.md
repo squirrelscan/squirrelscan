@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- Locked and not-checked rules can carry a machine-readable reason (`plan`, `provider_error` or `unsupported_environment`, with a short detail), and every report format says what it means: a plan exclusion names the plan, a provider failure says a re-run may help, an unsupported environment says where the check can run. The JSON report gains `lockedRules` and `cause`/`causeDetail` on `notChecked` entries (JSON schema 1.12). Reports with no reason keep today's wording (#1734)
+
 ### Fixed
 
 - **Behaviour change:** `squirrel report --publish` now publishes as `unlisted` by default; it was `public`. `squirrel audit`, the docs and the agent skill already said `unlisted`, and the help now matches. Pass `--visibility public` to publish publicly (#1730)

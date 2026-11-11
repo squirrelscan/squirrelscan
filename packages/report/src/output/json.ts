@@ -3,6 +3,7 @@
 import type {
   AuditOutcome,
   AuditStatusReasonCode,
+  LockedRuleReason,
   StoreIntegrityEvicted,
   EditorSummaryPriority,
   MaxDurationCut,
@@ -51,6 +52,7 @@ import { getScoreGrade } from "../scoring";
 import { getGroupName } from "../categories";
 import { groupIssuesByCategory, flattenIssuesBySeverity, reportPassedRules } from "../grouping";
 import { affectedPages } from "../affected-pages";
+import { lockedRuleView, lockedRulesMessage } from "../locked-rules";
 import {
   checkRegionScope,
   itemLabel,
@@ -276,6 +278,17 @@ interface SlimJsonReport {
   status: AuditStatus;
   /** Exit code, audit status and publish result (#1657); present on a report an audit just wrote. */
   outcome?: AuditOutcome;
+  /**
+   * Cloud checks that did not run, and why (#1734). `message` is the sentence every other format shows;
+   * each rule carries `reason` (`plan`, `provider_error` or `unsupported_environment`) and `detail` when
+   * the publisher said. Present only when some rule is locked.
+   */
+  lockedRules?: {
+    count: number;
+    audience: string;
+    message: string;
+    rules: Array<{ id: string; name: string; reason?: LockedRuleReason; detail?: string }>;
+  };
   /** What cloud rendering did (#1664): mode, pages rendered and fetched plain, and why it fell back; present on a report an audit just wrote. */
   render?: ReportRender;
   /** Short human reason, present when `status` is failed/blocked. */
@@ -490,6 +503,10 @@ interface SlimJsonReport {
     reason: string;
     /** What became of the rule (#1661): `coverage_gap`, `timed_out` or `errored`. */
     outcome: RuleOutcome;
+    /** Why it did not run, from a closed set (#1734): `plan`, `provider_error` or `unsupported_environment`. Absent when the publisher gave none. */
+    cause?: LockedRuleReason;
+    /** Short free-text detail for `cause`. */
+    causeDetail?: string;
     message: string;
     /** A rule that hit an internal error: the first pages it was not evaluated on (#1291). */
     pages?: string[];
@@ -581,6 +598,7 @@ function buildSlimReport(
   const infoChecks = collectInfoChecks(report.ruleResults);
   const privateTarget = privateTargetLine(report);
   const notChecked = notCheckedRules(report);
+  const locked = lockedRulesMessage(report);
   const unfetched = scanScopeUnfetched(report);
   return {
     meta: {
@@ -661,6 +679,16 @@ function buildSlimReport(
     ...(report.refusedFetches?.length ? { refusedFetches: report.refusedFetches } : {}),
     ...(safeWafBlocked(report) ? { wafBlocked: safeWafBlocked(report)! } : {}),
     ...(safeWafSuspect(report) ? { wafSuspect: safeWafSuspect(report)! } : {}),
+    ...(locked
+      ? {
+          lockedRules: {
+            count: locked.count,
+            audience: locked.audience,
+            message: locked.action,
+            rules: locked.rules.map(lockedRuleView),
+          },
+        }
+      : {}),
     score: {
       // null ⇒ N/A (failed/0-page audit); preserved through save/reload (#586).
       overall: report.healthScore?.overall ?? null,
@@ -888,6 +916,8 @@ function buildSlimReport(
             check: r.check,
             reason: r.reason,
             outcome: r.outcome,
+            ...(r.cause ? { cause: r.cause } : {}),
+            ...(r.causeDetail ? { causeDetail: r.causeDetail } : {}),
             message: notCheckedLine(r),
             ...(r.pages && r.pages.length > 0 ? { pages: r.pages } : {}),
           })),

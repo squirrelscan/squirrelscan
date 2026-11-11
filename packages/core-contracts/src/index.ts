@@ -1360,10 +1360,30 @@ export type CloudPlanTier = "anonymous" | "free" | "paid";
 /** Resolved cloud fetch mode stamped on a report — plain HTTP vs browser render (#368). */
 export type CloudRenderMode = "http" | "browser";
 
+/**
+ * Why a locked rule did not run (#1734), a closed set so an agent can tell a plan
+ * exclusion (retrying spends credits and changes nothing) from a provider failure
+ * (a re-run may help) from a check that cannot run in that environment.
+ */
+export const LOCKED_RULE_REASONS = ["plan", "provider_error", "unsupported_environment"] as const;
+export type LockedRuleReason = (typeof LOCKED_RULE_REASONS)[number];
+
+/** Whether `value` is one of {@link LOCKED_RULE_REASONS}. */
+export function isLockedRuleReason(value: unknown): value is LockedRuleReason {
+  return typeof value === "string" && (LOCKED_RULE_REASONS as readonly string[]).includes(value);
+}
+
 /** A cloud-/Pro-gated rule that was not run — shown locked in the report upsell. */
 export interface LockedRule {
   id: string;
   name: string;
+  /**
+   * Why it did not run. Optional: a report from an older publisher has none and
+   * keeps the audience wording chosen by plan alone.
+   */
+  reason?: LockedRuleReason;
+  /** Free-text detail for `reason` (for `unsupported_environment`, where the check can run). Short, never page content. */
+  detail?: string;
 }
 
 /**

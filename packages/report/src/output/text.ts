@@ -71,7 +71,7 @@ import {
 import { ignoredLine, unusedIgnoreEntries } from "../ignored";
 import { wrapText } from "../utils";
 import { unfetchedNote } from "../coverage";
-import { lockedRulesMessage } from "../locked-rules";
+import { LOCKED_REASON_LABELS, lockedRuleView, lockedRulesMessage } from "../locked-rules";
 import { privateTargetLine } from "../private-target";
 import { notCheckedDetailLines } from "../not-checked";
 import { stripControlChars } from "@squirrelscan/core-contracts/control-chars";
@@ -629,7 +629,9 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
       for (const line of wrapText(locked.action, REPORT_TEXT_WRAP_WIDTH)) write(line);
       if (locked.cta) write(`${locked.cta.label}: ${locked.cta.url}`);
       write("");
-      for (const rule of locked.rules) write(`  ${rule.id} — ${rule.name}`);
+      for (const rule of locked.rules.map(lockedRuleView)) {
+        write(`  ${rule.id} — ${rule.name}${rule.reason ? ` (${LOCKED_REASON_LABELS[rule.reason]})` : ""}`);
+      }
       write("");
     }
   }

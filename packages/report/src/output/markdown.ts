@@ -74,7 +74,7 @@ import {
 } from "../affected-pages";
 import { formatReportDate } from "../utils";
 import { getPathname } from "../url";
-import { lockedRulesMessage } from "../locked-rules";
+import { LOCKED_REASON_LABELS, lockedRuleView, lockedRulesMessage } from "../locked-rules";
 import { privateTargetLine } from "../private-target";
 import { notCheckedDetailLines } from "../not-checked";
 import {
@@ -818,12 +818,14 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
     if (locked) {
       lines.push("## Checks not run");
       lines.push("");
-      lines.push(
-        locked.cta ? `${locked.action} [${locked.cta.label}](${locked.cta.url}).` : locked.action,
-      );
+      // The action carries publisher-supplied detail (#1734): escaped as text, so a link, an
+      // image or raw HTML in it renders as typed. The CTA is ours.
+      const action = escapeMarkdownText(locked.action);
+      lines.push(locked.cta ? `${action} [${locked.cta.label}](${locked.cta.url}).` : action);
       lines.push("");
-      for (const rule of locked.rules) {
-        lines.push(`- \`${rule.id}\` — ${rule.name}`);
+      for (const rule of locked.rules.map(lockedRuleView)) {
+        const why = rule.reason ? ` (${LOCKED_REASON_LABELS[rule.reason]})` : "";
+        lines.push(`- ${markdownCodeSpan(rule.id)} — ${escapeMarkdownText(rule.name)}${why}`);
       }
       lines.push("");
     }

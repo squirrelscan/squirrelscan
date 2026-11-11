@@ -30,7 +30,7 @@ import { hasCarriedPages } from "../page-type-scope";
 const lowerFirst = (text: string): string => text.charAt(0).toLowerCase() + text.slice(1);
 import { getDocsUrl } from "../docs";
 import { domainAgeYears } from "../site-metadata";
-import { lockedRulesMessage } from "../locked-rules";
+import { lockedRuleView, lockedRulesMessage } from "../locked-rules";
 import { privateTargetLine, privateTargetSkippedRules } from "../private-target";
 import { notCheckedLine, notCheckedRules } from "../not-checked";
 import { techOpenTag, techOriginAttr } from "../technologies";
@@ -887,8 +887,12 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
         `${indent(1)}<cta label="${escapeXml(locked.cta.label)}" url="${escapeXml(locked.cta.url)}"/>`,
       );
     }
-    for (const rule of locked.rules) {
-      lines.push(`${indent(1)}<rule id="${escapeXml(rule.id)}" name="${escapeXml(rule.name)}"/>`);
+    for (const rule of locked.rules.map(lockedRuleView)) {
+      const reason = rule.reason ? ` reason="${rule.reason}"` : "";
+      const detail = rule.detail ? ` detail="${escapeXml(rule.detail)}"` : "";
+      lines.push(
+        `${indent(1)}<rule id="${escapeXml(rule.id)}" name="${escapeXml(rule.name)}"${reason}${detail}/>`,
+      );
     }
     lines.push("</locked-rules>");
   }
