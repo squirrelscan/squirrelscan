@@ -126,7 +126,8 @@ describe("links/broken-links counts pages per section", () => {
       },
       options: {},
     } as unknown as RuleContext;
-    const item = check(brokenLinksRule.run(ctx).checks, "broken-links")!.items![0]!;
+    // A link in the footer of every page is a sitewide link (#1772): its own check, with the same counts per section.
+    const item = check(brokenLinksRule.run(ctx).checks, "broken-links-sitewide")!.items![0]!;
     expect(item.regions).toEqual({ footer: 10, content: 2 });
   });
 });

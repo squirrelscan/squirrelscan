@@ -149,6 +149,7 @@ function reportOf(ruleResults: Map<string, unknown>): AuditReport {
 type Check = {
   name: string;
   status: string;
+  message?: string;
   items?: Array<{ id: string; meta?: Record<string, unknown> }>;
 };
 
@@ -157,8 +158,10 @@ describe("Nut Shop regression fixtures over a 40-page site", () => {
     const results = await audit(site({ productLang: true }));
     const checks = (
       results.get("links/broken-links") as unknown as { checks: Check[] }
-    ).checks.filter((c) => c.name === "broken-links");
+    ).checks.filter((c) => c.name === "broken-links-sitewide");
+    // A footer link on every page is its own site-wide check (#1772), not a `broken-links` finding.
     expect(checks.map((c) => c.status)).toEqual(["fail"]);
+    expect(checks[0]!.message ?? "").toContain("in the footer of");
     expect(checks[0]!.items).toHaveLength(1);
     expect(checks[0]!.items![0]!.id).toBe(`${BASE}/legal/old-terms`);
     // Every page that carries the footer: home, about, the 37 products and the 404 page's own template.

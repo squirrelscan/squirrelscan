@@ -269,7 +269,8 @@ function buildLinkTargetSets(
   for (const [ruleId, rows] of Object.entries(LINK_TARGET_SET_RULES)) {
     const checks = ruleResults[ruleId]?.checks;
     if (!Array.isArray(checks)) continue;
-    const main = checks.filter((c) => c.name === rows.broken);
+    // The broken links are in two checks (#1772): page content, and site-wide chrome.
+    const main = checks.filter((c) => c.name === rows.broken || c.name === rows.sitewide);
     const ran = main.some(
       (c) =>
         (c.status === "pass" || c.status === "fail" || c.status === "warn") &&

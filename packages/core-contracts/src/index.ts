@@ -1321,14 +1321,17 @@ export interface LinkTargetSets {
  * off, rate limited, refused, not requested).
  */
 export const LINK_TARGET_SET_RULES: Readonly<
-  Record<string, { broken: string; unverified: readonly string[] }>
+  Record<string, { broken: string; sitewide: string; unverified: readonly string[] }>
 > = {
   "links/broken-links": {
     broken: "broken-links",
+    // A broken link in header, navigation or footer chrome of most pages is its own check (#1772).
+    sitewide: "broken-links-sitewide",
     unverified: ["refused-links", "rate-limited-links"],
   },
   "links/broken-external-links": {
     broken: "broken-external-links",
+    sitewide: "broken-external-links-sitewide",
     unverified: [
       "waf-blocked-external-links",
       "rate-limited-external-links",
