@@ -82,6 +82,40 @@ Disallow:
     });
   });
 
+  test("a wildcard block with Allow exceptions reports info when no named group re-allows the site", () => {
+    const checks = run(`
+User-agent: *
+Disallow: /
+Allow: /public/
+`);
+
+    expect(checks).toEqual([
+      {
+        name: "robots-txt-disallow",
+        status: "info",
+        message: "robots.txt has Disallow: / with Allow exceptions",
+      },
+    ]);
+  });
+
+  test("a wildcard block with Allow exceptions and a Googlebot group that allows / warns instead of info", () => {
+    const checks = run(`
+User-agent: *
+Disallow: /
+Allow: /public/
+
+User-agent: Googlebot
+Allow: /
+`);
+
+    expect(checks).toHaveLength(1);
+    expect(checks[0]).toMatchObject({
+      name: "robots-txt-disallow-wildcard",
+      status: "warn",
+      value: "User-agent: * has Disallow: /; still allowed: Googlebot",
+    });
+  });
+
   test("a wildcard block with a named Disallow for another bot still blocks all crawling", () => {
     const checks = run(`
 User-agent: *
