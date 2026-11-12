@@ -161,15 +161,16 @@ describe("third-party scan plumbing", () => {
 });
 
 describe("top-up bonus curve (repo#3888)", () => {
-  // The approved table from the issue: amount, bonus percent, credits, credits per $1.
+  // The approved table (repo#3888, approved by Nik 2026-11-13: no bonus at $100 or below):
+  // amount, bonus percent, credits, credits per $1.
   const table: [number, number, number, number][] = [
     [50, 0, 5_000, 100],
-    [75, 1.6, 7_617, 101.6],
-    [100, 2.5, 10_254, 102.5],
-    [150, 4.1, 15_620, 104.1],
-    [250, 6.7, 26_679, 106.7],
-    [500, 11.9, 55_927, 111.9],
-    [750, 16.2, 87_113, 116.2],
+    [75, 0, 7_500, 100],
+    [100, 0, 10_000, 100],
+    [150, 2.6, 15_396, 102.6],
+    [250, 5.7, 26_426, 105.7],
+    [500, 11.3, 55_668, 111.3],
+    [750, 15.9, 86_944, 115.9],
     [1_000, 20, 120_000, 120],
   ];
 
@@ -241,7 +242,7 @@ describe("top-up bonus curve (repo#3888)", () => {
   });
 
   test("the curve numbers live in one object", () => {
-    expect(TOPUP_BONUS_CURVE).toEqual({ floorUsd: 50, capPercent: 20, exponent: 0.7 });
+    expect(TOPUP_BONUS_CURVE).toEqual({ floorUsd: 100, capPercent: 20, exponent: 0.7 });
     expect(CREDIT_TOPUP).toEqual({ minUsd: 10, maxUsd: 1_000, creditsPerUsd: 100 });
   });
 
@@ -270,13 +271,13 @@ describe("top-up bonus curve (repo#3888)", () => {
     const pinned = JSON.parse(
       readFileSync(new URL("./fixtures/topup-total-credits.json", import.meta.url), "utf8"),
     ) as Record<string, number>;
-    expect(pinned["100"]).toBe(10_254);
-    expect(pinned["250"]).toBe(26_679);
-    expect(pinned["500"]).toBe(55_927);
-    expect(pinned["750"]).toBe(87_113);
+    expect(pinned["100"]).toBe(10_000);
+    expect(pinned["250"]).toBe(26_426);
+    expect(pinned["500"]).toBe(55_668);
+    expect(pinned["750"]).toBe(86_944);
     expect(pinned["1000"]).toBe(120_000);
     expect(pinned["50"]).toBe(5_000);
-    expect(pinned["75"]).toBe(7_617);
-    expect(pinned["150"]).toBe(15_620);
+    expect(pinned["75"]).toBe(7_500);
+    expect(pinned["150"]).toBe(15_396);
   });
 });

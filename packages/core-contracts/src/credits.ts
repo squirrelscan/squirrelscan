@@ -217,7 +217,7 @@ export const CREDIT_TOPUP = {
  * Larger bonuses are kept for enterprise purchases above the maximum.
  */
 export const TOPUP_BONUS_CURVE = {
-  floorUsd: 50,
+  floorUsd: 100,
   capPercent: 20,
   exponent: 0.7,
 } as const;
