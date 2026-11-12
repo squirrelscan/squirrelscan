@@ -58,7 +58,7 @@ function verdict(checks: CheckResult[], name: "bad-caching-freshness" | "bad-cac
   const c = check(checks, name);
   if (!c) return undefined;
   expect(c.status).toBe("info");
-  return /no caching policy|served without/.test(c.message) ? "flagged" : "ok";
+  return /no caching policy|send Cache-Control: no-store|served without/.test(c.message) ? "flagged" : "ok";
 }
 
 const goodHeaders = {
@@ -580,5 +580,44 @@ describe("perf/bad-caching names JavaScript Detections (#605)", () => {
     }
     // the marker beyond the read window of a huge script is not found, and that is the documented bound
     expect(hasJavaScriptDetections(parsePage(`<html><head><script>${"x".repeat(5000)}/cdn-cgi/challenge-platform/</script></head></html>`, "https://example.com/").document!)).toBe(false);
+  });
+});
+
+// #1754: the origin sent no-store, so the missing validator is its choice, not Cloudflare's.
+describe("perf/bad-caching no-store (#1754)", () => {
+  const noStorePages = (n: number, extra: Record<string, string> = {}) =>
+    Array.from({ length: n }, (_, i) => ({
+      url: `https://example.com/p${i}`,
+      headers: { "cache-control": "no-store", "content-encoding": "gzip", ...extra },
+    }));
+
+  test("no-store behind Cloudflare names no-store and does not blame Cloudflare", () => {
+    const checks = run(badCachingRule, siteCtx(noStorePages(6, { "cf-cache-status": "DYNAMIC" })));
+    const validators = check(checks, "bad-caching-validators");
+    expect(validators?.status).toBe("warn");
+    expect(validators?.message).toContain("Cache-Control: no-store");
+    expect(validators?.message).not.toContain("Cloudflare");
+    expect(validators?.details?.noStorePages).toBe(6);
+    expect(validators?.details?.cloudflarePages).toBeUndefined();
+  });
+
+  test("freshness distinguishes no-store from no policy", () => {
+    const checks = run(badCachingRule, siteCtx(noStorePages(4)));
+    const msg = check(checks, "bad-caching-freshness")?.message ?? "";
+    expect(msg).toContain("Cache-Control: no-store");
+    expect(msg).not.toContain("no caching policy");
+  });
+
+  test("a mix reports both counts", () => {
+    const pages = [
+      ...noStorePages(2),
+      ...Array.from({ length: 2 }, (_, i) => ({
+        url: `https://example.com/q${i}`,
+        headers: { "content-encoding": "gzip" },
+      })),
+    ];
+    const msg = check(run(badCachingRule, siteCtx(pages)), "bad-caching-freshness")?.message ?? "";
+    expect(msg).toContain("2 send Cache-Control: no-store");
+    expect(msg).toContain("2 set no caching policy");
   });
 });

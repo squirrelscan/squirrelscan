@@ -41,6 +41,11 @@ export const kitSignatureRule: Rule = {
     verdictScope: "page",
     severity: "error",
     weight: 9,
+    // Check names by outcome class (#1741).
+    checks: [
+      { name: "kit-signature", outcome: "problem" },
+      { name: "kit-signature", outcome: "clean", clears: ["kit-signature"] },
+    ],
     // Compromise detection: an ignore could hide a compromised site (#1262).
     ignorable: false,
   },
@@ -77,6 +82,15 @@ export const kitSignatureRule: Rule = {
           matchedStrings: m.matchedStrings,
           description: m.description,
         },
+      });
+    }
+
+    if (checks.length === 0) {
+      checks.push({
+        name: "kit-signature",
+        status: "pass",
+        message: "No known kit signature matched this page",
+        pageUrl: ctx.page.url,
       });
     }
 

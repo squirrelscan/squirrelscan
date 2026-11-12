@@ -25,7 +25,7 @@ import { WELL_KNOWN_PATHS, isPermanentStorageError } from "@squirrelscan/core-co
 import { auditFailureDetail } from "@squirrelscan/core-contracts/failure-reason";
 import { COVERAGE_PAGE_LIMITS, REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
 
-import { extractCrawlableUrls } from "@squirrelscan/parser/extractors";
+import { extractCrawlableUrls, mergeServerOnlyScripts } from "@squirrelscan/parser/extractors";
 import {
   parseDocument,
   parsePage,
@@ -63,6 +63,7 @@ import { RefusalLog } from "../refusals";
 import { memoizeTlsProbe, withTlsCause } from "../tls-cause";
 import {
   computeSitemapUrlCap,
+  classifySitemapReadState,
   discoverSitemaps,
   selectSitemapUrls,
   SITEMAP_WALK_TOTAL_MS,
@@ -108,6 +109,7 @@ import {
   normalizeUrl,
   resolveSeedRedirect,
 } from "../frontier";
+import { isRedirectSourcePage } from "../redirect-row";
 import {
   buildConditionalHeaders,
   extractChangeDetection,
@@ -133,10 +135,12 @@ import {
   RECENTLY_REMOVED_PENALTY,
 } from "../priority";
 import { fetchLlmsTxt } from "../llms";
+import { LLMS_TXT_PATHS } from "@squirrelscan/core-contracts/storage";
+import type { WellKnownProbe } from "@squirrelscan/core-contracts";
 import { probeMarkdownResponse } from "../markdown";
 import { fetchRobotsEvaluator as fetchRobots } from "../robots";
 import { probeConfiguredPage } from "../well-known";
-import { probeWellKnown } from "../well-known";
+import { notApprovedProbe, probeWellKnown } from "../well-known";
 import { probeAgentAccess } from "../agent-access";
 import { fetchRslLicensing } from "../rsl";
 import { createTestStorage } from "../storage";
@@ -641,6 +645,9 @@ export function createCrawler(
     // runCrawlLoop start (resume-safe), bumped per upsertPage — avoids a
     // hot-path COUNT(*) per enqueue/dispatch (#268).
     let pagesCommitted = 0;
+    // Redirect rows stored this run: they are not pages and spend no slot, so they are not attempts the zero-success
+    // breaker may count either (a sitemap of unslashed URLs that all redirect is a working crawl).
+    let redirectRowsThisRun = 0;
     // URLs this run recorded as rate-limited instead of fetching (#1829). Counts
     // against maxPages alongside `pagesCommitted`: the budget is a number of
     // URLs the crawl will ATTEMPT, and once a host is exhausted every remaining
@@ -797,6 +804,9 @@ export function createCrawler(
      * `interrupted` aborts them: nothing still queued goes out after the crawl
      * was stopped.
      */
+    // The current crawl's refusal log, for the post-crawl configured-pages probe (#1655).
+    let crawlRefusals: RefusalLog | undefined;
+
     const probeGate =
       (budget: PhaseBudget, interrupted: AbortSignal): ProbeGate =>
       (url, send) => {
@@ -921,6 +931,36 @@ export function createCrawler(
       });
 
       return { normalized, decision };
+    };
+
+    /**
+     * The URL a fetch landed on when that is a different page from the one asked for
+     * (the frontier's own normalization, so `/a` and `/a/` or a stripped tracking
+     * parameter are not a redirect), else null.
+     */
+    /** A redirect row's status: its first HTTP hop's 3xx, else 302 (a client-side hop has no status of its own). */
+    const redirectRowStatus = (chain: PageRecord["redirectChain"]): number => {
+      const first = chain?.hops[0];
+      return first && first.type === "http" && first.statusCode >= 300 && first.statusCode < 400
+        ? first.statusCode
+        : 302;
+    };
+
+    const redirectTargetOf = (
+      requested: string,
+      landed: string | undefined,
+      chain?: PageRecord["redirectChain"],
+    ): string | null => {
+      if (!landed) return null;
+      // ONE rule with the engine's marker predicate: a redirect that ended in an error or looped is not a
+      // redirect row. It stays an ordinary row (the error the fetch answered), so a link to it is still a
+      // broken link and the chain still reaches the redirect rules as before (#1762).
+      if (chain && (chain.endsInError || chain.isLoop)) return null;
+      const { normalized, decision } = normalizeAndCheckScope(landed);
+      // A destination the crawl would not visit (excluded, outside `include`, another site) would leave the
+      // redirect source stored as a redirect with no page behind it: keep the old behaviour, a page.
+      if (normalized === null || !decision.allowed) return null;
+      return normalized !== requested ? landed : null;
     };
 
     // An absolute include that allowedDomains refused is almost certainly a
@@ -1197,7 +1237,26 @@ export function createCrawler(
           depth: entry.depth,
           parentUrl: entry.parentUrl,
         });
-        pagesCommitted++;
+        // A cached redirect keeps its destination in the crawl and takes no page slot (#1762). A row is a
+        // redirect here by the engine's own predicate: a 3xx marker this crawler stored, or a legacy 2xx
+        // row holding the destination's markup under the source URL (the engine drops both from the
+        // report, so the crawl must not count a page slot for either). The destination is queued when
+        // the crawl would visit it; a legacy row whose destination is out of scope still takes no slot.
+        const cachedIsRedirect = isRedirectSourcePage(cachedPage);
+        const cachedRedirectTarget = cachedIsRedirect
+          ? redirectTargetOf(entry.normalizedUrl, cachedPage.finalUrl, cachedPage.redirectChain)
+          : null;
+        if (cachedIsRedirect) redirectRowsThisRun++;
+        else pagesCommitted++;
+        if (cachedRedirectTarget) {
+          yield* enqueueUrl(
+            crawlId,
+            cachedRedirectTarget,
+            entry.depth,
+            entry.normalizedUrl,
+            "discovered",
+          );
+        }
 
         // Copy links + images from the cached page.
         const cachedLinks = yield* storage.getLinksByPage(entry.normalizedUrl);
@@ -1984,8 +2043,70 @@ export function createCrawler(
             if (landedHost) yield* reportSeedBaseMismatch(landedHost, "landed on");
           }
 
+          // A URL that redirected to another page is recorded as a redirect (source,
+          // hops, destination) and nothing else (#1762). Its body is the destination's,
+          // which is crawled and audited as itself: keeping it here would count the
+          // destination twice and file its findings against a URL the owner cannot fix
+          // them on. The destination is queued so it is audited once even when nothing
+          // else links to it (a no-op when it is already known or out of scope).
+          const redirectTarget = redirectTargetOf(entry.normalizedUrl, result.finalUrl, result.redirectChain);
+          if (redirectTarget) {
+            yield* storage.upsertPage(crawlId, {
+              url: entry.rawUrl,
+              normalizedUrl: entry.normalizedUrl,
+              finalUrl: result.finalUrl,
+              depth: entry.depth,
+              parentUrl: entry.parentUrl,
+              redirectChain: result.redirectChain,
+              // The marker the engine reads (#1762): the status the URL itself answered with.
+              status: redirectRowStatus(result.redirectChain),
+              contentType: result.contentType,
+              sizeBytes: 0,
+              loadTimeMs: result.loadTime,
+              ttfb: result.ttfb,
+              downloadTime: result.downloadTime,
+              fetchedAt: Date.now(),
+              etag: null,
+              lastModified: null,
+              contentHash: "",
+              html: null,
+              parsedData: null,
+              headers,
+              securityHeaders,
+              requestHeaders: requestContext,
+              fetcherId: result.fetcherId,
+              fallbackReason: result.fallbackReason,
+            });
+            // Not counted against maxPages: a redirect is not a page, and spending a slot on it
+            // would starve its destination.
+            yield* storage.updateFrontierStatus(crawlId, entry.normalizedUrl, "done");
+            redirectRowsThisRun++;
+            yield* emit({
+              type: "page:fetched",
+              url: entry.normalizedUrl,
+              // What the URL itself answered (its first hop's 3xx), not the destination's status.
+              status: redirectRowStatus(result.redirectChain),
+              loadTimeMs: result.loadTime,
+              ttfbMs: result.ttfb,
+              sizeBytes: 0,
+              depth: entry.depth,
+              fetcherId: result.fetcherId,
+              timestamp: Date.now(),
+              renderTimeMs: result.renderTimeMs,
+              queueWaitMs: result.queueWaitMs,
+            });
+            yield* updateStats(crawlId, { pagesFetched: 1, bytesTotal: 0 });
+            markPrefixCrawled(entry.normalizedUrl, entry.depth);
+            yield* enqueueUrl(crawlId, redirectTarget, entry.depth, entry.normalizedUrl, "discovered");
+            yield* emitProgress(crawlId);
+            return;
+          }
+
           // Parse and discover URLs if HTML (before storing page)
           let parsedData: string | null = null;
+          // The stored page is the rendered DOM plus the scripts the server sent and client code
+          // removed (#1769): the same set for a fast and a slow render.
+          let pageHtml = result.body;
           if (
             (isHtmlContentType(result.contentType) ||
               (!result.contentType && looksLikeHtml(result.body))) &&
@@ -1994,7 +2115,10 @@ export function createCrawler(
             !(config.maxParseBytes !== undefined && decodedPageBytes(result.sizeBytes, result.body) > config.maxParseBytes)
           ) {
             // Parse page data once (includes parseDocument internally)
-            const parsed = parsePage(result.body, result.finalUrl, { classify: options.classify });
+            if (result.serverHtml) {
+              pageHtml = mergeServerOnlyScripts(result.body, result.serverHtml, result.finalUrl).html;
+            }
+            const parsed = parsePage(pageHtml, result.finalUrl, { classify: options.classify });
 
             // Retain the live ParsedPage so a same-process audit reuses its
             // DOM (#267) — capped: each retained DOM costs MBs for the rest
@@ -2099,13 +2223,19 @@ export function createCrawler(
             parsedData = JSON.stringify(serializableParsed);
           }
 
+          // A redirect kept as a page (its destination is out of scope, so no page of its own exists)
+          // is marked so the engine does not read it as a legacy redirect row and drop its content.
+          const keptRedirectChain =
+            result.redirectChain && result.finalUrl && result.finalUrl !== entry.normalizedUrl
+              ? { ...result.redirectChain, keptAsPage: true }
+              : result.redirectChain;
           const pageRecord: PageRecord = {
             url: entry.rawUrl,
             normalizedUrl: entry.normalizedUrl,
             finalUrl: result.finalUrl,
             depth: entry.depth,
             parentUrl: entry.parentUrl,
-            redirectChain: result.redirectChain,
+            redirectChain: keptRedirectChain,
             status: result.status,
             contentType: result.contentType,
             sizeBytes: result.sizeBytes,
@@ -2116,7 +2246,7 @@ export function createCrawler(
             etag: changeDetection.etag,
             lastModified: changeDetection.lastModified,
             contentHash: changeDetection.contentHash,
-            html: result.body,
+            html: pageHtml,
             parsedData, // Parsed above if HTML
             headers,
             securityHeaders,
@@ -2310,6 +2440,7 @@ export function createCrawler(
         // made every upsertPage throw).
         const zeroSuccessAbortThreshold = Math.max(8, config.concurrency * 2);
         let attemptsFinished = 0;
+        redirectRowsThisRun = 0;
         // Tracks how long we've been waiting on "fetching" rows that no
         // in-process fiber owns (orphaned by a crash/interrupt) — the pool
         // would otherwise spin on sleep indefinitely.
@@ -2521,7 +2652,7 @@ export function createCrawler(
             if (
               !stopRequested &&
               pagesCommitted === 0 &&
-              attemptsFinished >= zeroSuccessAbortThreshold
+              attemptsFinished - redirectRowsThisRun >= zeroSuccessAbortThreshold
             ) {
               stopRequested = true;
               logger.warn(
@@ -2827,7 +2958,8 @@ export function createCrawler(
         const budget = createPhaseBudget(
           discoveryBudgetMs(config.timeoutMs, config.discoveryDeadlineAt),
           Date.now(),
-          undefined,
+          // The crawl's refusal log, so a block signal seen earlier stops these requests too (#1655).
+          crawlRefusals,
           crawlEgress,
         );
         const gate = probeGate(budget, interrupted.signal);
@@ -2868,14 +3000,26 @@ export function createCrawler(
           logger.debug("discovery probes off", "no llms, markdown, well-known, agent or RSL requests");
         }
 
-        // llms.txt + llms-full.txt at the root once, independent of robots.
-        if (wants("llms-txt")) {
+        // The allowlist over the path-shaped probes (#1655). A probe the rules selected but the
+        // allowlist left out is not sent; it stores a "path not approved" record instead.
+        const approvedPaths = config.discoveryProbePaths ? new Set(config.discoveryProbePaths) : null;
+        const approved = (path: string): boolean => !approvedPaths || approvedPaths.has(path);
+        const notApproved: WellKnownProbe[] = [];
+
+        // llms.txt + llms-full.txt at the root once, independent of robots. /llms-full.txt only
+        // rides along with /llms.txt: the rule reads it as a note on the file it reports.
+        const llmsApproved = approved(LLMS_TXT_PATHS[0]);
+        if (wants("llms-txt") && !llmsApproved) {
+          notApproved.push(notApprovedProbe(baseUrl, LLMS_TXT_PATHS[0]));
+        }
+        if (wants("llms-txt") && llmsApproved) {
           const llms = yield* fetchLlmsTxt(
             baseUrl,
             config.userAgent,
             customHeadersFor(baseUrl),
             preamble,
             gate,
+            { fetchFull: approved(LLMS_TXT_PATHS[1]), pathLocked: approvedPaths !== null },
           );
           // null: the budget ran out first. No row, so the rule says "not checked".
           if (llms) {
@@ -2927,15 +3071,23 @@ export function createCrawler(
 
         // Well-known and agent files, then RSL licensing.
         const wellKnownPaths = WELL_KNOWN_PATHS.filter(wants);
-        if (wellKnownPaths.length > 0) {
-          const wellKnown = yield* probeWellKnown(
-            baseUrl,
-            config.userAgent,
-            customHeadersFor(baseUrl),
-            preamble,
-            { paths: wellKnownPaths, gate },
-          );
-          yield* storage.setWellKnownProbe(crawlId, { ...wellKnown, fetchedAt: Date.now() });
+        const sentPaths = wellKnownPaths.filter(approved);
+        for (const path of wellKnownPaths) {
+          if (!approved(path)) notApproved.push(notApprovedProbe(baseUrl, path));
+        }
+        if (sentPaths.length > 0 || notApproved.length > 0) {
+          const wellKnown =
+            sentPaths.length > 0
+              ? yield* probeWellKnown(baseUrl, config.userAgent, customHeadersFor(baseUrl), preamble, {
+                  paths: sentPaths,
+                  gate,
+                  pathLocked: approvedPaths !== null,
+                })
+              : { probes: [] };
+          yield* storage.setWellKnownProbe(crawlId, {
+            probes: [...wellKnown.probes, ...notApproved],
+            fetchedAt: Date.now(),
+          });
         }
 
         if (wants("rsl")) {
@@ -2979,7 +3131,8 @@ export function createCrawler(
         //
         // The log rides on the budget so every root probe can note a request the
         // site refused; persisted below so the rules say "refused", not "absent".
-        const refusals = new RefusalLog();
+        const refusals = new RefusalLog(targetUrl);
+        crawlRefusals = refusals;
         const seedPhase = createPhaseBudget(discoveryBudgetMs(config.timeoutMs, config.discoveryDeadlineAt), Date.now(), refusals);
 
         // Follow redirects to get final URL (both HTTP and client-side)
@@ -3223,6 +3376,11 @@ export function createCrawler(
             "the walk stopped before visiting every entry point; absence is unconfirmed",
           );
           yield* storage.updateStats(crawlId, { sitemapDiscoveryTruncated: true });
+        }
+
+        const sitemapReadState = classifySitemapReadState(sitemapResult);
+        if (sitemapReadState) {
+          yield* storage.updateStats(crawlId, { sitemapReadState });
         }
 
         const sitemapByUrl = new Map(sitemapResult.all.map((sitemap) => [sitemap.url, sitemap]));
@@ -3591,10 +3749,12 @@ export function createCrawler(
         });
 
         // One wall-clock budget for this restart's preamble, same as start().
+        // The log carries only the block signal here: a resumed crawl does not persist refusals (#1655).
+        crawlRefusals = new RefusalLog(baseUrl);
         const preamble = createPhaseBudget(
           discoveryBudgetMs(config.timeoutMs, config.discoveryDeadlineAt),
           Date.now(),
-          undefined,
+          crawlRefusals,
           crawlEgress,
         );
 

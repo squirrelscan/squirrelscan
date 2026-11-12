@@ -43,6 +43,31 @@ export const ASSET_COMPRESSION_LIMITS = {
   MIN_BYTES: 100 * 1024, // 100KB
 } as const;
 
+/**
+ * A render-blocking `<script src>` that took longer than this to answer is reported by
+ * perf/render-blocking as a slow blocking script (#1751). One second is where a
+ * synchronous head script alone puts First Contentful Paint past a "good" score.
+ */
+export const SLOW_BLOCKING_SCRIPT_MS = 1000;
+
+/**
+ * A script this slow is reported whether or not it was the first request to its host (#1751).
+ * Under it, a time over {@link SLOW_BLOCKING_SCRIPT_MS} counts only for a warm host.
+ */
+export const SLOW_BLOCKING_SCRIPT_HARD_MS = 2000;
+
+/**
+ * Whether a measured script response time is a slow blocking script. Hysteresis, because the time is a
+ * wall-clock reading of one request and a run that crosses 1000 ms and one that does not would open and
+ * close the same issue: over 2000 ms always counts; over 1000 ms counts only when the script was not the
+ * first one fetched from its host, since that request also pays for DNS and the TLS handshake.
+ */
+export function isSlowBlockingScript(responseMs: number | undefined, hostFirst: boolean | undefined): boolean {
+  if (responseMs === undefined) return false;
+  if (responseMs > SLOW_BLOCKING_SCRIPT_HARD_MS) return true;
+  return responseMs > SLOW_BLOCKING_SCRIPT_MS && hostFirst !== true;
+}
+
 // Script content fetch limits (for security scanning)
 export const SCRIPT_FETCH_LIMITS = {
   MAX_SCRIPTS_TO_FETCH: 50,
@@ -476,7 +501,7 @@ export type OrgLogoContentType = (typeof ORG_LOGO_CONTENT_TYPES)[number];
 // Public rule/category counts for marketing and doc copy that can't read the
 // live catalog (MDX, plugin manifests, skill files, MCP tool descriptions).
 // PUBLIC_RULE_COUNT_FLOOR is deliberately rounded DOWN to the nearest 50 from the
-// live total (currently 326 enabled rules) so copy doesn't need a bump on every
+// live total (currently 327 enabled rules) so copy doesn't need a bump on every
 // rule add/remove. PUBLIC_CATEGORY_COUNT tracks exactly since categories change
 // far less often. The rule-count-consistency guard fails if the floor exceeds the
 // live count or the live count reaches floor + 50. Bump both by hand when the

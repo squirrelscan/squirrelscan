@@ -29,7 +29,6 @@
 // proxy that never answers make the rule say "not checked" with that reason,
 // never a pass and never a crash.
 
-import { wwwVariant } from "@squirrelscan/rules/security/tls-certificate";
 import { isNonPublicHostname } from "@squirrelscan/utils/non-public-host";
 import {
   EgressRefusedError,
@@ -47,6 +46,7 @@ import {
   type TlsCertificateExtras,
   type TlsProbe,
   type TlsProbeFn,
+  wwwVariant,
 } from "@squirrelscan/utils/tls-certificate";
 import { X509Certificate } from "node:crypto";
 import { connect as connectTcp, isIP, type Socket } from "node:net";
@@ -86,6 +86,15 @@ export interface TlsProbeOptions {
    * the egress guard refuses without a lookup, never take this path.
    */
   proxyResolvesNames?: boolean;
+  /**
+   * Explicit CONNECT proxy (an `http:` URL). It wins over every proxy variable
+   * and over `NO_PROXY`, and is used exactly as an environment proxy is: the
+   * name is vetted here, CONNECT names the vetted address, and TLS runs inside
+   * the tunnel with the name as SNI. Never bypassed: a host that `NO_PROXY`
+   * names still goes through it, and an unusable URL is `not checked`, never a
+   * direct socket. The hosted audit sets this to its egress guard's local proxy.
+   */
+  proxyUrl?: string;
 }
 
 /** Connect errors after which the next vetted address may be tried: nothing reached a server. */
@@ -132,7 +141,7 @@ export function createTlsProbe(options: TlsProbeOptions = {}): TlsProbeFn {
     const port = target.port ?? 443;
     const timeoutMs =
       target.timeoutMs ?? options.timeoutMs ?? TLS_PROBE_TIMEOUT_MS;
-    const proxy = proxyForTarget(hostname, port);
+    const proxy = proxyForTarget(hostname, port, options.proxyUrl);
     if (proxy.kind === "unsupported") {
       return {
         kind: "unavailable",
@@ -343,8 +352,12 @@ function handshake(args: {
  * design: the audit reads the certificate the server presents, trusted or not,
  * and judges it on the facts (`authorized`, `authorizationError`, the names and
  * dates), so an expired, self-signed or mismatched certificate is REPORTED
- * instead of aborting the handshake. No request, header or credential is sent
- * over this connection. `hostname` is the SNI name (an IP literal has none).
+ * instead of aborting the handshake. This connection is NEVER used for a request:
+ * no request, header or credential is sent over it, so nothing is exposed to an
+ * unverified peer. Verification happens separately, on the facts read here
+ * (`authorized` and `authorizationError` from the handshake, the names and the
+ * dates), and the audit reports a certificate that fails them. `hostname` is the
+ * SNI name (an IP literal has none).
  */
 function connectForFacts(options: {
   hostname: string;
@@ -358,6 +371,7 @@ function connectForFacts(options: {
   return connect({
     ...target,
     ...(isIP(hostname) === 0 ? { servername: hostname } : {}),
+    // Intentional: see above. Read-only certificate probe; nothing is sent, trust is judged on the facts.
     rejectUnauthorized: false,
     ...(ca !== undefined ? { ca } : {}),
   });
@@ -467,26 +481,33 @@ const PROXY_ENV_NAMES = [
  * because the proxy is not one this probe speaks to. A tunnel needs an
  * `http:` proxy URL; `https:` and `socks` proxies are reported, not guessed at.
  */
-export function proxyForTarget(hostname: string, port: number): ProxyDecision {
-  const raw = PROXY_ENV_NAMES.map((name) =>
-    (process.env[name] ?? "").trim()
-  ).find((value) => value !== "");
+export function proxyForTarget(
+  hostname: string,
+  port: number,
+  proxyUrl?: string
+): ProxyDecision {
+  const explicit = proxyUrl !== undefined && proxyUrl.trim() !== "";
+  const raw = explicit
+    ? proxyUrl.trim()
+    : PROXY_ENV_NAMES.map((name) => (process.env[name] ?? "").trim()).find(
+        (value) => value !== ""
+      );
   if (raw === undefined) return { kind: "direct" };
-  if (noProxyMatches(hostname, port)) return { kind: "direct" };
+  if (!explicit && noProxyMatches(hostname, port)) return { kind: "direct" };
+  const where = explicit ? "configured" : "set in the environment";
   let url: URL;
   try {
     url = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `http://${raw}`);
   } catch {
     return {
       kind: "unsupported",
-      reason:
-        "an HTTP proxy is set in the environment but its URL is not valid",
+      reason: `an HTTP proxy is ${where} but its URL is not valid`,
     };
   }
   if (url.protocol !== "http:") {
     return {
       kind: "unsupported",
-      reason: `a ${url.protocol.replace(/:$/, "")} proxy is set in the environment and this check only tunnels through an http proxy`,
+      reason: `a ${url.protocol.replace(/:$/, "")} proxy is ${where} and this check only tunnels through an http proxy`,
     };
   }
   return { kind: "proxy", url };
@@ -561,12 +582,19 @@ function tunnelHandshake(args: {
     };
     const fail = (code: string, message: string) =>
       finish({ kind: "unreachable", code, message });
+    // Two stalls, told apart by PHASE: the proxy never answered CONNECT (the proxy's), or the tunnel
+    // was up and the handshake through it never finished (the audited host's).
     const timer = setTimeout(
       () =>
-        fail(
-          "PROXY_TIMEOUT",
-          `no TLS handshake with ${hostname} through the proxy ${proxyName} within ${timeoutMs}ms`
-        ),
+        secure
+          ? fail(
+              "PROXY_TLS_TIMEOUT",
+              `no TLS handshake with ${hostname} through the proxy ${proxyName} within ${timeoutMs}ms`
+            )
+          : fail(
+              "PROXY_CONNECT_TIMEOUT",
+              `the proxy ${proxyName} did not answer CONNECT within ${timeoutMs}ms`
+            ),
       timeoutMs
     );
 

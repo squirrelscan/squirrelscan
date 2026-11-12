@@ -78,7 +78,7 @@ export { EXIT_CODE_REDIRECTED } from "@squirrelscan/core-contracts/seed-redirect
 
 export const DASHBOARD_URL = "https://app.squirrelscan.com";
 
-/** Where published reports are served; a report lives at `${REPORTS_BASE_URL}/<id>`. */
+/** Where the 5xx-recovery link points; reports live on <org>.squirrel.report, and this host redirects an id there. */
 export const REPORTS_BASE_URL = "https://reports.squirrelscan.com";
 
 // Public pricing page — linked from Team-plan upsell messaging (#739)
@@ -180,8 +180,17 @@ export const CRAWL_PHASE_PER_PAGE_BUDGET_MS = 60_000;
 export const CRAWL_PHASE_SETUP_SLACK_MS = 60_000;
 /** Floor — never cap a crawl below this regardless of page count. */
 export const CRAWL_PHASE_MIN_TIMEOUT_MS = 120_000;
-/** Ceiling — absolute backstop for very large crawls. */
-export const CRAWL_PHASE_MAX_TIMEOUT_MS = 1_800_000; // 30 min
+/**
+ * Ceiling of the DERIVED default (#1639). Kept low so the backstop still catches a
+ * wedged crawl quickly when the user set nothing; raised from 30 min only to 60.
+ */
+export const CRAWL_PHASE_DERIVED_MAX_TIMEOUT_MS = 3_600_000; // 60 min
+/**
+ * Ceiling for an EXPLICIT `--crawl-timeout` / `[crawler] crawl_timeout`: the finite
+ * absolute backstop, so a polite single-host crawl of a few thousand pages can
+ * finish when the user asks for it (#1639).
+ */
+export const CRAWL_PHASE_MAX_TIMEOUT_MS = 21_600_000; // 6 h
 
 // CSR-shell thresholds (#294) moved to @squirrelscan/fetchers csr-detect.ts.
 

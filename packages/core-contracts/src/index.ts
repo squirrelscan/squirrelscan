@@ -383,6 +383,22 @@ export const PRIVATE_TARGET_SKIP_REASON = "private-target";
 export const EXTERNAL_LINKS_NOT_CHECKED_SKIP_REASON = "external-links-not-checked";
 
 /**
+ * The `error` a link row carries when its host was CONFIRMED not to resolve (#1740): a definitive "no such
+ * host" answer (NXDOMAIN, or no address records) that held on a second lookup. It is a verdict, stored like a
+ * status (so it survives the cache and the database with no new column), and `links/broken-external-links`
+ * reads it as confirmed broken. A resolver that failed to answer (a timeout, SERVFAIL) is never this: that
+ * link is unverifiable. The same wording the cloud link checker already reports for a dead domain.
+ */
+export const EXTERNAL_LINK_HOST_UNRESOLVED_ERROR = "domain does not exist";
+
+/**
+ * The `error` for a link whose host sits under a name that can never resolve (#1740): a suffix RFC 6761 reserves
+ * (`.invalid`, `.test`, `.example`). A verdict without a lookup, in the cloud link checker's wording for an
+ * invalid link, and a confirmed broken link for every visitor.
+ */
+export const EXTERNAL_LINK_INVALID_SUFFIX_ERROR = "invalid link: no such domain suffix";
+
+/**
  * `skipReason` of `links/broken-links` when the crawl did not follow links
  * (the Quick level, or a sitemap-scoped crawl) and some internal link targets
  * were never fetched (repo#2729). Their status is unknown, so the rule cannot
@@ -667,6 +683,16 @@ export const UNSTORED_PAGE_REASONS = [
 export type UnstoredPageReason = (typeof UNSTORED_PAGE_REASONS)[number] | `http-${number}`;
 
 /** A URL the crawl requested but could not store a page for (#1396), listed by `--include-pages`. */
+/** A URL that redirected, in the `--include-pages` JSON `redirects` list (#1762). */
+export interface RedirectRow {
+  url: string;
+  finalUrl: string;
+  /** The status the URL itself answered with: its first hop's 3xx. */
+  status: number;
+  /** Redirect responses before the landing page. */
+  hops: number;
+}
+
 export interface UnstoredPage {
   /** As the crawl recorded it, cut at 2,048 characters. */
   url: string;
@@ -769,6 +795,13 @@ export interface AuditReport {
   unstoredPages?: UnstoredPage[];
   unstoredPagesTotal?: number;
   /**
+   * URLs the crawl recorded as redirects, not pages (#1762), for `--include-pages`: they are not in `pages`, and a
+   * consumer that read `finalUrl` from a page row finds it here. At most `JSON_REPORT_PAGES.maxEntries`, with
+   * `redirectsTotal` the real count.
+   */
+  redirects?: RedirectRow[];
+  redirectsTotal?: number;
+  /**
    * Where the seed URL's redirects resolved to, when that is a DIFFERENT site
    * from `baseUrl` — i.e. the redirect left the seed's registrable domain and
    * was refused rather than adopted. `baseUrl` always stays the site the user
@@ -840,6 +873,12 @@ export interface AuditReport {
    * `statusReasonCode` is `max_duration` (unless the run was already failed or blocked).
    */
   maxDuration?: MaxDurationCut;
+  /**
+   * Present when the crawl-phase backstop (`--crawl-timeout`, #1639) stopped the crawl;
+   * with it `status` is `partial` and `statusReasonCode` is `crawl_timeout` (unless the
+   * run was already failed or blocked). `linkGraphComplete` is false.
+   */
+  crawlPhase?: CrawlPhaseCut;
   /**
    * Machine-readable class of the failure behind `statusReason` (#1822), so the
    * email template, the dashboard, the MCP tools and Sentry can branch on the
@@ -1268,6 +1307,20 @@ export interface PublishedReportDetail {
   classesDropped?: number;
 }
 
+/** What the crawl-phase backstop cut from a run (#1639). */
+export interface CrawlPhaseCut {
+  /** The crawl-phase budget that fired, in seconds. */
+  seconds: number;
+  /** Pages the crawl had collected when it stopped. */
+  pagesCollected: number;
+  /** Page cap in effect, when there was one. */
+  pageBudget?: number;
+  /** Discovered pages never fetched. */
+  unfetchedPages: number;
+  /** Always false: site-wide link and sitemap conclusions rest on an incomplete graph. */
+  linkGraphComplete: false;
+}
+
 /** What a `--max-duration` time limit cut from a run (#1271). */
 export interface MaxDurationCut {
   /** The budget, in seconds. */
@@ -1286,6 +1339,15 @@ export interface MaxDurationCut {
   resourceChecksCut?: boolean;
   /** Probes before the page rules that hit their own deadline and were skipped, e.g. `soft-404-confirmation` (#1327). Absent when none. */
   probesSkipped?: string[];
+}
+
+export interface ScanScopePageType {
+  /** The crawler's URL-based page type, e.g. `product`, `article`, `home`, or `unknown`. */
+  type: string;
+  /** Pages of this type the crawl knows of: audited plus discovered (links, sitemap) and not fetched. */
+  discovered: number;
+  /** Pages of this type that were fetched and audited. */
+  audited: number;
 }
 
 /** Where an audit executed + how much of the site it crawled (#1180). */
@@ -1328,6 +1390,14 @@ export interface ScanScope {
    */
   unfetched?: number;
   /**
+   * Discovered and audited page counts per page type (#1744), so a sampled audit can say
+   * "1 of 36 product pages". `discovered >= audited` for every row, and `discovered` is
+   * `audited` plus the queued-but-unfetched pages of that type, so a complete crawl has equal
+   * counts. Types come from the URL (the only label an unfetched page has). Most pages
+   * first. Absent on reports from before it. REPORT-ONLY.
+   */
+  pageTypes?: ScanScopePageType[];
+  /**
    * The start URL's followed redirect (#1281), kept here so a report rebuilt
    * from the crawl later still names the URL the user gave. The report's
    * `originalUrl` and `redirectChain` are read from it.
@@ -1338,6 +1408,8 @@ export interface ScanScope {
    * from the crawl later is still `partial` with reason code `max_duration`.
    */
   maxDuration?: MaxDurationCut;
+  /** The crawl-phase backstop cut (#1639), kept so a rebuilt report is still partial. */
+  crawlPhase?: CrawlPhaseCut;
   /**
    * The config's `[[ignore]]` list as this audit ran it (#1262): each entry's rule
    * pattern and reason, in order, so a report rebuilt later can name the entries
@@ -1360,10 +1432,30 @@ export type CloudPlanTier = "anonymous" | "free" | "paid";
 /** Resolved cloud fetch mode stamped on a report — plain HTTP vs browser render (#368). */
 export type CloudRenderMode = "http" | "browser";
 
+/**
+ * Why a locked rule did not run (#1734), a closed set so an agent can tell a plan
+ * exclusion (retrying spends credits and changes nothing) from a provider failure
+ * (a re-run may help) from a check that cannot run in that environment.
+ */
+export const LOCKED_RULE_REASONS = ["plan", "provider_error", "unsupported_environment"] as const;
+export type LockedRuleReason = (typeof LOCKED_RULE_REASONS)[number];
+
+/** Whether `value` is one of {@link LOCKED_RULE_REASONS}. */
+export function isLockedRuleReason(value: unknown): value is LockedRuleReason {
+  return typeof value === "string" && (LOCKED_RULE_REASONS as readonly string[]).includes(value);
+}
+
 /** A cloud-/Pro-gated rule that was not run — shown locked in the report upsell. */
 export interface LockedRule {
   id: string;
   name: string;
+  /**
+   * Why it did not run. Optional: a report from an older publisher has none and
+   * keeps the audience wording chosen by plan alone.
+   */
+  reason?: LockedRuleReason;
+  /** Free-text detail for `reason` (for `unsupported_environment`, where the check can run). Short, never page content. */
+  detail?: string;
 }
 
 /**
@@ -2456,6 +2548,17 @@ export interface ScriptContentData {
    * run bounded its fetch (#1255): the memory or time budget ran out.
    */
   fetchSkipReason?: "memory-cap" | "time-budget";
+  /**
+   * Milliseconds this audit's request for the script took to answer (#1751).
+   * `undefined` when no request was timed: a skipped or refused fetch, a network
+   * error, or a content-store cache hit. Treat that as unknown, never as fast.
+   */
+  responseMs?: number;
+  /**
+   * This was the first script fetched from its host in the audit, so `responseMs` includes the connection
+   * setup (DNS, TLS) a later script on that host does not pay (#1751). Absent when `responseMs` is.
+   */
+  hostFirst?: boolean;
 }
 
 export interface SitemapUrl {
@@ -2489,6 +2592,14 @@ export interface SitemapFetchFailure {
   error: string;
 }
 
+/**
+ * How completely the sitemap walk read the sitemaps:
+ * - `complete`: every sitemap it found was read, with no URL cap, walk deadline or child failure.
+ * - `partial`: something was read, but a child failed, an entry point failed, or a cap or deadline stopped the walk.
+ * - `unreadable`: the root sitemap(s) the site declared could not be read.
+ */
+export type SitemapReadState = "complete" | "partial" | "unreadable";
+
 export interface SitemapDiscovery {
   discovered: SitemapData[];
   sources: { robotsTxt: string[]; commonLocations: string[] };
@@ -2509,6 +2620,11 @@ export interface SitemapDiscovery {
    * Optional: absent reads as "the walk completed".
    */
   truncated?: boolean;
+  /**
+   * How completely the sitemaps were read. Absent reads as unknown (a crawl
+   * stored before it was recorded), never as complete.
+   */
+  readState?: SitemapReadState;
 }
 
 export interface SitemapUrlStatusData {

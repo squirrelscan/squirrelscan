@@ -121,6 +121,16 @@ export {
 } from "./site-wide-items";
 export type { SiteWideItem } from "./site-wide-items";
 
+// Site-level agent signals shown beside the Agents score (#1386, advisory, never scored)
+export {
+  AGENTS_SCORE_MEASURES,
+  agentSignalLines,
+  agentSignalsLine,
+  getAgentSignals,
+  type AgentSignal,
+  type AgentSignalStatus,
+} from "./agent-signals";
+
 // Scoring
 export { getScoreGrade, getScoreColor, getGroupColor, GROUP_COLORS } from "./scoring";
 export type { GroupColor } from "./scoring";
@@ -249,6 +259,8 @@ export {
   timeAgo,
   scanScopeLine,
   scanScopeUnfetched,
+  scanScopePageTypes,
+  pageTypeCoverageLine,
   publishedReportNote,
   seedRedirect,
   seedRedirectFollowUp,
@@ -497,3 +509,12 @@ export type {
   PageMapDiffMeta,
 } from "./page-map-diff";
 export { PAGE_MAP_HTML_ROW_CAP, renderPageMapHtml } from "./page-map-html";
+
+// Top line of a report: section scores + counts, shared with the dashboard
+export {
+  discoveredCount,
+  discoveredPages,
+  reportTopLineCounts,
+  sectionScoreRows,
+} from "./top-line";
+export type { ReportTopLineCounts, SectionScoreRow } from "./top-line";

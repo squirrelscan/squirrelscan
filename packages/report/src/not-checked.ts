@@ -16,12 +16,15 @@ import {
   EXTERNAL_LINKS_OUT_OF_TIME_SKIP_REASON,
   EXTERNAL_LINKS_OVER_CAP_SKIP_REASON,
   LINK_TARGETS_NOT_FETCHED_SKIP_REASON,
+  isLockedRuleReason,
   NOT_CHECKED_SKIP_REASONS,
   RULE_TIMED_OUT_SKIP_REASON,
   TLS_CERTIFICATE_NOT_CHECKED_SKIP_REASON,
 } from "@squirrelscan/core-contracts";
 
 import { classifyRuleOutcome, type RuleOutcome } from "@squirrelscan/core-contracts/rule-outcome";
+
+import type { LockedRuleReason } from "@squirrelscan/core-contracts";
 
 import type { ReportRuleResult } from "./types";
 
@@ -39,6 +42,13 @@ export interface NotCheckedRule {
   message: string;
   /** What to run to check it. */
   hint: string;
+  /**
+   * Why it did not run, from a closed set (#1734), when the publisher said: read from the skipped
+   * check's `details.cause`. Absent from an older publisher, which keeps the skip-reason hint.
+   */
+  cause?: LockedRuleReason;
+  /** Short free-text detail for `cause`, from `details.causeDetail`. */
+  causeDetail?: string;
   /** For a rule that hit an internal error (#1291): the first pages it was not evaluated on (at most {@link MAX_NOT_CHECKED_PAGES}). */
   pages?: string[];
 }
@@ -69,6 +79,11 @@ const HINTS: Record<string, string> = {
   [CRAWL_CAPPED_SKIP_REASON]:
     "Raise the page limit (--max-pages, or crawler.max_pages) so the crawl reaches every page, to check them.",
 };
+
+// #3922: a hosted audit's user cannot change where it runs, so no advice about
+// networks, proxies or --offline.
+const TLS_CLOUD_HINT =
+  "The audit needs to open a TLS connection to the site and could not. Run the audit again, make sure the site accepts TLS connections on its port from public addresses, or check the certificate with a TLS tool.";
 
 const DEFAULT_HINT = "Run a Surface or Full audit to check them.";
 
@@ -104,11 +119,49 @@ function linkTargetsHint(details: Record<string, unknown> | undefined): string {
   return `${text.charAt(0).toUpperCase()}${text.slice(1)} to check them.`;
 }
 
+/** What to do about a check that did not run, by cause (#1734). */
+const CAUSE_HINTS: Record<LockedRuleReason, string> = {
+  plan: "This check is not included in your plan, so running the audit again will not include it.",
+  provider_error:
+    "A service this check depends on failed during the audit. Run the audit again; a re-run may include it.",
+  unsupported_environment:
+    "This check can't run in the environment the audit ran in. Run it in a cloud audit, or from the squirrel CLI on a machine with direct network access.",
+};
+
+const MAX_CAUSE_DETAIL = 200;
+
+function causeOf(check: { details?: Record<string, unknown> }): {
+  cause?: LockedRuleReason;
+  causeDetail?: string;
+} {
+  const cause = check.details?.cause;
+  if (!isLockedRuleReason(cause)) return {};
+  const raw = check.details?.causeDetail;
+  // Publisher-supplied: control characters (an ANSI escape, a NUL) become spaces. Markup is
+  // escaped by each renderer, which already escapes the not-checked lines.
+  // eslint-disable-next-line no-control-regex
+  const detail =
+    typeof raw === "string" ? raw.replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]+/g, " ").replace(/\s+/g, " ").trim() : "";
+  return {
+    cause,
+    ...(detail
+      ? { causeDetail: detail.length > MAX_CAUSE_DETAIL ? `${detail.slice(0, MAX_CAUSE_DETAIL - 1)}…` : detail }
+      : {}),
+  };
+}
+
 function hintFor(check: { skipReason?: string; details?: Record<string, unknown> }): string {
+  const { cause, causeDetail } = causeOf(check);
+  if (cause) return causeDetail ? `${CAUSE_HINTS[cause]} ${causeDetail}` : CAUSE_HINTS[cause];
   if (classifyRuleOutcome({ status: "skipped", ...check }) === "errored")
     return "This is a defect in squirrelscan, not a problem with your pages, and no finding there is not a clean result. Update squirrel and run the audit again, or report it at https://github.com/squirrelscan/squirrelscan/issues.";
   if (check.skipReason === LINK_TARGETS_NOT_FETCHED_SKIP_REASON)
     return linkTargetsHint(check.details);
+  if (
+    check.skipReason === TLS_CERTIFICATE_NOT_CHECKED_SKIP_REASON &&
+    check.details?.environment === "cloud"
+  )
+    return TLS_CLOUD_HINT;
   return (check.skipReason && HINTS[check.skipReason]) || DEFAULT_HINT;
 }
 
@@ -237,6 +290,7 @@ export function notCheckedRules(report: NotCheckedReportShape): NotCheckedRule[]
       // A timeout names the rule and the pages it did not check.
       message: timedOut ? timedOutMessage(timedOut) : check.message,
       hint: hintFor(check),
+      ...causeOf(check),
       ...(timedOut?.errored && !timedOut.site ? { pages: erroredPages(result) } : {}),
     });
   }

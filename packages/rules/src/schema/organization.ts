@@ -9,6 +9,13 @@ import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 import { flattenJsonLdNodes } from "@squirrelscan/utils";
 
+import { contactChannelsCheck, readContactEvidence } from "./contact-evidence";
+import {
+  isConfirmedShop,
+  merchantIdentityCheck,
+  readMerchantIdentity,
+  readOrganizations,
+} from "./merchant-evidence";
 import { crossCheckSocials, socialPlatformLabel } from "../social/social-match";
 
 const REQUIRED_PROPS = ["name", "url"];
@@ -36,6 +43,7 @@ export const organizationSchemaRule: Rule = {
       'script[type="application/ld+json"]'
     );
     let orgSchema: Record<string, unknown> | null = null;
+    const pageNodes: Record<string, unknown>[] = [];
 
     for (const script of schemaScripts) {
       // Flattened per script, so a Yoast / Rank Math `@graph` wrapper is
@@ -44,6 +52,7 @@ export const organizationSchemaRule: Rule = {
       // mis-split a pretty-printed block (#1099). Unparseable JSON yields an
       // empty list, which is what the old try/catch was for.
       const schemas = flattenJsonLdNodes(script.textContent || "");
+      pageNodes.push(...schemas);
 
       for (const schema of schemas) {
         const type = schema["@type"];
@@ -59,13 +68,24 @@ export const organizationSchemaRule: Rule = {
       }
     }
 
+    // Informational evidence, appended after the existing checks so they are
+    // unchanged. Only emitted for a confirmed shop.
+    const withEvidence = (): RuleResult => {
+      const org = readOrganizations(ctx, pageNodes);
+      const merchant = readMerchantIdentity(ctx, org);
+      if (merchant) checks.push(merchantIdentityCheck(merchant));
+      const contact = readContactEvidence(ctx, org, isConfirmedShop(ctx, org.allNodes));
+      if (contact) checks.push(contactChannelsCheck(contact));
+      return { checks };
+    };
+
     if (!orgSchema) {
       checks.push({
         name: "organization-schema",
         status: "info",
         message: "No Organization schema found",
       });
-      return { checks };
+      return withEvidence();
     }
 
     // Check required properties
@@ -140,6 +160,6 @@ export const organizationSchemaRule: Rule = {
       });
     }
 
-    return { checks };
+    return withEvidence();
   },
 };

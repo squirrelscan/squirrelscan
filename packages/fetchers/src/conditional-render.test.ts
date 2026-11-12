@@ -77,6 +77,7 @@ describe("createConditionalRenderDocumentFetcher", () => {
     expect(httpReqs.length).toBe(1); // probed once, purely to fingerprint
     // The bootstrap hash the crawler persists so the NEXT run's probe can reuse.
     expect(r.sourceHash).toBe(fingerprint(body));
+    expect(r.serverHtml).toBe(body);
   });
 
   test("304 probe → reuses probe response, never renders", async () => {

@@ -1,6 +1,6 @@
 // The certificate facts and what they mean (#712). This module is pure: the
-// handshake is injected by the CLI (apps/cli/src/audit/tls-probe.ts), whose
-// real-socket tests live in apps/cli/tests/audit/tls-probe.test.ts.
+// handshake is injected by the runtime (the implementation is apps/cli/src/audit/tls-probe.ts),
+// whose real-socket tests live in apps/cli/tests/audit/tls-probe.test.ts.
 
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
@@ -230,10 +230,15 @@ describe("tlsFailureCause", () => {
 describe("shared packages open no raw socket", () => {
   // #716: a raw socket from a shared package would go around the hosted
   // engine's request-level network policy. The TLS handshake is injected
-  // (`TlsProbeFn`); only apps/cli holds one. `isIP` from node:net is an
+  // (`TlsProbeFn`); the one implementation is apps/cli/src/audit/tls-probe.ts,
+  // outside every shared package, so no file scanned below may open a socket (#2410:
+  // the hosted container must stay free of raw sockets). Its handshake passes the
+  // egress guard first.
+  // `isIP` from node:net is an
   // address helper, not a socket, and stays allowed; type-only imports open
   // nothing. Tests are not shipped, and their fixture servers are sockets.
   const packagesRoot = join(import.meta.dir, "..", "..");
+  const TLS_PROBE_FILE = join("..", "apps", "cli", "src", "audit", "tls-probe.ts");
   const files = [...new Bun.Glob("*/src/**/*.{ts,tsx,js,mjs,cjs}").scanSync({ cwd: packagesRoot })].filter(
     (file) => !/\.test\.[cm]?[jt]sx?$/.test(file),
   );
@@ -281,6 +286,12 @@ describe("shared packages open no raw socket", () => {
     }
     expect(offendersIn('import { isIP } from "node:net";')).toEqual([]);
     expect(offendersIn('import type { TLSSocket } from "node:tls";')).toEqual([]);
+  });
+
+  test("the probe is the only socket site, outside the shared packages, and stays vetted", () => {
+    const text = readFileSync(join(packagesRoot, TLS_PROBE_FILE), "utf8");
+    expect(offendersIn(text)).not.toEqual([]);
+    expect(text).toContain("vetEgressTarget");
   });
 
   test("no shared package opens one", () => {

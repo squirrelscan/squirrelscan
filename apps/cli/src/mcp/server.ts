@@ -13,6 +13,7 @@ import { registerAuditTools } from "./tools/audit-tools";
 import { registerEntityTools } from "./tools/entity-tools";
 import { registerFeedbackTools } from "./tools/feedback-tools";
 import { registerIssueTools } from "./tools/issue-tools";
+import { registerPageTools } from "./tools/page-tools";
 import { registerReportTools } from "./tools/report-tools";
 import { registerRuleTools } from "./tools/rule-tools";
 
@@ -34,6 +35,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
   registerRuleTools(server);
   // Local and free: these read the project store, so no auth and no credits.
   registerEntityTools(server);
+  registerPageTools(server);
   // No login and no credits, but it does need the network (#370).
   registerFeedbackTools(server);
   // The squirrelscan agent skills, the same bytes the hosted server serves.

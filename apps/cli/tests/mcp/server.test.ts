@@ -36,6 +36,8 @@ const EXPECTED_TOOLS = [
   "get_entity_graph",
   "compare_entities",
   "get_entity_findings",
+  // #701: the page map, local like the entity tools.
+  "list_pages",
   // #370: same channel as the hosted server; no auth, no credits.
   "send_feedback",
 ] as const;
@@ -97,6 +99,7 @@ describe("createMcpServer tool registration", () => {
       "get_entity_graph",
       "compare_entities",
       "get_entity_findings",
+      "list_pages",
       // No login and no credits: it only needs the network.
       "send_feedback",
     ]);

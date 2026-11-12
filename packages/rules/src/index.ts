@@ -71,6 +71,7 @@ export * as social from "./social";
 export * as crawl from "./crawl";
 export * as url from "./url";
 export * as mobile from "./mobile";
+export { colorContrastRule, stylesheetBackgroundOf, stylesheetBackgroundSelectorsOf } from "./a11y/color-contrast";
 export { listWebAppManifestIconUrls, WEB_APP_MANIFEST_ICON_LIMIT } from "./mobile/web-app-manifest";
 export * as legal from "./legal";
 export * as local from "./local";
@@ -98,3 +99,4 @@ export const RULE_MODULES = [
   "analytics",
   "eeat",
 ] as const;
+export * from "./template-signature-reads";

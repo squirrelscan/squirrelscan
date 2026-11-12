@@ -4,17 +4,23 @@
 import type {
   AuditStatus,
   AuditStatusReasonCode,
+  CrawlPhaseCut,
   MaxDurationCut,
   PageFeatureRow,
+  RedirectRow,
 } from "@squirrelscan/core-contracts";
 
 import {
   canonicalVariantMap,
   detachFromPage,
   foldChecksToCanonical,
+  isRedirectSourcePage,
 } from "@squirrelscan/audit-engine";
 import { buildCacheStats, isScoreless } from "@squirrelscan/core-contracts";
-import { maxDurationReason } from "@squirrelscan/core-contracts/failure-reason";
+import {
+  crawlTimeoutReason,
+  maxDurationReason,
+} from "@squirrelscan/core-contracts/failure-reason";
 import { JSON_REPORT_PAGES } from "@squirrelscan/core-contracts/limits";
 import { redactUrl } from "@squirrelscan/core-contracts/seed-redirect";
 import { unstoredPageRow } from "@squirrelscan/report";
@@ -156,6 +162,84 @@ export function withMaxDurationCut<
     reason: run.reason,
     reasonCode: run.reasonCode,
   };
+}
+
+/**
+ * The crawl-phase backstop cut applied to a run status (#1639): same rule as
+ * {@link withMaxDurationCut}, so a crawl stopped by the backstop is `partial` with
+ * code `crawl_timeout`, live and rebuilt alike.
+ */
+export function withCrawlPhaseCut<
+  R extends {
+    status: AuditStatus | undefined;
+    reason?: string | undefined;
+    reasonCode?: AuditStatusReasonCode | undefined;
+  },
+>(
+  run: R,
+  cut: CrawlPhaseCut | undefined
+): {
+  status: AuditStatus;
+  reason: string | undefined;
+  reasonCode: AuditStatusReasonCode | undefined;
+} {
+  if (cut && (run.status === undefined || run.status === "completed")) {
+    return {
+      status: "partial",
+      reason: crawlTimeoutReason(cut),
+      reasonCode: "crawl_timeout",
+    };
+  }
+  return {
+    status: run.status ?? "completed",
+    reason: run.reason,
+    reasonCode: run.reasonCode,
+  };
+}
+
+/**
+ * Stamp a crawl-phase backstop cut on the live report and its scan scope (#1639):
+ * `crawlPhase` on both, and the status made `partial` with code `crawl_timeout`
+ * unless the run already has its own non-completed status.
+ */
+export function stampCrawlPhaseCut(
+  report: {
+    status?: AuditStatus | undefined;
+    statusReason?: string | undefined;
+    statusReasonCode?: AuditStatusReasonCode | undefined;
+    crawlPhase?: CrawlPhaseCut | undefined;
+  },
+  scanScope: { crawlPhase?: CrawlPhaseCut | undefined },
+  input: {
+    seconds: number;
+    pagesCollected: number;
+    pageBudget: number;
+    unfetchedPages: number;
+  }
+): CrawlPhaseCut {
+  const phaseCut: CrawlPhaseCut = {
+    seconds: input.seconds,
+    pagesCollected: input.pagesCollected,
+    ...(input.pageBudget > 0 ? { pageBudget: input.pageBudget } : {}),
+    unfetchedPages: input.unfetchedPages,
+    linkGraphComplete: false,
+  };
+  scanScope.crawlPhase = phaseCut;
+  report.crawlPhase = phaseCut;
+  const next = withCrawlPhaseCut(
+    {
+      status: report.status,
+      reason: report.statusReason,
+      reasonCode: report.statusReasonCode,
+    },
+    phaseCut
+  );
+  if (next.status !== (report.status ?? "completed")) {
+    report.status = next.status;
+    report.statusReason = next.reason;
+    report.statusReasonCode = next.reasonCode;
+  }
+  return phaseCut;
 }
 
 export interface SmartMergeOverride {
@@ -522,6 +606,11 @@ export function reconstructReport(
           )
       : null;
 
+    // URLs recorded as redirects, not pages (#1762), for `--include-pages`: they are out of `pages`, so the list
+    // keeps where each one went. Capped like the pages list, with the real count.
+    const redirectRows: RedirectRow[] = [];
+    let redirectsTotal = 0;
+
     // 7. Load rule registry to get metadata
     // Stored results can include explicitly enabled opt-in rules. Reconstruction
     // needs their metadata even though a default audit does not select them.
@@ -593,6 +682,21 @@ export function reconstructReport(
       if (batch.length === 0) break;
 
       for (const page of batch) {
+        // A redirecting URL is a redirect, not a page (#1762): not in pages[], not in the totals.
+        if (isRedirectSourcePage(page)) {
+          if (options?.includePageRuleCounts) {
+            redirectsTotal++;
+            if (redirectRows.length < JSON_REPORT_PAGES.maxEntries) {
+              redirectRows.push({
+                url: page.normalizedUrl,
+                finalUrl: page.finalUrl ?? page.normalizedUrl,
+                status: page.status,
+                hops: Math.max(1, (page.redirectChain?.hops.length ?? 2) - 1),
+              });
+            }
+          }
+          continue;
+        }
         // Advance the features walk to (at least) this page. Degrades to "no
         // row" rather than failing the report: the fallback parse produces the
         // same answer, just slower.
@@ -1024,7 +1128,11 @@ export function reconstructReport(
 
     // #1271: the audit's own `--max-duration` cut, restored from the stored scope.
     const durationCut = crawl.scanScope?.maxDuration;
-    const auditStatus = withMaxDurationCut(baseAuditStatus, durationCut);
+    const phaseCut = crawl.scanScope?.crawlPhase;
+    const auditStatus = withCrawlPhaseCut(
+      withMaxDurationCut(baseAuditStatus, durationCut),
+      phaseCut
+    );
 
     // No real audit ⇒ null score (N/A), not 0. Parity with the cloud/live
     // builder (generateReportFromStorage) + the API's failed-report persist (#586).
@@ -1073,6 +1181,9 @@ export function reconstructReport(
             unstoredPagesTotal: unstoredRead.total,
           }
         : {}),
+      ...(redirectsTotal > 0
+        ? { redirects: redirectRows, redirectsTotal }
+        : {}),
       // #1829: coverage lost to throttling, in a form renderers can count
       // rather than parse out of the reason prose.
       ...(rateLimitedCount > 0
@@ -1103,6 +1214,7 @@ export function reconstructReport(
       // old crawl rows have no stamp and deliberately gain no inferred one.
       ...(crawl.scanScope ? { scanScope: crawl.scanScope } : {}),
       ...(durationCut ? { maxDuration: durationCut } : {}),
+      ...(phaseCut ? { crawlPhase: phaseCut } : {}),
       ...(ignored ? { ignored } : {}),
       // The start URL's followed redirect (#1281), persisted with the scan scope.
       ...(crawl.scanScope?.startRedirect

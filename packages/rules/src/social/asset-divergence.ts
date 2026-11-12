@@ -58,6 +58,9 @@ import type { CheckItem, HreflangAlternate, SiteQuery } from "@squirrelscan/core
 
 import { getAttrCI } from "@squirrelscan/utils";
 
+import { CHECK_NOT_APPLICABLE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
+
+import { excludesNoindexPage, skipsNoindexPages } from "../shared/noindex";
 import { identity } from "../shared/region-variants";
 
 /** Crawl-wide page floor: below this there is no site norm to judge against. */
@@ -231,6 +234,8 @@ interface ChromePageRecord {
   chrome: SiteChromeSignal;
   /** Parser-extracted hreflang alternates, null when the page has none stored. */
   hreflangAlternates: readonly HreflangAlternate[] | null;
+  /** Left out of the comparison (noindex page on an indexable site, #1773). */
+  excluded?: boolean;
 }
 
 /** A 2xx page the rule can judge. */
@@ -246,6 +251,8 @@ interface ChromeSample {
 interface ChromeRollup {
   /** Pages seen by the rule (both paths count the same universe). */
   pageCount: number;
+  /** Noindex pages deliberately left out of the comparison (#1773). */
+  skippedNoindexPages: number;
   samples: ChromeSample[];
   /** Page identity -> identities it lists as hreflang alternates. */
   alternates: Map<string, Set<string>>;
@@ -322,7 +329,7 @@ interface AxisVerdict {
 }
 
 function emptyRollup(): ChromeRollup {
-  return { pageCount: 0, samples: [], alternates: new Map() };
+  return { pageCount: 0, skippedNoindexPages: 0, samples: [], alternates: new Map() };
 }
 
 /**
@@ -333,6 +340,12 @@ function emptyRollup(): ChromeRollup {
 function accumulatePage(rollup: ChromeRollup, record: ChromePageRecord): void {
   rollup.pageCount += 1;
 
+  // A noindex page (staging copy, thank-you page) can carry deliberately different
+  // assets: it neither votes nor counts toward the site size (#1773).
+  if (record.excluded) {
+    rollup.skippedNoindexPages += 1;
+    return;
+  }
   if (record.status < 200 || record.status >= 300) return;
   const perPageOg = PER_PAGE_OG_PAGE_TYPES.has(record.pageType ?? "");
   rollup.samples.push({
@@ -480,7 +493,24 @@ function joinLabels(labels: string[]): string {
  * `siteQuery.pageCount()` (which includes rows this rule cannot sample), so the
  * site floor is judged on the crawl, not on the sampled subset.
  */
-function buildChecks(rollup: ChromeRollup, sitePageCount: number): CheckResult[] {
+function buildChecks(rollup: ChromeRollup, crawlPageCount: number): CheckResult[] {
+  // Every page that answered is noindex: nothing is left to compare, which is not
+  // a pass. Reported as not applicable.
+  if (rollup.skippedNoindexPages > 0 && rollup.samples.length === 0) {
+    return [
+      {
+        name: CHECK_NAME,
+        status: "skipped",
+        message: `Every crawled page is noindex (${rollup.skippedNoindexPages} page(s)), so there is no indexable page to compare`,
+        skipReason: CHECK_NOT_APPLICABLE_SKIP_REASON,
+        details: {
+          foldKey: CHECK_NOT_APPLICABLE_SKIP_REASON,
+          skippedNoindexPages: rollup.skippedNoindexPages,
+        },
+      },
+    ];
+  }
+  const sitePageCount = crawlPageCount - rollup.skippedNoindexPages;
   if (sitePageCount < ASSET_NORM_MIN_PAGES) {
     return [
       skip(
@@ -604,7 +634,7 @@ function buildChecks(rollup: ChromeRollup, sitePageCount: number): CheckResult[]
  * That is a property of this seam shared with every site rule on it (see
  * content/duplicate-title), not something specific to this rule.
  */
-async function runViaSiteQuery(siteQuery: SiteQuery): Promise<RuleResult> {
+async function runViaSiteQuery(siteQuery: SiteQuery, skipNoindex: boolean): Promise<RuleResult> {
   const rollup = emptyRollup();
   for await (const row of siteQuery.pagesMatching(() => true)) {
     accumulatePage(rollup, {
@@ -617,6 +647,7 @@ async function runViaSiteQuery(siteQuery: SiteQuery): Promise<RuleResult> {
         ogImage: row.ogImage,
       },
       hreflangAlternates: row.hreflangAlternates,
+      excluded: skipNoindex && row.robotsNoindex,
     });
   }
 
@@ -641,7 +672,7 @@ export const assetDivergenceRule: Rule = {
 
   run(ctx: RuleContext): RuleResult | Promise<RuleResult> {
     if (ctx.siteQuery) {
-      return runViaSiteQuery(ctx.siteQuery);
+      return runViaSiteQuery(ctx.siteQuery, skipsNoindexPages(ctx.site));
     }
 
     const pages = ctx.site?.pages;
@@ -657,6 +688,7 @@ export const assetDivergenceRule: Rule = {
         pageType: page.parsed?.pageType ?? null,
         chrome: extractSiteChromeSignal(page.parsed, page.url),
         hreflangAlternates: page.parsed?.hreflangAlternates ?? null,
+        excluded: excludesNoindexPage(ctx.site, page.parsed, page.headers),
       });
     }
 

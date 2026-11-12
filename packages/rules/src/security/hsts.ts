@@ -13,6 +13,16 @@ export const hstsRule: Rule = {
     scope: "site",
     severity: "warning",
     weight: 6,
+    // Check names by outcome class (#1741).
+    checks: [
+      { name: "hsts-missing", outcome: "problem" },
+      { name: "hsts-malformed", outcome: "problem" },
+      { name: "hsts-disabled", outcome: "problem" },
+      { name: "hsts-max-age-short", outcome: "problem" },
+      { name: "hsts", outcome: "clean", clears: ["hsts-missing", "hsts-malformed", "hsts-disabled", "hsts-max-age-short"] },
+      { name: "hsts-no-pages", outcome: "skipped" },
+      { name: "hsts-not-applicable", outcome: "skipped" },
+    ],
     // A dev server or private-network host is not the delivery edge (pub#629).
     skipOnPrivateTarget: true,
   },
@@ -23,7 +33,7 @@ export const hstsRule: Rule = {
 
     if (!firstPage) {
       checks.push({
-        name: "hsts",
+        name: "hsts-no-pages",
         status: "skipped",
         message: "No pages to check",
         skipReason: "No pages crawled",
@@ -37,7 +47,7 @@ export const hstsRule: Rule = {
 
     if (!isHttps) {
       checks.push({
-        name: "hsts",
+        name: "hsts-not-applicable",
         status: "info",
         message: "HSTS not applicable - site not served over HTTPS",
       });
@@ -46,7 +56,7 @@ export const hstsRule: Rule = {
 
     if (!hsts) {
       checks.push({
-        name: "hsts",
+        name: "hsts-missing",
         status: "warn",
         message: "Missing Strict-Transport-Security header",
         value: "Add: Strict-Transport-Security: max-age=31536000",
@@ -60,7 +70,7 @@ export const hstsRule: Rule = {
     // Header present but no valid max-age — it's inert and likely a config bug.
     if (!maxAgeMatch) {
       checks.push({
-        name: "hsts",
+        name: "hsts-malformed",
         status: "warn",
         message: "Malformed HSTS header — no valid max-age directive",
         value: hsts,
@@ -74,7 +84,7 @@ export const hstsRule: Rule = {
     // max-age=0 actively disables HSTS (not merely short) — flag separately (squirrelscan/squirrelscan#20).
     if (maxAge === 0) {
       checks.push({
-        name: "hsts",
+        name: "hsts-disabled",
         status: "warn",
         message: "HSTS disabled — max-age=0 tells browsers to stop enforcing HTTPS",
         value: hsts,
@@ -86,7 +96,7 @@ export const hstsRule: Rule = {
     const sixMonths = 15768000; // 6 months in seconds
     if (maxAge < sixMonths) {
       checks.push({
-        name: "hsts",
+        name: "hsts-max-age-short",
         status: "warn",
         message: `HSTS max-age too short (${Math.round(maxAge / 86400)} days)`,
         value: hsts,

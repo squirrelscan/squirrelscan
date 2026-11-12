@@ -225,7 +225,7 @@ _squirrel_completions() {
           return 0
           ;;
       esac
-      COMPREPLY=( $(compgen -W "--max-pages -m --max-depth --concurrency --per-host --level --coverage -C --format -f --output -o --refresh -r --fresh-ua --store-scripts --no-store-scripts --incremental --no-incremental --resume --verbose -v --debug --trace --project-name -n --publish -p --no-publish --ephemeral --no-ephemeral --visibility --follow-redirect --no-follow-redirect --yes -y --render --render-mode --http --offline --external-links --no-external-links --no-internal-links --no-classifier --fail-on --header -H --header-host --rule-include --rule-exclude --disable-discovery-probes --probe -P --passive --aggressive --probe-budget --pentest --summary --include-passed --help --include-info --include-pages --max-duration --no-ignore" -- "\${cur}") )
+      COMPREPLY=( $(compgen -W "--max-pages -m --max-depth --concurrency --per-host --level --coverage -C --format -f --output -o --refresh -r --fresh-ua --store-scripts --no-store-scripts --incremental --no-incremental --resume --verbose -v --debug --trace --project-name -n --publish -p --no-publish --ephemeral --no-ephemeral --visibility --follow-redirect --no-follow-redirect --yes -y --render --render-mode --http --offline --external-links --no-external-links --no-internal-links --no-classifier --fail-on --header -H --header-host --rule-include --rule-exclude --disable-discovery-probes --discovery-probe-path --crawl-timeout --probe -P --passive --aggressive --probe-budget --pentest --summary --include-passed --help --include-info --include-pages --max-duration --no-ignore" -- "\${cur}") )
       return 0
       ;;
     entities)
@@ -257,7 +257,7 @@ _squirrel_completions() {
           return 0
           ;;
       esac
-      COMPREPLY=( $(compgen -W "--max-pages -m --concurrency --per-host --level --coverage -C --refresh -r --fresh-ua --resume --disable-discovery-probes --help" -- "\${cur}") )
+      COMPREPLY=( $(compgen -W "--max-pages -m --concurrency --per-host --level --coverage -C --refresh -r --fresh-ua --resume --disable-discovery-probes --discovery-probe-path --help" -- "\${cur}") )
       return 0
       ;;
     credits)
@@ -546,6 +546,7 @@ _squirrel() {
             '(-m --max-pages)'{-m,--max-pages}'[Maximum pages to crawl]:number' \\
             '--max-depth[Maximum crawl depth from the seed]:number' \\
             '--max-duration[Wall-clock budget for the whole audit, in seconds]:seconds' \\
+            '--crawl-timeout[Crawl-phase wall-clock backstop, in seconds]:seconds' \\
             '--concurrency[Global crawl worker pool size]:number' \\
             '--per-host[Max concurrent requests per host]:number' \\
             '(-C --coverage --level)--level[Audit level]:level:(${levelValues})' \\
@@ -563,7 +564,7 @@ _squirrel() {
             '--debug[Enable debug logging]' \\
             '--trace[Enable performance tracing]' \\
             '(-n --project-name)'{-n,--project-name}'[Project name (overrides config and prompts)]:name' \\
-            '(-p --publish)'{-p,--publish}'[Publish to reports.squirrelscan.com (default when signed in)]' \\
+            '(-p --publish)'{-p,--publish}'[Publish to a shareable report link (default when signed in)]' \\
             '--no-publish[Skip auto-publishing this run]' \\
             '--ephemeral[Use cloud features for this run only: no dashboard site, no schedule, no publish]' \\
             '--no-ephemeral[Override [cloud] ephemeral = true for this run]' \\
@@ -586,6 +587,7 @@ _squirrel() {
             '*--rule-include[Only run these rule categories or rules]:pattern' \\
             '*--rule-exclude[Skip these rule categories or rules]:pattern' \\
             '--disable-discovery-probes[Skip the pre-crawl discovery probes (llms.txt, well-known files, swagger.json)]' \\
+            '*--discovery-probe-path[Only send the discovery probe for this path (repeatable)]:path' \\
             '(-P --probe)'{-P,--probe}'[Probing intensity]:level:(passive active aggressive)' \\
             '--passive[Probing intensity passive: no probe rules]' \\
             '--aggressive[Probing intensity aggressive: loud probes, can trip a WAF]' \\
@@ -633,7 +635,8 @@ _squirrel() {
             '(-r --refresh)'{-r,--refresh}'[Ignore cache, fetch all pages fresh]' \\
             '--fresh-ua[Re-roll the pinned random user-agent]' \\
             '--resume[Resume interrupted crawl]' \\
-            '--disable-discovery-probes[Skip the pre-crawl discovery probes for this run]'
+            '--disable-discovery-probes[Skip the pre-crawl discovery probes for this run]' \\
+            '*--discovery-probe-path[Only send the discovery probe for this path (repeatable)]:path'
           ;;
         credits)
           _arguments \\
@@ -675,7 +678,7 @@ _squirrel() {
             '--allow-cross-site[Allow diff across different base URLs]' \\
             '(-o --output)'{-o,--output}'[Output file path]:file:_files' \\
             '(-i --input)'{-i,--input}'[Load from JSON file]:file:_files -g "*.json"' \\
-            '(-p --publish)'{-p,--publish}'[Publish to reports.squirrelscan.com]' \\
+            '(-p --publish)'{-p,--publish}'[Publish to a shareable report link]' \\
             '--visibility[Visibility when publishing]:visibility:(public unlisted private)' \\
             '--summary[Print score, category breakdown, and issue counts only]' \\
             '--include-passed[Also list the rules that passed]' \\
@@ -831,6 +834,7 @@ complete -c squirrel -n "__fish_seen_subcommand_from config; and __fish_seen_sub
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -s m -l max-pages -d "Maximum pages to crawl"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l max-depth -d "Maximum crawl depth from the seed"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l max-duration -d "Wall-clock budget for the whole audit, in seconds"
+complete -c squirrel -n "__fish_seen_subcommand_from audit" -l crawl-timeout -d "Crawl-phase wall-clock backstop, in seconds"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l concurrency -d "Global crawl worker pool size"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l per-host -d "Max concurrent requests per host"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l level -a "${levelValues}" -d "Audit level"
@@ -848,7 +852,7 @@ complete -c squirrel -n "__fish_seen_subcommand_from audit" -s v -l verbose -d "
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l debug -d "Enable debug logging"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l trace -d "Enable performance tracing"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -s n -l project-name -d "Project name (overrides config and prompts)"
-complete -c squirrel -n "__fish_seen_subcommand_from audit" -s p -l publish -d "Publish to reports.squirrelscan.com (default when signed in)"
+complete -c squirrel -n "__fish_seen_subcommand_from audit" -s p -l publish -d "Publish to a shareable report link (default when signed in)"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l no-publish -d "Skip auto-publishing this run"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l ephemeral -d "Use cloud features for this run only: no dashboard site, no schedule, no publish"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l no-ephemeral -d "Override [cloud] ephemeral = true for this run"
@@ -871,6 +875,7 @@ complete -c squirrel -n "__fish_seen_subcommand_from audit" -l header-host -d "H
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l rule-include -d "Only run these rule categories or rules"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l rule-exclude -d "Skip these rule categories or rules"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l disable-discovery-probes -d "Skip the pre-crawl discovery probes (llms.txt, well-known files, swagger.json)"
+complete -c squirrel -n "__fish_seen_subcommand_from audit" -l discovery-probe-path -r -d "Only send the discovery probe for this path (repeatable)"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -s P -l probe -a "passive active aggressive" -d "Probing intensity"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l passive -d "Probing intensity passive: no probe rules"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l aggressive -d "Probing intensity aggressive: loud probes, can trip a WAF"
@@ -918,6 +923,7 @@ complete -c squirrel -n "__fish_seen_subcommand_from crawl" -s r -l refresh -d "
 complete -c squirrel -n "__fish_seen_subcommand_from crawl" -l fresh-ua -d "Re-roll the pinned random user-agent"
 complete -c squirrel -n "__fish_seen_subcommand_from crawl" -l resume -d "Resume interrupted crawl"
 complete -c squirrel -n "__fish_seen_subcommand_from crawl" -l disable-discovery-probes -d "Skip the pre-crawl discovery probes for this run"
+complete -c squirrel -n "__fish_seen_subcommand_from crawl" -l discovery-probe-path -r -d "Only send the discovery probe for this path (repeatable)"
 
 # Analyze options
 complete -c squirrel -n "__fish_seen_subcommand_from analyze" -l id -d "Crawl ID to analyze"
@@ -936,7 +942,7 @@ complete -c squirrel -n "__fish_seen_subcommand_from report" -l regression-since
 complete -c squirrel -n "__fish_seen_subcommand_from report" -l allow-cross-site -d "Allow diff across different base URLs"
 complete -c squirrel -n "__fish_seen_subcommand_from report" -s o -l output -d "Output file path"
 complete -c squirrel -n "__fish_seen_subcommand_from report" -s i -l input -d "Load from JSON file"
-complete -c squirrel -n "__fish_seen_subcommand_from report" -s p -l publish -d "Publish to reports.squirrelscan.com"
+complete -c squirrel -n "__fish_seen_subcommand_from report" -s p -l publish -d "Publish to a shareable report link"
 complete -c squirrel -n "__fish_seen_subcommand_from report" -l visibility -a "public unlisted private" -d "Visibility when publishing"
 complete -c squirrel -n "__fish_seen_subcommand_from report" -l summary -d "Print score, category breakdown, and issue counts only"
 complete -c squirrel -n "__fish_seen_subcommand_from report" -l include-passed -d "Also list the rules that passed"

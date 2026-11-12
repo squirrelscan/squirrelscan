@@ -35,6 +35,8 @@ import { detachFingerprint, fingerprintPage, mergeRuleRunResult } from "@squirre
 import { buildSiteContext, buildHeadersMap, isRenderedFetch } from "./site-fetch";
 import { collectDroppedBatch } from "./batch-gc";
 import { detachFromPage } from "./detach";
+import { EMPTY_PARSED_PAGE } from "./empty-parsed-page";
+import { isRedirectSourcePage, redirectSourceEntry } from "./redirect-source";
 import { extractPageFeatures, isAuditablePage } from "./page-features";
 import { crawledPageKeys } from "@squirrelscan/utils/url";
 import type { PageRuleLoopHooks } from "./page-rule-executor";
@@ -407,6 +409,9 @@ export function streamPageRules(
               ? universe.has(page.normalizedUrl)
               : isAuditablePage(page);
             if (!inUniverse) continue;
+            // A redirect row (#1762) is not a page and runs only the redirect rules: it has no cached entry,
+            // and a key built from its empty record must never be looked up as if it did.
+            if (isRedirectSourcePage(page)) continue;
             const key = await cache.keyFor(page, soft404?.get(page.normalizedUrl));
             if (key) {
               keyByUrl.set(page.normalizedUrl, key);
@@ -470,6 +475,40 @@ export function streamPageRules(
             yield* Effect.promise(() => yieldToEventLoop());
             lastYieldAt = Date.now();
             opts?.signal?.throwIfAborted();
+          }
+          continue;
+        }
+
+        // A redirecting URL is a redirect, not a page (#1762): no content rule, not in the
+        // page list or totals. The rule that reports its hops still runs on it.
+        if (isRedirectSourcePage(page)) {
+          const entry = redirectSourceEntry(page, EMPTY_PARSED_PAGE);
+          const raw = yield* Effect.promise(() =>
+            runner.runPageRules(
+              {
+                url: entry.url,
+                html: "",
+                statusCode: entry.statusCode,
+                loadTime: 0,
+                headers: {},
+                parsed: entry.parsed,
+                finalUrl: entry.finalUrl,
+                redirectChain: entry.redirectChain,
+              },
+              siteDataForPageRules,
+              { redirectSource: true },
+            ),
+          );
+          const pageUrl = entry.url;
+          for (const [, rr] of raw.ruleResults) {
+            for (const check of rr.checks) if (!check.pageUrl) check.pageUrl = pageUrl;
+          }
+          const entries = [...raw.ruleResults].map(([ruleId, rr]) => [ruleId, rr.checks] as const);
+          const written = pageSink?.writePage(pageUrl, entries);
+          if (written) yield* Effect.promise(() => written);
+          for (const [ruleId, rr] of raw.ruleResults) {
+            if (retain) mergeRuleRunResult(ruleResultsMap, ruleId, rr as RuleRunResult);
+            foldRuleResultIntoTallies(tallies, ruleId, rr as RuleRunResult);
           }
           continue;
         }

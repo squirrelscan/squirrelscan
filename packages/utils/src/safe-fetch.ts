@@ -36,6 +36,11 @@ export interface SafeRedirectResult {
   finalUrl: string;
   /** True when at least one redirect was followed. */
   redirected: boolean;
+  /**
+   * Set when `shouldFollow` refused the next hop: the redirect target. `response` is then that 3xx,
+   * body unread, and `finalUrl` the URL that answered it.
+   */
+  unfollowed?: string;
 }
 
 /**
@@ -69,6 +74,7 @@ export async function safeRedirectFetch(
   url: string,
   init: RequestInit = {},
   send: (url: string, init: RequestInit) => Promise<Response> = fetch,
+  shouldFollow?: (from: string, to: string) => boolean,
 ): Promise<SafeRedirectResult> {
   if (!isHttpOrHttpsUrl(url)) {
     throw new TypeError(`Refusing to fetch non-http(s) URL: ${url}`);
@@ -98,6 +104,12 @@ export async function safeRedirectFetch(
       // Cross-protocol redirect (e.g. Location: file:///etc/passwd) — refuse it.
       response.body?.cancel().catch(() => {});
       throw new TypeError(`Refusing redirect to non-http(s) URL: ${nextUrl}`);
+    }
+
+    // A caller that vetoes the hop gets the 3xx back as the final response, unfollowed, with the
+    // refused target named (#1655). The hook runs after the scheme check, so it only sees http(s).
+    if (shouldFollow && !shouldFollow(currentUrl, nextUrl)) {
+      return { response, finalUrl: currentUrl, redirected: currentUrl !== url, unfollowed: nextUrl };
     }
 
     // Discard the 3xx body before the next hop so the socket can be reused.

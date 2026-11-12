@@ -78,7 +78,7 @@ All tools require authentication. Write tools are marked; everything else only r
 | `whoami` | Identify the active credentials: org, plan, auth kind, credit balance. Call it first. | Read |
 | `run_audit` | Run a cloud audit of a URL (crawl + 300+ rule analysis + report) at an [audit level](/guides/audit-levels). Estimate and confirm rail, see [Credits](#credits). Registers the website automatically on first audit. If the requested page count exceeds the org's plan ceiling, the audit still runs at the plan's max (never a hard error) and the response carries a `notice` field saying so. | Write, spends credits |
 | `get_audit_status` | Poll a running audit by `run_id` until it completes. While running, the response includes a `progress` field (phase, message, page/link counts) when available. `notice` is present when the run's page count was clamped to the plan's ceiling at dispatch time. | Read |
-| `get_report` | Fetch a finished report: `summary` (JSON scores, top issues grouped by rule with fix text deduped into a `rules` dict, and score/issue-count history across prior audits), `llm` (compact text for agent context), `markdown` (the readable report), or `rule_ids` (just the distinct failing and warning rule ids, uncapped, for building a [disable list](#tailor-each-website-with-rules)). Every format says how many rules the website's config switched off, as `rulesDisabledByConfig` or a line such as "3 rules disabled by config". A published report is a capped summary: each issue lists a sample of its pages and items with the true counts (`affectedPagesCount`, `occurrences`), and `detail.note` says where the full per-page list is. | Read |
+| `get_report` | Fetch a finished report: `summary` (JSON scores, top issues grouped by rule with fix text deduped into a `rules` dict, and score/issue-count history across prior audits), `llm` (compact text for agent context), `markdown` (the readable report), or `rule_ids` (just the distinct failing and warning rule ids, uncapped, for building a [disable list](#tailor-each-website-with-rules)). Every format says how many rules the website's config switched off, as `rulesDisabledByConfig` or a line such as "3 rules disabled by config". A published report is a capped summary: each issue lists a sample of its pages and items with the true counts (`affectedPagesCount`, `occurrences`), and `detail.note` says where the full per-page list is. When the audit did not cover every known page, the summary also carries `coverageNotice`: see [audit coverage](#audit-coverage). | Read |
 | `compare_audits` | Diff two completed audits of a website: the latest against the one before it by default, or any two by `base` and `head` run id. Each finding is `new`, `resolved`, `worsened`, `improved`, `unchanged`, `still_open`, `not_crawled` or `not_checked`, with score movement per category; the last four are listed only when asked for with `include_unchanged`, `include_still_open`, `include_not_crawled` and `include_not_checked`, and `totals` counts every kind. A page the newer audit did not visit counts as `not_crawled`, and a rule it could not run (a capped crawl's inbound-link rules, a check that did not run) as `not_checked` with its `skipReason`, never `resolved`; `resolutionEvidence` says what backs the resolved verdicts. | Read |
 | `list_audits` | Active and recent audit runs for the org. An active run carries `notice` when its page count was clamped to the plan's ceiling at dispatch time. | Read |
 | `list_websites` | Websites the org has audited, with latest status and health score. Paginated (`total`/`has_more`). | Read |
@@ -87,7 +87,7 @@ All tools require authentication. Write tools are marked; everything else only r
 | `update_website_settings` | Change those settings for one website, including `schedule` (`off`, `daily`, `weekly` or `monthly`), `broken_link_alerts` (Pro and Team; turning it on is refused on Free) and `disable_rules` (rule ids and category globs the website's cloud audits skip, see [Tailor each website with rules](#tailor-each-website-with-rules)). Omitted fields stay as they are, values are checked like the dashboard's, and the result shows what is stored afterwards with the fields that were `applied`. Confirm rail for anything that raises spend, see below. Needs `audits:write`. | Write |
 | `delete_website` | Soft-delete a website (confirm rail). Past audits, reports, and issues are preserved and published report links keep working; the site leaves listings and frees a slot under the plan's website limit. Re-adding the domain later creates a fresh website with a new id. | Write |
 | `delete_websites` | Soft-delete up to 50 websites in one call, with the same confirm rail and the same soft delete as `delete_website`. Each result names the domain behind its id whenever it can be found, and an id that does not resolve is reported on its own rather than failing the call. | Write |
-| `list_issues` | Audit issues for a website, sorted by severity, filterable by status, severity, and category. Rows omit the long recommendation unless `include_recommendation` is set; `website_totals` counts the whole website, `total` counts the filtered set. `website_totals` replaces the earlier `severity_summary` and `status_counts` fields, an intentional change: read the counts there. After a smart audit each row also carries `provenance` and `last_seen_at`: see [issue provenance](#issue-provenance). | Read |
+| `list_issues` | Audit issues for a website, sorted by severity, filterable by status, severity, and category. Rows omit the long recommendation unless `include_recommendation` is set; `website_totals` counts the whole website, `total` counts the filtered set. `website_totals` replaces the earlier `severity_summary` and `status_counts` fields, an intentional change: read the counts there. After a smart audit each row also carries `provenance` and `last_seen_at`: see [issue provenance](#issue-provenance). When the latest audit did not cover every known page, the result also carries `coverage`: see [audit coverage](#audit-coverage). | Read |
 | `get_issue` | One issue with full detail, per-occurrence detail from the latest report (which pages/images, capped and countable via `occurrence_limit`), and its comment thread. It carries `provenance` and `last_seen_at` as `list_issues` does. | Read |
 | `comment_on_issue` | Post a markdown comment on an issue, visible in the dashboard thread. | Write |
 | `list_rules` | Browse the audit rule catalog by category or keyword. | Read |
@@ -126,6 +126,29 @@ After a [smart audit](/guides/audit-levels), `list_issues` and `get_issue` retur
 Both fields are omitted when the issue has no recorded provenance, for example on a website whose audits are not smart audits.
 
 `get_report` returns `seedRedirect` only when the audited URL redirected off-site and the crawler did not follow it. Its `finalUrl` is `null`, with a `note` saying the redirect target was not a valid URL and is withheld, when the target was not a valid http(s) URL. The audit then graded the audited address, not the redirect target.
+
+### Audit coverage
+
+A sampled or capped audit says what it did not check. `list_issues` returns `coverage` and `get_report` (summary format) returns `coverageNotice` only when the audit did not cover every page the site is known to have: it was sampled by its level or page limit, stopped on time, or left a queue behind. Both are absent when every known page was audited. The two carry the same facts. `list_issues` uses snake_case keys like the rest of that tool, and `get_report` uses camelCase like the rest of its summary (`coverage` is already the smart-audit object there, hence the different name).
+
+| `list_issues` `coverage` | `get_report` `coverageNotice` | Meaning |
+| --- | --- | --- |
+| `audited_pages` | `auditedPages` | Pages this audit crawled and checked. |
+| `known_pages` | `knownPages` | Pages the site is known to have, from this and earlier audits. |
+| `not_audited_pages` | `notAuditedPages` | The gap between the two. A floor: the site may have more. |
+| `carried_pages` | `carriedPages` | Known from earlier audits and not re-checked now. |
+| `unaudited_pages` | `unauditedPages` | Found but never audited. |
+| `capped` | `capped` | The page limit stopped the crawl. |
+| `time_stopped` | `timeStopped` | The time limit stopped the crawl. |
+| `max_pages` | `maxPages` | The page limit, when there was one. |
+| `page_types` | `pageTypes` | The sampled page types, each as `{type, discovered, audited}`. |
+
+Carried is not unaudited:
+
+- **Carried pages** were audited in an earlier audit. Their findings are in the results, marked `carried`, and stay open until a later audit re-checks them.
+- **Unaudited pages** were found and never audited. A problem on one of them does not appear in the results.
+
+When `unaudited_pages` (or `unauditedPages`) is above 0, the list of issues can be shorter than the site's real problems. Tell the user that, and offer a deeper audit (`run_audit` with `level` set to `full`). It does not put any listed issue in doubt. A failed or blocked audit, or one that crawled no pages, carries no coverage notice.
 
 ### Tailor each website with rules
 

@@ -7,7 +7,7 @@
 
 import { describe, expect, test } from "bun:test";
 
-import type { CheckItem, CheckResult, CheckTallies } from "@squirrelscan/core-contracts";
+import { isCoverageGapCheck, type CheckItem, type CheckResult, type CheckTallies } from "@squirrelscan/core-contracts";
 import {
   ENTITY_MAP_FORMAT,
   ENTITY_MAP_VERSION,
@@ -504,6 +504,38 @@ describe("capReportForPublish: size", () => {
     expect(capped.detail.classesDropped).toBeGreaterThan(0);
     const kept = capped.ruleResults["links/broken-external-links"]!.checks;
     expect(kept.map((c) => [c.status, c.skipReason])).toEqual([["skipped", "external-links-not-checked"]]);
+  }, SLOW);
+
+  test("a coverage-gap row survives the byte-budget cut, whatever its status (#1749)", () => {
+    const rules: RuleSpec[] = Array.from({ length: 60 }, (_, r) => ({
+      id: `content/many-${String(r).padStart(2, "0")}`,
+      category: "content",
+      severity: "warning" as const,
+      weight: 3,
+      names: Array.from({ length: 25 }, (_, n) => `check-${n}`),
+    }));
+    const input = report(4, { rules, everyClassFails: 1, maxStrings: true });
+    const gaps: Array<[string, CheckResult]> = [
+      ["security/leaked-secrets", { name: "leaked-secrets-unfetched", status: "info", message: "2 script(s) could not be read" }],
+      ["security/leaked-secrets", { name: "leaked-secrets-unscanned", status: "info", message: "1 page(s) were not fully scanned" }],
+      ["security/leaked-secrets", { name: "leaked-secrets-omitted", status: "warn", message: "3 more findings were not kept" }],
+      ["content/dev-leakage", { name: "dev-leakage", status: "skipped", message: "No document available", skipReason: "unread-page" }],
+      ["content/date-agreement", { name: "date-agreement", status: "skipped", message: "Stopped at a work cap", skipReason: "scan-truncated" }],
+    ];
+    for (const [id, check] of gaps) {
+      input.ruleResults[id] = {
+        meta: meta({ id, category: id.startsWith("security") ? "security" : "content", severity: "warning", weight: 5, names: [] }, "site"),
+        checks: [...(input.ruleResults[id]?.checks ?? []), check],
+      };
+    }
+    const capped = capReportForPublish(input, { maxBytes: 256 * 1024 });
+    expect(capped.detail.classesDropped).toBeGreaterThan(0);
+    for (const [id, check] of gaps) {
+      const kept = capped.ruleResults[id]!.checks.map((c) => [c.name, c.status, c.skipReason]);
+      expect(kept, `${id}/${check.name}`).toContainEqual([check.name, check.status, check.skipReason]);
+    }
+    // An ordinary info row of a rule is not a coverage gap and gets no such pin.
+    expect(isCoverageGapCheck({ name: "leaked-secrets-info", status: "info" })).toBe(false);
   }, SLOW);
 
   test("a skeleton that fits is published even with every class left out", () => {

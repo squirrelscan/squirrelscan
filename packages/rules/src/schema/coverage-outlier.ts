@@ -30,6 +30,14 @@
 // carry the same `schemaTypes`, so they all sit inside their own norm and none of
 // them can be a deviant.
 //
+// Noindex pages (meta or X-Robots-Tag) are left out entirely (#1770): structured
+// data has no search use on a page kept out of search, so a noindex page is neither
+// a candidate outlier nor part of the group that sets the norm, and the site floor
+// and the "N of M" figures count indexable pages only. Unlike the #488 rules this is
+// not gated on `siteIndexable`: the exclusion is about the page, and a site where
+// every page is noindex (staging, a site-wide header) reports "not applicable"
+// rather than a pass.
+//
 // Dual path: `ctx.siteQuery` streams (pageType, schemaTypes, richResultTypes)
 // straight off page_features; the legacy path reads the same three fields from
 // `ctx.site.pages`. Both feed ONE accumulator and ONE check builder, so the output
@@ -37,6 +45,8 @@
 // #1021/#1022). No storage schema change: all three columns already exist.
 
 import { getRichResultTypes } from "@squirrelscan/utils";
+
+import { noindexSource } from "../shared/noindex";
 
 import type { CheckItem, SiteQuery } from "@squirrelscan/core-contracts";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
@@ -73,6 +83,8 @@ interface SchemaPageRecord {
   pageType: string | null;
   schemaTypes: string[];
   richResultTypes: string[];
+  /** Noindex page: left out of the comparison (#1770). */
+  noindex?: boolean;
 }
 
 interface SchemaGroup {
@@ -89,6 +101,8 @@ interface SchemaGroup {
 interface SchemaRollup {
   /** Pages seen by the rule (both paths count the same universe). */
   pageCount: number;
+  /** Noindex pages among them, left out of the comparison (#1770). */
+  noindexCount: number;
   /** Pages that carry a usable page type. */
   sampleCount: number;
   groups: Map<string, SchemaGroup>;
@@ -111,7 +125,7 @@ interface JudgedGroup {
 }
 
 function emptyRollup(): SchemaRollup {
-  return { pageCount: 0, sampleCount: 0, groups: new Map() };
+  return { pageCount: 0, noindexCount: 0, sampleCount: 0, groups: new Map() };
 }
 
 /**
@@ -122,6 +136,10 @@ function emptyRollup(): SchemaRollup {
 function accumulatePage(rollup: SchemaRollup, record: SchemaPageRecord): void {
   rollup.pageCount += 1;
 
+  if (record.noindex) {
+    rollup.noindexCount += 1;
+    return;
+  }
   if (record.status < 200 || record.status >= 300) return;
   const pageType = record.pageType?.trim().toLowerCase();
   if (!pageType || pageType === "unknown") return;
@@ -165,7 +183,15 @@ function byString(a: string, b: string): number {
  * `siteQuery.pageCount()` (which includes rows this rule cannot sample), so the
  * site floor is judged on the crawl, not on the sampled subset.
  */
-function buildChecks(rollup: SchemaRollup, sitePageCount: number): CheckResult[] {
+function buildChecks(rollup: SchemaRollup, crawlPageCount: number): CheckResult[] {
+  if (crawlPageCount > 0 && rollup.noindexCount >= crawlPageCount) {
+    return [
+      skip(
+        `Not applicable: all ${crawlPageCount} crawled page(s) are noindex, so structured data has no search use to compare`
+      ),
+    ];
+  }
+  const sitePageCount = crawlPageCount - rollup.noindexCount;
   if (sitePageCount < SCHEMA_NORM_MIN_PAGES) {
     return [
       skip(
@@ -318,6 +344,7 @@ async function runViaSiteQuery(siteQuery: SiteQuery): Promise<RuleResult> {
       pageType: row.pageType,
       schemaTypes: row.schemaTypes,
       richResultTypes: row.richResultTypes,
+      noindex: row.robotsNoindex,
     });
   }
 
@@ -360,6 +387,7 @@ export const schemaCoverageOutlierRule: Rule = {
         schemaTypes: schemas?.types ?? [],
         // Same derivation page-features stores, so both paths see one value.
         richResultTypes: schemas ? getRichResultTypes(schemas) : [],
+        noindex: noindexSource(page.parsed, page.headers) !== null,
       });
     }
 

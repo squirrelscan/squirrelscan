@@ -202,6 +202,7 @@ import type {
   AuditStatus as _AS,
   AuditStatusReasonCode as _ASRC,
   MaxDurationCut as _MDC,
+  CrawlPhaseCut as _CPC,
   CacheStats as _CST,
   CategoryScore as _CS,
   CheckItemSource,
@@ -225,6 +226,7 @@ export type AuditStatus = _AS;
 export type AuditFailureReasonCode = _AFRC;
 export type AuditStatusReasonCode = _ASRC;
 export type MaxDurationCut = _MDC;
+export type CrawlPhaseCut = _CPC;
 export type CategoryScore = _CS;
 export type GroupScore = _GS;
 export type HealthScore = _HS;
@@ -476,6 +478,9 @@ export interface AuditReport {
   /** URLs the crawl requested but stored no page for, for `--include-pages` (#1396). Mirrors core-contracts `AuditReport`. */
   unstoredPages?: import("@squirrelscan/core-contracts").UnstoredPage[];
   unstoredPagesTotal?: number;
+  /** URLs recorded as redirects, not pages (#1762), for `--include-pages`. Mirrors core-contracts `AuditReport`. */
+  redirects?: import("@squirrelscan/core-contracts").RedirectRow[];
+  redirectsTotal?: number;
   /**
    * Where the seed's redirects resolved to, when that is a DIFFERENT site from
    * `baseUrl` — the redirect left the seed's site and was refused, not adopted.
@@ -518,6 +523,8 @@ export interface AuditReport {
   statusReasonCode?: AuditStatusReasonCode;
   /** What the `--max-duration` time limit cut (#1271). Mirrors core-contracts `AuditReport`. */
   maxDuration?: MaxDurationCut;
+  /** What the crawl-phase backstop cut (#1639). Mirrors core-contracts `AuditReport`. */
+  crawlPhase?: CrawlPhaseCut;
   /**
    * Root fetches the site refused (401/403/429, a bot wall). Mirrors the field
    * on the engine's AuditReport; the two types are structurally different, so
@@ -674,10 +681,14 @@ export interface AuditReport {
     stopReason?: "time";
     /** In-scope URLs left queued, never fetched, when the crawl stopped. */
     unfetched?: number;
+    /** Discovered and audited page counts per URL-based page type (#1744). */
+    pageTypes?: Array<{ type: string; discovered: number; audited: number }>;
     /** The start URL's followed redirect (#1281), so a rebuilt report still carries it. */
     startRedirect?: SeedRedirectRecord;
     /** What the `--max-duration` time limit cut (#1271), so a rebuilt report is still partial. */
     maxDuration?: MaxDurationCut;
+    /** The crawl-phase backstop cut (#1639), so a rebuilt report is still partial. */
+    crawlPhase?: CrawlPhaseCut;
     /** The `[[ignore]]` list as this audit ran it (#1262). */
     ignore?: {
       entries: Array<{ rule: string; reason?: string }>;
@@ -822,6 +833,8 @@ export interface AuditOptions {
   // disable_discovery_probes for this run, either way (`=false` turns the
   // probes back on). Undefined → config decides.
   disableDiscoveryProbes?: boolean;
+  /** `--discovery-probe-path`: replaces [crawler] discovery_probe_paths for this run (#1655). */
+  discoveryProbePaths?: string[];
   // Probing intensity, resolved by the command (resolveProbeIntensity): the
   // level and the wall-clock cap for ALL probing rules together. The controller
   // turns it into the shared `ctx.probe` budget. Undefined → passive.

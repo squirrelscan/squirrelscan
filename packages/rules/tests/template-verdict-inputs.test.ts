@@ -22,14 +22,18 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 
 import { loadAllRules } from "../src/loader";
+import { SIGNATURE_ATTRIBUTES, SIGNATURE_SELECTORS } from "../src/template-signature-reads";
 import { mayFanOutAcrossTemplate } from "../src/types";
 
 const SRC = join(import.meta.dir, "../src");
 
+/** Channels that read the whole document: reviewed, never keyed (#1373). */
+const WHOLE_DOCUMENT = new Set(["page.html", "page.url", "textContent", "innerHTML", "documentElement", "body"]);
+
 type Reviewed = { keyed: string[]; unkeyed: string[] };
 
 /**
- * `getCWVHints` (src/performance/cwv.ts), which three rules hand their document
+ * `getCWVHints` (src/performance/cwv.ts), which two template rules hand their document
  * and raw HTML to. The scan counts every read in that file, so this is all of
  * them: preload, prefetch, preconnect and dns-prefetch links, script `type`,
  * `async`, `defer` and `nomodule`, stylesheet `media`, images and iframes with
@@ -161,7 +165,6 @@ const REVIEWED: Record<string, Reviewed> = {
     ],
   },
   "perf/preconnect": CWV_HINTS,
-  "perf/render-blocking": CWV_HINTS,
   "perf/unminified-css": {
     keyed: ["@href"],
     // An exact `rel="stylesheet"`: the key matches the token, so
@@ -446,6 +449,43 @@ describe("template-declared rules read only reviewed inputs (#614)", () => {
     const stripped = readFileSync(zoom, "utf-8").replaceAll("getAttribute(", "noop(");
     expect(reviewDifference("a11y/zoom-disabled", ruleReads(stripped, zoom)).some((d) => d.startsWith("-"))).toBe(true);
   }, 30_000);
+
+  test("every attribute and selector read is in the derived signature reads (#1373)", () => {
+    // Whole-document reads (page.html, textContent, innerHTML, helper:*) stay
+    // reviewed UNKEYED entries. A selector or attribute read can be keyed, so a
+    // new one must be added to src/template-signature-reads.ts, which the derived
+    // signature measurement (template-fanout-bench.ts --coverage) follows.
+    const selectors = new Set(SIGNATURE_SELECTORS);
+    const attributes = new Set(SIGNATURE_ATTRIBUTES);
+    const outside: string[] = [];
+    for (const [id, reads] of scanned) {
+      for (const r of reads) {
+        if (r.startsWith("@")) {
+          if (!attributes.has(r.slice(1))) outside.push(`${id}: ${r}`);
+        } else if (!/^(?:helper:|selector:|attribute:|matches:)/.test(r) && !WHOLE_DOCUMENT.has(r)) {
+          if (!selectors.has(r)) outside.push(`${id}: ${r}`);
+        }
+      }
+    }
+    expect(outside).toEqual([]);
+  });
+
+  test("a new attribute or selector read outside the derived reads is reported (#1373)", () => {
+    const file = sourceFiles(SRC).find((f) => f.endsWith("/core/doctype.ts"))!;
+    const mutated = `${readFileSync(file, "utf-8")}\nfunction f(el: any) { el.getAttribute("data-new"); el.querySelector("aside.fake"); }\n`;
+    const reads = ruleReads(mutated, file);
+    expect(reads).toContain("@data-new");
+    expect(new Set(SIGNATURE_ATTRIBUTES).has("data-new")).toBe(false);
+    expect(new Set(SIGNATURE_SELECTORS).has("aside.fake")).toBe(false);
+  });
+
+  test("the derived reads list holds nothing no declared rule reads, bar the signature's own elements", () => {
+    const read = new Set([...scanned.values()].flat());
+    const extraSelectors = new Set(["html", "body", "meta", 'link[rel*="icon"]']);
+    const extraAttributes = new Set(["charset", "http-equiv", "name", "property"]);
+    expect(SIGNATURE_SELECTORS.filter((s) => !read.has(s) && !extraSelectors.has(s))).toEqual([]);
+    expect(SIGNATURE_ATTRIBUTES.filter((a) => !read.has(`@${a}`) && !extraAttributes.has(a))).toEqual([]);
+  });
 
   test("the VerdictScope doc names every rule with an UNKEYED read", () => {
     const types = readFileSync(join(SRC, "types.ts"), "utf-8");

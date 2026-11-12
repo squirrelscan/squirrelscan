@@ -13,6 +13,8 @@ This rule never asks whether a page has structured data in the abstract. It grou
 
 The rule runs once per crawl and emits a single check named `coverage-outlier`. A page enters a comparison group only when its HTTP status is 2xx and it carries a page type that is neither empty nor `unknown`. The `unknown` bucket holds everything the classifier could not place, and its members are not siblings of each other.
 
+- Pages marked `noindex`, by robots meta tag or `X-Robots-Tag` header, are left out of the comparison: they are never reported, and they are not part of the group that sets the norm, so the `N of M` figures and the 10-page floor below count indexable pages only. Structured data has no search use on a page kept out of search. Unlike some other rules this does not depend on the homepage being indexable. See [pages kept out of search](/rules/index#pages-kept-out-of-search).
+- Skipped with the message `Not applicable: all N crawled page(s) are noindex, so structured data has no search use to compare` when every crawled page is noindex, such as a staging site or a site-wide header.
 - Skipped with the message `Only N page(s) crawled; 10 needed to establish a structured-data norm` when the crawl has fewer than 10 pages.
 - Skipped with the message `No page type has 8+ comparable pages sharing a structured-data pattern` when no page-type group reaches 8 pages with an agreed set of types.
 - Skipped with the message `No pages available for analysis` when the crawl produced no pages at all. This wording comes from the non-streaming path; a streaming crawl with no pages takes the `Only 0 page(s) crawled` branch instead.

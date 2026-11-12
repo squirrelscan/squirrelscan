@@ -38,6 +38,7 @@ import { isIP } from "node:net";
 
 import { isCloudMetadataHostname, isNonPublicHostname } from "./non-public-host";
 import { isPrivateOrReservedHost } from "./url";
+import { trimTrailing } from "./trim";
 
 /** Every address a hostname resolves to. */
 export type ResolveHost = (hostname: string) => Promise<string[]>;
@@ -153,6 +154,30 @@ export const EGRESS_OFF_SITE_REFUSAL = "refused: host outside the allowed set";
 /** Thrown before a request the egress policy refuses. Nothing was sent. */
 export class EgressRefusedError extends Error {
   override name = "EgressRefusedError";
+}
+
+/**
+ * The name resolved to NO address (the resolver answered, with nothing). Not a safety refusal: the host does
+ * not exist, as far as this resolver can tell, which is a different thing from an address the policy will
+ * not connect to. A subclass of {@link EgressRefusedError}, so a caller that only asks "was it refused"
+ * is unchanged; a link checker reads it to tell a dead host from a refused one (#1740).
+ */
+export class EgressUnresolvableError extends EgressRefusedError {
+  override name = "EgressUnresolvableError";
+  constructor(readonly hostname: string) {
+    super("refused: host resolves to no address");
+  }
+}
+
+/**
+ * Names RFC 6761 reserves so that they never resolve in public DNS: `.test`, `.example` and `.invalid`. A link
+ * to one on a public site points at nothing any visitor can reach, which is a dead link, not a name whose status
+ * is unknown (#1740). Not the other internal-only zones (`.local`, `.lan`, `.internal`, ...): those are real
+ * names on real private networks, and stay refused. A private-network audit allows all of them.
+ */
+export function isReservedUnresolvableHostname(rawHost: string): boolean {
+  const host = trimTrailing(rawHost.toLowerCase(), 46); // a linear trim: /\.+$/ is quadratic on a host of many dots
+  return ["test", "example", "invalid"].some((zone) => host === zone || host.endsWith(`.${zone}`));
 }
 
 /** Cloud metadata services reached by address rather than by 169.254/16. */
@@ -453,6 +478,8 @@ export function refusedWithoutLookup(url: string, policy: EgressPolicy): boolean
   if (isIP(host) !== 0) return refusesAddress(host, allowPrivate);
   if (isCloudMetadataHostname(host)) return true;
   if (policy.trustTarget?.(parsed)) return false;
+  // A reserved never-resolving name is a dead name, not a refusal (#1740): the link checker answers it as one.
+  if (!allowPrivate && isReservedUnresolvableHostname(host)) return false;
   return !allowPrivate && isNonPublicHostname(host);
 }
 
@@ -500,6 +527,9 @@ export async function vetEgressTarget(
   // Not when the transport connects by name: it might pick that address.
   const addresses =
     policy.pin === false ? answers : answers.filter((address) => !address.includes("%"));
+  // No answer at all is a dead name, not a refused address (#1740). Only when the resolver gave nothing: a
+  // name whose every answer was set aside above (scoped link-local) still reads as refused.
+  if (answers.length === 0) throw new EgressUnresolvableError(host);
   if (
     addresses.length === 0 ||
     addresses.some((address) => refusesAddress(address, allowPrivate))

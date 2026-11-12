@@ -24,7 +24,7 @@ export async function run(body: string, head = ""): Promise<{ ms: number; checks
 }
 export const finished = (checks: Check[]): boolean => !checks.some((c) => /-error$|timeout/.test(c.name ?? "") || c.status === "skipped");
 export const fired = (checks: Check[], name: string): boolean =>
-  checks.some((c) => c.name === name && c.status !== "skipped" && c.details?.scanTruncated !== true);
+  checks.some((c) => c.name === name && c.status !== "skipped" && c.status !== "pass" && c.details?.scanTruncated !== true);
 
 
 export const noted = (checks: Check[]): boolean => checks.some((c) => c.details?.scanTruncated === true);

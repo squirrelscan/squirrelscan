@@ -273,10 +273,10 @@ describe("findDevHostsInText", () => {
   });
 
   test("the sentence's full stop stays out of the reported sample", () => {
-    const hits = findDevHostsInText("Old links point at http://example.com. Next.", site());
+    const hits = findDevHostsInText("Old links point at http://localhost. Next.", site());
     expect(hits).toHaveLength(1);
-    expect(hits[0]?.host).toBe("example.com");
-    expect(hits[0]?.sample).toBe("http://example.com");
+    expect(hits[0]?.host).toBe("localhost");
+    expect(hits[0]?.sample).toBe("http://localhost");
   });
 
   test("the left boundary keeps lookalike hosts out", () => {
@@ -285,16 +285,9 @@ describe("findDevHostsInText", () => {
     expect(textKinds("Build 1.10.0.0.1 shipped")).toHaveLength(0);
   });
 
-  test("an http self-link on an HTTPS page, and nobody else's http link", () => {
-    expect(textKinds("Old bookmarks point at http://example.com/pricing")).toContain(
-      "insecure-self-link",
-    );
+  test("an http link to the site's own host, or anyone else's, is not dev leakage", () => {
+    expect(textKinds("Old bookmarks point at http://example.com/pricing")).toHaveLength(0);
     expect(textKinds("See http://other.com/pricing for theirs")).toHaveLength(0);
-  });
-
-  test("an http self-link is not reported from an HTTP page", () => {
-    expect(textKinds("Old bookmarks point at http://example.com/pricing", site("example.com", false)))
-      .toHaveLength(0);
   });
 
   test("a dev host reachable over http is reported once, as what it is", () => {
@@ -331,8 +324,9 @@ describe("classifyUrlAttribute", () => {
     expect(at("https://example.com/pricing")).toBeNull();
   });
 
-  test("an http self-link on an HTTPS page", () => {
-    expect(at("http://example.com/pricing")).toMatchObject({ kind: "insecure-self-link" });
+  test("an http self-link (and its www twin) is mixed content, not a dev host", () => {
+    expect(at("http://example.com/pricing")).toBeNull();
+    expect(at("http://www.example.com/logo.png")).toBeNull();
     // Somebody else's http link belongs to links/https-downgrade, not here.
     expect(at("http://other.com/pricing")).toBeNull();
   });
@@ -418,12 +412,19 @@ describe("devLeakageRule outcomes", () => {
     expect(check.message).toContain("localhost");
   });
 
-  test("warn: an http link back to the site's own origin never escalates", () => {
-    // links/https-downgrade owns the page-level downgrade story; this rule
-    // reports the same href as a baked-in dev URL and stops at warn.
-    const check = only(run(`${NAV}<main><a href="http://example.com/pricing">Pricing</a></main>`));
-    expect(check.status).toBe("warn");
-    expect(check.message).toContain("insecure-self-link");
+  test("pass: the site's own http:// logo is mixed content, not a dev host (#1758)", () => {
+    const check = only(
+      run(`${NAV}<main><img src="http://example.com/img/logo.png" alt="Logo"></main>`),
+    );
+    expect(check.status).toBe("pass");
+  });
+
+  test("fail: an http://localhost:3000 asset is still reported (#1758)", () => {
+    const check = only(
+      run(`${NAV}<main><img src="http://localhost:3000/img/logo.png" alt="Logo"></main>`),
+    );
+    expect(check.status).toBe("fail");
+    expect(check.message).toContain("localhost");
   });
 
   test("skipped: the seed is itself a preview deploy", () => {
@@ -481,18 +482,6 @@ describe("devLeakageRule outcomes", () => {
     );
     expect(check.status).toBe("skipped");
     expect(check.skipReason).toBe("non-production-origin");
-  });
-
-  test("the redirected-to URL decides whether the page is secure", () => {
-    // Seeded over http, redirected to https: the self-link kind is live now.
-    const check = only(
-      run(`${NAV}<main><a href="http://example.com/pricing">Pricing</a></main>`, {
-        url: "http://example.com/about",
-        finalUrl: "https://example.com/about",
-      }),
-    );
-    expect(check.status).toBe("warn");
-    expect(check.message).toContain("insecure-self-link");
   });
 
   test("an unparseable finalUrl falls back to the page URL rather than disabling the rule", () => {

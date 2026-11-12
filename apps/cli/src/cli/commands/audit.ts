@@ -67,6 +67,7 @@ import {
 import { localUnverifiedLinksNotice } from "@/audit/local-link-notice";
 import { MAX_DURATION_MAX_SECONDS } from "@/audit/max-duration";
 import { configDir, loadConfiguredPlugins } from "@/audit/plugins";
+import { parseDiscoveryProbePaths } from "@/audit/probe-paths";
 import { renderFallbackLine } from "@/audit/render-summary";
 import {
   generateConsoleReport,
@@ -98,6 +99,7 @@ import {
   DASHBOARD_URL,
   MAX_PAGES_CAP,
   MAX_CRAWL_CONCURRENCY,
+  CRAWL_PHASE_MAX_TIMEOUT_MS,
   STATUS_REQUEST_TIMEOUT_MS,
 } from "@/constants";
 import {
@@ -1092,6 +1094,23 @@ export function parseMaxDurationFlag(
   return parsed;
 }
 
+/** `--crawl-timeout` seconds (#1639): a positive number up to the 6 h crawl-phase ceiling. */
+export function parseCrawlTimeoutFlag(
+  raw: string | undefined
+): number | undefined | null {
+  if (raw === undefined) return undefined;
+  const text = raw.trim();
+  const parsed = /^\d+(?:\.\d+)?$/.test(text) ? Number(text) : Number.NaN;
+  const maxSeconds = CRAWL_PHASE_MAX_TIMEOUT_MS / 1000;
+  if (!Number.isFinite(parsed) || parsed <= 0 || parsed > maxSeconds) {
+    console.error(
+      `${fmt.red("Error:")} --crawl-timeout must be a positive number of seconds, at most ${maxSeconds} (6 hours), got '${raw}'.`
+    );
+    return null;
+  }
+  return parsed;
+}
+
 export const audit = defineCommand({
   meta: {
     name: "audit",
@@ -1117,6 +1136,11 @@ export const audit = defineCommand({
       type: "string",
       description:
         "Wall-clock budget for the whole audit, in seconds. At the limit the audit stops launching new work, finishes in-flight pages, runs rules on what it has and writes a report with status partial and reason code max_duration. Exits within max(10% of the budget, 15 s) of the limit. Overrides [crawler] max_duration; unset means no limit",
+    },
+    "crawl-timeout": {
+      type: "string",
+      description:
+        "Wall-clock backstop for the crawl phase alone, in seconds (max 21600). At the limit the crawl stops and the audit continues on the pages collected, with status partial and reason code crawl_timeout. Overrides [crawler] crawl_timeout; unset derives it from the page budget and per-host rate. Per-request watchdogs are unaffected",
     },
     concurrency: {
       type: "string",
@@ -1199,7 +1223,7 @@ export const audit = defineCommand({
       type: "boolean",
       alias: "p",
       description:
-        "Publish report to reports.squirrelscan.com (now the default when signed in)",
+        "Publish report to a shareable report link (now the default when signed in)",
     },
     // Declared for help and completions only: citty delivers --no-publish as
     // publish: false and never sets this arg, so run() reads it from rawArgs.
@@ -1316,6 +1340,11 @@ export const audit = defineCommand({
       type: "string",
       description:
         "Skip these rule categories or rules (repeatable or comma-separated), e.g. images,social. Adds to [rules] disable for this run",
+    },
+    "discovery-probe-path": {
+      type: "string",
+      description:
+        "Only send the discovery probe for this path (repeatable or comma-separated), e.g. /llms.txt or /AGENTS.md; a probe for any other path is not sent and reports not checked, and a redirect from it may not change the path. Replaces [crawler] discovery_probe_paths. Markdown, agent-access and RSL probes are not gated",
     },
     "disable-discovery-probes": {
       type: "boolean",
@@ -1519,6 +1548,15 @@ export const audit = defineCommand({
     // --disable-discovery-probes (#409): a plain boolean, so citty delivers
     // true, or false for `=false` (which turns the probes back on over a config
     // that disables them). A repeated flag arrives as an array; the last wins.
+    const probePathsParse = parseDiscoveryProbePaths(
+      args["discovery-probe-path"] as string | string[] | undefined
+    );
+    if (!probePathsParse.ok) {
+      console.error(probePathsParse.error);
+      exitWith({ early: "validation" });
+      return;
+    }
+    const discoveryProbePaths = probePathsParse.paths;
     const disableDiscoveryProbes = lastFlagValue(
       args["disable-discovery-probes"] as boolean | boolean[] | undefined
     );
@@ -2059,7 +2097,9 @@ export const audit = defineCommand({
         "--per-host"
       );
       const maxDurationSeconds = parseMaxDurationFlag(args["max-duration"]);
+      const crawlTimeoutSeconds = parseCrawlTimeoutFlag(args["crawl-timeout"]);
       if (
+        crawlTimeoutSeconds === null ||
         concurrency === null ||
         perHostConcurrency === null ||
         maxDurationSeconds === null
@@ -2202,6 +2242,9 @@ export const audit = defineCommand({
           ? { includePages: true }
           : {}),
         ...(maxDurationSeconds !== undefined ? { maxDurationSeconds } : {}),
+        ...(crawlTimeoutSeconds !== undefined
+          ? { crawlPhaseTimeoutMs: Math.round(crawlTimeoutSeconds * 1000) }
+          : {}),
         maxDurationStartedAt: commandStartedAt,
         ...(Object.keys(customHeaders).length > 0
           ? { headers: customHeaders }
@@ -2216,6 +2259,7 @@ export const audit = defineCommand({
         ...(disableDiscoveryProbes !== undefined
           ? { disableDiscoveryProbes }
           : {}),
+        ...(discoveryProbePaths.length > 0 ? { discoveryProbePaths } : {}),
         probe: { level: probing.level, budgetMs: probing.budgetMs },
         ...(noIgnore ? { noIgnore: true } : {}),
         ...(startRedirect ? { startRedirect } : {}),

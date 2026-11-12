@@ -12,6 +12,7 @@ export * from "./images";
 export * from "./fonts";
 export * from "./stylesheets";
 export * from "./scripts";
+export * from "./server-scripts";
 export * from "./schema";
 export * from "./headings";
 export * from "./content";

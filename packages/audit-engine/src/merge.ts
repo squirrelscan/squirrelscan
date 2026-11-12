@@ -53,6 +53,8 @@ export interface MergeInput {
   removedUrls: Set<string>;
   /** Rule severity lookup (ruleId -> severity) for surfacing carried findings. */
   severityByRule: Map<string, string>;
+  /** `${ruleId}|${oldCheck}` -> successor checks (`buildSupersededIndex`), #1765. */
+  supersededChecks?: ReadonlyMap<string, readonly string[]>;
   /** Real per-page HTTP status (normalizedUrl -> status) for site_pages. */
   statusByUrl: Map<string, number>;
   /** (#508) Page checks this run skipped while the check ran elsewhere; they carry, never resolve. */

@@ -6,6 +6,7 @@
     ".": "./src/index.ts",
     "./constants": "./src/constants.ts",
     "./url": "./src/url.ts",
+    "./trim": "./src/trim.ts",
     "./non-public-host": "./src/non-public-host.ts",
     "./own-site": "./src/own-site.ts",
     "./public-egress": "./src/public-egress.ts",
@@ -41,6 +42,7 @@
     "@squirrelscan/core-contracts": "workspace:*",
     "@squirrelscan/waf-detect": "workspace:*",
     "htmlparser2": "^10.1.0",
+    "tldts": "^7",
     "user-agents": "^1.1.675"
   },
   "devDependencies": {

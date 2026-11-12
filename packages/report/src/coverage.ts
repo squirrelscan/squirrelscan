@@ -109,7 +109,7 @@ export function clampedPageLimit(
  * printing only the requested one describes a crawl that did not happen.
  */
 /** `0.0.137`, `1.2.3-beta.1+build`: letters, digits, `.`, `_`, `+` and `-`, nothing else. */
-function isVersionLike(value: unknown): value is string {
+export function isVersionLike(value: unknown): value is string {
   return typeof value === "string" && /^[0-9A-Za-z][0-9A-Za-z._+-]{0,63}$/.test(value);
 }
 
@@ -159,7 +159,56 @@ export function scanScopeLine(report: AuditReport): string | null {
     unfetched > 0 ? `${unfetched} more discovered but not fetched` : "",
   ].filter(Boolean);
   const cap = parts.length > 0 ? ` (${parts.join("; ")})` : "";
-  return `Scan: ${s.pagesCrawled} page${s.pagesCrawled === 1 ? "" : "s"} crawled from ${origin}${version}${cap}.${canonicalVariantsNote(report)}`;
+  const types = pageTypeCoverageLine(report);
+  return `Scan: ${s.pagesCrawled} page${s.pagesCrawled === 1 ? "" : "s"} crawled from ${origin}${version}${cap}.${canonicalVariantsNote(report)}${types ? ` ${types}` : ""}`;
+}
+
+/** How many page types the per-type line names before it folds the rest into "other". */
+const PAGE_TYPE_LINE_ROWS = 6;
+
+/**
+ * The per-type rows of `scanScope.pageTypes` (#1744), read off a stored report of any origin:
+ * a row whose type is not a plain lowercase word, or whose counts are not whole numbers, is
+ * left out, and `audited` is clamped to `discovered`. Most pages first.
+ */
+export function scanScopePageTypes(
+  report: Pick<AuditReport, "scanScope">,
+): Array<{ type: string; discovered: number; audited: number }> {
+  const raw: unknown = report.scanScope?.pageTypes;
+  if (!Array.isArray(raw)) return [];
+  const whole = (v: unknown): number | undefined =>
+    typeof v === "number" && Number.isSafeInteger(v) && v >= 0 ? v : undefined;
+  const rows: Array<{ type: string; discovered: number; audited: number }> = [];
+  for (const r of raw) {
+    const type: unknown = r?.type;
+    const discovered = whole(r?.discovered);
+    const audited = whole(r?.audited);
+    if (typeof type !== "string" || !/^[a-z][a-z-]{0,31}$/.test(type)) continue;
+    if (discovered === undefined || audited === undefined) continue;
+    rows.push({ type, discovered: Math.max(discovered, audited), audited });
+  }
+  return rows.sort((a, b) => b.discovered - a.discovered || a.type.localeCompare(b.type));
+}
+
+/**
+ * "Page types: 1 of 36 product pages audited, 12 of 12 article pages audited." (#1744), or
+ * null when the report has no per-type counts. Types the crawler could not tell apart are
+ * `unknown` and print as "other". Rows past the first {@link PAGE_TYPE_LINE_ROWS} fold into
+ * "other", so nothing the crawl found is dropped from the totals.
+ */
+export function pageTypeCoverageLine(report: Pick<AuditReport, "scanScope">): string | null {
+  const rows = scanScopePageTypes(report);
+  if (rows.length === 0) return null;
+  const named = rows.filter((r) => r.type !== "unknown");
+  const shown = named.slice(0, PAGE_TYPE_LINE_ROWS);
+  const other = [...named.slice(PAGE_TYPE_LINE_ROWS), ...rows.filter((r) => r.type === "unknown")];
+  const parts = shown.map((r) => `${r.audited} of ${r.discovered} ${r.type} page${r.discovered === 1 ? "" : "s"}`);
+  if (other.length > 0) {
+    const discovered = other.reduce((n, r) => n + r.discovered, 0);
+    const audited = other.reduce((n, r) => n + r.audited, 0);
+    parts.push(`${audited} of ${discovered} other page${discovered === 1 ? "" : "s"}`);
+  }
+  return `Page types audited: ${parts.join(", ")}.`;
 }
 
 /**

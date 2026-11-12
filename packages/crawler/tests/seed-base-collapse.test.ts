@@ -240,6 +240,9 @@ describe("seed probe refused (#1899)", () => {
       // it gets through where the bare preamble probe did not — and it lands on
       // www, which is where the apex was redirecting all along.
       [`${APEX}/`]: { body: linksTo(`${WWW}/a`, `${WWW}/b`), finalUrl: `${WWW}/` },
+      // The redirect's destination is a page of its own (#1762): the apex row is a marker with no
+      // body, so the links come from the page it lands on.
+      [`${WWW}/`]: { body: linksTo(`${WWW}/a`, `${WWW}/b`) },
       [`${WWW}/a`]: { body: linksTo() },
       [`${WWW}/b`]: { body: linksTo() },
     };

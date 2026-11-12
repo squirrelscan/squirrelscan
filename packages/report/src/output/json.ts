@@ -3,9 +3,11 @@
 import type {
   AuditOutcome,
   AuditStatusReasonCode,
+  LockedRuleReason,
   StoreIntegrityEvicted,
   EditorSummaryPriority,
   MaxDurationCut,
+  CrawlPhaseCut,
   RefusedFetch,
   ReportRender,
   ResumeOutcome,
@@ -51,6 +53,7 @@ import { getScoreGrade } from "../scoring";
 import { getGroupName } from "../categories";
 import { groupIssuesByCategory, flattenIssuesBySeverity, reportPassedRules } from "../grouping";
 import { affectedPages } from "../affected-pages";
+import { lockedRuleView, lockedRulesMessage } from "../locked-rules";
 import {
   checkRegionScope,
   itemLabel,
@@ -63,7 +66,7 @@ import { isLocalOnlyTech, techIconUrl } from "../technologies";
 import { domainAgeYears, siteProfileRows } from "../site-metadata";
 import { editorSummaryView } from "../editor-summary";
 import type { IgnoreSummary } from "@squirrelscan/core-contracts/ignore";
-import { canonicalVariantCount, followedStartRedirect, scanScopeUnfetched, seedRedirect } from "../coverage";
+import { canonicalVariantCount, followedStartRedirect, scanScopePageTypes, scanScopeUnfetched, seedRedirect } from "../coverage";
 import { safeIgnored } from "../ignored";
 import { privateTargetLine, privateTargetSkippedRules } from "../private-target";
 import { notCheckedLine, notCheckedRules } from "../not-checked";
@@ -184,6 +187,10 @@ export interface JsonRenderOptions {
   pages?: readonly JsonPageRow[];
   /** The real number of rows when `pages` carries fewer than there are (unstored URLs past the loaded cap), for `pagesTotal`. */
   pagesTotal?: number;
+  /** URLs recorded as redirects, not pages (#1762), listed beside `pages`: `{ url, finalUrl, status, hops }` each. */
+  redirects?: readonly { url: string; finalUrl: string; status: number; hops: number }[];
+  /** The real number of redirects when `redirects` is cut. */
+  redirectsTotal?: number;
 }
 
 interface SlimJsonReport {
@@ -276,6 +283,17 @@ interface SlimJsonReport {
   status: AuditStatus;
   /** Exit code, audit status and publish result (#1657); present on a report an audit just wrote. */
   outcome?: AuditOutcome;
+  /**
+   * Cloud checks that did not run, and why (#1734). `message` is the sentence every other format shows;
+   * each rule carries `reason` (`plan`, `provider_error` or `unsupported_environment`) and `detail` when
+   * the publisher said. Present only when some rule is locked.
+   */
+  lockedRules?: {
+    count: number;
+    audience: string;
+    message: string;
+    rules: Array<{ id: string; name: string; reason?: LockedRuleReason; detail?: string }>;
+  };
   /** What cloud rendering did (#1664): mode, pages rendered and fetched plain, and why it fell back; present on a report an audit just wrote. */
   render?: ReportRender;
   /** Short human reason, present when `status` is failed/blocked. */
@@ -293,6 +311,8 @@ interface SlimJsonReport {
   statusReasonCode?: AuditStatusReasonCode;
   /** What the `--max-duration` time limit cut (#1271). Present only when it cut something. */
   maxDuration?: MaxDurationCut;
+  /** What the crawl-phase backstop cut (#1639): the link graph is incomplete. */
+  crawlPhase?: CrawlPhaseCut;
   /**
    * Root fetches (robots.txt, sitemaps, llms.txt, Markdown) the site refused
    *. Their absence is unknown, not confirmed. Present only when
@@ -348,6 +368,9 @@ interface SlimJsonReport {
   pages?: JsonPageRow[];
   pagesTotal?: number;
   pagesTruncated?: boolean;
+  /** URLs that redirected, listed beside `pages` with `--include-pages` (#1762, schema 1.15). */
+  redirects?: Array<{ url: string; finalUrl: string; status: number; hops: number }>;
+  redirectsTotal?: number;
   issues: Array<{
     ruleId: string;
     name: string;
@@ -490,6 +513,10 @@ interface SlimJsonReport {
     reason: string;
     /** What became of the rule (#1661): `coverage_gap`, `timed_out` or `errored`. */
     outcome: RuleOutcome;
+    /** Why it did not run, from a closed set (#1734): `plan`, `provider_error` or `unsupported_environment`. Absent when the publisher gave none. */
+    cause?: LockedRuleReason;
+    /** Short free-text detail for `cause`. */
+    causeDetail?: string;
     message: string;
     /** A rule that hit an internal error: the first pages it was not evaluated on (#1291). */
     pages?: string[];
@@ -567,7 +594,9 @@ function buildSlimReport(
   version: string,
   includePassed: boolean,
   pages?: readonly JsonPageRow[],
-  pagesTotal?: number
+  pagesTotal?: number,
+  redirects?: JsonRenderOptions["redirects"],
+  redirectsTotal?: number
 ): SlimJsonReport {
   const siteWide = siteWideContext(report);
   const categoryIssues = groupIssuesByCategory(report.ruleResults, report.checkTallies);
@@ -581,6 +610,7 @@ function buildSlimReport(
   const infoChecks = collectInfoChecks(report.ruleResults);
   const privateTarget = privateTargetLine(report);
   const notChecked = notCheckedRules(report);
+  const locked = lockedRulesMessage(report);
   const unfetched = scanScopeUnfetched(report);
   return {
     meta: {
@@ -620,6 +650,8 @@ function buildSlimReport(
         ? { stopReason: report.scanScope.stopReason }
         : {}),
       ...(unfetched > 0 ? { unfetched } : {}),
+      // #1744: pages known and pages audited per URL-based page type.
+      ...(scanScopePageTypes(report).length > 0 ? { pageTypes: scanScopePageTypes(report) } : {}),
       // Query-string variants counted with their canonical page; `totalPages` excludes them (#858).
       ...(canonicalVariantCount(report) > 0 ? { canonicalVariants: canonicalVariantCount(report) } : {}),
       ...(canonicalVariantCount(report) > 0 && report.canonicalVariantPages?.length
@@ -655,12 +687,23 @@ function buildSlimReport(
         ? { statusReasonCode: report.statusReasonCode }
         : {}),
     ...(report.maxDuration ? { maxDuration: report.maxDuration } : {}),
+    ...(report.crawlPhase ? { crawlPhase: report.crawlPhase } : {}),
     ...(report.rateLimited && report.rateLimited.pages > 0
       ? { rateLimited: report.rateLimited }
       : {}),
     ...(report.refusedFetches?.length ? { refusedFetches: report.refusedFetches } : {}),
     ...(safeWafBlocked(report) ? { wafBlocked: safeWafBlocked(report)! } : {}),
     ...(safeWafSuspect(report) ? { wafSuspect: safeWafSuspect(report)! } : {}),
+    ...(locked
+      ? {
+          lockedRules: {
+            count: locked.count,
+            audience: locked.audience,
+            message: locked.action,
+            rules: locked.rules.map(lockedRuleView),
+          },
+        }
+      : {}),
     score: {
       // null ⇒ N/A (failed/0-page audit); preserved through save/reload (#586).
       overall: report.healthScore?.overall ?? null,
@@ -716,6 +759,18 @@ function buildSlimReport(
           })),
           pagesTotal: Math.max(pages.length, pagesTotal ?? 0),
           pagesTruncated: Math.max(pages.length, pagesTotal ?? 0) > JSON_REPORT_PAGES.maxEntries,
+          // #1762: a URL that redirected is not a page; it is listed here, with where it went.
+          ...(redirects && redirects.length > 0
+            ? {
+                redirects: redirects.slice(0, JSON_REPORT_PAGES.maxEntries).map((r) => ({
+                  url: r.url,
+                  finalUrl: r.finalUrl,
+                  status: r.status,
+                  hops: r.hops,
+                })),
+                redirectsTotal: Math.max(redirects.length, redirectsTotal ?? 0),
+              }
+            : {}),
         }
       : {}),
     issues: flattenIssuesBySeverity(categoryIssues).map((rule) => ({
@@ -888,6 +943,8 @@ function buildSlimReport(
             check: r.check,
             reason: r.reason,
             outcome: r.outcome,
+            ...(r.cause ? { cause: r.cause } : {}),
+            ...(r.causeDetail ? { causeDetail: r.causeDetail } : {}),
             message: notCheckedLine(r),
             ...(r.pages && r.pages.length > 0 ? { pages: r.pages } : {}),
           })),
@@ -975,6 +1032,14 @@ function buildSlimReport(
 
 export function renderJson(report: AuditReport, options?: JsonRenderOptions): string {
   const version = options?.version ?? "";
-  const slim = buildSlimReport(report, version, options?.includePassed ?? false, options?.pages, options?.pagesTotal);
+  const slim = buildSlimReport(
+    report,
+    version,
+    options?.includePassed ?? false,
+    options?.pages,
+    options?.pagesTotal,
+    options?.redirects,
+    options?.redirectsTotal
+  );
   return JSON.stringify(slim, null, 2);
 }

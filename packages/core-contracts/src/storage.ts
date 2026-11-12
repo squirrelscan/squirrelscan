@@ -4,7 +4,7 @@
 import type { Effect } from "effect";
 
 import type { AuditFailureDetail } from "./failure-reason";
-import type { ClassifiedPageType, LinkSection, LinkSectionCounts, ScanScope } from "./index";
+import type { ClassifiedPageType, LinkSection, LinkSectionCounts, ScanScope, SitemapReadState } from "./index";
 import type { RefusedFetch } from "./refused-fetch";
 import type { WafBlockedSummary, WafSuspectSummary } from "./waf-block";
 import type { UnverifiedReason } from "./services";
@@ -40,6 +40,14 @@ export interface RedirectChain {
    * so chains persisted before #1829 read back unchanged.
    */
   endsRateLimited?: boolean;
+  /**
+   * The crawler followed this redirect and deliberately kept the row as a PAGE: the destination
+   * is outside the crawl's scope (excluded, another site), so there is no page of its own to
+   * audit it under and the source row holds the content (#1762). It has a 2xx status and a
+   * different final URL, the shape of a row an older crawler stored for a redirect, so the
+   * engine reads this flag to leave it a page. Optional: rows stored before it read back unchanged.
+   */
+  keptAsPage?: boolean;
   httpsToHttp: boolean;
   httpToHttps: boolean;
 }
@@ -311,6 +319,12 @@ export interface CrawlStats {
    * persisted stats blobs; absent reads as "the walk completed".
    */
   sitemapDiscoveryTruncated?: boolean;
+  /**
+   * How completely the sitemap walk read the site's sitemaps (see
+   * `SitemapReadState`). Optional: stats persisted before it existed omit it,
+   * which reads as unknown, never as complete.
+   */
+  sitemapReadState?: SitemapReadState;
   /**
    * The crawl did not follow links: it fetched the seed and the sitemap URLs
    * only (Quick level, sitemap scope), so internal link targets outside them
@@ -1392,6 +1406,37 @@ export interface AgentAccessRecord {
  * Both land as `status: 0`, so this exact string is the discriminator.
  */
 export const PROBE_NOT_ATTEMPTED_ERROR = "crawl phase budget exhausted";
+
+/**
+ * Recorded against an optional probe the audit left unsent because its path is not in
+ * `[crawler] discovery_probe_paths` (#1655). Not evidence about the site: "not checked".
+ */
+export const PROBE_PATH_NOT_APPROVED_ERROR = "path not approved";
+
+/**
+ * Recorded against an optional probe that was not sent after a block signal (a 429 or a bot wall),
+ * or whose redirect to another path was not followed (#1655). "Not checked", never missing.
+ */
+export const PROBE_STOPPED_ERROR = "stopped after a block signal";
+export const PROBE_REDIRECT_NOT_FOLLOWED_ERROR = "redirect to another path not followed";
+
+/** Every `error` marker that means the request never produced an answer by design. */
+export const PROBE_NOT_SENT_ERRORS: readonly string[] = [
+  PROBE_NOT_ATTEMPTED_ERROR,
+  PROBE_PATH_NOT_APPROVED_ERROR,
+  PROBE_STOPPED_ERROR,
+  PROBE_REDIRECT_NOT_FOLLOWED_ERROR,
+];
+
+/** The two files the `llms-txt` probe reads, each its own approvable path (#1655). */
+export const LLMS_TXT_PATHS = ["/llms.txt", "/llms-full.txt"] as const;
+
+/**
+ * Every probe request that `[crawler] discovery_probe_paths` can approve one by one: the well-known
+ * sweep and the two llms files. The markdown, agent-access and RSL probes are not path-shaped and
+ * stay under rule selection.
+ */
+export const APPROVABLE_PROBE_PATHS: readonly string[] = [...LLMS_TXT_PATHS, ...WELL_KNOWN_PATHS];
 
 /**
  * Recorded against a sitemap the walk stopped before reaching. Distinct from a

@@ -35,6 +35,15 @@ export const xFrameOptionsRule: Rule = {
     scope: "site",
     severity: "warning",
     weight: 5,
+    // Check names by outcome class (#1741).
+    checks: [
+      { name: "x-frame-options-missing", outcome: "problem" },
+      { name: "x-frame-options-invalid", outcome: "problem" },
+      { name: "x-frame-options-allow-from", outcome: "problem" },
+      { name: "x-frame-options", outcome: "clean", clears: ["x-frame-options-missing", "x-frame-options-invalid", "x-frame-options-allow-from"] },
+      { name: "x-frame-options-csp-frame-ancestors", outcome: "clean", clears: ["x-frame-options-missing", "x-frame-options-invalid", "x-frame-options-allow-from"] },
+      { name: "x-frame-options-no-pages", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {
@@ -43,7 +52,7 @@ export const xFrameOptionsRule: Rule = {
 
     if (!firstPage) {
       checks.push({
-        name: "x-frame-options",
+        name: "x-frame-options-no-pages",
         status: "skipped",
         message: "No pages to check",
         skipReason: "No pages crawled",
@@ -67,20 +76,20 @@ export const xFrameOptionsRule: Rule = {
         });
       } else if (value.includes("ALLOW-FROM")) {
         checks.push({
-          name: "x-frame-options",
+          name: "x-frame-options-allow-from",
           status: "warn",
           message: "ALLOW-FROM is deprecated",
           value: "Use CSP frame-ancestors instead",
         });
       } else if (hasFrameAncestors) {
         checks.push({
-          name: "x-frame-options",
+          name: "x-frame-options-csp-frame-ancestors",
           status: "pass",
           message: "Clickjacking protection via CSP frame-ancestors",
         });
       } else {
         checks.push({
-          name: "x-frame-options",
+          name: "x-frame-options-invalid",
           status: "warn",
           message: `Unrecognised X-Frame-Options value: ${printable(xFrameOptions)}`,
           value: "Browsers ignore it. Use DENY or SAMEORIGIN, or CSP frame-ancestors",
@@ -88,13 +97,13 @@ export const xFrameOptionsRule: Rule = {
       }
     } else if (hasFrameAncestors) {
       checks.push({
-        name: "x-frame-options",
+        name: "x-frame-options-csp-frame-ancestors",
         status: "pass",
         message: "Clickjacking protection via CSP frame-ancestors",
       });
     } else {
       checks.push({
-        name: "x-frame-options",
+        name: "x-frame-options-missing",
         status: "warn",
         message: "No clickjacking protection",
         value: "Add X-Frame-Options: DENY or CSP frame-ancestors",

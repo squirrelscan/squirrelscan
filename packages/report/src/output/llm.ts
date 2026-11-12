@@ -24,13 +24,14 @@ import {
   itemLabel,
   regionScopeLine,
 } from "../region-scope";
+import { isVersionLike } from "../coverage";
 import { hasCarriedPages } from "../page-type-scope";
 
 /** "in the site footer, ..." from "In the site footer, ...", to sit inside a sentence. */
 const lowerFirst = (text: string): string => text.charAt(0).toLowerCase() + text.slice(1);
 import { getDocsUrl } from "../docs";
 import { domainAgeYears } from "../site-metadata";
-import { lockedRulesMessage } from "../locked-rules";
+import { lockedRuleView, lockedRulesMessage } from "../locked-rules";
 import { privateTargetLine, privateTargetSkippedRules } from "../private-target";
 import { notCheckedLine, notCheckedRules } from "../not-checked";
 import { techOpenTag, techOriginAttr } from "../technologies";
@@ -61,6 +62,7 @@ import {
   followedStartRedirect,
   publishedReportNote,
   scanScopeUnfetched,
+  scanScopePageTypes,
   seedRedirect,
   seedRedirectFollowUp,
 } from "../coverage";
@@ -167,7 +169,11 @@ export function serializeMetaValue(value: unknown): string {
 export function renderLlm(report: AuditReport, options?: LlmRenderOptions): string {
   const lines: string[] = [];
   const siteWide = siteWideContext(report, options?.siteWideCollapse !== false);
-  const version = options?.version ?? "0.0.0";
+  // The report's own generator version wins: a report read back from storage or the cloud was written by
+  // the version that audited it, not by the process that renders it. "0.0.0" is only the no-version fallback.
+  const version = isVersionLike(report.generatorVersion)
+    ? report.generatorVersion
+    : (options?.version ?? "0.0.0");
 
   let baseOrigin = "";
   try {
@@ -392,11 +398,11 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
   // Top-level group scores (#626), above the finer per-category scores.
   for (const g of report.healthScore?.groups ?? []) {
     lines.push(
-      `${indent(1)}<group name="${escapeXml(getGroupName(g.group))}" score="${g.score}" errors="${g.failed}" warnings="${g.warnings}"/>`,
+      `${indent(1)}<group name="${escapeXml(getGroupName(g.group))}" score="${g.score}" scope="group" errors="${g.failed}" warnings="${g.warnings}"/>`,
     );
   }
   for (const cat of report.healthScore?.categories ?? []) {
-    lines.push(`${indent(1)}<cat name="${escapeXml(cat.name)}" score="${cat.score}"/>`);
+    lines.push(`${indent(1)}<cat name="${escapeXml(cat.name)}" score="${cat.score}" scope="category"/>`);
   }
   lines.push("</score>");
 
@@ -444,6 +450,10 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
     lines.push(
       `<scan-scope origin="${s.origin}" crawled="${s.pagesCrawled}"${cap}${requested} capped="${s.capped}"${stop}${unfetched}${variants}/>`,
     );
+    // Pages known against pages audited, per URL-based page type (#1744).
+    for (const t of scanScopePageTypes(report)) {
+      lines.push(`<page-type name="${escapeXml(t.type)}" discovered="${t.discovered}" audited="${t.audited}"/>`);
+    }
   }
 
   // repo#2661: a capped published report lists a sample of each issue's pages
@@ -887,8 +897,12 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
         `${indent(1)}<cta label="${escapeXml(locked.cta.label)}" url="${escapeXml(locked.cta.url)}"/>`,
       );
     }
-    for (const rule of locked.rules) {
-      lines.push(`${indent(1)}<rule id="${escapeXml(rule.id)}" name="${escapeXml(rule.name)}"/>`);
+    for (const rule of locked.rules.map(lockedRuleView)) {
+      const reason = rule.reason ? ` reason="${rule.reason}"` : "";
+      const detail = rule.detail ? ` detail="${escapeXml(rule.detail)}"` : "";
+      lines.push(
+        `${indent(1)}<rule id="${escapeXml(rule.id)}" name="${escapeXml(rule.name)}"${reason}${detail}/>`,
+      );
     }
     lines.push("</locked-rules>");
   }

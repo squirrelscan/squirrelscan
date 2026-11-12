@@ -77,8 +77,7 @@ export type DevLeakageKind =
   | "private-ip"
   | "local-name"
   | "dev-subdomain"
-  | "preview-host"
-  | "insecure-self-link";
+  | "preview-host";
 
 /** Where the reference was found: a live `href`/`src`, or copy a reader sees. */
 export type DevLeakageSource = "attribute" | "text";
@@ -508,20 +507,6 @@ export function scanDevHostsInText(
         truncated = true;
         break;
       }
-      continue;
-    }
-    // Only on an HTTPS page, and only for the site's own domain: a printed
-    // `http://` URL for somebody else's site is their transport problem, and
-    // `links/https-downgrade` already owns the page-level downgrade story. The
-    // `classified` check above means a dev host reachable over http is reported
-    // as what it is rather than counted twice.
-    if (!site.secure || !site.apex) continue;
-    if (m.scheme !== "http") continue;
-    if (registrableDomain(m.host) !== site.apex) continue;
-    add("insecure-self-link", true, m);
-    if (hits.length >= MAX_HITS_PER_KIND * 2) {
-      truncated = true;
-      break;
     }
   }
 
@@ -588,9 +573,6 @@ export function classifyUrlAttribute(
   if (classified) {
     return { kind: classified.kind, source: "attribute", host, sample, own: classified.own };
   }
-  if (site.secure && url.protocol === "http:" && registrableDomain(host) === site.apex) {
-    return { kind: "insecure-self-link", source: "attribute", host, sample, own: true };
-  }
   return null;
 }
 
@@ -606,13 +588,6 @@ export interface DevLeakageSummaryRow {
   /** True when at least one occurrence of this kind came from an `href`/`src`. */
   inAttribute: boolean;
 }
-
-/**
- * `insecure-self-link` is the one kind `links/https-downgrade` also speaks
- * about, so it is never allowed to decide this rule's status on its own and
- * never escalates to `fail`. See the doc page for the full overlap story.
- */
-const SOFT_KINDS = new Set<DevLeakageKind>(["insecure-self-link"]);
 
 export function summarize(hits: DevLeakageHit[]): DevLeakageSummaryRow[] {
   const rows = new Map<DevLeakageKind, DevLeakageSummaryRow>();
@@ -644,12 +619,18 @@ export const devLeakageRule: Rule = {
     name: "Development Host Leakage",
     description: "Detects localhost, private, staging and preview hosts on a production page",
     solution:
-      "A URL that was correct in development shipped to production. Find where it is stored, not just the page it appears on: a link or image pointing at localhost, a private address, or a preview deployment is usually a hard-coded value in a template, a CMS field written while working locally, or a base-URL environment variable that never got a production value, so the same URL is on every page that renders that component. Replace the origin with a relative path where the target is on this site, which is what makes the link correct in every environment at once. For a staging or preview host, point the link at the production equivalent and check whether the staging site is publicly indexable while you are there. For an `http://` link back to your own site, make it relative or `https://`, since the redirect it currently costs every visitor is avoidable.",
+      "A URL that was correct in development shipped to production. Find where it is stored, not just the page it appears on: a link or image pointing at localhost, a private address, or a preview deployment is usually a hard-coded value in a template, a CMS field written while working locally, or a base-URL environment variable that never got a production value, so the same URL is on every page that renders that component. Replace the origin with a relative path where the target is on this site, which is what makes the link correct in every environment at once. For a staging or preview host, point the link at the production equivalent and check whether the staging site is publicly indexable while you are there. An `http://` link to your own site is not reported here: it is a mixed-content or downgrade problem, covered by the links and security rules.",
     category: "content",
     scope: "page",
     verdictScope: "page",
     severity: "warning",
     weight: 6,
+    // Check names by outcome class (#1741).
+    checks: [
+      { name: "dev-leakage", outcome: "problem" },
+      { name: "dev-leakage", outcome: "clean", clears: ["dev-leakage"] },
+      { name: "dev-leakage", outcome: "skipped" },
+    ],
     skipOnSoft404: true,
   },
 
@@ -768,14 +749,14 @@ export const devLeakageRule: Rule = {
     // mention in copy is embarrassing rather than broken, and a preview host
     // that could belong to anyone is a judgement call, so both warn.
     const broken = hits.some(
-      (h) => h.source === "attribute" && h.own && !SOFT_KINDS.has(h.kind),
+      (h) => h.source === "attribute" && h.own,
     );
     const status = broken ? "fail" : "warn";
 
     // Lead with the row that decided the status, so the example line is the
     // clickable reference rather than whichever mention came first.
     const leading =
-      rows.find((r) => r.inAttribute && !SOFT_KINDS.has(r.kind)) ?? (rows[0] as DevLeakageSummaryRow);
+      rows.find((r) => r.inAttribute) ?? (rows[0] as DevLeakageSummaryRow);
 
     checks.push({
       name,

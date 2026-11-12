@@ -57,6 +57,7 @@ import { groupTechnologies, isLocalOnlyTech, TECH_LOCAL_MARK, techChangeSummary 
 import { SITE_PROFILE_NOTE, siteProfileFlags, siteProfileRows } from "../site-metadata";
 import { EDITOR_SUMMARY_NOTE, editorSummaryView, priorityEffortLabel } from "../editor-summary";
 import { getGroupName, getSubcategoryName, severityLabel } from "../categories";
+import { agentSignalLines } from "../agent-signals";
 import {
   carriedTag,
   coverageLine,
@@ -71,7 +72,7 @@ import {
 import { ignoredLine, unusedIgnoreEntries } from "../ignored";
 import { wrapText } from "../utils";
 import { unfetchedNote } from "../coverage";
-import { lockedRulesMessage } from "../locked-rules";
+import { LOCKED_REASON_LABELS, lockedRuleView, lockedRulesMessage } from "../locked-rules";
 import { privateTargetLine } from "../private-target";
 import { notCheckedDetailLines } from "../not-checked";
 import { stripControlChars } from "@squirrelscan/core-contracts/control-chars";
@@ -97,7 +98,8 @@ function pathOnly(url: string): string {
   }
 }
 
-function formatHealthScoreText(score: AuditReport["healthScore"]): string {
+function formatHealthScoreText(report: AuditReport): string {
+  const score = report.healthScore;
   if (!score) return "";
   const lines: string[] = [];
   lines.push(
@@ -117,6 +119,7 @@ function formatHealthScoreText(score: AuditReport["healthScore"]): string {
       // apply to already-stored reports.
       lines.push(`${getGroupName(g.group).padEnd(20)} ${bar} ${g.score}%`);
       lines.push(`  Passed: ${g.passed} | Warnings: ${g.warnings} | Failed: ${g.failed}`);
+      if (g.group === "ai") for (const l of agentSignalLines(report)) lines.push(`  ${l}`);
     }
     lines.push("");
   }
@@ -362,7 +365,7 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
       write(`PARTIAL AUDIT: ${report.statusReason}`);
       write("");
     }
-    write(formatHealthScoreText(report.healthScore));
+    write(formatHealthScoreText(report));
     write("");
   }
 
@@ -629,7 +632,9 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
       for (const line of wrapText(locked.action, REPORT_TEXT_WRAP_WIDTH)) write(line);
       if (locked.cta) write(`${locked.cta.label}: ${locked.cta.url}`);
       write("");
-      for (const rule of locked.rules) write(`  ${rule.id} — ${rule.name}`);
+      for (const rule of locked.rules.map(lockedRuleView)) {
+        write(`  ${rule.id} — ${rule.name}${rule.reason ? ` (${LOCKED_REASON_LABELS[rule.reason]})` : ""}`);
+      }
       write("");
     }
   }

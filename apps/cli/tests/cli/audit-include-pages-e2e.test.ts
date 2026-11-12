@@ -102,7 +102,7 @@ describe("--include-pages", () => {
     );
     expect(r.code).toBe(0);
     const json = JSON.parse(r.out) as Json;
-    expect(json.meta.schemaVersion).toBe("1.11");
+    expect(json.meta.schemaVersion).toBe("1.15");
     const pages = json.pages ?? [];
     const byPath = new Map(pages.map((p) => [new URL(p.url).pathname, p]));
     expect(byPath.get("/")?.status).toBe(200);
@@ -111,11 +111,27 @@ describe("--include-pages", () => {
     // Each row says how the page answered and where it was served from (#1260).
     expect(byPath.get("/")).toMatchObject({ outcome: "ok", finalUrl: url() });
     expect(byPath.get("/missing")?.outcome).toBe("http-error");
-    // A redirected URL keeps the URL asked for and names where it was served from.
-    const old = byPath.get("/old");
-    expect(old).toBeDefined();
-    expect(new URL(old!.finalUrl).pathname).toBe("/about");
-    expect(old?.outcome).toBe("ok");
+    // A URL that redirected is a redirect, not a page (#1762): it is not listed, and its destination is, once.
+    expect(byPath.has("/old")).toBe(false);
+    // ...and it is listed under `redirects`, with where it went (schema 1.15).
+    const redirects =
+      (
+        json as unknown as {
+          redirects?: Array<{
+            url: string;
+            finalUrl: string;
+            status: number;
+            hops: number;
+          }>;
+          redirectsTotal?: number;
+        }
+      ).redirects ?? [];
+    expect(redirects.map((r) => new URL(r.url).pathname)).toEqual(["/old"]);
+    expect(new URL(redirects[0]!.finalUrl).pathname).toBe("/about");
+    expect(redirects[0]!.status).toBeGreaterThanOrEqual(300);
+    expect(redirects[0]!.status).toBeLessThan(400);
+    expect(redirects[0]!.hops).toBe(1);
+    expect(byPath.get("/about")?.status).toBe(200);
     for (const p of pages) {
       expect(["ok", "http-error", "rate-limited", "error"]).toContain(
         p.outcome
@@ -144,7 +160,6 @@ describe("--include-pages", () => {
       "/",
       "/about",
       "/missing",
-      "/old",
     ]);
     expect(
       json.pages?.find((p) => new URL(p.url).pathname === "/")?.ruleCount
@@ -157,7 +172,7 @@ describe("--include-pages", () => {
     const json = JSON.parse(r.out) as Json;
     expect(json).not.toHaveProperty("pages");
     expect(json).not.toHaveProperty("pagesTotal");
-    expect(json.meta.schemaVersion).toBe("1.11");
+    expect(json.meta.schemaVersion).toBe("1.15");
   }, 120_000);
 
   test("another format says the flag is JSON only and still prints the report", async () => {

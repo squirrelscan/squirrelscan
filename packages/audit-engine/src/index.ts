@@ -65,6 +65,8 @@ export {
   carriedFindingToCheck,
 } from "./scoring";
 export type { AuditStatusSignals } from "./scoring";
+export { pageTypeCoverage, pageTypeCoverageFor } from "./report-stream";
+export { isRedirectSourcePage } from "./redirect-source";
 export type {
   ScoringContext,
   CarriedFinding,
@@ -248,6 +250,10 @@ export {
   DEFAULT_MAX_CLUSTERS,
 } from "./template-fanout";
 export type { TemplateFanout, TemplateFanoutStats } from "./template-fanout";
+
+// Signature coverage measurement (#1373): bench tooling, not on the audit path.
+export { derivedFanoutSignature, measureSignatureCoverage } from "./template-signature-coverage";
+export type { CoveragePage, SignatureCoverage, SignatureMode } from "./template-signature-coverage";
 
 // Streaming rules engine (#1021, PR-E) — batched page-rule pass with DOM-drop.
 export { streamPageRules, STREAM_PAGE_BATCH } from "./streaming";

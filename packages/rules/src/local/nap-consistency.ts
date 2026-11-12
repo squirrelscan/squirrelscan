@@ -19,7 +19,10 @@ import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 import type { CheckItem, PageFeatureRow, SiteQuery } from "@squirrelscan/core-contracts";
 import type { NapSignal } from "@squirrelscan/utils";
 
+import { CHECK_NOT_APPLICABLE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
 import { extractNapSignal, getPathname, NAP_BUSINESS_SCHEMA_TYPES } from "@squirrelscan/utils";
+
+import { excludesNoindexPage, skipsNoindexPages } from "../shared/noindex";
 
 /**
  * Minimum number of pages that must DECLARE a signal before drift is judged. The
@@ -46,6 +49,10 @@ interface NapPageRecord {
   url: string;
   schemaTypes: string[];
   nap: NapSignal;
+  /** Answered 2xx. Error pages are not compared, so they never keep a noindex-only site "applicable". */
+  ok: boolean;
+  /** Left out of the comparison (noindex page on an indexable site, #1773). */
+  excluded?: boolean;
 }
 
 /** Per-value rollup for one signal (phone or address). */
@@ -69,6 +76,10 @@ interface NapSignalRollup {
 
 interface NapRollup {
   pageCount: number;
+  /** Noindex pages deliberately left out of the comparison (#1773). */
+  skippedNoindexPages: number;
+  /** 2xx pages that took part in the comparison. */
+  comparedPages: number;
   hasLocalBusiness: boolean;
   businessName: string | null;
   /** First contact-ish page in crawl order, and whether it carries contact links. */
@@ -85,6 +96,8 @@ function emptySignalRollup(): NapSignalRollup {
 function emptyRollup(): NapRollup {
   return {
     pageCount: 0,
+    skippedNoindexPages: 0,
+    comparedPages: 0,
     hasLocalBusiness: false,
     businessName: null,
     contactPageSeen: false,
@@ -125,6 +138,14 @@ function accumulateSignal(
  */
 function accumulatePage(rollup: NapRollup, record: NapPageRecord): void {
   rollup.pageCount += 1;
+
+  // A noindex page can carry deliberately different details (a staging copy, a
+  // thank-you page): it neither votes nor counts (#1773).
+  if (record.excluded) {
+    rollup.skippedNoindexPages += 1;
+    return;
+  }
+  if (record.ok) rollup.comparedPages += 1;
 
   if (
     !rollup.hasLocalBusiness &&
@@ -269,6 +290,23 @@ function buildSignalCheck(name: string, label: string, rollup: NapSignalRollup):
 
 /** The rule's full output for a non-empty crawl. ONE builder, both paths. */
 function buildChecks(rollup: NapRollup): CheckResult[] {
+  // Every page that answered is noindex: nothing is left to compare, which is not
+  // a pass. Reported as not applicable.
+  if (rollup.skippedNoindexPages > 0 && rollup.comparedPages === 0) {
+    return [
+      {
+        name: "nap-consistency",
+        status: "skipped",
+        message: `Every crawled page is noindex (${rollup.skippedNoindexPages} page(s)), so there is no indexable page to compare`,
+        skipReason: CHECK_NOT_APPLICABLE_SKIP_REASON,
+        details: {
+          foldKey: CHECK_NOT_APPLICABLE_SKIP_REASON,
+          skippedNoindexPages: rollup.skippedNoindexPages,
+        },
+      },
+    ];
+  }
+
   const checks: CheckResult[] = [];
 
   if (rollup.hasLocalBusiness) {
@@ -332,13 +370,15 @@ function napFromRow(row: PageFeatureRow): NapSignal {
  * on this seam (see content/duplicate-title), not something specific to NAP, and
  * such a crawl cannot resolve the local-business metadata this rule is gated on.
  */
-async function runViaSiteQuery(siteQuery: SiteQuery): Promise<RuleResult> {
+async function runViaSiteQuery(siteQuery: SiteQuery, skipNoindex: boolean): Promise<RuleResult> {
   const rollup = emptyRollup();
   for await (const row of siteQuery.pagesMatching(() => true)) {
     accumulatePage(rollup, {
       url: row.normalizedUrl,
       schemaTypes: row.schemaTypes,
       nap: napFromRow(row),
+      ok: row.status >= 200 && row.status < 300,
+      excluded: skipNoindex && row.robotsNoindex,
     });
   }
 
@@ -364,7 +404,7 @@ export const napConsistencyRule: Rule = {
 
   run(ctx: RuleContext): RuleResult | Promise<RuleResult> {
     if (ctx.siteQuery) {
-      return runViaSiteQuery(ctx.siteQuery);
+      return runViaSiteQuery(ctx.siteQuery, skipsNoindexPages(ctx.site));
     }
 
     const pages = ctx.site?.pages;
@@ -378,6 +418,8 @@ export const napConsistencyRule: Rule = {
         url: page.url,
         schemaTypes: page.parsed?.schema?.types ?? [],
         nap: extractNapSignal(page.parsed),
+        ok: page.statusCode >= 200 && page.statusCode < 300,
+        excluded: excludesNoindexPage(ctx.site, page.parsed, page.headers),
       });
     }
 

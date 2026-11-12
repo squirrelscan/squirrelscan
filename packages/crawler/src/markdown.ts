@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 
-import { budgetedTimeoutMs, safeFetchWithDeadline, ungated } from "./deadline";
+import { optionalProbeTimeoutMs, safeFetchWithDeadline, ungated } from "./deadline";
 import { noteRefusal } from "./refusals";
 
 import type { PhaseBudget, ProbeGate } from "./deadline";
@@ -59,7 +59,7 @@ async function probeOne(
   customHeaders?: Record<string, string>,
   budget?: PhaseBudget,
 ): Promise<ProbeResult | null> {
-  const timeoutMs = budgetedTimeoutMs(budget, PROBE_TIMEOUT_MS);
+  const timeoutMs = optionalProbeTimeoutMs(budget, PROBE_TIMEOUT_MS);
   if (timeoutMs === null) return null;
   try {
     return await safeFetchWithDeadline(

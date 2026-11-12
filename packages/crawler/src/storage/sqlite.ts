@@ -2198,8 +2198,18 @@ export class SQLiteStorage implements CrawlStorage {
     return Effect.try({
       try: () => {
         const db = this.getDb();
+        // Pages, not redirect rows (#1762): the engine's marker, mirrored in SQL (`isRedirectRecord`): a 3xx whose
+        // chain resolved to another URL (more than one hop, no error, no loop). Such a row takes no maxPages slot
+        // and is not in the report's totals. A 3xx that ended in an error or looped is a page row in both.
         const stmt = db.prepare(
-          "SELECT COUNT(*) as count FROM pages WHERE crawl_id = ?"
+          `SELECT COUNT(*) as count FROM pages WHERE crawl_id = ? AND NOT (
+            status BETWEEN 300 AND 399 AND final_url IS NOT NULL AND final_url <> normalized_url
+            AND CASE WHEN redirect_chain IS NOT NULL AND json_valid(redirect_chain)
+              THEN COALESCE(json_extract(redirect_chain, '$.endsInError'), 0) = 0
+                AND COALESCE(json_extract(redirect_chain, '$.isLoop'), 0) = 0
+                AND COALESCE(json_array_length(redirect_chain, '$.hops'), 0) > 1
+              ELSE 0 END
+          )`
         );
         const row = stmt.get(crawlId) as { count: number };
         return row.count;

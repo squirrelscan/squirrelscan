@@ -315,3 +315,50 @@ describe("crawl/canonical-chain — canonical-redirects needs the same evidence"
     );
   });
 });
+
+describe("crawl/canonical-chain: a redirecting URL has no document of its own (#1762)", () => {
+  const O = "https://example.com";
+  const hops = chain(`${O}/old`, `${O}/new`, [hop(`${O}/old`, 301), hop(`${O}/new`, 200)]);
+  const source = { url: `${O}/old`, finalUrl: `${O}/new`, redirectChain: hops, statusCode: 301 };
+
+  test("the redirect source reports its hops without a document", () => {
+    const result = canonicalChainRule.run({
+      page: { ...source, html: "" },
+      parsed: { document: null },
+      options: {},
+    } as unknown as RuleContext);
+    expect(result.checks.map((c) => c.name)).toEqual(["page-redirect-chain"]);
+  });
+});
+
+import { redirectChainsRule } from "../src/links/redirect-chains";
+
+describe("links/redirect-chains: a canonical naming a URL that redirected to the page (#1762)", () => {
+  const O = "https://example.com";
+  const hops = chain(`${O}/old`, `${O}/new`, [hop(`${O}/old`, 301), hop(`${O}/new`, 200)]);
+  const site = (canonical: string | null) =>
+    ({
+      page: { url: O, html: "", statusCode: 200 },
+      parsed: {},
+      site: {
+        baseUrl: O,
+        pages: [
+          { url: `${O}/old`, finalUrl: `${O}/new`, statusCode: 301, redirectChain: hops, redirectSource: true, parsed: { links: [], meta: {} } },
+          { url: `${O}/new`, finalUrl: `${O}/new`, statusCode: 200, parsed: { links: [], meta: { canonical } } },
+        ],
+      },
+      options: {},
+    }) as unknown as RuleContext;
+
+  test("is reported on the destination, naming the hops", () => {
+    const check = redirectChainsRule.run(site(`${O}/old`) as never) as { checks: Array<{ name: string; items?: Array<{ id: string; label: string; sourcePages?: string[] }> }> };
+    const found = check.checks.find((c) => c.name === "canonical-redirects");
+    expect(found?.items?.[0]?.id).toBe(`${O}/old`);
+    expect(found?.items?.[0]?.sourcePages).toEqual([`${O}/new`]);
+  });
+
+  test("a self canonical reports nothing", () => {
+    const check = redirectChainsRule.run(site(`${O}/new`) as never) as { checks: Array<{ name: string }> };
+    expect(check.checks.find((c) => c.name === "canonical-redirects")).toBeUndefined();
+  });
+});

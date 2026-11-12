@@ -200,13 +200,23 @@ What the coverage counts mean:
   run's, plus the URLs this run found but never fetched because the host was
   rate limiting it. It is never lower than **audited**.
 - **carried** is the findings a previous run observed on pages this run did not
-  crawl. They are keyed by the page's URL, not by the page record, so a carried
-  finding does not by itself prove the page is counted in **known**. A page
-  whose record is missing from the store can carry findings while **known**
-  equals **audited**. That is a gap in the store, not a statement that the
-  finding is gone: the finding
-  stays in the score and the report until the page is crawled again or comes
-  back 404 or 410.
+  crawl. A carried finding's page has an active page record, so it is in
+  **known**: `carriedFindings > 0` implies `knownPages > auditedPages`.
+- **unrendered** (`unrenderedFindings`) is open findings on pages no audit has
+  ever rendered, so no earlier run observed them: pages known from a sitemap or
+  an aggregate page list but left out by every run's page limit, and a page
+  whose record is missing from the store (the merge cannot tell it was ever
+  crawled). They are not counted as **carried**. A sitemap-known page has a
+  record and is in **known**; a page with no record is not, so a site with only
+  such pages can report `knownPages = auditedPages` while findings on pages
+  outside the crawl stay open. That is a gap in the store, not a statement that
+  the finding is gone: the finding stays in the score and the report until the
+  page is crawled again or comes back 404 or 410. A non-zero
+  `unrenderedFindings` beside `auditedPages` equal to `knownPages` means
+  findings from pages outside this run's crawl.
+- **pagesWithStaleCarry** counts pages this run did re-crawl that still carry a
+  finding from an earlier run, because a rule gave no verdict there (skipped, or
+  inconclusive). It does not count pages outside the crawl.
 
 Carried findings do not expire on a timer: they last until you re-crawl the page
 (the fresh result replaces them) or it is removed. If a capped run rotates the

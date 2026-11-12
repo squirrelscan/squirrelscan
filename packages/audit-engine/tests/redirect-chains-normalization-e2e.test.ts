@@ -219,8 +219,10 @@ describe("#1510 — real redirects still report, with their real statuses", () =
       `${site.origin}/posredni/`,
       `${site.origin}/nowy/`,
     ]);
+    // A chain of two redirects is labelled with its hop count (#1750).
     expect(redirectPages?.items?.[0]?.label).toBe(
-      `${site.origin}/stary/ (301) → ${site.origin}/posredni/ (301) → ${site.origin}/nowy/ (200)`,
+      // Two redirect responses before the landing page, so the label carries the hop count (#1750).
+      `2 hops: ${site.origin}/stary/ (301) → ${site.origin}/posredni/ (301) → ${site.origin}/nowy/ (200)`,
     );
 
     // The page that linked the redirecting form is the one blamed.

@@ -26,6 +26,7 @@ import {
   type NotEvaluatedEvidence,
   type RuleTally,
 } from "@squirrelscan/audit-engine";
+import { buildSupersededIndex } from "@squirrelscan/core-contracts/resolution";
 import { loadAllRules, type RuleRunResult } from "@squirrelscan/rules";
 import { isNonPublicUrl } from "@squirrelscan/utils/non-public-host";
 import { Effect } from "effect";
@@ -124,7 +125,7 @@ export interface RunSmartAuditsInput {
   /** ruleId -> folded tally; read for `meta` only (the bounded rule index). */
   ruleMeta: ReadonlyMap<string, RuleTally>;
   /** All page records for this crawl (status used to detect 404/410). */
-  pages: Array<{ normalizedUrl: string; status: number }>;
+  pages: Array<{ normalizedUrl: string; status: number; redirect?: true }>;
 }
 
 /**
@@ -153,6 +154,9 @@ export function runSmartAudits(
     for (const url of scoredPageUrls) crawledUrls.add(url);
     for (const p of pages) crawledUrls.add(p.normalizedUrl);
 
+    const redirectUrls = new Set<string>();
+    for (const p of pages) if (p.redirect) redirectUrls.add(p.normalizedUrl);
+
     const removedUrls = new Set<string>();
     const statusByUrl = new Map<string, number>();
     for (const p of pages) {
@@ -177,6 +181,9 @@ export function runSmartAudits(
       freshFindings,
       removedUrls,
       severityByRule,
+      supersededChecks: buildSupersededIndex(
+        [...ruleMeta.values()].map((t) => t.meta)
+      ),
       statusByUrl,
       ...(notEvaluated ? { notEvaluated } : {}),
     });
@@ -285,8 +292,13 @@ export function runSmartAudits(
       carriedRuleResults,
       removedUrls,
       coverage: {
-        auditedPages: crawledUrls.size,
-        knownPages: merged.activePageUrls.size,
+        // A redirecting URL (#1762) is re-observed (it is in `crawledUrls`, so its stale findings resolve)
+        // but it is not a page: neither count includes it.
+        auditedPages: [...crawledUrls].filter((url) => !redirectUrls.has(url))
+          .length,
+        knownPages: [...merged.activePageUrls].filter(
+          (url) => !redirectUrls.has(url)
+        ).length,
         carriedFindings: carriedFindings.length - unrenderedCount,
         ...(unrenderedCount > 0 ? { unrenderedFindings: unrenderedCount } : {}),
       },

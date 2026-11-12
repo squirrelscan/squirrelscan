@@ -823,6 +823,9 @@ export function evaluateAnchorGraph(
     message: `${mismatches.length} link pair(s) to ${targets.size} page(s) use anchor text that shares no word with the target${escalation}`,
     items: mismatches.slice(0, MAX_ITEMS).map((m) => ({
       id: `${m.source} -> ${m.target}`,
+      // #1729: the id names a PAIR, which is not a page; without sourcePages the
+      // affected-pages aggregation read it as one ("/faq%20-%3E%20https://...").
+      sourcePages: [m.source],
       label: `"${m.anchor}" -> ${m.target}${m.title ? ` (title: "${m.title}")` : ""}${m.onlyAnchor ? ", the only contextual anchor text this page receives" : ""}`,
     })),
     details: { ...details, total: mismatches.length, onlyAnchorTargets: only.size },

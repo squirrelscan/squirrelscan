@@ -10,9 +10,10 @@ import { affectedPages, itemsNotListed } from "../affected-pages";
 import { domainAgeYears } from "../site-metadata";
 import { editorSummaryView } from "../editor-summary";
 import { entityPageTotal, stableIdPercent } from "../entities";
-import { followedStartRedirect, scanScopeUnfetched, seedRedirect } from "../coverage";
+import { followedStartRedirect, scanScopePageTypes, scanScopeUnfetched, seedRedirect } from "../coverage";
 import { ignoredLine, safeIgnored } from "../ignored";
 import { notCheckedLine, notCheckedRules } from "../not-checked";
+import { lockedRuleView, lockedRulesMessage } from "../locked-rules";
 import { pageTypePhrase, structureAttr, structureSectionName } from "../structure";
 import { checkRegionScope, itemLabel, itemRegionScope, type RegionScope } from "../region-scope";
 import { checkPageTypeScope, type PageTypeScope } from "../page-type-scope";
@@ -78,6 +79,12 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
     lines.push(
       `${indent(2)}<scan-scope origin="${escapeXml(s.origin)}" crawled="${s.pagesCrawled}"${cap}${requested} capped="${s.capped}"${stop}${unfetched}/>`,
     );
+    // Pages known against pages audited, per URL-based page type (#1744).
+    for (const t of scanScopePageTypes(report)) {
+      lines.push(
+        `${indent(2)}<page-type name="${escapeXml(t.type)}" discovered="${t.discovered}" audited="${t.audited}"/>`,
+      );
+    }
   }
   lines.push(`${indent(1)}</site>`);
 
@@ -385,10 +392,27 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
     lines.push(`${indent(1)}<not-checked count="${notChecked.length}">`);
     for (const rule of notChecked) {
       lines.push(
-        `${indent(2)}<rule id="${escapeXml(rule.ruleId)}" name="${escapeXml(rule.name)}" check="${escapeXml(rule.check)}" reason="${escapeXml(rule.reason)}">${escapeXml(notCheckedLine(rule))}</rule>`,
+        `${indent(2)}<rule id="${escapeXml(rule.ruleId)}" name="${escapeXml(rule.name)}" check="${escapeXml(rule.check)}" reason="${escapeXml(rule.reason)}"${rule.cause ? ` cause="${rule.cause}"` : ""}>${escapeXml(notCheckedLine(rule))}</rule>`,
       );
     }
     lines.push(`${indent(1)}</not-checked>`);
+  }
+
+  // #1734: cloud checks that did not run, with the reason each carries. Omitted for white-label reports, like
+  // the HTML, text and markdown sections: the message and its call to action name squirrelscan signup,
+  // credits and the dashboard.
+  const locked = options?.branding?.whiteLabel ? null : lockedRulesMessage(report);
+  if (locked) {
+    lines.push(`${indent(1)}<locked-rules count="${locked.count}" audience="${locked.audience}">`);
+    lines.push(`${indent(2)}<message>${escapeXml(locked.action)}</message>`);
+    for (const rule of locked.rules.map(lockedRuleView)) {
+      const reason = rule.reason ? ` reason="${rule.reason}"` : "";
+      const detail = rule.detail ? ` detail="${escapeXml(rule.detail)}"` : "";
+      lines.push(
+        `${indent(2)}<rule id="${escapeXml(rule.id)}" name="${escapeXml(rule.name)}"${reason}${detail}/>`,
+      );
+    }
+    lines.push(`${indent(1)}</locked-rules>`);
   }
 
   // Entities (#2091) — the site's JSON-LD as one graph. Report-only, never part

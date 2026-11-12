@@ -85,7 +85,13 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // analytics/duplicate-tags, i18n/hreflang-targets, content/duplicate-content). Their passes lift the weighted
       // overall past one more rounding boundary. The skipped and info rows among them do not score; the one warn row, links/click-depth
       // on the synthetic site, is also a finding (it is among the 105251 below) and counts in that move too.
-      expect(v1.healthScore.overall).toBe(53);
+      // 53 -> 54 (#1741): the integrity page rules (brand-impersonation, fake-auth-overlay, obfuscated-script,
+      // seo-doorway) now PASS on every page they read instead of saying nothing, which lifts the weighted overall
+      // past one more rounding boundary. A deliberate change: a clean run is a check, not an empty list.
+      // 54 -> 56 (#1765): core/meta-title, core/meta-description and links/internal-links report too short and too
+      // long as separate checks, so a page inside both limits records two passes where it recorded one. More
+      // passes lift the weighted overall past two more rounding boundaries. Failing pages are unchanged.
+      expect(v1.healthScore.overall).toBe(56);
       // 97711 -> 98211: content/hidden-text emits one page check across the 500
       // fixture pages that have a document, and passes on every one of them. The
       // overall score is unmoved.
@@ -220,7 +226,15 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // add a pass row on each of the 500 pages with a document; the four site-scoped rules (crawl/indexable-
       // search-results, links/click-depth, i18n/hreflang-targets, content/duplicate-content) add one row each.
       // svg-img-alt and password-form-get say nothing on a page with no svg role=img or password form.
-      expect(v1.findings.length).toBe(105251);
+      // 105251 -> 108253 (#1741): a rule that ran never returns an empty list. brand-impersonation,
+      // fake-auth-overlay, obfuscated-script and seo-doorway add a pass row on each of the 500 pages with a
+      // document; schema/rating-scope and content/date-agreement add a skipped row (no rating markup, no schema
+      // date) on each of those pages; integrity/cloaking and integrity/known-malicious-url add one skipped row
+      // each for the run (the probe and threat intelligence are off).
+      // 108253 -> 108254: crawl/conflicting-index-signals is site-scoped and adds one pass row (no page
+      // sends contradictory signals), so healthScore.overall is unmoved.
+      // 108254 -> 109734 (#1765): the split checks add a pass row per page and per direction (1,480 rows).
+      expect(v1.findings.length).toBe(109734);
       // Tripwire: EXTENDING a rule must never add a tally key, so a change here
       // is only correct alongside a deliberate new rule id. 266 -> 267 is
       // content/hidden-text, 267 -> 268 content/thin-vs-site-norm, 268 -> 269
@@ -250,9 +264,9 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // 309 -> 310 images/hotlinked, 310 -> 311 content/h1-title-alignment,
       // 311 -> 312 schema/expected-type, 312 -> 313 security/tls-certificate,
       // 313 -> 314 crawl/single-page-site, 314 -> 315 perf/framework-data-payload, 315 -> 316 perf/content-in-js-bundle,
-      // 316 -> 317 links/anchor-mismatch, 317 -> 326 the 2026-11 batch of nine rules (crawl/rendered-signal-mismatch, a11y/svg-img-alt, security/password-form-get, url/session-ids, crawl/indexable-search-results, links/click-depth, analytics/duplicate-tags, i18n/hreflang-targets, content/duplicate-content);
+      // 316 -> 317 links/anchor-mismatch, 317 -> 326 the 2026-11 batch of nine rules (crawl/rendered-signal-mismatch, a11y/svg-img-alt, security/password-form-get, url/session-ids, crawl/indexable-search-results, links/click-depth, analytics/duplicate-tags, i18n/hreflang-targets, content/duplicate-content), 326 -> 327 crawl/conflicting-index-signals;
       // anything else means a rule id leaked in, so fix that rather than this number.
-      expect(v1.perRuleTally.length).toBe(326);
+      expect(v1.perRuleTally.length).toBe(327);
       expect(v1.perRuleTally.find((t) => t.ruleId === "security/tls-certificate")).toEqual({
         ruleId: "security/tls-certificate",
         pass: 0,

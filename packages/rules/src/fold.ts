@@ -15,6 +15,7 @@ import {
 } from "@squirrelscan/core-contracts/clamp";
 import { addRegions, alignItemSources, pageRegions } from "@squirrelscan/core-contracts/item-sources";
 import { PUBLISH_LIMITS, REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
+import { mergeCheckMessages, messageMergeKey } from "@squirrelscan/core-contracts/message-merge";
 import { byteLength } from "@squirrelscan/utils/bytes";
 
 /**
@@ -735,7 +736,7 @@ export function unfoldAggregateCheck(check: CheckResult): CheckResult[] {
   // foldGroup composed the message as `${first.message} (+N more pages)`; strip
   // that suffix so a downstream re-fold doesn't stack a second one and carried
   // findings read as the plain per-page message.
-  const perPageMessage = check.message.replace(/ \(\+\d+ more pages\)$/, "");
+  const perPageText = perPageMessage(check);
   // `aggregated`/`occurrences` describe the whole fold — meaningless per page.
   // `additional` (items dropped at the fold cap) can't be split across pages, so
   // pin the whole count to the FIRST page below: the scorer keys its density
@@ -745,6 +746,10 @@ export function unfoldAggregateCheck(check: CheckResult): CheckResult[] {
   const baseDetails: Record<string, unknown> = { ...check.details };
   delete baseDetails.aggregated;
   delete baseDetails.occurrences;
+  delete baseDetails.pageMessage;
+  delete baseDetails.messages;
+  delete baseDetails.messagesTruncated;
+  delete baseDetails.distinctItems;
   const additional = baseDetails.additional;
   delete baseDetails.additional;
 
@@ -827,7 +832,7 @@ export function unfoldAggregateCheck(check: CheckResult): CheckResult[] {
     const pageOccurrences = occurrencesByPage.get(page);
     return {
       ...check,
-      message: perPageMessage,
+      message: perPageText,
       pageUrl: page,
       pages: undefined,
       items:
@@ -932,6 +937,85 @@ export function clampReportPagesToBudget(
     }
   }
   return dropped;
+}
+
+/** Distinct per-page messages an aggregate remembers in `details.messages`. */
+const MAX_MESSAGE_VARIANTS = 20;
+
+// Both tails an aggregate's message can end in: "(+N more pages)" and, since #1767, "on N pages".
+const MORE_PAGES_SUFFIX = /(?: \(\+\d+ more pages\)| on \d+ pages?)$/;
+
+function occurrencesOf(check: CheckResult): number {
+  const prior = check.details?.occurrences;
+  return typeof prior === "number" && Number.isFinite(prior) && prior > 0 ? Math.floor(prior) : 1;
+}
+
+/** The message one page would have shown: an aggregate keeps it in `details.pageMessage` (older ones carry the suffix). */
+function perPageMessage(check: CheckResult): string {
+  if (check.details?.aggregated !== true) return check.message;
+  const kept = check.details.pageMessage;
+  return typeof kept === "string" ? kept : check.message.replace(MORE_PAGES_SUFFIX, "");
+}
+
+/** The `details.messages` an aggregate kept when its pages disagreed, with a count per message. */
+function messageVariantsOf(check: CheckResult): { message: string; count: number }[] | null {
+  const listed = check.details?.aggregated === true ? check.details.messages : undefined;
+  if (!Array.isArray(listed)) return null;
+  const out: { message: string; count: number }[] = [];
+  for (const v of listed) {
+    if (v && typeof v.message === "string" && typeof v.count === "number") out.push({ message: v.message, count: v.count });
+  }
+  return out.length > 0 ? out : null;
+}
+
+const pagesWord = (n: number): string => `${n} page${n === 1 ? "" : "s"}`;
+
+/**
+ * The sentence for a folded group (#1767). One message shape: the merged message,
+ * with `(+N more pages)`; or, when every message counts items and the group knows
+ * its distinct items, `1 image missing alt text, shown on 16 pages` and
+ * `14 images missing alt text across 9 pages`. Several shapes: each listed once
+ * with its page count, so no page's problem is stated for the others.
+ */
+function composeFoldedMessage(
+  variants: ReadonlyMap<string, number>,
+  occurrences: number,
+  distinctItems: number,
+): string {
+  const byShape = new Map<string, { messages: string[]; count: number }>();
+  for (const [message, count] of variants) {
+    const key = messageMergeKey(message);
+    const slot = byShape.get(key);
+    if (slot) {
+      slot.messages.push(message);
+      slot.count += count;
+    } else byShape.set(key, { messages: [message], count });
+  }
+  const merged = [...byShape.values()]
+    .map((g) => ({ text: mergeCheckMessages(g.messages) ?? g.messages[0]!, count: g.count }))
+    .sort((a, b) => b.count - a.count || (a.text < b.text ? -1 : a.text > b.text ? 1 : 0));
+  if (merged.length === 1) {
+    const text = merged[0]!.text;
+    const counted = /^(?:\d+(?: to \d+)?) (.*)$/s.exec(text);
+    if (distinctItems > 0 && counted && counted[1]!.includes("(s)")) {
+      return distinctItems === 1
+        ? `1 ${counted[1]!.replace(/\(s\)/g, "")}, shown on ${pagesWord(occurrences)}`
+        : `${distinctItems} ${counted[1]!.replace(/\(s\)/g, "s")} across ${pagesWord(occurrences)}`;
+    }
+    // Pages that disagreed on a count or a measurement say so as a range and the pages it covers
+    // ("Slow server response (850 to 1200ms) on 2 pages"); a message every page agrees on keeps its tail.
+    return variants.size > 1
+      ? `${text} on ${pagesWord(occurrences)}`
+      : `${text} (+${occurrences - 1} more pages)`;
+  }
+  // "on N pages", not "(N pages)": a count in parentheses after a message that ends in a parenthesised
+  // value reads as two values ("(2 to 5) (3 pages)").
+  const shown = merged.slice(0, 3).map((g) => `${g.text} on ${pagesWord(g.count)}`);
+  const rest = merged.slice(3);
+  if (rest.length > 0) {
+    shown.push(`${rest.length} other messages on ${pagesWord(rest.reduce((n, g) => n + g.count, 0))}`);
+  }
+  return shown.join("; ");
 }
 
 function foldGroup(group: CheckResult[], limits: FoldLimits): CheckResult {
@@ -1118,10 +1202,38 @@ function foldGroup(group: CheckResult[], limits: FoldLimits): CheckResult {
   // number to show. (#1876) That case is now routine: a rule carrying more than
   // `maxChecksPerRule` findings reaches the report as a bounded sample whose
   // occurrence total is stamped rather than materialized.
-  const message = `${first.message} (+${occurrences - 1} more pages)`.slice(
+  //
+  // (#1767) Never states one page's problem for all of them: the constituents'
+  // messages are merged (counts that differ become a range), several different
+  // messages are listed with their page counts, and a group whose items carry
+  // ids says how many DISTINCT items there are and how many pages show them.
+  const distinctItems = Math.max(
+    // `additional` is a count of dropped OCCURRENCES, not distinct items: it is not added here.
+    itemMap.size + droppedIds.size,
+    ...group.map((c) =>
+      typeof c.details?.distinctItems === "number" ? Math.floor(c.details.distinctItems) : 0,
+    ),
+  );
+  const variants = new Map<string, number>();
+  for (const check of group) {
+    const weight = occurrencesOf(check);
+    const listed = messageVariantsOf(check);
+    if (listed) for (const v of listed) variants.set(v.message, (variants.get(v.message) ?? 0) + v.count);
+    else variants.set(perPageMessage(check), (variants.get(perPageMessage(check)) ?? 0) + weight);
+  }
+  const message = composeFoldedMessage(variants, occurrences, distinctItems).slice(
     0,
     REPORT_LIMITS.maxMediumString,
   );
+  details.pageMessage = perPageMessage(first);
+  if (distinctItems > 0) details.distinctItems = distinctItems;
+  if (variants.size > 1) {
+    details.messages = [...variants]
+      .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))
+      .slice(0, MAX_MESSAGE_VARIANTS)
+      .map(([m, count]) => ({ message: m.slice(0, REPORT_LIMITS.maxMediumString), count }));
+    if (variants.size > MAX_MESSAGE_VARIANTS) details.messagesTruncated = variants.size;
+  }
   // Component-aware fix grouping requires every observed element, unlike legacy
   // items/pages which are explicitly presentation samples. Do not cap this list:
   // a cap would turn affected-page membership into an unlabelled guess.

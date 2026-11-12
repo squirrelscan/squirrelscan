@@ -11,15 +11,25 @@ Google's guidance is to put the markup on the page that is about that product. A
 
 ## What squirrel checks
 
-The rule reads every `script[type="application/ld+json"]` on the page and keeps the first `Product` node from the last script that contains one, matching either a plain `@type` or an `@type` array. It emits one to three checks:
+The rule reads every `script[type="application/ld+json"]` on the page and keeps the first `Product` or `ProductGroup` node from the last script that contains one, matching either a plain `@type` or an `@type` array. It also reads Microdata (`itemscope` with a schema.org `itemtype`) and RDFa (`typeof` with a schema.org vocabulary) products from the raw HTML. Nothing is rendered or fetched. It emits one to five checks:
 
-- `product-schema`: reports at info status with the message `No Product schema found` when no such node exists. No further checks run.
-- `product-required`: warns with the message `Product schema missing required properties` and lists the missing names as items. The required set is `name` and `image`. When both are present it passes with `Product schema has required properties`.
-- `product-offers`: reports at info status with the message `Product schema has no offers/pricing` and the value `Add Offer with price and availability` when `offers` is absent.
-- `product-offer-details`: warns with the message `Product Offer missing price or availability` when the offer lacks either property.
+- `product-schema`: reports at info status with the message `No Product schema found` when no product exists in any of those representations and nothing suggests script builds one. No further checks run.
+- `product-required`: warns with the message `Product schema missing required properties` and lists the names that were proven absent. The required set is `name` and `image`. When both are present it passes with `Product schema has required properties`. When a field could not be checked (see below) and none is proven absent, it reports at info status instead of warning.
+- `product-offers`: reports at info status with the message `Product schema has no offers/pricing` and the value `Add Offer with price and availability` when no Offer was found in a complete read.
+- `product-offer-details`: warns with the message `Product Offer missing price or availability` when an Offer was found but price or availability is proven absent.
+- `product-field-evidence`: always info, never a failure. It lists `name`, `description`, `image`, `price` and `availability` as present (with the representation it was read from), absent or unknown (with the reason). The `details` carry the same data plus the read state.
 - `product-reviews`: emitted only when `review` or `aggregateRating` is present, passing with the message `Product has review/rating data`.
 
-When `offers` is an array only the first entry is checked, so a product with several offers is judged on one of them. An offer written as a node reference (`{"@id": "…#offer"}`) is read from the node with that `@id` anywhere in the page's JSON-LD. Every property test is a truthiness test rather than a presence test, so a property present but empty, `0` or `false` counts as missing. A price of `0` is therefore treated as missing, and so is an `image` of `""`.
+### Present, absent and unknown
+
+A field is `present` when it is declared with a value. `description` is judged on presence only, with no length threshold, and a price of `0` is declared. A field is `absent` only when the HTML was read completely and no supported representation carries it. Otherwise it is `unknown`, with one of these reasons:
+
+- `incomplete-read`: the read failed (an error status or no document) or looks truncated (no closing `</html>`, or an unterminated `<script>`). Fields already found stay present; the rest are unknown.
+- `rendered-only`: no product markup is in the raw HTML, but the page looks like a JavaScript shell for a product (product Open Graph tags or an ecommerce site profile with almost no visible text, or a script that builds schema.org Product data). The ecommerce site profile comes from cloud site metadata, so an offline CLI audit has none and decides from the page markup alone. The rule does not run a browser, so it reports every field as unknown rather than missing.
+- `unsupported`: the Microdata uses `itemref`, which this reader does not follow.
+- `unresolved-reference`: the field is a `{"@id": "..."}` reference that no node on the page defines.
+
+A `ProductGroup` is read together with its `hasVariant` entries, inline or by `@id`: a field counts when the group or any variant carries it, and an Offer on any variant or nested `AggregateOffer` counts for price and availability. An offer written as a node reference is read from the node with that `@id` anywhere in the page's JSON-LD. Price counts when `price`, `lowPrice` or a `priceSpecification` price is declared.
 
 ## How to fix it
 

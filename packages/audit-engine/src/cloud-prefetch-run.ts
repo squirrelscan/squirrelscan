@@ -42,6 +42,7 @@ import {
 import { detachFromPage } from "./detach";
 import { auditedEmpty } from "@squirrelscan/parser";
 import { CLASS_SPLIT } from "@squirrelscan/parser/dom";
+import { trimTrailing } from "@squirrelscan/utils/trim";
 
 // The parsed page's linkedom Document, without adding a direct linkedom dep here.
 type Document = NonNullable<NonNullable<SiteContextPage["parsed"]>["document"]>;
@@ -332,7 +333,7 @@ interface GapsRuleOptions {
 }
 
 function apexDomain(baseUrl: string): string {
-  const host = getHostname(baseUrl).toLowerCase().replace(/\.+$/, "");
+  const host = trimTrailing(getHostname(baseUrl).toLowerCase(), 46);
   return host.startsWith("www.") ? host.slice(4) : host;
 }
 

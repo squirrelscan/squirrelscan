@@ -18,7 +18,7 @@ export function normalizeUrl(raw: string): string {
     return input.toLowerCase();
   }
   const host = u.hostname.toLowerCase().replace(/^www\./, "");
-  const path = u.pathname.replace(/\/+$/, "");
+  const path = trimTrailingSlashes(u.pathname);
   return path ? `${host}${path}` : host;
 }
 
@@ -36,4 +36,11 @@ export function hostOf(raw: string): string | null {
 export function registrableDomain(raw: string): string | null {
   const host = hostOf(raw) ?? raw.trim().toLowerCase();
   return getDomain(host, { allowPrivateDomains: true });
+}
+
+/** Drop trailing slashes in one linear pass: `/\/+$/` is quadratic on a path of many slashes. */
+function trimTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === 47) end--;
+  return value.slice(0, end);
 }

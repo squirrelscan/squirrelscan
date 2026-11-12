@@ -161,7 +161,7 @@ export function createConditionalRenderDocumentFetcher(
         const rendered = await opts.render.fetch(req);
         const probe = await settleWithin(probePromise, bootstrapProbeGraceMs);
         if (probe && probe.status >= 200 && probe.status < 300 && !isDefinitelyNonHtml(probe)) {
-          return { ...rendered, sourceHash: computeSourceFingerprint(probe.body) };
+          return { ...rendered, sourceHash: computeSourceFingerprint(probe.body), serverHtml: probe.body };
         }
         return rendered;
       }
@@ -201,7 +201,7 @@ export function createConditionalRenderDocumentFetcher(
           return synthesizeNotModified(probe);
         }
         const rendered = await opts.render.fetch(stripConditionalHeaders(req));
-        return { ...rendered, sourceHash };
+        return { ...rendered, sourceHash, serverHtml: probe.body };
       }
 
       // A 3xx with HTML/ambiguous content-type, or an error/block status (403

@@ -11,15 +11,17 @@ import {
   daysUntil,
   isoDate,
   untrustedRootText,
+  wwwVariant,
   type TlsCertificate,
   type TlsProbeFn,
   type TlsProblem,
   type TlsProbe,
 } from "@squirrelscan/utils/tls-certificate";
-import { getDomain } from "tldts";
 import { z } from "zod";
 
 import { TLS_CERTIFICATE_NOT_CHECKED_SKIP_REASON } from "@squirrelscan/core-contracts";
+
+export { wwwVariant };
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
@@ -165,6 +167,8 @@ export type { TlsProbeFn };
 export interface TlsCertificateDeps {
   probe: TlsProbeFn;
   now: Date;
+  /** A hosted audit: the not-checked wording carries no advice about networks, proxies or --offline (#3922). */
+  hosted?: boolean;
 }
 
 
@@ -187,6 +191,7 @@ export const tlsCertificateRule: Rule = {
 
   async run(ctx: RuleContext): Promise<RuleResult> {
     const options = optionsSchema.parse(ctx.options);
+    const hosted = ctx.hosted === true;
     const probe: TlsProbeFn =
       ctx.tlsProbe ??
       (async () => ({
@@ -196,6 +201,7 @@ export const tlsCertificateRule: Rule = {
     return checkTlsCertificate(ctx.site?.baseUrl ?? ctx.page.url, options, {
       probe,
       now: new Date(),
+      hosted,
     });
   },
 };
@@ -238,7 +244,7 @@ export async function checkTlsCertificate(
   ]);
 
   if (probe.kind !== "certificate") {
-    return { checks: [notChecked(hostname, probe)] };
+    return { checks: [notChecked(hostname, probe, deps.hosted === true)] };
   }
 
   const checks: CheckResult[] = [expiryCheck(probe.certificate, options, deps.now)];
@@ -480,17 +486,37 @@ function describeProblem(
   }
 }
 
-function notChecked(hostname: string, probe: Exclude<TlsProbe, { kind: "certificate" }>): CheckResult {
+function notChecked(
+  hostname: string,
+  probe: Exclude<TlsProbe, { kind: "certificate" }>,
+  hosted: boolean,
+): CheckResult {
   // Skipped, not info (#1259): a skipped check carrying a not-checked reason is
   // what every report lists under "Not checked", and the JSON `notChecked` too.
   // The value stays `not-checked` for readers of the check itself.
+  // `details.environment` lets the report pick the hint that fits (#3922).
   const skipped = (message: string): CheckResult => ({
     name: "tls-certificate",
     status: "skipped",
     message,
     value: "not-checked",
     skipReason: TLS_CERTIFICATE_NOT_CHECKED_SKIP_REASON,
+    ...(hosted ? { details: { environment: "cloud" } } : {}),
   });
+  if (hosted) {
+    // The probe's own reasons name proxies and --offline; a hosted user cannot act on them.
+    // A PROXY_ code names the hosted container's own plumbing, so it is left out too.
+    if (probe.kind === "unavailable" || probe.code.startsWith("PROXY_")) {
+      return skipped(
+        "TLS certificate not checked: the hosted audit could not open a TLS connection to the site",
+      );
+    }
+    return skipped(
+      probe.code === "EGRESS_REFUSED"
+        ? `TLS certificate not checked: the hosted audit does not connect to the address ${hostname} resolves to`
+        : `TLS certificate not checked: the hosted audit made no TLS handshake with ${hostname}, error ${probe.code}`,
+    );
+  }
   if (probe.kind === "unavailable") {
     return skipped(`TLS certificate not checked: ${probe.reason}`);
   }
@@ -502,24 +528,6 @@ function notChecked(hostname: string, probe: Exclude<TlsProbe, { kind: "certific
   return skipped(
     `TLS certificate not checked: no TLS handshake with ${hostname}, error ${probe.code}`,
   );
-}
-
-/**
- * The www/apex counterpart of a hostname, from its registrable domain only:
- * `www.example.com` for `example.com` and the reverse. Undefined for any other
- * subdomain (`blog.example.com` has no counterpart here, and `www.blog.example.com`
- * is not derived), for an IP, and for a name with no registrable domain
- * (`localhost`, a bare public suffix). Private suffixes count as registrable
- * (`acme.pages.dev`), so another tenant's name is never derived.
- */
-export function wwwVariant(hostname: string): string | undefined {
-  const host = hostname.toLowerCase().replace(/\.$/, "");
-  if (/^[\d.]+$/.test(host) || host.includes(":")) return undefined;
-  const registrable = getDomain(host, { allowPrivateDomains: true });
-  if (!registrable) return undefined;
-  if (host === registrable) return `www.${registrable}`;
-  if (host === `www.${registrable}`) return registrable;
-  return undefined;
 }
 
 /** SAN names listed in a message; the rest are counted. A shared certificate can carry hundreds. */

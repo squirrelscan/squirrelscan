@@ -481,8 +481,20 @@ export const JSON_REPORT_PAGES = {
   maxEntries: 2_000,
 } as const;
 
-/** The JSON report's schema version (`meta.schemaVersion`): major.minor. 1.1 added the opt-in `pages` list (#1260); 1.2 added `meta.requestedUrl` (#1369) and `finalUrl` and `outcome` on the pages rows (#1260); 1.3 added `technologies.truncated` (#1387); 1.4 added `meta.ignored` (#1262); 1.5 added `executedRules` and, with `--include-pages`, rows with outcome `skipped` or `error` and a `reason` for URLs the crawl requested but stored no page for (#1396); 1.6 added `technologies.items[].origin` (#1406); 1.7 added `meta.resume` (#1658); 1.8 added the top-level `outcome` (#1657); 1.9 added `outcome` on `skippedChecks` and `notChecked` entries (#1661); 1.10 added `meta.storeIntegrity` (#1667); 1.11 added the top-level `render` (#1664). */
-export const JSON_REPORT_SCHEMA_VERSION = "1.11";
+// ── Grouped lcp-preload evidence (#1656) ───────────────────────
+// A grouped `lcp-preload` finding lists each affected page's own candidates in
+// `details.pageEvidence`. Bounded by page count and by serialized bytes
+// (`maxBytes`, well under REPORT_LIMITS.maxFindingPayload: ingest drops a whole
+// finding payload that is over it, and URLs can be 2048 chars). Pages past
+// either cap are counted in `details.pageEvidenceOmittedPages`.
+export const LCP_PAGE_EVIDENCE = {
+  maxPages: 25,
+  maxCandidatesPerPage: 3,
+  maxBytes: 4 * 1024,
+} as const;
+
+/** The JSON report's schema version (`meta.schemaVersion`): major.minor. 1.1 added the opt-in `pages` list (#1260); 1.2 added `meta.requestedUrl` (#1369) and `finalUrl` and `outcome` on the pages rows (#1260); 1.3 added `technologies.truncated` (#1387); 1.4 added `meta.ignored` (#1262); 1.5 added `executedRules` and, with `--include-pages`, rows with outcome `skipped` or `error` and a `reason` for URLs the crawl requested but stored no page for (#1396); 1.6 added `technologies.items[].origin` (#1406); 1.7 added `meta.resume` (#1658); 1.8 added the top-level `outcome` (#1657); 1.9 added `outcome` on `skippedChecks` and `notChecked` entries (#1661); 1.10 added `meta.storeIntegrity` (#1667); 1.11 added the top-level `render` (#1664); 1.12 added the top-level `crawlPhase` (#1639) and `details.pageEvidence` on a grouped `lcp-preload` finding (#1656); 1.13 added the top-level `lockedRules` and `cause` and `causeDetail` on `notChecked` entries (#1734); 1.14 added `meta.pageTypes` (#1744); 1.15 added `redirects` and `redirectsTotal` beside `pages` with `--include-pages` (#1762). */
+export const JSON_REPORT_SCHEMA_VERSION = "1.15";
 
 // ── LLM Report Output ──────────────────────────────────────────
 export const LLM_REPORT = {
@@ -844,6 +856,8 @@ export const SERVICE_LIMITS = {
   editorSummaryMaxTechnologies: 60,
   /** Max failing rule ids sent per editor-summary call (the catalog has about 320 rules). */
   editorSummaryMaxFailingRuleIds: 500,
+  /** Most `ruleId|checkName` keys per list of the editor summary's check evidence (#3944). */
+  editorSummaryMaxCheckKeys: 600,
   /** Max ranked priorities kept in a stored editor's summary. */
   editorSummaryMaxPriorities: 8,
   blocklistBatchValues: 2000,

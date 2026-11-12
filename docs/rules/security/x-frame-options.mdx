@@ -11,14 +11,16 @@ The header is superseded by the CSP `frame-ancestors` directive, which supports 
 
 ## What squirrel checks
 
-The rule reads the response headers of the first crawled page and emits a single check named `x-frame-options`:
+The rule reads the response headers of the first crawled page and emits one check, and its name says which outcome it found (#1737):
 
-- Skipped when the crawl produced no pages. Message: `No pages to check`.
-- Pass when `X-Frame-Options` is `DENY` or `SAMEORIGIN`, compared case-insensitively after trimming. A header sent twice and joined by the server, such as `DENY, DENY`, counts as that single value. Message: `X-Frame-Options header present`, with the raw value.
-- Warn when the value contains `ALLOW-FROM`. Message: `ALLOW-FROM is deprecated`, with `Use CSP frame-ancestors instead` as the value.
-- Warn when the value is anything else, such as `ALLOWALL`, a typo like `DENNY`, or conflicting repeats like `DENY, SAMEORIGIN`, unless the CSP already has `frame-ancestors` (see the next item). Browsers ignore an invalid value, so the page can still be framed. Message: `Unrecognised X-Frame-Options value: <value>`, with `Browsers ignore it. Use DENY or SAMEORIGIN, or CSP frame-ancestors` as the value. Long values are cut at 80 characters.
-- Pass when there is no valid `X-Frame-Options` header but the `Content-Security-Policy` header has a `frame-ancestors` directive. The directive is matched by name: each policy is split on `;`, and the first token of a directive must be `frame-ancestors`, case-insensitively. Text that merely contains it, such as a source URL, does not count. Message: `Clickjacking protection via CSP frame-ancestors`.
-- Warn when neither is present. Message: `No clickjacking protection`, with `Add X-Frame-Options: DENY or CSP frame-ancestors` as the value.
+- `x-frame-options-no-pages`: Skipped when the crawl produced no pages. Message: `No pages to check`.
+- `x-frame-options`: Pass when `X-Frame-Options` is `DENY` or `SAMEORIGIN`, compared case-insensitively after trimming. A header sent twice and joined by the server, such as `DENY, DENY`, counts as that single value. Message: `X-Frame-Options header present`, with the raw value.
+- `x-frame-options-allow-from`: Warn when the value contains `ALLOW-FROM`. Message: `ALLOW-FROM is deprecated`, with `Use CSP frame-ancestors instead` as the value.
+- `x-frame-options-invalid`: Warn when the value is anything else, such as `ALLOWALL`, a typo like `DENNY`, or conflicting repeats like `DENY, SAMEORIGIN`, unless the CSP already has `frame-ancestors` (see the next item). Browsers ignore an invalid value, so the page can still be framed. Message: `Unrecognised X-Frame-Options value: <value>`, with `Browsers ignore it. Use DENY or SAMEORIGIN, or CSP frame-ancestors` as the value. Long values are cut at 80 characters.
+- `x-frame-options-csp-frame-ancestors`: Pass when there is no valid `X-Frame-Options` header but the `Content-Security-Policy` header has a `frame-ancestors` directive. The directive is matched by name: each policy is split on `;`, and the first token of a directive must be `frame-ancestors`, case-insensitively. Text that merely contains it, such as a source URL, does not count. Message: `Clickjacking protection via CSP frame-ancestors`.
+- `x-frame-options-missing`: Warn when neither is present. Message: `No clickjacking protection`, with `Add X-Frame-Options: DENY or CSP frame-ancestors` as the value.
+
+The names are distinct so a report, an agent or the cloud can tell no protection (`x-frame-options-missing`) from a header that is present but unusable (`x-frame-options-invalid`, `x-frame-options-allow-from`), and from protection that comes from CSP rather than the header (`x-frame-options-csp-frame-ancestors`). Earlier versions named every outcome `x-frame-options`; findings from that name are re-keyed once on the next audit, and the passing outcome for a valid header keeps the name `x-frame-options`.
 
 ## How to fix it
 

@@ -14,7 +14,7 @@ import { describe, expect, test } from "bun:test";
 
 import { parsePage } from "@squirrelscan/parser";
 
-import { colorContrastRule } from "../src/a11y/color-contrast";
+import { colorContrastRule, stylesheetBackgroundOf, stylesheetBackgroundSelectorsOf } from "../src/a11y/color-contrast";
 import type { CheckResult, RuleContext } from "../src/types";
 
 function ctx(html: string): RuleContext {
@@ -34,11 +34,22 @@ function run(html: string): CheckResult {
   return runCtx(ctx(html));
 }
 
-function runCtx(context: RuleContext): CheckResult {
+function runAll(context: RuleContext): CheckResult[] {
   const result = colorContrastRule.run(context);
   if (result instanceof Promise) throw new Error("color-contrast is async");
-  expect(result.checks).toHaveLength(1);
-  return result.checks[0]!;
+  return result.checks;
+}
+
+/** The `color-contrast` check, which every page gets exactly once. */
+function runCtx(context: RuleContext): CheckResult {
+  const found = runAll(context).filter((c) => c.name === "color-contrast");
+  expect(found).toHaveLength(1);
+  return found[0]!;
+}
+
+/** The info check that counts inline-colored text the rule could not measure, or undefined. */
+function unresolvedOf(html: string): CheckResult | undefined {
+  return runAll(ctx(html)).find((c) => c.name === "color-contrast-unresolved");
 }
 
 /** Milliseconds the rule itself takes, parsing excluded. */
@@ -67,7 +78,6 @@ describe("guesses are not reported", () => {
     ["opacity utility", `<p class="opacity-30">x</p>`],
     ["light color in a <style> block", `<style>.muted{color:#ccc;}</style><p class="muted">x</p>`],
     ["white text in a <style> block", `<style>h2{color:#fff}</style><h2>x</h2>`],
-    ["light text color alone, inline", `<p style="color:#ddd">x</p>`],
     ["background alone, inline", `<p style="background:#fff">x</p>`],
   ])("%s", (_label, body) => {
     const check = run(page({ body }));
@@ -161,12 +171,146 @@ describe("pairs that cannot be resolved from the markup are not reported", () =>
 });
 
 describe("output when there is nothing to measure", () => {
-  test("a page with no styled or classed elements returns info", () => {
-    const result = colorContrastRule.run(
+  test("a page with no inline text color passes with a note and emits no info", () => {
+    const checks = runAll(
       ctx(`<!DOCTYPE html><html><head><title>t</title></head><body><p>x</p></body></html>`)
     );
-    if (result instanceof Promise) throw new Error("async");
-    expect(result.checks[0]?.status).toBe("info");
+    expect(checks.map((c) => [c.name, c.status])).toEqual([["color-contrast", "pass"]]);
+    expect(checks[0]!.message).toBe("No obvious contrast issues detected");
+    expect(checks[0]!.details?.measuredPairs).toBe(0);
+    expect(checks[0]!.details?.note).toContain("No inline text colors to measure");
+  });
+});
+
+describe("inline color against the computed background (#1752)", () => {
+  test("the demo tagline: #b9b9b9 on the browser's white is reported with colors and ratio", () => {
+    const check = run(page({ body: `<p style="color:#b9b9b9">Tagline</p>` }));
+    expect(check.status).toBe("warn");
+    expect(check.items).toEqual([{ id: "p: #b9b9b9 on white (1.96:1)" }]);
+    expect(check.details?.measuredPairs).toBe(1);
+  });
+
+  test("an inline background on an ancestor is the background", () => {
+    const check = run(
+      page({ body: `<section style="background:#fff"><div><p style="color:#b9b9b9">x</p></div></section>` })
+    );
+    expect(check.items).toEqual([{ id: "p: #b9b9b9 on #fff (1.96:1)" }]);
+  });
+
+  test("a dark ancestor makes light text pass", () => {
+    const check = run(
+      page({ body: `<div style="background-color:#000"><p style="color:#b9b9b9">x</p></div>` })
+    );
+    expect(check.status).toBe("pass");
+    expect(check.details?.measuredPairs).toBe(1);
+    expect(unresolvedOf(page({ body: `<div style="background-color:#000"><p style="color:#b9b9b9">x</p></div>` }))).toBeUndefined();
+  });
+
+  test("the nearest ancestor background wins", () => {
+    const check = run(
+      page({
+        body: `<div style="background:#000"><div style="background:#fff"><p style="color:#b9b9b9">x</p></div></div>`,
+      })
+    );
+    expect(check.items).toEqual([{ id: "p: #b9b9b9 on #fff (1.96:1)" }]);
+  });
+
+  test.each([
+    ["a gradient", `<div style="background:linear-gradient(#000,#111)"><p style="color:#b9b9b9">x</p></div>`],
+    ["a background image", `<div style="background-image:url(x.png)"><p style="color:#b9b9b9">x</p></div>`],
+    ["a translucent ancestor", `<div style="background:rgba(0,0,0,.5)"><p style="color:#b9b9b9">x</p></div>`],
+    ["a bgcolor attribute", `<table bgcolor="#000"><tr><td><p style="color:#b9b9b9">x</p></td></tr></table>`],
+  ])("%s ancestor leaves the pair unresolved, not warned", (_label, body) => {
+    const html = page({ body });
+    expect(run(html).status).toBe("pass");
+    const info = unresolvedOf(html)!;
+    expect(info.status).toBe("info");
+    expect(info.details?.inconclusive).toBe(true);
+    expect(info.details?.unresolved).toBe(1);
+  });
+
+  test("a plain body rule in a style block is the background", () => {
+    const light = page({
+      head: `<style>body { background: #fff; margin: 0 }</style>`,
+      body: `<p style="color:#b9b9b9">x</p>`,
+    });
+    expect(run(light).items).toEqual([{ id: "p: #b9b9b9 on #fff (1.96:1)" }]);
+    const dark = page({
+      head: `<style>html { background-color: #111 } body{color:#fff}</style>`,
+      body: `<p style="color:#b9b9b9">x</p>`,
+    });
+    expect(run(dark).status).toBe("pass");
+    expect(unresolvedOf(dark)).toBeUndefined();
+  });
+
+  test.each([
+    ["a body gradient", `<style>body{background:linear-gradient(#fff,#eee)}</style>`],
+    ["a class rule that sets a background", `<style>.hero{background:#000}</style>`],
+    ["a background inside @media", `<style>@media (min-width:1px){body{background:#000}}</style>`],
+    ["a linked stylesheet", `<link rel="stylesheet" href="/site.css">`],
+    ["an @import", `<style>@import url(/site.css);</style>`],
+    [
+      "a body rule beside a linked stylesheet that may override it",
+      `<style>body{background:#fff}</style><link rel="stylesheet" href="/site.css">`,
+    ],
+    [
+      "a body rule beside a class rule that sets another background",
+      `<style>body{background:#fff}.hero{background:#000}</style>`,
+    ],
+  ])("%s: unresolved, counted with the ratio against white, not warned", (_label, head) => {
+    const html = page({ head, body: `<p style="color:#b9b9b9">Tagline</p>` });
+    expect(run(html).status).toBe("pass");
+    expect(run(html).details?.measuredPairs).toBe(0);
+    const info = unresolvedOf(html)!;
+    expect(info.status).toBe("info");
+    expect(info.details?.inconclusive).toBe(true);
+    expect(info.message).toContain("1 inline-colored text element(s) could not be measured");
+    expect(info.items).toEqual([{ id: expect.stringContaining("p: #b9b9b9 (1.96:1 against white)") }]);
+  });
+
+  test("a stylesheet-set background is named in the message", () => {
+    const info = unresolvedOf(
+      page({ head: `<link rel="stylesheet" href="/s.css">`, body: `<p style="color:#b9b9b9">x</p>` })
+    )!;
+    expect(info.message).toBe(
+      "1 inline-colored text element(s) could not be measured: the background is set by a stylesheet the audit does not read"
+    );
+    expect(info.details?.reasons).toEqual({ stylesheet: 1 });
+  });
+
+  test("a style block with no background keeps the white default", () => {
+    const check = run(
+      page({ head: `<style>.muted{color:#ccc}</style>`, body: `<p style="color:#b9b9b9">x</p>` })
+    );
+    expect(check.status).toBe("warn");
+  });
+
+  test("a stylesheet inside <noscript> does not load, so the default holds", () => {
+    const check = run(
+      page({
+        head: `<noscript><link rel="stylesheet" href="/s.css"></noscript>`,
+        body: `<p style="color:#b9b9b9">x</p>`,
+      })
+    );
+    expect(check.status).toBe("warn");
+  });
+
+  test("a measured warning and unresolved text both appear on one page", () => {
+    const checks = runAll(
+      ctx(
+        page({
+          body: `<p style="color:#b9b9b9">low</p><div style="background:url(x.png)"><p style="color:#eee">y</p></div>`,
+        })
+      )
+    );
+    expect(checks.map((c) => [c.name, c.status])).toEqual([
+      ["color-contrast", "warn"],
+      ["color-contrast-unresolved", "info"],
+    ]);
+  });
+
+  test("css-wide keywords are not counted as unresolved colors", () => {
+    expect(unresolvedOf(page({ body: `<p style="color:inherit">x</p>` }))).toBeUndefined();
   });
 });
 
@@ -189,5 +333,176 @@ describe("linear in what it reads", () => {
   ])("an inline style with %s", (_label, style) => {
     // 200KB: the quadratic form of the alpha pattern takes seconds here.
     expect(timeRule(page({ body: `<p style="${style(200_000)}">Text</p>` }))).toBeLessThan(500);
+  });
+});
+
+describe("a linked stylesheet's other background selectors guard the pair (#1756)", () => {
+  const sheet = (extra: Record<string, unknown>) => ({
+    url: "https://example.com/styles.css",
+    status: 200,
+    error: null,
+    background: { kind: "color", value: "#fff" },
+    ...extra,
+  });
+  const run = (body: string, extra: Record<string, unknown>) =>
+    colorContrastRule.run({
+      ...ctx(page({ head: '<link rel="stylesheet" href="/styles.css">', body })),
+      site: { baseUrl: "https://example.com", pages: [], robotsTxt: null, sitemaps: null, stylesheetBackgrounds: [sheet(extra)] },
+    } as unknown as RuleContext).checks as CheckResult[];
+  const TEXT = '<p style="color:#b9b9b9">Tagline</p>';
+
+  test("text inside an element matching a selector with a background is unresolved, by class, id and tag", () => {
+    for (const [selector, wrapped] of [
+      [".hero", `<div class="hero">${TEXT}</div>`],
+      ["#top", `<header id="top"><div>${TEXT}</div></header>`],
+      ["footer", `<footer>${TEXT}</footer>`],
+    ] as const) {
+      const checks = run(wrapped, { selectors: [selector] });
+      expect(checks.some((c) => c.status === "warn"), selector).toBe(false);
+      expect(checks.some((c) => c.name === "color-contrast-unresolved"), selector).toBe(true);
+    }
+  });
+
+  test("text outside every matching element is still measured; a truncated list guards everything", () => {
+    expect(run(TEXT, { selectors: [".hero"] }).some((c) => c.status === "warn")).toBe(true);
+    expect(run(TEXT, { selectors: [".hero"], selectorsTruncated: true }).some((c) => c.status === "warn")).toBe(false);
+  });
+
+  test("a selector the DOM cannot evaluate is not provable, so the pair is unresolved", () => {
+    expect(run(TEXT, { selectors: ["div:not("] }).some((c) => c.status === "warn")).toBe(false);
+  });
+});
+
+describe("stylesheetBackgroundSelectorsOf lists the other background selectors (#1756)", () => {
+  test("html/body are excluded; at-rules and the cap are reported", () => {
+    expect(stylesheetBackgroundSelectorsOf("body{background:#fff}.hero,.card{background:#111}p{color:red}")).toEqual({
+      selectors: [".hero", ".card"],
+      truncated: false,
+    });
+    expect(stylesheetBackgroundSelectorsOf("@media (max-width:600px){.nav{background:#000}}").selectors).toEqual([".nav"]);
+    const many = Array.from({ length: 205 }, (_, i) => `.c${i}{background:#000}`).join("");
+    const r = stylesheetBackgroundSelectorsOf(many);
+    expect(r.selectors).toHaveLength(200);
+    expect(r.truncated).toBe(true);
+  });
+});
+
+describe("a hostile stylesheet cannot make the parser superlinear (#1756)", () => {
+  const timed = <T,>(fn: () => T): [T, number] => {
+    const start = performance.now();
+    const out = fn();
+    return [out, performance.now() - start];
+  };
+
+  test("40 nested @media blocks finish fast and a background in them is unresolved, never a color", () => {
+    const nested = (levels: number, inner: string) =>
+      "@media (min-width:1px){".repeat(levels) + inner + "}".repeat(levels);
+    const css = "body{background:#fff}" + nested(40, ".x{background:#000} body{background:#000}");
+    const [bg, ms] = timed(() => stylesheetBackgroundOf(css));
+    expect(bg).toEqual({ kind: "unresolved" });
+    expect(ms).toBeLessThan(100);
+    const [sel, ms2] = timed(() => stylesheetBackgroundSelectorsOf(css));
+    expect(sel.truncated).toBe(true);
+    expect(ms2).toBeLessThan(100);
+  });
+
+  test("nesting with no background inside is ignored at any depth", () => {
+    const css = "body{background:#fff}" + "@media (min-width:1px){".repeat(40) + ".x{color:red}" + "}".repeat(40);
+    const [bg, ms] = timed(() => stylesheetBackgroundOf(css));
+    expect(bg).toEqual({ kind: "color", value: "#fff" });
+    expect(ms).toBeLessThan(100);
+  });
+
+  test("a 1 MB stylesheet of many blocks is read in one pass", () => {
+    const rule = ".c{margin:0;padding:0}\n";
+    const css = "body{background:#fff}\n" + rule.repeat(Math.ceil((1024 * 1024) / rule.length));
+    expect(css.length).toBeGreaterThan(1024 * 1024);
+    const [bg, ms] = timed(() => stylesheetBackgroundOf(css));
+    expect(bg).toEqual({ kind: "color", value: "#fff" });
+    expect(ms).toBeLessThan(100);
+    const manyBackgrounds = "body{background:#fff}" + ".b{background:#000}".repeat(60_000);
+    const [sel, ms2] = timed(() => stylesheetBackgroundSelectorsOf(manyBackgrounds));
+    expect(sel.selectors).toHaveLength(200);
+    expect(sel.truncated).toBe(true);
+    expect(ms2).toBeLessThan(100);
+  });
+
+  test("a body block with hundreds of thousands of declarations does not overflow the call", () => {
+    const css = "body{" + "a:b;".repeat(300_000) + "background:#fff}";
+    const [bg, ms] = timed(() => stylesheetBackgroundOf(css));
+    expect(bg).toEqual({ kind: "color", value: "#fff" });
+    expect(ms).toBeLessThan(500);
+  });
+
+  test("a page nested thousands deep and a stylesheet with many selectors finish, with the pair unresolved", () => {
+    const depth = 3000;
+    const body = "<div>".repeat(depth) + '<p style="color:#b9b9b9">Tagline</p>' + "</div>".repeat(depth);
+    const selectors = Array.from({ length: 200 }, (_, i) => `.n${i}`);
+    const start = performance.now();
+    const checks = colorContrastRule.run({
+      ...ctx(page({ head: '<link rel="stylesheet" href="/s.css">', body })),
+      site: {
+        baseUrl: "https://example.com",
+        pages: [],
+        robotsTxt: null,
+        sitemaps: null,
+        stylesheetBackgrounds: [
+          {
+            url: "https://example.com/s.css",
+            status: 200,
+            error: null,
+            background: { kind: "color", value: "#fff" },
+            selectors,
+          },
+        ],
+      },
+    } as unknown as RuleContext).checks as CheckResult[];
+    expect(performance.now() - start).toBeLessThan(5000);
+    // 3000 ancestors x 200 selectors is past the match budget: not provable, so not a warning.
+    expect(checks.some((c) => c.status === "warn")).toBe(false);
+    expect(checks.some((c) => c.name === "color-contrast-unresolved")).toBe(true);
+  });
+});
+
+describe("stylesheetBackgroundOf keeps only the html/body background (#1756)", () => {
+  test.each([
+    ["a body color", "body{margin:0;background:#101010}", { kind: "color", value: "#101010" }],
+    ["body over html", "html{background:#fff}body{background-color:#000}", { kind: "color", value: "#000" }],
+    ["a :root color", ":root{background:navy}", { kind: "color", value: "navy" }],
+    ["another selector is not read", ".hero{background:#000}p{color:red}", { kind: "none" }],
+    ["a gradient on body", "body{background:linear-gradient(#000,#111)}", { kind: "unresolved" }],
+    ["a variable", "body{background:var(--bg)}", { kind: "unresolved" }],
+    ["an import", '@import url("a.css");body{background:#fff}', { kind: "unresolved" }],
+    [
+      "a media override of the body",
+      "body{background:#fff}@media (prefers-color-scheme: dark){body{background:#000}}",
+      { kind: "unresolved" },
+    ],
+    ["a media rule for another selector", "@media (max-width:600px){.nav{background:#000}}body{background:#fff}", { kind: "color", value: "#fff" }],
+  ])("%s", (_label, css, expected) => {
+    expect(stylesheetBackgroundOf(css)).toEqual(expected as never);
+  });
+
+  test("a linked stylesheet with no read result stays unresolved, one with a read color is measured", () => {
+    const html = page({
+      head: '<link rel="stylesheet" href="/styles.css">',
+      body: '<p style="color:#b9b9b9">Tagline</p>',
+    });
+    const base = ctx(html);
+    const none = colorContrastRule.run(base).checks;
+    expect(none.some((c) => c.name === "color-contrast-unresolved")).toBe(true);
+    const read = colorContrastRule.run({
+      ...base,
+      site: {
+        baseUrl: "https://example.com",
+        pages: [],
+        robotsTxt: null,
+        sitemaps: null,
+        stylesheetBackgrounds: [
+          { url: "https://example.com/styles.css", status: 200, error: null, background: { kind: "color", value: "#fff" } },
+        ],
+      },
+    } as unknown as RuleContext).checks as CheckResult[];
+    expect(read.find((c) => c.status === "warn")?.items?.[0]?.id).toContain("#b9b9b9 on #fff");
   });
 });

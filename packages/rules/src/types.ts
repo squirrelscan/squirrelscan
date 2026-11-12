@@ -128,10 +128,9 @@ export type RuleSeverity = "error" | "warning" | "info";
  *
  *  - the raw HTML (`ctx.page.html`): `core/doctype`, `a11y/focus-visible`,
  *    `analytics/consent-mode`, `analytics/gtm-present`, `perf/js-libraries`;
- *  - everything `getCWVHints` reads, which `perf/font-loading`,
- *    `perf/preconnect` and `perf/render-blocking` hand their document and raw
- *    HTML to: preload, prefetch, preconnect and dns-prefetch links, script
- *    `type`, `async`, `defer` and `nomodule`, stylesheet `media`, and images and
+ *  - everything `getCWVHints` reads, which `perf/font-loading` and
+ *    `perf/preconnect` hand their document and raw HTML to: preload, prefetch,
+ *    preconnect and dns-prefetch links, script `type`, `async`, `defer` and `nomodule`, stylesheet `media`, and images and
  *    iframes with their size and style (`perf/font-loading` also reads every
  *    `<link href>`);
  *  - inline `<script>` and `<style>` bodies and the script `type`: `perf/legacy-js`
@@ -159,6 +158,13 @@ export type RuleSeverity = "error" | "warning" | "info";
  * selectors, all inside `link[rel*="icon"]`) is reviewed by hand, and the test
  * checks that each rule with an unkeyed read is named above, not every input.
  * Deriving the key from what the rules read is squirrelscan/squirrelscan#585.
+ * #1373 took the measurement half: `SIGNATURE_SELECTORS` / `SIGNATURE_ATTRIBUTES`
+ * (template-signature-reads.ts) list every selector and attribute a declared rule
+ * reads, a read outside them fails `template-verdict-inputs.test.ts`, and
+ * `template-fanout-bench.ts --coverage --signature derived|current` reports how many
+ * pages would still share a cluster if the signature were derived from them.
+ * Whole-document reads stay reviewed UNKEYED entries. The production signature is
+ * unchanged until that measurement is run on real crawls.
  *
  * A declaration is a claim, not a proof, and it has two falsifiers.
  * `template-fanout-parity-golden.test.ts` runs in CI over an authored corpus with
@@ -196,6 +202,26 @@ export interface RuleApplicability {
 }
 
 // Rule metadata - describes the rule
+/**
+ * What a check means to a consumer comparing two audits (#1741):
+ * - `problem`: a finding (a fail, warn or advisory info the rule raises about the page or site).
+ * - `clean`: the rule ran over what it covers and found nothing; it supersedes the problem checks it `clears`.
+ * - `skipped`: the rule did not evaluate (nothing to look at, unread page, feature off, incomplete scan).
+ *   A skipped check never clears a problem: the finding was not compared.
+ */
+export type RuleCheckOutcome = "problem" | "clean" | "skipped";
+
+/** One check name a rule can emit, declared in `RuleMeta.checks`. */
+export interface RuleCheckDecl {
+  name: string;
+  outcome: RuleCheckOutcome;
+  /**
+   * `clean` checks only: the `problem` check names (of this rule) that this check supersedes. A finding
+   * whose check is listed here is fixed when the rule ran over the same scope and emitted this check.
+   */
+  clears?: string[];
+}
+
 export interface RuleMeta {
   id: string; // "core/meta-title"
   name: string; // "Meta Title"
@@ -208,6 +234,18 @@ export interface RuleMeta {
   weight: number; // scoring weight (1-10)
   // Zod schema for rule options - self-describing with defaults
   optionsSchema?: z.ZodObject<z.ZodRawShape>;
+  /**
+   * The check names this rule can emit, by outcome class (#1741). Optional while rules adopt it: a test pins
+   * the ones that have not yet (`tests/rule-check-declarations.test.ts`) and fails for a new rule without it.
+   * A name can be declared twice, once as `problem` and once as `clean`, when a rule reuses a name for both.
+   */
+  checks?: RuleCheckDecl[];
+  /**
+   * Check names this rule no longer emits, each with the checks that replace it: `{ "meta-title": ["meta-title-too-short", "meta-title-too-long"] }`.
+   * A consumer resolving a finding stored under a superseded name judges it by its successors on the same page: resolved when
+   * every successor passed, still failing when any failed, not checked when any was not checked (#1765).
+   */
+  supersededChecks?: Record<string, string[]>;
   disabled?: boolean; // Internal flag - hides rule from all listings and execution
   /**
    * `false` keeps a `[[ignore]]` entry from waiving this rule's findings (#1262).
@@ -487,6 +525,25 @@ export interface FetchedTarget {
   wafChallenge?: boolean;
 }
 
+/** What a stylesheet says about the colour behind the page: only its `html`, `body` and `:root` rules are read (#1756). */
+export type StylesheetBackground =
+  | { kind: "none" }
+  | { kind: "color"; value: string }
+  | { kind: "unresolved" };
+
+export interface StylesheetBackgroundData {
+  /** The absolute URL the pages reference. */
+  url: string;
+  status: number | null;
+  error: string | null;
+  /** Null when the stylesheet could not be read (a failed, refused, skipped, oversized or non-CSS response). */
+  background: StylesheetBackground | null;
+  /** Selectors other than html/body/:root that the stylesheet gives a background; text inside a match is not measured. */
+  selectors?: string[];
+  /** More selectors than were kept had a background: treat any text as possibly inside one. */
+  selectorsTruncated?: boolean;
+}
+
 export interface SiteData {
   baseUrl: string;
   /**
@@ -503,6 +560,11 @@ export interface SiteData {
     parsed: ParsedPage;
     headers?: Record<string, string>;
     redirectChain?: RedirectChain;
+    /**
+     * A URL that redirected (#1762): kept so the redirect rules see its hops, but it is not a
+     * page. It has no content, and the runner hides it from every rule that is not redirect-aware.
+     */
+    redirectSource?: boolean;
     /** Bytes of the stored HTML response, when the crawler recorded them. */
     sizeBytes?: number | null;
     /**
@@ -614,6 +676,12 @@ export interface SiteData {
     fonts: ResourceSizeData[];
   };
   /**
+   * The page background each same-site linked stylesheet sets, read by `a11y/color-contrast` (#1756). One
+   * entry per stylesheet the asset phase requested; a stylesheet with no entry, or with `background: null`,
+   * was not read. Absent when the asset phase did not run or the rule is off.
+   */
+  stylesheetBackgrounds?: StylesheetBackgroundData[];
+  /**
    * Referenced URLs the asset fetch caps (`maxScripts`, `maxResources`) left
    * unfetched, per kind (#703). Absent or zero means nothing was dropped.
    */
@@ -625,6 +693,11 @@ export interface SiteData {
     externalCss?: number;
     externalFonts?: number;
   };
+  /**
+   * URLs (capped) of scripts fetched for storage but held back from `scripts` by the script rule limit (#1757).
+   * Their count is already in `assetCapDropped.scripts`. Absent when none were held back.
+   */
+  scriptsNotReadUrls?: string[];
   pdfSizes?: ResourceSizeData[];
   sitemapUrlStatuses?: SitemapUrlStatusData[];
   // Sitemap URLs on another site an own-site-only audit (`--offline`) left
@@ -717,6 +790,10 @@ export interface RuleContext {
   // CLI). Shared packages never open a socket themselves; undefined (cloud, an
   // embedder, tests) means the rule reports "not checked". Site rules only.
   tlsProbe?: TlsProbeFn;
+
+  // A hosted (cloud) audit. Wording only: a check that was not made says so
+  // without advice about networks, proxies or --offline (#3922). Site rules only.
+  hosted?: boolean;
 
   // Resolved Stage-0 site profile (cloud). Undefined offline / free / no-credits
   // / no-consent — rules must treat undefined as "run as today" (no gating).

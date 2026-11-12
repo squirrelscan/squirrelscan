@@ -4,6 +4,7 @@
 
 import { AUDIT_LEVELS, parseAuditLevel } from "@squirrelscan/core-contracts/audit-levels";
 import { SERVICE_LIMITS } from "@squirrelscan/core-contracts/limits";
+import { APPROVABLE_PROBE_PATHS } from "@squirrelscan/core-contracts/storage";
 import { isValidHeaderHost, isValidHeaderName, isValidHeaderValue } from "@squirrelscan/utils/headers";
 import { z } from "zod";
 
@@ -122,6 +123,20 @@ export const CrawlerConfigSchema = z.object({
   // probes on: a config without the key (every cloud run) behaves exactly as
   // before, and code that builds a Config by hand does not have to learn it.
   disable_discovery_probes: z.boolean().optional(),
+  // Per-path allowlist over the path-shaped discovery probes (#1655), on top of rule selection:
+  // only a listed path is requested (`/llms.txt` and `/llms-full.txt` each count as their own), a
+  // path left out reports "not checked (path not approved)", and a redirect from a listed path may
+  // not change the path. Unset: every selected probe goes out. `--discovery-probe-path` replaces it
+  // for one run. The markdown, agent-access and RSL probes are not path-shaped and are not gated.
+  // TOML: `[crawler] discovery_probe_paths = ["/llms.txt", "/AGENTS.md"]`.
+  discovery_probe_paths: z
+    .array(
+      z.string().refine((path) => APPROVABLE_PROBE_PATHS.includes(path), {
+        message: `discovery_probe_paths entries must each be a probe path, exactly as written: ${APPROVABLE_PROBE_PATHS.join(", ")}`,
+      }),
+    )
+    .max(APPROVABLE_PROBE_PATHS.length)
+    .optional(),
   // security/tls-certificate behind an HTTP(S)_PROXY (#1317): true lets the proxy resolve the audited
   // host and its www/apex counterpart (the CONNECT names the host), for a proxy that owns DNS and allows
   // by name. Default off: squirrel resolves, vets and pins the address itself. The trade-off is that
@@ -137,6 +152,10 @@ export const CrawlerConfigSchema = z.object({
   // crawl stops launching work and the report is `partial` with reason code
   // `max_duration`. `--max-duration` overrides it; unset means no budget.
   max_duration: z.number().positive().max(604_800).optional(),
+  // Crawl-phase wall-clock backstop in seconds (#1639). Unset derives it from the
+  // page budget and the effective per-host rate. Bounded at 6 h; per-request
+  // watchdogs are unaffected. `--crawl-timeout` overrides it.
+  crawl_timeout: z.number().positive().max(21_600).optional(),
   // Incremental re-scan: send conditional GETs (ETag/Last-Modified) so unchanged pages return 304; --refresh forces a full fetch. (#125)
   incremental: z.boolean().default(true),
   breadth_first: z.boolean().default(true),

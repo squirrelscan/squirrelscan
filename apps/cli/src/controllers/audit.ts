@@ -35,6 +35,8 @@ import {
   type FlatFinding,
   type PageResultSink,
   unfetchedFrontierCount,
+  pageTypeCoverageFor,
+  isRedirectSourcePage,
 } from "@squirrelscan/audit-engine";
 import { foldEntityMapVariants } from "@squirrelscan/audit-engine/entity-map";
 import { createEntityMapCollector } from "@squirrelscan/audit-engine/entity-map/collect";
@@ -146,6 +148,7 @@ import {
   DEFAULT_CRAWLER_PER_HOST_DELAY_MS,
 } from "@/config";
 import {
+  CRAWL_PHASE_DERIVED_MAX_TIMEOUT_MS,
   CRAWL_PHASE_MAX_TIMEOUT_MS,
   CRAWL_PHASE_MIN_TIMEOUT_MS,
   CRAWL_PHASE_PER_PAGE_BUDGET_MS,
@@ -179,7 +182,11 @@ import {
 import { isPermanentStorageError } from "@/crawler/storage/types";
 import { preflightBalanceOf } from "@/lib/balance";
 import { resolvePageLimit } from "@/lib/page-limit";
-import { reconstructReport, withMaxDurationCut } from "@/reports/reconstruct";
+import {
+  reconstructReport,
+  stampCrawlPhaseCut,
+  withMaxDurationCut,
+} from "@/reports/reconstruct";
 import { detectRunner } from "@/self/install-meta";
 import { createCloudClientFromSettings } from "@/tools/cloud";
 import { initRequestTool } from "@/tools/request";
@@ -682,22 +689,36 @@ export function formatPhaseTimings(phases: Record<string, number>): string {
 export function resolveCrawlPhaseTimeoutMs(
   options: RunAuditOptions,
   maxPages: number,
-  concurrency: number
+  concurrency: number,
+  perHostConcurrency?: number,
+  maxDurationMs?: number
 ): number | undefined {
   if (typeof options.crawlPhaseTimeoutMs === "number") {
     return options.crawlPhaseTimeoutMs > 0
-      ? Math.floor(options.crawlPhaseTimeoutMs)
+      ? Math.min(
+          Math.floor(options.crawlPhaseTimeoutMs),
+          CRAWL_PHASE_MAX_TIMEOUT_MS
+        )
       : undefined;
   }
-  const conc = Math.max(1, concurrency);
+  // A single-host crawl cannot go faster than its per-host limit, whatever the
+  // global pool size, so the per-host cap bounds the effective parallelism (#1639).
+  const conc = Math.max(
+    1,
+    Math.min(concurrency, perHostConcurrency ?? concurrency)
+  );
   const pages = Math.max(1, maxPages);
   const est =
     Math.ceil(pages / conc) * CRAWL_PHASE_PER_PAGE_BUDGET_MS +
     CRAWL_PHASE_SETUP_SLACK_MS;
-  return Math.min(
+  const derived = Math.min(
     Math.max(est, CRAWL_PHASE_MIN_TIMEOUT_MS),
-    CRAWL_PHASE_MAX_TIMEOUT_MS
+    CRAWL_PHASE_DERIVED_MAX_TIMEOUT_MS
   );
+  // The whole-run budget stops the crawl first anyway; do not exceed it.
+  return maxDurationMs && maxDurationMs > 0
+    ? Math.max(Math.min(derived, maxDurationMs), CRAWL_PHASE_MIN_TIMEOUT_MS)
+    : derived;
 }
 
 /**
@@ -1294,6 +1315,10 @@ export async function runAudit(
           >,
           additionalNamespaces: pluginRuleNamespaces,
         }),
+        // Per-path allowlist over those probes (#1655); unset sends every selected one.
+        ...(mergedConfig.crawler.discovery_probe_paths
+          ? { discoveryProbePaths: mergedConfig.crawler.discovery_probe_paths }
+          : {}),
         // #1428: pages the E-E-A-T rules are configured with that the crawl does not reach are asked for once.
         configuredPagePaths: configuredPagePaths(
           mergedConfig.rule_options as Record<string, unknown>
@@ -1485,11 +1510,21 @@ export async function runAudit(
       // pool), stop() just sets isRunning=false and the crawl ends with 0 pages
       // → the "no pages collected" branch below reports it clearly. Safe.
       const crawlPhaseTimeoutMs = resolveCrawlPhaseTimeoutMs(
-        options,
+        mergedConfig.crawler.crawl_timeout !== undefined &&
+          options.crawlPhaseTimeoutMs === undefined
+          ? {
+              ...options,
+              crawlPhaseTimeoutMs: mergedConfig.crawler.crawl_timeout * 1000,
+            }
+          : options,
         crawlerConfig.maxPages,
-        crawlConcurrency.concurrency
+        crawlConcurrency.concurrency,
+        crawlConcurrency.perHostConcurrency,
+        durationBudget?.budgetMs
       );
       let crawlPhaseStopped = false;
+      // Filled when the backstop fires; stamped on the report at the end (#1639).
+      const crawlPhaseCutRef = { seconds: 0, pagesCollected: 0 };
       let crawlPhaseTimer: ReturnType<typeof setTimeout> | undefined;
       if (crawlPhaseTimeoutMs) {
         crawlPhaseTimer = setTimeout(() => {
@@ -1623,6 +1658,10 @@ export async function runAudit(
         );
       }
       if (crawlPhaseStopped) {
+        crawlPhaseCutRef.seconds = Math.round(
+          (crawlPhaseTimeoutMs ?? 0) / 1000
+        );
+        crawlPhaseCutRef.pagesCollected = pageCount;
         logger.warn(
           "partial crawl",
           `analyzing ${pageCount} page(s) collected before the crawl-phase timeout`
@@ -1747,7 +1786,11 @@ export async function runAudit(
       // normalizedUrl + status per page, for the smart-audits merge and nothing
       // else — two scalars a page instead of the PageRecord it used to slice
       // them off.
-      const pageStatuses: Array<{ normalizedUrl: string; status: number }> = [];
+      const pageStatuses: Array<{
+        normalizedUrl: string;
+        status: number;
+        redirect?: true;
+      }> = [];
       // Distinct external link urls, sized exactly as countExternalLinks does,
       // so the dead-links spend estimate is the number v1 showed. Only
       // accumulated when a paid checker could ask for it — this is the one
@@ -1859,6 +1902,11 @@ export async function runAudit(
               pageStatuses.push({
                 normalizedUrl: page.normalizedUrl,
                 status: page.status,
+                // A redirect row (#1762) is re-observed, so its stale findings resolve, but it is
+                // not a page: "audited N of M" leaves it out.
+                ...(isRedirectSourcePage(page)
+                  ? { redirect: true as const }
+                  : {}),
               });
             }
             pagesWalked += batchContext.length;
@@ -2425,6 +2473,14 @@ export async function runAudit(
         const unfetched = await Effect.runPromise(
           unfetchedFrontierCount(sqliteStorage, crawlId)
         );
+        // Per page type: what the crawl knew of against what it audited (#1744).
+        const pageTypes = await Effect.runPromise(
+          pageTypeCoverageFor(
+            sqliteStorage,
+            crawlId,
+            report.pages.map((p) => p.url)
+          )
+        );
         const scanScope: NonNullable<AuditReport["scanScope"]> = {
           origin: detectRunner().ci ? "ci" : "cli",
           maxPages: scopeMaxPages,
@@ -2440,6 +2496,7 @@ export async function runAudit(
             ? { canonicalVariants: report.canonicalVariants }
             : {}),
           ...(unfetched > 0 ? { unfetched } : {}),
+          ...(pageTypes.length > 0 ? { pageTypes } : {}),
           ...(options.startRedirect
             ? { startRedirect: options.startRedirect }
             : {}),
@@ -2510,6 +2567,17 @@ export async function runAudit(
               report.statusReasonCode = cutStatus.reasonCode;
             }
           }
+        }
+        // #1639: the crawl-phase backstop stopped the crawl, so the link graph is
+        // incomplete. Applied after the time limit so an already-partial run keeps
+        // its own reason, as `squirrel report` does when it rebuilds it.
+        if (crawlPhaseStopped) {
+          stampCrawlPhaseCut(report, scanScope, {
+            seconds: crawlPhaseCutRef.seconds,
+            pagesCollected: crawlPhaseCutRef.pagesCollected,
+            pageBudget: crawlerConfig.maxPages,
+            unfetchedPages: unfetched,
+          });
         }
         // #1262: reconstruction ran before the entries were stamped, so build the
         // summary again from the same checks with them.
@@ -3083,6 +3151,10 @@ export function mergeOptionsToConfig(
       // disable_discovery_probes (#409), in both directions.
       ...(typeof options.disableDiscoveryProbes === "boolean"
         ? { disable_discovery_probes: options.disableDiscoveryProbes }
+        : {}),
+      // --discovery-probe-path replaces [crawler] discovery_probe_paths (#1655).
+      ...(options.discoveryProbePaths && options.discoveryProbePaths.length > 0
+        ? { discovery_probe_paths: options.discoveryProbePaths }
         : {}),
     },
     // --offline promises no network beyond the audited site itself, so

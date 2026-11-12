@@ -25,7 +25,10 @@ import {
 
 const PRIVATE = "http://192.168.1.1/admin";
 const LOOPBACK = "http://127.0.0.1:9/status";
-const TEST_ZONE = "http://service.test/status";
+// An internal-only zone, which may be a real name on a private network: refused, never looked up. (`.test`,
+// `.example` and `.invalid` are NOT here since #1740: RFC 6761 reserves them so they never resolve in public DNS,
+// so a link to one is a dead link and is checked, not refused: see external-link-dns-1740.test.ts.)
+const TEST_ZONE = "http://service.internal/status";
 
 describe("a refused address is settled before the cache and the bulk checker", () => {
   test("neither answers for it, and it comes back refused", async () => {

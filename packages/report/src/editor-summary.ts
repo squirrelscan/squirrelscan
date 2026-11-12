@@ -167,6 +167,68 @@ function buildFailingRuleIds(report: AuditReport, max: number): string[] {
   return ids;
 }
 
+/** Rule families whose clean checks are sent as "confirmed in place" (#3944). */
+const CONFIRMABLE_RULE_PREFIXES = ["security/", "ax/"];
+
+/**
+ * `info` values that say the thing is THERE. An `info` check is also how a rule
+ * says it did not look ("not-checked", "refused"), or that the check does not
+ * apply (HSTS on a site not served over HTTPS), so `info` alone proves nothing:
+ * only a positive value does. Enumerated from the security and ax rule sources.
+ */
+const POSITIVE_INFO_VALUES = new Set(["present", "available", "valid"]);
+
+/** Families first, so a cap on the lists drops the least useful keys, never a security header. */
+const CHECK_KEY_PRIORITY = ["security/", "ax/", "perf/", "images/"];
+const priorityOf = (ruleId: string): number => {
+  const i = CHECK_KEY_PRIORITY.findIndex((p) => ruleId.startsWith(p));
+  return i === -1 ? CHECK_KEY_PRIORITY.length : i;
+};
+
+/**
+ * Check-level evidence (#3944): every check that failed or warned, and the
+ * security and agent-experience checks that ran and POSITIVELY found the thing
+ * (a pass, or an info with a positive value), as `ruleId|checkName`. The summary
+ * uses the second list to avoid recommending what the site already has, so a
+ * check that did not run is never in it. A key is never in both lists. Rules are
+ * visited security, ax, perf, images first, so the per-list cap is not decided
+ * by report order.
+ */
+function buildChecks(
+  report: AuditReport,
+  max: number
+): { failing: string[]; confirmed: string[] } | undefined {
+  const failing = new Set<string>();
+  const confirmed = new Set<string>();
+  const key = (ruleId: string, name: string) =>
+    clampItemString(`${ruleId}|${name}`, EDITOR_SUMMARY_FIELD_MAX);
+  const entries = Object.entries(report.ruleResults)
+    .map((entry, order) => ({ entry, order }))
+    .sort((a, b) => priorityOf(a.entry[0]) - priorityOf(b.entry[0]) || a.order - b.order);
+  for (const {
+    entry: [ruleId, rr],
+  } of entries) {
+    const family = CONFIRMABLE_RULE_PREFIXES.some((p) => ruleId.startsWith(p));
+    for (const c of rr.checks) {
+      if (c.status === "fail" || c.status === "warn") {
+        failing.add(key(ruleId, c.name));
+      } else if (family) {
+        const positive =
+          c.status === "pass" ||
+          (c.status === "info" &&
+            c.details?.inconclusive !== true &&
+            POSITIVE_INFO_VALUES.has(String(c.value)));
+        if (positive) confirmed.add(key(ruleId, c.name));
+      }
+    }
+  }
+  for (const k of failing) confirmed.delete(k);
+  const capped = (set: Set<string>) => [...set].slice(0, max);
+  return failing.size === 0 && confirmed.size === 0
+    ? undefined
+    : { failing: capped(failing), confirmed: capped(confirmed) };
+}
+
 /** A count the engine wrote, or undefined when absent or not a whole non-negative number. */
 const count = (v: unknown): number | undefined =>
   typeof v === "number" && Number.isSafeInteger(v) && v >= 0 ? v : undefined;
@@ -230,6 +292,7 @@ export function buildEditorSummaryRequest(
   const technologies = buildTechnologies(report, SERVICE_LIMITS.editorSummaryMaxTechnologies);
   const failingRuleIds = buildFailingRuleIds(report, SERVICE_LIMITS.editorSummaryMaxFailingRuleIds);
   const coverage = buildCoverage(report);
+  const checks = buildChecks(report, SERVICE_LIMITS.editorSummaryMaxCheckKeys);
   return {
     ...(opts.auditId ? { auditId: opts.auditId } : {}),
     ...(opts.websiteId ? { websiteId: opts.websiteId } : {}),
@@ -246,6 +309,7 @@ export function buildEditorSummaryRequest(
     ...(notChecked.length > 0 ? { notChecked } : {}),
     ...(technologies.length > 0 ? { technologies } : {}),
     ...(failingRuleIds.length > 0 ? { failingRuleIds } : {}),
+    ...(checks ? { checks } : {}),
     ...(coverage ? { coverage } : {}),
   };
 }

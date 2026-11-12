@@ -72,6 +72,8 @@ export const CREDIT_COSTS = {
   // into the base under v10. Key kept: the 0-debit idempotency row dedups the
   // per-(domain,audit) provider replay.
   archive_indexing: { cost: 0, per: 1, unit: "run" },
+  // Third-party script scan (cloud audits). Plumbing only: it records the scan in the ledger at no cost.
+  third_party_scan: { cost: 0, per: 1, unit: "run" },
 } satisfies Record<string, CreditPrice>;
 
 export type CreditFeature = keyof typeof CREDIT_COSTS;

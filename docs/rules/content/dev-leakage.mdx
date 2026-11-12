@@ -20,13 +20,15 @@ The rule runs on every crawled page and emits a single check named `dev-leakage`
 - Pass when the whole page was scanned and nothing was found. Message: `No development, private or preview hosts referenced`.
 - Warn or fail otherwise. Message: `3 development host reference(s) on a production page (localhost, preview-host): example http://localhost:3000/api`.
 
-Six kinds are classified: `localhost` for a loopback host, `private-ip` for a private address range, `local-name` for a name only a local machine or network resolves, `preview-host` for a deployment-preview domain, `dev-subdomain` for a development subdomain of the audited site, and `insecure-self-link` for an `http://` link back to your own host. Each hit also records whether it came from an attribute or from body copy, and whether the host is unmistakably this site's own.
+Five kinds are classified: `localhost` for a loopback host, `private-ip` for a private address range, `local-name` for a name only a local machine or network resolves, `preview-host` for a deployment-preview domain, and `dev-subdomain` for a development subdomain of the audited site. Each hit also records whether it came from an attribute or from body copy, and whether the host is unmistakably this site's own.
+
+What counts as a development host: loopback (`localhost`, `127.0.0.1`, `::1`), private and link-local IP addresses, local-only names (`.local`, `.test`, `.internal`, single-label hosts), a `staging`, `dev` or `test` subdomain of the audited site, and preview-deployment domains such as `vercel.app`, `netlify.app`, `pages.dev` and `ngrok`. An `http://` URL to the audited site itself (or its www or apex twin) is not a development host and is never reported here, even for an asset such as a logo: that is mixed content, reported by the rules below.
 
 A `local-name` is a Laravel Valet or Herd site such as `myapp.test`, a name under `.example`, `.invalid`, `.local`, `.lan`, `.internal`, `.home.arpa`, `.localdomain` or `.home` and the other local-only zones, or a single-label host such as `intranet`. A production page that links one, often a leftover from a CMS preview, points visitors at a site only its author can reach. The external link check never requests these names, so they also appear as info under `refused-external-links` in [links/broken-external-links](/rules/links/broken-external-links), and this rule is what makes them stand out: `local-name` always warns, because the local site could be anyone's. In body copy a local name counts only when written as a URL with `http://` or `https://`, since `config.local` or `app.test` is as often a file name. `.onion` and `.alt` names are not local names: they are reachable through Tor and other non-DNS resolvers.
 
 The scan has work caps: 50,000 elements, 2,000 `href` and `src` values, 1,000 attribute hits, the first 500,000 characters of copy, and a limit on matches per pattern in that copy. The finding's details carry `scanTruncated`, which is true when a cap cut the scan short, because a kind past the cap may be missing from its items. When a capped scan found nothing, the rule skips the page rather than passing it: a pass would say the page is clean, and on a re-audit it would close an earlier finding that may sit past the cap. The skip has `skipReason: "scan-truncated"`, the page counts as not evaluated, and its earlier findings stay open.
 
-The status is fail when a live `href` or `src` points at a host that is clearly this site's own development artifact, since that is a reference a visitor can follow into nothing. An `insecure-self-link` is treated as soft and warns instead, as does any mention in copy and any preview host that could belong to someone else. Severity for the rule is warning, weight 6. The rule is skipped on soft 404 pages.
+The status is fail when a live `href` or `src` points at a host that is clearly this site's own development artifact, since that is a reference a visitor can follow into nothing. Any mention in copy and any preview host that could belong to someone else. Severity for the rule is warning, weight 6. The rule is skipped on soft 404 pages.
 
 ## How to fix it
 
@@ -36,7 +38,7 @@ The status is fail when a live `href` or `src` points at a host that is clearly 
 
 Replace the origin with a relative path where the target is on this site. That makes the reference correct in every environment at once, which is the actual fix; changing one absolute URL to the production one leaves the same bug in the next environment.
 
-Point a staging or preview link at the production equivalent, and check whether that staging site is publicly indexable while you are there. Make an `http://` self-link relative or `https://`, since the redirect it costs every visitor is avoidable.
+Point a staging or preview link at the production equivalent, and check whether that staging site is publicly indexable while you are there.
 
 | | |
 |---|---|
@@ -75,7 +77,8 @@ enable = ["content/dev-leakage"]
 
 - [security/leaked-secrets](/rules/security/leaked-secrets): credentials that shipped the same way.
 - [content/placeholder-text](/rules/content/placeholder-text): other values that reached production unfinished.
-- [links/https-downgrade](/rules/links/https-downgrade): the `http://` links this rule also reports.
+- [links/https-downgrade](/rules/links/https-downgrade): owns `http://` links, including those to your own site.
+- [security/mixed-content](/rules/security/mixed-content): owns `http://` subresources on an HTTPS page.
 - [links/broken-links](/rules/links/broken-links): internal links that resolve to an error.
 
 Content findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.

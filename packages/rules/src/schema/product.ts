@@ -2,9 +2,11 @@
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
-import { flattenJsonLdNodes, indexJsonLdIds, resolveJsonLdRef } from "@squirrelscan/utils";
+import { flattenJsonLdNodes } from "@squirrelscan/utils";
 
-const REQUIRED_PROPS = ["name", "image"];
+import { fieldEvidenceCheck, readProductEvidence, type ProductField } from "./product-evidence";
+
+const REQUIRED_PROPS: ProductField[] = ["name", "image"];
 
 export const productSchemaRule: Rule = {
   meta: {
@@ -45,7 +47,8 @@ export const productSchemaRule: Rule = {
         const type = schema["@type"];
         if (
           type === "Product" ||
-          (Array.isArray(type) && type.includes("Product"))
+          type === "ProductGroup" ||
+          (Array.isArray(type) && (type.includes("Product") || type.includes("ProductGroup")))
         ) {
           productSchema = schema;
           break;
@@ -53,7 +56,9 @@ export const productSchemaRule: Rule = {
       }
     }
 
-    if (!productSchema) {
+    const evidence = readProductEvidence(ctx, pageNodes, productSchema);
+
+    if (!evidence) {
       checks.push({
         name: "product-schema",
         status: "info",
@@ -62,13 +67,12 @@ export const productSchemaRule: Rule = {
       return { checks };
     }
 
-    // Check required properties
-    const missing: string[] = [];
-    for (const prop of REQUIRED_PROPS) {
-      if (!productSchema[prop]) {
-        missing.push(prop);
-      }
-    }
+    const statusOf = (field: ProductField) => evidence.fields.find((f) => f.field === field)?.status;
+
+    // Required properties. Only a field proven absent from a complete read
+    // warns; an unchecked one (truncated read, rendered-only shell) does not.
+    const missing = REQUIRED_PROPS.filter((prop) => statusOf(prop) === "absent");
+    const unchecked = REQUIRED_PROPS.filter((prop) => statusOf(prop) === "unknown");
 
     if (missing.length > 0) {
       checks.push({
@@ -76,6 +80,13 @@ export const productSchemaRule: Rule = {
         status: "warn",
         message: `Product schema missing required properties`,
         items: missing.map((prop) => ({ id: prop })),
+      });
+    } else if (unchecked.length > 0) {
+      checks.push({
+        name: "product-required",
+        status: "info",
+        message: "Product required properties could not all be checked",
+        items: unchecked.map((prop) => ({ id: prop })),
       });
     } else {
       checks.push({
@@ -86,36 +97,30 @@ export const productSchemaRule: Rule = {
     }
 
     // Check for Offer
-    const offers = productSchema["offers"];
-    if (!offers) {
-      checks.push({
-        name: "product-offers",
-        status: "info",
-        message: "Product schema has no offers/pricing",
-        value: "Add Offer with price and availability",
-      });
-    } else {
-      const offer = resolveJsonLdRef(
-        Array.isArray(offers) ? offers[0] : offers,
-        indexJsonLdIds(pageNodes, ctx.page.url),
-        ctx.page.url
-      );
-      const hasPrice = offer && (offer as Record<string, unknown>)["price"];
-      const hasAvailability =
-        offer && (offer as Record<string, unknown>)["availability"];
-
-      if (!hasPrice || !hasAvailability) {
+    if (!evidence.hasOffers) {
+      // Without a complete read an absent Offer is not proven: the evidence
+      // check below carries the unknown price and availability instead.
+      if (evidence.read === "complete" && statusOf("price") !== "unknown") {
         checks.push({
-          name: "product-offer-details",
-          status: "warn",
-          message: "Product Offer missing price or availability",
+          name: "product-offers",
+          status: "info",
+          message: "Product schema has no offers/pricing",
+          value: "Add Offer with price and availability",
         });
       }
+    } else if (statusOf("price") === "absent" || statusOf("availability") === "absent") {
+      checks.push({
+        name: "product-offer-details",
+        status: "warn",
+        message: "Product Offer missing price or availability",
+      });
     }
+
+    checks.push(fieldEvidenceCheck(evidence));
 
     // Check for reviews
     const hasReview =
-      productSchema["review"] || productSchema["aggregateRating"];
+      productSchema?.["review"] || productSchema?.["aggregateRating"];
     if (hasReview) {
       checks.push({
         name: "product-reviews",

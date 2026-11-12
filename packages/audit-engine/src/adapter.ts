@@ -9,7 +9,6 @@ import {
   extractScripts,
   extractStylesheets,
   isSameDomainScript,
-  EMPTY_SCHEMA_COLLECTION,
 } from "@squirrelscan/parser";
 import {
   applySiteFindingBudget,
@@ -20,6 +19,8 @@ import {
   isSiteIndexable,
   mergeRuleRunResult,
   pluginNamespaces,
+  stylesheetBackgroundOf,
+  stylesheetBackgroundSelectorsOf,
   type PluginRegistrySnapshot,
   type RunnerScope,
 } from "@squirrelscan/rules";
@@ -51,9 +52,12 @@ import type {
   ParsedPage,
   RuleRunResult,
   SiteData,
+  StylesheetBackgroundData,
   WebAppManifestData,
 } from "@squirrelscan/rules";
 import type { SQLiteStorage } from "@squirrelscan/crawler";
+import { EMPTY_PARSED_PAGE } from "./empty-parsed-page";
+import { isRedirectSourcePage, redirectSourceEntry } from "./redirect-source";
 import type {
   CheckResult,
   CloakingProbeData,
@@ -210,50 +214,6 @@ export { setAdapterLogger, type AdapterLogger } from "./adapter-logger";
 // CONSTANTS
 // ============================================
 
-/**
- * Empty ParsedPage for error pages (4xx/5xx) that have no HTML content.
- * Used in site context for broken link detection - only statusCode matters.
- */
-const EMPTY_PARSED_PAGE: ParsedPage = {
-  document: null,
-  meta: { title: null, description: null, canonical: null, robots: null },
-  h1: { count: 0, texts: [] },
-  og: {
-    title: null,
-    description: null,
-    url: null,
-    type: null,
-    image: null,
-    siteName: null,
-  },
-  twitter: { card: null, title: null, description: null, image: null },
-  links: [],
-  images: [],
-  headings: {
-    headings: [],
-    h1Count: 0,
-    h1Texts: [],
-    hasSkippedLevels: false,
-    skippedLevels: [],
-    emptyHeadings: [],
-    longHeadings: [],
-    duplicateHeadings: [],
-    outline: "",
-  },
-  content: {
-    wordCount: 0,
-    textLength: 0,
-    htmlLength: 0,
-    textToHtmlRatio: 0,
-    isThinContent: true,
-    contentHash: "",
-    textContent: "",
-  },
-  schemas: EMPTY_SCHEMA_COLLECTION,
-  author: null,
-  pageType: "unknown",
-  schema: { types: [], valid: true, errors: [], raw: null },
-};
 
 function buildLlmsTxtData(llms: LlmsTxtRecord | null): LlmsTxtData | null {
   if (!llms) return null;
@@ -347,11 +307,21 @@ export interface ResourceCheckOverrides {
 /** Most preloaded chunks fetched per audit, on top of the regular script fetch. */
 const PRELOAD_CHUNK_FETCH_LIMIT = 20;
 
+/** The one rule that reads the page background a linked stylesheet sets (#1756). */
+const COLOR_CONTRAST_RULE_ID = "a11y/color-contrast";
+/** Same-site stylesheets read for the page background (#1756): the most widely linked first. */
+const STYLESHEET_BACKGROUND_FETCH_LIMIT = 20;
+/** A stylesheet over this many decoded bytes is not read (#1756). */
+const STYLESHEET_BACKGROUND_MAX_BYTES = 1024 * 1024;
+
 /** The one rule that reads the third-party asset pools (#703). */
 const BROKEN_RESOURCES_RULE_ID = "reliability/broken-resources";
 
 /** The one rule that reads the web app manifest fetch (#710). */
 const WEB_APP_MANIFEST_RULE_ID = "mobile/web-app-manifest";
+
+/** Most script URLs kept for scripts held back from the rules (#1757). */
+export const SCRIPTS_NOT_READ_URLS_CAP = 20;
 
 /**
  * Referenced URLs each fetch cap left unfetched, per kind (#703): the count of
@@ -395,6 +365,16 @@ export interface PreFetchedAssets {
    * them as truncated. Optional: assets built by hand have none.
    */
   scriptsNotRead?: number;
+  /**
+   * Up to {@link SCRIPTS_NOT_READ_URLS_CAP} of the scripts `scriptsNotRead` counts (#1757): a `store_scripts`
+   * run fetched them for storage but the rules never see their content. Absent when none were held back.
+   */
+  scriptsNotReadUrls?: string[];
+  /**
+   * The page background each same-site linked stylesheet sets (#1756), for `a11y/color-contrast`. Absent
+   * when the rule is off or the phase did not run: the rule then reads every linked stylesheet as unread.
+   */
+  stylesheetBackgrounds?: StylesheetBackgroundData[];
   /**
    * Same-site chunks a page preloads (`modulepreload`, `preload as=script`) that
    * no `<script src>` names. Held apart from `scripts` so the file-size,
@@ -841,6 +821,7 @@ export function fetchAssetsFromOccurrences(
       // truncation flag has to be here or crawl/sitemap-exists still reports
       // "No XML sitemap found" for a walk that never looked (#1733).
       truncated: crawl?.stats?.sitemapDiscoveryTruncated ?? false,
+      ...(crawl?.stats?.sitemapReadState ? { readState: crawl.stats.sitemapReadState } : {}),
     };
 
     // Every orphan the coverage pass found, in its order. These are the
@@ -1104,6 +1085,18 @@ export function fetchAssetsFromOccurrences(
           BROKEN_RESOURCES_RULE_ID
         ],
       );
+    const probeStylesheetBackgrounds = isRuleEnabled(
+      COLOR_CONTRAST_RULE_ID,
+      config.rules?.enable ?? [],
+      config.rules?.disable ?? [],
+      (config.rule_options as Record<string, { enabled?: boolean }> | undefined)?.[
+        COLOR_CONTRAST_RULE_ID
+      ],
+    );
+    const stylesheetTargets = Array.from(resourceOccurrences.css.entries())
+      .sort((a, b) => b[1].size - a[1].size)
+      .map(([url]) => url)
+      .slice(0, STYLESHEET_BACKGROUND_FETCH_LIMIT);
     const probeWebAppManifests = isRuleEnabled(
       WEB_APP_MANIFEST_RULE_ID,
       config.rules?.enable ?? [],
@@ -1207,6 +1200,16 @@ export function fetchAssetsFromOccurrences(
             maxScripts: Math.min(preloadFetchOptions.maxScripts ?? PRELOAD_CHUNK_FETCH_LIMIT, PRELOAD_CHUNK_FETCH_LIMIT),
           },
         ),
+        // Only the html/body background is kept (#1756); same egress and budget as the scripts.
+        stylesheets: probeStylesheetBackgrounds
+          ? fetchScriptContents(stylesheetTargets, {
+              ...nonStoreScriptOptions,
+              fetchAll: true,
+              anyContentType: true,
+              maxScripts: STYLESHEET_BACKGROUND_FETCH_LIMIT,
+              maxSizeBytes: STYLESHEET_BACKGROUND_MAX_BYTES,
+            })
+          : Effect.succeed([] as ScriptFetchResult[]),
         pdfs: checkResourceSizes(
           Array.from(pdfUrls.keys()).slice(0, pdfCheckLimit),
           resourceCheckOptions,
@@ -1313,6 +1316,7 @@ export function fetchAssetsFromOccurrences(
               images: [] as ResourceCheckResult[],
               fonts: [] as ResourceCheckResult[],
               scripts: [] as ScriptFetchResult[],
+              stylesheets: [] as ScriptFetchResult[],
               preloads: [] as ScriptFetchResult[],
               pdfs: [] as ResourceCheckResult[],
               sitemap: [] as ResourceCheckResult[],
@@ -1345,6 +1349,22 @@ export function fetchAssetsFromOccurrences(
       : resourceResults.scripts.length;
     const ruleScripts = resourceResults.scripts.slice(0, ruleScriptCount);
     const storedOnlyScripts = resourceResults.scripts.slice(ruleScriptCount);
+    // The first timed script of each origin carries the connection setup in its response time (#1751).
+    const timedHosts = new Set<string>();
+    const hostFirstOf = (fetch: ScriptFetchResult): boolean | undefined => {
+      if (fetch.responseMs === undefined) return undefined;
+      let origin: string;
+      try {
+        origin = new URL(fetch.url).origin;
+      } catch {
+        return undefined;
+      }
+      if (timedHosts.has(origin)) return false;
+      timedHosts.add(origin);
+      return true;
+    };
+    const hostFirst = new Map<string, boolean | undefined>();
+    for (const fetch of resourceResults.scripts) hostFirst.set(fetch.url, hostFirstOf(fetch));
     const toScriptData = (fetch: ScriptFetchResult): ScriptContentData => ({
         url: fetch.url,
         status: fetch.status,
@@ -1354,6 +1374,9 @@ export function fetchAssetsFromOccurrences(
         content: fetch.content,
         sourcePages: Array.from(resourceOccurrences.scripts.get(fetch.url) ?? []),
         ...(fetch.fetchSkipReason ? { fetchSkipReason: fetch.fetchSkipReason } : {}),
+        ...(fetch.responseMs !== undefined
+          ? { responseMs: fetch.responseMs, ...(hostFirst.get(fetch.url) ? { hostFirst: true } : {}) }
+          : {}),
         rateLimited: fetch.rateLimited,
         wafBlocked: fetch.wafBlocked,
         ...(withheld(fetch.url, fetch.status, fetch.finalUrl) ? { headersWithheld: true } : {}),
@@ -1461,6 +1484,25 @@ export function fetchAssetsFromOccurrences(
       scripts: ruleScripts.map(toScriptData),
       ...(resourceOccurrences.scripts.size > ruleScripts.length
         ? { scriptsNotRead: resourceOccurrences.scripts.size - ruleScripts.length }
+        : {}),
+      ...(probeStylesheetBackgrounds
+        ? {
+            stylesheetBackgrounds: resourceResults.stylesheets.map((fetch) => {
+              const readable = fetch.content !== null && !/html/i.test(fetch.contentType ?? "");
+              const other = readable ? stylesheetBackgroundSelectorsOf(fetch.content as string) : null;
+              return {
+                url: fetch.url,
+                status: fetch.status,
+                error: fetch.error,
+                background: readable ? stylesheetBackgroundOf(fetch.content as string) : null,
+                ...(other && other.selectors.length > 0 ? { selectors: other.selectors } : {}),
+                ...(other?.truncated ? { selectorsTruncated: true } : {}),
+              };
+            }),
+          }
+        : {}),
+      ...(storedOnlyScripts.length > 0
+        ? { scriptsNotReadUrls: storedOnlyScripts.slice(0, SCRIPTS_NOT_READ_URLS_CAP).map((f) => f.url) }
         : {}),
       ...(storedOnlyScripts.length > 0
         ? { storedOnlyScripts: storedOnlyScripts.map(toScriptData) }
@@ -1615,6 +1657,7 @@ export function runRulesOnStorage(
       sizeBytes?: number | null;
       rendered?: boolean;
       versionHeadersRecorded?: boolean;
+      redirectSource?: boolean;
     }> = [];
     const wafBlockedPages: Array<{
       url: string;
@@ -1636,7 +1679,16 @@ export function runRulesOnStorage(
       }
     >();
 
+    // URLs that redirected (#1762): recorded as redirects, never audited as pages.
+    const redirectSourcePages: ReturnType<typeof redirectSourceEntry>[] = [];
+
     for (const { page, parsed } of siteContext) {
+      if (isRedirectSourcePage(page)) {
+        const entry = redirectSourceEntry(page, EMPTY_PARSED_PAGE);
+        redirectSourcePages.push(entry);
+        fetchedTargets.push({ url: page.normalizedUrl, status: entry.statusCode });
+        continue;
+      }
       if (!parsed) {
         // Skip non-HTML or failed parses. One that answered is still a known
         // status for a link to it (pub#798); 4xx/5xx join site.pages below. A
@@ -1717,6 +1769,9 @@ export function runRulesOnStorage(
         });
       }
     }
+
+    // The redirect rules still see a redirecting URL and its hops (#1762).
+    parsedPages.push(...redirectSourcePages);
 
     const robots = yield* storage
       .getRobotsTxt(crawlId)
@@ -1874,6 +1929,7 @@ export function runRulesOnStorage(
       // truncation flag has to be here or crawl/sitemap-exists still reports
       // "No XML sitemap found" for a walk that never looked (#1733).
       truncated: crawl?.stats?.sitemapDiscoveryTruncated ?? false,
+      ...(crawl?.stats?.sitemapReadState ? { readState: crawl.stats.sitemapReadState } : {}),
     };
 
     // Sitemap array limits must match the API schema caps (REPORT_LIMITS.maxPages).
@@ -1901,6 +1957,8 @@ export function runRulesOnStorage(
       preloadedScripts,
       externalAssets,
       assetCapDropped,
+      scriptsNotReadUrls,
+      stylesheetBackgrounds,
       pdfSizes,
       sitemapUrlStatuses,
       webAppManifests,
@@ -1917,7 +1975,7 @@ export function runRulesOnStorage(
         {
           baseUrl: crawl?.baseUrl ?? "",
           entryUrls: crawlEntryUrls(crawl),
-          pages: parsedPages.map((p) => ({
+          pages: parsedPages.filter((p) => !p.redirectSource).map((p) => ({
             url: p.url,
             statusCode: p.statusCode,
             parsed: { links: p.parsed.links },
@@ -2010,6 +2068,8 @@ export function runRulesOnStorage(
       preloadedScripts,
       externalAssets,
       assetCapDropped,
+      scriptsNotReadUrls,
+      stylesheetBackgrounds,
       pdfSizes,
       sitemapUrlStatuses,
       webAppManifests,
@@ -2019,7 +2079,7 @@ export function runRulesOnStorage(
       // sitemap-coverage can tell "crawl budget truncated this run" apart
       // from a genuine coverage gap.
       crawlLimits: {
-        pagesCrawled: siteContext.length,
+        pagesCrawled: siteContext.length - redirectSourcePages.length,
         maxPages: config.crawler?.max_pages ?? 100,
       },
       unfetchedPages,
@@ -2076,6 +2136,31 @@ export function runRulesOnStorage(
       for (const [ruleId, ruleResult] of ruleResults) {
         for (const check of ruleResult.checks) {
           if (!check.pageUrl) check.pageUrl = pageUrl;
+        }
+        mergeRuleRunResult(ruleResultsMap, ruleId, ruleResult);
+      }
+    }
+    // A redirecting URL has no content to audit: only the rules that report the redirect itself run on it (#1762).
+    for (const entry of redirectSourcePages) {
+      const raw = yield* Effect.promise(() =>
+        runner.runPageRules(
+          {
+            url: entry.url,
+            html: "",
+            statusCode: entry.statusCode,
+            loadTime: 0,
+            headers: {},
+            parsed: entry.parsed,
+            finalUrl: entry.finalUrl,
+            redirectChain: entry.redirectChain,
+          },
+          siteDataForPageRules,
+          { redirectSource: true },
+        ),
+      );
+      for (const [ruleId, ruleResult] of raw.ruleResults) {
+        for (const check of ruleResult.checks) {
+          if (!check.pageUrl) check.pageUrl = entry.url;
         }
         mergeRuleRunResult(ruleResultsMap, ruleId, ruleResult);
       }
@@ -2312,6 +2397,8 @@ type StreamParsedPage = {
   sizeBytes?: number | null;
   rendered?: boolean;
   versionHeadersRecorded?: boolean;
+  /** A URL that redirected: in the list for its hops, not a page (#1762). */
+  redirectSource?: boolean;
 };
 
 /**
@@ -2351,6 +2438,8 @@ interface ParsedUniverse {
   pageDataMap: Map<string, StreamPageIdentity>;
   /** Pages the crawl fetched that site.pages leaves out (pub#798). */
   fetchedTargets: NonNullable<SiteData["fetchedTargets"]>;
+  /** URLs that redirected: in `parsedPages` for their hops, in no page total (#1762). */
+  redirectSourceCount: number;
 }
 
 /**
@@ -2389,10 +2478,18 @@ function createParsedUniverseAccumulator(): {
   // AFTER the whole first loop. Batching means a later batch can still add to
   // that map, so the error-page decision is deferred to `build`.
   const errorCandidates: StreamParsedPage[] = [];
+  const redirectSources: StreamParsedPage[] = [];
 
   return {
     absorb(siteContext: SiteContextPage[]): void {
       for (const { page, parsed } of siteContext) {
+        // A redirecting URL is a redirect, not a page (#1762): no page rule, no page count.
+        if (isRedirectSourcePage(page)) {
+          const entry = redirectSourceEntry(page, EMPTY_PARSED_PAGE);
+          redirectSources.push(entry);
+          fetchedTargets.push({ url: page.normalizedUrl, status: entry.statusCode });
+          continue;
+        }
         // Error-page candidates are collected for EVERY page (parsed or not),
         // mirroring v1's second loop, which iterates the whole site context.
         if (page.status >= 400) {
@@ -2496,7 +2593,8 @@ function createParsedUniverseAccumulator(): {
         }
       }
       return {
-        parsedPages: [...htmlPages, ...errorPages],
+        parsedPages: [...htmlPages, ...errorPages, ...redirectSources],
+        redirectSourceCount: redirectSources.length,
         wafBlockedPages,
         wafBlockedPageSet,
         rateLimitedPages,
@@ -2546,7 +2644,8 @@ function streamParsedUniverse(
       if (batch.length < batchSize) break;
     }
 
-    return { ...universe.build(), totalPageCount };
+    const built = universe.build();
+    return { ...built, totalPageCount: totalPageCount - built.redirectSourceCount };
   });
 }
 
@@ -2736,6 +2835,7 @@ function buildStreamingSiteData(
       // truncation flag has to be here or crawl/sitemap-exists still reports
       // "No XML sitemap found" for a walk that never looked (#1733).
       truncated: crawl?.stats?.sitemapDiscoveryTruncated ?? false,
+      ...(crawl?.stats?.sitemapReadState ? { readState: crawl.stats.sitemapReadState } : {}),
     };
 
     const SITEMAP_ARRAY_CAP = REPORT_LIMITS.maxPages;
@@ -2759,6 +2859,8 @@ function buildStreamingSiteData(
       preloadedScripts,
       externalAssets,
       assetCapDropped,
+      scriptsNotReadUrls,
+      stylesheetBackgrounds,
       pdfSizes,
       sitemapUrlStatuses,
       webAppManifests,
@@ -2768,7 +2870,7 @@ function buildStreamingSiteData(
     const cloakingSite = {
       baseUrl: crawl?.baseUrl ?? "",
       entryUrls: crawlEntryUrls(crawl),
-      pages: parsedPages.map((p) => ({
+      pages: parsedPages.filter((p) => !p.redirectSource).map((p) => ({
         url: p.url,
         statusCode: p.statusCode,
         parsed: { links: p.parsed.links },
@@ -2881,6 +2983,8 @@ function buildStreamingSiteData(
       preloadedScripts,
       externalAssets,
       assetCapDropped,
+      scriptsNotReadUrls,
+      stylesheetBackgrounds,
       pdfSizes,
       sitemapUrlStatuses,
       webAppManifests,
@@ -3488,7 +3592,7 @@ export function runStreamingRules(
     // graph's membership/order/sources match v1 exactly (E-E2 (b) reconciliation).
     const siteQuery = yield* phase("site-query", () =>
       createSiteQuery(storage, crawlId, {
-        universe: parsedPages.map((p) => p.url),
+        universe: parsedPages.filter((p) => !p.redirectSource).map((p) => p.url),
         pageScanBatchSize: batchSize,
         // Only a run with links/anchor-mismatch enabled pays for the anchor graph (#110).
         anchorGraph: isRuleEnabled(

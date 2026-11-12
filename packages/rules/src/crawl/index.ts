@@ -4,6 +4,7 @@
 import type { Rule } from "../types";
 
 import { allNoindexPages } from "./all-noindex-pages";
+import { conflictingIndexSignalsRule } from "./conflicting-index-signals";
 import { canonicalChainRule } from "./canonical-chain";
 import { htmlSizeRule } from "./html-size";
 import { indexabilityCheck } from "./indexability";
@@ -38,6 +39,7 @@ export const rules: Rule[] = [
   sitemapLastmodDriftRule,
   robotsMetaConflictRule,
   noindexInSitemapRule,
+  conflictingIndexSignalsRule,
   indexabilityCheck,
   allNoindexPages,
   indexabilityConflicts,
@@ -56,6 +58,7 @@ export const rules: Rule[] = [
 export {
   allNoindexPages,
   canonicalChainRule,
+  conflictingIndexSignalsRule,
   htmlSizeRule,
   indexabilityCheck,
   indexabilityConflicts,

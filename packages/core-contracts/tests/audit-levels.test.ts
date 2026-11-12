@@ -300,6 +300,22 @@ describe("AUDIT_LEVEL_COPY quick summary", () => {
     expect(summary).toContain("Costs credits: 50, plus 2 per page and 1 per external link checked, up to 125");
     expect(summary).not.toMatch(/no credits|local rules only|free/i);
   });
+
+  // repo#2729: Quick reads as a clean bill for links it never followed unless it says so.
+  test("says links are not followed and the cloud checks are skipped, and the preset agrees", () => {
+    const summary = AUDIT_LEVEL_COPY.quick.summary;
+    expect(summary).toContain("does not follow links");
+    expect(summary).toContain("status check only");
+    expect(summary).toContain("skips the cloud checks");
+    expect(AUDIT_LEVEL_PRESETS.quick.crawlStrategy).toBe("seed-and-sitemap");
+    expect(AUDIT_LEVEL_PRESETS.quick.cloudChecks).toBe(false);
+  });
+
+  test("the other levels do not claim that", () => {
+    for (const level of ["surface", "full"] as const) {
+      expect(AUDIT_LEVEL_COPY[level].summary).not.toContain("does not follow links");
+    }
+  });
 });
 
 // repo#2729: one constant holds the external link default, so turning it on

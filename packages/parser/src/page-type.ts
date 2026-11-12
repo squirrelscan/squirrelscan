@@ -48,7 +48,16 @@ export function detectPageType(
   if (schemas.hasType("ContactPage")) return "contact";
   if (schemas.hasType("AboutPage")) return "about";
 
-  // 2. URL patterns (low-confidence hints)
+  return pageTypeFromUrl(url);
+}
+
+/**
+ * Page type from the URL alone (the low-confidence half of {@link detectPageType}). The only
+ * label available for a page that was discovered but never fetched, so it is also what a
+ * coverage count uses for audited pages: both sides of "N of M product pages" must come from
+ * the same classifier or the difference means nothing.
+ */
+export function pageTypeFromUrl(url: string): PageType {
   let path: string;
   try {
     path = new URL(url).pathname.toLowerCase();

@@ -1,7 +1,16 @@
 // a11y/color-contrast - Color contrast ratio check
 // Based on WCAG 2.1 Success Criterion 1.4.3 Contrast (Minimum) (Level AA)
 
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
+import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
+
+import type {
+  Rule,
+  RuleContext,
+  RuleResult,
+  CheckResult,
+  StylesheetBackground,
+  StylesheetBackgroundData,
+} from "../types";
 
 type Rgb = [number, number, number];
 
@@ -51,14 +60,21 @@ export const colorContrastRule: Rule = {
   meta: {
     id: "a11y/color-contrast",
     name: "Color Contrast",
-    description: "Measures the contrast of text whose color and background are both set inline",
+    description:
+      "Measures the contrast of text with an inline color against the background the markup determines, and counts the text it could not measure",
     solution:
-      "Text must have sufficient contrast with its background for readability. WCAG AA requires 4.5:1 for normal text and 3:1 for large text (18pt+, or 14pt+ bold). Darken the text or lighten the background until the pair clears the ratio, and check the pair, not the color alone. squirrel only measures pairs it can resolve from the markup; verify colors set in stylesheets with browser DevTools or a contrast checker. Don't rely on color alone to convey information - add icons or text labels.",
+      "Text must have sufficient contrast with its background for readability. WCAG AA requires 4.5:1 for normal text and 3:1 for large text (18pt+, or 14pt+ bold). Darken the text or lighten the background until the pair clears the ratio, and check the pair, not the color alone. squirrel measures text with an inline color against the nearest inline background, a plain html or body rule in a style block or in a same-site linked stylesheet, or the white browser default; where a stylesheet it could not read (another site, a failed request, an @import) may set the background it lists the text as not measured instead. Verify those with browser DevTools or a contrast checker. Don't rely on color alone to convey information - add icons or text labels.",
     category: "a11y",
     scope: "page",
     verdictScope: "page",
     severity: "warning",
     weight: 5,
+    // Check names by outcome class (#1741).
+    checks: [
+      { name: "color-contrast", outcome: "problem" },
+      { name: "color-contrast", outcome: "clean", clears: ["color-contrast"] },
+      { name: "color-contrast-unresolved", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {
@@ -67,34 +83,53 @@ export const colorContrastRule: Rule = {
 
     const checks: CheckResult[] = [];
     const lowContrast: Array<{ element: string; fg: string; bg: string; ratio: number }> = [];
+    const unresolved: Array<{ id: string; reason: UnresolvedReason }> = [];
     let measuredPairs = 0;
 
-    // Only a pair the markup fully determines is measured: an element that
-    // sets both its text color and an opaque background color inline, and has
-    // text to read. Colors from stylesheets, class names or ancestors cannot be
-    // resolved without rendering, and an unresolved pair is not a violation
-    // (axe reports it as "incomplete", not as a failure).
-    const elementsWithStyle = doc.querySelectorAll("[style]");
+    // An element is measured when its own inline `color` is an opaque color and
+    // the markup determines what is behind it: the nearest inline background up
+    // the ancestors, a plain `html`/`body`/`:root` rule in a style block, or the
+    // browser's white when nothing on the page can set a background. When a
+    // stylesheet the audit does not read might set it, the pair is counted as
+    // not measured, never reported: axe calls that "incomplete".
+    const resolver = createBackgroundResolver(
+      doc,
+      ctx.page.finalUrl ?? ctx.page.url,
+      ctx.site?.stylesheetBackgrounds
+    );
 
-    for (const el of elementsWithStyle) {
-      const colors = resolveInlineColors(el.getAttribute("style") || "");
-      if (!colors) continue;
+    for (const el of doc.querySelectorAll("[style]")) {
+      const color = winner(
+        parseDeclarations(el.getAttribute("style") || "").filter((d) => d.property === "color")
+      );
+      if (!color || CSS_WIDE_KEYWORDS.has(color.value.toLowerCase())) continue;
       if (!el.textContent?.trim()) continue;
-      const { fg, bg, fgRgb, bgRgb } = colors;
+      const element = el.tagName.toLowerCase();
+      const fgRgb = parseColor(color.value);
+      if (!fgRgb) {
+        unresolved.push({
+          id: `${element}: ${color.value} (text color is translucent or not a plain color)`,
+          reason: "color",
+        });
+        continue;
+      }
+
+      const bg = resolver.resolve(el);
+      if (bg.kind === "unresolved") {
+        const ratio = calculateContrastRatio(fgRgb, WHITE);
+        unresolved.push({
+          id: `${element}: ${color.value} (${ratio.toFixed(2)}:1 against white)`,
+          reason: bg.reason,
+        });
+        continue;
+      }
 
       measuredPairs++;
-      const ratio = calculateContrastRatio(fgRgb, bgRgb);
+      const ratio = calculateContrastRatio(fgRgb, bg.rgb);
       if (ratio < CONTRAST_RATIO_NORMAL) {
-        lowContrast.push({
-          element: el.tagName.toLowerCase(),
-          fg,
-          bg,
-          ratio,
-        });
+        lowContrast.push({ element, fg: color.value, bg: bg.raw, ratio });
       }
     }
-
-    const elementsWithClass = doc.querySelectorAll("[class]");
 
     if (lowContrast.length > 0) {
       const uniqueIssues = [
@@ -116,29 +151,396 @@ export const colorContrastRule: Rule = {
           ...(uniqueIssues.length > 10 ? { additional: uniqueIssues.length - 10 } : {}),
         },
       });
-    } else if (elementsWithStyle.length > 0 || elementsWithClass.length > 0) {
+    } else {
+      // Also the answer for a page with no inline text color at all: there is
+      // nothing on it this rule can measure, which is not a finding. The
+      // architecture has no way for a page rule to attach a note to the audited
+      // site, so the note stays on the page's own check.
       checks.push({
         name: "color-contrast",
         status: "pass",
         message: "No obvious contrast issues detected",
         details: {
-          note: "Full contrast check requires browser rendering for complete accuracy",
+          note:
+            measuredPairs > 0
+              ? "Colors set in stylesheets are not analysed; full contrast check requires browser rendering for complete accuracy"
+              : "No inline text colors to measure; colors set in stylesheets are not analysed",
           measuredPairs,
         },
       });
-    } else {
+    }
+
+    if (unresolved.length > 0) {
+      const reasons: Partial<Record<UnresolvedReason, number>> = {};
+      for (const u of unresolved) reasons[u.reason] = (reasons[u.reason] ?? 0) + 1;
+      const why = (Object.keys(reasons) as UnresolvedReason[])
+        .map((r) => UNRESOLVED_REASON_TEXT[r])
+        .join("; ");
+      const ids = [...new Set(unresolved.map((u) => u.id))];
       checks.push({
-        name: "color-contrast",
+        name: "color-contrast-unresolved",
         status: "info",
-        message: "Limited contrast analysis available",
-        details: { inconclusive: true },
-        value: "Use browser DevTools or WebAIM Contrast Checker for full audit",
+        message: `${unresolved.length} inline-colored text element(s) could not be measured: ${why}`,
+        items: ids.slice(0, 10).map((id) => ({ id })),
+        details: {
+          inconclusive: true,
+          unresolved: unresolved.length,
+          reasons,
+          ...(ids.length > 10 ? { additional: ids.length - 10 } : {}),
+        },
+        value: "Check these with browser DevTools or the WebAIM Contrast Checker",
       });
     }
 
     return { checks };
   },
 };
+
+const WHITE: Rgb = [255, 255, 255];
+const CSS_WIDE_KEYWORDS = new Set(["inherit", "initial", "unset", "revert", "revert-layer", "currentcolor"]);
+
+type UnresolvedReason = "stylesheet" | "image" | "color";
+
+const UNRESOLVED_REASON_TEXT: Record<UnresolvedReason, string> = {
+  stylesheet: "the background is set by a stylesheet the audit does not read",
+  image: "a background image or gradient sits behind the text",
+  color: "the color is transparent, translucent or not a plain color value",
+};
+
+type Background =
+  | { kind: "none" }
+  | { kind: "color"; rgb: Rgb; raw: string }
+  | { kind: "unresolved"; reason: UnresolvedReason };
+
+type ResolvedBackground = Exclude<Background, { kind: "none" }>;
+
+const NO_BACKGROUND: Background = { kind: "none" };
+
+/**
+ * What a list of declarations (one element's inline style, or the rules that
+ * target one element) says about the background behind its text: nothing, one
+ * opaque color, or something that cannot be resolved. The `background`
+ * shorthand counts only when its whole value is one color; any other
+ * shorthand, and any `background-image` other than `none`, leaves the color
+ * behind the text unknown.
+ */
+function backgroundOf(declarations: Declaration[]): Background {
+  const background = winner(
+    declarations.filter((d) => d.property === "background" || d.property === "background-color")
+  );
+  const image = winner(
+    declarations.filter((d) => d.property === "background" || d.property === "background-image")
+  );
+  if (!background && !image) return NO_BACKGROUND;
+  // A one-color `background` shorthand resets the image to none; any other
+  // shorthand may set one.
+  if (image) {
+    const noImage =
+      image.property === "background-image"
+        ? image.value.toLowerCase() === "none"
+        : parseColor(image.value) !== null;
+    if (!noImage) return { kind: "unresolved", reason: "image" };
+  }
+  if (!background) return NO_BACKGROUND;
+  const rgb = parseColor(background.value);
+  return rgb
+    ? { kind: "color", rgb, raw: background.value }
+    : { kind: "unresolved", reason: "color" };
+}
+
+/**
+ * Background of the `html`/`body`/`:root` rules in the page's `<style>` blocks.
+ * Only a selector that is exactly one of those three counts, and an at-rule body
+ * (`@media`, `@font-face`) is skipped. Body wins over html, as the canvas shows
+ * through only where the body has none. One linear pass: the blocks are
+ * site-controlled and can hold hundreds of KB of base64.
+ */
+/** Selectors with a background kept per stylesheet (#1756); past this the list says "more existed". */
+const MAX_BACKGROUND_SELECTORS = 200;
+
+/** At-rules nested deeper than this are not read; a background in one is unresolved (never a color). */
+const MAX_AT_RULE_DEPTH = 8;
+
+/** Selector matches the guard may spend per page before the rest is read as not provable. */
+const GUARD_MATCH_BUDGET = 50_000;
+
+function styleBlockRules(css: string, level = 0): {
+  html: Declaration[];
+  body: Declaration[];
+  otherBackground: boolean;
+  /** An at-rule (`@media`, `@supports`) sets the background of `html`/`body`/`:root`: it can override the plain rule. */
+  atRuleRootBackground: boolean;
+  /** The selectors, other than html/body/:root, whose rule sets a background (inside an at-rule too), capped. */
+  otherSelectors: string[];
+  /** More than {@link MAX_BACKGROUND_SELECTORS} such selectors existed: the list is not all of them. */
+  otherSelectorsTruncated: boolean;
+} {
+  const otherSelectors: string[] = [];
+  let otherSelectorsTruncated = false;
+  const html: Declaration[] = [];
+  const body: Declaration[] = [];
+  // A background set by any other selector (or inside an at-rule) can sit behind
+  // the text, so the page-level answer is no longer provable.
+  let otherBackground = false;
+  let atRuleRootBackground = false;
+  let i = 0;
+  while (i < css.length) {
+    const open = css.indexOf("{", i);
+    if (open < 0) break;
+    let depth = 1;
+    let j = open + 1;
+    while (j < css.length && depth > 0) {
+      const ch = css[j];
+      if (ch === "{") depth++;
+      else if (ch === "}") depth--;
+      j++;
+    }
+    const selector = css.slice(i, open).trim();
+    const block = css.slice(open + 1, depth === 0 ? j - 1 : j);
+    i = j;
+    if (selector.startsWith("@")) {
+      const mentionsBackground = /background/i.test(block);
+      if (mentionsBackground) otherBackground = true;
+      if (!/^@(font-face|keyframes|-webkit-keyframes|property)\b/i.test(selector) && depth === 0) {
+        if (level >= MAX_AT_RULE_DEPTH) {
+          // Nested past what is read: a background in there is not provable, so it is never a color.
+          if (mentionsBackground) {
+            atRuleRootBackground = true;
+            otherSelectorsTruncated = true;
+          }
+        } else {
+          // ONE recursive call per at-rule: its result serves every purpose below. Two calls per level would
+          // cost 2^depth on a stylesheet that nests at-rules, and linked stylesheets are site-controlled.
+          const inner = styleBlockRules(block, level + 1);
+          const sets = (d: Declaration[]): boolean =>
+            d.some((x) => /^background(-color|-image)?$/.test(x.property));
+          if (sets(inner.html) || sets(inner.body) || inner.atRuleRootBackground) atRuleRootBackground = true;
+          if (mentionsBackground) {
+            for (const sel of inner.otherSelectors) {
+              if (otherSelectors.length >= MAX_BACKGROUND_SELECTORS) otherSelectorsTruncated = true;
+              else otherSelectors.push(sel);
+            }
+            if (inner.otherSelectorsTruncated) otherSelectorsTruncated = true;
+          }
+        }
+      }
+      continue;
+    }
+    for (const part of selector.split(",")) {
+      const target = part.trim().toLowerCase();
+      // Looped, not spread: a block with a few hundred thousand declarations would overflow the call's arguments.
+      if (target === "body") for (const d of parseDeclarations(block)) body.push(d);
+      else if (target === "html" || target === ":root") for (const d of parseDeclarations(block)) html.push(d);
+      else if (/background/i.test(block)) {
+        otherBackground = true;
+        if (part.trim()) {
+          if (otherSelectors.length >= MAX_BACKGROUND_SELECTORS) otherSelectorsTruncated = true;
+          else otherSelectors.push(part.trim());
+        }
+      }
+    }
+  }
+  return { html, body, otherBackground, atRuleRootBackground, otherSelectors, otherSelectorsTruncated };
+}
+
+function stripCssComments(css: string): string {
+  let out = "";
+  let i = 0;
+  while (i < css.length) {
+    const start = css.indexOf("/*", i);
+    if (start < 0) {
+      out += css.slice(i);
+      break;
+    }
+    out += css.slice(i, start) + " ";
+    const end = css.indexOf("*/", start + 2);
+    if (end < 0) break;
+    i = end + 2;
+  }
+  return out;
+}
+
+/**
+ * What a linked stylesheet's own text says about the page background (#1756). Only the `html`, `body` and
+ * `:root` rules count: a background on any other selector is not read, so a container that paints over the
+ * body is not seen. A background image or gradient on those rules, an `@import`, or an at-rule that sets
+ * their background (a `prefers-color-scheme` override) is unresolved, never a color.
+ */
+export function stylesheetBackgroundOf(css: string): StylesheetBackground {
+  const text = stripCssComments(css);
+  if (/@import/i.test(text)) return { kind: "unresolved" };
+  const rules = styleBlockRules(text);
+  if (rules.atRuleRootBackground) return { kind: "unresolved" };
+  const found = [backgroundOf(rules.body), backgroundOf(rules.html)].find((b) => b.kind !== "none");
+  if (!found) return { kind: "none" };
+  if (found.kind === "color") return { kind: "color", value: found.raw };
+  return { kind: "unresolved" };
+}
+
+/**
+ * The selectors, other than `html`, `body` and `:root`, that a stylesheet gives a background (#1756): a
+ * container such as `.hero { background: #111 }` can paint under text whose own color is light. The
+ * resolver does not read their colors; it treats text that sits inside a match as not measurable.
+ */
+export function stylesheetBackgroundSelectorsOf(css: string): { selectors: string[]; truncated: boolean } {
+  const rules = styleBlockRules(stripCssComments(css));
+  return { selectors: rules.otherSelectors, truncated: rules.otherSelectorsTruncated };
+}
+
+function createBackgroundResolver(
+  doc: Document,
+  pageUrl: string,
+  stylesheets: StylesheetBackgroundData[] | undefined
+): { resolve(el: Element): ResolvedBackground } {
+  const memo = new Map<Element, ResolvedBackground>();
+  let page: ResolvedBackground | null = null;
+  // Backgrounds a linked stylesheet gives other selectors (#1756): its html/body rule is read, a container
+  // painting under the text is not, so text inside a match is unresolved rather than measured against the page.
+  const guard: { selectors: string[]; all: boolean } = { selectors: [], all: false };
+  // One answer per node (does it, or an ancestor, match a guarded selector), and a bound on the matching work:
+  // up to 200 selectors against every ancestor of every inline-colored element is attacker-sized on a big page.
+  const guardMemo = new Map<Element, boolean>();
+  let guardBudget = GUARD_MATCH_BUDGET;
+  const matchesGuarded = (el: Element): boolean => {
+    for (const selector of guard.selectors) {
+      if (guardBudget-- <= 0) return true; // out of work: not provable, so not measured
+      try {
+        if (el.matches(selector)) return true;
+      } catch {
+        return true; // a selector the DOM cannot evaluate could match
+      }
+    }
+    return false;
+  };
+  const insideGuardedSelector = (el: Element): boolean => {
+    if (guard.all) return true;
+    if (guard.selectors.length === 0) return false;
+    // Iterative: walk up to the first node with an answer, then settle the nodes below it from the top. A page
+    // nested ten thousand deep must not overflow the stack.
+    const path: Element[] = [];
+    let node: Element | null = el;
+    let inside = false;
+    while (node) {
+      const known = guardMemo.get(node);
+      if (known !== undefined) {
+        inside = known;
+        break;
+      }
+      path.push(node);
+      node = node.parentElement;
+    }
+    for (let k = path.length - 1; k >= 0; k--) {
+      if (!inside) inside = matchesGuarded(path[k]!);
+      guardMemo.set(path[k]!, inside);
+    }
+    return inside;
+  };
+
+  // What is behind everything the element's ancestors leave open. Computed once,
+  // and only when an inline-colored element needs it.
+  const pageBackground = (): ResolvedBackground => {
+    if (page) return page;
+    const sheets = Array.from(doc.querySelectorAll("style"), (el) =>
+      stripCssComments(el.textContent || "")
+    ).join("\n");
+    // A stylesheet in <noscript> never loads for a browser running scripts.
+    const linkedUrls: string[] = [];
+    let linkedUnknown = false;
+    for (const link of querySelectorAllOutsideNoscript(doc, 'link[rel~="stylesheet" i]')) {
+      const href = link.getAttribute("href");
+      try {
+        if (!href) throw new Error("no href");
+        linkedUrls.push(new URL(href, pageUrl).toString());
+      } catch {
+        linkedUnknown = true;
+      }
+    }
+    const hasImport = /@import/i.test(sheets);
+    const setsBackground = /background/i.test(sheets);
+    const rules = styleBlockRules(sheets);
+    const fromStyle = [backgroundOf(rules.body), backgroundOf(rules.html)].find(
+      (b): b is ResolvedBackground => b.kind !== "none"
+    );
+    // Another rule's background could override or sit under what an html/body
+    // rule says, so only a page whose sole background is that rule is resolved
+    // from it.
+    if (hasImport || rules.otherBackground || linkedUnknown) {
+      return (page = { kind: "unresolved", reason: "stylesheet" });
+    }
+    // A linked stylesheet is read only when the asset phase fetched it and it
+    // said something provable. One that failed to load, or sits on another
+    // site, leaves the pair unresolved: white is never assumed (#1756).
+    if (fromStyle?.kind === "unresolved") return (page = fromStyle);
+    const sources: Array<{ kind: "color"; rgb: Rgb; raw: string }> = [];
+    if (fromStyle) sources.push(fromStyle);
+    const byUrl = new Map((stylesheets ?? []).map((s) => [s.url, s.background]));
+    const dataByUrl = new Map((stylesheets ?? []).map((s) => [s.url, s]));
+    for (const url of new Set(linkedUrls)) {
+      const data = dataByUrl.get(url);
+      if (data?.selectors) guard.selectors.push(...data.selectors);
+      if (data?.selectorsTruncated) guard.all = true;
+      const read = byUrl.get(url);
+      if (!read || read.kind === "unresolved") {
+        return (page = { kind: "unresolved", reason: "stylesheet" });
+      }
+      if (read.kind === "none") continue;
+      const rgb = parseColor(read.value);
+      if (!rgb) return (page = { kind: "unresolved", reason: "stylesheet" });
+      sources.push({ kind: "color", rgb, raw: read.value });
+    }
+    // Two sources that name different colors depend on the cascade order, which
+    // this rule does not model.
+    const first = sources[0];
+    if (first && sources.some((c) => c.rgb.join() !== first.rgb.join())) {
+      return (page = { kind: "unresolved", reason: "stylesheet" });
+    }
+    if (first) page = first;
+    else if (setsBackground) page = { kind: "unresolved", reason: "stylesheet" };
+    else page = { kind: "color", rgb: WHITE, raw: "white" };
+    return page;
+  };
+
+  const own = (el: Element): Background => {
+    // A legacy `bgcolor` attribute sets a background this rule does not read.
+    if (el.hasAttribute("bgcolor")) return { kind: "unresolved", reason: "color" };
+    const style = el.getAttribute("style");
+    return style ? backgroundOf(parseDeclarations(style)) : NO_BACKGROUND;
+  };
+
+  return {
+    resolve(el: Element): ResolvedBackground {
+      // Walk up to the first ancestor with an answer, then record it for the
+      // whole chain, so siblings share the walk.
+      const chain: Element[] = [];
+      let node: Element | null = el;
+      let found: ResolvedBackground | undefined;
+      while (node) {
+        const known = memo.get(node);
+        if (known) {
+          found = known;
+          break;
+        }
+        const state = own(node);
+        if (state.kind !== "none") {
+          memo.set(node, state);
+          found = state;
+          break;
+        }
+        chain.push(node);
+        node = node.parentElement;
+      }
+      const pageResult = pageBackground();
+      const result = found ?? pageResult;
+      for (const visited of chain) memo.set(visited, result);
+      // The page background was the answer (not an inline one on an ancestor): a linked stylesheet's container
+      // rule may sit under the text. Judged per element, not per memoized chain, so a sibling is not skipped.
+      if (result === pageResult && result.kind === "color" && insideGuardedSelector(el)) {
+        return { kind: "unresolved", reason: "stylesheet" };
+      }
+      return result;
+    },
+  };
+}
 
 interface Declaration {
   property: string;
@@ -219,44 +621,6 @@ function winner(candidates: Declaration[]): Declaration | undefined {
     if (!best || d.important || !best.important) best = d;
   }
   return best;
-}
-
-/**
- * The text color and background color an inline `style` attribute settles on,
- * when both are opaque colors it fully determines, or null. The `background`
- * shorthand counts only when its whole value is one color; any other shorthand,
- * and any `background-image` other than `none`, leaves the color behind the
- * text unknown.
- */
-function resolveInlineColors(
-  style: string
-): { fg: string; bg: string; fgRgb: Rgb; bgRgb: Rgb } | null {
-  const declarations = parseDeclarations(style);
-
-  const color = winner(declarations.filter((d) => d.property === "color"));
-  const fgRgb = color ? parseColor(color.value) : null;
-  if (!color || !fgRgb) return null;
-
-  const background = winner(
-    declarations.filter((d) => d.property === "background" || d.property === "background-color")
-  );
-  const bgRgb = background ? parseColor(background.value) : null;
-  if (!background || !bgRgb) return null;
-
-  const image = winner(
-    declarations.filter((d) => d.property === "background" || d.property === "background-image")
-  );
-  // A one-color `background` shorthand resets the image to none; any other
-  // shorthand may set one.
-  if (image) {
-    const noImage =
-      image.property === "background-image"
-        ? image.value.toLowerCase() === "none"
-        : parseColor(image.value) !== null;
-    if (!noImage) return null;
-  }
-
-  return { fg: color.value, bg: background.value, fgRgb, bgRgb };
 }
 
 const HEX_COLOR = /^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/;

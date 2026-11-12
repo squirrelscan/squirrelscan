@@ -6,6 +6,7 @@ import { normalizeUrl } from "@squirrelscan/utils";
 
 import { excludesNoindexPage, noindexSource, skipsNoindexPages } from "../shared/noindex";
 import { sampleUrlItems } from "../shared/sample-items";
+import { productDiscoveryCheck } from "./product-discovery";
 
 function normalizedOrNull(url: string): string | null {
   try {
@@ -15,7 +16,7 @@ function normalizedOrNull(url: string): string | null {
   }
 }
 
-export const sitemapCoverageRule: Rule = {
+const coverageRule: Rule = {
   meta: {
     id: "crawl/sitemap-coverage",
     name: "Sitemap Coverage",
@@ -151,8 +152,49 @@ export const sitemapCoverageRule: Rule = {
 
     // The engine cuts orphanPages to the report's array cap; the total is the
     // count before that cut, so the message stays exact past it (repo#2320).
-    const orphanTotal = Math.max(sitemaps.orphanPagesTotal ?? 0, precomputedOrphans.length);
-    if (precomputedOrphans.length > 0) {
+    //
+    // A sitemap URL the origin refused (429/430 rate limiting, a bot-wall
+    // challenge) is not an orphan: the crawl never got an answer for it, so
+    // whether it is linked or reachable is unknown (#1639). Those are moved to
+    // their own info check, keeping the URLs and statuses as evidence, instead of
+    // being dropped or reported as actionable.
+    const deniedByUrl = new Map<string, { status: number; reason: "rate_limited" | "waf_challenge" }>();
+    for (const target of ctx.site?.fetchedTargets ?? []) {
+      if (!target.rateLimited && !target.wafChallenge) continue;
+      const key = normalizedOrNull(target.url);
+      if (key) {
+        deniedByUrl.set(key, {
+          status: target.status,
+          reason: target.rateLimited ? "rate_limited" : "waf_challenge",
+        });
+      }
+    }
+    const denied: Array<{ url: string; status: number; reason: string }> = [];
+    const actionableOrphans: string[] = [];
+    for (const url of precomputedOrphans) {
+      const hit = deniedByUrl.get(normalizedOrNull(url) ?? url);
+      if (hit) denied.push({ url, ...hit });
+      else actionableOrphans.push(url);
+    }
+    // The engine's total counts every orphan, denied ones included.
+    const orphanTotal = Math.max(
+      (sitemaps.orphanPagesTotal ?? 0) - denied.length,
+      actionableOrphans.length
+    );
+    if (denied.length > 0) {
+      checks.push({
+        name: "sitemap-unverified",
+        status: "info",
+        message: `${denied.length} sitemap URL(s) were refused or rate limited when crawled, so whether they are orphans is unknown`,
+        items: denied.map((entry) => ({ id: entry.url })),
+        details: {
+          total: denied.length,
+          statuses: Array.from(new Set(denied.map((entry) => entry.status))).sort(),
+          reasons: Array.from(new Set(denied.map((entry) => entry.reason))).sort(),
+        },
+      });
+    }
+    if (actionableOrphans.length > 0) {
       // #697: a crawl truncated by the coverage profile's page cap (e.g. the
       // "quick" profile stopping at 25 pages against a 54-URL sitemap) isn't
       // a coverage problem — it's a crawl-budget artifact that self-heals on
@@ -168,15 +210,20 @@ export const sitemapCoverageRule: Rule = {
       // Count plus sample: one entry per un-crawled sitemap URL ran to
       // thousands of items on a large sitemap (repo#2320).
       const { items, truncation } = sampleUrlItems(
-        precomputedOrphans.map((url) => ({ id: url })),
+        actionableOrphans.map((url) => ({ id: url })),
         orphanTotal
       );
+      // A crawl that stopped with URLs still queued (time limit, crawl-phase
+      // backstop) may simply not have reached these: unknown, not an orphan.
+      const stoppedEarly = !wasCapped && (ctx.site?.unfetchedPages ?? 0) > 0;
       checks.push({
         name: "sitemap-orphans",
-        status: wasCapped ? "info" : "warn",
+        status: wasCapped || stoppedEarly ? "info" : "warn",
         message: wasCapped
           ? `${orphanTotal} sitemap URL(s) not audited this run (crawl capped at ${limits.maxPages} pages)`
-          : `${orphanTotal} sitemap URL(s) were not crawled`,
+          : stoppedEarly
+            ? `${orphanTotal} sitemap URL(s) were not crawled before the crawl stopped (${ctx.site?.unfetchedPages} URL(s) still queued), so they may not be orphans`
+            : `${orphanTotal} sitemap URL(s) were not crawled`,
         items,
         details: wasCapped
           ? { ...truncation, total: orphanTotal, cappedAt: limits.maxPages }
@@ -185,5 +232,17 @@ export const sitemapCoverageRule: Rule = {
     }
 
     return { checks };
+  },
+};
+
+export const sitemapCoverageRule: Rule = {
+  ...coverageRule,
+  run(ctx: RuleContext): RuleResult {
+    const result = coverageRule.run(ctx) as RuleResult;
+    // After the coverage verdict, on every path: a failed or absent sitemap read is exactly
+    // when the provenance of a shop's product URLs is worth stating.
+    const discovery = productDiscoveryCheck(ctx);
+    if (discovery) result.checks.push(discovery);
+    return result;
   },
 };

@@ -82,16 +82,18 @@ describe("links/broken-external-links — rate-limited targets (#1829)", () => {
       ]),
     );
     const broken = check(checks, "broken-external-links")!;
-    expect(broken.status).toBe("warn");
+    // #1739: a 404 is confirmed broken, so it fails.
+    expect(broken.status).toBe("fail");
     expect(broken.items?.length).toBe(1);
     expect(broken.items?.[0]?.id).toBe("https://dead.example/");
   });
 
-  test("a bare 503 with no Retry-After stays broken", () => {
+  test("a bare 503 with no Retry-After stays broken: possibly broken, a warning (#1739)", () => {
     const { checks } = brokenExternalLinksRule.run(
       externalCtx([link({ href: "https://down.example/", status: 503 })]),
     );
-    expect(check(checks, "broken-external-links")!.status).toBe("warn");
+    expect(check(checks, "possibly-broken-external-links")!.status).toBe("warn");
+    expect(check(checks, "broken-external-links")).toBeUndefined();
   });
 });
 

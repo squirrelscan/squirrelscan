@@ -114,6 +114,13 @@ export interface RunnerScope {
    */
   tlsProbe?: TlsProbeFn;
   /**
+   * This run is a hosted (cloud) audit, threaded into `ctx.hosted` on site
+   * rules. It only changes wording: a check that was not made says so without
+   * advice about networks, proxies or `--offline`, which a hosted user cannot
+   * act on (#3922). Undefined = a local (CLI) run.
+   */
+  hosted?: boolean;
+  /**
    * Extra rule namespaces (plugins / tests) merged on top of the built-ins. Scope
    * rather than a runner-only option so `createRunner` carries it, and so the audit
    * controller can hand the same list to `selectDiscoveryProbes` (#1375).
@@ -204,7 +211,45 @@ export interface PageRuleRunOptions {
    * exactly today's behaviour.
    */
   fannedRuleChecks?: ReadonlyMap<string, CheckResult[]>;
+  /**
+   * The page is a URL that redirected (#1762): it has no content of its own, so only the rules that
+   * report the redirect itself run on it ({@link REDIRECT_SOURCE_RULE_IDS}).
+   */
+  redirectSource?: boolean;
 }
+
+/**
+ * Site rules that read a redirecting URL's hops, its landing page or its identity, and so see
+ * `redirectSource` entries in `site.pages` (#1762). Every other rule reads pages as content
+ * and gets the list without them.
+ */
+export const REDIRECT_AWARE_SITE_RULE_IDS: ReadonlySet<string> = new Set([
+  "crawl/redirect-chain",
+  "links/redirect-chains",
+  "i18n/hreflang-targets",
+  "crawl/sitemap-coverage",
+  "crawl/single-page-site",
+  "security/http-to-https",
+  "links/broken-anchors",
+  // Judges a redirecting URL at its destination (#1760), so it must see the redirect rows.
+  "links/no-contextual-inbound",
+]);
+
+const contentViews = new WeakMap<SiteData, SiteData>();
+
+/** `siteData` without its redirect sources: what every rule that reads pages as content sees. */
+function contentView(siteData: SiteData | undefined): SiteData | undefined {
+  if (!siteData || !siteData.pages.some((p) => p.redirectSource)) return siteData;
+  let view = contentViews.get(siteData);
+  if (!view) {
+    view = { ...siteData, pages: siteData.pages.filter((p) => !p.redirectSource) };
+    contentViews.set(siteData, view);
+  }
+  return view;
+}
+
+/** Page rules that still run on a redirecting URL, to report its hops. */
+export const REDIRECT_SOURCE_RULE_IDS: ReadonlySet<string> = new Set(["crawl/canonical-chain"]);
 
 export interface SiteRunResult {
   checks: CheckResult[];
@@ -358,6 +403,7 @@ export class RuleRunner {
   private readonly entityMap: EntityMap | undefined;
   private readonly probe: ProbeBudget | undefined;
   private readonly tlsProbe: TlsProbeFn | undefined;
+  private readonly hosted: boolean | undefined;
   // The audited url last classified by `isPrivateTarget`, and the verdict. One
   // audit has one base url, so this is a single classification per run; keyed on
   // the url so a runner reused for another site cannot carry a stale verdict.
@@ -371,6 +417,7 @@ export class RuleRunner {
     this.entityMap = options.entityMap;
     this.probe = options.probe;
     this.tlsProbe = options.tlsProbe;
+    this.hosted = options.hosted;
     this.ruleConcurrency = Math.max(
       1,
       options.ruleConcurrency ?? DEFAULT_RULE_CONCURRENCY
@@ -828,7 +875,9 @@ export class RuleRunner {
 
         // Filter to page-scope rules only
         const pageRules = this.getEnabledRules().filter(
-          (r) => r.meta.scope === "page"
+          (r) =>
+            r.meta.scope === "page" &&
+            (!opts?.redirectSource || REDIRECT_SOURCE_RULE_IDS.has(r.meta.id))
         );
 
         // Per-run Stage-0 metadata + cloud store + intel (captured at
@@ -905,10 +954,11 @@ export class RuleRunner {
         const entityMap = this.entityMap;
         const probe = this.probe;
         const tlsProbe = this.tlsProbe;
+        const hosted = this.hosted;
 
         // For site-scope rules, we need to provide page context: use the first
         // page or a dummy if no pages. Built once and shared (read-only).
-        const firstPage = siteData.pages[0];
+        const firstPage = siteData.pages.find((p) => !p.redirectSource);
         const sitePage = firstPage
           ? {
               url: firstPage.url,
@@ -942,7 +992,7 @@ export class RuleRunner {
             const ctx: RuleContext = {
               page: sitePage,
               parsed: siteParsed,
-              site: siteData,
+              site: REDIRECT_AWARE_SITE_RULE_IDS.has(rule.meta.id) ? siteData : contentView(siteData),
               siteQuery,
               collectedSignals,
               endpointSurface,
@@ -952,6 +1002,7 @@ export class RuleRunner {
               entityMap,
               probe,
               tlsProbe,
+              hosted,
               options: getRuleOptions(rule, this.config),
             };
             return Promise.resolve(

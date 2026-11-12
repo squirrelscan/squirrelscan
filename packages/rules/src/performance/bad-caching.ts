@@ -47,6 +47,17 @@ function jsDetectionsNote(pages: number): string {
   );
 }
 
+// The origin said so itself: `Cache-Control: no-store` forbids a cache from keeping the response, so
+// a validator on it would never be used. Blaming a CDN rewrite for the missing one sends the reader
+// to the wrong place (#1754).
+function noStoreNote(noStorePages: number): string {
+  return (
+    `. ${noStorePages} of them send Cache-Control: no-store, so the origin itself told caches not to keep them` +
+    " and a validator would not be used. Send an ETag or Last-Modified and use no-cache (or a short max-age)" +
+    " instead of no-store if you want cheap revalidation"
+  );
+}
+
 export const optionsSchema = z.object({
   min_freshness_ratio: z
     .number()
@@ -124,6 +135,8 @@ export const badCachingRule: Rule = {
     let withCachePolicy = 0;
     let withValidator = 0; // has ETag or Last-Modified
     let noValidatorViaCloudflare = 0;
+    let noValidatorNoStore = 0;
+    let noPolicyNoStore = 0;
     let noValidatorWithJsd = 0;
     // The marker per page: the streaming engine records it with the page's other signals, the
     // resident engine reads it off the live document (#605).
@@ -161,7 +174,9 @@ export const badCachingRule: Rule = {
       if (hasValidator) withValidator++;
       else {
         if (noValidatorExamples.length < 5) noValidatorExamples.push(page.url);
-        if (detectCdnFromHeaders(h) === "cloudflare") {
+        // no-store is the origin's own doing: the edge is not blamed for a missing validator on it.
+        if (cc.noStore) noValidatorNoStore++;
+        else if (detectCdnFromHeaders(h) === "cloudflare") {
           noValidatorViaCloudflare++;
           const doc = page.parsed?.document;
           const jsd = ctx.collectedSignals
@@ -184,7 +199,10 @@ export const badCachingRule: Rule = {
       // revalidate against: every request for one is a full transfer.
       const revalidates = !cc.noStore && hasValidator && (cc.noCache || lifetime === 0);
       if (hasFreshness || revalidates) withCachePolicy++;
-      else if (noCacheExamples.length < 5) noCacheExamples.push(page.url);
+      else {
+        if (cc.noStore) noPolicyNoStore++;
+        if (noCacheExamples.length < 5) noCacheExamples.push(page.url);
+      }
 
       if (isCompressible(contentType)) {
         compressibleTotal++;
@@ -207,14 +225,27 @@ export const badCachingRule: Rule = {
 
     // --- Freshness lifetime coverage (info: perf/cache-headers scores it) ---
     if (cachePolicyRatio < opts.min_freshness_ratio) {
+      const noPolicy = total - withCachePolicy;
+      // `no-store` is a policy (never keep this), just not a reusable one: say which pages chose it
+      // and which sent nothing, instead of calling both "no policy" (#1754).
+      const message =
+        noPolicyNoStore === 0
+          ? `${noPolicy}/${total} pages set no caching policy (no freshness lifetime and no validator)`
+          : noPolicyNoStore === noPolicy
+            ? `${noPolicy}/${total} pages send Cache-Control: no-store (a deliberate policy that forbids reuse, not a missing one)`
+            : `${noPolicy}/${total} pages have no reusable caching policy: ${noPolicyNoStore} send Cache-Control: no-store (deliberate) and ${noPolicy - noPolicyNoStore} set no caching policy (no freshness lifetime and no validator)`;
       checks.push({
         name: "bad-caching-freshness",
         status: "info",
-        message: `${total - withCachePolicy}/${total} pages set no caching policy (no freshness lifetime and no validator)`,
+        message,
         value: `${Math.round(cachePolicyRatio * 100)}%`,
         expected: `≥ ${Math.round(opts.min_freshness_ratio * 100)}% with Cache-Control max-age, Expires, or a validator to revalidate against`,
         pages: noCacheExamples,
-        details: { pagesWithCachePolicy: withCachePolicy, totalPages: total },
+        details: {
+          pagesWithCachePolicy: withCachePolicy,
+          totalPages: total,
+          ...(noPolicyNoStore > 0 ? { noStorePages: noPolicyNoStore } : {}),
+        },
       });
     } else {
       checks.push({
@@ -237,15 +268,19 @@ export const badCachingRule: Rule = {
     // it never moves the score.
     if (validatorRatio < opts.min_validator_ratio) {
       const missing = total - withValidator;
+      const viaNoStore = noValidatorNoStore > 0 && noValidatorNoStore * 2 >= missing;
       const viaCloudflare =
+        !viaNoStore &&
         noValidatorViaCloudflare > 0 && noValidatorViaCloudflare * 2 >= missing;
-      const viaJsd = noValidatorWithJsd > 0 && noValidatorWithJsd * 2 >= missing;
+      const viaJsd = !viaNoStore && noValidatorWithJsd > 0 && noValidatorWithJsd * 2 >= missing;
       checks.push({
         name: "bad-caching-validators",
         status: "warn",
         message:
           `${missing}/${total} pages lack an ETag or Last-Modified validator` +
-          (viaJsd
+          (viaNoStore
+            ? noStoreNote(noValidatorNoStore)
+            : viaJsd
             ? jsDetectionsNote(noValidatorWithJsd)
             : viaCloudflare
               ? cloudflareNote(noValidatorViaCloudflare)
@@ -256,6 +291,7 @@ export const badCachingRule: Rule = {
         details: {
           pagesWithValidator: withValidator,
           totalPages: total,
+          ...(noValidatorNoStore > 0 ? { noStorePages: noValidatorNoStore } : {}),
           ...(viaCloudflare ? { cloudflarePages: noValidatorViaCloudflare } : {}),
           ...(viaJsd ? { javascriptDetectionsPages: noValidatorWithJsd } : {}),
         },

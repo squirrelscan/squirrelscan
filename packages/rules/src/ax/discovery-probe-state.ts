@@ -9,7 +9,11 @@
 // counts as a failure, instead of the "not found" it reports for a request that
 // did get an answer.
 
-import { PROBE_NOT_ATTEMPTED_ERROR } from "@squirrelscan/core-contracts/storage";
+import {
+  PROBE_NOT_SENT_ERRORS,
+  PROBE_PATH_NOT_APPROVED_ERROR,
+  PROBE_REDIRECT_NOT_FOLLOWED_ERROR,
+} from "@squirrelscan/core-contracts/storage";
 
 import type {
   WellKnownPath,
@@ -27,12 +31,22 @@ export const NOT_CHECKED = "not-checked";
  * or the crawler kept no result, which is either (llms, markdown and RSL store
  * no row in both cases).
  */
-export type NotCheckedReason = "not-sent" | "no-answer" | "no-result";
+export type NotCheckedReason =
+  | "not-sent"
+  | "no-answer"
+  | "no-result"
+  | "blocked"
+  | "not-approved"
+  | "redirect-not-followed";
 
 const REASON_TEXT: Record<NotCheckedReason, string> = {
   "not-sent": "the discovery probe was not sent",
   "no-answer": "the discovery probe got no answer",
   "no-result": "the discovery probe was not sent or got no answer",
+  blocked: "the discovery probe was refused or throttled",
+  "not-approved": "path not approved ([crawler] discovery_probe_paths)",
+  "redirect-not-followed":
+    "the request was sent but its redirect to another path was not followed ([crawler] discovery_probe_paths)",
 };
 
 /** An info check saying `subject` was not checked, and why. */
@@ -62,7 +76,7 @@ export function includesPath(paths: readonly WellKnownPath[], path: string): boo
  * network failure gets, so the marker is the only discriminator.
  */
 export function wasSent(probe: { status: number; error: string | null }): boolean {
-  return !(probe.status === 0 && probe.error === PROBE_NOT_ATTEMPTED_ERROR);
+  return !(probe.status === 0 && probe.error !== null && PROBE_NOT_SENT_ERRORS.includes(probe.error));
 }
 
 /** Whether a stored probe got an HTTP answer. `status: 0` is no answer at all. */
@@ -74,7 +88,18 @@ export function answered(probe: { status: number }): boolean {
 export function notCheckedReason(
   probes: ReadonlyArray<{ status: number; error: string | null } | undefined>,
 ): NotCheckedReason {
-  return probes.some((p) => p !== undefined && wasSent(p)) ? "no-answer" : "not-sent";
+  if (probes.some((p) => p !== undefined && wasSent(p))) return "no-answer";
+  // The request went out and was redirected off its approved path: it was sent, so never say "not sent".
+  const present0 = probes.filter((p) => p !== undefined);
+  if (present0.length > 0 && present0.every((p) => p.error === PROBE_REDIRECT_NOT_FOLLOWED_ERROR)) {
+    return "redirect-not-followed";
+  }
+  // Every silent path was left out by the allowlist: say so, rather than blaming a block or a budget.
+  const present = probes.filter((p) => p !== undefined);
+  if (present.length > 0 && present.every((p) => p.error === PROBE_PATH_NOT_APPROVED_ERROR)) {
+    return "not-approved";
+  }
+  return "not-sent";
 }
 
 /**

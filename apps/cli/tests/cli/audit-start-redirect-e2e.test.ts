@@ -45,6 +45,28 @@ const shortener = Bun.serve({
     if (pathname === "/old") {
       return new Response(null, { status: 302, headers: { location: "/" } });
     }
+    // A chain of same-site hops: /c1 -> /c2 -> /c3 -> / (three redirects), and one past the cap of five.
+    const chain = /^\/(c|h)(\d+)$/.exec(pathname);
+    if (chain) {
+      const n = Number(chain[2]);
+      const last = chain[1] === "c" ? 3 : 6;
+      return new Response(null, {
+        status: 302,
+        headers: { location: n >= last ? "/" : `/${chain[1]}${n + 1}` },
+      });
+    }
+    if (pathname === "/loop-a") {
+      return new Response(null, {
+        status: 302,
+        headers: { location: "/loop-b" },
+      });
+    }
+    if (pathname === "/loop-b") {
+      return new Response(null, {
+        status: 302,
+        headers: { location: "/loop-a" },
+      });
+    }
     if (pathname === "/") {
       return new Response(
         `<!doctype html><html lang="en"><head><title>Shortener home</title></head><body><h1>Home</h1></body></html>`,
@@ -229,5 +251,48 @@ describe("the same start-URL redirects without --offline (#1281)", () => {
       meta: { baseUrl: string };
     };
     expect(report.meta.baseUrl).toBe(`http://localhost:${shortener.port}`);
+  }, 90_000);
+});
+
+describe("start-URL redirect chains (#1281)", () => {
+  test("a same-site chain of three hops is followed silently to the final URL", async () => {
+    const r = await audit(`${shortener.url.origin}/c1`);
+    expect(r.code).toBe(0);
+    const report = JSON.parse(r.out) as {
+      meta: { baseUrl: string; originalUrl?: string };
+    };
+    expect(report.meta.baseUrl).toBe(shortener.url.origin);
+    expect(report.meta.originalUrl).toBeUndefined();
+  }, 90_000);
+
+  test("a chain past the cap of five hops is not followed, flag or not: exit 4, redirected, nothing crawled", async () => {
+    for (const flags of [[], ["--follow-redirect"]]) {
+      const r = await audit(`${shortener.url.origin}/h1`, ...flags);
+      expect(r.code).toBe(4);
+      const outcome = JSON.parse(r.out) as {
+        status: string;
+        redirectChain: { url: string; status: number }[];
+      };
+      expect(outcome.status).toBe("redirected");
+      // The chain so far is reported, one record per hop requested.
+      expect(outcome.redirectChain.length).toBeGreaterThanOrEqual(5);
+      expect(outcome.redirectChain.every((hop) => hop.status === 302)).toBe(
+        true
+      );
+    }
+  }, 90_000);
+
+  test("a redirect loop is reported as redirected, never followed", async () => {
+    const r = await audit(
+      `${shortener.url.origin}/loop-a`,
+      "--follow-redirect"
+    );
+    expect(r.code).toBe(4);
+    const outcome = JSON.parse(r.out) as {
+      status: string;
+      redirectChain: unknown[];
+    };
+    expect(outcome.status).toBe("redirected");
+    expect(outcome.redirectChain.length).toBeGreaterThanOrEqual(2);
   }, 90_000);
 });

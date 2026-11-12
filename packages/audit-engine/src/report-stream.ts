@@ -12,6 +12,8 @@
 
 import { Effect } from "effect";
 
+import { pageTypeFromUrl } from "@squirrelscan/parser";
+
 import {
   capChecksForPublish,
   capMixedRuleChecksForPublish,
@@ -47,6 +49,7 @@ import type {
   MetaData,
   OpenGraphData,
   RedirectChain,
+  ScanScopePageType,
   ReportRuleResult,
   ResourceSizeData,
   RobotsTxtData,
@@ -57,6 +60,7 @@ import type {
 } from "@squirrelscan/core-contracts";
 import type { ParsedPage, RuleRunResult } from "@squirrelscan/rules";
 import { isScoreless } from "@squirrelscan/core-contracts";
+import { isRedirectSourcePage } from "./redirect-source";
 
 // ============================================
 // SITE-RECORD BUILDERS
@@ -91,6 +95,59 @@ export function unfetchedFrontierCount(
   crawlId: string,
 ): Effect.Effect<number, never, never> {
   return storage.getPendingCount(crawlId).pipe(Effect.catchAll(() => Effect.succeed(0)));
+}
+
+/**
+ * Per page type, how many pages the crawl knows of and how many it audited (#1744).
+ * `discovered` is the audited pages plus the URLs still `pending` in the frontier, so a
+ * complete crawl has equal counts and a capped one has `discovered > audited` for each
+ * type it left pages of. Types come from the URL alone, the one label an unfetched page
+ * has, and the audited pages are classified the same way so both sides compare. Most
+ * pages first, ties by type name. Pure: the caller reads the frontier.
+ */
+export function pageTypeCoverage(
+  auditedUrls: Iterable<string>,
+  pendingUrls: Iterable<string>,
+): ScanScopePageType[] {
+  const rows = new Map<string, ScanScopePageType>();
+  const row = (url: string): ScanScopePageType => {
+    const type = pageTypeFromUrl(url);
+    let r = rows.get(type);
+    if (!r) {
+      r = { type, discovered: 0, audited: 0 };
+      rows.set(type, r);
+    }
+    return r;
+  };
+  for (const url of auditedUrls) {
+    const r = row(url);
+    r.audited += 1;
+    r.discovered += 1;
+  }
+  for (const url of pendingUrls) row(url).discovered += 1;
+  return [...rows.values()].sort(
+    (a, b) => b.discovered - a.discovered || a.type.localeCompare(b.type),
+  );
+}
+
+/**
+ * {@link pageTypeCoverage} for a stored crawl: the pending frontier rows are the
+ * discovered-but-not-fetched pages. A failed read gives no rows, never a failed report.
+ */
+export function pageTypeCoverageFor(
+  storage: CrawlStorage,
+  crawlId: string,
+  auditedUrls: Iterable<string>,
+): Effect.Effect<ScanScopePageType[], never, never> {
+  return storage.getAllFrontierEntries(crawlId).pipe(
+    Effect.map((entries) =>
+      pageTypeCoverage(
+        auditedUrls,
+        entries.filter((e) => e.status === "pending").map((e) => e.normalizedUrl),
+      ),
+    ),
+    Effect.catchAll(() => Effect.succeed([] as ScanScopePageType[])),
+  );
 }
 
 /**
@@ -523,6 +580,8 @@ export function buildV1Report(
       if (batch.length === 0) break;
 
       for (const page of batch) {
+        // A redirecting URL is a redirect, not a page (#1762): not in pages[], not in the totals.
+        if (isRedirectSourcePage(page)) continue;
         pagesCrawled++;
         pageStatuses.push({ status: page.status });
         // A variant is not a page of its own in the report (#858): it is counted with its canonical.
@@ -882,6 +941,8 @@ export function buildV2Report(
       if (batch.length === 0) break;
 
       for (const page of batch) {
+        // A redirecting URL is a redirect, not a page (#1762): not in the totals.
+        if (isRedirectSourcePage(page)) continue;
         pagesCrawled++;
         if (page.status >= 200 && page.status < 300) contentPages++;
         if (page.status === 401 || page.status === 403) blockedPages++;

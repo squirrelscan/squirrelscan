@@ -22,6 +22,7 @@ export type CloudServiceId =
   | "editor-summary"
   | "domain-stats"
   | "archive-indexing"
+  | "third-party-scan"
   | "render";
 
 // Slim per-page payload sent from the CLI for AI analysis.
@@ -383,6 +384,15 @@ export interface EditorSummaryRequest {
    */
   failingRuleIds?: string[];
   /**
+   * Check-level evidence as `ruleId|checkName` keys (#3944): the checks that
+   * failed or warned, and the security and agent-experience checks that ran and
+   * positively found the thing (a pass, or an info note with a positive value such
+   * as an llms.txt that is present; a check that did not run is never listed). Lets the summary recommend only what the site
+   * lacks. Capped by the client; absent when there is nothing to send. Older
+   * servers ignore it.
+   */
+  checks?: { failing: string[]; confirmed: string[] };
+  /**
    * How much of the site this audit covered, so the summary can say plainly
    * when it read only part of it and suggest a deeper audit. Engine counts,
    * never estimated. Absent when the report has no scan scope. Older servers
@@ -614,6 +624,13 @@ export interface RenderResultItem {
   headers?: Record<string, string>;
   error?: string | null;
   redirectChain?: { url: string; status: number }[];
+  /**
+   * The HTML the server sent for the main document, before any script ran (#1769, private half repo#4022).
+   * Capped by the render service. Absent from services that do not send it, and then nothing changes: the
+   * crawler stores the rendered DOM only. When present the crawler adds the scripts the server sent and client
+   * code removed after hydration, so the script rules still see them.
+   */
+  serverHtml?: string;
   /** Browser render cost only, mirrored from crawler-worker. Absent on a render-cache hit (#826). */
   renderTimeMs?: number;
   /** Queue delivery lag + browser-pool acquisition + concurrency-slot wait before rendering started. Absent on a render-cache hit (#826). */

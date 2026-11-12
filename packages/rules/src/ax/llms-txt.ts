@@ -1,5 +1,7 @@
 // ax/llms-txt - detect /llms.txt (+ /llms-full.txt) and validate basic format
 
+import { PROBE_PATH_NOT_APPROVED_ERROR } from "@squirrelscan/core-contracts/storage";
+
 import type { WellKnownPath, WellKnownProbe } from "@squirrelscan/core-contracts";
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
@@ -91,10 +93,19 @@ export const llmsTxtRule: Rule = {
       } else {
         // A refused request is not a missing file.
         const refused = refusedFor(ctx.site, "llms.txt");
+        // The crawler records a path the allowlist left out (#1655), so the reason is the real one.
+        const notApproved = ctx.site?.wellKnown?.probes.some(
+          (p) => p.path === "/llms.txt" && p.error === PROBE_PATH_NOT_APPROVED_ERROR,
+        );
         checks.push(
           refused.length > 0
             ? refusedCheck("llms-txt", "/llms.txt", refused)
-            : notCheckedCheck("llms-txt", "/llms.txt", undefined, "no-result"),
+            : notCheckedCheck(
+                "llms-txt",
+                "/llms.txt",
+                undefined,
+                notApproved ? "not-approved" : "no-result",
+              ),
         );
       }
       return { checks };

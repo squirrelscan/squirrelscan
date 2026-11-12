@@ -3,7 +3,7 @@
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 import { formatRedirectHop, type RedirectChain } from "@squirrelscan/core-contracts";
 
-import { didRedirect, targetKey } from "../shared/redirect-evidence";
+import { didRedirect, requestTarget, targetKey } from "../shared/redirect-evidence";
 import {
   regionsField,
   sectionMeta,
@@ -24,6 +24,15 @@ export const redirectChainsRule: Rule = {
     scope: "site",
     severity: "warning",
     weight: 4,
+    // Check names by outcome class (#1741).
+    checks: [
+      { name: "redirect-pages", outcome: "problem" },
+      { name: "links-to-redirect", outcome: "problem" },
+      { name: "redirect-chain-multi-hop", outcome: "problem" },
+      { name: "canonical-redirects", outcome: "problem" },
+      { name: "redirect-chains", outcome: "clean", clears: ["redirect-pages", "links-to-redirect", "redirect-chain-multi-hop", "canonical-redirects"] },
+      { name: "redirect-chains", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {
@@ -45,6 +54,7 @@ export const redirectChainsRule: Rule = {
         originalUrl: string;
         finalUrl: string;
         chainLabel: string;
+        hopCount: number;
         chain?: RedirectChain;
       }
     >();
@@ -56,14 +66,20 @@ export const redirectChainsRule: Rule = {
       const original = targetKey(page.url);
 
       if (didRedirect(page.url, page.finalUrl, chain)) {
-        const chainLabel =
+        // Redirect responses followed before the landing page: the last hop is the
+        // destination, so a chain of N hops holds N-1 redirects. Unobserved chains
+        // (no hop list) still count as one (#1750).
+        const hopCount = chain && chain.hops.length > 1 ? chain.hops.length - 1 : 1;
+        const path =
           chain && chain.hops.length > 1
             ? chain.hops.map((hop) => formatRedirectHop(hop)).join(" → ")
             : `${page.url} → ${page.finalUrl}`;
+        const chainLabel = hopCount > 1 ? `${hopCount} hops: ${path}` : path;
         redirectTargets.set(original, {
           originalUrl: page.url,
           finalUrl: page.finalUrl,
           chainLabel,
+          hopCount,
           chain,
         });
       }
@@ -79,11 +95,35 @@ export const redirectChainsRule: Rule = {
           label: target.chainLabel,
           meta: {
             targetUrl: target.finalUrl,
+            hopCount: target.hopCount,
             chain: target.chain,
           },
         })),
         details: { total: redirectTargets.size },
       });
+
+      // A chain of two or more redirects costs a round trip per hop and is the
+      // one to collapse first, so it gets its own failing check (#1750).
+      const chained = [...redirectTargets.values()].filter((t) => t.hopCount > 1);
+      if (chained.length > 0) {
+        const longest = Math.max(...chained.map((t) => t.hopCount));
+        checks.push({
+          name: "redirect-chain-multi-hop",
+          // `warn`, like the rule's declared severity: a rule that declares warning must not emit fail (#1746).
+          status: "warn",
+          message: `${chained.length} redirect chain(s) of 2 or more hops (longest: ${longest} hops). Point links and the first URL straight at the final destination`,
+          items: chained.map((target) => ({
+            id: target.originalUrl,
+            label: target.chainLabel,
+            meta: {
+              targetUrl: target.finalUrl,
+              hopCount: target.hopCount,
+              chain: target.chain,
+            },
+          })),
+          details: { total: chained.length, longestHops: longest },
+        });
+      }
     }
 
     // The pages linking each redirecting target: each page once, with its links there and where
@@ -136,6 +176,41 @@ export const redirectChainsRule: Rule = {
         }),
         details: { total: linksToRedirect.size },
       });
+    }
+
+    // A page whose canonical names a URL that redirected to it (#1762). The redirecting URL is not
+    // a page of its own, so this is where the canonical-names-a-redirect finding lives now.
+    if (redirectTargets.size > 0) {
+      const byRequest = new Map<string, (typeof redirectTargets extends Map<string, infer V> ? V : never)>();
+      for (const target of redirectTargets.values()) byRequest.set(requestTarget(target.originalUrl), target);
+      const canonicalToRedirect: Array<{ page: string; canonical: string; label: string; chain?: RedirectChain }> = [];
+      for (const page of pages) {
+        const canonical = page.parsed?.meta?.canonical;
+        if (!canonical || page.redirectSource) continue;
+        try {
+          const absolute = new URL(canonical, page.url).href;
+          const redirect = byRequest.get(requestTarget(absolute));
+          if (redirect && requestTarget(redirect.finalUrl) === requestTarget(page.url)) {
+            canonicalToRedirect.push({ page: page.url, canonical: absolute, label: redirect.chainLabel, chain: redirect.chain });
+          }
+        } catch {
+          continue;
+        }
+      }
+      if (canonicalToRedirect.length > 0) {
+        checks.push({
+          name: "canonical-redirects",
+          status: "warn",
+          message: `${canonicalToRedirect.length} page(s) declare a canonical URL that redirects to them`,
+          items: canonicalToRedirect.map((c) => ({
+            id: c.canonical,
+            label: c.label,
+            sourcePages: [c.page],
+            meta: { chain: c.chain, finalUrl: c.page },
+          })),
+          details: { total: canonicalToRedirect.length },
+        });
+      }
     }
 
     if (checks.length === 0) {

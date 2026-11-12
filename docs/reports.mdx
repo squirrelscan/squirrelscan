@@ -74,7 +74,7 @@ Every category rolls up into one of four top-level groups, and each group gets i
 | **SEO** | Crawlability, core SEO, content, links, structured data, images, social, accessibility, mobile, URLs, internationalization, E-E-A-T, local, video, analytics |
 | **Performance** | Page speed and loading performance, and reliability: broken links, scripts, stylesheets, fonts and forms |
 | **Security** | HTTPS and headers, site integrity, legal compliance, blocked content |
-| **Agents** | Agent experience: how ready the site is for AI agents to read, discover, and operate on it |
+| **Agents** | Agent experience: how ready the site is for AI agents to read, discover, and operate on it. The Agents score covers the scored agent experience rules; it does not include `llms.txt`, Markdown response or `AGENTS.md`, which are shown separately as site-level signals and never move the score. |
 
 Group scores use the same weighted formula and scoring curve as the health score. The crawlability penalties apply only to the overall health score.
 
@@ -103,6 +103,18 @@ the work to do first:
 
 Categories are not top-level sections: a category with both an error and a
 warning appears under both severities.
+
+### How a finding on many pages is worded
+
+A check that fires on many pages is stored once, with the pages it covers. Its message never states one page's problem for all of them:
+
+- One item on many pages: `1 image missing alt attribute, shown on 16 pages`. It is the same single image, so the fix is one attribute.
+- Different items on many pages: `14 images missing alt attribute across 9 pages`.
+- The same sentence with different counts: the counts become a range, `Title too long (65 to 114 chars, max 60)`.
+- Pages that disagree: each message is listed with its page count, `Multiple H1 tags found (2 to 5) (3 pages); H1 tag is empty (2 pages)`. Three messages are listed, the rest are counted as `N other messages`.
+- Anything else keeps the first page's sentence with `(+N more pages)`.
+
+In the JSON report the check's `details` carries `distinctItems` (the number of distinct items, a floor when the item list was clipped before the report), `pageMessage` (the sentence one page shows) and, when pages disagree, `messages` (each message with its page count).
 
 ### Findings in a shared page region
 
@@ -204,6 +216,15 @@ before page types were recorded, or the page classifier off) keep their page
 lists. Nothing about how a finding is detected, its severity or the score
 changes. Only `schema/expected-type` is scoped this way today: it is the one
 rule that records a page type from the classifier on its findings.
+
+### Pages known and pages audited, per page type
+
+A capped audit (a page limit, a time limit, or the Surface level) audits a sample of the pages it finds. To say which pages the sample came from, the report counts, for each page type the crawler can tell from the URL (`home`, `article`, `product`, `category`, `faq`, `contact`, `about`, `search`, `profile`, `event`, and `unknown` for everything else), how many pages the crawl knows of and how many it audited. The text, markdown and console reports print one line, for example `Page types audited: 1 of 36 product pages, 12 of 12 article pages.`, and the JSON, XML and llm reports carry the counts as fields.
+
+- `discovered`: the pages audited plus the pages found (in links or a sitemap) and queued but never fetched.
+- `audited`: the pages fetched and audited.
+
+On a complete audit the two are equal for every type. When the crawl stopped with pages still queued, `discovered` is larger than `audited` for each type it left pages of. Types come from the URL alone, because that is all an unfetched page has, so a page type here can differ from the page type the classifier gives an audited page in the report's structure section. The counts are a floor: links on pages that were never fetched are unknown. They never change the score. In the JSON report they are `meta.pageTypes`, a list of `{ "type", "discovered", "audited" }` objects, most pages first; the llm and XML reports print one `<page-type name discovered audited/>` element for each, next to `<scan-scope>`. A report from before this field has none.
 
 ### console (default)
 
@@ -326,7 +347,7 @@ squirrel report -f html -o report.html
 open report.html
 ```
 
-The local file and the published report at reports.squirrelscan.com are the same page. [See a live one](<https://reports.squirrelscan.com/01M5NJH51Q6FNRAA3QGW8GYWB6>), or read [how to read your report](/guides/read-your-report) for a walk through it.
+The local file and the published report are the same page. [See a live one](<https://reports.squirrelscan.com/01M5NJH51Q6FNRAA3QGW8GYWB6>), or read [how to read your report](/guides/read-your-report) for a walk through it.
 
 ![A squirrelscan report for squirrelscan.com. The header shows the site, 220 of 220 pages scanned, the Full audit level and a health score of 79 (C). A notice says 912 of 1412 external links were not checked. Four group cards show SEO 86 (B), Performance 59 (F), Security 95 (A) and Agents 42 (F), each with its error and warning counts. Below are pass, warning and fail totals, an auto-generated summary, and the first three ranked issues, each with a Copy fix prompt button.](/images/report/example-report.webp)
 
@@ -446,9 +467,10 @@ squirrel report -f llm | claude "analyze this audit and prioritize fixes"
 <audit version="0.0.13">
 <site url="https://example.com" crawled="42" date="2025-01-18T10:30:00Z"/>
 <score overall="87" grade="B">
- <cat name="Core SEO" score="100"/>
- <cat name="Links" score="85"/>
- <cat name="Images" score="72"/>
+ <group name="SEO" score="91" scope="group" errors="2" warnings="5"/>
+ <cat name="Core SEO" score="100" scope="category"/>
+ <cat name="Links" score="85" scope="category"/>
+ <cat name="Images" score="72" scope="category"/>
 </score>
 <summary passed="83" warnings="13" failed="9"/>
 <issues>
@@ -478,6 +500,8 @@ squirrel report -f llm | claude "analyze this audit and prioritize fixes"
 </audit>
 ```
 
+`<score>` carries two kinds of score, and each line says which: `<group scope="group">` is the score of a top-level group (SEO, Performance, Security, and so on) with its error and warning counts, and `<cat scope="category">` is the score of one finer category inside a group. They are different numbers on different scales of detail, so do not compare a group score with a category score. The `<audit version>` attribute is the version of squirrelscan that produced the report: for a stored or published report it is the version recorded in that report, and it is `0.0.0` only when the report records none and the renderer was given none.
+
 `<info-checks>` holds the notes rules recorded that are neither findings nor skips (status `info`). It is left out unless you pass `--include-info` (the LLM report is read against a token budget, and most info checks are "nothing to check" notes); the JSON report always has them. They never change the score. It lists the first 25 with up to three pages each and a `<more count>` for the rest; the JSON report's `infoChecks` has them all.
 
 **Key Features:**
@@ -487,8 +511,20 @@ squirrel report -f llm | claude "analyze this audit and prioritize fixes"
 - **Text prefixes** - `Desc:`, `Fix:`, `Pages (n):`, `Items (n):`
 - **Comma-separated lists** - pages and URLs formatted inline
 - **Hybrid structure** - XML tags for parsing, text for readability
-- **`<locked-rules>`** - cloud-gated checks that didn't run this audit (logged out, the quick level, out of credits), with an audience-aware action and, for anonymous/free runs, a signup or credits link. Absent when every eligible check ran.
+- **`<locked-rules>`** - cloud-gated checks that didn't run this audit (logged out, the quick level, out of credits), with an audience-aware action and, for anonymous/free runs, a signup or credits link. Absent when every eligible check ran. When the audit says why a rule did not run, each `<rule>` carries `reason` (see [Why a check did not run](#why-a-check-did-not-run)) and the action text has one sentence per cause.
 - **`<audit-level>`** - the [audit level](/guides/audit-levels) the audit ran at: `level` (`quick`, `surface`, `full` or `custom`), `based-on`, the `changes` made to it (setting names, comma-separated) and the page budget. On an `--offline` run it also carries `offline="true"`, `cloud-checks="false"`, `render="off"` and `external-links="false"`: the settings that ran, not the level's cloud defaults. Absent on reports from before audit levels.
+
+### Why a check did not run
+
+A rule that did not run (a locked cloud check, or a check listed under not checked) can carry a reason from a closed set, so an agent can tell a plan exclusion from a failed service from an environment that cannot run the check, and neither retry what a re-run will not change nor trust a result that never ran.
+
+| Reason | Meaning | What a report says |
+|--------|---------|--------------------|
+| `plan` | The check is not part of the plan this audit ran under. | Names the plan ("not included in the Free plan", "in your plan", or a signed-out audit) and keeps the upgrade link. A re-run will not include it. |
+| `provider_error` | A service the check depends on failed during the audit. | Says a re-run may include it. |
+| `unsupported_environment` | The check cannot run where the audit ran. | Says where it can run: a cloud audit, or the squirrel CLI on a machine with direct network access, or the place the report's detail names. |
+
+A rule may also carry a short free-text `detail` for its reason. Every format shows the same sentence: the text, markdown, HTML, `llm` and XML reports print it in the checks-not-run section and label each rule, and the JSON report has `lockedRules` (`count`, `audience`, `message` and each rule's `id`, `name`, `reason` and `detail`). A `notChecked` entry in the JSON and XML reports carries the same code as `cause` (and `causeDetail`), and its hint follows the cause. A report whose rules carry no reason, such as one from an older publisher, keeps the wording chosen by plan and coverage alone, unchanged. A failed audit keeps its own message: nothing ran, whatever the reasons say.
 
 **Token Efficiency:**
 The LLM format achieves significant size reduction through:
@@ -523,6 +559,7 @@ squirrel report -f xml -o report.xml
     <pages-crawled>42</pages-crawled>
     <audit-date>2025-01-18T10:30:00.000Z</audit-date>
     <scan-scope origin="cli" crawled="42" max-pages="100" capped="false"/>
+    <page-type name="product" discovered="36" audited="1"/>
   </site>
   <health-score overall="87" grade="B">
     <category name="Core SEO" score="100"/>
@@ -645,6 +682,8 @@ Compare the latest report for a domain against a baseline audit:
 squirrel report --regression-since example.com --format llm
 ```
 
+A baseline finding stored under a check name a rule has since replaced (a rule lists these in `supersededChecks`, for example `core/meta-title`'s old `meta-title` now `meta-title-too-short` and `meta-title-too-long`) is judged by the new checks on the same target: gone when they all passed, shown as a change when one still fails, and listed under `notChecked` in the JSON diff when one was not checked, so it is never counted as fixed.
+
 <Note>
 Diff mode supports `console`, `text`, `json`, `llm`, and `markdown`. `html` and `xml` are not supported in diff mode. Diff reports cannot be published with `--publish`.
 </Note>
@@ -754,7 +793,7 @@ rm -rf ~/.local/share/squirrel/audits.db
 
 ## Publishing reports
 
-Share audit reports online by publishing to `reports.squirrelscan.com`. Published reports can be shared with clients, included in documentation, or consumed programmatically by LLMs and CI pipelines.
+Share audit reports online by publishing them. Each org's reports live on their own address under `squirrel.report` (see [Report address](#report-address)). Published reports can be shared with clients, included in documentation, or consumed programmatically by LLMs and CI pipelines.
 
 <Note>
 Publishing requires authentication. Run `squirrel auth login` first.
@@ -796,8 +835,21 @@ squirrel report a7b3c2d1 --publish --visibility unlisted
 The CLI prints the published URL:
 
 ```text
-https://reports.squirrelscan.com/SJEItpldwW
+https://acme.squirrel.report/SJEItpldwW
 ```
+
+### Report address
+
+Published reports are served from `squirrel.report`, a domain of their own that shares nothing with the app, so a report page never sits next to your signed-in session.
+
+- Your org's reports live at `https://<address>.squirrel.report/<report id>`. Owners and admins set the address in the dashboard under Settings, Details, Report address.
+- An org that has not set one is served from the shared address, `https://r.squirrel.report/<report id>`.
+- The address is separate from your org slug. Renaming the slug does not change it.
+- Links never break. A report asked for on any other address redirects to its own, so changing your address, or an old `reports.squirrelscan.com` or `rep.squirrelscan.com` link, still lands on the report.
+- Reports are not indexed by search engines unless their visibility is `public`.
+- Report pages set no cookies and load their images from `assets.squirrel.report`.
+
+Badges stay at `reports.squirrelscan.com/b/...`, so embeds keep working. See [badges](/guides/badges).
 
 ### Visibility
 
@@ -834,26 +886,28 @@ Published reports support multiple output formats. Append a file extension to th
 
 | Format | URL | Use Case |
 |--------|-----|----------|
-| HTML | [/SJEItpldwW](https://reports.squirrelscan.com/SJEItpldwW) | Browser viewing (default) |
-| JSON | [/SJEItpldwW.json](https://reports.squirrelscan.com/SJEItpldwW.json) | CI/CD, programmatic access |
-| Markdown | [/SJEItpldwW.md](https://reports.squirrelscan.com/SJEItpldwW.md) | Documentation, READMEs |
-| Plain Text | [/SJEItpldwW.txt](https://reports.squirrelscan.com/SJEItpldwW.txt) | Email, logs |
-| XML | [/SJEItpldwW.xml](https://reports.squirrelscan.com/SJEItpldwW.xml) | Enterprise integration |
-| LLM | [/SJEItpldwW.llm](https://reports.squirrelscan.com/SJEItpldwW.llm) | Coding agents, token-efficient |
+| HTML | [/SJEItpldwW](https://r.squirrel.report/SJEItpldwW) | Browser viewing (default) |
+| JSON | [/SJEItpldwW.json](https://r.squirrel.report/SJEItpldwW.json) | CI/CD, programmatic access |
+| Markdown | [/SJEItpldwW.md](https://r.squirrel.report/SJEItpldwW.md) | Documentation, READMEs |
+| Plain Text | [/SJEItpldwW.txt](https://r.squirrel.report/SJEItpldwW.txt) | Email, logs |
+| XML | [/SJEItpldwW.xml](https://r.squirrel.report/SJEItpldwW.xml) | Enterprise integration |
+| LLM | [/SJEItpldwW.llm](https://r.squirrel.report/SJEItpldwW.llm) | Coding agents, token-efficient |
 
 Every format is the same capped summary, the JSON included: each issue keeps up to 10 example pages and 5 items beside its true counts, which the JSON carries in a sampled check's `details` (`pagesTruncated` for pages, `occurrences` for per-page checks, `additional` for items left out). The HTML, markdown and text formats print that count beside the items they list, for example `1 item, 37 more not listed`, or on its own (`1,500 items not listed`) for an issue that lists none. The console adds it to its `... +N more` line after the first 5 items, or prints it on its own the same way. The llm format counts it in each rule's item total (`Items (5/1152):`, or `Items (0/1500): none listed` when nothing is listed), and the XML gives it as a `not-listed` attribute on the check's `<items>` element (`<items count="0" not-listed="1500"/>` when nothing is listed). When a rule's issues reach different pages, the JSON's top-level `rulePageCounts` gives that rule's exact page count, which adding up its sampled issues cannot. Its top-level `linkTargetSets` holds, for each link rule, short hashes of every target the rule reported broken and every one it could not verify, so a later audit can tell a newly broken link from one that was already broken. A set marked `complete: false` holds only some of them. No format renders it. A capped report says so in its top-level `detail` field, and every format of a capped report prints one line saying where the full list is. See [size cap on large sites](#size-cap-on-large-sites).
+
+Any address works for a published report: one that is not the report's own redirects to it, so `curl` needs `-L`.
 
 Without an extension, the format is determined by the `Accept` header. Browsers receive HTML, while tools like `curl` can request specific formats:
 
 ```bash
 # Get JSON via Accept header
-curl -H "Accept: application/json" https://reports.squirrelscan.com/SJEItpldwW
+curl -L -H "Accept: application/json" https://r.squirrel.report/SJEItpldwW
 
 # Get JSON via extension (simpler)
-curl https://reports.squirrelscan.com/SJEItpldwW.json
+curl -L https://r.squirrel.report/SJEItpldwW.json
 
 # Pipe LLM format to Claude
-curl -s https://reports.squirrelscan.com/SJEItpldwW.llm | claude "prioritize fixes"
+curl -sL https://r.squirrel.report/SJEItpldwW.llm | claude "prioritize fixes"
 ```
 
 ### Size cap on large sites
@@ -867,6 +921,8 @@ When a crawl is bigger than that:
 - The pages that don't fit are still counted as audited.
 - An issue on one of those pages is never closed early: it stays open until an audit can confirm the fix.
 - The checks that cost the most to list, such as one failing on about half the pages with no pattern, can be dropped first. Their issues stay open the same way.
+
+A row that says part of the site was not read is never dropped to fit the size budget: a page that could not be parsed (`unread-page`), a scan that stopped at a work cap (`scan-truncated`), and a rule's `*-unscanned`, `*-omitted` or `*-unfetched` check (for example `leaked-secrets-unfetched`, scripts the audit could not read). Dropping one would read as a clean result, so it outranks every ordinary check when the report is cut.
 
 The full per-page results are never cut. They stay in your local project: run `squirrel report --format json` or `squirrel report --format llm` to read every page and every finding.
 

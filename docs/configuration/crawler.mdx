@@ -18,12 +18,14 @@ per_host_concurrency = 5
 per_host_delay_ms = 50
 max_backoff_ms = 300000
 # max_duration = 240   # seconds, whole audit; unset = no limit
+# crawl_timeout = 7200 # seconds, crawl phase only; unset = derived from pages and per-host rate
 include = []
 exclude = []
 allow_query_params = []
 drop_query_prefixes = ["utm_", "gclid", "fbclid"]
 respect_robots = false
 disable_discovery_probes = false
+# discovery_probe_paths = ["/llms.txt"]   # unset = every selected probe
 tls_proxy_resolves_names = false
 incremental = true
 breadth_first = true
@@ -82,6 +84,22 @@ max_duration = 240
 ```
 
 **CLI override:** `--max-duration <seconds>`. See [Time limit](/cli/audit#time-limit) for what the report says and what is cut.
+
+### `crawl_timeout`
+
+**Type:** `number` (seconds)
+**Default:** unset (derived)
+
+A wall-clock backstop for the crawl phase alone, separate from the whole-run `max_duration`. When it fires the crawler stops, the audit continues on the pages collected and the report has `status: "partial"`, reason code `crawl_timeout` and a `crawlPhase` object (`seconds`, `pagesCollected`, `pageBudget`, `unfetchedPages`, `linkGraphComplete: false`). The link graph is incomplete in that case, so site-wide link and sitemap conclusions may be wrong. Must be greater than zero and at most 21600 (6 hours). When unset, the budget is derived from the page budget and the effective per-host rate, floored at 2 minutes, capped at 60 minutes and never above `max_duration`. A crawl that needs longer (for example about 4,000 pages at one request per second per host) must set `crawl_timeout` explicitly. A long explicit value weakens the backstop that catches a wedged crawl: the per-request watchdogs still apply, but nothing else stops a crawl that stalls until the budget runs out, so set it only as high as the crawl needs.
+
+Unset, the backstop is derived from the page budget and the effective per-host rate (the smaller of `concurrency` and `per_host_concurrency`), at 60 seconds per page plus setup slack, never below 2 minutes, never above 6 hours and never above `max_duration` when that is set. A polite single-host crawl of a few thousand pages therefore gets the time it needs. Per-request watchdogs are not affected by this setting.
+
+```toml
+[crawler]
+crawl_timeout = 7200
+```
+
+**CLI override:** `--crawl-timeout <seconds>`.
 
 ### `coverage`
 
@@ -1115,6 +1133,38 @@ as an attack and bans the auditing IP, so every request after it gets
 connection refused and the audit fails right after it starts. Turn the probes
 off for that site and the crawl goes through.
 
+### `discovery_probe_paths`
+
+**Type:** `string[]`
+**Default:** unset (every probe the enabled rules read is sent)
+
+An allowlist over the path-shaped discovery probes, on top of rule selection, for sites that accept some probe paths and ban others. Only a listed path is requested. `/llms.txt` and `/llms-full.txt` are separate paths (`/llms-full.txt` is read only together with `/llms.txt`), and each well-known path (`/AGENTS.md`, `/agents.md`, `/.well-known/llms.txt`, `/docs/llms.txt`, `/openapi.json` and the rest) is its own entry, written exactly as the probe sends it.
+
+```toml
+[crawler]
+discovery_probe_paths = ["/llms.txt", "/AGENTS.md"]
+```
+
+**CLI override:** `--discovery-probe-path` (repeatable or comma-separated) replaces the list for one run.
+
+```bash
+squirrel audit https://example.com --discovery-probe-path /llms.txt --discovery-probe-path /AGENTS.md
+```
+
+With the list set:
+
+- A probe left out is not sent. Its rule reports **not checked (path not approved)**, never a missing file.
+- A redirect from a listed path may change the scheme, host or query (an `http` to `https` or apex to `www` canonical hop) but not the path. A redirect to another path is not followed, and the probe reports not checked. The path is compared exactly: a canonical redirect that adds or drops a trailing slash (`/x` to `/x/`), changes the case, or doubles a slash is a different path and is not followed. The request was sent, so the report says the redirect was not followed, not that the probe was not sent.
+- The per-host limits (`per_host_concurrency`, `per_host_delay_ms`) still apply.
+- `robots.txt` and sitemap discovery are not probes and always run.
+- The markdown, agent-access and RSL probes are not path-shaped and are not gated by the list. They stay under rule selection and `disable_discovery_probes`.
+
+A path that is not one of the probe paths is a config error.
+
+### Block signals stop the optional probes
+
+On a 429 or a bot challenge (`cf-mitigated: challenge`), the crawl sends no further optional probe: the discovery probes and the post-crawl configured-page requests that have not gone out yet are skipped and report not checked, and the probe that met the block is no answer either. A block only counts when it comes from the audited host or its `www` or apex twin: a 429 from a third-party sitemap host or CDN does not stop the probes. The agent access probe notes its block after all three identities ran, so they stay comparable. A lone 403 does not stop them, since sites answer 403 for a single protected path. `robots.txt`, sitemaps and the pages themselves are not optional probes and keep their own handling.
+
 ### Or let squirrelscan through
 
 To keep the checks, make an exception for the audit instead.
@@ -1244,6 +1294,8 @@ the rate-limit and robots controls documented above:
 - `disable_discovery_probes`: turn off the pre-crawl requests for agent files
   when the site's firewall objects to them (see
   [Discovery probes](#discovery-probes)).
+- `discovery_probe_paths`: send only the probe paths you approve (see
+  [`discovery_probe_paths`](#discovery_probe_paths)).
 
 A `Crawl-delay` directive in the target's `robots.txt` overrides
 `per_host_delay_ms` only when `respect_robots = true`, and is capped at 2

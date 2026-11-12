@@ -21,6 +21,7 @@ import type {
 } from "@squirrelscan/core-contracts";
 import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
 import {
+  buildSupersededIndex,
   isRuleNotApplicableReason,
   resolutionCheckKey,
   resolutionUrlHash,
@@ -865,6 +866,7 @@ export async function runCloudSmartAudits(
       freshFindings,
       removedUrls,
       severityByRule,
+      supersededChecks: buildSupersededIndex([...ruleMetaIndex.values()]),
       statusByUrl,
       priorPages,
       now,

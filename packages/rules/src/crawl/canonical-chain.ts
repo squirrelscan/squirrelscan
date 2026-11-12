@@ -23,9 +23,6 @@ export const canonicalChainRule: Rule = {
 
   run(ctx: RuleContext): RuleResult {
     const checks: CheckResult[] = [];
-    const doc = ctx.parsed.document;
-    if (!doc) return { checks: [] };
-
     const pageUrl = ctx.page.url;
     const finalUrl = ctx.page.finalUrl ?? pageUrl;
     const redirectChain = ctx.page.redirectChain;
@@ -52,6 +49,10 @@ export const canonicalChainRule: Rule = {
         ],
       });
     }
+
+    // A redirecting URL has no document of its own (#1762): its hops are all there is to report.
+    const doc = ctx.parsed.document;
+    if (!doc) return { checks };
 
     const canonical = doc.querySelector('link[rel="canonical"]');
     const canonicalUrl = canonical?.getAttribute("href");
@@ -149,12 +150,14 @@ export const canonicalChainRule: Rule = {
     // is the one whose chain we hold. Folding them together hands this page's
     // chain to a canonical that never redirected (#1510).
     const canonicalTarget = requestTarget(absoluteCanonical);
-    if (
+    const canonicalChain =
       canonicalTarget === requestTarget(pageUrl) &&
       requestTarget(finalUrl) !== canonicalTarget &&
       redirectChain &&
       didRedirect(pageUrl, finalUrl, redirectChain)
-    ) {
+        ? redirectChain
+        : undefined;
+    if (canonicalChain) {
       checks.push({
         name: "canonical-redirects",
         status: "warn",
@@ -162,8 +165,8 @@ export const canonicalChainRule: Rule = {
         items: [
           {
             id: absoluteCanonical,
-            label: redirectChain.hops.map((hop) => formatRedirectHop(hop)).join(" → "),
-            meta: { chain: redirectChain, finalUrl },
+            label: canonicalChain.hops.map((hop) => formatRedirectHop(hop)).join(" → "),
+            meta: { chain: canonicalChain, finalUrl },
           },
         ],
       });

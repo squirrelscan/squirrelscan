@@ -25,6 +25,8 @@ export const internalLinksRule: Rule = {
     severity: "warning",
     weight: 4,
     optionsSchema,
+    // The old name carried both directions (pub#1765).
+    supersededChecks: { "internal-links": ["internal-links-too-few", "internal-links-too-many"] },
   },
 
   run(ctx: RuleContext): RuleResult {
@@ -35,17 +37,26 @@ export const internalLinksRule: Rule = {
     const internalLinks = links.filter((l) => l.isInternal);
     const count = internalLinks.length;
 
+    // Separate checks per side, both reported on every page: see core/meta-title (pub#1765).
     if (count < opts.min_internal_links) {
       checks.push({
-        name: "internal-links",
+        name: "internal-links-too-few",
         status: "warn",
         message: `Too few internal links (${count}, min ${opts.min_internal_links})`,
         value: count,
         expected: opts.min_internal_links,
       });
-    } else if (count > opts.max_internal_links) {
+    } else {
       checks.push({
-        name: "internal-links",
+        name: "internal-links-too-few",
+        status: "pass",
+        message: `${count} internal link(s)`,
+        value: count,
+      });
+    }
+    if (count > opts.max_internal_links) {
+      checks.push({
+        name: "internal-links-too-many",
         status: "warn",
         message: `Too many internal links (${count}, max ${opts.max_internal_links})`,
         value: count,
@@ -53,7 +64,7 @@ export const internalLinksRule: Rule = {
       });
     } else {
       checks.push({
-        name: "internal-links",
+        name: "internal-links-too-many",
         status: "pass",
         message: `${count} internal link(s)`,
         value: count,

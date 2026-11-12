@@ -367,19 +367,30 @@ export async function printSkillsStatus(
     const ours = s.targets.filter(
       (x) => x.managedBy !== "other" && !x.released
     );
-    const versions = [...new Set(ours.map((x) => x.version ?? "?"))];
+    // #1730: a link into a checkout of our own skill shows its version too, marked as linked.
+    const linked = s.targets.filter((x) => x.managedBy === "other" && x.linked);
+    const versions = [
+      ...new Set([
+        ...ours.map((x) => x.version ?? "?"),
+        ...linked.map((x) => `${x.version ?? "?"} (linked)`),
+      ]),
+    ];
     const outdated = ours.some((x) => x.outdated);
+    const linkedBehind = linked.some((x) => x.outdated);
     return {
       skill: s.name,
       installed: versions.join("/") || "-",
       latest: s.latest
-        ? `${s.latest}${outdated ? ` ${p.up}` : ""}`
+        ? `${s.latest}${outdated || linkedBehind ? ` ${p.up}` : ""}`
         : manifest
           ? "-"
           : "?",
       where:
-        [...new Set(ours.map((x) => tildify(x.root, e)))].join(", ") || "-",
+        [...new Set([...ours, ...linked].map((x) => tildify(x.root, e)))].join(
+          ", "
+        ) || "-",
       outdated,
+      linkedBehind,
     };
   });
   const width = (key: "skill" | "installed" | "latest", min: number) =>
@@ -420,7 +431,11 @@ export async function printSkillsStatus(
           `${p.warn} ${where} was not installed by squirrel: ${p.cmd("squirrel skills update")} takes it over`
         );
       }
-      if (x.managedBy === "other") {
+      if (x.managedBy === "other" && x.linked && x.outdated) {
+        notes.push(
+          `${p.warn} ${where} links to ${tildify(x.linkTo!, e)} (${x.version}), behind the latest ${s.latest}: squirrel leaves the checkout alone, update it yourself`
+        );
+      } else if (x.managedBy === "other") {
         notes.push(
           `${p.aside} ${where} ${x.linkTo ? `links to ${tildify(x.linkTo, e)}` : "holds another author's skill"}; squirrel leaves it alone`
         );
@@ -440,7 +455,11 @@ export async function printSkillsStatus(
     );
   else if (!manifest)
     console.log(`Could not reach ${SOURCE} to check for updates.`);
-  else if (updates) {
+  else if (!updates && rows.some((r) => r.linkedBehind)) {
+    console.log(
+      "A linked skill is behind the latest: update the checkout it links to (see above)."
+    );
+  } else if (updates) {
     console.log(
       `${updates} update${updates === 1 ? "" : "s"} available: run ${p.cmd("squirrel skills update")}.`
     );
