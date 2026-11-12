@@ -174,6 +174,10 @@ describe("squirrel audit with [[ignore]]", () => {
     expect(r.out).toContain(
       "Ignore entry 2 (security/cookie-flags) matched nothing."
     );
+    // The entry that waived something and has a reason says why, and how much it hid (#1262).
+    expect(r.out).toMatch(
+      /Ignore entry 1 \(security\/cookie-flags\), Shopify sets these itself: \d+ findings? waived\./
+    );
   }, 90_000);
 
   // The carry path: findings carried from pages this run did not crawl are replayed from

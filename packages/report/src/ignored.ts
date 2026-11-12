@@ -155,6 +155,30 @@ export function ignoredEntryLines(report: Pick<AuditReport, "ignored">): string[
   });
 }
 
+/**
+ * The per-entry notes every report prints under the ignored line (#1262): an entry that waived something and
+ * carries a `reason` says what the owner wrote and how much it hid, and an entry that waived nothing says so,
+ * with its reason when it has one. Entries with no reason that matched are covered by the totals line. Empty
+ * for a `--no-ignore` run.
+ */
+export function ignoredNoteLines(report: Pick<AuditReport, "ignored">): string[] {
+  const s = safeIgnored(report);
+  if (!s || s.disabled) return [];
+  const lines: string[] = [];
+  for (const e of s.entries) {
+    const matched = e.items > 0 || e.pages > 0;
+    if (matched && e.reason) {
+      const waived: string[] = [];
+      if (e.items > 0) waived.push(plural(e.items, "finding", "findings"));
+      if (e.pages > 0) waived.push(plural(e.pages, "page", "pages"));
+      lines.push(`Ignore entry ${e.index + 1} (${e.rule}), ${e.reason}: ${waived.join(" and ")} waived.`);
+    } else if (!matched) {
+      lines.push(`Ignore entry ${e.index + 1} (${e.rule})${e.reason ? `, ${e.reason},` : ""} matched nothing.`);
+    }
+  }
+  return lines;
+}
+
 /** The entries that waived nothing: the guard against a waiver that quietly stopped matching. */
 export function unusedIgnoreEntries(report: Pick<AuditReport, "ignored">): IgnoredEntrySummary[] {
   const s = safeIgnored(report);

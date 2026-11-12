@@ -64,7 +64,7 @@ import {
   ruleCarriedRollupLine,
   unfetchedNote,
 } from "../coverage";
-import { ignoredLine, unusedIgnoreEntries } from "../ignored";
+import { ignoredLine, ignoredNoteLines } from "../ignored";
 import {
   affectedPages,
   ruleAffectedPageCount,
@@ -216,9 +216,7 @@ function scanDetailLines(report: AuditReport): string[] {
   // #1262: findings the config's [[ignore]] entries waived, and entries that matched nothing.
   const ignored = ignoredLine(report);
   if (ignored) out.push(escapeMarkdownInline(ignored));
-  for (const entry of unusedIgnoreEntries(report)) {
-    out.push(escapeMarkdownInline(`Ignore entry ${entry.index + 1} (${entry.rule}) matched nothing.`));
-  }
+  for (const line of ignoredNoteLines(report)) out.push(escapeMarkdownInline(line));
   const scope = scanScopeLine(report);
   if (scope) out.push(scope);
   // repo#2661: a capped published report lists samples; say so, and where the rest is. Not

@@ -69,7 +69,7 @@ import {
   seedRedirectLine,
   startRedirectLine,
 } from "../coverage";
-import { ignoredLine, unusedIgnoreEntries } from "../ignored";
+import { ignoredLine, ignoredNoteLines } from "../ignored";
 import { wrapText } from "../utils";
 import { unfetchedNote } from "../coverage";
 import { LOCKED_REASON_LABELS, lockedRuleView, lockedRulesMessage } from "../locked-rules";
@@ -182,9 +182,7 @@ function scanDetailLines(report: AuditReport): string[] {
   // #1262: findings the config's [[ignore]] entries waived, and entries that matched nothing.
   const ignored = ignoredLine(report);
   if (ignored) out.push(stripControlChars(ignored));
-  for (const entry of unusedIgnoreEntries(report)) {
-    out.push(stripControlChars(`Ignore entry ${entry.index + 1} (${entry.rule}) matched nothing.`));
-  }
+  for (const line of ignoredNoteLines(report)) out.push(stripControlChars(line));
   const scope = scanScopeLine(report);
   if (scope) out.push(scope);
   // repo#2661: a capped published report lists samples; say so, and where the rest is.
