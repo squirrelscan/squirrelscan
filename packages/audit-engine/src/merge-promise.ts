@@ -31,6 +31,7 @@ import { unfoldAggregateCheck } from "@squirrelscan/rules/fold";
 import type { RuleRunResult } from "@squirrelscan/rules/types";
 import { normalizePageUrl } from "@squirrelscan/utils/url";
 
+import { canonicalVariantMap } from "./canonical-fold";
 import {
   computeMerge,
   createMergeSession,
@@ -356,6 +357,25 @@ export interface CloudSmartAuditsInput {
   /** Epoch ms; defaults to Date.now(). */
   now?: number;
   /**
+   * (#1350) The query-string variants this run's crawl folded (`report.canonicalVariantPages`: variant page
+   * and the page it counts under). They are recorded on the pages' site rows, so a later run, which may
+   * carry them, still knows what they are. Absent for a producer that does not report them: nothing is
+   * recorded or folded and the result is the one it always was.
+   */
+  canonicalVariantPages?: ReadonlyArray<{ page: string; canonical: string }>;
+  /**
+   * (#1350) `false` when {@link canonicalVariantPages} was clipped by the producer. A list that is not
+   * `false` is the whole truth about the crawled pages, an empty one included: a crawled page that is not
+   * in it stops being recorded as a variant. A clipped list only adds.
+   */
+  canonicalVariantsComplete?: boolean;
+  /**
+   * (#1031) Ask for `coverage.carriedPagesOutsideCrawl`. Off by default so a report is byte-identical to
+   * before (the published report JSON feeds the publish idempotency hash and the golden fixtures); the
+   * caller turns it on when it wants the count.
+   */
+  countCarriedPagesOutsideCrawl?: boolean;
+  /**
    * URLs this run discovered but never fetched because the host was
    * rate limiting it (`report.rateLimited.unfetched`). They are known to the
    * site without being pages it audited, so they widen `coverage.knownPages`
@@ -413,7 +433,21 @@ export interface CloudSmartAuditsResult {
      * zero so a report without any is byte-identical to before.
      */
     pagesWithStaleCarry?: number;
+    /**
+     * (#1031, #1350) Pages that carry a finding no run re-observed and are NOT in this run's crawl, counted
+     * as the report counts pages (a variant with its canonical page is one). Only when the caller asked
+     * (`countCarriedPagesOutsideCrawl`); OMITTED when zero and when the untouched split's provider did not
+     * count its pages, so a report without any is byte-identical to before.
+     */
+    carriedPagesOutsideCrawl?: number;
   };
+  /**
+   * (#1350) Variant page -> the page it counts under, over every ACTIVE page the site knows (this run's
+   * variants and the ones earlier runs recorded). Empty when the site has none. The caller folds the
+   * report's checks with it AFTER scoring (`foldChecksToCanonical`): the union returned here keeps every
+   * variant's own checks, so the score, the tallies and `coverage.auditedPages` are the ones they were.
+   */
+  canonicalVariantOf: ReadonlyMap<string, string>;
   /**
    * `${normalizedUrl}|${ruleId}|${checkName}` → lastSeenAt for tagging report
    * checks as carried. (#1652) Never-rendered findings are DELIBERATELY absent:
@@ -459,6 +493,8 @@ export interface CloudSmartAuditsResult {
    */
   completeStore: boolean;
 }
+
+const NO_VARIANTS: ReadonlyMap<string, string> = new Map();
 
 /** Stable identity for a carried finding, used to tag report checks (mirror CLI). */
 function carriedKey(normalizedUrl: string, ruleId: string, checkName: string): string {
@@ -856,6 +892,18 @@ export async function runCloudSmartAudits(
   // never a prior FINDING), which is what lets `carriedPageUrls` — and with it the
   // carried scoring fold — exist before the first prior arrives.
   const priorPages = await store.getSitePages(siteKey);
+  // (#1350) The run's variants, normalized as the pages are. Undefined when the producer reports no list at
+  // all; an EMPTY list is a report that there are none, and clears what earlier runs recorded.
+  let runCanonicals: Map<string, string> | undefined;
+  if (Array.isArray(input.canonicalVariantPages)) {
+    runCanonicals = new Map();
+    for (const v of input.canonicalVariantPages) {
+      if (typeof v?.page !== "string" || typeof v?.canonical !== "string") continue;
+      const page = normalizePageUrl(v.page);
+      const canonical = normalizePageUrl(v.canonical);
+      if (page !== canonical) runCanonicals.set(page, canonical);
+    }
+  }
   let onPersist: (record: PageFindingRecord) => void = () => {};
   let onActive: (finding: MergedFinding) => void = () => {};
   const session = createMergeSession(
@@ -869,6 +917,12 @@ export async function runCloudSmartAudits(
       supersededChecks: buildSupersededIndex([...ruleMetaIndex.values()]),
       statusByUrl,
       priorPages,
+      ...(runCanonicals
+        ? {
+            canonicals: runCanonicals,
+            canonicalsComplete: input.canonicalVariantsComplete !== false,
+          }
+        : {}),
       now,
       sampledCheckPages,
       resolution: mergeResolution,
@@ -993,6 +1047,18 @@ export async function runCloudSmartAudits(
   // (#1031) Pages this run crawled that still carry a finding no run re-observed: the page was
   // re-evaluated, so the carry means the rule gave no verdict there. A carry the signal reconfirmed
   // (still failing, clipped from the publish sample) is stamped with this run's time and is not stale.
+  // (#1031) Pages that carry a finding and are not in this run's crawl.
+  const carriedOutside = new Set<string>();
+  // The untouched split's pages (counted by its provider) and whether it could not count them.
+  let untouchedOutsidePages = 0;
+  let outsideUnknown = false;
+  const isCrawledPage = (url: string): boolean =>
+    crawledUrls.has(url) || (resolution?.crawledUrls.has(url) ?? false);
+  const noteCarriedOutside = (finding: { normalizedUrl: string; neverRendered?: boolean }): void => {
+    if (!finding.neverRendered && !isCrawledPage(finding.normalizedUrl)) {
+      carriedOutside.add(finding.normalizedUrl);
+    }
+  };
   const staleCarryPages = new Set<string>();
   const noteStaleCarry = (finding: { normalizedUrl: string; lastSeenAt?: number }): void => {
     if ((finding.lastSeenAt ?? 0) >= now) return;
@@ -1022,6 +1088,7 @@ export async function runCloudSmartAudits(
       if (finding.provenance !== "carried" || countedByTallies?.(finding)) return;
       carriedCount += 1;
       noteStaleCarry(finding);
+      noteCarriedOutside(finding);
       if (finding.neverRendered) unrenderedCount += 1;
       // No copy: `MergedFinding` already carries every field `CarriedFinding`
       // reads, `lastSeenAt` included — which is what stamps the replayed check
@@ -1057,6 +1124,10 @@ export async function runCloudSmartAudits(
       fold.addUntouched(split.aggregate);
       carriedCount += split.aggregate.findings;
       unrenderedCount += split.aggregate.unrenderedFindings;
+      if (split.aggregate.findings > 0) {
+        if (split.aggregate.pages === undefined) outsideUnknown = true;
+        else untouchedOutsidePages += split.aggregate.pages;
+      }
       persistedFindings += split.aggregate.findings;
     }
     fold.foldShellRules();
@@ -1171,7 +1242,10 @@ export async function runCloudSmartAudits(
       : withoutUnscorablePages(carriedPageUrls, resolution, carriedFindings);
   // The sampled path's carried list is the union's (after the capped report's tallies took theirs);
   // the streamed path noted its carries as they went by.
-  for (const f of unionCarried) noteStaleCarry(f);
+  for (const f of unionCarried) {
+    noteStaleCarry(f);
+    noteCarriedOutside(f);
+  }
   const unionRuleResults = buildScoringResultsFromMerged({
     freshResults: freshForUnion,
     carriedFindings: unionCarried,
@@ -1203,7 +1277,28 @@ export async function runCloudSmartAudits(
     reportTotals = tallyReportTotals(scoringTallies, completeTallies);
   }
 
+  // (#1350) Variants among the site's ACTIVE pages: this run's (recorded above) and the ones earlier runs
+  // recorded. Nothing is read, computed or changed unless one was reported or is stored, so a site without
+  // any is byte-identical. `auditedPages` is NOT folded: it is what this run crawled, and billing reads it.
+  let canonicalVariantOf: ReadonlyMap<string, string> = NO_VARIANTS;
+  if ((runCanonicals && runCanonicals.size > 0) || priorPages.some((p) => !!p.canonical)) {
+    const active: Array<{ url: string; canonical: string | null | undefined }> = [];
+    for (const p of session.sitePages) {
+      if (p.state === "active") active.push({ url: p.normalizedUrl, canonical: p.canonical });
+    }
+    canonicalVariantOf = canonicalVariantMap(active);
+  }
+  let auditedVariants = 0;
+  if (canonicalVariantOf.size > 0) {
+    for (const url of auditedUrls) if (canonicalVariantOf.has(url)) auditedVariants += 1;
+  }
+  const outsidePages = outsideUnknown || !input.countCarriedPagesOutsideCrawl
+    ? undefined
+    : new Set([...carriedOutside].map((u) => canonicalVariantOf.get(u) ?? u)).size +
+      untouchedOutsidePages;
+
   return {
+    canonicalVariantOf,
     unionRuleResults,
     ...(scoringTallies ? { scoringTallies } : {}),
     ...(reportTotals ? { reportTotals } : {}),
@@ -1217,10 +1312,17 @@ export async function runCloudSmartAudits(
       // Each such page got an active `site_pages` row above, so `knownPages`
       // stays at least this.
       auditedPages,
-      knownPages: knownPageCount(session.activePageCount, auditedPages, input.unfetchedPages),
+      // Variants count with their canonical page (#1350): out of the active set, and out of the audited
+      // floor that set is compared with (the audited count itself, above, stays as crawled).
+      knownPages: knownPageCount(
+        session.activePageCount - canonicalVariantOf.size,
+        Math.max(0, auditedPages - auditedVariants),
+        input.unfetchedPages,
+      ),
       carriedFindings: carriedCount - unrenderedCount,
       ...(unrenderedCount > 0 ? { unrenderedFindings: unrenderedCount } : {}),
       ...(staleCarryPages.size > 0 ? { pagesWithStaleCarry: staleCarryPages.size } : {}),
+      ...(outsidePages ? { carriedPagesOutsideCrawl: outsidePages } : {}),
     },
     carriedLastSeen: shownLastSeen,
     persistedFindings,
