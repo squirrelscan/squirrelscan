@@ -935,6 +935,12 @@ export interface AuditReport {
   /** The folded variants and the page each is counted with (first 100), so no variant URL is lost (#858). */
   canonicalVariantPages?: Array<{ page: string; canonical: string }>;
   /**
+   * (#1350) `false` when `canonicalVariantPages` was clipped: a producer that lists the crawl's variants
+   * without folding them sends the list even when it is empty, and a server treats a list that is not
+   * `false` here as the whole truth about the crawled pages. Absent otherwise.
+   */
+  canonicalVariantsComplete?: boolean;
+  /**
    * Resolved site-metadata "profile" (site type, business category, country,
    * audience, identity, contacts, socials, domain age). Like `technologies`,
    * it is a REPORT-ONLY section that NEVER contributes to `healthScore`.
@@ -1004,6 +1010,12 @@ export interface AuditReport {
      * no verdict there). Omitted when none.
      */
     pagesWithStaleCarry?: number;
+    /**
+     * (#1031, #1350) Pages that carry a finding from an earlier run and are not in this run's crawl,
+     * counted as the report counts pages (a query-string variant with its canonical page is one). Only
+     * when the producer of the merge asked for it; omitted when zero.
+     */
+    carriedPagesOutsideCrawl?: number;
   };
   /**
    * Scan scope disclosure (#1180): where the audit ran and how much of the site

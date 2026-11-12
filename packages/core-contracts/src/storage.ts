@@ -860,6 +860,13 @@ export interface SitePageRecord {
   state: SitePageState;
   lastSeenCrawlId: string;
   lastSeenAt: number;
+  /**
+   * (#1350) The page this one counts under when it is a query-string variant of a crawled page of the
+   * same path (the report fold's target, `canonicalVariantMap`). Absent or null: the page is its own
+   * page. Optional and recorded only by producers that know it, so a store that never writes it, and a
+   * report with no variants, stay byte-identical to before.
+   */
+  canonical?: string | null;
 }
 
 // ============================================

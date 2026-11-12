@@ -162,6 +162,19 @@ export interface ComputeMergeInput {
   priorFindings: PageFindingRecord[];
   /** Prior site pages for the site. */
   priorPages: SitePageRecord[];
+  /**
+   * (#1350) This run's crawled query-string variants: normalized variant URL -> normalized canonical page.
+   * Stamped on the variant's site page row as `canonical`; a crawled page missing from it has its stored
+   * `canonical` cleared (an empty map clears them all). Undefined (a producer that does not report variants): every row keeps the
+   * `canonical` it had, and a row with none is written exactly as before.
+   */
+  canonicals?: ReadonlyMap<string, string>;
+  /**
+   * (#1350) Whether {@link canonicals} is the whole list of this run's variants (the default). A clipped
+   * list (`false`) only ADDS: a crawled page missing from it keeps the `canonical` it had, because it may be
+   * one of the variants the list left out.
+   */
+  canonicalsComplete?: boolean;
   /** Epoch ms stamped on this run's records (caller passes Date.now()). */
   now: number;
   /**
@@ -1098,6 +1111,8 @@ export function createMergeSession(
     supersededChecks,
     statusByUrl,
     priorPages,
+    canonicals,
+    canonicalsComplete,
     now,
     sampledCheckPages,
     resolution,
@@ -1177,6 +1192,13 @@ export function createMergeSession(
   // Crawled this run (excluding removed) → active with the real HTTP status.
   const markCrawled = (url: string): void => {
     if (removedUrls.has(url)) return;
+    // (#1350) The canonical this run's crawl found for the page: recorded for a variant, cleared when the
+    // page stopped being one. Without a report of variants the stored one is kept, and a page that never
+    // had one gets no `canonical` key at all (byte-identical rows).
+    const was = priorOf(url)?.canonical;
+    const canonical = canonicals
+      ? (canonicals.get(url) ?? (canonicalsComplete === false ? was : was ? null : undefined))
+      : was;
     thisRun.set(url, {
       siteKey,
       normalizedUrl: url,
@@ -1184,6 +1206,7 @@ export function createMergeSession(
       state: "active",
       lastSeenCrawlId: crawlId,
       lastSeenAt: now,
+      ...(canonical !== undefined ? { canonical } : {}),
     });
   };
   for (const url of crawledUrls) markCrawled(url);

@@ -838,8 +838,10 @@
               "cloud/editor-summary",
               "cloud/rendering",
               "cloud/scheduled-audits",
+              "cloud/deploy-hooks",
               "cloud/firewall",
               "cloud/team",
+              "cloud/version",
               "cloud/changelog"
             ]
           },
