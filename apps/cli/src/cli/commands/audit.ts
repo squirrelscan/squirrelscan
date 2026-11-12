@@ -854,6 +854,10 @@ export function resolvePublishDecision(opts: {
   // report in the dashboard, so treat it like an implicit --no-publish
   // unless the user explicitly asks with --publish.
   ruleFilterActive?: boolean;
+  // #1777: a --target-url run audits only the listed URLs. Publishing it would replace the site's latest
+  // audit with a few pages (and #1776 `squirrel ci` reads the latest audit as its baseline), so it is
+  // treated like a rule-filtered run: not published unless --publish is explicit.
+  targeted?: boolean;
   // #1841: the audited host is loopback / RFC1918 / link-local, so no hosted
   // service can ever reach it.
   nonPublicHost?: boolean;
@@ -872,6 +876,7 @@ export function resolvePublishDecision(opts: {
   if (opts.ephemeral && !opts.explicitPublish) return false;
   if (opts.explicitPublish) return true; // explicit --publish overrides opt-outs (still needs login; publishReport errors otherwise)
   if (opts.ruleFilterActive) return false;
+  if (opts.targeted) return false;
   if (opts.noPublish || !opts.configPublish) return false;
   return opts.signedIn; // default: publish when signed in
 }
@@ -1331,6 +1336,11 @@ export const audit = defineCommand({
       description:
         "Host that also gets the custom headers on page and asset requests, over https (repeatable or comma-separated), e.g. assets.example.com; prefix http:// to allow plain http. Only the audited origin gets them by default",
     },
+    "target-url": {
+      type: "string",
+      description:
+        "Audit exactly this URL and nothing else (repeatable), absolute or a path on the site, e.g. /pricing. No sitemap, probes or link following; site-wide rules skip with the reason targeted-run, and the report lists every URL not audited and why. maxPages caps the list",
+    },
     "rule-include": {
       type: "string",
       description:
@@ -1527,6 +1537,21 @@ export const audit = defineCommand({
       );
       exitWith({ early: "validation" });
       return;
+    }
+
+    // --target-url (#1777): repeatable, one URL or path per flag. Not split on commas: a comma is legal in a
+    // URL. A URL that is not one is still passed on, and the report lists it as not audited with its reason.
+    const targetUrls = (() => {
+      const raw = args["target-url"] as string | string[] | undefined;
+      const list = raw === undefined ? [] : Array.isArray(raw) ? raw : [raw];
+      return list.map((v) => String(v).trim()).filter((v) => v.length > 0);
+    })();
+
+    // A targeted run checks no links, so a request to turn external link checks ON has no effect (#1777).
+    if (targetUrls.length > 0 && externalLinksOn) {
+      process.stderr.write(
+        "--external-links is ignored on a targeted audit (--target-url): no links are checked.\n"
+      );
     }
 
     // Parse --rule-include/--rule-exclude early so an unknown category fails
@@ -2147,19 +2172,26 @@ export const audit = defineCommand({
         }
         const reportGoesToStdoutEarly =
           !isConsoleFormat && args.format !== "html" && !args.output;
-        const resolved = await resolveAuditStart({
-          url: startParsed.url,
-          follow:
-            lastFlagValue(
-              args["follow-redirect"] as boolean | boolean[] | undefined
-            ) ?? config.crawler.follow_redirect === true,
-          interactive:
-            !!process.stdin.isTTY &&
-            !!process.stdout.isTTY &&
-            !reportGoesToStdoutEarly,
-          userAgent: config.crawler.user_agent || undefined,
-          pin: ownHostsPinned({ pinOwnHosts: pinOwnHosts() }),
-        });
+        // --target-url (#1777): the start URL is the site's base, not a page to request, so its redirect
+        // is not resolved (give the final host).
+        const resolved: Pick<
+          Awaited<ReturnType<typeof resolveAuditStart>>,
+          "url" | "record" | "stop"
+        > = targetUrls.length > 0
+          ? { url: startParsed.url }
+          : await resolveAuditStart({
+              url: startParsed.url,
+              follow:
+                lastFlagValue(
+                  args["follow-redirect"] as boolean | boolean[] | undefined
+                ) ?? config.crawler.follow_redirect === true,
+              interactive:
+                !!process.stdin.isTTY &&
+                !!process.stdout.isTTY &&
+                !reportGoesToStdoutEarly,
+              userAgent: config.crawler.user_agent || undefined,
+              pin: ownHostsPinned({ pinOwnHosts: pinOwnHosts() }),
+            });
         if (resolved.stop) {
           commandResult = "error";
           emitRedirectedOutcome(resolved.stop, {
@@ -2250,6 +2282,7 @@ export const audit = defineCommand({
           ? { headers: customHeaders }
           : {}),
         ...(headerHosts.length > 0 ? { headerHosts } : {}),
+        ...(targetUrls.length > 0 ? { targetUrls } : {}),
         ...(ruleFilter.enable.length > 0
           ? { ruleInclude: ruleFilter.enable }
           : {}),
@@ -3344,6 +3377,7 @@ export const audit = defineCommand({
           noPublish,
           configPublish: config.cloud.publish,
           ruleFilterActive,
+          targeted: targetUrls.length > 0,
           nonPublicHost: !!nonPublicHost,
           ephemeral,
         });
@@ -3370,6 +3404,7 @@ export const audit = defineCommand({
           noPublish,
           configPublish: config.cloud.publish,
           ruleFilterActive,
+          targeted: targetUrls.length > 0,
           nonPublicHost: false,
           ephemeral,
         })
@@ -3394,6 +3429,25 @@ export const audit = defineCommand({
             "Rule filter active — auto-publish skipped for this partial run (use --publish to publish anyway)."
           )
         );
+      } else if (
+        !shouldPublish &&
+        targetUrls.length > 0 &&
+        resolvePublishDecision({
+          signedIn,
+          offline: !!args.offline,
+          explicitPublish: !!args.publish,
+          noPublish,
+          configPublish: config.cloud.publish,
+          ruleFilterActive,
+          nonPublicHost: !!nonPublicHost,
+          ephemeral,
+        })
+      ) {
+        log(
+          fmt.dim(
+            "Targeted audit: auto-publish skipped, it covers only the URLs you listed (use --publish to publish anyway)."
+          )
+        );
       }
       // #857: publish runs here (after runAudit returns), not inside the
       // controller. recordPublishPhase() is called at every exit from the
@@ -3412,6 +3466,7 @@ export const audit = defineCommand({
           ephemeral: !!ephemeral,
           explicitPublish: !!args.publish,
           ruleFilterActive: !!ruleFilterActive,
+          targeted: targetUrls.length > 0,
           noPublish: !!noPublish,
           configPublish: config.cloud.publish,
         }),
@@ -3674,7 +3729,7 @@ export const audit = defineCommand({
               everPublished: hasEverPublished(effectiveSettings),
               nudgeShown: effectiveSettings?.publish_nudge_shown === true,
               nonPublicHost: !!nonPublicHost,
-              ruleFilterActive,
+              ruleFilterActive: ruleFilterActive || targetUrls.length > 0,
               stderrIsTTY: process.stderr.isTTY === true,
               isConsoleFormat,
               outputPath: args.output,

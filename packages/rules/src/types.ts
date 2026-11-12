@@ -611,6 +611,11 @@ export interface SiteData {
    */
   linkDiscoveryOff?: boolean;
   /**
+   * True on a targeted run (#1777): the crawl fetched an explicit URL list and nothing else. A site-scope rule
+   * that judges the whole site skips with `targeted-run` instead of reporting on pages nobody fetched.
+   */
+  targetedRun?: boolean;
+  /**
    * External link checking this audit (repo#2729): distinct external links
    * found, how many were checked, and the per-audit limit. Undefined when the
    * check did not run, or for callers that do not record it. `notRequested`:

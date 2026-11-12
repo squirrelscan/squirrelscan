@@ -80,10 +80,11 @@ Nothing is dropped silently. Every report says what was waived:
 
 ```text
 Ignored by squirrel.toml: 8 findings and 2 pages on 2 rules (1 of 2 entries matched). Run with --no-ignore to see them.
+Ignore entry 1 (security/cookie-flags), Shopify sets these: 8 findings waived.
 Ignore entry 2 (security/cookie-flags) matched nothing.
 ```
 
-The second line is the guard against a waiver that quietly stopped matching, for example because an item changed name. In JSON the summary is `meta.ignored` (waived items and pages, per rule and per entry with its reason; an entry that waived nothing has zeros), in the LLM and XML reports it is an `<ignored>` element, so an agent reading the report knows it is filtered and does not propose fixes for what you chose to waive.
+The first line is the total. An entry that has a `reason` and waived something gets its own line with that reason and what it hid, so a reader of the report sees why a finding is not there. The last line is the guard against a waiver that quietly stopped matching, for example because an item changed name; it keeps the entry's `reason` when it has one. The console, text, Markdown and HTML reports print these lines. In JSON the summary is `meta.ignored` (waived items and pages, per rule and per entry with its reason; an entry that waived nothing has zeros), in the LLM and XML reports it is an `<ignored>` element, so an agent reading the report knows it is filtered and does not propose fixes for what you chose to waive.
 
 ### See what is waived
 
@@ -110,6 +111,7 @@ Compromise detection, the `integrity/*` rules (injected pages, phishing kits, ma
 
 - Waivers apply when the findings are produced. A smart audit that carries findings forward from pages this run did not crawl replays what an earlier audit recorded; when the ignore list changed since then, the report says those carried findings may still include waived items. Re-run without a page limit, or with `--refresh`.
 - Editing an entry re-evaluates only the rules it names; cached results for other rules stay valid.
+- What a waiver does to a message. Scores and counts always come from the remaining items. For a rule whose message starts with the item count (the `a11y` label rules, `messageCountsItems`) only the first number in the message is replaced with the remaining count. Every rule whose check keeps some items then gets an `(N ignored)` suffix, where N is the number of items and pages waived. A check whose items are all waived reads as a pass: `N waived by squirrel.toml: <the original message>`. A message that names its items (the platform-cookie note lists cookie names) is not rewritten, so it can still name one you waived.
 - Cloud audits do not read `squirrel.toml`. A website's stored [`disable_rules`](/developers/mcp#tailor-each-website-with-rules) switches rules off for its cloud audits; `[[ignore]]` waivers have no cloud equivalent yet.
 
 ## Limits

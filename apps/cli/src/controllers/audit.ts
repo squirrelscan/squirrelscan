@@ -37,10 +37,14 @@ import {
   unfetchedFrontierCount,
   pageTypeCoverageFor,
   isRedirectSourcePage,
+  targetedCoverageFor,
 } from "@squirrelscan/audit-engine";
 import { foldEntityMapVariants } from "@squirrelscan/audit-engine/entity-map";
 import { createEntityMapCollector } from "@squirrelscan/audit-engine/entity-map/collect";
-import { offlineAuditSettings } from "@squirrelscan/core-contracts/audit-levels";
+import {
+  offlineAuditSettings,
+  targetedAuditSettings,
+} from "@squirrelscan/core-contracts/audit-levels";
 import { computeCost } from "@squirrelscan/core-contracts/credits";
 import { classifyAuditFailureReasonText } from "@squirrelscan/core-contracts/failure-reason";
 import { PLANS } from "@squirrelscan/core-contracts/plans";
@@ -1046,10 +1050,21 @@ export async function runAudit(
     });
 
     // Check reachability
-    logger.debug("checking reachability", redactUrl(url));
+    // A targeted run (#1777) asks only for the URLs it was given: the site's reachability is read off the
+    // first one rather than off the start URL, which is the site's base and not a page of the audit.
+    const reachabilityUrl = (() => {
+      const first = options.targetUrls?.[0];
+      if (!first) return url;
+      try {
+        return new URL(first, url).toString();
+      } catch {
+        return url;
+      }
+    })();
+    logger.debug("checking reachability", redactUrl(reachabilityUrl));
     // --offline: the start URL's redirects stay on the audited site (#819).
     const reachability = await checkReachability(
-      url,
+      reachabilityUrl,
       options.offline
         ? { ownSiteOnly: true, domains: mergedConfig.project?.domains }
         : undefined,
@@ -1338,6 +1353,10 @@ export async function runAudit(
         maxPrefixBudgetRatio: mergedConfig.crawler.max_prefix_budget,
         coverageMode,
         disableLinkDiscovery: isQuickMode,
+        // #1777: audit exactly these URLs; no sitemap, probes or link following.
+        ...(options.targetUrls && options.targetUrls.length > 0
+          ? { targetUrls: options.targetUrls }
+          : {}),
         documentFetcher,
         onTlsEvent: (event: TlsEvent) => {
           // Surface TLS/status-0 failures + standard-fetch fallbacks so they
@@ -1384,15 +1403,20 @@ export async function runAudit(
 
       // Detect redirects first so we can look up by final URL
       // (before subscribing to events to avoid counting redirect requests)
-      const finalUrl = await Effect.runPromise(
-        // #1271: the seed redirect probe is inside the budget too.
-        crawler.detectRedirects(
-          url,
-          durationBudget
-            ? { deadlineAt: durationBudget.crawlStopAt }
-            : undefined
-        )
-      );
+      // A targeted run (#1777) requests only the URLs it was given: the start URL is the site's base and is
+      // not probed for a redirect.
+      const finalUrl =
+        options.targetUrls && options.targetUrls.length > 0
+          ? url
+          : await Effect.runPromise(
+              // #1271: the seed redirect probe is inside the budget too.
+              crawler.detectRedirects(
+                url,
+                durationBudget
+                  ? { deadlineAt: durationBudget.crawlStopAt }
+                  : undefined
+              )
+            );
 
       // Subscribe to crawler events to emit progress updates
       let pagesProcessed = 0;
@@ -2481,6 +2505,13 @@ export async function runAudit(
             report.pages.map((p) => p.url)
           )
         );
+        // A targeted run (#1777) accounts for every URL it was given.
+        const targeted =
+          options.targetUrls && options.targetUrls.length > 0
+            ? await Effect.runPromise(
+                targetedCoverageFor(sqliteStorage, crawlId)
+              )
+            : undefined;
         const scanScope: NonNullable<AuditReport["scanScope"]> = {
           origin: detectRunner().ci ? "ci" : "cli",
           maxPages: scopeMaxPages,
@@ -2497,6 +2528,7 @@ export async function runAudit(
             : {}),
           ...(unfetched > 0 ? { unfetched } : {}),
           ...(pageTypes.length > 0 ? { pageTypes } : {}),
+          ...(targeted ? { targeted } : {}),
           ...(options.startRedirect
             ? { startRedirect: options.startRedirect }
             : {}),
@@ -2643,9 +2675,14 @@ export async function runAudit(
       // what ran even after a level's definition changes. REPORT-ONLY.
       // An --offline run records what ran, not the level's cloud defaults (#1275).
       if (options.auditLevel) {
-        report.auditLevel = options.offline
+        // A targeted run checks no links, so it records that too (#1777).
+        const ran = options.offline
           ? offlineAuditSettings(options.auditLevel)
           : options.auditLevel;
+        report.auditLevel =
+          options.targetUrls && options.targetUrls.length > 0
+            ? targetedAuditSettings(ran)
+            : ran;
       }
 
       // How many first-party scripts the script rules saw (#1280).
@@ -3051,6 +3088,7 @@ export function mergeOptionsToConfig(
   config: Config,
   options: RunAuditOptions
 ): Config {
+  const targetedRun = (options.targetUrls?.length ?? 0) > 0;
   const nextExternalLinks = {
     ...config.external_links,
     ...(typeof options.externalLinksEnabled === "boolean"
@@ -3159,12 +3197,15 @@ export function mergeOptionsToConfig(
     },
     // --offline promises no network beyond the audited site itself, so
     // external-link probing (fetches to third-party URLs) is disabled too.
-    external_links: options.offline
-      ? { ...nextExternalLinks, enabled: false }
-      : nextExternalLinks,
+    // A targeted run (#1777) checks no links: the link rules are site-wide and skip, so the status
+    // requests (and the cloud link credits) would be spent for nothing.
+    external_links:
+      options.offline || targetedRun
+        ? { ...nextExternalLinks, enabled: false }
+        : nextExternalLinks,
     // repo#2729: the internal link probe only requests the audited site, so
     // --offline keeps it; --no-internal-links turns it off.
-    ...(options.internalLinksEnabled === false
+    ...(options.internalLinksEnabled === false || targetedRun
       ? { internal_links: { ...config.internal_links, enabled: false } }
       : {}),
     // #2307: --no-classifier turns the page classifier off; absent keeps the config's choice.

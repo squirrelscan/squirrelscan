@@ -36,7 +36,7 @@ import {
   seedRedirectLine,
   startRedirectLine,
   ignoredLine,
-  unusedIgnoreEntries,
+  ignoredNoteLines,
   getGroupName,
   getSubcategoryName,
   groupTechnologies,
@@ -666,11 +666,10 @@ function printReportDetail(
   // #1262: findings the config's [[ignore]] entries waived, and entries that matched nothing.
   const ignored = ignoredLine(report);
   if (ignored) scan.push(fmt.dim(ignored));
-  for (const entry of unusedIgnoreEntries(report)) {
+  for (const line of ignoredNoteLines(report)) {
+    // An entry that matched nothing is the warning; one that waived something shows its reason quietly.
     scan.push(
-      fmt.yellow(
-        `Ignore entry ${entry.index + 1} (${entry.rule}) matched nothing.`
-      )
+      line.endsWith("matched nothing.") ? fmt.yellow(line) : fmt.dim(line)
     );
   }
   // Scan scope (#1180) + smart-audits coverage (#110): the score reads with its basis. The

@@ -1,0 +1,202 @@
+---
+title: "Deploy hooks"
+description: "Start a cloud audit of a website from your deploy pipeline with one signed request"
+icon: "rocket"
+---
+
+A deploy hook is a URL that starts a cloud audit of one website when your pipeline calls it, so every deploy gets checked without anyone opening the dashboard. The request is signed with a key only you hold. No API key is involved, and a hook can only ever audit its own website.
+
+Each audit a hook starts is an ordinary cloud audit: it is priced in [credits](/cloud/credits) like any other and lands in the website's audit history. It also renders pages fresh instead of reusing a cached render, so it sees the site as deployed.
+
+## Create a hook
+
+A website has at most one hook. Managing it needs the signed-in session of an organization **owner or admin**. Organization API keys are refused (`403`), so a leaked API key cannot mint or rotate a hook.
+
+| Method | Path | What it does |
+| --- | --- | --- |
+| `GET` | `/v1/websites/{websiteId}/deploy-hook` | The hook, or `null` |
+| `POST` | `/v1/websites/{websiteId}/deploy-hook` | Create it. Answers `201` with the hook and its signing key |
+| `POST` | `/v1/websites/{websiteId}/deploy-hook/rotate` | Rotate the key. Answers with the hook and the new key |
+| `DELETE` | `/v1/websites/{websiteId}/deploy-hook` | Delete it |
+
+All paths are on `https://api.squirrelscan.com`. The create body is optional: send `{}`, or no body and no `Content-Type`.
+
+```json
+{ "maxCredits": 200, "level": "surface" }
+```
+
+- `maxCredits` is the hook's credit budget per run, from 1 to 10,000. It defaults to 200. An audit is sized to fit it (see [Caps and budgets](#caps-and-budgets)).
+- `level` (`quick`, `surface` or `full`) is the [audit level](/guides/audit-levels) the hook runs when a request does not name one. Without it, the website's own level applies.
+
+Creating a second hook for the same website answers `409` with `"error": "exists"`: rotate or delete the one you have. A website outside an organization cannot have a hook (`409`, `"error": "no_organization"`).
+
+The response carries the hook URL, `https://api.squirrelscan.com/v1/deploy-hooks/{hookId}`, and the signing key, which starts `sqdh_`.
+
+<Warning>
+  The signing key is shown **once**, in the create and rotate responses. `GET` never returns it and nobody can look it up later. Store it as a secret in your CI right away. If you lose it, rotate the hook.
+</Warning>
+
+Rotating gives the hook a new key and the old key stops working at once. Requests signed with it answer `401` until your pipeline has the new key. The member who rotates becomes the hook's owner for future runs.
+
+A hook goes away with its website: deleting or moving the website deletes its hook.
+
+## Sign a request
+
+Call the hook with `POST` and two headers:
+
+| Header | Value |
+| --- | --- |
+| `X-Squirrel-Timestamp` | The current time in unix seconds |
+| `X-Squirrel-Signature` | `sha256=` and the hex HMAC-SHA256 of `<timestamp>.<body>`, keyed with the signing key |
+
+The signed message is the timestamp, a `.`, and the **exact bytes** of the request body. An empty body is fine and signs as `<timestamp>.`. The key is used as given, `sqdh_` prefix included.
+
+The timestamp must be within **5 minutes** of the server's clock, either way, so a captured request cannot be replayed later. The body is at most 4 KB (`413` beyond that) and must be UTF-8.
+
+## What a request can ask for
+
+The body is optional JSON. Every field shapes the audit; none can point it at another site.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `level` | `"quick"`, `"surface"` or `"full"` | The [audit level](/guides/audit-levels) for this run |
+| `full` | `true` | Shorthand for `"level": "full"` |
+| `rules` | array of strings | Run only these rules: rule ids or category globs such as `"links/*"`. At most 50 entries of up to 100 characters |
+| `max_pages` | integer | Page cap for this run, from 1 to 100,000. Your plan's page limit still applies |
+
+Without a level in the body, the hook's own level applies, then the website's. Passing `level` and `full` with different meanings is refused.
+
+Any other field is a `400`. A pipeline must not believe it narrowed the audit by a field nothing reads, so unknown fields are refused rather than ignored. That includes `paths`: running an audit on a list of paths is not supported yet.
+
+```json
+{ "level": "quick", "rules": ["links/*", "core/*"], "max_pages": 50 }
+```
+
+## One audit per burst
+
+Deploys come in bursts: a merge, a retry, a second app in the same release. A hook starts **one audit per 10 minutes**. A request inside that window starts nothing and answers with the audit the burst already started:
+
+```json
+{ "status": "debounced", "runId": "01KX...", "retryAfterSeconds": 412 }
+```
+
+`"status": "starting"` with `"runId": null` means the first request of the burst is still starting its audit. Retry after a moment to get its run id.
+
+Concurrent requests are safe: ten requests at once start one audit, and the other nine get the debounced answer.
+
+## Caps and budgets
+
+Every request is checked before anything is charged. A refused request starts nothing and spends none of the day's runs.
+
+- **12 audits per hook per UTC day.** The thirteenth answers `429` with `"error": "daily_cap"`.
+- **30 requests a minute per IP address**, counted before the signature is checked, for every caller of the hook endpoint from that address. Over it the answer is `429` with a `Retry-After` header and the error `"Rate limit exceeded. Slow down and retry shortly."`. CI runners that share an address share this limit. A pipeline that retries should wait for `Retry-After` on this one, and should not retry `daily_cap`: that hook is done for the day.
+- **The hook's credit budget per run** (`maxCredits`), together with the website's own per-audit spend cap and your organization's balance. The audit is sized to fit the smallest of them: it audits fewer pages rather than being refused, and the response says so with `"creditClamp": true`. Raise the budget, or narrow the audit with `level`, `rules` or `max_pages`, to keep the pages you want.
+- When not even a one-page audit fits, nothing starts: `402` with `"error": "cap_exceeded"` (the budget or the website's cap is too low) or `"insufficient_credits"` (the balance). An estimate over the hook's budget is refused as `"over_budget"`.
+- **Plan limits and the audit queue**, as for every cloud audit.
+
+A request inside the 5 minute window can be replayed by whoever captured it, but only while the timestamp is fresh. During the debounce a replay returns the burst's run, and after it a replay can start at most one more audit, always inside the daily cap and the credit budget. It cannot change what is audited: the body is signed.
+
+## Responses
+
+| Status | Body | Meaning |
+| --- | --- | --- |
+| `202` | `status`, `runId`, `auditId`, `websiteId`, `estimate` | The audit started |
+| `200` | `status: "debounced"` or `"starting"`, `runId`, `retryAfterSeconds` | A run of this burst already started (or is starting) |
+| `400` | `error: "invalid_body"`, `message` | The body is not JSON or not UTF-8, has an unknown field, passes `level` and `full` with different meanings, or names bad rules |
+| `400` | `error: "no_rules_selected"` or `"too_many_forced_rules"` | The rules the request (and the website's own settings) select leave nothing to run, or force on too many |
+| `401` | `error: "unauthorized"`, `reason` | `missing` headers, a `stale` timestamp, or a `bad_signature` (also a wrong or rotated key) |
+| `402` | `error: "cap_exceeded"`, `"over_budget"` or `"insufficient_credits"` | Not even a one-page audit fits the hook's budget, the website's cap or the balance |
+| `403` | `error: "forbidden"` or `"org_locked"` | The hook's owner no longer runs audits in the organization, or the organization is locked |
+| `404` | `error: "website_not_found"` | The website was deleted, or it is no longer the one its URL resolves to in the organization |
+| `413` | `error: "body_too_large"` | The body is over 4 KB |
+| `429` | `error: "daily_cap"` | The hook has started 12 audits today (UTC). Do not retry before tomorrow |
+| `429` | `error: "Rate limit exceeded. Slow down and retry shortly."`, `Retry-After` header | Over 30 requests a minute from this IP address. Retry after the header's seconds |
+| `502` | `error: "dispatch_failed"` | The audit could not be handed to a worker. Retryable |
+| `503` | `error: "disabled"` or `"no_sandbox"` | Cloud audits are unavailable right now. Retryable |
+
+Other refusals carry the cloud audit's own error code in lowercase, such as `queue_full` (`409`). Only the `5xx` answers and the rate limit are worth an automatic retry; every other refusal answers the same until something changes.
+
+A hook runs as the member who created it, or who last rotated it. If that member leaves the organization or no longer runs audits, the hook answers `403` until an owner or admin rotates it.
+
+## Examples
+
+### Shell
+
+Needs `curl` and `openssl`. Put the hook URL and key in the environment, never in the script.
+
+```bash
+#!/usr/bin/env bash
+# Usage: export DEPLOY_HOOK_URL and DEPLOY_HOOK_KEY from your secret store, then run this script.
+# Never type the key on the command line: it would land in your shell history.
+set -euo pipefail
+
+body='{"level":"quick"}'
+ts=$(date +%s)
+sig=$(printf '%s.%s' "$ts" "$body" | openssl dgst -sha256 -hmac "$DEPLOY_HOOK_KEY" -hex | sed 's/^.* //')
+
+curl --fail-with-body -sS -X POST "$DEPLOY_HOOK_URL" \
+  -H "Content-Type: application/json" \
+  -H "X-Squirrel-Timestamp: $ts" \
+  -H "X-Squirrel-Signature: sha256=$sig" \
+  --data "$body"
+```
+
+Sign the same bytes you send: build the body once in a variable, as above, and pass that variable to both `openssl` and `curl`.
+
+### GitHub Actions
+
+Add `SQUIRREL_DEPLOY_HOOK_URL` and `SQUIRREL_DEPLOY_HOOK_KEY` as repository secrets, then call the hook after your deploy step:
+
+```yaml
+- name: Audit the deploy with squirrelscan
+  if: success()
+  # The deploy already succeeded: a refused audit (402, 429) should not fail the job.
+  continue-on-error: true
+  env:
+    DEPLOY_HOOK_URL: ${{ secrets.SQUIRREL_DEPLOY_HOOK_URL }}
+    DEPLOY_HOOK_KEY: ${{ secrets.SQUIRREL_DEPLOY_HOOK_KEY }}
+  run: |
+    body='{"level":"surface"}'
+    ts=$(date +%s)
+    sig=$(printf '%s.%s' "$ts" "$body" | openssl dgst -sha256 -hmac "$DEPLOY_HOOK_KEY" -hex | sed 's/^.* //')
+    curl --fail-with-body -sS -X POST "$DEPLOY_HOOK_URL" \
+      -H "Content-Type: application/json" \
+      -H "X-Squirrel-Timestamp: $ts" \
+      -H "X-Squirrel-Signature: sha256=$sig" \
+      --data "$body"
+```
+
+A `200` debounced answer is a success too: the burst's audit is already running. `continue-on-error: true` keeps a refused audit (over budget, daily cap, rate limit) from failing a job whose deploy already went out. Leave it off only if you want a deploy pipeline to stop when its audit cannot start.
+
+### Cloudflare
+
+Run the same step right after `wrangler deploy` (or the Cloudflare Pages deploy) in your pipeline. With GitHub Actions and the official action:
+
+```yaml
+- name: Deploy to Cloudflare
+  uses: cloudflare/wrangler-action@v3
+  with:
+    apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    command: deploy
+
+- name: Audit the deploy with squirrelscan
+  continue-on-error: true
+  env:
+    DEPLOY_HOOK_URL: ${{ secrets.SQUIRREL_DEPLOY_HOOK_URL }}
+    DEPLOY_HOOK_KEY: ${{ secrets.SQUIRREL_DEPLOY_HOOK_KEY }}
+  run: |
+    body='{"level":"quick"}'
+    ts=$(date +%s)
+    sig=$(printf '%s.%s' "$ts" "$body" | openssl dgst -sha256 -hmac "$DEPLOY_HOOK_KEY" -hex | sed 's/^.* //')
+    curl --fail-with-body -sS -X POST "$DEPLOY_HOOK_URL" \
+      -H "Content-Type: application/json" \
+      -H "X-Squirrel-Timestamp: $ts" \
+      -H "X-Squirrel-Signature: sha256=$sig" \
+      --data "$body"
+```
+
+Cloudflare's own build pipeline has no step after the deploy, so call the hook from the CI that runs the deploy.
+
+## Follow the audit
+
+The `202` response carries the `runId`. The audit shows in the website's history in the [dashboard](/dashboard) like any other, and the [API](/api) and [MCP server](/developers/mcp) read it by that id.

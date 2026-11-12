@@ -217,6 +217,16 @@ What the coverage counts mean:
 - **pagesWithStaleCarry** counts pages this run did re-crawl that still carry a
   finding from an earlier run, because a rule gave no verdict there (skipped, or
   inconclusive). It does not count pages outside the crawl.
+- **carriedPagesOutsideCrawl** (cloud only, when present) counts pages that carry
+  a finding from an earlier run and are not in this run's crawl: the pages a
+  capped run rotated out. It is the number to read beside `pagesWithStaleCarry`,
+  which counts the other kind of stale carry.
+- A query-string variant of a page (`/contact?subject=Billing` whose
+  `rel=canonical` is the crawled `/contact`) counts with that page in **known**
+  in the cloud, as it does in a local report, so `knownPages` is the same number
+  as the report's total pages. **audited** stays the number of pages the run
+  crawled, variants included: it is what the audit covered and what it is billed
+  on.
 
 Carried findings do not expire on a timer: they last until you re-crawl the page
 (the fresh result replaces them) or it is removed. If a capped run rotates the

@@ -5,7 +5,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { AuditReport } from "../src/types";
-import { fullScanHint, scanScopeLine } from "../src/coverage";
+import { auditLevelLine, fullScanHint, scanScopeLine } from "../src/coverage";
 import { renderText } from "../src/output/text";
 import { renderMarkdown } from "../src/output/markdown";
 import { renderHtml } from "../src/output/html";
@@ -363,5 +363,55 @@ describe("XML scan scope (#350)", () => {
     );
     expect(out).toContain('origin="&quot;&gt;&lt;x"');
     expect(out).not.toContain('origin=""><x');
+  });
+});
+
+describe("targeted run note (#1777)", () => {
+  const scope = (targeted: unknown) =>
+    baseReport({
+      scanScope: {
+        origin: "cli",
+        maxPages: 100,
+        pagesCrawled: 3,
+        capped: false,
+        targeted,
+      } as never,
+    });
+
+  test("an ordinary audit has no note and its line is unchanged", () => {
+    expect(scanScopeLine(scope(undefined))).toBe("Scan: 3 pages crawled from the CLI (page limit 100).");
+  });
+
+  test("says how many of the given URLs were audited and that site-wide rules did not run", () => {
+    expect(scanScopeLine(scope({ requested: 4, audited: 3, unaudited: [] }))).toBe(
+      "Scan: 3 pages crawled from the CLI (page limit 100). Targeted run: 3 of 4 URLs given were audited; site-wide rules were not run.",
+    );
+    expect(scanScopeLine(scope({ requested: 1, audited: 1, unaudited: [] }))).toContain(
+      "1 of 1 URL given was audited",
+    );
+  });
+
+  test("counts that are not whole numbers read as no note", () => {
+    expect(scanScopeLine(scope({ requested: "x", audited: 1 }))).not.toContain("Targeted run");
+    expect(scanScopeLine(scope({ requested: -1, audited: 1 }))).not.toContain("Targeted run");
+  });
+});
+
+describe("audit level line of a targeted run (#1777)", () => {
+  const level = (extra: Record<string, unknown>) =>
+    baseReport({
+      auditLevel: {
+        level: "surface",
+        basedOn: "surface",
+        changes: [],
+        settings: { pages: 10, crawlStrategy: "pattern-sampled", cloudChecks: true, render: "auto", externalLinks: false, probe: "active" },
+        ...extra,
+      } as never,
+    });
+  test("says only the listed URLs were audited and no links were checked", () => {
+    expect(auditLevelLine(level({ targeted: true }))).toContain("Targeted: only the listed URLs were audited, and no links were checked.");
+  });
+  test("an ordinary run's line is unchanged", () => {
+    expect(auditLevelLine(level({}))).toBe("Audit level: Surface.");
   });
 });

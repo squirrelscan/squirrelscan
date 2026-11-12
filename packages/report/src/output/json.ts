@@ -66,7 +66,7 @@ import { isLocalOnlyTech, techIconUrl } from "../technologies";
 import { domainAgeYears, siteProfileRows } from "../site-metadata";
 import { editorSummaryView } from "../editor-summary";
 import type { IgnoreSummary } from "@squirrelscan/core-contracts/ignore";
-import { canonicalVariantCount, followedStartRedirect, scanScopePageTypes, scanScopeUnfetched, seedRedirect } from "../coverage";
+import { canonicalVariantCount, followedStartRedirect, scanScopePageTypes, scanScopeTargeted, scanScopeUnfetched, seedRedirect } from "../coverage";
 import { safeIgnored } from "../ignored";
 import { privateTargetLine, privateTargetSkippedRules } from "../private-target";
 import { notCheckedLine, notCheckedRules } from "../not-checked";
@@ -285,7 +285,7 @@ interface SlimJsonReport {
   outcome?: AuditOutcome;
   /**
    * Cloud checks that did not run, and why (#1734). `message` is the sentence every other format shows;
-   * each rule carries `reason` (`plan`, `provider_error` or `unsupported_environment`) and `detail` when
+   * each rule carries `reason` (`plan`, `credits`, `provider_error` or `unsupported_environment`) and `detail` when
    * the publisher said. Present only when some rule is locked.
    */
   lockedRules?: {
@@ -513,7 +513,7 @@ interface SlimJsonReport {
     reason: string;
     /** What became of the rule (#1661): `coverage_gap`, `timed_out` or `errored`. */
     outcome: RuleOutcome;
-    /** Why it did not run, from a closed set (#1734): `plan`, `provider_error` or `unsupported_environment`. Absent when the publisher gave none. */
+    /** Why it did not run, from a closed set (#1734): `plan`, `credits`, `provider_error` or `unsupported_environment`. Absent when the publisher gave none. */
     cause?: LockedRuleReason;
     /** Short free-text detail for `cause`. */
     causeDetail?: string;
@@ -652,6 +652,8 @@ function buildSlimReport(
       ...(unfetched > 0 ? { unfetched } : {}),
       // #1744: pages known and pages audited per URL-based page type.
       ...(scanScopePageTypes(report).length > 0 ? { pageTypes: scanScopePageTypes(report) } : {}),
+      // #1777: a targeted run says which URLs it was given and which it did not audit.
+      ...(scanScopeTargeted(report) ? { targeted: scanScopeTargeted(report) } : {}),
       // Query-string variants counted with their canonical page; `totalPages` excludes them (#858).
       ...(canonicalVariantCount(report) > 0 ? { canonicalVariants: canonicalVariantCount(report) } : {}),
       ...(canonicalVariantCount(report) > 0 && report.canonicalVariantPages?.length

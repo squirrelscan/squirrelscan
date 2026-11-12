@@ -1,0 +1,26 @@
+---
+title: "Cloud version"
+description: "The cloud has its own version, separate from the squirrel CLI's, and where to read it"
+icon: "tag"
+---
+
+squirrelscan cloud has one version of its own. It covers the API, the dashboard, the admin app, the website and the workers together, because they deploy as one unit. It is **not** the `squirrel` CLI's `v0.0.x` number: the CLI ships on its own schedule and the two never move together.
+
+## What the number means
+
+- A released cloud version is plain semantic versioning, such as `1.1.0`.
+- While a version is in development, each deploy reads `1.1.0-dev<N>`, where `N` is the number of commits on main since the commit that last changed the version. Cutting a release, or starting the next version, resets it.
+- Compare two deploys by `N` or by deploy time, never by parsing the string: as semver, `1.1.0-dev10` sorts before `1.1.0-dev2`.
+- A build that was not deployed reports no number: the API's `/health` says `dev`, and a local dashboard build shows `<version>-dev+local`, never a numbered `devN` that could be mistaken for a deploy.
+
+## Where to see it
+
+- **Dashboard.** A small badge in the sidebar shows the version, and its tooltip carries the build sha. It turns red when a newer build is live in another tab: refresh to load it.
+- **API.** `GET https://api.squirrelscan.com/health` returns `{"status":"ok","version":"1.1.0-dev4","sha":"<build sha>"}`. `sha` is `null` when the deploy carried none.
+- **MCP.** The hosted server (`https://mcp.squirrelscan.com/mcp`) reports the same version as `serverInfo.version` in its `initialize` response. The local `squirrel mcp` server reports the CLI's version instead.
+
+Quote the version and the sha when you report a problem to support.
+
+## What changed
+
+The [cloud changelog](/cloud/changelog) lists what changed in each cloud version. The CLI has its own [release notes](https://squirrelscan.com/releases).

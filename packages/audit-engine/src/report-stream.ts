@@ -38,6 +38,7 @@ import {
 
 import type {
   CrawlStorage,
+  FrontierRecord,
   RobotsTxtRecord,
   ImageAppearanceRecord,
 } from "@squirrelscan/core-contracts/storage";
@@ -50,6 +51,8 @@ import type {
   OpenGraphData,
   RedirectChain,
   ScanScopePageType,
+  ScanScopeTargeted,
+  TargetedRunUnaudited,
   ReportRuleResult,
   ResourceSizeData,
   RobotsTxtData,
@@ -147,6 +150,88 @@ export function pageTypeCoverageFor(
       ),
     ),
     Effect.catchAll(() => Effect.succeed([] as ScanScopePageType[])),
+  );
+}
+
+/** Pages read per batch when looking for the redirect rows of a targeted run. */
+const TARGETED_PAGE_BATCH = 50;
+
+/** Rows `scanScope.targeted.unaudited` lists at most; `requested - audited` stays the true count. */
+const TARGETED_UNAUDITED_MAX = 100;
+
+/**
+ * What a targeted run (#1777) did with the URLs it was given: every one is audited or listed with its
+ * reason. The frontier holds exactly the targets (no discovery), plus a skipped row for the destination of a
+ * target that redirected to a URL not in the list. `redirectSources` are the normalised URLs of the stored
+ * redirect rows (see `isRedirectSourcePage`): a target is `redirected` because its stored row says so, never
+ * because it is missing from the report's pages, so a canonical or query variant that was folded into
+ * another page still counts as audited. `overLimit` is the count of URLs past `MAX_TARGET_URLS`. Pure: the
+ * caller reads the frontier, the pages and the crawl stats.
+ */
+export function targetedCoverage(
+  entries: readonly FrontierRecord[],
+  redirectSources: Iterable<string>,
+  overLimit = 0,
+): ScanScopeTargeted {
+  const redirects = new Set<string>(redirectSources);
+  const redirectDestinations = new Map<string, string>();
+  for (const e of entries) {
+    if (e.reason === "redirect_not_targeted" && e.parentUrl) {
+      redirectDestinations.set(e.parentUrl, e.normalizedUrl);
+    }
+  }
+  const targets = entries.filter((e) => e.reason !== "redirect_not_targeted");
+  const unaudited: TargetedRunUnaudited[] = [];
+  let auditedCount = 0;
+  for (const e of targets) {
+    if (e.status === "skipped") {
+      unaudited.push({ url: e.normalizedUrl, reason: e.reason ?? "skipped" });
+    } else if (e.status === "failed") {
+      unaudited.push({ url: e.normalizedUrl, reason: "failed" });
+    } else if (e.status === "done") {
+      if (redirects.has(e.normalizedUrl)) {
+        const destination = redirectDestinations.get(e.normalizedUrl);
+        unaudited.push({
+          url: e.normalizedUrl,
+          reason: "redirected",
+          ...(destination ? { destination } : {}),
+        });
+      } else {
+        auditedCount += 1;
+      }
+    } else {
+      // Still pending or fetching when the crawl stopped (a time limit, an interrupted run).
+      unaudited.push({ url: e.normalizedUrl, reason: "not_reached" });
+    }
+  }
+  return {
+    requested: targets.length + overLimit,
+    audited: auditedCount,
+    ...(overLimit > 0 ? { overLimit } : {}),
+    unaudited: unaudited.slice(0, TARGETED_UNAUDITED_MAX),
+  };
+}
+
+/** {@link targetedCoverage} for a stored crawl. A failed read gives an empty answer, never a failed report. */
+export function targetedCoverageFor(
+  storage: CrawlStorage,
+  crawlId: string,
+): Effect.Effect<ScanScopeTargeted, never, never> {
+  return Effect.gen(function* () {
+    const entries = yield* storage.getAllFrontierEntries(crawlId);
+    // The stored redirect rows, read in batches: a PageRecord carries the page's full html (#1860), and the
+    // legacy-redirect test needs it, so a single `getPages(crawlId)` would hold every body at once.
+    const redirectSources: string[] = [];
+    for (let offset = 0; ; offset += TARGETED_PAGE_BATCH) {
+      const batch = yield* storage.getPages(crawlId, { limit: TARGETED_PAGE_BATCH, offset });
+      if (batch.length === 0) break;
+      for (const page of batch) if (isRedirectSourcePage(page)) redirectSources.push(page.normalizedUrl);
+      if (batch.length < TARGETED_PAGE_BATCH) break;
+    }
+    const stats = yield* storage.getStats(crawlId);
+    return targetedCoverage(entries, redirectSources, stats?.targetsOverLimit ?? 0);
+  }).pipe(
+    Effect.catchAll(() => Effect.succeed({ requested: 0, audited: 0, unaudited: [] } as ScanScopeTargeted)),
   );
 }
 
@@ -424,7 +509,19 @@ export interface BuildV1ReportOptions {
    * in place (idempotent, after the score is computed), so build the report once from them.
    */
   foldCanonicalVariants?: boolean;
+  /**
+   * List the crawl's query-string variants in the report (`canonicalVariantPages`, at most
+   * {@link CANONICAL_VARIANT_EXPORT_MAX}, with `canonicalVariantsComplete: false` past it) WITHOUT folding anything: counts, checks and `totalPages` are
+   * the ones they would be without it. For a producer whose report is merged and persisted by a server,
+   * which records the variants and folds the merged report itself after scoring (#1350): folding here
+   * would rewrite the pages the findings are keyed on before the server stores them. Ignored when
+   * {@link foldCanonicalVariants} is on (the fold lists them itself).
+   */
+  exportCanonicalVariants?: boolean;
 }
+
+/** The most variants `exportCanonicalVariants` lists. A site with more folds the first ones only. */
+export const CANONICAL_VARIANT_EXPORT_MAX = 1000;
 
 /**
  * Build a FullAuditReport from crawler storage — the v1 (non-streaming) path.
@@ -463,6 +560,11 @@ export function buildV1Report(
       if (list) list.push(variant);
       else variantsOfCanonical.set(canonical, [variant]);
     }
+    const exportOn = !!options?.exportCanonicalVariants && !options.foldCanonicalVariants;
+    const variantRead = { unreadable: false };
+    const exportedVariants = exportOn
+      ? yield* readCanonicalVariants(storage, crawlId, batchSize, variantRead)
+      : new Map<string, string>();
     let variantPages = 0;
 
     const links = yield* storage.getLinks(crawlId).pipe(Effect.catchAll(() => Effect.succeed([])));
@@ -717,6 +819,19 @@ export function buildV1Report(
       warnings,
       failed,
       ...(renderBlockRecovered > 0 ? { fetchFallbacks: { recovered: renderBlockRecovered } } : {}),
+      // The list is always sent when it could be read, an empty one included: it is how a server learns that a
+      // page it once recorded as a variant is not one any more. `canonicalVariantsComplete: false` says the list
+      // was clipped, so a server only adds from it. Unreadable page features send nothing (unknown).
+      ...(exportOn && !variantRead.unreadable
+        ? {
+            canonicalVariantPages: [...exportedVariants]
+              .slice(0, CANONICAL_VARIANT_EXPORT_MAX)
+              .map(([page, canonical]) => ({ page, canonical })),
+            ...(exportedVariants.size > CANONICAL_VARIANT_EXPORT_MAX
+              ? { canonicalVariantsComplete: false }
+              : {}),
+          }
+        : {}),
       ...(variantPages > 0
         ? {
             canonicalVariants: variantPages,

@@ -258,6 +258,8 @@ export {
   carriedTag,
   timeAgo,
   scanScopeLine,
+  targetedRunNote,
+  scanScopeTargeted,
   scanScopeUnfetched,
   scanScopePageTypes,
   pageTypeCoverageLine,
@@ -279,6 +281,7 @@ export {
 export {
   ignoredEntryLines,
   ignoredLine,
+  ignoredNoteLines,
   safeIgnored,
   summarizeIgnored,
   unusedIgnoreEntries,

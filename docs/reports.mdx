@@ -516,15 +516,16 @@ squirrel report -f llm | claude "analyze this audit and prioritize fixes"
 
 ### Why a check did not run
 
-A rule that did not run (a locked cloud check, or a check listed under not checked) can carry a reason from a closed set, so an agent can tell a plan exclusion from a failed service from an environment that cannot run the check, and neither retry what a re-run will not change nor trust a result that never ran.
+A rule that did not run (a locked cloud check, or a check listed under not checked) can carry a reason from a closed set, so an agent can tell a plan exclusion from an audit that ran out of credits from a failed service from an environment that cannot run the check, and neither retry what a re-run will not change nor trust a result that never ran.
 
 | Reason | Meaning | What a report says |
 |--------|---------|--------------------|
 | `plan` | The check is not part of the plan this audit ran under. | Names the plan ("not included in the Free plan", "in your plan", or a signed-out audit) and keeps the upgrade link. A re-run will not include it. |
+| `credits` | The audit ran out of credits before the check ran. | Says the audit ran out of credits and to add credits, then re-run; never a plan or an environment limit. The Free account keeps its add-credits link. |
 | `provider_error` | A service the check depends on failed during the audit. | Says a re-run may include it. |
 | `unsupported_environment` | The check cannot run where the audit ran. | Says where it can run: a cloud audit, or the squirrel CLI on a machine with direct network access, or the place the report's detail names. |
 
-A rule may also carry a short free-text `detail` for its reason. Every format shows the same sentence: the text, markdown, HTML, `llm` and XML reports print it in the checks-not-run section and label each rule, and the JSON report has `lockedRules` (`count`, `audience`, `message` and each rule's `id`, `name`, `reason` and `detail`). A `notChecked` entry in the JSON and XML reports carries the same code as `cause` (and `causeDetail`), and its hint follows the cause. A report whose rules carry no reason, such as one from an older publisher, keeps the wording chosen by plan and coverage alone, unchanged. A failed audit keeps its own message: nothing ran, whatever the reasons say.
+A rule may also carry a short free-text `detail` for its reason. Every format shows the same sentence: the text, markdown, HTML, `llm` and XML reports print it in the checks-not-run section and label each rule, and the JSON report has `lockedRules` (`count`, `audience`, `message` and each rule's `id`, `name`, `reason` and `detail`). A `notChecked` entry in the JSON and XML reports carries the same code as `cause` (and `causeDetail`), and its hint follows the cause. A report whose rules carry no reason, such as one from an older publisher, keeps the wording chosen by plan and coverage alone, unchanged. So does a reader from before `credits` existed that meets a `credits` reason: it treats the value as none and prints the generic wording, without failing. A failed audit keeps its own message: nothing ran, whatever the reasons say.
 
 **Token Efficiency:**
 The LLM format achieves significant size reduction through:

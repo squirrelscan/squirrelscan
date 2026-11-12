@@ -52,7 +52,7 @@ squirrel keys create --shell
 
 `--shell` offers to append `export SQUIRRELSCAN_API_KEY=sq_...` to your shell rc, and `SQUIRRELSCAN_API_KEY` is the conventional env var: most clients can interpolate it into the header so the key never lands in a config file. See [`squirrel keys`](/cli/keys) and [Authentication](/developers/authentication).
 
-Key scopes apply to tools exactly like they do to the REST API: `run_audit`, `add_website`, `delete_website`, `delete_websites`, and `comment_on_issue` need `audits:write`; audit, report, and issue reads (`compare_audits` included) need `audits:read`; `get_credit_balance` and `list_credit_transactions` need `credits:read`; `list_notifications` needs `org:read`. A key missing a scope gets a structured `FORBIDDEN` error naming the missing scope. `whoami` works with any key but only includes the balance when the key has `credits:read`.
+Key scopes apply to tools exactly like they do to the REST API: `run_audit`, `add_website`, `delete_website`, `delete_websites`, `comment_on_issue`, and `update_issue` need `audits:write`; audit, report, and issue reads (`compare_audits` included) need `audits:read`; `get_credit_balance` and `list_credit_transactions` need `credits:read`; `list_notifications` needs `org:read`. A key missing a scope gets a structured `FORBIDDEN` error naming the missing scope. `whoami` works with any key but only includes the balance when the key has `credits:read`.
 
 Best for: CI, headless machines, containers, and configs you commit and share.
 
@@ -90,6 +90,8 @@ All tools require authentication. Write tools are marked; everything else only r
 | `list_issues` | Audit issues for a website, sorted by severity, filterable by status, severity, and category. Rows omit the long recommendation unless `include_recommendation` is set; `website_totals` counts the whole website, `total` counts the filtered set. `website_totals` replaces the earlier `severity_summary` and `status_counts` fields, an intentional change: read the counts there. After a smart audit each row also carries `provenance` and `last_seen_at`: see [issue provenance](#issue-provenance). When the latest audit did not cover every known page, the result also carries `coverage`: see [audit coverage](#audit-coverage). | Read |
 | `get_issue` | One issue with full detail, per-occurrence detail from the latest report (which pages/images, capped and countable via `occurrence_limit`), and its comment thread. It carries `provenance` and `last_seen_at` as `list_issues` does. | Read |
 | `comment_on_issue` | Post a markdown comment on an issue, visible in the dashboard thread. | Write |
+| `update_issue` | Change an issue the way a person does in the dashboard: `status` (`open`, `in_progress`, `resolved`, `dismissed`, `wontfix`), `assigned_to` and `severity`. Set only the fields to change. A completed close releases the issue's findings and a reopen re-links them, a severity edit on a triage issue locks its priority against the next triage run, and a later audit does not reopen what you closed as not planned. Returns the issue as it reads afterwards. | Write |
+| `list_findings` | The raw findings of one audit (the latest completed one, or `run_id`): each rule's failing or warning check as the audit reported it, with `affected_pages_count` and a sample of pages, its stable `finding_id`, and `covered_by_issues` (the open issues that cover it, empty when none does). Filter by `rule_id`, `category`, `status` or one `page`; paginated with `total`. Unlike an issue it has no model-written text, so it exists even before triage runs. | Read |
 | `list_rules` | Browse the audit rule catalog by category or keyword. | Read |
 | `get_rule` | One rule's full definition by id, e.g. `crawl/canonical-chain`, including its fix recommendation and docs link. | Read |
 | `list_entities` | The entities a site declares in its JSON-LD, collapsed across every crawled page, so an Organization declared on 60 pages is one row rather than 60. Filter by `@type`, by declaring page, by problem class, or by a text match on the name. Page-local entities (a page's own `WebPage`, `BreadcrumbList` and unnamed images) are hidden unless `include_page_local` is true. Paginated (`total`/`has_more`). Needs `audits:read`. | Read |
@@ -227,6 +229,10 @@ It runs squirrelscan's deterministic audit engine on your machine: it works offl
 It also serves the squirrelscan agent skills over MCP (the Skills extension), so a client that supports it gets the matching skills from the server itself: see [Skills](/cli/mcp#skills).
 
 Full setup and tool reference: [`squirrel mcp`](/cli/mcp).
+
+## Server version
+
+The hosted server's `serverInfo.version` is the [cloud version](/cloud/version) (`1.1.0`, or `1.1.0-dev<N>` while a version is in development), not the CLI's `v0.0.x` number and not a fixed value. The local `squirrel mcp` server reports the CLI's version.
 
 ## Related
 

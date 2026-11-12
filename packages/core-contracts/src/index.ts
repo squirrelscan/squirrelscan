@@ -383,6 +383,13 @@ export const PRIVATE_TARGET_SKIP_REASON = "private-target";
 export const EXTERNAL_LINKS_NOT_CHECKED_SKIP_REASON = "external-links-not-checked";
 
 /**
+ * `skipReason` of a site-scope rule in a targeted run (#1777: `--target-url`, `targetUrls`). The run fetched
+ * only the listed URLs, so a rule that judges the whole site (inbound links, sitemap coverage, discovery
+ * probes) has nothing to judge. An evaluation gap, not a pass: never scored, never a finding.
+ */
+export const TARGETED_RUN_SKIP_REASON = "targeted-run";
+
+/**
  * The `error` a link row carries when its host was CONFIRMED not to resolve (#1740): a definitive "no such
  * host" answer (NXDOMAIN, or no address records) that held on a second lookup. It is a verdict, stored like a
  * status (so it survives the cache and the database with no new column), and `links/broken-external-links`
@@ -935,6 +942,12 @@ export interface AuditReport {
   /** The folded variants and the page each is counted with (first 100), so no variant URL is lost (#858). */
   canonicalVariantPages?: Array<{ page: string; canonical: string }>;
   /**
+   * (#1350) `false` when `canonicalVariantPages` was clipped: a producer that lists the crawl's variants
+   * without folding them sends the list even when it is empty, and a server treats a list that is not
+   * `false` here as the whole truth about the crawled pages. Absent otherwise.
+   */
+  canonicalVariantsComplete?: boolean;
+  /**
    * Resolved site-metadata "profile" (site type, business category, country,
    * audience, identity, contacts, socials, domain age). Like `technologies`,
    * it is a REPORT-ONLY section that NEVER contributes to `healthScore`.
@@ -1004,6 +1017,12 @@ export interface AuditReport {
      * no verdict there). Omitted when none.
      */
     pagesWithStaleCarry?: number;
+    /**
+     * (#1031, #1350) Pages that carry a finding from an earlier run and are not in this run's crawl,
+     * counted as the report counts pages (a query-string variant with its canonical page is one). Only
+     * when the producer of the merge asked for it; omitted when zero.
+     */
+    carriedPagesOutsideCrawl?: number;
   };
   /**
    * Scan scope disclosure (#1180): where the audit ran and how much of the site
@@ -1211,6 +1230,14 @@ export interface CheckTally {
   warnUnits?: number;
   failUnits?: number;
   skipped?: number;
+  /**
+   * Of the `skipped` checks, the ones that are a gap rather than a "does not
+   * apply" (`classifyRuleOutcome` of `coverage_gap`, `timed_out` or `errored`),
+   * counted by skip reason (#1775). Present only when a gap exists, so a reader
+   * of a capped report sees one even when no gap row survived the cap. A
+   * `skipped` with no `gaps` entry is not a gap.
+   */
+  gaps?: Record<string, number>;
 }
 
 /** `ruleId` → `checkName` → {@link CheckTally}. */
@@ -1350,6 +1377,34 @@ export interface ScanScopePageType {
   audited: number;
 }
 
+/** Why a URL named by `targetUrls` was not audited (#1777). */
+export interface TargetedRunUnaudited {
+  url: string;
+  /**
+   * Why: `robots_disallowed`, `url_too_long`, `over_max_pages`, `invalid_url`, `failed`, `redirected` (the URL
+   * redirects, so it is recorded as a redirect and not audited as a page), or the crawler's scope reason for
+   * a URL outside the site or the include and exclude rules.
+   */
+  reason: string;
+  /** Where a `redirected` URL led, when that destination was NOT audited (it was not in the list). */
+  destination?: string;
+}
+
+/**
+ * A targeted run (#1777): the audit fetched exactly the URLs it was given and nothing else. Every URL given
+ * is accounted for: audited, or listed in `unaudited` with its reason.
+ */
+export interface ScanScopeTargeted {
+  /** URLs given, after dropping duplicates. */
+  requested: number;
+  /** URLs fetched and audited. */
+  audited: number;
+  /** URLs in the list past the limit (`MAX_TARGET_URLS`), counted in `requested` and not audited. Absent when none. */
+  overLimit?: number;
+  /** The URLs given that were not audited, with the reason (capped at 100 rows; `requested - audited` is the true count). */
+  unaudited: TargetedRunUnaudited[];
+}
+
 /** Where an audit executed + how much of the site it crawled (#1180). */
 export interface ScanScope {
   /** "cli" = local machine, "ci" = CI runner, "cloud" = squirrelscan cloud container. */
@@ -1398,6 +1453,11 @@ export interface ScanScope {
    */
   pageTypes?: ScanScopePageType[];
   /**
+   * Present only on a targeted run (#1777): the audit was given an explicit URL list and fetched those URLs
+   * only, so site-wide rules skipped with `targeted-run` and the score covers just these pages.
+   */
+  targeted?: ScanScopeTargeted;
+  /**
    * The start URL's followed redirect (#1281), kept here so a report rebuilt
    * from the crawl later still names the URL the user gave. The report's
    * `originalUrl` and `redirectChain` are read from it.
@@ -1434,10 +1494,19 @@ export type CloudRenderMode = "http" | "browser";
 
 /**
  * Why a locked rule did not run (#1734), a closed set so an agent can tell a plan
- * exclusion (retrying spends credits and changes nothing) from a provider failure
- * (a re-run may help) from a check that cannot run in that environment.
+ * exclusion (retrying spends credits and changes nothing) from an audit that ran out of
+ * credits (add credits, then re-run, #1792) from a provider failure (a re-run may help)
+ * from a check that cannot run in that environment.
  */
-export const LOCKED_RULE_REASONS = ["plan", "provider_error", "unsupported_environment"] as const;
+export const LOCKED_RULE_REASONS = [
+  "plan",
+  // #1792: the audit ran out of credits partway. Not a plan exclusion (a paid org has the check) and not an
+  // environment limit: adding credits and re-running includes it. A reader that predates the code reads it
+  // as "no reason" and keeps the audience wording.
+  "credits",
+  "provider_error",
+  "unsupported_environment",
+] as const;
 export type LockedRuleReason = (typeof LOCKED_RULE_REASONS)[number];
 
 /** Whether `value` is one of {@link LOCKED_RULE_REASONS}. */

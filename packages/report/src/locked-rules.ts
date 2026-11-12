@@ -110,6 +110,7 @@ export function lockedRuleView(rule: LockedRule): {
 /** Short label for a reason, for a list beside a rule. */
 export const LOCKED_REASON_LABELS: Record<LockedRuleReason, string> = {
   plan: "not in your plan",
+  credits: "out of credits, add credits and re-run",
   provider_error: "a service failed, a re-run may help",
   unsupported_environment: "cannot run in this environment",
 };
@@ -135,6 +136,9 @@ function groupText(
   const details = [...new Set(rules.map(lockedRuleDetail).filter((d): d is string => !!d))];
   const detail = details.length > 0 ? ` ${details.map((d) => (/[.!?]$/.test(d) ? d : `${d}.`)).join(" ")}` : "";
   if (reason === "plan") return `${these} ${n === 1 ? "is" : "are"} not included in ${PLAN_NAMES[plan]}.${detail}`;
+  if (reason === "credits") {
+    return `${these} did not run because the audit ran out of credits. Add credits, then re-run the audit to include ${n === 1 ? "it" : "them"}.${detail}`;
+  }
   if (reason === "provider_error") {
     return `${these} did not run because a service ${n === 1 ? "it" : "they"} depend${n === 1 ? "s" : ""} on failed during this audit. Re-running the audit may include ${n === 1 ? "it" : "them"}.${detail}`;
   }
@@ -172,6 +176,7 @@ export function lockedRulesMessage(report: LockedRulesReportShape): LockedRulesM
   const plan = report.cloudPlan ?? "anonymous";
   const order: Array<LockedRuleReason | undefined> = [
     "plan",
+    "credits",
     "provider_error",
     "unsupported_environment",
     undefined,
@@ -187,8 +192,11 @@ export function lockedRulesMessage(report: LockedRulesReportShape): LockedRulesM
       rules,
     });
   }
-  // The upsell link only goes with a plan exclusion or a rule with no reason.
-  const upsell = groups.some((g) => g.reason === undefined || g.reason === "plan");
+  // The upsell link (add credits, or get started) only goes with a plan exclusion, an audit out of credits, or
+  // a rule with no reason.
+  const upsell = groups.some(
+    (g) => g.reason === undefined || g.reason === "plan" || g.reason === "credits",
+  );
   const { cta: _cta, ...rest } = legacy;
   return {
     ...rest,

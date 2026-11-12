@@ -47,8 +47,8 @@ function report(lockedRules: LockedRule[], over: Partial<AuditReport> = {}): Aud
 }
 
 describe("the closed set", () => {
-  test("is exactly plan, provider_error and unsupported_environment", () => {
-    expect([...LOCKED_RULE_REASONS]).toEqual(["plan", "provider_error", "unsupported_environment"]);
+  test("is exactly plan, credits, provider_error and unsupported_environment (credits: #1792)", () => {
+    expect([...LOCKED_RULE_REASONS]).toEqual(["plan", "credits", "provider_error", "unsupported_environment"]);
     expect(isLockedRuleReason("plan")).toBe(true);
     expect(isLockedRuleReason("outage")).toBe(false);
     expect(isLockedRuleReason(undefined)).toBe(false);

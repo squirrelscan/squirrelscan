@@ -335,6 +335,13 @@ export interface CrawlStats {
    */
   linkDiscoveryOff?: boolean;
   /**
+   * The crawl was given an explicit URL list (`targetUrls`, #1777) and fetched exactly those: no links
+   * followed, no sitemap read, no discovery probes. Site-scope rules read this and skip.
+   */
+  targetedRun?: boolean;
+  /** Targeted run: URLs in the list past `MAX_TARGET_URLS`, counted and not stored (#1777). */
+  targetsOverLimit?: number;
+  /**
    * External link checking this run (repo#2729): distinct external links the
    * pages carry, how many were checked, and the per-audit limit that capped it.
    * Set by the external-link phase when it ran; absent when it did not.
@@ -467,6 +474,11 @@ export interface CrawlerConfigSnapshot {
   allowQueryParams: string[];
   dropQueryPrefixes: string[];
   allowedDomains: string[];
+  /**
+   * The URL list of a targeted run (#1777), kept so a resume under another list, or a normal one, is
+   * refused: it would mix two scopes in one crawl. Absent on a normal crawl.
+   */
+  targetUrls?: string[];
 }
 
 // ============================================
@@ -860,6 +872,13 @@ export interface SitePageRecord {
   state: SitePageState;
   lastSeenCrawlId: string;
   lastSeenAt: number;
+  /**
+   * (#1350) The page this one counts under when it is a query-string variant of a crawled page of the
+   * same path (the report fold's target, `canonicalVariantMap`). Absent or null: the page is its own
+   * page. Optional and recorded only by producers that know it, so a store that never writes it, and a
+   * report with no variants, stay byte-identical to before.
+   */
+  canonical?: string | null;
 }
 
 // ============================================

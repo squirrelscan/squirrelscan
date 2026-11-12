@@ -55,6 +55,7 @@ export const main = defineCommand({
     auth: () => import("./commands/auth").then((m) => m.auth),
     crawl: () => import("./commands/crawl").then((m) => m.crawl),
     credits: () => import("./commands/credits").then((m) => m.credits),
+    ci: () => import("./commands/ci").then((m) => m.ci),
     analyze: () => import("./commands/analyze").then((m) => m.analyze),
     entities: () => import("./commands/entities").then((m) => m.entities),
     pages: () => import("./commands/pages").then((m) => m.pages),

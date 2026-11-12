@@ -53,7 +53,7 @@ _squirrel_completions() {
   local global_opts="--config-file -c"
 
   # Top-level commands
-  local commands="setup audit auth crawl credits analyze entities pages init config report feedback keys mcp channel self skills"
+  local commands="setup audit auth crawl ci credits analyze entities pages init config report feedback keys mcp channel self skills"
 
   # Auth subcommands
   local auth_commands="login logout status whoami"
@@ -225,7 +225,7 @@ _squirrel_completions() {
           return 0
           ;;
       esac
-      COMPREPLY=( $(compgen -W "--max-pages -m --max-depth --concurrency --per-host --level --coverage -C --format -f --output -o --refresh -r --fresh-ua --store-scripts --no-store-scripts --incremental --no-incremental --resume --verbose -v --debug --trace --project-name -n --publish -p --no-publish --ephemeral --no-ephemeral --visibility --follow-redirect --no-follow-redirect --yes -y --render --render-mode --http --offline --external-links --no-external-links --no-internal-links --no-classifier --fail-on --header -H --header-host --rule-include --rule-exclude --disable-discovery-probes --discovery-probe-path --crawl-timeout --probe -P --passive --aggressive --probe-budget --pentest --summary --include-passed --help --include-info --include-pages --max-duration --no-ignore" -- "\${cur}") )
+      COMPREPLY=( $(compgen -W "--max-pages -m --max-depth --concurrency --per-host --level --coverage -C --format -f --output -o --refresh -r --fresh-ua --store-scripts --no-store-scripts --incremental --no-incremental --resume --verbose -v --debug --trace --project-name -n --publish -p --no-publish --ephemeral --no-ephemeral --visibility --follow-redirect --no-follow-redirect --yes -y --render --render-mode --http --offline --external-links --no-external-links --no-internal-links --no-classifier --fail-on --header -H --header-host --rule-include --rule-exclude --target-url --disable-discovery-probes --discovery-probe-path --crawl-timeout --probe -P --passive --aggressive --probe-budget --pentest --summary --include-passed --help --include-info --include-pages --max-duration --no-ignore" -- "\${cur}") )
       return 0
       ;;
     entities)
@@ -258,6 +258,16 @@ _squirrel_completions() {
           ;;
       esac
       COMPREPLY=( $(compgen -W "--max-pages -m --concurrency --per-host --level --coverage -C --refresh -r --fresh-ua --resume --disable-discovery-probes --discovery-probe-path --help" -- "\${cur}") )
+      return 0
+      ;;
+    ci)
+      case "\${prev}" in
+        --fail-on-new)
+          COMPREPLY=( $(compgen -W "error warning info" -- "\${cur}") )
+          return 0
+          ;;
+      esac
+      COMPREPLY=( $(compgen -W "--website --fail-on-new --max-pages --timeout --json --help" -- "\${cur}") )
       return 0
       ;;
     credits)
@@ -343,6 +353,7 @@ _squirrel() {
     'audit:Run audit on a URL'
     'auth:Authentication commands'
     'crawl:Crawl a website (no analysis)'
+    'ci:Audit a deployed URL in the cloud and fail on new findings'
     'credits:Show cloud credit balance and pricing'
     'analyze:Run audit rules on stored crawl'
     'pages:List the pages of a stored audit as a table'
@@ -584,6 +595,7 @@ _squirrel() {
             '*--fail-on[Exit 2 when a threshold trips (e.g. score<90, severity>=error)]:expr' \\
             '*'{-H,--header}'[Custom HTTP header on every crawl request, format "Name: Value" (repeatable)]:header' \\
             '*--header-host[Host that also gets the custom headers on page and asset requests (repeatable)]:host' \\
+            '*--target-url[Audit exactly this URL and nothing else (repeatable)]:url' \\
             '*--rule-include[Only run these rule categories or rules]:pattern' \\
             '*--rule-exclude[Skip these rule categories or rules]:pattern' \\
             '--disable-discovery-probes[Skip the pre-crawl discovery probes (llms.txt, well-known files, swagger.json)]' \\
@@ -637,6 +649,15 @@ _squirrel() {
             '--resume[Resume interrupted crawl]' \\
             '--disable-discovery-probes[Skip the pre-crawl discovery probes for this run]' \\
             '*--discovery-probe-path[Only send the discovery probe for this path (repeatable)]:path'
+          ;;
+        ci)
+          _arguments \\
+            '1:url:_urls' \\
+            '--website[Website id the audit belongs to]:website-id:' \\
+            '--fail-on-new[Fail on new findings at or above this severity]:severity:(error warning info)' \\
+            '--max-pages[Page limit for the cloud audit]:number' \\
+            '--timeout[Minutes to wait for the audit]:minutes' \\
+            '--json[Print the result as JSON]'
           ;;
         credits)
           _arguments \\
@@ -709,6 +730,7 @@ complete -c squirrel -n "__fish_use_subcommand" -a setup -d "Sign in, install th
 complete -c squirrel -n "__fish_use_subcommand" -a audit -d "Run audit on a URL"
 complete -c squirrel -n "__fish_use_subcommand" -a auth -d "Authentication commands"
 complete -c squirrel -n "__fish_use_subcommand" -a crawl -d "Crawl a website (no analysis)"
+complete -c squirrel -n "__fish_use_subcommand" -a ci -d "Audit a deployed URL in the cloud and fail on new findings"
 complete -c squirrel -n "__fish_use_subcommand" -a credits -d "Show cloud credit balance and pricing"
 complete -c squirrel -n "__fish_use_subcommand" -a analyze -d "Run audit rules on stored crawl"
 complete -c squirrel -n "__fish_use_subcommand" -a pages -d "List the pages of a stored audit as a table"
@@ -872,6 +894,7 @@ complete -c squirrel -n "__fish_seen_subcommand_from audit" -l no-classifier -d 
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l fail-on -d "Exit 2 when a threshold trips (e.g. score<90, severity>=error)"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -s H -l header -d "Custom HTTP header on every crawl request, format \\"Name: Value\\" (repeatable)"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l header-host -d "Host that also gets the custom headers on page and asset requests (repeatable)"
+complete -c squirrel -n "__fish_seen_subcommand_from audit" -l target-url -r -d "Audit exactly this URL and nothing else (repeatable)"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l rule-include -d "Only run these rule categories or rules"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l rule-exclude -d "Skip these rule categories or rules"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l disable-discovery-probes -d "Skip the pre-crawl discovery probes (llms.txt, well-known files, swagger.json)"
@@ -908,6 +931,13 @@ complete -c squirrel -n "__fish_seen_subcommand_from pages" -l too-long -d "Only
 complete -c squirrel -n "__fish_seen_subcommand_from pages" -l orphan -d "Only pages the audit flags as orphans"
 complete -c squirrel -n "__fish_seen_subcommand_from pages" -l section -d "Only pages under this URL path"
 complete -c squirrel -n "__fish_seen_subcommand_from pages" -l page -d "Only pages whose URL contains this text"
+
+# Ci options
+complete -c squirrel -n "__fish_seen_subcommand_from ci" -l website -x -d "Website id the audit belongs to"
+complete -c squirrel -n "__fish_seen_subcommand_from ci" -l fail-on-new -x -a "error warning info" -d "Fail on new findings at or above this severity"
+complete -c squirrel -n "__fish_seen_subcommand_from ci" -l max-pages -x -d "Page limit for the cloud audit"
+complete -c squirrel -n "__fish_seen_subcommand_from ci" -l timeout -x -d "Minutes to wait for the audit"
+complete -c squirrel -n "__fish_seen_subcommand_from ci" -l json -d "Print the result as JSON"
 
 # Credits options
 complete -c squirrel -n "__fish_seen_subcommand_from credits" -l json -d "Output as JSON"
