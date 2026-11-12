@@ -122,6 +122,8 @@ function linkTargetsHint(details: Record<string, unknown> | undefined): string {
 /** What to do about a check that did not run, by cause (#1734). */
 const CAUSE_HINTS: Record<LockedRuleReason, string> = {
   plan: "This check is not included in your plan, so running the audit again will not include it.",
+  credits:
+    "The audit ran out of credits before this check ran. Add credits, then run the audit again to include it.",
   provider_error:
     "A service this check depends on failed during the audit. Run the audit again; a re-run may include it.",
   unsupported_environment:

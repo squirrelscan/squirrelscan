@@ -1446,10 +1446,19 @@ export type CloudRenderMode = "http" | "browser";
 
 /**
  * Why a locked rule did not run (#1734), a closed set so an agent can tell a plan
- * exclusion (retrying spends credits and changes nothing) from a provider failure
- * (a re-run may help) from a check that cannot run in that environment.
+ * exclusion (retrying spends credits and changes nothing) from an audit that ran out of
+ * credits (add credits, then re-run, #1792) from a provider failure (a re-run may help)
+ * from a check that cannot run in that environment.
  */
-export const LOCKED_RULE_REASONS = ["plan", "provider_error", "unsupported_environment"] as const;
+export const LOCKED_RULE_REASONS = [
+  "plan",
+  // #1792: the audit ran out of credits partway. Not a plan exclusion (a paid org has the check) and not an
+  // environment limit: adding credits and re-running includes it. A reader that predates the code reads it
+  // as "no reason" and keeps the audience wording.
+  "credits",
+  "provider_error",
+  "unsupported_environment",
+] as const;
 export type LockedRuleReason = (typeof LOCKED_RULE_REASONS)[number];
 
 /** Whether `value` is one of {@link LOCKED_RULE_REASONS}. */
