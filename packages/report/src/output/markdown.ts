@@ -8,6 +8,7 @@ import { cacheReasonsLabel, cacheStatsSummaryLine } from "../cache-stats";
 import { refusedFetchLines, reportFailureReasonCode } from "../failure-notice";
 import { wafBlockedPagesLines, wafBlockedSeedCopy, wafSuspectLines } from "../waf-blocked";
 import { getScoreGrade } from "../scoring";
+import { scoreAdjustmentNoteFor } from "../score-adjustment";
 import { REPORT_SOURCE_PAGES_PREVIEW, REPORT_PAGES_HARD_CAP } from "../constants";
 import { fixRollupLine, fixUnits, ruleFixCoverage } from "../component-presentation";
 import {
@@ -472,6 +473,8 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
       lines.push(`| ${cat.name} | ${cat.score}/100 |`);
     }
     lines.push("");
+    const adjustmentNote = scoreAdjustmentNoteFor(report.healthScore);
+    if (adjustmentNote) lines.push(`_${adjustmentNote}_`, "");
     if ((report.healthScore.groups ?? []).some((g) => g.group === "ai")) {
       for (const l of agentSignalLines(report)) lines.push(`_${l}_`, "");
     }

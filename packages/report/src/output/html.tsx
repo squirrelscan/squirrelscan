@@ -105,6 +105,7 @@ import {
   regionScopeLine,
 } from "../region-scope";
 import { GROUP_COLORS, getGroupColor, getScoreGrade } from "../scoring";
+import { scoreAdjustmentNoteFor } from "../score-adjustment";
 import { count, discoveredPages } from "../top-line";
 import { siteProfileFlags, siteProfileRows } from "../site-metadata";
 import {
@@ -1729,6 +1730,7 @@ function ReportPage({
   const description = report.homepage?.description?.trim();
   const score = report.healthScore?.overall;
   const groups = report.healthScore?.groups ?? [];
+  const scoreNote = scoreAdjustmentNoteFor(report.healthScore);
   const agentLines = agentSignalLines(report);
   const failedRun = isAuditFailed(report.status);
   const issues = flattenIssuesBySeverity(
@@ -2101,6 +2103,12 @@ function ReportPage({
                 <p className="text-xs text-muted-foreground">Reason: {report.statusReason}</p>
               )}
             </Card>
+          )}
+
+          {scoreNote && (
+            <p className="mb-3 text-xs text-muted-foreground" data-score-adjustment>
+              {scoreNote}
+            </p>
           )}
 
           {groups.length > 0 && (

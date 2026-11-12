@@ -74,6 +74,7 @@ import { wrapText } from "../utils";
 import { unfetchedNote } from "../coverage";
 import { LOCKED_REASON_LABELS, lockedRuleView, lockedRulesMessage } from "../locked-rules";
 import { privateTargetLine } from "../private-target";
+import { scoreAdjustmentNoteFor } from "../score-adjustment";
 import { notCheckedDetailLines } from "../not-checked";
 import { stripControlChars } from "@squirrelscan/core-contracts/control-chars";
 
@@ -108,6 +109,8 @@ function formatHealthScoreText(report: AuditReport): string {
       : `Health Score: ${score.overall}/100 (${getScoreGrade(score.overall)})`,
   );
   lines.push("");
+  const adjustmentNote = scoreAdjustmentNoteFor(score);
+  if (adjustmentNote) lines.push(adjustmentNote, "");
   // Group Breakdown (#626): the 4 top-level groups, above the finer categories.
   const groups = score.groups ?? [];
   if (groups.length > 0) {

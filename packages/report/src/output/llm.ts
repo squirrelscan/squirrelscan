@@ -83,6 +83,7 @@ import { stripControlChars } from "@squirrelscan/core-contracts/control-chars";
 import { AUDIT_FAILURE_NEXT_STEP_THIRD } from "@squirrelscan/core-contracts/failure-reason";
 import { refusedFetchLines, reportFailureReasonCode } from "../failure-notice";
 import { safeWafBlocked, safeWafSuspect, wafBlockedSeedCopy } from "../waf-blocked";
+import { scoreAdjustmentNoteFor } from "../score-adjustment";
 
 export interface LlmRenderOptions {
   /** Roll up groups that are one repair (default true). */
@@ -404,6 +405,8 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
   for (const cat of report.healthScore?.categories ?? []) {
     lines.push(`${indent(1)}<cat name="${escapeXml(cat.name)}" score="${cat.score}" scope="category"/>`);
   }
+  const adjustmentNote = scoreAdjustmentNoteFor(report.healthScore);
+  if (adjustmentNote) lines.push(`${indent(1)}<adjustment>${escapeXml(adjustmentNote)}</adjustment>`);
   lines.push("</score>");
 
   lines.push(

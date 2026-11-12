@@ -521,3 +521,7 @@ export {
   sectionScoreRows,
 } from "./top-line";
 export type { ReportTopLineCounts, SectionScoreRow } from "./top-line";
+
+// Why the overall can sit below every section score, from healthScore.debug
+export { scoreAdjustment, scoreAdjustmentNote, scoreAdjustmentNoteFor } from "./score-adjustment";
+export type { ScoreAdjustment } from "./score-adjustment";
