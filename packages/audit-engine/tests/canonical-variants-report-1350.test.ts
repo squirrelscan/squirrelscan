@@ -77,6 +77,40 @@ describe("buildV1Report folds query-string variants (#1350)", () => {
     await run(storage.close());
   }, T);
 
+  test("exportCanonicalVariants lists the variants and changes nothing else (the server folds, #1350)", async () => {
+    const { storage, crawlId, result, base } = await crawl(true);
+    const strip = (r: object): string => JSON.stringify({ ...r, timestamp: "", canonicalVariantPages: undefined });
+    const off = await run(generateReportFromStorage(storage, crawlId, result));
+    const exported = await run(generateReportFromStorage(storage, crawlId, result, { exportCanonicalVariants: true }));
+    expect(exported.canonicalVariantPages).toEqual([{ page: `${base.url}?subject=Billing`, canonical: base.url }]);
+    expect(exported.canonicalVariants).toBeUndefined();
+    expect(strip(exported)).toBe(strip(off));
+    await run(storage.close());
+  }, T);
+
+  test("exportCanonicalVariants on a site with no variants sends an EMPTY list and is otherwise byte-identical", async () => {
+    const { storage, crawlId, result } = await crawl(false);
+    const strip = (r: object): string => JSON.stringify({ ...r, timestamp: "", canonicalVariantPages: undefined });
+    const off = await run(generateReportFromStorage(storage, crawlId, result));
+    const on = await run(generateReportFromStorage(storage, crawlId, result, { exportCanonicalVariants: true }));
+    // The empty list is how a server learns that a page it recorded as a variant is not one any more.
+    expect(on.canonicalVariantPages).toEqual([]);
+    expect(on.canonicalVariantsComplete).toBeUndefined();
+    expect(strip(on)).toBe(strip(off));
+    await run(storage.close());
+  }, T);
+
+  test("exportCanonicalVariants on storage that cannot list page features sends no list (unknown, not none)", async () => {
+    const { storage, crawlId, result } = await crawl(true);
+    const blind = new Proxy(storage, {
+      get: (target, prop, receiver) =>
+        prop === "getPageFeaturesPage" ? undefined : Reflect.get(target, prop, receiver),
+    });
+    const on = await run(generateReportFromStorage(blind, crawlId, result, { exportCanonicalVariants: true }));
+    expect(on.canonicalVariantPages).toBeUndefined();
+    await run(storage.close());
+  }, T);
+
   test("a site with no variants reports byte-identically with the fold on or off", async () => {
     const { storage, crawlId, result } = await crawl(false);
     const strip = (r: object): string => JSON.stringify({ ...r, timestamp: "" });

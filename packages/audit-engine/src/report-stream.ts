@@ -424,7 +424,19 @@ export interface BuildV1ReportOptions {
    * in place (idempotent, after the score is computed), so build the report once from them.
    */
   foldCanonicalVariants?: boolean;
+  /**
+   * List the crawl's query-string variants in the report (`canonicalVariantPages`, at most
+   * {@link CANONICAL_VARIANT_EXPORT_MAX}, with `canonicalVariantsComplete: false` past it) WITHOUT folding anything: counts, checks and `totalPages` are
+   * the ones they would be without it. For a producer whose report is merged and persisted by a server,
+   * which records the variants and folds the merged report itself after scoring (#1350): folding here
+   * would rewrite the pages the findings are keyed on before the server stores them. Ignored when
+   * {@link foldCanonicalVariants} is on (the fold lists them itself).
+   */
+  exportCanonicalVariants?: boolean;
 }
+
+/** The most variants `exportCanonicalVariants` lists. A site with more folds the first ones only. */
+export const CANONICAL_VARIANT_EXPORT_MAX = 1000;
 
 /**
  * Build a FullAuditReport from crawler storage — the v1 (non-streaming) path.
@@ -463,6 +475,11 @@ export function buildV1Report(
       if (list) list.push(variant);
       else variantsOfCanonical.set(canonical, [variant]);
     }
+    const exportOn = !!options?.exportCanonicalVariants && !options.foldCanonicalVariants;
+    const variantRead = { unreadable: false };
+    const exportedVariants = exportOn
+      ? yield* readCanonicalVariants(storage, crawlId, batchSize, variantRead)
+      : new Map<string, string>();
     let variantPages = 0;
 
     const links = yield* storage.getLinks(crawlId).pipe(Effect.catchAll(() => Effect.succeed([])));
@@ -717,6 +734,19 @@ export function buildV1Report(
       warnings,
       failed,
       ...(renderBlockRecovered > 0 ? { fetchFallbacks: { recovered: renderBlockRecovered } } : {}),
+      // The list is always sent when it could be read, an empty one included: it is how a server learns that a
+      // page it once recorded as a variant is not one any more. `canonicalVariantsComplete: false` says the list
+      // was clipped, so a server only adds from it. Unreadable page features send nothing (unknown).
+      ...(exportOn && !variantRead.unreadable
+        ? {
+            canonicalVariantPages: [...exportedVariants]
+              .slice(0, CANONICAL_VARIANT_EXPORT_MAX)
+              .map(([page, canonical]) => ({ page, canonical })),
+            ...(exportedVariants.size > CANONICAL_VARIANT_EXPORT_MAX
+              ? { canonicalVariantsComplete: false }
+              : {}),
+          }
+        : {}),
       ...(variantPages > 0
         ? {
             canonicalVariants: variantPages,

@@ -173,6 +173,12 @@ export interface UntouchedCarriedAggregate {
   findings: number;
   /** Of those, the ones on pages no audit has rendered (no `site_pages` row). */
   unrenderedFindings: number;
+  /**
+   * (#1031) Distinct pages those carried findings sit on, counted as the report counts pages (a page that
+   * records a `canonical` counts as that page). Optional: a provider that does not count them leaves it
+   * out, and the merge then reports no `carriedPagesOutsideCrawl` rather than an undercount.
+   */
+  pages?: number;
   /** Per rule, page-scope or not: the fold drops the rules it cannot score. */
   rules: readonly UntouchedRuleTotals[];
   /** Per rule and report class, for the report sample's stamps. */
