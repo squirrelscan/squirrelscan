@@ -19,6 +19,7 @@ How it works:
 
 ### Added
 
+- Locked and not-checked rules can carry the reason `credits` (#1792): the audit ran out of credits before the check ran. Every report groups and words it on its own ("ran out of credits: add credits, then re-run the audit"), never as a plan or an environment limit, and the Free account keeps its add-credits link. A reader from before this release treats the new value as no reason and keeps the generic wording.
 - A site page record can carry `canonical`, the page a query-string variant counts with. The cloud merge records a crawl's variants (`report.canonicalVariantPages`), counts them with their canonical page in `coverage.knownPages` (`auditedPages` stays as crawled), and returns the site's variant map so a server folds the merged report after scoring. `generateReportFromStorage` takes `exportCanonicalVariants` to list the variants without folding: the list is always sent when the page features could be read, an empty one included, and `canonicalVariantsComplete: false` marks a list clipped at 1000. A complete list is the whole truth for the crawled pages (a page it no longer names stops being recorded as a variant); a clipped one only adds. `coverage.carriedPagesOutsideCrawl` counts pages that carry a finding and are not in the run's crawl, only when the caller asks. A site with no variants reports exactly as before. #1350 #1031
 
 ### Fixed

@@ -285,7 +285,7 @@ interface SlimJsonReport {
   outcome?: AuditOutcome;
   /**
    * Cloud checks that did not run, and why (#1734). `message` is the sentence every other format shows;
-   * each rule carries `reason` (`plan`, `provider_error` or `unsupported_environment`) and `detail` when
+   * each rule carries `reason` (`plan`, `credits`, `provider_error` or `unsupported_environment`) and `detail` when
    * the publisher said. Present only when some rule is locked.
    */
   lockedRules?: {
@@ -513,7 +513,7 @@ interface SlimJsonReport {
     reason: string;
     /** What became of the rule (#1661): `coverage_gap`, `timed_out` or `errored`. */
     outcome: RuleOutcome;
-    /** Why it did not run, from a closed set (#1734): `plan`, `provider_error` or `unsupported_environment`. Absent when the publisher gave none. */
+    /** Why it did not run, from a closed set (#1734): `plan`, `credits`, `provider_error` or `unsupported_environment`. Absent when the publisher gave none. */
     cause?: LockedRuleReason;
     /** Short free-text detail for `cause`. */
     causeDetail?: string;
