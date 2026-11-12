@@ -6,7 +6,14 @@ import { XMLValidator } from "fast-xml-parser";
 
 import type { CheckResult } from "@squirrelscan/core-contracts";
 
-import { ignoredEntryLines, ignoredLine, safeIgnored, summarizeIgnored, unusedIgnoreEntries } from "../src/ignored";
+import {
+  ignoredEntryLines,
+  ignoredLine,
+  ignoredNoteLines,
+  safeIgnored,
+  summarizeIgnored,
+  unusedIgnoreEntries,
+} from "../src/ignored";
 import { renderHtml } from "../src/output/html";
 import { renderJson } from "../src/output/json";
 import { renderLlm } from "../src/output/llm";
@@ -118,6 +125,39 @@ describe("every renderer carries it", () => {
     expect(renderMarkdown(r)).toContain("Ignore entry 2 \\(never/matches\\) matched nothing.");
   });
 
+  // #1262: the HTML report lists an entry that matched nothing, and every report shows an entry's reason.
+  test("the HTML report lists the entry that matched nothing", () => {
+    expect(renderHtml(r, { reportId: "rep_1" })).toContain("Ignore entry 2 (never/matches) matched nothing.");
+  });
+
+  test("text, markdown and HTML show an entry's reason and what it waived", () => {
+    const line = "Ignore entry 1 (security/cookie-flags), Shopify sets these: 3 findings waived.";
+    expect(renderText(r)).toContain(line);
+    expect(renderMarkdown(r)).toContain("Shopify sets these");
+    expect(renderHtml(r, { reportId: "rep_1" })).toContain(line);
+  });
+
+  test("a reason on an entry that matched nothing is kept; an entry with neither reason nor waiver says only that", () => {
+    const lines = ignoredNoteLines(
+      report({
+        ...WAIVED,
+        entries: [
+          { index: 0, rule: "a/b", reason: "was needed in 2025", items: 0, pages: 0 },
+          { index: 1, rule: "c/d", items: 0, pages: 0 },
+          { index: 2, rule: "e/f", items: 2, pages: 0 },
+        ],
+      }),
+    );
+    expect(lines).toEqual([
+      "Ignore entry 1 (a/b), was needed in 2025, matched nothing.",
+      "Ignore entry 2 (c/d) matched nothing.",
+    ]);
+  });
+
+  test("a --no-ignore run prints no per-entry notes", () => {
+    expect(ignoredNoteLines(report({ ...WAIVED, disabled: true }))).toEqual([]);
+  });
+
   test("json puts it in meta; llm and xml stay well-formed and name the entries", () => {
     const meta = (JSON.parse(renderJson(r)) as { meta: { ignored?: typeof WAIVED } }).meta;
     expect(meta.ignored?.items).toBe(3);
@@ -148,11 +188,19 @@ describe("a stored report is untrusted", () => {
 
   test("no renderer emits an escape character or unescaped markup from it", () => {
     const r = report(hostile);
-    for (const out of [renderText(r), renderLlm(r), renderXml(r), renderMarkdown(r)]) {
+    const html = renderHtml(r, { reportId: "rep_1" });
+    for (const out of [renderText(r), renderLlm(r), renderXml(r), renderMarkdown(r), html]) {
       expect(out).not.toContain(ESC);
     }
     expect(renderLlm(r)).not.toContain("<script>");
     expect(XMLValidator.validate(renderLlm(r))).toBe(true);
+    // The reason and the rule are shown in the HTML and the Markdown reports, and the stored markup is inert in
+    // both. (The HTML page has <b> and <script> of its own, so the check is on the hostile text itself.)
+    expect(html).not.toContain("why[31m<b>");
+    expect(html).not.toContain('r/x[2J"><script>');
+    expect(html).toContain("why[31m&lt;b&gt;");
+    expect(html).toContain("&lt;script&gt;");
+    expect(renderMarkdown(r)).toContain("\\<b\\>");
   });
 });
 

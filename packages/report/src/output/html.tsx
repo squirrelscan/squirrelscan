@@ -65,7 +65,7 @@ import {
   startRedirectLine,
   clampedPageLimit,
 } from "../coverage";
-import { ignoredLine, unusedIgnoreEntries } from "../ignored";
+import { ignoredLine, ignoredNoteLines } from "../ignored";
 import { getDocsUrl } from "../docs";
 import { allPositionBands, domainStatRows } from "../domain-stats";
 import { editorSummaryView, priorityEffortLabel } from "../editor-summary";
@@ -1801,6 +1801,8 @@ function ReportPage({
   const seed = seedRedirectLine(report);
   const startRedirect = startRedirectLine(report);
   const ignoredNote = ignoredLine(report);
+  // Each entry's reason and the entries that matched nothing, beside the totals line (#1262).
+  const ignoredEntryNotes = ignoredNoteLines(report);
   const priv = privateTargetLine(report);
   // repo#2729: checks this audit did not run, so a skipped check never reads as a clean one.
   const notChecked = notCheckedLines(report);
@@ -1813,7 +1815,7 @@ function ReportPage({
   const blockedNote = blockedSummary
     ? `${blockedSummary}${blockedListed.length > 0 ? ` ${blockedListed.slice(0, 3).join("; ")}` : ""}`
     : null;
-  const notes = [cov, priv, ...notChecked, seed, startRedirect, ignoredNote, blockedNote, hint].filter(
+  const notes = [cov, priv, ...notChecked, seed, startRedirect, ignoredNote, ...ignoredEntryNotes, blockedNote, hint].filter(
     (t): t is string => !!t,
   );
   const reportKey = coverageNoticeKey(report, reportId);

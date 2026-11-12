@@ -279,6 +279,7 @@ export {
 export {
   ignoredEntryLines,
   ignoredLine,
+  ignoredNoteLines,
   safeIgnored,
   summarizeIgnored,
   unusedIgnoreEntries,
