@@ -839,7 +839,8 @@
               "cloud/rendering",
               "cloud/scheduled-audits",
               "cloud/firewall",
-              "cloud/team"
+              "cloud/team",
+              "cloud/changelog"
             ]
           },
           {
