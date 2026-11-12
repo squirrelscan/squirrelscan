@@ -49,6 +49,12 @@ Penalties are multiplicative. For example, an 80% score with missing robots.txt 
 80 × (1 - 0.15) × (1 - 0.20) = 80 × 0.85 × 0.80 = 54.4
 ```
 
+### Why the overall can be lower than every section
+
+The four section scores (SEO, Performance, Security, Agents) are each scored from their own checks only. The overall score is scored from all of them together and then takes the robots.txt and sitemap penalties above, which the sections do not get, and an issue density penalty counted over the whole audit's issues together (each section's own penalty counts only its own issues). The issue density penalty starts at 10 issue units, counted per score: an audit with 23 issues can have none in any section (each under 10) and still lose about a quarter of its overall score once they are counted together.
+
+When that happens a report says so, from the numbers the engine recorded in `healthScore.debug`: for example, "Overall 72: 95 before a 24% site-wide adjustment for issue density across the whole audit. Section scores use only their own checks." The line is shown in the HTML, Markdown, text and LLM formats, only when the report has section scores and the adjustment is at least 1%. It explains the score; it does not change it.
+
 ### Rules that do not apply
 
 A rule that does not apply to the audited site is skipped: its checks have status `skipped`, and they count toward neither the passed, warning and failed totals nor the score. A rule whose checks are all skipped carries no weight, so it cannot lift or lower the grade.
