@@ -14,6 +14,7 @@ import {
   LINK_TARGETS_NOT_FETCHED_SKIP_REASON,
   NOT_CHECKED_SKIP_REASONS,
   PRIVATE_TARGET_SKIP_REASON,
+  TARGETED_RUN_SKIP_REASON,
   TLS_CERTIFICATE_NOT_CHECKED_SKIP_REASON,
 } from "../src/index";
 import { IGNORED_SKIP_REASON } from "../src/ignore";
@@ -42,6 +43,8 @@ const TABLE: Array<[string, boolean, boolean, boolean]> = [
   [EXTERNAL_LINKS_OVER_CAP_SKIP_REASON, false, false, true],
   [EXTERNAL_LINKS_OUT_OF_TIME_SKIP_REASON, false, false, true],
   [CRAWL_CAPPED_SKIP_REASON, false, false, true],
+  // A targeted run (#1777): a whole-site rule has nothing to judge, so the rule-wide gap is also not checked.
+  [TARGETED_RUN_SKIP_REASON, false, true, true],
   [IGNORED_SKIP_REASON, false, false, false],
   [PRIVATE_TARGET_SKIP_REASON, false, false, false],
 ];
@@ -63,7 +66,7 @@ describe("the predicates over every coded skip reason", () => {
     }
   });
 
-  test("the not-checked set is exactly the seven reasons", () => {
+  test("the not-checked set is exactly the eight reasons", () => {
     expect([...NOT_CHECKED_SKIP_REASONS].sort()).toEqual(
       TABLE.filter((r) => r[3]).map((r) => r[0]).sort(),
     );
