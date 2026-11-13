@@ -265,6 +265,16 @@ function Write-Err {
     $script:ErrorsSeen += $Message
     throw "write-err"
 }
+# The real Invoke-GhBounded kills a process that outlives its deadline (runs the
+# current PowerShell host as the slow child).
+$hostExe = (Get-Process -Id $PID).Path
+$env:SQUIRREL_TEST_GH_TIMEOUT_SECS = "2"
+$realBounded = Invoke-GhBounded -GhName $hostExe -GhArgs @("-NoProfile", "-Command", "Start-Sleep -Seconds 60") -TimeoutSec 120
+$fastBounded = Invoke-GhBounded -GhName $hostExe -GhArgs @("-NoProfile", "-Command", "Write-Output hi; exit 3") -TimeoutSec 120
+Remove-Item Env:SQUIRREL_TEST_GH_TIMEOUT_SECS -ErrorAction SilentlyContinue
+Check "a process that outlives the deadline is killed and reported as timed out" ($realBounded.TimedOut)
+Check "a process that exits in time reports its code and output" (-not $fastBounded.TimedOut -and $fastBounded.Code -eq 3 -and $fastBounded.Output -like "*hi*")
+
 # A stand-in for gh: records its argument lists and answers per subcommand.
 $script:GhCalls = @()
 $script:GhVerifyExit = 0
@@ -281,6 +291,18 @@ function squirrel-fake-gh {
     }
     $global:LASTEXITCODE = 99
 }
+$script:GhTimeoutOn = ""
+# The stub function cannot run under Start-Process, so replace the bounded runner
+# with one that calls it in-process and can simulate a timeout of one subcommand.
+function Invoke-GhBounded {
+    param([string]$GhName, [string[]]$GhArgs, [int]$TimeoutSec)
+    $label = if ($GhArgs[0] -eq "auth") { "auth" } elseif ($GhArgs[2] -eq "--help") { "help" } else { "verify" }
+    $script:GhTimeouts += ,@($label, $TimeoutSec)
+    if ($script:GhTimeoutOn -eq $label) { $script:GhCalls += ,@($GhArgs); return @{ Code = -1; Output = ""; TimedOut = $true } }
+    $out = (& $GhName @GhArgs 2>&1 | ForEach-Object { "$_" }) -join "`n"
+    return @{ Code = $global:LASTEXITCODE; Output = $out; TimedOut = $false }
+}
+$script:GhTimeouts = @()
 $binaryStub = Join-Path ([System.IO.Path]::GetTempPath()) "squirrel-ps-contract-binary"
 
 $threw = $false
@@ -317,6 +339,26 @@ $script:Warnings = @()
 $threw = $false
 try { Test-ReleaseAttestation -Path $binaryStub -GhName "squirrel-no-such-gh-on-this-machine" } catch { $threw = $true }
 Check "no gh: warns visibly and does not fail" (-not $threw -and $script:Warnings.Count -eq 1 -and $script:Warnings[0] -like "*sha256*")
+
+$authCall = $script:GhCalls | Where-Object { $_[0] -eq "auth" } | Select-Object -First 1
+Check "the auth probe is pinned to github.com" ($authCall -and ($authCall -join " ") -eq "auth status --hostname github.com")
+Check "deadlines are 15s for the probes and 120s for verify" (
+    ($script:GhTimeouts | Where-Object { $_[0] -eq "help" -or $_[0] -eq "auth" } | Where-Object { $_[1] -ne 15 }).Count -eq 0 -and
+    ($script:GhTimeouts | Where-Object { $_[0] -eq "verify" } | Where-Object { $_[1] -ne 120 }).Count -eq 0)
+
+foreach ($probe in @("help", "auth")) {
+    $script:GhTimeoutOn = $probe
+    $script:Warnings = @()
+    $threw = $false
+    try { Test-ReleaseAttestation -Path $binaryStub -GhName "squirrel-fake-gh" } catch { $threw = $true }
+    Check "a $probe probe timeout warns and skips" (-not $threw -and $script:Warnings.Count -eq 1 -and $script:Warnings[0] -like "*timed out*")
+}
+$script:GhTimeoutOn = "verify"
+$script:ErrorsSeen = @()
+$threw = $false
+try { Test-ReleaseAttestation -Path $binaryStub -GhName "squirrel-fake-gh" } catch { $threw = $true }
+Check "a verify timeout fails closed" ($threw -and $script:ErrorsSeen[0] -eq "gh attestation verify timed out after 120s, nothing was installed.")
+$script:GhTimeoutOn = ""
 
 if ($script:Failures -gt 0) {
     Write-Host ""
