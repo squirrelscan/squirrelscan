@@ -206,8 +206,12 @@ export const aiCrawlersRule: Rule = {
     }
 
     const verdicts = evaluateAiCrawlers(robotsTxt);
-    const blocked = verdicts.filter((v) => v.blocked);
+    const allBlocked = verdicts.filter((v) => v.blocked);
     const allowed = verdicts.filter((v) => !v.blocked);
+    // A crawler covered only by `User-agent: *` is one decision, not one per bot (#1780): it gets a
+    // single grouped row. Crawlers the file names itself stay separate rows below.
+    const blocked = allBlocked.filter((v) => v.explicitlyListed);
+    const wildcardBlocked = allBlocked.filter((v) => !v.explicitlyListed);
 
     // Always-on informational summary (never penalizes).
     checks.push({
@@ -217,6 +221,10 @@ export const aiCrawlersRule: Rule = {
         blocked.length > 0
           ? `; ${blocked.length} blocked (${blocked.map((b) => b.token).join(", ")})`
           : ""
+      }${
+        wildcardBlocked.length > 0
+          ? `; ${wildcardBlocked.length} blocked by the User-agent: * rule only`
+          : ""
       }`,
       value: `${allowed.length}/${verdicts.length} allowed`,
       items: blocked.map((b) => ({
@@ -225,7 +233,8 @@ export const aiCrawlersRule: Rule = {
       })),
       details: {
         allowed: allowed.map((b) => b.token),
-        blocked: blocked.map((b) => b.token),
+        blocked: allBlocked.map((b) => b.token),
+        wildcardBlocked: wildcardBlocked.map((b) => b.token),
         blockedByClass: {
           training: blocked.filter((b) => b.crawlerClass === "training").map((b) => b.token),
           "ai-search": blocked.filter((b) => b.crawlerClass === "ai-search").map((b) => b.token),
@@ -235,6 +244,30 @@ export const aiCrawlersRule: Rule = {
         explicitlyListed: verdicts.filter((v) => v.explicitlyListed).map((v) => v.token),
       },
     });
+
+    if (wildcardBlocked.length > 0) {
+      // crawl/robots-txt already fails on a `User-agent: *` block with no Allow rules. Then this row is
+      // the same problem seen from the AI side, so it stays info and does not score a second time.
+      const reported = !robotsTxt.rules.some(
+        (g) => g.userAgent === "*" && g.rules.some((r) => r.type === "allow"),
+      );
+      checks.push({
+        name: "ai-crawlers-wildcard-blocked",
+        status: reported ? "info" : "warn",
+        message: `robots.txt blocks all AI crawlers through the User-agent: * rule (Disallow: /); none of the ${wildcardBlocked.length} affected crawlers is named in the file.${
+          reported ? " This is the whole-site block already reported by crawl/robots-txt." : ""
+        } Name a crawler in its own group with Allow: / to let it in.`,
+        value: `${wildcardBlocked.length} crawler(s) blocked by the wildcard rule`,
+        items: wildcardBlocked.map((b) => ({
+          id: b.token,
+          label: `${b.token} (${b.vendor}, ${CLASS_LABEL[b.crawlerClass]}): blocked by User-agent: *`,
+        })),
+        details: {
+          wildcardBlocked: wildcardBlocked.map((b) => b.token),
+          reportedByRule: reported ? "crawl/robots-txt" : null,
+        },
+      });
+    }
 
     // Blocking an answer-engine or live user fetch is usually accidental → warn.
     const answerBlocked = blocked.filter(

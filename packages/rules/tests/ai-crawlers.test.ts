@@ -165,17 +165,75 @@ describe("ax/ai-crawlers", () => {
     expect(warn?.message).toContain("ClaudeBot");
   });
 
-  test("blocking everything lists all as items and warns on the answer-engine subset", () => {
+  test("a wildcard block alone gives one grouped row, no per-crawler rows (#1780)", () => {
     const checks = run(blockAll());
-    const summary = checks[0];
-    expect(summary?.status).toBe("info");
-    expect(summary?.items?.length).toBe(AI_CRAWLERS.length);
-    const warn = checks.find((c) => c.name === "ai-answer-access");
-    const answerCount = AI_CRAWLERS.filter(
-      (c) => c.crawlerClass === "ai-search" || c.crawlerClass === "user-action",
-    ).length;
-    expect(warn?.status).toBe("warn");
-    expect(warn?.items?.length).toBe(answerCount);
+    expect(checks[0]?.items ?? []).toHaveLength(0);
+    expect(checks.some((c) => c.name === "ai-answer-access")).toBe(false);
+    expect(checks.some((c) => c.name === "archive-crawler-access")).toBe(false);
+    const rows = checks.filter((c) => c.name === "ai-crawlers-wildcard-blocked");
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.message).toContain("User-agent: *");
+    expect(rows[0]?.message).toContain("crawl/robots-txt");
+    expect(rows[0]?.status).toBe("info");
+    expect(rows[0]?.items?.map((i) => i.id)).toEqual(AI_CRAWLERS.map((c) => c.token));
+  });
+
+  test("the wildcard row keeps its identity between audits (#1780)", () => {
+    const ids = (c: CheckResult[]) => c.find((x) => x.name === "ai-crawlers-wildcard-blocked")?.items?.map((i) => i.id);
+    expect(ids(run(blockAll()))).toEqual(ids(run(blockAll())));
+    expect(ids(run(robots([])))).toBeUndefined();
+  });
+
+  test("a wildcard block with Allow exceptions warns, since crawl/robots-txt does not fail (#1780)", () => {
+    const checks = run(
+      robots([
+        {
+          userAgent: "*",
+          rules: [
+            { type: "disallow", path: "/" },
+            { type: "allow", path: "/public" },
+          ],
+        },
+      ]),
+    );
+    expect(checks.find((c) => c.name === "ai-crawlers-wildcard-blocked")?.status).toBe("warn");
+  });
+
+  test("named blocks only keep one row per crawler and no wildcard row (#1780)", () => {
+    const checks = run(
+      robots([
+        { userAgent: "GPTBot", rules: [{ type: "disallow", path: "/" }] },
+        { userAgent: "PerplexityBot", rules: [{ type: "disallow", path: "/" }] },
+      ]),
+    );
+    expect(checks.some((c) => c.name === "ai-crawlers-wildcard-blocked")).toBe(false);
+    expect(checks[0]?.items?.map((i) => i.id)).toEqual(["GPTBot", "PerplexityBot"]);
+    expect(checks.find((c) => c.name === "ai-answer-access")?.items?.map((i) => i.id)).toEqual(["PerplexityBot"]);
+  });
+
+  test("named and wildcard blocks together give named rows plus one wildcard row (#1780)", () => {
+    const checks = run(
+      robots([
+        { userAgent: "*", rules: [{ type: "disallow", path: "/" }] },
+        { userAgent: "GPTBot", rules: [{ type: "disallow", path: "/" }] },
+      ]),
+    );
+    expect(checks[0]?.items?.map((i) => i.id)).toEqual(["GPTBot"]);
+    const wild = checks.find((c) => c.name === "ai-crawlers-wildcard-blocked");
+    expect(wild?.items).toHaveLength(AI_CRAWLERS.length - 1);
+    expect(wild?.items?.some((i) => i.id === "GPTBot")).toBe(false);
+  });
+
+  test("a crawler allowed by name under a wildcard block is not listed as blocked (#1780)", () => {
+    const checks = run(
+      robots([
+        { userAgent: "*", rules: [{ type: "disallow", path: "/" }] },
+        { userAgent: "ClaudeBot", rules: [{ type: "allow", path: "/" }] },
+      ]),
+    );
+    const wild = checks.find((c) => c.name === "ai-crawlers-wildcard-blocked");
+    expect(wild?.items?.some((i) => i.id === "ClaudeBot")).toBe(false);
+    expect(checks[0]?.items ?? []).toHaveLength(0);
   });
 });
 
