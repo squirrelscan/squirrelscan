@@ -50,6 +50,7 @@ import type {
   MetaData,
   OpenGraphData,
   RedirectChain,
+  ScanScope,
   ScanScopePageType,
   ScanScopeTargeted,
   TargetedRunUnaudited,
@@ -109,6 +110,31 @@ export function robotsBlockedFrontierCount(
   crawlId: string,
 ): Effect.Effect<number, never, never> {
   return storage.getRobotsDisallowedCount(crawlId).pipe(Effect.catchAll(() => Effect.succeed(0)));
+}
+
+/**
+ * What a caller hands the report builders to have `scanScope` stamped (#1782): the scope it knows (where the
+ * run executed, the page cap, ...) and whether the crawl honoured robots.txt. The builders add
+ * `robotsBlockedPages` from the frontier, so the two robots fields always come from the same crawl.
+ */
+export type EngineScanScopeInput = Omit<ScanScope, "respectRobots" | "robotsBlockedPages"> & {
+  respectRobots: boolean;
+};
+
+/**
+ * `scanScope` for an engine-assembled report, or undefined when the caller gave none (the report then has no
+ * `scanScope`, as before). `robotsBlockedPages` is zero when robots.txt was not honoured.
+ */
+function engineScanScope(
+  storage: CrawlStorage,
+  crawlId: string,
+  input: EngineScanScopeInput | undefined,
+): Effect.Effect<ScanScope | undefined, never, never> {
+  if (!input) return Effect.succeed(undefined);
+  if (!input.respectRobots) return Effect.succeed({ ...input, robotsBlockedPages: 0 });
+  return robotsBlockedFrontierCount(storage, crawlId).pipe(
+    Effect.map((robotsBlockedPages) => ({ ...input, robotsBlockedPages })),
+  );
 }
 
 /**
@@ -507,6 +533,8 @@ export const V1_REPORT_PAGE_BATCH = 100;
 
 export interface BuildV1ReportOptions {
   batchSize?: number;
+  /** Stamp `scanScope` on the report, with `respectRobots` and the frontier's `robotsBlockedPages` (#1782). */
+  scanScope?: EngineScanScopeInput;
   /** Fired after each page batch with the running count. The container wires its
    * liveness heartbeat here so a large-crawl report tail keeps the run alive
    * (aligns #1252) instead of going silent for the whole assembly. */
@@ -819,12 +847,14 @@ export function buildV1Report(
     ).length;
 
     const refusedSeedRedirect = offSiteSeedRedirect(crawl?.baseUrl ?? "", crawl?.seedUrl);
+    const scanScope = yield* engineScanScope(storage, crawlId, options?.scanScope);
 
     const result: FullAuditReport = {
       baseUrl: crawl?.baseUrl ?? "",
       // Present only when the crawler refused an off-site seed redirect (#1418).
       ...(refusedSeedRedirect ? { finalUrl: refusedSeedRedirect } : {}),
       timestamp: new Date().toISOString(),
+      ...(scanScope ? { scanScope } : {}),
       totalPages: pagesCrawled - variantPages,
       passed,
       warnings,
@@ -985,6 +1015,8 @@ export interface StreamingReportInput extends RuleExecutionResult {
 
 export interface BuildV2ReportOptions {
   batchSize?: number;
+  /** Stamp `scanScope` on the report, with `respectRobots` and the frontier's `robotsBlockedPages` (#1782). */
+  scanScope?: EngineScanScopeInput;
   /**
    * Heartbeat hook — fired after each getPages batch with the running page count.
    * Hook point only: E-G wires the container heartbeat here so a large-crawl
@@ -1155,12 +1187,14 @@ export function buildV2Report(
     const robotsData = buildRobotsData(robots);
 
     const refusedSeedRedirect = offSiteSeedRedirect(crawl?.baseUrl ?? "", crawl?.seedUrl);
+    const scanScope = yield* engineScanScope(storage, crawlId, options?.scanScope);
 
     const result: FullAuditReport = {
       baseUrl: crawl?.baseUrl ?? "",
       // Present only when the crawler refused an off-site seed redirect (#1418).
       ...(refusedSeedRedirect ? { finalUrl: refusedSeedRedirect } : {}),
       timestamp: new Date().toISOString(),
+      ...(scanScope ? { scanScope } : {}),
       totalPages: pagesCrawled,
       passed,
       warnings,
