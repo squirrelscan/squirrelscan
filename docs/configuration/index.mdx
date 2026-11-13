@@ -221,6 +221,17 @@ What the coverage counts mean:
   a finding from an earlier run and are not in this run's crawl: the pages a
   capped run rotated out. It is the number to read beside `pagesWithStaleCarry`,
   which counts the other kind of stale carry.
+- **seedVerification** (cloud only, when present: a local CLI audit does not seed pages, so its report has none) states what
+  became of those known pages. **reverified** is the pages the run looked at again: **gone** (answered
+  404 or 410, so their findings resolve and the status is named), **redirected** (answered with a
+  redirect off the old URL, so their page-level findings resolve and the source, destination and
+  status are recorded) and **live** (answered 200, so their findings are fresh; a live page no link
+  reaches is reported by the orphan-page rules). **leftCarried** is the pages it did not verify, split
+  into **skippedByBudget** (queued, but the page budget or time limit stopped the crawl first),
+  **noLongerLinked** (nothing queued them) and **unverified** (the answer proved nothing: a 5xx, a rate
+  limit or bot wall, or a URL the crawl now refuses). Left-carried pages keep their findings exactly as
+  before, so sampled and capped audits behave as they always did; the counts only say why. `pages`
+  lists up to 100 of them with their outcome.
 - A query-string variant of a page (`/contact?subject=Billing` whose
   `rel=canonical` is the crawled `/contact`) counts with that page in **known**
   in the cloud, as it does in a local report, so `knownPages` is the same number

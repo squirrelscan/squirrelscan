@@ -12,6 +12,7 @@ import {
   type OffSiteRedirectFollowUp,
 } from "@squirrelscan/core-contracts/offsite-redirect";
 
+import { seedVerificationLine } from "@squirrelscan/core-contracts/seed-verification";
 import { redactUrl, type SeedRedirectHop } from "@squirrelscan/core-contracts/seed-redirect";
 
 import type { AuditReport, CheckItem } from "./types";
@@ -77,7 +78,8 @@ export function coverageLine(report: AuditReport): string | null {
     notes.push(`${stale} re-crawled page${stale === 1 ? "" : "s"} still carry${stale === 1 ? "s" : ""} earlier findings`);
   }
   const suffix = notes.length > 0 ? ` (${notes.join("; ")})` : "";
-  return `Coverage: audited ${c.auditedPages} of ${c.knownPages} known page${c.knownPages === 1 ? "" : "s"}${suffix}.`;
+  const seeds = seedVerificationLine(c.seedVerification);
+  return `Coverage: audited ${c.auditedPages} of ${c.knownPages} known page${c.knownPages === 1 ? "" : "s"}${suffix}.${seeds ? ` ${seeds}` : ""}`;
 }
 
 /**

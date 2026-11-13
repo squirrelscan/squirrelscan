@@ -425,6 +425,14 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
     lines.push(
       `<coverage audited="${c.auditedPages}" known="${c.knownPages}" carried="${c.carriedFindings}"${unrenderedAttr}${stale}/>`,
     );
+    // (#1759) Counts only, each a whole number: a stored report of any origin reaches this.
+    const sv = c.seedVerification;
+    if (sv && typeof sv === "object") {
+      const n = (v: unknown) => (typeof v === "number" && Number.isSafeInteger(v) && v > 0 ? v : 0);
+      lines.push(
+        `<seed-verification reverified="${n(sv.reverified)}" gone="${n(sv.gone)}" redirected="${n(sv.redirected)}" live="${n(sv.live)}" left-carried="${n(sv.leftCarried)}" skipped-by-budget="${n(sv.skippedByBudget)}" no-longer-linked="${n(sv.noLongerLinked)}" unverified="${n(sv.unverified)}"/>`,
+      );
+    }
   }
 
   // Scan scope disclosure (#1180): where the audit ran + crawl cap, so an agent
