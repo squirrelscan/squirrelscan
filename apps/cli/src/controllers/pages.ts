@@ -242,6 +242,92 @@ async function findCrawl(
   return ok({ ...matches[0]!, warnings });
 }
 
+/**
+ * The page rows of audit `crawl`, read from an open store. Shared by `squirrel pages` and the
+ * publish path, so the hosted `pageMap` carries the rows the local table shows.
+ */
+export function readPageMapRows(
+  storage: SQLiteStorage,
+  crawl: Pick<CrawlMetadata, "id">
+): Effect.Effect<PageMapRow[], unknown> {
+  return Effect.gen(function* () {
+    const links = yield* readLinkCounts(storage, crawl.id);
+    const flagged = yield* storage.getFlaggedPages(crawl.id, PAGE_MAP_RULE_IDS);
+    // Each rule's pages, by the flag it sets.
+    const flagsByUrl = new Map<string, Set<string>>();
+    for (const [ruleId, urls] of flagged) {
+      const flag = PAGE_MAP_FLAG_RULES[ruleId];
+      if (!flag) continue;
+      for (const url of urls) {
+        const known = flagsByUrl.get(url);
+        if (known) known.add(flag);
+        else flagsByUrl.set(url, new Set([flag]));
+      }
+    }
+
+    // The stored features, by normalized url, a batch at a time.
+    const features = new Map<string, PageFeatureRow>();
+    for (let after: string | undefined; ; ) {
+      const batch = yield* storage.getPageFeaturesPage(crawl.id, {
+        ...(after !== undefined ? { after } : {}),
+        limit: BATCH,
+      });
+      for (const row of batch) features.set(row.normalizedUrl, row);
+      if (batch.length < BATCH) break;
+      after = batch[batch.length - 1]!.normalizedUrl;
+    }
+
+    const out: PageMapRow[] = [];
+    for (let offset = 0; ; offset += BATCH) {
+      const pages = yield* storage.getPagesWithoutBodies(crawl.id, {
+        limit: BATCH,
+        offset,
+      });
+      for (const page of pages) {
+        const f = features.get(page.normalizedUrl);
+        const flags = new Set<string>([
+          ...(flagsByUrl.get(page.normalizedUrl) ?? []),
+          ...(flagsByUrl.get(page.url) ?? []),
+        ]);
+        if (f?.robotsNoindex) flags.add("noindex");
+        if (f && f.status < 400 && f.schemaTypes.length === 0)
+          flags.add("no-schema");
+        const key = linkKey(page.normalizedUrl);
+        const parsed = links.facts.get(page.normalizedUrl);
+        const title = f?.title ?? null;
+        const description = f?.description ?? null;
+        out.push({
+          url: page.url,
+          finalUrl: page.finalUrl || page.url,
+          status: page.status,
+          depth: f?.depth ?? page.depth,
+          canonical: f?.canonical ?? null,
+          noindex: f?.robotsNoindex ?? false,
+          title,
+          titleLength: title?.length ?? 0,
+          description,
+          descriptionLength: description?.length ?? 0,
+          h1Count: f?.reportScalars?.h1Count ?? null,
+          h1: parsed?.h1 ?? null,
+          headingCount: parsed?.headingCount ?? null,
+          schemaIds: parsed?.schemaIds ?? [],
+          wordCount: f?.wordCount ?? null,
+          schemaTypes: f?.schemaTypes ?? [],
+          inlinks: links.inbound.get(key) ?? 0,
+          internalOutlinks: links.internalOut.get(page.normalizedUrl) ?? 0,
+          externalOutlinks: links.externalOut.get(page.normalizedUrl) ?? 0,
+          externalDomains: links.externalHosts.get(page.normalizedUrl) ?? [],
+          loadTimeMs: page.loadTimeMs ?? null,
+          lastModified: page.lastModified ?? null,
+          flags: [...flags].sort(),
+        });
+      }
+      if (pages.length < BATCH) break;
+    }
+    return out;
+  });
+}
+
 /** Load the page map of audit `crawlId` (id or prefix), or the newest audit. */
 export async function loadPageMap(
   crawlId?: string
@@ -252,88 +338,7 @@ export async function loadPageMap(
   const storage = new SQLiteStorage(dbPath, getGlobalContentStore());
   try {
     await Effect.runPromise(storage.init());
-    const rows = await Effect.runPromise(
-      Effect.gen(function* () {
-        const links = yield* readLinkCounts(storage, crawl.id);
-        const flagged = yield* storage.getFlaggedPages(
-          crawl.id,
-          PAGE_MAP_RULE_IDS
-        );
-        // Each rule's pages, by the flag it sets.
-        const flagsByUrl = new Map<string, Set<string>>();
-        for (const [ruleId, urls] of flagged) {
-          const flag = PAGE_MAP_FLAG_RULES[ruleId];
-          if (!flag) continue;
-          for (const url of urls) {
-            const known = flagsByUrl.get(url);
-            if (known) known.add(flag);
-            else flagsByUrl.set(url, new Set([flag]));
-          }
-        }
-
-        // The stored features, by normalized url, a batch at a time.
-        const features = new Map<string, PageFeatureRow>();
-        for (let after: string | undefined; ; ) {
-          const batch = yield* storage.getPageFeaturesPage(crawl.id, {
-            ...(after !== undefined ? { after } : {}),
-            limit: BATCH,
-          });
-          for (const row of batch) features.set(row.normalizedUrl, row);
-          if (batch.length < BATCH) break;
-          after = batch[batch.length - 1]!.normalizedUrl;
-        }
-
-        const out: PageMapRow[] = [];
-        for (let offset = 0; ; offset += BATCH) {
-          const pages = yield* storage.getPagesWithoutBodies(crawl.id, {
-            limit: BATCH,
-            offset,
-          });
-          for (const page of pages) {
-            const f = features.get(page.normalizedUrl);
-            const flags = new Set<string>([
-              ...(flagsByUrl.get(page.normalizedUrl) ?? []),
-              ...(flagsByUrl.get(page.url) ?? []),
-            ]);
-            if (f?.robotsNoindex) flags.add("noindex");
-            if (f && f.status < 400 && f.schemaTypes.length === 0)
-              flags.add("no-schema");
-            const key = linkKey(page.normalizedUrl);
-            const parsed = links.facts.get(page.normalizedUrl);
-            const title = f?.title ?? null;
-            const description = f?.description ?? null;
-            out.push({
-              url: page.url,
-              finalUrl: page.finalUrl || page.url,
-              status: page.status,
-              depth: f?.depth ?? page.depth,
-              canonical: f?.canonical ?? null,
-              noindex: f?.robotsNoindex ?? false,
-              title,
-              titleLength: title?.length ?? 0,
-              description,
-              descriptionLength: description?.length ?? 0,
-              h1Count: f?.reportScalars?.h1Count ?? null,
-              h1: parsed?.h1 ?? null,
-              headingCount: parsed?.headingCount ?? null,
-              schemaIds: parsed?.schemaIds ?? [],
-              wordCount: f?.wordCount ?? null,
-              schemaTypes: f?.schemaTypes ?? [],
-              inlinks: links.inbound.get(key) ?? 0,
-              internalOutlinks: links.internalOut.get(page.normalizedUrl) ?? 0,
-              externalOutlinks: links.externalOut.get(page.normalizedUrl) ?? 0,
-              externalDomains:
-                links.externalHosts.get(page.normalizedUrl) ?? [],
-              loadTimeMs: page.loadTimeMs ?? null,
-              lastModified: page.lastModified ?? null,
-              flags: [...flags].sort(),
-            });
-          }
-          if (pages.length < BATCH) break;
-        }
-        return out;
-      })
-    );
+    const rows = await Effect.runPromise(readPageMapRows(storage, crawl));
     // The rows come from the page data stored with the audit, but an evicted body is worth one line (#1667).
     const integrity = await checkStoreIntegrity(storage, crawl.id, "read");
     return ok({
