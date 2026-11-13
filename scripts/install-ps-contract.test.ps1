@@ -310,7 +310,7 @@ try { Test-ReleaseAttestation -Path $binaryStub -GhName "squirrel-fake-gh" } cat
 $verifyCall = $script:GhCalls | Where-Object { $_[0] -eq "attestation" -and $_[1] -eq "verify" -and $_[2] -ne "--help" }
 Check "a matching attestation does not fail" (-not $threw)
 Check "it ran gh attestation verify <file> --repo squirrelscan/squirrelscan" (
-    $verifyCall -and $verifyCall[2] -eq $binaryStub -and $verifyCall[3] -eq "--repo" -and $verifyCall[4] -eq "squirrelscan/squirrelscan")
+    $verifyCall -and $verifyCall[2] -eq $binaryStub -and $verifyCall[3] -eq "--repo" -and $verifyCall[4] -eq "squirrelscan/squirrelscan" -and $verifyCall[5] -eq "--cert-identity" -and $verifyCall[6] -eq "https://github.com/squirrelscan/squirrelscan/.github/workflows/release.yml@refs/heads/main" -and $verifyCall[7] -eq "--deny-self-hosted-runners")
 Check "a match prints no warning" ($script:Warnings.Count -eq 0)
 
 $script:GhVerifyExit = 1
