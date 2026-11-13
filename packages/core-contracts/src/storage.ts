@@ -1066,6 +1066,12 @@ export interface PageFeatureRow {
    */
   hreflangAlternates: HreflangAlternate[] | null;
   /**
+   * Flesch Reading Ease of the page body (0..100, rounded), the same number content/reading-level
+   * reports; null when the body is too short to score. Optional: absent on a row stored before
+   * it existed, which reads as null (content/voice-consistency then has no sample).
+   */
+  readingLevel?: number | null;
+  /**
    * Report-only per-page scalars (#2343). Null on a row written before schema
    * v30, which is what makes the report's fallback parse reachable rather than
    * dead code.

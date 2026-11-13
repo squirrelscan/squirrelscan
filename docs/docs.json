@@ -291,6 +291,7 @@
                   "rules/content/stale-copyright",
                   "rules/content/mojibake",
                   "rules/content/thin-vs-site-norm",
+                  "rules/content/voice-consistency",
                   "rules/content/title-pattern-outlier",
                   "rules/content/date-agreement",
                   "rules/content/unrendered-markup",

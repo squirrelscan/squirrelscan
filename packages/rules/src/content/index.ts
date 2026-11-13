@@ -28,6 +28,7 @@ import { staleCopyrightRule } from "./stale-copyright";
 import { thinVsSiteNormRule } from "./thin-vs-site-norm";
 import { titlePatternOutlierRule } from "./title-pattern-outlier";
 import { unrenderedMarkupRule } from "./unrendered-markup";
+import { voiceConsistencyRule } from "./voice-consistency";
 import { wordCountRule } from "./word-count";
 
 export const rules: Rule[] = [
@@ -58,6 +59,7 @@ export const rules: Rule[] = [
   placeholderContactRule,
   commonMisspellingsRule,
   h1TitleAlignmentRule,
+  voiceConsistencyRule,
 ];
 
 export {
@@ -86,5 +88,6 @@ export {
   thinVsSiteNormRule,
   titlePatternOutlierRule,
   unrenderedMarkupRule,
+  voiceConsistencyRule,
   wordCountRule,
 };

@@ -163,7 +163,7 @@ interface UnfinishedCrawlRow extends LeaseCrawlRow {
   last_activity: number;
 }
 
-export const SCHEMA_VERSION = 40;
+export const SCHEMA_VERSION = 41;
 
 // Migrations to run when upgrading from older versions
 const MIGRATIONS: Record<number, string[]> = {
@@ -644,6 +644,9 @@ const MIGRATIONS: Record<number, string[]> = {
   // says how long its report has been building: the last page it wrote is long
   // past by then. NULL for every crawl written before this. ADDITIVE.
   40: [`ALTER TABLE crawls ADD COLUMN building_at INTEGER`],
+  // Version 41: a page's Flesch reading level (content/voice-consistency). ADDITIVE and
+  // nullable: a row written before this reads as no score, so the rule has no sample for it.
+  41: [`ALTER TABLE page_features ADD COLUMN reading_level INTEGER`],
 };
 
 // Every `pages` column but the two that hold a page's body, for
@@ -787,6 +790,7 @@ const RESOURCE_SIZES_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }
 // past 33 without it would fail the streamed rule loop's first upsert.
 const PAGE_FEATURES_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> = [
   { name: "hreflang_alternates", type: "TEXT" },
+  { name: "reading_level", type: "INTEGER" },
 ];
 
 // Same guard for `rule_results`. Migrations 37 and 38 added the component-evidence
@@ -1253,6 +1257,7 @@ CREATE TABLE IF NOT EXISTS page_features (
   og_image TEXT,
   report_scalars TEXT,
   hreflang_alternates TEXT,
+  reading_level INTEGER,
   PRIMARY KEY (crawl_id, normalized_url),
   FOREIGN KEY (crawl_id) REFERENCES crawls(id)
 );
@@ -6306,8 +6311,8 @@ export class SQLiteStorage implements CrawlStorage {
       meta_noindex, indexable_reasons, rich_result_types,
       nap_name, nap_phones, nap_phone_formats, nap_address, nap_address_format,
       nap_tel_link, nap_mailto_link,
-      favicon_href, theme_color, og_image, report_scalars, hreflang_alternates
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      favicon_href, theme_color, og_image, report_scalars, hreflang_alternates, reading_level
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
   private pageFeatureParams(
@@ -6351,6 +6356,7 @@ export class SQLiteStorage implements CrawlStorage {
       // Optional-chained: a rule-cache payload stored before #489 replays a
       // features object without the field, and stores as "no alternates".
       row.hreflangAlternates?.length ? JSON.stringify(row.hreflangAlternates) : null,
+      row.readingLevel ?? null,
     ];
   }
 
@@ -6718,6 +6724,7 @@ export class SQLiteStorage implements CrawlStorage {
       hreflangAlternates: row.hreflang_alternates
         ? this.safeJsonParse(row.hreflang_alternates as string, null as HreflangAlternate[] | null)
         : null,
+      readingLevel: (row.reading_level as number | null) ?? null,
     };
   }
 }
