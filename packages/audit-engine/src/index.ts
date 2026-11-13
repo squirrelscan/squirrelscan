@@ -12,6 +12,7 @@ export {
   generateReportFromStorage,
   emptyRuleExecutionResult,
   unfetchedFrontierCount,
+  robotsBlockedFrontierCount,
   parsePageRecord,
   parseHtmlForRules,
   getParsedPages,

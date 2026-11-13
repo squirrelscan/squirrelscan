@@ -1609,6 +1609,8 @@ export interface CrawlStorage {
     perHostLimit?: number,
   ): Effect.Effect<FrontierRecord[], StorageError, never>;
   getPendingCount(crawlId: string): Effect.Effect<number, StorageError, never>;
+  /** Frontier URLs skipped because robots.txt disallows them (`reason = 'robots_disallowed'`, #1782). */
+  getRobotsDisallowedCount(crawlId: string): Effect.Effect<number, StorageError, never>;
   getFetchingCount(crawlId: string): Effect.Effect<number, StorageError, never>;
   updateFrontierStatus(
     crawlId: string,

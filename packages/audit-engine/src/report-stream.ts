@@ -101,6 +101,17 @@ export function unfetchedFrontierCount(
 }
 
 /**
+ * `scanScope.robotsBlockedPages` (#1782): frontier URLs skipped as `robots_disallowed`. A failed read counts
+ * as none, like {@link unfetchedFrontierCount}.
+ */
+export function robotsBlockedFrontierCount(
+  storage: CrawlStorage,
+  crawlId: string,
+): Effect.Effect<number, never, never> {
+  return storage.getRobotsDisallowedCount(crawlId).pipe(Effect.catchAll(() => Effect.succeed(0)));
+}
+
+/**
  * Per page type, how many pages the crawl knows of and how many it audited (#1744).
  * `discovered` is the audited pages plus the URLs still `pending` in the frontier, so a
  * complete crawl has equal counts and a capped one has `discovered > audited` for each

@@ -2828,6 +2828,18 @@ export class SQLiteStorage implements CrawlStorage {
     });
   }
 
+  getRobotsDisallowedCount(crawlId: string): Effect.Effect<number, StorageError, never> {
+    return Effect.try({
+      try: () => {
+        const row = this.getDb()
+          .query("SELECT COUNT(*) as count FROM frontier WHERE crawl_id = ? AND status = 'skipped' AND reason = 'robots_disallowed'")
+          .get(crawlId) as { count: number };
+        return row.count;
+      },
+      catch: (e) => StorageError.read(e),
+    });
+  }
+
   getPendingCount(crawlId: string): Effect.Effect<number, StorageError, never> {
     return Effect.try({
       try: () => {

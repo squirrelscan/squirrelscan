@@ -1465,6 +1465,16 @@ export interface ScanScope {
   requestedMaxPages?: number;
   /** Pages freshly crawled this run (the report.pages basis, before publish drops pages[]). */
   pagesCrawled: number;
+  /**
+   * Whether the crawl honoured robots.txt (`[crawler] respect_robots`, #1782). robots.txt is read either
+   * way: false means pages it disallows were fetched and audited. Absent on reports from before it.
+   */
+  respectRobots?: boolean;
+  /**
+   * Frontier URLs skipped as `robots_disallowed` (#1782): the pages robots.txt kept out of the audit. Zero
+   * when robots.txt was not honoured or disallowed nothing. Absent on reports from before it.
+   */
+  robotsBlockedPages?: number;
   /** The page cap was the binding constraint — the site likely has more pages. */
   capped: boolean;
   /**

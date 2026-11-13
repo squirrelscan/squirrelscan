@@ -130,6 +130,36 @@ export function canonicalVariantsNote(report: Pick<AuditReport, "canonicalVarian
   return n > 0 ? ` ${n} query-string variant${n === 1 ? "" : "s"} counted with ${n === 1 ? "its" : "their"} canonical.` : "";
 }
 
+/**
+ * `scanScope.respectRobots` and `robotsBlockedPages` (#1782), read off a stored report of any origin: a
+ * non-boolean flag means unknown (null), and a count that is not a whole number reads as zero.
+ */
+export function robotsScope(
+  report: Pick<AuditReport, "scanScope">,
+): { respectRobots: boolean; robotsBlockedPages: number } | null {
+  const scope = report.scanScope;
+  if (!scope || typeof scope.respectRobots !== "boolean") return null;
+  const n: unknown = scope.robotsBlockedPages;
+  const blocked = typeof n === "number" && Number.isSafeInteger(n) && n > 0 ? n : 0;
+  return { respectRobots: scope.respectRobots, robotsBlockedPages: scope.respectRobots ? blocked : 0 };
+}
+
+/**
+ * One plain sentence on whether the audit honoured robots.txt (#1782), or null when the report does not say.
+ * When it was honoured and kept pages out, the sentence carries how many; when it was not, it says pages
+ * robots.txt disallows were audited anyway.
+ */
+export function robotsHonouredNote(report: Pick<AuditReport, "scanScope">): string | null {
+  const r = robotsScope(report);
+  if (!r) return null;
+  if (!r.respectRobots) {
+    return "robots.txt was not honoured (respect_robots is off), so pages it disallows were audited too.";
+  }
+  return r.robotsBlockedPages > 0
+    ? `robots.txt was honoured: ${r.robotsBlockedPages} page${r.robotsBlockedPages === 1 ? "" : "s"} it disallows ${r.robotsBlockedPages === 1 ? "was" : "were"} left out of the audit.`
+    : "robots.txt was honoured: it kept no pages out of the audit.";
+}
+
 export function scanScopeLine(report: AuditReport): string | null {
   const raw = report.scanScope;
   if (!raw) return null;
@@ -164,7 +194,8 @@ export function scanScopeLine(report: AuditReport): string | null {
   const cap = parts.length > 0 ? ` (${parts.join("; ")})` : "";
   const types = pageTypeCoverageLine(report);
   const targeted = targetedRunNote(report);
-  return `Scan: ${s.pagesCrawled} page${s.pagesCrawled === 1 ? "" : "s"} crawled from ${origin}${version}${cap}.${canonicalVariantsNote(report)}${types ? ` ${types}` : ""}${targeted ? ` ${targeted}` : ""}`;
+  const robots = robotsHonouredNote(report);
+  return `Scan: ${s.pagesCrawled} page${s.pagesCrawled === 1 ? "" : "s"} crawled from ${origin}${version}${cap}.${canonicalVariantsNote(report)}${types ? ` ${types}` : ""}${targeted ? ` ${targeted}` : ""}${robots ? ` ${robots}` : ""}`;
 }
 
 /**

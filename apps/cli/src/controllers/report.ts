@@ -155,6 +155,9 @@ interface SlimJsonReport {
     requestedMaxPages?: number;
     /** URLs left queued, never fetched; absent when none were. Untrusted. */
     unfetched?: unknown;
+    /** Whether robots.txt was honoured and the pages it kept out (#1782). Untrusted. */
+    respectRobots?: unknown;
+    robotsBlockedPages?: unknown;
     /** Smart audits (#110): this run's pages and the known ones. Untrusted. */
     coverage?: { auditedPages?: unknown };
     /** The audit level snapshot; absent in slim JSON written before audit levels. Untrusted. */
@@ -414,6 +417,11 @@ function convertSlimReport(report: SlimJsonReport): AuditReport {
   // A whole count only: the file is user-supplied, and the cloud's publish
   // schema rejects anything else.
   const unfetched = wholeCount(report.meta.unfetched);
+  const respectRobots =
+    typeof report.meta.respectRobots === "boolean"
+      ? report.meta.respectRobots
+      : undefined;
+  const robotsBlockedPages = wholeCount(report.meta.robotsBlockedPages);
 
   return {
     baseUrl: report.meta.baseUrl,
@@ -464,6 +472,9 @@ function convertSlimReport(report: SlimJsonReport): AuditReport {
             pagesCrawled: crawled,
             capped: crawled >= report.meta.maxPages,
             ...(unfetched !== undefined ? { unfetched } : {}),
+            ...(respectRobots !== undefined
+              ? { respectRobots, robotsBlockedPages: robotsBlockedPages ?? 0 }
+              : {}),
           },
         }
       : {}),
