@@ -17,7 +17,7 @@ export const EDGE_ASN_PROVIDERS = Object.keys(asnData.providers);
 export interface EdgeRangeMatch {
   provider: string;
   name: string;
-  /** True when the published list is the provider's whole cloud, not only its edge (Google Cloud). */
+  /** True when the published list is the provider's whole cloud, not only its edge (Google Cloud). Such a match is provider information, never an edge. */
   broad: boolean;
 }
 export interface EdgeAsnMatch {

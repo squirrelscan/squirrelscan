@@ -5,7 +5,7 @@ import { describe, expect, test } from "bun:test";
 import { detectTechnologies } from "@squirrelscan/tech-detect";
 import { EDGE_ASN_PROVIDERS, EDGE_RANGE_PROVIDERS, matchEdgeAsn, matchEdgeRanges } from "@squirrelscan/utils/geoip/edge";
 
-import { buildReportHost, detectEdge } from "../src/host-info";
+import { buildReportHost, cloudRangeOf, detectEdge } from "../src/host-info";
 
 const techs = (headers: Record<string, string>, url = "https://example.test/") =>
   detectTechnologies({ url, headers, html: "<html><body>x</body></html>" }).map((t) => ({
@@ -60,7 +60,6 @@ describe("ip-range source", () => {
     ["cloudfront", "23.228.249.5"],
     ["fastly", "151.101.1.1"],
     ["azure-front-door", "4.145.22.161"],
-    ["google-cloud", "34.35.1.1"],
   ];
   const OUT: string[] = ["173.245.64.1", "151.102.1.1", "4.145.22.168", "8.8.8.8", "93.184.216.34", "2001:db8::1"];
 
@@ -80,9 +79,23 @@ describe("ip-range source", () => {
   test("an IPv4-mapped IPv6 address is the IPv4 address", () => {
     expect(matchEdgeRanges("::ffff:151.101.1.1").map((m) => m.provider)).toEqual(["fastly"]);
   });
-  test("a range list that covers a whole cloud is marked broad and ranks last", () => {
-    expect(detectEdge(["34.35.1.1"], [])?.broad).toBe(true);
-    expect(detectEdge(["34.35.1.1", "151.101.1.1"], [])?.id).toBe("fastly");
+  test("a whole-cloud range (Google Cloud) is not an edge on its own", () => {
+    expect(matchEdgeRanges("34.35.1.1").map((m) => m.provider)).toEqual(["google-cloud"]);
+    expect(detectEdge(["34.35.1.1"], [])).toBeNull();
+    expect(detectEdge(["34.35.1.1"], techs({ "cf-ray": "x-SYD" }))?.alsoMatched).toBeUndefined();
+  });
+  test("a whole-cloud range never adds to or overrides a real edge", () => {
+    const fastly = detectEdge(["34.35.1.1", "151.101.1.1"], []);
+    expect(fastly?.id).toBe("fastly");
+    expect(fastly?.matched).toEqual(["ip-range", "asn"]);
+    expect(fastly?.alsoMatched).toBeUndefined();
+    const cf = detectEdge(["34.35.1.1"], techs({ "cf-ray": "x-SYD" }));
+    expect(cf?.id).toBe("cloudflare");
+    expect(cf?.matched).toEqual(["header"]);
+  });
+  test("a whole-cloud match is reported as provider information, with its address", () => {
+    expect(cloudRangeOf(["8.8.8.8", "34.35.1.1"])).toEqual({ id: "google-cloud", name: "Google Cloud", address: "34.35.1.1" });
+    expect(cloudRangeOf(["151.101.1.1"])).toBeUndefined();
   });
   test("a Cloudflare address matches only Cloudflare", () => {
     expect(matchEdgeRanges("173.245.48.1").map((m) => m.provider)).toEqual(["cloudflare"]);
@@ -165,6 +178,20 @@ describe("combined sources and origin", () => {
     const host = await buildReportHost({ host: "x.test", ipv4: ["8.8.8.8"], ipv6: [] }, [{ id: "wordpress" }]);
     expect(host?.edge).toBeUndefined();
     expect(host?.country?.location).toBe("origin");
+  });
+  test("a whole-cloud address is not an edge: no edge, country not labelled edge, cloudRange set", async () => {
+    const host = await buildReportHost({ host: "x.test", ipv4: ["34.35.1.1"], ipv6: [] }, []);
+    expect(host?.edge).toBeUndefined();
+    expect(host?.country?.location).toBe("origin");
+    expect(host?.country?.edge).toBeUndefined();
+    expect(host?.cloudRange).toEqual({ id: "google-cloud", name: "Google Cloud", address: "34.35.1.1" });
+    expect(JSON.parse(JSON.stringify(host)).edge).toBeUndefined();
+  });
+  test("a whole-cloud address beside a real edge leaves the edge and its country unchanged", async () => {
+    const host = await buildReportHost({ host: "x.test", ipv4: ["34.35.1.1", "151.101.1.1"], ipv6: [] }, []);
+    expect(host?.edge?.id).toBe("fastly");
+    expect(host?.country?.location).toBe("edge");
+    expect(host?.cloudRange?.id).toBe("google-cloud");
   });
   test("an edge found only from an IP labels the country as the edge's", async () => {
     const host = await buildReportHost({ host: "x.test", ipv4: ["151.101.1.1"], ipv6: [] }, []);

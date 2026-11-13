@@ -47,15 +47,16 @@ Beside the technologies, the report has a **Host** section for the audited host 
 
 | Field | Meaning |
 |---|---|
-| `id`, `name` | The provider: `cloudflare`, `cloudfront`, `fastly`, `akamai`, `vercel`, `netlify`, `azure-front-door` or `google-cloud`. |
+| `id`, `name` | The provider: `cloudflare`, `cloudfront`, `fastly`, `akamai`, `vercel`, `netlify` or `azure-front-door`. |
 | `source` | The strongest source that matched: `header`, `ip-range` or `asn`. `matched` lists every source that agreed. `alsoMatched` lists another provider a source named, when sources disagree. |
 | `edgeHosted` | `true` when the platform is both edge and host (Vercel, Netlify, Cloudflare Pages): there is no separate origin. |
 | `origin` | `{ "status": "edge-hosted" }`, `{ "status": "identified", "id", "name" }` when a separate hosting technology was detected (for example Heroku behind Cloudflare), or `{ "status": "unknown" }`. An unknown origin is reported as unknown, never as the edge. |
+| `host.cloudRange` | `{ "id", "name", "address" }` when the resolved address is in a provider's whole-cloud range list (Google Cloud). It is provider information only: it never sets `edge`, and the country is not labelled an edge location because of it. |
 
 How each source is judged, strongest first:
 
 1. **`header`**: the platform response headers the technology detection already reads (for example `cf-ray`, `x-amz-cf-id`, `x-vercel-id`, `x-nf-request-id`, `x-azure-ref`). A provider named only in the page HTML is not a header match. Lookalike header names do not match.
-2. **`ip-range`**: any resolved address inside the provider's own published range list: [cloudflare.com/ips](https://www.cloudflare.com/ips/), the `CLOUDFRONT` service of [ip-ranges.amazonaws.com](https://ip-ranges.amazonaws.com/ip-ranges.json), [api.fastly.com/public-ip-list](https://api.fastly.com/public-ip-list), the Microsoft Service Tag `AzureFrontDoor.Frontend`, and Google's [cloud.json](https://www.gstatic.com/ipranges/cloud.json). An address just outside a range is not a match. Google publishes no Cloud CDN-only list: `cloud.json` covers all of Google Cloud, so a Google match is marked `broad`, ranks below every other source, and is not proof of a CDN (a plain Compute Engine VM is in the same list). Google Cloud CDN has no header of its own either.
+2. **`ip-range`**: any resolved address inside the provider's own published range list: [cloudflare.com/ips](https://www.cloudflare.com/ips/), the `CLOUDFRONT` service of [ip-ranges.amazonaws.com](https://ip-ranges.amazonaws.com/ip-ranges.json), [api.fastly.com/public-ip-list](https://api.fastly.com/public-ip-list), the Microsoft Service Tag `AzureFrontDoor.Frontend`, An address just outside a range is not a match. Google's [cloud.json](https://www.gstatic.com/ipranges/cloud.json) is not an edge source at all. Google publishes no Cloud CDN-only list and `cloud.json` covers all of Google Cloud (a plain Compute Engine VM is in the same list), so a match only means the address is in Google Cloud's published ranges. It is reported as `host.cloudRange`, and the report says it is not evidence of a CDN. Google Cloud CDN has no header of its own either, so it is never detected as an edge.
 3. **`asn`**: the address belongs to an ASN that is specific to an edge provider (Cloudflare, Fastly, Akamai's CDN ASNs, Vercel), from the DB-IP IP to ASN Lite database. Shared cloud ASNs (AWS, Azure, Google) are not used, because they say nothing about an edge, and Akamai's Linode hosting ASN is excluded.
 
 Akamai, Vercel and Netlify publish no complete range list, so they are found from headers (and, for Akamai and Vercel, ASN) only. Netlify has no ASN of its own in the database and is found from headers only.
