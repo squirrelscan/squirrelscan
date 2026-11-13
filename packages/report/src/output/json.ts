@@ -260,9 +260,9 @@ interface SlimJsonReport {
      * when nothing was left queued.
      */
     unfetched?: number;
-    /** Whether robots.txt was honoured (#1782, schema 1.17). Absent on reports from before it. */
+    /** Whether robots.txt was honoured (#1782, schema 1.19). Absent on reports from before it. */
     respectRobots?: boolean;
-    /** Pages robots.txt kept out of the audit (#1782, schema 1.17). Present with `respectRobots`. */
+    /** Pages robots.txt kept out of the audit (#1782, schema 1.19). Present with `respectRobots`. */
     robotsBlockedPages?: number;
     canonicalVariants?: number;
     canonicalVariantPages?: Array<{ page: string; canonical: string }>;
