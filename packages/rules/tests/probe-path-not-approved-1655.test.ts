@@ -45,7 +45,9 @@ function ctx(wellKnown: WellKnownProbeData): RuleContext {
 const notApproved = (path: string) => probe(path, { error: PROBE_PATH_NOT_APPROVED_ERROR });
 
 describe("path not approved (#1655)", () => {
-  test("ax/agents-md: /AGENTS.md 404 with the variants not approved is not checked, not absent", () => {
+  // #1794 supersedes the first #1655 verdict here: variants the user left out of discovery_probe_paths are theirs
+  // to leave out, so an approved path that answered 404 establishes absence, and the left-out variants are listed.
+  test("ax/agents-md: /AGENTS.md 404 with the variants not approved is absent, the variants listed as not checked", () => {
     const checks = agentsMdRule.run(
       ctx({
         probes: [
@@ -57,9 +59,8 @@ describe("path not approved (#1655)", () => {
       }),
     ).checks;
     expect(checks).toHaveLength(1);
-    expect(checks[0]?.value).toBe("not-checked");
-    expect(checks[0]?.status).toBe("info");
-    expect(checks[0]?.message).toContain("path not approved");
+    expect(checks[0]?.value).toBe("absent");
+    expect(checks[0]?.details?.notChecked).toEqual(["/agents.md", "/.well-known/agents.md", "/docs/AGENTS.md"]);
   });
 
   test("ax/agents-md: a block-stopped path is not checked for another reason", () => {

@@ -1,7 +1,9 @@
 import type { HostProbe } from "@squirrelscan/audit-engine";
 
 import { lookup } from "node:dns/promises";
-import { connect } from "node:net";
+import { connect, isIPv6 } from "node:net";
+
+import { nonPublicHostLabel } from "@/lib/non-public-host";
 
 const PROBE_TIMEOUT_MS = 3000;
 
@@ -35,6 +37,9 @@ export async function probeHost(url: string): Promise<HostProbe | undefined> {
     return undefined;
   }
   const host = parsed.hostname.replace(/^\[|\]$/g, "");
+  // A local or special-use host (loopback, private, TEST-NET, benchmark ranges) has no public location and may
+  // never answer: probing it only adds a connect timeout to the audit.
+  if (nonPublicHostLabel(url)) return undefined;
   let answers: Array<{ address: string; family: number }>;
   try {
     answers = await Promise.race([
@@ -59,7 +64,11 @@ export async function probeHost(url: string): Promise<HostProbe | undefined> {
     : parsed.protocol === "http:"
       ? 80
       : 443;
-  const ms = await tcpConnectMs(first, port);
+  // A public name that resolves to a non-public address: report the addresses, skip the connect.
+  const firstUrl = `http://${isIPv6(first) ? `[${first}]` : first}/`;
+  const ms = nonPublicHostLabel(firstUrl)
+    ? undefined
+    : await tcpConnectMs(first, port);
   return {
     host,
     ipv4,
