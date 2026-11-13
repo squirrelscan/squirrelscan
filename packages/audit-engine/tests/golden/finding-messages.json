@@ -687,6 +687,12 @@
    "unrendered-markup|pass|No unrendered markup in visible text||"
   ]
  },
+ "content/voice-consistency": {
+  "digest": "18949102945452",
+  "lines": [
+   "voice-consistency|pass|All # scored page(s) read at the site's level (median Flesch #)|#|"
+  ]
+ },
  "content/word-count": {
   "digest": "91320938823082",
   "lines": [

@@ -1,0 +1,90 @@
+---
+title: "Voice consistency: pages that read unlike the rest of the site"
+description: "A page written by a different hand, or pasted in from elsewhere, reads at a very different level from its neighbours. squirrel compares each page's reading level against your site's own median."
+---
+
+## What voice consistency is
+
+`content/reading-level` scores one page. This rule looks at the spread across your whole site. A page written by a different author, boilerplate dropped into a marketing section, or a bulk-generated dump usually reads at a very different level from the pages around it, and that difference is invisible on any single page.
+
+Nothing is compared with a target grade. The norm is the median Flesch Reading Ease score of your own pages, and only a page far from it is reported, whether it is much harder or much easier to read.
+
+## What squirrel checks
+
+The rule is site-wide and needs no account, no model and no credits. It uses the same Flesch score `content/reading-level` reports, stored per page during the crawl. It emits a single check named `voice-consistency`:
+
+- Skipped when there are no pages. Message: `No pages available for analysis`.
+- Skipped below 10 crawled pages. Message: `Only 6 page(s) crawled; 10 needed to establish a site voice`.
+- Skipped when fewer than 10 pages have enough text to score (a page needs at least 100 words and 5 sentences). Message: `Only 4 page(s) have enough text to score; 10 needed to establish a site voice`.
+- Skipped when the pages do not cluster around one level (fewer than 70% sit within 15 Flesch points of the median), because then there is no norm to depart from. Message: `The pages' reading levels do not cluster around one norm, so no page is an outlier`.
+- Pass when no page is an outlier. Message: `All 120 scored page(s) read at the site's level (median Flesch 62)`.
+- Info when outliers exist. Message: `3 of 120 page(s) read at a very different level from the rest of the site (median Flesch 62)`. Each item reads `Flesch 18 vs the site norm of 62 (harder to read by 44 points)`, with up to ten listed.
+
+A page is an outlier only when it is at least 25 Flesch points from the median and at least three robust deviations away (a deviation is the larger of 1.4826 times the median absolute deviation and 5 points).
+
+## What is left out
+
+- Legal pages (privacy, terms, imprint, legal notice), found by URL or by a stored page type of legal. Their register is different on purpose. They are counted in `details.excludedLegalPages`, never flagged.
+- Pages that did not return a 2xx status.
+- Pages too short to score.
+- On an indexed site, pages marked `noindex`, counted in `details.skippedNoindexPages`. When the homepage is itself noindex, as on a staging or preview deployment, nothing is skipped; see [pages kept out of search](/rules#pages-kept-out-of-search).
+
+The Flesch formula is written for English, so a site in another language gives scores that are only comparable with each other, which is all this rule uses.
+
+## How to fix it
+
+Open each page. If it should sound like the rest of the site, rewrite it with the site's sentence length and word choice. If it is deliberately different (a technical reference, a section for children), leave it: the finding only says that it differs.
+
+| | |
+|---|---|
+| **Rule ID** | `content/voice-consistency` |
+| **Category** | [Content](/rules/content) |
+| **Scope** | Site-wide |
+| **Severity** | info |
+| **Weight** | 2/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["content/voice-consistency"]
+```
+
+### Disable all Content rules
+
+```toml squirrel.toml
+[rules]
+disable = ["content/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["content/voice-consistency"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Related rules
+
+- [content/reading-level](/rules/content/reading-level): the per-page score this rule compares across the site.
+- [content/thin-vs-site-norm](/rules/content/thin-vs-site-norm): the same site-relative approach applied to word count.
+- [content/title-pattern-outlier](/rules/content/title-pattern-outlier): the same approach applied to titles.
+
+Content findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Content section of the report. Each outlier is listed with its Flesch score and the site's median. Signed-out local audits need no account and cost nothing. Signed-in audits spend credits.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Content section looks like on a real site.
+  </Card>
+</CardGroup>

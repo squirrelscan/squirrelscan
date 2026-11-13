@@ -60,6 +60,7 @@ These carry the highest severity and weight in the category.
 | [Thin against your own site: outliers by page type](/rules/content/thin-vs-site-norm) | A 200 word product page is normal and a 200 word article is not. squirrel compares each page against the median for its own page type. | warning | Site-wide |
 | [Thin content: the 300 word floor and what to do below it](/rules/content/word-count) | A page under a few hundred words rarely answers the question it ranks for. squirrel counts the words and reports against two thresholds. | warning | Per-page |
 | [Visible date disagrees with schema: which date is wrong](/rules/content/date-agreement) | A page states its date in several places and presence checks pass as soon as one exists. squirrel compares the byline, the schema and the URL year. | warning | Per-page |
+| [Voice consistency: pages that read unlike the rest of the site](/rules/content/voice-consistency) | A page written by a different hand, or pasted in from elsewhere, reads at a very different level from its neighbours. squirrel compares each page's reading level against your site's own median. | info | Site-wide |
 | [Wrong Content-Type: header and extension disagree](/rules/content/mime-type) | A stylesheet served as text/html is refused by the browser under nosniff. squirrel compares the response type against the URL extension. | warning | Per-page |
 
 {/* hub:rules:end */}

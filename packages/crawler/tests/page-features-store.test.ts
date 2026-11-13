@@ -77,6 +77,7 @@ function feat(over: Partial<PageFeatureRow> = {}): PageFeatureRow {
     ogImage: null,
     reportScalars: null,
     hreflangAlternates: null,
+    readingLevel: null,
     ...over,
   };
 }
@@ -736,6 +737,17 @@ describe("page_features migration (v17 → current)", () => {
 // #489: the hreflang alternates the duplicate title and description rules read on
 // the streaming path. A row written before the column existed reads as null,
 // which the rules treat as "no alternates", the behaviour before #489.
+describe("page_features store: reading_level (v41)", () => {
+  test("round-trips the score, and a row without one reads back as null", async () => {
+    const store = await freshStore();
+    await run(store.upsertPageFeatures(CRAWL, feat({ normalizedUrl: "https://example.com/a", readingLevel: 62 })));
+    await run(store.upsertPageFeatures(CRAWL, feat({ normalizedUrl: "https://example.com/b" })));
+    expect((await run(store.getPageFeatures(CRAWL, "https://example.com/a")))?.readingLevel).toBe(62);
+    expect((await run(store.getPageFeatures(CRAWL, "https://example.com/b")))?.readingLevel).toBeNull();
+    await run(store.close());
+  });
+});
+
 describe("page_features store: hreflang_alternates (v33)", () => {
   const alternates = [
     { hreflang: "en-gb", href: "https://example.com/en-gb/a" },

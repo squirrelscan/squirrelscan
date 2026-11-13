@@ -20,7 +20,7 @@ import { extractPageStructure } from "@squirrelscan/report/structure";
 import { detectWafChallengePage } from "@squirrelscan/waf-detect";
 import { extractNapSignal, getRichResultTypes, isPageIndexable } from "@squirrelscan/utils";
 
-import { extractSiteChromeSignal, fingerprintPage } from "@squirrelscan/rules";
+import { extractSiteChromeSignal, fingerprintPage, pageReadingLevel } from "@squirrelscan/rules";
 
 import type { PageRecord, PageFeatureRow } from "@squirrelscan/core-contracts";
 import type { PageFingerprint, ParsedPage } from "@squirrelscan/rules";
@@ -170,6 +170,8 @@ export function extractPageFeatures(
     // field existed (crawl reuse replays the old record), which stores as null
     // and exempts nothing, so the duplicate rules fall back to their old answer.
     hreflangAlternates: parsed.hreflangAlternates?.length ? parsed.hreflangAlternates : null,
+    // Same computation content/reading-level runs, so the stored score and the page rule agree.
+    readingLevel: pageReadingLevel(parsed),
     // #2343: the report's own per-page scalars, taken here because this is the
     // one pass that holds the DOM. Recovering them later meant re-parsing every
     // stored page a second time.
