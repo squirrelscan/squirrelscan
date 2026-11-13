@@ -20,6 +20,7 @@ How it works:
 ### Changed
 
 - internal: TLS probe moved to its own package
+- Credit top-ups go up to $5,000 (was $1,000). The bonus is unchanged up to $1,000 and is a flat 20% above it, so $5,000 buys 600,000 credits. Core contracts: `CREDIT_TOPUP.maxUsd` is 5,000, `TOPUP_BONUS_CURVE` gains `endUsd` (1,000), and `TOPUP_SCHEDULE_USD` adds $2,500 and $5,000. squirrelscan/repo#4314
 
 ### Added
 
