@@ -160,7 +160,7 @@ snap.edge = {
     sourceSha256: sha(asnRaw),
     keptAsns: [...wanted.keys()].length,
   },
-  rangeSources: sources.filter((s) => !s.url.includes("db-ip.com")).map((s) => ({ ...s, fetchedAt })),
+  rangeSources: sources.filter((s) => !/(^|\.)db-ip\.com$/.test(new URL(s.url).hostname)).map((s) => ({ ...s, fetchedAt })),
 };
 writeFileSync(snapPath, `${JSON.stringify(snap, null, 2)}\n`);
 console.log(JSON.stringify({ fetchedAt, providers: Object.fromEntries(Object.entries(providers).map(([k, v]) => [k, v.cidrs.length])), asn: Object.fromEntries(Object.entries(asnRanges).map(([k, v]) => [k, v.length])) }, null, 1));
