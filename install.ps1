@@ -19,6 +19,7 @@ $ErrorActionPreference = "Stop"
     [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 
 $Repo = "squirrelscan/squirrelscan"
+$CertIdentity = "https://github.com/squirrelscan/squirrelscan/.github/workflows/release.yml@refs/heads/main"
 $Platform = "windows-x64"
 
 function Write-Log { param($Message) Write-Host "==> " -ForegroundColor Green -NoNewline; Write-Host $Message }
@@ -597,7 +598,7 @@ function Test-ReleaseAttestation {
     }
 
     Write-Log "Verifying release attestation..."
-    $verify = Invoke-GhBounded -GhName $GhName -GhArgs @("attestation", "verify", $Path, "--repo", $Repo) -TimeoutSec 120
+    $verify = Invoke-GhBounded -GhName $GhName -GhArgs @("attestation", "verify", $Path, "--repo", $Repo, "--cert-identity", $CertIdentity, "--deny-self-hosted-runners") -TimeoutSec 120
     if ($verify.TimedOut) {
         Write-Err "gh attestation verify timed out after 120s, nothing was installed." -Output $verify.Output
     }

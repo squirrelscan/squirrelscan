@@ -23,6 +23,8 @@ import { type Result, ok, err, commandError } from "@/controllers/types";
  * but not logged in counts as absent, never as a pass.
  */
 export const ATTESTATION_REPO = "squirrelscan/squirrelscan";
+export const ATTESTATION_CERT_IDENTITY =
+  "https://github.com/squirrelscan/squirrelscan/.github/workflows/release.yml@refs/heads/main";
 
 export type AttestationOutcome =
   | { status: "verified" }
@@ -134,7 +136,16 @@ export async function verifyReleaseAttestation(
     const file = join(dir, "squirrel");
     writeFileSync(file, Buffer.from(data), { mode: 0o600 });
     const verify = await runGh(
-      ["attestation", "verify", file, "--repo", ATTESTATION_REPO],
+      [
+        "attestation",
+        "verify",
+        file,
+        "--repo",
+        ATTESTATION_REPO,
+        "--cert-identity",
+        ATTESTATION_CERT_IDENTITY,
+        "--deny-self-hosted-runners",
+      ],
       VERIFY_TIMEOUT_MS
     );
     // gh was there a moment ago; it vanishing mid-run is the same as absent.

@@ -66,7 +66,7 @@ Set any of these before running the installer.
 
 - **Permissions.** It runs with the umask tightened to at least `022`, so the directories and the binary it creates are never group or world writable, whatever umask it inherited. A stricter umask (`077`) is kept.
 - **Size and checksum.** The release manifest records each binary's size. A download of a different size fails with a size mismatch, before the checksum, so a cut-short download reads as that and not as a bad hash.
-- **Provenance.** The checksum comes from a manifest served next to the binary, so on its own it cannot tell a compromised download origin from a good one. Every release binary and the manifest also carry a GitHub build attestation, signed by the release workflow. When the GitHub CLI (`gh`) is installed and logged in, the installer runs `gh attestation verify <file> --repo squirrelscan/squirrelscan` on the download and stops with nothing installed if it does not match. See [Verifying a release](#verifying-a-release).
+- **Provenance.** The checksum comes from a manifest served next to the binary, so on its own it cannot tell a compromised download origin from a good one. Every release binary and the manifest also carry a GitHub build attestation, signed by the release workflow. When the GitHub CLI (`gh`) is installed and logged in, the installer runs `gh attestation verify <file> --repo squirrelscan/squirrelscan --cert-identity <release workflow on main> --deny-self-hosted-runners` on the download and stops with nothing installed if it does not match. See [Verifying a release](#verifying-a-release).
 - **Ctrl-C.** An interrupt, `SIGTERM` or `SIGHUP` during the install (including one sent to the installer alone, mid-download) removes the temporary directory, ends the download and exits with 130, 143 or 129. Stopping the install is not a failure, so no failure report is sent.
 - **No `HOME`.** If `HOME` is unset or empty it stops at once and tells you to set it. The installer keeps its state under `$HOME/.squirrel`, so it needs `HOME` even when `SQUIRREL_BIN_DIR` is set.
 - **A `noexec` temp directory.** The binary is first run from your temp directory. If it cannot be run there (a `noexec` mount, whatever language the system's messages are in), the installer retries from `~/.squirrel/tmp`. If that fails too it says a `noexec` mount is the likely cause and tells you to set `TMPDIR` to a directory on a filesystem that can run programs; if `~/.squirrel/tmp` cannot even be created it says that instead.
@@ -139,7 +139,10 @@ What the installers and `squirrel self update` do:
 To verify a binary by hand, download it from the [releases page](https://github.com/squirrelscan/squirrelscan/releases) and run:
 
 ```bash
-gh attestation verify ./squirrel-<version>-<platform> --repo squirrelscan/squirrelscan
+gh attestation verify ./squirrel-<version>-<platform> \
+  --repo squirrelscan/squirrelscan \
+  --cert-identity https://github.com/squirrelscan/squirrelscan/.github/workflows/release.yml@refs/heads/main \
+  --deny-self-hosted-runners
 ```
 
 The same command works on `manifest.json`. Releases published before attestations were added have none, so pinning one of them with a logged-in `gh` fails this check. A mismatch means the file was not built by the squirrelscan release workflow: delete it and do not run it. The same applies on Windows with `squirrel-<version>-windows-x64.exe`.
