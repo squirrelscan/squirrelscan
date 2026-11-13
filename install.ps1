@@ -520,6 +520,65 @@ function Get-Manifest {
     return $manifest
 }
 
+# Provenance check (#169), the same policy as install.sh. The sha256 comes from
+# a manifest served next to the binary, so it cannot tell a compromised origin
+# from a good one. GitHub artifact attestations are signed in the release
+# workflow and checked against Sigstore and GitHub, which is not our origin.
+#   gh usable, attestation matches    -> continue
+#   gh usable, attestation mismatch   -> hard failure, nothing is installed
+#   gh absent, too old, or logged out -> visible warning, sha256 alone decides
+# `gh attestation verify` needs an authenticated gh, so a gh that is installed
+# but not logged in counts as absent, never as a pass. $GhName is a seam for
+# the tests; callers use the default.
+function Test-ReleaseAttestation {
+    param([string]$Path, [string]$GhName = "gh")
+
+    $script:CurrentStep = "verify_attestation"
+    if (-not (Get-Command $GhName -ErrorAction SilentlyContinue)) {
+        Write-Warn "GitHub CLI (gh) not found: skipping the release provenance check, relying on the sha256 checksum only.`n  Install gh and run 'gh auth login' to verify installs against the GitHub attestation."
+        return
+    }
+
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    $previousNotifier = $env:GH_NO_UPDATE_NOTIFIER
+    $env:GH_NO_UPDATE_NOTIFIER = "1"
+    $skip = ""
+    $verifyOutput = ""
+    $verifyExit = 0
+    try {
+        & $GhName attestation verify --help *> $null
+        if ($LASTEXITCODE -ne 0) {
+            $skip = "This gh is too old for 'gh attestation verify': skipping the release provenance check, relying on the sha256 checksum only."
+        } else {
+            & $GhName auth status *> $null
+            if ($LASTEXITCODE -ne 0) {
+                $skip = "gh is not logged in: skipping the release provenance check, relying on the sha256 checksum only.`n  Run 'gh auth login' to enable it."
+            }
+        }
+        if (-not $skip) {
+            Write-Log "Verifying release attestation..."
+            $lines = & $GhName attestation verify $Path --repo $Repo 2>&1 | ForEach-Object { "$_" }
+            $verifyExit = $LASTEXITCODE
+            $verifyOutput = ($lines -join "`n")
+        }
+    } finally {
+        $ErrorActionPreference = $previous
+        $env:GH_NO_UPDATE_NOTIFIER = $previousNotifier
+    }
+
+    if ($skip) {
+        Write-Warn $skip
+        return
+    }
+    if ($verifyExit -ne 0) {
+        $tail = (($verifyOutput -split "`n") | Select-Object -Last 10) -join "`n"
+        Write-Host $tail
+        Write-Err "Attestation verification failed: this binary was not built by the $Repo release workflow.`n  Nothing was installed. Do not run it." -Output $tail
+    }
+    Write-Info "Attestation verified: built by $Repo"
+}
+
 function Install-Squirrel {
     param(
         [string]$Version,
@@ -569,6 +628,8 @@ function Install-Squirrel {
             Write-Err "Checksum mismatch!`n  Expected: $expectedHash`n  Actual:   $actualHash"
         }
         Write-Info "Checksum verified: $($expectedHash.Substring(0, 16))..."
+
+        Test-ReleaseAttestation -Path $binaryPath
 
         # Run self install. Its output is echoed live AND captured, so a failure
         # reports what the binary actually said instead of a bare exit code
