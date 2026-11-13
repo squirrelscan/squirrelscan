@@ -6,7 +6,7 @@ import { describe, expect, test } from "bun:test";
 import { PAGE_MAP_PUBLISH_LIMITS, PageMapSchema } from "@squirrelscan/core-contracts/page-map";
 import { Value } from "@sinclair/typebox/value";
 
-import type { PageMapRow } from "@squirrelscan/report";
+import type { PageMapRow } from "@squirrelscan/report/page-map";
 import { buildPageMap, projectPageMap } from "@squirrelscan/report/page-map-publish";
 
 function row(i: number, over: Partial<PageMapRow> = {}): PageMapRow {
