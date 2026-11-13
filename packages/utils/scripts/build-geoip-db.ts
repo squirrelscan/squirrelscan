@@ -132,6 +132,7 @@ await Bun.write(
       v4Ranges: v4n.length,
       v6Ranges: v6n.length,
       compiledBytes: gz.length,
+      compiledSha256: createHash("sha256").update(gz).digest("hex"),
     },
     null,
     2,

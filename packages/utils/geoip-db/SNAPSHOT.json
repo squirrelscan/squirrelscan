@@ -8,5 +8,6 @@
   "sourceSha256": "e5c8459d638a272ece7f4d7cfa49dce18d91b4f403f6940ba9249bf0db3781fd",
   "v4Ranges": 362998,
   "v6Ranges": 369798,
-  "compiledBytes": 2296108
+  "compiledBytes": 2296108,
+  "compiledSha256": "cda9d3433c8358da2670387cac2004b32e9d4acce25a0f4705bd7959f98046a8"
 }

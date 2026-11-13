@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 
 import { countryName, GEOIP_ATTRIBUTION, lookupCountry } from "../src/geoip";
+import snapshot from "../geoip-db/SNAPSHOT.json";
 
 describe("lookupCountry", () => {
   test("resolves well-known IPv4 addresses", async () => {
@@ -20,5 +22,14 @@ describe("lookupCountry", () => {
   test("names and attribution", () => {
     expect(countryName("AU")).toBe("Australia");
     expect(GEOIP_ATTRIBUTION).toContain("DB-IP.com");
+  });
+});
+
+describe("shipped GeoIP database", () => {
+  test("matches the size and sha256 recorded in SNAPSHOT.json", async () => {
+    const bytes = new Uint8Array(await Bun.file(new URL("../geoip-db/country.bin.gz", import.meta.url)).arrayBuffer());
+    expect(bytes.byteLength).toBe(snapshot.compiledBytes);
+    expect(snapshot.compiledBytes).toBe(2296108);
+    expect(createHash("sha256").update(bytes).digest("hex")).toBe(snapshot.compiledSha256);
   });
 });
