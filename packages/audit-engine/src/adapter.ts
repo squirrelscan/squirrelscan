@@ -3687,6 +3687,7 @@ export function runStreamingRules(
 export {
   emptyRuleExecutionResult,
   unfetchedFrontierCount,
+  robotsBlockedFrontierCount,
   V1_REPORT_PAGE_BATCH,
   type AuditSummary,
   type BuildV1ReportOptions,

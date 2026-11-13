@@ -35,6 +35,7 @@ import {
   type FlatFinding,
   type PageResultSink,
   unfetchedFrontierCount,
+  robotsBlockedFrontierCount,
   pageTypeCoverageFor,
   isRedirectSourcePage,
   targetedCoverageFor,
@@ -2497,6 +2498,12 @@ export async function runAudit(
         const unfetched = await Effect.runPromise(
           unfetchedFrontierCount(sqliteStorage, crawlId)
         );
+        // Pages robots.txt kept out of the audit (#1782); zero when it was not honoured.
+        const robotsBlockedPages = mergedConfig.crawler.respect_robots
+          ? await Effect.runPromise(
+              robotsBlockedFrontierCount(sqliteStorage, crawlId)
+            )
+          : 0;
         // Per page type: what the crawl knew of against what it audited (#1744).
         const pageTypes = await Effect.runPromise(
           pageTypeCoverageFor(
@@ -2519,6 +2526,8 @@ export async function runAudit(
             ? { requestedMaxPages: scopeLimit.requested }
             : {}),
           pagesCrawled: report.pages.length,
+          respectRobots: mergedConfig.crawler.respect_robots,
+          robotsBlockedPages,
           // The page cap counted every crawled page, variants included (#858).
           capped:
             report.pages.length + (report.canonicalVariants ?? 0) >=

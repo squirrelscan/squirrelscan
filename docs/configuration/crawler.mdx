@@ -1050,6 +1050,8 @@ Enforce robots.txt `Disallow:` rules and honor its `Crawl-delay:` directive.
 - Honors that group's `Crawl-delay:`, capped at 2 seconds even if the
   directive asks for longer
 
+Either way, the report says which it was: the scan line reads `robots.txt was not honoured (respect_robots is off), so pages it disallows were audited too.`, or, when it was on, how many pages it kept out of the audit (`robots.txt was honoured: 12 pages it disallows were left out of the audit.`). JSON carries `meta.respectRobots` and `meta.robotsBlockedPages` (see the [output schema](/configuration/output)).
+
 **Example:**
 
 Enforce robots.txt (auditing a site you don't own):

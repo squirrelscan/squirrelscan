@@ -55,6 +55,7 @@ import {
 } from "../constants";
 import {
   auditLevelLine,
+  robotsHonouredNote,
   checkCarriedLabel,
   checkUnrenderedLabel,
   coverageLine,
@@ -1791,6 +1792,7 @@ function ReportPage({
     signedIn && report.coverageMode === "quick" && !groups.some((g) => g.group === "ai");
   const locked = branding?.whiteLabel ? null : lockedRulesMessage(report);
   const level = auditLevelLine(report);
+  const robotsNote = robotsHonouredNote(report);
   const cov =
     report.coverage &&
     (report.coverage.carriedFindings > 0 ||
@@ -1996,6 +1998,11 @@ function ReportPage({
                   {level && (
                     <Badge color="neutral" size="md">
                       {level.replace(/\.$/, "")}
+                    </Badge>
+                  )}
+                  {robotsNote && (
+                    <Badge color="neutral" size="md">
+                      {robotsNote.replace(/\.$/, "")}
                     </Badge>
                   )}
                   {report.generatorVersion && (
