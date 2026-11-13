@@ -1814,6 +1814,37 @@ export interface ReportHost {
   latency?: { ms: number; measure: "tcp-connect"; address: string; port: number };
   /** Month of the bundled DB-IP Lite snapshot the country came from (CC BY 4.0, DB-IP.com). */
   geoipSnapshot?: string;
+  /**
+   * The CDN or edge platform that answers for the host, kept apart from the origin (#1807). Absent when no
+   * edge was detected. Report-only.
+   */
+  edge?: ReportHostEdge;
+}
+
+/** Where an edge detection came from. `header`: platform response headers; `ip-range`: the resolved address is in the provider's published ranges; `asn`: its ASN belongs to the provider. */
+export type ReportEdgeSource = "header" | "ip-range" | "asn";
+
+/** The edge provider of the audited host and what is known of the origin behind it (#1807). */
+export interface ReportHostEdge {
+  /** Provider key: cloudflare, cloudfront, fastly, akamai, vercel, netlify, azure-front-door, google-cloud. */
+  id: string;
+  name: string;
+  /** The strongest source that matched (header, then ip-range, then asn). */
+  source: ReportEdgeSource;
+  /** Every source that matched this provider, strongest first. */
+  matched: ReportEdgeSource[];
+  /** The ip-range list is the provider's whole cloud, not only its edge (Google Cloud), so a match is weaker evidence of a CDN. */
+  broad?: true;
+  /** Resolved address that matched an ip-range or asn source. */
+  address?: string;
+  /** ASN that matched, for the asn source. */
+  asn?: number;
+  /** The platform is both edge and host (Vercel, Netlify, Cloudflare Pages): there is no separate origin. */
+  edgeHosted: boolean;
+  /** `unknown` is reported, never the edge itself, when no origin could be told apart. */
+  origin: { status: "edge-hosted" } | { status: "unknown" } | { status: "identified"; id: string; name: string };
+  /** Other providers some source matched, when sources disagree. */
+  alsoMatched?: Array<{ id: string; name: string; source: ReportEdgeSource }>;
 }
 
 /** One link section's footprint across the audited pages. */

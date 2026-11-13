@@ -118,6 +118,8 @@ for (const r of v6n) {
 const dir = new URL("../geoip-db/", import.meta.url);
 const gz = gzipSync(buf, { level: 9 });
 await Bun.write(new URL("country.bin.gz", dir), gz);
+// keep the `edge` block that scripts/refresh-edge-data.ts owns
+const previous = await Bun.file(new URL("SNAPSHOT.json", dir)).json().catch(() => ({}));
 await Bun.write(
   new URL("SNAPSHOT.json", dir),
   `${JSON.stringify(
@@ -133,6 +135,7 @@ await Bun.write(
       v6Ranges: v6n.length,
       compiledBytes: gz.length,
       compiledSha256: createHash("sha256").update(gz).digest("hex"),
+      ...(previous.edge ? { edge: previous.edge } : {}),
     },
     null,
     2,

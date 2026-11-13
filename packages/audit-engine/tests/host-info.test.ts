@@ -15,7 +15,8 @@ describe("buildReportHost country labelling (#10, edge requirement)", () => {
     test(`${id}: the country is an edge location, not the origin's`, async () => {
       const host = await buildReportHost(probe, [{ id: "wordpress" }, { id }]);
       expect(host?.country?.location).toBe("edge");
-      expect(host?.country?.edge).toEqual({ id, name });
+      expect(host?.country?.edge?.name).toBe(name);
+      expect(host?.edge?.name).toBe(name);
       expect(JSON.parse(JSON.stringify(host)).country.location).toBe("edge");
     });
   }

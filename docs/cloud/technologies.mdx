@@ -28,7 +28,7 @@ On a signed-in audit the two are merged into one section (see below). A local sc
 
 ### Host address, country and connect time
 
-Beside the technologies, the report has a **Host** section for the audited host (`host` in the `-f json` output, schema 1.17). It is report-only and never affects the score.
+Beside the technologies, the report has a **Host** section for the audited host (`host` in the `-f json` output, schema 1.18). It is report-only and never affects the score.
 
 | Field | Meaning |
 |---|---|
@@ -36,9 +36,31 @@ Beside the technologies, the report has a **Host** section for the audited host 
 | `country` | The country the bundled GeoIP database assigns to the first resolved address: `code` (ISO 3166-1 alpha-2), `name`, `address` and `location`. Omitted, never guessed, when the database has no country for the address (private, loopback and unallocated addresses). |
 | `country.location` | `origin` when no CDN or edge platform was detected, otherwise `edge`, with `country.edge` naming the provider. |
 | `latency` | `ms` to open one TCP connection to the host (`measure` is `tcp-connect`, with the `address` and `port` used). It is not an ICMP ping and not a page load time. Omitted when the connection did not complete within 3 seconds. |
+| `edge` | The CDN or edge platform that answers for the host, kept apart from the origin (see below). Omitted when none was detected. |
 | `geoipSnapshot` | The month of the GeoIP snapshot the country came from. |
 
-**Edge location, not origin.** When technology detection finds Cloudflare, Amazon CloudFront, Vercel, Netlify, Fastly or Akamai in front of the site, the resolved address belongs to that provider's edge or anycast network. The country is then labelled an **edge location** (`country.location: "edge"`; "Edge location" in the text, markdown, console and HTML reports) and is not where the site is hosted. This only reads the existing detection back; it adds no edge detection of its own.
+**Edge location, not origin.** When an edge is detected (Cloudflare, Amazon CloudFront, Vercel, Netlify, Fastly, Akamai, Azure Front Door or Google Cloud, from any of the three sources below), the resolved address belongs to that provider's edge or anycast network. The country is then labelled an **edge location** (`country.location: "edge"`; "Edge location" in the text, markdown, console and HTML reports) and is not where the site is hosted.
+
+### Edge and origin
+
+`host.edge` names the edge provider and, separately, what is known of the origin behind it.
+
+| Field | Meaning |
+|---|---|
+| `id`, `name` | The provider: `cloudflare`, `cloudfront`, `fastly`, `akamai`, `vercel`, `netlify`, `azure-front-door` or `google-cloud`. |
+| `source` | The strongest source that matched: `header`, `ip-range` or `asn`. `matched` lists every source that agreed. `alsoMatched` lists another provider a source named, when sources disagree. |
+| `edgeHosted` | `true` when the platform is both edge and host (Vercel, Netlify, Cloudflare Pages): there is no separate origin. |
+| `origin` | `{ "status": "edge-hosted" }`, `{ "status": "identified", "id", "name" }` when a separate hosting technology was detected (for example Heroku behind Cloudflare), or `{ "status": "unknown" }`. An unknown origin is reported as unknown, never as the edge. |
+
+How each source is judged, strongest first:
+
+1. **`header`**: the platform response headers the technology detection already reads (for example `cf-ray`, `x-amz-cf-id`, `x-vercel-id`, `x-nf-request-id`, `x-azure-ref`). A provider named only in the page HTML is not a header match. Lookalike header names do not match.
+2. **`ip-range`**: any resolved address inside the provider's own published range list: [cloudflare.com/ips](https://www.cloudflare.com/ips/), the `CLOUDFRONT` service of [ip-ranges.amazonaws.com](https://ip-ranges.amazonaws.com/ip-ranges.json), [api.fastly.com/public-ip-list](https://api.fastly.com/public-ip-list), the Microsoft Service Tag `AzureFrontDoor.Frontend`, and Google's [cloud.json](https://www.gstatic.com/ipranges/cloud.json). An address just outside a range is not a match. Google publishes no Cloud CDN-only list: `cloud.json` covers all of Google Cloud, so a Google match is marked `broad`, ranks below every other source, and is not proof of a CDN (a plain Compute Engine VM is in the same list). Google Cloud CDN has no header of its own either.
+3. **`asn`**: the address belongs to an ASN that is specific to an edge provider (Cloudflare, Fastly, Akamai's CDN ASNs, Vercel), from the DB-IP IP to ASN Lite database. Shared cloud ASNs (AWS, Azure, Google) are not used, because they say nothing about an edge, and Akamai's Linode hosting ASN is excluded.
+
+Akamai, Vercel and Netlify publish no complete range list, so they are found from headers (and, for Akamai and Vercel, ASN) only. Netlify has no ASN of its own in the database and is found from headers only.
+
+**Data and refresh.** The ranges and ASN rows are bundled files in `packages/utils/geoip-db/`, generated by `bun run scripts/refresh-edge-data.ts`, which is the only thing that fetches them; the CLI never makes a request to match an address. The script records the fetch date and the sha256 of every file fetched in `SNAPSHOT.json`. Range lists change, so a match reflects the list as of that date. IP to ASN data by [DB-IP.com](https://db-ip.com), licensed [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 
 **GeoIP data.** Lookups are offline: the CLI bundles the [DB-IP](https://db-ip.com) IP to Country Lite database (snapshot 2026-11, licensed [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)) and makes no request to look an address up. IP geolocation by DB-IP.com. The Lite database has reduced coverage and accuracy and is refreshed with the CLI, not live.
 
