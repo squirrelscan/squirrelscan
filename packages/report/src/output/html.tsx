@@ -1795,7 +1795,8 @@ function ReportPage({
     report.coverage &&
     (report.coverage.carriedFindings > 0 ||
       (report.coverage.unrenderedFindings ?? 0) > 0 ||
-      (report.coverage.pagesWithStaleCarry ?? 0) > 0)
+      (report.coverage.pagesWithStaleCarry ?? 0) > 0 ||
+      report.coverage.seedVerification !== undefined)
       ? coverageLine(report)
       : null;
   // The coverage notice replaces the generic partial-scan hint.

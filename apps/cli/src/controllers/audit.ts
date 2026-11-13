@@ -1814,6 +1814,7 @@ export async function runAudit(
         normalizedUrl: string;
         status: number;
         redirect?: true;
+        finalUrl?: string;
       }> = [];
       // Distinct external link urls, sized exactly as countExternalLinks does,
       // so the dead-links spend estimate is the number v1 showed. Only
@@ -1929,7 +1930,10 @@ export async function runAudit(
                 // A redirect row (#1762) is re-observed, so its stale findings resolve, but it is
                 // not a page: "audited N of M" leaves it out.
                 ...(isRedirectSourcePage(page)
-                  ? { redirect: true as const }
+                  ? {
+                      redirect: true as const,
+                      ...(page.finalUrl ? { finalUrl: page.finalUrl } : {}),
+                    }
                   : {}),
               });
             }
