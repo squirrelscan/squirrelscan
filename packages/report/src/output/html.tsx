@@ -122,6 +122,7 @@ import {
   structureRows,
   structureTotalsLine,
 } from "../structure";
+import { hostRows } from "../host";
 import { groupTechnologies, isLocalOnlyTech, TECH_LOCAL_MARK, techChangeSummary, techIconUrl } from "../technologies";
 import type { AuditReport } from "../types";
 import { getPathname } from "../url";
@@ -1455,7 +1456,7 @@ function SiteContext({ report, offline }: { report: AuditReport; offline: boolea
   const techSummary = tech ? techChangeSummary(tech) : null;
   return (
     <>
-      {(profileRows.length > 0 || hasTech || cs) && (
+      {(profileRows.length > 0 || hasTech || cs || report.host) && (
         <section id="site">
           <SectionHead
             title="Site"
@@ -1495,6 +1496,19 @@ function SiteContext({ report, offline }: { report: AuditReport; offline: boolea
                     ))}
                   </div>
                 )}
+              </Panel>
+            )}
+            {report.host && (
+              <Panel className="md:col-span-2">
+                <PanelTitle>Host</PanelTitle>
+                <dl className="grid grid-cols-[max-content_1fr] gap-x-5 gap-y-2 text-sm">
+                  {hostRows(report.host).map((row) => (
+                    <React.Fragment key={row.key}>
+                      <dt className="text-muted-foreground">{row.label}</dt>
+                      <dd className="break-words">{row.value}</dd>
+                    </React.Fragment>
+                  ))}
+                </dl>
               </Panel>
             )}
             {hasTech && (
