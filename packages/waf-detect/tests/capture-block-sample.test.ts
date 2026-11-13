@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { captureBlockSample, writeSample, type FetchImpl } from "../scripts/capture-block-sample";
 
 const HOST = "shop.example.com";
+const NETLIFY = "fixture-shop.netlify.app";
 const IP = "203.0.113.77";
 const UUID_VALUE = "123e4567-e89b-42d3-a456-426614174000";
 const SECRET = ["tok", "en"].join("");
@@ -54,7 +55,7 @@ describe("captureBlockSample", () => {
     expect(s.redactions.cookies).toBe(2);
     expect(s.headers["x-forwarded-for"]).toBe("REDACTED-IP");
     expect(s.headers["x-nf-request-id"]).toBe("REDACTED-REQUEST-ID");
-    expect(s.headers["x-served-by"]).toBe("cache-fra-example");
+    expect(s.headers["x-served-by"]).toBe("REDACTED-REQUEST-ID");
     expect(s.headers["location"]).toBe("https://example.com/blocked");
     expect(s.html).toContain("Request to example.com from REDACTED-IP");
     expect(s.html).toContain("id REDACTED-ID");
@@ -70,6 +71,114 @@ describe("captureBlockSample", () => {
     expect(json).not.toContain(UUID_VALUE);
     expect(json).not.toContain("abc123");
     expect(json).not.toContain("secret");
+    expect(json).not.toContain("cache-fra-example");
+  });
+
+  test("replaces every *.netlify.app origin in the body and Location, not only the target", async () => {
+    const body =
+      `<a href="https://${NETLIFY}/">origin</a>` +
+      `<a href="https://api.${NETLIFY}/x">api</a>` +
+      `<a href="https://${NETLIFY}.evil.test/">lookalike</a>` +
+      `<a href="https://app.netlify.com/docs">netlify docs</a>`;
+    const { fetchImpl } = spyFetch(
+      () =>
+        new Response(body, {
+          status: 403,
+          headers: { location: `https://${NETLIFY}/blocked?ref=1` },
+        }),
+    );
+    const s = await captureBlockSample({ url: `https://${HOST}/`, fetchImpl, now: fixedNow });
+    expect(s.headers["location"]).toBe("https://example.com/blocked?ref=1");
+    expect(s.html).toContain('href="https://example.com/"');
+    expect(s.html).toContain('href="https://example.com/x">api');
+    expect(s.html).toContain('href="https://example.com/">lookalike');
+    // The provider's own domain is evidence, so it is kept.
+    expect(s.html).toContain("https://app.netlify.com/docs");
+    const json = JSON.stringify(s);
+    expect(json).not.toContain(NETLIFY);
+    expect(json).not.toContain("evil.test");
+  });
+
+  test("replaces the host of any absolute Location and keeps a relative one", async () => {
+    const cases: [string, string][] = [
+      ["https://checkout.example.com/hold?x=1", "https://example.com/hold?x=1"],
+      ["//edge.example.com/x", "https://example.com/x"],
+      ["https://u:p@checkout.example.com/", "https://example.com/"],
+      ["/blocked?ref=1", "/blocked?ref=1"],
+    ];
+    for (const [location, expected] of cases) {
+      const { fetchImpl } = spyFetch(
+        () => new Response("", { status: 302, headers: { location } }),
+      );
+      const s = await captureBlockSample({ url: `https://${HOST}/`, fetchImpl, now: fixedNow });
+      expect(s.headers["location"]).toBe(expected);
+      const json = JSON.stringify(s);
+      expect(json).not.toContain("checkout");
+      expect(json).not.toContain("edge.example");
+      expect(json).not.toContain("u:p@");
+    }
+  });
+
+  test("scrubs IPv6 addresses but leaves times and CSS pseudo-elements alone", async () => {
+    const body =
+      "<p>from 2001:db8::1 and 2001:0db8:85a3:0000:0000:8a2e:0370:7334</p>" +
+      "<p>at 12:30:45</p><style>a::before{content:''}</style>";
+    const { fetchImpl } = spyFetch(
+      () =>
+        new Response(body, {
+          status: 403,
+          headers: { "x-sigsci-tags": "from 2001:db8::3 SQLI", "x-forwarded-for": "2001:db8::2" },
+        }),
+    );
+    const s = await captureBlockSample({ url: `https://${HOST}/`, fetchImpl, now: fixedNow });
+    expect(s.html).toContain("from REDACTED-IP and REDACTED-IP");
+    expect(s.html).toContain("at 12:30:45");
+    expect(s.html).toContain("a::before{content:''}");
+    expect(s.headers["x-sigsci-tags"]).toBe("from REDACTED-IP SQLI");
+    expect(s.headers["x-forwarded-for"]).toBe("REDACTED-IP");
+    const json = JSON.stringify(s);
+    expect(json).not.toContain("2001:db8");
+    expect(json).not.toContain("8a2e");
+  });
+
+  test("redacts cf-ray and x-amz-cf-id values and keeps their names", async () => {
+    const CF_RAY = "8f1d2c3b4a596877-FRA";
+    const AMZ_CF_ID = "Zq8w0Xy2AbCdEf1234567890QrStUvWxYz==";
+    const { fetchImpl } = spyFetch(
+      () =>
+        new Response("", {
+          status: 403,
+          headers: { "cf-ray": CF_RAY, "x-amz-cf-id": AMZ_CF_ID },
+        }),
+    );
+    const s = await captureBlockSample({ url: `https://${HOST}/`, fetchImpl, now: fixedNow });
+    expect(s.headers["cf-ray"]).toBe("REDACTED-REQUEST-ID");
+    expect(s.headers["x-amz-cf-id"]).toBe("REDACTED-REQUEST-ID");
+    expect(s.redactions.requestIds).toBe(2);
+    const json = JSON.stringify(s);
+    expect(json).not.toContain(CF_RAY);
+    expect(json).not.toContain(AMZ_CF_ID);
+  });
+
+  test("replaces Netlify and Fastly client-IP headers whole, whatever their value looks like", async () => {
+    // A value no IP pattern matches: only the header name can get it redacted.
+    const { fetchImpl } = spyFetch(
+      () =>
+        new Response("", {
+          status: 403,
+          headers: {
+            "x-nf-client-connection-ip": "opaque-client-7f3a",
+            "fastly-client-ip": "2001:db8::9",
+          },
+        }),
+    );
+    const s = await captureBlockSample({ url: `https://${HOST}/`, fetchImpl, now: fixedNow });
+    expect(s.headers["x-nf-client-connection-ip"]).toBe("REDACTED-IP");
+    expect(s.headers["fastly-client-ip"]).toBe("REDACTED-IP");
+    expect(s.redactions.ips).toBe(2);
+    const json = JSON.stringify(s);
+    expect(json).not.toContain("opaque-client-7f3a");
+    expect(json).not.toContain("2001:db8::9");
   });
 
   test("redacts only the id part of x-sigsci headers", async () => {
@@ -88,8 +197,11 @@ describe("captureBlockSample", () => {
     expect(calls).toHaveLength(1);
     expect(calls[0]?.init?.redirect).toBe("manual");
     expect(calls[0]?.init?.credentials).toBe("omit");
-    const ua = new Headers(calls[0]?.init?.headers).get("user-agent");
-    expect(ua).toContain("squirrelscan-capture");
+    const sent = new Headers(calls[0]?.init?.headers);
+    expect(sent.get("user-agent")).toContain("squirrelscan-capture");
+    // The script never sends credentials or cookies of its own.
+    expect(sent.has("authorization")).toBe(false);
+    expect(sent.has("cookie")).toBe(false);
   });
 
   test("rejects bad URLs before any fetch", async () => {
