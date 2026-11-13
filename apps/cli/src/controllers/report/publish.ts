@@ -6,6 +6,7 @@ import type { WebsiteScheduleSummary } from "@squirrelscan/cloud-client";
 import type { PageMap } from "@squirrelscan/core-contracts/page-map";
 
 import { computeLockedRules } from "@squirrelscan/audit-engine";
+import { readPageMapRows } from "@squirrelscan/audit-engine/page-map-rows";
 import {
   capReportForPublish,
   PublishedReportTooLargeError,
@@ -24,7 +25,6 @@ import type { AuditReport, CheckResult } from "@/types";
 
 import { hasEverPublished } from "@/cli/publish-nudge";
 import { REPORTS_BASE_URL } from "@/constants";
-import { readPageMapRows } from "@/controllers/pages";
 import { type Result, ok, err, commandError } from "@/controllers/types";
 import { getGlobalContentStore } from "@/crawler/storage/content-store";
 import { SQLiteStorage } from "@/crawler/storage/sqlite";
