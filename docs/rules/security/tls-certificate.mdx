@@ -49,7 +49,7 @@ The check for expiry always runs when the handshake succeeds, so a valid site ge
 
 The runtime reports only the first verification error it meets, and expiry and the hostname come before the chain. An expired certificate that is also self-signed, or missing its intermediate, reports as expired only, so fixing one problem can reveal the next. Run the audit again after each fix.
 
-When the handshake cannot be made, the rule reports `not checked`: a skipped check with the reason, which every report lists under "Not checked" and the JSON report lists in `notChecked`, never as a pass or a failure for a certificate it did not read. The handshake runs in the `squirrel` CLI. With `--offline`, only the audited host is contacted, so the counterpart is not checked. `squirrel analyze` reads the certificate the site serves when it runs, not the one at the time of the crawl. It is also `not checked` when the audited host's address is refused by the check above, or when the host does not answer.
+When the handshake cannot be made, the rule reports `not checked`: a skipped check with the reason, which every report lists under "Not checked" and the JSON report lists in `notChecked`, never as a pass or a failure for a certificate it did not read. The handshake runs in the `squirrel` CLI and in cloud audits, where it leaves only through the cloud's egress guard and applies the same address checks. With `--offline`, only the audited host is contacted, so the counterpart is not checked. `squirrel analyze` reads the certificate the site serves when it runs, not the one at the time of the crawl. It is also `not checked` when the audited host's address is refused by the check above, or when the host does not answer.
 
 ### Where the check runs
 
