@@ -24,6 +24,7 @@ import type {
 } from "./types";
 
 import { version } from "../../package.json";
+import { type AttestationDeps, verifyReleaseAttestation } from "./attestation";
 import { updateSuppressedReason } from "./install-meta";
 import { linkBinary, unlinkIfPresent } from "./link-binary";
 import {
@@ -872,6 +873,8 @@ export async function runAutoUpdate(options?: {
   landingDeps?: LandingDeps;
   /** Test seam for the download deadlines (#174). */
   downloadTimeouts?: DownloadTimeouts;
+  /** Test seam for the `gh attestation verify` step (#169). */
+  attestation?: AttestationDeps;
 }): Promise<string | null> {
   const settingsResult = loadSettings();
   if (!settingsResult.ok) return null;
@@ -933,6 +936,8 @@ export async function runAutoUpdate(options?: {
     const applyResult = await performUpdate(manifest, settings, {
       ...options,
       abortIfDismissed: true,
+      onAttestationSkipped: (reason) =>
+        logger.debug("auto-update: attestation check skipped", { reason }),
     });
     if (!applyResult.ok) {
       if (options?.signal?.aborted) {
@@ -1125,6 +1130,9 @@ async function performUpdate(
     abortIfDismissed?: boolean;
     landingDeps?: LandingDeps;
     downloadTimeouts?: DownloadTimeouts;
+    attestation?: AttestationDeps;
+    /** Receives the "provenance check skipped" notice; a silent update has no console. */
+    onAttestationSkipped?: (reason: string) => void;
   }
 ): Promise<Result<UpdateLanding>> {
   const platformArch = detectPlatformArch();
@@ -1133,6 +1141,17 @@ async function performUpdate(
     timeouts: options?.downloadTimeouts,
   });
   if (!downloadResult.ok) return downloadResult;
+
+  // After the sha256 check inside downloadBinary, before anything is written
+  // into the install: a mismatch aborts the update, a missing gh only warns.
+  const attested = await verifyReleaseAttestation(
+    downloadResult.data,
+    options?.attestation
+  );
+  if (!attested.ok) return attested;
+  if (attested.data.status === "skipped") {
+    options?.onAttestationSkipped?.(attested.data.reason);
+  }
 
   // A download takes long enough for `self update --dismiss` to land in the
   // middle of one. Re-read immediately before the swap so an unattended update
@@ -1254,6 +1273,8 @@ export async function runInteractiveUpdate(options?: {
   force?: boolean;
   /** Test seam for the PATH/bin-dir landing check. */
   landingDeps?: LandingDeps;
+  /** Test seam for the `gh attestation verify` step (#169). */
+  attestation?: AttestationDeps;
 }): Promise<Result<UpdateResult>> {
   const settingsResult = loadSettings();
   if (!settingsResult.ok) return settingsResult;
@@ -1308,6 +1329,8 @@ export async function runInteractiveUpdate(options?: {
 
     const applyResult = await performUpdate(manifest, settings, {
       landingDeps: options?.landingDeps,
+      attestation: options?.attestation,
+      onAttestationSkipped: (reason) => console.warn(`Warning: ${reason}`),
     });
     if (!applyResult.ok) return applyResult;
 

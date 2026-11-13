@@ -255,6 +255,69 @@ if ($null -ne $savedCi) { $env:CI = $savedCi } else { Remove-Item Env:CI -ErrorA
 if ($null -ne $savedGithubPath) { $env:GITHUB_PATH = $savedGithubPath }
 Check "the Path is untouched after the checks" ($env:Path -eq $savedPath)
 
+Write-Host "release attestation: gh present and matching, gh present and mismatching, gh absent (#169)"
+# Write-Err really exits and Write-Warn really prints: record both instead.
+$script:Warnings = @()
+$script:ErrorsSeen = @()
+function Write-Warn { param($Message) $script:Warnings += "$Message" }
+function Write-Err {
+    param([string]$Message, [string]$Output = "", [int]$ExitCode = 1)
+    $script:ErrorsSeen += $Message
+    throw "write-err"
+}
+# A stand-in for gh: records its argument lists and answers per subcommand.
+$script:GhCalls = @()
+$script:GhVerifyExit = 0
+$script:GhAuthExit = 0
+$script:GhHelpExit = 0
+function squirrel-fake-gh {
+    $script:GhCalls += ,@($args)
+    if ($args[0] -eq "auth") { $global:LASTEXITCODE = $script:GhAuthExit; return }
+    if ($args[0] -eq "attestation" -and $args[2] -eq "--help") { $global:LASTEXITCODE = $script:GhHelpExit; return }
+    if ($args[0] -eq "attestation" -and $args[1] -eq "verify") {
+        $global:LASTEXITCODE = $script:GhVerifyExit
+        if ($script:GhVerifyExit -ne 0) { "verification failed" }
+        return
+    }
+    $global:LASTEXITCODE = 99
+}
+$binaryStub = Join-Path ([System.IO.Path]::GetTempPath()) "squirrel-ps-contract-binary"
+
+$threw = $false
+try { Test-ReleaseAttestation -Path $binaryStub -GhName "squirrel-fake-gh" } catch { $threw = $true }
+$verifyCall = $script:GhCalls | Where-Object { $_[0] -eq "attestation" -and $_[1] -eq "verify" -and $_[2] -ne "--help" }
+Check "a matching attestation does not fail" (-not $threw)
+Check "it ran gh attestation verify <file> --repo squirrelscan/squirrelscan" (
+    $verifyCall -and $verifyCall[2] -eq $binaryStub -and $verifyCall[3] -eq "--repo" -and $verifyCall[4] -eq "squirrelscan/squirrelscan")
+Check "a match prints no warning" ($script:Warnings.Count -eq 0)
+
+$script:GhVerifyExit = 1
+$script:ErrorsSeen = @()
+$threw = $false
+try { Test-ReleaseAttestation -Path $binaryStub -GhName "squirrel-fake-gh" } catch { $threw = $true }
+Check "a mismatch fails the install" ($threw -and $script:ErrorsSeen.Count -eq 1)
+Check "the failure says nothing was installed" ($script:ErrorsSeen[0] -like "*Nothing was installed*")
+
+$script:GhVerifyExit = 1
+$script:GhAuthExit = 1
+$script:Warnings = @()
+$threw = $false
+try { Test-ReleaseAttestation -Path $binaryStub -GhName "squirrel-fake-gh" } catch { $threw = $true }
+Check "a gh that is not logged in warns and falls back" (-not $threw -and $script:Warnings.Count -eq 1 -and $script:Warnings[0] -like "*not logged in*")
+$script:GhAuthExit = 0
+
+$script:GhHelpExit = 1
+$script:Warnings = @()
+$threw = $false
+try { Test-ReleaseAttestation -Path $binaryStub -GhName "squirrel-fake-gh" } catch { $threw = $true }
+Check "a gh without the attestation command warns and falls back" (-not $threw -and $script:Warnings.Count -eq 1 -and $script:Warnings[0] -like "*too old*")
+$script:GhHelpExit = 0
+
+$script:Warnings = @()
+$threw = $false
+try { Test-ReleaseAttestation -Path $binaryStub -GhName "squirrel-no-such-gh-on-this-machine" } catch { $threw = $true }
+Check "no gh: warns visibly and does not fail" (-not $threw -and $script:Warnings.Count -eq 1 -and $script:Warnings[0] -like "*sha256*")
+
 if ($script:Failures -gt 0) {
     Write-Host ""
     Write-Host "$($script:Failures) check(s) failed"
