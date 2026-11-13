@@ -1,0 +1,39 @@
+---
+title: "Script from an unattributed origin: a host that does not say who runs it"
+description: "A request goes to a bare IP, a raw storage bucket or a shared serverless host, where the host does not say who runs it."
+---
+
+<Note>**Cloud rule.** The `third-party/*` rules run in cloud audits only. They are not part of the local `squirrel audit`, and a cloud audit includes them once the scan is switched on for your organization's plan; an audit without the scan has no Third parties section and none of these rules appear. The scan never charges credits. It reads at most 8 pages per audit, so a finding is about those pages, not the whole site. See [Third-party rules](/cloud/third-party).</Note>
+
+## What an unattributed origin is
+
+Most third-party hosts name their owner: a vendor's own domain says who you are trusting. Some hosts say nothing. A bare IP address, a raw cloud storage bucket and a shared serverless app address could belong to anyone, and anyone can put a file at one. A page that loads code from one has no way to tell whose code it is, and the owner can change without notice.
+
+## What squirrel checks
+
+The rule reports requests, on a sampled page, whose host is one of:
+
+- a bare IP address (`bare ip`);
+- a raw cloud storage or CDN bucket host (`cloud bucket`): Amazon S3 and CloudFront, Google Cloud Storage, Azure Blob Storage, DigitalOcean Spaces, Cloudflare R2;
+- a shared serverless or app-hosting address (`serverless worker`): `workers.dev`, `run.app`, `vercel.app`, `pages.dev`, `netlify.app`, `herokuapp.com`, `trycloudflare.com`, AWS Lambda function URLs and `azurewebsites.net`.
+
+- `unattributed-origin` warns once per page and host. Message: `https://example.com/ requests assets.example-bucket.s3.amazonaws.com (cloud bucket), which does not name its owner`.
+- `unattributed-origin` passes with `No request goes to an unattributed origin.` otherwise.
+
+A bucket you own is reported too, because the host alone cannot say so. The rule says the owner is not visible in the host, not that the request is malicious. Only sampled pages are checked.
+
+## How to fix it
+
+Put the asset behind a hostname you control (a custom domain on your bucket, CDN or app), so the owner is visible and you can move it without editing pages. If the host belongs to a vendor, ask the vendor for a branded domain. If you do not recognise the request at all, find what loads it before anything else.
+
+| | |
+|---|---|
+| **Rule** | `third-party/unattributed-origin` |
+| **Category** | [Third-party](/cloud/third-party), part of [Security](/rules/security) |
+| **Scope** | Site (cloud audits only) |
+| **Severity** | warning |
+| **Weight** | 1/10 |
+
+## Enable / disable
+
+Cloud audits do not read `squirrel.toml`, so these rules cannot be switched off there. They run whenever the audit includes the third-party scan, and report as skipped when the scan could not run.

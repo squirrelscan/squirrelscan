@@ -1,0 +1,35 @@
+---
+title: "Session replay on a sensitive page: recording sign-in and checkout"
+description: "A session-replay vendor loads on a sign-in, checkout, wallet or account page. squirrel names the vendor and the page."
+---
+
+<Note>**Cloud rule.** The `third-party/*` rules run in cloud audits only. They are not part of the local `squirrel audit`, and a cloud audit includes them once the scan is switched on for your organization's plan; an audit without the scan has no Third parties section and none of these rules appear. The scan never charges credits. It reads at most 8 pages per audit, so a finding is about those pages, not the whole site. See [Third-party rules](/cloud/third-party).</Note>
+
+## What session replay on a sensitive page is
+
+Session-replay tools record what visitors do on a page, often including what they type and see. On a sign-in, checkout, wallet or account page that can capture credentials, card details and personal data, unless the vendor is configured to mask them, and the data is held by a third party. Replay is also a script with full access to the page.
+
+## What squirrel checks
+
+For each sampled page that is a sensitive page, the rule looks for a vendor the catalogue tags as session replay. Sensitive means a page whose URL path says it is a sign-in, sign-up, checkout, cart, payment, billing, wallet or account page (see [how a sensitive page is decided](/cloud/third-party#how-a-sensitive-page-is-decided)).
+
+- `session-replay-on-sensitive-page` fails once per page and vendor. Message: `https://example.com/checkout (checkout page) loads session replay from Example Replay`.
+- `session-replay-on-sensitive-page` passes with `No session replay on a sensitive page.` otherwise.
+
+The rule cannot see the vendor's masking settings, so it flags the presence of the tool, not a proven leak. Sensitivity comes from the URL path alone: a replay script on a sign-in form served from a path the audit does not recognise is not flagged. Only the sampled pages are checked. The issue the finding becomes is rated at least high.
+
+## How to fix it
+
+Do not load replay on pages that take credentials or payment. If you need it for support or conversion work, restrict it to pages without sensitive input, enable the vendor's input masking and exclusion rules, and check what a recording shows before turning it on.
+
+| | |
+|---|---|
+| **Rule** | `third-party/session-replay-on-sensitive-page` |
+| **Category** | [Third-party](/cloud/third-party), part of [Security](/rules/security) |
+| **Scope** | Site (cloud audits only) |
+| **Severity** | error |
+| **Weight** | 1/10 |
+
+## Enable / disable
+
+Cloud audits do not read `squirrel.toml`, so these rules cannot be switched off there. They run whenever the audit includes the third-party scan, and report as skipped when the scan could not run.

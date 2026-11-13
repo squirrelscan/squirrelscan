@@ -1,0 +1,35 @@
+---
+title: "Third-party script through a first-party proxy: code your host rules cannot see"
+description: "A third-party vendor's code is delivered through your own origin, out of sight of host-based controls such as a Content-Security-Policy."
+---
+
+<Note>**Cloud rule.** The `third-party/*` rules run in cloud audits only. They are not part of the local `squirrel audit`, and a cloud audit includes them once the scan is switched on for your organization's plan; an audit without the scan has no Third parties section and none of these rules appear. The scan never charges credits. It reads at most 8 pages per audit, so a finding is about those pages, not the whole site. See [Third-party rules](/cloud/third-party).</Note>
+
+## What a proxied script is
+
+Some vendors and tag managers offer to serve their code from a path on your own domain, often to get past ad blockers or browsers' tracking limits. The script is still a third party's code, and it still runs with full access to the page, but its address now looks like yours.
+
+## What squirrel checks
+
+The scan notes when a request that belongs to a catalogued vendor reached the network through a first-party proxy. The rule warns once per page and vendor.
+
+- `proxied-script` warns with `https://example.com/ loads Example Analytics through a first-party proxy, so a content-security policy or blocklist by host does not see it`.
+- `proxied-script` passes with `No third-party script is served through a first-party proxy.` otherwise.
+
+The point is the controls it defeats. A Content-Security-Policy that allows only your own origin cannot tell this script from yours, a host blocklist does not match it, and the inventory in your privacy notice misses it. The rule does not say proxying is wrong: some teams do it on purpose. It says the vendor is there and your host-based controls cannot see it. Only sampled pages are checked.
+
+## How to fix it
+
+If you do not need the proxy, load the vendor from its own host and cover it with your policy and your inventory. If you do, list the vendor in your privacy notice and your vendor register, pin or review the version, and treat the proxy path as code you own.
+
+| | |
+|---|---|
+| **Rule** | `third-party/proxied-script` |
+| **Category** | [Third-party](/cloud/third-party), part of [Security](/rules/security) |
+| **Scope** | Site (cloud audits only) |
+| **Severity** | warning |
+| **Weight** | 1/10 |
+
+## Enable / disable
+
+Cloud audits do not read `squirrel.toml`, so these rules cannot be switched off there. They run whenever the audit includes the third-party scan, and report as skipped when the scan could not run.
