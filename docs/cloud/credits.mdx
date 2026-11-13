@@ -90,6 +90,7 @@ Every signed-in audit has one flat price:
 | Audit base | 50 per audit | covers every included service below |
 | Audited page | 2 per page | every page the report shows as audited, however it was fetched: plain HTTP, a [cloud browser render](/cloud/rendering), the local or cloud render cache, a `304 Not Modified`, or a plain fetch after a render failed |
 | External link check | 1 per link | each distinct external destination the cloud verifies for an audit (it works, redirects or is broken), cloud or signed-in CLI, at most 1 per page of the audit's page limit. A link it cannot verify, or does not answer in time, costs nothing (see below) |
+| LLM rules (opt-in) | 2 per page | only when an audit turns the LLM rule pack on, for each page the pack evaluates, on top of the audited page charge. Off by default; audits that do not opt in are unchanged |
 
 A page is charged once per audit. Rendering it, serving it from a cache, or retrying a request never adds a second charge, and the same external link on twenty pages is one check. Run the audit again and it is charged again: it is a new audit.
 
