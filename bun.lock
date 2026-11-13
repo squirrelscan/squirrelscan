@@ -13,7 +13,7 @@
     },
     "apps/cli": {
       "name": "@squirrelscan/cli",
-      "version": "0.0.173",
+      "version": "0.0.181",
       "bin": {
         "squirrelscan": "./build/squirrelscan",
       },
@@ -31,6 +31,7 @@
         "@squirrelscan/parser": "workspace:*",
         "@squirrelscan/report": "workspace:*",
         "@squirrelscan/rules": "workspace:*",
+        "@squirrelscan/tls-probe": "workspace:*",
         "@squirrelscan/utils": "workspace:*",
         "citty": "^0.1.6",
         "effect": "^3.21.3",
@@ -258,6 +259,17 @@
       "dependencies": {
         "@squirrelscan/core-contracts": "workspace:*",
         "tldts": "^7",
+      },
+    },
+    "packages/tls-probe": {
+      "name": "@squirrelscan/tls-probe",
+      "version": "0.0.1",
+      "dependencies": {
+        "@squirrelscan/utils": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/bun": "^1.4.0",
+        "@types/node": "^24.13.1",
       },
     },
     "packages/utils": {
@@ -987,6 +999,8 @@
     "@squirrelscan/tech-detect": ["@squirrelscan/tech-detect@workspace:packages/tech-detect"],
 
     "@squirrelscan/threat-intel": ["@squirrelscan/threat-intel@workspace:packages/threat-intel"],
+
+    "@squirrelscan/tls-probe": ["@squirrelscan/tls-probe@workspace:packages/tls-probe"],
 
     "@squirrelscan/utils": ["@squirrelscan/utils@workspace:packages/utils"],
 

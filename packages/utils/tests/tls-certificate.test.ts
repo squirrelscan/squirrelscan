@@ -230,16 +230,15 @@ describe("tlsFailureCause", () => {
 describe("shared packages open no raw socket", () => {
   // #716: a raw socket from a shared package would go around the hosted
   // engine's request-level network policy. The TLS handshake is injected
-  // (`TlsProbeFn`); the one implementation is packages/fetchers/src/tls-probe.ts,
-  // allowlisted below and exported only as the `@squirrelscan/fetchers/tls-probe`
-  // subpath that the CLI and the hosted worker import (#2410, #3922). No other
-  // file scanned below may open a socket, and no shared package imports the
-  // subpath. Its handshake passes the egress guard first.
+  // (`TlsProbeFn`); the one implementation is packages/tls-probe/src/index.ts,
+  // allowlisted below, in its own `@squirrelscan/tls-probe` package so no other
+  // shared package carries socket code (#2410, #3922). No other file scanned
+  // below may open a socket, and no shared package imports the probe. Its handshake passes the egress guard first.
   // `isIP` from node:net is an
   // address helper, not a socket, and stays allowed; type-only imports open
   // nothing. Tests are not shipped, and their fixture servers are sockets.
   const packagesRoot = join(import.meta.dir, "..", "..");
-  const TLS_PROBE_FILE = "fetchers/src/tls-probe.ts";
+  const TLS_PROBE_FILE = "tls-probe/src/index.ts";
   const files = [...new Bun.Glob("*/src/**/*.{ts,tsx,js,mjs,cjs}").scanSync({ cwd: packagesRoot })].filter(
     (file) => !/\.test\.[cm]?[jt]sx?$/.test(file) && file !== TLS_PROBE_FILE,
   );
@@ -305,14 +304,17 @@ describe("shared packages open no raw socket", () => {
     expect(offenders).toEqual([]);
   });
 
-  test("no shared package imports the probe, and the fetchers root does not export it", () => {
+  test("no shared package imports the probe, and only its own package holds it", () => {
     const importers = files.filter((file) =>
-      /fetchers\/tls-probe|\.\/tls-probe/.test(readFileSync(join(packagesRoot, file), "utf8")),
+      /@squirrelscan\/tls-probe|tls-probe\/src|\.\/tls-probe/.test(readFileSync(join(packagesRoot, file), "utf8")),
     );
     expect(importers).toEqual([]);
-    const index = readFileSync(join(packagesRoot, "fetchers/src/index.ts"), "utf8");
-    expect(index).not.toContain("tls-probe");
+    for (const pkg of [...new Bun.Glob("*/package.json").scanSync({ cwd: packagesRoot })]) {
+      if (pkg === "tls-probe/package.json") continue;
+      const manifest = JSON.parse(readFileSync(join(packagesRoot, pkg), "utf8"));
+      expect({ pkg, dep: manifest.dependencies?.["@squirrelscan/tls-probe"] }).toEqual({ pkg, dep: undefined });
+    }
     const manifest = JSON.parse(readFileSync(join(packagesRoot, "fetchers/package.json"), "utf8"));
-    expect(manifest.exports["./tls-probe"]).toBe("./src/tls-probe.ts");
+    expect(manifest.exports["./tls-probe"]).toBeUndefined();
   });
 });

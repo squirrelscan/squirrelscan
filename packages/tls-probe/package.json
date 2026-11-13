@@ -1,0 +1,21 @@
+{
+  "name": "@squirrelscan/tls-probe",
+  "version": "0.0.1",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@squirrelscan/utils": "workspace:*"
+  },
+  "scripts": {
+    "typecheck": "tsgo --noEmit",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.0",
+    "@types/node": "^24.13.1"
+  },
+  "private": true,
+  "license": "MIT"
+}

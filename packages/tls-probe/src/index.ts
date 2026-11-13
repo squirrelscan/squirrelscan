@@ -1,9 +1,9 @@
 // The TLS handshake behind `security/tls-certificate` and the crawl's TLS
 // failure cause (#712). It is the only raw TLS socket an audit opens. It is
-// exported ONLY through the `@squirrelscan/fetchers/tls-probe` subpath, never
-// from the package root, and only the CLI and the hosted worker import it: the
-// rules, the crawler and the audit engine receive it as an injected
-// `TlsProbeFn` and hold no socket code (#2410, #3922). The certificate facts and
+// its own package, @squirrelscan/tls-probe, so no package the hosted worker
+// depends on carries socket code, and only runtimes that open the handshake
+// import it: the rules, the crawler and the audit engine receive it as an
+// injected `TlsProbeFn` and hold no socket code (#2410, #3922). The certificate facts and
 // what they mean live in @squirrelscan/utils/tls-certificate.
 //
 // The hosted worker sets `requireProxy` with its egress guard's local proxy as
