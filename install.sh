@@ -1473,6 +1473,42 @@ run_self_install() {
 }
 
 # Download binary and run self install
+# Provenance check (#169). The sha256 above comes from a manifest served next
+# to the binary, so it cannot tell a compromised origin from a good one. GitHub
+# artifact attestations are signed in the release workflow and checked against
+# Sigstore and GitHub, a trust root that is not our download origin.
+#   gh usable, attestation matches   -> continue
+#   gh usable, attestation mismatch  -> hard failure, nothing is installed
+#   gh absent, too old, or logged out -> visible warning, sha256 alone decides
+# `gh attestation verify` needs an authenticated gh; a gh that is installed but
+# not logged in cannot verify anything, so it counts as absent, never as a pass.
+verify_attestation() {
+  local file="$1"
+  CURRENT_STEP="verify_attestation"
+  if ! command -v gh > /dev/null 2>&1; then
+    warn "GitHub CLI (gh) not found: skipping the release provenance check, relying on the sha256 checksum only.\n  Install gh and run 'gh auth login' to verify installs against the GitHub attestation."
+    return 0
+  fi
+  if ! GH_NO_UPDATE_NOTIFIER=1 gh attestation verify --help > /dev/null 2>&1 < /dev/null; then
+    warn "This gh is too old for 'gh attestation verify': skipping the release provenance check, relying on the sha256 checksum only."
+    return 0
+  fi
+  if ! GH_NO_UPDATE_NOTIFIER=1 gh auth status > /dev/null 2>&1 < /dev/null; then
+    warn "gh is not logged in: skipping the release provenance check, relying on the sha256 checksum only.\n  Run 'gh auth login' to enable it."
+    return 0
+  fi
+  log "Verifying release attestation..."
+  local attest_out
+  if ! attest_out=$(GH_NO_UPDATE_NOTIFIER=1 gh attestation verify "$file" --repo "$REPO" 2>&1 < /dev/null); then
+    LAST_ERROR_OUTPUT=$(printf '%s\n' "$attest_out" | tail -n 20)
+    # printf, not error's detail: that goes through echo -e, which would
+    # interpret backslashes in text this script did not write.
+    printf '%s\n' "$attest_out" | tail -n 10 >&2
+    error "Attestation verification failed: this binary was not built by the ${REPO} release workflow.\n  Nothing was installed. Do not run it."
+  fi
+  info "Attestation verified: built by ${REPO}"
+}
+
 download_and_install() {
   local version="$1"
   local platform="$2"
@@ -1561,6 +1597,8 @@ download_and_install() {
     error "Checksum mismatch!\n  Expected: ${expected_sha256}\n  Actual:   ${actual_sha256}"
   fi
   info "Checksum verified: ${expected_sha256:0:16}..."
+
+  verify_attestation "$tmpdir/squirrel"
 
   # Make executable and run self install with bin dir
   chmod +x "$tmpdir/squirrel"

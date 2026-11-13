@@ -28,6 +28,8 @@ import type {
   UserSettings,
 } from "@/self/types";
 
+import { ok } from "@/controllers/types";
+import * as attestationModule from "@/self/attestation";
 import * as pathsModule from "@/self/paths";
 import * as releasesModule from "@/self/releases";
 import { downloadBinary } from "@/self/releases";
@@ -97,6 +99,9 @@ function waitForTelemetry(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 20));
 }
 
+// Captured before any spy replaces the export.
+const realVerifyReleaseAttestation = attestationModule.verifyReleaseAttestation;
+
 describe("updater", () => {
   beforeEach(() => {
     tempHome = mkdtempSync(join(tmpdir(), "squirrelscan-updater-"));
@@ -114,6 +119,15 @@ describe("updater", () => {
     );
     spyOn(pathsModule, "getUpdateLockPath").mockReturnValue(
       join(tempHome, "update.lock")
+    );
+    // #169: never start the developer's real gh. An update without an injected
+    // gh runner sees a verified attestation; a test that injects `runGh` gets
+    // the real verification logic over its fake.
+    spyOn(attestationModule, "verifyReleaseAttestation").mockImplementation(
+      async (data, deps) =>
+        deps?.runGh
+          ? realVerifyReleaseAttestation(data, deps)
+          : ok({ status: "verified" as const })
     );
   });
 
@@ -636,6 +650,83 @@ describe("updater", () => {
       );
       expect(errors).toHaveLength(1);
       expect(errors[0]?.error_type).toBe("DOWNLOAD_TIMEOUT");
+    });
+  });
+
+  // #169: a downloaded binary whose attestation does not verify never installs.
+  describe("release attestation (#169)", () => {
+    const BYTES = new TextEncoder().encode("squirrel-binary-bytes");
+    const SHA = new Bun.CryptoHasher("sha256").update(BYTES).digest("hex");
+    const entry = { filename: "squirrel", sha256: SHA, size: BYTES.length };
+    const manifest = {
+      version: "9.9.9",
+      binaries: {
+        "darwin-arm64": entry,
+        "darwin-x64": entry,
+        "linux-x64": entry,
+        "linux-arm64": entry,
+        "windows-x64": entry,
+      },
+    } as ReleaseManifest;
+
+    test("a mismatching attestation fails the auto-update before anything is installed", async () => {
+      spyOn(pathsModule, "isManagedInstall").mockReturnValue(true);
+      spyOn(os, "platform").mockReturnValue("linux");
+      // Anything installVersion would write goes to the temp home, not the real one.
+      const releases = join(tempHome, "releases");
+      spyOn(pathsModule, "getReleasePath").mockReturnValue(releases);
+      spyOn(pathsModule, "getBinaryPath").mockReturnValue(
+        join(releases, "squirrel")
+      );
+      spyOn(releasesModule, "checkForUpdates").mockResolvedValue({
+        ok: true,
+        data: {
+          available: true,
+          current_version: "0.0.1",
+          latest_version: "9.9.9",
+          release_url: null,
+          manifest,
+        },
+      } as Awaited<ReturnType<typeof releasesModule.checkForUpdates>>);
+      const events: Array<Record<string, unknown>> = [];
+      globalThis.fetch = (async (
+        url: string | URL | Request,
+        init?: RequestInit
+      ) => {
+        if (url.toString().includes("/releases/download/")) {
+          return new Response(BYTES);
+        }
+        if (init?.body) {
+          events.push(
+            JSON.parse(init.body as string) as Record<string, unknown>
+          );
+        }
+        return new Response("{}", { status: 200 });
+      }) as unknown as typeof fetch;
+      updateSettings({
+        auto_update: true,
+        pending_update_notification: {
+          from_version: "0.0.1",
+          to_version: "9.9.9",
+          release_url: null,
+        },
+      });
+
+      const installed = await runAutoUpdate({
+        attestation: {
+          runGh: async (args) =>
+            args[0] === "attestation" && args[2] !== "--help"
+              ? { code: 1, output: "verification failed" }
+              : { code: 0, output: "" },
+        },
+      });
+      expect(installed).toBeNull();
+      expect(existsSync(releases)).toBe(false);
+      expect(existsSync(join(tempHome, "update.lock"))).toBe(false);
+      await waitForTelemetry();
+      const errors = events.filter((e) => e.event === "update_auto_error");
+      expect(errors).toHaveLength(1);
+      expect(errors[0]?.error_type).toBe("ATTESTATION_FAILED");
     });
   });
 

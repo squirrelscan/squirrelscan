@@ -65,7 +65,7 @@ Check for and apply updates to the CLI.
 
 ### Automatic updates
 
-You usually don't need this command. With `auto_update` enabled (the default), squirrel updates itself: any CLI run checks for a new release in the background, and when one is found a detached background process downloads it, verifies its SHA-256 checksum, and switches over silently. Your next run prints a one-line notice:
+You usually don't need this command. With `auto_update` enabled (the default), squirrel updates itself: any CLI run checks for a new release in the background, and when one is found a detached background process downloads it, verifies its SHA-256 checksum (and its GitHub build attestation when `gh` is installed and logged in, see [Verifying a release](/quickstart#verifying-a-release)), and switches over silently. Your next run prints a one-line notice:
 
 ```text
 ✓ squirrel auto-updated v0.0.42 → v0.0.43
