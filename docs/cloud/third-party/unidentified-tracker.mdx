@@ -1,0 +1,36 @@
+---
+title: "Tracker not in the catalogue: a request a public blocklist names but no vendor owns"
+description: "A request matches a public tracker blocklist but no known vendor. squirrel names the host and the page."
+---
+
+<Note>**Cloud rule.** The `third-party/*` rules run in cloud audits only. They are not part of the local `squirrel audit`, and a cloud audit includes them once the scan is switched on for your organization's plan; an audit without the scan has no Third parties section and none of these rules appear. The scan never charges credits. It reads at most 8 pages per audit, so a finding is about those pages, not the whole site. See [Third-party rules](/cloud/third-party).</Note>
+
+## What an unidentified tracker is
+
+Public tracker blocklists name many hosts that measure or profile visitors. squirrel's own catalogue of vendors is curated and finite, so some hosts the lists name belong to no vendor squirrel knows. Something on your page is talking to a tracker, and the scan cannot tell you who runs it.
+
+## What squirrel checks
+
+For each sampled page, the rule looks at requests that no catalogued vendor claims and that match one of three public lists: EasyPrivacy, uBlock Origin Privacy and uBlock Origin Badware. The lists are fetched and validated, kept as prebuilt indexes, and refreshed by a scheduled task and in the background when a copy is more than 7 days old, so an audit never waits on the lists' servers.
+
+- `unidentified-tracker` warns once per page and host. Message: `https://example.com/ requests t.example-track.net, which a public tracker list names but we cannot attribute to a vendor`.
+- `unidentified-tracker` passes with `No unidentified tracker was seen.` otherwise.
+- `unidentified-tracker` is skipped, never passed, when a list was unavailable or was cut short at its rule cap: `Third-party scan skipped for this rule: a tracker blocklist was unavailable, so unidentified trackers could not be checked.` A "none seen" with a missing list would be a guess.
+
+A blocklist match is a heuristic. Lists are maintained by volunteers, a host may be listed for an old behaviour, and the rule does not read what the request sends. Regex-only and unsupported list rules are skipped. Only sampled pages are checked.
+
+## How to fix it
+
+Find what loads the request: a tag, an embed, a plugin or a script a tag manager publishes. If it is something you use, add it to your privacy notice and your vendor register, and consider whether you need it. If you do not recognise it, remove it and re-run the audit.
+
+| | |
+|---|---|
+| **Rule** | `third-party/unidentified-tracker` |
+| **Category** | [Third-party](/cloud/third-party), part of [Security](/rules/security) |
+| **Scope** | Site (cloud audits only) |
+| **Severity** | warning |
+| **Weight** | 1/10 |
+
+## Enable / disable
+
+Cloud audits do not read `squirrel.toml`, so these rules cannot be switched off there. They run whenever the audit includes the third-party scan, and report as skipped when the scan could not run.

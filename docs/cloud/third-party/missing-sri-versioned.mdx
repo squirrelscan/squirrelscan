@@ -1,0 +1,43 @@
+---
+title: "Versioned third-party script without integrity: pin it with a hash"
+description: "A version-pinned script from a vendor that supports subresource integrity loads without an integrity value."
+---
+
+<Note>**Cloud rule.** The `third-party/*` rules run in cloud audits only. They are not part of the local `squirrel audit`, and a cloud audit includes them once the scan is switched on for your organization's plan; an audit without the scan has no Third parties section and none of these rules appear. The scan never charges credits. It reads at most 8 pages per audit, so a finding is about those pages, not the whole site. See [Third-party rules](/cloud/third-party).</Note>
+
+## What subresource integrity does here
+
+A subresource integrity (SRI) value is a hash in the script tag. The browser refuses to run the file if its bytes do not match. For a script at an exact version, such as `/lib/1.2.3/widget.min.js`, the file should never change, so a hash costs nothing and turns a silent swap at the vendor's host into a blocked script.
+
+## What squirrel checks
+
+The rule looks at vendors the catalogue marks as able to carry an integrity value, and at script URLs on a sampled page that name an exact version. If such a script loads without an integrity value, it warns.
+
+- `missing-sri-versioned` warns once per page and vendor, not once per URL, so a version bump does not create a new finding. Message: `https://example.com/ loads a version-pinned script from Example CDN without an integrity attribute`, with one example script URL as the item's snippet.
+- `missing-sri-versioned` passes with `Every version-pinned third-party script carries an integrity value.` otherwise.
+
+It does not flag scripts at a floating URL (`latest`), because a hash would break them whenever the vendor updates; that is a different decision. It does not cover first-party scripts. The static [`security/sri`](/rules/security/sri) rule looks at every script tag but cannot tell a vendor that supports integrity from one that cannot, so the two can report the same script; the cloud audit does not merge them yet.
+
+## How to fix it
+
+Add the `integrity` and `crossorigin` attributes to the tag, with the hash of the exact file you load:
+
+```html
+<script src="https://cdn.example.com/lib/1.2.3/widget.min.js"
+        integrity="sha384-..."
+        crossorigin="anonymous"></script>
+```
+
+Generate the hash from the file at that version, and update it whenever you bump the version.
+
+| | |
+|---|---|
+| **Rule** | `third-party/missing-sri-versioned` |
+| **Category** | [Third-party](/cloud/third-party), part of [Security](/rules/security) |
+| **Scope** | Site (cloud audits only) |
+| **Severity** | warning |
+| **Weight** | 1/10 |
+
+## Enable / disable
+
+Cloud audits do not read `squirrel.toml`, so these rules cannot be switched off there. They run whenever the audit includes the third-party scan, and report as skipped when the scan could not run.

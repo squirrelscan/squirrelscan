@@ -1,0 +1,58 @@
+---
+title: "Third-party rules: who else runs code on your pages"
+sidebarTitle: "Third-party"
+description: "Ten cloud audit rules that inventory the third-party companies a page loads and flag compromised, proxied, unpinned, unattributed and over-crowded ones, with the pages and thresholds they use."
+icon: "plug"
+---
+
+Every third-party script, pixel and iframe runs with the access of your own code. These rules look at who your pages load code from, and they name the vendor and the page, so you can decide whether each one belongs. They are part of [Security](/rules/security), in a sub-category of their own because they need a browser to see what a page really loads.
+
+<Note>**Cloud rules.** The `third-party/*` rules run in cloud audits only. They are not in the local `squirrel audit`, and they are not configurable from `squirrel.toml` (cloud audits do not read it). Which audits include the scan depends on the rollout: a cloud audit has it once the scan is switched on for your organization's plan. An audit without the scan has no Third parties section, and none of these rules appear in its report. The scan never charges credits.</Note>
+
+## How the scan works
+
+1. **Sampling.** The audit picks at most **8 pages** per run: the home page first, then pages whose path looks like sign-in, sign-up, register, checkout, cart, basket, payment, billing, account or wallet, then the rest spread evenly across the crawl. Findings are about those pages, not the whole site.
+2. **Capture.** A browser renders each sampled page and records every request it makes: the page itself, iframes, workers, service workers, scripts injected after load and requests that reach a vendor through a first-party proxy.
+3. **Classification.** Each request is matched against a curated catalogue of vendors, grouped by company and by purpose (analytics, session replay, tag manager, payments, captcha, chat and so on). A host the catalogue does not know is unknown, not safe. Public tracker lists name hosts the catalogue has no vendor for.
+4. **Rules.** Ten rules read the result. The audit's step has a time budget (60 seconds from the container, 45 seconds on the API's side) and never fails the audit: a scan that could not run is reported as skipped.
+
+A rule that could not look says so. When the scan service was unavailable, the browser recorded no requests on any page, or the scan did not run for the audit, each rule reports a skipped check such as `Third-party scan skipped: the scan service was unavailable. Try the audit again later.` It never reports a pass for something it did not check. A vendor list the report shows may be incomplete when a capture was cut short, a blocklist was unavailable or truncated, or the list was capped; the dashboard says so rather than implying there are no trackers.
+
+## How a sensitive page is decided
+
+Several rules care about sign-in, checkout, wallet and account pages. The scan has no page markup, so it decides from the URL path alone, and conservatively:
+
+- **Wallet:** `wallet`, `connect-wallet`.
+- **Checkout:** `checkout`, `cart`, `basket`, `payment`, `payments`, `billing`, `pay`.
+- **Login:** `login`, `log-in`, `signin`, `sign-in`, `signup`, `sign-up`, `register`, `registration`, `auth`, `wp-login`.
+- **Account:** `account`, `accounts`, `my-account`, `profile`, `settings`.
+
+The keyword must be a whole path segment at the start of the path (after an optional locale such as `/en/` or `/pt-br/`) or follow a platform container such as `/customer/account/login` or `/shop/checkout`. A page under a content section (`/blog/`, `/docs/`, `/help/`, `/news/`, `/guides/` and similar) is never sensitive, so `/blog/cart-abandonment-tips` is not. A file extension and `;params` are ignored. This is evidence of intent, not proof: a sign-in form on a path the scan does not recognise is not marked.
+
+## The rules
+
+| Rule | Severity | Fires when |
+|---|---|---|
+| [`third-party/compromised-script`](/cloud/third-party/compromised-script) | error | A sampled page loads a script from a vendor with an open compromise report |
+| [`third-party/vendor-count`](/cloud/third-party/vendor-count) | warning | More than 10, 15 or 25 companies on the site (info, warning, error), or more than 5 on one sensitive page |
+| [`third-party/session-replay-on-sensitive-page`](/cloud/third-party/session-replay-on-sensitive-page) | error | A session-replay vendor loads on a sensitive page |
+| [`third-party/proxied-script`](/cloud/third-party/proxied-script) | warning | A vendor's code is delivered through your own origin |
+| [`third-party/script-on-sensitive-page`](/cloud/third-party/script-on-sensitive-page) | warning | A vendor that can inject code loads on a sensitive page |
+| [`third-party/tag-manager-on-sensitive-page`](/cloud/third-party/tag-manager-on-sensitive-page) | warning | A tag manager loads on a sensitive page |
+| [`third-party/rum-in-production`](/cloud/third-party/rum-in-production) | info | A real-user-monitoring vendor is present (inventory note) |
+| [`third-party/missing-sri-versioned`](/cloud/third-party/missing-sri-versioned) | warning | A version-pinned script from a vendor that supports integrity has no integrity value |
+| [`third-party/unattributed-origin`](/cloud/third-party/unattributed-origin) | warning | A request goes to a bare IP, a raw storage bucket or a shared serverless host |
+| [`third-party/unidentified-tracker`](/cloud/third-party/unidentified-tracker) | warning | A request matches a public tracker list but no known vendor |
+
+Severity is the rule's own level. Once findings become issues in the dashboard, a failing `compromised-script` is rated critical, and `session-replay-on-sensitive-page` and the sensitive-page count are rated at least high.
+
+## What the rules do not do
+
+- **They sample.** At most 8 pages per audit, chosen as above.
+- **They cannot detect a new compromise.** `compromised-script` fires for compromises the catalogue already records. The catalogue is curated by people, helped by a monitor and a news feed that only propose events to an administrator. The scan does not diff or hash a script's content between audits.
+- **The catalogue is finite.** An unknown vendor is unknown, not safe, and a tracker found only through a public blocklist is a heuristic.
+- **Sensitivity is read from the URL.** It is not read from the page's forms.
+- **Thresholds are untuned defaults.** The company counts (10, 15, 25 and 5) are starting values, not recommendations.
+- **No vendor scores.** The catalogue keeps an internal rating that never appears in a report, a finding or the dashboard.
+
+<Info>The scan is cloud-only and part of the cloud audit's report: the dashboard shows the vendors it found as a Third parties section, grouped by company and purpose, with the pages each loads on and how it reaches the browser.</Info>
