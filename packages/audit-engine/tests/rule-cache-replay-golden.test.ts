@@ -25,13 +25,16 @@ import { Effect } from "effect";
 
 import { generateSiteModel, writeCrawlToStorage } from "@squirrelscan/synthetic-site";
 import { SQLiteStorage } from "@squirrelscan/crawler";
-import { createRunner, RuleRunner } from "@squirrelscan/rules";
+import { createRunner, fingerprintPage, RuleRunner } from "@squirrelscan/rules";
 import type { ContentStoreAdapter } from "@squirrelscan/crawler";
 import type { PreFetchedAssets } from "@squirrelscan/audit-engine";
 
 import type { Config } from "../src/adapter";
 import { generateReportFromStorage, runStreamingRules } from "../src/adapter";
+import { parseHtmlForRules } from "../src/adapter";
 import { bindRuleCache } from "../src/rule-cache";
+import { fanoutClusterKey, fanoutInputSignature } from "../src/template-fanout";
+import { templateFingerprintKey } from "../src/template-key";
 import { streamPageRules } from "../src/streaming";
 import type { RuleCacheStore } from "../src/rule-cache";
 import { getGoldenBaselineConfig } from "./helpers/golden-baseline";
@@ -221,10 +224,7 @@ describe("per-page rule-result cache — replay parity", () => {
     const { dbPath, crawlId } = await buildCrawl("parity");
     const cache = memoryCacheStore();
 
-    // The reference is a cold run WITH THE CACHE ENABLED and an empty store, not a
-    // run without one: enabling the cache turns template fan-out off (they do not
-    // compose — see streaming.ts), so a cache-off run is a different
-    // configuration and comparing against it would be comparing two changes.
+    // The reference is a cold run with the cache enabled and an empty store.
     const cold = await runOnce(dbPath, crawlId, { store: memoryCacheStore().store });
     expect(cold.replayedPages).toBe(0);
 
@@ -273,7 +273,7 @@ describe("per-page rule-result cache — replay parity", () => {
     expect(second.replayedPages).toBe(first.freshPages - 1);
   }, 120_000);
 
-  // The case that made the cache and template fan-out (#1951) mutually exclusive.
+  // The case that once made the cache and template fan-out (#1951) mutually exclusive.
   //
   // A fanned verdict belongs to the page's CLUSTER, so no per-page key can capture
   // what it depends on: change one page of a cluster and the OTHER pages' cached
@@ -324,15 +324,66 @@ describe("per-page rule-result cache — replay parity", () => {
     expectSameSerialization(fullyReplayed.serialized, fresh.serialized);
   }, 180_000);
 
-  // The mechanism, asserted directly rather than through an output difference.
+  // The case the old design could not hold (#296): change the cluster's REPRESENTATIVE.
   //
-  // A fanned verdict belongs to the cluster, so the divergence it causes shows up
-  // only on a page whose CLUSTER-MATE changed — which a fixture cannot be relied
-  // on to produce, and a test that happens not to produce it passes while proving
-  // nothing. What can be pinned exactly is that the two features never run
-  // together: with a cache supplied, the fan-out does no work at all.
-  test("supplying a cache turns template fan-out off", async () => {
-    const { dbPath, crawlId } = await buildCrawl("fanout-exclusive");
+  // `analytics/gtm-present` (template verdict) reads the page's html as a whole, which the
+  // fan-out signature does not key, so an inline `gtm.js` mention changes the first page's
+  // verdict and leaves it in its cluster. The members cached the verdict they inherited from
+  // the representative's PREVIOUS run; a fresh audit gives them the new one.
+  test("changing a cluster's representative re-runs members that inherited its verdict", async () => {
+    const { dbPath, crawlId } = await buildCrawl("fanout-representative");
+    const cache = memoryCacheStore();
+
+    const baseline = await runOnce(dbPath, crawlId, { store: cache.store });
+    expect(baseline.replayedPages).toBe(0);
+
+    await withStorage(dbPath, async (storage) => {
+      const pages = await run(storage.getPages(crawlId));
+      // The first page, in crawl order, of a cluster that has other members.
+      const sizes = new Map<string, number>();
+      const keyOf = (p: (typeof pages)[number]): string | null => {
+        const parsed = parseHtmlForRules(p.html!, p.normalizedUrl);
+        return fanoutClusterKey(
+          templateFingerprintKey(fingerprintPage(parsed, p.normalizedUrl)),
+          p.normalizedUrl,
+          fanoutInputSignature(parsed.document),
+        );
+      };
+      const auditable = pages.filter((p) => p.html && p.status === 200);
+      for (const p of auditable) {
+        const key = keyOf(p);
+        if (key) sizes.set(key, (sizes.get(key) ?? 0) + 1);
+      }
+      const first = auditable.find((p) => (sizes.get(keyOf(p) ?? "") ?? 0) > 1)!;
+      expect(first).toBeTruthy();
+      await run(
+        storage.upsertPage(crawlId, {
+          ...first,
+          html: first.html!.replace("</body>", "<script>/* gtm.js */</script></body>"),
+        }),
+      );
+    });
+
+    // The changed page and every member that inherited its old verdict run again; pages of
+    // the other clusters replay. Without the composition this is exactly 1.
+    const afterChange = await runOnce(dbPath, crawlId, { store: cache.store });
+    expect(afterChange.freshPages).toBeGreaterThan(1);
+    expect(afterChange.replayedPages).toBeGreaterThan(0);
+
+    const fullyReplayed = await runOnce(dbPath, crawlId, { store: cache.store });
+    expect(fullyReplayed.freshPages).toBe(0);
+
+    const fresh = await runOnce(dbPath, crawlId, { store: memoryCacheStore().store });
+    // Not vacuous: the change moved the report at all.
+    expect(fresh.serialized).not.toBe(baseline.serialized);
+    expectSameSerialization(afterChange.serialized, fresh.serialized);
+    expectSameSerialization(fullyReplayed.serialized, fresh.serialized);
+  }, 240_000);
+
+  // The two features run together: a cold run with a cache fans out, and a warm one replays
+  // the clusters' verdicts into the fan-out without running a page.
+  test("a run with a cache fans out template-scoped rules", async () => {
+    const { dbPath, crawlId } = await buildCrawl("fanout-with-cache");
     const cache = memoryCacheStore();
     await withStorage(dbPath, async (storage) => {
       const runner = createRunner(getGoldenBaselineConfig());
@@ -342,29 +393,54 @@ describe("per-page rule-result cache — replay parity", () => {
         robotsTxt: null,
         sitemaps: null,
       } as unknown as Parameters<typeof streamPageRules>[3];
+      const pass = () =>
+        run(
+          streamPageRules(storage, crawlId, runner, siteData, {
+            batchSize: 20,
+            templateFanout: true,
+            collectors: [],
+            ruleCache: bindRuleCache(cache.store, "run-context-for-this-test"),
+          }),
+        );
 
-      const withoutCache = await run(
-        streamPageRules(storage, crawlId, runner, siteData, {
-          batchSize: 20,
-          templateFanout: true,
-        }),
-      );
-      // The fixture really does cluster, or the assertion below proves nothing.
-      expect(withoutCache.templateFanout.fannedRuleRuns).toBeGreaterThan(0);
+      const cold = await pass();
+      expect(cold.templateFanout.fannedRuleRuns).toBeGreaterThan(0);
+      expect(cold.ruleCache.storedEntries).toBeGreaterThan(0);
 
-      const withCache = await run(
-        streamPageRules(storage, crawlId, runner, siteData, {
-          batchSize: 20,
-          templateFanout: true,
-          collectors: [],
-          ruleCache: bindRuleCache(cache.store, "run-context-for-this-test"),
-        }),
-      );
-      expect(withCache.templateFanout.fannedRuleRuns).toBe(0);
-      expect(withCache.templateFanout.clusters).toBe(0);
-      // And the cache really was in play, so this is exclusivity and not an
-      // accidentally-disabled fan-out.
-      expect(withCache.ruleCache.storedEntries).toBeGreaterThan(0);
+      const warm = await pass();
+      expect(warm.ruleCache.freshPages).toBe(0);
+      expect(warm.ruleCache.replayedPages).toBe(cold.ruleCache.freshPages);
+      expect(warm.pageUrls).toEqual(cold.pageUrls);
+    });
+  }, 180_000);
+
+  // An entry written without fan-out holds the page's own verdicts for every rule, which a
+  // fan-out run would not give a member: it must not replay into one.
+  test("an entry written without fan-out does not replay into a fan-out run", async () => {
+    const { dbPath, crawlId } = await buildCrawl("fanout-toggle");
+    const cache = memoryCacheStore();
+    await withStorage(dbPath, async (storage) => {
+      const runner = createRunner(getGoldenBaselineConfig());
+      const siteData = {
+        baseUrl: "http://synthetic.example.com",
+        pages: [],
+        robotsTxt: null,
+        sitemaps: null,
+      } as unknown as Parameters<typeof streamPageRules>[3];
+      const pass = (templateFanout: boolean) =>
+        run(
+          streamPageRules(storage, crawlId, runner, siteData, {
+            batchSize: 20,
+            templateFanout,
+            collectors: [],
+            ruleCache: bindRuleCache(cache.store, "run-context-for-this-test"),
+          }),
+        );
+      const off = await pass(false);
+      expect(off.templateFanout.fannedRuleRuns).toBe(0);
+      const on = await pass(true);
+      expect(on.ruleCache.replayedPages).toBe(0);
+      expect(on.ruleCache.freshPages).toBe(off.ruleCache.freshPages);
     });
   }, 180_000);
 
