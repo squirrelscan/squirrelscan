@@ -398,3 +398,51 @@ describe("decideExit", () => {
     expect(decideExit({}, null).code).toBe(1);
   });
 });
+
+describe("the report address (#1730)", () => {
+  const failBody: CompareResponse = {
+    comparison: { head: { runId: "run_2", reportId: "rep_2" }, findings: [] },
+    gate: { status: "pass", failOn: "error", newAtOrAbove: 0 },
+  } as never;
+  const reportAddress =
+    (reply: ApiReply<unknown>): Handler =>
+    (m, p) =>
+      m === "GET" && p === "/v1/reports/rep_2" ? reply : undefined;
+
+  test("prints the org's address the API returns, the host every other surface shows", async () => {
+    const h = harness([
+      credits([100, 98]),
+      start,
+      runDone(),
+      compare(failBody),
+      reportAddress(
+        ok({ id: "rep_2", url: "https://acme.squirrel.report/rep_2" })
+      ),
+    ]);
+    await runNewFindingsGate(h.deps, OPTS);
+    const text = h.out.join("\n");
+    expect(text).toContain("Report: https://acme.squirrel.report/rep_2");
+    expect(text).not.toContain("reports.squirrelscan.com");
+  });
+
+  test("falls back to the id on the redirecting host when the address cannot be read or is not https", async () => {
+    for (const reply of [
+      { ok: false, status: 500, data: null } as ApiReply<unknown>,
+      ok({ url: "http://acme.squirrel.report/rep_2" }),
+      ok({ url: "not a url" }),
+      ok({}),
+    ]) {
+      const h = harness([
+        credits([100, 98]),
+        start,
+        runDone(),
+        compare(failBody),
+        reportAddress(reply),
+      ]);
+      await runNewFindingsGate(h.deps, OPTS);
+      expect(h.out.join("\n")).toContain(
+        "Report: https://reports.squirrelscan.com/rep_2"
+      );
+    }
+  });
+});

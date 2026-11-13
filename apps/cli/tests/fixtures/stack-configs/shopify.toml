@@ -1,0 +1,104 @@
+# Contributed by @deniskern (squirrelscan/squirrelscan#695): the effective configuration of a real stack, sanitised
+# (project URLs and names are placeholders; no credentials). Lines marked 'Provisional' are the contributor's local
+# observations, NOT recommended defaults. Used as a regression fixture: it must keep validating (see
+# tests/commands/stack-configs-695.test.ts).
+[project]
+name = "Example Shopify store"
+url = "https://myshop.example"
+system = "shopify"
+
+[crawler]
+user_agent = ""
+per_host_concurrency = 1
+per_host_delay_ms = 1000
+max_backoff_ms = 600000
+max_prefix_budget = 0.6
+exclude = [
+  "/cart/**",
+  "/checkout/**",
+  "/account/**",
+  "/orders/**",
+  "/policies/**",
+]
+allow_query_params = [
+  "page",
+  "sort_by",
+  "filter.v.price",
+  "filter.v.option",
+  "filter.p.tag",
+  "q",
+  "variant",
+]
+drop_query_prefixes = ["_pos", "_psq", "variant"]
+
+[rules]
+disable = [
+  # Established: Shopify controls these response security headers and captcha transport.
+  "security/csp",
+  "security/hsts",
+  "security/http-to-https",
+  "security/form-captcha",
+  # Provisional: Shopify/app infrastructure controls transport and cache behavior; validate against current rules.
+  "perf/cache-headers",
+  "perf/preconnect",
+  "perf/source-maps",
+  "perf/compression",
+  "perf/http2",
+  "perf/ttfb",
+  # Provisional: minified theme bundles and app-owned assets can trigger these checks; confirm against fixed rule behavior.
+  "perf/unminified-js",
+  "perf/legacy-js",
+  "perf/duplicate-js",
+  # Established: publisher-authorship and editorial claims do not fit a product storefront; content/legal checks remain enabled.
+  "eeat/author-byline",
+  "eeat/author-expertise",
+  "eeat/affiliate-disclosure",
+  "eeat/citations",
+  "eeat/disclaimers",
+  "eeat/editorial-policy",
+  "eeat/ymyl-detection",
+  "eeat/content-dates",
+]
+
+[rule_options."eeat/about-page"]
+paths = [
+  "/pages/ueber-uns",
+  "/pages/uber-uns",
+  "/pages/wer-wir-sind",
+  "/pages/about",
+  "/pages/about-us",
+  "/pages/unsere-geschichte",
+  "/pages/our-story",
+  "/pages/the-team",
+  "/pages/das-team",
+]
+
+[rule_options."eeat/privacy-policy"]
+paths = [
+  "/policies/privacy-policy",
+  "/policies/datenschutz",
+  "/pages/datenschutz",
+  "/pages/privacy-policy",
+]
+
+[rule_options."content/word-count"]
+min_words = 150
+warn_threshold = 300
+
+[rule_options."links/dead-end-pages"]
+excludePatterns = [
+  "/products/",
+  "/collections/",
+  "/thank-you",
+  "/confirmation",
+  "/download",
+  "/success",
+  "/submitted",
+]
+
+# Established: Shopify creates these cookies without HttpOnly/Secure; only those checks are waived.
+[[ignore]]
+rule = "security/cookie-flags"
+items = ["localization", "cart_currency"]
+checks = ["cookie-httponly", "cookie-secure"]
+reason = "Shopify sets these cookies itself"

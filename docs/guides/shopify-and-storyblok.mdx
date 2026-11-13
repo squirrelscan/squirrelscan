@@ -1,0 +1,42 @@
+---
+title: "Shopify and Storyblok configurations"
+icon: "store"
+description: "Starting points for auditing a Shopify store or a Storyblok site: what to keep out of the crawl, which rules to switch off and why"
+---
+
+These are starting points, not defaults. They come from audits of 18 Shopify and 12 Storyblok projects on squirrelscan v0.0.108, contributed by [@deniskern](https://github.com/deniskern) ([#695](https://github.com/squirrelscan/squirrelscan/issues/695)). We have not re-checked each exclusion against a live site, so treat every line as something to confirm on yours with `squirrel audit --no-ignore` and by reading what the rule says before you silence it.
+
+Both templates are kept in the repository as test fixtures (`apps/cli/tests/fixtures/stack-configs/`), so a rule renamed or an option dropped breaks a test instead of your config. A rule you disable is not run, and its findings are not in the score: say why next to each one, as below.
+
+## Shopify
+
+Shopify controls the response headers, the cookies it sets and part of the delivery stack, so findings about those cannot be fixed in the theme.
+
+| Setting | Why |
+|---|---|
+| `crawler.exclude`: `/cart/**`, `/checkout/**`, `/account/**`, `/orders/**`, `/policies/**` | Transactional and account pages are not content you audit. |
+| `crawler.allow_query_params`: `page`, `sort_by`, `filter.v.price`, `filter.v.option`, `filter.p.tag`, `q`, `variant` | The query strings that change a collection page. Others are dropped so one collection is not crawled once per tracking parameter. |
+| `rules.disable`: `security/csp`, `security/hsts`, `security/http-to-https`, `security/form-captcha` | Shopify controls these response security headers and the captcha transport. |
+| `rules.disable`: `eeat/author-byline`, `eeat/author-expertise`, `eeat/affiliate-disclosure`, `eeat/citations`, `eeat/disclaimers`, `eeat/editorial-policy`, `eeat/ymyl-detection`, `eeat/content-dates` | Publisher authorship and editorial claims do not fit a product storefront. The content and legal checks stay on. |
+| `[[ignore]]` `security/cookie-flags`, items `localization` and `cart_currency`, checks `cookie-httponly` and `cookie-secure` | Shopify creates these two cookies without `HttpOnly` or `Secure`. Only those checks are waived, and a merchant's own cookies are still reported. |
+| `rule_options` for `eeat/about-page` and `eeat/privacy-policy` | Shopify serves them under `/pages/...` and `/policies/...`, in several languages. List your own paths. |
+
+The contributor's file also disables `perf/cache-headers`, `perf/preconnect`, `perf/source-maps`, `perf/compression`, `perf/http2`, `perf/ttfb`, `perf/unminified-js`, `perf/legacy-js` and `perf/duplicate-js`, and marks them **provisional**: they reflect what that store's apps and theme produced against rules that have since changed, and are not established platform limits. They are not recommended here. Start with those rules on.
+
+Shopify also throttles an eager crawler: see [Crawling rate-limited hosts](/guides/rate-limited-hosts) for the per-host delay and concurrency settings.
+
+## Storyblok
+
+Storyblok is a headless CMS: the site is a frontend (Next.js, Nuxt, Astro or SvelteKit) that renders its content, with an editor that frames it.
+
+| Setting | Why |
+|---|---|
+| `crawler.exclude`: `/_storyblok/**`, `*?_storyblok=*`, `*?version=draft*`, `*?token=*`, and the framework and API paths (`/api/**`, `/_next/**`, `/_nuxt/**`, `/_astro/**`, `/_app/**`, `/_ipx/**`, `*.json`) | The editor transport, preview and draft URLs and framework assets are not public rendered pages. |
+| `crawler.drop_query_prefixes`: `_storyblok` | The editor adds its own parameters. |
+| `rules.disable`: `security/x-frame-options` | The editor frames the site. Use CSP `frame-ancestors` as the control instead. |
+| `rules.disable`: `eeat/affiliate-disclosure`, `eeat/ymyl-detection`, `eeat/disclaimers`, `eeat/editorial-policy`, `eeat/citations`, `eeat/author-expertise`, `eeat/trust-signals` | Publisher and editorial trust claims are not requirements for a generic CMS site. |
+| `rules.disable`: `schema/product`, `schema/review`, `schema/local-business` | A general-purpose content site has no product, review or local-business catalogue. Keep them on if yours does. |
+
+## Using a template
+
+Copy the settings you agree with into your `squirrel.toml` and run `squirrel config validate`: it checks every `[rule_options]` table and `[[ignore]]` entry against the rules that exist. See [configuration](/configuration) for the full reference and [`[[ignore]]`](/configuration/ignore) for waiving one finding without disabling a rule.

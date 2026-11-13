@@ -118,7 +118,7 @@ The loop is: audit, read, fix, deploy, re-audit. Here is what the agent does on 
     The agent polls `get_audit_status` with the `run_id` until the run completes, then pulls the report with `get_report`. Start with the `summary` format for scores and top issues; `llm` or `markdown` gives the full detail.
   </Step>
   <Step title="Work the issue tracker">
-    The agent calls `list_issues` for the website to see every open finding, then `get_issue` for the detail and fix guidance on the ones worth tackling. It implements the fixes in your repo.
+    The agent calls `list_issues` for the website to see every open issue (an action plan that covers one or more findings), then `get_issue` for the plan, the findings it covers and the fix guidance on the ones worth tackling. It implements the fixes in your repo.
   </Step>
   <Step title="Deploy, then re-audit">
     You deploy the changes. The agent runs `run_audit` again. Because cloud audits hit your live site, the re-audit only reflects fixes that are actually deployed. Issues resolve when their rule stops firing.
@@ -131,9 +131,9 @@ Deploy before you re-audit. A cloud audit fetches your live URL, not your workin
 
 ### How issues close
 
-Issues live in a per-website tracker, and they close by themselves. When you re-audit and a rule no longer fires on any page, the issues it raised move to resolved: you do not tick anything off by hand. In our run, **six issues auto-closed** across the fix rounds.
+Issues live in a per-website tracker, and they close by themselves. An issue covers one or more findings (rule results from the report), and when you re-audit and none of the findings it covers fire any more, it moves to resolved: you do not tick anything off by hand. In our run, **six issues auto-closed** across the fix rounds.
 
-Partial fixes are visible too. Each issue carries an occurrence count, the number of pages or items still tripping the rule, and that count decays as you fix pages. One issue in our run went from **8 occurrences to 7 to 1, then resolved** once the last page was fixed. A dropping count with the issue still open means you are on the right track and not yet done.
+Partial fixes are visible too. Each issue reports how many of its findings are still active (`active_covered_finding_count`) and an occurrence count, the number of pages or items still tripping the rule, and those numbers decay as you fix pages. One issue in our run went from **8 occurrences to 7 to 1, then resolved** once the last page was fixed. A dropping count with the issue still open means you are on the right track and not yet done.
 
 ### Some findings need a human call
 

@@ -26,6 +26,7 @@ How it works:
 
 ### Fixed
 
+- `squirrel ci` prints the report's own address (`https://<org>.squirrel.report/...`, read from the API) on its `Report:` line and in `--json`, as `squirrel audit` does, instead of the id on the older `reports.squirrelscan.com` host; it falls back to that host, which redirects, only when the address cannot be read (#1730).
 - A capped (published) report keeps coverage-gap skip rows instead of cutting them like a "does not apply" skip (#1775). Per rule, up to 5 skipped rows whose outcome is a coverage gap, a timeout or an error (`scan-truncated`, `unread-page`, `rule-timed-out`, ...) are kept per page with their `pageUrl`, the rest fold into one class per skip reason, and each check's tally gains `gaps` (a count by reason), so a reader sees a gap even when no row survives. `not-applicable`, `noindex`, `page-type` and free-text skips are never marked as a gap.
 - `[[ignore]]` reasons and unmatched entries now reach every report (#1262): an entry with a `reason` that waived something prints its own line (`Ignore entry 1 (security/cookie-flags), Shopify sets these: 3 findings waived.`) in the console, text, Markdown and HTML reports, and the HTML report now lists the entries that matched nothing, as the other formats already did (an unmatched entry keeps its reason). The docs say which rules rewrite their message from the remaining items and which keep their text with an `(N ignored)` suffix.
 
