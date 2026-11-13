@@ -515,6 +515,7 @@ export type {
   PageMapDiffField,
   PageMapDiffMeta,
 } from "./page-map-diff";
+export { buildPageMap, projectPageMap, publishPageMapRow } from "./page-map-publish";
 export { PAGE_MAP_HTML_ROW_CAP, renderPageMapHtml } from "./page-map-html";
 
 // Top line of a report: section scores + counts, shared with the dashboard

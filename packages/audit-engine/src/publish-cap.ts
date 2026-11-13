@@ -65,6 +65,7 @@ import type { CompactResolutionSignal } from "@squirrelscan/core-contracts/resol
 import { clampItemString } from "@squirrelscan/core-contracts/clamp";
 import { alignItemSources } from "@squirrelscan/core-contracts/item-sources";
 import { ENTITY_MAP_PUBLISH_LIMITS, type EntityMap } from "@squirrelscan/core-contracts/entity-map";
+import type { PageMap } from "@squirrelscan/core-contracts/page-map";
 import { projectEntityMap } from "@squirrelscan/core-contracts/entity-map-project";
 import {
   PUBLISHED_REPORT_MAX_BYTES,
@@ -86,6 +87,7 @@ import {
   unfoldAggregateCheck,
 } from "@squirrelscan/rules/fold";
 import { checkAffectedPages } from "@squirrelscan/report/affected-pages";
+import { projectPageMap } from "@squirrelscan/report/page-map-publish";
 import {
   buildPublishResolution,
   PAGE_STATUSES_KEY_BYTES,
@@ -125,6 +127,8 @@ export interface CappableReport {
   /** Never trusted from the input: the capper builds its own from `pages`. */
   resolutionSignalCompact?: unknown;
   entityMap?: EntityMap | null;
+  /** The per-page listing (repo#4172). Re-projected to its publish bound, never trusted as sent. */
+  pageMap?: PageMap | null;
   summary?: unknown;
   sitemaps?: unknown;
   robotsTxt?: unknown;
@@ -147,6 +151,7 @@ export type CappedReport<T extends CappableReport> = Omit<
   | "ruleResults"
   | "siteChecks"
   | "entityMap"
+  | "pageMap"
   | "rulesCache"
   | "scriptsEvaluated"
   | "checkTallies"
@@ -161,6 +166,7 @@ export type CappedReport<T extends CappableReport> = Omit<
   ruleResults: Record<string, { meta: CappedRuleMeta; checks: CheckResult[] }>;
   siteChecks: CheckResult[];
   entityMap?: EntityMap;
+  pageMap?: PageMap;
   checkTallies: CheckTallies;
   /** Absent when no rule needs one (see {@link rulePageCount}). */
   rulePageCounts?: Record<string, number>;
@@ -1121,6 +1127,21 @@ function slimEntityMap(map: EntityMap | null | undefined): { map?: EntityMap; fa
 }
 
 /**
+ * The page map at its publish bound (repo#4172). `failed` when the report had one that could not
+ * be projected: it is left out and the stamp says so (`detail.pageMapFailed`), apart from a
+ * budget drop (`pageMapDropped`). It rides the same budget as the entity map: both are
+ * report-only sections the fitter drops before it reduces any issue class.
+ */
+function slimPageMap(map: PageMap | null | undefined): { map?: PageMap; failed: boolean } {
+  if (!map) return { failed: false };
+  try {
+    return { map: projectPageMap(map), failed: false };
+  } catch {
+    return { failed: true };
+  }
+}
+
+/**
  * Pages that returned 404/410 this run, normalized. Read from the full report,
  * before `pageStatuses` is clipped, and from the same source the published
  * statuses are built from: the producer's `pageStatuses` when it sent them, else
@@ -1374,6 +1395,7 @@ export function capReportForPublish<T extends CappableReport>(
     ruleResults: _ruleResults,
     siteChecks: _siteChecks,
     entityMap: _entityMap,
+    pageMap: _pageMap,
     rulesCache: _rulesCache,
     scriptsEvaluated: _scriptsEvaluated,
     checkTallies: _checkTallies,
@@ -1409,6 +1431,7 @@ export function capReportForPublish<T extends CappableReport>(
     ...(Object.keys(linkTargetSets).length > 0 ? { linkTargetSets } : {}),
   });
   const { map: entityMap, failed: entityMapFailed } = slimEntityMap(report.entityMap);
+  const { map: pageMap, failed: pageMapFailed } = slimPageMap(report.pageMap);
   const tiers = REPORT_CAPS.tiers;
   const countsLevel = tiers.length - 1;
 
@@ -1426,6 +1449,7 @@ export function capReportForPublish<T extends CappableReport>(
     caps: { ...tiers[0]!, classesPerRule: REPORT_CAPS.classesPerRule },
     ...(options.fullDetail ? { fullDetail: options.fullDetail } : {}),
     ...(entityMapFailed ? { entityMapFailed: true as const } : {}),
+    ...(pageMapFailed ? { pageMapFailed: true as const } : {}),
     ...(tier > 0 && fullSampleBytes !== undefined ? { fullSampleBytes } : {}),
     ...extra,
   });
@@ -1502,6 +1526,7 @@ export function capReportForPublish<T extends CappableReport>(
     return {
       ...sections(mode),
       ...(withEntityMap && entityMap ? { entityMap } : {}),
+      ...(withEntityMap && pageMap ? { pageMap } : {}),
       siteChecks,
       ruleResults,
       detail,
@@ -1537,7 +1562,10 @@ export function capReportForPublish<T extends CappableReport>(
    * Undefined when the counts rows alone do not fit.
    */
   function fill(tier: number, mode: SectionMode, withEntityMap: boolean): Loose | undefined {
-    const dropped = !withEntityMap && entityMap ? { entityMapDropped: true as const } : {};
+    const dropped = {
+      ...(!withEntityMap && entityMap ? { entityMapDropped: true as const } : {}),
+      ...(!withEntityMap && pageMap ? { pageMapDropped: true as const } : {}),
+    };
     const levels = slots.map(() => countsLevel);
     // Priced with the most digits `classesReduced` can need.
     const base = assemble(
@@ -1580,6 +1608,7 @@ export function capReportForPublish<T extends CappableReport>(
     const total = slots.length;
     const extra = (admitted: number): Partial<PublishedReportDetail> => ({
       ...(entityMap ? { entityMapDropped: true as const } : {}),
+      ...(pageMap ? { pageMapDropped: true as const } : {}),
       ...(admitted > 0 ? { classesReduced: admitted } : {}),
       ...(total - admitted > 0 ? { classesDropped: total - admitted } : {}),
     });

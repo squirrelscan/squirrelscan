@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- Published reports carry an optional `pageMap` section (the rows of `squirrel pages`, failed pages included), so the hosted API and MCP can list a stored report's pages. `squirrel audit --publish` and `squirrel report --publish` send it. It is capped at 1,000 pages (shallowest first) with `truncated`, `stored` and `total` counts, and the publish capper drops it (`detail.pageMapDropped`) before reducing any issue sample if the report would not fit. Core contracts gain `PageMapSchema`, `PageMapRowSchema` and `PAGE_MAP_PUBLISH_LIMITS`; the engine side is `readPageMapRows` (`@squirrelscan/audit-engine/page-map-rows`, shared by the CLI and the cloud runtime) and `buildPageMap` and `projectPageMap` (`@squirrelscan/report/page-map-publish`). The public API docs gain `GET /v1/reports/{id}/pages`. squirrelscan/repo#4172, #701
+
 ## v0.0.181 (2026-11-13)
 
 Reports now tell you where a site actually lives: a new host section lists its IPv4 and IPv6 addresses, a connect time and the country (offline, from a bundled DB-IP Lite snapshot), and names the CDN or WAF in front of it separately from the origin. Every report also says whether robots.txt was honoured and how many pages it kept out. A site that blocks every AI crawler with one wildcard rule gets one row instead of one per crawler, installs and updates verify the release's GitHub build attestation when `gh` is available, and discovery probes you never approved show up as coverage gaps instead of false verdicts.

@@ -45,6 +45,9 @@ export * from "./failure-reason";
 // #2061: the structured entity map — site-wide JSON-LD graph of one audit.
 export * from "./entity-map";
 
+// #701 / repo#4172: the published per-page listing of an audit.
+export * from "./page-map";
+
 // pub#837: per-source link detail on check items and how every surface phrases it.
 export * from "./item-sources";
 // #2095: the entity MCP tool contract. Types only here, because `./entity-mcp`
@@ -90,6 +93,7 @@ import type { AuditStatusReasonCode } from "./failure-reason";
 import type { RefusedFetch } from "./refused-fetch";
 import type { WafBlockedSummary, WafSuspectSummary } from "./waf-block";
 import type { EntityMap } from "./entity-map";
+import type { PageMap } from "./page-map";
 import type { AuditLevel, ResolvedAuditSettings } from "./audit-levels";
 import type { ReportCapTier } from "./limits";
 
@@ -1011,6 +1015,13 @@ export interface AuditReport {
    */
   entityMap?: EntityMap;
   /**
+   * Per-page listing (#701, repo#4172): one row per crawled page, failed pages included,
+   * capped at `PAGE_MAP_PUBLISH_LIMITS.maxRows` with `truncated: true`. REPORT-ONLY: never
+   * contributes to `healthScore`. Carried by the CLI publish and the cloud worker; the API
+   * validates it and serves it at `GET /v1/reports/:id/pages`.
+   */
+  pageMap?: PageMap;
+  /**
    * Auto-generated "editor's-style" audit summary — prose narrative + point-form
    * big-ticket items, framed like a quick exec-email to management. Like
    * `technologies` / `siteMetadata`, a REPORT-ONLY section surfaced at the TOP of
@@ -1370,6 +1381,10 @@ export interface PublishedReportDetail {
    * publish bound, so it was left out. Never set together with a map.
    */
   entityMapFailed?: true;
+  /** Set when the fitter dropped the page map to fit the budget. */
+  pageMapDropped?: true;
+  /** Set when the report had a page map that could not be projected to its publish bound. */
+  pageMapFailed?: true;
   /**
    * Issue classes left out entirely by the last-resort byte admission. Their
    * counts survive in `checkTallies`. Absent when every class fit.

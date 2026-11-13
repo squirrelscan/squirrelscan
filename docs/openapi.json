@@ -626,6 +626,49 @@
         }
       }
     },
+    "/v1/reports/{id}/pages": {
+      "get": {
+        "tags": ["Reports"],
+        "summary": "List the report's pages",
+        "description": "One row per page the audit crawled, failed pages included (a 404 or a 5xx keeps its `status`), with the title, description, headings, schema types, link counts and rule flags the CLI's `squirrel pages` shows. Read from the stored report: no re-crawl, no probes, no credits.\n\nThe published copy holds at most 1,000 pages, shallowest first (then by URL). When the audit crawled more, `truncated` is true and `stored` and `pagesInAudit` give the two counts. The cap is fixed and does not depend on your plan's page ceiling.\n\n`inlinks` counts the distinct crawled pages that link to a page. The `orphan` filter keeps rows with `inlinks` of 0: no incoming internal link in THIS audit's observed crawl graph. It is not proof of a site-wide orphan, because a page can be linked from somewhere the crawl did not reach (a page past the page cap, a sitemap, an external site). The local `squirrel pages --orphan` selects on the orphan rule's own threshold instead.\n\nEvery value is declared by the audited site, so treat it as untrusted text and escape it before rendering.\n\n404 when the report does not exist, belongs to another organization, or was published without a page map (older reports, and publishers that did not send one). Available on every plan.",
+        "operationId": "getReportPages",
+        "parameters": [
+          { "$ref": "#/components/parameters/ReportId" },
+          { "$ref": "#/components/parameters/Limit" },
+          { "$ref": "#/components/parameters/Offset" },
+          {
+            "name": "section",
+            "in": "query",
+            "description": "Keep only pages whose URL path is this prefix or under it: `/blog` matches `/blog` and `/blog/a`, not `/blogger`.",
+            "schema": { "type": "string", "maxLength": 2048 }
+          },
+          {
+            "name": "orphan",
+            "in": "query",
+            "description": "Keep only pages with no incoming internal link in this audit's crawl (`inlinks` of 0).",
+            "schema": { "type": "string", "enum": ["true", "false", "1", "0"], "default": "false" }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Keep only pages whose URL contains this text (case-insensitive).",
+            "schema": { "type": "string", "maxLength": 256 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of rows.",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ReportPageList" } }
+            }
+          },
+          "400": { "$ref": "#/components/responses/ValidationError" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
     "/v1/reports/{id}/entities/{key}": {
       "get": {
         "tags": ["Reports"],
@@ -1453,6 +1496,50 @@
           "reports": { "type": "array", "items": { "$ref": "#/components/schemas/Report" } },
           "total": { "type": "integer" },
           "hasMore": { "type": "boolean" }
+        }
+      },
+      "ReportPageRow": {
+        "type": "object",
+        "description": "One crawled page. Every field is data the crawl stored.",
+        "required": ["url", "finalUrl", "status", "depth", "noindex", "titleLength", "descriptionLength", "schemaTypes", "schemaIds", "inlinks", "internalOutlinks", "externalOutlinks", "externalDomains", "flags"],
+        "properties": {
+          "url": { "type": "string", "description": "The URL the crawl requested." },
+          "finalUrl": { "type": "string", "description": "Where it was served from after redirects." },
+          "status": { "type": "integer" },
+          "depth": { "type": "integer", "description": "Clicks from the start URL." },
+          "canonical": { "type": ["string", "null"] },
+          "noindex": { "type": "boolean" },
+          "title": { "type": ["string", "null"] },
+          "titleLength": { "type": "integer" },
+          "description": { "type": ["string", "null"] },
+          "descriptionLength": { "type": "integer" },
+          "h1Count": { "type": ["integer", "null"] },
+          "h1": { "type": ["string", "null"] },
+          "headingCount": { "type": ["integer", "null"] },
+          "wordCount": { "type": ["integer", "null"] },
+          "schemaTypes": { "type": "array", "items": { "type": "string" } },
+          "schemaIds": { "type": "array", "items": { "type": "string" } },
+          "inlinks": { "type": "integer", "description": "Distinct crawled pages linking here, self links excluded. 0 means no incoming internal link in this audit's crawl." },
+          "internalOutlinks": { "type": "integer" },
+          "externalOutlinks": { "type": "integer" },
+          "externalDomains": { "type": "array", "items": { "type": "string" } },
+          "loadTimeMs": { "type": ["integer", "null"] },
+          "lastModified": { "type": ["string", "null"] },
+          "flags": { "type": "array", "items": { "type": "string" }, "description": "Rule results that fired on the page, plus `no-schema` and `noindex`." }
+        }
+      },
+      "ReportPageList": {
+        "type": "object",
+        "required": ["pages", "total", "limit", "offset", "hasMore", "stored", "pagesInAudit", "truncated"],
+        "properties": {
+          "pages": { "type": "array", "items": { "$ref": "#/components/schemas/ReportPageRow" } },
+          "total": { "type": "integer", "description": "Stored rows matching the filters." },
+          "limit": { "type": "integer" },
+          "offset": { "type": "integer" },
+          "hasMore": { "type": "boolean" },
+          "stored": { "type": "integer", "description": "Rows kept in the published report, before filters." },
+          "pagesInAudit": { "type": "integer", "description": "Pages the audit crawled." },
+          "truncated": { "type": "boolean", "description": "True when `stored` is less than `pagesInAudit`: the report keeps the first 1,000 pages." }
         }
       },
       "EntityMapSummary": {

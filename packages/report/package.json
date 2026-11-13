@@ -5,6 +5,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./affected-pages": "./src/affected-pages.ts",
+    "./page-map-publish": "./src/page-map-publish.ts",
     "./rule-catalog": "./src/rule-catalog.ts",
     "./editor-summary": "./src/editor-summary.ts",
     "./not-checked": "./src/not-checked.ts",

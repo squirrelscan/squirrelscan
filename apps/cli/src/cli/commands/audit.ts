@@ -3544,6 +3544,15 @@ export const audit = defineCommand({
               : (registeredRun?.websiteId ?? undefined),
             // #1167: surface the degrade-pass clip notice on stderr-safe `log`.
             onWarn: (msg) => log(fmt.yellow(`⚠ ${msg}`)),
+            // repo#4172: the page rows ride the body as the capped `pageMap`.
+            ...(report.crawlId && storeProject
+              ? {
+                  pageMapSource: {
+                    dbPath: resolveProjectDbPath(storeProject),
+                    crawlId: report.crawlId,
+                  },
+                }
+              : {}),
           });
 
           if (!publishResult.ok) {
