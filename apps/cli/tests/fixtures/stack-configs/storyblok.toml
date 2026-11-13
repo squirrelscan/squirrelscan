@@ -1,0 +1,104 @@
+# Contributed by @deniskern (squirrelscan/squirrelscan#695): the effective configuration of a real stack, sanitised
+# (project URLs and names are placeholders; no credentials). Lines marked 'Provisional' are the contributor's local
+# observations, NOT recommended defaults. Used as a regression fixture: it must keep validating (see
+# tests/commands/stack-configs-695.test.ts).
+[project]
+name = "Example Storyblok site"
+url = "https://example.com"
+system = "storyblok"
+
+[crawler]
+# Established: editor transport, preview/draft URLs and app/API/framework assets are not public rendered pages.
+exclude = [
+  "/_storyblok/**",
+  "*?_storyblok=*",
+  "*?_storyblok_tk*",
+  "*?version=draft*",
+  "*?token=*",
+  "*?cv=*",
+  "/api/**",
+  "/_api/**",
+  "/_next/**",
+  "/api/revalidate**",
+  "/api/preview**",
+  "/api/exit-preview**",
+  "/api/draft**",
+  "/_nuxt/**",
+  "/__nuxt_error**",
+  "/api/_content/**",
+  "/_payload.json",
+  "*.json",
+  "/_astro/**",
+  "/_app/**",
+  "/_ipx/**",
+  "/admin/**",
+  "/login/**",
+  "/checkout/**",
+  "/cart/**",
+  "/account/**",
+  "*.pdf",
+  "*.zip",
+  "*.tar.gz",
+  "*.js",
+  "*.css",
+  "*.xml",
+  "*?preview=*",
+  "*?draft=*",
+  "/search**",
+  "/suche**",
+]
+allow_query_params = ["page", "seite", "sort", "category", "tag"]
+drop_query_prefixes = ["_storyblok"]
+
+[rules]
+disable = [
+  # Established: the editor frames the site; CSP frame-ancestors is the configurable control instead.
+  "security/x-frame-options",
+  # Established: publisher/editorial trust claims are not generic requirements for this CMS site.
+  "eeat/affiliate-disclosure",
+  "eeat/ymyl-detection",
+  "eeat/disclaimers",
+  "eeat/editorial-policy",
+  "eeat/citations",
+  "eeat/author-expertise",
+  "eeat/trust-signals",
+  # Established: this general-purpose content site has no product, review or local-business catalog.
+  "schema/product",
+  "schema/review",
+  "schema/local-business",
+]
+
+[rule_options."eeat/about-page"]
+paths = [
+  "/ueber-uns",
+  "/uber-uns",
+  "/wer-wir-sind",
+  "/about",
+  "/about-us",
+  "/agentur",
+  "/agency",
+  "/team",
+  "/das-team",
+  "/our-story",
+]
+
+[rule_options."eeat/privacy-policy"]
+paths = [
+  "/datenschutz",
+  "/datenschutzerklaerung",
+  "/privacy-policy",
+  "/privacy",
+]
+
+[rule_options."content/article-links"]
+short_min_external = 1
+medium_min_external = 1
+long_min_external = 1
+
+[rule_options."perf/ttfb"]
+good_threshold = 800
+poor_threshold = 1500
+
+[rule_options."content/word-count"]
+min_words = 200
+warn_threshold = 400

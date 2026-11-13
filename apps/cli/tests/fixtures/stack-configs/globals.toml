@@ -1,0 +1,80 @@
+# Contributed by @deniskern (squirrelscan/squirrelscan#695): the effective configuration of a real stack, sanitised
+# (project URLs and names are placeholders; no credentials). Lines marked 'Provisional' are the contributor's local
+# observations, NOT recommended defaults. Used as a regression fixture: it must keep validating (see
+# tests/commands/stack-configs-695.test.ts).
+[internal_links]
+max_targets = 100
+[external_links]
+max_links = 100
+[storage]
+keep_audits = 3
+content_store_max_bytes = 10737418240
+[crawler]
+max_pages = 100
+delay_ms = 500
+per_host_delay_ms = 750
+timeout_ms = 60000
+concurrency = 4
+per_host_concurrency = 2
+breadth_first = true
+max_prefix_budget = 0.25
+respect_robots = true
+follow_redirects = true
+disable_discovery_probes = false
+headers = { Accept = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8" }
+drop_query_prefixes = [
+  "utm_",
+  "gclid",
+  "fbclid",
+  "mc_",
+  "_ga",
+  "ref",
+  "source",
+  "pk_",
+  "mtm_",
+]
+[lighthouse]
+templates = [{ label = "home", path = "/" }]
+[rules]
+enable = ["*"]
+time_budget_ms = 5000
+# Global established disables: thumbnails are upload detail; schema/video duplicates video-schema;
+# AAA identical links are a mega-menu pattern; library audit is covered by vuln-libs/techstack;
+# weak links overlap orphan-pages; keyword stuffing remains noisy on shop cards/newsletter;
+# adblock/social outcomes are visitor/marketing choices; ax discovery checks require intrusive path probes;
+# URL style rules are not defects on established URLs.
+disable = [
+  "video/video-thumbnail",
+  "schema/video",
+  "a11y/identical-links-same-purpose",
+  "perf/js-libraries",
+  "links/weak-internal-links",
+  "content/keyword-stuffing",
+  "adblock/*",
+  "social/share-buttons",
+  "social/social-profiles",
+  "ax/llms-txt",
+  "ax/agents-md",
+  "ax/markdown-response",
+  "ax/well-known-agent",
+  "ax/api-discovery",
+  "ax/rsl-license",
+  "url/stop-words",
+  "url/length",
+  "url/special-chars",
+  "url/lowercase",
+]
+[gsc]
+property_type = "url"
+property_override = ""
+cwv_urls = []
+[[ignore]]
+rule = "a11y/label-content-name-mismatch"
+selectors = ["select"]
+reason = "Option texts are values, not the visible label of a select"
+[[ignore]]
+rule = "a11y/label-content-name-mismatch"
+items = [
+  'regex:^[a-z][\\w-]*: visible="[.#][\\w-]+[^"{}]*\\{\\s*-?[a-z][\\w-]*\\s*:[^"{}]*[;}][^"]*" vs aria-label="',
+]
+reason = "Embedded CSS source is not rendered label text"

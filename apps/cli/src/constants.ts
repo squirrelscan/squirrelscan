@@ -78,7 +78,10 @@ export { EXIT_CODE_REDIRECTED } from "@squirrelscan/core-contracts/seed-redirect
 
 export const DASHBOARD_URL = "https://app.squirrelscan.com";
 
-/** Where the 5xx-recovery link points; reports live on <org>.squirrel.report, and this host redirects an id there. */
+/**
+ * Where a report link points when only its id is known (the 5xx recovery, and `squirrel ci` when the API will not
+ * say the address). Reports live on <org>.squirrel.report and the API returns that address; this host redirects an id there.
+ */
 export const REPORTS_BASE_URL = "https://reports.squirrelscan.com";
 
 // Public pricing page — linked from Team-plan upsell messaging (#739)
