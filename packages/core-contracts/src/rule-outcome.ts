@@ -62,6 +62,13 @@ export const SKIP_REASON_CLASSES: Readonly<Record<string, SkipReasonClass>> = {
   "external-links-out-of-time": gap(true),
   // A targeted run (#1777) fetched only the URLs it was given: a whole-site rule has nothing to judge.
   "targeted-run": gap(true, "rule"),
+  // A discovery probe that was not approved, not sent, refused, throttled or unanswered (#1794): the file may
+  // exist, so a rule built on the probe says nothing about its absence and never resolves a finding.
+  "discovery-probe-not-approved": gap(true),
+  "discovery-probe-not-sent": gap(true),
+  "discovery-probe-refused": gap(true),
+  "discovery-probe-no-answer": gap(true),
+  "discovery-probe-redirect-not-followed": gap(true),
   // Prose rather than an id: published reports already carry this exact text.
   "Crawl capped before the frontier was exhausted": gap(true),
   // Left out on purpose.

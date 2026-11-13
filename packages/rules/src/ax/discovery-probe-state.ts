@@ -16,6 +16,7 @@ import {
 } from "@squirrelscan/core-contracts/storage";
 
 import type {
+  DiscoveryProbeSkipReason,
   WellKnownPath,
   WellKnownProbe,
   WellKnownProbeData,
@@ -49,7 +50,29 @@ const REASON_TEXT: Record<NotCheckedReason, string> = {
     "the request was sent but its redirect to another path was not followed ([crawler] discovery_probe_paths)",
 };
 
-/** An info check saying `subject` was not checked, and why. */
+/**
+ * The `skipReason` each cause reports (#1794). `no-result` (the crawler kept no row, so the probe either never
+ * went out or got no answer) is reported as not sent: the message keeps the wider wording.
+ */
+const SKIP_REASON: Record<NotCheckedReason, DiscoveryProbeSkipReason> = {
+  "not-sent": "discovery-probe-not-sent",
+  "no-answer": "discovery-probe-no-answer",
+  "no-result": "discovery-probe-not-sent",
+  blocked: "discovery-probe-refused",
+  "not-approved": "discovery-probe-not-approved",
+  "redirect-not-followed": "discovery-probe-redirect-not-followed",
+};
+
+/** The `skipReason` for a not-checked cause. */
+export function probeSkipReason(reason: NotCheckedReason): DiscoveryProbeSkipReason {
+  return SKIP_REASON[reason];
+}
+
+/**
+ * A skipped check saying `subject` was not checked, and why (#1794). Skipped, not info, with a coded reason:
+ * that is what lists the rule under `notChecked` (outcome `coverage_gap`) and keeps its findings open, so a
+ * consumer never reads a probe nothing answered as "checked, absent". The value stays `not-checked`.
+ */
 export function notCheckedCheck(
   name: string,
   subject: string,
@@ -58,11 +81,17 @@ export function notCheckedCheck(
 ): CheckResult {
   return {
     name,
-    status: "info",
+    status: "skipped",
+    skipReason: SKIP_REASON[reason],
     message: `${subject} not checked: ${REASON_TEXT[reason]}`,
     value: NOT_CHECKED,
-    ...(details ? { details } : {}),
+    details: { ...details, notCheckedReason: reason },
   };
+}
+
+/** Whether `path` is recorded as left out by `[crawler] discovery_probe_paths` (never requested, on purpose). */
+export function notApprovedPath(wellKnown: WellKnownProbeData, path: string): boolean {
+  return wellKnown.probes.some((p) => p.path === path && p.error === PROBE_PATH_NOT_APPROVED_ERROR);
 }
 
 /** `paths.includes(path)` for a path read back from storage, a plain string. */

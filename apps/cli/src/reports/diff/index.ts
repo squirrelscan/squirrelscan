@@ -1,4 +1,7 @@
-import { LINK_COVERAGE_DETAIL_KEYS } from "@squirrelscan/core-contracts";
+import {
+  LINK_COVERAGE_DETAIL_KEYS,
+  isDiscoveryProbeSkipReason,
+} from "@squirrelscan/core-contracts";
 import {
   buildSupersededIndex,
   judgeSuperseded,
@@ -222,9 +225,7 @@ function stableStringify(value: unknown): string {
     const entries = Object.entries(value as Record<string, unknown>).sort(
       ([a], [b]) => a.localeCompare(b)
     );
-    return `{${entries
-      .map(([k, v]) => `${k}:${stableStringify(v)}`)
-      .join(",")}}`;
+    return `{${entries.map(([k, v]) => `${k}:${stableStringify(v)}`).join(",")}}`;
   }
   return String(value);
 }
@@ -352,7 +353,10 @@ export function diffReports(
       resolutionCheckKey(issue.ruleId, issue.checkName)
     );
     if (!successors) {
-      removed.push(issue);
+      // A rule whose discovery probe gave no verdict (#1794) says nothing about the finding: keep it open.
+      if (probeGap(current, issue.ruleId, issue.checkName))
+        notChecked.push(issue);
+      else removed.push(issue);
       continue;
     }
     const outcomes: SupersededOutcome[] = [];
@@ -411,7 +415,29 @@ export function diffReports(
   };
 }
 
-/** True when the report holds a check of that name for the rule that was evaluated (not only skipped). */
+/**
+ * Whether `ruleId` has a check skipped for a discovery probe reason (#1794) in `report`, and none that ran
+ * under `checkName`: the rule could not look, so a finding of it absent from this report is not resolved.
+ */
+function probeGap(
+  report: AuditReport,
+  ruleId: string,
+  checkName: string
+): boolean {
+  const rule: ReportRuleResult | undefined =
+    report.ruleResults instanceof Map
+      ? report.ruleResults.get(ruleId)
+      : report.ruleResults[ruleId];
+  if (!rule) return false;
+  return (
+    rule.checks.some(
+      (c: CheckResult) =>
+        c.status === "skipped" && isDiscoveryProbeSkipReason(c.skipReason)
+    ) && !ranCheck(report, ruleId, checkName)
+  );
+}
+
+/** True when the named check was evaluated, not only skipped. */
 function ranCheck(report: AuditReport, ruleId: string, name: string): boolean {
   const rule: ReportRuleResult | undefined =
     report.ruleResults instanceof Map

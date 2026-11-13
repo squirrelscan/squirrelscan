@@ -1153,7 +1153,8 @@ squirrel audit https://example.com --discovery-probe-path /llms.txt --discovery-
 
 With the list set:
 
-- A probe left out is not sent. Its rule reports **not checked (path not approved)**, never a missing file.
+- A probe left out is not sent. Its rule reports **not checked (path not approved)**, never a missing file, and is listed under `notChecked` with outcome `coverage_gap` and reason `discovery-probe-not-approved` (a probe that was not sent or was refused or throttled has `discovery-probe-not-sent` or `discovery-probe-refused`; see [Not checked](/configuration/output)).
+- A rule that reads several paths for one file (`ax/agents-md`, `security/security-txt`) reports the file absent when an approved path was requested and answered, a 404 included. The variants you left out are listed in the check's `details.notChecked`.
 - A redirect from a listed path may change the scheme, host or query (an `http` to `https` or apex to `www` canonical hop) but not the path. A redirect to another path is not followed, and the probe reports not checked. The path is compared exactly: a canonical redirect that adds or drops a trailing slash (`/x` to `/x/`), changes the case, or doubles a slash is a different path and is not followed. The request was sent, so the report says the redirect was not followed, not that the probe was not sent.
 - The per-host limits (`per_host_concurrency`, `per_host_delay_ms`) still apply.
 - `robots.txt` and sitemap discovery are not probes and always run.

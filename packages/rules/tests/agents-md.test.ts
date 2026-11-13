@@ -59,7 +59,7 @@ function run(wk: WellKnownProbeData | null | undefined, publishesLlmsTxt = false
 describe("ax/agents-md", () => {
   test("data unavailable → not checked info, no crash", () => {
     const checks = run(undefined);
-    expect(checks[0]?.status).toBe("info");
+    expect(checks[0]?.status).toBe("skipped");
     expect(checks[0]?.value).toBe("not-checked");
     expect(checks[0]?.message).toContain("not checked");
   });
@@ -69,7 +69,7 @@ describe("ax/agents-md", () => {
   test("AGENTS.md paths missing from the sweep → not checked, not a warning", () => {
     const checks = run({ probes: [probe({ path: "/swagger.json", status: 404 })] }, true);
     expect(checks).toHaveLength(1);
-    expect(checks[0]?.status).toBe("info");
+    expect(checks[0]?.status).toBe("skipped");
     expect(checks[0]?.value).toBe("not-checked");
   });
 
@@ -78,7 +78,7 @@ describe("ax/agents-md", () => {
   test("an AGENTS.md path that got no answer → not checked, not absent", () => {
     const wk = wellKnown([probe({ path: "/AGENTS.md", status: 0, error: "connect ECONNREFUSED" })]);
     const checks = run(wk, true);
-    expect(checks[0]?.status).toBe("info");
+    expect(checks[0]?.status).toBe("skipped");
     expect(checks[0]?.value).toBe("not-checked");
     expect(checks[0]?.message).toContain("got no answer");
     expect(checks[0]?.details?.notChecked).toEqual(["/AGENTS.md"]);

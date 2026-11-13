@@ -30,7 +30,7 @@ export const markdownResponseRule: Rule = {
       const refused = refusedFor(ctx.site, "markdown");
       checks.push(
         refused.length > 0
-          ? refusedCheck("markdown-response", "Markdown response", refused)
+          ? refusedCheck("markdown-response", "Markdown response", refused, true)
           : notCheckedCheck("markdown-response", "Markdown response", undefined, "no-result"),
       );
       return { checks };

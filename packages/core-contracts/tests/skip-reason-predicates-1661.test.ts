@@ -45,6 +45,12 @@ const TABLE: Array<[string, boolean, boolean, boolean]> = [
   [CRAWL_CAPPED_SKIP_REASON, false, false, true],
   // A targeted run (#1777): a whole-site rule has nothing to judge, so the rule-wide gap is also not checked.
   [TARGETED_RUN_SKIP_REASON, false, true, true],
+  // Discovery probes with no verdict (#1794): check-scoped coverage gaps that are listed as not checked.
+  ["discovery-probe-not-approved", false, false, true],
+  ["discovery-probe-not-sent", false, false, true],
+  ["discovery-probe-refused", false, false, true],
+  ["discovery-probe-no-answer", false, false, true],
+  ["discovery-probe-redirect-not-followed", false, false, true],
   [IGNORED_SKIP_REASON, false, false, false],
   [PRIVATE_TARGET_SKIP_REASON, false, false, false],
 ];
@@ -66,7 +72,7 @@ describe("the predicates over every coded skip reason", () => {
     }
   });
 
-  test("the not-checked set is exactly the eight reasons", () => {
+  test("the not-checked set is exactly the reasons the table marks", () => {
     expect([...NOT_CHECKED_SKIP_REASONS].sort()).toEqual(
       TABLE.filter((r) => r[3]).map((r) => r[0]).sort(),
     );

@@ -80,7 +80,7 @@ describe("security/security-txt", () => {
   test("data unavailable: not checked, never missing", () => {
     const checks = run(undefined);
     expect(checks[0]?.value).toBe("not-checked");
-    expect(checks[0]?.status).toBe("info");
+    expect(checks[0]?.status).toBe("skipped");
   });
 
   test("no security.txt at either path: warns missing", () => {
@@ -169,7 +169,7 @@ describe("security/security-txt", () => {
       const checks = run(sweep([probe(CANONICAL, { status })]));
       expect(checks.some((c) => c.status === "warn")).toBe(false);
       const check = checks.find((c) => c.name === "security-txt");
-      expect(check?.status).toBe("info");
+      expect(check?.status).toBe("skipped");
       expect(check?.message).toContain(`HTTP ${status}`);
     },
   );

@@ -2,7 +2,7 @@
 
 import type { WellKnownPath, WellKnownProbe } from "@squirrelscan/core-contracts";
 
-import { NOT_CHECKED, answeredWellKnown, notCheckedCheck } from "../ax/discovery-probe-state";
+import { NOT_CHECKED, answeredWellKnown, notApprovedPath, notCheckedCheck } from "../ax/discovery-probe-state";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 const CANONICAL_PATH: WellKnownPath = "/.well-known/security.txt";
@@ -206,11 +206,13 @@ export const securityTxtRule: Rule = {
 
     // Only 404 and 410 say the file is not there. A 401/403 (often a WAF or a
     // bot rule), a 429 or a 5xx says nothing about the file.
-    if (canonical && MISSING_STATUSES.has(canonical.status)) {
+    // The legacy path stands in when the canonical one was not requested (not approved, not sent) (#1794).
+    const decisive = canonical && canonical.status > 0 ? canonical : notApprovedPath(wk, CANONICAL_PATH) ? legacy : canonical;
+    if (decisive && MISSING_STATUSES.has(decisive.status)) {
       checks.push({
         name: "security-txt",
         status: "warn",
-        message: `No security.txt at ${CANONICAL_PATH} (RFC 9116 vulnerability-disclosure contact)`,
+        message: `No security.txt at ${decisive.path} (RFC 9116 vulnerability-disclosure contact)`,
         value: "missing",
         ...(unchecked.length > 0 ? { details: { notChecked: unchecked } } : {}),
       });
@@ -218,9 +220,11 @@ export const securityTxtRule: Rule = {
     }
 
     if (canonical && canonical.status > 0) {
+      // Sent and answered, but with a refusal or an error that says nothing about the file (#1794).
       checks.push({
         name: "security-txt",
-        status: "info",
+        status: "skipped",
+        skipReason: "discovery-probe-refused",
         message: `security.txt not checked: ${CANONICAL_PATH} answered HTTP ${canonical.status}, which does not say whether the file exists`,
         value: NOT_CHECKED,
         details: { status: canonical.status },
