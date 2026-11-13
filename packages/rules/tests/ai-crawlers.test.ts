@@ -167,11 +167,14 @@ describe("ax/ai-crawlers", () => {
 
   test("a wildcard block alone gives one grouped row, no per-crawler rows (#1780)", () => {
     const checks = run(blockAll());
-    expect(checks[0]?.items ?? []).toHaveLength(0);
     expect(checks.some((c) => c.name === "ai-answer-access")).toBe(false);
     expect(checks.some((c) => c.name === "archive-crawler-access")).toBe(false);
     const rows = checks.filter((c) => c.name === "ai-crawlers-wildcard-blocked");
     expect(rows).toHaveLength(1);
+    // Exactly one check in total: no summary, no search-engine warning beside it.
+    expect(checks).toHaveLength(1);
+    expect(checks.some((c) => c.name === "search-engine-access")).toBe(false);
+    expect(checks.some((c) => c.name === "ai-crawler-access")).toBe(false);
     expect(rows[0]?.message).toContain("User-agent: *");
     expect(rows[0]?.message).toContain("crawl/robots-txt");
     expect(rows[0]?.status).toBe("info");
@@ -222,6 +225,19 @@ describe("ax/ai-crawlers", () => {
     const wild = checks.find((c) => c.name === "ai-crawlers-wildcard-blocked");
     expect(wild?.items).toHaveLength(AI_CRAWLERS.length - 1);
     expect(wild?.items?.some((i) => i.id === "GPTBot")).toBe(false);
+  });
+
+  test("wildcard block plus a named Googlebot allow keeps the search-engine check (#1780)", () => {
+    const checks = run(
+      robots([
+        { userAgent: "*", rules: [{ type: "disallow", path: "/" }] },
+        { userAgent: "Googlebot", rules: [{ type: "allow", path: "/" }] },
+      ]),
+    );
+    const se = checks.find((c) => c.name === "search-engine-access");
+    expect(se).toBeDefined();
+    expect(se?.status).toBe("info");
+    expect(se?.message).toContain("Googlebot allowed");
   });
 
   test("a crawler allowed by name under a wildcard block is not listed as blocked (#1780)", () => {
@@ -344,8 +360,13 @@ describe("ax/ai-crawlers search-engine bots", () => {
       expect(r.check?.message).toContain("Googlebot (blocked for this path only)");
     });
 
-    test("a wildcard Disallow / warns too, since Googlebot falls under it", () => {
-      expect(status([{ userAgent: "*", rules: deny("/") }]).status).toBe("warn");
+    test("a bare wildcard Disallow / emits no separate search-engine check (#1780)", () => {
+      expect(status([{ userAgent: "*", rules: deny("/") }]).check).toBeUndefined();
+    });
+
+    test("a wildcard Disallow / with an Allow exception still warns on Googlebot", () => {
+      const rules = [...deny("/"), { type: "allow" as const, path: "/public" }];
+      expect(status([{ userAgent: "*", rules }]).status).toBe("warn");
     });
 
     test("an Allow override for the entry path stays info", () => {
@@ -388,7 +409,9 @@ describe("ax/ai-crawlers search-engine bots", () => {
     });
 
     test("the AI-crawler checks keep their own statuses beside a Googlebot warn", () => {
-      const checks = aiCrawlersRule.run(ctx(blockAll())).checks;
+      const checks = aiCrawlersRule.run(
+        ctx(robots([{ userAgent: "Googlebot", rules: deny("/") }])),
+      ).checks;
       expect(checks[0]?.name).toBe("ai-crawler-access");
       expect(checks[0]?.status).toBe("info");
       expect(checks.find((c) => c.name === "search-engine-access")?.status).toBe("warn");
