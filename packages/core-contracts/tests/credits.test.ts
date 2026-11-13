@@ -17,15 +17,22 @@ import {
   minimumAuditCredits,
 } from "../src/credits";
 
-describe("pricing v12", () => {
-  test("the version moved with the price: v12 bills a signed-in CLI's cloud link checks (#801)", () => {
-    expect(CREDIT_PRICING_VERSION).toBe(12);
+describe("pricing v13", () => {
+  test("the version moved with the price: v13 adds the opt-in llm_rules_page feature", () => {
+    expect(CREDIT_PRICING_VERSION).toBe(13);
   });
 
   test("50 base, 2 per audited page, 1 per external link", () => {
     expect(CREDIT_COSTS.audit_base).toEqual({ cost: 50, per: 1, unit: "run" });
     expect(CREDIT_COSTS.audit_page).toEqual({ cost: 2, per: 1, unit: "page" });
     expect(CREDIT_COSTS.external_link).toEqual({ cost: 1, per: 1, unit: "url" });
+  });
+
+  test("llm_rules_page is 2 per page and leaves the audit price untouched", () => {
+    expect(CREDIT_COSTS.llm_rules_page).toEqual({ cost: 2, per: 1, unit: "page" });
+    expect(computeCost("llm_rules_page", 50)).toBe(100);
+    expect(minimumAuditCredits()).toBe(52);
+    expect(estimateAuditCap({ maxPages: 100 })).toBe(250);
   });
 
   test("a standalone render keeps its 2-credit price", () => {

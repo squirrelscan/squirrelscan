@@ -2,7 +2,7 @@
 // Credit costs for cloud-enriched features. Bump CREDIT_PRICING_VERSION
 // whenever any cost or unit changes so consumers can detect drift.
 
-export const CREDIT_PRICING_VERSION = 12;
+export const CREDIT_PRICING_VERSION = 13;
 
 export interface CreditPrice {
   cost: number;
@@ -10,6 +10,8 @@ export interface CreditPrice {
   unit: "page" | "url" | "run" | "report" | "issue";
 }
 
+// Pricing v13 adds `llm_rules_page` (2cr per audited page, only when an audit
+// opts into the LLM rule pack; opted-out audits are unchanged).
 // Pricing v12 (#2290, #2291, #801): an audit costs `audit_base` (50cr, debited
 // at run registration/dispatch) + `audit_page` (2cr per audited page, however
 // the page was obtained: plain HTTP, a browser render, the local or remote
@@ -32,6 +34,9 @@ export const CREDIT_COSTS = {
   // once, when its render is submitted; every other page is settled when the
   // run completes. Never stacked with a `render` charge for the same audit.
   audit_page: { cost: 2, per: 1, unit: "page" },
+  // LLM rule pack (opt-in, off by default): 2cr per page the pack evaluates,
+  // on top of `audit_page`. Never charged when the audit has not opted in.
+  llm_rules_page: { cost: 2, per: 1, unit: "page" },
   // One distinct external destination the cloud checks during an audit
   // (#2291), whatever status it returns: a cloud audit's, or a signed-in CLI
   // audit's billed to its registered run (#801). HEAD/GET fallback, browser
