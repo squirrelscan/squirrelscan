@@ -424,9 +424,9 @@
   ]
  },
  "ax/agents-md": {
-  "digest": "160363170884487",
+  "digest": "276273209474479",
   "lines": [
-   "agents-md|info|AGENTS.md not checked: the discovery probe was not sent|\"not-checked\"|"
+   "agents-md|skipped|AGENTS.md not checked: the discovery probe was not sent|\"not-checked\"|"
   ]
  },
  "ax/ai-crawlers": {
@@ -437,9 +437,9 @@
   ]
  },
  "ax/api-discovery": {
-  "digest": "80144336166214",
+  "digest": "189302838238827",
   "lines": [
-   "api-discovery|info|API and OAuth discovery documents not checked: the discovery probe was not sent|\"not-checked\"|"
+   "api-discovery|skipped|API and OAuth discovery documents not checked: the discovery probe was not sent|\"not-checked\"|"
   ]
  },
  "ax/archive-indexing": {
@@ -461,15 +461,15 @@
   ]
  },
  "ax/llms-txt": {
-  "digest": "1972623345956",
+  "digest": "151210782721644",
   "lines": [
-   "llms-txt|info|/llms.txt not checked: the discovery probe was not sent or got no answer|\"not-checked\"|"
+   "llms-txt|skipped|/llms.txt not checked: the discovery probe was not sent or got no answer|\"not-checked\"|"
   ]
  },
  "ax/markdown-response": {
-  "digest": "84558450365013",
+  "digest": "172230427598746",
   "lines": [
-   "markdown-response|info|Markdown response not checked: the discovery probe was not sent or got no answer|\"not-checked\"|"
+   "markdown-response|skipped|Markdown response not checked: the discovery probe was not sent or got no answer|\"not-checked\"|"
   ]
  },
  "ax/noai-signals": {
@@ -479,15 +479,15 @@
   ]
  },
  "ax/pay-per-crawl": {
-  "digest": "181823855507165",
+  "digest": "164294522880540",
   "lines": [
-   "pay-per-crawl|info|Monetized agent access not checked: the discovery probe was not sent|\"not-checked\"|"
+   "pay-per-crawl|skipped|Monetized agent access not checked: the discovery probe was not sent|\"not-checked\"|"
   ]
  },
  "ax/rsl-license": {
-  "digest": "90900522258429",
+  "digest": "97176834834396",
   "lines": [
-   "rsl-license|info|RSL licensing not checked: the discovery probe was not sent or got no answer|\"not-checked\"|"
+   "rsl-license|skipped|RSL licensing not checked: the discovery probe was not sent or got no answer|\"not-checked\"|"
   ]
  },
  "ax/token-weight": {
@@ -498,9 +498,9 @@
   ]
  },
  "ax/well-known-agent": {
-  "digest": "124028370187993",
+  "digest": "140085014444147",
   "lines": [
-   "well-known-agent|info|Agent manifests not checked: the discovery probe was not sent|\"not-checked\"|"
+   "well-known-agent|skipped|Agent manifests not checked: the discovery probe was not sent|\"not-checked\"|"
   ]
  },
  "content/article-links": {
@@ -3384,9 +3384,9 @@
   ]
  },
  "mobile/web-app-manifest": {
-  "digest": "122313758836178",
+  "digest": "22511287957860",
   "lines": [
-   "web-app-manifest|info|Web app manifest not checked: the discovery probe was not sent or got no answer|\"not-checked\"|"
+   "web-app-manifest|skipped|Web app manifest not checked: the discovery probe was not sent or got no answer|\"not-checked\"|"
   ]
  },
  "perf/animated-content": {
@@ -3843,9 +3843,9 @@
   ]
  },
  "security/security-txt": {
-  "digest": "50367719187413",
+  "digest": "242163993264146",
   "lines": [
-   "security-txt|info|security.txt not checked: the discovery probe was not sent|\"not-checked\"|"
+   "security-txt|skipped|security.txt not checked: the discovery probe was not sent|\"not-checked\"|"
   ]
  },
  "security/sri": {

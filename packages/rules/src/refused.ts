@@ -38,10 +38,15 @@ export function refusedCheck(
   name: string,
   subject: string,
   refusals: readonly RefusedFetch[],
+  asProbe = false,
 ): CheckResult {
   return {
     name,
-    status: "info",
+    // A refused discovery probe is a coverage gap (#1794): skipped with a coded reason, so it lands in
+    // `notChecked`. A root fetch that is not a probe (the sitemap) stays an info note.
+    ...(asProbe
+      ? { status: "skipped" as const, skipReason: "discovery-probe-refused" }
+      : { status: "info" as const }),
     message: `${subject} not checked: the site refused the request (${refusalReason(refusals)})`,
     value: REFUSED,
     details: { refused: refusals.map(describeRefusedFetch) },

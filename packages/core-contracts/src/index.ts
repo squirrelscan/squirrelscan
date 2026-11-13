@@ -476,6 +476,36 @@ export const CRAWL_CAPPED_SKIP_REASON = "Crawl capped before the frontier was ex
 export const TLS_CERTIFICATE_NOT_CHECKED_SKIP_REASON = "tls-certificate-not-checked";
 
 /**
+ * `skipReason` of a rule whose discovery probe gave no verdict (#1794), so a consumer that resolves findings by
+ * absence keeps them open: the file may exist. One per cause, from `ax/discovery-probe-state`:
+ * - `discovery-probe-not-approved`: the path is not in `[crawler] discovery_probe_paths`, so it was never requested.
+ * - `discovery-probe-not-sent`: no request went out (probes off, no enabled reader, or the time budget ran out first).
+ * - `discovery-probe-refused`: the site refused or throttled the request (a bot wall, HTTP 429, a status that
+ *   does not say whether the file exists).
+ * - `discovery-probe-no-answer`: the request went out and nothing answered (a timeout or a refused connection).
+ * - `discovery-probe-redirect-not-followed`: the request was redirected off its approved path.
+ * A probe that got an answer, a 404 included, is a verdict and is never one of these.
+ */
+export const DISCOVERY_PROBE_NOT_APPROVED_SKIP_REASON = "discovery-probe-not-approved";
+export const DISCOVERY_PROBE_NOT_SENT_SKIP_REASON = "discovery-probe-not-sent";
+export const DISCOVERY_PROBE_REFUSED_SKIP_REASON = "discovery-probe-refused";
+export const DISCOVERY_PROBE_NO_ANSWER_SKIP_REASON = "discovery-probe-no-answer";
+export const DISCOVERY_PROBE_REDIRECT_NOT_FOLLOWED_SKIP_REASON = "discovery-probe-redirect-not-followed";
+export const DISCOVERY_PROBE_SKIP_REASONS = [
+  DISCOVERY_PROBE_NOT_APPROVED_SKIP_REASON,
+  DISCOVERY_PROBE_NOT_SENT_SKIP_REASON,
+  DISCOVERY_PROBE_REFUSED_SKIP_REASON,
+  DISCOVERY_PROBE_NO_ANSWER_SKIP_REASON,
+  DISCOVERY_PROBE_REDIRECT_NOT_FOLLOWED_SKIP_REASON,
+] as const;
+export type DiscoveryProbeSkipReason = (typeof DISCOVERY_PROBE_SKIP_REASONS)[number];
+
+/** Whether `reason` is one of {@link DISCOVERY_PROBE_SKIP_REASONS}. */
+export function isDiscoveryProbeSkipReason(reason: string | undefined): reason is DiscoveryProbeSkipReason {
+  return reason !== undefined && (DISCOVERY_PROBE_SKIP_REASONS as readonly string[]).includes(reason);
+}
+
+/**
  * Skip reasons that mean "this check did not run for the audit", which every
  * report renders as a visible "Not checked" line instead of leaving the rule
  * looking clean (repo#2729), and which never resolve an open finding.

@@ -87,7 +87,7 @@ export const agentBlockingRule: Rule = {
         status: "skipped",
         message: "Agent access not checked: the discovery probe was not sent",
         value: NOT_CHECKED,
-        skipReason: "No agentAccess prefetch for this crawl",
+        skipReason: "discovery-probe-not-sent",
       });
       return { checks };
     }
@@ -101,7 +101,7 @@ export const agentBlockingRule: Rule = {
         status: "skipped",
         message: "Agent access not checked: the discovery probe was not sent",
         value: NOT_CHECKED,
-        skipReason: "Browser baseline probe was not sent",
+        skipReason: "discovery-probe-not-sent",
       });
       return { checks };
     }
@@ -131,7 +131,8 @@ export const agentBlockingRule: Rule = {
         case "not-checked":
           checks.push({
             name: "agent-access",
-            status: "info",
+            status: "skipped",
+            skipReason: "discovery-probe-not-sent",
             message: `${label} not checked: the discovery probe was not sent`,
             value: NOT_CHECKED,
             details: { userAgent: probe.userAgent },

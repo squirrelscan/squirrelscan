@@ -117,13 +117,13 @@ describe("ax/llms-txt", () => {
     );
 
     expect(checks).toHaveLength(1);
-    expect(checks[0]).toMatchObject({ name: "llms-txt", status: "info", value: "refused" });
+    expect(checks[0]).toMatchObject({ name: "llms-txt", status: "skipped", skipReason: "discovery-probe-refused", value: "refused" });
     expect(checks[0]!.message).toContain("refused");
   });
 
   test("control: nothing refused and no row stored stays the generic not-checked", () => {
     const { checks } = llmsTxtRule.run(ctx(site({ llmsTxt: null })));
-    expect(checks[0]).toMatchObject({ status: "info", value: "not-checked" });
+    expect(checks[0]).toMatchObject({ status: "skipped", value: "not-checked" });
   });
 });
 
@@ -134,7 +134,7 @@ describe("ax/markdown-response", () => {
     );
 
     expect(checks).toHaveLength(1);
-    expect(checks[0]).toMatchObject({ name: "markdown-response", status: "info", value: "refused" });
+    expect(checks[0]).toMatchObject({ name: "markdown-response", status: "skipped", skipReason: "discovery-probe-refused", value: "refused" });
     expect(checks[0]!.message).not.toContain("No Markdown response");
   });
 });

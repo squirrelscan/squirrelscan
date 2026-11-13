@@ -16,6 +16,7 @@ import {
   EXTERNAL_LINKS_OUT_OF_TIME_SKIP_REASON,
   EXTERNAL_LINKS_OVER_CAP_SKIP_REASON,
   LINK_TARGETS_NOT_FETCHED_SKIP_REASON,
+  isDiscoveryProbeSkipReason,
   isLockedRuleReason,
   NOT_CHECKED_SKIP_REASONS,
   RULE_TIMED_OUT_SKIP_REASON,
@@ -78,6 +79,17 @@ const HINTS: Record<string, string> = {
   // #1144: the inbound-link rules on a crawl that stopped at its page cap.
   [CRAWL_CAPPED_SKIP_REASON]:
     "Raise the page limit (--max-pages, or crawler.max_pages) so the crawl reaches every page, to check them.",
+  // #1794: a discovery probe that gave no verdict. The file may exist, so these never read as "checked, absent".
+  "discovery-probe-not-approved":
+    "Add the path to [crawler] discovery_probe_paths (or pass --discovery-probe-path) to check it.",
+  "discovery-probe-not-sent":
+    "Run the audit again with discovery probes on and enough time for the crawl preamble (the probe was not sent).",
+  "discovery-probe-refused":
+    "The site refused or throttled the request, so the file may exist. Allow the audit through the site's bot protection, or run the audit again later.",
+  "discovery-probe-no-answer":
+    "The request went out and nothing answered (a timeout or a refused connection). Run the audit again to check it.",
+  "discovery-probe-redirect-not-followed":
+    "The request was redirected off its approved path. Approve the destination path in [crawler] discovery_probe_paths to check it.",
 };
 
 // #3922: a hosted audit's user cannot change where it runs, so no advice about
@@ -170,7 +182,7 @@ function hintFor(check: { skipReason?: string; details?: Record<string, unknown>
 /**
  * Rules with a check that did not run this audit, sorted by name (then id).
  * One entry per rule, from its first not-checked check. Info-severity rules
- * are left out: they summarize what another rule reports (links/dead-links
+ * (other than a rule whose discovery probe gave no verdict) are left out: they summarize what another rule reports (links/dead-links
  * restates links/broken-external-links), so listing them would say the same
  * thing twice. Empty for reports written before repo#2729.
  */
@@ -271,12 +283,16 @@ export function notCheckedRules(report: NotCheckedReportShape): NotCheckedRule[]
   const out: NotCheckedRule[] = [];
   for (const ruleId of Object.keys(report.ruleResults)) {
     const result = report.ruleResults[ruleId];
-    if (!result || result.meta.severity === "info") continue;
+    if (!result) continue;
+    const info = result.meta.severity === "info";
     const check = result.checks.find(
       (c) =>
         c.status === "skipped" &&
         c.skipReason !== undefined &&
-        NOT_CHECKED_SKIP_REASONS.has(c.skipReason),
+        NOT_CHECKED_SKIP_REASONS.has(c.skipReason) &&
+        // An info rule restates what another rule reports, except a discovery probe rule (#1794): its own
+        // finding is the one a consumer would resolve by absence.
+        (!info || isDiscoveryProbeSkipReason(c.skipReason)),
     );
     if (!check || check.skipReason === undefined) continue;
     const timedOut =

@@ -99,7 +99,7 @@ export const llmsTxtRule: Rule = {
         );
         checks.push(
           refused.length > 0
-            ? refusedCheck("llms-txt", "/llms.txt", refused)
+            ? refusedCheck("llms-txt", "/llms.txt", refused, true)
             : notCheckedCheck(
                 "llms-txt",
                 "/llms.txt",
