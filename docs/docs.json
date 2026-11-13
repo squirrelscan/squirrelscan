@@ -100,7 +100,7 @@
               "guides/failed-audits",
               "guides/badges",
               "guides/browser-rendering",
-              "guides/rate-limited-hosts",
+              "guides/rate-limited-hosts", "guides/shopify-and-storyblok",
               "guides/web-bot-auth"
             ]
           }

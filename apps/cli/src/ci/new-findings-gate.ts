@@ -247,6 +247,29 @@ async function readCredits(deps: GateDeps): Promise<CreditsSnapshot | null> {
   return { total: balance.total, unlimited: balance.unlimited === true };
 }
 
+/**
+ * The address the API gives the report (`GET /v1/reports/:id` -> `url`, `<org>.squirrel.report/...`), the
+ * host every other surface prints. Null when it cannot be read; the caller then falls back to the id on
+ * the legacy host, which redirects there.
+ */
+async function readReportUrl(
+  deps: GateDeps,
+  reportId: string
+): Promise<string | null> {
+  const reply = await deps.request<{ url?: unknown }>(
+    "GET",
+    `/v1/reports/${encodeURIComponent(reportId)}`
+  );
+  const url = reply.data?.url;
+  if (!reply.ok || typeof url !== "string") return null;
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "https:" ? parsed.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Print the finished comparison (or the JSON record) and return the exit decision. */
 function report(
   deps: GateDeps,
@@ -254,7 +277,8 @@ function report(
   run: RunRecord,
   compare: CompareResponse,
   decision: GateResult,
-  credits: { before: CreditsSnapshot | null; after: CreditsSnapshot | null }
+  credits: { before: CreditsSnapshot | null; after: CreditsSnapshot | null },
+  reportAddress: string | null
 ): void {
   const comparison = compare.comparison ?? {};
   const gate = compare.gate ?? {};
@@ -263,7 +287,7 @@ function report(
   const resolved = findings.filter((f) => f.kind === "resolved");
   const reportId = comparison.head?.reportId ?? run.reportId ?? null;
   const reportUrl = reportId
-    ? `${REPORTS_BASE_URL}/${encodeURIComponent(reportId)}`
+    ? (reportAddress ?? `${REPORTS_BASE_URL}/${encodeURIComponent(reportId)}`)
     : null;
   const notCompared = {
     notCrawled: gate.notCompared?.notCrawled ?? 0,
@@ -492,9 +516,22 @@ export async function runNewFindingsGate(
   }
 
   const decision = decideExit(compareReply.data, run);
-  report(deps, opts, run, compareReply.data, decision, {
-    before: creditsBefore,
-    after: creditsAfter,
-  });
+  const headReportId =
+    compareReply.data.comparison?.head?.reportId ?? run.reportId ?? null;
+  const reportAddress = headReportId
+    ? await readReportUrl(deps, headReportId)
+    : null;
+  report(
+    deps,
+    opts,
+    run,
+    compareReply.data,
+    decision,
+    {
+      before: creditsBefore,
+      after: creditsAfter,
+    },
+    reportAddress
+  );
   return decision;
 }
