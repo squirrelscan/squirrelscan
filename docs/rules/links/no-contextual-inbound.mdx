@@ -21,7 +21,7 @@ The rule is site-wide. For each crawled page it counts internal, resolvable, dof
 
 Only a URL that resolved to a page in this crawl is considered. A footer link to a URL that answers 404, 410 or any other 4xx or 5xx is reported by [links/broken-links](/rules/links/broken-links), not here: the URL is not a page, so it cannot need a contextual link. A URL that redirects is judged at its final destination: its inbound links count toward the destination and the redirecting URL is not reported.
 
-A page is only considered when its raw inbound count is at or above `minInboundLinks`, default 2. Below that it is already reported by `links/orphan-pages`, and the two thresholds should be kept in sync when either is tuned. The homepage is skipped, since it is linked from every header by design, and so is the page the audit started from: the URL you gave and where its redirects landed (a root that redirects to `/en/`).
+A page is only considered when its raw inbound count is at or above `minInboundLinks`, default 2. Below that it is already reported by `links/orphan-pages`, and the two thresholds should be kept in sync when either is tuned (see [relation to links/orphan-pages](#relation-to-linksorphan-pages)). The homepage is skipped, since it is linked from every header by design, and so is the page the audit started from: the URL you gave and where its redirects landed (a root that redirects to `/en/`).
 
 Legal pages are skipped too: privacy, terms and imprint pages are footer-only by design, so being linked only from chrome is expected. They are recognised by the last segment of the path, under any prefix, so `/impressum`, `/datenschutz`, `/agb`, `/privacy-policy`, `/terms-of-service`, `/imprint`, `/legal`, `/legal-notice` and `/en/legal` are not reported, in the languages the privacy and terms checks of [eeat/privacy-policy](/rules/eeat/privacy-policy) recognise. A page whose slug only contains one of those words (`/legalese-guide`) is still reported.
 When the inbound links carry a link section (see [Page Classifier](/configuration/classifier)), each item says where they sit. An item reads `https://example.com/pricing, linked only from the footer and the navigation` and carries the counts in `meta.sections`, for example `{ "footer": 3, "navigation": 1 }`. The label names up to three sections, most links first, and counts the rest. It says "only from" when every inbound link had a section, and "from" when some did not.
@@ -35,6 +35,20 @@ Crawls stored before the chrome flag existed report every link as contextual, so
 Link to the page from the body of the content it belongs with, using anchor text that describes it. A category page that introduces its members in prose, rather than only listing them, produces contextual links as a side effect.
 
 A whole site that links only through chrome reports every page that is not the homepage or the page the audit started from, is not excluded, and has at least `minInboundLinks` raw inbound links. That is accurate rather than a false positive, and it usually means the content does not cross-reference itself.
+
+## Relation to links/orphan-pages
+
+The `minInboundLinks` option exists on both rules and the two are independent: neither is validated against the other, and a value set on one rule never changes the other. Both default to 2.
+
+- `links/orphan-pages` reports a page when its raw inbound count is below its `minInboundLinks`.
+- `links/no-contextual-inbound` considers a page only when its raw inbound count is at or above its own `minInboundLinks`, and reports it when none of those links are contextual.
+
+With equal values, a page is handled by at most one of the two. If they differ, the rules overlap or leave a gap:
+
+- **Double-report band.** Set `links/orphan-pages` to 5 and leave `links/no-contextual-inbound` at 2. A page with 2 to 4 raw inbound links, all of them from nav, header, footer or aside, is below the orphan threshold (5) and at or above the contextual threshold (2). Both rules report it: `links/orphan-pages` for too few inbound links overall, and this rule for having no contextual support.
+- **Gap.** Set this rule higher than `links/orphan-pages`. A chrome-only page with a raw count between the two values is below this rule's threshold and at or above the orphan threshold, so neither rule reports it.
+
+Keep the two values equal unless you want one of these on purpose, for example to see both findings on thinly linked pages. This is documented behaviour, not a bug.
 
 | | |
 |---|---|
