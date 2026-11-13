@@ -848,6 +848,22 @@
             ]
           },
           {
+            "group": "Third-party scan",
+            "pages": [
+              "cloud/third-party/index",
+              "cloud/third-party/compromised-script",
+              "cloud/third-party/vendor-count",
+              "cloud/third-party/session-replay-on-sensitive-page",
+              "cloud/third-party/proxied-script",
+              "cloud/third-party/script-on-sensitive-page",
+              "cloud/third-party/tag-manager-on-sensitive-page",
+              "cloud/third-party/rum-in-production",
+              "cloud/third-party/missing-sri-versioned",
+              "cloud/third-party/unattributed-origin",
+              "cloud/third-party/unidentified-tracker"
+            ]
+          },
+          {
             "group": "Dashboard",
             "pages": [
               "dashboard/index",

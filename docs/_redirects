@@ -6,3 +6,5 @@
 /og/entity-map.png /og/guides/entity-map.png 301
 /og/entity-map/* /og/guides/entity-map/:splat 301
 /rules/content/article-toc /rules/content 301
+/rules/third-party /cloud/third-party 301
+/rules/third-party/* /cloud/third-party/:splat 301

@@ -1,0 +1,39 @@
+---
+title: "Compromised third-party script: a loaded vendor with an open compromise report"
+description: "A page loads a script from a vendor with an open compromise report. squirrel names the vendor and the page."
+---
+
+<Note>**Cloud rule.** The `third-party/*` rules run in cloud audits only. They are not part of the local `squirrel audit`, and a cloud audit includes them once the scan is switched on for your organization's plan; an audit without the scan has no Third parties section and none of these rules appear. The scan never charges credits. It reads at most 8 pages per audit, so a finding is about those pages, not the whole site. See [Third-party rules](/cloud/third-party).</Note>
+
+## What a compromised script is
+
+A third-party script runs in your visitors' browsers with the same access as your own code. When the vendor's own delivery is taken over, every site that loads the script serves the attacker's code: skimmers on checkout pages, redirects, data theft. The 2024 Polyfill.io domain takeover and the October 2026 compromise of a real-user-monitoring vendor's script host both reached sites that did nothing wrong except load a script.
+
+## What squirrel checks
+
+squirrel classifies every request a sampled page makes against a curated catalogue of vendors. Some vendors carry a compromise event: a report, with a summary and a source link, that a vendor or its delivery was compromised and has not been closed. The rule fails for each sampled page that loads a script from a vendor with an open event.
+
+- `compromised-script` fails once per page and vendor. Message: `https://example.com/ loads Example Tag, reported compromised: <the event's summary>`.
+- `compromised-script` passes with `No loaded script is from a compromised technology.` when no sampled page loads one.
+
+The issue the finding becomes in the dashboard is critical, a step above the rule's own error severity.
+
+### What it cannot do
+
+The rule only fires for compromises the catalogue already records. It cannot detect a new compromise by itself: it does not hash or diff a script's content between audits, and a vendor missing from the catalogue is unknown, not safe. Compromise events are added by people, not automatically. A page the audit did not sample is not checked.
+
+## How to fix it
+
+Remove the script, or replace it with a pinned, self-hosted copy of a known-good version, until the vendor publishes an all-clear. Read the source link in the finding before deciding: an event can cover one delivery host, and a vendor that has since fixed its delivery may have closed it. Then re-run the audit; the finding clears when the vendor's event is closed or the script is gone.
+
+| | |
+|---|---|
+| **Rule** | `third-party/compromised-script` |
+| **Category** | [Third-party](/cloud/third-party), part of [Security](/rules/security) |
+| **Scope** | Site (cloud audits only) |
+| **Severity** | error |
+| **Weight** | 1/10 |
+
+## Enable / disable
+
+Cloud audits do not read `squirrel.toml`, so these rules cannot be switched off there. They run whenever the audit includes the third-party scan, and report as skipped when the scan could not run.

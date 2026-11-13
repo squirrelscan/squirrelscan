@@ -1,0 +1,35 @@
+---
+title: "Real-user monitoring script: an inventory note"
+description: "A real-user-monitoring vendor runs in the visitor's browser with the access of any script on the page. An inventory note, not a defect."
+---
+
+<Note>**Cloud rule.** The `third-party/*` rules run in cloud audits only. They are not part of the local `squirrel audit`, and a cloud audit includes them once the scan is switched on for your organization's plan; an audit without the scan has no Third parties section and none of these rules appear. The scan never charges credits. It reads at most 8 pages per audit, so a finding is about those pages, not the whole site. See [Third-party rules](/cloud/third-party).</Note>
+
+## What it is
+
+Real-user monitoring (RUM) measures how pages perform for actual visitors by running a script in their browsers. It is useful and common. It is also a third-party script with the same access as any other, and a vendor your privacy notice and your security review should name.
+
+## What squirrel checks
+
+The rule reports every catalogued vendor tagged as real-user monitoring that a sampled page loads. It is an information-only inventory item.
+
+- `rum-in-production` reports info once per page and vendor. Message: `Inventory note: https://example.com/ loads the real-user-monitoring script from Example RUM`.
+- `rum-in-production` passes with `No real-user-monitoring script was seen.` otherwise.
+
+Nothing is wrong with a RUM script as such. The check exists so the vendor shows up in the third-party picture, next to the others. Only sampled pages are checked.
+
+## How to fix it
+
+Usually nothing. Confirm the vendor is in your privacy notice and vendor register, that the data it collects matches what you disclose, and that you load it on the pages that need it rather than everywhere.
+
+| | |
+|---|---|
+| **Rule** | `third-party/rum-in-production` |
+| **Category** | [Third-party](/cloud/third-party), part of [Security](/rules/security) |
+| **Scope** | Site (cloud audits only) |
+| **Severity** | info |
+| **Weight** | 1/10 |
+
+## Enable / disable
+
+Cloud audits do not read `squirrel.toml`, so these rules cannot be switched off there. They run whenever the audit includes the third-party scan, and report as skipped when the scan could not run.
