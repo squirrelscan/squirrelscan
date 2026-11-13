@@ -19,7 +19,7 @@ How it works:
 
 ## v0.0.181 (2026-11-13)
 
-Reports now tell you where a site actually lives: a new host section lists its IPv4 and IPv6 addresses, a connect time and the country (offline, from a bundled DB-IP Lite snapshot), and names the CDN or WAF in front of it separately from the origin. Every report also says whether robots.txt was honoured and how many pages it kept out. A site that blocks every AI crawler with one wildcard rule gets one tidy row instead of eleven, installs and updates verify the release's GitHub build attestation, and discovery probes you never approved show up as coverage gaps instead of false verdicts.
+Reports now tell you where a site actually lives: a new host section lists its IPv4 and IPv6 addresses, a connect time and the country (offline, from a bundled DB-IP Lite snapshot), and names the CDN or WAF in front of it separately from the origin. Every report also says whether robots.txt was honoured and how many pages it kept out. A site that blocks every AI crawler with one wildcard rule gets one row instead of one per crawler, installs and updates verify the release's GitHub build attestation when `gh` is available, and discovery probes you never approved show up as coverage gaps instead of false verdicts.
 
 ### Added
 
