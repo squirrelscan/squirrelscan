@@ -64,14 +64,14 @@
 //    `SiteData`, down to the individual script and resource entries, and fails on
 //    any read outside the declared sets.
 //
-// TEMPLATE FAN-OUT (#1951) DOES NOT COMPOSE WITH THIS, and the cache wins: a run
-// with a cache does not build a fan-out at all (see streaming.ts). A fanned
-// verdict belongs to the page's CLUSTER, so no per-page key can capture what it
-// depends on — change a cluster's representative and its members' cached verdicts
-// are stale with nothing about those members having changed. Two designs were
-// tried and rejected before this one; the reasoning is in streaming.ts, and making
-// them compose means caching the cluster's verdict against its representative's
-// identity, which is a whole-crawl property rather than a per-page one.
+// TEMPLATE FAN-OUT (#1951) COMPOSES WITH THIS (#296). A fanned verdict belongs to the
+// page's CLUSTER, so the page's own key cannot capture what it depends on: change a
+// cluster's representative and its members' cached verdicts are stale with nothing about
+// those members having changed. An entry therefore also records `fan`: the page's
+// cluster key and the page key of the representative whose verdicts it holds. A
+// replay is valid only when the representative of that cluster in THIS run has the
+// same page key (see `fanReplayable` in streaming.ts); otherwise the page runs
+// fresh and takes the verdicts a fresh audit would give it.
 
 import { isSlowBlockingScript } from "@squirrelscan/utils/constants";
 import type { CheckResult, PageFeatureRow, PageRecord } from "@squirrelscan/core-contracts";
@@ -215,6 +215,13 @@ export interface PageRuleCacheEntry {
    * live registry, never from the cache — a stale `meta` would be a different bug.
    */
   readonly ruleResults: ReadonlyArray<readonly [string, CheckResult[]]>;
+  /**
+   * Written by a run with template fan-out on (#296); absent on an entry written without it.
+   * `cluster` is the page's fan-out cluster key (`null`: it never groups). `rep` is the page key
+   * of the representative whose template verdicts the page holds: its OWN key when it was the
+   * representative, another page's when it inherited them, `null` when that page had no key.
+   */
+  readonly fan?: { readonly cluster: string | null; readonly rep: string | null };
   /** What `extractPageFeatures` returned, replayed via `upsertPageFeatures`. */
   readonly features: PageFeatureRow;
   /** Per-collector snapshot: collector id -> whatever its `collect` returned. */

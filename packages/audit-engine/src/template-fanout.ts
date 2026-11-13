@@ -284,7 +284,19 @@ export interface TemplateFanout {
    * Call it with the results of a page that really ran, BEFORE `pageUrl` is
    * stamped on them. A second call for the same key is a no-op.
    */
-  record(clusterKey: string | null, ruleResults: ReadonlyMap<string, RuleRunResult>): void;
+  record(
+    clusterKey: string | null,
+    ruleResults: ReadonlyMap<string, RuleRunResult>,
+    repKey?: string | null,
+  ): void;
+  /**
+   * The identity (the representative's rule-cache page key, #296) the cluster's recorded verdicts came
+   * from: `undefined` when no representative is recorded for the cluster (none yet, or the cluster
+   * is over the cap), `null` when one is recorded but has no usable key (it cannot be replayed against).
+   */
+  repKeyOf(clusterKey: string | null): string | null | undefined;
+  /** The representative `repKey` of the cluster will not be replayable: members stop naming it (#296). */
+  unidentify(clusterKey: string | null, repKey: string | null): void;
   stats(): TemplateFanoutStats;
 }
 
@@ -345,6 +357,8 @@ export function createTemplateFanout(
 
   /** clusterKey -> ruleId -> the representative's checks, detached, unstamped. */
   const cache = new Map<string, Map<string, CheckResult[]>>();
+  /** clusterKey -> the representative's identity, see {@link TemplateFanout.repKeyOf}. */
+  const reps = new Map<string, string | null>();
   let fannedPages = 0;
   let fannedRuleRuns = 0;
   let pagesOverCap = 0;
@@ -367,7 +381,11 @@ export function createTemplateFanout(
       return out;
     },
 
-    record(clusterKey, ruleResults) {
+    repKeyOf(clusterKey) {
+      return clusterKey ? reps.get(clusterKey) : undefined;
+    },
+
+    record(clusterKey, ruleResults, repKey = null) {
       if (!clusterKey || fannable.size === 0 || cache.has(clusterKey)) return;
       if (cache.size >= maxClusters) {
         pagesOverCap++;
@@ -387,6 +405,11 @@ export function createTemplateFanout(
       // Recorded even when empty: it marks the cluster as seen, so a later member
       // does not re-record and the representative stays the first page.
       cache.set(clusterKey, entry);
+      reps.set(clusterKey, repKey);
+    },
+
+    unidentify(clusterKey, repKey) {
+      if (clusterKey && reps.get(clusterKey) === repKey) reps.set(clusterKey, null);
     },
 
     stats() {

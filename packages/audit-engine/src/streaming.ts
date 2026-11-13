@@ -325,29 +325,40 @@ export function streamPageRules(
         : undefined;
     const ruleCacheStats = emptyRuleCacheStats();
 
-    // TEMPLATE FAN-OUT AND THE RULE CACHE ARE MUTUALLY EXCLUSIVE, and the cache
-    // wins (#1990 x #1951). They are two ways of not running a rule, and they do
-    // not compose:
-    //
-    // A fanned verdict is a property of the page's CLUSTER, not of the page, so no
-    // per-page key can capture what it depends on. Cache A and B of one cluster,
-    // then change A — the cluster's representative. A is fresh and records its new
-    // verdict; B replays the OLD verdict it inherited from A's previous run, and a
-    // fully-replayed audit after that reports B's stale value forever. A fresh
-    // audit of the same content gives B the new one. Keying B on its own inputs
-    // cannot see this, because nothing about B changed.
-    //
-    // Fixing it properly means caching the CLUSTER's verdict against its
-    // representative's identity, which is a whole-crawl property the streamed loop
-    // resolves as it goes. That is a design, not a patch.
-    //
-    // The trade this makes: a COLD audit gives up fan-out's 13% of the page-rule
-    // pass; every audit after it takes the cache's ~88%. `SQUIRREL_RULE_CACHE=0`
-    // gets fan-out back, and the cloud is unaffected — it passes no cache.
+    // TEMPLATE FAN-OUT COMPOSES WITH THE RULE CACHE (#296). A fanned verdict belongs to
+    // the page's CLUSTER, so a page's own key cannot capture what it depends on: cache
+    // A and B of one cluster, change A (the representative), and B's cached verdict is
+    // stale with nothing about B having changed. Each entry therefore records its
+    // cluster and the page key of the representative its verdicts came from
+    // (`entry.fan`), and a candidate replay is re-checked IN THE LOOP, where every
+    // earlier page of the crawl has already resolved its cluster (a changed page by
+    // parsing, an unchanged one from its entry), so the representative is the first page
+    // of the cluster in crawl order exactly as in a fresh audit. See `fanReplayable`.
     const fanout =
-      !ruleCache && (opts?.templateFanout ?? templateFanoutEnabled())
+      opts?.templateFanout ?? templateFanoutEnabled()
         ? createTemplateFanout(runner, { maxClusters: opts?.templateFanoutMaxClusters })
         : null;
+
+    /**
+     * May this page's cached entry stand in for running it, given the representatives
+     * resolved so far? Without fan-out only an entry written without it (a fan-out-off
+     * run's entry holds the page's own verdicts for every rule). With it:
+     *  - no cluster: own verdicts, always valid;
+     *  - an entry that was its cluster's representative is valid only while the
+     *    cluster has none yet (it is the first page, as a fresh audit would elect it);
+     *  - an entry that inherited is valid only while the cluster's representative
+     *    is the page it inherited from (same page key, so same inputs, same verdicts).
+     * Anything else runs fresh: a fresh audit would give the page other verdicts.
+     */
+    const fanReplayable = (entry: PageRuleCacheEntry, ownKey: string | undefined): boolean => {
+      const fan = entry.fan;
+      if (!fanout) return fan === undefined;
+      if (fan === undefined) return false;
+      if (fan.cluster === null) return true;
+      const rep = fanout.repKeyOf(fan.cluster);
+      if (fan.rep !== null && fan.rep === ownKey) return rep === undefined;
+      return fan.rep !== null && rep === fan.rep;
+    };
 
     const pageSink = opts?.pageSink;
     const retain = opts?.retainPageResults ?? true;
@@ -452,7 +463,18 @@ export function streamPageRules(
         // whole batch of heavy pages to completion before it took effect.
         opts?.signal?.throwIfAborted();
 
-        const replayEntry = replayByUrl.get(page.normalizedUrl);
+        let replayEntry = replayByUrl.get(page.normalizedUrl);
+        if (replayEntry && !fanReplayable(replayEntry, keyByUrl.get(page.normalizedUrl))) {
+          // The page itself is unchanged but its cluster's representative moved (#296): it runs
+          // fresh, so it was not parsed with the batch. Parse it now.
+          replayEntry = undefined;
+          replayByUrl.delete(page.normalizedUrl);
+          if (!tooLarge(page)) {
+            const late = yield* buildSiteContext([page], undefined, { maxParseBytes: maxPageBytes });
+            for (const e of late) parsedByUrl.set(e.page.normalizedUrl, e.parsed);
+            peakLiveDocs = Math.max(peakLiveDocs, late.filter((p) => p.parsed?.document).length);
+          }
+        }
         if (replayEntry) {
           yield* replayPage(page, replayEntry, runner, crawlId, storage, collectors, {
             retain,
@@ -463,6 +485,24 @@ export function streamPageRules(
             tallies,
             pageUrls,
           });
+          // A replayed representative is the cluster's first page: record its template
+          // verdicts so a member that has to run fresh inherits them (#296). Its stored
+          // checks carry its own pageUrl, which a recorded verdict must not.
+          const fan = replayEntry.fan;
+          if (fanout && fan && fan.cluster !== null && fan.rep === keyByUrl.get(page.normalizedUrl)) {
+            const unstamped = new Map<string, RuleRunResult>();
+            for (const [ruleId, checks] of replayEntry.ruleResults) {
+              const meta = runner.getRuleMeta(ruleId);
+              if (!meta) continue;
+              unstamped.set(ruleId, {
+                meta,
+                checks: checks.map((c) =>
+                  c.pageUrl === page.normalizedUrl ? { ...c, pageUrl: undefined } : c,
+                ) as CheckResultLike[],
+              });
+            }
+            fanout.record(fan.cluster, unstamped, fan.rep);
+          }
           extractedCount++;
           ruleCacheStats.replayedPages++;
           ruleCache?.carryForward(keyByUrl.get(page.normalizedUrl)!, page);
@@ -637,7 +677,13 @@ export function streamPageRules(
         // BEFORE `pageUrl` is stamped below, so what a member inherits is
         // page-identity-free and its own stamp is a first write (#1951). Only when
         // this page ran the rules itself — a member has nothing new to say.
-        if (!fanned && !unread) fanout?.record(clusterKey, result.ruleResults);
+        const ownCacheKey = keyByUrl.get(pageUrl) ?? null;
+        if (!fanned && !unread) fanout?.record(clusterKey, result.ruleResults, ownCacheKey);
+        // Whose verdicts this page holds, for its cache entry (#296): the cluster's
+        // representative, which is this page unless the fan-out gave it one.
+        // A cluster with no recorded representative (over the cap, or nothing fannable) ran on its own.
+        const repKey =
+          clusterKey === null ? null : (fanout?.repKeyOf(clusterKey) ?? ownCacheKey);
 
         // Stamp the page URL FIRST, then every consumer — the sink, the retained
         // maps and the fold — sees identical checks and they stay byte-consistent
@@ -702,7 +748,10 @@ export function streamPageRules(
           checks.some((c) => c.details?.timedOut === true),
         );
         const cacheKey = keyByUrl.get(pageUrl);
-        if (ruleCache && cacheKey && features && signalsCacheable && !timedOut) {
+        // A page that inherited a verdict from a representative with no key cannot say whose it
+        // holds, so it is not stored (it runs again next time, which is always correct).
+        const fanKnown = !fanout || clusterKey === null || repKey !== null;
+        if (ruleCache && cacheKey && features && signalsCacheable && !timedOut && fanKnown) {
           // The checks stored are the ones whose `pageUrl` was just stamped, so a
           // replay's own stamping loop is a no-op and the two paths agree. They
           // are the SAME objects the run already retains, so recording them here
@@ -710,10 +759,16 @@ export function streamPageRules(
           // serialize them.
           ruleCache.putFresh(cacheKey, page, {
             ruleResults: entries,
+            ...(fanout ? { fan: { cluster: clusterKey, rep: repKey } } : {}),
             features,
             signals,
           });
           ruleCacheStats.storedEntries++;
+        } else if (fanout && !fanned && !unread && clusterKey !== null) {
+          // A representative that is not stored runs again next time, perhaps with another
+          // verdict (a timeout says how busy the machine was). Members that inherited its
+          // verdict must not be replayed against it, so the cluster loses its identity.
+          fanout.unidentify(clusterKey, ownCacheKey);
         }
 
         // Drop this page's DOM before moving on — the residency bound.
