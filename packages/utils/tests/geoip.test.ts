@@ -33,3 +33,20 @@ describe("shipped GeoIP database", () => {
     expect(createHash("sha256").update(bytes).digest("hex")).toBe(snapshot.compiledSha256);
   });
 });
+
+describe("IPv6 text parsing (CodeQL js/polynomial-redos on the IPv4-tail regex)", () => {
+  test("an embedded IPv4 tail still parses", async () => {
+    const { parseV6 } = await import("../src/geoip/ip");
+    const mapped = parseV6("::ffff:192.0.2.1");
+    expect(mapped && [...mapped.slice(10)]).toEqual([0xff, 0xff, 192, 0, 2, 1]);
+    expect(parseV6("::ffff:300.0.2.1")).toBeNull();
+  });
+
+  test("a long run of zeros returns null at once instead of backtracking", async () => {
+    const { parseV6 } = await import("../src/geoip/ip");
+    const started = performance.now();
+    expect(parseV6("0".repeat(50_000) + "x")).toBeNull();
+    expect(parseV6(`${"0.".repeat(20_000)}0`)).toBeNull();
+    expect(performance.now() - started).toBeLessThan(50);
+  });
+});

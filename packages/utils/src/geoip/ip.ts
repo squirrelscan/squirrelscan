@@ -12,11 +12,14 @@ export function parseV4(ip: string): number | null {
 
 export function parseV6(ip: string): Uint8Array | null {
   let text = ip.split("%")[0]!;
-  const tailV4 = /(\d+\.\d+\.\d+\.\d+)$/.exec(text);
-  if (tailV4) {
-    const v4 = parseV4(tailV4[1]!);
+  // The longest valid IPv6 text is 45 characters; anything longer is not an address.
+  if (text.length > 45) return null;
+  // An embedded IPv4 tail (::ffff:1.2.3.4) is everything after the last colon; no regex over the whole input.
+  const tail4 = text.slice(text.lastIndexOf(":") + 1);
+  if (tail4.includes(".")) {
+    const v4 = parseV4(tail4);
     if (v4 === null) return null;
-    text = `${text.slice(0, -tailV4[1]!.length)}${((v4 >>> 16) & 0xffff).toString(16)}:${(v4 & 0xffff).toString(16)}`;
+    text = `${text.slice(0, -tail4.length)}${((v4 >>> 16) & 0xffff).toString(16)}:${(v4 & 0xffff).toString(16)}`;
   }
   const [head, tail, extra] = text.split("::");
   if (extra !== undefined) return null;
