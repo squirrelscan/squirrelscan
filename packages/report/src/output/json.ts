@@ -62,6 +62,7 @@ import {
   type RegionScope,
 } from "../region-scope";
 import { checkPageTypeScope, pageTypeScopeData, type PageTypeScope } from "../page-type-scope";
+import type { ReportHost } from "@squirrelscan/core-contracts";
 import { isLocalOnlyTech, techIconUrl } from "../technologies";
 import { domainAgeYears, siteProfileRows } from "../site-metadata";
 import { editorSummaryView } from "../editor-summary";
@@ -541,6 +542,10 @@ interface SlimJsonReport {
   // page types the classifier gave them. Absent when no audited page carries either, which is
   // every crawl stored before the page classifier existed.
   structure?: ReportStructure;
+  // Report-only — never part of the score (#10). Resolved addresses, GeoIP country and connect time of
+  // the audited host. `country.location` is `edge` when a CDN or edge platform was detected in front of the
+  // site: the country is then the edge node's, not where the origin is hosted.
+  host?: ReportHost;
   // Report-only — never part of the score. Present when a technology scan ran: the cloud one, or
   // the free local scan of the crawled pages (`source` says which, #1263).
   technologies?: {
@@ -954,6 +959,7 @@ function buildSlimReport(
           })),
         }
       : {}),
+    ...(report.host ? { host: report.host } : {}),
     ...(report.technologies && (report.technologies.items.length > 0 || report.technologies.truncated)
       ? {
           technologies: {

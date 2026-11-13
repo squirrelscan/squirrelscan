@@ -579,6 +579,20 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
     lines.push("</site-profile>");
   }
 
+  // Host — report-only context: addresses, GeoIP country (edge vs origin), connect time.
+  if (report.host) {
+    const h = report.host;
+    const attrs = [`name="${escapeXml(h.host)}"`];
+    if (h.addresses.ipv4.length > 0) attrs.push(`ipv4="${escapeXml(h.addresses.ipv4.join(" "))}"`);
+    if (h.addresses.ipv6.length > 0) attrs.push(`ipv6="${escapeXml(h.addresses.ipv6.join(" "))}"`);
+    if (h.country) {
+      attrs.push(`country="${escapeXml(h.country.code)}"`, `country-location="${h.country.location}"`);
+      if (h.country.edge) attrs.push(`edge="${escapeXml(h.country.edge.name)}"`);
+    }
+    if (h.latency) attrs.push(`connect-ms="${h.latency.ms}"`);
+    lines.push(`<host ${attrs.join(" ")}/>`);
+  }
+
   // Technologies — report-only context for the agent (does not affect the score).
   if (report.technologies && (report.technologies.items.length > 0 || report.technologies.truncated)) {
     const tech = report.technologies;

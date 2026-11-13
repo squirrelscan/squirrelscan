@@ -75,6 +75,17 @@ runtime dependency closure of `apps/cli`.
 | `xmlbuilder@11.0.1` | MIT | [source](https://github.com/oozcitak/xmlbuilder-js) |
 | `zod@4.6.7` | MIT | [source](https://github.com/colinhacks/zod) |
 
+## Bundled Data
+
+| Data | License | Source |
+| --- | --- | --- |
+| DB-IP IP to Country Lite, snapshot 2026-11 (source sha256 `e5c8459d638a272ece7f4d7cfa49dce18d91b4f403f6940ba9249bf0db3781fd`) | CC BY 4.0 | [db-ip.com](https://db-ip.com/db/download/ip-to-country-lite) |
+
+IP Geolocation by [DB-IP](https://db-ip.com). The database is licensed under the Creative Commons
+Attribution 4.0 International License (https://creativecommons.org/licenses/by/4.0/). It is compiled
+into `packages/utils/geoip-db/country.bin.gz` by `packages/utils/scripts/build-geoip-db.ts`; the data is
+modified from the original CSV only by merging adjacent ranges of the same country.
+
 ## License And Notice Texts
 
 ### LICENSE (036546fdfb34)

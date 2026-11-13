@@ -47,6 +47,7 @@ import {
   structureNumber,
   structureTotalsLine,
 } from "../structure";
+import { hostRows } from "../host";
 import { groupTechnologies, isLocalOnlyTech, TECH_LOCAL_MARK, techChangeSummary, techIconUrl } from "../technologies";
 import { SITE_PROFILE_NOTE, siteProfileFlags, siteProfileRows } from "../site-metadata";
 import { EDITOR_SUMMARY_NOTE, editorSummaryView, priorityEffortLabel } from "../editor-summary";
@@ -494,6 +495,14 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
     }
     const flags = siteProfileFlags(report.siteMetadata);
     if (flags) lines.push(`| Flags | ${escapeMarkdownCell(flags)} |`);
+    lines.push("");
+  }
+
+  // Host — report-only: addresses, GeoIP country (labelled edge behind a CDN), connect time.
+  if (report.host) {
+    lines.push("## Host");
+    lines.push("");
+    for (const row of hostRows(report.host)) lines.push(`- **${row.label}:** ${escapeMarkdownText(row.value)}`);
     lines.push("");
   }
 

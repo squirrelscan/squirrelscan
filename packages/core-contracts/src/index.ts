@@ -956,6 +956,11 @@ export interface AuditReport {
    */
   technologies?: ReportTechnologies;
   /**
+   * Resolved addresses, GeoIP country and connect latency of the audited host (#10). Report-only: never
+   * contributes to `healthScore`. Absent when the host did not resolve.
+   */
+  host?: ReportHost;
+  /**
    * Page structure (#2307): where the audited pages' links sit (header, footer, navigation,
    * sidebar, content, ...) and what type the page classifier says each page is. Like
    * `technologies`, REPORT-ONLY: it NEVER contributes to `healthScore`. Absent when no audited
@@ -1780,6 +1785,35 @@ export interface ReportTechnologies {
     /** Scripts read only in part or not at all. */
     scripts: number;
   };
+}
+
+/** Where the audited host's resolved address sits, and how its address was measured (#10). Report-only. */
+export interface ReportHost {
+  /** The audited hostname. */
+  host: string;
+  /** Resolved addresses (A and AAAA answers). Either list may be empty. */
+  addresses: { ipv4: string[]; ipv6: string[] };
+  /**
+   * GeoIP country of the first resolved address. Absent when the bundled database has no country for it:
+   * a missing country is never filled by a guess. `location` is `edge` when technology detection found a
+   * CDN or edge platform in front of the site (Cloudflare, CloudFront, Vercel, Netlify, Fastly, Akamai):
+   * the address then belongs to that edge/anycast network, so the country is where the edge node is, not
+   * where the site is hosted.
+   */
+  country?: {
+    /** ISO 3166-1 alpha-2 code. */
+    code: string;
+    name: string;
+    location: "origin" | "edge";
+    /** The detected edge provider when `location` is `edge`. */
+    edge?: { id: string; name: string };
+    /** The address the country was looked up for. */
+    address: string;
+  };
+  /** Time to open a TCP connection to the host, in ms. Not an ICMP ping and not a page load time. */
+  latency?: { ms: number; measure: "tcp-connect"; address: string; port: number };
+  /** Month of the bundled DB-IP Lite snapshot the country came from (CC BY 4.0, DB-IP.com). */
+  geoipSnapshot?: string;
 }
 
 /** One link section's footprint across the audited pages. */
