@@ -67,7 +67,7 @@ import { isLocalOnlyTech, techIconUrl } from "../technologies";
 import { domainAgeYears, siteProfileRows } from "../site-metadata";
 import { editorSummaryView } from "../editor-summary";
 import type { IgnoreSummary } from "@squirrelscan/core-contracts/ignore";
-import { canonicalVariantCount, followedStartRedirect, scanScopePageTypes, scanScopeTargeted, scanScopeUnfetched, seedRedirect } from "../coverage";
+import { robotsScope, canonicalVariantCount, followedStartRedirect, scanScopePageTypes, scanScopeTargeted, scanScopeUnfetched, seedRedirect } from "../coverage";
 import { safeIgnored } from "../ignored";
 import { privateTargetLine, privateTargetSkippedRules } from "../private-target";
 import { notCheckedLine, notCheckedRules } from "../not-checked";
@@ -260,6 +260,10 @@ interface SlimJsonReport {
      * when nothing was left queued.
      */
     unfetched?: number;
+    /** Whether robots.txt was honoured (#1782, schema 1.17). Absent on reports from before it. */
+    respectRobots?: boolean;
+    /** Pages robots.txt kept out of the audit (#1782, schema 1.17). Present with `respectRobots`. */
+    robotsBlockedPages?: number;
     canonicalVariants?: number;
     canonicalVariantPages?: Array<{ page: string; canonical: string }>;
     /** The audit level and the settings it resolved to. Absent before audit levels. */
@@ -657,6 +661,8 @@ function buildSlimReport(
         ? { stopReason: report.scanScope.stopReason }
         : {}),
       ...(unfetched > 0 ? { unfetched } : {}),
+      // #1782: whether robots.txt was honoured and how many pages it kept out of the audit.
+      ...(robotsScope(report) ?? {}),
       // #1744: pages known and pages audited per URL-based page type.
       ...(scanScopePageTypes(report).length > 0 ? { pageTypes: scanScopePageTypes(report) } : {}),
       // #1777: a targeted run says which URLs it was given and which it did not audit.

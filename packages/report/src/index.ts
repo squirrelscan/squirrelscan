@@ -260,6 +260,8 @@ export {
   carriedTag,
   timeAgo,
   scanScopeLine,
+  robotsScope,
+  robotsHonouredNote,
   targetedRunNote,
   scanScopeTargeted,
   scanScopeUnfetched,

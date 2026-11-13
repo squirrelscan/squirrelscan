@@ -680,6 +680,10 @@ export interface AuditReport {
     /** Requested page cap, when it exceeded MAX_PAGES_CAP and was clamped (#1909). */
     requestedMaxPages?: number;
     pagesCrawled: number;
+    /** Whether robots.txt was honoured (#1782). */
+    respectRobots?: boolean;
+    /** Frontier URLs skipped as robots_disallowed (#1782). */
+    robotsBlockedPages?: number;
     /** Query-string variants counted with their canonical page (#858). */
     canonicalVariants?: number;
     capped: boolean;

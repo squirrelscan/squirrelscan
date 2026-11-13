@@ -62,6 +62,8 @@ import {
   followedStartRedirect,
   publishedReportNote,
   scanScopeUnfetched,
+  robotsScope,
+  robotsHonouredNote,
   scanScopePageTypes,
   seedRedirect,
   seedRedirectFollowUp,
@@ -458,9 +460,16 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
     // Query-string variants counted with their canonical page (#858).
     const variantCount = Number(report.canonicalVariants ?? s.canonicalVariants ?? 0);
     const variants = Number.isSafeInteger(variantCount) && variantCount > 0 ? ` canonical-variants="${variantCount}"` : "";
+    // Whether robots.txt was honoured and how many pages it kept out (#1782).
+    const robots = robotsScope(report);
+    const robotsAttrs = robots
+      ? ` respect-robots="${robots.respectRobots}" robots-blocked-pages="${robots.robotsBlockedPages}"`
+      : "";
     lines.push(
-      `<scan-scope origin="${s.origin}" crawled="${s.pagesCrawled}"${cap}${requested} capped="${s.capped}"${stop}${unfetched}${variants}/>`,
+      `<scan-scope origin="${s.origin}" crawled="${s.pagesCrawled}"${cap}${requested} capped="${s.capped}"${stop}${unfetched}${variants}${robotsAttrs}/>`,
     );
+    const robotsNote = robotsHonouredNote(report);
+    if (robotsNote) lines.push(`<robots-note>${escapeXml(robotsNote)}</robots-note>`);
     // Pages known against pages audited, per URL-based page type (#1744).
     for (const t of scanScopePageTypes(report)) {
       lines.push(`<page-type name="${escapeXml(t.type)}" discovered="${t.discovered}" audited="${t.audited}"/>`);
