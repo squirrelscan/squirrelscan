@@ -209,13 +209,18 @@ describe("special-use hosts are refused as non-public (the policy classifier)", 
     ).toEqual([]);
   });
   test("public addresses beside them are kept", () => {
-    const r = ok("http://198.17.255.255/\nhttp://203.0.114.1/\nhttp://[2606:4700::1111]/\n");
+    const r = ok(
+      "http://198.17.255.255/\nhttp://203.0.114.1/\nhttp://[2606:4700::1111]/\n"
+    );
     expect(r.urls).toHaveLength(3);
   });
   test("NAT64 and 6to4 are judged by prefix, as every policy caller does (#1572), whatever IPv4 they embed", () => {
     const r = ok("http://[64:ff9b::808:808]/\nhttp://[2002:808:808::]/\n");
     expect(r.urls).toEqual([]);
-    expect(r.rejected.map((x) => x.reason)).toEqual(["non-public-host", "non-public-host"]);
+    expect(r.rejected.map((x) => x.reason)).toEqual([
+      "non-public-host",
+      "non-public-host",
+    ]);
   });
 });
 
