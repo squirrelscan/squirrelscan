@@ -39,7 +39,13 @@ function h1Exposure(ctx: RuleContext): H1Exposure | null {
   if (elements.length !== h1.count || h1.texts.length !== h1.count) return null;
 
   const visibility = createStaticVisibility({ ariaHidden: false });
-  const result: H1Exposure = { raw: h1.count, exposed: 0, hidden: 0, unconfirmed: 0, visibleTexts: [] };
+  const result: H1Exposure = {
+    raw: h1.count,
+    exposed: 0,
+    hidden: 0,
+    unconfirmed: 0,
+    visibleTexts: [],
+  };
   for (const [i, el] of elements.entries()) {
     const seen = visibility.visibility(el);
     if (seen.state === "hidden") {
