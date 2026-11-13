@@ -6,7 +6,7 @@ import type { WebsiteScheduleSummary } from "@squirrelscan/cloud-client";
 import type { PageMap } from "@squirrelscan/core-contracts/page-map";
 
 import { computeLockedRules } from "@squirrelscan/audit-engine";
-import { readPageMapRows } from "@squirrelscan/audit-engine/page-map-rows";
+import { readPublishedPageMap } from "@squirrelscan/audit-engine/page-map-rows";
 import {
   capReportForPublish,
   PublishedReportTooLargeError,
@@ -17,7 +17,6 @@ import {
   PUBLISHED_REPORT_MAX_BYTES,
   REPORT_LIMITS,
 } from "@squirrelscan/core-contracts/limits";
-import { buildPageMap } from "@squirrelscan/report/page-map-publish";
 import { Effect } from "effect";
 import { existsSync } from "node:fs";
 
@@ -674,10 +673,9 @@ async function loadPublishPageMap(
   const storage = new SQLiteStorage(source.dbPath, getGlobalContentStore());
   try {
     await Effect.runPromise(storage.init());
-    const rows = await Effect.runPromise(
-      readPageMapRows(storage, { id: source.crawlId })
+    return await Effect.runPromise(
+      readPublishedPageMap(storage, { id: source.crawlId }, report.baseUrl)
     );
-    return buildPageMap(rows, { site: report.baseUrl });
   } catch (error) {
     onWarn?.(
       `Published without the page map (${error instanceof Error ? error.message : String(error)}).`

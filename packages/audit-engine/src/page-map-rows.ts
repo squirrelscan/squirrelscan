@@ -6,6 +6,7 @@
 // hosted `pageMap` carry the same rows.
 
 import type { PageFeatureRow } from "@squirrelscan/core-contracts";
+import type { PageMap } from "@squirrelscan/core-contracts/page-map";
 import type { SQLiteStorage } from "@squirrelscan/crawler";
 
 import {
@@ -13,6 +14,7 @@ import {
   PAGE_MAP_RULE_IDS,
   type PageMapRow,
 } from "@squirrelscan/report/page-map";
+import { buildPageMap } from "@squirrelscan/report/page-map-publish";
 import { normalizeUrl } from "@squirrelscan/utils";
 import { Effect } from "effect";
 
@@ -242,3 +244,18 @@ export function readPageMapRows(
   });
 }
 
+
+/**
+ * The published `pageMap` of audit `crawl`: its rows (failed pages included) bounded to
+ * {@link PAGE_MAP_PUBLISH_LIMITS}. Null for an audit with no pages. The one call the CLI publish
+ * and the cloud runtime make, so both bodies carry the same section.
+ */
+export function readPublishedPageMap(
+  storage: SQLiteStorage,
+  crawl: { id: string },
+  site: string
+): Effect.Effect<PageMap | null, unknown> {
+  return readPageMapRows(storage, crawl).pipe(
+    Effect.map((rows) => buildPageMap(rows, { site }))
+  );
+}
