@@ -79,12 +79,17 @@ runtime dependency closure of `apps/cli`.
 
 | Data | License | Source |
 | --- | --- | --- |
+| DB-IP IP to ASN Lite, snapshot 2026-11 (source sha256 `0ea3ba480ed39127fb2ff6bcbea44db14bc978f387efedc28f0411c054c4b1e4`), reduced to the ASNs of edge providers | CC BY 4.0 | [db-ip.com](https://db-ip.com/db/download/ip-to-asn-lite) |
+| Cloudflare, Amazon CloudFront, Fastly, Google Cloud and Azure Front Door published IP ranges, fetched 2026-11-13 | Provider-published lists | cloudflare.com/ips, ip-ranges.amazonaws.com, api.fastly.com/public-ip-list, gstatic.com/ipranges/cloud.json, Microsoft Service Tags |
 | DB-IP IP to Country Lite, snapshot 2026-11 (source sha256 `e5c8459d638a272ece7f4d7cfa49dce18d91b4f403f6940ba9249bf0db3781fd`) | CC BY 4.0 | [db-ip.com](https://db-ip.com/db/download/ip-to-country-lite) |
 
 IP Geolocation by [DB-IP](https://db-ip.com). The database is licensed under the Creative Commons
 Attribution 4.0 International License (https://creativecommons.org/licenses/by/4.0/). It is compiled
 into `packages/utils/geoip-db/country.bin.gz` by `packages/utils/scripts/build-geoip-db.ts`; the data is
-modified from the original CSV only by merging adjacent ranges of the same country.
+modified from the original CSV only by merging adjacent ranges of the same country. The IP to ASN Lite
+data is under the same licence and is reduced to the rows of a fixed list of edge-provider ASNs
+(`scripts/refresh-edge-data.ts`). The provider range lists are the providers' own published files, reduced
+to the CloudFront service, the AzureFrontDoor.Frontend tag and the other lists as published.
 
 ## License And Notice Texts
 

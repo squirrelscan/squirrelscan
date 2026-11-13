@@ -8,5 +8,59 @@
   "sourceSha256": "e5c8459d638a272ece7f4d7cfa49dce18d91b4f403f6940ba9249bf0db3781fd",
   "v4Ranges": 362998,
   "v6Ranges": 369798,
-  "compiledBytes": 2296108
+  "compiledBytes": 2296108,
+  "edge": {
+    "fetchedAt": "2026-11-13",
+    "asn": {
+      "source": "DB-IP.com IP to ASN Lite",
+      "sourceUrl": "https://db-ip.com/db/download/ip-to-asn-lite",
+      "license": "CC-BY-4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+      "snapshot": "2026-11",
+      "sourceFile": "dbip-asn-lite-2026-11.csv.gz",
+      "sourceSha256": "0ea3ba480ed39127fb2ff6bcbea44db14bc978f387efedc28f0411c054c4b1e4",
+      "keptAsns": 32
+    },
+    "rangeSources": [
+      {
+        "url": "https://www.cloudflare.com/ips-v4",
+        "sha256": "f02c6d83bc01ab0ae8577160e036d700c7455359bce054df884e5d7d9e4e9e7b",
+        "bytes": 230,
+        "fetchedAt": "2026-11-13"
+      },
+      {
+        "url": "https://www.cloudflare.com/ips-v6",
+        "sha256": "9e9d39e3e83bad00c4decafd53c63fa62029f3d95db68de937d2be28234ca0a9",
+        "bytes": 104,
+        "fetchedAt": "2026-11-13"
+      },
+      {
+        "url": "https://ip-ranges.amazonaws.com/ip-ranges.json",
+        "sha256": "ac1f32940c6e559e06b556b66a87dd5e0376b4f903e66daa324d1262481a7242",
+        "bytes": 2758578,
+        "note": "createDate 2026-11-12-22-57-05",
+        "fetchedAt": "2026-11-13"
+      },
+      {
+        "url": "https://api.fastly.com/public-ip-list",
+        "sha256": "b5e8800ff76c2a8fdcedb7d9b27f23b6cb3158034b157540e594651d42b60bc6",
+        "bytes": 451,
+        "fetchedAt": "2026-11-13"
+      },
+      {
+        "url": "https://www.gstatic.com/ipranges/cloud.json",
+        "sha256": "81e9db0944883fecfd36e3d6672e4aa6a6507ac55ed4f540a2674a0941113022",
+        "bytes": 117975,
+        "note": "creationTime 2026-11-12T18:05:59.643473",
+        "fetchedAt": "2026-11-13"
+      },
+      {
+        "url": "https://download.microsoft.com/download/7/1/d/71d86715-5596-4529-9b13-da13a5de5b63/ServiceTags_Public_20261109.json",
+        "sha256": "e3ac69c59027b0a42d86b7e9ccb2c07dd3eecb95ff94872b451b4bf5456d04cd",
+        "bytes": 4655501,
+        "note": "changeNumber 426",
+        "fetchedAt": "2026-11-13"
+      }
+    ]
+  }
 }

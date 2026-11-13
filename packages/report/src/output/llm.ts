@@ -581,6 +581,9 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
       attrs.push(`country="${escapeXml(h.country.code)}"`, `country-location="${h.country.location}"`);
       if (h.country.edge) attrs.push(`edge="${escapeXml(h.country.edge.name)}"`);
     }
+    if (h.edge) {
+      attrs.push(`edge-provider="${escapeXml(h.edge.name)}"`, `edge-source="${h.edge.source}"`, `edge-hosted="${h.edge.edgeHosted}"`, `origin="${escapeXml(h.edge.origin.status === "identified" ? h.edge.origin.name : h.edge.origin.status)}"`);
+    }
     if (h.latency) attrs.push(`connect-ms="${h.latency.ms}"`);
     lines.push(`<host ${attrs.join(" ")}/>`);
   }

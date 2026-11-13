@@ -229,12 +229,17 @@ lines.push(
   "",
   "| Data | License | Source |",
   "| --- | --- | --- |",
+  `| DB-IP IP to ASN Lite, snapshot ${geoipSnapshot.edge.asn.snapshot} (source sha256 \`${geoipSnapshot.edge.asn.sourceSha256}\`), reduced to the ASNs of edge providers | CC BY 4.0 | [db-ip.com](https://db-ip.com/db/download/ip-to-asn-lite) |`,
+  `| Cloudflare, Amazon CloudFront, Fastly, Google Cloud and Azure Front Door published IP ranges, fetched ${geoipSnapshot.edge.fetchedAt} | Provider-published lists | cloudflare.com/ips, ip-ranges.amazonaws.com, api.fastly.com/public-ip-list, gstatic.com/ipranges/cloud.json, Microsoft Service Tags |`,
   `| DB-IP IP to Country Lite, snapshot ${geoipSnapshot.snapshot} (source sha256 \`${geoipSnapshot.sourceSha256}\`) | CC BY 4.0 | [db-ip.com](https://db-ip.com/db/download/ip-to-country-lite) |`,
   "",
   "IP Geolocation by [DB-IP](https://db-ip.com). The database is licensed under the Creative Commons",
   "Attribution 4.0 International License (https://creativecommons.org/licenses/by/4.0/). It is compiled",
   "into `packages/utils/geoip-db/country.bin.gz` by `packages/utils/scripts/build-geoip-db.ts`; the data is",
-  "modified from the original CSV only by merging adjacent ranges of the same country.",
+  "modified from the original CSV only by merging adjacent ranges of the same country. The IP to ASN Lite",
+  "data is under the same licence and is reduced to the rows of a fixed list of edge-provider ASNs",
+  "(`scripts/refresh-edge-data.ts`). The provider range lists are the providers' own published files, reduced",
+  "to the CloudFront service, the AzureFrontDoor.Frontend tag and the other lists as published.",
 );
 
 lines.push("", "## License And Notice Texts", "");
