@@ -2,8 +2,8 @@
 //
 // Only what is safe to hand to a child `squirrel audit` gets through: http and https (a bare `example.com` or
 // `localhost:3000` is read as https), no userinfo (a credential in a listed URL would end up in a results file and in
-// process arguments), no control character, no host that is not public unless the caller allows private hosts (the strict
-// classifier: private, loopback, link-local, documentation, benchmarking, multicast and reserved ranges, and NAT64, 6to4,
+// process arguments), no control character, no host that is not public unless the caller allows private hosts (the policy
+// classifier, `isNonPublicHostnameForPolicy`: private, loopback, link-local, documentation, benchmarking, multicast and reserved ranges, and NAT64, 6to4,
 // Teredo and site-local IPv6), and a length and a count that bound the work. A line that is refused is returned with its
 // line number and a reason, never dropped silently, so the batch can record it; the text echoed back has userinfo, query
 // values and fragment masked, so a credential in a refused line cannot reach a results file either. What is NOT masked: the
@@ -16,7 +16,7 @@
 // plus one byte, before it decodes. Slice 2 note: a manifest that ends in a partial line (a crash mid-write) must have that
 // line terminated before the next record is appended, or the new record joins it.
 
-import { isNonPublicHostnameStrict } from "@squirrelscan/utils/non-public-host";
+import { isNonPublicHostnameForPolicy } from "@squirrelscan/utils/non-public-host";
 import { createHash } from "node:crypto";
 
 import {
@@ -176,7 +176,7 @@ function readLine(
   if (parsed.hostname === "") return { reason: "invalid" };
   if (
     options.allowPrivateHosts !== true &&
-    isNonPublicHostnameStrict(parsed.hostname.replace(/^\[|\]$/g, ""))
+    isNonPublicHostnameForPolicy(parsed.hostname.replace(/^\[|\]$/g, ""))
   ) {
     return { reason: "non-public-host" };
   }

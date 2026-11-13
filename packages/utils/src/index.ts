@@ -29,7 +29,6 @@ export {
 export {
   isNonPublicHostname,
   isNonPublicHostnameForPolicy,
-  isNonPublicHostnameStrict,
   isNonPublicUrl,
   isPrivateNetworkUrl,
   nonPublicHostLabel,
