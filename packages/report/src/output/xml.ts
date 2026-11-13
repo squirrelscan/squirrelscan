@@ -243,6 +243,9 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
       attrs.push(`country="${escapeXml(h.country.code)}"`, `countryLocation="${h.country.location}"`);
       if (h.country.edge) attrs.push(`edge="${escapeXml(h.country.edge.name)}"`);
     }
+    if (h.edge) {
+      attrs.push(`edgeProvider="${escapeXml(h.edge.name)}"`, `edgeSource="${h.edge.source}"`, `edgeHosted="${h.edge.edgeHosted}"`, `origin="${escapeXml(h.edge.origin.status === "identified" ? h.edge.origin.name : h.edge.origin.status)}"`);
+    }
     if (h.latency) attrs.push(`connectMs="${h.latency.ms}"`);
     lines.push(`${indent(1)}<host ${attrs.join(" ")}/>`);
   }

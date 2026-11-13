@@ -101,7 +101,7 @@ export type {
   TechScanDiff,
 } from "./technologies";
 
-export { buildReportHost, detectedEdge, EDGE_TECHNOLOGY_IDS } from "./host-info";
+export { buildReportHost, detectEdge, detectedEdge, EDGE_TECHNOLOGY_IDS } from "./host-info";
 export type { HostProbe } from "./host-info";
 
 // Smart audits — finding merge / supplant (#110/#195)
