@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+## v0.0.180 (2026-11-13)
+
+`squirrel ci` gates a deploy on the findings it adds, `--target-url` audits exactly the URLs you name, an audit that ran out of credits says so in every report, and `[[ignore]]` reasons now show up in all of them. The bundled agent skills move to squirrelscan 2.0 and audit-website 3.0.
+
 ### Added
 
 - **New rule `content/voice-consistency`.** Flags pages whose reading level is far from the rest of the site: the page written by a different hand, text pasted in from elsewhere, or bulk-generated copy. The norm is the median Flesch Reading Ease score of the site's own pages; a page at least 25 points away (harder or easier) is reported with its score and the site norm. Legal, privacy and terms pages are never judged (counted in `excludedLegalPages`), and the rule skips a crawl under 10 pages, under 10 scorable pages, or with no clear norm. It is a normal local rule: no model, no account, no surcharge. The score is stored per page (`page_features.reading_level`, schema version 41) so the streaming and legacy paths give the same answer. (squirrelscan/repo#1384)
