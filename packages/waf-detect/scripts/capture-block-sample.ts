@@ -50,16 +50,21 @@ const IP_HEADERS = new Set([
   "cf-connecting-ip",
   "forwarded",
   "x-cluster-client-ip",
+  "x-nf-client-connection-ip",
+  "fastly-client-ip",
 ]);
 
+// Per-request or per-node ids (x-served-by names the cache node that answered).
 // The NAME of these stays: its presence is the evidence. Only the value is per-request.
 const REQUEST_ID_HEADERS = new Set([
   "x-nf-request-id",
   "x-request-id",
   "x-sigsci-requestid",
   "x-amzn-requestid",
+  "x-amz-cf-id",
   "cf-ray",
   "x-fastly-request-id",
+  "x-served-by",
   "x-timer",
 ]);
 
@@ -67,6 +72,9 @@ const UUID = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/g
 const HEX_RUN_20 = /\b[0-9a-f]{20,}\b/gi;
 const HEX_RUN_16 = /\b[0-9a-f]{16,}\b/gi;
 const IPV4 = /\b(?:\d{1,3}\.){3}\d{1,3}\b/g;
+// Any *.netlify.app origin, not only the captured host: a block page can name its
+// own origin. The whole dotted name is taken so "a.netlify.app.evil.test" leaves nothing.
+const NETLIFY_ORIGIN = /(?<![\w-])(?:[a-z0-9-]+\.)+netlify\.app(?:\.[a-z0-9-]+)*(?![\w-])/gi;
 // Needs "::" or a full eight groups, and no word or colon neighbour, so times
 // (12:30:45) and CSS (a::before) are left alone.
 const IPV6 =
@@ -136,6 +144,7 @@ function sub(text: string, re: RegExp, repl: string, onHit: () => void): string 
 function scrubCommon(text: string, ctx: Ctx): string {
   let out = text;
   if (ctx.hostRe) out = sub(out, ctx.hostRe, "example.com", () => ctx.counts.hosts++);
+  out = sub(out, NETLIFY_ORIGIN, "example.com", () => ctx.counts.hosts++);
   out = sub(out, UUID, "REDACTED-ID", () => ctx.counts.requestIds++);
   out = sub(out, HEX_RUN_20, "REDACTED-ID", () => ctx.counts.requestIds++);
   out = sub(out, IPV4, "REDACTED-IP", () => ctx.counts.ips++);
@@ -171,6 +180,30 @@ function makeCtx(host: string): Ctx {
   return { hostRe, counts: emptyRedactions() };
 }
 
+/**
+ * A redirect can name any host, not only the captured one, so the host of an absolute
+ * Location is replaced whatever it is (userinfo too). A relative Location has no host.
+ */
+function scrubLocation(value: string, ctx: Ctx): string {
+  const protocolRelative = /^[\\/]{2}/.test(value);
+  if (!protocolRelative && !/^[a-z][a-z0-9+.-]*:/i.test(value)) return value;
+  let url: URL;
+  try {
+    url = new URL(protocolRelative ? `https:${value}` : value);
+  } catch {
+    ctx.counts.hosts++;
+    return "REDACTED-HOST";
+  }
+  if (url.hostname === "") return value;
+  if (url.hostname !== "example.com" || url.username !== "" || url.password !== "") {
+    ctx.counts.hosts++;
+  }
+  url.hostname = "example.com";
+  url.username = "";
+  url.password = "";
+  return url.toString();
+}
+
 export function sanitiseHeaders(headers: Headers, ctx: Ctx): Record<string, string> {
   const out: Record<string, string> = {};
   const setCookies = headers.getSetCookie();
@@ -189,7 +222,7 @@ export function sanitiseHeaders(headers: Headers, ctx: Ctx): Record<string, stri
       ctx.counts.requestIds++;
       continue;
     }
-    let v = value;
+    let v = name === "location" ? scrubLocation(value, ctx) : value;
     if (name.startsWith("x-sigsci-")) {
       // Provider evidence: keep the value, hide only the id-shaped part.
       v = sub(v, UUID, "REDACTED-ID", () => ctx.counts.requestIds++);
