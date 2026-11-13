@@ -27,6 +27,11 @@ import {
   type RuleTally,
 } from "@squirrelscan/audit-engine";
 import { buildSupersededIndex } from "@squirrelscan/core-contracts/resolution";
+import {
+  summarizeSeedVerification,
+  type SeedVerification,
+  type SeedVerificationFrontier,
+} from "@squirrelscan/core-contracts/seed-verification";
 import { loadAllRules, type RuleRunResult } from "@squirrelscan/rules";
 import { isNonPublicUrl } from "@squirrelscan/utils/non-public-host";
 import { Effect } from "effect";
@@ -97,6 +102,8 @@ export interface SmartAuditResult {
      * copied straight into `report.coverage`.
      */
     unrenderedFindings?: number;
+    /** What became of the known pages with open findings (#1759). Only when the run was given its seeds. */
+    seedVerification?: SeedVerification;
   };
   /**
    * carriedKey → lastSeenAt (epoch ms) for tagging report checks as carried.
@@ -125,7 +132,27 @@ export interface RunSmartAuditsInput {
   /** ruleId -> folded tally; read for `meta` only (the bounded rule index). */
   ruleMeta: ReadonlyMap<string, RuleTally>;
   /** All page records for this crawl (status used to detect 404/410). */
-  pages: Array<{ normalizedUrl: string; status: number; redirect?: true }>;
+  pages: Array<{
+    normalizedUrl: string;
+    status: number;
+    redirect?: true;
+    /** Where a redirect row leads; read for `coverage.seedVerification` only. */
+    finalUrl?: string;
+  }>;
+  /**
+   * (#1759) The run's carried seeds and the frontier it left. Given, the coverage says how many known
+   * pages with open findings were re-verified (live, gone, redirected) and how many were left carried
+   * (skipped by the page budget, no longer linked). It changes nothing the merge resolves or carries.
+   * Absent: no extra read and a byte-identical report.
+   *
+   * No caller in this CLI passes it: a local audit does not seed carried pages (`carriedSeedUrls`), and
+   * reading the whole frontier for every audit would add a heap term. The intended caller is the hosted
+   * run that seeds pages (squirrelscan/repo#4014), which has the seeds and the frontier in hand.
+   */
+  seedVerification?: {
+    seeded: readonly string[];
+    frontier: readonly SeedVerificationFrontier[];
+  };
 }
 
 /**
@@ -144,6 +171,7 @@ export function runSmartAudits(
     scoredPageUrls,
     ruleMeta,
     pages,
+    seedVerification,
   } = input;
 
   return Effect.gen(function* () {
@@ -172,6 +200,15 @@ export function runSmartAudits(
     for (const [ruleId, t] of ruleMeta) {
       severityByRule.set(ruleId, t.meta.severity);
     }
+
+    // Read before the merge: it turns the open priors into resolved or stale rows.
+    const carriedPagesIn = seedVerification
+      ? new Set(
+          (yield* storage.getFindings(siteKey, ["open"])).map(
+            (f) => f.normalizedUrl
+          )
+        )
+      : undefined;
 
     const merged = yield* mergeFindings({
       store: storage,
@@ -288,6 +325,21 @@ export function runSmartAudits(
       ruleMetaIndex,
     });
 
+    const seedSummary =
+      seedVerification && carriedPagesIn
+        ? summarizeSeedVerification({
+            carriedPages: carriedPagesIn,
+            seeded: seedVerification.seeded,
+            pages: pages.map((p) => ({
+              normalizedUrl: p.normalizedUrl,
+              status: p.status,
+              ...(p.finalUrl ? { finalUrl: p.finalUrl } : {}),
+              ...(p.redirect ? { redirect: true } : {}),
+            })),
+            frontier: seedVerification.frontier,
+          })
+        : null;
+
     return {
       carriedRuleResults,
       removedUrls,
@@ -301,6 +353,7 @@ export function runSmartAudits(
         ).length,
         carriedFindings: carriedFindings.length - unrenderedCount,
         ...(unrenderedCount > 0 ? { unrenderedFindings: unrenderedCount } : {}),
+        ...(seedSummary ? { seedVerification: seedSummary } : {}),
       },
       carriedLastSeen,
     };

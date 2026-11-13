@@ -662,6 +662,8 @@ export interface AuditReport {
     unrenderedFindings?: number;
     /** Re-crawled pages that still carry earlier findings (#1031). */
     pagesWithStaleCarry?: number;
+    /** What became of the known pages with open findings (#1759). */
+    seedVerification?: import("@squirrelscan/core-contracts/seed-verification").SeedVerification;
   };
   /**
    * Scan scope disclosure (#1180): where the audit ran and how much of the site

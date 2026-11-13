@@ -7,6 +7,7 @@ export * from "./ignore";
 export * from "./rule-outcome";
 // Start URL redirects (#1281): chain, outcome and exit-code contract.
 export * from "./seed-redirect";
+export * from "./seed-verification";
 
 // Cache-stats aggregation helper (#108).
 export * from "./cache-stats";
@@ -70,6 +71,7 @@ export type {
 // Import storage types needed locally by interfaces in this file
 import type { IgnoreSummary } from "./ignore";
 import type { SeedRedirectHop, SeedRedirectRecord } from "./seed-redirect";
+import type { SeedVerification } from "./seed-verification";
 import type {
   AgentAccessProbe,
   CacheHitReason,
@@ -1023,6 +1025,12 @@ export interface AuditReport {
      * when the producer of the merge asked for it; omitted when zero.
      */
     carriedPagesOutsideCrawl?: number;
+    /**
+     * (#1759) What became of the known pages with open findings: re-verified (live, gone,
+     * redirected) and left carried (skipped by the page budget, no longer linked). Only when
+     * the run could say.
+     */
+    seedVerification?: SeedVerification;
   };
   /**
    * Scan scope disclosure (#1180): where the audit ran and how much of the site
