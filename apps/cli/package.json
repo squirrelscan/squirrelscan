@@ -29,6 +29,7 @@
     "@squirrelscan/parser": "workspace:*",
     "@squirrelscan/report": "workspace:*",
     "@squirrelscan/rules": "workspace:*",
+    "@squirrelscan/tls-probe": "workspace:*",
     "@squirrelscan/utils": "workspace:*",
     "citty": "^0.1.6",
     "effect": "^3.21.3",

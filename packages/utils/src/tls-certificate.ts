@@ -3,8 +3,8 @@
 // The facts and what they mean live here, so the `security/tls-certificate`
 // rule and the crawl's TLS failure message share one definition. The handshake
 // itself does NOT: this package has no socket code. A runtime that can open a
-// TLS socket injects a `TlsProbeFn` (the CLI does, from packages/fetchers/src/
-// tls-probe.ts, behind the egress guard); everywhere else there is no probe and
+// TLS socket injects a `TlsProbeFn` (the CLI does, from packages/tls-probe/
+// src/index.ts, behind the egress guard); everywhere else there is no probe and
 // the rule says "not checked".
 //
 // Runtime limits of the CLI's probe, checked against Bun 1.4:
