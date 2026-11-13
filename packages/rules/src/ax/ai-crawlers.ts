@@ -213,6 +213,38 @@ export const aiCrawlersRule: Rule = {
     const blocked = allBlocked.filter((v) => v.explicitlyListed);
     const wildcardBlocked = allBlocked.filter((v) => !v.explicitlyListed);
 
+    // A bare `User-agent: *` `Disallow: /` (no AI or search-engine bot named, no Allow rule) is one decision
+    // that crawl/robots-txt already reports and fails on. It gets a single informational check here, so the
+    // site-wide block is not echoed as a summary, a Googlebot warning and a grouped row (#1780). A named
+    // group that decides differently (an AI crawler or a search engine) keeps the full set of checks.
+    const auditedUrl = ctx.site?.entryUrls?.[0] ?? ctx.site?.baseUrl ?? ctx.page.url;
+    const search = evaluateSearchEngineBots(robotsTxt, auditedUrl);
+    const wildcardHasAllow = robotsTxt.rules.some(
+      (g) => g.userAgent === "*" && g.rules.some((r) => r.type === "allow"),
+    );
+    const wildcardOnly =
+      wildcardBlocked.length === verdicts.length &&
+      !wildcardHasAllow &&
+      search.every((v) => !v.explicitlyListed && v.verdict === "root-blocked");
+    if (wildcardOnly) {
+      checks.push({
+        name: "ai-crawlers-wildcard-blocked",
+        status: "info",
+        message: `robots.txt blocks every crawler, AI crawlers and search engines included, through the User-agent: * rule (Disallow: /); no crawler is named in the file. This is the whole-site block already reported by crawl/robots-txt. Name a crawler in its own group with Allow: / to let it in.`,
+        value: `${wildcardBlocked.length} AI crawler(s) blocked by the wildcard rule`,
+        items: wildcardBlocked.map((b) => ({
+          id: b.token,
+          label: `${b.token} (${b.vendor}, ${CLASS_LABEL[b.crawlerClass]}): blocked by User-agent: *`,
+        })),
+        details: {
+          wildcardBlocked: wildcardBlocked.map((b) => b.token),
+          searchEngineBlocked: search.map((v) => v.token),
+          reportedByRule: "crawl/robots-txt",
+        },
+      });
+      return { checks };
+    }
+
     // Always-on informational summary (never penalizes).
     checks.push({
       name: "ai-crawler-access",
@@ -321,8 +353,6 @@ export const aiCrawlersRule: Rule = {
     // Search-engine bots: per-bot verdict for the audited URL. Googlebot blocked (from the root or for this
     // path) warns, since it usually means the site is deindexed, often by a staging `Disallow: /` left in; every
     // other engine stays info, as does an allowed Googlebot and an `Allow` override.
-    const auditedUrl = ctx.site?.entryUrls?.[0] ?? ctx.site?.baseUrl ?? ctx.page.url;
-    const search = evaluateSearchEngineBots(robotsTxt, auditedUrl);
     const searchBlocked = search.filter((v) => v.verdict !== "allowed");
     const googlebot = search.find((v) => v.token === "Googlebot");
     const googlebotBlocked = googlebot?.verdict === "root-blocked" || googlebot?.verdict === "path-blocked";
