@@ -32,6 +32,7 @@ How it works:
 
 ### Added
 
+- Pricing version 13 adds the `llm_rules_page` credit feature: 2 credits per page when an audit opts into LLM rules. Audits that do not opt in cost the same as before.
 - New rule `crawl/conflicting-index-signals` finds pages that say "index me" and "do not index me" at once: a page listed in a sitemap that also carries at least two signals keeping it out of the index (noindex in the robots meta tag or the `X-Robots-Tag` header, a canonical to another URL, a robots.txt block). It lists each page once, with the signals found and the related rules, and asks whether the page should be indexed. A site that is closed as a whole (80% or more of at least three pages noindexed or blocked) gets a single `site-wide-noindex` info check instead. `crawl/noindex-in-sitemap` keeps reporting and now names this rule on the pages both find (#1771).
 
 ### Changed
