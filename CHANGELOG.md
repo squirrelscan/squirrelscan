@@ -37,6 +37,7 @@ How it works:
 
 ### Changed
 
+- The TLS certificate handshake is shared by the CLI and the cloud worker (#3922). It moves from `apps/cli` to the `@squirrelscan/fetchers/tls-probe` subpath, which only the CLI and the worker import: the rules, the crawler and the audit engine still receive it as an injected `TlsProbeFn` and open no socket. A new `requireProxy` option makes a handshake that would go out directly `unavailable` instead, so a cloud worker without its egress proxy fails closed. CLI behaviour is unchanged.
 - Bundled agent skills updated: squirrelscan 2.0, audit-website 3.0 (served by both MCP servers).
 
 ## v0.0.179 (2026-11-12)
