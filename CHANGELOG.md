@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+## v0.0.181 (2026-11-13)
+
+Reports now tell you where a site actually lives: a new host section lists its IPv4 and IPv6 addresses, a connect time and the country (offline, from a bundled DB-IP Lite snapshot), and names the CDN or WAF in front of it separately from the origin. Every report also says whether robots.txt was honoured and how many pages it kept out. A site that blocks every AI crawler with one wildcard rule gets one tidy row instead of eleven, installs and updates verify the release's GitHub build attestation, and discovery probes you never approved show up as coverage gaps instead of false verdicts.
+
 ### Added
 
 - Every report says whether the audit honoured robots.txt and how many pages it kept out of the audit (#1782): the console, text, markdown, HTML and LLM reports carry one plain sentence, and the JSON report (schema 1.19) carries `meta.respectRobots` and `meta.robotsBlockedPages`. A run with `respect_robots = false` says robots.txt was not honoured and pages it disallows were audited too. Reports the audit engine assembles (`buildV1Report`, `buildV2Report`) stamp the same two fields on `scanScope` when the caller passes a `scanScope` option, so a hosted run reports them too.
@@ -27,8 +31,7 @@ How it works:
 ### Fixed
 
 - Discovery probes that were not approved, not sent or refused now appear as coded coverage gaps in notChecked, keeping previous findings open; an approved AGENTS.md probe answered with 404 is reported as absent (#1794).
-- `ax/ai-crawlers` reports one grouped row when only `User-agent: *` blocks the AI crawlers (#1780), instead of one row per crawler. The row (`ai-crawlers-wildcard-blocked`) names the wildcard rule and lists the affected crawlers, and stays info when `crawl/robots-txt` already fails on the same whole-site block. Crawlers the file blocks by name keep their own rows. When `User-agent: *` with `Disallow: /` is the only decision (no AI crawler or search engine named, no `Allow` exception), that row is the only check the rule emits, at info, pointing at `crawl/robots-txt`; a named group that decides differently (for example a `Googlebot` group allowing the site) keeps the `search-engine-access` check.
-- Sites that block AI crawlers only through `User-agent: *` now get one grouped row; those crawlers no longer count toward ai-answer-access or archive-crawler-access, so some scores move.
+- `ax/ai-crawlers` reports one grouped row when only `User-agent: *` blocks the AI crawlers (#1780), instead of one row per crawler. The row (`ai-crawlers-wildcard-blocked`) names the wildcard rule and lists the affected crawlers, and stays info when `crawl/robots-txt` already fails on the same whole-site block. Crawlers the file blocks by name keep their own rows. When `User-agent: *` with `Disallow: /` is the only decision (no AI crawler or search engine named, no `Allow` exception), that row is the only check the rule emits, at info, pointing at `crawl/robots-txt`; a named group that decides differently (for example a `Googlebot` group allowing the site) keeps the `search-engine-access` check. Those crawlers no longer count toward ai-answer-access or archive-crawler-access, so some scores move.
 - Pricing version 13 adds the `llm_rules_page` credit feature: 2 credits per page when an audit opts into LLM rules. Audits that do not opt in cost the same as before.
 
 ### Changed
