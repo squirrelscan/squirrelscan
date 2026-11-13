@@ -40,7 +40,7 @@ function run(data: AgentAccessData | null | undefined): CheckResult[] {
 describe("ax/pay-per-crawl", () => {
   test("data unavailable → not checked info, no crash", () => {
     const checks = run(undefined);
-    expect(checks[0]?.status).toBe("info");
+    expect(checks[0]?.status).toBe("skipped");
     expect(checks[0]?.value).toBe("not-checked");
     expect(checks[0]?.message).toContain("not checked");
   });

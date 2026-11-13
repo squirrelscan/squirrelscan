@@ -4,7 +4,7 @@ import type { WellKnownPath, WellKnownProbe } from "@squirrelscan/core-contracts
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
-import { answeredWellKnown, includesPath, notCheckedCheck } from "./discovery-probe-state";
+import { answeredWellKnown, includesPath, notApprovedPath, notCheckedCheck } from "./discovery-probe-state";
 
 // Probed in this order (mirrors core-contracts WELL_KNOWN_PATHS).
 const AGENTS_MD_PATHS: readonly WellKnownPath[] = [
@@ -74,8 +74,13 @@ export const agentsMdRule: Rule = {
     }
 
     // Absence is only established for paths that were actually requested.
-    const { unchecked, reason } = answeredWellKnown(wk, AGENTS_MD_PATHS);
-    if (unchecked.length > 0) {
+    // A path that was requested and answered (a 404 included) establishes the absence of AGENTS.md at that
+    // path. Variants the user left out of `discovery_probe_paths` are theirs to leave out, so an approved path
+    // that answered is a verdict on its own (#1794). A variant that was never sent (budget, probes off) or got
+    // no answer still makes the whole check "not checked".
+    const { answered, unchecked, reason } = answeredWellKnown(wk, AGENTS_MD_PATHS);
+    const leftOut = unchecked.filter((path) => notApprovedPath(wk, path));
+    if (answered.length === 0 || unchecked.length > leftOut.length) {
       checks.push(
         notCheckedCheck("agents-md-present", "AGENTS.md", { notChecked: unchecked }, reason),
       );
@@ -93,6 +98,7 @@ export const agentsMdRule: Rule = {
         ? "No AGENTS.md found — this site publishes llms.txt, so consider an AGENTS.md for coding agents too"
         : "No AGENTS.md found — consider adding one if this site has an associated codebase",
       value: "absent",
+      ...(unchecked.length > 0 ? { details: { notChecked: unchecked } } : {}),
     });
     return { checks };
   },

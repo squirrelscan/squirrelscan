@@ -70,7 +70,7 @@ function run(probes: WellKnownProbe[] | null | undefined, raw = false): CheckRes
 describe("ax/api-discovery", () => {
   test("data unavailable → not checked info, no crash", () => {
     const checks = run(undefined);
-    expect(checks[0]?.status).toBe("info");
+    expect(checks[0]?.status).toBe("skipped");
     expect(checks[0]?.value).toBe("not-checked");
     expect(checks[0]?.message).toContain("not checked");
   });
@@ -83,7 +83,7 @@ describe("ax/api-discovery", () => {
       ["api-discovery", "not-checked"],
       ["api-discovery-oauth", "not-checked"],
     ]);
-    expect(checks.every((c) => c.status === "info")).toBe(true);
+    expect(checks.every((c) => c.status === "skipped")).toBe(true);
   });
 
   test("a hit still counts when another API path was not requested", () => {
@@ -184,7 +184,7 @@ describe("ax/api-discovery", () => {
     test.each([401, 403, 429, 503])("HTTP %d → not checked, never absent", (status) => {
       const c = api([probe({ status })]);
       expect(c?.value).toBe("not-checked");
-      expect(c?.status).toBe("info");
+      expect(c?.status).toBe("skipped");
       expect(c?.details).toMatchObject({ blocked: { "/.well-known/api-catalog": status } });
     });
 

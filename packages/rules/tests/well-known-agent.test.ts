@@ -55,7 +55,7 @@ function run(probes: WellKnownProbe[] | null | undefined, raw = false): CheckRes
 describe("ax/well-known-agent", () => {
   test("data unavailable → not checked info, no crash", () => {
     const checks = run(undefined);
-    expect(checks[0]?.status).toBe("info");
+    expect(checks[0]?.status).toBe("skipped");
     expect(checks[0]?.value).toBe("not-checked");
     expect(checks[0]?.message).toContain("not checked");
   });
@@ -64,7 +64,7 @@ describe("ax/well-known-agent", () => {
   test("manifest paths missing from the sweep → not checked, never absent", () => {
     const checks = run([probe({ path: "/AGENTS.md", status: 404 })], true);
     expect(checks).toHaveLength(1);
-    expect(checks[0]?.status).toBe("info");
+    expect(checks[0]?.status).toBe("skipped");
     expect(checks[0]?.value).toBe("not-checked");
     expect(checks[0]?.message).not.toContain("No MCP");
   });

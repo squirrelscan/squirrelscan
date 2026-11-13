@@ -290,8 +290,9 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
         pass: 0,
         warn: 0,
         fail: 0,
-        info: 1,
-        skipped: 0,
+        info: 0,
+        // A probe that was never sent is skipped with a coded reason (#1794), not an info note.
+        skipped: 1,
         total: 1,
       });
       expect(v1.perRuleTally.find((t) => t.ruleId === "content/common-misspellings")).toEqual({
@@ -322,7 +323,7 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
         total: 1,
       });
       for (const [ruleId, outcome] of [
-        ["security/security-txt", "info"],
+        ["security/security-txt", "skipped"],
         ["security/version-disclosure", "skipped"],
       ] as const) {
         expect(v1.perRuleTally.find((t) => t.ruleId === ruleId)).toEqual({

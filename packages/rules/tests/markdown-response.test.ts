@@ -45,7 +45,7 @@ function run(m: MarkdownProbeData | null | undefined): CheckResult[] {
 describe("ax/markdown-response", () => {
   test("data unavailable → not checked info, no crash", () => {
     const c = run(undefined);
-    expect(c[0]?.status).toBe("info");
+    expect(c[0]?.status).toBe("skipped");
     expect(c[0]?.value).toBe("not-checked");
     expect(c[0]?.message).toContain("not checked");
   });

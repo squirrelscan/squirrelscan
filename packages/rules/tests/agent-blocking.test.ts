@@ -73,7 +73,7 @@ describe("ax/agent-blocking", () => {
     const claude = checks.find(
       (c) => c.name === "agent-access" && c.details?.userAgent === "claude-user",
     );
-    expect(claude?.status).toBe("info");
+    expect(claude?.status).toBe("skipped");
     expect(claude?.value).toBe("not-checked");
     expect(checks.some((c) => c.status === "pass")).toBe(false);
   });

@@ -87,7 +87,7 @@ function only(checks: CheckResult[]): CheckResult {
 describe("mobile/web-app-manifest", () => {
   test("not checked when the asset pass did not run, and an info with no penalty when no page links a manifest", () => {
     const notChecked = only(run(undefined));
-    expect(notChecked.status).toBe("info");
+    expect(notChecked.status).toBe("skipped");
     expect(notChecked.value).toBe("not-checked");
 
     const none = only(run([]));
