@@ -7,7 +7,7 @@
 import { assertInstallerEnvCannotReachProduction, DEAD_ERROR_ENDPOINT } from "./install-test-env";
 import { afterAll, describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -49,7 +49,11 @@ exit 22
 // Answers per subcommand from GH_* env, and logs the argv of every call.
 const GH_SHIM = `#!/bin/bash
 { for a in "$@"; do printf '%s\\0' "$a"; done; printf '\\036'; } >> "$GH_LOG"
-if [ "$1" = "auth" ]; then exit "\${GH_AUTH_EXIT:-0}"; fi
+label=verify
+[ "$1" = "auth" ] && label=auth
+[ "$1" = "attestation" ] && [ "$3" = "--help" ] && label=help
+if [ "$label" = "$GH_HANG" ]; then exec sleep 30; fi
+if [ "$1" = "auth" ]; then echo "$*" > "$GH_AUTH_ARGS"; exit "\${GH_AUTH_EXIT:-0}"; fi
 if [ "$1" = "attestation" ] && [ "$2" = "verify" ]; then
   if [ "$3" = "--help" ]; then exit "\${GH_HELP_EXIT:-0}"; fi
   if [ "\${GH_VERIFY_EXIT:-0}" != 0 ]; then echo "verification failed: no attestation found for digest"; fi
@@ -111,6 +115,7 @@ async function install(ghEnv: Record<string, string> | null): Promise<Result> {
     SHIM_MANIFEST: manifestPath,
     SHIM_BINARY: binaryPath,
     GH_LOG: ghLog,
+    GH_AUTH_ARGS: join(root, "auth-args"),
     SQUIRREL_VERSION: "9.9.9",
     SQUIRREL_BIN_DIR: join(home, "bin"),
     SQUIRREL_NO_MODIFY_PATH: "1",
@@ -174,6 +179,64 @@ describe("install.sh release attestation (#169)", () => {
     const r = await install({ GH_HELP_EXIT: "1", GH_VERIFY_EXIT: "1" });
     expect(r.code).toBe(0);
     expect(r.stderr).toContain("too old");
+  }, 60_000);
+
+  test("auth status is pinned to github.com", async () => {
+    const r = await install({});
+    expect(readFileSync(join(r.root, "auth-args"), "utf8").trim()).toBe("auth status --hostname github.com");
+  }, 60_000);
+
+  test("a probe that hangs is killed: a warning, then the sha256 check decides", async () => {
+    for (const hang of ["help", "auth"]) {
+      const started = Date.now();
+      const r = await install({ GH_HANG: hang, SQUIRREL_TEST_GH_TIMEOUT_SECS: "1" });
+      expect(r.code).toBe(0);
+      expect(r.stderr).toContain("timed out after");
+      expect(r.stderr).toContain("skipping the release provenance check");
+      expect(r.ghCalls.some((c) => c[0] === "attestation" && c[2] !== "--help")).toBe(false);
+      expect(Date.now() - started).toBeLessThan(25_000);
+    }
+  }, 90_000);
+
+  test("a verify that hangs fails closed and nothing is installed", async () => {
+    const r = await install({ GH_HANG: "verify", SQUIRREL_TEST_GH_TIMEOUT_SECS: "1" });
+    expect(r.code).toBe(1);
+    expect(r.stderr).toContain("gh attestation verify timed out after");
+    expect(r.stderr).toContain("nothing was installed");
+    expect(existsSync(join(r.home, "ran.txt"))).toBe(false);
+    expect(existsSync(join(r.home, "bin", "squirrel"))).toBe(false);
+  }, 60_000);
+
+  test("without timeout/gtimeout (macOS) the watchdog still kills a hung gh", async () => {
+    const root = mkdtempSync(join(tmpdir(), "install-169-wd-"));
+    pending.push(root);
+    const lib = join(root, "installer-lib.sh");
+    writeFileSync(lib, INSTALLER_BODY);
+    // A PATH with gh and the few tools the function needs, and no timeout.
+    const bin = join(root, "bin");
+    mkdirSync(bin);
+    for (const tool of ["sleep", "mktemp", "cat", "rm", "tail"]) {
+      for (const dir of ["/usr/bin", "/bin"]) {
+        if (existsSync(join(dir, tool))) {
+          symlinkSync(join(dir, tool), join(bin, tool));
+          break;
+        }
+      }
+    }
+    writeFileSync(join(bin, "gh"), "#!/bin/bash\nexec sleep 30\n", { mode: 0o755 });
+    const started = Date.now();
+    const proc = Bun.spawn(
+      ["bash", "-c", 'source "$1"; PATH="$2"; rc=0; gh_bounded 15 "$3" attestation verify || rc=$?; echo "rc=$rc"', "--", lib, bin, join(root, "out")],
+      {
+        env: { HOME: root, TMPDIR: root, NO_TELEMETRY: "1", LC_ALL: "C", PATH: "/usr/bin:/bin", SQUIRREL_TEST_GH_TIMEOUT_SECS: "1" },
+        stdin: "ignore",
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    const [stdout] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited]);
+    expect(stdout).toContain("rc=124");
+    expect(Date.now() - started).toBeLessThan(15_000);
   }, 60_000);
 
   test("the attestation check runs after the checksum one", async () => {

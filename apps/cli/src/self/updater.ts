@@ -24,7 +24,11 @@ import type {
 } from "./types";
 
 import { version } from "../../package.json";
-import { type AttestationDeps, verifyReleaseAttestation } from "./attestation";
+import {
+  ATTESTATION_REPO,
+  type AttestationDeps,
+  verifyReleaseAttestation,
+} from "./attestation";
 import { updateSuppressedReason } from "./install-meta";
 import { linkBinary, unlinkIfPresent } from "./link-binary";
 import {
@@ -1133,6 +1137,8 @@ async function performUpdate(
     attestation?: AttestationDeps;
     /** Receives the "provenance check skipped" notice; a silent update has no console. */
     onAttestationSkipped?: (reason: string) => void;
+    /** Called when the attestation verified; only the interactive path prints it. */
+    onAttestationVerified?: () => void;
   }
 ): Promise<Result<UpdateLanding>> {
   const platformArch = detectPlatformArch();
@@ -1151,6 +1157,8 @@ async function performUpdate(
   if (!attested.ok) return attested;
   if (attested.data.status === "skipped") {
     options?.onAttestationSkipped?.(attested.data.reason);
+  } else {
+    options?.onAttestationVerified?.();
   }
 
   // A download takes long enough for `self update --dismiss` to land in the
@@ -1331,6 +1339,8 @@ export async function runInteractiveUpdate(options?: {
       landingDeps: options?.landingDeps,
       attestation: options?.attestation,
       onAttestationSkipped: (reason) => console.warn(`Warning: ${reason}`),
+      onAttestationVerified: () =>
+        console.log(`Attestation verified: built by ${ATTESTATION_REPO}`),
     });
     if (!applyResult.ok) return applyResult;
 

@@ -124,6 +124,66 @@ describe("verifyReleaseAttestation (#169)", () => {
     expect(gh.verifiedFile).toBeNull();
   });
 
+  test("the auth probe is pinned to github.com", async () => {
+    const gh = fakeGh({});
+    await verifyReleaseAttestation(DATA, { runGh: gh.runGh });
+    expect(gh.calls.find((c) => c[0] === "auth")).toEqual([
+      "auth",
+      "status",
+      "--hostname",
+      "github.com",
+    ]);
+  });
+
+  test("a probe that times out (code null) is a skip with a 'timed out' reason, not a failure", async () => {
+    for (const answers of [
+      { help: { code: null, output: "" } },
+      { auth: { code: null, output: "" } },
+    ]) {
+      const gh = fakeGh({ ...answers, verify: { code: 1, output: "x" } });
+      const result = await verifyReleaseAttestation(DATA, { runGh: gh.runGh });
+      expect(result.ok && result.data.status).toBe("skipped");
+      if (result.ok && result.data.status === "skipped") {
+        expect(result.data.reason).toContain("timed out");
+      }
+      expect(gh.verifiedFile).toBeNull();
+    }
+  });
+
+  test("deadlines: 15s for the probes, 120s for verify", async () => {
+    const seen: Array<[string, number]> = [];
+    await verifyReleaseAttestation(DATA, {
+      runGh: async (args, timeoutMs) => {
+        seen.push([
+          args[0] === "auth"
+            ? "auth"
+            : args[2] === "--help"
+              ? "help"
+              : "verify",
+          timeoutMs,
+        ]);
+        return { code: 0, output: "" };
+      },
+    });
+    expect(seen).toEqual([
+      ["help", 15_000],
+      ["auth", 15_000],
+      ["verify", 120_000],
+    ]);
+  });
+
+  test("a verify that times out (code null) fails closed", async () => {
+    const gh = fakeGh({ verify: { code: null, output: "" } });
+    const result = await verifyReleaseAttestation(DATA, { runGh: gh.runGh });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("ATTESTATION_FAILED");
+      expect(result.error.message).toContain(
+        "gh attestation verify timed out after 120s, nothing was installed."
+      );
+    }
+  });
+
   test("gh disappearing between the probe and the verify counts as absent", async () => {
     const gh = fakeGh({ verify: null });
     const result = await verifyReleaseAttestation(DATA, { runGh: gh.runGh });

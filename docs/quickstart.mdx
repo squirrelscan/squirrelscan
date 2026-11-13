@@ -99,28 +99,6 @@ The one-time install registration reports what happened as `path_setup` (`on_pat
 
 ### If GitHub is blocked on your network
 
-### Verifying a release
-
-Each release binary (and `manifest.json`) has a build attestation made by the release workflow in `squirrelscan/squirrelscan`. The trust root is GitHub's attestation service (Sigstore), not the origin you downloaded from, so it holds even if that origin or the mirror were compromised. The SHA-256 checksum stays in place; the attestation is a second check on top of it.
-
-What the installers and `squirrel self update` do:
-
-| Situation | Result |
-|---|---|
-| `gh` is installed and logged in, and the attestation matches | Continues, and prints `Attestation verified` |
-| `gh` is installed and logged in, and the attestation does **not** match | Fails. Nothing is installed or run, and `gh`'s own output is shown. For `self update`, the current version stays in place |
-| `gh` is not installed, is too old to have `gh attestation`, or is not logged in | Prints a warning and relies on the SHA-256 checksum alone |
-
-`gh attestation verify` needs a logged-in `gh`, so run `gh auth login` once to turn the check on. A `gh` that is not logged in cannot verify anything, so it is treated like a missing one, with the warning, and never as a pass.
-
-To verify a binary by hand, download it from the [releases page](https://github.com/squirrelscan/squirrelscan/releases) and run:
-
-```bash
-gh attestation verify ./squirrel-<version>-<platform> --repo squirrelscan/squirrelscan
-```
-
-The same command works on `manifest.json`. Releases published before attestations were added have none, so pinning one of them with a logged-in `gh` fails this check. A mismatch means the file was not built by the squirrelscan release workflow: delete it and do not run it. The same applies on Windows with `squirrel-<version>-windows-x64.exe`.
-
 Release binaries live on GitHub, and a GitHub download redirects to `release-assets.githubusercontent.com`. Some networks cannot reach it, most commonly in mainland China. The installer handles this on its own: when a GitHub download fails it retries the same file from `install.squirrelscan.com`, which serves the identical bytes through squirrelscan's own infrastructure. The checksum from the release manifest is verified either way, so the mirror is not a shortcut around the integrity check.
 
 To skip GitHub from the start rather than waiting for it to time out:
@@ -142,6 +120,29 @@ To skip GitHub from the start rather than waiting for it to time out:
 If both hosts are unreachable, the installer prints the two URLs it tried. Allowlist either `github.com` or `install.squirrelscan.com`, or download the binary on a machine that can reach one of them and move it into place yourself. A host that answers with a sign-in page instead of the release files, which is what a captive portal or an intercepting proxy does, counts as unreachable and the installer moves on to the other one.
 
 `SQUIRREL_DOWNLOAD_ENDPOINT` points the fallback at a different host if you mirror the releases yourself. A custom endpoint's address never appears in the installer's anonymous failure report: when a request to it fails, the report says `custom` where it would name the host, so neither the name nor a token in a URL's userinfo, query or fragment leaves your machine. After a failed request to squirrelscan or GitHub, the installer makes one short, bounded request to that same host, ignoring proxy settings, only to read which IP family the connection used (reported as `v4`, `v6` or `unknown`). It runs after the install has already failed, in the background, and sends nothing but the request itself. A failed request to a custom endpoint is never probed.
+
+### Verifying a release
+
+Each release binary (and `manifest.json`) has a build attestation made by the release workflow in `squirrelscan/squirrelscan`. The trust root is GitHub's attestation service (Sigstore), not the origin you downloaded from, so it holds even if that origin or the mirror were compromised. The SHA-256 checksum stays in place; the attestation is a second check on top of it.
+
+What the installers and `squirrel self update` do:
+
+| Situation | Result |
+|---|---|
+| `gh` is installed and logged in, and the attestation matches | Continues, and prints `Attestation verified` |
+| `gh` is installed and logged in, and the attestation does **not** match | Fails. Nothing is installed or run, and `gh`'s own output is shown. For `self update`, the current version stays in place |
+| `gh` is not installed, is too old to have `gh attestation`, is not logged in, or a `gh` probe (`--help`, `auth status`) takes longer than 15 seconds | Prints a warning and relies on the SHA-256 checksum alone |
+| `gh attestation verify` itself takes longer than 120 seconds | Fails with `gh attestation verify timed out after 120s, nothing was installed.` |
+
+`gh attestation verify` needs a logged-in `gh`, so run `gh auth login` once to turn the check on. A `gh` that is not logged in cannot verify anything, so it is treated like a missing one, with the warning, and never as a pass.
+
+To verify a binary by hand, download it from the [releases page](https://github.com/squirrelscan/squirrelscan/releases) and run:
+
+```bash
+gh attestation verify ./squirrel-<version>-<platform> --repo squirrelscan/squirrelscan
+```
+
+The same command works on `manifest.json`. Releases published before attestations were added have none, so pinning one of them with a logged-in `gh` fails this check. A mismatch means the file was not built by the squirrelscan release workflow: delete it and do not run it. The same applies on Windows with `squirrel-<version>-windows-x64.exe`.
 
 ### Homebrew
 
