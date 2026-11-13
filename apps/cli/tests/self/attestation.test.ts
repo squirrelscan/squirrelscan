@@ -63,7 +63,13 @@ describe("verifyReleaseAttestation (#169)", () => {
       (c) => c[0] === "attestation" && c[2] !== "--help"
     );
     expect(verify?.[1]).toBe("verify");
-    expect(verify?.slice(3)).toEqual(["--repo", "squirrelscan/squirrelscan"]);
+    expect(verify?.slice(3)).toEqual([
+      "--repo",
+      "squirrelscan/squirrelscan",
+      "--cert-identity",
+      "https://github.com/squirrelscan/squirrelscan/.github/workflows/release.yml@refs/heads/main",
+      "--deny-self-hosted-runners",
+    ]);
     expect(ATTESTATION_REPO).toBe("squirrelscan/squirrelscan");
     expect(gh.verifiedFile?.existed).toBe(true);
     expect(gh.verifiedFile?.bytes).toBe("squirrel-binary-bytes");

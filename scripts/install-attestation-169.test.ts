@@ -153,7 +153,13 @@ describe("install.sh release attestation (#169)", () => {
     const verify = r.ghCalls.find((c) => c[0] === "attestation" && c[1] === "verify" && c[2] !== "--help");
     expect(verify).toBeDefined();
     expect(verify![2]).toMatch(/\/squirrel$/);
-    expect(verify!.slice(3)).toEqual(["--repo", "squirrelscan/squirrelscan"]);
+    expect(verify!.slice(3)).toEqual([
+      "--repo",
+      "squirrelscan/squirrelscan",
+      "--cert-identity",
+      "https://github.com/squirrelscan/squirrelscan/.github/workflows/release.yml@refs/heads/main",
+      "--deny-self-hosted-runners",
+    ]);
     expect(r.stderr).toContain("Attestation verified");
     expect(existsSync(join(r.home, "bin", "squirrel"))).toBe(true);
   }, 60_000);

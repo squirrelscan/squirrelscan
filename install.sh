@@ -48,6 +48,7 @@ umask "$(printf '%04o' "$((0$(umask) | 022))")"
 #   GITHUB_TOKEN       - GitHub token to avoid API rate limits (optional)
 
 REPO="squirrelscan/squirrelscan"
+CERT_IDENTITY="https://github.com/squirrelscan/squirrelscan/.github/workflows/release.yml@refs/heads/main"
 
 # Transport hardening for every curl this script runs. curl's own defaults will
 # happily follow a redirect from https to plain http and will negotiate whatever
@@ -1560,7 +1561,7 @@ verify_attestation() {
   fi
   log "Verifying release attestation..."
   rc=0
-  gh_bounded 120 "$out" attestation verify "$file" --repo "$REPO" || rc=$?
+  gh_bounded 120 "$out" attestation verify "$file" --repo "$REPO" --cert-identity "$CERT_IDENTITY" --deny-self-hosted-runners || rc=$?
   local attest_out
   attest_out=$(cat "$out" 2> /dev/null || true)
   rm -f "$out"
