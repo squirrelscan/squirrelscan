@@ -26,6 +26,22 @@ There is one detector, with one set of fingerprints, and two ways it runs. A rep
 
 On a signed-in audit the two are merged into one section (see below). A local scan keeps no history, so a technology only it found has no scan diff, and a section from a local scan alone never says "No changes since last scan" and shows where the list came from instead. The cloud scan is the one that stores results per domain and reports the difference between scans.
 
+### Host address, country and connect time
+
+Beside the technologies, the report has a **Host** section for the audited host (`host` in the `-f json` output, schema 1.17). It is report-only and never affects the score.
+
+| Field | Meaning |
+|---|---|
+| `addresses.ipv4`, `addresses.ipv6` | The A and AAAA records the host resolved to. A list is empty when the host has no such record. |
+| `country` | The country the bundled GeoIP database assigns to the first resolved address: `code` (ISO 3166-1 alpha-2), `name`, `address` and `location`. Omitted, never guessed, when the database has no country for the address (private, loopback and unallocated addresses). |
+| `country.location` | `origin` when no CDN or edge platform was detected, otherwise `edge`, with `country.edge` naming the provider. |
+| `latency` | `ms` to open one TCP connection to the host (`measure` is `tcp-connect`, with the `address` and `port` used). It is not an ICMP ping and not a page load time. Omitted when the connection did not complete within 3 seconds. |
+| `geoipSnapshot` | The month of the GeoIP snapshot the country came from. |
+
+**Edge location, not origin.** When technology detection finds Cloudflare, Amazon CloudFront, Vercel, Netlify, Fastly or Akamai in front of the site, the resolved address belongs to that provider's edge or anycast network. The country is then labelled an **edge location** (`country.location: "edge"`; "Edge location" in the text, markdown, console and HTML reports) and is not where the site is hosted. This only reads the existing detection back; it adds no edge detection of its own.
+
+**GeoIP data.** Lookups are offline: the CLI bundles the [DB-IP](https://db-ip.com) IP to Country Lite database (snapshot 2026-11, licensed [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)) and makes no request to look an address up. IP geolocation by DB-IP.com. The Lite database has reduced coverage and accuracy and is refreshed with the CLI, not live.
+
 ### Why a result can show little more than headers
 
 A local scan can only match what the crawl fetched. When a run lists the server and CDN and little else, check these in order:

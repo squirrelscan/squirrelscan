@@ -1,0 +1,12 @@
+{
+  "source": "DB-IP.com IP to Country Lite",
+  "sourceUrl": "https://db-ip.com/db/download/ip-to-country-lite",
+  "license": "CC-BY-4.0",
+  "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+  "snapshot": "2026-11",
+  "sourceFile": "dbip-country-lite-2026-11.csv.gz",
+  "sourceSha256": "e5c8459d638a272ece7f4d7cfa49dce18d91b4f403f6940ba9249bf0db3781fd",
+  "v4Ranges": 362998,
+  "v6Ranges": 369798,
+  "compiledBytes": 2296108
+}

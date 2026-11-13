@@ -297,3 +297,5 @@ If squirrelscan caught something your agent missed, a [star on GitHub](https://g
 ## License
 
 The CLI and the repository contents are licensed under the [MIT License](LICENSE). squirrelscan names and logos are covered by [TRADEMARKS.md](TRADEMARKS.md).
+
+The CLI bundles the DB-IP IP to Country Lite database (snapshot 2026-11) for offline hosting-country lookups: [IP Geolocation by DB-IP](https://db-ip.com), licensed [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

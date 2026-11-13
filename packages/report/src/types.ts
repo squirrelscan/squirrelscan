@@ -23,6 +23,7 @@ export type {
   HealthScore,
   ReportRuleResult,
   ReportStructure,
+  ReportHost,
   ReportTechnologies,
   ReportTechnology,
   SiteMetadata,

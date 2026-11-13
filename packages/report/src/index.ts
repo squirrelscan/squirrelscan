@@ -188,6 +188,8 @@ export {
   TECH_LOCAL_MARK,
   type TechGroup,
 } from "./technologies";
+export { hostCountryRow, hostRows } from "./host";
+export type { HostRow } from "./host";
 
 // Page structure block helpers (#2307; report-only / non-scoring, shared across formats + CLI console)
 export {

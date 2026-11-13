@@ -40,6 +40,7 @@ import {
   getGroupName,
   getSubcategoryName,
   groupTechnologies,
+  hostRows,
   isLocalOnlyTech,
   TECH_LOCAL_MARK,
   itemsNotListed,
@@ -251,6 +252,14 @@ export function generateConsoleReport(
   if (report.domainStats) {
     log("");
     printDomainStats(report.domainStats);
+  }
+
+  // Host — report-only: addresses, GeoIP country (labelled edge behind a CDN), connect time.
+  if (report.host) {
+    log("");
+    log(fmt.bold("HOST"));
+    for (const row of hostRows(report.host))
+      log(`${fmt.dim(row.label.padEnd(15))} ${row.value}`);
   }
 
   // Technologies — report-only section, separate from issues, not scored.

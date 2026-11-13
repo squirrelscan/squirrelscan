@@ -233,6 +233,20 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
     lines.push(`${indent(1)}</site-profile>`);
   }
 
+  // Host — report-only (does not affect the health score).
+  if (report.host) {
+    const h = report.host;
+    const attrs = [`name="${escapeXml(h.host)}"`];
+    if (h.addresses.ipv4.length > 0) attrs.push(`ipv4="${escapeXml(h.addresses.ipv4.join(" "))}"`);
+    if (h.addresses.ipv6.length > 0) attrs.push(`ipv6="${escapeXml(h.addresses.ipv6.join(" "))}"`);
+    if (h.country) {
+      attrs.push(`country="${escapeXml(h.country.code)}"`, `countryLocation="${h.country.location}"`);
+      if (h.country.edge) attrs.push(`edge="${escapeXml(h.country.edge.name)}"`);
+    }
+    if (h.latency) attrs.push(`connectMs="${h.latency.ms}"`);
+    lines.push(`${indent(1)}<host ${attrs.join(" ")}/>`);
+  }
+
   // Technologies — report-only (does not affect the health score).
   if (report.technologies && (report.technologies.items.length > 0 || report.technologies.truncated)) {
     const tech = report.technologies;

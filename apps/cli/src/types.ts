@@ -217,6 +217,7 @@ import type {
   WafBlockedSummary,
   WafSuspectSummary,
   ReportStructure as _RST,
+  ReportHost as _RH,
   ReportTechnologies as _RT,
   RuleCategory as _RC,
   SiteMetadata as _SM,
@@ -232,6 +233,7 @@ export type GroupScore = _GS;
 export type HealthScore = _HS;
 export type RuleCategory = _RC;
 export type ReportTechnologies = _RT;
+export type ReportHost = _RH;
 export type ReportStructure = _RST;
 export type SiteMetadata = _SM;
 export type EditorSummary = _ES;
@@ -571,6 +573,8 @@ export interface AuditReport {
    * tech-detect ran (logged-in users with cloud enabled).
    */
   technologies?: ReportTechnologies;
+  /** Resolved addresses, GeoIP country (edge-labelled behind a CDN) and connect time (#10). REPORT-ONLY. */
+  host?: ReportHost;
   /**
    * Page structure (#2307) — REPORT-ONLY / non-scoring. Where the audited pages' links sit and
    * the page types the classifier gave them. Mirrors core-contracts `AuditReport`. Absent when no

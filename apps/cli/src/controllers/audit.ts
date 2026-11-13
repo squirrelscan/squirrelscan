@@ -27,6 +27,7 @@ import type { ParsedPageCache } from "@squirrelscan/parser";
 import {
   createCloudDocumentFetcher,
   createNotEvaluatedCollector,
+  buildReportHost,
   emptyRuleCacheStats,
   emptyRuleExecutionResult,
   flattenChecks,
@@ -185,6 +186,7 @@ import {
 } from "@/crawler/storage/store-check";
 import { isPermanentStorageError } from "@/crawler/storage/types";
 import { preflightBalanceOf } from "@/lib/balance";
+import { probeHost } from "@/lib/host-probe";
 import { resolvePageLimit } from "@/lib/page-limit";
 import {
   reconstructReport,
@@ -2716,6 +2718,16 @@ export async function runAudit(
         }
       );
       if (technologies) report.technologies = technologies;
+
+      // Report-only host section (#10): resolved addresses, offline GeoIP country, connect latency.
+      // The country is labelled edge when the technology scan above found a CDN or edge platform.
+      {
+        const probe = await probeHost(url);
+        const host = probe
+          ? await buildReportHost(probe, technologies?.items)
+          : undefined;
+        if (host) report.host = host;
+      }
 
       // Persist the resolved Stage-0 profile for explainability — it records
       // which cloud features + rules applied this run. Report-only / non-scoring.
