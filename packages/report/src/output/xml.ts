@@ -246,6 +246,7 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
     if (h.edge) {
       attrs.push(`edgeProvider="${escapeXml(h.edge.name)}"`, `edgeSource="${h.edge.source}"`, `edgeHosted="${h.edge.edgeHosted}"`, `origin="${escapeXml(h.edge.origin.status === "identified" ? h.edge.origin.name : h.edge.origin.status)}"`);
     }
+    if (h.cloudRange) attrs.push(`cloudRange="${escapeXml(h.cloudRange.name)}"`);
     if (h.latency) attrs.push(`connectMs="${h.latency.ms}"`);
     lines.push(`${indent(1)}<host ${attrs.join(" ")}/>`);
   }

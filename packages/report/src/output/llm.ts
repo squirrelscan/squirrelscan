@@ -584,6 +584,7 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
     if (h.edge) {
       attrs.push(`edge-provider="${escapeXml(h.edge.name)}"`, `edge-source="${h.edge.source}"`, `edge-hosted="${h.edge.edgeHosted}"`, `origin="${escapeXml(h.edge.origin.status === "identified" ? h.edge.origin.name : h.edge.origin.status)}"`);
     }
+    if (h.cloudRange) attrs.push(`cloud-range="${escapeXml(h.cloudRange.name)}"`);
     if (h.latency) attrs.push(`connect-ms="${h.latency.ms}"`);
     lines.push(`<host ${attrs.join(" ")}/>`);
   }

@@ -90,4 +90,21 @@ describe("edge and origin rows (#1807)", () => {
   test("no edge, no edge rows", () => {
     expect(hostRows(origin).some((r) => r.key === "edge" || r.key === "origin")).toBe(false);
   });
+  test("a whole-cloud range is a Cloud range row, never an Edge row or an edge country", () => {
+    const cloud = { ...origin, cloudRange: { id: "google-cloud", name: "Google Cloud", address: "8.8.8.8" } };
+    const rows = hostRows(cloud);
+    expect(rows.some((r) => r.key === "edge")).toBe(false);
+    expect(rows.find((r) => r.key === "country")!.label).toBe("Hosting country");
+    const row = rows.find((r) => r.key === "cloud")!;
+    expect(row.label).toBe("Cloud range");
+    expect(row.value).toContain("address is in Google Cloud's published ranges");
+    expect(row.value).toContain("not evidence of a CDN or edge");
+  });
+  test("JSON carries the cloud range and no edge", () => {
+    const base = { baseUrl: "https://example.test", timestamp: "2026-11-12T00:00:00.000Z", totalPages: 1, passed: 0, warnings: 0, failed: 0, ruleResults: {} };
+    const json = JSON.parse(renderJson({ ...base, host: { ...origin, cloudRange: { id: "google-cloud", name: "Google Cloud", address: "8.8.8.8" } } } as never));
+    expect(json.host.cloudRange).toEqual({ id: "google-cloud", name: "Google Cloud", address: "8.8.8.8" });
+    expect(json.host.edge).toBeUndefined();
+    expect(json.host.country.location).toBe("origin");
+  });
 });
