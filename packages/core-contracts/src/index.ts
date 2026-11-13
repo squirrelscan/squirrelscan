@@ -1819,6 +1819,21 @@ export interface ReportHost {
    * edge was detected. Report-only.
    */
   edge?: ReportHostEdge;
+  /**
+   * The resolved address is in a provider's published whole-cloud range list (Google Cloud). This is provider
+   * information only: it never makes the address an edge, so `edge` stays absent unless a header or a
+   * CDN-specific range or ASN says so. Absent when no such list contains the address. Report-only.
+   */
+  cloudRange?: ReportHostCloudRange;
+}
+
+/** A published whole-cloud range list that contains the resolved address (#1807). Not evidence of an edge. */
+export interface ReportHostCloudRange {
+  /** Provider key, e.g. google-cloud. */
+  id: string;
+  name: string;
+  /** Resolved address inside the list. */
+  address: string;
 }
 
 /** Where an edge detection came from. `header`: platform response headers; `ip-range`: the resolved address is in the provider's published ranges; `asn`: its ASN belongs to the provider. */
@@ -1826,15 +1841,13 @@ export type ReportEdgeSource = "header" | "ip-range" | "asn";
 
 /** The edge provider of the audited host and what is known of the origin behind it (#1807). */
 export interface ReportHostEdge {
-  /** Provider key: cloudflare, cloudfront, fastly, akamai, vercel, netlify, azure-front-door, google-cloud. */
+  /** Provider key: cloudflare, cloudfront, fastly, akamai, vercel, netlify, azure-front-door. */
   id: string;
   name: string;
   /** The strongest source that matched (header, then ip-range, then asn). */
   source: ReportEdgeSource;
   /** Every source that matched this provider, strongest first. */
   matched: ReportEdgeSource[];
-  /** The ip-range list is the provider's whole cloud, not only its edge (Google Cloud), so a match is weaker evidence of a CDN. */
-  broad?: true;
   /** Resolved address that matched an ip-range or asn source. */
   address?: string;
   /** ASN that matched, for the asn source. */

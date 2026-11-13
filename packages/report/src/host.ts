@@ -3,7 +3,7 @@
 import type { ReportHost } from "./types";
 
 export interface HostRow {
-  key: "host" | "ipv4" | "ipv6" | "edge" | "origin" | "country" | "latency" | "geoip";
+  key: "host" | "ipv4" | "ipv6" | "edge" | "origin" | "cloud" | "country" | "latency" | "geoip";
   label: string;
   value: string;
 }
@@ -28,7 +28,6 @@ export function hostEdgeRows(host: ReportHost): HostRow[] {
   const e = host.edge;
   if (!e) return [];
   const via = e.matched.map((m) => (m === "ip-range" ? "published IP range" : m === "asn" ? `ASN${e.asn ? ` AS${e.asn}` : ""}` : "response headers")).join(", ");
-  const broad = e.broad ? "; the range list covers all of Google Cloud, so this is not proof of a CDN" : "";
   const origin =
     e.origin.status === "edge-hosted"
       ? `none separate: ${e.name} is both edge and host`
@@ -36,9 +35,20 @@ export function hostEdgeRows(host: ReportHost): HostRow[] {
         ? e.origin.name
         : "unknown";
   return [
-    { key: "edge", label: "Edge", value: `${e.name} (matched by ${via}${broad})` },
+    { key: "edge", label: "Edge", value: `${e.name} (matched by ${via})` },
     { key: "origin", label: "Origin", value: origin },
   ];
+}
+
+/** The provider whose whole-cloud range list holds the address. Provider information only: it is never shown as the edge. */
+export function hostCloudRow(host: ReportHost): HostRow | null {
+  const c = host.cloudRange;
+  if (!c) return null;
+  return {
+    key: "cloud",
+    label: "Cloud range",
+    value: `address is in ${c.name}'s published ranges, which cover all of ${c.name}; not evidence of a CDN or edge`,
+  };
 }
 
 export function hostRows(host: ReportHost): HostRow[] {
@@ -46,6 +56,8 @@ export function hostRows(host: ReportHost): HostRow[] {
   if (host.addresses.ipv4.length > 0) rows.push({ key: "ipv4", label: "IPv4", value: host.addresses.ipv4.join(", ") });
   if (host.addresses.ipv6.length > 0) rows.push({ key: "ipv6", label: "IPv6", value: host.addresses.ipv6.join(", ") });
   rows.push(...hostEdgeRows(host));
+  const cloud = hostCloudRow(host);
+  if (cloud) rows.push(cloud);
   const country = hostCountryRow(host);
   if (country) rows.push(country);
   if (host.latency) {
