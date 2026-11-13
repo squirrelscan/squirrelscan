@@ -50,6 +50,7 @@ import {
   reexecIntoUpdatedBinary,
   resetUpdaterStateForTests,
   runAutoUpdate,
+  runInteractiveUpdate,
   safeExit,
   startInlineAutoUpdate,
   updateLandingWarnings,
@@ -727,6 +728,69 @@ describe("updater", () => {
       const errors = events.filter((e) => e.event === "update_auto_error");
       expect(errors).toHaveLength(1);
       expect(errors[0]?.error_type).toBe("ATTESTATION_FAILED");
+    });
+
+    function stubInteractiveUpdate() {
+      spyOn(pathsModule, "isManagedInstall").mockReturnValue(true);
+      spyOn(os, "platform").mockReturnValue("linux");
+      spyOn(pathsModule, "getReleasePath").mockImplementation((v: string) =>
+        join(tempHome, "releases", v)
+      );
+      spyOn(pathsModule, "getBinaryPath").mockImplementation((v: string) =>
+        join(tempHome, "releases", v, "squirrel")
+      );
+      spyOn(pathsModule, "getSymlinkPath").mockImplementation((dir?: string) =>
+        join(dir ?? join(tempHome, "bin"), "squirrel")
+      );
+      spyOn(releasesModule, "checkForUpdates").mockResolvedValue({
+        ok: true,
+        data: {
+          available: true,
+          current_version: "0.0.1",
+          latest_version: "9.9.9",
+          release_url: null,
+          manifest,
+        },
+      } as Awaited<ReturnType<typeof releasesModule.checkForUpdates>>);
+      spyOn(releasesModule, "downloadBinary").mockResolvedValue({
+        ok: true,
+        data: BYTES.buffer as ArrayBuffer,
+      });
+      spyOn(console, "warn").mockImplementation(() => {});
+      return spyOn(console, "log").mockImplementation(() => {});
+    }
+
+    test("an interactive update prints the verified line on a pass", async () => {
+      const log = stubInteractiveUpdate();
+      const result = await runInteractiveUpdate({
+        landingDeps: { which: () => null, isWindows: false },
+        attestation: { runGh: async () => ({ code: 0, output: "" }) },
+      });
+      expect(result.ok).toBe(true);
+      const lines = log.mock.calls.map((c) => String(c[0]));
+      expect(lines).toContain(
+        "Attestation verified: built by squirrelscan/squirrelscan"
+      );
+    });
+
+    test("a verify timeout fails the update with nothing installed", async () => {
+      stubInteractiveUpdate();
+      const result = await runInteractiveUpdate({
+        landingDeps: { which: () => null, isWindows: false },
+        attestation: {
+          runGh: async (args) =>
+            args[0] === "attestation" && args[2] !== "--help"
+              ? { code: null, output: "" }
+              : { code: 0, output: "" },
+        },
+      });
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.message).toContain(
+          "gh attestation verify timed out after 120s, nothing was installed."
+        );
+      }
+      expect(existsSync(join(tempHome, "releases"))).toBe(false);
     });
   });
 

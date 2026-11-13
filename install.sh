@@ -1472,7 +1472,53 @@ run_self_install() {
   return "${PIPESTATUS[0]}"
 }
 
-# Download binary and run self install
+# gh_bounded <seconds> <outfile> <gh args...>
+# Runs gh with a deadline so a hung gh cannot hang the install. Output goes to
+# <outfile>. Returns gh's exit code, or 124 when the deadline hit. Uses
+# timeout/gtimeout when present; macOS has neither, so otherwise a background
+# process plus a kill watchdog. SQUIRREL_TEST_GH_TIMEOUT_SECS replaces every
+# deadline and exists only as a test seam.
+gh_bounded() {
+  local secs="${SQUIRREL_TEST_GH_TIMEOUT_SECS:-$1}" out="$2"
+  shift 2
+  local tbin="" rc=0
+  if command -v timeout > /dev/null 2>&1; then
+    tbin=timeout
+  elif command -v gtimeout > /dev/null 2>&1; then
+    tbin=gtimeout
+  fi
+  if [ -n "$tbin" ]; then
+    GH_NO_UPDATE_NOTIFIER=1 GH_PROMPT_DISABLED=1 "$tbin" -s KILL "$secs" gh "$@" > "$out" 2>&1 < /dev/null || rc=$?
+    # GNU reports 124; some builds report the KILL as 137.
+    if [ "$rc" -eq 137 ]; then rc=124; fi
+    return "$rc"
+  fi
+  local flag="${out}.timedout" pid wd
+  rm -f "$flag"
+  GH_NO_UPDATE_NOTIFIER=1 GH_PROMPT_DISABLED=1 gh "$@" > "$out" 2>&1 < /dev/null &
+  pid=$!
+  (
+    i=0
+    while [ "$i" -lt "$secs" ] && kill -0 "$pid" 2> /dev/null; do
+      sleep 1
+      i=$((i + 1))
+    done
+    if kill -0 "$pid" 2> /dev/null; then
+      : > "$flag"
+      kill -9 "$pid" 2> /dev/null
+    fi
+  ) > /dev/null 2>&1 &
+  wd=$!
+  wait "$pid" 2> /dev/null || rc=$?
+  kill "$wd" 2> /dev/null || true
+  wait "$wd" 2> /dev/null || true
+  if [ -e "$flag" ]; then
+    rm -f "$flag"
+    return 124
+  fi
+  return "$rc"
+}
+
 # Provenance check (#169). The sha256 above comes from a manifest served next
 # to the binary, so it cannot tell a compromised origin from a good one. GitHub
 # artifact attestations are signed in the release workflow and checked against
@@ -1483,23 +1529,45 @@ run_self_install() {
 # `gh attestation verify` needs an authenticated gh; a gh that is installed but
 # not logged in cannot verify anything, so it counts as absent, never as a pass.
 verify_attestation() {
-  local file="$1"
+  local file="$1" out rc
   CURRENT_STEP="verify_attestation"
   if ! command -v gh > /dev/null 2>&1; then
     warn "GitHub CLI (gh) not found: skipping the release provenance check, relying on the sha256 checksum only.\n  Install gh and run 'gh auth login' to verify installs against the GitHub attestation."
     return 0
   fi
-  if ! GH_NO_UPDATE_NOTIFIER=1 gh attestation verify --help > /dev/null 2>&1 < /dev/null; then
+  out=$(mktemp)
+  rc=0
+  gh_bounded 15 "$out" attestation verify --help || rc=$?
+  if [ "$rc" -eq 124 ]; then
+    rm -f "$out"
+    warn "gh attestation verify --help timed out after ${SQUIRREL_TEST_GH_TIMEOUT_SECS:-15}s: skipping the release provenance check, relying on the sha256 checksum only."
+    return 0
+  elif [ "$rc" -ne 0 ]; then
+    rm -f "$out"
     warn "This gh is too old for 'gh attestation verify': skipping the release provenance check, relying on the sha256 checksum only."
     return 0
   fi
-  if ! GH_NO_UPDATE_NOTIFIER=1 gh auth status > /dev/null 2>&1 < /dev/null; then
+  rc=0
+  gh_bounded 15 "$out" auth status --hostname github.com || rc=$?
+  if [ "$rc" -eq 124 ]; then
+    rm -f "$out"
+    warn "gh auth status timed out after ${SQUIRREL_TEST_GH_TIMEOUT_SECS:-15}s: skipping the release provenance check, relying on the sha256 checksum only."
+    return 0
+  elif [ "$rc" -ne 0 ]; then
+    rm -f "$out"
     warn "gh is not logged in: skipping the release provenance check, relying on the sha256 checksum only.\n  Run 'gh auth login' to enable it."
     return 0
   fi
   log "Verifying release attestation..."
+  rc=0
+  gh_bounded 120 "$out" attestation verify "$file" --repo "$REPO" || rc=$?
   local attest_out
-  if ! attest_out=$(GH_NO_UPDATE_NOTIFIER=1 gh attestation verify "$file" --repo "$REPO" 2>&1 < /dev/null); then
+  attest_out=$(cat "$out" 2> /dev/null || true)
+  rm -f "$out"
+  if [ "$rc" -eq 124 ]; then
+    LAST_ERROR_OUTPUT=$(printf '%s\n' "$attest_out" | tail -n 20)
+    error "gh attestation verify timed out after ${SQUIRREL_TEST_GH_TIMEOUT_SECS:-120}s, nothing was installed."
+  elif [ "$rc" -ne 0 ]; then
     LAST_ERROR_OUTPUT=$(printf '%s\n' "$attest_out" | tail -n 20)
     # printf, not error's detail: that goes through echo -e, which would
     # interpret backslashes in text this script did not write.
@@ -1509,6 +1577,7 @@ verify_attestation() {
   info "Attestation verified: built by ${REPO}"
 }
 
+# Download binary and run self install
 download_and_install() {
   local version="$1"
   local platform="$2"

@@ -28,7 +28,10 @@ export type AttestationOutcome =
   | { status: "verified" }
   | { status: "skipped"; reason: string };
 
-/** Result of one gh call. `null` from the runner means gh could not be started (not installed). */
+/**
+ * Result of one gh call. `null` from the runner means gh could not be started
+ * (not installed). `code: null` means gh was killed at its deadline.
+ */
 export interface GhRun {
   code: number | null;
   output: string;
@@ -47,6 +50,9 @@ const PROBE_TIMEOUT_MS = 15_000;
 const VERIFY_TIMEOUT_MS = 120_000;
 const OUTPUT_TAIL_LINES = 10;
 const OUTPUT_CAP_BYTES = 64 * 1024;
+
+const PROBE_TIMEOUT_S = PROBE_TIMEOUT_MS / 1000;
+const VERIFY_TIMEOUT_S = VERIFY_TIMEOUT_MS / 1000;
 
 const defaultRunGh: GhRunner = (args, timeoutMs) =>
   new Promise((resolve) => {
@@ -85,6 +91,8 @@ const defaultRunGh: GhRunner = (args, timeoutMs) =>
 const SKIP_NOT_FOUND =
   "GitHub CLI (gh) not found: skipping the release provenance check, relying on the sha256 checksum only. " +
   "Install gh and run 'gh auth login' to verify updates against the GitHub attestation.";
+const skipTimedOut = (what: string) =>
+  `${what} timed out after ${PROBE_TIMEOUT_S}s: skipping the release provenance check, relying on the sha256 checksum only.`;
 const SKIP_TOO_OLD =
   "This gh is too old for 'gh attestation verify': skipping the release provenance check, relying on the sha256 checksum only.";
 const SKIP_NOT_LOGGED_IN =
@@ -109,10 +117,16 @@ export async function verifyReleaseAttestation(
     PROBE_TIMEOUT_MS
   );
   if (!help) return skipped(SKIP_NOT_FOUND);
+  if (help.code === null)
+    return skipped(skipTimedOut("gh attestation verify --help"));
   if (help.code !== 0) return skipped(SKIP_TOO_OLD);
 
-  const auth = await runGh(["auth", "status"], PROBE_TIMEOUT_MS);
+  const auth = await runGh(
+    ["auth", "status", "--hostname", "github.com"],
+    PROBE_TIMEOUT_MS
+  );
   if (!auth) return skipped(SKIP_NOT_FOUND);
+  if (auth.code === null) return skipped(skipTimedOut("gh auth status"));
   if (auth.code !== 0) return skipped(SKIP_NOT_LOGGED_IN);
 
   const dir = mkdtempSync(join(tmpdir(), "squirrel-attest-"));
@@ -125,6 +139,14 @@ export async function verifyReleaseAttestation(
     );
     // gh was there a moment ago; it vanishing mid-run is the same as absent.
     if (!verify) return skipped(SKIP_NOT_FOUND);
+    if (verify.code === null) {
+      return err(
+        commandError(
+          "ATTESTATION_FAILED",
+          `gh attestation verify timed out after ${VERIFY_TIMEOUT_S}s, nothing was installed.`
+        )
+      );
+    }
     if (verify.code !== 0) {
       const tail = verify.output
         .trim()

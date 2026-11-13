@@ -530,6 +530,44 @@ function Get-Manifest {
 # `gh attestation verify` needs an authenticated gh, so a gh that is installed
 # but not logged in counts as absent, never as a pass. $GhName is a seam for
 # the tests; callers use the default.
+# Runs gh with a deadline so a hung gh cannot hang the install. Returns
+# @{ Code; Output; TimedOut }. Start-Process with redirected output files, then
+# WaitForExit(ms) and Kill. $env:SQUIRREL_TEST_GH_TIMEOUT_SECS replaces every
+# deadline and exists only as a test seam.
+function Invoke-GhBounded {
+    param([string]$GhName, [string[]]$GhArgs, [int]$TimeoutSec)
+
+    if ($env:SQUIRREL_TEST_GH_TIMEOUT_SECS) { $TimeoutSec = [int]$env:SQUIRREL_TEST_GH_TIMEOUT_SECS }
+    $exe = (Get-Command $GhName -ErrorAction SilentlyContinue | Select-Object -First 1).Source
+    $outFile = [System.IO.Path]::GetTempFileName()
+    $errFile = [System.IO.Path]::GetTempFileName()
+    $previousNotifier = $env:GH_NO_UPDATE_NOTIFIER
+    $previousPrompt = $env:GH_PROMPT_DISABLED
+    $env:GH_NO_UPDATE_NOTIFIER = "1"
+    $env:GH_PROMPT_DISABLED = "1"
+    try {
+        $quoted = @($GhArgs | ForEach-Object { if ($_ -match '[\s"]') { '"' + ($_ -replace '"', '\"') + '"' } else { $_ } })
+        $proc = Start-Process -FilePath $exe -ArgumentList $quoted -PassThru -NoNewWindow `
+            -RedirectStandardOutput $outFile -RedirectStandardError $errFile
+        $null = $proc.Handle   # keeps the handle so ExitCode is readable after exit
+        $timedOut = $false
+        if (-not $proc.WaitForExit($TimeoutSec * 1000)) {
+            $timedOut = $true
+            try { $proc.Kill($true) } catch { try { $proc.Kill() } catch { } }
+            $null = $proc.WaitForExit(5000)
+        } else {
+            $proc.WaitForExit()   # flush the redirected streams
+        }
+        $text = ((Get-Content $outFile -Raw -ErrorAction SilentlyContinue), (Get-Content $errFile -Raw -ErrorAction SilentlyContinue)) -join "`n"
+        $code = if ($timedOut) { -1 } else { $proc.ExitCode }
+        return @{ Code = $code; Output = $text.Trim(); TimedOut = $timedOut }
+    } finally {
+        $env:GH_NO_UPDATE_NOTIFIER = $previousNotifier
+        $env:GH_PROMPT_DISABLED = $previousPrompt
+        Remove-Item $outFile, $errFile -Force -ErrorAction SilentlyContinue
+    }
+}
+
 function Test-ReleaseAttestation {
     param([string]$Path, [string]$GhName = "gh")
 
@@ -539,40 +577,32 @@ function Test-ReleaseAttestation {
         return
     }
 
-    $previous = $ErrorActionPreference
-    $ErrorActionPreference = "Continue"
-    $previousNotifier = $env:GH_NO_UPDATE_NOTIFIER
-    $env:GH_NO_UPDATE_NOTIFIER = "1"
-    $skip = ""
-    $verifyOutput = ""
-    $verifyExit = 0
-    try {
-        & $GhName attestation verify --help *> $null
-        if ($LASTEXITCODE -ne 0) {
-            $skip = "This gh is too old for 'gh attestation verify': skipping the release provenance check, relying on the sha256 checksum only."
-        } else {
-            & $GhName auth status *> $null
-            if ($LASTEXITCODE -ne 0) {
-                $skip = "gh is not logged in: skipping the release provenance check, relying on the sha256 checksum only.`n  Run 'gh auth login' to enable it."
-            }
-        }
-        if (-not $skip) {
-            Write-Log "Verifying release attestation..."
-            $lines = & $GhName attestation verify $Path --repo $Repo 2>&1 | ForEach-Object { "$_" }
-            $verifyExit = $LASTEXITCODE
-            $verifyOutput = ($lines -join "`n")
-        }
-    } finally {
-        $ErrorActionPreference = $previous
-        $env:GH_NO_UPDATE_NOTIFIER = $previousNotifier
-    }
-
-    if ($skip) {
-        Write-Warn $skip
+    $help = Invoke-GhBounded -GhName $GhName -GhArgs @("attestation", "verify", "--help") -TimeoutSec 15
+    if ($help.TimedOut) {
+        Write-Warn "gh attestation verify --help timed out after 15s: skipping the release provenance check, relying on the sha256 checksum only."
         return
     }
-    if ($verifyExit -ne 0) {
-        $tail = (($verifyOutput -split "`n") | Select-Object -Last 10) -join "`n"
+    if ($help.Code -ne 0) {
+        Write-Warn "This gh is too old for 'gh attestation verify': skipping the release provenance check, relying on the sha256 checksum only."
+        return
+    }
+    $auth = Invoke-GhBounded -GhName $GhName -GhArgs @("auth", "status", "--hostname", "github.com") -TimeoutSec 15
+    if ($auth.TimedOut) {
+        Write-Warn "gh auth status timed out after 15s: skipping the release provenance check, relying on the sha256 checksum only."
+        return
+    }
+    if ($auth.Code -ne 0) {
+        Write-Warn "gh is not logged in: skipping the release provenance check, relying on the sha256 checksum only.`n  Run 'gh auth login' to enable it."
+        return
+    }
+
+    Write-Log "Verifying release attestation..."
+    $verify = Invoke-GhBounded -GhName $GhName -GhArgs @("attestation", "verify", $Path, "--repo", $Repo) -TimeoutSec 120
+    if ($verify.TimedOut) {
+        Write-Err "gh attestation verify timed out after 120s, nothing was installed." -Output $verify.Output
+    }
+    if ($verify.Code -ne 0) {
+        $tail = (($verify.Output -split "`n") | Select-Object -Last 10) -join "`n"
         Write-Host $tail
         Write-Err "Attestation verification failed: this binary was not built by the $Repo release workflow.`n  Nothing was installed. Do not run it." -Output $tail
     }
