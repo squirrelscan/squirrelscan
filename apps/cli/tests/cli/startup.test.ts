@@ -127,5 +127,8 @@ describe("light startup path (#2023)", () => {
     expect(makefile).toContain("--compile --splitting --minify");
     expect(makefile).toContain("--no-compile-autoload-dotenv");
     expect(makefile).toContain("--no-compile-autoload-bunfig");
+    // Release builds pin production mode so NODE_ENV-gated test knobs compile out (#1839, pub#1854).
+    expect(makefile).toContain("--production");
+    expect(makefile).toContain(`--define process.env.NODE_ENV='"production"'`);
   });
 });
