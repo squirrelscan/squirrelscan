@@ -23,7 +23,10 @@ import type { Config } from "@/config";
 import type { Result } from "@/controllers/types";
 import type { AuditReport } from "@/types";
 
-import { MAX_DURATION_MAX_SECONDS } from "@/audit/max-duration";
+import {
+  createDurationBudget,
+  MAX_DURATION_MAX_SECONDS,
+} from "@/audit/max-duration";
 import {
   AUDIT_LEVELS,
   configLevelOverrides,
@@ -194,6 +197,11 @@ async function runWebsiteAudit(input: {
     url: input.url,
     follow: input.followRedirect ?? config.crawler.follow_redirect === true,
     interactive: false,
+    // #1853: the redirect probe is inside the budget.
+    budgetDeadlineAt: createDurationBudget(
+      input.maxDuration ?? config.crawler.max_duration,
+      startedAt
+    )?.crawlStopAt,
     pin: ownHostsPinned({ pinOwnHosts: pinOwnHosts() }),
   });
   if (start.stop) {

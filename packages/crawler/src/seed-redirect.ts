@@ -44,6 +44,11 @@ export interface ResolveStartRedirectOptions {
   userAgent?: string;
   /** Per-hop timeout in ms. */
   timeoutMs?: number;
+  /**
+   * Epoch ms the whole resolution must be done by (`--max-duration`, #1853): each hop's
+   * timeout is the smaller of its own cap and what is left of this. Unset: the caps alone.
+   */
+  deadlineAt?: number;
   /** Hops allowed before the chain is reported as too long. */
   maxHops?: number;
 }
@@ -102,7 +107,10 @@ export async function resolveStartRedirect(
   const send = egressGuardedSend(options.transport ?? fetchUndecoded, policy);
   const maxHops = options.maxHops ?? MAX_SEED_REDIRECT_HOPS;
   const hopTimeout = options.timeoutMs ?? HOP_TIMEOUT_MS;
-  const deadline = Date.now() + TOTAL_BUDGET_MS;
+  const deadline = Math.min(
+    Date.now() + TOTAL_BUDGET_MS,
+    options.deadlineAt ?? Number.POSITIVE_INFINITY,
+  );
   const headers = {
     "user-agent": options.userAgent || FALLBACK_USER_AGENT,
     accept: "text/html,application/xhtml+xml,*/*;q=0.8",

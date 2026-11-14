@@ -310,6 +310,60 @@ describe("squirrel audit --max-duration", () => {
     expect(outcome.message.match(/Cannot reach/g)).toHaveLength(1);
   }, 60_000);
 
+  // #1853: the start-URL redirect probe (10 s cap) comes out of the budget. No reachability knob
+  // here: the probe keeps its production cap, so only the budget can end the run at BUDGET_S.
+  // Not concurrent: it measures wall time.
+  test("the start-URL redirect probe is cut to the budget, not its own 10 s cap", async () => {
+    const r = await auditUrlWithEnv(
+      { SQUIRREL_TEST_MIN_MARGIN_MS: String(MIN_MARGIN_MS) },
+      `http://127.0.0.1:${blackhole.port}/`,
+      "--max-duration",
+      String(BUDGET_S)
+    );
+    expect(r.code).toBe(5);
+    expect(r.elapsedMs).toBeGreaterThanOrEqual(BUDGET_S * 1000);
+    // Budget + the configured margin (a bound; the run actually ends at the budget) + start-up.
+    expect(r.elapsedMs).toBeLessThan(BUDGET_S * 1000 + MIN_MARGIN_MS);
+  }, 30_000);
+
+  // Without the flag the probe keeps its 10 s cap: a probe that is not cut answers after the
+  // cap, and the audit is then cut by the (knob-shortened) reachability check, so only the
+  // resolver is observed, directly.
+  test("without --max-duration the probe keeps its own cap", async () => {
+    const { resolveStartRedirect } =
+      await import("@squirrelscan/crawler/seed-redirect");
+    const seen: number[] = [];
+    await resolveStartRedirect("http://127.0.0.1:1/", {
+      policy: { resolve: async () => ["127.0.0.1"] },
+      transport: (_url, init) =>
+        new Promise<Response>((_resolve, reject) => {
+          const started = Date.now();
+          init.signal?.addEventListener("abort", () => {
+            seen.push(Date.now() - started);
+            reject(new Error("aborted"));
+          });
+        }),
+      timeoutMs: 400,
+    });
+    // The cap (here 400 ms) applies as given; a far deadline does not shorten it.
+    expect(seen[0]).toBeGreaterThanOrEqual(350);
+    const cut: number[] = [];
+    await resolveStartRedirect("http://127.0.0.1:1/", {
+      policy: { resolve: async () => ["127.0.0.1"] },
+      transport: (_url, init) =>
+        new Promise<Response>((_resolve, reject) => {
+          const started = Date.now();
+          init.signal?.addEventListener("abort", () => {
+            cut.push(Date.now() - started);
+            reject(new Error("aborted"));
+          });
+        }),
+      timeoutMs: 5_000,
+      deadlineAt: Date.now() + 300,
+    });
+    expect(cut[0]).toBeLessThan(1_000);
+  }, 30_000);
+
   test.concurrent("the unreachable outputs never carry userinfo, query or fragment (budget and not)", async () => {
     const secret = (port: number | undefined) => {
       // Built at runtime: a literal user:password@ URL trips the secret scan.
