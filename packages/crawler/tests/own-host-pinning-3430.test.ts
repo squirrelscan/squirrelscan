@@ -105,7 +105,16 @@ afterEach(() => {
 });
 
 /** A resolver from a fixed table that counts every name it is asked for. */
-function resolver(answers: Record<string, string[] | (() => string[])>) {
+function resolver(overrides: Record<string, string[] | (() => string[])>) {
+  // The fixture redirects to the www twin and a cdn name. A name the table does not
+  // know fails with ENOTFOUND, which the crawler retries with real backoff (~3 s per
+  // crawl). Unless a test says otherwise they answer a metadata address, which is
+  // refused at once and never requested (asserted by every test via reachedRefused()).
+  const answers: Record<string, string[] | (() => string[])> = {
+    "www.site.test": ["169.254.169.254"],
+    "cdn.site.test": ["169.254.169.254"],
+    ...overrides,
+  };
   const asked: string[] = [];
   const resolveHost = async (hostname: string) => {
     asked.push(hostname);

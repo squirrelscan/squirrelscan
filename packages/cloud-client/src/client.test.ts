@@ -1,9 +1,22 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
 
 import { createCloudClient } from "./client";
 import { CloudClientError } from "./errors";
 
 const realFetch = globalThis.fetch;
+
+// The client's retry backoff is a real setTimeout of >= 1000 ms (client.ts backoff()).
+// Collapse those waits so retry tests run fast; per-request timeouts use
+// AbortSignal.timeout (not setTimeout) and the tests assert attempt counts and upper
+// time bounds only, so retry behaviour and bounds are unchanged.
+const realSetTimeout = globalThis.setTimeout;
+beforeAll(() => {
+  globalThis.setTimeout = ((fn: (...a: unknown[]) => void, ms?: number, ...args: unknown[]) =>
+    realSetTimeout(fn, ms !== undefined && ms >= 1000 ? 1 : ms, ...args)) as typeof setTimeout;
+});
+afterAll(() => {
+  globalThis.setTimeout = realSetTimeout;
+});
 afterEach(() => {
   globalThis.fetch = realFetch;
 });
