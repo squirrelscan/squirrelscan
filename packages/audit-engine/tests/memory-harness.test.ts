@@ -29,7 +29,11 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { generateSiteModel, writeCrawlToStorage } from "@squirrelscan/synthetic-site";
+import {
+  generateSiteModel,
+  writeCrawlToStorage,
+  type DuplicateGroupSpec,
+} from "@squirrelscan/synthetic-site";
 import { SQLiteStorage } from "@squirrelscan/crawler";
 
 import { getGoldenBaselineConfig, run, runV1Pipeline } from "./helpers/golden-baseline";
@@ -106,7 +110,8 @@ async function runMemoryHarness(pageCount: number, label: string): Promise<Memor
     issues: {
       longH1: { ratio: 0.05 },
       oversizeTitle: { ratio: 0.05 },
-      duplicateTitles: { ratio: 0.02 },
+      // `ratio` is not part of DuplicateGroupSpec; kept as-is (ignored by the model).
+      duplicateTitles: { ratio: 0.02 } as unknown as DuplicateGroupSpec,
       orphanPages: { ratio: 0.02 },
       brokenLinks: { ratio: 0.03 },
     },
@@ -139,10 +144,10 @@ async function runMemoryHarness(pageCount: number, label: string): Promise<Memor
   sample("done");
   await run(storage.close());
 
-  const final = flush(true, report.healthScore.overall);
+  const final = flush(true, report.healthScore!.overall);
   console.log(
     `[memory-harness] ${label}: peak RSS ${final.peakRssMb}MB over ${samples.length} samples, ` +
-      `healthScore=${report.healthScore.overall}, report at ${reportPath}`,
+      `healthScore=${report.healthScore!.overall}, report at ${reportPath}`,
   );
   return final;
 }

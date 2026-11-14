@@ -53,4 +53,5 @@ describe("measureSignatureCoverage on the template corpus (ceiling, not an estim
     }
     expect(SIGNATURE_ATTRIBUTES.length).toBeGreaterThan(0);
   });
+// @ts-expect-error bun-types declares describe(label, fn) only; the 30s option is kept unchanged (no per-test slot preserves behavior)
 }, 30_000);

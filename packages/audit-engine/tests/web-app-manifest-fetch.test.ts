@@ -66,7 +66,7 @@ beforeAll(() => {
         });
       }
       if (path === "/static/icon.png") {
-        return new Response(pngHeader(256, 256), { headers: { "content-type": "image/png" } });
+        return new Response(pngHeader(256, 256) as unknown as BodyInit, { headers: { "content-type": "image/png" } });
       }
       // Same-site manifest paths that redirect off the site: to another host
       // (`localhost` reaches this server, but is not the site's host) and to
@@ -142,7 +142,7 @@ function judge(webAppManifests: Awaited<ReturnType<typeof fetchAll>>, dropped = 
     parsed: {} as ParsedPage,
     site: { baseUrl: base, pages: [], webAppManifests, webAppManifestsDropped: dropped },
     options: {},
-  } as Parameters<typeof mobile.webAppManifestRule.run>[0]) as {
+  } as unknown as Parameters<typeof mobile.webAppManifestRule.run>[0]) as {
     checks: Array<{
       name: string;
       status: string;

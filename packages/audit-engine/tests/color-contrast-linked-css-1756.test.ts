@@ -87,7 +87,7 @@ async function contrastFor(
   const assets = await Effect.runPromise(
     fetchAssetsFromOccurrences(storageFor(base), "fixture-crawl", occurrences, config, undefined),
   );
-  return colorContrastRule.run({
+  return (colorContrastRule.run({
     page: { url, html: markup, statusCode: 200, loadTime: 0, headers: {} },
     parsed: { document } as never,
     site: {
@@ -98,7 +98,7 @@ async function contrastFor(
       stylesheetBackgrounds: assets.stylesheetBackgrounds,
     },
     options: {},
-  }).checks as CheckResult[];
+  }) as { checks: CheckResult[] }).checks;
 }
 
 const named = (checks: CheckResult[], name: string) => checks.filter((c) => c.name === name);

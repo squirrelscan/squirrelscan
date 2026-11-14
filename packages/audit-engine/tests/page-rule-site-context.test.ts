@@ -38,7 +38,7 @@ import {
 import { streamPageRules } from "../src/streaming";
 import { getGoldenBaselineConfig } from "./helpers/golden-baseline";
 
-const run = <A>(e: Effect.Effect<A, never, never>) => Effect.runPromise(e);
+const run = <A, E>(e: Effect.Effect<A, E, never>) => Effect.runPromise(e);
 const tmpDir = mkdtempSync(join(tmpdir(), "squirrelscan-site-context-"));
 afterAll(() => rmSync(tmpDir, { recursive: true, force: true }));
 

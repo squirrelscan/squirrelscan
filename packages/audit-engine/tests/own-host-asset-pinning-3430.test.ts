@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
 import type { Config } from "@squirrelscan/config";
-import { createCrawler } from "@squirrelscan/crawler";
+import { createCrawler, type SQLiteStorage } from "@squirrelscan/crawler";
 import { ASSET_FETCH_REFUSED_ERROR } from "@squirrelscan/utils/constants";
 
 import { runStreamingPreRules } from "../src/streaming-pre-rules";
@@ -107,7 +107,7 @@ async function assetsOf(pinOwnHosts: boolean) {
     internal_links: { enabled: false },
   } as unknown as Config;
   const pre = await Effect.runPromise(
-    runStreamingPreRules(crawler.storage, crawlId, config, {
+    runStreamingPreRules(crawler.storage as SQLiteStorage, crawlId, config, {
       resourceOverrides: { pinOwnHosts, resolveHost },
     }),
   );

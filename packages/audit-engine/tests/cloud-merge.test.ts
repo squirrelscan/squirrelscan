@@ -80,7 +80,7 @@ const pageMeta = {
   id: "meta-description",
   name: "Meta Description",
   description: "Pages should have a meta description",
-  category: "content",
+  category: "content" as const,
   scope: "page" as const,
   severity: "warning" as const,
   weight: 10,
@@ -542,7 +542,7 @@ describe("runCloudSmartAudits — unsampled resolution signal (#1185)", () => {
     // synthetic pass — so the union score strictly recovers.
     const scoreWithout = calculateHealthScore({ results: noSignal.unionRuleResults }).overall;
     const scoreWith = calculateHealthScore({ results: withSignal.unionRuleResults }).overall;
-    expect(scoreWith).toBeGreaterThan(scoreWithout);
+    expect(scoreWith!).toBeGreaterThan(scoreWithout!);
     const union = withSignal.unionRuleResults.get(RULE)!;
     expect(union.checks.some((c) => c.pageUrl === "https://x.test/contact")).toBe(false);
     expect(union.syntheticPassCount ?? 0).toBeGreaterThan(0); // P3 counts as clean carried

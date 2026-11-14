@@ -6,7 +6,7 @@ import { Effect } from "effect";
 
 import type { Config } from "@squirrelscan/config";
 import type { CheckResult } from "@squirrelscan/core-contracts";
-import { createCrawler } from "@squirrelscan/crawler";
+import { createCrawler, type SQLiteStorage } from "@squirrelscan/crawler";
 
 import { runRulesOnStorage, runStreamingRules, buildSiteContext } from "../src/adapter";
 import { runStreamingPreRules } from "../src/streaming-pre-rules";
@@ -90,7 +90,7 @@ async function audit(engine: "v1" | "v2") {
     }),
   );
   const crawlId = await Effect.runPromise(crawler.start(`${origin}/`, `${origin}/`));
-  const storage = crawler.storage;
+  const storage = crawler.storage as SQLiteStorage;
   const config = {
     rule_options: {},
     rules: { enable: RULES },
@@ -107,7 +107,7 @@ async function audit(engine: "v1" | "v2") {
         return yield* runRulesOnStorage(storage, crawlId, siteContext, config, preRules.assets);
       }
       return yield* runStreamingRules(storage, crawlId, config, preRules.assets);
-    }) as Effect.Effect<{ siteRuleResults: Map<string, CheckResult[]> }, never, never>,
+    }) as unknown as Effect.Effect<{ siteRuleResults: Map<string, CheckResult[]> }, never, never>,
   );
   return { origin, ran };
 }

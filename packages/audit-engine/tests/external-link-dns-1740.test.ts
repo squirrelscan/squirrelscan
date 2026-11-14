@@ -11,7 +11,7 @@ import {
   EXTERNAL_LINK_INVALID_SUFFIX_ERROR,
   type CheckResult,
 } from "@squirrelscan/core-contracts";
-import { createCrawler } from "@squirrelscan/crawler";
+import { createCrawler, type SQLiteStorage } from "@squirrelscan/crawler";
 import type { EgressPolicy, ResolveHost } from "@squirrelscan/utils/public-egress";
 
 import { runStreamingRules } from "../src/adapter";
@@ -194,7 +194,7 @@ describe("engine: a dead host reaches links/broken-external-links as a failure (
     } as unknown as Config;
 
     const preRules = await Effect.runPromise(
-      runStreamingPreRules(crawler.storage, crawlId, config, {
+      runStreamingPreRules(crawler.storage as SQLiteStorage, crawlId, config, {
         externalLinks: { config: config.external_links, linkCache: null, bulkChecker },
       }),
     );
@@ -203,7 +203,7 @@ describe("engine: a dead host reaches links/broken-external-links as a failure (
       "https://partner.example-live.net/",
     ]);
     const ran = await Effect.runPromise(
-      runStreamingRules(crawler.storage, crawlId, config, preRules.assets) as Effect.Effect<
+      runStreamingRules(crawler.storage as SQLiteStorage, crawlId, config, preRules.assets) as Effect.Effect<
         { siteRuleResults: Map<string, CheckResult[]> },
         never,
         never

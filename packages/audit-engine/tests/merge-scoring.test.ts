@@ -14,14 +14,14 @@ import {
   fingerprint,
   findingKey,
   flattenChecks,
-  type CarriedFinding,
 } from "../src/merge";
+import type { CarriedFinding } from "../src/scoring";
 
 const META: RuleMeta = {
   id: "core/meta-title",
   name: "Meta Title",
   description: "Page has a meta title",
-  category: "core",
+  category: "core" as const,
   scope: "page",
   severity: "error",
   weight: 5,
@@ -89,9 +89,9 @@ describe("union scoring — no inflation on partial re-audit", () => {
 
     // The union reconstructs the same 100-page / 30-fail population, so the
     // score must match the full audit (within rounding).
-    expect(Math.abs(partialScore - fullScore)).toBeLessThanOrEqual(1);
+    expect(Math.abs(partialScore! - fullScore!)).toBeLessThanOrEqual(1);
     // Critically: the partial re-audit does NOT inflate above the full score.
-    expect(partialScore).toBeLessThanOrEqual(fullScore + 1);
+    expect(partialScore).toBeLessThanOrEqual(fullScore! + 1);
   });
 
   test("WITHOUT union scoring, a partial re-audit inflates (control)", () => {
@@ -101,7 +101,7 @@ describe("union scoring — no inflation on partial re-audit", () => {
     // Same fail ratio here, so equal — bump the re-audit to be "cleaner" to show
     // inflation: re-audit 10 pages with 0 fails.
     const cleanReaudit = calculateHealthScore({ results: freshMapFor(10, 0) }).overall;
-    expect(cleanReaudit).toBeGreaterThan(fullScore);
+    expect(cleanReaudit!).toBeGreaterThan(fullScore!);
     // (naiveScore included to document the same-ratio case is stable.)
     expect(naiveScore).toBeGreaterThanOrEqual(0);
   });
@@ -137,7 +137,7 @@ describe("union scoring — no inflation on partial re-audit", () => {
       ruleMetaIndex: new Map([[META.id, META]]),
     });
     const partial = calculateHealthScore({ results: union }).overall;
-    expect(Math.abs(partial - full)).toBeLessThanOrEqual(1);
+    expect(Math.abs(partial! - full!)).toBeLessThanOrEqual(1);
   });
 });
 

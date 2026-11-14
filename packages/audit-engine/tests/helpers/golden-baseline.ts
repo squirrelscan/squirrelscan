@@ -19,14 +19,12 @@
 // exactly ONE place that chains the four pipeline calls.
 
 import type {
-  Config,
-  CrawlStorage,
   FullAuditReport,
-  PageRecord,
   PreFetchedAssets,
   RuleExecutionResult,
 } from "@squirrelscan/audit-engine";
-import type { CheckStatus } from "@squirrelscan/core-contracts";
+import type { Config } from "@squirrelscan/config";
+import type { CheckStatus, CrawlStorage, PageRecord } from "@squirrelscan/core-contracts";
 import type { PageRuleLoopHooks } from "@squirrelscan/audit-engine";
 
 import type { IssueMixOptions, SiteModel } from "@squirrelscan/synthetic-site";
@@ -288,7 +286,7 @@ function buildSnapshot(
 
   const perRuleTally = [...tallyByRule.values()].sort((a, b) => a.ruleId.localeCompare(b.ruleId));
 
-  const hs = report.healthScore;
+  const hs = report.healthScore!;
   return {
     meta: { pageCount },
     healthScore: {

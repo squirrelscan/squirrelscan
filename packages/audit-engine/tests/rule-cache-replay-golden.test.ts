@@ -29,7 +29,7 @@ import { createRunner, fingerprintPage, RuleRunner } from "@squirrelscan/rules";
 import type { ContentStoreAdapter } from "@squirrelscan/crawler";
 import type { PreFetchedAssets } from "@squirrelscan/audit-engine";
 
-import type { Config } from "../src/adapter";
+import type { Config } from "@squirrelscan/config";
 import { generateReportFromStorage, runStreamingRules } from "../src/adapter";
 import { parseHtmlForRules } from "../src/adapter";
 import { bindRuleCache } from "../src/rule-cache";
@@ -39,7 +39,7 @@ import { streamPageRules } from "../src/streaming";
 import type { RuleCacheStore } from "../src/rule-cache";
 import { getGoldenBaselineConfig } from "./helpers/golden-baseline";
 
-const run = <A>(e: Effect.Effect<A, never, never>) => Effect.runPromise(e);
+const run = <A, E>(e: Effect.Effect<A, E, never>) => Effect.runPromise(e);
 const tmpDir = mkdtempSync(join(tmpdir(), "squirrelscan-rule-cache-"));
 afterAll(() => rmSync(tmpDir, { recursive: true, force: true }));
 

@@ -7,7 +7,8 @@ import { describe, expect, test } from "bun:test";
 
 import type { CheckResult } from "@squirrelscan/core-contracts";
 import { RuleRunner } from "@squirrelscan/rules";
-import type { PageData, Rule, RuleNamespace, RuleRunResult } from "@squirrelscan/rules/types";
+import type { RuleNamespace } from "@squirrelscan/rules";
+import type { PageData, Rule, RuleRunResult } from "@squirrelscan/rules/types";
 
 import { addChecksToTally, calculateHealthScore, emptyTally } from "../src/scoring";
 

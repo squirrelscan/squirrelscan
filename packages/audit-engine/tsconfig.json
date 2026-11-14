@@ -8,6 +8,7 @@
     "skipLibCheck": true,
     "noEmit": true,
     "types": ["bun", "node"],
+    "jsx": "react-jsx",
     "paths": {
       "@squirrelscan/core-contracts": ["../core-contracts/src/index.ts"],
       "@squirrelscan/fetchers": ["../fetchers/src/index.ts"],
@@ -16,5 +17,5 @@
       "@squirrelscan/utils/*": ["../utils/src/*"]
     }
   },
-  "include": ["src/**/*.ts", "src/**/*.d.ts"]
+  "include": ["src/**/*.ts", "src/**/*.d.ts", "tests/**/*.ts"]
 }

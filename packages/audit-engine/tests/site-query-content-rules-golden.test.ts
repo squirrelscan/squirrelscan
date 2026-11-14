@@ -78,7 +78,7 @@ function feat(row: Row): PageFeatureRow {
     faviconHref: null,
     themeColor: null,
     ogImage: null,
-  };
+  } as unknown as PageFeatureRow;
 }
 
 // normalized_url ASC order (matches getPageFeaturesPage cursor + getPages).

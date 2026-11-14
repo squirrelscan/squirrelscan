@@ -164,7 +164,7 @@ async function runBothWays(
     url: p.normalizedUrl,
     finalUrl: p.finalUrl,
     statusCode: p.status,
-    headers: p.contentType ? { "content-type": p.contentType } : {},
+    headers: (p.contentType ? { "content-type": p.contentType } : {}) as Record<string, string>,
     parsed: {
       links: parseLinks(p.parsedData),
       ...parseHeadInfo(p.parsedData),
@@ -653,7 +653,7 @@ function feat(over: Partial<PageFeatureRow> = {}): PageFeatureRow {
     themeColor: null,
     ogImage: null,
     ...over,
-  };
+  } as PageFeatureRow;
 }
 
 describe("createSiteQuery — page_features-backed aggregates", () => {

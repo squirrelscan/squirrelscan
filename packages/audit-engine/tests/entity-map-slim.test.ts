@@ -69,7 +69,7 @@ function map(nodes: EntityMapNode[], edges: EntityMapEdge[], pageCount = 0): Ent
       nodesWithStableId: 0,
       stableIdShare: 0,
       countsByType: { Thing: nodes.length },
-    },
+    } as never,
     nodes,
     edges,
     pages: Array.from({ length: pageCount }, (_, i) => ({

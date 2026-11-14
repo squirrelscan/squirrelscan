@@ -6,7 +6,7 @@ import { Effect } from "effect";
 
 import type { Config } from "@squirrelscan/config";
 import type { CheckResult } from "@squirrelscan/core-contracts";
-import { createCrawler } from "@squirrelscan/crawler";
+import { createCrawler, type SQLiteStorage } from "@squirrelscan/crawler";
 
 import { runStreamingRules } from "../src/adapter";
 import { runStreamingPreRules } from "../src/streaming-pre-rules";
@@ -82,10 +82,10 @@ async function audit(slowMs: number, warmFirst = false) {
     internal_links: { enabled: false },
   } as unknown as Config;
   const preRules = await Effect.runPromise(
-    runStreamingPreRules(crawler.storage, crawlId, config, {}),
+    runStreamingPreRules(crawler.storage as SQLiteStorage, crawlId, config, {}),
   );
   const ran = await Effect.runPromise(
-    runStreamingRules(crawler.storage, crawlId, config, preRules.assets) as Effect.Effect<
+    runStreamingRules(crawler.storage as SQLiteStorage, crawlId, config, preRules.assets) as Effect.Effect<
       { pageRuleResults: Map<string, Map<string, CheckResult[]>> },
       never,
       never

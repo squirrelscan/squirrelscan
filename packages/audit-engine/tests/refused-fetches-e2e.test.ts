@@ -11,7 +11,7 @@ import { Effect } from "effect";
 
 import type { Config } from "@squirrelscan/config";
 import type { CheckResult } from "@squirrelscan/core-contracts";
-import { createCrawler } from "@squirrelscan/crawler";
+import { createCrawler, type SQLiteStorage } from "@squirrelscan/crawler";
 
 import {
   buildSiteContext,
@@ -77,7 +77,7 @@ async function auditWall(engine: Engine, status: number, headers: Record<string,
     }),
   );
   const crawlId = await Effect.runPromise(crawler.start(`${origin}/`, `${origin}/`));
-  const storage = crawler.storage;
+  const storage = crawler.storage as SQLiteStorage;
 
   return Effect.runPromise(
     Effect.gen(function* () {

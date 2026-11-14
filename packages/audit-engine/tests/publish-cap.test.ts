@@ -152,7 +152,7 @@ function entityMap(nodes: number): EntityMap {
       nodesWithStableId: 0,
       stableIdShare: 0,
       countsByType: { Product: nodes },
-    },
+    } as never,
     nodes: list,
     edges: [],
     pages: [],

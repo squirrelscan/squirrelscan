@@ -7,7 +7,7 @@ import { Effect } from "effect";
 
 import type { Config } from "@squirrelscan/config";
 import type { CheckResult } from "@squirrelscan/core-contracts";
-import { createCrawler } from "@squirrelscan/crawler";
+import { createCrawler, type SQLiteStorage } from "@squirrelscan/crawler";
 
 import { buildSiteContext, runRulesOnStorage, runStreamingRules } from "../src/adapter";
 import { runStreamingPreRules } from "../src/streaming-pre-rules";
@@ -20,7 +20,7 @@ afterEach(() => {
 /** Home links every page; /en names a redirect, a 404, a noindex page and a page with no return link. */
 function serve(): { origin: string; hits: string[] } {
   const hits: string[] = [];
-  const server = Bun.serve({
+  const server: ReturnType<typeof Bun.serve> = Bun.serve({
     port: 0,
     fetch(req) {
       const B = `http://localhost:${server.port}`;
@@ -94,7 +94,7 @@ async function audit(engine: "v1" | "v2") {
     }),
   );
   const crawlId = await Effect.runPromise(crawler.start(`${origin}/`, `${origin}/`));
-  const storage = crawler.storage;
+  const storage = crawler.storage as SQLiteStorage;
   const hitsAfterCrawl = hits.length;
   const ran = await Effect.runPromise(
     Effect.gen(function* () {
@@ -105,7 +105,7 @@ async function audit(engine: "v1" | "v2") {
         return yield* runRulesOnStorage(storage, crawlId, siteContext, CONFIG, pre.assets);
       }
       return yield* runStreamingRules(storage, crawlId, CONFIG, pre.assets);
-    }) as Effect.Effect<{ ruleResultsMap: Map<string, { checks: CheckResult[] }> }, never, never>,
+    }) as unknown as Effect.Effect<{ ruleResultsMap: Map<string, { checks: CheckResult[] }> }, never, never>,
   );
   const checks = (ran.ruleResultsMap.get("i18n/hreflang-targets")?.checks ?? []) as CheckResult[];
   const ids = (name: string) =>

@@ -12,7 +12,7 @@ import { Effect } from "effect";
 
 import type { Config } from "@squirrelscan/config";
 import type { CheckResult } from "@squirrelscan/core-contracts";
-import { createCrawler } from "@squirrelscan/crawler";
+import { createCrawler, type SQLiteStorage } from "@squirrelscan/crawler";
 import { notCheckedLines } from "@squirrelscan/report";
 
 import { buildSiteContext, runRulesOnStorage, runStreamingRules } from "../src/adapter";
@@ -101,7 +101,7 @@ async function audit(engine: "v1" | "v2", maxTargets?: number) {
     }),
   );
   const crawlId = await Effect.runPromise(crawler.start(`${origin}/`, `${origin}/`));
-  const storage = crawler.storage;
+  const storage = crawler.storage as SQLiteStorage;
   const config = {
     rule_options: {},
     rules: { enable: ["links/broken-links"] },
@@ -121,7 +121,7 @@ async function audit(engine: "v1" | "v2", maxTargets?: number) {
         return yield* runRulesOnStorage(storage, crawlId, siteContext, config, preRules.assets);
       }
       return yield* runStreamingRules(storage, crawlId, config, preRules.assets);
-    }) as Effect.Effect<{ siteRuleResults: Map<string, CheckResult[]> }, never, never>,
+    }) as unknown as Effect.Effect<{ siteRuleResults: Map<string, CheckResult[]> }, never, never>,
   );
   const checks = ran.siteRuleResults.get("links/broken-links") ?? [];
   const lines = notCheckedLines({

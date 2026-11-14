@@ -515,7 +515,7 @@ describe("rescore of a capped report (repo#2657)", () => {
     const capped = await publish(seed.clone(), "audit_2", await clippedBody(report, 15), NOW);
     expect(capped.scoringTallies).toBeDefined();
     expect(rescored(capped).healthScore.overall).toBeLessThanOrEqual(
-      rescored(uncapped).healthScore.overall,
+      rescored(uncapped).healthScore.overall!,
     );
   });
 
@@ -543,7 +543,7 @@ describe("rescore of a capped report (repo#2657)", () => {
     const uncapped = await publish(seed.clone(), "audit_2", uncappedBody(report), NOW);
     const capped = await publish(seed.clone(), "audit_2", body, NOW);
     expect(rescored(capped).healthScore.overall).toBeLessThanOrEqual(
-      rescored(uncapped).healthScore.overall,
+      rescored(uncapped).healthScore.overall!,
     );
     expect(capped.carriedLastSeen.has(`${noisy(url(33))}|perf/ttfb|ttfb`)).toBe(true);
   });
@@ -626,7 +626,7 @@ describe("rescore of a capped report (repo#2657)", () => {
     const uncapped = await publish(seed.clone(), "audit_2", uncappedBody(report), NOW);
     const capped = await publish(seed.clone(), "audit_2", body, NOW);
     expect(rescored(capped).healthScore.overall).toBeLessThanOrEqual(
-      rescored(uncapped).healthScore.overall,
+      rescored(uncapped).healthScore.overall!,
     );
     expect(comparable(rescored(capped))).toEqual(comparable(rescored(uncapped)));
     expect(uncapped.carriedLastSeen.has(`${page}|${key}`)).toBe(true);
@@ -685,8 +685,8 @@ describe("rescore of a capped report (repo#2657)", () => {
       expect(body.resolutionSignal?.crawledHashes?.length).toBeGreaterThan(0);
       const uncapped = rescored(await publish(seed.clone(), "audit_2", uncappedBody(report), NOW));
       const capped = rescored(await publish(seed.clone(), "audit_2", body, NOW));
-      expect(capped.healthScore.overall).toBeLessThanOrEqual(uncapped.healthScore.overall);
-      expect(uncapped.healthScore.overall - capped.healthScore.overall).toBeLessThanOrEqual(1);
+      expect(capped.healthScore.overall!).toBeLessThanOrEqual(uncapped.healthScore.overall!);
+      expect(uncapped.healthScore.overall! - capped.healthScore.overall!).toBeLessThanOrEqual(1);
       // (#2688) With the unlisted skips named, the counts come out exact.
       expect(capped.totals).toEqual(uncapped.totals);
     },

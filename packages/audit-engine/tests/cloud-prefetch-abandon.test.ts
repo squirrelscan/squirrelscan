@@ -23,12 +23,12 @@ import {
 } from "../src/cloud-prefetch";
 import { runContainerCloudPrefetchFromPayloads } from "../src/cloud-prefetch-run";
 
-const config: CloudConfig = {
+const config = {
   enabled: true,
   max_credits_per_audit: 0,
   confirm_threshold: 1_000_000,
   batch_size: 1,
-};
+} as unknown as CloudConfig;
 
 const pages: CloudPagePayload[] = Array.from({ length: 6 }, (_, i) => ({
   url: `https://example.com/p${i}`,
@@ -96,7 +96,7 @@ function partialClient(submitted: string[], release: { p2?: () => void } = {}) {
     getBalance: async () => BALANCE,
     siteMetadata: async () => METADATA,
     keywordGaps: async () => ({ gaps: [], summary: "" }),
-    render: (req) => {
+    render: (req: Parameters<CloudServicesClient["render"]>[0]) => {
       const url = req.urls[0];
       submitted.push(url);
       if (url.endsWith("/p0")) return Promise.resolve({ jobId: "done", status: "queued" });
@@ -108,7 +108,7 @@ function partialClient(submitted: string[], release: { p2?: () => void } = {}) {
       }
       return hang();
     },
-    renderResult: async (jobId): Promise<RenderResultResponse> =>
+    renderResult: async (jobId: string): Promise<RenderResultResponse> =>
       jobId === "done"
         ? {
             jobId,
@@ -116,7 +116,7 @@ function partialClient(submitted: string[], release: { p2?: () => void } = {}) {
             results: [{ url: "https://example.com/p0", status: 200, html: "<html>p0</html>" }],
           }
         : { jobId, status: "running" },
-  } as CloudServicesClient;
+  } as unknown as CloudServicesClient;
   return client;
 }
 
@@ -225,13 +225,13 @@ describe("abandoned cloud prefetch (#280)", () => {
         getBalance: async () => BALANCE,
         siteMetadata: async () => METADATA,
         keywordGaps: async () => ({ gaps: [], summary: "" }),
-        render: async (req) => ({ jobId: req.urls[0], status: "queued" }),
+        render: async (req: Parameters<CloudServicesClient["render"]>[0]) => ({ jobId: req.urls[0], status: "queued" }),
         renderResult: async (jobId: string) => ({
           jobId,
           status: "done",
           results: [{ url: jobId, status: 200, html: `<html>${jobId}</html>` }],
         }),
-      }) as CloudServicesClient;
+      }) as unknown as CloudServicesClient;
 
     const plain = await prefetchCloudData(input(complete()));
     const bounded = await prefetchCloudDataWithDeadline(input(complete()), 60_000);

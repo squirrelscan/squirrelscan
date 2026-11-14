@@ -19,6 +19,7 @@ import {
 } from "@squirrelscan/audit-engine";
 import { SQLiteStorage } from "@squirrelscan/crawler";
 
+import type { StreamingRuleExecutionResult } from "../src/adapter";
 import { buildV2Report } from "../src/report-stream";
 import { canonicalFixtureDb, getGoldenBaselineConfig, run } from "./helpers/golden-baseline";
 
@@ -30,7 +31,7 @@ import { canonicalFixtureDb, getGoldenBaselineConfig, run } from "./helpers/gold
 interface SharedRun {
   storage: SQLiteStorage;
   crawlId: string;
-  streamResult: Awaited<ReturnType<typeof runStreamingRules>>;
+  streamResult: StreamingRuleExecutionResult;
 }
 let shared: Promise<SharedRun> | undefined;
 function sharedRun(): Promise<SharedRun> {
@@ -111,7 +112,7 @@ describe("v2 report assembly — byte-identical to v1 except pages[] (#1021 PR-F
 
         console.log(
           `[report-v2-golden] pages(v1)=${v1Report.pages.length} pages(v2)=${v2Report.pages.length} ` +
-            `healthScore=${v2Report.healthScore.overall} passed=${v2Report.passed} ` +
+            `healthScore=${v2Report.healthScore!.overall} passed=${v2Report.passed} ` +
             `warnings=${v2Report.warnings} failed=${v2Report.failed} ` +
             `summaryDupTitles=${v2Report.summary.missingTitles.length}`,
         );

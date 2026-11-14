@@ -228,7 +228,7 @@ describe("streamed pre-rules collectors — batched === resident (#1860)", () =>
           }
         : {},
     ).toEqual(
-      legacy.gaps["keyword-gaps"] ? { "keyword-gaps": legacy.gaps["keyword-gaps"] } : {},
+      (legacy.gaps["keyword-gaps"] ? { "keyword-gaps": legacy.gaps["keyword-gaps"] } : {}) as never,
     );
 
     // Vacuity guards: the sample and the blocklist must be non-trivial, and the

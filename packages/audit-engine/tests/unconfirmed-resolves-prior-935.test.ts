@@ -132,7 +132,7 @@ async function ruleChecks(ruleId: string, url: string, body: string): Promise<Ch
   const page = { url, html, statusCode: 200, loadTime: 0, headers: {} };
   const result = await runner.runPageRules(page, {
     baseUrl: "https://example.com",
-    pages: [page],
+    pages: [page as never],
     robotsTxt: null,
     sitemaps: null,
   });

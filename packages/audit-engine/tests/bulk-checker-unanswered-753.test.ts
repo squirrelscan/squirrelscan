@@ -11,7 +11,7 @@ import { Effect } from "effect";
 
 import type { Config } from "@squirrelscan/config";
 import type { CheckResult } from "@squirrelscan/core-contracts";
-import { createCrawler } from "@squirrelscan/crawler";
+import { createCrawler, type SQLiteStorage } from "@squirrelscan/crawler";
 
 import { runStreamingRules } from "../src/adapter";
 import {
@@ -221,7 +221,7 @@ describe("a local site's external links and the dead-links service", () => {
       }),
     );
     const crawlId = await Effect.runPromise(crawler.start(home, home));
-    const storage = crawler.storage;
+    const storage = crawler.storage as SQLiteStorage;
     const config = {
       rule_options: {},
       rules: { enable: ["links/dead-links", "links/broken-external-links"] },

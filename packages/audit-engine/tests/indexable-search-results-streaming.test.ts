@@ -8,7 +8,7 @@ import { Effect } from "effect";
 
 import type { Config } from "@squirrelscan/config";
 import type { CheckResult } from "@squirrelscan/core-contracts";
-import { createCrawler } from "@squirrelscan/crawler";
+import { createCrawler, type SQLiteStorage } from "@squirrelscan/crawler";
 
 import { buildSiteContext, runRulesOnStorage, runStreamingRules } from "../src/adapter";
 import { runStreamingPreRules } from "../src/streaming-pre-rules";
@@ -85,7 +85,7 @@ async function audit(engine: "v1" | "v2") {
     }),
   );
   const crawlId = await Effect.runPromise(crawler.start(`${origin}/`, `${origin}/`));
-  const storage = crawler.storage;
+  const storage = crawler.storage as SQLiteStorage;
   const stored = await Effect.runPromise(storage.getPages(crawlId));
   const ran = await Effect.runPromise(
     Effect.gen(function* () {

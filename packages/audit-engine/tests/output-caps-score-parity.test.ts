@@ -32,7 +32,7 @@ function run(rule: Rule, ctx: RuleContext): CheckResult[] {
 
 function score(rule: Rule, checks: CheckResult[]): number {
   const results = new Map<string, RuleRunResult>([[rule.meta.id, { meta: rule.meta, checks }]]);
-  return calculateHealthScore({ results }).overall;
+  return calculateHealthScore({ results }).overall!;
 }
 
 function sitemapCtx(locs: string[], orphans: string[] = [], orphanTotal?: number): RuleContext {

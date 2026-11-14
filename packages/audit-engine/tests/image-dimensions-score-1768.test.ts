@@ -35,6 +35,6 @@ describe("one unsized image, one warning's weight", () => {
   });
 
   test("the unsized image does lower the score by the images/dimensions warning", () => {
-    expect(score(bad, both)).toBeLessThan(score(good, both));
+    expect(score(bad, both)!).toBeLessThan(score(good, both)!);
   });
 });

@@ -7,7 +7,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
 import type { Config } from "@squirrelscan/config";
-import { createCrawler } from "@squirrelscan/crawler";
+import { createCrawler, type SQLiteStorage } from "@squirrelscan/crawler";
 import type { EgressPolicy } from "@squirrelscan/utils/public-egress";
 
 import { probeLinkTargets } from "../src/link-target-probe";
@@ -173,7 +173,7 @@ describe("the audit wires the probe to the site's egress policy (repo#2830)", ()
       internal_links: { enabled: true },
     } as unknown as Config;
     const { assets } = await Effect.runPromise(
-      runStreamingPreRules(crawler.storage, crawlId, config, {}),
+      runStreamingPreRules(crawler.storage as SQLiteStorage, crawlId, config, {}),
     );
 
     // Non-vacuous: the probe asked the link, and the redirect was its answer.

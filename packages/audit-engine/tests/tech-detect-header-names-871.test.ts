@@ -61,7 +61,7 @@ describe("TECH_DETECT_HEADER_NAMES (pub#871)", () => {
   });
 
   test("names are lower case and listed once", () => {
-    for (const name of TECH_DETECT_HEADER_NAMES) expect(name).toBe(name.toLowerCase());
+    for (const name of TECH_DETECT_HEADER_NAMES) expect<string>(name).toBe(name.toLowerCase());
     expect(listed.size).toBe(TECH_DETECT_HEADER_NAMES.length);
   });
 });
