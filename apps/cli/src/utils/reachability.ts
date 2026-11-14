@@ -20,6 +20,10 @@ import { Effect, Duration } from "effect";
 import { pinOwnHosts } from "@/crawl/pin-own-hosts";
 import { requestOnceScoped, RequestError } from "@/tools/request";
 import { logger } from "@/utils/logger";
+import {
+  TEST_REACHABILITY_TIMEOUT_MS_ENV,
+  testOnlyMs,
+} from "@/utils/test-knobs";
 import { detectWaf, type WafProvider } from "@/utils/waf";
 
 const REACHABILITY_TIMEOUT_MS = 10000;
@@ -227,12 +231,15 @@ export async function checkReachability(
   /** Epoch ms the whole probe must be done by (`--max-duration`, #1271); each attempt is cut to what is left. */
   budgetDeadlineAt?: number
 ): Promise<ReachabilityResult> {
+  // Under `bun test` only, one knob replaces both limits (#1839).
+  const testTimeoutMs = testOnlyMs(TEST_REACHABILITY_TIMEOUT_MS_ENV);
+  const attemptLimitMs = testTimeoutMs ?? REACHABILITY_TIMEOUT_MS;
   const deadline = Math.min(
-    Date.now() + REACHABILITY_TOTAL_BUDGET_MS,
+    Date.now() + (testTimeoutMs ?? REACHABILITY_TOTAL_BUDGET_MS),
     budgetDeadlineAt ?? Number.POSITIVE_INFINITY
   );
   const attemptTimeout = (): number =>
-    Math.max(1, Math.min(REACHABILITY_TIMEOUT_MS, deadline - Date.now()));
+    Math.max(1, Math.min(attemptLimitMs, deadline - Date.now()));
   let result = await attemptReachability(
     url,
     scope,

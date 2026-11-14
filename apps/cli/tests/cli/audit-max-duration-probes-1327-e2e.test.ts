@@ -63,6 +63,10 @@ afterAll(() => {
   rmSync(scratch, { recursive: true, force: true });
 });
 
+// #1839: test-only, read under NODE_ENV "test" alone. The margin's floor (production 15 s), so the
+// budgeted run winds down in seconds; the margin assertion uses it.
+const MIN_MARGIN_MS = 3_000;
+
 function cleanEnv(): Record<string, string> {
   const env: Record<string, string> = {};
   for (const [k, v] of Object.entries(process.env)) {
@@ -76,6 +80,8 @@ function cleanEnv(): Record<string, string> {
     SQUIRREL_NO_UPDATE: "1",
     NO_TELEMETRY: "1",
     NO_COLOR: "1",
+    NODE_ENV: "test",
+    SQUIRREL_TEST_MIN_MARGIN_MS: String(MIN_MARGIN_MS),
   };
 }
 
@@ -118,8 +124,8 @@ describe("--max-duration with a probe that hangs before the page rules (#1327)",
       proc.exited,
     ]);
     const elapsedMs = Date.now() - started;
-    // Budget 5 s + margin 15 s, plus start-up and the report.
-    expect(elapsedMs).toBeLessThan((5 + 15) * 1000 + 8_000);
+    // Budget 5 s + the configured margin, plus start-up and the report.
+    expect(elapsedMs).toBeLessThan(5_000 + MIN_MARGIN_MS + 8_000);
     expect(code).toBe(0);
     const report = JSON.parse(out) as JsonReport;
     expect(report.status).toBe("partial");

@@ -25,6 +25,10 @@ import {
 import { writeFileSync } from "node:fs";
 
 import { promptForInput } from "@/cli/prompt";
+import {
+  TEST_REACHABILITY_TIMEOUT_MS_ENV,
+  testOnlyMs,
+} from "@/utils/test-knobs";
 
 export type StartRedirectDecision =
   /** Audit `url`; `record` is set when a cross-domain redirect was followed. */
@@ -113,8 +117,11 @@ export interface ResolveAuditStartInput extends StartRedirectContext {
 export async function resolveAuditStart(
   input: ResolveAuditStartInput
 ): Promise<ResolvedAuditStart> {
+  // Under `bun test` only, the per-hop timeout follows the reachability knob (#1839).
+  const testTimeoutMs = testOnlyMs(TEST_REACHABILITY_TIMEOUT_MS_ENV);
   const resolution = await (input.resolve ?? resolveStartRedirect)(input.url, {
     ...(input.userAgent ? { userAgent: input.userAgent } : {}),
+    ...(testTimeoutMs !== undefined ? { timeoutMs: testTimeoutMs } : {}),
     ...(input.pin === false ? { pin: false } : {}),
   });
   const decision = decideStartRedirect(resolution, input);
