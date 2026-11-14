@@ -22,9 +22,10 @@ One `GET` to a random path that cannot exist (the baseline), then one request pe
 | Server status and debug | `/server-status`, `/server-info`, `/phpinfo.php`, `/.htaccess`, `/web.config` | the Apache mod_status and mod_info pages; the `phpinfo()` page; Apache directives; an IIS `<configuration>` |
 | Editor and OS files | `/.DS_Store`, `/Thumbs.db` | the `Bud1` magic number; the OLE compound file magic number |
 | Backups and dumps | `/backup.zip`, `/site.tar.gz`, `/db.sql`, `/dump.sql` | the zip, gzip or tar magic number; a MySQL, MariaDB, PostgreSQL or phpMyAdmin dump header, or SQL statements |
-| Framework endpoints | `/actuator/env`, `/actuator/heapdump` | Spring Boot's `activeProfiles` and `propertySources`; heap dump download headers |
 
-Every request is a `GET`, except `/actuator/heapdump`, which is a `HEAD`: a heap dump is a copy of the application's memory and is never downloaded. Nothing else is sent: no `POST`, no query string, no cookies. Every URL is built on the audited origin (scheme, host and port), and a redirect is never followed, wherever it points. At most 16 KB of each answer is read, counted after decompression, so a large archive is never pulled in full. Every request counts against the shared [probe budget](/configuration/security#budget) and robots.txt is ignored on purpose, as it is for every `aggressive` probe.
+Every request is a `GET`. Nothing else is sent: no `POST`, no query string, no cookies. Every URL is built on the audited origin (scheme, host and port), and a redirect is never followed, wherever it points. At most 16 KB of each answer is read, counted after decompression, so a large archive is never pulled in full. Every request counts against the shared [probe budget](/configuration/security#budget) and robots.txt is ignored on purpose, as it is for every `aggressive` probe.
+
+Spring Boot Actuator endpoints (`/actuator/env`, `/actuator/heapdump` and the rest) are not on this list: they are covered by `security/exposed-actuator`, so one exposure is never reported by two rules.
 
 ### How a hit is confirmed
 
@@ -40,7 +41,7 @@ An HTTP `429` or a bot challenge (Cloudflare's `cf-mitigated: challenge`, or a c
 ### Results
 
 - Fail, one check per file, for version control metadata, secrets, configuration source, `phpinfo()`, backups, dumps and framework endpoints. Warn for `server-status`, `server-info`, `.htaccess`, `web.config`, `.DS_Store` and `Thumbs.db`. Message: `/.env is publicly readable at https://example.com/.env: it reveals environment variables, typically API keys, database URLs and other secrets (12 variable(s), 4 with secret-looking names)`. The item meta has the path, the method, the status, the size, the signature, the group and what the file reveals.
-- Pass when none of the listed files is readable: `None of the 22 well-known sensitive files is publicly readable`.
+- Pass when none of the listed files is readable: `None of the 20 well-known sensitive files is publicly readable`.
 - Not checked, with reason `probe-level-too-low`, below `aggressive`.
 - Not checked, with reason `probe-incomplete`, when the run stopped early.
 
@@ -48,13 +49,13 @@ The finding never contains a value, a line or a variable name from the file, onl
 
 ### Limits
 
-Only the listed paths are requested, so a backup named `backup-2024.zip` or a `.git` directory under a subpath is not found. A file that is readable only to signed-in users is not seen, because the probes carry no cookies. The heap dump is judged from its response headers alone.
+Only the listed paths are requested, so a backup named `backup-2024.zip` or a `.git` directory under a subpath is not found. A file that is readable only to signed-in users is not seen, because the probes carry no cookies.
 
 ## How to fix it
 
 1. Remove the file from the web root, or block it at the server. Deny dotfiles and dot-directories (`location ~ /\. { deny all; }` in nginx, `<FilesMatch "^\.">Require all denied</FilesMatch>` in Apache) and keep backups, dumps and configuration copies outside the document root.
 2. Deploy from a build output, not a working copy, so `.git` never ships.
-3. Turn off `server-status`, `server-info`, `phpinfo()` pages and Spring Boot actuator endpoints in production, or restrict them to internal addresses.
+3. Turn off `server-status`, `server-info` and `phpinfo()` pages in production, or restrict them to internal addresses.
 4. Treat anything the file exposed as leaked. Rotate every credential and key it held, and assume the source code and its history are public.
 
 | | |

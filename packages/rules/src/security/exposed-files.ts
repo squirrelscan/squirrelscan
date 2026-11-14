@@ -233,7 +233,7 @@ export const exposedFilesRule: Rule = {
     description:
       "Requests a short, curated list of sensitive files that should never be public (.git and other version control metadata, .env files, configuration backups, server status pages, database dumps, .DS_Store) and flags each one the site serves, confirmed by its content, not its status code. Runs only when probing is aggressive.",
     solution:
-      "Remove each listed file from the web root, or block it at the server: deny dotfiles and dot-directories (`location ~ /\\. { deny all; }` in nginx, `<FilesMatch \"^\\.\">Require all denied</FilesMatch>` in Apache), and keep backups, dumps and configuration copies outside the document root. Deploy from a build output, not a working copy, so `.git` never ships. Turn off `server-status`, `server-info`, `phpinfo()` pages and Spring Boot actuator endpoints in production, or restrict them to internal addresses. Then treat anything the file exposed as leaked: rotate every credential and key it held, and assume the source and history are public.",
+      "Remove each listed file from the web root, or block it at the server: deny dotfiles and dot-directories (`location ~ /\\. { deny all; }` in nginx, `<FilesMatch \"^\\.\">Require all denied</FilesMatch>` in Apache), and keep backups, dumps and configuration copies outside the document root. Deploy from a build output, not a working copy, so `.git` never ships. Turn off `server-status`, `server-info` and `phpinfo()` pages in production, or restrict them to internal addresses. Then treat anything the file exposed as leaked: rotate every credential and key it held, and assume the source and history are public.",
     category: "security",
     scope: "site",
     severity: "error",

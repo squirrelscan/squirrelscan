@@ -17,7 +17,7 @@ export const EXPOSED_FILE_READ_CAP = 16 * 1024;
 /** Bump when the list or a signature changes, so two audits can say which list they ran. */
 export const EXPOSED_FILES_LIST_VERSION = 1;
 
-export type ExposedFileGroup = "vcs" | "secrets" | "server" | "cruft" | "backup" | "framework";
+export type ExposedFileGroup = "vcs" | "secrets" | "server" | "cruft" | "backup";
 
 /** `high` fails the check (secrets, source, data); `medium` warns (metadata, listings). */
 export type ExposureSeverity = "high" | "medium";
@@ -352,36 +352,6 @@ export const SENSITIVE_FILES: readonly SensitiveFile[] = [
     reveals: "a database dump: table structure and stored data, often user records and password hashes",
     signature: "SQL dump header",
     match: matchSqlDump,
-  },
-  // Framework debug endpoints
-  {
-    path: "/actuator/env",
-    method: "GET",
-    group: "framework",
-    severity: "high",
-    reveals: "Spring Boot environment: configuration properties, which can include secrets the actuator does not mask",
-    signature: "Spring Boot actuator env JSON",
-    match(a) {
-      const text = nonHtmlText(a);
-      if (!text || !text.trimStart().startsWith("{")) return null;
-      return /"activeProfiles"\s*:/.test(text) && /"propertySources"\s*:/.test(text) ? {} : null;
-    },
-  },
-  {
-    // HEAD only: a heap dump is the process memory, secrets included, and is never downloaded.
-    path: "/actuator/heapdump",
-    method: "HEAD",
-    group: "framework",
-    severity: "high",
-    reveals: "a Spring Boot heap dump: a copy of the application's memory, with every secret it holds",
-    signature: "heap dump download headers",
-    match(a) {
-      if (a.status < 200 || a.status >= 300) return null;
-      if (!/application\/(octet-stream|x-hprof)/.test(a.contentType)) return null;
-      const disposition = a.headers.get("content-disposition") ?? "";
-      const length = Number(a.headers.get("content-length") ?? "");
-      return /hprof|heapdump/i.test(disposition) || (Number.isFinite(length) && length >= 1_000_000) ? {} : null;
-    },
   },
 ];
 
