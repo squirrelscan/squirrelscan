@@ -105,9 +105,40 @@ jobs:
     timeout-minutes: 75
     permissions:
       contents: read
+      actions: read # main CI's jobs at this sha (the reuse step below)
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-bun
+      # Main CI (ci.yml on push) already runs every test file ("CLI tests", via scripts/test-suites.ts), the engine
+      # goldens and the release tooling tests. When all three jobs passed at THIS exact sha, the three test steps below
+      # are skipped instead of re-running ~30 min of the same suite (#1839). Main CI still running: wait for it (cap
+      # 45 min). Anything else (no run, a skipped or failed job, cancelled, API error) runs the tests here as before.
+      - name: Reuse main CI's test results at this sha
+        id: mainci
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -u
+          deadline=$(( $(date +%s) + 45 * 60 ))
+          ok=false
+          while :; do
+            run=$(gh api "repos/$REPO/actions/workflows/ci.yml/runs?head_sha=$SHA&event=push&per_page=5" \
+              --jq '[.workflow_runs[] | select(.head_branch == "main")] | sort_by(.created_at) | last | (.id|tostring) + " " + .status' 2>/dev/null) || run=""
+            id=${run%% *}; status=${run#* }
+            if [ -z "$run" ] || [ "$id" = null ]; then echo "no main CI run for $SHA: running the tests here"; break; fi
+            if [ "$status" = completed ]; then
+              jobs=$(gh api "repos/$REPO/actions/runs/$id/jobs?per_page=100" \
+                --jq '[.jobs[] | select(.name == "CLI tests" or .name == "Audit engine golden tests" or .name == "Release tooling tests") | .conclusion] | (length|tostring) + " " + (all(. == "success")|tostring)' 2>/dev/null) || jobs=""
+              echo "main CI run $id at $SHA: test jobs found, all success = $jobs"
+              [ "$jobs" = "3 true" ] && ok=true
+              break
+            fi
+            [ "$(date +%s)" -ge "$deadline" ] && { echo "main CI run $id still $status after 45 min: running the tests here"; break; }
+            echo "main CI run $id is $status; waiting"; sleep 30
+          done
+          echo "passed=$ok" >> "$GITHUB_OUTPUT"
       # No manifest stamping: the `version` job has already established that the
       # checked-out tree carries $VERSION, so the gate runs against exactly the
       # bytes that will be tagged.
@@ -117,10 +148,13 @@ jobs:
       - run: bun run notices:check
       - run: bun run audit:dependencies
       - run: bun test
+        if: steps.mainci.outputs.passed != 'true'
         # per-test timeouts already default to 5 s; this catches a hook or an open handle that keeps the process alive
         timeout-minutes: 55
       - run: bun run test:engine
+        if: steps.mainci.outputs.passed != 'true'
       - run: bun run test:release
+        if: steps.mainci.outputs.passed != 'true'
 
   tag:
     name: Create release tag
