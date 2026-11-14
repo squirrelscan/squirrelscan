@@ -3,6 +3,7 @@
 import type { Rule } from "../types";
 
 import { authEndpointDisclosureRule } from "./auth-endpoint-disclosure";
+import { clientSideAuthzRule } from "./client-side-authz";
 import { cookieFlagsRule } from "./cookie-flags";
 import { cspRule } from "./csp";
 import { cspBlocksOwnResourcesRule } from "./csp-blocks-own-resources";
@@ -60,12 +61,14 @@ export const rules: Rule[] = [
   exposedFilesRule,
   authEndpointDisclosureRule,
   openRedirectRule,
+  clientSideAuthzRule,
   securityTxtRule,
   versionDisclosureRule,
 ];
 
 export {
   authEndpointDisclosureRule,
+  clientSideAuthzRule,
   cookieFlagsRule,
   cspBlocksOwnResourcesRule,
   cspRule,

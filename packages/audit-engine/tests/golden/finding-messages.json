@@ -3789,6 +3789,12 @@
    "auth-endpoint-not-checked|skipped|Probing is passive, so no auth or session endpoint was probed. Run with --probe active to check what they disclose.||"
   ]
  },
+ "security/client-side-authz": {
+  "digest": "98304338379794",
+  "lines": [
+   "client-side-authz|skipped|Probing is passive, so no admin endpoint was probed. Run with --probe active to check whether admin APIs answer without credentials.||"
+  ]
+ },
  "security/cookie-flags": {
   "digest": "142347220823910",
   "lines": [
