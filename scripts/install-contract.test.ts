@@ -322,7 +322,7 @@ describe("PowerShell installer transport security", () => {
 // A `self install` failure used to report an exit code and nothing else, which
 // made a real Windows break undiagnosable (#1538). Both installers now capture
 // the command's own output and carry a bounded, scrubbed tail of it.
-describe("self install failure reporting", () => {
+describe.concurrent("self install failure reporting", () => {
   test("both installers send error_output; install.sh is at report version 4 (host and ip_family), install.ps1 at 3", () => {
     expect(shellInstaller).toContain('INSTALLER_REPORT_VERSION="4"');
     expect(shellInstaller).toContain('"error_output":"%s"');
@@ -364,7 +364,7 @@ describe("self install failure reporting", () => {
 // killer on a small VPS) produces no output at all, so it used to surface as a
 // bare "failed with exit code 137" and report under the same step as a genuine
 // self-install bug (#1654).
-describe("self install killed by a signal", () => {
+describe.concurrent("self install killed by a signal", () => {
   // Everything under test lives in the sourceable preamble, above the EXIT trap.
   const sourcePreamble = async (script: string, env: Record<string, string> = {}) => {
     const preambleEnd = shellInstaller.indexOf("trap report_on_exit EXIT");
@@ -707,7 +707,9 @@ describe("self install killed by a signal", () => {
 
 // Behavioural, not textual: source the shell installer's reporting preamble and
 // watch what report_error actually POSTs.
-describe("install.sh report_error payload", () => {
+// The describes that spawn bash are `describe.concurrent`: nearly all their wall time is the installer's own
+// sleeps and the settle wait for a detached curl, and every case owns a fresh mkdtemp dir and env.
+describe.concurrent("install.sh report_error payload", () => {
   test("carries a scrubbed, tail-truncated error_output as valid JSON", async () => {
     expect(INSTALLER_PREAMBLE.length).toBeGreaterThan(0);
     const home = process.env.HOME ?? "";
@@ -1205,7 +1207,7 @@ describe("install.sh report_error payload", () => {
 // whatever TLS the local build still allows. The binary is checksum-verified
 // against the manifest, but the metadata fetches and the bash re-exec have
 // nothing but the transport behind them (#165).
-describe("install.sh curl transport hardening", () => {
+describe.concurrent("install.sh curl transport hardening", () => {
   test("the flag set is defined once, with all four options", () => {
     expect(shellInstaller).toContain(
       "CURL_TLS_ARGS=(--proto '=https' --proto-redir '=https' --tlsv1.2 --max-redirs 3)",
@@ -1353,7 +1355,7 @@ describe("install.sh curl transport hardening", () => {
 // release out itself (the binary never got to its trivial file work), then
 // proves the installed binary runs. A binary that will not run reports under
 // its own step with the paths already in place (#2023).
-describe("by-hand install after a killed self install (#2023)", () => {
+describe.concurrent("by-hand install after a killed self install (#2023)", () => {
   const scratch = () => {
     const dir = mkdtempSync(join(tmpdir(), "install-by-hand-"));
     return { dir, home: join(dir, "home"), bin: join(dir, "bin"), tmp: join(dir, "tmp") };
@@ -1651,7 +1653,7 @@ describe("by-hand install after a killed self install (#2023)", () => {
 });
 
 // --- release metadata validation (#167) ----------------------------------
-describe("release metadata validation (#167)", () => {
+describe.concurrent("release metadata validation (#167)", () => {
   test.each([
     ["v1.2.3", true],
     ["1.2.3-beta.1", true],
@@ -1738,7 +1740,7 @@ describe("release metadata validation (#167)", () => {
 // GitHub release-asset URLs redirect to release-assets.githubusercontent.com,
 // which some networks cannot reach. Every asset now has a second source at
 // install.squirrelscan.com/dl.
-describe("release asset download falls back to the mirror (#2064)", () => {
+describe.concurrent("release asset download falls back to the mirror (#2064)", () => {
   const GITHUB_ASSET =
     "https://github.com/squirrelscan/squirrelscan/releases/download/v1.2.3/squirrel-1.2.3-linux-x64";
   const MIRROR_ASSET =
