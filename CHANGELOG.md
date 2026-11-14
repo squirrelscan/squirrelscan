@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Changed
+
+- Release binaries are built with `NODE_ENV` pinned to `"production"` (`bun build --production --define process.env.NODE_ENV='"production"'`), so test-only knobs gated on `NODE_ENV === "test"` are compiled out whatever the build environment exports (#1839). Bundled React now uses its production build for the HTML report; report output is unchanged.
+
 ### Fixed
 
 - A page of deeply nested links no longer holds an audit in the parser (#1844). Parsing 20,000 directly nested anchors took 45 s, and now takes about 0.2 s. A link's text now stops at a link nested inside it, as a browser reads the page (the browser closes an open link when the next one starts): the inner link's text belongs to the inner link alone and is no longer repeated in every link around it. Pages without nested links parse as before.
