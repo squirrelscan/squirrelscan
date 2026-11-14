@@ -33,7 +33,7 @@ const parse = (options?: Parameters<typeof renderJson>[1]) =>
   };
 
 describe("meta.schemaVersion", () => {
-  test("is 1.17, the version that added the per-rule `rules`, on every JSON report", () => {
+  test("is 1.20, the version that added the per-rule `rules`, on every JSON report", () => {
     expect(JSON_REPORT_SCHEMA_VERSION).toBe("1.20");
     expect(parse().meta.schemaVersion).toBe("1.20");
     expect(parse({ pages: rows(1) }).meta.schemaVersion).toBe("1.20");
