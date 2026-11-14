@@ -100,6 +100,9 @@ const MAX_PART_LENGTH = MAX_ANCHOR_PART_LENGTH;
  * CSS from a stylesheet or a class (an inline `div`, a block `span`) cannot be seen at parse time;
  * `glued` reports when text from adjacent elements was joined without any boundary.
  *
+ * A nested `<a>` (invalid HTML a browser would split into sibling links) is skipped: its text is
+ * the inner link's, not this one's (#1844).
+ *
  * Iterative with an explicit stack and linear in the text: an anchor holding tens of thousands of
  * nested or sibling elements must neither overflow the call stack nor rescan its text per node.
  */
@@ -159,6 +162,17 @@ export function anchorTextResult(element: Element): AnchorTextResult {
       const el = child as Element;
       const tag = el.tagName.toLowerCase();
       if (NON_TEXT_TAGS.has(tag)) continue;
+      // A nested anchor is its own link, not text of this one (#1844). A browser never builds
+      // `<a>` inside `<a>`: the HTML parser closes the open anchor when the next one starts
+      // (the adoption agency algorithm), so its text belongs to the inner link alone. This parse
+      // keeps the nesting, and reading every descendant anchor's text into each ancestor made
+      // the stored text quadratic in nesting depth (about 1 GB, 45 s, at 20,000 nested links).
+      // Stopping here reads each text node once per page. The skipped anchor separates the
+      // outer anchor's text on either side of it, like a block.
+      if (tag === "a") {
+        pendingGap = true;
+        continue;
+      }
       const boundary =
         BOUNDARY_TAGS.has(tag) || INLINE_BLOCK_DISPLAY.test(el.getAttribute("style") ?? "");
       if (boundary) pendingGap = true;
