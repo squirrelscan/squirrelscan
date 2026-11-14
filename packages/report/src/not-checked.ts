@@ -76,6 +76,9 @@ const HINTS: Record<string, string> = {
     "Run the audit again to check them.",
   [RULE_TIMED_OUT_SKIP_REASON]:
     "A timed-out rule did not check those pages, so no finding there is not a clean result. Run the audit again, or raise [rules] time_budget_ms if the machine was busy.",
+  // #1269: `squirrel analyze` makes no live request.
+  "analyze-offline":
+    "Run `squirrel audit` to probe the live site.",
   // #1144: the inbound-link rules on a crawl that stopped at its page cap.
   [CRAWL_CAPPED_SKIP_REASON]:
     "Raise the page limit (--max-pages, or crawler.max_pages) so the crawl reaches every page, to check them.",

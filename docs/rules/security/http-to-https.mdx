@@ -22,6 +22,8 @@ The rule is site-wide and makes live network requests. It builds a sample of sam
 
 Probes run five at a time with a 100 ms stagger, each hop times out after 10 seconds and chains stop at 10 hops. Each probe is one `HEAD` request without retries, sent with the same user agent and headers as the crawl. A total budget (default 20 seconds, `probeBudgetMs`) stops workers picking up new URLs; probes already in flight are still awaited. When the budget runs out the check says so: the message reads `partial coverage` with the number of URLs not probed, and `details.partial` is `true`, so a slow host is never reported as clean. Raise `probeBudgetMs` or lower `sampleLimit` to cover the whole sample. Redirect loops get no verdict. A redirect to a scheme other than `http` or `https`, to a link-local or cloud metadata address such as `169.254.169.254`, or to another host whose DNS answers include one (or whose lookup fails) is not followed: the chain stops at that redirect. With `--offline`, a redirect to another host is not followed either.
 
+`squirrel analyze` re-runs rules over the stored crawl and makes no live request, so there this rule is a skipped check with `skipReason` `analyze-offline`, the value `not-checked` and the message `analyze runs offline; run `squirrel audit` to probe`. It is listed under `notChecked` with outcome `coverage_gap`, so a finding of it stays open. Run `squirrel audit` to probe.
+
 On a local or private-network host, such as `localhost` or `192.168.1.10`, the rule is skipped and left out of the score, because a dev server is not the production edge. See [Transport and delivery rules do not apply](/guides/local-audits-cli#transport-and-delivery-rules-do-not-apply).
 
 ## How to fix it

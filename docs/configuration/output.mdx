@@ -709,7 +709,7 @@ A rule that did not give a verdict on a page is one of these, and `outcome` on `
 |-----------|---------|------------------------|
 | `ran` | The check ran and said something: a pass, a warning, a failure or a note. Never on a skipped entry | none |
 | `not_applicable` | There was nothing for the check to look at (a `noindex` page, a contact page, no images). Clean, not a gap | `noindex`, `page-type`, `not-applicable`, and any free-text reason |
-| `coverage_gap` | The check did not look at all of what it should have, so no finding proves nothing | `scan-truncated`, `unread-page`, `tls-certificate-not-checked`, `external-links-not-checked`, `external-links-over-cap`, `external-links-out-of-time`, `link-targets-not-fetched`, the five `discovery-probe-*` reasons below, and a crawl stopped at its page cap |
+| `coverage_gap` | The check did not look at all of what it should have, so no finding proves nothing | `scan-truncated`, `unread-page`, `tls-certificate-not-checked`, `external-links-not-checked`, `external-links-over-cap`, `external-links-out-of-time`, `link-targets-not-fetched`, `analyze-offline` (`squirrel analyze` makes no live request, so `security/http-to-https` is not probed), the five `discovery-probe-*` reasons below, and a crawl stopped at its page cap |
 | `timed_out` | The rule ran past its time budget | `rule-timed-out` |
 | `errored` | The rule hit an internal squirrelscan error: a defect in squirrel, not a problem with your pages | `rule-timed-out` with `details.errored`, listed as `rule-errored` in `skippedChecks` |
 | `disabled` | It was left out on purpose: a waived page, a private target the run never probes | `ignored`, `private-target` |

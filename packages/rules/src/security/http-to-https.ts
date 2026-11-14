@@ -7,7 +7,10 @@ import type { RedirectChain } from "@squirrelscan/core-contracts";
 
 import { HTTP_PROBE_LIMITS } from "@squirrelscan/utils/constants";
 import { followRedirects } from "../links/redirects";
+import { hasRequestTool } from "../tools";
 import { getHostname } from "@squirrelscan/utils";
+
+const ANALYZE_OFFLINE_REASON = "analyze runs offline; run `squirrel audit` to probe";
 
 export const optionsSchema = z.object({
   sampleLimit: z
@@ -230,6 +233,19 @@ export const httpToHttpsRule: Rule = {
         name: "http-to-https",
         status: "skipped",
         message: "Base URL is not HTTPS",
+      });
+      return { checks };
+    }
+
+    // `squirrel analyze` installs no request tool: it re-reads stored data and must not touch the site.
+    if (!hasRequestTool()) {
+      checks.push({
+        name: "http-to-https",
+        status: "skipped",
+        skipReason: "analyze-offline",
+        message: `HTTP to HTTPS redirects not checked: ${ANALYZE_OFFLINE_REASON}`,
+        value: "not-checked",
+        details: { notCheckedReason: ANALYZE_OFFLINE_REASON },
       });
       return { checks };
     }

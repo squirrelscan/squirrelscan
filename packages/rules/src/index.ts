@@ -23,7 +23,7 @@ export {
   type ApplicabilityVerdict,
   ruleApplies,
 } from "./applicability";
-export { setRequestAsync, setLlmCall } from "./tools";
+export { setRequestAsync, clearRequestAsync, hasRequestTool, setLlmCall } from "./tools";
 // The anchor graph `links/anchor-mismatch` judges. audit-engine's SiteQuery builds it with the
 // SAME builder the rule's legacy path uses, so the two paths cannot diverge (#110).
 export { AnchorGraphBuilder } from "./links/anchor-mismatch";
