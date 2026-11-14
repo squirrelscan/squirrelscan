@@ -41,6 +41,8 @@ build: ci
 # `--production` too: it switches Bun's JSX transform from jsxDEV to jsx, which
 # React's production jsx-dev-runtime (selected by the pinned NODE_ENV) needs,
 # or the HTML report crashes calling an undefined jsxDEV.
+# The dev build (`bun run build` in apps/cli, also behind `make build`) carries the same
+# two flags for the same reasons (#1855); it just skips --minify.
 build-all: ci
 	@for platform in $(PLATFORMS); do \
 		echo "==> Building $$platform..."; \
