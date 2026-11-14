@@ -306,7 +306,8 @@ describe("what is stored is bounded", () => {
     expect(r.rejected).toHaveLength(BATCH_MAX_REJECTED_KEPT);
     expect(r.rejectedCount).toBe(EIGHT_MIB / 2 - 1);
     expect(r.rejected[0]).toMatchObject({ line: 1, reason: "non-public-host" });
-  });
+    // Measured on CI at about 5.1 s (#1856): 30 s keeps clear headroom over bun's 5 s default.
+  }, 30_000);
 
   test("the cap is a parameter, and every refused line is counted", () => {
     const r = ok("a\nb\nc\nhttps://ok.example.com/\n", { maxRejected: 2 });
@@ -371,17 +372,37 @@ describe("hostile files are read in linear time", () => {
     return performance.now() - started;
   };
 
-  test("8 MB of comment lines, of blank lines and of one-character lines", () => {
-    for (const unit of ["#\n", "\n", "a\n", "\r\n", " \t \n"]) {
-      const content = unit.repeat(Math.floor((EIGHT_MIB - 1) / unit.length));
-      expect(
-        time(() => parseUrlsFile(content, { maxBytes: EIGHT_MIB })),
-        JSON.stringify(unit)
-      ).toBeLessThan(20_000);
-    }
-  });
+  // Speed-independent: the same parse on N and on 2N bytes in this process, best of up to 3
+  // rounds each (a round that already passes ends the loop, which keeps the slow unit fast).
+  // Linear is about 2x, quadratic about 4x; 3x splits them. 2N is the 8 MB input.
+
+  // One test per unit so each gets its own timeout. Measured on CI at about 5.5 s for all
+  // units in the old single test (#1856): 30 s per unit is clear headroom.
+  for (const unit of ["#\n", "\n", "a\n", "\r\n", " \t \n"]) {
+    test(`8 MB of ${JSON.stringify(unit)} lines: 2N takes under 3x the time of N`, () => {
+      const make = (bytes: number) =>
+        unit.repeat(Math.floor((bytes - 1) / unit.length));
+      const half = make(EIGHT_MIB / 2);
+      const full = make(EIGHT_MIB);
+      const opts = { maxBytes: EIGHT_MIB };
+      let tHalf = Infinity;
+      let tFull = Infinity;
+      for (let round = 0; round < 3 && tFull >= tHalf * 3; round++) {
+        tHalf = Math.min(
+          tHalf,
+          time(() => parseUrlsFile(half, opts))
+        );
+        tFull = Math.min(
+          tFull,
+          time(() => parseUrlsFile(full, opts))
+        );
+      }
+      expect(tFull, `N=${tHalf}ms 2N=${tFull}ms`).toBeLessThan(tHalf * 3);
+    }, 30_000);
+  }
 
   test("8 MB without a line break, and 8 MB of 2 KB lines", () => {
+    // Measured on CI at about 5.1 to 5.5 s per hostile test (#1856); 30 s is clear headroom.
     expect(
       time(() =>
         parseUrlsFile("h".repeat(EIGHT_MIB - 1), { maxBytes: EIGHT_MIB })
@@ -395,7 +416,7 @@ describe("hostile files are read in linear time", () => {
         })
       )
     ).toBeLessThan(20_000);
-  });
+  }, 30_000);
 
   test("the largest allowed count of distinct URLs", () => {
     const content = Array.from(
@@ -403,7 +424,7 @@ describe("hostile files are read in linear time", () => {
       (_, i) => `https://h${i}.example.com/p${i}`
     ).join("\n");
     expect(time(() => parseUrlsFile(content))).toBeLessThan(20_000);
-  });
+  }, 30_000);
 });
 
 describe("the echo of a refused line never holds a credential, whatever the slashes (#1547 round 2)", () => {
