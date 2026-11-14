@@ -101,6 +101,8 @@ jobs:
     name: Release quality gate
     needs: version
     runs-on: ubuntu-latest
+    # ~13 min normally; a stall (run 43554005170 sat 34+ min in bun test) fails here instead of at the 6 h default
+    timeout-minutes: 30
     permissions:
       contents: read
     steps:
@@ -115,6 +117,8 @@ jobs:
       - run: bun run notices:check
       - run: bun run audit:dependencies
       - run: bun test
+        # per-test timeouts already default to 5 s; this catches a hook or an open handle that keeps the process alive
+        timeout-minutes: 20
       - run: bun run test:engine
       - run: bun run test:release
 
