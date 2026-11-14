@@ -145,4 +145,15 @@ describe("v1 golden baseline — 500-page canonical fixture", () => {
     expect(diff.divergences.length).toBe(5);
     expect(diff.totalDivergences).toBeGreaterThan(5);
   }, CAPTURE_BUDGET_MS);
+
+  test("the shared canonical snapshot is deep-frozen: a mutation throws", async () => {
+    const snapshot = await canonicalV1Snapshot();
+    expect(Object.isFrozen(snapshot)).toBe(true);
+    expect(Object.isFrozen(snapshot.findings)).toBe(true);
+    expect(Object.isFrozen(snapshot.findings[0])).toBe(true);
+    expect(() => {
+      snapshot.healthScore.errorCount += 1;
+    }).toThrow();
+    expect(() => snapshot.findings.push(snapshot.findings[0]!)).toThrow();
+  }, CAPTURE_BUDGET_MS);
 });
