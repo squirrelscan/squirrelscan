@@ -65,6 +65,7 @@ describe("per-source detail follows the publish caps (pub#837)", () => {
           meta: {
             id: "links/broken-links",
             name: "Broken Links",
+            // @ts-expect-error `description` is not in CappableRuleMeta; kept so the fixture is unchanged
             description: "d",
             category: "links",
             scope: "site",

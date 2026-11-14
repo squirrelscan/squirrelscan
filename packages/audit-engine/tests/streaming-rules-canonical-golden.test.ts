@@ -315,7 +315,7 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
           fail: 0,
           info: 0,
           skipped: 0,
-          [outcome]: 1,
+          [outcome as string]: 1,
           total: 1,
         });
       }

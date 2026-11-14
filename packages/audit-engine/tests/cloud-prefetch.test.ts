@@ -20,12 +20,12 @@ import {
   type CloudPrefetchInput,
 } from "../src/cloud-prefetch";
 
-const config: CloudConfig = {
+const config = {
   enabled: true,
   max_credits_per_audit: 200,
   confirm_threshold: 50,
   batch_size: 20,
-};
+} as unknown as CloudConfig;
 
 const pages: CloudPagePayload[] = Array.from({ length: 5 }, (_, i) => ({
   url: `https://example.com/p${i}`,
@@ -86,7 +86,7 @@ function okClient(overrides: Partial<CloudServicesClient> = {}): CloudServicesCl
     keywordGaps: async () => ({ gaps: [], summary: "" }),
     contentGaps: async () => ({ gaps: [], summary: "" }),
     ...overrides,
-  };
+  } as CloudServicesClient;
 }
 
 /** A resolved Stage-0 profile the metadata stub returns. */
@@ -129,7 +129,7 @@ function input(partial: Partial<CloudPrefetchInput>): CloudPrefetchInput {
     rules: RULES,
     pages,
     siteUrl: "https://example.com",
-    sitePayloads: SITE_PAYLOADS,
+    sitePayloads: SITE_PAYLOADS as unknown as CloudPrefetchInput["sitePayloads"],
     auditId: "audit-1",
     ...partial,
   };
@@ -736,7 +736,7 @@ describe("prefetchCloudData Stage 0 + Stage 1", () => {
         config: { ...config, max_credits_per_audit: 30 },
       }),
     );
-    expect(res.siteMetadata).toEqual({ ...METADATA_RESPONSE, cached: true });
+    expect(res.siteMetadata).toEqual({ ...METADATA_RESPONSE, cached: true } as typeof METADATA_RESPONSE);
     // No spend line, and the envelope records 0 credits for the cached call.
     expect(res.spend.some((l) => l.service === "site-metadata")).toBe(false);
     expect(res.store.get("site-metadata")?.get(CLOUD_SITE_KEY)?.creditsSpent).toBe(0);

@@ -93,7 +93,7 @@ beforeAll(async () => {
         );
       }
       if (path === "/bomb.js") {
-        return new Response(bomb, {
+        return new Response(bomb as unknown as BodyInit, {
           headers: { "content-type": "application/javascript", "content-encoding": "gzip" },
         });
       }

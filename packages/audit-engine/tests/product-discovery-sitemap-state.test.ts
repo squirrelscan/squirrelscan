@@ -24,7 +24,7 @@ const CONFIG = {
   rules: { enable: [RULE] },
 } as unknown as Config;
 
-const EMPTY_ASSETS: PreFetchedAssets = { css: new Map(), js: new Map(), images: new Map() };
+const EMPTY_ASSETS = { css: new Map(), js: new Map(), images: new Map() } as unknown as PreFetchedAssets;
 
 const BASE_STATS = {
   pagesTotal: 3,
@@ -75,8 +75,8 @@ async function productDiscovery(path: Path, readState?: SitemapReadState): Promi
           contentHash: `h${n}`,
           html,
           parsedData: null,
-          headers: {},
-          securityHeaders: {},
+          headers: {} as never,
+          securityHeaders: {} as never,
         });
       }
       yield* storage.addSitemap(crawlId, {

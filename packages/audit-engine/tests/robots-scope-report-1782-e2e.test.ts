@@ -5,7 +5,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
 import type { Config } from "@squirrelscan/config";
-import { createCrawler } from "@squirrelscan/crawler";
+import { createCrawler, type SQLiteStorage } from "@squirrelscan/crawler";
 
 import { buildV2Report } from "../src/report-stream";
 import { generateReportFromStorage, runStreamingRules, type PreFetchedAssets } from "../src/adapter";
@@ -56,7 +56,7 @@ async function crawlAndReport(respectRobots: boolean) {
     }),
   );
   const crawlId = await Effect.runPromise(crawler.start(`${origin}/`, `${origin}/`));
-  const storage = crawler.storage;
+  const storage = crawler.storage as SQLiteStorage;
   const pages = await Effect.runPromise(storage.getPages(crawlId));
   const result = await Effect.runPromise(
     runStreamingRules(storage, crawlId, CONFIG, ASSETS, undefined, { batchSize: 8 }) as Effect.Effect<never, never, never>,

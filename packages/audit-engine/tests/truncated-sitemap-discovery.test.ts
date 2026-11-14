@@ -28,7 +28,7 @@ const CONFIG = {
   rules: { enable: [EXISTS_RULE, VALID_RULE] },
 } as unknown as Config;
 
-const EMPTY_ASSETS: PreFetchedAssets = { css: new Map(), js: new Map(), images: new Map() };
+const EMPTY_ASSETS = { css: new Map(), js: new Map(), images: new Map() } as unknown as PreFetchedAssets;
 
 const PAGE_HTML = "<!doctype html><html><head><title>t</title></head><body>x</body></html>";
 
@@ -74,8 +74,8 @@ async function sitemapChecks(truncated: boolean): Promise<Map<string, CheckResul
         contentHash: "test",
         html: PAGE_HTML,
         parsedData: null,
-        headers: {},
-        securityHeaders: {},
+        headers: {} as never,
+        securityHeaders: {} as never,
       });
       const pages = yield* storage.getPages(crawlId);
       const siteContext = yield* buildSiteContext(pages);

@@ -67,7 +67,7 @@ function feat(row: Row): PageFeatureRow {
     faviconHref: null,
     themeColor: null,
     ogImage: null,
-  };
+  } as unknown as PageFeatureRow;
 }
 
 // 12 product pages in normalized_url ASC order (== the cursor order): 10 carry

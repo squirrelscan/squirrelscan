@@ -37,7 +37,7 @@ function serve(links: string): { origin: string } {
     fetch: () => new Response(html("Elsewhere", ""), { headers: { "content-type": "text/html" } }),
   });
   servers.push(other);
-  const server = Bun.serve({
+  const server: ReturnType<typeof Bun.serve> = Bun.serve({
     port: 0,
     fetch(req) {
       const url = new URL(req.url);

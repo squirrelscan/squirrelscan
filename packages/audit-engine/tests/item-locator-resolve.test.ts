@@ -54,7 +54,7 @@ const meta = {
   id: RULE,
   name: "Dialog Name",
   description: "Dialogs have accessible names",
-  category: "a11y",
+  category: "a11y" as const,
   scope: "page" as const,
   severity: "warning" as const,
   weight: 5,

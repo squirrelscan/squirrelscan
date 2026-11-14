@@ -44,7 +44,7 @@ const meta = {
   id: RULE,
   name: "Meta Description",
   description: "Pages should have a meta description",
-  category: "content",
+  category: "content" as const,
   scope: "page" as const,
   severity: "warning" as const,
   weight: 10,

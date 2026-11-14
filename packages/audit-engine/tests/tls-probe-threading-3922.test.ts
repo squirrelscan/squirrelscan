@@ -23,7 +23,7 @@ const RULE = "security/tls-certificate";
 const HOST = "tls-fixture.com";
 const DAY_MS = 86_400_000;
 
-const run = <A>(e: Effect.Effect<A, never, never>) => Effect.runPromise(e);
+const run = <A, E>(e: Effect.Effect<A, E, never>) => Effect.runPromise(e);
 const tmpDir = mkdtempSync(join(tmpdir(), "squirrelscan-tls-threading-"));
 afterAll(() => rmSync(tmpDir, { recursive: true, force: true }));
 

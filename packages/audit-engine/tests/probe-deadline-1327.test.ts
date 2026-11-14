@@ -6,7 +6,7 @@ import { describe, expect, test } from "bun:test";
 import { parsePage } from "@squirrelscan/parser";
 
 import { withinDeadline } from "../src/adapter";
-import { runCloakingProbe, selectCloakingPaths, type SelectedProbe } from "../src/cloaking-probe";
+import { runCloakingProbe, selectCloakingPaths, type CloakingProbeOptions, type SelectedProbe } from "../src/cloaking-probe";
 import {
   confirmSoft404Candidates,
   hasSoft404FetchWork,
@@ -128,7 +128,7 @@ describe("soft-404 confirmation after the deadline", () => {
 describe("cloaking probe after the deadline", () => {
   const selected = (n: number): SelectedProbe[] =>
     Array.from({ length: n }, (_, i) => ({ url: `https://example.com/p${i}`, normalizedUrl: `https://example.com/p${i}`, reason: "recent" }) as unknown as SelectedProbe);
-  const OPTS = { maxPages: 10, queryVariation: true, googlebotUserAgent: "gb", defaultUserAgent: "ua", concurrency: 1 };
+  const OPTS = { maxPages: 10, queryVariation: true, googlebotUserAgent: "gb", defaultUserAgent: "ua", concurrency: 1 } as unknown as CloakingProbeOptions;
 
   test("a cancelled probe dispatches nothing further", async () => {
     const controller = new AbortController();

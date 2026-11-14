@@ -60,7 +60,7 @@ function injectedPage(over: Partial<PageRecord> & { url: string; status: number 
     parsedData: null,
     headers: EMPTY_HEADERS,
     securityHeaders: EMPTY_SECURITY_HEADERS,
-    ...over,
+    ...(over as Partial<PageRecord>),
   };
 }
 

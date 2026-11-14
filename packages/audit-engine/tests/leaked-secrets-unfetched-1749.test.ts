@@ -79,7 +79,7 @@ async function assetsFor(srcs: string[], overrides?: Overrides, config: Config =
 }
 
 function leakChecks(assets: Awaited<ReturnType<typeof assetsFor>>): CheckResult[] {
-  return security.leakedSecretsRule.run({
+  return (security.leakedSecretsRule.run({
     page: { url: `${base}/`, html: "", statusCode: 200, loadTime: 0, headers: {} },
     parsed: {} as never,
     site: {
@@ -92,7 +92,7 @@ function leakChecks(assets: Awaited<ReturnType<typeof assetsFor>>): CheckResult[
       scriptsNotReadUrls: assets.scriptsNotReadUrls,
     },
     options: {},
-  }).checks as CheckResult[];
+  }) as { checks: CheckResult[] }).checks;
 }
 
 const named = (checks: CheckResult[], name: string) => checks.find((c) => c.name === name);

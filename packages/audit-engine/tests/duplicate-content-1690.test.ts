@@ -7,7 +7,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import type { CheckResult, PreFetchedAssets } from "@squirrelscan/audit-engine";
+import type { PreFetchedAssets } from "@squirrelscan/audit-engine";
+import type { CheckResult } from "@squirrelscan/core-contracts";
 
 import { runStreamingRules } from "@squirrelscan/audit-engine";
 import { parsePage } from "@squirrelscan/parser";

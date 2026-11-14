@@ -9,7 +9,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
 import type { Config } from "@squirrelscan/config";
-import { createCrawler } from "@squirrelscan/crawler";
+import { createCrawler, type SQLiteStorage } from "@squirrelscan/crawler";
 
 import { probeLinkTargets } from "../src/link-target-probe";
 import { runStreamingPreRules } from "../src/streaming-pre-rules";
@@ -114,7 +114,7 @@ async function auditQuick() {
     external_links: { enabled: false, concurrency: 1, timeout_ms: 5_000, cache_ttl_days: 1 },
     internal_links: { enabled: true },
   } as unknown as Config;
-  const preRules = await Effect.runPromise(runStreamingPreRules(crawler.storage, crawlId, config, {}));
+  const preRules = await Effect.runPromise(runStreamingPreRules(crawler.storage as SQLiteStorage, crawlId, config, {}));
   return { ...site, crawlEnd, assets: preRules.assets };
 }
 

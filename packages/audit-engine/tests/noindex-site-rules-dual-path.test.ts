@@ -170,7 +170,7 @@ function feat(s: Spec): PageFeatureRow {
     faviconHref: null,
     themeColor: null,
     ogImage: null,
-  };
+  } as unknown as PageFeatureRow;
 }
 
 async function seededStore(fixture: Spec[] = FIXTURE): Promise<SQLiteStorage> {
@@ -193,7 +193,7 @@ function legacyPages(fixture: Spec[] = FIXTURE) {
       pageType: s.pageType ?? null,
       links: s.links.map(link),
     } as unknown as ParsedPage,
-    headers: s.xRobotsTag ? { "x-robots-tag": s.xRobotsTag } : {},
+    headers: (s.xRobotsTag ? { "x-robots-tag": s.xRobotsTag } : {}) as Record<string, string>,
   }));
 }
 

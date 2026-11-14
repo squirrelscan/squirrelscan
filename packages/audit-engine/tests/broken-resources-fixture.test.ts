@@ -208,7 +208,7 @@ function ruleChecks(assets: Awaited<ReturnType<typeof assetsFor>>, siteBase = ba
     },
     options: {},
   });
-  return result.checks as CheckResult[];
+  return (result as { checks: CheckResult[] }).checks;
 }
 
 function named(checks: CheckResult[], name: string): CheckResult | undefined {

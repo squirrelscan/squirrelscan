@@ -8,7 +8,7 @@ import { Effect } from "effect";
 
 import type { Config } from "@squirrelscan/config";
 import { TARGETED_RUN_SKIP_REASON, type CheckResult } from "@squirrelscan/core-contracts";
-import { createCrawler } from "@squirrelscan/crawler";
+import { createCrawler, type SQLiteStorage } from "@squirrelscan/crawler";
 
 import { buildSiteContext, runRulesOnStorage, runStreamingRules } from "../src/adapter";
 import { runStreamingPreRules } from "../src/streaming-pre-rules";
@@ -25,7 +25,7 @@ const PAGE_COUNT = 20;
 function serve(): { origin: string; hits: string[] } {
   const hits: string[] = [];
   const links = Array.from({ length: PAGE_COUNT }, (_, i) => `<a href="/p/${i}">p${i}</a>`).join(" ");
-  const server = Bun.serve({
+  const server: ReturnType<typeof Bun.serve> = Bun.serve({
     port: 0,
     fetch(req) {
       const { pathname } = new URL(req.url);
@@ -90,7 +90,7 @@ async function audit(
     }),
   );
   const crawlId = await Effect.runPromise(crawler.start(`${origin}/`, `${origin}/`));
-  const storage = crawler.storage;
+  const storage = crawler.storage as SQLiteStorage;
   const stored = await Effect.runPromise(storage.getPages(crawlId));
   const ran = await Effect.runPromise(
     Effect.gen(function* () {
@@ -285,7 +285,7 @@ describe("targetedCoverageFor reads the pages in batches (#1777 review)", () => 
         yield* storage.upsertFrontier(crawlId, frontier(old));
         yield* storage.upsertPage(crawlId, page(old, `${base}/a/000`));
         return yield* targetedCoverageFor(storage, crawlId);
-      }).pipe(Effect.ensuring(storage.close().pipe(Effect.orDie))) as Effect.Effect<never, never, never>,
+      }).pipe(Effect.ensuring(storage.close().pipe(Effect.orDie))) as unknown as ReturnType<typeof targetedCoverageFor>,
     );
     expect(coverage).toMatchObject({ requested: 131, audited: 130 });
     expect(coverage.unaudited).toEqual([{ url: `${base}/z-old`, reason: "redirected" }]);

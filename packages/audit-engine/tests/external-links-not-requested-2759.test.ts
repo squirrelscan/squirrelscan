@@ -347,7 +347,7 @@ describe("an audit with external link checks on (repo#2759)", () => {
       }),
     );
     const crawlId = await Effect.runPromise(crawler.start(home, home));
-    const storage = crawler.storage;
+    const storage = crawler.storage as SQLiteStorage;
     const config = {
       rule_options: {},
       rules: { enable: ["links/broken-external-links"] },
@@ -435,7 +435,7 @@ for (const engine of ["v1", "v2"] as const) {
         internal_links: { enabled: false },
       } as unknown as Config;
       const first = await Effect.runPromise(createCrawler({ config: crawlerConfig }));
-      const storage = first.storage;
+      const storage = first.storage as SQLiteStorage;
       const audit = async (
         crawler: typeof first,
         afterPreRules?: (crawlId: string) => Promise<void>,
@@ -455,7 +455,7 @@ for (const engine of ["v1", "v2"] as const) {
               return yield* runRulesOnStorage(storage, crawlId, siteContext, config, pre.assets);
             }
             return yield* runStreamingRules(storage, crawlId, config, pre.assets);
-          }) as Effect.Effect<{ siteRuleResults: Map<string, CheckResult[]> }, never, never>,
+          }) as unknown as Effect.Effect<{ siteRuleResults: Map<string, CheckResult[]> }, never, never>,
         );
         return { crawlId, ran };
       };

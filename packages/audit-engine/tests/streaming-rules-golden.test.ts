@@ -27,9 +27,9 @@ import type { Config } from "@squirrelscan/config";
 import type {
   PageRecord,
   ResponseHeaders,
-  RuleRunResult,
   SecurityHeaders,
 } from "@squirrelscan/core-contracts";
+import type { RuleRunResult } from "@squirrelscan/rules/types";
 import {
   RULE_ID_ROBOTS_TXT,
   RULE_ID_SITEMAP_EXISTS,
@@ -172,7 +172,7 @@ function injectedPage(over: Partial<PageRecord> & { url: string; status: number 
     parsedData: null,
     headers: EMPTY_HEADERS,
     securityHeaders: EMPTY_SECURITY_HEADERS,
-    ...over,
+    ...(over as Partial<PageRecord>),
   };
 }
 

@@ -346,7 +346,7 @@ describe("on the NEXT publish, a clipped page counts only with all of its eviden
         lastSeenAt: 1_770_000_000_000,
         provenance: "fresh",
         state: "open",
-      },
+      } as PageFindingRecord,
     ]);
     const second = await publish(store, "audit_2", payload);
     expect(second.coverage.carriedFindings).toBe(1);

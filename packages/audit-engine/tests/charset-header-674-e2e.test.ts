@@ -73,7 +73,7 @@ async function audit(engine: "v1" | "v2") {
     }),
   );
   const crawlId = await Effect.runPromise(crawler.start(`${origin}/`, `${origin}/`));
-  const storage = crawler.storage;
+  const storage = crawler.storage as SQLiteStorage;
   const stored = await Effect.runPromise(storage.getPages(crawlId));
   const ran = await Effect.runPromise(
     Effect.gen(function* () {

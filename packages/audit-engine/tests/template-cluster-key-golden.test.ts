@@ -58,7 +58,7 @@ function fp(over: Partial<PageFingerprint> = {}): PageFingerprint {
     hasNav: true,
     hasFooter: true,
     ...over,
-  };
+  } as PageFingerprint;
 }
 
 // ---------------------------------------------------------------------------

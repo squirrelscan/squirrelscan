@@ -9,7 +9,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
 import type { Config } from "@squirrelscan/config";
-import { createCrawler } from "@squirrelscan/crawler";
+import { createCrawler, type SQLiteStorage } from "@squirrelscan/crawler";
 import type { EgressPolicy } from "@squirrelscan/utils/public-egress";
 
 import { checkExternalLinks } from "../src/external-checker";
@@ -60,7 +60,7 @@ function serve(): number {
     },
   });
   servers.push(server);
-  return server.port;
+  return server.port!;
 }
 
 /**
@@ -210,7 +210,7 @@ describe("the audit's external link phase", () => {
     }) as typeof fetch;
     try {
       await Effect.runPromise(
-        runStreamingPreRules(crawler.storage, crawlId, config, {
+        runStreamingPreRules(crawler.storage as SQLiteStorage, crawlId, config, {
           externalLinks: { config: config.external_links, linkCache: null },
           resourceOverrides: { egressPinnedByTransport },
         }),

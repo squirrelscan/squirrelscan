@@ -182,7 +182,7 @@ for (const engine of ["v1", "v2"] as const) {
           },
         }),
       );
-      const storage = crawler.storage;
+      const storage = crawler.storage as SQLiteStorage;
       const config = {
         rule_options: {},
         rules: { enable: ["links/broken-external-links"] },
@@ -225,7 +225,7 @@ for (const engine of ["v1", "v2"] as const) {
             return yield* runRulesOnStorage(storage, crawlId, siteContext, config, pre.assets);
           }
           return yield* runStreamingRules(storage, crawlId, config, pre.assets);
-        }) as Effect.Effect<{ siteRuleResults: Map<string, CheckResult[]> }, never, never>,
+        }) as unknown as Effect.Effect<{ siteRuleResults: Map<string, CheckResult[]> }, never, never>,
       );
       const checks = ran.siteRuleResults.get("links/broken-external-links") ?? [];
       // #1739: the cloud's first-404 answer is likely broken: its own warning check, not listed as blocked.

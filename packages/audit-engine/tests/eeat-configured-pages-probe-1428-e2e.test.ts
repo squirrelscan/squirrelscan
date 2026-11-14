@@ -6,7 +6,7 @@ import { Effect } from "effect";
 
 import type { Config } from "@squirrelscan/config";
 import type { CheckResult } from "@squirrelscan/core-contracts";
-import { createCrawler } from "@squirrelscan/crawler";
+import { createCrawler, type SQLiteStorage } from "@squirrelscan/crawler";
 
 import { buildSiteContext, runRulesOnStorage, runStreamingRules } from "../src/adapter";
 import { runStreamingPreRules } from "../src/streaming-pre-rules";
@@ -115,7 +115,7 @@ async function audit(
     }),
   );
   const crawlId = await Effect.runPromise(crawler.start(`${fixture.origin}/`, `${fixture.origin}/`));
-  const storage = crawler.storage;
+  const storage = crawler.storage as SQLiteStorage;
   const stored = await Effect.runPromise(storage.getPages(crawlId));
   fixture.stored = stored.map((p) => p.url);
   const ran = await Effect.runPromise(
