@@ -43,6 +43,7 @@ jobs:
       # releases endpoint is part of what is under test.
       installer_url: https://install.squirrelscan.com
       installer_ps1_url: https://install.squirrelscan.com/install.ps1
+      installer_source: published
       verify_channel: stable
 
   report:
