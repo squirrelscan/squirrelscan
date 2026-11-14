@@ -25,6 +25,7 @@ import { getGlobalConfigPath, setGlobalConfigPath } from "@/config";
 import { closeGlobalContentStore } from "@/crawler/storage/content-store";
 import { closeGlobalLinkCache } from "@/crawler/storage/link-cache";
 
+import { fastCrawlConfig } from "../helpers/fast-crawl-config";
 import { isolateSquirrelHome } from "../helpers/scratch-squirrel-home";
 
 // #626: every squirrel path under one scratch dir, removed afterwards.
@@ -155,7 +156,7 @@ async function runAudit(
   flags: string[],
   config = "[cloud]\npublish = false\n"
 ): Promise<void> {
-  writeFileSync(configPath, config);
+  writeFileSync(configPath, fastCrawlConfig(config));
   // --refresh: every run is a fresh crawl, so a page one test stored is never
   // reused by the next and each test sees only its own requests.
   const rawArgs = ["https://example.com/", "-y", "--refresh", ...flags];

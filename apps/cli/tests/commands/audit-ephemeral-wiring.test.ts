@@ -9,6 +9,7 @@ import { join } from "node:path";
 import { audit } from "@/cli/commands/audit";
 import { getGlobalConfigPath, setGlobalConfigPath } from "@/config";
 
+import { fastCrawlConfig } from "../helpers/fast-crawl-config";
 import { isolateSquirrelHome } from "../helpers/scratch-squirrel-home";
 
 const scratch = isolateSquirrelHome("squirrel-ephemeral").root;
@@ -52,7 +53,7 @@ beforeEach(() => {
   calls = [];
   registerAnswer = HONOURED;
   registerStatus = 201;
-  writeFileSync(configPath, "");
+  writeFileSync(configPath, fastCrawlConfig(""));
   setGlobalConfigPath(configPath);
   process.env.SQUIRREL_API_TOKEN = "sqcli_test_token";
   process.env.SQUIRREL_DISABLE_TELEMETRY = "1";
@@ -172,7 +173,7 @@ describe("squirrel audit --ephemeral (#3649)", () => {
   });
 
   test("[cloud] ephemeral = true is the same as the flag", async () => {
-    writeFileSync(configPath, "[cloud]\nephemeral = true\n");
+    writeFileSync(configPath, fastCrawlConfig("[cloud]\nephemeral = true\n"));
     await runAudit([]);
 
     expect(registerBody()?.ephemeral).toBe(true);
@@ -180,7 +181,7 @@ describe("squirrel audit --ephemeral (#3649)", () => {
   });
 
   test("--no-ephemeral overrides the config", async () => {
-    writeFileSync(configPath, "[cloud]\nephemeral = true\n");
+    writeFileSync(configPath, fastCrawlConfig("[cloud]\nephemeral = true\n"));
     registerAnswer = IGNORED;
     await runAudit(["--no-ephemeral"]);
 
@@ -202,7 +203,7 @@ describe("squirrel audit --ephemeral (#3649)", () => {
   });
 
   test("config ephemeral plus an explicit --publish publishes", async () => {
-    writeFileSync(configPath, "[cloud]\nephemeral = true\n");
+    writeFileSync(configPath, fastCrawlConfig("[cloud]\nephemeral = true\n"));
     await runAudit(["--publish"]);
 
     expect(published()).toHaveLength(1);

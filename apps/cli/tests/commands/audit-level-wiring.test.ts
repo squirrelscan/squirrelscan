@@ -25,6 +25,7 @@ import * as controller from "@/controllers/audit";
 import { closeGlobalContentStore } from "@/crawler/storage/content-store";
 import { closeGlobalLinkCache } from "@/crawler/storage/link-cache";
 
+import { fastCrawlConfig } from "../helpers/fast-crawl-config";
 import { isolateSquirrelHome } from "../helpers/scratch-squirrel-home";
 
 // Same isolation as audit-probe-wiring.test.ts: every store the audit writes
@@ -133,7 +134,7 @@ async function runAudit(
   config = "",
   { online = false } = {}
 ): Promise<void> {
-  writeFileSync(configPath, config);
+  writeFileSync(configPath, fastCrawlConfig(config));
   const rawArgs = [
     "https://example.com/",
     ...flags,

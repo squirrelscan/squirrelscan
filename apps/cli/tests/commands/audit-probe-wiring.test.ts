@@ -28,6 +28,7 @@ import { getGlobalConfigPath, setGlobalConfigPath } from "@/config";
 import { closeGlobalContentStore } from "@/crawler/storage/content-store";
 import { closeGlobalLinkCache } from "@/crawler/storage/link-cache";
 
+import { fastCrawlConfig } from "../helpers/fast-crawl-config";
 import { isolateSquirrelHome } from "../helpers/scratch-squirrel-home";
 
 // Same isolation as audit-discovery-probes-wiring.test.ts: every store the
@@ -134,7 +135,7 @@ async function runAudit(
   config = "",
   coverage: string[] = ["-C", "quick"]
 ): Promise<void> {
-  writeFileSync(configPath, config);
+  writeFileSync(configPath, fastCrawlConfig(config));
   const rawArgs = [
     "https://example.com/",
     "-m",

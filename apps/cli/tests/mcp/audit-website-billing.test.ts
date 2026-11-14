@@ -30,6 +30,7 @@ import {
 import { createMcpServer } from "@/mcp/server";
 import { levelRunOptions } from "@/mcp/tools/audit-tools";
 
+import { fastCrawlConfig } from "../helpers/fast-crawl-config";
 import { isolateSquirrelHome } from "../helpers/scratch-squirrel-home";
 
 // #626: every squirrel path under one scratch dir, removed afterwards.
@@ -199,7 +200,7 @@ async function call(
   args: Record<string, unknown>,
   config = "[cloud]\npublish = false\n"
 ): Promise<{ text: string; isError: boolean }> {
-  writeFileSync(configPath, config);
+  writeFileSync(configPath, fastCrawlConfig(config));
   const client = await connect();
   const result = (await client.callTool({ name, arguments: args })) as {
     content: { type: string; text?: string }[];
