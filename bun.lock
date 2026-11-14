@@ -13,7 +13,7 @@
     },
     "apps/cli": {
       "name": "@squirrelscan/cli",
-      "version": "0.0.181",
+      "version": "0.0.182",
       "bin": {
         "squirrelscan": "./build/squirrelscan",
       },
@@ -183,6 +183,7 @@
         "linkedom": "^0.18.12",
       },
       "devDependencies": {
+        "@types/bun": "^1.4.0",
         "@types/node": "^24.13.1",
       },
     },

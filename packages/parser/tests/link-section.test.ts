@@ -90,6 +90,6 @@ describe("link section", () => {
     const stored = parsePage(html, URL).links.map((l) => [l.text, l.section]);
     const document = parseDocument(html);
     const extracted = extractLinks(document, URL).map((l) => [l.text, l.section]);
-    expect(extracted).toEqual(stored);
+    expect(extracted).toEqual(stored as typeof extracted);
   });
 });

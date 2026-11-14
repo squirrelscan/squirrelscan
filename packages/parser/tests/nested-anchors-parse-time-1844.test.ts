@@ -28,7 +28,7 @@ const nestedAnchors = (n: number): string => {
 const MAX_PARSE_MS = 5_000;
 
 describe("nested anchors parse in linear time (#1844)", () => {
-  test(`20,000 nested anchors parse in under ${MAX_PARSE_MS} ms and keep every link`, { timeout: 60_000 }, () => {
+  test(`20,000 nested anchors parse in under ${MAX_PARSE_MS} ms and keep every link`, () => {
     const n = 20_000;
     const html = nestedAnchors(n);
     const start = performance.now();
@@ -41,15 +41,15 @@ describe("nested anchors parse in linear time (#1844)", () => {
     expect(page.links[0]).toMatchObject({ url: "https://example.com/p0", text: "l0" });
     expect(page.links[n - 1]).toMatchObject({ url: `https://example.com/p${n - 1}`, text: `l${n - 1}` });
     expect(page.links.every((link, i) => link.text === `l${i}`)).toBe(true);
-  });
+  }, { timeout: 60_000 });
 
-  test("extractors/links.ts finds every nested link with its own text", { timeout: 60_000 }, () => {
+  test("extractors/links.ts finds every nested link with its own text", () => {
     const n = 20_000;
     const { document } = parseHTML(nestedAnchors(n));
     const links = extractLinks(document as never, URL);
     expect(links).toHaveLength(n);
     expect(links.every((link, i) => link.text === `l${i}`)).toBe(true);
-  });
+  }, { timeout: 60_000 });
 });
 
 describe("a nested anchor's text is its own, as a browser reads it (#1844)", () => {

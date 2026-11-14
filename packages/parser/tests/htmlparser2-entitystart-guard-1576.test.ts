@@ -8,7 +8,12 @@ import { Parser } from "htmlparser2";
 
 test("htmlparser2 tokenizer exposes a numeric entityStart during an attribute entity callback", () => {
   const seen: unknown[] = [];
-  const parser = new Parser({}) as unknown as Parser & { tokenizer: { entityStart?: unknown } };
+  const parser = new Parser({}) as unknown as {
+    tokenizer: { entityStart?: unknown };
+    onattribentity: (cp: number) => void;
+    write: (s: string) => void;
+    end: () => void;
+  };
   const originalEntity = parser.onattribentity.bind(parser);
   parser.onattribentity = (cp: number) => {
     seen.push(parser.tokenizer?.entityStart);

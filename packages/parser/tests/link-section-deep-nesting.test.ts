@@ -4,6 +4,7 @@
 
 import { describe, expect, test } from "bun:test";
 import type { Element } from "linkedom";
+import type { LinkSection } from "../src/extractors/types";
 
 import { makeSectionResolver } from "../src/extractors/link-section";
 import { extractLinks } from "../src/extractors/links";
@@ -18,7 +19,7 @@ function page(body: string): string {
 /** A body holding `depth` nested divs under `outer` (a tag name, or none), one anchor at the bottom. */
 function deepDocument(depth: number, outer?: string) {
   const doc = parseDocument(page(""));
-  let parent = doc.querySelector("body")!;
+  let parent: Element = doc.querySelector("body")!;
   if (outer) {
     const wrap = doc.createElement(outer);
     parent.appendChild(wrap);
@@ -116,7 +117,7 @@ describe("the iterative walk answers what the recursive one did", () => {
     test(`fixture ${i + 1}, in document order and in reverse`, () => {
       const doc = parseDocument(page(body));
       const anchors = [...doc.querySelectorAll("a[href]")] as unknown as Element[];
-      const expected = anchors.map(referenceResolver());
+      const expected = anchors.map(referenceResolver()) as LinkSection[];
       expect(anchors.map(makeSectionResolver())).toEqual(expected);
       // Resolving deep anchors first fills the memo from below; the answers must not change.
       expect([...anchors].reverse().map(makeSectionResolver()).reverse()).toEqual(expected);
