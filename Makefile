@@ -33,6 +33,14 @@ ci: check test test-release-tooling
 build: ci
 	@cd $(APP_DIR) && bun run build
 
+# NODE_ENV is pinned to "production" (#1839). `bun build` folds the literal
+# `process.env.NODE_ENV` to a constant taken from the build environment
+# ("development" when unset), so a runner exporting NODE_ENV=test would ship the
+# test-only knobs live. `--define` pins the constant whatever the environment
+# says; `--production` alone does not (it yields to an exported NODE_ENV). Keep
+# `--production` too: it switches Bun's JSX transform from jsxDEV to jsx, which
+# React's production jsx-dev-runtime (selected by the pinned NODE_ENV) needs,
+# or the HTML report crashes calling an undefined jsxDEV.
 build-all: ci
 	@for platform in $(PLATFORMS); do \
 		echo "==> Building $$platform..."; \
@@ -44,8 +52,9 @@ build-all: ci
 			linux-x64-musl) target="linux-x64-musl-baseline";; \
 			windows-x64) target="windows-x64-baseline";; \
 		esac; \
-		(cd $(APP_DIR) && bun build src/cli.ts --compile --splitting --minify \
+		(cd $(APP_DIR) && bun build src/cli.ts --compile --production --splitting --minify \
 			--no-compile-autoload-dotenv --no-compile-autoload-bunfig \
+			--define process.env.NODE_ENV='"production"' \
 			--target=bun-$$target \
 			--outfile=build/squirrel-$(VERSION)-$$platform$$ext); \
 	done
