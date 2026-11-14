@@ -12,12 +12,24 @@ import type { ZodType } from "zod";
 // HTTP request tool
 export type RequestAsyncFn = (url: string, options?: RequestInit) => Promise<Response>;
 
-let _requestAsync: RequestAsyncFn = () => {
+const NOT_INJECTED: RequestAsyncFn = () => {
   throw new Error("requestAsync not injected — call setRequestAsync() first");
 };
 
+let _requestAsync: RequestAsyncFn = NOT_INJECTED;
+
 export function setRequestAsync(fn: RequestAsyncFn): void {
   _requestAsync = fn;
+}
+
+/** Back to "no request tool": a rule that probes the live site reports not-checked instead (`squirrel analyze`). */
+export function clearRequestAsync(): void {
+  _requestAsync = NOT_INJECTED;
+}
+
+/** Whether a request tool is installed. False means the run is offline over stored data. */
+export function hasRequestTool(): boolean {
+  return _requestAsync !== NOT_INJECTED;
 }
 
 export function requestAsync(url: string, options?: RequestInit): Promise<Response> {

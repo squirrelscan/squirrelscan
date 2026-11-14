@@ -395,6 +395,9 @@ export const EXTERNAL_LINKS_NOT_CHECKED_SKIP_REASON = "external-links-not-checke
  */
 export const TARGETED_RUN_SKIP_REASON = "targeted-run";
 
+/** `skipReason` of a live-probe rule under `squirrel analyze`, which runs offline over stored data (#1269). */
+export const ANALYZE_OFFLINE_SKIP_REASON = "analyze-offline";
+
 /**
  * The `error` a link row carries when its host was CONFIRMED not to resolve (#1740): a definitive "no such
  * host" answer (NXDOMAIN, or no address records) that held on a second lookup. It is a verdict, stored like a

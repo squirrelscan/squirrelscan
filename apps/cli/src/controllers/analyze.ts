@@ -3,6 +3,7 @@
 import type { EntityMap } from "@squirrelscan/core-contracts";
 
 import { createEntityMapCollector } from "@squirrelscan/audit-engine/entity-map/collect";
+import { clearRequestAsync } from "@squirrelscan/rules";
 import { Effect } from "effect";
 import { existsSync, readdirSync } from "node:fs";
 
@@ -41,7 +42,6 @@ import { createStorage } from "@/crawler/storage";
 import { deriveCrawlRunStatus } from "@/reports/reconstruct";
 import { retiredAuditReason } from "@/reports/retired";
 import { getProjectsPath } from "@/self/paths";
-import { installRuleRequestTool } from "@/tools/request";
 import { configureLogger, logger } from "@/utils/logger";
 
 export interface AnalyzeProgress {
@@ -562,7 +562,8 @@ export function analyzeStoredCrawl(
       // squirrelscan/repo#3430: the site's own hosts are vetted and pinned.
       { pinOwnHosts: pinOwnHosts() }
     );
-    installRuleRequestTool();
+    // Offline over stored data: no request tool, so a live-probe rule reports not-checked (#1269).
+    clearRequestAsync();
     logger.debug("running rules on crawl", crawl.id);
     // Run rules on site context (no additional parsing)
     const ruleResults = yield* runRulesOnStorage(
