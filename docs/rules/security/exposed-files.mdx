@@ -1,0 +1,112 @@
+---
+title: "Exposed .git, .env and backup files: how to find them before a scanner does"
+description: "A readable /.git/HEAD, /.env or database dump hands out source code and secrets. On an aggressive run squirrel requests a short, fixed list of these paths and confirms each hit by its content."
+---
+
+## What an exposed sensitive file is
+
+Some files should never be served by a web server: the `.git` directory from a deploy that copied the working tree, a `.env` file that holds API keys, a `wp-config.php.bak` an editor left behind, a `db.sql` dump, a `server-status` page. Automated scanners request these paths on every site they find, all day, because one hit is often enough to take the site over. A readable `/.git/HEAD` means the whole repository and its history can be rebuilt from the server. A readable `.env` usually means the database password and every third-party key.
+
+## What squirrel checks
+
+This is a loud probing rule. It requests paths that should not exist, which leaves a trail of 404s in your logs and can trip a WAF, so it runs only when [probing intensity](/configuration/security) is `aggressive` (`--probe aggressive` or `--pentest`). Below that it sends nothing and the report lists it as not checked, with how to turn it on. Run it on a site you own or have permission to test.
+
+### What is requested
+
+One `GET` to a random path that cannot exist (the baseline), then one request per path on a fixed, curated list. The list is versioned in the rule, not a wordlist:
+
+| Group | Paths | Signature that confirms a hit |
+|---|---|---|
+| Version control | `/.git/HEAD`, `/.git/config`, `/.svn/entries`, `/.hg/requires` | a `ref: refs/...` line or a commit id; a `[core]` section; the Subversion entries format; Mercurial feature names |
+| Secrets and configuration | `/.env`, `/.env.local`, `/config.php.bak`, `/wp-config.php.bak`, `/appsettings.json` | every line `KEY=VALUE`; PHP source that defines or assigns settings; `ConnectionStrings`, `Logging` or similar sections |
+| Server status and debug | `/server-status`, `/server-info`, `/phpinfo.php`, `/.htaccess`, `/web.config` | the Apache mod_status and mod_info pages; the `phpinfo()` page; Apache directives; an IIS `<configuration>` |
+| Editor and OS files | `/.DS_Store`, `/Thumbs.db` | the `Bud1` magic number; the OLE compound file magic number |
+| Backups and dumps | `/backup.zip`, `/site.tar.gz`, `/db.sql`, `/dump.sql` | the zip, gzip or tar magic number; a MySQL, MariaDB, PostgreSQL or phpMyAdmin dump header, or SQL statements |
+| Framework endpoints | `/actuator/env`, `/actuator/heapdump` | Spring Boot's `activeProfiles` and `propertySources`; heap dump download headers |
+
+Every request is a `GET`, except `/actuator/heapdump`, which is a `HEAD`: a heap dump is a copy of the application's memory and is never downloaded. Nothing else is sent: no `POST`, no query string, no cookies. Every URL is built on the audited origin (scheme, host and port), and a redirect is never followed, wherever it points. At most 16 KB of each answer is read, counted after decompression, so a large archive is never pulled in full. Every request counts against the shared [probe budget](/configuration/security#budget) and robots.txt is ignored on purpose, as it is for every `aggressive` probe.
+
+### How a hit is confirmed
+
+A `200` alone is never a hit. A path is reported only when the answer is a 2xx and its body matches that file's signature. Most sites answer an unknown path with their homepage, an SPA shell or a themed 404 page served with `200`, so two more guards drop those:
+
+- The text signatures reject HTML, so a catch-all page never matches a `.env` or a `.git/config`.
+- A hit is dropped when the baseline path got the same bytes, or an answer that matches the same signature.
+
+### What it stops on
+
+An HTTP `429` or a bot challenge (Cloudflare's `cf-mitigated: challenge`, or a challenge page) stops the run at once, with no retry, so the audit does not get your own IP banned. The probe budget running out, or a probe that failed with a network error or timeout, stops it being a clean result too. Any of these makes the check incomplete: hits already confirmed are still reported, and the paths not answered are listed as not checked rather than passed.
+
+### Results
+
+- Fail, one check per file, for version control metadata, secrets, configuration source, `phpinfo()`, backups, dumps and framework endpoints. Warn for `server-status`, `server-info`, `.htaccess`, `web.config`, `.DS_Store` and `Thumbs.db`. Message: `/.env is publicly readable at https://example.com/.env: it reveals environment variables, typically API keys, database URLs and other secrets (12 variable(s), 4 with secret-looking names)`. The item meta has the path, the method, the status, the size, the signature, the group and what the file reveals.
+- Pass when none of the listed files is readable: `None of the 22 well-known sensitive files is publicly readable`.
+- Not checked, with reason `probe-level-too-low`, below `aggressive`.
+- Not checked, with reason `probe-incomplete`, when the run stopped early.
+
+The finding never contains a value, a line or a variable name from the file, only counts and the kind of data the file holds. Nothing from the file is logged.
+
+### Limits
+
+Only the listed paths are requested, so a backup named `backup-2024.zip` or a `.git` directory under a subpath is not found. A file that is readable only to signed-in users is not seen, because the probes carry no cookies. The heap dump is judged from its response headers alone.
+
+## How to fix it
+
+1. Remove the file from the web root, or block it at the server. Deny dotfiles and dot-directories (`location ~ /\. { deny all; }` in nginx, `<FilesMatch "^\.">Require all denied</FilesMatch>` in Apache) and keep backups, dumps and configuration copies outside the document root.
+2. Deploy from a build output, not a working copy, so `.git` never ships.
+3. Turn off `server-status`, `server-info`, `phpinfo()` pages and Spring Boot actuator endpoints in production, or restrict them to internal addresses.
+4. Treat anything the file exposed as leaked. Rotate every credential and key it held, and assume the source code and its history are public.
+
+| | |
+|---|---|
+| **Rule ID** | `security/exposed-files` |
+| **Category** | [Security](/rules/security) |
+| **Scope** | Site-wide |
+| **Severity** | error |
+| **Weight** | 8/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["security/exposed-files"]
+```
+
+### Disable all Security rules
+
+```toml squirrel.toml
+[rules]
+disable = ["security/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["security/exposed-files"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `exposed-files` | Problem |  |
+| `exposed-files-none` | Clean | `exposed-files` |
+| `exposed-files-not-checked` | Not checked |  |
+| `exposed-files-incomplete` | Not checked |  |
+
+{/* rule-checks:end */}
+
+## Related rules
+
+- [security/leaked-secrets](/rules/security/leaked-secrets): secrets that reached the pages and scripts the crawl fetched.
+- [security/version-disclosure](/rules/security/version-disclosure): response headers that tell a scanner which server version to target.
+- [security/graphql-introspection](/rules/security/graphql-introspection): another probing rule, for an API schema left open.

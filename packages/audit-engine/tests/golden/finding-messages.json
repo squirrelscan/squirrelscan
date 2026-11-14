@@ -3770,6 +3770,12 @@
    "csp-blocks-own-resources|pass|No enforced Content-Security-Policy to check (security/csp covers a missing policy)||"
   ]
  },
+ "security/exposed-files": {
+  "digest": "88417882991078",
+  "lines": [
+   "exposed-files-not-checked|skipped|Exposed sensitive files not checked: probing is passive, and this rule only probes at aggressive. Run with --probe aggressive (or --pentest) to check, on a site you own or may test.|\"not-checked\"|"
+  ]
+ },
  "security/form-captcha": {
   "digest": "25043495342045",
   "lines": [

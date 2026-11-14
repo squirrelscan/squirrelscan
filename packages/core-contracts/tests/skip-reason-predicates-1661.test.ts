@@ -52,6 +52,8 @@ const TABLE: Array<[string, boolean, boolean, boolean]> = [
   ["discovery-probe-no-answer", false, false, true],
   ["discovery-probe-redirect-not-followed", false, false, true],
   ["analyze-offline", false, false, true],
+  ["probe-level-too-low", false, false, true],
+  ["probe-incomplete", false, false, true],
   [IGNORED_SKIP_REASON, false, false, false],
   [PRIVATE_TARGET_SKIP_REASON, false, false, false],
 ];

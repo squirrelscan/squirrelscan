@@ -626,6 +626,7 @@
                   "rules/security/json-sensitive-fields",
                   "rules/security/graphql-get-mutations",
                   "rules/security/unauthenticated-api",
+                  "rules/security/exposed-files",
                   "rules/security/third-party-cookies",
                   "rules/security/sri",
                   "rules/security/cookie-flags",

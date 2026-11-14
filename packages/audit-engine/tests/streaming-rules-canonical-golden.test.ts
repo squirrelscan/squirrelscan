@@ -220,7 +220,9 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // passive, so it adds one skipped check and sends nothing; the overall score is unmoved.
       // 109736 -> 109737: security/json-sensitive-fields is a site-scoped probing rule. This gate runs
       // passive, so it adds one skipped check and sends nothing. The overall score is unmoved.
-      expect(v1.findings.length).toBe(109737);
+      // 109737 -> 109738 (#1932): security/exposed-files is a site-scoped probing rule. This gate runs with no
+      // probe budget (passive), so it adds one skipped not-checked row and sends nothing. The score is unmoved.
+      expect(v1.findings.length).toBe(109738);
       // Tripwire: EXTENDING a rule must never add a tally key, so a change here
       // is only correct alongside a deliberate new rule id. 266 -> 267 is
       // content/hidden-text, 267 -> 268 content/thin-vs-site-norm, 268 -> 269
@@ -251,9 +253,10 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // 311 -> 312 schema/expected-type, 312 -> 313 security/tls-certificate,
       // 313 -> 314 crawl/single-page-site, 314 -> 315 perf/framework-data-payload, 315 -> 316 perf/content-in-js-bundle,
       // 316 -> 317 links/anchor-mismatch, 317 -> 326 the 2026-11 batch of nine rules (crawl/rendered-signal-mismatch, a11y/svg-img-alt, security/password-form-get, url/session-ids, crawl/indexable-search-results, links/click-depth, analytics/duplicate-tags, i18n/hreflang-targets, content/duplicate-content), 326 -> 327 crawl/conflicting-index-signals, 327 -> 328 content/voice-consistency,
-      // 328 -> 329 security/unauthenticated-api, 329 -> 330 security/json-sensitive-fields;
+      // 328 -> 329 security/unauthenticated-api, 329 -> 330 security/json-sensitive-fields,
+      // 330 -> 331 security/exposed-files (#1932);
       // anything else means a rule id leaked in, so fix that rather than this number.
-      expect(v1.perRuleTally.length).toBe(330);
+      expect(v1.perRuleTally.length).toBe(331);
       expect(v1.perRuleTally.find((t) => t.ruleId === "security/tls-certificate")).toEqual({
         ruleId: "security/tls-certificate",
         pass: 0,
@@ -330,6 +333,7 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
         "security/graphql-get-mutations",
         "security/unauthenticated-api",
         "security/json-sensitive-fields",
+        "security/exposed-files",
       ]) {
         expect(v1.perRuleTally.find((t) => t.ruleId === ruleId)).toEqual({
           ruleId,

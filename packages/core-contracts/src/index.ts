@@ -399,6 +399,19 @@ export const TARGETED_RUN_SKIP_REASON = "targeted-run";
 export const ANALYZE_OFFLINE_SKIP_REASON = "analyze-offline";
 
 /**
+ * `skipReason` of a probing rule that needs a higher `--probe` level than the run has (#1932): it sent no
+ * request, so the report lists it as not checked and says which level turns it on.
+ */
+export const PROBE_LEVEL_TOO_LOW_SKIP_REASON = "probe-level-too-low";
+
+/**
+ * `skipReason` of a probing rule that stopped before it had probed everything (#1932): the site throttled it
+ * (HTTP 429) or answered with a bot challenge, the shared probe budget ran out, or every request failed. The
+ * paths it never reached may be exposed, so no finding is not a clean result.
+ */
+export const PROBE_INCOMPLETE_SKIP_REASON = "probe-incomplete";
+
+/**
  * The `error` a link row carries when its host was CONFIRMED not to resolve (#1740): a definitive "no such
  * host" answer (NXDOMAIN, or no address records) that held on a second lookup. It is a verdict, stored like a
  * status (so it survives the cache and the database with no new column), and `links/broken-external-links`
