@@ -33,10 +33,10 @@ const page = (body: string) => `<html><head><title>t</title></head><body>${body}
 // byte hide the left-boundary bug the host patterns depend on.
 const NAV = '<header><nav><a href="/">Home</a><a href="/pricing">Pricing</a></nav></header>';
 
-function run(
+async function run(
   body: string,
   opts: { url?: string; baseUrl?: string; finalUrl?: string; head?: string } = {},
-): CheckResult[] {
+): Promise<CheckResult[]> {
   const url = opts.url ?? "https://example.com/about";
   const html = opts.head
     ? `<html><head><title>t</title>${opts.head}</head><body>${body}</body></html>`
@@ -55,7 +55,7 @@ function run(
     ...(opts.baseUrl ? { site: { baseUrl: opts.baseUrl } as unknown as SiteData } : {}),
     options: {},
   };
-  return devLeakageRule.run(ctx).checks;
+  return (await devLeakageRule.run(ctx)).checks;
 }
 
 const only = (checks: CheckResult[]): CheckResult => {
@@ -178,11 +178,11 @@ describe("preview ownership", () => {
     expect(looksLikeOwnPreview("blog-app.pages.dev", "app")).toBe(true);
   });
 
-  test("a stranger's preview warns rather than fails, even on a short apex", () => {
+  test("a stranger's preview warns rather than fails, even on a short apex", async () => {
     const check = only(
-      run(`${NAV}<main><a href="https://sandbox-demo.vercel.app/">Partner demo</a></main>`, {
+      (await run(`${NAV}<main><a href="https://sandbox-demo.vercel.app/">Partner demo</a></main>`, {
         url: "https://box.com/x",
-      }),
+      })),
     );
     expect(check.status).toBe("warn");
   });
@@ -354,158 +354,158 @@ describe("classifyUrlAttribute", () => {
 // ---------------------------------------------------------------------------
 
 describe("devLeakageRule outcomes", () => {
-  test("pass: an ordinary production page", () => {
+  test("pass: an ordinary production page", async () => {
     const check = only(
-      run(
+      (await run(
         `${NAV}<main><h1>Pricing</h1><p>Plans start at ten dollars.</p>` +
           `<a href="/contact">Contact us</a><img src="/img/hero.png" alt="hero">` +
           `<a href="https://example.com/docs">Docs</a></main>`,
-      ),
+      )),
     );
     expect(check.status).toBe("pass");
   });
 
-  test("fail: a live href at a localhost origin", () => {
+  test("fail: a live href at a localhost origin", async () => {
     const check = only(
-      run(`${NAV}<main><a href="http://localhost:3000/api/health">Health check</a></main>`),
+      (await run(`${NAV}<main><a href="http://localhost:3000/api/health">Health check</a></main>`)),
     );
     expect(check.status).toBe("fail");
     expect(check.message).toContain("localhost");
     expect(check.value).toBe(1);
   });
 
-  test("fail: an img src on a private address", () => {
-    const check = only(run(`${NAV}<main><img src="http://192.168.1.10/logo.png" alt=""></main>`));
+  test("fail: an img src on a private address", async () => {
+    const check = only(await run(`${NAV}<main><img src="http://192.168.1.10/logo.png" alt=""></main>`));
     expect(check.status).toBe("fail");
     expect(check.message).toContain("private-ip");
   });
 
-  test("fail: a link to the site's own staging tier", () => {
-    const check = only(run(`${NAV}<main><a href="https://staging.example.com/x">Draft</a></main>`));
+  test("fail: a link to the site's own staging tier", async () => {
+    const check = only(await run(`${NAV}<main><a href="https://staging.example.com/x">Draft</a></main>`));
     expect(check.status).toBe("fail");
     expect(check.message).toContain("dev-subdomain");
   });
 
-  test("fail: an asset served from the site's own preview deployment", () => {
+  test("fail: an asset served from the site's own preview deployment", async () => {
     const check = only(
-      run(`${NAV}<main><img src="https://example-git-main.vercel.app/a.png" alt=""></main>`, {
+      (await run(`${NAV}<main><img src="https://example-git-main.vercel.app/a.png" alt=""></main>`, {
         url: "https://example.com/about",
-      }),
+      })),
     );
     expect(check.status).toBe("fail");
     expect(check.message).toContain("preview-host");
   });
 
-  test("warn: a preview host that could belong to anyone", () => {
+  test("warn: a preview host that could belong to anyone", async () => {
     const check = only(
-      run(`${NAV}<main><a href="https://someones-portfolio.vercel.app/">A friend</a></main>`),
+      (await run(`${NAV}<main><a href="https://someones-portfolio.vercel.app/">A friend</a></main>`)),
     );
     expect(check.status).toBe("warn");
     expect(check.message).toContain("preview-host");
   });
 
-  test("warn: a dev host mentioned in copy but never linked", () => {
+  test("warn: a dev host mentioned in copy but never linked", async () => {
     const check = only(
-      run(`${NAV}<main><p>The API also listens on http://localhost:3000 in development.</p></main>`),
+      (await run(`${NAV}<main><p>The API also listens on http://localhost:3000 in development.</p></main>`)),
     );
     expect(check.status).toBe("warn");
     expect(check.message).toContain("localhost");
   });
 
-  test("pass: the site's own http:// logo is mixed content, not a dev host (#1758)", () => {
+  test("pass: the site's own http:// logo is mixed content, not a dev host (#1758)", async () => {
     const check = only(
-      run(`${NAV}<main><img src="http://example.com/img/logo.png" alt="Logo"></main>`),
+      (await run(`${NAV}<main><img src="http://example.com/img/logo.png" alt="Logo"></main>`)),
     );
     expect(check.status).toBe("pass");
   });
 
-  test("fail: an http://localhost:3000 asset is still reported (#1758)", () => {
+  test("fail: an http://localhost:3000 asset is still reported (#1758)", async () => {
     const check = only(
-      run(`${NAV}<main><img src="http://localhost:3000/img/logo.png" alt="Logo"></main>`),
+      (await run(`${NAV}<main><img src="http://localhost:3000/img/logo.png" alt="Logo"></main>`)),
     );
     expect(check.status).toBe("fail");
     expect(check.message).toContain("localhost");
   });
 
-  test("skipped: the seed is itself a preview deploy", () => {
+  test("skipped: the seed is itself a preview deploy", async () => {
     const check = only(
-      run(`${NAV}<main><a href="https://acme.vercel.app/pricing">Pricing</a></main>`, {
+      (await run(`${NAV}<main><a href="https://acme.vercel.app/pricing">Pricing</a></main>`, {
         url: "https://acme.vercel.app/about",
         baseUrl: "https://acme.vercel.app/",
-      }),
+      })),
     );
     expect(check.status).toBe("skipped");
     expect(check.skipReason).toBe("non-production-origin");
   });
 
-  test("skipped: the audit is of a local dev server", () => {
+  test("skipped: the audit is of a local dev server", async () => {
     const check = only(
-      run(`${NAV}<main><a href="http://localhost:3000/api">API</a></main>`, {
+      (await run(`${NAV}<main><a href="http://localhost:3000/api">API</a></main>`, {
         url: "http://localhost:3000/about",
-      }),
+      })),
     );
     expect(check.status).toBe("skipped");
     expect(check.skipReason).toBe("non-production-origin");
   });
 
-  test("skipped: the seed is a staging tier even when this page redirected onto the apex", () => {
+  test("skipped: the seed is a staging tier even when this page redirected onto the apex", async () => {
     const check = only(
-      run(`${NAV}<main><a href="https://staging.example.com/x">Draft</a></main>`, {
+      (await run(`${NAV}<main><a href="https://staging.example.com/x">Draft</a></main>`, {
         url: "https://example.com/about",
         baseUrl: "https://staging.example.com/",
-      }),
+      })),
     );
     expect(check.status).toBe("skipped");
   });
 
-  test("fail: the head is scanned, where the worst leaks live", () => {
+  test("fail: the head is scanned, where the worst leaks live", async () => {
     // A canonical at localhost de-indexes the page; a stylesheet or script at
     // localhost breaks it outright. Body copy here is entirely clean.
     const check = only(
-      run(`${NAV}<main><p>Plans start at ten dollars.</p></main>`, {
+      (await run(`${NAV}<main><p>Plans start at ten dollars.</p></main>`, {
         head:
           '<link rel="canonical" href="http://localhost:3000/about">' +
           '<link rel="stylesheet" href="http://localhost:3000/a.css">' +
           '<script src="http://localhost:3000/app.js"></script>',
-      }),
+      })),
     );
     expect(check.status).toBe("fail");
     expect(check.value).toBe(3);
   });
 
-  test("skipped: the page redirected onto a preview host", () => {
+  test("skipped: the page redirected onto a preview host", async () => {
     const check = only(
-      run(`${NAV}<main><a href="/pricing">Pricing</a></main>`, {
+      (await run(`${NAV}<main><a href="/pricing">Pricing</a></main>`, {
         url: "https://example.com/about",
         finalUrl: "https://example-git-main.vercel.app/about",
-      }),
+      })),
     );
     expect(check.status).toBe("skipped");
     expect(check.skipReason).toBe("non-production-origin");
   });
 
-  test("an unparseable finalUrl falls back to the page URL rather than disabling the rule", () => {
+  test("an unparseable finalUrl falls back to the page URL rather than disabling the rule", async () => {
     const check = only(
-      run(`${NAV}<main><a href="http://localhost:3000/api">API</a></main>`, {
+      (await run(`${NAV}<main><a href="http://localhost:3000/api">API</a></main>`, {
         url: "https://example.com/about",
         finalUrl: "not a url",
-      }),
+      })),
     );
     expect(check.status).toBe("fail");
   });
 
-  test("skipped: no document", () => {
+  test("skipped: no document", async () => {
     const ctx = {
       page: { url: "https://example.com/", html: "", statusCode: 200, loadTime: 0, headers: {} },
       parsed: { document: null } as unknown as ParsedPage,
       options: {},
     } as RuleContext;
-    const check = only(devLeakageRule.run(ctx).checks);
+    const check = only((await devLeakageRule.run(ctx)).checks);
     expect(check.status).toBe("skipped");
   });
 
-  test("skipped: the page URL will not parse", () => {
-    const check = only(run(`${NAV}<main><p>hi</p></main>`, { url: "not a url" }));
+  test("skipped: the page URL will not parse", async () => {
+    const check = only(await run(`${NAV}<main><p>hi</p></main>`, { url: "not a url" }));
     expect(check.status).toBe("skipped");
     expect(check.skipReason).toBe("unparseable-page-url");
   });
@@ -516,22 +516,22 @@ describe("devLeakageRule outcomes", () => {
 // ---------------------------------------------------------------------------
 
 describe("code samples stay clean", () => {
-  test("a production page whose code sample mentions localhost passes", () => {
+  test("a production page whose code sample mentions localhost passes", async () => {
     const check = only(
-      run(
+      (await run(
         `${NAV}<main><h1>Getting started</h1>` +
           `<p>Start the dev server, then open the address it prints.</p>` +
           `<pre><code>bun run dev\n# Listening on http://localhost:5173</code></pre>` +
           `<p>Set <code>BASE_URL=http://127.0.0.1:8080</code> to point at the API.</p>` +
           `</main>`,
-      ),
+      )),
     );
     expect(check.status).toBe("pass");
   });
 
-  test("a highlighted block, a CodeMirror editor and an inert template are code too", () => {
+  test("a highlighted block, a CodeMirror editor and an inert template are code too", async () => {
     const check = only(
-      run(
+      (await run(
         `${NAV}<main>` +
           // What Rouge and Chroma emit: a wrapper div around a real <pre>.
           `<div class="highlight"><pre><code>curl http://localhost:9000/health</code></pre></div>` +
@@ -541,16 +541,16 @@ describe("code samples stay clean", () => {
           // Inert: the browser never renders it, so a visitor never reads it.
           `<template><span>http://staging.example.com</span></template>` +
           `</main>`,
-      ),
+      )),
     );
     expect(check.status).toBe("pass");
   });
 
-  test("but an href inside a code block is still a live reference", () => {
+  test("but an href inside a code block is still a live reference", async () => {
     // Excluding code from the PROSE scan must not excuse a real anchor: a
     // clickable link is a clickable link wherever it sits in the markup.
     const check = only(
-      run(`${NAV}<main><pre><a href="http://localhost:3000/x">run</a></pre></main>`),
+      (await run(`${NAV}<main><pre><a href="http://localhost:3000/x">run</a></pre></main>`)),
     );
     expect(check.status).toBe("fail");
   });
@@ -561,14 +561,14 @@ describe("code samples stay clean", () => {
 // ---------------------------------------------------------------------------
 
 describe("reporting", () => {
-  test("kinds are folded to one row each, counted, and lead with the live reference", () => {
+  test("kinds are folded to one row each, counted, and lead with the live reference", async () => {
     const check = only(
-      run(
+      (await run(
         `${NAV}<main>` +
           `<p>Mentioned once: http://localhost:4000 and again http://localhost:4001.</p>` +
           `<a href="http://192.168.1.10/admin">Admin</a>` +
           `</main>`,
-      ),
+      )),
     );
     expect(check.status).toBe("fail");
     expect(check.value).toBe(3);
@@ -579,12 +579,12 @@ describe("reporting", () => {
     expect(check.message).toContain("http://192.168.1.10/admin");
   });
 
-  test("item ids are kinds, never URLs", () => {
+  test("item ids are kinds, never URLs", async () => {
     // report/affected-pages reads an item id starting with `http` as a page of
     // the audited site, which would both inflate the affected-page count and
     // suppress the row as redundant.
     const check = only(
-      run(`${NAV}<main><a href="http://localhost:3000/api">API</a></main>`),
+      (await run(`${NAV}<main><a href="http://localhost:3000/api">API</a></main>`)),
     );
     expect(check.items).toEqual([
       {
@@ -596,13 +596,13 @@ describe("reporting", () => {
     ]);
   });
 
-  test("markdown link syntax in a hostile href cannot survive into the report", () => {
+  test("markdown link syntax in a hostile href cannot survive into the report", async () => {
     // Canonicalizing is not enough: new URL() leaves brackets and parentheses
     // alone, and the renderer would turn them into a clickable attacker link.
     const check = only(
-      run(
+      (await run(
         `${NAV}<main><a href="http://localhost/[click here](https://evil.example/pwn)">x</a></main>`,
-      ),
+      )),
     );
     const sample = (check.items?.[0]?.snippet ?? "") as string;
     expect(sample).not.toContain("[");
@@ -612,9 +612,9 @@ describe("reporting", () => {
     expect(sample).toContain("%5Bclick%20here%5D");
   });
 
-  test("a very long site-controlled URL is truncated", () => {
+  test("a very long site-controlled URL is truncated", async () => {
     const long = `http://localhost:3000/${"a".repeat(500)}`;
-    const check = only(run(`${NAV}<main><a href="${long}">x</a></main>`));
+    const check = only(await run(`${NAV}<main><a href="${long}">x</a></main>`));
     const sample = (check.items?.[0]?.snippet ?? "") as string;
     expect(sample.length).toBeLessThanOrEqual(120);
     expect(sample.endsWith("…")).toBe(true);
@@ -669,11 +669,11 @@ describe("seed classification", () => {
     expect(isNonProductionSeedHost("www.dev.to")).toBe(false);
   });
 
-  test("the rule still runs on a site hosted at dev.to", () => {
+  test("the rule still runs on a site hosted at dev.to", async () => {
     const check = only(
-      run(`${NAV}<main><a href="http://localhost:3000/api">API</a></main>`, {
+      (await run(`${NAV}<main><a href="http://localhost:3000/api">API</a></main>`, {
         url: "https://dev.to/some-post",
-      }),
+      })),
     );
     expect(check.status).toBe("fail");
   });

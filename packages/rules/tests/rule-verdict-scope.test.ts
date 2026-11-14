@@ -32,7 +32,7 @@ describe("verdictScope declarations", () => {
     "%s declares a verdictScope",
     (_id, meta) => {
       expect(meta.verdictScope).toBeDefined();
-      expect(["template", "page"]).toContain(meta.verdictScope);
+      expect(["template", "page"]).toContain(meta.verdictScope!);
     },
   );
 

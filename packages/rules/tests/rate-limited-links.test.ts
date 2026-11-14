@@ -13,12 +13,8 @@ import { brokenLinksRule } from "../src/links/broken-links";
 import { deadLinksRule } from "../src/links/dead-links";
 import { validateRedirectChain } from "../src/links/redirects";
 import { sitemap4xxRule } from "../src/crawl/sitemap-4xx";
-import type {
-  ExternalLinkCheckData,
-  ParsedPage,
-  RuleContext,
-  SitemapUrlStatusData,
-} from "../src/types";
+import type { SitemapUrlStatusData } from "@squirrelscan/core-contracts";
+import type { ExternalLinkCheckData, ParsedPage, RuleContext } from "../src/types";
 
 const BASE = "https://example.com";
 
@@ -39,7 +35,7 @@ const link = (over: Partial<ExternalLinkCheckData> = {}): ExternalLinkCheckData 
   ...over,
 });
 
-function check(checks: { name: string }[], name: string) {
+function check<T extends { name: string }>(checks: T[], name: string) {
   return checks.find((c) => c.name === name);
 }
 
@@ -195,12 +191,12 @@ describe("crawl/sitemap-4xx — rate-limited sitemap URLs (#1829)", () => {
   });
 
   test("429 and 430 are inside the 4xx band but are not sitemap rot", async () => {
-    const { checks } = sitemap4xxRule.run(
+    const { checks } = (await sitemap4xxRule.run(
       sitemapCtx([
         entry({ url: `${BASE}/a`, status: 429 }),
         entry({ url: `${BASE}/b`, status: 430 }),
       ]),
-    );
+    ));
     expect(check(checks, "sitemap-4xx")!.status).toBe("pass");
     const info = check(checks, "sitemap-rate-limited")!;
     expect(info.status).toBe("info");
@@ -208,20 +204,20 @@ describe("crawl/sitemap-4xx — rate-limited sitemap URLs (#1829)", () => {
   });
 
   test("a Retry-After 503 flagged by the checker is excluded too", async () => {
-    const { checks } = sitemap4xxRule.run(
+    const { checks } = (await sitemap4xxRule.run(
       sitemapCtx([entry({ url: `${BASE}/a`, status: 503, rateLimited: true })]),
-    );
+    ));
     expect(check(checks, "sitemap-4xx")!.status).toBe("pass");
     expect(check(checks, "sitemap-rate-limited")!.status).toBe("info");
   });
 
   test("a genuine 404 in the sitemap is still reported", async () => {
-    const { checks } = sitemap4xxRule.run(
+    const { checks } = (await sitemap4xxRule.run(
       sitemapCtx([
         entry({ url: `${BASE}/gone`, status: 404 }),
         entry({ url: `${BASE}/slow`, status: 429 }),
       ]),
-    );
+    ));
     const bad = check(checks, "sitemap-4xx")!;
     expect(bad.status).toBe("warn");
     expect(bad.items?.length).toBe(1);

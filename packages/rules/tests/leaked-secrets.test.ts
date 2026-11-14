@@ -33,6 +33,7 @@ import {
   scanContent,
 } from "../src/security/leaked-secrets";
 import { githubChecksum } from "../src/security/secrets/confidence";
+import type { LeakedSecret } from "../src/security/leaked-secrets";
 import type { RuleContext } from "../src/types";
 
 // A GitHub token body (30 characters); the checksum it needs (#361) is
@@ -78,7 +79,7 @@ function ctx(pageHtml: string, url = "https://squirrelscan.com/releases"): RuleC
   } as unknown as RuleContext;
 }
 
-function findings(checks: ReturnType<typeof leakedSecretsRule.run>["checks"]) {
+function findings(checks: Awaited<ReturnType<typeof leakedSecretsRule.run>>["checks"]) {
   return checks
     .filter((c) => c.name === "leaked-secrets-critical" || c.name === "leaked-secrets-high" || c.name === "leaked-secrets-medium")
     .flatMap((c) => c.items ?? []);
@@ -104,18 +105,18 @@ const SRI_TAG = `<script src="https://cdn.example.net/lib.js" integrity="sha256-
 const COMMIT_ID = `<p>Built from commit <code data-commit="${COMMIT}">${COMMIT}</code> on Cloudflare.</p>`;
 
 describe("security/leaked-secrets: hex digests are not secrets", () => {
-  test("a release page of checksums, an SRI hash and a commit id reports nothing", () => {
+  test("a release page of checksums, an SRI hash and a commit id reports nothing", async () => {
     const page = html(`${RELEASE_PAYLOAD}${CHECKSUM_TABLE}${SRI_TAG}${COMMIT_ID}`);
-    const { checks } = leakedSecretsRule.run(ctx(page));
+    const { checks } = (await leakedSecretsRule.run(ctx(page)));
 
     expect(findings(checks)).toEqual([]);
     expect(checks.find((c) => c.name === "leaked-secrets")?.status).toBe("pass");
   });
 
-  test("the same page plus a real Together key reports exactly one finding", () => {
+  test("the same page plus a real Together key reports exactly one finding", async () => {
     const leak = `<script>const api_key = "${TOGETHER_KEY}";</script>`; // pragma: allowlist secret
     const page = html(`${RELEASE_PAYLOAD}${CHECKSUM_TABLE}${SRI_TAG}${COMMIT_ID}${leak}`);
-    const { checks } = leakedSecretsRule.run(ctx(page));
+    const { checks } = (await leakedSecretsRule.run(ctx(page)));
 
     const items = findings(checks);
     expect(items).toHaveLength(1);
@@ -393,11 +394,11 @@ describe("security/leaked-secrets: real credentials still report", () => {
     expect(scanContent(short, "inline-script")).toEqual([]);
   });
 
-  test("public-by-design client keys stay informational, not leaks", () => {
+  test("public-by-design client keys stay informational, not leaks", async () => {
     const page = html(
       `<script>const cfg={apiKey:"AIzaSyD3mQ8xR2vT7pLnK4hW9cB1sE6yU0zJfXa"};</script>`, // pragma: allowlist secret
     );
-    const { checks } = leakedSecretsRule.run(ctx(page));
+    const { checks } = (await leakedSecretsRule.run(ctx(page)));
 
     expect(findings(checks)).toEqual([]);
     expect(checks.find((c) => c.name === "leaked-secrets-public")?.status).toBe("info");
@@ -723,11 +724,11 @@ describe("security/leaked-secrets: #150 missed shapes", () => {
     }
   });
 
-  test("a quoted JSON key inside a script[type=application/json] block is reported", () => {
+  test("a quoted JSON key inside a script[type=application/json] block is reported", async () => {
     const page = html(
       `<script type="application/json">{"x-api-key":"${COMMIT}"}</script>` // pragma: allowlist secret
     );
-    const items = findings(leakedSecretsRule.run(ctx(page)).checks);
+    const items = findings((await leakedSecretsRule.run(ctx(page))).checks);
     expect(items).toHaveLength(1);
     expect(items[0]?.id).toContain("Generic API Key Assignment");
   });
@@ -957,11 +958,11 @@ describe("security/leaked-secrets: #150 missed shapes", () => {
     expect(scanContent(`<p>Send a Bearer token.</p>${tag}`, "html")).toEqual([]);
   });
 
-  test("a base64 image data URI reports nothing", () => {
+  test("a base64 image data URI reports nothing", async () => {
     const page = html(
       `<img alt="logo" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z/C/HgAGgwJ/lK3Q6wAAAABJRU5ErkJggg==">`
     );
-    expect(findings(leakedSecretsRule.run(ctx(page)).checks)).toEqual([]);
+    expect(findings((await leakedSecretsRule.run(ctx(page))).checks)).toEqual([]);
   });
 
   test("two secrets on one line are both reported", () => {
@@ -1138,8 +1139,8 @@ const SPACES_SHAPE = "DO" + "ABCDEFGHJKLMNPQRST12"; // pragma: allowlist secret
 const AWS_SHAPE = "AKIA" + "IOSFODNN7EXAMPLE"; // pragma: allowlist secret
 const REAL_SECRET = "sk_live_" + "Zq7mR2xKd9LpV4nB8cT5wY3j"; // pragma: allowlist secret
 
-function reported(pageHtml: string) {
-  const result = leakedSecretsRule.run(ctx(pageHtml));
+async function reported(pageHtml: string) {
+  const result = (await leakedSecretsRule.run(ctx(pageHtml)));
   return {
     findings: findings(result.checks),
     names: result.checks.map((c) => c.name),
@@ -1148,10 +1149,10 @@ function reported(pageHtml: string) {
 
 describe("security/leaked-secrets: vendor public identifiers in URL queries (#574)", () => {
   // The issue's repro, in the shape its reporter saw (a medium finding).
-  test("the Mida optimize.js repro reports nothing", () => {
-    const { findings: items, names } = reported(
+  test("the Mida optimize.js repro reports nothing", async () => {
+    const { findings: items, names } = (await reported(
       html(`<script async src="https://cdn.mida.so/js/optimize.js?key=${SPACES_SHAPE}"></script>`)
-    );
+    ));
     expect(items).toEqual([]);
     expect(names).toEqual(["leaked-secrets"]);
   });
@@ -1169,10 +1170,10 @@ describe("security/leaked-secrets: vendor public identifiers in URL queries (#57
 
   for (const value of [SPACES_SHAPE, AWS_SHAPE]) {
     for (const [vendor, prefix] of VENDOR_CASES) {
-      test(`${vendor}: ${value.slice(0, 4)}-shaped value in src and href is not reported`, () => {
-        const { findings: items, names } = reported(
+      test(`${vendor}: ${value.slice(0, 4)}-shaped value in src and href is not reported`, async () => {
+        const { findings: items, names } = (await reported(
           html(`<script async src="${prefix}${value}"></script><link rel="preload" as="script" href="${prefix}${value}&x=1">`)
-        );
+        ));
         expect(items).toEqual([]);
         expect(names).not.toContain("leaked-secrets-public");
       });
@@ -1204,48 +1205,48 @@ describe("security/leaked-secrets: vendor public identifiers in URL queries (#57
     ["vendor param, wrong parameter name case", "https://cdn.mida.so/js/optimize.js?KEY="],
   ];
   for (const [label, prefix] of STILL_REPORTED) {
-    test(`still reported: ${label}`, () => {
-      const { findings: items } = reported(html(`<script async src="${prefix}${SPACES_SHAPE}"></script>`));
+    test(`still reported: ${label}`, async () => {
+      const { findings: items } = (await reported(html(`<script async src="${prefix}${SPACES_SHAPE}"></script>`)));
       expect(items.length).toBe(1);
       expect(items[0]!.id).toContain("DigitalOcean Spaces Key");
     });
   }
 
-  test("a vendor URL does not hide a real secret elsewhere on the page", () => {
-    const { findings: items } = reported(
+  test("a vendor URL does not hide a real secret elsewhere on the page", async () => {
+    const { findings: items } = (await reported(
       html(
         `<script async src="https://cdn.mida.so/js/optimize.js?key=${SPACES_SHAPE}"></script>` +
           `<script>var cfg = { token: "${REAL_SECRET}" };</script>`
       )
-    );
+    ));
     expect(items.map((i) => i.id).join("\n")).toContain("Stripe Live Key");
     expect(items.some((i) => i.id.includes("DigitalOcean"))).toBe(false);
   });
 
-  test("the same value outside the vendor URL is still reported", () => {
-    const { findings: items } = reported(
+  test("the same value outside the vendor URL is still reported", async () => {
+    const { findings: items } = (await reported(
       html(
         `<script async src="https://cdn.mida.so/js/optimize.js?key=${SPACES_SHAPE}"></script>` +
           `<p>Spaces key: ${SPACES_SHAPE}</p>`
       )
-    );
+    ));
     expect(items.length).toBe(1);
   });
 
-  test("a longer secret that contains the identifier is not hidden by it", () => {
-    const { findings: items } = reported(
+  test("a longer secret that contains the identifier is not hidden by it", async () => {
+    const { findings: items } = (await reported(
       html(
         `<script async src="https://cdn.mida.so/js/optimize.js?key=${SPACES_SHAPE}"></script>` +
           `<script>var u = "postgres://app:${SPACES_SHAPE}@db.internal/prod";</script>`
       )
-    );
+    ));
     expect(items.map((i) => i.id).join("\n")).toContain("PostgreSQL");
   });
 
-  test("a secret in a non-identifier parameter of a vendor URL is still reported", () => {
-    const { findings: items } = reported(
+  test("a secret in a non-identifier parameter of a vendor URL is still reported", async () => {
+    const { findings: items } = (await reported(
       html(`<script async src="https://cdn.mida.so/js/optimize.js?key=abc123&auth=${REAL_SECRET}"></script>`)
-    );
+    ));
     expect(items.map((i) => i.id).join("\n")).toContain("Stripe Live Key");
   });
 });

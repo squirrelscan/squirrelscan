@@ -37,8 +37,8 @@ describe("links/https-downgrade — link sections", () => {
     '<footer><a href="http://other.example/x">x</a></footer><p><a href="http://other.example/y">y</a></p>'
   );
 
-  test("an item says where its link sits; an unplaced one stays bare", () => {
-    const { checks } = httpsDowngradeRule.run(pageCtx(html));
+  test("an item says where its link sits; an unplaced one stays bare", async () => {
+    const { checks } = (await httpsDowngradeRule.run(pageCtx(html)));
 
     expect(checks[0]!.items).toEqual([
       {
@@ -52,8 +52,8 @@ describe("links/https-downgrade — link sections", () => {
     ]);
   });
 
-  test("without section data every item is bare", () => {
-    expect(httpsDowngradeRule.run(pageCtx(html, true)).checks[0]!.items).toEqual([
+  test("without section data every item is bare", async () => {
+    expect((await httpsDowngradeRule.run(pageCtx(html, true))).checks[0]!.items).toEqual([
       { id: "http://other.example/x" },
       { id: "http://other.example/y" },
     ]);
@@ -79,8 +79,8 @@ describe("links/nofollow-internal — link sections", () => {
     '<nav><a href="/x" rel="nofollow">x</a></nav><main><a href="/x">x again</a></main>'
   );
 
-  test("an item says where the nofollowed link sits, not where the followed one does", () => {
-    const { checks } = nofollowInternalRule.run(crawlCtx(html));
+  test("an item says where the nofollowed link sits, not where the followed one does", async () => {
+    const { checks } = (await nofollowInternalRule.run(crawlCtx(html)));
 
     expect(checks[0]!.items).toEqual([
       {
@@ -92,16 +92,16 @@ describe("links/nofollow-internal — link sections", () => {
     ]);
   });
 
-  test("without section data the item is bare", () => {
-    expect(nofollowInternalRule.run(crawlCtx(html, true)).checks[0]!.items).toEqual([{ id: "/x" }]);
+  test("without section data the item is bare", async () => {
+    expect((await nofollowInternalRule.run(crawlCtx(html, true))).checks[0]!.items).toEqual([{ id: "/x" }]);
   });
 
-  test("a link marked only sponsored or ugc is not counted as a nofollowed one", () => {
+  test("a link marked only sponsored or ugc is not counted as a nofollowed one", async () => {
     const mixed = body(
       '<nav><a href="/x" rel="nofollow">x</a></nav><footer><a href="/x" rel="sponsored">x</a></footer>'
     );
 
-    expect(nofollowInternalRule.run(crawlCtx(mixed)).checks[0]!.items?.[0]).toMatchObject({
+    expect((await nofollowInternalRule.run(crawlCtx(mixed))).checks[0]!.items?.[0]).toMatchObject({
       label: "/x, linked in the navigation",
       meta: { sections: { navigation: 1 } },
     });
@@ -127,8 +127,8 @@ describe("links/invalid-links — link sections", () => {
     } as unknown as RuleContext;
   }
 
-  test("the item says where the link sits", () => {
-    expect(invalidLinksRule.run(invalidCtx("footer")).checks[0]!.items).toEqual([
+  test("the item says where the link sits", async () => {
+    expect((await invalidLinksRule.run(invalidCtx("footer"))).checks[0]!.items).toEqual([
       {
         id: "http://[bad",
         label: "Invalid URL format, linked in the footer",
@@ -138,8 +138,8 @@ describe("links/invalid-links — link sections", () => {
     ]);
   });
 
-  test("without a section the item is as it was", () => {
-    expect(invalidLinksRule.run(invalidCtx()).checks[0]!.items).toEqual([
+  test("without a section the item is as it was", async () => {
+    expect((await invalidLinksRule.run(invalidCtx())).checks[0]!.items).toEqual([
       {
         id: "http://[bad",
         label: "Invalid URL format",
@@ -180,8 +180,8 @@ describe("links/weak-internal-links — link sections", () => {
     } as unknown as RuleContext;
   }
 
-  test("the legacy path says where the one link sits", () => {
-    const { checks } = weakInternalLinksRule.run(legacyCtx("navigation")) as {
+  test("the legacy path says where the one link sits", async () => {
+    const { checks } = (await weakInternalLinksRule.run(legacyCtx("navigation"))) as {
       checks: Array<{ items?: unknown[] }>;
     };
 
@@ -190,7 +190,7 @@ describe("links/weak-internal-links — link sections", () => {
     ]);
   });
 
-  test("the streaming path reads siteQuery.inboundSectionCounts and gets the same item", () => {
+  test("the streaming path reads siteQuery.inboundSectionCounts and gets the same item", async () => {
     const c = legacyCtx("navigation");
     c.siteQuery = {
       incomingLinkCounts: () =>
@@ -202,23 +202,23 @@ describe("links/weak-internal-links — link sections", () => {
         ]),
       inboundSectionCounts: () => new Map([[LONE, { navigation: 1 }]]),
     } as unknown as RuleContext["siteQuery"];
-    const viaQuery = weakInternalLinksRule.run(c) as { checks: Array<{ items?: unknown[] }> };
-    const legacy = weakInternalLinksRule.run(legacyCtx("navigation")) as {
+    const viaQuery = (await weakInternalLinksRule.run(c)) as { checks: Array<{ items?: unknown[] }> };
+    const legacy = (await weakInternalLinksRule.run(legacyCtx("navigation"))) as {
       checks: Array<{ items?: unknown[] }>;
     };
 
     expect(viaQuery.checks[0]!.items).toEqual(legacy.checks[0]!.items);
   });
 
-  test("without section data the item is bare, on both paths", () => {
-    const legacy = weakInternalLinksRule.run(legacyCtx()) as { checks: Array<{ items?: unknown[] }> };
+  test("without section data the item is bare, on both paths", async () => {
+    const legacy = (await weakInternalLinksRule.run(legacyCtx())) as { checks: Array<{ items?: unknown[] }> };
     expect(legacy.checks[0]!.items).toEqual([{ id: LONE }]);
 
     const c = legacyCtx();
     c.siteQuery = {
       incomingLinkCounts: () => new Map([[`${BASE}/`, 0], [`${BASE}/a`, 2], [LONE, 1]]),
     } as unknown as RuleContext["siteQuery"];
-    const streamed = weakInternalLinksRule.run(c) as { checks: Array<{ items?: unknown[] }> };
+    const streamed = (await weakInternalLinksRule.run(c)) as { checks: Array<{ items?: unknown[] }> };
     expect(streamed.checks[0]!.items).toEqual([{ id: LONE }]);
   });
 });

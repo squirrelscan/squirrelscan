@@ -18,7 +18,7 @@ import {
 } from "../src/shared/conventional-link-labels";
 import type { CheckResult, ParsedPage, RuleContext } from "../src/types";
 
-function run(body: string): CheckResult[] {
+async function run(body: string): Promise<CheckResult[]> {
   const html = `<!DOCTYPE html><html><head><title>t</title></head><body>${body}</body></html>`;
   const url = "https://example.com/";
   const ctx = {
@@ -26,11 +26,11 @@ function run(body: string): CheckResult[] {
     parsed: parsePage(html, url) as ParsedPage,
     options: {},
   } as unknown as RuleContext;
-  return linkTextRule.run(ctx).checks as CheckResult[];
+  return (await linkTextRule.run(ctx)).checks as CheckResult[];
 }
 
-function generic(body: string): string[] {
-  const check = run(body).find((c) => c.name === "link-text-generic");
+async function generic(body: string): Promise<string[]> {
+  const check = (await run(body)).find((c) => c.name === "link-text-generic");
   return check?.items?.map((i) => i.id) ?? [];
 }
 
@@ -162,48 +162,48 @@ describe("the conventional label set", () => {
 });
 
 describe("a11y/link-text", () => {
-  test("sign in, sign up and the other account labels are no longer reported", () => {
+  test("sign in, sign up and the other account labels are no longer reported", async () => {
     const labels = ["Sign in", "Signup", "Sign up", "Log in", "Login", "Log out", "Logout", "Sign out", "Register", "My account", "SIGN IN", "Sign in.", "Sign up"];
-    const checks = run(links(...labels));
+    const checks = (await run(links(...labels)));
     expect(checks.map((c) => [c.name, c.status])).toEqual([["link-text", "pass"]]);
   });
 
-  test("legal and utility labels are not reported", () => {
+  test("legal and utility labels are not reported", async () => {
     const labels = ["Terms", "Terms of Service", "Terms and Conditions", "Privacy", "Privacy Policy", "Legal", "Legal notice", "Imprint", "DMCA", "Cookies", "Cookie policy", "Accessibility", "Sitemap", "Contact", "About", "Help", "FAQ", "Careers"];
-    expect(run(links(...labels)).map((c) => c.name)).toEqual(["link-text"]);
+    expect((await run(links(...labels))).map((c) => c.name)).toEqual(["link-text"]);
   });
 
-  test("labels in other languages are not reported", () => {
+  test("labels in other languages are not reported", async () => {
     const labels = ["Anmelden", "Impressum", "Datenschutz", "Iniciar sesión", "Aviso legal", "Connexion", "Mentions légales", "ログイン", "利用規約", "登录", "联系我们", "로그인", "이용약관", "Войти", "Контакты"];
-    expect(run(links(...labels)).map((c) => c.name)).toEqual(["link-text"]);
+    expect((await run(links(...labels))).map((c) => c.name)).toEqual(["link-text"]);
   });
 
-  test("click here and its kin are still reported", () => {
+  test("click here and its kin are still reported", async () => {
     const labels = ["click here", "read more", "learn more", "here", "more", "link", "this", "go", "continue"];
-    expect(generic(links(...labels)).sort()).toEqual([...labels].sort());
+    expect((await generic(links(...labels))).sort()).toEqual([...labels].sort());
   });
 
-  test("subscribe and join are still reported", () => {
-    expect(generic(links("Subscribe", "Join")).sort()).toEqual(["join", "subscribe"]);
+  test("subscribe and join are still reported", async () => {
+    expect((await generic(links("Subscribe", "Join"))).sort()).toEqual(["join", "subscribe"]);
   });
 
-  test("a mixed page reports only the generic links", () => {
+  test("a mixed page reports only the generic links", async () => {
     const body = `<header>${links("Sign in", "Sign up")}</header><main><a href="/a">Read more</a><a href="/b">Pricing plans</a><a href="/c">Click here</a></main><footer>${links("Terms", "Privacy policy", "Impressum")}</footer>`;
-    expect(generic(body).sort()).toEqual(["click here", "read more"]);
+    expect((await generic(body)).sort()).toEqual(["click here", "read more"]);
   });
 
-  test("the aria-label path exempts conventional labels too, and still reports generic ones", () => {
+  test("the aria-label path exempts conventional labels too, and still reports generic ones", async () => {
     const body =
       `<a href="/login" aria-label="Sign in"><svg><circle/></svg></a>` +
       `<a href="/terms" aria-label="Terms of use">T</a>` +
       `<a href="/aria-generic" aria-label="Read more">R</a>` +
       `<a href="/title-generic" title="Click here">Q</a>` +
       `<a href="/impressum" title="Impressum">I</a>`;
-    expect(generic(body).sort()).toEqual(["Click here", "Read more"]);
+    expect((await generic(body)).sort()).toEqual(["Click here", "Read more"]);
   });
 
-  test("an accessible name that is conventional wins over visible generic text", () => {
-    expect(generic(`<a href="/login" aria-label="Log in">here</a>`)).toEqual([]);
+  test("an accessible name that is conventional wins over visible generic text", async () => {
+    expect(await generic(`<a href="/login" aria-label="Log in">here</a>`)).toEqual([]);
   });
 
   test("isGenericLinkText: a conventional label is checked first, whatever the list holds", () => {
@@ -217,15 +217,15 @@ describe("a11y/link-text", () => {
     expect(isGenericLinkText("Click here", overlapping)).toBe(true);
   });
 
-  test("the aria-labelledby path exempts a conventional label and reports a generic one", () => {
+  test("the aria-labelledby path exempts a conventional label and reports a generic one", async () => {
     const body =
       `<span id="a">Sign in</span><a href="/login" aria-labelledby="a">x</a>` +
       `<span id="b">Read more</span><a href="/more" aria-labelledby="b">y</a>`;
-    expect(generic(body)).toEqual(["Read more"]);
+    expect(await generic(body)).toEqual(["Read more"]);
   });
 
-  test("empty links are still reported", () => {
-    const checks = run(`<a href="/x"></a>${links("Sign in")}`);
+  test("empty links are still reported", async () => {
+    const checks = (await run(`<a href="/x"></a>${links("Sign in")}`));
     expect(checks.map((c) => c.name)).toEqual(["link-text-empty"]);
   });
 });

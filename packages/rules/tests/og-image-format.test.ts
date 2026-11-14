@@ -86,7 +86,7 @@ describe("social/og-image-size image formats", () => {
     globalThis.fetch = (() => {
       calls += 1;
       throw new Error("unexpected image fetch");
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
     try {
       run(meta("og:image", "https://cdn.example.com/share.svg"));
       expect(calls).toBe(0);

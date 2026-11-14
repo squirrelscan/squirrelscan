@@ -54,7 +54,7 @@ export function stubFetch(routes: Record<string, Route>): {
     sent.push(req);
     const u = new URL(url);
     const route = routes[`${u.origin}${u.pathname}`];
-    return route ? route(req) : html();
+    return route ? (await route(req)) : html();
   };
   globalThis.fetch = stub as typeof fetch;
   return {

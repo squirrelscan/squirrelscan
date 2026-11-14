@@ -40,7 +40,7 @@ async function audit(
   return (await commonMisspellingsRule.run(ctx)).checks;
 }
 
-const named = (checks: { name: string }[], name: string) => checks.filter((c) => c.name === name);
+const named = <T extends { name: string }>(checks: T[], name: string) => checks.filter((c) => c.name === name);
 
 describe("content/common-misspellings", () => {
   test("a misspelling in a paragraph is an info finding with the URL and a context snippet", async () => {

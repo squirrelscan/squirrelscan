@@ -11,14 +11,14 @@ import type { ParsedPage, RuleContext } from "../src/types";
 
 const NOW = 2026;
 
-function run(html: string, currentYear: number = NOW, pageUrl = "https://example.com/") {
+async function run(html: string, currentYear: number = NOW, pageUrl = "https://example.com/") {
   const { document } = parseHTML(`<html><body>${html}</body></html>`);
   const ctx: RuleContext = {
     page: { url: pageUrl, html, statusCode: 200, loadTime: 0, headers: {} },
     parsed: { document } as unknown as ParsedPage,
     options: { current_year: currentYear },
   };
-  return staleCopyrightRule.run(ctx).checks;
+  return (await staleCopyrightRule.run(ctx)).checks;
 }
 
 describe("latestCopyrightYear", () => {
@@ -50,13 +50,13 @@ describe("latestCopyrightYear", () => {
 });
 
 describe("staleCopyrightRule", () => {
-  test("current year in the footer passes", () => {
-    const [check] = run("<footer>© 2026 Acme</footer>");
+  test("current year in the footer passes", async () => {
+    const [check] = (await run("<footer>© 2026 Acme</footer>"));
     expect(check?.status).toBe("pass");
   });
 
-  test("a year behind the current year warns — never errors", () => {
-    const [check] = run("<footer>© 2024 Acme</footer>");
+  test("a year behind the current year warns — never errors", async () => {
+    const [check] = (await run("<footer>© 2024 Acme</footer>"));
     expect(check?.status).toBe("warn");
     expect(check?.value).toBe(2024);
     expect(check?.expected).toBe(NOW);
@@ -71,10 +71,10 @@ describe("staleCopyrightRule", () => {
     });
   });
 
-  test("preserves distinct copyright elements but not superseded older notices", () => {
-    const [check] = run(
+  test("preserves distinct copyright elements but not superseded older notices", async () => {
+    const [check] = (await run(
       "<footer><span>© 2022 Acme</span><span>© 2024 Acme</span><span>© 2024 Other</span></footer>",
-    );
+    ));
     expect(check?.value).toBe(2024);
     expect(check?.componentOccurrences).toHaveLength(2);
     expect(check?.componentOccurrences?.map((occurrence) => occurrence.element.locator)).toEqual([
@@ -83,19 +83,19 @@ describe("staleCopyrightRule", () => {
     ]);
   });
 
-  test("does not duplicate one nested copyright element matched through overlapping footer selectors", () => {
-    const [check] = run('<footer><div class="footer"><p>© 2024 Acme</p></div></footer>');
+  test("does not duplicate one nested copyright element matched through overlapping footer selectors", async () => {
+    const [check] = (await run('<footer><div class="footer"><p>© 2024 Acme</p></div></footer>'));
     expect(check?.componentOccurrences).toHaveLength(1);
     expect(check?.componentOccurrences?.[0]?.element.locator).toBe("footer:1>footer>div:1>p:1");
   });
 
-  test("article-local footers do not shift a shared site footer's region slot", () => {
-    const withArticleFooter = run(
+  test("article-local footers do not shift a shared site footer's region slot", async () => {
+    const withArticleFooter = (await run(
       "<article><footer>© 2024 Article</footer></article><footer>© 2024 Acme</footer>",
       NOW,
       "https://example.com/a/",
-    )[0]!;
-    const plainPage = run("<footer>© 2024 Acme</footer>", NOW, "https://example.com/b/")[0]!;
+    ))[0]!;
+    const plainPage = (await run("<footer>© 2024 Acme</footer>", NOW, "https://example.com/b/"))[0]!;
     const siteFooter = withArticleFooter.componentOccurrences?.find(
       (occurrence) => occurrence.groupable,
     )!;
@@ -105,59 +105,59 @@ describe("staleCopyrightRule", () => {
     expect(siteFooter.variant).toEqual(plainFooter.variant);
   });
 
-  test("a range ending this year is clean; ending last year is not", () => {
-    expect(run("<footer>© 2019-2026 Acme</footer>")[0]?.status).toBe("pass");
-    expect(run("<footer>© 2019-2025 Acme</footer>")[0]?.status).toBe("warn");
+  test("a range ending this year is clean; ending last year is not", async () => {
+    expect((await run("<footer>© 2019-2026 Acme</footer>"))[0]?.status).toBe("pass");
+    expect((await run("<footer>© 2019-2025 Acme</footer>"))[0]?.status).toBe("warn");
   });
 
-  test("a year ahead of now is not a finding — sites roll over early", () => {
-    expect(run("<footer>© 2027 Acme</footer>")[0]?.status).toBe("pass");
+  test("a year ahead of now is not a finding — sites roll over early", async () => {
+    expect((await run("<footer>© 2027 Acme</footer>"))[0]?.status).toBe("pass");
   });
 
-  test("site-chrome regions other than <footer> are matched", () => {
+  test("site-chrome regions other than <footer> are matched", async () => {
     for (const html of [
       '<div role="contentinfo">© 2024 Acme</div>',
       '<div class="site-footer">© 2024 Acme</div>',
       '<div id="colophon">© 2024 Acme</div>',
     ])
-      expect(run(html)[0]?.status).toBe("warn");
+      expect((await run(html))[0]?.status).toBe("warn");
   });
 
-  test("no footer at all is skipped, not passed", () => {
-    const [check] = run("<main><p>© 2024 Acme</p></main>");
+  test("no footer at all is skipped, not passed", async () => {
+    const [check] = (await run("<main><p>© 2024 Acme</p></main>"));
     expect(check?.status).toBe("skipped");
     expect(check?.skipReason).toBe("no-footer");
   });
 
-  test("a footer with no copyright notice is skipped", () => {
-    const [check] = run("<footer><a href='/privacy'>Privacy</a></footer>");
+  test("a footer with no copyright notice is skipped", async () => {
+    const [check] = (await run("<footer><a href='/privacy'>Privacy</a></footer>"));
     expect(check?.status).toBe("skipped");
     expect(check?.skipReason).toBe("not-applicable");
   });
 
   // The false-positive that would make this rule unshippable: a historical year in
   // body copy is correct as written, and an archived post is SUPPOSED to say 2019.
-  test("historical years in body copy stay clean", () => {
-    const [check] = run(
+  test("historical years in body copy stay clean", async () => {
+    const [check] = (await run(
       `<article>
          <p>Originally published © 2019 by Acme Press. The 2019-2020 season was our first.</p>
        </article>
        <footer>© 2026 Acme</footer>`,
-    );
+    ));
     expect(check?.status).toBe("pass");
     expect(check?.value).toBe(2026);
   });
 
-  test("a dated legal notice in the body does not drag the footer down", () => {
-    const [check] = run(
+  test("a dated legal notice in the body does not drag the footer down", async () => {
+    const [check] = (await run(
       `<main><section class="legal">Terms of Service, last revised © 2021.</section></main>
        <footer>© 2026 Acme</footer>`,
-    );
+    ));
     expect(check?.status).toBe("pass");
   });
 
-  test("the year is injected, so the verdict moves with the caller's clock, not ours", () => {
-    expect(run("<footer>© 2025 Acme</footer>", 2025)[0]?.status).toBe("pass");
-    expect(run("<footer>© 2025 Acme</footer>", 2026)[0]?.status).toBe("warn");
+  test("the year is injected, so the verdict moves with the caller's clock, not ours", async () => {
+    expect((await run("<footer>© 2025 Acme</footer>", 2025))[0]?.status).toBe("pass");
+    expect((await run("<footer>© 2025 Acme</footer>", 2026))[0]?.status).toBe("warn");
   });
 });

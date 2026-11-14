@@ -244,10 +244,10 @@ describe("crawl/sitemap-lastmod-drift", () => {
         )
       );
 
-    expect(behindBy(7 * 24).checks[0]?.status).toBe("pass"); // exactly 7 days
-    expect(behindBy(7 * 24 + 12).checks[0]?.status).toBe("pass"); // 7.5 days
-    expect(behindBy(8 * 24 - 1).checks[0]?.status).toBe("pass"); // just under 8
-    const warned = behindBy(8 * 24);
+    expect((await behindBy(7 * 24)).checks[0]?.status).toBe("pass"); // exactly 7 days
+    expect((await behindBy(7 * 24 + 12)).checks[0]?.status).toBe("pass"); // 7.5 days
+    expect((await behindBy(8 * 24 - 1)).checks[0]?.status).toBe("pass"); // just under 8
+    const warned = (await behindBy(8 * 24));
     expect(warned.checks[0]?.status).toBe("warn");
     expect(warned.checks[0]?.items?.[0]?.meta?.deltaDays).toBe(8);
   });
@@ -286,7 +286,7 @@ describe("crawl/sitemap-lastmod-drift", () => {
   test("ahead threshold is configurable", async () => {
     const pages: PageSpec[] = [{ url: "https://example.com/a", schemaDateModified: "2024-03-01T00:00:00Z" }];
     const urls = [{ loc: "https://example.com/a", lastmod: "2024-03-21" }];
-    expect(sitemapLastmodDriftRule.run(ctx(pages, urls)).checks[0]?.status).toBe("pass");
+    expect((await sitemapLastmodDriftRule.run(ctx(pages, urls))).checks[0]?.status).toBe("pass");
     const tightened = await sitemapLastmodDriftRule.run(ctx(pages, urls, { ahead_days: 10 }));
     expect(tightened.checks[0]?.status).toBe("warn");
     expect(tightened.checks[0]?.name).toBe("sitemap-lastmod-ahead-of-page");
@@ -401,51 +401,51 @@ describe("crawl/sitemap-lastmod-drift", () => {
     }
 
     /** Same nodes, both orders — the verdict must not move. */
-    function bothOrders(sitewide: Record<string, unknown>, article: Record<string, unknown>) {
+    async function bothOrders(sitewide: Record<string, unknown>, article: Record<string, unknown>) {
       return {
-        sitewideFirst: runOn(graph(sitewide, article)),
-        articleFirst: runOn(graph(article, sitewide)),
+        sitewideFirst: (await runOn(graph(sitewide, article))),
+        articleFirst: (await runOn(graph(article, sitewide))),
       };
     }
 
     test("sitewide WebSite dated 2020 ahead of an agreeing Article → pass, in either order", async () => {
-      const { sitewideFirst, articleFirst } = bothOrders(SITEWIDE, ARTICLE);
+      const { sitewideFirst, articleFirst } = (await bothOrders(SITEWIDE, ARTICLE));
 
-      expect(sitewideFirst.checks[0]?.status).toBe("pass");
-      expect(articleFirst.checks[0]?.status).toBe("pass");
+      expect((await sitewideFirst).checks[0]?.status).toBe("pass");
+      expect((await articleFirst).checks[0]?.status).toBe("pass");
       // Not just the same status: the same finding, byte for byte.
       expect(JSON.stringify(sitewideFirst)).toBe(JSON.stringify(articleFirst));
     });
 
     test("real drift on the Article still warns, with the sitewide node present", async () => {
       const drifted = { "@type": "Article", dateModified: "2011-04-02T00:00:00.000Z" };
-      const { sitewideFirst, articleFirst } = bothOrders(SITEWIDE, drifted);
+      const { sitewideFirst, articleFirst } = (await bothOrders(SITEWIDE, drifted));
 
       for (const result of [sitewideFirst, articleFirst]) {
-        expect(result.checks[0]?.status).toBe("warn");
-        expect(result.checks[0]?.name).toBe("sitemap-lastmod-ahead-of-page");
+        expect((await result).checks[0]?.status).toBe("warn");
+        expect((await result).checks[0]?.name).toBe("sitemap-lastmod-ahead-of-page");
         // The Article's 2011 date, never the WebSite's 2020 one.
-        expect(result.checks[0]?.items?.[0]?.meta?.pageDate).toBe("2011-04-02T00:00:00.000Z");
+        expect((await result).checks[0]?.items?.[0]?.meta?.pageDate).toBe("2011-04-02T00:00:00.000Z");
       }
       expect(JSON.stringify(sitewideFirst)).toBe(JSON.stringify(articleFirst));
     });
 
     test("the same trap in a flat top-level array, not just @graph", async () => {
-      expect(runOn(flatArray(SITEWIDE, ARTICLE)).checks[0]?.status).toBe("pass");
-      expect(runOn(flatArray(ARTICLE, SITEWIDE)).checks[0]?.status).toBe("pass");
+      expect((await runOn(flatArray(SITEWIDE, ARTICLE))).checks[0]?.status).toBe("pass");
+      expect((await runOn(flatArray(ARTICLE, SITEWIDE))).checks[0]?.status).toBe("pass");
     });
 
     test("sitewide nodes carrying dates raise no drift claim of their own", async () => {
       // Every one of these describes a thing the page mentions, not the page.
       // With no document node and no visible date, there is nothing to compare.
-      const { checks } = runOn(
+      const { checks } = (await runOn(
         graph(
           SITEWIDE,
           { "@type": "Organization", dateModified: "2019-05-05" },
           { "@type": "SoftwareApplication", datePublished: "2026-01-01" },
           { "@type": "Person", name: "Author" }
         )
-      );
+      ));
       expect(checks).toHaveLength(1);
       expect(checks[0]?.status).toBe("skipped");
       expect(checks[0]?.skipReason).toBe("No comparable dates");
@@ -453,29 +453,29 @@ describe("crawl/sitemap-lastmod-drift", () => {
 
     test("with no document-typed date the page's own visible date is used, not the sitewide one", async () => {
       // The WebSite's 2020 date would have warned by 1,613 days.
-      const { checks } = runOn(graph(SITEWIDE), { visibleDateModified: AGREES });
+      const { checks } = (await runOn(graph(SITEWIDE), { visibleDateModified: AGREES }));
       expect(checks[0]?.status).toBe("pass");
     });
 
     test("a WebPage node speaks for the document when there is no Article", async () => {
-      const { checks } = runOn(graph(SITEWIDE, { "@type": "WebPage", dateModified: AGREES }));
+      const { checks } = (await runOn(graph(SITEWIDE, { "@type": "WebPage", dateModified: AGREES })));
       expect(checks[0]?.status).toBe("pass");
     });
 
     test("an Article wins over a dated WebPage regardless of position", async () => {
       const webPage = { "@type": "WebPage", dateModified: "2011-04-02T00:00:00.000Z" };
       // The WebPage's 2011 date would warn; the Article agrees with lastmod.
-      expect(runOn(graph(webPage, ARTICLE)).checks[0]?.status).toBe("pass");
-      expect(runOn(graph(ARTICLE, webPage)).checks[0]?.status).toBe("pass");
+      expect((await runOn(graph(webPage, ARTICLE))).checks[0]?.status).toBe("pass");
+      expect((await runOn(graph(ARTICLE, webPage))).checks[0]?.status).toBe("pass");
     });
 
     test("array-wrapped @type and a {@value} date are still read", async () => {
-      const { checks } = runOn(
+      const { checks } = (await runOn(
         graph(SITEWIDE, {
           "@type": ["WebPage", "BlogPosting"],
           dateModified: { "@value": "2011-04-02T00:00:00.000Z" },
         })
-      );
+      ));
       expect(checks[0]?.status).toBe("warn");
       expect(checks[0]?.items?.[0]?.meta?.pageDate).toBe("2011-04-02T00:00:00.000Z");
     });
@@ -485,7 +485,7 @@ describe("crawl/sitemap-lastmod-drift", () => {
       // dated WebPage must lose to this node either way round.
       const stalePage = { "@type": "WebPage", dateModified: "2011-04-02T00:00:00.000Z" };
       for (const types of [["WebPage", "BlogPosting"], ["BlogPosting", "WebPage"]]) {
-        const { checks } = runOn(graph(stalePage, { "@type": types, dateModified: AGREES }));
+        const { checks } = (await runOn(graph(stalePage, { "@type": types, dateModified: AGREES })));
         expect(checks[0]?.status).toBe("pass");
       }
     });
@@ -493,20 +493,20 @@ describe("crawl/sitemap-lastmod-drift", () => {
     test("full-IRI and schema:-prefixed @types are recognised", async () => {
       for (const type of ["https://schema.org/Article", "http://schema.org/Article", "schema:Article"]) {
         // Recognised as the document node, so its agreeing date beats the sitewide one.
-        expect(runOn(graph(SITEWIDE, { "@type": type, dateModified: AGREES })).checks[0]?.status).toBe(
+        expect((await runOn(graph(SITEWIDE, { "@type": type, dateModified: AGREES }))).checks[0]?.status).toBe(
           "pass"
         );
       }
     });
 
     test("an unparseable date on one document node does not hide a later usable one", async () => {
-      const { checks } = runOn(
+      const { checks } = (await runOn(
         graph(
           SITEWIDE,
           { "@type": "Article", dateModified: "last tuesday" },
           { "@type": "BlogPosting", dateModified: AGREES }
         )
-      );
+      ));
       // Returning "last tuesday" would have failed to parse and dropped the page
       // to "no comparable dates", losing a comparison the page could support.
       expect(checks[0]?.status).toBe("pass");
@@ -514,9 +514,9 @@ describe("crawl/sitemap-lastmod-drift", () => {
     });
 
     test("an unparseable entry does not hide a later one in the same date list", async () => {
-      const { checks } = runOn(
+      const { checks } = (await runOn(
         graph(SITEWIDE, { "@type": "Article", dateModified: ["last tuesday", AGREES] })
-      );
+      ));
       expect(checks[0]?.status).toBe("pass");
       expect(checks[0]?.details?.comparedPages).toBe(1);
     });
@@ -524,9 +524,9 @@ describe("crawl/sitemap-lastmod-drift", () => {
     test("a crafted IRI is not normalised twice into a type it does not name", async () => {
       // Stripping the IRI and then the prefix in sequence would reduce this to
       // `Article`; it names no schema.org type, so the node is not the document.
-      const { checks } = runOn(
+      const { checks } = (await runOn(
         graph({ "@type": "https://schema.org/schema:Article", dateModified: AGREES })
-      );
+      ));
       expect(checks[0]?.status).toBe("skipped");
       expect(checks[0]?.skipReason).toBe("No comparable dates");
     });

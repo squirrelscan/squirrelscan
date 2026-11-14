@@ -13,7 +13,7 @@ async function run(head: string, body = "") {
 }
 const s = (src: string, attrs = "") => `<script async src="${src}" ${attrs}></script>`;
 const inline = (code: string) => `<script>${code}</script>`;
-const warns = (c: { status: string }[]) => c.filter((x) => x.status === "warn");
+const warns = <T extends { status: string }>(c: T[]) => c.filter((x) => x.status === "warn");
 
 const GTM_SNIPPET = (id: string) =>
   inline(`(function(w,d,s,l,i){var j=d.createElement(s);j.src='https://www.googletagmanager.com/gtm.js?id='+i;})(window,document,'script','dataLayer','${id}');`);

@@ -17,46 +17,46 @@ function context(body: string): RuleContext {
   return { page: { url, html, statusCode: 200, loadTime: 0, headers: {}, parsed }, parsed, options: {} };
 }
 
-test("control: whitespace-separated correlated signals produce two failures", () => {
+test("control: whitespace-separated correlated signals produce two failures", async () => {
   const ctx = context(` ${overlay}${link}`);
   expect([...detectPageSignals(ctx)].sort()).toEqual(["brand-impersonation", "fake-auth-overlay"]);
-  expect(brandImpersonationRule.run(ctx).checks[0]?.status).toBe("fail");
-  expect(fakeAuthOverlayRule.run(ctx).checks[0]?.status).toBe("fail");
+  expect((await brandImpersonationRule.run(ctx)).checks[0]?.status).toBe("fail");
+  expect((await fakeAuthOverlayRule.run(ctx)).checks[0]?.status).toBe("fail");
 });
 
-test("regression: removing inter-element whitespace preserves correlated signals", () => {
+test("regression: removing inter-element whitespace preserves correlated signals", async () => {
   const ctx = context(`${overlay}${link}`);
   expect([...detectPageSignals(ctx)].sort()).toEqual(["brand-impersonation", "fake-auth-overlay"]);
-  expect(brandImpersonationRule.run(ctx).checks[0]?.status).toBe("fail");
-  expect(fakeAuthOverlayRule.run(ctx).checks[0]?.status).toBe("fail");
+  expect((await brandImpersonationRule.run(ctx)).checks[0]?.status).toBe("fail");
+  expect((await fakeAuthOverlayRule.run(ctx)).checks[0]?.status).toBe("fail");
 });
 
-test("control: a lone overlay remains info", () => {
+test("control: a lone overlay remains info", async () => {
   const ctx = context(` ${overlay}`);
   expect([...detectPageSignals(ctx)]).toEqual(["fake-auth-overlay"]);
-  expect(fakeAuthOverlayRule.run(ctx).checks[0]?.status).toBe("info");
-  expect(brandImpersonationRule.run(ctx).checks.map((c) => c.status)).toEqual(["pass"]); // clean, not empty (#1741)
+  expect((await fakeAuthOverlayRule.run(ctx)).checks[0]?.status).toBe("info");
+  expect((await brandImpersonationRule.run(ctx)).checks.map((c) => c.status)).toEqual(["pass"]); // clean, not empty (#1741)
 });
 
-test("control: an ordinary iframe has no compromise signal", () => {
+test("control: an ordinary iframe has no compromise signal", async () => {
   const ctx = context(' <iframe title="Ordinary content" srcdoc="" style="width:300px;height:150px"></iframe>');
   expect([...detectPageSignals(ctx)]).toEqual([]);
-  expect(fakeAuthOverlayRule.run(ctx).checks.map((c) => c.status)).toEqual(["pass"]); // clean, not empty (#1741)
-  expect(brandImpersonationRule.run(ctx).checks.map((c) => c.status)).toEqual(["pass"]); // clean, not empty (#1741)
+  expect((await fakeAuthOverlayRule.run(ctx)).checks.map((c) => c.status)).toEqual(["pass"]); // clean, not empty (#1741)
+  expect((await brandImpersonationRule.run(ctx)).checks.map((c) => c.status)).toEqual(["pass"]); // clean, not empty (#1741)
 });
 
 // ── what the fix must not change ────────────────────────────────────
 
-test("a compact, legitimate Sign in with Google link is not impersonation", () => {
+test("a compact, legitimate Sign in with Google link is not impersonation", async () => {
   const ctx = context('<a href="https://accounts.google.com/o/oauth2/auth">Sign in with Google</a>');
   expect(detectPageSignals(ctx).has("brand-impersonation")).toBe(false);
-  expect(brandImpersonationRule.run(ctx).checks.map((c) => c.status)).toEqual(["pass"]); // clean, not empty (#1741)
+  expect((await brandImpersonationRule.run(ctx)).checks.map((c) => c.status)).toEqual(["pass"]); // clean, not empty (#1741)
 });
 
-test("a compact off-brand link with no overlay is a lone signal: info", () => {
+test("a compact off-brand link with no overlay is a lone signal: info", async () => {
   const ctx = context(link);
   expect([...detectPageSignals(ctx)]).toEqual(["brand-impersonation"]);
-  expect(brandImpersonationRule.run(ctx).checks[0]?.status).toBe("info");
+  expect((await brandImpersonationRule.run(ctx)).checks[0]?.status).toBe("info");
 });
 
 test("a self-hosted sign-in link is spared, glued or not", () => {
@@ -101,14 +101,14 @@ test("whitespace or an invisible character inside the label cannot split the cue
   }
 });
 
-test("a link labelled only verify or continue with is not a credential affordance by itself", () => {
+test("a link labelled only verify or continue with is not a credential affordance by itself", async () => {
   for (const anchor of [
     '<a href="https://blog.example.org/post">Verify your Google account</a>',
     '<a href="https://help.example.org/kb">Continue with Microsoft account</a>',
   ]) {
     const ctx = context(` ${anchor}`);
     expect(detectPageSignals(ctx).has("brand-impersonation")).toBe(false);
-    expect(brandImpersonationRule.run(ctx).checks.map((c) => c.status)).toEqual(["pass"]); // clean, not empty (#1741)
+    expect((await brandImpersonationRule.run(ctx)).checks.map((c) => c.status)).toEqual(["pass"]); // clean, not empty (#1741)
   }
 });
 

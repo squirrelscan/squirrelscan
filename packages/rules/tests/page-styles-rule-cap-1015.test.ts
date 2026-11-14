@@ -24,7 +24,7 @@ function state(rules: number, id = "t"): string {
   return vis.visibility(document.getElementById(id) as Element).state;
 }
 
-function buttonChecks(rules: number): string[] {
+async function buttonChecks(rules: number): Promise<string[]> {
   const html = page(rules, `<main><div class="gone"><button></button></div></main>`);
   const url = "https://example.com/";
   const ctx: RuleContext = {
@@ -32,7 +32,7 @@ function buttonChecks(rules: number): string[] {
     parsed: parsePage(html, url) as ParsedPage,
     options: {},
   };
-  return (buttonNameRule.run(ctx).checks as CheckResult[]).map((c) => `${c.name}:${c.status}`);
+  return ((await buttonNameRule.run(ctx)).checks as CheckResult[]).map((c) => `${c.name}:${c.status}`);
 }
 
 function stateOf(css: string, body: string, id = "t"): string {
@@ -56,10 +56,10 @@ describe("the style rule cap (pub#1015)", () => {
     expect(state(4_900, "s")).toBe("shown");
   });
 
-  test("an unnamed button in the hidden element is unconfirmed over the cap, not a failure", () => {
-    expect(buttonChecks(4_900)).not.toContain("button-name:fail");
-    expect(buttonChecks(5_000)).toEqual(["button-name-unconfirmed:warn"]);
-    expect(buttonChecks(5_100)).toEqual(["button-name-unconfirmed:warn"]);
+  test("an unnamed button in the hidden element is unconfirmed over the cap, not a failure", async () => {
+    expect(await buttonChecks(4_900)).not.toContain("button-name:fail");
+    expect(await buttonChecks(5_000)).toEqual(["button-name-unconfirmed:warn"]);
+    expect(await buttonChecks(5_100)).toEqual(["button-name-unconfirmed:warn"]);
   });
 
   test("reading the over-cap page costs about the same as the capped one", () => {

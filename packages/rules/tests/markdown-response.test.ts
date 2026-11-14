@@ -38,86 +38,86 @@ function ctx(markdownResponse: MarkdownProbeData | null | undefined): RuleContex
   };
 }
 
-function run(m: MarkdownProbeData | null | undefined): CheckResult[] {
-  return markdownResponseRule.run(ctx(m)).checks;
+async function run(m: MarkdownProbeData | null | undefined): Promise<CheckResult[]> {
+  return (await markdownResponseRule.run(ctx(m))).checks;
 }
 
 describe("ax/markdown-response", () => {
-  test("data unavailable → not checked info, no crash", () => {
-    const c = run(undefined);
+  test("data unavailable → not checked info, no crash", async () => {
+    const c = (await run(undefined));
     expect(c[0]?.status).toBe("skipped");
     expect(c[0]?.value).toBe("not-checked");
     expect(c[0]?.message).toContain("not checked");
   });
 
-  test("no markdown signal → absent surfaces as warn-status recommendation", () => {
-    const c = run(probe());
+  test("no markdown signal → absent surfaces as warn-status recommendation", async () => {
+    const c = (await run(probe()));
     expect(c[0]?.value).toBe("absent");
     // warn-status in this info-severity rule = shown as a Recommendation in
     // the report but score-neutral (advisory scoring).
     expect(c[0]?.status).toBe("warn");
   });
 
-  test("content negotiation serves markdown → available", () => {
-    const c = run(probe({ servesMarkdown: true, negotiatedContentType: "text/markdown" }));
+  test("content negotiation serves markdown → available", async () => {
+    const c = (await run(probe({ servesMarkdown: true, negotiatedContentType: "text/markdown" })));
     expect(c[0]?.value).toBe("available");
     expect(c[0]?.message).toContain("content negotiation");
   });
 
-  test(".md variant present → available", () => {
-    const c = run(probe({ mdVariantExists: true, mdVariantContentType: "text/markdown" }));
+  test(".md variant present → available", async () => {
+    const c = (await run(probe({ mdVariantExists: true, mdVariantContentType: "text/markdown" })));
     expect(c[0]?.value).toBe("available");
     expect(c[0]?.message).toContain(".md variant");
   });
 
-  test("both signals listed together", () => {
-    const c = run(
+  test("both signals listed together", async () => {
+    const c = (await run(
       probe({
         servesMarkdown: true,
         negotiatedContentType: "text/markdown",
         mdVariantExists: true,
         mdVariantContentType: "text/markdown",
       }),
-    );
+    ));
     expect(c[0]?.message).toContain("content negotiation");
     expect(c[0]?.message).toContain(".md variant");
   });
 
-  test("no check ever fails; markdown present → all info", () => {
-    expect(run(probe()).every((c) => c.status !== "fail")).toBe(true);
-    expect(run(probe({ servesMarkdown: true, negotiatedContentType: "text/markdown" })).every((c) => c.status === "info")).toBe(
+  test("no check ever fails; markdown present → all info", async () => {
+    expect((await run(probe())).every((c) => c.status !== "fail")).toBe(true);
+    expect((await run(probe({ servesMarkdown: true, negotiatedContentType: "text/markdown" }))).every((c) => c.status === "info")).toBe(
       true,
     );
   });
 
-  test("no header signals → no headers check emitted", () => {
-    const c = run(probe());
+  test("no header signals → no headers check emitted", async () => {
+    const c = (await run(probe()));
     expect(c.find((r) => r.name === "markdown-response-headers")).toBeUndefined();
   });
 
-  test("Vary: Accept present → surfaced in headers check", () => {
-    const c = run(probe({ servesMarkdown: true, negotiatedVary: "Accept" }));
+  test("Vary: Accept present → surfaced in headers check", async () => {
+    const c = (await run(probe({ servesMarkdown: true, negotiatedVary: "Accept" })));
     const headers = c.find((r) => r.name === "markdown-response-headers");
     expect(headers?.message).toContain("Vary: Accept");
   });
 
-  test("Vary present but doesn't mention Accept → not surfaced as a negotiation signal", () => {
-    const c = run(probe({ negotiatedVary: "Origin" }));
+  test("Vary present but doesn't mention Accept → not surfaced as a negotiation signal", async () => {
+    const c = (await run(probe({ negotiatedVary: "Origin" })));
     expect(c.find((r) => r.name === "markdown-response-headers")).toBeUndefined();
   });
 
-  test("Cloudflare token fingerprint headers → surfaced with computed percentage", () => {
-    const c = run(probe({ markdownTokensHeader: "100", originalTokensHeader: "400" }));
+  test("Cloudflare token fingerprint headers → surfaced with computed percentage", async () => {
+    const c = (await run(probe({ markdownTokensHeader: "100", originalTokensHeader: "400" })));
     const headers = c.find((r) => r.name === "markdown-response-headers");
     expect(headers?.message).toContain("x-markdown-tokens: 100");
     expect(headers?.message).toContain("x-original-tokens: 400");
     expect(headers?.message).toContain("25%");
   });
 
-  test("alternate Markdown Link alone → available (primary signal)", () => {
+  test("alternate Markdown Link alone → available (primary signal)", async () => {
     // A site whose homepage renders HTML but advertises a markdown twin via
     // Link: rel=alternate is serving markdown — not scored as absent.
-    const c = run(probe({ alternateMarkdownUrl: "https://example.com/index.md" }));
+    const c = (await run(probe({ alternateMarkdownUrl: "https://example.com/index.md" })));
     expect(c[0]?.value).toBe("available");
     expect(c[0]?.status).toBe("info");
     expect(c[0]?.message).toContain("link rel=alternate");
@@ -126,15 +126,15 @@ describe("ax/markdown-response", () => {
     expect(c.find((r) => r.name === "markdown-response-headers")).toBeUndefined();
   });
 
-  test("header signals check itself is always info", () => {
-    const c = run(
+  test("header signals check itself is always info", async () => {
+    const c = (await run(
       probe({
         negotiatedVary: "Accept",
         markdownTokensHeader: "10",
         originalTokensHeader: "40",
         alternateMarkdownUrl: "https://example.com/index.md",
       }),
-    );
+    ));
     expect(c.find((r) => r.name === "markdown-response-headers")?.status).toBe("info");
   });
 });

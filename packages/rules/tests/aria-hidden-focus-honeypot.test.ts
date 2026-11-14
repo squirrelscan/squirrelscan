@@ -23,8 +23,8 @@ function pageCtx(html: string, url = "https://example.com/"): RuleContext {
   };
 }
 
-function run(ctx: RuleContext): CheckResult[] {
-  return ariaHiddenFocusRule.run(ctx).checks as CheckResult[];
+async function run(ctx: RuleContext): Promise<CheckResult[]> {
+  return (await ariaHiddenFocusRule.run(ctx)).checks as CheckResult[];
 }
 
 function check(checks: CheckResult[], name: string): CheckResult | undefined {
@@ -32,7 +32,7 @@ function check(checks: CheckResult[], name: string): CheckResult | undefined {
 }
 
 describe("a11y/aria-hidden-focus — honeypot annotation (#1100)", () => {
-  test("honeypot input (id matching hp, inside a form) is annotated and downgraded to warning", () => {
+  test("honeypot input (id matching hp, inside a form) is annotated and downgraded to warning", async () => {
     const html = `<html><body>
       <form action="/contact" method="post">
         <input type="text" name="name">
@@ -40,7 +40,7 @@ describe("a11y/aria-hidden-focus — honeypot annotation (#1100)", () => {
         <button type="submit">Send</button>
       </form>
     </body></html>`;
-    const checks = run(pageCtx(html));
+    const checks = (await run(pageCtx(html)));
 
     expect(check(checks, "aria-hidden-focus")).toBeUndefined();
     const honeypot = check(checks, "aria-hidden-focus-honeypot");
@@ -51,59 +51,59 @@ describe("a11y/aria-hidden-focus — honeypot annotation (#1100)", () => {
     expect(honeypot?.items?.[0]?.id).toBe("input#pp-contact-hp");
   });
 
-  test("regular focusable-in-aria-hidden content (not a honeypot) still errors", () => {
+  test("regular focusable-in-aria-hidden content (not a honeypot) still errors", async () => {
     const html = `<html><body>
       <div aria-hidden="true"><a href="/promo">Hidden promo link</a></div>
     </body></html>`;
-    const checks = run(pageCtx(html));
+    const checks = (await run(pageCtx(html)));
 
     const fail = check(checks, "aria-hidden-focus");
     expect(fail?.status).toBe("fail");
     expect(check(checks, "aria-hidden-focus-honeypot")).toBeUndefined();
   });
 
-  test("honeypot-named input outside a form is NOT downgraded (form context required)", () => {
+  test("honeypot-named input outside a form is NOT downgraded (form context required)", async () => {
     const html = `<html><body>
       <div aria-hidden="true"><input type="text" id="standalone-hp"></div>
     </body></html>`;
-    const checks = run(pageCtx(html));
+    const checks = (await run(pageCtx(html)));
 
     expect(check(checks, "aria-hidden-focus")?.status).toBe("fail");
     expect(check(checks, "aria-hidden-focus-honeypot")).toBeUndefined();
   });
 
-  test("focusable input in a form without a honeypot-style name is NOT downgraded (name/id required)", () => {
+  test("focusable input in a form without a honeypot-style name is NOT downgraded (name/id required)", async () => {
     const html = `<html><body>
       <form action="/contact" method="post">
         <div aria-hidden="true"><input type="text" id="newsletter-opt-in"></div>
       </form>
     </body></html>`;
-    const checks = run(pageCtx(html));
+    const checks = (await run(pageCtx(html)));
 
     expect(check(checks, "aria-hidden-focus")?.status).toBe("fail");
     expect(check(checks, "aria-hidden-focus-honeypot")).toBeUndefined();
   });
 
-  test("a real a11y error and a honeypot on the same page both report, at their own severities", () => {
+  test("a real a11y error and a honeypot on the same page both report, at their own severities", async () => {
     const html = `<html><body>
       <div aria-hidden="true"><a href="/promo">Hidden promo link</a></div>
       <form action="/contact" method="post">
         <div aria-hidden="true"><input type="text" name="honeypot"></div>
       </form>
     </body></html>`;
-    const checks = run(pageCtx(html));
+    const checks = (await run(pageCtx(html)));
 
     expect(check(checks, "aria-hidden-focus")?.status).toBe("fail");
     expect(check(checks, "aria-hidden-focus-honeypot")?.status).toBe("warn");
   });
 
-  test("aria-hidden self-focusable honeypot input is also recognized", () => {
+  test("aria-hidden self-focusable honeypot input is also recognized", async () => {
     const html = `<html><body>
       <form action="/contact" method="post">
         <input type="text" id="trap-field" aria-hidden="true">
       </form>
     </body></html>`;
-    const checks = run(pageCtx(html));
+    const checks = (await run(pageCtx(html)));
 
     expect(check(checks, "aria-hidden-focus")).toBeUndefined();
     expect(check(checks, "aria-hidden-focus-honeypot")?.status).toBe("warn");
@@ -111,14 +111,14 @@ describe("a11y/aria-hidden-focus — honeypot annotation (#1100)", () => {
     expect(check(checks, "aria-hidden-focus-honeypot")?.items).toEqual([{ id: "input#trap-field" }]);
   });
 
-  test("no aria-hidden elements → info (regression)", () => {
-    const checks = run(pageCtx(`<html><body><p>plain page</p></body></html>`));
+  test("no aria-hidden elements → info (regression)", async () => {
+    const checks = (await run(pageCtx(`<html><body><p>plain page</p></body></html>`)));
     expect(check(checks, "aria-hidden-focus")?.status).toBe("info");
   });
 
-  test("aria-hidden present with no focusable content → pass (regression)", () => {
+  test("aria-hidden present with no focusable content → pass (regression)", async () => {
     const html = `<html><body><div aria-hidden="true"><p>decorative</p></div></body></html>`;
-    const checks = run(pageCtx(html));
+    const checks = (await run(pageCtx(html)));
     expect(check(checks, "aria-hidden-focus")?.status).toBe("pass");
   });
 });

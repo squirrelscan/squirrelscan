@@ -25,7 +25,7 @@ const failOf = (checks: CheckResult[]) => checks.find((c) => c.status === "fail"
 const isPass = (checks: CheckResult[]) => checks.length === 1 && checks[0]?.status === "pass";
 
 describe("methodOf table", () => {
-  const table: [string | null, string][] = [
+  const table: [string | null, "get" | "post" | "dialog"][] = [
     [null, "get"],
     ["", "get"],
     ["get", "get"],

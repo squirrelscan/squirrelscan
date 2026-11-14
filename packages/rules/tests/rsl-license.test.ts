@@ -39,67 +39,67 @@ function ctx(data: RslData | null | undefined): RuleContext {
   };
 }
 
-function run(data: RslData | null | undefined): CheckResult[] {
-  return rslLicenseRule.run(ctx(data)).checks;
+async function run(data: RslData | null | undefined): Promise<CheckResult[]> {
+  return (await rslLicenseRule.run(ctx(data))).checks;
 }
 
 describe("ax/rsl-license", () => {
-  test("data unavailable → not checked info, no crash", () => {
-    const checks = run(undefined);
+  test("data unavailable → not checked info, no crash", async () => {
+    const checks = (await run(undefined));
     expect(checks[0]?.status).toBe("skipped");
     expect(checks[0]?.value).toBe("not-checked");
     expect(checks[0]?.message).toContain("not checked");
   });
 
-  test("no signal at all → single absent info", () => {
-    const checks = run(rsl());
+  test("no signal at all → single absent info", async () => {
+    const checks = (await run(rsl()));
     expect(checks).toHaveLength(1);
     expect(checks[0]?.value).toBe("absent");
     expect(checks[0]?.status).toBe("info");
   });
 
-  test("valid RSL document → present + valid, both info", () => {
-    const checks = run(
+  test("valid RSL document → present + valid, both info", async () => {
+    const checks = (await run(
       rsl({
         robotsHasLicense: true,
         licenseUrls: ["https://example.com/license.xml"],
         documents: [doc()],
       }),
-    );
+    ));
     expect(checks.find((c) => c.name === "rsl-license-present")?.value).toBe("present");
     const valid = checks.find((c) => c.name === "rsl-license-valid");
     expect(valid?.status).toBe("info");
     expect(valid?.value).toBe("valid");
   });
 
-  test("License: declared but document unfetchable → warn", () => {
-    const checks = run(
+  test("License: declared but document unfetchable → warn", async () => {
+    const checks = (await run(
       rsl({
         robotsHasLicense: true,
         licenseUrls: ["https://example.com/license.xml"],
         documents: [doc({ status: 0, xmlValid: false, looksRsl: false, error: "network error" })],
       }),
-    );
+    ));
     const valid = checks.find((c) => c.name === "rsl-license-valid");
     expect(valid?.status).toBe("warn");
     expect(valid?.value).toBe("broken");
     expect(valid?.message).toContain("network error");
   });
 
-  test("License: declared but document doesn't parse as RSL → warn", () => {
-    const checks = run(
+  test("License: declared but document doesn't parse as RSL → warn", async () => {
+    const checks = (await run(
       rsl({
         robotsHasLicense: true,
         licenseUrls: ["https://example.com/license.xml"],
         documents: [doc({ xmlValid: true, looksRsl: false })],
       }),
-    );
+    ));
     const valid = checks.find((c) => c.name === "rsl-license-valid");
     expect(valid?.status).toBe("warn");
   });
 
-  test("Link: rel=license header alone counts as a signal", () => {
-    const checks = run(rsl({ linkHeaderPresent: true, licenseUrls: ["https://example.com/l.xml"] }));
+  test("Link: rel=license header alone counts as a signal", async () => {
+    const checks = (await run(rsl({ linkHeaderPresent: true, licenseUrls: ["https://example.com/l.xml"] })));
     expect(checks.find((c) => c.name === "rsl-license-present")?.value).toBe("present");
   });
 });

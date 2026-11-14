@@ -344,32 +344,32 @@ describe("a linked stylesheet's other background selectors guard the pair (#1756
     background: { kind: "color", value: "#fff" },
     ...extra,
   });
-  const run = (body: string, extra: Record<string, unknown>) =>
-    colorContrastRule.run({
+  const run = async (body: string, extra: Record<string, unknown>) =>
+    (await colorContrastRule.run({
       ...ctx(page({ head: '<link rel="stylesheet" href="/styles.css">', body })),
       site: { baseUrl: "https://example.com", pages: [], robotsTxt: null, sitemaps: null, stylesheetBackgrounds: [sheet(extra)] },
-    } as unknown as RuleContext).checks as CheckResult[];
+    } as unknown as RuleContext)).checks as CheckResult[];
   const TEXT = '<p style="color:#b9b9b9">Tagline</p>';
 
-  test("text inside an element matching a selector with a background is unresolved, by class, id and tag", () => {
+  test("text inside an element matching a selector with a background is unresolved, by class, id and tag", async () => {
     for (const [selector, wrapped] of [
       [".hero", `<div class="hero">${TEXT}</div>`],
       ["#top", `<header id="top"><div>${TEXT}</div></header>`],
       ["footer", `<footer>${TEXT}</footer>`],
     ] as const) {
-      const checks = run(wrapped, { selectors: [selector] });
+      const checks = (await run(wrapped, { selectors: [selector] }));
       expect(checks.some((c) => c.status === "warn"), selector).toBe(false);
       expect(checks.some((c) => c.name === "color-contrast-unresolved"), selector).toBe(true);
     }
   });
 
-  test("text outside every matching element is still measured; a truncated list guards everything", () => {
-    expect(run(TEXT, { selectors: [".hero"] }).some((c) => c.status === "warn")).toBe(true);
-    expect(run(TEXT, { selectors: [".hero"], selectorsTruncated: true }).some((c) => c.status === "warn")).toBe(false);
+  test("text outside every matching element is still measured; a truncated list guards everything", async () => {
+    expect((await run(TEXT, { selectors: [".hero"] })).some((c) => c.status === "warn")).toBe(true);
+    expect((await run(TEXT, { selectors: [".hero"], selectorsTruncated: true })).some((c) => c.status === "warn")).toBe(false);
   });
 
-  test("a selector the DOM cannot evaluate is not provable, so the pair is unresolved", () => {
-    expect(run(TEXT, { selectors: ["div:not("] }).some((c) => c.status === "warn")).toBe(false);
+  test("a selector the DOM cannot evaluate is not provable, so the pair is unresolved", async () => {
+    expect((await run(TEXT, { selectors: ["div:not("] })).some((c) => c.status === "warn")).toBe(false);
   });
 });
 
@@ -434,12 +434,12 @@ describe("a hostile stylesheet cannot make the parser superlinear (#1756)", () =
     expect(ms).toBeLessThan(500);
   });
 
-  test("a page nested thousands deep and a stylesheet with many selectors finish, with the pair unresolved", () => {
+  test("a page nested thousands deep and a stylesheet with many selectors finish, with the pair unresolved", async () => {
     const depth = 3000;
     const body = "<div>".repeat(depth) + '<p style="color:#b9b9b9">Tagline</p>' + "</div>".repeat(depth);
     const selectors = Array.from({ length: 200 }, (_, i) => `.n${i}`);
     const start = performance.now();
-    const checks = colorContrastRule.run({
+    const checks = (await colorContrastRule.run({
       ...ctx(page({ head: '<link rel="stylesheet" href="/s.css">', body })),
       site: {
         baseUrl: "https://example.com",
@@ -456,7 +456,7 @@ describe("a hostile stylesheet cannot make the parser superlinear (#1756)", () =
           },
         ],
       },
-    } as unknown as RuleContext).checks as CheckResult[];
+    } as unknown as RuleContext)).checks as CheckResult[];
     expect(performance.now() - start).toBeLessThan(5000);
     // 3000 ancestors x 200 selectors is past the match budget: not provable, so not a warning.
     expect(checks.some((c) => c.status === "warn")).toBe(false);
@@ -483,15 +483,15 @@ describe("stylesheetBackgroundOf keeps only the html/body background (#1756)", (
     expect(stylesheetBackgroundOf(css)).toEqual(expected as never);
   });
 
-  test("a linked stylesheet with no read result stays unresolved, one with a read color is measured", () => {
+  test("a linked stylesheet with no read result stays unresolved, one with a read color is measured", async () => {
     const html = page({
       head: '<link rel="stylesheet" href="/styles.css">',
       body: '<p style="color:#b9b9b9">Tagline</p>',
     });
     const base = ctx(html);
-    const none = colorContrastRule.run(base).checks;
+    const none = (await colorContrastRule.run(base)).checks;
     expect(none.some((c) => c.name === "color-contrast-unresolved")).toBe(true);
-    const read = colorContrastRule.run({
+    const read = (await colorContrastRule.run({
       ...base,
       site: {
         baseUrl: "https://example.com",
@@ -502,7 +502,7 @@ describe("stylesheetBackgroundOf keeps only the html/body background (#1756)", (
           { url: "https://example.com/styles.css", status: 200, error: null, background: { kind: "color", value: "#fff" } },
         ],
       },
-    } as unknown as RuleContext).checks as CheckResult[];
+    } as unknown as RuleContext)).checks as CheckResult[];
     expect(read.find((c) => c.status === "warn")?.items?.[0]?.id).toContain("#b9b9b9 on #fff");
   });
 });

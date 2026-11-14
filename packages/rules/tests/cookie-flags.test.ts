@@ -20,7 +20,7 @@ function ctx(setCookie: string | undefined, url = "https://example.com/"): RuleC
   } as unknown as RuleContext;
 }
 
-function checksByName(checks: ReturnType<typeof cookieFlagsRule.run>["checks"], name: string) {
+function checksByName(checks: Awaited<ReturnType<typeof cookieFlagsRule.run>>["checks"], name: string) {
   return checks.find((c) => c.name === name);
 }
 

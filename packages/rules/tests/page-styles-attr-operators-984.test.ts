@@ -13,22 +13,22 @@ import { ariaCommandNameRule } from "../src/a11y/aria-command-name";
 import { formLabelsRule } from "../src/a11y/form-labels";
 import { parseSelector } from "../src/shared/page-styles";
 import { createStaticVisibility } from "../src/shared/static-hidden";
-import type { ParsedPage, RuleContext } from "../src/types";
+import type { ParsedPage, Rule, RuleContext } from "../src/types";
 
 const BODY =
   '<div class="nav"><button type="button"></button></div><form><input type="text" id="q"></form>';
 
-function statuses(
-  rule: { run: (ctx: RuleContext) => { checks: unknown } },
+async function statuses(
+  rule: Pick<Rule, "run">,
   css: string,
-): Record<string, string> {
+): Promise<Record<string, string>> {
   const url = "https://example.com/";
   const html = `<!doctype html><html lang="en"><head><title>t</title><style>${css}</style></head><body><main>${BODY}</main></body></html>`;
-  const checks = rule.run({
+  const checks = (await rule.run({
     page: { url, html, statusCode: 200, loadTime: 0, headers: {} },
     parsed: parsePage(html, url) as ParsedPage,
     options: {},
-  }).checks as CheckResult[];
+  })).checks as CheckResult[];
   return Object.fromEntries(checks.map((c) => [c.name, c.status]));
 }
 
@@ -86,18 +86,18 @@ describe("the issue's repro table: nothing on the page can match", () => {
     '.is-open [lang|="fr"]{display:none !important}',
     '[id$="-drawer"]{display:none}',
   ]) {
-    test(css, () => {
-      expect(statuses(ariaCommandNameRule, css)).toEqual({ "aria-command-name": "fail" });
-      expect(statuses(formLabelsRule, css)).toEqual({ "form-labels": "fail" });
+    test(css, async () => {
+      expect(await statuses(ariaCommandNameRule, css)).toEqual({ "aria-command-name": "fail" });
+      expect(await statuses(formLabelsRule, css)).toEqual({ "form-labels": "fail" });
     });
   }
 
-  test("the combined selector list with a plain id part", () => {
+  test("the combined selector list with a plain id part", async () => {
     expect(
-      statuses(
+      (await statuses(
         ariaCommandNameRule,
         '.is-x #drawer, .is-x [id$="-drawer"]{display:none !important}',
-      ),
+      )),
     ).toEqual({ "aria-command-name": "fail" });
   });
 });

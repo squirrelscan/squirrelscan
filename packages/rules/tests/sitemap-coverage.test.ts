@@ -53,66 +53,66 @@ function ctx(over: {
 }
 
 describe("crawl/sitemap-coverage cap-aware orphan warning (#697)", () => {
-  test("genuine gap (cap NOT hit) still warns", () => {
-    const { checks } = sitemapCoverageRule.run(
+  test("genuine gap (cap NOT hit) still warns", async () => {
+    const { checks } = (await sitemapCoverageRule.run(
       ctx({
         orphanPages: ["https://example.com/a", "https://example.com/b"],
         crawlLimits: { pagesCrawled: 15, maxPages: 100 },
       }),
-    );
+    ));
     const orphanCheck = checks.find((c) => c.name === "sitemap-orphans");
     expect(orphanCheck?.status).toBe("warn");
     expect(orphanCheck?.message).toContain("were not crawled");
   });
 
-  test("crawl truncated by the coverage profile's page cap → downgraded to info, cap-aware message", () => {
-    const { checks } = sitemapCoverageRule.run(
+  test("crawl truncated by the coverage profile's page cap → downgraded to info, cap-aware message", async () => {
+    const { checks } = (await sitemapCoverageRule.run(
       ctx({
         orphanPages: Array.from({ length: 44 }, (_, i) => `https://example.com/p${i}`),
         crawlLimits: { pagesCrawled: 10, maxPages: 10 },
       }),
-    );
+    ));
     const orphanCheck = checks.find((c) => c.name === "sitemap-orphans");
     expect(orphanCheck?.status).toBe("info");
     expect(orphanCheck?.message).toContain("capped at 10 pages");
   });
 
-  test("no crawlLimits threaded (legacy/offline caller) → preserves prior warn behavior", () => {
-    const { checks } = sitemapCoverageRule.run(ctx({ orphanPages: ["https://example.com/a"] }));
+  test("no crawlLimits threaded (legacy/offline caller) → preserves prior warn behavior", async () => {
+    const { checks } = (await sitemapCoverageRule.run(ctx({ orphanPages: ["https://example.com/a"] })));
     const orphanCheck = checks.find((c) => c.name === "sitemap-orphans");
     expect(orphanCheck?.status).toBe("warn");
   });
 
-  test("crawl stopped short of the cap (not truncated) → still warns despite the gap", () => {
-    const { checks } = sitemapCoverageRule.run(
+  test("crawl stopped short of the cap (not truncated) → still warns despite the gap", async () => {
+    const { checks } = (await sitemapCoverageRule.run(
       ctx({
         orphanPages: ["https://example.com/a"],
         crawlLimits: { pagesCrawled: 8, maxPages: 10 },
       }),
-    );
+    ));
     const orphanCheck = checks.find((c) => c.name === "sitemap-orphans");
     expect(orphanCheck?.status).toBe("warn");
   });
 
-  test("sitemap small enough to fit under the cap → coincidental cap hit still warns (codex)", () => {
+  test("sitemap small enough to fit under the cap → coincidental cap hit still warns (codex)", async () => {
     // Crawl happened to stop exactly at maxPages, but the whole sitemap
     // (5 URLs) fits comfortably within that budget — the cap isn't why
     // this URL is missing, so it must NOT be downgraded to info.
-    const { checks } = sitemapCoverageRule.run(
+    const { checks } = (await sitemapCoverageRule.run(
       ctx({
         orphanPages: ["https://example.com/a"],
         crawlLimits: { pagesCrawled: 5, maxPages: 5 },
         totalUrls: 5,
       }),
-    );
+    ));
     const orphanCheck = checks.find((c) => c.name === "sitemap-orphans");
     expect(orphanCheck?.status).toBe("warn");
   });
 
-  test("no orphan pages at all → no sitemap-orphans check emitted", () => {
-    const { checks } = sitemapCoverageRule.run(
+  test("no orphan pages at all → no sitemap-orphans check emitted", async () => {
+    const { checks } = (await sitemapCoverageRule.run(
       ctx({ orphanPages: [], crawlLimits: { pagesCrawled: 10, maxPages: 10 } }),
-    );
+    ));
     expect(checks.find((c) => c.name === "sitemap-orphans")).toBeUndefined();
   });
 });
@@ -168,9 +168,9 @@ describe("crawl/sitemap-coverage noindex pages (pub#488)", () => {
     } as unknown as RuleContext;
   }
 
-  const coverage = (ctx: RuleContext) =>
-    sitemapCoverageRule.run(ctx).checks.find((c) => c.name === "sitemap-coverage")!;
-  const listed = (ctx: RuleContext) => coverage(ctx).items?.map((i) => i.id) ?? [];
+  const coverage = async (ctx: RuleContext) =>
+    (await sitemapCoverageRule.run(ctx)).checks.find((c) => c.name === "sitemap-coverage")!;
+  const listed = async (ctx: RuleContext) => (await coverage(ctx)).items?.map((i) => i.id) ?? [];
 
   const INDEXED = [
     { path: "/" },
@@ -179,17 +179,17 @@ describe("crawl/sitemap-coverage noindex pages (pub#488)", () => {
     { path: "/campaign-terms.html", headers: { "x-robots-tag": "noindex" } },
   ];
 
-  test("precomputed missing pages: a meta-noindex page is not listed", () => {
+  test("precomputed missing pages: a meta-noindex page is not listed", async () => {
     const ctx = noindexCtx({
       pages: INDEXED,
       missingPages: [`${BASE}/campaign.html`],
       siteIndexable: true,
     });
-    expect(coverage(ctx).status).toBe("pass");
-    expect(listed(ctx)).toEqual([]);
+    expect((await coverage(ctx)).status).toBe("pass");
+    expect(await listed(ctx)).toEqual([]);
   });
 
-  test("precomputed path does not fall back to recomputing once the list is filtered empty", () => {
+  test("precomputed path does not fall back to recomputing once the list is filtered empty", async () => {
     // /campaign-terms.html is the only page missing from the sitemap list; the
     // fallback would also see the indexable /about page, which is not in the list.
     const ctx = noindexCtx({
@@ -197,50 +197,50 @@ describe("crawl/sitemap-coverage noindex pages (pub#488)", () => {
       missingPages: [`${BASE}/campaign.html`],
       siteIndexable: true,
     });
-    expect(listed(ctx)).toEqual([]);
+    expect(await listed(ctx)).toEqual([]);
   });
 
-  test("precomputed path: a header-noindex page, matched through its trailing slash, is not listed", () => {
+  test("precomputed path: a header-noindex page, matched through its trailing slash, is not listed", async () => {
     const ctx = noindexCtx({
       pages: INDEXED,
       missingPages: [`${BASE}/campaign-terms.html/`],
       siteIndexable: true,
     });
-    expect(listed(ctx)).toEqual([]);
+    expect(await listed(ctx)).toEqual([]);
   });
 
-  test("fallback path: a header-noindex page is not listed", () => {
+  test("fallback path: a header-noindex page is not listed", async () => {
     const ctx = noindexCtx({ pages: INDEXED, missingPages: [], siteIndexable: true });
-    expect(coverage(ctx).status).toBe("pass");
-    expect(listed(ctx)).toEqual([]);
+    expect((await coverage(ctx)).status).toBe("pass");
+    expect(await listed(ctx)).toEqual([]);
   });
 
-  test("an indexable page missing from the sitemap is still listed (both paths)", () => {
+  test("an indexable page missing from the sitemap is still listed (both paths)", async () => {
     const pages = [...INDEXED, { path: "/about.html" }];
     const fallback = noindexCtx({ pages, missingPages: [], siteIndexable: true });
-    expect(listed(fallback)).toEqual([`${BASE}/about.html`]);
+    expect(await listed(fallback)).toEqual([`${BASE}/about.html`]);
 
     const precomputed = noindexCtx({
       pages,
       missingPages: [`${BASE}/campaign.html`, `${BASE}/about.html`],
       siteIndexable: true,
     });
-    expect(listed(precomputed)).toEqual([`${BASE}/about.html`]);
+    expect(await listed(precomputed)).toEqual([`${BASE}/about.html`]);
   });
 
-  test("a site that is noindex everywhere is reported as before", () => {
+  test("a site that is noindex everywhere is reported as before", async () => {
     for (const siteIndexable of [false, undefined]) {
       const precomputed = noindexCtx({
         pages: INDEXED,
         missingPages: [`${BASE}/campaign.html`],
         siteIndexable,
       });
-      expect(listed(precomputed)).toEqual([`${BASE}/campaign.html`]);
+      expect(await listed(precomputed)).toEqual([`${BASE}/campaign.html`]);
 
       const fallback = noindexCtx({ pages: INDEXED, missingPages: [], siteIndexable });
       // The fallback has always left meta-noindex pages out; header noindex is only
       // read once the site is known to be indexable.
-      expect(listed(fallback)).toEqual([`${BASE}/campaign-terms.html`]);
+      expect(await listed(fallback)).toEqual([`${BASE}/campaign-terms.html`]);
     }
   });
 });

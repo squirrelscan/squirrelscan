@@ -13,14 +13,14 @@ import type { ParsedPage, RuleContext } from "../src/types";
 import { buttonNameRule } from "../src/a11y/button-name";
 import { parseSelector } from "../src/shared/page-styles";
 
-function statuses(html: string): Record<string, string> {
+async function statuses(html: string): Promise<Record<string, string>> {
   const url = "https://example.com/";
   const ctx: RuleContext = {
     page: { url, html, statusCode: 200, loadTime: 0, headers: {} },
     parsed: parsePage(html, url) as ParsedPage,
     options: {},
   };
-  const checks = buttonNameRule.run(ctx).checks as CheckResult[];
+  const checks = (await buttonNameRule.run(ctx)).checks as CheckResult[];
   return Object.fromEntries(checks.map((c) => [c.name, c.status]));
 }
 
@@ -71,41 +71,41 @@ describe("parseSelector: functional pseudo-classes narrow the subject", () => {
 });
 
 describe("a11y/button-name with Tailwind v4's preflight inlined (pub#951)", () => {
-  test("a visible unnamed button fails, not unconfirmed", () => {
-    expect(statuses(page(PREFLIGHT, '<button class="y"></button>'))).toEqual({
+  test("a visible unnamed button fails, not unconfirmed", async () => {
+    expect(await statuses(page(PREFLIGHT, '<button class="y"></button>'))).toEqual({
       "button-name": "fail",
     });
   });
 
   // The rule is undecidable for an element it can reach, so a button carrying
   // `hidden` stays unconfirmed (as before), never a failure.
-  test("a button with the hidden attribute is never a failure", () => {
-    expect(statuses(page(PREFLIGHT, "<button hidden></button>"))).toEqual({
+  test("a button with the hidden attribute is never a failure", async () => {
+    expect(await statuses(page(PREFLIGHT, "<button hidden></button>"))).toEqual({
       "button-name-unconfirmed": "warn",
     });
   });
 
-  test("a button inside a hidden ancestor is never a failure", () => {
-    expect(statuses(page(PREFLIGHT, "<div hidden><button></button></div>"))).toEqual({
+  test("a button inside a hidden ancestor is never a failure", async () => {
+    expect(await statuses(page(PREFLIGHT, "<div hidden><button></button></div>"))).toEqual({
       "button-name-unconfirmed": "warn",
     });
   });
 
-  test("a bare :where() rule that can hide keeps every button unconfirmed", () => {
+  test("a bare :where() rule that can hide keeps every button unconfirmed", async () => {
     expect(
-      statuses(page(":where(.a, .b) { display: none }", '<button class="y"></button>')),
+      (await statuses(page(":where(.a, .b) { display: none }", '<button class="y"></button>'))),
     ).toEqual({ "button-name-unconfirmed": "warn" });
   });
 
-  test("a hiding rule narrowed to a class leaves other buttons failing", () => {
+  test("a hiding rule narrowed to a class leaves other buttons failing", async () => {
     expect(
-      statuses(page("button.x:where(.open) { display: none }", '<button class="y"></button>')),
+      (await statuses(page("button.x:where(.open) { display: none }", '<button class="y"></button>'))),
     ).toEqual({ "button-name": "fail" });
   });
 
-  test("the same narrowed rule still makes a button it could reach unconfirmed", () => {
+  test("the same narrowed rule still makes a button it could reach unconfirmed", async () => {
     expect(
-      statuses(page("button.x:where(.open) { display: none }", '<button class="x"></button>')),
+      (await statuses(page("button.x:where(.open) { display: none }", '<button class="x"></button>'))),
     ).toEqual({ "button-name-unconfirmed": "warn" });
   });
 });

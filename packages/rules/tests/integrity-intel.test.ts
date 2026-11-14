@@ -103,32 +103,32 @@ describe("integrity/kit-signature", () => {
   const KIT = `<html><head><title>Calendly</title></head><body>
     <iframe id="google-auth"></iframe>__KIT__</body></html>`;
 
-  test("no-op when intel is absent (opt-in off)", () => {
+  test("no-op when intel is absent (opt-in off)", async () => {
     const ctx = pageCtx(`${SITE}/calendly?token=x`, KIT); // no intel
     // Off for the whole run: no per-page check (a pass would claim a verdict nobody reached).
-    expect(checks(kitSignatureRule.run(ctx) as { checks: CheckResult[] })).toHaveLength(0);
+    expect(checks((await kitSignatureRule.run(ctx)) as { checks: CheckResult[] })).toHaveLength(0);
   });
 
-  test("fails when a signature matches the page", () => {
+  test("fails when a signature matches the page", async () => {
     const ctx = pageCtx(`${SITE}/calendly?token=x`, KIT, signatureIntel("__KIT__"));
-    const out = checks(kitSignatureRule.run(ctx) as { checks: CheckResult[] });
+    const out = checks((await kitSignatureRule.run(ctx)) as { checks: CheckResult[] });
     expect(out).toHaveLength(1);
     expect(out[0]?.status).toBe("fail");
     expect(out[0]?.value).toBe("calendly-kit");
     expect(out[0]?.details?.severity).toBe("critical");
   });
 
-  test("a clean page with intel on emits a clean check, never an empty list (#1741)", () => {
+  test("a clean page with intel on emits a clean check, never an empty list (#1741)", async () => {
     const ctx = pageCtx(
       `${SITE}/about`,
       "<html><body>clean</body></html>",
       signatureIntel("__KIT__"),
     );
-    const out = checks(kitSignatureRule.run(ctx) as { checks: CheckResult[] });
+    const out = checks((await kitSignatureRule.run(ctx)) as { checks: CheckResult[] });
     expect(out.map((c) => [c.name, c.status])).toEqual([["kit-signature", "pass"]]);
   });
 
-  test("matches against external script bodies for the page", () => {
+  test("matches against external script bodies for the page", async () => {
     const url = `${SITE}/p`;
     const parsed = parsePage("<html><body>x</body></html>", url);
     const intel: IntelContext = {
@@ -179,7 +179,7 @@ describe("integrity/kit-signature", () => {
       intel,
       options: {},
     };
-    const out = checks(kitSignatureRule.run(ctx) as { checks: CheckResult[] });
+    const out = checks((await kitSignatureRule.run(ctx)) as { checks: CheckResult[] });
     expect(out).toHaveLength(1);
   });
 });
@@ -191,21 +191,21 @@ describe("integrity/known-malicious-url", () => {
     return { url, statusCode: 200, parsed: parsePage("<html></html>", url) };
   }
 
-  test("says it did not run when intel is absent (opt-in off), never clean (#1741)", () => {
+  test("says it did not run when intel is absent (opt-in off), never clean (#1741)", async () => {
     const ctx = siteCtx([pageEntry(`${SITE}/`)]);
-    const out = checks(knownMaliciousUrlRule.run(ctx) as { checks: CheckResult[] });
+    const out = checks((await knownMaliciousUrlRule.run(ctx)) as { checks: CheckResult[] });
     expect(out.map((c) => [c.name, c.status, c.skipReason])).toEqual([
       ["known-malicious-url", "skipped", "not-applicable"],
     ]);
   });
 
-  test("flags a site page listed by a feed", () => {
+  test("flags a site page listed by a feed", async () => {
     const bad = `${SITE}/calendly?token=x`;
     const intel = feedIntel({
       [bad]: [{ provider: "urlhaus", matched: "url", threat: "phishing" }],
     });
     const ctx = siteCtx([pageEntry(`${SITE}/`), pageEntry(bad)], { intel });
-    const out = checks(knownMaliciousUrlRule.run(ctx) as { checks: CheckResult[] });
+    const out = checks((await knownMaliciousUrlRule.run(ctx)) as { checks: CheckResult[] });
     const fail = out.find((c) => c.status === "fail");
     expect(fail).toBeDefined();
     expect(fail?.pageUrl).toBe(bad);
@@ -213,7 +213,7 @@ describe("integrity/known-malicious-url", () => {
     expect(fail?.details?.providers).toContain("urlhaus");
   });
 
-  test("flags an outbound external link to a known-malicious host", () => {
+  test("flags an outbound external link to a known-malicious host", async () => {
     const evil = "https://evil-collector.tk/grab";
     const intel = feedIntel({
       [evil]: [{ provider: "openphish", matched: "url", threat: "phishing" }],
@@ -222,21 +222,21 @@ describe("integrity/known-malicious-url", () => {
       intel,
       externalLinks: [{ href: evil, status: 200, error: null, sourcePages: [`${SITE}/`] }],
     });
-    const out = checks(knownMaliciousUrlRule.run(ctx) as { checks: CheckResult[] });
+    const out = checks((await knownMaliciousUrlRule.run(ctx)) as { checks: CheckResult[] });
     const fail = out.find((c) => c.status === "fail");
     expect(fail).toBeDefined();
     expect(fail?.details?.origin).toBe("external-link");
   });
 
-  test("emits a single pass when intel was consulted and nothing matched", () => {
+  test("emits a single pass when intel was consulted and nothing matched", async () => {
     const intel = feedIntel({}); // checked=true for all, listed for none
     const ctx = siteCtx([pageEntry(`${SITE}/`), pageEntry(`${SITE}/about`)], { intel });
-    const out = checks(knownMaliciousUrlRule.run(ctx) as { checks: CheckResult[] });
+    const out = checks((await knownMaliciousUrlRule.run(ctx)) as { checks: CheckResult[] });
     expect(out).toHaveLength(1);
     expect(out[0]?.status).toBe("pass");
   });
 
-  test("says skipped, not clean, when NO provider was consulted (checked=false everywhere)", () => {
+  test("says skipped, not clean, when NO provider was consulted (checked=false everywhere)", async () => {
     const intel: IntelContext = {
       providers: [],
       signatureCount: 0,
@@ -244,7 +244,7 @@ describe("integrity/known-malicious-url", () => {
       lookupUrl: (url) => ({ url, listed: false, checked: false, sources: [] }),
     };
     const ctx = siteCtx([pageEntry(`${SITE}/`)], { intel });
-    const out = checks(knownMaliciousUrlRule.run(ctx) as { checks: CheckResult[] });
+    const out = checks((await knownMaliciousUrlRule.run(ctx)) as { checks: CheckResult[] });
     expect(out.map((c) => [c.name, c.status])).toEqual([["known-malicious-url", "skipped"]]);
   });
 });

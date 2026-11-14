@@ -11,39 +11,39 @@ import { buttonNameRule } from "../src/a11y/button-name";
 import { duplicateIdActiveRule } from "../src/a11y/duplicate-id-active";
 import { formLabelsRule } from "../src/a11y/form-labels";
 import { RuleRunner } from "../src/runner";
-import type { ParsedPage, RuleContext } from "../src/types";
+import type { ParsedPage, Rule, RuleContext } from "../src/types";
 
 const page = (body: string) => `<!doctype html><html lang="en"><head><title>t</title></head><body><main>${body}</main></body></html>`;
 
-function runRule(rule: { run(ctx: RuleContext): { checks: unknown[] } }, html: string): CheckResult[] {
+async function runRule(rule: Pick<Rule, "run">, html: string): Promise<CheckResult[]> {
   const url = "https://example.com/";
   const ctx = { page: { url, html, statusCode: 200, loadTime: 0, headers: {} }, parsed: parsePage(html, url) as ParsedPage, options: {} } as RuleContext;
-  return rule.run(ctx).checks as CheckResult[];
+  return (await rule.run(ctx)).checks as CheckResult[];
 }
 
-function buttonName(html: string): CheckResult[] {
+async function buttonName(html: string): Promise<CheckResult[]> {
   const url = "https://example.com/";
   const ctx = { page: { url, html, statusCode: 200, loadTime: 0, headers: {} }, parsed: parsePage(html, url) as ParsedPage, options: {} } as RuleContext;
-  return buttonNameRule.run(ctx).checks as CheckResult[];
+  return (await buttonNameRule.run(ctx)).checks as CheckResult[];
 }
 
 describe("declarative shadow roots (#922)", () => {
   for (const mode of ["open", "closed"]) {
-    test(`an unnamed button inside shadowrootmode=${mode} is reported like one in the light DOM`, () => {
-      const shadow = buttonName(page(`<div><template shadowrootmode="${mode}"><button></button></template></div>`));
-      const light = buttonName(page(`<div><button></button></div>`));
+    test(`an unnamed button inside shadowrootmode=${mode} is reported like one in the light DOM`, async () => {
+      const shadow = (await buttonName(page(`<div><template shadowrootmode="${mode}"><button></button></template></div>`)));
+      const light = (await buttonName(page(`<div><button></button></div>`)));
       expect(shadow.map((c) => [c.name, c.status])).toEqual(light.map((c) => [c.name, c.status]));
       expect(shadow.some((c) => c.status === "fail")).toBe(true);
     });
   }
 
-  test("a plain <template> is inert: its content is not checked", () => {
-    const checks = buttonName(page(`<div><template><button></button></template></div>`));
+  test("a plain <template> is inert: its content is not checked", async () => {
+    const checks = (await buttonName(page(`<div><template><button></button></template></div>`)));
     expect(checks.some((c) => c.status === "fail")).toBe(false);
   });
 
-  test("a named button inside a shadow root passes", () => {
-    const checks = buttonName(page(`<div><template shadowrootmode="open"><button>Buy</button></template></div>`));
+  test("a named button inside a shadow root passes", async () => {
+    const checks = (await buttonName(page(`<div><template shadowrootmode="open"><button>Buy</button></template></div>`)));
     expect(checks.some((c) => c.status === "fail")).toBe(false);
   });
 
@@ -71,24 +71,24 @@ describe("declarative shadow roots (#922)", () => {
 
   const card = `<my-card><template shadowrootmode="open"><label for="q">Search</label><input id="q"><button id="go">Go</button></template></my-card>`;
 
-  test("ids are scoped per root: three identical components are not duplicate ids", () => {
-    const checks = runRule(duplicateIdActiveRule, page(card.repeat(3)));
+  test("ids are scoped per root: three identical components are not duplicate ids", async () => {
+    const checks = (await runRule(duplicateIdActiveRule, page(card.repeat(3))));
     expect(checks.some((c) => c.status === "fail" || c.status === "warn")).toBe(false);
   });
 
-  test("a real duplicate inside ONE root is still reported, and the light DOM is unaffected", () => {
+  test("a real duplicate inside ONE root is still reported, and the light DOM is unaffected", async () => {
     const dup = `<my-card><template shadowrootmode="open"><input id="q"><button id="q">Go</button></template></my-card>`;
-    expect(runRule(duplicateIdActiveRule, page(dup)).some((c) => c.status === "fail" || c.status === "warn")).toBe(true);
+    expect((await runRule(duplicateIdActiveRule, page(dup))).some((c) => c.status === "fail" || c.status === "warn")).toBe(true);
     const light = `<div><input id="a"><button id="a">x</button></div>`;
-    expect(runRule(duplicateIdActiveRule, page(light)).some((c) => c.status === "fail" || c.status === "warn")).toBe(true);
+    expect((await runRule(duplicateIdActiveRule, page(light))).some((c) => c.status === "fail" || c.status === "warn")).toBe(true);
   });
 
-  test("label for and aria-labelledby resolve inside their own root only", () => {
+  test("label for and aria-labelledby resolve inside their own root only", async () => {
     // each root labels its own input: no unlabeled input anywhere
-    expect(runRule(formLabelsRule, page(card.repeat(3))).some((c) => c.status === "fail")).toBe(false);
+    expect((await runRule(formLabelsRule, page(card.repeat(3)))).some((c) => c.status === "fail")).toBe(false);
     // a label in root A does not label the input of root B (same id, different roots)
     const split = `<my-a><template shadowrootmode="open"><label for="q">Search</label></template></my-a><my-b><template shadowrootmode="open"><input id="q"></template></my-b>`;
-    expect(runRule(formLabelsRule, page(split)).some((c) => c.status === "fail")).toBe(true);
+    expect((await runRule(formLabelsRule, page(split))).some((c) => c.status === "fail")).toBe(true);
     const aria = `<my-a><template shadowrootmode="open"><span id="t">Name</span></template></my-a><my-b><template shadowrootmode="open"><input aria-labelledby="t"></template></my-b>`;
     const doc = parseHTML(page(aria)).document;
     expect(doc.querySelector("input")!.getAttribute("aria-labelledby")).toBe("t");

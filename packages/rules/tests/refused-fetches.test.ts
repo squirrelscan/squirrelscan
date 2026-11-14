@@ -41,6 +41,7 @@ function ctx(data: SiteData): RuleContext {
     page: { url: `${BASE}/`, html: "", statusCode: 200, loadTime: 0, headers: {} },
     parsed: {} as ParsedPage,
     site: data,
+    options: {},
   };
 }
 
@@ -80,15 +81,15 @@ describe("refused helpers", () => {
 });
 
 describe("crawl/sitemap-exists", () => {
-  test("control: no sitemap and nothing refused is still a failure", () => {
-    const { checks } = sitemapExistsRule.run(ctx(site({ sitemaps: NO_SITEMAPS })));
+  test("control: no sitemap and nothing refused is still a failure", async () => {
+    const { checks } = (await sitemapExistsRule.run(ctx(site({ sitemaps: NO_SITEMAPS }))));
     expect(checks[0]).toMatchObject({ status: "fail", message: "No XML sitemap found" });
   });
 
-  test("a refused sitemap request is not a missing sitemap", () => {
-    const { checks } = sitemapExistsRule.run(
+  test("a refused sitemap request is not a missing sitemap", async () => {
+    const { checks } = (await sitemapExistsRule.run(
       ctx(site({ sitemaps: NO_SITEMAPS, refusedFetches: [WALL("sitemap", "/sitemap.xml")] })),
-    );
+    ));
 
     expect(checks).toHaveLength(1);
     expect(checks[0]).toMatchObject({ name: "sitemap-exists", status: "info", value: "refused" });
@@ -97,41 +98,41 @@ describe("crawl/sitemap-exists", () => {
     expect(checks[0]!.message).not.toContain("No XML sitemap found");
   });
 
-  test("a sitemap that WAS found still passes when a sibling location was refused", () => {
+  test("a sitemap that WAS found still passes when a sibling location was refused", async () => {
     const found = {
       ...NO_SITEMAPS,
       discovered: [{ url: `${BASE}/sitemap.xml`, type: "urlset", urls: [], childSitemaps: [], errors: [], urlCount: 3 }],
       totalUrls: 3,
     } as unknown as SitemapDiscovery;
-    const { checks } = sitemapExistsRule.run(
+    const { checks } = (await sitemapExistsRule.run(
       ctx(site({ sitemaps: found, refusedFetches: [WALL("sitemap", "/sitemap_index.xml")] })),
-    );
+    ));
     expect(checks[0]).toMatchObject({ status: "pass" });
   });
 });
 
 describe("ax/llms-txt", () => {
-  test("a refused /llms.txt is not 'No /llms.txt found'", () => {
-    const { checks } = llmsTxtRule.run(
+  test("a refused /llms.txt is not 'No /llms.txt found'", async () => {
+    const { checks } = (await llmsTxtRule.run(
       ctx(site({ llmsTxt: null, refusedFetches: [WALL("llms.txt", "/llms.txt")] })),
-    );
+    ));
 
     expect(checks).toHaveLength(1);
     expect(checks[0]).toMatchObject({ name: "llms-txt", status: "skipped", skipReason: "discovery-probe-refused", value: "refused" });
     expect(checks[0]!.message).toContain("refused");
   });
 
-  test("control: nothing refused and no row stored stays the generic not-checked", () => {
-    const { checks } = llmsTxtRule.run(ctx(site({ llmsTxt: null })));
+  test("control: nothing refused and no row stored stays the generic not-checked", async () => {
+    const { checks } = (await llmsTxtRule.run(ctx(site({ llmsTxt: null }))));
     expect(checks[0]).toMatchObject({ status: "skipped", value: "not-checked" });
   });
 });
 
 describe("ax/markdown-response", () => {
-  test("a refused probe is not 'No Markdown response'", () => {
-    const { checks } = markdownResponseRule.run(
+  test("a refused probe is not 'No Markdown response'", async () => {
+    const { checks } = (await markdownResponseRule.run(
       ctx(site({ markdownResponse: null, refusedFetches: [WALL("markdown", "/")] })),
-    );
+    ));
 
     expect(checks).toHaveLength(1);
     expect(checks[0]).toMatchObject({ name: "markdown-response", status: "skipped", skipReason: "discovery-probe-refused", value: "refused" });
@@ -140,10 +141,10 @@ describe("ax/markdown-response", () => {
 });
 
 describe("crawl/robots-txt", () => {
-  test("a refused robots.txt reports who refused it, never a missing file", () => {
-    const { checks } = robotsTxtRule.run(
+  test("a refused robots.txt reports who refused it, never a missing file", async () => {
+    const { checks } = (await robotsTxtRule.run(
       ctx(site({ robotsTxt: UNREACHABLE_ROBOTS, refusedFetches: [WALL("robots.txt", "/robots.txt")] })),
-    );
+    ));
 
     expect(checks).toHaveLength(1);
     expect(checks[0]).toMatchObject({ name: "robots-txt-exists", status: "info" });
@@ -152,9 +153,9 @@ describe("crawl/robots-txt", () => {
     expect(checks[0]!.value).toContain("unknown, not missing");
   });
 
-  test("control: a 404 robots.txt (no recorded error) is still a failure", () => {
+  test("control: a 404 robots.txt (no recorded error) is still a failure", async () => {
     const missing: RobotsTxtData = { ...UNREACHABLE_ROBOTS, errors: [] };
-    const { checks } = robotsTxtRule.run(ctx(site({ robotsTxt: missing })));
+    const { checks } = (await robotsTxtRule.run(ctx(site({ robotsTxt: missing }))));
     expect(checks[0]).toMatchObject({ status: "fail", message: "No robots.txt found" });
   });
 });

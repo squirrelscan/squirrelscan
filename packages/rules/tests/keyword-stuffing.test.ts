@@ -267,7 +267,7 @@ describe("content/keyword-stuffing main copy and Unicode words (#1182)", () => {
     expect(checks[0].items?.some((item) => item.id === "widget")).toBe(true);
   });
 
-  test("thousands of nested main landmarks stay within a bounded scan", { timeout: 30_000 }, async () => {
+  test("thousands of nested main landmarks stay within a bounded scan", async () => {
     const depth = 5_000;
     const html = `<html><body>${"<main>".repeat(depth)}<p>${filler(120)}</p>${"</main>".repeat(depth)}</body></html>`;
     const context = ctx(html);
@@ -275,7 +275,7 @@ describe("content/keyword-stuffing main copy and Unicode words (#1182)", () => {
     const { checks } = await keywordStuffingRule.run(context);
     expect(performance.now() - started).toBeLessThan(1_000);
     expect(checks[0].status).toBe("pass");
-  });
+  }, { timeout: 30_000 });
 
   test("a listing without main keeps every article", async () => {
     const html = `<html><body><article><p>${filler(100)}</p></article><article><p>${"widget ".repeat(20)}${filler(20)}</p></article></body></html>`;
@@ -407,8 +407,8 @@ describe("content/keyword-stuffing ignores the site's own brand name", () => {
 });
 
 describe("content/keyword-stuffing: German function words, menu chrome, card microcopy (#1315)", () => {
-  const flagged = (html: string): string[] => {
-    const check = keywordStuffingRule.run(ctx(html)).checks.find((c) => c.name === "keyword-stuffing");
+  const flagged = async (html: string): Promise<string[]> => {
+    const check = (await keywordStuffingRule.run(ctx(html))).checks.find((c) => c.name === "keyword-stuffing");
     return check?.items?.map((i) => i.id) ?? [];
   };
   const page = (lang: string, body: string) => `<html lang="${lang}"><head><title>t</title></head><body>${body}</body></html>`;
@@ -417,21 +417,21 @@ describe("content/keyword-stuffing: German function words, menu chrome, card mic
     const words = "sie für dich dir deinen deinem deiner ihn ihm";
     const prose = Array.from({ length: 12 }, () => `${words} ${filler(8)}`).join(" ");
     const html = page("de", `<main><p>${prose} ${"zahlung ".repeat(14)}</p></main>`);
-    const out = flagged(html);
+    const out = (await flagged(html));
     for (const w of words.split(" ")) expect(out).not.toContain(w);
     expect(out).toContain("zahlung");
   });
 
   test("`out` is not reported on an English page", async () => {
     const html = page("en", `<main><p>${Array.from({ length: 12 }, () => `out ${filler(8)}`).join(" ")}</p></main>`);
-    expect(flagged(html)).not.toContain("out");
+    expect(await flagged(html)).not.toContain("out");
   });
 
   test("a mega menu of plain div links on a page with little copy is not measured", async () => {
     const cats = ["bademode", "curvy", "wäsche", "kleider", "röcke", "hosen"];
     const links = Array.from({ length: 60 }, (_, i) => `<a href="/c/${i}">${cats[i % cats.length]} ${["neu", "sale", "alle", "top"][i % 4]}</a>`).join(" ");
     const html = page("de", `<body><div role="menubar"><div>${links}</div></div><div class="copy"><p>Kontakt ${filler(70)}</p></div></body>`);
-    expect(flagged(html)).toEqual([]);
+    expect(await flagged(html)).toEqual([]);
   });
 
   test("the issue's shape: 20 plain-div links repeating one category word, under 100 words of copy (#1315)", async () => {
@@ -441,27 +441,27 @@ describe("content/keyword-stuffing: German function words, menu chrome, card mic
     const copy = `<div class="copy"><p>Kontakt ${filler(60)}</p></div>`;
     // No signal at all (no nav, header, role or aria state): the accepted cost. The words count toward density,
     // because a keyword spammer writes the same plain links (docs: "Link menus built without landmarks").
-    expect(flagged(page("de", `<body><div>${links}</div>${copy}</body>`))).toContain("bademode");
+    expect(await flagged(page("de", `<body><div>${links}</div>${copy}</body>`))).toContain("bademode");
     // Class and id names are not signals either.
-    expect(flagged(page("de", `<body><div class="mega-menu" id="menu">${links}</div>${copy}</body>`))).toContain("bademode");
+    expect(await flagged(page("de", `<body><div class="mega-menu" id="menu">${links}</div>${copy}</body>`))).toContain("bademode");
     // The same links with a real menu signal and a varied set of category words are left out, as the docs say.
     const varied = Array.from({ length: 20 }, (_, i) => `<a href="/c/${i}">${["bademode", "curvy", "wäsche", "kleider", "röcke", "hosen"][i % 6]} ${sub[i]}</a>`).join(" ");
-    expect(flagged(page("de", `<body><div role="menubar">${varied}</div>${copy}</body>`))).toEqual([]);
+    expect(await flagged(page("de", `<body><div role="menubar">${varied}</div>${copy}</body>`))).toEqual([]);
     // The reporter's real mega-menu shape: varied labels in plain divs, no signal. Still counted (the signal gate
     // is what separates it from the menubar case above, not the labels).
     // One category word (repeated in its label) on a quarter of the links stays under the keyword-cloud share, so only the signal decides.
     const quarter = Array.from({ length: 20 }, (_, i) => `<a href="/c/${i}">${["bademode bademode bademode bademode", "curvy", "wäsche", "kleider"][i % 4]} ${sub[i]}</a>`).join(" ");
-    expect(flagged(page("de", `<body><div role="menubar">${quarter}</div>${copy}</body>`))).toEqual([]);
-    expect(flagged(page("de", `<body><div>${quarter}</div>${copy}</body>`))).toContain("bademode");
-    expect(flagged(page("de", `<body><div class="mega-menu" id="menu">${quarter}</div>${copy}</body>`))).toContain("bademode");
+    expect(await flagged(page("de", `<body><div role="menubar">${quarter}</div>${copy}</body>`))).toEqual([]);
+    expect(await flagged(page("de", `<body><div>${quarter}</div>${copy}</body>`))).toContain("bademode");
+    expect(await flagged(page("de", `<body><div class="mega-menu" id="menu">${quarter}</div>${copy}</body>`))).toContain("bademode");
     // A shared word is a keyword cloud even with the signal, so the issue's literal shape is counted by design.
-    expect(flagged(page("de", `<body><div role="menubar">${links}</div>${copy}</body>`))).toContain("bademode");
+    expect(await flagged(page("de", `<body><div role="menubar">${links}</div>${copy}</body>`))).toContain("bademode");
   });
 
   test("true positive: one anchor repeated 20 times is not a menu, it still flags", async () => {
     const links = Array.from({ length: 20 }, () => `<a href="/p">emergency plumber</a>`).join(" ");
     const html = page("en", `<body><div>${links}</div><p>${filler(60)}</p></body>`);
-    expect(flagged(html)).toContain("plumber");
+    expect(await flagged(html)).toContain("plumber");
   });
 
   const card = (n: number) => `<div class="card"><h3>${FILLER_BANK[n % 30]} ${FILLER_BANK[(n + 7) % 30]}</h3><span class="rating">Durchschnittliche Bewertung von 4.${n} von 5 Sternen</span><div class="inst">Ab ${n},90 € zahlen in Raten</div></div>`;
@@ -472,22 +472,22 @@ describe("content/keyword-stuffing: German function words, menu chrome, card mic
 
   test("price-shaped means currency, percent, \"of 5\" or stars/reviews only: a bare decimal is not a card", async () => {
     const lines = Array.from({ length: 45 }, (_, n) => `<p>plumber ${n % 10}${n % 7}.99</p>`).join("");
-    expect(flagged(page("en", `<main>${lines}<p>${unique(255)}</p></main>`))).toContain("plumber");
+    expect(await flagged(page("en", `<main>${lines}<p>${unique(255)}</p></main>`))).toContain("plumber");
   });
 
   test("a word that is 10% or more of the page is never deducted, however it is dressed", async () => {
     const lines = Array.from({ length: 45 }, (_, n) => `<div><h3>Item ${n}</h3><span>plumber from $${n + 1}</span></div>`).join("");
-    expect(flagged(page("en", `<main>${lines}<p>${unique(255)}</p></main>`))).toContain("plumber");
+    expect(await flagged(page("en", `<main>${lines}<p>${unique(255)}</p></main>`))).toContain("plumber");
   });
 
   test("a deduction is clamped, not skipped, and large real grids are still deducted", async () => {
     const en = Array.from({ length: 40 }, (_, n) => `<div><h3>Item ${n}</h3><span>Average rating 4.${n % 10} of 5 stars</span><span>from ${n + 1},90 EUR in instalments</span></div>`).join("");
-    const outEn = flagged(page("en", `<main><div class="grid">${en}</div><p>${unique(700)}</p></main>`));
+    const outEn = (await flagged(page("en", `<main><div class="grid">${en}</div><p>${unique(700)}</p></main>`)));
     for (const w of ["average", "rating", "stars", "instalments", "eur"]) expect(outEn).not.toContain(w);
     const de = Array.from({ length: 60 }, (_, n) => `<div><h3>Nr ${n}</h3><span>Preis ab ${n + 1},90 \u20ac inkl. MwSt</span></div>`).join("");
-    expect(flagged(page("de", `<main><div class="grid">${de}</div><p>${unique(500)}</p></main>`))).not.toContain("preis");
+    expect(await flagged(page("de", `<main><div class="grid">${de}</div><p>${unique(500)}</p></main>`))).not.toContain("preis");
     const rating = Array.from({ length: 80 }, (_, n) => `<div><h3>Item ${n}</h3><span>Average rating 4.${n % 10} of 5 stars</span></div>`).join("");
-    const outRating = flagged(page("en", `<main><div class="grid">${rating}</div><p>${unique(800)}</p></main>`));
+    const outRating = (await flagged(page("en", `<main><div class="grid">${rating}</div><p>${unique(800)}</p></main>`)));
     for (const w of ["average", "rating", "stars"]) expect(outRating).not.toContain(w);
   });
 
@@ -503,7 +503,7 @@ describe("content/keyword-stuffing: German function words, menu chrome, card mic
 
   test("text repeated once per product card does not count toward density", async () => {
     const html = page("de", `<main><div class="grid">${Array.from({ length: 12 }, (_, i) => card(i)).join("")}</div><p>${unique(500)}</p></main>`);
-    const out = flagged(html);
+    const out = (await flagged(html));
     expect(out).not.toContain("durchschnittliche");
     expect(out).not.toContain("bewertung");
     expect(out).not.toContain("sternen");
@@ -514,14 +514,14 @@ describe("content/keyword-stuffing: German function words, menu chrome, card mic
     const cities = ["london", "leeds", "bristol", "york", "bath", "derby"];
     const links = Array.from({ length: 24 }, (_, i) => `<a href="/p/${i}">emergency plumber ${cities[i % 6]}</a>`).join(" ");
     const html = page("en", `<body><div>${links}</div><p>${filler(90)}</p></body>`);
-    expect(flagged(html)).toContain("plumber");
+    expect(await flagged(html)).toContain("plumber");
     // Class and id names and a plain list are not menu signals: a keyword spammer writes them too.
     const lis = Array.from({ length: 24 }, (_, i) => `<li><a href="/p/${i}">emergency plumber ${cities[i % 6]}</a></li>`).join("");
     for (const wrapper of [`<div class="nav"><div>${links}</div></div>`, `<div id="footer-menu">${links}</div>`, `<ul>${lis}</ul>`, `<div class="site-menu"><ul>${lis}</ul></div>`]) {
-      expect(flagged(page("en", `<body>${wrapper}<p>${filler(90)}</p></body>`)), wrapper.slice(0, 30)).toContain("plumber");
+      expect(await flagged(page("en", `<body>${wrapper}<p>${filler(90)}</p></body>`)), wrapper.slice(0, 30)).toContain("plumber");
     }
     // Even a real menu signal does not excuse a keyword cloud: one phrase in most of the labels
-    expect(flagged(page("en", `<body><div role="menubar">${links}</div><p>${filler(90)}</p></body>`))).toContain("plumber");
+    expect(await flagged(page("en", `<body><div role="menubar">${links}</div><p>${filler(90)}</p></body>`))).toContain("plumber");
   });
 
   test("a keyword cloud is not excused by a menu signal, at 40% or 58% of the labels sharing a word", async () => {
@@ -529,45 +529,45 @@ describe("content/keyword-stuffing: German function words, menu chrome, card mic
       const labels = Array.from({ length: 24 }, (_, i) => (i < shared ? `emergency plumber area${i}` : `service${i} option${i} page${i}`));
       const links = labels.map((l, i) => `<a href="/p/${i}">${l}</a>`).join(" ");
       for (const wrapper of [`<div role="menubar">${links}</div>`, `<div aria-expanded="true">${links}</div>`]) {
-        expect(flagged(page("en", `<body>${wrapper}<p>${filler(90)}</p></body>`)), `${shared} ${wrapper.slice(0, 22)}`).toContain("plumber");
+        expect(await flagged(page("en", `<body>${wrapper}<p>${filler(90)}</p></body>`)), `${shared} ${wrapper.slice(0, 22)}`).toContain("plumber");
       }
     }
     // a menu of varied categories (each word in a few labels) with a real signal is still left out
     const cats = Array.from({ length: 24 }, (_, i) => `<a href="/c/${i}">category${i} range${i % 8} line${i}</a>`).join(" ");
-    expect(flagged(page("en", `<body><div role="menubar">${cats}</div><p>${filler(90)}</p></body>`))).not.toContain("category1");
+    expect(await flagged(page("en", `<body><div role="menubar">${cats}</div><p>${filler(90)}</p></body>`))).not.toContain("category1");
   });
 
   test("true positive: a repeated phrase is never a card, however its wrapper looks", async () => {
     const wrapped = Array.from({ length: 25 }, () => `<div class="sec"><p>cheap emergency plumber london</p></div>`).join("");
-    expect(flagged(page("en", `<main>${wrapped}<p>${filler(110)}</p></main>`))).toContain("plumber");
+    expect(await flagged(page("en", `<main>${wrapped}<p>${filler(110)}</p></main>`))).toContain("plumber");
     const lists = Array.from({ length: 25 }, () => `<ul><li>cheap emergency plumber london</li></ul>`).join("");
-    expect(flagged(page("en", `<main>${lists}<p>${filler(110)}</p></main>`))).toContain("plumber");
+    expect(await flagged(page("en", `<main>${lists}<p>${filler(110)}</p></main>`))).toContain("plumber");
     const one = `<ul>${Array.from({ length: 25 }, () => `<li>cheap emergency plumber london</li>`).join("")}</ul>`;
-    expect(flagged(page("en", `<main>${one}<p>${filler(110)}</p></main>`))).toContain("plumber");
+    expect(await flagged(page("en", `<main>${one}<p>${filler(110)}</p></main>`))).toContain("plumber");
     // extra text in the wrapper must not hide it
     const withMore = Array.from({ length: 25 }, (_, n) => `<div><p>cheap emergency plumber london</p><p>call ${n}</p></div>`).join("");
-    expect(flagged(page("en", `<main>${withMore}<p>${filler(110)}</p></main>`))).toContain("plumber");
+    expect(await flagged(page("en", `<main>${withMore}<p>${filler(110)}</p></main>`))).toContain("plumber");
     const lis = Array.from({ length: 25 }, () => `<ul><li>cheap emergency plumber london</li><li>more info</li></ul>`).join("");
-    expect(flagged(page("en", `<main>${lis}<p>${filler(110)}</p></main>`))).toContain("plumber");
+    expect(await flagged(page("en", `<main>${lis}<p>${filler(110)}</p></main>`))).toContain("plumber");
     // identical digits are not a varying rating or price: still stuffing
     const digits = Array.from({ length: 25 }, () => `<div><span>24 hour emergency plumber london</span><b>x</b></div>`).join("");
-    expect(flagged(page("en", `<main>${digits}<p>${filler(110)}</p></main>`))).toContain("plumber");
+    expect(await flagged(page("en", `<main>${digits}<p>${filler(110)}</p></main>`))).toContain("plumber");
     // a bare integer that varies is doorway numbering, not a rating or a price
     for (const lines of [
       Array.from({ length: 25 }, (_, n) => `<div><span>emergency plumber london call ${n}</span><b>x</b></div>`).join(""),
       Array.from({ length: 25 }, (_, n) => `<div><p>${n + 1} cheap emergency plumber london</p></div>`).join(""),
       Array.from({ length: 25 }, (_, n) => `<section><p>24 hour emergency plumber ${n}</p></section>`).join(""),
     ]) {
-      expect(flagged(page("en", `<main>${lines}<p>${filler(110)}</p></main>`)), lines.slice(0, 40)).toContain("plumber");
+      expect(await flagged(page("en", `<main>${lines}<p>${filler(110)}</p></main>`)), lines.slice(0, 40)).toContain("plumber");
     }
     // a decimal or a currency amount that varies still reads as a card, but never more than 20% of the words
     const priced = Array.from({ length: 25 }, (_, n) => `<div><h3>Item ${n}</h3><span>emergency plumber from ${n + 1}.99 EUR</span></div>`).join("");
-    expect(flagged(page("en", `<main>${priced}<p>${filler(110)}</p></main>`))).toContain("plumber");
+    expect(await flagged(page("en", `<main>${priced}<p>${filler(110)}</p></main>`))).toContain("plumber");
   });
 
   test("the card bound counts candidate cards, not every element, so a large grid is still deducted", async () => {
     const big = Array.from({ length: 700 }, (_, n) => card(n % 30)).join("");
-    const out = flagged(page("de", `<main><div class="grid">${big}</div><p>${unique(45_000)}</p></main>`));
+    const out = (await flagged(page("de", `<main><div class="grid">${big}</div><p>${unique(45_000)}</p></main>`)));
     expect(out).not.toContain("durchschnittliche");
     expect(out).not.toContain("zahlen");
   });
@@ -575,10 +575,10 @@ describe("content/keyword-stuffing: German function words, menu chrome, card mic
   test("true positive: the same sentence written 12 times as body copy still flags", async () => {
     const sentence = "Günstige Matratzen kaufen";
     const html = page("de", `<main><article><p>${Array.from({ length: 12 }, () => sentence).join(". ")}. ${filler(90)}</p></article></main>`);
-    expect(flagged(html)).toContain("matratzen");
+    expect(await flagged(html)).toContain("matratzen");
     // and as separate paragraphs in ONE container
     const html2 = page("de", `<main><article>${Array.from({ length: 12 }, () => `<p>${sentence}</p>`).join("")}<p>${filler(90)}</p></article></main>`);
-    expect(flagged(html2)).toContain("matratzen");
+    expect(await flagged(html2)).toContain("matratzen");
   });
 });
 
@@ -589,31 +589,31 @@ describe("content/keyword-stuffing link-list and card heuristics stay bounded (#
     const cards = Array.from({ length: 6000 }, (_, i) => `<div><span>Durchschnittliche Bewertung ${i}</span></div>`).join("");
     const html = `<html lang="de"><body>${nest(40, links)}${cards}<p>${filler(120)}</p></body></html>`;
     const started = performance.now();
-    keywordStuffingRule.run(ctx(html));
+    await keywordStuffingRule.run(ctx(html));
     expect(performance.now() - started).toBeLessThan(3000);
   });
 });
 
 describe("content/keyword-stuffing stays near-linear on hostile shapes (#1315)", () => {
-  const timeIt = (html: string): number => {
+  const timeIt = async (html: string): Promise<number> => {
     const started = performance.now();
-    keywordStuffingRule.run(ctx(html));
+    await keywordStuffingRule.run(ctx(html));
     return performance.now() - started;
   };
   const wrap = (body: string) => `<html lang="en"><body><main>${body}<p>${filler(120)}</p></main></body></html>`;
 
   test("40,000 spans under one div", async () => {
-    expect(timeIt(wrap(`<div>${Array.from({ length: 40_000 }, (_, i) => `<span>tag${i % 50} value ${i}</span>`).join("")}</div>`))).toBeLessThan(1500);
+    expect(await timeIt(wrap(`<div>${Array.from({ length: 40_000 }, (_, i) => `<span>tag${i % 50} value ${i}</span>`).join("")}</div>`))).toBeLessThan(1500);
   });
 
   test("3,000 cards under a parent with two million characters of text", async () => {
     const cards = Array.from({ length: 3000 }, (_, i) => `<div><h3>Item ${i}</h3><span>Rating 4.${i % 10} of 5 stars</span></div>`).join("");
     const pad = "lorem ".repeat(330_000);
-    expect(timeIt(wrap(`<section>${pad}${cards}</section>`))).toBeLessThan(1500);
+    expect(await timeIt(wrap(`<section>${pad}${cards}</section>`))).toBeLessThan(1500);
   });
 
   test("a list of 8,000 items and 2,000 groups", async () => {
-    expect(timeIt(wrap(`<ul>${Array.from({ length: 8000 }, (_, i) => `<li>entry number ${i}</li>`).join("")}</ul>`))).toBeLessThan(1500);
-    expect(timeIt(wrap(Array.from({ length: 2000 }, (_, i) => `<div class="${"c".repeat(500)}"><a href="/x${i}">link ${i}</a></div>`).join("")))).toBeLessThan(1500);
+    expect(await timeIt(wrap(`<ul>${Array.from({ length: 8000 }, (_, i) => `<li>entry number ${i}</li>`).join("")}</ul>`))).toBeLessThan(1500);
+    expect(await timeIt(wrap(Array.from({ length: 2000 }, (_, i) => `<div class="${"c".repeat(500)}"><a href="/x${i}">link ${i}</a></div>`).join("")))).toBeLessThan(1500);
   });
 });

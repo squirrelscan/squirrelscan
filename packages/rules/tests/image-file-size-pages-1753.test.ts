@@ -88,7 +88,7 @@ describe("perf/total-byte-weight heaviest resource (#1753)", () => {
     sourcePages: [page],
   });
 
-  function weigh(site: object): CheckResult {
+  async function weigh(site: object): Promise<CheckResult> {
     const ctx = siteCtx({
       pages: [
         { url: pageUrl, statusCode: 200, parsed: parsePage(doc, pageUrl), sizeBytes: 5 * KB },
@@ -101,18 +101,18 @@ describe("perf/total-byte-weight heaviest resource (#1753)", () => {
       ],
       ...site,
     });
-    return totalByteWeightRule.run(ctx).checks[0]!;
+    return (await totalByteWeightRule.run(ctx)).checks[0]!;
   }
 
-  test("names the largest resource of the heaviest page with its size and kind", () => {
-    const check = weigh({
+  test("names the largest resource of the heaviest page with its size and kind", async () => {
+    const check = (await weigh({
       resourceSizes: {
         css: [res("/a.css", 20 * KB)],
         images: [res("/_fault/big-image.svg", 2500 * KB), res("/logo.png", 30 * KB)],
         fonts: [],
       },
       scripts: [{ ...res("/app.js", 200 * KB), content: null }],
-    });
+    }));
     expect(check.message).toContain(
       `Heaviest page: ${BASE}/ 2755KB, largest resource ${BASE}/_fault/big-image.svg 2500KB (`,
     );
@@ -124,8 +124,8 @@ describe("perf/total-byte-weight heaviest resource (#1753)", () => {
     });
   });
 
-  test("only resources on the heaviest page are considered", () => {
-    const check = weigh({
+  test("only resources on the heaviest page are considered", async () => {
+    const check = (await weigh({
       resourceSizes: {
         css: [],
         images: [
@@ -134,13 +134,13 @@ describe("perf/total-byte-weight heaviest resource (#1753)", () => {
         ],
         fonts: [],
       },
-    });
+    }));
     expect(check.details?.heaviestPage).toBe(pageUrl);
     expect(check.details?.heaviestResource).toBe(`${BASE}/bigger.png`);
   });
 
-  test("a page with no sized resources names none", () => {
-    const check = weigh({ resourceSizes: { css: [], images: [res("/x.png", null)], fonts: [] } });
+  test("a page with no sized resources names none", async () => {
+    const check = (await weigh({ resourceSizes: { css: [], images: [res("/x.png", null)], fonts: [] } }));
     expect(check.details?.heaviestResource).toBeUndefined();
     expect(check.message).not.toContain("largest resource");
   });

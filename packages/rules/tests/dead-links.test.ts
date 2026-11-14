@@ -32,22 +32,22 @@ const link = (over: Partial<ExternalLinkCheckData> = {}): ExternalLinkCheckData 
 });
 
 describe("links/dead-links", () => {
-  test("missing link data → skipped: external link checking was off (repo#2729)", () => {
-    const { checks } = deadLinksRule.run(ctx(undefined));
+  test("missing link data → skipped: external link checking was off (repo#2729)", async () => {
+    const { checks } = (await deadLinksRule.run(ctx(undefined)));
     expect(checks[0].status).toBe("skipped");
     expect(checks[0].skipReason).toBe("external-links-not-checked");
   });
 
-  test("zero external links → info, NOT skipped (#656: nothing any plan could check)", () => {
-    const { checks } = deadLinksRule.run(ctx([]));
+  test("zero external links → info, NOT skipped (#656: nothing any plan could check)", async () => {
+    const { checks } = (await deadLinksRule.run(ctx([])));
     expect(checks[0].status).toBe("info");
     expect(checks[0].message).toContain("No external links");
   });
 
-  test("checked links summarize dead count", () => {
-    const { checks } = deadLinksRule.run(
+  test("checked links summarize dead count", async () => {
+    const { checks } = (await deadLinksRule.run(
       ctx([link(), link({ href: "https://dead.example/", status: 404 })]),
-    );
+    ));
     expect(checks[0].status).toBe("info");
     expect(checks[0].value).toBe(1);
   });

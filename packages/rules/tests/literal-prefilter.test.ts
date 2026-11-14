@@ -456,7 +456,7 @@ describe("mandatoryLiterals extraction", () => {
       // Without the `u` flag `\u{41}` is the letter `u` repeated 41 times, not
       // the code point 0x41 — and the two readings share no characters, so
       // neither may be claimed.
-      [/wxyz\u{41}abcd/, `wxyz${"u".repeat(41)}abcd`],
+      [new RegExp("wxyz\\u{41}abcd"), `wxyz${"u".repeat(41)}abcd`],
     ];
     const failures: string[] = [];
     for (const [pattern, subject] of cases) {
@@ -487,8 +487,8 @@ describe("mandatoryLiterals extraction", () => {
       [/abcd[]|efgh/, "efgh"],
       // In legacy mode `\p` and `\u{` are identity escapes and the `}` searched
       // for belongs to a character class, not to them.
-      [/\p{[abcd}efgh]/, "p{a"],
-      [/\u{[abcd}efgh]/, "u{a"],
+      [new RegExp("\\p{[abcd}efgh]"), "p{a"],
+      [new RegExp("\\u{[abcd}efgh]"), "u{a"],
       // Under `u`, `i` folds beyond ASCII: these match subjects that do not
       // contain the ASCII literal at all.
       [/secret/iu, `${LONG_S}ecret`],
@@ -499,7 +499,7 @@ describe("mandatoryLiterals extraction", () => {
       [/\c[abcd]/, "\\ca"],
       // `\k<…>` is a named backreference only when the pattern declares a named
       // group. Here it does not, so the `>` searched for is inside a class.
-      [/\k<[abcd>efgh]/, "k<a"],
+      [new RegExp("\\k<[abcd>efgh]"), "k<a"],
       // The readings that ARE determinate must still be read: `\cA` is U+0001,
       // not the letter A, and a real named backreference is not literal text.
       [/wxyz\cAabcd/, `wxyz${String.fromCharCode(1)}abcd`],

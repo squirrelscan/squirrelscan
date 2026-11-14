@@ -20,7 +20,7 @@ const html = (title: string, body: string): string =>
 
 function ctxFor(
   pagesHtml: Array<{ url: string; html: string }>,
-  options: object = {},
+  options: Record<string, unknown> = {},
 ): RuleContext {
   const pages: SiteData["pages"] = pagesHtml.map((p) => ({
     url: p.url,

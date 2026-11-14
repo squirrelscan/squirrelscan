@@ -12,17 +12,17 @@ import { emptyHeadingRule } from "../src/a11y/empty-heading";
 import { frameTitleRule } from "../src/a11y/frame-title";
 import { objectAltRule } from "../src/a11y/object-alt";
 import { SCRIPT_STATE_LABEL } from "../src/shared/static-hidden";
-import type { ParsedPage, RuleContext } from "../src/types";
+import type { ParsedPage, Rule, RuleContext } from "../src/types";
 
-type AnyRule = { run: (ctx: RuleContext) => { checks: unknown } };
+type AnyRule = Pick<Rule, "run">;
 
-function checks(rule: AnyRule, html: string): CheckResult[] {
+async function checks(rule: AnyRule, html: string): Promise<CheckResult[]> {
   const url = "https://example.com/";
-  return rule.run({
+  return (await rule.run({
     page: { url, html, statusCode: 200, loadTime: 0, headers: {} },
     parsed: parsePage(html, url) as ParsedPage,
     options: {},
-  }).checks as CheckResult[];
+  })).checks as CheckResult[];
 }
 
 const LINK = '<link rel="stylesheet" href="/site.css">';
@@ -61,15 +61,15 @@ const CASES: Case[] = [
 ];
 
 describe.each(CASES)("$check", ({ rule, check, failStatus, el }) => {
-  const summary = (html: string) => checks(rule, html).map((c) => [c.name, c.status]);
+  const summary = async (html: string) => (await checks(rule, html)).map((c) => [c.name, c.status]);
 
-  test("a visible unnamed element still fails, with or without an unread sheet", () => {
+  test("a visible unnamed element still fails, with or without an unread sheet", async () => {
     for (const head of ["", LINK, LINK + "<style>.x{display:flex}</style>"]) {
-      expect(summary(page(head, el("")))).toEqual([[check, failStatus]]);
+      expect(await summary(page(head, el("")))).toEqual([[check, failStatus]]);
     }
   });
 
-  test("hidden, aria-hidden, display:none, closed dialog: skipped and counted", () => {
+  test("hidden, aria-hidden, display:none, closed dialog: skipped and counted", async () => {
     for (const body of [
       el("hidden"),
       `<div aria-hidden="true">${el("")}</div>`,
@@ -77,30 +77,30 @@ describe.each(CASES)("$check", ({ rule, check, failStatus, el }) => {
       `<dialog>${el("")}</dialog>`,
       `<style>.x{display:none}</style>${el('class="x"')}`,
     ]) {
-      const out = checks(rule, page("", body));
+      const out = (await checks(rule, page("", body)));
       expect(out).toHaveLength(1);
       expect(out[0]?.status).toBe("pass");
       expect(out[0]?.details).toMatchObject({ hiddenWithoutName: 1 });
     }
   });
 
-  test("a no-js fallback on a page with an unread stylesheet is unconfirmed, with the script-state reason", () => {
-    const out = checks(rule, page(LINK, el('class="no-js"')));
+  test("a no-js fallback on a page with an unread stylesheet is unconfirmed, with the script-state reason", async () => {
+    const out = (await checks(rule, page(LINK, el('class="no-js"'))));
     expect(out.map((c) => [c.name, c.status])).toEqual([[`${check}-unconfirmed`, "warn"]]);
     expect(out[0]?.items?.[0]?.label).toBe(SCRIPT_STATE_LABEL);
   });
 
-  test("all styles read: a no-js fallback keeps failing", () => {
-    expect(summary(page("", el('class="no-js"')))).toEqual([[check, failStatus]]);
+  test("all styles read: a no-js fallback keeps failing", async () => {
+    expect(await summary(page("", el('class="no-js"')))).toEqual([[check, failStatus]]);
   });
 
-  test("a style squirrel cannot settle is unconfirmed, not failed", () => {
+  test("a style squirrel cannot settle is unconfirmed, not failed", async () => {
     const head = "<style>.x:hover{display:none}@media print{.x{display:none}}</style>";
-    expect(summary(page(head, el('class="x"')))).toEqual([[`${check}-unconfirmed`, "warn"]]);
+    expect(await summary(page(head, el('class="x"')))).toEqual([[`${check}-unconfirmed`, "warn"]]);
   });
 
-  test("a hidden element beside a visible one: only the visible one is reported", () => {
-    const out = checks(rule, page("", el("hidden") + el('id="v"')));
+  test("a hidden element beside a visible one: only the visible one is reported", async () => {
+    const out = (await checks(rule, page("", el("hidden") + el('id="v"'))));
     expect(out).toHaveLength(1);
     expect(out[0]?.status).toBe(failStatus);
     expect(out[0]?.items).toHaveLength(1);
@@ -108,13 +108,13 @@ describe.each(CASES)("$check", ({ rule, check, failStatus, el }) => {
 });
 
 describe("naming still wins over hidden state", () => {
-  test("a named iframe in a no-js wrapper passes", () => {
-    const out = checks(frameTitleRule, page(LINK, '<div class="no-js"><iframe title="Demo" src="/x"></iframe></div>'));
+  test("a named iframe in a no-js wrapper passes", async () => {
+    const out = (await checks(frameTitleRule, page(LINK, '<div class="no-js"><iframe title="Demo" src="/x"></iframe></div>')));
     expect(out.map((c) => [c.name, c.status])).toEqual([["frame-title", "pass"]]);
   });
 
-  test("presentational objects and frames are still skipped", () => {
-    expect(checks(objectAltRule, page("", '<object role="presentation"></object>'))[0]?.status).toBe("pass");
-    expect(checks(frameTitleRule, page("", '<iframe role="none" src="/x"></iframe>'))[0]?.status).toBe("pass");
+  test("presentational objects and frames are still skipped", async () => {
+    expect((await checks(objectAltRule, page("", '<object role="presentation"></object>')))[0]?.status).toBe("pass");
+    expect((await checks(frameTitleRule, page("", '<iframe role="none" src="/x"></iframe>')))[0]?.status).toBe("pass");
   });
 });

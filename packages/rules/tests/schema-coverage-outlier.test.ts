@@ -103,6 +103,8 @@ function featureRow(spec: PageSpec, i: number): PageFeatureRow {
     faviconHref: null,
     themeColor: null,
     ogImage: null,
+    hreflangAlternates: null,
+    reportScalars: null,
   };
 }
 

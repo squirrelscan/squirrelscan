@@ -77,13 +77,13 @@ describe("@squirrelscan/rules/security-headers", () => {
     }
   });
 
-  test("grades one response as the rule grades an audit's first page", () => {
+  test("grades one response as the rule grades an audit's first page", async () => {
     expect(
       gradeResponseHeaders(hstsRule, "https://example.com/", {
         "strict-transport-security": "max-age=31536000",
       }),
     ).toEqual(
-      hstsRule.run({
+      (await hstsRule.run({
         site: {
           pages: [
             {
@@ -92,7 +92,7 @@ describe("@squirrelscan/rules/security-headers", () => {
             },
           ],
         },
-      } as never).checks,
+      } as never)).checks,
     );
     expect(gradeResponseHeaders(hstsRule, "http://example.com/", {})[0]?.status).toBe("info");
   });

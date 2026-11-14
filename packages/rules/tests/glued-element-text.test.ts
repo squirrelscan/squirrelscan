@@ -38,8 +38,8 @@ function ctx(body: string): RuleContext {
   };
 }
 
-function visibility(body: string): CheckResult | undefined {
-  return (ratingScopeRule.run(ctx(body)).checks as CheckResult[]).find(
+async function visibility(body: string): Promise<CheckResult | undefined> {
+  return ((await ratingScopeRule.run(ctx(body))).checks as CheckResult[]).find(
     (c) => c.name === "rating-visible",
   );
 }
@@ -54,19 +54,19 @@ const PAIRS: [string, string[]][] = [
 
 describe("schema/rating-scope: glued and spaced markup get the same verdict", () => {
   for (const [name, parts] of PAIRS) {
-    test(name, () => {
-      const glued = visibility(parts.join(""));
-      const spaced = visibility(parts.join(" "));
+    test(name, async () => {
+      const glued = (await visibility(parts.join("")));
+      const spaced = (await visibility(parts.join(" ")));
       expect(spaced?.status).toBe("pass");
       expect(glued?.status).toBe(spaced?.status);
       expect(glued?.message).toBe(spaced?.message);
     });
   }
 
-  test("a page with no rating in its copy still warns either way", () => {
+  test("a page with no rating in its copy still warns either way", async () => {
     const parts = ["<h3>Our policy</h3>", "<p>We keep data for 5 years.</p>"];
-    expect(visibility(parts.join(""))?.status).toBe("warn");
-    expect(visibility(parts.join(" "))?.status).toBe("warn");
+    expect((await visibility(parts.join("")))?.status).toBe("warn");
+    expect((await visibility(parts.join(" ")))?.status).toBe("warn");
   });
 });
 

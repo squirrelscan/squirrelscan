@@ -13,21 +13,21 @@ import { ariaHiddenFocusRule } from "../src/a11y/aria-hidden-focus";
 import { buttonNameRule } from "../src/a11y/button-name";
 import { formLabelsRule } from "../src/a11y/form-labels";
 import { SCRIPT_STATE_LABEL, UNCONFIRMED_LABEL } from "../src/shared/static-hidden";
-import type { ParsedPage, RuleContext } from "../src/types";
+import type { ParsedPage, Rule, RuleContext } from "../src/types";
 
-type AnyRule = { run: (ctx: RuleContext) => { checks: unknown } };
+type AnyRule = Pick<Rule, "run">;
 
-function checks(rule: AnyRule, html: string): CheckResult[] {
+async function checks(rule: AnyRule, html: string): Promise<CheckResult[]> {
   const url = "https://example.com/";
-  return rule.run({
+  return (await rule.run({
     page: { url, html, statusCode: 200, loadTime: 0, headers: {} },
     parsed: parsePage(html, url) as ParsedPage,
     options: {},
-  }).checks as CheckResult[];
+  })).checks as CheckResult[];
 }
 
-function statuses(rule: AnyRule, html: string): Record<string, string> {
-  return Object.fromEntries(checks(rule, html).map((c) => [c.name, c.status]));
+async function statuses(rule: AnyRule, html: string): Promise<Record<string, string>> {
+  return Object.fromEntries((await checks(rule, html)).map((c) => [c.name, c.status]));
 }
 
 const LINK = '<link rel="stylesheet" href="/theme.css">';
@@ -45,53 +45,53 @@ const RULES: Array<[string, AnyRule, string]> = [
 
 for (const [name, rule, check] of RULES) {
   describe(`${name} and a no-js fallback`, () => {
-    test("A: external sheet + show-only rule: unconfirmed with the script-state reason", () => {
-      const out = checks(rule, page(LINK + ICON, SELECT));
+    test("A: external sheet + show-only rule: unconfirmed with the script-state reason", async () => {
+      const out = (await checks(rule, page(LINK + ICON, SELECT)));
       expect(out.map((c) => [c.name, c.status])).toEqual([[`${check}-unconfirmed`, "warn"]]);
       expect(out[0]?.items?.[0]).toMatchObject({ label: SCRIPT_STATE_LABEL });
     });
 
-    test("B: external sheet alone: unconfirmed", () => {
-      expect(statuses(rule, page(LINK, SELECT))).toEqual({ [`${check}-unconfirmed`]: "warn" });
+    test("B: external sheet alone: unconfirmed", async () => {
+      expect(await statuses(rule, page(LINK, SELECT))).toEqual({ [`${check}-unconfirmed`]: "warn" });
     });
 
-    test("D: an unrendered fetch with <html class=no-js>: unconfirmed", () => {
-      expect(statuses(rule, page(LINK + ICON, SELECT, "no-js"))).toEqual({
+    test("D: an unrendered fetch with <html class=no-js>: unconfirmed", async () => {
+      expect(await statuses(rule, page(LINK + ICON, SELECT, "no-js"))).toEqual({
         [`${check}-unconfirmed`]: "warn",
       });
     });
 
-    test("C: a readable .js .no-js hide stays unconfirmed (generic reason)", () => {
-      const out = checks(rule, page(`${LINK}<style>.js .no-js{display:none}</style>`, SELECT));
+    test("C: a readable .js .no-js hide stays unconfirmed (generic reason)", async () => {
+      const out = (await checks(rule, page(`${LINK}<style>.js .no-js{display:none}</style>`, SELECT)));
       expect(out.map((c) => c.status)).toEqual(["warn"]);
       expect(out[0]?.items?.[0]).toMatchObject({ label: UNCONFIRMED_LABEL });
     });
 
-    test("a non-root ancestor wrapper carries the marker", () => {
+    test("a non-root ancestor wrapper carries the marker", async () => {
       const body =
         '<div class="variant no-js"><form><select name="id"><option>S</option></select></form></div>';
-      expect(statuses(rule, page(LINK, body))).toEqual({ [`${check}-unconfirmed`]: "warn" });
+      expect(await statuses(rule, page(LINK, body))).toEqual({ [`${check}-unconfirmed`]: "warn" });
     });
 
-    test("complete styles (no external sheet): unchanged, a fail", () => {
-      expect(statuses(rule, page(ICON, SELECT))).toEqual({ [check]: "fail" });
-      expect(statuses(rule, page("", SELECT))).toEqual({ [check]: "fail" });
+    test("complete styles (no external sheet): unchanged, a fail", async () => {
+      expect(await statuses(rule, page(ICON, SELECT))).toEqual({ [check]: "fail" });
+      expect(await statuses(rule, page("", SELECT))).toEqual({ [check]: "fail" });
     });
 
-    test("no marker, or a different token (no-js-hidden), keeps failing", () => {
+    test("no marker, or a different token (no-js-hidden), keeps failing", async () => {
       const plain = '<form><select name="id"><option>S</option></select></form>';
       const other =
         '<form><select name="id" class="no-js-hidden"><option>S</option></select></form>';
-      expect(statuses(rule, page(LINK + ICON, plain))).toEqual({ [check]: "fail" });
-      expect(statuses(rule, page(LINK + ICON, other))).toEqual({ [check]: "fail" });
+      expect(await statuses(rule, page(LINK + ICON, plain))).toEqual({ [check]: "fail" });
+      expect(await statuses(rule, page(LINK + ICON, other))).toEqual({ [check]: "fail" });
     });
 
-    test("only <html class=no-js> carries it: the root is not a marker", () => {
+    test("only <html class=no-js> carries it: the root is not a marker", async () => {
       expect(
-        statuses(
+        (await statuses(
           rule,
           page(LINK, '<form><select name="id"><option>S</option></select></form>', "no-js"),
-        ),
+        )),
       ).toEqual({
         [check]: "fail",
       });
@@ -100,34 +100,34 @@ for (const [name, rule, check] of RULES) {
 }
 
 describe("the other naming rules apply the same marker", () => {
-  test("button-name", () => {
+  test("button-name", async () => {
     const html = page(LINK, '<button class="no-js"></button>');
-    const out = checks(buttonNameRule, html);
+    const out = (await checks(buttonNameRule, html));
     expect(out.map((c) => c.name)).toEqual(["button-name-unconfirmed"]);
     expect(out[0]?.items?.[0]).toMatchObject({ label: SCRIPT_STATE_LABEL });
-    expect(statuses(buttonNameRule, page("", '<button class="no-js"></button>'))).toEqual({
+    expect(await statuses(buttonNameRule, page("", '<button class="no-js"></button>'))).toEqual({
       "button-name": "fail",
     });
   });
 
-  test("aria-hidden-focus", () => {
+  test("aria-hidden-focus", async () => {
     const body = '<div aria-hidden="true"><a href="/x" class="no-js">x</a></div>';
-    const out = checks(ariaHiddenFocusRule, page(LINK, body));
+    const out = (await checks(ariaHiddenFocusRule, page(LINK, body)));
     expect(out.map((c) => c.name)).toEqual(["aria-hidden-focus-unconfirmed"]);
     expect(out[0]?.items?.[0]).toMatchObject({ label: SCRIPT_STATE_LABEL });
-    expect(statuses(ariaHiddenFocusRule, page("", body))).toEqual({ "aria-hidden-focus": "fail" });
+    expect(await statuses(ariaHiddenFocusRule, page("", body))).toEqual({ "aria-hidden-focus": "fail" });
   });
 });
 
 describe("what is not a marker", () => {
-  test("NO-JS is not no-js in standards mode", () => {
-    expect(statuses(buttonNameRule, page(LINK, '<button class="NO-JS"></button>'))).toEqual({
+  test("NO-JS is not no-js in standards mode", async () => {
+    expect(await statuses(buttonNameRule, page(LINK, '<button class="NO-JS"></button>'))).toEqual({
       "button-name": "fail",
     });
   });
 
-  test("a stray second <html> class is not a marker", () => {
+  test("a stray second <html> class is not a marker", async () => {
     const html = `<!doctype html><html lang="en"><head><title>t</title>${LINK}</head><body><html class="no-js"><button></button></html></body></html>`;
-    expect(statuses(buttonNameRule, html)).toEqual({ "button-name": "fail" });
+    expect(await statuses(buttonNameRule, html)).toEqual({ "button-name": "fail" });
   });
 });

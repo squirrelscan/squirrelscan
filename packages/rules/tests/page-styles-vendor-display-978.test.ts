@@ -10,19 +10,19 @@ import { parsePage } from "@squirrelscan/parser";
 import { ariaCommandNameRule as aria } from "../src/a11y/aria-command-name";
 import { buttonNameRule } from "../src/a11y/button-name";
 import { readDeclarations } from "../src/shared/page-styles";
-import type { ParsedPage, RuleContext } from "../src/types";
+import type { ParsedPage, Rule, RuleContext } from "../src/types";
 
-function statuses(
-  rule: { run: (ctx: RuleContext) => { checks: unknown } },
+async function statuses(
+  rule: Pick<Rule, "run">,
   css: string,
-): Record<string, string> {
+): Promise<Record<string, string>> {
   const url = "https://example.com/";
   const html = `<!doctype html><html lang="en"><head><title>t</title><style>${css}</style></head><body><main><div class="menu"><div class="item"><button type="button"></button></div></div></main></body></html>`;
-  const checks = rule.run({
+  const checks = (await rule.run({
     page: { url, html, statusCode: 200, loadTime: 0, headers: {} },
     parsed: parsePage(html, url) as ParsedPage,
     options: {},
-  }).checks as CheckResult[];
+  })).checks as CheckResult[];
   return Object.fromEntries(checks.map((c) => [c.name, c.status]));
 }
 
@@ -105,23 +105,23 @@ describe("the issue's repro table: an unnamed button under the rule fails", () =
     "plain selector": ".item{display:-webkit-box;display:flex}",
   };
   for (const [name, css] of Object.entries(cases)) {
-    test(name, () => {
-      expect(statuses(buttonNameRule, css)).toEqual({ "button-name": "fail" });
-      expect(statuses(aria, css)).toEqual({ "aria-command-name": "fail" });
+    test(name, async () => {
+      expect(await statuses(buttonNameRule, css)).toEqual({ "button-name": "fail" });
+      expect(await statuses(aria, css)).toEqual({ "aria-command-name": "fail" });
     });
   }
 
-  test("var(--x) stays unconfirmed", () => {
-    expect(statuses(buttonNameRule, ".menu .item{display:var(--x)}")).toEqual({
+  test("var(--x) stays unconfirmed", async () => {
+    expect(await statuses(buttonNameRule, ".menu .item{display:var(--x)}")).toEqual({
       "button-name-unconfirmed": "warn",
     });
   });
 
-  test("display:none last in a vendor chain still hides, or stays unconfirmed", () => {
-    expect(statuses(buttonNameRule, ".item{display:-webkit-box;display:none}")).toEqual({
+  test("display:none last in a vendor chain still hides, or stays unconfirmed", async () => {
+    expect(await statuses(buttonNameRule, ".item{display:-webkit-box;display:none}")).toEqual({
       "button-name": "pass",
     });
-    expect(statuses(buttonNameRule, ".menu .item{display:-webkit-box;display:none}")).toEqual({
+    expect(await statuses(buttonNameRule, ".menu .item{display:-webkit-box;display:none}")).toEqual({
       "button-name-unconfirmed": "warn",
     });
   });

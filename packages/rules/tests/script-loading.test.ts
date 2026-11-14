@@ -32,8 +32,8 @@ function makeCtx(head: string): RuleContext {
   };
 }
 
-function check(rule: Rule, ctx: RuleContext, name: string): CheckResult {
-  const { checks } = rule.run(ctx) as { checks: CheckResult[] };
+async function check(rule: Rule, ctx: RuleContext, name: string): Promise<CheckResult> {
+  const { checks } = (await rule.run(ctx)) as { checks: CheckResult[] };
   const found = checks.find((c) => c.name === name);
   if (!found) throw new Error(`no ${name} check`);
   return found;
@@ -99,56 +99,56 @@ describe("perf rules treat type=module as non-blocking (#424)", () => {
   const classicHead =
     stylesheet + THIRD_PARTY_SRCS.map((src) => `<script src="${src}"></script>`).join("");
 
-  test("perf/inp-hints counts module scripts as deferred", () => {
-    const c = check(inpHintsRule, makeCtx(moduleHead), "inp-blocking-scripts");
+  test("perf/inp-hints counts module scripts as deferred", async () => {
+    const c = (await check(inpHintsRule, makeCtx(moduleHead), "inp-blocking-scripts"));
     expect(c.status).toBe("pass");
     expect(c.details).toEqual({ async: 0, defer: 6, blocking: 0 });
   });
 
-  test("perf/inp-hints still flags classic blocking scripts", () => {
-    const c = check(inpHintsRule, makeCtx(classicHead), "inp-blocking-scripts");
+  test("perf/inp-hints still flags classic blocking scripts", async () => {
+    const c = (await check(inpHintsRule, makeCtx(classicHead), "inp-blocking-scripts"));
     expect(c.status).toBe("warn");
     expect(c.message).toBe("6 blocking scripts (consider async/defer)");
   });
 
-  test("perf/inp-hints third-party count is unchanged by script type", () => {
-    const c = check(inpHintsRule, makeCtx(moduleHead), "inp-third-party");
+  test("perf/inp-hints third-party count is unchanged by script type", async () => {
+    const c = (await check(inpHintsRule, makeCtx(moduleHead), "inp-third-party"));
     expect(c.status).toBe("warn");
     expect(c.items).toHaveLength(6);
   });
 
-  test("perf/render-blocking lists only the stylesheet next to module scripts", () => {
-    const c = check(renderBlockingRule, makeCtx(moduleHead), "render-blocking");
+  test("perf/render-blocking lists only the stylesheet next to module scripts", async () => {
+    const c = (await check(renderBlockingRule, makeCtx(moduleHead), "render-blocking"));
     expect(c.status).toBe("info");
     expect(c.items).toEqual([{ id: "/style.css" }]);
   });
 
-  test("perf/render-blocking still counts classic scripts", () => {
-    const c = check(renderBlockingRule, makeCtx(classicHead), "render-blocking");
+  test("perf/render-blocking still counts classic scripts", async () => {
+    const c = (await check(renderBlockingRule, makeCtx(classicHead), "render-blocking"));
     expect(c.status).toBe("warn");
     expect(c.items).toHaveLength(7);
   });
 
-  test("perf/render-blocking skips nomodule and text/plain scripts", () => {
+  test("perf/render-blocking skips nomodule and text/plain scripts", async () => {
     const head = `<script nomodule src="/legacy.js"></script><script type="text/plain" src="/gated.js"></script>`;
-    const c = check(renderBlockingRule, makeCtx(head), "render-blocking");
+    const c = (await check(renderBlockingRule, makeCtx(head), "render-blocking"));
     expect(c.status).toBe("pass");
   });
 
-  test("perf/critical-request-chains agrees with the shared classification", () => {
+  test("perf/critical-request-chains agrees with the shared classification", async () => {
     const head = `<script type="MODULE" src="/m.js"></script><script nomodule src="/legacy.js"></script><script src="/app.js"></script>`;
-    const c = check(criticalRequestChainsRule, makeCtx(head), "critical-request-chains");
+    const c = (await check(criticalRequestChainsRule, makeCtx(head), "critical-request-chains"));
     expect(c.details?.blockingJs).toBe(1);
   });
 
-  test("an empty src blocks nothing in any of the three rules", () => {
+  test("an empty src blocks nothing in any of the three rules", async () => {
     const ctx = makeCtx(`<script src=""></script>`);
-    expect(check(renderBlockingRule, ctx, "render-blocking").status).toBe("pass");
-    expect(check(inpHintsRule, ctx, "inp-blocking-scripts").details).toEqual({
+    expect((await check(renderBlockingRule, ctx, "render-blocking")).status).toBe("pass");
+    expect((await check(inpHintsRule, ctx, "inp-blocking-scripts")).details).toEqual({
       async: 0,
       defer: 0,
       blocking: 0,
     });
-    expect(check(criticalRequestChainsRule, ctx, "critical-request-chains").status).toBe("pass");
+    expect((await check(criticalRequestChainsRule, ctx, "critical-request-chains")).status).toBe("pass");
   });
 });

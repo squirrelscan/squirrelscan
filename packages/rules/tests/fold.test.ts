@@ -278,11 +278,11 @@ describe("images/alt-text over-cap crawl (#910)", () => {
     } as unknown as RuleContext;
   }
 
-  test("merged per-page emission exceeds the cap; folded output stays within every cap", () => {
+  test("merged per-page emission exceeds the cap; folded output stays within every cap", async () => {
     const map = new Map<string, RuleRunResult>();
     for (let i = 0; i < FAIL_PAGES + PASS_PAGES; i++) {
       const pageUrl = `https://example.com/p/${i}`;
-      const result = altTextRule.run(pageCtx(pageUrl, i < FAIL_PAGES, i)) as RuleResult;
+      const result = (await altTextRule.run(pageCtx(pageUrl, i < FAIL_PAGES, i))) as RuleResult;
       // The adapter stamps pageUrl on page-scope checks before merging.
       for (const check of result.checks) {
         if (!check.pageUrl) check.pageUrl = pageUrl;

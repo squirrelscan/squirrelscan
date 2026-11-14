@@ -209,7 +209,7 @@ describe("the element path is bounded and only computed when an entry wants it (
     expect(unlabeled.items).toHaveLength(5_000);
     // the rule itself, run with the flag unset, builds no path at all
     const { formLabelsRule } = await import("../src/a11y/form-labels");
-    const direct = formLabelsRule.run({ page: { url: URL, html: "", statusCode: 200, loadTime: 0, headers: {} }, parsed: { document: parsePage(hostile(50), URL).document }, options: {} } as never);
+    const direct = (await formLabelsRule.run({ page: { url: URL, html: "", statusCode: 200, loadTime: 0, headers: {} }, parsed: { document: parsePage(hostile(50), URL).document }, options: {} } as never));
     for (const check of direct.checks) for (const item of check.items ?? []) expect(Object.keys(item)).not.toContain("selector");
   }, 60_000);
 

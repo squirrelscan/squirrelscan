@@ -21,7 +21,7 @@ function ctx(css: string): RuleContext {
   } as unknown as RuleContext;
 }
 
-function checkNamed(checks: ReturnType<typeof unminifiedCssRule.run>["checks"], name: string) {
+function checkNamed(checks: Awaited<ReturnType<typeof unminifiedCssRule.run>>["checks"], name: string) {
   return checks.find((c) => c.name === name);
 }
 
@@ -32,30 +32,30 @@ const PADDING = Array.from(
 ).join("");
 
 describe("perf/unminified-css — string-aware comment detection (#142)", () => {
-  test("#142: `/* */` inside a string literal is not counted as a comment", () => {
+  test("#142: `/* */` inside a string literal is not counted as a comment", async () => {
     const strings = Array.from(
       { length: 5 },
       (_, i) => `.s${i}::before{content:"/* not a comment ${i} */"}`,
     ).join("");
-    const { checks } = unminifiedCssRule.run(ctx(`${strings}${PADDING}`));
+    const { checks } = (await unminifiedCssRule.run(ctx(`${strings}${PADDING}`)));
     expect(checkNamed(checks, "unminified-css")).toBeUndefined();
     expect(checkNamed(checks, "minified-css")?.status).toBe("pass");
   });
 
-  test("true positive preserved: real CSS comments are still counted and flagged", () => {
+  test("true positive preserved: real CSS comments are still counted and flagged", async () => {
     const comments = Array.from({ length: 5 }, (_, i) => `/* section ${i} */`).join("");
-    const { checks } = unminifiedCssRule.run(ctx(`${comments}${PADDING}`));
+    const { checks } = (await unminifiedCssRule.run(ctx(`${comments}${PADDING}`)));
     const warn = checkNamed(checks, "unminified-css");
     expect(warn?.status).toBe("warn");
     expect(warn?.items?.[0]?.meta?.reason).toBe("5 comments");
   });
 
-  test("a real comment following a string on the same line is still counted", () => {
+  test("a real comment following a string on the same line is still counted", async () => {
     const mixed = Array.from(
       { length: 5 },
       (_, i) => `.m${i}::after{content:"/* x */"}/* real ${i} */`,
     ).join("");
-    const { checks } = unminifiedCssRule.run(ctx(`${mixed}${PADDING}`));
+    const { checks } = (await unminifiedCssRule.run(ctx(`${mixed}${PADDING}`)));
     const warn = checkNamed(checks, "unminified-css");
     expect(warn?.status).toBe("warn");
     expect(warn?.items?.[0]?.meta?.reason).toBe("5 comments");

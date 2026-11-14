@@ -99,8 +99,8 @@ const engines = [
   ["streaming", streamingCtx],
 ] as const;
 
-const run = (ctx: RuleContext) => {
-  const check = totalByteWeightRule.run(ctx).checks[0]!;
+const run = async (ctx: RuleContext) => {
+  const check = (await totalByteWeightRule.run(ctx)).checks[0]!;
   return {
     status: check.status,
     kb: Number.parseInt(check.value as string, 10),
@@ -111,7 +111,7 @@ const run = (ctx: RuleContext) => {
 
 describe("perf/total-byte-weight per-page scoring", () => {
   for (const [name, build] of engines) {
-    test(`${name}: a page with known html, css, js, image and font sizes scores exactly their sum`, () => {
+    test(`${name}: a page with known html, css, js, image and font sizes scores exactly their sum`, async () => {
       const f: Fixture = {
         htmlSizes: [10 * KB],
         css: [{ url: `${BASE}/a.css`, size: 100 * KB, pages: [pageUrl(0)] }],
@@ -119,7 +119,7 @@ describe("perf/total-byte-weight per-page scoring", () => {
         images: [{ url: `${BASE}/a.png`, size: 300 * KB, pages: [pageUrl(0)] }],
         fonts: [{ url: `${BASE}/a.woff2`, size: 40 * KB, pages: [pageUrl(0)] }],
       };
-      const { kb, details } = run(build(f));
+      const { kb, details } = (await run(build(f)));
       expect(kb).toBe(650);
       expect(details.html).toBe("10KB");
       expect(details.css).toBe("100KB");
@@ -129,13 +129,13 @@ describe("perf/total-byte-weight per-page scoring", () => {
       expect(details.heaviestPage).toBe(pageUrl(0));
     });
 
-    test(`${name}: many small pages pass, the same bytes on one heavy page fail`, () => {
+    test(`${name}: many small pages pass, the same bytes on one heavy page fail`, async () => {
       // 600 pages of 10 KB html each is 6000 KB of html in total, over the
       // 5000 KB error threshold if it were summed across the site.
       const many: Fixture = {
         htmlSizes: Array.from({ length: 600 }, () => 10 * KB),
       };
-      const small = run(build(many));
+      const small = (await run(build(many)));
       expect(small.status).toBe("pass");
       expect(small.kb).toBe(10);
       expect(small.details.pagesOverWarn).toBe(0);
@@ -146,12 +146,12 @@ describe("perf/total-byte-weight per-page scoring", () => {
           { url: `${BASE}/huge.png`, size: 6000 * KB, pages: [pageUrl(0)] },
         ],
       };
-      const heavy = run(build(one));
+      const heavy = (await run(build(one)));
       expect(heavy.status).toBe("fail");
       expect(heavy.details.pagesOverError).toBe(1);
     });
 
-    test(`${name}: a font and a stylesheet shared by two pages count toward both, once within each`, () => {
+    test(`${name}: a font and a stylesheet shared by two pages count toward both, once within each`, async () => {
       const f: Fixture = {
         htmlSizes: [10 * KB, 20 * KB],
         // The same page listed twice must not double the resource within a page.
@@ -170,16 +170,16 @@ describe("perf/total-byte-weight per-page scoring", () => {
           },
         ],
       };
-      const { kb, details } = run(build(f));
+      const { kb, details } = (await run(build(f)));
       // p1 is the heavier page: 20 + 100 + 50.
       expect(kb).toBe(170);
       expect(details.heaviestPage).toBe(pageUrl(1));
 
-      const onlyFirst = run(build({ ...f, htmlSizes: [10 * KB] }));
+      const onlyFirst = (await run(build({ ...f, htmlSizes: [10 * KB] })));
       expect(onlyFirst.kb).toBe(160);
     });
 
-    test(`${name}: the output names the heaviest page and the pages over each threshold`, () => {
+    test(`${name}: the output names the heaviest page and the pages over each threshold`, async () => {
       const f: Fixture = {
         htmlSizes: [10 * KB, 10 * KB, 10 * KB],
         images: [
@@ -187,7 +187,7 @@ describe("perf/total-byte-weight per-page scoring", () => {
           { url: `${BASE}/err.png`, size: 5500 * KB, pages: [pageUrl(2)] },
         ],
       };
-      const { status, details, message } = run(build(f));
+      const { status, details, message } = (await run(build(f)));
       expect(status).toBe("fail");
       expect(details.heaviestPage).toBe(pageUrl(2));
       expect(details.heaviestPageKb).toBe("5510KB");
@@ -197,24 +197,24 @@ describe("perf/total-byte-weight per-page scoring", () => {
       expect(message).toContain("2 over 1600KB, 1 over 5000KB");
     });
 
-    test(`${name}: a resource with no size is reported, not silently counted as zero`, () => {
+    test(`${name}: a resource with no size is reported, not silently counted as zero`, async () => {
       const f: Fixture = {
         htmlSizes: [10 * KB],
         fonts: [
           { url: `${BASE}/nolen.woff2`, size: null, pages: [pageUrl(0)] },
         ],
       };
-      const { kb, details, message } = run(build(f));
+      const { kb, details, message } = (await run(build(f)));
       expect(kb).toBe(10);
       expect(details.unsizedResources).toBe(1);
       expect(message).toContain("1 resource could not be sized");
     });
 
     // #668: the HTML size already includes inline <style> and <script> code.
-    test(`${name}: a page whose weight is one inline stylesheet scores its document size, not double`, () => {
+    test(`${name}: a page whose weight is one inline stylesheet scores its document size, not double`, async () => {
       const doc = inlineDoc(1800 * KB, 0);
       const f: Fixture = { htmlSizes: [byteLength(doc)], docs: [doc] };
-      const { kb, details } = run(build(f));
+      const { kb, details } = (await run(build(f)));
       // Before #668 the inline stylesheet was added on top: about 3600KB.
       expect(kb).toBe(Math.round(byteLength(doc) / KB));
       expect(kb).toBeLessThan(1810);
@@ -223,15 +223,15 @@ describe("perf/total-byte-weight per-page scoring", () => {
       expect(details.js).toBeUndefined();
     });
 
-    test(`${name}: a compressed transfer size smaller than the inline code is still the document's weight`, () => {
+    test(`${name}: a compressed transfer size smaller than the inline code is still the document's weight`, async () => {
       // Content-Length of a gzipped response: the inline text decodes larger.
       const doc = inlineDoc(1800 * KB, 0);
-      const { kb, details } = run(build({ htmlSizes: [100 * KB], docs: [doc] }));
+      const { kb, details } = (await run(build({ htmlSizes: [100 * KB], docs: [doc] })));
       expect(kb).toBe(100);
       expect(details.html).toBe("100KB");
     });
 
-    test(`${name}: inline code is counted once, external stylesheets and scripts once each`, () => {
+    test(`${name}: inline code is counted once, external stylesheets and scripts once each`, async () => {
       const doc = inlineDoc(200 * KB, 300 * KB);
       const f: Fixture = {
         htmlSizes: [byteLength(doc)],
@@ -239,31 +239,31 @@ describe("perf/total-byte-weight per-page scoring", () => {
         css: [{ url: `${BASE}/a.css`, size: 100 * KB, pages: [pageUrl(0)] }],
         js: [{ url: `${BASE}/a.js`, size: 50 * KB, pages: [pageUrl(0)] }],
       };
-      const { kb, details } = run(build(f));
+      const { kb, details } = (await run(build(f)));
       expect(kb).toBe(Math.round(byteLength(doc) / KB) + 150);
       expect(details.css).toBe("100KB");
       expect(details.js).toBe("50KB");
     });
 
-    test(`${name}: the no-resource-data estimate does not add inline code to the HTML`, () => {
+    test(`${name}: the no-resource-data estimate does not add inline code to the HTML`, async () => {
       const doc = inlineDoc(400 * KB, 0);
       const ctx = build({ htmlSizes: [byteLength(doc)], docs: [doc] });
       delete ctx.site!.resourceSizes;
       delete ctx.site!.scripts;
-      const { kb, details } = run(ctx);
+      const { kb, details } = (await run(ctx));
       expect(details.estimated).toBe(true);
       expect(kb).toBe(Math.round(byteLength(doc) / KB));
     });
 
     // #568: site figures, for information only.
-    test(`${name}: the site total counts a shared resource once, and the average is the mean page weight`, () => {
+    test(`${name}: the site total counts a shared resource once, and the average is the mean page weight`, async () => {
       const f: Fixture = {
         htmlSizes: [10 * KB, 20 * KB],
         css: [{ url: `${BASE}/s.css`, size: 100 * KB, pages: [pageUrl(0), pageUrl(1)] }],
         images: [{ url: `${BASE}/a.png`, size: 300 * KB, pages: [pageUrl(0)] }],
         fonts: [{ url: `${BASE}/nolen.woff2`, size: null, pages: [pageUrl(1)] }],
       };
-      const { status, kb, details, message } = run(build(f));
+      const { status, kb, details, message } = (await run(build(f)));
       // p0 = 10 + 100 + 300, p1 = 20 + 100; the total holds s.css once.
       expect(kb).toBe(410);
       expect(details.siteTotalKb).toBe("430KB");
@@ -274,46 +274,46 @@ describe("perf/total-byte-weight per-page scoring", () => {
       );
     });
 
-    test(`${name}: the site figures never change the verdict`, () => {
+    test(`${name}: the site figures never change the verdict`, async () => {
       // 6000 KB across the site, over the 5000 KB error threshold, still passes.
-      const many = run(build({ htmlSizes: Array.from({ length: 600 }, () => 10 * KB) }));
+      const many = (await run(build({ htmlSizes: Array.from({ length: 600 }, () => 10 * KB) })));
       expect(many.status).toBe("pass");
       expect(many.details.siteTotalKb).toBe("6000KB");
       expect(many.details.pageAverageKb).toBe("10KB");
 
       // A heavy page keeps its own suffix before the site note.
-      const heavy = run(
+      const heavy = (await run(
         build({
           htmlSizes: [10 * KB, 10 * KB],
           images: [{ url: `${BASE}/big.png`, size: 2000 * KB, pages: [pageUrl(0)] }],
         }),
-      );
+      ));
       expect(heavy.status).toBe("warn");
       expect(heavy.message).toContain("(heavy page). Not scored: site total 2020KB across 2 pages");
       expect(heavy.details.pageAverageKb).toBe("1010KB");
     });
 
-    test(`${name}: an estimate reports no site figures`, () => {
+    test(`${name}: an estimate reports no site figures`, async () => {
       const ctx = build({ htmlSizes: [10 * KB, 10 * KB] });
       delete ctx.site!.resourceSizes;
       delete ctx.site!.scripts;
-      const { details, message } = run(ctx);
+      const { details, message } = (await run(ctx));
       expect(details.estimated).toBe(true);
       expect(details.siteTotalKb).toBeUndefined();
       expect(details.pageAverageKb).toBeUndefined();
       expect(message).not.toContain("Not scored");
     });
 
-    test(`${name}: a page with no recorded HTML size is weighed by its inline code`, () => {
+    test(`${name}: a page with no recorded HTML size is weighed by its inline code`, async () => {
       const doc = inlineDoc(300 * KB, 100 * KB);
-      const { kb, details } = run(build({ htmlSizes: [0], docs: [doc] }));
+      const { kb, details } = (await run(build({ htmlSizes: [0], docs: [doc] })));
       expect(kb).toBe(400);
       expect(details.html).toBe("400KB");
       expect(details.css).toBeUndefined();
     });
   }
 
-  test("the resident and streaming engines report the same result", () => {
+  test("the resident and streaming engines report the same result", async () => {
     const f: Fixture = {
       htmlSizes: [10 * KB, 20 * KB],
       css: [
@@ -325,13 +325,13 @@ describe("perf/total-byte-weight per-page scoring", () => {
       ],
       fonts: [{ url: `${BASE}/f.woff2`, size: 50 * KB, pages: [pageUrl(1)] }],
     };
-    expect(run(streamingCtx(f))).toEqual(run(residentCtx(f)));
+    expect(await run(streamingCtx(f))).toEqual(await run(residentCtx(f)));
   });
 
-  test("a collector snapshot cached before htmlBytes existed reads as no html weight", () => {
+  test("a collector snapshot cached before htmlBytes existed reads as no html weight", async () => {
     const f: Fixture = { htmlSizes: [10 * KB] };
     const ctx = streamingCtx(f);
     delete (ctx.collectedSignals!.pages[0] as { htmlBytes?: number }).htmlBytes;
-    expect(run(ctx).kb).toBe(0);
+    expect((await run(ctx)).kb).toBe(0);
   });
 });

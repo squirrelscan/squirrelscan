@@ -15,14 +15,14 @@ import { rules as contentRules } from "../src/content";
 import { loadAllRules } from "../src/loader";
 import type { ParsedPage, RuleContext } from "../src/types";
 
-function run(html: string, url = "https://shop.test/about-the-team", pageType?: string) {
+async function run(html: string, url = "https://shop.test/about-the-team", pageType?: string) {
   const { document } = parseHTML(html);
   const ctx: RuleContext = {
     page: { url, html, statusCode: 200, loadTime: 0, headers: {} },
     parsed: { document, pageType } as unknown as ParsedPage,
     options: {},
   };
-  return placeholderContactRule.run(ctx).checks;
+  return (await placeholderContactRule.run(ctx)).checks;
 }
 
 const page = (body: string) => `<html><head><title>t</title></head><body>${body}</body></html>`;
@@ -131,52 +131,52 @@ describe("classifyContactPage", () => {
 });
 
 describe("placeholderContactRule", () => {
-  test("skipped without a document", () => {
+  test("skipped without a document", async () => {
     const ctx = { page: { url: "https://a.test/" }, parsed: {}, options: {} } as unknown as RuleContext;
-    const [c] = placeholderContactRule.run(ctx).checks;
+    const [c] = (await placeholderContactRule.run(ctx)).checks;
     expect(c!.status).toBe("skipped");
   });
 
-  test("skipped without a body", () => {
-    const [c] = run("<html></html>");
+  test("skipped without a body", async () => {
+    const [c] = (await run("<html></html>"));
     expect(c!.status).toBe("skipped");
     expect(c!.skipReason).toBe("no-body");
   });
 
-  test("skipped on a documentation page", () => {
-    const [c] = run(page("<p>Use info@example.com</p>"), "https://a.test/docs/mail");
+  test("skipped on a documentation page", async () => {
+    const [c] = (await run(page("<p>Use info@example.com</p>"), "https://a.test/docs/mail"));
     expect(c!.status).toBe("skipped");
   });
 
-  test("pass on real contact details", () => {
-    const [c] = run(page("<p>Call 020 7946 0958 or write to hi@acme.io</p>"), "https://a.test/contact");
+  test("pass on real contact details", async () => {
+    const [c] = (await run(page("<p>Call 020 7946 0958 or write to hi@acme.io</p>"), "https://a.test/contact"));
     expect(c!.status).toBe("pass");
   });
 
-  test("fail on a contact page", () => {
-    const [c] = run(page("<p>Call (212) 555-0123</p>"), "https://a.test/contact");
+  test("fail on a contact page", async () => {
+    const [c] = (await run(page("<p>Call (212) 555-0123</p>"), "https://a.test/contact"));
     expect(c!.status).toBe("fail");
     expect(c!.items?.map((i) => i.id)).toEqual(["phone"]);
     expect(c!.message).toContain("contact or checkout page");
   });
 
-  test("fail on a checkout page, and on schema-detected contact pages", () => {
-    expect(run(page("<p>info@example.com</p>"), "https://a.test/checkout")[0]!.status).toBe("fail");
-    expect(run(page("<p>info@example.com</p>"), "https://a.test/x", "contact")[0]!.status).toBe("fail");
+  test("fail on a checkout page, and on schema-detected contact pages", async () => {
+    expect((await run(page("<p>info@example.com</p>"), "https://a.test/checkout"))[0]!.status).toBe("fail");
+    expect((await run(page("<p>info@example.com</p>"), "https://a.test/x", "contact"))[0]!.status).toBe("fail");
   });
 
-  test("warn elsewhere", () => {
-    const [c] = run(page("<footer>123 Main St</footer><p>Follow @yourhandle</p>"));
+  test("warn elsewhere", async () => {
+    const [c] = (await run(page("<footer>123 Main St</footer><p>Follow @yourhandle</p>")));
     expect(c!.status).toBe("warn");
     expect(c!.items?.map((i) => i.id)).toEqual(["address", "social"]);
   });
 
-  test("a placeholder mailto link is found", () => {
-    const [c] = run(page('<a href="mailto:info@example.com">Email us</a>'), "https://a.test/contact");
+  test("a placeholder mailto link is found", async () => {
+    const [c] = (await run(page('<a href="mailto:info@example.com">Email us</a>'), "https://a.test/contact"));
     expect(c!.status).toBe("fail");
   });
 
-  test("no false positive: a developer docs page showing user@example.com in a code block", () => {
+  test("no false positive: a developer docs page showing user@example.com in a code block", async () => {
     const html = page(
       `<h1>Sending mail</h1><p>Pass the recipient:</p>
        <pre><code>send({ to: "user@example.com", phone: "555-0123" })</code></pre>
@@ -185,12 +185,12 @@ describe("placeholderContactRule", () => {
        <pre><a href="mailto:user@example.com">x</a></pre>`,
     );
     for (const url of ["https://a.test/blog/sending-mail", "https://a.test/contact"]) {
-      expect(run(html, url)[0]!.status).toBe("pass");
+      expect((await run(html, url))[0]!.status).toBe("pass");
     }
   });
 
-  test("a <template> is inert", () => {
-    expect(run(page("<template><p>info@example.com</p></template>"))[0]!.status).toBe("pass");
+  test("a <template> is inert", async () => {
+    expect((await run(page("<template><p>info@example.com</p></template>")))[0]!.status).toBe("pass");
   });
 
   test("is registered once, in the loader's content group", () => {

@@ -96,6 +96,8 @@ function featureRow(spec: PageSpec): PageFeatureRow {
     faviconHref: null,
     themeColor: null,
     ogImage: null,
+    hreflangAlternates: null,
+    reportScalars: null,
   };
 }
 

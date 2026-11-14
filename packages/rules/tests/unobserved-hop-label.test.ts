@@ -17,7 +17,7 @@ import {
 } from "@squirrelscan/core-contracts";
 import { parsePage } from "@squirrelscan/parser";
 
-import type { RuleContext } from "../src/types";
+import type { RuleContext, RuleResult } from "../src/types";
 
 import { canonicalChainRule } from "../src/crawl/canonical-chain";
 import { redirectChainRule } from "../src/crawl/redirect-chain";
@@ -114,15 +114,15 @@ describe("formatRedirectHop", () => {
 });
 
 describe("no rule renders (0) for an unobserved hop", () => {
-  const cases: [string, () => { checks: { message?: string; items?: unknown[] }[] }][] = [
+  const cases: [string, () => RuleResult | Promise<RuleResult>][] = [
     ["crawl/canonical-chain", () => canonicalChainRule.run(pageCtx(UNOBSERVED))],
     ["crawl/canonical-chain (long)", () => canonicalChainRule.run(pageCtx(UNOBSERVED_LONG))],
     ["crawl/redirect-chain", () => redirectChainRule.run(siteCtx(UNOBSERVED_LONG))],
     ["links/redirect-chains", () => redirectChainsRule.run(siteCtx(UNOBSERVED))],
   ];
 
-  test.each(cases)("%s", (_name, run) => {
-    const text = emittedText(run());
+  test.each(cases)("%s", async (_name, run) => {
+    const text = emittedText(await run());
     // Non-vacuous: the rule really did report something to inspect.
     expect(text.length).toBeGreaterThan(0);
     for (const line of text) {
@@ -130,15 +130,15 @@ describe("no rule renders (0) for an unobserved hop", () => {
     }
   });
 
-  test("the unobserved hop's URL is still shown, just without a status", () => {
-    const labels = emittedText(canonicalChainRule.run(pageCtx(UNOBSERVED)));
+  test("the unobserved hop's URL is still shown, just without a status", async () => {
+    const labels = emittedText(await canonicalChainRule.run(pageCtx(UNOBSERVED)));
     const chainLabel = labels.find((l) => l.includes(" → "));
     expect(chainLabel).toBe(`${SOURCE} → ${LANDING} (200)`);
   });
 
-  test("an observed status is still rendered", () => {
+  test("an observed status is still rendered", async () => {
     const observed = renderChain([hop(SOURCE, 301), hop(LANDING, 200)]);
-    const labels = emittedText(canonicalChainRule.run(pageCtx(observed)));
+    const labels = emittedText(await canonicalChainRule.run(pageCtx(observed)));
     expect(labels.some((l) => l.includes("(301)"))).toBe(true);
   });
 });

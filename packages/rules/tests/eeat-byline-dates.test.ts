@@ -46,8 +46,8 @@ function siteCtx(pagesHtml: { url: string; html: string }[]): RuleContext {
   };
 }
 
-function run(rule: Rule, ctx: RuleContext): CheckResult[] {
-  return rule.run(ctx).checks as CheckResult[];
+async function run(rule: Rule, ctx: RuleContext): Promise<CheckResult[]> {
+  return (await rule.run(ctx)).checks as CheckResult[];
 }
 
 function check(checks: CheckResult[], name: string): CheckResult | undefined {
@@ -266,17 +266,17 @@ describe("parser — Yoast @graph @id author resolution", () => {
 // ── eeat/author-byline rule ─────────────────────────────────────────
 
 describe("eeat/author-byline — visible markup", () => {
-  test("detects hCard byline on Kadence post (no JSON-LD)", () => {
-    const checks = run(authorBylineRule, siteCtx([kadencePost("https://ex.com/blog/post")]));
+  test("detects hCard byline on Kadence post (no JSON-LD)", async () => {
+    const checks = (await run(authorBylineRule, siteCtx([kadencePost("https://ex.com/blog/post")])));
     expect(check(checks, "author-byline")?.status).toBe("pass");
   });
 
-  test("detects author via Yoast @graph @id ref", () => {
-    const checks = run(authorBylineRule, siteCtx([yoastPost("https://ex.com/blog/post")]));
+  test("detects author via Yoast @graph @id ref", async () => {
+    const checks = (await run(authorBylineRule, siteCtx([yoastPost("https://ex.com/blog/post")])));
     expect(check(checks, "author-byline")?.status).toBe("pass");
   });
 
-  test("counts a visible-byline page as content even on a large site", () => {
+  test("counts a visible-byline page as content even on a large site", async () => {
     // 6+ pages forces the content-page gate; the byline page must still count.
     const pages = [
       { url: "https://ex.com/", html: "<html><body><p>home</p></body></html>" },
@@ -287,12 +287,12 @@ describe("eeat/author-byline — visible markup", () => {
       { url: "https://ex.com/e", html: "<html><body><p>e</p></body></html>" },
       kadencePost("https://ex.com/the-post"),
     ];
-    const checks = run(authorBylineRule, siteCtx(pages));
+    const checks = (await run(authorBylineRule, siteCtx(pages)));
     // Exactly one content page (the byline post) with an author → 100%.
     expect(check(checks, "author-byline")?.status).toBe("pass");
   });
 
-  test("does NOT pass when only org-level chrome carries a byline", () => {
+  test("does NOT pass when only org-level chrome carries a byline", async () => {
     const orgPages = [
       {
         url: "https://ex.com/blog/post",
@@ -303,7 +303,7 @@ describe("eeat/author-byline — visible markup", () => {
         </body></html>`,
       },
     ];
-    const checks = run(authorBylineRule, siteCtx(orgPages));
+    const checks = (await run(authorBylineRule, siteCtx(orgPages)));
     expect(check(checks, "author-byline")?.status).toBe("warn");
   });
 });
@@ -311,18 +311,18 @@ describe("eeat/author-byline — visible markup", () => {
 // ── eeat/content-dates rule ─────────────────────────────────────────
 
 describe("eeat/content-dates — visible markup", () => {
-  test("detects entry-meta <time> dates on Kadence post (no JSON-LD)", () => {
-    const checks = run(contentDatesRule, siteCtx([kadencePost("https://ex.com/blog/post")]));
+  test("detects entry-meta <time> dates on Kadence post (no JSON-LD)", async () => {
+    const checks = (await run(contentDatesRule, siteCtx([kadencePost("https://ex.com/blog/post")])));
     expect(check(checks, "date-published")?.status).toBe("pass");
     expect(check(checks, "date-modified")?.status).toBe("pass");
   });
 
-  test("detects dates via Yoast @graph Article schema", () => {
-    const checks = run(contentDatesRule, siteCtx([yoastPost("https://ex.com/blog/post")]));
+  test("detects dates via Yoast @graph Article schema", async () => {
+    const checks = (await run(contentDatesRule, siteCtx([yoastPost("https://ex.com/blog/post")])));
     expect(check(checks, "date-published")?.status).toBe("pass");
   });
 
-  test("counts a visible-date page as content even on a large site", () => {
+  test("counts a visible-date page as content even on a large site", async () => {
     const pages = [
       { url: "https://ex.com/", html: "<html><body><p>home</p></body></html>" },
       { url: "https://ex.com/a", html: "<html><body><p>a</p></body></html>" },
@@ -332,11 +332,11 @@ describe("eeat/content-dates — visible markup", () => {
       { url: "https://ex.com/e", html: "<html><body><p>e</p></body></html>" },
       kadencePost("https://ex.com/the-post"),
     ];
-    const checks = run(contentDatesRule, siteCtx(pages));
+    const checks = (await run(contentDatesRule, siteCtx(pages)));
     expect(check(checks, "date-published")?.status).toBe("pass");
   });
 
-  test("does NOT count footer copyright date as datePublished", () => {
+  test("does NOT count footer copyright date as datePublished", async () => {
     const pages = [
       {
         url: "https://ex.com/blog/post",
@@ -346,7 +346,7 @@ describe("eeat/content-dates — visible markup", () => {
         </body></html>`,
       },
     ];
-    const checks = run(contentDatesRule, siteCtx(pages));
+    const checks = (await run(contentDatesRule, siteCtx(pages)));
     expect(check(checks, "date-published")?.status).toBe("warn");
   });
 });
@@ -372,13 +372,13 @@ describe("Kadence/Yoast site — issue #122 repro", () => {
     yoastPost("https://helder-ai.nl/schema-post", "Bob Author"),
   ]);
 
-  test("author detected across visible and @graph posts", () => {
-    const c = check(run(authorBylineRule, site), "author-byline");
+  test("author detected across visible and @graph posts", async () => {
+    const c = check(await run(authorBylineRule, site), "author-byline");
     expect(c?.status).toBe("pass");
     expect(c?.value).toBe("2/2 pages");
   });
 
-  test("dates detected across visible and @graph posts", () => {
-    expect(check(run(contentDatesRule, site), "date-published")?.status).toBe("pass");
+  test("dates detected across visible and @graph posts", async () => {
+    expect(check(await run(contentDatesRule, site), "date-published")?.status).toBe("pass");
   });
 });

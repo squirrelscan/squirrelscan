@@ -62,7 +62,7 @@ function legacyCtx(specs: PageSpec[], siteIndexable?: boolean): RuleContext {
         parsed: {
           meta: { title: spec.title ?? null, robots: spec.noindex ? "noindex,follow" : null },
         } as unknown as ParsedPage,
-        headers: spec.headerNoindex ? { "x-robots-tag": "noindex" } : {},
+        headers: spec.headerNoindex ? { "x-robots-tag": "noindex" } : ({} as Record<string, string>),
       })),
       robotsTxt: null,
       sitemaps: null,
@@ -104,6 +104,8 @@ function featureRow(spec: PageSpec): PageFeatureRow {
     faviconHref: null,
     themeColor: null,
     ogImage: null,
+    hreflangAlternates: null,
+    reportScalars: null,
   };
 }
 

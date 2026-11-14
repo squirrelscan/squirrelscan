@@ -22,41 +22,41 @@ function makeCtx(style: string): RuleContext {
   };
 }
 
-function run(style: string): CheckResult {
-  const { checks } = criticalRequestChainsRule.run(makeCtx(style)) as { checks: CheckResult[] };
+async function run(style: string): Promise<CheckResult> {
+  const { checks } = (await criticalRequestChainsRule.run(makeCtx(style))) as { checks: CheckResult[] };
   expect(checks).toHaveLength(1);
   return checks[0]!;
 }
 
 describe("perf/critical-request-chains @import counting", () => {
-  test("the reporter's comment-only page has no import and passes", () => {
-    const c = run('/* @import url("/comment-only.css"); */ body { color: black; }');
+  test("the reporter's comment-only page has no import and passes", async () => {
+    const c = (await run('/* @import url("/comment-only.css"); */ body { color: black; }'));
     expect(c.status).toBe("pass");
     expect(c.message).toBe("No critical request chains detected");
   });
 
-  test("a real @import still counts and warns", () => {
-    const c = run('@import url("/real-import.css");');
+  test("a real @import still counts and warns", async () => {
+    const c = (await run('@import url("/real-import.css");'));
     expect(c.status).toBe("warn");
     expect(c.details?.importCount).toBe(1);
   });
 
-  test("a style block with no import passes", () => {
-    expect(run("body { color: black; }").status).toBe("pass");
+  test("a style block with no import passes", async () => {
+    expect((await run("body { color: black; }")).status).toBe("pass");
   });
 
-  test("an import after comments and whitespace still counts", () => {
-    const c = run('\n  /* reset */\n\t@import url("/a.css");');
+  test("an import after comments and whitespace still counts", async () => {
+    const c = (await run('\n  /* reset */\n\t@import url("/a.css");'));
     expect(c.details?.importCount).toBe(1);
   });
 
-  test("an import inside @media or @supports is in an invalid position and counts 0", () => {
-    expect(run('@media screen { @import url("/a.css"); }').status).toBe("pass");
-    expect(run('@supports (display: grid) { @import url("/a.css"); }').status).toBe("pass");
+  test("an import inside @media or @supports is in an invalid position and counts 0", async () => {
+    expect((await run('@media screen { @import url("/a.css"); }')).status).toBe("pass");
+    expect((await run('@supports (display: grid) { @import url("/a.css"); }')).status).toBe("pass");
   });
 
-  test("a commented import followed by a real one counts once", () => {
-    const c = run('/* @import url("/a.css"); */ @import url("/b.css");');
+  test("a commented import followed by a real one counts once", async () => {
+    const c = (await run('/* @import url("/a.css"); */ @import url("/b.css");'));
     expect(c.status).toBe("warn");
     expect(c.details?.importCount).toBe(1);
   });

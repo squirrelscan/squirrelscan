@@ -19,7 +19,7 @@ import type { RuleContext } from "../src/types";
 // Minified-looking filler that matches no library signature on its own.
 const PAD = "function q0(a,b){return a+b*2}var z9=[1,2,3].map(q0);".repeat(1400);
 
-function detected(script: string): string[] {
+async function detected(script: string): Promise<string[]> {
   const url = "https://example.com/";
   const html = `<!DOCTYPE html><html><head><title>t</title></head><body><script>${script}</script></body></html>`;
   const ctx = {
@@ -31,7 +31,7 @@ function detected(script: string): string[] {
   // The whole item, not just its id: the label carries WHERE the library was
   // detected ("inline code" against "HTML markers"), and a prefilter that skips
   // the inline pass but not the HTML one changes that without changing the id.
-  const check = jsLibrariesRule.run(ctx).checks.find((c) => c.name === "js-libraries-detected");
+  const check = (await jsLibrariesRule.run(ctx)).checks.find((c) => c.name === "js-libraries-detected");
   return (check?.items ?? []).map((i) => JSON.stringify(i)).sort();
 }
 
@@ -48,8 +48,8 @@ const SIGNATURES: Array<[string, string]> = [
 ];
 
 describe("perf/js-libraries: the inline prefilter never loses a detection", () => {
-  test("the pad on its own detects nothing", () => {
-    expect(detected(PAD)).toEqual([]);
+  test("the pad on its own detects nothing", async () => {
+    expect(await detected(PAD)).toEqual([]);
   });
 
   // The character IMMEDIATELY BEFORE a signature's match is what the index's
@@ -59,14 +59,14 @@ describe("perf/js-libraries: the inline prefilter never loses a detection", () =
   // The rule ignores inline scripts of 50 characters or fewer.
   const SHORT_PAD = `var ${"z".repeat(60)}=1`;
 
-  test("every signature detected in a short script is detected in a 70 KB one", () => {
+  test("every signature detected in a short script is detected in a 70 KB one", async () => {
     const lost: string[] = [];
     for (const [name, token] of SIGNATURES) {
       for (const lead of LEAD_INS) {
-        const bare = detected(`${SHORT_PAD}${lead}${token}`);
+        const bare = (await detected(`${SHORT_PAD}${lead}${token}`));
         // A signature that does not detect unpadded proves nothing about padding.
         expect(bare.join(" ")).toContain(`"${name}"`);
-        const padded = detected(`${PAD}${lead}${token}\n${PAD}`);
+        const padded = (await detected(`${PAD}${lead}${token}\n${PAD}`));
         for (const item of bare) {
           if (!padded.includes(item)) lost.push(`${name} after ${JSON.stringify(lead)}: ${item}`);
         }
@@ -75,7 +75,7 @@ describe("perf/js-libraries: the inline prefilter never loses a detection", () =
     expect(lost).toEqual([]);
   });
 
-  test("a signature in the HTML rather than a script is still found at page size", () => {
+  test("a signature in the HTML rather than a script is still found at page size", async () => {
     // The HTML body gets its own index, and Angular's `ng-version` marker is
     // matched against the markup rather than against any script.
     const url = "https://example.com/";
@@ -86,7 +86,7 @@ describe("perf/js-libraries: the inline prefilter never loses a detection", () =
       site: { baseUrl: "https://example.com", pages: [], robotsTxt: null, sitemaps: null, scripts: [] },
       options: {},
     } as unknown as RuleContext;
-    const check = jsLibrariesRule.run(ctx).checks.find((c) => c.name === "js-libraries-detected");
+    const check = (await jsLibrariesRule.run(ctx)).checks.find((c) => c.name === "js-libraries-detected");
     expect((check?.items ?? []).map((i) => i.id)).toContain("Angular v17.1.0");
     expect((check?.items ?? []).find((i) => i.id === "Angular v17.1.0")?.label).toBe("HTML markers");
   });

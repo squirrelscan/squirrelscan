@@ -142,7 +142,7 @@ describe("findSourcePages", () => {
 // ── (A) + (B) rule output ───────────────────────────────────────────
 
 describe("blockedLinksRule", () => {
-  test("emits one warning per blocked script, each naming the vendor + pages", () => {
+  test("emits one warning per blocked script, each naming the vendor + pages", async () => {
     const ctx = ctxFor(
       [
         pageWithScripts("https://example.com/", TW, FB),
@@ -157,7 +157,7 @@ describe("blockedLinksRule", () => {
       },
     );
 
-    const checks = blockedLinksRule.run(ctx).checks as CheckResult[];
+    const checks = (await blockedLinksRule.run(ctx)).checks as CheckResult[];
     expect(checks).toHaveLength(2);
     for (const c of checks) {
       expect(c.status).toBe("warn");
@@ -180,7 +180,7 @@ describe("blockedLinksRule", () => {
     expect(checks[1].items?.[0]?.label).toBe('matches "||facebook.net^"');
   });
 
-  test("distinct same-host resources get distinct messages (no grouping collision)", () => {
+  test("distinct same-host resources get distinct messages (no grouping collision)", async () => {
     const uwt = "https://ads-twitter.com/uwt.js";
     const jot = "https://ads-twitter.com/i/jot";
     const ctx = ctxFor([pageWithScripts("https://example.com/", uwt, jot)], {
@@ -190,7 +190,7 @@ describe("blockedLinksRule", () => {
       ],
       listsVersion: "v1",
     });
-    const checks = blockedLinksRule.run(ctx).checks as CheckResult[];
+    const checks = (await blockedLinksRule.run(ctx)).checks as CheckResult[];
     expect(checks).toHaveLength(2);
     // Messages must differ even after digit-normalization (same host, same
     // page count) — the full resource URL is the discriminator.
@@ -198,13 +198,13 @@ describe("blockedLinksRule", () => {
     expect(norm(checks[0].message)).not.toBe(norm(checks[1].message));
   });
 
-  test("truncates a long URL in the message but keeps the full URL on item.id", () => {
+  test("truncates a long URL in the message but keeps the full URL on item.id", async () => {
     const longUrl = `https://ads-twitter.com/uwt.js?${"a".repeat(200)}`;
     const ctx = ctxFor([pageWithScripts("https://example.com/", longUrl)], {
       matches: [{ value: longUrl, kind: "url", list: "easylist" }],
       listsVersion: "v1",
     });
-    const checks = blockedLinksRule.run(ctx).checks as CheckResult[];
+    const checks = (await blockedLinksRule.run(ctx)).checks as CheckResult[];
     expect(checks).toHaveLength(1);
     // Message URL is shortened with an ellipsis; full URL is NOT in the message.
     expect(checks[0].message).toContain("…");
@@ -213,7 +213,7 @@ describe("blockedLinksRule", () => {
     expect(checks[0].items?.[0]?.id).toBe(longUrl);
   });
 
-  test("two long same-prefix URLs still produce distinct messages", () => {
+  test("two long same-prefix URLs still produce distinct messages", async () => {
     const prefix = `https://ads-twitter.com/uwt.js?${"a".repeat(200)}`;
     const a = `${prefix}1`;
     const b = `${prefix}2`;
@@ -224,31 +224,31 @@ describe("blockedLinksRule", () => {
       ],
       listsVersion: "v1",
     });
-    const checks = blockedLinksRule.run(ctx).checks as CheckResult[];
+    const checks = (await blockedLinksRule.run(ctx)).checks as CheckResult[];
     expect(checks).toHaveLength(2);
     // Differ only past the 80-char display cap — the appended hash disambiguates.
     const norm = (m: string) => m.replace(/\d+/g, "#");
     expect(norm(checks[0].message)).not.toBe(norm(checks[1].message));
   });
 
-  test("clamps maxMatchesToReport to at least one warning", () => {
+  test("clamps maxMatchesToReport to at least one warning", async () => {
     const ctx = ctxFor([pageWithScripts("https://example.com/", TW)], {
       matches: [{ value: TW, kind: "url", list: "easylist" }],
       listsVersion: "v1",
     });
     ctx.options = { maxMatchesToReport: 0 };
-    const checks = blockedLinksRule.run(ctx).checks as CheckResult[];
+    const checks = (await blockedLinksRule.run(ctx)).checks as CheckResult[];
     expect(checks).toHaveLength(1);
     expect(checks[0].status).toBe("warn");
   });
 
-  test("emits a warning even when no page could be attributed (empty sourcePages)", () => {
+  test("emits a warning even when no page could be attributed (empty sourcePages)", async () => {
     // Match exists but the resource is referenced by nothing we parsed.
     const ctx = ctxFor([pageWithScripts("https://example.com/")], {
       matches: [{ value: TW, kind: "url", list: "easylist" }],
       listsVersion: "v1",
     });
-    const checks = blockedLinksRule.run(ctx).checks as CheckResult[];
+    const checks = (await blockedLinksRule.run(ctx)).checks as CheckResult[];
     expect(checks).toHaveLength(1);
     expect(checks[0].status).toBe("warn");
     expect(checks[0].items?.[0]?.sourcePages).toEqual([]);
@@ -256,17 +256,17 @@ describe("blockedLinksRule", () => {
     expect(checks[0].message).not.toContain("page");
   });
 
-  test("passes when no EasyList matches", () => {
+  test("passes when no EasyList matches", async () => {
     const ctx = ctxFor([pageWithScripts("https://example.com/")], {
       matches: [],
       listsVersion: "v1",
     });
-    const checks = blockedLinksRule.run(ctx).checks as CheckResult[];
+    const checks = (await blockedLinksRule.run(ctx)).checks as CheckResult[];
     expect(checks).toHaveLength(1);
     expect(checks[0].status).toBe("pass");
   });
 
-  test("ignores EasyPrivacy + selector matches (reported elsewhere)", () => {
+  test("ignores EasyPrivacy + selector matches (reported elsewhere)", async () => {
     const ctx = ctxFor([pageWithScripts("https://example.com/", TW)], {
       matches: [
         { value: TW, kind: "url", list: "easyprivacy" },
@@ -274,18 +274,18 @@ describe("blockedLinksRule", () => {
       ],
       listsVersion: "v1",
     });
-    const checks = blockedLinksRule.run(ctx).checks as CheckResult[];
+    const checks = (await blockedLinksRule.run(ctx)).checks as CheckResult[];
     expect(checks).toHaveLength(1);
     expect(checks[0].status).toBe("pass");
   });
 
-  test("skips when the cloud result was not prefetched", () => {
+  test("skips when the cloud result was not prefetched", async () => {
     const ctx = ctxFor([pageWithScripts("https://example.com/")], {
       matches: [],
       listsVersion: "v1",
     });
     ctx.cloudResults = new Map();
-    const checks = blockedLinksRule.run(ctx).checks as CheckResult[];
+    const checks = (await blockedLinksRule.run(ctx)).checks as CheckResult[];
     expect(checks).toHaveLength(1);
     expect(checks[0].status).toBe("skipped");
   });

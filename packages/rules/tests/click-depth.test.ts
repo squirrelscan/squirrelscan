@@ -49,8 +49,8 @@ function ctx(
   } as unknown as RuleContext;
 }
 
-function run(c: RuleContext): CheckResult {
-  return (clickDepthRule.run(c) as RuleResult).checks[0]!;
+async function run(c: RuleContext): Promise<CheckResult> {
+  return ((await clickDepthRule.run(c)) as RuleResult).checks[0]!;
 }
 
 const P = (n: string) => `https://example.com/${n}`;
@@ -66,8 +66,8 @@ const CHAIN: Spec[] = [
 ];
 
 describe("links/click-depth", () => {
-  test("lists pages deeper than 3 with depth, deepest first, total and deepest stated", () => {
-    const c = run(ctx(CHAIN));
+  test("lists pages deeper than 3 with depth, deepest first, total and deepest stated", async () => {
+    const c = (await run(ctx(CHAIN)));
     expect(c.status).toBe("warn");
     expect((c.items ?? []).map((i) => i.id)).toEqual([P("e"), P("d")]);
     expect((c.items ?? []).map((i) => i.meta?.depth)).toEqual([5, 4]);
@@ -76,15 +76,15 @@ describe("links/click-depth", () => {
     expect(c.details).toMatchObject({ total: 2, deepest: 5, threshold: 3 });
   });
 
-  test("the threshold option changes the listing and is stated", () => {
-    const c = run(ctx(CHAIN, { maxDepth: 4 }));
+  test("the threshold option changes the listing and is stated", async () => {
+    const c = (await run(ctx(CHAIN, { maxDepth: 4 })));
     expect((c.items ?? []).map((i) => i.id)).toEqual([P("e")]);
     expect(c.message).toContain("more than 4 clicks");
     expect(c.details?.threshold).toBe(4);
-    expect(run(ctx(CHAIN, { maxDepth: 5 })).status).toBe("pass");
+    expect((await run(ctx(CHAIN, { maxDepth: 5 }))).status).toBe("pass");
   });
 
-  test("depth is the shortest path, whatever order pages are listed", () => {
+  test("depth is the shortest path, whatever order pages are listed", async () => {
     // /deep is linked from the homepage directly and, later, from a long chain.
     const pages: Spec[] = [
       { url: P("c"), links: ["/deep"] },
@@ -93,19 +93,19 @@ describe("links/click-depth", () => {
       { url: P("a"), links: ["/b"] },
       { url: BASE, links: ["/a", "/deep"] },
     ];
-    const c = run(ctx(pages, { maxDepth: 1 }));
+    const c = (await run(ctx(pages, { maxDepth: 1 })));
     expect((c.items ?? []).map((i) => [i.id, i.meta?.depth])).toEqual([
       [P("c"), 3],
       [P("b"), 2],
     ]);
   });
 
-  test("a sitemap-only page with no link path gets no depth", () => {
-    const c = run(ctx([...CHAIN, { url: P("sitemap-only") }], { maxDepth: 1 }));
+  test("a sitemap-only page with no link path gets no depth", async () => {
+    const c = (await run(ctx([...CHAIN, { url: P("sitemap-only") }], { maxDepth: 1 })));
     expect((c.items ?? []).map((i) => i.id)).not.toContain(P("sitemap-only"));
   });
 
-  test("noindex (meta and header), redirect-like and error pages are not listed", () => {
+  test("noindex (meta and header), redirect-like and error pages are not listed", async () => {
     const pages: Spec[] = [
       { url: BASE, links: ["/a"] },
       { url: P("a"), links: ["/b"] },
@@ -115,20 +115,20 @@ describe("links/click-depth", () => {
       { url: P("gone"), status: 404 },
       { url: P("ok") },
     ];
-    const c = run(ctx(pages, { maxDepth: 2 }));
+    const c = (await run(ctx(pages, { maxDepth: 2 })));
     expect((c.items ?? []).map((i) => i.id)).toEqual([P("ok")]);
   });
 
-  test("a noindex page still carries links to the pages behind it", () => {
+  test("a noindex page still carries links to the pages behind it", async () => {
     const pages: Spec[] = [
       { url: BASE, links: ["/hub"] },
       { url: P("hub"), robots: "noindex", links: ["/x"] },
       { url: P("x") },
     ];
-    expect(run(ctx(pages, { maxDepth: 1 })).items?.map((i) => i.id)).toEqual([P("x")]);
+    expect((await run(ctx(pages, { maxDepth: 1 }))).items?.map((i) => i.id)).toEqual([P("x")]);
   });
 
-  test("nofollow, external and unparsable links are not edges", () => {
+  test("nofollow, external and unparsable links are not edges", async () => {
     const pages: Spec[] = [
       {
         url: BASE,
@@ -140,52 +140,52 @@ describe("links/click-depth", () => {
       },
       { url: P("a") },
     ];
-    expect(run(ctx(pages, { maxDepth: 1 })).status).toBe("pass");
+    expect((await run(ctx(pages, { maxDepth: 1 }))).status).toBe("pass");
     expect(shortestDepths([BASE], new Map()).get(P("a"))).toBeUndefined();
   });
 
-  test("a capped crawl says depths are a lower bound", () => {
-    const c = run(ctx(CHAIN, {}, { crawlLimits: { pagesCrawled: 6, maxPages: 6 } }));
+  test("a capped crawl says depths are a lower bound", async () => {
+    const c = (await run(ctx(CHAIN, {}, { crawlLimits: { pagesCrawled: 6, maxPages: 6 } })));
     expect(c.status).toBe("warn");
     expect(c.message).toContain("lower bound");
     expect(c.details?.lowerBound).toBe(true);
-    expect(run(ctx(CHAIN)).details?.lowerBound).toBeUndefined();
+    expect((await run(ctx(CHAIN))).details?.lowerBound).toBeUndefined();
   });
 
-  test("a single-page audit is skipped with a reason", () => {
-    const c = run(ctx([{ url: BASE }]));
+  test("a single-page audit is skipped with a reason", async () => {
+    const c = (await run(ctx([{ url: BASE }])));
     expect(c.status).toBe("skipped");
     expect(c.skipReason).toBeTruthy();
   });
 
-  test("skips when the homepage was not crawled", () => {
-    const c = run(ctx([{ url: P("a") }, { url: P("b") }]));
+  test("skips when the homepage was not crawled", async () => {
+    const c = (await run(ctx([{ url: P("a") }, { url: P("b") }])));
     expect(c.status).toBe("skipped");
   });
 
-  test("the page the crawl started on is a root", () => {
+  test("the page the crawl started on is a root", async () => {
     const pages: Spec[] = [
       { url: P("en/"), links: ["/a"] },
       { url: P("a"), links: ["/b"] },
       { url: P("b") },
     ];
-    const c = run(
+    const c = (await run(
       ctx(pages, { maxDepth: 1 }, { baseUrl: "https://example.com/", entryUrls: [P("en/")] }),
-    );
+    ));
     expect(c.items?.map((i) => i.id)).toEqual([P("b")]);
   });
 
-  test("the same input gives the same result", () => {
+  test("the same input gives the same result", async () => {
     const shuffled = [...CHAIN].reverse();
-    expect(run(ctx(shuffled))).toEqual(run(ctx(CHAIN)));
-    expect(run(ctx(CHAIN))).toEqual(run(ctx(CHAIN)));
+    expect(await run(ctx(shuffled))).toEqual(await run(ctx(CHAIN)));
+    expect(await run(ctx(CHAIN))).toEqual(await run(ctx(CHAIN)));
   });
 
-  test("a cycle does not loop and a large chain stays fast", () => {
+  test("a cycle does not loop and a large chain stays fast", async () => {
     const pages: Spec[] = [{ url: BASE, links: ["/p0"] }];
     for (let i = 0; i < 2000; i++) pages.push({ url: P(`p${i}`), links: [`/p${i + 1}`, "/"] });
     pages.push({ url: P("p2000") });
-    const c = run(ctx(pages));
+    const c = (await run(ctx(pages)));
     expect(c.details?.deepest).toBe(2001);
   }, 20_000);
 

@@ -71,8 +71,8 @@ const CHECK_NAMES: Record<Check, string> = {
 const LOCATION_RE = /^Found in ([a-z-]+(?: \(base64\))?)/;
 
 /** What the rule reported, in the same shape as a case's `expect`. */
-function observed(c: Case): { findings: Expectation[]; ids: string[]; passed: boolean } {
-  const { checks } = leakedSecretsRule.run(ctxFor(c)) as RuleResult;
+async function observed(c: Case): Promise<{ findings: Expectation[]; ids: string[]; passed: boolean }> {
+  const { checks } = (await leakedSecretsRule.run(ctxFor(c))) as RuleResult;
   const findings: Expectation[] = [];
   const ids: string[] = [];
   for (const [check, name] of Object.entries(CHECK_NAMES) as Array<[Check, string]>) {
@@ -282,8 +282,8 @@ describe("security/leaked-secrets corpus: meta (every pattern, derived from its 
 
 describe("security/leaked-secrets corpus: rule output", () => {
   for (const c of ok) {
-    test(c.id, () => {
-      const got = observed(c);
+    test(c.id, async () => {
+      const got = (await observed(c));
       expect(sorted(got.findings)).toEqual(sorted(c.expect));
       for (const pattern of c.mustNotFire ?? []) {
         expect(got.findings.map((f) => f.pattern)).not.toContain(pattern);
@@ -310,8 +310,8 @@ describe("security/leaked-secrets corpus: known gaps (asserting CURRENT behaviou
 
   for (const c of gaps) {
     // The 5 MB size-cap probe scans in full: an explicit budget under load.
-    test(`${c.id} — today: ${c.expect.map((e) => `${e.pattern} (${e.check})`).join(", ") || "nothing"}`, () => {
-      const got = observed(c);
+    test(`${c.id} — today: ${c.expect.map((e) => `${e.pattern} (${e.check})`).join(", ") || "nothing"}`, async () => {
+      const got = (await observed(c));
       expect(sorted(got.findings)).toEqual(sorted(c.expect));
       for (const pattern of c.mustNotFire ?? []) {
         expect(got.findings.map((f) => f.pattern)).not.toContain(pattern);
@@ -324,14 +324,14 @@ describe("security/leaked-secrets corpus: known gaps (asserting CURRENT behaviou
 });
 
 describe("security/leaked-secrets corpus: invariants", () => {
-  test("the same value in three locations is reported once, at the last location scanned", () => {
+  test("the same value in three locations is reported once, at the last location scanned", async () => {
     const c = CASES.find((k) => k.id === "probe:same-value-in-three-locations-reports-once")!;
     const raw = rawScan(c);
     // html (meta) + html (script, via the serialized document) is one html
     // scan with one value, then the inline script, then the external script.
     expect(raw.map((f) => f.location)).toEqual(["html", "inline-script", "external-script"]);
     expect(new Set(raw.map((f) => f.value)).size).toBe(1);
-    const got = observed(c);
+    const got = (await observed(c));
     expect(got.findings).toHaveLength(1);
     expect(got.findings[0]?.location).toBe("external-script");
   });
@@ -347,9 +347,9 @@ describe("security/leaked-secrets corpus: invariants", () => {
     throw new Error("known gap");
   });
 
-  test("masking keeps the head and tail only", () => {
+  test("masking keeps the head and tail only", async () => {
     const c = CASES.find((k) => k.id === "github-personal-access-token@window-env")!;
-    const [id] = observed(c).ids;
+    const [id] = (await observed(c)).ids;
     const masked = id!.slice(id!.lastIndexOf(": ") + 2);
     expect(masked).toMatch(/^.{6}\*{10,20}.{4}$/);
     expect(masked.startsWith(c.secret!.slice(0, 6))).toBe(true);
