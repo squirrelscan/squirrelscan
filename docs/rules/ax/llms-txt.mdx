@@ -19,7 +19,7 @@ The rule runs once per crawl against the root `/llms.txt`, with `/.well-known/ll
 
 An alternate-path hit counts only when the probe returned 200, the body did not sniff as HTML, and the content read as Markdown. The format check tests that the first non-empty line matches an H1 with text after the hash, counts every `[text](url)` link, and tries to parse each link URL against the site's base URL. The rule's severity is info, so a `warn` check surfaces as a recommendation and does not move the score. The SPA-fallback result is the exception: a file that claims to be curated content and is not is a `fail`.
 
-A probe goes unsent when [discovery probes](/configuration/crawler#discovery-probes) are turned off, when no rule that reads it was enabled for the crawl, or when the crawl's preamble time budget ran out first. A probe that went out and got no answer, a refused connection or a timeout, counts the same. None of those says anything about the site, so the result is `not-checked`, never absent, and the rule is listed under `notChecked` so a finding of it stays open.
+A probe goes unsent when [discovery probes](/configuration/crawler#discovery-probes) are turned off, when no rule that reads it was enabled for the crawl, or when the crawl's preamble time budget ran out first. A probe that went out and got no answer, a refused connection, a timeout or a 5xx answer, counts the same. Only a 404 or 410 says the file is absent. None of those says anything about the site, so the result is `not-checked`, never absent, and the rule is listed under `notChecked` so a finding of it stays open.
 
 ## How to fix it
 

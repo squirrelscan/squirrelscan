@@ -66,6 +66,12 @@ export const orphanPageRule: Rule = {
         }
       }
     }
+    // A truncated or partly read sitemap corpus cannot prove a page is unlisted, so absence
+    // from it is not evidence (#1760): such a page is reported for review only and is
+    // never escalated toward "likely injected".
+    const sm = ctx.site?.sitemaps;
+    const corpusIncomplete =
+      sm?.truncated === true || sm?.readState === "partial" || sm?.readState === "unreadable";
     const hasSitemap = sitemapUrls.size > 0;
 
     // Inbound internal link counts (normalized target → count).
@@ -151,7 +157,7 @@ export const orphanPageRule: Rule = {
         };
         signalCount = detectPageSignals(pageCtx).size;
       }
-      hidden.push({ url: page.url, escalated: signalCount >= 1 });
+      hidden.push({ url: page.url, escalated: !corpusIncomplete && signalCount >= 1 });
     }
 
     if (hidden.length === 0) {
@@ -187,10 +193,12 @@ export const orphanPageRule: Rule = {
       checks.push({
         name: "orphan-page-review",
         status: "info",
-        message: `${reviewOnly.length} hidden page(s): in no sitemap and linked from nowhere (review)`,
+        message: corpusIncomplete
+          ? `${reviewOnly.length} hidden page(s): linked from nowhere and not in the sitemap, which was only partly read (review)`
+          : `${reviewOnly.length} hidden page(s): in no sitemap and linked from nowhere (review)`,
         value: listOf(reviewOnly),
         items: reviewOnly.map((h) => ({ id: h.url })),
-        details: { total: reviewOnly.length, hasSitemap, escalated: false },
+        details: { total: reviewOnly.length, hasSitemap, escalated: false, ...(corpusIncomplete ? { sitemapIncomplete: true } : {}) },
       });
     }
 

@@ -17,7 +17,7 @@ function emptyFile(url: string): LlmsTxtFile {
   return { url, exists: false, content: null, sizeBytes: 0 };
 }
 
-// Fetch one well-known file; a 404/error-status/oversize file is "absent", never
+// Fetch one well-known file; a 404/410 or oversize file is "absent", never
 // a throw. null when there was no answer at all: the budget was spent before the
 // request went out, it failed or timed out in flight, or the site refused it
 // (401/403/429, a bot wall). Nothing learned (#409).
@@ -45,9 +45,15 @@ async function fetchOne(
           await response.body?.cancel().catch(() => {});
           return null;
         }
-        if (response.status === 404 || !response.ok) {
+        // Only a 404/410 is evidence of absence. A 5xx (or any other non-ok status) is
+        // no answer about the file, so it must not read as "no llms.txt" (#1760).
+        if (response.status === 404 || response.status === 410) {
           await response.body?.cancel().catch(() => {});
           return emptyFile(url);
+        }
+        if (!response.ok) {
+          await response.body?.cancel().catch(() => {});
+          return null;
         }
         // The content-length pre-check is a cheap fast path only: it is absent on a
         // chunked response and reports the COMPRESSED size on an encoded one, so it
@@ -76,7 +82,7 @@ async function fetchOne(
 }
 
 // Fetch /llms.txt + /llms-full.txt from the domain root once per audit. null
-// when /llms.txt got no answer (skipped by the budget, refused, timed out):
+// when /llms.txt got no answer (skipped by the budget, refused, 5xx, timed out):
 // there is no finding to store, and the rule reports "not checked" rather than
 // a missing file (#409).
 export function fetchLlmsTxt(

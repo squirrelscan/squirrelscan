@@ -553,6 +553,22 @@ describe("integrity/orphan-page", () => {
     expect(items.some((u) => u.includes("/calendly"))).toBe(true);
   });
 
+  // #1760: a truncated or partly read sitemap cannot prove a page is unlisted, so the
+  // hidden page is review-only, never escalated toward "likely injected".
+  for (const state of [{ truncated: true }, { readState: "partial" as const }, { readState: "unreadable" as const }]) {
+    test(`incomplete sitemap corpus (${JSON.stringify(state)}) never escalates a hidden page`, async () => {
+      const pages = fullSitePages();
+      const sitemapLocs = [`${SITE}/`, `${SITE}/services`, `${SITE}/about`, `${SITE}/contact`];
+      const ctx = siteCtx(pages, { sitemapLocs });
+      Object.assign(ctx.site!.sitemaps!, state);
+      const checks = await run(orphanPageRule, ctx);
+      expect(checks.find((c) => c.name === "orphan-page" && c.status === "fail")).toBeUndefined();
+      const review = find(checks, "orphan-page-review");
+      expect(review?.status).toBe("info");
+      expect((review?.items ?? []).some((i) => i.id.includes("/calendly"))).toBe(true);
+    });
+  }
+
   test("all pages linked + in sitemap → pass", async () => {
     const home = themed(
       "Home",

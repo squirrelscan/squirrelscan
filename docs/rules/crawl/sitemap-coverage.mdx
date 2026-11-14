@@ -99,6 +99,10 @@ Glossary: [X-Robots-Tag](/glossary#x-robots-tag), [XML sitemap](/glossary/xml-si
 - [Build and submit a sitemap, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap)
 - [Sitemaps overview, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/sitemaps/overview)
 
+## When the sitemap was only partly read
+
+If the sitemap walk was truncated, or a child sitemap failed or hit a cap or deadline, a crawled page's absence from the sitemap says nothing, because the page may be listed in the part that was not read. The missing-page check is then reported as skipped with the reason `Sitemap incomplete (truncated or partly read)`, never as pages missing from the sitemap. The related `integrity/orphan-page` rule likewise reports a hidden page for review only, and never escalates it toward a likely injected page, while the sitemap is incomplete.
+
 ## Check your site
 
 Run `squirrel audit https://example.com` and open the Crawlability section of the report. Both gaps are listed by URL, with the missing-page share as a percentage. Signed-out local audits need no account and cost nothing. Signed-in audits spend credits.
