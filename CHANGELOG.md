@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- A page of deeply nested links no longer holds an audit in the parser (#1844). Parsing 20,000 directly nested anchors took 45 s, and now takes about 0.2 s. A link's text now stops at a link nested inside it, as a browser reads the page (the browser closes an open link when the next one starts): the inner link's text belongs to the inner link alone and is no longer repeated in every link around it. Pages without nested links parse as before.
+
 ## v0.0.182 (2026-11-14)
 
 The JSON report now says, for every rule, whether it ran and what it covered (schema 1.20), and `squirrel report --diff` uses that to count a finding as fixed only when the rule actually looked again: a finding that is gone because its rule was skipped, timed out or never saw the page is listed as not compared instead. A broken link in a site's header, navigation or footer is now its own site-wide check, reported once with the number of pages it is on. Published reports carry a page map so the hosted service can list a report's pages, and cloud credit top-ups go up to $5,000 with bonus credits above $100.
