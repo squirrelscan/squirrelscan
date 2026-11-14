@@ -2018,6 +2018,7 @@ export function createCrawler(
             // so core/charset sees a header-only declaration (pub#674).
             contentTypeCharset: contentTypeCharset(result.headers.contentType),
             contentEncoding: result.headers.contentEncoding ?? null,
+            ...(result.headers.recorded === false ? { recorded: false } : {}),
             cacheControl: result.headers.cacheControl ?? null,
             expires: result.headers.expires ?? null,
             vary: result.headers.vary ?? null,

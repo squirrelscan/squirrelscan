@@ -691,9 +691,14 @@ function extractResponseHeaders(headers: Headers): ResponseHeaders {
   // (packages/fetchers/src/index.ts) and the hosted render path so rules see
   // one shape regardless of which fetcher produced the page.
   const setCookies = headers.getSetCookie();
+  let any = false;
+  headers.forEach(() => {
+    any = true;
+  });
   return {
     contentType: headers.get("content-type"),
     contentEncoding: headers.get("content-encoding"),
+    ...(any ? {} : { recorded: false }),
     cacheControl: headers.get("cache-control"),
     expires: headers.get("expires"),
     vary: headers.get("vary"),

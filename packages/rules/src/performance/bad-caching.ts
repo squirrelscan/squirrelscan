@@ -122,6 +122,17 @@ function judgeExpires(
   return expiresAt > reference ? "lifetime" : "expired";
 }
 
+// Header names are case-insensitive (RFC 9110 5.1); the map a rule gets is lowercase when the
+// crawler built it, but a custom fetcher or an older record can hand over `ETag` (repo#2240).
+function lowercaseKeys(headers: Record<string, string> | undefined): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(headers ?? {})) {
+    const name = key.toLowerCase();
+    if (!(name in out)) out[name] = value;
+  }
+  return out;
+}
+
 export const badCachingRule: Rule = {
   meta: {
     id: "perf/bad-caching",
@@ -144,13 +155,18 @@ export const badCachingRule: Rule = {
     const checks: CheckResult[] = [];
 
     // Only consider successful HTML responses we actually have headers for.
-    const pages = (ctx.site?.pages ?? []).filter(
-      (p) =>
-        p.statusCode >= 200 &&
-        p.statusCode < 300 &&
-        p.headers &&
-        (p.headers["content-type"] ?? "").includes("text/html")
-    );
+    // A page whose headers could not be recorded says nothing about the site, so it is not
+    // counted as lacking a validator or a policy (repo#2240).
+    const pages = (ctx.site?.pages ?? [])
+      .filter((p) => p.headersRecorded !== false)
+      .map((p) => ({ ...p, headers: p.headers ? lowercaseKeys(p.headers) : p.headers }))
+      .filter(
+        (p) =>
+          p.statusCode >= 200 &&
+          p.statusCode < 300 &&
+          p.headers &&
+          (p.headers["content-type"] ?? "").includes("text/html")
+      );
 
     if (pages.length === 0) {
       checks.push({

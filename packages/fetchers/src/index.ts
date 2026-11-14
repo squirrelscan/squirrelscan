@@ -192,6 +192,21 @@ function headersToRecord(headers: Headers): Record<string, string> {
   return result;
 }
 
+/**
+ * Lowercases header names from a remote render service so a server's `ETag` or
+ * `Cache-Control` is stored under the key every reader looks up (repo#2240).
+ * Repeated names (differing only by case) keep the first value.
+ */
+export function lowercaseHeaderNames(headers: Record<string, string> | null | undefined): Record<string, string> {
+  const result: Record<string, string> = Object.create(null);
+  for (const [key, value] of Object.entries(headers ?? {})) {
+    if (typeof value !== "string") continue;
+    const name = key.toLowerCase();
+    if (!(name in result)) result[name] = value;
+  }
+  return result;
+}
+
 type Send = (url: string, init: RequestInit) => Promise<Response>;
 
 // `decompress: false` is a Bun fetch option returning the undecoded bytes.
@@ -616,7 +631,7 @@ export function createBrowserQueueDocumentFetcher(
             url: statusData.result.sourceUrl,
             finalUrl: statusData.result.finalUrl,
             status: statusData.result.status,
-            headers: statusData.result.headers,
+            headers: lowercaseHeaderNames(statusData.result.headers),
             body: statusData.result.body,
             redirectChain: statusData.result.redirectChain
               ? {

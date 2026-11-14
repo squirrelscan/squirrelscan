@@ -308,6 +308,14 @@ export function buildTechHeadersMap(page: PageRecord): Record<string, string> {
   return overlayTechHeaders(buildHeadersMap(page), page.headers.techHeaders);
 }
 
+/**
+ * False when the fetcher returned no headers for this page, so a missing ETag
+ * or Cache-Control proves nothing (repo#2240). Absent reads as recorded.
+ */
+export function recordsResponseHeaders(page: PageRecord): boolean {
+  return page.headers?.recorded !== false;
+}
+
 export function buildHeadersMap(page: PageRecord): Record<string, string> {
   const headers: Record<string, string> = {};
   if (page.headers.contentType) {

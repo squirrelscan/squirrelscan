@@ -595,6 +595,11 @@ export interface SiteData {
      * before they were recorded, where absence proves nothing.
      */
     versionHeadersRecorded?: boolean;
+    /**
+     * False when the fetcher returned no response headers for this page: absence of
+     * any header in `headers` then means "not recorded", not "not sent" (repo#2240).
+     */
+    headersRecorded?: boolean;
   }>;
   robotsTxt: RobotsTxtData | null;
   sitemaps: SitemapDiscovery | null;

@@ -495,6 +495,12 @@ export interface ResponseHeaders {
    */
   contentTypeCharset?: string | null;
   contentEncoding: string | null;
+  /**
+   * False when the fetcher returned no response headers at all, so a null
+   * field below means "not recorded", not "the server sent none" (repo#2240).
+   * Absent reads as recorded (records stored before this field).
+   */
+  recorded?: boolean;
   cacheControl: string | null;
   /**
    * Legacy Expires header — freshness fallback when Cache-Control has no

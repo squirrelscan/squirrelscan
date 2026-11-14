@@ -723,3 +723,28 @@ describe("perf/bad-caching no-store (#1754)", () => {
     expect(msg).toContain("2 set no caching policy");
   });
 });
+
+describe("perf/bad-caching header names and unrecorded headers (repo#2240)", () => {
+  test("reads ETag and Cache-Control sent with non-lowercase names", async () => {
+    const ctx = siteCtx(
+      ["a", "b", "c"].map((n) => ({
+        url: `https://example.com/${n}`,
+        headers: { ETag: '"abc"', "Cache-Control": "public, max-age=0, must-revalidate" },
+      }))
+    );
+    const checks = await run(badCachingRule, ctx);
+    expect(check(checks, "bad-caching-validators")?.status).toBe("pass");
+    expect(verdict(checks, "bad-caching-freshness")).toBe("ok");
+  });
+
+  test("does not count a page whose headers were not recorded as lacking a validator", async () => {
+    const ctx = siteCtx([
+      { url: "https://example.com/a", headers: { etag: '"x"' } },
+      { url: "https://example.com/b", headers: {} },
+      { url: "https://example.com/c", headers: {} },
+    ]);
+    for (const p of ctx.site!.pages.slice(1)) p.headersRecorded = false;
+    const checks = await run(badCachingRule, ctx);
+    expect(check(checks, "bad-caching-validators")?.status).toBe("pass");
+  });
+});
