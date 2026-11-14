@@ -16,14 +16,14 @@ import {
 } from "../src/content/unrendered-markup";
 import type { ParsedPage, RuleContext } from "../src/types";
 
-function run(html: string) {
+async function run(html: string) {
   const { document } = parseHTML(html);
   const ctx: RuleContext = {
     page: { url: "https://example.com/", html, statusCode: 200, loadTime: 0, headers: {} },
     parsed: { document } as unknown as ParsedPage,
     options: {},
   };
-  return unrenderedMarkupRule.run(ctx).checks;
+  return (await unrenderedMarkupRule.run(ctx)).checks;
 }
 
 const page = (body: string) => `<html><head><title>t</title></head><body>${body}</body></html>`;
@@ -260,72 +260,72 @@ describe("isCodeLikeElement", () => {
 });
 
 describe("unrenderedMarkupRule", () => {
-  test("pass on a clean page", () => {
-    const checks = run(page("<h1>Welcome</h1><p>We sell excellent coffee beans.</p>"));
+  test("pass on a clean page", async () => {
+    const checks = await run(page("<h1>Welcome</h1><p>We sell excellent coffee beans.</p>"));
     expect(checks[0]?.status).toBe("pass");
   });
 
-  test("warn on one or two stray markdown occurrences", () => {
-    const checks = run(page("<p>We are **the best** at coffee.</p>"));
+  test("warn on one or two stray markdown occurrences", async () => {
+    const checks = await run(page("<p>We are **the best** at coffee.</p>"));
     expect(checks[0]?.status).toBe("warn");
     expect(checks[0]?.value).toBe(1);
   });
 
-  test("fail once markdown is systemic", () => {
-    const checks = run(
+  test("fail once markdown is systemic", async () => {
+    const checks = await run(
       page("<p>**one** and **two** and **three** and [docs](https://example.com/d)</p>"),
     );
     expect(checks[0]?.status).toBe("fail");
   });
 
-  test("fail on visible escaped HTML even once", () => {
+  test("fail on visible escaped HTML even once", async () => {
     // Source: `&lt;p&gt;Welcome&lt;/p&gt;` — nothing renders that on purpose.
-    const checks = run(page("<p>&lt;p&gt;Welcome&lt;/p&gt;</p>"));
+    const checks = await run(page("<p>&lt;p&gt;Welcome&lt;/p&gt;</p>"));
     expect(checks[0]?.status).toBe("fail");
     const kindList = (checks[0]?.details as { kinds: { kind: string }[] }).kinds.map((k) => k.kind);
     expect(kindList).toContain("escaped-html-tag");
   });
 
-  test("fail on a visible double-encoded entity", () => {
-    const checks = run(page("<p>Ten&amp;nbsp;dollars a month</p>"));
+  test("fail on a visible double-encoded entity", async () => {
+    const checks = await run(page("<p>Ten&amp;nbsp;dollars a month</p>"));
     expect(checks[0]?.status).toBe("fail");
   });
 
-  test("visible backticks alone do not accuse the page", () => {
+  test("visible backticks alone do not accuse the page", async () => {
     // Vercel's docs landing page carries a copyable agent prompt written in
     // markdown. Six visible code spans, nothing else, nothing broken.
     const prompt =
       "<p>Install the CLI globally (`npm i -g vercel`) and log in with `vercel login`. " +
       "Then run `vercel link`, `vercel env pull` and `vercel deploy`.</p>";
-    expect(run(page(prompt))[0]?.status).toBe("pass");
+    expect((await run(page(prompt)))[0]?.status).toBe("pass");
   });
 
-  test("backticks corroborate once something real fires", () => {
-    const checks = run(page(`${NAV}<main><p>## Setup</p><p>Run \`vercel deploy\` to ship</p></main>`));
+  test("backticks corroborate once something real fires", async () => {
+    const checks = await run(page(`${NAV}<main><p>## Setup</p><p>Run \`vercel deploy\` to ship</p></main>`));
     expect(checks[0]?.status).not.toBe("pass");
     const kindList = (checks[0]?.details as { kinds: { kind: string }[] }).kinds.map((k) => k.kind);
     expect(kindList).toContain("markdown-inline-code");
     expect(kindList).toContain("markdown-heading");
   });
 
-  test("a bare escaped div with its closing tag counts", () => {
+  test("a bare escaped div with its closing tag counts", async () => {
     // The issue names `&lt;div&gt;` explicitly. It carries a closing form here,
     // which is what separates a leak from a page documenting the element.
-    expect(run(page("<p>&lt;div&gt;Contents&lt;/div&gt;</p>"))[0]?.status).toBe("fail");
+    expect((await run(page("<p>&lt;div&gt;Contents&lt;/div&gt;</p>")))[0]?.status).toBe("fail");
   });
 
-  test("skipped when the document is missing", () => {
+  test("skipped when the document is missing", async () => {
     const ctx: RuleContext = {
       page: { url: "https://example.com/", html: "", statusCode: 200, loadTime: 0, headers: {} },
       parsed: { document: null } as unknown as ParsedPage,
       options: {},
     };
-    const checks = unrenderedMarkupRule.run(ctx).checks;
+    const checks = (await unrenderedMarkupRule.run(ctx)).checks;
     expect(checks[0]?.status).toBe("skipped");
     expect(checks[0]?.skipReason).toBe("Parse error");
   });
 
-  test("skipped when there is no body", () => {
+  test("skipped when there is no body", async () => {
     const { document } = parseHTML("<html><head><title>t</title></head></html>");
     document.querySelector("body")?.remove();
     const ctx: RuleContext = {
@@ -333,13 +333,13 @@ describe("unrenderedMarkupRule", () => {
       parsed: { document } as unknown as ParsedPage,
       options: {},
     };
-    const checks = unrenderedMarkupRule.run(ctx).checks;
+    const checks = (await unrenderedMarkupRule.run(ctx)).checks;
     expect(checks[0]?.status).toBe("skipped");
     expect(checks[0]?.skipReason).toBe("no-body");
   });
 
-  test("the message names a real example, flattened to one line", () => {
-    const checks = run(page("<p>Read [our docs](https://docs.example.com/start) today</p>"));
+  test("the message names a real example, flattened to one line", async () => {
+    const checks = await run(page("<p>Read [our docs](https://docs.example.com/start) today</p>"));
     expect(checks[0]?.message).toContain("[our docs](https://docs.example.com/start)");
     expect(checks[0]?.message).not.toContain("\n");
   });
@@ -368,19 +368,19 @@ const a = 1;
 Some **bold** copy the author is still editing.</textarea>
   `);
 
-  test("stays clean", () => {
-    const checks = run(docsPage);
+  test("stays clean", async () => {
+    const checks = await run(docsPage);
     expect(checks[0]?.status).toBe("pass");
   });
 
-  test("the same page warns once one line escapes its code block", () => {
+  test("the same page warns once one line escapes its code block", async () => {
     // Same document, one paragraph moved out of <code>: the exclusion is doing
     // the work, not the patterns.
     const leaked = docsPage.replace(
       "<p>Wrap a phrase in asterisks to emphasise it:</p>",
       "<p>Wrap a phrase in **asterisks** to [emphasise](https://example.com/e) it</p>",
     );
-    expect(run(leaked)[0]?.status).toBe("warn");
+    expect((await run(leaked))[0]?.status).toBe("warn");
   });
 
   // "Stays clean" is only evidence if the SAME markup, outside the container,
@@ -418,15 +418,15 @@ Some **bold** copy the author is still editing.</textarea>
     ],
   ];
 
-  test.each(containers)("%s is silent, and the same markup outside it is not", (_, inside, outside) => {
-    expect(run(page(inside))[0]?.status).toBe("pass");
-    expect(run(page(outside))[0]?.status).not.toBe("pass");
+  test.each(containers)("%s is silent, and the same markup outside it is not", async (_, inside, outside) => {
+    expect((await run(page(inside)))[0]?.status).toBe("pass");
+    expect((await run(page(outside)))[0]?.status).not.toBe("pass");
   });
 
-  test("a skipped subtree does not glue its neighbours into a match", () => {
+  test("a skipped subtree does not glue its neighbours into a match", async () => {
     // Without a boundary between excluded subtrees, `**` + `**` reads back as
     // bold text that exists in neither fragment.
-    const checks = run(page("<p>**<code>x</code>**</p>"));
+    const checks = await run(page("<p>**<code>x</code>**</p>"));
     expect(checks[0]?.status).toBe("pass");
   });
 });
@@ -507,20 +507,20 @@ describe("unrenderedMarkupRule: adversarial input stays linear", () => {
 // half. Every fixture puts the markup after chrome, so none of them passes by
 // sitting at the body's first byte.
 describe("unrenderedMarkupRule: block boundaries on a real page shape", () => {
-  test("a leaked heading is found after the site chrome", () => {
-    expect(run(page(`${NAV}<main><p>## Pricing</p></main>`))[0]?.status).toBe("warn");
+  test("a leaked heading is found after the site chrome", async () => {
+    expect((await run(page(`${NAV}<main><p>## Pricing</p></main>`)))[0]?.status).toBe("warn");
   });
 
-  test("a leaked fence is found after the site chrome", () => {
-    expect(run(page(`${NAV}<main><p>\`\`\`js</p><p>const a = 1</p></main>`))[0]?.status).toBe(
+  test("a leaked fence is found after the site chrome", async () => {
+    expect((await run(page(`${NAV}<main><p>\`\`\`js</p><p>const a = 1</p></main>`)))[0]?.status).toBe(
       "warn",
     );
   });
 
-  test("emphasis in adjacent list items is not lost at the seam", () => {
+  test("emphasis in adjacent list items is not lost at the seam", async () => {
     // Glued, `*a b*</li><li>*c d*` runs together and the flanking fails on both.
     expect(
-      run(page(`${NAV}<main><ul><li>*a b*</li><li>*c d*</li></ul></main>`))[0]?.status,
+      (await run(page(`${NAV}<main><ul><li>*a b*</li><li>*c d*</li></ul></main>`)))[0]?.status,
     ).toBe("warn");
   });
 
@@ -534,27 +534,27 @@ describe("unrenderedMarkupRule: block boundaries on a real page shape", () => {
     ["adjacent options", "<select><option>Sort by *</option><option>price* asc</option></select>"],
   ];
 
-  test.each(glued)("%s cannot glue into a match", (_, body) => {
-    expect(run(page(`${NAV}<main>${body}</main>`))[0]?.status).toBe("pass");
+  test.each(glued)("%s cannot glue into a match", async (_, body) => {
+    expect((await run(page(`${NAV}<main>${body}</main>`)))[0]?.status).toBe("pass");
   });
 
-  test("a tag whole within one block is still reported", () => {
+  test("a tag whole within one block is still reported", async () => {
     // The boundary must suppress assembled matches, not real ones sitting
     // entirely inside a single block.
     expect(
-      run(page(`${NAV}<main><p>x</p><span>&lt;p&gt;y&lt;/p&gt;</span></main>`))[0]?.status,
+      (await run(page(`${NAV}<main><p>x</p><span>&lt;p&gt;y&lt;/p&gt;</span></main>`)))[0]?.status,
     ).toBe("fail");
   });
 
-  test("a heading split across blocks does not invent a match", () => {
-    expect(run(page(`${NAV}<main><p>Rated ##</p><p>Pricing details</p></main>`))[0]?.status).toBe(
+  test("a heading split across blocks does not invent a match", async () => {
+    expect((await run(page(`${NAV}<main><p>Rated ##</p><p>Pricing details</p></main>`)))[0]?.status).toBe(
       "pass",
     );
   });
 
-  test("chrome itself is judged, not skipped", () => {
+  test("chrome itself is judged, not skipped", async () => {
     expect(
-      run(page(`<header><nav><p>## Menu</p></nav></header><main><p>Copy.</p></main>`))[0]?.status,
+      (await run(page(`<header><nav><p>## Menu</p></nav></header><main><p>Copy.</p></main>`)))[0]?.status,
     ).toBe("warn");
   });
 });
