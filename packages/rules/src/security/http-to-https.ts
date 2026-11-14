@@ -17,6 +17,15 @@ export const optionsSchema = z.object({
     .max(HTTP_PROBE_LIMITS.MAX_SAMPLE_SIZE)
     .default(HTTP_PROBE_LIMITS.DEFAULT_SAMPLE_SIZE)
     .describe("Maximum number of pages to probe for HTTP→HTTPS redirects"),
+  probeBudgetMs: z
+    .number()
+    .int()
+    .min(1000)
+    .max(600_000)
+    .default(HTTP_PROBE_LIMITS.PROBE_TOTAL_BUDGET_MS)
+    .describe(
+      "Total time budget in milliseconds for all probes; when it runs out the rule reports partial coverage"
+    ),
 });
 
 // Add delay between probes to prevent rate limiting
@@ -43,17 +52,48 @@ export interface ProbeResult {
 }
 
 /**
+ * What one http:// probe found.
+ * - `redirects`: the chain ended on https://.
+ * - `insecure`: the http:// URL answered (or redirected within http) and never
+ *   reached https://.
+ * - `unverified`: no verdict (request failed, rate limited, error status,
+ *   redirect loop, off-host target). Not a finding: a host that does not listen
+ *   on port 80 at all lands here.
+ */
+export interface ProbeOutcome {
+  from: string;
+  to: string;
+  kind: "redirects" | "insecure" | "unverified";
+  statusCode?: number;
+  chain?: RedirectChain;
+}
+
+export interface ProbeReport {
+  /** One entry per url that was actually probed, in input order. */
+  outcomes: ProbeOutcome[];
+  /** Urls never started because the total budget ran out. */
+  notProbed: number;
+}
+
+function classify(chain: RedirectChain): ProbeOutcome["kind"] {
+  if (chain.isLoop) return "unverified";
+  if (chain.httpToHttps || chain.finalUrl.startsWith("https://")) return "redirects";
+  if (chain.endsInError || chain.endsRateLimited) return "unverified";
+  return "insecure";
+}
+
+/**
  * Probe HTTP variants of sample urls with a bounded worker pool. The serial
  * 500ms-per-probe loop dominated the entire rules phase (~10s for 20 urls);
  * 5 workers with a 100ms intra-worker stagger keep the politeness property
- * while finishing in ~1s. Results preserve input order. Exported for tests.
+ * while finishing in ~1s. Outcomes preserve input order. Exported for tests.
  */
-export async function probeHttpVariants(
+export async function probeHttpCoverage(
   urls: string[],
   baseUrl: string,
   probe: (httpUrl: string) => Promise<RedirectChain>,
   options?: { concurrency?: number; staggerMs?: number; budgetMs?: number }
-): Promise<ProbeResult[]> {
+): Promise<ProbeReport> {
   const concurrency = Math.max(
     1,
     options?.concurrency ?? HTTP_PROBE_LIMITS.PROBE_CONCURRENCY
@@ -62,19 +102,21 @@ export async function probeHttpVariants(
   // #1252: total wall-clock budget for the whole probe. This step runs inside
   // the rules phase and re-hits the target host, so a tarpit could stretch it
   // across minutes; once the budget is spent, workers stop pulling new URLs and
-  // the rule reports on whatever subset it already probed. In-flight probes are
-  // separately bounded by the per-hop timeout in followRedirects.
+  // the rule reports on whatever subset it already probed (#1269: and says so).
+  // In-flight probes are separately bounded by the per-hop timeout in
+  // followRedirects.
   const budgetMs =
     options?.budgetMs && options.budgetMs > 0
       ? options.budgetMs
       : HTTP_PROBE_LIMITS.PROBE_TOTAL_BUDGET_MS;
   const deadlineAt = Date.now() + budgetMs;
 
-  const results: Array<ProbeResult | null> = new Array(urls.length).fill(null);
+  const results: Array<ProbeOutcome | undefined> = new Array(urls.length).fill(undefined);
   let nextIndex = 0;
+  let notProbed = 0;
 
   async function worker(workerIndex: number): Promise<void> {
-    // Stagger worker start too — without this all workers fire their first
+    // Stagger worker start too: without this all workers fire their first
     // probe simultaneously, bursting the audited host with `concurrency`
     // requests at t=0.
     let first = true;
@@ -82,34 +124,39 @@ export async function probeHttpVariants(
       const index = nextIndex++;
       if (index >= urls.length) return;
       // Stop launching new probes once the total budget is spent (#1252).
-      if (Date.now() >= deadlineAt) return;
+      if (Date.now() >= deadlineAt) {
+        notProbed++;
+        continue;
+      }
       const startDelay = first ? workerIndex * staggerMs : staggerMs;
       if (startDelay > 0) await delay(startDelay);
       first = false;
+      if (Date.now() >= deadlineAt) {
+        notProbed++;
+        continue;
+      }
 
       const url = urls[index]!;
+      let from = "";
       try {
         const httpUrl = new URL(url);
         httpUrl.protocol = "http:";
+        from = httpUrl.toString();
 
         // Double-check probe target is valid
-        if (!isValidProbeTarget(httpUrl.toString(), baseUrl)) continue;
+        if (!isValidProbeTarget(from, baseUrl)) continue;
 
-        const chain = await probe(httpUrl.toString());
-
-        // Skip circular redirects (already detected in followRedirects)
-        if (chain.isLoop) continue;
-
-        if (chain.httpToHttps || chain.finalUrl.startsWith("https://")) {
-          results[index] = {
-            from: httpUrl.toString(),
-            to: chain.finalUrl,
-            statusCode: chain.hops[0]?.statusCode,
-            chain,
-          };
-        }
+        const chain = await probe(from);
+        results[index] = {
+          from,
+          to: chain.finalUrl,
+          kind: classify(chain),
+          statusCode: chain.hops[0]?.statusCode,
+          chain,
+        };
       } catch {
-        continue;
+        // The probe threw (e.g. connection refused on port 80): no verdict.
+        if (from) results[index] = { from, to: "", kind: "unverified" };
       }
     }
   }
@@ -118,7 +165,23 @@ export async function probeHttpVariants(
     Array.from({ length: Math.min(concurrency, urls.length) }, (_, i) => worker(i))
   );
 
-  return results.filter((r): r is ProbeResult => r !== null);
+  return {
+    outcomes: results.filter((r): r is ProbeOutcome => r !== undefined),
+    notProbed,
+  };
+}
+
+/** The probes that redirected to https://. Kept for callers that only want those. */
+export async function probeHttpVariants(
+  urls: string[],
+  baseUrl: string,
+  probe: (httpUrl: string) => Promise<RedirectChain>,
+  options?: { concurrency?: number; staggerMs?: number; budgetMs?: number }
+): Promise<ProbeResult[]> {
+  const report = await probeHttpCoverage(urls, baseUrl, probe, options);
+  return report.outcomes
+    .filter((o) => o.kind === "redirects")
+    .map((o) => ({ from: o.from, to: o.to, statusCode: o.statusCode, chain: o.chain }));
 }
 
 export const httpToHttpsRule: Rule = {
@@ -183,34 +246,63 @@ export const httpToHttpsRule: Rule = {
       sampleUrls.add(page.url);
     }
 
-    const redirected = await probeHttpVariants(
+    const sampled = sampleUrls.size;
+    const report = await probeHttpCoverage(
       Array.from(sampleUrls),
       ctx.site.baseUrl,
-      followRedirects
+      (httpUrl) => followRedirects(httpUrl),
+      { budgetMs: opts.probeBudgetMs }
     );
 
-    if (redirected.length > 0) {
+    const insecure = report.outcomes.filter((o) => o.kind === "insecure");
+    const redirected = report.outcomes.filter((o) => o.kind === "redirects");
+    const unverified = report.outcomes.filter((o) => o.kind === "unverified").length;
+    const partial = report.notProbed > 0;
+    const coverage = `${report.outcomes.length} of ${sampled} URL(s) probed`;
+    const partialNote = partial
+      ? `; partial coverage: the ${opts.probeBudgetMs} ms probe budget ran out, ${report.notProbed} URL(s) not probed (raise probeBudgetMs or lower sampleLimit)`
+      : "";
+    const details = {
+      sampled,
+      probed: report.outcomes.length,
+      redirected: redirected.length,
+      insecure: insecure.length,
+      unverified,
+      notProbed: report.notProbed,
+      partial,
+      probeBudgetMs: opts.probeBudgetMs,
+    };
+
+    if (insecure.length > 0) {
       checks.push({
         name: "http-to-https",
-        status: "warn",
-        message: `${redirected.length} HTTP URL(s) redirect to HTTPS`,
-        items: redirected.map((entry) => ({
+        status: "fail",
+        message: `${insecure.length} HTTP URL(s) do not redirect to HTTPS (${coverage}${partialNote})`,
+        items: insecure.map((entry) => ({
           id: entry.from,
           label: entry.statusCode
-            ? `${entry.from} → ${entry.to} (${entry.statusCode})`
-            : `${entry.from} → ${entry.to}`,
-          meta: {
-            statusCode: entry.statusCode,
-            chain: entry.chain,
-          },
+            ? `${entry.from} answered ${entry.statusCode} over HTTP without redirecting to HTTPS`
+            : `${entry.from} did not redirect to HTTPS`,
+          meta: { statusCode: entry.statusCode, chain: entry.chain },
         })),
-        details: { total: redirected.length, sampled: sampleUrls.size },
+        details,
+      });
+    } else if (partial || redirected.length === 0) {
+      checks.push({
+        name: "http-to-https",
+        status: "info",
+        message:
+          redirected.length === 0 && !partial
+            ? `Could not verify HTTP to HTTPS redirects (${coverage}, ${unverified} without a verdict)`
+            : `No HTTP URL found without an HTTPS redirect, ${coverage}${partialNote}`,
+        details,
       });
     } else {
       checks.push({
         name: "http-to-https",
         status: "pass",
-        message: "No HTTP to HTTPS redirects detected in sample",
+        message: `${redirected.length} sampled HTTP URL(s) redirect to HTTPS`,
+        details,
       });
     }
 

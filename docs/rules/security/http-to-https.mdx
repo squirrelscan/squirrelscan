@@ -1,6 +1,6 @@
 ---
 title: "HTTP to HTTPS redirect: how squirrel probes for it"
-description: "squirrel requests the http:// version of a sample of your URLs and reports which ones redirect to HTTPS, with the status code of the first hop."
+description: "squirrel requests the http:// version of a sample of your URLs and reports the ones that answer over plain HTTP without redirecting to HTTPS."
 ---
 
 ## What an HTTP to HTTPS redirect is
@@ -16,10 +16,11 @@ The rule is site-wide and makes live network requests. It builds a sample of sam
 - Skipped when there is no base URL. Message: `No base URL available`.
 - Skipped when the base URL does not parse. Message: `Invalid base URL`.
 - Skipped when the base URL is not HTTPS. Message: `Base URL is not HTTPS`.
-- Warn when at least one probed URL redirects to HTTPS. Message: `12 HTTP URL(s) redirect to HTTPS`, with each entry labelled `http://example.com/ → https://example.com/ (301)`.
-- Pass when none do. Message: `No HTTP to HTTPS redirects detected in sample`.
+- Fail when at least one probed URL answers over plain HTTP and never reaches HTTPS. Message: `3 HTTP URL(s) do not redirect to HTTPS (20 of 20 URL(s) probed)`, with each entry labelled `http://example.com/page answered 200 over HTTP without redirecting to HTTPS`.
+- Pass when every probed URL redirects to HTTPS. Message: `20 sampled HTTP URL(s) redirect to HTTPS`.
+- Info when nothing could be verified (no listener on port 80, errors, rate limiting) or the run was partial and found no failure. A URL that cannot be reached over HTTP at all gets no verdict and is not a finding.
 
-Read the warn status as an inventory rather than a defect: it lists the HTTP URLs that are still reachable and redirecting. Probes run five at a time with a 100 ms stagger, each hop times out after 10 seconds and chains stop at 10 hops. A 20 second budget stops workers picking up new URLs, so the rule reports on the subset it started; probes already in flight are still awaited and can finish after the budget expires. Redirect loops are skipped. A redirect to a scheme other than `http` or `https`, to a link-local or cloud metadata address such as `169.254.169.254`, or to another host whose DNS answers include one (or whose lookup fails) is not followed: the chain stops at that redirect.
+Probes run five at a time with a 100 ms stagger, each hop times out after 10 seconds and chains stop at 10 hops. Each probe is one `HEAD` request without retries, sent with the same user agent and headers as the crawl. A total budget (default 20 seconds, `probeBudgetMs`) stops workers picking up new URLs; probes already in flight are still awaited. When the budget runs out the check says so: the message reads `partial coverage` with the number of URLs not probed, and `details.partial` is `true`, so a slow host is never reported as clean. Raise `probeBudgetMs` or lower `sampleLimit` to cover the whole sample. Redirect loops get no verdict. A redirect to a scheme other than `http` or `https`, to a link-local or cloud metadata address such as `169.254.169.254`, or to another host whose DNS answers include one (or whose lookup fails) is not followed: the chain stops at that redirect. With `--offline`, a redirect to another host is not followed either.
 
 On a local or private-network host, such as `localhost` or `192.168.1.10`, the rule is skipped and left out of the score, because a dev server is not the production edge. See [Transport and delivery rules do not apply](/guides/local-audits-cli#transport-and-delivery-rules-do-not-apply).
 
@@ -48,12 +49,14 @@ Redirect in one hop, preserving the path and query string, and use 301 rather th
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `sampleLimit` | integer, 1 to 100 | `20` | Maximum number of pages to probe for HTTP to HTTPS redirects |
+| `probeBudgetMs` | integer, 1000 to 600000 | `20000` | Total time budget for all probes, in milliseconds. When it runs out the rule reports partial coverage |
 
 ### Configuration example
 
 ```toml squirrel.toml
 [rule_options."security/http-to-https"]
 sampleLimit = 40
+probeBudgetMs = 60000
 ```
 
 ## Enable / disable
@@ -103,7 +106,7 @@ Glossary: [HTTPS](/glossary/https).
 
 ## Check your site
 
-Run `squirrel audit https://example.com` and open the Security section of the report. Each probed HTTP URL is listed with its destination and status code. Signed-out local audits need no account and cost nothing. Signed-in audits spend credits.
+Run `squirrel audit https://example.com` and open the Security section of the report. Each HTTP URL that does not redirect is listed with its status code. Signed-out local audits need no account and cost nothing. Signed-in audits spend credits.
 
 <CardGroup cols={2}>
   <Card title="Install squirrel" icon="terminal" href="/quickstart">

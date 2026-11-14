@@ -3,6 +3,7 @@
 // Uses plain fetch with browser-like headers
 
 import { withRequestDeadline } from "@squirrelscan/crawler/deadline";
+import { setRequestAsync } from "@squirrelscan/rules";
 import { fetchUndecoded } from "@squirrelscan/utils/response-body";
 import { Effect, Schedule, Duration, Data } from "effect";
 
@@ -473,4 +474,64 @@ export async function requestTextAsync(
   options?: RequestInit
 ): Promise<string> {
   return Effect.runPromise(requestText(url, options));
+}
+
+// ============================================
+// RULE PROBE REQUEST (security/http-to-https, #1269)
+// ============================================
+
+/**
+ * One attempt, no retries, never follows a redirect on its own unless the caller
+ * asks: the redirect probe in @squirrelscan/rules walks the chain by hand and
+ * vets every hop against the egress policy. Shares the configured user agent,
+ * browser headers and deadline with every other request, so a tarpit is cut off
+ * at `timeout` and a retry storm cannot stretch the rules phase.
+ */
+export async function requestProbeAsync(
+  url: string,
+  options?: RequestInit
+): Promise<Response> {
+  return Effect.runPromise(
+    Effect.suspend(() => {
+      const headers = new Headers(options?.headers);
+      applyBrowserHeaders(headers, config.userAgent);
+      return fetchWithDeadline(
+        url,
+        options,
+        headers,
+        options?.redirect ?? "manual",
+        config.timeout,
+        (response, timing) =>
+          bufferResponse(response).then(
+            (r) => (logRequest(url, options, r, timing), r)
+          )
+      );
+    })
+  );
+}
+
+/**
+ * Give the rules package its HTTP client (it throws "not injected" otherwise,
+ * which `security/http-to-https` used to swallow, so the rule never fired).
+ * `ownSiteHost` (--offline) refuses any request to another host, so a redirect
+ * off the audited site is not followed.
+ */
+export function installRuleRequestTool(opts?: { ownSiteHost?: string }): void {
+  const only = opts?.ownSiteHost?.toLowerCase();
+  setRequestAsync((url, options) => {
+    if (only) {
+      let host = "";
+      try {
+        host = new URL(url).hostname.toLowerCase();
+      } catch {
+        // fall through: refused below
+      }
+      if (host !== only) {
+        return Promise.reject(
+          new Error("offline: request to another host refused")
+        );
+      }
+    }
+    return requestProbeAsync(url, options);
+  });
 }

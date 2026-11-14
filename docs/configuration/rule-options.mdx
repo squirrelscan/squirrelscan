@@ -553,17 +553,19 @@ max_depth = 40
 
 #### `security/http-to-https`
 
-Probe whether the `http://` versions of your URLs redirect to HTTPS. The rule requests a sample of URLs over plain HTTP and lists the ones that redirect.
+Probe whether the `http://` versions of your URLs redirect to HTTPS. The rule requests a sample of URLs over plain HTTP and lists the ones that do not redirect to HTTPS.
 
 **Options:**
 
 ```toml
 [rule_options."security/http-to-https"]
-sampleLimit = 20   # Most URLs to probe (1 to 100)
+sampleLimit = 20        # Most URLs to probe (1 to 100)
+probeBudgetMs = 20000   # Total probe time in ms (1000 to 600000); partial coverage is reported when it runs out
 ```
 
 **Default:**
 - `sampleLimit: 20`
+- `probeBudgetMs: 20000`
 
 **Examples:**
 
@@ -571,10 +573,12 @@ Probe more of a large site:
 ```toml
 [rule_options."security/http-to-https"]
 sampleLimit = 100
+probeBudgetMs = 120000
 ```
 
 **Why configure:**
 - A larger sample covers more of a big site
+- A slow host needs a longer budget, or the check reports partial coverage
 - A smaller one makes fewer live requests to your server
 
 ---

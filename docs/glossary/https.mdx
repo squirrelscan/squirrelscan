@@ -29,7 +29,7 @@ The HTTPS and redirect rules are skipped on `localhost` and private-network host
 | Rule | What it flags | Severity |
 |---|---|---|
 | [HTTPS: what it means when a page is not served over HTTPS](/rules/security/https) | A page delivered over plain HTTP can be read and rewritten in transit. squirrel flags every crawled URL whose protocol is not https. | error |
-| [HTTP to HTTPS redirect: how squirrel probes for it](/rules/security/http-to-https) | squirrel requests the http:// version of a sample of your URLs and reports which ones redirect to HTTPS, with the status code of the first hop. | warning |
+| [HTTP to HTTPS redirect: how squirrel probes for it](/rules/security/http-to-https) | squirrel requests the http:// version of a sample of your URLs and reports the ones that answer over plain HTTP without redirecting to HTTPS. | warning |
 | [Form action over HTTP: the insecure form submission warning](/rules/security/form-https) | A form on an HTTPS page that posts to http:// sends the data in the clear and browsers interstitial it. squirrel checks action and formaction. | error |
 | [Links from an HTTPS page to an http:// destination](/rules/links/https-downgrade) | A link that drops the visitor to plain HTTP hands their next request to the network. squirrel flags every explicit http:// link on an HTTPS page. | warning |
 
