@@ -24,6 +24,7 @@ How it works:
 ### Fixed
 
 - A page of deeply nested links no longer holds an audit in the parser (#1844). Parsing 20,000 directly nested anchors took 45 s, and now takes about 0.2 s. A link's text now stops at a link nested inside it, as a browser reads the page (the browser closes an open link when the next one starts): the inner link's text belongs to the inner link alone and is no longer repeated in every link around it. Pages without nested links parse as before.
+- `--max-duration` now also bounds the start-URL redirect check; a silent host no longer runs the audit past its budget (#1853).
 
 ## v0.0.182 (2026-11-14)
 
