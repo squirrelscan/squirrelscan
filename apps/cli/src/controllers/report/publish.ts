@@ -171,7 +171,7 @@ function hasPageChecks(report: AuditReport): boolean {
  * capper refused it before the POST or the API refused the body (413).
  */
 export function payloadTooLargeMessage(): string {
-  return `Report exceeds maximum allowed size (${PUBLISHED_REPORT_MAX_BYTES / 1024 / 1024}MB).\nTry reducing the number of pages audited.`;
+  return `Report could not be capped to fit the ${PUBLISHED_REPORT_MAX_BYTES / 1024 / 1024}MB publish limit.\nThe full detail stays in your local project: run 'squirrel report' to view or export it.`;
 }
 
 /**

@@ -19,6 +19,7 @@ How it works:
 
 ### Changed
 
+- When a report cannot be published because it is over the 1MB publish limit, the CLI no longer suggests auditing fewer pages (published reports are capped to fit, so that advice was wrong). It now says the report could not be capped to fit and that the full detail stays in your local project (`squirrel report`).
 - Release binaries are built with `NODE_ENV` pinned to `"production"` (`bun build --production --define process.env.NODE_ENV='"production"'`), so test-only knobs gated on `NODE_ENV === "test"` are compiled out whatever the build environment exports (#1839). Bundled React now uses its production build for the HTML report; report output is unchanged.
 
 ### Fixed

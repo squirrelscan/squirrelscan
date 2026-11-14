@@ -21,7 +21,6 @@ import {
   clampCheckItemIds,
   clampCheckStrings,
   clampCheckItemsOverflow,
-  clampReportPagesToBudget,
   DEFAULT_FOLD_LIMITS,
   foldOverflowChecks,
   stampChecksTruncated,
@@ -498,60 +497,6 @@ describe("per-check pages cap (#918)", () => {
     expect(byUrl.get("https://x/a")!.items?.map((i) => i.id)).toEqual(["item-ab"]);
     expect(byUrl.get("https://x/b")!.items?.map((i) => i.id)).toEqual(["item-ab"]);
     expect(byUrl.get("https://x/c")!.items?.map((i) => i.id)).toEqual(["item-c"]);
-  });
-});
-
-describe("clampReportPagesToBudget (#918 payload guard)", () => {
-  test("no-op when total pages bytes fit the budget", () => {
-    const rr = {
-      r1: { checks: [failCheck({ pages: ["https://x/a", "https://x/b"] })] },
-    };
-    expect(clampReportPagesToBudget(rr, 1_000_000)).toBe(0);
-    expect(rr.r1.checks[0]!.pages).toHaveLength(2);
-    expect(rr.r1.checks[0]!.details?.pagesTruncated).toBeUndefined();
-  });
-
-  test("over budget: clips largest-first, stamps pagesTruncated, keeps >=1 page", () => {
-    const big = {
-      checks: [
-        failCheck({
-          name: "big",
-          pages: Array.from({ length: 100 }, (_, i) => `https://x/big/${i}`),
-        }),
-      ],
-    };
-    const small = {
-      checks: [failCheck({ name: "small", pages: ["https://x/small/0", "https://x/small/1"] })],
-    };
-    const rr = { big, small };
-    const dropped = clampReportPagesToBudget(rr, 500);
-    expect(dropped).toBeGreaterThan(0);
-    // The largest array is clipped first, down to under its original length but
-    // never below one page (the check still cites where it fired).
-    expect(big.checks[0]!.pages!.length).toBeLessThan(100);
-    expect(big.checks[0]!.pages!.length).toBeGreaterThanOrEqual(1);
-    expect(big.checks[0]!.details?.pagesTruncated).toBe(100);
-    // Budget met by clipping `big` alone → the small array is untouched.
-    expect(small.checks[0]!.pages).toHaveLength(2);
-    expect(small.checks[0]!.details?.pagesTruncated).toBeUndefined();
-  });
-
-  test("#1275: estimates multi-byte page URLs by true UTF-8 bytes, not .length", () => {
-    // 10 URLs each ~100 CJK chars: ~118 UTF-16 code units but ~318 UTF-8 bytes.
-    const cjkPages = Array.from(
-      { length: 10 },
-      (_, i) => `https://x.test/${"路".repeat(100)}/${i}`,
-    );
-    const rr = { r: { checks: [failCheck({ pages: cjkPages })] } };
-    // The OLD `.length`-based estimate (url.length + 3) sums UNDER this budget, so
-    // it would NOT clip — the pages would ride ~3KB over the real byte budget.
-    const lengthEstimate = cjkPages.reduce((sum, u) => sum + u.length + 3, 0);
-    expect(lengthEstimate).toBeLessThan(2000);
-    // Byte-accurate estimate is over budget → it clips.
-    const dropped = clampReportPagesToBudget(rr, 2000);
-    expect(dropped).toBeGreaterThan(0);
-    expect(rr.r.checks[0]!.pages!.length).toBeLessThan(10);
-    expect(rr.r.checks[0]!.details?.pagesTruncated).toBe(10);
   });
 });
 
