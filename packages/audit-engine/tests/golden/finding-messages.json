@@ -3813,6 +3813,12 @@
    "csp-blocks-own-resources|pass|No enforced Content-Security-Policy to check (security/csp covers a missing policy)||"
   ]
  },
+ "security/exposed-actuator": {
+  "digest": "111694927425978",
+  "lines": [
+   "exposed-actuator-not-checked|skipped|Probing is passive, so no Spring Boot Actuator path was probed. Run with --probe active to check for exposed actuator endpoints.||"
+   ]
+  },
  "security/exposed-files": {
   "digest": "88417882991078",
   "lines": [
