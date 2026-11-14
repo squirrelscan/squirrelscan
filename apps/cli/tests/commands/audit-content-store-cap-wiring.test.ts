@@ -41,6 +41,7 @@ import { closeGlobalLinkCache } from "@/crawler/storage/link-cache";
 import { SQLiteStorage } from "@/crawler/storage/sqlite";
 import { logger } from "@/utils/logger";
 
+import { fastCrawlConfig } from "../helpers/fast-crawl-config";
 import { isolateSquirrelHome } from "../helpers/scratch-squirrel-home";
 
 // Each test runs one or two real audits.
@@ -109,7 +110,10 @@ class ExitSignal extends Error {
 function withHome(name: string, config: string): void {
   home = squirrelHome.use(name);
   const configPath = join(scratch, `${name}.toml`);
-  writeFileSync(configPath, `[cloud]\npublish = false\n${config}`);
+  writeFileSync(
+    configPath,
+    fastCrawlConfig(`[cloud]\npublish = false\n${config}`)
+  );
   setGlobalConfigPath(configPath);
 }
 

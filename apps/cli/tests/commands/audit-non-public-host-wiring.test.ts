@@ -19,10 +19,22 @@
 // part of it; the contract is that nothing hands the ADDRESS to a hosted
 // runner. The public-host control below is what proves the gate is a gate and
 // not an outage.
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  test,
+} from "bun:test";
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
 
 import { audit } from "@/cli/commands/audit";
+import { getGlobalConfigPath, setGlobalConfigPath } from "@/config";
 
+import { fastCrawlConfig } from "../helpers/fast-crawl-config";
 import { isolateSquirrelHome } from "../helpers/scratch-squirrel-home";
 
 // #2182: a SUCCESSFUL publish now stamps `first_publish_at` in the user
@@ -31,7 +43,18 @@ import { isolateSquirrelHome } from "../helpers/scratch-squirrel-home";
 // write to the developer's REAL ~/.squirrel/settings.json.
 // homedir() is fixed at process start in Bun, so $HOME cannot redirect it;
 // `isolateSquirrelHome` moves every squirrel path instead (#626).
-isolateSquirrelHome("squirrel-audit-host");
+const scratch = isolateSquirrelHome("squirrel-audit-host").root;
+// #1839: skip the per-host politeness sleep the discovery probes pay serially.
+const configPath = join(scratch, "squirrel.toml");
+let previousConfigPath: string | undefined;
+beforeAll(() => {
+  writeFileSync(configPath, fastCrawlConfig(""));
+  previousConfigPath = getGlobalConfigPath();
+  setGlobalConfigPath(configPath);
+});
+afterAll(() => {
+  if (previousConfigPath !== undefined) setGlobalConfigPath(previousConfigPath);
+});
 
 /** Thrown in place of process.exit, so a command exit cannot kill the runner. */
 class ExitSignal extends Error {

@@ -30,6 +30,7 @@ import { closeGlobalContentStore } from "@/crawler/storage/content-store";
 import { closeGlobalLinkCache } from "@/crawler/storage/link-cache";
 import { getSettingsPath } from "@/self/paths";
 
+import { fastCrawlConfig } from "../helpers/fast-crawl-config";
 import { isolateSquirrelHome } from "../helpers/scratch-squirrel-home";
 
 const home = isolateSquirrelHome("squirrel-plugin-packs-1599");
@@ -117,7 +118,9 @@ function installPlugin(): void {
 function writeConfig(extra = ""): void {
   writeFileSync(
     configPath,
-    `[plugins]\nenabled = true\n\n[[plugins.items]]\nid = "acme-pack"\nentry = "./${basename(pluginPath)}"\nallow = ["rules"]\n\n${extra}`
+    fastCrawlConfig(
+      `[plugins]\nenabled = true\n\n[[plugins.items]]\nid = "acme-pack"\nentry = "./${basename(pluginPath)}"\nallow = ["rules"]\n\n${extra}`
+    )
   );
 }
 

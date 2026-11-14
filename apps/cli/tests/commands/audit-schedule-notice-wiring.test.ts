@@ -10,11 +10,23 @@
 // and the squirrel home is a scratch dir from `isolateSquirrelHome`, not
 // $HOME, because homedir() is fixed at process start and a successful publish
 // writes both the settings (`first_publish_at`) and the project database.
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  test,
+} from "bun:test";
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
 
 import { audit } from "@/cli/commands/audit";
+import { getGlobalConfigPath, setGlobalConfigPath } from "@/config";
 import { scheduleSummaryLine } from "@/lib/schedule-notice";
 
+import { fastCrawlConfig } from "../helpers/fast-crawl-config";
 import { isolateSquirrelHome } from "../helpers/scratch-squirrel-home";
 
 const SETTINGS_URL =
@@ -53,7 +65,18 @@ const capped = () => ({
 });
 
 // #626: settings, projects and stores all under one scratch dir.
-isolateSquirrelHome("squirrel-sched");
+const scratch = isolateSquirrelHome("squirrel-sched").root;
+// #1839: skip the per-host politeness sleep the discovery probes pay serially.
+const configPath = join(scratch, "squirrel.toml");
+let previousConfigPath: string | undefined;
+beforeAll(() => {
+  writeFileSync(configPath, fastCrawlConfig(""));
+  previousConfigPath = getGlobalConfigPath();
+  setGlobalConfigPath(configPath);
+});
+afterAll(() => {
+  if (previousConfigPath !== undefined) setGlobalConfigPath(previousConfigPath);
+});
 
 class ExitSignal extends Error {
   constructor(readonly code: number) {
