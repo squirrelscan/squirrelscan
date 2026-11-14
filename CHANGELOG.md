@@ -17,6 +17,20 @@ How it works:
 
 ## [Unreleased]
 
+### Changed
+
+- internal: TLS probe moved to its own package
+- Credit top-ups go up to $5,000 (was $1,000). The bonus is unchanged up to $1,000 and is a flat 20% above it, so $5,000 buys 600,000 credits. Core contracts: `CREDIT_TOPUP.maxUsd` is 5,000, `TOPUP_BONUS_CURVE` gains `endUsd` (1,000), and `TOPUP_SCHEDULE_USD` adds $2,500 and $5,000. squirrelscan/repo#4314
+
+### Added
+
+- Credit top-ups above $100 earn bonus credits on a smooth curve, to 20% at $1,000 (`topupQuote`, `topupBonusSchedule` and `TOPUP_BONUS_CURVE` in `@squirrelscan/core-contracts`). Base and bonus credits are returned separately. The docs list the schedule.
+- Published reports carry an optional `pageMap` section (the rows of `squirrel pages`, failed pages included), so the hosted API and MCP can list a stored report's pages. `squirrel audit --publish` and `squirrel report --publish` send it. It is capped at 1,000 pages (shallowest first) with `truncated`, `stored` and `total` counts, and the publish capper drops it (`detail.pageMapDropped`) before reducing any issue sample if the report would not fit. Core contracts gain `PageMapSchema`, `PageMapRowSchema` and `PAGE_MAP_PUBLISH_LIMITS`; the engine side is `readPageMapRows` (`@squirrelscan/audit-engine/page-map-rows`, shared by the CLI and the cloud runtime) and `buildPageMap` and `projectPageMap` (`@squirrelscan/report/page-map-publish`). The public API docs gain `GET /v1/reports/{id}/pages`. squirrelscan/repo#4172, #701
+
+## v0.0.181 (2026-11-13)
+
+Reports now tell you where a site actually lives: a new host section lists its IPv4 and IPv6 addresses, a connect time and the country (offline, from a bundled DB-IP Lite snapshot), and names the CDN or WAF in front of it separately from the origin. Every report also says whether robots.txt was honoured and how many pages it kept out. A site that blocks every AI crawler with one wildcard rule gets one row instead of one per crawler, installs and updates verify the release's GitHub build attestation when `gh` is available, and discovery probes you never approved show up as coverage gaps instead of false verdicts.
+
 ### Added
 
 - Every report says whether the audit honoured robots.txt and how many pages it kept out of the audit (#1782): the console, text, markdown, HTML and LLM reports carry one plain sentence, and the JSON report (schema 1.19) carries `meta.respectRobots` and `meta.robotsBlockedPages`. A run with `respect_robots = false` says robots.txt was not honoured and pages it disallows were audited too. Reports the audit engine assembles (`buildV1Report`, `buildV2Report`) stamp the same two fields on `scanScope` when the caller passes a `scanScope` option, so a hosted run reports them too.
@@ -27,8 +41,7 @@ How it works:
 ### Fixed
 
 - Discovery probes that were not approved, not sent or refused now appear as coded coverage gaps in notChecked, keeping previous findings open; an approved AGENTS.md probe answered with 404 is reported as absent (#1794).
-- `ax/ai-crawlers` reports one grouped row when only `User-agent: *` blocks the AI crawlers (#1780), instead of one row per crawler. The row (`ai-crawlers-wildcard-blocked`) names the wildcard rule and lists the affected crawlers, and stays info when `crawl/robots-txt` already fails on the same whole-site block. Crawlers the file blocks by name keep their own rows. When `User-agent: *` with `Disallow: /` is the only decision (no AI crawler or search engine named, no `Allow` exception), that row is the only check the rule emits, at info, pointing at `crawl/robots-txt`; a named group that decides differently (for example a `Googlebot` group allowing the site) keeps the `search-engine-access` check.
-- Sites that block AI crawlers only through `User-agent: *` now get one grouped row; those crawlers no longer count toward ai-answer-access or archive-crawler-access, so some scores move.
+- `ax/ai-crawlers` reports one grouped row when only `User-agent: *` blocks the AI crawlers (#1780), instead of one row per crawler. The row (`ai-crawlers-wildcard-blocked`) names the wildcard rule and lists the affected crawlers, and stays info when `crawl/robots-txt` already fails on the same whole-site block. Crawlers the file blocks by name keep their own rows. When `User-agent: *` with `Disallow: /` is the only decision (no AI crawler or search engine named, no `Allow` exception), that row is the only check the rule emits, at info, pointing at `crawl/robots-txt`; a named group that decides differently (for example a `Googlebot` group allowing the site) keeps the `search-engine-access` check. Those crawlers no longer count toward ai-answer-access or archive-crawler-access, so some scores move.
 - Pricing version 13 adds the `llm_rules_page` credit feature: 2 credits per page when an audit opts into LLM rules. Audits that do not opt in cost the same as before.
 
 ### Changed

@@ -537,7 +537,19 @@ export const report = defineCommand({
         return safeExit(1);
       }
 
-      const publishResult = await publishReport(reportData, { visibility });
+      const publishResult = await publishReport(reportData, {
+        visibility,
+        // repo#4172: a stored audit publishes its page rows too. A report read
+        // from a file has no store to read them from.
+        ...(source.dbPath && reportData.crawlId
+          ? {
+              pageMapSource: {
+                dbPath: source.dbPath,
+                crawlId: reportData.crawlId,
+              },
+            }
+          : {}),
+      });
 
       if (!publishResult.ok) {
         console.error(`Failed to publish: ${publishResult.error.message}`);

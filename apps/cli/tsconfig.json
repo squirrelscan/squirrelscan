@@ -24,6 +24,7 @@
       "@squirrelscan/crawler/*": ["../../packages/crawler/src/*"],
       "@squirrelscan/fetchers": ["../../packages/fetchers/src/index.ts"],
       "@squirrelscan/fetchers/*": ["../../packages/fetchers/src/*"],
+      "@squirrelscan/tls-probe": ["../../packages/tls-probe/src/index.ts"],
       "@squirrelscan/page-classifier": [
         "../../packages/page-classifier/src/index.ts"
       ],

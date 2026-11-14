@@ -3,8 +3,10 @@
  */
 
 import type { WebsiteScheduleSummary } from "@squirrelscan/cloud-client";
+import type { PageMap } from "@squirrelscan/core-contracts/page-map";
 
 import { computeLockedRules } from "@squirrelscan/audit-engine";
+import { readPublishedPageMap } from "@squirrelscan/audit-engine/page-map-rows";
 import {
   capReportForPublish,
   PublishedReportTooLargeError,
@@ -60,6 +62,12 @@ export interface PublishOptions {
   // #1167: surface a non-fatal notice (e.g. the degrade pass clipped detail to
   // fit the publish limit). The audit command passes its `log`; absent → silent.
   onWarn?: (message: string) => void;
+  /**
+   * Where this report's audit is stored (repo#4172). When set, the page rows of that audit ride
+   * the publish body as the capped `pageMap` section, so the hosted API and MCP can list pages.
+   * Absent for a report loaded from a file (no store to read): it publishes without one.
+   */
+  pageMapSource?: { dbPath: string; crawlId: string };
 }
 
 export interface PublishResult {
@@ -284,7 +292,16 @@ export async function publishReport(
   // skeleton alone is over the budget, which no real shape comes near.
   let slimmed: ReturnType<typeof slimForPublish>;
   try {
-    slimmed = slimForPublish(report);
+    slimmed = slimForPublish(
+      report,
+      options.pageMapSource
+        ? await loadPublishPageMap(
+            report,
+            options.pageMapSource,
+            options.onWarn
+          )
+        : undefined
+    );
   } catch (error) {
     // Too large: the same message as the API's refusal of the body below.
     if (error instanceof PublishedReportTooLargeError) {
@@ -642,6 +659,35 @@ export function pickHomepageSummary(
   };
 }
 
+/**
+ * The audit's page rows as the published `pageMap`, read from its project store. A page map is
+ * report-only data, so a store that cannot be read costs the map and a warning, never the
+ * publish.
+ */
+async function loadPublishPageMap(
+  report: AuditReport,
+  source: { dbPath: string; crawlId: string },
+  onWarn?: (message: string) => void
+): Promise<PageMap | null> {
+  if (!existsSync(source.dbPath)) return null;
+  const storage = new SQLiteStorage(source.dbPath, getGlobalContentStore());
+  try {
+    await Effect.runPromise(storage.init());
+    return await Effect.runPromise(
+      readPublishedPageMap(storage, { id: source.crawlId }, report.baseUrl)
+    );
+  } catch (error) {
+    onWarn?.(
+      `Published without the page map (${error instanceof Error ? error.message : String(error)}).`
+    );
+    return null;
+  } finally {
+    await Effect.runPromise(
+      storage.close().pipe(Effect.catchAll(() => Effect.void))
+    );
+  }
+}
+
 /** What the CLI adds to a report before it is capped for publish. */
 type CliPublishReport = AuditReport & {
   generatorVersion: string;
@@ -672,12 +718,14 @@ type CliPublishReport = AuditReport & {
  */
 // Exported for tests (publish-slim.test.ts) — not part of the module's API.
 export function slimForPublish(
-  report: AuditReport
+  report: AuditReport,
+  pageMap?: PageMap | null
 ): CappedReport<CliPublishReport> {
   const homepage = pickHomepageSummary(report);
   return capReportForPublish<CliPublishReport>(
     {
       ...report,
+      ...(pageMap ? { pageMap } : {}),
       generatorVersion: version,
       lockedRules: computeLockedRules(report),
       ...(homepage ? { homepage } : {}),

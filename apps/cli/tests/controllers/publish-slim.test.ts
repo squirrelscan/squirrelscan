@@ -4,6 +4,7 @@
 // pin what the CLI's publish body adds and keeps on top of it.
 
 import { REPORT_CAPS } from "@squirrelscan/core-contracts/limits";
+import { buildPageMap } from "@squirrelscan/report/page-map-publish";
 import { decodeResolutionSignal } from "@squirrelscan/rules/resolution-decode";
 import { describe, expect, test } from "bun:test";
 
@@ -186,5 +187,56 @@ describe("slimForPublish resolution signal (#1185)", () => {
     expect(JSON.stringify(slim.pageStatuses).length).toBeLessThanOrEqual(
       REPORT_CAPS.pageStatusesMaxBytes
     );
+  });
+});
+
+describe("slimForPublish page map (repo#4172)", () => {
+  const map = buildPageMap(
+    [
+      {
+        url: "https://example.com/",
+        finalUrl: "https://example.com/",
+        status: 200,
+        depth: 0,
+        canonical: null,
+        noindex: false,
+        title: "Home",
+        titleLength: 4,
+        description: null,
+        descriptionLength: 0,
+        h1Count: 1,
+        h1: "Home",
+        headingCount: 1,
+        wordCount: 120,
+        schemaTypes: [],
+        schemaIds: [],
+        inlinks: 0,
+        internalOutlinks: 0,
+        externalOutlinks: 0,
+        externalDomains: [],
+        loadTimeMs: null,
+        lastModified: null,
+        flags: [],
+      },
+    ],
+    { site: "https://example.com" }
+  )!;
+
+  test("rides the published body when the caller has one", () => {
+    const slim = slimForPublish(makeReport([]), map);
+    expect(slim.pageMap?.stored).toBe(1);
+    expect(slim.pageMap?.pages[0]?.url).toBe("https://example.com/");
+  });
+
+  test("is absent when the caller has none", () => {
+    expect(slimForPublish(makeReport([])).pageMap).toBeUndefined();
+  });
+
+  test("never lands on the local report", () => {
+    const report = makeReport([]);
+    slimForPublish(report, map);
+    expect(
+      (report as unknown as Record<string, unknown>).pageMap
+    ).toBeUndefined();
   });
 });

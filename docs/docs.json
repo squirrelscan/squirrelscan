@@ -157,6 +157,7 @@
               "api/reports/publish",
               "api/reports/list",
               "api/reports/get",
+              "api/reports/pages",
               "api/reports/update",
               "api/reports/delete",
               "api/credits/get",

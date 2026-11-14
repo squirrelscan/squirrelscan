@@ -4,7 +4,7 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { createTlsProbe } from "./tls-probe";
+import { createTlsProbe } from "./index";
 
 const noResolve = async (): Promise<string[]> => {
   throw new Error("resolver must not be called");

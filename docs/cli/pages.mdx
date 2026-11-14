@@ -121,6 +121,17 @@ With one audit named, or none, the older side is the audit of the same site that
 
 `--diff` takes `markdown` (default), `json` or `csv`. `--section` and `--page` narrow both sides. `--missing`, `--duplicate`, `--too-long` and `--orphan` are rejected with `--diff`: they select on the state a diff compares, so a page whose title was fixed would stop matching `--missing title` on the newer side and be reported as removed.
 
+## Published reports
+
+`squirrel audit --publish` and `squirrel report --publish` send the page rows with the report, so the hosted API and MCP can list a stored report's pages without re-crawling anything or spending a credit: [`GET /v1/reports/{id}/pages`](/api/reports/pages) and the hosted MCP `list_pages` tool, with `limit`, `offset` and `hasMore`.
+
+- Rows are the ones this command prints, failed pages included, so a 404 keeps its status.
+- The published copy keeps the first 1,000 pages, shallowest first and then by URL, whatever your plan's page ceiling. A larger audit is marked `truncated: true`, with `stored` (rows kept) and `pagesInAudit` (pages crawled) beside it. The full table stays in your project store and in `squirrel pages`.
+- Long text is cut at 512 characters and list columns at 20 entries in the published copy.
+- Like the entity map, the page map is report-only: it never changes the health score, and if a very large report would not fit the publish size limit, the page map is dropped before any issue sample is reduced (`detail.pageMapDropped`).
+- A report published from a JSON file has no project store to read, so it carries no page map and the endpoint answers 404 for it.
+- The hosted `orphan` filter keeps pages with `inlinks` of 0: no incoming internal link in that audit's observed crawl graph. That is not proof of a site-wide orphan, because a page can be linked from somewhere the crawl did not reach. The local `--orphan` flag selects on the orphan rule's own threshold instead.
+
 ## Exit codes
 
 The command exits `0` whenever it has an answer: an audit with no matching pages prints an empty table, and a store with no audit prints how to create one. It exits `1` for a usage mistake (an unknown `--missing`, `--duplicate` or `--format` value) or a project store it cannot read. `--diff` with a format it does not support, or with a state filter, is also a usage error.

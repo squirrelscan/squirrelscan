@@ -1,6 +1,6 @@
 {
   "name": "@squirrelscan/cli",
-  "version": "0.0.180",
+  "version": "0.0.181",
   "description": "Free CLI for SEO, performance & security audits. Built for Claude Code, Cursor, and AI workflows.",
   "bin": {
     "squirrelscan": "./build/squirrelscan"
@@ -29,6 +29,7 @@
     "@squirrelscan/parser": "workspace:*",
     "@squirrelscan/report": "workspace:*",
     "@squirrelscan/rules": "workspace:*",
+    "@squirrelscan/tls-probe": "workspace:*",
     "@squirrelscan/utils": "workspace:*",
     "citty": "^0.1.6",
     "effect": "^3.21.3",
