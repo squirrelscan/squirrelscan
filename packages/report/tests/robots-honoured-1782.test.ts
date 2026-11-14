@@ -63,7 +63,7 @@ describe("renderers", () => {
 
   test("json carries both fields in meta, and drops them on an old report", () => {
     const meta = (r: AuditReport) => (JSON.parse(renderJson(r)) as { meta: Record<string, unknown> }).meta;
-    expect(meta(honoured)).toMatchObject({ schemaVersion: "1.19", respectRobots: true, robotsBlockedPages: 7 });
+    expect(meta(honoured)).toMatchObject({ schemaVersion: "1.20", respectRobots: true, robotsBlockedPages: 7 });
     expect(meta(ignored)).toMatchObject({ respectRobots: false, robotsBlockedPages: 0 });
     expect(meta(report({}))).not.toHaveProperty("respectRobots");
   });
