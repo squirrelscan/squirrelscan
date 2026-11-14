@@ -632,6 +632,7 @@
                   "rules/security/unauthenticated-api",
                   "rules/security/exposed-files",
                   "rules/security/auth-endpoint-disclosure",
+                  "rules/security/open-redirect",
                   "rules/security/third-party-cookies",
                   "rules/security/sri",
                   "rules/security/cookie-flags",

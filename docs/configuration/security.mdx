@@ -94,7 +94,7 @@ default.
 
 These rules send requests only when probing is `active` or `aggressive`. Below
 the level a rule needs, it records one skipped check and sends nothing. The GraphQL,
-API and auth endpoint probes and the exposed-files probe go only to the audited origin; see below for the form check. `--offline` does not turn them off: offline is about which hosts are requested, passive is about probing, and they are separate. An offline `surface` or `full` run still probes unless you pass `--passive` (see [Offline and passive are separate](/cli/audit#offline-and-passive-are-separate)).
+API, auth endpoint and open redirect probes and the exposed-files probe go only to the audited origin; see below for the form check. `--offline` does not turn them off: offline is about which hosts are requested, passive is about probing, and they are separate. An offline `surface` or `full` run still probes unless you pass `--passive` (see [Offline and passive are separate](/cli/audit#offline-and-passive-are-separate)).
 
 | Rule | What it sends | Level |
 |------|---------------|-------|
@@ -105,6 +105,7 @@ API and auth endpoint probes and the exposed-files probe go only to the audited 
 | [`security/json-sensitive-fields`](/rules/security/json-sensitive-fields) | One `GET` per same-origin API endpoint found in your pages and scripts whose call site uses `GET` or states no method, at most ten. No cookies, no request body | `active` |
 | [`security/exposed-files`](/rules/security/exposed-files) | One `GET` to a random path (the baseline), then one request per path on a fixed list of 20 sensitive files such as `/.git/HEAD`, `/.env` and `/db.sql`, each a `GET`. Stops on a `429` or a bot challenge | `aggressive` |
 | [`security/auth-endpoint-disclosure`](/rules/security/auth-endpoint-disclosure) | One `GET` per current-user or session endpoint (such as `/api/me` or `/api/session`), at most six. No cookies, no `Authorization` header, no body: credentials are never submitted | `active` |
+| [`security/open-redirect`](/rules/security/open-redirect) | Per same-origin URL with a redirect-shaped query parameter (`next`, `url`, `returnTo` and the like), at most ten: one `GET` with that parameter set to `https://squirrelscan-redirect-probe.invalid/`, and a second with `//squirrelscan-redirect-probe.invalid/` when the first is not redirected off-site. The redirect is never followed | `active` |
 | [`reliability/broken-forms`](/rules/reliability/broken-forms) | One `HEAD` per distinct form action URL the crawl did not fetch, then one `GET` when the `HEAD` is refused or fails. Never a `POST`. A form action on another site is probed only online with external link checks on; an offline run stays on the audited site | `active` |
 
 The GraphQL endpoints are the ones the audit found in your pages and scripts,

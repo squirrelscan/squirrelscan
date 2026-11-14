@@ -1,0 +1,113 @@
+---
+title: "Open redirects: when a redirect parameter sends visitors anywhere"
+description: "A next, url or returnTo parameter that redirects to any host it is given lends your domain to phishing links. squirrel sends an off-site value that cannot resolve and reads the Location header without following it."
+---
+
+## Why an open redirect is a problem
+
+Sign-in pages, language switchers and tracking links often take the page to go to next from the URL: `/login?next=/account`. When the server redirects to whatever that parameter says, anyone can build a link that starts on your domain and ends on theirs:
+
+```text
+https://example.com/login?next=https://evil.example/
+```
+
+The link shows your domain, passes a glance and many link filters, and lands the visitor on a look-alike sign-in page. In an OAuth or single sign-on flow the same flaw can hand a token or authorization code to the other site. The [OWASP cheat sheet on unvalidated redirects](https://cheatsheetseries.owasp.org/cheatsheets/Unvalidated_Redirects_and_Forwards_Cheat_Sheet.html) covers the attack in detail.
+
+## What squirrel checks
+
+This is a probing rule. It sends requests beyond the crawl, so it runs only when [probing intensity](/configuration/security) is `active` or `aggressive`. On a `passive` run it sends nothing and records one skipped check.
+
+### Which URLs are probed
+
+The rule looks for redirect-shaped query parameters in the URLs the audit already found: the crawled page URLs, the internal links on those pages, and the `GET` call sites and form actions that endpoint discovery found in your pages and scripts. Finding them sends no request. A parameter is redirect-shaped when its name is one of `next`, `url`, `redirect`, `redirect_url`, `redirect_to`, `return`, `return_url`, `return_to`, `return_path`, `dest`, `destination`, `continue`, `goto` or `r`. Names match without case, `_` or `-`, so `returnTo`, `return_to` and `return-to` are the same.
+
+Every URL must have the same origin as the audited URL. A path that names a state-changing action, such as `logout`, `delete`, `update` or `reset`, is never probed, and neither is a discovered call site or form that declares any method other than `GET`. Below `aggressive`, a path that `robots.txt` disallows is skipped. Each path and parameter name is probed once, and at most ten are probed per audit.
+
+### What is sent
+
+For each URL and parameter, the same URL with only that parameter replaced:
+
+```text
+GET /login?next=https://squirrelscan-redirect-probe.invalid/
+GET /login?next=//squirrelscan-redirect-probe.invalid/
+```
+
+The second request, the protocol-relative form, is sent only when the first was not redirected off-site. It catches a check that refuses a scheme but lets `//host` through because it starts with `/`. The host is under `.invalid`, a name reserved never to resolve, so even a browser that followed the link would go nowhere.
+
+Requests use `GET` only, carry no cookies and never follow the redirect: the rule reads the status and the `Location` header and does not read the body. They share the audit's probe budget with the other probing rules.
+
+### Results
+
+The rule emits checks named `open-redirect`:
+
+- Skipped when probing is passive. Message: `Probing is passive, so no redirect parameter was probed. Run with --probe active to check for open redirects.`
+- Skipped, with reason `probe-budget`, when the shared probe budget ran out before the first request, or partway through with no finding on the parameters it reached. A run cut short is never reported as a pass.
+- Skipped, with reason `probe-errors`, when every probe failed with a network error or timeout.
+- Warn, one check per page and parameter, when the answer is a `3xx` whose `Location` resolves to the probe host. Message: `Open redirect at https://example.com/login: the next parameter sends visitors to any site it names (a 302 to an off-site host given as an absolute URL)`. The finding names the page by origin and path only: the rest of the query string is never reported.
+- Pass when no parameter redirected off-site. Message: `No redirect parameter sent visitors off-site (4 parameter(s) probed)`.
+
+### What is not flagged
+
+- A redirect that stays on your site, even when its query string repeats the value.
+- A redirect to any other host, such as an allowlisted partner or a fixed sign-in service. Only the probe host proves the value was used as given.
+- A `200` page that prints the value, a `400` or any other answer that is not a redirect.
+
+### Limits
+
+The rule reads the `Location` header only. A page that redirects with a meta refresh or JavaScript after loading is not checked, and neither is a parameter the audit never saw in a URL, such as one that only a script adds.
+
+## How to fix it
+
+Never redirect to a value from the request as it is. Accept only a relative path that starts with a single `/`, and reject `//`, `/\` and anything with a scheme. Better still, map a short key to a fixed list of destinations, or parse the value with a URL parser and check its host against a list of your own hosts. A string check such as `startsWith("/")` is not enough, because `//evil.example` passes it. When the value fails the check, redirect to a safe default page.
+
+| | |
+|---|---|
+| **Rule ID** | `security/open-redirect` |
+| **Category** | [Security](/rules/security) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 5/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["security/open-redirect"]
+```
+
+### Disable all Security rules
+
+```toml squirrel.toml
+[rules]
+disable = ["security/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["security/open-redirect"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `open-redirect` | Problem |  |
+| `open-redirect` | Clean | `open-redirect` |
+| `open-redirect` | Not checked |  |
+
+{/* rule-checks:end */}
+
+## Related rules
+
+- [security/graphql-get-mutations](/rules/security/graphql-get-mutations): another probing rule that never probes a state-changing path.
+- [security/http-to-https](/rules/security/http-to-https): checks that the site's own redirects go where they should.
