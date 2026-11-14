@@ -25,7 +25,7 @@ Cloud audits also run the [third-party rules](/cloud/third-party): who else load
 
 ## Security rules
 
-HTTPS, headers, and safe link practices (25 rules).
+HTTPS, headers, and safe link practices (26 rules).
 
 ## Run only these rules
 
@@ -44,8 +44,8 @@ These carry the highest severity and weight in the category.
 - [Leaked API key in client-side code: how to find one](/rules/security/leaked-secrets): An API key shipped in HTML or a bundle can be read by anyone who views source. squirrel scans every page and script against more than 90 key patterns.
 - [HTTPS: what it means when a page is not served over HTTPS](/rules/security/https): A page delivered over plain HTTP can be read and rewritten in transit. squirrel flags every crawled URL whose protocol is not https.
 - [Password form submitted by GET: the password in the URL warning](/rules/security/password-form-get): A form with a password field and method=get, or no method, puts the password in the URL. squirrel checks method and formmethod on every password form.
+- [Sensitive fields in JSON API responses: password hashes, tokens and PII](/rules/security/json-sensitive-fields): An API that returns whole database rows can hand anyone password hashes, tokens and other users' emails. squirrel requests your own API endpoints without cookies and flags them.
 - [GraphQL mutations over GET: why they open the door to CSRF](/rules/security/graphql-get-mutations): A server that runs a mutation sent as a GET lets any site fire it with your visitors' cookies. squirrel sends a no-op mutation that cannot write and checks the answer.
-- [Mixed content: HTTP resources on an HTTPS page](/rules/security/mixed-content): An HTTPS page that loads a script or stylesheet over HTTP is not secure and browsers block it. squirrel lists every HTTP resource per page.
 
 {/* hub:start-here:end */}
 
@@ -73,6 +73,7 @@ These carry the highest severity and weight in the category.
 | [Referrer-Policy: which value to send and what leaks](/rules/security/referrer-policy) | unsafe-url sends the full URL, query string included, to every site you link to. squirrel reads the header and flags the leaky values. | info | Site-wide |
 | [rel=noopener: external target=_blank links and tabnabbing](/rules/security/new-tab) | An external link with target=_blank and an explicit rel=opener gives the opened page a handle on yours. squirrel lists every one, per page. | warning | Per-page |
 | [security.txt: how to publish a vulnerability disclosure contact](/rules/security/security-txt) | Without a security.txt a researcher who finds a bug has no published route to report it. squirrel checks /.well-known/security.txt against RFC 9116 and flags catch-all HTML pages. | warning | Site-wide |
+| [Sensitive fields in JSON API responses: password hashes, tokens and PII](/rules/security/json-sensitive-fields) | An API that returns whole database rows can hand anyone password hashes, tokens and other users' emails. squirrel requests your own API endpoints without cookies and flags them. | error | Site-wide |
 | [Subresource Integrity: which scripts need an integrity hash](/rules/security/sri) | Cross-origin scripts and stylesheets with no integrity hash can be swapped by a compromised CDN. squirrel lists every one, page by page. | warning | Per-page |
 | [Third-party cookies: which external domains a page loads](/rules/security/third-party-cookies) | Trackers and 1x1 pixels set cookies from domains you do not control. squirrel inventories the third-party scripts, iframes and pixels per page. | info | Per-page |
 | [TLS certificate: expiry, hostname, chain and key checks](/rules/security/tls-certificate) | A certificate that expires, does not cover the hostname, or is missing its intermediate breaks the page for some visitors. squirrel reads the certificate once per host and names each problem. | error | Per-site |

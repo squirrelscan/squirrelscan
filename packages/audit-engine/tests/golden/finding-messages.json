@@ -3812,6 +3812,12 @@
    "https|fail|Page not served over HTTPS|\"http:\"|\"https:\""
   ]
  },
+ "security/json-sensitive-fields": {
+  "digest": "190526034971805",
+  "lines": [
+   "json-api-responses|skipped|Probing is passive, so no API endpoint was requested. Run with --probe active to check JSON responses for sensitive fields.||"
+  ]
+ },
  "security/leaked-secrets": {
   "digest": "190515275948111",
   "lines": [

@@ -623,6 +623,7 @@
                   "rules/security/leaked-secrets",
                   "rules/security/token-storage",
                   "rules/security/graphql-introspection",
+                  "rules/security/json-sensitive-fields",
                   "rules/security/graphql-get-mutations",
                   "rules/security/unauthenticated-api",
                   "rules/security/third-party-cookies",

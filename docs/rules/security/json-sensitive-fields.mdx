@@ -1,0 +1,114 @@
+---
+title: "Sensitive fields in JSON API responses: password hashes, tokens and PII"
+description: "An API that returns whole database rows can hand anyone password hashes, tokens and other users' emails. squirrel requests your own API endpoints without cookies and flags them."
+---
+
+## What over-sharing API responses are
+
+Many apps build their JSON responses by serializing a database row or an ORM model as it is. Every column goes out, including the ones the client never shows: `password_hash`, `salt`, `reset_token`, `api_key`, a card number, or the email and phone number of every other user in the list. The page renders three fields and the network tab shows thirty.
+
+Anyone can open the network tab, so a value in a response is public whether the interface displays it or not. A password hash can be cracked offline, a reset or session token can be replayed, and a list of customer emails is a data breach.
+
+## What squirrel checks
+
+This is a probing rule. It sends requests beyond the crawl, so it runs only when [probing intensity](/configuration/security) is `active` or `aggressive`. On a `passive` run it sends nothing and records one skipped check.
+
+### Which endpoints are requested
+
+Only API endpoints the audit found in your own pages and scripts: a `fetch("/api/users")` or `axios.get(...)` call site, an `/api/...` string literal, or a convention path for your detected stack (see [endpoint discovery](/configuration/security#rules-that-probe)). No path is guessed.
+
+- The endpoint must have the same origin as the audited URL (scheme, host and port). An endpoint on another host, such as a vendor API, is never requested.
+- The call site must use `GET`, or state no method. An endpoint called with `POST`, `PUT`, `PATCH` or `DELETE` is never sent anything.
+- A path or query that names a state-changing action, such as `logout`, `delete`, `update` or `reset`, is skipped, and so are GraphQL endpoints, which [security/graphql-introspection](/rules/security/graphql-introspection) covers.
+- Below `aggressive`, a path that `robots.txt` disallows is skipped.
+- At most ten endpoints are requested.
+
+### What is sent
+
+One `GET` per endpoint, with `Accept: application/json`. It carries no cookies and no credentials and does not follow redirects, so it sees exactly what an anonymous visitor would. At most 1 MB of the answer is read, counted after decompression.
+
+### What is flagged
+
+A 2xx response that is JSON (by its content type, or by starting with `{` or `[`) is parsed and every field is read:
+
+- **Fail, `json-sensitive-fields`**: a credential is in the response. That is a password hash recognised by its format (bcrypt, argon2, scrypt, PBKDF2, crypt), a server-side key the [leaked-secrets](/rules/security/leaked-secrets) patterns recognise (a database connection string, a live Stripe secret key and the like), or a value under a field named for a credential that looks like one: a password, salt, secret, API key or token, a social security number, a card number that passes the Luhn check, or a CVV. One check per endpoint. Message: `https://example.com/api/users returns bcrypt hash, access token to a request without credentials`.
+- **Warn, `json-bulk-pii`**: personal data for many records. Five or more distinct email addresses, five or more distinct phone numbers, or five or more records with a postal address or a date of birth. Role and admin fields in the same response are counted in the message. Message: `https://example.com/api/users returns personal data for many records to a request without credentials: 48 distinct email address(es), 48 distinct phone number(s), and 48 role or admin field(s)`.
+- **Pass, `json-api-responses`**: no requested endpoint returned either. Message: `No JSON response carried sensitive fields or bulk personal data (4 endpoint(s) requested, 3 answered with JSON)`.
+- **Skipped**: probing is passive, the shared probe budget ran out before the endpoints were all requested (`probe-budget`), or every request failed (`probe-errors`). A run cut short is never reported as a pass.
+
+### Values are never reported
+
+No character of a flagged value reaches the report. Each item names the endpoint, the field path with array positions folded (`$.data[].passwordHash`), the kind of value, how many records carried it and the value's length, as in `$.data[].passwordHash = <redacted, 60 chars>`. Field paths are cut at 160 characters, and each endpoint reports at most 20 items.
+
+### What is not flagged
+
+- A field whose value is empty, `null`, a boolean, or a placeholder such as `********` or `[REDACTED]`.
+- A word under a `password` field outside a user-shaped record, such as a translation file's `"password": "Passwort"`.
+- Tokens meant for the browser: CSRF tokens, pagination cursors and CAPTCHA tokens, and keys that are public by design, such as a Firebase `apiKey` or a Stripe publishable key.
+- A single email address, such as a contact address.
+- A non-2xx response, a redirect, an HTML page or a network error.
+
+### Limits
+
+This check sees only what an endpoint gives an anonymous caller. It cannot tell whose records came back, and it cannot prove that one signed-in user can read another's data: testing that takes two accounts. An endpoint that needs a session, one called only with `POST`, or one the crawled pages never reference is not requested. For a response over 1 MB, only the first 1 MB is read, as text: the leaked-secrets patterns and the email count still apply, field names are not judged, and the finding carries `truncated: true` and `confidence: "lower"`.
+
+## How to fix it
+
+- Serialize through an allowlist. Return a DTO or view model, use `select` in the query, or name the fields in your serializer, so a new column never reaches the wire by default.
+- Never send password hashes, salts, reset or session tokens, API keys or full card numbers to a browser.
+- Require authentication on endpoints that list users or customers, scope each response to the caller, and paginate.
+- Rotate any secret or token that has been served, and treat exposed personal data as a possible breach.
+
+| | |
+|---|---|
+| **Rule ID** | `security/json-sensitive-fields` |
+| **Category** | [Security](/rules/security) |
+| **Scope** | Site-wide |
+| **Severity** | error |
+| **Weight** | 8/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["security/json-sensitive-fields"]
+```
+
+### Disable all Security rules
+
+```toml squirrel.toml
+[rules]
+disable = ["security/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["security/json-sensitive-fields"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `json-sensitive-fields` | Problem |  |
+| `json-bulk-pii` | Problem |  |
+| `json-api-responses` | Clean | `json-sensitive-fields`, `json-bulk-pii` |
+| `json-api-responses` | Not checked |  |
+
+{/* rule-checks:end */}
+
+## Related rules
+
+- [security/leaked-secrets](/rules/security/leaked-secrets): the same key patterns, applied to your HTML and JavaScript.
+- [security/graphql-introspection](/rules/security/graphql-introspection): probes the site's GraphQL endpoints for an open schema.
+- [security/token-storage](/rules/security/token-storage): auth tokens your scripts write to web storage.

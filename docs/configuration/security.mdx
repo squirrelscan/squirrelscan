@@ -102,6 +102,7 @@ and API probes go only to the audited origin; see below for the form check. `--o
 | | One `POST` of the same read-only query, only when the `GET` answer is GraphQL without a schema | `aggressive` |
 | [`security/graphql-get-mutations`](/rules/security/graphql-get-mutations) | One `GET /graphql?query=mutation{__typename}` per GraphQL endpoint, at most five. The no-op mutation names no schema field and cannot write | `active` |
 | [`security/unauthenticated-api`](/rules/security/unauthenticated-api) | One `GET` per same-origin API endpoint the audit found, at most ten, with no cookies, no `Authorization` header and no query string. Never a path that only takes `POST`, `PUT`, `PATCH` or `DELETE`, and never a session or state-changing path such as `login`, `logout`, `verify` or `webhook` | `active` |
+| [`security/json-sensitive-fields`](/rules/security/json-sensitive-fields) | One `GET` per same-origin API endpoint found in your pages and scripts whose call site uses `GET` or states no method, at most ten. No cookies, no request body | `active` |
 | [`reliability/broken-forms`](/rules/reliability/broken-forms) | One `HEAD` per distinct form action URL the crawl did not fetch, then one `GET` when the `HEAD` is refused or fails. Never a `POST`. A form action on another site is probed only online with external link checks on; an offline run stays on the audited site | `active` |
 
 The GraphQL endpoints are the ones the audit found in your pages and scripts,
