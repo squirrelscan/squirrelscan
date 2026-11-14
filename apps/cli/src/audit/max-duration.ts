@@ -6,6 +6,8 @@
 // after the budget gets a margin of max(10% of the budget, 15 s) and is then cut.
 // Unset means no budget, and nothing here runs.
 
+import { TEST_MIN_MARGIN_MS_ENV, testOnlyMs } from "@/utils/test-knobs";
+
 /** Smallest margin past the budget, in ms. */
 export const MAX_DURATION_MIN_MARGIN_MS = 15_000;
 /** Margin as a share of the budget. */
@@ -47,11 +49,17 @@ export interface DurationBudget {
   readonly hardStopAt: number;
 }
 
-/** The margin past `budgetMs` the audit may take to wind down: max(10% of the budget, 15 s). */
-export function maxDurationMarginMs(budgetMs: number): number {
+/**
+ * The margin past `budgetMs` the audit may take to wind down: max(10% of the budget, 15 s).
+ * Under `bun test` only, SQUIRREL_TEST_MIN_MARGIN_MS replaces the 15 s floor (#1839).
+ */
+export function maxDurationMarginMs(
+  budgetMs: number,
+  env: Record<string, string | undefined> = process.env
+): number {
   return Math.max(
     Math.ceil(budgetMs * MAX_DURATION_MARGIN_RATIO),
-    MAX_DURATION_MIN_MARGIN_MS
+    testOnlyMs(TEST_MIN_MARGIN_MS_ENV, env) ?? MAX_DURATION_MIN_MARGIN_MS
   );
 }
 

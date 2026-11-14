@@ -31,6 +31,38 @@ describe("margin: max(10% of the budget, 15 s)", () => {
   test("never below the floor", () => {
     expect(maxDurationMarginMs(1)).toBe(MAX_DURATION_MIN_MARGIN_MS);
   });
+
+  // #1839: a test-only knob replaces the floor under `bun test`, and nowhere else.
+  test.each([undefined, "production", "development"])(
+    "SQUIRREL_TEST_MIN_MARGIN_MS is ignored when NODE_ENV is %p",
+    (nodeEnv) => {
+      const env = { NODE_ENV: nodeEnv, SQUIRREL_TEST_MIN_MARGIN_MS: "2000" };
+      expect(maxDurationMarginMs(5_000, env)).toBe(MAX_DURATION_MIN_MARGIN_MS);
+    }
+  );
+  test("SQUIRREL_TEST_MIN_MARGIN_MS replaces the floor when NODE_ENV is test", () => {
+    const env = { NODE_ENV: "test", SQUIRREL_TEST_MIN_MARGIN_MS: "2000" };
+    expect(maxDurationMarginMs(5_000, env)).toBe(2_000);
+    // 10% of the budget still wins when it is larger.
+    expect(maxDurationMarginMs(60_000, env)).toBe(6_000);
+  });
+  test("an invalid SQUIRREL_TEST_MIN_MARGIN_MS keeps the floor", () => {
+    for (const value of ["0", "-1", "2.5", "abc", ""]) {
+      const env = { NODE_ENV: "test", SQUIRREL_TEST_MIN_MARGIN_MS: value };
+      expect(maxDurationMarginMs(5_000, env)).toBe(MAX_DURATION_MIN_MARGIN_MS);
+    }
+  });
+  test("the process environment is read by default", () => {
+    const saved = process.env.SQUIRREL_TEST_MIN_MARGIN_MS;
+    process.env.SQUIRREL_TEST_MIN_MARGIN_MS = "2000";
+    try {
+      expect(maxDurationMarginMs(5_000)).toBe(2_000);
+      expect(createDurationBudget(5)?.marginMs).toBe(2_000);
+    } finally {
+      if (saved === undefined) delete process.env.SQUIRREL_TEST_MIN_MARGIN_MS;
+      else process.env.SQUIRREL_TEST_MIN_MARGIN_MS = saved;
+    }
+  });
 });
 
 describe("createDurationBudget", () => {

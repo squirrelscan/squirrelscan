@@ -148,7 +148,16 @@ afterAll(() => {
 
 let homes = 0;
 
-function cleanEnv(): Record<string, string> {
+// #1839: test-only knobs, read under NODE_ENV "test" alone, set by the runs that wait out the
+// floors they replace. The margin's floor (production 15 s):
+const MIN_MARGIN_MS = 3_000;
+// The start-URL probes' limits (production: a 10 s redirect hop, then 10 s per reachability
+// attempt). Shorter than the hop, so a seed that never answers reaches the budget sooner, and
+// with the reachability check longer than what is left of a 5 or 6 s budget, so the budget,
+// not the probe, still ends the run.
+const PROBE_TIMEOUT_MS = 4_000;
+
+function cleanEnv(extra: Record<string, string> = {}): Record<string, string> {
   const env: Record<string, string> = {};
   for (const [k, v] of Object.entries(process.env)) {
     if (v === undefined || /^(SQUIRREL|FORCE_COLOR|NO_COLOR|COLORTERM)/.test(k))
@@ -161,6 +170,8 @@ function cleanEnv(): Record<string, string> {
     SQUIRREL_NO_UPDATE: "1",
     NO_TELEMETRY: "1",
     NO_COLOR: "1",
+    NODE_ENV: "test",
+    ...extra,
   };
 }
 
@@ -169,6 +180,14 @@ async function audit(...args: string[]) {
 }
 
 async function auditUrl(url: string, ...args: string[]) {
+  return auditUrlWithEnv({}, url, ...args);
+}
+
+async function auditUrlWithEnv(
+  extra: Record<string, string>,
+  url: string,
+  ...args: string[]
+) {
   const started = Date.now();
   const proc = Bun.spawn(
     [
@@ -188,7 +207,7 @@ async function auditUrl(url: string, ...args: string[]) {
       ...(args.includes("-f") ? [] : ["-f", "json"]),
       ...args,
     ],
-    { env: cleanEnv(), stdin: "ignore", stdout: "pipe", stderr: "pipe" }
+    { env: cleanEnv(extra), stdin: "ignore", stdout: "pipe", stderr: "pipe" }
   );
   const [out, err, code] = await Promise.all([
     new Response(proc.stdout).text(),
@@ -249,12 +268,16 @@ describe("squirrel audit --max-duration", () => {
   }, 90_000);
 
   test.concurrent("robots.txt and sitemaps that never answer do not use up the budget before the first page", async () => {
-    const r = await auditUrl(
+    const r = await auditUrlWithEnv(
+      { SQUIRREL_TEST_MIN_MARGIN_MS: String(MIN_MARGIN_MS) },
       `http://127.0.0.1:${slowDiscoverySite.port}/`,
       "--max-duration",
       String(DISCOVERY_BUDGET_S)
     );
-    expect(r.elapsedMs).toBeLessThan((DISCOVERY_BUDGET_S + 15) * 1000 + 8_000);
+    // Budget + the configured margin, plus start-up and the report.
+    expect(r.elapsedMs).toBeLessThan(
+      DISCOVERY_BUDGET_S * 1000 + MIN_MARGIN_MS + 8_000
+    );
     expect(r.code).toBe(0);
     const report = JSON.parse(r.out) as JsonReport;
     expect(["completed", "partial"]).toContain(report.status);
@@ -262,13 +285,16 @@ describe("squirrel audit --max-duration", () => {
   }, 90_000);
 
   test.concurrent("a seed that never answers fails at the limit with an unreachable report, exit 5, class timeout", async () => {
-    const r = await auditUrl(
+    const r = await auditUrlWithEnv(
+      { SQUIRREL_TEST_REACHABILITY_TIMEOUT_MS: String(PROBE_TIMEOUT_MS) },
       `http://127.0.0.1:${blackhole.port}/`,
       "--max-duration",
       String(BUDGET_S)
     );
     expect(r.code).toBe(5);
-    expect(r.elapsedMs).toBeLessThan((BUDGET_S + 15) * 1000);
+    // It waits for the budget, and stops there (start-up and the report get 8 s).
+    expect(r.elapsedMs).toBeGreaterThanOrEqual(BUDGET_S * 1000);
+    expect(r.elapsedMs).toBeLessThan(BUDGET_S * 1000 + 8_000);
     const outcome = JSON.parse(r.out) as {
       status: string;
       statusReason: string;
@@ -296,7 +322,11 @@ describe("squirrel audit --max-duration", () => {
       [secret(blackhole.port), ["--max-duration", String(BUDGET_S)]],
       [secret(1), []],
     ] as const) {
-      const r = await auditUrl(url, ...args);
+      const r = await auditUrlWithEnv(
+        { SQUIRREL_TEST_REACHABILITY_TIMEOUT_MS: String(PROBE_TIMEOUT_MS) },
+        url,
+        ...args
+      );
       expect(r.code).toBe(5);
       for (const text of [r.out, r.err]) {
         expect(text).not.toContain("hunter2");

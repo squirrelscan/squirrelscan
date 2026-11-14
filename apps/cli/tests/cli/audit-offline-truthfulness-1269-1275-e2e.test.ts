@@ -21,7 +21,11 @@ const scratch = mkdtempSync(join(tmpdir(), "squirrel-unreachable-"));
 afterAll(() => rmSync(scratch, { recursive: true, force: true }));
 
 let homes = 0;
-function cleanEnv(): Record<string, string> {
+// #1839: test-only, read under NODE_ENV "test" alone. The start-URL probes' limits (production:
+// a 10 s redirect hop, then 10 s per reachability attempt and 20 s in all), set for the run that
+// waits them out.
+const PROBE_TIMEOUT_MS = 1_500;
+function cleanEnv(extra: Record<string, string> = {}): Record<string, string> {
   const env: Record<string, string> = {};
   for (const [k, v] of Object.entries(process.env)) {
     if (v === undefined || /^(SQUIRREL|FORCE_COLOR|NO_COLOR|COLORTERM)/.test(k))
@@ -34,10 +38,21 @@ function cleanEnv(): Record<string, string> {
     SQUIRREL_NO_UPDATE: "1",
     NO_TELEMETRY: "1",
     NO_COLOR: "1",
+    NODE_ENV: "test",
+    ...extra,
   };
 }
 
 async function audit(url: string, ...args: string[]) {
+  return auditWithEnv({}, url, ...args);
+}
+
+async function auditWithEnv(
+  extra: Record<string, string>,
+  url: string,
+  ...args: string[]
+) {
+  const started = Date.now();
   const proc = Bun.spawn(
     [
       process.execPath,
@@ -50,14 +65,14 @@ async function audit(url: string, ...args: string[]) {
       "3",
       ...args,
     ],
-    { env: cleanEnv(), stdin: "ignore", stdout: "pipe", stderr: "pipe" }
+    { env: cleanEnv(extra), stdin: "ignore", stdout: "pipe", stderr: "pipe" }
   );
   const [out, err, code] = await Promise.all([
     new Response(proc.stdout).text(),
     new Response(proc.stderr).text(),
     proc.exited,
   ]);
-  return { code, out, err };
+  return { code, out, err, elapsedMs: Date.now() - started };
 }
 
 type Outcome = {
@@ -176,8 +191,17 @@ describe("squirrel audit -f json on a start URL it cannot reach", () => {
     await new Promise((resolve) => server.once("listening", resolve));
     const port = (server.address() as { port: number }).port;
     try {
-      const r = await audit(`http://127.0.0.1:${port}/`, "-f", "json");
+      const r = await auditWithEnv(
+        { SQUIRREL_TEST_REACHABILITY_TIMEOUT_MS: String(PROBE_TIMEOUT_MS) },
+        `http://127.0.0.1:${port}/`,
+        "-f",
+        "json"
+      );
       expect(r.code).toBe(5);
+      // Both probes wait out the configured limit (the redirect hop, then the reachability
+      // check), and no more: start-up and the report get 10 s, well under the production 30 s.
+      expect(r.elapsedMs).toBeGreaterThanOrEqual(2 * PROBE_TIMEOUT_MS);
+      expect(r.elapsedMs).toBeLessThan(2 * PROBE_TIMEOUT_MS + 10_000);
       const outcome = JSON.parse(r.out) as Outcome;
       expect(outcome.status).toBe("unreachable");
       // The probe's own wording is "Connection timed out", which the shared
@@ -187,7 +211,7 @@ describe("squirrel audit -f json on a start URL it cannot reach", () => {
     } finally {
       server.close();
     }
-  }, 120_000);
+  }, 60_000);
 
   test.concurrent("a name that does not exist: dns", async () => {
     const r = await audit(
