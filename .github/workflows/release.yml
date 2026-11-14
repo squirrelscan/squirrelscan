@@ -101,8 +101,9 @@ jobs:
     name: Release quality gate
     needs: version
     runs-on: ubuntu-latest
-    # bun test alone takes 31-36 min (releases 11-12/11-13); a real stall fails here instead of at the 6 h default
-    timeout-minutes: 75
+    # bun test alone takes 31-36 min (releases 11-12/11-13) and the reuse step can wait up to 45 min for main CI first;
+    # a real stall fails here instead of at the 6 h default
+    timeout-minutes: 100
     permissions:
       contents: read
       actions: read # main CI's jobs at this sha (the reuse step below)
