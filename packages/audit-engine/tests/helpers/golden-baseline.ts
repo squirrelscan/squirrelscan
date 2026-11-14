@@ -660,9 +660,21 @@ export function diffBaselines(
 // rerun the whole rule set (~15 s per engine). These helpers memoize per process
 // (module-level, so every file in the same bun process reuses it): the crawl DB is
 // written once, and each engine is captured once. The snapshots are SHARED, so a
-// caller must treat them as read-only (`structuredClone` before mutating). A test
+// caller must treat them as read-only: they are deep-frozen once, when each memo is
+// first built, so a mutation throws (test files are ES modules, strict mode) instead of
+// silently changing what the other golden files assert. `structuredClone` before mutating
+// (a clone is not frozen). The crawl is shared as a closed DB path (a string), so it
+// has nothing to freeze. A test
 // that needs a genuinely independent capture (e.g. determinism) calls
 // `captureEngineBaseline(canonicalFixtureDb(), config)` directly instead.
+
+/** Recursive Object.freeze. Called once per memoized snapshot, never per read. */
+function deepFreeze<T>(value: T): T {
+  if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
+  Object.freeze(value);
+  for (const child of Object.values(value)) deepFreeze(child);
+  return value;
+}
 
 let canonicalDir: string | undefined;
 let canonicalDbPromise: Promise<string> | undefined;
@@ -685,18 +697,18 @@ export function canonicalFixtureDb(): Promise<string> {
   return canonicalDbPromise;
 }
 
-/** The v1 snapshot of the canonical fixture under the canonical config, captured once. READ-ONLY. */
+/** The v1 snapshot of the canonical fixture under the canonical config, captured once. DEEP-FROZEN. */
 export function canonicalV1Snapshot(): Promise<EngineBaselineSnapshot> {
-  canonicalV1Promise ??= canonicalFixtureDb().then((db) =>
-    captureEngineBaseline(db, getGoldenBaselineConfig()),
-  );
+  canonicalV1Promise ??= canonicalFixtureDb()
+    .then((db) => captureEngineBaseline(db, getGoldenBaselineConfig()))
+    .then(deepFreeze);
   return canonicalV1Promise;
 }
 
-/** The v2 (streaming) snapshot of the canonical fixture under the canonical config, captured once. READ-ONLY. */
+/** The v2 (streaming) snapshot of the canonical fixture under the canonical config, captured once. DEEP-FROZEN. */
 export function canonicalV2Snapshot(): Promise<EngineBaselineSnapshot> {
-  canonicalV2Promise ??= canonicalFixtureDb().then((db) =>
-    captureStreamingBaseline(db, getGoldenBaselineConfig()),
-  );
+  canonicalV2Promise ??= canonicalFixtureDb()
+    .then((db) => captureStreamingBaseline(db, getGoldenBaselineConfig()))
+    .then(deepFreeze);
   return canonicalV2Promise;
 }
