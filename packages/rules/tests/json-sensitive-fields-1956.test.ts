@@ -186,6 +186,15 @@ describe("security/json-sensitive-fields: credentials are high severity", () => 
     expect(scan.sensitive).toEqual([]);
   });
 
+  test("a public Firebase apiKey does not decide a server apiKey in the same response, in either order", () => {
+    const firebaseKey = `AIzaSyD${"-abcdefghijklmnopqrstuvwxyz12345"}`; // pragma: allowlist secret
+    const serverKey = ["sk", "live", "51HxQabcdefghijklmnopqrstuv"].join("_"); // pragma: allowlist secret
+    const publicFirst = scanJsonValue({ firebase: { apiKey: firebaseKey }, server: { apiKey: serverKey } });
+    expect(publicFirst.sensitive.map((f) => [f.path, f.kind])).toEqual([["$.server.apiKey", "secret or API key"]]);
+    const secretFirst = scanJsonValue({ server: { apiKey: serverKey }, firebase: { apiKey: firebaseKey } });
+    expect(secretFirst.sensitive.map((f) => [f.path, f.kind])).toEqual([["$.server.apiKey", "secret or API key"]]);
+  });
+
   test("helpers: key classes, hash shapes and Luhn", () => {
     expect(credentialClass("password_hash")).toBe("password");
     expect(credentialClass("githubToken")).toBe("token");
