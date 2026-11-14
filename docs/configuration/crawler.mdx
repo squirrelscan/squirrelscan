@@ -989,9 +989,10 @@ requested: the page is recorded as failed with "Not requested", and an asset as
 refused. Private networks,
 `localhost` and mDNS `.local` names keep working; a `.local` name that answers
 only a scoped link-local IPv6 address cannot be connected to by address and is
-refused. Two rule probes still go out by name without that check: the `HEAD`
+refused. Some rule probes still go out by name without that check: the `HEAD`
 request `security/http-to-https` sends to the site's `http://` address, and the
-GraphQL probes an active or aggressive probing intensity sends.
+GraphQL and Spring Boot Actuator probes an active or aggressive probing
+intensity sends.
 
 Two cases send the site's own hostnames by name instead, without that check:
 an HTTP proxy set in the environment (`HTTP_PROXY` or `HTTPS_PROXY`), which

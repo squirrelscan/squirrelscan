@@ -637,6 +637,7 @@
                   "rules/security/auth-endpoint-disclosure",
                   "rules/security/open-redirect",
                   "rules/security/client-side-authz",
+                  "rules/security/exposed-actuator",
                   "rules/security/third-party-cookies",
                   "rules/security/sri",
                   "rules/security/cookie-flags",

@@ -8,6 +8,7 @@ import { cookieFlagsRule } from "./cookie-flags";
 import { cspRule } from "./csp";
 import { cspBlocksOwnResourcesRule } from "./csp-blocks-own-resources";
 import { exposedFilesRule } from "./exposed-files";
+import { exposedActuatorRule } from "./exposed-actuator";
 import { formCaptchaRule } from "./form-captcha";
 import { formHttpsRule } from "./form-https";
 import { graphqlGetMutationsRule } from "./graphql-get-mutations";
@@ -62,6 +63,7 @@ export const rules: Rule[] = [
   authEndpointDisclosureRule,
   openRedirectRule,
   clientSideAuthzRule,
+  exposedActuatorRule,
   securityTxtRule,
   versionDisclosureRule,
 ];
@@ -73,6 +75,7 @@ export {
   cspBlocksOwnResourcesRule,
   cspRule,
   exposedFilesRule,
+  exposedActuatorRule,
   formCaptchaRule,
   formHttpsRule,
   graphqlGetMutationsRule,

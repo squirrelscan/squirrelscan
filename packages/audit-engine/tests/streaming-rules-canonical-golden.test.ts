@@ -234,7 +234,9 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // 110742 -> 110743 (content/font-consistency, repo#1376): a site rule adds one row.
       // 110743 -> 110744 (security/client-side-authz, repo#1966): a site-scoped probing rule; this gate runs
       // passive, so it adds one skipped row and sends nothing. The overall score is unmoved.
-      expect(v1.findings.length).toBe(110744);
+      // 110744 -> 110745 (security/exposed-actuator, repo#1961): a site-scoped probing rule; this gate runs
+      // passive, so it adds one skipped row and sends nothing. Score unmoved.
+      expect(v1.findings.length).toBe(110745);
       // Tripwire: EXTENDING a rule must never add a tally key, so a change here
       // is only correct alongside a deliberate new rule id. 266 -> 267 is
       // content/hidden-text, 267 -> 268 content/thin-vs-site-norm, 268 -> 269
@@ -270,8 +272,9 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // 332 -> 333 content/stale-dated-copy, 333 -> 334 content/terminology-consistency, 334 -> 335 i18n/locale-mixing (repo#1359),
       // 335 -> 336 security/auth-endpoint-disclosure, 336 -> 337 security/open-redirect,
       // 337 -> 338 content/font-consistency (repo#1376), 338 -> 339 security/client-side-authz (repo#1966);
+      // 339 -> 340 security/exposed-actuator (repo#1961);
       // anything else means a rule id leaked in, so fix that rather than this number.
-      expect(v1.perRuleTally.length).toBe(339);
+      expect(v1.perRuleTally.length).toBe(340);
       expect(v1.perRuleTally.find((t) => t.ruleId === "security/tls-certificate")).toEqual({
         ruleId: "security/tls-certificate",
         pass: 0,
@@ -352,6 +355,7 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
         "security/auth-endpoint-disclosure",
         "security/open-redirect",
         "security/client-side-authz",
+        "security/exposed-actuator",
       ]) {
         expect(v1.perRuleTally.find((t) => t.ruleId === ruleId)).toEqual({
           ruleId,
