@@ -20,6 +20,10 @@ function context(body: string, head = ""): RuleContext {
   const parsed = parsePage(html, url);
   return { page: { url, html, statusCode: 200, loadTime: 0, headers: {}, parsed }, parsed, options: {} };
 }
+/** The 6 MB sheet is parsed once for the two tests that need it (parsing it dominates both). */
+let truncatedCssCtx: RuleContext | undefined;
+const truncatedCss = (): RuleContext =>
+  (truncatedCssCtx ??= context('<iframe class="cover" id="google-auth" srcdoc=""></iframe>', `<style>${"x{y:z}".repeat(1_000_000)}.cover{position:fixed;inset:0;z-index:99999}</style>`));
 const time = (run: () => unknown): number => {
   const started = performance.now();
   run();
@@ -107,8 +111,7 @@ test("the overlay rule is not pushed out by CSS or iframes placed before it", ()
 });
 
 test("CSS beyond the amount read is reported, not silently passed", () => {
-  const junk = "x{y:z}".repeat(1_000_000); // 6 MB
-  const ctx = context('<iframe class="cover" id="google-auth" srcdoc=""></iframe>', `<style>${junk}.cover{position:fixed;inset:0;z-index:99999}</style>`);
+  const ctx = truncatedCss(); // 6 MB of rules
   expect(integrityScanNotes(ctx).cssTruncated).toBe(true);
 });
 
@@ -142,8 +145,8 @@ test("the overlay reason carries no userinfo, query token or fragment of the ifr
 
 const RUNNER_RULES = ["integrity/brand-impersonation", "integrity/fake-auth-overlay"];
 
-async function runRules(body: string, head = "", budgetMs?: number) {
-  const ctx = context(body, head);
+async function runRules(body: string, head = "", budgetMs?: number, shared?: RuleContext) {
+  const ctx = shared ?? context(body, head);
   const runner = new RuleRunner({
     config: { rule_options: {}, rules: { enable: RUNNER_RULES } } as never,
     ...(budgetMs !== undefined ? { ruleTimeBudgetMs: budgetMs } : {}),
@@ -205,8 +208,7 @@ test("RuleRunner: a real control whose label is padded past the visit cap is rep
 }, 120_000);
 
 test("RuleRunner: CSS longer than the amount read is reported on the overlay rule when nothing fired", async () => {
-  const junk = "x{y:z}".repeat(1_000_000);
-  const { checks } = await runRules('<iframe class="cover" id="google-auth" srcdoc=""></iframe>', `<style>${junk}.cover{position:fixed;inset:0;z-index:99999}</style>`, 30_000);
+  const { checks } = await runRules("", "", 30_000, truncatedCss());
   const note = checks.find((c) => c.name === "fake-auth-overlay");
   expect(note?.status).toBe("info");
   expect(note?.details?.cssTruncated).toBe(true);
