@@ -99,7 +99,7 @@ interface Report {
 }
 
 describe("a very large page under --max-duration (#1332)", () => {
-  test("is not evaluated, is counted, and the run stays inside the budget plus margin", async () => {
+  test.concurrent("is not evaluated, is counted, and the run stays inside the budget plus margin", async () => {
     const budget = 20;
     const { out, elapsedMs } = await audit("--max-duration", String(budget));
     const report = JSON.parse(out) as Report;
@@ -117,7 +117,7 @@ describe("a very large page under --max-duration (#1332)", () => {
     expect(elapsedMs).toBeLessThan(budget * 1000);
   }, 90_000);
 
-  test("without the flag the page is audited and nothing is cut", async () => {
+  test.concurrent("without the flag the page is audited and nothing is cut", async () => {
     const { out } = await audit();
     const report = JSON.parse(out) as Report;
     expect(report.maxDuration).toBeUndefined();

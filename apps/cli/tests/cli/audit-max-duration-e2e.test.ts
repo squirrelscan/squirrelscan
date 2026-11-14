@@ -16,6 +16,12 @@ const scratch = mkdtempSync(join(tmpdir(), "squirrel-max-duration-"));
 const PAGE_DELAY_MS = 700;
 const hung: Array<() => void> = [];
 
+// Budgets (seconds) for the runs that wait one out. Small on purpose: every assertion is against the
+// configured budget, never an absolute time, and 3 s still leaves the slow crawl several page
+// rounds (PAGE_DELAY_MS) before the cut.
+const BUDGET_S = 3;
+const DISCOVERY_BUDGET_S = 5;
+
 const site = Bun.serve({
   port: 0,
   hostname: "127.0.0.1",
@@ -206,28 +212,31 @@ interface JsonReport {
   };
 }
 
+// The runs that wait out a budget are concurrent: each is a separate subprocess against its own
+// server and scratch HOME, idle while it waits, and every bound below is the configured budget plus
+// the documented margin, so overlapping them shortens the file without loosening a single assertion.
 describe("squirrel audit --max-duration", () => {
-  test("cuts a slow crawl at the budget and writes a partial report inside the margin", async () => {
-    const r = await audit("--max-duration", "5");
+  test.concurrent("cuts a slow crawl at the budget and writes a partial report inside the margin", async () => {
+    const r = await audit("--max-duration", String(BUDGET_S));
     // Exits within budget + margin max(10%, 15 s), plus start-up and the report.
-    expect(r.elapsedMs).toBeLessThan((5 + 15) * 1000 + 8_000);
+    expect(r.elapsedMs).toBeLessThan((BUDGET_S + 15) * 1000 + 8_000);
     expect(r.code).toBe(0);
     const report = JSON.parse(r.out) as JsonReport;
     expect(report.status).toBe("partial");
     expect(report.statusReasonCode).toBe("max_duration");
     expect(report.statusReason).toContain("--max-duration");
-    expect(report.maxDuration?.seconds).toBe(5);
+    expect(report.maxDuration?.seconds).toBe(BUDGET_S);
     expect(report.maxDuration?.unfetchedPages).toBeGreaterThan(0);
   }, 90_000);
 
-  test("the text report says it is partial", async () => {
-    const r = await audit("--max-duration", "4", "-f", "text");
+  test.concurrent("the text report says it is partial", async () => {
+    const r = await audit("--max-duration", String(BUDGET_S), "-f", "text");
     expect(r.code).toBe(0);
     expect(r.out).toContain("PARTIAL AUDIT");
     expect(r.out).toContain("--max-duration");
   }, 90_000);
 
-  test("a budget the audit never reaches changes nothing", async () => {
+  test.concurrent("a budget the audit never reaches changes nothing", async () => {
     const r = await auditUrl(
       `http://127.0.0.1:${fastSite.port}/`,
       "--max-duration",
@@ -239,27 +248,27 @@ describe("squirrel audit --max-duration", () => {
     expect(report.maxDuration).toBeUndefined();
   }, 90_000);
 
-  test("robots.txt and sitemaps that never answer do not use up the budget before the first page", async () => {
+  test.concurrent("robots.txt and sitemaps that never answer do not use up the budget before the first page", async () => {
     const r = await auditUrl(
       `http://127.0.0.1:${slowDiscoverySite.port}/`,
       "--max-duration",
-      "10"
+      String(DISCOVERY_BUDGET_S)
     );
-    expect(r.elapsedMs).toBeLessThan((10 + 15) * 1000 + 8_000);
+    expect(r.elapsedMs).toBeLessThan((DISCOVERY_BUDGET_S + 15) * 1000 + 8_000);
     expect(r.code).toBe(0);
     const report = JSON.parse(r.out) as JsonReport;
     expect(["completed", "partial"]).toContain(report.status);
     expect(report.meta.totalPages ?? 0).toBeGreaterThan(1);
   }, 90_000);
 
-  test("a seed that never answers fails at the limit with an unreachable report, exit 5, class timeout", async () => {
+  test.concurrent("a seed that never answers fails at the limit with an unreachable report, exit 5, class timeout", async () => {
     const r = await auditUrl(
       `http://127.0.0.1:${blackhole.port}/`,
       "--max-duration",
-      "6"
+      String(BUDGET_S)
     );
     expect(r.code).toBe(5);
-    expect(r.elapsedMs).toBeLessThan((6 + 15) * 1000);
+    expect(r.elapsedMs).toBeLessThan((BUDGET_S + 15) * 1000);
     const outcome = JSON.parse(r.out) as {
       status: string;
       statusReason: string;
@@ -269,13 +278,13 @@ describe("squirrel audit --max-duration", () => {
     expect(outcome.status).toBe("unreachable");
     expect(outcome.statusReasonCode).toBe("timeout");
     expect(outcome.statusReason).toContain(
-      "6s --max-duration time limit was reached"
+      `${BUDGET_S}s --max-duration time limit was reached`
     );
     // The reason says what happened once; the message adds "Cannot reach" itself.
     expect(outcome.message.match(/Cannot reach/g)).toHaveLength(1);
   }, 60_000);
 
-  test("the unreachable outputs never carry userinfo, query or fragment (budget and not)", async () => {
+  test.concurrent("the unreachable outputs never carry userinfo, query or fragment (budget and not)", async () => {
     const secret = (port: number | undefined) => {
       // Built at runtime: a literal user:password@ URL trips the secret scan.
       const url = new URL(`http://127.0.0.1:${port}/p?token=SECRET#frag`);
@@ -284,7 +293,7 @@ describe("squirrel audit --max-duration", () => {
       return url.href;
     };
     for (const [url, args] of [
-      [secret(blackhole.port), ["--max-duration", "5"]],
+      [secret(blackhole.port), ["--max-duration", String(BUDGET_S)]],
       [secret(1), []],
     ] as const) {
       const r = await auditUrl(url, ...args);
@@ -298,13 +307,13 @@ describe("squirrel audit --max-duration", () => {
     }
   }, 90_000);
 
-  test("resource checks that run out of the budget's time are named in the report", async () => {
+  test.concurrent("resource checks that run out of the budget's time are named in the report", async () => {
     const r = await auditUrl(
       `http://127.0.0.1:${slowAssetsSite.port}/`,
       "--max-duration",
-      "4"
+      String(BUDGET_S)
     );
-    expect(r.elapsedMs).toBeLessThan((4 + 15) * 1000 + 8_000);
+    expect(r.elapsedMs).toBeLessThan((BUDGET_S + 15) * 1000 + 8_000);
     expect(r.code).toBe(0);
     const report = JSON.parse(r.out) as JsonReport & {
       maxDuration?: { resourceChecksCut?: boolean };

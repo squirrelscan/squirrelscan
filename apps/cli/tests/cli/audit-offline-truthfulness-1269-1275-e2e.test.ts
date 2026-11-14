@@ -113,7 +113,7 @@ describe("unreachableOutcome classes", () => {
 });
 
 describe("squirrel audit -f json on a start URL it cannot reach", () => {
-  test("connection refused: a report on stdout, exit 5", async () => {
+  test.concurrent("connection refused: a report on stdout, exit 5", async () => {
     // A port that was open a moment ago and is now closed.
     const probe = createServer().listen(0, "127.0.0.1");
     await new Promise((resolve) => probe.once("listening", resolve));
@@ -129,7 +129,7 @@ describe("squirrel audit -f json on a start URL it cannot reach", () => {
     expect(r.err).toContain("Cannot reach");
   }, 60_000);
 
-  test("a reset connection: written to -o, exit 5", async () => {
+  test.concurrent("a reset connection: written to -o, exit 5", async () => {
     const server = createServer((socket) => socket.destroy()).listen(
       0,
       "127.0.0.1"
@@ -154,7 +154,7 @@ describe("squirrel audit -f json on a start URL it cannot reach", () => {
     }
   }, 60_000);
 
-  test("TLS to a plain-http port: tls", async () => {
+  test.concurrent("TLS to a plain-http port: tls", async () => {
     const server = Bun.serve({
       port: 0,
       hostname: "127.0.0.1",
@@ -171,7 +171,7 @@ describe("squirrel audit -f json on a start URL it cannot reach", () => {
     }
   }, 60_000);
 
-  test("a server that accepts and never answers: a timed out connection", async () => {
+  test.concurrent("a server that accepts and never answers: a timed out connection", async () => {
     const server = createServer(() => {}).listen(0, "127.0.0.1");
     await new Promise((resolve) => server.once("listening", resolve));
     const port = (server.address() as { port: number }).port;
@@ -189,7 +189,7 @@ describe("squirrel audit -f json on a start URL it cannot reach", () => {
     }
   }, 120_000);
 
-  test("a name that does not exist: dns", async () => {
+  test.concurrent("a name that does not exist: dns", async () => {
     const r = await audit(
       "http://squirrel-no-such-host.invalid/",
       "-f",
@@ -203,7 +203,7 @@ describe("squirrel audit -f json on a start URL it cannot reach", () => {
 });
 
 describe("a blocked report exits 3", () => {
-  test("a bare 403 with no WAF vendor still exits 3", async () => {
+  test.concurrent("a bare 403 with no WAF vendor still exits 3", async () => {
     const server = Bun.serve({
       port: 0,
       hostname: "127.0.0.1",
@@ -226,7 +226,7 @@ describe("a blocked report exits 3", () => {
 
 // #1275: the level snapshot on an --offline run says what ran.
 describe("an --offline audit reports the settings that ran", () => {
-  test("-C surface --offline: no cloud checks, rendering or external links", async () => {
+  test.concurrent("-C surface --offline: no cloud checks, rendering or external links", async () => {
     const server = Bun.serve({
       port: 0,
       hostname: "127.0.0.1",
