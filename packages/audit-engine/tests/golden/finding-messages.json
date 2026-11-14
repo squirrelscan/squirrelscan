@@ -3873,6 +3873,12 @@
    "new-tab-security|info|No external target=\"_blank\" links found||"
   ]
  },
+ "security/open-redirect": {
+  "digest": "163295195601176",
+  "lines": [
+   "open-redirect|skipped|Probing is passive, so no redirect parameter was probed. Run with --probe active to check for open redirects.||"
+  ]
+ },
  "security/permissions-policy": {
   "digest": "198247508190623",
   "lines": [

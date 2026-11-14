@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- **New rule `security/open-redirect`.** A probing rule (runs at `--probe active` or above) that finds same-origin URLs whose query carries a redirect-shaped parameter (`next`, `url`, `redirect`, `returnTo`, `continue` and the like) in crawled page URLs, internal links and discovered `GET` endpoints, and requests each with that parameter set to an off-site value on a host that cannot resolve (`squirrelscan-redirect-probe.invalid`), first as an absolute URL and then protocol-relative. It warns when the `3xx` `Location` points to that host, and never follows the redirect or reads the body. State-changing paths and non-`GET` call sites are never requested, `robots.txt` is respected below `aggressive`, and at most ten parameters are probed inside the shared probe budget. Findings name the page and the parameter, not the query string. That makes 337 rules, 29 of them in Security. (squirrelscan/repo#1936)
+
 ### Fixed
 
 - An incremental audit that refetches an unchanged page now reports the headers that response carried, not the ones stored with the page (squirrelscan/repo#4765). A site that dropped an `X-Robots-Tag: noindex`, or added HSTS, without changing its HTML kept the old header in every later audit, and `core/robots-meta` reported a noindex the site no longer sent. A 200 whose body matched and a reused render (the conditional-render gate's probe) now replace the stored headers; an origin's own 304 updates the headers it resends and keeps the ones it omits, as HTTP caches do.

@@ -127,7 +127,7 @@ Two settings control what an audit sends, and they are independent:
 
 | | Passive | Active (the default at `surface` and `full`) |
 |---|---|---|
-| **Offline** (`--offline`) | The crawl of the audited site, no cloud, no other host. No probe rules, but the 28 [discovery probes](/configuration/crawler#discovery-probes) still run unless disabled | The same, plus the probe rules: GraphQL `GET` requests and, for form actions, `HEAD` then `GET`, all to the audited site |
+| **Offline** (`--offline`) | The crawl of the audited site, no cloud, no other host. No probe rules, but the 28 [discovery probes](/configuration/crawler#discovery-probes) still run unless disabled | The same, plus the probe rules: GraphQL and open redirect `GET` requests and, for form actions, `HEAD` then `GET`, all to the audited site |
 | **Online** (signed in or out) | The crawl, plus other sites (external link checks) and, signed in, the cloud: rendering, cloud checks and publishing. No probe rules, discovery probes still run unless disabled | Everything above, plus the probe rules |
 
 So `squirrel audit <url> -C surface --offline` is offline and **active**: it keeps
