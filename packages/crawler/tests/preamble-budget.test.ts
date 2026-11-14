@@ -48,6 +48,10 @@ const PAGE = `<!doctype html><html><head><title>t</title></head><body>
 const TIMEOUT_MS = 500;
 const BUDGET_MS = preambleBudgetMs(TIMEOUT_MS);
 const WALK_WINDOW_MS = sitemapWalkWindowMs(TIMEOUT_MS);
+// The walk tests that stall bodies pay one full window per chunk (the fast-404 test is ~14 chunks),
+// so they use a tighter window than the crawl does. Same arithmetic, every assertion is expressed in
+// this window; it is still far above a loopback response (single-digit ms).
+const STALL_WINDOW_MS = 400;
 
 const CONFIG: Partial<CrawlerConfig> = {
   maxPages: 3,
@@ -360,7 +364,7 @@ describe("sitemap walk progress window (squirrelscan/repo#1733)", () => {
     const result = await Effect.runPromise(
       discoverSitemaps(origin, robotsDeclaring(origin, 60), "squirrel-test", {
         maxUrls: 10_000,
-        walkWindowMs: WALK_WINDOW_MS,
+        walkWindowMs: STALL_WINDOW_MS,
       }),
     );
     const elapsed = Date.now() - startedAt;
@@ -368,7 +372,7 @@ describe("sitemap walk progress window (squirrelscan/repo#1733)", () => {
     // Roughly one chunk of five, not all 68.
     expect(requests).toBeGreaterThan(0);
     expect(requests).toBeLessThan(20);
-    expect(elapsed).toBeLessThan(WALK_WINDOW_MS * 4);
+    expect(elapsed).toBeLessThan(STALL_WINDOW_MS * 4);
 
     // AC3: nothing vanishes. Every entry point the walk never reached is still
     // recorded, and the result says absence was never established — which is
@@ -404,9 +408,9 @@ describe("sitemap walk progress window (squirrelscan/repo#1733)", () => {
     const result = await Effect.runPromise(
       discoverSitemaps(origin, robotsDeclaring(origin, 60), "squirrel-test", {
         maxUrls: 10_000,
-        walkWindowMs: WALK_WINDOW_MS,
+        walkWindowMs: STALL_WINDOW_MS,
         // Generous hard stop: the window, not the cap, is what is under test.
-        walkTotalMs: WALK_WINDOW_MS * 40,
+        walkTotalMs: STALL_WINDOW_MS * 40,
       }),
     );
 
@@ -440,15 +444,15 @@ describe("sitemap walk progress window (squirrelscan/repo#1733)", () => {
     const result = await Effect.runPromise(
       discoverSitemaps(origin, robotsDeclaring(origin, 400), "squirrel-test", {
         maxUrls: 10_000,
-        walkWindowMs: WALK_WINDOW_MS,
-        walkTotalMs: WALK_WINDOW_MS * 3,
+        walkWindowMs: STALL_WINDOW_MS,
+        walkTotalMs: STALL_WINDOW_MS * 3,
       }),
     );
     const elapsed = Date.now() - startedAt;
 
     // Bounded by the hard stop rather than by the origin's willingness to drip.
     // Without it this runs for 408 entry points x one window each.
-    expect(elapsed).toBeLessThan(WALK_WINDOW_MS * 8);
+    expect(elapsed).toBeLessThan(STALL_WINDOW_MS * 8);
     // And it says it did not finish, so no consumer reads this as "no sitemap".
     expect(result.truncated).toBe(true);
   }, 60_000);

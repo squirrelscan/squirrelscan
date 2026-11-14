@@ -229,7 +229,7 @@ beforeAll(async () => {
 }, 180_000);
 
 describe("squirrel pages", () => {
-  test("lists every crawled page with the stored columns", async () => {
+  test.concurrent("lists every crawled page with the stored columns", async () => {
     const map = await asJson();
     expect(map.total).toBe(map.pages.length);
     expect(map.filtered).toBe(map.total);
@@ -267,7 +267,7 @@ describe("squirrel pages", () => {
     ).toBe(5);
   }, 120_000);
 
-  test("pages stored with a trailing slash or a query string still get their link counts (#701)", async () => {
+  test.concurrent("pages stored with a trailing slash or a query string still get their link counts (#701)", async () => {
     const map = await asJson();
     const at = (path: string) =>
       map.pages.find((r) => new URL(r.url).pathname === path)!;
@@ -281,7 +281,7 @@ describe("squirrel pages", () => {
     expect(at("/b").flags).not.toContain("orphan");
   }, 120_000);
 
-  test("query-string variants keep their own out-links and share an in-link count, and a self link is no link (#701)", async () => {
+  test.concurrent("query-string variants keep their own out-links and share an in-link count, and a self link is no link (#701)", async () => {
     const map = await asJson();
     const items = map.pages.filter((r) => new URL(r.url).pathname === "/items");
     expect(items).toHaveLength(2);
@@ -296,7 +296,7 @@ describe("squirrel pages", () => {
     expect(items.map((r) => r.inlinks)).toEqual([6, 6]);
   }, 120_000);
 
-  test("h1, heading count and JSON-LD ids come from the stored parse", async () => {
+  test.concurrent("h1, heading count and JSON-LD ids come from the stored parse", async () => {
     const map = await asJson();
     const home = map.pages.find((r) => new URL(r.url).pathname === "/")!;
     expect(home.h1).toBe("Heading");
@@ -304,7 +304,7 @@ describe("squirrel pages", () => {
     expect(home.schemaIds).toEqual([]);
   }, 120_000);
 
-  test("--missing title, description and schema", async () => {
+  test.concurrent("--missing title, description and schema", async () => {
     expect(paths((await asJson("--missing", "title")).pages)).toEqual(["/a"]);
     expect(paths((await asJson("--missing", "description")).pages)).toEqual([
       "/b",
@@ -313,7 +313,7 @@ describe("squirrel pages", () => {
     expect((await asJson("--missing", "schema")).filtered).toBe(9);
   }, 120_000);
 
-  test("--duplicate title names the pages the audit flags, --section and --page narrow by URL", async () => {
+  test.concurrent("--duplicate title names the pages the audit flags, --section and --page narrow by URL", async () => {
     expect(paths((await asJson("--duplicate", "title")).pages)).toEqual([
       "/dup1",
       "/dup2",
@@ -330,13 +330,13 @@ describe("squirrel pages", () => {
     ).toEqual([]);
   }, 120_000);
 
-  test("--orphan names the page nothing links to", async () => {
+  test.concurrent("--orphan names the page nothing links to", async () => {
     const map = await asJson("--orphan");
     expect(paths(map.pages)).toEqual(["/lonely"]);
     expect(map.pages[0]!.flags).toContain("orphan");
   }, 120_000);
 
-  test("csv and markdown carry the same pages", async () => {
+  test.concurrent("csv and markdown carry the same pages", async () => {
     const csv = await squirrel("pages", "-f", "csv");
     expect(csv.code).toBe(0);
     const lines = csv.out.trim().split("\n");
@@ -350,7 +350,7 @@ describe("squirrel pages", () => {
     expect(md.out).toContain("/blog/post");
   }, 120_000);
 
-  test("-o writes the file and says so on stderr; a pipe defaults to markdown", async () => {
+  test.concurrent("-o writes the file and says so on stderr; a pipe defaults to markdown", async () => {
     const file = join(scratch, "pages.csv");
     const r = await squirrel("pages", "-f", "csv", "-o", file);
     expect(r.code).toBe(0);
@@ -360,7 +360,7 @@ describe("squirrel pages", () => {
     expect(piped.out).toContain("# Page map: ");
   }, 120_000);
 
-  test("bad flag values are usage errors", async () => {
+  test.concurrent("bad flag values are usage errors", async () => {
     const missing = await squirrel("pages", "--missing", "nonsense");
     expect(missing.code).toBe(1);
     expect(missing.err).toContain("--missing: unknown value nonsense");
@@ -371,13 +371,13 @@ describe("squirrel pages", () => {
     expect(fmt.err).toContain('--format: unknown value "xml"');
   }, 120_000);
 
-  test("an unknown crawl id is an answer, not a failure", async () => {
+  test.concurrent("an unknown crawl id is an answer, not a failure", async () => {
     const r = await squirrel("pages", "--crawl", "ffffffff");
     expect(r.code).toBe(0);
     expect(r.out).toContain("No audit found");
   }, 120_000);
 
-  test("--crawl reads a named audit", async () => {
+  test.concurrent("--crawl reads a named audit", async () => {
     const latest = await asJson();
     const named = await asJson("--crawl", latest.crawlId.slice(0, 8));
     expect(named.crawlId).toBe(latest.crawlId);
@@ -397,7 +397,7 @@ describe("hostile page values (#701)", () => {
       );
     });
 
-  test("csv, markdown and html carry no escape, control or bidi character from a page", async () => {
+  test.concurrent("csv, markdown and html carry no escape, control or bidi character from a page", async () => {
     for (const format of ["csv", "markdown", "html"]) {
       const r = await squirrel("pages", "-f", format);
       expect(r.code).toBe(0);
@@ -406,13 +406,13 @@ describe("hostile page values (#701)", () => {
     }
   }, 120_000);
 
-  test("csv neutralises the formula in the description and keeps one record per page", async () => {
+  test.concurrent("csv neutralises the formula in the description and keeps one record per page", async () => {
     const r = await squirrel("pages", "-f", "csv");
     expect(r.out).toContain("'=cmd|' /C calc'!A0");
     expect(r.out.split("\n").filter((l) => l.length > 0)).toHaveLength(10);
   }, 120_000);
 
-  test("json is valid and keeps the page's own bytes", async () => {
+  test.concurrent("json is valid and keeps the page's own bytes", async () => {
     const map = await asJson();
     const lonely = map.pages.find((r) => new URL(r.url).pathname === "/lonely");
     expect(lonely?.title).toContain("Lonely");
@@ -422,7 +422,7 @@ describe("hostile page values (#701)", () => {
 });
 
 describe("squirrel pages -f html", () => {
-  test("is a standalone page with the pages as data", async () => {
+  test.concurrent("is a standalone page with the pages as data", async () => {
     const r = await squirrel("pages", "-f", "html");
     expect(r.code).toBe(0);
     expect(r.out.startsWith("<!doctype html>")).toBe(true);
@@ -483,7 +483,7 @@ describe("squirrel pages --diff", () => {
   const changedPaths = (d: Diff) =>
     d.changed.map((c) => new URL(c.url).pathname).sort();
 
-  test("compares the latest audit with the one before it", async () => {
+  test.concurrent("compares the latest audit with the one before it", async () => {
     const d = await diffJson();
     expect(d.older.crawlId).not.toBe(d.newer.crawlId);
     expect(d.added.map((r) => new URL(r.url).pathname)).toEqual(["/fresh"]);
@@ -505,7 +505,7 @@ describe("squirrel pages --diff", () => {
     expect(d.counts.unchanged).toBeGreaterThan(0);
   }, 120_000);
 
-  test("one --crawl names the newer side, two name both, in either order", async () => {
+  test.concurrent("one --crawl names the newer side, two name both, in either order", async () => {
     const latest = (await asJson()).crawlId;
     const auto = await diffJson();
     const one = await diffJson("--crawl", latest.slice(0, 8));
@@ -528,7 +528,7 @@ describe("squirrel pages --diff", () => {
     expect(reversed.newer.crawlId).toBe(latest);
   }, 120_000);
 
-  test("--section narrows both sides; markdown and csv carry the same changes", async () => {
+  test.concurrent("--section narrows both sides; markdown and csv carry the same changes", async () => {
     const d = await diffJson("--section", "/blog");
     expect(d.counts).toMatchObject({ added: 0, removed: 0, changed: 0 });
     const md = await squirrel("pages", "--diff");
@@ -540,7 +540,7 @@ describe("squirrel pages --diff", () => {
     expect(csv.out).toContain("added,");
   }, 120_000);
 
-  test("the diff in every format carries no control or bidi character from a page", async () => {
+  test.concurrent("the diff in every format carries no control or bidi character from a page", async () => {
     for (const format of ["markdown", "csv", "json"]) {
       const r = await squirrel("pages", "--diff", "-f", format);
       expect(r.code).toBe(0);
@@ -560,7 +560,7 @@ describe("squirrel pages --diff", () => {
     }
   }, 120_000);
 
-  test("filters on page state and unsupported formats are usage errors", async () => {
+  test.concurrent("filters on page state and unsupported formats are usage errors", async () => {
     const missing = await squirrel("pages", "--diff", "--missing", "title");
     expect(missing.code).toBe(1);
     expect(missing.err).toContain("cannot be combined with --diff");
@@ -569,7 +569,7 @@ describe("squirrel pages --diff", () => {
     expect(html.err).toContain("--diff supports markdown, json, csv");
   }, 120_000);
 
-  test("more audits than the command takes is a usage error", async () => {
+  test.concurrent("more audits than the command takes is a usage error", async () => {
     const latest = (await asJson()).crawlId.slice(0, 8);
     const three = await squirrel(
       "pages",
@@ -588,7 +588,7 @@ describe("squirrel pages --diff", () => {
     expect(two.err).toContain("--crawl takes one audit, or two with --diff");
   }, 120_000);
 
-  test("-o to a path that cannot be written is a clean error, not a crash", async () => {
+  test.concurrent("-o to a path that cannot be written is a clean error, not a crash", async () => {
     const r = await squirrel(
       "pages",
       "-f",
@@ -601,7 +601,7 @@ describe("squirrel pages --diff", () => {
     expect(r.err).not.toContain("    at ");
   }, 120_000);
 
-  test("naming an audit that does not exist is an answer, not a failure", async () => {
+  test.concurrent("naming an audit that does not exist is an answer, not a failure", async () => {
     const r = await squirrel("pages", "--diff", "--crawl", "ffffffff");
     expect(r.code).toBe(0);
     expect(r.out).toContain("No audit found");
