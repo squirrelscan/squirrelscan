@@ -11,25 +11,14 @@
 //
 // and the diff of that file is the review of what the change does to stored fingerprints and to what users see.
 
-import { afterAll, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { writeCrawlToStorage } from "@squirrelscan/synthetic-site";
-
-import {
-  buildGoldenBaselineModel,
-  captureEngineBaseline,
-  getGoldenBaselineConfig,
-  run,
-  type EngineBaselineSnapshot,
-} from "./helpers/golden-baseline";
+import { canonicalV1Snapshot, type EngineBaselineSnapshot } from "./helpers/golden-baseline";
 
 const PINNED = join(import.meta.dir, "golden/finding-messages.json");
-const tmpDir = mkdtempSync(join(tmpdir(), "squirrelscan-golden-messages-"));
-afterAll(() => rmSync(tmpDir, { recursive: true, force: true }));
 
 export interface PinnedRule {
   /** Decimal digest (48 bits of sha1) of the exact distinct lines, sorted: moves when a count or value in a message changes. */
@@ -92,10 +81,7 @@ export function diffPinned(expected: PinnedMessages, actual: PinnedMessages, cap
 
 describe("pinned finding messages, values and expected (#229)", () => {
   test("the canonical fixture produces the committed set", async () => {
-    const dbPath = join(tmpDir, "messages.sqlite");
-    const { storage } = await writeCrawlToStorage(buildGoldenBaselineModel(), dbPath);
-    await run(storage.close());
-    const actual = pinMessages(await captureEngineBaseline(dbPath, getGoldenBaselineConfig()));
+    const actual = pinMessages(await canonicalV1Snapshot());
     if (process.env.UPDATE_GOLDEN === "1") {
       writeFileSync(PINNED, `${JSON.stringify(actual, null, 1)}\n`);
       return;

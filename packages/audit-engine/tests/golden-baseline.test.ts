@@ -7,20 +7,16 @@
 // merge gate. This file only proves the v1 SIDE of that gate is itself sound:
 // capturing twice yields a byte-identical snapshot.
 
-import { afterAll, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
-import { writeCrawlToStorage } from "@squirrelscan/synthetic-site";
+import { describe, expect, test } from "bun:test";
 
 import {
   buildGoldenBaselineModel,
+  canonicalFixtureDb,
+  canonicalV1Snapshot,
   captureEngineBaseline,
   diffBaselines,
   getGoldenBaselineConfig,
   GOLDEN_BASELINE_PAGE_COUNT,
-  run,
   serializeBaseline,
 } from "./helpers/golden-baseline";
 
@@ -36,11 +32,10 @@ import {
 const CAPTURE_BUDGET_MS = 120_000;
 const DETERMINISM_TIMEOUT_MS = 2 * CAPTURE_BUDGET_MS;
 
-const tmpDir = mkdtempSync(join(tmpdir(), "squirrelscan-golden-baseline-"));
-
-afterAll(() => {
-  rmSync(tmpDir, { recursive: true, force: true });
-});
+// The canonical crawl DB is written once and the first v1 capture is memoized per
+// process (#1839): every test below that only READS a snapshot shares it (never
+// mutating it; the mutation tests structuredClone first). Only the determinism test
+// needs two INDEPENDENT captures, so it takes a second, fresh one.
 
 describe("v1 golden baseline — 500-page canonical fixture", () => {
   test("fixture generation is deterministic (sanity — synthetic-site's own contract)", () => {
@@ -57,14 +52,11 @@ describe("v1 golden baseline — 500-page canonical fixture", () => {
   test(
     "captureEngineBaseline is deterministic — same crawl DB, captured twice, byte-identical",
     async () => {
-      const model = buildGoldenBaselineModel();
-      const dbPath = join(tmpDir, "determinism.sqlite");
-      const { storage } = await writeCrawlToStorage(model, dbPath);
-      await run(storage.close()); // capture opens its own fresh connection
-
-      const config = getGoldenBaselineConfig();
-      const first = await captureEngineBaseline(dbPath, config);
-      const second = await captureEngineBaseline(dbPath, config);
+      const dbPath = await canonicalFixtureDb();
+      // Two independent captures of the same DB: the memoized one, and a fresh one
+      // that opens its own connection and reruns the whole rule set.
+      const first = await canonicalV1Snapshot();
+      const second = await captureEngineBaseline(dbPath, getGoldenBaselineConfig());
 
       expect(serializeBaseline(first)).toBe(serializeBaseline(second));
 
@@ -78,13 +70,7 @@ describe("v1 golden baseline — 500-page canonical fixture", () => {
   test(
     "captures a real, non-trivial finding set and health score over the canonical fixture",
     async () => {
-      const model = buildGoldenBaselineModel();
-      const dbPath = join(tmpDir, "baseline-stats.sqlite");
-      const { storage } = await writeCrawlToStorage(model, dbPath);
-      await run(storage.close());
-
-      const config = getGoldenBaselineConfig();
-      const snapshot = await captureEngineBaseline(dbPath, config);
+      const snapshot = await canonicalV1Snapshot();
 
       // Sanity bounds, not exact-value pins (the exact numbers are the whole
       // point of "capture" — pinning them here would just be a second,
@@ -121,26 +107,14 @@ describe("v1 golden baseline — 500-page canonical fixture", () => {
   );
 
   test("diffBaselines reports zero divergences comparing a snapshot to itself", async () => {
-    const model = buildGoldenBaselineModel();
-    const dbPath = join(tmpDir, "diff-self.sqlite");
-    const { storage } = await writeCrawlToStorage(model, dbPath);
-    await run(storage.close());
-
-    const config = getGoldenBaselineConfig();
-    const snapshot = await captureEngineBaseline(dbPath, config);
+    const snapshot = await canonicalV1Snapshot();
 
     const diff = diffBaselines(snapshot, snapshot);
     expect(diff).toEqual({ identical: true, divergences: [], totalDivergences: 0 });
   }, CAPTURE_BUDGET_MS);
 
   test("diffBaselines detects and reports an injected divergence, grouped by rule", async () => {
-    const model = buildGoldenBaselineModel();
-    const dbPath = join(tmpDir, "diff-mutated.sqlite");
-    const { storage } = await writeCrawlToStorage(model, dbPath);
-    await run(storage.close());
-
-    const config = getGoldenBaselineConfig();
-    const original = await captureEngineBaseline(dbPath, config);
+    const original = await canonicalV1Snapshot();
 
     // Deliberately corrupt a copy: drop one finding, and skew the overall score.
     const mutated = structuredClone(original);
@@ -160,13 +134,7 @@ describe("v1 golden baseline — 500-page canonical fixture", () => {
   }, CAPTURE_BUDGET_MS);
 
   test("diffBaselines caps the divergence list but reports the true total", async () => {
-    const model = buildGoldenBaselineModel();
-    const dbPath = join(tmpDir, "diff-capped.sqlite");
-    const { storage } = await writeCrawlToStorage(model, dbPath);
-    await run(storage.close());
-
-    const config = getGoldenBaselineConfig();
-    const original = await captureEngineBaseline(dbPath, config);
+    const original = await canonicalV1Snapshot();
 
     // Drop many findings — more divergences than the cap.
     const mutated = structuredClone(original);

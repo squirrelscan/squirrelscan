@@ -10,19 +10,11 @@
 // finding set and the per-rule tally must be identical. Matched by the Engine
 // Golden Gates CI glob (tests/*golden*.test.ts).
 
-import { afterAll, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
-import { writeCrawlToStorage } from "@squirrelscan/synthetic-site";
+import { describe, expect, test } from "bun:test";
 
 import {
-  buildGoldenBaselineModel,
-  captureEngineBaseline,
-  captureStreamingBaseline,
-  getGoldenBaselineConfig,
-  run,
+  canonicalV1Snapshot,
+  canonicalV2Snapshot,
   type EngineBaselineSnapshot,
 } from "./helpers/golden-baseline";
 
@@ -47,12 +39,6 @@ const MUST_FIRE = new Set<string>([
   "integrity/orphan-page",
 ]);
 
-const tmpDir = mkdtempSync(join(tmpdir(), "squirrelscan-collector-rules-"));
-
-afterAll(() => {
-  rmSync(tmpDir, { recursive: true, force: true });
-});
-
 function findingsFor(snapshot: EngineBaselineSnapshot, ruleId: string) {
   return snapshot.findings.filter((f) => f.ruleId === ruleId);
 }
@@ -64,14 +50,9 @@ describe("E-E2 collector rules — per-rule v1↔v2 byte-identity", () => {
   test(
     "each of the six DOM-scanner rules emits an identical finding set on both engines",
     async () => {
-      const model = buildGoldenBaselineModel();
-      const dbPath = join(tmpDir, "collector-rules.sqlite");
-      const { storage } = await writeCrawlToStorage(model, dbPath);
-      await run(storage.close()); // each capture opens its own fresh connection
-
-      const config = getGoldenBaselineConfig();
-      const v1 = await captureEngineBaseline(dbPath, config);
-      const v2 = await captureStreamingBaseline(dbPath, config);
+      // Captured once per process and shared with the other canonical golden files.
+      const v1 = await canonicalV1Snapshot();
+      const v2 = await canonicalV2Snapshot();
 
       for (const ruleId of COLLECTOR_RULE_IDS) {
         const v1Findings = findingsFor(v1, ruleId);
