@@ -10,11 +10,7 @@
 // equivalence is proven end-to-end through the whole report object.
 
 import { afterAll, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 
-import { writeCrawlToStorage } from "@squirrelscan/synthetic-site";
 import {
   generateReportFromStorage,
   runStreamingRules,
@@ -24,12 +20,36 @@ import {
 import { SQLiteStorage } from "@squirrelscan/crawler";
 
 import { buildV2Report } from "../src/report-stream";
-import { buildGoldenBaselineModel, getGoldenBaselineConfig, run } from "./helpers/golden-baseline";
+import { canonicalFixtureDb, getGoldenBaselineConfig, run } from "./helpers/golden-baseline";
 
-const tmpDir = mkdtempSync(join(tmpdir(), "squirrelscan-report-v2-golden-"));
+// ONE streaming run over the canonical fixture, shared by all three tests (#1839).
+// They used to each write the crawl DB and rerun the full streaming rule set; the
+// tests only differ in what they assert about the report built from that run, so
+// the run is done once (lazily, in the first test, which carries the budget) and
+// the storage stays open until afterAll. The streamResult is treated as read-only.
+interface SharedRun {
+  storage: SQLiteStorage;
+  crawlId: string;
+  streamResult: Awaited<ReturnType<typeof runStreamingRules>>;
+}
+let shared: Promise<SharedRun> | undefined;
+function sharedRun(): Promise<SharedRun> {
+  shared ??= (async () => {
+    const dbPath = await canonicalFixtureDb();
+    const storage = new SQLiteStorage(dbPath);
+    await run(storage.init());
+    const crawlId = (await run(storage.listCrawls(1)))[0]?.id;
+    if (!crawlId) throw new Error("no crawl found in fixture DB");
+    const streamResult = await run(
+      runStreamingRules(storage, crawlId, getGoldenBaselineConfig(), emptyAssets()),
+    );
+    return { storage, crawlId, streamResult };
+  })();
+  return shared;
+}
 
-afterAll(() => {
-  rmSync(tmpDir, { recursive: true, force: true });
+afterAll(async () => {
+  if (shared) await run((await shared).storage.close());
 });
 
 /** Offline assets — no network sizing, matching the golden-baseline harness. */
@@ -57,21 +77,9 @@ describe("v2 report assembly — byte-identical to v1 except pages[] (#1021 PR-F
   test(
     "buildV2Report ≡ generateReportFromStorage over the canonical fixture, sans pages",
     async () => {
-      const model = buildGoldenBaselineModel();
-      const dbPath = join(tmpDir, "v2-report.sqlite");
-      const { storage: writeStorage } = await writeCrawlToStorage(model, dbPath);
-      await run(writeStorage.close());
-
-      const storage = new SQLiteStorage(dbPath);
-      try {
-        await run(storage.init());
-        const crawls = await run(storage.listCrawls(1));
-        const crawlId = crawls[0]?.id;
-        if (!crawlId) throw new Error("no crawl found in fixture DB");
-
-        const config = getGoldenBaselineConfig();
+      {
         // ONE streaming run feeds BOTH report paths — the only variable is the tail.
-        const streamResult = await run(runStreamingRules(storage, crawlId, config, emptyAssets()));
+        const { storage, crawlId, streamResult } = await sharedRun();
 
         const v1Report = await run(generateReportFromStorage(storage, crawlId, streamResult));
         const v2Report = await run(buildV2Report(storage, crawlId, streamResult));
@@ -107,8 +115,6 @@ describe("v2 report assembly — byte-identical to v1 except pages[] (#1021 PR-F
             `warnings=${v2Report.warnings} failed=${v2Report.failed} ` +
             `summaryDupTitles=${v2Report.summary.missingTitles.length}`,
         );
-      } finally {
-        await run(storage.close());
       }
     },
     60_000,
@@ -119,20 +125,8 @@ describe("v2 report assembly — byte-identical to v1 except pages[] (#1021 PR-F
     async () => {
       // Same fixture; assert the cap is an upper bound v2 never exceeds (the
       // fixture sits under it, which is exactly why the parity test above holds).
-      const model = buildGoldenBaselineModel();
-      const dbPath = join(tmpDir, "v2-cap.sqlite");
-      const { storage: writeStorage } = await writeCrawlToStorage(model, dbPath);
-      await run(writeStorage.close());
-
-      const storage = new SQLiteStorage(dbPath);
-      try {
-        await run(storage.init());
-        const crawlId = (await run(storage.listCrawls(1)))[0]?.id;
-        if (!crawlId) throw new Error("no crawl found in fixture DB");
-
-        const streamResult = await run(
-          runStreamingRules(storage, crawlId, getGoldenBaselineConfig(), emptyAssets()),
-        );
+      {
+        const { storage, crawlId, streamResult } = await sharedRun();
         const report = await run(buildV2Report(storage, crawlId, streamResult));
 
         const { maxSummaryItems } = (await import("@squirrelscan/core-contracts/limits"))
@@ -149,28 +143,14 @@ describe("v2 report assembly — byte-identical to v1 except pages[] (#1021 PR-F
         ]) {
           expect(arr.length).toBeLessThanOrEqual(maxSummaryItems);
         }
-      } finally {
-        await run(storage.close());
       }
     },
     60_000,
   );
 
   test("v2 heartbeat hook fires once per page batch", async () => {
-    const model = buildGoldenBaselineModel();
-    const dbPath = join(tmpDir, "v2-heartbeat.sqlite");
-    const { storage: writeStorage } = await writeCrawlToStorage(model, dbPath);
-    await run(writeStorage.close());
-
-    const storage = new SQLiteStorage(dbPath);
-    try {
-      await run(storage.init());
-      const crawlId = (await run(storage.listCrawls(1)))[0]?.id;
-      if (!crawlId) throw new Error("no crawl found in fixture DB");
-
-      const streamResult = await run(
-        runStreamingRules(storage, crawlId, getGoldenBaselineConfig(), emptyAssets()),
-      );
+    {
+      const { storage, crawlId, streamResult } = await sharedRun();
 
       const batches: number[] = [];
       const report = await run(
@@ -184,8 +164,6 @@ describe("v2 report assembly — byte-identical to v1 except pages[] (#1021 PR-F
       expect(batches.length).toBeGreaterThan(1);
       expect(batches).toEqual([...batches].sort((a, b) => a - b));
       expect(batches[batches.length - 1]).toBe(report.totalPages);
-    } finally {
-      await run(storage.close());
     }
   }, 60_000);
 });

@@ -39,7 +39,10 @@ import {
 } from "@squirrelscan/audit-engine";
 import { getDefaultConfig } from "@squirrelscan/config";
 import { SQLiteStorage } from "@squirrelscan/crawler";
-import { generateSiteModel } from "@squirrelscan/synthetic-site";
+import { generateSiteModel, writeCrawlToStorage } from "@squirrelscan/synthetic-site";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { Effect } from "effect";
 
 export function run<A>(eff: Effect.Effect<A, unknown, never>): Promise<A> {
@@ -648,4 +651,52 @@ export function diffBaselines(
     divergences: divergences.slice(0, maxDivergences),
     totalDivergences: divergences.length,
   };
+}
+
+// ── Shared canonical captures (#1839) ─────────────────────────────────────────
+//
+// Several golden files need the identical capture: the canonical fixture, the
+// canonical config, one engine. Each used to rebuild the ~518-page crawl DB and
+// rerun the whole rule set (~15 s per engine). These helpers memoize per process
+// (module-level, so every file in the same bun process reuses it): the crawl DB is
+// written once, and each engine is captured once. The snapshots are SHARED, so a
+// caller must treat them as read-only (`structuredClone` before mutating). A test
+// that needs a genuinely independent capture (e.g. determinism) calls
+// `captureEngineBaseline(canonicalFixtureDb(), config)` directly instead.
+
+let canonicalDir: string | undefined;
+let canonicalDbPromise: Promise<string> | undefined;
+let canonicalV1Promise: Promise<EngineBaselineSnapshot> | undefined;
+let canonicalV2Promise: Promise<EngineBaselineSnapshot> | undefined;
+
+/** Path of the canonical crawl DB (written once per process, closed, safe to open from many connections). */
+export function canonicalFixtureDb(): Promise<string> {
+  if (!canonicalDbPromise) {
+    canonicalDir = mkdtempSync(join(tmpdir(), "squirrelscan-golden-canonical-"));
+    const dir = canonicalDir;
+    process.once("exit", () => rmSync(dir, { recursive: true, force: true }));
+    canonicalDbPromise = (async () => {
+      const dbPath = join(dir, "canonical.sqlite");
+      const { storage } = await writeCrawlToStorage(buildGoldenBaselineModel(), dbPath);
+      await run(storage.close()); // each capture opens its own fresh connection
+      return dbPath;
+    })();
+  }
+  return canonicalDbPromise;
+}
+
+/** The v1 snapshot of the canonical fixture under the canonical config, captured once. READ-ONLY. */
+export function canonicalV1Snapshot(): Promise<EngineBaselineSnapshot> {
+  canonicalV1Promise ??= canonicalFixtureDb().then((db) =>
+    captureEngineBaseline(db, getGoldenBaselineConfig()),
+  );
+  return canonicalV1Promise;
+}
+
+/** The v2 (streaming) snapshot of the canonical fixture under the canonical config, captured once. READ-ONLY. */
+export function canonicalV2Snapshot(): Promise<EngineBaselineSnapshot> {
+  canonicalV2Promise ??= canonicalFixtureDb().then((db) =>
+    captureStreamingBaseline(db, getGoldenBaselineConfig()),
+  );
+  return canonicalV2Promise;
 }

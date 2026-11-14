@@ -10,42 +10,23 @@
 // file (matched by the Golden-Gates glob) so the fast small-fixture direct-compares
 // in streaming-rules-golden.test.ts still fail fast independently.
 
-import { afterAll, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
-import { writeCrawlToStorage } from "@squirrelscan/synthetic-site";
+import { describe, expect, test } from "bun:test";
 
 import {
-  buildGoldenBaselineModel,
-  captureEngineBaseline,
-  captureStreamingBaseline,
+  canonicalV1Snapshot,
+  canonicalV2Snapshot,
   diffBaselines,
-  getGoldenBaselineConfig,
   GOLDEN_BASELINE_PAGE_COUNT,
-  run,
   serializeBaseline,
 } from "./helpers/golden-baseline";
-
-const tmpDir = mkdtempSync(join(tmpdir(), "squirrelscan-streaming-canonical-"));
-
-afterAll(() => {
-  rmSync(tmpDir, { recursive: true, force: true });
-});
 
 describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
   test(
     "v2 streaming snapshot is byte-identical to the v1 baseline (zero divergences)",
     async () => {
-      const model = buildGoldenBaselineModel();
-      const dbPath = join(tmpDir, "canonical.sqlite");
-      const { storage } = await writeCrawlToStorage(model, dbPath);
-      await run(storage.close()); // each capture opens its own fresh connection
-
-      const config = getGoldenBaselineConfig();
-      const v1 = await captureEngineBaseline(dbPath, config);
-      const v2 = await captureStreamingBaseline(dbPath, config);
+      // Captured once per process and shared with the other canonical golden files.
+      const v1 = await canonicalV1Snapshot();
+      const v2 = await canonicalV2Snapshot();
 
       // The gate: readable, rule-grouped divergence report must be empty.
       const diff = diffBaselines(v1, v2);
