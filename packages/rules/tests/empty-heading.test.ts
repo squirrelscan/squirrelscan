@@ -7,7 +7,7 @@ import { parsePage } from "@squirrelscan/parser";
 import { emptyHeadingRule } from "../src/a11y/empty-heading";
 import type { CheckResult, RuleContext } from "../src/types";
 
-function runAll(body: string): CheckResult[] {
+async function runAll(body: string): Promise<CheckResult[]> {
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Hidden headings</title></head><body>${body}</body></html>`;
   const url = "https://example.com/";
   const ctx = {
@@ -15,18 +15,17 @@ function runAll(body: string): CheckResult[] {
     parsed: parsePage(html, url),
     options: {},
   } as unknown as RuleContext;
-  const result = emptyHeadingRule.run(ctx);
-  if (result instanceof Promise) throw new Error("empty-heading is async");
+  const result = await emptyHeadingRule.run(ctx);
   return result.checks;
 }
 
-function run(body: string): CheckResult | undefined {
-  return runAll(body).find((c) => c.name === "empty-heading");
+async function run(body: string): Promise<CheckResult | undefined> {
+  return (await runAll(body)).find((c) => c.name === "empty-heading");
 }
 
 describe("a11y/empty-heading hidden headings", () => {
-  test("the reporter's repro page passes", () => {
-    const result = run(`<h1>Shop</h1>
+  test("the reporter's repro page passes", async () => {
+    const result = await run(`<h1>Shop</h1>
 <h2 hidden></h2>
 <h2 style="display:none"></h2>`);
     expect(result?.status).toBe("pass");
@@ -44,8 +43,8 @@ describe("a11y/empty-heading hidden headings", () => {
     ["visibility:hidden ancestor", `<h1>Shop</h1><div style="visibility:hidden"><h2></h2></div>`],
     ["aria-hidden heading", `<h1>Shop</h1><h2 aria-hidden="true"></h2>`],
     ["aria-hidden ancestor", `<h1>Shop</h1><div aria-hidden="true"><h2></h2></div>`],
-  ])("%s: passes", (_label, body) => {
-    const result = run(body);
+  ])("%s: passes", async (_label, body) => {
+    const result = await run(body);
     expect(result?.status).toBe("pass");
     expect(result?.items).toBeUndefined();
   });
@@ -53,28 +52,28 @@ describe("a11y/empty-heading hidden headings", () => {
   test.each([
     ["hidden=\"until-found\" heading", `<h1>Shop</h1><h2 hidden="until-found"></h2>`],
     ["hidden=\"until-found\" ancestor", `<h1>Shop</h1><div hidden="until-found"><h2></h2></div>`],
-  ])("%s: warns", (_label, body) => {
-    const result = run(body);
+  ])("%s: warns", async (_label, body) => {
+    const result = await run(body);
     expect(result?.status).toBe("warn");
     expect(result?.items).toHaveLength(1);
   });
 
-  test("a heading that overrides an inherited visibility:hidden is rendered: warns", () => {
-    const result = run(
+  test("a heading that overrides an inherited visibility:hidden is rendered: warns", async () => {
+    const result = await run(
       `<h1>Shop</h1><div style="visibility:hidden"><h2 style="visibility:visible"></h2></div>`,
     );
     expect(result?.status).toBe("warn");
   });
 
-  test("visibility:inherit on the heading defers to the hidden ancestor: passes", () => {
-    const result = run(
+  test("visibility:inherit on the heading defers to the hidden ancestor: passes", async () => {
+    const result = await run(
       `<h1>Shop</h1><div style="visibility:hidden"><h2 style="visibility:inherit"></h2></div>`,
     );
     expect(result?.status).toBe("pass");
   });
 
-  test("visibility:unset on the heading inherits the hidden ancestor: passes", () => {
-    const result = run(
+  test("visibility:unset on the heading inherits the hidden ancestor: passes", async () => {
+    const result = await run(
       `<h1>Shop</h1><div style="visibility:hidden"><h2 style="visibility:unset"></h2></div>`,
     );
     expect(result?.status).toBe("pass");
@@ -82,58 +81,58 @@ describe("a11y/empty-heading hidden headings", () => {
 
   // pub#1002: the shared reader settles only plainly written inline styles; one
   // it cannot read is unconfirmed rather than decided either way.
-  test("an inline style with a comment is unconfirmed, not failed", () => {
-    const out = runAll(`<h1>Shop</h1><h2 style="/* x */display:none"></h2>`);
+  test("an inline style with a comment is unconfirmed, not failed", async () => {
+    const out = await runAll(`<h1>Shop</h1><h2 style="/* x */display:none"></h2>`);
     expect(out.map((c) => [c.name, c.status])).toEqual([["empty-heading-unconfirmed", "warn"]]);
   });
 
-  test("hidden with a multi-keyword inline display is unconfirmed, not failed", () => {
-    const out = runAll(`<h1>Shop</h1><h2 hidden style="display:inline flow-root"></h2>`);
+  test("hidden with a multi-keyword inline display is unconfirmed, not failed", async () => {
+    const out = await runAll(`<h1>Shop</h1><h2 hidden style="display:inline flow-root"></h2>`);
     expect(out.map((c) => c.name)).toEqual(["empty-heading-unconfirmed"]);
   });
 
   test.each(["block", "inherit"])(
     "hidden with inline display:%s is rendered: warns",
-    (display) => {
-      const result = run(`<h1>Shop</h1><h2 hidden style="display:${display}"></h2>`);
+    async (display) => {
+      const result = await run(`<h1>Shop</h1><h2 hidden style="display:${display}"></h2>`);
       expect(result?.status).toBe("warn");
     },
   );
 
-  test("an inline display other than none overrides the hidden attribute: warns", () => {
-    const result = run(`<h1>Shop</h1><h2 hidden style="display:block"></h2>`);
+  test("an inline display other than none overrides the hidden attribute: warns", async () => {
+    const result = await run(`<h1>Shop</h1><h2 hidden style="display:block"></h2>`);
     expect(result?.status).toBe("warn");
   });
 
-  test("a later display declaration wins over an earlier display:none: warns", () => {
-    const result = run(`<h1>Shop</h1><h2 style="display:none;display:block"></h2>`);
+  test("a later display declaration wins over an earlier display:none: warns", async () => {
+    const result = await run(`<h1>Shop</h1><h2 style="display:none;display:block"></h2>`);
     expect(result?.status).toBe("warn");
   });
 
-  test("a page whose only headings are hidden still passes", () => {
-    const result = run(`<h2 hidden></h2>`);
+  test("a page whose only headings are hidden still passes", async () => {
+    const result = await run(`<h2 hidden></h2>`);
     expect(result?.status).toBe("pass");
   });
 
-  test("the position label is the heading's position in the document", () => {
-    const result = run(`<h2 hidden></h2><h2 hidden></h2><h1>Shop</h1><h2></h2>`);
+  test("the position label is the heading's position in the document", async () => {
+    const result = await run(`<h2 hidden></h2><h2 hidden></h2><h1>Shop</h1><h2></h2>`);
     expect(result?.items?.[0]?.label).toBe("h2, heading 4 of 4 on the page");
   });
 
-  test("a CSS class that hides a heading cannot be seen from the markup: warns", () => {
-    const result = run(`<h1>Shop</h1><h2 class="visually-gone"></h2>`);
+  test("a CSS class that hides a heading cannot be seen from the markup: warns", async () => {
+    const result = await run(`<h1>Shop</h1><h2 class="visually-gone"></h2>`);
     expect(result?.status).toBe("warn");
   });
 
-  test("a visible empty heading warns and the item has a snippet", () => {
-    const result = run(`<h1>Shop</h1><h2></h2>`);
+  test("a visible empty heading warns and the item has a snippet", async () => {
+    const result = await run(`<h1>Shop</h1><h2></h2>`);
     expect(result?.status).toBe("warn");
     expect(result?.message).toBe("1 empty heading(s) found");
     expect(result?.items?.[0]?.snippet).toBe("<h2>");
   });
 
-  test("items tell sibling headings of the same level apart", () => {
-    const result = run(`<h1>Shop</h1><h2></h2><h2>Real</h2><h2 data-slot="b"></h2>`);
+  test("items tell sibling headings of the same level apart", async () => {
+    const result = await run(`<h1>Shop</h1><h2></h2><h2>Real</h2><h2 data-slot="b"></h2>`);
     expect(result?.items).toHaveLength(2);
     const [first, second] = result?.items ?? [];
     expect(first?.label).not.toBe(second?.label);
@@ -141,14 +140,14 @@ describe("a11y/empty-heading hidden headings", () => {
     expect(second?.snippet).toBe('<h2 data-slot="b">');
   });
 
-  test("a hidden empty heading next to a visible empty one reports only the visible one", () => {
-    const result = run(`<h1>Shop</h1><h2 hidden></h2><h2 id="promo"></h2>`);
+  test("a hidden empty heading next to a visible empty one reports only the visible one", async () => {
+    const result = await run(`<h1>Shop</h1><h2 hidden></h2><h2 id="promo"></h2>`);
     expect(result?.items).toHaveLength(1);
     expect(result?.items?.[0]?.id).toBe("h2#promo");
   });
 
-  test("a heading whose only content is an image with alt text passes", () => {
-    const result = run(`<h1>Shop</h1><h2><img src="/logo.svg" alt="Northwind Traders"></h2>`);
+  test("a heading whose only content is an image with alt text passes", async () => {
+    const result = await run(`<h1>Shop</h1><h2><img src="/logo.svg" alt="Northwind Traders"></h2>`);
     expect(result?.status).toBe("pass");
   });
 });

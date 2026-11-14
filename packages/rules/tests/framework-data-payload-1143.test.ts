@@ -12,14 +12,13 @@ import type { ParsedPage, RuleContext } from "../src/types";
 
 const doc = (html: string) => parseHTML(html).document as unknown as NonNullable<ParsedPage["document"]>;
 
-function run(html: string, options: Record<string, unknown> = {}) {
+async function run(html: string, options: Record<string, unknown> = {}) {
   const ctx: RuleContext = {
     page: { url: "https://example.com/", html, statusCode: 200, loadTime: 0, headers: {} },
     parsed: { document: doc(html) } as unknown as ParsedPage,
     options,
   };
-  const result = frameworkDataPayloadRule.run(ctx);
-  if (result instanceof Promise) throw new Error("unexpected async rule");
+  const result = await frameworkDataPayloadRule.run(ctx);
   return result.checks;
 }
 
@@ -91,8 +90,8 @@ describe("findFrameworkPayloads", () => {
 });
 
 describe("perf/framework-data-payload", () => {
-  test("a text page with 150 KB of flight data is flagged at info, with every number", () => {
-    const [check] = run(page(`<main><h1>Docs</h1><p>${prose(300)}</p></main>${nextFlight(150)}`));
+  test("a text page with 150 KB of flight data is flagged at info, with every number", async () => {
+    const [check] = await run(page(`<main><h1>Docs</h1><p>${prose(300)}</p></main>${nextFlight(150)}`));
     expect(check?.status).toBe("info");
     expect(check?.message).toContain("self.__next_f");
     expect(check?.items?.[0]?.id).toBe("self.__next_f");
@@ -100,71 +99,71 @@ describe("perf/framework-data-payload", () => {
     expect((check?.details as { ratio: number }).ratio).toBeGreaterThanOrEqual(20);
   });
 
-  test("__NEXT_DATA__ on a static page is flagged too", () => {
-    const [check] = run(page(`<article><p>${prose(200)}</p></article>${nextData(120)}`));
+  test("__NEXT_DATA__ on a static page is flagged too", async () => {
+    const [check] = await run(page(`<article><p>${prose(200)}</p></article>${nextData(120)}`));
     expect(check?.status).toBe("info");
   });
 
-  test("a small payload passes", () => {
-    const [check] = run(page(`<p>${prose(200)}</p>${nextData(20)}`));
+  test("a small payload passes", async () => {
+    const [check] = await run(page(`<p>${prose(200)}</p>${nextData(20)}`));
     expect(check?.status).toBe("pass");
     expect(check?.message).toContain("under the");
   });
 
-  test("no payload passes", () => {
-    const [check] = run(page(`<p>${prose(200)}</p>`));
+  test("no payload passes", async () => {
+    const [check] = await run(page(`<p>${prose(200)}</p>`));
     expect(check?.status).toBe("pass");
   });
 
-  test("an interactive page (many form fields) is not flagged, however big the payload", () => {
+  test("an interactive page (many form fields) is not flagged, however big the payload", async () => {
     const fields = Array.from({ length: 12 }, (_, i) => `<input type="text" name="f${i}">`).join("");
-    const [check] = run(page(`<main><form>${fields}</form><p>${prose(200)}</p></main>${nextFlight(300)}`));
+    const [check] = await run(page(`<main><form>${fields}</form><p>${prose(200)}</p></main>${nextFlight(300)}`));
     expect(check?.status).toBe("pass");
     expect(check?.message).toContain("interactive");
   });
 
-  test("a page with embedded media is not flagged", () => {
+  test("a page with embedded media is not flagged", async () => {
     const media = '<canvas></canvas><video></video><iframe></iframe><audio></audio><embed><object></object>';
-    const [check] = run(page(`<p>${prose(200)}</p>${media}${nextFlight(300)}`));
+    const [check] = await run(page(`<p>${prose(200)}</p>${media}${nextFlight(300)}`));
     expect(check?.status).toBe("pass");
   });
 
-  test("a client-rendered shell with almost no text is not judged, however big the payload", () => {
+  test("a client-rendered shell with almost no text is not judged, however big the payload", async () => {
     for (const body of ["", "<div id=root></div>", "<p>Loading</p>"]) {
-      const [check] = run(page(`${body}${nextFlight(300)}`));
+      const [check] = await run(page(`${body}${nextFlight(300)}`));
       expect(check?.status).toBe("pass");
       expect(check?.message).toContain("too little to judge");
     }
   });
 
-  test("a page that is mostly data (text comparable to the payload) is not flagged", () => {
-    const [check] = run(page(`<p>${prose(30000)}</p>${nextData(110)}`));
+  test("a page that is mostly data (text comparable to the payload) is not flagged", async () => {
+    const [check] = await run(page(`<p>${prose(30000)}</p>${nextData(110)}`));
     expect(check?.status).toBe("pass");
     expect(check?.message).toContain("mostly data");
   });
 
-  test("hidden inputs and submit buttons are not interactivity", () => {
+  test("hidden inputs and submit buttons are not interactivity", async () => {
     const html = page(
       `<p>${prose(200)}</p><form><input type="hidden" name="a"><input type="submit"></form>${nextFlight(150)}`,
     );
-    expect(run(html)[0]?.status).toBe("info");
+    expect((await run(html))[0]?.status).toBe("info");
   });
 
-  test("the options move the thresholds", () => {
+  test("the options move the thresholds", async () => {
     const html = page(`<p>${prose(200)}</p>${nextData(40)}`);
-    expect(run(html)[0]?.status).toBe("pass");
-    expect(run(html, { min_bytes: 30 * 1024 })[0]?.status).toBe("info");
+    expect((await run(html))[0]?.status).toBe("pass");
+    expect((await run(html, { min_bytes: 30 * 1024 }))[0]?.status).toBe("info");
   });
 
-  test("a page with no document emits nothing", () => {
+  test("a page with no document emits nothing", async () => {
     const ctx = { page: {}, parsed: { document: null }, options: {} } as unknown as RuleContext;
-    const result = frameworkDataPayloadRule.run(ctx);
-    expect(result instanceof Promise ? [] : result.checks).toEqual([]);
+    const result = await frameworkDataPayloadRule.run(ctx);
+    expect(result.checks).toEqual([]);
   });
 
-  test("an empty document (no root element) passes without throwing", () => {
+  test("an empty document (no root element) passes without throwing", async () => {
     for (const html of ["", "   ", "just text", "<!-- only a comment -->"]) {
-      const checks = run(html);
+      const checks = await run(html);
       expect(checks.every((c) => c.status === "pass")).toBe(true);
     }
   });

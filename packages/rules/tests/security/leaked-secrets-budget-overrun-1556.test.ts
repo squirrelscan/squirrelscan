@@ -30,11 +30,11 @@ describe("a scan that overruns the time budget keeps what it found (#1556)", () 
     expect(signal.secrets.some((s) => s.value === stripe(7))).toBe(true);
   });
 
-  test("the rule still says the page was not fully scanned, and does not pass", () => {
+  test("the rule still says the page was not fully scanned, and does not pass", async () => {
     const filler = "var token = 'abcdefghijklmnopqrstuvwxyz0123456789';\n".repeat(60_000);
     const html = `<html><body><script>var k = "${stripe(8)}";</script><script>${filler}</script></body></html>`;
     const signal = buildCollectedPageSignal({ url: URL_, parsed: parsePage(html, URL_), budgetMs: 25 });
-    const result = leakedSecretsRule.run({
+    const result = await leakedSecretsRule.run({
       site: { baseUrl: URL_, pages: [], scripts: [] },
       collectedSignals: { pages: [signal] },
     } as unknown as RuleContext);

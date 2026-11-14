@@ -10,7 +10,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { leakedSecretsRule, scanContent, type SecretLocation } from "../../src/security/leaked-secrets";
-import type { CheckItem, RuleContext } from "../../src/types";
+import type { RuleContext } from "../../src/types";
 import { mixedRun, runOf, seededRng } from "./leaked-secrets/generators";
 
 const HEX = "0123456789abcdef";
@@ -245,12 +245,12 @@ describe("search keys keep reporting, with the name as a hint (#1229)", () => {
     expect([searchFinding?.confidence, typeof searchFinding?.extra?.hint]).toEqual(["medium", "string"]);
   });
 
-  test("the same value under a search name and an admin name is reported as a leak, never as public", () => {
+  test("the same value under a search name and an admin name is reported as a leak, never as public", async () => {
     const text = `{searchApiKey:"${key}",adminApiKey:"${key}"}`;
-    const reported = leakedSecretsRule.run({
+    const reported = await leakedSecretsRule.run({
       site: { baseUrl: PAGE, pages: [], robotsTxt: null, sitemaps: null, scripts: [{ url: "https://shop.acme.test/a.js", content: text, status: 200, error: null, contentType: "application/javascript", sizeBytes: text.length, sourcePages: [PAGE] }] },
       options: {},
-    } as unknown as RuleContext) as { checks: Array<{ name: string; items?: CheckItem[] }> };
+    } as unknown as RuleContext);
     const medium = reported.checks.find((c) => c.name === "leaked-secrets-medium");
     // The scanner reports one finding per distinct secret value; what matters is that it is a leak, not a public key.
     expect(medium?.items?.length).toBeGreaterThanOrEqual(1);
