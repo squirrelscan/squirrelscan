@@ -1,0 +1,134 @@
+---
+title: "Exposed Spring Boot Actuator: env, heapdump and other open endpoints"
+description: "An open /actuator/env or /actuator/heapdump hands anyone your secrets. squirrel sends read-only GET requests to the actuator paths and flags the ones that answer."
+---
+
+## What an exposed actuator is
+
+Spring Boot Actuator adds management endpoints to a Java application: health checks, metrics, configuration and diagnostics. They are meant for operators. When `management.endpoints.web.exposure.include=*` ships to production without authentication, anyone on the internet can read them.
+
+Some of them are a full breach in one request:
+
+- `/actuator/env` lists the application's environment and property sources: database URLs, API keys and passwords, masked or not depending on the Spring Boot version and settings.
+- `/actuator/configprops` lists every configuration properties bean, which often includes the same credentials.
+- `/actuator/heapdump` downloads a dump of the JVM's memory, with every secret, session and token the process holds in plain text.
+
+Others, such as the index at `/actuator` and `/actuator/mappings`, do not leak secrets themselves but map the application's routes and internals for an attacker.
+
+## What squirrel checks
+
+This is a probing rule. It sends requests beyond the crawl, so it runs only when [probing intensity](/configuration/security) is `active` or `aggressive`. On a `passive` run it sends nothing and records one skipped check.
+
+### Which paths are probed
+
+- Actuator base paths the audit found in your pages and scripts: a URL with an `actuator` path segment, such as a `fetch("/manage/actuator/health")` call site, gives the base `/manage/actuator`. Finding them sends no request.
+- The conventional base `/actuator`.
+
+Every base must have the same origin as the audited URL (scheme, host and port). A path on another host is never probed. A discovered path that names a state-changing action (`logout`, `delete`, `update`, `reset` and similar, or an actuator write such as `shutdown`, `restart` or `refresh`), or whose call site declares `POST`, `PUT`, `PATCH` or `DELETE`, is never used. At most three bases are probed. Below `aggressive`, a path that `robots.txt` disallows is skipped.
+
+### What is sent
+
+Only `GET` requests, to these fixed read-only paths under each base:
+
+| Path | Level | Severity when open |
+|---|---|---|
+| `/actuator` (the index) | `active` | warning |
+| `/actuator/env` | `active` | critical |
+| `/actuator/configprops` | `active` | critical |
+| `/actuator/mappings` | `active` | warning |
+| `/actuator/heapdump` | `aggressive` | critical |
+
+When the index answers with its list of exposed endpoints, only the listed ones are requested.
+
+Asking for a heap dump makes the JVM write one, which is heavy work for the server, so `heapdump` is requested only on an `aggressive` run. That request carries `Range: bytes=0-63` and at most 64 bytes of the answer are read, whatever the server sends. On an `active` run, a heapdump listed by an open actuator index is reported from that listing alone, as a lower-confidence finding, and is not requested.
+
+Requests carry no cookies and do not follow redirects. At most 1 MB of each JSON answer is read, counted after decompression, and a compressed answer is decompressed no further than that.
+
+### How an endpoint is confirmed
+
+A status code alone never counts, so a single-page app that answers every path with its 200 page is not a finding. An endpoint counts only when its 2xx answer has that endpoint's shape:
+
+- The index: a JSON `_links` object with a `self` link and at least one known actuator endpoint.
+- `env`: `activeProfiles` and `propertySources` arrays.
+- `configprops`: `contexts` holding beans with a `prefix` and `properties`.
+- `mappings`: `contexts` holding `mappings` with dispatcher servlets, dispatcher handlers or servlet filters.
+- `heapdump`: a body that starts with the HPROF header `JAVA PROFILE`.
+
+A JSON answer longer than 1 MB counts when its opening matches the shape, for example an `env` answer that starts with `{"activeProfiles":[` and names `propertySources`.
+
+### Results
+
+Findings name the endpoint and the kind of evidence only. squirrel never stores or reports a response body or any value from it.
+
+- `exposed-actuator-critical` (fail) lists the open `env`, `configprops` and `heapdump` endpoints. The check details carry `severity: "critical"`. Each item has `endpoint`, `evidence` (`env-property-sources`, `configprops-beans`, `hprof-header` or `listed-in-index`) and, for a listing-only heapdump, `confidence: "lower"`.
+- `exposed-actuator-endpoints` (warn) lists the open index and `mappings` endpoints, with evidence `actuator-index-links` or `request-mappings`.
+- `exposed-actuator` (pass) when no endpoint answered with an actuator shape.
+- `exposed-actuator-not-checked` (skipped) when probing is passive (reason `probing-passive`), when the shared probe budget ran out before or partway through a run with no finding (reason `probe-budget`), or when every request failed with a network error or timeout (reason `probe-errors`). A run that did not check is never reported as a pass.
+
+### Limits
+
+An actuator base the crawl never referenced and that is not at `/actuator` is not found, and neither are Spring Boot 1.x endpoints at the application root (`/env`, `/heapdump`). Endpoints open only to signed-in users are not seen, because the probes carry no cookies. Other actuator endpoints, such as `threaddump`, `loggers` or `jolokia`, are not requested; an open index lists them, so check the index finding's endpoint by hand.
+
+## How to fix it
+
+Expose only what you need over HTTP, and nothing sensitive:
+
+```properties application.properties
+management.endpoints.web.exposure.include=health,info
+```
+
+Never use `*` in production. Put any other endpoint behind Spring Security, or serve the actuator on a separate port that is not reachable from the internet with `management.server.port`. If `env`, `configprops` or `heapdump` was open, treat every secret the application holds as leaked and rotate it: database passwords, API keys, signing keys and cloud credentials.
+
+| | |
+|---|---|
+| **Rule ID** | `security/exposed-actuator` |
+| **Category** | [Security](/rules/security) |
+| **Scope** | Site-wide |
+| **Severity** | error |
+| **Weight** | 9/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["security/exposed-actuator"]
+```
+
+### Disable all Security rules
+
+```toml squirrel.toml
+[rules]
+disable = ["security/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["security/exposed-actuator"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `exposed-actuator-critical` | Problem |  |
+| `exposed-actuator-endpoints` | Problem |  |
+| `exposed-actuator` | Clean | `exposed-actuator-critical`, `exposed-actuator-endpoints` |
+| `exposed-actuator-not-checked` | Not checked |  |
+
+{/* rule-checks:end */}
+
+## Related rules
+
+- [security/leaked-secrets](/rules/security/leaked-secrets): secrets shipped to the browser in pages and scripts.
+- [security/graphql-introspection](/rules/security/graphql-introspection): another probe for an API that describes itself to anyone.
+- [security/version-disclosure](/rules/security/version-disclosure): response headers that tell a scanner which server version to target.
