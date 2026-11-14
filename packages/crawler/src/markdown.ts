@@ -72,6 +72,12 @@ async function probeOne(
           await res.body?.cancel().catch(() => {});
           return null;
         }
+        // A 404/410 is an answer (no Markdown here). A 5xx or other non-ok status is
+        // no answer, so it is not stored as "no Markdown" (#1760).
+        if (!res.ok && res.status !== 404 && res.status !== 410) {
+          await res.body?.cancel().catch(() => {});
+          return null;
+        }
         const contentType = res.headers.get("content-type");
         const result: ProbeResult = {
           ok: res.ok,

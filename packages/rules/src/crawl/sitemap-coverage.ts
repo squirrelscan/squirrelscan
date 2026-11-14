@@ -16,6 +16,17 @@ function normalizedOrNull(url: string): string | null {
   }
 }
 
+// A partial read of the sitemaps (a child failed, a cap or deadline stopped the walk, or
+// discovery stopped early) leaves URLs the site does list out of the corpus, so a crawled
+// page's absence from it is unknown, not a defect (#1760). An absent readState predates the
+// field and keeps the old behaviour.
+function sitemapCorpusIncomplete(sitemaps: {
+  truncated?: boolean;
+  readState?: string;
+}): boolean {
+  return sitemaps.truncated === true || sitemaps.readState === "partial" || sitemaps.readState === "unreadable";
+}
+
 const coverageRule: Rule = {
   meta: {
     id: "crawl/sitemap-coverage",
@@ -54,6 +65,7 @@ const coverageRule: Rule = {
       return { checks };
     }
 
+    const corpusIncomplete = sitemapCorpusIncomplete(sitemaps);
     const precomputedMissing = sitemaps.missingPages ?? [];
     const precomputedOrphans = sitemaps.orphanPages ?? [];
 
@@ -132,7 +144,14 @@ const coverageRule: Rule = {
       }
     }
 
-    if (missingFromSitemap.length > 0) {
+    if (corpusIncomplete) {
+      checks.push({
+        name: "sitemap-coverage",
+        status: "skipped",
+        message: "Sitemap was only partly read, so pages missing from it were not checked",
+        skipReason: "Sitemap incomplete (truncated or partly read)",
+      });
+    } else if (missingFromSitemap.length > 0) {
       const percentage = Math.round((missingFromSitemap.length / pages.length) * 100);
 
       checks.push({

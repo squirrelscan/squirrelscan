@@ -18,7 +18,7 @@ The rule runs once per crawl against the homepage and emits one or two checks:
 
 The rule's severity is info, so the warning surfaces as a recommendation and does not move the score. The `link rel=alternate` signal is counted in the first check and deliberately not repeated in the second.
 
-A probe goes unsent when [discovery probes](/configuration/crawler#discovery-probes) are turned off, when no rule that reads it was enabled for the crawl, or when the crawl's preamble time budget ran out first. A probe that went out and got no answer, a refused connection or a timeout, counts the same. None of those says anything about the site, so the result is `not-checked`, never absent.
+A probe goes unsent when [discovery probes](/configuration/crawler#discovery-probes) are turned off, when no rule that reads it was enabled for the crawl, or when the crawl's preamble time budget ran out first. A probe that went out and got no answer, a refused connection, a timeout or a 5xx answer, counts the same. Only a 404 or 410 says there is no Markdown at that URL. None of those says anything about the site, so the result is `not-checked`, never absent.
 
 ## How to fix it
 
