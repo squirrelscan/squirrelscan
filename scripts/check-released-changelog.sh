@@ -21,6 +21,20 @@ if [ ! -f "$changelog" ]; then
   exit 1
 fi
 
+# Structure (v0.0.182 notes renamed the header prose's "## [Unreleased]" instead of the heading, #1849): exactly one
+# `## [Unreleased]` heading line, and the header bullet that explains it, when present, is complete.
+unreleased_headings=$(grep -c '^## \[Unreleased\]$' "$changelog" || true)
+if [ "$unreleased_headings" -ne 1 ]; then
+  echo "ERROR: CHANGELOG.md needs exactly one '## [Unreleased]' heading line (found $unreleased_headings). A release renames it to the version and adds a fresh empty one above." >&2
+  exit 1
+fi
+# shellcheck disable=SC2016 # literal backticks: the markdown text itself
+header_bullet='- A `## [Unreleased]` section collects merged changes that have not been cut into'
+if grep -q '^- A `## \[Unreleased\]' "$changelog" && ! grep -qxF -- "$header_bullet" "$changelog"; then
+  echo "ERROR: CHANGELOG.md header bullet about ## [Unreleased] is damaged; restore: $header_bullet" >&2
+  exit 1
+fi
+
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 

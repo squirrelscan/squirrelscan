@@ -114,11 +114,39 @@ fi
 
 restore_fixture
 awk '
+  $0 == "## [Unreleased]" { print "## [Unreleased]"; print ""; print "## v1.1.0 (2026-01-03)"; next }
+  { print }
+' "$repo/CHANGELOG.md" > "$repo/CHANGELOG.next"
+mv "$repo/CHANGELOG.next" "$repo/CHANGELOG.md"
+expect_pass "an untagged release bump that keeps a fresh [Unreleased] passes"
+
+restore_fixture
+awk '
   $0 == "## [Unreleased]" { print "## v1.1.0 (2026-01-03)"; next }
   { print }
 ' "$repo/CHANGELOG.md" > "$repo/CHANGELOG.next"
 mv "$repo/CHANGELOG.next" "$repo/CHANGELOG.md"
-expect_pass "an untagged release bump passes"
+expect_fail "a release bump that drops the [Unreleased] heading fails"
+if ! grep -qF "exactly one '## [Unreleased]' heading" <<<"$output"; then
+  echo "FAIL: missing-heading failure says what is wrong"
+  fails=1
+fi
+
+restore_fixture
+# shellcheck disable=SC2016 # literal backticks: the markdown text itself
+printf '%s\n' '# Changelog' '' '- A `## [Unreleased]' '' "$(tail -n +3 "$repo/CHANGELOG.md")" > "$repo/CHANGELOG.next"
+mv "$repo/CHANGELOG.next" "$repo/CHANGELOG.md"
+expect_fail "a truncated header bullet fails (the v0.0.182 damage)"
+if ! grep -qF "header bullet about ## [Unreleased] is damaged" <<<"$output"; then
+  echo "FAIL: damaged-bullet failure says what is wrong"
+  fails=1
+fi
+
+restore_fixture
+# shellcheck disable=SC2016 # literal backticks: the markdown text itself
+printf '%s\n' '# Changelog' '' '- A `## [Unreleased]` section collects merged changes that have not been cut into' '  a release yet; rename it to the version when the release goes out.' '' "$(tail -n +3 "$repo/CHANGELOG.md")" > "$repo/CHANGELOG.next"
+mv "$repo/CHANGELOG.next" "$repo/CHANGELOG.md"
+expect_pass "the complete header bullet passes"
 
 if [ "$fails" -ne 0 ]; then
   echo "released changelog tests FAILED"
