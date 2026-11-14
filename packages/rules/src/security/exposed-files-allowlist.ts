@@ -63,7 +63,7 @@ function startsWithBytes(bytes: Uint8Array, magic: readonly number[], offset = 0
 export function looksLikeHtml(answer: ProbeAnswer): boolean {
   if (answer.contentType.includes("html")) return true;
   const head = answer.text.slice(0, 1024).trimStart().toLowerCase();
-  return head.startsWith("<!doctype html") || head.startsWith("<html") || /<(head|body|script|div)[\s>]/.test(head);
+  return head.startsWith("<!doctype html") || head.startsWith("<html") || /<(head|body|script|div)[\s>]/i.test(head);
 }
 
 function nonHtmlText(answer: ProbeAnswer): string | null {
