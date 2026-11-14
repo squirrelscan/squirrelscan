@@ -12,6 +12,7 @@ import { graphqlIntrospectionRule } from "./graphql-introspection";
 import { hstsRule } from "./hsts";
 import { httpToHttpsRule } from "./http-to-https";
 import { httpsRule } from "./https";
+import { jsonSensitiveFieldsRule } from "./json-sensitive-fields";
 import { leakedSecretsRule } from "./leaked-secrets";
 import { mixedContentRule } from "./mixed-content";
 import { newTabRule } from "./new-tab";
@@ -52,6 +53,7 @@ export const rules: Rule[] = [
   graphqlIntrospectionRule,
   graphqlGetMutationsRule,
   unauthenticatedApiRule,
+  jsonSensitiveFieldsRule,
   securityTxtRule,
   versionDisclosureRule,
 ];
@@ -67,6 +69,7 @@ export {
   hstsRule,
   httpToHttpsRule,
   httpsRule,
+  jsonSensitiveFieldsRule,
   leakedSecretsRule,
   mixedContentRule,
   newTabRule,
