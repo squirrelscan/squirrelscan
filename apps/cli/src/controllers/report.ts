@@ -190,7 +190,7 @@ interface SlimJsonReport {
   skippedChecks?: unknown[];
   /** Info checks (#669). Not read back: they are notes, not findings. */
   infoChecks?: unknown[];
-  /** The per-rule status list (schema 1.17). Untrusted; read back only to tell a comparison what ran. */
+  /** The per-rule status list (schema 1.20). Untrusted; read back only to tell a comparison what ran. */
   rules?: unknown[];
   issues: Array<{
     ruleId: string;
