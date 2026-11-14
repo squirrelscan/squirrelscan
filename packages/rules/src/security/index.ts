@@ -23,6 +23,7 @@ import { securityTxtRule } from "./security-txt";
 import { thirdPartyCookiesRule } from "./third-party-cookies";
 import { tlsCertificateRule } from "./tls-certificate";
 import { tokenStorageRule } from "./token-storage";
+import { unauthenticatedApiRule } from "./unauthenticated-api";
 import { versionDisclosureRule } from "./version-disclosure";
 import { xContentTypeRule } from "./x-content-type";
 import { xFrameOptionsRule } from "./x-frame-options";
@@ -50,6 +51,7 @@ export const rules: Rule[] = [
   cookieFlagsRule,
   graphqlIntrospectionRule,
   graphqlGetMutationsRule,
+  unauthenticatedApiRule,
   securityTxtRule,
   versionDisclosureRule,
 ];
@@ -76,6 +78,7 @@ export {
   thirdPartyCookiesRule,
   tlsCertificateRule,
   tokenStorageRule,
+  unauthenticatedApiRule,
   versionDisclosureRule,
   xContentTypeRule,
   xFrameOptionsRule,

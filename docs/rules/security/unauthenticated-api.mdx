@@ -1,0 +1,151 @@
+---
+title: "Unauthenticated API endpoints: when your API hands out data with no login"
+description: "An API route that answers an anonymous request with user records has no server-side authorization. squirrel sends one GET with no cookies or token and grades what comes back by its field names."
+---
+
+## Why an open API endpoint matters
+
+A page can hide a button, redirect to a login screen or check a role in the browser, and still call an API route that answers anyone. If that route returns records to a request that carries no session cookie and no token, the authorization lives only in the frontend. Anyone who reads your JavaScript can find the route and call it directly.
+
+This is common in apps built quickly, and in apps written with an AI assistant: the UI is gated, the API behind it is not.
+
+## What squirrel checks
+
+This is a probing rule. It sends requests beyond the crawl, so it runs only when [probing intensity](/configuration/security) is `active` or `aggressive`. On a `passive` run it sends nothing and records one skipped check. A cloud audit stays `passive` until you verify that you own the website.
+
+### Which endpoints are probed
+
+Only endpoints the audit found in your own pages and scripts, such as a `fetch("/api/users")` or `axios.get("/api/orders")` call site, an API-looking string literal, or a convention path for your detected stack. Finding them sends no request. This rule adds no guessed paths of its own.
+
+Every endpoint must have the same origin as the audited URL (scheme, host and port). An endpoint on another host, such as a vendor API, is never probed. Beyond that:
+
+- A path whose only call sites send `POST`, `PUT`, `PATCH` or `DELETE` is never probed, not even with a `GET`. A path with a `GET` call site is probed even when other call sites `POST` to it.
+- A path that names a state-changing or session action is never probed: words such as `logout`, `delete`, `update`, `reset`, `login`, `auth`, `callback`, `verify`, `confirm`, `token`, `webhook`, `cron`, `send` or `sync`.
+- GraphQL endpoints are left to [security/graphql-introspection](/rules/security/graphql-introspection), and Next.js `_next/data` payloads, health, metrics and API-spec paths (`/health`, `/metrics`, `/actuator`, `/openapi.json`, `/swagger.json`) are left out too.
+- Below `aggressive`, a path that `robots.txt` disallows is skipped.
+- At most ten endpoints are probed, call sites before string literals before convention paths.
+
+### What is sent
+
+One request per endpoint:
+
+```text
+GET /api/users
+Accept: application/json, */*;q=0.1
+```
+
+The query string and fragment of the discovered URL are dropped. The request carries no cookies, no `Authorization` header and no API key, and does not follow redirects. At most 256 KB of the answer is read, counted after decompression, so a compressed answer cannot inflate past the limit.
+
+### How an answer is graded
+
+An answer is flagged only when it is a 2xx JSON body that carries records:
+
+- an array of objects (`[{...}, {...}]`);
+- an array of objects under a wrapper key such as `data`, `results`, `items`, `records` or `rows`, or under any top-level key (`{"users": [...], "total": 2}`);
+- or a single object with an id field (`id`, `_id`, `uuid`, `userId`) and at least two other fields.
+
+The field names of the records, including one level of nested objects such as `author.email` or JSON:API `attributes`, decide the result:
+
+| Fields | Examples | Result |
+|---|---|---|
+| Credentials | `password`, `password_hash`, `salt`, `api_key`, `secret`, `access_token`, `session_id` | Fail (high) |
+| Personal data | `email`, `phone`, `address`, `postcode`, `date_of_birth`, `ssn`, `ip_address`, `card_number`, `iban` | Fail (high) |
+| Internal fields | `role`, `is_admin`, `permissions`, `stripe_customer_id`, `tenant_id`, `last_login_at`, `internal_notes` | Fail (high) |
+| User identity, or nothing telling | `username`, `user_id`, `first_name`, `avatar_urls`, or fields that say nothing either way | Warn (medium) |
+| Only published content | `title`, `slug`, `excerpt`, `body`, `price`, `sku`, `image`, `tags` | Info (low) |
+
+A public product catalog or blog feed is meant to be open, so content fields alone stay informational. One sensitive field anywhere in the records is enough to fail.
+
+### What a finding shows
+
+The finding names the endpoint, the number of records and the field names, sensitive ones first. It never carries a value from the response. The item meta has a redacted shape of the first record, field names and value types only:
+
+```text
+GET https://example.com/api/users: 2 records (password_hash, email, role)
+sample: {id: number, email: string, password_hash: string, role: string, name: string}
+```
+
+A field name that looks like data itself, such as an email address, a long number or a UUID used as a map key, is left out and only counted. When the answer is longer than 256 KB and opens as a list of records, field names are read from the first 256 KB, the record count is unknown, and the item meta has `truncated: true` and `confidence: "lower"`.
+
+### Results
+
+- `unauthenticated-api-sensitive` (fail): records with credential, personal or internal fields. Message: `1 API endpoint(s) return records with credential, personal or internal fields to a request with no cookies or Authorization header, for example https://example.com/api/users (password_hash, email, role)`.
+- `unauthenticated-api-data` (warn): records with user-identity fields, or with fields that do not say whether the data is public.
+- `unauthenticated-api-public` (info): records that read as published content.
+- `unauthenticated-api` (pass): no probed endpoint returned records, or no endpoint could be probed.
+- `unauthenticated-api-unchecked` (skipped): probing is passive (`probing-passive`), the shared probe budget ran out before or partway through the endpoints (`probe-budget`), or every probe failed with a network error or timeout (`probe-errors`). A run cut short is never a pass, because the endpoints it did not reach were not checked.
+
+### What is not flagged
+
+- A `401`, `403`, any other non-2xx status, or a redirect (to a login page, for example).
+- An HTML page, a catch-all route, or a body that is not JSON.
+- A JSON body with no records: a health answer such as `{"status":"ok"}`, an error such as `{"error":"unauthorized","message":"Sign in"}`, an empty list or a list of plain values.
+
+### Limits
+
+An anonymous probe shows that an endpoint answers without credentials. It cannot show that one signed-in user can read another user's records (an IDOR), because that needs two accounts. Test that separately.
+
+The grade comes from field names, not values, so a field with an unusual name is not recognised. An endpoint that needs a query parameter to return data, or a path parameter the audit could not see, may answer with an error and is not flagged. An endpoint the crawl never referenced is not found.
+
+## How to fix it
+
+- Check authorization on the server, in every API route that returns user or business data, and answer `401` or `403` when the request carries no valid session or token. Middleware that guards the whole `/api` prefix is the simplest way to make the default closed.
+- Do not rely on the frontend: a hidden button or a client-side route guard does not protect the API behind it.
+- Return only the fields the caller needs. Never send password hashes, tokens, emails or roles in a list response. Select columns explicitly instead of returning whole rows.
+- If the endpoint is meant to be public, make sure it returns only public fields, then the finding drops to informational or clears.
+- If you use Supabase or Firebase, turn on row level security or database rules: a client key alone must not be able to read every row.
+
+| | |
+|---|---|
+| **Rule ID** | `security/unauthenticated-api` |
+| **Category** | [Security](/rules/security) |
+| **Scope** | Site-wide |
+| **Severity** | error |
+| **Weight** | 7/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["security/unauthenticated-api"]
+```
+
+### Disable all Security rules
+
+```toml squirrel.toml
+[rules]
+disable = ["security/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["security/unauthenticated-api"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `unauthenticated-api-sensitive` | Problem |  |
+| `unauthenticated-api-data` | Problem |  |
+| `unauthenticated-api-public` | Problem |  |
+| `unauthenticated-api` | Clean | `unauthenticated-api-sensitive`, `unauthenticated-api-data`, `unauthenticated-api-public` |
+| `unauthenticated-api-unchecked` | Not checked |  |
+
+{/* rule-checks:end */}
+
+## Related rules
+
+- [security/leaked-secrets](/rules/security/leaked-secrets): server-only secrets shipped in the browser bundle, the other half of the same failure.
+- [security/graphql-introspection](/rules/security/graphql-introspection): probes the site's GraphQL endpoints for an open schema.
+- [security/token-storage](/rules/security/token-storage): auth tokens written to localStorage, readable by any script on the page.

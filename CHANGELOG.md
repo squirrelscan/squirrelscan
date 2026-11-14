@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- `security/unauthenticated-api`, a probing rule for API endpoints that hand out data with no login (squirrelscan/repo#1955). On an `active` or `aggressive` run it sends one `GET` with no cookies, no `Authorization` header and no query string to each same-origin API endpoint the audit found in your pages and scripts, at most ten, and never to a path that only takes `POST`, `PUT`, `PATCH` or `DELETE` or that names a session or state-changing action. A 2xx JSON answer that carries records is graded by its field names: credential, personal or internal fields fail, user-identity or unclassified fields warn, and published content such as titles, slugs and prices is informational. The finding names the endpoint, the record count and the field names, never a value. On a `passive` run it sends nothing. See [security/unauthenticated-api](https://docs.squirrelscan.com/rules/security/unauthenticated-api). That makes 329 rules, 25 of them in Security.
+
 ### Changed
 
 - When a report cannot be published because it is over the 1MB publish limit, the CLI no longer suggests auditing fewer pages (published reports are capped to fit, so that advice was wrong). It now says the report could not be capped to fit and that the full detail stays in your local project (`squirrel report`).

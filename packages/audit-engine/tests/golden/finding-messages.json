@@ -3872,6 +3872,12 @@
    "token-storage|pass|No auth tokens written to localStorage or sessionStorage||"
   ]
  },
+ "security/unauthenticated-api": {
+  "digest": "244940589461690",
+  "lines": [
+   "unauthenticated-api-unchecked|skipped|Probing is passive, so no API endpoint was probed. Run with --probe active to check for API endpoints that answer without authentication.||"
+  ]
+ },
  "security/version-disclosure": {
   "digest": "73157584638604",
   "lines": [
