@@ -196,7 +196,7 @@ import {
 } from "@/reports/reconstruct";
 import { detectRunner } from "@/self/install-meta";
 import { createCloudClientFromSettings } from "@/tools/cloud";
-import { initRequestTool } from "@/tools/request";
+import { initRequestTool, installRuleRequestTool } from "@/tools/request";
 import { cwdOr } from "@/utils/cwd";
 import { configureLogger, logger } from "@/utils/logger";
 import { checkReachability } from "@/utils/reachability";
@@ -1050,6 +1050,11 @@ export async function runAudit(
     // Initialize request tool with config
     initRequestTool({
       timeout: mergedConfig.crawler.timeout_ms,
+    });
+    // Rules that probe the site themselves (security/http-to-https, #1269) call
+    // this client; without it they throw and report nothing.
+    installRuleRequestTool({
+      ownSiteHost: options.offline ? new URL(url).hostname : undefined,
     });
 
     // Check reachability
