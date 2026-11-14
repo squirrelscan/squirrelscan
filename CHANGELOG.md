@@ -12,7 +12,10 @@ How it works:
   A stable `## vX.Y.Z` matches any `## vX.Y.Z-<suffix>` heading (e.g. `-beta.N`,
   `-rc.1`), so a stable cut can reuse a pre-release section when no plain one exists.
 - Use `###` (or deeper) for sub-sections within an entry — a `## ` heading marks a new version.
-- A `## [Unreleased]
+- A `## [Unreleased]` section collects merged changes that have not been cut into
+  a release yet; rename it to the version when the release goes out.
+
+## [Unreleased]
 
 ## v0.0.182 (2026-11-14)
 
