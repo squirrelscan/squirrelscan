@@ -2,6 +2,7 @@
 
 import type { Rule } from "../types";
 
+import { authEndpointDisclosureRule } from "./auth-endpoint-disclosure";
 import { cookieFlagsRule } from "./cookie-flags";
 import { cspRule } from "./csp";
 import { cspBlocksOwnResourcesRule } from "./csp-blocks-own-resources";
@@ -56,11 +57,13 @@ export const rules: Rule[] = [
   unauthenticatedApiRule,
   jsonSensitiveFieldsRule,
   exposedFilesRule,
+  authEndpointDisclosureRule,
   securityTxtRule,
   versionDisclosureRule,
 ];
 
 export {
+  authEndpointDisclosureRule,
   cookieFlagsRule,
   cspBlocksOwnResourcesRule,
   cspRule,
