@@ -20,7 +20,7 @@
  *
  * Reads the rules from the workspace (`packages/rules`), so run it from a checkout with dependencies installed.
  */
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { loadAllRules } from "../../packages/rules/src/loader";
@@ -84,11 +84,15 @@ function main(): number {
     if (!meta.checks) continue;
     const file = pagePath(meta.id);
     const rel = `rules/${meta.id}.mdx`;
-    if (!existsSync(file)) {
+    // read once and handle a missing page here, not via existsSync first (CodeQL js/file-system-race)
+    let text: string;
+    try {
+      text = readFileSync(file, "utf8");
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e;
       problems.push(`${rel}: no docs page for ${meta.id}, which declares its check names`);
       continue;
     }
-    const text = readFileSync(file, "utf8");
     const next = withBlock(text, meta);
     if (next === text) continue;
     if (write) writeFileSync(file, next);
