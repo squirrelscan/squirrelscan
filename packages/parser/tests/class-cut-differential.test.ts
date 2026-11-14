@@ -11,8 +11,10 @@ import { parseHTML } from "../src/dom";
 import * as current from "../src/dom";
 
 const LIMIT = 5;
+// A variable specifier: the scratch copy is not committed, so a literal path would fail typechecking.
+const OLD_IMPL_PATH = "./_old-dom-1558";
 // `TRUNC_IMPL=old` runs the same table against the first cut (#1558), kept as a scratch copy to show the cases fail there.
-const impl: { truncateClassAttributes: (html: string, limit: number) => { text: string; cut: number[] } } = process.env.TRUNC_IMPL === "old" ? await import("./_old-dom-1558") : current;
+const impl: { truncateClassAttributes: (html: string, limit: number) => { text: string; cut: number[] } } = process.env.TRUNC_IMPL === "old" ? await import(OLD_IMPL_PATH) : current;
 
 const T = (n: number, sep = " ", prefix = "c"): string => Array.from({ length: n }, (_, i) => `${prefix}${i}`).join(sep);
 const N = T(12);

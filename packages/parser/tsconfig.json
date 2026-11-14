@@ -7,12 +7,12 @@
     "strict": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "types": ["node"],
+    "types": ["bun", "node"],
     "paths": {
       "@squirrelscan/core-contracts": ["../core-contracts/src/index.ts"],
       "@squirrelscan/utils": ["../utils/src/index.ts"],
       "@squirrelscan/utils/*": ["../utils/src/*"]
     }
   },
-  "include": ["src/**/*.ts", "src/**/*.d.ts"]
+  "include": ["src/**/*.ts", "src/**/*.d.ts", "tests/**/*.ts"]
 }

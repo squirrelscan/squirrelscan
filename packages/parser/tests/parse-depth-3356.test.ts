@@ -74,7 +74,7 @@ function randomPage(seed: number): string {
 }
 
 describe("every anchor gets the answer the single walks gave (#3356)", () => {
-  test("chrome flag and position on 600 seeded random pages, both extractors", { timeout: 30_000 }, () => {
+  test("chrome flag and position on 600 seeded random pages, both extractors", () => {
     for (let seed = 1; seed <= 600; seed++) {
       const html = randomPage(seed);
       const { document } = parseHTML(html);
@@ -96,7 +96,7 @@ describe("every anchor gets the answer the single walks gave (#3356)", () => {
         `seed ${seed}`,
       ).toEqual(expected.map((e) => e.isChrome));
     }
-  });
+  }, { timeout: 30_000 });
 });
 
 /** parsePage's whole run on `html`, in ms: the best of 3, so a busy runner's stall is not the parser's. */
@@ -136,12 +136,12 @@ describe("nesting costs a walk, not a walk per link (#3356)", () => {
     ["aria-hidden divs", '<div aria-hidden="true"><a href="/x">x</a>', "</div>"],
     ["blockquotes", '<blockquote><a href="/x">l</a>', "</blockquote>"],
   ] as const) {
-    test(`20,000 nested ${shape} cost linear time (4x the depth, under ${MAX_GROWTH}x the time)`, { timeout: 60_000 }, () => {
+    test(`20,000 nested ${shape} cost linear time (4x the depth, under ${MAX_GROWTH}x the time)`, () => {
       expect(growth((depth) => parseMs(nested(depth, open, close)))).toBeLessThan(MAX_GROWTH);
-    });
+    }, { timeout: 60_000 });
   }
 
-  test("extractLinks on nested links costs linear time and finds every link", { timeout: 60_000 }, () => {
+  test("extractLinks on nested links costs linear time and finds every link", () => {
     const extractMs = (depth: number): number => {
       const { document } = parseHTML(nested(depth, '<div class="x"><a href="/x">x</a>', "</div>"));
       let best = Number.POSITIVE_INFINITY;
@@ -154,7 +154,7 @@ describe("nesting costs a walk, not a walk per link (#3356)", () => {
       return best;
     };
     expect(growth(extractMs)).toBeLessThan(MAX_GROWTH);
-  });
+  }, { timeout: 60_000 });
 });
 
 describe("the memo holds no page alive (#2343)", () => {
