@@ -44,8 +44,8 @@ function check(checks: { name: string }[], name: string) {
 }
 
 describe("links/broken-external-links — rate-limited targets (#1829)", () => {
-  test("429 and 430 are not counted as broken", () => {
-    const { checks } = brokenExternalLinksRule.run(
+  test("429 and 430 are not counted as broken", async () => {
+    const { checks } = await brokenExternalLinksRule.run(
       externalCtx([
         link({ href: "https://a.example/", status: 429 }),
         link({ href: "https://b.example/", status: 430 }),
@@ -55,17 +55,17 @@ describe("links/broken-external-links — rate-limited targets (#1829)", () => {
     expect(broken.status).toBe("pass");
   });
 
-  test("a Retry-After 503, flagged by the checker, is not broken either", () => {
+  test("a Retry-After 503, flagged by the checker, is not broken either", async () => {
     // 503 is not recoverable from the status alone, so the checker persists the
     // verdict; the rule must honour the flag rather than re-deriving it.
-    const { checks } = brokenExternalLinksRule.run(
+    const { checks } = await brokenExternalLinksRule.run(
       externalCtx([link({ href: "https://c.example/", status: 503, rateLimited: true })]),
     );
     expect(check(checks, "broken-external-links")!.status).toBe("pass");
   });
 
-  test("they are reported as info with the status called unverifiable", () => {
-    const { checks } = brokenExternalLinksRule.run(
+  test("they are reported as info with the status called unverifiable", async () => {
+    const { checks } = await brokenExternalLinksRule.run(
       externalCtx([link({ href: "https://a.example/", status: 429 })]),
     );
     const info = check(checks, "rate-limited-external-links")!;
@@ -74,8 +74,8 @@ describe("links/broken-external-links — rate-limited targets (#1829)", () => {
     expect(info.items?.[0]?.id).toBe("https://a.example/");
   });
 
-  test("a genuine 404 is still broken", () => {
-    const { checks } = brokenExternalLinksRule.run(
+  test("a genuine 404 is still broken", async () => {
+    const { checks } = await brokenExternalLinksRule.run(
       externalCtx([
         link({ href: "https://dead.example/", status: 404 }),
         link({ href: "https://slow.example/", status: 429 }),
@@ -88,8 +88,8 @@ describe("links/broken-external-links — rate-limited targets (#1829)", () => {
     expect(broken.items?.[0]?.id).toBe("https://dead.example/");
   });
 
-  test("a bare 503 with no Retry-After stays broken: possibly broken, a warning (#1739)", () => {
-    const { checks } = brokenExternalLinksRule.run(
+  test("a bare 503 with no Retry-After stays broken: possibly broken, a warning (#1739)", async () => {
+    const { checks } = await brokenExternalLinksRule.run(
       externalCtx([link({ href: "https://down.example/", status: 503 })]),
     );
     expect(check(checks, "possibly-broken-external-links")!.status).toBe("warn");
@@ -98,8 +98,8 @@ describe("links/broken-external-links — rate-limited targets (#1829)", () => {
 });
 
 describe("links/dead-links — rate-limited targets (#1829)", () => {
-  test("throttled links are excluded from the dead count and named in the message", () => {
-    const { checks } = deadLinksRule.run(
+  test("throttled links are excluded from the dead count and named in the message", async () => {
+    const { checks } = await deadLinksRule.run(
       externalCtx([
         link({ href: "https://ok.example/", status: 200 }),
         link({ href: "https://throttled.example/", status: 429 }),
@@ -109,8 +109,8 @@ describe("links/dead-links — rate-limited targets (#1829)", () => {
     expect(checks[0]!.message).toContain("rate-limited");
   });
 
-  test("a real dead link is still counted alongside a throttled one", () => {
-    const { checks } = deadLinksRule.run(
+  test("a real dead link is still counted alongside a throttled one", async () => {
+    const { checks } = await deadLinksRule.run(
       externalCtx([
         link({ href: "https://dead.example/", status: 404 }),
         link({ href: "https://throttled.example/", status: 430 }),
@@ -141,8 +141,8 @@ describe("links/broken-links — rate-limited internal pages (#1829)", () => {
     } as unknown as RuleContext;
   }
 
-  test("a 429 target is not a broken internal link", () => {
-    const { checks } = brokenLinksRule.run(
+  test("a 429 target is not a broken internal link", async () => {
+    const { checks } = await brokenLinksRule.run(
       pageCtx([
         { url: `${BASE}/`, statusCode: 200, links: [`${BASE}/throttled`] },
         { url: `${BASE}/throttled`, statusCode: 429, links: [] },
@@ -153,8 +153,8 @@ describe("links/broken-links — rate-limited internal pages (#1829)", () => {
     expect(check(checks, "rate-limited-links")!.status).toBe("info");
   });
 
-  test("a 404 target is still a broken internal link", () => {
-    const { checks } = brokenLinksRule.run(
+  test("a 404 target is still a broken internal link", async () => {
+    const { checks } = await brokenLinksRule.run(
       pageCtx([
         { url: `${BASE}/`, statusCode: 200, links: [`${BASE}/gone`] },
         { url: `${BASE}/gone`, statusCode: 404, links: [] },
@@ -194,7 +194,7 @@ describe("crawl/sitemap-4xx — rate-limited sitemap URLs (#1829)", () => {
     ...over,
   });
 
-  test("429 and 430 are inside the 4xx band but are not sitemap rot", () => {
+  test("429 and 430 are inside the 4xx band but are not sitemap rot", async () => {
     const { checks } = sitemap4xxRule.run(
       sitemapCtx([
         entry({ url: `${BASE}/a`, status: 429 }),
@@ -207,7 +207,7 @@ describe("crawl/sitemap-4xx — rate-limited sitemap URLs (#1829)", () => {
     expect(info.items?.length).toBe(2);
   });
 
-  test("a Retry-After 503 flagged by the checker is excluded too", () => {
+  test("a Retry-After 503 flagged by the checker is excluded too", async () => {
     const { checks } = sitemap4xxRule.run(
       sitemapCtx([entry({ url: `${BASE}/a`, status: 503, rateLimited: true })]),
     );
@@ -215,7 +215,7 @@ describe("crawl/sitemap-4xx — rate-limited sitemap URLs (#1829)", () => {
     expect(check(checks, "sitemap-rate-limited")!.status).toBe("info");
   });
 
-  test("a genuine 404 in the sitemap is still reported", () => {
+  test("a genuine 404 in the sitemap is still reported", async () => {
     const { checks } = sitemap4xxRule.run(
       sitemapCtx([
         entry({ url: `${BASE}/gone`, status: 404 }),
@@ -245,7 +245,7 @@ describe("links/redirects — a chain ending in a rate limit (#1829)", () => {
     ...over,
   });
 
-  test("reports info, not a failing chain", () => {
+  test("reports info, not a failing chain", async () => {
     const checks = validateRedirectChain(chain({ endsRateLimited: true }));
     expect(check(checks, "redirect-to-error")).toBeUndefined();
     const info = check(checks, "redirect-rate-limited")!;
@@ -253,7 +253,7 @@ describe("links/redirects — a chain ending in a rate limit (#1829)", () => {
     expect(info.message).toContain("unverifiable");
   });
 
-  test("a chain that really ends in a 404 still fails", () => {
+  test("a chain that really ends in a 404 still fails", async () => {
     const checks = validateRedirectChain(
       chain({
         endsInError: true,
@@ -267,7 +267,7 @@ describe("links/redirects — a chain ending in a rate limit (#1829)", () => {
     expect(check(checks, "redirect-rate-limited")).toBeUndefined();
   });
 
-  test("the status is written so a report merge never widens it (#2244)", () => {
+  test("the status is written so a report merge never widens it (#2244)", async () => {
     // `(404)` alone in parentheses reads as a count, so pages ending in 404 and
     // 500 would merge into `(404 to 500)`.
     const message = (statusCode: number) =>
@@ -318,8 +318,8 @@ describe("links/broken-external-links — link sections (#2307)", () => {
     return ctx;
   }
 
-  test("a broken link says where it sits and carries meta.sections", () => {
-    const { checks } = brokenExternalLinksRule.run(
+  test("a broken link says where it sits and carries meta.sections", async () => {
+    const { checks } = await brokenExternalLinksRule.run(
       sectionedCtx([link({ href: "https://gone.example/", status: 404 })], {
         "https://gone.example/": ["footer", "footer", "content"],
       }),
@@ -330,8 +330,8 @@ describe("links/broken-external-links — link sections (#2307)", () => {
     expect(item.meta).toEqual({ status: 404, error: null, sections: { footer: 2, content: 1 } });
   });
 
-  test("WAF-blocked and rate-limited links say it too", () => {
-    const { checks } = brokenExternalLinksRule.run(
+  test("WAF-blocked and rate-limited links say it too", async () => {
+    const { checks } = await brokenExternalLinksRule.run(
       sectionedCtx(
         [
           link({ href: "https://wall.example/", status: 403, wafBlocked: true, wafProvider: "Cloudflare" }),
@@ -349,8 +349,8 @@ describe("links/broken-external-links — link sections (#2307)", () => {
     );
   });
 
-  test("links no section is known for keep their label", () => {
-    const { checks } = brokenExternalLinksRule.run(
+  test("links no section is known for keep their label", async () => {
+    const { checks } = await brokenExternalLinksRule.run(
       sectionedCtx([link({ href: "https://gone.example/", status: 404 })], {
         "https://gone.example/": [undefined],
       }),

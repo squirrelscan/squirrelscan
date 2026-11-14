@@ -58,19 +58,19 @@ function filler(wordCount: number): string {
 }
 
 describe("content/keyword-stuffing false-positive fixes (#695)", () => {
-  test("'get' used heavily as a generic verb does not flag", () => {
+  test("'get' used heavily as a generic verb does not flag", async () => {
     const html = `<html><body><p>${"get ".repeat(10)}${filler(120)}</p></body></html>`;
-    const { checks } = keywordStuffingRule.run(ctx(html));
+    const { checks } = await keywordStuffingRule.run(ctx(html));
     expect(checks[0].status).toBe("pass");
   });
 
-  test("'your' used heavily on a privacy-policy-style page does not flag", () => {
+  test("'your' used heavily on a privacy-policy-style page does not flag", async () => {
     const html = `<html><body><p>${"your ".repeat(10)}${filler(120)}</p></body></html>`;
-    const { checks } = keywordStuffingRule.run(ctx(html));
+    const { checks } = await keywordStuffingRule.run(ctx(html));
     expect(checks[0].status).toBe("pass");
   });
 
-  test("11 repeated 'Learn more' CTA links do not flag 'learn'", () => {
+  test("11 repeated 'Learn more' CTA links do not flag 'learn'", async () => {
     // Real templated markup always has whitespace/newlines between sibling
     // cards; joining with "\n" keeps word tokenization realistic (adjacent
     // elements with zero separator would merge into a bogus compound token).
@@ -79,30 +79,30 @@ describe("content/keyword-stuffing false-positive fixes (#695)", () => {
       () => `<div class="card"><a href="/x">Learn more</a></div>`,
     ).join("\n");
     const html = `<html><body>${cards}<p>${filler(120)}</p></body></html>`;
-    const { checks } = keywordStuffingRule.run(ctx(html));
+    const { checks } = await keywordStuffingRule.run(ctx(html));
     expect(checks[0].status).toBe("pass");
   });
 
-  test("true positive: real prose keyword stuffing outside CTAs still flags", () => {
+  test("true positive: real prose keyword stuffing outside CTAs still flags", async () => {
     const html = `<html><body><p>${"widget ".repeat(30)}${filler(90)}</p></body></html>`;
-    const { checks } = keywordStuffingRule.run(ctx(html));
+    const { checks } = await keywordStuffingRule.run(ctx(html));
     expect(checks[0].status).toBe("warn");
     expect(checks[0].items?.some((i) => i.id === "widget")).toBe(true);
   });
 
-  test("true positive: CTA exclusion does not mask unrelated prose stuffing on the same page", () => {
+  test("true positive: CTA exclusion does not mask unrelated prose stuffing on the same page", async () => {
     const cards = Array.from(
       { length: 11 },
       () => `<div class="card"><a href="/x">Learn more</a></div>`,
     ).join("\n");
     const html = `<html><body>${cards}<p>${"widget ".repeat(30)}${filler(90)}</p></body></html>`;
-    const { checks } = keywordStuffingRule.run(ctx(html));
+    const { checks } = await keywordStuffingRule.run(ctx(html));
     expect(checks[0].status).toBe("warn");
     expect(checks[0].items?.some((i) => i.id === "widget")).toBe(true);
     expect(checks[0].items?.some((i) => i.id === "learn")).toBe(false);
   });
 
-  test("review regression: nested <a><button> CTA counts once, so stuffing isn't masked", () => {
+  test("review regression: nested <a><button> CTA counts once, so stuffing isn't masked", async () => {
     // Each card matches BOTH the <a> and the <button>; double-counting the
     // label would over-deduct and could zero out organicTotal, silently
     // skipping the scan of the genuinely stuffed word below.
@@ -111,13 +111,13 @@ describe("content/keyword-stuffing false-positive fixes (#695)", () => {
       () => `<div class="card"><a href="/x"><button>Learn more</button></a></div>`,
     ).join("\n");
     const html = `<html><body>${cards}<p>${"widget ".repeat(30)}${filler(60)}</p></body></html>`;
-    const { checks } = keywordStuffingRule.run(ctx(html));
+    const { checks } = await keywordStuffingRule.run(ctx(html));
     expect(checks[0].status).toBe("warn");
     expect(checks[0].items?.some((i) => i.id === "widget")).toBe(true);
     expect(checks[0].items?.some((i) => i.id === "learn")).toBe(false);
   });
 
-  test("true positive: repeated COMMERCIAL anchor text (not a generic CTA) still flags", () => {
+  test("true positive: repeated COMMERCIAL anchor text (not a generic CTA) still flags", async () => {
     // The CTA exclusion is an allowlist of known boilerplate phrases, not
     // "any repeated short anchor text" — a spam/doorway page repeating a
     // real target keyword as a link label must still count fully.
@@ -126,15 +126,15 @@ describe("content/keyword-stuffing false-positive fixes (#695)", () => {
       () => `<div class="card"><a href="/plumber">Emergency Plumber</a></div>`,
     ).join("\n");
     const html = `<html><body>${links}<p>${filler(100)}</p></body></html>`;
-    const { checks } = keywordStuffingRule.run(ctx(html));
+    const { checks } = await keywordStuffingRule.run(ctx(html));
     expect(checks[0].status).toBe("warn");
     expect(checks[0].items?.some((i) => i.id === "emergency")).toBe(true);
     expect(checks[0].items?.some((i) => i.id === "plumber")).toBe(true);
   });
 
-  test("whitelist option still suppresses a configured brand/keyword", () => {
+  test("whitelist option still suppresses a configured brand/keyword", async () => {
     const html = `<html><body><p>${"widget ".repeat(30)}${filler(90)}</p></body></html>`;
-    const { checks } = keywordStuffingRule.run(ctx(html, { whitelist: ["widget"] }));
+    const { checks } = await keywordStuffingRule.run(ctx(html, { whitelist: ["widget"] }));
     expect(checks[0].status).toBe("pass");
   });
 });
@@ -147,13 +147,13 @@ describe("content/keyword-stuffing language stop words (#1042)", () => {
     ["pt-BR", "para"],
     ["it", "della"],
     ["nl", "voor"],
-  ])("%s excludes its own function word %p", (lang, word) => {
+  ])("%s excludes its own function word %p", async (lang, word) => {
     const html = `<html lang="${lang}"><body><p>${`${word} `.repeat(30)}${filler(120)}</p></body></html>`;
-    const { checks } = keywordStuffingRule.run(ctx(html));
+    const { checks } = await keywordStuffingRule.run(ctx(html));
     expect(checks[0].status).toBe("pass");
   });
 
-  test("the German reproduction excludes its stop words", () => {
+  test("the German reproduction excludes its stop words", async () => {
     const paragraph =
       "Hier findest du alles für den Sommer, alles aus weicher Baumwolle. " +
       "Unsere Shirts kommen aus fairer Produktion und halten lange. " +
@@ -162,53 +162,53 @@ describe("content/keyword-stuffing language stop words (#1042)", () => {
       "Die Stoffe stammen aus Portugal, genäht wird in kleinen Werkstätten. " +
       "Pflegehinweise findest du auf jedem Etikett und in unserem Ratgeber.";
     const html = `<html lang="de"><body><p>${paragraph.repeat(12)}</p></body></html>`;
-    const { checks } = keywordStuffingRule.run(ctx(html));
+    const { checks } = await keywordStuffingRule.run(ctx(html));
     const reported = new Set(checks[0].items?.map((item) => item.id));
     for (const stopWord of ["alles", "aus", "die", "und"]) {
       expect(reported.has(stopWord)).toBe(false);
     }
   });
 
-  test("a German content word over the threshold is still reported", () => {
+  test("a German content word over the threshold is still reported", async () => {
     const html = `<html lang="de"><body><p>${"bademode ".repeat(30)}${filler(120)}</p></body></html>`;
-    const { checks } = keywordStuffingRule.run(ctx(html));
+    const { checks } = await keywordStuffingRule.run(ctx(html));
     expect(checks[0].status).toBe("warn");
     expect(checks[0].items?.some((item) => item.id === "bademode")).toBe(true);
   });
 
   test.each(["", "x-default", "und", "mul", "zxx", "xx", "qaa"])(
     "%p keeps the English common-word exclusions when it has no usable function-word list",
-    (lang) => {
+    async (lang) => {
       const html = `<html lang="${lang}"><body><p>${"the ".repeat(30)}${filler(120)}</p></body></html>`;
-      const { checks } = keywordStuffingRule.run(ctx(html));
+      const { checks } = await keywordStuffingRule.run(ctx(html));
       expect(checks[0].status).toBe("pass");
     },
   );
 
-  test.each(["en-GB", "EN", "en_US"])("%p keeps the English price-note exclusions", (lang) => {
+  test.each(["en-GB", "EN", "en_US"])("%p keeps the English price-note exclusions", async (lang) => {
     const html = `<html lang="${lang}"><body><p>${"VAT ".repeat(30)}${filler(120)}</p></body></html>`;
-    const { checks } = keywordStuffingRule.run(ctx(html));
+    const { checks } = await keywordStuffingRule.run(ctx(html));
     expect(checks[0].status).toBe("pass");
   });
 
   test.each(["ja", "pl", "tr", "sv", "cs", "id", "vi"])(
     "%p still detects Latin-script stuffing without its own function-word list",
-    (lang) => {
+    async (lang) => {
       const html = `<html lang="${lang}"><body><p>${"widget ".repeat(30)}${filler(120)}</p></body></html>`;
-      const { checks } = keywordStuffingRule.run(ctx(html));
+      const { checks } = await keywordStuffingRule.run(ctx(html));
       expect(checks[0].status).toBe("warn");
       expect(checks[0].items?.some((item) => item.id === "widget")).toBe(true);
     },
   );
 
-  test("an unsupported lang alone cannot turn off Latin-script stuffing detection", () => {
+  test("an unsupported lang alone cannot turn off Latin-script stuffing detection", async () => {
     const html = `<html lang="ru"><body><p>${"widget ".repeat(30)}${filler(120)}</p></body></html>`;
-    const { checks } = keywordStuffingRule.run(ctx(html));
+    const { checks } = await keywordStuffingRule.run(ctx(html));
     expect(checks[0].status).toBe("warn");
     expect(checks[0].items?.some((item) => item.id === "widget")).toBe(true);
   });
 
-  test("a natural Russian paragraph is not judged without a Russian function-word list", () => {
+  test("a natural Russian paragraph is not judged without a Russian function-word list", async () => {
     const paragraph =
       "Городская библиотека открывает новые залы для читателей, которые хотят спокойно работать, изучать архивы и обсуждать книги с друзьями. " +
       "По утрам сотрудники готовят столы для студентов, которым нужны справочники, редкие журналы, карты и удобные места рядом с окнами. " +
@@ -222,7 +222,7 @@ describe("content/keyword-stuffing language stop words (#1042)", () => {
       "Каждый проект задуман для сообщества, поэтому программа меняется после опросов, личных разговоров и внимательного анализа предложений постоянных гостей.";
     expect(keywordTokens(paragraph).length).toBeGreaterThanOrEqual(150);
     const html = `<html lang="ru-RU"><body><p>${paragraph}</p></body></html>`;
-    const { checks } = keywordStuffingRule.run(ctx(html));
+    const { checks } = await keywordStuffingRule.run(ctx(html));
     expect(checks[0].status).not.toBe("warn");
     expect(checks[0]).toMatchObject({
       status: "skipped",
@@ -232,129 +232,129 @@ describe("content/keyword-stuffing language stop words (#1042)", () => {
 });
 
 describe("content/keyword-stuffing main copy and Unicode words (#1182)", () => {
-  test("navigation and header links outside main content do not affect density", () => {
+  test("navigation and header links outside main content do not affect density", async () => {
     const links = Array.from(
       { length: 20 },
       (_, index) => `<a href="/${index}">Bademode ${FILLER_BANK[index]}</a>`,
     ).join("\n");
     const html = `<html lang="de"><body><header><nav>${links}</nav></header><main><p>${filler(120)}</p></main></body></html>`;
-    const { checks } = keywordStuffingRule.run(ctx(html));
+    const { checks } = await keywordStuffingRule.run(ctx(html));
     expect(checks[0].status).toBe("pass");
     expect(checks[0].items?.some((item) => item.id === "bademode")).not.toBe(true);
   });
 
-  test("commercial anchor text inside main content still flags", () => {
+  test("commercial anchor text inside main content still flags", async () => {
     const links = Array.from({ length: 12 }, () => '<a href="/plumber">Emergency Plumber</a>').join(
       "\n",
     );
     const html = `<html><body><header><nav><a href="/">Home</a></nav></header><main>${links}<p>${filler(100)}</p></main></body></html>`;
-    const { checks } = keywordStuffingRule.run(ctx(html));
+    const { checks } = await keywordStuffingRule.run(ctx(html));
     expect(checks[0].status).toBe("warn");
     expect(checks[0].items?.some((item) => item.id === "plumber")).toBe(true);
   });
 
-  test("a thin main falls back to substantial body copy", () => {
+  test("a thin main falls back to substantial body copy", async () => {
     const html = `<html><body><main><p>Short introduction only</p></main><section><p>${"widget ".repeat(20)}${filler(120)}</p></section></body></html>`;
-    const { checks } = keywordStuffingRule.run(ctx(html));
+    const { checks } = await keywordStuffingRule.run(ctx(html));
     expect(checks[0].status).toBe("warn");
     expect(checks[0].items?.some((item) => item.id === "widget")).toBe(true);
   });
 
-  test("the largest substantial main landmark is measured", () => {
+  test("the largest substantial main landmark is measured", async () => {
     const html = `<html><body><main><p>${filler(100)}</p></main><main><p>${"widget ".repeat(20)}${filler(100)}</p></main></body></html>`;
-    const { checks } = keywordStuffingRule.run(ctx(html));
+    const { checks } = await keywordStuffingRule.run(ctx(html));
     expect(checks[0].status).toBe("warn");
     expect(checks[0].items?.some((item) => item.id === "widget")).toBe(true);
   });
 
-  test("thousands of nested main landmarks stay within a bounded scan", { timeout: 30_000 }, () => {
+  test("thousands of nested main landmarks stay within a bounded scan", { timeout: 30_000 }, async () => {
     const depth = 5_000;
     const html = `<html><body>${"<main>".repeat(depth)}<p>${filler(120)}</p>${"</main>".repeat(depth)}</body></html>`;
     const context = ctx(html);
     const started = performance.now();
-    const { checks } = keywordStuffingRule.run(context);
+    const { checks } = await keywordStuffingRule.run(context);
     expect(performance.now() - started).toBeLessThan(1_000);
     expect(checks[0].status).toBe("pass");
   });
 
-  test("a listing without main keeps every article", () => {
+  test("a listing without main keeps every article", async () => {
     const html = `<html><body><article><p>${filler(100)}</p></article><article><p>${"widget ".repeat(20)}${filler(20)}</p></article></body></html>`;
-    const { checks } = keywordStuffingRule.run(ctx(html));
+    const { checks } = await keywordStuffingRule.run(ctx(html));
     expect(checks[0].status).toBe("warn");
     expect(checks[0].items?.some((item) => item.id === "widget")).toBe(true);
   });
 
-  test("an article inside a sidebar is not selected as the page's main copy", () => {
+  test("an article inside a sidebar is not selected as the page's main copy", async () => {
     const html = `<html><body><aside><article><p>${filler(100)}</p></article></aside><section><p>${"widget ".repeat(20)}${filler(100)}</p></section></body></html>`;
-    const { checks } = keywordStuffingRule.run(ctx(html));
+    const { checks } = await keywordStuffingRule.run(ctx(html));
     expect(checks[0].status).toBe("warn");
     expect(checks[0].items?.some((item) => item.id === "widget")).toBe(true);
   });
 
-  test("a thin sole article falls back to the rest of the body", () => {
+  test("a thin sole article falls back to the rest of the body", async () => {
     const html = `<html><body><article><p>Short article</p></article><section><p>${"widget ".repeat(20)}${filler(120)}</p></section></body></html>`;
-    const { checks } = keywordStuffingRule.run(ctx(html));
+    const { checks } = await keywordStuffingRule.run(ctx(html));
     expect(checks[0].status).toBe("warn");
     expect(checks[0].items?.some((item) => item.id === "widget")).toBe(true);
   });
 
-  test("article headers remain part of body-fallback copy", () => {
+  test("article headers remain part of body-fallback copy", async () => {
     const html = `<html><body><header>${"global ".repeat(30)}</header><article><header>${"widget ".repeat(20)}</header><p>${filler(100)}</p></article><article><p>${filler(20)}</p></article></body></html>`;
-    const { checks } = keywordStuffingRule.run(ctx(html));
+    const { checks } = await keywordStuffingRule.run(ctx(html));
     expect(checks[0].status).toBe("warn");
     expect(checks[0].items?.some((item) => item.id === "widget")).toBe(true);
     expect(checks[0].items?.some((item) => item.id === "global")).not.toBe(true);
   });
 
-  test("umlauts, ß and decomposed letters stay in one normalized word", () => {
+  test("umlauts, ß and decomposed letters stay in one normalized word", async () => {
     expect(keywordTokens("gemäß gema\u0308ß Straße")).toEqual(["gemäß", "gemäß", "straße"]);
     const html = `<html lang="de"><body><main><p>${"gemäß ".repeat(15)}${filler(120)}</p></main></body></html>`;
-    const { checks } = keywordStuffingRule.run(ctx(html));
+    const { checks } = await keywordStuffingRule.run(ctx(html));
     expect(checks[0].items?.some((item) => item.id === "gemäß")).toBe(true);
     expect(checks[0].items?.some((item) => item.id === "gem")).toBe(false);
   });
 
-  test("German price-note boilerplate is ignored", () => {
+  test("German price-note boilerplate is ignored", async () => {
     const notes = "inkl MwSt zzgl Versandkosten ".repeat(12);
     const html = `<html lang="de"><body><main><p>${notes}${filler(120)}</p></main></body></html>`;
-    const { checks } = keywordStuffingRule.run(ctx(html));
+    const { checks } = await keywordStuffingRule.run(ctx(html));
     expect(checks[0].status).toBe("pass");
   });
 
-  test("English price-note boilerplate is ignored", () => {
+  test("English price-note boilerplate is ignored", async () => {
     const html = `<html lang="en"><body><main><p>${"incl VAT ".repeat(12)}${filler(120)}</p></main></body></html>`;
-    const { checks } = keywordStuffingRule.run(ctx(html));
+    const { checks } = await keywordStuffingRule.run(ctx(html));
     expect(checks[0].status).toBe("pass");
   });
 
-  test.each(["incl", "VAT"])("German copy does not ignore the English price term %p", (word) => {
+  test.each(["incl", "VAT"])("German copy does not ignore the English price term %p", async (word) => {
     const html = `<html lang="de"><body><main><p>${`${word} `.repeat(20)}${filler(120)}</p></main></body></html>`;
-    const { checks } = keywordStuffingRule.run(ctx(html));
+    const { checks } = await keywordStuffingRule.run(ctx(html));
     expect(checks[0].status).toBe("warn");
     expect(checks[0].items?.some((item) => item.id === word.toLowerCase())).toBe(true);
   });
 
   test.each(["incl", "VAT"])(
     "German body-fallback copy does not ignore the English price term %p",
-    (word) => {
+    async (word) => {
       const html = `<html lang="de"><body><p>${`${word} `.repeat(20)}${filler(120)}</p></body></html>`;
-      const { checks } = keywordStuffingRule.run(ctx(html));
+      const { checks } = await keywordStuffingRule.run(ctx(html));
       expect(checks[0].status).toBe("warn");
       expect(checks[0].items?.some((item) => item.id === word.toLowerCase())).toBe(true);
     },
   );
 
-  test("a token longer than the item limit is ignored instead of split", () => {
+  test("a token longer than the item limit is ignored instead of split", async () => {
     const longToken = "ä".repeat(80);
     expect(keywordTokens(`${longToken} normal`)).toEqual(["normal"]);
   });
 
-  test("compatibility normalization is bounded to one short token", () => {
+  test("compatibility normalization is bounded to one short token", async () => {
     expect(keywordTokens("ａｃｍｅ ﬀoo gemäß")).toEqual(["acme", "ffoo", "gemäß"]);
     expect(keywordTokens(`${"\uFDFA.".repeat(2_000)} normal`)).toEqual(["normal"]);
   });
 
-  test("Han, Kana and Hangul runs are not treated as whole words", () => {
+  test("Han, Kana and Hangul runs are not treated as whole words", async () => {
     expect(keywordTokens("検索検索 검색검색 カタカナカタカナ normal")).toEqual(["normal"]);
   });
 });
@@ -371,36 +371,36 @@ describe("content/keyword-stuffing ignores the site's own brand name", () => {
   const launchPage = (name: string, head = "") =>
     `<html><head>${head}</head><body><h1>${name}</h1><p>${`${name} `.repeat(30)}${filler(90)}</p></body></html>`;
 
-  test("a landing page repeating its own domain name does not flag it", () => {
-    const { checks } = keywordStuffingRule.run(siteCtx("https://acme.com/", launchPage("Acme")));
+  test("a landing page repeating its own domain name does not flag it", async () => {
+    const { checks } = await keywordStuffingRule.run(siteCtx("https://acme.com/", launchPage("Acme")));
     expect(checks[0].status).toBe("pass");
   });
 
-  test("a launch domain prefix or suffix still resolves to the product name", () => {
+  test("a launch domain prefix or suffix still resolves to the product name", async () => {
     for (const url of ["https://getacme.com/", "https://acmehq.io/", "https://www.tryacme.co.uk/"]) {
-      const { checks } = keywordStuffingRule.run(siteCtx(url, launchPage("Acme")));
+      const { checks } = await keywordStuffingRule.run(siteCtx(url, launchPage("Acme")));
       expect(checks[0].status).toBe("pass");
     }
   });
 
-  test("a multi-word og:site_name carried by the domain is exempt word by word", () => {
+  test("a multi-word og:site_name carried by the domain is exempt word by word", async () => {
     const head = `<meta property="og:site_name" content="Rocket Notes">`;
     const html = `<html><head>${head}</head><body><p>${"rocket notes ".repeat(20)}${filler(90)}</p></body></html>`;
-    const { checks } = keywordStuffingRule.run(siteCtx("https://rocketnotes.app/", html));
+    const { checks } = await keywordStuffingRule.run(siteCtx("https://rocketnotes.app/", html));
     expect(checks[0].status).toBe("pass");
   });
 
-  test("true positive: a site name the domain does not carry is not a free pass", () => {
+  test("true positive: a site name the domain does not carry is not a free pass", async () => {
     const head = `<meta property="og:site_name" content="Plumber">`;
     const html = `<html><head>${head}</head><body><p>${"plumber ".repeat(30)}${filler(90)}</p></body></html>`;
-    const { checks } = keywordStuffingRule.run(siteCtx("https://acme.com/", html));
+    const { checks } = await keywordStuffingRule.run(siteCtx("https://acme.com/", html));
     expect(checks[0].status).toBe("warn");
     expect(checks[0].items?.some((i) => i.id === "plumber")).toBe(true);
   });
 
-  test("true positive: other stuffed words on the brand's own page still flag", () => {
+  test("true positive: other stuffed words on the brand's own page still flag", async () => {
     const html = `<html><body><p>${"acme ".repeat(30)}${"widget ".repeat(30)}${filler(90)}</p></body></html>`;
-    const { checks } = keywordStuffingRule.run(siteCtx("https://acme.com/", html));
+    const { checks } = await keywordStuffingRule.run(siteCtx("https://acme.com/", html));
     expect(checks[0].status).toBe("warn");
     expect(checks[0].items?.map((i) => i.id)).toEqual(["widget"]);
   });
@@ -413,7 +413,7 @@ describe("content/keyword-stuffing: German function words, menu chrome, card mic
   };
   const page = (lang: string, body: string) => `<html lang="${lang}"><head><title>t</title></head><body>${body}</body></html>`;
 
-  test("German function words are not reported, a content word still is", () => {
+  test("German function words are not reported, a content word still is", async () => {
     const words = "sie für dich dir deinen deinem deiner ihn ihm";
     const prose = Array.from({ length: 12 }, () => `${words} ${filler(8)}`).join(" ");
     const html = page("de", `<main><p>${prose} ${"zahlung ".repeat(14)}</p></main>`);
@@ -422,19 +422,19 @@ describe("content/keyword-stuffing: German function words, menu chrome, card mic
     expect(out).toContain("zahlung");
   });
 
-  test("`out` is not reported on an English page", () => {
+  test("`out` is not reported on an English page", async () => {
     const html = page("en", `<main><p>${Array.from({ length: 12 }, () => `out ${filler(8)}`).join(" ")}</p></main>`);
     expect(flagged(html)).not.toContain("out");
   });
 
-  test("a mega menu of plain div links on a page with little copy is not measured", () => {
+  test("a mega menu of plain div links on a page with little copy is not measured", async () => {
     const cats = ["bademode", "curvy", "wäsche", "kleider", "röcke", "hosen"];
     const links = Array.from({ length: 60 }, (_, i) => `<a href="/c/${i}">${cats[i % cats.length]} ${["neu", "sale", "alle", "top"][i % 4]}</a>`).join(" ");
     const html = page("de", `<body><div role="menubar"><div>${links}</div></div><div class="copy"><p>Kontakt ${filler(70)}</p></div></body>`);
     expect(flagged(html)).toEqual([]);
   });
 
-  test("the issue's shape: 20 plain-div links repeating one category word, under 100 words of copy (#1315)", () => {
+  test("the issue's shape: 20 plain-div links repeating one category word, under 100 words of copy (#1315)", async () => {
     // Link text built like a mega menu: 20 links, each a different second word, one shared category word.
     const sub = ["damen", "herren", "kinder", "neu", "sale", "top", "alle", "marken", "pflege", "sets", "mehr", "info", "hilfe", "tipps", "wahl", "form", "stil", "farbe", "preis", "test"];
     const links = sub.map((w, i) => `<a href="/c/${i}">bademode ${w}</a>`).join(" ");
@@ -458,7 +458,7 @@ describe("content/keyword-stuffing: German function words, menu chrome, card mic
     expect(flagged(page("de", `<body><div role="menubar">${links}</div>${copy}</body>`))).toContain("bademode");
   });
 
-  test("true positive: one anchor repeated 20 times is not a menu, it still flags", () => {
+  test("true positive: one anchor repeated 20 times is not a menu, it still flags", async () => {
     const links = Array.from({ length: 20 }, () => `<a href="/p">emergency plumber</a>`).join(" ");
     const html = page("en", `<body><div>${links}</div><p>${filler(60)}</p></body>`);
     expect(flagged(html)).toContain("plumber");
@@ -470,17 +470,17 @@ describe("content/keyword-stuffing: German function words, menu chrome, card mic
   const letters = (i: number): string => { let out = ""; let n = i; do { out = String.fromCharCode(97 + (n % 26)) + out; n = Math.floor(n / 26) - 1; } while (n >= 0); return out; };
   const unique = (n: number) => Array.from({ length: n }, (_, i) => `zz${letters(i)}`).join(" ");
 
-  test("price-shaped means currency, percent, \"of 5\" or stars/reviews only: a bare decimal is not a card", () => {
+  test("price-shaped means currency, percent, \"of 5\" or stars/reviews only: a bare decimal is not a card", async () => {
     const lines = Array.from({ length: 45 }, (_, n) => `<p>plumber ${n % 10}${n % 7}.99</p>`).join("");
     expect(flagged(page("en", `<main>${lines}<p>${unique(255)}</p></main>`))).toContain("plumber");
   });
 
-  test("a word that is 10% or more of the page is never deducted, however it is dressed", () => {
+  test("a word that is 10% or more of the page is never deducted, however it is dressed", async () => {
     const lines = Array.from({ length: 45 }, (_, n) => `<div><h3>Item ${n}</h3><span>plumber from $${n + 1}</span></div>`).join("");
     expect(flagged(page("en", `<main>${lines}<p>${unique(255)}</p></main>`))).toContain("plumber");
   });
 
-  test("a deduction is clamped, not skipped, and large real grids are still deducted", () => {
+  test("a deduction is clamped, not skipped, and large real grids are still deducted", async () => {
     const en = Array.from({ length: 40 }, (_, n) => `<div><h3>Item ${n}</h3><span>Average rating 4.${n % 10} of 5 stars</span><span>from ${n + 1},90 EUR in instalments</span></div>`).join("");
     const outEn = flagged(page("en", `<main><div class="grid">${en}</div><p>${unique(700)}</p></main>`));
     for (const w of ["average", "rating", "stars", "instalments", "eur"]) expect(outEn).not.toContain(w);
@@ -491,17 +491,17 @@ describe("content/keyword-stuffing: German function words, menu chrome, card mic
     for (const w of ["average", "rating", "stars"]) expect(outRating).not.toContain(w);
   });
 
-  test("the deduction never takes a word below half the flag threshold", () => {
+  test("the deduction never takes a word below half the flag threshold", async () => {
     // 25 priced lines of the stuffed phrase in 500 words: the card deduction is bounded (counted down to the floor, not to nothing)
     const lines = Array.from({ length: 25 }, (_, n) => `<div><h3>Item ${n}</h3><span>emergency plumber london from $${n + 1}</span></div>`).join("");
     const html = page("en", `<main>${lines}<p>${unique(425)}</p></main>`);
-    const check = keywordStuffingRule.run(ctx(html)).checks[0]!;
+    const check = (await keywordStuffingRule.run(ctx(html))).checks[0]!;
     expect(["warn", "pass"]).toContain(check.status);
     const word = check.items?.find((i) => i.id === "plumber");
     if (word) expect((word.meta as { count: number }).count).toBeGreaterThanOrEqual(8);
   });
 
-  test("text repeated once per product card does not count toward density", () => {
+  test("text repeated once per product card does not count toward density", async () => {
     const html = page("de", `<main><div class="grid">${Array.from({ length: 12 }, (_, i) => card(i)).join("")}</div><p>${unique(500)}</p></main>`);
     const out = flagged(html);
     expect(out).not.toContain("durchschnittliche");
@@ -510,7 +510,7 @@ describe("content/keyword-stuffing: German function words, menu chrome, card mic
     expect(out).not.toContain("zahlen");
   });
 
-  test("true positive: 24 keyword links in one bare div (no list, no menu name) still count and flag", () => {
+  test("true positive: 24 keyword links in one bare div (no list, no menu name) still count and flag", async () => {
     const cities = ["london", "leeds", "bristol", "york", "bath", "derby"];
     const links = Array.from({ length: 24 }, (_, i) => `<a href="/p/${i}">emergency plumber ${cities[i % 6]}</a>`).join(" ");
     const html = page("en", `<body><div>${links}</div><p>${filler(90)}</p></body>`);
@@ -524,7 +524,7 @@ describe("content/keyword-stuffing: German function words, menu chrome, card mic
     expect(flagged(page("en", `<body><div role="menubar">${links}</div><p>${filler(90)}</p></body>`))).toContain("plumber");
   });
 
-  test("a keyword cloud is not excused by a menu signal, at 40% or 58% of the labels sharing a word", () => {
+  test("a keyword cloud is not excused by a menu signal, at 40% or 58% of the labels sharing a word", async () => {
     for (const shared of [10, 14]) {
       const labels = Array.from({ length: 24 }, (_, i) => (i < shared ? `emergency plumber area${i}` : `service${i} option${i} page${i}`));
       const links = labels.map((l, i) => `<a href="/p/${i}">${l}</a>`).join(" ");
@@ -537,7 +537,7 @@ describe("content/keyword-stuffing: German function words, menu chrome, card mic
     expect(flagged(page("en", `<body><div role="menubar">${cats}</div><p>${filler(90)}</p></body>`))).not.toContain("category1");
   });
 
-  test("true positive: a repeated phrase is never a card, however its wrapper looks", () => {
+  test("true positive: a repeated phrase is never a card, however its wrapper looks", async () => {
     const wrapped = Array.from({ length: 25 }, () => `<div class="sec"><p>cheap emergency plumber london</p></div>`).join("");
     expect(flagged(page("en", `<main>${wrapped}<p>${filler(110)}</p></main>`))).toContain("plumber");
     const lists = Array.from({ length: 25 }, () => `<ul><li>cheap emergency plumber london</li></ul>`).join("");
@@ -565,14 +565,14 @@ describe("content/keyword-stuffing: German function words, menu chrome, card mic
     expect(flagged(page("en", `<main>${priced}<p>${filler(110)}</p></main>`))).toContain("plumber");
   });
 
-  test("the card bound counts candidate cards, not every element, so a large grid is still deducted", () => {
+  test("the card bound counts candidate cards, not every element, so a large grid is still deducted", async () => {
     const big = Array.from({ length: 700 }, (_, n) => card(n % 30)).join("");
     const out = flagged(page("de", `<main><div class="grid">${big}</div><p>${unique(45_000)}</p></main>`));
     expect(out).not.toContain("durchschnittliche");
     expect(out).not.toContain("zahlen");
   });
 
-  test("true positive: the same sentence written 12 times as body copy still flags", () => {
+  test("true positive: the same sentence written 12 times as body copy still flags", async () => {
     const sentence = "Günstige Matratzen kaufen";
     const html = page("de", `<main><article><p>${Array.from({ length: 12 }, () => sentence).join(". ")}. ${filler(90)}</p></article></main>`);
     expect(flagged(html)).toContain("matratzen");
@@ -583,7 +583,7 @@ describe("content/keyword-stuffing: German function words, menu chrome, card mic
 });
 
 describe("content/keyword-stuffing link-list and card heuristics stay bounded (#1315)", () => {
-  test("thousands of nested anchors and repeated cards finish quickly", () => {
+  test("thousands of nested anchors and repeated cards finish quickly", async () => {
     const nest = (depth: number, inner: string) => Array.from({ length: depth }, () => "<div>").join("") + inner + Array.from({ length: depth }, () => "</div>").join("");
     const links = Array.from({ length: 6000 }, (_, i) => `<a href="/x/${i}">label ${i % 97}</a>`).join("");
     const cards = Array.from({ length: 6000 }, (_, i) => `<div><span>Durchschnittliche Bewertung ${i}</span></div>`).join("");
@@ -602,17 +602,17 @@ describe("content/keyword-stuffing stays near-linear on hostile shapes (#1315)",
   };
   const wrap = (body: string) => `<html lang="en"><body><main>${body}<p>${filler(120)}</p></main></body></html>`;
 
-  test("40,000 spans under one div", () => {
+  test("40,000 spans under one div", async () => {
     expect(timeIt(wrap(`<div>${Array.from({ length: 40_000 }, (_, i) => `<span>tag${i % 50} value ${i}</span>`).join("")}</div>`))).toBeLessThan(1500);
   });
 
-  test("3,000 cards under a parent with two million characters of text", () => {
+  test("3,000 cards under a parent with two million characters of text", async () => {
     const cards = Array.from({ length: 3000 }, (_, i) => `<div><h3>Item ${i}</h3><span>Rating 4.${i % 10} of 5 stars</span></div>`).join("");
     const pad = "lorem ".repeat(330_000);
     expect(timeIt(wrap(`<section>${pad}${cards}</section>`))).toBeLessThan(1500);
   });
 
-  test("a list of 8,000 items and 2,000 groups", () => {
+  test("a list of 8,000 items and 2,000 groups", async () => {
     expect(timeIt(wrap(`<ul>${Array.from({ length: 8000 }, (_, i) => `<li>entry number ${i}</li>`).join("")}</ul>`))).toBeLessThan(1500);
     expect(timeIt(wrap(Array.from({ length: 2000 }, (_, i) => `<div class="${"c".repeat(500)}"><a href="/x${i}">link ${i}</a></div>`).join("")))).toBeLessThan(1500);
   });

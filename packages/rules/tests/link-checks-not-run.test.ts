@@ -17,6 +17,7 @@ import { brokenExternalLinksRule } from "../src/links/broken-external-links";
 import { brokenLinksRule } from "../src/links/broken-links";
 import { deadLinksRule } from "../src/links/dead-links";
 import type { ExternalLinkCheckData, ParsedPage, RuleContext, SiteData } from "../src/types";
+import type { CheckResult } from "@squirrelscan/core-contracts";
 
 const BASE = "https://example.com";
 
@@ -64,12 +65,12 @@ function ctx(
   } as unknown as RuleContext;
 }
 
-const named = (checks: { name: string; status: string }[], name: string) =>
+const named = (checks: CheckResult[], name: string) =>
   checks.filter((c) => c.name === name);
 
 describe("links/broken-external-links when external link checking did not run", () => {
-  test("undefined link data is skipped with the not-checked reason, never a pass", () => {
-    const { checks } = brokenExternalLinksRule.run(
+  test("undefined link data is skipped with the not-checked reason, never a pass", async () => {
+    const { checks } = await brokenExternalLinksRule.run(
       ctx([
         {
           url: `${BASE}/`,
@@ -89,25 +90,25 @@ describe("links/broken-external-links when external link checking did not run", 
     expect(checks[0]!.details).toEqual({ externalLinksFound: 2 });
   });
 
-  test("skipped even when the pages have no external links: nothing was checked", () => {
-    const { checks } = brokenExternalLinksRule.run(ctx([{ url: `${BASE}/`, statusCode: 200 }]));
+  test("skipped even when the pages have no external links: nothing was checked", async () => {
+    const { checks } = await brokenExternalLinksRule.run(ctx([{ url: `${BASE}/`, statusCode: 200 }]));
     expect(checks[0]!.status).toBe("skipped");
     expect(checks[0]!.message).toBe(
       "External link checking was off for this audit, so external links were not checked",
     );
   });
 
-  test("an empty list means checking ran and found nothing: still a pass", () => {
-    const { checks } = brokenExternalLinksRule.run(
+  test("an empty list means checking ran and found nothing: still a pass", async () => {
+    const { checks } = await brokenExternalLinksRule.run(
       ctx([{ url: `${BASE}/`, statusCode: 200 }], { externalLinks: [] }),
     );
     expect(checks[0]!.status).toBe("pass");
     expect(checks[0]!.message).toBe("No external links found to check");
   });
 
-  test("no check results while the pages link out is not a pass either", () => {
+  test("no check results while the pages link out is not a pass either", async () => {
     // `squirrel analyze` re-runs rules on a stored crawl whose link phase never ran.
-    const { checks } = brokenExternalLinksRule.run(
+    const { checks } = await brokenExternalLinksRule.run(
       ctx([{ url: `${BASE}/`, statusCode: 200, external: ["https://a.example/"] }], {
         externalLinks: [],
       }),
@@ -119,8 +120,8 @@ describe("links/broken-external-links when external link checking did not run", 
     );
   });
 
-  test("results with no status or error at all are not 'All 0 working'", () => {
-    const { checks } = brokenExternalLinksRule.run(
+  test("results with no status or error at all are not 'All 0 working'", async () => {
+    const { checks } = await brokenExternalLinksRule.run(
       ctx([{ url: `${BASE}/`, statusCode: 200 }], {
         externalLinks: [
           { href: "https://a.example/", status: null, error: null, sourcePages: [`${BASE}/`] },
@@ -131,7 +132,7 @@ describe("links/broken-external-links when external link checking did not run", 
     expect(checks[0]!.message).toBe("None of the 1 external link(s) could be checked this audit");
   });
 
-  test("only http(s) hrefs the checker could request are counted", () => {
+  test("only http(s) hrefs the checker could request are counted", async () => {
     const page = {
       url: `${BASE}/`,
       statusCode: 200,
@@ -145,12 +146,12 @@ describe("links/broken-external-links when external link checking did not run", 
     };
     const context = ctx([]);
     context.site!.pages = [page];
-    const { checks } = brokenExternalLinksRule.run(context);
+    const { checks } = await brokenExternalLinksRule.run(context);
     expect(checks[0]!.details).toEqual({ externalLinksFound: 1 });
   });
 
-  test("a checked link answering 404 fails (confirmed broken, #1739)", () => {
-    const { checks } = brokenExternalLinksRule.run(
+  test("a checked link answering 404 fails (confirmed broken, #1739)", async () => {
+    const { checks } = await brokenExternalLinksRule.run(
       ctx([{ url: `${BASE}/`, statusCode: 200 }], {
         externalLinks: [
           { href: "https://dead.example/", status: 404, error: null, sourcePages: [`${BASE}/`] },
@@ -160,8 +161,8 @@ describe("links/broken-external-links when external link checking did not run", 
     expect(checks[0]!.status).toBe("fail");
   });
 
-  test("links over the per-audit limit are not checked, next to the result for the rest", () => {
-    const { checks } = brokenExternalLinksRule.run(
+  test("links over the per-audit limit are not checked, next to the result for the rest", async () => {
+    const { checks } = await brokenExternalLinksRule.run(
       ctx([{ url: `${BASE}/`, statusCode: 200 }], {
         externalLinks: [
           { href: "https://a.example/", status: 200, error: null, sourcePages: [`${BASE}/`] },
@@ -180,8 +181,8 @@ describe("links/broken-external-links when external link checking did not run", 
 
   // repo#2613: a check with a time budget (the cloud's) reports the links it
   // ran out of time on as not checked, next to the result for the rest.
-  test("links the check ran out of time on are not checked, next to the result for the rest", () => {
-    const { checks } = brokenExternalLinksRule.run(
+  test("links the check ran out of time on are not checked, next to the result for the rest", async () => {
+    const { checks } = await brokenExternalLinksRule.run(
       ctx([{ url: `${BASE}/`, statusCode: 200 }], {
         externalLinks: [
           { href: "https://a.example/", status: 200, error: null, sourcePages: [`${BASE}/`] },
@@ -198,21 +199,21 @@ describe("links/broken-external-links when external link checking did not run", 
     );
   });
 
-  test("a check that ran out of time before any answer says so, not 'no results'", () => {
+  test("a check that ran out of time before any answer says so, not 'no results'", async () => {
     const site = { externalLinks: [], externalLinkCheck: { found: 3, checked: 3, cap: 200, outOfTime: 3 } };
     const page = { url: `${BASE}/`, statusCode: 200, external: ["https://a.example/"] };
-    const { checks } = brokenExternalLinksRule.run(ctx([page], site));
+    const { checks } = await brokenExternalLinksRule.run(ctx([page], site));
     expect(checks.map((c) => `${c.status}:${c.skipReason ?? ""}`)).toEqual([
       "skipped:external-links-out-of-time",
     ]);
-    const dead = deadLinksRule.run(ctx([page], site)).checks;
+    const dead = (await deadLinksRule.run(ctx([page], site))).checks;
     expect(dead[0]!.message).toBe(
       "No external links were verified: the link check ran out of time before reaching any of the 3 selected",
     );
   });
 
-  test("links/dead-links skips with the same reason (kept off the locked upsell)", () => {
-    const { checks } = deadLinksRule.run(ctx([{ url: `${BASE}/`, statusCode: 200 }]));
+  test("links/dead-links skips with the same reason (kept off the locked upsell)", async () => {
+    const { checks } = await deadLinksRule.run(ctx([{ url: `${BASE}/`, statusCode: 200 }]));
     expect(checks[0]!.status).toBe("skipped");
     expect(checks[0]!.skipReason).toBe(EXTERNAL_LINKS_NOT_CHECKED_SKIP_REASON);
   });
@@ -229,8 +230,8 @@ describe("links/broken-links when the crawl did not follow links", () => {
     { url: `${BASE}/about`, statusCode: 200, internal: [`${BASE}/`] },
   ];
 
-  test("unfetched targets make the check skipped, with no pass", () => {
-    const { checks } = brokenLinksRule.run(ctx(pages, { linkDiscoveryOff: true }));
+  test("unfetched targets make the check skipped, with no pass", async () => {
+    const { checks } = await brokenLinksRule.run(ctx(pages, { linkDiscoveryOff: true }));
     const results = named(checks, "broken-links");
     expect(results.map((c) => c.status)).toEqual(["skipped"]);
     const skipped = checks[0]!;
@@ -248,8 +249,8 @@ describe("links/broken-links when the crawl did not follow links", () => {
     });
   });
 
-  test("a broken target it did fetch still fails, next to the not-checked skip", () => {
-    const { checks } = brokenLinksRule.run(
+  test("a broken target it did fetch still fails, next to the not-checked skip", async () => {
+    const { checks } = await brokenLinksRule.run(
       ctx(
         [
           ...pages,
@@ -263,8 +264,8 @@ describe("links/broken-links when the crawl did not follow links", () => {
     expect(checks[0]!.items?.[0]?.id).toBe(`${BASE}/gone`);
   });
 
-  test("every target fetched: a real pass even with links not followed", () => {
-    const { checks } = brokenLinksRule.run(
+  test("every target fetched: a real pass even with links not followed", async () => {
+    const { checks } = await brokenLinksRule.run(
       ctx(
         [
           { url: `${BASE}/`, statusCode: 200, internal: [`${BASE}/about`] },
@@ -284,10 +285,10 @@ describe("links/broken-links when the crawl did not follow links", () => {
     });
   });
 
-  test("links followed (Surface, Full): unfetched targets keep today's pass", () => {
+  test("links followed (Surface, Full): unfetched targets keep today's pass", async () => {
     // A followed crawl that ran out of budget is a different gap (#1146), left as
     // is; the pass says how much it covered.
-    const { checks } = brokenLinksRule.run(ctx(pages));
+    const { checks } = await brokenLinksRule.run(ctx(pages));
     expect(named(checks, "broken-links").map((c) => c.status)).toEqual(["pass"]);
     expect(checks[0]!.details).toEqual({
       linkTargets: 4,
@@ -299,8 +300,8 @@ describe("links/broken-links when the crawl did not follow links", () => {
     });
   });
 
-  test("the link probe's statuses count as known: a probed 404 fails, a probed 200 passes", () => {
-    const { checks } = brokenLinksRule.run(
+  test("the link probe's statuses count as known: a probed 404 fails, a probed 200 passes", async () => {
+    const { checks } = await brokenLinksRule.run(
       ctx(pages, {
         linkDiscoveryOff: true,
         linkTargetStatuses: [
@@ -314,8 +315,8 @@ describe("links/broken-links when the crawl did not follow links", () => {
     expect(checks[0]!.items?.map((i) => [i.id, i.meta?.probed])).toEqual([[`${BASE}/gone`, true]]);
   });
 
-  test("targets past the probe's limit stay not checked, and the message says why", () => {
-    const { checks } = brokenLinksRule.run(
+  test("targets past the probe's limit stay not checked, and the message says why", async () => {
+    const { checks } = await brokenLinksRule.run(
       ctx(pages, {
         linkDiscoveryOff: true,
         linkTargetStatuses: [{ url: `${BASE}/blog/old`, status: 200, error: null }],
@@ -355,8 +356,8 @@ describe("links/broken-links when the crawl did not follow links", () => {
     { url: `${BASE}/private`, status: 403, error: null },
   ];
 
-  test("targets skipped as actions, limit not reached: the line names the skip, not the limit", () => {
-    const { checks } = brokenLinksRule.run(
+  test("targets skipped as actions, limit not reached: the line names the skip, not the limit", async () => {
+    const { checks } = await brokenLinksRule.run(
       ctx(issuePages, {
         linkDiscoveryOff: true,
         linkTargetStatuses: issueStatuses,
@@ -373,9 +374,9 @@ describe("links/broken-links when the crawl did not follow links", () => {
     expect(named(checks, "broken-links").map((c) => c.status)).toEqual(["fail", "skipped"]);
   });
 
-  test("over the limit: the line names the limit", () => {
+  test("over the limit: the line names the limit", async () => {
     // Limit 2: the probe answered /missing and /moved; /private was past it.
-    const { checks } = brokenLinksRule.run(
+    const { checks } = await brokenLinksRule.run(
       ctx(issuePages, {
         linkDiscoveryOff: true,
         linkTargetStatuses: issueStatuses.slice(0, 2),
@@ -389,8 +390,8 @@ describe("links/broken-links when the crawl did not follow links", () => {
     );
   });
 
-  test("every cause at once gets a count each", () => {
-    const { checks } = brokenLinksRule.run(
+  test("every cause at once gets a count each", async () => {
+    const { checks } = await brokenLinksRule.run(
       ctx(issuePages, {
         linkDiscoveryOff: true,
         // /moved was asked and never answered; /private was past the limit of 2.
@@ -405,9 +406,9 @@ describe("links/broken-links when the crawl did not follow links", () => {
     );
   });
 
-  test("one target linked in several forms counts once", () => {
+  test("one target linked in several forms counts once", async () => {
     // `/missing`, `/missing/` and `/missing#x` are one target, asked once.
-    const { checks } = brokenLinksRule.run(
+    const { checks } = await brokenLinksRule.run(
       ctx(
         [
           {
@@ -431,8 +432,8 @@ describe("links/broken-links when the crawl did not follow links", () => {
     );
   });
 
-  test("an unreliable HEAD marks only the errors it set aside as not trusted", () => {
-    const { checks } = brokenLinksRule.run(
+  test("an unreliable HEAD marks only the errors it set aside as not trusted", async () => {
+    const { checks } = await brokenLinksRule.run(
       ctx(issuePages, {
         linkDiscoveryOff: true,
         linkTargetStatuses: [
@@ -450,8 +451,8 @@ describe("links/broken-links when the crawl did not follow links", () => {
     );
   });
 
-  test("a limit of 0 with targets skipped too: both counted", () => {
-    const { checks } = brokenLinksRule.run(
+  test("a limit of 0 with targets skipped too: both counted", async () => {
+    const { checks } = await brokenLinksRule.run(
       ctx(issuePages, {
         linkDiscoveryOff: true,
         internalLinkProbe: { unfetched: 3, probed: 0, cap: 0, outOfScope: 2 },
@@ -464,8 +465,8 @@ describe("links/broken-links when the crawl did not follow links", () => {
     );
   });
 
-  test("an engine without a skip count: targets it never asked about are not blamed on the limit", () => {
-    const { checks } = brokenLinksRule.run(
+  test("an engine without a skip count: targets it never asked about are not blamed on the limit", async () => {
+    const { checks } = await brokenLinksRule.run(
       ctx(issuePages, {
         linkDiscoveryOff: true,
         linkTargetStatuses: issueStatuses,
@@ -477,8 +478,8 @@ describe("links/broken-links when the crawl did not follow links", () => {
     expect(skipped.message).not.toContain("max_targets");
   });
 
-  test("a probe refused with 401/403 is unverifiable, not broken (a bot wall)", () => {
-    const { checks } = brokenLinksRule.run(
+  test("a probe refused with 401/403 is unverifiable, not broken (a bot wall)", async () => {
+    const { checks } = await brokenLinksRule.run(
       ctx(pages, {
         linkTargetStatuses: [
           { url: `${BASE}/gone`, status: 403, error: null },
@@ -491,19 +492,19 @@ describe("links/broken-links when the crawl did not follow links", () => {
     expect(named(checks, "refused-links").map((c) => c.status)).toEqual(["info"]);
   });
 
-  test("a probe that got no answer says so rather than naming zero targets", () => {
-    const { checks } = brokenLinksRule.run(
+  test("a probe that got no answer says so rather than naming zero targets", async () => {
+    const { checks } = await brokenLinksRule.run(
       ctx(pages, { linkDiscoveryOff: true, internalLinkProbe: { unfetched: 2, probed: 0, cap: 200 } }),
     );
     expect(checks[0]!.message).toContain("its internal link checks got no answer");
   });
 
-  test("max_targets = 0 and an unreliable HEAD each say why, not 'no answer'", () => {
-    const capped = brokenLinksRule.run(
+  test("max_targets = 0 and an unreliable HEAD each say why, not 'no answer'", async () => {
+    const capped = await brokenLinksRule.run(
       ctx(pages, { linkDiscoveryOff: true, internalLinkProbe: { unfetched: 2, probed: 0, cap: 0 } }),
     );
     expect(capped.checks[0]!.message).toContain("internal_links.max_targets is 0");
-    const untrusted = brokenLinksRule.run(
+    const untrusted = await brokenLinksRule.run(
       ctx(pages, {
         linkDiscoveryOff: true,
         linkTargetStatuses: [
@@ -517,8 +518,8 @@ describe("links/broken-links when the crawl did not follow links", () => {
     expect(untrusted.checks[0]!.message).toContain("could not be trusted");
   });
 
-  test("a probe that was throttled is rate-limited, not broken", () => {
-    const { checks } = brokenLinksRule.run(
+  test("a probe that was throttled is rate-limited, not broken", async () => {
+    const { checks } = await brokenLinksRule.run(
       ctx(pages, {
         linkTargetStatuses: [
           { url: `${BASE}/gone`, status: 429, error: null, rateLimited: true },
@@ -552,8 +553,8 @@ describe("links/broken-links coverage on every row", () => {
   };
   const about: FixturePage = { url: `${BASE}/about`, statusCode: 200, internal: [`${BASE}/`] };
 
-  test("a fail that fetched every target says so: nothing unfetched", () => {
-    const { checks } = brokenLinksRule.run(
+  test("a fail that fetched every target says so: nothing unfetched", async () => {
+    const { checks } = await brokenLinksRule.run(
       ctx([
         { url: `${BASE}/`, statusCode: 200, internal: [`${BASE}/about`, `${BASE}/gone`] },
         { url: `${BASE}/about`, statusCode: 200, internal: [`${BASE}/`] },
@@ -572,11 +573,11 @@ describe("links/broken-links coverage on every row", () => {
     });
   });
 
-  test("a fail with targets left unfetched counts them, by cause", () => {
+  test("a fail with targets left unfetched counts them, by cause", async () => {
     // Links followed: the crawl fetched /missing (404) and /about. The probe
     // answered /moved (410), /private was past its limit of 1, and /logout and
     // the token link are never requested.
-    const { checks } = brokenLinksRule.run(
+    const { checks } = await brokenLinksRule.run(
       ctx([home, about, { url: `${BASE}/missing`, statusCode: 404 }], {
         linkTargetStatuses: [{ url: `${BASE}/moved`, status: 410, error: null }],
         internalLinkProbe: { unfetched: 2, probed: 1, cap: 1, outOfScope: 2 },
@@ -595,10 +596,10 @@ describe("links/broken-links coverage on every row", () => {
     });
   });
 
-  test("a pass whose only unfetched targets were skipped by design says so", () => {
+  test("a pass whose only unfetched targets were skipped by design says so", async () => {
     // The same on every run with the same settings: action and token links are
     // never requested, so they never count against a clean pass.
-    const { checks } = brokenLinksRule.run(
+    const { checks } = await brokenLinksRule.run(
       ctx(
         [
           { url: `${BASE}/`, statusCode: 200, internal: [`${BASE}/about`, ...home.internal!.slice(4)] },
@@ -619,9 +620,9 @@ describe("links/broken-links coverage on every row", () => {
     });
   });
 
-  test("a fail beside a not-checked skip carries the same coverage, in its own object", () => {
+  test("a fail beside a not-checked skip carries the same coverage, in its own object", async () => {
     // Links not followed, checks off: /missing was fetched (a sitemap 404), the rest not.
-    const { checks } = brokenLinksRule.run(
+    const { checks } = await brokenLinksRule.run(
       ctx([home, about, { url: `${BASE}/missing`, statusCode: 404 }], { linkDiscoveryOff: true }),
     );
     const [fail, skipped] = named(checks, "broken-links");
@@ -643,8 +644,8 @@ describe("links/broken-links and pages the crawl fetched outside site.pages", ()
     internal: [`${BASE}/report.pdf`, `${BASE}/busy`, `${BASE}/walled`, `${BASE}/gone.pdf`],
   };
 
-  test("a non-HTML page that answered, a throttled one and a walled one are none of them unfetched", () => {
-    const { checks } = brokenLinksRule.run(
+  test("a non-HTML page that answered, a throttled one and a walled one are none of them unfetched", async () => {
+    const { checks } = await brokenLinksRule.run(
       ctx([home, { url: `${BASE}/gone.pdf`, statusCode: 404 }], {
         fetchedTargets: [
           { url: `${BASE}/report.pdf`, status: 200 },
@@ -685,8 +686,8 @@ describe("links/broken-links and pages the crawl fetched outside site.pages", ()
     ]);
   });
 
-  test("a walled target next to a probe's 403 shares one row that names both", () => {
-    const { checks } = brokenLinksRule.run(
+  test("a walled target next to a probe's 403 shares one row that names both", async () => {
+    const { checks } = await brokenLinksRule.run(
       ctx([{ url: `${BASE}/`, statusCode: 200, internal: [`${BASE}/walled`, `${BASE}/private`] }], {
         fetchedTargets: [{ url: `${BASE}/walled`, status: 503, wafChallenge: true }],
         linkTargetStatuses: [{ url: `${BASE}/private`, status: 403, error: null }],
@@ -699,8 +700,8 @@ describe("links/broken-links and pages the crawl fetched outside site.pages", ()
     );
   });
 
-  test("without fetchedTargets (an older engine) such a link still counts as unfetched", () => {
-    const { checks } = brokenLinksRule.run(ctx([{ url: `${BASE}/`, statusCode: 200, internal: [`${BASE}/report.pdf`] }]));
+  test("without fetchedTargets (an older engine) such a link still counts as unfetched", async () => {
+    const { checks } = await brokenLinksRule.run(ctx([{ url: `${BASE}/`, statusCode: 200, internal: [`${BASE}/report.pdf`] }]));
     const [row] = named(checks, "broken-links") as Array<{ details?: Record<string, unknown> }>;
     expect(row!.details?.unfetchedTargets).toBe(1);
   });
