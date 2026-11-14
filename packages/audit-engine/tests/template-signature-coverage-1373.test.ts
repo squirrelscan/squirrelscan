@@ -2,13 +2,16 @@
 // not an estimate: its pages vary only the ways the author chose. The real
 // numbers come from `template-fanout-bench.ts --coverage` on real crawls.
 
-import { describe, expect, test } from "bun:test";
+import { describe, expect, setDefaultTimeout, test } from "bun:test";
 
 import { SIGNATURE_ATTRIBUTES, SIGNATURE_SELECTORS } from "@squirrelscan/rules";
 
 import { parseHtmlForRules } from "../src/adapter";
 import { derivedFanoutSignature, measureSignatureCoverage } from "../src/index";
 import { CORPUS, ORIGIN } from "./helpers/template-corpus";
+
+// Bun's describe() has no timeout slot; apply the 30s file-wide.
+setDefaultTimeout(30_000);
 
 describe("measureSignatureCoverage on the template corpus (ceiling, not an estimate)", () => {
   test("current mode finds the authored clusters", () => {
@@ -53,5 +56,4 @@ describe("measureSignatureCoverage on the template corpus (ceiling, not an estim
     }
     expect(SIGNATURE_ATTRIBUTES.length).toBeGreaterThan(0);
   });
-// @ts-expect-error bun-types declares describe(label, fn) only; the 30s option is kept unchanged (no per-test slot preserves behavior)
-}, 30_000);
+});
