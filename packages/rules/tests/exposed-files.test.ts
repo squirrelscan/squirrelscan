@@ -109,16 +109,6 @@ const EXPOSED: Record<string, Handler> = {
   "/site.tar.gz": bytes(GZIP, "application/gzip"),
   "/db.sql": text("-- MySQL dump 10.13\n--\nCREATE TABLE `users` (id int);\nINSERT INTO `users` VALUES (1);\n"),
   "/dump.sql": text("-- PostgreSQL database dump\n\nSET client_encoding = 'UTF8';\nCREATE TABLE public.users (id integer);\n"),
-  "/actuator/env": text('{"activeProfiles":["prod"],"propertySources":[{"name":"server.ports"}]}', "application/vnd.spring-boot.actuator.v3+json"),
-  "/actuator/heapdump": (req) =>
-    req.method === "HEAD"
-      ? new Response(null, {
-          headers: {
-            "content-type": "application/octet-stream",
-            "content-disposition": 'attachment; filename="heapdump.hprof.gz"',
-          },
-        })
-      : new Response("never fetched", { status: 500 }),
 };
 
 const SPA_SHELL = '<!doctype html><html><head><title>Shop</title></head><body><div id="root"></div><script src="/app.js"></script></body></html>';
@@ -159,12 +149,13 @@ describe("security/exposed-files", () => {
     expect(serialized).not.toContain("STRIPE_SECRET_KEY");
   });
 
-  test("only GET and HEAD are sent; the heap dump is checked with HEAD only", async () => {
+  test("only GET is sent, and no Actuator path is requested (security/exposed-actuator owns those)", async () => {
     const site = serve(EXPOSED);
     await run(ctx(site.origin));
     const methods = new Set(site.seen.map((r) => r.split(" ")[0]));
-    expect([...methods].every((m) => m === "GET" || m === "HEAD")).toBe(true);
-    expect(site.seen.filter((r) => r.endsWith("/actuator/heapdump"))).toEqual(["HEAD /actuator/heapdump"]);
+    expect([...methods]).toEqual(["GET"]);
+    expect(site.seen.some((r) => r.includes("/actuator"))).toBe(false);
+    expect(SENSITIVE_FILES).toHaveLength(20);
     // The baseline first, then one request per listed path, nothing else.
     expect(site.seen[0]).toMatch(/^GET \/\.squirrelscan-baseline-[0-9a-f]{16}$/);
     expect(site.seen).toHaveLength(SENSITIVE_FILES.length + 1);
