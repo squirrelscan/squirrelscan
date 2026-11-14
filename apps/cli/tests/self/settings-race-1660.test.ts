@@ -265,35 +265,43 @@ describe("withFileLock (#1660)", () => {
 
   test("waiters racing to take over one stale lock never hold it together", async () => {
     const dir = lockDir();
-    const lock = join(dir, "settings.json.lock");
-    const guard = join(dir, "inside");
-    const violations = join(dir, "violations");
     const worker = join(import.meta.dir, "helpers", "lock-worker.ts");
     try {
-      for (let round = 0; round < 15; round++) {
-        writeFileSync(
-          lock,
-          JSON.stringify({ pid: 2_147_483_646, at: new Date().toISOString() })
-        );
-        const startAt = Date.now() + 400;
-        const procs = Array.from({ length: 4 }, () =>
-          Bun.spawn(
-            [
-              process.execPath,
-              "run",
-              worker,
-              lock,
-              guard,
-              violations,
-              String(startAt),
-            ],
-            { stdout: "ignore", stderr: "ignore" }
-          )
-        );
-        const codes = await Promise.all(procs.map((proc) => proc.exited));
-        expect(codes).toEqual([0, 0, 0, 0]);
-        expect(existsSync(violations)).toBe(false);
-      }
+      // 15 independent races (each its own lock, guard and violations files in its own
+      // subdirectory) run side by side instead of one after another: the same 4 waiters
+      // per stale lock, the same assertions per round, without paying the start barrier
+      // fifteen times in a row.
+      const startAt = Date.now() + 1_500;
+      await Promise.all(
+        Array.from({ length: 15 }, async (_, round) => {
+          const roundDir = join(dir, `round-${round}`);
+          mkdirSync(roundDir, { recursive: true });
+          const lock = join(roundDir, "settings.json.lock");
+          const guard = join(roundDir, "inside");
+          const violations = join(roundDir, "violations");
+          writeFileSync(
+            lock,
+            JSON.stringify({ pid: 2_147_483_646, at: new Date().toISOString() })
+          );
+          const procs = Array.from({ length: 4 }, () =>
+            Bun.spawn(
+              [
+                process.execPath,
+                "run",
+                worker,
+                lock,
+                guard,
+                violations,
+                String(startAt),
+              ],
+              { stdout: "ignore", stderr: "ignore" }
+            )
+          );
+          const codes = await Promise.all(procs.map((proc) => proc.exited));
+          expect(codes).toEqual([0, 0, 0, 0]);
+          expect(existsSync(violations)).toBe(false);
+        })
+      );
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
