@@ -133,6 +133,7 @@ function featureRow(spec: PageSpec): PageFeatureRow {
     themeColor: chrome.themeColor,
     ogImage: chrome.ogImage,
     hreflangAlternates: alternatesOf(spec),
+    reportScalars: null,
   };
 }
 
@@ -150,6 +151,7 @@ function siteQueryCtx(specs: PageSpec[]): RuleContext {
     pageCount: () => rows.length,
     duplicateGroups: unused,
     incomingLinkCounts: unused,
+    contextualIncomingLinkCounts: unused,
     pagesByType: unused,
     templateClusters: unused,
     sumTransferBytes: unused,

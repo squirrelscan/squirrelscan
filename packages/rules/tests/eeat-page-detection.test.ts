@@ -41,8 +41,8 @@ function siteCtx(pagesHtml: { url: string; html: string }[]): RuleContext {
   };
 }
 
-function run(rule: Rule, ctx: RuleContext): CheckResult[] {
-  return rule.run(ctx).checks;
+async function run(rule: Rule, ctx: RuleContext): Promise<CheckResult[]> {
+  return (await rule.run(ctx)).checks;
 }
 
 function check(checks: CheckResult[], name: string): CheckResult | undefined {
@@ -56,51 +56,51 @@ function page(url: string, body: string): { url: string; html: string } {
 // ── About page ──────────────────────────────────────────────────────
 
 describe("eeat/about-page — URL detection", () => {
-  test("matches /about (existing English, no regression)", () => {
-    const checks = run(aboutPageRule, siteCtx([page("https://ex.com/about", FILLER)]));
+  test("matches /about (existing English, no regression)", async () => {
+    const checks = (await run(aboutPageRule, siteCtx([page("https://ex.com/about", FILLER)])));
     expect(check(checks, "about-page")?.status).toBe("pass");
   });
 
-  test("matches /about/ (trailing slash, no regression)", () => {
-    const checks = run(aboutPageRule, siteCtx([page("https://ex.com/about/", FILLER)]));
+  test("matches /about/ (trailing slash, no regression)", async () => {
+    const checks = (await run(aboutPageRule, siteCtx([page("https://ex.com/about/", FILLER)])));
     expect(check(checks, "about-page")?.status).toBe("pass");
   });
 
-  test("matches /about.html (.html suffix — #121)", () => {
-    const checks = run(aboutPageRule, siteCtx([page("https://ex.com/about.html", FILLER)]));
+  test("matches /about.html (.html suffix — #121)", async () => {
+    const checks = (await run(aboutPageRule, siteCtx([page("https://ex.com/about.html", FILLER)])));
     expect(check(checks, "about-page")?.status).toBe("pass");
   });
 
-  test("matches /about-us.htm (.htm suffix — #121)", () => {
-    const checks = run(aboutPageRule, siteCtx([page("https://ex.com/about-us.htm", FILLER)]));
+  test("matches /about-us.htm (.htm suffix — #121)", async () => {
+    const checks = (await run(aboutPageRule, siteCtx([page("https://ex.com/about-us.htm", FILLER)])));
     expect(check(checks, "about-page")?.status).toBe("pass");
   });
 
-  test("matches German /ueber-mich.html (#121)", () => {
-    const checks = run(aboutPageRule, siteCtx([page("https://ex.com/ueber-mich.html", FILLER)]));
+  test("matches German /ueber-mich.html (#121)", async () => {
+    const checks = (await run(aboutPageRule, siteCtx([page("https://ex.com/ueber-mich.html", FILLER)])));
     expect(check(checks, "about-page")?.status).toBe("pass");
   });
 
-  test("matches Spanish /acerca-de (#121)", () => {
-    const checks = run(aboutPageRule, siteCtx([page("https://ex.com/acerca-de", FILLER)]));
+  test("matches Spanish /acerca-de (#121)", async () => {
+    const checks = (await run(aboutPageRule, siteCtx([page("https://ex.com/acerca-de", FILLER)])));
     expect(check(checks, "about-page")?.status).toBe("pass");
   });
 
-  test("does NOT match unrelated /about/team subpage", () => {
-    const checks = run(aboutPageRule, siteCtx([page("https://ex.com/about/team", FILLER)]));
+  test("does NOT match unrelated /about/team subpage", async () => {
+    const checks = (await run(aboutPageRule, siteCtx([page("https://ex.com/about/team", FILLER)])));
     expect(check(checks, "about-page")?.status).toBe("warn");
   });
 
-  test("does NOT match /abouting (no false partial match)", () => {
-    const checks = run(aboutPageRule, siteCtx([page("https://ex.com/abouting", FILLER)]));
+  test("does NOT match /abouting (no false partial match)", async () => {
+    const checks = (await run(aboutPageRule, siteCtx([page("https://ex.com/abouting", FILLER)])));
     expect(check(checks, "about-page")?.status).toBe("warn");
   });
 
-  test("falls back to Schema.org AboutPage @type on unknown slug (#121)", () => {
+  test("falls back to Schema.org AboutPage @type on unknown slug (#121)", async () => {
     const html = `<html><head><script type="application/ld+json">${JSON.stringify(
       { "@context": "https://schema.org", "@type": "AboutPage" },
     )}</script></head><body>${FILLER}</body></html>`;
-    const checks = run(aboutPageRule, siteCtx([{ url: "https://ex.com/p/42", html }]));
+    const checks = (await run(aboutPageRule, siteCtx([{ url: "https://ex.com/p/42", html }])));
     expect(check(checks, "about-page")?.status).toBe("pass");
   });
 });
@@ -110,35 +110,35 @@ describe("eeat/about-page — URL detection", () => {
 describe("eeat/contact-page — URL detection", () => {
   const methods = `<a href="mailto:a@ex.com">Email</a><a href="tel:+1">Call</a>`;
 
-  test("matches /contact (existing English, no regression)", () => {
-    const checks = run(contactPageRule, siteCtx([page("https://ex.com/contact", methods)]));
+  test("matches /contact (existing English, no regression)", async () => {
+    const checks = (await run(contactPageRule, siteCtx([page("https://ex.com/contact", methods)])));
     expect(check(checks, "contact-page")?.status).toBe("pass");
   });
 
-  test("matches /kontakt.html (German + .html — #121)", () => {
-    const checks = run(contactPageRule, siteCtx([page("https://ex.com/kontakt.html", methods)]));
+  test("matches /kontakt.html (German + .html — #121)", async () => {
+    const checks = (await run(contactPageRule, siteCtx([page("https://ex.com/kontakt.html", methods)])));
     expect(check(checks, "contact-page")?.status).toBe("pass");
   });
 
-  test("matches Spanish /contacto.htm (#121)", () => {
-    const checks = run(contactPageRule, siteCtx([page("https://ex.com/contacto.htm", methods)]));
+  test("matches Spanish /contacto.htm (#121)", async () => {
+    const checks = (await run(contactPageRule, siteCtx([page("https://ex.com/contacto.htm", methods)])));
     expect(check(checks, "contact-page")?.status).toBe("pass");
   });
 
-  test("does NOT match unrelated path", () => {
-    const checks = run(contactPageRule, siteCtx([page("https://ex.com/products", methods)]));
+  test("does NOT match unrelated path", async () => {
+    const checks = (await run(contactPageRule, siteCtx([page("https://ex.com/products", methods)])));
     expect(check(checks, "contact-page")?.status).toBe("warn");
   });
 
-  test("falls back to Schema.org ContactPage @type on unknown slug (#121)", () => {
+  test("falls back to Schema.org ContactPage @type on unknown slug (#121)", async () => {
     const html = `<html><head><script type="application/ld+json">${JSON.stringify(
       { "@context": "https://schema.org", "@type": "ContactPage" },
     )}</script></head><body>${methods}</body></html>`;
-    const checks = run(contactPageRule, siteCtx([{ url: "https://ex.com/p/7", html }]));
+    const checks = (await run(contactPageRule, siteCtx([{ url: "https://ex.com/p/7", html }])));
     expect(check(checks, "contact-page")?.status).toBe("pass");
   });
 
-  test("does NOT treat homepage @graph ContactPoint as the contact page", () => {
+  test("does NOT treat homepage @graph ContactPoint as the contact page", async () => {
     // ContactPoint is org contact metadata that appears on the homepage /
     // every page; it must not be mistaken for a contact page. Using an @graph
     // surfaces ContactPoint as a top-level schema type — under the old
@@ -155,7 +155,7 @@ describe("eeat/contact-page — URL detection", () => {
     const ctx = siteCtx([{ url: "https://ex.com/", html }]);
     // Sanity: the parser does surface ContactPoint as a type on this page.
     expect(ctx.site?.pages[0]?.parsed.schemas.hasType("ContactPoint")).toBe(true);
-    const checks = run(contactPageRule, ctx);
+    const checks = (await run(contactPageRule, ctx));
     expect(check(checks, "contact-page")?.status).toBe("warn");
   });
 });
@@ -163,23 +163,23 @@ describe("eeat/contact-page — URL detection", () => {
 // ── Privacy policy ──────────────────────────────────────────────────
 
 describe("eeat/privacy-policy — URL detection", () => {
-  test("matches /privacy-policy (existing English, no regression)", () => {
-    const checks = run(privacyPolicyRule, siteCtx([page("https://ex.com/privacy-policy", FILLER)]));
+  test("matches /privacy-policy (existing English, no regression)", async () => {
+    const checks = (await run(privacyPolicyRule, siteCtx([page("https://ex.com/privacy-policy", FILLER)])));
     expect(check(checks, "privacy-policy")?.status).toBe("pass");
   });
 
-  test("matches German /datenschutz.html (#121)", () => {
-    const checks = run(privacyPolicyRule, siteCtx([page("https://ex.com/datenschutz.html", FILLER)]));
+  test("matches German /datenschutz.html (#121)", async () => {
+    const checks = (await run(privacyPolicyRule, siteCtx([page("https://ex.com/datenschutz.html", FILLER)])));
     expect(check(checks, "privacy-policy")?.status).toBe("pass");
   });
 
-  test("matches French /confidentialite.htm (#121)", () => {
-    const checks = run(privacyPolicyRule, siteCtx([page("https://ex.com/confidentialite.htm", FILLER)]));
+  test("matches French /confidentialite.htm (#121)", async () => {
+    const checks = (await run(privacyPolicyRule, siteCtx([page("https://ex.com/confidentialite.htm", FILLER)])));
     expect(check(checks, "privacy-policy")?.status).toBe("pass");
   });
 
-  test("does NOT match unrelated path", () => {
-    const checks = run(privacyPolicyRule, siteCtx([page("https://ex.com/blog", FILLER)]));
+  test("does NOT match unrelated path", async () => {
+    const checks = (await run(privacyPolicyRule, siteCtx([page("https://ex.com/blog", FILLER)])));
     expect(check(checks, "privacy-policy")?.status).toBe("warn");
   });
 });
@@ -194,9 +194,9 @@ describe("German .html site — issue #121 repro", () => {
     page("https://ex.de/datenschutz.html", FILLER),
   ]);
 
-  test("about, contact, and privacy all detected", () => {
-    expect(check(run(aboutPageRule, site), "about-page")?.status).toBe("pass");
-    expect(check(run(contactPageRule, site), "contact-page")?.status).toBe("pass");
-    expect(check(run(privacyPolicyRule, site), "privacy-policy")?.status).toBe("pass");
+  test("about, contact, and privacy all detected", async () => {
+    expect(check(await run(aboutPageRule, site), "about-page")?.status).toBe("pass");
+    expect(check(await run(contactPageRule, site), "contact-page")?.status).toBe("pass");
+    expect(check(await run(privacyPolicyRule, site), "privacy-policy")?.status).toBe("pass");
   });
 });

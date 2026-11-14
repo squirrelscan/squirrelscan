@@ -116,6 +116,7 @@ function featureRow(spec: Spec): PageFeatureRow {
     themeColor: chrome.themeColor,
     ogImage: chrome.ogImage,
     hreflangAlternates: null,
+    reportScalars: null,
   };
 }
 
@@ -128,6 +129,7 @@ function streamingCtx(specs: Spec[], siteIndexable: boolean | undefined): RuleCo
     pageCount: () => rows.length,
     duplicateGroups: unused,
     incomingLinkCounts: unused,
+    contextualIncomingLinkCounts: unused,
     pagesByType: unused,
     templateClusters: unused,
     sumTransferBytes: unused,

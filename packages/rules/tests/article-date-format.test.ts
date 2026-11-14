@@ -23,8 +23,8 @@ function pageCtx(html: string, url = "https://example.com/"): RuleContext {
   };
 }
 
-function run(ctx: RuleContext): CheckResult[] {
-  return articleSchemaRule.run(ctx).checks as CheckResult[];
+async function run(ctx: RuleContext): Promise<CheckResult[]> {
+  return (await articleSchemaRule.run(ctx)).checks as CheckResult[];
 }
 
 function check(checks: CheckResult[], name: string): CheckResult | undefined {
@@ -44,110 +44,110 @@ const BASE_ARTICLE = {
 };
 
 describe("schema/article — ISO 8601 date validation (#1099)", () => {
-  test("raw Postgres timestamp datePublished warns", () => {
+  test("raw Postgres timestamp datePublished warns", async () => {
     const html = withSchema({
       ...BASE_ARTICLE,
       datePublished: "2026-07-16 03:55:00+00",
       dateModified: "2026-07-16T04:35:34.907Z",
     });
-    const dateCheck = check(run(pageCtx(html)), "article-date-format");
+    const dateCheck = check(await run(pageCtx(html)), "article-date-format");
 
     expect(dateCheck?.status).toBe("warn");
     expect(dateCheck?.items?.map((i) => i.id)).toEqual(["datePublished"]);
   });
 
-  test("valid ISO 8601 datetime (Z offset) and date-only pass unchanged", () => {
+  test("valid ISO 8601 datetime (Z offset) and date-only pass unchanged", async () => {
     const html = withSchema({
       ...BASE_ARTICLE,
       datePublished: "2026-07-16",
       dateModified: "2026-07-16T04:35:34.907Z",
     });
-    expect(check(run(pageCtx(html)), "article-date-format")).toBeUndefined();
+    expect(check(await run(pageCtx(html)), "article-date-format")).toBeUndefined();
   });
 
-  test("valid ISO 8601 datetime with ±HH:MM offset passes", () => {
+  test("valid ISO 8601 datetime with ±HH:MM offset passes", async () => {
     const html = withSchema({
       ...BASE_ARTICLE,
       datePublished: "2026-07-16T03:55:00+00:00",
     });
-    expect(check(run(pageCtx(html)), "article-date-format")).toBeUndefined();
+    expect(check(await run(pageCtx(html)), "article-date-format")).toBeUndefined();
   });
 
-  test("valid ISO 8601 datetime without a UTC offset (local time) passes", () => {
+  test("valid ISO 8601 datetime without a UTC offset (local time) passes", async () => {
     const html = withSchema({ ...BASE_ARTICLE, datePublished: "2026-07-16T03:55:00" });
-    expect(check(run(pageCtx(html)), "article-date-format")).toBeUndefined();
+    expect(check(await run(pageCtx(html)), "article-date-format")).toBeUndefined();
   });
 
-  test("out-of-range month/day/hour components warn", () => {
+  test("out-of-range month/day/hour components warn", async () => {
     const html = withSchema({ ...BASE_ARTICLE, datePublished: "2026-13-40T25:00:00Z" });
-    expect(check(run(pageCtx(html)), "article-date-format")?.status).toBe("warn");
+    expect(check(await run(pageCtx(html)), "article-date-format")?.status).toBe("warn");
   });
 
-  test("impossible calendar date — February 31 — warns despite passing the shape check", () => {
+  test("impossible calendar date — February 31 — warns despite passing the shape check", async () => {
     const html = withSchema({ ...BASE_ARTICLE, datePublished: "2026-02-31" });
-    expect(check(run(pageCtx(html)), "article-date-format")?.status).toBe("warn");
+    expect(check(await run(pageCtx(html)), "article-date-format")?.status).toBe("warn");
   });
 
-  test("impossible calendar date — April 31 (April has 30 days) — warns", () => {
+  test("impossible calendar date — April 31 (April has 30 days) — warns", async () => {
     const html = withSchema({ ...BASE_ARTICLE, datePublished: "2026-04-31" });
-    expect(check(run(pageCtx(html)), "article-date-format")?.status).toBe("warn");
+    expect(check(await run(pageCtx(html)), "article-date-format")?.status).toBe("warn");
   });
 
-  test("impossible calendar date — Feb 29 in a non-leap year (2026) — warns", () => {
+  test("impossible calendar date — Feb 29 in a non-leap year (2026) — warns", async () => {
     const html = withSchema({ ...BASE_ARTICLE, datePublished: "2026-02-29" });
-    expect(check(run(pageCtx(html)), "article-date-format")?.status).toBe("warn");
+    expect(check(await run(pageCtx(html)), "article-date-format")?.status).toBe("warn");
   });
 
-  test("Feb 29 in a real leap year (2024) passes", () => {
+  test("Feb 29 in a real leap year (2024) passes", async () => {
     const html = withSchema({ ...BASE_ARTICLE, datePublished: "2024-02-29" });
-    expect(check(run(pageCtx(html)), "article-date-format")).toBeUndefined();
+    expect(check(await run(pageCtx(html)), "article-date-format")).toBeUndefined();
   });
 
-  test("epoch number datePublished warns", () => {
+  test("epoch number datePublished warns", async () => {
     const html = withSchema({ ...BASE_ARTICLE, datePublished: 1752633300 });
-    const dateCheck = check(run(pageCtx(html)), "article-date-format");
+    const dateCheck = check(await run(pageCtx(html)), "article-date-format");
     expect(dateCheck?.status).toBe("warn");
     expect(dateCheck?.items?.map((i) => i.id)).toEqual(["datePublished"]);
   });
 
-  test("RFC 2822 datePublished warns", () => {
+  test("RFC 2822 datePublished warns", async () => {
     const html = withSchema({
       ...BASE_ARTICLE,
       datePublished: "Thu, 16 Jul 2026 03:55:00 GMT",
     });
-    expect(check(run(pageCtx(html)), "article-date-format")?.status).toBe("warn");
+    expect(check(await run(pageCtx(html)), "article-date-format")?.status).toBe("warn");
   });
 
-  test("DD/MM/YYYY datePublished warns", () => {
+  test("DD/MM/YYYY datePublished warns", async () => {
     const html = withSchema({ ...BASE_ARTICLE, datePublished: "16/07/2026" });
-    expect(check(run(pageCtx(html)), "article-date-format")?.status).toBe("warn");
+    expect(check(await run(pageCtx(html)), "article-date-format")?.status).toBe("warn");
   });
 
-  test("missing datePublished is not double-reported by the date-format check", () => {
+  test("missing datePublished is not double-reported by the date-format check", async () => {
     const html = withSchema({
       "@type": "Article",
       headline: "Headline",
       author: { "@type": "Person", name: "Author" },
     });
-    const checks = run(pageCtx(html));
+    const checks = (await run(pageCtx(html)));
     expect(check(checks, "article-required")?.status).toBe("warn");
     expect(check(checks, "article-date-format")).toBeUndefined();
   });
 
-  test("empty string datePublished reports only as missing, not also as malformed", () => {
+  test("empty string datePublished reports only as missing, not also as malformed", async () => {
     const html = withSchema({
       "@type": "Article",
       headline: "Headline",
       author: { "@type": "Person", name: "Author" },
       datePublished: "",
     });
-    const checks = run(pageCtx(html));
+    const checks = (await run(pageCtx(html)));
     expect(check(checks, "article-required")?.status).toBe("warn");
     expect(check(checks, "article-required")?.items?.map((i) => i.id)).toContain("datePublished");
     expect(check(checks, "article-date-format")).toBeUndefined();
   });
 
-  test("@graph-wrapped Article schema is still found and validated (Yoast-style)", () => {
+  test("@graph-wrapped Article schema is still found and validated (Yoast-style)", async () => {
     const html = withSchema({
       "@context": "https://schema.org",
       "@graph": [
@@ -155,11 +155,11 @@ describe("schema/article — ISO 8601 date validation (#1099)", () => {
         { ...BASE_ARTICLE, datePublished: "2026-07-16 03:55:00+00" },
       ],
     });
-    const dateCheck = check(run(pageCtx(html)), "article-date-format");
+    const dateCheck = check(await run(pageCtx(html)), "article-date-format");
     expect(dateCheck?.status).toBe("warn");
   });
 
-  test("multiple Article nodes on a page: the last one wins (matches prior behavior)", () => {
+  test("multiple Article nodes on a page: the last one wins (matches prior behavior)", async () => {
     const html = `<html><head>
       <script type="application/ld+json">${JSON.stringify({
         ...BASE_ARTICLE,
@@ -170,7 +170,7 @@ describe("schema/article — ISO 8601 date validation (#1099)", () => {
         datePublished: "2026-07-16 03:55:00+00",
       })}</script>
       </head><body><p>content</p></body></html>`;
-    const dateCheck = check(run(pageCtx(html)), "article-date-format");
+    const dateCheck = check(await run(pageCtx(html)), "article-date-format");
     // The second (last) script's malformed date must be the one evaluated.
     expect(dateCheck?.status).toBe("warn");
   });
@@ -179,7 +179,7 @@ describe("schema/article — ISO 8601 date validation (#1099)", () => {
     expect(articleSchemaRule.meta.severity).toBe("warning");
   });
 
-  test("a pretty-printed Article script with internal blank lines is still found when a second script is also present", () => {
+  test("a pretty-printed Article script with internal blank lines is still found when a second script is also present", async () => {
     // Regression: re-parsing ctx.parsed.schema.raw (multiple <script> blocks
     // joined with "\n\n") via a whole-raw-then-blank-line-split fallback mis-splits
     // INSIDE a script whose own pretty-printed JSON contains blank lines,
@@ -197,7 +197,7 @@ describe("schema/article — ISO 8601 date validation (#1099)", () => {
       </script>
       <script type="application/ld+json">${JSON.stringify({ "@type": "WebSite", name: "Site" })}</script>
       </head><body><p>content</p></body></html>`;
-    const checks = run(pageCtx(html));
+    const checks = (await run(pageCtx(html)));
 
     expect(check(checks, "article-required")?.status).toBe("pass");
     expect(check(checks, "article-date-format")?.status).toBe("warn");

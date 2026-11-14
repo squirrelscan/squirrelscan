@@ -172,11 +172,11 @@ describe("rules ignore <noscript> content (#434)", () => {
     });
   }
 
-  test("a live <picture> whose only <img> is in <noscript> has no fallback", () => {
+  test("a live <picture> whose only <img> is in <noscript> has no fallback", async () => {
     const html = page({
       body: `<picture><source srcset="/hero.webp" type="image/webp"><noscript><img src="/hero.jpg" alt="Hero"></noscript></picture>`,
     });
-    expect(pictureElementRule.run(ctx(html)).checks[0]?.status).toBe("fail");
+    expect((await pictureElementRule.run(ctx(html))).checks[0]?.status).toBe("fail");
   });
 
   test("a <noscript> WebM source does not give a live video a modern codec", () => {
@@ -187,11 +187,11 @@ describe("rules ignore <noscript> content (#434)", () => {
     expect(run(animatedContentRule, withNoscript)).toBe(run(animatedContentRule, live));
   });
 
-  test("live elements next to a <noscript> copy are still counted once", () => {
+  test("live elements next to a <noscript> copy are still counted once", async () => {
     const html = page({
       body: `<iframe src="https://www.googletagmanager.com/ns.html?id=GTM-X"></iframe><noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-Y"></iframe></noscript>`,
     });
-    const check = frameTitleRule.run(ctx(html)).checks[0];
+    const check = (await frameTitleRule.run(ctx(html))).checks[0];
     expect(check?.status).toBe("fail");
     expect(check?.message).toBe("1 iframe(s) without title attribute");
   });

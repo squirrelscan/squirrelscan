@@ -65,14 +65,14 @@ function sitemaps(locs: string[], readState?: SitemapReadState): SitemapDiscover
   };
 }
 
-function run(site: Partial<SiteData>): CheckResult[] {
+async function run(site: Partial<SiteData>): Promise<CheckResult[]> {
   const ctx = {
     page: { url: `${BASE}/`, html: "", statusCode: 200, loadTime: 0, headers: {} },
     parsed: {} as ParsedPage,
     site: { baseUrl: BASE, robotsTxt: null, sitemaps: null, pages: [], ...site },
     options: {},
   } as unknown as RuleContext;
-  return (sitemapCoverageRule.run(ctx) as { checks: CheckResult[] }).checks;
+  return ((await sitemapCoverageRule.run(ctx)) as { checks: CheckResult[] }).checks;
 }
 
 function discovery(checks: CheckResult[]): CheckResult | undefined {
@@ -89,8 +89,8 @@ function boundedShop(): Pick<SiteData, "pages" | "crawlLimits"> {
 }
 
 describe("crawl/sitemap-coverage product discovery (#1651)", () => {
-  test("bounded crawl against a complete product sitemap: provenance by source, bounded not missing", () => {
-    const check = discovery(run({ ...boundedShop(), sitemaps: sitemaps(INVENTORY, "complete") }));
+  test("bounded crawl against a complete product sitemap: provenance by source, bounded not missing", async () => {
+    const check = discovery(await run({ ...boundedShop(), sitemaps: sitemaps(INVENTORY, "complete") }));
     expect(check?.status).toBe("info");
     expect(check?.details).toMatchObject({
       total: 12,
@@ -104,9 +104,9 @@ describe("crawl/sitemap-coverage product discovery (#1651)", () => {
     expect(check?.message).toContain("bounded, not a measure of missing products");
   });
 
-  test("never asserts missing products, whatever the sitemap state", () => {
+  test("never asserts missing products, whatever the sitemap state", async () => {
     for (const state of ["complete", "partial", "unreadable", undefined] as const) {
-      const checks = run({ ...boundedShop(), sitemaps: sitemaps(INVENTORY, state) });
+      const checks = (await run({ ...boundedShop(), sitemaps: sitemaps(INVENTORY, state) }));
       for (const check of checks) {
         if (check.name !== "product-discovery") continue;
         expect(check.status).toBe("info");
@@ -120,61 +120,61 @@ describe("crawl/sitemap-coverage product discovery (#1651)", () => {
     }
   });
 
-  test("unreadable sitemap: crawl-only provenance and the state says so", () => {
+  test("unreadable sitemap: crawl-only provenance and the state says so", async () => {
     const { pages, crawlLimits } = boundedShop();
-    const check = discovery(run({ pages, crawlLimits, sitemaps: null }));
+    const check = discovery(await run({ pages, crawlLimits, sitemaps: null }));
     expect(check?.details).toMatchObject({
       total: 7,
       bySource: { both: 0, sitemap: 0, crawl: 7 },
       sitemapState: "none",
     });
     const unreadable = discovery(
-      run({ pages, crawlLimits, sitemaps: { ...sitemaps([], "unreadable"), discovered: [] } }),
+      (await run({ pages, crawlLimits, sitemaps: { ...sitemaps([], "unreadable"), discovered: [] } })),
     );
     // The state travels even when nothing was read.
     expect(unreadable?.details).toMatchObject({ sitemapState: "unreadable" });
     expect(unreadable?.message).toContain("unreadable");
   });
 
-  test("partial sitemap is distinguished from complete", () => {
+  test("partial sitemap is distinguished from complete", async () => {
     const check = discovery(
-      run({ ...boundedShop(), sitemaps: sitemaps(INVENTORY.slice(0, 6), "partial") }),
+      (await run({ ...boundedShop(), sitemaps: sitemaps(INVENTORY.slice(0, 6), "partial") })),
     );
     expect(check?.details).toMatchObject({ sitemapState: "partial", sitemapProductUrls: 6 });
     expect(check?.message).toContain("lower bound");
   });
 
-  test("a read state that was never recorded is unknown, not complete", () => {
-    const check = discovery(run({ ...boundedShop(), sitemaps: sitemaps(INVENTORY) }));
+  test("a read state that was never recorded is unknown, not complete", async () => {
+    const check = discovery(await run({ ...boundedShop(), sitemaps: sitemaps(INVENTORY) }));
     expect(check?.details).toMatchObject({ sitemapState: "unknown" });
     expect(check?.message).not.toContain("read completely");
   });
 
-  test("a crawl that did not follow links claims no crawl-link discovery", () => {
+  test("a crawl that did not follow links claims no crawl-link discovery", async () => {
     const check = discovery(
-      run({ ...boundedShop(), sitemaps: sitemaps(INVENTORY, "complete"), linkDiscoveryOff: true }),
+      (await run({ ...boundedShop(), sitemaps: sitemaps(INVENTORY, "complete"), linkDiscoveryOff: true })),
     );
     expect(check?.details).toMatchObject({ bySource: { both: 0, sitemap: 12, crawl: 0 } });
   });
 
-  test("a site without commerce evidence is unchanged: no check", () => {
+  test("a site without commerce evidence is unchanged: no check", async () => {
     const pages = [plainPage(`${BASE}/`), plainPage(`${BASE}/about`), plainPage(`${BASE}/blog`)];
-    expect(discovery(run({ pages, sitemaps: sitemaps(INVENTORY, "complete") }))).toBeUndefined();
+    expect(discovery(await run({ pages, sitemaps: sitemaps(INVENTORY, "complete") }))).toBeUndefined();
     // Two product pages alone are below the threshold.
     const two = [plainPage(`${BASE}/`), productPage(INVENTORY[0]!), productPage(INVENTORY[1]!)];
     expect(
-      discovery(run({ pages: two, sitemaps: sitemaps(INVENTORY, "complete") })),
+      discovery(await run({ pages: two, sitemaps: sitemaps(INVENTORY, "complete") })),
     ).toBeUndefined();
   });
 
-  test("one product page plus a cart link is enough evidence", () => {
+  test("one product page plus a cart link is enough evidence", async () => {
     const pages = [plainPage(`${BASE}/`, [`${BASE}/cart`]), productPage(INVENTORY[0]!)];
-    expect(discovery(run({ pages, sitemaps: sitemaps(INVENTORY, "complete") }))?.status).toBe(
+    expect(discovery(await run({ pages, sitemaps: sitemaps(INVENTORY, "complete") }))?.status).toBe(
       "info",
     );
   });
 
-  test("og:type=product counts as product evidence", () => {
+  test("og:type=product counts as product evidence", async () => {
     const og = (url: string) => ({
       url,
       statusCode: 200,
@@ -186,11 +186,11 @@ describe("crawl/sitemap-coverage product discovery (#1651)", () => {
       } as unknown as ParsedPage,
     });
     const pages = INVENTORY.slice(0, 3).map(og);
-    expect(discovery(run({ pages }))?.details).toMatchObject({ crawledProductPages: 3 });
+    expect(discovery(await run({ pages }))?.details).toMatchObject({ crawledProductPages: 3 });
   });
 
-  test("the existing coverage verdict is untouched", () => {
-    const checks = run({ ...boundedShop(), sitemaps: sitemaps(INVENTORY, "complete") });
+  test("the existing coverage verdict is untouched", async () => {
+    const checks = (await run({ ...boundedShop(), sitemaps: sitemaps(INVENTORY, "complete") }));
     expect(checks.map((c) => c.name)).toContain("sitemap-coverage");
   });
 
@@ -211,14 +211,14 @@ describe("crawl/sitemap-coverage product discovery (#1651)", () => {
     };
   }
 
-  test("a Product nested in a Review, ItemList or Offer is not a product page", () => {
+  test("a Product nested in a Review, ItemList or Offer is not a product page", async () => {
     const product = { "@type": "Product", name: "Widget" };
     const pages = [
       jsonLdPage(`${BASE}/reviews/a`, { "@type": "Review", itemReviewed: product }),
       jsonLdPage(`${BASE}/reviews/b`, { "@type": "Review", itemReviewed: product }),
       jsonLdPage(`${BASE}/reviews/c`, { "@type": "Review", itemReviewed: product }),
     ];
-    expect(discovery(run({ pages, sitemaps: sitemaps(INVENTORY, "complete") }))).toBeUndefined();
+    expect(discovery(await run({ pages, sitemaps: sitemaps(INVENTORY, "complete") }))).toBeUndefined();
 
     const list = {
       "@type": "ItemList",
@@ -229,30 +229,30 @@ describe("crawl/sitemap-coverage product discovery (#1651)", () => {
       jsonLdPage(`${BASE}/products/hats`, list, [`${BASE}/cart`]),
       jsonLdPage(`${BASE}/products/bags`, list, [`${BASE}/cart`]),
     ];
-    expect(discovery(run({ pages: category }))).toBeUndefined();
+    expect(discovery(await run({ pages: category }))).toBeUndefined();
 
     const offered = jsonLdPage(
       `${BASE}/products/x`,
       { "@type": "Offer", itemOffered: product },
       [`${BASE}/cart`],
     );
-    expect(discovery(run({ pages: [offered] }))).toBeUndefined();
+    expect(discovery(await run({ pages: [offered] }))).toBeUndefined();
   });
 
-  test("top-level Product, ProductGroup and @graph Product count", () => {
+  test("top-level Product, ProductGroup and @graph Product count", async () => {
     const pages = [
       jsonLdPage(`${BASE}/products/a`, { "@type": "Product" }),
       jsonLdPage(`${BASE}/products/b`, { "@type": "ProductGroup" }),
       jsonLdPage(`${BASE}/products/c`, { "@graph": [{ "@type": "WebPage" }, { "@type": ["Product"] }] }),
     ];
-    expect(discovery(run({ pages }))?.details).toMatchObject({ crawledProductPages: 3 });
+    expect(discovery(await run({ pages }))?.details).toMatchObject({ crawledProductPages: 3 });
   });
 
-  test("one embedded Product page plus a nav cart link needs a product-shaped path of its own", () => {
+  test("one embedded Product page plus a nav cart link needs a product-shaped path of its own", async () => {
     const nav = [`${BASE}/cart`];
     const blog = jsonLdPage(`${BASE}/blog/post`, { "@type": "Product" }, nav);
-    expect(discovery(run({ pages: [blog] }))).toBeUndefined();
+    expect(discovery(await run({ pages: [blog] }))).toBeUndefined();
     const shop = jsonLdPage(`${BASE}/products/post`, { "@type": "Product" }, nav);
-    expect(discovery(run({ pages: [shop] }))?.status).toBe("info");
+    expect(discovery(await run({ pages: [shop] }))?.status).toBe("info");
   });
 });

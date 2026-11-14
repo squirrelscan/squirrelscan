@@ -9,25 +9,25 @@ import { parsePage } from "@squirrelscan/parser";
 import { linkTextRule } from "../src/a11y/link-text";
 import { anchorTextRule } from "../src/links/anchor-text";
 import { isGenericInPageLanguage, primaryLangSubtag } from "../src/shared/generic-link-phrases";
-import type { ParsedPage, RuleContext } from "../src/types";
+import type { ParsedPage, Rule, RuleContext } from "../src/types";
 
-type AnyRule = { run: (ctx: RuleContext) => { checks: unknown } };
+type AnyRule = Pick<Rule, "run">;
 
-function run(rule: AnyRule, lang: string | null, links: string[]): CheckResult[] {
+async function run(rule: AnyRule, lang: string | null, links: string[]): Promise<CheckResult[]> {
   const url = "https://example.com/";
   const attr = lang === null ? "" : ` lang="${lang}"`;
   const html = `<!doctype html><html${attr}><head><title>t</title></head><body>${links
     .map((t, i) => `<a href="/p${i}">${t}</a>`)
     .join("")}</body></html>`;
-  return rule.run({
+  return (await rule.run({
     page: { url, html, statusCode: 200, loadTime: 0, headers: {} },
     parsed: parsePage(html, url) as ParsedPage,
     options: {},
-  } as RuleContext).checks as CheckResult[];
+  } as RuleContext)).checks as CheckResult[];
 }
 
-const reported = (rule: AnyRule, name: string, lang: string | null, text: string): boolean =>
-  run(rule, lang, [text]).some((c) => c.name === name && c.status !== "pass");
+const reported = async (rule: AnyRule, name: string, lang: string | null, text: string): Promise<boolean> =>
+  (await run(rule, lang, [text])).some((c) => c.name === name && c.status !== "pass");
 
 const RULES: Array<[string, AnyRule, string]> = [
   ["a11y/link-text", linkTextRule, "link-text-generic"],
@@ -50,70 +50,70 @@ const CASES: Array<[string, string, string]> = [
 
 for (const [id, rule, name] of RULES) {
   describe(id, () => {
-    test.each(CASES)("%s: a generic phrase is reported, a descriptive link is not", (lang, generic, descriptive) => {
-      expect(reported(rule, name, lang, generic)).toBe(true);
-      expect(reported(rule, name, lang, descriptive)).toBe(false);
+    test.each(CASES)("%s: a generic phrase is reported, a descriptive link is not", async (lang, generic, descriptive) => {
+      expect(await reported(rule, name, lang, generic)).toBe(true);
+      expect(await reported(rule, name, lang, descriptive)).toBe(false);
     });
 
-    test.each(CASES)("%s: punctuation, case and region subtags do not matter", (lang, generic) => {
-      expect(reported(rule, name, `${lang}-XX`, `${generic.toUpperCase()}.`)).toBe(true);
-      expect(reported(rule, name, lang.toUpperCase(), `  ${generic}！ `)).toBe(true);
+    test.each(CASES)("%s: punctuation, case and region subtags do not matter", async (lang, generic) => {
+      expect(await reported(rule, name, `${lang}-XX`, `${generic.toUpperCase()}.`)).toBe(true);
+      expect(await reported(rule, name, lang.toUpperCase(), `  ${generic}！ `)).toBe(true);
     });
 
-    test("English always applies on a non-English page", () => {
-      expect(reported(rule, name, "fr", "click here")).toBe(true);
-      expect(reported(rule, name, "ja", "read more")).toBe(true);
+    test("English always applies on a non-English page", async () => {
+      expect(await reported(rule, name, "fr", "click here")).toBe(true);
+      expect(await reported(rule, name, "ja", "read more")).toBe(true);
     });
 
-    test("no or an unknown lang checks English only", () => {
+    test("no or an unknown lang checks English only", async () => {
       for (const lang of [null, "", "xx", "tlh", "en"]) {
-        expect(reported(rule, name, lang, "En savoir plus")).toBe(false);
-        expect(reported(rule, name, lang, "Mehr")).toBe(false);
-        expect(reported(rule, name, lang, "click here")).toBe(true);
+        expect(await reported(rule, name, lang, "En savoir plus")).toBe(false);
+        expect(await reported(rule, name, lang, "Mehr")).toBe(false);
+        expect(await reported(rule, name, lang, "click here")).toBe(true);
       }
     });
 
-    test("another language's phrase is not reported", () => {
-      expect(reported(rule, name, "fr", "Mehr")).toBe(false);
-      expect(reported(rule, name, "de", "En savoir plus")).toBe(false);
+    test("another language's phrase is not reported", async () => {
+      expect(await reported(rule, name, "fr", "Mehr")).toBe(false);
+      expect(await reported(rule, name, "de", "En savoir plus")).toBe(false);
     });
 
-    test("whole text only: a longer descriptive text containing a phrase is not reported", () => {
-      expect(reported(rule, name, "fr", "En savoir plus sur nos tarifs")).toBe(false);
-      expect(reported(rule, name, "de", "Mehr über unsere Preise")).toBe(false);
-      expect(reported(rule, name, "ja", "詳しくはこちらの料金表")).toBe(false);
+    test("whole text only: a longer descriptive text containing a phrase is not reported", async () => {
+      expect(await reported(rule, name, "fr", "En savoir plus sur nos tarifs")).toBe(false);
+      expect(await reported(rule, name, "de", "Mehr über unsere Preise")).toBe(false);
+      expect(await reported(rule, name, "ja", "詳しくはこちらの料金表")).toBe(false);
     });
 
-    test("conventional account and legal labels are never reported, in any language", () => {
+    test("conventional account and legal labels are never reported, in any language", async () => {
       for (const [lang, label] of [
         ["fr", "Connexion"], ["fr", "Mentions légales"], ["de", "Anmelden"], ["de", "Impressum"],
         ["es", "Iniciar sesión"], ["es", "Contacto"], ["ja", "ログイン"], ["zh", "隐私政策"],
         ["ko", "로그인"], ["ru", "Войти"], ["it", "Contatti"], ["pt", "Contato"], ["nl", "Inloggen"],
       ] as const) {
-        expect(reported(rule, name, lang, label)).toBe(false);
+        expect(await reported(rule, name, lang, label)).toBe(false);
       }
     });
   });
 }
 
 describe("review trims (pub#840)", () => {
-  test("ambiguous pager and wizard words are not generic", () => {
+  test("ambiguous pager and wizard words are not generic", async () => {
     for (const [lang, text] of [
       ["de", "Weiter »"], ["de", "Weiter"], ["fr", "Suite"], ["ru", "Продолжить"], ["it", "Altro"], ["nl", "Verder"],
     ] as const) {
-      for (const [, rule, name] of RULES) expect(reported(rule, name, lang, text)).toBe(false);
+      for (const [, rule, name] of RULES) expect(await reported(rule, name, lang, text)).toBe(false);
     }
   });
 
-  test("only the primary html lang is read: a nested lang is ignored, other-language text under another lang is not reported", () => {
+  test("only the primary html lang is read: a nested lang is ignored, other-language text under another lang is not reported", async () => {
     const url = "https://example.com/";
     const html = '<!doctype html><html lang="en"><head><title>t</title></head><body><div lang="fr"><a href="/a">En savoir plus</a></div><a href="/b">Cliquez ici</a></body></html>';
     for (const [, rule, name] of RULES) {
-      const out = rule.run({
+      const out = (await rule.run({
         page: { url, html, statusCode: 200, loadTime: 0, headers: {} },
         parsed: parsePage(html, url) as ParsedPage,
         options: {},
-      } as RuleContext).checks as CheckResult[];
+      } as RuleContext)).checks as CheckResult[];
       expect(out.some((c) => c.name === name && c.status !== "pass")).toBe(false);
     }
   });

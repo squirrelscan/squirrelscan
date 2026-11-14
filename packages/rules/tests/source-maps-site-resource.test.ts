@@ -14,10 +14,10 @@ import { sourceMapsRule } from "../src/performance/source-maps";
 import { unfoldAggregateCheck, foldOverflowChecks, DEFAULT_FOLD_LIMITS } from "../src/fold";
 import type { CheckResult, ParsedPage, RuleContext, SiteData } from "../src/types";
 
-function run(
+async function run(
   body: string,
   opts: { url?: string; headers?: Record<string, string>; site?: SiteData } = {},
-): CheckResult[] {
+): Promise<CheckResult[]> {
   const url = opts.url ?? "https://example.com/about";
   const html = `<html><head><title>t</title></head><body>${body}</body></html>`;
   const { document } = parseHTML(html);
@@ -27,7 +27,7 @@ function run(
     ...(opts.site ? { site: opts.site } : {}),
     options: {},
   };
-  return sourceMapsRule.run(ctx).checks;
+  return (await sourceMapsRule.run(ctx)).checks;
 }
 
 /** An inline script carrying N distinct `sourceMappingURL` comments. */
@@ -37,8 +37,8 @@ function bundleScript(count: number): string {
 }
 
 describe("parity: the check itself does not move", () => {
-  test("a page with maps emits the same name, status, message, items and details", () => {
-    const [check] = run(bundleScript(2));
+  test("a page with maps emits the same name, status, message, items and details", async () => {
+    const [check] = (await run(bundleScript(2)));
     // Byte-for-byte what this rule emitted before the evidence field existed.
     const { siteResourceOccurrences: _evidence, ...legacy } = check as CheckResult;
     expect(legacy).toEqual({
@@ -55,22 +55,22 @@ describe("parity: the check itself does not move", () => {
     });
   });
 
-  test("the 10-item cap and its `additional` count are untouched", () => {
-    const [check] = run(bundleScript(14));
+  test("the 10-item cap and its `additional` count are untouched", async () => {
+    const [check] = (await run(bundleScript(14)));
     expect(check!.items).toHaveLength(10);
     expect(check!.details!.additional).toBe(4);
     expect(check!.message).toBe("14 potential source map(s) detected");
   });
 
-  test("a clean page still passes, and carries no evidence", () => {
-    const [check] = run("<script>console.log(1)</script>");
+  test("a clean page still passes, and carries no evidence", async () => {
+    const [check] = (await run("<script>console.log(1)</script>"));
     expect(check!.name).toBe("source-maps");
     expect(check!.status).toBe("pass");
     expect((check as CheckResult).siteResourceOccurrences).toBeUndefined();
   });
 
-  test("the inline-map check is unchanged and ungrouped", () => {
-    const checks = run('<script>//# sourceMappingURL=data:application/json;base64,e30=</script>');
+  test("the inline-map check is unchanged and ungrouped", async () => {
+    const checks = (await run('<script>//# sourceMappingURL=data:application/json;base64,e30=</script>'));
     const inline = checks.find((c) => c.name === "source-maps-inline")!;
     expect(inline.status).toBe("warn");
     expect((inline as CheckResult).siteResourceOccurrences).toBeUndefined();
@@ -78,8 +78,8 @@ describe("parity: the check itself does not move", () => {
 });
 
 describe("the evidence itself", () => {
-  test("carries every map, past the item cap", () => {
-    const [check] = run(bundleScript(14));
+  test("carries every map, past the item cap", async () => {
+    const [check] = (await run(bundleScript(14)));
     const evidence = (check as CheckResult).siteResourceOccurrences!;
     // 14, not the 10 `items` shows: a sampled set would make page membership a
     // guess, which is the truncation this feature exists to remove.
@@ -87,8 +87,8 @@ describe("the evidence itself", () => {
     expect(evidence.map((o) => o.key)).toContain("https://example.com/a/m13.js.map");
   });
 
-  test("records the page, the reference and the origin", () => {
-    const [check] = run(bundleScript(1), { url: "https://example.com/pricing" });
+  test("records the page, the reference and the origin", async () => {
+    const [check] = (await run(bundleScript(1), { url: "https://example.com/pricing" }));
     const [first] = (check as CheckResult).siteResourceOccurrences!;
     expect(first).toEqual({
       kind: "source-map",
@@ -99,13 +99,13 @@ describe("the evidence itself", () => {
     });
   });
 
-  test("a map reached twice on one page is one resource", () => {
+  test("a map reached twice on one page is one resource", async () => {
     // The same URL from a `SourceMap` header and an inline comment. The rule
     // already dedupes its items on URL; the evidence must agree, or the unit
     // would count one artifact twice.
-    const [check] = run("<script>//# sourceMappingURL=/a/m0.js.map</script>", {
+    const [check] = (await run("<script>//# sourceMappingURL=/a/m0.js.map</script>", {
       headers: { sourcemap: "/a/m0.js.map" },
-    });
+    }));
     expect((check as CheckResult).siteResourceOccurrences).toHaveLength(1);
     expect(check!.items).toHaveLength(1);
   });

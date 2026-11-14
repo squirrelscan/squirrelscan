@@ -303,7 +303,7 @@ describe("the caps cannot be defeated", () => {
 });
 
 describe("compile-time cost is bounded too (review of #1333)", () => {
-  const timed = (fn: () => unknown) => {
+  const timed = <T>(fn: () => T) => {
     const started = performance.now();
     const out = fn();
     return { out, ms: performance.now() - started };

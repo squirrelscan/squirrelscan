@@ -15,7 +15,7 @@ const SCRIPT = `${BASE}/_fault/shop-config.js`;
 const signal = (url: string, html: string) =>
   buildCollectedPageSignal({ url, parsed: parsePage(html, url), rendered: false });
 
-function run(pages: ReturnType<typeof signal>[], scripts: { url: string; content: string; sourcePages: string[] }[]) {
+async function run(pages: ReturnType<typeof signal>[], scripts: { url: string; content: string; sourcePages: string[] }[]) {
   const ctx = {
     site: {
       baseUrl: BASE,
@@ -31,18 +31,18 @@ function run(pages: ReturnType<typeof signal>[], scripts: { url: string; content
     collectedSignals: { pages },
     options: {},
   } as unknown as RuleContext;
-  return leakedSecretsRule.run(ctx).checks;
+  return (await leakedSecretsRule.run(ctx)).checks;
 }
 
 describe("leaked-secrets names the pages (#1755)", () => {
   const loader = `${BASE}/products/crunchy-peanut-butter`;
   const other = `${BASE}/products/almond-butter`;
 
-  test("an external script finding lists every page that loads the script", () => {
-    const checks = run(
+  test("an external script finding lists every page that loads the script", async () => {
+    const checks = (await run(
       [signal(loader, `<html><body><script src="${SCRIPT}"></script></body></html>`), signal(other, "<html><body>x</body></html>")],
       [{ url: SCRIPT, content: `window.cfg={key:"${KEY}"};`, sourcePages: [loader] }],
-    );
+    ));
     const crit = checks.find((c) => c.name === "leaked-secrets-critical")!;
     expect(crit.items).toHaveLength(1);
     expect(crit.items![0]!.id).toMatch(/^Stripe Live Key: sk_liv\*+5tU7$/);
@@ -50,11 +50,11 @@ describe("leaked-secrets names the pages (#1755)", () => {
     expect(crit.items![0]!.sourcePages).toEqual([loader]);
   });
 
-  test("the inline copy on the loading page is reported with its page as its own occurrence", () => {
-    const checks = run(
+  test("the inline copy on the loading page is reported with its page as its own occurrence", async () => {
+    const checks = (await run(
       [signal(loader, `<html><body><script>window.__SHOP_CONFIG__={"k":"${KEY}"};</script></body></html>`)],
       [{ url: SCRIPT, content: `window.cfg={key:"${KEY}"};`, sourcePages: [loader, other] }],
-    );
+    ));
     const crit = checks.find((c) => c.name === "leaked-secrets-critical")!;
     expect(crit.items).toHaveLength(1);
     const item = crit.items![0]!;
@@ -64,11 +64,11 @@ describe("leaked-secrets names the pages (#1755)", () => {
     expect(occ.some((o) => o.location === "external-script" && o.script === SCRIPT)).toBe(true);
   });
 
-  test("no raw value appears anywhere in the result", () => {
-    const checks = run(
+  test("no raw value appears anywhere in the result", async () => {
+    const checks = (await run(
       [signal(loader, `<html><body><script>var a="${KEY}";</script></body></html>`)],
       [{ url: SCRIPT, content: `var b="${KEY}";`, sourcePages: [loader] }],
-    );
+    ));
     expect(JSON.stringify(checks)).not.toContain(KEY);
   });
 

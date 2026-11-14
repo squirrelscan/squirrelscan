@@ -83,7 +83,7 @@ describe("stored value length cap (#1592)", () => {
     }
   }, 30_000);
 
-  test("the rule check carries the cut marker for report readers", () => {
+  test("the rule check carries the cut marker for report readers", async () => {
     const url = "https://shop.example/p";
     const ctx = {
       site: {
@@ -97,7 +97,7 @@ describe("stored value length cap (#1592)", () => {
       },
       options: {},
     } as unknown as RuleContext;
-    const result = leakedSecretsRule.run(ctx);
+    const result = (await leakedSecretsRule.run(ctx));
     const medium = result.checks.find((c) => c.name === "leaked-secrets-medium");
     expect(medium).toBeDefined();
     expect(medium!.items!.length).toBeGreaterThan(0);

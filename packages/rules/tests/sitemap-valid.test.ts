@@ -54,7 +54,7 @@ function sizeCheck(result: ReturnType<typeof sitemapValidRule.run>) {
 }
 
 describe("crawl/sitemap-valid index vs per-file limits (#1651)", () => {
-  test("an index whose aggregated urlCount exceeds 50k passes when shards are within limits", () => {
+  test("an index whose aggregated urlCount exceeds 50k passes when shards are within limits", async () => {
     const shards = Array.from({ length: 4 }, (_, i) =>
       sitemap({
         url: `https://example.com/sitemap-${i}.xml`,
@@ -68,11 +68,11 @@ describe("crawl/sitemap-valid index vs per-file limits (#1651)", () => {
       urlCount: 160000, // crawler-aggregated child total
     });
 
-    const check = sizeCheck(sitemapValidRule.run(ctx([index, ...shards])));
+    const check = sizeCheck(await sitemapValidRule.run(ctx([index, ...shards])));
     expect(check.status).toBe("pass");
   });
 
-  test("a urlset shard over 50k URLs fails and the finding names the shard, not the index", () => {
+  test("a urlset shard over 50k URLs fails and the finding names the shard, not the index", async () => {
     const shard = sitemap({ url: "https://example.com/sitemap-big.xml", urlCount: 60000 });
     const index = sitemap({
       url: "https://example.com/sitemap.xml",
@@ -81,13 +81,13 @@ describe("crawl/sitemap-valid index vs per-file limits (#1651)", () => {
       urlCount: 60000,
     });
 
-    const check = sizeCheck(sitemapValidRule.run(ctx([index, shard])));
+    const check = sizeCheck(await sitemapValidRule.run(ctx([index, shard])));
     expect(check.status).toBe("warn");
     expect(check.items).toHaveLength(1);
     expect(check.items?.[0]?.id).toContain("sitemap-big.xml");
   });
 
-  test("an index listing more than 50k child sitemaps fails on the child limit", () => {
+  test("an index listing more than 50k child sitemaps fails on the child limit", async () => {
     const index = sitemap({
       url: "https://example.com/sitemap.xml",
       type: "index",
@@ -95,13 +95,13 @@ describe("crawl/sitemap-valid index vs per-file limits (#1651)", () => {
       urlCount: 0,
     });
 
-    const check = sizeCheck(sitemapValidRule.run(ctx([index])));
+    const check = sizeCheck(await sitemapValidRule.run(ctx([index])));
     expect(check.status).toBe("warn");
     expect(check.items?.[0]?.id).toContain("50001 child sitemaps");
   });
 
-  test("a plain oversized urlset still fails", () => {
-    const check = sizeCheck(sitemapValidRule.run(ctx([sitemap({ urlCount: 50001 })])));
+  test("a plain oversized urlset still fails", async () => {
+    const check = sizeCheck(await sitemapValidRule.run(ctx([sitemap({ urlCount: 50001 })])));
     expect(check.status).toBe("warn");
   });
 });

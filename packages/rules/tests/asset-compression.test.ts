@@ -2,18 +2,12 @@
 
 import { describe, expect, test } from "bun:test";
 
-import type { CheckResult } from "@squirrelscan/core-contracts";
+import type { CheckResult, ResourceSizeData, ScriptContentData } from "@squirrelscan/core-contracts";
 import { ASSET_COMPRESSION_LIMITS } from "@squirrelscan/utils/constants";
 
 import { assetCompressionRule } from "../src/performance/asset-compression";
 import { compressionRule } from "../src/performance/compression";
-import type {
-  ParsedPage,
-  ResourceSizeData,
-  RuleContext,
-  ScriptContentData,
-  SiteData,
-} from "../src/types";
+import type { ParsedPage, RuleContext, SiteData } from "../src/types";
 
 const BIG = ASSET_COMPRESSION_LIMITS.MIN_BYTES * 2;
 const SMALL = Math.floor(ASSET_COMPRESSION_LIMITS.MIN_BYTES / 2);
@@ -71,8 +65,8 @@ function ctx(site: Partial<SiteData["resourceSizes"]> & {
   };
 }
 
-function run(c: RuleContext): CheckResult[] {
-  return assetCompressionRule.run(c).checks as CheckResult[];
+async function run(c: RuleContext): Promise<CheckResult[]> {
+  return (await assetCompressionRule.run(c)).checks as CheckResult[];
 }
 
 function only(checks: CheckResult[]): CheckResult {
@@ -85,29 +79,29 @@ function itemIds(check: CheckResult): string[] {
 }
 
 describe("perf/asset-compression — reports", () => {
-  test("a large uncompressed CSS file is reported with its URL and size", () => {
-    const check = only(run(ctx({ css: [css()] })));
+  test("a large uncompressed CSS file is reported with its URL and size", async () => {
+    const check = only(await run(ctx({ css: [css()] })));
     expect(check.status).toBe("warn");
     expect(itemIds(check)).toEqual(["https://example.com/app.css"]);
     expect(check.items?.[0]?.meta?.sizeBytes).toBe(BIG);
     expect(check.items?.[0]?.meta?.size).toBe("200.0 KB");
   });
 
-  test("a large uncompressed JS file is reported", () => {
-    const check = only(run(ctx({ scripts: [script()] })));
+  test("a large uncompressed JS file is reported", async () => {
+    const check = only(await run(ctx({ scripts: [script()] })));
     expect(check.status).toBe("warn");
     expect(itemIds(check)).toEqual(["https://example.com/app.js"]);
   });
 
-  test("an SVG in the image pool is reported (image/svg+xml is text)", () => {
+  test("an SVG in the image pool is reported (image/svg+xml is text)", async () => {
     const check = only(
-      run(
+      (await run(
         ctx({
           images: [
             css({ url: "https://example.com/hero.svg", contentType: "image/svg+xml" }),
           ],
         })
-      )
+      ))
     );
     expect(check.status).toBe("warn");
     expect(itemIds(check)).toEqual(["https://example.com/hero.svg"]);
@@ -116,21 +110,21 @@ describe("perf/asset-compression — reports", () => {
   test.each([
     ["identity", "identity"],
     ["IDENTITY (uppercase)", "IDENTITY"],
-  ])("%s is reported — it means compression is off, not unknown", (_l, enc) => {
-    const check = only(run(ctx({ css: [css({ contentEncoding: enc })] })));
+  ])("%s is reported — it means compression is off, not unknown", async (_l, enc) => {
+    const check = only(await run(ctx({ css: [css({ contentEncoding: enc })] })));
     expect(check.status).toBe("warn");
   });
 
-  test("findings are sorted biggest-first and totalled", () => {
+  test("findings are sorted biggest-first and totalled", async () => {
     const check = only(
-      run(
+      (await run(
         ctx({
           css: [
             css({ url: "https://example.com/small.css", sizeBytes: BIG }),
             css({ url: "https://example.com/huge.css", sizeBytes: BIG * 3 }),
           ],
         })
-      )
+      ))
     );
     expect(itemIds(check)).toEqual([
       "https://example.com/huge.css",
@@ -156,58 +150,58 @@ describe("perf/asset-compression — stays silent", () => {
     // uncompressed is the false positive the rule most needs to avoid.
     ["shared-dictionary (dcb)", { contentEncoding: "dcb" }],
     ["some future coding", { contentEncoding: "not-invented-yet" }],
-  ])("a %s-compressed asset is not reported", (_label, override) => {
-    const check = only(run(ctx({ css: [css(override)] })));
+  ])("a %s-compressed asset is not reported", async (_label, override) => {
+    const check = only(await run(ctx({ css: [css(override)] })));
     expect(check.status).toBe("pass");
   });
 
 
-  test("an all-identity coding list is still reported as uncompressed", () => {
+  test("an all-identity coding list is still reported as uncompressed", async () => {
     // Content-Encoding is a LIST. The fetchers normalize a lone `identity` to
     // null, but they match one token, so `identity, identity` arrives verbatim
     // and must not be mistaken for a real coding.
-    const check = only(run(ctx({ css: [css({ contentEncoding: "identity, identity" })] })));
+    const check = only(await run(ctx({ css: [css({ contentEncoding: "identity, identity" })] })));
     expect(check.status).toBe("warn");
     expect(itemIds(check)).toEqual(["https://example.com/app.css"]);
   });
 
-  test("a list is compressed when any token is a real coding", () => {
-    const check = only(run(ctx({ css: [css({ contentEncoding: "identity, gzip" })] })));
+  test("a list is compressed when any token is a real coding", async () => {
+    const check = only(await run(ctx({ css: [css({ contentEncoding: "identity, gzip" })] })));
     expect(check.status).toBe("pass");
   });
 
-  test("a 206 whose confirming GET failed is not reported", () => {
+  test("a 206 whose confirming GET failed is not reported", async () => {
     // The end of the chain the resource checker's capture tests start: an
     // unconfirmable ranged 206 records `undefined`, and the rule must stay
     // silent rather than report a possibly-gzipped asset as uncompressed.
     const check = only(
-      run(ctx({ css: [css({ status: 206, contentEncoding: undefined })] }))
+      (await run(ctx({ css: [css({ status: 206, contentEncoding: undefined })] })))
     );
     expect(check.status).toBe("skipped");
   });
 
-  test("an asset under the threshold is not reported", () => {
-    const check = only(run(ctx({ css: [css({ sizeBytes: SMALL })] })));
+  test("an asset under the threshold is not reported", async () => {
+    const check = only(await run(ctx({ css: [css({ sizeBytes: SMALL })] })));
     expect(check.status).toBe("pass");
   });
 
-  test("an asset exactly at the threshold is not reported (strict >)", () => {
+  test("an asset exactly at the threshold is not reported (strict >)", async () => {
     const check = only(
-      run(ctx({ css: [css({ sizeBytes: ASSET_COMPRESSION_LIMITS.MIN_BYTES })] }))
+      (await run(ctx({ css: [css({ sizeBytes: ASSET_COMPRESSION_LIMITS.MIN_BYTES })] })))
     );
     expect(check.status).toBe("pass");
   });
 
-  test("unknown encoding (undefined) is not treated as uncompressed", () => {
+  test("unknown encoding (undefined) is not treated as uncompressed", async () => {
     // The CLI's script content-store cache returns a hit without ever seeing
     // response headers. Defaulting that to null would report every cached script.
     const c = ctx({ scripts: [script()] });
     delete (c.site!.scripts![0] as ScriptContentData).contentEncoding;
-    expect(only(run(c)).status).toBe("skipped");
+    expect(only(await run(c)).status).toBe("skipped");
   });
 
-  test("a cache-reused record is not reported (headers are the prior crawl's)", () => {
-    const check = only(run(ctx({ css: [css({ cacheReason: "max-age" })] })));
+  test("a cache-reused record is not reported (headers are the prior crawl's)", async () => {
+    const check = only(await run(ctx({ css: [css({ cacheReason: "max-age" })] })));
     expect(check.status).toBe("skipped");
   });
 
@@ -217,8 +211,8 @@ describe("perf/asset-compression — stays silent", () => {
     ["woff2 font", "font/woff2"],
     ["PDF", "application/pdf"],
     ["octet-stream", "application/octet-stream"],
-  ])("a large %s is not reported (not compressible text)", (_label, contentType) => {
-    const check = only(run(ctx({ images: [css({ contentType })] })));
+  ])("a large %s is not reported (not compressible text)", async (_label, contentType) => {
+    const check = only(await run(ctx({ images: [css({ contentType })] })));
     expect(check.status).toBe("skipped");
   });
 
@@ -226,38 +220,38 @@ describe("perf/asset-compression — stays silent", () => {
     ["a 404", { status: 404 }],
     ["a 301", { status: 301 }],
     ["a failed fetch", { status: null }],
-  ])("%s is not reported", (_label, override) => {
-    const check = only(run(ctx({ css: [css(override)] })));
+  ])("%s is not reported", async (_label, override) => {
+    const check = only(await run(ctx({ css: [css(override)] })));
     expect(check.status).toBe("skipped");
   });
 
-  test("a record carrying an error is not reported (its size is not trustworthy)", () => {
+  test("a record carrying an error is not reported (its size is not trustworthy)", async () => {
     // The script fetcher's "script too large" bail reports the byte it stopped
     // reading at, not the asset's real length — and this rule's finding names
     // that size out loud, so it must not speak for such a record.
     const check = only(
-      run(ctx({ scripts: [script({ error: "script too large" })] }))
+      (await run(ctx({ scripts: [script({ error: "script too large" })] })))
     );
     expect(check.status).toBe("skipped");
   });
 
-  test("an unknown size is not reported", () => {
-    const check = only(run(ctx({ css: [css({ sizeBytes: null })] })));
+  test("an unknown size is not reported", async () => {
+    const check = only(await run(ctx({ css: [css({ sizeBytes: null })] })));
     expect(check.status).toBe("pass");
   });
 
-  test("no crawled sub-resources at all → skipped, not pass", () => {
-    const check = only(run(ctx()));
+  test("no crawled sub-resources at all → skipped, not pass", async () => {
+    const check = only(await run(ctx()));
     expect(check.status).toBe("skipped");
     expect(check.skipReason).toBe("no_data");
   });
 });
 
 describe("perf/asset-compression — options", () => {
-  test("min_bytes lowers the threshold", () => {
+  test("min_bytes lowers the threshold", async () => {
     const c = ctx({ css: [css({ sizeBytes: SMALL })] });
     c.options = { min_bytes: 1024 };
-    expect(only(run(c)).status).toBe("warn");
+    expect(only(await run(c)).status).toBe("warn");
   });
 });
 
@@ -265,19 +259,19 @@ describe("perf/compression is untouched by this rule", () => {
   // #9's acceptance criteria: the HTML-document check keeps its behaviour. The
   // new rule is site-scope and reads ctx.site; perf/compression is page-scope
   // and reads ctx.page.headers, so asset data must not reach it.
-  test("still judges only the page's own response headers", () => {
+  test("still judges only the page's own response headers", async () => {
     const c = ctx({ css: [css()] });
     c.page.headers = { "content-type": "text/html", "content-encoding": "br" };
-    const checks = compressionRule.run(c).checks as CheckResult[];
+    const checks = (await compressionRule.run(c)).checks as CheckResult[];
     expect(only(checks).status).toBe("pass");
     expect(only(checks).value).toBe("br");
   });
 
-  test("still fails an uncompressed HTML document", () => {
+  test("still fails an uncompressed HTML document", async () => {
     const c = ctx();
     c.page.headers = { "content-type": "text/html" };
     c.page.html = "x".repeat(5000);
-    const checks = compressionRule.run(c).checks as CheckResult[];
+    const checks = (await compressionRule.run(c)).checks as CheckResult[];
     expect(only(checks).status).toBe("fail");
   });
 

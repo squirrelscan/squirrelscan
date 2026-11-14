@@ -383,7 +383,7 @@ describe("content/duplicate-content", () => {
     const ctx = streamingCtx([{ url: u("/a") }, { url: u("/b") }], { withoutFingerprint: true });
     expect((await check(ctx)).status).toBe("skipped");
     const noDocs = legacyCtx([{ url: u("/a") }, { url: u("/b") }]);
-    for (const p of noDocs.site.pages) (p.parsed as { document: unknown }).document = undefined;
+    for (const p of noDocs.site!.pages) (p.parsed as { document: unknown }).document = undefined;
     expect((await check(noDocs)).status).toBe("skipped");
   });
 

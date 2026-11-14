@@ -178,7 +178,7 @@ const POSITIVES: Case[] = GENERATORS.flatMap((g) =>
     // (`Bearer …`) reports under its own pattern's tier instead.
     const tier =
       pattern === (g.reportedAs ?? g.pattern) && g.check ? g.check : pattern ? checkFor(pattern) : "medium";
-    const check = escalate(pattern, tier, c.location);
+    const check = escalate(pattern ?? "", tier, c.location);
     const expect: Expectation[] = pattern ? [{ pattern, check, location: c.location }] : [];
     let knownGap = gap?.gap;
 

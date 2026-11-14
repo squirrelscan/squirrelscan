@@ -59,8 +59,8 @@ function referenceDetects(doc: any): boolean {
   return false;
 }
 
-function detects(html: string): boolean {
-  return cookieConsentRule.run(ctxOf(html)).checks[0]?.status === "pass";
+async function detects(html: string): Promise<boolean> {
+  return (await cookieConsentRule.run(ctxOf(html))).checks[0]?.status === "pass";
 }
 
 // seeded PRNG so a failure reproduces
@@ -107,13 +107,13 @@ function randomPage(rand: () => number): string {
 }
 
 describe("legal/cookie-consent single-pass scan matches the selector version (pub#270)", () => {
-  test("2000 randomised pages answer identically", () => {
+  test("2000 randomised pages answer identically", async () => {
     const rand = rng(270);
     let passes = 0;
     for (let i = 0; i < 2000; i++) {
       const html = randomPage(rand);
       const expected = referenceDetects(ctxOf(html).parsed.document);
-      const actual = detects(html);
+      const actual = await detects(html);
       if (actual !== expected) throw new Error(`diverged on page ${i}: ${html}`);
       if (expected) passes++;
     }
@@ -124,15 +124,15 @@ describe("legal/cookie-consent single-pass scan matches the selector version (pu
 
   // #1567: a class list splits on HTML whitespace only, so an NBSP does not separate tokens and `foo<NBSP>cc-window` is not the `cc-window` class. The selector
   // reference above reads `.cc-window` through a parser that folds NBSP into a space, which a browser does not, so the shape is pinned here, not in the run above.
-  test("an NBSP between class tokens does not make `cc-window` a token, as in a browser", () => {
-    expect(detects(`<html><body><div class="foo\u00a0cc-window"><p>x</p></div></body></html>`)).toBe(false);
-    expect(detects(`<html><body><div class="foo cc-window"><p>x</p></div></body></html>`)).toBe(true);
+  test("an NBSP between class tokens does not make `cc-window` a token, as in a browser", async () => {
+    expect(await detects(`<html><body><div class="foo\u00a0cc-window"><p>x</p></div></body></html>`)).toBe(false);
+    expect(await detects(`<html><body><div class="foo cc-window"><p>x</p></div></body></html>`)).toBe(true);
   });
 
-  test("a CMP container is found on any element, anywhere", () => {
-    expect(detects(`<html><body><section><p><i class="x cc-window"></i></p></section></body></html>`)).toBe(true);
-    expect(detects(`<html><body><div id="didomi-host"></div></body></html>`)).toBe(true);
-    expect(detects(`<html><body><div id="DIDOMI-HOST"></div></body></html>`)).toBe(false);
+  test("a CMP container is found on any element, anywhere", async () => {
+    expect(await detects(`<html><body><section><p><i class="x cc-window"></i></p></section></body></html>`)).toBe(true);
+    expect(await detects(`<html><body><div id="didomi-host"></div></body></html>`)).toBe(true);
+    expect(await detects(`<html><body><div id="DIDOMI-HOST"></div></body></html>`)).toBe(false);
   });
 });
 
@@ -150,10 +150,10 @@ describe("social/share-buttons answers like the lowercase-copy version (pub#270)
   // the rule reads patterns from page.html and links from the parsed document,
   // so parse once and vary only page.html (a parse per call would take minutes)
   const base = ctxOf("<html><body><p>x</p></body></html>", "https://example.com/x");
-  const newAnswer = (html: string) =>
-    shareButtonsRule.run({ ...base, page: { ...base.page, html } }).checks[0]?.status === "pass";
+  const newAnswer = async (html: string) =>
+    (await shareButtonsRule.run({ ...base, page: { ...base.page, html } })).checks[0]?.status === "pass";
 
-  test("every BMP character, spliced into each pattern's letters, answers identically", () => {
+  test("every BMP character, spliced into each pattern's letters, answers identically", async () => {
     const seeds = ["share facebook", "facebook share", "share twitter", "share linkedin", "addthis", "sumo-share", "shareaholic", "addtoany"];
     for (let cp = 0; cp < 0x10000; cp++) {
       if (cp >= 0xd800 && cp <= 0xdfff) continue;
@@ -161,7 +161,7 @@ describe("social/share-buttons answers like the lowercase-copy version (pub#270)
       for (const seed of seeds) {
         for (let at = 0; at < seed.length; at += 3) {
           const text = seed.slice(0, at) + ch + seed.slice(at + 1); // replace one letter
-          if (newAnswer(text) !== oldAnswer(text)) {
+          if ((await newAnswer(text)) !== oldAnswer(text)) {
             throw new Error(`diverged on U+${cp.toString(16)} in "${text}"`);
           }
         }
@@ -169,9 +169,9 @@ describe("social/share-buttons answers like the lowercase-copy version (pub#270)
     }
   }, 60_000);
 
-  test("Kelvin sign still matches as before; plain case folding unchanged", () => {
-    expect(newAnswer("share facebooK")).toBe(true);
-    expect(newAnswer("SHARE FACEBOOK")).toBe(true);
-    expect(newAnswer("share faceb00k")).toBe(false);
+  test("Kelvin sign still matches as before; plain case folding unchanged", async () => {
+    expect(await newAnswer("share facebooK")).toBe(true);
+    expect(await newAnswer("SHARE FACEBOOK")).toBe(true);
+    expect(await newAnswer("share faceb00k")).toBe(false);
   });
 });

@@ -220,7 +220,7 @@ describe("noindexSource and isSiteIndexable", () => {
   });
 
   test("without a fetched homepage the entry page decides, matched by url or final url", () => {
-    const deep = (extra: object) => ({ url: "https://example.com/docs/start", ...extra });
+    const deep = (extra: typeof indexable) => ({ url: "https://example.com/docs/start", ...extra });
     expect(isSiteIndexable([deep(noindex)], BASE_URL, ["https://example.com/docs/start"])).toBe(
       false,
     );
@@ -293,7 +293,7 @@ function sitePage(
     url,
     statusCode: 200,
     parsed,
-    headers: opts.header ? { "x-robots-tag": opts.header } : {},
+    headers: opts.header ? { "x-robots-tag": opts.header } : ({} as Record<string, string>),
   };
 }
 

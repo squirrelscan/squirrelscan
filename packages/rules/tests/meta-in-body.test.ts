@@ -22,8 +22,8 @@ function page(body: string): string {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Shirt | Brand</title></head><body>${body}</body></html>`;
 }
 
-function run(body: string): CheckResult {
-  const checks = (metaInBodyRule.run(makeCtx(page(body))) as { checks: CheckResult[] }).checks;
+async function run(body: string): Promise<CheckResult> {
+  const checks = ((await metaInBodyRule.run(makeCtx(page(body)))) as { checks: CheckResult[] }).checks;
   expect(checks).toHaveLength(1);
   return checks[0] as CheckResult;
 }
@@ -39,67 +39,67 @@ const MICRODATA = `<h1>Shirt</h1>
 </div>`;
 
 describe("content/meta-in-body", () => {
-  test("passes: reporter repro with only microdata metas", () => {
-    const c = run(MICRODATA);
+  test("passes: reporter repro with only microdata metas", async () => {
+    const c = (await run(MICRODATA));
     expect(c.status).toBe("pass");
     expect(c.items).toBeUndefined();
   });
 
-  test("fails with exactly 1 item when a name meta sits among microdata", () => {
-    const c = run(`${MICRODATA}<meta name="description" content="Oops">`);
+  test("fails with exactly 1 item when a name meta sits among microdata", async () => {
+    const c = (await run(`${MICRODATA}<meta name="description" content="Oops">`));
     expect(c.status).toBe("fail");
     expect(c.items).toHaveLength(1);
     expect(c.message).toBe("Found 1 meta tag(s) in <body>");
     expect(c.items?.[0]?.id).toBe("description");
-    expect(c.items?.some((i) => i.label.startsWith("unknown"))).toBe(false);
+    expect(c.items?.some((i) => i.label?.startsWith("unknown"))).toBe(false);
   });
 
-  test("fails: itemprop combined with name is not exempt", () => {
-    const c = run(`<meta name="x" itemprop="y" content="z">`);
+  test("fails: itemprop combined with name is not exempt", async () => {
+    const c = (await run(`<meta name="x" itemprop="y" content="z">`));
     expect(c.status).toBe("fail");
     expect(c.items).toHaveLength(1);
   });
 
-  test("fails: itemprop combined with http-equiv is not exempt", () => {
-    const c = run(`<meta http-equiv="refresh" itemprop="y" content="5">`);
+  test("fails: itemprop combined with http-equiv is not exempt", async () => {
+    const c = (await run(`<meta http-equiv="refresh" itemprop="y" content="5">`));
     expect(c.status).toBe("fail");
   });
 
-  test("fails: itemprop combined with charset is not exempt", () => {
-    const c = run(`<meta charset="utf-8" itemprop="y">`);
+  test("fails: itemprop combined with charset is not exempt", async () => {
+    const c = (await run(`<meta charset="utf-8" itemprop="y">`));
     expect(c.status).toBe("fail");
   });
 
-  test("still fails: meta property in the body", () => {
-    const c = run(`<meta property="og:title" content="Shirt">`);
+  test("still fails: meta property in the body", async () => {
+    const c = (await run(`<meta property="og:title" content="Shirt">`));
     expect(c.status).toBe("fail");
     expect(c.items?.[0]?.id).toBe("og:title");
   });
 
-  test("still fails: RDFa meta property under an RDFa ancestor", () => {
-    const c = run(
+  test("still fails: RDFa meta property under an RDFa ancestor", async () => {
+    const c = (await run(
       `<div vocab="https://schema.org/" typeof="Product"><meta property="name" content="Shirt"></div>`,
-    );
+    ));
     expect(c.status).toBe("fail");
     expect(c.items).toHaveLength(1);
   });
 
-  test("passes: itemprop combined with property is exempt (triage: only name, http-equiv, charset block it)", () => {
-    const c = run(`<meta itemprop="name" property="name" content="Shirt">`);
+  test("passes: itemprop combined with property is exempt (triage: only name, http-equiv, charset block it)", async () => {
+    const c = (await run(`<meta itemprop="name" property="name" content="Shirt">`));
     expect(c.status).toBe("pass");
   });
 
-  test("passes: page with no body metas", () => {
-    const c = run(`<h1>Shirt</h1>`);
+  test("passes: page with no body metas", async () => {
+    const c = (await run(`<h1>Shirt</h1>`));
     expect(c.status).toBe("pass");
     expect(c.message).toBe("All meta tags correctly placed in <head>");
   });
 });
 
 describe("content/meta-in-body wording is count-independent (#231)", () => {
-  test("one and several body metas share one message form", () => {
-    expect(run(`<meta name="description" content="Oops">`).message).toBe("Found 1 meta tag(s) in <body>");
-    expect(run(`<meta name="description" content="Oops"><meta name="robots" content="index">`).message).toBe(
+  test("one and several body metas share one message form", async () => {
+    expect((await run(`<meta name="description" content="Oops">`)).message).toBe("Found 1 meta tag(s) in <body>");
+    expect((await run(`<meta name="description" content="Oops"><meta name="robots" content="index">`)).message).toBe(
       "Found 2 meta tag(s) in <body>",
     );
   });

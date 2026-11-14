@@ -139,22 +139,22 @@ describe("the single-pass rewrites report what the old rules did (#3066)", () =>
     ["aria-text", ariaTextRule, referenceAriaTextRule],
     ["aria-hidden-focus", ariaHiddenFocusRule, referenceAriaHiddenFocusRule],
   ] as const) {
-    test(`${name}: identical results on 600 seeded random pages`, { timeout: 30_000 }, () => {
+    test(`${name}: identical results on 600 seeded random pages`, async () => {
       let nonTrivial = 0;
       for (let seed = 1; seed <= 600; seed++) {
         const html = page(seed);
-        const actual = run(rule, html);
-        const expected = run(reference, html);
+        const actual = (await run(rule, html));
+        const expected = (await run(reference, html));
         // The seed in the message makes a failure reproducible.
         expect({ seed, ...actual }).toEqual({ seed, ...expected });
         if (expected.checks.some((c) => c.status === "warn" || c.status === "fail")) nonTrivial++;
       }
       // Non-vacuous: most pages produce findings.
       expect(nonTrivial).toBeGreaterThan(200);
-    });
+    }, { timeout: 30_000 });
   }
 
-  test("nested containers file a control once per container, in container order", () => {
+  test("nested containers file a control once per container, in container order", async () => {
     const html = `<!doctype html><html><body>
       <div aria-hidden="true" id="outer"><a href="/1">1</a>
         <div aria-hidden="true" id="inner"><button id="b">b</button></div>
@@ -165,9 +165,9 @@ describe("the single-pass rewrites report what the old rules did (#3066)", () =>
       [ariaHiddenFocusRule, referenceAriaHiddenFocusRule],
       [ariaTextRule, referenceAriaTextRule],
     ] as const) {
-      expect(run(rule, html)).toEqual(run(reference, html));
+      expect(await run(rule, html)).toEqual(await run(reference, html));
     }
-    const fail = run(ariaHiddenFocusRule, html).checks.find((c) => c.name === "aria-hidden-focus");
+    const fail = (await run(ariaHiddenFocusRule, html)).checks.find((c) => c.name === "aria-hidden-focus");
     expect(fail?.message).toBe("3 focusable element(s) inside aria-hidden");
     expect(fail?.items).toEqual([{ id: "a" }, { id: "button#b" }, { id: "button#b" }]);
   });
@@ -184,7 +184,7 @@ describe("deeply nested shapes run in bounded time (#3066)", () => {
   test.each([
     ["aria-text", ariaTextRule, '<span role="text">', "</span>"],
     ["aria-hidden-focus", ariaHiddenFocusRule, '<div aria-hidden="true">', "</div>"],
-  ] as const)("%s at 5,000 levels stays under 1 s", (_name, rule, open, close) => {
+  ] as const)("%s at 5,000 levels stays under 1 s", async (_name, rule, open, close) => {
     const html = nested(5000, open, close);
     const ctx: RuleContext = {
       page: { url: URL, html, statusCode: 200, loadTime: 0, headers: {} },
@@ -192,7 +192,7 @@ describe("deeply nested shapes run in bounded time (#3066)", () => {
       options: {},
     };
     const started = performance.now();
-    const result = rule.run(ctx);
+    const result = (await rule.run(ctx));
     expect(performance.now() - started).toBeLessThan(1000);
     expect(result.checks.some((c) => c.status === "warn" || c.status === "fail")).toBe(true);
   });

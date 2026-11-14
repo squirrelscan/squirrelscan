@@ -20,13 +20,13 @@ function ctx(html: string, pageUrl = "https://example.test/p"): RuleContext {
 }
 
 describe("region evidence is linear in the number of faulty elements", () => {
-  test("a 5,000-link nav does not re-walk the region per link", () => {
+  test("a 5,000-link nav does not re-walk the region per link", async () => {
     const links = Array.from(
       { length: 5000 },
       (_, i) => `<a href="/t${i}">Read more</a>`,
     ).join("");
     const started = performance.now();
-    const checks = linkTextRule.run(ctx(`<footer><nav>${links}</nav></footer>`)).checks;
+    const checks = (await linkTextRule.run(ctx(`<footer><nav>${links}</nav></footer>`))).checks;
     const elapsed = performance.now() - started;
 
     expect(checks[0]?.componentOccurrences).toHaveLength(5000);
@@ -38,10 +38,10 @@ describe("region evidence is linear in the number of faulty elements", () => {
 });
 
 describe("content nested BELOW a chrome region is not site chrome", () => {
-  test("an article inside the footer keeps its links page-scoped", () => {
+  test("an article inside the footer keeps its links page-scoped", async () => {
     const html =
       "<footer><article><a href='/related'>Read more</a></article><a href='/pricing'>Read more</a></footer>";
-    const occurrences = linkTextRule.run(ctx(html)).checks[0]!.componentOccurrences!;
+    const occurrences = (await linkTextRule.run(ctx(html))).checks[0]!.componentOccurrences!;
     const inArticle = occurrences.find((o) => o.element.locator.includes("article"))!;
     const siteChrome = occurrences.find((o) => !o.element.locator.includes("article"))!;
 
@@ -77,8 +77,8 @@ describe("stale-copyright detection is byte-identical to the baseline", () => {
   // element matching both `footer` and `.footer` contributes its text twice.
   // That duplication is load-bearing: the pattern needs the © marker BEFORE a
   // year, and only the seam between the two copies supplies it.
-  test("an element matching two selectors still warns", () => {
-    const checks = staleCopyrightRule.run(ctx('<footer class="footer">2025 &copy;</footer>')).checks;
+  test("an element matching two selectors still warns", async () => {
+    const checks = (await staleCopyrightRule.run(ctx('<footer class="footer">2025 &copy;</footer>'))).checks;
     expect(checks[0]).toMatchObject({
       name: "footer-copyright-year",
       status: "warn",
@@ -86,21 +86,21 @@ describe("stale-copyright detection is byte-identical to the baseline", () => {
     });
   });
 
-  test("that finding carries NO evidence, because no element asserts the year", () => {
+  test("that finding carries NO evidence, because no element asserts the year", async () => {
     // The year is a concatenation artifact: it exists only at the seam between
     // the two copies, so no single element's text asserts it. The finding must
     // still stand (parity), and evidence must stay empty rather than blaming an
     // element that does not say what the finding claims.
-    const check = staleCopyrightRule.run(ctx('<footer class="footer">2025 &copy;</footer>')).checks[0]!;
+    const check = (await staleCopyrightRule.run(ctx('<footer class="footer">2025 &copy;</footer>'))).checks[0]!;
     expect(check.status).toBe("warn");
     expect(check.componentOccurrences ?? []).toHaveLength(0);
   });
 
-  test("deep wrapper chains stay linear", () => {
+  test("deep wrapper chains stay linear", async () => {
     const depth = 400;
     const inner = `${"<div>".repeat(depth)}<p>&copy; 2019 Acme</p>${"</div>".repeat(depth)}`;
     const started = performance.now();
-    const check = staleCopyrightRule.run(ctx(`<footer>${inner}</footer>`)).checks[0]!;
+    const check = (await staleCopyrightRule.run(ctx(`<footer>${inner}</footer>`))).checks[0]!;
     const elapsed = performance.now() - started;
     expect(check.status).toBe("warn");
     // Evidence belongs to the innermost element asserting the year.

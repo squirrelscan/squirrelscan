@@ -130,12 +130,12 @@ test("look-alike forms of the cue are matched: small capitals, accents, Armenian
 
 // ── what the report may carry ───────────────────────────────────────────────
 
-test("the overlay reason carries no userinfo, query token or fragment of the iframe's source, and a sanitised id", () => {
+test("the overlay reason carries no userinfo, query token or fragment of the iframe's source, and a sanitised id", async () => {
   // Built from parts so the secret scanner does not flag the fixture.
   const userinfo = ["user", "pw"].join(":");
   const src = `https://${userinfo}@host.invalid/login?token=SECRETVALUE#frag`;
   const ctx = context(`<iframe id="google-auth&#27;[31m" src="${src}" style="position:fixed;top:0;left:0;width:100%;height:100%;z-index:9999"></iframe>`);
-  const check = fakeAuthOverlayRule.run(ctx).checks[0];
+  const check = (await fakeAuthOverlayRule.run(ctx)).checks[0];
   const text = JSON.stringify(check);
   for (const secret of ["SECRETVALUE", "pw", "frag", "user:", "\u001b"]) expect(text, secret).not.toContain(secret);
   expect(check?.value).toContain("https://host.invalid/login");

@@ -292,24 +292,24 @@ describe("a decidable rule that outranks the width hide keeps the element shown 
 });
 
 describe("the naming rule reports it unconfirmed, with the reason and widths", () => {
-  function run(html: string): CheckResult[] {
+  async function run(html: string): Promise<CheckResult[]> {
     const url = "https://example.com/";
-    return buttonNameRule.run({
+    return (await buttonNameRule.run({
       page: { url, html, statusCode: 200, loadTime: 0, headers: {} },
       parsed: parsePage(html, url) as ParsedPage,
       options: {},
-    } as RuleContext).checks as CheckResult[];
+    } as RuleContext)).checks as CheckResult[];
   }
   const page = (css: string, body: string) =>
     `<!doctype html><html lang="en"><head><title>t</title><style>${css}</style></head><body>${body}</body></html>`;
 
-  test("button-name: the drawer button is unconfirmed, not failed", () => {
-    const out = run(
+  test("button-name: the drawer button is unconfirmed, not failed", async () => {
+    const out = (await run(
       page(
         "@media screen and (min-width: 990px){menu-drawer{display:none}}",
         '<menu-drawer><button type="button"></button></menu-drawer>',
       ),
-    );
+    ));
     expect(out.map((c) => [c.name, c.status])).toEqual([["button-name-unconfirmed", "warn"]]);
     expect(out[0]?.message).toBe(
       "1 button(s) without accessible names hidden only at some widths by a media query (unconfirmed)",
@@ -320,34 +320,34 @@ describe("the naming rule reports it unconfirmed, with the reason and widths", (
     expect(item?.meta).toEqual({ reason: WIDTH_REASON, shown: "below 990px" });
   });
 
-  test("button-name: complementary ranges leave the button hidden, not reported", () => {
-    const out = run(
+  test("button-name: complementary ranges leave the button hidden, not reported", async () => {
+    const out = (await run(
       page(
         "@media (min-width: 990px){menu-drawer{display:none}} @media (max-width: 989.98px){menu-drawer{display:none}}",
         '<menu-drawer><button type="button"></button></menu-drawer>',
       ),
-    );
+    ));
     expect(out.map((c) => [c.name, c.status])).toEqual([["button-name", "pass"]]);
   });
 
-  test("button-name: another reason keeps the generic message", () => {
-    const out = run(
+  test("button-name: another reason keeps the generic message", async () => {
+    const out = (await run(
       page(
         "@media print{menu-drawer{display:none}}",
         '<menu-drawer><button type="button"></button></menu-drawer>',
       ),
-    );
+    ));
     expect(out[0]?.message).toBe("1 button(s) without accessible names may be hidden by a style (unconfirmed)");
     expect(out[0]?.items?.[0]?.meta).toBeUndefined();
   });
 
-  test("button-name: a visible unnamed button still fails", () => {
-    const out = run(
+  test("button-name: a visible unnamed button still fails", async () => {
+    const out = (await run(
       page(
         "@media (min-width: 990px){menu-drawer{display:none}}",
         '<div><button type="button"></button></div>',
       ),
-    );
+    ));
     expect(out.map((c) => [c.name, c.status])).toEqual([["button-name", "fail"]]);
   });
 });

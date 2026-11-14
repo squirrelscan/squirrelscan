@@ -16,14 +16,14 @@ interface Out {
   byName: (n: string) => string | undefined;
 }
 
-function run(html: string, extra: Partial<RuleContext> = {}): Out {
+async function run(html: string, extra: Partial<RuleContext> = {}): Promise<Out> {
   const ctx = {
     page: { url: BASE, html, statusCode: 200, loadTime: 0, headers: {} },
     parsed: parsePage(html, BASE),
     options: {},
     ...extra,
   } as unknown as RuleContext;
-  const checks = productSchemaRule.run(ctx).checks as Out["checks"];
+  const checks = (await productSchemaRule.run(ctx)).checks as Out["checks"];
   const ev = checks.find((c) => c.name === "product-field-evidence");
   const fields: Record<string, string> = {};
   for (const i of ev?.items ?? []) fields[i.id] = i.label ?? "";
@@ -44,8 +44,8 @@ const full = () => ({
 });
 
 describe("schema/product field evidence (#1652): JSON-LD Product", () => {
-  test("all fields present, no warnings", () => {
-    const r = run(page(ld(full())));
+  test("all fields present, no warnings", async () => {
+    const r = (await run(page(ld(full()))));
     expect(r.fields).toEqual({
       name: "present (json-ld)",
       description: "present (json-ld)",
@@ -58,39 +58,39 @@ describe("schema/product field evidence (#1652): JSON-LD Product", () => {
   });
 
   for (const field of ["name", "description", "image", "price", "availability"]) {
-    test(`removing ${field} alone makes only ${field} absent`, () => {
+    test(`removing ${field} alone makes only ${field} absent`, async () => {
       const p = full() as Record<string, unknown>;
       if (field === "price" || field === "availability") delete (p["offers"] as Record<string, unknown>)[field];
       else delete p[field];
-      const r = run(page(ld(p)));
+      const r = (await run(page(ld(p))));
       for (const [k, v] of Object.entries(r.fields)) {
         expect(v === "absent").toBe(k === field);
       }
     });
   }
 
-  test("missing fields are warned once by the existing checks, never by the evidence check", () => {
+  test("missing fields are warned once by the existing checks, never by the evidence check", async () => {
     const p = full() as Record<string, unknown>;
     delete p["name"];
-    const r = run(page(ld(p)));
+    const r = (await run(page(ld(p))));
     expect(r.byName("product-required")).toBe("warn");
     expect(r.byName("product-field-evidence")).toBe("info");
     expect(r.checks.filter((c) => c.status === "warn")).toHaveLength(1);
   });
 
-  test("description is judged on presence, not on length", () => {
-    const r = run(page(ld(full())));
+  test("description is judged on presence, not on length", async () => {
+    const r = (await run(page(ld(full()))));
     expect(r.fields["description"]).toBe("present (json-ld)");
   });
 
-  test("a price of 0 is declared", () => {
+  test("a price of 0 is declared", async () => {
     const p = full();
     (p.offers as Record<string, unknown>).price = 0;
-    expect(run(page(ld(p))).fields["price"]).toBe("present (json-ld)");
+    expect((await run(page(ld(p)))).fields["price"]).toBe("present (json-ld)");
   });
 
-  test("offers by @id reference resolve", () => {
-    const r = run(
+  test("offers by @id reference resolve", async () => {
+    const r = (await run(
       page(
         ld({
           "@graph": [
@@ -99,13 +99,13 @@ describe("schema/product field evidence (#1652): JSON-LD Product", () => {
           ],
         }),
       ),
-    );
+    ));
     expect(r.fields["price"]).toBe("present (json-ld)");
     expect(r.fields["availability"]).toBe("present (json-ld)");
   });
 
-  test("a dangling offer reference is unknown, not absent", () => {
-    const r = run(page(ld({ "@type": "Product", name: "n", offers: { "@id": `${BASE}#gone` } })));
+  test("a dangling offer reference is unknown, not absent", async () => {
+    const r = (await run(page(ld({ "@type": "Product", name: "n", offers: { "@id": `${BASE}#gone` } }))));
     expect(r.fields["price"]).toBe("unknown (unresolved-reference)");
   });
 });
@@ -119,8 +119,8 @@ describe("schema/product field evidence (#1652): ProductGroup with variants", ()
     hasVariant: [variant],
   });
 
-  test("price, availability and image read from a variant count for the group", () => {
-    const r = run(
+  test("price, availability and image read from a variant count for the group", async () => {
+    const r = (await run(
       page(
         ld(
           group({
@@ -130,16 +130,16 @@ describe("schema/product field evidence (#1652): ProductGroup with variants", ()
           }),
         ),
       ),
-    );
+    ));
     expect(Object.values(r.fields).every((v) => v.startsWith("present"))).toBe(true);
     expect(r.byName("product-required")).toBe("pass");
   });
 
-  test("variants referenced by @id resolve the same as inline ones", () => {
-    const inline = run(
+  test("variants referenced by @id resolve the same as inline ones", async () => {
+    const inline = (await run(
       page(ld(group({ "@type": "Product", image: "i", offers: { price: "1", availability: "a" } }))),
-    );
-    const linked = run(
+    ));
+    const linked = (await run(
       page(
         ld({
           "@graph": [
@@ -148,51 +148,51 @@ describe("schema/product field evidence (#1652): ProductGroup with variants", ()
           ],
         }),
       ),
-    );
+    ));
     expect(linked.fields).toEqual(inline.fields);
   });
 
-  test("a field no variant and not the group has is absent", () => {
-    const r = run(page(ld(group({ "@type": "Product", offers: { price: "1", availability: "a" } }))));
+  test("a field no variant and not the group has is absent", async () => {
+    const r = (await run(page(ld(group({ "@type": "Product", offers: { price: "1", availability: "a" } })))));
     expect(r.fields["image"]).toBe("absent");
     expect(r.byName("product-required")).toBe("warn");
   });
 });
 
 describe("schema/product field evidence (#1652): Microdata and RDFa", () => {
-  test("Microdata product with a nested Offer", () => {
+  test("Microdata product with a nested Offer", async () => {
     const body = `<div itemscope itemtype="https://schema.org/Product">
       <h1 itemprop="name">Dripper</h1><p itemprop="description">Pour over</p>
       <img itemprop="image" src="/a.jpg" alt="">
       <div itemprop="offers" itemscope itemtype="https://schema.org/Offer">
         <meta itemprop="price" content="32.00"><link itemprop="availability" href="https://schema.org/InStock">
       </div></div>`;
-    const r = run(page("", body));
+    const r = (await run(page("", body)));
     expect(Object.values(r.fields)).toEqual(Array(5).fill("present (microdata)"));
     expect(r.byName("product-schema")).toBeUndefined();
   });
 
-  test("Microdata product missing its image", () => {
+  test("Microdata product missing its image", async () => {
     const body = `<div itemscope itemtype="https://schema.org/Product"><span itemprop="name">N</span></div>`;
-    const r = run(page("", body));
+    const r = (await run(page("", body)));
     expect(r.fields["name"]).toBe("present (microdata)");
     expect(r.fields["image"]).toBe("absent");
     expect(r.byName("product-required")).toBe("warn");
   });
 
-  test("RDFa product with a nested Offer", () => {
+  test("RDFa product with a nested Offer", async () => {
     const body = `<div vocab="https://schema.org/" typeof="Product">
       <span property="name">Dripper</span><span property="description">d</span>
       <img property="image" src="/a.jpg" alt="">
       <div property="offers" typeof="Offer"><span property="price" content="32.00">$32</span>
       <link property="availability" href="https://schema.org/InStock"></div></div>`;
-    const r = run(page("", body));
+    const r = (await run(page("", body)));
     expect(Object.values(r.fields)).toEqual(Array(5).fill("present (rdfa)"));
   });
 
-  test("an itemref leaves unfound fields unsupported, not absent", () => {
+  test("an itemref leaves unfound fields unsupported, not absent", async () => {
     const body = `<div itemscope itemtype="https://schema.org/Product" itemref="x"><span itemprop="name">N</span></div><p id="x" itemprop="image">far</p>`;
-    const r = run(page("", body));
+    const r = (await run(page("", body)));
     expect(r.fields["image"]).toBe("unknown (unsupported)");
   });
 });
@@ -200,26 +200,26 @@ describe("schema/product field evidence (#1652): Microdata and RDFa", () => {
 describe("schema/product field evidence (#1652): JavaScript shells and truncated reads", () => {
   const shell = `<!doctype html><html><head><title>t</title><meta property="og:type" content="product"></head><body><div id="root"></div><script src="/app.js"></script></body></html>`;
 
-  test("a JavaScript-only product shell reports every field unknown (rendered-only)", () => {
-    const r = run(shell);
+  test("a JavaScript-only product shell reports every field unknown (rendered-only)", async () => {
+    const r = (await run(shell));
     expect(Object.values(r.fields)).toEqual(Array(5).fill("unknown (rendered-only)"));
     expect(r.checks.some((c) => c.status === "warn")).toBe(false);
   });
 
-  test("a script that builds the JSON-LD is rendered-only too", () => {
+  test("a script that builds the JSON-LD is rendered-only too", async () => {
     const html = page(`<script>var d={"@context":"https://schema.org/Product"}</script>`);
-    expect(run(html).fields["name"]).toBe("unknown (rendered-only)");
+    expect((await run(html)).fields["name"]).toBe("unknown (rendered-only)");
   });
 
-  test("an ordinary page with no product signal gets no evidence", () => {
-    const r = run(page(""));
+  test("an ordinary page with no product signal gets no evidence", async () => {
+    const r = (await run(page("")));
     expect(r.byName("product-schema")).toBe("info");
     expect(r.byName("product-field-evidence")).toBeUndefined();
   });
 
-  test("a truncated read keeps found fields present and leaves the rest unknown", () => {
+  test("a truncated read keeps found fields present and leaves the rest unknown", async () => {
     const html = `<!doctype html><html><head>${ld({ "@type": "Product", name: "N" })}</head><body><p>cut off mid-sent`;
-    const r = run(html);
+    const r = (await run(html));
     expect(r.fields["name"]).toBe("present (json-ld)");
     expect(r.fields["image"]).toBe("unknown (incomplete-read)");
     expect(r.fields["price"]).toBe("unknown (incomplete-read)");
@@ -227,38 +227,38 @@ describe("schema/product field evidence (#1652): JavaScript shells and truncated
   });
 
   // htmlReadState is a heuristic: a page that ends in </html> or </body> was served whole.
-  test("valid HTML that omits </html> but ends in </body> is a complete read", () => {
+  test("valid HTML that omits </html> but ends in </body> is a complete read", async () => {
     const html = `<!doctype html><html><head><title>t</title>${ld({ "@type": "Product", name: "N" })}</head><body><p>done</p></body>`;
-    const r = run(html);
+    const r = (await run(html));
     expect(r.fields["image"]).toBe("absent");
     expect(r.fields["name"]).toBe("present (json-ld)");
   });
 
-  test("a long tail after </html> (more than 4 KB of comments and whitespace) is still a complete read", () => {
+  test("a long tail after </html> (more than 4 KB of comments and whitespace) is still a complete read", async () => {
     const tail = `<!-- ${"analytics snippet ".repeat(800)} -->\n${" ".repeat(2000)}`;
     expect(tail.length).toBeGreaterThan(8000);
-    const r = run(page(ld({ "@type": "Product", name: "N" })) + tail);
+    const r = (await run(page(ld({ "@type": "Product", name: "N" })) + tail));
     expect(r.fields["image"]).toBe("absent");
   });
 
-  test("a page with neither </html> nor </body> near its end stays a truncated read", () => {
+  test("a page with neither </html> nor </body> near its end stays a truncated read", async () => {
     const html = `<!doctype html><html><head>${ld({ "@type": "Product", name: "N" })}</head><body><p>cut ${"x".repeat(9000)}`;
-    expect(run(html).fields["image"]).toBe("unknown (incomplete-read)");
+    expect((await run(html)).fields["image"]).toBe("unknown (incomplete-read)");
   });
 
-  test("a closing tag far from the end (past the tail searched) does not make a cut-off page complete", () => {
+  test("a closing tag far from the end (past the tail searched) does not make a cut-off page complete", async () => {
     const html = `<!doctype html><html><head>${ld({ "@type": "Product", name: "N" })}</head><body></body></html>${"x".repeat(80_000)}<p>cut`;
-    expect(run(html).fields["image"]).toBe("unknown (incomplete-read)");
+    expect((await run(html)).fields["image"]).toBe("unknown (incomplete-read)");
   });
 
-  test("a failed read (error status) never proves absence", () => {
+  test("a failed read (error status) never proves absence", async () => {
     const html = page(ld({ "@type": "Product", name: "N" }));
-    const r = run(html, { page: { url: BASE, html, statusCode: 503, loadTime: 0, headers: {} } } as never);
+    const r = (await run(html, { page: { url: BASE, html, statusCode: 503, loadTime: 0, headers: {} } } as never));
     expect(r.fields["image"]).toBe("unknown (incomplete-read)");
   });
 
-  test("a complete read of the same product says absent", () => {
-    const r = run(page(ld({ "@type": "Product", name: "N" })));
+  test("a complete read of the same product says absent", async () => {
+    const r = (await run(page(ld({ "@type": "Product", name: "N" }))));
     expect(r.fields["image"]).toBe("absent");
   });
 });
@@ -269,13 +269,13 @@ const HOSTILE_BUDGET_MS = 2000;
 describe("schema/product field evidence (#1652): hostile markup stays bounded", () => {
   test(
     "deeply nested and very many Microdata scopes finish and still answer",
-    () => {
+    async () => {
       const deep = '<div itemscope itemtype="https://schema.org/Product"><span itemprop="name">N</span>' +
         '<div itemprop="offers" itemscope>'.repeat(3000) +
         "</div>".repeat(3000) + "</div>";
       const many = '<div itemscope itemtype="https://schema.org/Thing"></div>'.repeat(20000);
       const started = performance.now();
-      const r = run(page("", deep + many));
+      const r = (await run(page("", deep + many)));
       const elapsed = performance.now() - started;
       expect(r.fields["name"]).toBe("present (microdata)");
       // The caps keep this linear. A 100x slowdown (a quadratic walk) fails here, not just at the 30 s timeout.
@@ -289,27 +289,27 @@ describe("schema/product Microdata itemtype host is anchored", () => {
   const product = (type: string) =>
     `<div itemscope itemtype="${type}"><span itemprop="name">N</span></div>`;
 
-  test("http, https and www schema.org types are read", () => {
+  test("http, https and www schema.org types are read", async () => {
     for (const type of ["https://schema.org/Product", "http://schema.org/Product", "https://www.schema.org/Product"]) {
-      expect(run(page("", product(type))).fields["name"]).toBe("present (microdata)");
+      expect((await run(page("", product(type)))).fields["name"]).toBe("present (microdata)");
     }
   });
 
-  test("a lookalike host or a bare token is not a schema.org type", () => {
+  test("a lookalike host or a bare token is not a schema.org type", async () => {
     for (const type of [
       "https://evil.example/schema.org/Product",
       "https://schema.org.evil.example/Product",
       "schema.org/Product",
     ]) {
-      expect(run(page("", product(type))).fields["name"]).toBeUndefined();
+      expect((await run(page("", product(type)))).fields["name"]).toBeUndefined();
     }
   });
 
-  test("script text that names schema.org/Product or ProductGroup is a product shell, a longer word is not", () => {
+  test("script text that names schema.org/Product or ProductGroup is a product shell, a longer word is not", async () => {
     const shell = (t: string) => `<script>var t = "${t}";</script>`;
     for (const t of ["https://schema.org/Product", "https://schema.org/ProductGroup"]) {
-      expect(run(page(shell(t))).fields["name"]).toBe("unknown (rendered-only)");
+      expect((await run(page(shell(t)))).fields["name"]).toBe("unknown (rendered-only)");
     }
-    expect(run(page(shell("https://schema.org/Productivity"))).fields["name"]).toBeUndefined();
+    expect((await run(page(shell("https://schema.org/Productivity")))).fields["name"]).toBeUndefined();
   });
 });

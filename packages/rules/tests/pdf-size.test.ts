@@ -9,7 +9,7 @@ import type { CheckResult, RuleContext } from "../src/types";
 const MB = 1024 * 1024;
 const ORIGIN = "https://example.com";
 
-function run(sizesMb: number[]): CheckResult[] {
+async function run(sizesMb: number[]): Promise<CheckResult[]> {
   const ctx = {
     options: {},
     site: {
@@ -24,26 +24,26 @@ function run(sizesMb: number[]): CheckResult[] {
       })),
     },
   } as unknown as RuleContext;
-  const result = pdfSizeRule.run(ctx) as { checks: CheckResult[] };
+  const result = (await pdfSizeRule.run(ctx)) as { checks: CheckResult[] };
   return result.checks;
 }
 
 describe("crawl/pdf-size wording (#320)", () => {
-  test("the error message names squirrel's 60MB threshold, not Google's limit", () => {
-    const check = run([61]).find((c) => c.name === "pdf-size");
+  test("the error message names squirrel's 60MB threshold, not Google's limit", async () => {
+    const check = (await run([61])).find((c) => c.name === "pdf-size");
     expect(check?.status).toBe("fail");
     expect(check?.message).toBe("1 PDF(s) exceed the 60MB error threshold");
     expect(check?.message).not.toContain("Googlebot");
   });
 
-  test("the warning message has no em-dash and names the 60MB threshold", () => {
-    const check = run([35]).find((c) => c.name === "pdf-size-warn");
+  test("the warning message has no em-dash and names the 60MB threshold", async () => {
+    const check = (await run([35])).find((c) => c.name === "pdf-size-warn");
     expect(check?.message).toBe("1 PDF(s) exceed 30MB, approaching the 60MB error threshold");
     expect(check?.message).not.toContain("—");
   });
 
-  test("the pass message has no em-dash", () => {
-    const check = run([1, 2]).find((c) => c.name === "pdf-size");
+  test("the pass message has no em-dash", async () => {
+    const check = (await run([1, 2])).find((c) => c.name === "pdf-size");
     expect(check?.message).toBe("2 PDF(s) checked, all under 30MB");
   });
 

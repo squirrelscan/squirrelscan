@@ -91,7 +91,7 @@ describe("static-hidden: the inline-style reader", () => {
   });
 
   test("anything else that mentions display or visibility is unknown", () => {
-    const unknown = { display: "unknown", visibility: "unknown" };
+    const unknown = { display: "unknown", visibility: "unknown" } as const;
     for (const style of [
       "display:var(--d)",
       "display:/**/none",
@@ -113,7 +113,7 @@ describe("static-hidden: the inline-style reader", () => {
   // `visibility` or `all` declaration can hide, so a custom property or any
   // other property is skipped whatever its value holds.
   test("only display, visibility and all declarations are read", () => {
-    const unknown = { display: "unknown", visibility: "unknown" };
+    const unknown = { display: "unknown", visibility: "unknown" } as const;
     expect(readInlineStyle("content:'x';display:none")).toEqual({ display: "none" });
     expect(readInlineStyle("--font-display:swap;--gap:calc(1rem + 2px)")).toEqual({});
     expect(

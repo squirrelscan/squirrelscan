@@ -38,8 +38,8 @@ describe("a11y/link-text records the section of each flagged link", () => {
     '<div><a href="/c">read more</a></div>' +
     '<footer><a href="/d"><i class="icon-x"></i></a></footer>';
 
-  test("a header link and a content link; a link with no landmark adds nothing", () => {
-    const checks = linkTextRule.run(pageCtx(body)).checks;
+  test("a header link and a content link; a link with no landmark adds nothing", async () => {
+    const checks = (await linkTextRule.run(pageCtx(body))).checks;
     expect(check(checks, "link-text-generic")!.items).toEqual([
       { id: "read more", regions: { header: 1, content: 1 } },
     ]);
@@ -48,54 +48,54 @@ describe("a11y/link-text records the section of each flagged link", () => {
     ]);
   });
 
-  test("the same link repeated in two parts of the page is matched to each in order", () => {
-    const checks = linkTextRule.run(
+  test("the same link repeated in two parts of the page is matched to each in order", async () => {
+    const checks = (await linkTextRule.run(
       pageCtx('<nav><a href="/x">learn more</a></nav><main><a href="/x">learn more</a></main>'),
-    ).checks;
+    )).checks;
     expect(check(checks, "link-text-generic")!.items).toEqual([
       { id: "learn more", regions: { navigation: 1, content: 1 } },
     ]);
   });
 
-  test("an anchor the link extractor leaves out does not take another's placement", () => {
-    const checks = linkTextRule.run(
+  test("an anchor the link extractor leaves out does not take another's placement", async () => {
+    const checks = (await linkTextRule.run(
       pageCtx('<header><a href="#">click here</a></header><footer><a href="https://example.com/#">click here</a></footer>'),
-    ).checks;
+    )).checks;
     expect(check(checks, "link-text-generic")!.items).toEqual([
       { id: "click here", regions: { footer: 1 } },
     ]);
   });
 
-  test("a parse without sections records no region, and the items are as before", () => {
-    const checks = linkTextRule.run(pageCtx(body, true)).checks;
+  test("a parse without sections records no region, and the items are as before", async () => {
+    const checks = (await linkTextRule.run(pageCtx(body, true))).checks;
     expect(check(checks, "link-text-generic")!.items).toEqual([{ id: "read more" }]);
     expect(check(checks, "link-text-empty")!.items).toEqual([{ id: "/d", label: "icon-font" }]);
   });
 });
 
 describe("page-scope link rules with section labels add regions", () => {
-  test("links/anchor-text", () => {
-    const checks = anchorTextRule.run(pageCtx('<footer><a href="/x">click here</a></footer>')).checks;
+  test("links/anchor-text", async () => {
+    const checks = (await anchorTextRule.run(pageCtx('<footer><a href="/x">click here</a></footer>'))).checks;
     expect(check(checks, "generic-anchor")!.items![0]).toMatchObject({ regions: { footer: 1 } });
   });
 
-  test("links/tel-mailto", () => {
-    const checks = telMailtoRule.run(
+  test("links/tel-mailto", async () => {
+    const checks = (await telMailtoRule.run(
       pageCtx('<footer><a href="tel:+61299999999">Call 02 1234 5678</a></footer>'),
-    ).checks;
+    )).checks;
     expect(check(checks, "tel-mismatch")!.items![0]).toMatchObject({ regions: { footer: 1 } });
   });
 });
 
 describe("content/stale-copyright names the footer", () => {
-  test("a stale year is a footer finding", () => {
+  test("a stale year is a footer finding", async () => {
     const { document } = parseHTML("<html><body><footer>© 2019 Acme</footer></body></html>");
     const ctx = {
       page: { url: `${BASE}/`, html: "", statusCode: 200, loadTime: 0, headers: {} },
       parsed: { document } as unknown as ParsedPage,
       options: { current_year: 2026 },
     } as unknown as RuleContext;
-    expect(staleCopyrightRule.run(ctx).checks[0]).toMatchObject({
+    expect((await staleCopyrightRule.run(ctx)).checks[0]).toMatchObject({
       status: "warn",
       details: { region: "footer" },
     });
@@ -103,7 +103,7 @@ describe("content/stale-copyright names the footer", () => {
 });
 
 describe("links/broken-links counts pages per section", () => {
-  test("a footer link on every page, and a content link on two of them", () => {
+  test("a footer link on every page, and a content link on two of them", async () => {
     const gone = `${BASE}/gone`;
     const pages = Array.from({ length: 10 }, (_, k) => ({
       url: `${BASE}/p${k}`,
@@ -127,7 +127,7 @@ describe("links/broken-links counts pages per section", () => {
       options: {},
     } as unknown as RuleContext;
     // A link in the footer of every page is a sitewide link (#1772): its own check, with the same counts per section.
-    const item = check(brokenLinksRule.run(ctx).checks, "broken-links-sitewide")!.items![0]!;
+    const item = check((await brokenLinksRule.run(ctx)).checks, "broken-links-sitewide")!.items![0]!;
     expect(item.regions).toEqual({ footer: 10, content: 2 });
   });
 });

@@ -16,14 +16,14 @@ import { parsePage } from "@squirrelscan/parser";
 import { buttonNameRule } from "../src/a11y/button-name";
 import type { ParsedPage, RuleContext } from "../src/types";
 
-function run(html: string): CheckResult[] {
+async function run(html: string): Promise<CheckResult[]> {
   const url = "https://example.com/";
   const ctx: RuleContext = {
     page: { url, html, statusCode: 200, loadTime: 0, headers: {} },
     parsed: parsePage(html, url) as ParsedPage,
     options: {},
   };
-  return buttonNameRule.run(ctx).checks as CheckResult[];
+  return (await buttonNameRule.run(ctx)).checks as CheckResult[];
 }
 
 /** The issue's page shell, byte for byte. */
@@ -31,8 +31,8 @@ function fixture(body: string): string {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Button name control</title></head><body><main>${body}</main></body></html>`;
 }
 
-function statuses(html: string): Record<string, string> {
-  return Object.fromEntries(run(html).map((c) => [c.name, c.status]));
+async function statuses(html: string): Promise<Record<string, string>> {
+  return Object.fromEntries((await run(html)).map((c) => [c.name, c.status]));
 }
 
 /** The repro's six cases (pub#665). */
@@ -46,8 +46,8 @@ const CASES = {
 };
 
 describe("a11y/button-name: the six repro fixtures (pub#665)", () => {
-  test("bad: a visible unnamed button still fails", () => {
-    expect(run(fixture(CASES.bad))).toEqual([
+  test("bad: a visible unnamed button still fails", async () => {
+    expect(await run(fixture(CASES.bad))).toEqual([
       expect.objectContaining({
         name: "button-name",
         status: "fail",
@@ -58,8 +58,8 @@ describe("a11y/button-name: the six repro fixtures (pub#665)", () => {
   });
 
   for (const name of ["title", "named"] as const) {
-    test(`${name}: a named button passes`, () => {
-      expect(run(fixture(CASES[name]))).toEqual([
+    test(`${name}: a named button passes`, async () => {
+      expect(await run(fixture(CASES[name]))).toEqual([
         expect.objectContaining({
           status: "pass",
           message: "All buttons have accessible names",
@@ -70,8 +70,8 @@ describe("a11y/button-name: the six repro fixtures (pub#665)", () => {
   }
 
   for (const name of ["hidden", "aria"] as const) {
-    test(`${name}: an unnamed button in a hidden ancestor is not reported`, () => {
-      expect(run(fixture(CASES[name]))).toEqual([
+    test(`${name}: an unnamed button in a hidden ancestor is not reported`, async () => {
+      expect(await run(fixture(CASES[name]))).toEqual([
         expect.objectContaining({
           status: "pass",
           message: "All buttons in the accessibility tree have accessible names",
@@ -81,35 +81,35 @@ describe("a11y/button-name: the six repro fixtures (pub#665)", () => {
     });
   }
 
-  test("css hides with a <style> block: not reported (pub#678)", () => {
-    expect(statuses(fixture(CASES.css))).toEqual({ "button-name": "pass" });
+  test("css hides with a <style> block: not reported (pub#678)", async () => {
+    expect(await statuses(fixture(CASES.css))).toEqual({ "button-name": "pass" });
     // The same hiding written inline is read.
-    expect(statuses(fixture('<div style="display:none"><button></button></div>'))).toEqual({
+    expect(await statuses(fixture('<div style="display:none"><button></button></div>'))).toEqual({
       "button-name": "pass",
     });
   });
 });
 
 describe("a11y/button-name: what counts as hidden", () => {
-  test("an inline display:none on the button or an ancestor, or visibility:hidden on the button", () => {
+  test("an inline display:none on the button or an ancestor, or visibility:hidden on the button", async () => {
     for (const body of [
       '<div style="display:none"><span><button></button></span></div>',
       '<button style="display: none"></button>',
       '<input type="submit" value="" style="visibility:collapse">',
     ]) {
-      expect(statuses(fixture(body))).toEqual({ "button-name": "pass" });
+      expect(await statuses(fixture(body))).toEqual({ "button-name": "pass" });
     }
     // Inherited visibility is settled when the page loads no stylesheet this
     // check does not read; with one, an external rule could undo it.
-    expect(statuses(fixture('<div style="visibility:hidden"><button></button></div>'))).toEqual({
+    expect(await statuses(fixture('<div style="visibility:hidden"><button></button></div>'))).toEqual({
       "button-name": "pass",
     });
     expect(
-      statuses(fixture('<link rel="stylesheet" href="/site.css"><div style="visibility:hidden"><button></button></div>')),
+      (await statuses(fixture('<link rel="stylesheet" href="/site.css"><div style="visibility:hidden"><button></button></div>'))),
     ).toEqual({ "button-name-unconfirmed": "warn" });
   });
 
-  test("off-screen, transparent, sr-only and disabled buttons are not treated as hidden", () => {
+  test("off-screen, transparent, sr-only and disabled buttons are not treated as hidden", async () => {
     for (const body of [
       // The hidden attribute and popover rules are HTML-only: an SVG button stays rendered.
       '<svg role="button" hidden width="9" height="9"></svg>',
@@ -120,21 +120,21 @@ describe("a11y/button-name: what counts as hidden", () => {
       "<button disabled></button>",
       '<input type="button" disabled>',
     ]) {
-      expect(statuses(fixture(body))).toEqual({ "button-name": "fail" });
+      expect(await statuses(fixture(body))).toEqual({ "button-name": "fail" });
     }
   });
 
-  test("a hidden and a visible unnamed button: only the visible one fails", () => {
+  test("a hidden and a visible unnamed button: only the visible one fails", async () => {
     expect(
-      run(fixture('<div hidden><button id="zoom-in"></button></div><button id="cart"></button>')),
+      (await run(fixture('<div hidden><button id="zoom-in"></button></div><button id="cart"></button>'))),
     ).toEqual([expect.objectContaining({ status: "fail", items: [{ id: "button#cart" }] })]);
   });
 });
 
 describe("a11y/button-name: inline styles the check cannot read exactly", () => {
-  test("are reported as unconfirmed, not as a failure", () => {
+  test("are reported as unconfirmed, not as a failure", async () => {
     expect(
-      run(fixture('<div style="display:var(--d)"><button class="zoom-in"></button></div>')),
+      (await run(fixture('<div style="display:var(--d)"><button class="zoom-in"></button></div>'))),
     ).toEqual([
       expect.objectContaining({
         name: "button-name-unconfirmed",

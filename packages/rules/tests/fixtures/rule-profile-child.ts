@@ -7,7 +7,7 @@
 import type { CheckResult } from "@squirrelscan/core-contracts";
 
 import { RuleRunner } from "../../src/runner";
-import type { Rule } from "../../src/types";
+import type { Rule, SiteData } from "../../src/types";
 
 let filters = 0;
 class CountingChecks extends Array<CheckResult> {
@@ -47,7 +47,12 @@ const runner = new RuleRunner({
   },
   additionalNamespaces: [{ name: "probe", rules: [probeRule] }],
 });
-const site = { baseUrl: "https://example.com", pages: [page], robotsTxt: null, sitemaps: null };
+const site = {
+  baseUrl: "https://example.com",
+  pages: [page],
+  robotsTxt: null,
+  sitemaps: null,
+} as unknown as SiteData;
 
 await runner.runPageRules(page, site);
 await runner.runSiteRules(site);

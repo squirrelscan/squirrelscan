@@ -74,82 +74,82 @@ const ENGINES: Array<[string, boolean]> = [
 ];
 
 describe.each(ENGINES)("crawl/single-page-site (%s)", (_name, streaming) => {
-  const run = (over: Over = {}) => singlePageSiteRule.run(build(over, streaming)).checks;
+  const run = async (over: Over = {}) => (await singlePageSiteRule.run(build(over, streaming))).checks;
 
-  test("fires on one page with 3+ section links and lists the ids", () => {
-    const checks = run();
+  test("fires on one page with 3+ section links and lists the ids", async () => {
+    const checks = (await run());
     expect(checks).toHaveLength(1);
     expect(checks[0]!.status).toBe("info");
     expect(checks[0]!.items?.map((i) => i.id)).toEqual(["#about", "#services", "#contact"]);
     expect(checks[0]!.details?.sections).toBe(3);
   });
 
-  test("a one-URL sitemap listing the page does not stop it", () => {
-    expect(run({ sitemapUrls: [`${BASE}/`] })).toHaveLength(1);
+  test("a one-URL sitemap listing the page does not stop it", async () => {
+    expect(await run({ sitemapUrls: [`${BASE}/`] })).toHaveLength(1);
   });
 
-  test("a sitemap with a second in-scope URL does", () => {
-    expect(run({ sitemapUrls: [`${BASE}/`, `${BASE}/other`] })).toEqual([]);
+  test("a sitemap with a second in-scope URL does", async () => {
+    expect(await run({ sitemapUrls: [`${BASE}/`, `${BASE}/other`] })).toEqual([]);
   });
 
-  test("a sitemap's off-site URLs are not in scope", () => {
-    expect(run({ sitemapUrls: [`${BASE}/`, "https://elsewhere.test/x"] })).toHaveLength(1);
+  test("a sitemap's off-site URLs are not in scope", async () => {
+    expect(await run({ sitemapUrls: [`${BASE}/`, "https://elsewhere.test/x"] })).toHaveLength(1);
   });
 
-  test("no finding when the crawl was capped", () => {
-    expect(run({ crawlLimits: { pagesCrawled: 1, maxPages: 1 } })).toEqual([]);
+  test("no finding when the crawl was capped", async () => {
+    expect(await run({ crawlLimits: { pagesCrawled: 1, maxPages: 1 } })).toEqual([]);
   });
 
-  test("no finding when URLs were left unfetched or links were not followed", () => {
-    expect(run({ unfetchedPages: 4 })).toEqual([]);
-    expect(run({ linkDiscoveryOff: true })).toEqual([]);
+  test("no finding when URLs were left unfetched or links were not followed", async () => {
+    expect(await run({ unfetchedPages: 4 })).toEqual([]);
+    expect(await run({ linkDiscoveryOff: true })).toEqual([]);
   });
 
-  test("no finding when the page links to another same-site path, even a missing one", () => {
+  test("no finding when the page links to another same-site path, even a missing one", async () => {
     const html = page(`${SECTIONS}<a href="/gone">Gone</a>`);
-    expect(run({ html })).toEqual([]);
+    expect(await run({ html })).toEqual([]);
   });
 
-  test("a link to a same-host file counts as another path", () => {
-    expect(run({ html: page(`${SECTIONS}<a href="/cv.pdf">CV</a>`) })).toEqual([]);
+  test("a link to a same-host file counts as another path", async () => {
+    expect(await run({ html: page(`${SECTIONS}<a href="/cv.pdf">CV</a>`) })).toEqual([]);
   });
 
-  test("external, mailto, tel and own-path links do not stop it", () => {
+  test("external, mailto, tel and own-path links do not stop it", async () => {
     const html = page(
       `${SECTIONS}<a href="https://other.test/">x</a><a href="mailto:a@b.test">m</a><a href="tel:+1555">t</a><a href="/">home</a><a href="/#about">again</a>`,
     );
-    expect(run({ html })).toHaveLength(1);
+    expect(await run({ html })).toHaveLength(1);
   });
 
-  test("no finding with fewer than 3 section links", () => {
+  test("no finding with fewer than 3 section links", async () => {
     const html = page(
       `<a href="#a">a</a><a href="#b">b</a><div id="a"></div><div id="b"></div>`,
     );
-    expect(run({ html })).toEqual([]);
+    expect(await run({ html })).toEqual([]);
   });
 
-  test("links to ids that do not exist are not sections", () => {
+  test("links to ids that do not exist are not sections", async () => {
     const html = page(
       `<a href="#a">a</a><a href="#b">b</a><a href="#c">c</a><div id="a"></div><div id="b"></div>`,
     );
-    expect(run({ html })).toEqual([]);
+    expect(await run({ html })).toEqual([]);
   });
 
-  test("no finding for a multi-page site", () => {
-    expect(run({ extraPages: 2 })).toEqual([]);
+  test("no finding for a multi-page site", async () => {
+    expect(await run({ extraPages: 2 })).toEqual([]);
   });
 
-  test("no finding when the one page did not answer 2xx", () => {
-    expect(run({ statusCode: 404 })).toEqual([]);
+  test("no finding when the one page did not answer 2xx", async () => {
+    expect(await run({ statusCode: 404 })).toEqual([]);
   });
 
-  test("lists at most 10 sections and counts the rest", () => {
+  test("lists at most 10 sections and counts the rest", async () => {
     const ids = Array.from({ length: 13 }, (_, i) => `s${i}`);
     const html = page(
       ids.map((id) => `<a href="#${id}">${id}</a>`).join("") +
         ids.map((id) => `<div id="${id}"></div>`).join(""),
     );
-    const [c] = run({ html });
+    const [c] = (await run({ html }));
     expect(c!.items).toHaveLength(10);
     expect(c!.details).toMatchObject({ sections: 13, additional: 3 });
   });

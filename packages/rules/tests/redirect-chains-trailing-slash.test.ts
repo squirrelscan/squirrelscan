@@ -57,11 +57,11 @@ function ctx(pages: PageInput[]): RuleContext {
   } as unknown as RuleContext;
 }
 
-const check = (pages: PageInput[], name: string) =>
-  redirectChainsRule.run(ctx(pages)).checks.find((c) => c.name === name);
+const check = async (pages: PageInput[], name: string) =>
+  (await redirectChainsRule.run(ctx(pages))).checks.find((c) => c.name === name);
 
 describe("links/redirect-chains — trailing-slash false positives", () => {
-  test("the exact reported shape (200 → 200) is not a redirect", () => {
+  test("the exact reported shape (200 → 200) is not a redirect", async () => {
     // Verbatim from the field report: a slash-canonical page whose chain claims
     // two hops, both 200. Neither hop redirected, so nothing should be flagged.
     const pages: PageInput[] = [
@@ -75,14 +75,14 @@ describe("links/redirect-chains — trailing-slash false positives", () => {
       },
     ];
 
-    const { checks } = redirectChainsRule.run(ctx(pages));
+    const { checks } = (await redirectChainsRule.run(ctx(pages)));
 
     expect(checks).toHaveLength(1);
     expect(checks[0]!.status).toBe("pass");
     expect(checks[0]!.message).toContain("No redirects");
   });
 
-  test("a slash-canonical site produces zero phantom chains", () => {
+  test("a slash-canonical site produces zero phantom chains", async () => {
     // Every page fetched at the URL it was linked at, no redirect anywhere.
     const pages: PageInput[] = [
       "https://example.com/",
@@ -96,12 +96,12 @@ describe("links/redirect-chains — trailing-slash false positives", () => {
       links: ["https://example.com/o-mnie/", "https://example.com/blog/"],
     }));
 
-    const { checks } = redirectChainsRule.run(ctx(pages));
+    const { checks } = (await redirectChainsRule.run(ctx(pages)));
 
     expect(checks.map((c) => c.status)).toEqual(["pass"]);
   });
 
-  test("a page whose links-to-redirect fan-out is driven by a phantom chain stays quiet", () => {
+  test("a page whose links-to-redirect fan-out is driven by a phantom chain stays quiet", async () => {
     // The regression that made this site-wide: `links-to-redirect` inherits
     // redirect-pages' targets, so one phantom chain blamed every linking page.
     const pages: PageInput[] = [
@@ -120,12 +120,12 @@ describe("links/redirect-chains — trailing-slash false positives", () => {
       })),
     ];
 
-    expect(check(pages, "links-to-redirect")).toBeUndefined();
+    expect(await check(pages, "links-to-redirect")).toBeUndefined();
   });
 });
 
 describe("links/redirect-chains — genuine redirects still report", () => {
-  test("a real 301 chain is reported", () => {
+  test("a real 301 chain is reported", async () => {
     const pages: PageInput[] = [
       {
         url: "https://example.com/przemyslenia",
@@ -141,7 +141,7 @@ describe("links/redirect-chains — genuine redirects still report", () => {
       },
     ];
 
-    const redirectPages = check(pages, "redirect-pages");
+    const redirectPages = (await check(pages, "redirect-pages"));
     expect(redirectPages?.status).toBe("warn");
     expect(redirectPages?.items).toHaveLength(1);
     expect(redirectPages?.items?.[0]?.label).toBe(
@@ -149,7 +149,7 @@ describe("links/redirect-chains — genuine redirects still report", () => {
     );
   });
 
-  test("a real 301 on a slash-only redirect is still reported", () => {
+  test("a real 301 on a slash-only redirect is still reported", async () => {
     // The one genuine case in the field report: the site really did serve a 301
     // from the no-slash form. Suppressing on shape alone would have hidden it.
     const pages: PageInput[] = [
@@ -163,10 +163,10 @@ describe("links/redirect-chains — genuine redirects still report", () => {
       },
     ];
 
-    expect(check(pages, "redirect-pages")?.status).toBe("warn");
+    expect((await check(pages, "redirect-pages"))?.status).toBe("warn");
   });
 
-  test("a multi-hop chain is reported and every hop is labelled", () => {
+  test("a multi-hop chain is reported and every hop is labelled", async () => {
     const pages: PageInput[] = [
       {
         url: "http://example.com/old",
@@ -179,12 +179,12 @@ describe("links/redirect-chains — genuine redirects still report", () => {
       },
     ];
 
-    expect(check(pages, "redirect-pages")?.items?.[0]?.label).toBe(
+    expect((await check(pages, "redirect-pages"))?.items?.[0]?.label).toBe(
       "2 hops: http://example.com/old (301) → https://example.com/old (302) → https://example.com/new/ (200)",
     );
   });
 
-  test("a three-hop chain names every hop, the hop count and gets its own failing check (#1750)", () => {
+  test("a three-hop chain names every hop, the hop count and gets its own failing check (#1750)", async () => {
     const b = "https://nutshop.example";
     const pages: PageInput[] = [
       {
@@ -199,17 +199,17 @@ describe("links/redirect-chains — genuine redirects still report", () => {
       },
       { url: `${b}/`, finalUrl: `${b}/`, links: [`${b}/_fault/r1`] },
     ];
-    const { checks } = redirectChainsRule.run(ctx(pages));
-    const label = check(pages, "redirect-pages")?.items?.[0]?.label ?? "";
+    const { checks } = (await redirectChainsRule.run(ctx(pages)));
+    const label = (await check(pages, "redirect-pages"))?.items?.[0]?.label ?? "";
     expect(label.startsWith("3 hops: ")).toBe(true);
     for (const part of ["r1", "r2", "r3", "gift-boxes"]) expect(label).toContain(part);
     const multi = checks.find((c) => c.name === "redirect-chain-multi-hop");
     expect(multi?.status).toBe("warn");
     expect(multi?.details).toMatchObject({ longestHops: 3 });
-    expect(check(pages, "links-to-redirect")?.items?.[0]?.label).toContain("3 hops");
+    expect((await check(pages, "links-to-redirect"))?.items?.[0]?.label).toContain("3 hops");
   });
 
-  test("a single redirect has no multi-hop check", () => {
+  test("a single redirect has no multi-hop check", async () => {
     const pages: PageInput[] = [
       {
         url: "https://example.com/a",
@@ -220,10 +220,10 @@ describe("links/redirect-chains — genuine redirects still report", () => {
         ]),
       },
     ];
-    expect(check(pages, "redirect-chain-multi-hop")).toBeUndefined();
+    expect(await check(pages, "redirect-chain-multi-hop")).toBeUndefined();
   });
 
-  test("a SLASH-ONLY move with unobserved hop statuses is still reported", () => {
+  test("a SLASH-ONLY move with unobserved hop statuses is still reported", async () => {
     // The render path reports the landing page but never the statuses that led
     // to it, so a genuine `/o-mnie → /o-mnie/` move arrives as `0 → 200`. Now
     // that the crawler only ever requests URLs the site actually linked, this
@@ -239,14 +239,14 @@ describe("links/redirect-chains — genuine redirects still report", () => {
       },
     ];
 
-    const redirectPages = check(pages, "redirect-pages");
+    const redirectPages = (await check(pages, "redirect-pages"));
     expect(redirectPages?.status).toBe("warn");
     expect(redirectPages?.items?.[0]?.label).toBe(
       "https://example.com/o-mnie → https://example.com/o-mnie/ (200)",
     );
   });
 
-  test("a genuine destination change with unobserved hop statuses still reports", () => {
+  test("a genuine destination change with unobserved hop statuses still reports", async () => {
     // Browser-rendered pages come back with the landing page only, so the source
     // hop carries status 0. The URL genuinely changed, so it is still a redirect.
     const pages: PageInput[] = [
@@ -260,7 +260,7 @@ describe("links/redirect-chains — genuine redirects still report", () => {
       },
     ];
 
-    const redirectPages = check(pages, "redirect-pages");
+    const redirectPages = (await check(pages, "redirect-pages"));
     expect(redirectPages?.status).toBe("warn");
     // An unobserved status is omitted rather than printed as "(0)".
     expect(redirectPages?.items?.[0]?.label).toBe(
@@ -268,7 +268,7 @@ describe("links/redirect-chains — genuine redirects still report", () => {
     );
   });
 
-  test("only the pages linking the REDIRECTING form are blamed", () => {
+  test("only the pages linking the REDIRECTING form are blamed", async () => {
     // The fan-out complaint in the report: a slash-insensitive join blamed every
     // page linking the canonical `/o-mnie/` for `/o-mnie`'s redirect. They are
     // different hrefs and only one of them is the mistake.
@@ -293,13 +293,13 @@ describe("links/redirect-chains — genuine redirects still report", () => {
       })),
     ];
 
-    const linksToRedirect = check(pages, "links-to-redirect");
+    const linksToRedirect = (await check(pages, "links-to-redirect"));
     expect(linksToRedirect?.items?.[0]?.sourcePages).toEqual(["https://example.com/guilty/"]);
   });
 
   test.each([["javascript"], ["meta-refresh"]] as const)(
     "a %s redirect is reported even though its source hop returned 200",
-    (type) => {
+    async (type) => {
       // A client-side redirect IS a document that loaded with 200 and then sent
       // the visitor elsewhere, so 2xx on the non-final hop is the truth here and
       // must not be mistaken for a fabricated chain.
@@ -314,11 +314,11 @@ describe("links/redirect-chains — genuine redirects still report", () => {
         },
       ];
 
-      expect(check(pages, "redirect-pages")?.status).toBe("warn");
+      expect((await check(pages, "redirect-pages"))?.status).toBe("warn");
     },
   );
 
-  test("a client-side redirect back to the SAME url is still reported", () => {
+  test("a client-side redirect back to the SAME url is still reported", async () => {
     // Nothing changed about the target, so only the hop type is evidence.
     const pages: PageInput[] = [
       {
@@ -331,10 +331,10 @@ describe("links/redirect-chains — genuine redirects still report", () => {
       },
     ];
 
-    expect(check(pages, "redirect-pages")?.status).toBe("warn");
+    expect((await check(pages, "redirect-pages"))?.status).toBe("warn");
   });
 
-  test("links pointing at a genuinely redirecting URL are still blamed", () => {
+  test("links pointing at a genuinely redirecting URL are still blamed", async () => {
     const pages: PageInput[] = [
       {
         url: "https://example.com/old",
@@ -351,7 +351,7 @@ describe("links/redirect-chains — genuine redirects still report", () => {
       },
     ];
 
-    const linksToRedirect = check(pages, "links-to-redirect");
+    const linksToRedirect = (await check(pages, "links-to-redirect"));
     expect(linksToRedirect?.status).toBe("warn");
     expect(linksToRedirect?.items?.[0]?.sourcePages).toEqual(["https://example.com/"]);
   });
@@ -364,7 +364,7 @@ describe("links/redirect-chains — a chain can never claim a 200 first hop", ()
       hop("https://example.com/a", 200),
       hop("https://example.com/a/", 301),
     ]],
-  ])("%s produces no warning", (_name, hops) => {
+  ])("%s produces no warning", async (_name, hops) => {
     const pages: PageInput[] = [
       {
         url: "https://example.com/a",
@@ -373,10 +373,10 @@ describe("links/redirect-chains — a chain can never claim a 200 first hop", ()
       },
     ];
 
-    expect(check(pages, "redirect-pages")).toBeUndefined();
+    expect(await check(pages, "redirect-pages")).toBeUndefined();
   });
 
-  test("no emitted chain has a 2xx status on a non-final hop", () => {
+  test("no emitted chain has a 2xx status on a non-final hop", async () => {
     // Blanket invariant over a mixed site: whatever the rule chooses to report,
     // the hop it blames must have actually redirected.
     const pages: PageInput[] = [
@@ -398,7 +398,7 @@ describe("links/redirect-chains — a chain can never claim a 200 first hop", ()
       },
     ];
 
-    const items = check(pages, "redirect-pages")?.items ?? [];
+    const items = (await check(pages, "redirect-pages"))?.items ?? [];
     expect(items).toHaveLength(1);
     for (const item of items) {
       const emitted = (item.meta as { chain?: RedirectChain } | undefined)?.chain;
@@ -439,9 +439,9 @@ describe("links/redirect-chains — link sections", () => {
     return c;
   }
 
-  test("links-to-redirect items say where the links sit and carry meta.sections", () => {
-    const item = redirectChainsRule
-      .run(sectionedCtx("footer"))
+  test("links-to-redirect items say where the links sit and carry meta.sections", async () => {
+    const item = (await redirectChainsRule
+      .run(sectionedCtx("footer")))
       .checks.find((c) => c.name === "links-to-redirect")!.items![0]!;
 
     expect(item.label).toBe(
@@ -451,13 +451,13 @@ describe("links/redirect-chains — link sections", () => {
     expect(item.sourcePages).toEqual(["https://example.com/a", "https://example.com/b"]);
   });
 
-  test("without section data the item is as it was", () => {
+  test("without section data the item is as it was", async () => {
     const c = sectionedCtx(undefined);
     for (const page of c.site!.pages) {
       for (const link of page.parsed?.links ?? []) delete (link as { section?: string }).section;
     }
-    const item = redirectChainsRule
-      .run(c)
+    const item = (await redirectChainsRule
+      .run(c))
       .checks.find((x) => x.name === "links-to-redirect")!.items![0]!;
 
     expect(item.label).toBe("https://example.com/old (301) → https://example.com/new (200)");

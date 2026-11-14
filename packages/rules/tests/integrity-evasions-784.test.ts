@@ -467,7 +467,7 @@ test("a site whose name is shorter than three letters is never spared by a tenan
   const short = (href: string): string | null => {
     const html = `<!doctype html><html><head><title>x</title></head><body><a href="${href}" aria-label="Continue with Google"><svg></svg></a></body></html>`;
     const parsed = parsePage(html, "https://ab.com/");
-    return detectBrandImpersonation({ page: { url: "https://ab.com/", html, statusCode: 200, loadTime: 0, headers: {}, parsed }, parsed, options: {} })?.brand ?? null;
+    return detectBrandImpersonation({ page: { url: "https://ab.com/", html, statusCode: 200, loadTime: 0, headers: {}, parsed }, parsed, options: {} } as unknown as Parameters<typeof detectBrandImpersonation>[0])?.brand ?? null;
   };
   expect(short("https://ab.auth0.com/authorize?connection=google-oauth2")).toBe("Google");
   expect(short("https://abc.auth0.com/authorize?connection=google-oauth2")).toBe("Google");
@@ -520,7 +520,7 @@ test("many links with huge queries do not make the brand check slow", () => {
 const brandOn = (pageUrl: string, href: string, label = "Continue with Google"): string | null => {
   const html = `<!doctype html><html><head><title>x</title></head><body><a href="${href}" aria-label="${label}"><svg></svg></a></body></html>`;
   const parsed = parsePage(html, pageUrl);
-  return detectBrandImpersonation({ page: { url: pageUrl, html, statusCode: 200, loadTime: 0, headers: {}, parsed }, parsed, options: {} })?.brand ?? null;
+  return detectBrandImpersonation({ page: { url: pageUrl, html, statusCode: 200, loadTime: 0, headers: {}, parsed }, parsed, options: {} } as unknown as Parameters<typeof detectBrandImpersonation>[0])?.brand ?? null;
 };
 
 test("the environment suffix needs its hyphen and a listed word", () => {

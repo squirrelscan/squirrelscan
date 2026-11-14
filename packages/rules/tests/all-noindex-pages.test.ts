@@ -27,8 +27,8 @@ function makeCtx(paths: string[], options: Record<string, unknown>): RuleContext
   } as unknown as RuleContext;
 }
 
-function run(paths: string[], options: Record<string, unknown>): CheckResult[] {
-  const result = allNoindexPages.run(makeCtx(paths, options)) as { checks: CheckResult[] };
+async function run(paths: string[], options: Record<string, unknown>): Promise<CheckResult[]> {
+  const result = (await allNoindexPages.run(makeCtx(paths, options))) as { checks: CheckResult[] };
   return result.checks;
 }
 
@@ -47,15 +47,15 @@ describe("crawl/all-noindex-pages options", () => {
     expect(() => allNoindexPages.meta.optionsSchema?.parse({ errorOnPatterns: "/blog/" })).toThrow();
   });
 
-  test("errorOnPatterns still escalates a noindexed page to critical", () => {
-    const checks = run(["/blog/post/"], { errorOnPatterns: ["/blog/"] });
+  test("errorOnPatterns still escalates a noindexed page to critical", async () => {
+    const checks = (await run(["/blog/post/"], { errorOnPatterns: ["/blog/"] }));
     expect(checks).toHaveLength(1);
     expect(checks[0]?.name).toBe("critical-noindex");
     expect(checks[0]?.status).toBe("fail");
   });
 
-  test("warnOnPatterns still escalates a noindexed page to important", () => {
-    const checks = run(["/products/shirt/"], { warnOnPatterns: ["/products/"] });
+  test("warnOnPatterns still escalates a noindexed page to important", async () => {
+    const checks = (await run(["/products/shirt/"], { warnOnPatterns: ["/products/"] }));
     expect(checks).toHaveLength(1);
     expect(checks[0]?.name).toBe("important-noindex");
     expect(checks[0]?.status).toBe("warn");

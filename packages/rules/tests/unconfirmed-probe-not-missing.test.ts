@@ -67,11 +67,11 @@ function sitemaps(over: Partial<SitemapDiscovery> = {}): SitemapDiscovery {
 const byName = (checks: CheckResult[], name: string) => checks.find((c) => c.name === name);
 
 describe("crawl/robots-txt does not report a missing file it never confirmed", () => {
-  test("a probe that never completed reports unknown, not a failure", () => {
+  test("a probe that never completed reports unknown, not a failure", async () => {
     // Anything the crawler records a reason for: a budget-skipped fetch, a
     // timeout, a 5xx. None of them establish that robots.txt is absent.
     for (const reason of ["crawl phase budget exhausted", "The operation timed out", "HTTP 503"]) {
-      const checks = robotsTxtRule.run(ctx({ robotsTxt: robots({ errors: [reason] }) })).checks;
+      const checks = (await robotsTxtRule.run(ctx({ robotsTxt: robots({ errors: [reason] }) }))).checks;
       const check = byName(checks, "robots-txt-exists");
 
       expect(check?.status).toBe("info");
@@ -81,11 +81,11 @@ describe("crawl/robots-txt does not report a missing file it never confirmed", (
     }
   });
 
-  test("a confirmed 404 still fails — this must not blanket-suppress the finding", () => {
+  test("a confirmed 404 still fails — this must not blanket-suppress the finding", async () => {
     // The crawler records NO error for a clean 404, which is the whole
     // discriminator. Losing this case would trade a false positive for a false
     // negative and make the rule useless.
-    const checks = robotsTxtRule.run(ctx({ robotsTxt: robots({ errors: [] }) })).checks;
+    const checks = (await robotsTxtRule.run(ctx({ robotsTxt: robots({ errors: [] }) }))).checks;
     const check = byName(checks, "robots-txt-exists");
 
     expect(check?.status).toBe("fail");
@@ -94,29 +94,29 @@ describe("crawl/robots-txt does not report a missing file it never confirmed", (
 });
 
 describe("crawl/sitemap-exists does not report a missing sitemap it never looked for", () => {
-  test("a truncated discovery reports unknown, not a failure", () => {
-    const checks = sitemapExistsRule.run(
+  test("a truncated discovery reports unknown, not a failure", async () => {
+    const checks = (await sitemapExistsRule.run(
       ctx({ sitemaps: sitemaps({ truncated: true }), robotsTxt: robots() }),
-    ).checks;
+    )).checks;
     const check = byName(checks, "sitemap-exists");
 
     expect(check?.status).toBe("info");
     expect(check?.message).not.toContain("No XML sitemap found");
   });
 
-  test("a completed discovery that found nothing still fails", () => {
-    const checks = sitemapExistsRule.run(
+  test("a completed discovery that found nothing still fails", async () => {
+    const checks = (await sitemapExistsRule.run(
       ctx({ sitemaps: sitemaps({ truncated: false }), robotsTxt: robots() }),
-    ).checks;
+    )).checks;
     const check = byName(checks, "sitemap-exists");
 
     expect(check?.status).toBe("fail");
     expect(check?.message).toBe("No XML sitemap found");
   });
 
-  test("an absent `truncated` (older reports) reads as a completed walk", () => {
+  test("an absent `truncated` (older reports) reads as a completed walk", async () => {
     // The field is optional so pre-#1733 persisted reports still score the same.
-    const checks = sitemapExistsRule.run(ctx({ sitemaps: sitemaps(), robotsTxt: robots() })).checks;
+    const checks = (await sitemapExistsRule.run(ctx({ sitemaps: sitemaps(), robotsTxt: robots() }))).checks;
 
     expect(byName(checks, "sitemap-exists")?.status).toBe("fail");
   });
@@ -142,8 +142,8 @@ describe("ax/rsl-license does not call an unreachable document broken", () => {
     };
   }
 
-  test("status 0 reports unknown and does not leak the internal reason", () => {
-    const checks = rslLicenseRule.run(ctx({ rsl: rsl([unreachable]) } as never)).checks;
+  test("status 0 reports unknown and does not leak the internal reason", async () => {
+    const checks = (await rslLicenseRule.run(ctx({ rsl: rsl([unreachable]) } as never))).checks;
     const check = byName(checks, "rsl-license-valid");
 
     expect(check?.status).toBe("info");
@@ -152,9 +152,9 @@ describe("ax/rsl-license does not call an unreachable document broken", () => {
     expect(JSON.stringify(check)).not.toContain("budget exhausted");
   });
 
-  test("a document that genuinely resolved wrong is still reported broken", () => {
+  test("a document that genuinely resolved wrong is still reported broken", async () => {
     const notRsl: RslLicenseDoc = { ...unreachable, status: 200, error: null };
-    const checks = rslLicenseRule.run(ctx({ rsl: rsl([notRsl]) } as never)).checks;
+    const checks = (await rslLicenseRule.run(ctx({ rsl: rsl([notRsl]) } as never))).checks;
 
     expect(byName(checks, "rsl-license-valid")?.status).toBe("warn");
   });

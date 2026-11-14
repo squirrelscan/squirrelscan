@@ -52,12 +52,12 @@ describe("values that name something other than a credential (#1292)", () => {
     }
   });
 
-  test("the rule lists a partial value in its own info check, apart from expired and session tokens, with the value masked", () => {
+  test("the rule lists a partial value in its own info check, apart from expired and session tokens, with the value masked", async () => {
     const html = `<!doctype html><html><body><script>var c={password:"${"Xk9!" + "mQ2v..."}"};</script></body></html>`;
-    const checks = leakedSecretsRule.run({
+    const checks = (await leakedSecretsRule.run({
       site: { baseUrl: PAGE, pages: [{ url: PAGE, statusCode: 200, parsed: parsePage(html, PAGE) }], robotsTxt: null, sitemaps: null, scripts: [] },
       options: {},
-    } as unknown as RuleContext).checks;
+    } as unknown as RuleContext)).checks;
     const partial = checks.find((c) => c.name === "leaked-secrets-partial");
     expect(partial?.status).toBe("info");
     expect(partial?.message).toContain("under a password or secret key end in an ellipsis");

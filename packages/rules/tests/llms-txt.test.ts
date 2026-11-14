@@ -63,8 +63,8 @@ function ctx(
   };
 }
 
-function run(llmsTxt: LlmsTxtData | null | undefined, wellKnown?: WellKnownProbeData | null): CheckResult[] {
-  return llmsTxtRule.run(ctx(llmsTxt, wellKnown)).checks;
+async function run(llmsTxt: LlmsTxtData | null | undefined, wellKnown?: WellKnownProbeData | null): Promise<CheckResult[]> {
+  return (await llmsTxtRule.run(ctx(llmsTxt, wellKnown))).checks;
 }
 
 const VALID =
@@ -72,15 +72,15 @@ const VALID =
 
 describe("ax/llms-txt", () => {
   // #409: probes off → no llms row → "not checked", never "No /llms.txt found".
-  test("data unavailable → not checked info, no crash", () => {
-    const checks = run(undefined);
+  test("data unavailable → not checked info, no crash", async () => {
+    const checks = (await run(undefined));
     expect(checks[0]?.status).toBe("skipped");
     expect(checks[0]?.value).toBe("not-checked");
     expect(checks[0]?.message).toContain("not checked");
   });
 
-  test("absent /llms.txt → single 'absent' warn-status recommendation", () => {
-    const checks = run(llms());
+  test("absent /llms.txt → single 'absent' warn-status recommendation", async () => {
+    const checks = (await run(llms()));
     expect(checks).toHaveLength(1);
     expect(checks[0]?.value).toBe("absent");
     // warn-status in this info-severity rule = shown as a Recommendation in
@@ -88,18 +88,18 @@ describe("ax/llms-txt", () => {
     expect(checks[0]?.status).toBe("warn");
   });
 
-  test("present + valid → present + valid format with link count", () => {
-    const checks = run(
+  test("present + valid → present + valid format with link count", async () => {
+    const checks = (await run(
       llms({ llmsTxt: file({ exists: true, content: VALID, sizeBytes: VALID.length }) }),
-    );
+    ));
     expect(checks.find((c) => c.name === "llms-txt-present")?.value).toBe("present");
     const format = checks.find((c) => c.name === "llms-txt-format");
     expect(format?.value).toBe("valid");
     expect(format?.message).toContain("2 links");
   });
 
-  test("notes /llms-full.txt when also present", () => {
-    const checks = run(
+  test("notes /llms-full.txt when also present", async () => {
+    const checks = (await run(
       llms({
         llmsTxt: file({ exists: true, content: VALID, sizeBytes: 1 }),
         llmsFullTxt: file({
@@ -109,84 +109,84 @@ describe("ax/llms-txt", () => {
           sizeBytes: 3,
         }),
       }),
-    );
+    ));
     expect(checks.find((c) => c.name === "llms-txt-present")?.message).toContain(
       "/llms-full.txt also present",
     );
   });
 
-  test("SPA-fallback HTML body at /llms.txt → fail, not present", () => {
-    const checks = run(
+  test("SPA-fallback HTML body at /llms.txt → fail, not present", async () => {
+    const checks = (await run(
       llms({ llmsTxt: file({ exists: true, content: "<!DOCTYPE html><html>...</html>", sizeBytes: 32 }) }),
-    );
+    ));
     expect(checks).toHaveLength(1);
     expect(checks[0]?.status).toBe("fail");
     expect(checks[0]?.value).toBe("spa-fallback");
     expect(checks[0]?.message).toContain("SPA fallback");
   });
 
-  test("SPA-fallback detection ignores leading whitespace and <html> without doctype", () => {
-    const checks = run(llms({ llmsTxt: file({ exists: true, content: "\n  <html><body/></html>" }) }));
+  test("SPA-fallback detection ignores leading whitespace and <html> without doctype", async () => {
+    const checks = (await run(llms({ llmsTxt: file({ exists: true, content: "\n  <html><body/></html>" }) })));
     expect(checks[0]?.status).toBe("fail");
   });
 
   // #409: no answer from the root is not "missing", but a real file at an
   // alternate path that did answer is still a finding.
-  test("root got no answer but /.well-known/llms.txt is real → present via alt path", () => {
-    const checks = run(undefined, {
+  test("root got no answer but /.well-known/llms.txt is real → present via alt path", async () => {
+    const checks = (await run(undefined, {
       probes: [wkProbe({ path: "/.well-known/llms.txt", status: 200, bodySize: 40, markdownLike: true })],
-    });
+    }));
     expect(checks).toHaveLength(1);
     expect(checks[0]?.value).toBe("present");
     expect(checks[0]?.message).toContain("/.well-known/llms.txt");
     expect(checks[0]?.message).toContain("not checked");
   });
 
-  test("root got no answer and no alt hit → not checked", () => {
-    const checks = run(undefined, { probes: [wkProbe({ path: "/docs/llms.txt", status: 404 })] });
+  test("root got no answer and no alt hit → not checked", async () => {
+    const checks = (await run(undefined, { probes: [wkProbe({ path: "/docs/llms.txt", status: 404 })] }));
     expect(checks[0]?.value).toBe("not-checked");
     expect(checks[0]?.message).toContain("was not sent or got no answer");
   });
 
-  test("root absent but /.well-known/llms.txt hits a real file → present via alt path", () => {
-    const checks = run(
+  test("root absent but /.well-known/llms.txt hits a real file → present via alt path", async () => {
+    const checks = (await run(
       llms(),
       {
         probes: [
           wkProbe({ path: "/.well-known/llms.txt", status: 200, bodySize: 40, markdownLike: true }),
         ],
       },
-    );
+    ));
     expect(checks).toHaveLength(1);
     expect(checks[0]?.value).toBe("present");
     expect(checks[0]?.message).toContain("/.well-known/llms.txt");
   });
 
-  test("root absent, alt path 200 with plain-text junk (not markdown) → absent", () => {
-    const checks = run(
+  test("root absent, alt path 200 with plain-text junk (not markdown) → absent", async () => {
+    const checks = (await run(
       llms(),
       { probes: [wkProbe({ path: "/docs/llms.txt", status: 200, bodySize: 9, markdownLike: false })] },
-    );
+    ));
     expect(checks[0]?.value).toBe("absent");
   });
 
-  test("root absent, alt path also SPA-fallback HTML → still reported absent", () => {
-    const checks = run(
+  test("root absent, alt path also SPA-fallback HTML → still reported absent", async () => {
+    const checks = (await run(
       llms(),
       { probes: [wkProbe({ path: "/docs/llms.txt", status: 200, looksHtml: true })] },
-    );
+    ));
     expect(checks[0]?.value).toBe("absent");
   });
 
-  test("root absent + no wellKnown data at all → absent, no crash", () => {
-    const checks = run(llms());
+  test("root absent + no wellKnown data at all → absent, no crash", async () => {
+    const checks = (await run(llms()));
     expect(checks[0]?.value).toBe("absent");
   });
 
-  test("malformed (no H1, no links) surfaces as warn-status recommendation", () => {
-    const checks = run(
+  test("malformed (no H1, no links) surfaces as warn-status recommendation", async () => {
+    const checks = (await run(
       llms({ llmsTxt: file({ exists: true, content: "just text, no heading", sizeBytes: 10 }) }),
-    );
+    ));
     const format = checks.find((c) => c.name === "llms-txt-format");
     expect(format?.status).toBe("warn");
     expect(format?.value).toBe("has-notes");

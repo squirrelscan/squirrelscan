@@ -17,7 +17,7 @@ import type { Rule, RuleContext } from "../src/types";
 
 const BASE = "http://127.0.0.1:8765/";
 
-function run(rule: Rule, ...blocks: unknown[]): Record<string, string> {
+async function run(rule: Rule, ...blocks: unknown[]): Promise<Record<string, string>> {
   const scripts = blocks
     .map((b) => `<script type="application/ld+json">${JSON.stringify(b)}</script>`)
     .join("");
@@ -28,7 +28,7 @@ function run(rule: Rule, ...blocks: unknown[]): Record<string, string> {
     options: {},
   } as unknown as RuleContext;
   const out: Record<string, string> = {};
-  for (const c of rule.run(ctx).checks as Array<{ name: string; status: string; message: string }>) {
+  for (const c of (await rule.run(ctx)).checks as Array<{ name: string; status: string; message: string }>) {
     // A rule may emit a warn and a pass under one name: keep both.
     out[out[c.name] ? `${c.name}#${c.status}` : c.name] = `${c.status}: ${c.message}`;
   }
@@ -44,7 +44,7 @@ const question = (id: string, over: Record<string, unknown> = {}) => ({
 });
 
 describe("schema/faq — mainEntity @id references (pub#817)", () => {
-  test("the issue's repro: references into the same @graph resolve, like the inlined control", () => {
+  test("the issue's repro: references into the same @graph resolve, like the inlined control", async () => {
     const repro = {
       "@context": "https://schema.org",
       "@graph": [
@@ -63,17 +63,17 @@ describe("schema/faq — mainEntity @id references (pub#817)", () => {
       "@type": "FAQPage",
       mainEntity: [question("q1")],
     };
-    expect(run(faqRule, repro)).toEqual(run(faqRule, inlined));
-    expect(run(faqRule, repro)["faq-valid"]).toBe("pass: FAQPage has 1 valid question(s)");
+    expect(await run(faqRule, repro)).toEqual(await run(faqRule, inlined));
+    expect((await run(faqRule, repro))["faq-valid"]).toBe("pass: FAQPage has 1 valid question(s)");
   });
 
-  test("a reference to a node in another script on the page resolves too", () => {
+  test("a reference to a node in another script on the page resolves too", async () => {
     const faq = { "@context": "https://schema.org", "@type": "FAQPage", mainEntity: [{ "@id": `${BASE}#q1` }, { "@id": `${BASE}#q2` }] };
     const questions = { "@context": "https://schema.org", "@graph": [question("q1"), question("q2")] };
-    expect(run(faqRule, faq, questions)["faq-valid"]).toBe("pass: FAQPage has 2 valid question(s)");
+    expect((await run(faqRule, faq, questions))["faq-valid"]).toBe("pass: FAQPage has 2 valid question(s)");
   });
 
-  test("a dangling reference, or a referenced Question without an answer, is still reported", () => {
+  test("a dangling reference, or a referenced Question without an answer, is still reported", async () => {
     const graph = {
       "@context": "https://schema.org",
       "@graph": [
@@ -82,34 +82,34 @@ describe("schema/faq — mainEntity @id references (pub#817)", () => {
         question("q3", { acceptedAnswer: undefined }),
       ],
     };
-    expect(run(faqRule, graph)).toMatchObject({
+    expect(await run(faqRule, graph)).toMatchObject({
       "faq-questions": "warn: 2 question(s) missing required properties",
     });
   });
 });
 
 describe("schema/faq — entries that are not objects (pub#817 review)", () => {
-  test("a null or a bare string in mainEntity is an invalid question, not a crash", () => {
+  test("a null or a bare string in mainEntity is an invalid question, not a crash", async () => {
     const faq = { "@context": "https://schema.org", "@type": "FAQPage", mainEntity: [null, "What?", question("q1")] };
-    expect(run(faqRule, faq)).toMatchObject({ "faq-questions": "warn: 2 question(s) missing required properties" });
+    expect(await run(faqRule, faq)).toMatchObject({ "faq-questions": "warn: 2 question(s) missing required properties" });
   });
 });
 
 describe("schema/review — entries that are not objects (pub#817 review)", () => {
-  test("a null or a bare string in review is skipped, not a crash", () => {
+  test("a null or a bare string in review is skipped, not a crash", async () => {
     const product = {
       "@context": "https://schema.org",
       "@type": "Product",
       name: "p",
       review: [null, "great", { "@type": "Review", author: "a", reviewRating: { ratingValue: 5 } }],
     };
-    const out = run(reviewRule, product);
+    const out = (await run(reviewRule, product));
     expect(out["individual-reviews"]).toStartWith("pass:");
   });
 });
 
 describe("schema/product and schema/review — @id references (pub#817)", () => {
-  test("a Product's offers referenced by @id are read from the Offer node", () => {
+  test("a Product's offers referenced by @id are read from the Offer node", async () => {
     const graph = {
       "@context": "https://schema.org",
       "@graph": [
@@ -117,10 +117,10 @@ describe("schema/product and schema/review — @id references (pub#817)", () => 
         { "@type": "Offer", "@id": `${BASE}#offer`, price: "10", priceCurrency: "EUR", availability: "https://schema.org/InStock" },
       ],
     };
-    expect(run(productRule, graph)["product-offer-details"]).toBeUndefined();
+    expect((await run(productRule, graph))["product-offer-details"]).toBeUndefined();
   });
 
-  test("reviews and an aggregateRating referenced by @id are read from their nodes, each review once", () => {
+  test("reviews and an aggregateRating referenced by @id are read from their nodes, each review once", async () => {
     const graph = {
       "@context": "https://schema.org",
       "@graph": [
@@ -139,7 +139,7 @@ describe("schema/product and schema/review — @id references (pub#817)", () => 
         },
       ],
     };
-    const result = run(reviewRule, graph);
+    const result = (await run(reviewRule, graph));
     expect(result["aggregate-rating"]).toStartWith("pass");
     expect(Object.values(result).filter((v) => v.startsWith("warn"))).toEqual([]);
     expect(Object.values(result).join("\n")).toContain("1 valid review");
@@ -147,7 +147,7 @@ describe("schema/product and schema/review — @id references (pub#817)", () => 
 });
 
 describe("@id resolution edge cases (pub#817 review)", () => {
-  test("a reference carrying @context, and a relative @id, resolve", () => {
+  test("a reference carrying @context, and a relative @id, resolve", async () => {
     const graph = {
       "@context": "https://schema.org",
       "@graph": [
@@ -159,10 +159,10 @@ describe("@id resolution edge cases (pub#817 review)", () => {
         question("q2"),
       ],
     };
-    expect(run(faqRule, graph)["faq-valid"]).toBe("pass: FAQPage has 2 valid question(s)");
+    expect((await run(faqRule, graph))["faq-valid"]).toBe("pass: FAQPage has 2 valid question(s)");
   });
 
-  test("an Offer defined inline on one node resolves from a reference on another", () => {
+  test("an Offer defined inline on one node resolves from a reference on another", async () => {
     const graph = {
       "@context": "https://schema.org",
       "@graph": [
@@ -179,10 +179,10 @@ describe("@id resolution edge cases (pub#817 review)", () => {
         { "@type": "Product", name: "Chair", image: `${BASE}c.jpg`, offers: { "@id": `${BASE}#offer` } },
       ],
     };
-    expect(run(productRule, graph)["product-offer-details"]).toBeUndefined();
+    expect((await run(productRule, graph))["product-offer-details"]).toBeUndefined();
   });
 
-  test("a minimal Review stub and its references are one review; a stub never empties a resolved rating", () => {
+  test("a minimal Review stub and its references are one review; a stub never empties a resolved rating", async () => {
     const graph = {
       "@context": "https://schema.org",
       "@graph": [
@@ -192,7 +192,7 @@ describe("@id resolution edge cases (pub#817 review)", () => {
         { "@type": "AggregateRating", "@id": `${BASE}#rating` },
       ],
     };
-    const result = run(reviewRule, graph);
+    const result = (await run(reviewRule, graph));
     expect(result["individual-reviews"]).toBe("warn: 1 review(s) missing author or rating");
     expect(result["aggregate-rating"]).toStartWith("pass");
   });

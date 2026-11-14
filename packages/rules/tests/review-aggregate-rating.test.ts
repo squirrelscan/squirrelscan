@@ -24,8 +24,8 @@ function pageCtx(html: string, url = "https://example.com/"): RuleContext {
   };
 }
 
-function run(rule: Rule, ctx: RuleContext): CheckResult[] {
-  return rule.run(ctx).checks as CheckResult[];
+async function run(rule: Rule, ctx: RuleContext): Promise<CheckResult[]> {
+  return (await rule.run(ctx)).checks as CheckResult[];
 }
 
 function check(checks: CheckResult[], name: string): CheckResult | undefined {
@@ -45,112 +45,112 @@ const COMPLETE = {
 };
 
 describe("schema/review — array-wrapped aggregateRating (#721)", () => {
-  test("array-wrapped fully-populated rating → passes, not reported missing", () => {
+  test("array-wrapped fully-populated rating → passes, not reported missing", async () => {
     const html = withSchema({
       "@type": "Product",
       name: "Wrapped Widget",
       aggregateRating: [COMPLETE],
     });
-    const checks = run(reviewSchemaRule, pageCtx(html));
+    const checks = (await run(reviewSchemaRule, pageCtx(html)));
     const rating = check(checks, "aggregate-rating");
 
     expect(rating?.status).toBe("pass");
     expect(rating?.message).toBe("AggregateRating: 4.7/5 (89 reviews)");
   });
 
-  test("array-wrapped rating with reviewCount instead of ratingCount → passes", () => {
+  test("array-wrapped rating with reviewCount instead of ratingCount → passes", async () => {
     const html = withSchema({
       "@type": "Product",
       name: "Review Count Widget",
       aggregateRating: [{ "@type": "AggregateRating", ratingValue: "4.2", reviewCount: "12" }],
     });
-    const checks = run(reviewSchemaRule, pageCtx(html));
+    const checks = (await run(reviewSchemaRule, pageCtx(html)));
 
     expect(check(checks, "aggregate-rating")?.status).toBe("pass");
   });
 
-  test("array-wrapped rating missing ratingValue → still warns", () => {
+  test("array-wrapped rating missing ratingValue → still warns", async () => {
     const html = withSchema({
       "@type": "Product",
       name: "Half Widget",
       aggregateRating: [{ "@type": "AggregateRating", ratingCount: "5" }],
     });
-    const checks = run(reviewSchemaRule, pageCtx(html));
+    const checks = (await run(reviewSchemaRule, pageCtx(html)));
     const rating = check(checks, "aggregate-rating");
 
     expect(rating?.status).toBe("warn");
     expect(rating?.message).toBe("AggregateRating missing ratingValue");
   });
 
-  test("array with null entry then complete rating → passes without crashing", () => {
+  test("array with null entry then complete rating → passes without crashing", async () => {
     const html = withSchema({
       "@type": "Product",
       name: "Null Then Rating",
       aggregateRating: [null, COMPLETE],
     });
-    const checks = run(reviewSchemaRule, pageCtx(html));
+    const checks = (await run(reviewSchemaRule, pageCtx(html)));
 
     expect(check(checks, "aggregate-rating")?.status).toBe("pass");
   });
 
-  test("empty array → treated as no rating (info, no false missing-field warn)", () => {
+  test("empty array → treated as no rating (info, no false missing-field warn)", async () => {
     const html = withSchema({
       "@type": "Product",
       name: "Empty Rating",
       aggregateRating: [],
     });
-    const checks = run(reviewSchemaRule, pageCtx(html));
+    const checks = (await run(reviewSchemaRule, pageCtx(html)));
 
     expect(check(checks, "aggregate-rating")).toBeUndefined();
     expect(check(checks, "review-schema")?.status).toBe("info");
   });
 
-  test("plain object complete rating → still passes (regression)", () => {
+  test("plain object complete rating → still passes (regression)", async () => {
     const html = withSchema({
       "@type": "Product",
       name: "Plain Widget",
       aggregateRating: COMPLETE,
     });
-    const checks = run(reviewSchemaRule, pageCtx(html));
+    const checks = (await run(reviewSchemaRule, pageCtx(html)));
     const rating = check(checks, "aggregate-rating");
 
     expect(rating?.status).toBe("pass");
     expect(rating?.message).toBe("AggregateRating: 4.7/5 (89 reviews)");
   });
 
-  test("plain object missing ratingValue → still warns (regression)", () => {
+  test("plain object missing ratingValue → still warns (regression)", async () => {
     const html = withSchema({
       "@type": "Product",
       name: "Plain Half Widget",
       aggregateRating: { "@type": "AggregateRating", ratingCount: "5" },
     });
-    const checks = run(reviewSchemaRule, pageCtx(html));
+    const checks = (await run(reviewSchemaRule, pageCtx(html)));
     const rating = check(checks, "aggregate-rating");
 
     expect(rating?.status).toBe("warn");
     expect(rating?.message).toBe("AggregateRating missing ratingValue");
   });
 
-  test("plain object missing ratingCount/reviewCount → still warns (regression)", () => {
+  test("plain object missing ratingCount/reviewCount → still warns (regression)", async () => {
     const html = withSchema({
       "@type": "Product",
       name: "Countless Widget",
       aggregateRating: { "@type": "AggregateRating", ratingValue: "4.0" },
     });
-    const checks = run(reviewSchemaRule, pageCtx(html));
+    const checks = (await run(reviewSchemaRule, pageCtx(html)));
     const rating = check(checks, "aggregate-rating");
 
     expect(rating?.status).toBe("warn");
     expect(rating?.message).toBe("AggregateRating missing ratingCount/reviewCount");
   });
 
-  test("standalone AggregateRating node → unchanged (regression)", () => {
+  test("standalone AggregateRating node → unchanged (regression)", async () => {
     const html = withSchema({
       "@type": "AggregateRating",
       ratingValue: "4.9",
       ratingCount: "200",
     });
-    const checks = run(reviewSchemaRule, pageCtx(html));
+    const checks = (await run(reviewSchemaRule, pageCtx(html)));
 
     expect(check(checks, "aggregate-rating")?.status).toBe("pass");
   });

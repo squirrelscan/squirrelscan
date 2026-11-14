@@ -11,26 +11,26 @@ import { keywordStuffingRule } from "../src/content/keyword-stuffing";
 import { readingLevelRule } from "../src/content/reading-level";
 import type { ParsedPage, Rule, RuleContext } from "../src/types";
 
-function run(rule: Rule, html: string): CheckResult[] {
+async function run(rule: Rule, html: string): Promise<CheckResult[]> {
   const url = "https://example.com/";
   const ctx = { page: { url, html, statusCode: 200, loadTime: 0, headers: {} }, parsed: parsePage(html, url) as ParsedPage, options: {} } as RuleContext;
-  return rule.run(ctx).checks as CheckResult[];
+  return (await rule.run(ctx)).checks as CheckResult[];
 }
 
 const page = (body: string) => `<!doctype html><html lang="en"><head><title>t</title></head><body><main>${body}</main></body></html>`;
 
 describe("inconclusive vs nothing-found infos (#1031)", () => {
-  test("content too short to judge is inconclusive (keyword-stuffing, reading-level)", () => {
+  test("content too short to judge is inconclusive (keyword-stuffing, reading-level)", async () => {
     const html = page("<p>Short page.</p>");
     for (const rule of [keywordStuffingRule, readingLevelRule]) {
-      const info = run(rule, html).find((c) => c.status === "info");
+      const info = (await run(rule, html)).find((c) => c.status === "info");
       expect(info, rule.meta.id).toBeDefined();
       expect(info!.details?.inconclusive, rule.meta.id).toBe(true);
     }
   });
 
-  test('"No form inputs found" is a verdict, not inconclusive', () => {
-    const info = run(formLabelsRule, page("<p>Hello</p>")).find((c) => c.status === "info");
+  test('"No form inputs found" is a verdict, not inconclusive', async () => {
+    const info = (await run(formLabelsRule, page("<p>Hello</p>"))).find((c) => c.status === "info");
     expect(info?.message).toBe("No form inputs found");
     expect(info?.details?.inconclusive).toBeUndefined();
   });

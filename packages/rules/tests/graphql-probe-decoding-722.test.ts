@@ -55,7 +55,7 @@ let origin: string;
 let mode: "gzip-bomb" | "br-bomb" | "gzip-schema" | "schema" = "schema";
 
 const encoded = (body: Uint8Array | string, coding?: string): Response =>
-  new Response(body, {
+  new Response(body as BodyInit, {
     headers: {
       "content-type": "application/json",
       ...(coding ? { "content-encoding": coding } : {}),

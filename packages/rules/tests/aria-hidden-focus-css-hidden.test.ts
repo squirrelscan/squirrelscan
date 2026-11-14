@@ -15,14 +15,14 @@ import { parsePage } from "@squirrelscan/parser";
 import { ariaHiddenFocusRule } from "../src/a11y/aria-hidden-focus";
 import type { ParsedPage, RuleContext } from "../src/types";
 
-function run(html: string): CheckResult[] {
+async function run(html: string): Promise<CheckResult[]> {
   const url = "https://example.com/";
   const ctx: RuleContext = {
     page: { url, html, statusCode: 200, loadTime: 0, headers: {} },
     parsed: parsePage(html, url) as ParsedPage,
     options: {},
   };
-  return ariaHiddenFocusRule.run(ctx).checks as CheckResult[];
+  return (await ariaHiddenFocusRule.run(ctx)).checks as CheckResult[];
 }
 
 function check(checks: CheckResult[], name: string): CheckResult | undefined {
@@ -34,8 +34,8 @@ function fixture(variant: string): string {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Hidden focus fixture</title></head><body><h1>Fixture</h1>${variant}</body></html>`;
 }
 
-function statuses(html: string): Record<string, string> {
-  return Object.fromEntries(run(html).map((c) => [c.name, c.status]));
+async function statuses(html: string): Promise<Record<string, string>> {
+  return Object.fromEntries((await run(html)).map((c) => [c.name, c.status]));
 }
 
 /** The repro's six variants (pub#664). */
@@ -51,8 +51,8 @@ const VARIANTS = {
 };
 
 describe("a11y/aria-hidden-focus: the six repro fixtures (pub#664)", () => {
-  test("bad: a visible button inside aria-hidden still fails", () => {
-    expect(run(fixture(VARIANTS.bad))).toEqual([
+  test("bad: a visible button inside aria-hidden still fails", async () => {
+    expect(await run(fixture(VARIANTS.bad))).toEqual([
       expect.objectContaining({
         name: "aria-hidden-focus",
         status: "fail",
@@ -63,114 +63,114 @@ describe("a11y/aria-hidden-focus: the six repro fixtures (pub#664)", () => {
   });
 
   for (const name of ["hidden", "inert", "disabled"] as const) {
-    test(`${name}: passes`, () => {
-      expect(statuses(fixture(VARIANTS[name]))).toEqual({ "aria-hidden-focus": "pass" });
+    test(`${name}: passes`, async () => {
+      expect(await statuses(fixture(VARIANTS[name]))).toEqual({ "aria-hidden-focus": "pass" });
     });
   }
 
-  test("display-none and visibility-hidden come from a <style> block: pass (pub#678)", () => {
+  test("display-none and visibility-hidden come from a <style> block: pass (pub#678)", async () => {
     for (const name of ["display-none", "visibility-hidden"] as const) {
-      expect(statuses(fixture(VARIANTS[name]))).toEqual({ "aria-hidden-focus": "pass" });
+      expect(await statuses(fixture(VARIANTS[name]))).toEqual({ "aria-hidden-focus": "pass" });
     }
   });
 
-  test("with an external stylesheet, which could show the button again: unconfirmed", () => {
+  test("with an external stylesheet, which could show the button again: unconfirmed", async () => {
     const external = '<link rel="stylesheet" href="/site.css">';
     for (const name of ["display-none", "visibility-hidden"] as const) {
-      expect(statuses(fixture(external + VARIANTS[name]))).toEqual({ "aria-hidden-focus-unconfirmed": "warn" });
+      expect(await statuses(fixture(external + VARIANTS[name]))).toEqual({ "aria-hidden-focus-unconfirmed": "warn" });
     }
   });
 
-  test("written as inline styles: display:none passes, inherited visibility:hidden too unless a stylesheet could undo it", () => {
+  test("written as inline styles: display:none passes, inherited visibility:hidden too unless a stylesheet could undo it", async () => {
     expect(
-      statuses(
+      (await statuses(
         fixture('<div style="display:none" aria-hidden="true"><button>Close</button></div>'),
-      ),
+      )),
     ).toEqual({ "aria-hidden-focus": "pass" });
     // With every stylesheet read, inherited visibility is settled.
     expect(
-      statuses(
+      (await statuses(
         fixture('<div style="visibility:hidden" aria-hidden="true"><button>Close</button></div>'),
-      ),
+      )),
     ).toEqual({ "aria-hidden-focus": "pass" });
     // An external stylesheet could make the button visible again
     // (`button{visibility:visible}`), so then it is not settled.
     expect(
-      statuses(
+      (await statuses(
         fixture(
           '<link rel="stylesheet" href="/site.css"><div style="visibility:hidden" aria-hidden="true"><button>Close</button></div>',
         ),
-      ),
+      )),
     ).toEqual({ "aria-hidden-focus-unconfirmed": "warn" });
   });
 });
 
 describe("a11y/aria-hidden-focus: markup and inline styles", () => {
-  test("a closed dialog, an ancestor with an inline display:none, or !important", () => {
+  test("a closed dialog, an ancestor with an inline display:none, or !important", async () => {
     for (const variant of [
       '<dialog aria-hidden="true"><button>b</button></dialog>',
       '<div style="display:none"><div aria-hidden="true"><button>b</button></div></div>',
       '<div style="DISPLAY: NONE !important" aria-hidden="true"><a href="/x">x</a></div>',
     ]) {
-      expect(statuses(fixture(variant))).toEqual({ "aria-hidden-focus": "pass" });
+      expect(await statuses(fixture(variant))).toEqual({ "aria-hidden-focus": "pass" });
     }
   });
 
-  test("a child that sets visibility:visible inside a visibility:hidden container is still focusable", () => {
-    const checks = run(
+  test("a child that sets visibility:visible inside a visibility:hidden container is still focusable", async () => {
+    const checks = (await run(
       fixture(
         `<div style="visibility:hidden" aria-hidden="true"><a href="/x" id="back" style="visibility:visible">x</a></div>`,
       ),
-    );
+    ));
     expect(check(checks, "aria-hidden-focus")?.items).toEqual([{ id: "a#back" }]);
   });
 
-  test("a focusable container an inline style hides still has its visible descendants checked", () => {
-    const checks = run(
+  test("a focusable container an inline style hides still has its visible descendants checked", async () => {
+    const checks = (await run(
       fixture(
         `<div aria-hidden="true" tabindex="0" style="visibility:hidden"><button id="open" style="visibility:visible">Open</button></div>`,
       ),
-    );
+    ));
     expect(check(checks, "aria-hidden-focus")?.items).toEqual([{ id: "button#open" }]);
   });
 
-  test("off-screen, transparent or clipped content is still reported", () => {
+  test("off-screen, transparent or clipped content is still reported", async () => {
     for (const style of [
       "position:absolute;left:-9999px",
       "opacity:0",
       "width:0;height:0;overflow:hidden",
       "clip:rect(0 0 0 0);position:absolute",
     ]) {
-      const checks = run(
+      const checks = (await run(
         fixture(`<div aria-hidden="true" style="${style}"><a href="/x">x</a></div>`),
-      );
+      ));
       expect(check(checks, "aria-hidden-focus")?.status).toBe("fail");
     }
   });
 
-  test("a region under the hidden attribute is skipped as before, whatever its inline style", () => {
+  test("a region under the hidden attribute is skipped as before, whatever its inline style", async () => {
     // The rule only ever moves a finding to pass or to unconfirmed: the plain
     // `hidden` skip it always had is not handed to the new check.
     for (const variant of [
       `<div hidden style="display:block" aria-hidden="true"><button>b</button></div>`,
       `<div hidden style="display:var(--d)" aria-hidden="true"><button>b</button></div>`,
     ]) {
-      expect(statuses(fixture(variant))).toEqual({ "aria-hidden-focus": "pass" });
+      expect(await statuses(fixture(variant))).toEqual({ "aria-hidden-focus": "pass" });
     }
   });
 });
 
 describe("a11y/aria-hidden-focus: inline styles the check cannot read exactly", () => {
-  test("are reported as unconfirmed, not as a failure", () => {
+  test("are reported as unconfirmed, not as a failure", async () => {
     for (const style of [
       "display:var(--d)",
       "display:/*x*/none",
       "display:n\\6f ne",
       "all:unset",
     ]) {
-      const checks = run(
+      const checks = (await run(
         fixture(`<div style="${style}" aria-hidden="true"><a href="/x">x</a></div>`),
-      );
+      ));
       expect(check(checks, "aria-hidden-focus")).toBeUndefined();
       expect(check(checks, "aria-hidden-focus-unconfirmed")).toMatchObject({
         status: "warn",
@@ -181,12 +181,12 @@ describe("a11y/aria-hidden-focus: inline styles the check cannot read exactly", 
     }
   });
 
-  test("confirmed and unconfirmed findings are reported side by side", () => {
-    const checks = run(
+  test("confirmed and unconfirmed findings are reported side by side", async () => {
+    const checks = (await run(
       fixture(
         `<div aria-hidden="true"><a href="/a" id="seen">a</a></div><div aria-hidden="true" style="display:var(--d)"><a href="/b" id="maybe">b</a></div>`,
       ),
-    );
+    ));
     expect(check(checks, "aria-hidden-focus")?.items).toEqual([{ id: "a#seen" }]);
     expect(check(checks, "aria-hidden-focus-unconfirmed")?.items?.map((i) => i.id)).toEqual([
       "a#maybe",

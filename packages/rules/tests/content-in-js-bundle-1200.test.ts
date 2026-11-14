@@ -171,7 +171,7 @@ describe("estimateProseShare", () => {
   });
 });
 
-describe.each(engines)("perf/content-in-js-bundle (%s engine)", (engine) => {
+describe.each([...engines])("perf/content-in-js-bundle (%s engine)", (engine) => {
   const pages = (n: number) => Array.from({ length: n }, (_, i) => pageHtml(i));
 
   test("the page's own content in a 60 KB chunk is flagged with the chunk, sizes and prose share", async () => {

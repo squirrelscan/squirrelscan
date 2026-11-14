@@ -31,8 +31,9 @@ describe("the inconclusive marker through the fold (#1031)", () => {
     const raw = evaluatedFor(rows, pages);
     const viaFold = evaluatedFor(folded, pages);
     expect(Object.keys(viaFold.failing ?? {})).toEqual(Object.keys(raw.failing ?? {}));
-    expect(JSON.stringify(viaFold.evaluated ?? null)).toBe(JSON.stringify(raw.evaluated ?? null));
-    expect(Object.keys(viaFold.evaluated ?? {})).not.toContain(`${RULE}|expected-type`);
+    // pub#1863: `evaluated` became `notEvaluated` (the complement), so "nothing evaluated" is every page listed.
+    expect(viaFold.notEvaluated).toEqual(raw.notEvaluated);
+    expect(viaFold.notEvaluated?.[`${RULE}|expected-type`]).toHaveLength(pages.length);
   });
 
   test("inconclusive and plain info of the same name fold apart, not into one smeared aggregate", () => {

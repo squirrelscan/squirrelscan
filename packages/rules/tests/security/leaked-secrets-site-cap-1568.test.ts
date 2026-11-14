@@ -83,7 +83,7 @@ describe("the site budget: pages under the page cap cannot add up to an unbounde
     expect(out.secrets).toHaveLength(1);
   });
 
-  test("through the rule: omitted findings are in the result, and a late critical finding is listed", () => {
+  test("through the rule: omitted findings are in the result, and a late critical finding is listed", async () => {
     const budget = createSiteFindingBudget();
     const pages: CollectedPageSignal[] = [];
     const base = buildCollectedPageSignal({ url: "https://a.test/", parsed: parsePage("<html><body>x</body></html>", "https://a.test/") });
@@ -92,10 +92,10 @@ describe("the site budget: pages under the page cap cannot add up to an unbounde
       pages.push(applySiteFindingBudget(signal, budget));
     }
     pages.push(applySiteFindingBudget({ ...base, url: "https://a.test/late", secrets: [fake(0, "late")] }, budget));
-    const result = leakedSecretsRule.run({
+    const result = (await leakedSecretsRule.run({
       site: { baseUrl: "https://a.test/", pages: [], scripts: [] },
       collectedSignals: { pages },
-    } as unknown as RuleContext);
+    } as unknown as RuleContext));
     const omitted = result.checks.find((c) => c.name === "leaked-secrets-omitted");
     expect(omitted).toBeDefined();
     expect(omitted!.details).toMatchObject({ siteCap: SITE_FINDINGS_CAP });
@@ -143,28 +143,28 @@ describe("one site cap, and the omitted check says at least (review)", () => {
   const run = (ctx: Partial<RuleContext>) =>
     leakedSecretsRule.run({ site: { baseUrl: U, pages: [], scripts: [] }, ...ctx } as unknown as RuleContext);
 
-  test("external scripts draw on the collector's budget: a full site keeps none of them and counts them", () => {
+  test("external scripts draw on the collector's budget: a full site keeps none of them and counts them", async () => {
     const budget = createSiteFindingBudget();
     budget.admit(Array.from({ length: SITE_FINDINGS_CAP }, (_, i) => fake(0, `c${i}`)));
     const scripts = [{ url: "https://a.test/app.js", content: Array.from({ length: 5 }, (_, i) => `var k${i}="${key(i)}";`).join("\n") }];
-    const shared = run({ collectedSignals: { pages: [], secretsBudget: budget }, site: { baseUrl: U, pages: [], scripts } } as never);
+    const shared = (await run({ collectedSignals: { pages: [], secretsBudget: budget }, site: { baseUrl: U, pages: [], scripts } } as never));
     expect(shared.checks.find((c) => c.name === "leaked-secrets-critical")).toBeUndefined();
     const omitted = shared.checks.find((c) => c.name === "leaked-secrets-omitted");
     expect(omitted?.status).toBe("warn");
     expect(omitted?.message).toContain("At least 5");
     expect(omitted?.details).toMatchObject({ atLeast: true });
     // control: without a shared budget the same scripts are listed
-    const alone = run({ collectedSignals: { pages: [] }, site: { baseUrl: U, pages: [], scripts } } as never);
+    const alone = (await run({ collectedSignals: { pages: [] }, site: { baseUrl: U, pages: [], scripts } } as never));
     expect(alone.checks.find((c) => c.name === "leaked-secrets-critical")).toBeDefined();
   });
 
-  test("the omitted check is info when only public or informational findings were left out, warn otherwise", () => {
+  test("the omitted check is info when only public or informational findings were left out, warn otherwise", async () => {
     const base = buildCollectedPageSignal({ url: U, parsed: parsePage("<html><body>x</body></html>", U) });
-    const info = run({ collectedSignals: { pages: [{ ...base, secretsOmitted: 3, secretsOmittedSerious: false }] } });
+    const info = (await run({ collectedSignals: { pages: [{ ...base, secretsOmitted: 3, secretsOmittedSerious: false }] } }));
     expect(info.checks.find((c) => c.name === "leaked-secrets-omitted")?.status).toBe("info");
-    const warn = run({ collectedSignals: { pages: [{ ...base, secretsOmitted: 3, secretsOmittedSerious: true }] } });
+    const warn = (await run({ collectedSignals: { pages: [{ ...base, secretsOmitted: 3, secretsOmittedSerious: true }] } }));
     expect(warn.checks.find((c) => c.name === "leaked-secrets-omitted")?.status).toBe("warn");
-    const unknown = run({ collectedSignals: { pages: [{ ...base, secretsOmitted: 3 }] } });
+    const unknown = (await run({ collectedSignals: { pages: [{ ...base, secretsOmitted: 3 }] } }));
     expect(unknown.checks.find((c) => c.name === "leaked-secrets-omitted")?.status).toBe("warn");
   });
 });

@@ -13,7 +13,7 @@ import type { RuleContext } from "../src/types";
 
 const PAGE = "http://127.0.0.1:18923/";
 
-function checks(head: string, chunk?: string) {
+async function checks(head: string, chunk?: string) {
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>CSP repro page for squirrel</title>${head}</head><body><h1>Repro</h1></body></html>`;
   const scripts = chunk
     ? [
@@ -34,14 +34,14 @@ function checks(head: string, chunk?: string) {
     site: { baseUrl: PAGE, pages: [], scripts, preloadedScripts: [] },
     options: {},
   } as unknown as RuleContext;
-  return cspBlocksOwnResourcesRule.run(ctx).checks;
+  return (await cspBlocksOwnResourcesRule.run(ctx)).checks;
 }
 
 const REPRO_CHUNK = `function loadReplay(){ if (window.__replay) return import("https://openpanel.dev/op1-replay.js"); }`;
 
 describe("security/csp-blocks-own-resources — hosts named only inside a chunk (pub#776)", () => {
-  test("the issue's repro gives no warning, only an informational note", () => {
-    const result = checks(`<script src="/app.js" defer></script>`, REPRO_CHUNK);
+  test("the issue's repro gives no warning, only an informational note", async () => {
+    const result = (await checks(`<script src="/app.js" defer></script>`, REPRO_CHUNK));
     expect(result.map((c) => c.status)).toEqual(["pass", "info"]);
     const note = result[1]!;
     expect(note.name).toBe("csp-chunk-only-hosts");
@@ -55,21 +55,21 @@ describe("security/csp-blocks-own-resources — hosts named only inside a chunk 
     });
   });
 
-  test("a host the HTML loads and the CSP blocks is still a warning, and is not repeated in the note", () => {
-    const result = checks(
+  test("a host the HTML loads and the CSP blocks is still a warning, and is not repeated in the note", async () => {
+    const result = (await checks(
       `<script src="/app.js" defer></script><script src="https://openpanel.dev/op1.js"></script>`,
       REPRO_CHUNK,
-    );
+    ));
     expect(result.map((c) => c.status)).toEqual(["warn"]);
     expect(result[0]!.items?.map((i) => i.meta?.found)).toEqual(["html"]);
   });
 
-  test("other HTML attributes the CSP blocks still warn", () => {
+  test("other HTML attributes the CSP blocks still warn", async () => {
     for (const head of [
       `<link rel="stylesheet" href="https://cdn.other.test/a.css">`,
       `<script src="https://cdn.other.test/a.js"></script>`,
     ]) {
-      expect(checks(head)[0]!.status).toBe("warn");
+      expect((await checks(head))[0]!.status).toBe("warn");
     }
   });
 });

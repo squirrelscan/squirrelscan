@@ -304,9 +304,9 @@ describe("the rule: no spread, one cap with the report, and the omitted count is
       collectedSignals: { pages },
       ...extra,
     } as unknown as RuleContext);
-  const named = (r: ReturnType<typeof run>, name: string) => r.checks.find((c) => c.name === name);
+  const named = (r: Awaited<ReturnType<typeof run>>, name: string) => r.checks.find((c) => c.name === name);
 
-  test("a page record with far more findings than an argument list can hold does not throw, and other pages still report", () => {
+  test("a page record with far more findings than an argument list can hold does not throw, and other pages still report", async () => {
     const hostile = signal("<html><body>x</body></html>", "https://shop.acme.test/dump");
     const one = fake(1, 1);
     hostile.secrets = Array.from({ length: 1_000_000 }, () => one); // what a spread of this size throws on
@@ -314,23 +314,23 @@ describe("the rule: no spread, one cap with the report, and the omitted count is
       `<html><body><p>${v.stripe()}</p></body></html>`,
       "https://shop.acme.test/real",
     );
-    const result = run([hostile, normal]);
+    const result = (await run([hostile, normal]));
     const high = named(result, "leaked-secrets-high");
     expect(high).toBeDefined();
     expect(high!.message).toContain("high-confidence");
     expect(JSON.stringify(result).length).toBeLessThan(2 * 1024 * 1024);
   });
 
-  test("the same holds for the legacy site.pages path and for external scripts", () => {
+  test("the same holds for the legacy site.pages path and for external scripts", async () => {
     const body = Array.from({ length: 2_500 }, () => `<p>${v.stripe()}</p>`).join("");
     const parsed = page(`<html><body>${body}</body></html>`);
-    const legacy = leakedSecretsRule.run({
+    const legacy = (await leakedSecretsRule.run({
       site: {
         baseUrl: URL_,
         pages: [{ url: URL_, statusCode: 200, parsed }],
         scripts: [{ url: "https://shop.acme.test/a.js", content: body }],
       },
-    } as unknown as RuleContext);
+    } as unknown as RuleContext));
     expect(named(legacy, "leaked-secrets-omitted")).toBeDefined();
     expect(named(legacy, "leaked-secrets-omitted")!.items!.map((i) => i.id)).toContain(URL_);
     expect(named(legacy, "leaked-secrets-omitted")!.items!.map((i) => i.id)).toContain(
@@ -338,27 +338,27 @@ describe("the rule: no spread, one cap with the report, and the omitted count is
     );
   });
 
-  test("a check lists at most the report's cap, the rest is details.additional, and the message counts them all", () => {
+  test("a check lists at most the report's cap, the rest is details.additional, and the message counts them all", async () => {
     const pages = Array.from({ length: 3 }, (_, i) =>
       signal(
         `<html><body>${Array.from({ length: 800 }, () => `<p>${v.stripe()}</p>`).join("")}</body></html>`,
         `https://shop.acme.test/p${i}`,
       ),
     );
-    const high = named(run(pages), "leaked-secrets-high")!;
+    const high = named(await run(pages), "leaked-secrets-high")!;
     expect(high.items).toHaveLength(1000);
     expect(high.details).toEqual({ additional: 2400 - 1000 });
     expect(high.message).toContain("2400 high-confidence");
   });
 
-  test("a page cut by the cap adds a warn check naming the page and the count, in the JSON too", () => {
+  test("a page cut by the cap adds a warn check naming the page and the count, in the JSON too", async () => {
     const hostile = signal(
       `<html><body>${Array.from({ length: 3_000 }, () => `<p>${v.stripe()}</p>`).join("")}</body></html>`,
       "https://shop.acme.test/dump",
     );
     const omittedCount = hostile.secretsOmitted!;
     expect(omittedCount).toBeGreaterThan(0);
-    const check = named(run([hostile]), "leaked-secrets-omitted")!;
+    const check = named(await run([hostile]), "leaked-secrets-omitted")!;
     expect(check.status).toBe("warn");
     expect(check.message).toContain(`${omittedCount} more`);
     expect(check.details).toEqual({ omitted: omittedCount, perPageCap: PAGE_FINDINGS_CAP, siteCap: SITE_FINDINGS_CAP, atLeast: true });
@@ -369,10 +369,10 @@ describe("the rule: no spread, one cap with the report, and the omitted count is
     expect(JSON.parse(JSON.stringify(check)).details.omitted).toBe(omittedCount);
   });
 
-  test("a page under every cap: no omitted check, no details on the tiers, no extra field on the record", () => {
+  test("a page under every cap: no omitted check, no details on the tiers, no extra field on the record", async () => {
     const small = signal(`<html><body><p>${v.stripe()}</p></body></html>`);
     expect("secretsOmitted" in small).toBe(false);
-    const result = run([small]);
+    const result = (await run([small]));
     expect(named(result, "leaked-secrets-omitted")).toBeUndefined();
     expect(named(result, "leaked-secrets-high")!.details).toBeUndefined();
   });
@@ -391,16 +391,16 @@ describe("the rule's lists, from forged page records (#1554 review)", () => {
       collectedSignals: { pages },
     } as unknown as RuleContext);
 
-  test("the critical check lists at most the cap and records the rest in details.additional", () => {
+  test("the critical check lists at most the cap and records the rest in details.additional", async () => {
     const rec = signal("https://shop.acme.test/dump");
     rec.secrets = Array.from({ length: 1_500 }, (_, i) => fake(0, i));
-    const check = run([rec]).checks.find((c) => c.name === "leaked-secrets-critical")!;
+    const check = (await run([rec])).checks.find((c) => c.name === "leaked-secrets-critical")!;
     expect(check.items).toHaveLength(PAGE_FINDINGS_CAP);
     expect(check.details).toEqual({ severity: "critical", additional: 500 });
     expect(check.message).toContain("1500 critical");
   });
 
-  test("the medium, public and informational checks do the same", () => {
+  test("the medium, public and informational checks do the same", async () => {
     const rec = signal("https://shop.acme.test/dump");
     rec.secrets = [
       ...Array.from({ length: 1_200 }, (_, i) => fake(2, i)),
@@ -411,7 +411,7 @@ describe("the rule's lists, from forged page records (#1554 review)", () => {
       })),
       ...Array.from({ length: 1_050 }, (_, i) => fake(3, 10_000 + i)),
     ];
-    const checks = run([rec]).checks;
+    const checks = (await run([rec])).checks;
     expect(checks.find((c) => c.name === "leaked-secrets-medium")!.details).toEqual({
       additional: 200,
     });
@@ -423,13 +423,13 @@ describe("the rule's lists, from forged page records (#1554 review)", () => {
     });
   });
 
-  test("the omitted check lists at most 20 sources and counts all of them", () => {
+  test("the omitted check lists at most 20 sources and counts all of them", async () => {
     const pages = Array.from({ length: 30 }, (_, i) => {
       const rec = signal(`https://shop.acme.test/p${i}`);
       rec.secretsOmitted = 5;
       return rec;
     });
-    const check = run(pages).checks.find((c) => c.name === "leaked-secrets-omitted")!;
+    const check = (await run(pages)).checks.find((c) => c.name === "leaked-secrets-omitted")!;
     expect(check.items).toHaveLength(20);
     expect(check.details).toEqual({ omitted: 150, perPageCap: PAGE_FINDINGS_CAP, siteCap: SITE_FINDINGS_CAP, atLeast: true });
     expect(check.message).toContain("150 more");

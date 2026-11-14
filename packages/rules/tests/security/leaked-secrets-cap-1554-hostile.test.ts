@@ -64,7 +64,7 @@ for (const [label, bytes] of [
 ] as const) {
   describe(`${label} of distinct key shapes`, () => {
     for (const [shape, build] of shapes) {
-      test(shape, () => {
+      test(shape, async () => {
         const html = build(bytes);
         const parsed = parsePage(html, URL_);
         const started = performance.now();
@@ -73,10 +73,10 @@ for (const [label, bytes] of [
         expect(signal.secrets.length).toBeLessThanOrEqual(PAGE_FINDINGS_CAP);
         expect(signal.secretsOmitted ?? 0).toBeGreaterThan(0);
         const ruleStart = performance.now();
-        const result = leakedSecretsRule.run({
+        const result = (await leakedSecretsRule.run({
           site: { baseUrl: URL_, pages: [], scripts: [] },
           collectedSignals: { pages: [signal] },
-        } as unknown as RuleContext);
+        } as unknown as RuleContext));
         const ruleMs = performance.now() - ruleStart;
         const json = JSON.stringify(result).length;
         expect(json).toBeLessThan(2 * 1024 * 1024);

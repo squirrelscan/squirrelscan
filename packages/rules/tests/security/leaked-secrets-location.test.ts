@@ -16,7 +16,7 @@ const PAGE = "https://app.acme.test/";
 const inlineSecret = "sk_live_" + "aB3dE5gH7jK9mN1pQ3rS5tU7"; // pragma: allowlist secret
 const externalSecret = "sk_live_" + "zY8xW6vU4tS2rQ0pN8mL6kJ4"; // pragma: allowlist secret
 
-function run(html: string, scripts: { url: string; content: string }[] = []): CheckItem[] {
+async function run(html: string, scripts: { url: string; content: string }[] = []): Promise<CheckItem[]> {
   const ctx = {
     site: {
       baseUrl: PAGE,
@@ -35,15 +35,15 @@ function run(html: string, scripts: { url: string; content: string }[] = []): Ch
     options: {},
   } as unknown as RuleContext;
 
-  return (leakedSecretsRule.run(ctx).checks ?? []).flatMap((check) => check.items ?? []);
+  return ((await leakedSecretsRule.run(ctx)).checks ?? []).flatMap((check) => check.items ?? []);
 }
 
 describe("leaked-secret source location metadata", () => {
-  test("inline items point into the script body and identify its page position", () => {
+  test("inline items point into the script body and identify its page position", async () => {
     const script = `window.config = { key: "${inlineSecret}" };`;
-    const items = run(
+    const items = (await run(
       `<html><body><script src="/vendor.js"></script><script>${script}</script></body></html>`
-    );
+    ));
     const item = items.find((candidate) => candidate.id.startsWith("Stripe Live Key:"));
 
     expect(item?.meta).toMatchObject({
@@ -57,11 +57,11 @@ describe("leaked-secret source location metadata", () => {
     expect(JSON.stringify(item)).not.toContain(inlineSecret);
   });
 
-  test("external-script offsets use UTF-16 indices in the fetched script body", () => {
+  test("external-script offsets use UTF-16 indices in the fetched script body", async () => {
     const content = `const note = "🔥"; export const config = { key: "${externalSecret}" };`;
-    const items = run("<html><body>ok</body></html>", [
+    const items = (await run("<html><body>ok</body></html>", [
       { url: "https://app.acme.test/app.js", content },
-    ]);
+    ]));
     const item = items.find((candidate) => candidate.id.startsWith("Stripe Live Key:"));
 
     expect(item?.meta).toMatchObject({

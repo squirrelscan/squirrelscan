@@ -29,67 +29,67 @@ const CONTACT_FORM = `<form id="contact-form" action="/submit">
   <button type="submit">Send</button>
 </form>`;
 
-function formCaptchaCheck(checks: ReturnType<typeof formCaptchaRule.run>["checks"]) {
+function formCaptchaCheck(checks: Awaited<ReturnType<typeof formCaptchaRule.run>>["checks"]) {
   return checks.find((c) => c.name === "form-captcha");
 }
 
 describe("security/form-captcha — FormShield detection", () => {
-  test("#696: FormShield beacon script → public form counts as protected", () => {
+  test("#696: FormShield beacon script → public form counts as protected", async () => {
     const html = page(
       `<script async src="https://api.formshield.dev/js/formshield.js" data-fs-project-key="fs_pub_live_abc" data-fs-action="pageview" data-fs-mode="pageload"></script>`,
       CONTACT_FORM,
     );
-    const { checks } = formCaptchaRule.run(ctx(html));
+    const { checks } = (await formCaptchaRule.run(ctx(html)));
     expect(formCaptchaCheck(checks)?.status).toBe("pass");
   });
 
-  test("FormShield beacon proxied under a different host, keyed via data-fs-project-key", () => {
+  test("FormShield beacon proxied under a different host, keyed via data-fs-project-key", async () => {
     const html = page(
       `<script async src="/assets/beacon.js" data-fs-project-key="fs_pub_live_abc"></script>`,
       CONTACT_FORM,
     );
-    const { checks } = formCaptchaRule.run(ctx(html));
+    const { checks } = (await formCaptchaRule.run(ctx(html)));
     expect(formCaptchaCheck(checks)?.status).toBe("pass");
   });
 
-  test("FormShield covers ALL public forms on a multi-form page (unlike the generic single-form heuristic)", () => {
+  test("FormShield covers ALL public forms on a multi-form page (unlike the generic single-form heuristic)", async () => {
     const html = page(
       `<script src="https://api.formshield.dev/js/formshield.js" data-fs-project-key="fs_pub_live_abc"></script>`,
       `${CONTACT_FORM}
       <form id="newsletter" action="/subscribe"><input type="email" name="email"><button>Subscribe</button></form>`,
     );
-    const { checks } = formCaptchaRule.run(ctx(html));
+    const { checks } = (await formCaptchaRule.run(ctx(html)));
     expect(formCaptchaCheck(checks)?.status).toBe("pass");
   });
 
-  test("true positive preserved: no FormShield, no CAPTCHA → still flagged", () => {
+  test("true positive preserved: no FormShield, no CAPTCHA → still flagged", async () => {
     const html = page("", CONTACT_FORM);
-    const { checks } = formCaptchaRule.run(ctx(html));
+    const { checks } = (await formCaptchaRule.run(ctx(html)));
     expect(formCaptchaCheck(checks)?.status).toBe("warn");
     expect(formCaptchaCheck(checks)?.message).toContain("without CAPTCHA");
   });
 
-  test("unrelated script src containing 'formshield' as a substring only (not the real host) still flags", () => {
+  test("unrelated script src containing 'formshield' as a substring only (not the real host) still flags", async () => {
     const html = page(
       `<script src="https://example.com/not-formshield.dev-related.js"></script>`,
       CONTACT_FORM,
     );
-    const { checks } = formCaptchaRule.run(ctx(html));
+    const { checks } = (await formCaptchaRule.run(ctx(html)));
     expect(formCaptchaCheck(checks)?.status).toBe("warn");
   });
 
-  test("review regression: full beacon path on a NON-formshield host does not count as protection", () => {
+  test("review regression: full beacon path on a NON-formshield host does not count as protection", async () => {
     const html = page(
       `<script src="https://evil.example/formshield.dev/js/formshield.js"></script>`,
       CONTACT_FORM,
     );
-    const { checks } = formCaptchaRule.run(ctx(html));
+    const { checks } = (await formCaptchaRule.run(ctx(html)));
     expect(formCaptchaCheck(checks)?.status).toBe("warn");
   });
 });
 
 describe("security/form-captcha — explicit-render Turnstile/CAPTCHA loaders (#1173)", () => {
-  test("#1173: perspectivesintopractice.com/contact repro — preload link + explicit-render container, no script[src]/iframe/.cf-turnstile → pass", () => {
+  test("#1173: perspectivesintopractice.com/contact repro — preload link + explicit-render container, no script[src]/iframe/.cf-turnstile → pass", async () => {
     const html = page(
       `<link rel="preload" as="script" href="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit">`,
       `<form id="contact-form" action="/submit">
@@ -99,35 +99,35 @@ describe("security/form-captcha — explicit-render Turnstile/CAPTCHA loaders (#
         <button type="submit">Send</button>
       </form>`,
     );
-    const { checks } = formCaptchaRule.run(ctx(html));
+    const { checks } = (await formCaptchaRule.run(ctx(html)));
     expect(formCaptchaCheck(checks)?.status).toBe("pass");
   });
 
-  test("modulepreload link to a CAPTCHA provider script counts as a page-level signal", () => {
+  test("modulepreload link to a CAPTCHA provider script counts as a page-level signal", async () => {
     const html = page(
       `<link rel="modulepreload" href="https://www.google.com/recaptcha/releases/abc/recaptcha__en.js">`,
       CONTACT_FORM,
     );
-    const { checks } = formCaptchaRule.run(ctx(html));
+    const { checks } = (await formCaptchaRule.run(ctx(html)));
     expect(formCaptchaCheck(checks)?.status).toBe("pass");
   });
 
-  test("prefetch link to a CAPTCHA provider script counts as a page-level signal", () => {
+  test("prefetch link to a CAPTCHA provider script counts as a page-level signal", async () => {
     const html = page(`<link rel="prefetch" href="https://hcaptcha.com/1/api.js">`, CONTACT_FORM);
-    const { checks } = formCaptchaRule.run(ctx(html));
+    const { checks } = (await formCaptchaRule.run(ctx(html)));
     expect(formCaptchaCheck(checks)?.status).toBe("pass");
   });
 
-  test("preload link without as=script does NOT count (not a script loader)", () => {
+  test("preload link without as=script does NOT count (not a script loader)", async () => {
     const html = page(
       `<link rel="preload" as="style" href="https://challenges.cloudflare.com/turnstile/v0/api.css">`,
       CONTACT_FORM,
     );
-    const { checks } = formCaptchaRule.run(ctx(html));
+    const { checks } = (await formCaptchaRule.run(ctx(html)));
     expect(formCaptchaCheck(checks)?.status).toBe("warn");
   });
 
-  test("explicit-render container id (turnstile) with no script/iframe/class at all → pass", () => {
+  test("explicit-render container id (turnstile) with no script/iframe/class at all → pass", async () => {
     const html = page(
       "",
       `<form id="contact-form" action="/submit">
@@ -137,96 +137,96 @@ describe("security/form-captcha — explicit-render Turnstile/CAPTCHA loaders (#
         <button type="submit">Send</button>
       </form>`,
     );
-    const { checks } = formCaptchaRule.run(ctx(html));
+    const { checks } = (await formCaptchaRule.run(ctx(html)));
     expect(formCaptchaCheck(checks)?.status).toBe("pass");
   });
 
-  test("g-recaptcha explicit-render container id (not the .g-recaptcha class) → pass", () => {
+  test("g-recaptcha explicit-render container id (not the .g-recaptcha class) → pass", async () => {
     const html = page("", `${CONTACT_FORM}<div id="g-recaptcha-container"></div>`);
-    const { checks } = formCaptchaRule.run(ctx(html));
+    const { checks } = (await formCaptchaRule.run(ctx(html)));
     expect(formCaptchaCheck(checks)?.status).toBe("pass");
   });
 
-  test("h-captcha and frc-captcha explicit-render container tokens are also detected", () => {
+  test("h-captcha and frc-captcha explicit-render container tokens are also detected", async () => {
     for (const token of ["h-captcha-widget", "frc-captcha-box"]) {
       const html = page("", `${CONTACT_FORM}<div id="${token}"></div>`);
-      const { checks } = formCaptchaRule.run(ctx(html));
+      const { checks } = (await formCaptchaRule.run(ctx(html)));
       expect(formCaptchaCheck(checks)?.status).toBe("pass");
     }
   });
 
-  test("bare 'captcha' token WITH a container hint word (widget/container/box) counts as a page-level signal", () => {
+  test("bare 'captcha' token WITH a container hint word (widget/container/box) counts as a page-level signal", async () => {
     const html = page("", `${CONTACT_FORM}<div id="captcha-widget"></div>`);
-    const { checks } = formCaptchaRule.run(ctx(html));
+    const { checks } = (await formCaptchaRule.run(ctx(html)));
     expect(formCaptchaCheck(checks)?.status).toBe("pass");
   });
 
-  test("false-positive guard: bare 'captcha' token WITHOUT a container hint (e.g. help text link) does NOT match", () => {
+  test("false-positive guard: bare 'captcha' token WITHOUT a container hint (e.g. help text link) does NOT match", async () => {
     const html = page(
       "",
       `${CONTACT_FORM}<a id="captcha-help-text" href="/faq#captcha">What's a CAPTCHA?</a>`,
     );
-    const { checks } = formCaptchaRule.run(ctx(html));
+    const { checks } = (await formCaptchaRule.run(ctx(html)));
     expect(formCaptchaCheck(checks)?.status).toBe("warn");
   });
 
-  test("false-positive guard: 'recaptcha' as a substring of an unrelated id does not match provider tokens", () => {
+  test("false-positive guard: 'recaptcha' as a substring of an unrelated id does not match provider tokens", async () => {
     // "notrecaptcha" is not the same delimited token as "recaptcha" or "g-recaptcha"
     const html = page("", `${CONTACT_FORM}<div id="notrecaptcha-info"></div>`);
-    const { checks } = formCaptchaRule.run(ctx(html));
+    const { checks } = (await formCaptchaRule.run(ctx(html)));
     expect(formCaptchaCheck(checks)?.status).toBe("warn");
   });
 
-  test("review finding #1 (confirmed): bare 'captcha' and a hint word on SEPARATE, unrelated attributes of the same element must NOT match — an FAQ link with an unrelated 'footer-widget' styling class must still warn", () => {
+  test("review finding #1 (confirmed): bare 'captcha' and a hint word on SEPARATE, unrelated attributes of the same element must NOT match — an FAQ link with an unrelated 'footer-widget' styling class must still warn", async () => {
     const html = page(
       "",
       `${CONTACT_FORM}<a id="captcha-help-text" class="footer-widget">What is a CAPTCHA?</a>`,
     );
-    const { checks } = formCaptchaRule.run(ctx(html));
+    const { checks } = (await formCaptchaRule.run(ctx(html)));
     expect(formCaptchaCheck(checks)?.status).toBe("warn");
   });
 
-  test("review round 2 finding (confirmed): heading anchor slug auto-generated from prose ABOUT Turnstile does not count as a mount point", () => {
+  test("review round 2 finding (confirmed): heading anchor slug auto-generated from prose ABOUT Turnstile does not count as a mount point", async () => {
     // e.g. rehype-slug turning "Cloudflare Turnstile vs reCAPTCHA" into <h2 id="...">
     const html = page(
       "",
       `${CONTACT_FORM}<h2 id="cloudflare-turnstile-vs-recaptcha">Cloudflare Turnstile vs reCAPTCHA</h2>`,
     );
-    const { checks } = formCaptchaRule.run(ctx(html));
+    const { checks } = (await formCaptchaRule.run(ctx(html)));
     expect(formCaptchaCheck(checks)?.status).toBe("warn");
   });
 
-  test("review round 2 finding (confirmed): a physical-turnstile counter div WITH text content is not a CAPTCHA mount point", () => {
+  test("review round 2 finding (confirmed): a physical-turnstile counter div WITH text content is not a CAPTCHA mount point", async () => {
     const html = page(
       "",
       `${CONTACT_FORM}<div id="turnstile-status" class="turnstile-counter-widget">3 people through</div>`,
     );
-    const { checks } = formCaptchaRule.run(ctx(html));
+    const { checks } = (await formCaptchaRule.run(ctx(html)));
     expect(formCaptchaCheck(checks)?.status).toBe("warn");
   });
 
-  test("the same turnstile-status/turnstile-counter-widget markup with NO text content is still a valid mount point (emptiness, not the id name, is what's gated)", () => {
+  test("the same turnstile-status/turnstile-counter-widget markup with NO text content is still a valid mount point (emptiness, not the id name, is what's gated)", async () => {
     const html = page(
       "",
       `${CONTACT_FORM}<div id="turnstile-status" class="turnstile-counter-widget"></div>`,
     );
-    const { checks } = formCaptchaRule.run(ctx(html));
+    const { checks } = (await formCaptchaRule.run(ctx(html)));
     expect(formCaptchaCheck(checks)?.status).toBe("pass");
   });
 
-  test("bare 'captcha' + hint word DO count when they form a single hyphen-delimited compound (captcha-widget)", () => {
+  test("bare 'captcha' + hint word DO count when they form a single hyphen-delimited compound (captcha-widget)", async () => {
     const html = page("", `${CONTACT_FORM}<div id="captcha-widget"></div>`);
-    const { checks } = formCaptchaRule.run(ctx(html));
+    const { checks } = (await formCaptchaRule.run(ctx(html)));
     expect(formCaptchaCheck(checks)?.status).toBe("pass");
   });
 
-  test("bare 'captcha' + hint word compound also matches camelCase (captchaBox)", () => {
+  test("bare 'captcha' + hint word compound also matches camelCase (captchaBox)", async () => {
     const html = page("", `${CONTACT_FORM}<div id="captchaBox"></div>`);
-    const { checks } = formCaptchaRule.run(ctx(html));
+    const { checks } = (await formCaptchaRule.run(ctx(html)));
     expect(formCaptchaCheck(checks)?.status).toBe("pass");
   });
 
-  test("review finding #2 (confirmed): explicit-render container nested inside an EXCLUDED nav-search form does not protect an unrelated public contact form", () => {
+  test("review finding #2 (confirmed): explicit-render container nested inside an EXCLUDED nav-search form does not protect an unrelated public contact form", async () => {
     const html = page(
       "",
       `<form id="nav-search" action="/search">
@@ -235,32 +235,32 @@ describe("security/form-captcha — explicit-render Turnstile/CAPTCHA loaders (#
       </form>
       ${CONTACT_FORM}`,
     );
-    const { checks } = formCaptchaRule.run(ctx(html));
+    const { checks } = (await formCaptchaRule.run(ctx(html)));
     expect(formCaptchaCheck(checks)?.status).toBe("warn");
     expect(formCaptchaCheck(checks)?.items).toEqual([{ id: "#contact-form" }]);
   });
 
-  test("assumeProtected loosening: page-level signal + one PUBLIC form protects it even with an extra nav search form present", () => {
+  test("assumeProtected loosening: page-level signal + one PUBLIC form protects it even with an extra nav search form present", async () => {
     const html = page(
       `<link rel="preload" as="script" href="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit">`,
       `<form id="nav-search" action="/search"><input type="text" name="q"></form>
       <div id="turnstile-widget"></div>
       ${CONTACT_FORM}`,
     );
-    const { checks } = formCaptchaRule.run(ctx(html));
+    const { checks } = (await formCaptchaRule.run(ctx(html)));
     expect(formCaptchaCheck(checks)?.status).toBe("pass");
   });
 
-  test("modulepreload/prefetch links with a combined rel token list are still detected (rel is a token list, not an exact string)", () => {
+  test("modulepreload/prefetch links with a combined rel token list are still detected (rel is a token list, not an exact string)", async () => {
     const html = page(
       `<link rel="preload modulepreload" as="script" href="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit">`,
       CONTACT_FORM,
     );
-    const { checks } = formCaptchaRule.run(ctx(html));
+    const { checks } = (await formCaptchaRule.run(ctx(html)));
     expect(formCaptchaCheck(checks)?.status).toBe("pass");
   });
 
-  test("codex review regression: a CAPTCHA belonging to a DIFFERENT form (login) is not credited to an unrelated public contact form", () => {
+  test("codex review regression: a CAPTCHA belonging to a DIFFERENT form (login) is not credited to an unrelated public contact form", async () => {
     const html = page(
       "",
       `<form id="login-form" action="/login">
@@ -270,18 +270,18 @@ describe("security/form-captcha — explicit-render Turnstile/CAPTCHA loaders (#
       </form>
       ${CONTACT_FORM}`,
     );
-    const { checks } = formCaptchaRule.run(ctx(html));
+    const { checks } = (await formCaptchaRule.run(ctx(html)));
     expect(formCaptchaCheck(checks)?.status).toBe("warn");
     expect(formCaptchaCheck(checks)?.items).toEqual([{ id: "#contact-form" }]);
   });
 
-  test("true positive preserved: two genuinely unprotected public forms still flag, page-level signal does not blanket-cover multiple public forms", () => {
+  test("true positive preserved: two genuinely unprotected public forms still flag, page-level signal does not blanket-cover multiple public forms", async () => {
     const html = page(
       "",
       `${CONTACT_FORM}
       <form id="newsletter" action="/subscribe"><input type="email" name="email"><button>Subscribe</button></form>`,
     );
-    const { checks } = formCaptchaRule.run(ctx(html));
+    const { checks } = (await formCaptchaRule.run(ctx(html)));
     expect(formCaptchaCheck(checks)?.status).toBe("warn");
     expect(formCaptchaCheck(checks)?.items?.length).toBe(2);
   });
@@ -291,7 +291,7 @@ describe("security/form-captcha — explicit-render Turnstile/CAPTCHA loaders (#
 // component) mounts after hydration; the static HTML holds only the site key
 // the runtime will render with.
 describe("security/form-captcha: a site key in the page's config", () => {
-  const run = (head: string, body = CONTACT_FORM) => formCaptchaCheck(formCaptchaRule.run(ctx(page(head, body))).checks)?.status;
+  const run = async (head: string, body = CONTACT_FORM) => formCaptchaCheck((await formCaptchaRule.run(ctx(page(head, body)))).checks)?.status;
 
   test.each([
     ["Nuxt runtime config (the issue's page)", '<script>window.__NUXT__={};window.__NUXT__.config={public:{turnstile:{siteKey:"0x4AAAAAADPN4lRzZ4X3GkuZ"},baseUrl:"https://one-dot.de"}}</script>'],
@@ -305,8 +305,8 @@ describe("security/form-captcha: a site key in the page's config", () => {
       '<script>var defaults = { turnstile: { enabled: false, siteKey: "1x00000000000000000000AA" } }; var live = { turnstile: { siteKey: "0x4AAAAAAAxyz123" } };</script>',
     ],
     ["a flag inside a sub-object is not the provider's own", '<script>window.cfg = { turnstile: { siteKey: "0x4AAAAAAAxyz123", retry: { enabled: false } } };</script>'],
-  ])("%s protects the single public form", (_name, head) => {
-    expect(run(head)).toBe("pass");
+  ])("%s protects the single public form", async (_name, head) => {
+    expect(await run(head)).toBe("pass");
   });
 
   test.each([
@@ -328,12 +328,12 @@ describe("security/form-captcha: a site key in the page's config", () => {
       "an object too long to read to its end",
       `<script>window.cfg = { turnstile: { siteKey: "0x4AAAAAAAxyz123", options: { message: "${"x".repeat(4100)}" }, enabled: false } };</script>`,
     ],
-  ])("%s is not protection", (_name, head) => {
-    expect(run(head)).toBe("warn");
+  ])("%s is not protection", async (_name, head) => {
+    expect(await run(head)).toBe("warn");
   });
 
-  test("two public forms with only a page-level config still warn, like the other page-level signals", () => {
+  test("two public forms with only a page-level config still warn, like the other page-level signals", async () => {
     const second = CONTACT_FORM.replace('id="contact-form"', 'id="newsletter-form"');
-    expect(run('<script>window.__NUXT__={config:{public:{turnstile:{siteKey:"0x4AAAAAADPN4lRzZ4X3GkuZ"}}}}</script>', CONTACT_FORM + second)).toBe("warn");
+    expect(await run('<script>window.__NUXT__={config:{public:{turnstile:{siteKey:"0x4AAAAAADPN4lRzZ4X3GkuZ"}}}}</script>', CONTACT_FORM + second)).toBe("warn");
   });
 });

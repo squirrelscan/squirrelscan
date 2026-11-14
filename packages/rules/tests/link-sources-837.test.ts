@@ -53,8 +53,8 @@ function site(
 
 const named = (checks: CheckResult[], name: string) => checks.find((c) => c.name === name)!;
 
-describe("links/broken-links: one row per source page (pub#837)", () => {
-  const checks = brokenLinksRule.run(
+describe("links/broken-links: one row per source page (pub#837)", async () => {
+  const checks = (await brokenLinksRule.run(
     site([
       {
         url: `${BASE}/a`,
@@ -67,7 +67,7 @@ describe("links/broken-links: one row per source page (pub#837)", () => {
       { url: `${BASE}/c`, links: [{ url: gone }] },
       { url: gone, status: 404, links: [] },
     ]),
-  ).checks;
+  )).checks;
   const item = named(checks, "broken-links").items![0]!;
 
   test("a page that links twice is listed once, with a link count", () => {
@@ -84,10 +84,10 @@ describe("links/broken-links: one row per source page (pub#837)", () => {
     expect(item.label).toBe(`${gone} (404), linked in the page content and the footer`);
   });
 
-  test("refused and rate-limited targets list each page once too", () => {
+  test("refused and rate-limited targets list each page once too", async () => {
     const refused = `${BASE}/private`;
     const throttled = `${BASE}/busy`;
-    const { checks } = brokenLinksRule.run(
+    const { checks } = (await brokenLinksRule.run(
       site(
         [
           {
@@ -102,7 +102,7 @@ describe("links/broken-links: one row per source page (pub#837)", () => {
           ],
         },
       ),
-    );
+    ));
     expect(named(checks, "refused-links").items![0]).toMatchObject({
       sourcePages: [`${BASE}/`],
       sources: [{ page: `${BASE}/`, links: 2, sections: { header: 1 } }],
@@ -130,8 +130,8 @@ describe("links/redirect-chains: links-to-redirect per source page (pub#837)", (
     httpToHttps: false,
   };
 
-  test("each source page once, with its links and sections", () => {
-    const { checks } = redirectChainsRule.run(
+  test("each source page once, with its links and sections", async () => {
+    const { checks } = (await redirectChainsRule.run(
       site([
         { url: moved, finalUrl: `${BASE}/new`, redirectChain: chain, links: [] },
         {
@@ -143,7 +143,7 @@ describe("links/redirect-chains: links-to-redirect per source page (pub#837)", (
         },
         { url: `${BASE}/b`, links: [{ url: moved }] },
       ]),
-    );
+    ));
     expect(named(checks, "links-to-redirect").items![0]).toMatchObject({
       sourcePages: [`${BASE}/a`, `${BASE}/b`],
       sources: [
@@ -155,7 +155,7 @@ describe("links/redirect-chains: links-to-redirect per source page (pub#837)", (
 });
 
 describe("links/broken-anchors: per source page (pub#837)", () => {
-  test("a page that links the missing id twice is one source with two links", () => {
+  test("a page that links the missing id twice is one source with two links", async () => {
     const target = `${BASE}/doc`;
     const sourceHtml =
       '<html><body><nav><a href="/doc#missing">a</a></nav><main><a href="/doc#missing">b</a></main></body></html>';
@@ -174,7 +174,7 @@ describe("links/broken-anchors: per source page (pub#837)", () => {
         ],
       },
     } as unknown as RuleContext;
-    const item = named(brokenAnchorsRule.run(ctx).checks, "broken-anchors").items![0]!;
+    const item = named((await brokenAnchorsRule.run(ctx)).checks, "broken-anchors").items![0]!;
     expect(item.sourcePages).toEqual([`${BASE}/a`]);
     expect(item.sources).toEqual([
       { page: `${BASE}/a`, links: 2, sections: { navigation: 1, content: 1 } },
@@ -182,7 +182,7 @@ describe("links/broken-anchors: per source page (pub#837)", () => {
     expect(item.meta).toMatchObject({ linkedFrom: 1 });
   });
 
-  test("same-page links to a missing id count every link, on both engines", () => {
+  test("same-page links to a missing id count every link, on both engines", async () => {
     const url = `${BASE}/faq`;
     const html =
       '<html><body><a href="#gone">a</a><a href="#gone">b</a><a href="#gone">c</a><h2 id="here">x</h2></body></html>';
@@ -203,7 +203,7 @@ describe("links/broken-anchors: per source page (pub#837)", () => {
       collectedSignals: { pages: [buildCollectedPageSignal({ url, parsed, rendered: false })] },
     } as unknown as RuleContext;
     for (const ctx of [dom, stream]) {
-      const item = named(brokenAnchorsRule.run(ctx).checks, "broken-anchors").items![0]!;
+      const item = named((await brokenAnchorsRule.run(ctx)).checks, "broken-anchors").items![0]!;
       expect(item.sources).toEqual([{ page: url, links: 3 }]);
     }
   });
@@ -212,8 +212,8 @@ describe("links/broken-anchors: per source page (pub#837)", () => {
 describe("links/broken-external-links: per source page (pub#837)", () => {
   const dead = "https://partner.example/gone";
 
-  test("each source page once, with its links and sections there", () => {
-    const { checks } = brokenExternalLinksRule.run(
+  test("each source page once, with its links and sections there", async () => {
+    const { checks } = (await brokenExternalLinksRule.run(
       site(
         [
           {
@@ -231,7 +231,7 @@ describe("links/broken-external-links: per source page (pub#837)", () => {
           ] as ExternalLinkCheckData[],
         },
       ),
-    );
+    ));
     const item = named(checks, "broken-external-links").items![0]!;
     expect(item.sourcePages).toEqual([`${BASE}/a`, `${BASE}/b`]);
     expect(item.sources).toEqual([
@@ -241,14 +241,14 @@ describe("links/broken-external-links: per source page (pub#837)", () => {
     expect(item.label).toBe(`${dead} (404), linked in the page content and the footer`);
   });
 
-  test("a source page the audited pages do not show gets no detail row", () => {
-    const { checks } = brokenExternalLinksRule.run(
+  test("a source page the audited pages do not show gets no detail row", async () => {
+    const { checks } = (await brokenExternalLinksRule.run(
       site([{ url: `${BASE}/a`, links: [{ url: dead, isInternal: false, section: "footer" }] }], {
         externalLinks: [
           { href: dead, status: 410, error: null, sourcePages: [`${BASE}/a`, `${BASE}/unseen`] },
         ] as ExternalLinkCheckData[],
       }),
-    );
+    ));
     const item = named(checks, "broken-external-links").items![0]!;
     expect(item.sourcePages).toEqual([`${BASE}/a`, `${BASE}/unseen`]);
     expect(item.sources).toEqual([{ page: `${BASE}/a`, links: 1, sections: { footer: 1 } }]);

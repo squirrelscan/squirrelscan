@@ -41,8 +41,8 @@ function siteCtx(
   };
 }
 
-function run(rule: Rule, ctx: RuleContext): CheckResult[] {
-  return rule.run(ctx).checks as CheckResult[];
+async function run(rule: Rule, ctx: RuleContext): Promise<CheckResult[]> {
+  return (await rule.run(ctx)).checks as CheckResult[];
 }
 
 function check(checks: CheckResult[], name: string): CheckResult | undefined {
@@ -68,34 +68,34 @@ const goodHeaders = {
 };
 
 describe("perf/bad-caching", () => {
-  test("skips when no HTML pages with headers", () => {
-    const checks = run(badCachingRule, siteCtx([]));
+  test("skips when no HTML pages with headers", async () => {
+    const checks = (await run(badCachingRule, siteCtx([])));
     expect(check(checks, "bad-caching")?.status).toBe("skipped");
   });
 
-  test("passes a well-cached, compressed site", () => {
+  test("passes a well-cached, compressed site", async () => {
     const pages = Array.from({ length: 5 }, (_, i) => ({
       url: `https://example.com/p${i}`,
       headers: goodHeaders,
     }));
-    const checks = run(badCachingRule, siteCtx(pages));
+    const checks = (await run(badCachingRule, siteCtx(pages)));
     expect(verdict(checks, "bad-caching-freshness")).toBe("ok");
     expect(check(checks, "bad-caching-validators")?.status).toBe("pass");
     expect(verdict(checks, "bad-caching-compression")).toBe("ok");
   });
 
-  test("flags missing freshness across the site", () => {
+  test("flags missing freshness across the site", async () => {
     const pages = Array.from({ length: 4 }, (_, i) => ({
       url: `https://example.com/p${i}`,
       headers: { etag: '"x"', "content-encoding": "gzip" }, // no cache-control/expires
     }));
-    const checks = run(badCachingRule, siteCtx(pages));
+    const checks = (await run(badCachingRule, siteCtx(pages)));
     const freshness = check(checks, "bad-caching-freshness");
     expect(freshness?.status).toBe("info");
     expect(freshness?.pages?.length).toBeGreaterThan(0);
   });
 
-  test("no-store does not count as freshness", () => {
+  test("no-store does not count as freshness", async () => {
     const pages = Array.from({ length: 4 }, (_, i) => ({
       url: `https://example.com/p${i}`,
       headers: {
@@ -104,7 +104,7 @@ describe("perf/bad-caching", () => {
         "content-encoding": "gzip",
       },
     }));
-    const checks = run(badCachingRule, siteCtx(pages));
+    const checks = (await run(badCachingRule, siteCtx(pages)));
     expect(verdict(checks, "bad-caching-freshness")).toBe("flagged");
   });
 
@@ -115,7 +115,7 @@ describe("perf/bad-caching", () => {
   // caching policy, and the correct one for a document that must never be
   // served stale. Each pairs with the same header and no validator, which is
   // the case worth reporting: every request is a full transfer.
-  test("no-cache with a validator is a revalidation policy, not a missing one", () => {
+  test("no-cache with a validator is a revalidation policy, not a missing one", async () => {
     const pages = Array.from({ length: 4 }, (_, i) => ({
       url: `https://example.com/p${i}`,
       headers: {
@@ -124,20 +124,20 @@ describe("perf/bad-caching", () => {
         "content-encoding": "gzip",
       },
     }));
-    const checks = run(badCachingRule, siteCtx(pages));
+    const checks = (await run(badCachingRule, siteCtx(pages)));
     expect(verdict(checks, "bad-caching-freshness")).toBe("ok");
   });
 
-  test("no-cache with no validator has no caching policy at all", () => {
+  test("no-cache with no validator has no caching policy at all", async () => {
     const pages = Array.from({ length: 4 }, (_, i) => ({
       url: `https://example.com/p${i}`,
       headers: { "cache-control": "no-cache, max-age=3600", "content-encoding": "gzip" },
     }));
-    const checks = run(badCachingRule, siteCtx(pages));
+    const checks = (await run(badCachingRule, siteCtx(pages)));
     expect(verdict(checks, "bad-caching-freshness")).toBe("flagged");
   });
 
-  test("s-maxage=0 with a validator is a revalidation policy", () => {
+  test("s-maxage=0 with a validator is a revalidation policy", async () => {
     const pages = Array.from({ length: 4 }, (_, i) => ({
       url: `https://example.com/p${i}`,
       headers: {
@@ -146,22 +146,22 @@ describe("perf/bad-caching", () => {
         "content-encoding": "gzip",
       },
     }));
-    const checks = run(badCachingRule, siteCtx(pages));
+    const checks = (await run(badCachingRule, siteCtx(pages)));
     expect(verdict(checks, "bad-caching-freshness")).toBe("ok");
   });
 
-  test("s-maxage=0 with no validator has no caching policy at all", () => {
+  test("s-maxage=0 with no validator has no caching policy at all", async () => {
     const pages = Array.from({ length: 4 }, (_, i) => ({
       url: `https://example.com/p${i}`,
       headers: { "cache-control": "max-age=3600, s-maxage=0", "content-encoding": "gzip" },
     }));
-    const checks = run(badCachingRule, siteCtx(pages));
+    const checks = (await run(badCachingRule, siteCtx(pages)));
     expect(verdict(checks, "bad-caching-freshness")).toBe("flagged");
   });
 
   // The shape the issue was filed for: the default a framework or CDN emits
   // for an HTML document, and the one that used to fail 163 of 196 sites.
-  test("max-age=0, must-revalidate with a strong ETag passes", () => {
+  test("max-age=0, must-revalidate with a strong ETag passes", async () => {
     const pages = Array.from({ length: 4 }, (_, i) => ({
       url: `https://example.com/p${i}`,
       headers: {
@@ -170,11 +170,11 @@ describe("perf/bad-caching", () => {
         "content-encoding": "br",
       },
     }));
-    const checks = run(badCachingRule, siteCtx(pages));
+    const checks = (await run(badCachingRule, siteCtx(pages)));
     expect(verdict(checks, "bad-caching-freshness")).toBe("ok");
   });
 
-  test("max-age=0, must-revalidate with Last-Modified instead of an ETag passes", () => {
+  test("max-age=0, must-revalidate with Last-Modified instead of an ETag passes", async () => {
     const pages = Array.from({ length: 4 }, (_, i) => ({
       url: `https://example.com/p${i}`,
       headers: {
@@ -183,16 +183,16 @@ describe("perf/bad-caching", () => {
         "content-encoding": "br",
       },
     }));
-    const checks = run(badCachingRule, siteCtx(pages));
+    const checks = (await run(badCachingRule, siteCtx(pages)));
     expect(verdict(checks, "bad-caching-freshness")).toBe("ok");
   });
 
-  test("max-age=0 with neither validator still fails, and says why", () => {
+  test("max-age=0 with neither validator still fails, and says why", async () => {
     const pages = Array.from({ length: 4 }, (_, i) => ({
       url: `https://example.com/p${i}`,
       headers: { "cache-control": "public, max-age=0, must-revalidate", "content-encoding": "br" },
     }));
-    const checks = run(badCachingRule, siteCtx(pages));
+    const checks = (await run(badCachingRule, siteCtx(pages)));
     const freshness = check(checks, "bad-caching-freshness");
     expect(freshness?.status).toBe("info");
     expect(freshness?.message).toBe(
@@ -200,7 +200,7 @@ describe("perf/bad-caching", () => {
     );
   });
 
-  test("no-store is never a caching policy, validator or not", () => {
+  test("no-store is never a caching policy, validator or not", async () => {
     // `no-store, no-cache` would satisfy the revalidation arm on its own, so
     // this is the input that proves no-store is still refused: a per-user page
     // that must not be stored anywhere has no policy a cache can use.
@@ -212,11 +212,11 @@ describe("perf/bad-caching", () => {
         "content-encoding": "br",
       },
     }));
-    const checks = run(badCachingRule, siteCtx(pages));
+    const checks = (await run(badCachingRule, siteCtx(pages)));
     expect(verdict(checks, "bad-caching-freshness")).toBe("flagged");
   });
 
-  test("a validator with no Cache-Control at all is not a declared policy", () => {
+  test("a validator with no Cache-Control at all is not a declared policy", async () => {
     // The server said nothing about caching; a cache falls back to a heuristic
     // and nothing about the reuse is under the site's control. That is the
     // case the rule was written for and it still reports.
@@ -224,27 +224,27 @@ describe("perf/bad-caching", () => {
       url: `https://example.com/p${i}`,
       headers: { etag: '"x"', "content-encoding": "br" },
     }));
-    const checks = run(badCachingRule, siteCtx(pages));
+    const checks = (await run(badCachingRule, siteCtx(pages)));
     expect(verdict(checks, "bad-caching-freshness")).toBe("flagged");
   });
 
-  test("a freshness lifetime alone is still a policy", () => {
+  test("a freshness lifetime alone is still a policy", async () => {
     const pages = Array.from({ length: 4 }, (_, i) => ({
       url: `https://example.com/p${i}`,
       headers: { "cache-control": "public, max-age=600", "content-encoding": "br" },
     }));
-    const checks = run(badCachingRule, siteCtx(pages));
+    const checks = (await run(badCachingRule, siteCtx(pages)));
     expect(verdict(checks, "bad-caching-freshness")).toBe("ok");
   });
 
   // pub#600: the validators check warns and never fails. A page with no
   // lifetime and no validator already fails freshness for the same header.
-  test("missing validators warn, never fail", () => {
+  test("missing validators warn, never fail", async () => {
     const none = Array.from({ length: 4 }, (_, i) => ({
       url: `https://example.com/p${i}`,
       headers: { "cache-control": "max-age=600", "content-encoding": "br" },
     }));
-    const validators = check(run(badCachingRule, siteCtx(none)), "bad-caching-validators");
+    const validators = check(await run(badCachingRule, siteCtx(none)), "bad-caching-validators");
     expect(validators?.status).toBe("warn");
     expect(validators?.message).toBe("4/4 pages lack an ETag or Last-Modified validator");
 
@@ -257,17 +257,17 @@ describe("perf/bad-caching", () => {
         ...(i < 2 ? { etag: '"x"' } : {}),
       },
     }));
-    expect(check(run(badCachingRule, siteCtx(some)), "bad-caching-validators")?.status).toBe(
+    expect(check(await run(badCachingRule, siteCtx(some)), "bad-caching-validators")?.status).toBe(
       "warn"
     );
   });
 
-  test("max-age=0 with no validator still fails freshness after the validators cap", () => {
+  test("max-age=0 with no validator still fails freshness after the validators cap", async () => {
     const pages = Array.from({ length: 4 }, (_, i) => ({
       url: `https://example.com/p${i}`,
       headers: { "cache-control": "public, max-age=0, must-revalidate", "content-encoding": "br" },
     }));
-    const checks = run(badCachingRule, siteCtx(pages));
+    const checks = (await run(badCachingRule, siteCtx(pages)));
     expect(verdict(checks, "bad-caching-freshness")).toBe("flagged");
     expect(check(checks, "bad-caching-validators")?.status).toBe("warn");
   });
@@ -276,7 +276,7 @@ describe("perf/bad-caching", () => {
   // body, was dropped. It is not: any non-empty ETag is a validator, and
   // If-None-Match compares weakly, so `W/` still revalidates.
   for (const encoding of [undefined, "gzip", "br", "zstd"]) {
-    test(`a weak ETag is a validator under max-age=0, must-revalidate (${encoding ?? "identity"})`, () => {
+    test(`a weak ETag is a validator under max-age=0, must-revalidate (${encoding ?? "identity"})`, async () => {
       const pages = Array.from({ length: 4 }, (_, i) => ({
         url: `https://example.com/p${i}`,
         headers: {
@@ -285,28 +285,28 @@ describe("perf/bad-caching", () => {
           ...(encoding ? { "content-encoding": encoding } : {}),
         },
       }));
-      const checks = run(badCachingRule, siteCtx(pages));
+      const checks = (await run(badCachingRule, siteCtx(pages)));
       expect(verdict(checks, "bad-caching-freshness")).toBe("ok");
       expect(check(checks, "bad-caching-validators")?.status).toBe("pass");
     });
   }
 
-  test("flags uncompressed compressible responses", () => {
+  test("flags uncompressed compressible responses", async () => {
     const pages = Array.from({ length: 4 }, (_, i) => ({
       url: `https://example.com/p${i}`,
       headers: { "cache-control": "max-age=600", etag: '"x"' }, // no content-encoding
     }));
-    const checks = run(badCachingRule, siteCtx(pages));
+    const checks = (await run(badCachingRule, siteCtx(pages)));
     expect(verdict(checks, "bad-caching-compression")).toBe("flagged");
   });
 
-  test("Expires header satisfies freshness", () => {
+  test("Expires header satisfies freshness", async () => {
     const expires = new Date(Date.now() + 3600 * 1000).toUTCString();
     const pages = Array.from({ length: 4 }, (_, i) => ({
       url: `https://example.com/p${i}`,
       headers: { expires, "last-modified": "x", "content-encoding": "gzip" },
     }));
-    const checks = run(badCachingRule, siteCtx(pages));
+    const checks = (await run(badCachingRule, siteCtx(pages)));
     expect(verdict(checks, "bad-caching-freshness")).toBe("ok");
     expect(check(checks, "bad-caching-validators")?.status).toBe("pass");
   });
@@ -316,33 +316,33 @@ describe("perf/bad-caching", () => {
   // validator to fall back on. Pinned here so the fix has to flip it on
   // purpose rather than change it by accident; docs state the same at
   // docs/rules/perf/bad-caching.mdx.
-  test("an already-past Expires still counts as a lifetime (documented gap, #2243)", () => {
+  test("an already-past Expires still counts as a lifetime (documented gap, #2243)", async () => {
     const past = new Date(Date.now() - 3600 * 1000).toUTCString();
     const pages = Array.from({ length: 4 }, (_, i) => ({
       url: `https://example.com/p${i}`,
       headers: { expires: past, "content-encoding": "gzip" },
     }));
-    const checks = run(badCachingRule, siteCtx(pages));
+    const checks = (await run(badCachingRule, siteCtx(pages)));
     expect(verdict(checks, "bad-caching-freshness")).toBe("ok");
     // No validator anywhere, so that check still reports the real gap.
     expect(check(checks, "bad-caching-validators")?.status).toBe("warn");
   });
 
-  test("a literal `Expires: 0` still counts as a lifetime (documented gap, #2243)", () => {
+  test("a literal `Expires: 0` still counts as a lifetime (documented gap, #2243)", async () => {
     const pages = Array.from({ length: 4 }, (_, i) => ({
       url: `https://example.com/p${i}`,
       headers: { expires: "0", "content-encoding": "gzip" },
     }));
-    const checks = run(badCachingRule, siteCtx(pages));
+    const checks = (await run(badCachingRule, siteCtx(pages)));
     expect(verdict(checks, "bad-caching-freshness")).toBe("ok");
   });
 
-  test("an empty Expires is not a lifetime", () => {
+  test("an empty Expires is not a lifetime", async () => {
     const pages = Array.from({ length: 4 }, (_, i) => ({
       url: `https://example.com/p${i}`,
       headers: { expires: "", "content-encoding": "gzip" },
     }));
-    const checks = run(badCachingRule, siteCtx(pages));
+    const checks = (await run(badCachingRule, siteCtx(pages)));
     expect(verdict(checks, "bad-caching-freshness")).toBe("flagged");
   });
 });
@@ -368,9 +368,9 @@ describe("perf/bad-caching Cloudflare note", () => {
     }));
   }
 
-  test("pages behind Cloudflare get the note on the validators check", () => {
+  test("pages behind Cloudflare get the note on the validators check", async () => {
     const pages = pagesWith(14, () => ({ ...strippedHeaders, "cf-cache-status": "HIT" }));
-    const checks = run(badCachingRule, siteCtx(pages));
+    const checks = (await run(badCachingRule, siteCtx(pages)));
     const validators = check(checks, "bad-caching-validators");
     expect(validators?.status).toBe("warn");
     expect(validators?.message).toBe(
@@ -385,43 +385,43 @@ describe("perf/bad-caching Cloudflare note", () => {
     );
   });
 
-  test("server: cloudflare alone is enough", () => {
+  test("server: cloudflare alone is enough", async () => {
     const pages = pagesWith(4, () => ({ ...strippedHeaders, server: "cloudflare" }));
-    const validators = check(run(badCachingRule, siteCtx(pages)), "bad-caching-validators");
+    const validators = check(await run(badCachingRule, siteCtx(pages)), "bad-caching-validators");
     expect(validators?.message).toBe(
       `4/4 pages lack an ETag or Last-Modified validator. 4 of them ${NOTE}`
     );
   });
 
-  test("the same headers without Cloudflare carry no note", () => {
+  test("the same headers without Cloudflare carry no note", async () => {
     const pages = pagesWith(4, () => ({ ...strippedHeaders, server: "nginx" }));
-    const validators = check(run(badCachingRule, siteCtx(pages)), "bad-caching-validators");
+    const validators = check(await run(badCachingRule, siteCtx(pages)), "bad-caching-validators");
     expect(validators?.status).toBe("warn");
     expect(validators?.message).toBe("4/4 pages lack an ETag or Last-Modified validator");
     expect(validators?.details?.cloudflarePages).toBeUndefined();
   });
 
-  test("exactly half of the missing pages behind Cloudflare is enough", () => {
+  test("exactly half of the missing pages behind Cloudflare is enough", async () => {
     const pages = pagesWith(4, (i) => ({
       ...strippedHeaders,
       server: i < 2 ? "cloudflare" : "nginx",
     }));
-    const validators = check(run(badCachingRule, siteCtx(pages)), "bad-caching-validators");
+    const validators = check(await run(badCachingRule, siteCtx(pages)), "bad-caching-validators");
     expect(validators?.message).toBe(
       `4/4 pages lack an ETag or Last-Modified validator. 2 of them ${NOTE}`
     );
   });
 
-  test("fewer than half of the missing pages behind Cloudflare is not", () => {
+  test("fewer than half of the missing pages behind Cloudflare is not", async () => {
     const pages = pagesWith(4, (i) => ({
       ...strippedHeaders,
       server: i < 1 ? "cloudflare" : "nginx",
     }));
-    const validators = check(run(badCachingRule, siteCtx(pages)), "bad-caching-validators");
+    const validators = check(await run(badCachingRule, siteCtx(pages)), "bad-caching-validators");
     expect(validators?.message).toBe("4/4 pages lack an ETag or Last-Modified validator");
   });
 
-  test("Cloudflare pages that kept a validator do not count toward the note", () => {
+  test("Cloudflare pages that kept a validator do not count toward the note", async () => {
     // 10 pages: the 4 with an ETag are behind Cloudflare, and only 2 of the 6
     // missing one are. 2 of 6 is under half, so no note.
     const pages = pagesWith(10, (i) => ({
@@ -429,12 +429,12 @@ describe("perf/bad-caching Cloudflare note", () => {
       ...(i < 4 ? { etag: '"x"', server: "cloudflare" } : {}),
       ...(i >= 4 && i < 6 ? { server: "cloudflare" } : {}),
     }));
-    const validators = check(run(badCachingRule, siteCtx(pages)), "bad-caching-validators");
+    const validators = check(await run(badCachingRule, siteCtx(pages)), "bad-caching-validators");
     expect(validators?.status).toBe("warn");
     expect(validators?.message).toBe("6/10 pages lack an ETag or Last-Modified validator");
   });
 
-  test("half is measured against the pages missing a validator, not all pages", () => {
+  test("half is measured against the pages missing a validator, not all pages", async () => {
     // 3 of the 6 missing are behind Cloudflare: half of the missing pages,
     // though under half of the 10 crawled.
     const pages = pagesWith(10, (i) => ({
@@ -442,30 +442,30 @@ describe("perf/bad-caching Cloudflare note", () => {
       ...(i < 4 ? { etag: '"x"' } : {}),
       ...(i >= 4 && i < 7 ? { server: "cloudflare" } : {}),
     }));
-    const validators = check(run(badCachingRule, siteCtx(pages)), "bad-caching-validators");
+    const validators = check(await run(badCachingRule, siteCtx(pages)), "bad-caching-validators");
     expect(validators?.message).toBe(
       `6/10 pages lack an ETag or Last-Modified validator. 3 of them ${NOTE}`
     );
   });
 
-  test("at exactly the 60% threshold the check passes with no note", () => {
+  test("at exactly the 60% threshold the check passes with no note", async () => {
     const pages = pagesWith(5, (i) => ({
       ...strippedHeaders,
       "cf-cache-status": "HIT",
       ...(i < 3 ? { etag: 'W/"x"' } : {}),
     }));
-    const validators = check(run(badCachingRule, siteCtx(pages)), "bad-caching-validators");
+    const validators = check(await run(badCachingRule, siteCtx(pages)), "bad-caching-validators");
     expect(validators?.status).toBe("pass");
     expect(validators?.message).toBe("3/5 pages expose a revalidation validator");
   });
 
-  test("a passing validators check behind Cloudflare carries no note", () => {
+  test("a passing validators check behind Cloudflare carries no note", async () => {
     const pages = pagesWith(5, (i) => ({
       ...strippedHeaders,
       "cf-cache-status": "HIT",
       ...(i < 4 ? { etag: 'W/"x"' } : {}),
     }));
-    const validators = check(run(badCachingRule, siteCtx(pages)), "bad-caching-validators");
+    const validators = check(await run(badCachingRule, siteCtx(pages)), "bad-caching-validators");
     expect(validators?.status).toBe("pass");
     expect(validators?.message).toBe("4/5 pages expose a revalidation validator");
   });
@@ -477,17 +477,17 @@ describe("perf/bad-caching freshness and compression are info (pub#633)", () => 
   test.each([
     ["no caching headers, no compression", {}],
     ["a healthy site", goodHeaders],
-  ])("%s: neither check moves the score", (_name, headers) => {
+  ])("%s: neither check moves the score", async (_name, headers) => {
     const pages = Array.from({ length: 4 }, (_, i) => ({ url: `https://example.com/p${i}`, headers }));
-    const checks = run(badCachingRule, siteCtx(pages));
+    const checks = (await run(badCachingRule, siteCtx(pages)));
     for (const name of ["bad-caching-freshness", "bad-caching-compression"]) {
       expect(check(checks, name)?.status).toBe("info");
     }
   });
 
-  test("below the threshold, the messages and example pages are as before", () => {
+  test("below the threshold, the messages and example pages are as before", async () => {
     const pages = Array.from({ length: 4 }, (_, i) => ({ url: `https://example.com/p${i}`, headers: {} }));
-    const checks = run(badCachingRule, siteCtx(pages));
+    const checks = (await run(badCachingRule, siteCtx(pages)));
     expect(check(checks, "bad-caching-freshness")?.message).toBe(
       "4/4 pages set no caching policy (no freshness lifetime and no validator)"
     );
@@ -522,49 +522,49 @@ describe("perf/bad-caching names JavaScript Detections (#605)", () => {
   const doc = (body: string) => `<html><head><title>t</title>${body}</head><body></body></html>`;
 
   for (const engine of ["resident", "streaming"] as const) {
-    test(`${engine}: the marker at the end of a script-heavy page is found`, () => {
+    test(`${engine}: the marker at the end of a script-heavy page is found`, async () => {
       const filler = '<script src="/a.js"></script>'.repeat(150);
       const heavy = `<html><head><title>t</title></head><body>${filler}${JSD}</body></html>`;
       const ctx = ctxFor(engine, [heavy, heavy]);
-      const v = check(run(badCachingRule, ctx), "bad-caching-validators")!;
+      const v = check(await run(badCachingRule, ctx), "bad-caching-validators")!;
       expect(v.message).toContain("Cloudflare JavaScript Detections");
     });
   }
 
   for (const engine of ["resident", "streaming"] as const) {
-    test(`${engine}: half or more of the missing pages carrying the marker names JavaScript Detections`, () => {
+    test(`${engine}: half or more of the missing pages carrying the marker names JavaScript Detections`, async () => {
       const ctx = ctxFor(engine, [doc(JSD), doc(JSD), doc(JSD), doc("")]);
-      const v = check(run(badCachingRule, ctx), "bad-caching-validators")!;
+      const v = check(await run(badCachingRule, ctx), "bad-caching-validators")!;
       expect(v.message).toContain("Cloudflare JavaScript Detections");
       expect(v.message).toContain("found on 3 of them");
       expect(v.message).not.toContain(NAMES);
       expect(v.details?.javascriptDetectionsPages).toBe(3);
     });
 
-    test(`${engine}: Cloudflare pages without the marker keep the headers-only note`, () => {
+    test(`${engine}: Cloudflare pages without the marker keep the headers-only note`, async () => {
       const ctx = ctxFor(engine, [doc(""), doc(""), doc(""), doc("")]);
-      const v = check(run(badCachingRule, ctx), "bad-caching-validators")!;
+      const v = check(await run(badCachingRule, ctx), "bad-caching-validators")!;
       expect(v.message).toContain(NAMES);
       expect(v.details?.javascriptDetectionsPages).toBeUndefined();
     });
 
-    test(`${engine}: fewer than half carrying the marker is not enough`, () => {
+    test(`${engine}: fewer than half carrying the marker is not enough`, async () => {
       const ctx = ctxFor(engine, [doc(JSD), doc(""), doc(""), doc("")]);
-      const v = check(run(badCachingRule, ctx), "bad-caching-validators")!;
+      const v = check(await run(badCachingRule, ctx), "bad-caching-validators")!;
       expect(v.message).toContain(NAMES);
       expect(v.details?.javascriptDetectionsPages).toBeUndefined();
     });
 
-    test(`${engine}: the path in visible text, or in a code sample, is not a script marker`, () => {
+    test(`${engine}: the path in visible text, or in a code sample, is not a script marker`, async () => {
       const text = `<p>Cloudflare loads /cdn-cgi/challenge-platform/scripts/jsd/main.js on your pages</p><pre>__CF$cv$params</pre>`;
       const ctx = ctxFor(engine, [text, text, text, text].map((t) => `<html><head></head><body>${t}</body></html>`));
-      const v = check(run(badCachingRule, ctx), "bad-caching-validators")!;
+      const v = check(await run(badCachingRule, ctx), "bad-caching-validators")!;
       expect(v.details?.javascriptDetectionsPages).toBeUndefined();
     });
 
-    test(`${engine}: an external script from the challenge platform counts too`, () => {
+    test(`${engine}: an external script from the challenge platform counts too`, async () => {
       const ext = doc(`<script src="/cdn-cgi/challenge-platform/scripts/jsd/main.js" defer></script>`);
-      const v = check(run(badCachingRule, ctxFor(engine, [ext, ext, ext, ext])), "bad-caching-validators")!;
+      const v = check(await run(badCachingRule, ctxFor(engine, [ext, ext, ext, ext])), "bad-caching-validators")!;
       expect(v.details?.javascriptDetectionsPages).toBe(4);
     });
   }
@@ -591,8 +591,8 @@ describe("perf/bad-caching no-store (#1754)", () => {
       headers: { "cache-control": "no-store", "content-encoding": "gzip", ...extra },
     }));
 
-  test("no-store behind Cloudflare names no-store and does not blame Cloudflare", () => {
-    const checks = run(badCachingRule, siteCtx(noStorePages(6, { "cf-cache-status": "DYNAMIC" })));
+  test("no-store behind Cloudflare names no-store and does not blame Cloudflare", async () => {
+    const checks = (await run(badCachingRule, siteCtx(noStorePages(6, { "cf-cache-status": "DYNAMIC" }))));
     const validators = check(checks, "bad-caching-validators");
     expect(validators?.status).toBe("warn");
     expect(validators?.message).toContain("Cache-Control: no-store");
@@ -601,14 +601,14 @@ describe("perf/bad-caching no-store (#1754)", () => {
     expect(validators?.details?.cloudflarePages).toBeUndefined();
   });
 
-  test("freshness distinguishes no-store from no policy", () => {
-    const checks = run(badCachingRule, siteCtx(noStorePages(4)));
+  test("freshness distinguishes no-store from no policy", async () => {
+    const checks = (await run(badCachingRule, siteCtx(noStorePages(4))));
     const msg = check(checks, "bad-caching-freshness")?.message ?? "";
     expect(msg).toContain("Cache-Control: no-store");
     expect(msg).not.toContain("no caching policy");
   });
 
-  test("a mix reports both counts", () => {
+  test("a mix reports both counts", async () => {
     const pages = [
       ...noStorePages(2),
       ...Array.from({ length: 2 }, (_, i) => ({
@@ -616,7 +616,7 @@ describe("perf/bad-caching no-store (#1754)", () => {
         headers: { "content-encoding": "gzip" },
       })),
     ];
-    const msg = check(run(badCachingRule, siteCtx(pages)), "bad-caching-freshness")?.message ?? "";
+    const msg = check(await run(badCachingRule, siteCtx(pages)), "bad-caching-freshness")?.message ?? "";
     expect(msg).toContain("2 send Cache-Control: no-store");
     expect(msg).toContain("2 set no caching policy");
   });

@@ -170,16 +170,16 @@ describe("integrity/obfuscated-script says when a link was cut", () => {
     }
     return `${s}"));String.fromCharCode(104,105);`;
   };
-  const check = (body: string) => {
+  const check = async (body: string) => {
     const html = `<!doctype html><html><head><title>Page</title><script>${payload()}</script></head><body>${body}</body></html>`;
     const parsed = parsePage(html, url);
     const ctx = { page: { url, html, statusCode: 200, loadTime: 0, headers: {}, parsed }, parsed, options: {} } as unknown as RuleContext;
-    return (obfuscatedScriptRule.run(ctx) as { checks: Array<{ status: string; message: string; details?: Record<string, unknown> }> }).checks[0]!;
+    return ((await obfuscatedScriptRule.run(ctx)) as { checks: Array<{ status: string; message: string; details?: Record<string, unknown> }> }).checks[0]!;
   };
 
-  test("a control with five aria-labelledby ids is counted: the info check carries the note and details", () => {
+  test("a control with five aria-labelledby ids is counted: the info check carries the note and details", async () => {
     const targets = ["a", "b", "c", "d", "e"].map((id) => `<span id="${id}">x</span>`).join("");
-    const c = check(`<p>text</p>${targets}<a href="${O}" aria-labelledby="a b c d e">x</a>`);
+    const c = (await check(`<p>text</p>${targets}<a href="${O}" aria-labelledby="a b c d e">x</a>`));
     expect(c.status).toBe("info");
     expect(c.message).toContain("single signal");
     expect(c.message).toContain("1 sign-in control could not be read in full");
@@ -187,8 +187,8 @@ describe("integrity/obfuscated-script says when a link was cut", () => {
     expect(c.details?.controlsUnread).toBe(1);
   });
 
-  test("a page where nothing was cut has no note", () => {
-    const c = check("<p>text</p>");
+  test("a page where nothing was cut has no note", async () => {
+    const c = (await check("<p>text</p>"));
     expect(c.status).toBe("info");
     expect(c.message).not.toContain("scan work limit");
     expect(c.details?.scanTruncated).toBeUndefined();

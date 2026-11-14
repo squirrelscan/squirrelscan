@@ -22,8 +22,8 @@ function ctxFor(html: string, parsed = parsePage(html, URL)): RuleContext {
   } as unknown as RuleContext;
 }
 
-function emptyCheck(html: string, parsed?: ReturnType<typeof parsePage>): CheckResult | undefined {
-  const result = headingHierarchyRule.run(ctxFor(html, parsed)) as { checks: CheckResult[] };
+async function emptyCheck(html: string, parsed?: ReturnType<typeof parsePage>): Promise<CheckResult | undefined> {
+  const result = (await headingHierarchyRule.run(ctxFor(html, parsed))) as { checks: CheckResult[] };
   return result.checks.find((c) => c.name === "empty-headings");
 }
 
@@ -36,25 +36,25 @@ describe("content/heading-hierarchy empty headings (#547)", () => {
     ["inline visibility:hidden", `<h2 style="visibility:hidden"></h2>`],
     ["hidden ancestor", `<div hidden><h2></h2></div>`],
     ["aria-hidden ancestor", `<div aria-hidden="true"><h2></h2></div>`],
-  ])("a hidden empty heading (%s) is not counted", (_label, hidden) => {
-    expect(emptyCheck(page(`${VISIBLE_TEXT}${hidden}`))).toBeUndefined();
+  ])("a hidden empty heading (%s) is not counted", async (_label, hidden) => {
+    expect(await emptyCheck(page(`${VISIBLE_TEXT}${hidden}`))).toBeUndefined();
   });
 
-  test("a visible empty heading is still counted", () => {
-    const check = emptyCheck(page(`${VISIBLE_TEXT}<h2></h2>`));
+  test("a visible empty heading is still counted", async () => {
+    const check = (await emptyCheck(page(`${VISIBLE_TEXT}<h2></h2>`)));
     expect(check?.status).toBe("warn");
     expect(check?.message).toBe("1 empty heading(s) found");
   });
 
-  test("hidden and visible empties in one page count only the visible one", () => {
-    const check = emptyCheck(page(`${VISIBLE_TEXT}<h2 hidden></h2><h3></h3>`));
+  test("hidden and visible empties in one page count only the visible one", async () => {
+    const check = (await emptyCheck(page(`${VISIBLE_TEXT}<h2 hidden></h2><h3></h3>`)));
     expect(check?.message).toBe("1 empty heading(s) found");
   });
 
-  test("a replayed parse (JSON round trip) gives the same count as a fresh parse", () => {
+  test("a replayed parse (JSON round trip) gives the same count as a fresh parse", async () => {
     const html = page(`${VISIBLE_TEXT}<h2 hidden></h2><h3></h3>`);
     const fresh = parsePage(html, URL);
     const replayed = JSON.parse(JSON.stringify(fresh));
-    expect(emptyCheck(html, replayed)?.message).toBe(emptyCheck(html, fresh)?.message);
+    expect((await emptyCheck(html, replayed))?.message).toBe((await emptyCheck(html, fresh))?.message);
   });
 });

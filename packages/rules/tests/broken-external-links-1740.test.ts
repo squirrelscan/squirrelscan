@@ -33,15 +33,15 @@ const link = (over: Partial<ExternalLinkCheckData> = {}): ExternalLinkCheckData 
   ...over,
 });
 
-const run = (links: ExternalLinkCheckData[], linkCheck?: Parameters<typeof ctx>[1]) =>
-  (brokenExternalLinksRule.run(ctx(links, linkCheck)) as { checks: CheckResult[] }).checks;
+const run = async (links: ExternalLinkCheckData[], linkCheck?: Parameters<typeof ctx>[1]) =>
+  ((await brokenExternalLinksRule.run(ctx(links, linkCheck))) as { checks: CheckResult[] }).checks;
 const named = (checks: CheckResult[], name: string) => checks.find((c) => c.name === name);
 
 describe("a dead host is reported as broken, not as refused (#1740)", () => {
-  test("a reserved suffix (.invalid) is a broken link with 'no such domain suffix', not under refused-external-links", () => {
-    const checks = run([
+  test("a reserved suffix (.invalid) is a broken link with 'no such domain suffix', not under refused-external-links", async () => {
+    const checks = (await run([
       link({ href: "https://nut-supplier.invalid/", status: null, error: EXTERNAL_LINK_INVALID_SUFFIX_ERROR }),
-    ]);
+    ]));
     const check = named(checks, "broken-external-links")!;
     expect(check.message).toBe("1 broken external link(s): 1 no such domain suffix");
     expect(check.items?.[0]?.label).toContain("no such domain suffix");
@@ -49,10 +49,10 @@ describe("a dead host is reported as broken, not as refused (#1740)", () => {
     expect(named(checks, "not-requested-external-links")).toBeUndefined();
   });
 
-  test("a non-resolving name on a real TLD is still broken with 'domain does not exist' (today's behaviour)", () => {
-    const checks = run([
+  test("a non-resolving name on a real TLD is still broken with 'domain does not exist' (today's behaviour)", async () => {
+    const checks = (await run([
       link({ href: "https://gone.nutshop-fault.example-live.net/", status: null, error: EXTERNAL_LINK_HOST_UNRESOLVED_ERROR }),
-    ]);
+    ]));
     expect(named(checks, "broken-external-links")!.message).toBe("1 broken external link(s): 1 domain does not exist");
     expect(named(checks, "refused-external-links")).toBeUndefined();
   });
@@ -63,22 +63,22 @@ describe("a dead host is reported as broken, not as refused (#1740)", () => {
 });
 
 describe("the main check never says all links work when some are not verified (#1740)", () => {
-  test("all verified: 'All N external link(s) are working'", () => {
-    const check = named(run([link(), link({ href: "https://b.example-live.net/" })]), "broken-external-links")!;
+  test("all verified: 'All N external link(s) are working'", async () => {
+    const check = named(await run([link(), link({ href: "https://b.example-live.net/" })]), "broken-external-links")!;
     expect(check.status).toBe("pass");
     expect(check.message).toBe("All 2 external link(s) are working");
   });
 
-  test("some unverified, rate limited or never requested: how many were verified out of how many were found", () => {
+  test("some unverified, rate limited or never requested: how many were verified out of how many were found", async () => {
     const check = named(
-      run(
+      (await run(
         [
           link(),
           link({ href: "https://wall.example-live.net/", status: 403, wafBlocked: true }),
           link({ href: "https://throttled.example-live.net/", status: 429 }),
         ],
         { found: 5, checked: 3, cap: 200, refused: 1, refusedLinks: [{ href: "http://10.0.0.1/", sourcePages: [`${BASE}/`] }], notRequested: 1 },
-      ),
+      )),
       "broken-external-links",
     )!;
     expect(check.status).toBe("pass");
@@ -88,15 +88,15 @@ describe("the main check never says all links work when some are not verified (#
 });
 
 describe("refused addresses stay informational, and the message no longer mentions DNS (#1740)", () => {
-  test("private, loopback, link-local and metadata addresses are listed as not requested, never broken", () => {
-    const checks = run([link()], {
+  test("private, loopback, link-local and metadata addresses are listed as not requested, never broken", async () => {
+    const checks = (await run([link()], {
       found: 2,
       checked: 1,
       cap: 200,
       refused: 1,
       refusedByUrl: 1,
       refusedLinks: [{ href: "http://192.168.1.1/admin", sourcePages: [`${BASE}/`] }],
-    });
+    }));
     const refused = named(checks, "refused-external-links")!;
     expect(refused.status).toBe("info");
     expect(refused.message).not.toMatch(/DNS|resolve/i);

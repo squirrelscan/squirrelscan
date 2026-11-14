@@ -13,14 +13,14 @@ import { findPlaceholders, normalizeProse, placeholderTextRule } from "../src/co
 import { getRenderedProseText } from "../src/content/text-content";
 import type { ParsedPage, RuleContext } from "../src/types";
 
-function run(html: string) {
+async function run(html: string) {
   const { document } = parseHTML(html);
   const ctx: RuleContext = {
     page: { url: "https://example.com/", html, statusCode: 200, loadTime: 0, headers: {} },
     parsed: { document } as unknown as ParsedPage,
     options: {},
   };
-  return placeholderTextRule.run(ctx).checks;
+  return (await placeholderTextRule.run(ctx)).checks;
 }
 
 const page = (body: string) => `<html><head><title>t</title></head><body>${body}</body></html>`;
@@ -311,49 +311,49 @@ describe("findPlaceholders — adversarial input", () => {
 });
 
 describe("placeholderTextRule", () => {
-  test("a clean page passes", () => {
-    expect(run(page("<p>Ordinary copy about ordinary things.</p>"))[0]?.status).toBe("pass");
+  test("a clean page passes", async () => {
+    expect((await run(page("<p>Ordinary copy about ordinary things.</p>")))[0]?.status).toBe("pass");
   });
 
-  test("machine-generated leftovers fail", () => {
-    const [check] = run(page("<p>Hello {{ user.name }}</p>"));
+  test("machine-generated leftovers fail", async () => {
+    const [check] = (await run(page("<p>Hello {{ user.name }}</p>")));
     expect(check?.status).toBe("fail");
     expect(check?.message).toMatch(/unrendered template syntax/i);
     expect(check?.value).toBe(1);
   });
 
-  test("human filler only warns", () => {
+  test("human filler only warns", async () => {
     // A page could just about mean to write these, so they are not a failure.
-    const [check] = run(page("<h1>Your Company Name</h1>\n<p>TODO: write this</p>"));
+    const [check] = (await run(page("<h1>Your Company Name</h1>\n<p>TODO: write this</p>")));
     expect(check?.status).toBe("warn");
     expect(check?.items?.map((i) => i.id).sort()).toEqual(["boilerplate-copy", "todo-marker"]);
   });
 
-  test("a certain family among warnings escalates the whole check", () => {
-    const [check] = run(page("<h1>Sample text</h1>\n<p>Tags: [object Object]</p>"));
+  test("a certain family among warnings escalates the whole check", async () => {
+    const [check] = (await run(page("<h1>Sample text</h1>\n<p>Tags: [object Object]</p>")));
     expect(check?.status).toBe("fail");
   });
 
-  test("a bare JavaScript value warns, it does not fail", () => {
+  test("a bare JavaScript value warns, it does not fail", async () => {
     // An API reference whose defaults column reads `null` is ordinary. Only
     // [object X], which nothing legitimate produces, is a failure.
-    const [check] = run(page("<table><tr><td>onError</td><td>null</td></tr></table>"));
+    const [check] = (await run(page("<table><tr><td>onError</td><td>null</td></tr></table>")));
     expect(check?.status).toBe("warn");
     expect(check?.items?.[0]?.id).toBe("js-artifact");
   });
 
-  test("no document is skipped, not passed", () => {
+  test("no document is skipped, not passed", async () => {
     const ctx = {
       page: { url: "https://example.com/", html: "", statusCode: 500, loadTime: 0, headers: {} },
       parsed: { document: null } as unknown as ParsedPage,
       options: {},
     } as RuleContext;
-    const [check] = placeholderTextRule.run(ctx).checks;
+    const [check] = (await placeholderTextRule.run(ctx)).checks;
     expect(check?.status).toBe("skipped");
     expect(check?.skipReason).toBe("Parse error");
   });
 
-  test("a document with no body is skipped", () => {
+  test("a document with no body is skipped", async () => {
     const { document } = parseHTML("<html><head><title>t</title></head></html>");
     document.querySelector("body")?.remove();
     const ctx = {
@@ -361,16 +361,16 @@ describe("placeholderTextRule", () => {
       parsed: { document } as unknown as ParsedPage,
       options: {},
     } as RuleContext;
-    const [check] = placeholderTextRule.run(ctx).checks;
+    const [check] = (await placeholderTextRule.run(ctx)).checks;
     expect(check?.status).toBe("skipped");
     expect(check?.skipReason).toBe("no-body");
   });
 });
 
 describe("placeholderTextRule — what a reader never sees", () => {
-  test("a docs page that shows template syntax in a code block stays clean", () => {
+  test("a docs page that shows template syntax in a code block stays clean", async () => {
     // The fixture that matters: this rule's own documentation.
-    const [check] = run(
+    const [check] = (await run(
       page(`
         <h1>Templating</h1>
         <p>Interpolate a value with the double-brace form:</p>
@@ -380,13 +380,13 @@ describe("placeholderTextRule — what a reader never sees", () => {
         <p>A missing value renders as <code>undefined</code> or
         <samp>[object Object]</samp>. Press <kbd>XXX</kbd> to continue.</p>
       `),
-    );
+    ));
     expect(check?.status).toBe("pass");
   });
 
-  test("this rule's own documentation page stays clean", () => {
+  test("this rule's own documentation page stays clean", async () => {
     // The design constraint stated at the top of the rule module, asserted.
-    const [check] = run(
+    const [check] = (await run(
       page(`
         <h1>Placeholder Text</h1>
         <p>Detects template leftovers and filler copy that shipped to production.</p>
@@ -403,56 +403,56 @@ describe("placeholderTextRule — what a reader never sees", () => {
         </table>
         <pre><code>disable = ["content/placeholder-text"]</code></pre>
       `),
-    );
+    ));
     expect(check?.status).toBe("pass");
   });
 
-  test("script and style contents are not visible text", () => {
-    const [check] = run(
+  test("script and style contents are not visible text", async () => {
+    const [check] = (await run(
       page('<script>var s = "{{ name }}";</script><style>/* TODO: colours */</style><p>Clean.</p>'),
-    );
+    ));
     expect(check?.status).toBe("pass");
   });
 
-  test("an inert <template> is markup the browser never renders", () => {
+  test("an inert <template> is markup the browser never renders", async () => {
     // linkedom keeps template children in childNodes, so a plain text walk would
     // read every Vue/Alpine/Handlebars page as full of unrendered syntax.
-    const [check] = run(
+    const [check] = (await run(
       page('<p>Clean.</p><template id="row"><li>{{ item.name }}</li></template>'),
-    );
+    ));
     expect(check?.status).toBe("pass");
   });
 
-  test("a phrase is not glued together across a skipped subtree", () => {
+  test("a phrase is not glued together across a skipped subtree", async () => {
     // The `<code>` becomes a newline, and phrases match on literal spaces only.
-    const [check] = run(page("<p>Set your <code>x</code> company name in config.</p>"));
+    const [check] = (await run(page("<p>Set your <code>x</code> company name in config.</p>")));
     expect(check?.status).toBe("pass");
   });
 
-  test("inline markup inside a phrase does not hide it", () => {
+  test("inline markup inside a phrase does not hide it", async () => {
     // `<b>` is not excluded, so the text nodes concatenate with their own spaces.
-    const [check] = run(page("<p>Welcome to Your <b>Company</b> Name</p>"));
+    const [check] = (await run(page("<p>Welcome to Your <b>Company</b> Name</p>")));
     expect(check?.status).toBe("warn");
   });
 
-  test("adjacent blocks are separated even with no whitespace between them", () => {
+  test("adjacent blocks are separated even with no whitespace between them", async () => {
     // `.textContent` joins these into "HeadingTODO: write this", where no
     // word-boundary pattern can see the marker at all.
-    expect(run(page("<h1>Heading</h1><p>TODO: write this</p>"))[0]?.status).toBe("warn");
+    expect((await run(page("<h1>Heading</h1><p>TODO: write this</p>")))[0]?.status).toBe("warn");
   });
 
-  test("a value alone in a table cell is a value alone on its line", () => {
+  test("a value alone in a table cell is a value alone on its line", async () => {
     // The shape a missing field actually takes, and the reason block boundaries
     // matter: every cell here sits on one source line.
-    const [check] = run(page("<table><tr><td>Author</td><td>undefined</td></tr></table>"));
+    const [check] = (await run(page("<table><tr><td>Author</td><td>undefined</td></tr></table>")));
     expect(check?.items?.[0]?.id).toBe("js-artifact");
     expect(check?.value).toBe(1);
   });
 
-  test("a block boundary does not fuse two words into a placeholder", () => {
+  test("a block boundary does not fuse two words into a placeholder", async () => {
     // The boundary must SEPARATE, never join: `<p>your</p><p>company name</p>`
     // is not the boilerplate phrase.
-    expect(run(page("<p>your</p><p>company name</p>"))[0]?.status).toBe("pass");
+    expect((await run(page("<p>your</p><p>company name</p>")))[0]?.status).toBe("pass");
   });
 });
 
@@ -515,16 +515,16 @@ describe("getRenderedProseText", () => {
 // pub#215: the body walk never reads the head, and a broken <title> is the one
 // a reader sees in search results and the browser tab.
 describe("placeholderTextRule — the title", () => {
-  const titled = (title: string, body = "<h1>Acme anvils</h1><p>Forged in Ohio.</p>") => {
+  const titled = async (title: string, body = "<h1>Acme anvils</h1><p>Forged in Ohio.</p>") => {
     const html = `<html><head><title>${title}</title></head><body>${body}</body></html>`;
     const ctx = {
       page: { url: "https://example.com/", html, statusCode: 200, loadTime: 0, headers: {} },
       parsed: parsePage(html, "https://example.com/"),
       options: {},
     } as unknown as RuleContext;
-    return placeholderTextRule.run(ctx).checks as Array<{ name: string; status: string; message: string }>;
+    return (await placeholderTextRule.run(ctx)).checks as Array<{ name: string; status: string; message: string }>;
   };
-  const titleCheck = (title: string, body?: string) => titled(title, body).find((c) => c.name === "placeholder-title");
+  const titleCheck = async (title: string, body?: string) => (await titled(title, body)).find((c) => c.name === "placeholder-title");
 
   test.each([
     ["undefined | Acme", "warn: Title shows a JavaScript value: undefined"],
@@ -535,8 +535,8 @@ describe("placeholderTextRule — the title", () => {
     ["| null", "warn: Title shows a JavaScript value: null"],
     ["[object Object] | Acme", "fail: Title shows a stringified object: [object Object]"],
     ["Acme anvils [object Promise]", "fail: Title shows a stringified object: [object Promise]"],
-  ])("%s is reported", (title, expected) => {
-    const c = titleCheck(title);
+  ])("%s is reported", async (title, expected) => {
+    const c = (await titleCheck(title));
     expect(c && `${c.status}: ${c.message}`).toBe(expected);
   });
 
@@ -545,25 +545,25 @@ describe("placeholderTextRule — the title", () => {
     ["another case", "Undefined | Acme"],
     ["a hyphenated word", "non-null assertions | Acme"],
     ["a clean title", "Acme anvils | Forged in Ohio"],
-  ])("not reported: %s", (_name, title) => {
-    expect(titleCheck(title)).toBeUndefined();
+  ])("not reported: %s", async (_name, title) => {
+    expect(await titleCheck(title)).toBeUndefined();
   });
 
-  test("a page about the word is not reported: MDN's undefined page", () => {
+  test("a page about the word is not reported: MDN's undefined page", async () => {
     const mdn = "<h1>undefined</h1><p>The <code>undefined</code> global property represents the primitive value <code>undefined</code>.</p>";
-    expect(titleCheck("undefined - JavaScript | MDN", mdn)).toBeUndefined();
+    expect(await titleCheck("undefined - JavaScript | MDN", mdn)).toBeUndefined();
     // Named in a <code> element alone is enough too.
-    expect(titleCheck("null - JavaScript | MDN", "<h1>The null value</h1><p>See <code>null</code>.</p>")).toBeUndefined();
+    expect(await titleCheck("null - JavaScript | MDN", "<h1>The null value</h1><p>See <code>null</code>.</p>")).toBeUndefined();
     // Each value is judged on its own: the page is about undefined, not null.
-    expect(titleCheck("undefined | null | Acme", mdn)?.message).toBe("Title shows a JavaScript value: null");
+    expect((await titleCheck("undefined | null | Acme", mdn))?.message).toBe("Title shows a JavaScript value: null");
   });
 
-  test("reported once, by this rule's own check, beside the body result", () => {
-    const checks = titled("undefined | Acme");
+  test("reported once, by this rule's own check, beside the body result", async () => {
+    const checks = (await titled("undefined | Acme"));
     expect(checks.map((c) => `${c.name}:${c.status}`)).toEqual(["placeholder-content:pass", "placeholder-title:warn"]);
   });
 
-  test("a clean title adds no row", () => {
-    expect(titled("Acme anvils").map((c) => c.name)).toEqual(["placeholder-content"]);
+  test("a clean title adds no row", async () => {
+    expect((await titled("Acme anvils")).map((c) => c.name)).toEqual(["placeholder-content"]);
   });
 });

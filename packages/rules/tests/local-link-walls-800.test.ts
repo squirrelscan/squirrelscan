@@ -35,8 +35,8 @@ const timedOut = link({ href: "https://stalls.example/", status: null, wafBlocke
 const dead = link({ href: "https://gone.example/", status: 404 });
 
 describe("unverifiable links are never broken (pub#800)", () => {
-  test("broken-external-links lists them as unverifiable and counts only the 404", () => {
-    const { checks } = brokenExternalLinksRule.run(externalCtx([...walled, timedOut, dead]));
+  test("broken-external-links lists them as unverifiable and counts only the 404", async () => {
+    const { checks } = (await brokenExternalLinksRule.run(externalCtx([...walled, timedOut, dead])));
     const broken = checks.find((c) => c.name === "broken-external-links")!;
     // #1739: the 404 is confirmed broken, so it fails.
     expect(broken.status).toBe("fail");
@@ -47,13 +47,13 @@ describe("unverifiable links are never broken (pub#800)", () => {
     );
   });
 
-  test("with nothing else, walled links leave the check passing", () => {
-    const { checks } = brokenExternalLinksRule.run(externalCtx([...walled, link()]));
+  test("with nothing else, walled links leave the check passing", async () => {
+    const { checks } = (await brokenExternalLinksRule.run(externalCtx([...walled, link()])));
     expect(checks.find((c) => c.name === "broken-external-links")!.status).toBe("pass");
   });
 
-  test("dead-links counts the same one dead link", () => {
-    const { checks } = deadLinksRule.run(externalCtx([...walled, timedOut, dead]));
+  test("dead-links counts the same one dead link", async () => {
+    const { checks } = (await deadLinksRule.run(externalCtx([...walled, timedOut, dead])));
     expect(checks[0]!.value).toBe(1);
   });
 });

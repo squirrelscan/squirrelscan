@@ -25,8 +25,8 @@ function pageCtx(html: string, url = "https://example.com/"): RuleContext {
   };
 }
 
-function run(rule: Rule, ctx: RuleContext): CheckResult[] {
-  return rule.run(ctx).checks as CheckResult[];
+async function run(rule: Rule, ctx: RuleContext): Promise<CheckResult[]> {
+  return (await rule.run(ctx)).checks as CheckResult[];
 }
 
 function check(checks: CheckResult[], name: string): CheckResult | undefined {
@@ -47,13 +47,13 @@ const COMPLETE = {
 };
 
 describe("schema/local-business — array-wrapped address (#711)", () => {
-  test("array-wrapped fully-populated address → no address-completeness warning", () => {
+  test("array-wrapped fully-populated address → no address-completeness warning", async () => {
     const html = withSchema({
       "@type": "LocalBusiness",
       name: "Wrapped Address Co",
       address: [COMPLETE],
     });
-    const checks = run(localBusinessSchemaRule, pageCtx(html));
+    const checks = (await run(localBusinessSchemaRule, pageCtx(html)));
 
     expect(check(checks, "local-business-address")).toBeUndefined();
     // Address IS present (wrapped), so the SAB location check must not fire.
@@ -61,18 +61,18 @@ describe("schema/local-business — array-wrapped address (#711)", () => {
     expect(checks.some((c) => c.status === "warn")).toBe(false);
   });
 
-  test("array with multiple addresses, one complete → passes (any-complete)", () => {
+  test("array with multiple addresses, one complete → passes (any-complete)", async () => {
     const html = withSchema({
       "@type": "LocalBusiness",
       name: "Two Locations",
       address: [{ "@type": "PostalAddress", streetAddress: "1 Small Ln" }, COMPLETE],
     });
-    const checks = run(localBusinessSchemaRule, pageCtx(html));
+    const checks = (await run(localBusinessSchemaRule, pageCtx(html)));
 
     expect(check(checks, "local-business-address")).toBeUndefined();
   });
 
-  test("array with multiple addresses, none complete → warns on first entry's missing fields", () => {
+  test("array with multiple addresses, none complete → warns on first entry's missing fields", async () => {
     const html = withSchema({
       "@type": "LocalBusiness",
       name: "Two Bad Locations",
@@ -81,44 +81,44 @@ describe("schema/local-business — array-wrapped address (#711)", () => {
         { "@type": "PostalAddress", addressLocality: "Perth" },
       ],
     });
-    const checks = run(localBusinessSchemaRule, pageCtx(html));
+    const checks = (await run(localBusinessSchemaRule, pageCtx(html)));
     const addressCheck = check(checks, "local-business-address");
 
     expect(addressCheck?.status).toBe("warn");
     expect(addressCheck?.items?.map((i) => i.id)).toEqual(["addressLocality", "postalCode"]);
   });
 
-  test("single-element array with incomplete address → warns with that entry's missing fields", () => {
+  test("single-element array with incomplete address → warns with that entry's missing fields", async () => {
     const html = withSchema({
       "@type": "LocalBusiness",
       name: "Wrapped Half Store",
       address: [{ "@type": "PostalAddress", streetAddress: "123 Main St" }],
     });
-    const checks = run(localBusinessSchemaRule, pageCtx(html));
+    const checks = (await run(localBusinessSchemaRule, pageCtx(html)));
     const addressCheck = check(checks, "local-business-address");
 
     expect(addressCheck?.status).toBe("warn");
     expect(addressCheck?.items?.map((i) => i.id)).toEqual(["addressLocality", "postalCode"]);
   });
 
-  test("array with null entry plus complete address → passes without crashing", () => {
+  test("array with null entry plus complete address → passes without crashing", async () => {
     const html = withSchema({
       "@type": "LocalBusiness",
       name: "Null Then Complete",
       address: [null, COMPLETE],
     });
-    const checks = run(localBusinessSchemaRule, pageCtx(html));
+    const checks = (await run(localBusinessSchemaRule, pageCtx(html)));
 
     expect(check(checks, "local-business-address")).toBeUndefined();
   });
 
-  test("array of only null → warns with all subfields missing, no crash", () => {
+  test("array of only null → warns with all subfields missing, no crash", async () => {
     const html = withSchema({
       "@type": "LocalBusiness",
       name: "Null Address Co",
       address: [null],
     });
-    const checks = run(localBusinessSchemaRule, pageCtx(html));
+    const checks = (await run(localBusinessSchemaRule, pageCtx(html)));
     const addressCheck = check(checks, "local-business-address");
 
     expect(addressCheck?.status).toBe("warn");
@@ -129,13 +129,13 @@ describe("schema/local-business — array-wrapped address (#711)", () => {
     ]);
   });
 
-  test("empty address array → treated as no address, SAB location check warns (#724)", () => {
+  test("empty address array → treated as no address, SAB location check warns (#724)", async () => {
     const html = withSchema({
       "@type": "LocalBusiness",
       name: "Empty Address Co",
       address: [],
     });
-    const checks = run(localBusinessSchemaRule, pageCtx(html));
+    const checks = (await run(localBusinessSchemaRule, pageCtx(html)));
 
     // No "Address incomplete" warning — falls through to the location guidance.
     expect(check(checks, "local-business-address")).toBeUndefined();
@@ -144,38 +144,38 @@ describe("schema/local-business — array-wrapped address (#711)", () => {
     expect(locationCheck?.message).toBe("LocalBusiness schema has no address or service area");
   });
 
-  test("empty address array with areaServed → SAB path passes (#724)", () => {
+  test("empty address array with areaServed → SAB path passes (#724)", async () => {
     const html = withSchema({
       "@type": "LocalBusiness",
       name: "Empty Address SAB",
       address: [],
       areaServed: "Sydney NSW",
     });
-    const checks = run(localBusinessSchemaRule, pageCtx(html));
+    const checks = (await run(localBusinessSchemaRule, pageCtx(html)));
 
     expect(check(checks, "local-business-address")).toBeUndefined();
     expect(check(checks, "local-business-location")?.status).toBe("pass");
   });
 
-  test("plain object full PostalAddress → still passes (regression)", () => {
+  test("plain object full PostalAddress → still passes (regression)", async () => {
     const html = withSchema({
       "@type": "LocalBusiness",
       name: "Corner Store",
       address: COMPLETE,
     });
-    const checks = run(localBusinessSchemaRule, pageCtx(html));
+    const checks = (await run(localBusinessSchemaRule, pageCtx(html)));
 
     expect(check(checks, "local-business-address")).toBeUndefined();
     expect(check(checks, "local-business-location")).toBeUndefined();
   });
 
-  test("plain object incomplete PostalAddress → still warns with correct missing fields (regression)", () => {
+  test("plain object incomplete PostalAddress → still warns with correct missing fields (regression)", async () => {
     const html = withSchema({
       "@type": "LocalBusiness",
       name: "Half Store",
       address: { "@type": "PostalAddress", streetAddress: "123 Main St" },
     });
-    const checks = run(localBusinessSchemaRule, pageCtx(html));
+    const checks = (await run(localBusinessSchemaRule, pageCtx(html)));
     const addressCheck = check(checks, "local-business-address");
 
     expect(addressCheck?.status).toBe("warn");

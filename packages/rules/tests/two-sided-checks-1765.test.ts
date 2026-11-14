@@ -11,13 +11,13 @@ import type { ParsedPage, Rule, RuleContext } from "../src/types";
 
 const URL = "https://example.com/p";
 
-function run(rule: Rule, html: string): CheckResult[] {
+async function run(rule: Rule, html: string): Promise<CheckResult[]> {
   const ctx: RuleContext = {
     page: { url: URL, html, statusCode: 200, loadTime: 0, headers: {} },
     parsed: parsePage(html, URL) as ParsedPage,
     options: {},
   };
-  return rule.run(ctx).checks as CheckResult[];
+  return (await rule.run(ctx)).checks as CheckResult[];
 }
 
 const withDescription = (d: string) =>
@@ -26,9 +26,9 @@ const withDescription = (d: string) =>
 const warned = (checks: CheckResult[]) => checks.filter((c) => c.status === "warn");
 
 describe("meta-description", () => {
-  test("a short and a long description report under their own checks and labels", () => {
-    const short = warned(run(metaDescriptionRule, withDescription("a".repeat(80))));
-    const long = warned(run(metaDescriptionRule, withDescription("b".repeat(190))));
+  test("a short and a long description report under their own checks and labels", async () => {
+    const short = warned(await run(metaDescriptionRule, withDescription("a".repeat(80))));
+    const long = warned(await run(metaDescriptionRule, withDescription("b".repeat(190))));
     expect(short.map((c) => [c.name, c.message])).toEqual([
       ["meta-description-too-short", "Description too short (80 chars, min 120)"],
     ]);
@@ -39,12 +39,12 @@ describe("meta-description", () => {
     expect(String(long[0]!.items?.[0]?.label)).toContain("(190 chars, over 160)");
   });
 
-  test("an in-range description passes both sides and a missing one keeps the old name", () => {
-    expect(run(metaDescriptionRule, withDescription("c".repeat(140))).map((c) => [c.name, c.status])).toEqual([
+  test("an in-range description passes both sides and a missing one keeps the old name", async () => {
+    expect((await run(metaDescriptionRule, withDescription("c".repeat(140)))).map((c) => [c.name, c.status])).toEqual([
       ["meta-description-too-short", "pass"],
       ["meta-description-too-long", "pass"],
     ]);
-    const missing = run(metaDescriptionRule, "<!doctype html><html><head><title>t</title></head><body></body></html>");
+    const missing = (await run(metaDescriptionRule, "<!doctype html><html><head><title>t</title></head><body></body></html>"));
     expect(missing.map((c) => [c.name, c.status])).toEqual([["meta-description", "fail"]]);
   });
 });
@@ -53,14 +53,14 @@ describe("internal-links", () => {
   const links = (n: number) =>
     `<!doctype html><html><head><title>t</title></head><body>${Array.from({ length: n }, (_, i) => `<a href="/p${i}">l${i}</a>`).join("")}</body></html>`;
 
-  test("too few and too many are separate checks", () => {
-    expect(warned(run(internalLinksRule, links(0))).map((c) => [c.name, c.message])).toEqual([
+  test("too few and too many are separate checks", async () => {
+    expect(warned(await run(internalLinksRule, links(0))).map((c) => [c.name, c.message])).toEqual([
       ["internal-links-too-few", "Too few internal links (0, min 1)"],
     ]);
-    expect(warned(run(internalLinksRule, links(101))).map((c) => [c.name, c.message])).toEqual([
+    expect(warned(await run(internalLinksRule, links(101))).map((c) => [c.name, c.message])).toEqual([
       ["internal-links-too-many", "Too many internal links (101, max 100)"],
     ]);
-    expect(run(internalLinksRule, links(5)).map((c) => [c.name, c.status])).toEqual([
+    expect((await run(internalLinksRule, links(5))).map((c) => [c.name, c.status])).toEqual([
       ["internal-links-too-few", "pass"],
       ["internal-links-too-many", "pass"],
     ]);

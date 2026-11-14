@@ -14,14 +14,14 @@ import { buttonNameRule } from "../src/a11y/button-name";
 import { createStaticVisibility } from "../src/shared/static-hidden";
 import type { ParsedPage, RuleContext } from "../src/types";
 
-function statuses(html: string): Record<string, string> {
+async function statuses(html: string): Promise<Record<string, string>> {
   const url = "https://example.com/";
   const ctx: RuleContext = {
     page: { url, html, statusCode: 200, loadTime: 0, headers: {} },
     parsed: parsePage(html, url) as ParsedPage,
     options: {},
   };
-  const checks = buttonNameRule.run(ctx).checks as CheckResult[];
+  const checks = (await buttonNameRule.run(ctx)).checks as CheckResult[];
   return Object.fromEntries(checks.map((c) => [c.name, c.status]));
 }
 
@@ -38,11 +38,11 @@ const LIGHTBOX = ".wp-lightbox-container button{align-items:center;display:flex;
 const IMAGE = ".wp-block-image>a,.wp-block-image>figure>a{display:inline-block}";
 
 describe("a show-only rule on an element nothing else hides", () => {
-  test("WordPress lightbox button: an unnamed button fails, not unconfirmed", () => {
+  test("WordPress lightbox button: an unnamed button fails, not unconfirmed", async () => {
     expect(
-      statuses(
+      (await statuses(
         `<!doctype html><html lang="en"><head><title>t</title><style>${LIGHTBOX}</style></head><body><main><div class="wp-lightbox-container"><button></button></div></main></body></html>`,
-      ),
+      )),
     ).toEqual({ "button-name": "fail" });
   });
 
@@ -73,11 +73,11 @@ describe("a show-only rule where something else hides the element stays unknown"
     test(name, () => expect(state(body)).toBe("unknown"));
   }
 
-  test("a hidden unnamed button is unconfirmed, not a pass or a failure", () => {
+  test("a hidden unnamed button is unconfirmed, not a pass or a failure", async () => {
     expect(
-      statuses(
+      (await statuses(
         `<!doctype html><html lang="en"><head><title>t</title><style>${LIGHTBOX}</style></head><body><main><div class="wp-lightbox-container"><button hidden></button></div></main></body></html>`,
-      ),
+      )),
     ).toEqual({ "button-name-unconfirmed": "warn" });
   });
 });

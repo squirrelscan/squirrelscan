@@ -5,7 +5,7 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { DISCOVERY_PROBES } from "@squirrelscan/core-contracts/storage";
+import { DISCOVERY_PROBES, type DiscoveryProbe } from "@squirrelscan/core-contracts/storage";
 
 import { configuredPagePaths, selectDiscoveryProbes } from "../src/discovery-probes";
 import { loadAllRules } from "../src/loader";
@@ -38,7 +38,7 @@ describe("selectDiscoveryProbes (#409)", () => {
   // they stay on when only ax is excluded.
   test("excluding the ax category sends only the security.txt probes and the configured-pages probe", () => {
     // `configured-pages` is read by eeat/about-page and eeat/privacy-policy (#1428).
-    const securityTxt = ["/.well-known/security.txt", "/security.txt", "configured-pages"];
+    const securityTxt: DiscoveryProbe[] = ["/.well-known/security.txt", "/security.txt", "configured-pages"];
     expect(selectDiscoveryProbes({ enabled: true, rules: { enable: ["*"], disable: ["ax/*"] } })).toEqual(
       securityTxt,
     );

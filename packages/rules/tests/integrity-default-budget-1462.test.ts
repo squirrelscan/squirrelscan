@@ -3,6 +3,7 @@
 // only a fair test on a machine that is not busy and is skipped otherwise: the rules are not abandoned.
 // Synthetic pages.
 
+import { expect, test } from "bun:test";
 import { cpus, loadavg } from "node:os";
 
 import { parsePage } from "@squirrelscan/parser";

@@ -102,6 +102,7 @@ function row(s: Spec): PageFeatureRow {
     themeColor: null,
     ogImage: null,
     hreflangAlternates: null,
+    reportScalars: null,
     readingLevel: pageReadingLevel(parsed),
   } as PageFeatureRow;
 }
@@ -231,8 +232,8 @@ describe("content/voice-consistency", () => {
 
   test("a row stored without a reading level is not a sample", async () => {
     const ctx = streamCtx(normals(14));
-    const rule = voiceConsistencyRule.run(ctx) as Promise<{ checks: CheckResult[] }>;
-    expect((await rule).checks[0]?.status).toBe("pass");
+    const rule = await voiceConsistencyRule.run(ctx);
+    expect(rule.checks[0]?.status).toBe("pass");
   });
 
   test("legacy path with no pages skips", async () => {

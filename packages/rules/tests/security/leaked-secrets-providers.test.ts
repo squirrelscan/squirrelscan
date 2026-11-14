@@ -167,16 +167,16 @@ describe("tiers, boundaries and false-positive shapes pinned after review (#1309
     }
   });
 
-  test("the rule reports a Shopify Admin token in a script under the critical check and OpenRouter under the high one", () => {
-    const run = (key: string) =>
+  test("the rule reports a Shopify Admin token in a script under the critical check and OpenRouter under the high one", async () => {
+    const run = async (key: string) =>
       (
-        leakedSecretsRule.run({
+        (await leakedSecretsRule.run({
           site: { baseUrl: PAGE, pages: [], robotsTxt: null, sitemaps: null, scripts: [{ url: "https://app.acme.test/a.js", content: `var k="${key}";`, status: 200, error: null, contentType: "application/javascript", sizeBytes: key.length + 8, sourcePages: [PAGE] }] },
           options: {},
-        } as unknown as RuleContext) as { checks: Array<{ name: string; status?: string }> }
+        } as unknown as RuleContext)) as { checks: Array<{ name: string; status?: string }> }
       ).checks.filter((c) => c.status !== "pass").map((c) => c.name);
-    expect(run(shp("shpat_"))).toContain("leaked-secrets-critical");
-    const openrouter = run("sk-" + "or-v1-" + runOf(rr, HEX, 64));
+    expect(await run(shp("shpat_"))).toContain("leaked-secrets-critical");
+    const openrouter = (await run("sk-" + "or-v1-" + runOf(rr, HEX, 64)));
     expect(openrouter).toContain("leaked-secrets-high");
     expect(openrouter).not.toContain("leaked-secrets-critical");
   });
