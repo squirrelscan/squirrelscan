@@ -67,6 +67,7 @@ import { isLocalOnlyTech, techIconUrl } from "../technologies";
 import { domainAgeYears, siteProfileRows } from "../site-metadata";
 import { editorSummaryView } from "../editor-summary";
 import type { IgnoreSummary } from "@squirrelscan/core-contracts/ignore";
+import { ruleRuns, type RuleRun } from "../rule-runs";
 import { robotsScope, canonicalVariantCount, followedStartRedirect, scanScopePageTypes, scanScopeTargeted, scanScopeUnfetched, seedRedirect } from "../coverage";
 import { safeIgnored } from "../ignored";
 import { privateTargetLine, privateTargetSkippedRules } from "../private-target";
@@ -484,6 +485,14 @@ interface SlimJsonReport {
    */
   executedRules?: string[];
   /**
+   * What became of every rule that has a check, and what it covered (#1747, schema 1.20): `status` is `ran`
+   * (it judged something, a clean pass included), `skipped` or `timed_out`; `scope` is `{ pages }` for a page
+   * rule (the audited pages it examined) or `{ origin }` for a site rule; `reason` is the coded skip reason of
+   * a rule that did not run. A finding is gone because it was fixed only when its rule `ran` over the same
+   * scope. Omitted on a report read back with `report --input`, which carries no rule results.
+   */
+  rules?: RuleRun[];
+  /**
    * Rules that passed: at least one passing check and no failing or warning
    * one. `scope` is the rule's own; `pages` counts distinct pages with a pass,
    * and is 0 when the pass rows carry none. Present only with
@@ -618,6 +627,7 @@ function buildSlimReport(
   const ignoredSummary = safeIgnored(report);
   const skippedChecks = collectSkippedChecks(report.ruleResults);
   const executedRules = collectExecutedRules(report.ruleResults);
+  const ruleRunRows = ruleRuns(report);
   const infoChecks = collectInfoChecks(report.ruleResults);
   const privateTarget = privateTargetLine(report);
   const notChecked = notCheckedRules(report);
@@ -929,6 +939,7 @@ function buildSlimReport(
     })),
     ...(skippedChecks.length > 0 ? { skippedChecks } : {}),
     ...(executedRules.length > 0 ? { executedRules } : {}),
+    ...(ruleRunRows.length > 0 ? { rules: ruleRunRows } : {}),
     ...(infoChecks.length > 0 ? { infoChecks } : {}),
     ...(passedRules.length > 0
       ? {

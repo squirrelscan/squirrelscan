@@ -293,6 +293,7 @@ export {
 
 // Start URL redirects (#1281): the followed-redirect disclosure and the
 // no-audit outcome a redirect that was not followed prints.
+export { ruleRuns, ruleRunOf, type RuleRun, type RuleRunScope, type RuleRunStatus } from "./rule-runs";
 export { followedStartRedirect, startRedirectLine, type FollowedStartRedirect } from "./coverage";
 export { renderRedirectedOutcome, type RedirectedOutcomeFormat } from "./start-redirect";
 
