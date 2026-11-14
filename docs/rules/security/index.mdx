@@ -25,7 +25,7 @@ Cloud audits also run the [third-party rules](/cloud/third-party): who else load
 
 ## Security rules
 
-HTTPS, headers, and safe link practices (31 rules).
+HTTPS, headers, and safe link practices (32 rules).
 
 ## Run only these rules
 
@@ -80,6 +80,7 @@ These carry the highest severity and weight in the category.
 | [security.txt: how to publish a vulnerability disclosure contact](/rules/security/security-txt) | Without a security.txt a researcher who finds a bug has no published route to report it. squirrel checks /.well-known/security.txt against RFC 9116 and flags catch-all HTML pages. | warning | Site-wide |
 | [Sensitive fields in JSON API responses: password hashes, tokens and PII](/rules/security/json-sensitive-fields) | An API that returns whole database rows can hand anyone password hashes, tokens and other users' emails. squirrel requests your own API endpoints without cookies and flags them. | error | Site-wide |
 | [Subresource Integrity: which scripts need an integrity hash](/rules/security/sri) | Cross-origin scripts and stylesheets with no integrity hash can be swapped by a compromised CDN. squirrel lists every one, page by page. | warning | Per-page |
+| [Supabase Row Level Security off: tables the anon key can read](/rules/security/supabase-rls) | A Supabase table without Row Level Security answers anyone who holds the public anon key. squirrel counts the rows each table your code queries shows that key, with a HEAD request that reads no data. | error | Site-wide |
 | [Third-party cookies: which external domains a page loads](/rules/security/third-party-cookies) | Trackers and 1x1 pixels set cookies from domains you do not control. squirrel inventories the third-party scripts, iframes and pixels per page. | info | Per-page |
 | [TLS certificate: expiry, hostname, chain and key checks](/rules/security/tls-certificate) | A certificate that expires, does not cover the hostname, or is missing its intermediate breaks the page for some visitors. squirrel reads the certificate once per host and names each problem. | error | Per-site |
 | [Unauthenticated API endpoints: when your API hands out data with no login](/rules/security/unauthenticated-api) | An API route that answers an anonymous request with user records has no server-side authorization. squirrel sends one GET with no cookies or token and grades what comes back by its field names. | error | Site-wide |

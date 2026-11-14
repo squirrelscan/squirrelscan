@@ -3921,6 +3921,12 @@
    "sri|info|No cross-origin scripts or stylesheets on this page — SRI not applicable||"
   ]
  },
+ "security/supabase-rls": {
+  "digest": "174302948985199",
+  "lines": [
+   "supabase-rls|skipped|No Supabase project with a public anon key was found in the site's scripts||"
+  ]
+ },
  "security/third-party-cookies": {
   "digest": "65458506709735",
   "lines": [

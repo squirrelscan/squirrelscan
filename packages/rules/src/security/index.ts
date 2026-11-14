@@ -25,6 +25,7 @@ import { passwordFormGetRule } from "./password-form-get";
 import { permissionsPolicyRule } from "./permissions-policy";
 import { referrerPolicyRule } from "./referrer-policy";
 import { sriRule } from "./sri";
+import { supabaseRlsRule } from "./supabase-rls";
 import { securityTxtRule } from "./security-txt";
 import { thirdPartyCookiesRule } from "./third-party-cookies";
 import { tlsCertificateRule } from "./tls-certificate";
@@ -64,6 +65,7 @@ export const rules: Rule[] = [
   openRedirectRule,
   clientSideAuthzRule,
   exposedActuatorRule,
+  supabaseRlsRule,
   securityTxtRule,
   versionDisclosureRule,
 ];
@@ -93,6 +95,7 @@ export {
   referrerPolicyRule,
   securityTxtRule,
   sriRule,
+  supabaseRlsRule,
   thirdPartyCookiesRule,
   tlsCertificateRule,
   tokenStorageRule,
