@@ -1,0 +1,130 @@
+---
+title: "Client-side-only authorization: when your admin API answers anyone"
+description: "Hiding the admin screen in the frontend does not protect the admin API. squirrel finds admin endpoints in your JavaScript and checks whether they answer without credentials."
+---
+
+## What client-side-only authorization is
+
+A common bug in fast-built and AI-generated apps: the frontend checks the user's role (`if (user.role === "admin")`) and only then shows the admin screens, but the API those screens call checks nothing. The role check lives in the JavaScript bundle, which anyone can read. Anyone who reads it finds `/api/admin/users` and can call it directly, with no account at all.
+
+The frontend is then the only gate, and a gate in the browser is not access control. Authorization has to happen on the server, on every request.
+
+## What squirrel checks
+
+This is a probing rule. It sends requests beyond the crawl, so it runs only when [probing intensity](/configuration/security) is `active` or `aggressive`. On a `passive` run it sends nothing and records one skipped check. `--disable-discovery-probes` resolves probing to `passive`, so it turns this rule off too.
+
+### Which endpoints are probed
+
+The endpoints come from the audit's endpoint discovery, which reads the pages and scripts the crawl already fetched and sends no request: `fetch(...)`, `axios.*` and `XMLHttpRequest` call sites, and API-looking string literals in your own scripts. An endpoint is probed only when all of these hold:
+
+- Its path has a privileged word: `admin`, `administrator`, `superadmin`, `superuser`, `sudo`, `staff`, `backoffice`, `internal`, `moderator`, `moderation` or `privileged`, as a whole word (`/api/admin/users`, `/api/adminUsers` and `/api/super-admin` count; `/api/badminton` does not).
+- It has the same origin as the audited URL (scheme, host and port). An endpoint on another host is never probed.
+- Its path does not name an action. A path with a word such as `delete`, `update`, `reset`, `logout`, `impersonate`, `ban`, `grant`, `export` or `publish` is never probed, whatever the method.
+- At least one reference calls it with `GET` or with no stated method. A URL that is only ever called with `POST`, `PUT`, `PATCH` or `DELETE` is a write and is never probed.
+- Below `aggressive`, `robots.txt` does not disallow it.
+
+Endpoints guessed from the detected stack are not probed: only URLs your own code references. At most eight endpoints are probed.
+
+### What is sent
+
+One request per endpoint:
+
+```text
+GET /api/admin/users
+Accept: application/json, */*;q=0.1
+```
+
+The query string is dropped, so a discovered `?action=delete` is never replayed. The request carries no cookies, no `Authorization` header and none of the custom headers you configured for the crawl, and it does not follow redirects. At most 256 KB of the answer is read, counted after decompression, so a compressed answer cannot inflate past the limit.
+
+### Results
+
+The rule emits checks named `client-side-authz`:
+
+- Skipped when probing is passive. Message: `Probing is passive, so no admin endpoint was probed. Run with --probe active to check whether admin APIs answer without credentials.`
+- Skipped, with reason `probe-budget`, when the shared probe budget ran out before the first request, or partway through with no finding on the endpoints it reached.
+- Skipped, with reason `probe-errors`, when every probe failed with a network error or timeout.
+- Fail, one check per endpoint, when a 2xx answer is JSON that carries data. The message names the endpoint, the status, how many records came back and the field names of the first record, never a value. When your scripts also check a role client-side, the message says so. Example: `Admin endpoint https://example.com/api/admin/users answered a request with no credentials: 200 with 25 records (fields: id, email, role, passwordHash). The server does not check who is asking, so the frontend is the only gate.` The item meta lists `sensitiveFields`, the field names that look sensitive (email, password, token, role and similar).
+- Fail, as a lower-confidence finding, when a 2xx JSON answer is longer than the 256 KB read limit. Item meta: `truncated: true`, `confidence: "lower"`.
+- Pass when no endpoint answered with data. Message: `No admin endpoint answered with data without credentials (3 endpoint(s) probed, 3 refused with 401 or 403)`.
+- Pass when no admin endpoint could be probed. When `robots.txt` disallowed some, the message counts them, for example `(2 disallowed by robots.txt; --probe aggressive probes them)`.
+
+### What counts as data
+
+- A JSON list with at least one non-empty entry.
+- An object with a non-empty list under a collection key such as `data`, `items`, `results`, `users`, `accounts` or `orders`.
+- An object with at least two populated fields that are not status or error fields (`{"totalUsers": 120, "mrr": 4000}`).
+
+### What is not flagged
+
+- A `401` or `403`: the server enforces authorization.
+- A `200` whose body says the caller is not allowed, such as `{"error": "Unauthorized"}` or `{"authenticated": false}`.
+- A redirect (usually to a login page), a `404`, a `405` or any other non-2xx answer.
+- An HTML page, such as the single-page app shell a catch-all route serves.
+- An empty or health-shaped answer: `[]`, `{"data": []}`, `{"status": "ok", "version": "1.2.3"}`.
+
+### Limits
+
+An unauthenticated probe shows that an endpoint answers anyone. It cannot show whether one signed-in user can read another user's data (IDOR or broken object-level authorization): that needs two signed-in identities, and squirrel probes with none. An admin endpoint your code builds at runtime, or one that is never referenced in a page or script the crawl fetched, is not found. An endpoint that answers only `POST` is not probed, because squirrel never sends a write.
+
+## How to fix it
+
+Enforce authorization on the server, for every admin route:
+
+1. Read the session or token on the server, and answer `401` when nobody is signed in.
+2. Look up the caller's role server-side, and answer `403` when the caller lacks it. Never trust a role the client sends.
+3. Put the check where no route can skip it: an auth guard mounted on the whole `/api/admin` router in Express or Fastify, a check inside each Next.js route handler and server action (middleware alone can be bypassed), row-level security policies in Supabase, or security rules in Firebase.
+
+Keep the client-side role check if you like, for the interface. It decides what to show, not who may act. Then re-run with `--probe active` and confirm every admin endpoint answers `401` or `403`.
+
+| | |
+|---|---|
+| **Rule ID** | `security/client-side-authz` |
+| **Category** | [Security](/rules/security) |
+| **Scope** | Site-wide |
+| **Severity** | error |
+| **Weight** | 8/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["security/client-side-authz"]
+```
+
+### Disable all Security rules
+
+```toml squirrel.toml
+[rules]
+disable = ["security/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["security/client-side-authz"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `client-side-authz` | Problem |  |
+| `client-side-authz` | Clean | `client-side-authz` |
+| `client-side-authz` | Not checked |  |
+
+{/* rule-checks:end */}
+
+## Related rules
+
+- [security/leaked-secrets](/rules/security/leaked-secrets): server-only keys shipped in the same JavaScript bundle.
+- [security/token-storage](/rules/security/token-storage): auth tokens kept in `localStorage`, where any script on the page can read them.
+- [security/graphql-introspection](/rules/security/graphql-introspection): a GraphQL schema that maps every admin mutation for an attacker.

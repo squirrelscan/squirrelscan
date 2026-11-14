@@ -25,7 +25,7 @@ Cloud audits also run the [third-party rules](/cloud/third-party): who else load
 
 ## Security rules
 
-HTTPS, headers, and safe link practices (29 rules).
+HTTPS, headers, and safe link practices (30 rules).
 
 ## Run only these rules
 
@@ -43,9 +43,9 @@ These carry the highest severity and weight in the category.
 
 - [Leaked API key in client-side code: how to find one](/rules/security/leaked-secrets): An API key shipped in HTML or a bundle can be read by anyone who views source. squirrel scans every page and script against more than 90 key patterns.
 - [Auth endpoint leaks a password hash or the full user record](/rules/security/auth-endpoint-disclosure): A /api/me or session endpoint that serializes the whole user row hands out password hashes and reset tokens. squirrel sends one credential-free GET per endpoint and names each leaked field.
+- [Client-side-only authorization: when your admin API answers anyone](/rules/security/client-side-authz): Hiding the admin screen in the frontend does not protect the admin API. squirrel finds admin endpoints in your JavaScript and checks whether they answer without credentials.
 - [Exposed .git, .env and backup files: how to find them before a scanner does](/rules/security/exposed-files): A readable /.git/HEAD, /.env or database dump hands out source code and secrets. On an aggressive run squirrel requests a short, fixed list of these paths and confirms each hit by its content.
 - [HTTPS: what it means when a page is not served over HTTPS](/rules/security/https): A page delivered over plain HTTP can be read and rewritten in transit. squirrel flags every crawled URL whose protocol is not https.
-- [Password form submitted by GET: the password in the URL warning](/rules/security/password-form-get): A form with a password field and method=get, or no method, puts the password in the URL. squirrel checks method and formmethod on every password form.
 
 {/* hub:start-here:end */}
 
@@ -57,6 +57,7 @@ These carry the highest severity and weight in the category.
 |---|---|---|---|
 | [Auth endpoint leaks a password hash or the full user record](/rules/security/auth-endpoint-disclosure) | A /api/me or session endpoint that serializes the whole user row hands out password hashes and reset tokens. squirrel sends one credential-free GET per endpoint and names each leaked field. | error | Site-wide |
 | [Auth tokens in localStorage: why a stored JWT is exposed](/rules/security/token-storage) | A JWT or session token in localStorage or sessionStorage is readable by any script on the page. squirrel finds the writes in your scripts and names the key. | warning | Per-page |
+| [Client-side-only authorization: when your admin API answers anyone](/rules/security/client-side-authz) | Hiding the admin screen in the frontend does not protect the admin API. squirrel finds admin endpoints in your JavaScript and checks whether they answer without credentials. | error | Site-wide |
 | [Content-Security-Policy: what to set and how to check it](/rules/security/csp) | A missing CSP, a report-only policy or an unsafe-inline script-src leaves XSS unmitigated. squirrel parses the header and names each gap. | warning | Site-wide |
 | [Cookie flags: Secure, HttpOnly and SameSite on Set-Cookie](/rules/security/cookie-flags) | SameSite=None without Secure is rejected outright, and a session cookie without HttpOnly is readable by any script. squirrel parses every Set-Cookie. | warning | Per-page |
 | [CSP blocks your own scripts, frames and analytics endpoints](/rules/security/csp-blocks-own-resources) | A Content-Security-Policy that leaves out a host your page depends on breaks a widget or a tracker silently. squirrel matches each page's policy against what the page loads. | warning | Per-page |
