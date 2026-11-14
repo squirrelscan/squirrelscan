@@ -9,12 +9,14 @@ import { decodedBody } from "@squirrelscan/utils/response-body";
 // The cap applies to the DECODED body: `decodedBody` undoes the response's
 // Content-Encoding lazily, so a compressed answer is inflated no further than
 // the cap (#722). A body that does not decode fails the read and so the probe.
-export async function readCapped(
+// Shared with security/exposed-files, which needs the raw bytes for its magic
+// number signatures.
+export async function readCappedBytes(
   res: Response,
   maxBytes: number
-): Promise<{ text: string; truncated: boolean }> {
+): Promise<{ bytes: Uint8Array; truncated: boolean }> {
   const body = decodedBody(res);
-  if (!body) return { text: "", truncated: false };
+  if (!body) return { bytes: new Uint8Array(0), truncated: false };
   const reader = body.getReader();
   const chunks: Uint8Array[] = [];
   let total = 0;
@@ -47,5 +49,13 @@ export async function readCapped(
     buf.set(c, offset);
     offset += c.byteLength;
   }
-  return { text: new TextDecoder().decode(buf), truncated };
+  return { bytes: buf, truncated };
+}
+
+export async function readCapped(
+  res: Response,
+  maxBytes: number
+): Promise<{ text: string; truncated: boolean }> {
+  const { bytes, truncated } = await readCappedBytes(res, maxBytes);
+  return { text: new TextDecoder().decode(bytes), truncated };
 }

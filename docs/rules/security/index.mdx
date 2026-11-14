@@ -25,7 +25,7 @@ Cloud audits also run the [third-party rules](/cloud/third-party): who else load
 
 ## Security rules
 
-HTTPS, headers, and safe link practices (26 rules).
+HTTPS, headers, and safe link practices (27 rules).
 
 ## Run only these rules
 
@@ -42,10 +42,10 @@ squirrel audit https://example.com --rule-include security
 These carry the highest severity and weight in the category.
 
 - [Leaked API key in client-side code: how to find one](/rules/security/leaked-secrets): An API key shipped in HTML or a bundle can be read by anyone who views source. squirrel scans every page and script against more than 90 key patterns.
+- [Exposed .git, .env and backup files: how to find them before a scanner does](/rules/security/exposed-files): A readable /.git/HEAD, /.env or database dump hands out source code and secrets. On an aggressive run squirrel requests a short, fixed list of these paths and confirms each hit by its content.
 - [HTTPS: what it means when a page is not served over HTTPS](/rules/security/https): A page delivered over plain HTTP can be read and rewritten in transit. squirrel flags every crawled URL whose protocol is not https.
 - [Password form submitted by GET: the password in the URL warning](/rules/security/password-form-get): A form with a password field and method=get, or no method, puts the password in the URL. squirrel checks method and formmethod on every password form.
 - [Sensitive fields in JSON API responses: password hashes, tokens and PII](/rules/security/json-sensitive-fields): An API that returns whole database rows can hand anyone password hashes, tokens and other users' emails. squirrel requests your own API endpoints without cookies and flags them.
-- [GraphQL mutations over GET: why they open the door to CSRF](/rules/security/graphql-get-mutations): A server that runs a mutation sent as a GET lets any site fire it with your visitors' cookies. squirrel sends a no-op mutation that cannot write and checks the answer.
 
 {/* hub:start-here:end */}
 
@@ -59,6 +59,7 @@ These carry the highest severity and weight in the category.
 | [Content-Security-Policy: what to set and how to check it](/rules/security/csp) | A missing CSP, a report-only policy or an unsafe-inline script-src leaves XSS unmitigated. squirrel parses the header and names each gap. | warning | Site-wide |
 | [Cookie flags: Secure, HttpOnly and SameSite on Set-Cookie](/rules/security/cookie-flags) | SameSite=None without Secure is rejected outright, and a session cookie without HttpOnly is readable by any script. squirrel parses every Set-Cookie. | warning | Per-page |
 | [CSP blocks your own scripts, frames and analytics endpoints](/rules/security/csp-blocks-own-resources) | A Content-Security-Policy that leaves out a host your page depends on breaks a widget or a tracker silently. squirrel matches each page's policy against what the page loads. | warning | Per-page |
+| [Exposed .git, .env and backup files: how to find them before a scanner does](/rules/security/exposed-files) | A readable /.git/HEAD, /.env or database dump hands out source code and secrets. On an aggressive run squirrel requests a short, fixed list of these paths and confirms each hit by its content. | error | Site-wide |
 | [Form action over HTTP: the insecure form submission warning](/rules/security/form-https) | A form on an HTTPS page that posts to http:// sends the data in the clear and browsers interstitial it. squirrel checks action and formaction. | error | Per-page |
 | [GraphQL introspection in production: what an open schema exposes](/rules/security/graphql-introspection) | Open introspection hands anyone a map of every type in your API. squirrel sends one read-only introspection query per endpoint and counts the types it gets back. | warning | Site-wide |
 | [GraphQL mutations over GET: why they open the door to CSRF](/rules/security/graphql-get-mutations) | A server that runs a mutation sent as a GET lets any site fire it with your visitors' cookies. squirrel sends a no-op mutation that cannot write and checks the answer. | error | Site-wide |

@@ -5,6 +5,7 @@ import type { Rule } from "../types";
 import { cookieFlagsRule } from "./cookie-flags";
 import { cspRule } from "./csp";
 import { cspBlocksOwnResourcesRule } from "./csp-blocks-own-resources";
+import { exposedFilesRule } from "./exposed-files";
 import { formCaptchaRule } from "./form-captcha";
 import { formHttpsRule } from "./form-https";
 import { graphqlGetMutationsRule } from "./graphql-get-mutations";
@@ -54,6 +55,7 @@ export const rules: Rule[] = [
   graphqlGetMutationsRule,
   unauthenticatedApiRule,
   jsonSensitiveFieldsRule,
+  exposedFilesRule,
   securityTxtRule,
   versionDisclosureRule,
 ];
@@ -62,6 +64,7 @@ export {
   cookieFlagsRule,
   cspBlocksOwnResourcesRule,
   cspRule,
+  exposedFilesRule,
   formCaptchaRule,
   formHttpsRule,
   graphqlGetMutationsRule,

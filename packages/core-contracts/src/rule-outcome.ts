@@ -64,6 +64,9 @@ export const SKIP_REASON_CLASSES: Readonly<Record<string, SkipReasonClass>> = {
   "targeted-run": gap(true, "rule"),
   // `squirrel analyze` re-reads stored data and makes no live request, so a rule that probes the site is not checked.
   "analyze-offline": gap(true),
+  // A probing rule below the level it needs, or one the site throttled or the budget cut short (#1932).
+  "probe-level-too-low": gap(true),
+  "probe-incomplete": gap(true),
   // A discovery probe that was not approved, not sent, refused, throttled or unanswered (#1794): the file may
   // exist, so a rule built on the probe says nothing about its absence and never resolves a finding.
   "discovery-probe-not-approved": gap(true),

@@ -79,6 +79,11 @@ const HINTS: Record<string, string> = {
   // #1269: `squirrel analyze` makes no live request.
   "analyze-offline":
     "Run `squirrel audit` to probe the live site.",
+  // #1932: a probing rule below its level, or one the site throttled or the budget cut short.
+  "probe-level-too-low":
+    "Run the audit with --probe aggressive (or --pentest) to send these probes, on a site you own or may test.",
+  "probe-incomplete":
+    "The site throttled the probes, answered with a bot challenge, or the probe budget ran out, so the paths not reached may be exposed. Run the audit again later, or raise --probe-budget.",
   // #1144: the inbound-link rules on a crawl that stopped at its page cap.
   [CRAWL_CAPPED_SKIP_REASON]:
     "Raise the page limit (--max-pages, or crawler.max_pages) so the crawl reaches every page, to check them.",
