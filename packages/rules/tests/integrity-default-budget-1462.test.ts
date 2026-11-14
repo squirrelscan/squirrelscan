@@ -19,8 +19,20 @@ const rep = (unit: string, bytes: number): string => unit.repeat(Math.ceil(bytes
 
 type Check = { name?: string; status?: string; details?: Record<string, unknown> };
 
-async function run(html: string, ruleTimeBudgetMs?: number): Promise<{ ms: number; checks: Check[] }> {
-  const parsed = parsePage(html, url);
+/** A full-size shape is built and parsed once and shared by its budget-off and default-budget tests (parsing a multi-MB page dominates the run). */
+const fullPages = new Map<string, { html: string; parsed: ReturnType<typeof parsePage> }>();
+const fullPage = (label: string, build: (scale: number) => string) => {
+  let entry = fullPages.get(label);
+  if (!entry) {
+    const html = build(1);
+    entry = { html, parsed: parsePage(html, url) };
+    fullPages.set(label, entry);
+  }
+  return entry;
+};
+
+async function run(input: string | { html: string; parsed: ReturnType<typeof parsePage> }, ruleTimeBudgetMs?: number): Promise<{ ms: number; checks: Check[] }> {
+  const { html, parsed } = typeof input === "string" ? { html: input, parsed: parsePage(input, url) } : input;
   const runner = new RuleRunner({
     config: { rule_options: {}, rules: { enable: ["integrity/brand-impersonation", "integrity/fake-auth-overlay"] } } as never,
     ...(ruleTimeBudgetMs === undefined ? {} : { ruleTimeBudgetMs }),
@@ -55,7 +67,7 @@ const quiet = loadavg()[0]! < cpus().length / 2;
 
 for (const [label, build] of SHAPES) {
   test(`${label}: the real control is found or the controls not read are counted (budget off)`, async () => {
-    const { checks } = await run(build(1), 0);
+    const { checks } = await run(fullPage(label, build), 0);
     expect([label, "found or reported", foundOrReported(checks)]).toEqual([label, "found or reported", true]);
   }, 120_000);
 
@@ -66,8 +78,12 @@ for (const [label, build] of SHAPES) {
   }, 120_000);
 
   test(`${label}: not abandoned at the default 2 s budget${quiet ? "" : " (skipped: the machine is busy)"}`, async () => {
-    if (!quiet) return;
-    const { checks } = await run(build(1));
+    if (!quiet) {
+      fullPages.delete(label);
+      return;
+    }
+    const { checks } = await run(fullPage(label, build));
+    fullPages.delete(label);
     expect([label, "abandoned", abandonedChecks(checks).length]).toEqual([label, "abandoned", 0]);
     expect([label, "found or reported", foundOrReported(checks)]).toEqual([label, "found or reported", true]);
   }, 120_000);

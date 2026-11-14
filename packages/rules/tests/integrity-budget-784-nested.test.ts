@@ -12,8 +12,9 @@ test("30,000 cross-host decoys with children before the real control: the fair s
 }, 180_000);
 
 // Characterisation: this passes on main too; it pins the behaviour on nested anchors.
-test("20,000 unclosed anchors nest in each other; both rules finish and the innermost real control is found", async () => {
-  const { checks } = await run(`${'<a href="https://p.invalid/x">x'.repeat(20_000)}${REAL}`);
+// 2,500 nests is 1.6x the point where 256 visits per control exhaust the page's 400,000-visit budget (TOTAL_VISITS / SHORT_VISITS = 1,562).
+test("2,500 unclosed anchors nest in each other; both rules finish and the innermost real control is found", async () => {
+  const { checks } = await run(`${'<a href="https://p.invalid/x">x'.repeat(2_500)}${REAL}`);
   expect(finished(checks)).toBe(true);
   expect(fired(checks, "brand-impersonation")).toBe(true);
 }, 180_000);

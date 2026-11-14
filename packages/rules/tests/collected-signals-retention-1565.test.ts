@@ -72,7 +72,9 @@ function retained(extract: Extract, build: (i: number) => string = page): number
 }
 
 /** Heap kept by holding nothing of the page but its index: what parsing N padded pages alone leaves behind. */
-const parseOnly = (): number => retained((_p, i) => i);
+let parseOnlyMb: number | undefined;
+/** Measured once per file: the baseline does not depend on the field, so each field compares against the same number. */
+const parseOnly = (): number => (parseOnlyMb ??= retained((_p, i) => i));
 
 // The collector's secrets scan serialises the document first, which flattens attribute strings, so a build through
 // `buildCollectedPageSignal` hides most of this on some engine versions. Measuring the fields off an unserialised document
