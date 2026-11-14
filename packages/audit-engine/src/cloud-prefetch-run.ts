@@ -28,7 +28,10 @@ import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils/dom";
 import {
   prefetchCloudData,
   prefetchCloudDataWithDeadline,
+  startCloudPrefetch,
   type CloudPrefetchAccumulator,
+  type CloudPrefetchCallEvent,
+  type StartedCloudPrefetch,
   type CloudPrefetchInput,
   type CloudPrefetchResult,
   type CloudSitePayloads,
@@ -628,6 +631,8 @@ export interface ContainerPrefetchInput {
    * Ignored when `deadlineMs` is set (that path owns its accumulator).
    */
   accumulator?: CloudPrefetchAccumulator;
+  /** One event per prefetch call, with its duration (#2129). */
+  onCallEvent?: (event: CloudPrefetchCallEvent) => void;
 }
 
 /**
@@ -663,6 +668,7 @@ export async function runContainerCloudPrefetch(
       renderDisabled: input.renderDisabled,
       deadlineMs: input.deadlineMs,
       accumulator: input.accumulator,
+      onCallEvent: input.onCallEvent,
     },
     payloads,
   );
@@ -677,6 +683,36 @@ export async function runContainerCloudPrefetchFromPayloads(
   input: Omit<ContainerPrefetchInput, "siteContext">,
   payloads: CloudPrefetchPayloadSet,
 ): Promise<CloudPrefetchResult | null> {
+  const prefetchInput = buildContainerPrefetchInput(input, payloads);
+  if (!prefetchInput) return null;
+  if (input.deadlineMs !== undefined) {
+    return prefetchCloudDataWithDeadline(prefetchInput, input.deadlineMs);
+  }
+  return prefetchCloudData({ ...prefetchInput, accumulator: input.accumulator });
+}
+
+/**
+ * {@link runContainerCloudPrefetchFromPayloads} that does not make the caller
+ * wait (#2129): the prefetch runs in the background, cut off at `deadlineMs`,
+ * and the rules phase attaches to the returned accumulator. Null when there is
+ * nothing to prefetch. The same calls in the same order at the same concurrency
+ * as the awaited form, so render calls and spend are unchanged.
+ */
+export function startContainerCloudPrefetchFromPayloads(
+  input: Omit<ContainerPrefetchInput, "siteContext" | "deadlineMs" | "accumulator"> & {
+    deadlineMs: number;
+  },
+  payloads: CloudPrefetchPayloadSet,
+): StartedCloudPrefetch | null {
+  const prefetchInput = buildContainerPrefetchInput(input, payloads);
+  if (!prefetchInput) return null;
+  return startCloudPrefetch(prefetchInput, input.deadlineMs);
+}
+
+function buildContainerPrefetchInput(
+  input: Omit<ContainerPrefetchInput, "siteContext">,
+  payloads: CloudPrefetchPayloadSet,
+): Omit<CloudPrefetchInput, "accumulator"> | null {
   if (input.remainingBudget <= 0) return null;
   const rules = selectCloudRules(input.config);
   if (rules.length === 0) return null;
@@ -712,11 +748,9 @@ export async function runContainerCloudPrefetchFromPayloads(
     // "auto" hybrid crawl doesn't pay to re-render its upgraded pages.
     renderedPageUrls: payloads.renderedPageUrls,
     // No `confirm` — the dashboard spendAck already consented; the cap bounds spend.
+    ...(input.onCallEvent ? { onCallEvent: input.onCallEvent } : {}),
   };
-  if (input.deadlineMs !== undefined) {
-    return prefetchCloudDataWithDeadline(prefetchInput, input.deadlineMs);
-  }
-  return prefetchCloudData({ ...prefetchInput, accumulator: input.accumulator });
+  return prefetchInput;
 }
 
 /**

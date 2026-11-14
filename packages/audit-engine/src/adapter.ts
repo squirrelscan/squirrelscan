@@ -3479,6 +3479,9 @@ export function runStreamingRules(
     if (ruleCacheOpts) {
       if (effectiveScope?.intel) {
         ruleCacheDisabled = "threat-intel-enabled";
+      } else if (effectiveScope?.cloudReady) {
+        // The cloud store is still filling, so it has no stable hash (#2129).
+        ruleCacheDisabled = "unhashable-run-context";
       } else if (pluginRulePack.length > 0) {
         ruleCacheDisabled = "plugin-rules";
       } else {

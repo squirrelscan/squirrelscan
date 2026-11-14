@@ -162,6 +162,13 @@ export interface CloudPrefetchInput {
   ) => Promise<boolean>;
   onProgress?: (message: string) => void;
   /**
+   * One event per cloud call the prefetch makes (#2129): the site profile, each
+   * site-scoped call, and each page batch (ai-parse, render, authority). Fired
+   * when the call returns, with its wall-clock duration. A throwing listener is
+   * ignored: telemetry must never fail a prefetch.
+   */
+  onCallEvent?: (event: CloudPrefetchCallEvent) => void;
+  /**
    * Caller-owned state the prefetch fills in as each call returns (#280). A
    * caller that bounds the phase with a deadline keeps this and calls
    * {@link CloudPrefetchAccumulator.abandon} when the deadline fires, getting
@@ -170,6 +177,20 @@ export interface CloudPrefetchInput {
    * Single use: one accumulator per prefetch run.
    */
   accumulator?: CloudPrefetchAccumulator;
+}
+
+/** One cloud call made by the prefetch, reported through `onCallEvent` (#2129). */
+export interface CloudPrefetchCallEvent {
+  service: CloudServiceId;
+  /** Which call of the service: the single site call, or one page batch. */
+  kind: "site" | "batch";
+  /** Zero-based batch index (batches only). */
+  batchIndex?: number;
+  batchCount?: number;
+  /** Pages in the batch, or 1 for a site call. */
+  units: number;
+  durationMs: number;
+  ok: boolean;
 }
 
 export interface CloudSpendLine {
@@ -285,6 +306,58 @@ export class CloudPrefetchAccumulator {
   /** @internal */ inFlight: InFlightPageService | null = null;
   private settled: CloudPrefetchResult | null = null;
   private wasAbandoned = false;
+  private readonly waiters: Array<{ service: CloudServiceId; key: string; resolve: () => void }> =
+    [];
+  private profileWaiters: Array<() => void> = [];
+  private profileDone = false;
+
+  /**
+   * Resolves once the (service, key) envelope is in the live {@link store}, or
+   * once the prefetch settles or is abandoned (the key then reads whatever the
+   * final result holds, usually a skip). `undefined` means "already there, do
+   * not wait", so a caller on a sync path pays nothing. This is how a rules
+   * phase that started before the prefetch finished reads the store (#2129).
+   */
+  whenReady(service: CloudServiceId, key: string): Promise<void> | undefined {
+    if (this.settled || this.store.get(service)?.has(key)) return undefined;
+    if (this.planned && !this.planned.has(service)) return undefined;
+    return new Promise<void>((resolve) => {
+      this.waiters.push({ service, key, resolve });
+    });
+  }
+
+  /** Resolves when Stage 0 (the site profile) is decided, or the prefetch ends. */
+  whenProfileReady(): Promise<void> {
+    if (this.profileDone || this.settled) return Promise.resolve();
+    return new Promise<void>((resolve) => {
+      this.profileWaiters.push(resolve);
+    });
+  }
+
+  /** @internal Wake every waiter whose key has landed. */
+  notify(): void {
+    for (let i = this.waiters.length - 1; i >= 0; i--) {
+      const w = this.waiters[i];
+      if (this.store.get(w.service)?.has(w.key)) {
+        this.waiters.splice(i, 1);
+        w.resolve();
+      }
+    }
+  }
+
+  /** @internal Stage 0 is decided (resolved, skipped or failed). */
+  markProfileDone(): void {
+    this.profileDone = true;
+    const ws = this.profileWaiters;
+    this.profileWaiters = [];
+    for (const w of ws) w();
+  }
+
+  /** @internal The run is over and its result is final: release every waiter. */
+  releaseAll(): void {
+    this.markProfileDone();
+    for (const w of this.waiters.splice(0)) w.resolve();
+  }
 
   /** True once {@link abandon} cut the run short; the prefetch then stops dispatching. */
   get abandoned(): boolean {
@@ -294,6 +367,7 @@ export class CloudPrefetchAccumulator {
   /** @internal Record the completed run's result; a later abandon returns it unchanged. */
   settle(result: CloudPrefetchResult): void {
     this.settled ??= result;
+    this.releaseAll();
   }
 
   /**
@@ -395,6 +469,15 @@ export class CloudPrefetchAccumulator {
       // Calls still in flight are not in `spend` but may yet be charged.
       ...(balanceAfter !== null ? { balanceAfterApproximate: true as const } : {}),
     };
+    // The live store gets the abandon result's skips for the keys that never
+    // landed, so a reader attached to it (#2129) sees the same final word as
+    // one holding the result, then every waiter is released.
+    for (const [service, byKey] of store) {
+      const live = this.store.get(service) ?? new Map<string, CloudResultEnvelope>();
+      for (const [key, env] of byKey) if (!live.has(key)) live.set(key, env);
+      this.store.set(service, live);
+    }
+    this.releaseAll();
     return this.settled;
   }
 }
@@ -419,6 +502,41 @@ export async function prefetchCloudDataWithDeadline(
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * A prefetch that runs while the caller goes on (#2129). The rules phase
+ * attaches to `accumulator` instead of awaiting the result: it waits for the
+ * site profile with {@link CloudPrefetchAccumulator.whenProfileReady}, reads
+ * `accumulator.store` live, and a cloud rule waits for exactly the envelope it
+ * reads with {@link CloudPrefetchAccumulator.whenReady}. `settled` carries the
+ * spend and failures once the prefetch finishes or its deadline cuts it off.
+ */
+export interface StartedCloudPrefetch {
+  accumulator: CloudPrefetchAccumulator;
+  /** Never rejects: a prefetch that throws settles as an abandoned result. */
+  settled: Promise<CloudPrefetchResult>;
+}
+
+/**
+ * Start {@link prefetchCloudData} in the background, cut off at `deadlineMs`
+ * (the stage's budget): at the deadline the run is abandoned, keeping what
+ * landed and its spend, and every waiter is released. Makes exactly the calls
+ * prefetchCloudData makes, in the same order and concurrency; only the caller's
+ * waiting changes.
+ */
+export function startCloudPrefetch(
+  input: Omit<CloudPrefetchInput, "accumulator">,
+  deadlineMs: number,
+): StartedCloudPrefetch {
+  const accumulator = new CloudPrefetchAccumulator();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const expired = new Promise<CloudPrefetchResult>((resolve) => {
+    timer = setTimeout(() => resolve(accumulator.abandon()), Math.max(0, deadlineMs));
+  });
+  const run = prefetchCloudData({ ...input, accumulator }).catch(() => accumulator.abandon());
+  const settled = Promise.race([run, expired]).finally(() => clearTimeout(timer));
+  return { accumulator, settled };
 }
 
 interface ServicePlan {
@@ -741,6 +859,14 @@ async function runPrefetch(
   // visible to an abandon() taken mid-run (#280).
   const store = acc.store;
   acc.pages = input.pages;
+  const emitCall = (event: Omit<CloudPrefetchCallEvent, "durationMs">, startedAt: number): void => {
+    if (!input.onCallEvent) return;
+    try {
+      input.onCallEvent({ ...event, durationMs: Date.now() - startedAt });
+    } catch {
+      /* a telemetry listener must never fail the prefetch */
+    }
+  };
   const specs = planServices(input.rules);
   if (specs.size === 0) return emptyResult(store);
 
@@ -892,6 +1018,7 @@ async function runPrefetch(
     } else if (!acc.abandoned) {
       // (Abandoned already: dispatch nothing more, the abandon result is final.)
       input.onProgress?.(`cloud: ${SITE_METADATA_SERVICE}`);
+      const stage0Started = Date.now();
       try {
         const data = await client.siteMetadata({
           auditId: input.auditId,
@@ -907,6 +1034,7 @@ async function runPrefetch(
         store.set(SITE_METADATA_SERVICE, byKey);
         siteMetadata = data;
         acc.siteMetadata = data;
+        emitCall({ service: SITE_METADATA_SERVICE, kind: "site", units: 1, ok: true }, stage0Started);
         if (credits > 0) {
           spend.push({
             service: SITE_METADATA_SERVICE,
@@ -919,6 +1047,7 @@ async function runPrefetch(
         }
       } catch (error) {
         const reason = reasonForError(error);
+        emitCall({ service: SITE_METADATA_SERVICE, kind: "site", units: 1, ok: false }, stage0Started);
         stop ??= latchFatal(error, reason);
         skipService(store, SITE_METADATA_SERVICE, "site", [], reason);
         failures.push({
@@ -934,6 +1063,9 @@ async function runPrefetch(
     }
     specs.delete(SITE_METADATA_SERVICE);
   }
+  // Stage 0 is decided: a rules phase waiting on the site profile may start.
+  acc.notify();
+  acc.markProfileDone();
 
   // ── STAGE 1: gate downstream services by the resolved metadata ──
   // A gated-out service is removed BEFORE applyCap, so it never charges and its
@@ -1000,6 +1132,9 @@ async function runPrefetch(
   // worst-case total including the metadata cost — no second prompt here.
 
   for (const plan of plans) {
+    // Whatever the previous service (or the cap stamps above) left in the store
+    // is readable now.
+    acc.notify();
     // An abandoned run stops dispatching: anything charged now would never reach a report.
     if (acc.abandoned) break;
     if (plan.fullyCapped) continue;
@@ -1050,8 +1185,10 @@ async function runPrefetch(
       }
 
       input.onProgress?.(`cloud: ${plan.service}`);
+      const siteStarted = Date.now();
       try {
         const data = await call;
+        emitCall({ service: plan.service, kind: "site", units: 1, ok: true }, siteStarted);
         const byKey = store.get(plan.service) ?? new Map<string, CloudResultEnvelope>();
         // Cache-aware services (archive-indexing) return `cached: true` on a
         // 0-credit server cache hit — mirror that in the spend accounting
@@ -1064,6 +1201,7 @@ async function runPrefetch(
         line.credits = cost;
       } catch (error) {
         const reason = reasonForError(error);
+        emitCall({ service: plan.service, kind: "site", units: 1, ok: false }, siteStarted);
         stop ??= latchFatal(error, reason);
         skipService(store, plan.service, plan.unit, [], reason);
         failures.push({
@@ -1108,6 +1246,9 @@ async function runPrefetch(
         : input.config.batch_size;
     const batches = chunkPagesBySize(pagesToFetch, maxBatch);
     const byKey = store.get(plan.service) ?? new Map<string, CloudResultEnvelope>();
+    // Live from here, so each batch's envelopes are readable as they land
+    // (#2129). The merge below writes the same entries again, in batch order.
+    store.set(plan.service, byKey);
     const perPage = computeCost(plan.feature, 1);
 
     // Publish the in-flight batches so an abandon mid-service keeps the ones that returned (#280).
@@ -1124,9 +1265,29 @@ async function runPrefetch(
 
     // Independent batches overlap (bounded); `stop` short-circuits batches not yet dispatched.
     // onProgress may fire out of batch order under concurrency — it is display-only.
+    const dispatched = new Set<number>();
     const runBatch = async (batch: CloudPagePayload[], i: number): Promise<BatchOutcome> => {
+      const startedAt = Date.now();
       const outcome = await fetchBatchOutcome(batch, i);
       inFlight.outcomes[i] = outcome;
+      // Only a batch that was actually dispatched is a call.
+      if (dispatched.has(i)) {
+        emitCall(
+          {
+            service: plan.service,
+            kind: "batch",
+            batchIndex: i,
+            batchCount: batches.length,
+            units: batch.length,
+            ok: outcome.failedBatches === 0,
+          },
+          startedAt,
+        );
+      }
+      if (!acc.abandoned) {
+        for (const [url, env] of outcome.entries) byKey.set(url, env);
+        acc.notify();
+      }
       return outcome;
     };
 
@@ -1147,6 +1308,7 @@ async function runPrefetch(
         };
       }
       input.onProgress?.(`cloud: ${plan.service} ${i + 1}/${batches.length}`);
+      dispatched.add(i);
       try {
         const byUrl = await fetchPageBatch(
           client,

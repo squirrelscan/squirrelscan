@@ -14,6 +14,7 @@ import { nonPublicHostLabel } from "@squirrelscan/utils/non-public-host";
 
 import type {
   CheckResult,
+  CloudServiceId,
   EntityMap,
   IntelContext,
   SiteMetadata,
@@ -31,7 +32,7 @@ import type {
   SiteData,
 } from "./types";
 
-import type { CloudResultStore } from "./cloud";
+import { CLOUD_SITE_KEY, type CloudResultStore } from "./cloud";
 import type { CollectedSiteSignals } from "./collected-signals";
 import type { EndpointSurface } from "./endpoint-surface";
 import type { ProbeBudget } from "./probe-budget";
@@ -91,6 +92,14 @@ export interface RunnerScope {
    * rules emit `skipped` + `not-prefetched`.
    */
   cloudResults?: CloudResultStore;
+  /**
+   * Set when `cloudResults` is still being filled by a prefetch the rules phase
+   * did not wait for (#2129). Before a cloud rule runs, the runner awaits this
+   * for the envelope it reads (service plus page URL, or `site` for a site
+   * rule); `undefined` back means it is already there. Rules that read no cloud
+   * service never wait. Absent = the store is final, exactly as before.
+   */
+  cloudReady?: (service: CloudServiceId, key: string) => Promise<void> | undefined;
   /**
    * Threat-intel handle for THIS run (#117) — feeds/lookups/signatures resolved
    * before rules run, threaded into `ctx.intel`. Undefined = intel off / not
@@ -410,6 +419,7 @@ export class RuleRunner {
   // concurrent audits never share these.
   private readonly siteMetadata: SiteMetadata | undefined;
   private readonly cloudResults: CloudResultStore | undefined;
+  private readonly cloudReady: RunnerScope["cloudReady"];
   private readonly intel: IntelContext | undefined;
   private readonly entityMap: EntityMap | undefined;
   private readonly probe: ProbeBudget | undefined;
@@ -424,6 +434,7 @@ export class RuleRunner {
     this.config = options.config;
     this.siteMetadata = options.siteMetadata;
     this.cloudResults = options.cloudResults;
+    this.cloudReady = options.cloudReady;
     this.intel = options.intel;
     this.entityMap = options.entityMap;
     this.probe = options.probe;
@@ -926,6 +937,14 @@ export class RuleRunner {
         const allChecks: CheckResult[] = [];
         const fannedChecks = opts?.fannedRuleChecks;
         for (const rule of pageRules) {
+          const cloudSpec = rule.meta.cloud;
+          if (this.cloudReady && cloudSpec) {
+            const wait = this.cloudReady(
+              cloudSpec.service,
+              cloudSpec.unit === "site" ? CLOUD_SITE_KEY : page.url
+            );
+            if (wait) await wait;
+          }
           const ctx: RuleContext = {
             page,
             parsed,
@@ -1020,7 +1039,12 @@ export class RuleRunner {
         // Run rules with bounded concurrency; assemble in deterministic order.
         // runOneRule may return sync; Promise.resolve normalizes for the pool.
         const results = await mapWithConcurrency(
-          siteRules.map((rule) => () => {
+          siteRules.map((rule) => async () => {
+            const cloudSpec = rule.meta.cloud;
+            if (this.cloudReady && cloudSpec) {
+              const wait = this.cloudReady(cloudSpec.service, CLOUD_SITE_KEY);
+              if (wait) await wait;
+            }
             const ctx: RuleContext = {
               page: sitePage,
               parsed: siteParsed,

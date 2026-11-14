@@ -842,3 +842,54 @@ export const SERVICE_LIMITS = {
   gapsMaxSeeds: 50,
   gapsMaxResults: 100,
 } as const;
+
+// ── Cloud prefetch budget (#2129, from worker-agent timeouts.ts #1995) ──────────
+
+/**
+ * Per-page rate of the post-crawl cloud prefetch's budget, in ms.
+ *
+ * The prefetch's work scales with the crawl: ai-parse and authority-signals each
+ * batch 20 pages, render batches 10 urls. The rate is a doubled LOWER BOUND, not
+ * a measurement: the first hosted 2,000-page run spent the flat 600 s and was not
+ * finished, i.e. it needs more than 300 ms/page, and 600 gives the same headroom
+ * the per-coverage floors always had. An over-estimate is safe because
+ * {@link CLOUD_PREFETCH_RUN_SHARE}, not this rate, bounds the phase.
+ */
+export const CLOUD_PREFETCH_PER_PAGE_MS = 600;
+
+/**
+ * The most of a run's wall clock the prefetch budget may ever be: a quarter,
+ * leaving the crawl, rules, report and publish three quarters between them. A
+ * share rather than an absolute number, so it tracks the run budget (and the
+ * container class) instead of rotting like the flat 600 s did.
+ */
+export const CLOUD_PREFETCH_RUN_SHARE = 0.25;
+
+/**
+ * Aggregate wall-clock budget for the cloud-prefetch stage, in ms. At the budget
+ * the stage is cut off and the run continues with what landed.
+ *
+ * `max(floor, min(maxPages x 600 ms, 25% of the run))`, then never more than half
+ * the run:
+ *  - the FLOOR is the per-coverage value ({@link AUDIT_RUNTIME}
+ *    `.cloudPrefetchBudgetByCoverageMs`), so a crawl never gets less than it
+ *    always did, and the floor wins over the share for small crawls;
+ *  - the half-run clamp only binds when the runtime was overridden down.
+ *
+ * `runtimeMs` is the run's EFFECTIVE runtime (after any override), which the
+ * caller resolves, because the runtime depends on the container class. With no
+ * usable `maxPages` this is the floor. Unknown coverage reads as quick.
+ */
+export function resolveCloudPrefetchBudgetMs(
+  coverage: CoverageMode,
+  maxPages: number | undefined,
+  runtimeMs: number,
+): number {
+  const floors = AUDIT_RUNTIME.cloudPrefetchBudgetByCoverageMs;
+  const floor = floors[coverage] ?? floors.quick;
+  if (maxPages === undefined || !Number.isFinite(maxPages) || maxPages <= 0) return floor;
+  const scaled = Math.round(maxPages * CLOUD_PREFETCH_PER_PAGE_MS);
+  const share = Math.round(runtimeMs * CLOUD_PREFETCH_RUN_SHARE);
+  const wanted = Math.max(floor, Math.min(scaled, share));
+  return Math.min(wanted, Math.floor(runtimeMs / 2));
+}
