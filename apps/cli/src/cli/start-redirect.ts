@@ -105,6 +105,8 @@ export interface ResolveAuditStartInput extends StartRedirectContext {
   userAgent?: string;
   /** False where an environment proxy carries requests (see `ownHostsPinned`). */
   pin?: boolean;
+  /** Epoch ms the `--max-duration` budget ends (#1853): the probe is cut to what is left of it. */
+  budgetDeadlineAt?: number;
   resolve?: typeof resolveStartRedirect;
   /** The yes/no prompt; tests inject one. Default: stdin. */
   ask?: (question: string) => Promise<string>;
@@ -122,6 +124,9 @@ export async function resolveAuditStart(
   const resolution = await (input.resolve ?? resolveStartRedirect)(input.url, {
     ...(input.userAgent ? { userAgent: input.userAgent } : {}),
     ...(testTimeoutMs !== undefined ? { timeoutMs: testTimeoutMs } : {}),
+    ...(input.budgetDeadlineAt !== undefined
+      ? { deadlineAt: input.budgetDeadlineAt }
+      : {}),
     ...(input.pin === false ? { pin: false } : {}),
   });
   const decision = decideStartRedirect(resolution, input);

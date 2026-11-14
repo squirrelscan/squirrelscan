@@ -65,7 +65,10 @@ import {
   redactHeaders,
 } from "@/audit/headers";
 import { localUnverifiedLinksNotice } from "@/audit/local-link-notice";
-import { MAX_DURATION_MAX_SECONDS } from "@/audit/max-duration";
+import {
+  createDurationBudget,
+  MAX_DURATION_MAX_SECONDS,
+} from "@/audit/max-duration";
 import { configDir, loadConfiguredPlugins } from "@/audit/plugins";
 import { parseDiscoveryProbePaths } from "@/audit/probe-paths";
 import { renderFallbackLine } from "@/audit/render-summary";
@@ -2190,6 +2193,11 @@ export const audit = defineCommand({
                 !!process.stdout.isTTY &&
                 !reportGoesToStdoutEarly,
               userAgent: config.crawler.user_agent || undefined,
+              // #1853: the redirect probe is inside the --max-duration budget.
+              budgetDeadlineAt: createDurationBudget(
+                maxDurationSeconds ?? config.crawler.max_duration,
+                commandStartedAt
+              )?.crawlStopAt,
               pin: ownHostsPinned({ pinOwnHosts: pinOwnHosts() }),
             });
         if (resolved.stop) {
