@@ -380,8 +380,6 @@ export const SCHEDULER = {
 
 // ── Report Limits ───────────────────────────────────────────────
 export const REPORT_LIMITS = {
-  // Sized for maxPages-page cloud reports; the schema array caps bound worst-case growth.
-  maxPayloadBytes: 20 * 1024 * 1024,
   // Report page-count ceiling for the CLOUD crawl config + sitemap arrays
   // (planMaxPages, cloud/custom-crawl caps all track this). Decoupled from the
   // per-check pages cap below (#918): raising THIS raises crawl cost.
@@ -584,34 +582,6 @@ export const RESOLUTION_PUBLISH_LIMITS = {
   // and the decoder stops reading past it, so a small body cannot expand into a
   // large allocation on the server.
   maxInflatedBytes: 4 * 1024 * 1024,
-} as const;
-
-// #1167: hard-clip fallback applied by the cloud container's publish degrade pass
-// only when the primary-capped payload STILL exceeds maxPayloadBytes — should be
-// unreachable post-sampling, but guarantees a signalled clip over a 413. Tighter
-// than PUBLISH_LIMITS on every axis so the rebuilt body provably fits the 20MB gate.
-// Shape matches the rules pkg `PublishSampleLimits` so it drops straight into
-// sampleChecksForPublish / that degrade pass. (The CLI publishes the capped
-// report since repo#2667 and has no degrade pass.)
-export const PUBLISH_DEGRADE_LIMITS = {
-  maxPagesPerCheck: 25,
-  maxItems: 10,
-  maxSourcePagesPerItem: 3,
-  // #1028: byte budget for `pageStatuses`, the one published field sized by
-  // PAGES CRAWLED rather than by findings and therefore invisible to the
-  // per-check caps above. It lists every non-2xx page, count-capped at the crawl
-  // ceiling, so at 10,000 pages of maxUrlLength URLs it is ~20MB on its own
-  // against a 20MB gate — the degrade pass would run, shrink nothing that
-  // mattered, and the publish would still fail. Clipping it only means fewer
-  // carried findings get staled (they carry instead), never a wrong resolve.
-  //
-  // 4MB is a fifth of the gate: generous for any real site (an ordinary URL is
-  // ~60 bytes, so this is tens of thousands of broken pages) while leaving the
-  // rest of the budget to the report. Bytes, not a count, because entry size
-  // varies by three orders of magnitude with URL length. See
-  // clipPageStatusesToBytes in the rules pkg, which also explains why
-  // `resolutionSignal` is left alone.
-  maxPageStatusBytes: 4 * 1024 * 1024,
 } as const;
 
 // ── Published report cap (repo#2656) ────────────────────────────

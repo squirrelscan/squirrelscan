@@ -16,7 +16,6 @@ import {
 import { addRegions, alignItemSources, pageRegions } from "@squirrelscan/core-contracts/item-sources";
 import { PUBLISH_LIMITS, REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
 import { mergeCheckMessages, messageMergeKey } from "@squirrelscan/core-contracts/message-merge";
-import { byteLength } from "@squirrelscan/utils/bytes";
 
 /**
  * Bound every check item's `id`/`label` to the publish schema's medium-string
@@ -165,21 +164,6 @@ export interface PublishSampleLimits {
   maxItems: number;
   /** Max `sourcePages` kept per item (deduped first). */
   maxSourcePagesPerItem: number;
-}
-
-/**
- * What {@link degradeAndRebuild} needs on top of the per-check sample caps.
- *
- * `maxPageStatusBytes` is OPTIONAL by design, and its absence is meaningful
- * rather than a missing guard: it selects whether `pageStatuses` — sized by
- * pages CRAWLED, so invisible to per-check sampling — is clipped too. A PRIMARY
- * publish sample must leave it whole; only a DEGRADE pass, already clipping
- * every finding's affected pages to fit the payload gate, may give it up. So
- * `DEFAULT_PUBLISH_SAMPLE` omits it and `PUBLISH_DEGRADE_LIMITS` sets it.
- */
-export interface PublishDegradeLimits extends PublishSampleLimits {
-  /** Byte budget for `pageStatuses`; omit to leave it whole. */
-  maxPageStatusBytes?: number;
 }
 
 /**
@@ -382,58 +366,13 @@ function sampleCheckForPublish(check: CheckResult, limits: PublishSampleLimits):
 }
 
 /**
- * Publish DEGRADE pass (#1172): re-sample an already-slimmed publish report's
- * per-check detail to a HARDER limit set. BOTH publish producers reach for this
- * when the primary-capped body still exceeds the payload/isolate gate — the CLI
- * (`publishReport` on a >20MB body) and the cloud container
- * (`attemptPublishReport` on a 413 / over-budget pre-check) — re-running
- * {@link sampleChecksForPublish} over every rule's `checks` and `siteChecks`
- * with the tighter `limits` (e.g. PUBLISH_DEGRADE_LIMITS). Mutates the checks
- * arrays on the report IN PLACE (both callers own their report by the time they
- * degrade — the CLI a throwaway slim, the cloud an already-mutated report) and
- * returns the same report.
- *
- * Idempotent + monotonic: re-sampling an already-sampled report at tighter
- * limits yields the SAME result as sampling the original once at those limits —
- * kept pages/items are first-N (N ≤ the prior cap, so first-N of first-M =
- * first-N), and `details.pagesTruncated` (preserved-if-larger) /
- * `details.additional` (additive) carry the TRUE pre-sample totals across
- * passes. So a report already at/under `limits` passes through unchanged (same
- * refs, via sampleChecksForPublish), and a second degrade is a no-op.
- */
-export function degradeAndRebuild<
-  T extends {
-    ruleResults?: Record<string, { checks?: CheckResult[] } | null | undefined> | null;
-    siteChecks?: CheckResult[] | null;
-    pageStatuses?: { url: string; status: number }[] | null;
-  },
->(report: T, limits: PublishDegradeLimits): T {
-  const ruleResults = report.ruleResults;
-  if (ruleResults && typeof ruleResults === "object") {
-    for (const rule of Object.values(ruleResults)) {
-      if (rule && Array.isArray(rule.checks)) {
-        rule.checks = sampleChecksForPublish(rule.checks, limits);
-      }
-    }
-  }
-  if (Array.isArray(report.siteChecks)) {
-    report.siteChecks = sampleChecksForPublish(report.siteChecks, limits);
-  }
-  if (limits.maxPageStatusBytes !== undefined) {
-    clipPageStatusesToBytes(report, limits.maxPageStatusBytes);
-  }
-  return report;
-}
-
-/**
  * Clip `pageStatuses` to a byte budget — the one part of a published report
  * whose size tracks PAGES CRAWLED rather than findings found, and which the
  * per-check sampling above therefore cannot shrink.
  *
  * It is a list of every non-2xx page, capped by COUNT at the crawl ceiling, so
  * its worst case is `pages x REPORT_LIMITS.maxUrlLength`. At the 10,000-page
- * ceiling (#1028) that is ~20MB against a 20MB gate on its own: the degrade pass
- * would run, shrink nothing that mattered, and the publish would still fail.
+ * ceiling (#1028) that is ~20MB on its own, far over the 1 MiB publish cap.
  *
  * Clipping is safe in one direction only, which is the direction taken: the
  * server uses these to STALE carried findings on pages that 404'd, so a shorter
@@ -451,7 +390,7 @@ export function degradeAndRebuild<
  * signal keeps a count of every crawled page when it has to clip its list.
  *
  * Exported for direct testing; production callers reach it through
- * {@link degradeAndRebuild} and `buildPublishResolution`.
+ * `buildPublishResolution`.
  */
 export function clipPageStatusesToBytes<
   T extends { pageStatuses?: { url: string; status: number }[] | null },
@@ -846,97 +785,6 @@ export function unfoldAggregateCheck(check: CheckResult): CheckResult[] {
       siteResourceEvidence: i === 0 ? siteResourceEvidence : undefined,
     };
   });
-}
-
-/** Bytes reserved for the rest of the (separately capped) report under the 20MB
- * publish limit; the pages budget is maxPayloadBytes minus this headroom. */
-const PAGES_PAYLOAD_HEADROOM = 6 * 1024 * 1024;
-
-/**
- * Clamp a report's total folded `pages[]` bytes to a publish-payload budget so a
- * large crawl can't 413 the whole publish (#918). The raised per-check pages cap
- * (`maxPagesPerCheck` = 5000) lets a large-bad-site CLI audit carry enough
- * affected-page URLs across many rules to approach the API's 20MB body limit —
- * which rejects the ENTIRE publish, strictly worse than a clip. This degrades
- * gracefully: clip the largest `pages[]` arrays largest-first until the estimated
- * pages bytes fit the budget, stamping `details.pagesTruncated` (the pre-clip
- * count) so the true affected-page total survives the drop.
- *
- * NOT server-alerted: `collectCheckTruncations` deliberately ignores
- * `checks[].pages` (#2048) — it cannot tell this backstop apart from the #1167
- * sampling that clips every large crawl, so alerting on it made the #817 signal
- * fire on "big site published" and buried the real clamps. Post-#1167 this
- * backstop should never engage anyway (see the call site in the CLI's publish
- * controller): sampling already bounds each `pages[]` at 100 entries.
- *
- * Budget covers pages bytes only — the caller/default sizes it below
- * maxPayloadBytes with headroom for the rest of the report (items, summary,
- * sitemaps, pageStatuses are all separately capped and realistically small).
- * Reassigns each clipped check's `pages` to a fresh sliced array (never mutates
- * the source). Returns the number of page entries dropped (0 = fit, no-op).
- */
-export function clampReportPagesToBudget(
-  ruleResults: Record<string, { checks: CheckResult[] }>,
-  budgetBytes: number = REPORT_LIMITS.maxPayloadBytes - PAGES_PAYLOAD_HEADROOM,
-): number {
-  // "url", — quotes + comma per JSON array entry. #1275: measure the UTF-8 byte
-  // size, not `.length` (UTF-16 code units), so a multi-byte URL is estimated at
-  // its true wire size against this byte budget.
-  const entryBytes = (url: string): number => byteLength(url) + 3;
-
-  // Track the containing array + index so a clip REPLACES the element with a
-  // clone rather than mutating the check object — the caller's checks arrays can
-  // share objects with the source report (sampleChecksForPublish returns the same
-  // ref when nothing overran), and slimForPublish re-slims from that same report
-  // on its degrade pass, so an in-place mutation here would corrupt the original.
-  const withPages: { checks: CheckResult[]; index: number; bytes: number }[] = [];
-  let totalBytes = 0;
-  for (const rule of Object.values(ruleResults)) {
-    for (let index = 0; index < rule.checks.length; index++) {
-      const check = rule.checks[index]!;
-      if (!check.pages || check.pages.length === 0) continue;
-      let bytes = 0;
-      for (const url of check.pages) bytes += entryBytes(url);
-      withPages.push({ checks: rule.checks, index, bytes });
-      totalBytes += bytes;
-    }
-  }
-  if (totalBytes <= budgetBytes) return 0;
-
-  // Clip the largest pages arrays first until the global excess is covered.
-  withPages.sort((a, b) => b.bytes - a.bytes);
-  let excess = totalBytes - budgetBytes;
-  let dropped = 0;
-  for (const { checks, index } of withPages) {
-    if (excess <= 0) break;
-    const check = checks[index]!;
-    const pages = check.pages!;
-    const originalLen = pages.length;
-    let keep = originalLen;
-    // Keep at least one page so the check still cites where it fired.
-    while (excess > 0 && keep > 1) {
-      keep--;
-      excess -= entryBytes(pages[keep]!);
-      dropped++;
-    }
-    if (keep < originalLen) {
-      // Preserve an already-recorded (larger) pre-sample count: publish sampling
-      // (#1167) runs before this backstop and stamps the TRUE original page total;
-      // this budget clip must not overwrite it with the post-sample length.
-      const priorTruncated = check.details?.pagesTruncated;
-      const pagesTruncated =
-        typeof priorTruncated === "number" && priorTruncated > originalLen
-          ? priorTruncated
-          : originalLen;
-      // Clone (never mutate the source check) — fresh pages array + details.
-      checks[index] = {
-        ...check,
-        pages: pages.slice(0, keep),
-        details: { ...check.details, pagesTruncated },
-      };
-    }
-  }
-  return dropped;
 }
 
 /** Distinct per-page messages an aggregate remembers in `details.messages`. */
