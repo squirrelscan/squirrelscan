@@ -439,8 +439,11 @@ function credentialKind(
       if (/^(?:https?:)?\/\//i.test(v) || v.startsWith("/")) return null;
       // Mostly one character class (a slug, a number): not a key.
       if (/^[a-z-]+$/.test(v) || /^\d+$/.test(v)) return null;
-      // Checked once per field name: the values of one field share a provider.
-      const memoKey = normalizeKey(key);
+      // Checked once per field name and value. A name alone is not enough: one
+      // response can carry a public Firebase `apiKey` and a server `apiKey`,
+      // and the first one checked must not decide the other. The same value
+      // repeated across records is still checked once.
+      const memoKey = `${normalizeKey(key)}\u0000${v}`;
       let isPublic = publicMemo.get(memoKey);
       if (isPublic === undefined) {
         isPublic = isPublicByDesign(key, v);
