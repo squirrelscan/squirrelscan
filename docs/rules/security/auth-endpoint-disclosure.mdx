@@ -1,0 +1,141 @@
+---
+title: "Auth endpoint leaks a password hash or the full user record"
+description: "A /api/me or session endpoint that serializes the whole user row hands out password hashes and reset tokens. squirrel sends one credential-free GET per endpoint and names each leaked field."
+---
+
+## What this rule finds
+
+Current-user and session endpoints such as `/api/me`, `/api/session` or `/api/auth/session` tell the front end who is signed in. The quickest way to build one is to return the user object straight from the database, and that object carries everything the table stores: the password hash, password reset and email confirmation tokens, the OTP secret, recovery codes, sign-in counters and the last sign-in IP.
+
+The browser needs none of that. A password hash can be cracked offline, a reset token signs in as the user, and an OTP secret defeats two-factor authentication. Generated and quickly assembled apps ship this pattern often, because the user row and the API response start out as the same object.
+
+## What squirrel checks
+
+This is a probing rule. It sends requests beyond the crawl, so it runs only when [probing intensity](/configuration/security) is `active` or `aggressive`. On a `passive` run it sends nothing and records one skipped check. A cloud audit of a website whose ownership is not verified, and any audit with discovery probes turned off, is passive, so this rule sends nothing there.
+
+### Which endpoints are probed
+
+- Current-user and session endpoints the audit found in your pages and scripts: a URL whose last path segment is `me`, `session`, `user`, `whoami`, `userinfo`, `current-user`, `self`, `profile` or `account`. A string literal or a conventional path must also sit under an API or auth segment (`/api/`, `/auth/`, `/v1/` and similar); a call site such as `fetch("/me")` counts on its own. Finding them sends no request.
+- The conventional paths `/api/me`, `/api/session`, `/api/auth/session` and `/api/user`.
+
+Every endpoint must have the same origin as the audited URL (scheme, host and port). An endpoint on another host, such as an identity provider, is never probed. These are never probed either:
+
+- a path that names a state-changing action, such as `logout`, `delete`, `update` or `reset`;
+- a path that names a credential flow, such as `login`, `signin`, `signup`, `register`, `password`, `token`, `verify`, `callback` or `authorize`;
+- a call site that declares any method other than `GET` or `HEAD`, because a `POST` to `/api/session` is how a sign-in is submitted.
+
+Below `aggressive`, a path that `robots.txt` disallows is skipped. At most six endpoints are probed.
+
+### What is sent
+
+One request per endpoint:
+
+```text
+GET /api/me
+Accept: application/json
+```
+
+The request has no query string and no body. It carries no cookies and no `Authorization` header, and it does not follow redirects. No username, password or token is ever submitted. At most 256 KB of the answer is read, counted after decompression.
+
+### What is flagged
+
+A 2xx JSON answer that contains any of these, anywhere in the document:
+
+| Finding | How it is recognized |
+|---|---|
+| Password hash | A string in a known hash format under any key: bcrypt (`$2b$...`), argon2, scrypt, SHA-crypt, MD5-crypt, Django (`pbkdf2_sha256$...`) and Werkzeug |
+| Password | A non-empty string under a key such as `password`, `passwd`, `pwd`, `password_hash`, `encrypted_password` or `password_digest`. `null`, an empty string and a mask such as `********` are not flagged |
+| Credential secret | A non-empty value under a key such as `reset_password_token`, `confirmation_token`, `remember_token`, `otp_secret`, `two_factor_secret`, `recovery_codes`, `refresh_token`, `client_secret` or `private_key` |
+| Internal user record | Two or more user-table columns on one object, such as `sign_in_count`, `current_sign_in_ip`, `last_sign_in_ip`, `failed_attempts`, `locked_at`, `salt` or `reset_password_sent_at` |
+
+Each finding is high severity: a failed check at `error` severity.
+
+### Results
+
+The rule emits these checks:
+
+- `auth-endpoint-not-checked`, skipped, when probing is passive. Message: `Probing is passive, so no auth or session endpoint was probed. Run with --probe active to check what they disclose.`
+- `auth-endpoint-not-checked`, skipped with reason `probe-budget`, when the shared probe budget ran out before the first request, or partway through with no finding on the endpoints it reached. A run cut short is never reported as a pass.
+- `auth-endpoint-not-checked`, skipped with reason `probe-errors`, when every probe failed with a network error or timeout.
+- `auth-endpoint-disclosure`, failed, one check per leaking endpoint. Message: `https://example.com/api/me answered a GET with no credentials with 1 password hash (user.encrypted_password); 1 credential secret (user.reset_password_token); 3 internal user columns (user.sign_in_count, user.current_sign_in_ip, user.last_sign_in_ip)`. Each item names the endpoint, the JSON path of the field and its kind. The value is never stored or printed.
+- `auth-endpoint-clean`, passed, when no endpoint disclosed anything. Message: `No auth or session endpoint disclosed a password, password hash, credential secret or internal user record (4 endpoint(s) probed, 1 answered with JSON)`.
+
+### What is not flagged
+
+- A non-2xx answer, such as a 401 or 404, even when its body is JSON.
+- A redirect, an HTML page or a network error.
+- An answer longer than 256 KB, which is not parsed.
+- A session answer with only profile fields (`id`, `name`, `email`, `image`) or a CSRF token.
+
+### Limits
+
+The probes carry no cookies, so the rule sees what an anonymous visitor sees. An endpoint that leaks the user row only to a signed-in user is not seen, and neither is one that returns another user's record when asked with a user's session: that needs two signed-in identities, which a black-box audit does not have. A finding means the endpoint returned these fields to a request with no credentials at all. An endpoint the crawl never referenced, outside the conventional paths, is not found.
+
+## How to fix it
+
+Never send the stored user row as the response. Build the response from an explicit allowlist of the fields the client needs, such as `id`, `name`, `email` and `avatar`:
+
+| Stack | Where to restrict it |
+|---|---|
+| Laravel | `$hidden` on the model, or an API resource |
+| Rails | a serializer, or `as_json(only: [...])` |
+| Django REST framework | an explicit `fields` list on the serializer |
+| Prisma or Drizzle | `select` only the public columns |
+| Express or Fastify | a response schema, or a `toJSON` that drops private fields |
+
+An endpoint that answers a request without a session should return 401 or an empty session, not a user.
+
+Then treat what leaked as compromised: force a password reset for every exposed hash, and revoke the exposed reset, confirmation, remember and refresh tokens and the OTP secrets.
+
+| | |
+|---|---|
+| **Rule ID** | `security/auth-endpoint-disclosure` |
+| **Category** | [Security](/rules/security) |
+| **Scope** | Site-wide |
+| **Severity** | error |
+| **Weight** | 8/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["security/auth-endpoint-disclosure"]
+```
+
+### Disable all Security rules
+
+```toml squirrel.toml
+[rules]
+disable = ["security/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["security/auth-endpoint-disclosure"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `auth-endpoint-disclosure` | Problem |  |
+| `auth-endpoint-clean` | Clean | `auth-endpoint-disclosure` |
+| `auth-endpoint-not-checked` | Not checked |  |
+
+{/* rule-checks:end */}
+
+## Related rules
+
+- [security/leaked-secrets](/rules/security/leaked-secrets): API keys and credentials shipped in your pages and scripts.
+- [security/token-storage](/rules/security/token-storage): session tokens written to localStorage or sessionStorage.
+- [security/graphql-introspection](/rules/security/graphql-introspection): another probing rule, for GraphQL endpoints that publish their schema.

@@ -3777,6 +3777,12 @@
    "website-schema|info|No WebSite schema on homepage|\"Consider adding for sitelinks searchbox\"|"
   ]
  },
+ "security/auth-endpoint-disclosure": {
+  "digest": "37778800347004",
+  "lines": [
+   "auth-endpoint-not-checked|skipped|Probing is passive, so no auth or session endpoint was probed. Run with --probe active to check what they disclose.||"
+  ]
+ },
  "security/cookie-flags": {
   "digest": "142347220823910",
   "lines": [
