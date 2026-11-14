@@ -52,7 +52,7 @@ build-all: ci
 			linux-x64-musl) target="linux-x64-musl-baseline";; \
 			windows-x64) target="windows-x64-baseline";; \
 		esac; \
-		(cd $(APP_DIR) && bun build src/cli.ts --compile --production --splitting --minify \
+		(cd $(APP_DIR) && bun build src/cli.ts --compile --splitting --minify --production \
 			--no-compile-autoload-dotenv --no-compile-autoload-bunfig \
 			--define process.env.NODE_ENV='"production"' \
 			--target=bun-$$target \
