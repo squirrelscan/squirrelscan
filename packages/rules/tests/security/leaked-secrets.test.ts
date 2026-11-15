@@ -30,7 +30,7 @@ import {
   type LeakedSecret,
 } from "../../src/security/leaked-secrets";
 import type { RuleContext, RuleResult } from "../../src/types";
-import { CASES, type Case, type Check, type Expectation } from "./leaked-secrets/cases";
+import { CASES, HARNESS_ERRORS, type Case, type Check, type Expectation } from "./leaked-secrets/cases";
 import { CONTEXTS } from "./leaked-secrets/contexts";
 import { GENERATORS, GENERATORS_BY_PATTERN, seededRng } from "./leaked-secrets/generators";
 
@@ -108,6 +108,10 @@ describe("security/leaked-secrets corpus: coverage", () => {
     const missing = names.filter((n) => !GENERATORS_BY_PATTERN.has(n));
     const stale = GENERATORS.map((g) => g.pattern).filter((n) => !names.includes(n));
     expect({ missing, stale }).toEqual({ missing: [], stale: [] });
+  });
+
+  test("every generator builds its cases: no stale pattern, every draw fires bare", () => {
+    expect(HARNESS_ERRORS).toEqual([]);
   });
 
   test("every pattern has a positive in at least two contexts", () => {
