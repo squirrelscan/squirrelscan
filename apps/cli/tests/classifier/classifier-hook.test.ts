@@ -57,4 +57,37 @@ describe("the parser hook", () => {
     expect(section("/")).toBe("header");
     expect(section("/legal")).toBe("footer");
   });
+
+  // repo#3065: a response whose parsed document has no root element must not
+  // crash the hook, and must not produce a page type.
+  const ROOTLESS: Array<[string, string]> = [
+    ["an empty string", ""],
+    ["a 21-byte non-HTML body", '{"error":"not found"}'],
+    ["an <html fragment with no closing tag", "<html"],
+    ["an <html fragment with an open attribute", '<html lang="en"'],
+    ["a comment-only body", "<!-- nothing here -->"],
+  ];
+  for (const [name, html] of ROOTLESS) {
+    test(`predicts no page type for ${name}`, () => {
+      const hook = createPageClassifierHook();
+      const out = hook({ document: parseDocument(html), url: URL, html })!;
+      expect(out.classification.pageType.label).toBe("unknown");
+      expect(out.classification.pageType.source).toBe("rules");
+    });
+  }
+
+  test("a document with no root element and a throwing body getter predicts no page type", () => {
+    const hook = createPageClassifierHook();
+    const document = {
+      get body(): never {
+        throw new TypeError("firstElementChild of null");
+      },
+      documentElement: null,
+      querySelector: () => null,
+      querySelectorAll: () => [],
+    };
+    const out = hook({ document: document as never, url: URL, html: "" })!;
+    expect(out.classification.pageType.label).toBe("unknown");
+    expect(out.classification.pageType.confidence).toBe(0);
+  });
 });
