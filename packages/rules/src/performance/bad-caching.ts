@@ -90,6 +90,19 @@ function isCompressible(contentType: string): boolean {
   );
 }
 
+// Expires is a freshness lifetime only while its instant is still ahead of the
+// response's own Date header (RFC 9110 5.6.7, 8.8.3), or of now when Date is
+// absent or unparsable. `0`, any other unparsable value and a past date mean
+// "already expired" (RFC 9111 5.3), so they are not a lifetime.
+function expiresInFuture(expires: string | undefined, date: string | undefined): boolean {
+  if (!expires) return false;
+  const expiresAt = Date.parse(expires);
+  if (Number.isNaN(expiresAt)) return false;
+  const parsedDate = date ? Date.parse(date) : Number.NaN;
+  const reference = Number.isNaN(parsedDate) ? Date.now() : parsedDate;
+  return expiresAt > reference;
+}
+
 export const badCachingRule: Rule = {
   meta: {
     id: "perf/bad-caching",
@@ -165,7 +178,7 @@ export const badCachingRule: Rule = {
       const hasFreshness =
         !cc.noStore &&
         !cc.noCache &&
-        ((lifetime !== undefined && lifetime > 0) || Boolean(expires));
+        ((lifetime !== undefined && lifetime > 0) || expiresInFuture(expires, h["date"]));
 
       // Any non-empty ETag counts, weak (`W/"..."`) included: If-None-Match
       // compares weakly (RFC 9110 13.1.2), so a weak tag still earns a 304,
