@@ -20,10 +20,14 @@ const MAX_ITEMS = 50;
 export const optionsSchema = z.object({
   ahead_days: z
     .number()
+    .int()
+    .min(0)
     .default(30)
     .describe("Days a sitemap lastmod may run ahead of the page's own dateModified before warning"),
   behind_days: z
     .number()
+    .int()
+    .min(0)
     .default(7)
     .describe("Days a sitemap lastmod may lag the page's own dateModified before warning"),
 });
