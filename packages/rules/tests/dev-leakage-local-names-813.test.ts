@@ -70,9 +70,13 @@ describe("content/dev-leakage — links to local-only names (pub#813)", () => {
   });
 
   test("public names that merely contain a local word are not local names", () => {
-    for (const host of ["testing.com", "my.local.example.com", "lan.dev", "home.com", "example.com"]) {
+    for (const host of ["testing.com", "lan.dev", "home.com", "example.com"]) {
       expect(classifyHost(host, site)).toBeNull();
     }
+  });
+
+  test("a `local` label left of the apex is a tier subdomain, not a local name (repo#1858)", () => {
+    expect(classifyHost("my.local.example.com", site)).toEqual({ kind: "dev-subdomain", own: true });
   });
 
   test("a single-label host: a link warns, a mention in copy cannot match (no dot)", async () => {
