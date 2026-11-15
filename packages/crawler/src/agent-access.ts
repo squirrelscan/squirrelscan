@@ -7,6 +7,7 @@ import { optionalProbeTimeoutMs, safeFetchWithDeadline, skippedProbeError, ungat
 
 import type { PhaseBudget, ProbeGate } from "./deadline";
 import { mergeHeaderRecords } from "@squirrelscan/utils/headers";
+import { AGENT_ACCESS_BOTS, DEFAULT_AGENT_ACCESS_BOT_IDS } from "@squirrelscan/core-contracts/storage";
 import type {
   AgentAccessData,
   AgentAccessProbe,
@@ -15,11 +16,6 @@ import type {
 
 const PROBE_TIMEOUT_MS = 15_000;
 const AGENT_ACCESS_MAX_BYTES = 512 * 1024;
-
-// Realistic vendor UA strings so a site's bot rules trigger as they would in the wild.
-const GPTBOT_UA =
-  "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; GPTBot/1.1; +https://openai.com/gptbot";
-const CLAUDE_USER_UA = "Mozilla/5.0 (compatible; Claude-User/1.0; +Claude-User@anthropic.com)";
 
 interface ProbeIdentity {
   label: AgentAccessUserAgent;
@@ -65,6 +61,7 @@ const unreachableProbe = (identity: ProbeIdentity, error: string): AgentAccessPr
   challengeSignal: null,
   paymentRequired: false,
   paymentSignal: null,
+  xRobotsTag: null,
   error,
 });
 
@@ -109,6 +106,7 @@ async function probeOne(
           challengeSignal,
           paymentRequired: paymentSignal !== null,
           paymentSignal,
+          xRobotsTag: response.headers.get("x-robots-tag"),
           error: null,
         };
       },
@@ -121,22 +119,27 @@ async function probeOne(
 
 // Fetch the homepage as a browser, GPTBot, and Claude-User once per audit so
 // rules can compare access parity + spot bot-blocking / pay-per-crawl walls.
+// `opts.allTokens` (#3788, opt-in) probes every bot in AGENT_ACCESS_BOTS instead.
 export function probeAgentAccess(
   baseUrl: string,
   browserUserAgent: string,
   customHeaders?: Record<string, string>,
   budget?: PhaseBudget,
   gate: ProbeGate = ungated,
+  opts?: { allTokens?: boolean },
 ): Effect.Effect<AgentAccessData, never, never> {
   const homeUrl = new URL("/", baseUrl).toString();
+  const allTokens = opts?.allTokens === true;
+  const bots = allTokens
+    ? AGENT_ACCESS_BOTS
+    : AGENT_ACCESS_BOTS.filter((b) => DEFAULT_AGENT_ACCESS_BOT_IDS.includes(b.id));
   const identities: ProbeIdentity[] = [
     { label: "browser", ua: browserUserAgent },
-    { label: "gptbot", ua: GPTBOT_UA },
-    { label: "claude-user", ua: CLAUDE_USER_UA },
+    ...bots.map((b): ProbeIdentity => ({ label: b.id, ua: b.userAgentString })),
   ];
   return Effect.promise(async () => {
-    // The three identities are compared with each other, so a block signal on one must not
-    // skip the others: it is noted after all three ran, and stops the probes after this one (#1655).
+    // The identities are compared with each other, so a block signal on one must not
+    // skip the others: it is noted after all of them ran, and stops the probes after this one (#1655).
     const seen: Response[] = [];
     const probes = await Promise.all(
       identities.map((id) => gate(homeUrl, () => probeOne(homeUrl, id, customHeaders, budget, seen))),

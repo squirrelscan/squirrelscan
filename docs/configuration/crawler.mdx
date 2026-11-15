@@ -26,6 +26,7 @@ drop_query_prefixes = ["utm_", "gclid", "fbclid"]
 respect_robots = false
 disable_discovery_probes = false
 # discovery_probe_paths = ["/llms.txt"]   # unset = every selected probe
+agent_access_all_tokens = false   # true probes the homepage as every AI token
 tls_proxy_resolves_names = false
 incremental = true
 breadth_first = true
@@ -1107,6 +1108,20 @@ tls_proxy_resolves_names = true
 ```
 
 The trade-off is plain: with it on, where those two names go is the proxy's decision, not squirrel's, so the check that a name does not resolve to a link-local, metadata or private address is the proxy's job. Only the audited site's own port is requested by name, and the probe that explains a TLS failure of the start URL during the crawl has no audited site to compare with, so it never does. Every other host (a name found in page content, any other subdomain) is still resolved, vetted and pinned by squirrel, and an IP address, a cloud metadata name or a name the guard refuses on sight never take this path, whatever the setting. See [Behind an HTTP proxy](/rules/security/tls-certificate#behind-an-http-proxy).
+
+### `agent_access_all_tokens`
+
+**Type:** `boolean`
+**Default:** `false`
+
+By default [ax/agent-blocking](/rules/ax/agent-blocking) fetches the homepage as a browser, `GPTBot` and `Claude-User`. Set this to `true` to fetch it as every AI bot that sends its own `User-Agent` and record each response's status and `X-Robots-Tag`. The results are UA probes: the request carries the bot's `User-Agent` but not its source IP or signature, so they are not proof of what the real bot would get.
+
+```toml
+[crawler]
+agent_access_all_tokens = true
+```
+
+The cost is about 15 more homepage requests per audit, sent through [`per_host_concurrency`](#per_host_concurrency) and [`per_host_delay_ms`](#per_host_delay_ms). With it off, the request count and timing are unchanged. It does nothing when [`disable_discovery_probes`](#disable_discovery_probes) is on.
 
 ### `disable_discovery_probes`
 

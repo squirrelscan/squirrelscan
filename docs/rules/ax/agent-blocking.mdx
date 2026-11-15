@@ -1,6 +1,6 @@
 ---
 title: "Blocking AI agents at the edge: what robots.txt hides"
-description: "A WAF or bot-management rule serving GPTBot or Claude-User a challenge the browser never sees. squirrel probes the homepage as all three."
+description: "A WAF or bot-management rule serving GPTBot or Claude-User a challenge the browser never sees. squirrel probes the homepage as a browser, GPTBot and Claude-User, and every AI token on request."
 ---
 
 ## What edge blocking is
@@ -11,12 +11,28 @@ The two cases differ in cost. Blocking a training crawler such as `GPTBot` is of
 
 ## What squirrel checks
 
-The rule runs once per crawl. It uses three homepage fetches made during the prefetch phase, one with a browser user-agent, one as `GPTBot` and one as `Claude-User`, and compares each AI response against the browser baseline. It emits one or two checks: at most one per AI probe, or a single check covering all of them.
+The rule runs once per crawl. By default it uses three homepage fetches made during the prefetch phase, one with a browser user-agent, one as `GPTBot` and one as `Claude-User`, and compares each AI response against the browser baseline. It emits at most one check per AI probe, or a single check covering all of them.
 
-- `agent-blocking`, skipped with the message `Agent access not checked: the discovery probe was not sent` and the value `not-checked` when the probes did not run or the browser probe was never sent, or `Browser baseline did not return 2xx (status <status>) — cannot compare agent access` when the browser fetch itself failed, where `<status>` is the status it returned or `n/a` when the probe is missing entirely. Without a healthy baseline the site may be down for everyone, so the rule declines to blame the agents.
-- `agent-access-payment`: reports at info status with the message `<agent> hit a pay-per-crawl wall (<signal>) — reported by ax/pay-per-crawl, not a block` when the response is a 402 or carries a payment signal. The parenthesised signal is omitted when the response named none. A deliberate payment wall is not an access block.
-- `agent-access`: at info status with `<agent> not checked: the discovery probe was not sent` and the value `not-checked` when that probe was never sent, and with `<agent> probe was inconclusive (<reason>)` when it was sent and never completed. At warn status with `<agent> got the same status as the browser but only N% of the body — likely a soft-block / interstitial served to the agent` when the agent response was itself 2xx, the browser body was not empty, and the agent body came back under a fifth of its size. At warn status with `<agent> is blocked (<reason>) while the browser gets 200 — often an intentional training opt-out, but confirm it was deliberate` for a bot challenge, a 401, a 403 or a 5xx. The same condition on `Claude-User` is a fail with `Claude-User is blocked (<reason>) while the browser gets 200 — this breaks a live fetch a real user triggered inside an assistant, the worst case for agent access`.
-- `agent-blocking`: passes with `GPTBot and Claude-User reached the homepage like a browser`, naming the probes it ran, when none of them was classified as blocked, soft-blocked, inconclusive or payment-walled. An unchallenged 3xx or 404 counts as clean, since the rule is comparing access rather than status.
+Every AI result is a UA probe. squirrel sends the bot's published `User-Agent` header so your bot rules trigger as they would for that bot, but the request has none of the real bot's source IP addresses or request signatures. A WAF that verifies real bots by IP or signature may answer the real one differently, so messages say `GPTBot UA probe`, never that the bot itself was blocked.
+
+Each per-bot check carries the probe's `status` and `xRobotsTag` (the response's `X-Robots-Tag` header, `null` when absent) in its details.
+
+- `agent-blocking`, skipped with the message `Agent access not checked: the discovery probe was not sent` and the value `not-checked` when the probes did not run or the browser probe was never sent, or `Browser baseline did not return 2xx (status <status>): cannot compare agent access` when the browser fetch itself failed, where `<status>` is the status it returned or `n/a` when the probe is missing entirely. Without a healthy baseline the site may be down for everyone, so the rule declines to blame the agents.
+- `agent-access-payment`: reports at info status with the message `<agent> UA probe hit a pay-per-crawl wall (<signal>): reported by ax/pay-per-crawl, not a block` when the response is a 402 or carries a payment signal. The parenthesised signal is omitted when the response named none. A deliberate payment wall is not an access block.
+- `agent-access`: at info status with `<agent> UA probe not checked: the discovery probe was not sent` and the value `not-checked` when that probe was never sent, and with `<agent> UA probe was inconclusive (<reason>)` when it was sent and never completed. At warn status with `<agent> UA probe got the same status as the browser but only N% of the body: likely a soft-block / interstitial served to the agent` when the agent response was itself 2xx, the browser body was not empty, and the agent body came back under a fifth of its size. At warn status with `<agent> UA probe is blocked (<reason>) while the browser gets 200: often an intentional opt-out, but confirm it was deliberate` for a bot challenge, a 401, a 403 or a 5xx. The same condition on a user-action fetcher (`Claude-User`, `ChatGPT-User`, `Perplexity-User`, `Meta-ExternalFetcher`, `MistralAI-User`) is a fail with `<agent> UA probe is blocked (<reason>) while the browser gets 200: this would break a live fetch a real user triggers inside an assistant, the worst case for agent access`.
+- `agent-blocking`: passes with `GPTBot and Claude-User UA probes reached the homepage like a browser`, naming the probes it ran and listing each one's status and `X-Robots-Tag` in `details.probes`, when none of them was classified as blocked, soft-blocked, inconclusive or payment-walled. An unchallenged 3xx or 404 counts as clean, since the rule is comparing access rather than status.
+- `agent-access-probes`: only in all-token mode, one info check with `Probed N AI user agents (UA probe, not the real bots): X matched the browser`. Its `details.probes` has one entry per AI probe (`userAgent`, `token`, `userAgentString`, `status`, `xRobotsTag` and `verdict`), and `details.browserXRobotsTag` holds the browser's header for comparison.
+
+## Probe every AI token
+
+Set [`agent_access_all_tokens`](/configuration/crawler#agent_access_all_tokens) to probe the homepage as every AI bot that identifies itself with its own `User-Agent`, not just `GPTBot` and `Claude-User`. It is off by default and costs about 15 more homepage requests, per-host throttled. With it off, the request count and timing are unchanged.
+
+```toml squirrel.toml
+[crawler]
+agent_access_all_tokens = true
+```
+
+The probed bots are `GPTBot`, `OAI-SearchBot`, `ChatGPT-User`, `ClaudeBot`, `Claude-User`, `Claude-SearchBot`, `PerplexityBot`, `Perplexity-User`, `CCBot`, `Bytespider`, `Amazonbot`, `Meta-ExternalAgent`, `Meta-ExternalFetcher`, `DuckAssistBot`, `MistralAI-User`, `AI2Bot` and `YouBot`. Tokens that exist only in robots.txt (`Google-Extended`, `Applebot-Extended`, `anthropic-ai`, `cohere-ai`) have no `User-Agent` to send, and archive bots are not probed. The fetchers a person triggers (`ChatGPT-User`, `Claude-User`, `Perplexity-User`, `Meta-ExternalFetcher`, `MistralAI-User`) fail when blocked; the rest warn.
 
 A probe counts as a bot challenge when the response carries `cf-mitigated: challenge`, or when the first 10 KB of its body holds Cloudflare's challenge script (`/cdn-cgi/challenge-platform/h/…/orchestrate/`) or a `__cf_chl_` or `_cf_chl_opt` marker, or the first 4 KB holds a `<title>` that starts with `Just a moment`. The reason in the message names which: `cf-mitigated`, `challenge-platform`, `__cf_chl_` or `just-a-moment`. The JavaScript Detections script that Cloudflare adds to ordinary pages loads from `/cdn-cgi/challenge-platform/scripts/jsd/` and does not count, and neither does the phrase in page text.
 

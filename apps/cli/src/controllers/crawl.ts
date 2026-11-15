@@ -296,6 +296,10 @@ export async function runCrawl(
                     : config.crawler.discovery_probe_paths,
                 }
               : {}),
+            // #3788: opt-in, probe the homepage as every AI bot token.
+            ...(config.crawler.agent_access_all_tokens === true
+              ? { agentAccessAllTokens: true }
+              : {}),
             // #1428: pages the E-E-A-T rules are configured with that the crawl does not reach are asked for once.
             configuredPagePaths: configuredPagePaths(
               config.rule_options as Record<string, unknown>

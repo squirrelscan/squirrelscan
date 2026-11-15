@@ -137,6 +137,12 @@ export const CrawlerConfigSchema = z.object({
     )
     .max(APPROVABLE_PROBE_PATHS.length)
     .optional(),
+  // ax/agent-blocking (#3788): opt-in, default off. true probes the homepage as
+  // every AI bot that sends its own User-Agent (about 15 extra homepage requests,
+  // per-host throttled) and records each one's status and X-Robots-Tag. The
+  // results are UA probes, not the real bots. Off: browser, GPTBot and
+  // Claude-User only. Optional so a Config built by hand need not know it.
+  agent_access_all_tokens: z.boolean().optional(),
   // security/tls-certificate behind an HTTP(S)_PROXY (#1317): true lets the proxy resolve the audited
   // host and its www/apex counterpart (the CONNECT names the host), for a proxy that owns DNS and allows
   // by name. Default off: squirrel resolves, vets and pins the address itself. The trade-off is that

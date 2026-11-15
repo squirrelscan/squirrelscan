@@ -133,3 +133,67 @@ describe("ax/agent-blocking", () => {
     expect(gpt?.status).toBe("info");
   });
 });
+
+describe("ax/agent-blocking UA probes and all-token mode (#3788)", () => {
+  test("verdicts say UA probe, not a confirmed bot", async () => {
+    const blocked = await run(both({ status: 403 }, { status: 403 }));
+    const gpt = blocked.find((c) => c.details?.userAgent === "gptbot");
+    const claude = blocked.find((c) => c.details?.userAgent === "claude-user");
+    expect(gpt?.message).toContain("GPTBot UA probe is blocked (HTTP 403)");
+    expect(claude?.message).toContain("Claude-User UA probe is blocked");
+    const passed = (await run(both({}, {}))).find((c) => c.status === "pass");
+    expect(passed?.message).toBe("GPTBot and Claude-User UA probes reached the homepage like a browser");
+  });
+
+  test("per-bot checks carry status and X-Robots-Tag", async () => {
+    const checks = await run(both({ status: 403, xRobotsTag: "noai" }, {}));
+    const gpt = checks.find((c) => c.details?.userAgent === "gptbot");
+    expect(gpt?.details).toMatchObject({ status: 403, xRobotsTag: "noai" });
+    const clean = await run(both({ xRobotsTag: "noindex" }, {}));
+    const pass = clean.find((c) => c.status === "pass");
+    expect(pass?.details?.probes).toEqual([
+      { userAgent: "gptbot", status: 200, xRobotsTag: "noindex" },
+      { userAgent: "claude-user", status: 200, xRobotsTag: null },
+    ]);
+  });
+
+  test("a user-action bot other than Claude-User blocked fails; a training bot warns", async () => {
+    const checks = await run({
+      probes: [
+        probe("browser"),
+        probe("perplexity-user", { status: 403 }),
+        probe("ccbot", { status: 403 }),
+      ],
+    });
+    expect(checks.find((c) => c.details?.userAgent === "perplexity-user")?.status).toBe("fail");
+    expect(checks.find((c) => c.details?.userAgent === "ccbot")?.status).toBe("warn");
+  });
+
+  test("all-token mode (a bot beyond the default pair) emits one agent-access-probes info check listing every probe", async () => {
+    const checks = await run({
+      probes: [
+        probe("browser", { xRobotsTag: "all" }),
+        probe("gptbot", { xRobotsTag: "noai" }),
+        probe("ccbot", { status: 403 }),
+        probe("claude-user"),
+      ],
+    });
+    const summary = checks.filter((c) => c.name === "agent-access-probes");
+    expect(summary).toHaveLength(1);
+    expect(summary[0]?.status).toBe("info");
+    expect(summary[0]?.message).toBe(
+      "Probed 3 AI user agents (UA probe, not the real bots): 2 matched the browser",
+    );
+    expect(summary[0]?.details?.browserXRobotsTag).toBe("all");
+    expect(summary[0]?.details?.probes).toEqual([
+      { userAgent: "gptbot", token: "GPTBot", userAgentString: "gptbot-UA", status: 200, xRobotsTag: "noai", verdict: "ok" },
+      { userAgent: "ccbot", token: "CCBot", userAgentString: "ccbot-UA", status: 403, xRobotsTag: null, verdict: "blocked" },
+      { userAgent: "claude-user", token: "Claude-User", userAgentString: "claude-user-UA", status: 200, xRobotsTag: null, verdict: "ok" },
+    ]);
+  });
+
+  test("the default GPTBot and Claude-User pair emits no agent-access-probes check", async () => {
+    const checks = await run(both({}, {}));
+    expect(checks.some((c) => c.name === "agent-access-probes")).toBe(false);
+  });
+});
