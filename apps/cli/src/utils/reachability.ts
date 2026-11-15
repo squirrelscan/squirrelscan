@@ -182,38 +182,67 @@ const EGRESS_REFUSED_REACHABILITY =
   "Not requested: it resolves or redirects to a link-local or cloud metadata address";
 
 /**
- * The send for a pinned probe (squirrelscan/repo#3430): the start URL's host is
- * resolved, refused when it answers a link-local or metadata address, and
- * connected to by the address checked, the way the crawl will. Undefined when
- * the site's own hosts are not pinned (opted out, or an environment proxy).
+ * The send for the probe: every request goes through the egress guard and
+ * redirects are followed hop by hop (safeRedirectFetch), so a hop that
+ * resolves or points to a link-local or metadata address is never sent.
+ *
+ * squirrelscan/repo#3430: with the site's own hosts pinned, the start URL's
+ * host is resolved, refused when it answers a link-local or metadata address,
+ * and connected to by the address checked, the way the crawl will.
+ * squirrelscan/repo#3336: unpinned (opted out, or an environment proxy) the
+ * own hosts go out by name, as the crawl sends them, and a redirect anywhere
+ * else is still vetted. Undefined only when the user named such an address as
+ * the site, which is theirs to audit.
+ *
+ * A start URL that answered with a redirect the guard refuses is reachable:
+ * the probe hands back that redirect, unfollowed, and the crawl audits the
+ * start URL and records where it pointed.
  */
 function reachabilitySend(
   url: string,
   scope?: ReachabilityScope
 ): ((url: string, init: RequestInit) => Promise<Response>) | undefined {
   const pinned = ownHostsPinned({ pinOwnHosts: pinOwnHosts() });
-  if (!pinned && scope?.ownSiteOnly !== true) return undefined;
   const policy: EgressPolicy = {
     allowPrivateNetwork: true,
     resolve: resolveHostAddresses,
   };
+  const own = ownSiteHostMatcher({ baseUrl: url, domains: scope?.domains });
   // --offline (#819): the start URL's redirects stay on the audited site too.
-  // With the own hosts not pinned (opted out, or an environment proxy) they
-  // still go out by name; only the hops that leave the site are refused.
-  if (scope?.ownSiteOnly === true) {
-    const own = ownSiteHostMatcher({ baseUrl: url, domains: scope.domains });
-    policy.allowHost = own;
-    if (!pinned) policy.trustTarget = (hop) => own(hop.hostname);
-  }
+  if (scope?.ownSiteOnly === true) policy.allowHost = own;
+  // Not pinned: the site's own hosts go out by name, unvetted; only the hops
+  // that leave them are checked.
+  if (!pinned) policy.trustTarget = (hop) => own(hop.hostname);
   // An address the user named as the site is theirs to audit, as the crawl
   // treats it: only where the site's DNS or redirects lead is guarded.
   if (refusedWithoutLookup(url, policy)) return undefined;
-  // Redirects are followed hop by hop through the guard (safeRedirectFetch), so
-  // the WAF check still reads the page a redirect lands on, and a hop that
-  // resolves to a refused address is never sent.
   const guarded = egressGuardedSend(fetchUndecoded, policy);
-  return (hopUrl, init) =>
-    safeRedirectFetch(hopUrl, init, guarded).then((result) => result.response);
+  return async (hopUrl, init) => {
+    // The last response a hop answered: a refusal after it means a redirect
+    // the start URL (or a hop it was allowed to take) sent and the guard
+    // declined, which leaves the start URL reachable. The WAF check still
+    // reads the page an allowed redirect lands on.
+    let answered: Response | undefined;
+    const send = async (u: string, i: RequestInit): Promise<Response> => {
+      answered = await guarded(u, i);
+      return answered;
+    };
+    try {
+      return (await safeRedirectFetch(hopUrl, init, send)).response;
+    } catch (error) {
+      if (!(error instanceof EgressRefusedError) || !answered) throw error;
+      logger.debug(
+        "reachability redirect refused",
+        redactUrl(hopUrl),
+        redactUrlsInText(error.message)
+      );
+      await answered.body?.cancel().catch(() => {});
+      return new Response(null, {
+        status: answered.status,
+        headers: answered.headers,
+      });
+    }
+  };
 }
 
 /**

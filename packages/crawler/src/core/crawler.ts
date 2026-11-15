@@ -2819,15 +2819,20 @@ export function createCrawler(
           );
           let currentUrl = targetUrl;
           const visited = new Set<string>();
-          // repo#3430: with the crawl's own hosts pinned, the seed probe goes
-          // out through the same guard, hop by hop (manual redirects): a seed
-          // name, or a redirect, that resolves to a link-local or metadata
-          // address is never requested. Its final URL is the logical one the
-          // chain reached, never the pinned address it connected to.
+          // The seed probe goes out through the crawl's own egress policy, hop
+          // by hop (manual redirects), the same policy every page fetch uses.
+          // repo#3430: with the crawl's own hosts pinned, a seed name, or a
+          // redirect, that resolves to a link-local or metadata address is
+          // never requested. repo#3336: unpinned (opted out, an environment
+          // proxy, a transport that pins) the own hosts go out by name as the
+          // crawl sends them, and an HTTP or client-side (meta refresh, script)
+          // hop anywhere else is still vetted, so a start URL cannot steer the
+          // probe to the metadata service either. Its final URL is the logical
+          // one the chain reached, never the pinned address it connected to.
           // #819: an own-site-only (offline) crawl holds the seed's redirects to the
-          // site the same way, pinned or not.
-          const seedEgress =
-            pinOwnHosts || config.ownSiteOnly === true ? egressFor(targetUrl) : undefined;
+          // site the same way. Undefined only when the user named such an
+          // address as the site, which is theirs to audit.
+          const seedEgress = egressFor(targetUrl);
           const seedSend = seedEgress ? egressGuardedSend(fetchUndecoded, seedEgress) : undefined;
           let guardedFinalUrl: string | undefined;
 

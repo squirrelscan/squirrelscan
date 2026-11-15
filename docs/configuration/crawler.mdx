@@ -971,7 +971,12 @@ well-known and markdown probes), for a sitemap that robots.txt or a sitemap
 index points at such an address, and for the redirects the internal link check
 follows. The `security/http-to-https` rule checks the address of each redirect
 it follows the same way. On the CLI, the redirects of the start URL itself,
-resolved before the crawl begins, are checked too (see the next paragraph).
+followed before the crawl begins by the reachability check and the start URL
+redirect check, are checked the same way: an HTTP redirect, a meta refresh or a
+script redirect to such an address is never requested, whether or not the
+site's own hostnames are checked (see the next paragraphs). The start URL then
+counts as reachable and is audited itself, recorded as the redirect it answered
+with.
 
 **The site's own hostnames are checked too.** The CLI resolves the audited
 host, its `www` twin, and the domains in `[project] domains` with all their
