@@ -511,7 +511,7 @@ export function createCloudDocumentFetcher(
       if (item.error) {
         // Per-url render error (truthy string) → fall back for this url only.
         // `error: null`/absent is not an error and falls through to success.
-        if (!racing) void fallbackWaiter(w);
+        if (!racing) void fallbackWaiter(w, "render-error");
       } else if (isRenderBlocked(item)) {
         // #490: headless/CF egress was blocked (401/403/429/503 or WAF
         // challenge). Retry from the local egress via plain HTTP before
@@ -536,7 +536,7 @@ export function createCloudDocumentFetcher(
         );
       } else {
         // Succeeded but no HTML and not a known block — fall back to be safe.
-        if (!racing) void fallbackWaiter(w);
+        if (!racing) void fallbackWaiter(w, "render-empty");
       }
     }
   }
