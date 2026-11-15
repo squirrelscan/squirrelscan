@@ -86,14 +86,27 @@ const PATTERN_GAPS: Record<string, { expectPattern: string | null; gap: string }
 };
 
 /**
+ * Harness failures found while building the corpus: a generator whose pattern
+ * the detector no longer has, or one that never drew a value that fires. They
+ * are collected rather than thrown, because `CASES` is built at module scope
+ * and a throw there would hide the test that names the mismatch. The suite
+ * asserts this list is empty.
+ */
+export const HARNESS_ERRORS: string[] = [];
+
+/** Real generators need at most a redraw or two; the bound only stops one that can never fire. */
+const MAX_DRAWS = 50;
+
+const DETECTOR_PATTERNS = new Set([...FAST_PATTERNS, ...CONTEXT_PATTERNS].map((p) => p.name));
+
+/**
  * A value that trips the detector's substring false-positive list (`xxx`,
  * `fake`, `sample`…) is redrawn: the corpus wants every positive to be a
  * positive, and the filter's behaviour on random keys is its own probe below.
+ * Returns null (and records why) when no draw fires within `MAX_DRAWS`.
  */
-function draw(g: Generator, id: string): Generated {
-  for (let attempt = 0; ; attempt++) {
-    // A generator that can never produce a firing value would loop here for ever: fail the suite instead.
-    if (attempt > 500) throw new Error(`no value drawn for ${g.pattern} fires bare in 500 attempts`);
+function draw(g: Generator, id: string): Generated | null {
+  for (let attempt = 0; attempt < MAX_DRAWS; attempt++) {
     const value = g.make(seededRng(seedOf(attempt === 0 ? id : `${id}#${attempt}`)));
     if (tripsFalsePositiveFilter(value.text)) continue;
     // A positive has to fire when scanned bare: a random draw can land under
@@ -102,6 +115,10 @@ function draw(g: Generator, id: string): Generated {
     if (!firesBare(g, value)) continue;
     return value;
   }
+  HARNESS_ERRORS.push(
+    `generator for pattern "${g.pattern}" (case ${id}) drew no value that fires bare in ${MAX_DRAWS} attempts: the pattern no longer matches what its generator makes`,
+  );
+  return null;
 }
 
 /** Does the value fire its own pattern in the plainest assignment there is? */
@@ -163,10 +180,17 @@ function escalate(pattern: string, check: Check, location: string): Check {
   return SERVER_ONLY.has(pattern) && served && (check === "high" || check === "medium") ? "critical" : check;
 }
 
-const POSITIVES: Case[] = GENERATORS.flatMap((g) =>
-  CONTEXTS.filter((c) => c.accepts.includes(g.tier) && !g.notIn?.includes(c.id)).map((c): Case => {
+const POSITIVES: Case[] = GENERATORS.flatMap((g) => {
+  // A stale generator (its pattern deleted or renamed) builds no cases, so the
+  // coverage meta-test can report it as stale instead of the build throwing.
+  if (!DETECTOR_PATTERNS.has(g.pattern)) {
+    HARNESS_ERRORS.push(`generator for pattern "${g.pattern}" has no FAST or CONTEXT pattern of that name`);
+    return [];
+  }
+  return CONTEXTS.filter((c) => c.accepts.includes(g.tier) && !g.notIn?.includes(c.id)).flatMap((c): Case[] => {
     const id = `${slug(g.pattern)}@${c.id}`;
     const value = draw(g, id);
+    if (value === null) return [];
     const keyName = keyNameFor(g);
     const embedded = c.embedTiered(value, keyName, g.tier);
 
@@ -197,17 +221,19 @@ const POSITIVES: Case[] = GENERATORS.flatMap((g) =>
         "`Authorization: Bearer <value>` around a value with a `.`, `;` or `%` (JWTs, OAuth client ids, Azure strings) reports a second medium \"Bearer Token\" for the prefix: a duplicate, and for a public-tier key a false warning";
     }
 
-    return {
-      id,
-      url: "https://app.acme.test/dashboard",
-      html: embedded.html,
-      scripts: embedded.scripts,
-      expect,
-      secret: value.secret,
-      knownGap,
-    };
-  }),
-);
+    return [
+      {
+        id,
+        url: "https://app.acme.test/dashboard",
+        html: embedded.html,
+        scripts: embedded.scripts,
+        expect,
+        secret: value.secret,
+        knownGap,
+      },
+    ];
+  });
+});
 
 // Probes for defects that are about interaction between patterns or about the
 // FP filters, rather than about one pattern's shape.
