@@ -163,3 +163,5 @@ await Effect.runPromise(
   }),
 );
 ```
+
+When the host also passes late-bound link verdicts (`linkVerdicts`), plugin site rules run last, after the external link verdicts are bound, with the built-in rules that read them. The engine cannot tell whether a plugin rule reads them, so it waits for them.

@@ -50,6 +50,7 @@ import { ownSiteHostMatcher } from "@squirrelscan/utils/own-site";
 import { collectDroppedBatch } from "./batch-gc";
 import { createCloudPrefetchCollector, type CloudPrefetchPayloadSet } from "./cloud-prefetch-run";
 import type { ExternalCheckResult, LinkCache } from "./external-checker";
+import { startLateLinkVerdicts, type LateLinkVerdicts } from "./late-link-verdicts";
 
 /** Default page batch for the pre-rules walk. Smaller than STREAM_PAGE_BATCH
  * because this is the pass whose peak is `batchSize` live DOMs of the site's
@@ -95,6 +96,20 @@ export interface StreamPreRulesOptions {
      * check goes, not only when it ends, so a watchdog sees it working.
      */
     limits?: ExternalLinkCheckLimits;
+    /**
+     * Late-binding mode (repo#2144). Set: the check is started in the
+     * background once the walk has collected the links, and this pass returns
+     * without waiting for it or writing any verdict. The verdicts come back as
+     * `linkVerdicts`; pass that to `runStreamingRules`, which runs every rule
+     * that does not read them at once and the link rules last, bound to the
+     * verdicts that arrived by the deadline (`linkVerdictDeadlineAt`, from
+     * `limits.budgetMs` and `runDeadlineAt`). Unset: the blocking mode, as
+     * before.
+     */
+    lateBinding?: {
+      /** The run's own deadline (epoch ms), so the link rules still have time after the verdicts. */
+      runDeadlineAt?: number;
+    };
   };
   /**
    * Site URL to collect cloud-prefetch payloads for. Omit when the run has no
@@ -130,8 +145,13 @@ export interface StreamPreRulesOptions {
 
 export interface StreamPreRulesResult {
   assets: PreFetchedAssets;
-  /** Empty when external-link checking is off, exactly as v1 returns. */
+  /**
+   * Empty when external-link checking is off, exactly as v1 returns. Empty in
+   * the late-binding mode too: the verdicts are `linkVerdicts.settle()`'s.
+   */
   externalLinkResults: ExternalCheckResult[];
+  /** The started check, in the late-binding mode only (repo#2144). */
+  linkVerdicts?: LateLinkVerdicts;
   /**
    * The crawl's FIRST stored page (normalized_url ASC) — v1's `pages[0]`, which
    * the cloud runtime feeds to tech detection. Retained whole (one PageRecord,
@@ -234,32 +254,54 @@ export function runStreamingPreRules(
 
     // Network halves, in v1's order: external links are checked and PERSISTED
     // first because `buildStreamingSiteData` later reads the link + appearance
-    // rows they write.
+    // rows they write. In the late-binding mode (repo#2144) the check is only
+    // started here; the link rules bind its verdicts after the other rules.
     const bulkChecker = options?.externalLinks
       ? (options.externalLinks.bulkChecker ??
         (options.externalLinks.resolveBulkChecker
           ? yield* Effect.promise(options.externalLinks.resolveBulkChecker)
           : undefined))
       : undefined;
-    const externalLinkResults = options?.externalLinks
+    const externalLinksConfig = options?.externalLinks
+      ? {
+          ...options.externalLinks.config,
+          // repo#2729: an explicit `max_links` wins; unset is the audit's page
+          // budget, so the cloud's one-credit-per-page reservation is an upper bound.
+          max_links:
+            options.externalLinks.config.max_links ??
+            externalLinkCheckCap(config.crawler?.max_pages ?? 0),
+        }
+      : null;
+    const lateBinding = options?.externalLinks?.lateBinding;
+    const linkVerdicts =
+      options?.externalLinks && externalLinksConfig && lateBinding
+        ? yield* startLateLinkVerdicts(storage, crawlId, {
+            occurrences: externalLinkOccurrences,
+            config: externalLinksConfig,
+            linkCache: options.externalLinks.linkCache ?? null,
+            bulkChecker,
+            priorityHrefs: options.externalLinks.priorityHrefs,
+            egressPinnedByTransport: options.resourceOverrides?.egressPinnedByTransport,
+            limits: options.externalLinks.limits,
+            runDeadlineAt: lateBinding.runDeadlineAt,
+            onProgress: options.externalLinks.onProgress,
+            resolveHost: options.resourceOverrides?.resolveHost,
+          })
+        : undefined;
+    const externalLinkResults =
+      options?.externalLinks && externalLinksConfig && !lateBinding
       ? yield* checkCollectedExternalLinks(
           storage,
           crawlId,
           externalLinkOccurrences,
-          // repo#2729: an explicit `max_links` wins; unset is the audit's page
-          // budget, so the cloud's one-credit-per-page reservation is an upper bound.
-          {
-            ...options.externalLinks.config,
-            max_links:
-              options.externalLinks.config.max_links ??
-              externalLinkCheckCap(config.crawler?.max_pages ?? 0),
-          },
+          externalLinksConfig,
           options.externalLinks.onProgress,
           options.externalLinks.linkCache ?? null,
           bulkChecker,
           options.externalLinks.priorityHrefs,
           options.resourceOverrides?.egressPinnedByTransport,
           options.externalLinks.limits,
+          options.resourceOverrides?.resolveHost,
         )
       : [];
 
@@ -274,6 +316,7 @@ export function runStreamingPreRules(
     return {
       assets,
       externalLinkResults,
+      ...(linkVerdicts ? { linkVerdicts } : {}),
       techDetectPage,
       intelUrls: [...intelUrlSet],
       cloudPrefetchPayloads: prefetchCollector ? prefetchCollector.build() : null,

@@ -150,6 +150,15 @@ export interface ExternalCheckerOptions {
    * watchdog cannot tell it from a hang.
    */
   onProgress?: (progress: { done: number; total: number; fromCache: number }) => void;
+  /**
+   * repo#2144: called once per link the moment its verdict is known (a cache
+   * hit, a bulk chunk's answer, a local check), with the same result object
+   * the check returns for it. Lets a caller that cannot wait for the whole
+   * check (the late-binding link verdicts, `late-link-verdicts.ts`) keep the
+   * verdicts that arrived before its deadline. A callback that throws is
+   * ignored, like `onProgress`.
+   */
+  onVerdict?: (result: ExternalCheckResult) => void;
   /** The clock {@link deadlineAt} is read against. Absent: `Date.now`. */
   now?: () => number;
 }
@@ -263,7 +272,8 @@ export async function runBulkChecker(
   urls: string[],
   chunkSize: number = BULK_CHECK_CHUNK_SIZE,
   limits: Pick<ExternalCheckerOptions, "deadlineAt" | "maxWaitMs" | "now"> & {
-    onChunk?: (resolvedSoFar: number) => void;
+    /** Called after each answered chunk with the running count and that chunk's answers. */
+    onChunk?: (resolvedSoFar: number, chunk: ReadonlyMap<string, ExternalCheckResult>) => void;
   } = {}
 ): Promise<Map<string, ExternalCheckResult>> {
   const now = limits.now ?? Date.now;
@@ -279,7 +289,7 @@ export async function runBulkChecker(
       if (chunk === NOT_ANSWERED) break;
       slowestChunkMs = Math.max(slowestChunkMs, now() - sentAt);
       for (const [url, result] of chunk) resolved.set(url, result);
-      tell(() => limits.onChunk?.(resolved.size));
+      tell(() => limits.onChunk?.(resolved.size, chunk));
       // pub#753: a service that answered nothing for a whole chunk (overloaded,
       // or out of time on links it has not seen) will most likely do the same
       // for the next one, and each such chunk costs its full wait. Stop asking:
@@ -653,6 +663,10 @@ export function checkExternalLinks(
 
     const results: ExternalCheckResult[] = [];
     let urlsToCheck: string[] = [];
+    // repo#2144: each verdict is told the moment it is known; see `onVerdict`.
+    const emit = (result: ExternalCheckResult) => {
+      if (opts.onVerdict) tell(() => opts.onVerdict!(result));
+    };
 
     // repo#2759: never requested, by the bulk checker or locally, and never
     // answered from an old cached verdict either. The audit leaves these out
@@ -690,6 +704,7 @@ export function checkExternalLinks(
         uniqueUrls.push(url);
       }
     }
+    for (const result of results) emit(result);
     if (uniqueUrls.length === 0) return results;
 
     // pub#775: a private site's checks stay out of the cache every audit shares.
@@ -699,7 +714,7 @@ export function checkExternalLinks(
       for (const url of uniqueUrls) {
         const cached = cachedEntries.get(url);
         if (cached && !staleWallVerdict(cached)) {
-          results.push({
+          const hit: ExternalCheckResult = {
             href: cached.href,
             status: cached.status,
             error: cached.error,
@@ -707,7 +722,9 @@ export function checkExternalLinks(
             fromCache: true,
             wafBlocked: cached.wafBlocked,
             wafProvider: cached.wafProvider as WafProvider | undefined,
-          });
+          };
+          results.push(hit);
+          emit(hit);
         } else {
           urlsToCheck.push(url);
         }
@@ -737,6 +754,7 @@ export function checkExternalLinks(
         (url) => !refusedWithoutLookup(url, DEFAULT_EGRESS) && !hasReservedSuffix(url, DEFAULT_EGRESS),
       );
       const answeredBefore = results.length;
+      const bulkAsked = new Set(bulkUrls);
       const bulkResolved =
         bulkUrls.length > 0
           ? yield* Effect.promise(() =>
@@ -744,7 +762,13 @@ export function checkExternalLinks(
                 deadlineAt: opts.deadlineAt,
                 maxWaitMs: opts.maxWaitMs,
                 now: opts.now,
-                onChunk: (resolvedSoFar) => report(answeredBefore + resolvedSoFar),
+                onChunk: (resolvedSoFar, chunk) => {
+                  report(answeredBefore + resolvedSoFar);
+                  // The same object the loop below pushes for each answered url.
+                  for (const [url, resolved] of chunk) {
+                    if (bulkAsked.has(url) && !isBulkNonPublicRefusal(resolved)) emit({ ...resolved, href: url });
+                  }
+                },
               })
             )
           : new Map<string, ExternalCheckResult>();
@@ -797,7 +821,11 @@ export function checkExternalLinks(
         const result = await waitAtMost(checkSingleUrlAsync(href, opts), allowance);
         if (result !== NOT_ANSWERED) answered += 1;
         report(answered);
-        return result === NOT_ANSWERED ? null : { href, ...result };
+        if (result === NOT_ANSWERED) return null;
+        const checked = { href, ...result };
+        // The same shape the loop below pushes for it.
+        emit(localVerdict(checked));
+        return checked;
       })
     );
 
@@ -829,23 +857,26 @@ export function checkExternalLinks(
       if (cacheEntries.length > 0) sharedCache.setCachedBulk(cacheEntries);
     }
 
-    for (const r of checkedResults) {
-      results.push({
-        href: r.href,
-        status: r.status,
-        error: r.error,
-        redirectTarget: r.redirectTarget,
-        fromCache: false,
-        wafBlocked: r.wafBlocked,
-        wafProvider: r.wafProvider,
-        ...(r.unverifiedReason ? { unverifiedReason: r.unverifiedReason } : {}),
-        rateLimited: r.rateLimited,
-        ...(r.refused ? { refused: true } : {}),
-      });
-    }
+    for (const r of checkedResults) results.push(localVerdict(r));
 
     return results;
   });
+}
+
+/** A local check's answer as the check returns it. */
+function localVerdict(r: CheckUrlResult & { href: string }): ExternalCheckResult {
+  return {
+    href: r.href,
+    status: r.status,
+    error: r.error,
+    redirectTarget: r.redirectTarget,
+    fromCache: false,
+    wafBlocked: r.wafBlocked,
+    wafProvider: r.wafProvider,
+    ...(r.unverifiedReason ? { unverifiedReason: r.unverifiedReason } : {}),
+    rateLimited: r.rateLimited,
+    ...(r.refused ? { refused: true } : {}),
+  };
 }
 
 export function checkExternalLink(

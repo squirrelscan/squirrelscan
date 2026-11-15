@@ -311,6 +311,14 @@ export type {
 export { runStreamingPreRules, PRE_RULES_PAGE_BATCH } from "./streaming-pre-rules";
 export { detachFromPage, type DetachBoundary } from "./detach";
 export type { StreamPreRulesOptions, StreamPreRulesResult } from "./streaming-pre-rules";
+export {
+  linkVerdictDeadlineAt,
+  LINK_RULES_RESERVE_MS,
+  startLateLinkVerdicts,
+  type LateLinkVerdicts,
+  type LinkVerdictSettlement,
+  type StartLateLinkVerdictsOptions,
+} from "./late-link-verdicts";
 
 // Byte-budget batch sizing (#1860) — pages per batch derived from the site's own
 // average page size, because peak RSS is batch x per-page cost and per-page cost

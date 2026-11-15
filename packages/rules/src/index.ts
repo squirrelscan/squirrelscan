@@ -18,6 +18,7 @@ export * from "./ignore";
 export * from "./plugins";
 export * from "./cloud";
 export * from "./discovery-probes";
+export * from "./link-verdict-rules";
 export {
   APPLICABILITY_MIN_CONFIDENCE,
   type ApplicabilityVerdict,
