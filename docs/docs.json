@@ -262,6 +262,7 @@
                   "rules/links/anchor-text",
                   "rules/links/anchor-mismatch",
                   "rules/links/https-downgrade",
+                  "rules/links/nav-set-divergence",
                   "rules/links/tel-mailto"
                 ]
               },

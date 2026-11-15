@@ -197,6 +197,7 @@
   "links/https-downgrade",
   "links/internal-links",
   "links/invalid-links",
+  "links/nav-set-divergence",
   "links/no-contextual-inbound",
   "links/nofollow-internal",
   "links/orphan-pages",

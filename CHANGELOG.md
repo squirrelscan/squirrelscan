@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- **New rule `links/nav-set-divergence`.** Flags pages whose navigation is missing links the rest of the site has: a landing page built outside the shared layout, an older template, a header or footer include that failed to render. The norm is every internal header, navigation and footer link carried by at least 70% of the pages, and it must be shared by at least 70% of them to count. A page missing norm links is reported with the exact hrefs (a warning, or a failure when it is missing at least half the norm). A section with its own navigation, such as a docs sidebar, is compared within its page type and is not flagged against the marketing nav, and a localized section (`/fr/`, `/de/`) is compared within its own locale. The rule skips a crawl under 10 pages, under 10 pages with navigation links, or with no clear norm. It is a normal local rule: no model, no account, no surcharge. The per-page set is stored in `page_features.nav_link_set` (schema version 44) so the streaming and legacy paths give the same answer. (squirrelscan/repo#1370)
+
 ### Fixed
 
 - An incremental audit that refetches an unchanged page now reports the headers that response carried, not the ones stored with the page (squirrelscan/repo#4765). A site that dropped an `X-Robots-Tag: noindex`, or added HSTS, without changing its HTML kept the old header in every later audit, and `core/robots-meta` reported a noindex the site no longer sent. A 200 whose body matched and a reused render (the conditional-render gate's probe) now replace the stored headers; an origin's own 304 updates the headers it resends and keeps the ones it omits, as HTTP caches do.

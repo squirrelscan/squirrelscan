@@ -54,6 +54,7 @@ import type {
   PageFeatureRow,
   PageReportScalars,
   HreflangAlternate,
+  NavLinkSet,
   PageLinkRow,
   PageFeatureDuplicateField,
   DuplicateGroup,
@@ -162,7 +163,7 @@ interface UnfinishedCrawlRow extends LeaseCrawlRow {
   last_activity: number;
 }
 
-export const SCHEMA_VERSION = 43;
+export const SCHEMA_VERSION = 44;
 
 // Migrations to run when upgrading from older versions
 const MIGRATIONS: Record<number, string[]> = {
@@ -654,6 +655,9 @@ const MIGRATIONS: Record<number, string[]> = {
   // Version 43: a page's bounded variant-count map (content/terminology-consistency), JSON text.
   // ADDITIVE and nullable: a row written before this reads as no sample for the rule.
   43: [`ALTER TABLE page_features ADD COLUMN terminology_variants TEXT`],
+  // Version 44: a page's navigation link set as JSON (links/nav-set-divergence). ADDITIVE and
+  // nullable: a row written before this reads as no set, so the page is not compared.
+  44: [`ALTER TABLE page_features ADD COLUMN nav_link_set TEXT`],
 };
 
 // Every `pages` column but the two that hold a page's body, for
@@ -799,6 +803,7 @@ const PAGE_FEATURES_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }>
   { name: "hreflang_alternates", type: "TEXT" },
   { name: "reading_level", type: "INTEGER" },
   { name: "terminology_variants", type: "TEXT" },
+  { name: "nav_link_set", type: "TEXT" },
 ];
 
 // Same guard for `rule_results`. Migrations 37 and 38 added the component-evidence
@@ -1269,6 +1274,7 @@ CREATE TABLE IF NOT EXISTS page_features (
   hreflang_alternates TEXT,
   reading_level INTEGER,
   terminology_variants TEXT,
+  nav_link_set TEXT,
   PRIMARY KEY (crawl_id, normalized_url),
   FOREIGN KEY (crawl_id) REFERENCES crawls(id)
 );
@@ -6379,8 +6385,8 @@ export class SQLiteStorage implements CrawlStorage {
       meta_noindex, indexable_reasons, rich_result_types,
       nap_name, nap_phones, nap_phone_formats, nap_address, nap_address_format,
       nap_tel_link, nap_mailto_link,
-      favicon_href, theme_color, og_image, report_scalars, hreflang_alternates, reading_level, terminology_variants
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      favicon_href, theme_color, og_image, report_scalars, hreflang_alternates, reading_level, terminology_variants, nav_link_set
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
   private pageFeatureParams(
@@ -6429,6 +6435,7 @@ export class SQLiteStorage implements CrawlStorage {
       row.terminologyVariants && Object.keys(row.terminologyVariants).length > 0
         ? JSON.stringify(row.terminologyVariants)
         : null,
+      row.navLinkSet ? JSON.stringify(row.navLinkSet) : null,
     ];
   }
 
@@ -6799,6 +6806,9 @@ export class SQLiteStorage implements CrawlStorage {
       readingLevel: (row.reading_level as number | null) ?? null,
       terminologyVariants: row.terminology_variants
         ? this.safeJsonParse(row.terminology_variants as string, null as Record<string, number> | null)
+        : null,
+      navLinkSet: row.nav_link_set
+        ? this.safeJsonParse(row.nav_link_set as string, null as NavLinkSet | null)
         : null,
     };
   }
