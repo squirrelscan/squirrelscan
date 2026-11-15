@@ -240,3 +240,50 @@ describe("render runId threading (#1134)", () => {
     expect(captured[0]?.runId).toBeUndefined();
   });
 });
+
+describe("render fallback reasons (#1873)", () => {
+  const fallbackFetcher = {
+    id: "http",
+    capabilities: { jsRendering: false, cookies: false, screenshot: false },
+    fetch: async () => ({
+      url: "https://example.com/",
+      status: 200,
+      headers: {},
+      body: "<html>raw</html>",
+      fetcherMethod: "fetch",
+    }),
+  } as unknown as DocumentFetcher;
+
+  function clientWith(item: Record<string, unknown>): CloudServicesClient {
+    return {
+      render: async () => ({ jobId: "tok", status: "queued" as const, charged: 2 }),
+      renderResult: async () => ({
+        jobId: "tok",
+        status: "done" as const,
+        results: [{ url: "https://example.com/", ...item }],
+      }),
+    } as unknown as CloudServicesClient;
+  }
+
+  const opts = { fallback: fallbackFetcher, batchWindowMs: 1, firstPollDelayMs: 1, pollIntervalMs: 5 };
+  const run = (item: Record<string, unknown>) =>
+    createCloudDocumentFetcher(clientWith(item), opts).fetch({
+      url: "https://example.com/",
+    } as FetchRequest);
+
+  test("a render item with an error falls back tagged render-error", async () => {
+    const res = await run({ status: null, error: "render failed" });
+    expect(res.fallbackReason).toBe("render-error");
+    expect(res.body).toContain("raw");
+  });
+
+  test("a render item with no html falls back tagged render-empty", async () => {
+    const res = await run({ status: 200, headers: {} });
+    expect(res.fallbackReason).toBe("render-empty");
+  });
+
+  test("a good render carries no fallbackReason", async () => {
+    const res = await run({ status: 200, html: "<html>ok</html>", headers: {} });
+    expect(res.fallbackReason).toBeUndefined();
+  });
+});
