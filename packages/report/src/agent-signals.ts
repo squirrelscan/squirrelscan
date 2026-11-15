@@ -68,8 +68,60 @@ export function agentSignalsLine(signals: AgentSignal[]): string {
   return `Site-level signals (not scored): ${signals.map((s) => `${s.label} ${s.status === "unchecked" ? "not checked" : s.status}`).join(", ")}`;
 }
 
+export type CitabilityStatus = "ok" | "issues" | "unchecked";
+
+export interface CitabilitySignal {
+  ruleId: string;
+  label: string;
+  status: CitabilityStatus;
+}
+
+// Page-level findings an answer engine weighs when deciding what to quote. Each lives in its own
+// rule and category; the Agents section links to them and never re-emits the finding (repo#3882).
+const CITABILITY_RULES: { ruleId: string; label: string }[] = [
+  { ruleId: "eeat/content-dates", label: "dates" },
+  { ruleId: "content/freshness", label: "freshness" },
+  { ruleId: "content/date-agreement", label: "date agreement" },
+  { ruleId: "eeat/author-byline", label: "author" },
+  { ruleId: "eeat/author-expertise", label: "author expertise" },
+  { ruleId: "eeat/citations", label: "citations" },
+  { ruleId: "ax/answer-blocks", label: "answer blocks" },
+];
+
+/**
+ * Where the report stands on each citability rule, read from the rule results that already exist.
+ * Empty when none of them ran, so a quick-level report prints nothing.
+ */
+export function getCitabilitySignals(report: Pick<AuditReport, "ruleResults">): CitabilitySignal[] {
+  const byRule = new Map<string, ReportRuleResult>();
+  for (const r of Object.values(report.ruleResults ?? {})) byRule.set(canonicalRuleId(r.meta.id), r);
+  if (!CITABILITY_RULES.some((c) => byRule.has(c.ruleId))) return [];
+  return CITABILITY_RULES.map(({ ruleId, label }) => {
+    const checks = byRule.get(ruleId)?.checks ?? [];
+    const status: CitabilityStatus = checks.some((c) => c.status === "warn" || c.status === "fail")
+      ? "issues"
+      : checks.some((c) => c.status === "pass" || c.status === "info")
+        ? "ok"
+        : "unchecked";
+    return { ruleId, label, status };
+  });
+}
+
+/** One line, e.g. "Citability (not scored here, see each rule): dates ok, author issues (eeat/author-byline)". */
+export function citabilityLine(signals: CitabilitySignal[]): string {
+  const parts = signals.map((s) =>
+    s.status === "issues"
+      ? `${s.label} issues (${s.ruleId})`
+      : `${s.label} ${s.status === "unchecked" ? "not checked" : "ok"}`,
+  );
+  return `Citability (findings stay under their own rules): ${parts.join(", ")}`;
+}
+
 /** Both lines for an Agents group, or [] when the rules did not run. */
 export function agentSignalLines(report: Pick<AuditReport, "ruleResults">): string[] {
   const signals = getAgentSignals(report);
-  return signals.length === 0 ? [] : [AGENTS_SCORE_MEASURES, agentSignalsLine(signals)];
+  const lines = signals.length === 0 ? [] : [AGENTS_SCORE_MEASURES, agentSignalsLine(signals)];
+  const citability = getCitabilitySignals(report);
+  if (citability.length > 0) lines.push(citabilityLine(citability));
+  return lines;
 }

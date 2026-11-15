@@ -669,6 +669,7 @@
               "rules/ax/index",
               "rules/ax/content-without-js",
               "rules/ax/token-weight",
+              "rules/ax/answer-blocks",
               "rules/ax/markdown-response",
               "rules/ax/ai-crawlers",
               "rules/ax/agent-blocking",

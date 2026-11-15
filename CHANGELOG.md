@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- `ax/answer-blocks` (squirrelscan/repo#3882), an advisory rule for content pages. It lists question headings (`h2` to `h4` ending in a question mark) with no short, self-contained answer in the first two sentences, and data tables or charts with no source next to them. It is `info` severity, so it never changes the score. The Agents section of the console, text, markdown and HTML reports now carries one line that links to the existing date, author and citation rules (`eeat/content-dates`, `content/freshness`, `content/date-agreement`, `eeat/author-byline`, `eeat/author-expertise`, `eeat/citations`) with their status, without repeating their findings. See [ax/answer-blocks](https://docs.squirrelscan.com/rules/ax/answer-blocks).
+
 ### Fixed
 
 - An incremental audit that refetches an unchanged page now reports the headers that response carried, not the ones stored with the page (squirrelscan/repo#4765). A site that dropped an `X-Robots-Tag: noindex`, or added HSTS, without changing its HTML kept the old header in every later audit, and `core/robots-meta` reported a noindex the site no longer sent. A 200 whose body matched and a reused render (the conditional-render gate's probe) now replace the stored headers; an origin's own 304 updates the headers it resends and keeps the ones it omits, as HTTP caches do.

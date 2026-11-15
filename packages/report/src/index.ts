@@ -126,8 +126,12 @@ export {
   AGENTS_SCORE_MEASURES,
   agentSignalLines,
   agentSignalsLine,
+  citabilityLine,
   getAgentSignals,
+  getCitabilitySignals,
   type AgentSignal,
+  type CitabilitySignal,
+  type CitabilityStatus,
   type AgentSignalStatus,
 } from "./agent-signals";
 

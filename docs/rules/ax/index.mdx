@@ -19,6 +19,7 @@ Readable asks whether an agent that fetches a URL gets the content. Most agent f
 - [Content Without JavaScript](/rules/ax/content-without-js): flags main content that only renders client-side
 - [Token Weight](/rules/ax/token-weight): per-page token estimate and text-to-HTML ratio
 - [Markdown Response](/rules/ax/markdown-response): serving clean Markdown via content negotiation or a `.md` variant
+- [Answer Blocks](/rules/ax/answer-blocks): question headings with a direct answer, and a source beside data tables and charts (advisory)
 
 ### Reachable
 
@@ -85,6 +86,7 @@ These carry the highest severity and weight in the category.
 | [AGENTS.md: the paths squirrel probes and what counts](/rules/ax/agents-md) | No AGENTS.md at the repository root or any conventional path, or an SPA fallback served in its place. squirrel probes four paths and sniffs the body. | info | Site-wide |
 | [AI content detection: why this rule is retired](/rules/ai/ai-content) | The AI-generated content check no longer runs. squirrel emits a skip on every page and never calls a model. | info | Per-page |
 | [AI crawlers in robots.txt: which bots you block, by class](/rules/ax/ai-crawlers) | robots.txt blocking Claude-User or PerplexityBot alongside the training bots. squirrel classifies all 24 known AI crawlers and names what each block costs. | warning | Site-wide |
+| [Answer blocks: can an answer engine quote this page](/rules/ax/answer-blocks) | Question headings with no short, self-contained answer, and data tables or charts with no source. squirrel flags both on content pages and never lowers the score. | info | Per-page |
 | [api-catalog and OpenAPI: how an agent finds your API](/rules/ax/api-discovery) | No OpenAPI spec at a conventional path, or OAuth metadata with no way for an agent to register a client. squirrel probes both. | info | Site-wide |
 | [Blocking AI agents at the edge: what robots.txt hides](/rules/ax/agent-blocking) | A WAF or bot-management rule serving GPTBot or Claude-User a challenge the browser never sees. squirrel probes the homepage as a browser, GPTBot and Claude-User, and every AI token on request. | error | Site-wide |
 | [Common Crawl and Wayback: is your site in the archives](/rules/ax/archive-indexing) | A site missing from the Common Crawl index or the Wayback Machine, or archived only with a capture over a year old. squirrel checks both. | warning | Site-wide |
