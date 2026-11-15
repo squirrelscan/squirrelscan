@@ -1,5 +1,5 @@
-// #1739: an external link CONFIRMED broken (404, 410, or a host confirmed not to resolve) is a
-// failure and the rule's severity is `error`; links that may be broken (5xx, TLS and connection errors,
+// #1739/#2747: an external link CONFIRMED broken (404, 410, TLS, or a host confirmed not to resolve) is a
+// failure and the rule's severity is `error`; links that may be broken (5xx and connection errors,
 // other 4xx) warn under their own check; links that cannot be verified inform; and the main check never
 // says all links work while some were broken, unverified or never requested.
 
@@ -87,6 +87,16 @@ describe("confirmed broken fails (#1739)", () => {
     )!;
     expect(check.message).toBe("3 broken external link(s): 1 with 404, 1 with 410, 1 domain does not exist");
   });
+
+  test("a TLS failure is confirmed broken", async () => {
+    const check = named(
+      await run([link({ href: "https://tls.example-live.net/", status: null, error: "certificate has expired" })]),
+      "broken-external-links",
+    )!;
+    expect(check.status).toBe("fail");
+    expect(check.message).toBe("1 broken external link(s): 1 TLS failure");
+    expect(check.items?.[0]?.label).toContain("(TLS failure)");
+  });
 });
 
 describe("possibly broken warns, under its own check (#1739)", () => {
@@ -94,7 +104,6 @@ describe("possibly broken warns, under its own check (#1739)", () => {
     ["a 503", link({ href: "https://down.example-live.net/", status: 503 })],
     ["a 500", link({ href: "https://err.example-live.net/", status: 500 })],
     ["another 4xx", link({ href: "https://teapot.example-live.net/", status: 418 })],
-    ["a TLS error", link({ href: "https://tls.example-live.net/", status: null, error: "certificate has expired" })],
     ["a connection reset", link({ href: "https://reset.example-live.net/", status: null, error: "ECONNRESET" })],
   ])("%s warns and is not a failure", async (_name, l) => {
     const checks = (await run([l]));
@@ -154,6 +163,28 @@ describe("unverifiable links are reported exactly as before and never fail (#173
       "rate-limited-external-links:info",
       "waf-blocked-external-links:info",
     ]);
+  });
+});
+
+describe("bot-blocked responses do not affect the score (#2747)", () => {
+  test("common bot refusals and provider edge errors are informational", async () => {
+    const checks = await run([
+      link({ href: "https://refused.example-live.net/", status: 403, wafBlocked: true, wafProvider: "cloudflare" }),
+      link({ href: "https://linkedin.example-live.net/", status: 999, wafBlocked: true }),
+      link({ href: "https://edge.example-live.net/", status: 522, wafBlocked: true, wafProvider: "cloudflare" }),
+      link({ href: "https://gone.example-live.net/", status: 404 }),
+    ]);
+    expect(named(checks, "waf-blocked-external-links")?.status).toBe("info");
+    expect(named(checks, "waf-blocked-external-links")?.items?.map((item) => item.id)).toEqual([
+      "https://refused.example-live.net/",
+      "https://linkedin.example-live.net/",
+      "https://edge.example-live.net/",
+    ]);
+    expect(named(checks, "waf-blocked-external-links")?.items?.[1]?.meta).toMatchObject({ status: 999 });
+    expect(named(checks, "broken-external-links")?.items?.map((item) => item.id)).toEqual([
+      "https://gone.example-live.net/",
+    ]);
+    expect(named(checks, "possibly-broken-external-links")).toBeUndefined();
   });
 });
 

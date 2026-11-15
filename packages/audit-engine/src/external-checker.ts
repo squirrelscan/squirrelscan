@@ -303,12 +303,21 @@ export async function runBulkChecker(
   return resolved;
 }
 
+export const EXTERNAL_LINK_USER_AGENT =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 SquirrelScan/2.0 (+https://squirrelscan.com)";
+
 const DEFAULT_OPTIONS: ExternalCheckerOptions = {
   ttlSeconds: 7 * 24 * 60 * 60,
   concurrency: 5,
   timeoutMs: 10000,
-  userAgent: "SquirrelScan/2.0 (+https://squirrelscan.com)",
+  userAgent: EXTERNAL_LINK_USER_AGENT,
 };
+
+const EXTERNAL_LINK_HEADERS = {
+  Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+  "Accept-Language": "en-US,en;q=0.9",
+  "Upgrade-Insecure-Requests": "1",
+} as const;
 
 interface CheckUrlResult {
   status: number | null;
@@ -494,7 +503,7 @@ async function requestFollowingSafeRedirects(
     try {
       response = await send(current, {
         method,
-        headers: { "User-Agent": options.userAgent, Accept: "*/*" },
+        headers: { "User-Agent": options.userAgent, ...EXTERNAL_LINK_HEADERS },
         signal,
         redirect: "manual",
       });
@@ -571,7 +580,11 @@ async function checkSingleUrlAsync(
     // its vendor can be named, so it is listed as unverifiable. A 503 is a
     // wall only when it is a challenge page; otherwise it is the site's own
     // error (or, with Retry-After, throttling, below).
-    if (BOT_WALL_STATUSES.has(getResponse.status) || getResponse.status === 503) {
+    if (
+      BOT_WALL_STATUSES.has(getResponse.status) ||
+      getResponse.status === 503 ||
+      getResponse.headers.get("cf-mitigated") === "challenge"
+    ) {
       let body: string | undefined;
       try {
         // Capped, and decoded no further than the cap (#2717): the WAF
@@ -605,6 +618,20 @@ async function checkSingleUrlAsync(
           redirectTarget,
           wafBlocked: true,
           wafProvider: wafResult.detected ? (wafResult.provider ?? "unknown") : "unknown",
+          unverifiedReason: "blocked",
+        };
+      }
+    }
+
+    if (getResponse.status >= 520 && getResponse.status <= 530) {
+      const waf = detectWaf(getResponse.headers);
+      if (waf.detected && (waf.provider === "cloudflare" || waf.provider === "akamai")) {
+        return {
+          status: getResponse.status,
+          error: null,
+          redirectTarget,
+          wafBlocked: true,
+          wafProvider: waf.provider,
           unverifiedReason: "blocked",
         };
       }

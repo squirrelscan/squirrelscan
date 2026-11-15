@@ -21,7 +21,13 @@ afterEach(() => {
 });
 
 /** Every request the server saw: path, Host, and the header names it carried. */
-let seen: Array<{ path: string; host: string; headers: string[] }> = [];
+let seen: Array<{
+  path: string;
+  host: string;
+  headers: string[];
+  headerValues: Record<string, string>;
+  userAgent: string;
+}> = [];
 
 function serve(): number {
   seen = [];
@@ -33,6 +39,8 @@ function serve(): number {
         path: url.pathname,
         host: req.headers.get("host") ?? "",
         headers: [...req.headers.keys()],
+        headerValues: Object.fromEntries(req.headers.entries()),
+        userAgent: req.headers.get("user-agent") ?? "",
       });
       const redirect = (location: string) =>
         new Response(null, { status: 302, headers: { location } });
@@ -49,6 +57,13 @@ function serve(): number {
           return redirect(`http://localhost:${url.port}/landed`);
         case "/hop-public":
           return redirect(`http://public-b.example.com:${url.port}/landed`);
+        case "/edge":
+          return new Response("edge error", { status: 522, headers: { "cf-ray": "example" } });
+        case "/challenge":
+          return new Response("challenge", {
+            status: 403,
+            headers: { "cf-mitigated": "challenge", server: "cloudflare" },
+          });
         case "/":
           return new Response(
             `<!doctype html><html><head><title>Fixture</title></head><body><a href="http://localhost:${url.port}/landed">Elsewhere</a></body></html>`,
@@ -84,7 +99,15 @@ function publicSite(): EgressPolicy {
   };
 }
 
-const ALLOWED_HEADERS = new Set(["host", "user-agent", "accept", "accept-encoding", "connection"]);
+const ALLOWED_HEADERS = new Set([
+  "host",
+  "user-agent",
+  "accept",
+  "accept-language",
+  "upgrade-insecure-requests",
+  "accept-encoding",
+  "connection",
+]);
 
 describe("every hop of the external check goes through the egress guard", () => {
   const options = (egress: EgressPolicy) => ({
@@ -159,7 +182,7 @@ describe("every hop of the external check goes through the egress guard", () => 
     expect(seen).toEqual([]);
   });
 
-  test("no request carries anything but User-Agent and Accept", async () => {
+  test("external link requests carry browser-like headers and no credentials", async () => {
     const port = serve();
     await Effect.runPromise(
       checkExternalLinks([`http://public-a.example.com:${port}/hop-public`], null, options(publicSite())),
@@ -167,7 +190,53 @@ describe("every hop of the external check goes through the egress guard", () => 
     expect(seen.length).toBeGreaterThan(0);
     for (const r of seen) {
       expect(r.headers.filter((h) => !ALLOWED_HEADERS.has(h))).toEqual([]);
+      expect(r.headers).toContain("accept-language");
+      expect(r.headers).toContain("upgrade-insecure-requests");
+      expect(r.headerValues.accept).toContain("text/html");
+      expect(r.headerValues["accept-language"]).toBe("en-US,en;q=0.9");
+      expect(r.headerValues["upgrade-insecure-requests"]).toBe("1");
     }
+  });
+
+  test("the default user agent keeps the product identity after its browser fingerprint", async () => {
+    const port = serve();
+    await Effect.runPromise(
+      checkExternalLinks([`http://public-a.example.com:${port}/landed`], null, {
+        concurrency: 1,
+        timeoutMs: 5_000,
+        egress: publicSite(),
+      }),
+    );
+    expect(seen[0]?.userAgent).toContain("Mozilla/5.0");
+    expect(seen[0]?.userAgent).toEndWith("SquirrelScan/2.0 (+https://squirrelscan.com)");
+  });
+
+  test("Cloudflare edge errors are saved as unverified blocks", async () => {
+    const port = serve();
+    const [result] = await Effect.runPromise(
+      checkExternalLinks([`http://public-a.example.com:${port}/edge`], null, options(publicSite())),
+    );
+    expect(result).toMatchObject({
+      status: 522,
+      error: null,
+      wafBlocked: true,
+      wafProvider: "cloudflare",
+      unverifiedReason: "blocked",
+    });
+  });
+
+  test("a Cloudflare challenge header makes a 403 unverified", async () => {
+    const port = serve();
+    const [result] = await Effect.runPromise(
+      checkExternalLinks([`http://public-a.example.com:${port}/challenge`], null, options(publicSite())),
+    );
+    expect(result).toMatchObject({
+      status: 403,
+      error: null,
+      wafBlocked: true,
+      wafProvider: "cloudflare",
+      unverifiedReason: "blocked",
+    });
   });
 });
 

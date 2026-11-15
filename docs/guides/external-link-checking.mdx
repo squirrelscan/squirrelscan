@@ -1,0 +1,22 @@
+---
+title: "How squirrel checks external links"
+description: "Learn how local and cloud external-link checks work, what an unverified result means, and when a failed link counts as broken."
+---
+
+## How the check works
+
+The local checker requests each distinct external URL with a browser-like set of HTTP headers. It tries `HEAD`, then `GET` when needed, and follows safe HTTP and HTTPS redirects. It does not send your site's cookies or authorization headers to another site. A link that answers 404 or 410, points to a domain confirmed not to exist, or fails its TLS connection is reported as broken.
+
+The cloud link checker uses Perch to check links from its shared cache and retry requests that a plain client could not verify. Sign in with `squirrel auth login` to run an audit with cloud link checking.
+
+## What unverified means
+
+An unverified result means the checker could not determine whether a person can open the destination. Sites may refuse automated requests with bot protection, rate limits, a sign-in wall or a temporary network error. Cloudflare and Akamai error responses can also come from an edge service rather than the destination site. These links are informational and do not affect the score.
+
+The audit reports a link as possibly blocked when a response commonly used to refuse automated requests appears, including 401, 403, 406, 429, 999, or a Cloudflare or Akamai 52x response. A provider's challenge fingerprint also makes the result unverified. A timeout is unverified too. Other transient errors can appear as possibly broken warnings.
+
+## Why a 404 can need two failures
+
+The cloud checker does not call a link broken from one failed check. A first 404 waits for a second check; only a confirming failure makes it a broken link. This avoids scoring a brief network or edge failure as a dead destination. While it waits, the report lists the link as awaiting confirmation. This is the two-failures rule tracked in [#2148](https://github.com/squirrelscan/repo/issues/2148).
+
+See [broken external links](/rules/links/broken-external-links) for the check names, messages and configuration.
