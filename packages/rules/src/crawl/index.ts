@@ -4,6 +4,7 @@
 import type { Rule } from "../types";
 
 import { allNoindexPages } from "./all-noindex-pages";
+import { custom404Rule } from "./custom-404";
 import { conflictingIndexSignalsRule } from "./conflicting-index-signals";
 import { canonicalChainRule } from "./canonical-chain";
 import { htmlSizeRule } from "./html-size";
@@ -51,6 +52,7 @@ export const rules: Rule[] = [
   htmlSizeRule,
   pdfSizeRule,
   soft404Rule,
+  custom404Rule,
   singlePageSiteRule,
   renderedSignalMismatchRule,
 ];
@@ -80,4 +82,5 @@ export {
   sitemapValidRule,
   singlePageSiteRule,
   soft404Rule,
+  custom404Rule,
 };
