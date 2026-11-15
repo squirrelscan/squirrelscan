@@ -3,7 +3,7 @@
 // structurally by the CLI's vendored AuditReport), and runCloudAudit calls it
 // directly, so cloud and CLI reports stamp identical `homepage`/`lockedRules`.
 
-import { NOT_CHECKED_SKIP_REASONS, type LockedRule } from "@squirrelscan/core-contracts";
+import { NOT_CHECKED_SKIP_REASONS, type LockedRule, type PartialAudit } from "@squirrelscan/core-contracts";
 import {
   isNotApplicableCloudSkip,
   isRenderDisabledCloudSkip,
@@ -11,6 +11,7 @@ import {
   UNWIRED_CLOUD_SERVICES,
   type Rule,
 } from "@squirrelscan/rules";
+import { matchesRulePattern } from "@squirrelscan/utils/rule-pattern";
 
 interface HomepageMeta {
   title: string | null;
@@ -56,6 +57,31 @@ export function deriveHomepageSummary(report: {
 }
 
 /**
+ * True when a `--rule-include`/`--rule-exclude` filter keeps `ruleId` from running (repo#1082):
+ * an exclude pattern matches it, or there are include patterns and none match. Same precedence as
+ * the engine (disable wins over enable). A rule the user opted out of is not a locked-rule upsell.
+ */
+export function isRuleFilteredOut(
+  ruleId: string,
+  partial: Pick<PartialAudit, "include" | "exclude"> | undefined,
+): boolean {
+  if (!partial) return false;
+  const exclude = Array.isArray(partial.exclude) ? partial.exclude : [];
+  const include = Array.isArray(partial.include) ? partial.include : [];
+  if (exclude.some((p) => matchesRulePattern(ruleId, p))) return true;
+  return include.length > 0 && !include.some((p) => matchesRulePattern(ruleId, p));
+}
+
+/** `locked` without the rules a `--rule-include`/`--rule-exclude` filter turned off (repo#1082). */
+export function withoutFilteredLockedRules<T extends { id: string }>(
+  locked: T[] | undefined,
+  partial: Pick<PartialAudit, "include" | "exclude"> | undefined,
+): T[] | undefined {
+  if (!locked || !partial) return locked;
+  return locked.filter((r) => !isRuleFilteredOut(r.id, partial));
+}
+
+/**
  * Cloud-/Pro-gated rules (meta.cloud) with no non-skipped check this run.
  * The list is an upsell ("run a cloud audit to unlock"), so it must only name
  * rules a paid run would actually produce (#656): unwired services and rules
@@ -66,6 +92,7 @@ export function deriveHomepageSummary(report: {
 export function computeLockedRules(
   report: {
     ruleResults: Record<string, { checks: Array<{ status: string; skipReason?: string }> }>;
+    partialAudit?: Pick<PartialAudit, "include" | "exclude">;
   },
   rules: Iterable<Rule> = loadAllRules().values(),
 ): LockedRule[] {
@@ -73,6 +100,7 @@ export function computeLockedRules(
   for (const rule of rules) {
     const cloud = rule.meta.cloud;
     if (!cloud) continue;
+    if (isRuleFilteredOut(rule.meta.id, report.partialAudit)) continue;
     if (cloud.service && UNWIRED_CLOUD_SERVICES.has(cloud.service)) continue;
     const checks = report.ruleResults[rule.meta.id]?.checks;
     const ran = checks?.some((c) => c.status !== "skipped") ?? false;

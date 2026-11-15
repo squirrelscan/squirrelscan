@@ -475,7 +475,11 @@ export interface ReportRuleResult {
   checks: CheckResult[];
 }
 
+export type PartialAudit = import("@squirrelscan/core-contracts").PartialAudit;
+
 export interface AuditReport {
+  /** Set when `--rule-include`/`--rule-exclude` narrowed the run (repo#1082). Mirrors core-contracts. */
+  partialAudit?: PartialAudit;
   /**
    * Set on a report rebuilt from a slim JSON export (`squirrel report --input`, #1748): that file carries a
    * sample of each check's pages and no passing rows, so a comparison cannot read an absent finding as fixed.

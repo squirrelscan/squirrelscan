@@ -33,10 +33,10 @@ const parse = (options?: Parameters<typeof renderJson>[1]) =>
   };
 
 describe("meta.schemaVersion", () => {
-  test("is 1.24, the version that added `meta.discovered` (after 1.23 `reportBody`), on every JSON report", () => {
-    expect(JSON_REPORT_SCHEMA_VERSION).toBe("1.24");
-    expect(parse().meta.schemaVersion).toBe("1.24");
-    expect(parse({ pages: rows(1) }).meta.schemaVersion).toBe("1.24");
+  test("is 1.25, the version that added `meta.partialAudit` (after 1.24 `meta.discovered`), on every JSON report", () => {
+    expect(JSON_REPORT_SCHEMA_VERSION).toBe("1.25");
+    expect(parse().meta.schemaVersion).toBe("1.25");
+    expect(parse({ pages: rows(1) }).meta.schemaVersion).toBe("1.25");
   });
 });
 

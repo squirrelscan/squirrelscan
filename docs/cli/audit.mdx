@@ -586,9 +586,12 @@ Excluding rules also skips the pre-crawl requests that only those rules read:
 `--rule-exclude` skips categories on top of whatever would normally run. When
 either flag is set, the report is **partial**: the health score is recomputed
 from only the included categories and the console output prints a
-`partial audit: ...` notice in its Report detail section at the end. Only console output carries that
-notice: other formats (json, text, markdown, xml, llm) print a warning to
-stderr instead, so the report body itself is unchanged. An unknown category
+`partial audit: ...` notice in its Report detail section at the end.
+The json, text, markdown, xml and llm formats carry the same marker
+(`meta.partialAudit` in json, with the included categories), and the payload of a report you
+publish carries it, so a hosted report can show it as a partial run. An unfiltered
+run carries no marker. A Pro-gated rule you excluded with `--rule-exclude` is
+not listed as a locked rule. An unknown category
 errors before crawling, listing the valid category codes. `--fail-on score:<category>`
 referencing an excluded category also errors up front, since it could never
 trip.

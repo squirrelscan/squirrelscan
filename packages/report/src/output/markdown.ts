@@ -66,6 +66,7 @@ import {
   ruleCarriedRollupLine,
   unfetchedNote,
 } from "../coverage";
+import { partialAuditLine } from "../coverage";
 import { ignoredLine, ignoredNoteLines } from "../ignored";
 import {
   affectedPages,
@@ -219,6 +220,8 @@ function scanDetailLines(report: AuditReport): string[] {
   const ignored = ignoredLine(report);
   if (ignored) out.push(escapeMarkdownInline(ignored));
   for (const line of ignoredNoteLines(report)) out.push(escapeMarkdownInline(line));
+  const partial = partialAuditLine(report);
+  if (partial) out.push(escapeMarkdownInline(partial));
   const scope = scanScopeLine(report);
   if (scope) out.push(scope);
   // repo#2661: a capped published report lists samples; say so, and where the rest is. Not

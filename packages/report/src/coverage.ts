@@ -164,6 +164,30 @@ export function robotsHonouredNote(report: Pick<AuditReport, "scanScope">): stri
     : "robots.txt was honoured: it kept no pages out of the audit.";
 }
 
+/**
+ * One plain line for a run narrowed with `--rule-include`/`--rule-exclude` (repo#1082), or null for
+ * an unfiltered run. Shared by every renderer so the marker reads the same everywhere.
+ */
+export function partialAuditLine(report: Pick<AuditReport, "partialAudit">): string | null {
+  const p = report.partialAudit;
+  if (!p) return null;
+  const list = (v: unknown): string[] =>
+    Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && x.length > 0) : [];
+  const shorten = (x: string) => (x.endsWith("/*") ? x.slice(0, -2) : x);
+  const include = list(p.include).map(shorten);
+  const exclude = list(p.exclude).map(shorten);
+  const categories = list(p.includedCategories);
+  if (include.length === 0 && exclude.length === 0) return null;
+  const parts: string[] = [];
+  if (include.length > 0) parts.push(`included ${include.join(", ")}`);
+  if (exclude.length > 0) parts.push(`excluded ${exclude.join(", ")}`);
+  const scored =
+    categories.length > 0
+      ? ` Scored on ${categories.join(", ")} only, so this is not the site's full state.`
+      : " This is not the site's full state.";
+  return `Partial audit: ${parts.join("; ")}.${scored}`;
+}
+
 export function scanScopeLine(report: AuditReport): string | null {
   const raw = report.scanScope;
   if (!raw) return null;

@@ -855,6 +855,20 @@ export interface ReportRender {
   pagesFetchedPlain: number;
 }
 
+/**
+ * Marks a report whose rules were narrowed with `--rule-include` / `--rule-exclude` (repo#1082).
+ * The score covers `includedCategories` only, so the report must not read as the site's full state.
+ * Absent on an unfiltered run.
+ */
+export interface PartialAudit {
+  /** Resolved `--rule-include` patterns. */
+  include: string[];
+  /** Resolved `--rule-exclude` patterns. */
+  exclude: string[];
+  /** Categories that could run under the filter (canonical codes). */
+  includedCategories: string[];
+}
+
 export interface AuditReport {
   crawlId?: string;
   /**
@@ -1127,6 +1141,8 @@ export interface AuditReport {
    * REPORT-ONLY — never feeds `healthScore`. Absent on pre-#1180 reports.
    */
   scanScope?: ScanScope;
+  /** Set when the run was narrowed by `--rule-include`/`--rule-exclude` (repo#1082). REPORT-ONLY. */
+  partialAudit?: PartialAudit;
   /**
    * Rule-result cache disclosure (#1990): how much of this audit's rules phase was
    * REPLAYED from a previous audit rather than evaluated now.
