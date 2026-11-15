@@ -5,6 +5,7 @@
 
 import type { PageModel } from "./types";
 
+import { lastmodForPath, pageDateModified } from "./lastmod";
 import { ADJECTIVES, NOUNS, TOPICS, VERBS } from "./lexicon";
 import { createRng, rngPick, type Rng } from "./prng";
 
@@ -104,6 +105,11 @@ export function renderPageHtml(page: PageModel, origin: string): string {
     )
     .join("\n");
   const robotsMeta = page.noindex ? '<meta name="robots" content="noindex">' : "";
+  // Never on a noindex page: rich schema behind noindex is its own finding (schema-noindex).
+  const modified = page.noindex ? null : pageDateModified(page.path);
+  const dateJsonLd = modified
+    ? `<script type="application/ld+json">${JSON.stringify({ "@context": "https://schema.org", "@type": "Article", headline: page.title, description: page.description, image: `${origin}/og.png`, author: { "@type": "Person", name: "synthetic" }, publisher: { "@type": "Organization", name: "synthetic-site" }, datePublished: modified, dateModified: modified })}</script>`
+    : "";
 
   return `<!doctype html>
 <html lang="en">
@@ -112,6 +118,7 @@ export function renderPageHtml(page: PageModel, origin: string): string {
 <title>${escapeHtml(page.title)}</title>
 <meta name="description" content="${escapeHtml(page.description)}">
 ${robotsMeta}
+${dateJsonLd}
 <link rel="canonical" href="${origin}${page.path}">
 </head>
 <body class="tpl-${escapeHtml(page.templateId)}">
@@ -134,7 +141,10 @@ export function buildRobotsTxt(origin: string): string {
 
 export function buildSitemapXml(sitemapPaths: string[], origin: string): string {
   const urls = sitemapPaths
-    .map((path) => `  <url><loc>${escapeHtml(`${origin}${path}`)}</loc></url>`)
+    .map(
+      (path) =>
+        `  <url><loc>${escapeHtml(`${origin}${path}`)}</loc><lastmod>${lastmodForPath(path)}</lastmod></url>`,
+    )
     .join("\n");
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`;
 }

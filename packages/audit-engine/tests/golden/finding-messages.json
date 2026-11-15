@@ -491,7 +491,7 @@
   ]
  },
  "ax/token-weight": {
-  "digest": "133332720164953",
+  "digest": "278361123954960",
   "lines": [
    "token-weight-budget|pass|~#,# estimated tokens (#,# bytes), within budget|#|",
    "token-weight-ratio|pass|~#% of this page's HTML is visible text, above the #% floor|#|"
@@ -512,9 +512,10 @@
   ]
  },
  "content/author-info": {
-  "digest": "155297629449239",
+  "digest": "260856751903904",
   "lines": [
-   "author-info|info|No author information detected|\"Consider adding author attribution for E-E-A-T\"|"
+   "author-info|info|No author information detected|\"Consider adding author attribution for E-E-A-T\"|",
+   "author-schema|pass|Author schema markup present|\"synthetic\"|"
   ]
  },
  "content/broken-html": {
@@ -530,9 +531,10 @@
   ]
  },
  "content/date-agreement": {
-  "digest": "179024305377535",
+  "digest": "43754820475730",
   "lines": [
-   "date-agreement|skipped|No schema date describes this page, so there is nothing to compare||"
+   "date-agreement|skipped|No schema date describes this page, so there is nothing to compare||",
+   "visible-date-missing|warn|This Article states datePublished #-#-# in its schema but shows the reader no date at all||\"#-#-#\""
   ]
  },
  "content/dev-leakage": {
@@ -560,9 +562,10 @@
   ]
  },
  "content/freshness": {
-  "digest": "280733104328403",
+  "digest": "56902072502168",
   "lines": [
    "freshness|info|No freshness signals detected|\"Consider adding date schema or Last-Modified header\"|",
+   "schema-dates|pass|Date schema markup present||",
    "time-elements|pass|# <time> element(s) found|\"#-#-#\"|"
   ]
  },
@@ -677,7 +680,7 @@
   ]
  },
  "content/thin-vs-site-norm": {
-  "digest": "103890801665555",
+  "digest": "167515910083910",
   "lines": [
    "thin-vs-site-norm|pass|All # comparable page(s) sit within their page type's word-count norm (median words: article #, category #, product #)|#|"
   ]
@@ -2823,7 +2826,7 @@
   ]
  },
  "crawl/html-size": {
-  "digest": "153079876188729",
+  "digest": "9229176217177",
   "lines": [
    "html-size|pass|HTML size OK: #KB|#|"
   ]
@@ -2925,15 +2928,15 @@
   ]
  },
  "crawl/sitemap-lastmod-churn": {
-  "digest": "29354897186413",
+  "digest": "25576795291976",
   "lines": [
-   "sitemap-lastmod-churn|skipped|Only # sitemap URL(s) carry a lastmod; sitemap is too small to judge lastmod churn||"
+   "sitemap-lastmod-churn|pass|# sitemap URL(s) with lastmod spread across # distinct days||"
   ]
  },
  "crawl/sitemap-lastmod-drift": {
-  "digest": "260756701498461",
+  "digest": "43291997998557",
   "lines": [
-   "sitemap-lastmod-drift|skipped|No sitemap URL carries both a lastmod and a page-side date signal||"
+   "sitemap-lastmod-drift|pass|# sitemap URL(s) carry a lastmod consistent with the page's own dateModified||"
   ]
  },
  "crawl/sitemap-valid": {
@@ -2962,9 +2965,9 @@
   ]
  },
  "eeat/author-byline": {
-  "digest": "69269765111121",
+  "digest": "219516511167385",
   "lines": [
-   "author-byline|warn|No content pages have author attribution|\"Add author bylines to build E-E-A-T\"|"
+   "author-byline|warn|Only #% of content pages have author attribution|\"Add author bylines to build E-E-A-T\"|"
   ]
  },
  "eeat/author-expertise": {
@@ -2998,9 +3001,10 @@
   ]
  },
  "eeat/content-dates": {
-  "digest": "187410121392036",
+  "digest": "235656044787114",
   "lines": [
-   "content-dates|info|No article content detected for date analysis||"
+   "date-modified|pass|#% of content has dateModified||",
+   "date-published|pass|#% of content has datePublished||"
   ]
  },
  "eeat/disclaimers": {
@@ -3573,7 +3577,7 @@
   ]
  },
  "perf/total-byte-weight": {
-  "digest": "70907475740515",
+  "digest": "236058587042446",
   "lines": [
    "total-byte-weight|pass|Heaviest page: http://synthetic.example.com/product/# #KB (# over #KB, # over #KB). Not scored: site total #KB across # pages, shared files counted once; average page #KB|\"#KB\"|\"< #KB\""
   ]
@@ -3609,8 +3613,9 @@
   ]
  },
  "schema/article": {
-  "digest": "77463328948093",
+  "digest": "64013196624987",
   "lines": [
+   "article-required|pass|Article schema has required properties||",
    "article-schema|info|No Article schema found|\"Consider adding for blog/news content\"|"
   ]
  },
@@ -3718,9 +3723,10 @@
   ]
  },
  "schema/json-ld-valid": {
-  "digest": "240265805622708",
+  "digest": "194369703780409",
   "lines": [
-   "json-ld|info|No JSON-LD structured data found|null|"
+   "json-ld|info|No JSON-LD structured data found|null|",
+   "json-ld|pass|Valid JSON-LD with # type(s)||"
   ]
  },
  "schema/local-business": {
@@ -3730,8 +3736,9 @@
   ]
  },
  "schema/organization": {
-  "digest": "12904498421577",
+  "digest": "8398610336197",
   "lines": [
+   "organization-contact-channels|info|Contact channels observed on this page: none|\"Informational: observed channels only, no requirement to publish contact details\"|",
    "organization-schema|info|No Organization schema found||"
   ]
  },

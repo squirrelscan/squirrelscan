@@ -51,6 +51,8 @@ export const sitemapLastmodChurnRule: Rule = {
     const days = new Map<string, number>();
     const sourceSitemaps = new Set<string>();
     let urlsWithLastmod = 0;
+    // Every URL seen, lastmod or not: only to tell "too small" from "omits lastmod".
+    let totalUrls = 0;
     // Counted only to explain a skip: "your lastmod values all came from a news sitemap" is a very
     // different message from "your sitemap has no lastmod at all", and the operator needs to tell them
     // apart to know whether anything is wrong.
@@ -63,6 +65,7 @@ export const sitemapLastmodChurnRule: Rule = {
 
     for (const sitemap of sitemaps.discovered) {
       for (const sitemapUrl of sitemap.urls) {
+        if (!sitemap.isNewsSitemap) totalUrls++;
         if (!sitemapUrl.lastmod) continue;
         const day = toDay(sitemapUrl.lastmod);
         if (!day) {
@@ -96,32 +99,47 @@ export const sitemapLastmodChurnRule: Rule = {
       // in a sitemap that is behaving exactly as specified.
       const newsOnly = urlsWithLastmod === 0 && newsUrlsWithLastmod > 0 && coarseLastmods === 0;
       // Too coarse, not too small: counting them would have been enough.
-      const coarseOnly = coarseLastmods > 0 && urlsWithLastmod + coarseLastmods >= MIN_URLS_WITH_LASTMOD;
+      const coarseOnly =
+        coarseLastmods > 0 && urlsWithLastmod + coarseLastmods >= MIN_URLS_WITH_LASTMOD;
       // Unreadable, not too few: counting them would have been enough.
       const unreadable =
         !coarseOnly &&
         unreadableLastmods > 0 &&
         urlsWithLastmod + coarseLastmods + unreadableLastmods >= MIN_URLS_WITH_LASTMOD;
+      // Large but lastmod-free: not "too small", the sitemap omits lastmod entirely, which is its own
+      // actionable finding (repo#1668). Nothing was read, counted, excluded or set aside.
+      const omitted =
+        urlsWithLastmod + coarseLastmods + unreadableLastmods + newsUrlsWithLastmod === 0 &&
+        totalUrls >= MIN_URLS_WITH_LASTMOD;
       checks.push({
         name: "sitemap-lastmod-churn",
         status: "skipped",
-        message: newsOnly
-          ? `Only news-sitemap URLs carry a lastmod (${newsUrlsWithLastmod}); news sitemaps hold ~48 hours of articles by design, so their lastmod values are excluded from this check`
-          : coarseOnly
-            ? `${coarseLastmods} sitemap lastmod value(s) name only a year or month, which says nothing about the day a page changed; ${urlsWithLastmod} name a day, too few to judge lastmod churn`
-            : unreadable
-              ? `${unreadableLastmods} sitemap lastmod value(s) are not dates squirrel can read the same way on every machine; ${urlsWithLastmod} name a day, too few to judge lastmod churn`
-              : // Year and month values carry a lastmod too: counting only the
-              // day-level ones read "Only 0" for a sitemap of coarse values.
-                `Only ${urlsWithLastmod + coarseLastmods + unreadableLastmods} sitemap URL(s) carry a lastmod; sitemap is too small to judge lastmod churn`,
-        skipReason: newsOnly
-          ? "Only news-sitemap lastmod values"
-          : coarseOnly
-            ? "Lastmod values name only a year or month"
-            : unreadable
-              ? "Lastmod values are not readable dates"
-              : "Too few URLs with lastmod",
-        details: { urlsWithLastmod, newsUrlsWithLastmod, coarseLastmods, unreadableLastmods },
+        message: omitted
+          ? `${totalUrls} sitemap URL(s) found but none carries a lastmod; the sitemap omits lastmod entirely, so there is nothing to judge`
+          : newsOnly
+            ? `Only news-sitemap URLs carry a lastmod (${newsUrlsWithLastmod}); news sitemaps hold ~48 hours of articles by design, so their lastmod values are excluded from this check`
+            : coarseOnly
+              ? `${coarseLastmods} sitemap lastmod value(s) name only a year or month, which says nothing about the day a page changed; ${urlsWithLastmod} name a day, too few to judge lastmod churn`
+              : unreadable
+                ? `${unreadableLastmods} sitemap lastmod value(s) are not dates squirrel can read the same way on every machine; ${urlsWithLastmod} name a day, too few to judge lastmod churn`
+                : // Year and month values carry a lastmod too: counting only the
+                  // day-level ones read "Only 0" for a sitemap of coarse values.
+                  `Only ${urlsWithLastmod + coarseLastmods + unreadableLastmods} sitemap URL(s) carry a lastmod; sitemap is too small to judge lastmod churn`,
+        skipReason: omitted
+          ? "Sitemap omits lastmod"
+          : newsOnly
+            ? "Only news-sitemap lastmod values"
+            : coarseOnly
+              ? "Lastmod values name only a year or month"
+              : unreadable
+                ? "Lastmod values are not readable dates"
+                : "Too few URLs with lastmod",
+        details: {
+          urlsWithLastmod,
+          newsUrlsExcluded: newsUrlsWithLastmod,
+          coarseLastmods,
+          unreadableLastmods,
+        },
       });
       return { checks };
     }

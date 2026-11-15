@@ -22,6 +22,7 @@ import { SQLiteStorage } from "@squirrelscan/crawler/storage";
 import { parsePage } from "@squirrelscan/parser";
 
 import { absoluteHref, buildRobotsTxt, linkText, renderPageHtml } from "./html-render";
+import { lastmodForPath } from "./lastmod";
 import { hashString32, hashStringHex } from "./prng";
 
 export interface WriteCrawlOptions {
@@ -361,7 +362,7 @@ async function writeCrawlBody(
   await run(
     storage.addSitemapUrls(
       crawlId,
-      model.sitemapPaths.map((path) => ({ sitemapUrl, loc: `${baseUrl}${path}` })),
+      model.sitemapPaths.map((path) => ({ sitemapUrl, loc: `${baseUrl}${path}`, lastmod: lastmodForPath(path) })),
     ),
   );
 

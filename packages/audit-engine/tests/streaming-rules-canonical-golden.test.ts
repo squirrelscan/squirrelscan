@@ -225,7 +225,9 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // 109738 -> 109739 (eeat/byline-consistency, squirrelscan/repo#1364): a site rule adds one row; the
       // fixture has no page type with a byline convention, so it is a skipped check and the score is unmoved.
       // 109739 -> 110239 (repo#1357): content/stale-dated-copy adds one row per page (500 pages run it).
-      expect(v1.findings.length).toBe(110239);
+      // 110239 -> 110352 (repo#1668): the synthetic site now writes sitemap lastmod and dates one page in ten,
+      // so the lastmod rules and the date and author schema rules judge instead of skipping. Score unmoved.
+      expect(v1.findings.length).toBe(110352);
       // Tripwire: EXTENDING a rule must never add a tally key, so a change here
       // is only correct alongside a deliberate new rule id. 266 -> 267 is
       // content/hidden-text, 267 -> 268 content/thin-vs-site-norm, 268 -> 269

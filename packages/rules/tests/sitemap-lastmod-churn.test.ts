@@ -5,7 +5,10 @@ import { describe, expect, test } from "bun:test";
 import { sitemapLastmodChurnRule } from "../src/crawl/sitemap-lastmod-churn";
 import type { ParsedPage, RuleContext } from "../src/types";
 
-function urlsWithLastmod(count: number, lastmods: (string | undefined)[]): { loc: string; lastmod?: string }[] {
+function urlsWithLastmod(
+  count: number,
+  lastmods: (string | undefined)[],
+): { loc: string; lastmod?: string }[] {
   return Array.from({ length: count }, (_, i) => ({
     loc: `https://example.com/p${i}`,
     lastmod: lastmods[i % lastmods.length],
@@ -75,25 +78,25 @@ function multi(
 describe("crawl/sitemap-lastmod-churn", () => {
   test("no sitemap → skipped", async () => {
     const site = ctx([]).site;
-    const { checks } = (await sitemapLastmodChurnRule.run({
+    const { checks } = await sitemapLastmodChurnRule.run({
       page: { url: "https://example.com/", html: "", statusCode: 200, loadTime: 0, headers: {} },
       parsed: {} as ParsedPage,
       site: { ...site, sitemaps: null },
       options: {},
-    } as unknown as RuleContext));
+    } as unknown as RuleContext);
     expect(checks[0]?.status).toBe("skipped");
   });
 
   test("fewer than 20 URLs with lastmod → skipped, not pass", async () => {
     const urls = urlsWithLastmod(10, ["2024-01-01"]);
-    const { checks } = (await sitemapLastmodChurnRule.run(ctx(urls)));
+    const { checks } = await sitemapLastmodChurnRule.run(ctx(urls));
     expect(checks[0]?.status).toBe("skipped");
     expect(checks[0]?.message).toContain("too small");
   });
 
   test("44 URLs all on one build date → warn, names date and counts", async () => {
     const urls = urlsWithLastmod(44, ["2024-06-01T10:00:00Z"]);
-    const { checks } = (await sitemapLastmodChurnRule.run(ctx(urls)));
+    const { checks } = await sitemapLastmodChurnRule.run(ctx(urls));
     const check = checks[0];
     expect(check?.status).toBe("warn");
     expect(check?.message).toContain("44");
@@ -103,27 +106,30 @@ describe("crawl/sitemap-lastmod-churn", () => {
 
   test(">=20 URLs but only 3 distinct days → does not warn", async () => {
     const urls = urlsWithLastmod(30, ["2024-01-01", "2024-02-01", "2024-03-01"]);
-    const { checks } = (await sitemapLastmodChurnRule.run(ctx(urls)));
+    const { checks } = await sitemapLastmodChurnRule.run(ctx(urls));
     expect(checks[0]?.status).toBe("pass");
   });
 
   test("lastmod spread across many days → pass", async () => {
-    const lastmods = Array.from({ length: 25 }, (_, i) => `2024-01-${String((i % 28) + 1).padStart(2, "0")}`);
+    const lastmods = Array.from(
+      { length: 25 },
+      (_, i) => `2024-01-${String((i % 28) + 1).padStart(2, "0")}`,
+    );
     const urls = urlsWithLastmod(25, lastmods);
-    const { checks } = (await sitemapLastmodChurnRule.run(ctx(urls)));
+    const { checks } = await sitemapLastmodChurnRule.run(ctx(urls));
     expect(checks[0]?.status).toBe("pass");
   });
 
   test("no lastmod on any URL → skipped, not warn", async () => {
     const urls = Array.from({ length: 44 }, (_, i) => ({ loc: `https://example.com/p${i}` }));
-    const { checks } = (await sitemapLastmodChurnRule.run(ctx(urls)));
+    const { checks } = await sitemapLastmodChurnRule.run(ctx(urls));
     expect(checks[0]?.status).toBe("skipped");
     expect(checks[0]?.status).not.toBe("warn");
   });
 
   test("6-page brochure site with only 6 lastmod URLs → skipped (below floor), not warn", async () => {
     const urls = urlsWithLastmod(6, ["2024-06-01"]);
-    const { checks } = (await sitemapLastmodChurnRule.run(ctx(urls)));
+    const { checks } = await sitemapLastmodChurnRule.run(ctx(urls));
     expect(checks[0]?.status).toBe("skipped");
   });
 
@@ -135,7 +141,7 @@ describe("crawl/sitemap-lastmod-churn", () => {
    */
   describe("news sitemaps", () => {
     test("news-only sample → skipped naming the reason, never warn (the allrecipes.com shape)", async () => {
-      const { checks } = (await sitemapLastmodChurnRule.run(
+      const { checks } = await sitemapLastmodChurnRule.run(
         multi([
           // The regular sitemap is present but yielded nothing: its children were unreachable.
           { url: "https://example.com/sitemap.xml", urls: [] },
@@ -145,16 +151,19 @@ describe("crawl/sitemap-lastmod-churn", () => {
             urls: urlsWithLastmod(38, ["2026-08-18T04:00:00Z", "2026-08-19T04:00:00Z"]),
           },
         ]),
-      ));
+      );
       expect(checks[0]?.status).toBe("skipped");
       expect(checks[0]?.status).not.toBe("warn");
       expect(checks[0]?.message).toContain("news");
-      expect(checks[0]?.details?.newsUrlsWithLastmod).toBe(38);
+      expect(checks[0]?.details?.newsUrlsExcluded).toBe(38);
     });
 
     test("news URLs are excluded from the count, so a well-spread regular sitemap still passes", async () => {
-      const spread = Array.from({ length: 25 }, (_, i) => `2024-01-${String((i % 28) + 1).padStart(2, "0")}`);
-      const { checks } = (await sitemapLastmodChurnRule.run(
+      const spread = Array.from(
+        { length: 25 },
+        (_, i) => `2024-01-${String((i % 28) + 1).padStart(2, "0")}`,
+      );
+      const { checks } = await sitemapLastmodChurnRule.run(
         multi([
           { url: "https://example.com/sitemap.xml", urls: urlsWithLastmod(25, spread) },
           {
@@ -163,7 +172,7 @@ describe("crawl/sitemap-lastmod-churn", () => {
             urls: urlsWithLastmod(38, ["2026-08-18T04:00:00Z", "2026-08-19T04:00:00Z"]),
           },
         ]),
-      ));
+      );
       expect(checks[0]?.status).toBe("pass");
       // The pooled count must be the regular sitemap's 25, NOT 63 — the news URLs are not merely
       // out-voted, they are absent.
@@ -172,16 +181,19 @@ describe("crawl/sitemap-lastmod-churn", () => {
     });
 
     test("a genuinely build-stamped regular sitemap still warns alongside a news sitemap", async () => {
-      const { checks } = (await sitemapLastmodChurnRule.run(
+      const { checks } = await sitemapLastmodChurnRule.run(
         multi([
-          { url: "https://example.com/sitemap.xml", urls: urlsWithLastmod(40, ["2024-06-01T10:00:00Z"]) },
+          {
+            url: "https://example.com/sitemap.xml",
+            urls: urlsWithLastmod(40, ["2024-06-01T10:00:00Z"]),
+          },
           {
             url: "https://example.com/news.xml",
             news: true,
             urls: urlsWithLastmod(38, ["2026-08-18T04:00:00Z"]),
           },
         ]),
-      ));
+      );
       expect(checks[0]?.status).toBe("warn");
       expect(checks[0]?.message).toContain("40");
       expect(checks[0]?.message).toContain("2024-06-01");
@@ -189,5 +201,70 @@ describe("crawl/sitemap-lastmod-churn", () => {
       expect(checks[0]?.message).toContain("https://example.com/sitemap.xml");
       expect(checks[0]?.message).not.toContain("news.xml");
     });
+  });
+});
+
+describe("crawl/sitemap-lastmod-churn boundaries (repo#1668)", () => {
+  const run = async (urls: { loc: string; lastmod?: string }[]) =>
+    (await sitemapLastmodChurnRule.run(ctx(urls))).checks[0];
+
+  test("19 URLs with lastmod on one day → skipped; 20 → judged (warn)", async () => {
+    expect((await run(urlsWithLastmod(19, ["2024-06-01"])))?.status).toBe("skipped");
+    expect((await run(urlsWithLastmod(20, ["2024-06-01"])))?.status).toBe("warn");
+  });
+
+  test("exactly 2 distinct days → warn; exactly 3 → pass", async () => {
+    expect((await run(urlsWithLastmod(20, ["2024-06-01", "2024-06-02"])))?.status).toBe("warn");
+    expect(
+      (await run(urlsWithLastmod(20, ["2024-06-01", "2024-06-02", "2024-06-03"])))?.status,
+    ).toBe("pass");
+  });
+
+  test("20+ URLs with no lastmod → skip message says the sitemap omits lastmod, not 'too small'", async () => {
+    const urls = Array.from({ length: 500 }, (_, i) => ({ loc: `https://example.com/p${i}` }));
+    const check = await run(urls);
+    expect(check?.status).toBe("skipped");
+    expect(check?.message).toContain("omits lastmod entirely");
+    expect(check?.message).not.toContain("too small");
+    expect(check?.skipReason).toBe("Sitemap omits lastmod");
+  });
+
+  test("a genuinely small lastmod-free sitemap still says too small", async () => {
+    const urls = Array.from({ length: 5 }, (_, i) => ({ loc: `https://example.com/p${i}` }));
+    const check = await run(urls);
+    expect(check?.message).toContain("too small");
+  });
+
+  test("offsets: three local days that collapse to 2 UTC days count as 3 (no false positive)", async () => {
+    const check = await run(
+      urlsWithLastmod(21, [
+        "2024-06-01T23:30:00+00:00",
+        "2024-06-02T00:30:00+02:00",
+        "2024-06-03T01:00:00+03:00",
+      ]),
+    );
+    expect(check?.status).toBe("pass");
+    expect(check?.details?.distinctDays).toBe(3);
+  });
+
+  test("offsets: one local build day with wide offsets stays one day (no masking)", async () => {
+    const check = await run(
+      urlsWithLastmod(30, [
+        "2024-06-01T12:00:00+14:00",
+        "2024-06-01T12:00:00+00:00",
+        "2024-06-01T12:00:00-12:00",
+      ]),
+    );
+    expect(check?.status).toBe("warn");
+    expect(check?.details?.distinctDays).toBe(1);
+  });
+
+  test("news sitemap row with isNewsSitemap undefined (pre-migration-21) fails open: judged like a regular sitemap", async () => {
+    const urls = urlsWithLastmod(38, ["2026-08-18T04:00:00Z", "2026-08-19T04:00:00Z"]);
+    const base = ctx(urls);
+    const discovered = base.site?.sitemaps?.discovered ?? [];
+    expect(discovered[0]?.isNewsSitemap).toBeUndefined();
+    const { checks } = await sitemapLastmodChurnRule.run(base);
+    expect(checks[0]?.status).toBe("warn");
   });
 });
