@@ -36,7 +36,7 @@ A `200` alone is never a hit. A path is reported only when the answer is a 2xx a
 
 ### What it stops on
 
-An HTTP `429` or a bot challenge (Cloudflare's `cf-mitigated: challenge`, or a challenge page) stops the run at once, with no retry, so the audit does not get your own IP banned. The probe budget running out, or a probe that failed with a network error or timeout, stops it being a clean result too. Any of these makes the check incomplete: hits already confirmed are still reported, and the paths not answered are listed as not checked rather than passed.
+An HTTP `429` or a bot challenge (Cloudflare's `cf-mitigated: challenge`, a challenge page, or a `403` that carries WAF markers such as `x-amzn-waf-*`, `x-sucuri-id`, `x-iinfo` or a DataDome cookie) stops the run at once, with no retry, so the audit does not get your own IP banned. The probe budget running out, a path that answered with a `5xx`, or a probe that failed with a network error or timeout, stops it being a clean result too. A `401` or a `403` the server sent itself, with no WAF marker, means the path is protected: a real answer. Any of these makes the check incomplete: hits already confirmed are still reported, and the message names how many paths were not verified: they are listed as not checked rather than passed.
 
 ### Results
 

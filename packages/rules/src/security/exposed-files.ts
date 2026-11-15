@@ -50,7 +50,7 @@ import {
   type SensitiveFile,
   type SignatureMatch,
 } from "./exposed-files-allowlist";
-import { readCappedBytes } from "./probe-http";
+import { isThrottledOrChallenged, readCappedBytes } from "./probe-http";
 
 const CHECK = "exposed-files";
 const CLEAN = "exposed-files-none";
@@ -138,14 +138,9 @@ async function sendProbe(
   }
 }
 
-const CHALLENGE_TITLE_RE = /<title>\s*(Just a moment\.\.\.|Attention Required! \| Cloudflare|Access denied \| [^<]*Cloudflare|DDoS-Guard)\s*<\/title>/i;
-
 /** Rate limited or challenged: the site is pushing back, so no further probe is sent. */
 export function isPushback(answer: ProbeAnswer): boolean {
-  if (answer.status === 429) return true;
-  if (answer.headers.get("cf-mitigated")?.toLowerCase() === "challenge") return true;
-  if (answer.status === 403 || answer.status === 503) return CHALLENGE_TITLE_RE.test(answer.text);
-  return false;
+  return isThrottledOrChallenged(answer);
 }
 
 function isSuccess(status: number): boolean {
@@ -290,6 +285,7 @@ export const exposedFilesRule: Rule = {
     let probed = 0;
     let errored = 0;
     let redirected = 0;
+    let serverErrors = 0;
 
     const baselineOutcome = await sendProbe(ctx, origin, randomBaselinePath(), "GET");
     let baseline: ProbeAnswer | null = null;
@@ -317,6 +313,11 @@ export const exposedFilesRule: Rule = {
           stopped = "pushback";
           break;
         }
+        if (answer.status >= 500) {
+          // A server error says nothing about the path: not checked (#1920).
+          serverErrors++;
+          continue;
+        }
         if (answer.status >= 300 && answer.status < 400) {
           // Never followed, wherever it points.
           redirected++;
@@ -329,23 +330,38 @@ export const exposedFilesRule: Rule = {
     }
 
     const checks: CheckResult[] = hits.map(hitCheck);
-    const runDetails = { ...listDetails, probed, errored, redirected, exposed: hits.length };
+    const total = SENSITIVE_FILES.length;
+    // Every path not answered: never reached, errored, a server error, or the
+    // one that drew the pushback.
+    const unverified = total - (probed - errored - serverErrors - (stopped === "pushback" && probed > 0 ? 1 : 0));
+    const runDetails = {
+      ...listDetails,
+      probed,
+      errored,
+      serverErrors,
+      redirected,
+      exposed: hits.length,
+      unverified,
+    };
 
     // A path that was never answered may be exposed, so any gap makes the run incomplete.
-    if (stopped !== null || errored > 0) {
-      const why =
-        stopped === "pushback"
-          ? `the site throttled the probes (HTTP 429) or answered with a bot challenge after ${probed} of ${SENSITIVE_FILES.length} path(s), so no further request was sent`
-          : stopped === "budget"
-            ? `the probe budget ran out after ${probed} of ${SENSITIVE_FILES.length} path(s)`
-            : `${errored} of ${SENSITIVE_FILES.length} probe(s) failed with a network error or timeout`;
+    if (unverified > 0) {
+      const why: string[] = [];
+      if (stopped === "pushback") {
+        why.push(
+          `the site throttled the probes (HTTP 429) or answered with a bot challenge after ${probed} of ${total} path(s), so no further request was sent`
+        );
+      }
+      if (stopped === "budget") why.push(`the probe budget ran out after ${probed} of ${total} path(s)`);
+      if (errored > 0) why.push(`${errored} probe(s) failed with a network error or timeout`);
+      if (serverErrors > 0) why.push(`${serverErrors} path(s) answered with a server error (5xx)`);
       checks.push({
         name: INCOMPLETE,
         status: "skipped",
         skipReason: PROBE_INCOMPLETE_SKIP_REASON,
-        message: `Exposed sensitive files check incomplete: ${why}. The paths not answered were not checked`,
+        message: `Exposed sensitive files check incomplete: ${why.join("; ")}. ${unverified} of ${total} path(s) were not verified and may be exposed`,
         value: "not-checked",
-        details: { ...runDetails, stoppedBy: stopped ?? "errors" },
+        details: { ...runDetails, stoppedBy: stopped ?? (errored > 0 ? "errors" : "server-errors") },
       });
       return { checks };
     }

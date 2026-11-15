@@ -90,7 +90,10 @@ describe("security/unauthenticated-api: activation", () => {
       }
     );
     expect(sent).toHaveLength(0);
-    expect(checks).toEqual([expect.objectContaining({ name: "unauthenticated-api", status: "pass" })]);
+    // Nothing eligible to probe is not checked, never a pass (#1920).
+    expect(checks).toEqual([
+      expect.objectContaining({ name: "unauthenticated-api-unchecked", status: "skipped", skipReason: "no-endpoints" }),
+    ]);
   });
 });
 

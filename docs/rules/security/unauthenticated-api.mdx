@@ -72,12 +72,12 @@ A field name that looks like data itself, such as an email address, a long numbe
 - `unauthenticated-api-sensitive` (fail): records with credential, personal or internal fields. Message: `1 API endpoint(s) return records with credential, personal or internal fields to a request with no cookies or Authorization header, for example https://example.com/api/users (password_hash, email, role)`.
 - `unauthenticated-api-data` (warn): records with user-identity fields, or with fields that do not say whether the data is public.
 - `unauthenticated-api-public` (info): records that read as published content.
-- `unauthenticated-api` (pass): no probed endpoint returned records, or no endpoint could be probed.
-- `unauthenticated-api-unchecked` (skipped): probing is passive (`probing-passive`), the shared probe budget ran out before or partway through the endpoints (`probe-budget`), or every probe failed with a network error or timeout (`probe-errors`). A run cut short is never a pass, because the endpoints it did not reach were not checked.
+- `unauthenticated-api` (pass): every probed endpoint answered and none returned records.
+- `unauthenticated-api-unchecked` (skipped): probing is passive (`probing-passive`), no API endpoint was found in page code (`no-endpoints`), the shared probe budget ran out before or partway through the endpoints (`probe-budget`), every probe failed with a network error or timeout (`probe-errors`), or some endpoints were not verified (`probe-incomplete`). An endpoint is not verified when it answers with an HTTP `429`, a bot challenge (a challenge page, or a `403` that carries WAF markers such as `cf-mitigated`, `x-amzn-waf-*`, `x-sucuri-id` or a DataDome cookie) or a `5xx`, or when the probe times out. A `429` or a challenge stops the run at once. Findings for the endpoints that did answer are still reported, and the message names how many were not verified. A run with any endpoint not verified is never a pass.
 
 ### What is not flagged
 
-- A `401`, `403`, any other non-2xx status, or a redirect (to a login page, for example).
+- A `401`, a `403` the app sent itself (a JSON or plain answer with no WAF marker), any other `4xx`, or a redirect (to a login page, for example). The endpoint is protected, and that counts as a real answer.
 - An HTML page, a catch-all route, or a body that is not JSON.
 - A JSON body with no records: a health answer such as `{"status":"ok"}`, an error such as `{"error":"unauthorized","message":"Sign in"}`, an empty list or a list of plain values.
 
