@@ -568,6 +568,13 @@ export interface SiteData {
     /** Bytes of the stored HTML response, when the crawler recorded them. */
     sizeBytes?: number | null;
     /**
+     * When the crawler fetched the page (epoch ms, PageRecord.fetchedAt). Rules that judge an
+     * absolute response time such as Expires measure it against this when the response carried
+     * no Date header, never against the wall clock: re-analysing an old crawl is not "now".
+     * Absent on callers that do not record it.
+     */
+    fetchedAt?: number;
+    /**
      * The page's HTML came from a browser render (see PageData.rendered). Read by
      * links/broken-anchors on the v1 path, where the DOM is present; the streaming
      * path takes the same judgement from ctx.collectedSignals.
