@@ -55,6 +55,13 @@ const shortener = Bun.serve({
         headers: { location: n >= last ? "/" : `/${chain[1]}${n + 1}` },
       });
     }
+    // A hop the egress guard refuses even for a local start URL (cloud metadata).
+    if (pathname === "/to-metadata") {
+      return new Response(null, {
+        status: 302,
+        headers: { location: "http://169.254.169.254/latest/meta-data/" },
+      });
+    }
     if (pathname === "/loop-a") {
       return new Response(null, {
         status: 302,
@@ -294,5 +301,15 @@ describe("start-URL redirect chains (#1281)", () => {
     };
     expect(outcome.status).toBe("redirected");
     expect(outcome.redirectChain.length).toBeGreaterThanOrEqual(2);
+  }, 90_000);
+
+  test("a hop to the metadata address is refused and reported, flag or not, and never requested", async () => {
+    for (const flags of [[], ["--follow-redirect"]]) {
+      const r = await audit(`${shortener.url.origin}/to-metadata`, ...flags);
+      expect(r.code).toBe(4);
+      const outcome = JSON.parse(r.out) as { status: string };
+      expect(outcome.status).toBe("redirected");
+      expect(r.out).not.toContain("Shortener home");
+    }
   }, 90_000);
 });
