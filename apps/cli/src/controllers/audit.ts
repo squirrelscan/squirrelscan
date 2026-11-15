@@ -186,7 +186,10 @@ import {
   domainToProjectName,
   resolveProjectDbPath,
 } from "@/crawler/storage";
-import { retainGlobalContentStore } from "@/crawler/storage/content-store";
+import {
+  getGlobalContentStorePutCounts,
+  retainGlobalContentStore,
+} from "@/crawler/storage/content-store";
 import {
   warnEvictedPages,
   warnRefetchedPages,
@@ -1316,6 +1319,7 @@ export async function runAudit(
     const releaseContentStore = retainGlobalContentStore({
       configMaxBytes: mergedConfig.storage.content_store_max_bytes,
     });
+    const putCountsBefore = getGlobalContentStorePutCounts();
 
     try {
       // ============================================
@@ -3227,6 +3231,13 @@ export async function runAudit(
       });
 
       if (resumeReport) report.resume = resumeReport;
+      const putCountsAfter = getGlobalContentStorePutCounts();
+      if (putCountsBefore && putCountsAfter) {
+        report.contentStore = {
+          stored: putCountsAfter.stored - putCountsBefore.stored,
+          reused: putCountsAfter.reused - putCountsBefore.reused,
+        };
+      }
       return ok(report);
     } finally {
       // Clean up event subscription fiber if it was started

@@ -211,6 +211,8 @@ export class ContentStore {
    * prunes the whole overshoot down to target on its first page.
    */
   private totalBytesCache: number | null = null;
+  /** put() outcomes in this process: bodies written vs already in the store (#1914). */
+  private putCounts = { stored: 0, reused: 0 };
 
   constructor(dbPath?: string, maxBytes?: number) {
     this.dbPath = dbPath ?? getContentStorePath();
@@ -430,7 +432,10 @@ export class ContentStore {
           "UPDATE content SET last_accessed = ?, access_count = access_count + 1 WHERE hash = ?"
         )
         .run(now, hash);
-      if (touched.changes > 0) return hash;
+      if (touched.changes > 0) {
+        this.putCounts.reused++;
+        return hash;
+      }
     } else {
       // A keyed replacement bills the running total for the size delta rather
       // than the whole new row, so it needs the old size.
@@ -443,6 +448,7 @@ export class ContentStore {
     // keyed replacement: a prune in another process can delete the row between
     // the SELECT above and this write, and a plain UPDATE would then report
     // success while storing nothing.
+    this.putCounts.stored++;
     const buffer = typeof content === "string" ? Buffer.from(content) : content;
     const compressed = gzipSync(buffer, { level: 6 }); // Balance speed/size
     const originalSize = buffer.length;
@@ -475,6 +481,11 @@ export class ContentStore {
     this.maybePrune(compressedSize - (existing?.compressed_size ?? 0));
 
     return hash;
+  }
+
+  /** Cumulative put() outcomes for this process: bodies stored fresh vs reused (#1914). */
+  getPutCounts(): { stored: number; reused: number } {
+    return { ...this.putCounts };
   }
 
   /**
@@ -812,6 +823,14 @@ export function retainGlobalContentStore(opts: {
     logger.debug("content store retention unavailable", error);
     return () => {};
   }
+}
+
+/** Cumulative stored-vs-reused counts of the global store, or null if none is open (#1914). */
+export function getGlobalContentStorePutCounts(): {
+  stored: number;
+  reused: number;
+} | null {
+  return globalContentStore ? globalContentStore.getPutCounts() : null;
 }
 
 export function closeGlobalContentStore(): void {

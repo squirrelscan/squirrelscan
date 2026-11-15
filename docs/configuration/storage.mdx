@@ -291,6 +291,28 @@ In JSON, `squirrel report` carries it as `meta.storeIntegrity`, `squirrel pages 
 [`squirrel self doctor`](/cli/self#doctor) shows the store's size, the cap and
 the last eviction.
 
+## Running a cold audit
+
+The content store is shared by every project, so a new `--project-name` does not
+give you a cold run: the crawl is new, but a page body that is already in the
+store is reused instead of written again. That is the right behavior for a cache
+and the wrong one for a benchmark.
+
+To audit against an empty store, point the run at a new file:
+
+```bash
+squirrel audit https://example.com --content-store /tmp/cold-store.db
+```
+
+`--content-store` is the same as setting `SQUIRREL_CONTENT_STORE_PATH` for one
+run. It takes a file path, not a folder, and the file is created if it does not
+exist. Delete the file when you are done; the default store is not touched.
+
+When a run reused page bodies, the summary says how many, for example
+`Content store: 812 of 900 page bodies were already stored`. The JSON report
+carries the same counts as `contentStore: { stored, reused }`. A run with a high
+`reused` count was not cold, which also explains a suspiciously fast re-run.
+
 ## Running several audits at once
 
 Any number of `squirrel` processes can run on one machine at once, for example a batch that audits ten sites in parallel. They share the [content store](#content_store_max_bytes) and the external link cache in `~/.squirrel`, and each project has its own database.
