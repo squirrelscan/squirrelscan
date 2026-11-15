@@ -1,6 +1,10 @@
-# The bundled model
+# Treetop model card
 
-The weights are `treetop-pagetype-v1`, MIT licensed like the rest of this repository. They are the file `assets/classifier-v2.json`.
+Treetop is the name of squirrelscan's DOM classifier: squirrels live in trees, and the model reads the DOM tree. The bundled weights are `treetop-pagetype-v1`, MIT licensed like the rest of this repository. They are the file `assets/classifier-v2.json`. The npm package keeps the name `@squirrelscan/page-classifier`.
+
+**Intended use.** Naming the part of a page a link or node sits in, the page type, and the purpose of a section, as a fallback where the page's own markup says nothing. It is an aid to audit findings, not a judge of a site. It runs offline inside `squirrel`. It is not trained or evaluated for ranking, moderation or any decision about people.
+
+**Licence.** The weights and the runtime in this repository are MIT. The label data and training corpus are not part of this repository and are not released.
 
 `assets/classifier-v2.json` holds three gradient-boosted tree heads that read the same per-node feature vector: a region head (10 classes: header, footer, navigation, sidebar, main content, content block, article chrome, form, search, dialog), a page type head (12 classes) and a section purpose head (17 classes, `none` included). It is weights, class names and per-class confidence thresholds. It holds no vocabulary and no page text: words and attributes are hashed into 512 buckets before scoring, and `tests/artifact-contents.test.ts` fails if any other string appears.
 
@@ -22,6 +26,18 @@ Nothing derived from JSON-LD, microdata or `og:type` is a feature.
 ## How answers are chosen
 
 Every class has its own threshold, picked on held-out pages so that precision holds. A class that could not hold the bar abstains (its threshold is above 1) and never answers. A region or page type answer below its threshold falls back to what the page's markup says. The region head is asked only about nodes whose own markup says nothing; the section head scores every candidate node, a declared landmark included.
+
+## Thresholds per class
+
+These are the abstention thresholds stored in the artifact. A value above 1 means the class never answers.
+
+| Head | Class: threshold |
+| --- | --- |
+| Region | site_header 0.85, footer 0.82, navigation 0.94, sidebar 0.87, content_block 0.95, dialog 0.94; main_content, article_chrome, form and search abstain |
+| Page type | homepage 0.30 (URL rule only, see README), product_detail 0.94, product_listing 0.98, article 0.95, blog_post 0.74, about 0.77, contact 0.68, docs 0.87, legal 0.56, pricing 0.93, listing_index 0.97, other 0.91 |
+| Section purpose | listed below |
+
+Held-out precision and coverage are published here for the section head only. Per-class holdout numbers for the region and page type heads are not yet published.
 
 ## Section purpose precision
 
@@ -47,3 +63,10 @@ The other classes abstain (`ad`, `comments`, `cookie_consent`, `locale_switcher`
 - The head sometimes names a wrapper around the real section, not the section itself.
 - Recall is low for the rarer classes, roughly 0.2 to 0.5. No answer does not mean the section is absent.
 - Its text cues cover English and four other European languages. Unusual markup, outside the conventions of common themes and frameworks, gets fewer answers.
+
+## Training data and licences
+
+- **Customer data.** The artifact stores no token vocabulary. Class and id words, text and attribute words and anchor hosts are hashed into 512 buckets before scoring, so no page string can be read back from the weights. `tests/artifact-contents.test.ts` allowlists the artifact's shape and fails on any other string, and it runs on every artifact swap.
+- **Ad and cookie labels.** Labels for the ad and cookie classes were derived offline from public filter lists (EasyList and the Fanboy lists, GPL and CC-BY-SA). No list text, selector or rule is stored in or shipped with the artifact, and both classes abstain in the bundled model.
+- **Model-assisted labels.** Part of the section labels were produced with a hosted language model service.
+- **Label data and corpus.** Not released.
