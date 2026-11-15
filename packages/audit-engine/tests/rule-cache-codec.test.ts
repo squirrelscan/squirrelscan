@@ -281,6 +281,7 @@ describe("run context", () => {
     cloudResults: undefined,
     ignoreApplicability: false,
     utcYear: 2026,
+    utcMonth: 5,
     timeZone: "UTC",
   };
   const hashOf = async (over: Partial<typeof base>) => {
@@ -297,6 +298,11 @@ describe("run context", () => {
   // a pass cached on 31 December must not replay on 1 January.
   test("moves with the UTC year", async () => {
     expect(await hashOf({ utcYear: 2027 })).not.toBe(await hashOf({}));
+  });
+
+  // `content/stale-dated-copy` compares copy against the calendar month.
+  test("moves with the UTC month", async () => {
+    expect(await hashOf({ utcMonth: 6 })).not.toBe(await hashOf({}));
   });
 
   // The escape hatch changes a gated rule from a `skipped` check to its real

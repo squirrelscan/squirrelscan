@@ -26,6 +26,7 @@ async function hashOf(ignore: IgnoreEntry[] | undefined, only?: string): Promise
     cloudResults: undefined,
     ignoreApplicability: false,
     utcYear: 2026,
+    utcMonth: 5,
     timeZone: "UTC",
   });
   if (!("hash" in out)) throw new Error(`disabled: ${out.disabled}`);

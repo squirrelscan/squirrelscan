@@ -3497,6 +3497,7 @@ export function runStreamingRules(
               (config.rules as { ignore_applicability?: boolean } | undefined)
                 ?.ignore_applicability === true,
             utcYear: new Date().getUTCFullYear(),
+            utcMonth: new Date().getUTCMonth(),
             timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           }),
         );
