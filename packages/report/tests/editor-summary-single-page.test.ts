@@ -73,3 +73,19 @@ describe("coverage.singlePageSite", () => {
     expect(req.coverage?.singlePageSite).toBeUndefined();
   });
 });
+
+describe("coverage.creditsStopped (repo#2145)", () => {
+  test("a credit stop is sent and suppresses singlePageSite", () => {
+    const req = buildEditorSummaryRequest(
+      report({
+        scanScope: { origin: "cloud", pagesCrawled: 1, capped: false, stopReason: "credits" },
+      } as Partial<AuditReport>),
+    );
+    expect(req.coverage).toEqual({
+      scannedPages: 1,
+      capped: false,
+      timeStopped: false,
+      creditsStopped: true,
+    });
+  });
+});

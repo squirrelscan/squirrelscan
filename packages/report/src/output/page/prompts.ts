@@ -108,11 +108,13 @@ export function coverageGap(input: {
   discovered: number;
   capped: boolean;
   timeStopped: boolean;
+  creditsStopped?: boolean;
 }): CoverageGap | null {
   const whole = (n: number) => (Number.isFinite(n) && n > 0 ? Math.floor(n) : 0);
   const scanned = whole(input.scanned);
   const discovered = whole(input.discovered);
-  if (discovered <= scanned && !input.capped && !input.timeStopped) return null;
+  if (discovered <= scanned && !input.capped && !input.timeStopped && !input.creditsStopped)
+    return null;
   // Room above what is known (link discovery is a floor), rounded to a tidy number.
   const want = Math.max(discovered, scanned * 2);
   const suggestedPages = Math.ceil((want * 1.2) / 50) * 50;

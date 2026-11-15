@@ -7,10 +7,7 @@ import type {
   ResumeOutcome,
   StoreIntegrityEvicted,
 } from "@squirrelscan/core-contracts";
-import type {
-  AuditLevel,
-  ResolvedAuditSettings,
-} from "@squirrelscan/core-contracts/audit-levels";
+import type { AuditLevel, ResolvedAuditSettings } from "@squirrelscan/core-contracts/audit-levels";
 import type { IgnoreSummary } from "@squirrelscan/core-contracts/ignore";
 import type {
   SeedRedirectHop,
@@ -708,7 +705,7 @@ export interface AuditReport {
     canonicalVariants?: number;
     capped: boolean;
     /** The crawl time budget ended the crawl early (the page cap was not the reason). */
-    stopReason?: "time";
+    stopReason?: "time" | "credits";
     /** In-scope URLs left queued, never fetched, when the crawl stopped. */
     unfetched?: number;
     /** Discovered and audited page counts per URL-based page type (#1744). */
@@ -819,14 +816,7 @@ export interface AuditOptions {
   maxDurationSeconds?: number;
   /** Epoch ms the budget counts from (the command's start); unset = when the audit starts. */
   maxDurationStartedAt?: number;
-  outputFormat?:
-    | "json"
-    | "html"
-    | "console"
-    | "text"
-    | "markdown"
-    | "xml"
-    | "llm";
+  outputFormat?: "json" | "html" | "console" | "text" | "markdown" | "xml" | "llm";
   outputPath?: string;
   refresh?: boolean; // ignore cache, fetch all pages fresh
   storeScripts?: boolean; // #1255 / #1268: true keeps fetched first-party scripts in the content store for this run, false turns [storage] store_scripts off for it

@@ -117,7 +117,11 @@ function buildTopIssues(report: AuditReport, max: number): EditorSummaryIssueInp
  * offline audit did not check links instead of calling the site clean.
  */
 function buildNotChecked(report: AuditReport): EditorSummaryNotCheckedInput[] {
-  return notCheckedRules(report).map((r) => ({ ruleId: r.ruleId, title: r.name, reason: r.reason }));
+  return notCheckedRules(report).map((r) => ({
+    ruleId: r.ruleId,
+    title: r.name,
+    reason: r.reason,
+  }));
 }
 
 /** Build the per-category score lines (worst first), capped. */
@@ -196,7 +200,7 @@ const priorityOf = (ruleId: string): number => {
  */
 function buildChecks(
   report: AuditReport,
-  max: number
+  max: number,
 ): { failing: string[]; confirmed: string[] } | undefined {
   const failing = new Set<string>();
   const confirmed = new Set<string>();
@@ -248,17 +252,19 @@ function buildCoverage(report: AuditReport): EditorSummaryCoverageInput | undefi
   const unfetchedPages = count(report.rateLimited?.unfetched) ?? count(scope.unfetched);
   const capped = scope.capped === true;
   const timeStopped = scope.stopReason === "time";
+  const creditsStopped = scope.stopReason === "credits";
   const sections = singlePageSiteSections(report);
   return {
     scannedPages,
     ...(maxPages !== undefined ? { maxPages } : {}),
     capped,
     timeStopped,
+    ...(creditsStopped ? { creditsStopped } : {}),
     ...(knownPages !== undefined ? { knownPages } : {}),
     ...(unfetchedPages !== undefined ? { unfetchedPages } : {}),
     // Only when crawl/single-page-site fired AND the crawl stopped for no other
     // reason: a capped, time-stopped or unfetched crawl may just be short.
-    ...(sections !== undefined && !capped && !timeStopped && !unfetchedPages
+    ...(sections !== undefined && !capped && !timeStopped && !creditsStopped && !unfetchedPages
       ? { singlePageSite: true, sectionCount: sections }
       : {}),
   };
@@ -410,7 +416,11 @@ function guardedSummary(summary: EditorSummary, report: AuditReport): EditorSumm
 
 /** Display label for a priority's effort. */
 export function priorityEffortLabel(effort: EditorSummaryPriority["effort"]): string {
-  return effort === "quick-win" ? "Quick win" : effort === "significant" ? "Significant" : "Moderate";
+  return effort === "quick-win"
+    ? "Quick win"
+    : effort === "significant"
+      ? "Significant"
+      : "Moderate";
 }
 
 /**
@@ -460,7 +470,9 @@ export function summaryPageCounts(report: AuditReport): number[] {
     ...(unfetched > 0 ? [unfetched, (report.scanScope?.pagesCrawled ?? 0) + unfetched] : []),
     ...buildTopIssues(report, Number.POSITIVE_INFINITY).map((i) => i.occurrences),
   ];
-  return counts.filter((n): n is number => typeof n === "number" && Number.isSafeInteger(n) && n > 0);
+  return counts.filter(
+    (n): n is number => typeof n === "number" && Number.isSafeInteger(n) && n > 0,
+  );
 }
 
 /** The summary prose when no model sentence survives the text rules. */

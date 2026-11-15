@@ -411,6 +411,8 @@ export interface EditorSummaryCoverageInput {
   capped: boolean;
   /** The crawl time budget stopped the crawl (`scanScope.stopReason === "time"`). */
   timeStopped: boolean;
+  /** The audit's credit budget stopped the crawl (`scanScope.stopReason === "credits"`). Absent reads as false. */
+  creditsStopped?: boolean;
   /** Pages the audit knows exist (`coverage.knownPages`), when reported. */
   knownPages?: number;
   /**

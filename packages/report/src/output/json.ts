@@ -34,10 +34,7 @@ import type {
   PackedComponentOccurrence,
   PackedSubtreeLadder,
 } from "@squirrelscan/core-contracts/component-evidence";
-import {
-  JSON_REPORT_PAGES,
-  JSON_REPORT_SCHEMA_VERSION,
-} from "@squirrelscan/core-contracts/limits";
+import { JSON_REPORT_PAGES, JSON_REPORT_SCHEMA_VERSION } from "@squirrelscan/core-contracts/limits";
 import { packComponentOccurrences } from "@squirrelscan/core-contracts/component-evidence";
 import { packSiteResourceOccurrences } from "@squirrelscan/core-contracts/site-resource-evidence";
 import { componentOccurrenceKey } from "../component-fix-groups";
@@ -69,7 +66,15 @@ import { domainAgeYears, siteProfileRows } from "../site-metadata";
 import { editorSummaryView } from "../editor-summary";
 import type { IgnoreSummary } from "@squirrelscan/core-contracts/ignore";
 import { ruleRuns, type RuleRun } from "../rule-runs";
-import { robotsScope, canonicalVariantCount, followedStartRedirect, scanScopePageTypes, scanScopeTargeted, scanScopeUnfetched, seedRedirect } from "../coverage";
+import {
+  robotsScope,
+  canonicalVariantCount,
+  followedStartRedirect,
+  scanScopePageTypes,
+  scanScopeTargeted,
+  scanScopeUnfetched,
+  seedRedirect,
+} from "../coverage";
 import { safeIgnored } from "../ignored";
 import { privateTargetLine, privateTargetSkippedRules } from "../private-target";
 import { notCheckedLine, notCheckedRules } from "../not-checked";
@@ -155,12 +160,19 @@ export function pageOutcome(status: number): JsonPageOutcome {
  * skipped (a scan limit, a missing probe, an internal error) did not evaluate anything and is not listed.
  */
 export function collectExecutedRules(
-  ruleResults: Record<string, { checks: ReadonlyArray<{ status: string; provenance?: string }> } | undefined>,
+  ruleResults: Record<
+    string,
+    { checks: ReadonlyArray<{ status: string; provenance?: string }> } | undefined
+  >,
 ): string[] {
   // A check carried over from an earlier audit (a smart audit keeps findings of pages it did not re-crawl) is not a
   // rule that ran in this one.
   return Object.keys(ruleResults)
-    .filter((ruleId) => ruleResults[ruleId]?.checks.some((check) => check.status !== "skipped" && check.provenance !== "carried"))
+    .filter((ruleId) =>
+      ruleResults[ruleId]?.checks.some(
+        (check) => check.status !== "skipped" && check.provenance !== "carried",
+      ),
+    )
     .sort();
 }
 
@@ -251,10 +263,10 @@ interface SlimJsonReport {
      */
     requestedMaxPages?: number;
     /**
-     * `"time"` when the crawl time budget ended a cloud crawl early. Absent on a
+     * `"time"` when the crawl time budget ended a cloud crawl early, `"credits"` when the credit budget did. Absent on a
      * run that finished or hit the page cap.
      */
-    stopReason?: "time";
+    stopReason?: "time" | "credits";
     /**
      * In-scope URLs the crawl queued but never fetched before it stopped. Added
      * to the pages this run crawled (`coverage.auditedPages` on a smart audit,
@@ -442,9 +454,7 @@ interface SlimJsonReport {
        * `scope` (pub#846). Items the human renderers collapse carry a `siteWide` flag so an agent
        * gets the same collapse without re-deriving the threshold.
        */
-      items?: Array<
-        CheckItem & { scope?: RegionScope; siteWide?: { pages: number; of: number } }
-      >;
+      items?: Array<CheckItem & { scope?: RegionScope; siteWide?: { pages: number; of: number } }>;
       details?: Record<string, unknown>;
       observation?: {
         mode: "static" | "crawl" | "browser" | "field";
@@ -634,7 +644,7 @@ function buildSlimReport(
   pages?: readonly JsonPageRow[],
   pagesTotal?: number,
   redirects?: JsonRenderOptions["redirects"],
-  redirectsTotal?: number
+  redirectsTotal?: number,
 ): SlimJsonReport {
   const siteWide = siteWideContext(report);
   const categoryIssues = groupIssuesByCategory(report.ruleResults, report.checkTallies);
@@ -679,9 +689,7 @@ function buildSlimReport(
       ...(ignoredSummary ? { ignored: ignoredSummary } : {}),
       timestamp: report.timestamp,
       totalPages: report.totalPages,
-      ...(report.scanScope?.maxPages !== undefined
-        ? { maxPages: report.scanScope.maxPages }
-        : {}),
+      ...(report.scanScope?.maxPages !== undefined ? { maxPages: report.scanScope.maxPages } : {}),
       ...(report.scanScope?.requestedMaxPages !== undefined
         ? { requestedMaxPages: report.scanScope.requestedMaxPages }
         : {}),
@@ -696,9 +704,15 @@ function buildSlimReport(
       // #1777: a targeted run says which URLs it was given and which it did not audit.
       ...(scanScopeTargeted(report) ? { targeted: scanScopeTargeted(report) } : {}),
       // Query-string variants counted with their canonical page; `totalPages` excludes them (#858).
-      ...(canonicalVariantCount(report) > 0 ? { canonicalVariants: canonicalVariantCount(report) } : {}),
+      ...(canonicalVariantCount(report) > 0
+        ? { canonicalVariants: canonicalVariantCount(report) }
+        : {}),
       ...(canonicalVariantCount(report) > 0 && report.canonicalVariantPages?.length
-        ? { canonicalVariantPages: report.canonicalVariantPages.slice(0, 100).map((v) => ({ page: String(v.page), canonical: String(v.canonical) })) }
+        ? {
+            canonicalVariantPages: report.canonicalVariantPages
+              .slice(0, 100)
+              .map((v) => ({ page: String(v.page), canonical: String(v.canonical) })),
+          }
         : {}),
       ...(report.coverage ? { coverage: report.coverage } : {}),
       // The audit level and the settings it resolved to: `level` (a level's
@@ -933,9 +947,7 @@ function buildSlimReport(
           // truth rather than two that can disagree.
           ...(check.siteResourceOccurrences?.length
             ? {
-                siteResourceOccurrences: packSiteResourceOccurrences(
-                  check.siteResourceOccurrences,
-                ),
+                siteResourceOccurrences: packSiteResourceOccurrences(check.siteResourceOccurrences),
               }
             : {}),
           ...(check.siteResourceEvidence
@@ -998,7 +1010,8 @@ function buildSlimReport(
         }
       : {}),
     ...(report.host ? { host: report.host } : {}),
-    ...(report.technologies && (report.technologies.items.length > 0 || report.technologies.truncated)
+    ...(report.technologies &&
+    (report.technologies.items.length > 0 || report.technologies.truncated)
       ? {
           technologies: {
             ...(report.technologies.source ? { source: report.technologies.source } : {}),
@@ -1087,7 +1100,7 @@ export function renderJson(report: AuditReport, options?: JsonRenderOptions): st
     options?.pages,
     options?.pagesTotal,
     options?.redirects,
-    options?.redirectsTotal
+    options?.redirectsTotal,
   );
   return JSON.stringify(slim, null, 2);
 }
