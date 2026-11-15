@@ -1,0 +1,87 @@
+---
+title: "Font consistency: sprawl and one-page families"
+description: "Too many font families, or a family only one page uses, makes a site look stitched together. squirrel counts primary families across your inline styles and reports the outliers."
+---
+
+## What font consistency is
+
+`perf/font-delivery` and `perf/font-loading` look at what fonts cost to load. This rule asks a different question: does the site use one coherent set of typefaces? Three things break that: more families than a design needs, a family that a single page uses and no other, and an `@font-face` family that no `font-family` declaration names.
+
+## What squirrel checks
+
+The rule is site-wide and needs no account, no model and no credits. It counts the **primary** family of each `font-family` declaration, meaning the first name in the stack. Fallbacks such as Arial are not counted. Generic keywords (`serif`, `system-ui`), system-font stacks, `var()` values and icon fonts (Font Awesome, Material Icons and similar) are left out.
+
+Checks, by name:
+
+- `font-consistency` is skipped below 10 crawled pages (`Only 6 page(s) crawled; 10 needed to judge font consistency`), and skipped when no page declares a font in an inline style.
+- `font-sprawl` warns when the site uses more distinct families than `max_families` (default 4), and fails at twice the limit. Message: `6 distinct font families in use (limit 4)`.
+- `rogue-font-family` warns for each family used on exactly one page. It only runs when at least 5 pages declare a font, so there is a norm to depart from.
+- `unreferenced-font-face` is info for an `@font-face` family that no `font-family` stack names, with the weights and styles it loads.
+- `font-consistency` passes when none of the above applies.
+
+## Coverage today: inline styles only
+
+squirrel reads `<style>` blocks and `style=` attributes in each page's HTML. Linked stylesheet bodies are not fetched yet, so a family declared only in an external stylesheet is invisible. Every result says `inline styles only; linked stylesheets are not read` and carries `details.coverage = "inline-only"`. A site that declares fonts only in linked stylesheets is skipped with that reason, never reported as clean. Check linked stylesheets by hand before deleting an `unreferenced-font-face` family.
+
+## How to fix it
+
+Pick one family for text, optionally one for headings and one for code. Remove the rest and their `@font-face` rules and files. For a family on a single page, switch it to a site font or delete the pasted snippet that added it.
+
+## Options
+
+```toml squirrel.toml
+[rule_options."content/font-consistency"]
+max_families = 3
+```
+
+| | |
+|---|---|
+| **Rule ID** | `content/font-consistency` |
+| **Category** | [Content](/rules/content) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 2/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["content/font-consistency"]
+```
+
+### Disable all Content rules
+
+```toml squirrel.toml
+[rules]
+disable = ["content/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["content/font-consistency"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Related rules
+
+- [perf/font-delivery](/rules/perf/font-delivery): render-blocking font stylesheets, a delivery cost rather than a consistency question.
+- [perf/font-loading](/rules/perf/font-loading): font-display and swap behaviour.
+- [content/voice-consistency](/rules/content/voice-consistency): the same site-relative approach applied to reading level.
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Content section of the report. Signed-out local audits need no account and cost nothing. Signed-in audits spend credits.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Content section looks like on a real site.
+  </Card>
+</CardGroup>

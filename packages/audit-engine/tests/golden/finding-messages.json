@@ -559,6 +559,12 @@
    "duplicate-title|warn|# duplicate title(s) found across # pages||"
   ]
  },
+ "content/font-consistency": {
+  "digest": "149478060133416",
+  "lines": [
+   "font-consistency|skipped|No font declarations found in inline styles on # page(s); linked stylesheets are not read, so this is not a clean pass||"
+  ]
+ },
  "content/freshness": {
   "digest": "280733104328403",
   "lines": [

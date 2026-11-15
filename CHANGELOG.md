@@ -29,6 +29,10 @@ How it works:
 
 - An incremental audit that refetches an unchanged page now reports the headers that response carried, not the ones stored with the page (squirrelscan/repo#4765). A site that dropped an `X-Robots-Tag: noindex`, or added HSTS, without changing its HTML kept the old header in every later audit, and `core/robots-meta` reported a noindex the site no longer sent. A 200 whose body matched and a reused render (the conditional-render gate's probe) now replace the stored headers; an origin's own 304 updates the headers it resends and keeps the ones it omits, as HTTP caches do.
 
+### Added
+
+- New rule `content/font-consistency` (squirrelscan/repo#1376): flags font sprawl (more distinct primary font families site-wide than `max_families`, default 4), a family used on one page only, and `@font-face` families no `font-family` names. It reads `<style>` blocks and `style=` attributes only, because linked stylesheet bodies are not fetched yet, and every finding says so; a site with no inline font data is skipped, not passed. Icon fonts, generic keywords and system stacks are not counted, and a crawl under 10 pages is skipped. Local rule, no account, no credits. The per-page signal joins the site-dom-signals record, so each site's first audit after the upgrade runs fresh once.
+
 ## v0.0.183 (2026-11-17)
 
 Four new probing security rules check what a site hands to anyone who asks: open JSON APIs, sensitive JSON fields, exposed files such as `.env` and `.git`, and auth endpoints that leak the user record. Four more catch mixed locale conventions, inconsistent terminology, copy whose own date has passed and broken byline conventions. Large audits peak at about half the memory, and a probe that never got an answer is now reported as not checked instead of clean. This release adds 8 rules: 336 rules on by default, 28 of them in Security, 29 in Content, 16 in E-E-A-T and 4 in Internationalization.
