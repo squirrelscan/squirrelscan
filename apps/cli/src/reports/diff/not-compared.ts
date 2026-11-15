@@ -11,6 +11,8 @@ const REASON_TEXT: Record<NotComparedIssue["reason"], string> = {
   "rule-skipped-on-page": "the rule skipped the page in the current audit",
   "sampled-report":
     "the current report is a sampled export that cannot show the finding is gone",
+  "items-capped":
+    "the rule capped its item list in the current audit, so the item may sit past the cap",
   "not-evaluated": "the rule did not evaluate it in the current audit",
 };
 
