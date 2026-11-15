@@ -19,6 +19,7 @@ import {
   runStreamingRules,
   type PreFetchedAssets,
 } from "../src/adapter";
+import { parsePageRecord } from "../src/site-fetch";
 
 const BASE = "https://site.example.com";
 const LANDING = `${BASE}/v3/signin/identifier?continue=x`;
@@ -107,7 +108,16 @@ async function orphanChecks(
           avgLoadTimeMs: 0,
         },
       } as never);
-      for (const page of PAGES) yield* storage.upsertPage(crawlId, page);
+      for (const page of PAGES) {
+        // A real crawl stores the parse with the page, and the streaming siteQuery reads the links
+        // from it (#1022); the v1 path reads them off the HTML.
+        let stored = page;
+        if (engine === "streaming") {
+          const { document: _document, ...parse } = parsePageRecord(page)!;
+          stored = { ...page, parsedData: JSON.stringify(parse) };
+        }
+        yield* storage.upsertPage(crawlId, stored);
+      }
 
       let result;
       if (engine === "streaming") {
