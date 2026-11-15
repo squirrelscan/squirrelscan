@@ -132,6 +132,8 @@ async function seed(options: {
   map: EntityMap;
   /** Overrides the map's own page list; use it to seed a narrower re-crawl. */
   crawledPages?: string[];
+  /** Seed a crawl from before repo#2105: no map was ever written for it. */
+  neverWroteMap?: boolean;
 }): Promise<string> {
   const { createStorage } = await import("@/crawler/storage");
   const { storeEntityMap } = await import("@/audit/entity-map");
@@ -194,11 +196,13 @@ async function seed(options: {
         } as unknown as Parameters<typeof storage.upsertPage>[1])
       );
     }
-    await storeEntityMap({
-      storage: storage as import("@/crawler/storage/sqlite").SQLiteStorage,
-      crawlId,
-      map: options.map,
-    });
+    if (!options.neverWroteMap) {
+      await storeEntityMap({
+        storage: storage as import("@/crawler/storage/sqlite").SQLiteStorage,
+        crawlId,
+        map: options.map,
+      });
+    }
     return crawlId;
   } finally {
     await Effect.runPromise(
@@ -902,7 +906,7 @@ describe("an audit the loader passed over is named, not hidden", () => {
   // wipes a site's JSON-LD makes today's audit store nothing, the loader falls
   // back to yesterday, and an agent asking "is the structured data OK" is shown
   // yesterday's healthy graph with no indication it is looking at the past.
-  test("list_entities warns when a newer audit stored no entities", async () => {
+  test("list_entities warns when a newer audit never wrote a map", async () => {
     const good = await seed({
       project: "regressed",
       baseUrl: "https://regressed.example/",
@@ -917,6 +921,7 @@ describe("an audit the loader passed over is named, not hidden", () => {
       project: "regressed",
       baseUrl: "https://regressed.example/",
       startedAt: 2_000_000,
+      neverWroteMap: true,
       map: {
         ...empty,
         summary: { ...empty.summary, nodeCount: 0, countsByType: {} },
@@ -938,6 +943,35 @@ describe("an audit the loader passed over is named, not hidden", () => {
     // And it names the audit it passed over, so the agent can go look.
     expect(warnings.join(" ")).toContain(wiped);
     expect(warnings.join(" ")).toContain("NOT the most recent");
+  });
+
+  test("a completed empty map is the latest audit, not a passed-over one (repo#2105)", async () => {
+    await seed({
+      project: "wiped-for-real",
+      baseUrl: "https://wiped.example/",
+      startedAt: 1_000_000,
+      map: synthetic({ withId: true, site: "https://wiped.example/" }),
+    });
+    const empty = synthetic({ withId: true, site: "https://wiped.example/" });
+    const wiped = await seed({
+      project: "wiped-for-real",
+      baseUrl: "https://wiped.example/",
+      startedAt: 2_000_000,
+      map: {
+        ...empty,
+        summary: { ...empty.summary, nodeCount: 0, countsByType: {} },
+        nodes: [],
+        edges: [],
+        pages: empty.pages.map((page) => ({
+          ...page,
+          declares: [],
+          entityCount: 0,
+        })),
+      },
+    });
+    const { data } = await call("list_entities");
+    expect(data.runId).toBe(wiped);
+    expect((data.warnings as string[] | undefined) ?? []).toEqual([]);
   });
 
   test("no warning when the latest audit is the one returned", async () => {
