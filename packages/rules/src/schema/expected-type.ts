@@ -25,6 +25,9 @@ import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 import { UNREADABLE_MESSAGE, bareTypeName, jsonLdTypes, microdataAndRdfaTypes } from "./markup-types";
 
+/** `skipReason` of the check emitted when the page classifier did not run. */
+export const CLASSIFIER_OFF_SKIP_REASON = "classifier-off";
+
 export const optionsSchema = z.object({
   min_confidence: z
     .number()
@@ -218,7 +221,22 @@ export const expectedTypeSchemaRule: Rule = {
 
   run(ctx: RuleContext): RuleResult {
     const opts = optionsSchema.parse(ctx.options ?? {});
-    const pageType = ctx.parsed.classification?.pageType;
+    // No classification at all means the classifier did not run (`--no-classifier`,
+    // `classifier.enabled = false`, or a parse stored before it existed). The user
+    // chose that, so it is a not-checked line, never an info finding on every page.
+    if (!ctx.parsed.classification) {
+      return {
+        checks: [
+          {
+            name: "expected-type",
+            status: "skipped",
+            skipReason: CLASSIFIER_OFF_SKIP_REASON,
+            message: "Not checked: the page classifier is off (--no-classifier or classifier.enabled = false)",
+          },
+        ],
+      };
+    }
+    const pageType = ctx.parsed.classification.pageType;
 
     // Model answers only: a rules label is read from the schema (circular) or is a
     // low-confidence default.
