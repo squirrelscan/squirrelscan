@@ -71,9 +71,14 @@ export function resolveNow(option: string | undefined): Ym {
 }
 
 /** An ISO-ish datetime, or a 10/13 digit epoch, as a month. */
-export function parseMachineDate(raw: string | null | undefined): Ym | undefined {
+export function parseMachineDate(
+  raw: string | null | undefined,
+  allowBareYear = true,
+): Ym | undefined {
   const value = (raw ?? "").trim();
   if (!value) return undefined;
+  // A bare 4-digit number is a year in <time datetime>, but a seconds-remaining value in a countdown attribute.
+  if (!allowBareYear && /^\d{4}$/.test(value)) return undefined;
   if (/^\d{13}$/.test(value) || /^\d{10}$/.test(value)) {
     const d = new Date(value.length === 13 ? Number(value) : Number(value) * 1000);
     return Number.isNaN(d.getTime()) ? undefined : { year: d.getUTCFullYear(), month: d.getUTCMonth() };
@@ -243,7 +248,7 @@ function scanCountdowns(doc: Document, now: Ym): Claim[] {
     for (const t of el.querySelectorAll("time[datetime]") as Iterable<Element>) candidates.push(t.getAttribute("datetime"));
     candidates.push(el.getAttribute("datetime"));
     for (const raw of candidates) {
-      const date = parseMachineDate(raw);
+      const date = parseMachineDate(raw, false);
       if (date && hasPassed(date, now)) {
         seen.add(el);
         out.push({ kind: "countdown", text: clip(el.textContent || raw || ""), date: fmt(date) });

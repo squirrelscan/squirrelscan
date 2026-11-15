@@ -73,6 +73,12 @@ describe("content/stale-dated-copy", () => {
     expect(c.status).toBe("fail");
   });
 
+  test("a bare 4-digit countdown value is seconds remaining, not a year", () => {
+    expect(parseMachineDate("2000")).toEqual({ year: 2000 });
+    expect(parseMachineDate("2000", false)).toBeUndefined();
+    expect(run('<div class="countdown" data-countdown="2000">00:33:20</div>').status).toBe("pass");
+  });
+
   test("future countdown is clean", () => {
     expect(run('<div class="countdown" data-countdown-to="2027-01-01T00:00:00Z">9d</div>').status).toBe("pass");
   });
