@@ -2,7 +2,13 @@
 // URL appended as it finishes, so a batch that dies can be resumed with `--skip-existing`. The child is injected, so the
 // runner is tested without a network.
 
-import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+} from "node:fs";
 import { join } from "node:path";
 
 import type { BatchRecord, BatchStatus } from "./manifest";
@@ -225,6 +231,8 @@ export async function runBatch(
       });
       let child: ChildResult;
       try {
+        // A report left by an earlier run must not be read as this attempt's result when the child writes nothing.
+        rmSync(reportFile, { force: true });
         child = await options.runChild(entry.url, reportFile);
       } catch (error) {
         child = { exitCode: null, timedOut: false };

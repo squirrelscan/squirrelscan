@@ -144,6 +144,29 @@ describe("runBatch", () => {
     expect(retry.exitCode).toBe(0);
   });
 
+  test("a re-run whose child writes no report does not reuse the old report", async () => {
+    const out = tmp();
+    const parsed = list("https://a.example.com/\n");
+    await runBatch({ ...base(out, parsed), runChild: fakeChild([]) });
+    const fail = new Set(["https://a.example.com/"]);
+    const s = await runBatch({
+      ...base(out, parsed),
+      skipExisting: false,
+      runChild: fakeChild([], fail),
+    });
+    expect(s.counts.completed ?? 0).toBe(0);
+    expect(s.exitCode).toBe(6);
+    expect(s.averageScore).toBeUndefined();
+    const recs = parseManifest(
+      readFileSync(join(out, "results.jsonl"), "utf8")
+    ).records;
+    const last = recs[recs.length - 1];
+    expect(last.attempt).toBe(2);
+    expect(last.status).not.toBe("completed");
+    expect(last.score).toBeUndefined();
+    expect(last.report).toBeUndefined();
+  });
+
   test("a timeout is recorded as timeout and a signal death as crashed", async () => {
     const out = tmp();
     const parsed = list("https://a.example.com/\nhttps://b.example.com/\n");
