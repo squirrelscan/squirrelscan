@@ -139,6 +139,26 @@ export function getRenderedProseText(element: Element): string {
 }
 
 /**
+ * `getRenderedProseText` with a newline at EVERY element boundary, inline ones
+ * included, so no two elements' text ever fuses.
+ *
+ * Only for content/mojibake. Real mojibake is a byte-level corruption of one
+ * string, so it never legitimately spans an element boundary: `<span>Ã</span><span>©</span>`
+ * is two clean characters, not `Ã©`. The boundary is a newline, never a space,
+ * because `"Ã"` + U+00A0 and `"Â"` + U+00A0 are mojibake sequences themselves. Other
+ * readers of rendered prose keep the block-only boundaries of `getRenderedProseText`
+ * (a word split by an inline tag, as in `<b>Hel</b>lo`, must stay one word for them).
+ */
+export function getElementBoundaryProseText(element: Element): string {
+  return collectTextExcluding(
+    element,
+    isScriptCodeOrUnrendered,
+    SKIPPED_SUBTREE_BOUNDARY,
+    () => true,
+  );
+}
+
+/**
  * `getRenderedProseText` with one more reason to skip a subtree: `isExtraExcluded`
  * is consulted for every element, and a true answer drops that element and
  * everything under it. For rules that judge some marked-up regions differently

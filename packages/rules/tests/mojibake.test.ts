@@ -6,6 +6,7 @@
 import { describe, expect, test } from "bun:test";
 import { parseHTML } from "@squirrelscan/parser/dom";
 
+import { getElementBoundaryProseText, getRenderedProseText } from "../src/content/text-content";
 import { declaredCharset, findMojibake, mojibakeRule } from "../src/content/mojibake";
 import type { ParsedPage, RuleContext } from "../src/types";
 
@@ -315,5 +316,44 @@ describe("Portuguese and Spanish lowercase accent mojibake (#1623)", () => {
     expect(findMojibake("IRM\u00C3\u00ADZINHA e MANH\u00C3\u00ADZINHA")).toEqual([]);
     expect(findMojibake("tia\u00C3\u00ADzinha").length).toBe(1);
     expect(findMojibake("pa\u00C3\u00ADs vazio").length).toBe(1);
+  });
+});
+
+// repo#1641: real mojibake is one string corrupted at the byte level, so it never spans an
+// element boundary. Every boundary emits a newline (never a space: "Ã" + U+00A0 is à mojibake).
+describe("element boundaries (repo#1641)", () => {
+  test("two clean characters in neighbouring spans are not corruption", async () => {
+    expect((await run(page("<p><span>Ã</span><span>©</span></p>")))[0]?.status).toBe("pass");
+    expect((await run(page("<p><b>â</b><i>€™</i></p>")))[0]?.status).toBe("pass");
+  });
+
+  test("mojibake wholly inside one text node is still reported", async () => {
+    const [check] = await run(page("<p><span>Itâ€™s a cafÃ©</span></p>"));
+    expect(check?.status).toBe("warn");
+  });
+
+  test("the boundary is a newline: a space or nbsp would form a sequence", async () => {
+    const html = page("<p><span>Ã</span><span>\u00A0x</span></p>");
+    const { document } = parseHTML(html);
+    const text = getElementBoundaryProseText(document.querySelector("body") as Element);
+    expect(text).not.toContain("Ã\u00A0");
+    expect(text).not.toContain("Ã ");
+    expect(text).toContain("Ã\n");
+    expect((await run(html))[0]?.status).toBe("pass");
+  });
+
+  test("double-encoded entities split across elements are not reported", async () => {
+    expect((await run(page("<p>&amp;amp;<span>nbsp;</span></p>")))[0]?.status).toBe("pass");
+    expect((await run(page("<p>&amp;amp;nbsp; in one node</p>")))[0]?.status).toBe("warn");
+  });
+
+  test("the replacement character is one code point and cannot span elements", async () => {
+    expect((await run(page("<p>caf�</p>")))[0]?.status).toBe("fail");
+  });
+
+  test("getRenderedProseText is unchanged: inline elements still join", () => {
+    const { document } = parseHTML(page("<p><b>Hel</b>lo <span>Ã</span><span>©</span></p>"));
+    const body = document.querySelector("body") as Element;
+    expect(getRenderedProseText(body)).toContain("Hello Ã©");
   });
 });
