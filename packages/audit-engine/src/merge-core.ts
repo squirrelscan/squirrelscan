@@ -390,6 +390,14 @@ export interface MergeResolutionInput {
    * (#2688) With them, `notEvaluatedByCheck` covers these pages too.
    */
   crawledHashes?: Set<string>;
+  /**
+   * (repo#3376) Check keys whose `notEvaluatedByCheck` set is exact, so the
+   * blunt clipped-list and timeout-aggregate carries stand down for them. A
+   * complete-store merge passes a signal with no failing sets and says here which
+   * keys the full signal covers. Undefined → derived: in `failingByCheck` and not
+   * truncated.
+   */
+  exactNotEvaluatedChecks?: Set<string>;
 }
 
 const KEY_SEP = "|";
@@ -1419,12 +1427,29 @@ export function createMergeSession(
       // it was not evaluated, so its absence from the fresh findings proves
       // nothing, whatever the signal (dropped key, over budget, none at all in a
       // local merge) or the sampled payload can say. Carry.
+      const checkKey = `${prior.ruleId}${KEY_SEP}${prior.checkName}`;
+      // (#2658) A signal that lists only part of the crawl speaks for the listed
+      // pages only: for any other page its sets are silent, not evidence of clean.
+      const signal =
+        resolution &&
+        (resolution.crawledComplete !== false || resolution.crawledUrls.has(prior.normalizedUrl))
+          ? resolution
+          : undefined;
+      // (repo#3376) The clipped-list and timeout-aggregate carries below are blunt:
+      // they carry every prior of the check. A key the signal covers (present in
+      // failingByCheck and not truncated) has exact notEvaluated sets, so those
+      // blunt carries apply only to keys the signal does not cover.
+      const signalCoversCheck =
+        !!signal &&
+        (signal.exactNotEvaluatedChecks
+          ? signal.exactNotEvaluatedChecks.has(checkKey)
+          : signal.failingByCheck.has(checkKey) && !signal.truncatedChecks.has(checkKey));
       if (
         notEvaluated?.pageChecks.has(
           pageCheckKey(prior.normalizedUrl, prior.ruleId, prior.checkName)
         ) ||
-        notEvaluated?.clippedChecks.has(`${prior.ruleId}${KEY_SEP}${prior.checkName}`) ||
-        notEvaluated?.rules.has(prior.ruleId) ||
+        (!signalCoversCheck && notEvaluated?.clippedChecks.has(checkKey)) ||
+        (!signalCoversCheck && notEvaluated?.rules.has(prior.ruleId)) ||
         notEvaluated?.pageRules.has(pageRuleKey(prior.normalizedUrl, prior.ruleId))
       ) {
         const carried: PageFindingRecord = { ...prior, provenance: "carried" };
@@ -1439,14 +1464,6 @@ export function createMergeSession(
       // → resolve, regardless of the #1167 sample guard below. A key marked
       // truncated (or absent — rule disabled, unknown shape, old CLI) gives no
       // authority and falls through to the pre-#1185 behavior.
-      const checkKey = `${prior.ruleId}${KEY_SEP}${prior.checkName}`;
-      // (#2658) A signal that lists only part of the crawl speaks for the listed
-      // pages only: for any other page its sets are silent, not evidence of clean.
-      const signal =
-        resolution &&
-        (resolution.crawledComplete !== false || resolution.crawledUrls.has(prior.normalizedUrl))
-          ? resolution
-          : undefined;
       const priorHashes = signal ? resolutionHashes(prior.normalizedUrl) : EMPTY_HASHES;
       // The check produced NO evaluated result for this page this run (the rule
       // `skipped` it — perf/ttfb without timing data — or emitted nothing for

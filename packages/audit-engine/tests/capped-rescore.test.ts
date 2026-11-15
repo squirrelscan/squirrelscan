@@ -708,6 +708,34 @@ describe("rescore of a capped report (repo#2657)", () => {
     expect(open).toEqual(new Set(range(20, 30).map(url)));
   });
 
+  test("(repo#3376) a check skipped on more than 10 pages carries only the skipped pages' findings", async () => {
+    const slowRun1 = [0, 6, 12, 18, 24];
+    const seed = await seeded(
+      fullReport(
+        range(0, 40).map((i) => ({ i, ttfb: slowRun1.includes(i) ? ("slow" as const) : undefined })),
+      ),
+    );
+    // Run 2: no timing data on pages 1-12 (a class wider than the 10-page sample),
+    // slow on 30 and 36, fine elsewhere. Pages 0, 18 and 24 were evaluated and passed.
+    const run2 = () =>
+      fullReport(
+        range(0, 40).map((i) => ({
+          i,
+          ttfb: i >= 1 && i <= 12 ? ("skipped" as const) : i === 30 || i === 36 ? ("slow" as const) : undefined,
+        })),
+      );
+    const { uncapped, capped, cappedStore } = await bothWays(seed, "audit_2", run2());
+    expect(comparable(rescored(capped))).toEqual(comparable(rescored(uncapped)));
+    const open = await openUrls(cappedStore, "perf/ttfb", "ttfb");
+    expect(open).toEqual(new Set([6, 12, 30, 36].map(url)));
+
+    for (const driver of DRIVERS) {
+      const store = seed.clone();
+      await publishChunked(store, "audit_2", run2(), 1_780_000_000_000, { driver });
+      expect(await openUrls(store, "perf/ttfb", "ttfb")).toEqual(new Set([6, 12, 30, 36].map(url)));
+    }
+  });
+
   test("a crawled page no check evaluated earns no synthetic pass from its carried finding", async () => {
     // Page 10's ttfb warning is open. Run 2 crawls all 11 pages but every check
     // skips every page, so the capped sample (10 pages per class) leaves page 10
