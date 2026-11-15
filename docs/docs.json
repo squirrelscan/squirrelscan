@@ -265,6 +265,7 @@
                   "rules/links/dead-end-pages",
                   "rules/links/anchor-text",
                   "rules/links/anchor-mismatch",
+                  "rules/links/anchor-target-conflict",
                   "rules/links/https-downgrade",
                   "rules/links/tel-mailto"
                 ]

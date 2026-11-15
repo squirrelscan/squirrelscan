@@ -1,0 +1,103 @@
+---
+title: "Same anchor text pointing at different pages"
+description: "A link labeled Pricing that goes to /pricing from most pages and to /plans from a few leaves readers and agents guessing. squirrel finds the split, and the pages linked with unrelated anchor texts."
+---
+
+## What an anchor target conflict is
+
+[links/anchor-text](/rules/links/anchor-text) judges one page's links at a time. It cannot see two problems that only show up across the whole site:
+
+- One anchor text that points at several different URLs. `Pricing` goes to `/pricing` from eleven pages and to `/plans` from three.
+- One URL that is linked with several unrelated anchor texts. `/pricing` is linked as `Pricing`, `Buy now`, `Subscription costs` and `Plans and tiers`.
+
+Both are ambiguous for readers, split the signal a link passes to a page, and leave an agent that navigates by link label guessing which page the label means.
+
+## What squirrel checks
+
+The rule is site-wide and emits a single check named `anchor-target-conflict`. It reads the same contextual link graph as [links/anchor-mismatch](/rules/links/anchor-mismatch), on both the in-memory and the streaming path, so the two produce identical output.
+
+- Only contextual links count. Links inside a `nav`, `header`, `footer` or `aside` landmark are template text and are left out, as are `nofollow` links, fragment links, `rel="next"` and `rel="prev"` links and paginated URLs.
+- Anchor text is compared without case and extra whitespace.
+- Generic anchors never count: `read more`, `learn more`, `click here`, `view all`, `next`, their translations, and conventional account and legal labels such as `Log in` and `Privacy`. They point everywhere by design.
+- Only pages that answered 2xx with HTML are targets.
+- The rule is skipped below 10 crawled pages.
+- Anchor to several URLs: an anchor is reported only when one destination takes at least 70% of the pages that use that anchor. That destination is the norm, and the finding lists the deviating destinations with up to five example source pages. An even split has no norm to deviate from and is not reported.
+- URL with divergent anchors: a URL is reported when at least four anchor texts that share no word each come from at least two source pages. Anchors that share a word (`Pricing`, `Our pricing`) are one variant. The homepage is never reported here, because it is linked as `Home`, the brand name and the logo.
+- The link graph is bounded. A very large crawl can leave out some link pairs, and the number left out is in `details.droppedPairs`. Each page pair keeps at most eight distinct anchor texts, in the order the links appear on the page.
+
+Outcomes:
+
+- Skipped when there are fewer than 10 pages, or no non-generic contextual anchor text. Message: `Too few pages to compare anchor text across the site` or `No non-generic contextual anchor text to compare`.
+- Warn when there are one to nine findings. Message: `2 anchor text(s) point at different pages and 1 page(s) are linked with unrelated anchor texts`. Severity warning, weight 3.
+- Fail when there are ten or more findings.
+- Pass otherwise. Message: `Each anchor text points at one page and each page keeps a consistent anchor`.
+
+`details` carries `judgedAnchors`, `total` (all findings; the item list is capped at 100), `anchorConflicts`, `targetConflicts` and `droppedPairs`.
+
+## How to fix it
+
+Point every link with the same text at one page, or change the text so it names the page it really goes to. For a page with many unrelated anchors, pick the label that describes it and use that one consistently. If two pages really answer the same label, merge them or redirect one to the other.
+
+| | |
+|---|---|
+| **Rule ID** | `links/anchor-target-conflict` |
+| **Category** | [Links](/rules/links) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 3/10 |
+
+## Options
+
+This rule has no options.
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["links/anchor-target-conflict"]
+```
+
+### Disable all Links rules
+
+```toml squirrel.toml
+[rules]
+disable = ["links/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["links/anchor-target-conflict"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Related rules
+
+- [links/anchor-text](/rules/links/anchor-text): empty and generic anchor text on a page's outgoing links.
+- [links/anchor-mismatch](/rules/links/anchor-mismatch): whether the text pointing at a page matches that page.
+- [a11y/identical-links-same-purpose](/rules/a11y/identical-links-same-purpose): identical link text pointing at different pages, per page.
+
+Links findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+{/* glossary:backlinks:start */}
+
+Glossary: [Anchor text](/glossary/anchor-text), [Internal linking](/glossary/internal-linking).
+
+{/* glossary:backlinks:end */}
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Links section of the report. Each conflicting anchor text or page is listed with its destinations and example source pages. Signed-out local audits need no account and cost nothing. Signed-in audits spend credits.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Links section looks like on a real site.
+  </Card>
+</CardGroup>

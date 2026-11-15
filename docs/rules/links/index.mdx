@@ -52,6 +52,7 @@ These carry the highest severity and weight in the category.
 | [Orphan pages: pages with too few inbound internal links](/rules/links/orphan-pages) | A page nothing links to is hard to discover and reads as unimportant. squirrel counts dofollow inbound internal links for every crawled page. | warning | Site-wide |
 | [Pages with only one internal link pointing to them](/rules/links/weak-internal-links) | One inbound link is enough to be found and not enough to look important. squirrel lists every page whose dofollow inbound count is exactly one. | warning | Site-wide |
 | [rel=nofollow on an internal link: usually a mistake](/rules/links/nofollow-internal) | Nofollow on your own links tells search engines to ignore your site's internal structure. squirrel flags every internal link carrying it. | warning | Per-page |
+| [Same anchor text pointing at different pages](/rules/links/anchor-target-conflict) | A link labeled Pricing that goes to /pricing from most pages and to /plans from a few leaves readers and agents guessing. squirrel finds the split, and the pages linked with unrelated anchor texts. | warning | Site-wide |
 | [tel: and mailto: links: format and href/text mismatches](/rules/links/tel-mailto) | A phone link whose href differs from the number on screen dials the wrong person. squirrel validates both formats and compares them with the visible text. | info | Per-page |
 
 {/* hub:rules:end */}

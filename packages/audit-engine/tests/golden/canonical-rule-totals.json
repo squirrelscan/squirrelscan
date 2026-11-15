@@ -206,6 +206,7 @@
   "legal/subprocessor-disclosure": 1,
   "legal/terms-of-service": 500,
   "links/anchor-mismatch": 1,
+  "links/anchor-target-conflict": 1,
   "links/anchor-text": 500,
   "links/broken-anchors": 1,
   "links/broken-external-links": 1,
