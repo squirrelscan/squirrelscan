@@ -51,6 +51,11 @@ beforeAll(() => {
       if (pathname === "/hero.css") {
         return new Response("body { background: #ffffff } .hero { background: #111111; padding: 2rem }", { headers: CSS });
       }
+      if (pathname === "/tailwind.css") {
+        // A compiled utility sheet (#4433): body is near-white, and hundreds of bg utilities exist.
+        const utilities = Array.from({ length: 400 }, (_, i) => `.bg-c${i}{background-color:#${(0x101010 + i * 997).toString(16).padStart(6, "0")}}`).join("");
+        return new Response(`*,::before,::after{box-sizing:border-box}body{margin:0;background-color:#fafafa}.lead{font-size:1.25rem}${utilities}`, { headers: CSS });
+      }
       if (pathname === "/boom.css") return new Response("boom", { status: 500 });
       if (pathname === "/soft404.css") {
         return new Response("<html>not found</html>", { headers: { "content-type": "text/html" } });
@@ -130,6 +135,18 @@ describe("a11y/color-contrast reads same-site linked stylesheets (#1756)", () =>
     // The same sheet and the same text outside the container is still measured against the light body.
     const outside = await contrastFor(["/hero.css"], CONFIG, `<div class="hero"><p>Title</p></div>${TAGLINE}`);
     expect(named(outside, "color-contrast").some((c) => c.status === "warn")).toBe(true);
+  });
+
+  test("nutshop markup: inline #b9b9b9 tagline over a same-origin utility sheet warns with the ratio (#4433)", async () => {
+    const lead = '<p class="lead" style="color:#b9b9b9">Fresh roasted every morning</p>';
+    const checks = await contrastFor(["/tailwind.css"], CONFIG, `<main class="bg-c3"><h1>Nut Shop</h1></main>${lead}`);
+    const warn = named(checks, "color-contrast").find((c) => c.status === "warn");
+    expect(warn).toBeDefined();
+    expect(warn?.items?.[0]?.id).toMatch(/p: #b9b9b9 on #fafafa \(1\.8\d:1\)/);
+    // Text inside an element a utility paints is still not measured against the page.
+    const inside = await contrastFor(["/tailwind.css"], CONFIG, `<div class="bg-c7">${lead}</div>`);
+    expect(named(inside, "color-contrast").some((c) => c.status === "warn")).toBe(false);
+    expect(named(inside, "color-contrast-unresolved")).toHaveLength(1);
   });
 
   test("a stylesheet that fails to load keeps the pair unresolved, never white", async () => {

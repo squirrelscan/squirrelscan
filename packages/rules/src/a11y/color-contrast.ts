@@ -255,14 +255,14 @@ function backgroundOf(declarations: Declaration[]): Background {
  * through only where the body has none. One linear pass: the blocks are
  * site-controlled and can hold hundreds of KB of base64.
  */
-/** Selectors with a background kept per stylesheet (#1756); past this the list says "more existed". */
-const MAX_BACKGROUND_SELECTORS = 200;
+/** Selectors with a background kept per stylesheet (#1756, #4433); past this the list says "more existed". A compiled Tailwind sheet has hundreds of bg utilities, so the cap must clear one. */
+const MAX_BACKGROUND_SELECTORS = 5000;
 
 /** At-rules nested deeper than this are not read; a background in one is unresolved (never a color). */
 const MAX_AT_RULE_DEPTH = 8;
 
 /** Selector matches the guard may spend per page before the rest is read as not provable. */
-const GUARD_MATCH_BUDGET = 50_000;
+const GUARD_MATCH_BUDGET = 500_000;
 
 function styleBlockRules(css: string, level = 0): {
   html: Declaration[];
@@ -398,7 +398,7 @@ function createBackgroundResolver(
   // painting under the text is not, so text inside a match is unresolved rather than measured against the page.
   const guard: { selectors: string[]; all: boolean } = { selectors: [], all: false };
   // One answer per node (does it, or an ancestor, match a guarded selector), and a bound on the matching work:
-  // up to 200 selectors against every ancestor of every inline-colored element is attacker-sized on a big page.
+  // up to 5000 selectors against every ancestor of every inline-colored element is attacker-sized on a big page.
   const guardMemo = new Map<Element, boolean>();
   let guardBudget = GUARD_MATCH_BUDGET;
   const matchesGuarded = (el: Element): boolean => {
