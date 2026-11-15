@@ -33,7 +33,7 @@ describe("perf/lcp-hints output", () => {
     expect(c.status).toBe("warn");
     // One page has one LCP element: the message names one image, not the count.
     expect(c.value).toBe(1);
-    expect(c.message).toBe("Likely-LCP image loaded without preload");
+    expect(c.message).toBe("Likely-LCP image lacks preload in static HTML");
     // No explicit items / image dump — the report auto-generates one per-page
     // item from the message, so the count survives grouping per page.
     expect(c.items).toBeUndefined();
@@ -56,7 +56,7 @@ describe("perf/lcp-hints output", () => {
     const { checks } = lcpHintsRule.run(pageCtx(html)) as { checks: any[] };
     const c = checks.find((x) => x.name === "lcp-preload");
     expect(c.value).toBe(1);
-    expect(c.message).toBe("Likely-LCP image loaded without preload");
+    expect(c.message).toBe("Likely-LCP image lacks preload in static HTML");
   });
 
   test("passes when no large unpreloaded images", () => {
@@ -275,7 +275,7 @@ describe("perf/lcp-hints with a preloaded hero", () => {
     const c = preloadCheck(page("", `${HERO_IMG}<ul>${CARDS}</ul>`));
     expect(c.status).toBe("warn");
     expect(c.value).toBe(1);
-    expect(c.message).toBe("Likely-LCP image loaded without preload");
+    expect(c.message).toBe("Likely-LCP image lacks preload in static HTML");
     expect(c.details.candidates).toHaveLength(1);
     expect(c.details.candidates[0].src).toBe(
       "https://example.com/hero-960.jpg"

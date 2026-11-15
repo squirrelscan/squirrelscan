@@ -3439,9 +3439,9 @@
   ]
  },
  "perf/cls-hints": {
-  "digest": "176332881170950",
+  "digest": "226777248263342",
   "lines": [
-   "cls-images|pass|All images have dimensions||"
+   "cls-images|pass|All images have dimensions in static HTML||"
   ]
  },
  "perf/compression": {
@@ -3457,9 +3457,9 @@
   ]
  },
  "perf/critical-request-chains": {
-  "digest": "208137095554089",
+  "digest": "208214082445421",
   "lines": [
-   "critical-request-chains|pass|No critical request chains detected||"
+   "critical-request-chains|pass|No render-blocking resource hints found in static HTML||"
   ]
  },
  "perf/css-file-size": {
@@ -3543,9 +3543,9 @@
   ]
  },
  "perf/lcp-hints": {
-  "digest": "240685794582495",
+  "digest": "116010383782763",
   "lines": [
-   "lcp-preload|pass|LCP images appear to be optimized||"
+   "lcp-preload|pass|LCP images appear optimized in static HTML||"
   ]
  },
  "perf/legacy-js": {
