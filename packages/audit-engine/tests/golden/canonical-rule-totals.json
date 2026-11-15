@@ -113,6 +113,7 @@
   "content/terminology-consistency": 1,
   "content/thin-vs-site-norm": 1,
   "content/title-pattern-outlier": 1,
+  "content/truncation-artifacts": 500,
   "content/unrendered-markup": 500,
   "content/voice-consistency": 1,
   "content/word-count": 500,

@@ -1,0 +1,110 @@
+---
+title: "Truncated titles and descriptions: copy cut mid-word"
+description: "A title, meta description or excerpt that stops inside a word was cut by a character limit and shows as a stump in search. squirrel finds the cut and names the field."
+---
+
+## What a truncation artifact is
+
+A CMS field limit, a theme that runs `substr($text, 0, 160)` or a plugin that clips the description to 155 characters leaves copy that stops in the middle of a word: `Introducing the new dashbo...`. The title and the meta description are what a search result shows, so a cut there is visible to every searcher. A cut in body copy is smaller, but it still reads as unfinished.
+
+## What squirrel checks
+
+The rule runs on every indexable page and emits one check named `truncation-artifacts`. It reads the `<title>`, the meta description and the body copy. It looks for the cut, never for the ellipsis alone:
+
+- **A longer version on the page.** The text, minus any trailing ellipsis, is the start of a longer text on the same page (the H1, `og:title`, `og:description`, or for a description or an excerpt the body copy) and the longer text carries on with a letter or digit. That is proof the text stopped inside a word.
+- **An ellipsis glued to a partial word at a round limit.** `...` or `…` straight after a letter, where the text is exactly a limit that CMS plugins use: 50 to 70 characters for a title, 110 to 170 for a description, 100 to 300 for body copy.
+- **A dangling last word at a round limit.** A title or description that is exactly a round limit long and ends on `the`, `and`, `of`, `to` or a similar word that cannot end a phrase.
+
+The outcomes:
+
+- Pass when no title, description or body copy looks cut.
+- Fail when the title or the meta description was cut. The message names the field and quotes the text.
+- Warn when only body copy was cut: a paragraph or list item that ends in an ellipsis glued to a partial word, with no "read more" link beside it.
+- Skipped when the page is noindex (it never appears in a search result) or has no title, description or body copy to read.
+
+An ellipsis after a whole word is ordinary writing and does not fire. Quotations (`<blockquote>`, `<q>`), code, navigation and anything inside a link, such as a clickable card, are left alone.
+
+## How to fix it
+
+```html
+<!-- Before -->
+<title>Introducing the new dashbo...</title>
+
+<!-- After -->
+<title>Introducing the New Dashboard for Teams</title>
+```
+
+Write the title (about 50 to 60 characters) and the description (about 150 to 160) to length in the CMS field. If a theme builds the description from the body, change its excerpt function to cut at the last space before the limit and add the ellipsis only after a whole word. Give every body excerpt a "read more" link.
+
+| | |
+|---|---|
+| **Rule ID** | `content/truncation-artifacts` |
+| **Category** | [Content](/rules/content) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 4/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["content/truncation-artifacts"]
+```
+
+### Disable all Content rules
+
+```toml squirrel.toml
+[rules]
+disable = ["content/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["content/truncation-artifacts"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `truncation-artifacts` | Problem |  |
+| `truncation-artifacts` | Clean | `truncation-artifacts` |
+| `truncation-artifacts` | Not checked |  |
+
+{/* rule-checks:end */}
+
+## Related rules
+
+- [core/meta-title](/rules/core/meta-title): title length, in characters and in pixels.
+- [core/meta-description](/rules/core/meta-description): description presence and length.
+- [content/mojibake](/rules/content/mojibake): encoding damage in the same copy.
+
+Content findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Write good titles and snippets in Search Results, Google Search Central](https://developers.google.com/search/docs/appearance/title-link)
+- [Control your snippets in search results, Google Search Central](https://developers.google.com/search/docs/appearance/snippet)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Content section of the report. Signed-out local audits need no account and cost nothing. Signed-in audits spend credits.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Content section looks like on a real site.
+  </Card>
+</CardGroup>
