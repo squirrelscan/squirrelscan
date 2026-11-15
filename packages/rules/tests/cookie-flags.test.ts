@@ -20,7 +20,10 @@ function ctx(setCookie: string | undefined, url = "https://example.com/"): RuleC
   } as unknown as RuleContext;
 }
 
-function checksByName(checks: Awaited<ReturnType<typeof cookieFlagsRule.run>>["checks"], name: string) {
+function checksByName(
+  checks: Awaited<ReturnType<typeof cookieFlagsRule.run>>["checks"],
+  name: string,
+) {
   return checks.find((c) => c.name === name);
 }
 
@@ -47,7 +50,9 @@ describe("security/cookie-flags", () => {
   });
 
   test("missing Secure on an HTTPS page: flagged as warn", async () => {
-    const { checks } = await cookieFlagsRule.run(ctx("session=abc123; Path=/; HttpOnly; SameSite=Lax"));
+    const { checks } = await cookieFlagsRule.run(
+      ctx("session=abc123; Path=/; HttpOnly; SameSite=Lax"),
+    );
     const check = checksByName(checks, "cookie-secure");
     expect(check?.status).toBe("warn");
     expect(check?.items?.[0]?.id).toBe("session");
@@ -61,7 +66,9 @@ describe("security/cookie-flags", () => {
   });
 
   test("missing HttpOnly: flagged as warn", async () => {
-    const { checks } = await cookieFlagsRule.run(ctx("session=abc123; Path=/; Secure; SameSite=Lax"));
+    const { checks } = await cookieFlagsRule.run(
+      ctx("session=abc123; Path=/; Secure; SameSite=Lax"),
+    );
     const check = checksByName(checks, "cookie-httponly");
     expect(check?.status).toBe("warn");
     expect(check?.items?.[0]?.id).toBe("session");
@@ -74,7 +81,9 @@ describe("security/cookie-flags", () => {
   });
 
   test("SameSite=None without Secure: flagged as fail (browsers reject this)", async () => {
-    const { checks } = await cookieFlagsRule.run(ctx("session=abc123; Path=/; HttpOnly; SameSite=None"));
+    const { checks } = await cookieFlagsRule.run(
+      ctx("session=abc123; Path=/; HttpOnly; SameSite=None"),
+    );
     const check = checksByName(checks, "cookie-samesite-none-insecure");
     expect(check?.status).toBe("fail");
     // Not double-counted under the generic missing-SameSite info check.
@@ -138,7 +147,9 @@ describe("security/cookie-flags", () => {
 // #1378: a hosting platform's own routing cookie is not an XSS cookie-theft risk.
 describe("security/cookie-flags: platform cookies (#1378)", () => {
   test("a page whose only cookie is __dpl: info naming the platform, no HttpOnly warning", async () => {
-    const { checks } = await cookieFlagsRule.run(ctx("__dpl=dpl_abc123; Path=/; Secure; SameSite=Lax"));
+    const { checks } = await cookieFlagsRule.run(
+      ctx("__dpl=dpl_abc123; Path=/; Secure; SameSite=Lax"),
+    );
     expect(checksByName(checks, "cookie-httponly")).toBeUndefined();
     const info = checksByName(checks, "cookie-httponly-platform");
     expect(info?.status).toBe("info");

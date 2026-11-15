@@ -28,9 +28,7 @@ function getTableName(table: Element, doc: Document): string | null {
   const labelledBy = table.getAttribute("aria-labelledby");
   if (labelledBy) {
     const ids = labelledBy.split(/\s+/);
-    const labels = ids
-      .map((id) => doc.getElementById(id)?.textContent?.trim())
-      .filter(Boolean);
+    const labels = ids.map((id) => doc.getElementById(id)?.textContent?.trim()).filter(Boolean);
     if (labels.length > 0) return labels.join(" ");
   }
 
@@ -66,9 +64,7 @@ export const tableDuplicateNameRule: Rule = {
     const checks: CheckResult[] = [];
 
     // Get data tables (exclude layout tables)
-    const allTables = doc.querySelectorAll(
-      "table:not([role='presentation']):not([role='none'])"
-    );
+    const allTables = doc.querySelectorAll("table:not([role='presentation']):not([role='none'])");
 
     // #1637: a table out of the accessibility tree (a closed <dialog>, a
     // `hidden`, `inert`, aria-hidden or `display:none` ancestor) is not in a
@@ -94,9 +90,7 @@ export const tableDuplicateNameRule: Rule = {
         name: "table-duplicate-name",
         status: "info",
         message:
-          tables.length + unsettled.length === 1
-            ? "Only one table found"
-            : "No data tables found",
+          tables.length + unsettled.length === 1 ? "Only one table found" : "No data tables found",
         ...(hiddenTables > 0 ? { details: hiddenDetails } : {}),
       });
       return { checks };
@@ -154,12 +148,12 @@ export const tableDuplicateNameRule: Rule = {
       const exposed = tableNames.get(name)?.length ?? 0;
       if (exposed > 1 || exposed + seen.length < 2) continue;
       unconfirmedNames.push(
-        unconfirmedItem(`"${name}" (${exposed + seen.length} tables)`, seen[0])
+        unconfirmedItem(`"${name}" (${exposed + seen.length} tables)`, seen[0]),
       );
     }
     if (unconfirmedNames.length > 0) {
       checks.push(
-        unconfirmedRow("table-duplicate-name", "duplicate table name(s)", unconfirmedNames)
+        unconfirmedRow("table-duplicate-name", "duplicate table name(s)", unconfirmedNames),
       );
     }
 

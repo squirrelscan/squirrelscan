@@ -65,7 +65,7 @@ export const citationsRule: Rule = {
         if (!hostname) continue;
 
         const isAuthoritative = AUTHORITATIVE_DOMAINS.some(
-          (d) => hostname.includes(d) || hostname.endsWith(`.${d}`)
+          (d) => hostname.includes(d) || hostname.endsWith(`.${d}`),
         );
 
         if (isAuthoritative) {

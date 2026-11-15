@@ -130,14 +130,19 @@ describe("onUnauthorized (#1666)", () => {
   test("an explicit token is the one reported", async () => {
     stubFetch(() => new Response(null, { status: 401 }));
     const seen: string[] = [];
-    await client({ onUnauthorized: (t) => void seen.push(t) }).request("/v1/x", { token: "tok_other" });
+    await client({ onUnauthorized: (t) => void seen.push(t) }).request("/v1/x", {
+      token: "tok_other",
+    });
     expect(seen).toEqual(["tok_other"]);
   });
 
   test("send() reports it too", async () => {
     stubFetch(() => new Response(null, { status: 401 }));
     const seen: string[] = [];
-    await client({ onUnauthorized: (t) => void seen.push(t) }).send("/v1/x", { method: "PATCH", body: {} });
+    await client({ onUnauthorized: (t) => void seen.push(t) }).send("/v1/x", {
+      method: "PATCH",
+      body: {},
+    });
     expect(seen).toEqual(["tok_123"]);
   });
 
@@ -153,7 +158,9 @@ describe("onUnauthorized (#1666)", () => {
   test("an anonymous request has no token to report", async () => {
     stubFetch(() => new Response(null, { status: 401 }));
     const seen: string[] = [];
-    await client({ getToken: () => null, onUnauthorized: (t) => void seen.push(t) }).request("/v1/x");
+    await client({ getToken: () => null, onUnauthorized: (t) => void seen.push(t) }).request(
+      "/v1/x",
+    );
     expect(seen).toEqual([]);
   });
 

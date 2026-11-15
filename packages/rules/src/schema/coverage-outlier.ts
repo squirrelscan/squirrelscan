@@ -187,7 +187,7 @@ function buildChecks(rollup: SchemaRollup, crawlPageCount: number): CheckResult[
   if (crawlPageCount > 0 && rollup.noindexCount >= crawlPageCount) {
     return [
       skip(
-        `Not applicable: all ${crawlPageCount} crawled page(s) are noindex, so structured data has no search use to compare`
+        `Not applicable: all ${crawlPageCount} crawled page(s) are noindex, so structured data has no search use to compare`,
       ),
     ];
   }
@@ -195,7 +195,7 @@ function buildChecks(rollup: SchemaRollup, crawlPageCount: number): CheckResult[
   if (sitePageCount < SCHEMA_NORM_MIN_PAGES) {
     return [
       skip(
-        `Only ${sitePageCount} page(s) crawled; ${SCHEMA_NORM_MIN_PAGES} needed to establish a structured-data norm`
+        `Only ${sitePageCount} page(s) crawled; ${SCHEMA_NORM_MIN_PAGES} needed to establish a structured-data norm`,
       ),
     ];
   }
@@ -255,7 +255,7 @@ function buildChecks(rollup: SchemaRollup, crawlPageCount: number): CheckResult[
   if (judged.length === 0) {
     return [
       skip(
-        `No page type has ${SCHEMA_NORM_MIN_GROUP_PAGES}+ comparable pages sharing a structured-data pattern`
+        `No page type has ${SCHEMA_NORM_MIN_GROUP_PAGES}+ comparable pages sharing a structured-data pattern`,
       ),
     ];
   }
@@ -294,7 +294,7 @@ function buildChecks(rollup: SchemaRollup, crawlPageCount: number): CheckResult[
     (a, b) =>
       b.missingUrls.length - a.missingUrls.length ||
       byString(a.pageType, b.pageType) ||
-      byString(a.schemaType, b.schemaType)
+      byString(a.schemaType, b.schemaType),
   );
   const items: CheckItem[] = gaps.slice(0, SCHEMA_NORM_MAX_ITEMS).map((g) => ({
     id: `${g.pageType}:${g.schemaType}`,
@@ -355,8 +355,7 @@ export const schemaCoverageOutlierRule: Rule = {
   meta: {
     id: "schema/coverage-outlier",
     name: "Structured Data Coverage Outlier",
-    description:
-      "Finds pages missing the structured data the rest of their page type carries",
+    description: "Finds pages missing the structured data the rest of their page type carries",
     solution:
       "These pages break your own site's pattern: most pages of the same type emit this schema @type and these do not. That is almost always a template or CMS gap rather than a deliberate choice - a product without its Product markup, an article without its Article markup - and it costs those pages the rich results their siblings are eligible for. Find where the working pages get their JSON-LD and make sure the listed pages run through the same path. If a page genuinely should not carry the markup (a discontinued product stub, a landing page filed under the same type), leave it: the point is that it is currently the exception.",
     category: "schema",

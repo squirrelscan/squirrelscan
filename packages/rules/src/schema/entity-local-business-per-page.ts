@@ -43,7 +43,7 @@ export const entityLocalBusinessPerPageRule: Rule = {
     const { map } = resolved;
 
     const businesses = map.nodes.filter((node) =>
-      node.types.some((type) => isLocalBusinessType(type))
+      node.types.some((type) => isLocalBusinessType(type)),
     );
     if (businesses.length === 0) {
       return {
@@ -97,7 +97,9 @@ export const entityLocalBusinessPerPageRule: Rule = {
           name: CHECK,
           status: "warn",
           message: `${entityLabel(worst)} is declared in full on ${pageTotal(worst)} of ${pagesCrawled} crawled pages${moreSuffix(hidden, "businesses")}`,
-          value: clipValue(`${Math.round((pageTotal(worst) / pagesCrawled) * 100)}% of crawled pages`),
+          value: clipValue(
+            `${Math.round((pageTotal(worst) / pagesCrawled) * 100)}% of crawled pages`,
+          ),
           expected: "declared once with an @id, referenced elsewhere",
           items,
         },

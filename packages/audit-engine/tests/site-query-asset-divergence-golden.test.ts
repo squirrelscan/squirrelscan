@@ -232,7 +232,7 @@ describe("dual-path golden: social/asset-divergence hreflang cluster (pub#937)",
   const ENTITY_OG = "https://cdn.example.com/collections/gloves.webp";
   const locales = Array.from(
     { length: 16 },
-    (_, i) => `https://example.com/l${String(i).padStart(2, "0")}/collections/gloves`
+    (_, i) => `https://example.com/l${String(i).padStart(2, "0")}/collections/gloves`,
   );
   const cluster: Spec[] = locales.map((normalizedUrl) => ({
     normalizedUrl,

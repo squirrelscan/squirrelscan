@@ -58,8 +58,11 @@ function build(scripts: Array<{ url: string; content: string }>, limits: TechBun
     limits,
   );
   const emitted = new Map<string, string>();
-  for (const script of inputs[0]!.scripts ?? []) if (script.content) emitted.set(script.url, script.content);
-  const ids = detectReportTechnologiesMulti(inputs, undefined, LOCAL_TECH_DETECT_OPTIONS).items.map((item) => item.id);
+  for (const script of inputs[0]!.scripts ?? [])
+    if (script.content) emitted.set(script.url, script.content);
+  const ids = detectReportTechnologiesMulti(inputs, undefined, LOCAL_TECH_DETECT_OPTIONS).items.map(
+    (item) => item.id,
+  );
   return { inputs, emitted, ids };
 }
 
@@ -67,7 +70,8 @@ function build(scripts: Array<{ url: string; content: string }>, limits: TechBun
 function repeatedFullLines(sent: string, source: string): number {
   const full = new Set(source.split("\n").filter((line) => line.startsWith("var v_")));
   const seen = new Map<string, number>();
-  for (const line of sent.split("\n")) if (full.has(line)) seen.set(line, (seen.get(line) ?? 0) + 1);
+  for (const line of sent.split("\n"))
+    if (full.has(line)) seen.set(line, (seen.get(line) ?? 0) + 1);
   return [...seen.values()].filter((n) => n > 1).length;
 }
 
@@ -302,7 +306,10 @@ describe("a call straddling the head boundary is kept whole on a tight-budget pa
         test(`${count} plain scripts, loader ${position}, posthog.init ${before} characters before the head ends`, () => {
           const ph = loaderScript(before);
           const plain = plainScripts(count);
-          const { emitted, ids } = build(position === "first" ? [ph, ...plain] : [...plain, ph], cloud);
+          const { emitted, ids } = build(
+            position === "first" ? [ph, ...plain] : [...plain, ph],
+            cloud,
+          );
           expect(ids).toContain("posthog");
           const sent = emitted.get(ph.url) ?? "";
           expect(sent).toContain(LOADER.trim().slice(0, -1));
@@ -315,7 +322,10 @@ describe("a call straddling the head boundary is kept whole on a tight-budget pa
             const body = emitted.get(script.url) ?? "";
             total += bytes(body);
             // a script's head is its first 16 KB whole, whatever follows it
-            expect(body.startsWith(script.content.slice(0, script === ph ? HEAD - before : HEAD)), script.url).toBe(true);
+            expect(
+              body.startsWith(script.content.slice(0, script === ph ? HEAD - before : HEAD)),
+              script.url,
+            ).toBe(true);
           }
           expect(total).toBe(cloud.pageBytes);
         });
@@ -332,7 +342,8 @@ describe("emitted pieces are disjoint, in order, and abut without a separator (#
   /** Unique statements with no newline in them: nothing but the sampler's own cuts decides where a window starts. */
   const flat = (tag: string, size: number): string => {
     let out = "";
-    for (let i = 0; out.length < size; i++) out += `u_${tag}_${i}=${(((i + 1) * 2654435761) % 4294967296).toString(16)};`;
+    for (let i = 0; out.length < size; i++)
+      out += `u_${tag}_${i}=${(((i + 1) * 2654435761) % 4294967296).toString(16)};`;
     return out.slice(0, size);
   };
   const pieces = (sent: string, source: string): Array<{ at: number; length: number }> =>
@@ -355,7 +366,9 @@ describe("emitted pieces are disjoint, in order, and abut without a separator (#
     expect(found[0]!.at).toBe(0);
     for (let n = 1; n < found.length; n++) {
       // strictly after: text is left out between two pieces, otherwise they would be one
-      expect(found[n]!.at, `call at ${callAt}, piece ${n}`).toBeGreaterThan(found[n - 1]!.at + found[n - 1]!.length);
+      expect(found[n]!.at, `call at ${callAt}, piece ${n}`).toBeGreaterThan(
+        found[n - 1]!.at + found[n - 1]!.length,
+      );
     }
     // Text is left out only because the allowance ran out, and the allowance is then spent to the byte.
     expect(bytes(sent), `call at ${callAt}`).toBeLessThanOrEqual(cloud.bundleBytes);
@@ -369,7 +382,10 @@ describe("emitted pieces are disjoint, in order, and abut without a separator (#
       if (callAt <= 40_000) {
         const start = callAt - CALL_AT;
         const content = `${unique("a", start)}${CALL}${unique("b", 200 * KB)}`;
-        const sent = build([{ url: "https://example.com/a.js", content }], cloud).emitted.get("https://example.com/a.js") ?? "";
+        const sent =
+          build([{ url: "https://example.com/a.js", content }], cloud).emitted.get(
+            "https://example.com/a.js",
+          ) ?? "";
         expect(sent.startsWith(content.slice(0, callAt + CALL.length - CALL_AT))).toBe(true);
         expect(sent.split(SEP)[0]!.length).toBeGreaterThanOrEqual(callAt + CALL.length - CALL_AT);
       }
@@ -394,7 +410,8 @@ describe("a hint just after the head boundary keeps the context before it, once 
   const SIGNAL = `var s=mk("https://p0000000000000000001.supabase.co","eyJ${"x".repeat(40)}");`;
   const flat = (tag: string, size: number): string => {
     let out = "";
-    for (let i = 0; out.length < size; i++) out += `u_${tag}_${i}=${(((i + 1) * 2654435761) % 4294967296).toString(16)};`;
+    for (let i = 0; out.length < size; i++)
+      out += `u_${tag}_${i}=${(((i + 1) * 2654435761) % 4294967296).toString(16)};`;
     return out.slice(0, size);
   };
   const tail = flat("t", 200 * KB);
@@ -451,10 +468,14 @@ describe("page shapes from the #1534 report repeat no full line (#1534)", () => 
       ];
       const { emitted } = build(scripts, cloud);
       for (const script of scripts) {
-        expect(repeatedFullLines(emitted.get(script.url) ?? "", script.content), script.url).toBe(0);
+        expect(repeatedFullLines(emitted.get(script.url) ?? "", script.content), script.url).toBe(
+          0,
+        );
       }
       expect(emitted.get("https://example.com/a.js")).toBe(scripts[0]!.content);
-      expect(bytes(emitted.get("https://example.com/b.js") ?? "")).toBeGreaterThanOrEqual(cloud.bundleBytes - 32);
+      expect(bytes(emitted.get("https://example.com/b.js") ?? "")).toBeGreaterThanOrEqual(
+        cloud.bundleBytes - 32,
+      );
     });
   }
 });

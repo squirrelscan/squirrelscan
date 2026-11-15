@@ -119,7 +119,17 @@ const AUTH_LEAVES = new Set([
 
 // A segment that marks the path as an API or auth route, for candidates that
 // are not call sites (string literals, conventions).
-const API_SEGMENTS = new Set(["api", "auth", "rest", "identity", "users", "accounts", "v1", "v2", "v3"]);
+const API_SEGMENTS = new Set([
+  "api",
+  "auth",
+  "rest",
+  "identity",
+  "users",
+  "accounts",
+  "v1",
+  "v2",
+  "v3",
+]);
 
 // Words that mark a credential flow. Such a path is never probed, even by GET:
 // a GET to an OAuth callback or a magic-link verifier can complete a sign-in.
@@ -236,7 +246,7 @@ function originOf(url: string): string | null {
  * Pure: sends nothing.
  */
 export function selectAuthCandidates(
-  ctx: Pick<RuleContext, "site" | "endpointSurface" | "probe">
+  ctx: Pick<RuleContext, "site" | "endpointSurface" | "probe">,
 ): AuthCandidateSelection {
   const out: AuthCandidate[] = [];
   const selection: AuthCandidateSelection = {
@@ -258,7 +268,7 @@ export function selectAuthCandidates(
     rawUrl: string,
     source: AuthCandidate["source"],
     discoveredVia: string,
-    method: string | undefined
+    method: string | undefined,
   ): void => {
     let u: URL;
     try {
@@ -336,7 +346,7 @@ export function buildAuthProbe(endpointUrl: string): { url: string; init: Reques
  */
 export function sendAuthProbe(
   probe: ProbeBudget | undefined,
-  endpointUrl: string
+  endpointUrl: string,
 ): Promise<AuthProbeOutcome> {
   return sendAnonymousGet(probe, endpointUrl);
 }
@@ -454,7 +464,11 @@ function normalizeKey(key: string): string {
 function hasContent(value: unknown): boolean {
   if (typeof value === "string") {
     const t = value.trim();
-    return t.length > 0 && !/^[*•.\-_]+$/.test(t) && !/^(?:null|undefined|redacted|\[redacted\]|\[filtered\])$/i.test(t);
+    return (
+      t.length > 0 &&
+      !/^[*•.\-_]+$/.test(t) &&
+      !/^(?:null|undefined|redacted|\[redacted\]|\[filtered\])$/i.test(t)
+    );
   }
   if (Array.isArray(value)) return value.length > 0;
   if (typeof value === "object" && value !== null) return Object.keys(value).length > 0;
@@ -539,7 +553,12 @@ const KIND_LABEL: Record<DisclosureKind, string> = {
   secret: "credential secret",
   "internal-record": "internal user column",
 };
-const KIND_ORDER: readonly DisclosureKind[] = ["password-hash", "password", "secret", "internal-record"];
+const KIND_ORDER: readonly DisclosureKind[] = [
+  "password-hash",
+  "password",
+  "secret",
+  "internal-record",
+];
 
 function summarize(fields: DisclosedField[]): string {
   const parts: string[] = [];
@@ -548,7 +567,9 @@ function summarize(fields: DisclosedField[]): string {
     if (paths.length === 0) continue;
     const shown = paths.slice(0, 3).join(", ");
     const more = paths.length > 3 ? ` and ${paths.length - 3} more` : "";
-    parts.push(`${paths.length} ${KIND_LABEL[kind]}${paths.length === 1 ? "" : "s"} (${shown}${more})`);
+    parts.push(
+      `${paths.length} ${KIND_LABEL[kind]}${paths.length === 1 ? "" : "s"} (${shown}${more})`,
+    );
   }
   return parts.join("; ");
 }
@@ -567,7 +588,7 @@ type EndpointVerdict =
 async function probeEndpoint(
   ctx: RuleContext,
   candidate: AuthCandidate,
-  cachedOnly = false
+  cachedOnly = false,
 ): Promise<EndpointVerdict> {
   const pending: Promise<AuthProbeOutcome> | undefined = cachedOnly
     ? peekAnonymousGet(ctx.probe, candidate.url)
@@ -720,7 +741,16 @@ export const authEndpointDisclosureRule: Rule = {
     // could be leaking, so a run that left one unread is not clean (#1920).
     const total = selection.candidates.length;
     const unverified = total - probed + serverErrors + (pushback ? 1 : 0);
-    const runDetails = { ...details, probed, jsonAnswers, errored, serverErrors, pushback, budgetStopped, unverified };
+    const runDetails = {
+      ...details,
+      probed,
+      jsonAnswers,
+      errored,
+      serverErrors,
+      pushback,
+      budgetStopped,
+      unverified,
+    };
     const onlyBudget = budgetStopped && !pushback && serverErrors === 0;
     if (leaks.length === 0 && unverified > 0 && onlyBudget) {
       checks.push({
@@ -734,11 +764,13 @@ export const authEndpointDisclosureRule: Rule = {
       const why: string[] = [];
       if (pushback) {
         why.push(
-          `the site throttled the probes (HTTP 429) or answered with a bot challenge after ${probed} of ${total} endpoint(s), so no further request was sent`
+          `the site throttled the probes (HTTP 429) or answered with a bot challenge after ${probed} of ${total} endpoint(s), so no further request was sent`,
         );
       }
-      if (budgetStopped) why.push(`the probe budget ran out after ${probed} of ${total} endpoint(s)`);
-      if (serverErrors > 0) why.push(`${serverErrors} endpoint(s) answered with a server error (5xx)`);
+      if (budgetStopped)
+        why.push(`the probe budget ran out after ${probed} of ${total} endpoint(s)`);
+      if (serverErrors > 0)
+        why.push(`${serverErrors} endpoint(s) answered with a server error (5xx)`);
       checks.push({
         name: CHECK_SKIPPED,
         status: "skipped",

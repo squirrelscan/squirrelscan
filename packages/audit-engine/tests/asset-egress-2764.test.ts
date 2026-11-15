@@ -124,7 +124,9 @@ async function assetsOf(origin: string) {
     external_links: { enabled: false },
     internal_links: { enabled: false },
   } as unknown as Config;
-  const pre = await Effect.runPromise(runStreamingPreRules(crawler.storage as SQLiteStorage, crawlId, config, {}));
+  const pre = await Effect.runPromise(
+    runStreamingPreRules(crawler.storage as SQLiteStorage, crawlId, config, {}),
+  );
   return pre.assets;
 }
 

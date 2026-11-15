@@ -4,7 +4,12 @@ import { z } from "zod";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
-import { eeatPathsSchema, matchesConfiguredPaths, probedConfiguredPages, probedNote } from "../shared/eeat-paths";
+import {
+  eeatPathsSchema,
+  matchesConfiguredPaths,
+  probedConfiguredPages,
+  probedNote,
+} from "../shared/eeat-paths";
 import { findLinkedUncrawledPage, linkedUncrawledCheck } from "../shared/linked-uncrawled-page";
 import {
   findPrivacyPage,
@@ -84,9 +89,14 @@ export const privacyPolicyRule: Rule = {
         checks.push({
           name: "privacy-policy",
           status: "warn",
-          message: probed.length > 0 ? `No Privacy Policy page found ${probedNote(probed)}` : "No Privacy Policy page found",
+          message:
+            probed.length > 0
+              ? `No Privacy Policy page found ${probedNote(probed)}`
+              : "No Privacy Policy page found",
           value: "Create /privacy-policy page",
-          ...(probed.length > 0 ? { details: { probed: true, paths: probed.map((p) => p.path) } } : {}),
+          ...(probed.length > 0
+            ? { details: { probed: true, paths: probed.map((p) => p.path) } }
+            : {}),
         });
         return { checks };
       } else {

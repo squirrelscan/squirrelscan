@@ -22,12 +22,20 @@
   },
   "scripts": {
     "typecheck": "tsgo --noEmit && tsgo --noEmit -p tsconfig.test.json && tsgo --noEmit -p tsconfig.workers.json",
-    "bench:secrets": "bun run scripts/bench-leaked-secrets.ts"
+    "bench:secrets": "bun run scripts/bench-leaked-secrets.ts",
+    "lint": "oxlint -c oxlint.config.mjs src/ tests/ scripts/",
+    "format": "oxfmt src/ tests/ scripts/ --write",
+    "format:check": "oxfmt src/ tests/ scripts/ --check"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260609.1",
     "@types/bun": "^1.4.0",
-    "@types/node": "^24.13.1"
+    "@types/node": "^24.13.1",
+    "eslint-plugin-github": "^6.0.0",
+    "eslint-plugin-sonarjs": "^4.1.0",
+    "oxfmt": "^0.21.0",
+    "oxlint": "1.73.0",
+    "ultracite": "7.9.2"
   },
   "private": true,
   "license": "MIT"

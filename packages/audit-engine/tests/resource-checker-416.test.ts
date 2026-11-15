@@ -17,9 +17,7 @@ afterEach(() => {
 });
 
 /** Install a fetch stub; returns the recorded calls for assertions. */
-function stubFetch(
-  handler: (call: FetchCall) => Response
-): { calls: FetchCall[] } {
+function stubFetch(handler: (call: FetchCall) => Response): { calls: FetchCall[] } {
   const calls: FetchCall[] = [];
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const headers = new Headers(init?.headers);
@@ -53,9 +51,7 @@ describe("resource-checker GET fallback 416 handling (#235)", () => {
       });
     });
 
-    const [result] = await Effect.runPromise(
-      checkResourceSizes([url], { priorByUrl: undefined })
-    );
+    const [result] = await Effect.runPromise(checkResourceSizes([url], { priorByUrl: undefined }));
 
     expect(result.status).toBe(200);
     expect(result.error).toBeNull();
@@ -117,11 +113,12 @@ describe("resource-checker GET fallback 416 handling (#235)", () => {
 // "skipped" placeholder instead of hammering a slow host.
 describe("resource-checker fetch budget (#1252)", () => {
   test("skips URLs whose fetch would start after the budget deadline", async () => {
-    const { calls } = stubFetch(() =>
-      new Response("ok", {
-        status: 200,
-        headers: { "content-type": "text/css", "content-length": "2" },
-      }),
+    const { calls } = stubFetch(
+      () =>
+        new Response("ok", {
+          status: 200,
+          headers: { "content-type": "text/css", "content-length": "2" },
+        }),
     );
 
     // Advance the injected clock past the deadline before the checks run → every
@@ -130,9 +127,7 @@ describe("resource-checker fetch budget (#1252)", () => {
     const budget = createFetchBudget({ totalBudgetMs: 1, now: () => clock });
     clock = 1000; // now well past deadline (startedAt 0 + 1ms budget)
     const urls = ["https://a.com/1.css", "https://a.com/2.css", "https://a.com/3.css"];
-    const results = await Effect.runPromise(
-      checkResourceSizes(urls, { budget, concurrency: 1 }),
-    );
+    const results = await Effect.runPromise(checkResourceSizes(urls, { budget, concurrency: 1 }));
 
     // No network calls — all three were skipped before fetch.
     expect(calls).toHaveLength(0);
@@ -142,11 +137,12 @@ describe("resource-checker fetch budget (#1252)", () => {
   });
 
   test("fetches normally when the budget has headroom", async () => {
-    const { calls } = stubFetch(() =>
-      new Response("ok", {
-        status: 200,
-        headers: { "content-type": "text/css", "content-length": "2" },
-      }),
+    const { calls } = stubFetch(
+      () =>
+        new Response("ok", {
+          status: 200,
+          headers: { "content-type": "text/css", "content-length": "2" },
+        }),
     );
     const budget = createFetchBudget({ totalBudgetMs: 60_000 });
     const results = await Effect.runPromise(

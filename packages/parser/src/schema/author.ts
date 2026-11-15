@@ -1,12 +1,7 @@
 // Author extraction from schema.org data
 
 import type { SchemaCollection } from "./collection";
-import type {
-  ImageObjectSchema,
-  OrganizationSchema,
-  ParsedSchema,
-  PersonSchema,
-} from "./types";
+import type { ImageObjectSchema, OrganizationSchema, ParsedSchema, PersonSchema } from "./types";
 
 /**
  * Author information extracted from schema
@@ -33,9 +28,7 @@ export interface AuthorInfo {
  * the old standalone-Person fallback grabbed whichever Person appeared first
  * (e.g. the publisher/editor), not the one the article actually references.
  */
-export function extractAuthorFromSchema(
-  schemas: SchemaCollection
-): AuthorInfo | null {
+export function extractAuthorFromSchema(schemas: SchemaCollection): AuthorInfo | null {
   // Index every node by @id so author references can be resolved.
   const byId = buildIdIndex(schemas.all);
 
@@ -63,9 +56,7 @@ export function extractAuthorFromSchema(
 }
 
 /** Build an `@id` → node lookup from all parsed schema nodes. */
-function buildIdIndex(
-  nodes: ParsedSchema[]
-): Map<string, ParsedSchema> {
+function buildIdIndex(nodes: ParsedSchema[]): Map<string, ParsedSchema> {
   const map = new Map<string, ParsedSchema>();
   for (const node of nodes) {
     const id = node["@id"];
@@ -94,7 +85,7 @@ function hasName(node: ParsedSchema): boolean {
  */
 function resolveRef(
   value: PersonSchema | OrganizationSchema | string,
-  byId: Map<string, ParsedSchema>
+  byId: Map<string, ParsedSchema>,
 ): PersonSchema | OrganizationSchema | string {
   if (typeof value !== "object" || value === null) return value;
   const id = (value as { "@id"?: unknown })["@id"];
@@ -119,7 +110,7 @@ function parseAuthorField(
     | OrganizationSchema
     | string
     | (PersonSchema | OrganizationSchema | string)[],
-  byId: Map<string, ParsedSchema>
+  byId: Map<string, ParsedSchema>,
 ): AuthorInfo | null {
   // Handle array - use first item
   if (Array.isArray(author)) {
@@ -191,7 +182,7 @@ function organizationToAuthorInfo(org: OrganizationSchema): AuthorInfo {
  * Extract URL from image field (can be string or ImageObject)
  */
 function extractImageUrl(
-  image: string | ImageObjectSchema | (string | ImageObjectSchema)[] | undefined
+  image: string | ImageObjectSchema | (string | ImageObjectSchema)[] | undefined,
 ): string | undefined {
   if (!image) return undefined;
 

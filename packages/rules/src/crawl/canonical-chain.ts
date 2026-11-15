@@ -87,10 +87,7 @@ export const canonicalChainRule: Rule = {
     const canonicalParsed = new URL(absoluteCanonical);
 
     // Check protocol mismatch
-    if (
-      pageUrlObj.protocol === "https:" &&
-      canonicalParsed.protocol === "http:"
-    ) {
+    if (pageUrlObj.protocol === "https:" && canonicalParsed.protocol === "http:") {
       checks.push({
         name: "canonical-protocol",
         status: "warn",
@@ -101,16 +98,10 @@ export const canonicalChainRule: Rule = {
 
     // Check for common chain indicators
     // (In a full implementation, you'd actually fetch and check redirects)
-    const suspiciousPatterns = [
-      /\/\?.*redirect/i,
-      /\/go\//,
-      /\/out\//,
-      /\/link\//,
-      /\/r\//,
-    ];
+    const suspiciousPatterns = [/\/\?.*redirect/i, /\/go\//, /\/out\//, /\/link\//, /\/r\//];
 
     const hasSuspiciousPattern = suspiciousPatterns.some((pattern) =>
-      pattern.test(absoluteCanonical)
+      pattern.test(absoluteCanonical),
     );
 
     if (hasSuspiciousPattern) {

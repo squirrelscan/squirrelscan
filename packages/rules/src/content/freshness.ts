@@ -34,17 +34,12 @@ export const freshnessRule: Rule = {
     }
 
     // Check for schema.org dates
-    const schemaScripts = doc.querySelectorAll(
-      'script[type="application/ld+json"]'
-    );
+    const schemaScripts = doc.querySelectorAll('script[type="application/ld+json"]');
     let hasSchemaDate = false;
 
     for (const script of schemaScripts) {
       const content = script.textContent || "";
-      if (
-        content.includes("datePublished") ||
-        content.includes("dateModified")
-      ) {
+      if (content.includes("datePublished") || content.includes("dateModified")) {
         hasSchemaDate = true;
         break;
       }
@@ -65,18 +60,13 @@ export const freshnessRule: Rule = {
         name: "time-elements",
         status: "pass",
         message: `${timeElements.length} <time> element(s) found`,
-        value:
-          (timeElements[0] as Element).getAttribute("datetime") || undefined,
+        value: (timeElements[0] as Element).getAttribute("datetime") || undefined,
       });
     }
 
     // Check meta article dates
-    const articlePublished = doc.querySelector(
-      'meta[property="article:published_time"]'
-    );
-    const articleModified = doc.querySelector(
-      'meta[property="article:modified_time"]'
-    );
+    const articlePublished = doc.querySelector('meta[property="article:published_time"]');
+    const articleModified = doc.querySelector('meta[property="article:modified_time"]');
 
     if (articlePublished || articleModified) {
       checks.push({
@@ -91,11 +81,7 @@ export const freshnessRule: Rule = {
     }
 
     // Summary
-    const hasAnySig =
-      lastModified ||
-      hasSchemaDate ||
-      timeElements.length > 0 ||
-      articlePublished;
+    const hasAnySig = lastModified || hasSchemaDate || timeElements.length > 0 || articlePublished;
 
     if (!hasAnySig) {
       checks.push({

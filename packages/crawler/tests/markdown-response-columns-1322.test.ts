@@ -91,7 +91,9 @@ describe("markdown_response negotiation status columns (repo#1322)", () => {
 
     const db = new Database(path);
     for (const col of NEW_COLUMNS) db.exec(`ALTER TABLE markdown_response DROP COLUMN ${col}`);
-    const version = db.prepare("SELECT MAX(version) AS v FROM schema_version").get() as { v: number };
+    const version = db.prepare("SELECT MAX(version) AS v FROM schema_version").get() as {
+      v: number;
+    };
     db.close();
     expect(version.v).toBe(SCHEMA_VERSION);
     for (const col of NEW_COLUMNS) expect(markdownColumns(path)).not.toContain(col);

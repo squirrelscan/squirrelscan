@@ -129,7 +129,10 @@ export function componentOccurrenceIdentity(occurrence: ComponentOccurrence): st
     // is reported as evidence, but including it here would split one component
     // on any per-page string in the region (a date, a counter, a breadcrumb),
     // which is exactly the merge this feature exists to make.
-    variant: { key: occurrence.variant.key, structuralSignature: occurrence.variant.structuralSignature },
+    variant: {
+      key: occurrence.variant.key,
+      structuralSignature: occurrence.variant.structuralSignature,
+    },
     element: occurrence.element,
     defect: occurrence.defect,
   });
@@ -197,10 +200,13 @@ type GroupEntry = {
 function modalHint(hints: GroupEntry["hints"]): RootHint | undefined {
   if (!hints?.length) return undefined;
   const perPage = new Map<string, string>();
-  for (const entry of hints) if (!perPage.has(entry.pageUrl)) perPage.set(entry.pageUrl, stable(entry.hint));
+  for (const entry of hints)
+    if (!perPage.has(entry.pageUrl)) perPage.set(entry.pageUrl, stable(entry.hint));
   const counts = new Map<string, number>();
   for (const value of perPage.values()) counts.set(value, (counts.get(value) ?? 0) + 1);
-  const ranked = [...counts.entries()].sort(([leftKey, left], [rightKey, right]) => right - left || compare(leftKey, rightKey));
+  const ranked = [...counts.entries()].sort(
+    ([leftKey, left], [rightKey, right]) => right - left || compare(leftKey, rightKey),
+  );
   const [best, bestCount] = ranked[0]!;
   if (ranked.length > 1 && ranked[1]![1] === bestCount) return undefined;
   return hints.find((entry) => stable(entry.hint) === best)?.hint;
@@ -443,9 +449,9 @@ export function componentFixGroups(ruleId: string, checks: CheckResult[]): Compo
         .map((occurrence) => ({ occurrence, key: componentOccurrenceKey(occurrence) }))
         .sort((a, b) => compare(a.key, b.key))
         .map((entry) => entry.occurrence);
-      const affectedPages = [
-        ...new Set(occurrences.map((occurrence) => occurrence.pageUrl)),
-      ].sort(compare);
+      const affectedPages = [...new Set(occurrences.map((occurrence) => occurrence.pageUrl))].sort(
+        compare,
+      );
       const representative = occurrences[0]!;
       const attribution: ComponentFixAttribution = promotedIdentities.has(identity)
         ? "repeated-subtree"

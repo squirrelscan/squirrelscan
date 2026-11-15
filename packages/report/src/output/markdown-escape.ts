@@ -54,7 +54,10 @@ export function escapeMarkdownText(value: string): string {
  * value stays in its cell.
  */
 export function escapeMarkdownCell(value: string): string {
-  return value.split(/\r\n|\r|\n/).map(escapeSpecials).join("<br>");
+  return value
+    .split(/\r\n|\r|\n/)
+    .map(escapeSpecials)
+    .join("<br>");
 }
 
 /**

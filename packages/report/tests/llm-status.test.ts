@@ -21,7 +21,7 @@ function baseReport(overrides: Partial<AuditReport> = {}): AuditReport {
 }
 
 describe("renderLlm failed/blocked status (#792)", () => {
-  test("blocked report emits a <status state=\"blocked\"> block with reason + explanation", () => {
+  test('blocked report emits a <status state="blocked"> block with reason + explanation', () => {
     const xml = renderLlm(
       baseReport({
         status: "blocked",
@@ -40,10 +40,8 @@ describe("renderLlm failed/blocked status (#792)", () => {
     expect(xml.slice(xml.indexOf("<status"), xml.indexOf("</status>"))).not.toContain("—");
   });
 
-  test("failed (unreachable) report emits a <status state=\"failed\"> block", () => {
-    const xml = renderLlm(
-      baseReport({ status: "failed", statusReason: "No pages were crawled" }),
-    );
+  test('failed (unreachable) report emits a <status state="failed"> block', () => {
+    const xml = renderLlm(baseReport({ status: "failed", statusReason: "No pages were crawled" }));
     expect(xml).toContain('<status state="failed"');
     expect(xml).toContain("No pages could be fetched from the site");
     expect(xml).toContain("squirrel audit https://example.com");
@@ -60,7 +58,8 @@ describe("renderLlm failed/blocked status (#792)", () => {
 // same way, so the retry line gives way to the destination, offered for the
 // user to confirm, or to "needs authentication" for a sign-in page.
 describe("renderLlm off-site redirect failure (#3480)", () => {
-  const OFF_SITE = "Redirect from example.com could not be followed: redirected off-site to www.example.org";
+  const OFF_SITE =
+    "Redirect from example.com could not be followed: redirected off-site to www.example.org";
 
   test("offers the destination's exact command, for the user to confirm", () => {
     const xml = renderLlm(
@@ -95,7 +94,9 @@ describe("renderLlm off-site redirect failure (#3480)", () => {
       { statusReason: OFF_SITE },
     ]) {
       const xml = renderLlm(baseReport({ status: "failed", ...overrides }));
-      expect(xml).toContain("Run the CLI with `squirrel audit https://example.com` to retry locally.");
+      expect(xml).toContain(
+        "Run the CLI with `squirrel audit https://example.com` to retry locally.",
+      );
       expect(xml).not.toContain("The entry URL redirects to");
     }
   });

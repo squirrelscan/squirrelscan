@@ -27,7 +27,11 @@ describe("a scan that overruns the time budget keeps what it found (#1556)", () 
   test("a critical key before a huge tail of filler is kept, and the page is still listed as not fully scanned", () => {
     const filler = "var token = 'abcdefghijklmnopqrstuvwxyz0123456789';\n".repeat(150_000);
     const html = `<html><body><script>var k = "${stripe(7)}";</script><script>${filler}</script></body></html>`;
-    const signal = buildCollectedPageSignal({ url: URL_, parsed: parsePage(html, URL_), budgetMs: 25 });
+    const signal = buildCollectedPageSignal({
+      url: URL_,
+      parsed: parsePage(html, URL_),
+      budgetMs: 25,
+    });
     expect(signal.timedOut?.ruleIds).toContain("security/leaked-secrets");
     expect(signal.secrets.some((s) => s.value === stripe(7))).toBe(true);
   });
@@ -35,14 +39,22 @@ describe("a scan that overruns the time budget keeps what it found (#1556)", () 
   test("the rule still says the page was not fully scanned, and does not pass", async () => {
     const filler = "var token = 'abcdefghijklmnopqrstuvwxyz0123456789';\n".repeat(150_000);
     const html = `<html><body><script>var k = "${stripe(8)}";</script><script>${filler}</script></body></html>`;
-    const signal = buildCollectedPageSignal({ url: URL_, parsed: parsePage(html, URL_), budgetMs: 25 });
+    const signal = buildCollectedPageSignal({
+      url: URL_,
+      parsed: parsePage(html, URL_),
+      budgetMs: 25,
+    });
     const result = await leakedSecretsRule.run({
       site: { baseUrl: URL_, pages: [], scripts: [] },
       collectedSignals: { pages: [signal] },
     } as unknown as RuleContext);
     expect(result.checks.find((c) => c.name === "leaked-secrets-unscanned")).toBeDefined();
     expect(result.checks.some((c) => c.status === "pass")).toBe(false);
-    expect(result.checks.find((c) => c.name === "leaked-secrets-critical" || c.name === "leaked-secrets-high")).toBeDefined();
+    expect(
+      result.checks.find(
+        (c) => c.name === "leaked-secrets-critical" || c.name === "leaked-secrets-high",
+      ),
+    ).toBeDefined();
   });
 
   test("scripts are read first for the time budget, but the page's findings keep document-then-script order", () => {

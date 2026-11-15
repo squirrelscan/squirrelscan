@@ -37,7 +37,8 @@ function humanizeEnum(value: string): string {
     .split(/\s+/)
     .filter(Boolean)
     .map(
-      (word) => ENUM_WORD_LABELS[word.toLowerCase()] ?? word.charAt(0).toUpperCase() + word.slice(1),
+      (word) =>
+        ENUM_WORD_LABELS[word.toLowerCase()] ?? word.charAt(0).toUpperCase() + word.slice(1),
     )
     .join(" ");
 }

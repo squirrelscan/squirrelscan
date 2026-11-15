@@ -103,10 +103,7 @@ export const ariaCommandNameRule: Rule = {
         status: "fail",
         message: `${missingNames.length} command element(s) without accessible names`,
         items: missingNames.slice(0, 10).map((id) => ({ id })),
-        details:
-          missingNames.length > 10
-            ? { additional: missingNames.length - 10 }
-            : undefined,
+        details: missingNames.length > 10 ? { additional: missingNames.length - 10 } : undefined,
       });
     }
     if (unnamed.unconfirmed.length > 0) {
@@ -114,8 +111,8 @@ export const ariaCommandNameRule: Rule = {
         unconfirmedRow(
           "aria-command-name",
           "command element(s) without accessible names",
-          unnamed.unconfirmed
-        )
+          unnamed.unconfirmed,
+        ),
       );
     }
     if (missingNames.length === 0 && unnamed.unconfirmed.length === 0) {
@@ -124,8 +121,7 @@ export const ariaCommandNameRule: Rule = {
         status: "pass",
         ...(unnamed.hidden > 0
           ? {
-              message:
-                "All command elements in the accessibility tree have accessible names",
+              message: "All command elements in the accessibility tree have accessible names",
               details: { hiddenWithoutName: unnamed.hidden },
             }
           : { message: "All command elements have accessible names" }),

@@ -75,7 +75,9 @@ describe("asset checks with a custom header that differs only in case (repo#3346
       external_links: { enabled: false },
       internal_links: { enabled: false },
     } as unknown as Config;
-    await Effect.runPromise(runStreamingPreRules(crawler.storage as SQLiteStorage, crawlId, config, {}));
+    await Effect.runPromise(
+      runStreamingPreRules(crawler.storage as SQLiteStorage, crawlId, config, {}),
+    );
 
     const assets = seen.filter((s) => ["/style.css", "/app.js", "/logo.png"].includes(s.path));
     expect(new Set(assets.map((s) => s.path))).toEqual(

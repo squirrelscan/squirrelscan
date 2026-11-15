@@ -43,7 +43,7 @@ const run = <A>(eff: Effect.Effect<A, unknown, never>): Promise<A> =>
   Effect.runPromise(eff as Effect.Effect<A, never, never>);
 
 const BIG_BODY = `<!doctype html><html lang="en"><head><title>Big page</title></head><body>${'<div style="display:none">hidden filler text for the rule to read</div><p>visible copy</p>'.repeat(
-  12_000
+  12_000,
 )}</body></html>`;
 const SMALL_BODY =
   '<!doctype html><html lang="en"><head><title>Small</title></head><body><p>hi</p></body></html>';
@@ -136,10 +136,14 @@ describe("the <rule>-timeouts row reaches the stored results (pub#971)", () => {
       });
       const pagesNotChecked = (rows[0]!.details as { pagesNotChecked: number }).pagesNotChecked;
       expect(pagesNotChecked).toBeGreaterThanOrEqual(1);
-      expect((rows[0]!.details as { maxElapsedMs?: number }).maxElapsedMs).toBeGreaterThanOrEqual(1);
+      expect((rows[0]!.details as { maxElapsedMs?: number }).maxElapsedMs).toBeGreaterThanOrEqual(
+        1,
+      );
 
       // And in the per-rule results the report is built from.
-      const inReport = result.ruleResultsMap.get(RULE)?.checks.filter((c) => c.name === `${RULE}-timeouts`);
+      const inReport = result.ruleResultsMap
+        .get(RULE)
+        ?.checks.filter((c) => c.name === `${RULE}-timeouts`);
       expect(inReport).toHaveLength(1);
       // No failed check for a timeout, on any page.
       for (const checks of result.pageRuleResults.values()) {
@@ -165,11 +169,13 @@ describe("a page-time extractor timeout leaves the row too (pub#971)", () => {
     const checks = result.siteRuleResults.get("security/leaked-secrets") ?? [];
     const rows = checks.filter((c) => c.name === "security/leaked-secrets-timeouts");
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ status: "info", details: { timedOut: true, pagesNotChecked: 2 } });
+    expect(rows[0]).toMatchObject({
+      status: "info",
+      details: { timedOut: true, pagesNotChecked: 2 },
+    });
     expect(checks.some((c) => c.status === "fail")).toBe(false);
-    expect(checks.filter((c) => c.name === "security/leaked-secrets-error").map((c) => c.status)).toEqual([
-      "skipped",
-      "skipped",
-    ]);
+    expect(
+      checks.filter((c) => c.name === "security/leaked-secrets-error").map((c) => c.status),
+    ).toEqual(["skipped", "skipped"]);
   }, 60_000);
 });

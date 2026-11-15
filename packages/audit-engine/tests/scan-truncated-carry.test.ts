@@ -111,7 +111,8 @@ const CASES: Case[] = [
     prior: {
       name: "dev-leakage",
       status: "warn",
-      message: "1 development host reference(s) on a production page (localhost): example localhost:3000",
+      message:
+        "1 development host reference(s) on a production page (localhost): example localhost:3000",
       pageUrl: PAGE,
       value: 1,
       items: [{ id: "localhost", label: "localhost", snippet: "localhost:3000" }],

@@ -11,8 +11,7 @@ export const referenceLinkInTextBlockRule: Rule = {
   meta: {
     id: "a11y/link-in-text-block",
     name: "Link in Text Block",
-    description:
-      "Checks that links in text blocks are visually distinguishable",
+    description: "Checks that links in text blocks are visually distinguishable",
     solution:
       "Links within text blocks must be distinguishable by more than just color (for color-blind users). Use underlines, bold, borders, or other visual indicators. Exception: Links can rely on color alone if the contrast ratio between link and surrounding text is at least 3:1 and you provide additional cues on hover/focus.",
     category: "a11y",
@@ -28,9 +27,7 @@ export const referenceLinkInTextBlockRule: Rule = {
     const checks: CheckResult[] = [];
 
     // Check links within text-heavy elements
-    const textBlocks = doc.querySelectorAll(
-      "p, li, td, th, dd, blockquote, figcaption"
-    );
+    const textBlocks = doc.querySelectorAll("p, li, td, th, dd, blockquote, figcaption");
     let linksInText = 0;
     const linksWithoutUnderline: string[] = [];
     const counted = new Set<Element>();
@@ -44,27 +41,32 @@ export const referenceLinkInTextBlockRule: Rule = {
         // #1874: the same two skips as the rule (no text; nearest block has no text of its own).
         if (!link.textContent?.trim()) continue;
         const own = link.closest("p, li, td, th, dd, blockquote, figcaption");
-        if (own && ![...own.querySelectorAll("a")].reduce((t, a) => t.replace(a.textContent ?? "", ""), own.textContent ?? "").trim()) continue;
+        if (
+          own &&
+          ![...own.querySelectorAll("a")]
+            .reduce((t, a) => t.replace(a.textContent ?? "", ""), own.textContent ?? "")
+            .trim()
+        )
+          continue;
         linksInText++;
 
         // Check inline styles for text-decoration: none
         const style = link.getAttribute("style") || "";
         const hasNoUnderlineStyle =
           style.toLowerCase().includes("text-decoration") &&
-          (style.toLowerCase().includes("none") ||
-            !style.toLowerCase().includes("underline"));
+          (style.toLowerCase().includes("none") || !style.toLowerCase().includes("underline"));
 
         // Also check for common class patterns that remove underlines
         const className = link.getAttribute("class") || "";
         const hasNoUnderlineClass =
-          className.includes("no-underline") ||
-          className.includes("text-decoration-none");
+          className.includes("no-underline") || className.includes("text-decoration-none");
 
-        if ((hasNoUnderlineStyle || hasNoUnderlineClass) && !/(^|[;\s])(border|background)/i.test(style)) {
+        if (
+          (hasNoUnderlineStyle || hasNoUnderlineClass) &&
+          !/(^|[;\s])(border|background)/i.test(style)
+        ) {
           const text = link.textContent?.trim().slice(0, 30);
-          linksWithoutUnderline.push(
-            `"${text}${text && text.length >= 30 ? "..." : ""}"`
-          );
+          linksWithoutUnderline.push(`"${text}${text && text.length >= 30 ? "..." : ""}"`);
         }
       }
     }
@@ -77,8 +79,7 @@ export const referenceLinkInTextBlockRule: Rule = {
         items: linksWithoutUnderline.slice(0, 10).map((id) => ({ id })),
         details: {
           note: "Links need visual distinction beyond color",
-          suggestion:
-            "Ensure 3:1 contrast with surrounding text or add underlines",
+          suggestion: "Ensure 3:1 contrast with surrounding text or add underlines",
           ...(linksWithoutUnderline.length > 10
             ? { additional: linksWithoutUnderline.length - 10 }
             : {}),

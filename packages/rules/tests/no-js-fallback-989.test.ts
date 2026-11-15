@@ -19,11 +19,13 @@ type AnyRule = Pick<Rule, "run">;
 
 async function checks(rule: AnyRule, html: string): Promise<CheckResult[]> {
   const url = "https://example.com/";
-  return (await rule.run({
-    page: { url, html, statusCode: 200, loadTime: 0, headers: {} },
-    parsed: parsePage(html, url) as ParsedPage,
-    options: {},
-  })).checks as CheckResult[];
+  return (
+    await rule.run({
+      page: { url, html, statusCode: 200, loadTime: 0, headers: {} },
+      parsed: parsePage(html, url) as ParsedPage,
+      options: {},
+    })
+  ).checks as CheckResult[];
 }
 
 async function statuses(rule: AnyRule, html: string): Promise<Record<string, string>> {
@@ -46,13 +48,15 @@ const RULES: Array<[string, AnyRule, string]> = [
 for (const [name, rule, check] of RULES) {
   describe(`${name} and a no-js fallback`, () => {
     test("A: external sheet + show-only rule: unconfirmed with the script-state reason", async () => {
-      const out = (await checks(rule, page(LINK + ICON, SELECT)));
+      const out = await checks(rule, page(LINK + ICON, SELECT));
       expect(out.map((c) => [c.name, c.status])).toEqual([[`${check}-unconfirmed`, "warn"]]);
       expect(out[0]?.items?.[0]).toMatchObject({ label: SCRIPT_STATE_LABEL });
     });
 
     test("B: external sheet alone: unconfirmed", async () => {
-      expect(await statuses(rule, page(LINK, SELECT))).toEqual({ [`${check}-unconfirmed`]: "warn" });
+      expect(await statuses(rule, page(LINK, SELECT))).toEqual({
+        [`${check}-unconfirmed`]: "warn",
+      });
     });
 
     test("D: an unrendered fetch with <html class=no-js>: unconfirmed", async () => {
@@ -62,7 +66,10 @@ for (const [name, rule, check] of RULES) {
     });
 
     test("C: a readable .js .no-js hide stays unconfirmed (generic reason)", async () => {
-      const out = (await checks(rule, page(`${LINK}<style>.js .no-js{display:none}</style>`, SELECT)));
+      const out = await checks(
+        rule,
+        page(`${LINK}<style>.js .no-js{display:none}</style>`, SELECT),
+      );
       expect(out.map((c) => c.status)).toEqual(["warn"]);
       expect(out[0]?.items?.[0]).toMatchObject({ label: UNCONFIRMED_LABEL });
     });
@@ -88,10 +95,10 @@ for (const [name, rule, check] of RULES) {
 
     test("only <html class=no-js> carries it: the root is not a marker", async () => {
       expect(
-        (await statuses(
+        await statuses(
           rule,
           page(LINK, '<form><select name="id"><option>S</option></select></form>', "no-js"),
-        )),
+        ),
       ).toEqual({
         [check]: "fail",
       });
@@ -102,7 +109,7 @@ for (const [name, rule, check] of RULES) {
 describe("the other naming rules apply the same marker", () => {
   test("button-name", async () => {
     const html = page(LINK, '<button class="no-js"></button>');
-    const out = (await checks(buttonNameRule, html));
+    const out = await checks(buttonNameRule, html);
     expect(out.map((c) => c.name)).toEqual(["button-name-unconfirmed"]);
     expect(out[0]?.items?.[0]).toMatchObject({ label: SCRIPT_STATE_LABEL });
     expect(await statuses(buttonNameRule, page("", '<button class="no-js"></button>'))).toEqual({
@@ -112,10 +119,12 @@ describe("the other naming rules apply the same marker", () => {
 
   test("aria-hidden-focus", async () => {
     const body = '<div aria-hidden="true"><a href="/x" class="no-js">x</a></div>';
-    const out = (await checks(ariaHiddenFocusRule, page(LINK, body)));
+    const out = await checks(ariaHiddenFocusRule, page(LINK, body));
     expect(out.map((c) => c.name)).toEqual(["aria-hidden-focus-unconfirmed"]);
     expect(out[0]?.items?.[0]).toMatchObject({ label: SCRIPT_STATE_LABEL });
-    expect(await statuses(ariaHiddenFocusRule, page("", body))).toEqual({ "aria-hidden-focus": "fail" });
+    expect(await statuses(ariaHiddenFocusRule, page("", body))).toEqual({
+      "aria-hidden-focus": "fail",
+    });
   });
 });
 

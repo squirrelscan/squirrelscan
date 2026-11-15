@@ -40,8 +40,7 @@ export const viewportZoomRule: Rule = {
 
     // Check for zoom-disabling properties
     const hasUserScalableNo =
-      /user-scalable\s*=\s*no/i.test(content) ||
-      /user-scalable\s*=\s*0/i.test(content);
+      /user-scalable\s*=\s*no/i.test(content) || /user-scalable\s*=\s*0/i.test(content);
 
     const hasMaxScale = /maximum-scale\s*=\s*1(\.0)?(?![0-9])/i.test(content);
 

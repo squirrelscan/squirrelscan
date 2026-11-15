@@ -7,7 +7,11 @@ import { describe, expect, test } from "bun:test";
 
 import type { AuditReport, EditorSummary } from "../src/types";
 import { REPORT_HTML_VERSION } from "../src/constants";
-import { buildEditorSummaryRequest, editorSummaryView, toEditorSummary } from "../src/editor-summary";
+import {
+  buildEditorSummaryRequest,
+  editorSummaryView,
+  toEditorSummary,
+} from "../src/editor-summary";
 import { renderHtml } from "../src/output/html";
 import { renderJson } from "../src/output/json";
 import { renderLlm } from "../src/output/llm";
@@ -61,21 +65,43 @@ describe("buildEditorSummaryRequest", () => {
       report({
         technologies: {
           items: [
-            { id: "wordpress", name: "WordPress", category: "cms", version: "6.7", confidence: "high", detectedBy: "html:wp-content" },
+            {
+              id: "wordpress",
+              name: "WordPress",
+              category: "cms",
+              version: "6.7",
+              confidence: "high",
+              detectedBy: "html:wp-content",
+            },
           ],
           added: [],
           removed: [],
           firstScan: true,
         },
         ruleResults: {
-          "perf/ttfb": { meta: { name: "TTFB", category: "perf", weight: 5 }, checks: [{ status: "fail" }] },
-          "core/h1": { meta: { name: "H1", category: "core", weight: 3 }, checks: [{ status: "warn" }] },
-          "core/title": { meta: { name: "Title", category: "core", weight: 3 }, checks: [{ status: "pass" }] },
+          "perf/ttfb": {
+            meta: { name: "TTFB", category: "perf", weight: 5 },
+            checks: [{ status: "fail" }],
+          },
+          "core/h1": {
+            meta: { name: "H1", category: "core", weight: 3 },
+            checks: [{ status: "warn" }],
+          },
+          "core/title": {
+            meta: { name: "Title", category: "core", weight: 3 },
+            checks: [{ status: "pass" }],
+          },
         } as unknown as AuditReport["ruleResults"],
       }),
     );
     expect(req.technologies).toEqual([
-      { id: "wordpress", name: "WordPress", category: "cms", version: "6.7", detectedBy: "html:wp-content" },
+      {
+        id: "wordpress",
+        name: "WordPress",
+        category: "cms",
+        version: "6.7",
+        detectedBy: "html:wp-content",
+      },
     ]);
     expect(req.failingRuleIds?.sort()).toEqual(["core/h1", "perf/ttfb"]);
   });
@@ -159,7 +185,13 @@ describe("toEditorSummary priorities", () => {
       priorities: [
         { title: "No action" },
         "not an object",
-        { title: "  Spaced\n title ", action: "Do it", effort: "huge", ruleIds: [1, "a/b"], technologies: "x" },
+        {
+          title: "  Spaced\n title ",
+          action: "Do it",
+          effort: "huge",
+          ruleIds: [1, "a/b"],
+          technologies: "x",
+        },
         ...Array.from({ length: 20 }, (_, i) => ({ title: `T${i}`, action: "A" })),
       ],
     });
@@ -223,7 +255,9 @@ describe("renderers with priorities", () => {
 
   test("llm and xml emit ranked priority elements", () => {
     const llm = renderLlm(r);
-    expect(llm).toContain('<priority rank="1" effort="quick-win" rules="perf/ttfb" tech="wordpress">');
+    expect(llm).toContain(
+      '<priority rank="1" effort="quick-win" rules="perf/ttfb" tech="wordpress">',
+    );
     expect(llm).not.toContain("<big-ticket>");
     const xml = renderXml(r);
     expect(xml).toContain('<priority rank="2" effort="moderate">');
@@ -234,7 +268,7 @@ describe("renderers with priorities", () => {
     const out = renderHtml(r);
     expect(out).toContain('data-issues="ranked"');
     expect(out).toContain("Cache pages with WP Rocket");
-    expect(out).not.toContain('data-big-ticket');
+    expect(out).not.toContain("data-big-ticket");
   });
 
   test("html renders one technology badge per id in first-occurrence order", () => {
@@ -297,7 +331,7 @@ describe("renderers without priorities keep the big-ticket list", () => {
     expect(renderText(r)).not.toContain("PRIORITIES");
     expect(renderLlm(r)).toContain("<big-ticket>");
     expect(renderXml(r)).toContain("<big-ticket>");
-    expect(renderHtml(r)).toContain('data-big-ticket');
+    expect(renderHtml(r)).toContain("data-big-ticket");
     expect(renderHtml(r)).not.toContain('data-issues="ranked"');
   });
 });

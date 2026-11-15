@@ -64,9 +64,7 @@ export const jsonLdValidRule: Rule = {
 
     if (parseErrors.length > 0 || validationIssues.length > 0) {
       const failureMessage =
-        parseErrors.length > 0
-          ? "Invalid JSON-LD syntax"
-          : "Schema.org validation errors detected";
+        parseErrors.length > 0 ? "Invalid JSON-LD syntax" : "Schema.org validation errors detected";
 
       const items = [
         ...parseErrors.map((err, index) => ({

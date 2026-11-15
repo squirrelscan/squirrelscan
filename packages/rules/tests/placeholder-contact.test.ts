@@ -105,7 +105,9 @@ describe("findPlaceholderContacts: social", () => {
   });
 
   test("an email-shaped handle and real profiles stay clean", () => {
-    expect(kinds("Mail jo@username.net or follow @acme", ["https://facebook.com/acme"])).toEqual([]);
+    expect(kinds("Mail jo@username.net or follow @acme", ["https://facebook.com/acme"])).toEqual(
+      [],
+    );
   });
 
   test("handle samples and URL samples merge into one finding", () => {
@@ -132,47 +134,61 @@ describe("classifyContactPage", () => {
 
 describe("placeholderContactRule", () => {
   test("skipped without a document", async () => {
-    const ctx = { page: { url: "https://a.test/" }, parsed: {}, options: {} } as unknown as RuleContext;
+    const ctx = {
+      page: { url: "https://a.test/" },
+      parsed: {},
+      options: {},
+    } as unknown as RuleContext;
     const [c] = (await placeholderContactRule.run(ctx)).checks;
     expect(c!.status).toBe("skipped");
   });
 
   test("skipped without a body", async () => {
-    const [c] = (await run("<html></html>"));
+    const [c] = await run("<html></html>");
     expect(c!.status).toBe("skipped");
     expect(c!.skipReason).toBe("no-body");
   });
 
   test("skipped on a documentation page", async () => {
-    const [c] = (await run(page("<p>Use info@example.com</p>"), "https://a.test/docs/mail"));
+    const [c] = await run(page("<p>Use info@example.com</p>"), "https://a.test/docs/mail");
     expect(c!.status).toBe("skipped");
   });
 
   test("pass on real contact details", async () => {
-    const [c] = (await run(page("<p>Call 020 7946 0958 or write to hi@acme.io</p>"), "https://a.test/contact"));
+    const [c] = await run(
+      page("<p>Call 020 7946 0958 or write to hi@acme.io</p>"),
+      "https://a.test/contact",
+    );
     expect(c!.status).toBe("pass");
   });
 
   test("fail on a contact page", async () => {
-    const [c] = (await run(page("<p>Call (212) 555-0123</p>"), "https://a.test/contact"));
+    const [c] = await run(page("<p>Call (212) 555-0123</p>"), "https://a.test/contact");
     expect(c!.status).toBe("fail");
     expect(c!.items?.map((i) => i.id)).toEqual(["phone"]);
     expect(c!.message).toContain("contact or checkout page");
   });
 
   test("fail on a checkout page, and on schema-detected contact pages", async () => {
-    expect((await run(page("<p>info@example.com</p>"), "https://a.test/checkout"))[0]!.status).toBe("fail");
-    expect((await run(page("<p>info@example.com</p>"), "https://a.test/x", "contact"))[0]!.status).toBe("fail");
+    expect((await run(page("<p>info@example.com</p>"), "https://a.test/checkout"))[0]!.status).toBe(
+      "fail",
+    );
+    expect(
+      (await run(page("<p>info@example.com</p>"), "https://a.test/x", "contact"))[0]!.status,
+    ).toBe("fail");
   });
 
   test("warn elsewhere", async () => {
-    const [c] = (await run(page("<footer>123 Main St</footer><p>Follow @yourhandle</p>")));
+    const [c] = await run(page("<footer>123 Main St</footer><p>Follow @yourhandle</p>"));
     expect(c!.status).toBe("warn");
     expect(c!.items?.map((i) => i.id)).toEqual(["address", "social"]);
   });
 
   test("a placeholder mailto link is found", async () => {
-    const [c] = (await run(page('<a href="mailto:info@example.com">Email us</a>'), "https://a.test/contact"));
+    const [c] = await run(
+      page('<a href="mailto:info@example.com">Email us</a>'),
+      "https://a.test/contact",
+    );
     expect(c!.status).toBe("fail");
   });
 
@@ -190,7 +206,9 @@ describe("placeholderContactRule", () => {
   });
 
   test("a <template> is inert", async () => {
-    expect((await run(page("<template><p>info@example.com</p></template>")))[0]!.status).toBe("pass");
+    expect((await run(page("<template><p>info@example.com</p></template>")))[0]!.status).toBe(
+      "pass",
+    );
   });
 
   test("is registered once, in the loader's content group", () => {

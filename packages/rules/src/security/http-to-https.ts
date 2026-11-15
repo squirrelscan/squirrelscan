@@ -27,7 +27,7 @@ export const optionsSchema = z.object({
     .max(600_000)
     .default(HTTP_PROBE_LIMITS.PROBE_TOTAL_BUDGET_MS)
     .describe(
-      "Total time budget in milliseconds for all probes; when it runs out the rule reports partial coverage"
+      "Total time budget in milliseconds for all probes; when it runs out the rule reports partial coverage",
     ),
 });
 
@@ -95,12 +95,9 @@ export async function probeHttpCoverage(
   urls: string[],
   baseUrl: string,
   probe: (httpUrl: string) => Promise<RedirectChain>,
-  options?: { concurrency?: number; staggerMs?: number; budgetMs?: number }
+  options?: { concurrency?: number; staggerMs?: number; budgetMs?: number },
 ): Promise<ProbeReport> {
-  const concurrency = Math.max(
-    1,
-    options?.concurrency ?? HTTP_PROBE_LIMITS.PROBE_CONCURRENCY
-  );
+  const concurrency = Math.max(1, options?.concurrency ?? HTTP_PROBE_LIMITS.PROBE_CONCURRENCY);
   const staggerMs = options?.staggerMs ?? HTTP_PROBE_LIMITS.PROBE_STAGGER_MS;
   // #1252: total wall-clock budget for the whole probe. This step runs inside
   // the rules phase and re-hits the target host, so a tarpit could stretch it
@@ -165,7 +162,7 @@ export async function probeHttpCoverage(
   }
 
   await Promise.all(
-    Array.from({ length: Math.min(concurrency, urls.length) }, (_, i) => worker(i))
+    Array.from({ length: Math.min(concurrency, urls.length) }, (_, i) => worker(i)),
   );
 
   return {
@@ -179,7 +176,7 @@ export async function probeHttpVariants(
   urls: string[],
   baseUrl: string,
   probe: (httpUrl: string) => Promise<RedirectChain>,
-  options?: { concurrency?: number; staggerMs?: number; budgetMs?: number }
+  options?: { concurrency?: number; staggerMs?: number; budgetMs?: number },
 ): Promise<ProbeResult[]> {
   const report = await probeHttpCoverage(urls, baseUrl, probe, options);
   return report.outcomes
@@ -268,7 +265,7 @@ export const httpToHttpsRule: Rule = {
       Array.from(sampleUrls),
       ctx.site.baseUrl,
       (httpUrl) => followRedirects(httpUrl),
-      { budgetMs: opts.probeBudgetMs }
+      { budgetMs: opts.probeBudgetMs },
     );
 
     const insecure = report.outcomes.filter((o) => o.kind === "insecure");

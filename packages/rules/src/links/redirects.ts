@@ -71,18 +71,14 @@ export async function followRedirects(
     // whole phase. Abort the underlying request (not a bare race) so the socket
     // is actually released — a race that only rejects leaves the read pending.
     const controller = new AbortController();
-    const timeoutId = setTimeout(
-      () => controller.abort(),
-      HTTP_PROBE_LIMITS.FOLLOW_TIMEOUT_MS,
-    );
+    const timeoutId = setTimeout(() => controller.abort(), HTTP_PROBE_LIMITS.FOLLOW_TIMEOUT_MS);
 
     try {
       const response = await requestAsync(currentUrl, {
         method: "HEAD",
         redirect: "manual", // Don't auto-follow
         headers: {
-          Accept:
-            "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
           "Upgrade-Insecure-Requests": "1",
         },
         signal: controller.signal,

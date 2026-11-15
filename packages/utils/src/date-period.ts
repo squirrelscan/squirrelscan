@@ -45,7 +45,8 @@ const ISO_SHAPED = /^[+-]?\d{4,6}-\d/;
  * GMT-05:00`, `23:00 +2`). After a time only: in `10-09-2024` the `-2024` is
  * not a zone.
  */
-const NUMERIC_ZONE = /\d:\d{2}(?::\d{2}(?:\.\d+)?)?\s*(?:[AP]\.?M\.?)?\s*((?:(?:GMT|UTC|UT)\s*)?([+-])(\d{1,2})(?::?(\d{2}))?)$/i;
+const NUMERIC_ZONE =
+  /\d:\d{2}(?::\d{2}(?:\.\d+)?)?\s*(?:[AP]\.?M\.?)?\s*((?:(?:GMT|UTC|UT)\s*)?([+-])(\d{1,2})(?::?(\d{2}))?)$/i;
 /** Zone names `Date` understands, at the end, with their offsets in minutes. */
 const NAMED_ZONE = /(?:^|[^a-z])(z|ut|utc|gmt|[ecmp][sd]t)$/i;
 const NAMED_ZONES: Record<string, number> = {
@@ -165,7 +166,11 @@ function wholeDay(start: number, day: string): DatePeriod {
 }
 
 function wholeMonth(year: number, month: number): DatePeriod {
-  return { start: utcMonthStart(year, month), end: utcMonthStart(year, month + 1) - 1, precision: "month" };
+  return {
+    start: utcMonthStart(year, month),
+    end: utcMonthStart(year, month + 1) - 1,
+    precision: "month",
+  };
 }
 
 /** The W3C forms, or null when `value` is not one. */
@@ -186,12 +191,21 @@ function w3cForm(value: string): DatePeriod | null {
   if (dateTime) {
     const [, y, mo, d, h, mi, s, fraction, zone] = dateTime;
     const ms = fraction ? Number(fraction.slice(0, 3).padEnd(3, "0")) : 0;
-    const wall = utcTime(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), Number(s ?? 0), ms);
+    const wall = utcTime(
+      Number(y),
+      Number(mo) - 1,
+      Number(d),
+      Number(h),
+      Number(mi),
+      Number(s ?? 0),
+      ms,
+    );
     if (wall === null) return null;
     let offsetMinutes = 0;
     if (zone && zone.toUpperCase() !== "Z") {
       const digits = zone.replace(":", "");
-      offsetMinutes = (zone[0] === "-" ? -1 : 1) * (Number(digits.slice(1, 3)) * 60 + Number(digits.slice(3, 5)));
+      offsetMinutes =
+        (zone[0] === "-" ? -1 : 1) * (Number(digits.slice(1, 3)) * 60 + Number(digits.slice(3, 5)));
     }
     const instant = wall - offsetMinutes * 60_000;
     return { start: instant, end: instant, precision: "instant", day: `${y}-${mo}-${d}` };
@@ -281,7 +295,9 @@ function writtenForm(value: string): DatePeriod | null {
   );
   if (wall === null) return null;
   const day = isoDay(wall);
-  return /\d:\d/.test(value) ? { start: wall, end: wall, precision: "instant", day } : wholeDay(wall, day);
+  return /\d:\d/.test(value)
+    ? { start: wall, end: wall, precision: "instant", day }
+    : wholeDay(wall, day);
 }
 
 /** The 0-based month a month word names. */

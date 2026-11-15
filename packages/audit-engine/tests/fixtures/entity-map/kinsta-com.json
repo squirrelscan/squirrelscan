@@ -32,18 +32,14 @@
     {
       "key": "id:http://data.wordlift.io/wl0150038/author/grantrichmond",
       "id": "http://data.wordlift.io/wl0150038/author/grantrichmond",
-      "types": [
-        "Person"
-      ],
+      "types": ["Person"],
       "name": "grantrichmond",
       "properties": {
         "name": "grantrichmond",
         "url": "https://kinsta.com/blog/author/grantrichmond/"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/cheatsheets/"
-      ],
+      "pages": ["https://kinsta.com/cheatsheets/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -52,18 +48,14 @@
     {
       "key": "id:http://data.wordlift.io/wl0150038/author/pedrooliveira",
       "id": "http://data.wordlift.io/wl0150038/author/pedrooliveira",
-      "types": [
-        "Person"
-      ],
+      "types": ["Person"],
       "name": "pedrooliveira",
       "properties": {
         "name": "pedrooliveira",
         "url": "https://kinsta.com/blog/author/pedrooliveira/"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/affiliate-program-for-youtubers/"
-      ],
+      "pages": ["https://kinsta.com/affiliate-program-for-youtubers/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -72,19 +64,14 @@
     {
       "key": "id:http://data.wordlift.io/wl0150038/author/sarabaiao",
       "id": "http://data.wordlift.io/wl0150038/author/sarabaiao",
-      "types": [
-        "Person"
-      ],
+      "types": ["Person"],
       "name": "sarabaiao",
       "properties": {
         "name": "sarabaiao",
         "url": "https://kinsta.com/blog/author/sarabaiao/"
       },
       "occurrences": 2,
-      "pages": [
-        "https://kinsta.com/first-month-free/",
-        "https://kinsta.com/kinsta-reviews/"
-      ],
+      "pages": ["https://kinsta.com/first-month-free/", "https://kinsta.com/kinsta-reviews/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -93,18 +80,14 @@
     {
       "key": "id:http://data.wordlift.io/wl0150038/author/shannon",
       "id": "http://data.wordlift.io/wl0150038/author/shannon",
-      "types": [
-        "Person"
-      ],
+      "types": ["Person"],
       "name": "Shannon Lam",
       "properties": {
         "name": "Shannon Lam",
         "url": "https://kinsta.com/blog/author/shannon/"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/developer-roles/"
-      ],
+      "pages": ["https://kinsta.com/developer-roles/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -113,9 +96,7 @@
     {
       "key": "id:http://data.wordlift.io/wl0150038/entity/brian_jackson",
       "id": "http://data.wordlift.io/wl0150038/entity/brian_jackson",
-      "types": [
-        "Person"
-      ],
+      "types": ["Person"],
       "name": "Brian Jackson",
       "properties": {
         "name": "Brian Jackson",
@@ -140,16 +121,12 @@
     {
       "key": "id:http://data.wordlift.io/wl0150038/entity/brian_li",
       "id": "http://data.wordlift.io/wl0150038/entity/brian_li",
-      "types": [
-        "Person"
-      ],
+      "types": ["Person"],
       "name": "Brian Li",
       "properties": {
         "name": "Brian Li",
         "url": "https://brianli.com/",
-        "sameAs": [
-          "https://twitter.com/bwhli"
-        ],
+        "sameAs": ["https://twitter.com/bwhli"],
         "description": "Brian is the Website Content Manager at Kinsta. He focuses on content publishing, website functionality, and SEO. Brian has been a WordPress user for over 10 years, and enjoys sharing his knowledge w…"
       },
       "occurrences": 14,
@@ -177,9 +154,7 @@
     {
       "key": "id:http://data.wordlift.io/wl0150038/entity/daniel_pataki",
       "id": "http://data.wordlift.io/wl0150038/entity/daniel_pataki",
-      "types": [
-        "Person"
-      ],
+      "types": ["Person"],
       "name": "Daniel Pataki",
       "properties": {
         "name": "Daniel Pataki",
@@ -208,9 +183,7 @@
     {
       "key": "id:http://data.wordlift.io/wl0150038/entity/jeremy-holcombe",
       "id": "http://data.wordlift.io/wl0150038/entity/jeremy-holcombe",
-      "types": [
-        "Person"
-      ],
+      "types": ["Person"],
       "name": "Jeremy Holcombe",
       "properties": {
         "name": "Jeremy Holcombe",
@@ -238,9 +211,7 @@
     {
       "key": "id:http://data.wordlift.io/wl0150038/entity/kinsta",
       "id": "http://data.wordlift.io/wl0150038/entity/kinsta",
-      "types": [
-        "Organization"
-      ],
+      "types": ["Organization"],
       "name": "Kinsta",
       "properties": {
         "name": "Kinsta",
@@ -307,15 +278,11 @@
     {
       "key": "id:http://data.wordlift.io/wl0150038/entity/matteo_duo",
       "id": "http://data.wordlift.io/wl0150038/entity/matteo_duo",
-      "types": [
-        "Person"
-      ],
+      "types": ["Person"],
       "name": "Matteo Duò",
       "properties": {
         "name": "Matteo Duò",
-        "image": [
-          "https://kinsta.com/wp-content/uploads/2020/12/matteo-duo.jpeg"
-        ],
+        "image": ["https://kinsta.com/wp-content/uploads/2020/12/matteo-duo.jpeg"],
         "sameAs": [
           "https://ch.linkedin.com/in/matteoduo",
           "https://kinsta.com/it/blog/author/matteoduo/",
@@ -325,9 +292,7 @@
         "description": "Matteo Duò is the Head of Content at Kinsta and Content Marketing Consultant for WordPress plugin developers. Connect with Matteo on Twitter."
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/web-accessibility-statement/"
-      ],
+      "pages": ["https://kinsta.com/web-accessibility-statement/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -336,9 +301,7 @@
     {
       "key": "id:http://data.wordlift.io/wl0150038/page/-198478",
       "id": "http://data.wordlift.io/wl0150038/page/-198478",
-      "types": [
-        "Article"
-      ],
+      "types": ["Article"],
       "name": "Scale your YouTube earnings with an affiliate program designed for creators",
       "properties": {
         "name": "Scale your YouTube earnings with an affiliate program designed for creators",
@@ -349,9 +312,7 @@
         "description": "Kinsta's Affiliate ProgramScale your YouTube earnings with an affiliate program designed for creators Earn recurring income with the Kinsta YouTube Affiliate Program and earn up to $500 per referral,…"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/affiliate-program-for-youtubers/"
-      ],
+      "pages": ["https://kinsta.com/affiliate-program-for-youtubers/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -360,21 +321,14 @@
     {
       "key": "id:http://data.wordlift.io/wl0150038/page/about_us",
       "id": "http://data.wordlift.io/wl0150038/page/about_us",
-      "types": [
-        "AboutPage"
-      ],
+      "types": ["AboutPage"],
       "name": "About Us",
       "properties": {
         "name": "About Us",
-        "sameAs": [
-          "https://g.co/kgs/U4eJWpY",
-          "https://www.wikidata.org/wiki/Q106594994"
-        ]
+        "sameAs": ["https://g.co/kgs/U4eJWpY", "https://www.wikidata.org/wiki/Q106594994"]
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/about-us/"
-      ],
+      "pages": ["https://kinsta.com/about-us/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -383,22 +337,16 @@
     {
       "key": "id:http://data.wordlift.io/wl0150038/page/azure-market-share-revenue-growth-competition-169752",
       "id": "http://data.wordlift.io/wl0150038/page/azure-market-share-revenue-growth-competition-169752",
-      "types": [
-        "Article"
-      ],
+      "types": ["Article"],
       "name": "Azure Market Share: Revenue, Growth &amp; Competition",
       "properties": {
         "name": "Azure Market Share: Revenue, Growth &amp; Competition",
         "url": "https://kinsta.com/azure-market-share/",
-        "image": [
-          "https://kinsta.com/wp-content/uploads/2020/10/microsoft-azure-market-share.jpg"
-        ],
+        "image": ["https://kinsta.com/wp-content/uploads/2020/10/microsoft-azure-market-share.jpg"],
         "description": "Azure Market Share: Revenue, Growth & Competition Microsoft certainly isn’t a new player in the field of software development and SaaS, but you might not know much about their cloud computing solutio…"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/azure-market-share/"
-      ],
+      "pages": ["https://kinsta.com/azure-market-share/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -407,22 +355,16 @@
     {
       "key": "id:http://data.wordlift.io/wl0150038/page/bluehost-alternative-the-benefits-of-choosing-kinsta-186649",
       "id": "http://data.wordlift.io/wl0150038/page/bluehost-alternative-the-benefits-of-choosing-kinsta-186649",
-      "types": [
-        "Article"
-      ],
+      "types": ["Article"],
       "name": "Kinsta vs Bluehost: The managed platform built for enterprise scale",
       "properties": {
         "name": "Kinsta vs Bluehost: The managed platform built for enterprise scale",
         "url": "https://kinsta.com/bluehost-alternative/",
-        "image": [
-          "https://kinsta.com/wp-content/uploads/2024/08/comparison-bluehost.png"
-        ],
+        "image": ["https://kinsta.com/wp-content/uploads/2024/08/comparison-bluehost.png"],
         "description": "Bluehost alternativeKinsta vs Bluehost: The managed platform built for enterprise scale Stop sacrificing client performance on shared servers. Get guaranteed resources, expert support, and true finan…"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/bluehost-alternative/"
-      ],
+      "pages": ["https://kinsta.com/bluehost-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -431,20 +373,14 @@
     {
       "key": "id:http://data.wordlift.io/wl0150038/page/cheatsheets",
       "id": "http://data.wordlift.io/wl0150038/page/cheatsheets",
-      "types": [
-        "Article"
-      ],
+      "types": ["Article"],
       "name": "Cheat Sheets",
       "properties": {
         "name": "Cheat Sheets",
-        "image": [
-          "https://kinsta.com/wp-content/uploads/2023/12/kinsta-cheatsheets.jpg"
-        ]
+        "image": ["https://kinsta.com/wp-content/uploads/2023/12/kinsta-cheatsheets.jpg"]
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/cheatsheets/"
-      ],
+      "pages": ["https://kinsta.com/cheatsheets/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -453,21 +389,15 @@
     {
       "key": "id:http://data.wordlift.io/wl0150038/page/cloudflare_market_share",
       "id": "http://data.wordlift.io/wl0150038/page/cloudflare_market_share",
-      "types": [
-        "Article"
-      ],
+      "types": ["Article"],
       "name": "Cloudflare Market Share",
       "properties": {
         "name": "Cloudflare Market Share",
-        "image": [
-          "https://kinsta.com/wp-content/uploads/2023/10/cloudflare-market-share.jpg"
-        ],
+        "image": ["https://kinsta.com/wp-content/uploads/2023/10/cloudflare-market-share.jpg"],
         "description": "Cloudflare Market Share Cloudflare is a major player in the web security and performance space. In addition to advanced firewalls, Cloudflare also offers a variety of performance-enhancing services f…"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/cloudflare-market-share/"
-      ],
+      "pages": ["https://kinsta.com/cloudflare-market-share/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -476,22 +406,16 @@
     {
       "key": "id:http://data.wordlift.io/wl0150038/page/cloudways-alternative-the-benefits-of-choosing-kinsta-186653",
       "id": "http://data.wordlift.io/wl0150038/page/cloudways-alternative-the-benefits-of-choosing-kinsta-186653",
-      "types": [
-        "Article"
-      ],
+      "types": ["Article"],
       "name": "Kinsta vs Cloudways:  Enterprise performance without complexity",
       "properties": {
         "name": "Kinsta vs Cloudways:  Enterprise performance without complexity",
         "url": "https://kinsta.com/cloudways-alternative/",
-        "image": [
-          "https://kinsta.com/wp-content/uploads/2024/08/comparison-cloudways.png"
-        ],
+        "image": ["https://kinsta.com/wp-content/uploads/2024/08/comparison-cloudways.png"],
         "description": "Cloudways alternativeKinsta vs Cloudways: Enterprise performance without complexity Discover Kinsta's premium managed hosting for WordPress, designed to enhance performance and drive client success. …"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/cloudways-alternative/"
-      ],
+      "pages": ["https://kinsta.com/cloudways-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -500,18 +424,14 @@
     {
       "key": "id:http://data.wordlift.io/wl0150038/page/contact_us",
       "id": "http://data.wordlift.io/wl0150038/page/contact_us",
-      "types": [
-        "ContactPage"
-      ],
+      "types": ["ContactPage"],
       "name": "Contact Us",
       "properties": {
         "name": "Contact Us",
         "url": "https://kinsta.com/contact-us/"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/contact-us/"
-      ],
+      "pages": ["https://kinsta.com/contact-us/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -520,18 +440,14 @@
     {
       "key": "id:http://data.wordlift.io/wl0150038/page/cookie_settings",
       "id": "http://data.wordlift.io/wl0150038/page/cookie_settings",
-      "types": [
-        "Article"
-      ],
+      "types": ["Article"],
       "name": "Cookie Settings",
       "properties": {
         "name": "Cookie Settings",
         "url": "https://kinsta.com/cookie-settings/"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/cookie-settings/"
-      ],
+      "pages": ["https://kinsta.com/cookie-settings/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -540,17 +456,13 @@
     {
       "key": "id:http://data.wordlift.io/wl0150038/page/developer_roles_at_kinsta",
       "id": "http://data.wordlift.io/wl0150038/page/developer_roles_at_kinsta",
-      "types": [
-        "Article"
-      ],
+      "types": ["Article"],
       "name": "Developer Roles at Kinsta",
       "properties": {
         "name": "Developer Roles at Kinsta"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/developer-roles/"
-      ],
+      "pages": ["https://kinsta.com/developer-roles/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -559,22 +471,16 @@
     {
       "key": "id:http://data.wordlift.io/wl0150038/page/devkinsta_your_free_local_wordpress_development_suite",
       "id": "http://data.wordlift.io/wl0150038/page/devkinsta_your_free_local_wordpress_development_suite",
-      "types": [
-        "Thing"
-      ],
+      "types": ["Thing"],
       "name": "Your Free Local WordPress Development Suite",
       "properties": {
         "name": "Your Free Local WordPress Development Suite",
         "url": "https://kinsta.com/devkinsta/",
-        "image": [
-          "https://kinsta.com/wp-content/uploads/2023/12/devkinsta-main-en.jpg"
-        ],
+        "image": ["https://kinsta.com/wp-content/uploads/2023/12/devkinsta-main-en.jpg"],
         "description": "Your Free Local WordPress Development Suite Design, develop, and deploy WordPress sites from the comfort of your local machine. DevKinsta is free forever, and available for macOS, Windows, and Ubuntu…"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/devkinsta/"
-      ],
+      "pages": ["https://kinsta.com/devkinsta/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -583,22 +489,16 @@
     {
       "key": "id:http://data.wordlift.io/wl0150038/page/education-launchpad",
       "id": "http://data.wordlift.io/wl0150038/page/education-launchpad",
-      "types": [
-        "Article"
-      ],
+      "types": ["Article"],
       "name": "Get up to $10,000 in free hosting when you switch to Kinsta",
       "properties": {
         "name": "Get up to $10,000 in free hosting when you switch to Kinsta",
         "url": "https://kinsta.com/education-launchpad/",
-        "image": [
-          "https://kinsta.com/wp-content/uploads/2025/01/education-launch-pad.png"
-        ],
+        "image": ["https://kinsta.com/wp-content/uploads/2025/01/education-launch-pad.png"],
         "description": "Get up to $10,000 in free hosting when you switch to Kinsta Take your educational institution to new heights with Kinsta's Education Launch Pad! Institutes that migrate their WordPress websites to Ki…"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/education-launchpad/"
-      ],
+      "pages": ["https://kinsta.com/education-launchpad/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -607,22 +507,16 @@
     {
       "key": "id:http://data.wordlift.io/wl0150038/page/enjoy-one-monthof-free-managed-wordpress-hosting-186569",
       "id": "http://data.wordlift.io/wl0150038/page/enjoy-one-monthof-free-managed-wordpress-hosting-186569",
-      "types": [
-        "Article"
-      ],
+      "types": ["Article"],
       "name": "Enjoy one month of free Managed hosting for WordPress",
       "properties": {
         "name": "Enjoy one month of free Managed hosting for WordPress",
         "url": "https://kinsta.com/first-month-free/",
-        "image": [
-          "https://kinsta.com/wp-content/uploads/2024/10/free-month-bg-1.png"
-        ],
+        "image": ["https://kinsta.com/wp-content/uploads/2024/10/free-month-bg-1.png"],
         "description": "Enjoy one month of free Managed hosting for WordPress All new Single 35k and WP 2 hosting plans come with a full month free. No need to worry about migration, it’s fast, free, and handled by us. Rede…"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/first-month-free/"
-      ],
+      "pages": ["https://kinsta.com/first-month-free/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -631,22 +525,16 @@
     {
       "key": "id:http://data.wordlift.io/wl0150038/page/global-desktop-browser-market-share-169756",
       "id": "http://data.wordlift.io/wl0150038/page/global-desktop-browser-market-share-169756",
-      "types": [
-        "Article"
-      ],
+      "types": ["Article"],
       "name": "Global Desktop Browser Market Share",
       "properties": {
         "name": "Global Desktop Browser Market Share",
         "url": "https://kinsta.com/browser-market-share/",
-        "image": [
-          "https://kinsta.com/wp-content/uploads/2020/11/web-browser-market-share.jpg"
-        ],
+        "image": ["https://kinsta.com/wp-content/uploads/2020/11/web-browser-market-share.jpg"],
         "description": "Global Desktop Browser Market Share Google Chrome is the most popular and widely-used desktop web browser by far. However, when you take a look at the market share numbers worldwide, there are a vari…"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/browser-market-share/"
-      ],
+      "pages": ["https://kinsta.com/browser-market-share/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -655,22 +543,16 @@
     {
       "key": "id:http://data.wordlift.io/wl0150038/page/google_cloud_alternative_2",
       "id": "http://data.wordlift.io/wl0150038/page/google_cloud_alternative_2",
-      "types": [
-        "Article"
-      ],
+      "types": ["Article"],
       "name": "Google Cloud Alternative: The Benefits of Choosing Kinsta",
       "properties": {
         "name": "Google Cloud Alternative: The Benefits of Choosing Kinsta",
         "url": "https://kinsta.com/google-cloud-alternative/",
-        "image": [
-          "https://kinsta.com/wp-content/uploads/2024/08/comparison-google-cloud_720.png"
-        ],
+        "image": ["https://kinsta.com/wp-content/uploads/2024/08/comparison-google-cloud_720.png"],
         "description": "Google Cloud Alternative: The Benefits of Choosing Kinsta If you’re looking for a Google Cloud alternative for WordPress hosting, Kinsta has you covered. Our unique, powerful solution for managed Wor…"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/google-cloud-alternative/"
-      ],
+      "pages": ["https://kinsta.com/google-cloud-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -679,22 +561,16 @@
     {
       "key": "id:http://data.wordlift.io/wl0150038/page/hostgator-alternative-the-benefits-of-choosing-kinsta-186673",
       "id": "http://data.wordlift.io/wl0150038/page/hostgator-alternative-the-benefits-of-choosing-kinsta-186673",
-      "types": [
-        "Article"
-      ],
+      "types": ["Article"],
       "name": "HostGator Alternative: The Benefits of Choosing Kinsta",
       "properties": {
         "name": "HostGator Alternative: The Benefits of Choosing Kinsta",
         "url": "https://kinsta.com/hostgator-alternative/",
-        "image": [
-          "https://kinsta.com/wp-content/uploads/2024/08/comparison-hostgator.png"
-        ],
+        "image": ["https://kinsta.com/wp-content/uploads/2024/08/comparison-hostgator.png"],
         "description": "HostGator Alternative: The Benefits of Choosing Kinsta Are you looking for a HostGator alternative? You’ve come to the right place. Our unique, powerful solution for managed WordPress hosting is opti…"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/hostgator-alternative/"
-      ],
+      "pages": ["https://kinsta.com/hostgator-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -703,22 +579,16 @@
     {
       "key": "id:http://data.wordlift.io/wl0150038/page/id/130799",
       "id": "http://data.wordlift.io/wl0150038/page/id/130799",
-      "types": [
-        "Article"
-      ],
+      "types": ["Article"],
       "name": "Shopify Market Share and Usage Statistics",
       "properties": {
         "name": "Shopify Market Share and Usage Statistics",
         "url": "https://kinsta.com/shopify-market-share/",
-        "image": [
-          "https://kinsta.com/wp-content/uploads/2022/08/shopify-market-share.jpg"
-        ],
+        "image": ["https://kinsta.com/wp-content/uploads/2022/08/shopify-market-share.jpg"],
         "description": "Shopify Market Share and Usage Statistics Global ecommerce had a record year in 2020: Closures and restrictions forced businesses to evolve and adopt an online model. Worldwide ecommerce sales in 202…"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/shopify-market-share/"
-      ],
+      "pages": ["https://kinsta.com/shopify-market-share/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -727,22 +597,16 @@
     {
       "key": "id:http://data.wordlift.io/wl0150038/page/inmotion-hosting-alternative-the-benefits-of-choosing-kinsta-186679",
       "id": "http://data.wordlift.io/wl0150038/page/inmotion-hosting-alternative-the-benefits-of-choosing-kinsta-186679",
-      "types": [
-        "Article"
-      ],
+      "types": ["Article"],
       "name": "InMotion Hosting Alternative: The Benefits of Choosing Kinsta",
       "properties": {
         "name": "InMotion Hosting Alternative: The Benefits of Choosing Kinsta",
         "url": "https://kinsta.com/inmotion-hosting-alternative/",
-        "image": [
-          "https://kinsta.com/wp-content/uploads/2024/08/comparison-inmotion.png"
-        ],
+        "image": ["https://kinsta.com/wp-content/uploads/2024/08/comparison-inmotion.png"],
         "description": "InMotion Hosting Alternative: The Benefits of Choosing Kinsta If you’re looking for an InMotion Hosting alternative for your WordPress website, you’ve come to the right place! Kinsta offers an all-in…"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/inmotion-hosting-alternative/"
-      ],
+      "pages": ["https://kinsta.com/inmotion-hosting-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -751,22 +615,16 @@
     {
       "key": "id:http://data.wordlift.io/wl0150038/page/kinsta-reviews-181239",
       "id": "http://data.wordlift.io/wl0150038/page/kinsta-reviews-181239",
-      "types": [
-        "Article"
-      ],
+      "types": ["Article"],
       "name": "Kinsta Reviews",
       "properties": {
         "name": "Kinsta Reviews",
         "url": "https://kinsta.com/kinsta-reviews/",
-        "image": [
-          "https://kinsta.com/wp-content/uploads/2024/06/2024-06-Kinsta-Reviews.png"
-        ],
+        "image": ["https://kinsta.com/wp-content/uploads/2024/06/2024-06-Kinsta-Reviews.png"],
         "description": "Kinsta Reviews As a managed WordPress hosting company, we always try to exceed our customers' expectations with what we do. At Kinsta, we work hard to provide our customers with an unpaired managed W…"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/kinsta-reviews/"
-      ],
+      "pages": ["https://kinsta.com/kinsta-reviews/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -775,9 +633,7 @@
     {
       "key": "id:http://data.wordlift.io/wl0150038/page/kinsta-vs-ventraip-199737",
       "id": "http://data.wordlift.io/wl0150038/page/kinsta-vs-ventraip-199737",
-      "types": [
-        "Article"
-      ],
+      "types": ["Article"],
       "name": "Kinsta vs VentraIP: Lightning fast hosting built for growth",
       "properties": {
         "name": "Kinsta vs VentraIP: Lightning fast hosting built for growth",
@@ -788,9 +644,7 @@
         "description": "VentraIP alternativeKinsta vs VentraIP: Lightning fast hosting built for growth Go beyond local hosting with Kinsta’s optimized cloud infrastructure. Enjoy global speed, reliable performance, built-i…"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/ventraip-alternative/"
-      ],
+      "pages": ["https://kinsta.com/ventraip-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -799,9 +653,7 @@
     {
       "key": "id:http://data.wordlift.io/wl0150038/page/kinsta_-_software_engineering_statistics_article",
       "id": "http://data.wordlift.io/wl0150038/page/kinsta_-_software_engineering_statistics_article",
-      "types": [
-        "Article"
-      ],
+      "types": ["Article"],
       "name": "Software Engineering Statistics: Market Share, Trends, and Growth Patterns",
       "properties": {
         "name": "Software Engineering Statistics: Market Share, Trends, and Growth Patterns",
@@ -812,9 +664,7 @@
         "description": "Software Engineering Statistics: Market Share, Trends, and Growth Patterns We’ve gathered some relevant software engineering statistics, fresh industry reports, and expert insights to find out why th…"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/software-engineering-statistics/"
-      ],
+      "pages": ["https://kinsta.com/software-engineering-statistics/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -823,9 +673,7 @@
     {
       "key": "id:http://data.wordlift.io/wl0150038/page/legal-information-158307",
       "id": "http://data.wordlift.io/wl0150038/page/legal-information-158307",
-      "types": [
-        "Article"
-      ],
+      "types": ["Article"],
       "name": "Legal Information",
       "properties": {
         "name": "Legal Information",
@@ -833,9 +681,7 @@
         "description": "Terms of Service The Terms of Service summarize the parties’ rights, obligations, and restrictions regarding our Services. Read Online Privacy Policy The Privacy Policy provides information on how we…"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/legal/"
-      ],
+      "pages": ["https://kinsta.com/legal/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -844,21 +690,15 @@
     {
       "key": "id:http://data.wordlift.io/wl0150038/page/linode-alternative-the-benefits-of-choosing-kinsta-186682",
       "id": "http://data.wordlift.io/wl0150038/page/linode-alternative-the-benefits-of-choosing-kinsta-186682",
-      "types": [
-        "Article"
-      ],
+      "types": ["Article"],
       "name": "Linode Alternative: The Benefits of Choosing Kinsta",
       "properties": {
         "name": "Linode Alternative: The Benefits of Choosing Kinsta",
-        "image": [
-          "https://kinsta.com/wp-content/uploads/2024/08/comparison-linode.png"
-        ],
+        "image": ["https://kinsta.com/wp-content/uploads/2024/08/comparison-linode.png"],
         "description": "Linode Alternative: The Benefits of Choosing Kinsta If you're looking for a Linode alternative for WordPress hosting, you’ve come to the right place. Kinsta's platform is incredibly user-friendly and…"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/linode-alternative/"
-      ],
+      "pages": ["https://kinsta.com/linode-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -867,22 +707,16 @@
     {
       "key": "id:http://data.wordlift.io/wl0150038/page/nexcess-alternative-the-benefits-of-choosing-kinsta-186691",
       "id": "http://data.wordlift.io/wl0150038/page/nexcess-alternative-the-benefits-of-choosing-kinsta-186691",
-      "types": [
-        "Article"
-      ],
+      "types": ["Article"],
       "name": "Nexcess Alternative: The Benefits of Choosing Kinsta",
       "properties": {
         "name": "Nexcess Alternative: The Benefits of Choosing Kinsta",
         "url": "https://kinsta.com/nexcess-alternative/",
-        "image": [
-          "https://kinsta.com/wp-content/uploads/2024/08/comparison-nexcess_720.png"
-        ],
+        "image": ["https://kinsta.com/wp-content/uploads/2024/08/comparison-nexcess_720.png"],
         "description": "Nexcess Alternative: The Benefits of Choosing Kinsta If you’re looking for a Nexcess alternative for WordPress hosting, Kinsta has you covered. Our unique, powerful solution for managed WordPress hos…"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/nexcess-alternative/"
-      ],
+      "pages": ["https://kinsta.com/nexcess-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -891,22 +725,16 @@
     {
       "key": "id:http://data.wordlift.io/wl0150038/page/pantheon-alternative-the-benefits-of-choosing-kinsta-186703",
       "id": "http://data.wordlift.io/wl0150038/page/pantheon-alternative-the-benefits-of-choosing-kinsta-186703",
-      "types": [
-        "Article"
-      ],
+      "types": ["Article"],
       "name": "Kinsta vs Pantheon: Enterprise power without the platform complexity",
       "properties": {
         "name": "Kinsta vs Pantheon: Enterprise power without the platform complexity",
         "url": "https://kinsta.com/pantheon-alternative/",
-        "image": [
-          "https://kinsta.com/wp-content/uploads/2024/08/comparison-pantheon.png"
-        ],
+        "image": ["https://kinsta.com/wp-content/uploads/2024/08/comparison-pantheon.png"],
         "description": "Pantheon alternativeKinsta vs Pantheon: Enterprise power without the platform complexity Ditch rigid workflows and tiered support for secure, scalable hosting with modern tools and transparent pricin…"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/pantheon-alternative/"
-      ],
+      "pages": ["https://kinsta.com/pantheon-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -915,18 +743,14 @@
     {
       "key": "id:http://data.wordlift.io/wl0150038/page/php_market_share_in_year",
       "id": "http://data.wordlift.io/wl0150038/page/php_market_share_in_year",
-      "types": [
-        "Article"
-      ],
+      "types": ["Article"],
       "name": "PHP Market Share",
       "properties": {
         "name": "PHP Market Share",
         "description": "PHP Market Share PHP is the most used server-side programming language on the web. In fact, 79.2% of all websites rely on PHP to some degree, making it one of the most popular languages among program…"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/php-market-share/"
-      ],
+      "pages": ["https://kinsta.com/php-market-share/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -935,9 +759,7 @@
     {
       "key": "id:http://data.wordlift.io/wl0150038/page/pricing-that-scales-with-you-198374",
       "id": "http://data.wordlift.io/wl0150038/page/pricing-that-scales-with-you-198374",
-      "types": [
-        "Article"
-      ],
+      "types": ["Article"],
       "name": "Pricing that scales with you",
       "properties": {
         "name": "Pricing that scales with you",
@@ -945,9 +767,7 @@
         "description": "Pricing that scales with you Premium features included in all plans Unlimited users and flexible access management Create an unlimited number of users and grant each one the access level they need an…"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/pricing/"
-      ],
+      "pages": ["https://kinsta.com/pricing/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -956,21 +776,15 @@
     {
       "key": "id:http://data.wordlift.io/wl0150038/page/rackspace-alternative-the-benefits-of-choosing-kinsta-186709",
       "id": "http://data.wordlift.io/wl0150038/page/rackspace-alternative-the-benefits-of-choosing-kinsta-186709",
-      "types": [
-        "Article"
-      ],
+      "types": ["Article"],
       "name": "Rackspace Alternative: The Benefits of Choosing Kinsta",
       "properties": {
         "name": "Rackspace Alternative: The Benefits of Choosing Kinsta",
-        "image": [
-          "https://kinsta.com/wp-content/uploads/2024/08/comparison-rackspace.png"
-        ],
+        "image": ["https://kinsta.com/wp-content/uploads/2024/08/comparison-rackspace.png"],
         "description": "Rackspace Alternative: The Benefits of Choosing Kinsta If you're looking for a Rackspace alternative for managed hosting for WordPress, Kinsta should be at the top of your list. Our unique, powerful …"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/rackspace-alternative/"
-      ],
+      "pages": ["https://kinsta.com/rackspace-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -979,18 +793,14 @@
     {
       "key": "id:http://data.wordlift.io/wl0150038/page/resource_center",
       "id": "http://data.wordlift.io/wl0150038/page/resource_center",
-      "types": [
-        "Article"
-      ],
+      "types": ["Article"],
       "name": "Resource Center",
       "properties": {
         "name": "Resource Center",
         "url": "https://kinsta.com/resources/"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/resources/"
-      ],
+      "pages": ["https://kinsta.com/resources/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -999,22 +809,16 @@
     {
       "key": "id:http://data.wordlift.io/wl0150038/page/rocket-alternative-the-benefits-of-choosing-kinsta-186712",
       "id": "http://data.wordlift.io/wl0150038/page/rocket-alternative-the-benefits-of-choosing-kinsta-186712",
-      "types": [
-        "Article"
-      ],
+      "types": ["Article"],
       "name": "Kinsta vs Rocket: Superior performance and enterprise scale",
       "properties": {
         "name": "Kinsta vs Rocket: Superior performance and enterprise scale",
         "url": "https://kinsta.com/rocket-alternative/",
-        "image": [
-          "https://kinsta.com/wp-content/uploads/2024/08/comparison-rocket.png"
-        ],
+        "image": ["https://kinsta.com/wp-content/uploads/2024/08/comparison-rocket.png"],
         "description": "Rocket AlternativeKinsta vs Rocket: Superior performance and enterprise scale Unlock a new level of performance on a hosting platform built for the world's most demanding websites. Start for free Com…"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/rocket-alternative/"
-      ],
+      "pages": ["https://kinsta.com/rocket-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -1023,18 +827,14 @@
     {
       "key": "id:http://data.wordlift.io/wl0150038/page/web_accessibility_statement_for_kinsta-com",
       "id": "http://data.wordlift.io/wl0150038/page/web_accessibility_statement_for_kinsta-com",
-      "types": [
-        "Article"
-      ],
+      "types": ["Article"],
       "name": "Web Accessibility Statement for Kinsta.com",
       "properties": {
         "name": "Web Accessibility Statement for Kinsta.com",
         "description": "Kinsta is committed to providing a website, mobile application, and other digital content that are accessible to all customers, including those with disabilities. We have adopted the Web Content Acce…"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/web-accessibility-statement/"
-      ],
+      "pages": ["https://kinsta.com/web-accessibility-statement/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -1043,9 +843,7 @@
     {
       "key": "id:http://data.wordlift.io/wl0150038/page/what_makes_kinsta_the_best_green_hosting_",
       "id": "http://data.wordlift.io/wl0150038/page/what_makes_kinsta_the_best_green_hosting_",
-      "types": [
-        "Article"
-      ],
+      "types": ["Article"],
       "name": "What Makes Kinsta the Best Green Hosting?",
       "properties": {
         "name": "What Makes Kinsta the Best Green Hosting?",
@@ -1056,9 +854,7 @@
         "description": "What Makes Kinsta the Best Green Hosting? Kinsta's green hosting powers tens of thousands of websites across the internet, from personal projects to massive enterprises and online stores. All of that…"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/green-hosting/"
-      ],
+      "pages": ["https://kinsta.com/green-hosting/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -1067,22 +863,16 @@
     {
       "key": "id:http://data.wordlift.io/wl0150038/page/why-us-how-kinsta-is-different-212632",
       "id": "http://data.wordlift.io/wl0150038/page/why-us-how-kinsta-is-different-212632",
-      "types": [
-        "Article"
-      ],
+      "types": ["Article"],
       "name": "You're probably not here because hosting's going great",
       "properties": {
         "name": "You're probably not here because hosting's going great",
         "url": "https://kinsta.com/why-us/",
-        "image": [
-          "https://kinsta.com/wp-content/uploads/2023/12/kinsta-main-en.jpg"
-        ],
+        "image": ["https://kinsta.com/wp-content/uploads/2023/12/kinsta-main-en.jpg"],
         "description": "Why Kinsta?You're probably not here because hosting's going great 230,000+ customers switched to Kinsta and stayed. Faster sites, real WordPress experts, built-in Cloudflare protection, and free migr…"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/why-us/"
-      ],
+      "pages": ["https://kinsta.com/why-us/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -1091,9 +881,7 @@
     {
       "key": "id:http://data.wordlift.io/wl0150038/page/wordpress_market_share_statistics_2011-year",
       "id": "http://data.wordlift.io/wl0150038/page/wordpress_market_share_statistics_2011-year",
-      "types": [
-        "Article"
-      ],
+      "types": ["Article"],
       "name": "WordPress Market Share Statistics (2011-[year])",
       "properties": {
         "name": "WordPress Market Share Statistics (2011-[year])",
@@ -1101,9 +889,7 @@
         "description": "WordPress Market Share Statistics (2011-2026) When you’re looking to create a website, you’re likely to encounter lots of talk about several content management systems, including WordPress. This may …"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/wordpress-market-share/"
-      ],
+      "pages": ["https://kinsta.com/wordpress-market-share/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -1112,22 +898,16 @@
     {
       "key": "id:http://data.wordlift.io/wl0150038/page/wpserveur-alternative-the-benefits-of-choosing-kinsta-186726",
       "id": "http://data.wordlift.io/wl0150038/page/wpserveur-alternative-the-benefits-of-choosing-kinsta-186726",
-      "types": [
-        "Article"
-      ],
+      "types": ["Article"],
       "name": "WPServeur Alternative: The Benefits of Choosing Kinsta",
       "properties": {
         "name": "WPServeur Alternative: The Benefits of Choosing Kinsta",
         "url": "https://kinsta.com/wpserveur-alternative/",
-        "image": [
-          "https://kinsta.com/wp-content/uploads/2024/08/comparison-wpserveur.png"
-        ],
+        "image": ["https://kinsta.com/wp-content/uploads/2024/08/comparison-wpserveur.png"],
         "description": "WPServeur Alternative: The Benefits of Choosing Kinsta If you're looking for a WPServeur alternative, look no further than Kinsta. Our unique, powerful solution for managed WordPress hosting is optim…"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/wpserveur-alternative/"
-      ],
+      "pages": ["https://kinsta.com/wpserveur-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -1136,22 +916,16 @@
     {
       "key": "id:http://data.wordlift.io/wl0150038/page/wpx-hosting-alternative-the-benefits-of-choosing-kinsta-186729",
       "id": "http://data.wordlift.io/wl0150038/page/wpx-hosting-alternative-the-benefits-of-choosing-kinsta-186729",
-      "types": [
-        "Article"
-      ],
+      "types": ["Article"],
       "name": "WPX Hosting Alternative: The Benefits of Choosing Kinsta",
       "properties": {
         "name": "WPX Hosting Alternative: The Benefits of Choosing Kinsta",
         "url": "https://kinsta.com/wpx-hosting-alternative/",
-        "image": [
-          "https://kinsta.com/wp-content/uploads/2024/08/comparison-wpxhosting.png"
-        ],
+        "image": ["https://kinsta.com/wp-content/uploads/2024/08/comparison-wpxhosting.png"],
         "description": "WPX Hosting Alternative: The Benefits of Choosing Kinsta If you’re looking for an alternative to WPX Hosting, you’ve come to the right place. Kinsta offers a unique and powerful solution for managed …"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/wpx-hosting-alternative/"
-      ],
+      "pages": ["https://kinsta.com/wpx-hosting-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -1160,21 +934,15 @@
     {
       "key": "id:http://data.wordlift.io/wl0150038/page/xserver-alternative-the-benefits-of-choosing-kinsta-186732",
       "id": "http://data.wordlift.io/wl0150038/page/xserver-alternative-the-benefits-of-choosing-kinsta-186732",
-      "types": [
-        "Article"
-      ],
+      "types": ["Article"],
       "name": "Xserver Alternative: The Benefits of Choosing Kinsta",
       "properties": {
         "name": "Xserver Alternative: The Benefits of Choosing Kinsta",
-        "image": [
-          "https://kinsta.com/wp-content/uploads/2024/08/comparison-xserver.png"
-        ],
+        "image": ["https://kinsta.com/wp-content/uploads/2024/08/comparison-xserver.png"],
         "description": "Xserver Alternative: The Benefits of Choosing Kinsta If you’re looking for an alternative to Xserver’s wpXSpeed hosting plans, you’ve come to the right place. Our powerful cloud infrastructure delive…"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/xserver-alternative/"
-      ],
+      "pages": ["https://kinsta.com/xserver-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -1183,22 +951,16 @@
     {
       "key": "id:https://kinsta.com/",
       "id": "https://kinsta.com/",
-      "types": [
-        "WebPage"
-      ],
+      "types": ["WebPage"],
       "name": "Kinsta® - Simply better hosting for WordPress",
       "properties": {
         "name": "Kinsta® - Simply better hosting for WordPress",
         "url": "https://kinsta.com/",
-        "image": [
-          "https://kinsta.com/#primaryimage"
-        ],
+        "image": ["https://kinsta.com/#primaryimage"],
         "description": "Voted #1 WordPress Hosting Provider on G2. Enterprise-grade speed, security, and support. See what sets us apart with your first month free."
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/"
-      ],
+      "pages": ["https://kinsta.com/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -1207,9 +969,7 @@
     {
       "key": "id:https://kinsta.com/#/schema/logo/image/",
       "id": "https://kinsta.com/#/schema/logo/image/",
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2023/12/kinsta-logo.jpeg"
@@ -1264,15 +1024,11 @@
     {
       "key": "id:https://kinsta.com/#breadcrumb",
       "id": "https://kinsta.com/#breadcrumb",
-      "types": [
-        "BreadcrumbList"
-      ],
+      "types": ["BreadcrumbList"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/"
-      ],
+      "pages": ["https://kinsta.com/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -1281,17 +1037,13 @@
     {
       "key": "id:https://kinsta.com/#organization",
       "id": "https://kinsta.com/#organization",
-      "types": [
-        "Organization"
-      ],
+      "types": ["Organization"],
       "name": "Kinsta",
       "properties": {
         "name": "Kinsta",
         "url": "https://kinsta.com/",
         "logo": "https://kinsta.com/wp-content/uploads/2023/12/kinsta-logo.jpeg",
-        "image": [
-          "https://kinsta.com/#/schema/logo/image/"
-        ],
+        "image": ["https://kinsta.com/#/schema/logo/image/"],
         "sameAs": [
           "https://www.crunchbase.com/organization/kinsta-wordpress-hosting",
           "https://www.facebook.com/kinstahosting",
@@ -1356,17 +1108,13 @@
     {
       "key": "id:https://kinsta.com/#primaryimage",
       "id": "https://kinsta.com/#primaryimage",
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2025/08/Kinsta-homepage-featured-image.jpg"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/"
-      ],
+      "pages": ["https://kinsta.com/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -1375,9 +1123,7 @@
     {
       "key": "id:https://kinsta.com/#website",
       "id": "https://kinsta.com/#website",
-      "types": [
-        "WebSite"
-      ],
+      "types": ["WebSite"],
       "name": "Kinsta®",
       "properties": {
         "name": "Kinsta®",
@@ -1434,9 +1180,7 @@
     {
       "key": "id:https://kinsta.com/about-us/",
       "id": "https://kinsta.com/about-us/",
-      "types": [
-        "WebPage"
-      ],
+      "types": ["WebPage"],
       "name": "About Us - Kinsta®",
       "properties": {
         "name": "About Us - Kinsta®",
@@ -1444,9 +1188,7 @@
         "description": "Simply better hosting for WordPress. Experience hosting that's fast, secure, and built to scale, backed by expert support you can trust."
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/about-us/"
-      ],
+      "pages": ["https://kinsta.com/about-us/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -1455,15 +1197,11 @@
     {
       "key": "id:https://kinsta.com/about-us/#breadcrumb",
       "id": "https://kinsta.com/about-us/#breadcrumb",
-      "types": [
-        "BreadcrumbList"
-      ],
+      "types": ["BreadcrumbList"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/about-us/"
-      ],
+      "pages": ["https://kinsta.com/about-us/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -1472,22 +1210,16 @@
     {
       "key": "id:https://kinsta.com/affiliate-program-for-youtubers/",
       "id": "https://kinsta.com/affiliate-program-for-youtubers/",
-      "types": [
-        "WebPage"
-      ],
+      "types": ["WebPage"],
       "name": "Scale your YouTube earnings with Kinsta's affiliate program",
       "properties": {
         "name": "Scale your YouTube earnings with Kinsta's affiliate program",
         "url": "https://kinsta.com/affiliate-program-for-youtubers/",
-        "image": [
-          "https://kinsta.com/affiliate-program-for-youtubers/#primaryimage"
-        ],
+        "image": ["https://kinsta.com/affiliate-program-for-youtubers/#primaryimage"],
         "description": "Earn up to $500 per referral plus lifetime 10% monthly commissions. Monetize your YouTube channel and grow with high-paying affiliate rewards."
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/affiliate-program-for-youtubers/"
-      ],
+      "pages": ["https://kinsta.com/affiliate-program-for-youtubers/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -1496,15 +1228,11 @@
     {
       "key": "id:https://kinsta.com/affiliate-program-for-youtubers/#breadcrumb",
       "id": "https://kinsta.com/affiliate-program-for-youtubers/#breadcrumb",
-      "types": [
-        "BreadcrumbList"
-      ],
+      "types": ["BreadcrumbList"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/affiliate-program-for-youtubers/"
-      ],
+      "pages": ["https://kinsta.com/affiliate-program-for-youtubers/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -1513,17 +1241,13 @@
     {
       "key": "id:https://kinsta.com/affiliate-program-for-youtubers/#primaryimage",
       "id": "https://kinsta.com/affiliate-program-for-youtubers/#primaryimage",
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2025/09/featured_image-affiliate-youtubers-min.png"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/affiliate-program-for-youtubers/"
-      ],
+      "pages": ["https://kinsta.com/affiliate-program-for-youtubers/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -1532,22 +1256,16 @@
     {
       "key": "id:https://kinsta.com/azure-market-share/",
       "id": "https://kinsta.com/azure-market-share/",
-      "types": [
-        "WebPage"
-      ],
+      "types": ["WebPage"],
       "name": "Azure Market Share: Revenue, Growth & Competition",
       "properties": {
         "name": "Azure Market Share: Revenue, Growth & Competition",
         "url": "https://kinsta.com/azure-market-share/",
-        "image": [
-          "https://kinsta.com/azure-market-share/#primaryimage"
-        ],
+        "image": ["https://kinsta.com/azure-market-share/#primaryimage"],
         "description": "Microsoft Azure is a leading cloud computing provider. Learn more about Azure's market share, revenue, growth, and competition!"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/azure-market-share/"
-      ],
+      "pages": ["https://kinsta.com/azure-market-share/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -1556,15 +1274,11 @@
     {
       "key": "id:https://kinsta.com/azure-market-share/#breadcrumb",
       "id": "https://kinsta.com/azure-market-share/#breadcrumb",
-      "types": [
-        "BreadcrumbList"
-      ],
+      "types": ["BreadcrumbList"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/azure-market-share/"
-      ],
+      "pages": ["https://kinsta.com/azure-market-share/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -1573,17 +1287,13 @@
     {
       "key": "id:https://kinsta.com/azure-market-share/#primaryimage",
       "id": "https://kinsta.com/azure-market-share/#primaryimage",
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2020/10/microsoft-azure-market-share.jpg"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/azure-market-share/"
-      ],
+      "pages": ["https://kinsta.com/azure-market-share/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -1592,10 +1302,7 @@
     {
       "key": "id:https://kinsta.com/blog/",
       "id": "https://kinsta.com/blog/",
-      "types": [
-        "CollectionPage",
-        "WebPage"
-      ],
+      "types": ["CollectionPage", "WebPage"],
       "name": "WordPress Guides, Tutorials & Tips - Kinsta® Blog",
       "properties": {
         "name": "WordPress Guides, Tutorials & Tips - Kinsta® Blog",
@@ -1603,9 +1310,7 @@
         "description": "The Kinsta blog is packed full of WordPress guides & tutorials with actionable tips and resources to help you improve your WordPress site."
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/blog/"
-      ],
+      "pages": ["https://kinsta.com/blog/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -1614,15 +1319,11 @@
     {
       "key": "id:https://kinsta.com/blog/#breadcrumb",
       "id": "https://kinsta.com/blog/#breadcrumb",
-      "types": [
-        "BreadcrumbList"
-      ],
+      "types": ["BreadcrumbList"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/blog/"
-      ],
+      "pages": ["https://kinsta.com/blog/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -1631,22 +1332,16 @@
     {
       "key": "id:https://kinsta.com/bluehost-alternative/",
       "id": "https://kinsta.com/bluehost-alternative/",
-      "types": [
-        "WebPage"
-      ],
+      "types": ["WebPage"],
       "name": "Kinsta vs Bluehost: The managed platform built for enterprise scale",
       "properties": {
         "name": "Kinsta vs Bluehost: The managed platform built for enterprise scale",
         "url": "https://kinsta.com/bluehost-alternative/",
-        "image": [
-          "https://kinsta.com/bluehost-alternative/#primaryimage"
-        ],
+        "image": ["https://kinsta.com/bluehost-alternative/#primaryimage"],
         "description": "Upgrade to high-performance WordPress hosting with Kinsta, a powerful Bluehost alternative delivering lightning-fast speeds on cloud infrastructure."
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/bluehost-alternative/"
-      ],
+      "pages": ["https://kinsta.com/bluehost-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -1655,15 +1350,11 @@
     {
       "key": "id:https://kinsta.com/bluehost-alternative/#breadcrumb",
       "id": "https://kinsta.com/bluehost-alternative/#breadcrumb",
-      "types": [
-        "BreadcrumbList"
-      ],
+      "types": ["BreadcrumbList"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/bluehost-alternative/"
-      ],
+      "pages": ["https://kinsta.com/bluehost-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -1672,17 +1363,13 @@
     {
       "key": "id:https://kinsta.com/bluehost-alternative/#primaryimage",
       "id": "https://kinsta.com/bluehost-alternative/#primaryimage",
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2024/08/comparison-bluehost.png"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/bluehost-alternative/"
-      ],
+      "pages": ["https://kinsta.com/bluehost-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -1691,22 +1378,16 @@
     {
       "key": "id:https://kinsta.com/browser-market-share/",
       "id": "https://kinsta.com/browser-market-share/",
-      "types": [
-        "WebPage"
-      ],
+      "types": ["WebPage"],
       "name": "Global Desktop Browser Market Share",
       "properties": {
         "name": "Global Desktop Browser Market Share",
         "url": "https://kinsta.com/browser-market-share/",
-        "image": [
-          "https://kinsta.com/browser-market-share/#primaryimage"
-        ],
+        "image": ["https://kinsta.com/browser-market-share/#primaryimage"],
         "description": "Web browsers are an important part of everyday life. In this article, learn about browser market share, and which browser is most popular!"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/browser-market-share/"
-      ],
+      "pages": ["https://kinsta.com/browser-market-share/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -1715,15 +1396,11 @@
     {
       "key": "id:https://kinsta.com/browser-market-share/#breadcrumb",
       "id": "https://kinsta.com/browser-market-share/#breadcrumb",
-      "types": [
-        "BreadcrumbList"
-      ],
+      "types": ["BreadcrumbList"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/browser-market-share/"
-      ],
+      "pages": ["https://kinsta.com/browser-market-share/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -1732,17 +1409,13 @@
     {
       "key": "id:https://kinsta.com/browser-market-share/#primaryimage",
       "id": "https://kinsta.com/browser-market-share/#primaryimage",
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2020/11/web-browser-market-share.jpg"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/browser-market-share/"
-      ],
+      "pages": ["https://kinsta.com/browser-market-share/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -1751,22 +1424,16 @@
     {
       "key": "id:https://kinsta.com/cheatsheets/",
       "id": "https://kinsta.com/cheatsheets/",
-      "types": [
-        "WebPage"
-      ],
+      "types": ["WebPage"],
       "name": "Cheat Sheets to Turbocharge Your Business - Kinsta®",
       "properties": {
         "name": "Cheat Sheets to Turbocharge Your Business - Kinsta®",
         "url": "https://kinsta.com/cheatsheets/",
-        "image": [
-          "https://kinsta.com/cheatsheets/#primaryimage"
-        ],
+        "image": ["https://kinsta.com/cheatsheets/#primaryimage"],
         "description": "Tried and true tips from Kinsta, designed to turbocharge your business, packaged neatly into one page downloadable PDFs."
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/cheatsheets/"
-      ],
+      "pages": ["https://kinsta.com/cheatsheets/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -1775,15 +1442,11 @@
     {
       "key": "id:https://kinsta.com/cheatsheets/#breadcrumb",
       "id": "https://kinsta.com/cheatsheets/#breadcrumb",
-      "types": [
-        "BreadcrumbList"
-      ],
+      "types": ["BreadcrumbList"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/cheatsheets/"
-      ],
+      "pages": ["https://kinsta.com/cheatsheets/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -1792,17 +1455,13 @@
     {
       "key": "id:https://kinsta.com/cheatsheets/#primaryimage",
       "id": "https://kinsta.com/cheatsheets/#primaryimage",
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2023/12/kinsta-cheatsheets.jpg"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/cheatsheets/"
-      ],
+      "pages": ["https://kinsta.com/cheatsheets/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -1811,22 +1470,16 @@
     {
       "key": "id:https://kinsta.com/cloudflare-market-share/",
       "id": "https://kinsta.com/cloudflare-market-share/",
-      "types": [
-        "WebPage"
-      ],
+      "types": ["WebPage"],
       "name": "Cloudflare Market Share - Kinsta®",
       "properties": {
         "name": "Cloudflare Market Share - Kinsta®",
         "url": "https://kinsta.com/cloudflare-market-share/",
-        "image": [
-          "https://kinsta.com/cloudflare-market-share/#primaryimage"
-        ],
+        "image": ["https://kinsta.com/cloudflare-market-share/#primaryimage"],
         "description": "Cloudflare offers a variety of security and performance services for websites like CDN caching, image optimization, firewalls, and more."
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/cloudflare-market-share/"
-      ],
+      "pages": ["https://kinsta.com/cloudflare-market-share/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -1835,15 +1488,11 @@
     {
       "key": "id:https://kinsta.com/cloudflare-market-share/#breadcrumb",
       "id": "https://kinsta.com/cloudflare-market-share/#breadcrumb",
-      "types": [
-        "BreadcrumbList"
-      ],
+      "types": ["BreadcrumbList"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/cloudflare-market-share/"
-      ],
+      "pages": ["https://kinsta.com/cloudflare-market-share/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -1852,17 +1501,13 @@
     {
       "key": "id:https://kinsta.com/cloudflare-market-share/#primaryimage",
       "id": "https://kinsta.com/cloudflare-market-share/#primaryimage",
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2023/10/cloudflare-market-share.jpg"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/cloudflare-market-share/"
-      ],
+      "pages": ["https://kinsta.com/cloudflare-market-share/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -1871,22 +1516,16 @@
     {
       "key": "id:https://kinsta.com/cloudways-alternative/",
       "id": "https://kinsta.com/cloudways-alternative/",
-      "types": [
-        "WebPage"
-      ],
+      "types": ["WebPage"],
       "name": "Kinsta vs Cloudways: Compare features & performance",
       "properties": {
         "name": "Kinsta vs Cloudways: Compare features & performance",
         "url": "https://kinsta.com/cloudways-alternative/",
-        "image": [
-          "https://kinsta.com/cloudways-alternative/#primaryimage"
-        ],
+        "image": ["https://kinsta.com/cloudways-alternative/#primaryimage"],
         "description": "Looking to step up to high-performance WordPress hosting? Powered by Google Cloud Platform's fastest servers, Kinsta is the perfect Cloudways alternative."
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/cloudways-alternative/"
-      ],
+      "pages": ["https://kinsta.com/cloudways-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -1895,15 +1534,11 @@
     {
       "key": "id:https://kinsta.com/cloudways-alternative/#breadcrumb",
       "id": "https://kinsta.com/cloudways-alternative/#breadcrumb",
-      "types": [
-        "BreadcrumbList"
-      ],
+      "types": ["BreadcrumbList"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/cloudways-alternative/"
-      ],
+      "pages": ["https://kinsta.com/cloudways-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -1912,17 +1547,13 @@
     {
       "key": "id:https://kinsta.com/cloudways-alternative/#primaryimage",
       "id": "https://kinsta.com/cloudways-alternative/#primaryimage",
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2024/08/comparison-cloudways.png"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/cloudways-alternative/"
-      ],
+      "pages": ["https://kinsta.com/cloudways-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -1931,10 +1562,7 @@
     {
       "key": "id:https://kinsta.com/contact-us/",
       "id": "https://kinsta.com/contact-us/",
-      "types": [
-        "ContactPage",
-        "WebPage"
-      ],
+      "types": ["ContactPage", "WebPage"],
       "name": "Contact Kinsta®",
       "properties": {
         "name": "Contact Kinsta®",
@@ -1942,9 +1570,7 @@
         "description": "Contact Kinsta about managed WordPress hosting. Get in touch with sales, support, or our team using the options on this page."
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/contact-us/"
-      ],
+      "pages": ["https://kinsta.com/contact-us/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -1953,15 +1579,11 @@
     {
       "key": "id:https://kinsta.com/contact-us/#breadcrumb",
       "id": "https://kinsta.com/contact-us/#breadcrumb",
-      "types": [
-        "BreadcrumbList"
-      ],
+      "types": ["BreadcrumbList"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/contact-us/"
-      ],
+      "pages": ["https://kinsta.com/contact-us/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -1970,9 +1592,7 @@
     {
       "key": "id:https://kinsta.com/cookie-settings/",
       "id": "https://kinsta.com/cookie-settings/",
-      "types": [
-        "WebPage"
-      ],
+      "types": ["WebPage"],
       "name": "Cookie Settings - Kinsta®",
       "properties": {
         "name": "Cookie Settings - Kinsta®",
@@ -1980,9 +1600,7 @@
         "description": "A cookie is a piece of information that a website stores on a visitor’s computer. We use this for some functionality on our website to work properly."
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/cookie-settings/"
-      ],
+      "pages": ["https://kinsta.com/cookie-settings/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -1991,15 +1609,11 @@
     {
       "key": "id:https://kinsta.com/cookie-settings/#breadcrumb",
       "id": "https://kinsta.com/cookie-settings/#breadcrumb",
-      "types": [
-        "BreadcrumbList"
-      ],
+      "types": ["BreadcrumbList"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/cookie-settings/"
-      ],
+      "pages": ["https://kinsta.com/cookie-settings/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -2008,9 +1622,7 @@
     {
       "key": "id:https://kinsta.com/developer-roles/",
       "id": "https://kinsta.com/developer-roles/",
-      "types": [
-        "WebPage"
-      ],
+      "types": ["WebPage"],
       "name": "Developer Roles at Kinsta - Kinsta®",
       "properties": {
         "name": "Developer Roles at Kinsta - Kinsta®",
@@ -2018,9 +1630,7 @@
         "description": "Are you looking for the next step on your professional path as a developer? Come work for the global and fully remote Kinsta team!"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/developer-roles/"
-      ],
+      "pages": ["https://kinsta.com/developer-roles/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -2029,15 +1639,11 @@
     {
       "key": "id:https://kinsta.com/developer-roles/#breadcrumb",
       "id": "https://kinsta.com/developer-roles/#breadcrumb",
-      "types": [
-        "BreadcrumbList"
-      ],
+      "types": ["BreadcrumbList"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/developer-roles/"
-      ],
+      "pages": ["https://kinsta.com/developer-roles/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -2046,22 +1652,16 @@
     {
       "key": "id:https://kinsta.com/devkinsta/",
       "id": "https://kinsta.com/devkinsta/",
-      "types": [
-        "WebPage"
-      ],
+      "types": ["WebPage"],
       "name": "DevKinsta – Your Free Local WordPress Development Suite",
       "properties": {
         "name": "DevKinsta – Your Free Local WordPress Development Suite",
         "url": "https://kinsta.com/devkinsta/",
-        "image": [
-          "https://kinsta.com/devkinsta/#primaryimage"
-        ],
+        "image": ["https://kinsta.com/devkinsta/#primaryimage"],
         "description": "DevKinsta is a free suite of local development tools for macOS, Windows and Linux. Use DevKinsta to build, develop, and test WordPress sites."
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/devkinsta/"
-      ],
+      "pages": ["https://kinsta.com/devkinsta/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -2070,15 +1670,11 @@
     {
       "key": "id:https://kinsta.com/devkinsta/#breadcrumb",
       "id": "https://kinsta.com/devkinsta/#breadcrumb",
-      "types": [
-        "BreadcrumbList"
-      ],
+      "types": ["BreadcrumbList"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/devkinsta/"
-      ],
+      "pages": ["https://kinsta.com/devkinsta/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -2087,17 +1683,13 @@
     {
       "key": "id:https://kinsta.com/devkinsta/#primaryimage",
       "id": "https://kinsta.com/devkinsta/#primaryimage",
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2023/12/devkinsta-main-en.jpg"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/devkinsta/"
-      ],
+      "pages": ["https://kinsta.com/devkinsta/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -2106,22 +1698,16 @@
     {
       "key": "id:https://kinsta.com/education-launchpad/",
       "id": "https://kinsta.com/education-launchpad/",
-      "types": [
-        "WebPage"
-      ],
+      "types": ["WebPage"],
       "name": "Kinsta Educational Institute Launchpad: Unlock up to $10K in Free Hosting",
       "properties": {
         "name": "Kinsta Educational Institute Launchpad: Unlock up to $10K in Free Hosting",
         "url": "https://kinsta.com/education-launchpad/",
-        "image": [
-          "https://kinsta.com/education-launchpad/#primaryimage"
-        ],
+        "image": ["https://kinsta.com/education-launchpad/#primaryimage"],
         "description": "Migrate to Kinsta for free and receive up to $10,000 in free hosting to cover transition costs. Boost performance and eliminate double billing with Kinsta's Educational Institute Launch Pad."
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/education-launchpad/"
-      ],
+      "pages": ["https://kinsta.com/education-launchpad/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -2130,15 +1716,11 @@
     {
       "key": "id:https://kinsta.com/education-launchpad/#breadcrumb",
       "id": "https://kinsta.com/education-launchpad/#breadcrumb",
-      "types": [
-        "BreadcrumbList"
-      ],
+      "types": ["BreadcrumbList"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/education-launchpad/"
-      ],
+      "pages": ["https://kinsta.com/education-launchpad/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -2147,17 +1729,13 @@
     {
       "key": "id:https://kinsta.com/education-launchpad/#primaryimage",
       "id": "https://kinsta.com/education-launchpad/#primaryimage",
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2025/01/education-launch-pad.png"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/education-launchpad/"
-      ],
+      "pages": ["https://kinsta.com/education-launchpad/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -2166,22 +1744,16 @@
     {
       "key": "id:https://kinsta.com/first-month-free/",
       "id": "https://kinsta.com/first-month-free/",
-      "types": [
-        "WebPage"
-      ],
+      "types": ["WebPage"],
       "name": "First month free at Kinsta®",
       "properties": {
         "name": "First month free at Kinsta®",
         "url": "https://kinsta.com/first-month-free/",
-        "image": [
-          "https://kinsta.com/first-month-free/#primaryimage"
-        ],
+        "image": ["https://kinsta.com/first-month-free/#primaryimage"],
         "description": "Get one month free of Managed hosting for WordPress at Kinsta. Enjoy fast, free migration and experience premium hosting features with no risk. Try it today!"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/first-month-free/"
-      ],
+      "pages": ["https://kinsta.com/first-month-free/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -2190,15 +1762,11 @@
     {
       "key": "id:https://kinsta.com/first-month-free/#breadcrumb",
       "id": "https://kinsta.com/first-month-free/#breadcrumb",
-      "types": [
-        "BreadcrumbList"
-      ],
+      "types": ["BreadcrumbList"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/first-month-free/"
-      ],
+      "pages": ["https://kinsta.com/first-month-free/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -2207,17 +1775,13 @@
     {
       "key": "id:https://kinsta.com/first-month-free/#primaryimage",
       "id": "https://kinsta.com/first-month-free/#primaryimage",
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2024/10/free-month-bg-1.png"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/first-month-free/"
-      ],
+      "pages": ["https://kinsta.com/first-month-free/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -2226,22 +1790,16 @@
     {
       "key": "id:https://kinsta.com/google-cloud-alternative/",
       "id": "https://kinsta.com/google-cloud-alternative/",
-      "types": [
-        "WebPage"
-      ],
+      "types": ["WebPage"],
       "name": "Google Cloud Alternative: The Benefits of Choosing Kinsta®",
       "properties": {
         "name": "Google Cloud Alternative: The Benefits of Choosing Kinsta®",
         "url": "https://kinsta.com/google-cloud-alternative/",
-        "image": [
-          "https://kinsta.com/google-cloud-alternative/#primaryimage"
-        ],
+        "image": ["https://kinsta.com/google-cloud-alternative/#primaryimage"],
         "description": "Looking to upgrade to high-performance WordPress hosting? Kinsta’s powerful cloud infrastructure makes it a strong Google Cloud alternative."
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/google-cloud-alternative/"
-      ],
+      "pages": ["https://kinsta.com/google-cloud-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -2250,15 +1808,11 @@
     {
       "key": "id:https://kinsta.com/google-cloud-alternative/#breadcrumb",
       "id": "https://kinsta.com/google-cloud-alternative/#breadcrumb",
-      "types": [
-        "BreadcrumbList"
-      ],
+      "types": ["BreadcrumbList"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/google-cloud-alternative/"
-      ],
+      "pages": ["https://kinsta.com/google-cloud-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -2267,17 +1821,13 @@
     {
       "key": "id:https://kinsta.com/google-cloud-alternative/#primaryimage",
       "id": "https://kinsta.com/google-cloud-alternative/#primaryimage",
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2024/08/comparison-google-cloud_720.png"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/google-cloud-alternative/"
-      ],
+      "pages": ["https://kinsta.com/google-cloud-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -2286,22 +1836,16 @@
     {
       "key": "id:https://kinsta.com/green-hosting/",
       "id": "https://kinsta.com/green-hosting/",
-      "types": [
-        "WebPage"
-      ],
+      "types": ["WebPage"],
       "name": "What Makes Kinsta® the Best Green Hosting?",
       "properties": {
         "name": "What Makes Kinsta® the Best Green Hosting?",
         "url": "https://kinsta.com/green-hosting/",
-        "image": [
-          "https://kinsta.com/green-hosting/#primaryimage"
-        ],
+        "image": ["https://kinsta.com/green-hosting/#primaryimage"],
         "description": "Kinsta's high performance hosting solutions are powered by 100% renewable energy. Learn more about Kinsta's green hosting initiatives!"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/green-hosting/"
-      ],
+      "pages": ["https://kinsta.com/green-hosting/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -2310,15 +1854,11 @@
     {
       "key": "id:https://kinsta.com/green-hosting/#breadcrumb",
       "id": "https://kinsta.com/green-hosting/#breadcrumb",
-      "types": [
-        "BreadcrumbList"
-      ],
+      "types": ["BreadcrumbList"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/green-hosting/"
-      ],
+      "pages": ["https://kinsta.com/green-hosting/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -2327,17 +1867,13 @@
     {
       "key": "id:https://kinsta.com/green-hosting/#primaryimage",
       "id": "https://kinsta.com/green-hosting/#primaryimage",
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2021/01/kinsta-green-hosting-landing-page.jpg"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/green-hosting/"
-      ],
+      "pages": ["https://kinsta.com/green-hosting/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -2346,22 +1882,16 @@
     {
       "key": "id:https://kinsta.com/hostgator-alternative/",
       "id": "https://kinsta.com/hostgator-alternative/",
-      "types": [
-        "WebPage"
-      ],
+      "types": ["WebPage"],
       "name": "HostGator Alternative: The Benefits of Choosing Kinsta®",
       "properties": {
         "name": "HostGator Alternative: The Benefits of Choosing Kinsta®",
         "url": "https://kinsta.com/hostgator-alternative/",
-        "image": [
-          "https://kinsta.com/hostgator-alternative/#primaryimage"
-        ],
+        "image": ["https://kinsta.com/hostgator-alternative/#primaryimage"],
         "description": "Looking to step up to high-performance WordPress hosting? Powered by Google Cloud Platform's fastest servers, Kinsta is the perfect HostGator alternative."
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/hostgator-alternative/"
-      ],
+      "pages": ["https://kinsta.com/hostgator-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -2370,15 +1900,11 @@
     {
       "key": "id:https://kinsta.com/hostgator-alternative/#breadcrumb",
       "id": "https://kinsta.com/hostgator-alternative/#breadcrumb",
-      "types": [
-        "BreadcrumbList"
-      ],
+      "types": ["BreadcrumbList"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/hostgator-alternative/"
-      ],
+      "pages": ["https://kinsta.com/hostgator-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -2387,17 +1913,13 @@
     {
       "key": "id:https://kinsta.com/hostgator-alternative/#primaryimage",
       "id": "https://kinsta.com/hostgator-alternative/#primaryimage",
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2024/08/comparison-hostgator.png"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/hostgator-alternative/"
-      ],
+      "pages": ["https://kinsta.com/hostgator-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -2406,22 +1928,16 @@
     {
       "key": "id:https://kinsta.com/inmotion-hosting-alternative/",
       "id": "https://kinsta.com/inmotion-hosting-alternative/",
-      "types": [
-        "WebPage"
-      ],
+      "types": ["WebPage"],
       "name": "InMotion Hosting Alternative: Benefits of Choosing Kinsta®",
       "properties": {
         "name": "InMotion Hosting Alternative: Benefits of Choosing Kinsta®",
         "url": "https://kinsta.com/inmotion-hosting-alternative/",
-        "image": [
-          "https://kinsta.com/inmotion-hosting-alternative/#primaryimage"
-        ],
+        "image": ["https://kinsta.com/inmotion-hosting-alternative/#primaryimage"],
         "description": "Looking to upgrade to high-performance WordPress hosting? Kinsta’s powerful cloud infrastructure makes it a strong InMotion alternative."
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/inmotion-hosting-alternative/"
-      ],
+      "pages": ["https://kinsta.com/inmotion-hosting-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -2430,15 +1946,11 @@
     {
       "key": "id:https://kinsta.com/inmotion-hosting-alternative/#breadcrumb",
       "id": "https://kinsta.com/inmotion-hosting-alternative/#breadcrumb",
-      "types": [
-        "BreadcrumbList"
-      ],
+      "types": ["BreadcrumbList"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/inmotion-hosting-alternative/"
-      ],
+      "pages": ["https://kinsta.com/inmotion-hosting-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -2447,17 +1959,13 @@
     {
       "key": "id:https://kinsta.com/inmotion-hosting-alternative/#primaryimage",
       "id": "https://kinsta.com/inmotion-hosting-alternative/#primaryimage",
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2024/08/comparison-inmotion.png"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/inmotion-hosting-alternative/"
-      ],
+      "pages": ["https://kinsta.com/inmotion-hosting-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -2466,22 +1974,16 @@
     {
       "key": "id:https://kinsta.com/kinsta-reviews/",
       "id": "https://kinsta.com/kinsta-reviews/",
-      "types": [
-        "WebPage"
-      ],
+      "types": ["WebPage"],
       "name": "Kinsta Reviews - See What Our Customers Say About Us",
       "properties": {
         "name": "Kinsta Reviews - See What Our Customers Say About Us",
         "url": "https://kinsta.com/kinsta-reviews/",
-        "image": [
-          "https://kinsta.com/kinsta-reviews/#primaryimage"
-        ],
+        "image": ["https://kinsta.com/kinsta-reviews/#primaryimage"],
         "description": "On the lookout for WordPress Managed Hosting? See why customers rate Kinsta's hosting services so highly."
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/kinsta-reviews/"
-      ],
+      "pages": ["https://kinsta.com/kinsta-reviews/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -2490,15 +1992,11 @@
     {
       "key": "id:https://kinsta.com/kinsta-reviews/#breadcrumb",
       "id": "https://kinsta.com/kinsta-reviews/#breadcrumb",
-      "types": [
-        "BreadcrumbList"
-      ],
+      "types": ["BreadcrumbList"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/kinsta-reviews/"
-      ],
+      "pages": ["https://kinsta.com/kinsta-reviews/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -2507,17 +2005,13 @@
     {
       "key": "id:https://kinsta.com/kinsta-reviews/#primaryimage",
       "id": "https://kinsta.com/kinsta-reviews/#primaryimage",
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2024/06/2024-06-Kinsta-Reviews.png"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/kinsta-reviews/"
-      ],
+      "pages": ["https://kinsta.com/kinsta-reviews/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -2526,9 +2020,7 @@
     {
       "key": "id:https://kinsta.com/legal/",
       "id": "https://kinsta.com/legal/",
-      "types": [
-        "WebPage"
-      ],
+      "types": ["WebPage"],
       "name": "Legal - Kinsta®",
       "properties": {
         "name": "Legal - Kinsta®",
@@ -2536,9 +2028,7 @@
         "description": "Modern terms of service agreements, policies & privacy & copyright documents form the basis of a transparent business. We invite you to read these documents."
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/legal/"
-      ],
+      "pages": ["https://kinsta.com/legal/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -2547,15 +2037,11 @@
     {
       "key": "id:https://kinsta.com/legal/#breadcrumb",
       "id": "https://kinsta.com/legal/#breadcrumb",
-      "types": [
-        "BreadcrumbList"
-      ],
+      "types": ["BreadcrumbList"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/legal/"
-      ],
+      "pages": ["https://kinsta.com/legal/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -2564,22 +2050,16 @@
     {
       "key": "id:https://kinsta.com/linode-alternative/",
       "id": "https://kinsta.com/linode-alternative/",
-      "types": [
-        "WebPage"
-      ],
+      "types": ["WebPage"],
       "name": "Linode Alternative: The Benefits of Choosing Kinsta®",
       "properties": {
         "name": "Linode Alternative: The Benefits of Choosing Kinsta®",
         "url": "https://kinsta.com/linode-alternative/",
-        "image": [
-          "https://kinsta.com/linode-alternative/#primaryimage"
-        ],
+        "image": ["https://kinsta.com/linode-alternative/#primaryimage"],
         "description": "Looking to upgrade to high-performance WordPress hosting? Kinsta’s powerful cloud infrastructure makes it a strong Linode alternative."
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/linode-alternative/"
-      ],
+      "pages": ["https://kinsta.com/linode-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -2588,15 +2068,11 @@
     {
       "key": "id:https://kinsta.com/linode-alternative/#breadcrumb",
       "id": "https://kinsta.com/linode-alternative/#breadcrumb",
-      "types": [
-        "BreadcrumbList"
-      ],
+      "types": ["BreadcrumbList"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/linode-alternative/"
-      ],
+      "pages": ["https://kinsta.com/linode-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -2605,17 +2081,13 @@
     {
       "key": "id:https://kinsta.com/linode-alternative/#primaryimage",
       "id": "https://kinsta.com/linode-alternative/#primaryimage",
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2024/08/comparison-linode.png"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/linode-alternative/"
-      ],
+      "pages": ["https://kinsta.com/linode-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -2624,22 +2096,16 @@
     {
       "key": "id:https://kinsta.com/nexcess-alternative/",
       "id": "https://kinsta.com/nexcess-alternative/",
-      "types": [
-        "WebPage"
-      ],
+      "types": ["WebPage"],
       "name": "Nexcess Alternative: The Benefits of Choosing Kinsta®",
       "properties": {
         "name": "Nexcess Alternative: The Benefits of Choosing Kinsta®",
         "url": "https://kinsta.com/nexcess-alternative/",
-        "image": [
-          "https://kinsta.com/nexcess-alternative/#primaryimage"
-        ],
+        "image": ["https://kinsta.com/nexcess-alternative/#primaryimage"],
         "description": "Looking to upgrade to high-performance WordPress hosting? Kinsta’s powerful cloud infrastructure makes it a strong Nexcess alternative."
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/nexcess-alternative/"
-      ],
+      "pages": ["https://kinsta.com/nexcess-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -2648,15 +2114,11 @@
     {
       "key": "id:https://kinsta.com/nexcess-alternative/#breadcrumb",
       "id": "https://kinsta.com/nexcess-alternative/#breadcrumb",
-      "types": [
-        "BreadcrumbList"
-      ],
+      "types": ["BreadcrumbList"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/nexcess-alternative/"
-      ],
+      "pages": ["https://kinsta.com/nexcess-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -2665,17 +2127,13 @@
     {
       "key": "id:https://kinsta.com/nexcess-alternative/#primaryimage",
       "id": "https://kinsta.com/nexcess-alternative/#primaryimage",
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2024/08/comparison-nexcess_720.png"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/nexcess-alternative/"
-      ],
+      "pages": ["https://kinsta.com/nexcess-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -2684,22 +2142,16 @@
     {
       "key": "id:https://kinsta.com/pantheon-alternative/",
       "id": "https://kinsta.com/pantheon-alternative/",
-      "types": [
-        "WebPage"
-      ],
+      "types": ["WebPage"],
       "name": "Kinsta vs Pantheon: Enterprise power without the platform complexity",
       "properties": {
         "name": "Kinsta vs Pantheon: Enterprise power without the platform complexity",
         "url": "https://kinsta.com/pantheon-alternative/",
-        "image": [
-          "https://kinsta.com/pantheon-alternative/#primaryimage"
-        ],
+        "image": ["https://kinsta.com/pantheon-alternative/#primaryimage"],
         "description": "Looking for a Pantheon alternative? Kinsta delivers lightning-fast WordPress hosting on powerful cloud infrastructure."
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/pantheon-alternative/"
-      ],
+      "pages": ["https://kinsta.com/pantheon-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -2708,15 +2160,11 @@
     {
       "key": "id:https://kinsta.com/pantheon-alternative/#breadcrumb",
       "id": "https://kinsta.com/pantheon-alternative/#breadcrumb",
-      "types": [
-        "BreadcrumbList"
-      ],
+      "types": ["BreadcrumbList"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/pantheon-alternative/"
-      ],
+      "pages": ["https://kinsta.com/pantheon-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -2725,17 +2173,13 @@
     {
       "key": "id:https://kinsta.com/pantheon-alternative/#primaryimage",
       "id": "https://kinsta.com/pantheon-alternative/#primaryimage",
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2024/08/comparison-pantheon.png"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/pantheon-alternative/"
-      ],
+      "pages": ["https://kinsta.com/pantheon-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -2744,22 +2188,16 @@
     {
       "key": "id:https://kinsta.com/php-market-share/",
       "id": "https://kinsta.com/php-market-share/",
-      "types": [
-        "WebPage"
-      ],
+      "types": ["WebPage"],
       "name": "PHP Market Share in 2026 - Kinsta®",
       "properties": {
         "name": "PHP Market Share in 2026 - Kinsta®",
         "url": "https://kinsta.com/php-market-share/",
-        "image": [
-          "https://kinsta.com/php-market-share/#primaryimage"
-        ],
+        "image": ["https://kinsta.com/php-market-share/#primaryimage"],
         "description": "PHP is the most used server-side programming language on the web. 79.2% of all websites rely on PHP. In this article, learn more about PHP market share!"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/php-market-share/"
-      ],
+      "pages": ["https://kinsta.com/php-market-share/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -2768,15 +2206,11 @@
     {
       "key": "id:https://kinsta.com/php-market-share/#breadcrumb",
       "id": "https://kinsta.com/php-market-share/#breadcrumb",
-      "types": [
-        "BreadcrumbList"
-      ],
+      "types": ["BreadcrumbList"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/php-market-share/"
-      ],
+      "pages": ["https://kinsta.com/php-market-share/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -2785,17 +2219,13 @@
     {
       "key": "id:https://kinsta.com/php-market-share/#primaryimage",
       "id": "https://kinsta.com/php-market-share/#primaryimage",
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2023/11/php-summary.png"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/php-market-share/"
-      ],
+      "pages": ["https://kinsta.com/php-market-share/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -2804,9 +2234,7 @@
     {
       "key": "id:https://kinsta.com/pricing/",
       "id": "https://kinsta.com/pricing/",
-      "types": [
-        "WebPage"
-      ],
+      "types": ["WebPage"],
       "name": "WordPress hosting plans - Kinsta®",
       "properties": {
         "name": "WordPress hosting plans - Kinsta®",
@@ -2814,9 +2242,7 @@
         "description": "Kinsta's WordPress hosting plans start at $30/month, with free migrations, 24/7 expert support and the first month free on select plans."
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/pricing/"
-      ],
+      "pages": ["https://kinsta.com/pricing/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -2825,15 +2251,11 @@
     {
       "key": "id:https://kinsta.com/pricing/#breadcrumb",
       "id": "https://kinsta.com/pricing/#breadcrumb",
-      "types": [
-        "BreadcrumbList"
-      ],
+      "types": ["BreadcrumbList"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/pricing/"
-      ],
+      "pages": ["https://kinsta.com/pricing/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -2842,22 +2264,16 @@
     {
       "key": "id:https://kinsta.com/rackspace-alternative/",
       "id": "https://kinsta.com/rackspace-alternative/",
-      "types": [
-        "WebPage"
-      ],
+      "types": ["WebPage"],
       "name": "Rackspace Alternative: The Benefits of Choosing Kinsta®",
       "properties": {
         "name": "Rackspace Alternative: The Benefits of Choosing Kinsta®",
         "url": "https://kinsta.com/rackspace-alternative/",
-        "image": [
-          "https://kinsta.com/rackspace-alternative/#primaryimage"
-        ],
+        "image": ["https://kinsta.com/rackspace-alternative/#primaryimage"],
         "description": "Looking to upgrade to high-performance WordPress hosting? Kinsta’s powerful cloud infrastructure makes it a strong Rackspace alternative."
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/rackspace-alternative/"
-      ],
+      "pages": ["https://kinsta.com/rackspace-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -2866,15 +2282,11 @@
     {
       "key": "id:https://kinsta.com/rackspace-alternative/#breadcrumb",
       "id": "https://kinsta.com/rackspace-alternative/#breadcrumb",
-      "types": [
-        "BreadcrumbList"
-      ],
+      "types": ["BreadcrumbList"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/rackspace-alternative/"
-      ],
+      "pages": ["https://kinsta.com/rackspace-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -2883,17 +2295,13 @@
     {
       "key": "id:https://kinsta.com/rackspace-alternative/#primaryimage",
       "id": "https://kinsta.com/rackspace-alternative/#primaryimage",
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2024/08/comparison-rackspace.png"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/rackspace-alternative/"
-      ],
+      "pages": ["https://kinsta.com/rackspace-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -2902,9 +2310,7 @@
     {
       "key": "id:https://kinsta.com/resources/",
       "id": "https://kinsta.com/resources/",
-      "types": [
-        "WebPage"
-      ],
+      "types": ["WebPage"],
       "name": "Resources - Kinsta®",
       "properties": {
         "name": "Resources - Kinsta®",
@@ -2912,9 +2318,7 @@
         "description": "Get quick access to all the web development resources at Kinsta including knowledge base articles, in-depth learn guides, and the latest from our blog."
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/resources/"
-      ],
+      "pages": ["https://kinsta.com/resources/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -2923,15 +2327,11 @@
     {
       "key": "id:https://kinsta.com/resources/#breadcrumb",
       "id": "https://kinsta.com/resources/#breadcrumb",
-      "types": [
-        "BreadcrumbList"
-      ],
+      "types": ["BreadcrumbList"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/resources/"
-      ],
+      "pages": ["https://kinsta.com/resources/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -2940,22 +2340,16 @@
     {
       "key": "id:https://kinsta.com/rocket-alternative/",
       "id": "https://kinsta.com/rocket-alternative/",
-      "types": [
-        "WebPage"
-      ],
+      "types": ["WebPage"],
       "name": "Kinsta vs Rocket: Superior performance and enterprise scale",
       "properties": {
         "name": "Kinsta vs Rocket: Superior performance and enterprise scale",
         "url": "https://kinsta.com/rocket-alternative/",
-        "image": [
-          "https://kinsta.com/rocket-alternative/#primaryimage"
-        ],
+        "image": ["https://kinsta.com/rocket-alternative/#primaryimage"],
         "description": "Looking for high-performance WordPress hosting? Kinsta delivers powerful cloud infrastructure and is the perfect Rocket alternative."
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/rocket-alternative/"
-      ],
+      "pages": ["https://kinsta.com/rocket-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -2964,15 +2358,11 @@
     {
       "key": "id:https://kinsta.com/rocket-alternative/#breadcrumb",
       "id": "https://kinsta.com/rocket-alternative/#breadcrumb",
-      "types": [
-        "BreadcrumbList"
-      ],
+      "types": ["BreadcrumbList"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/rocket-alternative/"
-      ],
+      "pages": ["https://kinsta.com/rocket-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -2981,17 +2371,13 @@
     {
       "key": "id:https://kinsta.com/rocket-alternative/#primaryimage",
       "id": "https://kinsta.com/rocket-alternative/#primaryimage",
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2024/08/comparison-rocket.png"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/rocket-alternative/"
-      ],
+      "pages": ["https://kinsta.com/rocket-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -3000,22 +2386,16 @@
     {
       "key": "id:https://kinsta.com/shopify-market-share/",
       "id": "https://kinsta.com/shopify-market-share/",
-      "types": [
-        "WebPage"
-      ],
+      "types": ["WebPage"],
       "name": "Shopify Market Share and Usage Statistics",
       "properties": {
         "name": "Shopify Market Share and Usage Statistics",
         "url": "https://kinsta.com/shopify-market-share/",
-        "image": [
-          "https://kinsta.com/shopify-market-share/#primaryimage"
-        ],
+        "image": ["https://kinsta.com/shopify-market-share/#primaryimage"],
         "description": "Shopify is one of the biggest ecommerce platforms out there . Let's take a look at their market share and usage statistics."
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/shopify-market-share/"
-      ],
+      "pages": ["https://kinsta.com/shopify-market-share/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -3024,15 +2404,11 @@
     {
       "key": "id:https://kinsta.com/shopify-market-share/#breadcrumb",
       "id": "https://kinsta.com/shopify-market-share/#breadcrumb",
-      "types": [
-        "BreadcrumbList"
-      ],
+      "types": ["BreadcrumbList"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/shopify-market-share/"
-      ],
+      "pages": ["https://kinsta.com/shopify-market-share/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -3041,17 +2417,13 @@
     {
       "key": "id:https://kinsta.com/shopify-market-share/#primaryimage",
       "id": "https://kinsta.com/shopify-market-share/#primaryimage",
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2022/08/shopify-market-share.jpg"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/shopify-market-share/"
-      ],
+      "pages": ["https://kinsta.com/shopify-market-share/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -3060,22 +2432,16 @@
     {
       "key": "id:https://kinsta.com/software-engineering-statistics/",
       "id": "https://kinsta.com/software-engineering-statistics/",
-      "types": [
-        "WebPage"
-      ],
+      "types": ["WebPage"],
       "name": "Software Engineering Statistics: Market Share & Trends",
       "properties": {
         "name": "Software Engineering Statistics: Market Share & Trends",
         "url": "https://kinsta.com/software-engineering-statistics/",
-        "image": [
-          "https://kinsta.com/software-engineering-statistics/#primaryimage"
-        ],
+        "image": ["https://kinsta.com/software-engineering-statistics/#primaryimage"],
         "description": "Interested in the latest software engineering statistics? Let's take a look at some of the latest market share, trends, and growth patterns."
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/software-engineering-statistics/"
-      ],
+      "pages": ["https://kinsta.com/software-engineering-statistics/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -3084,15 +2450,11 @@
     {
       "key": "id:https://kinsta.com/software-engineering-statistics/#breadcrumb",
       "id": "https://kinsta.com/software-engineering-statistics/#breadcrumb",
-      "types": [
-        "BreadcrumbList"
-      ],
+      "types": ["BreadcrumbList"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/software-engineering-statistics/"
-      ],
+      "pages": ["https://kinsta.com/software-engineering-statistics/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -3101,17 +2463,13 @@
     {
       "key": "id:https://kinsta.com/software-engineering-statistics/#primaryimage",
       "id": "https://kinsta.com/software-engineering-statistics/#primaryimage",
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2022/11/software-engineering-statistics_featured-image.png"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/software-engineering-statistics/"
-      ],
+      "pages": ["https://kinsta.com/software-engineering-statistics/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -3120,22 +2478,16 @@
     {
       "key": "id:https://kinsta.com/ventraip-alternative/",
       "id": "https://kinsta.com/ventraip-alternative/",
-      "types": [
-        "WebPage"
-      ],
+      "types": ["WebPage"],
       "name": "Kinsta vs VentraIP: Lightning fast hosting built for growth",
       "properties": {
         "name": "Kinsta vs VentraIP: Lightning fast hosting built for growth",
         "url": "https://kinsta.com/ventraip-alternative/",
-        "image": [
-          "https://kinsta.com/ventraip-alternative/#primaryimage"
-        ],
+        "image": ["https://kinsta.com/ventraip-alternative/#primaryimage"],
         "description": "See how Kinsta outperforms VentraIP with lightning-fast, secure cloud hosting, global speed, and powerful tools built for modern teams and growth."
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/ventraip-alternative/"
-      ],
+      "pages": ["https://kinsta.com/ventraip-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -3144,15 +2496,11 @@
     {
       "key": "id:https://kinsta.com/ventraip-alternative/#breadcrumb",
       "id": "https://kinsta.com/ventraip-alternative/#breadcrumb",
-      "types": [
-        "BreadcrumbList"
-      ],
+      "types": ["BreadcrumbList"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/ventraip-alternative/"
-      ],
+      "pages": ["https://kinsta.com/ventraip-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -3161,17 +2509,13 @@
     {
       "key": "id:https://kinsta.com/ventraip-alternative/#primaryimage",
       "id": "https://kinsta.com/ventraip-alternative/#primaryimage",
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2025/10/kinsta-vs-ventraip-featured-image.png"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/ventraip-alternative/"
-      ],
+      "pages": ["https://kinsta.com/ventraip-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -3180,9 +2524,7 @@
     {
       "key": "id:https://kinsta.com/web-accessibility-statement/",
       "id": "https://kinsta.com/web-accessibility-statement/",
-      "types": [
-        "WebPage"
-      ],
+      "types": ["WebPage"],
       "name": "Web Accessibility Statement for Kinsta.com - Kinsta®",
       "properties": {
         "name": "Web Accessibility Statement for Kinsta.com - Kinsta®",
@@ -3190,9 +2532,7 @@
         "description": "Learn more about our Web Accessibility Statement and how we are committed to providing accessible digital content for all customers."
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/web-accessibility-statement/"
-      ],
+      "pages": ["https://kinsta.com/web-accessibility-statement/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -3201,15 +2541,11 @@
     {
       "key": "id:https://kinsta.com/web-accessibility-statement/#breadcrumb",
       "id": "https://kinsta.com/web-accessibility-statement/#breadcrumb",
-      "types": [
-        "BreadcrumbList"
-      ],
+      "types": ["BreadcrumbList"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/web-accessibility-statement/"
-      ],
+      "pages": ["https://kinsta.com/web-accessibility-statement/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -3218,22 +2554,16 @@
     {
       "key": "id:https://kinsta.com/why-us/",
       "id": "https://kinsta.com/why-us/",
-      "types": [
-        "WebPage"
-      ],
+      "types": ["WebPage"],
       "name": "Why Kinsta? See What Sets Us Apart",
       "properties": {
         "name": "Why Kinsta? See What Sets Us Apart",
         "url": "https://kinsta.com/why-us/",
-        "image": [
-          "https://kinsta.com/why-us/#primaryimage"
-        ],
+        "image": ["https://kinsta.com/why-us/#primaryimage"],
         "description": "230,000+ customers switched to Kinsta and stayed. Faster sites, real WordPress experts, built-in Cloudflare protection, and free migrations handled for you."
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/why-us/"
-      ],
+      "pages": ["https://kinsta.com/why-us/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -3242,15 +2572,11 @@
     {
       "key": "id:https://kinsta.com/why-us/#breadcrumb",
       "id": "https://kinsta.com/why-us/#breadcrumb",
-      "types": [
-        "BreadcrumbList"
-      ],
+      "types": ["BreadcrumbList"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/why-us/"
-      ],
+      "pages": ["https://kinsta.com/why-us/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -3259,17 +2585,13 @@
     {
       "key": "id:https://kinsta.com/why-us/#primaryimage",
       "id": "https://kinsta.com/why-us/#primaryimage",
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2023/12/kinsta-main-en.jpg"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/why-us/"
-      ],
+      "pages": ["https://kinsta.com/why-us/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -3278,22 +2600,16 @@
     {
       "key": "id:https://kinsta.com/wordpress-market-share/",
       "id": "https://kinsta.com/wordpress-market-share/",
-      "types": [
-        "WebPage"
-      ],
+      "types": ["WebPage"],
       "name": "WordPress Market Share Statistics (2011-2026) - Kinsta®",
       "properties": {
         "name": "WordPress Market Share Statistics (2011-2026) - Kinsta®",
         "url": "https://kinsta.com/wordpress-market-share/",
-        "image": [
-          "https://kinsta.com/wordpress-market-share/#primaryimage"
-        ],
+        "image": ["https://kinsta.com/wordpress-market-share/#primaryimage"],
         "description": "It’s no secret that WordPress is one of the most popular ways to build a website. Check out the current WordPress market share and growth compared to other platforms."
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/wordpress-market-share/"
-      ],
+      "pages": ["https://kinsta.com/wordpress-market-share/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -3302,15 +2618,11 @@
     {
       "key": "id:https://kinsta.com/wordpress-market-share/#breadcrumb",
       "id": "https://kinsta.com/wordpress-market-share/#breadcrumb",
-      "types": [
-        "BreadcrumbList"
-      ],
+      "types": ["BreadcrumbList"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/wordpress-market-share/"
-      ],
+      "pages": ["https://kinsta.com/wordpress-market-share/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -3319,17 +2631,13 @@
     {
       "key": "id:https://kinsta.com/wordpress-market-share/#primaryimage",
       "id": "https://kinsta.com/wordpress-market-share/#primaryimage",
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2024/08/wordpress-market-share-2024-trends.png"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/wordpress-market-share/"
-      ],
+      "pages": ["https://kinsta.com/wordpress-market-share/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -3338,22 +2646,16 @@
     {
       "key": "id:https://kinsta.com/wpserveur-alternative/",
       "id": "https://kinsta.com/wpserveur-alternative/",
-      "types": [
-        "WebPage"
-      ],
+      "types": ["WebPage"],
       "name": "WPServeur Alternative: Benefits of Choosing Kinsta®",
       "properties": {
         "name": "WPServeur Alternative: Benefits of Choosing Kinsta®",
         "url": "https://kinsta.com/wpserveur-alternative/",
-        "image": [
-          "https://kinsta.com/wpserveur-alternative/#primaryimage"
-        ],
+        "image": ["https://kinsta.com/wpserveur-alternative/#primaryimage"],
         "description": "Looking to upgrade to high-performance WordPress hosting? Kinsta’s powerful cloud infrastructure makes it a strong WPServeur alternative."
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/wpserveur-alternative/"
-      ],
+      "pages": ["https://kinsta.com/wpserveur-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -3362,15 +2664,11 @@
     {
       "key": "id:https://kinsta.com/wpserveur-alternative/#breadcrumb",
       "id": "https://kinsta.com/wpserveur-alternative/#breadcrumb",
-      "types": [
-        "BreadcrumbList"
-      ],
+      "types": ["BreadcrumbList"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/wpserveur-alternative/"
-      ],
+      "pages": ["https://kinsta.com/wpserveur-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -3379,17 +2677,13 @@
     {
       "key": "id:https://kinsta.com/wpserveur-alternative/#primaryimage",
       "id": "https://kinsta.com/wpserveur-alternative/#primaryimage",
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2024/08/comparison-wpserveur.png"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/wpserveur-alternative/"
-      ],
+      "pages": ["https://kinsta.com/wpserveur-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -3398,22 +2692,16 @@
     {
       "key": "id:https://kinsta.com/wpx-hosting-alternative/",
       "id": "https://kinsta.com/wpx-hosting-alternative/",
-      "types": [
-        "WebPage"
-      ],
+      "types": ["WebPage"],
       "name": "WPX Hosting Alternative: The Benefits of Choosing Kinsta®",
       "properties": {
         "name": "WPX Hosting Alternative: The Benefits of Choosing Kinsta®",
         "url": "https://kinsta.com/wpx-hosting-alternative/",
-        "image": [
-          "https://kinsta.com/wpx-hosting-alternative/#primaryimage"
-        ],
+        "image": ["https://kinsta.com/wpx-hosting-alternative/#primaryimage"],
         "description": "Looking to upgrade to high-performance WordPress hosting? Kinsta’s powerful cloud infrastructure makes it a strong WPX hosting alternative."
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/wpx-hosting-alternative/"
-      ],
+      "pages": ["https://kinsta.com/wpx-hosting-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -3422,15 +2710,11 @@
     {
       "key": "id:https://kinsta.com/wpx-hosting-alternative/#breadcrumb",
       "id": "https://kinsta.com/wpx-hosting-alternative/#breadcrumb",
-      "types": [
-        "BreadcrumbList"
-      ],
+      "types": ["BreadcrumbList"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/wpx-hosting-alternative/"
-      ],
+      "pages": ["https://kinsta.com/wpx-hosting-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -3439,17 +2723,13 @@
     {
       "key": "id:https://kinsta.com/wpx-hosting-alternative/#primaryimage",
       "id": "https://kinsta.com/wpx-hosting-alternative/#primaryimage",
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2024/08/comparison-wpxhosting.png"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/wpx-hosting-alternative/"
-      ],
+      "pages": ["https://kinsta.com/wpx-hosting-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -3458,22 +2738,16 @@
     {
       "key": "id:https://kinsta.com/xserver-alternative/",
       "id": "https://kinsta.com/xserver-alternative/",
-      "types": [
-        "WebPage"
-      ],
+      "types": ["WebPage"],
       "name": "Xserver Alternative: The Benefits of Choosing Kinsta®",
       "properties": {
         "name": "Xserver Alternative: The Benefits of Choosing Kinsta®",
         "url": "https://kinsta.com/xserver-alternative/",
-        "image": [
-          "https://kinsta.com/xserver-alternative/#primaryimage"
-        ],
+        "image": ["https://kinsta.com/xserver-alternative/#primaryimage"],
         "description": "Looking to step up to high-performance WordPress hosting? Powered by Google Cloud Platform's fastest servers, Kinsta is the perfect Xserver alternative."
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/xserver-alternative/"
-      ],
+      "pages": ["https://kinsta.com/xserver-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -3482,15 +2756,11 @@
     {
       "key": "id:https://kinsta.com/xserver-alternative/#breadcrumb",
       "id": "https://kinsta.com/xserver-alternative/#breadcrumb",
-      "types": [
-        "BreadcrumbList"
-      ],
+      "types": ["BreadcrumbList"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/xserver-alternative/"
-      ],
+      "pages": ["https://kinsta.com/xserver-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -3499,17 +2769,13 @@
     {
       "key": "id:https://kinsta.com/xserver-alternative/#primaryimage",
       "id": "https://kinsta.com/xserver-alternative/#primaryimage",
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2024/08/comparison-xserver.png"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/xserver-alternative/"
-      ],
+      "pages": ["https://kinsta.com/xserver-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -3518,17 +2784,13 @@
     {
       "key": "syn:ImageObject|url:https://kinsta.com/wp-content/uploads/2020/10/microsoft-azure-market-share.jpg",
       "id": null,
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2020/10/microsoft-azure-market-share.jpg"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/azure-market-share/"
-      ],
+      "pages": ["https://kinsta.com/azure-market-share/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -3537,17 +2799,13 @@
     {
       "key": "syn:ImageObject|url:https://kinsta.com/wp-content/uploads/2020/11/web-browser-market-share.jpg",
       "id": null,
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2020/11/web-browser-market-share.jpg"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/browser-market-share/"
-      ],
+      "pages": ["https://kinsta.com/browser-market-share/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -3556,9 +2814,7 @@
     {
       "key": "syn:ImageObject|url:https://kinsta.com/wp-content/uploads/2020/12/kinsta-logo--publisher-logo.png",
       "id": null,
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2020/12/kinsta-logo--publisher-logo.png"
@@ -3610,17 +2866,13 @@
     {
       "key": "syn:ImageObject|url:https://kinsta.com/wp-content/uploads/2020/12/matteo-duo.jpeg",
       "id": null,
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2020/12/matteo-duo.jpeg"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/web-accessibility-statement/"
-      ],
+      "pages": ["https://kinsta.com/web-accessibility-statement/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -3629,17 +2881,13 @@
     {
       "key": "syn:ImageObject|url:https://kinsta.com/wp-content/uploads/2021/01/kinsta-green-hosting-landing-page-1200x675.jpg",
       "id": null,
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2021/01/kinsta-green-hosting-landing-page-1200x675.jpg"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/green-hosting/"
-      ],
+      "pages": ["https://kinsta.com/green-hosting/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -3648,17 +2896,13 @@
     {
       "key": "syn:ImageObject|url:https://kinsta.com/wp-content/uploads/2021/01/kinsta-green-hosting-landing-page.jpg",
       "id": null,
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2021/01/kinsta-green-hosting-landing-page.jpg"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/green-hosting/"
-      ],
+      "pages": ["https://kinsta.com/green-hosting/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -3667,17 +2911,13 @@
     {
       "key": "syn:ImageObject|url:https://kinsta.com/wp-content/uploads/2022/08/shopify-market-share.jpg",
       "id": null,
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2022/08/shopify-market-share.jpg"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/shopify-market-share/"
-      ],
+      "pages": ["https://kinsta.com/shopify-market-share/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -3686,17 +2926,13 @@
     {
       "key": "syn:ImageObject|url:https://kinsta.com/wp-content/uploads/2022/11/software-engineering-statistics_featured-image.png",
       "id": null,
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2022/11/software-engineering-statistics_featured-image.png"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/software-engineering-statistics/"
-      ],
+      "pages": ["https://kinsta.com/software-engineering-statistics/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -3705,17 +2941,13 @@
     {
       "key": "syn:ImageObject|url:https://kinsta.com/wp-content/uploads/2023/10/cloudflare-market-share.jpg",
       "id": null,
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2023/10/cloudflare-market-share.jpg"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/cloudflare-market-share/"
-      ],
+      "pages": ["https://kinsta.com/cloudflare-market-share/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -3724,17 +2956,13 @@
     {
       "key": "syn:ImageObject|url:https://kinsta.com/wp-content/uploads/2023/12/devkinsta-main-en.jpg",
       "id": null,
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2023/12/devkinsta-main-en.jpg"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/devkinsta/"
-      ],
+      "pages": ["https://kinsta.com/devkinsta/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -3743,17 +2971,13 @@
     {
       "key": "syn:ImageObject|url:https://kinsta.com/wp-content/uploads/2023/12/kinsta-cheatsheets.jpg",
       "id": null,
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2023/12/kinsta-cheatsheets.jpg"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/cheatsheets/"
-      ],
+      "pages": ["https://kinsta.com/cheatsheets/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -3762,17 +2986,13 @@
     {
       "key": "syn:ImageObject|url:https://kinsta.com/wp-content/uploads/2023/12/kinsta-main-en.jpg",
       "id": null,
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2023/12/kinsta-main-en.jpg"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/why-us/"
-      ],
+      "pages": ["https://kinsta.com/why-us/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -3781,17 +3001,13 @@
     {
       "key": "syn:ImageObject|url:https://kinsta.com/wp-content/uploads/2024/06/2024-06-Kinsta-Reviews.png",
       "id": null,
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2024/06/2024-06-Kinsta-Reviews.png"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/kinsta-reviews/"
-      ],
+      "pages": ["https://kinsta.com/kinsta-reviews/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -3800,17 +3016,13 @@
     {
       "key": "syn:ImageObject|url:https://kinsta.com/wp-content/uploads/2024/08/comparison-bluehost.png",
       "id": null,
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2024/08/comparison-bluehost.png"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/bluehost-alternative/"
-      ],
+      "pages": ["https://kinsta.com/bluehost-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -3819,17 +3031,13 @@
     {
       "key": "syn:ImageObject|url:https://kinsta.com/wp-content/uploads/2024/08/comparison-cloudways.png",
       "id": null,
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2024/08/comparison-cloudways.png"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/cloudways-alternative/"
-      ],
+      "pages": ["https://kinsta.com/cloudways-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -3838,17 +3046,13 @@
     {
       "key": "syn:ImageObject|url:https://kinsta.com/wp-content/uploads/2024/08/comparison-google-cloud_720.png",
       "id": null,
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2024/08/comparison-google-cloud_720.png"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/google-cloud-alternative/"
-      ],
+      "pages": ["https://kinsta.com/google-cloud-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -3857,17 +3061,13 @@
     {
       "key": "syn:ImageObject|url:https://kinsta.com/wp-content/uploads/2024/08/comparison-hostgator.png",
       "id": null,
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2024/08/comparison-hostgator.png"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/hostgator-alternative/"
-      ],
+      "pages": ["https://kinsta.com/hostgator-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -3876,17 +3076,13 @@
     {
       "key": "syn:ImageObject|url:https://kinsta.com/wp-content/uploads/2024/08/comparison-inmotion.png",
       "id": null,
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2024/08/comparison-inmotion.png"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/inmotion-hosting-alternative/"
-      ],
+      "pages": ["https://kinsta.com/inmotion-hosting-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -3895,17 +3091,13 @@
     {
       "key": "syn:ImageObject|url:https://kinsta.com/wp-content/uploads/2024/08/comparison-linode.png",
       "id": null,
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2024/08/comparison-linode.png"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/linode-alternative/"
-      ],
+      "pages": ["https://kinsta.com/linode-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -3914,17 +3106,13 @@
     {
       "key": "syn:ImageObject|url:https://kinsta.com/wp-content/uploads/2024/08/comparison-nexcess_720.png",
       "id": null,
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2024/08/comparison-nexcess_720.png"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/nexcess-alternative/"
-      ],
+      "pages": ["https://kinsta.com/nexcess-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -3933,17 +3121,13 @@
     {
       "key": "syn:ImageObject|url:https://kinsta.com/wp-content/uploads/2024/08/comparison-pantheon.png",
       "id": null,
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2024/08/comparison-pantheon.png"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/pantheon-alternative/"
-      ],
+      "pages": ["https://kinsta.com/pantheon-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -3952,17 +3136,13 @@
     {
       "key": "syn:ImageObject|url:https://kinsta.com/wp-content/uploads/2024/08/comparison-rackspace.png",
       "id": null,
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2024/08/comparison-rackspace.png"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/rackspace-alternative/"
-      ],
+      "pages": ["https://kinsta.com/rackspace-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -3971,17 +3151,13 @@
     {
       "key": "syn:ImageObject|url:https://kinsta.com/wp-content/uploads/2024/08/comparison-rocket.png",
       "id": null,
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2024/08/comparison-rocket.png"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/rocket-alternative/"
-      ],
+      "pages": ["https://kinsta.com/rocket-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -3990,17 +3166,13 @@
     {
       "key": "syn:ImageObject|url:https://kinsta.com/wp-content/uploads/2024/08/comparison-wpserveur.png",
       "id": null,
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2024/08/comparison-wpserveur.png"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/wpserveur-alternative/"
-      ],
+      "pages": ["https://kinsta.com/wpserveur-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -4009,17 +3181,13 @@
     {
       "key": "syn:ImageObject|url:https://kinsta.com/wp-content/uploads/2024/08/comparison-wpxhosting.png",
       "id": null,
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2024/08/comparison-wpxhosting.png"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/wpx-hosting-alternative/"
-      ],
+      "pages": ["https://kinsta.com/wpx-hosting-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -4028,17 +3196,13 @@
     {
       "key": "syn:ImageObject|url:https://kinsta.com/wp-content/uploads/2024/08/comparison-xserver.png",
       "id": null,
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2024/08/comparison-xserver.png"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/xserver-alternative/"
-      ],
+      "pages": ["https://kinsta.com/xserver-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -4047,17 +3211,13 @@
     {
       "key": "syn:ImageObject|url:https://kinsta.com/wp-content/uploads/2024/10/free-month-bg-1.png",
       "id": null,
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2024/10/free-month-bg-1.png"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/first-month-free/"
-      ],
+      "pages": ["https://kinsta.com/first-month-free/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -4066,17 +3226,13 @@
     {
       "key": "syn:ImageObject|url:https://kinsta.com/wp-content/uploads/2025/01/education-launch-pad.png",
       "id": null,
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2025/01/education-launch-pad.png"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/education-launchpad/"
-      ],
+      "pages": ["https://kinsta.com/education-launchpad/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -4085,17 +3241,13 @@
     {
       "key": "syn:ImageObject|url:https://kinsta.com/wp-content/uploads/2025/09/featured_image-affiliate-youtubers-min.png",
       "id": null,
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2025/09/featured_image-affiliate-youtubers-min.png"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/affiliate-program-for-youtubers/"
-      ],
+      "pages": ["https://kinsta.com/affiliate-program-for-youtubers/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,
@@ -4104,17 +3256,13 @@
     {
       "key": "syn:ImageObject|url:https://kinsta.com/wp-content/uploads/2025/10/kinsta-vs-ventraip-featured-image.png",
       "id": null,
-      "types": [
-        "ImageObject"
-      ],
+      "types": ["ImageObject"],
       "name": null,
       "properties": {
         "url": "https://kinsta.com/wp-content/uploads/2025/10/kinsta-vs-ventraip-featured-image.png"
       },
       "occurrences": 1,
-      "pages": [
-        "https://kinsta.com/ventraip-alternative/"
-      ],
+      "pages": ["https://kinsta.com/ventraip-alternative/"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0,

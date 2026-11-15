@@ -139,8 +139,13 @@ describe("graphml", () => {
     // not a character at all: xmllint rejects a document containing any of
     // them exactly as it rejects a control byte.
     const hostile =
-      "A" + String.fromCharCode(0xfffe) + "B" + String.fromCharCode(0xffff) + "C" +
-      String.fromCharCode(0xd800) + "D";
+      "A" +
+      String.fromCharCode(0xfffe) +
+      "B" +
+      String.fromCharCode(0xffff) +
+      "C" +
+      String.fromCharCode(0xd800) +
+      "D";
     const out = renderEntitiesGraphml(map([node({ name: hostile })]));
     expect(out).toContain("ABCD");
     for (const code of [0xfffe, 0xffff, 0xd800]) {

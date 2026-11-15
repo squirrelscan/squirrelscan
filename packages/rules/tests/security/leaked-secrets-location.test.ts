@@ -16,7 +16,10 @@ const PAGE = "https://app.acme.test/";
 const inlineSecret = "sk_live_" + "aB3dE5gH7jK9mN1pQ3rS5tU7"; // pragma: allowlist secret
 const externalSecret = "sk_live_" + "zY8xW6vU4tS2rQ0pN8mL6kJ4"; // pragma: allowlist secret
 
-async function run(html: string, scripts: { url: string; content: string }[] = []): Promise<CheckItem[]> {
+async function run(
+  html: string,
+  scripts: { url: string; content: string }[] = [],
+): Promise<CheckItem[]> {
   const ctx = {
     site: {
       baseUrl: PAGE,
@@ -41,9 +44,9 @@ async function run(html: string, scripts: { url: string; content: string }[] = [
 describe("leaked-secret source location metadata", () => {
   test("inline items point into the script body and identify its page position", async () => {
     const script = `window.config = { key: "${inlineSecret}" };`;
-    const items = (await run(
-      `<html><body><script src="/vendor.js"></script><script>${script}</script></body></html>`
-    ));
+    const items = await run(
+      `<html><body><script src="/vendor.js"></script><script>${script}</script></body></html>`,
+    );
     const item = items.find((candidate) => candidate.id.startsWith("Stripe Live Key:"));
 
     expect(item?.meta).toMatchObject({
@@ -52,16 +55,16 @@ describe("leaked-secret source location metadata", () => {
       scriptIndex: 1,
     });
     expect(item?.id).toBe(
-      `Stripe Live Key: ${inlineSecret.slice(0, 6)}${"*".repeat(Math.min(inlineSecret.length - 10, 20))}${inlineSecret.slice(-4)}`
+      `Stripe Live Key: ${inlineSecret.slice(0, 6)}${"*".repeat(Math.min(inlineSecret.length - 10, 20))}${inlineSecret.slice(-4)}`,
     );
     expect(JSON.stringify(item)).not.toContain(inlineSecret);
   });
 
   test("external-script offsets use UTF-16 indices in the fetched script body", async () => {
     const content = `const note = "🔥"; export const config = { key: "${externalSecret}" };`;
-    const items = (await run("<html><body>ok</body></html>", [
+    const items = await run("<html><body>ok</body></html>", [
       { url: "https://app.acme.test/app.js", content },
-    ]));
+    ]);
     const item = items.find((candidate) => candidate.id.startsWith("Stripe Live Key:"));
 
     expect(item?.meta).toMatchObject({
@@ -69,7 +72,7 @@ describe("leaked-secret source location metadata", () => {
       offset: content.indexOf(externalSecret),
     });
     expect(content.indexOf(externalSecret)).toBe(
-      [...content.slice(0, content.indexOf(externalSecret))].length + 1
+      [...content.slice(0, content.indexOf(externalSecret))].length + 1,
     );
     expect(item?.meta).not.toHaveProperty("scriptIndex");
     expect(JSON.stringify(item)).not.toContain(externalSecret);
@@ -79,7 +82,7 @@ describe("leaked-secret source location metadata", () => {
     const secret = "aB3dE5gH7jK9mN1pQ3rS5tU7vW9xY2"; // pragma: allowlist secret
     const content = `window.config = { apiKey: "${secret}" };`;
     const finding = scanContent(content, "external-script").find(
-      (candidate) => candidate.type === "Generic API Key Assignment"
+      (candidate) => candidate.type === "Generic API Key Assignment",
     );
 
     expect(finding).toMatchObject({
@@ -94,10 +97,10 @@ describe("leaked-secret source location metadata", () => {
     const script = `window.config = "${encoded}";`;
     const doc = parsePage(
       `<script src="/vendor.js"></script><script>${script}</script>`,
-      PAGE
+      PAGE,
     ).document!;
     const finding = scanPageForSecrets(doc, PAGE).find(
-      (candidate) => candidate.location === "inline-script (base64)"
+      (candidate) => candidate.location === "inline-script (base64)",
     );
 
     expect(finding).toMatchObject({
@@ -112,7 +115,7 @@ describe("leaked-secret source location metadata", () => {
     const doc = parsePage(source, PAGE).document!;
     const serialized = doc.toString();
     const finding = scanPageForSecrets(doc, PAGE).find(
-      (candidate) => candidate.location === "html"
+      (candidate) => candidate.location === "html",
     );
 
     expect(finding).toMatchObject({

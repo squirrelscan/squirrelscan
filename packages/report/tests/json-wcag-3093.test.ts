@@ -68,21 +68,30 @@ describe("renderJson wcag (repo#3093)", () => {
   });
 
   test("markdown shows the criterion and level", () => {
-    expect(renderMarkdown(report())).toContain("**WCAG:** 1.4.3 Contrast (Minimum), Level AA (WCAG 2.0)");
+    expect(renderMarkdown(report())).toContain(
+      "**WCAG:** 1.4.3 Contrast (Minimum), Level AA (WCAG 2.0)",
+    );
   });
 });
 
 describe("html wcag line (pub#2024 review)", () => {
   test("says the counts are of accessibility rules with findings", () => {
     const html = renderHtml(report());
-    expect(html).toContain("Accessibility rules with findings, by WCAG level: Level A: 1, Level AA: 1, Level AAA: 1");
+    expect(html).toContain(
+      "Accessibility rules with findings, by WCAG level: Level A: 1, Level AA: 1, Level AAA: 1",
+    );
   });
 });
 
 describe("a run narrowed by a WCAG level is marked partial (pub#2024 review)", () => {
   const narrowed = (): AuditReport => ({
     ...report(),
-    partialAudit: { include: [], exclude: [], includedCategories: ["a11y", "core"], wcagLevel: "AA" },
+    partialAudit: {
+      include: [],
+      exclude: [],
+      includedCategories: ["a11y", "core"],
+      wcagLevel: "AA",
+    },
   });
 
   test("json meta.partialAudit carries the level", () => {
@@ -96,7 +105,9 @@ describe("a run narrowed by a WCAG level is marked partial (pub#2024 review)", (
   });
 
   test("text, markdown and xml name the level", () => {
-    expect(renderText(narrowed())).toContain("Partial audit: accessibility rules narrowed to WCAG Level AA.");
+    expect(renderText(narrowed())).toContain(
+      "Partial audit: accessibility rules narrowed to WCAG Level AA.",
+    );
     expect(renderMarkdown(narrowed())).toContain("accessibility rules narrowed to WCAG Level AA");
     expect(renderXml(narrowed())).toContain('wcag-level="AA"');
   });

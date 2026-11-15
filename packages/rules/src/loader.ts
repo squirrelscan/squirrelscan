@@ -92,7 +92,7 @@ function getRuleNamespaces(options: LoaderOptions = {}): RuleNamespace[] {
       for (const rule of ns.rules) {
         if (builtIn.has(rule.meta.id)) {
           throw new Error(
-            `Rule id "${rule.meta.id}" from namespace "${ns.name}" clashes with a built-in rule and cannot replace it`
+            `Rule id "${rule.meta.id}" from namespace "${ns.name}" clashes with a built-in rule and cannot replace it`,
           );
         }
       }
@@ -149,17 +149,10 @@ export function getAllRuleIds(options: LoaderOptions = {}): string[] {
 }
 
 // Get rules by domain
-export function getRulesByDomain(
-  domain: string,
-  options: LoaderOptions = {}
-): Rule[] {
+export function getRulesByDomain(domain: string, options: LoaderOptions = {}): Rule[] {
   const namespaces = getRuleNamespaces(options);
   const ns = namespaces.find((n) => n.name === domain);
-  return (
-    ns?.rules.filter(
-      (r) => !r.meta.disabled && (options.includeOptIn || !r.meta.optIn)
-    ) ?? []
-  );
+  return ns?.rules.filter((r) => !r.meta.disabled && (options.includeOptIn || !r.meta.optIn)) ?? [];
 }
 
 // Get all namespaces
@@ -167,8 +160,6 @@ export function getNamespaces(options: LoaderOptions = {}): RuleNamespace[] {
   const namespaces = getRuleNamespaces(options);
   return namespaces.map((ns) => ({
     ...ns,
-    rules: ns.rules.filter(
-      (r) => !r.meta.disabled && (options.includeOptIn || !r.meta.optIn)
-    ),
+    rules: ns.rules.filter((r) => !r.meta.disabled && (options.includeOptIn || !r.meta.optIn)),
   }));
 }

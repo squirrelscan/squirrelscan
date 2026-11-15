@@ -49,18 +49,24 @@ describe("a11y/link-text records the section of each flagged link", () => {
   });
 
   test("the same link repeated in two parts of the page is matched to each in order", async () => {
-    const checks = (await linkTextRule.run(
-      pageCtx('<nav><a href="/x">learn more</a></nav><main><a href="/x">learn more</a></main>'),
-    )).checks;
+    const checks = (
+      await linkTextRule.run(
+        pageCtx('<nav><a href="/x">learn more</a></nav><main><a href="/x">learn more</a></main>'),
+      )
+    ).checks;
     expect(check(checks, "link-text-generic")!.items).toEqual([
       { id: "learn more", regions: { navigation: 1, content: 1 } },
     ]);
   });
 
   test("an anchor the link extractor leaves out does not take another's placement", async () => {
-    const checks = (await linkTextRule.run(
-      pageCtx('<header><a href="#">click here</a></header><footer><a href="https://example.com/#">click here</a></footer>'),
-    )).checks;
+    const checks = (
+      await linkTextRule.run(
+        pageCtx(
+          '<header><a href="#">click here</a></header><footer><a href="https://example.com/#">click here</a></footer>',
+        ),
+      )
+    ).checks;
     expect(check(checks, "link-text-generic")!.items).toEqual([
       { id: "click here", regions: { footer: 1 } },
     ]);
@@ -75,14 +81,18 @@ describe("a11y/link-text records the section of each flagged link", () => {
 
 describe("page-scope link rules with section labels add regions", () => {
   test("links/anchor-text", async () => {
-    const checks = (await anchorTextRule.run(pageCtx('<footer><a href="/x">click here</a></footer>'))).checks;
+    const checks = (
+      await anchorTextRule.run(pageCtx('<footer><a href="/x">click here</a></footer>'))
+    ).checks;
     expect(check(checks, "generic-anchor")!.items![0]).toMatchObject({ regions: { footer: 1 } });
   });
 
   test("links/tel-mailto", async () => {
-    const checks = (await telMailtoRule.run(
-      pageCtx('<footer><a href="tel:+61299999999">Call 02 1234 5678</a></footer>'),
-    )).checks;
+    const checks = (
+      await telMailtoRule.run(
+        pageCtx('<footer><a href="tel:+61299999999">Call 02 1234 5678</a></footer>'),
+      )
+    ).checks;
     expect(check(checks, "tel-mismatch")!.items![0]).toMatchObject({ regions: { footer: 1 } });
   });
 });
@@ -127,7 +137,8 @@ describe("links/broken-links counts pages per section", () => {
       options: {},
     } as unknown as RuleContext;
     // A link in the footer of every page is a sitewide link (#1772): its own check, with the same counts per section.
-    const item = check((await brokenLinksRule.run(ctx)).checks, "broken-links-sitewide")!.items![0]!;
+    const item = check((await brokenLinksRule.run(ctx)).checks, "broken-links-sitewide")!
+      .items![0]!;
     expect(item.regions).toEqual({ footer: 10, content: 2 });
   });
 });
@@ -155,7 +166,10 @@ describe("the fold adds per-page regions once per page", () => {
     expect(item.regions).toEqual({ header: 6, footer: 1 });
     expect(item.sourcePages).toHaveLength(4);
     expect(item.pageCount).toBe(6);
-    expect(item.sources?.find((s) => s.page === `${BASE}/p0`)?.sections).toEqual({ header: 1, footer: 1 });
+    expect(item.sources?.find((s) => s.page === `${BASE}/p0`)?.sections).toEqual({
+      header: 1,
+      footer: 1,
+    });
   });
 
   test("an aggregate unfolded and folded again keeps its counts", () => {
@@ -166,7 +180,12 @@ describe("the fold adds per-page regions once per page", () => {
       pageUrl: `${BASE}/p${String(k).padStart(2, "0")}`,
       items: [{ id: "read more", regions: { footer: 1 } }],
     }));
-    const limits = { maxChecks: 1, maxPagesPerCheck: 100, maxItemsPerCheck: 100, maxSourcePagesPerItem: 100 };
+    const limits = {
+      maxChecks: 1,
+      maxPagesPerCheck: 100,
+      maxItemsPerCheck: 100,
+      maxSourcePagesPerItem: 100,
+    };
     const [aggregate] = foldOverflowChecks(checks, limits);
     expect(aggregate!.items![0]!.regions).toEqual({ footer: 12 });
     const [again] = foldOverflowChecks(unfoldAggregateCheck(aggregate!), limits);

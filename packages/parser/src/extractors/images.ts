@@ -24,10 +24,7 @@ function isLazyLoaded(element: Element): boolean {
   const lazyload = element.getAttribute("data-lazyload");
 
   // If has data-src but src is placeholder, it's lazy
-  if (
-    dataSrc &&
-    (src === "" || src.includes("placeholder") || src.includes("data:image"))
-  ) {
+  if (dataSrc && (src === "" || src.includes("placeholder") || src.includes("data:image"))) {
     return true;
   }
 
@@ -86,10 +83,7 @@ function getImageSrc(element: Element, baseUrl: string): string | null {
 /**
  * Extract all images from document
  */
-export function extractImages(
-  doc: Document,
-  baseUrl: string
-): ExtractedImage[] {
+export function extractImages(doc: Document, baseUrl: string): ExtractedImage[] {
   // A <noscript> fallback image never loads with scripting on (#434).
   const imgs = querySelectorAllOutsideNoscript(doc, "img");
   const images: ExtractedImage[] = [];
@@ -157,20 +151,14 @@ export function getUniqueImageUrls(doc: Document, baseUrl: string): string[] {
  * Get images with no alt attribute at all. alt="" is excluded: it is the
  * correct markup for a decorative image, not a missing attribute (#143).
  */
-export function getImagesWithoutAlt(
-  doc: Document,
-  baseUrl: string
-): ExtractedImage[] {
+export function getImagesWithoutAlt(doc: Document, baseUrl: string): ExtractedImage[] {
   return extractImages(doc, baseUrl).filter((img) => img.alt === null);
 }
 
 /**
  * Get images missing dimensions
  */
-export function getImagesWithoutDimensions(
-  doc: Document,
-  baseUrl: string
-): ExtractedImage[] {
+export function getImagesWithoutDimensions(doc: Document, baseUrl: string): ExtractedImage[] {
   return extractImages(doc, baseUrl).filter((img) => !img.width || !img.height);
 }
 

@@ -50,7 +50,10 @@ describe("measureSignatureCoverage on the template corpus (ceiling, not an estim
   });
 
   test("every declared selector is a valid selector for the DOM", () => {
-    const doc = parseHtmlForRules("<html><body><main></main></body></html>", `${ORIGIN}/`).document!;
+    const doc = parseHtmlForRules(
+      "<html><body><main></main></body></html>",
+      `${ORIGIN}/`,
+    ).document!;
     for (const selector of SIGNATURE_SELECTORS) {
       expect(() => doc.querySelectorAll(selector)).not.toThrow();
     }

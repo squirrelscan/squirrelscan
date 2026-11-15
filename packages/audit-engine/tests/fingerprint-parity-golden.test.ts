@@ -16,7 +16,7 @@ const TUPLES: Array<[string, string, string | null, string | null]> = [
   ["fail", "Missing meta description", null, null],
   ["warn", "Title too long", "72", "≤ 60"],
   ["fail", "Broken link", "https://x.test/a", null],
-  ["warn", "msg with | pipe and \"quotes\"", null, "expected|value"],
+  ["warn", 'msg with | pipe and "quotes"', null, "expected|value"],
   ["fail", "", "", ""],
 ];
 
@@ -49,7 +49,7 @@ describe("fingerprint cross-impl parity", () => {
 
   test("null value/expected collapses to empty-string (intentional, matches #194)", () => {
     expect(findingFingerprint("fail", "m", null, null)).toBe(
-      findingFingerprint("fail", "m", "", "")
+      findingFingerprint("fail", "m", "", ""),
     );
   });
 
@@ -57,7 +57,7 @@ describe("fingerprint cross-impl parity", () => {
     // ["fail","m","ab",""] vs ["fail","m","a","b"] — JSON encoding keeps the
     // field split unambiguous, so these must differ.
     expect(findingFingerprint("fail", "m", "ab", "")).not.toBe(
-      findingFingerprint("fail", "m", "a", "b")
+      findingFingerprint("fail", "m", "a", "b"),
     );
   });
 
@@ -65,7 +65,7 @@ describe("fingerprint cross-impl parity", () => {
   // orphaned — only bump deliberately + document the one-time re-fingerprint.
   test("golden value is stable", () => {
     expect(findingFingerprint("fail", "Missing meta description", null, null)).toBe(
-      "b40bb59e3f90d1aa479ed006308d70e1892d5214aabe12894448e9444b77b617"
+      "b40bb59e3f90d1aa479ed006308d70e1892d5214aabe12894448e9444b77b617",
     );
   });
 });

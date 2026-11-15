@@ -238,7 +238,8 @@ export function scanScopeLine(report: AuditReport): string | null {
   // Crawled pages that returned an error status (repo#2404). Read off a stored report of any origin: only a
   // positive whole number up to the crawled count prints, so a clean crawl's line is unchanged.
   const errors = Math.min(scanScopeErrorPages(report), s.pagesCrawled);
-  const errorNote = errors > 0 ? ` (${errors} returned ${errors === 1 ? "an error" : "errors"})` : "";
+  const errorNote =
+    errors > 0 ? ` (${errors} returned ${errors === 1 ? "an error" : "errors"})` : "";
   return `Scan: ${s.pagesCrawled} page${s.pagesCrawled === 1 ? "" : "s"} crawled${errorNote} from ${origin}${version}${cap}.${canonicalVariantsNote(report)}${types ? ` ${types}` : ""}${targeted ? ` ${targeted}` : ""}${robots ? ` ${robots}` : ""}`;
 }
 

@@ -68,13 +68,12 @@ export const imageRedundantAltRule: Rule = {
   meta: {
     id: "a11y/image-redundant-alt",
     name: "Redundant Image Alt",
-    description:
-      "Checks that image alt text is not redundant with surrounding text",
+    description: "Checks that image alt text is not redundant with surrounding text",
     solution:
       "Image alt text should not start with 'image of', 'photo of', 'picture of', etc. Screen readers already announce that it's an image. Alt text should describe the content or function, not state the obvious. Also avoid duplicating adjacent text in the alt.",
     category: "a11y",
     wcagNone:
-      "It flags alt text that names the image type (\"image of\", \"photo\"), repeats the filename or repeats nearby text, which are wording practices; such an image still has a text alternative, so 1.1.1 Non-text Content is not what it tests.",
+      'It flags alt text that names the image type ("image of", "photo"), repeats the filename or repeats nearby text, which are wording practices; such an image still has a text alternative, so 1.1.1 Non-text Content is not what it tests.',
     scope: "page",
     findingScope: "page",
     verdictScope: "page",
@@ -99,9 +98,7 @@ export const imageRedundantAltRule: Rule = {
         if (pattern.test(alt)) {
           const src = img.getAttribute("src") || "";
           const filename = src.split("/").pop()?.split("?")[0] || "";
-          redundantAlts.push(
-            `"${alt.slice(0, 30)}${alt.length > 30 ? "..." : ""}" (${filename})`
-          );
+          redundantAlts.push(`"${alt.slice(0, 30)}${alt.length > 30 ? "..." : ""}" (${filename})`);
           break;
         }
       }
@@ -141,28 +138,21 @@ export const imageRedundantAltRule: Rule = {
         if (parentText.length > alt.length && parentText.includes(altLower)) {
           // More lenient: only flag if alt is substantial part of parent text
           if (alt.length > 10 && parentText.length < alt.length * 3) {
-            redundantAlts.push(
-              `"${alt.slice(0, 20)}..." duplicates surrounding text`
-            );
+            redundantAlts.push(`"${alt.slice(0, 20)}..." duplicates surrounding text`);
           }
         }
 
         // Check if image is inside <figure> with <figcaption>
         const figure =
-          parent.tagName.toLowerCase() === "figure"
-            ? parent
-            : parent.closest?.("figure");
+          parent.tagName.toLowerCase() === "figure" ? parent : parent.closest?.("figure");
         if (figure) {
           const figcaption = querySelectorAllOutsideNoscript(figure, "figcaption")[0];
           if (figcaption) {
-            const captionText =
-              figcaption.textContent?.trim().toLowerCase() || "";
+            const captionText = figcaption.textContent?.trim().toLowerCase() || "";
             // Flag if alt exactly matches or is substring of figcaption
             if (captionText && altLower.length > 5) {
               if (captionText === altLower || captionText.includes(altLower)) {
-                redundantAlts.push(
-                  `"${alt.slice(0, 20)}..." duplicates figcaption`
-                );
+                redundantAlts.push(`"${alt.slice(0, 20)}..." duplicates figcaption`);
               }
             }
           }
@@ -179,10 +169,7 @@ export const imageRedundantAltRule: Rule = {
         status: "warn",
         message: `${uniqueIssues.length} image(s) with redundant alt text`,
         items: uniqueIssues.slice(0, 10).map((id) => ({ id })),
-        details:
-          uniqueIssues.length > 10
-            ? { additional: uniqueIssues.length - 10 }
-            : undefined,
+        details: uniqueIssues.length > 10 ? { additional: uniqueIssues.length - 10 } : undefined,
       });
     } else if (images.length > 0) {
       checks.push({

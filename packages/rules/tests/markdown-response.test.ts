@@ -46,14 +46,14 @@ async function run(m: MarkdownProbeData | null | undefined): Promise<CheckResult
 
 describe("ax/markdown-response", () => {
   test("data unavailable → not checked info, no crash", async () => {
-    const c = (await run(undefined));
+    const c = await run(undefined);
     expect(c[0]?.status).toBe("skipped");
     expect(c[0]?.value).toBe("not-checked");
     expect(c[0]?.message).toContain("not checked");
   });
 
   test("no markdown signal → absent surfaces as warn-status recommendation", async () => {
-    const c = (await run(probe()));
+    const c = await run(probe());
     expect(c[0]?.value).toBe("absent");
     // warn-status in this info-severity rule = shown as a Recommendation in
     // the report but score-neutral (advisory scoring).
@@ -61,55 +61,57 @@ describe("ax/markdown-response", () => {
   });
 
   test("content negotiation serves markdown → available", async () => {
-    const c = (await run(probe({ servesMarkdown: true, negotiatedContentType: "text/markdown" })));
+    const c = await run(probe({ servesMarkdown: true, negotiatedContentType: "text/markdown" }));
     expect(c[0]?.value).toBe("available");
     expect(c[0]?.message).toContain("content negotiation");
   });
 
   test(".md variant present → available", async () => {
-    const c = (await run(probe({ mdVariantExists: true, mdVariantContentType: "text/markdown" })));
+    const c = await run(probe({ mdVariantExists: true, mdVariantContentType: "text/markdown" }));
     expect(c[0]?.value).toBe("available");
     expect(c[0]?.message).toContain(".md variant");
   });
 
   test("both signals listed together", async () => {
-    const c = (await run(
+    const c = await run(
       probe({
         servesMarkdown: true,
         negotiatedContentType: "text/markdown",
         mdVariantExists: true,
         mdVariantContentType: "text/markdown",
       }),
-    ));
+    );
     expect(c[0]?.message).toContain("content negotiation");
     expect(c[0]?.message).toContain(".md variant");
   });
 
   test("absent markdown never fails; markdown present → all info", async () => {
     expect((await run(probe())).every((c) => c.status !== "fail")).toBe(true);
-    expect((await run(probe({ servesMarkdown: true, negotiatedContentType: "text/markdown" }))).every((c) => c.status === "info")).toBe(
-      true,
-    );
+    expect(
+      (await run(probe({ servesMarkdown: true, negotiatedContentType: "text/markdown" }))).every(
+        (c) => c.status === "info",
+      ),
+    ).toBe(true);
   });
 
   test("no header signals → no headers check emitted", async () => {
-    const c = (await run(probe()));
+    const c = await run(probe());
     expect(c.find((r) => r.name === "markdown-response-headers")).toBeUndefined();
   });
 
   test("Vary: Accept present → surfaced in headers check", async () => {
-    const c = (await run(probe({ servesMarkdown: true, negotiatedVary: "Accept" })));
+    const c = await run(probe({ servesMarkdown: true, negotiatedVary: "Accept" }));
     const headers = c.find((r) => r.name === "markdown-response-headers");
     expect(headers?.message).toContain("Vary: Accept");
   });
 
   test("Vary present but doesn't mention Accept → not surfaced as a negotiation signal", async () => {
-    const c = (await run(probe({ negotiatedVary: "Origin" })));
+    const c = await run(probe({ negotiatedVary: "Origin" }));
     expect(c.find((r) => r.name === "markdown-response-headers")).toBeUndefined();
   });
 
   test("Cloudflare token fingerprint headers → surfaced with computed percentage", async () => {
-    const c = (await run(probe({ markdownTokensHeader: "100", originalTokensHeader: "400" })));
+    const c = await run(probe({ markdownTokensHeader: "100", originalTokensHeader: "400" }));
     const headers = c.find((r) => r.name === "markdown-response-headers");
     expect(headers?.message).toContain("x-markdown-tokens: 100");
     expect(headers?.message).toContain("x-original-tokens: 400");
@@ -119,7 +121,7 @@ describe("ax/markdown-response", () => {
   test("alternate Markdown Link alone → available (primary signal)", async () => {
     // A site whose homepage renders HTML but advertises a markdown twin via
     // Link: rel=alternate is serving markdown — not scored as absent.
-    const c = (await run(probe({ alternateMarkdownUrl: "https://example.com/index.md" })));
+    const c = await run(probe({ alternateMarkdownUrl: "https://example.com/index.md" }));
     expect(c[0]?.value).toBe("available");
     expect(c[0]?.status).toBe("info");
     expect(c[0]?.message).toContain("link rel=alternate");
@@ -129,14 +131,14 @@ describe("ax/markdown-response", () => {
   });
 
   test("header signals check itself is always info", async () => {
-    const c = (await run(
+    const c = await run(
       probe({
         negotiatedVary: "Accept",
         markdownTokensHeader: "10",
         originalTokensHeader: "40",
         alternateMarkdownUrl: "https://example.com/index.md",
       }),
-    ));
+    );
     expect(c.find((r) => r.name === "markdown-response-headers")?.status).toBe("info");
   });
 
@@ -185,7 +187,11 @@ describe("ax/markdown-response", () => {
 
     test("5xx on strict while a .md variant exists → still flagged alongside available", async () => {
       const c = await run(
-        probe({ strictNegotiatedStatus: 503, mdVariantExists: true, mdVariantContentType: "text/markdown" }),
+        probe({
+          strictNegotiatedStatus: 503,
+          mdVariantExists: true,
+          mdVariantContentType: "text/markdown",
+        }),
       );
       expect(c[0]?.value).toBe("available");
       expect(c.find((r) => r.name === "markdown-negotiation-error")?.status).toBe("fail");
@@ -209,11 +215,16 @@ describe("ax/markdown-response", () => {
   // timeout, the probe budget) was read as clean, so audit 2 closed the finding
   // audit 1 opened. It is its own state now: a coded gap, never a verdict.
   describe("strict probe unanswered vs answered (repo#1322)", () => {
-    const negotiation = (c: CheckResult[]) => c.find((r) => r.name === "markdown-negotiation-error");
+    const negotiation = (c: CheckResult[]) =>
+      c.find((r) => r.name === "markdown-negotiation-error");
 
     test("strict unanswered (429, 403, timeout) → skipped with the coded strict-probe-unanswered reason", async () => {
       const c = await run(
-        probe({ negotiatedStatus: 200, strictNegotiatedStatus: null, strictNegotiationAnswered: false }),
+        probe({
+          negotiatedStatus: 200,
+          strictNegotiatedStatus: null,
+          strictNegotiationAnswered: false,
+        }),
       );
       const check = negotiation(c);
       expect(check?.status).toBe("skipped");
@@ -227,7 +238,11 @@ describe("ax/markdown-response", () => {
 
     test("strict 500 → the error finding, unchanged", async () => {
       const c = await run(
-        probe({ negotiatedStatus: 200, strictNegotiatedStatus: 500, strictNegotiationAnswered: true }),
+        probe({
+          negotiatedStatus: 200,
+          strictNegotiatedStatus: 500,
+          strictNegotiationAnswered: true,
+        }),
       );
       expect(negotiation(c)?.status).toBe("fail");
       expect(negotiation(c)?.value).toBe(500);
@@ -236,7 +251,11 @@ describe("ax/markdown-response", () => {
     test("strict answered healthy (200 HTML, 406) → a verdict, neither error nor gap", async () => {
       for (const status of [200, 406]) {
         const c = await run(
-          probe({ negotiatedStatus: 200, strictNegotiatedStatus: status, strictNegotiationAnswered: true }),
+          probe({
+            negotiatedStatus: 200,
+            strictNegotiatedStatus: status,
+            strictNegotiationAnswered: true,
+          }),
         );
         const check = negotiation(c);
         expect(check).toBeDefined();

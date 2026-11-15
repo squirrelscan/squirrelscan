@@ -51,11 +51,14 @@ function users(n: number, extra: (i: number) => Record<string, unknown> = () => 
 
 async function run(
   routes: Record<string, Route>,
-  ctxOpts: Parameters<typeof ruleCtx>[0] = {}
+  ctxOpts: Parameters<typeof ruleCtx>[0] = {},
 ): Promise<{ checks: CheckResult[]; sent: SentRequest[] }> {
   const stub = stubFetch(routes);
   restore = stub.restore;
-  const ctx = ruleCtx({ surface: surface([candidate("/api/users", { method: "GET" })]), ...ctxOpts });
+  const ctx = ruleCtx({
+    surface: surface([candidate("/api/users", { method: "GET" })]),
+    ...ctxOpts,
+  });
   const { checks } = await jsonSensitiveFieldsRule.run(ctx);
   return { checks, sent: stub.sent };
 }
@@ -69,7 +72,9 @@ describe("security/json-sensitive-fields: gating (per #1931)", () => {
     for (const opts of [{ level: "passive" as const }, { noProbe: true }]) {
       const { checks, sent } = await run({ [USERS]: () => json(users(10)) }, opts);
       expect(sent).toHaveLength(0);
-      expect(checks).toEqual([expect.objectContaining({ status: "skipped", skipReason: "probing-passive" })]);
+      expect(checks).toEqual([
+        expect.objectContaining({ status: "skipped", skipReason: "probing-passive" }),
+      ]);
     }
   });
 
@@ -96,7 +101,11 @@ describe("security/json-sensitive-fields: gating (per #1931)", () => {
   test("same origin only: cross-origin and probe-ineligible candidates are never requested", async () => {
     const s = surface([
       candidate("https://api.other.com/users", { method: "GET" }),
-      candidate("http://example.com/api/users", { method: "GET", sameOrigin: true, probeEligible: true }),
+      candidate("http://example.com/api/users", {
+        method: "GET",
+        sameOrigin: true,
+        probeEligible: true,
+      }),
       candidate("/api/claimed", { method: "GET", sameOrigin: true, probeEligible: false }),
       candidate("/api/users", { method: "GET" }),
     ]);
@@ -106,7 +115,9 @@ describe("security/json-sensitive-fields: gating (per #1931)", () => {
   });
 
   test("selection skips non-GET call sites, GraphQL, state-changing paths, robots and the cap", () => {
-    const many = Array.from({ length: MAX_JSON_ENDPOINTS + 3 }, (_, i) => candidate(`/api/items/${i}`, { method: undefined }));
+    const many = Array.from({ length: MAX_JSON_ENDPOINTS + 3 }, (_, i) =>
+      candidate(`/api/items/${i}`, { method: undefined }),
+    );
     const s = surface([
       candidate("/api/orders", { method: "POST" }),
       candidate("/api/graphql", { method: "GET" }),
@@ -118,10 +129,17 @@ describe("security/json-sensitive-fields: gating (per #1931)", () => {
     const ctx = ruleCtx({ surface: s, robotsTxt: robots(["/api/private"]) });
     const sel = selectJsonCandidates(ctx);
     expect(sel.candidates).toHaveLength(MAX_JSON_ENDPOINTS);
-    expect(sel).toMatchObject({ skippedMethod: 1, skippedStateChanging: 2, skippedRobots: 1, skippedCap: 3 });
+    expect(sel).toMatchObject({
+      skippedMethod: 1,
+      skippedStateChanging: 2,
+      skippedRobots: 1,
+      skippedCap: 3,
+    });
     expect(sel.candidates.some((c) => c.url.includes("graphql"))).toBe(false);
     // Aggressive requests robots-disallowed paths on purpose.
-    const aggressive = selectJsonCandidates(ruleCtx({ surface: s, robotsTxt: robots(["/api/private"]), level: "aggressive" }));
+    const aggressive = selectJsonCandidates(
+      ruleCtx({ surface: s, robotsTxt: robots(["/api/private"]), level: "aggressive" }),
+    );
     expect(aggressive.skippedRobots).toBe(0);
   });
 
@@ -129,7 +147,11 @@ describe("security/json-sensitive-fields: gating (per #1931)", () => {
     const { checks, sent } = await run({}, { surface: surface([]) });
     expect(sent).toHaveLength(0);
     expect(checks).toEqual([
-      expect.objectContaining({ name: "json-api-responses", status: "skipped", skipReason: "no-endpoints" }),
+      expect.objectContaining({
+        name: "json-api-responses",
+        status: "skipped",
+        skipReason: "no-endpoints",
+      }),
     ]);
   });
 });
@@ -154,7 +176,10 @@ describe("security/json-sensitive-fields: credentials are high severity", () => 
   test("tokens, secrets and leaked-secrets provider keys are a fail", async () => {
     const body = {
       user: { id: 1, email: "a@example.org", resetToken: "f3a9c1d27be84e05a6c3b9d0e1f27a4c" },
-      config: { stripeSecret: ["sk", "live", "51HxQabcdefghijklmnopqrstuv"].join("_"), databaseUrl: DB_URL }, // pragma: allowlist secret
+      config: {
+        stripeSecret: ["sk", "live", "51HxQabcdefghijklmnopqrstuv"].join("_"),
+        databaseUrl: DB_URL,
+      }, // pragma: allowlist secret
     };
     const { checks } = await run({ [USERS]: () => json(body) });
     const fail = checks.find((c) => c.status === "fail")!;
@@ -162,7 +187,9 @@ describe("security/json-sensitive-fields: credentials are high severity", () => 
     expect(kinds).toContain("access token");
     expect(kinds).toContain("secret or API key");
     // The connection string sits under a key the field rules do not name: the leaked-secrets matchers catch it.
-    expect(fail.items!.find((i) => i.meta?.path === "(response text)")?.meta?.kind).toBe("PostgreSQL Connection String");
+    expect(fail.items!.find((i) => i.meta?.path === "(response text)")?.meta?.kind).toBe(
+      "PostgreSQL Connection String",
+    );
     const text = allText(checks);
     expect(text).not.toContain("f3a9c1d27be84e05");
     expect(text).not.toContain("51HxQabcdefghij");
@@ -171,16 +198,40 @@ describe("security/json-sensitive-fields: credentials are high severity", () => 
 
   test("card numbers, SSNs and plaintext passwords in user records are a fail", () => {
     const scan = scanJsonValue({
-      customers: [{ id: 1, name: "A", password: "hunter22", ssn: "078-05-1120", card_number: "4111 1111 1111 1111", cvv: "123" }],
+      customers: [
+        {
+          id: 1,
+          name: "A",
+          password: "hunter22",
+          ssn: "078-05-1120",
+          card_number: "4111 1111 1111 1111",
+          cvv: "123",
+        },
+      ],
     });
     const kinds = scan.sensitive.map((f) => f.kind).sort();
-    expect(kinds).toEqual(["card number", "card security code", "plaintext password or salt", "social security number"]);
+    expect(kinds).toEqual([
+      "card number",
+      "card security code",
+      "plaintext password or salt",
+      "social security number",
+    ]);
   });
 
   test("labels, placeholders, CSRF tokens, cursors and publishable keys are not flagged", () => {
     const scan = scanJsonValue({
-      i18n: { name: "Name", email: "E-Mail", password: "Passwort", token: "Token", apiKey: "API key" },
-      form: { password: "********", csrfToken: "Zx9vQ2mL8kP4rT6yW1nB3cV5", nextPageToken: "eyJvZmZzZXQiOjEwMH0abcdef" },
+      i18n: {
+        name: "Name",
+        email: "E-Mail",
+        password: "Passwort",
+        token: "Token",
+        apiKey: "API key",
+      },
+      form: {
+        password: "********",
+        csrfToken: "Zx9vQ2mL8kP4rT6yW1nB3cV5",
+        nextPageToken: "eyJvZmZzZXQiOjEwMH0abcdef",
+      },
       firebase: { apiKey: `AIzaSyD${"-abcdefghijklmnopqrstuvwxyz12345"}` }, // pragma: allowlist secret
       user: { id: 1, password: null, passwordSet: true, card_number: "1234 5678 9012 3456" },
       commit: { hash: "9fceb02d0ae598e95dc970b74767f19372d61af8" },
@@ -191,10 +242,20 @@ describe("security/json-sensitive-fields: credentials are high severity", () => 
   test("a public Firebase apiKey does not decide a server apiKey in the same response, in either order", () => {
     const firebaseKey = `AIzaSyD${"-abcdefghijklmnopqrstuvwxyz12345"}`; // pragma: allowlist secret
     const serverKey = ["sk", "live", "51HxQabcdefghijklmnopqrstuv"].join("_"); // pragma: allowlist secret
-    const publicFirst = scanJsonValue({ firebase: { apiKey: firebaseKey }, server: { apiKey: serverKey } });
-    expect(publicFirst.sensitive.map((f) => [f.path, f.kind])).toEqual([["$.server.apiKey", "secret or API key"]]);
-    const secretFirst = scanJsonValue({ server: { apiKey: serverKey }, firebase: { apiKey: firebaseKey } });
-    expect(secretFirst.sensitive.map((f) => [f.path, f.kind])).toEqual([["$.server.apiKey", "secret or API key"]]);
+    const publicFirst = scanJsonValue({
+      firebase: { apiKey: firebaseKey },
+      server: { apiKey: serverKey },
+    });
+    expect(publicFirst.sensitive.map((f) => [f.path, f.kind])).toEqual([
+      ["$.server.apiKey", "secret or API key"],
+    ]);
+    const secretFirst = scanJsonValue({
+      server: { apiKey: serverKey },
+      firebase: { apiKey: firebaseKey },
+    });
+    expect(secretFirst.sensitive.map((f) => [f.path, f.kind])).toEqual([
+      ["$.server.apiKey", "secret or API key"],
+    ]);
   });
 
   test("helpers: key classes, hash shapes and Luhn", () => {
@@ -212,7 +273,10 @@ describe("security/json-sensitive-fields: credentials are high severity", () => 
 
 describe("security/json-sensitive-fields: bulk personal data", () => {
   test("emails for many records are a warning, redacted", async () => {
-    const { checks } = await run({ [USERS]: () => json({ data: users(8, (i) => ({ phone: `+1 415 555 01${10 + i}`, role: "member" })) }) });
+    const { checks } = await run({
+      [USERS]: () =>
+        json({ data: users(8, (i) => ({ phone: `+1 415 555 01${10 + i}`, role: "member" })) }),
+    });
     const warn = checks.filter((c) => c.status === "warn");
     expect(warn).toHaveLength(1);
     expect(warn[0]!.name).toBe("json-bulk-pii");
@@ -226,14 +290,20 @@ describe("security/json-sensitive-fields: bulk personal data", () => {
   });
 
   test("one email (a contact address, a single record) is not bulk", async () => {
-    const { checks } = await run({ [USERS]: () => json({ id: 1, email: "hello@example.org", support: "help@example.org" }) });
+    const { checks } = await run({
+      [USERS]: () => json({ id: 1, email: "hello@example.org", support: "help@example.org" }),
+    });
     expect(checks.filter((c) => c.status !== "pass")).toEqual([]);
     expect(checks.at(-1)).toMatchObject({ status: "pass", name: "json-api-responses" });
   });
 
   test("addresses and dates of birth across many records are bulk", () => {
     const scan = scanJsonValue(
-      Array.from({ length: 6 }, (_, i) => ({ id: i, address: { line1: `${i} Main St` }, dob: "1990-01-01" }))
+      Array.from({ length: 6 }, (_, i) => ({
+        id: i,
+        address: { line1: `${i} Main St` },
+        dob: "1990-01-01",
+      })),
     );
     expect(scan.pii.personalRecords).toBe(6);
     expect(isBulkPii(scan.pii)).toBe(true);
@@ -241,7 +311,10 @@ describe("security/json-sensitive-fields: bulk personal data", () => {
 
   test("a body over the read cap is scanned as text, marked lower confidence", () => {
     const body = JSON.stringify(users(20)).slice(0, -10);
-    const scan = scanJsonResponse({ status: 200, contentType: "application/json", body, truncated: true }, USERS);
+    const scan = scanJsonResponse(
+      { status: 200, contentType: "application/json", body, truncated: true },
+      USERS,
+    );
     expect(scan?.truncated).toBe(true);
     expect(scan!.pii.distinctEmails).toBeGreaterThanOrEqual(19);
   });
@@ -253,7 +326,11 @@ describe("security/json-sensitive-fields: what is not read", () => {
     for (const res of [
       () => new Response(leaky, { status: 200, headers: { "content-type": "text/html" } }),
       () => new Response(leaky, { status: 403, headers: { "content-type": "application/json" } }),
-      () => new Response(leaky, { status: 302, headers: { location: "/login", "content-type": "application/json" } }),
+      () =>
+        new Response(leaky, {
+          status: 302,
+          headers: { location: "/login", "content-type": "application/json" },
+        }),
     ]) {
       const { checks } = await run({ [USERS]: res });
       expect(checks).toEqual([expect.objectContaining({ status: "pass" })]);
@@ -263,7 +340,9 @@ describe("security/json-sensitive-fields: what is not read", () => {
         throw new TypeError("network down");
       },
     });
-    expect(checks).toEqual([expect.objectContaining({ status: "skipped", skipReason: "probe-errors" })]);
+    expect(checks).toEqual([
+      expect.objectContaining({ status: "skipped", skipReason: "probe-errors" }),
+    ]);
   });
 
   test("nesting past the depth cap is skipped, not walked, and the walk says so", () => {

@@ -6,10 +6,7 @@
  */
 import { describe, expect, test } from "bun:test";
 
-import {
-  redactSecretText,
-  siteHostsOf,
-} from "../src/secret-url-redaction";
+import { redactSecretText, siteHostsOf } from "../src/secret-url-redaction";
 
 import {
   applyTrailingSlashPolicy,

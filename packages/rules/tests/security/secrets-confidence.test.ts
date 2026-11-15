@@ -154,7 +154,9 @@ describe("AWS access key id", () => {
     const bad = j(["AK", "IA"]) + "8" + runOf(r, B32, 15).replace(/DO/g, "DQ");
     // The secret beside the ids keeps them out of the informational tier (#1294).
     const secret = "aws_secret_access_key=" + JSON.stringify(runOf(r, B32, 40)); // pragma: allowlist secret
-    const found = scanContent(`var a="${good}",b="${bad}";${secret}`, "inline-script").filter((f) => f.type === "AWS Access Key ID");
+    const found = scanContent(`var a="${good}",b="${bad}";${secret}`, "inline-script").filter(
+      (f) => f.type === "AWS Access Key ID",
+    );
     expect(found.map((f) => [f.type, f.confidence, f.extra?.accountId])).toEqual([
       ["AWS Access Key ID", "high", decodeAwsAccountId(good)!],
       ["AWS Access Key ID", "medium", "undecodable"],
@@ -180,25 +182,66 @@ describe("JWT claims", () => {
   });
 
   test("Supabase service_role is high, anon is public, other roles medium", () => {
-    const sr = refineFinding("Supabase Anon Key", token({ iss: "supabase", ref: "abcdefghij", role: "service_role", exp: 2000000000 }), NOW);
-    expect(sr).toMatchObject({ type: "Supabase Service Role JWT", confidence: "high", publicByDesign: false });
-    expect(sr?.extra).toMatchObject({ issuer: "supabase", role: "service_role", projectRef: "abcdefghij", expired: false });
+    const sr = refineFinding(
+      "Supabase Anon Key",
+      token({ iss: "supabase", ref: "abcdefghij", role: "service_role", exp: 2000000000 }),
+      NOW,
+    );
+    expect(sr).toMatchObject({
+      type: "Supabase Service Role JWT",
+      confidence: "high",
+      publicByDesign: false,
+    });
+    expect(sr?.extra).toMatchObject({
+      issuer: "supabase",
+      role: "service_role",
+      projectRef: "abcdefghij",
+      expired: false,
+    });
 
-    const anon = refineFinding("Supabase Anon Key", token({ iss: "supabase", ref: "abcdefghij", role: "anon", exp: 2000000000 }), NOW);
-    expect(anon).toMatchObject({ type: "Supabase Anon Key", confidence: "medium", publicByDesign: true });
+    const anon = refineFinding(
+      "Supabase Anon Key",
+      token({ iss: "supabase", ref: "abcdefghij", role: "anon", exp: 2000000000 }),
+      NOW,
+    );
+    expect(anon).toMatchObject({
+      type: "Supabase Anon Key",
+      confidence: "medium",
+      publicByDesign: true,
+    });
 
-    const user = refineFinding("Supabase Anon Key", token({ iss: "supabase", ref: "abcdefghij", role: "authenticated", exp: 2000000000 }), NOW);
-    expect(user).toMatchObject({ type: "Supabase JWT", confidence: "medium", publicByDesign: false });
+    const user = refineFinding(
+      "Supabase Anon Key",
+      token({ iss: "supabase", ref: "abcdefghij", role: "authenticated", exp: 2000000000 }),
+      NOW,
+    );
+    expect(user).toMatchObject({
+      type: "Supabase JWT",
+      confidence: "medium",
+      publicByDesign: false,
+    });
   });
 
   test("an expired token is info whatever its role", () => {
-    const expired = refineFinding("Supabase Anon Key", token({ iss: "supabase", ref: "abcdefghij", role: "service_role", exp: 1600000000 }), NOW);
-    expect(expired).toMatchObject({ type: "Supabase JWT (expired)", confidence: "info", publicByDesign: false });
+    const expired = refineFinding(
+      "Supabase Anon Key",
+      token({ iss: "supabase", ref: "abcdefghij", role: "service_role", exp: 1600000000 }),
+      NOW,
+    );
+    expect(expired).toMatchObject({
+      type: "Supabase JWT (expired)",
+      confidence: "info",
+      publicByDesign: false,
+    });
     expect(expired?.extra).toMatchObject({ expired: true, expiresAt: "2020-09-13T12:26:40.000Z" });
     // One second either side of now.
     const nowSec = Math.floor(NOW / 1000);
-    expect(refineFinding("Supabase Anon Key", token({ exp: nowSec - 1 }), NOW)?.confidence).toBe("info");
-    expect(refineFinding("Supabase Anon Key", token({ exp: nowSec + 1 }), NOW)?.confidence).toBe("medium");
+    expect(refineFinding("Supabase Anon Key", token({ exp: nowSec - 1 }), NOW)?.confidence).toBe(
+      "info",
+    );
+    expect(refineFinding("Supabase Anon Key", token({ exp: nowSec + 1 }), NOW)?.confidence).toBe(
+      "medium",
+    );
   });
 
   test("an unknown issuer is medium at most and never labelled Supabase", () => {
@@ -214,30 +257,78 @@ describe("JWT claims", () => {
     }
     // An issuer that merely mentions supabase, with a `ref` claim alongside,
     // cannot reach the public anon tier or the Supabase names.
-    for (const iss of ["https://evil.test/supabase", "supabase.evil.test", "https://abc.supabase.co.evil.test/auth/v1"]) {
+    for (const iss of [
+      "https://evil.test/supabase",
+      "supabase.evil.test",
+      "https://abc.supabase.co.evil.test/auth/v1",
+    ]) {
       // With role anon it is still public, but under the generic anon-role
       // name; with any other role it is a plain medium JWT.
-      expect(refineFinding("Supabase Anon Key", token({ iss, ref: "abcdefghij", role: "anon", exp: 2000000000 }), NOW)?.type).toBe("JSON Web Token (anon role)");
-      const r = refineFinding("Supabase Anon Key", token({ iss, ref: "abcdefghij", role: "authenticated", exp: 2000000000 }), NOW);
+      expect(
+        refineFinding(
+          "Supabase Anon Key",
+          token({ iss, ref: "abcdefghij", role: "anon", exp: 2000000000 }),
+          NOW,
+        )?.type,
+      ).toBe("JSON Web Token (anon role)");
+      const r = refineFinding(
+        "Supabase Anon Key",
+        token({ iss, ref: "abcdefghij", role: "authenticated", exp: 2000000000 }),
+        NOW,
+      );
       expect(r?.type).toBe("JSON Web Token");
       expect(r?.publicByDesign).toBe(false);
     }
     // A project's own auth issuer does count as Supabase.
-    expect(refineFinding("Supabase Anon Key", token({ iss: "https://abcdefghijklmnopqrst.supabase.co/auth/v1", role: "authenticated", exp: 2000000000 }), NOW)?.type).toBe("Supabase JWT");
+    expect(
+      refineFinding(
+        "Supabase Anon Key",
+        token({
+          iss: "https://abcdefghijklmnopqrst.supabase.co/auth/v1",
+          role: "authenticated",
+          exp: 2000000000,
+        }),
+        NOW,
+      )?.type,
+    ).toBe("Supabase JWT");
     // `service_role` means full access wherever it is used, so it is high
     // from any issuer, but still not called Supabase's.
-    const sr = refineFinding("Supabase Anon Key", token({ iss: "supabase-lookalike.test", role: "service_role", exp: 2000000000 }), NOW);
+    const sr = refineFinding(
+      "Supabase Anon Key",
+      token({ iss: "supabase-lookalike.test", role: "service_role", exp: 2000000000 }),
+      NOW,
+    );
     expect(sr).toMatchObject({ type: "JSON Web Token (admin scope)", confidence: "high" });
   });
 
   test("admin scopes are high, an anon role is public, on any issuer", () => {
-    expect(refineFinding("Supabase Anon Key", token({ scope: "read admin", exp: 2000000000 }), NOW)).toMatchObject({
+    expect(
+      refineFinding("Supabase Anon Key", token({ scope: "read admin", exp: 2000000000 }), NOW),
+    ).toMatchObject({
       type: "JSON Web Token (admin scope)",
       confidence: "high",
     });
-    expect(refineFinding("Supabase Anon Key", token({ roles: ["viewer", "Admin"], exp: 2000000000 }), NOW)?.confidence).toBe("high");
-    expect(refineFinding("Supabase Anon Key", token({ scope: "administer-nothing", exp: 2000000000 }), NOW)?.confidence).toBe("medium");
-    expect(refineFinding("Supabase Anon Key", token({ iss: "hasura", role: "anon", exp: 2000000000 }), NOW)).toMatchObject({
+    expect(
+      refineFinding(
+        "Supabase Anon Key",
+        token({ roles: ["viewer", "Admin"], exp: 2000000000 }),
+        NOW,
+      )?.confidence,
+    ).toBe("high");
+    expect(
+      refineFinding(
+        "Supabase Anon Key",
+        token({ scope: "administer-nothing", exp: 2000000000 }),
+        NOW,
+      )?.confidence,
+    ).toBe("medium");
+    expect(
+      refineFinding(
+        "Supabase Anon Key",
+        token({ iss: "hasura", role: "anon", exp: 2000000000 }),
+        NOW,
+      ),
+    ).toMatchObject({
       type: "JSON Web Token (anon role)",
       publicByDesign: true,
     });
@@ -245,9 +336,17 @@ describe("JWT claims", () => {
 
   test("a first-party session token is info: subject, short-lived, no third-party issuer, no admin scope", () => {
     const nowSec = Math.floor(NOW / 1000);
-    const session = (claims: Record<string, unknown>) => refineFinding("Supabase Anon Key", token(claims), NOW);
+    const session = (claims: Record<string, unknown>) =>
+      refineFinding("Supabase Anon Key", token(claims), NOW);
     // sub + exp within 30 days of iat.
-    expect(session({ iss: "https://auth.acme.test", sub: "usr_1", iat: nowSec - 60, exp: nowSec + 3600 })).toMatchObject({
+    expect(
+      session({
+        iss: "https://auth.acme.test",
+        sub: "usr_1",
+        iat: nowSec - 60,
+        exp: nowSec + 3600,
+      }),
+    ).toMatchObject({
       type: "Session Token (JWT)",
       confidence: "info",
       publicByDesign: false,
@@ -256,20 +355,46 @@ describe("JWT claims", () => {
     // sid, no iat: exp within 30 days of now qualifies.
     expect(session({ sid: "s_1", exp: nowSec + 86400 * 29 })?.type).toBe("Session Token (JWT)");
     expect(session({ session_id: 42, exp: nowSec + 86400 * 29 })?.type).toBe("Session Token (JWT)");
-    for (const claims of [{ user_id: 123 }, { userId: "u_1" }, { uid: "abc" }, { email: "a@b.test" }]) {
-      expect(session({ ...claims, iat: nowSec - 60, exp: nowSec + 86400 * 2 })?.type).toBe("Session Token (JWT)");
+    for (const claims of [
+      { user_id: 123 },
+      { userId: "u_1" },
+      { uid: "abc" },
+      { email: "a@b.test" },
+    ]) {
+      expect(session({ ...claims, iat: nowSec - 60, exp: nowSec + 86400 * 2 })?.type).toBe(
+        "Session Token (JWT)",
+      );
     }
     // exp within 30 days of iat but far from now (a token minted for later) still counts by iat.
-    expect(session({ sub: "usr_1", iat: nowSec + 86400 * 100, exp: nowSec + 86400 * 100 + 3600 })?.type).toBe("Session Token (JWT)");
+    expect(
+      session({ sub: "usr_1", iat: nowSec + 86400 * 100, exp: nowSec + 86400 * 100 + 3600 })?.type,
+    ).toBe("Session Token (JWT)");
   });
 
   test("session shapes that stay medium: no exp, exp past 30 days, third-party issuer, no subject", () => {
     const nowSec = Math.floor(NOW / 1000);
-    const session = (claims: Record<string, unknown>) => refineFinding("Supabase Anon Key", token(claims), NOW);
-    expect(session({ sub: "usr_1" })).toMatchObject({ type: "JSON Web Token", confidence: "medium" });
-    expect(session({ sub: "usr_1", iat: nowSec, exp: nowSec + 86400 * 31 })).toMatchObject({ type: "JSON Web Token", confidence: "medium" });
-    expect(session({ sub: "usr_1", exp: nowSec + 86400 * 31 })).toMatchObject({ type: "JSON Web Token", confidence: "medium" });
-    for (const iss of ["https://acme.eu.auth0.com/", "https://clerk.acme.test", "https://securetoken.google.com/acme", "https://cognito-idp.eu-west-1.amazonaws.com/x", "https://acme.okta.com", "https://abc.supabase.co/auth/v1"]) {
+    const session = (claims: Record<string, unknown>) =>
+      refineFinding("Supabase Anon Key", token(claims), NOW);
+    expect(session({ sub: "usr_1" })).toMatchObject({
+      type: "JSON Web Token",
+      confidence: "medium",
+    });
+    expect(session({ sub: "usr_1", iat: nowSec, exp: nowSec + 86400 * 31 })).toMatchObject({
+      type: "JSON Web Token",
+      confidence: "medium",
+    });
+    expect(session({ sub: "usr_1", exp: nowSec + 86400 * 31 })).toMatchObject({
+      type: "JSON Web Token",
+      confidence: "medium",
+    });
+    for (const iss of [
+      "https://acme.eu.auth0.com/",
+      "https://clerk.acme.test",
+      "https://securetoken.google.com/acme",
+      "https://cognito-idp.eu-west-1.amazonaws.com/x",
+      "https://acme.okta.com",
+      "https://abc.supabase.co/auth/v1",
+    ]) {
       const r = session({ iss, sub: "usr_1", iat: nowSec, exp: nowSec + 3600 });
       expect(r?.confidence).toBe("medium");
       expect(r?.type).not.toBe("Session Token (JWT)");
@@ -277,24 +402,67 @@ describe("JWT claims", () => {
     // No subject and no look-behind: nothing vouches for "standalone", so
     // the token stays medium. With a look-behind that says it stands alone,
     // a short-lived token needs no subject (a per-visitor feed token).
-    expect(session({ aud: "acme-web", iat: nowSec, exp: nowSec + 3600 })?.type).toBe("JSON Web Token");
-    expect(refineFinding("JSON Web Token", token({ aud: "river", iat: nowSec, exp: nowSec + 86400 * 7 }), NOW, { before: () => 'token:"' })?.type).toBe("Session Token (JWT)");
-    expect(refineFinding("JSON Web Token", token({ aud: "river", iat: nowSec, exp: nowSec + 86400 * 7 }), NOW, { before: () => "Bearer " })).toMatchObject({ type: "JSON Web Token", confidence: "medium" });
-    expect(refineFinding("JSON Web Token", token({ aud: "river", iat: nowSec, exp: nowSec + 86400 * 31 }), NOW, { before: () => 'token:"' })?.type).toBe("JSON Web Token");
-    expect(refineFinding("JSON Web Token", token({ aud: "river" }), NOW, { before: () => 'token:"' })?.type).toBe("JSON Web Token");
+    expect(session({ aud: "acme-web", iat: nowSec, exp: nowSec + 3600 })?.type).toBe(
+      "JSON Web Token",
+    );
+    expect(
+      refineFinding(
+        "JSON Web Token",
+        token({ aud: "river", iat: nowSec, exp: nowSec + 86400 * 7 }),
+        NOW,
+        { before: () => 'token:"' },
+      )?.type,
+    ).toBe("Session Token (JWT)");
+    expect(
+      refineFinding(
+        "JSON Web Token",
+        token({ aud: "river", iat: nowSec, exp: nowSec + 86400 * 7 }),
+        NOW,
+        { before: () => "Bearer " },
+      ),
+    ).toMatchObject({ type: "JSON Web Token", confidence: "medium" });
+    expect(
+      refineFinding(
+        "JSON Web Token",
+        token({ aud: "river", iat: nowSec, exp: nowSec + 86400 * 31 }),
+        NOW,
+        { before: () => 'token:"' },
+      )?.type,
+    ).toBe("JSON Web Token");
+    expect(
+      refineFinding("JSON Web Token", token({ aud: "river" }), NOW, { before: () => 'token:"' })
+        ?.type,
+    ).toBe("JSON Web Token");
     // An admin scope beats the session shape.
-    expect(session({ sub: "usr_1", scope: "admin", iat: nowSec, exp: nowSec + 3600 })?.confidence).toBe("high");
+    expect(
+      session({ sub: "usr_1", scope: "admin", iat: nowSec, exp: nowSec + 3600 })?.confidence,
+    ).toBe("high");
     // Expired beats the session shape too.
-    expect(session({ sub: "usr_1", iat: nowSec - 7200, exp: nowSec - 3600 })?.type).toBe("JSON Web Token (expired)");
+    expect(session({ sub: "usr_1", iat: nowSec - 7200, exp: nowSec - 3600 })?.type).toBe(
+      "JSON Web Token (expired)",
+    );
   });
 
   test("the session downgrade does not apply inside an Authorization literal or under a credential key", () => {
     const nowSec = Math.floor(NOW / 1000);
-    const claims = { iss: "https://auth.acme.test", sub: "usr_1", iat: nowSec - 60, exp: nowSec + 3600 };
+    const claims = {
+      iss: "https://auth.acme.test",
+      sub: "usr_1",
+      iat: nowSec - 60,
+      exp: nowSec + 3600,
+    };
     const t = token(claims);
-    const withBefore = (before: string) => refineFinding("JSON Web Token", t, NOW, { before: () => before });
+    const withBefore = (before: string) =>
+      refineFinding("JSON Web Token", t, NOW, { before: () => before });
     // Standalone: a plain variable, a data attribute, a cookie, a token key.
-    for (const before of ['var session = "', 'data-session="', 'document.cookie="session=', 'token:"', '"jwt":"', "x = "]) {
+    for (const before of [
+      'var session = "',
+      'data-session="',
+      'document.cookie="session=',
+      'token:"',
+      '"jwt":"',
+      "x = ",
+    ]) {
       expect(withBefore(before)?.type).toBe("Session Token (JWT)");
       expect(heldAsCredential(before)).toBe(false);
     }
@@ -316,29 +484,73 @@ describe("JWT claims", () => {
     // No context at all: standalone.
     expect(refineFinding("JSON Web Token", t, NOW)?.type).toBe("Session Token (JWT)");
     // The higher tiers are unaffected by where the token sits.
-    expect(refineFinding("JSON Web Token", token({ ...claims, scope: "admin" }), NOW, { before: () => "Bearer " })?.confidence).toBe("high");
-    expect(refineFinding("JSON Web Token", token({ iss: "supabase", ref: "abcdefghij", role: "anon", exp: nowSec + 3600 }), NOW, { before: () => "Bearer " })?.publicByDesign).toBe(true);
+    expect(
+      refineFinding("JSON Web Token", token({ ...claims, scope: "admin" }), NOW, {
+        before: () => "Bearer ",
+      })?.confidence,
+    ).toBe("high");
+    expect(
+      refineFinding(
+        "JSON Web Token",
+        token({ iss: "supabase", ref: "abcdefghij", role: "anon", exp: nowSec + 3600 }),
+        NOW,
+        { before: () => "Bearer " },
+      )?.publicByDesign,
+    ).toBe(true);
   });
 
   test("a token issued by a *.myshopify.com domain is Shopify's public storefront JWT", () => {
     const nowSec = Math.floor(NOW / 1000);
-    const r = refineFinding("JSON Web Token", token({ iss: "acme-shop.myshopify.com", aud: "storefront", exp: nowSec + 86400 * 7 }), NOW);
-    expect(r).toMatchObject({ type: "Shopify Storefront JWT", confidence: "medium", publicByDesign: true });
+    const r = refineFinding(
+      "JSON Web Token",
+      token({ iss: "acme-shop.myshopify.com", aud: "storefront", exp: nowSec + 86400 * 7 }),
+      NOW,
+    );
+    expect(r).toMatchObject({
+      type: "Shopify Storefront JWT",
+      confidence: "medium",
+      publicByDesign: true,
+    });
     expect(r?.extra?.issuer).toBe("acme-shop.myshopify.com");
     // Placement does not change a public key, and a lookalike host does not qualify.
-    expect(refineFinding("JSON Web Token", token({ iss: "acme-shop.myshopify.com", exp: nowSec + 3600 }), NOW, { before: () => "Bearer " })?.publicByDesign).toBe(true);
-    expect(refineFinding("JSON Web Token", token({ iss: "myshopify.com.evil.test", exp: nowSec + 3600 }), NOW)?.type).toBe("JSON Web Token");
+    expect(
+      refineFinding(
+        "JSON Web Token",
+        token({ iss: "acme-shop.myshopify.com", exp: nowSec + 3600 }),
+        NOW,
+        { before: () => "Bearer " },
+      )?.publicByDesign,
+    ).toBe(true);
+    expect(
+      refineFinding(
+        "JSON Web Token",
+        token({ iss: "myshopify.com.evil.test", exp: nowSec + 3600 }),
+        NOW,
+      )?.type,
+    ).toBe("JSON Web Token");
     // Expired still wins.
-    expect(refineFinding("JSON Web Token", token({ iss: "acme-shop.myshopify.com", exp: nowSec - 3600 }), NOW)?.confidence).toBe("info");
+    expect(
+      refineFinding(
+        "JSON Web Token",
+        token({ iss: "acme-shop.myshopify.com", exp: nowSec - 3600 }),
+        NOW,
+      )?.confidence,
+    ).toBe("info");
   });
 
   test("undecided matches are reported, not dropped: an empty payload or a part too long to read (#1283)", () => {
     for (const [label, value] of [
       ["payload is empty", `${header}..c2ln`],
       ["payload past 8,192 characters", `${header}.${b64u({ pad: "p".repeat(20_000) })}.c2ln`],
-      ["header past 8,192 characters", `${b64u({ alg: "HS256", kid: "k".repeat(9_000) })}.${b64u({ sub: "u" })}.c2ln`],
+      [
+        "header past 8,192 characters",
+        `${b64u({ alg: "HS256", kid: "k".repeat(9_000) })}.${b64u({ sub: "u" })}.c2ln`,
+      ],
     ] as Array<[string, string]>) {
-      expect([label, refineFinding("JSON Web Token", value, NOW)]).toEqual([label, { type: "JSON Web Token", confidence: "medium", publicByDesign: false }]);
+      expect([label, refineFinding("JSON Web Token", value, NOW)]).toEqual([
+        label,
+        { type: "JSON Web Token", confidence: "medium", publicByDesign: false },
+      ]);
     }
   });
 
@@ -354,32 +566,61 @@ describe("JWT claims", () => {
   test("a header with no string alg keeps a specific classification of its payload (#1283)", () => {
     const exp = Math.floor(NOW / 1000) + 3_600;
     const payloads: Array<[string, Record<string, unknown>, string]> = [
-      ["service role", { role: "service_role", iss: "supabase", ref: "abc" }, "Supabase Service Role JWT"],
+      [
+        "service role",
+        { role: "service_role", iss: "supabase", ref: "abc" },
+        "Supabase Service Role JWT",
+      ],
       ["admin scope", { scope: "admin" }, "JSON Web Token (admin scope)"],
-      ["hygraph management", { iss: "https://management-eu.hygraph.com/graphql" }, "Hygraph Management Token"],
+      [
+        "hygraph management",
+        { iss: "https://management-eu.hygraph.com/graphql" },
+        "Hygraph Management Token",
+      ],
       ["hygraph content", { iss: "https://eu.hygraph.com/graphql" }, "Hygraph Content API Token"],
       ["supabase anon", { iss: "supabase", role: "anon", ref: "abc" }, "Supabase Anon Key"],
-      ["supabase authenticated", { iss: "supabase", role: "authenticated", ref: "abc" }, "Supabase JWT"],
+      [
+        "supabase authenticated",
+        { iss: "supabase", role: "authenticated", ref: "abc" },
+        "Supabase JWT",
+      ],
       ["shopify storefront", { iss: "https://acme.myshopify.com", exp }, "Shopify Storefront JWT"],
     ];
     for (const [head, headerValue] of NO_ALG) {
       for (const [name, claims, type] of payloads) {
         const value = `${b64u(headerValue)}.${b64u({ iat: 1700000000, pad: "p".repeat(80), ...claims })}.c2ln`;
-        expect([head, name, refineFinding("JSON Web Token", value, NOW)?.type]).toEqual([head, name, type]);
+        expect([head, name, refineFinding("JSON Web Token", value, NOW)?.type]).toEqual([
+          head,
+          name,
+          type,
+        ]);
       }
     }
   });
 
   test("a header with no string alg over a plain generic payload is dropped, and so are permissions [*] and an expired plain token (#1283)", () => {
-    const plain = [{ sub: "u1" }, { permissions: ["*"] }, { sub: "u1", exp: 1_000_000_000 }, { sub: "u1", exp: Math.floor(NOW / 1000) + 3_600, iat: 1700000000 }];
+    const plain = [
+      { sub: "u1" },
+      { permissions: ["*"] },
+      { sub: "u1", exp: 1_000_000_000 },
+      { sub: "u1", exp: Math.floor(NOW / 1000) + 3_600, iat: 1700000000 },
+    ];
     for (const [head, headerValue] of NO_ALG) {
       for (const claims of plain) {
         const value = `${b64u(headerValue)}.${b64u({ pad: "p".repeat(80), ...claims })}.c2ln`;
-        expect([head, JSON.stringify(claims), refineFinding("JSON Web Token", value, NOW)]).toEqual([head, JSON.stringify(claims), { drop: true }]);
+        expect([head, JSON.stringify(claims), refineFinding("JSON Web Token", value, NOW)]).toEqual(
+          [head, JSON.stringify(claims), { drop: true }],
+        );
       }
     }
     // the same payloads under a string alg report
-    expect(refineFinding("JSON Web Token", `${header}.${b64u({ sub: "u1", pad: "p".repeat(80) })}.c2ln`, NOW)?.type).toBe("JSON Web Token");
+    expect(
+      refineFinding(
+        "JSON Web Token",
+        `${header}.${b64u({ sub: "u1", pad: "p".repeat(80) })}.c2ln`,
+        NOW,
+      )?.type,
+    ).toBe("JSON Web Token");
   });
 
   test("a part past 8,192 characters or nested 5,000 deep is reported, a privileged payload included (#1283)", () => {
@@ -388,15 +629,25 @@ describe("JWT claims", () => {
     expect(pad(5_000).length).toBeLessThan(8_192);
     for (const [label, value] of [
       ["payload 9,000 padding", `${header}.${pad(9_000)}.c2ln`],
-      ["header 9,000 padding", `${b64u({ alg: "HS256", pad: "x".repeat(9_000) })}.${b64u({ sub: "u" })}.c2ln`],
+      [
+        "header 9,000 padding",
+        `${b64u({ alg: "HS256", pad: "x".repeat(9_000) })}.${b64u({ sub: "u" })}.c2ln`,
+      ],
     ] as Array<[string, string]>) {
-      expect([label, refineFinding("JSON Web Token", value, NOW)?.type]).toEqual([label, "JSON Web Token"]);
+      expect([label, refineFinding("JSON Web Token", value, NOW)?.type]).toEqual([
+        label,
+        "JSON Web Token",
+      ]);
     }
     // just under the cap the part decodes and keeps its own classification
-    expect(refineFinding("JSON Web Token", `${header}.${pad(6_100)}.c2ln`, NOW)?.type).toBe("JSON Web Token (admin scope)");
+    expect(refineFinding("JSON Web Token", `${header}.${pad(6_100)}.c2ln`, NOW)?.type).toBe(
+      "JSON Web Token (admin scope)",
+    );
     const deep = `${"[".repeat(5_000)}${"]".repeat(5_000)}`;
     const nested = Buffer.from(`{"a":${deep}}`).toString("base64url");
-    expect(refineFinding("JSON Web Token", `${header}.${nested}.c2ln`, NOW)?.type).toBe("JSON Web Token");
+    expect(refineFinding("JSON Web Token", `${header}.${nested}.c2ln`, NOW)?.type).toBe(
+      "JSON Web Token",
+    );
   });
 
   test("JSON nested past what JSON.parse allows (a RangeError) is undecided, a SyntaxError is proof (#1283)", () => {
@@ -404,10 +655,18 @@ describe("JWT claims", () => {
     const value = `${header}.${b64u({ sub: "u1", pad: "p".repeat(80) })}.c2ln`;
     try {
       JSON.parse = ((text: string) => {
-        throw text.includes("sub") || text.includes("alg") ? new RangeError("too deep") : new SyntaxError("bad");
+        throw text.includes("sub") || text.includes("alg")
+          ? new RangeError("too deep")
+          : new SyntaxError("bad");
       }) as typeof JSON.parse;
-      expect(refineFinding("JSON Web Token", value, NOW)).toEqual({ type: "JSON Web Token", confidence: "medium", publicByDesign: false });
-      expect(refineFinding("JSON Web Token", `${header}.${"x".repeat(120)}.c2ln`, NOW)).toEqual({ drop: true });
+      expect(refineFinding("JSON Web Token", value, NOW)).toEqual({
+        type: "JSON Web Token",
+        confidence: "medium",
+        publicByDesign: false,
+      });
+      expect(refineFinding("JSON Web Token", `${header}.${"x".repeat(120)}.c2ln`, NOW)).toEqual({
+        drop: true,
+      });
     } finally {
       JSON.parse = real;
     }
@@ -424,8 +683,14 @@ describe("JWT claims", () => {
       ["header alg is a number, payload not JSON", `${b64u({ alg: 256 })}.${"x".repeat(120)}.c2ln`],
       ["payload is not JSON", `${header}.${"x".repeat(120)}`],
       ["payload is not JSON, with a signature", `${header}.${"x".repeat(120)}.c2ln`],
-      ["payload is truncated JSON", `${header}.${Buffer.from('{"sub":"u1","pad":"pppp').toString("base64url")}.c2ln`],
-      ["payload has trailing bytes", `${header}.${Buffer.from('{"sub":"u1"}xx').toString("base64url")}.c2ln`],
+      [
+        "payload is truncated JSON",
+        `${header}.${Buffer.from('{"sub":"u1","pad":"pppp').toString("base64url")}.c2ln`,
+      ],
+      [
+        "payload has trailing bytes",
+        `${header}.${Buffer.from('{"sub":"u1"}xx').toString("base64url")}.c2ln`,
+      ],
       ["payload is a JSON array", `${header}.${b64u([1, 2, 3])}.c2ln`],
       ["payload is a JSON string", `${header}.${b64u("text")}.c2ln`],
       ["payload is a number", `${header}.${b64u(42)}.c2ln`],
@@ -433,7 +698,11 @@ describe("JWT claims", () => {
     ];
     for (const [label, value] of shapes) {
       for (const type of ["JSON Web Token", "Supabase Anon Key"]) {
-        expect([label, type, refineFinding(type, value, NOW)]).toEqual([label, type, { drop: true }]);
+        expect([label, type, refineFinding(type, value, NOW)]).toEqual([
+          label,
+          type,
+          { drop: true },
+        ]);
       }
     }
   });
@@ -442,22 +711,43 @@ describe("JWT claims", () => {
     const nowSec = Math.floor(NOW / 1000);
     for (const alg of ["HS256", "RS256", "ES256", "none", "EdDSA", "x-custom"]) {
       const value = `${b64u({ alg, typ: "JWT" })}.${b64u({ sub: "u1", pad: "p".repeat(80) })}.c2ln`;
-      expect([alg, refineFinding("JSON Web Token", value, NOW)?.type]).toEqual([alg, "JSON Web Token"]);
+      expect([alg, refineFinding("JSON Web Token", value, NOW)?.type]).toEqual([
+        alg,
+        "JSON Web Token",
+      ]);
     }
     const expired = `${header}.${b64u({ sub: "u1", exp: nowSec - 3600, pad: "p".repeat(80) })}.c2ln`;
-    expect(refineFinding("JSON Web Token", expired, NOW)).toMatchObject({ type: "JSON Web Token (expired)", confidence: "info" });
+    expect(refineFinding("JSON Web Token", expired, NOW)).toMatchObject({
+      type: "JSON Web Token (expired)",
+      confidence: "info",
+    });
     const unsigned = `${b64u({ alg: "none" })}.${b64u({ sub: "u1", pad: "p".repeat(80) })}.`;
     expect(refineFinding("JSON Web Token", unsigned, NOW)?.drop).not.toBe(true);
     const admin = `${header}.${b64u({ sub: "u1", scope: "admin" })}.c2ln`;
-    expect(refineFinding("JSON Web Token", admin, NOW)).toMatchObject({ type: "JSON Web Token (admin scope)", confidence: "high" });
+    expect(refineFinding("JSON Web Token", admin, NOW)).toMatchObject({
+      type: "JSON Web Token (admin scope)",
+      confidence: "high",
+    });
     // an empty payload object and extra header fields are tokens
-    expect(refineFinding("JSON Web Token", `${b64u({ alg: "HS256", kid: "k1", x: [1] })}.${b64u({})}.c2ln`, NOW)?.drop).not.toBe(true);
+    expect(
+      refineFinding(
+        "JSON Web Token",
+        `${b64u({ alg: "HS256", kid: "k1", x: [1] })}.${b64u({})}.c2ln`,
+        NOW,
+      )?.drop,
+    ).not.toBe(true);
   });
 
   test("hostile claims do not throw: huge exp, non-string role, deep nesting, giant payload", () => {
     // An exp past Date's range is read as absent, not as a thrown refinement
     // (which would leave the token labelled as the pattern's public tier).
-    expect(refineFinding("Supabase Anon Key", token({ iss: "supabase", ref: "abcdefghij", role: "service_role", exp: 1e300 }), NOW)).toMatchObject({
+    expect(
+      refineFinding(
+        "Supabase Anon Key",
+        token({ iss: "supabase", ref: "abcdefghij", role: "service_role", exp: 1e300 }),
+        NOW,
+      ),
+    ).toMatchObject({
       type: "Supabase Service Role JWT",
       confidence: "high",
     });
@@ -473,28 +763,44 @@ describe("JWT claims", () => {
     }
     const giant = `${header}.${"A".repeat(20000)}`;
     // a giant part is undecided, so it is reported (#1283)
-    expect(refineFinding("Supabase Anon Key", giant, NOW)).toEqual({ type: "JSON Web Token", confidence: "medium", publicByDesign: false });
+    expect(refineFinding("Supabase Anon Key", giant, NOW)).toEqual({
+      type: "JSON Web Token",
+      confidence: "medium",
+      publicByDesign: false,
+    });
   });
 });
 
 describe("Algolia keys", () => {
   const hmac = (r: () => number) => runOf(r, "0123456789abcdef", 64);
-  const secured = (r: () => number, params: string) => Buffer.from(hmac(r) + params).toString("base64");
+  const secured = (r: () => number, params: string) =>
+    Buffer.from(hmac(r) + params).toString("base64");
 
   test("a secured key's restrictions decode, and unknown params are ignored", () => {
-    const key = secured(rng(6), "restrictIndices=products&validUntil=1900000000&foo=bar&filters=brand%3Aacme");
+    const key = secured(
+      rng(6),
+      "restrictIndices=products&validUntil=1900000000&foo=bar&filters=brand%3Aacme",
+    );
     expect(decodeAlgoliaSecuredKey(key)).toEqual({
       restrictIndices: "products",
       validUntil: "1900000000",
       filters: "brand:acme",
     });
     expect(decodeAlgoliaSecuredKey(secured(rng(7), ""))).toEqual({});
-    expect(decodeAlgoliaSecuredKey(Buffer.from("not a secured key at all, just text of a similar length here").toString("base64"))).toBeNull();
+    expect(
+      decodeAlgoliaSecuredKey(
+        Buffer.from("not a secured key at all, just text of a similar length here").toString(
+          "base64",
+        ),
+      ),
+    ).toBeNull();
     expect(decodeAlgoliaSecuredKey("A".repeat(9000))).toBeNull();
   });
 
   test("restricted keys are public, unrestricted ones medium, non-keys dropped", () => {
-    expect(refineFinding("Algolia Secured API Key", secured(rng(8), "restrictIndices=products"))).toMatchObject({
+    expect(
+      refineFinding("Algolia Secured API Key", secured(rng(8), "restrictIndices=products")),
+    ).toMatchObject({
       publicByDesign: true,
       confidence: "medium",
       structural: true,
@@ -505,11 +811,16 @@ describe("Algolia keys", () => {
       confidence: "medium",
       extra: { restrictions: "none" },
     });
-    expect(refineFinding("Algolia Secured API Key", Buffer.from("x".repeat(100)).toString("base64"))).toEqual({ drop: true });
+    expect(
+      refineFinding("Algolia Secured API Key", Buffer.from("x".repeat(100)).toString("base64")),
+    ).toEqual({ drop: true });
   });
 
   test("a 32-hex key near the keyword stays medium, marked as admin-or-search shaped", () => {
-    const found = scanContent(`window.__ALGOLIA__={algoliaKey:"${"7b".repeat(16)}"};`, "inline-script");
+    const found = scanContent(
+      `window.__ALGOLIA__={algoliaKey:"${"7b".repeat(16)}"};`,
+      "inline-script",
+    );
     expect(found.map((f) => [f.type, f.confidence, f.extra])).toEqual([
       ["Algolia API Key", "medium", { keyType: "admin-or-search-shaped", restrictions: "unknown" }],
     ]);
@@ -524,22 +835,38 @@ describe("Algolia keys", () => {
 
 describe("Stripe, Slack, Sentry structure", () => {
   test("Stripe keys carry their mode and kind", () => {
-    expect(refineFinding("Stripe Live Key", j(["sk_li", "ve_"]) + "a".repeat(24))?.extra).toEqual({ kind: "secret", mode: "live" });
-    expect(refineFinding("Stripe Test Key", j(["sk_te", "st_"]) + "a".repeat(24))?.extra).toEqual({ kind: "secret", mode: "test" });
-    expect(refineFinding("Stripe Publishable Key", j(["pk_li", "ve_"]) + "a".repeat(24))?.extra).toEqual({ kind: "publishable", mode: "live" });
+    expect(refineFinding("Stripe Live Key", j(["sk_li", "ve_"]) + "a".repeat(24))?.extra).toEqual({
+      kind: "secret",
+      mode: "live",
+    });
+    expect(refineFinding("Stripe Test Key", j(["sk_te", "st_"]) + "a".repeat(24))?.extra).toEqual({
+      kind: "secret",
+      mode: "test",
+    });
+    expect(
+      refineFinding("Stripe Publishable Key", j(["pk_li", "ve_"]) + "a".repeat(24))?.extra,
+    ).toEqual({ kind: "publishable", mode: "live" });
   });
 
   test("Slack tokens with numeric ids stay high; a placeholder shape is medium", () => {
     const real = j(["xo", "xb-"]) + "2094857361-3948572610-Kj8dPqR2mTvX5nB7wLcH1sZa";
-    expect(refineFinding("Slack Token", real)).toMatchObject({ confidence: "high", extra: { kind: "bot", segments: 3 } });
+    expect(refineFinding("Slack Token", real)).toMatchObject({
+      confidence: "high",
+      extra: { kind: "bot", segments: 3 },
+    });
     const placeholder = j(["xo", "xp-"]) + "your-token-goes-here";
     expect(refineFinding("Slack Token", placeholder)).toMatchObject({ confidence: "medium" });
-    expect(refineFinding("Slack Token", placeholder)?.extra?.structure).toBe("no numeric workspace id");
+    expect(refineFinding("Slack Token", placeholder)?.extra?.structure).toBe(
+      "no numeric workspace id",
+    );
   });
 
   test("a Sentry DSN carries its org and project", () => {
     const dsn = `https://${"a".repeat(32)}@o123456.ingest.sentry.io/7654321`;
-    expect(refineFinding("Sentry DSN", dsn)?.extra).toEqual({ org: "o123456", projectId: "7654321" });
+    expect(refineFinding("Sentry DSN", dsn)?.extra).toEqual({
+      org: "o123456",
+      projectId: "7654321",
+    });
   });
 
   test("types with nothing to decode return null", () => {

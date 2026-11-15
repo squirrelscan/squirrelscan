@@ -24,7 +24,9 @@ describe("createRobotsEvaluator().isAllowed", () => {
   });
 
   test("an allow rule allows its path", () => {
-    expect(allowed("User-agent: *\nAllow: /allowed", "https://example.com/allowed/page")).toBe(true);
+    expect(allowed("User-agent: *\nAllow: /allowed", "https://example.com/allowed/page")).toBe(
+      true,
+    );
   });
 
   test("a group for a named agent applies to it, the wildcard group to the others", () => {

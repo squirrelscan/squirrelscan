@@ -5,7 +5,10 @@
 // spoofed User-Agent, not the real bot (no vendor source IP, no signature).
 
 import type { AgentAccessData, AgentAccessProbe } from "@squirrelscan/core-contracts";
-import { AGENT_ACCESS_BOTS, DEFAULT_AGENT_ACCESS_BOT_IDS } from "@squirrelscan/core-contracts/storage";
+import {
+  AGENT_ACCESS_BOTS,
+  DEFAULT_AGENT_ACCESS_BOT_IDS,
+} from "@squirrelscan/core-contracts/storage";
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
@@ -46,7 +49,11 @@ function classifyProbe(probe: AgentAccessProbe, browserBodySize: number): Verdic
   if (probe.status === 0) {
     return { kind: "inconclusive", reason: probe.error ?? "network error" };
   }
-  if (is2xx(probe.status) && browserBodySize > 0 && probe.bodySize < browserBodySize * SOFT_BLOCK_BODY_RATIO) {
+  if (
+    is2xx(probe.status) &&
+    browserBodySize > 0 &&
+    probe.bodySize < browserBodySize * SOFT_BLOCK_BODY_RATIO
+  ) {
     return {
       kind: "soft-block",
       ratioPct: Math.round((probe.bodySize / browserBodySize) * 100),

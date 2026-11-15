@@ -238,7 +238,9 @@ export function createEndpointCollector(opts: {
   const retained = (): PageEndpointRef[] => {
     same.compact();
     cross.compact();
-    return [...same.map, ...cross.map].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([, r]) => r);
+    return [...same.map, ...cross.map]
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .map(([, r]) => r);
   };
 
   const collector: EndpointCollector = {

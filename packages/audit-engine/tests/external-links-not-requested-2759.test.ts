@@ -392,7 +392,9 @@ describe("an audit with external link checks on (repo#2759)", () => {
       "broken-external-links:pass",
       "not-requested-external-links:info",
     ]);
-    expect(checks[0]!.message).toBe("3 of 6 external link(s) verified working; 3 could not be verified or were not checked");
+    expect(checks[0]!.message).toBe(
+      "3 of 6 external link(s) verified working; 3 could not be verified or were not checked",
+    );
     const info = checks[1]!;
     expect(info.message).toBe(
       "3 external link(s) were not requested because they look like actions (log out, unsubscribe) or carry a token or signature in the URL, so their status was not checked",
@@ -455,7 +457,11 @@ for (const engine of ["v1", "v2"] as const) {
               return yield* runRulesOnStorage(storage, crawlId, siteContext, config, pre.assets);
             }
             return yield* runStreamingRules(storage, crawlId, config, pre.assets);
-          }) as unknown as Effect.Effect<{ siteRuleResults: Map<string, CheckResult[]> }, never, never>,
+          }) as unknown as Effect.Effect<
+            { siteRuleResults: Map<string, CheckResult[]> },
+            never,
+            never
+          >,
         );
         return { crawlId, ran };
       };

@@ -16,7 +16,9 @@ describe("redirect sources in site.pages (#1762)", () => {
     ];
     // Without the flag the empty 301 row counts as the homepage and hides the noindex one.
     expect(isSiteIndexable(pages, "https://example.com/", [])).toBeUndefined();
-    expect(isSiteIndexable([{ ...pages[0]!, redirectSource: undefined }], "https://example.com/", [])).toBe(true);
+    expect(
+      isSiteIndexable([{ ...pages[0]!, redirectSource: undefined }], "https://example.com/", []),
+    ).toBe(true);
   });
 
   test("the rules that read a redirect's hops are the ones that keep seeing the source", () => {

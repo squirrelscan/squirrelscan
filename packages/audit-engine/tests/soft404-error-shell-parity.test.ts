@@ -110,41 +110,49 @@ async function crawl() {
 const T = 30_000;
 
 describe("error-shell soft-404 candidates, v1 and streaming (#235)", () => {
-  test("both engines select the error-shell page and not the unmarked control", async () => {
-    const { storage, crawlId } = await crawl();
+  test(
+    "both engines select the error-shell page and not the unmarked control",
+    async () => {
+      const { storage, crawlId } = await crawl();
 
-    const v1 = await run(
-      runRulesOnStorage(
-        storage,
-        crawlId,
-        await run(buildSiteContext(await run(storage.getPages(crawlId)))),
-        CONFIG,
-        ASSETS,
-      ),
-    );
-    const v2 = await run(
-      runStreamingRules(storage, crawlId, CONFIG, ASSETS, undefined, { batchSize: 4 }),
-    );
+      const v1 = await run(
+        runRulesOnStorage(
+          storage,
+          crawlId,
+          await run(buildSiteContext(await run(storage.getPages(crawlId)))),
+          CONFIG,
+          ASSETS,
+        ),
+      );
+      const v2 = await run(
+        runStreamingRules(storage, crawlId, CONFIG, ASSETS, undefined, { batchSize: 4 }),
+      );
 
-    for (const result of [v1, v2]) {
-      expect(result.parsedPages.get(SHELL_URL)?.soft404Confirmation).toBe("unconfirmed");
-      expect(result.parsedPages.get(CONTROL_URL)?.soft404Confirmation).toBeUndefined();
-    }
+      for (const result of [v1, v2]) {
+        expect(result.parsedPages.get(SHELL_URL)?.soft404Confirmation).toBe("unconfirmed");
+        expect(result.parsedPages.get(CONTROL_URL)?.soft404Confirmation).toBeUndefined();
+      }
 
-    await run(storage.close());
-  }, T);
+      await run(storage.close());
+    },
+    T,
+  );
 
-  test("the signal is a scalar on the retained parse, with no DOM kept", async () => {
-    const { storage, crawlId } = await crawl();
-    const v2 = await run(
-      runStreamingRules(storage, crawlId, CONFIG, ASSETS, undefined, { batchSize: 4 }),
-    );
-    const shell = v2.parsedPages.get(SHELL_URL);
-    expect(shell?.document).toBeNull();
-    expect(shell?.errorShell).toBe(true);
-    expect(v2.parsedPages.get(CONTROL_URL)?.errorShell).toBe(false);
-    await run(storage.close());
-  }, T);
+  test(
+    "the signal is a scalar on the retained parse, with no DOM kept",
+    async () => {
+      const { storage, crawlId } = await crawl();
+      const v2 = await run(
+        runStreamingRules(storage, crawlId, CONFIG, ASSETS, undefined, { batchSize: 4 }),
+      );
+      const shell = v2.parsedPages.get(SHELL_URL);
+      expect(shell?.document).toBeNull();
+      expect(shell?.errorShell).toBe(true);
+      expect(v2.parsedPages.get(CONTROL_URL)?.errorShell).toBe(false);
+      await run(storage.close());
+    },
+    T,
+  );
 });
 
 describe("errorShell on the parse", () => {

@@ -87,7 +87,7 @@ export function hasCommercialOfferLink(doc: NonNullable<ParsedPage["document"]>)
  */
 export function matchSubprocessorLink(
   doc: NonNullable<ParsedPage["document"]>,
-  pageUrl: string
+  pageUrl: string,
 ): string | null {
   for (const link of doc.querySelectorAll("a[href]")) {
     const href = link.getAttribute("href") || "";
@@ -184,7 +184,7 @@ export const subprocessorDisclosureRule: Rule = {
           commercial = ctx.collectedSignals.pages.some((rec) => rec.commercialOffer);
         } else {
           commercial = pages.some(
-            (page) => !!page.parsed.document && hasCommercialOfferLink(page.parsed.document)
+            (page) => !!page.parsed.document && hasCommercialOfferLink(page.parsed.document),
           );
         }
       }

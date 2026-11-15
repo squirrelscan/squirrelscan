@@ -54,10 +54,7 @@ export const compressionRule: Rule = {
           message: "Brotli compression enabled (optimal)",
           value: contentEncoding,
         });
-      } else if (
-        contentEncoding.includes("gzip") ||
-        contentEncoding.includes("deflate")
-      ) {
+      } else if (contentEncoding.includes("gzip") || contentEncoding.includes("deflate")) {
         checks.push({
           name: "compression",
           status: "pass",

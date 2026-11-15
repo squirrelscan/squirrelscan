@@ -27,7 +27,7 @@ const STATS = {
 };
 
 async function store(
-  crawls: Array<[number, CrawlMetadata["status"]]>
+  crawls: Array<[number, CrawlMetadata["status"]]>,
 ): Promise<{ s: SQLiteStorage; ids: string[] }> {
   const s = new SQLiteStorage(":memory:");
   await run(s.init());
@@ -41,8 +41,8 @@ async function store(
           status,
           config: {} as CrawlMetadata["config"],
           stats: STATS,
-        } as Omit<CrawlMetadata, "id">)
-      )
+        } as Omit<CrawlMetadata, "id">),
+      ),
     );
   }
   return { s, ids };
@@ -57,9 +57,7 @@ describe("listAbandonedCrawls", () => {
         [100, status],
         [200, "analyzed"],
       ]);
-      expect((await run(s.listAbandonedCrawls())).map((c) => c.id)).toEqual([
-        ids[0]!,
-      ]);
+      expect((await run(s.listAbandonedCrawls())).map((c) => c.id)).toEqual([ids[0]!]);
     });
   }
 
@@ -70,9 +68,7 @@ describe("listAbandonedCrawls", () => {
         [200, status],
       ]);
       expect(await run(s.listAbandonedCrawls())).toEqual([]);
-      expect((await run(s.listPossiblyLiveCrawls())).map((c) => c.id)).toEqual([
-        ids[1]!,
-      ]);
+      expect((await run(s.listPossiblyLiveCrawls())).map((c) => c.id)).toEqual([ids[1]!]);
     });
   }
 
@@ -111,12 +107,10 @@ describe("retireCrawls guard", () => {
       [200, "running"],
     ]);
     const result = await run(
-      s.retireCrawlsDetailed([ids[1]!], Date.now(), { allowAbandoned: true })
+      s.retireCrawlsDetailed([ids[1]!], Date.now(), { allowAbandoned: true }),
     );
     expect(result).toEqual({ deleted: 0, retired: [], skipped: [ids[1]!] });
-    expect(
-      (await run(s.listCrawls())).every((c) => c.retiredAt === undefined)
-    ).toBe(true);
+    expect((await run(s.listCrawls())).every((c) => c.retiredAt === undefined)).toBe(true);
   });
 
   test("one crawl that stopped qualifying skips ALONE: the rest of the batch still retires", async () => {
@@ -132,7 +126,7 @@ describe("retireCrawls guard", () => {
     const result = await run(
       s.retireCrawlsDetailed([ids[0]!, ids[1]!, ids[3]!], Date.now(), {
         allowAbandoned: true,
-      })
+      }),
     );
     expect(result.retired.sort()).toEqual([ids[0]!, ids[1]!].sort());
     expect(result.skipped).toEqual([ids[3]!]);
@@ -148,12 +142,8 @@ describe("retireCrawls guard", () => {
       [200, "analyzed"],
       [250, "completed"],
     ]);
-    await expect(run(s.retireCrawls([ids[1]!, ids[0]!]))).rejects.toThrow(
-      /not finished/
-    );
-    expect(
-      (await run(s.listCrawls())).every((c) => c.retiredAt === undefined)
-    ).toBe(true);
+    await expect(run(s.retireCrawls([ids[1]!, ids[0]!]))).rejects.toThrow(/not finished/);
+    expect((await run(s.listCrawls())).every((c) => c.retiredAt === undefined)).toBe(true);
   });
 });
 
@@ -169,12 +159,8 @@ describe("stopped and paused (resumable) crawls", () => {
       ]);
       // ids[0]: idle 2 days (> 30 minutes, < 7 days): kept and listed as live.
       // ids[2]: idle 40 days but older than the newest finished: abandoned.
-      expect((await run(s.listAbandonedCrawls())).map((c) => c.id)).toEqual([
-        ids[2]!,
-      ]);
-      expect((await run(s.listPossiblyLiveCrawls())).map((c) => c.id)).toEqual([
-        ids[0]!,
-      ]);
+      expect((await run(s.listAbandonedCrawls())).map((c) => c.id)).toEqual([ids[2]!]);
+      expect((await run(s.listPossiblyLiveCrawls())).map((c) => c.id)).toEqual([ids[0]!]);
     });
   }
 });
@@ -186,16 +172,12 @@ describe("failed crawls agree across the three queries", () => {
       [200, "failed"],
     ]);
     expect(await run(s.listAbandonedCrawls())).toEqual([]);
-    expect((await run(s.listPossiblyLiveCrawls())).map((c) => c.id)).toEqual([
-      ids[1]!,
-    ]);
+    expect((await run(s.listPossiblyLiveCrawls())).map((c) => c.id)).toEqual([ids[1]!]);
     const result = await run(
-      s.retireCrawlsDetailed([ids[1]!], Date.now(), { allowAbandoned: true })
+      s.retireCrawlsDetailed([ids[1]!], Date.now(), { allowAbandoned: true }),
     );
     expect(result.skipped).toEqual([ids[1]!]);
-    await expect(run(s.retireCrawls([ids[1]!]))).rejects.toThrow(
-      /not finished/
-    );
+    await expect(run(s.retireCrawls([ids[1]!]))).rejects.toThrow(/not finished/);
   });
 
   test("a failed crawl older than a finished audit, idle, is abandoned and retired", async () => {
@@ -203,11 +185,9 @@ describe("failed crawls agree across the three queries", () => {
       [100, "failed"],
       [200, "analyzed"],
     ]);
-    expect((await run(s.listAbandonedCrawls())).map((c) => c.id)).toEqual([
-      ids[0]!,
-    ]);
+    expect((await run(s.listAbandonedCrawls())).map((c) => c.id)).toEqual([ids[0]!]);
     const result = await run(
-      s.retireCrawlsDetailed([ids[0]!], Date.now(), { allowAbandoned: true })
+      s.retireCrawlsDetailed([ids[0]!], Date.now(), { allowAbandoned: true }),
     );
     expect(result.retired).toEqual([ids[0]!]);
   });
@@ -231,13 +211,30 @@ function pageAt(url: string, fetchedAt: number): PageRecord {
     html: "<html></html>",
     parsedData: null,
     headers: nulls([
-      "contentType", "contentEncoding", "cacheControl", "vary", "etag", "server",
-      "lastModified", "link", "serverTiming", "age", "xCache", "cfCacheStatus",
-      "xVercelCache", "altSvc", "acceptRanges",
+      "contentType",
+      "contentEncoding",
+      "cacheControl",
+      "vary",
+      "etag",
+      "server",
+      "lastModified",
+      "link",
+      "serverTiming",
+      "age",
+      "xCache",
+      "cfCacheStatus",
+      "xVercelCache",
+      "altSvc",
+      "acceptRanges",
     ]),
     securityHeaders: nulls([
-      "hsts", "csp", "xFrameOptions", "xContentTypeOptions", "referrerPolicy",
-      "permissionsPolicy", "xRobotsTag",
+      "hsts",
+      "csp",
+      "xFrameOptions",
+      "xContentTypeOptions",
+      "referrerPolicy",
+      "permissionsPolicy",
+      "xRobotsTag",
     ]),
   } as unknown as PageRecord;
 }
@@ -256,7 +253,7 @@ describe("activity guard (#941)", () => {
     expect(live.map((c) => c.id)).toEqual([ids[0]!]);
     expect(live[0]!.lastActivityAt).toBeGreaterThan(Date.now() - 6 * MIN);
     const result = await run(
-      s.retireCrawlsDetailed([ids[0]!], Date.now(), { allowAbandoned: true })
+      s.retireCrawlsDetailed([ids[0]!], Date.now(), { allowAbandoned: true }),
     );
     expect(result.skipped).toEqual([ids[0]!]);
   });
@@ -269,9 +266,7 @@ describe("activity guard (#941)", () => {
     await run(s.upsertPage(ids[0]!, pageAt("https://e.test/a", Date.now() - 31 * MIN)));
     expect((await run(s.listAbandonedCrawls())).map((c) => c.id)).toEqual([ids[0]!]);
     await run(s.retireCrawls([ids[0]!], Date.now(), { allowAbandoned: true }));
-    expect(
-      (await run(s.listCrawls())).find((c) => c.id === ids[0])?.retiredAt
-    ).toBeDefined();
+    expect((await run(s.listCrawls())).find((c) => c.id === ids[0])?.retiredAt).toBeDefined();
   });
 
   test("a crawl that STARTED 5 minutes ago is not abandoned even with no pages yet", async () => {
@@ -294,8 +289,6 @@ describe("activity guard (#941)", () => {
       [now - 80 * MIN, "analyzed"],
     ]);
     await run(s.upsertPage(ids[0]!, pageAt("https://e.test/a", now - 40 * MIN)));
-    expect((await run(s.listAbandonedCrawls())).map((c) => c.id)).toEqual([
-      ids[0]!,
-    ]);
+    expect((await run(s.listAbandonedCrawls())).map((c) => c.id)).toEqual([ids[0]!]);
   });
 });

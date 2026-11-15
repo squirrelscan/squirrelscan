@@ -508,7 +508,8 @@ export function createSupabaseRlsRule(deps: SupabaseRlsDeps = {}): Rule {
           }
           sentTotal++;
           result.probed++;
-          if (verdict.kind === "exposed") result.exposed.push({ table: target, rows: verdict.rows });
+          if (verdict.kind === "exposed")
+            result.exposed.push({ table: target, rows: verdict.rows });
           else if (verdict.kind === "protected") result.protectedCount++;
           else if (verdict.kind === "empty") result.empty++;
           else if (verdict.kind === "missing") result.missing++;
@@ -525,7 +526,8 @@ export function createSupabaseRlsRule(deps: SupabaseRlsDeps = {}): Rule {
       // Tables the run never reached: past the per-project or per-run cap,
       // after a stop, or in a project past MAX_PROJECTS. None of them got an
       // answer. discovery.tables is deduped, so it is every table the code names.
-      const planned = (discovery.projects.length + discovery.projectsSkipped) * discovery.tables.length;
+      const planned =
+        (discovery.projects.length + discovery.projectsSkipped) * discovery.tables.length;
       const unanswered = planned - sentTotal;
       // Left out by a cap in the projects that were probed: past the per-run
       // cap, plus the tables past MAX_TABLES_PER_PROJECT in each project.
@@ -637,7 +639,10 @@ export function createSupabaseRlsRule(deps: SupabaseRlsDeps = {}): Rule {
         if (errored > 0) why.push(`${errored} probe(s) failed with a network error or timeout`);
         if (notChecked > 0)
           why.push(`${notChecked} answer(s) had no status and row count squirrel can judge`);
-        if (capped + discovery.projectsSkipped * targets.length > 0 || discovery.tables.length > targets.length)
+        if (
+          capped + discovery.projectsSkipped * targets.length > 0 ||
+          discovery.tables.length > targets.length
+        )
           why.push(
             `the per-audit cap of ${MAX_TABLE_PROBES} table probes, ${MAX_TABLES_PER_PROJECT} tables per project and ${MAX_PROJECTS} projects was reached`,
           );

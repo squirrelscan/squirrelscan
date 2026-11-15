@@ -17,7 +17,7 @@ import type { ProbeBudget } from "../probe-budget";
 // number signatures.
 export async function readCappedBytes(
   res: Response,
-  maxBytes: number
+  maxBytes: number,
 ): Promise<{ bytes: Uint8Array; truncated: boolean }> {
   const body = decodedBody(res);
   if (!body) return { bytes: new Uint8Array(0), truncated: false };
@@ -58,7 +58,7 @@ export async function readCappedBytes(
 
 export async function readCapped(
   res: Response,
-  maxBytes: number
+  maxBytes: number,
 ): Promise<{ text: string; truncated: boolean }> {
   const { bytes, truncated } = await readCappedBytes(res, maxBytes);
   return { text: new TextDecoder().decode(bytes), truncated };
@@ -81,7 +81,8 @@ const CHALLENGE_TITLE_RE =
   /<title>\s*(Just a moment\.\.\.|Attention Required! \| Cloudflare|Access denied \| [^<]*Cloudflare|DDoS-Guard)\s*<\/title>/i;
 // Markers only a challenge page carries. Not `/cdn-cgi/challenge-platform/`:
 // Cloudflare injects that script into ordinary pages too.
-const CHALLENGE_BODY_RE = /window\._cf_chl_opt|id="cf-browser-verification"|id="challenge-error-text"/i;
+const CHALLENGE_BODY_RE =
+  /window\._cf_chl_opt|id="cf-browser-verification"|id="challenge-error-text"/i;
 
 /**
  * True when the site pushed back instead of answering: rate limited (HTTP 429),
@@ -177,7 +178,7 @@ const anonymousGets = new WeakMap<ProbeBudget, Map<string, Promise<AnonymousGetO
  */
 export function sendAnonymousGet(
   probe: ProbeBudget | undefined,
-  endpointUrl: string
+  endpointUrl: string,
 ): Promise<AnonymousGetOutcome> {
   if (!probe) return Promise.resolve({ sent: false });
   const { url, init } = buildAnonymousGet(endpointUrl);
@@ -204,7 +205,7 @@ export function sendAnonymousGet(
  */
 export function peekAnonymousGet(
   probe: ProbeBudget | undefined,
-  endpointUrl: string
+  endpointUrl: string,
 ): Promise<AnonymousGetOutcome> | undefined {
   if (!probe) return undefined;
   return anonymousGets.get(probe)?.get(buildAnonymousGet(endpointUrl).url);
@@ -213,12 +214,16 @@ export function peekAnonymousGet(
 async function fetchAnonymousGet(
   url: string,
   init: RequestInit,
-  deadline: AbortSignal
+  deadline: AbortSignal,
 ): Promise<AnonymousGetOutcome> {
   // Aborted once the read is done, so a capped read does not keep pulling an
   // endless answer off the wire until the timeout (see graphql-probe.ts).
   const done = new AbortController();
-  const signal = AbortSignal.any([deadline, AbortSignal.timeout(ANONYMOUS_GET_TIMEOUT_MS), done.signal]);
+  const signal = AbortSignal.any([
+    deadline,
+    AbortSignal.timeout(ANONYMOUS_GET_TIMEOUT_MS),
+    done.signal,
+  ]);
   try {
     // Never `fetch` itself: Bun inflates a Content-Encoding body in full before
     // any capped read (#722).

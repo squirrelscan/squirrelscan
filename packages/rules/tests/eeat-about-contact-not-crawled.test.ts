@@ -81,15 +81,15 @@ for (const c of cases) {
 
   describe(`${c.rule.meta.id}: linked but not crawled (pub#740)`, () => {
     test("missing: no page and no link still warns with the create advice", async () => {
-      const checks = (await run(c.rule, siteCtx([home("")])));
+      const checks = await run(c.rule, siteCtx([home("")]));
       expect(checks).toEqual([{ name: c.name, status: "warn", ...c.missing }]);
     });
 
     test("crawled: the linked page the crawl fetched passes", async () => {
-      const checks = (await run(
+      const checks = await run(
         c.rule,
         siteCtx([home(link), { url: target, html: html(c.label, FILLER) }]),
-      ));
+      );
       expect(checks.find((k) => k.name === c.name)).toMatchObject({
         status: "pass",
         message: c.passMessage,
@@ -97,7 +97,7 @@ for (const c of cases) {
     });
 
     test("excluded: a linked page the crawl did not fetch is info, not create advice", async () => {
-      const checks = (await run(c.rule, siteCtx([home(link)])));
+      const checks = await run(c.rule, siteCtx([home(link)]));
       expect(checks).toEqual([
         {
           name: c.name,
@@ -110,10 +110,10 @@ for (const c of cases) {
     });
 
     test("a probed 404 on the uncrawled link warns that it is broken", async () => {
-      const checks = (await run(
+      const checks = await run(
         c.rule,
         siteCtx([home(link)], [{ url: target, status: 404, error: null }]),
-      ));
+      );
       expect(checks).toEqual([
         {
           name: c.name,
@@ -126,39 +126,42 @@ for (const c of cases) {
     });
 
     test("a probed 403 is not read as broken", async () => {
-      const checks = (await run(
+      const checks = await run(
         c.rule,
         siteCtx([home(link)], [{ url: target, status: 403, error: null }]),
-      ));
+      );
       expect(checks[0]?.status).toBe("info");
     });
 
     test("a link to another site's page at a matching slug is not this site's page", async () => {
       // e.g. a footer link to a social profile's /about or a partner's /contact.
-      const checks = (await run(
+      const checks = await run(
         c.rule,
         siteCtx([home(`<a href="https://social.example${c.path}">${c.linkText}</a>`)]),
-      ));
+      );
       expect(checks[0]).toMatchObject({ status: "warn", ...c.missing });
     });
 
     test("a target the crawl reached through a redirect counts as crawled", async () => {
-      const checks = (await run(
+      const checks = await run(
         c.rule,
         siteCtx([home(link), { url: `${ORIGIN}/old`, finalUrl: target, html: html("Moved", "") }]),
-      ));
+      );
       // The crawl fetched it, so the rule's own page test judges it; it is never
       // reported as linked but not crawled.
       expect(checks[0]?.message).not.toContain("not crawled");
     });
 
     test("anchor text alone is not enough: the href must match a known slug", async () => {
-      const checks = (await run(c.rule, siteCtx([home(`<a href="/pages/team">${c.linkText}</a>`)])));
+      const checks = await run(c.rule, siteCtx([home(`<a href="/pages/team">${c.linkText}</a>`)]));
       expect(checks[0]).toMatchObject({ status: "warn", message: c.missing.message });
     });
 
     test("a crawled page at a matching slug is judged by the rule, not reported as uncrawled", async () => {
-      const checks = (await run(c.rule, siteCtx([home(link), { url: target, html: html(c.label, "") }])));
+      const checks = await run(
+        c.rule,
+        siteCtx([home(link), { url: target, html: html(c.label, "") }]),
+      );
       expect(checks.find((k) => k.name === c.name)?.message).not.toContain("not crawled");
     });
   });
@@ -166,7 +169,7 @@ for (const c of cases) {
 
 describe("eeat/contact-page: an uncrawled contact page has no methods check", () => {
   test("contact-methods is not emitted for a page that was never read", async () => {
-    const checks = (await run(
+    const checks = await run(
       contactPageRule,
       siteCtx([
         {
@@ -177,7 +180,7 @@ describe("eeat/contact-page: an uncrawled contact page has no methods check", ()
           ),
         },
       ]),
-    ));
+    );
     expect(checks.map((k) => k.name)).toEqual(["contact-page"]);
   });
 });

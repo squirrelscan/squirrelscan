@@ -15,12 +15,9 @@ export function extractMeta(doc: Document): MetaData {
   const title = titleEl?.textContent?.trim() ?? null;
 
   const description =
-    doc.querySelector('meta[name="description"]')?.getAttribute("content") ??
-    null;
-  const canonical =
-    doc.querySelector('link[rel="canonical"]')?.getAttribute("href") ?? null;
-  const robots =
-    doc.querySelector('meta[name="robots"]')?.getAttribute("content") ?? null;
+    doc.querySelector('meta[name="description"]')?.getAttribute("content") ?? null;
+  const canonical = doc.querySelector('link[rel="canonical"]')?.getAttribute("href") ?? null;
+  const robots = doc.querySelector('meta[name="robots"]')?.getAttribute("content") ?? null;
 
   return {
     title: title || null, // Convert empty string to null
@@ -35,9 +32,7 @@ export function extractMeta(doc: Document): MetaData {
  */
 export function extractOG(doc: Document): OpenGraphData {
   const getOG = (property: string): string | null =>
-    doc
-      .querySelector(`meta[property="og:${property}"]`)
-      ?.getAttribute("content") ?? null;
+    doc.querySelector(`meta[property="og:${property}"]`)?.getAttribute("content") ?? null;
 
   return {
     title: getOG("title"),
@@ -54,9 +49,7 @@ export function extractOG(doc: Document): OpenGraphData {
  */
 export function extractTwitter(doc: Document): TwitterData {
   const getTwitter = (name: string): string | null =>
-    doc
-      .querySelector(`meta[name="twitter:${name}"]`)
-      ?.getAttribute("content") ?? null;
+    doc.querySelector(`meta[name="twitter:${name}"]`)?.getAttribute("content") ?? null;
 
   return {
     card: getTwitter("card"),
@@ -80,14 +73,10 @@ export function extractH1(doc: Document): { count: number; texts: string[] } {
 }
 
 // Effect versions for concurrent execution
-export const extractMetaEffect = (doc: Document) =>
-  Effect.sync(() => extractMeta(doc));
+export const extractMetaEffect = (doc: Document) => Effect.sync(() => extractMeta(doc));
 
-export const extractOGEffect = (doc: Document) =>
-  Effect.sync(() => extractOG(doc));
+export const extractOGEffect = (doc: Document) => Effect.sync(() => extractOG(doc));
 
-export const extractTwitterEffect = (doc: Document) =>
-  Effect.sync(() => extractTwitter(doc));
+export const extractTwitterEffect = (doc: Document) => Effect.sync(() => extractTwitter(doc));
 
-export const extractH1Effect = (doc: Document) =>
-  Effect.sync(() => extractH1(doc));
+export const extractH1Effect = (doc: Document) => Effect.sync(() => extractH1(doc));

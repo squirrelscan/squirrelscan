@@ -235,7 +235,10 @@ describe("templateClusters over the stored key", () => {
       mkPage("https://example.com/b1", html(CHROME_B, "tpl-b", "<p>1</p>")),
       mkPage("https://example.com/b2", html(CHROME_B, "tpl-b", "<p>2</p>")),
       // Its own chrome: one page, so not a cluster.
-      mkPage("https://example.com/solo", html(`<link rel="stylesheet" href="/solo.css">`, "tpl-c", "<p>s</p>")),
+      mkPage(
+        "https://example.com/solo",
+        html(`<link rel="stylesheet" href="/solo.css">`, "tpl-c", "<p>s</p>"),
+      ),
     ];
     for (const { page, parsed } of pages) {
       await run(store.upsertPageFeatures(CRAWL, extractPageFeatures(page, parsed)));
@@ -281,7 +284,8 @@ describe("streamPageRules — the fingerprint is built once and shared", () => {
       ":memory:",
     );
 
-    const seen: Array<{ url: string; shared: SharedPageSignals; live: PageFingerprint | null }> = [];
+    const seen: Array<{ url: string; shared: SharedPageSignals; live: PageFingerprint | null }> =
+      [];
     const streamed = await run(
       streamPageRules(storage, crawlId, createRunner(CONFIG), EMPTY_SITE_DATA, {
         batchSize: 4,

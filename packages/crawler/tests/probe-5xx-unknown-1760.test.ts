@@ -24,7 +24,9 @@ describe("5xx is unknown, 404 is absent (#1760)", () => {
       expect(await Effect.runPromise(fetchLlmsTxt(serveAll(status), "squirrel-test"))).toBeNull();
     });
     test(`markdown ${status} is no answer`, async () => {
-      expect(await Effect.runPromise(probeMarkdownResponse(serveAll(status), "squirrel-test"))).toBeNull();
+      expect(
+        await Effect.runPromise(probeMarkdownResponse(serveAll(status), "squirrel-test")),
+      ).toBeNull();
     });
   }
   test("llms.txt 404 is a stored absent file (control)", async () => {

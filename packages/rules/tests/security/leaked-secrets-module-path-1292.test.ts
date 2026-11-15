@@ -3,7 +3,11 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { isModulePath, isNotACredentialValue, scanContent } from "../../src/security/leaked-secrets";
+import {
+  isModulePath,
+  isNotACredentialValue,
+  scanContent,
+} from "../../src/security/leaked-secrets";
 import { runOf, seededRng } from "./leaked-secrets/generators";
 
 const ALNUM = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
@@ -28,7 +32,8 @@ describe("module paths are names, not values", () => {
 
   test("each shape is not reported under a password, secret, token or api key", () => {
     for (const path of PATHS) {
-      for (const key of KEYS) expect([path, key, reported(`var c={${key}:"${path}"};`)]).toEqual([path, key, 0]);
+      for (const key of KEYS)
+        expect([path, key, reported(`var c={${key}:"${path}"};`)]).toEqual([path, key, 0]);
       expect([path, isNotACredentialValue(path)]).toEqual([path, true]);
     }
   });
@@ -47,7 +52,8 @@ describe("values that are not module paths still report", () => {
       "a/b/c",
       `Magento_Customer/js/${"x".repeat(10)}/${"Y".repeat(12)}`,
     ];
-    for (const value of control.slice(0, 5)) expect([value, isNotACredentialValue(value)]).toEqual([value, false]);
+    for (const value of control.slice(0, 5))
+      expect([value, isNotACredentialValue(value)]).toEqual([value, false]);
     expect(isNotACredentialValue("Xk9mQ2vL8zPqRt4Wn7")).toBe(false);
     expect(isNotACredentialValue(control[8]!)).toBe(false);
     // `Acme/Shop/Token` and `a/b/c`: mixed-case / lowercase routes are the older location rule's business (lowercase) or report (capitals)
@@ -62,7 +68,13 @@ describe("values that are not module paths still report", () => {
 
   test("random base64-ish values with slashes: the module-path rule drops none of 20,000", () => {
     const rng = seededRng(129201);
-    const alphabets = [ALNUM + "+/", ALNUM + "/", `${ALNUM}_-/`, `${"0123456789"}${"abcdef"}/`, ALNUM];
+    const alphabets = [
+      ALNUM + "+/",
+      ALNUM + "/",
+      `${ALNUM}_-/`,
+      `${"0123456789"}${"abcdef"}/`,
+      ALNUM,
+    ];
     let dropped = 0;
     for (let i = 0; i < 20_000; i++) {
       const alphabet = alphabets[i % alphabets.length]!;
@@ -71,7 +83,8 @@ describe("values that are not module paths still report", () => {
       for (let j = 0; j < length; j++) value += alphabet[Math.floor(rng() * alphabet.length)];
       // put one to three slashes in (the alphabets without one still get them)
       const chars = value.split("");
-      for (let s = 0; s < 1 + Math.floor(rng() * 3); s++) chars[1 + Math.floor(rng() * (length - 2))] = "/";
+      for (let s = 0; s < 1 + Math.floor(rng() * 3); s++)
+        chars[1 + Math.floor(rng() * (length - 2))] = "/";
       const candidate = chars.join("");
       if (isModulePath(candidate)) dropped++;
     }
@@ -87,7 +100,12 @@ describe("the words are a list: a drawn lower-case run is not a word", () => {
   test("a lower-case tail after a Vendor_Module head, a js segment or both is not a module path", () => {
     for (let i = 0; i < 2_000; i++) {
       const n = 8 + Math.floor(rng() * 33);
-      for (const value of [`Magento_Customer/${draw(n)}`, `${draw(3)}/js/${draw(n)}`, `Stripe_Live/js/${draw(20)}`, `Magento_Customer/js/${draw(n)}/${draw(n)}`]) {
+      for (const value of [
+        `Magento_Customer/${draw(n)}`,
+        `${draw(3)}/js/${draw(n)}`,
+        `Stripe_Live/js/${draw(20)}`,
+        `Magento_Customer/js/${draw(n)}/${draw(n)}`,
+      ]) {
         expect([value, isModulePath(value)]).toEqual([value, false]);
       }
     }
@@ -98,7 +116,8 @@ describe("the words are a list: a drawn lower-case run is not a word", () => {
     for (let i = 0; i < 100_000; i++) {
       const length = 8 + Math.floor(rng() * 33);
       const chars = draw(length).split("");
-      for (let s = 0; s < 1 + Math.floor(rng() * 3); s++) chars[1 + Math.floor(rng() * (length - 2))] = "/";
+      for (let s = 0; s < 1 + Math.floor(rng() * 3); s++)
+        chars[1 + Math.floor(rng() * (length - 2))] = "/";
       if (isModulePath(chars.join(""))) dropped++;
     }
     expect(dropped).toBe(0);

@@ -32,7 +32,12 @@ function checks(rule: Rule, url: string, head: string, redirectChain?: RedirectC
   return result.checks.map((c) => `${c.name}:${c.status}`);
 }
 
-function moved(from: string, to: string, type: "http" | "javascript" = "http", status = 301): RedirectChain {
+function moved(
+  from: string,
+  to: string,
+  type: "http" | "javascript" = "http",
+  status = 301,
+): RedirectChain {
   return {
     sourceUrl: from,
     finalUrl: to,
@@ -63,9 +68,15 @@ describe("core/canonical on a redirected page (pub#864)", () => {
 
   test("no observed redirect, a client-side hop or an unparseable end keeps the page URL", () => {
     expect(checks(canonicalRule, OLD, canonical)).toContain("canonical:info");
-    expect(checks(canonicalRule, OLD, canonical, moved(OLD, NEW, "javascript", 200))).toContain("canonical:info");
-    expect(checks(canonicalRule, OLD, canonical, moved(OLD, NEW, "http", 0))).toContain("canonical:info");
-    expect(checks(canonicalRule, OLD, canonical, moved(OLD, "not a url"))).toContain("canonical:info");
+    expect(checks(canonicalRule, OLD, canonical, moved(OLD, NEW, "javascript", 200))).toContain(
+      "canonical:info",
+    );
+    expect(checks(canonicalRule, OLD, canonical, moved(OLD, NEW, "http", 0))).toContain(
+      "canonical:info",
+    );
+    expect(checks(canonicalRule, OLD, canonical, moved(OLD, "not a url"))).toContain(
+      "canonical:info",
+    );
   });
 });
 
@@ -74,21 +85,21 @@ describe("crawl/pagination on a redirected page (pub#864)", () => {
     const from = "https://example.com/blog/older";
     const to = "https://example.com/blog?page=2";
     // `?page=2` is relative to the final URL: self-referencing, so it passes.
-    expect(checks(paginationRule, from, '<link rel="canonical" href="?page=2">', moved(from, to))).toContain(
-      "pagination-canonical:pass",
-    );
+    expect(
+      checks(paginationRule, from, '<link rel="canonical" href="?page=2">', moved(from, to)),
+    ).toContain("pagination-canonical:pass");
     // Page 2 canonicalizing to the list root still warns, as it does unredirected.
-    expect(checks(paginationRule, from, '<link rel="canonical" href="/blog">', moved(from, to))).toContain(
-      "pagination-canonical:warn",
-    );
+    expect(
+      checks(paginationRule, from, '<link rel="canonical" href="/blog">', moved(from, to)),
+    ).toContain("pagination-canonical:warn");
   });
 
   test("a paginated source that 301s to a plain page is not judged as paginated", () => {
     const from = "https://example.com/blog?page=2";
     const to = "https://example.com/blog/archive";
-    expect(checks(paginationRule, from, '<link rel="canonical" href="/blog/archive">', moved(from, to))).toEqual([
-      "pagination:skipped",
-    ]);
+    expect(
+      checks(paginationRule, from, '<link rel="canonical" href="/blog/archive">', moved(from, to)),
+    ).toEqual(["pagination:skipped"]);
     // Without the redirect it is page 2 of the list, as before.
     expect(checks(paginationRule, from, '<link rel="canonical" href="/blog/archive">')).toContain(
       "pagination-canonical:warn",
@@ -97,8 +108,8 @@ describe("crawl/pagination on a redirected page (pub#864)", () => {
 
   test("an unparseable end keeps the page URL", () => {
     const from = "https://example.com/blog?page=2";
-    expect(checks(paginationRule, from, '<link rel="canonical" href="/blog">', moved(from, "not a url"))).toContain(
-      "pagination-canonical:warn",
-    );
+    expect(
+      checks(paginationRule, from, '<link rel="canonical" href="/blog">', moved(from, "not a url")),
+    ).toContain("pagination-canonical:warn");
   });
 });

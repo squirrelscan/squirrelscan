@@ -49,9 +49,7 @@ export const landmarkOneMainRule: Rule = {
         const tagName = main.tagName.toLowerCase();
         const id = main.getAttribute("id");
         const cls = main.getAttribute("class")?.split(CLASS_SPLIT).find(Boolean);
-        mainIdentifiers.push(
-          id ? `${tagName}#${id}` : cls ? `${tagName}.${cls}` : tagName
-        );
+        mainIdentifiers.push(id ? `${tagName}#${id}` : cls ? `${tagName}.${cls}` : tagName);
       }
 
       checks.push({

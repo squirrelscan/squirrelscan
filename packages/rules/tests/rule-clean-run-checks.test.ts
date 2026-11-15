@@ -45,7 +45,10 @@ describe("a rule that ran emits a check (#1741)", () => {
       .map((r) => r.meta.id)
       .sort();
     const baseline = new Set<string>(emptyBaseline);
-    expect(empty.filter((id) => !baseline.has(id)), "a rule that ran must emit a pass or info check").toEqual([]);
+    expect(
+      empty.filter((id) => !baseline.has(id)),
+      "a rule that ran must emit a pass or info check",
+    ).toEqual([]);
     expect(
       [...baseline].filter((id) => !empty.includes(id)),
       "now emits a check: remove from fixtures/rule-clean-run-empty.json",

@@ -46,11 +46,7 @@ export function entityDiffIsEmpty(diff: EntityMapDiff): boolean {
   );
 }
 
-function nodeTable(
-  heading: string,
-  blurb: string,
-  rows: EntityMapDiff["added"],
-): string[] {
+function nodeTable(heading: string, blurb: string, rows: EntityMapDiff["added"]): string[] {
   const lines = [`## ${heading} (${rows.length})`, ""];
   if (rows.length === 0) return [...lines, "None.", ""];
   lines.push(blurb, "", "| Type | Name | @id | Occurrences |", "| --- | --- | --- | ---: |");
@@ -101,7 +97,9 @@ export function renderEntityDiffMarkdown(diff: EntityMapDiff): string {
     "",
   );
 
-  lines.push(...nodeTable("Added", "Declared in the newer audit and not the older one.", diff.added));
+  lines.push(
+    ...nodeTable("Added", "Declared in the newer audit and not the older one.", diff.added),
+  );
   lines.push(
     ...nodeTable(
       "Removed",
@@ -136,7 +134,11 @@ export function renderEntityDiffMarkdown(diff: EntityMapDiff): string {
       );
     }
     lines.push(
-      ...tail(Math.min(diff.gainedId.length, ENTITY_DIFF_ROW_LIMIT), diff.gainedId.length, "entities"),
+      ...tail(
+        Math.min(diff.gainedId.length, ENTITY_DIFF_ROW_LIMIT),
+        diff.gainedId.length,
+        "entities",
+      ),
       "",
     );
   }
@@ -185,7 +187,11 @@ export function renderEntityDiffMarkdown(diff: EntityMapDiff): string {
   }
 
   for (const [heading, rows, blurb] of [
-    ["New conflicts", diff.newConflicts, "These entities now disagree with themselves across pages."],
+    [
+      "New conflicts",
+      diff.newConflicts,
+      "These entities now disagree with themselves across pages.",
+    ],
     ["Resolved conflicts", diff.resolvedConflicts, "These entities now agree with themselves."],
   ] as const) {
     lines.push(`## ${heading} (${rows.length})`, "");
@@ -220,7 +226,10 @@ export function renderEntityDiffMarkdown(diff: EntityMapDiff): string {
         `| ${entityCell(row.source)} | ${entityCell(row.predicate)} | ${entityCell(target)} |`,
       );
     }
-    lines.push(...tail(Math.min(rows.length, ENTITY_DIFF_ROW_LIMIT), rows.length, "references"), "");
+    lines.push(
+      ...tail(Math.min(rows.length, ENTITY_DIFF_ROW_LIMIT), rows.length, "references"),
+      "",
+    );
   }
 
   // Coverage last, because it qualifies everything above it.
@@ -247,7 +256,11 @@ export function renderEntityDiffMarkdown(diff: EntityMapDiff): string {
         lines.push(`- ${entityCell(url)}`);
       }
       lines.push(
-        ...tail(Math.min(diff.pagesOnlyInOlder.length, ENTITY_DIFF_PAGE_LIMIT), olderTotal, "pages"),
+        ...tail(
+          Math.min(diff.pagesOnlyInOlder.length, ENTITY_DIFF_PAGE_LIMIT),
+          olderTotal,
+          "pages",
+        ),
         "",
       );
     }
@@ -257,7 +270,11 @@ export function renderEntityDiffMarkdown(diff: EntityMapDiff): string {
         lines.push(`- ${entityCell(url)}`);
       }
       lines.push(
-        ...tail(Math.min(diff.pagesOnlyInNewer.length, ENTITY_DIFF_PAGE_LIMIT), newerTotal, "pages"),
+        ...tail(
+          Math.min(diff.pagesOnlyInNewer.length, ENTITY_DIFF_PAGE_LIMIT),
+          newerTotal,
+          "pages",
+        ),
         "",
       );
     }
@@ -273,7 +290,9 @@ export function renderEntityDiffMarkdown(diff: EntityMapDiff): string {
     for (const [name, m] of metrics) {
       const before = Number.isInteger(m.before) ? m.before : m.before.toFixed(3);
       const after = Number.isInteger(m.after) ? m.after : m.after.toFixed(3);
-      const delta = Number.isInteger(m.delta) ? signed(m.delta) : signed(Number(m.delta.toFixed(3)));
+      const delta = Number.isInteger(m.delta)
+        ? signed(m.delta)
+        : signed(Number(m.delta.toFixed(3)));
       lines.push(`| ${entityCell(name)} | ${before} | ${after} | ${delta} |`);
     }
     lines.push("");

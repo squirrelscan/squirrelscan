@@ -40,9 +40,7 @@ export const organizationSchemaRule: Rule = {
     const doc = ctx.parsed.document;
     if (!doc) return { checks: [] };
 
-    const schemaScripts = doc.querySelectorAll(
-      'script[type="application/ld+json"]'
-    );
+    const schemaScripts = doc.querySelectorAll('script[type="application/ld+json"]');
     let orgSchema: Record<string, unknown> | null = null;
     const pageNodes: Record<string, unknown>[] = [];
 
@@ -60,8 +58,7 @@ export const organizationSchemaRule: Rule = {
         if (
           type === "Organization" ||
           type === "Corporation" ||
-          (Array.isArray(type) &&
-            (type.includes("Organization") || type.includes("Corporation")))
+          (Array.isArray(type) && (type.includes("Organization") || type.includes("Corporation")))
         ) {
           orgSchema = schema;
           break;
@@ -127,7 +124,7 @@ export const organizationSchemaRule: Rule = {
     const sameAs = orgSchema["sameAs"];
     const sameAsUrls: string[] = sameAs
       ? (Array.isArray(sameAs) ? sameAs : [sameAs]).filter(
-          (u): u is string => typeof u === "string"
+          (u): u is string => typeof u === "string",
         )
       : [];
     if (sameAsUrls.length > 0) {

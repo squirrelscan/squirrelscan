@@ -148,10 +148,10 @@ export const EVAL_CASES: EvalCase[] = [
       rollups: 1,
       detections: {
         "a11y/link-text": [
-          ["/", "warn", "1 link(s) with generic text", "[{\"id\":\"learn more\"}]"],
-          ["/blog/post", "warn", "1 link(s) with generic text", "[{\"id\":\"learn more\"}]"],
-          ["/docs/x", "warn", "1 link(s) with generic text", "[{\"id\":\"learn more\"}]"],
-          ["/landing", "warn", "1 link(s) with generic text", "[{\"id\":\"learn more\"}]"],
+          ["/", "warn", "1 link(s) with generic text", '[{"id":"learn more"}]'],
+          ["/blog/post", "warn", "1 link(s) with generic text", '[{"id":"learn more"}]'],
+          ["/docs/x", "warn", "1 link(s) with generic text", '[{"id":"learn more"}]'],
+          ["/landing", "warn", "1 link(s) with generic text", '[{"id":"learn more"}]'],
         ],
       },
     },
@@ -169,18 +169,28 @@ export const EVAL_CASES: EvalCase[] = [
         path: "/shop",
         html:
           layout("plain", "Shop") +
-          footer(LEARN, EVAL_CURRENT_YEAR, '<section class="social"><a href="/x">Social</a></section>'),
+          footer(
+            LEARN,
+            EVAL_CURRENT_YEAR,
+            '<section class="social"><a href="/x">Social</a></section>',
+          ),
       },
       {
         path: "/shop/cart",
         html:
           layout("plain", "Cart") +
-          footer(LEARN, EVAL_CURRENT_YEAR, '<section class="social"><a href="/x">Social</a></section>'),
+          footer(
+            LEARN,
+            EVAL_CURRENT_YEAR,
+            '<section class="social"><a href="/x">Social</a></section>',
+          ),
       },
     ],
     labels: [
       ...["/", "/a", "/b"].map((p) => fixed(p, LT, FOOTER_LINK, "footer-main-learn-more", true)),
-      ...["/shop", "/shop/cart"].map((p) => fixed(p, LT, FOOTER_LINK, "footer-shop-learn-more", true)),
+      ...["/shop", "/shop/cart"].map((p) =>
+        fixed(p, LT, FOOTER_LINK, "footer-shop-learn-more", true),
+      ),
     ],
     expect: {
       observedGroups: 2,
@@ -188,11 +198,11 @@ export const EVAL_CASES: EvalCase[] = [
       rollups: 2,
       detections: {
         "a11y/link-text": [
-          ["/", "warn", "1 link(s) with generic text", "[{\"id\":\"learn more\"}]"],
-          ["/a", "warn", "1 link(s) with generic text", "[{\"id\":\"learn more\"}]"],
-          ["/b", "warn", "1 link(s) with generic text", "[{\"id\":\"learn more\"}]"],
-          ["/shop", "warn", "1 link(s) with generic text", "[{\"id\":\"learn more\"}]"],
-          ["/shop/cart", "warn", "1 link(s) with generic text", "[{\"id\":\"learn more\"}]"],
+          ["/", "warn", "1 link(s) with generic text", '[{"id":"learn more"}]'],
+          ["/a", "warn", "1 link(s) with generic text", '[{"id":"learn more"}]'],
+          ["/b", "warn", "1 link(s) with generic text", '[{"id":"learn more"}]'],
+          ["/shop", "warn", "1 link(s) with generic text", '[{"id":"learn more"}]'],
+          ["/shop/cart", "warn", "1 link(s) with generic text", '[{"id":"learn more"}]'],
         ],
       },
     },
@@ -226,10 +236,10 @@ export const EVAL_CASES: EvalCase[] = [
       rollups: 3,
       detections: {
         "a11y/link-text": [
-          ["/a", "warn", "1 link(s) with generic text", "[{\"id\":\"learn more\"}]"],
-          ["/b", "warn", "1 link(s) with generic text", "[{\"id\":\"learn more\"}]"],
-          ["/c", "warn", "1 link(s) with generic text", "[{\"id\":\"learn more\"}]"],
-          ["/d", "warn", "1 link(s) with generic text", "[{\"id\":\"learn more\"}]"],
+          ["/a", "warn", "1 link(s) with generic text", '[{"id":"learn more"}]'],
+          ["/b", "warn", "1 link(s) with generic text", '[{"id":"learn more"}]'],
+          ["/c", "warn", "1 link(s) with generic text", '[{"id":"learn more"}]'],
+          ["/d", "warn", "1 link(s) with generic text", '[{"id":"learn more"}]'],
         ],
       },
     },
@@ -254,9 +264,19 @@ export const EVAL_CASES: EvalCase[] = [
       rollups: 1,
       detections: {
         "a11y/link-text": [
-          ["/", "warn", "2 link(s) with generic text", "[{\"id\":\"learn more\"},{\"id\":\"click here\"}]"],
-          ["/blog/post", "warn", "2 link(s) with generic text", "[{\"id\":\"learn more\"},{\"id\":\"click here\"}]"],
-          ["/docs/x", "warn", "2 link(s) with generic text", "[{\"id\":\"learn more\"},{\"id\":\"click here\"}]"],
+          ["/", "warn", "2 link(s) with generic text", '[{"id":"learn more"},{"id":"click here"}]'],
+          [
+            "/blog/post",
+            "warn",
+            "2 link(s) with generic text",
+            '[{"id":"learn more"},{"id":"click here"}]',
+          ],
+          [
+            "/docs/x",
+            "warn",
+            "2 link(s) with generic text",
+            '[{"id":"learn more"},{"id":"click here"}]',
+          ],
         ],
       },
     },
@@ -301,10 +321,10 @@ export const EVAL_CASES: EvalCase[] = [
       rollups: 1,
       detections: {
         "a11y/link-text": [
-          ["/blog/page-1", "warn", "3 link(s) with generic text", "[{\"id\":\"read more\"}]"],
-          ["/blog/page-2", "warn", "3 link(s) with generic text", "[{\"id\":\"read more\"}]"],
-          ["/blog/page-3", "warn", "3 link(s) with generic text", "[{\"id\":\"read more\"}]"],
-          ["/blog/page-4", "warn", "3 link(s) with generic text", "[{\"id\":\"read more\"}]"],
+          ["/blog/page-1", "warn", "3 link(s) with generic text", '[{"id":"read more"}]'],
+          ["/blog/page-2", "warn", "3 link(s) with generic text", '[{"id":"read more"}]'],
+          ["/blog/page-3", "warn", "3 link(s) with generic text", '[{"id":"read more"}]'],
+          ["/blog/page-4", "warn", "3 link(s) with generic text", '[{"id":"read more"}]'],
         ],
       },
     },
@@ -317,19 +337,35 @@ export const EVAL_CASES: EvalCase[] = [
     pages: [
       {
         path: "/blog/a",
-        html: layout("plain", "A", '<div class="card"><p>Teaser A.</p><a href="/blog/post-a">Read more</a></div>') + footer(""),
+        html:
+          layout(
+            "plain",
+            "A",
+            '<div class="card"><p>Teaser A.</p><a href="/blog/post-a">Read more</a></div>',
+          ) + footer(""),
       },
       {
         path: "/blog/b",
-        html: layout("plain", "B", '<section><h2>Post B</h2><a href="/blog/post-b">Read more</a></section>') + footer(""),
+        html:
+          layout(
+            "plain",
+            "B",
+            '<section><h2>Post B</h2><a href="/blog/post-b">Read more</a></section>',
+          ) + footer(""),
       },
       {
         path: "/blog/c",
-        html: layout("plain", "C", '<ul><li><span>Post C</span><a href="/blog/post-c">Read more</a></li></ul>') + footer(""),
+        html:
+          layout(
+            "plain",
+            "C",
+            '<ul><li><span>Post C</span><a href="/blog/post-c">Read more</a></li></ul>',
+          ) + footer(""),
       },
       {
         path: "/blog/d",
-        html: layout("plain", "D", '<p>Post D <a href="/blog/post-d">Read more</a></p>') + footer(""),
+        html:
+          layout("plain", "D", '<p>Post D <a href="/blog/post-d">Read more</a></p>') + footer(""),
       },
     ],
     labels: [
@@ -354,10 +390,10 @@ export const EVAL_CASES: EvalCase[] = [
       rollups: 0,
       detections: {
         "a11y/link-text": [
-          ["/blog/a", "warn", "1 link(s) with generic text", "[{\"id\":\"read more\"}]"],
-          ["/blog/b", "warn", "1 link(s) with generic text", "[{\"id\":\"read more\"}]"],
-          ["/blog/c", "warn", "1 link(s) with generic text", "[{\"id\":\"read more\"}]"],
-          ["/blog/d", "warn", "1 link(s) with generic text", "[{\"id\":\"read more\"}]"],
+          ["/blog/a", "warn", "1 link(s) with generic text", '[{"id":"read more"}]'],
+          ["/blog/b", "warn", "1 link(s) with generic text", '[{"id":"read more"}]'],
+          ["/blog/c", "warn", "1 link(s) with generic text", '[{"id":"read more"}]'],
+          ["/blog/d", "warn", "1 link(s) with generic text", '[{"id":"read more"}]'],
         ],
       },
     },
@@ -373,7 +409,15 @@ export const EVAL_CASES: EvalCase[] = [
     })),
     labels: [1, 2, 3, 4].flatMap((n) => [
       fixed(`/post/${n}`, LT, "header:1>header>a:1", "site-header-learn-more", true),
-      fixed(`/post/${n}`, LT, "header:1>header>a:1", `article-header-${n}`, false, false, "article"),
+      fixed(
+        `/post/${n}`,
+        LT,
+        "header:1>header>a:1",
+        `article-header-${n}`,
+        false,
+        false,
+        "article",
+      ),
     ]),
     expect: {
       observedGroups: 1,
@@ -381,10 +425,10 @@ export const EVAL_CASES: EvalCase[] = [
       rollups: 1,
       detections: {
         "a11y/link-text": [
-          ["/post/1", "warn", "2 link(s) with generic text", "[{\"id\":\"learn more\"}]"],
-          ["/post/2", "warn", "2 link(s) with generic text", "[{\"id\":\"learn more\"}]"],
-          ["/post/3", "warn", "2 link(s) with generic text", "[{\"id\":\"learn more\"}]"],
-          ["/post/4", "warn", "2 link(s) with generic text", "[{\"id\":\"learn more\"}]"],
+          ["/post/1", "warn", "2 link(s) with generic text", '[{"id":"learn more"}]'],
+          ["/post/2", "warn", "2 link(s) with generic text", '[{"id":"learn more"}]'],
+          ["/post/3", "warn", "2 link(s) with generic text", '[{"id":"learn more"}]'],
+          ["/post/4", "warn", "2 link(s) with generic text", '[{"id":"learn more"}]'],
         ],
       },
     },
@@ -399,7 +443,15 @@ export const EVAL_CASES: EvalCase[] = [
       html: `<div class="top"><div class="inner"><a href="/start">Learn more</a></div></div><div class="content"><h1>Page ${n}</h1><p>Body ${n}.</p></div>`,
     })),
     labels: [1, 2, 3, 4].map((n) =>
-      fixed(`/p/${n}`, LT, "html>body:1>div:1>div:1>a:1", "div-chrome-learn-more", false, false, "unknown"),
+      fixed(
+        `/p/${n}`,
+        LT,
+        "html>body:1>div:1>div:1>a:1",
+        "div-chrome-learn-more",
+        false,
+        false,
+        "unknown",
+      ),
     ),
     expect: {
       observedGroups: 0,
@@ -407,10 +459,10 @@ export const EVAL_CASES: EvalCase[] = [
       rollups: 1,
       detections: {
         "a11y/link-text": [
-          ["/p/1", "warn", "1 link(s) with generic text", "[{\"id\":\"learn more\"}]"],
-          ["/p/2", "warn", "1 link(s) with generic text", "[{\"id\":\"learn more\"}]"],
-          ["/p/3", "warn", "1 link(s) with generic text", "[{\"id\":\"learn more\"}]"],
-          ["/p/4", "warn", "1 link(s) with generic text", "[{\"id\":\"learn more\"}]"],
+          ["/p/1", "warn", "1 link(s) with generic text", '[{"id":"learn more"}]'],
+          ["/p/2", "warn", "1 link(s) with generic text", '[{"id":"learn more"}]'],
+          ["/p/3", "warn", "1 link(s) with generic text", '[{"id":"learn more"}]'],
+          ["/p/4", "warn", "1 link(s) with generic text", '[{"id":"learn more"}]'],
         ],
       },
     },
@@ -436,10 +488,10 @@ export const EVAL_CASES: EvalCase[] = [
       rollups: 2,
       detections: {
         "a11y/link-text": [
-          ["/", "warn", "1 link(s) with generic text", "[{\"id\":\"click here\"}]"],
-          ["/a", "warn", "1 link(s) with generic text", "[{\"id\":\"click here\"}]"],
-          ["/b", "warn", "1 link(s) with generic text", "[{\"id\":\"click here\"}]"],
-          ["/special", "warn", "1 link(s) with generic text", "[{\"id\":\"learn more\"}]"],
+          ["/", "warn", "1 link(s) with generic text", '[{"id":"click here"}]'],
+          ["/a", "warn", "1 link(s) with generic text", '[{"id":"click here"}]'],
+          ["/b", "warn", "1 link(s) with generic text", '[{"id":"click here"}]'],
+          ["/special", "warn", "1 link(s) with generic text", '[{"id":"learn more"}]'],
         ],
       },
     },
@@ -465,9 +517,24 @@ export const EVAL_CASES: EvalCase[] = [
       detections: {
         "content/stale-copyright": [
           ["/", "warn", "Footer copyright year is 2019, behind the current year 2026", "null"],
-          ["/blog/post", "warn", "Footer copyright year is 2019, behind the current year 2026", "null"],
-          ["/docs/x", "warn", "Footer copyright year is 2019, behind the current year 2026", "null"],
-          ["/landing", "warn", "Footer copyright year is 2019, behind the current year 2026", "null"],
+          [
+            "/blog/post",
+            "warn",
+            "Footer copyright year is 2019, behind the current year 2026",
+            "null",
+          ],
+          [
+            "/docs/x",
+            "warn",
+            "Footer copyright year is 2019, behind the current year 2026",
+            "null",
+          ],
+          [
+            "/landing",
+            "warn",
+            "Footer copyright year is 2019, behind the current year 2026",
+            "null",
+          ],
         ],
       },
     },
@@ -483,15 +550,21 @@ export const EVAL_CASES: EvalCase[] = [
       { path: "/b", html: layout("plain", "B") + footer("", 2019) },
       {
         path: "/shop",
-        html: layout("plain", "Shop") + footer("", 2021, '<section class="social"><a href="/x">Social</a></section>'),
+        html:
+          layout("plain", "Shop") +
+          footer("", 2021, '<section class="social"><a href="/x">Social</a></section>'),
       },
       {
         path: "/shop/cart",
-        html: layout("plain", "Cart") + footer("", 2021, '<section class="social"><a href="/x">Social</a></section>'),
+        html:
+          layout("plain", "Cart") +
+          footer("", 2021, '<section class="social"><a href="/x">Social</a></section>'),
       },
     ],
     labels: [
-      ...["/", "/a", "/b"].map((p) => fixed(p, SC, "footer:1>footer>p:1", "footer-main-year", true)),
+      ...["/", "/a", "/b"].map((p) =>
+        fixed(p, SC, "footer:1>footer>p:1", "footer-main-year", true),
+      ),
       ...["/shop", "/shop/cart"].map((p) =>
         fixed(p, SC, "footer:1>footer>p:1", "footer-shop-year", true),
       ),
@@ -506,7 +579,12 @@ export const EVAL_CASES: EvalCase[] = [
           ["/a", "warn", "Footer copyright year is 2019, behind the current year 2026", "null"],
           ["/b", "warn", "Footer copyright year is 2019, behind the current year 2026", "null"],
           ["/shop", "warn", "Footer copyright year is 2021, behind the current year 2026", "null"],
-          ["/shop/cart", "warn", "Footer copyright year is 2021, behind the current year 2026", "null"],
+          [
+            "/shop/cart",
+            "warn",
+            "Footer copyright year is 2021, behind the current year 2026",
+            "null",
+          ],
         ],
       },
     },
@@ -526,10 +604,20 @@ export const EVAL_CASES: EvalCase[] = [
       })),
     ],
     labels: [
-      ...["/", "/about", "/docs"].map((p) => fixed(p, SC, "footer:1>footer>p:1", "site-footer-year", true)),
+      ...["/", "/about", "/docs"].map((p) =>
+        fixed(p, SC, "footer:1>footer>p:1", "site-footer-year", true),
+      ),
       // Authored with each article, so each is its own edit.
       ...[1, 2, 3].map((n) =>
-        fixed(`/post/${n}`, SC, "footer:1>footer", `article-footer-year-${n}`, false, false, "article"),
+        fixed(
+          `/post/${n}`,
+          SC,
+          "footer:1>footer",
+          `article-footer-year-${n}`,
+          false,
+          false,
+          "article",
+        ),
       ),
     ],
     expect: {
@@ -541,9 +629,24 @@ export const EVAL_CASES: EvalCase[] = [
           ["/", "warn", "Footer copyright year is 2019, behind the current year 2026", "null"],
           ["/about", "warn", "Footer copyright year is 2019, behind the current year 2026", "null"],
           ["/docs", "warn", "Footer copyright year is 2019, behind the current year 2026", "null"],
-          ["/post/1", "warn", "Footer copyright year is 2019, behind the current year 2026", "null"],
-          ["/post/2", "warn", "Footer copyright year is 2019, behind the current year 2026", "null"],
-          ["/post/3", "warn", "Footer copyright year is 2019, behind the current year 2026", "null"],
+          [
+            "/post/1",
+            "warn",
+            "Footer copyright year is 2019, behind the current year 2026",
+            "null",
+          ],
+          [
+            "/post/2",
+            "warn",
+            "Footer copyright year is 2019, behind the current year 2026",
+            "null",
+          ],
+          [
+            "/post/3",
+            "warn",
+            "Footer copyright year is 2019, behind the current year 2026",
+            "null",
+          ],
         ],
       },
     },
@@ -559,11 +662,15 @@ export const EVAL_CASES: EvalCase[] = [
       { path: "/docs/x", html: layout("sidebar", "Docs x") + footer(LEARN + CLICK, 2019) },
       {
         path: "/shop",
-        html: layout("plain", "Shop") + footer(LEARN, 2021, '<section class="social"><a href="/x">Social</a></section>'),
+        html:
+          layout("plain", "Shop") +
+          footer(LEARN, 2021, '<section class="social"><a href="/x">Social</a></section>'),
       },
       {
         path: "/shop/cart",
-        html: layout("plain", "Cart") + footer(LEARN, 2021, '<section class="social"><a href="/x">Social</a></section>'),
+        html:
+          layout("plain", "Cart") +
+          footer(LEARN, 2021, '<section class="social"><a href="/x">Social</a></section>'),
       },
       {
         path: "/blog",
@@ -572,7 +679,10 @@ export const EVAL_CASES: EvalCase[] = [
             "plain",
             "Blog",
             [1, 2]
-              .map((k) => `<div class="card"><h2>P${k}</h2><p>Teaser ${k}.</p><a href="/blog/p${k}">Read more</a></div>`)
+              .map(
+                (k) =>
+                  `<div class="card"><h2>P${k}</h2><p>Teaser ${k}.</p><a href="/blog/p${k}">Read more</a></div>`,
+              )
               .join(""),
           ) + footer(CLICK, 2019),
       },
@@ -598,20 +708,50 @@ export const EVAL_CASES: EvalCase[] = [
       rollups: 6,
       detections: {
         "a11y/link-text": [
-          ["/", "warn", "2 link(s) with generic text", "[{\"id\":\"learn more\"},{\"id\":\"click here\"}]"],
-          ["/blog", "warn", "3 link(s) with generic text", "[{\"id\":\"read more\"},{\"id\":\"click here\"}]"],
-          ["/blog/post", "warn", "2 link(s) with generic text", "[{\"id\":\"learn more\"},{\"id\":\"click here\"}]"],
-          ["/docs/x", "warn", "2 link(s) with generic text", "[{\"id\":\"learn more\"},{\"id\":\"click here\"}]"],
-          ["/shop", "warn", "1 link(s) with generic text", "[{\"id\":\"learn more\"}]"],
-          ["/shop/cart", "warn", "1 link(s) with generic text", "[{\"id\":\"learn more\"}]"],
+          ["/", "warn", "2 link(s) with generic text", '[{"id":"learn more"},{"id":"click here"}]'],
+          [
+            "/blog",
+            "warn",
+            "3 link(s) with generic text",
+            '[{"id":"read more"},{"id":"click here"}]',
+          ],
+          [
+            "/blog/post",
+            "warn",
+            "2 link(s) with generic text",
+            '[{"id":"learn more"},{"id":"click here"}]',
+          ],
+          [
+            "/docs/x",
+            "warn",
+            "2 link(s) with generic text",
+            '[{"id":"learn more"},{"id":"click here"}]',
+          ],
+          ["/shop", "warn", "1 link(s) with generic text", '[{"id":"learn more"}]'],
+          ["/shop/cart", "warn", "1 link(s) with generic text", '[{"id":"learn more"}]'],
         ],
         "content/stale-copyright": [
           ["/", "warn", "Footer copyright year is 2019, behind the current year 2026", "null"],
           ["/blog", "warn", "Footer copyright year is 2019, behind the current year 2026", "null"],
-          ["/blog/post", "warn", "Footer copyright year is 2019, behind the current year 2026", "null"],
-          ["/docs/x", "warn", "Footer copyright year is 2019, behind the current year 2026", "null"],
+          [
+            "/blog/post",
+            "warn",
+            "Footer copyright year is 2019, behind the current year 2026",
+            "null",
+          ],
+          [
+            "/docs/x",
+            "warn",
+            "Footer copyright year is 2019, behind the current year 2026",
+            "null",
+          ],
           ["/shop", "warn", "Footer copyright year is 2021, behind the current year 2026", "null"],
-          ["/shop/cart", "warn", "Footer copyright year is 2021, behind the current year 2026", "null"],
+          [
+            "/shop/cart",
+            "warn",
+            "Footer copyright year is 2021, behind the current year 2026",
+            "null",
+          ],
         ],
       },
     },
@@ -634,14 +774,24 @@ export const EVAL_CASES: EvalCase[] = [
       rollups: 0,
       detections: {
         "a11y/link-text": [
-          ["/", "warn", "1 link(s) with generic text", "[{\"id\":\"learn more\"}]"],
-          ["/blog/post", "warn", "1 link(s) with generic text", "[{\"id\":\"learn more\"}]"],
-          ["/docs/x", "warn", "1 link(s) with generic text", "[{\"id\":\"learn more\"}]"],
+          ["/", "warn", "1 link(s) with generic text", '[{"id":"learn more"}]'],
+          ["/blog/post", "warn", "1 link(s) with generic text", '[{"id":"learn more"}]'],
+          ["/docs/x", "warn", "1 link(s) with generic text", '[{"id":"learn more"}]'],
         ],
         "content/stale-copyright": [
           ["/", "warn", "Footer copyright year is 2019, behind the current year 2026", "null"],
-          ["/blog/post", "warn", "Footer copyright year is 2019, behind the current year 2026", "null"],
-          ["/docs/x", "warn", "Footer copyright year is 2019, behind the current year 2026", "null"],
+          [
+            "/blog/post",
+            "warn",
+            "Footer copyright year is 2019, behind the current year 2026",
+            "null",
+          ],
+          [
+            "/docs/x",
+            "warn",
+            "Footer copyright year is 2019, behind the current year 2026",
+            "null",
+          ],
         ],
       },
     },

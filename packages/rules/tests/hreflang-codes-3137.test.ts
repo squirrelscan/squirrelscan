@@ -30,7 +30,20 @@ async function invalid(codes: string[]) {
 
 describe("i18n/hreflang code validation (#3137)", () => {
   test("valid codes pass with no code check", async () => {
-    const codes = ["en", "en-US", "en-gb", "de-AT", "pt-BR", "zh-Hant-TW", "zh-hans", "es-419", "fil", "yue-HK", "uk", "ja"];
+    const codes = [
+      "en",
+      "en-US",
+      "en-gb",
+      "de-AT",
+      "pt-BR",
+      "zh-Hant-TW",
+      "zh-hans",
+      "es-419",
+      "fil",
+      "yue-HK",
+      "uk",
+      "ja",
+    ];
     expect(await invalid(codes)).toEqual([]);
     expect((await run(codes)).map((c) => c.name)).not.toContain("hreflang-codes");
   });
@@ -71,7 +84,11 @@ describe("i18n/hreflang code validation (#3137)", () => {
 
   test("script subtag is accepted case-insensitively; bad shapes are flagged", async () => {
     expect(await invalid(["sr-Latn", "sr-LATN-RS", "sr-latn"])).toEqual([]);
-    expect(await invalid(["en-US-x", "en-Latn-US-1996", "en-1"])).toEqual(["en-US-x", "en-Latn-US-1996", "en-1"]);
+    expect(await invalid(["en-US-x", "en-Latn-US-1996", "en-1"])).toEqual([
+      "en-US-x",
+      "en-Latn-US-1996",
+      "en-1",
+    ]);
   });
 
   test("UN M.49 numeric region is accepted", async () => {
@@ -79,7 +96,7 @@ describe("i18n/hreflang code validation (#3137)", () => {
   });
 
   test("existing checks are unchanged: pass check lists every code, the x-default self reference still counts", async () => {
-    const checks = (await run(["en_US"]));
+    const checks = await run(["en_US"]);
     const pass = checks.find((c) => c.name === "hreflang");
     expect(pass?.status).toBe("pass");
     expect(pass?.items?.map((i) => i.id)).toEqual(["en_US", "x-default"]);

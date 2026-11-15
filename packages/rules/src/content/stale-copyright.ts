@@ -78,10 +78,7 @@ export function latestCopyrightYear(text: string): number | undefined {
  * element is visited once and "some descendant matched" is aggregated from the
  * children on the way back up.
  */
-function innermostAssertingElements(
-  footers: readonly Element[],
-  year: number,
-): Element[] {
+function innermostAssertingElements(footers: readonly Element[], year: number): Element[] {
   const out: Element[] = [];
   const seen = new Set<Element>();
 
@@ -190,7 +187,7 @@ export const staleCopyrightRule: Rule = {
                 {
                   pageUrl: ctx.page.url,
                   observedUrl: ctx.page.finalUrl ?? ctx.page.url,
-                    rendered: ctx.page.rendered === true,
+                  rendered: ctx.page.rendered === true,
                   element,
                   kind: "stale-copyright",
                   values: { year, currentYear },

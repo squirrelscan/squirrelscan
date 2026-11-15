@@ -76,7 +76,7 @@ export const SITE_RULE_BUDGET_CAP_MS = 60_000;
 export function siteRuleBudgetMs(
   budgetMs: number,
   pageCount: number,
-  capMs: number = SITE_RULE_BUDGET_CAP_MS
+  capMs: number = SITE_RULE_BUDGET_CAP_MS,
 ): number {
   return Math.min(budgetMs * Math.max(1, pageCount), Math.max(capMs, budgetMs));
 }
@@ -91,7 +91,7 @@ export class RuleTimeoutError extends Error {
    */
   constructor(
     readonly budgetMs: number,
-    readonly elapsedMs?: number
+    readonly elapsedMs?: number,
   ) {
     super(`exceeded its ${budgetMs} ms time budget and was abandoned`);
     this.name = "RuleTimeoutError";

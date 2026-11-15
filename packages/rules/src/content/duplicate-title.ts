@@ -15,9 +15,7 @@ const SKIP_CHECK: CheckResult = {
 
 // First-seen-ordered duplicate groups (>1 url) from a title→urls map. Shared so
 // the legacy and streaming paths produce an identical `duplicates` list.
-function findDuplicates(
-  titleToUrls: Map<string, string[]>
-): { title: string; urls: string[] }[] {
+function findDuplicates(titleToUrls: Map<string, string[]>): { title: string; urls: string[] }[] {
   const duplicates: { title: string; urls: string[] }[] = [];
   for (const [title, urls] of titleToUrls) {
     if (urls.length > 1) {
@@ -30,10 +28,7 @@ function findDuplicates(
 // Shared result builder — identical output regardless of how the map was built.
 function buildCheck(duplicates: { title: string; urls: string[] }[]): CheckResult {
   if (duplicates.length > 0) {
-    const totalDuplicatePages = duplicates.reduce(
-      (sum, d) => sum + d.urls.length,
-      0
-    );
+    const totalDuplicatePages = duplicates.reduce((sum, d) => sum + d.urls.length, 0);
     return {
       name: "duplicate-title",
       status: "warn",
@@ -134,7 +129,10 @@ export const duplicateTitleRule: Rule = {
     }
 
     const duplicates = findDuplicates(titleToUrls);
-    const variants = RegionVariantIndex.fromPages(pages, duplicates.flatMap((d) => d.urls));
+    const variants = RegionVariantIndex.fromPages(
+      pages,
+      duplicates.flatMap((d) => d.urls),
+    );
     checks.push(buildCheck(variants.withoutVariantOnlyGroups(duplicates, (d) => d.urls)));
     return { checks };
   },

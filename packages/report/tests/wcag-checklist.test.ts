@@ -75,15 +75,27 @@ describe("buildWcagChecklist (repo#3094)", () => {
   });
 
   test("a rule that ran with a warning or failure marks its criterion as a finding", () => {
-    expect(row("2.4.1")).toMatchObject({ status: "finding", rules: ["a11y/skip-link"], findings: ["a11y/skip-link"] });
+    expect(row("2.4.1")).toMatchObject({
+      status: "finding",
+      rules: ["a11y/skip-link"],
+      findings: ["a11y/skip-link"],
+    });
   });
 
   test("rules that ran with no finding mark the criterion no-finding, never tested or passed", () => {
-    expect(row("3.1.1")).toMatchObject({ status: "no-finding", rules: ["a11y/html-lang-valid"], findings: [] });
+    expect(row("3.1.1")).toMatchObject({
+      status: "no-finding",
+      rules: ["a11y/html-lang-valid"],
+      findings: [],
+    });
   });
 
   test("a mapped rule absent from the results, or one that only timed out, did not run", () => {
-    expect(row("1.4.3")).toMatchObject({ status: "not-run", rules: [], notRun: ["a11y/never-ran"] });
+    expect(row("1.4.3")).toMatchObject({
+      status: "not-run",
+      rules: [],
+      notRun: ["a11y/never-ran"],
+    });
     expect(row("2.4.7")).toMatchObject({ status: "not-run", notRun: ["a11y/coverage-gap"] });
   });
 
@@ -106,10 +118,13 @@ describe("buildWcagChecklist (repo#3094)", () => {
   });
 
   test("a criterion with one rule that ran and one excluded reads no issue and names the excluded rule", () => {
-    const partial = buildWcagChecklist(report({ "a11y/html-lang-valid": result("a11y/html-lang-valid", "pass") }), [
-      { id: "a11y/html-lang-valid", wcag: [wcag("3.1.1")] },
-      { id: "a11y/excluded", wcag: [wcag("3.1.1")] },
-    ]);
+    const partial = buildWcagChecklist(
+      report({ "a11y/html-lang-valid": result("a11y/html-lang-valid", "pass") }),
+      [
+        { id: "a11y/html-lang-valid", wcag: [wcag("3.1.1")] },
+        { id: "a11y/excluded", wcag: [wcag("3.1.1")] },
+      ],
+    );
     expect(partial.find((r) => r.sc === "3.1.1")).toMatchObject({
       status: "no-finding",
       rules: ["a11y/html-lang-valid"],
@@ -154,7 +169,17 @@ describe("checklist output (repo#3094)", () => {
 
   test("no regulation mapping, no tested status and no compliance claim", () => {
     const text = `${wcagChecklistMarkdown(rows)}\n${wcagChecklistCsv(rows)}`;
-    for (const banned of ["ADA", "Section 508", "EAA", "EN 301 549", "AODA", "Cited by", "Tested", "compliant", "needs render"]) {
+    for (const banned of [
+      "ADA",
+      "Section 508",
+      "EAA",
+      "EN 301 549",
+      "AODA",
+      "Cited by",
+      "Tested",
+      "compliant",
+      "needs render",
+    ]) {
       expect(text, banned).not.toContain(banned);
     }
     expect(WCAG_CHECKLIST_DISCLAIMER).toContain("not a conformance claim");
@@ -174,7 +199,9 @@ describe("checklist output (repo#3094)", () => {
     const evil = buildWcagChecklist(report({ "=cmd|x": result("=cmd|x", "fail") }), [
       { id: "=cmd|x", wcag: [wcag("1.1.1")] },
     ]);
-    const line = wcagChecklistCsv(evil).split("\n").find((l) => l.startsWith("1.1.1,"))!;
+    const line = wcagChecklistCsv(evil)
+      .split("\n")
+      .find((l) => l.startsWith("1.1.1,"))!;
     expect(line).toContain(",'=cmd|x,");
     expect(wcagChecklistMarkdown(evil)).toContain("=cmd\\|x");
   });
@@ -182,7 +209,10 @@ describe("checklist output (repo#3094)", () => {
 
 describe("markdown reports carry the checklist when the rules' declarations are passed (repo#3094)", () => {
   test("it sits before Report detail, which stays last, and survives white-label", () => {
-    const md = renderMarkdown(ran, { branding: { whiteLabel: true, orgName: "Acme" }, wcagRules: rules });
+    const md = renderMarkdown(ran, {
+      branding: { whiteLabel: true, orgName: "Acme" },
+      wcagRules: rules,
+    });
     expect(md).toContain("## Accessibility checklist");
     expect(md.indexOf("## Accessibility checklist")).toBeLessThan(md.indexOf("## Report detail"));
   });
@@ -210,7 +240,9 @@ describe("markdown reports carry the checklist when the rules' declarations are 
 
   test("with no rule declarations there is no checklist, never one of all 'No rule covers it'", () => {
     expect(renderMarkdown(ran)).not.toContain("## Accessibility checklist");
-    expect(renderMarkdown(ran, { wcagRules: [{ id: "seo/untagged" }] })).not.toContain("## Accessibility checklist");
+    expect(renderMarkdown(ran, { wcagRules: [{ id: "seo/untagged" }] })).not.toContain(
+      "## Accessibility checklist",
+    );
     expect(renderMarkdown(ran)).not.toContain("No rule covers it");
   });
 });

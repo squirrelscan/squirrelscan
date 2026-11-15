@@ -56,12 +56,14 @@ describe("leaked-secrets patterns stay linear", () => {
     // whitespace up to its 512-character reach. The old pattern took ~19 ms per
     // call here, once per candidate value on a page.
     const before = "$".repeat(128) + "=" + "\t".repeat(380) + '"$:';
-    expect(timed(() => {
-      for (let i = 0; i < 100; i++) {
-        heldAsCredential(before);
-        classifyKeyContext(before, "key");
-      }
-    })).toBeLessThan(LINEAR_MS);
+    expect(
+      timed(() => {
+        for (let i = 0; i < 100; i++) {
+          heldAsCredential(before);
+          classifyKeyContext(before, "key");
+        }
+      }),
+    ).toBeLessThan(LINEAR_MS);
     expect(heldAsCredential('api_key = "')).toBe(true);
     expect(classifyKeyContext('sha256: "', "key")).toBe("digest");
     expect(classifyKeyContext('cfg["apiKey"] = "', "key")).toBe("credential");
@@ -83,28 +85,37 @@ describe("leaked-secrets patterns stay linear", () => {
 describe("other rechecked rules stay linear", () => {
   test("template fingerprint: CSS custom properties in a <style>", () => {
     const url = "https://example.com/";
-    const attack = parsePage(`<html><head><style>${"--0".repeat(100_000)}\t--0:</style></head><body></body></html>`, url);
+    const attack = parsePage(
+      `<html><head><style>${"--0".repeat(100_000)}\t--0:</style></head><body></body></html>`,
+      url,
+    );
     expect(timed(() => fingerprintPage(attack, url))).toBeLessThan(LINEAR_MS);
 
     const real = parsePage(
       "<html><head><style>:root{--brand-color: red; --Gap:4px} a{--x-y:1}</style></head><body></body></html>",
-      url
+      url,
     );
-    expect([...(fingerprintPage(real, url)?.cssVars ?? [])].toSorted()).toEqual(["--brand-color", "--gap", "--x-y"]);
+    expect([...(fingerprintPage(real, url)?.cssVars ?? [])].toSorted()).toEqual([
+      "--brand-color",
+      "--gap",
+      "--x-y",
+    ]);
   });
 
   test("css vars: a 1 MB --0-- run in a <style> is scanned in linear time", () => {
     // The previous look-behind form re-scanned the run from every `--` inside it.
-    for (const attack of ["--0".repeat(350_000), "--0--".repeat(200_000), "-".repeat(1_000_000), "a" + " ".repeat(1_000_000)]) {
+    for (const attack of [
+      "--0".repeat(350_000),
+      "--0--".repeat(200_000),
+      "-".repeat(1_000_000),
+      "a" + " ".repeat(1_000_000),
+    ]) {
       expect(timed(() => cssVarNames(attack))).toBeLessThan(LINEAR_MS);
     }
     // Real declarations, including one that starts mid-run and an uppercase name.
-    expect(cssVarNames(":root{--Brand-Color: #fff;--gap:4px; a--b:1; --x-y :2; --:3; a--:4}")).toEqual([
-      "--brand-color",
-      "--gap",
-      "--b",
-      "--x-y",
-    ]);
+    expect(
+      cssVarNames(":root{--Brand-Color: #fff;--gap:4px; a--b:1; --x-y :2; --:3; a--:4}"),
+    ).toEqual(["--brand-color", "--gap", "--b", "--x-y"]);
   });
 
   test("title separators: a long run of whitespace", () => {

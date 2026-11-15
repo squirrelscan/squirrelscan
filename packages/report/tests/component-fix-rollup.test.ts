@@ -26,7 +26,9 @@ const SITE = "https://example.test";
 const PAGES = Array.from({ length: 14 }, (_, i) => `${SITE}/releases/1.0.${i}`);
 
 /** A group as the grouping stage produces them, plus the additive root key. */
-function group(overrides: Partial<ComponentFixGroup> & { root?: string; value?: string }): ComponentFixGroup {
+function group(
+  overrides: Partial<ComponentFixGroup> & { root?: string; value?: string },
+): ComponentFixGroup {
   const { root, value, ...rest } = overrides;
   const base = {
     id: `component-fix:${(value ?? "x").padEnd(32, "0").slice(0, 32)}`,
@@ -109,15 +111,33 @@ function report(groups: ComponentFixGroup[]): AuditReport {
   }));
   const rule: ReportRuleResult = {
     meta: {
-      id: "a11y/link-text", name: "Link text", description: "d", solution: "s",
-      category: "accessibility", scope: "page", severity: "warning", weight: 1,
+      id: "a11y/link-text",
+      name: "Link text",
+      description: "d",
+      solution: "s",
+      category: "accessibility",
+      scope: "page",
+      severity: "warning",
+      weight: 1,
     },
     checks,
   };
   const built = {
-    baseUrl: SITE, timestamp: "2026-09-19T00:00:00.000Z", totalPages: PAGES.length,
-    passed: 0, warnings: checks.length, failed: 0, ruleResults: { "a11y/link-text": rule },
-    healthScore: { overall: 80, categories: [], groups: [], errorCount: 0, warningCount: 1, passedCount: 0 },
+    baseUrl: SITE,
+    timestamp: "2026-09-19T00:00:00.000Z",
+    totalPages: PAGES.length,
+    passed: 0,
+    warnings: checks.length,
+    failed: 0,
+    ruleResults: { "a11y/link-text": rule },
+    healthScore: {
+      overall: 80,
+      categories: [],
+      groups: [],
+      errorCount: 0,
+      warningCount: 1,
+      passedCount: 0,
+    },
   } as unknown as AuditReport;
   // The grouping stage derives groups from evidence; here they are supplied
   // directly so the rollup can be exercised before that field exists upstream.
@@ -217,7 +237,11 @@ describe("family rollup: one component in two structural variants", () => {
       },
       componentFamilyKey: "family-nav",
       attribution: "observed-component-evidence" as const,
-      region: { role: "navigation" as const, nestedIn: "none" as const, structuralSignature: "s128:n" },
+      region: {
+        role: "navigation" as const,
+        nestedIn: "none" as const,
+        structuralSignature: "s128:n",
+      },
     } as Parameters<typeof group>[0]);
   }
 
@@ -258,18 +282,20 @@ describe("family rollup: one component in two structural variants", () => {
   test("a single variant is byte-identical to today", () => {
     const single = variant(NAV_A, "nav>a:1");
     const withFamily = fixRollupLine(fixUnits([single])[0]!, 3, (p) => new URL(p).pathname);
-    const plain = fixRollupLine(
-      componentFixRollups([single])[0]!,
-      3,
-      (p) => new URL(p).pathname,
-    );
+    const plain = fixRollupLine(componentFixRollups([single])[0]!, 3, (p) => new URL(p).pathname);
     expect(withFamily).toBe(plain);
     expect(withFamily).not.toContain("variants");
   });
 
   test("no family key keeps every unit apart", () => {
     const noKey = (pages: string[], slot: string) =>
-      group({ root: `r-${slot}`, value: "log in", affectedPages: pages, affectedPageCount: pages.length, semanticSlot: slot } as Parameters<typeof group>[0]);
+      group({
+        root: `r-${slot}`,
+        value: "log in",
+        affectedPages: pages,
+        affectedPageCount: pages.length,
+        semanticSlot: slot,
+      } as Parameters<typeof group>[0]);
     expect(fixUnits([noKey(NAV_A, "nav>a:1"), noKey(NAV_B, "nav>ul:1>a:1")])).toHaveLength(2);
   });
 });
@@ -287,14 +313,28 @@ describe("packed evidence tables are complete in JSON", () => {
       family: { key: "s128:f", structuralSignature: "s128:f" },
       variant: { key: "s128:v", structuralSignature: "s128:v", contentHash: "s128:c" },
       element: { locator: "footer:1>footer>a:1", structuralSignature: "s128:e" },
-      defect: { kind: "link-text-generic" as const, values: { normalizedText: "download" }, valueHashes: {} },
+      defect: {
+        kind: "link-text-generic" as const,
+        values: { normalizedText: "download" },
+        valueHashes: {},
+      },
     };
     return withLadder
       ? ({
           ...base,
           subtreeCandidates: [
-            { level: 1, skeletonSignature: "s128:l1", textShareOfRegion: 0.5, locatorFromRoot: "div:1>a:1" },
-            { level: 2, skeletonSignature: "s128:l2", textShareOfRegion: 0.9, locatorFromRoot: "a:1" },
+            {
+              level: 1,
+              skeletonSignature: "s128:l1",
+              textShareOfRegion: 0.5,
+              locatorFromRoot: "div:1>a:1",
+            },
+            {
+              level: 2,
+              skeletonSignature: "s128:l2",
+              textShareOfRegion: 0.9,
+              locatorFromRoot: "a:1",
+            },
           ],
         } as unknown as ComponentOccurrence)
       : (base as ComponentOccurrence);
@@ -311,15 +351,33 @@ describe("packed evidence tables are complete in JSON", () => {
     }));
     const rule: ReportRuleResult = {
       meta: {
-        id: "a11y/link-text", name: "Link text", description: "d", solution: "s",
-        category: "accessibility", scope: "page", severity: "warning", weight: 1,
+        id: "a11y/link-text",
+        name: "Link text",
+        description: "d",
+        solution: "s",
+        category: "accessibility",
+        scope: "page",
+        severity: "warning",
+        weight: 1,
       },
       checks,
     };
     return {
-      baseUrl: SITE, timestamp: "2026-09-19T00:00:00.000Z", totalPages: 3,
-      passed: 0, warnings: 3, failed: 0, ruleResults: { "a11y/link-text": rule },
-      healthScore: { overall: 80, categories: [], groups: [], errorCount: 0, warningCount: 1, passedCount: 0 },
+      baseUrl: SITE,
+      timestamp: "2026-09-19T00:00:00.000Z",
+      totalPages: 3,
+      passed: 0,
+      warnings: 3,
+      failed: 0,
+      ruleResults: { "a11y/link-text": rule },
+      healthScore: {
+        overall: 80,
+        categories: [],
+        groups: [],
+        errorCount: 0,
+        warningCount: 1,
+        passedCount: 0,
+      },
     } as unknown as AuditReport;
   }
 

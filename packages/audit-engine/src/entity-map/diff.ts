@@ -90,7 +90,7 @@ function pageSet(map: EntityMap): Set<string> {
  */
 function buildCoverageTest(
   older: EntityMap,
-  newerPages: Set<string>
+  newerPages: Set<string>,
 ): (node: EntityMapNode) => boolean {
   const declaringPages = buildDeclaringPages(older);
   return (node: EntityMapNode): boolean => {
@@ -112,9 +112,7 @@ function buildCoverageTest(
  * Null whenever the set cannot be PROVEN, which is the safe direction: every
  * caller treats null as "say less".
  */
-function buildDeclaringPages(
-  map: EntityMap
-): (node: EntityMapNode) => string[] | null {
+function buildDeclaringPages(map: EntityMap): (node: EntityMapNode) => string[] | null {
   // A clipped page list (a publish projection caps it) looks exactly like a
   // complete one, so compare it against the count the crawl reported.
   // A projection that clipped its own index says so in `truncated`; dropped
@@ -164,7 +162,7 @@ function buildDeclaringPages(
  */
 function buildReplacementTest(
   older: EntityMap,
-  newer: EntityMap
+  newer: EntityMap,
 ): (before: EntityMapNode, after: EntityMapNode) => boolean {
   const olderDeclaringPages = buildDeclaringPages(older);
   const newerDeclaringPages = buildDeclaringPages(newer);
@@ -227,7 +225,7 @@ export function diffEntityMaps(
   // for something else that merely shares its name.
   const groupByIdentity = (
     nodes: readonly EntityMapNode[],
-    survived: (key: string) => boolean
+    survived: (key: string) => boolean,
   ): Map<string, EntityMapNode[]> => {
     const out = new Map<string, EntityMapNode[]>();
     for (const node of nodes) {
@@ -273,9 +271,7 @@ export function diffEntityMaps(
     // there and the identified entity turned up on /c; finding it on /c proves
     // nothing about /a and /b if those were never revisited.
     const coverage =
-      fullyRecrawled(before) && replacedEverywhere(before, node)
-        ? "proven"
-        : "partial";
+      fullyRecrawled(before) && replacedEverywhere(before, node) ? "proven" : "partial";
 
     if (node.id !== null && before.id === null) {
       gainedId.push({
@@ -340,11 +336,16 @@ export function diffEntityMaps(
   // Per (entity, property), not per entity: a node that swapped one conflicting
   // property for another has both a new and a resolved finding, and collapsing
   // them to "still conflicted" would hide the fix and the regression together.
-  const conflictPairs = (map: EntityMap): Map<string, { node: EntityMapNode; property: string }> => {
+  const conflictPairs = (
+    map: EntityMap,
+  ): Map<string, { node: EntityMapNode; property: string }> => {
     const out = new Map<string, { node: EntityMapNode; property: string }>();
     for (const node of map.nodes) {
       for (const conflict of node.conflicts) {
-        out.set(JSON.stringify([node.key, conflict.property]), { node, property: conflict.property });
+        out.set(JSON.stringify([node.key, conflict.property]), {
+          node,
+          property: conflict.property,
+        });
       }
     }
     return out;
@@ -366,7 +367,11 @@ export function diffEntityMaps(
     // not visit. A conflict needs two declarations to exist, so surviving on
     // ONE of its pages tells you nothing about whether it was reconciled.
     if (!fullyRecrawled(entry.node)) continue;
-    resolvedConflicts.push({ key: entry.node.key, name: entry.node.name, property: entry.property });
+    resolvedConflicts.push({
+      key: entry.node.key,
+      name: entry.node.name,
+      property: entry.property,
+    });
   }
 
   // ── dangling references ──────────────────────────────────────────

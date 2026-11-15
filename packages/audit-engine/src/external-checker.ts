@@ -11,10 +11,7 @@
 
 import { Effect } from "effect";
 
-import {
-  isRateLimitedResponse,
-  isRateLimitStatus,
-} from "@squirrelscan/utils/rate-limit";
+import { isRateLimitedResponse, isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
 import {
   DEFAULT_MAX_BODY_BYTES,
   fetchUndecoded,
@@ -199,7 +196,9 @@ function limitMs(value: number | undefined): number {
  * deadline and per-call limit: `Infinity` with neither, zero or less once the
  * deadline has passed.
  */
-function waitAllowance(opts: Pick<ExternalCheckerOptions, "deadlineAt" | "maxWaitMs" | "now">): number {
+function waitAllowance(
+  opts: Pick<ExternalCheckerOptions, "deadlineAt" | "maxWaitMs" | "now">,
+): number {
   const now = opts.now ?? Date.now;
   const untilDeadline =
     opts.deadlineAt === undefined || !Number.isFinite(opts.deadlineAt)
@@ -249,7 +248,9 @@ export function isPublicOnlyEgress(policy: EgressPolicy): boolean {
 export const BULK_NON_PUBLIC_REFUSAL = "blocked_non_public_host";
 
 function isBulkNonPublicRefusal(result: ExternalCheckResult): boolean {
-  return result.status === null && (result.error?.startsWith(`${BULK_NON_PUBLIC_REFUSAL}:`) ?? false);
+  return (
+    result.status === null && (result.error?.startsWith(`${BULK_NON_PUBLIC_REFUSAL}:`) ?? false)
+  );
 }
 
 /** Max urls per bulk-checker call — mirrors SERVICE_LIMITS.deadLinksBatchUrls. */
@@ -274,7 +275,7 @@ export async function runBulkChecker(
   limits: Pick<ExternalCheckerOptions, "deadlineAt" | "maxWaitMs" | "now"> & {
     /** Called after each answered chunk with the running count and that chunk's answers. */
     onChunk?: (resolvedSoFar: number, chunk: ReadonlyMap<string, ExternalCheckResult>) => void;
-  } = {}
+  } = {},
 ): Promise<Map<string, ExternalCheckResult>> {
   const now = limits.now ?? Date.now;
   const resolved = new Map<string, ExternalCheckResult>();
@@ -444,7 +445,9 @@ const WALL_VERDICT_CUTOFF_MS = Date.parse("2026-11-16T00:00:00Z");
 /** A cached answer from before pub#800, which counted a wall or a timeout as broken: asked again. */
 function staleWallVerdict(entry: LinkCacheEntry): boolean {
   if (entry.wafBlocked || entry.checkedAt >= WALL_VERDICT_CUTOFF_MS) return false;
-  return (entry.status !== null && BOT_WALL_STATUSES.has(entry.status)) || entry.error === "timeout";
+  return (
+    (entry.status !== null && BOT_WALL_STATUSES.has(entry.status)) || entry.error === "timeout"
+  );
 }
 
 /**
@@ -518,7 +521,9 @@ async function requestFollowingSafeRedirects(
       }
       throw error;
     }
-    const location = REDIRECT_STATUSES.has(response.status) ? response.headers.get("location") : null;
+    const location = REDIRECT_STATUSES.has(response.status)
+      ? response.headers.get("location")
+      : null;
     if (!location) {
       return { response, redirectTarget: current !== href ? current : null };
     }
@@ -542,7 +547,7 @@ async function requestFollowingSafeRedirects(
 
 async function checkSingleUrlAsync(
   href: string,
-  options: ExternalCheckerOptions
+  options: ExternalCheckerOptions,
 ): Promise<CheckUrlResult> {
   const controller = new AbortController();
   // #1729: the deadline stays armed until this function returns, so it also
@@ -672,7 +677,11 @@ async function checkSingleUrlAsync(
         unverifiedReason: "unreachable",
       };
     }
-    return { status: null, error: (error as Error).message || "Unknown error", redirectTarget: null };
+    return {
+      status: null,
+      error: (error as Error).message || "Unknown error",
+      redirectTarget: null,
+    };
   } finally {
     clearTimeout(timeoutId);
     // Closes every connection this check opened (#766). Neither a capped read
@@ -684,7 +693,7 @@ async function checkSingleUrlAsync(
 export function checkExternalLinks(
   urls: string[],
   cache: LinkCache | null,
-  options?: Partial<ExternalCheckerOptions>
+  options?: Partial<ExternalCheckerOptions>,
 ): Effect.Effect<ExternalCheckResult[], never, never> {
   const opts = { ...DEFAULT_OPTIONS, ...options };
   opts.concurrency = Math.max(1, opts.concurrency);
@@ -711,7 +720,13 @@ export function checkExternalLinks(
     const uniqueUrls: string[] = [];
     for (const url of new Set(urls)) {
       if (looksLikeAnAction(url)) {
-        results.push({ href: url, status: null, error: null, redirectTarget: null, fromCache: false });
+        results.push({
+          href: url,
+          status: null,
+          error: null,
+          redirectTarget: null,
+          fromCache: false,
+        });
       } else if (hasReservedSuffix(url, egress)) {
         // #1740: .invalid, .test and .example never resolve in public DNS (RFC 6761): a dead link for every
         // visitor, answered without a lookup, and not a refusal. A private-network audit looks them up.
@@ -782,7 +797,8 @@ export function checkExternalLinks(
       // local check, which a private site's audit may make.
       // A reserved never-resolving name (.invalid, .test, .example) is never sent out either (#1740).
       const bulkUrls = urlsToCheck.filter(
-        (url) => !refusedWithoutLookup(url, DEFAULT_EGRESS) && !hasReservedSuffix(url, DEFAULT_EGRESS),
+        (url) =>
+          !refusedWithoutLookup(url, DEFAULT_EGRESS) && !hasReservedSuffix(url, DEFAULT_EGRESS),
       );
       const answeredBefore = results.length;
       const bulkAsked = new Set(bulkUrls);
@@ -797,10 +813,11 @@ export function checkExternalLinks(
                   report(answeredBefore + resolvedSoFar);
                   // The same object the loop below pushes for each answered url.
                   for (const [url, resolved] of chunk) {
-                    if (bulkAsked.has(url) && !isBulkNonPublicRefusal(resolved)) emit({ ...resolved, href: url });
+                    if (bulkAsked.has(url) && !isBulkNonPublicRefusal(resolved))
+                      emit({ ...resolved, href: url });
                   }
                 },
-              })
+              }),
             )
           : new Map<string, ExternalCheckResult>();
       if (bulkResolved.size > 0) {
@@ -857,14 +874,12 @@ export function checkExternalLinks(
         // The same shape the loop below pushes for it.
         emit(localVerdict(checked));
         return checked;
-      })
+      }),
     );
 
-    const checkedResults = (
-      yield* Effect.all(checkEffects, {
-        concurrency: opts.concurrency,
-      })
-    ).filter((r) => r !== null);
+    const checkedResults = (yield* Effect.all(checkEffects, {
+      concurrency: opts.concurrency,
+    })).filter((r) => r !== null);
 
     if (sharedCache) {
       // #1829: a throttled result is a fact about the MOMENT, not the link. The
@@ -913,16 +928,12 @@ function localVerdict(r: CheckUrlResult & { href: string }): ExternalCheckResult
 export function checkExternalLink(
   href: string,
   cache: LinkCache | null,
-  options?: Partial<ExternalCheckerOptions>
+  options?: Partial<ExternalCheckerOptions>,
 ): Effect.Effect<ExternalCheckResult, never, never> {
-  return checkExternalLinks([href], cache, options).pipe(
-    Effect.map((results) => results[0]!)
-  );
+  return checkExternalLinks([href], cache, options).pipe(Effect.map((results) => results[0]!));
 }
 
-export function filterBrokenLinks(
-  results: ExternalCheckResult[]
-): ExternalCheckResult[] {
+export function filterBrokenLinks(results: ExternalCheckResult[]): ExternalCheckResult[] {
   return results.filter((r) => {
     if (r.error) return true;
     // Unverifiable, whatever its status: a wall or a timeout (pub#800).
@@ -988,23 +999,16 @@ export function cacheableVerdict(result: {
 }
 
 /** True when this result reflects throttling rather than the target's real state. */
-export function isRateLimited(result: {
-  status: number | null;
-  rateLimited?: boolean;
-}): boolean {
+export function isRateLimited(result: { status: number | null; rateLimited?: boolean }): boolean {
   return result.rateLimited === true || isRateLimitStatus(result.status);
 }
 
 /** Links whose status could not be verified because the host was throttling (#1829). */
-export function filterRateLimitedLinks(
-  results: ExternalCheckResult[]
-): ExternalCheckResult[] {
+export function filterRateLimitedLinks(results: ExternalCheckResult[]): ExternalCheckResult[] {
   return results.filter((r) => isRateLimited(r));
 }
 
-export function filterWafBlockedLinks(
-  results: ExternalCheckResult[]
-): ExternalCheckResult[] {
+export function filterWafBlockedLinks(results: ExternalCheckResult[]): ExternalCheckResult[] {
   return results.filter((r) => r.wafBlocked === true);
 }
 

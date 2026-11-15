@@ -53,7 +53,10 @@ const ENABLE_HINT = "Run with --probe active to check, on a site you own or may 
 const DEFAULT_SIGNATURES: Array<{ name: string; pattern: RegExp }> = [
   { name: "nginx", pattern: /<center>\s*nginx(?:\/[\d.]+)?\s*<\/center>/i },
   { name: "Apache", pattern: /the requested url (?:\S+ )?was not found on this server/i },
-  { name: "IIS", pattern: /the resource you are looking for has been removed, had its name changed/i },
+  {
+    name: "IIS",
+    pattern: /the resource you are looking for has been removed, had its name changed/i,
+  },
   { name: "Express", pattern: /<pre>cannot (?:get|post|put|delete|head) [^<]*<\/pre>/i },
   { name: "Spring Boot", pattern: /whitelabel error page/i },
   { name: "Tomcat", pattern: /apache tomcat\/[\d.]+/i },
@@ -65,7 +68,6 @@ export interface NotFoundAnswer {
   headers: Headers;
   html: string;
 }
-
 
 type ProbeOutcome =
   | { kind: "not-allowed" }
@@ -90,7 +92,10 @@ function randomMissingPath(): string {
 }
 
 /** The exact URL and init of the probe. Exported so tests can pin what is sent. */
-export function buildNotFoundProbe(origin: string, path: string): { url: string; init: RequestInit } {
+export function buildNotFoundProbe(
+  origin: string,
+  path: string,
+): { url: string; init: RequestInit } {
   const url = new URL(path, `${origin}/`);
   if (url.origin !== origin) throw new Error("custom-404: probe left the audited origin");
   return {
@@ -174,7 +179,9 @@ export function readErrorPage(html: string, origin: string, headers: Headers): E
 
   const metaNoindex = [...document.querySelectorAll("meta[name]")].some((m) => {
     const name = (m.getAttribute("name") ?? "").toLowerCase();
-    return (name === "robots" || name === "googlebot") && NOINDEX.test(m.getAttribute("content") ?? "");
+    return (
+      (name === "robots" || name === "googlebot") && NOINDEX.test(m.getAttribute("content") ?? "")
+    );
   });
   const noindex = metaNoindex || NOINDEX.test(headers.get("x-robots-tag") ?? "");
 
@@ -192,7 +199,7 @@ export function readErrorPage(html: string, origin: string, headers: Headers): E
 
   const hasSearch =
     document.querySelector(
-      'input[type="search"], [role="search"], form[action*="search" i], input[name="q" i], input[name="s" i], input[name="query" i]'
+      'input[type="search"], [role="search"], form[action*="search" i], input[name="q" i], input[name="s" i], input[name="query" i]',
     ) !== null;
   const hasNav =
     document.querySelector('nav, [role="navigation"]') !== null ||
@@ -214,10 +221,20 @@ export function readErrorPage(html: string, origin: string, headers: Headers): E
 /** A stock server page, or a bare page with no chrome of any kind. */
 export function isDefaultErrorPage(r: ErrorPageReading): boolean {
   if (r.defaultServer) return true;
-  return !r.hasNav && !r.hasSearch && r.siteLinks === 0 && !r.hasStylesheet && r.textLength < BARE_TEXT_LIMIT;
+  return (
+    !r.hasNav &&
+    !r.hasSearch &&
+    r.siteLinks === 0 &&
+    !r.hasStylesheet &&
+    r.textLength < BARE_TEXT_LIMIT
+  );
 }
 
-function skipped(message: string, skipReason: string | undefined, details?: Record<string, unknown>): RuleResult {
+function skipped(
+  message: string,
+  skipReason: string | undefined,
+  details?: Record<string, unknown>,
+): RuleResult {
   return {
     checks: [
       {
@@ -239,7 +256,7 @@ export const custom404Rule: Rule = {
     description:
       "Requests one URL that cannot exist and judges the answer: a real 404 or 410 status (not a 200 or a redirect to the homepage), a branded page rather than a bare server default, a route back into the site, and noindex. Runs only when probing is active or higher.",
     solution:
-      "Serve missing URLs with a real 404 (or 410 for removed pages), never a 200 or a redirect to the homepage: search engines treat those as soft 404s, spend crawl budget on them and can index them as thin duplicates. Replace the server's stock error page with one in your site template: the header and navigation, a search box, and links to the homepage and the main sections, so a visitor or an agent that lands on a dead URL has somewhere to go. Add `<meta name=\"robots\" content=\"noindex\">` (or an `X-Robots-Tag: noindex` header) to the 404 template so it can never be indexed if a misconfiguration serves it with a 200. Check it with `curl -I https://your-site/some-missing-page`.",
+      'Serve missing URLs with a real 404 (or 410 for removed pages), never a 200 or a redirect to the homepage: search engines treat those as soft 404s, spend crawl budget on them and can index them as thin duplicates. Replace the server\'s stock error page with one in your site template: the header and navigation, a search box, and links to the homepage and the main sections, so a visitor or an agent that lands on a dead URL has somewhere to go. Add `<meta name="robots" content="noindex">` (or an `X-Robots-Tag: noindex` header) to the 404 template so it can never be indexed if a misconfiguration serves it with a 200. Check it with `curl -I https://your-site/some-missing-page`.',
     category: "crawl",
     scope: "site",
     findingScope: "page",
@@ -258,14 +275,14 @@ export const custom404Rule: Rule = {
       return skipped(
         `404 handling not checked: probing is passive, and this rule sends one request at active. ${ENABLE_HINT}`,
         PROBE_LEVEL_TOO_LOW_SKIP_REASON,
-        { probeLevel: level, requiredLevel: "active" }
+        { probeLevel: level, requiredLevel: "active" },
       );
     }
     // `squirrel analyze` re-reads stored data and must not touch the site.
     if (!hasRequestTool()) {
       return skipped(
         "404 handling not checked: analyze runs offline; run `squirrel audit` to probe",
-        "analyze-offline"
+        "analyze-offline",
       );
     }
     const origin = siteOrigin(ctx.site?.baseUrl);
@@ -275,13 +292,13 @@ export const custom404Rule: Rule = {
     if (outcome.kind === "not-allowed") {
       return skipped(
         "404 handling not checked: the probe budget ran out before the request was sent",
-        PROBE_INCOMPLETE_SKIP_REASON
+        PROBE_INCOMPLETE_SKIP_REASON,
       );
     }
     if (outcome.kind === "error") {
       return skipped(
         "404 handling not checked: the request for a missing URL failed with a network error or timeout, so no 404 response was observed",
-        PROBE_INCOMPLETE_SKIP_REASON
+        PROBE_INCOMPLETE_SKIP_REASON,
       );
     }
 
@@ -293,7 +310,7 @@ export const custom404Rule: Rule = {
       return skipped(
         `404 handling not checked: the site answered the missing URL with HTTP ${status} (throttling, a bot wall or a server error), not a 404`,
         PROBE_INCOMPLETE_SKIP_REASON,
-        details
+        details,
       );
     }
 
@@ -324,7 +341,7 @@ export const custom404Rule: Rule = {
       return skipped(
         `404 handling not checked: the missing URL answered HTTP ${status}, which is neither a 404 nor a 410`,
         PROBE_INCOMPLETE_SKIP_REASON,
-        details
+        details,
       );
     }
 
@@ -333,7 +350,7 @@ export const custom404Rule: Rule = {
       return skipped(
         `404 handling not checked: the missing URL answered ${status} with a ${answer.contentType.split(";")[0]} body, not an HTML error page`,
         undefined,
-        details
+        details,
       );
     }
     const reading = readErrorPage(answer.html, origin, answer.headers);

@@ -36,8 +36,7 @@ export const REMOVED_STATUSES: ReadonlySet<number> = new Set([404, 410]);
  */
 export function isReplayedCheck(check: CheckResult): boolean {
   return (
-    isPageAttributed(check) &&
-    (check.provenance === "carried" || check.provenance === "unrendered")
+    isPageAttributed(check) && (check.provenance === "carried" || check.provenance === "unrendered")
   );
 }
 

@@ -117,8 +117,7 @@ function fullResults(descFails: Set<string>, titleFails: Set<string>) {
 /** The publish transformation: fold over-cap rules, sample every check, build the signal first. */
 function samplePayload(full: ReturnType<typeof fullResults>) {
   const resolutionSignal = buildResolutionSignal(full, CRAWLED);
-  const ruleResults: Record<string, { meta: ReturnType<typeof meta>; checks: CheckResult[] }> =
-    {};
+  const ruleResults: Record<string, { meta: ReturnType<typeof meta>; checks: CheckResult[] }> = {};
   for (const [ruleId, r] of Object.entries(full)) {
     ruleResults[ruleId] = {
       meta: r.meta,
@@ -319,9 +318,7 @@ describe("on the NEXT publish, a clipped page counts only with all of its eviden
       (u) => !silent.has(u) && !evidencedPages(silentPayload).has(u),
     );
     expect(clippedEvaluated.length).toBeGreaterThan(0);
-    expect(second.unionRuleResults.get("title")!.syntheticPassCount).toBe(
-      clippedEvaluated.length,
-    );
+    expect(second.unionRuleResults.get("title")!.syntheticPassCount).toBe(clippedEvaluated.length);
   });
 
   test("a clipped page with a carried finding keeps its passes, as before #2067", async () => {
@@ -391,10 +388,7 @@ describe("query pages: a query-blind hash speaks only for an uncrawled spelling 
       ruleResults: {
         "meta-description": {
           meta: meta("meta-description"),
-          checks: [
-            check("has-description", BASE, "fail"),
-            check("has-description", OTHER, "pass"),
-          ],
+          checks: [check("has-description", BASE, "fail"), check("has-description", OTHER, "pass")],
         },
       },
       pageStatuses: [],

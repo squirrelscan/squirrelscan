@@ -53,14 +53,17 @@ function serve(): Fixture {
     fetch(req) {
       const { pathname } = new URL(req.url);
       hits.push(`${req.method} ${pathname}`);
-      const html = (body: string) => new Response(body, { headers: { "content-type": "text/html; charset=utf-8" } });
+      const html = (body: string) =>
+        new Response(body, { headers: { "content-type": "text/html; charset=utf-8" } });
       switch (pathname) {
         case "/":
           return html(page("Home", ""));
         case "/account":
           return html(page("Account", INLINE_CALL_SITE));
         case "/api/me":
-          return new Response(JSON.stringify(USER), { headers: { "content-type": "application/json" } });
+          return new Response(JSON.stringify(USER), {
+            headers: { "content-type": "application/json" },
+          });
         default:
           return new Response("not found", { status: 404 });
       }
@@ -95,7 +98,9 @@ async function audit(engine: "v1" | "v2", fixture: Fixture): Promise<Map<string,
       } as never,
     }),
   );
-  const crawlId = await Effect.runPromise(crawler.start(`${fixture.origin}/`, `${fixture.origin}/`));
+  const crawlId = await Effect.runPromise(
+    crawler.start(`${fixture.origin}/`, `${fixture.origin}/`),
+  );
   const storage = crawler.storage as SQLiteStorage;
   const pages = await Effect.runPromise(storage.getPages(crawlId));
   const scope = { probe: createProbeBudget({ level: "active", budgetMs: 20_000 }) };
@@ -127,7 +132,10 @@ describe("one request and one finding for a leaking /api/me (squirrelscan#1886)"
       expect(auth).toHaveLength(1);
       expect(auth[0]?.details).toMatchObject({ endpoint: `${fixture.origin}/api/me` });
       // Found from the page's inline fetch() call site, not only from the conventional paths.
-      expect(auth[0]?.items?.[0]?.meta).toMatchObject({ source: "discovered", discoveredVia: "fetch" });
+      expect(auth[0]?.items?.[0]?.meta).toMatchObject({
+        source: "discovered",
+        discoveredVia: "fetch",
+      });
 
       const api = results.get("security/unauthenticated-api") ?? [];
       expect(problems(api)).toHaveLength(0);

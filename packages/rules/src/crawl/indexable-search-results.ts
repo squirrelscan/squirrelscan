@@ -161,7 +161,10 @@ function hasResultsEvidence(page: PageLike, u: URL): boolean {
 /** Robots `none` means noindex,nofollow; shared isPageIndexable only checks "noindex". */
 function hasRobotsNone(page: PageLike): boolean {
   const tokens = (v: string | undefined | null) =>
-    (v ?? "").toLowerCase().split(/[\s,]+/).filter(Boolean);
+    (v ?? "")
+      .toLowerCase()
+      .split(/[\s,]+/)
+      .filter(Boolean);
   const meta = (page.parsed.meta as { robots?: string | null } | undefined)?.robots;
   if (tokens(meta).includes("none")) return true;
   const xr = page.headers?.["x-robots-tag"];
@@ -282,12 +285,13 @@ export const indexableSearchResults: Rule = {
       if (!isSearch) continue;
       found++;
 
-      const indexable = isPageIndexable(
-        page.parsed as Parameters<typeof isPageIndexable>[0],
-        page.headers,
-        page.url,
-        robotsTxt,
-      ).isIndexable && !hasRobotsNone(page);
+      const indexable =
+        isPageIndexable(
+          page.parsed as Parameters<typeof isPageIndexable>[0],
+          page.headers,
+          page.url,
+          robotsTxt,
+        ).isIndexable && !hasRobotsNone(page);
       if (!indexable) {
         excluded++;
         continue;

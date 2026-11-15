@@ -94,10 +94,7 @@ export function calculateBreadthPenalty(factors: BreadthFirstFactors): number {
   // Use Math.max with small epsilon to prevent division by zero
   const fairShare = Math.max(
     0.001,
-    Math.min(
-      maxPrefixPages,
-      factors.maxPages / Math.max(factors.totalPrefixes, 1)
-    )
+    Math.min(maxPrefixPages, factors.maxPages / Math.max(factors.totalPrefixes, 1)),
   );
   const overBudgetRatio = factors.prefixCrawledCount / fairShare;
 
@@ -109,7 +106,7 @@ export function calculateBreadthPenalty(factors: BreadthFirstFactors): number {
   // Increasing penalty for over-represented prefixes
   return Math.min(
     Math.floor((overBudgetRatio - 1) * CRAWL_BREADTH_PENALTY_MULTIPLIER),
-    CRAWL_BREADTH_MAX_PREFIX_PENALTY
+    CRAWL_BREADTH_MAX_PREFIX_PENALTY,
   );
 }
 
@@ -119,7 +116,7 @@ export function calculateBreadthPenalty(factors: BreadthFirstFactors): number {
 export function calculatePriorityWithBreadth(
   factors: PriorityFactors,
   url: string,
-  breadthFactors: BreadthFirstFactors
+  breadthFactors: BreadthFirstFactors,
 ): number {
   let score = calculatePriorityWithPath(factors, url);
   score += calculateBreadthPenalty(breadthFactors);
@@ -155,7 +152,7 @@ export function calculatePriorityWithSurface(
   factors: PriorityFactors,
   url: string,
   breadthFactors: BreadthFirstFactors,
-  surfaceFactors: SurfaceModeFactors
+  surfaceFactors: SurfaceModeFactors,
 ): number {
   let score = calculatePriorityWithBreadth(factors, url, breadthFactors);
   score += calculatePatternPenalty(surfaceFactors);
@@ -294,10 +291,7 @@ export function calculatePriority(factors: PriorityFactors): number {
   }
 
   // Incoming link bonus (more links = lower score = higher priority)
-  const cappedLinks = Math.min(
-    factors.incomingLinkCount,
-    WEIGHTS.maxIncomingLinks
-  );
+  const cappedLinks = Math.min(factors.incomingLinkCount, WEIGHTS.maxIncomingLinks);
   score -= cappedLinks * WEIGHTS.incomingLinkBonus;
 
   // Source bonus
@@ -310,10 +304,7 @@ export function calculatePriority(factors: PriorityFactors): number {
 /**
  * Calculate priority for a URL with path importance
  */
-export function calculatePriorityWithPath(
-  factors: PriorityFactors,
-  url: string
-): number {
+export function calculatePriorityWithPath(factors: PriorityFactors, url: string): number {
   const pathImportance = getPathImportance(url);
   let score = calculatePriority(factors);
 

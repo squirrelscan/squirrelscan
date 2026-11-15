@@ -6,7 +6,11 @@ import type { AuditReport, CheckResult } from "../types";
 import { AUDIT_FAILURE_NEXT_STEP } from "@squirrelscan/core-contracts/failure-reason";
 import { cacheFreshnessLines, cacheReasonsLabel, cacheStatsSummaryLine } from "../cache-stats";
 import { javascriptHeaviestPagesLine, javascriptShippedLine } from "../javascript-shipped";
-import { refusedFetchLines, undecodableFetchLines, reportFailureReasonCode } from "../failure-notice";
+import {
+  refusedFetchLines,
+  undecodableFetchLines,
+  reportFailureReasonCode,
+} from "../failure-notice";
 import { wafBlockedPagesLines, wafBlockedSeedCopy, wafSuspectLines } from "../waf-blocked";
 import { getScoreGrade } from "../scoring";
 import { REPORT_SOURCE_PAGES_PREVIEW, REPORT_TEXT_WRAP_WIDTH } from "../constants";
@@ -32,12 +36,7 @@ import {
   moreSourcePages,
   sourceRowText,
 } from "../item-sources";
-import {
-  checkPagesScopedAway,
-  checkScopeLine,
-  itemLabel,
-  regionScopeLine,
-} from "../region-scope";
+import { checkPagesScopedAway, checkScopeLine, itemLabel, regionScopeLine } from "../region-scope";
 import {
   ENTITY_CONSOLE_LIMIT,
   ENTITY_EMPTY_MESSAGE,
@@ -55,7 +54,12 @@ import {
   structureTotalsLine,
 } from "../structure";
 import { hostRows } from "../host";
-import { groupTechnologies, isLocalOnlyTech, TECH_LOCAL_MARK, techChangeSummary } from "../technologies";
+import {
+  groupTechnologies,
+  isLocalOnlyTech,
+  TECH_LOCAL_MARK,
+  techChangeSummary,
+} from "../technologies";
 import { SITE_PROFILE_NOTE, siteProfileFlags, siteProfileRows } from "../site-metadata";
 import { EDITOR_SUMMARY_NOTE, editorSummaryView, priorityEffortLabel } from "../editor-summary";
 import { wcagLabel } from "@squirrelscan/core-contracts/wcag";
@@ -147,7 +151,6 @@ function formatHealthScoreText(report: AuditReport): string {
   );
   return lines.join("\n");
 }
-
 
 /**
  * Host list for a rate-limit line: names up to two, then counts the rest.
@@ -426,7 +429,10 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
   }
 
   // Technologies — report-only (no logos possible in plain text; emoji + name).
-  if (report.technologies && (report.technologies.items.length > 0 || report.technologies.truncated)) {
+  if (
+    report.technologies &&
+    (report.technologies.items.length > 0 || report.technologies.truncated)
+  ) {
     const tech = report.technologies;
     write("TECHNOLOGIES");
     write("-".repeat(40));
@@ -436,7 +442,10 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
     write("");
     for (const group of groupTechnologies(tech.items)) {
       const names = group.items
-        .map((t) => `${t.name}${t.version ? ` v${t.version}` : ""}${isLocalOnlyTech(t) ? ` ${TECH_LOCAL_MARK}` : ""}`)
+        .map(
+          (t) =>
+            `${t.name}${t.version ? ` v${t.version}` : ""}${isLocalOnlyTech(t) ? ` ${TECH_LOCAL_MARK}` : ""}`,
+        )
         .join(", ");
       write(`${group.emoji} ${group.label}: ${names}`);
     }
@@ -594,7 +603,8 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
             const hidden = Math.max(0, view.total - shown.length);
             if (hidden > 0) write(`            ${moreSourcePages(hidden)}`);
           }
-          if (left > 0) write(`        ... and ${left.toLocaleString("en-US")} more items not listed`);
+          if (left > 0)
+            write(`        ... and ${left.toLocaleString("en-US")} more items not listed`);
         } else if (left > 0) {
           write(`        ${itemsNotListedLine(left)}`);
         }
@@ -639,13 +649,13 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
       for (const node of primaryEntities(map).slice(0, ENTITY_CONSOLE_LIMIT)) {
         const id = node.id ?? "no @id";
         write(
-          `${entityLabel(node)} (${node.types.join(", ")}) — ${node.occurrences}x on ${entityPageTotal(node)} page(s), ${id}`
+          `${entityLabel(node)} (${node.types.join(", ")}) — ${node.occurrences}x on ${entityPageTotal(node)} page(s), ${id}`,
         );
       }
       if (map.summary.nodesWithoutIdCount > 0) {
         write("");
         write(
-          `${map.summary.nodesWithoutIdCount} entity(ies) declared on several pages carry no @id — search engines cannot tell they are one thing.`
+          `${map.summary.nodesWithoutIdCount} entity(ies) declared on several pages carry no @id — search engines cannot tell they are one thing.`,
         );
       }
     }
@@ -665,7 +675,9 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
       if (locked.cta) write(`${locked.cta.label}: ${locked.cta.url}`);
       write("");
       for (const rule of locked.rules.map(lockedRuleView)) {
-        write(`  ${rule.id} — ${rule.name}${rule.reason ? ` (${LOCKED_REASON_LABELS[rule.reason]})` : ""}`);
+        write(
+          `  ${rule.id} — ${rule.name}${rule.reason ? ` (${LOCKED_REASON_LABELS[rule.reason]})` : ""}`,
+        );
       }
       write("");
     }

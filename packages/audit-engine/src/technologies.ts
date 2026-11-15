@@ -614,7 +614,9 @@ export function buildTechInputs(
     // Held back only when the floors would not fit the room: a page whose scripts all get their head keeps it (#1510).
     const floorDemand = plan.reduce((sum, item) => sum + Math.min(floor, item.bytes), 0);
     const windowReserve =
-      !allWhole && floorDemand > room() && room() >= 4 * TECH_WINDOW_RESERVE_BYTES ? TECH_WINDOW_RESERVE_BYTES : 0;
+      !allWhole && floorDemand > room() && room() >= 4 * TECH_WINDOW_RESERVE_BYTES
+        ? TECH_WINDOW_RESERVE_BYTES
+        : 0;
     for (const item of allWhole ? [] : plan) {
       const r = Math.min(floor, room() - windowReserve);
       if (r <= 0) break;
@@ -656,7 +658,8 @@ export function buildTechInputs(
     }
     // A script the crawl dropped for its size has no body at all: detection never saw it (#1408).
     for (const script of limits.bundleBytes > 0 ? owned : []) {
-      if (script.content || script.error !== SCRIPT_TOO_LARGE_ERROR || counted.has(script.url)) continue;
+      if (script.content || script.error !== SCRIPT_TOO_LARGE_ERROR || counted.has(script.url))
+        continue;
       counted.add(script.url);
       cut++;
       reasons.add("script-too-large");
@@ -673,7 +676,11 @@ export function buildTechInputs(
       attached.add(item.url);
       withBody.push({
         url: item.url,
-        content: item.extras ? (item.head ? `${item.head}${SEGMENT_SEPARATOR}${item.extras}` : item.extras) : item.head,
+        content: item.extras
+          ? item.head
+            ? `${item.head}${SEGMENT_SEPARATOR}${item.extras}`
+            : item.extras
+          : item.head,
       });
     }
 

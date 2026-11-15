@@ -6,17 +6,38 @@ import { describe, expect, test } from "bun:test";
 
 import { detectTechnologies } from "../src";
 
-const page = (head: string) => `<!doctype html><html><head><title>t</title>${head}</head><body></body></html>`;
+const page = (head: string) =>
+  `<!doctype html><html><head><title>t</title>${head}</head><body></body></html>`;
 // The `html` detectors (a CDN host written anywhere on the page, such as `jsdelivr`) read the raw page on purpose and are not
 // in question here: only the library the URL names counts, so the ids are those of the script-url and tag-attr detectors.
-const ids = (html: string): string[] => detectTechnologies({ url: "https://example.com/", headers: {}, html }).map((t) => t.id).filter((id) => id !== "jsdelivr");
+const ids = (html: string): string[] =>
+  detectTechnologies({ url: "https://example.com/", headers: {}, html })
+    .map((t) => t.id)
+    .filter((id) => id !== "jsdelivr");
 const THREE = "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
 const link = (rel: string, href = THREE, order: "rel-first" | "href-first" = "rel-first"): string =>
-  order === "rel-first" ? `<link rel="${rel}" href="${href}">` : `<link href="${href}" rel="${rel}">`;
+  order === "rel-first"
+    ? `<link rel="${rel}" href="${href}">`
+    : `<link href="${href}" rel="${rel}">`;
 
 describe("a link that only describes or relates a URL is not a vendor loaded", () => {
   test("canonical, alternate, author, license, help, next, prev, icon and manifest", () => {
-    for (const rel of ["canonical", "alternate", "author", "license", "help", "next", "prev", "icon", "apple-touch-icon", "me", "manifest", "search", "alternate stylesheet-less", ""]) {
+    for (const rel of [
+      "canonical",
+      "alternate",
+      "author",
+      "license",
+      "help",
+      "next",
+      "prev",
+      "icon",
+      "apple-touch-icon",
+      "me",
+      "manifest",
+      "search",
+      "alternate stylesheet-less",
+      "",
+    ]) {
       for (const order of ["rel-first", "href-first"] as const) {
         expect([rel, order, ids(page(link(rel, THREE, order)))]).toEqual([rel, order, []]);
       }
@@ -32,17 +53,37 @@ describe("a link that only describes or relates a URL is not a vendor loaded", (
 
 describe("a link that loads its resource still counts", () => {
   test("stylesheet, preload, modulepreload, prefetch, prerender, preconnect and dns-prefetch, in either attribute order, any case, among other tokens", () => {
-    for (const rel of ["stylesheet", "preload", "modulepreload", "prefetch", "prerender", "preconnect", "dns-prefetch", "MODULEPRELOAD", "  preload  ", "alternate stylesheet", "preload prefetch"]) {
+    for (const rel of [
+      "stylesheet",
+      "preload",
+      "modulepreload",
+      "prefetch",
+      "prerender",
+      "preconnect",
+      "dns-prefetch",
+      "MODULEPRELOAD",
+      "  preload  ",
+      "alternate stylesheet",
+      "preload prefetch",
+    ]) {
       for (const order of ["rel-first", "href-first"] as const) {
-        expect([rel, order, ids(page(link(rel, THREE, order)))]).toEqual([rel, order, expect.arrayContaining(["threejs"])]);
+        expect([rel, order, ids(page(link(rel, THREE, order)))]).toEqual([
+          rel,
+          order,
+          expect.arrayContaining(["threejs"]),
+        ]);
       }
     }
     expect(ids(page(`<link rel=modulepreload href="${THREE}">`))).toContain("threejs");
   });
 
   test("a stylesheet detector still reads its link, and a describing link beside a real script src does not hide it", () => {
-    expect(ids(page(`<link rel="stylesheet" href="https://example.com/css/bulma.min.css">`))).toContain("bulma");
-    expect(ids(page(link("canonical") + `<script type="module" src="${THREE}"></script>`))).toContain("threejs");
+    expect(
+      ids(page(`<link rel="stylesheet" href="https://example.com/css/bulma.min.css">`)),
+    ).toContain("bulma");
+    expect(
+      ids(page(link("canonical") + `<script type="module" src="${THREE}"></script>`)),
+    ).toContain("threejs");
   });
 });
 

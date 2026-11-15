@@ -78,10 +78,7 @@ export function addWafSuspectPage(
   const next: WafSuspectSummary = summary
     ? { ...summary, pages: [...summary.pages], providers: [...summary.providers] }
     : { total: 0, pages: [], providers: [] };
-  if (
-    next.pages.length < MAX_WAF_BLOCKED_PAGES &&
-    !next.pages.some((p) => p.url === page.url)
-  ) {
+  if (next.pages.length < MAX_WAF_BLOCKED_PAGES && !next.pages.some((p) => p.url === page.url)) {
     next.pages.push(page);
   }
   next.total += 1;

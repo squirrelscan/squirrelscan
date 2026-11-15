@@ -91,7 +91,7 @@ describe("health score is unchanged by the output caps (repo#2320)", () => {
     const capped = run(sitemapCoverageRule, sitemapCtx([`${BASE}/`], orphans, 250_000));
     const orphanCheck = capped.find((c) => c.name === "sitemap-orphans")!;
     const uncapped = capped.map((c) =>
-      c === orphanCheck ? { ...c, items: orphans.map((id) => ({ id })), details: {} } : c
+      c === orphanCheck ? { ...c, items: orphans.map((id) => ({ id })), details: {} } : c,
     );
     expect(orphanCheck.status).toBe("warn");
     expect(score(sitemapCoverageRule, capped)).toBe(score(sitemapCoverageRule, uncapped));
@@ -134,7 +134,9 @@ describe("health score is unchanged by source-map grouping (repo#2341)", () => {
       } as unknown as RuleContext).map((c) => ({ ...c, pageUrl: url }));
       after.push(...checks);
       // What the rule emitted per page before: one check with every map.
-      const maps = checks.filter((c) => c.name === "source-maps-exposed").flatMap((c) => c.items ?? []);
+      const maps = checks
+        .filter((c) => c.name === "source-maps-exposed")
+        .flatMap((c) => c.items ?? []);
       before.push(
         ...(maps.length > 0
           ? [
@@ -146,11 +148,13 @@ describe("health score is unchanged by source-map grouping (repo#2341)", () => {
                 pageUrl: url,
               },
             ]
-          : checks)
+          : checks),
       );
     }
     expect(after.filter((c) => c.status === "warn").length).toBe(7);
-    expect(after.filter((c) => c.status === "pass")).toEqual(before.filter((c) => c.status === "pass"));
+    expect(after.filter((c) => c.status === "pass")).toEqual(
+      before.filter((c) => c.status === "pass"),
+    );
     expect(score(sourceMapsRule, after)).toBe(score(sourceMapsRule, before));
   });
 });

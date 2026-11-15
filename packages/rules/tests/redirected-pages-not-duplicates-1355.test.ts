@@ -15,7 +15,9 @@ const BASE = "https://shop.example";
 const doc = (title: string, description: string) =>
   `<!doctype html><html lang="en"><head><title>${title}</title><meta name="description" content="${description}"></head><body><h1>${title}</h1></body></html>`;
 
-function site(pages: Array<{ url: string; finalUrl?: string; title: string; description: string }>): SiteData {
+function site(
+  pages: Array<{ url: string; finalUrl?: string; title: string; description: string }>,
+): SiteData {
   return {
     baseUrl: BASE,
     pages: pages.map((p) => ({

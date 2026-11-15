@@ -115,7 +115,9 @@ async function crawl(
       retryCount: 0,
     }),
   );
-  const crawler = await Effect.runPromise(createCrawler({ config: { ...config, documentFetcher }, storage }));
+  const crawler = await Effect.runPromise(
+    createCrawler({ config: { ...config, documentFetcher }, storage }),
+  );
   await Effect.runPromise(crawler.resumeFromStorage(crawlId));
   const meta = await Effect.runPromise(storage.getCrawl(crawlId));
   return { sent, meta };

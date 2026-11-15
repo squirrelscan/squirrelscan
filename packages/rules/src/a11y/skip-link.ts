@@ -23,7 +23,9 @@ export const SKIP_LINK_SELECTOR =
  */
 export function hasSkipLinkText(text: string): boolean {
   const lower = text.toLowerCase();
-  return lower.includes("skip") || lower.includes("jump to content") || lower.includes("go to main");
+  return (
+    lower.includes("skip") || lower.includes("jump to content") || lower.includes("go to main")
+  );
 }
 
 export const skipLinkRule: Rule = {
@@ -93,9 +95,7 @@ export const skipLinkRule: Rule = {
       const html = headings.length > 0 ? serializedPrefix(body, need) : "";
       for (const hOuterHTML of outers) {
         // Check if heading appears early in the document
-        const position = html
-          .slice(0, EARLY_HEADING_LIMIT + hOuterHTML.length)
-          .indexOf(hOuterHTML);
+        const position = html.slice(0, EARLY_HEADING_LIMIT + hOuterHTML.length).indexOf(hOuterHTML);
         // Consider "early" if within first 2000 chars (allows for nav, but not much content)
         if (position >= 0 && position < EARLY_HEADING_LIMIT) {
           bypassMethods.push("early heading");
@@ -113,8 +113,7 @@ export const skipLinkRule: Rule = {
     // Evaluate results
     // Pass if: skip link exists OR (main landmark + nav landmark) OR (main + early heading)
     const hasSkipLink =
-      bypassMethods.includes("skip link") ||
-      bypassMethods.includes("skip link (text match)");
+      bypassMethods.includes("skip link") || bypassMethods.includes("skip link (text match)");
     const hasMainLandmark = bypassMethods.includes("<main> landmark");
     const hasNavLandmark = bypassMethods.includes("<nav> landmark");
     const hasEarlyHeading = bypassMethods.includes("early heading");
@@ -146,8 +145,7 @@ export const skipLinkRule: Rule = {
         message: "No bypass mechanism for repetitive content",
         details: {
           found: bypassMethods.length > 0 ? bypassMethods : ["none"],
-          suggestion:
-            "Add skip link or ensure <main> landmark with <nav> landmark",
+          suggestion: "Add skip link or ensure <main> landmark with <nav> landmark",
         },
       });
     }

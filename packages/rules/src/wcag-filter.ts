@@ -17,7 +17,8 @@ export function wcagLevelDisablePatterns(
   const out: string[] = [];
   for (const meta of metas) {
     if (meta.category !== "a11y") continue;
-    if (!meta.wcag || meta.wcag.length === 0 || !meetsWcagTarget(meta.wcag, target)) out.push(meta.id);
+    if (!meta.wcag || meta.wcag.length === 0 || !meetsWcagTarget(meta.wcag, target))
+      out.push(meta.id);
   }
   return out.sort();
 }

@@ -714,7 +714,9 @@ function buildSlimReport(
               exclude: report.partialAudit.exclude,
               includedCategories: report.partialAudit.includedCategories,
               // repo#3093: the WCAG level the run's accessibility rules were narrowed to.
-              ...(isWcagLevel(report.partialAudit.wcagLevel) ? { wcagLevel: report.partialAudit.wcagLevel } : {}),
+              ...(isWcagLevel(report.partialAudit.wcagLevel)
+                ? { wcagLevel: report.partialAudit.wcagLevel }
+                : {}),
             },
           }
         : {}),
@@ -800,9 +802,7 @@ function buildSlimReport(
       ? { rateLimited: report.rateLimited }
       : {}),
     ...(report.refusedFetches?.length ? { refusedFetches: report.refusedFetches } : {}),
-    ...(report.undecodableFetches?.length
-      ? { undecodableFetches: report.undecodableFetches }
-      : {}),
+    ...(report.undecodableFetches?.length ? { undecodableFetches: report.undecodableFetches } : {}),
     ...(safeWafBlocked(report) ? { wafBlocked: safeWafBlocked(report)! } : {}),
     ...(safeWafSuspect(report) ? { wafSuspect: safeWafSuspect(report)! } : {}),
     ...(report.cacheStats && report.cacheStats.hits > 0 ? { cacheStats: report.cacheStats } : {}),

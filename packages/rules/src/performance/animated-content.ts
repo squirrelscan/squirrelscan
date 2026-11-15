@@ -10,9 +10,7 @@ export const optionsSchema = z.object({
   gif_size_threshold_kb: z
     .number()
     .default(100)
-    .describe(
-      "GIF size threshold in KB above which to suggest video conversion"
-    ),
+    .describe("GIF size threshold in KB above which to suggest video conversion"),
 });
 
 export const animatedContentRule: Rule = {
@@ -62,8 +60,7 @@ export const animatedContentRule: Rule = {
       const type = source.getAttribute("type") || "";
 
       if (srcset.toLowerCase().includes(".gif") || type === "image/gif") {
-        const filename =
-          srcset.split("/").pop()?.split("?")[0]?.split(" ")[0] || srcset;
+        const filename = srcset.split("/").pop()?.split("?")[0]?.split(" ")[0] || srcset;
         if (!gifImages.includes(filename)) {
           gifImages.push(filename);
         }
@@ -101,11 +98,7 @@ export const animatedContentRule: Rule = {
 
       for (const source of sources) {
         const type = source.getAttribute("type") || "";
-        if (
-          type.includes("webm") ||
-          type.includes("av1") ||
-          type.includes("hevc")
-        ) {
+        if (type.includes("webm") || type.includes("av1") || type.includes("hevc")) {
           hasModernCodec = true;
           break;
         }

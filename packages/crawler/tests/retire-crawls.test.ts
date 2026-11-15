@@ -147,9 +147,7 @@ describe("retireCrawls", () => {
 
     await run(store.retireCrawls([old]));
     const remaining = await run(store.getPages(old));
-    expect(remaining.map((p) => p.normalizedUrl)).toEqual([
-      "https://e.test/gone",
-    ]);
+    expect(remaining.map((p) => p.normalizedUrl)).toEqual(["https://e.test/gone"]);
   });
 
   test("keeps the crawl row, so the audit is still listed", async () => {
@@ -197,7 +195,7 @@ describe("retireCrawls", () => {
         error: null,
         redirectTarget: null,
         checkedAt: 1_000,
-      } as never)
+      } as never),
     );
     // getLinksByPage joins links to link_appearances, so the page mapping has
     // to exist for the read that reuseCachedPage makes.
@@ -209,7 +207,7 @@ describe("retireCrawls", () => {
         position: "body",
         rel: null,
         isNofollow: false,
-      } as never)
+      } as never),
     );
     await run(store.retireCrawls([old]));
 
@@ -226,9 +224,7 @@ describe("retireCrawls", () => {
     const at = 1_700_000_000_000;
     await run(store.retireCrawls([old], at));
 
-    const byId = new Map(
-      (await run(store.listCrawls())).map((c) => [c.id, c])
-    );
+    const byId = new Map((await run(store.listCrawls())).map((c) => [c.id, c]));
     // The stamp is what lets `report` say "reclaimed on <date>" instead of
     // rebuilding an empty report from the pages that survive.
     expect(byId.get(old)?.retiredAt).toBe(at);
@@ -250,7 +246,7 @@ describe("retireCrawls", () => {
       db.transaction(() => {
         Effect.runSync(Effect.orDie(store.retireCrawls([old])));
         throw new Error("abort");
-      })()
+      })(),
     ).toThrow("abort");
 
     const crawl = (await run(store.listCrawls())).find((c) => c.id === old);

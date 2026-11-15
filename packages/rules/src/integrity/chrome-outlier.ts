@@ -135,7 +135,7 @@ function evaluate(entries: Entry[], suppressed: Set<string>, opts: Options): Rul
   if (entries.length < opts.minPages) {
     return skipped(
       `Need >=${opts.minPages} pages to establish a site template`,
-      "Insufficient pages for a template norm"
+      "Insufficient pages for a template norm",
     );
   }
 
@@ -160,7 +160,7 @@ function evaluate(entries: Entry[], suppressed: Set<string>, opts: Options): Rul
   if (agreement < opts.minAgreement) {
     return skipped(
       "No dominant site template: the pages use several distinct templates",
-      "No dominant template cluster"
+      "No dominant template cluster",
     );
   }
 
@@ -195,7 +195,8 @@ function evaluate(entries: Entry[], suppressed: Set<string>, opts: Options): Rul
         {
           name: CHECK_NAME,
           status: "pass",
-          message: "All pages share the site's dominant template or a sizeable template of their own",
+          message:
+            "All pages share the site's dominant template or a sizeable template of their own",
         },
       ],
     };
@@ -235,18 +236,19 @@ function readOptions(ctx: RuleContext): Options {
 async function runViaSiteQuery(
   siteQuery: SiteQuery,
   ctx: RuleContext,
-  opts: Options
+  opts: Options,
 ): Promise<RuleResult> {
   if (siteQuery.pageCount() < opts.minPages) {
     return skipped(
       `Need >=${opts.minPages} pages to establish a site template`,
-      "Insufficient pages for a template norm"
+      "Insufficient pages for a template norm",
     );
   }
   const collected = ctx.collectedSignals;
   const fps: { url: string; fp: PageFingerprint }[] = [];
   if (collected) {
-    for (const rec of collected.pages) if (rec.fingerprint) fps.push({ url: rec.url, fp: rec.fingerprint });
+    for (const rec of collected.pages)
+      if (rec.fingerprint) fps.push({ url: rec.url, fp: rec.fingerprint });
   }
   const fpByUrl = new Map(fps.map((e) => [e.url, e.fp]));
   const entries: Entry[] = [];
@@ -315,7 +317,7 @@ export const chromeOutlierRule: Rule = {
     if (pages.length < opts.minPages) {
       return skipped(
         `Need >=${opts.minPages} pages to establish a site template`,
-        "Insufficient pages for a template norm"
+        "Insufficient pages for a template norm",
       );
     }
     const entries: Entry[] = [];

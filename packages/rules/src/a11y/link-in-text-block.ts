@@ -58,8 +58,7 @@ function ownText(block: Element, cache: Map<Element, boolean>): boolean {
 function accessibleName(link: Element): string {
   const text = link.textContent?.trim();
   if (text) return text;
-  const label =
-    link.getAttribute("aria-label")?.trim() || link.getAttribute("title")?.trim();
+  const label = link.getAttribute("aria-label")?.trim() || link.getAttribute("title")?.trim();
   return label || link.getAttribute("href") || "link";
 }
 
@@ -67,8 +66,7 @@ export const linkInTextBlockRule: Rule = {
   meta: {
     id: "a11y/link-in-text-block",
     name: "Link in Text Block",
-    description:
-      "Checks that links in text blocks are visually distinguishable",
+    description: "Checks that links in text blocks are visually distinguishable",
     solution:
       "Links within text blocks must be distinguishable by more than just color (for color-blind users). Use underlines, bold, borders, or other visual indicators. Exception: Links can rely on color alone if the contrast ratio between link and surrounding text is at least 3:1 and you provide additional cues on hover/focus.",
     category: "a11y",
@@ -102,14 +100,12 @@ export const linkInTextBlockRule: Rule = {
       const style = link.getAttribute("style") || "";
       const hasNoUnderlineStyle =
         style.toLowerCase().includes("text-decoration") &&
-        (style.toLowerCase().includes("none") ||
-          !style.toLowerCase().includes("underline"));
+        (style.toLowerCase().includes("none") || !style.toLowerCase().includes("underline"));
 
       // Also check for common class patterns that remove underlines
       const className = link.getAttribute("class") || "";
       const hasNoUnderlineClass =
-        className.includes("no-underline") ||
-        className.includes("text-decoration-none");
+        className.includes("no-underline") || className.includes("text-decoration-none");
 
       // Another visual cue the solution text accepts.
       const hasCue = /(^|[;\s])(border|background)/i.test(style);
@@ -129,8 +125,7 @@ export const linkInTextBlockRule: Rule = {
         }),
         details: {
           note: "Links need visual distinction beyond color",
-          suggestion:
-            "Ensure 3:1 contrast with surrounding text or add underlines",
+          suggestion: "Ensure 3:1 contrast with surrounding text or add underlines",
           ...(linksWithoutUnderline.length > 10
             ? { additional: linksWithoutUnderline.length - 10 }
             : {}),

@@ -39,9 +39,7 @@ const crawlMeta = (startedAt: number): Omit<CrawlMetadata, "id"> => ({
 
 const run = <A, E>(e: Effect.Effect<A, E, never>) => Effect.runPromise(e);
 
-async function withStorage<T>(
-  fn: (s: SQLiteStorage, crawlId: string) => Promise<T>
-): Promise<T> {
+async function withStorage<T>(fn: (s: SQLiteStorage, crawlId: string) => Promise<T>): Promise<T> {
   const dir = join(mkdtempSync(join(tmpdir(), "squirrelscan-em-")), "store.sqlite");
   const storage = new SQLiteStorage(dir);
   try {
@@ -118,7 +116,7 @@ describe("entity map storage", () => {
             { key: "id:http://x.test/#org", normalizedUrl: "http://x.test/c" },
             { key: "syn:BreadcrumbList|name:home", normalizedUrl: "http://x.test/a" },
           ],
-        })
+        }),
       );
 
       const rows = await run(storage.getEntityMapRows(crawlId));
@@ -153,11 +151,9 @@ describe("entity map storage", () => {
       expect(dangling.morePages).toBe(2);
 
       expect(rows.occurrences).toHaveLength(4);
-      expect(
-        rows.occurrences
-          .filter((o) => o.key === ORG.key)
-          .map((o) => o.normalizedUrl)
-      ).toEqual(["http://x.test/a", "http://x.test/b", "http://x.test/c"]);
+      expect(rows.occurrences.filter((o) => o.key === ORG.key).map((o) => o.normalizedUrl)).toEqual(
+        ["http://x.test/a", "http://x.test/b", "http://x.test/c"],
+      );
     });
   });
 
@@ -178,7 +174,7 @@ describe("entity map storage", () => {
             },
           ],
           occurrences: [{ key: ORG.key, normalizedUrl: "http://x.test/a" }],
-        })
+        }),
       );
 
       // `squirrel analyze` re-running over the same crawl after the site
@@ -188,7 +184,7 @@ describe("entity map storage", () => {
           nodes: [ORG],
           edges: [],
           occurrences: [{ key: ORG.key, normalizedUrl: "http://x.test/a" }],
-        })
+        }),
       );
 
       const rows = await run(storage.getEntityMapRows(crawlId));
@@ -205,7 +201,7 @@ describe("entity map storage", () => {
           nodes: [ORG],
           edges: [],
           occurrences: [{ key: ORG.key, normalizedUrl: "http://x.test/a" }],
-        })
+        }),
       );
       await run(storage.saveEntityMap(crawlId, { nodes: [], edges: [], occurrences: [] }));
 
@@ -242,7 +238,7 @@ describe("entity map storage", () => {
             },
           ],
           occurrences: [{ key: ORG.key, normalizedUrl: "http://x.test/a" }],
-        })
+        }),
       );
 
       await run(storage.retireCrawls([crawlId]));
@@ -270,7 +266,9 @@ describe("entity edge pages across a schema upgrade (#492)", () => {
     morePages: 0,
   };
 
-  async function storeWithoutEdgePages(version: number): Promise<{ path: string; crawlId: string }> {
+  async function storeWithoutEdgePages(
+    version: number,
+  ): Promise<{ path: string; crawlId: string }> {
     const path = join(mkdtempSync(join(tmpdir(), "squirrelscan-em-")), "store.sqlite");
     const storage = new SQLiteStorage(path);
     await run(storage.init());
@@ -281,7 +279,7 @@ describe("entity edge pages across a schema upgrade (#492)", () => {
     db.exec("ALTER TABLE entity_edges DROP COLUMN pages");
     db.exec("ALTER TABLE entity_edges DROP COLUMN more_pages");
     db.prepare(
-      "INSERT INTO entity_edges (crawl_id, source, predicate, target, dangling, occurrences) VALUES (?, ?, ?, ?, 1, 1)"
+      "INSERT INTO entity_edges (crawl_id, source, predicate, target, dangling, occurrences) VALUES (?, ?, ?, ?, 1, 1)",
     ).run(crawlId, EDGE.source, EDGE.predicate, EDGE.target);
     db.exec("DELETE FROM schema_version");
     db.prepare("INSERT INTO schema_version (version) VALUES (?)").run(version);
@@ -308,7 +306,7 @@ describe("entity edge pages across a schema upgrade (#492)", () => {
             nodes: [ORG],
             edges: [EDGE],
             occurrences: [{ key: ORG.key, normalizedUrl: "http://x.test/a" }],
-          })
+          }),
         );
         const after = await run(storage.getEntityMapRows(crawlId));
         expect(after.edges[0]!.pages).toEqual(["http://x.test/a"]);
@@ -344,7 +342,7 @@ describe("entity map presence and per-page figures (repo#2105)", () => {
             { url: "http://x.test/a", entityCount: 2, references: [CRUMB.key] },
             { url: "http://x.test/empty", entityCount: 0, references: [] },
           ],
-        })
+        }),
       );
       const rows = await run(storage.getEntityMapRows(crawlId));
       expect(rows.pages).toEqual([

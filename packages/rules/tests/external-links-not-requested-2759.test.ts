@@ -45,7 +45,7 @@ const sample = [
 
 describe("links/broken-external-links: links never requested (repo#2759)", () => {
   test("listed as not requested beside the pass for the ones checked, and not over the limit", async () => {
-    const { checks } = (await brokenExternalLinksRule.run(
+    const { checks } = await brokenExternalLinksRule.run(
       ctx([ok("https://partner.example/")], {
         found: 3,
         checked: 1,
@@ -53,7 +53,7 @@ describe("links/broken-external-links: links never requested (repo#2759)", () =>
         notRequested: 2,
         notRequestedLinks: sample,
       }),
-    ));
+    );
     expect(checks.map((c) => `${c.name}:${c.status}`)).toEqual([
       "broken-external-links:pass",
       "not-requested-external-links:info",
@@ -74,7 +74,7 @@ describe("links/broken-external-links: links never requested (repo#2759)", () =>
   });
 
   test("the over-limit count leaves them out", async () => {
-    const { checks } = (await brokenExternalLinksRule.run(
+    const { checks } = await brokenExternalLinksRule.run(
       ctx([ok("https://a.example/"), ok("https://b.example/")], {
         found: 10,
         checked: 5,
@@ -82,7 +82,7 @@ describe("links/broken-external-links: links never requested (repo#2759)", () =>
         notRequested: 2,
         notRequestedLinks: sample,
       }),
-    ));
+    );
     const overCap = checks.find((c) => c.skipReason === EXTERNAL_LINKS_OVER_CAP_SKIP_REASON);
     expect(overCap?.message).toBe(
       "3 of 8 external link(s) were not checked: over this audit's limit of 5, which checks the most-linked first",
@@ -90,16 +90,16 @@ describe("links/broken-external-links: links never requested (repo#2759)", () =>
   });
 
   test("every external link not requested: only the not-requested line, no pass and no not-checked", async () => {
-    const { checks } = (await brokenExternalLinksRule.run(
+    const { checks } = await brokenExternalLinksRule.run(
       ctx([], { found: 2, checked: 0, cap: 200, notRequested: 2, notRequestedLinks: sample }),
-    ));
+    );
     expect(checks.map((c) => `${c.name}:${c.status}`)).toEqual([
       "not-requested-external-links:info",
     ]);
   });
 
   test("a sample shorter than the count says how many it lists", async () => {
-    const { checks } = (await brokenExternalLinksRule.run(
+    const { checks } = await brokenExternalLinksRule.run(
       ctx([ok("https://partner.example/")], {
         found: 81,
         checked: 1,
@@ -107,7 +107,7 @@ describe("links/broken-external-links: links never requested (repo#2759)", () =>
         notRequested: 80,
         notRequestedLinks: sample,
       }),
-    ));
+    );
     expect(checks.find((c) => c.name === "not-requested-external-links")?.details).toEqual({
       notRequested: 80,
       listed: 2,
@@ -115,7 +115,7 @@ describe("links/broken-external-links: links never requested (repo#2759)", () =>
   });
 
   test("a sample entry linked from more pages than it lists carries the page count", async () => {
-    const { checks } = (await brokenExternalLinksRule.run(
+    const { checks } = await brokenExternalLinksRule.run(
       ctx([ok("https://partner.example/")], {
         found: 2,
         checked: 1,
@@ -129,7 +129,7 @@ describe("links/broken-external-links: links never requested (repo#2759)", () =>
           },
         ],
       }),
-    ));
+    );
     expect(checks.find((c) => c.name === "not-requested-external-links")?.items).toEqual([
       { id: "https://mail.example/unsubscribe?token=…", sourcePages: [`${BASE}/`], pageCount: 40 },
     ]);
@@ -158,7 +158,7 @@ describe("links/broken-external-links: links never requested (repo#2759)", () =>
       notRequestedLinks: sample,
     });
     (context.site as { pages: unknown }).pages = pages;
-    const { checks } = (await brokenExternalLinksRule.run(context));
+    const { checks } = await brokenExternalLinksRule.run(context);
     expect(checks.map((c) => `${c.name}:${c.status}`)).toEqual([
       "not-requested-external-links:info",
       "broken-external-links:skipped",
@@ -169,9 +169,9 @@ describe("links/broken-external-links: links never requested (repo#2759)", () =>
   });
 
   test("links/dead-links says why nothing was verified when every link was left out", async () => {
-    const { checks } = (await deadLinksRule.run(
+    const { checks } = await deadLinksRule.run(
       ctx([], { found: 2, checked: 0, cap: 200, notRequested: 2, notRequestedLinks: sample }),
-    ));
+    );
     expect(checks.map((c) => c.message)).toEqual([
       "No external links were verified: all 2 look like actions or carry a token, so they were not requested",
     ]);
@@ -181,7 +181,7 @@ describe("links/broken-external-links: links never requested (repo#2759)", () =>
     const refusedLinks = [
       { href: "http://192.168.1.1/admin", sourcePages: [`${BASE}/`], pageCount: 1 },
     ];
-    const { checks } = (await brokenExternalLinksRule.run(
+    const { checks } = await brokenExternalLinksRule.run(
       ctx([ok("https://partner.example/")], {
         found: 2,
         checked: 1,
@@ -190,7 +190,7 @@ describe("links/broken-external-links: links never requested (repo#2759)", () =>
         refusedByUrl: 1,
         refusedLinks,
       }),
-    ));
+    );
     // Not over the limit of 1 either: the refused link never took a slot.
     expect(checks.map((c) => `${c.name}:${c.status}`)).toEqual([
       "broken-external-links:pass",
@@ -208,7 +208,7 @@ describe("links/broken-external-links: links never requested (repo#2759)", () =>
   });
 
   test("every link refused or left out: only those lines, no not-checked skip (pub#770)", async () => {
-    const { checks } = (await brokenExternalLinksRule.run(
+    const { checks } = await brokenExternalLinksRule.run(
       ctx([], {
         found: 3,
         checked: 0,
@@ -221,7 +221,7 @@ describe("links/broken-external-links: links never requested (repo#2759)", () =>
           { href: "http://192.168.1.1/admin", sourcePages: [`${BASE}/`], pageCount: 1 },
         ],
       }),
-    ));
+    );
     expect(checks.map((c) => `${c.name}:${c.status}`)).toEqual([
       "not-requested-external-links:info",
       "refused-external-links:info",
@@ -229,9 +229,9 @@ describe("links/broken-external-links: links never requested (repo#2759)", () =>
   });
 
   test("nothing left out: no not-requested line", async () => {
-    const { checks } = (await brokenExternalLinksRule.run(
+    const { checks } = await brokenExternalLinksRule.run(
       ctx([ok("https://partner.example/")], { found: 1, checked: 1, cap: 200 }),
-    ));
+    );
     expect(checks.map((c) => c.name)).toEqual(["broken-external-links"]);
   });
 });
@@ -254,7 +254,7 @@ describe("links/broken-external-links: where never-requested links sit (#2307)",
         },
       },
     ] as never;
-    const { checks } = (await brokenExternalLinksRule.run(c));
+    const { checks } = await brokenExternalLinksRule.run(c);
     const item = checks.find((x) => x.name === "not-requested-external-links")!.items![0]!;
 
     expect(item.id).toBe(UNSUBSCRIBE);
@@ -263,7 +263,7 @@ describe("links/broken-external-links: where never-requested links sit (#2307)",
   });
 
   test("without section data the item is as it was", async () => {
-    const { checks } = (await brokenExternalLinksRule.run(
+    const { checks } = await brokenExternalLinksRule.run(
       ctx([ok("https://partner.example/")], {
         found: 2,
         checked: 1,
@@ -271,7 +271,7 @@ describe("links/broken-external-links: where never-requested links sit (#2307)",
         notRequested: 1,
         notRequestedLinks: [sample[0]!],
       } as SiteData["externalLinkCheck"]),
-    ));
+    );
     const item = checks.find((x) => x.name === "not-requested-external-links")!.items![0]!;
 
     expect(item).toEqual({ id: UNSUBSCRIBE, sourcePages: [`${BASE}/`, `${BASE}/about`] });
@@ -297,9 +297,9 @@ describe("links/broken-external-links: masked hrefs still find their section (#2
         },
       },
     ] as never;
-    const item = (await brokenExternalLinksRule
-      .run(c))
-      .checks.find((x) => x.name === "not-requested-external-links")!.items![0]!;
+    const item = (await brokenExternalLinksRule.run(c)).checks.find(
+      (x) => x.name === "not-requested-external-links",
+    )!.items![0]!;
 
     expect(item.id).toBe(masked);
     expect(item.label).toBe(`${masked}, linked in the footer`);

@@ -6,7 +6,11 @@ import { existsSync, readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
 
-import { findAssetLayoutProblems, findStrayStrings, findTopologyProblems } from "../src/artifact-shape";
+import {
+  findAssetLayoutProblems,
+  findStrayStrings,
+  findTopologyProblems,
+} from "../src/artifact-shape";
 
 const ASSETS = join(import.meta.dir, "../assets");
 const ARTIFACT = join(ASSETS, "classifier-v2.json");
@@ -39,10 +43,16 @@ describe("findStrayStrings", () => {
       findStrayStrings({ ...valid, region: { ...valid.region, trees: "some page words" } }),
     ).toEqual(["region.trees value"]);
     expect(
-      findStrayStrings({ ...valid, region: { ...valid.region, tokenStreams: ["classid", "page text"] } }),
+      findStrayStrings({
+        ...valid,
+        region: { ...valid.region, tokenStreams: ["classid", "page text"] },
+      }),
     ).toEqual(["region.tokenStreams entry"]);
     expect(
-      findStrayStrings({ ...valid, region: { ...valid.region, tokenStreams: ["classid", "text"] } }),
+      findStrayStrings({
+        ...valid,
+        region: { ...valid.region, tokenStreams: ["classid", "text"] },
+      }),
     ).toEqual([]);
   });
 });
@@ -78,17 +88,23 @@ describe("install topology", () => {
   });
 
   test("rejects a missing head and inconsistent counts", () => {
-    expect(findTopologyProblems({ region: head, pageType: head })).toEqual(["section head missing"]);
-    expect(
-      findTopologyProblems({ ...good, region: { ...head, numClass: 3 } }),
-    ).toEqual(["region.numClass does not match classes"]);
+    expect(findTopologyProblems({ region: head, pageType: head })).toEqual([
+      "section head missing",
+    ]);
+    expect(findTopologyProblems({ ...good, region: { ...head, numClass: 3 } })).toEqual([
+      "region.numClass does not match classes",
+    ]);
     expect(
       findTopologyProblems({ ...good, pageType: { ...head, classThresholds: [0.5] } }),
     ).toEqual(["pageType.classThresholds length does not match classes"]);
   });
 
   test("rejects stray files in assets/", () => {
-    expect(findAssetLayoutProblems(["classifier-v2.json", "classifier-v2.manifest.json"])).toEqual([]);
-    expect(findAssetLayoutProblems(["classifier-v2.json", "old.json"])).toEqual(["unexpected file old.json"]);
+    expect(findAssetLayoutProblems(["classifier-v2.json", "classifier-v2.manifest.json"])).toEqual(
+      [],
+    );
+    expect(findAssetLayoutProblems(["classifier-v2.json", "old.json"])).toEqual([
+      "unexpected file old.json",
+    ]);
   });
 });

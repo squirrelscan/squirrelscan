@@ -51,10 +51,7 @@ export const SIGN_IN_DOCS_URL = "https://docs.squirrelscan.com/guides/failed-aud
  * is in {@link SIGN_IN_FIRST_LABELS}.
  */
 export function isSignInHost(host: string): boolean {
-  const bare = host
-    .toLowerCase()
-    .replace(/:\d+$/, "")
-    .replace(/\.$/, "");
+  const bare = host.toLowerCase().replace(/:\d+$/, "").replace(/\.$/, "");
   if (SIGN_IN_HOSTS.some((h) => (h.startsWith(".") ? bare.endsWith(h) : bare === h))) return true;
   const labels = bare.split(".");
   return labels.length > 2 && SIGN_IN_FIRST_LABELS.has(labels[0] ?? "");

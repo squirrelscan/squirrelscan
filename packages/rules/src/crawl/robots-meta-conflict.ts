@@ -53,7 +53,7 @@ function buildChecks(conflicts: string[], redundantNoindex: string[]): CheckResu
 // (mirrors the legacy path).
 async function runViaSiteQuery(
   siteQuery: SiteQuery,
-  robotsTxt: RobotsTxtData
+  robotsTxt: RobotsTxtData,
 ): Promise<RuleResult> {
   const conflicts: string[] = [];
   const redundantNoindex: string[] = [];

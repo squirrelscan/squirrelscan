@@ -11,7 +11,15 @@ import {
   type FrontierStatus,
 } from "../src/storage";
 
-const CRAWL: CrawlStatus[] = ["running", "paused", "crawled", "analyzed", "completed", "stopped", "failed"];
+const CRAWL: CrawlStatus[] = [
+  "running",
+  "paused",
+  "crawled",
+  "analyzed",
+  "completed",
+  "stopped",
+  "failed",
+];
 const FRONTIER: FrontierStatus[] = ["pending", "fetching", "done", "failed", "skipped"];
 
 // from -> the statuses it may be written to, spelled out edge by edge.
@@ -45,7 +53,8 @@ describe("crawl status transitions", () => {
 
   test("every status has an entry, and every entry lists real statuses", () => {
     expect(Object.keys(CRAWL_STATUS_TRANSITIONS).sort()).toEqual([...CRAWL].sort());
-    for (const froms of Object.values(CRAWL_STATUS_TRANSITIONS)) for (const f of froms) expect(CRAWL).toContain(f);
+    for (const froms of Object.values(CRAWL_STATUS_TRANSITIONS))
+      for (const f of froms) expect(CRAWL).toContain(f);
   });
 
   test("a finished crawl cannot be paused or re-finished by a late write", () => {

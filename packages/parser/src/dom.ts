@@ -64,11 +64,15 @@ export function parseHTML(
 ): ReturnType<typeof linkedomParseHTML> {
   const parsed = parseContained(args);
   if (parsed.document.documentElement) {
-    if (typeof args[0] === "string" && SHADOW_ROOT_HINT.test(args[0])) flattenDeclarativeShadowRoots(parsed.document as never);
+    if (typeof args[0] === "string" && SHADOW_ROOT_HINT.test(args[0]))
+      flattenDeclarativeShadowRoots(parsed.document as never);
     return parsed;
   }
   const [html, ...rest] = args;
-  return parseContained([`<html><head></head><body>${String(html)}</body></html>`, ...rest] as typeof args);
+  return parseContained([
+    `<html><head></head><body>${String(html)}</body></html>`,
+    ...rest,
+  ] as typeof args);
 }
 
 // ── A parse that throws does not fail the audit (#1557) ───────────────────────────────────────────────────────────────────────
@@ -105,22 +109,37 @@ export function noticesAuditedEmpty(notices: readonly string[] | undefined): boo
 
 /** The same for a document the parser degraded (its notices live beside it), or for a parsed page that carries them. */
 export function auditedEmpty(source: unknown): boolean {
-  if (typeof source === "object" && source !== null && ("parseNotices" in source || "document" in source)) {
+  if (
+    typeof source === "object" &&
+    source !== null &&
+    ("parseNotices" in source || "document" in source)
+  ) {
     const page = source as { parseNotices?: string[]; document?: unknown };
-    return noticesAuditedEmpty(page.parseNotices) || noticesAuditedEmpty(parseNotices(page.document));
+    return (
+      noticesAuditedEmpty(page.parseNotices) || noticesAuditedEmpty(parseNotices(page.document))
+    );
   }
   return noticesAuditedEmpty(parseNotices(source));
 }
 
 /** The notices of a document `parseHTML` had to degrade to parse (an empty list for any other): see {@link parseContained}. */
 export function parseNotices(document: unknown): string[] {
-  return (typeof document === "object" && document !== null ? PARSE_NOTICES.get(document) : undefined) ?? [];
+  return (
+    (typeof document === "object" && document !== null ? PARSE_NOTICES.get(document) : undefined) ??
+    []
+  );
 }
 
 /** The options linkedom builds its `Parser` with (`shared/parse-from-string.js`, HTML mode). The cut is only sound while these match. */
-const LINKEDOM_PARSER_OPTIONS = { lowerCaseAttributeNames: false, decodeEntities: true, xmlMode: false } as const;
+const LINKEDOM_PARSER_OPTIONS = {
+  lowerCaseAttributeNames: false,
+  decodeEntities: true,
+  xmlMode: false,
+} as const;
 
-function parseContained(args: Parameters<typeof linkedomParseHTML>): ReturnType<typeof linkedomParseHTML> {
+function parseContained(
+  args: Parameters<typeof linkedomParseHTML>,
+): ReturnType<typeof linkedomParseHTML> {
   return parseContainedWith(linkedomParseHTML, args);
 }
 
@@ -147,19 +166,30 @@ export function parseContainedWith(
       }
     }
     const parsed = parse("<html><head></head><body></body></html>", ...rest);
-    PARSE_NOTICES.set(parsed.document, [`the page could not be read (${error instanceof Error ? error.message.slice(0, 120) : "parse error"}), ${AUDITED_EMPTY_NOTICE_SUFFIX}`]);
+    PARSE_NOTICES.set(parsed.document, [
+      `the page could not be read (${error instanceof Error ? error.message.slice(0, 120) : "parse error"}), ${AUDITED_EMPTY_NOTICE_SUFFIX}`,
+    ]);
     return parsed;
   }
 }
 
 function cutNotices(cut: number[]): string[] {
-  const notices = cut.slice(0, MAX_PARSE_NOTICES).map((tokens) => `a class attribute of ${tokens.toLocaleString("en-US")} tokens was cut to the first ${MAX_CLASS_TOKENS.toLocaleString("en-US")} to read the page`);
-  if (cut.length > MAX_PARSE_NOTICES) notices.push(`${(cut.length - MAX_PARSE_NOTICES).toLocaleString("en-US")} more class attributes were cut the same way`);
+  const notices = cut
+    .slice(0, MAX_PARSE_NOTICES)
+    .map(
+      (tokens) =>
+        `a class attribute of ${tokens.toLocaleString("en-US")} tokens was cut to the first ${MAX_CLASS_TOKENS.toLocaleString("en-US")} to read the page`,
+    );
+  if (cut.length > MAX_PARSE_NOTICES)
+    notices.push(
+      `${(cut.length - MAX_PARSE_NOTICES).toLocaleString("en-US")} more class attributes were cut the same way`,
+    );
   return notices;
 }
 
 /** The five characters the HTML spec splits a class value on (tab, line feed, form feed, carriage return, space): not JavaScript's `\s`. */
-const isClassSpace = (code: number): boolean => code === 32 || code === 9 || code === 10 || code === 12 || code === 13;
+const isClassSpace = (code: number): boolean =>
+  code === 32 || code === 9 || code === 10 || code === 12 || code === 13;
 /** Split a class value as HTML does; every consumer that tokenises `class` uses this, not `\s` (#1567). */
 export const CLASS_SPLIT = /[ \t\n\f\r]+/;
 
@@ -261,7 +291,10 @@ class ClassProbe extends Parser {
     const tokenizer = (this as unknown as { tokenizer?: { entityStart?: unknown } }).tokenizer;
     const entityStart = tokenizer?.entityStart;
     const known = typeof entityStart === "number" && entityStart >= 0;
-    this.take(!(cp === 32 || cp === 9 || cp === 10 || cp === 12 || cp === 13), known ? entityStart : -1);
+    this.take(
+      !(cp === 32 || cp === 9 || cp === 10 || cp === 12 || cp === 13),
+      known ? entityStart : -1,
+    );
   }
 
   override onattribend(quote: QuoteType, end: number): void {
@@ -288,7 +321,10 @@ class ClassProbe extends Parser {
  * token counts that were cut. The offsets come from the tokenizer (see {@link ClassProbe}), so what is cut is what the parse reads
  * as that value and nothing else; a page with no such attribute comes back as the same string.
  */
-export function truncateClassAttributes(html: string, limit: number): { text: string; cut: number[] } {
+export function truncateClassAttributes(
+  html: string,
+  limit: number,
+): { text: string; cut: number[] } {
   const probe = ClassProbe.create(html, limit);
   probe.write(html);
   probe.end();
@@ -318,7 +354,8 @@ const SHADOW_ID_SUFFIX = /__sr\d+(?![\w-])/g;
 export function stripShadowIdScopes(checks: unknown[], document: unknown): void {
   if (!document || !SHADOW_SCOPED_DOCUMENTS.has(document as object)) return;
   const scrub = (value: unknown, depth: number): unknown => {
-    if (typeof value === "string") return value.includes("__sr") ? value.replace(SHADOW_ID_SUFFIX, "") : value;
+    if (typeof value === "string")
+      return value.includes("__sr") ? value.replace(SHADOW_ID_SUFFIX, "") : value;
     if (depth > 6 || value === null || typeof value !== "object") return value;
     if (Array.isArray(value)) {
       for (let i = 0; i < value.length; i++) value[i] = scrub(value[i], depth + 1);
@@ -331,11 +368,39 @@ export function stripShadowIdScopes(checks: unknown[], document: unknown): void 
   for (const check of checks) scrub(check, 0);
 }
 /** Elements a browser lets host a shadow root, besides any custom element (a name with a hyphen). */
-const SHADOW_HOSTS = new Set(["article", "aside", "blockquote", "body", "div", "footer", "h1", "h2", "h3", "h4", "h5", "h6", "header", "main", "nav", "p", "section", "span"]);
+const SHADOW_HOSTS = new Set([
+  "article",
+  "aside",
+  "blockquote",
+  "body",
+  "div",
+  "footer",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "header",
+  "main",
+  "nav",
+  "p",
+  "section",
+  "span",
+]);
 const MAX_SHADOW_TEMPLATES = 5000;
 const MAX_SHADOW_DEPTH = 16;
 /** Light DOM children that render nothing, so they never replace a slot's fallback. */
-const UNRENDERED_LIGHT_TAGS = new Set(["style", "script", "template", "link", "meta", "noscript", "title", "base"]);
+const UNRENDERED_LIGHT_TAGS = new Set([
+  "style",
+  "script",
+  "template",
+  "link",
+  "meta",
+  "noscript",
+  "title",
+  "base",
+]);
 
 interface NodeLike {
   nodeType?: number;
@@ -348,13 +413,34 @@ interface NodeLike {
 }
 
 interface TemplateLike {
-  parentNode: { insertBefore(node: unknown, ref: unknown): unknown; removeChild(node: unknown): unknown; localName?: string; childNodes: ArrayLike<unknown> } | null;
+  parentNode: {
+    insertBefore(node: unknown, ref: unknown): unknown;
+    removeChild(node: unknown): unknown;
+    localName?: string;
+    childNodes: ArrayLike<unknown>;
+  } | null;
   getAttribute(name: string): string | null;
-  content?: { childNodes: ArrayLike<unknown>; querySelectorAll(selector: string): ArrayLike<unknown> };
+  content?: {
+    childNodes: ArrayLike<unknown>;
+    querySelectorAll(selector: string): ArrayLike<unknown>;
+  };
 }
 
 /** Attributes whose value is one or more ids of the SAME tree (a shadow root is its own scope for them). */
-const ID_REFERENCE_ATTRIBUTES = ["for", "aria-labelledby", "aria-describedby", "aria-controls", "aria-owns", "aria-details", "aria-activedescendant", "aria-errormessage", "aria-flowto", "headers", "list", "form"];
+const ID_REFERENCE_ATTRIBUTES = [
+  "for",
+  "aria-labelledby",
+  "aria-describedby",
+  "aria-controls",
+  "aria-owns",
+  "aria-details",
+  "aria-activedescendant",
+  "aria-errormessage",
+  "aria-flowto",
+  "headers",
+  "list",
+  "form",
+];
 
 /**
  * Ids are scoped per shadow root: the same `id="q"` in three components is not a duplicate, and a
@@ -362,7 +448,11 @@ const ID_REFERENCE_ATTRIBUTES = ["for", "aria-labelledby", "aria-describedby", "
  * so the ids of one root's content (and the references to them from inside that root) get a
  * per-root suffix, `q__sr2`, keeping every root its own namespace for the id rules.
  */
-function scopeIdsToRoot(content: NonNullable<TemplateLike["content"]>, root: number, document: object): void {
+function scopeIdsToRoot(
+  content: NonNullable<TemplateLike["content"]>,
+  root: number,
+  document: object,
+): void {
   const withIds = Array.from(content.querySelectorAll("[id]")) as NodeLike[];
   if (withIds.length === 0) return;
   SHADOW_SCOPED_DOCUMENTS.add(document);
@@ -381,7 +471,10 @@ function scopeIdsToRoot(content: NonNullable<TemplateLike["content"]>, root: num
     for (const attribute of ID_REFERENCE_ATTRIBUTES) {
       const value = el.getAttribute?.(attribute);
       if (!value) continue;
-      const scoped = value.split(/\s+/).map((token) => (ids.has(token) ? `${token}${suffix}` : token)).join(" ");
+      const scoped = value
+        .split(/\s+/)
+        .map((token) => (ids.has(token) ? `${token}${suffix}` : token))
+        .join(" ");
       if (scoped !== value) el.setAttribute?.(attribute, scoped);
     }
   }
@@ -393,15 +486,24 @@ function scopeIdsToRoot(content: NonNullable<TemplateLike["content"]>, root: num
  * named one those with a matching `slot`. Where the host supplies content, the fallback is dropped
  * so it is not checked as if it rendered.
  */
-function dropReplacedSlotFallback(content: NonNullable<TemplateLike["content"]>, host: NonNullable<TemplateLike["parentNode"]>, template: unknown): void {
+function dropReplacedSlotFallback(
+  content: NonNullable<TemplateLike["content"]>,
+  host: NonNullable<TemplateLike["parentNode"]>,
+  template: unknown,
+): void {
   const slots = Array.from(content.querySelectorAll("slot")) as NodeLike[];
   if (slots.length === 0) return;
-  const light = (Array.from(host.childNodes) as NodeLike[]).filter((n) => (n as unknown) !== template);
+  const light = (Array.from(host.childNodes) as NodeLike[]).filter(
+    (n) => (n as unknown) !== template,
+  );
   const supplied = new Set<string>();
   for (const node of light) {
     if (node.nodeType === 1) {
       // Elements a browser never renders cannot be slotted content.
-      if (UNRENDERED_LIGHT_TAGS.has(((node as { localName?: string }).localName ?? "").toLowerCase())) continue;
+      if (
+        UNRENDERED_LIGHT_TAGS.has(((node as { localName?: string }).localName ?? "").toLowerCase())
+      )
+        continue;
       supplied.add(node.getAttribute?.("slot") ?? "");
     } else if (node.nodeType === 3 && (node.textContent ?? "").trim() !== "") supplied.add("");
   }
@@ -424,13 +526,17 @@ function dropReplacedSlotFallback(content: NonNullable<TemplateLike["content"]>,
  * most {@link MAX_SHADOW_TEMPLATES} roots are inlined, nested up to
  * {@link MAX_SHADOW_DEPTH} levels; templates that are skipped cost nothing against it.
  */
-function flattenDeclarativeShadowRoots(document: { querySelectorAll(selector: string): ArrayLike<unknown> } & object): void {
+function flattenDeclarativeShadowRoots(
+  document: { querySelectorAll(selector: string): ArrayLike<unknown> } & object,
+): void {
   const hosted = new WeakSet<object>();
   let budget = MAX_SHADOW_TEMPLATES;
   let rootNumber = 0;
   // Nested templates appear as the outer ones are inlined: repeat until none is left (bounded).
   for (let round = 0; round < MAX_SHADOW_DEPTH && budget > 0; round++) {
-    const templates = Array.from(document.querySelectorAll("template[shadowrootmode]")) as TemplateLike[];
+    const templates = Array.from(
+      document.querySelectorAll("template[shadowrootmode]"),
+    ) as TemplateLike[];
     let changed = false;
     for (const template of templates) {
       if (budget <= 0) return;
@@ -444,7 +550,8 @@ function flattenDeclarativeShadowRoots(document: { querySelectorAll(selector: st
       budget--;
       dropReplacedSlotFallback(template.content, host, template);
       scopeIdsToRoot(template.content, ++rootNumber, document);
-      for (const child of Array.from(template.content.childNodes)) host.insertBefore(child, template);
+      for (const child of Array.from(template.content.childNodes))
+        host.insertBefore(child, template);
       host.removeChild(template);
       changed = true;
     }
@@ -576,8 +683,7 @@ export function installHtmlAttributeCaseInsensitivity(): void {
   if (state.installed) return;
   state.installed = true;
 
-  const proto = (ElementFacade as unknown as { prototype: Record<PropertyKey, unknown> })
-    .prototype;
+  const proto = (ElementFacade as unknown as { prototype: Record<PropertyKey, unknown> }).prototype;
 
   const getAttributeNode = proto.getAttributeNode as (
     this: AttrElement,

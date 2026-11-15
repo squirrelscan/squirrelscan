@@ -161,7 +161,7 @@ describe("page_features store — round-trip", () => {
   test("a page declaring no chrome assets round-trips as null, not empty strings", async () => {
     const store = await freshStore();
     await run(
-      store.upsertPageFeatures(CRAWL, feat({ normalizedUrl: "https://example.com/no-chrome" }))
+      store.upsertPageFeatures(CRAWL, feat({ normalizedUrl: "https://example.com/no-chrome" })),
     );
     const got = await run(store.getPageFeatures(CRAWL, "https://example.com/no-chrome"));
     expect(got?.faviconHref).toBeNull();
@@ -184,9 +184,7 @@ describe("page_features store — round-trip", () => {
 
   test("empty schemaTypes round-trips as []", async () => {
     const store = await freshStore();
-    await run(
-      store.upsertPageFeatures(CRAWL, feat({ schemaTypes: [] }))
-    );
+    await run(store.upsertPageFeatures(CRAWL, feat({ schemaTypes: [] })));
     const got = await run(store.getPageFeatures(CRAWL, feat().normalizedUrl));
     expect(got?.schemaTypes).toEqual([]);
     await run(store.close());
@@ -210,7 +208,7 @@ describe("page_features store — round-trip", () => {
         feat({ normalizedUrl: "https://example.com/a" }),
         feat({ normalizedUrl: "https://example.com/b" }),
         feat({ normalizedUrl: "https://example.com/c" }),
-      ])
+      ]),
     );
     expect(await run(store.getPageFeaturesCount(CRAWL))).toBe(3);
     await run(store.upsertPageFeaturesBatch(CRAWL, []));
@@ -239,12 +237,48 @@ describe("page_features store — aggregates", () => {
   // Seed: 3 pages share title/desc/content hash "dup", 2 share "dup2", 1 unique.
   async function seedDuplicates(store: SQLiteStorage): Promise<void> {
     const rows: PageFeatureRow[] = [
-      feat({ normalizedUrl: "https://example.com/1", title: "Shared", titleHash: "dup", descHash: "dup", contentHash: "dup" }),
-      feat({ normalizedUrl: "https://example.com/2", title: "Shared", titleHash: "dup", descHash: "dup", contentHash: "dup" }),
-      feat({ normalizedUrl: "https://example.com/3", title: "Shared", titleHash: "dup", descHash: "dup", contentHash: "dup" }),
-      feat({ normalizedUrl: "https://example.com/4", title: "Pair", titleHash: "dup2", descHash: "dup2", contentHash: "dup2" }),
-      feat({ normalizedUrl: "https://example.com/5", title: "Pair", titleHash: "dup2", descHash: "dup2", contentHash: "dup2" }),
-      feat({ normalizedUrl: "https://example.com/6", title: "Unique", titleHash: "uniq", descHash: "uniq", contentHash: "uniq" }),
+      feat({
+        normalizedUrl: "https://example.com/1",
+        title: "Shared",
+        titleHash: "dup",
+        descHash: "dup",
+        contentHash: "dup",
+      }),
+      feat({
+        normalizedUrl: "https://example.com/2",
+        title: "Shared",
+        titleHash: "dup",
+        descHash: "dup",
+        contentHash: "dup",
+      }),
+      feat({
+        normalizedUrl: "https://example.com/3",
+        title: "Shared",
+        titleHash: "dup",
+        descHash: "dup",
+        contentHash: "dup",
+      }),
+      feat({
+        normalizedUrl: "https://example.com/4",
+        title: "Pair",
+        titleHash: "dup2",
+        descHash: "dup2",
+        contentHash: "dup2",
+      }),
+      feat({
+        normalizedUrl: "https://example.com/5",
+        title: "Pair",
+        titleHash: "dup2",
+        descHash: "dup2",
+        contentHash: "dup2",
+      }),
+      feat({
+        normalizedUrl: "https://example.com/6",
+        title: "Unique",
+        titleHash: "uniq",
+        descHash: "uniq",
+        contentHash: "uniq",
+      }),
     ];
     await run(store.upsertPageFeaturesBatch(CRAWL, rows));
   }
@@ -292,7 +326,7 @@ describe("page_features store — aggregates", () => {
         feat({ normalizedUrl: "https://example.com/2", titleHash: null }),
         feat({ normalizedUrl: "https://example.com/3", titleHash: "" }),
         feat({ normalizedUrl: "https://example.com/4", titleHash: "" }),
-      ])
+      ]),
     );
     expect(await run(store.getPageFeatureDuplicateGroups(CRAWL, "title"))).toEqual([]);
     await run(store.close());
@@ -309,7 +343,7 @@ describe("page_features store — aggregates", () => {
     }
     await run(store.upsertPageFeaturesBatch(CRAWL, rows));
     const groups = await run(
-      store.getPageFeatureDuplicateGroups(CRAWL, "title", { maxGroups: 2, maxUrlsPerGroup: 2 })
+      store.getPageFeatureDuplicateGroups(CRAWL, "title", { maxGroups: 2, maxUrlsPerGroup: 2 }),
     );
     expect(groups.length).toBe(2);
     for (const g of groups) {
@@ -327,7 +361,7 @@ describe("page_features store — aggregates", () => {
         feat({ normalizedUrl: "https://example.com/2", templateFp: "T" }),
         feat({ normalizedUrl: "https://example.com/3", templateFp: "solo" }),
         feat({ normalizedUrl: "https://example.com/4", templateFp: null }),
-      ])
+      ]),
     );
     const clusters = await run(store.getPageFeatureTemplateClusters(CRAWL));
     expect(clusters).toEqual([
@@ -343,7 +377,7 @@ describe("page_features store — aggregates", () => {
         feat({ normalizedUrl: "https://example.com/b", pageType: "product" }),
         feat({ normalizedUrl: "https://example.com/a", pageType: "product" }),
         feat({ normalizedUrl: "https://example.com/c", pageType: "article" }),
-      ])
+      ]),
     );
     expect(await run(store.getPageFeaturesByType(CRAWL, "product"))).toEqual([
       "https://example.com/a",
@@ -360,7 +394,7 @@ describe("page_features store — aggregates", () => {
         feat({ normalizedUrl: "https://example.com/1", transferBytes: 100, secretHits: 1 }),
         feat({ normalizedUrl: "https://example.com/2", transferBytes: 200, secretHits: 2 }),
         feat({ normalizedUrl: "https://example.com/3", transferBytes: null, secretHits: 0 }),
-      ])
+      ]),
     );
     expect(await run(store.sumPageFeatureTransferBytes(CRAWL))).toBe(300);
     expect(await run(store.sumPageFeatureSecretHits(CRAWL))).toBe(3);
@@ -374,7 +408,7 @@ describe("page_features store — aggregates", () => {
         feat({ normalizedUrl: "https://example.com/deep", depth: 2 }),
         feat({ normalizedUrl: "https://example.com/z-home", depth: 0 }),
         feat({ normalizedUrl: "https://example.com/a-home", depth: 0 }),
-      ])
+      ]),
     );
     const home = await run(store.getHomepageFeature(CRAWL));
     expect(home?.normalizedUrl).toBe("https://example.com/a-home");
@@ -387,10 +421,8 @@ describe("page_features store — aggregates", () => {
     await run(
       store.upsertPageFeaturesBatch(
         CRAWL,
-        ["a", "b", "c", "d", "e"].map((s) =>
-          feat({ normalizedUrl: `https://example.com/${s}` })
-        )
-      )
+        ["a", "b", "c", "d", "e"].map((s) => feat({ normalizedUrl: `https://example.com/${s}` })),
+      ),
     );
     const page1 = await run(store.getPageFeaturesPage(CRAWL, { limit: 2 }));
     expect(page1.map((r) => r.normalizedUrl)).toEqual([
@@ -398,18 +430,18 @@ describe("page_features store — aggregates", () => {
       "https://example.com/b",
     ]);
     const page2 = await run(
-      store.getPageFeaturesPage(CRAWL, { after: page1[1].normalizedUrl, limit: 2 })
+      store.getPageFeaturesPage(CRAWL, { after: page1[1].normalizedUrl, limit: 2 }),
     );
     expect(page2.map((r) => r.normalizedUrl)).toEqual([
       "https://example.com/c",
       "https://example.com/d",
     ]);
     const page3 = await run(
-      store.getPageFeaturesPage(CRAWL, { after: page2[1].normalizedUrl, limit: 2 })
+      store.getPageFeaturesPage(CRAWL, { after: page2[1].normalizedUrl, limit: 2 }),
     );
     expect(page3.map((r) => r.normalizedUrl)).toEqual(["https://example.com/e"]);
     const page4 = await run(
-      store.getPageFeaturesPage(CRAWL, { after: page3[0].normalizedUrl, limit: 2 })
+      store.getPageFeaturesPage(CRAWL, { after: page3[0].normalizedUrl, limit: 2 }),
     );
     expect(page4).toEqual([]);
     await run(store.close());
@@ -579,9 +611,7 @@ describe("page_features migration (v17 → current)", () => {
     const path = tmpDbPath();
     const seed = new SQLiteStorage(path);
     await run(seed.init());
-    await run(
-      seed.upsertPageFeatures("c1", feat({ normalizedUrl: "https://example.com/legacy" }))
-    );
+    await run(seed.upsertPageFeatures("c1", feat({ normalizedUrl: "https://example.com/legacy" })));
     await run(seed.close());
 
     const downgrade = new Database(path);
@@ -617,8 +647,8 @@ describe("page_features migration (v17 → current)", () => {
             h1Count: 2,
             thinContent: true,
           },
-        })
-      )
+        }),
+      ),
     );
     const fresh = await run(store.getPageFeatures("c1", "https://example.com/fresh"));
     expect(fresh?.reportScalars).toEqual({
@@ -669,8 +699,8 @@ describe("page_features migration (v17 → current)", () => {
           faviconHref: "https://example.com/favicon.ico",
           themeColor: "#0a5c36",
           ogImage: "https://cdn.example.com/share/default.png",
-        })
-      )
+        }),
+      ),
     );
     const fresh = await run(store.getPageFeatures("c1", "https://example.com/new"));
     expect(fresh?.faviconHref).toBe("https://example.com/favicon.ico");
@@ -690,9 +720,7 @@ describe("page_features migration (v17 → current)", () => {
     // append-only migration is the only thing that can add the columns.
     const seed = new SQLiteStorage(path);
     await run(seed.init());
-    await run(
-      seed.upsertPageFeatures("c1", feat({ normalizedUrl: "https://example.com/legacy" }))
-    );
+    await run(seed.upsertPageFeatures("c1", feat({ normalizedUrl: "https://example.com/legacy" })));
     await run(seed.close());
 
     const downgrade = new Database(path);
@@ -721,8 +749,8 @@ describe("page_features migration (v17 → current)", () => {
           napAddressFormat: "12 Main St",
           napTelLink: true,
           napMailtoLink: true,
-        })
-      )
+        }),
+      ),
     );
     const fresh = await run(store.getPageFeatures("c1", "https://example.com/new"));
     expect(fresh?.napPhoneFormats).toEqual(["(555) 123-4567"]);
@@ -740,11 +768,21 @@ describe("page_features migration (v17 → current)", () => {
 describe("page_features store: nav_link_set (v44)", () => {
   test("round-trips the set, and a row without one reads back as null", async () => {
     const store = await freshStore();
-    const navLinkSet = { hash: "0123456789abcdef", count: 2, hrefs: ["https://example.com/a", "https://example.com/b"] };
-    await run(store.upsertPageFeatures(CRAWL, feat({ normalizedUrl: "https://example.com/a", navLinkSet })));
+    const navLinkSet = {
+      hash: "0123456789abcdef",
+      count: 2,
+      hrefs: ["https://example.com/a", "https://example.com/b"],
+    };
+    await run(
+      store.upsertPageFeatures(CRAWL, feat({ normalizedUrl: "https://example.com/a", navLinkSet })),
+    );
     await run(store.upsertPageFeatures(CRAWL, feat({ normalizedUrl: "https://example.com/b" })));
-    expect((await run(store.getPageFeatures(CRAWL, "https://example.com/a")))?.navLinkSet).toEqual(navLinkSet);
-    expect((await run(store.getPageFeatures(CRAWL, "https://example.com/b")))?.navLinkSet).toBeNull();
+    expect((await run(store.getPageFeatures(CRAWL, "https://example.com/a")))?.navLinkSet).toEqual(
+      navLinkSet,
+    );
+    expect(
+      (await run(store.getPageFeatures(CRAWL, "https://example.com/b")))?.navLinkSet,
+    ).toBeNull();
     await run(store.close());
   });
 });
@@ -755,10 +793,19 @@ describe("page_features store: nav_link_set (v44)", () => {
 describe("page_features store: reading_level (v41)", () => {
   test("round-trips the score, and a row without one reads back as null", async () => {
     const store = await freshStore();
-    await run(store.upsertPageFeatures(CRAWL, feat({ normalizedUrl: "https://example.com/a", readingLevel: 62 })));
+    await run(
+      store.upsertPageFeatures(
+        CRAWL,
+        feat({ normalizedUrl: "https://example.com/a", readingLevel: 62 }),
+      ),
+    );
     await run(store.upsertPageFeatures(CRAWL, feat({ normalizedUrl: "https://example.com/b" })));
-    expect((await run(store.getPageFeatures(CRAWL, "https://example.com/a")))?.readingLevel).toBe(62);
-    expect((await run(store.getPageFeatures(CRAWL, "https://example.com/b")))?.readingLevel).toBeNull();
+    expect((await run(store.getPageFeatures(CRAWL, "https://example.com/a")))?.readingLevel).toBe(
+      62,
+    );
+    expect(
+      (await run(store.getPageFeatures(CRAWL, "https://example.com/b")))?.readingLevel,
+    ).toBeNull();
     await run(store.close());
   });
 });
@@ -767,12 +814,28 @@ describe("page_features store: terminology_variants (v43)", () => {
   test("round-trips the bounded count map, and a row without one reads back as null", async () => {
     const store = await freshStore();
     const map = { "signin.log_in": 3, "brand.lower": 1 };
-    await run(store.upsertPageFeatures(CRAWL, feat({ normalizedUrl: "https://example.com/a", terminologyVariants: map })));
+    await run(
+      store.upsertPageFeatures(
+        CRAWL,
+        feat({ normalizedUrl: "https://example.com/a", terminologyVariants: map }),
+      ),
+    );
     await run(store.upsertPageFeatures(CRAWL, feat({ normalizedUrl: "https://example.com/b" })));
-    await run(store.upsertPageFeatures(CRAWL, feat({ normalizedUrl: "https://example.com/c", terminologyVariants: {} })));
-    expect((await run(store.getPageFeatures(CRAWL, "https://example.com/a")))?.terminologyVariants).toEqual(map);
-    expect((await run(store.getPageFeatures(CRAWL, "https://example.com/b")))?.terminologyVariants).toBeNull();
-    expect((await run(store.getPageFeatures(CRAWL, "https://example.com/c")))?.terminologyVariants).toBeNull();
+    await run(
+      store.upsertPageFeatures(
+        CRAWL,
+        feat({ normalizedUrl: "https://example.com/c", terminologyVariants: {} }),
+      ),
+    );
+    expect(
+      (await run(store.getPageFeatures(CRAWL, "https://example.com/a")))?.terminologyVariants,
+    ).toEqual(map);
+    expect(
+      (await run(store.getPageFeatures(CRAWL, "https://example.com/b")))?.terminologyVariants,
+    ).toBeNull();
+    expect(
+      (await run(store.getPageFeatures(CRAWL, "https://example.com/c")))?.terminologyVariants,
+    ).toBeNull();
     await run(store.close());
   });
 });
@@ -790,7 +853,9 @@ describe("page_features store: content_simhash (v42)", () => {
     expect((await run(store.getPageFeatures(CRAWL, "https://example.com/a")))?.contentSimhash).toBe(
       "0123456789abcdef",
     );
-    expect((await run(store.getPageFeatures(CRAWL, "https://example.com/b")))?.contentSimhash).toBeNull();
+    expect(
+      (await run(store.getPageFeatures(CRAWL, "https://example.com/b")))?.contentSimhash,
+    ).toBeNull();
     await run(store.close());
   });
 });
@@ -804,14 +869,12 @@ describe("page_features store: hreflang_alternates (v33)", () => {
   test("round-trips the alternates, and stores none as null", async () => {
     const store = await freshStore();
     await run(store.upsertPageFeatures(CRAWL, feat({ hreflangAlternates: alternates })));
-    await run(
-      store.upsertPageFeatures(CRAWL, feat({ normalizedUrl: "https://example.com/b" }))
-    );
+    await run(store.upsertPageFeatures(CRAWL, feat({ normalizedUrl: "https://example.com/b" })));
     expect(
-      (await run(store.getPageFeatures(CRAWL, "https://example.com/a")))?.hreflangAlternates
+      (await run(store.getPageFeatures(CRAWL, "https://example.com/a")))?.hreflangAlternates,
     ).toEqual(alternates);
     expect(
-      (await run(store.getPageFeatures(CRAWL, "https://example.com/b")))?.hreflangAlternates
+      (await run(store.getPageFeatures(CRAWL, "https://example.com/b")))?.hreflangAlternates,
     ).toBeNull();
     await run(store.close());
   });
@@ -835,7 +898,7 @@ describe("page_features store: hreflang_alternates (v33)", () => {
     expect(legacy?.hreflangAlternates).toBeNull();
     await run(store.upsertPageFeatures("c1", feat({ hreflangAlternates: alternates })));
     expect(
-      (await run(store.getPageFeatures("c1", "https://example.com/a")))?.hreflangAlternates
+      (await run(store.getPageFeatures("c1", "https://example.com/a")))?.hreflangAlternates,
     ).toEqual(alternates);
     await run(store.close());
   });
@@ -856,7 +919,7 @@ describe("page_features store: hreflang_alternates (v33)", () => {
     await run(store.init());
     await run(store.upsertPageFeatures("c1", feat({ hreflangAlternates: alternates })));
     expect(
-      (await run(store.getPageFeatures("c1", "https://example.com/a")))?.hreflangAlternates
+      (await run(store.getPageFeatures("c1", "https://example.com/a")))?.hreflangAlternates,
     ).toEqual(alternates);
     await run(store.close());
   });

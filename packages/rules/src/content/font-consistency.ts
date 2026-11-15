@@ -160,7 +160,13 @@ function cleanName(raw: string): string {
 }
 
 function isCountable(name: string): boolean {
-  return name !== "" && !GENERIC.has(name) && !name.includes("var(") && !name.includes("(") && !ICON_FONT.test(name);
+  return (
+    name !== "" &&
+    !GENERIC.has(name) &&
+    !name.includes("var(") &&
+    !name.includes("(") &&
+    !ICON_FONT.test(name)
+  );
 }
 
 const FONT_FACE_BLOCK = /@font-face\s*\{([^}]*)\}/gi;
@@ -168,7 +174,12 @@ const FONT_FAMILY_DECL = /(?:^|[;{\s])font-family\s*:\s*([^;}]+)/gi;
 
 function declValue(block: string, prop: string): string | null {
   const m = new RegExp(`(?:^|[;{\\s])${prop}\\s*:\\s*([^;}]+)`, "i").exec(block);
-  return m ? m[1]!.replace(/!important/i, "").trim().toLowerCase() : null;
+  return m
+    ? m[1]!
+        .replace(/!important/i, "")
+        .trim()
+        .toLowerCase()
+    : null;
 }
 
 interface Acc {
@@ -192,9 +203,11 @@ function scanCss(raw: string, acc: Acc): void {
   const usage = css.replace(FONT_FACE_BLOCK, " ");
   for (const m of usage.matchAll(FONT_FAMILY_DECL)) {
     const names = splitStack(m[1] ?? "").map(cleanName);
-    for (const n of names) if (n && acc.referenced.size < MAX_FAMILIES_PER_PAGE * 4) acc.referenced.add(n);
+    for (const n of names)
+      if (n && acc.referenced.size < MAX_FAMILIES_PER_PAGE * 4) acc.referenced.add(n);
     const primary = names[0];
-    if (primary && isCountable(primary) && acc.families.size < MAX_FAMILIES_PER_PAGE) acc.families.add(primary);
+    if (primary && isCountable(primary) && acc.families.size < MAX_FAMILIES_PER_PAGE)
+      acc.families.add(primary);
   }
 }
 
@@ -268,9 +281,17 @@ function skip(message: string, details?: Record<string, unknown>): CheckResult {
 }
 
 /** Build the checks. `sitePageCount` is the crawl's page count (the norm floor reads it). */
-export function buildChecks(rollup: FontRollup, sitePageCount: number, maxFamilies: number): CheckResult[] {
+export function buildChecks(
+  rollup: FontRollup,
+  sitePageCount: number,
+  maxFamilies: number,
+): CheckResult[] {
   if (sitePageCount < FONT_MIN_PAGES) {
-    return [skip(`Only ${sitePageCount} page(s) crawled; ${FONT_MIN_PAGES} needed to judge font consistency`)];
+    return [
+      skip(
+        `Only ${sitePageCount} page(s) crawled; ${FONT_MIN_PAGES} needed to judge font consistency`,
+      ),
+    ];
   }
   if (rollup.pagesWithFonts === 0) {
     return [
@@ -357,7 +378,8 @@ export const fontConsistencyRule: Rule = {
   meta: {
     id: "content/font-consistency",
     name: "Font Consistency",
-    description: "Finds font sprawl, families used on one page only, and @font-face families nothing uses",
+    description:
+      "Finds font sprawl, families used on one page only, and @font-face families nothing uses",
     solution:
       "Too many font families make a site look unfinished and cost bytes. Pick one family for text, optionally one for headings and one for code, and remove the rest. A family used on a single page usually came from a pasted snippet or a one-off template: switch it to a site font. An @font-face family that no font-family names can be deleted along with its files. This rule reads inline styles only, so check linked stylesheets by hand before removing anything. Icon fonts are not counted.",
     category: "content",
@@ -373,7 +395,8 @@ export const fontConsistencyRule: Rule = {
     const rollup = emptyRollup();
     let pageCount: number;
     if (ctx.collectedSignals) {
-      for (const s of ctx.collectedSignals.pages) accumulate(rollup, s.url, s.fontUsage ?? EMPTY_FONT_USAGE);
+      for (const s of ctx.collectedSignals.pages)
+        accumulate(rollup, s.url, s.fontUsage ?? EMPTY_FONT_USAGE);
       pageCount = ctx.siteQuery?.pageCount() ?? rollup.pageCount;
     } else {
       const pages = ctx.site?.pages ?? [];

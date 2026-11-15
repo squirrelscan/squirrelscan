@@ -29,7 +29,10 @@ export function parseCspPolicies(header: string, commaSeparated = true): CspPoli
   for (const raw of commaSeparated ? header.split(",") : [header]) {
     const policy: CspPolicy = new Map();
     for (const part of raw.split(";")) {
-      const tokens = part.trim().split(/[\t\n\f\r ]+/).filter(Boolean);
+      const tokens = part
+        .trim()
+        .split(/[\t\n\f\r ]+/)
+        .filter(Boolean);
       const name = tokens.shift()?.toLowerCase();
       if (!name || policy.has(name)) continue;
       policy.set(name, tokens);
@@ -54,7 +57,11 @@ export interface ResourceContext {
 }
 
 function defaultPort(protocol: string): string {
-  return protocol === "https:" || protocol === "wss:" ? "443" : protocol === "http:" || protocol === "ws:" ? "80" : "";
+  return protocol === "https:" || protocol === "wss:"
+    ? "443"
+    : protocol === "http:" || protocol === "ws:"
+      ? "80"
+      : "";
 }
 
 function portOf(url: URL): string {
@@ -176,9 +183,10 @@ export function sourceListAllows(
     if (sources.includes(wanted)) return true;
   }
 
-  const target = ctx.upgradeInsecure && url.protocol === "http:" && ctx.page.protocol === "https:"
-    ? new URL(url.href.replace(/^http:/, "https:"))
-    : url;
+  const target =
+    ctx.upgradeInsecure && url.protocol === "http:" && ctx.page.protocol === "https:"
+      ? new URL(url.href.replace(/^http:/, "https:"))
+      : url;
   if (sources.some((token) => sourceMatches(token, target, { ...ctx, hostOnly: opts.hostOnly }))) {
     return true;
   }

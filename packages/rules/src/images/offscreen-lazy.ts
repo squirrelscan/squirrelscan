@@ -13,7 +13,7 @@ export const optionsSchema = z.object({
     .number()
     .default(3)
     .describe(
-      "Number of content images considered above the fold (icons and logos declared with width and height do not count)"
+      "Number of content images considered above the fold (icons and logos declared with width and height do not count)",
     ),
 });
 
@@ -43,8 +43,7 @@ function itemFor(img: Element): { id: string; snippet?: string } {
     firstSrcsetUrl(img.getAttribute("data-srcset"));
   if (fallback) return { id: filenameOf(fallback) };
   const tag = (img.outerHTML || "<img>").replace(/\s+/g, " ");
-  const snippet =
-    tag.length > SNIPPET_MAX_CHARS ? `${tag.slice(0, SNIPPET_MAX_CHARS - 1)}…` : tag;
+  const snippet = tag.length > SNIPPET_MAX_CHARS ? `${tag.slice(0, SNIPPET_MAX_CHARS - 1)}…` : tag;
   return { id: elementSelector(img), snippet };
 }
 
@@ -92,7 +91,7 @@ export const offscreenLazyRule: Rule = {
         width: img.getAttribute("width"),
         height: img.getAttribute("height"),
       })),
-      opts.above_fold_count
+      opts.above_fold_count,
     );
     const belowFoldImages = imagesArray.filter((_, index) => !inViewport[index]);
 

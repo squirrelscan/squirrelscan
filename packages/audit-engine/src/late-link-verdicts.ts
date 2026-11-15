@@ -75,7 +75,10 @@ export function linkVerdictDeadlineAt(input: {
   runDeadlineAt?: number;
 }): number | undefined {
   const bounds: number[] = [];
-  const budgetDeadline = externalLinkBudgetDeadline({ budgetMs: input.linkBudgetMs }, input.checkStartedAt);
+  const budgetDeadline = externalLinkBudgetDeadline(
+    { budgetMs: input.linkBudgetMs },
+    input.checkStartedAt,
+  );
   if (budgetDeadline !== undefined) bounds.push(budgetDeadline);
   if (input.runDeadlineAt !== undefined && Number.isFinite(input.runDeadlineAt)) {
     bounds.push(input.runDeadlineAt - LINK_RULES_RESERVE_MS);
@@ -163,12 +166,18 @@ export function startLateLinkVerdicts(
   return Effect.gen(function* () {
     const now = options.now ?? Date.now;
     const startedAt = now();
-    const plan = yield* planExternalLinkCheck(storage, crawlId, options.occurrences, options.config, {
-      linkCache: options.linkCache,
-      priorityHrefs: options.priorityHrefs,
-      egressPinnedByTransport: options.egressPinnedByTransport,
-      resolveHost: options.resolveHost,
-    });
+    const plan = yield* planExternalLinkCheck(
+      storage,
+      crawlId,
+      options.occurrences,
+      options.config,
+      {
+        linkCache: options.linkCache,
+        priorityHrefs: options.priorityHrefs,
+        egressPinnedByTransport: options.egressPinnedByTransport,
+        resolveHost: options.resolveHost,
+      },
+    );
     if (!plan) return nothingToCheck(startedAt);
 
     const deadlineAt = linkVerdictDeadlineAt({

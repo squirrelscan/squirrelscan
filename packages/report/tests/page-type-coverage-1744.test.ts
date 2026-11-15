@@ -73,7 +73,9 @@ describe("every format that prints the scan prints the per-type counts", () => {
     );
   });
   test("xml", () => {
-    expect(renderXml(report(capped))).toContain('<page-type name="product" discovered="36" audited="1"/>');
+    expect(renderXml(report(capped))).toContain(
+      '<page-type name="product" discovered="36" audited="1"/>',
+    );
   });
   test("json", () => {
     expect(JSON.parse(renderJson(report(capped))).meta.pageTypes[0]).toEqual({

@@ -23,16 +23,46 @@ function ctxOf(html: string, url = "https://example.com/"): RuleContext {
 // --- reference: the pre-#270 container + interactive logic (no CMP resources
 // appear in these fixtures, so hasCmpResource is false for both sides) --------
 const OLD_CMP_SELECTORS = [
-  "#onetrust-banner-sdk", "#onetrust-consent-sdk", "#ot-sdk-container", "#CybotCookiebotDialog",
-  "#usercentrics-root", "#usercentrics-cmp-ui", "#cookiescript_injected", "#cookie-law-info-bar",
-  ".cli-bar-container", "#iubenda-cs-banner", ".iubenda-cs-banner", "#didomi-host",
-  "#osano-cm-window", ".osano-cm-window", "#termly-code-snippet-support", "#axeptio_overlay",
-  "#qc-cmp2-container", ".qc-cmp2-container", ".cmplz-cookiebanner", "#BorlabsCookieBox", ".cc-window",
+  "#onetrust-banner-sdk",
+  "#onetrust-consent-sdk",
+  "#ot-sdk-container",
+  "#CybotCookiebotDialog",
+  "#usercentrics-root",
+  "#usercentrics-cmp-ui",
+  "#cookiescript_injected",
+  "#cookie-law-info-bar",
+  ".cli-bar-container",
+  "#iubenda-cs-banner",
+  ".iubenda-cs-banner",
+  "#didomi-host",
+  "#osano-cm-window",
+  ".osano-cm-window",
+  "#termly-code-snippet-support",
+  "#axeptio_overlay",
+  "#qc-cmp2-container",
+  ".qc-cmp2-container",
+  ".cmplz-cookiebanner",
+  "#BorlabsCookieBox",
+  ".cc-window",
 ];
 const WIDGET_TOKENS = [
-  "cookie-banner", "cookiebanner", "cookie_banner", "cookie-consent", "cookieconsent",
-  "cookie_consent", "cookie-notice", "cookie_notice", "cookie-law", "cookielaw", "cookie-bar",
-  "cookie-popup", "cookie-disclaimer", "consent-banner", "consent-manager", "gdpr-banner", "gdpr-consent",
+  "cookie-banner",
+  "cookiebanner",
+  "cookie_banner",
+  "cookie-consent",
+  "cookieconsent",
+  "cookie_consent",
+  "cookie-notice",
+  "cookie_notice",
+  "cookie-law",
+  "cookielaw",
+  "cookie-bar",
+  "cookie-popup",
+  "cookie-disclaimer",
+  "consent-banner",
+  "consent-manager",
+  "gdpr-banner",
+  "gdpr-consent",
 ];
 const ACTION_RE =
   /\b(accept|reject|allow|decline|deny|agree|disagree|got it|manage|preferences|consent|akzeptieren|zustimmen|einverstanden|ablehnen|accepter|refuser|accepto|aceptar|rechazar|accetta|accetto|aceitar|akkoord|godkänn|godta|tillad|zaakceptuj)\b/i;
@@ -41,17 +71,26 @@ function referenceDetects(doc: any): boolean {
   if (OLD_CMP_SELECTORS.some((s) => doc.querySelector(s) !== null)) return true;
   const regions = new Set<any>();
   for (const sel of [
-    "[id*='cookie' i]", "[class*='cookie' i]", "[id*='consent' i]", "[class*='consent' i]",
-    "[role='dialog']", "[role='alertdialog']", "[aria-modal='true']",
+    "[id*='cookie' i]",
+    "[class*='cookie' i]",
+    "[id*='consent' i]",
+    "[class*='consent' i]",
+    "[role='dialog']",
+    "[role='alertdialog']",
+    "[aria-modal='true']",
   ]) {
     for (const el of doc.querySelectorAll(sel)) regions.add(el);
   }
   for (const region of regions) {
-    const hay = `${region.getAttribute("id") || ""} ${region.getAttribute("class") || ""}`.toLowerCase();
+    const hay =
+      `${region.getAttribute("id") || ""} ${region.getAttribute("class") || ""}`.toLowerCase();
     if (WIDGET_TOKENS.some((t) => hay.includes(t))) return true;
-    const about = hay.includes("cookie") || (region.textContent || "").toLowerCase().includes("cookie");
+    const about =
+      hay.includes("cookie") || (region.textContent || "").toLowerCase().includes("cookie");
     if (!about) continue;
-    for (const c of region.querySelectorAll("button, a, input[type='button'], input[type='submit'], [role='button']")) {
+    for (const c of region.querySelectorAll(
+      "button, a, input[type='button'], input[type='submit'], [role='button']",
+    )) {
       const label = `${c.textContent || ""} ${c.getAttribute("value") || ""} ${c.getAttribute("aria-label") || ""}`;
       if (ACTION_RE.test(label)) return true;
     }
@@ -66,25 +105,54 @@ async function detects(html: string): Promise<boolean> {
 // seeded PRNG so a failure reproduces
 function rng(seed: number): () => number {
   let s = seed >>> 0;
-  return () => ((s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 2 ** 32);
+  return () => (s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 2 ** 32;
 }
 
 const IDS = [
-  "", "main", "onetrust-banner-sdk", "OneTrust-Banner-SDK", "CybotCookiebotDialog", "cybotcookiebotdialog",
-  "didomi-host", "didomi-host2", "x didomi-host", "cookie-banner", "CookieConsent", "my-consent", "COOKIE",
-  "consent-x", "qc-cmp2-container", "BorlabsCookieBox", "cookieK", "coÅkie",
+  "",
+  "main",
+  "onetrust-banner-sdk",
+  "OneTrust-Banner-SDK",
+  "CybotCookiebotDialog",
+  "cybotcookiebotdialog",
+  "didomi-host",
+  "didomi-host2",
+  "x didomi-host",
+  "cookie-banner",
+  "CookieConsent",
+  "my-consent",
+  "COOKIE",
+  "consent-x",
+  "qc-cmp2-container",
+  "BorlabsCookieBox",
+  "cookieK",
+  "coÅkie",
 ];
 const CLASSES = [
-  "", "a b", "cc-window", "cc-window-x", "x cc-window y", "CC-WINDOW", "cc-window\tfoo", 
-  "foo\ncc-window\n", "osano-cm-window", "cmplz-cookiebanner", "cookie-notice", "CookieNotice", "ConsentBox",
-  "cli-bar-container", "iubenda-cs-banner x", "nav cookie", "plain",
+  "",
+  "a b",
+  "cc-window",
+  "cc-window-x",
+  "x cc-window y",
+  "CC-WINDOW",
+  "cc-window\tfoo",
+  "foo\ncc-window\n",
+  "osano-cm-window",
+  "cmplz-cookiebanner",
+  "cookie-notice",
+  "CookieNotice",
+  "ConsentBox",
+  "cli-bar-container",
+  "iubenda-cs-banner x",
+  "nav cookie",
+  "plain",
 ];
 const ROLES = ["", "dialog", "Dialog", "alertdialog", "button", "region"];
 const MODALS = ["", "true", "TRUE", "false"];
 const TEXTS = ["Accept all", "We use cookies", "hello", "Reject", "Weiter", "cookies: Allow"];
 
 function randomPage(rand: () => number): string {
-  const pick = <T,>(xs: T[]): T => xs[Math.floor(rand() * xs.length)]!;
+  const pick = <T>(xs: T[]): T => xs[Math.floor(rand() * xs.length)]!;
   const n = 1 + Math.floor(rand() * 8);
   const out: string[] = [];
   for (let i = 0; i < n; i++) {
@@ -125,12 +193,20 @@ describe("legal/cookie-consent single-pass scan matches the selector version (pu
   // #1567: a class list splits on HTML whitespace only, so an NBSP does not separate tokens and `foo<NBSP>cc-window` is not the `cc-window` class. The selector
   // reference above reads `.cc-window` through a parser that folds NBSP into a space, which a browser does not, so the shape is pinned here, not in the run above.
   test("an NBSP between class tokens does not make `cc-window` a token, as in a browser", async () => {
-    expect(await detects(`<html><body><div class="foo\u00a0cc-window"><p>x</p></div></body></html>`)).toBe(false);
-    expect(await detects(`<html><body><div class="foo cc-window"><p>x</p></div></body></html>`)).toBe(true);
+    expect(
+      await detects(`<html><body><div class="foo\u00a0cc-window"><p>x</p></div></body></html>`),
+    ).toBe(false);
+    expect(
+      await detects(`<html><body><div class="foo cc-window"><p>x</p></div></body></html>`),
+    ).toBe(true);
   });
 
   test("a CMP container is found on any element, anywhere", async () => {
-    expect(await detects(`<html><body><section><p><i class="x cc-window"></i></p></section></body></html>`)).toBe(true);
+    expect(
+      await detects(
+        `<html><body><section><p><i class="x cc-window"></i></p></section></body></html>`,
+      ),
+    ).toBe(true);
     expect(await detects(`<html><body><div id="didomi-host"></div></body></html>`)).toBe(true);
     expect(await detects(`<html><body><div id="DIDOMI-HOST"></div></body></html>`)).toBe(false);
   });
@@ -151,10 +227,20 @@ describe("social/share-buttons answers like the lowercase-copy version (pub#270)
   // so parse once and vary only page.html (a parse per call would take minutes)
   const base = ctxOf("<html><body><p>x</p></body></html>", "https://example.com/x");
   const newAnswer = async (html: string) =>
-    (await shareButtonsRule.run({ ...base, page: { ...base.page, html } })).checks[0]?.status === "pass";
+    (await shareButtonsRule.run({ ...base, page: { ...base.page, html } })).checks[0]?.status ===
+    "pass";
 
   test("every BMP character, spliced into each pattern's letters, answers identically", async () => {
-    const seeds = ["share facebook", "facebook share", "share twitter", "share linkedin", "addthis", "sumo-share", "shareaholic", "addtoany"];
+    const seeds = [
+      "share facebook",
+      "facebook share",
+      "share twitter",
+      "share linkedin",
+      "addthis",
+      "sumo-share",
+      "shareaholic",
+      "addtoany",
+    ];
     for (let cp = 0; cp < 0x10000; cp++) {
       if (cp >= 0xd800 && cp <= 0xdfff) continue;
       const ch = String.fromCharCode(cp);

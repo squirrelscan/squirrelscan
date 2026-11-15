@@ -281,7 +281,7 @@ export interface CompleteStoreTallyFold {
   foldPage(
     normalizedUrl: string,
     fresh: readonly PageFindingRecord[],
-    carried: readonly CarriedFinding[]
+    carried: readonly CarriedFinding[],
   ): void;
   /**
    * (pub#497) Report-sample rows of ONE untouched page, the carried findings the
@@ -336,7 +336,7 @@ export interface CompleteStoreTallyFold {
  * that reads each page once and only writes rows behind it satisfies this.
  */
 export function createCompleteStoreTallyFold(
-  input: CompleteStoreFoldInput
+  input: CompleteStoreFoldInput,
 ): CompleteStoreTallyFold {
   const {
     ruleResults,
@@ -357,7 +357,9 @@ export function createCompleteStoreTallyFold(
   const crawledTotal = (): number =>
     Math.max(
       crawledUrls.size,
-      Number.isSafeInteger(crawledCount) ? Math.min(Math.max(crawledCount!, 0), REPORT_LIMITS.maxPages) : 0,
+      Number.isSafeInteger(crawledCount)
+        ? Math.min(Math.max(crawledCount!, 0), REPORT_LIMITS.maxPages)
+        : 0,
     );
 
   const tallies = new Map<string, RuleTally>();
@@ -441,7 +443,10 @@ export function createCompleteStoreTallyFold(
           const k = checksPerPage(ruleId);
           if (k > 1) {
             const names = new Set(carriedByRule.get(ruleId)!.map((f) => f.checkName)).size;
-            carriedDirtyPassesByRule.set(ruleId, (carriedDirtyPassesByRule.get(ruleId) ?? 0) + k - names);
+            carriedDirtyPassesByRule.set(
+              ruleId,
+              (carriedDirtyPassesByRule.get(ruleId) ?? 0) + k - names,
+            );
           }
         }
       }
@@ -469,7 +474,9 @@ export function createCompleteStoreTallyFold(
       const carriedChecks = carriedForRule?.map((f) => carriedFindingToCheck(f, normalizedUrl));
       if (carriedChecks) markCarriedContinuations(carriedChecks);
       if (requireAggregatableCarried && carriedChecks && carriedForRule) {
-        carriedForRule.forEach((f, i) => assertAggregatable(f.payload, carriedChecks[i]!, normalizedUrl));
+        carriedForRule.forEach((f, i) =>
+          assertAggregatable(f.payload, carriedChecks[i]!, normalizedUrl),
+        );
       }
       if (carriedReport && carriedChecks) retainCarried(carriedReport, ruleId, carriedChecks);
       // (repo#3348) With the tallies, a carry on a crawled page is one its check
@@ -488,7 +495,7 @@ export function createCompleteStoreTallyFold(
 
   const retainUntouchedSample: CompleteStoreTallyFold["retainUntouchedSample"] = (
     normalizedUrl,
-    carried
+    carried,
   ) => {
     // The same rule filter and grouping as `foldPage`, so the rules the page
     // claims, and the order it claims them in, are the ones a full fold of the
@@ -526,7 +533,7 @@ export function createCompleteStoreTallyFold(
       if (r.activePages > 0) {
         carriedDirtyPagesByRule.set(
           r.ruleId,
-          (carriedDirtyPagesByRule.get(r.ruleId) ?? 0) + r.activePages
+          (carriedDirtyPagesByRule.get(r.ruleId) ?? 0) + r.activePages,
         );
         const k = checksPerPage(r.ruleId);
         if (k > 1) {
@@ -534,7 +541,7 @@ export function createCompleteStoreTallyFold(
             r.ruleId,
             (carriedDirtyPassesByRule.get(r.ruleId) ?? 0) +
               k * r.activePages -
-              (r.activeChecks ?? r.activePages)
+              (r.activeChecks ?? r.activePages),
           );
         }
       }
@@ -555,14 +562,16 @@ export function createCompleteStoreTallyFold(
       // the class would leave the report while its findings stay open.
       if (!counts) {
         throw new Error(
-          `untouched carried class ${c.ruleId} ${c.checkName} (${c.status}, ${c.provenance}) has no sampled row`
+          `untouched carried class ${c.ruleId} ${c.checkName} (${c.status}, ${c.provenance}) has no sampled row`,
         );
       }
       // Every term is a non-negative integer, so the two orders of addition agree
       // exactly while the total stays safe. Past that they need not, and nine
       // million rows of one class would be the only way there.
       if (counts.total + c.occurrences > Number.MAX_SAFE_INTEGER) {
-        throw new Error(`untouched carried class ${c.ruleId} ${c.checkName} totals past the safe integer range`);
+        throw new Error(
+          `untouched carried class ${c.ruleId} ${c.checkName} totals past the safe integer range`,
+        );
       }
       counts.total += c.occurrences;
       counts.members += c.members;
@@ -638,7 +647,7 @@ export function createCompleteStoreTallyFold(
         entry.tally,
         [],
         advisory(r.meta),
-        clean + skippedPasses + cleanCarriedPasses(ruleId)
+        clean + skippedPasses + cleanCarriedPasses(ruleId),
       );
     }
   };
@@ -651,7 +660,12 @@ export function createCompleteStoreTallyFold(
       if (ruleResults[ruleId]) continue; // already handled by foldShellRules
       const meta = metaOf(ruleId);
       if (meta?.scope !== "page") continue;
-      addChecksToTally(entryFor(ruleId, meta).tally, [], advisory(meta), cleanCarriedPasses(ruleId));
+      addChecksToTally(
+        entryFor(ruleId, meta).tally,
+        [],
+        advisory(meta),
+        cleanCarriedPasses(ruleId),
+      );
     }
     return tallies;
   };
@@ -773,7 +787,7 @@ function emptyClassCounts(): CarriedClassCounts {
 function countClassMember(
   counts: CarriedClassCounts,
   check: CheckResult,
-  firstOnPage: boolean
+  firstOnPage: boolean,
 ): void {
   counts.total += occurrencesOf(check);
   counts.members += 1;
@@ -800,7 +814,7 @@ function retainCarried(
   report: Map<string, CarriedRuleReport>,
   ruleId: string,
   checks: readonly CheckResult[],
-  count = true
+  count = true,
 ): void {
   let entry = report.get(ruleId);
   if (!entry) {
@@ -926,7 +940,7 @@ function collapseCarriedReport(
  */
 function reconcileCarriedAggregate(
   aggregate: CheckResult,
-  classes: Map<string, CarriedClassCounts>
+  classes: Map<string, CarriedClassCounts>,
 ): void {
   const counts = classes.get(foldGroupKey(aggregate));
   // Untouched unless this class actually lost members; a fully-present class was
@@ -948,7 +962,7 @@ function reconcileCarriedAggregate(
     if (occurrences > 1) {
       aggregate.message = `${aggregate.message} (+${occurrences - 1} more pages)`.slice(
         0,
-        REPORT_LIMITS.maxMediumString
+        REPORT_LIMITS.maxMediumString,
       );
     }
   }
@@ -974,7 +988,7 @@ function reconcileCarriedAggregate(
  * {@link createCompleteStoreTallyFold} directly off one cursor instead.
  */
 export async function foldCompleteStoreTallies(
-  input: CompleteStoreTallyInput
+  input: CompleteStoreTallyInput,
 ): Promise<Map<string, RuleTally>> {
   const { findingPages, carriedFindings, ...rest } = input;
   const fold = createCompleteStoreTallyFold(rest);
@@ -1091,9 +1105,7 @@ export function carriedChecksPerPageFor(
 }
 
 /** Split a batch of findings into per-page groups, preserving arrival order. */
-function groupByPage(
-  batch: readonly PageFindingRecord[]
-): Map<string, PageFindingRecord[]> {
+function groupByPage(batch: readonly PageFindingRecord[]): Map<string, PageFindingRecord[]> {
   const byPage = new Map<string, PageFindingRecord[]>();
   for (const f of batch) {
     const rows = byPage.get(f.normalizedUrl);
@@ -1150,10 +1162,14 @@ function aggregatableCheck(check: CheckResult): boolean {
   return !(typeof occurrences === "number" && occurrences >= UNTOUCHED_MAX_OCCURRENCES);
 }
 
-function assertAggregatable(payload: string | null | undefined, check: CheckResult, normalizedUrl: string): void {
+function assertAggregatable(
+  payload: string | null | undefined,
+  check: CheckResult,
+  normalizedUrl: string,
+): void {
   if (!payloadItemsAggregatable(payload) || !aggregatableCheck(check)) {
     throw new Error(
-      `carried finding on ${normalizedUrl} is outside the untouched aggregate's exact domain; the store must stream every page`
+      `carried finding on ${normalizedUrl} is outside the untouched aggregate's exact domain; the store must stream every page`,
     );
   }
 }
@@ -1183,7 +1199,7 @@ export interface UntouchedCarriedReference {
  */
 export function untouchedCarriedFinding(
   row: PageFindingRecord,
-  neverRendered: boolean
+  neverRendered: boolean,
 ): CarriedFinding {
   return {
     normalizedUrl: row.normalizedUrl,
@@ -1211,12 +1227,18 @@ export function untouchedCarriedFinding(
  * Throws on a row outside {@link isAggregatableCarriedRow}.
  */
 export function aggregateUntouchedCarried(
-  pages: Iterable<UntouchedCarriedPage>
+  pages: Iterable<UntouchedCarriedPage>,
 ): UntouchedCarriedReference {
   const rules = new Map<string, UntouchedRuleTotals>();
   const classes = new Map<
     string,
-    { totals: Omit<UntouchedClassTotals, "occurrences" | "members" | "pages" | "pagesFloor" | "lastSeenAt">; counts: CarriedClassCounts }
+    {
+      totals: Omit<
+        UntouchedClassTotals,
+        "occurrences" | "members" | "pages" | "pagesFloor" | "lastSeenAt"
+      >;
+      counts: CarriedClassCounts;
+    }
   >();
   /** Rows seen per rule so far: the sample takes the first CAP of them. */
   const seenPerRule = new Map<string, number>();
@@ -1254,7 +1276,15 @@ export function aggregateUntouchedCarried(
       addChecksToTally(tally, checks, false, 0);
       let totals = rules.get(ruleId);
       if (!totals) {
-        totals = { ruleId, failed: 0, failUnits: 0, warnings: 0, warnUnits: 0, activePages: 0, activeChecks: 0 };
+        totals = {
+          ruleId,
+          failed: 0,
+          failUnits: 0,
+          warnings: 0,
+          warnUnits: 0,
+          activePages: 0,
+          activeChecks: 0,
+        };
         rules.set(ruleId, totals);
       }
       totals.failed += tally.failed;

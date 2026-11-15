@@ -47,9 +47,7 @@ export const breadcrumbSchemaRule: Rule = {
       return { checks };
     }
 
-    const schemaScripts = doc.querySelectorAll(
-      'script[type="application/ld+json"]'
-    );
+    const schemaScripts = doc.querySelectorAll('script[type="application/ld+json"]');
     let breadcrumbSchema: Record<string, unknown> | null = null;
     const pageNodes: Record<string, unknown>[] = [];
 

@@ -99,20 +99,28 @@ async function measure(): Promise<Measured> {
     for (const [ruleId, rr] of result.ruleResults) {
       let byUrl = verdicts.get(ruleId);
       if (!byUrl) verdicts.set(ruleId, (byUrl = new Map()));
-      byUrl.set(url, templateVerdictKey(rr.checks as unknown as Array<Record<string, unknown>>, url));
+      byUrl.set(
+        url,
+        templateVerdictKey(rr.checks as unknown as Array<Record<string, unknown>>, url),
+      );
     }
   }
 
   const sq = await run(createSiteQuery(store, CRAWL));
   const clusters = sq.templateClusters().map((c) => ({ fp: c.fp, urls: [...c.urls] }));
-  const all = await run(store.getPageFeatureTemplateClusters(CRAWL, { maxGroups: 1000, maxUrlsPerGroup: 1000 }));
+  const all = await run(
+    store.getPageFeatureTemplateClusters(CRAWL, { maxGroups: 1000, maxUrlsPerGroup: 1000 }),
+  );
   await run(store.close());
 
   return { verdicts, clusters, clusterCount: all.length, pageCount: CORPUS.length };
 }
 
 /** Rules that disagree inside a multi-page cluster, with the pair that proves it. */
-function divergences(m: Measured, ruleIds: Iterable<string>): Map<string, { fp: string; a: string; b: string }> {
+function divergences(
+  m: Measured,
+  ruleIds: Iterable<string>,
+): Map<string, { fp: string; a: string; b: string }> {
   const out = new Map<string, { fp: string; a: string; b: string }>();
   for (const ruleId of ruleIds) {
     const byUrl = m.verdicts.get(ruleId);
@@ -197,27 +205,24 @@ describe("rules declaring verdictScope template are constant across a cluster", 
     expect(fannable.length).toBeGreaterThan(20);
   });
 
-  test.each(fannable.map((id) => [id] as const))(
-    "%s gives one verdict per cluster",
-    (ruleId) => {
-      const byUrl = measured.verdicts.get(ruleId);
-      if (!byUrl) return; // rule did not run on this corpus (gated by applicability)
-      for (const { fp, urls } of measured.clusters) {
-        const present = urls.filter((u) => byUrl.has(u));
-        if (present.length < 2) continue;
-        const base = present[0]!;
-        for (const other of present.slice(1)) {
-          // The failure message names the rule, the cluster and the two members,
-          // so a failure is actionable without re-running anything.
-          if (byUrl.get(other) !== byUrl.get(base)) {
-            throw new Error(
-              `${ruleId} is declared verdictScope "template" but disagrees inside cluster ${fp}:\n` +
-                `  ${base}\n    ${byUrl.get(base)}\n` +
-                `  ${other}\n    ${byUrl.get(other)}`,
-            );
-          }
+  test.each(fannable.map((id) => [id] as const))("%s gives one verdict per cluster", (ruleId) => {
+    const byUrl = measured.verdicts.get(ruleId);
+    if (!byUrl) return; // rule did not run on this corpus (gated by applicability)
+    for (const { fp, urls } of measured.clusters) {
+      const present = urls.filter((u) => byUrl.has(u));
+      if (present.length < 2) continue;
+      const base = present[0]!;
+      for (const other of present.slice(1)) {
+        // The failure message names the rule, the cluster and the two members,
+        // so a failure is actionable without re-running anything.
+        if (byUrl.get(other) !== byUrl.get(base)) {
+          throw new Error(
+            `${ruleId} is declared verdictScope "template" but disagrees inside cluster ${fp}:\n` +
+              `  ${base}\n    ${byUrl.get(base)}\n` +
+              `  ${other}\n    ${byUrl.get(other)}`,
+          );
         }
       }
-    },
-  );
+    }
+  });
 });

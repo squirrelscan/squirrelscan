@@ -155,12 +155,7 @@ async function bothPaths(specs: PageSpec[]): Promise<CheckResult> {
 }
 
 /** A group of `total` pages of `pageType` where only `have` carry `schemaTypes`. */
-function partial(
-  pageType: string,
-  schemaTypes: string[],
-  have: number,
-  total: number
-): PageSpec[] {
+function partial(pageType: string, schemaTypes: string[], have: number, total: number): PageSpec[] {
   return Array.from({ length: total }, (_, i) => ({
     pageType,
     schemaTypes: i < have ? schemaTypes : [],
@@ -256,7 +251,7 @@ describe("schema/coverage-outlier — template-uniform pages sit inside the norm
   test("an optional extra on a minority of pages is not a norm, and does not hide a real gap", async () => {
     // 40/45 carry Product; a BreadcrumbList on 10 of them never reaches 70%.
     const specs = partial("product", ["Product"], 40, 45).map((spec, i) =>
-      i < 10 ? { ...spec, schemaTypes: [...spec.schemaTypes, "BreadcrumbList"] } : spec
+      i < 10 ? { ...spec, schemaTypes: [...spec.schemaTypes, "BreadcrumbList"] } : spec,
     );
     const check = await bothPaths(specs);
     expect(check.items).toHaveLength(1);
@@ -272,7 +267,7 @@ describe("schema/coverage-outlier — outliers", () => {
     expect(check.message).toContain("5 of 45 page(s) are missing structured data");
     expect(check.items).toHaveLength(1);
     expect(check.items?.[0]?.label).toBe(
-      "40 of 45 product pages have Product schema, these 5 do not"
+      "40 of 45 product pages have Product schema, these 5 do not",
     );
     expect(check.items?.[0]?.sourcePages).toHaveLength(5);
     expect(check.items?.[0]?.meta).toEqual({
@@ -366,7 +361,7 @@ describe("schema/coverage-outlier: noindex pages (#1770)", () => {
 
   test("a site where every page is noindex is not applicable, not a pass", async () => {
     const specs: PageSpec[] = uniform("product", ["Product"], 12).map((s, i) =>
-      i % 2 ? { ...s, noindex: true } : { ...s, headerNoindex: true }
+      i % 2 ? { ...s, noindex: true } : { ...s, headerNoindex: true },
     );
     const result = await bothPaths(specs);
     expect(result.status).toBe("skipped");

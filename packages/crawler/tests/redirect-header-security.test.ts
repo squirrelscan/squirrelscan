@@ -388,10 +388,7 @@ describe("findMetaRefresh scheme restriction (#1396)", () => {
 
   test("rejects a file:// meta refresh target", () => {
     expect(
-      findClientRedirects(
-        `<meta http-equiv="refresh" content="0;url=file:///etc/passwd">`,
-        base,
-      ),
+      findClientRedirects(`<meta http-equiv="refresh" content="0;url=file:///etc/passwd">`, base),
     ).toBeNull();
   });
 
@@ -411,8 +408,8 @@ describe("findMetaRefresh scheme restriction (#1396)", () => {
         base,
       ),
     ).toBe("https://other.example/next");
-    expect(
-      findClientRedirects(`<meta http-equiv="refresh" content="0;url=/next">`, base),
-    ).toBe("https://example.com/next");
+    expect(findClientRedirects(`<meta http-equiv="refresh" content="0;url=/next">`, base)).toBe(
+      "https://example.com/next",
+    );
   });
 });

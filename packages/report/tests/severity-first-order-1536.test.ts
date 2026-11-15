@@ -57,13 +57,7 @@ function report(): AuditReport {
 describe("flattenIssuesBySeverity (#1536)", () => {
   test("orders every issue by severity first, across categories", () => {
     const flat = flattenIssuesBySeverity(groupIssuesByCategory(mixedSeverities()));
-    expect(flat.map((r) => r.severity)).toEqual([
-      "error",
-      "error",
-      "info",
-      "warning",
-      "warning",
-    ]);
+    expect(flat.map((r) => r.severity)).toEqual(["error", "error", "info", "warning", "warning"]);
   });
 
   test("groups a severity's issues by category rather than interleaving them", () => {
@@ -79,9 +73,7 @@ describe("flattenIssuesBySeverity (#1536)", () => {
     const flat = flattenIssuesBySeverity(groupIssuesByCategory(mixedSeverities()));
     const perfWarn = flat.find((r) => r.id === "perf/warn");
     expect(perfWarn?.severity).toBe("warning");
-    expect(flat.indexOf(perfWarn!)).toBeGreaterThan(
-      flat.findIndex((r) => r.severity === "info"),
-    );
+    expect(flat.indexOf(perfWarn!)).toBeGreaterThan(flat.findIndex((r) => r.severity === "info"));
   });
 });
 

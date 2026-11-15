@@ -3,7 +3,11 @@
 // structurally by the CLI's vendored AuditReport), and runCloudAudit calls it
 // directly, so cloud and CLI reports stamp identical `homepage`/`lockedRules`.
 
-import { NOT_CHECKED_SKIP_REASONS, type LockedRule, type PartialAudit } from "@squirrelscan/core-contracts";
+import {
+  NOT_CHECKED_SKIP_REASONS,
+  type LockedRule,
+  type PartialAudit,
+} from "@squirrelscan/core-contracts";
 import {
   isNotApplicableCloudSkip,
   isRenderDisabledCloudSkip,

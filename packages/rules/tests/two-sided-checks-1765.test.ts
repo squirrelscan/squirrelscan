@@ -40,11 +40,19 @@ describe("meta-description", () => {
   });
 
   test("an in-range description passes both sides and a missing one keeps the old name", async () => {
-    expect((await run(metaDescriptionRule, withDescription("c".repeat(140)))).map((c) => [c.name, c.status])).toEqual([
+    expect(
+      (await run(metaDescriptionRule, withDescription("c".repeat(140)))).map((c) => [
+        c.name,
+        c.status,
+      ]),
+    ).toEqual([
       ["meta-description-too-short", "pass"],
       ["meta-description-too-long", "pass"],
     ]);
-    const missing = (await run(metaDescriptionRule, "<!doctype html><html><head><title>t</title></head><body></body></html>"));
+    const missing = await run(
+      metaDescriptionRule,
+      "<!doctype html><html><head><title>t</title></head><body></body></html>",
+    );
     expect(missing.map((c) => [c.name, c.status])).toEqual([["meta-description", "fail"]]);
   });
 });
@@ -57,9 +65,9 @@ describe("internal-links", () => {
     expect(warned(await run(internalLinksRule, links(0))).map((c) => [c.name, c.message])).toEqual([
       ["internal-links-too-few", "Too few internal links (0, min 1)"],
     ]);
-    expect(warned(await run(internalLinksRule, links(101))).map((c) => [c.name, c.message])).toEqual([
-      ["internal-links-too-many", "Too many internal links (101, max 100)"],
-    ]);
+    expect(
+      warned(await run(internalLinksRule, links(101))).map((c) => [c.name, c.message]),
+    ).toEqual([["internal-links-too-many", "Too many internal links (101, max 100)"]]);
     expect((await run(internalLinksRule, links(5))).map((c) => [c.name, c.status])).toEqual([
       ["internal-links-too-few", "pass"],
       ["internal-links-too-many", "pass"],

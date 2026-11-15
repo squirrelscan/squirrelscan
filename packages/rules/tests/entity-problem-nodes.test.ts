@@ -97,7 +97,9 @@ const CASES: Case[] = [
     cls: "no-id",
     rules: [entityIdentityRule],
     bad: () =>
-      entityMap({ nodes: [quietOrg({ key: "anon:org", id: null, pages: [A, B], occurrences: 2 })] }),
+      entityMap({
+        nodes: [quietOrg({ key: "anon:org", id: null, pages: [A, B], occurrences: 2 })],
+      }),
     // One declaring page is ordinary.
     good: () =>
       entityMap({ nodes: [quietOrg({ key: "anon:org", id: null, pages: [A], occurrences: 1 })] }),
@@ -107,7 +109,8 @@ const CASES: Case[] = [
     rules: [entitySplitIdentityRule],
     bad: () => entityMap({ nodes: twins([A, "https://example.com/c"], [A, B]) }),
     // Same name and type, never declared together: two things, not a split.
-    good: () => entityMap({ nodes: twins([A, "https://example.com/c"], [B, "https://example.com/d"]) }),
+    good: () =>
+      entityMap({ nodes: twins([A, "https://example.com/c"], [B, "https://example.com/d"]) }),
   },
   {
     cls: "orphan",
@@ -147,7 +150,10 @@ const CASES: Case[] = [
       }),
     good: () =>
       entityMap({
-        nodes: [quietOrg(), person({ properties: { name: "Ada", url: "https://example.com/ada" } })],
+        nodes: [
+          quietOrg(),
+          person({ properties: { name: "Ada", url: "https://example.com/ada" } }),
+        ],
       }),
   },
   {
@@ -168,7 +174,10 @@ function twins(pagesOne: string[], pagesTwo: string[]): EntityMapNode[] {
       occurrences: p.length,
       pages: p,
     });
-  return [twin("https://example.com/#org", pagesOne), twin("https://data.example.org/acme", pagesTwo)];
+  return [
+    twin("https://example.com/#org", pagesOne),
+    twin("https://data.example.org/acme", pagesTwo),
+  ];
 }
 
 function thing(key: string): EntityMapNode {
@@ -230,9 +239,7 @@ function localBusiness(declaredOn: number): EntityMap {
 
 describe("entityProblemNodes agrees with the rules", () => {
   test("every class has a case", () => {
-    expect(CASES.map((c) => c.cls).sort()).toEqual(
-      [...ENTITY_PROBLEM_CLASSES].sort(),
-    );
+    expect(CASES.map((c) => c.cls).sort()).toEqual([...ENTITY_PROBLEM_CLASSES].sort());
   });
 
   for (const c of CASES) {
@@ -286,7 +293,13 @@ describe("entityProblemNodes agrees with the rules", () => {
     const multi = quietOrg({
       danglingRefs: 1,
       conflicts: [
-        { property: "name", values: [{ value: "A", pages: [A], morePages: 0 }, { value: "B", pages: [B], morePages: 0 }] },
+        {
+          property: "name",
+          values: [
+            { value: "A", pages: [A], morePages: 0 },
+            { value: "B", pages: [B], morePages: 0 },
+          ],
+        },
       ],
     });
     const found = entityProblemNodes(entityMap({ nodes: [multi] }));

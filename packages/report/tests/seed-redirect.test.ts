@@ -127,7 +127,9 @@ describe("seedRedirect", () => {
     expect(seedRedirect(baseReport({ finalUrl: "https://example.com:443/" }))).toBeNull();
     expect(seedRedirect(baseReport({ finalUrl: "https://example.com:443" }))).toBeNull();
     expect(
-      seedRedirect(baseReport({ baseUrl: "http://example.com", finalUrl: "http://example.com:80/" })),
+      seedRedirect(
+        baseReport({ baseUrl: "http://example.com", finalUrl: "http://example.com:80/" }),
+      ),
     ).toBeNull();
     // A NON-default port is a different place and still discloses.
     expect(seedRedirect(baseReport({ finalUrl: "https://example.com:8443/" }))?.finalUrl).toBe(
@@ -140,12 +142,8 @@ describe("seedRedirect", () => {
     // producing a line claiming the seed redirected off its own domain.
     const unicodeHost = "https://例え.jp";
     const punycodeHost = "https://xn--r8jz45g.jp/";
-    expect(
-      seedRedirect(baseReport({ baseUrl: unicodeHost, finalUrl: punycodeHost })),
-    ).toBeNull();
-    expect(
-      seedRedirect(baseReport({ baseUrl: punycodeHost, finalUrl: unicodeHost })),
-    ).toBeNull();
+    expect(seedRedirect(baseReport({ baseUrl: unicodeHost, finalUrl: punycodeHost }))).toBeNull();
+    expect(seedRedirect(baseReport({ baseUrl: punycodeHost, finalUrl: unicodeHost }))).toBeNull();
   });
 
   test("null for a blank finalUrl, rather than an empty placeholder line", () => {
@@ -178,7 +176,9 @@ describe("seedRedirect", () => {
   });
 
   test("null without a baseUrl: with nothing to contrast against the line says nothing", () => {
-    expect(seedRedirect(baseReport({ baseUrl: "", finalUrl: "https://other.example/" }))).toBeNull();
+    expect(
+      seedRedirect(baseReport({ baseUrl: "", finalUrl: "https://other.example/" })),
+    ).toBeNull();
   });
 
   test("canonicalizes the site's URL: control characters cannot survive as themselves", () => {
@@ -319,7 +319,9 @@ describe("renderers surface the refused redirect", () => {
       "final-url": "https://other.example/landing",
       note: NOTE,
     });
-    expect(xml.parse(renderXml(baseReport()))["squirrelscan-audit"]["seed-redirect"]).toBeUndefined();
+    expect(
+      xml.parse(renderXml(baseReport()))["squirrelscan-audit"]["seed-redirect"],
+    ).toBeUndefined();
   });
 
   test("every renderer discloses it — none can be added and left unwired", () => {

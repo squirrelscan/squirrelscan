@@ -87,22 +87,35 @@ function crossPageFamilies(occurrences: ComponentOccurrence[]): Map<string, Set<
 describe("a block repeated inside <main> across pages is one component", () => {
   const pages = [
     { url: `${ORIGIN}/releases/1.0.1`, body: releasePage("1.0.1", "Signing fixes for macOS.") },
-    { url: `${ORIGIN}/releases/1.0.2`, body: releasePage("1.0.2", "Crawler retries are bounded now.") },
-    { url: `${ORIGIN}/releases/1.0.3`, body: releasePage("1.0.3", "Report output gained a summary.") },
-    { url: `${ORIGIN}/releases/1.0.4`, body: releasePage("1.0.4", "Nothing but dependency bumps.") },
+    {
+      url: `${ORIGIN}/releases/1.0.2`,
+      body: releasePage("1.0.2", "Crawler retries are bounded now."),
+    },
+    {
+      url: `${ORIGIN}/releases/1.0.3`,
+      body: releasePage("1.0.3", "Report output gained a summary."),
+    },
+    {
+      url: `${ORIGIN}/releases/1.0.4`,
+      body: releasePage("1.0.4", "Nothing but dependency bumps."),
+    },
   ];
 
   test("the four pages really do differ outside the block", () => {
     // Guards the fixture: if the pages were identical the grouping below would
     // prove nothing, because any page-scoped key would already collapse.
-    const mains = pages.map((page) => page.body.slice(0, page.body.indexOf("<div class=\"space-y-4\">")));
+    const mains = pages.map((page) =>
+      page.body.slice(0, page.body.indexOf('<div class="space-y-4">')),
+    );
     expect(new Set(mains).size).toBe(4);
   });
 
   test("today every page becomes its own family, which is the defect", () => {
     const occurrences = occurrencesFor(pages);
     expect(occurrences).toHaveLength(20);
-    expect(occurrences.every((occurrence) => occurrence.uncertainReason === "region-main")).toBe(true);
+    expect(occurrences.every((occurrence) => occurrence.uncertainReason === "region-main")).toBe(
+      true,
+    );
     // The structure IS recognised as the same; only the KEY is page-scoped.
     expect(new Set(occurrences.map((o) => o.family.structuralSignature)).size).toBe(1);
     expect(new Set(occurrences.map((o) => o.family.key)).size).toBe(4);
@@ -201,7 +214,10 @@ describe("repetition that is data, not a shared component, must not group", () =
     const listPage = (posts: string[]) =>
       `<main><section class="posts">` +
       posts
-        .map((post) => `<article class="post"><h3>${post}</h3><a href="/p/${post}">Download</a></article>`)
+        .map(
+          (post) =>
+            `<article class="post"><h3>${post}</h3><a href="/p/${post}">Download</a></article>`,
+        )
         .join("") +
       `</section></main>`;
     const occurrences = occurrencesFor([
@@ -252,7 +268,7 @@ describe("depth inside a block does not decide which component it belongs to", (
             element: link,
             kind: "link-text-empty",
             values: { normalizedText: "" },
-            },
+          },
           cache,
         ),
       );
@@ -292,37 +308,55 @@ describe("a component root says what it is, or says nothing", () => {
   }
 
   test("uses a heading inside the root", () => {
-    expect(hintFor(`<body><main><section><h2>Install squirrel</h2><div><a href="/d">Download</a></div></section></main></body>`))
-      .toMatchObject({ heading: "Install squirrel" });
+    expect(
+      hintFor(
+        `<body><main><section><h2>Install squirrel</h2><div><a href="/d">Download</a></div></section></main></body>`,
+      ),
+    ).toMatchObject({ heading: "Install squirrel" });
   });
 
   test("uses aria-label and a word-shaped id when there is no heading", () => {
-    const hint = hintFor(`<body><main><section id="install-panel" aria-label="Install options"><div><a href="/d">Download</a></div></section></main></body>`);
+    const hint = hintFor(
+      `<body><main><section id="install-panel" aria-label="Install options"><div><a href="/d">Download</a></div></section></main></body>`,
+    );
     expect(hint).toMatchObject({ ariaLabel: "Install options", id: "install-panel" });
   });
 
   test("drops a generated id rather than showing it", () => {
     // `sp-ppork3` is a real theme's id: a digit-count rule accepted it and it
     // tells a reader nothing.
-    const hint = hintFor(`<body><main><section id="sp-ppork3"><div><a href="/d">Download</a></div></section></main></body>`);
+    const hint = hintFor(
+      `<body><main><section id="sp-ppork3"><div><a href="/d">Download</a></div></section></main></body>`,
+    );
     expect(hint?.id).toBeUndefined();
   });
 
   test("never borrows a heading from outside the root", () => {
     // The fallback to a PRECEDING heading labelled a sticky product bar
     // "Recent post" on a real storefront. A wrong label is worse than none.
-    const hint = hintFor(`<body><main><h2>Recent post</h2><section><div><a href="/d">Download</a></div></section></main></body>`);
+    const hint = hintFor(
+      `<body><main><h2>Recent post</h2><section><div><a href="/d">Download</a></div></section></main></body>`,
+    );
     expect(hint).toBeUndefined();
   });
 
   test("drops text that carries an address, a number or a link", () => {
-    for (const heading of ["Mail us at sales@example.test", "Call +1 555 0134 now", "See https://example.test/x"])
-      expect(hintFor(`<body><main><section><h2>${heading}</h2><div><a href="/d">Download</a></div></section></main></body>`))
-        .toBeUndefined();
+    for (const heading of [
+      "Mail us at sales@example.test",
+      "Call +1 555 0134 now",
+      "See https://example.test/x",
+    ])
+      expect(
+        hintFor(
+          `<body><main><section><h2>${heading}</h2><div><a href="/d">Download</a></div></section></main></body>`,
+        ),
+      ).toBeUndefined();
   });
 
   test("bounds a long heading", () => {
-    const hint = hintFor(`<body><main><section><h2>${"word ".repeat(40)}</h2><div><a href="/d">Download</a></div></section></main></body>`);
+    const hint = hintFor(
+      `<body><main><section><h2>${"word ".repeat(40)}</h2><div><a href="/d">Download</a></div></section></main></body>`,
+    );
     expect(String(hint?.heading).length).toBeLessThanOrEqual(60);
   });
 });

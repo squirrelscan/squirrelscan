@@ -31,10 +31,16 @@ function serveSite(pages: string[], dead: string[]): string {
       if (pathname === "/") return ok(html(links));
       if (pathname === "/robots.txt") return ok("User-agent: *\nAllow: /\n", "text/plain");
       if (pathname === "/sitemap.xml") {
-        return ok(`<?xml version="1.0"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>${origin}/</loc></url></urlset>`, "application/xml");
+        return ok(
+          `<?xml version="1.0"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>${origin}/</loc></url></urlset>`,
+          "application/xml",
+        );
       }
       if (pages.includes(pathname)) return ok(html(`page ${pathname} <a href="/">home</a>`));
-      return new Response(html("Not found"), { status: 404, headers: { "content-type": "text/html" } });
+      return new Response(html("Not found"), {
+        status: 404,
+        headers: { "content-type": "text/html" },
+      });
     },
   });
   servers.push(server);
@@ -85,12 +91,18 @@ async function audit(opts: {
       never
     >,
   )) as { siteRuleResults: Map<string, CheckResult[]> };
-  const pagesCrawled = (await Effect.runPromise(storage.getPages(crawlId))).map((p) => new URL(p.url).pathname);
+  const pagesCrawled = (await Effect.runPromise(storage.getPages(crawlId))).map(
+    (p) => new URL(p.url).pathname,
+  );
   const checks = ran.siteRuleResults.get("links/broken-links") ?? [];
   const broken = checks
     .filter((c) => c.status === "fail")
     .flatMap((c) => c.items ?? [])
-    .map((i) => ({ path: new URL(i.id).pathname, status: i.meta?.statusCode, sources: i.sourcePages }));
+    .map((i) => ({
+      path: new URL(i.id).pathname,
+      status: i.meta?.statusCode,
+      sources: i.sourcePages,
+    }));
   return { broken, pagesCrawled, checks };
 }
 

@@ -190,7 +190,9 @@ describe("scheme-less Sitemap line, crawl side (#2316)", () => {
     expect(requested).toContain("https://cdn.example.test/s.xml");
     // #1393: the caller's secret headers are scoped to the audited origin.
     expect(headersSeen.get("https://cdn.example.test/s.xml")).not.toHaveProperty("signature-agent");
-    expect(headersSeen.get("https://worldairops.com/sitemap.xml")).toHaveProperty("signature-agent");
+    expect(headersSeen.get("https://worldairops.com/sitemap.xml")).toHaveProperty(
+      "signature-agent",
+    );
   });
 
   test("a bare filename with a query string stays on the audited origin", async () => {
@@ -350,9 +352,7 @@ describe("scheme-less Sitemap line, report side (#2316)", () => {
 
     for (const report of [v1, v2]) {
       expect(report.robotsTxt?.sitemaps).toEqual(["https://worldairops.com/sitemap.xml"]);
-      expect(report.sitemaps?.sources.robotsTxt).toEqual([
-        "https://worldairops.com/sitemap.xml",
-      ]);
+      expect(report.sitemaps?.sources.robotsTxt).toEqual(["https://worldairops.com/sitemap.xml"]);
     }
   });
 });

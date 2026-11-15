@@ -43,7 +43,7 @@ export const physicalAddressRule: Rule = {
       }
       if (
         page.parsed.schema.types.some((t) =>
-          ["LocalBusiness", "Organization", "Restaurant", "Store"].includes(t)
+          ["LocalBusiness", "Organization", "Restaurant", "Store"].includes(t),
         )
       ) {
         hasLocalBusinessSchema = true;
@@ -55,9 +55,7 @@ export const physicalAddressRule: Rule = {
         name: "physical-address",
         status: "pass",
         message: "Address schema markup found",
-        value: hasLocalBusinessSchema
-          ? "LocalBusiness/Organization"
-          : "PostalAddress",
+        value: hasLocalBusinessSchema ? "LocalBusiness/Organization" : "PostalAddress",
       });
     } else {
       checks.push({

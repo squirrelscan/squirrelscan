@@ -39,7 +39,7 @@ describe("security/form-captcha — FormShield detection", () => {
       `<script async src="https://api.formshield.dev/js/formshield.js" data-fs-project-key="fs_pub_live_abc" data-fs-action="pageview" data-fs-mode="pageload"></script>`,
       CONTACT_FORM,
     );
-    const { checks } = (await formCaptchaRule.run(ctx(html)));
+    const { checks } = await formCaptchaRule.run(ctx(html));
     expect(formCaptchaCheck(checks)?.status).toBe("pass");
   });
 
@@ -48,7 +48,7 @@ describe("security/form-captcha — FormShield detection", () => {
       `<script async src="/assets/beacon.js" data-fs-project-key="fs_pub_live_abc"></script>`,
       CONTACT_FORM,
     );
-    const { checks } = (await formCaptchaRule.run(ctx(html)));
+    const { checks } = await formCaptchaRule.run(ctx(html));
     expect(formCaptchaCheck(checks)?.status).toBe("pass");
   });
 
@@ -58,15 +58,17 @@ describe("security/form-captcha — FormShield detection", () => {
       `${CONTACT_FORM}
       <form id="newsletter" action="/subscribe"><input type="email" name="email"><button>Subscribe</button></form>`,
     );
-    const { checks } = (await formCaptchaRule.run(ctx(html)));
+    const { checks } = await formCaptchaRule.run(ctx(html));
     expect(formCaptchaCheck(checks)?.status).toBe("pass");
   });
 
   test("true positive preserved: no FormShield, no CAPTCHA → still flagged", async () => {
     const html = page("", CONTACT_FORM);
-    const { checks } = (await formCaptchaRule.run(ctx(html)));
+    const { checks } = await formCaptchaRule.run(ctx(html));
     expect(formCaptchaCheck(checks)?.status).toBe("warn");
-    expect(formCaptchaCheck(checks)?.message).toContain("without detectable client-side CAPTCHA markup");
+    expect(formCaptchaCheck(checks)?.message).toContain(
+      "without detectable client-side CAPTCHA markup",
+    );
     expect(formCaptchaCheck(checks)?.message).toContain("client-side");
     expect(formCaptchaCheck(checks)?.observation?.uncertainty).toContain("server-side");
     expect(formCaptchaCheck(checks)?.observation?.mode).toBe("static");
@@ -77,7 +79,7 @@ describe("security/form-captcha — FormShield detection", () => {
       `<script src="https://example.com/not-formshield.dev-related.js"></script>`,
       CONTACT_FORM,
     );
-    const { checks } = (await formCaptchaRule.run(ctx(html)));
+    const { checks } = await formCaptchaRule.run(ctx(html));
     expect(formCaptchaCheck(checks)?.status).toBe("warn");
   });
 
@@ -86,7 +88,7 @@ describe("security/form-captcha — FormShield detection", () => {
       `<script src="https://evil.example/formshield.dev/js/formshield.js"></script>`,
       CONTACT_FORM,
     );
-    const { checks } = (await formCaptchaRule.run(ctx(html)));
+    const { checks } = await formCaptchaRule.run(ctx(html));
     expect(formCaptchaCheck(checks)?.status).toBe("warn");
   });
 });
@@ -102,7 +104,7 @@ describe("security/form-captcha — explicit-render Turnstile/CAPTCHA loaders (#
         <button type="submit">Send</button>
       </form>`,
     );
-    const { checks } = (await formCaptchaRule.run(ctx(html)));
+    const { checks } = await formCaptchaRule.run(ctx(html));
     expect(formCaptchaCheck(checks)?.status).toBe("pass");
   });
 
@@ -111,13 +113,13 @@ describe("security/form-captcha — explicit-render Turnstile/CAPTCHA loaders (#
       `<link rel="modulepreload" href="https://www.google.com/recaptcha/releases/abc/recaptcha__en.js">`,
       CONTACT_FORM,
     );
-    const { checks } = (await formCaptchaRule.run(ctx(html)));
+    const { checks } = await formCaptchaRule.run(ctx(html));
     expect(formCaptchaCheck(checks)?.status).toBe("pass");
   });
 
   test("prefetch link to a CAPTCHA provider script counts as a page-level signal", async () => {
     const html = page(`<link rel="prefetch" href="https://hcaptcha.com/1/api.js">`, CONTACT_FORM);
-    const { checks } = (await formCaptchaRule.run(ctx(html)));
+    const { checks } = await formCaptchaRule.run(ctx(html));
     expect(formCaptchaCheck(checks)?.status).toBe("pass");
   });
 
@@ -126,7 +128,7 @@ describe("security/form-captcha — explicit-render Turnstile/CAPTCHA loaders (#
       `<link rel="preload" as="style" href="https://challenges.cloudflare.com/turnstile/v0/api.css">`,
       CONTACT_FORM,
     );
-    const { checks } = (await formCaptchaRule.run(ctx(html)));
+    const { checks } = await formCaptchaRule.run(ctx(html));
     expect(formCaptchaCheck(checks)?.status).toBe("warn");
   });
 
@@ -140,27 +142,27 @@ describe("security/form-captcha — explicit-render Turnstile/CAPTCHA loaders (#
         <button type="submit">Send</button>
       </form>`,
     );
-    const { checks } = (await formCaptchaRule.run(ctx(html)));
+    const { checks } = await formCaptchaRule.run(ctx(html));
     expect(formCaptchaCheck(checks)?.status).toBe("pass");
   });
 
   test("g-recaptcha explicit-render container id (not the .g-recaptcha class) → pass", async () => {
     const html = page("", `${CONTACT_FORM}<div id="g-recaptcha-container"></div>`);
-    const { checks } = (await formCaptchaRule.run(ctx(html)));
+    const { checks } = await formCaptchaRule.run(ctx(html));
     expect(formCaptchaCheck(checks)?.status).toBe("pass");
   });
 
   test("h-captcha and frc-captcha explicit-render container tokens are also detected", async () => {
     for (const token of ["h-captcha-widget", "frc-captcha-box"]) {
       const html = page("", `${CONTACT_FORM}<div id="${token}"></div>`);
-      const { checks } = (await formCaptchaRule.run(ctx(html)));
+      const { checks } = await formCaptchaRule.run(ctx(html));
       expect(formCaptchaCheck(checks)?.status).toBe("pass");
     }
   });
 
   test("bare 'captcha' token WITH a container hint word (widget/container/box) counts as a page-level signal", async () => {
     const html = page("", `${CONTACT_FORM}<div id="captcha-widget"></div>`);
-    const { checks } = (await formCaptchaRule.run(ctx(html)));
+    const { checks } = await formCaptchaRule.run(ctx(html));
     expect(formCaptchaCheck(checks)?.status).toBe("pass");
   });
 
@@ -169,14 +171,14 @@ describe("security/form-captcha — explicit-render Turnstile/CAPTCHA loaders (#
       "",
       `${CONTACT_FORM}<a id="captcha-help-text" href="/faq#captcha">What's a CAPTCHA?</a>`,
     );
-    const { checks } = (await formCaptchaRule.run(ctx(html)));
+    const { checks } = await formCaptchaRule.run(ctx(html));
     expect(formCaptchaCheck(checks)?.status).toBe("warn");
   });
 
   test("false-positive guard: 'recaptcha' as a substring of an unrelated id does not match provider tokens", async () => {
     // "notrecaptcha" is not the same delimited token as "recaptcha" or "g-recaptcha"
     const html = page("", `${CONTACT_FORM}<div id="notrecaptcha-info"></div>`);
-    const { checks } = (await formCaptchaRule.run(ctx(html)));
+    const { checks } = await formCaptchaRule.run(ctx(html));
     expect(formCaptchaCheck(checks)?.status).toBe("warn");
   });
 
@@ -185,7 +187,7 @@ describe("security/form-captcha — explicit-render Turnstile/CAPTCHA loaders (#
       "",
       `${CONTACT_FORM}<a id="captcha-help-text" class="footer-widget">What is a CAPTCHA?</a>`,
     );
-    const { checks } = (await formCaptchaRule.run(ctx(html)));
+    const { checks } = await formCaptchaRule.run(ctx(html));
     expect(formCaptchaCheck(checks)?.status).toBe("warn");
   });
 
@@ -195,7 +197,7 @@ describe("security/form-captcha — explicit-render Turnstile/CAPTCHA loaders (#
       "",
       `${CONTACT_FORM}<h2 id="cloudflare-turnstile-vs-recaptcha">Cloudflare Turnstile vs reCAPTCHA</h2>`,
     );
-    const { checks } = (await formCaptchaRule.run(ctx(html)));
+    const { checks } = await formCaptchaRule.run(ctx(html));
     expect(formCaptchaCheck(checks)?.status).toBe("warn");
   });
 
@@ -204,7 +206,7 @@ describe("security/form-captcha — explicit-render Turnstile/CAPTCHA loaders (#
       "",
       `${CONTACT_FORM}<div id="turnstile-status" class="turnstile-counter-widget">3 people through</div>`,
     );
-    const { checks } = (await formCaptchaRule.run(ctx(html)));
+    const { checks } = await formCaptchaRule.run(ctx(html));
     expect(formCaptchaCheck(checks)?.status).toBe("warn");
   });
 
@@ -213,19 +215,19 @@ describe("security/form-captcha — explicit-render Turnstile/CAPTCHA loaders (#
       "",
       `${CONTACT_FORM}<div id="turnstile-status" class="turnstile-counter-widget"></div>`,
     );
-    const { checks } = (await formCaptchaRule.run(ctx(html)));
+    const { checks } = await formCaptchaRule.run(ctx(html));
     expect(formCaptchaCheck(checks)?.status).toBe("pass");
   });
 
   test("bare 'captcha' + hint word DO count when they form a single hyphen-delimited compound (captcha-widget)", async () => {
     const html = page("", `${CONTACT_FORM}<div id="captcha-widget"></div>`);
-    const { checks } = (await formCaptchaRule.run(ctx(html)));
+    const { checks } = await formCaptchaRule.run(ctx(html));
     expect(formCaptchaCheck(checks)?.status).toBe("pass");
   });
 
   test("bare 'captcha' + hint word compound also matches camelCase (captchaBox)", async () => {
     const html = page("", `${CONTACT_FORM}<div id="captchaBox"></div>`);
-    const { checks } = (await formCaptchaRule.run(ctx(html)));
+    const { checks } = await formCaptchaRule.run(ctx(html));
     expect(formCaptchaCheck(checks)?.status).toBe("pass");
   });
 
@@ -238,7 +240,7 @@ describe("security/form-captcha — explicit-render Turnstile/CAPTCHA loaders (#
       </form>
       ${CONTACT_FORM}`,
     );
-    const { checks } = (await formCaptchaRule.run(ctx(html)));
+    const { checks } = await formCaptchaRule.run(ctx(html));
     expect(formCaptchaCheck(checks)?.status).toBe("warn");
     expect(formCaptchaCheck(checks)?.items).toEqual([{ id: "#contact-form" }]);
   });
@@ -250,7 +252,7 @@ describe("security/form-captcha — explicit-render Turnstile/CAPTCHA loaders (#
       <div id="turnstile-widget"></div>
       ${CONTACT_FORM}`,
     );
-    const { checks } = (await formCaptchaRule.run(ctx(html)));
+    const { checks } = await formCaptchaRule.run(ctx(html));
     expect(formCaptchaCheck(checks)?.status).toBe("pass");
   });
 
@@ -259,7 +261,7 @@ describe("security/form-captcha — explicit-render Turnstile/CAPTCHA loaders (#
       `<link rel="preload modulepreload" as="script" href="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit">`,
       CONTACT_FORM,
     );
-    const { checks } = (await formCaptchaRule.run(ctx(html)));
+    const { checks } = await formCaptchaRule.run(ctx(html));
     expect(formCaptchaCheck(checks)?.status).toBe("pass");
   });
 
@@ -273,7 +275,7 @@ describe("security/form-captcha — explicit-render Turnstile/CAPTCHA loaders (#
       </form>
       ${CONTACT_FORM}`,
     );
-    const { checks } = (await formCaptchaRule.run(ctx(html)));
+    const { checks } = await formCaptchaRule.run(ctx(html));
     expect(formCaptchaCheck(checks)?.status).toBe("warn");
     expect(formCaptchaCheck(checks)?.items).toEqual([{ id: "#contact-form" }]);
   });
@@ -284,7 +286,7 @@ describe("security/form-captcha — explicit-render Turnstile/CAPTCHA loaders (#
       `${CONTACT_FORM}
       <form id="newsletter" action="/subscribe"><input type="email" name="email"><button>Subscribe</button></form>`,
     );
-    const { checks } = (await formCaptchaRule.run(ctx(html)));
+    const { checks } = await formCaptchaRule.run(ctx(html));
     expect(formCaptchaCheck(checks)?.status).toBe("warn");
     expect(formCaptchaCheck(checks)?.items?.length).toBe(2);
   });
@@ -294,35 +296,84 @@ describe("security/form-captcha — explicit-render Turnstile/CAPTCHA loaders (#
 // component) mounts after hydration; the static HTML holds only the site key
 // the runtime will render with.
 describe("security/form-captcha: a site key in the page's config", () => {
-  const run = async (head: string, body = CONTACT_FORM) => formCaptchaCheck((await formCaptchaRule.run(ctx(page(head, body)))).checks)?.status;
+  const run = async (head: string, body = CONTACT_FORM) =>
+    formCaptchaCheck((await formCaptchaRule.run(ctx(page(head, body)))).checks)?.status;
 
   test.each([
-    ["Nuxt runtime config (the issue's page)", '<script>window.__NUXT__={};window.__NUXT__.config={public:{turnstile:{siteKey:"0x4AAAAAADPN4lRzZ4X3GkuZ"},baseUrl:"https://one-dot.de"}}</script>'],
-    ["a JSON data script", '<script id="__NEXT_DATA__" type="application/json">{"runtimeConfig":{"recaptchaSiteKey":"6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"}}</script>'], // pragma: allowlist secret
-    ["hCaptcha with a lowercase sitekey", '<script>var cfg = { "hcaptcha": { "sitekey": "10000000-ffff-ffff-ffff-000000000001" } };</script>'],
-    ["an underscore name", '<script>window.env = { TURNSTILE_SITE_KEY: "0x4AAAAAAAxyz123" };</script>'],
-    ["an env-style name", '<script>window.env = { NUXT_PUBLIC_TURNSTILE_SITE_KEY: "1x00000000000000000000AA" };</script>'],
-    ["a sub-object before the key", '<script>window.cfg = { turnstile: { options: { theme: "auto" }, siteKey: "0x4AAAAAAAxyz123" } };</script>'],
+    [
+      "Nuxt runtime config (the issue's page)",
+      '<script>window.__NUXT__={};window.__NUXT__.config={public:{turnstile:{siteKey:"0x4AAAAAADPN4lRzZ4X3GkuZ"},baseUrl:"https://one-dot.de"}}</script>',
+    ],
+    [
+      "a JSON data script",
+      '<script id="__NEXT_DATA__" type="application/json">{"runtimeConfig":{"recaptchaSiteKey":"6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"}}</script>',
+    ], // pragma: allowlist secret
+    [
+      "hCaptcha with a lowercase sitekey",
+      '<script>var cfg = { "hcaptcha": { "sitekey": "10000000-ffff-ffff-ffff-000000000001" } };</script>',
+    ],
+    [
+      "an underscore name",
+      '<script>window.env = { TURNSTILE_SITE_KEY: "0x4AAAAAAAxyz123" };</script>',
+    ],
+    [
+      "an env-style name",
+      '<script>window.env = { NUXT_PUBLIC_TURNSTILE_SITE_KEY: "1x00000000000000000000AA" };</script>',
+    ],
+    [
+      "a sub-object before the key",
+      '<script>window.cfg = { turnstile: { options: { theme: "auto" }, siteKey: "0x4AAAAAAAxyz123" } };</script>',
+    ],
     [
       "switched-off defaults, then the live config",
       '<script>var defaults = { turnstile: { enabled: false, siteKey: "1x00000000000000000000AA" } }; var live = { turnstile: { siteKey: "0x4AAAAAAAxyz123" } };</script>',
     ],
-    ["a flag inside a sub-object is not the provider's own", '<script>window.cfg = { turnstile: { siteKey: "0x4AAAAAAAxyz123", retry: { enabled: false } } };</script>'],
+    [
+      "a flag inside a sub-object is not the provider's own",
+      '<script>window.cfg = { turnstile: { siteKey: "0x4AAAAAAAxyz123", retry: { enabled: false } } };</script>',
+    ],
   ])("%s protects the single public form", async (_name, head) => {
     expect(await run(head)).toBe("pass");
   });
 
   test.each([
-    ["prose naming a provider", '<script>console.log("We use Turnstile; see the siteKey docs");</script>'],
-    ["a provider key with no site key", '<script>window.cfg = { turnstile: { enabled: true, theme: "auto" } };</script>'],
+    [
+      "prose naming a provider",
+      '<script>console.log("We use Turnstile; see the siteKey docs");</script>',
+    ],
+    [
+      "a provider key with no site key",
+      '<script>window.cfg = { turnstile: { enabled: true, theme: "auto" } };</script>',
+    ],
     ["an empty key", '<script>window.cfg = { turnstile: { siteKey: "" } };</script>'],
-    ["a flat key in the wrong format", '<script>window.env = { recaptchaSiteKey: "your-site-key-here" };</script>'],
-    ["a flat key switched off by a sibling flag", '<script>window.env = { TURNSTILE_SITE_KEY: "0x4AAAAAAAxyz123", TURNSTILE_ENABLED: "false" };</script>'],
-    ["a flat key switched off by a disabled flag", '<script>window.env = { hcaptchaSiteKey: "10000000-ffff-ffff-ffff-000000000001", hcaptchaDisabled: true };</script>'],
-    ["a provider object switched off with active", '<script>window.cfg = { turnstile: { siteKey: "0x4AAAAAAAxyz123", active: false } };</script>'],
-    ["a translated label, not a key", '<script type="application/json">{"messages":{"recaptcha":{"siteKey":"Site-Key"}}}</script>'],
-    ["a provider switched off", '<script>window.cfg = { turnstile: { enabled: false, siteKey: "0x4AAAAAAAxyz123" } };</script>'],
-    ["a provider switched off after its key", '<script>window.cfg = { hcaptcha: { sitekey: "10000000-ffff-ffff-ffff-000000000001", disabled: true } };</script>'],
+    [
+      "a flat key in the wrong format",
+      '<script>window.env = { recaptchaSiteKey: "your-site-key-here" };</script>',
+    ],
+    [
+      "a flat key switched off by a sibling flag",
+      '<script>window.env = { TURNSTILE_SITE_KEY: "0x4AAAAAAAxyz123", TURNSTILE_ENABLED: "false" };</script>',
+    ],
+    [
+      "a flat key switched off by a disabled flag",
+      '<script>window.env = { hcaptchaSiteKey: "10000000-ffff-ffff-ffff-000000000001", hcaptchaDisabled: true };</script>',
+    ],
+    [
+      "a provider object switched off with active",
+      '<script>window.cfg = { turnstile: { siteKey: "0x4AAAAAAAxyz123", active: false } };</script>',
+    ],
+    [
+      "a translated label, not a key",
+      '<script type="application/json">{"messages":{"recaptcha":{"siteKey":"Site-Key"}}}</script>',
+    ],
+    [
+      "a provider switched off",
+      '<script>window.cfg = { turnstile: { enabled: false, siteKey: "0x4AAAAAAAxyz123" } };</script>',
+    ],
+    [
+      "a provider switched off after its key",
+      '<script>window.cfg = { hcaptcha: { sitekey: "10000000-ffff-ffff-ffff-000000000001", disabled: true } };</script>',
+    ],
     [
       "a provider switched off after a sub-object",
       '<script>window.cfg = { turnstile: { siteKey: "0x4AAAAAAAxyz123", options: { theme: "auto" }, enabled: false } };</script>',
@@ -337,6 +388,11 @@ describe("security/form-captcha: a site key in the page's config", () => {
 
   test("two public forms with only a page-level config still warn, like the other page-level signals", async () => {
     const second = CONTACT_FORM.replace('id="contact-form"', 'id="newsletter-form"');
-    expect(await run('<script>window.__NUXT__={config:{public:{turnstile:{siteKey:"0x4AAAAAADPN4lRzZ4X3GkuZ"}}}}</script>', CONTACT_FORM + second)).toBe("warn");
+    expect(
+      await run(
+        '<script>window.__NUXT__={config:{public:{turnstile:{siteKey:"0x4AAAAAADPN4lRzZ4X3GkuZ"}}}}</script>',
+        CONTACT_FORM + second,
+      ),
+    ).toBe("warn");
   });
 });

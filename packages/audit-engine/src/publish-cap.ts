@@ -280,7 +280,8 @@ function buildLinkTargetSets(
     if (!ran) continue;
     const broken = main.filter((c) => c.status === "fail" || c.status === "warn");
     const unverified = checks.filter((c) => rows.unverified.includes(c.name));
-    const ids = (list: CheckResult[]) => list.flatMap((c) => (c.items ?? []).map((item) => item.id));
+    const ids = (list: CheckResult[]) =>
+      list.flatMap((c) => (c.items ?? []).map((item) => item.id));
     out[ruleId] = {
       broken: encodeLinkTargetSet(ids(broken), { partial: broken.some(listsPartially) }),
       unverified: encodeLinkTargetSet(ids(unverified), {
@@ -451,7 +452,14 @@ function unitOf(
   affected: number = affectedPageCount(check),
   key?: string,
 ): ClassUnit {
-  return { ruleId, check, order, size: occurrencesOf(check), affected, ...(key !== undefined ? { key } : {}) };
+  return {
+    ruleId,
+    check,
+    order,
+    size: occurrencesOf(check),
+    affected,
+    ...(key !== undefined ? { key } : {}),
+  };
 }
 
 interface FoldedRule {
@@ -485,7 +493,9 @@ function occurrencesOf(check: CheckResult): number {
 function isNotCheckedUnit(unit: ClassUnit): boolean {
   const { status, skipReason } = unit.check;
   if (isCoverageGapCheck(unit.check) || isSkipGap(unit.check)) return true;
-  return status === "skipped" && skipReason !== undefined && NOT_CHECKED_SKIP_REASONS.has(skipReason);
+  return (
+    status === "skipped" && skipReason !== undefined && NOT_CHECKED_SKIP_REASONS.has(skipReason)
+  );
 }
 
 /** Priority order for any cut: status, then size, then a stable identity. */
@@ -618,15 +628,19 @@ function foldClass(members: CheckResult[]): CheckResult {
     const sorted: CheckResult = {
       ...only,
       ...(only.pages ? { pages: [...only.pages].sort() } : {}),
-      ...(only.items ? { items: [...only.items].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)) } : {}),
+      ...(only.items
+        ? { items: [...only.items].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)) }
+        : {}),
     };
     return pinWorstPage(sorted, [sorted]);
   }
-  const clean = [...members].sort(compareMembers).map((check) =>
-    check.details?.aggregated === true && FOLD_SUFFIX.test(check.message)
-      ? { ...check, message: check.message.replace(FOLD_SUFFIX, "") }
-      : check,
-  );
+  const clean = [...members]
+    .sort(compareMembers)
+    .map((check) =>
+      check.details?.aggregated === true && FOLD_SUFFIX.test(check.message)
+        ? { ...check, message: check.message.replace(FOLD_SUFFIX, "") }
+        : check,
+    );
   const folded = foldOverflowChecks(clean, CLASS_FOLD_LIMITS)[0]!;
   return pinWorstPage(keepPriorPageCounts(folded, clean), clean);
 }
@@ -658,9 +672,7 @@ function capMeta(meta: CappableRuleMeta): CappedRuleMeta {
 
 /** The publish clamps every producer applies to a check list (`capMixedRuleChecksForPublish`'s). */
 function clampChecks(checks: CheckResult[]): CheckResult[] {
-  return clampCheckItemsOverflow(
-    clampCheckItemIds(clampCheckDetails(clampCheckStrings(checks))),
-  );
+  return clampCheckItemsOverflow(clampCheckItemIds(clampCheckDetails(clampCheckStrings(checks))));
 }
 
 /**
@@ -706,7 +718,10 @@ function affectedBeforeBounds(originals: CheckResult[], bounded: CheckResult): n
 /** Gap skip rows a rule keeps one by one, with their `pageUrl` (#1775). The rest fold per reason. */
 const GAP_ROWS_PER_RULE = 5;
 
-function foldRule(ruleId: string, rule: { meta: CappableRuleMeta; checks: CheckResult[] }): FoldedRule {
+function foldRule(
+  ruleId: string,
+  rule: { meta: CappableRuleMeta; checks: CheckResult[] },
+): FoldedRule {
   const originals = Array.isArray(rule.checks) ? rule.checks : [];
   // Every clamp maps one check to one check, so index i is the same check in both.
   const checks = boundChecks(originals);
@@ -722,7 +737,9 @@ function foldRule(ruleId: string, rule: { meta: CappableRuleMeta; checks: CheckR
   candidates.sort((a, b) => {
     const ca = checks[a]!;
     const cb = checks[b]!;
-    return compareMembers(ca, cb) || (ca.skipReason ?? "").localeCompare(cb.skipReason ?? "") || a - b;
+    return (
+      compareMembers(ca, cb) || (ca.skipReason ?? "").localeCompare(cb.skipReason ?? "") || a - b
+    );
   });
   for (const i of candidates.slice(0, GAP_ROWS_PER_RULE)) gapRows.add(i);
   const rows: Array<{ check: CheckResult; original: CheckResult }> = [];
@@ -843,7 +860,9 @@ function clampMessage(message: string, aggregated: boolean, max: number): string
 function itemPageCount(item: CheckItem): number {
   const listed = item.sourcePages ? new Set(item.sourcePages).size : 0;
   const prior = item.pageCount;
-  return typeof prior === "number" && Number.isFinite(prior) && prior > listed ? Math.floor(prior) : listed;
+  return typeof prior === "number" && Number.isFinite(prior) && prior > listed
+    ? Math.floor(prior)
+    : listed;
 }
 
 /**
@@ -966,8 +985,12 @@ function classCaps(tier: ReportCapTier, countsOnly: boolean): SampleCaps {
 function siteCaps(level: number, tier: ReportCapTier, countsOnly: boolean): SampleCaps {
   const first = level === 0;
   return {
-    pages: first ? REPORT_CAPS.siteCheckPages : Math.min(REPORT_CAPS.siteCheckPages, tier.pagesPerClass),
-    items: first ? REPORT_CAPS.siteCheckItems : Math.min(REPORT_CAPS.siteCheckItems, tier.itemsPerClass),
+    pages: first
+      ? REPORT_CAPS.siteCheckPages
+      : Math.min(REPORT_CAPS.siteCheckPages, tier.pagesPerClass),
+    items: first
+      ? REPORT_CAPS.siteCheckItems
+      : Math.min(REPORT_CAPS.siteCheckItems, tier.itemsPerClass),
     sourcePages: tier.sourcePagesPerItem,
     messageChars: tier.messageChars,
     countsOnly,
@@ -1035,7 +1058,10 @@ function capSitemaps(sitemaps: unknown, mode: SectionMode): unknown {
               ? {
                   ...s,
                   urls: sliceList(s.urls, normal ? REPORT_CAPS.sitemapUrls : 0),
-                  childSitemaps: sliceList(s.childSitemaps, normal ? REPORT_CAPS.sitemapChildren : 0),
+                  childSitemaps: sliceList(
+                    s.childSitemaps,
+                    normal ? REPORT_CAPS.sitemapChildren : 0,
+                  ),
                   errors: sliceList(s.errors, normal ? PUBLISH_LIMITS.maxSummary : 0),
                 }
               : s,
@@ -1234,7 +1260,9 @@ function withoutRemovedPages<R extends { checks: CheckResult[] }>(
               }
             : {}),
           ...(typeof total === "number" && Number.isFinite(total)
-            ? { details: { ...member.details, pagesTruncated: Math.max(total - gone, kept.length) } }
+            ? {
+                details: { ...member.details, pagesTruncated: Math.max(total - gone, kept.length) },
+              }
             : {}),
         });
       }
@@ -1376,16 +1404,16 @@ export function capReportForPublish<T extends CappableReport>(
   // Exactly what the two fields add to the body. Their builder holds them to
   // REPORT_CAPS.signalMaxBytes together, keys included.
   const transportBytes =
-    (resolutionSignalCompact
-      ? bytesOf(resolutionSignalCompact) + RESOLUTION_SIGNAL_KEY_BYTES
-      : 0) + (pageStatuses ? bytesOf(pageStatuses) + PAGE_STATUSES_KEY_BYTES : 0);
+    (resolutionSignalCompact ? bytesOf(resolutionSignalCompact) + RESOLUTION_SIGNAL_KEY_BYTES : 0) +
+    (pageStatuses ? bytesOf(pageStatuses) + PAGE_STATUSES_KEY_BYTES : 0);
   const ceiling = maxBytes - REPORT_CAPS.envelopeBytes;
   const budget = ceiling - transportBytes;
 
   // 2. Every rule's classes folded once, in rule-id order.
   const rules = ruleIds.map((id) => foldRule(id, live[id]!));
   const rulePageCounts: Record<string, number> = {};
-  for (const rule of rules) if (rule.pageCount !== undefined) rulePageCounts[rule.id] = rule.pageCount;
+  for (const rule of rules)
+    if (rule.pageCount !== undefined) rulePageCounts[rule.id] = rule.pageCount;
   // Top-level `siteChecks` repeats the site checks of `ruleResults` (9,137 of
   // 9,138 entries over 187 real reports), and nothing reads it but the schema
   // bounds and the publish counts, so a copy of a check `ruleResults` already
@@ -1398,7 +1426,13 @@ export function capReportForPublish<T extends CappableReport>(
   const siteUnits = boundChecks(siteOriginals)
     .map((check, order) => {
       const original = siteOriginals[order]!;
-      return unitOf("", check, order, affectedBeforeBounds([original], check), siteCheckKey(original, check));
+      return unitOf(
+        "",
+        check,
+        order,
+        affectedBeforeBounds([original], check),
+        siteCheckKey(original, check),
+      );
     })
     .filter((unit) => !published.has(unit.key!));
 
@@ -1496,7 +1530,11 @@ export function capReportForPublish<T extends CappableReport>(
   const slots: Slot[] = [];
   for (const rule of rules) {
     rule.kept.forEach((unit, i) => {
-      slots.push({ unit, rule, stamp: i === rule.kept.length - 1 && rule.total > rule.kept.length });
+      slots.push({
+        unit,
+        rule,
+        stamp: i === rule.kept.length - 1 && rule.total > rule.kept.length,
+      });
     });
   }
   for (const unit of siteUnits) slots.push({ unit, stamp: false });

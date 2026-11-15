@@ -38,7 +38,9 @@ export const clsHintsRule: Rule = {
     // twice. This check stays as an info row pointing there, keyed by the same
     // absolute URL, and never affects the score.
     if (hints.imagesWithoutDimensions.length > 0) {
-      const urls = [...new Set(hints.imagesWithoutDimensions.map((src) => absoluteUrl(src, ctx.page.url)))];
+      const urls = [
+        ...new Set(hints.imagesWithoutDimensions.map((src) => absoluteUrl(src, ctx.page.url))),
+      ];
       checks.push({
         name: "cls-images",
         status: "info",
@@ -47,7 +49,8 @@ export const clsHintsRule: Rule = {
         observation: {
           mode: "static",
           applicability: "applicable",
-          uncertainty: "Missing dimensions are a layout-shift risk hint, not a browser or field CLS measurement.",
+          uncertainty:
+            "Missing dimensions are a layout-shift risk hint, not a browser or field CLS measurement.",
         },
       });
     } else {
@@ -73,7 +76,8 @@ export const clsHintsRule: Rule = {
         observation: {
           mode: "static",
           applicability: "applicable",
-          uncertainty: "Missing dimensions are a layout-shift risk hint, not a browser or field CLS measurement.",
+          uncertainty:
+            "Missing dimensions are a layout-shift risk hint, not a browser or field CLS measurement.",
         },
       });
     }

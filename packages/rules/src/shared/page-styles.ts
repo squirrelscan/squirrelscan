@@ -245,9 +245,7 @@ function readPlainAttr(inner: string): { name: string; value: string | null } | 
  * `s` flag. Case is not tracked: a value is compared case-insensitively, a
  * superset of what a browser matches. Null for anything else.
  */
-function readOperatorAttr(
-  inner: string,
-): { name: string; value: string; op: AttrOperator } | null {
+function readOperatorAttr(inner: string): { name: string; value: string; op: AttrOperator } | null {
   const m =
     /^[\t\n\f\r ]*((?:--|-?[_a-zA-Z])[-_a-zA-Z0-9]*)[\t\n\f\r ]*([~|^$*]=)[\t\n\f\r ]*(?:"([^"\\\n\r\f]*)"|'([^'\\\n\r\f]*)'|((?:--|-?[_a-zA-Z])[-_a-zA-Z0-9]*))(?:[\t\n\f\r ]*[iIsS])?[\t\n\f\r ]*$/.exec(
       inner,
@@ -267,7 +265,9 @@ function readOperatorAttr(
  * or anything that is not plainly a name followed by `]` or an operator.
  */
 function readAttrName(inner: string): string | null {
-  const m = /^[\t\n\f\r ]*((?:--|-?[_a-zA-Z])[-_a-zA-Z0-9]*)(?:[\t\n\f\r ]*(?:[~|^$*]?=|$))/.exec(inner);
+  const m = /^[\t\n\f\r ]*((?:--|-?[_a-zA-Z])[-_a-zA-Z0-9]*)(?:[\t\n\f\r ]*(?:[~|^$*]?=|$))/.exec(
+    inner,
+  );
   return m ? asciiLower(m[1] as string) : null;
 }
 
@@ -636,8 +636,7 @@ function readHidingDeclaration(
       important: split.important,
       ...(MIXED_DISPLAY.has(v) ? { mixed: true as const } : {}),
     };
-  }
-  else out.visibility = { value: value as VisibilityValue, important: split.important };
+  } else out.visibility = { value: value as VisibilityValue, important: split.important };
   return true;
 }
 
@@ -839,7 +838,12 @@ export function readPageStyles(doc: Document): PageStyles {
           addTo(uncertain.display, key, {
             subject,
             important: important("display"),
-            width: { ranges: widths, compound: s.compound, specificity: s.specificity, order: order++ },
+            width: {
+              ranges: widths,
+              compound: s.compound,
+              specificity: s.specificity,
+              order: order++,
+            },
           });
         } else if (display) {
           addTo(uncertain.display, key, {

@@ -14,11 +14,7 @@ import type { Config } from "@squirrelscan/config";
 import type { CheckResult } from "@squirrelscan/core-contracts";
 import { createCrawler, type SQLiteStorage } from "@squirrelscan/crawler";
 
-import {
-  buildSiteContext,
-  runRulesOnStorage,
-  runStreamingRules,
-} from "../src/adapter";
+import { buildSiteContext, runRulesOnStorage, runStreamingRules } from "../src/adapter";
 import { runStreamingPreRules } from "../src/streaming-pre-rules";
 
 const RULES = ["links/broken-links", "links/broken-external-links"];
@@ -69,7 +65,10 @@ function serveSite(opts: { sitemap: boolean }): string {
         case "/robots.txt":
           return ok(`User-agent: *\nAllow: /\nSitemap: ${origin}/sitemap.xml\n`, "text/plain");
       }
-      return new Response(html("Not found"), { status: 404, headers: { "content-type": "text/html" } });
+      return new Response(html("Not found"), {
+        status: 404,
+        headers: { "content-type": "text/html" },
+      });
     },
   });
   servers.push(server);
@@ -210,7 +209,9 @@ for (const engine of ["v1", "v2"] as const) {
       expect(stats?.externalLinkCheck).toEqual({ found: 2, checked: 1, cap: 1 });
       expect(statuses(external)).toEqual(["pass:", "skipped:external-links-over-cap"]);
       // /elsewhere is on both pages, /elsewhere-two on one: the first is the one checked.
-      expect(external[0]!.message).toBe("1 of 2 external link(s) verified working; 1 could not be verified or were not checked");
+      expect(external[0]!.message).toBe(
+        "1 of 2 external link(s) verified working; 1 could not be verified or were not checked",
+      );
       expect(external[1]!.message).toBe(
         "1 of 2 external link(s) were not checked: over this audit's limit of 1, which checks the most-linked first",
       );

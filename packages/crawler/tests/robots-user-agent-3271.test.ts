@@ -26,13 +26,21 @@ const ROBOTS = [
 
 describe("robots.txt groups are matched on the robots token (#3271)", () => {
   test("a browser-style user agent alone is matched as its first token, not the bot's", () => {
-    const evaluator = createRobotsEvaluator("https://example.com/robots.txt", ROBOTS, BROWSER_STYLE);
+    const evaluator = createRobotsEvaluator(
+      "https://example.com/robots.txt",
+      ROBOTS,
+      BROWSER_STYLE,
+    );
     expect(evaluator.isAllowed("https://example.com/private/page")).toBe(true);
     expect(evaluator.crawlDelayMs).toBeNull();
   });
 
   test("the robots token selects the bot's group, Disallow and Crawl-delay included", () => {
-    const evaluator = createRobotsEvaluator("https://example.com/robots.txt", ROBOTS, "SquirrelScan");
+    const evaluator = createRobotsEvaluator(
+      "https://example.com/robots.txt",
+      ROBOTS,
+      "SquirrelScan",
+    );
     expect(evaluator.isAllowed("https://example.com/private/page")).toBe(false);
     expect(evaluator.isAllowed("https://example.com/public")).toBe(true);
     expect(evaluator.crawlDelayMs).toBe(1_000);

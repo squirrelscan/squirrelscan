@@ -29,9 +29,16 @@ export const authoritySignalsRule: Rule = {
   run(ctx: RuleContext): RuleResult {
     const checks: CheckResult[] = [];
 
-    const envelope = readCloudResult<AuthorityResult>(ctx.cloudResults, "authority-signals", ctx.page.url);
+    const envelope = readCloudResult<AuthorityResult>(
+      ctx.cloudResults,
+      "authority-signals",
+      ctx.page.url,
+    );
     if (!envelope || envelope.status === "skipped" || !envelope.data) {
-      const reason = envelope?.status === "skipped" ? (envelope.skipReason ?? "not-prefetched") : "not-prefetched";
+      const reason =
+        envelope?.status === "skipped"
+          ? (envelope.skipReason ?? "not-prefetched")
+          : "not-prefetched";
       checks.push({
         name: "authority-signals",
         status: "skipped",

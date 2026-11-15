@@ -87,7 +87,10 @@ export const tokenWeightRule: Rule = {
             label: `~${ratioPct}% of HTML is visible text (~${estimatedTokens.toLocaleString()} est. tokens)`,
           },
         ],
-        details: { textLength: ctx.parsed.content.textLength, htmlLength: ctx.parsed.content.htmlLength },
+        details: {
+          textLength: ctx.parsed.content.textLength,
+          htmlLength: ctx.parsed.content.htmlLength,
+        },
       });
     } else {
       checks.push({
@@ -95,7 +98,10 @@ export const tokenWeightRule: Rule = {
         status: "pass",
         message: `~${ratioPct}% of this page's HTML is visible text, above the 15% floor`,
         value: ratioPct,
-        details: { textLength: ctx.parsed.content.textLength, htmlLength: ctx.parsed.content.htmlLength },
+        details: {
+          textLength: ctx.parsed.content.textLength,
+          htmlLength: ctx.parsed.content.htmlLength,
+        },
       });
     }
 

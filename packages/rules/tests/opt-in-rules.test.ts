@@ -8,7 +8,7 @@ const GAP_RULES = ["gaps/keywords", "gaps/content"];
 
 function selected(
   enable: string[],
-  ruleOptions: Record<string, { enabled?: boolean }> = {}
+  ruleOptions: Record<string, { enabled?: boolean }> = {},
 ): string[] {
   const registry = loadAllRules({ includeOptIn: true });
   return filterRules([...registry.keys()], enable, [], ruleOptions, registry);
@@ -31,9 +31,7 @@ describe("opt-in rules", () => {
   });
 
   test("rule_options enabled = true selects an opt-in rule", () => {
-    expect(
-      selected(["*"], { "gaps/content": { enabled: true } })
-    ).toContain("gaps/content");
+    expect(selected(["*"], { "gaps/content": { enabled: true } })).toContain("gaps/content");
   });
 
   test("the runner uses the same opt-in selection", () => {
@@ -48,8 +46,6 @@ describe("opt-in rules", () => {
       rules: { enable: ["gaps/*"], disable: [] },
       rule_options: {},
     });
-    expect(gapRunner.getEnabledRules().map((rule) => rule.meta.id)).toEqual(
-      GAP_RULES
-    );
+    expect(gapRunner.getEnabledRules().map((rule) => rule.meta.id)).toEqual(GAP_RULES);
   });
 });

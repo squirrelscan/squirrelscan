@@ -24,7 +24,11 @@ describe("crawlRobotsUserAgent (#3390)", () => {
   test("a row with no token was matched on its user agent's product token", () => {
     expect(
       crawlRobotsUserAgent(
-        row({ userAgent: "MyBot/1.0 (+https://example.test)", robotsUserAgent: "", respectRobots: true }),
+        row({
+          userAgent: "MyBot/1.0 (+https://example.test)",
+          robotsUserAgent: "",
+          respectRobots: true,
+        }),
         cfg({ robots_user_agent: "SquirrelScan" }),
       ),
     ).toBe("MyBot");
@@ -37,9 +41,9 @@ describe("crawlRobotsUserAgent (#3390)", () => {
     expect(crawlRobotsUserAgent(null, cfg({ robots_user_agent: "SquirrelScan" }))).toBe(
       "SquirrelScan",
     );
-    expect(crawlRobotsUserAgent(undefined, cfg({ robots_user_agent: "", user_agent: "Acme/3" }))).toBe(
-      "Acme",
-    );
+    expect(
+      crawlRobotsUserAgent(undefined, cfg({ robots_user_agent: "", user_agent: "Acme/3" })),
+    ).toBe("Acme");
   });
 
   test("undefined when the crawl did not respect robots.txt, so rules read *", () => {

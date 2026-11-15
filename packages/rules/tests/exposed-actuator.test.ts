@@ -49,7 +49,10 @@ const INDEX = (base: string, ids: string[]) => ({
 const ENV = {
   activeProfiles: ["prod"],
   propertySources: [
-    { name: "systemEnvironment", properties: { DB_PASSWORD: { value: SECRET, origin: "System Environment Property" } } },
+    {
+      name: "systemEnvironment",
+      properties: { DB_PASSWORD: { value: SECRET, origin: "System Environment Property" } },
+    },
     { name: "Config resource 'class path resource [application.yml]'", properties: {} },
   ],
 };
@@ -69,12 +72,16 @@ const CONFIGPROPS = {
 };
 
 const MAPPINGS = {
-  contexts: { application: { mappings: { dispatcherServlets: { dispatcherServlet: [] }, servletFilters: [] } } },
+  contexts: {
+    application: {
+      mappings: { dispatcherServlets: { dispatcherServlet: [] }, servletFilters: [] },
+    },
+  },
 };
 
 async function run(
   routes: Record<string, Route>,
-  ctxOpts: Parameters<typeof ruleCtx>[0] = {}
+  ctxOpts: Parameters<typeof ruleCtx>[0] = {},
 ): Promise<{ checks: CheckResult[]; sent: SentRequest[] }> {
   const stub = stubFetch(routes);
   restore = stub.restore;
@@ -101,7 +108,9 @@ describe("security/exposed-actuator", () => {
 
   test("an SPA catch-all 200 on every path is not a finding", async () => {
     const shell = () => html("<!doctype html><div id=root></div>", 200);
-    const routes = Object.fromEntries(ACTUATOR_ENDPOINTS.map((e) => [`${BASE}/actuator${e.path}`, shell]));
+    const routes = Object.fromEntries(
+      ACTUATOR_ENDPOINTS.map((e) => [`${BASE}/actuator${e.path}`, shell]),
+    );
     for (const level of ["active", "aggressive"] as const) {
       const { checks, sent } = await run(routes, { level });
       // The heapdump never passes on a 200 without its header: only a 401, 403 or 404 does.
@@ -115,9 +124,16 @@ describe("security/exposed-actuator", () => {
   });
 
   test("a JSON catch-all or an empty object with a 200 is not a finding (shape, not status)", async () => {
-    for (const body of [{}, { status: "ok" }, { _links: { self: { href: `${BASE}/actuator` } } }, { contexts: {} }]) {
+    for (const body of [
+      {},
+      { status: "ok" },
+      { _links: { self: { href: `${BASE}/actuator` } } },
+      { contexts: {} },
+    ]) {
       const route = () => json(body);
-      const routes = Object.fromEntries(ACTUATOR_ENDPOINTS.map((e) => [`${BASE}/actuator${e.path}`, route]));
+      const routes = Object.fromEntries(
+        ACTUATOR_ENDPOINTS.map((e) => [`${BASE}/actuator${e.path}`, route]),
+      );
       const { checks } = await run(routes, { level: "aggressive" });
       expect(checks.map((c) => c.status)).toEqual(["pass", "skipped"]);
       restore?.();
@@ -143,7 +159,9 @@ describe("security/exposed-actuator", () => {
       "GET /actuator/configprops",
       "GET /actuator/mappings",
     ]);
-    expect(sent.every((r) => r.body === null && r.credentials === "omit" && r.redirect === "manual")).toBe(true);
+    expect(
+      sent.every((r) => r.body === null && r.credentials === "omit" && r.redirect === "manual"),
+    ).toBe(true);
   });
 
   test("active: a heapdump listed by an open index is a warning from the listing, never critical, and is not requested", async () => {
@@ -154,15 +172,17 @@ describe("security/exposed-actuator", () => {
     // The index lists endpoints even when Spring Security protects them, so the
     // listing alone is not proof a heap dump can be downloaded.
     expect(checks.find((c) => c.name === "exposed-actuator-critical")).toBeUndefined();
-    expect(checks.find((c) => c.name === "exposed-actuator-endpoints")?.items?.map((i) => i.meta?.endpoint)).toEqual([
-      "index",
-    ]);
+    expect(
+      checks
+        .find((c) => c.name === "exposed-actuator-endpoints")
+        ?.items?.map((i) => i.meta?.endpoint),
+    ).toEqual(["index"]);
     const warn = checks.find((c) => c.name === "exposed-actuator-heapdump");
     expect(warn?.status).toBe("warn");
     expect(warn?.items?.map((i) => i.meta?.endpoint)).toEqual(["heapdump"]);
     // Not requested, so not checked either: a heap dump found by an earlier aggressive run stays open.
     expect(checks.find((c) => c.name === "exposed-actuator-heapdump-not-checked")?.skipReason).toBe(
-      "probe-level-too-low"
+      "probe-level-too-low",
     );
     expect(warn?.items?.find((i) => i.id === `${BASE}/actuator/heapdump`)?.meta).toMatchObject({
       endpoint: "heapdump",
@@ -178,13 +198,15 @@ describe("security/exposed-actuator", () => {
         [`${BASE}/actuator`]: () => json(INDEX(`${BASE}/actuator`, ["health", "env", "info"])),
         [`${BASE}/actuator/env`]: () => json(ENV),
       },
-      { level: "aggressive" }
+      { level: "aggressive" },
     );
     // The heapdump is asked for whatever the index lists: it passes only on its own answer.
     expect(paths(sent)).toEqual(["GET /actuator", "GET /actuator/env", "GET /actuator/heapdump"]);
-    expect(checks.find((c) => c.name === "exposed-actuator-critical")?.items?.map((i) => i.meta?.endpoint)).toEqual([
-      "env",
-    ]);
+    expect(
+      checks
+        .find((c) => c.name === "exposed-actuator-critical")
+        ?.items?.map((i) => i.meta?.endpoint),
+    ).toEqual(["env"]);
   });
 
   test("configprops is critical and mappings is a warning", async () => {
@@ -192,12 +214,16 @@ describe("security/exposed-actuator", () => {
       [`${BASE}/actuator/configprops`]: () => json(CONFIGPROPS),
       [`${BASE}/actuator/mappings`]: () => json(MAPPINGS),
     });
-    expect(checks.find((c) => c.name === "exposed-actuator-critical")?.items?.map((i) => i.meta?.endpoint)).toEqual([
-      "configprops",
-    ]);
-    expect(checks.find((c) => c.name === "exposed-actuator-endpoints")?.items?.map((i) => i.meta?.endpoint)).toEqual([
-      "mappings",
-    ]);
+    expect(
+      checks
+        .find((c) => c.name === "exposed-actuator-critical")
+        ?.items?.map((i) => i.meta?.endpoint),
+    ).toEqual(["configprops"]);
+    expect(
+      checks
+        .find((c) => c.name === "exposed-actuator-endpoints")
+        ?.items?.map((i) => i.meta?.endpoint),
+    ).toEqual(["mappings"]);
     expect(JSON.stringify(checks)).not.toContain(SECRET);
   });
 
@@ -207,17 +233,18 @@ describe("security/exposed-actuator", () => {
       propertySources: [{ name: "big", properties: { X: { value: "a".repeat(1100 * 1024) } } }],
     });
     const { checks } = await run({
-      [`${BASE}/actuator/env`]: () => new Response(big, { headers: { "content-type": "application/json" } }),
+      [`${BASE}/actuator/env`]: () =>
+        new Response(big, { headers: { "content-type": "application/json" } }),
     });
-    expect(checks.find((c) => c.name === "exposed-actuator-critical")?.items?.[0]?.meta?.evidence).toBe(
-      "env-property-sources"
-    );
+    expect(
+      checks.find((c) => c.name === "exposed-actuator-critical")?.items?.[0]?.meta?.evidence,
+    ).toBe("env-property-sources");
   });
 
   test("a discovered actuator base is probed under its own path", async () => {
     const { checks, sent } = await run(
       { [`${BASE}/manage/actuator/env`]: () => json(ENV) },
-      { surface: surface([candidate("/manage/actuator/health", { method: "GET" })]) }
+      { surface: surface([candidate("/manage/actuator/health", { method: "GET" })]) },
     );
     expect(paths(sent).slice(0, 2)).toEqual(["GET /manage/actuator", "GET /manage/actuator/env"]);
     const critical = checks.find((c) => c.name === "exposed-actuator-critical");
@@ -235,10 +262,18 @@ describe("security/exposed-actuator", () => {
         surface: surface([
           candidate(`${other}/actuator/env`, { method: "GET" }),
           // Mislabelled as same-origin and eligible: the rule re-checks the origin.
-          candidate(`${other}/ops/actuator`, { method: "GET", sameOrigin: true, probeEligible: true }),
-          candidate("http://example.com/plain/actuator", { method: "GET", sameOrigin: true, probeEligible: true }),
+          candidate(`${other}/ops/actuator`, {
+            method: "GET",
+            sameOrigin: true,
+            probeEligible: true,
+          }),
+          candidate("http://example.com/plain/actuator", {
+            method: "GET",
+            sameOrigin: true,
+            probeEligible: true,
+          }),
         ]),
-      }
+      },
     );
     expect(sent.length).toBeGreaterThan(0);
     expect(sent.every((r) => new URL(r.url).origin === BASE)).toBe(true);
@@ -257,7 +292,7 @@ describe("security/exposed-actuator", () => {
           candidate("/c/actuator/caches", { method: "DELETE" }),
           candidate("/d/actuator/logout"),
         ]),
-      }
+      },
     );
     expect(sent.length).toBeGreaterThan(0);
     expect(sent.every((r) => r.method === "GET")).toBe(true);
@@ -269,7 +304,10 @@ describe("security/exposed-actuator", () => {
     const { sent, checks } = await run({}, { robotsTxt: robots(["/actuator"]) });
     expect(sent).toHaveLength(0);
     expect(checks).toHaveLength(2);
-    expect(checks[1]).toMatchObject({ name: "exposed-actuator-heapdump-not-checked", status: "skipped" });
+    expect(checks[1]).toMatchObject({
+      name: "exposed-actuator-heapdump-not-checked",
+      status: "skipped",
+    });
     expect(checks[0]).toMatchObject({
       name: "exposed-actuator-not-checked",
       status: "skipped",
@@ -293,7 +331,9 @@ describe("security/exposed-actuator", () => {
       });
     const limited = () => json({ error: "Too Many Requests" }, 429);
     for (const route of [limited, challenge]) {
-      const routes = Object.fromEntries(ACTUATOR_ENDPOINTS.map((e) => [`${BASE}/actuator${e.path}`, route]));
+      const routes = Object.fromEntries(
+        ACTUATOR_ENDPOINTS.map((e) => [`${BASE}/actuator${e.path}`, route]),
+      );
       const { checks, sent } = await run(routes);
       expect(sent).toHaveLength(1);
       expect(checks).toHaveLength(2);
@@ -311,7 +351,10 @@ describe("security/exposed-actuator", () => {
   test("no probe budget left: not checked, nothing sent", async () => {
     const { sent, checks } = await run({}, { budgetMs: 0 });
     expect(sent).toHaveLength(0);
-    expect(checks[0]).toMatchObject({ name: "exposed-actuator-not-checked", skipReason: "probe-budget" });
+    expect(checks[0]).toMatchObject({
+      name: "exposed-actuator-not-checked",
+      skipReason: "probe-budget",
+    });
   });
 
   test("network errors on every probe: not checked, not a pass", async () => {
@@ -322,10 +365,13 @@ describe("security/exposed-actuator", () => {
           () => {
             throw new TypeError("connection refused");
           },
-        ])
-      )
+        ]),
+      ),
     );
-    expect(checks[0]).toMatchObject({ name: "exposed-actuator-not-checked", skipReason: "probe-errors" });
+    expect(checks[0]).toMatchObject({
+      name: "exposed-actuator-not-checked",
+      skipReason: "probe-errors",
+    });
   });
 });
 
@@ -333,11 +379,15 @@ describe("selectActuatorBases", () => {
   test("caps the bases and always keeps the order: discovered, then /actuator", () => {
     const ctx = ruleCtx({
       surface: surface(
-        ["/a", "/b", "/c", "/d"].map((p) => candidate(`${p}/actuator/health`, { method: "GET" }))
+        ["/a", "/b", "/c", "/d"].map((p) => candidate(`${p}/actuator/health`, { method: "GET" })),
       ),
     });
     const sel = selectActuatorBases(ctx);
-    expect(sel.bases.map((b) => new URL(b.url).pathname)).toEqual(["/a/actuator", "/b/actuator", "/c/actuator"]);
+    expect(sel.bases.map((b) => new URL(b.url).pathname)).toEqual([
+      "/a/actuator",
+      "/b/actuator",
+      "/c/actuator",
+    ]);
     expect(sel.bases).toHaveLength(MAX_ACTUATOR_BASES);
     expect(sel.skippedCap).toBe(2);
   });
@@ -360,7 +410,8 @@ describe("security/exposed-actuator against a fixture server", () => {
         const { pathname } = new URL(req.url);
         seen.push(`${req.method} ${pathname}`);
         const origin = new URL(req.url).origin;
-        if (pathname === "/actuator") return Response.json(INDEX(`${origin}/actuator`, ["health", "env", "info"]));
+        if (pathname === "/actuator")
+          return Response.json(INDEX(`${origin}/actuator`, ["health", "env", "info"]));
         if (pathname === "/actuator/env") return Response.json(ENV);
         return new Response("Not Found", { status: 404 });
       },
@@ -373,9 +424,9 @@ describe("security/exposed-actuator against a fixture server", () => {
     expect(critical?.items?.map((i) => [i.id, i.meta?.evidence])).toEqual([
       [`${origin}/actuator/env`, "env-property-sources"],
     ]);
-    expect(checks.find((c) => c.name === "exposed-actuator-endpoints")?.items?.[0]?.meta?.evidence).toBe(
-      "actuator-index-links"
-    );
+    expect(
+      checks.find((c) => c.name === "exposed-actuator-endpoints")?.items?.[0]?.meta?.evidence,
+    ).toBe("actuator-index-links");
     const text = JSON.stringify(checks);
     expect(text).not.toContain(SECRET);
     expect(text).not.toContain("DB_PASSWORD");
@@ -433,7 +484,9 @@ describe("security/exposed-actuator against a fixture server", () => {
       },
     });
     const started = Date.now();
-    const { checks } = await exposedActuatorRule.run(serverCtx(`http://localhost:${server.port}`, "active"));
+    const { checks } = await exposedActuatorRule.run(
+      serverCtx(`http://localhost:${server.port}`, "active"),
+    );
     const elapsed = Date.now() - started;
     expect(seen).toEqual(["/actuator"]);
     expect(elapsed).toBeLessThan(ACTUATOR_PROBE_TIMEOUT_MS + 3_000);
@@ -459,7 +512,13 @@ describe("security/exposed-actuator against a fixture server", () => {
     });
     const ctx = serverCtx(`http://localhost:${server.port}`, "active");
     ctx.endpointSurface = surface(
-      ["/a", "/b"].map((p) => candidate(`http://localhost:${server.port}${p}/actuator/health`, { method: "GET", sameOrigin: true, probeEligible: true }))
+      ["/a", "/b"].map((p) =>
+        candidate(`http://localhost:${server.port}${p}/actuator/health`, {
+          method: "GET",
+          sameOrigin: true,
+          probeEligible: true,
+        }),
+      ),
     );
     const started = Date.now();
     const { checks } = await runExposedActuator(ctx, { requestTimeoutMs: 400, totalBudgetMs: 600 });
@@ -490,10 +549,23 @@ describe("security/exposed-actuator against a fixture server", () => {
     });
     const ctx = serverCtx(`http://localhost:${server.port}`, "active");
     ctx.endpointSurface = surface([
-      candidate(`http://localhost:${server.port}/a/actuator/health`, { method: "GET", sameOrigin: true, probeEligible: true }),
+      candidate(`http://localhost:${server.port}/a/actuator/health`, {
+        method: "GET",
+        sameOrigin: true,
+        probeEligible: true,
+      }),
     ]);
-    const { checks } = await runExposedActuator(ctx, { requestTimeoutMs: 300, totalBudgetMs: 10_000 });
-    expect(seen).toEqual(["/a/actuator", "/actuator", "/actuator/env", "/actuator/configprops", "/actuator/mappings"]);
+    const { checks } = await runExposedActuator(ctx, {
+      requestTimeoutMs: 300,
+      totalBudgetMs: 10_000,
+    });
+    expect(seen).toEqual([
+      "/a/actuator",
+      "/actuator",
+      "/actuator/env",
+      "/actuator/configprops",
+      "/actuator/mappings",
+    ]);
     expect(checks.map((c) => [c.name, c.skipReason])).toEqual([
       ["exposed-actuator-not-checked", "probe-incomplete"],
       ["exposed-actuator-heapdump-not-checked", "probe-level-too-low"],
@@ -503,9 +575,14 @@ describe("security/exposed-actuator against a fixture server", () => {
   test("an SPA fixture that answers every path with its 200 shell: no finding", async () => {
     using server = Bun.serve({
       port: 0,
-      fetch: () => new Response("<!doctype html><div id=app></div>", { headers: { "content-type": "text/html" } }),
+      fetch: () =>
+        new Response("<!doctype html><div id=app></div>", {
+          headers: { "content-type": "text/html" },
+        }),
     });
-    const { checks } = await exposedActuatorRule.run(serverCtx(`http://localhost:${server.port}`, "aggressive"));
+    const { checks } = await exposedActuatorRule.run(
+      serverCtx(`http://localhost:${server.port}`, "aggressive"),
+    );
     expect(checks.map((c) => [c.name, c.status])).toEqual([
       ["exposed-actuator", "pass"],
       ["exposed-actuator-heapdump-not-checked", "skipped"],
@@ -539,11 +616,19 @@ const HPROF = () =>
 describe("security/exposed-actuator: a pass clears only what was checked", () => {
   test("robots.txt disallowing only /actuator/env: no pass, env reported not checked", async () => {
     const { checks, sent } = await run({}, { robotsTxt: robots(["/actuator/env"]) });
-    expect(paths(sent)).toEqual(["GET /actuator", "GET /actuator/configprops", "GET /actuator/mappings"]);
+    expect(paths(sent)).toEqual([
+      "GET /actuator",
+      "GET /actuator/configprops",
+      "GET /actuator/mappings",
+    ]);
     expect(checks.some((c) => c.name === "exposed-actuator")).toBe(false);
     expect(clearedBy(checks)).toEqual([]);
     const nc = checks.find((c) => c.name === "exposed-actuator-not-checked");
-    expect(nc).toMatchObject({ status: "skipped", skipReason: "robots-disallowed", details: { skippedRobots: 1 } });
+    expect(nc).toMatchObject({
+      status: "skipped",
+      skipReason: "robots-disallowed",
+      details: { skippedRobots: 1 },
+    });
     expect(nc?.message).toContain(`${BASE}/actuator/env`);
   });
 
@@ -555,7 +640,9 @@ describe("security/exposed-actuator: a pass clears only what was checked", () =>
     const later = await run({});
     expect(later.sent.some((r) => r.url.includes("heapdump"))).toBe(false);
     expect(clearedBy(later.checks)).not.toContain(findingCheck);
-    expect(later.checks.find((c) => c.name === "exposed-actuator-heapdump-not-checked")).toMatchObject({
+    expect(
+      later.checks.find((c) => c.name === "exposed-actuator-heapdump-not-checked"),
+    ).toMatchObject({
       status: "skipped",
       skipReason: "probe-level-too-low",
     });
@@ -567,17 +654,27 @@ describe("security/exposed-actuator: a pass clears only what was checked", () =>
     for (const status of [404, 401, 403]) {
       const { checks, sent } = await run(
         { [`${BASE}/actuator/heapdump`]: () => json({ error: "x" }, status) },
-        { level: "aggressive" }
+        { level: "aggressive" },
       );
       expect(sent.some((r) => r.url.endsWith("/actuator/heapdump"))).toBe(true);
-      expect(checks.find((c) => c.name === "exposed-actuator-heapdump-closed")?.status).toBe("pass");
+      expect(checks.find((c) => c.name === "exposed-actuator-heapdump-closed")?.status).toBe(
+        "pass",
+      );
       expect(clearedBy(checks)).toContain("exposed-actuator-heapdump");
       restore?.();
     }
-    for (const route of [() => html("<!doctype html><div id=root></div>", 200), () => json({}, 503)]) {
-      const { checks } = await run({ [`${BASE}/actuator/heapdump`]: route }, { level: "aggressive" });
+    for (const route of [
+      () => html("<!doctype html><div id=root></div>", 200),
+      () => json({}, 503),
+    ]) {
+      const { checks } = await run(
+        { [`${BASE}/actuator/heapdump`]: route },
+        { level: "aggressive" },
+      );
       expect(clearedBy(checks)).not.toContain("exposed-actuator-heapdump");
-      expect(checks.find((c) => c.name === "exposed-actuator-heapdump-not-checked")?.status).toBe("skipped");
+      expect(checks.find((c) => c.name === "exposed-actuator-heapdump-not-checked")?.status).toBe(
+        "skipped",
+      );
       restore?.();
     }
   });
@@ -585,7 +682,7 @@ describe("security/exposed-actuator: a pass clears only what was checked", () =>
   test("aggressive: an open index that does not list heapdump still gets it requested before it can pass", async () => {
     const { checks, sent } = await run(
       { [`${BASE}/actuator`]: () => json(INDEX(`${BASE}/actuator`, ["health"])) },
-      { level: "aggressive" }
+      { level: "aggressive" },
     );
     // INDEX always carries `env-toMatch`, so env is listed and asked for too.
     expect(paths(sent)).toEqual(["GET /actuator", "GET /actuator/env", "GET /actuator/heapdump"]);
@@ -604,13 +701,19 @@ describe("security/exposed-actuator: a pass clears only what was checked", () =>
   test("throttled partway through an aggressive run: neither family is cleared", async () => {
     const { checks, sent } = await run(
       { [`${BASE}/actuator/configprops`]: () => json({ error: "Too Many Requests" }, 429) },
-      { level: "aggressive" }
+      { level: "aggressive" },
     );
-    expect(paths(sent)).toEqual(["GET /actuator", "GET /actuator/env", "GET /actuator/configprops"]);
+    expect(paths(sent)).toEqual([
+      "GET /actuator",
+      "GET /actuator/env",
+      "GET /actuator/configprops",
+    ]);
     expect(clearedBy(checks)).toEqual([]);
-    expect(checks.find((c) => c.name === "exposed-actuator-not-checked")?.skipReason).toBe("probe-incomplete");
+    expect(checks.find((c) => c.name === "exposed-actuator-not-checked")?.skipReason).toBe(
+      "probe-incomplete",
+    );
     expect(checks.find((c) => c.name === "exposed-actuator-heapdump-not-checked")?.skipReason).toBe(
-      "probe-incomplete"
+      "probe-incomplete",
     );
   });
 
@@ -626,30 +729,46 @@ describe("security/exposed-actuator: a pass clears only what was checked", () =>
     const origin = `http://localhost:${server.port}`;
     const ctx = serverCtx(origin, "aggressive");
     ctx.endpointSurface = surface([
-      candidate(`${origin}/a/actuator/health`, { method: "GET", sameOrigin: true, probeEligible: true }),
+      candidate(`${origin}/a/actuator/health`, {
+        method: "GET",
+        sameOrigin: true,
+        probeEligible: true,
+      }),
     ]);
-    const { checks } = await runExposedActuator(ctx, { requestTimeoutMs: 300, totalBudgetMs: 10_000 });
+    const { checks } = await runExposedActuator(ctx, {
+      requestTimeoutMs: 300,
+      totalBudgetMs: 10_000,
+    });
     expect(clearedBy(checks)).toEqual([]);
     const hd = checks.find((c) => c.name === "exposed-actuator-heapdump-not-checked");
     expect(hd).toMatchObject({ status: "skipped", skipReason: "probe-incomplete" });
     expect(hd?.message).toContain(`${origin}/a/actuator/heapdump`);
-    expect(checks.find((c) => c.name === "exposed-actuator-not-checked")?.message).toContain(`${origin}/a/actuator/env`);
-    }, 30_000);
+    expect(checks.find((c) => c.name === "exposed-actuator-not-checked")?.message).toContain(
+      `${origin}/a/actuator/env`,
+    );
+  }, 30_000);
 });
 
 describe("security/exposed-actuator: at most one heap dump per run", () => {
   test("two bases that both serve an HPROF header get exactly one /heapdump request", async () => {
     const { checks, sent } = await run(
       { [`${BASE}/manage/actuator/heapdump`]: HPROF, [`${BASE}/actuator/heapdump`]: HPROF },
-      { level: "aggressive", surface: surface([candidate("/manage/actuator/health", { method: "GET" })]) }
+      {
+        level: "aggressive",
+        surface: surface([candidate("/manage/actuator/health", { method: "GET" })]),
+      },
     );
     expect(sent.filter((r) => r.url.endsWith("/heapdump")).map((r) => r.url)).toEqual([
       `${BASE}/manage/actuator/heapdump`,
     ]);
-    expect(checks.find((c) => c.name === "exposed-actuator-heapdump")).toMatchObject({ status: "fail" });
+    expect(checks.find((c) => c.name === "exposed-actuator-heapdump")).toMatchObject({
+      status: "fail",
+    });
     const nc = checks.find((c) => c.name === "exposed-actuator-heapdump-not-checked");
     expect(nc).toMatchObject({ status: "skipped", skipReason: "probe-incomplete" });
-    expect(nc?.message).toContain(`${BASE}/actuator/heapdump (not requested: a heap dump was already confirmed`);
+    expect(nc?.message).toContain(
+      `${BASE}/actuator/heapdump (not requested: a heap dump was already confirmed`,
+    );
     expect(clearedBy(checks)).not.toContain("exposed-actuator-heapdump");
   });
 
@@ -667,9 +786,16 @@ describe("security/exposed-actuator: at most one heap dump per run", () => {
     const origin = `http://localhost:${server.port}`;
     const ctx = serverCtx(origin, "aggressive");
     ctx.endpointSurface = surface([
-      candidate(`${origin}/a/actuator/health`, { method: "GET", sameOrigin: true, probeEligible: true }),
+      candidate(`${origin}/a/actuator/health`, {
+        method: "GET",
+        sameOrigin: true,
+        probeEligible: true,
+      }),
     ]);
-    const { checks } = await runExposedActuator(ctx, { requestTimeoutMs: 300, totalBudgetMs: 10_000 });
+    const { checks } = await runExposedActuator(ctx, {
+      requestTimeoutMs: 300,
+      totalBudgetMs: 10_000,
+    });
     expect(seen.filter((p) => p.endsWith("/heapdump"))).toEqual(["/a/actuator/heapdump"]);
     // Base two's other endpoints are still asked for.
     expect(seen).toContain("/actuator/env");
@@ -678,17 +804,26 @@ describe("security/exposed-actuator: at most one heap dump per run", () => {
     const nc = checks.find((c) => c.name === "exposed-actuator-heapdump-not-checked");
     expect(nc).toMatchObject({ status: "skipped", skipReason: "probe-incomplete" });
     expect(nc?.message).toContain(
-      `${origin}/a/actuator/heapdump (the request timed out; an open endpoint may have started writing a dump)`
+      `${origin}/a/actuator/heapdump (the request timed out; an open endpoint may have started writing a dump)`,
     );
-    expect(nc?.message).toContain(`${origin}/actuator/heapdump (not requested: an earlier heapdump request timed out`);
+    expect(nc?.message).toContain(
+      `${origin}/actuator/heapdump (not requested: an earlier heapdump request timed out`,
+    );
   }, 30_000);
 });
 
 // A Spring Boot 1.x heap dump: the .hprof file gzipped, sent as an attachment
 // (no Content-Encoding: the gzip is the file, not a transfer coding).
-const GZIP_HPROF = Bun.gzipSync(new TextEncoder().encode(`JAVA PROFILE 1.0.2\0${"x".repeat(4096)}`));
-const gzipBody = (headers: Record<string, string>, status = 200) => () =>
-  new Response(GZIP_HPROF, { status, headers: { "content-type": "application/octet-stream", ...headers } });
+const GZIP_HPROF = Bun.gzipSync(
+  new TextEncoder().encode(`JAVA PROFILE 1.0.2\0${"x".repeat(4096)}`),
+);
+const gzipBody =
+  (headers: Record<string, string>, status = 200) =>
+  () =>
+    new Response(GZIP_HPROF, {
+      status,
+      headers: { "content-type": "application/octet-stream", ...headers },
+    });
 
 describe("security/exposed-actuator: any heapdump answer but 401, 403 or 404 ends heapdump requests", () => {
   const twoBases = surface([candidate("/manage/actuator/health", { method: "GET" })]);
@@ -708,7 +843,7 @@ describe("security/exposed-actuator: any heapdump answer but 401, 403 or 404 end
     test(`${label} on base one: zero /heapdump requests on base two, never closed`, async () => {
       const { checks, sent } = await run(
         { [`${BASE}/manage/actuator/heapdump`]: route },
-        { level: "aggressive", surface: twoBases }
+        { level: "aggressive", surface: twoBases },
       );
       expect(sent.filter((r) => r.url.endsWith("/heapdump")).map((r) => r.url)).toEqual([
         `${BASE}/manage/actuator/heapdump`,
@@ -719,7 +854,9 @@ describe("security/exposed-actuator: any heapdump answer but 401, 403 or 404 end
       expect(checks.some((c) => c.name === "exposed-actuator-heapdump")).toBe(false);
       const nc = checks.find((c) => c.name === "exposed-actuator-heapdump-not-checked");
       expect(nc).toMatchObject({ status: "skipped", skipReason: "probe-incomplete" });
-      expect(nc?.message).toContain(`${BASE}/actuator/heapdump (not requested: an earlier heapdump request`);
+      expect(nc?.message).toContain(
+        `${BASE}/actuator/heapdump (not requested: an earlier heapdump request`,
+      );
     });
   }
 });
@@ -733,7 +870,7 @@ describe("security/exposed-actuator: a gzipped (Spring Boot 1.x) heap dump", () 
     ]) {
       const { checks } = await run(
         { [`${BASE}/actuator/heapdump`]: gzipBody({ "content-disposition": disposition }) },
-        { level: "aggressive" }
+        { level: "aggressive" },
       );
       const critical = checks.find((c) => c.name === "exposed-actuator-heapdump");
       expect(critical?.status).toBe("fail");
@@ -775,7 +912,9 @@ describe("security/exposed-actuator: a gzipped (Spring Boot 1.x) heap dump", () 
     const origin = `http://localhost:${server.port}`;
     const { checks } = await exposedActuatorRule.run(serverCtx(origin, "aggressive"));
     expect(chunksSent).toBeLessThan(20_000);
-    expect(checks.find((c) => c.name === "exposed-actuator-heapdump")?.items?.[0]?.meta?.evidence).toBe("hprof-gzip");
+    expect(
+      checks.find((c) => c.name === "exposed-actuator-heapdump")?.items?.[0]?.meta?.evidence,
+    ).toBe("hprof-gzip");
   }, 30_000);
 
   test("gzip magic without a .hprof attachment name is not checked, not a finding", async () => {
@@ -785,9 +924,14 @@ describe("security/exposed-actuator: a gzipped (Spring Boot 1.x) heap dump", () 
       { "content-disposition": "inline" },
     ];
     for (const headers of variants) {
-      const { checks } = await run({ [`${BASE}/actuator/heapdump`]: gzipBody(headers) }, { level: "aggressive" });
+      const { checks } = await run(
+        { [`${BASE}/actuator/heapdump`]: gzipBody(headers) },
+        { level: "aggressive" },
+      );
       expect(checks.some((c) => c.name === "exposed-actuator-heapdump")).toBe(false);
-      expect(checks.find((c) => c.name === "exposed-actuator-heapdump-not-checked")?.status).toBe("skipped");
+      expect(checks.find((c) => c.name === "exposed-actuator-heapdump-not-checked")?.status).toBe(
+        "skipped",
+      );
       expect(clearedBy(checks)).not.toContain("exposed-actuator-heapdump");
       restore?.();
     }
@@ -797,14 +941,19 @@ describe("security/exposed-actuator: a gzipped (Spring Boot 1.x) heap dump", () 
     using server = Bun.serve({
       port: 0,
       fetch() {
-        return new Response(Bun.gzipSync(new TextEncoder().encode("<!doctype html><div id=root></div>")), {
-          headers: { "content-type": "text/html; charset=utf-8", "content-encoding": "gzip" },
-        });
+        return new Response(
+          Bun.gzipSync(new TextEncoder().encode("<!doctype html><div id=root></div>")),
+          {
+            headers: { "content-type": "text/html; charset=utf-8", "content-encoding": "gzip" },
+          },
+        );
       },
     });
     const origin = `http://localhost:${server.port}`;
     const { checks } = await exposedActuatorRule.run(serverCtx(origin, "aggressive"));
     expect(checks.some((c) => c.name === "exposed-actuator-heapdump")).toBe(false);
-    expect(checks.find((c) => c.name === "exposed-actuator-heapdump-not-checked")?.status).toBe("skipped");
+    expect(checks.find((c) => c.name === "exposed-actuator-heapdump-not-checked")?.status).toBe(
+      "skipped",
+    );
   }, 30_000);
 });

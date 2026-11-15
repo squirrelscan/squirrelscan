@@ -33,8 +33,7 @@ export const jsRedirectsRule: Rule = {
 
     // Filter scripts with 3XX redirect status
     const redirectingScripts = scripts.filter(
-      (script) =>
-        script.status !== null && script.status >= 300 && script.status < 400
+      (script) => script.status !== null && script.status >= 300 && script.status < 400,
     );
 
     if (redirectingScripts.length > 0) {
@@ -44,9 +43,7 @@ export const jsRedirectsRule: Rule = {
         .join("\n");
 
       const suffix =
-        redirectingScripts.length > 5
-          ? `\n+${redirectingScripts.length - 5} more`
-          : "";
+        redirectingScripts.length > 5 ? `\n+${redirectingScripts.length - 5} more` : "";
 
       checks.push({
         name: "js-redirects",

@@ -39,8 +39,7 @@ export const entityTypeDriftRule: Rule = {
   meta: {
     id: "schema/entity-type-drift",
     name: "Entity Type Drift",
-    description:
-      "Finds one @id declared with different @type sets on different pages",
+    description: "Finds one @id declared with different @type sets on different pages",
     solution: `The same @id is an Organization on one page and an Organization plus LocalBusiness on another. A search engine merges the declarations by id and is then left deciding which type set is authoritative, which affects which rich results the entity is eligible for. Pick one type set and emit it identically everywhere: if the entity is a LocalBusiness, say so on every page that declares it, not only on the contact page. See ${ENTITY_FIX_DOCS}.`,
     category: "schema",
     scope: "site",
@@ -61,8 +60,7 @@ export const entityTypeDriftRule: Rule = {
     const offenders = map.nodes
       .filter(
         (node) =>
-          node.id !== null &&
-          node.conflicts.some((conflict) => conflict.property === "@type")
+          node.id !== null && node.conflicts.some((conflict) => conflict.property === "@type"),
       )
       .sort(byReach);
 
@@ -84,7 +82,7 @@ export const entityTypeDriftRule: Rule = {
         return entityItem(node, {
           declaredTypeSets: drift?.values.map((value) => readTypeSet(value.value)) ?? [],
         });
-      })
+      }),
     );
     const worst = offenders[0]!;
     const worstDrift = worst.conflicts.find((conflict) => conflict.property === "@type");
@@ -95,7 +93,9 @@ export const entityTypeDriftRule: Rule = {
           name: CHECK,
           status: "warn",
           message: `${offenders.length} ${offenders.length === 1 ? "entity is" : "entities are"} declared with more than one @type set${moreSuffix(hidden)}`,
-          value: clipValue(`${entityLabel(worst)}: ${(worstDrift?.values ?? []).map((value) => readTypeSet(value.value)).join(" vs ")}`),
+          value: clipValue(
+            `${entityLabel(worst)}: ${(worstDrift?.values ?? []).map((value) => readTypeSet(value.value)).join(" vs ")}`,
+          ),
           expected: "one @type set per @id",
           items,
         },

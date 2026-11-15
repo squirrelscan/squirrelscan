@@ -1,10 +1,6 @@
 // Event schema type
 
-import type {
-  ImageObjectSchema,
-  PostalAddressSchema,
-  SchemaType,
-} from "./base";
+import type { ImageObjectSchema, PostalAddressSchema, SchemaType } from "./base";
 import type { OrganizationSchema } from "./organization";
 import type { PersonSchema } from "./person";
 import type { OfferSchema } from "./product";
@@ -37,10 +33,7 @@ export interface EventSchema extends SchemaType {
   image?: string | ImageObjectSchema | (string | ImageObjectSchema)[];
   url?: string;
   organizer?: OrganizationSchema | PersonSchema;
-  performer?:
-    | PersonSchema
-    | OrganizationSchema
-    | (PersonSchema | OrganizationSchema)[];
+  performer?: PersonSchema | OrganizationSchema | (PersonSchema | OrganizationSchema)[];
   offers?: OfferSchema | OfferSchema[];
   eventStatus?: string;
   eventAttendanceMode?: string;

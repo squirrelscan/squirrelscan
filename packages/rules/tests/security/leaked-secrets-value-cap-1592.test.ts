@@ -97,7 +97,7 @@ describe("stored value length cap (#1592)", () => {
       },
       options: {},
     } as unknown as RuleContext;
-    const result = (await leakedSecretsRule.run(ctx));
+    const result = await leakedSecretsRule.run(ctx);
     const medium = result.checks.find((c) => c.name === "leaked-secrets-medium");
     expect(medium).toBeDefined();
     expect(medium!.items!.length).toBeGreaterThan(0);

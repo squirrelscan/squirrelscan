@@ -24,8 +24,10 @@ async function run(description: string | null, lang = "en"): Promise<CheckResult
 const get = (checks: CheckResult[], name: string) => checks.find((c) => c.name === name)!;
 
 const ZH = "真皮租借保齡球鞋，EU 尺寸 24–52，自 2003 年起供應保齡球館。可採用您的配色並加上您的標";
-const JA = "本革のレンタルボウリングシューズ。サイズは24から52まで、2003年からボウリング場に提供しています。";
-const KO = "가죽 대여 볼링화입니다. 사이즈는 24부터 52까지 있으며 2003년부터 볼링장에 공급하고 있습니다.";
+const JA =
+  "本革のレンタルボウリングシューズ。サイズは24から52まで、2003年からボウリング場に提供しています。";
+const KO =
+  "가죽 대여 볼링화입니다. 사이즈는 24부터 52까지 있으며 2003년부터 볼링장에 공급하고 있습니다.";
 const TH = "รองเท้าโบว์ลิ่งหนังแท้สำหรับเช่า ขนาด 24 ถึง 52 จัดจำหน่ายให้ลานโบว์ลิ่งตั้งแต่ปี 2003";
 
 describe("core/meta-description script awareness", () => {
@@ -41,7 +43,10 @@ describe("core/meta-description script awareness", () => {
   });
 
   test("140-character English description passes", async () => {
-    const check = get(await run("a".repeat(70) + " " + "b".repeat(69)), "meta-description-too-short");
+    const check = get(
+      await run("a".repeat(70) + " " + "b".repeat(69)),
+      "meta-description-too-short",
+    );
     expect(check.status).toBe("pass");
   });
 

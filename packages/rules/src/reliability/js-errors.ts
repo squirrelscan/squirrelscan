@@ -16,11 +16,7 @@ import type {
   RenderRuntimeError,
 } from "@squirrelscan/core-contracts";
 
-import {
-  humanizeCloudSkip,
-  readCloudResult,
-  type CloudSkipReason,
-} from "../cloud";
+import { humanizeCloudSkip, readCloudResult, type CloudSkipReason } from "../cloud";
 import { registrableDomain } from "../content/dev-leakage";
 import type { Rule, RuleContext, RuleResult } from "../types";
 
@@ -29,12 +25,7 @@ const MAX_SAMPLE_PAGES = 10;
 /** Longest normalised message kept in a group key. */
 const MAX_MESSAGE_LENGTH = 200;
 
-type Category =
-  | "uncaught"
-  | "hydration"
-  | "console"
-  | "third-party"
-  | "request";
+type Category = "uncaught" | "hydration" | "console" | "third-party" | "request";
 
 interface Group {
   category: Category;
@@ -62,11 +53,7 @@ function isIgnoredMessage(message: string): boolean {
   if (/ResizeObserver loop/i.test(message)) return true;
   // CSP violations are security/csp-violations (#425).
   if (/content security policy/i.test(message)) return true;
-  if (
-    /refused to (load|execute|connect|apply|frame|run)\b.*(violates|directive)/i.test(
-      message
-    )
-  ) {
+  if (/refused to (load|execute|connect|apply|frame|run)\b.*(violates|directive)/i.test(message)) {
     return true;
   }
   // Chrome's console echo of a failed request: the request itself is reported from failedRequests.
@@ -113,8 +100,7 @@ function firstPartyChecker(baseUrl: string): (url: string) => boolean {
 
 /** The renderer saw a bot or WAF challenge in place of the page: its errors are the challenge's. */
 function isChallengePage(item: RenderResultItem): boolean {
-  if (item.headers?.["cf-mitigated"]?.toLowerCase() === "challenge")
-    return true;
+  if (item.headers?.["cf-mitigated"]?.toLowerCase() === "challenge") return true;
   return item.status === 403 || item.status === 429 || item.status === 503;
 }
 
@@ -127,8 +113,7 @@ function pathOf(url: string): string {
 }
 
 function sourceLabel(error: RenderRuntimeError, pageUrl: string): string {
-  const src =
-    error.sourceUrl && error.sourceUrl !== "" ? error.sourceUrl : pageUrl;
+  const src = error.sourceUrl && error.sourceUrl !== "" ? error.sourceUrl : pageUrl;
   const where = pathOf(src);
   return error.line !== undefined ? `${where}:${error.line}` : where;
 }
@@ -187,20 +172,12 @@ export const jsErrorsRule: Rule = {
     });
 
     if (!renders || renders.size === 0) {
-      return skip(
-        "JavaScript errors were not checked",
-        humanizeCloudSkip("not-prefetched")
-      );
+      return skip("JavaScript errors were not checked", humanizeCloudSkip("not-prefetched"));
     }
 
     const isFirstParty = site ? firstPartyChecker(site.baseUrl) : () => false;
     const groups = new Map<string, Group>();
-    const add = (
-      category: Category,
-      key: string,
-      label: string,
-      page: string
-    ): void => {
+    const add = (category: Category, key: string, label: string, page: string): void => {
       const groupKey = `${category}\n${key}`;
       let group = groups.get(groupKey);
       if (!group) {
@@ -219,11 +196,7 @@ export const jsErrorsRule: Rule = {
     let firstSkip: CloudSkipReason | string | undefined;
 
     for (const pageUrl of renders.keys()) {
-      const envelope = readCloudResult<RenderResultItem>(
-        ctx.cloudResults,
-        "render",
-        pageUrl
-      );
+      const envelope = readCloudResult<RenderResultItem>(ctx.cloudResults, "render", pageUrl);
       if (!envelope || envelope.status === "skipped" || !envelope.data) {
         firstSkip ??= envelope?.skipReason ?? "not-prefetched";
         unrendered++;
@@ -239,40 +212,30 @@ export const jsErrorsRule: Rule = {
         continue;
       }
       // Without site data the first-party split is unknowable: skip rather than misclassify.
-      if (!site)
-        return skip("Site data not available", "Site data not available");
+      if (!site) return skip("Site data not available", "Site data not available");
       measured++;
-      const {
-        pageErrors = [],
-        consoleErrors = [],
-        failedRequests = [],
-      } = data.runtime;
+      const { pageErrors = [], consoleErrors = [], failedRequests = [] } = data.runtime;
 
       for (const err of pageErrors) {
         if (!err.message || isIgnoredMessage(err.message)) continue;
-        const src =
-          err.sourceUrl && err.sourceUrl !== "" ? err.sourceUrl : pageUrl;
+        const src = err.sourceUrl && err.sourceUrl !== "" ? err.sourceUrl : pageUrl;
         const first = isFirstParty(src);
         const norm = normaliseMessage(err.message);
         const file = stripQuery(src);
         const label = `${err.message.split("\n")[0]?.slice(0, 160)} at ${sourceLabel(err, pageUrl)}`;
-        if (isHydrationMessage(err.message))
-          add("hydration", `${norm}\n${file}`, label, pageUrl);
+        if (isHydrationMessage(err.message)) add("hydration", `${norm}\n${file}`, label, pageUrl);
         else if (first) add("uncaught", `${norm}\n${file}`, label, pageUrl);
         else add("third-party", `${norm}\n${file}`, label, pageUrl);
       }
 
       for (const err of consoleErrors) {
         if (!err.message || isIgnoredMessage(err.message)) continue;
-        const src =
-          err.sourceUrl && err.sourceUrl !== "" ? err.sourceUrl : pageUrl;
+        const src = err.sourceUrl && err.sourceUrl !== "" ? err.sourceUrl : pageUrl;
         const norm = normaliseMessage(err.message);
         const file = stripQuery(src);
         const label = `console.error: ${err.message.split("\n")[0]?.slice(0, 160)} at ${sourceLabel(err, pageUrl)}`;
-        if (isHydrationMessage(err.message))
-          add("hydration", `${norm}\n${file}`, label, pageUrl);
-        else if (isFirstParty(src))
-          add("console", `${norm}\n${file}`, label, pageUrl);
+        if (isHydrationMessage(err.message)) add("hydration", `${norm}\n${file}`, label, pageUrl);
+        else if (isFirstParty(src)) add("console", `${norm}\n${file}`, label, pageUrl);
         else add("third-party", `console\n${norm}\n${file}`, label, pageUrl);
       }
 
@@ -296,7 +259,7 @@ export const jsErrorsRule: Rule = {
           first ? "request" : "third-party",
           `request\n${file}\n${detail}`,
           `${req.resourceType ? `${req.resourceType} ` : ""}${file} (${detail})`,
-          pageUrl
+          pageUrl,
         );
       }
     }
@@ -306,7 +269,7 @@ export const jsErrorsRule: Rule = {
       if (unmeasured > 0) {
         return skip(
           "JavaScript errors were not checked: the renderer did not record runtime errors for these pages",
-          RUNTIME_NOT_RECORDED_SKIP_REASON
+          RUNTIME_NOT_RECORDED_SKIP_REASON,
         );
       }
       // Every rendered page was a WAF or bot challenge: the rule could read none of them. A coded
@@ -315,12 +278,12 @@ export const jsErrorsRule: Rule = {
       if (challenged > 0 && !firstSkip) {
         return skip(
           "JavaScript errors were not checked: every rendered page was a WAF or bot challenge, so its errors say nothing about the site",
-          UNREAD_PAGE_SKIP_REASON
+          UNREAD_PAGE_SKIP_REASON,
         );
       }
       return skip(
         "JavaScript errors were not checked",
-        humanizeCloudSkip((firstSkip as CloudSkipReason) ?? "not-prefetched")
+        humanizeCloudSkip((firstSkip as CloudSkipReason) ?? "not-prefetched"),
       );
     }
 
@@ -342,7 +305,7 @@ export const jsErrorsRule: Rule = {
       category: Category,
       name: string,
       status: "fail" | "warn",
-      message: (n: number) => string
+      message: (n: number) => string,
     ): void => {
       const list = of(category);
       if (list.length === 0) return;
@@ -359,31 +322,26 @@ export const jsErrorsRule: Rule = {
       "uncaught",
       "js-errors",
       "fail",
-      (n) => `${n} uncaught JavaScript error(s) thrown from first-party scripts`
+      (n) => `${n} uncaught JavaScript error(s) thrown from first-party scripts`,
     );
-    emit(
-      "hydration",
-      "hydration-errors",
-      "warn",
-      (n) => `${n} framework hydration mismatch(es)`
-    );
+    emit("hydration", "hydration-errors", "warn", (n) => `${n} framework hydration mismatch(es)`);
     emit(
       "request",
       "failed-runtime-requests",
       "warn",
-      (n) => `${n} first-party request(s) made after load answered 5xx or 404`
+      (n) => `${n} first-party request(s) made after load answered 5xx or 404`,
     );
     emit(
       "console",
       "console-errors",
       "warn",
-      (n) => `${n} console.error message(s) from first-party code`
+      (n) => `${n} console.error message(s) from first-party code`,
     );
     emit(
       "third-party",
       "third-party-js-errors",
       "warn",
-      (n) => `${n} third-party JavaScript error(s) or failed request(s)`
+      (n) => `${n} third-party JavaScript error(s) or failed request(s)`,
     );
 
     // A page with no runtime data is a coded gap, never covered by a pass: the error may be on it (#704).

@@ -9,16 +9,14 @@ import { getPathname, normalizeUrl } from "@squirrelscan/utils";
 /** A test for the front door, keyed the way the inbound-link counts are. */
 export function frontDoorTest(
   baseUrl: string,
-  entryUrls: readonly string[] = []
+  entryUrls: readonly string[] = [],
 ): (url: string) => boolean {
   const normalizedBase = normalizeUrl(baseUrl);
   const entryPages = new Set(entryUrls.map((entry) => normalizeUrl(entry)));
   return (url) => {
     const normalizedUrl = normalizeUrl(url);
     return (
-      normalizedUrl === normalizedBase ||
-      getPathname(url) === "/" ||
-      entryPages.has(normalizedUrl)
+      normalizedUrl === normalizedBase || getPathname(url) === "/" || entryPages.has(normalizedUrl)
     );
   };
 }

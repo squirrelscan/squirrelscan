@@ -71,7 +71,9 @@ export const entitySameAsMissingRule: Rule = {
           name: CHECK,
           status: "info",
           message: `${entityLabel(primary)} has no sameAs profiles`,
-          value: clipValue(`declared on ${pageTotal(primary)} ${pageTotal(primary) === 1 ? "page" : "pages"}`),
+          value: clipValue(
+            `declared on ${pageTotal(primary)} ${pageTotal(primary) === 1 ? "page" : "pages"}`,
+          ),
           expected: "sameAs listing every profile the organization controls",
           items: [
             {

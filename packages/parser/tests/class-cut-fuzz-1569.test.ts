@@ -20,7 +20,8 @@ const DOCS = 100_000;
 // hide a cut: a value that swallows later fragments must still count each of its tokens.
 let uid = 0;
 const U = (prefix = "c"): string => `${prefix}${uid++}`;
-const T = (n: number, sep = " ", prefix = "c"): string => Array.from({ length: n }, () => U(prefix)).join(sep);
+const T = (n: number, sep = " ", prefix = "c"): string =>
+  Array.from({ length: n }, () => U(prefix)).join(sep);
 const N = (): string => T(LIMIT + 4);
 
 const FRAGMENTS: Array<() => string> = [
@@ -94,20 +95,24 @@ function rng(seed: number): () => number {
 }
 
 /** A line of the tree after the cut: an element whose class list is over the limit keeps its first LIMIT tokens. */
-const clip = (repeats: boolean) => (line: string): string => {
-  if (repeats) return line;
-  const match = /^(<\S+ id=.* class=)(\[.*\])>$/.exec(line);
-  if (!match) return line;
-  const tokens = JSON.parse(match[2]!) as string[];
-  return tokens.length > LIMIT ? `${match[1]}${JSON.stringify(tokens.slice(0, LIMIT))}>` : line;
-};
+const clip =
+  (repeats: boolean) =>
+  (line: string): string => {
+    if (repeats) return line;
+    const match = /^(<\S+ id=.* class=)(\[.*\])>$/.exec(line);
+    if (!match) return line;
+    const tokens = JSON.parse(match[2]!) as string[];
+    return tokens.length > LIMIT ? `${match[1]}${JSON.stringify(tokens.slice(0, LIMIT))}>` : line;
+  };
 
 /**
  * The string the cut sees on the real path: `parseHTML` parses a page that builds no `<html>` again inside a wrapper (a page that
  * ends in a tag the tokenizer never finishes is the case: the wrapper finishes it), and a RangeError, hence the cut, happens there.
  */
 function parsedAs(html: string): string {
-  return linkedomParseHTML(html).document.documentElement ? html : `<html><head></head><body>${html}</body></html>`;
+  return linkedomParseHTML(html).document.documentElement
+    ? html
+    : `<html><head></head><body>${html}</body></html>`;
 }
 
 interface Oracle {
@@ -143,9 +148,14 @@ function dump(html: string, withClasses: boolean): string[] {
   const walk = (node: any): void => {
     for (const child of Array.from(node.childNodes as ArrayLike<any>)) {
       if (child.nodeType === 1) {
-        const reads = Array.from(child.attributes as ArrayLike<{ name: string }>).some((attribute) => attribute.name === "class");
-        const tokens: string[] = reads && withClasses ? Array.from(child.classList as Iterable<string>) : [];
-        lines.push(`<${child.localName} id=${child.getAttribute("id")} class=${JSON.stringify(tokens)}>`);
+        const reads = Array.from(child.attributes as ArrayLike<{ name: string }>).some(
+          (attribute) => attribute.name === "class",
+        );
+        const tokens: string[] =
+          reads && withClasses ? Array.from(child.classList as Iterable<string>) : [];
+        lines.push(
+          `<${child.localName} id=${child.getAttribute("id")} class=${JSON.stringify(tokens)}>`,
+        );
         walk(child);
       } else lines.push(`#${child.nodeType}:${JSON.stringify(child.textContent)}`);
     }
@@ -154,35 +164,35 @@ function dump(html: string, withClasses: boolean): string[] {
   return lines;
 }
 
-test(
-  `${DOCS.toLocaleString("en-US")} generated documents: the cut changes only the value of an over-limit class`,
-  () => {
-    const next = rng(1569);
-    let withCut = 0;
-    let exact = 0;
-    for (let i = 0; i < DOCS; i++) {
-      const parts = 2 + Math.floor(next() * 5);
-      let html = "";
-      for (let k = 0; k < parts; k++) html += FRAGMENTS[Math.floor(next() * FRAGMENTS.length)]!();
-      html = parsedAs(html);
-      const want = oracle(html);
-      const { text, cut } = truncateClassAttributes(html, LIMIT);
-      const where = `document ${i}: ${JSON.stringify(html)}`;
-      if (JSON.stringify(cut) !== JSON.stringify(want.overLimit)) throw new Error(`cut counts differ in ${where}: got ${JSON.stringify(cut)}, want ${JSON.stringify(want.overLimit)}`);
-      if (cut.length === 0) {
-        if (text !== html) throw new Error(`text changed without a cut in ${where}`);
-        continue;
-      }
-      withCut++;
-      // elements, ids and text always compare; the class lists compare too unless a value repeats a token
-      const before = dump(html, !want.repeats);
-      const after = dump(text, !want.repeats);
-      if (JSON.stringify(after) !== JSON.stringify(before.map(clip(want.repeats)))) throw new Error(`tree differs in ${where}`);
-      if (!want.repeats) exact++;
+test(`${DOCS.toLocaleString("en-US")} generated documents: the cut changes only the value of an over-limit class`, () => {
+  const next = rng(1569);
+  let withCut = 0;
+  let exact = 0;
+  for (let i = 0; i < DOCS; i++) {
+    const parts = 2 + Math.floor(next() * 5);
+    let html = "";
+    for (let k = 0; k < parts; k++) html += FRAGMENTS[Math.floor(next() * FRAGMENTS.length)]!();
+    html = parsedAs(html);
+    const want = oracle(html);
+    const { text, cut } = truncateClassAttributes(html, LIMIT);
+    const where = `document ${i}: ${JSON.stringify(html)}`;
+    if (JSON.stringify(cut) !== JSON.stringify(want.overLimit))
+      throw new Error(
+        `cut counts differ in ${where}: got ${JSON.stringify(cut)}, want ${JSON.stringify(want.overLimit)}`,
+      );
+    if (cut.length === 0) {
+      if (text !== html) throw new Error(`text changed without a cut in ${where}`);
+      continue;
     }
-    expect(exact).toBeGreaterThan(DOCS / 5);
-    // the generator must exercise the cut, not only the no-op path
-    expect(withCut).toBeGreaterThan(DOCS / 4);
-  },
-  600_000,
-);
+    withCut++;
+    // elements, ids and text always compare; the class lists compare too unless a value repeats a token
+    const before = dump(html, !want.repeats);
+    const after = dump(text, !want.repeats);
+    if (JSON.stringify(after) !== JSON.stringify(before.map(clip(want.repeats))))
+      throw new Error(`tree differs in ${where}`);
+    if (!want.repeats) exact++;
+  }
+  expect(exact).toBeGreaterThan(DOCS / 5);
+  // the generator must exercise the cut, not only the no-op path
+  expect(withCut).toBeGreaterThan(DOCS / 4);
+}, 600_000);

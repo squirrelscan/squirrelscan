@@ -22,9 +22,12 @@ describe("findingScope declarations", () => {
     expect(rules.length).toBeGreaterThan(100);
   });
 
-  test.each(rules.map((r) => [r.meta.id, r.meta] as const))("%s declares a findingScope", (_id, meta) => {
-    expect(["page", "resource"]).toContain(meta.findingScope!);
-  });
+  test.each(rules.map((r) => [r.meta.id, r.meta] as const))(
+    "%s declares a findingScope",
+    (_id, meta) => {
+      expect(["page", "resource"]).toContain(meta.findingScope!);
+    },
+  );
 
   test.each(PAGE_RULES)("%s is page scope", (id) => {
     const rule = rules.find((r) => r.meta.id === id);

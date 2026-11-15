@@ -3,13 +3,22 @@ import { describe, expect, test } from "bun:test";
 import type { CheckResult } from "@squirrelscan/core-contracts";
 import { parsePage } from "@squirrelscan/parser";
 
-import { cutInsideWord, splitEllipsis, truncationArtifactsRule } from "../src/content/truncation-artifacts";
+import {
+  cutInsideWord,
+  splitEllipsis,
+  truncationArtifactsRule,
+} from "../src/content/truncation-artifacts";
 import type { ParsedPage, RuleContext } from "../src/types";
 import { expectDeclaredChecks } from "./helpers/declared-checks";
 
 function run(
   body: string,
-  { title = "A complete page title", description = "", head = "", headers = {} as Record<string, string> } = {},
+  {
+    title = "A complete page title",
+    description = "",
+    head = "",
+    headers = {} as Record<string, string>,
+  } = {},
 ): CheckResult {
   const desc = description ? `<meta name="description" content="${description}">` : "";
   const html = `<html><head><title>${title}</title>${desc}${head}</head><body>${body}</body></html>`;
@@ -25,12 +34,20 @@ function run(
   return out.checks[0]!;
 }
 
-const LONG_BODY = "Our dashboard gives every team a single place to follow audits, fixes and regressions over time.";
+const LONG_BODY =
+  "Our dashboard gives every team a single place to follow audits, fixes and regressions over time.";
 
 describe("content/truncation-artifacts helpers", () => {
   test("splitEllipsis separates the stump from the ellipsis", () => {
-    expect(splitEllipsis("the dashbo...")).toMatchObject({ fragment: "the dashbo", glued: true, hadEllipsis: true });
-    expect(splitEllipsis("the dashboard …")).toMatchObject({ fragment: "the dashboard", glued: false });
+    expect(splitEllipsis("the dashbo...")).toMatchObject({
+      fragment: "the dashbo",
+      glued: true,
+      hadEllipsis: true,
+    });
+    expect(splitEllipsis("the dashboard …")).toMatchObject({
+      fragment: "the dashboard",
+      glued: false,
+    });
     expect(splitEllipsis("a whole sentence.")).toMatchObject({ hadEllipsis: false });
     expect(splitEllipsis("cut off [...]")).toMatchObject({ fragment: "cut off", glued: false });
   });
@@ -44,14 +61,18 @@ describe("content/truncation-artifacts helpers", () => {
 
 describe("content/truncation-artifacts", () => {
   test("fail: a title that is a prefix of the H1, cut mid-word", () => {
-    const c = run("<h1>Introducing the new dashboard for teams</h1>", { title: "Introducing the new dashbo" });
+    const c = run("<h1>Introducing the new dashboard for teams</h1>", {
+      title: "Introducing the new dashbo",
+    });
     expect(c.status).toBe("fail");
     expect(c.message).toContain("<title>");
     expect(c.message).toContain("Introducing the new dashbo");
   });
 
   test("fail: a title cut mid-word with a trailing ellipsis", () => {
-    const c = run("<h1>Introducing the new dashboard for teams</h1>", { title: "Introducing the new dashbo..." });
+    const c = run("<h1>Introducing the new dashboard for teams</h1>", {
+      title: "Introducing the new dashbo...",
+    });
     expect(c.status).toBe("fail");
     expect(c.items?.[0]?.snippet).toBe("Introducing the new dashbo...");
   });
@@ -64,7 +85,10 @@ describe("content/truncation-artifacts", () => {
   });
 
   test("fail: a description cut mid-word, proven by the body copy", () => {
-    const c = run(`<p>${LONG_BODY}</p>`, { description: "Our dashboard gives every team a single place to follow audits, fixes and regress…" });
+    const c = run(`<p>${LONG_BODY}</p>`, {
+      description:
+        "Our dashboard gives every team a single place to follow audits, fixes and regress…",
+    });
     expect(c.status).toBe("fail");
     expect(c.message).toContain("meta description");
   });
@@ -86,27 +110,42 @@ describe("content/truncation-artifacts", () => {
   });
 
   test("warn: body copy cut mid-word, a longer version elsewhere, no read more link", () => {
-    const full = "The quarterly report covers every audit we ran across the whole customer base this year.";
-    const c = run(`<p>${full}</p><div><p>The quarterly report covers every audit we ran across the whole cust…</p></div>`);
+    const full =
+      "The quarterly report covers every audit we ran across the whole customer base this year.";
+    const c = run(
+      `<p>${full}</p><div><p>The quarterly report covers every audit we ran across the whole cust…</p></div>`,
+    );
     expect(c.status).toBe("warn");
     expect(c.message).toContain("body copy");
   });
 
   test("warn: body copy ending in a glued ellipsis at a round limit", () => {
-    const text = `${"Notes about the release process and how our team ships fixes ".repeat(2)}to productio`.slice(0, 100);
+    const text =
+      `${"Notes about the release process and how our team ships fixes ".repeat(2)}to productio`.slice(
+        0,
+        100,
+      );
     expect(text.length).toBe(100);
     expect(run(`<p>${text}...</p>`).status).toBe("warn");
   });
 
   test("pass: the same cut body copy with a read more link beside it", () => {
-    const text = `${"Notes about the release process and how our team ships fixes ".repeat(2)}to productio`.slice(0, 100);
+    const text =
+      `${"Notes about the release process and how our team ships fixes ".repeat(2)}to productio`.slice(
+        0,
+        100,
+      );
     const c = run(`<article><p>${text}...</p><a href="/post">Read more</a></article>`);
     expect(c.status).toBe("pass");
   });
 
   test("pass: the no-false-positive page: quotation, stylistic and whole-word ellipses", () => {
     // A 100 character mid-word cut: it warns outside the quotation (see the blockquote/q test below).
-    const quoted = `${"We were going to ship it in the spring but the company and the board kept moving the dates ".repeat(2)}`.slice(0, 100);
+    const quoted =
+      `${"We were going to ship it in the spring but the company and the board kept moving the dates ".repeat(2)}`.slice(
+        0,
+        100,
+      );
     expect(quoted.length).toBe(100);
     const c = run(
       `<h1>Why we stopped waiting</h1>
@@ -116,7 +155,8 @@ describe("content/truncation-artifacts", () => {
        <p>${LONG_BODY}</p>`,
       {
         title: "Why we stopped waiting...",
-        description: "A short note on why the team stopped waiting for the perfect moment to launch.",
+        description:
+          "A short note on why the team stopped waiting for the perfect moment to launch.",
       },
     );
     expect(c.status).toBe("pass");
@@ -124,7 +164,11 @@ describe("content/truncation-artifacts", () => {
 
   test("pass: a round-limit mid-word cut inside a <blockquote> or <q> is a quotation, not a truncation", () => {
     // The same text warns unquoted (see the round-limit body test above): only the quotation exclusion clears it.
-    const text = `${"Notes about the release process and how our team ships fixes ".repeat(2)}to productio`.slice(0, 100);
+    const text =
+      `${"Notes about the release process and how our team ships fixes ".repeat(2)}to productio`.slice(
+        0,
+        100,
+      );
     expect(text.length).toBe(100);
     expect(run(`<p>${text}...</p>`).status).toBe("warn");
     expect(run(`<blockquote><p>${text}...</p></blockquote>`).status).toBe("pass");
@@ -132,7 +176,11 @@ describe("content/truncation-artifacts", () => {
   });
 
   test("pass: a title that is a complete prefix of the H1 at a word boundary", () => {
-    expect(run("<h1>Introducing the new dashboard for teams</h1>", { title: "Introducing the new dashboard" }).status).toBe("pass");
+    expect(
+      run("<h1>Introducing the new dashboard for teams</h1>", {
+        title: "Introducing the new dashboard",
+      }).status,
+    ).toBe("pass");
   });
 
   test("pass: a title that ends where an H1 <br> breaks the line", () => {

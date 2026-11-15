@@ -27,12 +27,20 @@ type Served = Extract<TlsProbe, { kind: "certificate" }>;
 /** A served certificate for `names`, signed by the test intermediate and trusted. */
 function cert(
   names: string[],
-  overrides: { validTo?: Date; validFrom?: Date; rsaBits?: number; trusted?: boolean; trustError?: string } = {},
+  overrides: {
+    validTo?: Date;
+    validFrom?: Date;
+    rsaBits?: number;
+    trusted?: boolean;
+    trustError?: string;
+  } = {},
 ): Served {
   const { validTo, validFrom, rsaBits, trusted = true, trustError } = overrides;
   // A certificate with only an end date is a 90-day one (Let's Encrypt's lifetime),
   // so the lifetime-relative expiry window is what a real certificate gets (#1279).
-  const defaultFrom = validTo ? new Date(validTo.getTime() - 90 * DAY_MS) : new Date(NOW.getTime() - DAY_MS);
+  const defaultFrom = validTo
+    ? new Date(validTo.getTime() - 90 * DAY_MS)
+    : new Date(NOW.getTime() - DAY_MS);
   return {
     kind: "certificate",
     certificate: {
@@ -69,7 +77,10 @@ const fixtures = {
   selfSigned: cert(LOCAL, { trusted: false, trustError: "DEPTH_ZERO_SELF_SIGNED_CERT" }),
   leafOnly: cert(LOCAL, { trusted: false, trustError: "UNABLE_TO_VERIFY_LEAF_SIGNATURE" }),
   weakKey: cert(LOCAL, { rsaBits: 1024 }),
-  ecKey: { ...cert(LOCAL), certificate: { ...cert(LOCAL).certificate, rsaBits: undefined } } as Served,
+  ecKey: {
+    ...cert(LOCAL),
+    certificate: { ...cert(LOCAL).certificate, rsaBits: undefined },
+  } as Served,
 };
 
 /**
@@ -84,15 +95,23 @@ async function audit(
 ): Promise<{ checks: CheckResult[]; calls: string[] }> {
   const calls: string[] = [];
   const [audited] = Object.keys(hosts);
-  const result = await checkTlsCertificate(`https://${audited}/`, optionsSchema.parse({ ...options }), {
-    now,
-    probe: async ({ hostname }: TlsTarget): Promise<TlsProbe> => {
-      calls.push(hostname);
-      return (
-        hosts[hostname] ?? { kind: "unreachable", code: "ENOTFOUND", message: `${hostname} does not resolve` }
-      );
+  const result = await checkTlsCertificate(
+    `https://${audited}/`,
+    optionsSchema.parse({ ...options }),
+    {
+      now,
+      probe: async ({ hostname }: TlsTarget): Promise<TlsProbe> => {
+        calls.push(hostname);
+        return (
+          hosts[hostname] ?? {
+            kind: "unreachable",
+            code: "ENOTFOUND",
+            message: `${hostname} does not resolve`,
+          }
+        );
+      },
     },
-  });
+  );
   return { checks: result.checks, calls };
 }
 
@@ -114,14 +133,21 @@ describe("expiry thresholds", () => {
   test("a 90-day certificate with 28 days left, inside the renewal window, does not warn (#1279)", async () => {
     const { checks } = await audit({ localhost: fixtures.expiresIn28Days });
     expect(check(checks, "tls-certificate-expiry")?.status).toBe("pass");
-    expect(check(await audit({ localhost: fixtures.expiresIn20Days }).then((r) => r.checks), "tls-certificate-expiry")?.status).toBe("pass");
+    expect(
+      check(
+        await audit({ localhost: fixtures.expiresIn20Days }).then((r) => r.checks),
+        "tls-certificate-expiry",
+      )?.status,
+    ).toBe("pass");
   });
 
   test("a 90-day certificate with 10 days left warns with the date and days left (#1279)", async () => {
     const { checks } = await audit({ localhost: fixtures.expiresIn10Days });
     const expiry = check(checks, "tls-certificate-expiry");
     expect(expiry?.status).toBe("warn");
-    expect(expiry?.message).toMatch(/expires in 10 days \(\d{4}-\d{2}-\d{2}\), within the 16-day warning threshold/);
+    expect(expiry?.message).toMatch(
+      /expires in 10 days \(\d{4}-\d{2}-\d{2}\), within the 16-day warning threshold/,
+    );
     expect(expiry?.details).toMatchObject({ warnDays: 16, warnDaysSource: "lifetime" });
   });
 
@@ -151,16 +177,29 @@ describe("expiry thresholds", () => {
     const thirty = await audit({ localhost: fixtures.expiresIn28Days }, { warn_days: 30 });
     expect(check(thirty.checks, "tls-certificate-expiry")).toMatchObject({
       status: "warn",
-      details: { warnDays: 30, warnDaysSource: "option", errorDays: 7, errorDaysSource: "lifetime" },
+      details: {
+        warnDays: 30,
+        warnDaysSource: "option",
+        errorDays: 7,
+        errorDaysSource: "lifetime",
+      },
     });
-    const five = await audit({ localhost: fixtures.expiresIn10Days }, { warn_days: 5, error_days: 3 });
+    const five = await audit(
+      { localhost: fixtures.expiresIn10Days },
+      { warn_days: 5, error_days: 3 },
+    );
     expect(check(five.checks, "tls-certificate-expiry")?.status).toBe("pass");
   });
 
   test("the windows follow the certificate's lifetime", () => {
     const at = (lifetimeDays: number, options: object = {}) => {
       const window = expiryWindowFor(
-        { names: [], issuer: "x", validFrom: new Date(0), validTo: new Date(lifetimeDays * DAY_MS) },
+        {
+          names: [],
+          issuer: "x",
+          validFrom: new Date(0),
+          validTo: new Date(lifetimeDays * DAY_MS),
+        },
         optionsSchema.parse(options),
       );
       return [window.warnDays, window.errorDays];
@@ -389,10 +428,17 @@ describe("not checked", () => {
   test("a probe that cannot run here reports not checked with its reason, never pass", async () => {
     const result = await checkTlsCertificate("https://example.test/", DEFAULTS, {
       now: new Date(),
-      probe: async () => ({ kind: "unavailable", reason: "an HTTP proxy is set in the environment" }),
+      probe: async () => ({
+        kind: "unavailable",
+        reason: "an HTTP proxy is set in the environment",
+      }),
     });
     expect(result.checks).toHaveLength(1);
-    expect(result.checks[0]).toMatchObject({ status: "skipped", value: "not-checked", skipReason: "tls-certificate-not-checked" });
+    expect(result.checks[0]).toMatchObject({
+      status: "skipped",
+      value: "not-checked",
+      skipReason: "tls-certificate-not-checked",
+    });
     expect(result.checks[0]!.message).toBe(
       "TLS certificate not checked: an HTTP proxy is set in the environment",
     );
@@ -404,7 +450,11 @@ describe("not checked", () => {
       probe: async () => ({ kind: "unreachable", code: "ECONNREFUSED", message: "refused" }),
     });
     expect(result.checks).toHaveLength(1);
-    expect(result.checks[0]).toMatchObject({ status: "skipped", value: "not-checked", skipReason: "tls-certificate-not-checked" });
+    expect(result.checks[0]).toMatchObject({
+      status: "skipped",
+      value: "not-checked",
+      skipReason: "tls-certificate-not-checked",
+    });
     expect(result.checks[0]!.message).toContain("ECONNREFUSED");
   });
 
@@ -436,7 +486,11 @@ describe("the injected probe", () => {
     const result = await tlsCertificateRule.run(ctxFor("https://example.com/"));
     const checks = result.checks as CheckResult[];
     expect(checks).toHaveLength(1);
-    expect(checks[0]).toMatchObject({ status: "skipped", value: "not-checked", skipReason: "tls-certificate-not-checked" });
+    expect(checks[0]).toMatchObject({
+      status: "skipped",
+      value: "not-checked",
+      skipReason: "tls-certificate-not-checked",
+    });
     expect(checks[0]!.message).toBe(
       "TLS certificate not checked: this environment does not open TLS connections for the audit",
     );
@@ -472,7 +526,11 @@ describe("the injected probe", () => {
       }),
     });
     expect(result.checks).toHaveLength(1);
-    expect(result.checks[0]).toMatchObject({ status: "skipped", value: "not-checked", skipReason: "tls-certificate-not-checked" });
+    expect(result.checks[0]).toMatchObject({
+      status: "skipped",
+      value: "not-checked",
+      skipReason: "tls-certificate-not-checked",
+    });
     expect(result.checks[0]!.message).toBe(
       "TLS certificate not checked: example.com was not contacted: refused: host resolves to a non-public address",
     );
@@ -532,7 +590,11 @@ describe("rule declaration", () => {
 describe("key and certificate limits (#1259)", () => {
   const withKey = (extra: Partial<Served["certificate"]>, protocol?: string): Served => {
     const base = cert(LOCAL);
-    return { ...base, certificate: { ...base.certificate, rsaBits: undefined, ...extra }, ...(protocol ? { protocol } : {}) } as Served;
+    return {
+      ...base,
+      certificate: { ...base.certificate, rsaBits: undefined, ...extra },
+      ...(protocol ? { protocol } : {}),
+    } as Served;
   };
   const RSA = (bits: number) => withKey({ keyType: "rsa", keyBits: bits, rsaBits: bits });
   const EC = (curve: string, bits: number) => withKey({ keyType: "ecdsa", keyBits: bits, curve });
@@ -553,29 +615,60 @@ describe("key and certificate limits (#1259)", () => {
 
   test("a DSA key warns by default and passes when dsa is allowed at its minimum", async () => {
     const dsa = withKey({ keyType: "dsa", keyBits: 2048 });
-    expect((await keyOf(dsa))?.message).toContain("not in the allowed key types (rsa, ecdsa, ed25519)");
+    expect((await keyOf(dsa))?.message).toContain(
+      "not in the allowed key types (rsa, ecdsa, ed25519)",
+    );
     expect(await keyOf(dsa, { key_types: ["rsa", "ecdsa", "ed25519", "dsa"] })).toBeUndefined();
-    expect((await keyOf(withKey({ keyType: "dsa", keyBits: 1024 }), { key_types: ["dsa"] }))?.message).toContain("below the 2048-bit minimum for DSA");
+    expect(
+      (await keyOf(withKey({ keyType: "dsa", keyBits: 1024 }), { key_types: ["dsa"] }))?.message,
+    ).toContain("below the 2048-bit minimum for DSA");
   });
 
   test("the minimums are options", async () => {
-    expect((await keyOf(RSA(2048), { rsa_min_bits: 3072 }))?.message).toContain("below the 3072-bit minimum for RSA");
+    expect((await keyOf(RSA(2048), { rsa_min_bits: 3072 }))?.message).toContain(
+      "below the 3072-bit minimum for RSA",
+    );
     expect(await keyOf(RSA(1024), { rsa_min_bits: 1024 })).toBeUndefined();
-    expect((await keyOf(EC("P-256", 256), { ecdsa_min_bits: 384 }))?.message).toContain("below the 384-bit minimum for ECDSA");
+    expect((await keyOf(EC("P-256", 256), { ecdsa_min_bits: 384 }))?.message).toContain(
+      "below the 384-bit minimum for ECDSA",
+    );
   });
 
   test("a key type outside key_types warns even when its size is fine", async () => {
-    expect((await keyOf(RSA(4096), { key_types: ["ecdsa", "ed25519"] }))?.message).toContain("not in the allowed key types (ecdsa, ed25519)");
+    expect((await keyOf(RSA(4096), { key_types: ["ecdsa", "ed25519"] }))?.message).toContain(
+      "not in the allowed key types (ecdsa, ed25519)",
+    );
   });
 
   const sig = async (algorithm: string | undefined, options: Partial<TlsCertificateOptions> = {}) =>
-    check((await audit({ localhost: withKey({ keyType: "rsa", keyBits: 2048, rsaBits: 2048, signatureAlgorithm: algorithm }) }, options)).checks, "tls-certificate-signature");
+    check(
+      (
+        await audit(
+          {
+            localhost: withKey({
+              keyType: "rsa",
+              keyBits: 2048,
+              rsaBits: 2048,
+              signatureAlgorithm: algorithm,
+            }),
+          },
+          options,
+        )
+      ).checks,
+      "tls-certificate-signature",
+    );
 
   test("a SHA-1 or MD5 signature warns by default, SHA-256 and unread ones do not", async () => {
     expect((await sig("sha1WithRSAEncryption"))?.status).toBe("warn");
     expect((await sig("md5WithRSAEncryption"))?.status).toBe("warn");
     expect((await sig("ecdsa-with-SHA1"))?.status).toBe("warn");
-    for (const ok of ["sha256WithRSAEncryption", "sha384WithRSAEncryption", "ecdsa-with-SHA256", "ED25519", undefined]) {
+    for (const ok of [
+      "sha256WithRSAEncryption",
+      "sha384WithRSAEncryption",
+      "ecdsa-with-SHA256",
+      "ED25519",
+      undefined,
+    ]) {
       expect(await sig(ok), String(ok)).toBeUndefined();
     }
   });
@@ -584,8 +677,19 @@ describe("key and certificate limits (#1259)", () => {
     expect(await sig("sha1WithRSAEncryption", { reject_weak_signature: false })).toBeUndefined();
   });
 
-  const proto = async (protocol: string | undefined, options: Partial<TlsCertificateOptions> = {}) =>
-    check((await audit({ localhost: withKey({ keyType: "rsa", keyBits: 2048, rsaBits: 2048 }, protocol) }, options)).checks, "tls-certificate-protocol");
+  const proto = async (
+    protocol: string | undefined,
+    options: Partial<TlsCertificateOptions> = {},
+  ) =>
+    check(
+      (
+        await audit(
+          { localhost: withKey({ keyType: "rsa", keyBits: 2048, rsaBits: 2048 }, protocol) },
+          options,
+        )
+      ).checks,
+      "tls-certificate-protocol",
+    );
 
   test("a negotiated protocol below min_tls_version warns; the default minimum is TLS 1.2", async () => {
     expect((await proto("TLSv1.1"))?.message).toContain("TLSv1.1, below the TLSv1.2 minimum");

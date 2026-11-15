@@ -201,7 +201,7 @@ async function runBothWays(
   env: Env,
   rule: Rule,
   options: Record<string, unknown>,
-  extra: Extra = {}
+  extra: Extra = {},
 ) {
   const sitePages = env.built.map(({ page, parsed }) => ({
     url: page.normalizedUrl,
@@ -224,8 +224,9 @@ async function runBothWays(
     options,
     ...(extra.collectedSignals ? { collectedSignals: extra.collectedSignals } : {}),
   };
-  const legacy = (await Promise.resolve(rule.run({ ...base, site: site(sitePages) } as RuleContext)))
-    .checks;
+  const legacy = (
+    await Promise.resolve(rule.run({ ...base, site: site(sitePages) } as RuleContext))
+  ).checks;
   const siteQuery = await run(createSiteQuery(env.store, CRAWL));
   const streamed = (
     await Promise.resolve(rule.run({ ...base, site: site([]), siteQuery } as RuleContext))
@@ -237,7 +238,7 @@ function normalise(checks: CheckResult[]): CheckResult[] {
   return [...checks]
     .sort((a, b) => (a.name < b.name ? -1 : 1))
     .map((c) =>
-      c.items ? { ...c, items: [...c.items].sort((x, y) => (x.id < y.id ? -1 : 1)) } : c
+      c.items ? { ...c, items: [...c.items].sort((x, y) => (x.id < y.id ? -1 : 1)) } : c,
     );
 }
 
@@ -285,7 +286,7 @@ describe("SiteQuery dual-path: links/click-depth", () => {
       env,
       clickDepthRule,
       { maxDepth: 3 },
-      { crawlLimits: { pagesCrawled: 10, maxPages: 10 } }
+      { crawlLimits: { pagesCrawled: 10, maxPages: 10 } },
     );
     expect(streamed).toEqual(legacy);
     expect(legacy[0]!.details).toMatchObject({ lowerBound: true });
@@ -327,7 +328,7 @@ describe("SiteQuery dual-path: integrity/orphan-page", () => {
       env,
       orphanPageRule,
       { minPages: 3 },
-      { sitemaps: SITEMAP_WITH_HIDDEN, ...withSignals }
+      { sitemaps: SITEMAP_WITH_HIDDEN, ...withSignals },
     );
     expect(streamed).toEqual(legacy);
     const ids = (legacy.find((c) => c.name === "orphan-page-review")?.items ?? []).map((i) => i.id);
@@ -346,7 +347,12 @@ describe("SiteQuery dual-path: integrity/orphan-page", () => {
 
   test("without a sitemap", async () => {
     const env = await seed();
-    const { legacy, streamed } = await runBothWays(env, orphanPageRule, { minPages: 3 }, withSignals);
+    const { legacy, streamed } = await runBothWays(
+      env,
+      orphanPageRule,
+      { minPages: 3 },
+      withSignals,
+    );
     expect(streamed).toEqual(legacy);
     const ids = (legacy.find((c) => c.name === "orphan-page-review")?.items ?? []).map((i) => i.id);
     expect(ids).toContain(P("hidden-insm"));
@@ -360,7 +366,7 @@ describe("SiteQuery dual-path: integrity/orphan-page", () => {
       env,
       orphanPageRule,
       { minPages: 3 },
-      { sitemaps: truncated, collectedSignals: signals(P("hidden-nosm")) }
+      { sitemaps: truncated, collectedSignals: signals(P("hidden-nosm")) },
     );
     expect(streamed).toEqual(legacy);
     expect(legacy.map((c) => c.name)).toEqual(["orphan-page-review"]);
@@ -374,7 +380,7 @@ describe("SiteQuery dual-path: integrity/orphan-page", () => {
       env,
       orphanPageRule,
       { minPages: 3 },
-      { sitemaps: SITEMAP_WITH_HIDDEN, collectedSignals: signals(P("hidden-nosm")) }
+      { sitemaps: SITEMAP_WITH_HIDDEN, collectedSignals: signals(P("hidden-nosm")) },
     );
     expect(streamed).toEqual(legacy);
     const fail = legacy.find((c) => c.name === "orphan-page")!;
@@ -385,7 +391,12 @@ describe("SiteQuery dual-path: integrity/orphan-page", () => {
 
   test("minPages above the universe size skips on both paths", async () => {
     const env = await seed();
-    const { legacy, streamed } = await runBothWays(env, orphanPageRule, { minPages: 500 }, withSignals);
+    const { legacy, streamed } = await runBothWays(
+      env,
+      orphanPageRule,
+      { minPages: 500 },
+      withSignals,
+    );
     expect(streamed).toEqual(legacy);
     expect(legacy[0]!.status).toBe("skipped");
     await run(env.store.close());
@@ -397,7 +408,13 @@ describe("SiteQuery dual-path: integrity/orphan-page", () => {
     const ctx = {
       page: { url: BASE, html: "", statusCode: 200, loadTime: 0, headers: {} },
       parsed: {} as ParsedPage,
-      site: { baseUrl: BASE, entryUrls: [BASE, LANDING], pages: [], robotsTxt: null, sitemaps: null },
+      site: {
+        baseUrl: BASE,
+        entryUrls: [BASE, LANDING],
+        pages: [],
+        robotsTxt: null,
+        sitemaps: null,
+      },
       collectedSignals: signals(),
       options: { minPages: 3 },
     } as unknown as RuleContext;
@@ -447,7 +464,7 @@ describe("SiteQuery.outgoingEdges", () => {
   test("sources are restricted to the supplied universe", async () => {
     const env = await seed();
     const siteQuery = await run(
-      createSiteQuery(env.store, CRAWL, { universe: [BASE, P("a"), P("b")] })
+      createSiteQuery(env.store, CRAWL, { universe: [BASE, P("a"), P("b")] }),
     );
     const sources: string[] = [];
     for await (const page of siteQuery.outgoingEdges!()) sources.push(page.source);
@@ -549,7 +566,7 @@ describe("SQLiteStorage.getPageLinkRowsByUrls", () => {
     // Every other page: 600 urls, more than one 500-url statement, plus one unknown url.
     const wanted = specs.filter((_, i) => i % 2 === 0).map((s) => s.url);
     const rows = await run(
-      store.getPageLinkRowsByUrls(CRAWL, [...wanted].reverse().concat(P("missing")))
+      store.getPageLinkRowsByUrls(CRAWL, [...wanted].reverse().concat(P("missing"))),
     );
     expect(rows.map((r) => r.normalizedUrl)).toEqual(wanted);
     expect(rows[0]!.status).toBe(200);

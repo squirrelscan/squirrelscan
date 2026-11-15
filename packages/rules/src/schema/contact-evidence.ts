@@ -50,11 +50,16 @@ type Org = ReturnType<typeof readOrganizations>;
 const MAX_FORMS = 200;
 
 /** Telephone and email declared on organization entities and on ContactPoint nodes, by representation. */
-function structuredChannels(org: Org, resolve: Resolve): Map<"structured-telephone" | "structured-email", EvidenceSource> {
+function structuredChannels(
+  org: Org,
+  resolve: Resolve,
+): Map<"structured-telephone" | "structured-email", EvidenceSource> {
   const found = new Map<"structured-telephone" | "structured-email", EvidenceSource>();
   const read = (node: StructuredNode, source: EvidenceSource): void => {
-    if (isFilled(node["telephone"]) && !found.has("structured-telephone")) found.set("structured-telephone", source);
-    if (isFilled(node["email"]) && !found.has("structured-email")) found.set("structured-email", source);
+    if (isFilled(node["telephone"]) && !found.has("structured-telephone"))
+      found.set("structured-telephone", source);
+    if (isFilled(node["email"]) && !found.has("structured-email"))
+      found.set("structured-email", source);
   };
   for (const { source, node } of org.candidates) {
     read(node, source);
@@ -101,7 +106,13 @@ function hasContactForm(doc: Document): boolean {
     if (form.getAttribute("role") === "search") return false;
     if (form.querySelector('input[type="search" i], input[type="password" i]')) return false;
     if (form.querySelector("textarea")) return true;
-    const label = [form.getAttribute("action"), form.id, form.getAttribute("class"), form.getAttribute("name"), form.getAttribute("aria-label")]
+    const label = [
+      form.getAttribute("action"),
+      form.id,
+      form.getAttribute("class"),
+      form.getAttribute("name"),
+      form.getAttribute("aria-label"),
+    ]
       .filter(Boolean)
       .join(" ");
     return /contact/i.test(label);
@@ -112,7 +123,11 @@ function hasContactForm(doc: Document): boolean {
  * Evidence for the page's contact channels, or null when there is no sign the
  * page is about an organization, a shop or contact at all (nothing to report).
  */
-export function readContactEvidence(ctx: RuleContext, org: Org, shop: boolean): ContactEvidence | null {
+export function readContactEvidence(
+  ctx: RuleContext,
+  org: Org,
+  shop: boolean,
+): ContactEvidence | null {
   const doc = ctx.parsed.document;
   if (!doc) return null;
   const structured = structuredChannels(org, org.resolve);
@@ -131,7 +146,8 @@ export function readContactEvidence(ctx: RuleContext, org: Org, shop: boolean): 
   const channels: ChannelEvidence[] = CONTACT_CHANNELS.map((channel) => {
     const source = seen[channel];
     if (source) return { channel, status: "present" as const, source };
-    if (org.read !== "complete") return { channel, status: "unknown" as const, reason: "incomplete-read" as const };
+    if (org.read !== "complete")
+      return { channel, status: "unknown" as const, reason: "incomplete-read" as const };
     return { channel, status: "absent" as const };
   });
   const formOnly = form && !structured.size && !mailto && !tel;
@@ -149,7 +165,8 @@ export function contactChannelsCheck(e: ContactEvidence): CheckResult {
   const unknown = e.channels.some((c) => c.status === "unknown");
   let message: string;
   if (e.formOnly) message = "Contact channels observed on this page: contact form only";
-  else if (present.length > 0) message = `Contact channels observed on this page: ${present.join(", ")}`;
+  else if (present.length > 0)
+    message = `Contact channels observed on this page: ${present.join(", ")}`;
   else if (unknown) message = "Contact channels on this page: unknown (incomplete read)";
   else message = "Contact channels observed on this page: none";
   return {
@@ -161,7 +178,12 @@ export function contactChannelsCheck(e: ContactEvidence): CheckResult {
     details: {
       read: e.read,
       formOnly: e.formOnly,
-      channels: Object.fromEntries(e.channels.map((c) => [c.channel, { status: c.status, source: c.source, reason: c.reason }])),
+      channels: Object.fromEntries(
+        e.channels.map((c) => [
+          c.channel,
+          { status: c.status, source: c.source, reason: c.reason },
+        ]),
+      ),
     },
   };
 }

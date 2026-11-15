@@ -117,8 +117,7 @@ const TYPE_RULES: Record<string, SchemaRule> = {
         lastMayOmit: ["item"],
         // The older pattern names the crumb on its `item` node instead.
         alsoAt: {
-          name: (crumb, nodes) =>
-            describe(crumb.item, nodes).some((node) => !isMissing(node.name)),
+          name: (crumb, nodes) => describe(crumb.item, nodes).some((node) => !isMissing(node.name)),
         },
       },
     },
@@ -229,9 +228,7 @@ function isUrlOrImage(value: unknown): boolean {
   const types: unknown[] = Array.isArray(type) ? type : type === undefined ? [] : [type];
   const isImage = (t: unknown) => typeof t === "string" && IMAGE_OBJECT_TYPES.has(bareTypeName(t));
   if (types.length > 0 && !types.some(isImage)) return false;
-  return (
-    typeof value["@id"] === "string" || !isMissing(value.url) || !isMissing(value.contentUrl)
-  );
+  return typeof value["@id"] === "string" || !isMissing(value.url) || !isMissing(value.contentUrl);
 }
 
 /**
@@ -391,7 +388,11 @@ function positionOf(entry: unknown, nodes: NodeIndex): number | undefined {
     const raw = node.position;
     // Numbers and numeric strings only: coercing an object can run its code.
     const position =
-      typeof raw === "number" ? raw : typeof raw === "string" && raw.trim() !== "" ? Number(raw) : NaN;
+      typeof raw === "number"
+        ? raw
+        : typeof raw === "string" && raw.trim() !== ""
+          ? Number(raw)
+          : NaN;
     if (Number.isFinite(position)) return position;
   }
   return undefined;

@@ -208,13 +208,19 @@ describe("an email address in a path segment is masked (#774)", () => {
       "https://m.example/unsubscribe/…/77b1",
     );
     expect(maskLinkTokens("https://m.example/u/user%40example.com")).toBe("https://m.example/u/…");
-    expect(maskLinkTokens("https://m.example/u/user+tag@example.co.uk/")).toBe("https://m.example/u/…/");
-    expect(maskLinkTokens("https://m.example/prefs;email=user@example.com")).toBe("https://m.example/…");
+    expect(maskLinkTokens("https://m.example/u/user+tag@example.co.uk/")).toBe(
+      "https://m.example/u/…/",
+    );
+    expect(maskLinkTokens("https://m.example/prefs;email=user@example.com")).toBe(
+      "https://m.example/…",
+    );
     expect(maskLinkTokens("https://m.example/subscribers/user@example.com.json")).toBe(
       "https://m.example/subscribers/…",
     );
     expect(maskLinkTokens("https://m.example/u/(user@example.com)")).toBe("https://m.example/u/…");
-    expect(maskLinkTokens("https://m.example/u/user@m%C3%BCnchen.de")).toBe("https://m.example/u/…");
+    expect(maskLinkTokens("https://m.example/u/user@m%C3%BCnchen.de")).toBe(
+      "https://m.example/u/…",
+    );
     expect(maskLinkTokens("https://medium.example/@writer/a-post")).toBe(
       "https://medium.example/@writer/a-post",
     );

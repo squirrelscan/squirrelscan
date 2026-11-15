@@ -48,20 +48,26 @@ describe("static-hidden: markup", () => {
 
   test("a <style> rule it can decide hides the element (pub#678)", () => {
     expect(verdict('<style>.x{display:none}</style><b id="t" class="x"></b>')).toBe("hidden");
-    expect(verdict('<style>.x{visibility:hidden}</style><div class="x"><b id="t"></b></div>')).toBe("hidden");
+    expect(verdict('<style>.x{visibility:hidden}</style><div class="x"><b id="t"></b></div>')).toBe(
+      "hidden",
+    );
   });
 
   test("with an external stylesheet, hiding from a <style> rule is not settled", () => {
     const external = '<link rel="stylesheet" href="/site.css">';
-    expect(verdict(`${external}<style>.x{display:none}</style><b id="t" class="x"></b>`)).toBe("unknown");
+    expect(verdict(`${external}<style>.x{display:none}</style><b id="t" class="x"></b>`)).toBe(
+      "unknown",
+    );
     // An inline style still settles it, as before.
     expect(verdict(`${external}<b id="t" style="display:none"></b>`)).toBe("hidden");
     // A <style> rule that shows an element the browser hides by default is not
     // settled either: an external `[hidden]{display:none!important}` beats it
     // (pub#938, Chromium rows "an external [hidden] !important ...").
-    expect(verdict(`${external}<style>.f{display:flex}</style><div hidden class="f"><b id="t"></b></div>`)).toBe(
-      "unknown",
-    );
+    expect(
+      verdict(
+        `${external}<style>.f{display:flex}</style><div hidden class="f"><b id="t"></b></div>`,
+      ),
+    ).toBe("unknown");
   });
 
   test("a rule it cannot decide makes the elements it could reach unknown, and only those", () => {
@@ -72,9 +78,11 @@ describe("static-hidden: markup", () => {
 
   test("inherited visibility is settled once every stylesheet was read", () => {
     expect(verdict('<div style="visibility:hidden"><b id="t"></b></div>')).toBe("hidden");
-    expect(verdict('<link rel="stylesheet" href="/site.css"><div style="visibility:hidden"><b id="t"></b></div>')).toBe(
-      "unknown",
-    );
+    expect(
+      verdict(
+        '<link rel="stylesheet" href="/site.css"><div style="visibility:hidden"><b id="t"></b></div>',
+      ),
+    ).toBe("unknown");
   });
 });
 
@@ -121,7 +129,9 @@ describe("static-hidden: the inline-style reader", () => {
         "--wp--custom--typography--presets--6--name: Display; --font: var(--text-display-shorthand)",
       ),
     ).toEqual({});
-    expect(readInlineStyle("font-family:var(--wp--preset--font-family--display) !important")).toEqual({});
+    expect(
+      readInlineStyle("font-family:var(--wp--preset--font-family--display) !important"),
+    ).toEqual({});
     expect(readInlineStyle("--x:'a;display:none';color:red")).toEqual({});
     expect(readInlineStyle("--x:(;display:none);display:block")).toEqual({ display: "shown" });
     // An escape outside a string can spell a name or a `url(`: not read.
@@ -247,9 +257,17 @@ describe("static-hidden: <style> reading is bounded", () => {
   });
 
   test("4,000 rules against 2,000 controls stays fast", () => {
-    const rules = Array.from({ length: 4000 }, (_, i) => `.r${i}{display:${i % 2 ? "none" : "block"}}`).join("");
-    const buttons = Array.from({ length: 2000 }, (_, i) => `<button class="r${i} c${i}"></button>`).join("");
-    const { document } = parseHTML(`<!doctype html><html><head><style>${rules}</style></head><body>${buttons}</body></html>`);
+    const rules = Array.from(
+      { length: 4000 },
+      (_, i) => `.r${i}{display:${i % 2 ? "none" : "block"}}`,
+    ).join("");
+    const buttons = Array.from(
+      { length: 2000 },
+      (_, i) => `<button class="r${i} c${i}"></button>`,
+    ).join("");
+    const { document } = parseHTML(
+      `<!doctype html><html><head><style>${rules}</style></head><body>${buttons}</body></html>`,
+    );
     const resolver = createStaticVisibility({ ariaHidden: false });
     const started = performance.now();
     let hidden = 0;
@@ -275,7 +293,9 @@ describe("static-hidden: <style> reading is bounded", () => {
   test("a page that needs too many rule checks stops settling, quickly", () => {
     const rules = Array.from({ length: 4990 }, (_, i) => `.c.d${i}{display:none}`).join("");
     const buttons = Array.from({ length: 2000 }, () => `<button class="c"></button>`).join("");
-    const { document } = parseHTML(`<!doctype html><html><head><style>${rules}</style></head><body>${buttons}</body></html>`);
+    const { document } = parseHTML(
+      `<!doctype html><html><head><style>${rules}</style></head><body>${buttons}</body></html>`,
+    );
     const started = performance.now();
     const states = new Set<string>();
     for (let round = 0; round < 7; round++) {
@@ -294,7 +314,9 @@ describe("static-hidden: <style> reading is bounded", () => {
     const { document } = parseHTML(`<!doctype html><html><head></head><body>${html}</body></html>`);
     const resolver = createStaticVisibility({ ariaHidden: false });
     const started = performance.now();
-    expect(resolver.visibility(document.querySelector("#t") as unknown as Element).state).toBe("shown");
+    expect(resolver.visibility(document.querySelector("#t") as unknown as Element).state).toBe(
+      "shown",
+    );
     expect(performance.now() - started).toBeLessThan(1000);
   });
 });
@@ -303,17 +325,80 @@ describe("static-hidden: <style> reading is bounded", () => {
 // It must never throw, and every element gets an answer quickly.
 describe("static-hidden: <style> fuzz", () => {
   const PIECES = [
-    ".a", ".A", "#t", "#T", "b", "B", "i", "*", "[x]", "[x=y]", "[x='1']", ":hover", ":not(.a)",
-    ":is(b)", "::before", " ", ">", "+", "~", ",", "\\", "\\31 ", "\\\n", "&", "|", "-", "--", "2",
-    "{", "}", "(", ")", "[", "]", ";", ":", "!", "\"", "'", "/*", "*/", "<!--", "-->", "@media screen{",
-    "@keyframes k{", "from", "to", "50%", "@layer x;", "@import url(a);", "@namespace x;", "@\\6d edia",
-    "display:none", "display:block", "display:contents", "display:revert", "visibility:hidden",
-    "visibility:visible", "visibility:revert-layer", "animation:k 1s", "all:initial", "!important", "var(--x)",
+    ".a",
+    ".A",
+    "#t",
+    "#T",
+    "b",
+    "B",
+    "i",
+    "*",
+    "[x]",
+    "[x=y]",
+    "[x='1']",
+    ":hover",
+    ":not(.a)",
+    ":is(b)",
+    "::before",
+    " ",
+    ">",
+    "+",
+    "~",
+    ",",
+    "\\",
+    "\\31 ",
+    "\\\n",
+    "&",
+    "|",
+    "-",
+    "--",
+    "2",
+    "{",
+    "}",
+    "(",
+    ")",
+    "[",
+    "]",
+    ";",
+    ":",
+    "!",
+    '"',
+    "'",
+    "/*",
+    "*/",
+    "<!--",
+    "-->",
+    "@media screen{",
+    "@keyframes k{",
+    "from",
+    "to",
+    "50%",
+    "@layer x;",
+    "@import url(a);",
+    "@namespace x;",
+    "@\\6d edia",
+    "display:none",
+    "display:block",
+    "display:contents",
+    "display:revert",
+    "visibility:hidden",
+    "visibility:visible",
+    "visibility:revert-layer",
+    "animation:k 1s",
+    "all:initial",
+    "!important",
+    "var(--x)",
   ];
   const ELEMENTS = [
-    `<b id="t" class="a">x</b>`, `<i class="A a" x="y">x</i>`, `<b style="display:none">x</b>`,
-    `<div style="visibility:hidden"><b>x</b></div>`, `<svg><rect x="1"/></svg>`, `<template><b>x</b></template>`,
-    `<b hidden>x</b>`, `<dialog><b>x</b></dialog>`, `<i style="animation:k 1s">x</i>`,
+    `<b id="t" class="a">x</b>`,
+    `<i class="A a" x="y">x</i>`,
+    `<b style="display:none">x</b>`,
+    `<div style="visibility:hidden"><b>x</b></div>`,
+    `<svg><rect x="1"/></svg>`,
+    `<template><b>x</b></template>`,
+    `<b hidden>x</b>`,
+    `<dialog><b>x</b></dialog>`,
+    `<i style="animation:k 1s">x</i>`,
   ];
 
   test("500 random sheets: no throw, every element answered", () => {
@@ -326,13 +411,17 @@ describe("static-hidden: <style> fuzz", () => {
     const started = performance.now();
     for (let round = 0; round < 500; round++) {
       const css = Array.from({ length: 1 + Math.floor(next() * 40) }, () => pick(PIECES)).join("");
-      const body = Array.from({ length: 1 + Math.floor(next() * 6) }, () => pick(ELEMENTS)).join("");
+      const body = Array.from({ length: 1 + Math.floor(next() * 6) }, () => pick(ELEMENTS)).join(
+        "",
+      );
       const { document } = parseHTML(
         `<!doctype html><html><head><style>${css}</style></head><body>${body}</body></html>`,
       );
       const resolver = createStaticVisibility({ ariaHidden: round % 2 === 0 });
       for (const el of document.querySelectorAll("*")) {
-        expect(["shown", "hidden", "unknown"]).toContain(resolver.visibility(el as unknown as Element).state);
+        expect(["shown", "hidden", "unknown"]).toContain(
+          resolver.visibility(el as unknown as Element).state,
+        );
       }
     }
     expect(performance.now() - started).toBeLessThan(10_000);
@@ -363,15 +452,21 @@ describe("static-hidden: custom properties and shows over unread sheets (pub#938
 
   test("the WordPress global styles shape, with and without an external sheet", () => {
     for (const head of [wordpress, `${external}${wordpress}`]) {
-      expect(verdict(`${head}<button id="t" class="has-display-font-family"></button>`)).toBe("shown");
+      expect(verdict(`${head}<button id="t" class="has-display-font-family"></button>`)).toBe(
+        "shown",
+      );
       expect(verdict(`${head}<main><nav><button id="t"></button></nav></main>`)).toBe("shown");
     }
     // A real hide on the same page is still read.
-    expect(verdict(`${wordpress}<style>.drawer{display:none}</style><div class="drawer"><b id="t"></b></div>`)).toBe(
-      "hidden",
-    );
     expect(
-      verdict(`${external}${wordpress}<style>.drawer{display:none}</style><div class="drawer"><b id="t"></b></div>`),
+      verdict(
+        `${wordpress}<style>.drawer{display:none}</style><div class="drawer"><b id="t"></b></div>`,
+      ),
+    ).toBe("hidden");
+    expect(
+      verdict(
+        `${external}${wordpress}<style>.drawer{display:none}</style><div class="drawer"><b id="t"></b></div>`,
+      ),
     ).toBe("unknown");
   });
 
@@ -383,9 +478,12 @@ describe("static-hidden: custom properties and shows over unread sheets (pub#938
   test(":root reaches <html> alone: a child that sets visibility itself is settled", () => {
     // `:root` is a pseudo-class, so the rule is not decided; before pub#938 it
     // reached every element, `#t` included.
-    const html = '<style>:root{visibility:hidden}</style><div style="visibility:visible"><b id="t">x</b></div>';
+    const html =
+      '<style>:root{visibility:hidden}</style><div style="visibility:visible"><b id="t">x</b></div>';
     expect(verdict(html)).toBe("shown");
-    expect(verdict('<style>:root{visibility:hidden}</style><div><b id="t">x</b></div>')).toBe("unknown");
+    expect(verdict('<style>:root{visibility:hidden}</style><div><b id="t">x</b></div>')).toBe(
+      "unknown",
+    );
     expect(parseSelector(":root")).toEqual({
       kind: "complex",
       subject: { tag: "html", id: null, classes: [], attrs: [] },
@@ -406,16 +504,19 @@ describe("static-hidden: custom properties and shows over unread sheets (pub#938
   });
 
   test("a <style> show over the user-agent hide is unconfirmed while a sheet is unread", () => {
-    const show = "<style>button{display:inline-flex}dialog{display:block}[popover]{display:block}</style>";
+    const show =
+      "<style>button{display:inline-flex}dialog{display:block}[popover]{display:block}</style>";
     expect(verdict(`${external}${show}<button id="t" hidden></button>`)).toBe("unknown");
     expect(verdict(`${external}${show}<dialog id="t"></dialog>`)).toBe("unknown");
     expect(verdict(`${external}${show}<div id="t" popover></div>`)).toBe("unknown");
     // An inline show that is not `!important` loses to an external `!important` too.
-    expect(verdict(`${external}<button id="t" hidden style="display:inline-flex"></button>`)).toBe("unknown");
-    // An inline `!important` show outranks every stylesheet rule.
-    expect(verdict(`${external}<button id="t" hidden style="display:inline-flex !important"></button>`)).toBe(
-      "shown",
+    expect(verdict(`${external}<button id="t" hidden style="display:inline-flex"></button>`)).toBe(
+      "unknown",
     );
+    // An inline `!important` show outranks every stylesheet rule.
+    expect(
+      verdict(`${external}<button id="t" hidden style="display:inline-flex !important"></button>`),
+    ).toBe("shown");
     // With every sheet read, the show is settled (Chromium shows it).
     expect(verdict(`${show}<button id="t" hidden></button>`)).toBe("shown");
     expect(verdict('<button id="t" hidden style="display:inline-flex"></button>')).toBe("shown");
@@ -424,10 +525,13 @@ describe("static-hidden: custom properties and shows over unread sheets (pub#938
   });
 
   test("a custom property naming animation does not make <html> animated", () => {
-    const keyframes = "<style>@keyframes in{from{visibility:hidden}}:root{--wp--preset--animation:fade 1s}</style>";
+    const keyframes =
+      "<style>@keyframes in{from{visibility:hidden}}:root{--wp--preset--animation:fade 1s}</style>";
     expect(verdict(`${keyframes}<b id="t">x</b>`)).toBe("shown");
-    expect(verdict('<style>@keyframes in{from{visibility:hidden}}.a{animation:in 1s}</style><b id="t" class="a">x</b>')).toBe(
-      "unknown",
-    );
+    expect(
+      verdict(
+        '<style>@keyframes in{from{visibility:hidden}}.a{animation:in 1s}</style><b id="t" class="a">x</b>',
+      ),
+    ).toBe("unknown");
   });
 });

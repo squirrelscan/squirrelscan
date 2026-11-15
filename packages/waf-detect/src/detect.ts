@@ -29,7 +29,12 @@ function emptySignals(): Signals {
   return { confidence: new Map(), indicators: [] };
 }
 
-function note(signals: Signals, provider: WafProvider, confidence: Confidence, indicator: string): void {
+function note(
+  signals: Signals,
+  provider: WafProvider,
+  confidence: Confidence,
+  indicator: string,
+): void {
   signals.indicators.push(indicator);
   const prior = signals.confidence.get(provider);
   if (prior === undefined || RANK[confidence] > RANK[prior]) {
@@ -155,14 +160,12 @@ export function detectWaf(headers: Headers, body?: string): WafDetectionResult {
  * every response of a site it protects, so a genuine "forbidden" 403 there
  * carries them too (#750).
  */
-export function isLikelyWafBlock(
-  status: number,
-  headers: Headers,
-  body?: string,
-): boolean {
+export function isLikelyWafBlock(status: number, headers: Headers, body?: string): boolean {
   if (status !== 403) {
     return false;
   }
-  const signals = body ? merge(headerSignals(headers), contentSignals(body)) : headerSignals(headers);
+  const signals = body
+    ? merge(headerSignals(headers), contentSignals(body))
+    : headerSignals(headers);
   return attribute(signals).detected;
 }

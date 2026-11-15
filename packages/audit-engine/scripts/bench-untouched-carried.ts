@@ -124,7 +124,8 @@ for (let p = 0; p < backlogPages; p++) {
   const url = backlogUrl(p);
   priorPages.push(sitePage(url, PRIOR));
   const rows: PageFindingRecord[] = [];
-  for (let i = 0; i < PER_PAGE && p * PER_PAGE + i < CARRIED; i++) rows.push(row(url, p * PER_PAGE + i, PRIOR));
+  for (let i = 0; i < PER_PAGE && p * PER_PAGE + i < CARRIED; i++)
+    rows.push(row(url, p * PER_PAGE + i, PRIOR));
   untouched.push({ normalizedUrl: url, rows, rendered: true, active: true });
 }
 // What the store's single scan returns.
@@ -165,7 +166,9 @@ const cpu = process.cpuUsage(cpu0);
 const union = JSON.stringify([...result.unionRuleResults]);
 // Everything a caller reads, hashed, so two builds can be compared byte for byte.
 const digest = new Bun.CryptoHasher("sha256")
-  .update(JSON.stringify([[...result.scoringTallies!], score, result.coverage, result.persistedFindings]))
+  .update(
+    JSON.stringify([[...result.scoringTallies!], score, result.coverage, result.persistedFindings]),
+  )
   .update(union)
   .digest("hex")
   .slice(0, 16);

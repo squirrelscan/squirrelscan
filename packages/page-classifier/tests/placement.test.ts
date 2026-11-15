@@ -114,4 +114,3 @@ describe("a thread out of the rule's reach", () => {
     expect(performance.now() - started).toBeLessThan(50);
   });
 });
-

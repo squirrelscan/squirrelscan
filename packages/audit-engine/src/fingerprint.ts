@@ -42,7 +42,7 @@ export function findingFingerprint(
   status: string,
   message: string,
   value: string | null,
-  expected: string | null
+  expected: string | null,
 ): string {
   const input = JSON.stringify([status, message, value ?? "", expected ?? ""]);
   const bytes = new TextEncoder().encode(input);

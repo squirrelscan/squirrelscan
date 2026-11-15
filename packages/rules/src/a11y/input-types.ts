@@ -257,7 +257,8 @@ export const inputTypesRule: Rule = {
         if (hasCustomValidation(form, scriptText)) continue;
         mismatches.push({
           id: formSelector(form, index),
-          label: "novalidate disables the browser's error messages, but the form still declares constraints and no custom validation",
+          label:
+            "novalidate disables the browser's error messages, but the form still declares constraints and no custom validation",
           snippet: fieldSnippet(form, 240),
           meta: { reason: "novalidate-mismatch", fields: fields.length },
         });

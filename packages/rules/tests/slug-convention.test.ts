@@ -31,7 +31,7 @@ function url(path: string): string {
 function template(
   make: (i: number) => string,
   count: number,
-  pageType: string | null = "article"
+  pageType: string | null = "article",
 ): PageSpec[] {
   return Array.from({ length: count }, (_, i) => ({ path: make(i), pageType }));
 }
@@ -154,9 +154,7 @@ function itemFor(check: CheckResult, dimension: string): unknown {
 
 describe("url/slug-convention — silence guards", () => {
   test("skips a crawl below the site page floor", async () => {
-    const check = await bothPaths(
-      template((i) => `/blog/post-${pad(i)}`, SLUG_NORM_MIN_PAGES - 1)
-    );
+    const check = await bothPaths(template((i) => `/blog/post-${pad(i)}`, SLUG_NORM_MIN_PAGES - 1));
     expect(check.status).toBe("skipped");
     expect(check.message).toContain(`${SLUG_NORM_MIN_PAGES} needed`);
   });
@@ -171,9 +169,7 @@ describe("url/slug-convention — silence guards", () => {
     }
     const check = await bothPaths(specs);
     expect(check.status).toBe("skipped");
-    expect(check.message).toContain(
-      `${Math.round(SLUG_NORM_MIN_AGREEMENT * 100)}% agreement`
-    );
+    expect(check.message).toContain(`${Math.round(SLUG_NORM_MIN_AGREEMENT * 100)}% agreement`);
   });
 
   test("a dimension nobody votes in is dropped, not guessed at", async () => {
@@ -274,9 +270,7 @@ describe("url/slug-convention — findings", () => {
     ];
     const check = await bothPaths(specs);
     expect(check.status).toBe("warn");
-    const item = itemFor(check, "trailing-slash") as
-      | { meta: Record<string, unknown> }
-      | undefined;
+    const item = itemFor(check, "trailing-slash") as { meta: Record<string, unknown> } | undefined;
     expect(item?.meta.value).toBe("slash");
     expect(item?.meta.norm).toBe("bare");
   });
@@ -288,9 +282,7 @@ describe("url/slug-convention — findings", () => {
     ];
     const check = await bothPaths(specs);
     expect(check.status).toBe("warn");
-    const item = itemFor(check, "date-in-slug") as
-      | { meta: Record<string, unknown> }
-      | undefined;
+    const item = itemFor(check, "date-in-slug") as { meta: Record<string, unknown> } | undefined;
     expect(item?.meta.value).toBe("dated");
     expect(item?.meta.pageType).toBe("article");
   });

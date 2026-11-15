@@ -25,7 +25,7 @@ export const pasteInputsRule: Rule = {
     const checks: CheckResult[] = [];
 
     const inputs = doc.querySelectorAll(
-      'input[type="text"], input[type="password"], input[type="email"], input[type="tel"], input[type="url"], input[type="search"], input:not([type]), textarea'
+      'input[type="text"], input[type="password"], input[type="email"], input[type="tel"], input[type="url"], input[type="search"], input:not([type]), textarea',
     );
 
     const pasteBlockingInputs: string[] = [];
@@ -46,21 +46,15 @@ export const pasteInputsRule: Rule = {
 
       const hasBlockingOnpaste =
         onpaste &&
-        blockingPatterns.some((pattern) =>
-          onpaste.toLowerCase().includes(pattern.toLowerCase())
-        );
+        blockingPatterns.some((pattern) => onpaste.toLowerCase().includes(pattern.toLowerCase()));
 
       const hasBlockingOncopy =
         oncopy &&
-        blockingPatterns.some((pattern) =>
-          oncopy.toLowerCase().includes(pattern.toLowerCase())
-        );
+        blockingPatterns.some((pattern) => oncopy.toLowerCase().includes(pattern.toLowerCase()));
 
       const hasBlockingOncut =
         oncut &&
-        blockingPatterns.some((pattern) =>
-          oncut.toLowerCase().includes(pattern.toLowerCase())
-        );
+        blockingPatterns.some((pattern) => oncut.toLowerCase().includes(pattern.toLowerCase()));
 
       if (hasBlockingOnpaste || hasBlockingOncopy || hasBlockingOncut) {
         const type = input.getAttribute("type") || "text";

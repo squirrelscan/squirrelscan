@@ -45,7 +45,9 @@ export function readabilityStats(body: Element): ReadabilityStats | null {
 }
 
 /** The stored reading level of a parsed page (Flesch ease 0..100), or null when it has no judgeable body. */
-export function pageReadingLevel(parsed: { document?: Document | null } | null | undefined): number | null {
+export function pageReadingLevel(
+  parsed: { document?: Document | null } | null | undefined,
+): number | null {
   const body = parsed?.document?.querySelector("body");
   if (!body) return null;
   return readabilityStats(body)?.roundedScore ?? null;

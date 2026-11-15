@@ -27,7 +27,15 @@ export function hostCountryRow(host: ReportHost): HostRow | null {
 export function hostEdgeRows(host: ReportHost): HostRow[] {
   const e = host.edge;
   if (!e) return [];
-  const via = e.matched.map((m) => (m === "ip-range" ? "published IP range" : m === "asn" ? `ASN${e.asn ? ` AS${e.asn}` : ""}` : "response headers")).join(", ");
+  const via = e.matched
+    .map((m) =>
+      m === "ip-range"
+        ? "published IP range"
+        : m === "asn"
+          ? `ASN${e.asn ? ` AS${e.asn}` : ""}`
+          : "response headers",
+    )
+    .join(", ");
   const origin =
     e.origin.status === "edge-hosted"
       ? `none separate: ${e.name} is both edge and host`
@@ -53,8 +61,10 @@ export function hostCloudRow(host: ReportHost): HostRow | null {
 
 export function hostRows(host: ReportHost): HostRow[] {
   const rows: HostRow[] = [{ key: "host", label: "Host", value: host.host }];
-  if (host.addresses.ipv4.length > 0) rows.push({ key: "ipv4", label: "IPv4", value: host.addresses.ipv4.join(", ") });
-  if (host.addresses.ipv6.length > 0) rows.push({ key: "ipv6", label: "IPv6", value: host.addresses.ipv6.join(", ") });
+  if (host.addresses.ipv4.length > 0)
+    rows.push({ key: "ipv4", label: "IPv4", value: host.addresses.ipv4.join(", ") });
+  if (host.addresses.ipv6.length > 0)
+    rows.push({ key: "ipv6", label: "IPv6", value: host.addresses.ipv6.join(", ") });
   rows.push(...hostEdgeRows(host));
   const cloud = hostCloudRow(host);
   if (cloud) rows.push(cloud);
@@ -69,7 +79,11 @@ export function hostRows(host: ReportHost): HostRow[] {
     });
   }
   if (country && host.geoipSnapshot) {
-    rows.push({ key: "geoip", label: "GeoIP", value: `DB-IP.com Lite ${host.geoipSnapshot} (CC BY 4.0)` });
+    rows.push({
+      key: "geoip",
+      label: "GeoIP",
+      value: `DB-IP.com Lite ${host.geoipSnapshot} (CC BY 4.0)`,
+    });
   }
   return rows;
 }

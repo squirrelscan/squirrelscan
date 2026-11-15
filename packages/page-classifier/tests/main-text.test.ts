@@ -32,11 +32,19 @@ function assertClean(out: ReturnType<typeof extractPageMainText>) {
   expect(out.text).toContain("We keep a fixture site");
   expect(out.text).toContain("How we test crawlers");
   expect(out.text).not.toContain("By Ada Lovelace");
-  for (const junk of ["Archive", "Elsewhere", "all rights reserved", "We use cookies", "Chat with support"]) {
+  for (const junk of [
+    "Archive",
+    "Elsewhere",
+    "all rights reserved",
+    "We use cookies",
+    "Chat with support",
+  ]) {
     expect(out.text).not.toContain(junk);
   }
   expect(out.blocks.length).toBeGreaterThan(3);
-  expect(out.blocks.every((b) => b.region === null || typeof b.region.label === "string")).toBe(true);
+  expect(out.blocks.every((b) => b.region === null || typeof b.region.label === "string")).toBe(
+    true,
+  );
   const code = out.blocks.filter((b) => b.code);
   expect(code).toHaveLength(1);
   expect(code[0]).toMatchObject({ language: "sh", text: "bun test" });
@@ -49,20 +57,23 @@ describe("extractPageMainText", () => {
     const { document } = parseHTML(PAGE);
     const out = extractPageMainText(document, URL);
     assertClean(out);
-    expect(out.blocks.some((b) => b.region?.label === "content_block" && b.region.source === "rules")).toBe(
-      true,
-    );
+    expect(
+      out.blocks.some((b) => b.region?.label === "content_block" && b.region.source === "rules"),
+    ).toBe(true);
     expect(out.blocks.find((b) => b.region?.nodeId != null)).toBeDefined();
   });
 
-  test.skipIf(!HAS_ARTIFACT)("with the bundled model: blocks are labelled and chrome dropped", () => {
-    const { model } = tryLoadModel(JSON.parse(readFileSync(ARTIFACT, "utf8")));
-    expect(model).not.toBeNull();
-    const { document } = parseHTML(PAGE);
-    const out = extractPageMainText(document, URL, { model, html: PAGE });
-    assertClean(out);
-    expect(out.placer).toBe("classifier");
-  });
+  test.skipIf(!HAS_ARTIFACT)(
+    "with the bundled model: blocks are labelled and chrome dropped",
+    () => {
+      const { model } = tryLoadModel(JSON.parse(readFileSync(ARTIFACT, "utf8")));
+      expect(model).not.toBeNull();
+      const { document } = parseHTML(PAGE);
+      const out = extractPageMainText(document, URL, { model, html: PAGE });
+      assertClean(out);
+      expect(out.placer).toBe("classifier");
+    },
+  );
 
   test("does not modify the document", () => {
     const { document } = parseHTML(PAGE);

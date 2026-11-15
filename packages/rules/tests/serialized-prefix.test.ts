@@ -39,7 +39,8 @@ describe("serializedPrefix", () => {
       const body = bodyOf(html);
       expect(body).not.toBeNull();
       const full = body!.innerHTML;
-      for (const n of LENGTHS) expect(serializedPrefix(body!, n).slice(0, n)).toBe(full.slice(0, n));
+      for (const n of LENGTHS)
+        expect(serializedPrefix(body!, n).slice(0, n)).toBe(full.slice(0, n));
     }
   });
 
@@ -73,7 +74,9 @@ describe("a11y/skip-link early heading, read from the prefix", () => {
       parsed: parsePage(html, URL_) as ParsedPage,
       options: {},
     };
-    return skipLinkRule.run(ctx) as { checks: Array<{ status: string; details?: Record<string, unknown> }> };
+    return skipLinkRule.run(ctx) as {
+      checks: Array<{ status: string; details?: Record<string, unknown> }>;
+    };
   };
 
   test("a heading behind a large inline script in the first 2000 characters still counts", () => {
@@ -99,7 +102,9 @@ describe("serializeChildren", () => {
       pages++;
       expect(serializeChildren(doc)).toBe(doc.toString());
       // Taking apart every element that holds a script, each script's text put back as it is, changes nothing either.
-      const scripts = new Map(Array.from(doc.querySelectorAll("script")).map((s) => [s, s.textContent ?? ""] as const));
+      const scripts = new Map(
+        Array.from(doc.querySelectorAll("script")).map((s) => [s, s.textContent ?? ""] as const),
+      );
       expect(serializeChildren(doc, { replaceText: scripts })).toBe(doc.toString());
     }
     expect(pages).toBeGreaterThan(1000);

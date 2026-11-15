@@ -21,7 +21,7 @@ const SITE = "https://example.com";
 
 function render(
   runtime: RenderRuntimeDiagnostics | undefined,
-  extra: Partial<RenderResultItem> = {}
+  extra: Partial<RenderResultItem> = {},
 ): CloudResultEnvelope<RenderResultItem> {
   return {
     status: "ok",
@@ -36,7 +36,7 @@ function render(
 }
 
 function ctxOf(
-  pages: Record<string, CloudResultEnvelope<RenderResultItem>> | undefined
+  pages: Record<string, CloudResultEnvelope<RenderResultItem>> | undefined,
 ): RuleContext {
   const site: SiteData = {
     baseUrl: SITE,
@@ -45,12 +45,7 @@ function ctxOf(
     sitemaps: null,
   };
   const store: CloudResultStore | undefined = pages
-    ? new Map([
-        [
-          "render",
-          new Map(Object.entries(pages)) as Map<string, CloudResultEnvelope>,
-        ],
-      ])
+    ? new Map([["render", new Map(Object.entries(pages)) as Map<string, CloudResultEnvelope>]])
     : undefined;
   return {
     page: {
@@ -67,14 +62,11 @@ function ctxOf(
   };
 }
 
-async function run(
-  pages: Record<string, CloudResultEnvelope<RenderResultItem>> | undefined
-) {
+async function run(pages: Record<string, CloudResultEnvelope<RenderResultItem>> | undefined) {
   return (await jsErrorsRule.run(ctxOf(pages))).checks as CheckResult[];
 }
 
-const named = (checks: CheckResult[], name: string) =>
-  checks.find((c) => c.name === name);
+const named = (checks: CheckResult[], name: string) => checks.find((c) => c.name === name);
 
 describe("reliability/js-errors", () => {
   test("an inline TypeError on load is an error with message and source location", async () => {
@@ -82,8 +74,7 @@ describe("reliability/js-errors", () => {
       [`${SITE}/`]: render({
         pageErrors: [
           {
-            message:
-              "TypeError: Cannot read properties of undefined (reading 'x')",
+            message: "TypeError: Cannot read properties of undefined (reading 'x')",
             sourceUrl: `${SITE}/assets/app.js`,
             line: 14,
           },
@@ -92,9 +83,7 @@ describe("reliability/js-errors", () => {
     });
     const c = named(checks, "js-errors");
     expect(c?.status).toBe("fail");
-    expect(c?.items?.[0]?.label).toContain(
-      "TypeError: Cannot read properties of undefined"
-    );
+    expect(c?.items?.[0]?.label).toContain("TypeError: Cannot read properties of undefined");
     expect(c?.items?.[0]?.label).toContain("/assets/app.js:14");
   });
 
@@ -180,9 +169,7 @@ describe("reliability/js-errors", () => {
   test("an exception thrown 2s after load is reported when the renderer recorded it", async () => {
     const checks = await run({
       [`${SITE}/`]: render({
-        pageErrors: [
-          { message: "Error: late timer", sourceUrl: `${SITE}/late.js` },
-        ],
+        pageErrors: [{ message: "Error: late timer", sourceUrl: `${SITE}/late.js` }],
       }),
     });
     expect(named(checks, "js-errors")?.status).toBe("fail");
@@ -191,12 +178,8 @@ describe("reliability/js-errors", () => {
   test("third-party exceptions and first-party console.error are warnings", async () => {
     const checks = await run({
       [`${SITE}/`]: render({
-        pageErrors: [
-          { message: "TypeError: t", sourceUrl: "https://tags.vendor.io/t.js" },
-        ],
-        consoleErrors: [
-          { message: "Something went wrong", sourceUrl: `${SITE}/app.js` },
-        ],
+        pageErrors: [{ message: "TypeError: t", sourceUrl: "https://tags.vendor.io/t.js" }],
+        consoleErrors: [{ message: "Something went wrong", sourceUrl: `${SITE}/app.js` }],
       }),
     });
     expect(named(checks, "third-party-js-errors")?.status).toBe("warn");
@@ -209,8 +192,7 @@ describe("reliability/js-errors", () => {
       [`${SITE}/`]: render({
         pageErrors: [
           {
-            message:
-              "ResizeObserver loop completed with undelivered notifications.",
+            message: "ResizeObserver loop completed with undelivered notifications.",
           },
         ],
         consoleErrors: [
@@ -220,8 +202,7 @@ describe("reliability/js-errors", () => {
               "Refused to load the script 'https://x.com/a.js' because it violates the following Content Security Policy directive: \"script-src 'self'\"",
           },
           {
-            message:
-              "Failed to load resource: the server responded with a status of 500 ()",
+            message: "Failed to load resource: the server responded with a status of 500 ()",
           },
         ],
         failedRequests: [
@@ -240,10 +221,7 @@ describe("reliability/js-errors", () => {
 
   test("a page detected as a WAF challenge is left out, and is no gap: the other pages still pass", async () => {
     const checks = await run({
-      [`${SITE}/a`]: render(
-        { pageErrors: [{ message: "TypeError: c" }] },
-        { status: 403 }
-      ),
+      [`${SITE}/a`]: render({ pageErrors: [{ message: "TypeError: c" }] }, { status: 403 }),
       [`${SITE}/b`]: render({}),
     });
     expect(named(checks, "js-errors")?.status).toBe("pass");
@@ -298,7 +276,9 @@ describe("reliability/js-errors", () => {
   test("a partial run still reports the errors it saw, beside the gap", async () => {
     const checks = await run({
       [`${SITE}/a`]: render({
-        pageErrors: [{ message: "TypeError: x is undefined", sourceUrl: `${SITE}/app.js`, line: 3 }],
+        pageErrors: [
+          { message: "TypeError: x is undefined", sourceUrl: `${SITE}/app.js`, line: 3 },
+        ],
       }),
       [`${SITE}/b`]: render(undefined),
       [`${SITE}/c`]: render({}, { status: 403 }),
@@ -308,7 +288,7 @@ describe("reliability/js-errors", () => {
     expect(gap?.status).toBe("skipped");
     expect(gap?.skipReason).toBe(RUNTIME_NOT_RECORDED_SKIP_REASON);
     expect(gap?.message).toBe(
-      "Partial check: 1 page(s) had no runtime data from the renderer; 1 page(s) were a WAF or bot challenge and were left out"
+      "Partial check: 1 page(s) had no runtime data from the renderer; 1 page(s) were a WAF or bot challenge and were left out",
     );
   });
 

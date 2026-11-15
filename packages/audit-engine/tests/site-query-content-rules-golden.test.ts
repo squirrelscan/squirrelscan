@@ -88,7 +88,11 @@ const FIXTURE: Row[] = [
   { normalizedUrl: "https://example.com/c", title: "About Us", description: "About page" },
   // Whitespace variant: title-unique collapses to "home page" (joins the group),
   // duplicate-title keeps "home   page" (does not).
-  { normalizedUrl: "https://example.com/d", title: "  Home   Page  ", description: "Different desc" },
+  {
+    normalizedUrl: "https://example.com/d",
+    title: "  Home   Page  ",
+    description: "Different desc",
+  },
   // Title-less + desc-less rows are skipped by the rules but still counted.
   { normalizedUrl: "https://example.com/e", title: null, description: null },
   { normalizedUrl: "https://example.com/f", title: "Unique Title", description: null },
@@ -246,7 +250,7 @@ describe("SiteQuery dual-path — content-rule edge cases parity", () => {
           rule.run({
             ...base,
             site: { baseUrl: BASE, pages: single, robotsTxt: null, sitemaps: null },
-          } as RuleContext)
+          } as RuleContext),
         )
       ).checks;
       const streamed = (
@@ -255,7 +259,7 @@ describe("SiteQuery dual-path — content-rule edge cases parity", () => {
             ...base,
             site: { baseUrl: BASE, pages: [], robotsTxt: null, sitemaps: null },
             siteQuery,
-          } as RuleContext)
+          } as RuleContext),
         )
       ).checks;
       expect(streamed).toEqual(legacy);
@@ -289,7 +293,7 @@ describe("SiteQuery dual-path — content-rule edge cases parity", () => {
           rule.run({
             ...base,
             site: { baseUrl: BASE, pages: sitePages, robotsTxt: null, sitemaps: null },
-          } as RuleContext)
+          } as RuleContext),
         )
       ).checks;
       const streamed = (
@@ -298,7 +302,7 @@ describe("SiteQuery dual-path — content-rule edge cases parity", () => {
             ...base,
             site: { baseUrl: BASE, pages: [], robotsTxt: null, sitemaps: null },
             siteQuery,
-          } as RuleContext)
+          } as RuleContext),
         )
       ).checks;
       expect(streamed).toEqual(legacy);

@@ -47,7 +47,7 @@ export class SchemaCollection {
     errors: string[],
     raw: string | null,
     validationIssues: SchemaValidationIssue[] = [],
-    untypedNodes: Record<string, unknown>[] = []
+    untypedNodes: Record<string, unknown>[] = [],
   ) {
     this._schemas = schemas;
     this._untypedNodes = untypedNodes;
@@ -189,8 +189,7 @@ export class SchemaCollection {
   get product(): ProductSchema | null {
     if (this._product === undefined) {
       this._product =
-        this.getByType<ProductSchema>("Product") ??
-        this.getByType<ProductSchema>("ProductGroup");
+        this.getByType<ProductSchema>("Product") ?? this.getByType<ProductSchema>("ProductGroup");
     }
     return this._product;
   }
@@ -317,11 +316,9 @@ export function schemaCollectionFromJSON(data: unknown): SchemaCollection {
     (obj._schemas ?? obj.all ?? []) as ParsedSchema[],
     (obj._errors ?? obj.errors ?? []) as string[],
     (obj._raw ?? obj.raw ?? null) as string | null,
-    (obj._validationIssues ??
-      obj.validationIssues ??
-      []) as SchemaValidationIssue[],
+    (obj._validationIssues ?? obj.validationIssues ?? []) as SchemaValidationIssue[],
     // Absent on a page parsed before #469: such a page validates as it did.
-    (obj._untypedNodes ?? obj.untypedNodes ?? []) as Record<string, unknown>[]
+    (obj._untypedNodes ?? obj.untypedNodes ?? []) as Record<string, unknown>[],
   );
 }
 

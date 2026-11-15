@@ -23,11 +23,13 @@ type AnyRule = Pick<Rule, "run">;
 
 async function checks(rule: AnyRule, html: string): Promise<CheckResult[]> {
   const url = "https://example.com/";
-  return (await rule.run({
-    page: { url, html, statusCode: 200, loadTime: 0, headers: {} },
-    parsed: parsePage(html, url) as ParsedPage,
-    options: {},
-  })).checks as CheckResult[];
+  return (
+    await rule.run({
+      page: { url, html, statusCode: 200, loadTime: 0, headers: {} },
+      parsed: parsePage(html, url) as ParsedPage,
+      options: {},
+    })
+  ).checks as CheckResult[];
 }
 
 const LINK = '<link rel="stylesheet" href="/site.css">';
@@ -131,21 +133,23 @@ describe.each(CASES)("$check: $failName", ({ rule, check, failName, el }) => {
       `<dialog>${el("")}</dialog>`,
       `<style>.x{display:none}</style>${el('class="x"')}`,
     ]) {
-      expect((await summary(page("", body))).some(([n, st]) => n === failName && st === "fail")).toBe(
+      expect(
+        (await summary(page("", body))).some(([n, st]) => n === failName && st === "fail"),
+      ).toBe(false);
+      expect((await summary(page("", body))).some(([, s]) => s === "warn" || s === "fail")).toBe(
         false,
       );
-      expect((await summary(page("", body))).some(([, s]) => s === "warn" || s === "fail")).toBe(false);
     }
   });
 
   test("a no-js fallback on a page with an unread stylesheet is unconfirmed, with the script-state reason", async () => {
-    const out = (await checks(rule, page(LINK, el('class="no-js"'))));
+    const out = await checks(rule, page(LINK, el('class="no-js"')));
     expect(out.map((c) => [c.name, c.status])).toEqual([[`${check}-unconfirmed`, "warn"]]);
     expect(out[0]?.items?.[0]?.label).toBe(SCRIPT_STATE_LABEL);
   });
 
   test("a no-js fallback under a non-root wrapper is unconfirmed", async () => {
-    const out = (await checks(rule, page(LINK, `<div class="no-js">${el("")}</div>`)));
+    const out = await checks(rule, page(LINK, `<div class="no-js">${el("")}</div>`));
     expect(out.map((c) => c.name)).toEqual([`${check}-unconfirmed`]);
   });
 
@@ -155,7 +159,7 @@ describe.each(CASES)("$check: $failName", ({ rule, check, failName, el }) => {
 
   test("a style squirrel cannot settle is unconfirmed, not failed", async () => {
     const head = "<style>.x:hover{display:none}@media print{.x{display:none}}</style>";
-    const out = (await checks(rule, page(head, el('class="x"'))));
+    const out = await checks(rule, page(head, el('class="x"')));
     expect(out.some((c) => c.name === failName && c.status === "fail")).toBe(false);
     expect(out.map((c) => c.name)).toEqual([`${check}-unconfirmed`]);
   });
@@ -163,16 +167,16 @@ describe.each(CASES)("$check: $failName", ({ rule, check, failName, el }) => {
 
 describe("hidden unnamed elements alongside visible ones", () => {
   test("a hidden unnamed meter is skipped, a visible one fails", async () => {
-    const out = (await checks(
+    const out = await checks(
       ariaMeterNameRule,
       page("", '<meter hidden value="1"></meter><meter id="m" value="1"></meter>'),
-    ));
+    );
     expect(out).toHaveLength(1);
     expect(out[0]?.items?.map((i) => i.id)).toEqual(["meter#m"]);
   });
 
   test("all unnamed hidden: pass reads in the accessibility tree and counts the hidden", async () => {
-    const out = (await checks(ariaTooltipNameRule, page("", '<div role="tooltip" hidden></div>')));
+    const out = await checks(ariaTooltipNameRule, page("", '<div role="tooltip" hidden></div>'));
     expect(out).toHaveLength(1);
     expect(out[0]).toMatchObject({
       status: "pass",
@@ -184,15 +188,15 @@ describe("hidden unnamed elements alongside visible ones", () => {
 
 describe("link-text", () => {
   test("a hidden generic link is not reported; a visible one is", async () => {
-    const hidden = (await checks(linkTextRule, page("", '<a href="/x" hidden>click here</a>')));
+    const hidden = await checks(linkTextRule, page("", '<a href="/x" hidden>click here</a>'));
     expect(hidden.some((c) => c.name === "link-text-generic")).toBe(false);
-    const shown = (await checks(linkTextRule, page("", '<a href="/x">click here</a>')));
+    const shown = await checks(linkTextRule, page("", '<a href="/x">click here</a>'));
     expect(shown.map((c) => c.name)).toEqual(["link-text-generic"]);
   });
 
   test("an unconfirmed empty link outside the script state carries the default reason", async () => {
     const head = "<style>.x:hover{display:none}</style>";
-    const out = (await checks(linkTextRule, page(head, '<a class="x" href="/x"></a>')));
+    const out = await checks(linkTextRule, page(head, '<a class="x" href="/x"></a>'));
     expect(out.map((c) => c.name)).toEqual(["link-text-unconfirmed"]);
     expect(out[0]?.items?.[0]?.label).not.toBe("empty");
   });

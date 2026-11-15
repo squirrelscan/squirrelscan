@@ -4,7 +4,12 @@ import type { WellKnownPath, WellKnownProbe } from "@squirrelscan/core-contracts
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
-import { answeredWellKnown, includesPath, notApprovedPath, notCheckedCheck } from "./discovery-probe-state";
+import {
+  answeredWellKnown,
+  includesPath,
+  notApprovedPath,
+  notCheckedCheck,
+} from "./discovery-probe-state";
 
 // Probed in this order (mirrors core-contracts WELL_KNOWN_PATHS).
 const AGENTS_MD_PATHS: readonly WellKnownPath[] = [

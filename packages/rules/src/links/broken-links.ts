@@ -171,7 +171,12 @@ export const brokenLinksRule: Rule = {
         }
         if (fetched?.wafChallenge) {
           refusedTargets.add(normalizedTarget);
-          refusedLinks.push({ url: target, sources, statusCode: fetched.status, wafChallenge: true });
+          refusedLinks.push({
+            url: target,
+            sources,
+            statusCode: fetched.status,
+            wafChallenge: true,
+          });
           continue;
         }
         // Not HTML, and it answered 2xx/3xx: a known status, not broken.
@@ -429,7 +434,10 @@ function notFetchedCauses(
     // When the count is clipped, `excluded` keeps its targets first: `action`
     // claims the gap is stable between audits, so it never takes a target that
     // may be a robots or scope exclusion.
-    const excluded = Math.min(outOfScope, Math.max(0, (probe.outOfScope ?? 0) - (probe.actionLinks ?? 0)));
+    const excluded = Math.min(
+      outOfScope,
+      Math.max(0, (probe.outOfScope ?? 0) - (probe.actionLinks ?? 0)),
+    );
     const action = outOfScope - excluded;
     causes = {
       overLimit,

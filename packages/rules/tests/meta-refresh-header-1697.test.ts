@@ -4,7 +4,12 @@ import { describe, expect, test } from "bun:test";
 
 import { parsePage } from "@squirrelscan/parser";
 
-import { gradeRefreshHeader, metaRefreshRule, parseRefreshHeader, readRefreshHeader } from "../src/a11y/meta-refresh";
+import {
+  gradeRefreshHeader,
+  metaRefreshRule,
+  parseRefreshHeader,
+  readRefreshHeader,
+} from "../src/a11y/meta-refresh";
 import type { CheckResult, RuleContext } from "../src/types";
 
 function run(head = "", headers: Record<string, string> = {}): CheckResult[] {
@@ -88,18 +93,30 @@ describe("header only", () => {
 
   test("no url is a reload, not a redirect", () => {
     const fast = run("", { Refresh: "10" })[0];
-    expect(fast).toMatchObject({ name: "refresh-header-reload", status: "fail", message: "Page reloads every 10 seconds (Refresh header)" });
+    expect(fast).toMatchObject({
+      name: "refresh-header-reload",
+      status: "fail",
+      message: "Page reloads every 10 seconds (Refresh header)",
+    });
     const slow = run("", { Refresh: "60" })[0];
     expect(slow).toMatchObject({ name: "refresh-header-reload", status: "warn" });
-    expect(run("", { Refresh: "0" })[0]).toMatchObject({ name: "refresh-header-reload", status: "fail", message: "Refresh header reloads the page immediately" });
+    expect(run("", { Refresh: "0" })[0]).toMatchObject({
+      name: "refresh-header-reload",
+      status: "fail",
+      message: "Refresh header reloads the page immediately",
+    });
   });
 
   test("an unparseable header is ignored like a browser ignores it", () => {
-    expect(run("", { Refresh: "soon" })).toEqual([{ name: "meta-refresh", status: "pass", message: "No meta refresh found" }]);
+    expect(run("", { Refresh: "soon" })).toEqual([
+      { name: "meta-refresh", status: "pass", message: "No meta refresh found" },
+    ]);
   });
 
   test("the redirect finding recommends 301 or 308", () => {
-    expect(gradeRefreshHeader({ raw: "0;url=/x", delay: 0, target: "/x" }).issue).toContain("301 or 308");
+    expect(gradeRefreshHeader({ raw: "0;url=/x", delay: 0, target: "/x" }).issue).toContain(
+      "301 or 308",
+    );
     expect(metaRefreshRule.meta.solution).toContain("301 or 308");
   });
 });
@@ -117,8 +134,12 @@ describe("both sources", () => {
   });
 
   test("the worse status wins", () => {
-    expect(run('<meta http-equiv="refresh" content="5;url=/a">', { Refresh: "0; url=/b" })[0]?.status).toBe("fail");
-    expect(run('<meta http-equiv="refresh" content="0;url=/a">', { Refresh: "5; url=/b" })[0]?.status).toBe("fail");
+    expect(
+      run('<meta http-equiv="refresh" content="5;url=/a">', { Refresh: "0; url=/b" })[0]?.status,
+    ).toBe("fail");
+    expect(
+      run('<meta http-equiv="refresh" content="0;url=/a">', { Refresh: "5; url=/b" })[0]?.status,
+    ).toBe("fail");
   });
 
   test("a meta tag that gives no finding leaves the header finding alone", () => {
@@ -130,19 +151,39 @@ describe("both sources", () => {
 
 describe("neither or meta only: unchanged", () => {
   test("neither passes as before", () => {
-    expect(run("", { "content-type": "text/html" })).toEqual([{ name: "meta-refresh", status: "pass", message: "No meta refresh found" }]);
+    expect(run("", { "content-type": "text/html" })).toEqual([
+      { name: "meta-refresh", status: "pass", message: "No meta refresh found" },
+    ]);
   });
 
   test("meta redirect, delayed redirect and auto refresh keep their messages", () => {
-    expect(run('<meta http-equiv="refresh" content="0;url=/x">')[0]).toMatchObject({ name: "meta-refresh-redirect", status: "warn", message: "Immediate meta refresh redirect found", value: "0;url=/x" });
-    expect(run('<meta http-equiv="Refresh" content="4; url=/x">')[0]).toMatchObject({ name: "meta-refresh-redirect", status: "fail", message: "Meta refresh redirect after 4 seconds" });
-    expect(run('<meta http-equiv="refresh" content="10">')[0]).toMatchObject({ name: "meta-refresh-auto", status: "fail", message: "Page auto-refreshes every 10 seconds" });
-    expect(run('<meta http-equiv="refresh" content="30">')[0]).toMatchObject({ name: "meta-refresh-auto", status: "warn" });
+    expect(run('<meta http-equiv="refresh" content="0;url=/x">')[0]).toMatchObject({
+      name: "meta-refresh-redirect",
+      status: "warn",
+      message: "Immediate meta refresh redirect found",
+      value: "0;url=/x",
+    });
+    expect(run('<meta http-equiv="Refresh" content="4; url=/x">')[0]).toMatchObject({
+      name: "meta-refresh-redirect",
+      status: "fail",
+      message: "Meta refresh redirect after 4 seconds",
+    });
+    expect(run('<meta http-equiv="refresh" content="10">')[0]).toMatchObject({
+      name: "meta-refresh-auto",
+      status: "fail",
+      message: "Page auto-refreshes every 10 seconds",
+    });
+    expect(run('<meta http-equiv="refresh" content="30">')[0]).toMatchObject({
+      name: "meta-refresh-auto",
+      status: "warn",
+    });
     expect(run('<meta http-equiv="refresh" content="0">')).toEqual([]);
   });
 
   test("a meta tag inside noscript is still skipped", () => {
-    expect(run('<noscript><meta http-equiv="refresh" content="0;url=/x"></noscript>')[0]?.status).toBe("pass");
+    expect(
+      run('<noscript><meta http-equiv="refresh" content="0;url=/x"></noscript>')[0]?.status,
+    ).toBe("pass");
   });
 });
 

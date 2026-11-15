@@ -273,7 +273,8 @@ async function runSiteQuery(ctx: RuleContext): Promise<RuleResult> {
   // The same test as noindexSource: page_features carries it as indexableReasons.
   const noindex = new Set<string>();
   for await (const row of query.pagesMatching(
-    (r) => r.indexableReasons.includes("meta:noindex") || r.indexableReasons.includes("header:noindex"),
+    (r) =>
+      r.indexableReasons.includes("meta:noindex") || r.indexableReasons.includes("header:noindex"),
   )) {
     noindex.add(row.normalizedUrl);
   }

@@ -67,8 +67,7 @@ export const ariaDeprecatedRoleRule: Rule = {
         status: "fail",
         message: `${issues.length} deprecated/abstract role(s) found`,
         items: issues.slice(0, 10).map((id) => ({ id })),
-        details:
-          issues.length > 10 ? { additional: issues.length - 10 } : undefined,
+        details: issues.length > 10 ? { additional: issues.length - 10 } : undefined,
       });
     } else if (elementsWithRole.length > 0) {
       checks.push({

@@ -44,9 +44,7 @@ const run = (c: RuleContext) => Promise.resolve(indexabilityConflicts.run(c)).th
 
 describe("crawl/indexability-conflicts", () => {
   test("reporter's repro: Allow plus meta noindex passes", async () => {
-    const checks = await run(
-      ctx([page("/", HOME), page("/noindex.html", NOINDEX)], ALLOW_ALL),
-    );
+    const checks = await run(ctx([page("/", HOME), page("/noindex.html", NOINDEX)], ALLOW_ALL));
     expect(checks.map((c) => [c.name, c.status])).toEqual([["conflicts", "pass"]]);
   });
 

@@ -7,10 +7,7 @@ import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 import { GOOGLEBOT_PDF_MAX_BYTES, GOOGLEBOT_PDF_WARN_BYTES } from "@squirrelscan/utils/constants";
 
 export const optionsSchema = z.object({
-  warn_bytes: z
-    .number()
-    .default(GOOGLEBOT_PDF_WARN_BYTES)
-    .describe("Byte size to trigger warning"),
+  warn_bytes: z.number().default(GOOGLEBOT_PDF_WARN_BYTES).describe("Byte size to trigger warning"),
   error_bytes: z
     .number()
     .default(GOOGLEBOT_PDF_MAX_BYTES)
@@ -53,9 +50,7 @@ export const pdfSizeRule: Rule = {
 
       // Check if any PDF links exist in the crawled pages
       let hasPdfLinks = false;
-      const baseOrigin = ctx.site?.baseUrl
-        ? new URL(ctx.site.baseUrl).origin
-        : null;
+      const baseOrigin = ctx.site?.baseUrl ? new URL(ctx.site.baseUrl).origin : null;
 
       for (const page of pages) {
         for (const link of page.parsed.links) {

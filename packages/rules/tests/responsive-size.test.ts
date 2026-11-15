@@ -33,7 +33,7 @@ function run(
   body: string,
   images: ResourceSizeData[] = [],
   page: { url: string; finalUrl?: string } = { url: PAGE },
-  parsedUnder: string = page.finalUrl ?? page.url
+  parsedUnder: string = page.finalUrl ?? page.url,
 ): CheckResult[] {
   const html = `<!doctype html><html lang="en"><head><title>Gallery</title></head><body><main><h1>Gallery</h1>${body}</main></body></html>`;
   const ctx = {
@@ -66,7 +66,7 @@ function measured(
   sizeBytes: number,
   naturalWidth: number,
   naturalHeight: number,
-  animated = false
+  animated = false,
 ): ResourceSizeData {
   return { ...resource(path, sizeBytes), naturalWidth, naturalHeight, animated };
 }
@@ -79,7 +79,7 @@ describe("images at their natural size are not reported", () => {
     const sizes = { 64: 168, 100: 334, 101: 337, 150: 497, 300: 1058 } as const;
     const checks = run(
       body,
-      Object.entries(sizes).map(([n, bytes]) => resource(`i${n}.png`, bytes))
+      Object.entries(sizes).map(([n, bytes]) => resource(`i${n}.png`, bytes)),
     );
     expect(oversized(checks)).toBeUndefined();
     expect(checks).toEqual([
@@ -94,8 +94,12 @@ describe("images at their natural size are not reported", () => {
 
   test("a small image with no measured size is not reported", () => {
     // Third-party host, a check that was skipped, or one that failed.
-    expect(oversized(run(`<img src="https://cdn.example.net/a.jpg" width="64" height="64">`))).toBeUndefined();
-    expect(oversized(run(`<img src="a.jpg" width="64" height="64">`, [resource("a.jpg", null)]))).toBeUndefined();
+    expect(
+      oversized(run(`<img src="https://cdn.example.net/a.jpg" width="64" height="64">`)),
+    ).toBeUndefined();
+    expect(
+      oversized(run(`<img src="a.jpg" width="64" height="64">`, [resource("a.jpg", null)])),
+    ).toBeUndefined();
   });
 });
 
@@ -104,11 +108,11 @@ describe("evidence of oversizing is still reported", () => {
     const check = oversized(
       run(`<img src="/photos/full.jpg" width="64" height="64" alt="x">`, [
         resource("/photos/full.jpg", 400_000),
-      ])
+      ]),
     );
     expect(check?.status).toBe("warn");
     expect(check?.message).toBe(
-      "1 small image(s) serve files larger than their displayed size needs"
+      "1 small image(s) serve files larger than their displayed size needs",
     );
     expect(check?.items).toEqual([
       {
@@ -133,7 +137,7 @@ describe("evidence of oversizing is still reported", () => {
     const check = oversized(
       run(`<img src="../img/a.png?v=2" width="40" height="40">`, [
         resource("/img/a.png?v=2", 500_000),
-      ])
+      ]),
     );
     expect(check?.items?.map((i) => i.id)).toEqual(["a.png (40x40, no srcset)"]);
   });
@@ -144,7 +148,7 @@ describe("evidence of oversizing is still reported", () => {
       run(`<img src="placeholder.png" data-src="full.jpg" width="64" height="64">`, [
         resource("placeholder.png", 100),
         resource("full.jpg", 400_000),
-      ])
+      ]),
     );
     expect(check?.items?.map((i) => i.id)).toEqual(["full.jpg (64x64, no srcset)"]);
   });
@@ -183,9 +187,15 @@ describe("evidence of oversizing is still reported", () => {
   });
 
   test("more than ten are capped with a remainder count", () => {
-    const body = Array.from({ length: 12 }, (_, i) => `<img src="p${i}.jpg" width="50" height="50">`).join("");
+    const body = Array.from(
+      { length: 12 },
+      (_, i) => `<img src="p${i}.jpg" width="50" height="50">`,
+    ).join("");
     const check = oversized(
-      run(body, Array.from({ length: 12 }, (_, i) => resource(`p${i}.jpg`, 300_000)))
+      run(
+        body,
+        Array.from({ length: 12 }, (_, i) => resource(`p${i}.jpg`, 300_000)),
+      ),
     );
     expect(check?.items).toHaveLength(10);
     expect(check?.details).toEqual({ additional: 2 });
@@ -196,16 +206,36 @@ describe("images the rule does not judge", () => {
   const heavy = (path: string) => [resource(path, 2_000_000)];
 
   test.each([
-    ["a srcset", `<img src="a.jpg" srcset="a.jpg 1x, a@2x.jpg 2x" width="64" height="64">`, "a.jpg"],
+    [
+      "a srcset",
+      `<img src="a.jpg" srcset="a.jpg 1x, a@2x.jpg 2x" width="64" height="64">`,
+      "a.jpg",
+    ],
     ["a <picture> parent", `<picture><img src="a.jpg" width="64" height="64"></picture>`, "a.jpg"],
     ["an SVG", `<img src="a.SVG" width="64" height="64">`, "a.SVG"],
-    ["an SVG with a fragment", `<img src="sprite.svg#icon" width="24" height="24">`, "sprite.svg#icon"],
+    [
+      "an SVG with a fragment",
+      `<img src="sprite.svg#icon" width="24" height="24">`,
+      "sprite.svg#icon",
+    ],
     ["a GIF with trailing whitespace", `<img src="spin.gif " width="40" height="40">`, "spin.gif"],
     ["an ICO", `<img src="favicon.ico" width="32" height="32">`, "favicon.ico"],
-    ["a GIF, whose frames multiply its bytes", `<img src="spin.gif" width="40" height="40">`, "spin.gif"],
-    ["a display size over max_thumbnail_dimension", `<img src="a.jpg" width="101" height="64">`, "a.jpg"],
+    [
+      "a GIF, whose frames multiply its bytes",
+      `<img src="spin.gif" width="40" height="40">`,
+      "spin.gif",
+    ],
+    [
+      "a display size over max_thumbnail_dimension",
+      `<img src="a.jpg" width="101" height="64">`,
+      "a.jpg",
+    ],
     ["a percentage size", `<img src="a.jpg" width="50%" height="50%">`, "a.jpg"],
-    ["an image inside <noscript>", `<noscript><img src="a.jpg" width="64" height="64"></noscript>`, "a.jpg"],
+    [
+      "an image inside <noscript>",
+      `<noscript><img src="a.jpg" width="64" height="64"></noscript>`,
+      "a.jpg",
+    ],
   ])("%s", (_label, body, path) => {
     expect(oversized(run(body, heavy(path)))).toBeUndefined();
   });
@@ -217,7 +247,7 @@ describe("with a natural size, the test is in pixels (#470)", () => {
     const check = oversized(
       run(`<img src="/photos/full.jpg" width="64" height="64" alt="x">`, [
         measured("/photos/full.jpg", 20_480, 1200, 1200),
-      ])
+      ]),
     );
     const wastedBytes = Math.round(20_480 * (1 - (128 * 128) / (1200 * 1200)));
     expect(check?.items).toEqual([
@@ -253,7 +283,9 @@ describe("with a natural size, the test is in pixels (#470)", () => {
 
   test("an animated image shown smaller than its frames is still reported", () => {
     const check = oversized(
-      run(`<img src="spin.gif" width="40" height="40">`, [measured("spin.gif", 300_000, 400, 400, true)])
+      run(`<img src="spin.gif" width="40" height="40">`, [
+        measured("spin.gif", 300_000, 400, 400, true),
+      ]),
     );
     // GIFs were skipped by extension; a read header puts them in the pixel test.
     expect(check?.items?.map((i) => i.id)).toEqual(["spin.gif (40x40, no srcset)"]);
@@ -272,7 +304,9 @@ describe("with a natural size, the test is in pixels (#470)", () => {
     const half = { ...resource("a.jpg", 20_480), naturalWidth: 1200, naturalHeight: null };
     expect(oversized(run(img, [half]))).toBeUndefined();
     const heavy = { ...resource("a.jpg", 400_000), naturalWidth: 1200, naturalHeight: null };
-    expect(oversized(run(img, [heavy]))?.items?.[0]?.meta).toMatchObject({ budgetBytes: BUDGET_64 });
+    expect(oversized(run(img, [heavy]))?.items?.[0]?.meta).toMatchObject({
+      budgetBytes: BUDGET_64,
+    });
   });
 
   test("an image known to be animated is never judged by its bytes", () => {

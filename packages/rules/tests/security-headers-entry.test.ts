@@ -7,11 +7,7 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 
-import {
-  SECURITY_HEADER_RULES,
-  gradeResponseHeaders,
-  hstsRule,
-} from "../src/security-headers";
+import { SECURITY_HEADER_RULES, gradeResponseHeaders, hstsRule } from "../src/security-headers";
 import { getAllRuleIds } from "../src/loader";
 
 const SRC = join(import.meta.dir, "..", "src");
@@ -83,16 +79,18 @@ describe("@squirrelscan/rules/security-headers", () => {
         "strict-transport-security": "max-age=31536000",
       }),
     ).toEqual(
-      (await hstsRule.run({
-        site: {
-          pages: [
-            {
-              url: "https://example.com/",
-              headers: { "strict-transport-security": "max-age=31536000" },
-            },
-          ],
-        },
-      } as never)).checks,
+      (
+        await hstsRule.run({
+          site: {
+            pages: [
+              {
+                url: "https://example.com/",
+                headers: { "strict-transport-security": "max-age=31536000" },
+              },
+            ],
+          },
+        } as never)
+      ).checks,
     );
     expect(gradeResponseHeaders(hstsRule, "http://example.com/", {})[0]?.status).toBe("info");
   });

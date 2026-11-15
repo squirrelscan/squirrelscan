@@ -51,12 +51,12 @@ describe("latestCopyrightYear", () => {
 
 describe("staleCopyrightRule", () => {
   test("current year in the footer passes", async () => {
-    const [check] = (await run("<footer>© 2026 Acme</footer>"));
+    const [check] = await run("<footer>© 2026 Acme</footer>");
     expect(check?.status).toBe("pass");
   });
 
   test("a year behind the current year warns — never errors", async () => {
-    const [check] = (await run("<footer>© 2024 Acme</footer>"));
+    const [check] = await run("<footer>© 2024 Acme</footer>");
     expect(check?.status).toBe("warn");
     expect(check?.value).toBe(2024);
     expect(check?.expected).toBe(NOW);
@@ -72,9 +72,9 @@ describe("staleCopyrightRule", () => {
   });
 
   test("preserves distinct copyright elements but not superseded older notices", async () => {
-    const [check] = (await run(
+    const [check] = await run(
       "<footer><span>© 2022 Acme</span><span>© 2024 Acme</span><span>© 2024 Other</span></footer>",
-    ));
+    );
     expect(check?.value).toBe(2024);
     expect(check?.componentOccurrences).toHaveLength(2);
     expect(check?.componentOccurrences?.map((occurrence) => occurrence.element.locator)).toEqual([
@@ -84,18 +84,22 @@ describe("staleCopyrightRule", () => {
   });
 
   test("does not duplicate one nested copyright element matched through overlapping footer selectors", async () => {
-    const [check] = (await run('<footer><div class="footer"><p>© 2024 Acme</p></div></footer>'));
+    const [check] = await run('<footer><div class="footer"><p>© 2024 Acme</p></div></footer>');
     expect(check?.componentOccurrences).toHaveLength(1);
     expect(check?.componentOccurrences?.[0]?.element.locator).toBe("footer:1>footer>div:1>p:1");
   });
 
   test("article-local footers do not shift a shared site footer's region slot", async () => {
-    const withArticleFooter = (await run(
-      "<article><footer>© 2024 Article</footer></article><footer>© 2024 Acme</footer>",
-      NOW,
-      "https://example.com/a/",
-    ))[0]!;
-    const plainPage = (await run("<footer>© 2024 Acme</footer>", NOW, "https://example.com/b/"))[0]!;
+    const withArticleFooter = (
+      await run(
+        "<article><footer>© 2024 Article</footer></article><footer>© 2024 Acme</footer>",
+        NOW,
+        "https://example.com/a/",
+      )
+    )[0]!;
+    const plainPage = (
+      await run("<footer>© 2024 Acme</footer>", NOW, "https://example.com/b/")
+    )[0]!;
     const siteFooter = withArticleFooter.componentOccurrences?.find(
       (occurrence) => occurrence.groupable,
     )!;
@@ -124,13 +128,13 @@ describe("staleCopyrightRule", () => {
   });
 
   test("no footer at all is skipped, not passed", async () => {
-    const [check] = (await run("<main><p>© 2024 Acme</p></main>"));
+    const [check] = await run("<main><p>© 2024 Acme</p></main>");
     expect(check?.status).toBe("skipped");
     expect(check?.skipReason).toBe("no-footer");
   });
 
   test("a footer with no copyright notice is skipped", async () => {
-    const [check] = (await run("<footer><a href='/privacy'>Privacy</a></footer>"));
+    const [check] = await run("<footer><a href='/privacy'>Privacy</a></footer>");
     expect(check?.status).toBe("skipped");
     expect(check?.skipReason).toBe("not-applicable");
   });
@@ -138,21 +142,21 @@ describe("staleCopyrightRule", () => {
   // The false-positive that would make this rule unshippable: a historical year in
   // body copy is correct as written, and an archived post is SUPPOSED to say 2019.
   test("historical years in body copy stay clean", async () => {
-    const [check] = (await run(
+    const [check] = await run(
       `<article>
          <p>Originally published © 2019 by Acme Press. The 2019-2020 season was our first.</p>
        </article>
        <footer>© 2026 Acme</footer>`,
-    ));
+    );
     expect(check?.status).toBe("pass");
     expect(check?.value).toBe(2026);
   });
 
   test("a dated legal notice in the body does not drag the footer down", async () => {
-    const [check] = (await run(
+    const [check] = await run(
       `<main><section class="legal">Terms of Service, last revised © 2021.</section></main>
        <footer>© 2026 Acme</footer>`,
-    ));
+    );
     expect(check?.status).toBe("pass");
   });
 

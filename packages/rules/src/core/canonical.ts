@@ -15,7 +15,8 @@ function hostFamily(host: string): string {
  * router alias), and the directory index files `/index|default.(htm|html|php|asp|aspx)`. Case-insensitive.
  * `/homepage-design` and `/home/pricing` are not home pages.
  */
-const HOME_FILE = /^\/(?:(?:index|default)\.(?:html?|php|aspx?)|home\/?|index|home\.[a-z0-9]{1,5})$/i;
+const HOME_FILE =
+  /^\/(?:(?:index|default)\.(?:html?|php|aspx?)|home\/?|index|home\.[a-z0-9]{1,5})$/i;
 
 /** A path the site serves its home page at: the root, or one of the home spellings above. */
 function isRootPath(pathname: string): boolean {

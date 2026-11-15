@@ -32,9 +32,7 @@ describe("mergeRuleRunResult", () => {
     const map = new Map<string, RuleRunResult>();
     mergeRuleRunResult(map, "ruleA", rr("metaX", [check("a1")]));
     mergeRuleRunResult(map, "ruleA", rr("metaY", [check("a2")]));
-    expect((map.get("ruleA")!.meta as unknown as { id: string }).id).toBe(
-      "metaX"
-    );
+    expect((map.get("ruleA")!.meta as unknown as { id: string }).id).toBe("metaX");
   });
 
   // The core regression guard: first insert must store a PRIVATE copy so the

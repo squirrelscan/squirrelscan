@@ -44,20 +44,34 @@ const store = (extra: Record<string, unknown> = {}) => ({
 
 describe("schema/organization merchant identity (#1653)", () => {
   test("OnlineStore with a name and PostalAddress is present", async () => {
-    const r = (await run(page(ld(store({ address: { "@type": "PostalAddress", streetAddress: "1 Main St", addressCountry: "GB" } })))));
+    const r = await run(
+      page(
+        ld(
+          store({
+            address: { "@type": "PostalAddress", streetAddress: "1 Main St", addressCountry: "GB" },
+          }),
+        ),
+      ),
+    );
     expect(r.m?.message).toBe("Merchant identity in structured data: present");
     expect(r.fields["address"]).toBe("present (json-ld)");
     expect(r.fields["identifier"]).toBe("absent");
   });
 
   test("an identifier instead of an address is present", async () => {
-    const r = (await run(page(ld(store({ vatID: "GB123456789" })))));
+    const r = await run(page(ld(store({ vatID: "GB123456789" }))));
     expect(r.m?.message).toContain(": present");
     expect(r.fields["identifier"]).toBe("present (json-ld)");
   });
 
   test("a PropertyValue identifier counts", async () => {
-    const r = (await run(page(ld(store({ identifier: { "@type": "PropertyValue", propertyID: "CRN", value: "12345678" } })))));
+    const r = await run(
+      page(
+        ld(
+          store({ identifier: { "@type": "PropertyValue", propertyID: "CRN", value: "12345678" } }),
+        ),
+      ),
+    );
     expect(r.fields["identifier"]).toBe("present (json-ld)");
   });
 
@@ -68,21 +82,27 @@ describe("schema/organization merchant identity (#1653)", () => {
       { "@type": "PropertyValue", propertyID: "internal-site-id", value: "9981" },
       { "@type": "PropertyValue", value: "12345678" },
     ]) {
-      const r = (await run(page(ld(store({ identifier })))));
+      const r = await run(page(ld(store({ identifier }))));
       expect(r.fields["identifier"]).toBe("absent");
     }
   });
 
   test("PropertyValue identifiers that name a legal id count", async () => {
     for (const propertyID of ["VAT", "vatID", "Company number", "ABN", "DUNS", "tax id", "EIN"]) {
-      const r = (await run(page(ld(store({ identifier: { "@type": "PropertyValue", propertyID, value: "12345678" } })))));
+      const r = await run(
+        page(
+          ld(store({ identifier: { "@type": "PropertyValue", propertyID, value: "12345678" } })),
+        ),
+      );
       expect(r.fields["identifier"]).toBe("present (json-ld)");
     }
   });
 
   test("entities linked by @id count the same as nested ones", async () => {
-    const nested = (await run(page(ld(store({ address: { "@type": "PostalAddress", streetAddress: "1 Main St" } })))));
-    const linked = (await run(
+    const nested = await run(
+      page(ld(store({ address: { "@type": "PostalAddress", streetAddress: "1 Main St" } }))),
+    );
+    const linked = await run(
       page(
         ld({
           "@graph": [
@@ -92,65 +112,67 @@ describe("schema/organization merchant identity (#1653)", () => {
           ],
         }),
       ),
-    ));
+    );
     expect(linked.m?.message).toBe(nested.m?.message);
     expect(linked.fields).toEqual(nested.fields);
   });
 
   test("an address object with no parts is not an address", async () => {
-    const r = (await run(page(ld(store({ address: { "@type": "PostalAddress" } })))));
+    const r = await run(page(ld(store({ address: { "@type": "PostalAddress" } }))));
     expect(r.fields["address"]).toBe("absent");
     expect(r.m?.message).toContain(": absent");
   });
 
   test("a placeholder name is not an actual name", async () => {
-    const r = (await run(page(ld(store({ name: "Company", vatID: "GB123456789" })))));
+    const r = await run(page(ld(store({ name: "Company", vatID: "GB123456789" }))));
     expect(r.fields["name"]).toBe("absent");
     expect(r.m?.message).toContain(": absent");
   });
 
   test("visible legal-notice text alone is text-only, not structured identity", async () => {
-    const r = (await run(
+    const r = await run(
       page("", "<footer>Beans Ltd, registered office 1 Main St. Company number 12345678</footer>"),
       { siteType: "ecommerce" },
-    ));
+    );
     expect(r.m?.message).toBe("Merchant identity in structured data: text-only");
     expect(r.fields["legal-notice-text"]).toBe("visible text only");
   });
 
   test("text next to a named store without address or identifier is still text-only", async () => {
-    const r = (await run(page(ld(store()), "<p>VAT no. GB 123 4567 89</p>")));
+    const r = await run(page(ld(store()), "<p>VAT no. GB 123 4567 89</p>"));
     expect(r.m?.message).toContain("text-only");
   });
 
   test("no identifiable organization is unknown, with no failure", async () => {
-    const r = (await run(page(ld({ "@type": "Product", name: "x" }))));
+    const r = await run(page(ld({ "@type": "Product", name: "x" })));
     expect(r.m?.message).toBe("Merchant identity in structured data: unknown (no-organization)");
     expect(r.checks.some((c) => c.status === "warn" || c.status === "fail")).toBe(false);
   });
 
   test("a truncated read is unknown, never absent", async () => {
     const html = `<!doctype html><html><head>${ld(store())}</head><body><p>cut`;
-    const r = (await run(html));
+    const r = await run(html);
     expect(r.m?.message).toBe("Merchant identity in structured data: unknown (incomplete-read)");
     expect(r.fields["address"]).toBe("unknown (incomplete-read)");
   });
 
   test("a failed read is unknown", async () => {
-    const r = (await run(page(ld(store())), { statusCode: 503 }));
+    const r = await run(page(ld(store())), { statusCode: 503 });
     expect(r.m?.message).toContain("unknown (incomplete-read)");
   });
 
   test("a page that is not a confirmed shop emits nothing", async () => {
-    const r = (await run(page(ld({ "@type": "Organization", name: "Acme", url: BASE }))));
+    const r = await run(page(ld({ "@type": "Organization", name: "Acme", url: BASE })));
     expect(r.m).toBeUndefined();
   });
 
   test("existing organization results are unchanged and not duplicated", async () => {
     const org = { "@type": "Organization", name: "Acme", url: BASE };
-    const plain = (await run(page(ld(org))));
-    const shop = (await run(page(ld(org)), { siteType: "ecommerce" }));
-    expect(shop.checks.filter((c) => c.name !== "organization-merchant-identity")).toEqual(plain.checks);
+    const plain = await run(page(ld(org)));
+    const shop = await run(page(ld(org)), { siteType: "ecommerce" });
+    expect(shop.checks.filter((c) => c.name !== "organization-merchant-identity")).toEqual(
+      plain.checks,
+    );
     expect(shop.m?.status).toBe("info");
   });
 });

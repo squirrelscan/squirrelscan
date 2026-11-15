@@ -64,7 +64,12 @@ export function collectInfoChecks(ruleResults: Record<string, ReportRuleResult>)
       if (check.name === `${ruleId}-errors` || check.name === `${ruleId}-timeouts`) continue;
       let group = groups.get(check.name);
       if (!group) {
-        group = { message: check.message, pages: new Set(), total: 0, observation: check.observation };
+        group = {
+          message: check.message,
+          pages: new Set(),
+          total: 0,
+          observation: check.observation,
+        };
         groups.set(check.name, group);
       }
       const before = group.pages.size;

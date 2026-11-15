@@ -16,7 +16,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     icon: "taboola",
     detectors: [
       { type: "script-url", pattern: new RegExp("(?:cdn|trc)\\.taboola\\.com/", "i") },
-      { type: "script-content", pattern: new RegExp("window\\._taboola\\s*=\\s*window\\._taboola\\s*\\|\\|\\s*\\[\\]", "i") },
+      {
+        type: "script-content",
+        pattern: new RegExp("window\\._taboola\\s*=\\s*window\\._taboola\\s*\\|\\|\\s*\\[\\]", "i"),
+      },
       { type: "script-content", pattern: new RegExp("_taboola\\.push\\(\\{", "i") },
     ],
     confidence: "high",
@@ -41,8 +44,17 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://www.criteo.com",
     icon: "criteo",
     detectors: [
-      { type: "script-url", pattern: new RegExp("(?:dynamic\\.criteo\\.com/js/ld/ld\\.js|static\\.criteo\\.net/js/ld/)", "i") },
-      { type: "script-content", pattern: new RegExp("window\\.criteo_q\\s*=\\s*window\\.criteo_q\\s*\\|\\|\\s*\\[\\]", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp(
+          "(?:dynamic\\.criteo\\.com/js/ld/ld\\.js|static\\.criteo\\.net/js/ld/)",
+          "i",
+        ),
+      },
+      {
+        type: "script-content",
+        pattern: new RegExp("window\\.criteo_q\\s*=\\s*window\\.criteo_q\\s*\\|\\|\\s*\\[\\]", "i"),
+      },
       { type: "script-content", pattern: new RegExp("criteo_q\\.push\\(", "i") },
     ],
     confidence: "high",
@@ -68,7 +80,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://www.thetradedesk.com",
     icon: "the-trade-desk",
     detectors: [
-      { type: "script-url", pattern: new RegExp("(?:insight\\.adsrvr\\.org|js\\.adsrvr\\.org)", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("(?:insight\\.adsrvr\\.org|js\\.adsrvr\\.org)", "i"),
+      },
       { type: "script-content", pattern: new RegExp("TTDUniversalPixelApi", "i") },
       { type: "html", pattern: new RegExp("match\\.adsrvr\\.org", "i") },
     ],
@@ -81,7 +96,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://www.media.net",
     icon: "media-net",
     detectors: [
-      { type: "script-url", pattern: new RegExp("contextual\\.media\\.net/(?:dmedianet|nmedianet)\\.js", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("contextual\\.media\\.net/(?:dmedianet|nmedianet)\\.js", "i"),
+      },
       { type: "script-content", pattern: new RegExp("window\\._mNHandle", "i") },
       { type: "script-content", pattern: new RegExp("medianet_versionId", "i") },
     ],
@@ -94,8 +112,14 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://aps.amazon.com",
     icon: "amazon-aps-tam",
     detectors: [
-      { type: "script-url", pattern: new RegExp("c\\.amazon-adsystem\\.com/aax2/apstag\\.js", "i") },
-      { type: "script-content", pattern: new RegExp("apstag\\.(?:init|fetchBids|setDisplayBids)\\(", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("c\\.amazon-adsystem\\.com/aax2/apstag\\.js", "i"),
+      },
+      {
+        type: "script-content",
+        pattern: new RegExp("apstag\\.(?:init|fetchBids|setDisplayBids)\\(", "i"),
+      },
     ],
     confidence: "high",
   },
@@ -106,8 +130,14 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://about.ads.microsoft.com",
     icon: "microsoft-uet",
     detectors: [
-      { type: "script-url", pattern: new RegExp("bat\\.bing\\.(?:com|net)/bat\\.js(?![\\w.-])", "i") },
-      { type: "script-content", pattern: new RegExp("window\\.uetq\\s*=\\s*window\\.uetq\\s*\\|\\|\\s*\\[\\]", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("bat\\.bing\\.(?:com|net)/bat\\.js(?![\\w.-])", "i"),
+      },
+      {
+        type: "script-content",
+        pattern: new RegExp("window\\.uetq\\s*=\\s*window\\.uetq\\s*\\|\\|\\s*\\[\\]", "i"),
+      },
       { type: "header", name: "set-cookie", pattern: new RegExp("_uetsid=", "i") },
     ],
     confidence: "high",
@@ -132,7 +162,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://www.linkedin.com/help/lms/answer/a418880",
     icon: "linkedin-insight",
     detectors: [
-      { type: "script-url", pattern: new RegExp("snap\\.licdn\\.com/li\\.lms-analytics/insight\\.min\\.js", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("snap\\.licdn\\.com/li\\.lms-analytics/insight\\.min\\.js", "i"),
+      },
       { type: "script-content", pattern: new RegExp("_linkedin_partner_id", "i") },
       { type: "html", pattern: new RegExp("px\\.ads\\.linkedin\\.com/collect", "i") },
     ],
@@ -158,7 +191,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://ads.tiktok.com",
     icon: "tiktok-pixel",
     detectors: [
-      { type: "script-url", pattern: new RegExp("analytics\\.tiktok\\.com/i18n/pixel/events\\.js", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("analytics\\.tiktok\\.com/i18n/pixel/events\\.js", "i"),
+      },
       { type: "script-content", pattern: new RegExp("TiktokAnalyticsObject", "i") },
       { type: "script-content", pattern: new RegExp("ttq\\.load\\(", "i") },
     ],
@@ -209,7 +245,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://prebid.org",
     icon: "prebid-js",
     detectors: [
-      { type: "script-content", pattern: new RegExp("pbjs\\.que\\s*=\\s*pbjs\\.que\\s*\\|\\|\\s*\\[\\]", "i") },
+      {
+        type: "script-content",
+        pattern: new RegExp("pbjs\\.que\\s*=\\s*pbjs\\.que\\s*\\|\\|\\s*\\[\\]", "i"),
+      },
       { type: "script-content", pattern: new RegExp("pbjs\\.(?:requestBids|addAdUnits)\\(", "i") },
     ],
     confidence: "high",
@@ -222,9 +261,15 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://developers.google.com/publisher-tag",
     icon: "google-publisher-tag",
     detectors: [
-      { type: "script-url", pattern: new RegExp("securepubads\\.g\\.doubleclick\\.net/tag/js/gpt\\.js", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("securepubads\\.g\\.doubleclick\\.net/tag/js/gpt\\.js", "i"),
+      },
       { type: "script-content", pattern: new RegExp("googletag\\.cmd\\.push\\(", "i") },
-      { type: "script-content", pattern: new RegExp("googletag\\.(?:defineSlot|enableServices)\\(", "i") },
+      {
+        type: "script-content",
+        pattern: new RegExp("googletag\\.(?:defineSlot|enableServices)\\(", "i"),
+      },
     ],
     confidence: "high",
   },
@@ -237,7 +282,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     detectors: [
       { type: "script-url", pattern: new RegExp("s\\.yimg\\.com/wi/ytc\\.js", "i") },
       { type: "html", pattern: new RegExp("sp\\.analytics\\.yahoo\\.com/spp\\.pl\\?a=", "i") },
-      { type: "script-content", pattern: new RegExp("window\\.dotq\\s*=\\s*window\\.dotq\\s*\\|\\|\\s*\\[\\]", "i") },
+      {
+        type: "script-content",
+        pattern: new RegExp("window\\.dotq\\s*=\\s*window\\.dotq\\s*\\|\\|\\s*\\[\\]", "i"),
+      },
     ],
     confidence: "medium",
   },
@@ -312,7 +360,13 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://logrocket.com/",
     icon: "logrocket",
     detectors: [
-      { type: "script-url", pattern: new RegExp("cdn\\.(lr-ingest|logr-ingest|lr-in|lr-intake|lrkt-in|lgrckt-in|logr-in)\\.(io|com)/", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp(
+          "cdn\\.(lr-ingest|logr-ingest|lr-in|lr-intake|lrkt-in|lgrckt-in|logr-in)\\.(io|com)/",
+          "i",
+        ),
+      },
       { type: "script-url", pattern: new RegExp("LogRocket\\.min\\.js", "i") },
       { type: "script-content", pattern: new RegExp("LogRocket\\.init\\s*\\(", "i") },
       { type: "html", pattern: new RegExp("LogRocket\\.init\\s*\\(", "i") },
@@ -352,7 +406,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://www.quantcast.com/products/measure-audience-insights/",
     icon: "quantcast",
     detectors: [
-      { type: "script-url", pattern: new RegExp("(secure|edge|pixel)\\.quantserve\\.com/quant\\.js", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("(secure|edge|pixel)\\.quantserve\\.com/quant\\.js", "i"),
+      },
       { type: "script-content", pattern: new RegExp("_qevents\\.push\\s*\\(", "i") },
       { type: "html", pattern: new RegExp("_qevents\\.push\\s*\\(", "i") },
     ],
@@ -365,7 +422,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://chartbeat.com/",
     icon: "chartbeat",
     detectors: [
-      { type: "script-url", pattern: new RegExp("static\\.chartbeat\\.com/js/chartbeat(_mab|_video)?\\.js", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("static\\.chartbeat\\.com/js/chartbeat(_mab|_video)?\\.js", "i"),
+      },
       { type: "script-content", pattern: new RegExp("_sf_async_config\\b", "i") },
       { type: "html", pattern: new RegExp("_sf_async_config\\b", "i") },
     ],
@@ -390,9 +450,18 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://www.cloudflare.com/web-analytics/",
     icon: "cloudflare-web-analytics",
     detectors: [
-      { type: "script-url", pattern: new RegExp("static\\.cloudflareinsights\\.com/beacon(\\.min)?\\.js(?![\\w.-])", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp(
+          "static\\.cloudflareinsights\\.com/beacon(\\.min)?\\.js(?![\\w.-])",
+          "i",
+        ),
+      },
       { type: "html", pattern: new RegExp("data-cf-beacon\\s*=", "i") },
-      { type: "script-url", pattern: new RegExp("cloudflareinsights\\.com/cdn-cgi/rum(?![\\w-])", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("cloudflareinsights\\.com/cdn-cgi/rum(?![\\w-])", "i"),
+      },
     ],
     confidence: "high",
   },
@@ -403,7 +472,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://umami.is/",
     icon: "umami",
     detectors: [
-      { type: "script-url", pattern: new RegExp("(cloud\\.umami\\.is/script\\.js|/umami\\.js)", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("(cloud\\.umami\\.is/script\\.js|/umami\\.js)", "i"),
+      },
       { type: "html", pattern: new RegExp("data-host-url=[\"'][^\"']*umami", "i") },
     ],
     confidence: "medium",
@@ -428,7 +500,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     icon: "goatcounter",
     detectors: [
       { type: "html", pattern: new RegExp("data-goatcounter=", "i") },
-      { type: "script-url", pattern: new RegExp("(gc\\.zgo\\.at/count\\.js|\\.goatcounter\\.com/count\\.js)", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("(gc\\.zgo\\.at/count\\.js|\\.goatcounter\\.com/count\\.js)", "i"),
+      },
     ],
     confidence: "high",
   },
@@ -439,7 +514,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://pirsch.io/",
     icon: "pirsch",
     detectors: [
-      { type: "script-url", pattern: new RegExp("api\\.pirsch\\.io/(pa|pirsch|pirsch-extended)\\.js", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("api\\.pirsch\\.io/(pa|pirsch|pirsch-extended)\\.js", "i"),
+      },
       { type: "html", pattern: new RegExp("id=[\"']pirsch(extended)?js[\"']", "i") },
     ],
     confidence: "high",
@@ -451,7 +529,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://www.rudderstack.com/",
     icon: "rudderstack",
     detectors: [
-      { type: "script-url", pattern: new RegExp("cdn\\.rudderlabs\\.com/.{0,200}rudder-analytics(\\.min)?\\.js", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("cdn\\.rudderlabs\\.com/.{0,200}rudder-analytics(\\.min)?\\.js", "i"),
+      },
       { type: "script-content", pattern: new RegExp("rudderanalytics\\.load\\s*\\(", "i") },
       { type: "html", pattern: new RegExp("rudderanalytics\\.load\\s*\\(", "i") },
     ],
@@ -491,7 +572,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     icon: "woopra",
     detectors: [
       { type: "script-url", pattern: new RegExp("static\\.woopra\\.com/js/w\\.js", "i") },
-      { type: "script-content", pattern: new RegExp("woopra\\.(config|track|identify)\\s*\\(", "i") },
+      {
+        type: "script-content",
+        pattern: new RegExp("woopra\\.(config|track|identify)\\s*\\(", "i"),
+      },
       { type: "html", pattern: new RegExp("woopra\\.(config|track|identify)\\s*\\(", "i") },
     ],
     confidence: "high",
@@ -516,7 +600,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://metrica.yandex.com",
     icon: "yandex-metrica",
     detectors: [
-      { type: "script-url", pattern: new RegExp("mc\\.yandex\\.ru/metrika/(?:tag|watch)\\.js", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("mc\\.yandex\\.ru/metrika/(?:tag|watch)\\.js", "i"),
+      },
       { type: "script-content", pattern: new RegExp("ym\\(\\d+,\\s*[\"']init[\"']", "i") },
       { type: "html", pattern: new RegExp("mc\\.yandex\\.ru/watch/", "i") },
     ],
@@ -529,7 +616,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://customer.io",
     icon: "customer-io",
     detectors: [
-      { type: "script-url", pattern: new RegExp("assets\\.customer\\.io/assets/track(?:-eu)?\\.js", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("assets\\.customer\\.io/assets/track(?:-eu)?\\.js", "i"),
+      },
       { type: "script-content", pattern: new RegExp("_cio\\.(?:identify|track|page)\\(", "i") },
     ],
     confidence: "high",
@@ -558,7 +648,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     detectors: [
       { type: "script-url", pattern: new RegExp("d2wy8f7a9ursnm\\.cloudfront\\.net", "i") },
       { type: "script-url", pattern: new RegExp("(?:notify|sessions)\\.bugsnag\\.com", "i") },
-      { type: "script-content", pattern: new RegExp("Bugsnag\\.(?:start|notify|createClient)\\b", "i") },
+      {
+        type: "script-content",
+        pattern: new RegExp("Bugsnag\\.(?:start|notify|createClient)\\b", "i"),
+      },
     ],
     confidence: "high",
   },
@@ -598,7 +691,13 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     icon: "raygun",
     detectors: [
       { type: "script-url", pattern: new RegExp("cdn\\.raygun\\.io/raygun4js", "i") },
-      { type: "script-content", pattern: new RegExp("rg4js\\s*\\(\\s*['\"](?:apiKey|enableCrashReporting|enableRealUserMonitoring)", "i") },
+      {
+        type: "script-content",
+        pattern: new RegExp(
+          "rg4js\\s*\\(\\s*['\"](?:apiKey|enableCrashReporting|enableRealUserMonitoring)",
+          "i",
+        ),
+      },
       { type: "script-url", pattern: new RegExp("api\\.raygun\\.io", "i") },
     ],
     confidence: "high",
@@ -610,7 +709,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://www.honeybadger.io",
     icon: "honeybadger",
     detectors: [
-      { type: "script-url", pattern: new RegExp("js\\.honeybadger\\.io/v[0-9.]+/honeybadger", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("js\\.honeybadger\\.io/v[0-9.]+/honeybadger", "i"),
+      },
       { type: "script-content", pattern: new RegExp("Honeybadger\\.configure\\s*\\(", "i") },
       { type: "script-url", pattern: new RegExp("(?:eu-)?api\\.honeybadger\\.io", "i") },
     ],
@@ -639,7 +741,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     icon: "appdynamics",
     detectors: [
       { type: "script-url", pattern: new RegExp("adrum(?:-ext|-[0-9][0-9.]*)?\\.js", "i") },
-      { type: "script-content", pattern: new RegExp("window\\[['\"]adrum-(?:start-time|app-key|config)['\"]\\]", "i") },
+      {
+        type: "script-content",
+        pattern: new RegExp("window\\[['\"]adrum-(?:start-time|app-key|config)['\"]\\]", "i"),
+      },
       { type: "html", pattern: new RegExp("adrumExtUrlHttps?\\b", "i") },
       { type: "script-content", pattern: new RegExp("\\bADRUM\\b", "") },
     ],
@@ -653,7 +758,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     icon: "speedcurve",
     detectors: [
       { type: "script-url", pattern: new RegExp("lux\\.speedcurve\\.com", "i") },
-      { type: "script-content", pattern: new RegExp("LUX\\.(?:send|markLoadTime|label|addData)\\s*[=(]", "i") },
+      {
+        type: "script-content",
+        pattern: new RegExp("LUX\\.(?:send|markLoadTime|label|addData)\\s*[=(]", "i"),
+      },
       { type: "html", pattern: new RegExp("window\\.LUX\\s*=", "i") },
     ],
     confidence: "high",
@@ -666,8 +774,14 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     icon: "optimizely",
     detectors: [
       { type: "script-url", pattern: new RegExp("cdn\\.optimizely\\.com/js/[0-9]+\\.js", "i") },
-      { type: "script-url", pattern: new RegExp("cdn\\.optimizely\\.com/(?:public|client_storage)/", "i") },
-      { type: "script-content", pattern: new RegExp("window\\[['\"]optimizely['\"]\\]|window\\.optimizely\\s*=", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("cdn\\.optimizely\\.com/(?:public|client_storage)/", "i"),
+      },
+      {
+        type: "script-content",
+        pattern: new RegExp("window\\[['\"]optimizely['\"]\\]|window\\.optimizely\\s*=", "i"),
+      },
       { type: "html", pattern: new RegExp("logx\\.optimizely\\.com", "i") },
     ],
     confidence: "high",
@@ -680,7 +794,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     icon: "vwo",
     detectors: [
       { type: "script-url", pattern: new RegExp("dev\\.visualwebsiteoptimizer\\.com", "i") },
-      { type: "script-content", pattern: new RegExp("window\\._vwo_code\\b|var\\s+_vwo_code", "i") },
+      {
+        type: "script-content",
+        pattern: new RegExp("window\\._vwo_code\\b|var\\s+_vwo_code", "i"),
+      },
       { type: "html", pattern: new RegExp("_vwo_code\\b", "i") },
     ],
     confidence: "high",
@@ -718,8 +835,14 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://www.kameleoon.com",
     icon: "kameleoon",
     detectors: [
-      { type: "script-url", pattern: new RegExp("\\.kameleoon\\.(?:io|eu)/(?:[a-z0-9_-]+/)?engine\\.js", "i") },
-      { type: "script-content", pattern: new RegExp("window\\.kameleoon(?:Queue|StartLoadTime|EndLoadTime)\\b", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("\\.kameleoon\\.(?:io|eu)/(?:[a-z0-9_-]+/)?engine\\.js", "i"),
+      },
+      {
+        type: "script-content",
+        pattern: new RegExp("window\\.kameleoon(?:Queue|StartLoadTime|EndLoadTime)\\b", "i"),
+      },
       { type: "html", pattern: new RegExp("kameleoonQueue\\b", "i") },
     ],
     confidence: "high",
@@ -744,7 +867,11 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://www.stackpath.com",
     detectors: [
       { type: "header", name: "X-Provided-By", pattern: new RegExp("^StackCDN", "i") },
-      { type: "header", name: "X-Backend-Server", pattern: new RegExp("hosting\\.stackcp\\.net$", "i") },
+      {
+        type: "header",
+        name: "X-Backend-Server",
+        pattern: new RegExp("hosting\\.stackcp\\.net$", "i"),
+      },
     ],
     confidence: "medium",
     versionPattern: new RegExp("StackCDN(?: ([0-9.]+))?", "i"),
@@ -755,9 +882,7 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     category: "cdn",
     website: "https://www.cdn77.com",
     icon: "cdn77",
-    detectors: [
-      { type: "header", name: "Server", pattern: new RegExp("^CDN77-Turbo$", "i") },
-    ],
+    detectors: [{ type: "header", name: "Server", pattern: new RegExp("^CDN77-Turbo$", "i") }],
     confidence: "high",
   },
   {
@@ -829,7 +954,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     detectors: [
       { type: "html", pattern: new RegExp("res\\.cloudinary\\.com/", "i") },
       { type: "script-url", pattern: new RegExp("widget\\.cloudinary\\.com/", "i") },
-      { type: "script-content", pattern: new RegExp("cloudinary\\.(?:createUploadWidget|openUploadWidget)\\(", "i") },
+      {
+        type: "script-content",
+        pattern: new RegExp("cloudinary\\.(?:createUploadWidget|openUploadWidget)\\(", "i"),
+      },
     ],
     confidence: "high",
   },
@@ -1060,7 +1188,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     icon: "liveagent",
     detectors: [
       { type: "script-url", pattern: new RegExp("\\.ladesk\\.com/scripts/track\\.js", "i") },
-      { type: "script-content", pattern: new RegExp("LiveAgentTracker|LiveAgent\\.createButton", "i") },
+      {
+        type: "script-content",
+        pattern: new RegExp("LiveAgentTracker|LiveAgent\\.createButton", "i"),
+      },
     ],
     confidence: "high",
   },
@@ -1084,7 +1215,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://www.chaport.com",
     icon: "chaport",
     detectors: [
-      { type: "script-url", pattern: new RegExp("app\\.chaport\\.com/javascripts/insert\\.js", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("app\\.chaport\\.com/javascripts/insert\\.js", "i"),
+      },
       { type: "script-content", pattern: new RegExp("chaportConfig", "i") },
     ],
     confidence: "high",
@@ -1122,7 +1256,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     icon: "magento",
     detectors: [
       { type: "html", pattern: new RegExp("type=[\"']text/x-magento-init[\"']", "i") },
-      { type: "script-content", pattern: new RegExp("data-requiremodule=[\"'](?:mage/|Magento_)", "i") },
+      {
+        type: "script-content",
+        pattern: new RegExp("data-requiremodule=[\"'](?:mage/|Magento_)", "i"),
+      },
       { type: "header", name: "set-cookie", pattern: new RegExp("X-Magento-Vary=", "i") },
       { type: "script-url", pattern: new RegExp("/static/(?:version\\d+/)?frontend/", "i") },
     ],
@@ -1137,8 +1274,15 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     detectors: [
       { type: "meta", name: "generator", pattern: new RegExp("WooCommerce ([\\d.]+)", "i") },
       { type: "script-url", pattern: new RegExp("/wp-content/plugins/woocommerce/", "i") },
-      { type: "script-content", pattern: new RegExp("wc_add_to_cart_params|woocommerce_params", "i") },
-      { type: "header", name: "set-cookie", pattern: new RegExp("woocommerce_(?:recently_viewed|items_in_cart|cart_hash)=", "i") },
+      {
+        type: "script-content",
+        pattern: new RegExp("wc_add_to_cart_params|woocommerce_params", "i"),
+      },
+      {
+        type: "header",
+        name: "set-cookie",
+        pattern: new RegExp("woocommerce_(?:recently_viewed|items_in_cart|cart_hash)=", "i"),
+      },
     ],
     confidence: "high",
     versionPattern: new RegExp("WooCommerce ([\\d.]+)", "i"),
@@ -1152,7 +1296,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     detectors: [
       { type: "html", pattern: new RegExp("cdn\\d*\\.bigcommerce\\.com|mybigcommerce\\.com", "i") },
       { type: "meta", name: "platform", pattern: new RegExp("^bigcommerce", "i") },
-      { type: "script-content", pattern: new RegExp("bigcommerce_config|bigcommerce_i18n|window\\.stencilBootstrap", "i") },
+      {
+        type: "script-content",
+        pattern: new RegExp("bigcommerce_config|bigcommerce_i18n|window\\.stencilBootstrap", "i"),
+      },
     ],
     confidence: "high",
   },
@@ -1164,7 +1311,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     icon: "prestashop",
     detectors: [
       { type: "meta", name: "generator", pattern: new RegExp("PrestaShop", "i") },
-      { type: "script-content", pattern: new RegExp("var\\s+prestashop\\s*=|window\\.prestashop\\s*=", "i") },
+      {
+        type: "script-content",
+        pattern: new RegExp("var\\s+prestashop\\s*=|window\\.prestashop\\s*=", "i"),
+      },
       { type: "header", name: "set-cookie", pattern: new RegExp("PrestaShop-[a-f0-9]", "i") },
     ],
     confidence: "high",
@@ -1177,7 +1327,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     icon: "opencart",
     detectors: [
       { type: "header", name: "set-cookie", pattern: new RegExp("OCSESSID=", "i") },
-      { type: "url-path", pattern: new RegExp("index\\.php\\?route=(?:product|common|account|checkout)/", "i") },
+      {
+        type: "url-path",
+        pattern: new RegExp("index\\.php\\?route=(?:product|common|account|checkout)/", "i"),
+      },
       { type: "html", pattern: new RegExp("catalog/view/(?:theme|javascript)/", "i") },
     ],
     confidence: "high",
@@ -1189,9 +1342,16 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://www.salesforce.com/products/commerce-cloud/",
     icon: "salesforce",
     detectors: [
-      { type: "html", pattern: new RegExp("/on/demandware\\.(?:store|static)/|/demandware\\.static/", "i") },
+      {
+        type: "html",
+        pattern: new RegExp("/on/demandware\\.(?:store|static)/|/demandware\\.static/", "i"),
+      },
       { type: "header", name: "server", pattern: new RegExp("Demandware", "i") },
-      { type: "header", name: "set-cookie", pattern: new RegExp("dwsid=|dwanonymous_|dwsecuretoken_", "i") },
+      {
+        type: "header",
+        name: "set-cookie",
+        pattern: new RegExp("dwsid=|dwanonymous_|dwsecuretoken_", "i"),
+      },
     ],
     confidence: "high",
   },
@@ -1203,7 +1363,11 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     icon: "sitecore",
     detectors: [
       { type: "html", pattern: new RegExp("/[-~]/media/[^\"']*\\.ashx", "i") },
-      { type: "header", name: "set-cookie", pattern: new RegExp("SC_ANALYTICS_GLOBAL_COOKIE=", "i") },
+      {
+        type: "header",
+        name: "set-cookie",
+        pattern: new RegExp("SC_ANALYTICS_GLOBAL_COOKIE=", "i"),
+      },
       { type: "url-path", pattern: new RegExp("/sitecore/(?:shell|service)/", "i") },
     ],
     confidence: "high",
@@ -1217,7 +1381,11 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     detectors: [
       { type: "html", pattern: new RegExp("/etc\\.clientlibs/|/etc/designs/", "i") },
       { type: "html", pattern: new RegExp("/_jcr_content/|data-cmp-(?:hook|is)=", "i") },
-      { type: "header", name: "set-cookie", pattern: new RegExp("wcmmode=|cq-authoring-mode=", "i") },
+      {
+        type: "header",
+        name: "set-cookie",
+        pattern: new RegExp("wcmmode=|cq-authoring-mode=", "i"),
+      },
     ],
     confidence: "high",
   },
@@ -1230,7 +1398,11 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     detectors: [
       { type: "meta", name: "generator", pattern: new RegExp("Kentico", "i") },
       { type: "script-url", pattern: new RegExp("/CMSPages/GetResource\\.ashx|/CMSScripts/", "i") },
-      { type: "header", name: "set-cookie", pattern: new RegExp("CMSPreferredCulture=|CMSCookieLevel=", "i") },
+      {
+        type: "header",
+        name: "set-cookie",
+        pattern: new RegExp("CMSPreferredCulture=|CMSCookieLevel=", "i"),
+      },
     ],
     confidence: "high",
     versionPattern: new RegExp("Kentico(?: CMS)? ([\\d.R]+)", "i"),
@@ -1244,7 +1416,11 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     detectors: [
       { type: "meta", name: "generator", pattern: new RegExp("[Uu]mbraco", "i") },
       { type: "header", name: "x-umbraco-version", pattern: new RegExp("[\\d.]+", "i") },
-      { type: "header", name: "set-cookie", pattern: new RegExp("UMB_UCONTEXT=|UMB-XSRF-TOKEN=", "i") },
+      {
+        type: "header",
+        name: "set-cookie",
+        pattern: new RegExp("UMB_UCONTEXT=|UMB-XSRF-TOKEN=", "i"),
+      },
     ],
     confidence: "high",
     versionPattern: new RegExp("[Uu]mbraco[ /]([\\d.]+)", "i"),
@@ -1257,7 +1433,11 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     icon: "craft-cms",
     detectors: [
       { type: "header", name: "x-powered-by", pattern: new RegExp("Craft CMS", "i") },
-      { type: "header", name: "set-cookie", pattern: new RegExp("CraftSessionId=|CRAFT_CSRF_TOKEN=", "i") },
+      {
+        type: "header",
+        name: "set-cookie",
+        pattern: new RegExp("CraftSessionId=|CRAFT_CSRF_TOKEN=", "i"),
+      },
       { type: "script-url", pattern: new RegExp("/cpresources/", "i") },
     ],
     confidence: "high",
@@ -1305,7 +1485,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://prismic.io",
     icon: "prismic",
     detectors: [
-      { type: "script-url", pattern: new RegExp("prismic\\.io/prismic\\.js|static\\.cdn\\.prismic\\.io", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("prismic\\.io/prismic\\.js|static\\.cdn\\.prismic\\.io", "i"),
+      },
       { type: "html", pattern: new RegExp("images\\.prismic\\.io|\\.cdn\\.prismic\\.io", "i") },
       { type: "script-content", pattern: new RegExp("prismic\\.io/api/v2", "i") },
     ],
@@ -1319,7 +1502,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     icon: "storyblok",
     detectors: [
       { type: "html", pattern: new RegExp("a\\.storyblok\\.com|img2?\\.storyblok\\.com", "i") },
-      { type: "script-url", pattern: new RegExp("app\\.storyblok\\.com/f/storyblok-v2-latest\\.js", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("app\\.storyblok\\.com/f/storyblok-v2-latest\\.js", "i"),
+      },
       { type: "script-content", pattern: new RegExp("api\\.storyblok\\.com|StoryblokBridge", "i") },
     ],
     confidence: "high",
@@ -1330,9 +1516,7 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     category: "cms",
     website: "https://directus.io",
     icon: "directus",
-    detectors: [
-      { type: "header", name: "x-powered-by", pattern: new RegExp("^Directus$", "i") },
-    ],
+    detectors: [{ type: "header", name: "x-powered-by", pattern: new RegExp("^Directus$", "i") }],
     confidence: "medium",
   },
   {
@@ -1341,9 +1525,7 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     category: "cms",
     website: "https://payloadcms.com",
     icon: "payload-cms",
-    detectors: [
-      { type: "header", name: "set-cookie", pattern: new RegExp("payload-token=", "i") },
-    ],
+    detectors: [{ type: "header", name: "set-cookie", pattern: new RegExp("payload-token=", "i") }],
     confidence: "medium",
   },
   {
@@ -1380,7 +1562,11 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://expressionengine.com",
     icon: "expressionengine",
     detectors: [
-      { type: "header", name: "set-cookie", pattern: new RegExp("exp_(?:tracker|last_visit|last_activity|csrf_token|sessionid)=", "i") },
+      {
+        type: "header",
+        name: "set-cookie",
+        pattern: new RegExp("exp_(?:tracker|last_visit|last_activity|csrf_token|sessionid)=", "i"),
+      },
       { type: "html", pattern: new RegExp("/themes/(?:ee|user/ee)/", "i") },
     ],
     confidence: "high",
@@ -1404,7 +1590,13 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://www.ecwid.com",
     icon: "ecwid",
     detectors: [
-      { type: "script-url", pattern: new RegExp("app\\.ecwid\\.com/script\\.js|app\\.multiscreenstore\\.com/script\\.js", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp(
+          "app\\.ecwid\\.com/script\\.js|app\\.multiscreenstore\\.com/script\\.js",
+          "i",
+        ),
+      },
       { type: "script-content", pattern: new RegExp("Ecwid\\.|EcwidCart", "i") },
     ],
     confidence: "high",
@@ -1417,7 +1609,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     icon: "volusion",
     detectors: [
       { type: "html", pattern: new RegExp("/vspfiles/|data-vn-page-name", "i") },
-      { type: "script-content", pattern: new RegExp("VOLUSION_HELPERS|VOLUSION\\.affixYourOrder", "i") },
+      {
+        type: "script-content",
+        pattern: new RegExp("VOLUSION_HELPERS|VOLUSION\\.affixYourOrder", "i"),
+      },
     ],
     confidence: "high",
   },
@@ -1428,7 +1623,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://www.shopware.com",
     icon: "shopware",
     detectors: [
-      { type: "script-content", pattern: new RegExp("window\\.themeJsPublicPath|window\\.activeFeatureFlags", "i") },
+      {
+        type: "script-content",
+        pattern: new RegExp("window\\.themeJsPublicPath|window\\.activeFeatureFlags", "i"),
+      },
       { type: "script-url", pattern: new RegExp("/theme/[0-9a-f]+/js/all\\.js", "i") },
       { type: "header", name: "set-cookie", pattern: new RegExp("sw-states=|sw-cache-hash=", "i") },
     ],
@@ -1441,7 +1639,11 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://medusajs.com",
     icon: "medusajs",
     detectors: [
-      { type: "header", name: "set-cookie", pattern: new RegExp("_medusa_jwt=|medusa\\.sid=", "i") },
+      {
+        type: "header",
+        name: "set-cookie",
+        pattern: new RegExp("_medusa_jwt=|medusa\\.sid=", "i"),
+      },
       { type: "script-content", pattern: new RegExp("x-publishable-api-key", "i") },
     ],
     confidence: "medium",
@@ -1502,7 +1704,13 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     icon: "framer",
     detectors: [
       { type: "meta", name: "generator", pattern: new RegExp("Framer", "i") },
-      { type: "html", pattern: new RegExp("framerusercontent\\.com|data-framer-hydrate-v2|Built with Framer", "i") },
+      {
+        type: "html",
+        pattern: new RegExp(
+          "framerusercontent\\.com|data-framer-hydrate-v2|Built with Framer",
+          "i",
+        ),
+      },
       { type: "script-url", pattern: new RegExp("events\\.framer\\.com", "i") },
     ],
     confidence: "high",
@@ -1537,9 +1745,7 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     category: "font",
     website: "https://www.typography.com",
     icon: "typography-com",
-    detectors: [
-      { type: "html", pattern: new RegExp("cloud\\.typography\\.com/", "i") },
-    ],
+    detectors: [{ type: "html", pattern: new RegExp("cloud\\.typography\\.com/", "i") }],
     confidence: "high",
   },
   {
@@ -1548,9 +1754,7 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     category: "font",
     website: "https://fonts.bunny.net",
     icon: "bunny-fonts",
-    detectors: [
-      { type: "html", pattern: new RegExp("fonts\\.bunny\\.net/", "i") },
-    ],
+    detectors: [{ type: "html", pattern: new RegExp("fonts\\.bunny\\.net/", "i") }],
     confidence: "high",
   },
   {
@@ -1559,9 +1763,7 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     category: "font",
     website: "https://www.fontshare.com",
     icon: "fontshare",
-    detectors: [
-      { type: "html", pattern: new RegExp("api\\.fontshare\\.com/", "i") },
-    ],
+    detectors: [{ type: "html", pattern: new RegExp("api\\.fontshare\\.com/", "i") }],
     confidence: "high",
   },
   {
@@ -1587,7 +1789,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     icon: "preact",
     detectors: [
       { type: "script-url", pattern: new RegExp("(?:^|/)preact(?:\\.umd)?(?:\\.min)?\\.js", "i") },
-      { type: "script-url", pattern: new RegExp("(?:unpkg\\.com|cdn\\.jsdelivr\\.net/npm)/preact@", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("(?:unpkg\\.com|cdn\\.jsdelivr\\.net/npm)/preact@", "i"),
+      },
     ],
     confidence: "medium",
     versionPattern: new RegExp("preact@([0-9]+\\.[0-9]+\\.[0-9]+)", "i"),
@@ -1613,7 +1818,13 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://lit.dev",
     icon: "lit",
     detectors: [
-      { type: "script-url", pattern: new RegExp("(?:unpkg\\.com|cdn\\.jsdelivr\\.net/npm)/(?:lit|lit-element|lit-html)@", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp(
+          "(?:unpkg\\.com|cdn\\.jsdelivr\\.net/npm)/(?:lit|lit-element|lit-html)@",
+          "i",
+        ),
+      },
       { type: "script-url", pattern: new RegExp("/lit-element\\.js\\?module", "i") },
     ],
     confidence: "medium",
@@ -1627,7 +1838,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     icon: "stimulus",
     detectors: [
       { type: "html", pattern: new RegExp("\\sdata-controller\\s*=\\s*[\"'][a-z]", "i") },
-      { type: "script-url", pattern: new RegExp("(?:cdn\\.jsdelivr\\.net/npm|unpkg\\.com)/@hotwired/stimulus", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("(?:cdn\\.jsdelivr\\.net/npm|unpkg\\.com)/@hotwired/stimulus", "i"),
+      },
       { type: "script-url", pattern: new RegExp("/stimulus(?:\\.umd)?(?:\\.min)?\\.js", "i") },
     ],
     confidence: "high",
@@ -1641,7 +1855,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     detectors: [
       { type: "html", pattern: new RegExp("data-turbo-track\\s*=\\s*[\"']reload[\"']", "i") },
       { type: "html", pattern: new RegExp("<turbo-(?:frame|stream)\\b", "i") },
-      { type: "script-url", pattern: new RegExp("(?:cdn\\.jsdelivr\\.net/npm|unpkg\\.com)/@hotwired/turbo", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("(?:cdn\\.jsdelivr\\.net/npm|unpkg\\.com)/@hotwired/turbo", "i"),
+      },
     ],
     confidence: "high",
   },
@@ -1652,7 +1869,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://emberjs.com",
     icon: "emberjs",
     detectors: [
-      { type: "script-url", pattern: new RegExp("/ember(?:\\.debug|\\.prod)?(?:\\.min)?\\.js", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("/ember(?:\\.debug|\\.prod)?(?:\\.min)?\\.js", "i"),
+      },
       { type: "html", pattern: new RegExp("class=[\"'][^\"']*\\bember-application\\b", "i") },
       { type: "html", pattern: new RegExp("id=[\"']ember[0-9]+[\"']", "i") },
     ],
@@ -1678,7 +1898,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://underscorejs.org",
     icon: "underscorejs",
     detectors: [
-      { type: "script-url", pattern: new RegExp("(?:^|/)underscore(?:-min)?(?:\\.min)?\\.js", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("(?:^|/)underscore(?:-min)?(?:\\.min)?\\.js", "i"),
+      },
       { type: "script-url", pattern: new RegExp("/ajax/libs/underscore\\.js/", "i") },
     ],
     confidence: "medium",
@@ -1691,9 +1914,18 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://knockoutjs.com",
     icon: "knockoutjs",
     detectors: [
-      { type: "script-url", pattern: new RegExp("(?:^|/)knockout(?:-(?:min|latest))?(?:\\.min)?\\.js", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("(?:^|/)knockout(?:-(?:min|latest))?(?:\\.min)?\\.js", "i"),
+      },
       { type: "script-url", pattern: new RegExp("/ajax/libs/knockout/", "i") },
-      { type: "html", pattern: new RegExp("\\sdata-bind\\s*=\\s*[\"'][^\"']*(?:text|foreach|visible|css|click|value)\\s*:", "i") },
+      {
+        type: "html",
+        pattern: new RegExp(
+          "\\sdata-bind\\s*=\\s*[\"'][^\"']*(?:text|foreach|visible|css|click|value)\\s*:",
+          "i",
+        ),
+      },
     ],
     confidence: "medium",
     versionPattern: new RegExp("/knockout/([0-9]+\\.[0-9]+\\.[0-9]+)", "i"),
@@ -1768,7 +2000,13 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     icon: "docusaurus",
     detectors: [
       { type: "meta", name: "generator", pattern: new RegExp("^Docusaurus(?:\\s+v[0-9.]+)?", "i") },
-      { type: "html", pattern: new RegExp("__DOCUSAURUS_INSERT_BASEURL_BANNER|docusaurus-base-url-issue-banner", "i") },
+      {
+        type: "html",
+        pattern: new RegExp(
+          "__DOCUSAURUS_INSERT_BASEURL_BANNER|docusaurus-base-url-issue-banner",
+          "i",
+        ),
+      },
     ],
     confidence: "high",
     versionPattern: new RegExp("Docusaurus\\s+v([0-9.]+)", "i"),
@@ -1807,7 +2045,7 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     icon: "hexo",
     detectors: [
       { type: "meta", name: "generator", pattern: new RegExp("^Hexo(?:\\s+v?[0-9.]+)?", "i") },
-      { type: "html", pattern: new RegExp("Powered by\\s*<a[^>]+href=\"https?://hexo\\.io", "i") },
+      { type: "html", pattern: new RegExp('Powered by\\s*<a[^>]+href="https?://hexo\\.io', "i") },
     ],
     confidence: "high",
     versionPattern: new RegExp("Hexo\\s+v?([0-9.]+)", "i"),
@@ -1820,7 +2058,13 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     icon: "pelican",
     detectors: [
       { type: "meta", name: "generator", pattern: new RegExp("^Pelican(?:\\s+[0-9.]+)?", "i") },
-      { type: "html", pattern: new RegExp("(?:powered|built|generated)\\s+(?:by|with)[^<]*<a[^>]+href=\"[^\"]*getpelican\\.com", "i") },
+      {
+        type: "html",
+        pattern: new RegExp(
+          '(?:powered|built|generated)\\s+(?:by|with)[^<]*<a[^>]+href="[^"]*getpelican\\.com',
+          "i",
+        ),
+      },
     ],
     confidence: "medium",
     versionPattern: new RegExp("Pelican\\s+([0-9.]+)", "i"),
@@ -1833,7 +2077,7 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     icon: "gridsome",
     detectors: [
       { type: "meta", name: "generator", pattern: new RegExp("^Gridsome(?:\\s+[0-9.]+)?", "i") },
-      { type: "html", pattern: new RegExp("id=\"gridsome-styles\"|__GRIDSOME__", "i") },
+      { type: "html", pattern: new RegExp('id="gridsome-styles"|__GRIDSOME__', "i") },
     ],
     confidence: "high",
     versionPattern: new RegExp("Gridsome\\s+([0-9.]+)", "i"),
@@ -1847,7 +2091,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     detectors: [
       { type: "script-content", pattern: new RegExp("__sveltekit_[a-z0-9]+", "i") },
       { type: "script-url", pattern: new RegExp("/_app/immutable/", "i") },
-      { type: "html", pattern: new RegExp("data-sveltekit-(?:preload-data|preload-code|reload)", "i") },
+      {
+        type: "html",
+        pattern: new RegExp("data-sveltekit-(?:preload-data|preload-code|reload)", "i"),
+      },
     ],
     confidence: "high",
   },
@@ -1857,9 +2104,7 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     category: "framework",
     website: "https://redwoodjs.com",
     icon: "redwoodjs",
-    detectors: [
-      { type: "html", pattern: new RegExp("id=\"redwood-app\"", "i") },
-    ],
+    detectors: [{ type: "html", pattern: new RegExp('id="redwood-app"', "i") }],
     confidence: "medium",
   },
   {
@@ -1882,7 +2127,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     icon: "mkdocs",
     detectors: [
       { type: "meta", name: "generator", pattern: new RegExp("mkdocs-material-[0-9][0-9.]*", "i") },
-      { type: "script-url", pattern: new RegExp("assets/javascripts/bundle\\.[a-z0-9]+\\.min\\.js", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("assets/javascripts/bundle\\.[a-z0-9]+\\.min\\.js", "i"),
+      },
     ],
     confidence: "high",
     versionPattern: new RegExp("mkdocs-material-([0-9.]+)", "i"),
@@ -1894,9 +2142,25 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://www.sphinx-doc.org",
     icon: "sphinx",
     detectors: [
-      { type: "meta", name: "generator", pattern: new RegExp("^(?:Docutils[^,]*,\\s*)?(?:https?://)?(?:www\\.)?sphinx-doc\\.org|^Sphinx\\s+[0-9]", "i") },
-      { type: "script-url", pattern: new RegExp("_static/(?:documentation_options|sphinx_highlight)\\.js", "i") },
-      { type: "html", pattern: new RegExp("Created using\\s*<a[^>]+href=\"https?://(?:www\\.)?sphinx-doc\\.org", "i") },
+      {
+        type: "meta",
+        name: "generator",
+        pattern: new RegExp(
+          "^(?:Docutils[^,]*,\\s*)?(?:https?://)?(?:www\\.)?sphinx-doc\\.org|^Sphinx\\s+[0-9]",
+          "i",
+        ),
+      },
+      {
+        type: "script-url",
+        pattern: new RegExp("_static/(?:documentation_options|sphinx_highlight)\\.js", "i"),
+      },
+      {
+        type: "html",
+        pattern: new RegExp(
+          'Created using\\s*<a[^>]+href="https?://(?:www\\.)?sphinx-doc\\.org',
+          "i",
+        ),
+      },
     ],
     confidence: "high",
     versionPattern: new RegExp("Sphinx\\s+([0-9.]+)", "i"),
@@ -1921,7 +2185,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://middlemanapp.com",
     icon: "middleman",
     detectors: [
-      { type: "html", pattern: new RegExp("Built with\\s*<a[^>]+href=\"https?://middlemanapp\\.com", "i") },
+      {
+        type: "html",
+        pattern: new RegExp('Built with\\s*<a[^>]+href="https?://middlemanapp\\.com', "i"),
+      },
     ],
     confidence: "low",
   },
@@ -1944,7 +2211,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://www.phoenixframework.org",
     icon: "phoenix-cowboy",
     detectors: [
-      { type: "script-content", pattern: new RegExp("Phoenix\\.Channel|phoenix_html|new LiveSocket\\(", "i") },
+      {
+        type: "script-content",
+        pattern: new RegExp("Phoenix\\.Channel|phoenix_html|new LiveSocket\\(", "i"),
+      },
       { type: "html", pattern: new RegExp("data-phx-(?:main|session|static)", "i") },
     ],
     confidence: "medium",
@@ -1956,7 +2226,13 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://mui.com",
     icon: "mui",
     detectors: [
-      { type: "html", pattern: new RegExp("class=\"[^\"]*Mui(?:Paper-root|Button-root|Box-root|Container-root|InputBase-input|Typography-root)", "i") },
+      {
+        type: "html",
+        pattern: new RegExp(
+          'class="[^"]*Mui(?:Paper-root|Button-root|Box-root|Container-root|InputBase-input|Typography-root)',
+          "i",
+        ),
+      },
       { type: "script-url", pattern: new RegExp("@mui/material@?[\\d.]*", "i") },
     ],
     confidence: "high",
@@ -1969,7 +2245,13 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://ant.design",
     icon: "ant-design",
     detectors: [
-      { type: "html", pattern: new RegExp("class=\"[^\"]*\\bant-(?:btn|layout|row|col-|menu|select|input|modal|table)", "i") },
+      {
+        type: "html",
+        pattern: new RegExp(
+          'class="[^"]*\\bant-(?:btn|layout|row|col-|menu|select|input|modal|table)',
+          "i",
+        ),
+      },
       { type: "script-url", pattern: new RegExp("/antd(?:\\.min)?\\.js", "i") },
     ],
     confidence: "high",
@@ -1982,7 +2264,13 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://chakra-ui.com",
     icon: "chakra-ui",
     detectors: [
-      { type: "html", pattern: new RegExp("class=\"[^\"]*\\bchakra-(?:button|stack|text|heading|container|input|box|link)", "i") },
+      {
+        type: "html",
+        pattern: new RegExp(
+          'class="[^"]*\\bchakra-(?:button|stack|text|heading|container|input|box|link)',
+          "i",
+        ),
+      },
     ],
     confidence: "high",
   },
@@ -1993,7 +2281,13 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://www.radix-ui.com",
     icon: "radix-ui",
     detectors: [
-      { type: "html", pattern: new RegExp("data-radix-(?:scroll-area|popper|collection|focus|aspect-ratio|select|menu)", "i") },
+      {
+        type: "html",
+        pattern: new RegExp(
+          "data-radix-(?:scroll-area|popper|collection|focus|aspect-ratio|select|menu)",
+          "i",
+        ),
+      },
     ],
     confidence: "high",
   },
@@ -2004,7 +2298,12 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://bulma.io",
     icon: "bulma",
     detectors: [
-      { type: "tag-attr", tags: ["link"], attrs: ["href"], pattern: new RegExp("^[^\"]{0,300}?/bulma(?:\\.min)?\\.css", "i") },
+      {
+        type: "tag-attr",
+        tags: ["link"],
+        attrs: ["href"],
+        pattern: new RegExp('^[^"]{0,300}?/bulma(?:\\.min)?\\.css', "i"),
+      },
     ],
     confidence: "high",
     versionPattern: new RegExp("bulma@([0-9]+\\.[0-9]+\\.[0-9]+)", "i"),
@@ -2017,7 +2316,12 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     icon: "foundation",
     detectors: [
       { type: "script-url", pattern: new RegExp("foundation-sites[@/][\\d.]+", "i") },
-      { type: "tag-attr", tags: ["link"], attrs: ["href"], pattern: new RegExp("^[^\"]{0,300}?/foundation(?:\\.min)?\\.css", "i") },
+      {
+        type: "tag-attr",
+        tags: ["link"],
+        attrs: ["href"],
+        pattern: new RegExp('^[^"]{0,300}?/foundation(?:\\.min)?\\.css', "i"),
+      },
     ],
     confidence: "medium",
     versionPattern: new RegExp("foundation-sites@([0-9]+\\.[0-9]+\\.[0-9]+)", "i"),
@@ -2030,7 +2334,12 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     icon: "semantic-ui",
     detectors: [
       { type: "script-url", pattern: new RegExp("(?:semantic-ui|fomantic-ui)[@/][\\d.]", "i") },
-      { type: "tag-attr", tags: ["link"], attrs: ["href"], pattern: new RegExp("^[^\"]{0,300}?/(?:semantic|fomantic)(?:\\.min)?\\.css", "i") },
+      {
+        type: "tag-attr",
+        tags: ["link"],
+        attrs: ["href"],
+        pattern: new RegExp('^[^"]{0,300}?/(?:semantic|fomantic)(?:\\.min)?\\.css', "i"),
+      },
     ],
     confidence: "medium",
     versionPattern: new RegExp("(?:semantic-ui|fomantic-ui)@([0-9]+\\.[0-9]+\\.[0-9]+)", "i"),
@@ -2042,7 +2351,12 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://materializecss.com",
     icon: "materialize-css",
     detectors: [
-      { type: "tag-attr", tags: ["link"], attrs: ["href"], pattern: new RegExp("^[^\"]{0,300}?/materialize(?:\\.min)?\\.css", "i") },
+      {
+        type: "tag-attr",
+        tags: ["link"],
+        attrs: ["href"],
+        pattern: new RegExp('^[^"]{0,300}?/materialize(?:\\.min)?\\.css', "i"),
+      },
       { type: "script-url", pattern: new RegExp("/materialize(?:\\.min)?\\.js", "i") },
     ],
     confidence: "high",
@@ -2055,7 +2369,13 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://getuikit.com",
     icon: "uikit",
     detectors: [
-      { type: "html", pattern: new RegExp("class=\"[^\"]*\\buk-(?:container|section|grid|navbar|button|card|cover)", "i") },
+      {
+        type: "html",
+        pattern: new RegExp(
+          'class="[^"]*\\buk-(?:container|section|grid|navbar|button|card|cover)',
+          "i",
+        ),
+      },
       { type: "script-url", pattern: new RegExp("/uikit(?:-icons)?(?:\\.min)?\\.js", "i") },
     ],
     confidence: "high",
@@ -2068,7 +2388,7 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://primereact.org",
     icon: "primereact",
     detectors: [
-      { type: "html", pattern: new RegExp("class=\"[^\"]*\\bp-component\\b", "i") },
+      { type: "html", pattern: new RegExp('class="[^"]*\\bp-component\\b', "i") },
       { type: "script-url", pattern: new RegExp("/primeng[/@]", "i") },
     ],
     confidence: "medium",
@@ -2081,7 +2401,13 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     icon: "shoelace",
     detectors: [
       { type: "script-url", pattern: new RegExp("@shoelace-style/shoelace", "i") },
-      { type: "html", pattern: new RegExp("<sl-(?:button|icon|input|dialog|card|tab|tooltip|menu|drawer)\\b", "i") },
+      {
+        type: "html",
+        pattern: new RegExp(
+          "<sl-(?:button|icon|input|dialog|card|tab|tooltip|menu|drawer)\\b",
+          "i",
+        ),
+      },
     ],
     confidence: "high",
     versionPattern: new RegExp("@shoelace-style/shoelace@([0-9]+\\.[0-9]+\\.[0-9]+)", "i"),
@@ -2105,7 +2431,11 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://railway.app",
     icon: "railway-app",
     detectors: [
-      { type: "header", name: "Server", pattern: new RegExp("^railway(?:-(?:hikari|edge))?$", "i") },
+      {
+        type: "header",
+        name: "Server",
+        pattern: new RegExp("^railway(?:-(?:hikari|edge))?$", "i"),
+      },
       { type: "url-host", pattern: new RegExp("(?:^|\\.)railway\\.app\\.?$", "i") },
     ],
     confidence: "high",
@@ -2116,9 +2446,7 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     category: "hosting",
     website: "https://aws.amazon.com/amplify/hosting",
     icon: "aws-amplify-hosting",
-    detectors: [
-      { type: "url-host", pattern: new RegExp("(?:^|\\.)amplifyapp\\.com\\.?$", "i") },
-    ],
+    detectors: [{ type: "url-host", pattern: new RegExp("(?:^|\\.)amplifyapp\\.com\\.?$", "i") }],
     confidence: "medium",
   },
   {
@@ -2128,8 +2456,14 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://threejs.org",
     icon: "threejs",
     detectors: [
-      { type: "script-url", pattern: new RegExp("(?:^|/)three(?:\\.module)?(?:\\.min)?\\.js(?:[?#\"']|$)", "i") },
-      { type: "script-url", pattern: new RegExp("(?:unpkg\\.com|cdn\\.jsdelivr\\.net/npm)/three@", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("(?:^|/)three(?:\\.module)?(?:\\.min)?\\.js(?:[?#\"']|$)", "i"),
+      },
+      {
+        type: "script-url",
+        pattern: new RegExp("(?:unpkg\\.com|cdn\\.jsdelivr\\.net/npm)/three@", "i"),
+      },
       { type: "script-url", pattern: new RegExp("/ajax/libs/three\\.js/", "i") },
     ],
     confidence: "medium",
@@ -2144,7 +2478,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     detectors: [
       { type: "script-url", pattern: new RegExp("(?:^|/)d3(?:\\.v[0-9]+)?(?:\\.min)?\\.js", "i") },
       { type: "script-url", pattern: new RegExp("d3js\\.org/d3", "i") },
-      { type: "script-url", pattern: new RegExp("(?:unpkg\\.com|cdn\\.jsdelivr\\.net/npm)/d3@", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("(?:unpkg\\.com|cdn\\.jsdelivr\\.net/npm)/d3@", "i"),
+      },
     ],
     confidence: "medium",
     versionPattern: new RegExp("/d3@([0-9]+\\.[0-9]+\\.[0-9]+)", "i"),
@@ -2158,7 +2495,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     detectors: [
       { type: "script-url", pattern: new RegExp("(?:^|/)gsap(?:\\.min)?\\.js", "i") },
       { type: "script-url", pattern: new RegExp("/ajax/libs/gsap/", "i") },
-      { type: "script-url", pattern: new RegExp("(?:unpkg\\.com|cdn\\.jsdelivr\\.net/npm)/gsap@", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("(?:unpkg\\.com|cdn\\.jsdelivr\\.net/npm)/gsap@", "i"),
+      },
     ],
     confidence: "high",
     versionPattern: new RegExp("/gsap/([0-9]+\\.[0-9]+\\.[0-9]+)", "i"),
@@ -2171,8 +2511,20 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     icon: "lottie",
     detectors: [
       { type: "html", pattern: new RegExp("<(?:dotlottie|lottie)-player\\b", "i") },
-      { type: "script-url", pattern: new RegExp("/dist/(?:dotlottie-player|lottie-player|tgs-player)(?:\\.min)?\\.js", "i") },
-      { type: "script-url", pattern: new RegExp("(?:unpkg\\.com|cdn\\.jsdelivr\\.net/npm)/@(?:lottiefiles|dotlottie)/", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp(
+          "/dist/(?:dotlottie-player|lottie-player|tgs-player)(?:\\.min)?\\.js",
+          "i",
+        ),
+      },
+      {
+        type: "script-url",
+        pattern: new RegExp(
+          "(?:unpkg\\.com|cdn\\.jsdelivr\\.net/npm)/@(?:lottiefiles|dotlottie)/",
+          "i",
+        ),
+      },
     ],
     confidence: "high",
   },
@@ -2183,9 +2535,15 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://lodash.com",
     icon: "lodash",
     detectors: [
-      { type: "script-url", pattern: new RegExp("(?:^|/)lodash(?:\\.core|\\.fp)?(?:\\.min)?\\.js", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("(?:^|/)lodash(?:\\.core|\\.fp)?(?:\\.min)?\\.js", "i"),
+      },
       { type: "script-url", pattern: new RegExp("/ajax/libs/lodash\\.js/", "i") },
-      { type: "script-url", pattern: new RegExp("(?:unpkg\\.com|cdn\\.jsdelivr\\.net/npm)/lodash@", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("(?:unpkg\\.com|cdn\\.jsdelivr\\.net/npm)/lodash@", "i"),
+      },
     ],
     confidence: "medium",
     versionPattern: new RegExp("/lodash\\.js/([0-9]+\\.[0-9]+\\.[0-9]+)", "i"),
@@ -2197,7 +2555,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://momentjs.com",
     icon: "momentjs",
     detectors: [
-      { type: "script-url", pattern: new RegExp("(?:^|/)moment(?:-with-locales|\\.min|-timezone[^/]*)?\\.js", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("(?:^|/)moment(?:-with-locales|\\.min|-timezone[^/]*)?\\.js", "i"),
+      },
       { type: "script-url", pattern: new RegExp("/ajax/libs/moment\\.js/", "i") },
     ],
     confidence: "medium",
@@ -2212,7 +2573,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     detectors: [
       { type: "script-url", pattern: new RegExp("(?:^|/)dayjs(?:\\.min)?\\.js", "i") },
       { type: "script-url", pattern: new RegExp("/ajax/libs/dayjs/", "i") },
-      { type: "script-url", pattern: new RegExp("(?:unpkg\\.com|cdn\\.jsdelivr\\.net/npm)/dayjs@", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("(?:unpkg\\.com|cdn\\.jsdelivr\\.net/npm)/dayjs@", "i"),
+      },
     ],
     confidence: "medium",
     versionPattern: new RegExp("/dayjs/([0-9]+\\.[0-9]+\\.[0-9]+)", "i"),
@@ -2224,7 +2588,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://modernizr.com",
     icon: "modernizr",
     detectors: [
-      { type: "script-url", pattern: new RegExp("(?:^|/)modernizr(?:-custom|[.-][0-9][^/]*)?(?:\\.min)?\\.js", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("(?:^|/)modernizr(?:-custom|[.-][0-9][^/]*)?(?:\\.min)?\\.js", "i"),
+      },
       { type: "script-url", pattern: new RegExp("/ajax/libs/modernizr/", "i") },
     ],
     confidence: "high",
@@ -2251,9 +2618,18 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://webpack.js.org",
     icon: "webpack",
     detectors: [
-      { type: "script-content", pattern: new RegExp("self\\.webpackChunk[\\w$]*\\s*=\\s*self\\.webpackChunk", "i") },
-      { type: "script-content", pattern: new RegExp("window\\.webpackJsonp\\b|webpackJsonp\\.push\\(", "i") },
-      { type: "script-content", pattern: new RegExp("__webpack_require__\\.(?:e|r|d|n|t|p)\\b", "i") },
+      {
+        type: "script-content",
+        pattern: new RegExp("self\\.webpackChunk[\\w$]*\\s*=\\s*self\\.webpackChunk", "i"),
+      },
+      {
+        type: "script-content",
+        pattern: new RegExp("window\\.webpackJsonp\\b|webpackJsonp\\.push\\(", "i"),
+      },
+      {
+        type: "script-content",
+        pattern: new RegExp("__webpack_require__\\.(?:e|r|d|n|t|p)\\b", "i"),
+      },
     ],
     confidence: "high",
   },
@@ -2266,7 +2642,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     detectors: [
       { type: "script-url", pattern: new RegExp("/@vite/client\\b", "i") },
       { type: "html", pattern: new RegExp("/@vite/client\\b", "i") },
-      { type: "script-content", pattern: new RegExp("__vite__mapDeps|__vitePreload\\b|__vite_is_modern_browser\\b", "i") },
+      {
+        type: "script-content",
+        pattern: new RegExp("__vite__mapDeps|__vitePreload\\b|__vite_is_modern_browser\\b", "i"),
+      },
     ],
     confidence: "high",
   },
@@ -2293,7 +2672,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     detectors: [
       { type: "script-url", pattern: new RegExp("/featureassets\\.org[/:\"']", "i") },
       { type: "script-url", pattern: new RegExp("api\\.statsig(?:cdn)?\\.com", "i") },
-      { type: "script-url", pattern: new RegExp("(?:assetsconfigcdn|featuregates|prodregistryv2)\\.org[/:\"']", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("(?:assetsconfigcdn|featuregates|prodregistryv2)\\.org[/:\"']", "i"),
+      },
       { type: "script-url", pattern: new RegExp("@statsig/js-client", "i") },
       { type: "script-content", pattern: new RegExp("window\\.__STATSIG__|__STATSIG__\\b", "i") },
     ],
@@ -2307,8 +2689,14 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     icon: "split-io",
     detectors: [
       { type: "script-url", pattern: new RegExp("cdn\\.split\\.io/sdk/", "i") },
-      { type: "script-url", pattern: new RegExp("sdk\\.split\\.io|events\\.split\\.io|streaming\\.split\\.io", "i") },
-      { type: "script-content", pattern: new RegExp("window\\.splitio\\b|splitio\\.SplitFactory", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("sdk\\.split\\.io|events\\.split\\.io|streaming\\.split\\.io", "i"),
+      },
+      {
+        type: "script-content",
+        pattern: new RegExp("window\\.splitio\\b|splitio\\.SplitFactory", "i"),
+      },
     ],
     confidence: "high",
   },
@@ -2321,7 +2709,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     detectors: [
       { type: "script-url", pattern: new RegExp("cdn\\.growthbook\\.io/api/features/", "i") },
       { type: "html", pattern: new RegExp("data-client-key\\s*=\\s*['\"]sdk-", "i") },
-      { type: "script-content", pattern: new RegExp("window\\.growthbook_(?:config|queue)\\b", "i") },
+      {
+        type: "script-content",
+        pattern: new RegExp("window\\.growthbook_(?:config|queue)\\b", "i"),
+      },
       { type: "script-url", pattern: new RegExp("@growthbook/growthbook/dist/bundles/auto", "i") },
     ],
     confidence: "medium",
@@ -2334,7 +2725,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     icon: "braintree",
     detectors: [
       { type: "script-url", pattern: new RegExp("js\\.braintreegateway\\.com/web/", "i") },
-      { type: "script-content", pattern: new RegExp("braintree\\.(client|dropin|hostedFields)\\.create\\(", "i") },
+      {
+        type: "script-content",
+        pattern: new RegExp("braintree\\.(client|dropin|hostedFields)\\.create\\(", "i"),
+      },
     ],
     confidence: "high",
     versionPattern: new RegExp("js\\.braintreegateway\\.com/web/(?:dropin/)?v?([0-9.]+)/", "i"),
@@ -2346,11 +2740,17 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://www.adyen.com",
     icon: "adyen",
     detectors: [
-      { type: "script-url", pattern: new RegExp("checkoutshopper-(?:live|test)\\.adyen\\.com", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("checkoutshopper-(?:live|test)\\.adyen\\.com", "i"),
+      },
       { type: "script-content", pattern: new RegExp("new\\s+AdyenCheckout\\(", "i") },
     ],
     confidence: "high",
-    versionPattern: new RegExp("checkoutshopper-(?:live|test)\\.adyen\\.com/checkoutshopper/sdk/([0-9.]+)/", "i"),
+    versionPattern: new RegExp(
+      "checkoutshopper-(?:live|test)\\.adyen\\.com/checkoutshopper/sdk/([0-9.]+)/",
+      "i",
+    ),
   },
   {
     id: "authorize-net",
@@ -2359,7 +2759,13 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://www.authorize.net",
     icon: "authorize-net",
     detectors: [
-      { type: "script-url", pattern: new RegExp("(?:js|jstest)\\.authorize\\.net/v[0-9]+/(?:Accept|AcceptUI)\\.js", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp(
+          "(?:js|jstest)\\.authorize\\.net/v[0-9]+/(?:Accept|AcceptUI)\\.js",
+          "i",
+        ),
+      },
     ],
     confidence: "high",
     versionPattern: new RegExp("authorize\\.net/v([0-9]+)/Accept", "i"),
@@ -2432,9 +2838,7 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     category: "payment",
     website: "https://sezzle.com",
     icon: "sezzle",
-    detectors: [
-      { type: "script-url", pattern: new RegExp("widget\\.sezzle\\.com/", "i") },
-    ],
+    detectors: [{ type: "script-url", pattern: new RegExp("widget\\.sezzle\\.com/", "i") }],
     confidence: "high",
   },
   {
@@ -2457,7 +2861,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     icon: "google-pay",
     detectors: [
       { type: "script-url", pattern: new RegExp("pay\\.google\\.com/gp/p/js/pay\\.js", "i") },
-      { type: "script-content", pattern: new RegExp("google\\.payments\\.api\\.PaymentsClient", "i") },
+      {
+        type: "script-content",
+        pattern: new RegExp("google\\.payments\\.api\\.PaymentsClient", "i"),
+      },
     ],
     confidence: "high",
   },
@@ -2468,7 +2875,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://pay.amazon.com",
     icon: "amazon-pay",
     detectors: [
-      { type: "script-url", pattern: new RegExp("static-(?:na|eu|fe)\\.payments-amazon\\.com", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("static-(?:na|eu|fe)\\.payments-amazon\\.com", "i"),
+      },
       { type: "script-content", pattern: new RegExp("amazon\\.Pay\\.renderButton\\(", "i") },
     ],
     confidence: "high",
@@ -2479,9 +2889,7 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     category: "payment",
     website: "https://shop.app",
     icon: "shop-pay",
-    detectors: [
-      { type: "html", pattern: new RegExp("<shop-pay-(?:button|payment-request)", "i") },
-    ],
+    detectors: [{ type: "html", pattern: new RegExp("<shop-pay-(?:button|payment-request)", "i") }],
     confidence: "high",
   },
   {
@@ -2588,7 +2996,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://www.worldpay.com",
     icon: "worldpay",
     detectors: [
-      { type: "script-url", pattern: new RegExp("(?:try\\.)?access\\.worldpay\\.com/access-checkout", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("(?:try\\.)?access\\.worldpay\\.com/access-checkout", "i"),
+      },
     ],
     confidence: "high",
     versionPattern: new RegExp("access\\.worldpay\\.com/access-checkout/v([0-9]+)/", "i"),
@@ -2600,7 +3011,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://www.2checkout.com",
     icon: "2checkout",
     detectors: [
-      { type: "script-url", pattern: new RegExp("secure\\.2checkout\\.com/checkout/client/twoCoInlineCart\\.js", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("secure\\.2checkout\\.com/checkout/client/twoCoInlineCart\\.js", "i"),
+      },
       { type: "script-content", pattern: new RegExp("TwoCoInlineCart", "i") },
     ],
     confidence: "high",
@@ -2612,7 +3026,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://www.cybersource.com",
     icon: "cybersource",
     detectors: [
-      { type: "script-url", pattern: new RegExp("(?:test)?flex\\.cybersource\\.com/(?:microform|cybersource)", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("(?:test)?flex\\.cybersource\\.com/(?:microform|cybersource)", "i"),
+      },
     ],
     confidence: "high",
   },
@@ -2655,7 +3072,11 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
       { type: "script-url", pattern: new RegExp("\\.perimeterx\\.net/", "i") },
       { type: "script-content", pattern: new RegExp("_pxAppId\\s*[:=]", "i") },
       { type: "html", pattern: new RegExp("window\\._pxAppId", "i") },
-      { type: "header", name: "set-cookie", pattern: new RegExp("(?:^|[;\\s])_px(?:3|vid|hd)=", "i") },
+      {
+        type: "header",
+        name: "set-cookie",
+        pattern: new RegExp("(?:^|[;\\s])_px(?:3|vid|hd)=", "i"),
+      },
     ],
     confidence: "high",
   },
@@ -2735,7 +3156,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     icon: "trustarc",
     detectors: [
       { type: "script-url", pattern: new RegExp("consent\\.trustarc\\.com/", "i") },
-      { type: "script-url", pattern: new RegExp("(?:consent\\.truste|trustarc)\\.com/notice", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("(?:consent\\.truste|trustarc)\\.com/notice", "i"),
+      },
       { type: "html", pattern: new RegExp("id=[\"']consent_blackbar[\"']|teconsent", "i") },
     ],
     confidence: "high",
@@ -2759,7 +3183,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://termly.io",
     icon: "termly",
     detectors: [
-      { type: "script-url", pattern: new RegExp("app\\.termly\\.io/(?:embed|resource-blocker)", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("app\\.termly\\.io/(?:embed|resource-blocker)", "i"),
+      },
       { type: "html", pattern: new RegExp("termly-embed-banner|termly-code-snippet", "i") },
     ],
     confidence: "high",
@@ -2773,7 +3200,13 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     detectors: [
       { type: "script-url", pattern: new RegExp("cdn\\.iubenda\\.com/(?:cs|iubenda)", "i") },
       { type: "script-content", pattern: new RegExp("_iub\\.(?:csConfiguration|cons)", "i") },
-      { type: "html", pattern: new RegExp("iubenda\\.com/(?:privacy-policy|cookie-policy)|class=[\"'][^\"']*iubenda", "i") },
+      {
+        type: "html",
+        pattern: new RegExp(
+          "iubenda\\.com/(?:privacy-policy|cookie-policy)|class=[\"'][^\"']*iubenda",
+          "i",
+        ),
+      },
     ],
     confidence: "high",
   },
@@ -2797,9 +3230,21 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://www.didomi.io",
     icon: "didomi",
     detectors: [
-      { type: "script-url", pattern: new RegExp("sdk\\.privacy-center\\.org/.{0,200}loader\\.js", "i") },
-      { type: "script-url", pattern: new RegExp("(?:sdk|api|sdk-gcp)\\.privacy-center\\.org/", "i") },
-      { type: "script-content", pattern: new RegExp("window\\.didomiOnReady|window\\.didomiEventListeners|window\\.Didomi\\b", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("sdk\\.privacy-center\\.org/.{0,200}loader\\.js", "i"),
+      },
+      {
+        type: "script-url",
+        pattern: new RegExp("(?:sdk|api|sdk-gcp)\\.privacy-center\\.org/", "i"),
+      },
+      {
+        type: "script-content",
+        pattern: new RegExp(
+          "window\\.didomiOnReady|window\\.didomiEventListeners|window\\.Didomi\\b",
+          "i",
+        ),
+      },
     ],
     confidence: "high",
   },
@@ -2837,7 +3282,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     icon: "adobe-launch",
     detectors: [
       { type: "script-url", pattern: new RegExp("assets\\.adobedtm\\.com/", "i") },
-      { type: "script-content", pattern: new RegExp("_satellite\\.(pageBottom|buildInfo|getVar)", "i") },
+      {
+        type: "script-content",
+        pattern: new RegExp("_satellite\\.(pageBottom|buildInfo|getVar)", "i"),
+      },
       { type: "html", pattern: new RegExp("_satellite\\.(pageBottom|buildInfo|getVar)", "i") },
     ],
     confidence: "high",
@@ -2849,7 +3297,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://cheq.ai/ensighten/",
     icon: "ensighten",
     detectors: [
-      { type: "script-url", pattern: new RegExp("nexus\\.ensighten\\.com/.{1,200}/Bootstrap\\.js", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("nexus\\.ensighten\\.com/.{1,200}/Bootstrap\\.js", "i"),
+      },
       { type: "script-content", pattern: new RegExp("Bootstrapper\\.(ensEvent|data)\\b", "i") },
     ],
     confidence: "high",
@@ -2887,9 +3338,7 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     category: "video",
     website: "https://www.brightcove.com",
     icon: "brightcove",
-    detectors: [
-      { type: "html", pattern: new RegExp("players\\.brightcove\\.net/", "i") },
-    ],
+    detectors: [{ type: "html", pattern: new RegExp("players\\.brightcove\\.net/", "i") }],
     confidence: "high",
   },
   {
@@ -2937,7 +3386,11 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://openresty.org",
     icon: "openresty",
     detectors: [
-      { type: "header", name: "Server", pattern: new RegExp("openresty(?:/[0-9.]+)?|OpenResty Edge", "i") },
+      {
+        type: "header",
+        name: "Server",
+        pattern: new RegExp("openresty(?:/[0-9.]+)?|OpenResty Edge", "i"),
+      },
     ],
     confidence: "high",
     versionPattern: new RegExp("openresty/([0-9.]+)", "i"),
@@ -2962,9 +3415,7 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     category: "web-server",
     website: "https://jetty.org",
     icon: "jetty",
-    detectors: [
-      { type: "header", name: "Server", pattern: new RegExp("Jetty\\(?[0-9]", "i") },
-    ],
+    detectors: [{ type: "header", name: "Server", pattern: new RegExp("Jetty\\(?[0-9]", "i") }],
     confidence: "high",
     versionPattern: new RegExp("Jetty[ (]+([0-9.]+)", "i"),
   },
@@ -3037,9 +3488,7 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     category: "web-server",
     website: "https://ninenines.eu",
     icon: "cowboy-erlang",
-    detectors: [
-      { type: "header", name: "Server", pattern: new RegExp("^Cowboy$", "i") },
-    ],
+    detectors: [{ type: "header", name: "Server", pattern: new RegExp("^Cowboy$", "i") }],
     confidence: "high",
   },
   {
@@ -3062,8 +3511,14 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://swiperjs.com",
     icon: "swiper",
     detectors: [
-      { type: "script-url", pattern: new RegExp("swiper(?:-bundle|-element)?(?:\\.min)?\\.(?:js|css)", "i") },
-      { type: "html", pattern: new RegExp("class=\"[^\"]*\\bswiper-(?:wrapper|slide|pagination|button-next)", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("swiper(?:-bundle|-element)?(?:\\.min)?\\.(?:js|css)", "i"),
+      },
+      {
+        type: "html",
+        pattern: new RegExp('class="[^"]*\\bswiper-(?:wrapper|slide|pagination|button-next)', "i"),
+      },
     ],
     confidence: "high",
     versionPattern: new RegExp("swiper@([0-9]+\\.[0-9]+\\.[0-9]+)", "i"),
@@ -3075,7 +3530,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://kenwheeler.github.io/slick",
     detectors: [
       { type: "script-url", pattern: new RegExp("/slick(?:\\.min)?\\.js", "i") },
-      { type: "html", pattern: new RegExp("class=\"[^\"]*\\bslick-(?:slider|initialized|track|list)", "i") },
+      {
+        type: "html",
+        pattern: new RegExp('class="[^"]*\\bslick-(?:slider|initialized|track|list)', "i"),
+      },
     ],
     confidence: "high",
     versionPattern: new RegExp("slick-carousel@([0-9]+\\.[0-9]+\\.[0-9]+)", "i"),
@@ -3088,7 +3546,13 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     icon: "owl-carousel",
     detectors: [
       { type: "script-url", pattern: new RegExp("owl\\.carousel(?:\\.min)?\\.js", "i") },
-      { type: "html", pattern: new RegExp("owl\\.carousel(?:\\.min)?\\.css|class=\"[^\"]*\\bowl-(?:carousel|stage|theme)", "i") },
+      {
+        type: "html",
+        pattern: new RegExp(
+          'owl\\.carousel(?:\\.min)?\\.css|class="[^"]*\\bowl-(?:carousel|stage|theme)',
+          "i",
+        ),
+      },
     ],
     confidence: "high",
   },
@@ -3099,8 +3563,14 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://splidejs.com",
     icon: "splide",
     detectors: [
-      { type: "script-url", pattern: new RegExp("@splidejs/splide|/splide(?:\\.min)?\\.(?:js|css)", "i") },
-      { type: "html", pattern: new RegExp("class=\"[^\"]*\\bsplide__(?:track|list|slide|pagination)", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("@splidejs/splide|/splide(?:\\.min)?\\.(?:js|css)", "i"),
+      },
+      {
+        type: "html",
+        pattern: new RegExp('class="[^"]*\\bsplide__(?:track|list|slide|pagination)', "i"),
+      },
     ],
     confidence: "high",
     versionPattern: new RegExp("@splidejs/splide@([0-9]+\\.[0-9]+\\.[0-9]+)", "i"),
@@ -3113,7 +3583,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     icon: "flickity",
     detectors: [
       { type: "script-url", pattern: new RegExp("flickity(?:\\.pkgd)?(?:\\.min)?\\.js", "i") },
-      { type: "html", pattern: new RegExp("class=\"[^\"]*\\bflickity-(?:enabled|viewport|slider)", "i") },
+      {
+        type: "html",
+        pattern: new RegExp('class="[^"]*\\bflickity-(?:enabled|viewport|slider)', "i"),
+      },
     ],
     confidence: "high",
     versionPattern: new RegExp("flickity[@/]([0-9]+\\.[0-9]+\\.[0-9]+)", "i"),
@@ -3125,7 +3598,13 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://fancyapps.com/fancybox",
     icon: "fancybox",
     detectors: [
-      { type: "script-url", pattern: new RegExp("(?:jquery\\.)?fancybox(?:\\.umd|\\.pack|\\.min)?\\.js|@fancyapps/ui", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp(
+          "(?:jquery\\.)?fancybox(?:\\.umd|\\.pack|\\.min)?\\.js|@fancyapps/ui",
+          "i",
+        ),
+      },
       { type: "html", pattern: new RegExp("data-fancybox=", "i") },
     ],
     confidence: "high",
@@ -3149,8 +3628,14 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     category: "widget",
     website: "https://michalsnik.github.io/aos/",
     detectors: [
-      { type: "html", pattern: new RegExp("data-aos=\"|class=\"[^\"]*\\baos-(?:init|animate)\\b", "i") },
-      { type: "script-url", pattern: new RegExp("/aos@[\\d.]+/|/aos/dist/aos(?:\\.min)?\\.js", "i") },
+      {
+        type: "html",
+        pattern: new RegExp('data-aos="|class="[^"]*\\baos-(?:init|animate)\\b', "i"),
+      },
+      {
+        type: "script-url",
+        pattern: new RegExp("/aos@[\\d.]+/|/aos/dist/aos(?:\\.min)?\\.js", "i"),
+      },
     ],
     confidence: "high",
     versionPattern: new RegExp("aos@([0-9]+\\.[0-9]+\\.[0-9]+)", "i"),
@@ -3162,8 +3647,13 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://animate.style",
     icon: "animate-css",
     detectors: [
-      { type: "html", pattern: new RegExp("class=\"[^\"]*\\banimate__animated\\b", "i") },
-      { type: "tag-attr", tags: ["link"], attrs: ["href"], pattern: new RegExp("^[^\"]{0,300}?/animate(?:\\.min)?\\.css", "i") },
+      { type: "html", pattern: new RegExp('class="[^"]*\\banimate__animated\\b', "i") },
+      {
+        type: "tag-attr",
+        tags: ["link"],
+        attrs: ["href"],
+        pattern: new RegExp('^[^"]{0,300}?/animate(?:\\.min)?\\.css', "i"),
+      },
     ],
     confidence: "high",
   },
@@ -3175,7 +3665,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     icon: "mailchimp",
     detectors: [
       { type: "script-url", pattern: new RegExp("chimpstatic\\.com/mcjs-connected", "i") },
-      { type: "script-url", pattern: new RegExp("downloads\\.mailchimp\\.com/js/mc-validate\\.js", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("downloads\\.mailchimp\\.com/js/mc-validate\\.js", "i"),
+      },
       { type: "html", pattern: new RegExp("id=[\"']mc-embedded-subscribe-form[\"']", "i") },
       { type: "html", pattern: new RegExp("<!--\\s*Begin Mailchimp Signup Form", "i") },
     ],
@@ -3189,7 +3682,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     icon: "activecampaign",
     detectors: [
       { type: "script-url", pattern: new RegExp("\\.activehosted\\.com", "i") },
-      { type: "script-url", pattern: new RegExp("activecampaign-subscription-forms/site_tracking\\.js", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("activecampaign-subscription-forms/site_tracking\\.js", "i"),
+      },
       { type: "script-content", pattern: new RegExp("acEnableTracking", "i") },
       { type: "url-host", pattern: new RegExp("(?:^|\\.)ac-page\\.com\\.?$", "i") },
     ],
@@ -3203,7 +3699,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     icon: "convertkit",
     detectors: [
       { type: "script-url", pattern: new RegExp("f\\.convertkit\\.com/ckjs/ck\\.\\d", "i") },
-      { type: "html", pattern: new RegExp("class=[\"'][^\"']*formkit-form[^\"']*[\"'][^>]*data-uid", "i") },
+      {
+        type: "html",
+        pattern: new RegExp("class=[\"'][^\"']*formkit-form[^\"']*[\"'][^>]*data-uid", "i"),
+      },
       { type: "html", pattern: new RegExp("data-sv-form=[\"']\\d+[\"']", "i") },
     ],
     confidence: "high",
@@ -3227,7 +3726,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://www.marketo.com",
     icon: "marketo",
     detectors: [
-      { type: "script-url", pattern: new RegExp("munchkin\\.marketo\\.(?:net|com)/.*munchkin\\.js", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("munchkin\\.marketo\\.(?:net|com)/.*munchkin\\.js", "i"),
+      },
       { type: "script-content", pattern: new RegExp("Munchkin\\.init\\(", "i") },
       { type: "script-url", pattern: new RegExp("/js/forms2/js/forms2(?:\\.min)?\\.js", "i") },
       { type: "header", name: "set-cookie", pattern: new RegExp("_mkto_trk=", "i") },
@@ -3268,7 +3770,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://www.constantcontact.com",
     icon: "constant-contact",
     detectors: [
-      { type: "script-url", pattern: new RegExp("static\\.ctctcdn\\.com/js/(?:forms2|signup-form-widget)", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("static\\.ctctcdn\\.com/js/(?:forms2|signup-form-widget)", "i"),
+      },
       { type: "html", pattern: new RegExp("class=[\"'][^\"']*ctct-(?:inline-)?form", "i") },
     ],
     confidence: "high",
@@ -3383,7 +3888,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     detectors: [
       { type: "script-url", pattern: new RegExp("assets\\.calendly\\.com/", "i") },
       { type: "html", pattern: new RegExp("calendly-inline-widget", "i") },
-      { type: "script-content", pattern: new RegExp("Calendly\\.(?:initInlineWidget|initPopupWidget|showPopupWidget)", "i") },
+      {
+        type: "script-content",
+        pattern: new RegExp("Calendly\\.(?:initInlineWidget|initPopupWidget|showPopupWidget)", "i"),
+      },
     ],
     confidence: "high",
   },
@@ -3396,7 +3904,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     detectors: [
       { type: "script-url", pattern: new RegExp("(?:app\\.)?cal\\.com/embed/embed\\.js", "i") },
       { type: "html", pattern: new RegExp("data-cal-link=", "i") },
-      { type: "script-content", pattern: new RegExp("Cal\\(\\s*[\"'](?:init|inline|ui)[\"']", "i") },
+      {
+        type: "script-content",
+        pattern: new RegExp("Cal\\(\\s*[\"'](?:init|inline|ui)[\"']", "i"),
+      },
     ],
     confidence: "high",
   },
@@ -3420,7 +3931,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://www.hubspot.com/products/marketing/forms",
     icon: "hubspot-forms",
     detectors: [
-      { type: "script-url", pattern: new RegExp("js\\.hsforms\\.net/forms/(?:embed/v2|v2|shell)", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("js\\.hsforms\\.net/forms/(?:embed/v2|v2|shell)", "i"),
+      },
       { type: "script-content", pattern: new RegExp("hbspt\\.forms\\.create\\(", "i") },
     ],
     confidence: "high",
@@ -3432,7 +3946,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://www.mailerlite.com",
     icon: "mailerlite",
     detectors: [
-      { type: "script-url", pattern: new RegExp("assets\\.mailerlite\\.com/js/universal\\.js", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("assets\\.mailerlite\\.com/js/universal\\.js", "i"),
+      },
       { type: "script-content", pattern: new RegExp("ml\\(\\s*[\"']account[\"']", "i") },
       { type: "script-content", pattern: new RegExp("MailerLiteObject", "i") },
     ],
@@ -3469,9 +3986,18 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://www.algolia.com",
     icon: "algolia",
     detectors: [
-      { type: "script-url", pattern: new RegExp("(?:^|//|/)(?:cdn\\.jsdelivr\\.net/npm/)?(?:algoliasearch|instantsearch\\.js|@docsearch/(?:js|css))", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp(
+          "(?:^|//|/)(?:cdn\\.jsdelivr\\.net/npm/)?(?:algoliasearch|instantsearch\\.js|@docsearch/(?:js|css))",
+          "i",
+        ),
+      },
       { type: "script-url", pattern: new RegExp("(?:\\.algolia\\.net|\\.algolianet\\.com)/", "i") },
-      { type: "script-content", pattern: new RegExp("window\\.__algolia|ALGOLIA_INSIGHTS_SRC|instantsearch\\(\\{", "i") },
+      {
+        type: "script-content",
+        pattern: new RegExp("window\\.__algolia|ALGOLIA_INSIGHTS_SRC|instantsearch\\(\\{", "i"),
+      },
     ],
     confidence: "high",
     versionPattern: new RegExp("instantsearch(?:\\.js)?@([0-9]+\\.[0-9]+\\.[0-9]+)", "i"),
@@ -3483,9 +4009,18 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://typesense.org",
     icon: "typesense",
     detectors: [
-      { type: "script-url", pattern: new RegExp("typesense-(?:docsearch(?:\\.js|-css)?|instantsearch-adapter|minibar)", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp(
+          "typesense-(?:docsearch(?:\\.js|-css)?|instantsearch-adapter|minibar)",
+          "i",
+        ),
+      },
       { type: "script-url", pattern: new RegExp("\\.a1\\.typesense\\.net", "i") },
-      { type: "script-content", pattern: new RegExp("TypesenseInstantSearchAdapter|typesense-minibar", "i") },
+      {
+        type: "script-content",
+        pattern: new RegExp("TypesenseInstantSearchAdapter|typesense-minibar", "i"),
+      },
     ],
     confidence: "high",
     versionPattern: new RegExp("typesense-docsearch\\.js@([0-9]+(?:\\.[0-9]+)*)", "i"),
@@ -3497,9 +4032,18 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://www.meilisearch.com",
     icon: "meilisearch",
     detectors: [
-      { type: "script-url", pattern: new RegExp("(?:docs-searchbar\\.js|@meilisearch/instant-meilisearch|instant-meilisearch\\.umd)", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp(
+          "(?:docs-searchbar\\.js|@meilisearch/instant-meilisearch|instant-meilisearch\\.umd)",
+          "i",
+        ),
+      },
       { type: "script-url", pattern: new RegExp("\\.meilisearch\\.io/", "i") },
-      { type: "script-content", pattern: new RegExp("instantMeiliSearch\\(|docsSearchBar\\(\\{", "i") },
+      {
+        type: "script-content",
+        pattern: new RegExp("instantMeiliSearch\\(|docsSearchBar\\(\\{", "i"),
+      },
     ],
     confidence: "high",
   },
@@ -3512,7 +4056,7 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     detectors: [
       { type: "script-url", pattern: new RegExp("static\\.cloud\\.coveo\\.com/atomic", "i") },
       { type: "html", pattern: new RegExp("<atomic-search-interface", "i") },
-      { type: "html", pattern: new RegExp("class=\"[^\"]*CoveoSearchInterface", "i") },
+      { type: "html", pattern: new RegExp('class="[^"]*CoveoSearchInterface', "i") },
     ],
     confidence: "high",
   },
@@ -3524,7 +4068,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     icon: "swiftype",
     detectors: [
       { type: "script-url", pattern: new RegExp("s\\.swiftypecdn\\.com/install", "i") },
-      { type: "script-content", pattern: new RegExp("_st\\(\\s*['\"]install['\"]|SwiftypeObject", "i") },
+      {
+        type: "script-content",
+        pattern: new RegExp("_st\\(\\s*['\"]install['\"]|SwiftypeObject", "i"),
+      },
     ],
     confidence: "high",
   },
@@ -3535,8 +4082,14 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://www.yotpo.com",
     icon: "yotpo",
     detectors: [
-      { type: "script-url", pattern: new RegExp("staticw2\\.yotpo\\.com/.{1,200}/widget\\.js", "i") },
-      { type: "script-url", pattern: new RegExp("cdn-widgetsrepository\\.yotpo\\.com/v1/loader", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("staticw2\\.yotpo\\.com/.{1,200}/widget\\.js", "i"),
+      },
+      {
+        type: "script-url",
+        pattern: new RegExp("cdn-widgetsrepository\\.yotpo\\.com/v1/loader", "i"),
+      },
       { type: "script-content", pattern: new RegExp("yotpoWidgetsContainer", "i") },
     ],
     confidence: "high",
@@ -3573,8 +4126,14 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://www.okendo.io",
     icon: "okendo",
     detectors: [
-      { type: "html", pattern: new RegExp("data-oke-(?:widget|reviews-product-id|reviews-group-id)", "i") },
-      { type: "script-content", pattern: new RegExp("okendoReviews|okeReviewsWidgetOnInit|okeWidgetControlInit", "i") },
+      {
+        type: "html",
+        pattern: new RegExp("data-oke-(?:widget|reviews-product-id|reviews-group-id)", "i"),
+      },
+      {
+        type: "script-content",
+        pattern: new RegExp("okendoReviews|okeReviewsWidgetOnInit|okeWidgetControlInit", "i"),
+      },
       { type: "script-url", pattern: new RegExp("\\.okendo\\.io/", "i") },
     ],
     confidence: "high",
@@ -3587,7 +4146,13 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     icon: "judge-me",
     detectors: [
       { type: "script-url", pattern: new RegExp("cdn\\.judge\\.me|cache\\.judge\\.me", "i") },
-      { type: "html", pattern: new RegExp("class=\"[^\"]*jdgm-(?:widget|preview-badge|review-widget|all-reviews-widget)", "i") },
+      {
+        type: "html",
+        pattern: new RegExp(
+          'class="[^"]*jdgm-(?:widget|preview-badge|review-widget|all-reviews-widget)',
+          "i",
+        ),
+      },
       { type: "script-content", pattern: new RegExp("jdgmSettings|window\\.judgeme\\b", "i") },
     ],
     confidence: "high",
@@ -3623,7 +4188,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://www.feefo.com",
     icon: "feefo",
     detectors: [
-      { type: "script-url", pattern: new RegExp("api\\.feefo\\.com/api/(?:javascript|ecommerce)", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("api\\.feefo\\.com/api/(?:javascript|ecommerce)", "i"),
+      },
       { type: "html", pattern: new RegExp("feefo-review-(?:widget|carousel)-product", "i") },
     ],
     confidence: "high",
@@ -3636,7 +4204,13 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     icon: "reviews-io",
     detectors: [
       { type: "script-url", pattern: new RegExp("widget\\.reviews\\.(?:io|co\\.uk)/", "i") },
-      { type: "script-content", pattern: new RegExp("reviewsio_hasVoted|reviewsio_shareLink|window\\.reviewsBadgeRibbon", "i") },
+      {
+        type: "script-content",
+        pattern: new RegExp(
+          "reviewsio_hasVoted|reviewsio_shareLink|window\\.reviewsBadgeRibbon",
+          "i",
+        ),
+      },
       { type: "html", pattern: new RegExp("\\.reviews\\.io/company-reviews/", "i") },
     ],
     confidence: "high",
@@ -3661,7 +4235,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     icon: "transifex",
     detectors: [
       { type: "script-url", pattern: new RegExp("cdn\\.transifex\\.com/live\\.js", "i") },
-      { type: "script-content", pattern: new RegExp("window\\.liveSettings|Transifex\\.live\\.", "i") },
+      {
+        type: "script-content",
+        pattern: new RegExp("window\\.liveSettings|Transifex\\.live\\.", "i"),
+      },
     ],
     confidence: "high",
   },
@@ -3697,7 +4274,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     icon: "lokalise",
     detectors: [
       { type: "script-url", pattern: new RegExp("app\\.lokalise\\.com/live-js", "i") },
-      { type: "script-content", pattern: new RegExp("window\\.LOKALISE_CONFIG|LOKALISE_CONFIG\\s*=", "i") },
+      {
+        type: "script-content",
+        pattern: new RegExp("window\\.LOKALISE_CONFIG|LOKALISE_CONFIG\\s*=", "i"),
+      },
     ],
     confidence: "high",
   },
@@ -3721,7 +4301,13 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     icon: "userway",
     detectors: [
       { type: "script-url", pattern: new RegExp("cdn\\.userway\\.org/widget", "i") },
-      { type: "html", pattern: new RegExp("data-account=\"[^\"]{1,100}\"[^>]{0,400}cdn\\.userway\\.org|cdn\\.userway\\.org[^>]{0,400}data-account", "i") },
+      {
+        type: "html",
+        pattern: new RegExp(
+          'data-account="[^"]{1,100}"[^>]{0,400}cdn\\.userway\\.org|cdn\\.userway\\.org[^>]{0,400}data-account',
+          "i",
+        ),
+      },
       { type: "script-content", pattern: new RegExp("UserWayWidgetApp|_userway_config", "i") },
     ],
     confidence: "high",
@@ -3733,7 +4319,10 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://www.audioeye.com",
     icon: "audioeye",
     detectors: [
-      { type: "script-url", pattern: new RegExp("(?:ws|wsmcdn|wsv3cdn)\\.audioeye(?:-services)?\\.com/ae", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("(?:ws|wsmcdn|wsv3cdn)\\.audioeye(?:-services)?\\.com/ae", "i"),
+      },
       { type: "script-content", pattern: new RegExp("__AudioEyeSiteHash|AudioEye\\b", "i") },
     ],
     confidence: "high",
@@ -3745,9 +4334,15 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://www.equalweb.com",
     icon: "equalweb",
     detectors: [
-      { type: "script-url", pattern: new RegExp("aacdn\\.nagich\\.com|nagich\\.co\\.il|cdn\\.equalweb\\.com", "i") },
-      { type: "script-content", pattern: new RegExp("INITIAL_ENABLE_ACCESSIBILITY|nagichTrigger|window\\.equalweb\\b", "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp("aacdn\\.nagich\\.com|nagich\\.co\\.il|cdn\\.equalweb\\.com", "i"),
+      },
+      {
+        type: "script-content",
+        pattern: new RegExp("INITIAL_ENABLE_ACCESSIBILITY|nagichTrigger|window\\.equalweb\\b", "i"),
+      },
     ],
     confidence: "high",
-  }
+  },
 ];

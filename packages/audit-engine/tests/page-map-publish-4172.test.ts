@@ -70,10 +70,17 @@ describe("buildPageMap", () => {
   test("site-controlled strings and lists are clipped to the publish bound", () => {
     const long = "x".repeat(5000);
     const map = buildPageMap(
-      [row(1, { title: long, externalDomains: Array.from({ length: 80 }, (_, i) => `h${i}.test`) })],
+      [
+        row(1, {
+          title: long,
+          externalDomains: Array.from({ length: 80 }, (_, i) => `h${i}.test`),
+        }),
+      ],
       { site: "https://example.test" },
     )!;
-    expect(map.pages[0]!.title!.length).toBeLessThanOrEqual(PAGE_MAP_PUBLISH_LIMITS.maxStringLength);
+    expect(map.pages[0]!.title!.length).toBeLessThanOrEqual(
+      PAGE_MAP_PUBLISH_LIMITS.maxStringLength,
+    );
     expect(map.pages[0]!.externalDomains).toHaveLength(PAGE_MAP_PUBLISH_LIMITS.maxListItems);
     expect(Value.Check(PageMapSchema, map)).toBe(true);
   });
@@ -81,7 +88,8 @@ describe("buildPageMap", () => {
   test("a clip never splits a surrogate pair", () => {
     const max = PAGE_MAP_PUBLISH_LIMITS.maxStringLength;
     const title = `${"a".repeat(max - 1)}😀`;
-    const out = buildPageMap([row(1, { title })], { site: "https://example.test" })!.pages[0]!.title!;
+    const out = buildPageMap([row(1, { title })], { site: "https://example.test" })!.pages[0]!
+      .title!;
     expect(out).toBe("a".repeat(max - 1));
   });
 
@@ -103,7 +111,11 @@ describe("projectPageMap", () => {
   test("rows past the cap are cut and the map is marked truncated", () => {
     const rows = Array.from({ length: 1200 }, (_, i) => row(i));
     const big = buildPageMap(rows, { site: "https://example.test" })!;
-    const out = projectPageMap({ ...big, pages: rows.map((r) => ({ ...r })) as never, total: 1200 });
+    const out = projectPageMap({
+      ...big,
+      pages: rows.map((r) => ({ ...r })) as never,
+      total: 1200,
+    });
     expect(out.stored).toBe(1000);
     expect(out.truncated).toBe(true);
   });

@@ -120,7 +120,7 @@ export function startCrawlLease(options: CrawlLeaseOptions): CrawlLease {
       const result = db
         .prepare(
           `UPDATE crawls SET owner_pid = ?, owner_host = ?, heartbeat_at = ?
-           WHERE id = ? AND ((owner_pid IS NULL AND owner_host IS NULL) OR (owner_pid = ? AND owner_host = ?))`
+           WHERE id = ? AND ((owner_pid IS NULL AND owner_host IS NULL) OR (owner_pid = ? AND owner_host = ?))`,
         )
         .run(pid, host, t, id, pid, host);
       if (Number(result.changes ?? 0) > 0) {
@@ -129,9 +129,7 @@ export function startCrawlLease(options: CrawlLeaseOptions): CrawlLease {
       }
 
       const owner = db
-        .prepare(
-          "SELECT owner_pid, owner_host, heartbeat_at FROM crawls WHERE id = ?"
-        )
+        .prepare("SELECT owner_pid, owner_host, heartbeat_at FROM crawls WHERE id = ?")
         .get(id) as {
         owner_pid: number | null;
         owner_host: string | null;
@@ -140,8 +138,7 @@ export function startCrawlLease(options: CrawlLeaseOptions): CrawlLease {
       if (!owner) return { acquired: false };
 
       const heartbeatAge =
-        typeof owner.heartbeat_at === "number" &&
-        Number.isFinite(owner.heartbeat_at)
+        typeof owner.heartbeat_at === "number" && Number.isFinite(owner.heartbeat_at)
           ? t - owner.heartbeat_at
           : null;
       // A suspended same-host process may miss heartbeats while it still owns
@@ -162,28 +159,17 @@ export function startCrawlLease(options: CrawlLeaseOptions): CrawlLease {
       }
 
       const sameHostDead =
-        owner.owner_host === host &&
-        isReadablePid(owner.owner_pid) &&
-        !isPidAlive(owner.owner_pid);
-      const stale =
-        heartbeatAge === null || heartbeatAge >= CRAWL_LEASE_STALE_MS;
+        owner.owner_host === host && isReadablePid(owner.owner_pid) && !isPidAlive(owner.owner_pid);
+      const stale = heartbeatAge === null || heartbeatAge >= CRAWL_LEASE_STALE_MS;
       if (sameHostDead || stale) {
         // Compare every owner field we read so a heartbeat or a different
         // claimant between SELECT and UPDATE wins instead of being overwritten.
         const taken = db
           .prepare(
             `UPDATE crawls SET owner_pid = ?, owner_host = ?, heartbeat_at = ?
-             WHERE id = ? AND owner_pid IS ? AND owner_host IS ? AND heartbeat_at IS ?`
+             WHERE id = ? AND owner_pid IS ? AND owner_host IS ? AND heartbeat_at IS ?`,
           )
-          .run(
-            pid,
-            host,
-            t,
-            id,
-            owner.owner_pid,
-            owner.owner_host,
-            owner.heartbeat_at
-          );
+          .run(pid, host, t, id, owner.owner_pid, owner.owner_host, owner.heartbeat_at);
         if (Number(taken.changes ?? 0) > 0) {
           held.add(id);
           return ACQUIRED;
@@ -192,12 +178,8 @@ export function startCrawlLease(options: CrawlLeaseOptions): CrawlLease {
 
       return {
         acquired: false,
-        ...(typeof owner?.owner_pid === "number"
-          ? { ownerPid: owner.owner_pid }
-          : {}),
-        ...(typeof owner?.owner_host === "string"
-          ? { ownerHost: owner.owner_host }
-          : {}),
+        ...(typeof owner?.owner_pid === "number" ? { ownerPid: owner.owner_pid } : {}),
+        ...(typeof owner?.owner_host === "string" ? { ownerHost: owner.owner_host } : {}),
       };
     } catch {
       // SQLITE_BUSY past the 1 s timeout, or a DB without the columns: do not
@@ -220,7 +202,7 @@ export function startCrawlLease(options: CrawlLeaseOptions): CrawlLease {
         beat();
         if (!released) schedule();
       },
-      haveId ? heartbeatMs : Math.min(FIRST_BEAT_POLL_MS, heartbeatMs)
+      haveId ? heartbeatMs : Math.min(FIRST_BEAT_POLL_MS, heartbeatMs),
     );
     timer.unref?.();
   };
@@ -237,7 +219,7 @@ export function startCrawlLease(options: CrawlLeaseOptions): CrawlLease {
       if (db) {
         // Only clear what is still ours: a resume by another process re-took it.
         const clear = db.prepare(
-          "UPDATE crawls SET owner_pid = NULL, owner_host = NULL WHERE id = ? AND owner_pid = ? AND owner_host = ?"
+          "UPDATE crawls SET owner_pid = NULL, owner_host = NULL WHERE id = ? AND owner_pid = ? AND owner_host = ?",
         );
         for (const id of held) clear.run(id, pid, host);
       }

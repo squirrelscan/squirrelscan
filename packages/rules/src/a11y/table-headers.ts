@@ -27,9 +27,7 @@ export const tableHeadersRule: Rule = {
     const checks: CheckResult[] = [];
 
     // Get all tables that aren't layout tables
-    const tables = doc.querySelectorAll(
-      "table:not([role='presentation']):not([role='none'])"
-    );
+    const tables = doc.querySelectorAll("table:not([role='presentation']):not([role='none'])");
 
     if (tables.length === 0) {
       checks.push({

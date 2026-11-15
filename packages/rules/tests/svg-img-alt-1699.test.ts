@@ -27,16 +27,22 @@ const nothing = (checks: CheckResult[]) => checks.length === 0;
 
 describe("a name is required", () => {
   test("no title, no aria-label, no aria-labelledby fails, and the finding locates the element", () => {
-    const checks = run('<main><svg id="chart" class="big" role="img" viewBox="0 0 10 10"><circle r="4"/></svg></main>');
+    const checks = run(
+      '<main><svg id="chart" class="big" role="img" viewBox="0 0 10 10"><circle r="4"/></svg></main>',
+    );
     const f = fail(checks);
     expect(f?.message).toBe('1 <svg role="img"> element(s) without an accessible name');
     expect(f?.items?.[0]?.id).toContain("svg#chart.big");
-    expect(f?.items?.[0]?.snippet).toBe('<svg id="chart" class="big" role="img" viewBox="0 0 10 10">');
+    expect(f?.items?.[0]?.snippet).toBe(
+      '<svg id="chart" class="big" role="img" viewBox="0 0 10 10">',
+    );
     expect(f?.items?.[0]?.label).toContain("no <title>, aria-label or aria-labelledby");
   });
 
   test("a non-empty direct <title> passes", () => {
-    expect(passes(run('<svg role="img"><title>Revenue by quarter</title><rect/></svg>'))).toBe(true);
+    expect(passes(run('<svg role="img"><title>Revenue by quarter</title><rect/></svg>'))).toBe(
+      true,
+    );
   });
 
   test("an empty or whitespace <title> does not name it", () => {
@@ -53,21 +59,29 @@ describe("a name is required", () => {
   });
 
   test("an aria-labelledby that resolves to text on the page passes", () => {
-    expect(passes(run('<h2 id="h">Sales</h2><svg role="img" aria-labelledby="h"></svg>'))).toBe(true);
+    expect(passes(run('<h2 id="h">Sales</h2><svg role="img" aria-labelledby="h"></svg>'))).toBe(
+      true,
+    );
   });
 
   test("a list of ids passes when one of them resolves to text", () => {
-    expect(passes(run('<p id="a">Sales</p><svg role="img" aria-labelledby="missing a"></svg>'))).toBe(true);
+    expect(
+      passes(run('<p id="a">Sales</p><svg role="img" aria-labelledby="missing a"></svg>')),
+    ).toBe(true);
   });
 
   test("an aria-labelledby that points at an id missing from the page fails", () => {
     const f = fail(run('<svg role="img" aria-labelledby="nowhere"></svg>'));
     expect(f).toBeDefined();
-    expect(f?.items?.[0]?.label).toContain("aria-labelledby points at an id that is not on the page");
+    expect(f?.items?.[0]?.label).toContain(
+      "aria-labelledby points at an id that is not on the page",
+    );
   });
 
   test("an aria-labelledby that points at an element with no text fails", () => {
-    expect(fail(run('<span id="e"></span><svg role="img" aria-labelledby="e"></svg>'))).toBeDefined();
+    expect(
+      fail(run('<span id="e"></span><svg role="img" aria-labelledby="e"></svg>')),
+    ).toBeDefined();
   });
 
   test("role is read without case and as a first token", () => {
@@ -99,7 +113,10 @@ describe("what is not assessed", () => {
   });
 
   test("an svg a style may hide but squirrel cannot settle is unconfirmed, not a failure", () => {
-    const checks = run('<div class="promo"><svg role="img"></svg></div>', "<style>.promo:hover{display:none}</style>");
+    const checks = run(
+      '<div class="promo"><svg role="img"></svg></div>',
+      "<style>.promo:hover{display:none}</style>",
+    );
     expect(fail(checks)).toBeUndefined();
     expect(checks.find((c) => c.name === "svg-img-alt-unconfirmed")?.status).toBe("warn");
   });

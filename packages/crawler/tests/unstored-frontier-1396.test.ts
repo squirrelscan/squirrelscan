@@ -9,8 +9,19 @@ import { join } from "node:path";
 import { SQLiteStorage } from "../src/storage/sqlite";
 import type { CrawlMetadata, FrontierRecord, PageRecord } from "../src/storage/types";
 
-const run = <A>(eff: Effect.Effect<A, unknown, never>): Promise<A> => Effect.runPromise(eff as Effect.Effect<A, never, never>);
-const STATS = { pagesTotal: 0, pagesFetched: 0, pagesFailed: 0, pagesSkipped: 0, pagesUnchanged: 0, linksTotal: 0, imagesTotal: 0, bytesTotal: 0, avgLoadTimeMs: 0 };
+const run = <A>(eff: Effect.Effect<A, unknown, never>): Promise<A> =>
+  Effect.runPromise(eff as Effect.Effect<A, never, never>);
+const STATS = {
+  pagesTotal: 0,
+  pagesFetched: 0,
+  pagesFailed: 0,
+  pagesSkipped: 0,
+  pagesUnchanged: 0,
+  linksTotal: 0,
+  imagesTotal: 0,
+  bytesTotal: 0,
+  avgLoadTimeMs: 0,
+};
 
 let dir: string;
 beforeEach(() => {
@@ -18,21 +29,60 @@ beforeEach(() => {
 });
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
-const frontier = (url: string, status: FrontierRecord["status"], reason?: string, at = 1): FrontierRecord => ({
-  normalizedUrl: url, rawUrl: url, depth: 1, priority: 0, status, source: "discovered", enqueuedAt: at, retryCount: 0, ...(reason ? { reason } : {}),
+const frontier = (
+  url: string,
+  status: FrontierRecord["status"],
+  reason?: string,
+  at = 1,
+): FrontierRecord => ({
+  normalizedUrl: url,
+  rawUrl: url,
+  depth: 1,
+  priority: 0,
+  status,
+  source: "discovered",
+  enqueuedAt: at,
+  retryCount: 0,
+  ...(reason ? { reason } : {}),
 });
 const page = (url: string): PageRecord =>
   ({
-    url, normalizedUrl: url, finalUrl: url, depth: 0, status: 503, contentType: "text/html", sizeBytes: 1, loadTimeMs: 1, fetchedAt: 1,
-    etag: null, lastModified: null, contentHash: "h", html: "<html></html>", parsedData: null, headers: {}, securityHeaders: {},
+    url,
+    normalizedUrl: url,
+    finalUrl: url,
+    depth: 0,
+    status: 503,
+    contentType: "text/html",
+    sizeBytes: 1,
+    loadTimeMs: 1,
+    fetchedAt: 1,
+    etag: null,
+    lastModified: null,
+    contentHash: "h",
+    html: "<html></html>",
+    parsedData: null,
+    headers: {},
+    securityHeaders: {},
   }) as unknown as PageRecord;
 
 test("failed and skipped entries with no stored page, oldest first, with the true total; a stored page and done or pending entries are not listed", async () => {
   const s = new SQLiteStorage(join(dir, "project.db"));
   await run(s.init());
-  const id = await run(s.createCrawl({ baseUrl: "https://e.test", startedAt: 1, status: "analyzed", config: {} as CrawlMetadata["config"], stats: STATS } as Omit<CrawlMetadata, "id">));
-  await run(s.upsertFrontier(id, frontier("https://e.test/robots", "skipped", "robots_disallowed", 3)));
-  await run(s.upsertFrontier(id, frontier("https://e.test/boom", "failed", "connect ECONNREFUSED", 2)));
+  const id = await run(
+    s.createCrawl({
+      baseUrl: "https://e.test",
+      startedAt: 1,
+      status: "analyzed",
+      config: {} as CrawlMetadata["config"],
+      stats: STATS,
+    } as Omit<CrawlMetadata, "id">),
+  );
+  await run(
+    s.upsertFrontier(id, frontier("https://e.test/robots", "skipped", "robots_disallowed", 3)),
+  );
+  await run(
+    s.upsertFrontier(id, frontier("https://e.test/boom", "failed", "connect ECONNREFUSED", 2)),
+  );
   await run(s.upsertFrontier(id, frontier("https://e.test/excluded/a", "skipped", "excluded", 1)));
   await run(s.upsertFrontier(id, frontier("https://e.test/stored-503", "failed", "HTTP 503", 4)));
   await run(s.upsertFrontier(id, frontier("https://e.test/done", "done")));
@@ -58,8 +108,24 @@ test("failed and skipped entries with no stored page, oldest first, with the tru
 test("another crawl's entries are not listed", async () => {
   const s = new SQLiteStorage(join(dir, "project.db"));
   await run(s.init());
-  const a = await run(s.createCrawl({ baseUrl: "https://e.test", startedAt: 1, status: "analyzed", config: {} as CrawlMetadata["config"], stats: STATS } as Omit<CrawlMetadata, "id">));
-  const b = await run(s.createCrawl({ baseUrl: "https://e.test", startedAt: 2, status: "analyzed", config: {} as CrawlMetadata["config"], stats: STATS } as Omit<CrawlMetadata, "id">));
+  const a = await run(
+    s.createCrawl({
+      baseUrl: "https://e.test",
+      startedAt: 1,
+      status: "analyzed",
+      config: {} as CrawlMetadata["config"],
+      stats: STATS,
+    } as Omit<CrawlMetadata, "id">),
+  );
+  const b = await run(
+    s.createCrawl({
+      baseUrl: "https://e.test",
+      startedAt: 2,
+      status: "analyzed",
+      config: {} as CrawlMetadata["config"],
+      stats: STATS,
+    } as Omit<CrawlMetadata, "id">),
+  );
   await run(s.upsertFrontier(a, frontier("https://e.test/x", "failed", "boom")));
   expect((await run(s.getUnstoredFrontierEntries(b, 10))).total).toBe(0);
   s.close?.();
@@ -68,15 +134,35 @@ test("another crawl's entries are not listed", async () => {
 test("under a cap an error is never cut to keep a skip, and ties break by URL", async () => {
   const s = new SQLiteStorage(join(dir, "project.db"));
   await run(s.init());
-  const id = await run(s.createCrawl({ baseUrl: "https://e.test", startedAt: 1, status: "analyzed", config: {} as CrawlMetadata["config"], stats: STATS } as Omit<CrawlMetadata, "id">));
+  const id = await run(
+    s.createCrawl({
+      baseUrl: "https://e.test",
+      startedAt: 1,
+      status: "analyzed",
+      config: {} as CrawlMetadata["config"],
+      stats: STATS,
+    } as Omit<CrawlMetadata, "id">),
+  );
   // 1,000 skipped entries enqueued before the one error: a plain oldest-first cap of 1,000 would lose the error.
-  for (let i = 0; i < 1_000; i++) await run(s.upsertFrontier(id, frontier(`https://e.test/skip/${String(i).padStart(4, "0")}`, "skipped", "excluded", 1)));
+  for (let i = 0; i < 1_000; i++)
+    await run(
+      s.upsertFrontier(
+        id,
+        frontier(`https://e.test/skip/${String(i).padStart(4, "0")}`, "skipped", "excluded", 1),
+      ),
+    );
   await run(s.upsertFrontier(id, frontier("https://e.test/zz-error", "failed", "HTTP 503", 99)));
   await run(s.upsertFrontier(id, frontier("https://e.test/aa-error", "failed", "HTTP 502", 99)));
   const capped = await run(s.getUnstoredFrontierEntries(id, 1_000));
   expect(capped.total).toBe(1_002);
   expect(capped.entries).toHaveLength(1_000);
-  expect(capped.entries.slice(0, 2).map((e) => e.url)).toEqual(["https://e.test/aa-error", "https://e.test/zz-error"]);
-  expect(capped.entries.slice(2, 4).map((e) => e.url)).toEqual(["https://e.test/skip/0000", "https://e.test/skip/0001"]);
+  expect(capped.entries.slice(0, 2).map((e) => e.url)).toEqual([
+    "https://e.test/aa-error",
+    "https://e.test/zz-error",
+  ]);
+  expect(capped.entries.slice(2, 4).map((e) => e.url)).toEqual([
+    "https://e.test/skip/0000",
+    "https://e.test/skip/0001",
+  ]);
   s.close?.();
 });

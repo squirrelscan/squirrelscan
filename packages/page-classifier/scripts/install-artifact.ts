@@ -8,7 +8,11 @@ import { createHash } from "node:crypto";
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { findAssetLayoutProblems, findStrayStrings, findTopologyProblems } from "../src/artifact-shape";
+import {
+  findAssetLayoutProblems,
+  findStrayStrings,
+  findTopologyProblems,
+} from "../src/artifact-shape";
 import { tryLoadModel } from "../src/predict";
 
 const source = process.argv[2];
@@ -72,5 +76,8 @@ const manifest = {
   featurizerVersion: clean.featurizerVersion,
   heads: ["region", "pageType", "section"].filter((head) => clean[head] !== undefined),
 };
-writeFileSync(join(assets, "classifier-v2.manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
+writeFileSync(
+  join(assets, "classifier-v2.manifest.json"),
+  `${JSON.stringify(manifest, null, 2)}\n`,
+);
 console.log(manifest);

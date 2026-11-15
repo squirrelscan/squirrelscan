@@ -189,10 +189,12 @@ async function build(): Promise<void> {
   // the honest memory number is the end-to-end peak each mode prints, not a
   // synthetic per-page figure.
   const probe = await run(storage.getPages(crawlId, { limit: 5, offset: 0 }));
-  const htmlAvg = probe.reduce((n, pg) => n + (pg.html?.length ?? 0), 0) / Math.max(1, probe.length);
+  const htmlAvg =
+    probe.reduce((n, pg) => n + (pg.html?.length ?? 0), 0) / Math.max(1, probe.length);
   const first = probe[0];
   const nodes = first?.html
-    ? (parseHtmlForRules(first.html, first.normalizedUrl).document?.querySelectorAll("*").length ?? 0)
+    ? (parseHtmlForRules(first.html, first.normalizedUrl).document?.querySelectorAll("*").length ??
+      0)
     : 0;
   console.log(
     `built ${DB}: crawl=${crawlId} pages inflated=${inflated}\n` +
@@ -273,7 +275,9 @@ async function main(): Promise<void> {
 
   clearInterval(timer);
   await run(storage.close());
-  console.log(`PEAK_RSS_MB=${(peak / MB).toFixed(0)} elapsed=${Math.round((Date.now() - started) / 1000)}s`);
+  console.log(
+    `PEAK_RSS_MB=${(peak / MB).toFixed(0)} elapsed=${Math.round((Date.now() - started) / 1000)}s`,
+  );
 }
 
 await main();

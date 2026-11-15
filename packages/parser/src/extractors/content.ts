@@ -6,7 +6,10 @@ import type { Document, Element, Node } from "linkedom";
 import { Effect } from "effect";
 
 // Trace stubs (CLI wraps with rich logger)
-const logger = { traceStart: (_n: string) => "", traceEnd: (_id: string, _m?: Record<string, unknown>) => {} };
+const logger = {
+  traceStart: (_n: string) => "",
+  traceEnd: (_id: string, _m?: Record<string, unknown>) => {},
+};
 
 import type { ContentAnalysis } from "./types";
 import { collectTextExcluding, tagExcluder } from "./dom-text";
@@ -23,14 +26,7 @@ const CLEAN_REMOVE_TAGS = new Set([
   "audio",
   "template",
 ]);
-const MAIN_REMOVE_TAGS = new Set([
-  "script",
-  "style",
-  "nav",
-  "footer",
-  "header",
-  "aside",
-]);
+const MAIN_REMOVE_TAGS = new Set(["script", "style", "nav", "footer", "header", "aside"]);
 const isMainExcluded = tagExcluder(MAIN_REMOVE_TAGS);
 
 // Exclusion predicate mirroring the original selector list exactly: the tag set

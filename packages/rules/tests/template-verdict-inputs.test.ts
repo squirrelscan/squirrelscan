@@ -28,7 +28,14 @@ import { mayFanOutAcrossTemplate } from "../src/types";
 const SRC = join(import.meta.dir, "../src");
 
 /** Channels that read the whole document: reviewed, never keyed (#1373). */
-const WHOLE_DOCUMENT = new Set(["page.html", "page.url", "textContent", "innerHTML", "documentElement", "body"]);
+const WHOLE_DOCUMENT = new Set([
+  "page.html",
+  "page.url",
+  "textContent",
+  "innerHTML",
+  "documentElement",
+  "body",
+]);
 
 type Reviewed = { keyed: string[]; unkeyed: string[] };
 
@@ -280,7 +287,10 @@ function scanReads(source: string): string[] {
   add(String.raw`querySelector(?:All)?(?:OutsideNoscript)?\(\s*${ROOT_ARG}${QUOTED}`, (m) => m[2]!);
   add(String.raw`querySelector\w*\(\s*${ROOT_ARG}([A-Za-z_]\w*)\s*\)`, (m) => `selector:${m[1]}`);
   add(String.raw`(?:getAttribute|hasAttribute)\(\s*${QUOTED}`, (m) => `@${m[2]}`);
-  add(String.raw`(?:getAttribute|hasAttribute)\(\s*([A-Za-z_]\w*)\s*\)`, (m) => `attribute:${m[1]}`);
+  add(
+    String.raw`(?:getAttribute|hasAttribute)\(\s*([A-Za-z_]\w*)\s*\)`,
+    (m) => `attribute:${m[1]}`,
+  );
   // The case-insensitive `@squirrelscan/utils` forms: getAttrCI(el, "http-equiv").
   add(String.raw`(?:getAttrCI|hasAttrCI)\(\s*[\w.?]+\s*,\s*${QUOTED}`, (m) => `@${m[2]}`);
   add(
@@ -313,7 +323,11 @@ function localHelperFiles(text: string, file: string): Map<string, string> {
     const target = [`${base}.ts`, join(base, "index.ts")].find((p) => existsSync(p));
     if (!target) continue;
     for (const spec of m[1]!.split(",")) {
-      const name = spec.trim().replace(/^type\s+/, "").split(/\s+as\s+/).pop();
+      const name = spec
+        .trim()
+        .replace(/^type\s+/, "")
+        .split(/\s+as\s+/)
+        .pop();
       if (name) out.set(name, target);
     }
   }
@@ -388,7 +402,9 @@ describe("template-declared rules read only reviewed inputs (#614)", () => {
   });
 
   test("the scan sees each form of read it claims to", () => {
-    expect(scanReads(`querySelectorAllOutsideNoscript(doc, "iframe[src]")`)).toEqual(["iframe[src]"]);
+    expect(scanReads(`querySelectorAllOutsideNoscript(doc, "iframe[src]")`)).toEqual([
+      "iframe[src]",
+    ]);
     expect(scanReads(`querySelectorAllByAttrCI(doc, "script", "nomodule")`)).toEqual([
       "script[nomodule]",
     ]);
@@ -412,12 +428,16 @@ describe("template-declared rules read only reviewed inputs (#614)", () => {
     ]);
     // A commented-out read is not a read, and a `//` inside a string or a regex
     // literal is not a comment.
-    expect(scanReads(`// el.getAttribute("data-x")\nconst u = "https://x"; el.getAttribute("rel")`)).toEqual([
-      "@rel",
+    expect(
+      scanReads(`// el.getAttribute("data-x")\nconst u = "https://x"; el.getAttribute("rel")`),
+    ).toEqual(["@rel"]);
+    expect(scanReads(`const re = /https?:\\/\\//; el.getAttribute("data-new");`)).toEqual([
+      "@data-new",
     ]);
-    expect(scanReads(`const re = /https?:\\/\\//; el.getAttribute("data-new");`)).toEqual(["@data-new"]);
     expect(scanReads(`const re = /["']/; // el.getAttribute("data-comment")`)).toEqual([]);
-    expect(scanReads(`const half = a / 2; /* el.getAttribute("x") */ el.getAttribute("y")`)).toEqual(["@y"]);
+    expect(
+      scanReads(`const half = a / 2; /* el.getAttribute("x") */ el.getAttribute("y")`),
+    ).toEqual(["@y"]);
     // And in the real sources: a helper-call selector, a raw-HTML read and a
     // variable selector are all found where the rules make them.
     expect(scanned.get("security/third-party-cookies")).toContain("iframe[src]");
@@ -430,9 +450,24 @@ describe("template-declared rules read only reviewed inputs (#614)", () => {
   test("a read added to a declared rule without updating its declaration fails the scan (#585)", () => {
     // Real sources, edited in memory: nothing on disk or on a prototype changes.
     const cases: Array<[id: string, file: string, injected: string, expected: string]> = [
-      ["a11y/zoom-disabled", "a11y/zoom-disabled.ts", `el.getAttribute("data-undeclared");`, "+@data-undeclared"],
-      ["core/doctype", "core/doctype.ts", `el.querySelector("aside.fake-input");`, "+aside.fake-input"],
-      ["perf/preconnect", "performance/preconnect.ts", `el.matches(undeclaredSelector);`, "+matches:undeclaredSelector"],
+      [
+        "a11y/zoom-disabled",
+        "a11y/zoom-disabled.ts",
+        `el.getAttribute("data-undeclared");`,
+        "+@data-undeclared",
+      ],
+      [
+        "core/doctype",
+        "core/doctype.ts",
+        `el.querySelector("aside.fake-input");`,
+        "+aside.fake-input",
+      ],
+      [
+        "perf/preconnect",
+        "performance/preconnect.ts",
+        `el.matches(undeclaredSelector);`,
+        "+matches:undeclaredSelector",
+      ],
     ];
     for (const [id, rel, injected, expected] of cases) {
       const file = sourceFiles(SRC).find((f) => f.endsWith(`/${rel}`));
@@ -447,7 +482,11 @@ describe("template-declared rules read only reviewed inputs (#614)", () => {
     // The other direction: a declared read the rule stopped making is stale.
     const zoom = sourceFiles(SRC).find((f) => f.endsWith("/a11y/zoom-disabled.ts"))!;
     const stripped = readFileSync(zoom, "utf-8").replaceAll("getAttribute(", "noop(");
-    expect(reviewDifference("a11y/zoom-disabled", ruleReads(stripped, zoom)).some((d) => d.startsWith("-"))).toBe(true);
+    expect(
+      reviewDifference("a11y/zoom-disabled", ruleReads(stripped, zoom)).some((d) =>
+        d.startsWith("-"),
+      ),
+    ).toBe(true);
   }, 30_000);
 
   test("every attribute and selector read is in the derived signature reads (#1373)", () => {
@@ -462,7 +501,10 @@ describe("template-declared rules read only reviewed inputs (#614)", () => {
       for (const r of reads) {
         if (r.startsWith("@")) {
           if (!attributes.has(r.slice(1))) outside.push(`${id}: ${r}`);
-        } else if (!/^(?:helper:|selector:|attribute:|matches:)/.test(r) && !WHOLE_DOCUMENT.has(r)) {
+        } else if (
+          !/^(?:helper:|selector:|attribute:|matches:)/.test(r) &&
+          !WHOLE_DOCUMENT.has(r)
+        ) {
           if (!selectors.has(r)) outside.push(`${id}: ${r}`);
         }
       }
@@ -484,7 +526,9 @@ describe("template-declared rules read only reviewed inputs (#614)", () => {
     const extraSelectors = new Set(["html", "body", "meta", 'link[rel*="icon"]']);
     const extraAttributes = new Set(["charset", "http-equiv", "name", "property"]);
     expect(SIGNATURE_SELECTORS.filter((s) => !read.has(s) && !extraSelectors.has(s))).toEqual([]);
-    expect(SIGNATURE_ATTRIBUTES.filter((a) => !read.has(`@${a}`) && !extraAttributes.has(a))).toEqual([]);
+    expect(
+      SIGNATURE_ATTRIBUTES.filter((a) => !read.has(`@${a}`) && !extraAttributes.has(a)),
+    ).toEqual([]);
   });
 
   test("the VerdictScope doc names every rule with an UNKEYED read", () => {

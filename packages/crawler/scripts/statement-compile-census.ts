@@ -66,16 +66,34 @@ if (COST) {
   await run(costStore.init());
   const db = (costStore as unknown as { getDb(): Database }).getDb();
   const SQL: Array<[string, string]> = [
-    ["getIncomingLinkCount", "SELECT COUNT(*) as count FROM link_appearances WHERE crawl_id = ? AND href = ?"],
-    ["getCachedPage", "SELECT * FROM pages WHERE normalized_url = ? ORDER BY fetched_at DESC, rowid DESC LIMIT 1"],
+    [
+      "getIncomingLinkCount",
+      "SELECT COUNT(*) as count FROM link_appearances WHERE crawl_id = ? AND href = ?",
+    ],
+    [
+      "getCachedPage",
+      "SELECT * FROM pages WHERE normalized_url = ? ORDER BY fetched_at DESC, rowid DESC LIMIT 1",
+    ],
     ["updateCrawl (stats)", "UPDATE crawls SET stats = ? WHERE id = ?"],
-    ["upsertFrontier", "INSERT OR REPLACE INTO frontier (crawl_id, normalized_url, raw_url, depth, parent_url, priority, status, source, enqueued_at, fetched_at, retry_count, reason) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"],
+    [
+      "upsertFrontier",
+      "INSERT OR REPLACE INTO frontier (crawl_id, normalized_url, raw_url, depth, parent_url, priority, status, source, enqueued_at, fetched_at, retry_count, reason) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    ],
     // The widest statement in the file. Compilation does not need bindings —
     // it reports its 25 parameters and compiles fine — so an earlier version of
     // this that excluded it for "needing the full binding set" was wrong.
-    ["getLinksByPage", "SELECT DISTINCT l.* FROM links l INNER JOIN link_appearances la ON l.crawl_id = la.crawl_id AND l.href = la.href WHERE la.page_url = ? ORDER BY l.crawl_id DESC"],
-    ["getImagesByPage", "SELECT DISTINCT i.* FROM images i INNER JOIN image_appearances ia ON i.crawl_id = ia.crawl_id AND i.src = ia.src WHERE ia.page_url = ? ORDER BY i.crawl_id DESC"],
-    ["upsertPage", "INSERT OR REPLACE INTO pages (crawl_id, url, normalized_url, final_url, depth, parent_url, redirect_chain, status, content_type, size_bytes, load_time_ms, ttfb, download_time, fetched_at, etag, last_modified, content_hash, html, parsed_data, headers, security_headers, request_headers, fetcher_id, fallback_reason, source_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"],
+    [
+      "getLinksByPage",
+      "SELECT DISTINCT l.* FROM links l INNER JOIN link_appearances la ON l.crawl_id = la.crawl_id AND l.href = la.href WHERE la.page_url = ? ORDER BY l.crawl_id DESC",
+    ],
+    [
+      "getImagesByPage",
+      "SELECT DISTINCT i.* FROM images i INNER JOIN image_appearances ia ON i.crawl_id = ia.crawl_id AND i.src = ia.src WHERE ia.page_url = ? ORDER BY i.crawl_id DESC",
+    ],
+    [
+      "upsertPage",
+      "INSERT OR REPLACE INTO pages (crawl_id, url, normalized_url, final_url, depth, parent_url, redirect_chain, status, content_type, size_bytes, load_time_ms, ttfb, download_time, fetched_at, etag, last_modified, content_hash, html, parsed_data, headers, security_headers, request_headers, fetcher_id, fallback_reason, source_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    ],
   ];
   const N = 5_000;
   // Interleaved, minimum of five rounds: the two arms then share whatever the
@@ -179,7 +197,11 @@ const realQuery = Database.prototype.query;
 ) {
   if (insideQuery > 0) queryCompiles++;
   else prepareCalls.set(sql, (prepareCalls.get(sql) ?? 0) + 1);
-  return (realPrepare as (this: Database, sql: string, ...r: unknown[]) => unknown).call(this, sql, ...rest);
+  return (realPrepare as (this: Database, sql: string, ...r: unknown[]) => unknown).call(
+    this,
+    sql,
+    ...rest,
+  );
 };
 (Database.prototype as unknown as Record<string, unknown>).query = function patchedQuery(
   this: Database,
@@ -189,7 +211,11 @@ const realQuery = Database.prototype.query;
   queryCalls.set(sql, (queryCalls.get(sql) ?? 0) + 1);
   insideQuery++;
   try {
-    return (realQuery as (this: Database, sql: string, ...r: unknown[]) => unknown).call(this, sql, ...rest);
+    return (realQuery as (this: Database, sql: string, ...r: unknown[]) => unknown).call(
+      this,
+      sql,
+      ...rest,
+    );
   } finally {
     insideQuery--;
   }
@@ -204,13 +230,37 @@ await run(storage.init());
 // worker makes discovery order a function of the site, which is what lets two
 // revisions be compared at all.
 const concurrency = DIGEST ? 1 : 8;
-const crawler = await run(createCrawler({ storage, config: { maxPages: PAGES, concurrency, perHostConcurrency: concurrency, delayMs: 0, perHostDelayMs: 0, respectRobots: false, incremental: INCREMENTAL } as never }));
+const crawler = await run(
+  createCrawler({
+    storage,
+    config: {
+      maxPages: PAGES,
+      concurrency,
+      perHostConcurrency: concurrency,
+      delayMs: 0,
+      perHostDelayMs: 0,
+      respectRobots: false,
+      incremental: INCREMENTAL,
+    } as never,
+  }),
+);
 
 const startedAt = Date.now();
 let crawlId = await run(crawler.start(origin) as Effect.Effect<string, unknown, never>);
 if (TWICE) {
   const second = await run(
-    createCrawler({ storage, config: { maxPages: PAGES, concurrency, perHostConcurrency: concurrency, delayMs: 0, perHostDelayMs: 0, respectRobots: false, incremental: INCREMENTAL } as never }),
+    createCrawler({
+      storage,
+      config: {
+        maxPages: PAGES,
+        concurrency,
+        perHostConcurrency: concurrency,
+        delayMs: 0,
+        perHostDelayMs: 0,
+        respectRobots: false,
+        incremental: INCREMENTAL,
+      } as never,
+    }),
   );
   crawlId = await run(second.start(origin) as Effect.Effect<string, unknown, never>);
 }
@@ -244,7 +294,9 @@ if (DIGEST) {
   // The crawls row too: the stats UPDATE is one of the converted statements, so
   // leaving its output out would exempt the change from its own check.
   const crawls = db
-    .query(`SELECT base_url, seed_url, original_url, status, config, stats FROM crawls WHERE id = ?`)
+    .query(
+      `SELECT base_url, seed_url, original_url, status, config, stats FROM crawls WHERE id = ?`,
+    )
     .all(crawlId);
   const links = db
     .query(
@@ -260,7 +312,9 @@ if (DIGEST) {
     typeof value === "string" ? value.split(origin).join("{origin}") : value;
   const normalise = (rows: unknown[]) =>
     rows.map((row) =>
-      Object.fromEntries(Object.entries(row as Record<string, unknown>).map(([k, v]) => [k, strip(v)])),
+      Object.fromEntries(
+        Object.entries(row as Record<string, unknown>).map(([k, v]) => [k, strip(v)]),
+      ),
     );
   const digestable = {
     pages: normalise(pages),
@@ -323,5 +377,8 @@ for (const [sql, n] of rows.slice(0, TOP)) {
   );
 }
 const tail = rows.slice(TOP).reduce((sum, [, n]) => sum + n, 0);
-if (tail > 0) console.log(`${String(tail).padStart(8)} ${"".padStart(9)}  (${rows.length - TOP} more SQL texts)`);
+if (tail > 0)
+  console.log(
+    `${String(tail).padStart(8)} ${"".padStart(9)}  (${rows.length - TOP} more SQL texts)`,
+  );
 await run(storage.close());

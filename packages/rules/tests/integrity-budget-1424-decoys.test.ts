@@ -5,7 +5,10 @@ import { OFF, run, finished, fired, foundOrNoted, padded } from "./integrity-bud
 // test watchdog (#1465).
 
 // 21,000 cue-bearing decoys (about 8 MB) spend more windows than the page budget has.
-const decoys21k = Array.from({ length: 21_000 }, (_, i) => `<a href="https://p.invalid/${i}" title="${"sign in please ".repeat(24)}">x</a>`).join("");
+const decoys21k = Array.from(
+  { length: 21_000 },
+  (_, i) => `<a href="https://p.invalid/${i}" title="${"sign in please ".repeat(24)}">x</a>`,
+).join("");
 
 test("21,000 cue-bearing decoys after the real padded control: it is found, because the first controls are read in full", async () => {
   // Cue-bearing text after the phrase too, so a share of one window (the last) would miss the phrase.

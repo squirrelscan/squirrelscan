@@ -35,7 +35,15 @@ function report(rules: ReportRuleResult[]): AuditReport {
       categories: [],
       groups: [
         { group: "seo", name: "SEO", score: 80, passed: 1, warnings: 0, failed: 1, total: 2 },
-        { group: "performance", name: "Performance", score: 80, passed: 1, warnings: 0, failed: 1, total: 2 },
+        {
+          group: "performance",
+          name: "Performance",
+          score: 80,
+          passed: 1,
+          warnings: 0,
+          failed: 1,
+          total: 2,
+        },
       ],
       errorCount: rules.length,
       warningCount: 0,
@@ -46,9 +54,9 @@ function report(rules: ReportRuleResult[]): AuditReport {
 
 /** Every `gtag` pill as `title|text`. */
 function badges(html: string): string[] {
-  return [...html.matchAll(/class="gtag" data-g="[^"]*" title="([^"]*)"[^>]*>([^<]*)<\/span>/g)].map(
-    (m) => `${m[1]}|${m[2]}`,
-  );
+  return [
+    ...html.matchAll(/class="gtag" data-g="[^"]*" title="([^"]*)"[^>]*>([^<]*)<\/span>/g),
+  ].map((m) => `${m[1]}|${m[2]}`);
 }
 
 describe("reliability badges (pub#842)", () => {

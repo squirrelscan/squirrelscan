@@ -65,7 +65,12 @@ export interface WcagChecklistRow {
 }
 
 /** The WCAG 2.2 Level A and AA criteria, in document order. */
-function checklistCriteria(): { sc: string; title: string; level: WcagLevel; version: WcagVersion }[] {
+function checklistCriteria(): {
+  sc: string;
+  title: string;
+  level: WcagLevel;
+  version: WcagVersion;
+}[] {
   return Object.entries(WCAG_CRITERIA)
     .filter(([, entry]) => entry.level !== "AAA")
     .map(([sc, entry]) => ({ sc, ...entry }));
@@ -102,7 +107,8 @@ export function buildWcagChecklist(
         continue;
       }
       ran.push(ruleId);
-      if (checks.some((check) => check.status === "warn" || check.status === "fail")) findings.push(ruleId);
+      if (checks.some((check) => check.status === "warn" || check.status === "fail"))
+        findings.push(ruleId);
     }
     const status: WcagChecklistStatus =
       mapped.length === 0
@@ -116,7 +122,9 @@ export function buildWcagChecklist(
   });
 }
 
-export function wcagChecklistCounts(rows: readonly WcagChecklistRow[]): Record<WcagChecklistStatus, number> {
+export function wcagChecklistCounts(
+  rows: readonly WcagChecklistRow[],
+): Record<WcagChecklistStatus, number> {
   const counts: Record<WcagChecklistStatus, number> = {
     finding: 0,
     "no-finding": 0,
@@ -141,7 +149,10 @@ export function hasWcagDeclarations(rules: Iterable<WcagChecklistRule>): boolean
 }
 
 /** The checklist as markdown lines, disclaimer first. Brand-neutral, so white-label reports keep it. */
-export function wcagChecklistMarkdownLines(rows: readonly WcagChecklistRow[], headingLevel = 2): string[] {
+export function wcagChecklistMarkdownLines(
+  rows: readonly WcagChecklistRow[],
+  headingLevel = 2,
+): string[] {
   const h = "#".repeat(headingLevel);
   const counts = wcagChecklistCounts(rows);
   const lines: string[] = [

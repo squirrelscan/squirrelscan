@@ -33,9 +33,7 @@ function storedParse(parsedData: string | null): StoredParse {
   if (!parsedData) return {};
   try {
     const parsed = JSON.parse(parsedData) as unknown;
-    return typeof parsed === "object" && parsed !== null
-      ? (parsed as StoredParse)
-      : {};
+    return typeof parsed === "object" && parsed !== null ? (parsed as StoredParse) : {};
   } catch {
     return {};
   }
@@ -61,12 +59,7 @@ function pageFacts(parse: StoredParse): {
   if (Array.isArray(nodes)) {
     for (const node of nodes) {
       const id = (node as { "@id"?: unknown } | null)?.["@id"];
-      if (
-        typeof id === "string" &&
-        id.length > 0 &&
-        id.length <= MAX_SCHEMA_ID_CHARS
-      )
-        ids.add(id);
+      if (typeof id === "string" && id.length > 0 && id.length <= MAX_SCHEMA_ID_CHARS) ids.add(id);
       if (ids.size >= MAX_SCHEMA_IDS) break;
     }
   }
@@ -103,7 +96,7 @@ const linkKey = (url: string): string => normalizeUrl(url);
  */
 function readLinkCounts(
   storage: SQLiteStorage,
-  crawlId: string
+  crawlId: string,
 ): Effect.Effect<LinkCounts, unknown> {
   return Effect.gen(function* () {
     const internalOut = new Map<string, number>();
@@ -131,8 +124,7 @@ function readLinkCounts(
           } catch {
             continue;
           }
-          if (resolved.protocol !== "http:" && resolved.protocol !== "https:")
-            continue;
+          if (resolved.protocol !== "http:" && resolved.protocol !== "https:") continue;
           if (link.isInternal) {
             const target = linkKey(resolved.href);
             if (target === own) continue;
@@ -147,8 +139,7 @@ function readLinkCounts(
         }
         if (internal > 0) internalOut.set(page.normalizedUrl, internal);
         if (external > 0) externalOut.set(page.normalizedUrl, external);
-        for (const target of targets)
-          inbound.set(target, (inbound.get(target) ?? 0) + 1);
+        for (const target of targets) inbound.set(target, (inbound.get(target) ?? 0) + 1);
       }
       if (batch.length < BATCH) break;
     }
@@ -164,7 +155,7 @@ function readLinkCounts(
  */
 export function readPageMapRows(
   storage: SQLiteStorage,
-  crawl: { id: string }
+  crawl: { id: string },
 ): Effect.Effect<PageMapRow[], unknown> {
   return Effect.gen(function* () {
     const links = yield* readLinkCounts(storage, crawl.id);
@@ -206,8 +197,7 @@ export function readPageMapRows(
           ...(flagsByUrl.get(page.url) ?? []),
         ]);
         if (f?.robotsNoindex) flags.add("noindex");
-        if (f && f.status < 400 && f.schemaTypes.length === 0)
-          flags.add("no-schema");
+        if (f && f.status < 400 && f.schemaTypes.length === 0) flags.add("no-schema");
         const key = linkKey(page.normalizedUrl);
         const parsed = links.facts.get(page.normalizedUrl);
         const title = f?.title ?? null;
@@ -244,7 +234,6 @@ export function readPageMapRows(
   });
 }
 
-
 /**
  * The published `pageMap` of audit `crawl`: its rows (failed pages included) bounded to
  * {@link PAGE_MAP_PUBLISH_LIMITS}. Null for an audit with no pages. The one call the CLI publish
@@ -253,9 +242,7 @@ export function readPageMapRows(
 export function readPublishedPageMap(
   storage: SQLiteStorage,
   crawl: { id: string },
-  site: string
+  site: string,
 ): Effect.Effect<PageMap | null, unknown> {
-  return readPageMapRows(storage, crawl).pipe(
-    Effect.map((rows) => buildPageMap(rows, { site }))
-  );
+  return readPageMapRows(storage, crawl).pipe(Effect.map((rows) => buildPageMap(rows, { site })));
 }

@@ -40,9 +40,12 @@ beforeAll(() => {
     port: 0,
     fetch(req) {
       const { pathname } = new URL(req.url);
-      if (pathname === "/ok.js") return new Response("var x = 1;", { headers: { "content-type": "text/javascript" } });
-      if (pathname === "/ok2.js") return new Response("var y = 2;", { headers: { "content-type": "text/javascript" } });
-      if (/^\/bulk\d+\.js$/.test(pathname)) return new Response("var z = 3;", { headers: { "content-type": "text/javascript" } });
+      if (pathname === "/ok.js")
+        return new Response("var x = 1;", { headers: { "content-type": "text/javascript" } });
+      if (pathname === "/ok2.js")
+        return new Response("var y = 2;", { headers: { "content-type": "text/javascript" } });
+      if (/^\/bulk\d+\.js$/.test(pathname))
+        return new Response("var z = 3;", { headers: { "content-type": "text/javascript" } });
       if (pathname === "/gone.js") return new Response("gone", { status: 404 });
       if (pathname === "/boom.js") return new Response("boom", { status: 500 });
       if (pathname === "/waf.js") {
@@ -69,7 +72,14 @@ async function assetsFor(srcs: string[], overrides?: Overrides, config: Config =
   const occurrences = emptySiteAssetOccurrences();
   absorbResourceOccurrences(
     occurrences,
-    [{ url, finalUrl: url, parsed: { document: parseDocument(markup), images: [] } as unknown as ParsedPage, hasCsp: false }],
+    [
+      {
+        url,
+        finalUrl: url,
+        parsed: { document: parseDocument(markup), images: [] } as unknown as ParsedPage,
+        hasCsp: false,
+      },
+    ],
     base,
   );
   occurrences.pageCount = 1;
@@ -79,20 +89,22 @@ async function assetsFor(srcs: string[], overrides?: Overrides, config: Config =
 }
 
 function leakChecks(assets: Awaited<ReturnType<typeof assetsFor>>): CheckResult[] {
-  return (security.leakedSecretsRule.run({
-    page: { url: `${base}/`, html: "", statusCode: 200, loadTime: 0, headers: {} },
-    parsed: {} as never,
-    site: {
-      baseUrl: base,
-      pages: [],
-      robotsTxt: null,
-      sitemaps: null,
-      scripts: assets.scripts,
-      assetCapDropped: assets.assetCapDropped,
-      scriptsNotReadUrls: assets.scriptsNotReadUrls,
-    },
-    options: {},
-  }) as { checks: CheckResult[] }).checks;
+  return (
+    security.leakedSecretsRule.run({
+      page: { url: `${base}/`, html: "", statusCode: 200, loadTime: 0, headers: {} },
+      parsed: {} as never,
+      site: {
+        baseUrl: base,
+        pages: [],
+        robotsTxt: null,
+        sitemaps: null,
+        scripts: assets.scripts,
+        assetCapDropped: assets.assetCapDropped,
+        scriptsNotReadUrls: assets.scriptsNotReadUrls,
+      },
+      options: {},
+    }) as { checks: CheckResult[] }
+  ).checks;
 }
 
 const named = (checks: CheckResult[], name: string) => checks.find((c) => c.name === name);

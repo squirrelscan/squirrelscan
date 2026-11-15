@@ -24,9 +24,7 @@ export const reviewSchemaRule: Rule = {
     const doc = ctx.parsed.document;
     if (!doc) return { checks: [] };
 
-    const schemaScripts = doc.querySelectorAll(
-      'script[type="application/ld+json"]'
-    );
+    const schemaScripts = doc.querySelectorAll('script[type="application/ld+json"]');
     let aggregateRating: Record<string, unknown> | null = null;
     // A Set, so a review both referenced by `@id` and present as its own node
     // is judged once (pub#817).
@@ -54,7 +52,7 @@ export const reviewSchemaRule: Rule = {
         const candidate = resolve(
           Array.isArray(raw)
             ? raw.find((r) => r && typeof r === "object" && !Array.isArray(r))
-            : raw
+            : raw,
         );
         if (candidate) {
           aggregateRating = candidate as Record<string, unknown>;
@@ -96,8 +94,7 @@ export const reviewSchemaRule: Rule = {
     // Validate AggregateRating
     if (aggregateRating) {
       const ratingValue = aggregateRating["ratingValue"];
-      const ratingCount =
-        aggregateRating["ratingCount"] || aggregateRating["reviewCount"];
+      const ratingCount = aggregateRating["ratingCount"] || aggregateRating["reviewCount"];
 
       if (!ratingValue) {
         checks.push({

@@ -41,7 +41,8 @@ export function serializeChildren(parent: Node, options: SerializeOptions = {}):
   const holders = new Set<Node>();
   if (replaceText) {
     for (const el of replaceText.keys()) {
-      for (let up = el.parentNode; up && up !== parent && !holders.has(up); up = up.parentNode) holders.add(up);
+      for (let up = el.parentNode; up && up !== parent && !holders.has(up); up = up.parentNode)
+        holders.add(up);
     }
   }
   const bounded = need !== Number.POSITIVE_INFINITY;

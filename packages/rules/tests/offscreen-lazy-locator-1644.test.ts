@@ -23,11 +23,14 @@ function run(body: string, options: object = {}): CheckResult[] {
 // Three content images fill the default above-the-fold budget; the image under test follows them.
 const above = [1, 2, 3].map((n) => `<img src="/hero-${n}.jpg" alt="Hero ${n}">`).join("");
 
-const notLazy = (checks: CheckResult[]) => checks.find((c) => c.name === "offscreen-images-not-lazy");
+const notLazy = (checks: CheckResult[]) =>
+  checks.find((c) => c.name === "offscreen-images-not-lazy");
 
 describe("item locator for an image with an empty src (#1644)", () => {
   test('src="" with data-src names the data-src file', () => {
-    const row = notLazy(run(`${above}<img src="" data-src="/cdn/bundle/product-9.jpg?v=3" alt="p">`));
+    const row = notLazy(
+      run(`${above}<img src="" data-src="/cdn/bundle/product-9.jpg?v=3" alt="p">`),
+    );
     expect(row?.items).toEqual([{ id: "product-9.jpg" }]);
   });
 
@@ -51,7 +54,9 @@ describe("item locator for an image with an empty src (#1644)", () => {
   });
 
   test("no source attribute at all: the id is the element selector and a snippet carries the tag", () => {
-    const row = notLazy(run(`${above}<div id="bundle"><img src="" class="tile" alt="builder tile"></div>`));
+    const row = notLazy(
+      run(`${above}<div id="bundle"><img src="" class="tile" alt="builder tile"></div>`),
+    );
     const item = row?.items?.[0];
     expect(item?.id).toBe("html > body > div#bundle > img.tile");
     expect(item?.snippet).toBe('<img src="" class="tile" alt="builder tile">');

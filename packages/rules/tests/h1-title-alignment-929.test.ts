@@ -55,7 +55,9 @@ describe("the issue's fixtures", () => {
 
   test("no H1, or two H1s: skipped, no finding", () => {
     expect(run({ title: "Running Shoes for Women", h1: [] }).status).toBe("skipped");
-    expect(run({ title: "Running Shoes for Women", h1: ["One heading", "Another heading"] }).status).toBe("skipped");
+    expect(
+      run({ title: "Running Shoes for Women", h1: ["One heading", "Another heading"] }).status,
+    ).toBe("skipped");
   });
 
   test("a language with no stopword list is skipped, not passed", () => {
@@ -77,13 +79,25 @@ describe("false-positive guards", () => {
   });
 
   test("a title that is only the brand is skipped", () => {
-    expect(run({ title: "Squirrelscan", h1: ["Audit your website today"], url: "https://squirrelscan.com/x" }).status).toBe("skipped");
-    expect(run({ title: "Acme", h1: ["Audit your website today"], siteName: "Acme" }).status).toBe("skipped");
+    expect(
+      run({
+        title: "Squirrelscan",
+        h1: ["Audit your website today"],
+        url: "https://squirrelscan.com/x",
+      }).status,
+    ).toBe("skipped");
+    expect(run({ title: "Acme", h1: ["Audit your website today"], siteName: "Acme" }).status).toBe(
+      "skipped",
+    );
   });
 
   test("a brand segment named by the host is not counted as a title word", () => {
     // `Squirrelscan` names the site, so the title keeps one content word: too few to judge.
-    const c = run({ title: "Audits | Squirrelscan", h1: ["Check every page"], url: "https://squirrelscan.com/x" });
+    const c = run({
+      title: "Audits | Squirrelscan",
+      h1: ["Check every page"],
+      url: "https://squirrelscan.com/x",
+    });
     expect(c.status).toBe("skipped");
   });
 
@@ -102,18 +116,42 @@ describe("false-positive guards", () => {
   });
 
   test("numbers and stopwords never count as shared words", () => {
-    const c = run({ title: "Top 10 guides for new owners | Acme", h1: ["10 things to know about the web"] });
+    const c = run({
+      title: "Top 10 guides for new owners | Acme",
+      h1: ["10 things to know about the web"],
+    });
     expect(c.status).not.toBe("pass");
   });
 
   test("case, diacritics and punctuation do not hide a shared word", () => {
-    expect(run({ title: "Crème brûlée recipes | Acme", h1: ["Easy CREME BRULEE, step by step"] }).status).toBe("pass");
+    expect(
+      run({ title: "Crème brûlée recipes | Acme", h1: ["Easy CREME BRULEE, step by step"] }).status,
+    ).toBe("pass");
   });
 
   test("other supported languages", () => {
-    expect(run({ title: "Schuhe für Damen kaufen | Marke", h1: ["Damenschuhe und Schuhe im Angebot"], lang: "de" }).status).toBe("pass");
-    expect(run({ title: "Zapatillas de running para mujer | Marca", h1: ["Nuestra historia como empresa familiar"], lang: "es", url: "https://example.com/blog/x" }).details).toMatchObject({ confident: true });
-    expect(run({ title: "Chaussures de course pour femme | Marque", h1: ["Les chaussures de course les plus légères"], lang: "fr-CA" }).status).toBe("pass");
+    expect(
+      run({
+        title: "Schuhe für Damen kaufen | Marke",
+        h1: ["Damenschuhe und Schuhe im Angebot"],
+        lang: "de",
+      }).status,
+    ).toBe("pass");
+    expect(
+      run({
+        title: "Zapatillas de running para mujer | Marca",
+        h1: ["Nuestra historia como empresa familiar"],
+        lang: "es",
+        url: "https://example.com/blog/x",
+      }).details,
+    ).toMatchObject({ confident: true });
+    expect(
+      run({
+        title: "Chaussures de course pour femme | Marque",
+        h1: ["Les chaussures de course les plus légères"],
+        lang: "fr-CA",
+      }).status,
+    ).toBe("pass");
   });
 });
 
@@ -129,21 +167,48 @@ describe("stem", () => {
 });
 
 describe("precision fixes (review of #1024)", () => {
-  const miss = { title: "Reddit Visibility Services, SEO &amp; AI Search | Brand", h1: ["Be recommended and showed on Google"] };
+  const miss = {
+    title: "Reddit Visibility Services, SEO &amp; AI Search | Brand",
+    h1: ["Be recommended and showed on Google"],
+  };
 
   test("localized roots, index files and the root are the homepage: info", () => {
     for (const path of ["/", "/de", "/de/", "/pt-br/", "/en_gb", "/index.html", "/de/index.php"]) {
-      expect((run({ ...miss, url: `https://example.com${path}` }).details as { pageKind?: string }).pageKind).toBe("home");
+      expect(
+        (run({ ...miss, url: `https://example.com${path}` }).details as { pageKind?: string })
+          .pageKind,
+      ).toBe("home");
     }
-    expect(run({ ...miss, url: "https://example.com/de/blog" }).details).not.toHaveProperty("pageKind");
-    expect(run({ ...miss, url: "https://example.com/blog/post" }).details).toMatchObject({ confident: true });
+    expect(run({ ...miss, url: "https://example.com/de/blog" }).details).not.toHaveProperty(
+      "pageKind",
+    );
+    expect(run({ ...miss, url: "https://example.com/blog/post" }).details).toMatchObject({
+      confident: true,
+    });
     for (const path of ["/", "/de/", "/index.html"]) {
-      expect(run({ ...miss, url: `https://example.com${path}` }).details).toMatchObject({ pageKind: "home", confident: false });
+      expect(run({ ...miss, url: `https://example.com${path}` }).details).toMatchObject({
+        pageKind: "home",
+        confident: false,
+      });
     }
   });
 
   test("generic marketing pages are info, with the reason in the details", () => {
-    for (const path of ["/about", "/pricing", "/features/", "/contact", "/faq", "/services", "/company", "/team", "/support", "/help", "/en/about", "/de/preise", "/kontakt"]) {
+    for (const path of [
+      "/about",
+      "/pricing",
+      "/features/",
+      "/contact",
+      "/faq",
+      "/services",
+      "/company",
+      "/team",
+      "/support",
+      "/help",
+      "/en/about",
+      "/de/preise",
+      "/kontakt",
+    ]) {
       const c = run({ ...miss, url: `https://example.com${path}` });
       expect(c.status).toBe("info");
       expect((c.details as { pageKind?: string }).pageKind).toBe("marketing");
@@ -155,45 +220,102 @@ describe("precision fixes (review of #1024)", () => {
       expect(c.details).not.toHaveProperty("pageKind");
     }
     // A shallow page is info, never confident.
-    expect(run({ ...miss, url: "https://example.com/landing" }).details).toMatchObject({ confident: false });
+    expect(run({ ...miss, url: "https://example.com/landing" }).details).toMatchObject({
+      confident: false,
+    });
   });
 
   test("an all-caps pair (AI, UX, EA) is a word; a lower-case pair is not", () => {
-    expect(run({ title: "Hiring AI engineers | Acme", h1: ["Why AI matters now for teams"] }).status).toBe("pass");
-    expect(run({ title: "Hiring ai engineers | Acme", h1: ["Why ai matters now for teams"] }).status).not.toBe("pass");
+    expect(
+      run({ title: "Hiring AI engineers | Acme", h1: ["Why AI matters now for teams"] }).status,
+    ).toBe("pass");
+    expect(
+      run({ title: "Hiring ai engineers | Acme", h1: ["Why ai matters now for teams"] }).status,
+    ).not.toBe("pass");
   });
 
   test("silent e, -ing and irregular plurals meet", () => {
-    expect(run({ title: "Making coffee at home | Acme", h1: ["How to make better espresso"] }).status).toBe("pass");
-    expect(run({ title: "Hiring developers fast | Acme", h1: ["We hire remote engineers"] }).status).toBe("pass");
-    expect(run({ title: "Dresses for women | Acme", h1: ["The woman who wears silk"] }).status).toBe("pass");
+    expect(
+      run({ title: "Making coffee at home | Acme", h1: ["How to make better espresso"] }).status,
+    ).toBe("pass");
+    expect(
+      run({ title: "Hiring developers fast | Acme", h1: ["We hire remote engineers"] }).status,
+    ).toBe("pass");
+    expect(
+      run({ title: "Dresses for women | Acme", h1: ["The woman who wears silk"] }).status,
+    ).toBe("pass");
   });
 
   test("a German head-last compound meets its head", () => {
-    const c = run({ title: "Damenschuhe online kaufen | Marke", h1: ["Schuhe für jeden Tag"], lang: "de" });
+    const c = run({
+      title: "Damenschuhe online kaufen | Marke",
+      h1: ["Schuhe für jeden Tag"],
+      lang: "de",
+    });
     expect(c.status).toBe("pass");
   });
 
   test("sharing only a generic word is not a match", () => {
-    const c = run({ title: "Free online invoice tool for freelancers | Acme", h1: ["Free payments made simple for freelance teams"], url: "https://example.com/blog/x" });
+    const c = run({
+      title: "Free online invoice tool for freelancers | Acme",
+      h1: ["Free payments made simple for freelance teams"],
+      url: "https://example.com/blog/x",
+    });
     expect(c.status).toBe("pass");
     // Only generic words shared (free, online): no match.
-    const d = run({ title: "Free online invoice generator for freelancers | Acme", h1: ["Free online payments made simple today"], url: "https://example.com/blog/x" });
+    const d = run({
+      title: "Free online invoice generator for freelancers | Acme",
+      h1: ["Free online payments made simple today"],
+      url: "https://example.com/blog/x",
+    });
     expect(d.status).toBe("info");
     expect(d.name).toBe("h1-title-alignment");
   });
 
   test("a mostly non-Latin title or H1 under a Latin stopword language is skipped", () => {
-    expect(run({ title: "料金プランの比較 | Acme", h1: ["サービスのご案内と価格"], lang: "en" }).status).toBe("skipped");
+    expect(
+      run({ title: "料金プランの比較 | Acme", h1: ["サービスのご案内と価格"], lang: "en" }).status,
+    ).toBe("skipped");
   });
 
   test("run-together H1 text (lower-case start, a stopword hump) is skipped, not judged; capitalised brands are not", () => {
-    expect(run({ title: "Bedrijven software voor groei | Acme", h1: ["Software voorBedrijven met groei en meer"], lang: "nl", url: "https://example.com/blog/x" }).status).toBe("skipped");
-    expect(run({ title: "Pricing plans for teams | Acme", h1: ["Plans that start forFree today"], url: "https://example.com/blog/x" }).status).toBe("skipped");
+    expect(
+      run({
+        title: "Bedrijven software voor groei | Acme",
+        h1: ["Software voorBedrijven met groei en meer"],
+        lang: "nl",
+        url: "https://example.com/blog/x",
+      }).status,
+    ).toBe("skipped");
+    expect(
+      run({
+        title: "Pricing plans for teams | Acme",
+        h1: ["Plans that start forFree today"],
+        url: "https://example.com/blog/x",
+      }).status,
+    ).toBe("skipped");
     // A capitalised camel word is a brand, not a glue; the title is plain text and is not checked.
-    expect(run({ title: "Notes on videos | Acme", h1: ["How YouTube and OwnJournal help writers"], url: "https://example.com/blog/x" }).status).not.toBe("skipped");
-    expect(run({ title: "Teacher Mentor ForFree Attestation | SkillStory", h1: ["Achievements become trusted when educators back them"], url: "https://example.com/blog/x" }).status).not.toBe("skipped");
-    expect(run({ title: "WordPress themes for makers | Acme", h1: ["A WordPress theme you will love"], url: "https://example.com/blog/x" }).status).toBe("pass");
+    expect(
+      run({
+        title: "Notes on videos | Acme",
+        h1: ["How YouTube and OwnJournal help writers"],
+        url: "https://example.com/blog/x",
+      }).status,
+    ).not.toBe("skipped");
+    expect(
+      run({
+        title: "Teacher Mentor ForFree Attestation | SkillStory",
+        h1: ["Achievements become trusted when educators back them"],
+        url: "https://example.com/blog/x",
+      }).status,
+    ).not.toBe("skipped");
+    expect(
+      run({
+        title: "WordPress themes for makers | Acme",
+        h1: ["A WordPress theme you will love"],
+        url: "https://example.com/blog/x",
+      }).status,
+    ).toBe("pass");
   });
 
   test("a hostile long token stays fast: 100k letters, German substring, shared-prefix tokens", () => {
@@ -204,31 +326,67 @@ describe("precision fixes (review of #1024)", () => {
     };
     timed("\u00e9".repeat(100000) + " word", "\u00fc".repeat(100000) + " thing");
     timed("a".repeat(100000), "aaaaab", "de");
-    timed(Array.from({ length: 64 }, (_, i) => `${"x".repeat(20000)}t${i}`).join(" "), Array.from({ length: 64 }, (_, i) => `${"x".repeat(20000)}h${i}`).join(" "), "de");
-    timed(Array.from({ length: 64 }, (_, i) => `${"x".repeat(20000)}t${i}`).join(" "), Array.from({ length: 64 }, (_, i) => `${"x".repeat(20000)}h${i}`).join(" "), "en");
+    timed(
+      Array.from({ length: 64 }, (_, i) => `${"x".repeat(20000)}t${i}`).join(" "),
+      Array.from({ length: 64 }, (_, i) => `${"x".repeat(20000)}h${i}`).join(" "),
+      "de",
+    );
+    timed(
+      Array.from({ length: 64 }, (_, i) => `${"x".repeat(20000)}t${i}`).join(" "),
+      Array.from({ length: 64 }, (_, i) => `${"x".repeat(20000)}h${i}`).join(" "),
+      "en",
+    );
     timed("aB".repeat(100000), "xY".repeat(100000));
     timed("Foo".repeat(50000) + " bar", "Qux".repeat(50000) + " baz");
   });
 
   test("silent e needs a 5-letter stem: unrelated short words do not collide", () => {
-    for (const [a, b] of [["hope", "hop"], ["cute", "cut"], ["mate", "mat"], ["tape", "tap"], ["lace", "lac"], ["prime", "prim"], ["dining", "din"], ["bored", "bore"]] as const) {
+    for (const [a, b] of [
+      ["hope", "hop"],
+      ["cute", "cut"],
+      ["mate", "mat"],
+      ["tape", "tap"],
+      ["lace", "lac"],
+      ["prime", "prim"],
+      ["dining", "din"],
+      ["bored", "bore"],
+    ] as const) {
       expect(stem(a, "en")).not.toBe(stem(b, "en"));
     }
-    for (const [a, b] of [["price", "pricing"], ["make", "making"], ["bake", "baking"], ["women", "woman"]] as const) {
+    for (const [a, b] of [
+      ["price", "pricing"],
+      ["make", "making"],
+      ["bake", "baking"],
+      ["women", "woman"],
+    ] as const) {
       expect(stem(a, "en")).toBe(stem(b, "en"));
     }
-    expect(run({ title: "Damenschuhe online kaufen | Marke", h1: ["Schuhe f\u00fcr jeden Tag"], lang: "de" }).status).toBe("pass");
+    expect(
+      run({
+        title: "Damenschuhe online kaufen | Marke",
+        h1: ["Schuhe f\u00fcr jeden Tag"],
+        lang: "de",
+      }).status,
+    ).toBe("pass");
   });
 
   test("page-kind words (about, contact, pricing) cannot match alone", () => {
-    const c = run({ title: "About the Mercury analytics platform | Acme", h1: ["About, ownership and funding for everyone"], url: "https://example.com/blog/x" });
+    const c = run({
+      title: "About the Mercury analytics platform | Acme",
+      h1: ["About, ownership and funding for everyone"],
+      url: "https://example.com/blog/x",
+    });
     expect(c.status).toBe("info");
   });
 
   test("a 15,000-word heading and title stay fast", () => {
     const words = Array.from({ length: 15000 }, (_, i) => `alpha${i.toString(36)}beta`).join(" ");
     const started = performance.now();
-    run({ title: `${words} | Acme`, h1: [words.split("").reverse().join("")], url: "https://example.com/blog/x" });
+    run({
+      title: `${words} | Acme`,
+      h1: [words.split("").reverse().join("")],
+      url: "https://example.com/blog/x",
+    });
     expect(performance.now() - started).toBeLessThan(500);
   });
 });

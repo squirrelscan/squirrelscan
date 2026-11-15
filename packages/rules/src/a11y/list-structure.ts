@@ -53,9 +53,7 @@ export const listStructureRule: Rule = {
         const tagName = list.tagName.toLowerCase();
         const id = list.getAttribute("id");
         const cls = list.getAttribute("class")?.split(CLASS_SPLIT).find(Boolean);
-        invalidLists.push(
-          id ? `${tagName}#${id}` : cls ? `${tagName}.${cls}` : tagName
-        );
+        invalidLists.push(id ? `${tagName}#${id}` : cls ? `${tagName}.${cls}` : tagName);
       }
     }
 
@@ -65,10 +63,7 @@ export const listStructureRule: Rule = {
         status: "fail",
         message: `${invalidLists.length} list(s) with invalid child elements`,
         items: invalidLists.slice(0, 10).map((id) => ({ id })),
-        details:
-          invalidLists.length > 10
-            ? { additional: invalidLists.length - 10 }
-            : undefined,
+        details: invalidLists.length > 10 ? { additional: invalidLists.length - 10 } : undefined,
       });
     } else if (lists.length > 0) {
       checks.push({

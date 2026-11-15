@@ -46,7 +46,10 @@ describe("rule_results observation column (repo#2302)", () => {
     await run(store.init());
     await run(store.saveRuleResults("crawl-1", PAGE, RULE, [observed()]));
     await run(
-      store.saveRuleResultsBatch("crawl-2", new Map([[PAGE, [{ ruleId: RULE, checks: [observed()] }]]])),
+      store.saveRuleResultsBatch(
+        "crawl-2",
+        new Map([[PAGE, [{ ruleId: RULE, checks: [observed()] }]]]),
+      ),
     );
 
     for (const crawlId of ["crawl-1", "crawl-2"]) {

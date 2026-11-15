@@ -45,7 +45,7 @@ function mapOf(pages: Array<{ url: string; raw: string | null }>, site = BASE): 
     pages.map((p) => ({
       page: { url: p.url, finalUrl: p.url, status: 200 },
       parsed: { schemas: { raw: p.raw } },
-    }))
+    })),
   );
   return collector.build(site, { generatedAt: "2026-01-01T00:00:00.000Z" });
 }
@@ -178,8 +178,8 @@ describe("a Yoast and WordLift split identity", () => {
             url: BASE,
           },
         ],
-      })
-    )
+      }),
+    ),
   );
 
   test("schema/entity-split-identity names both ids", async () => {
@@ -196,9 +196,7 @@ describe("a publisher only the homepage declares", () => {
   const map = mapOf([
     page(BASE, {
       "@context": "https://schema.org",
-      "@graph": [
-        { "@type": "Organization", "@id": `${BASE}#organization`, name: "Example Ltd" },
-      ],
+      "@graph": [{ "@type": "Organization", "@id": `${BASE}#organization`, name: "Example Ltd" }],
     }),
     page(`${BASE}post-1`, {
       "@context": "https://schema.org",
@@ -250,8 +248,8 @@ describe("a LocalBusiness on every page", () => {
         "@id": `${BASE}#business`,
         name: "Example Plumbing",
         telephone: "+61 2 1234 5678",
-      })
-    )
+      }),
+    ),
   );
 
   test("schema/entity-local-business-per-page fires", async () => {
@@ -337,7 +335,7 @@ describe("an inline author nested in an article", () => {
 
   test("the builder found the nested Person", () => {
     expect(map.nodes.some((n) => n.types.includes("Person") && n.name === "Ada Lovelace")).toBe(
-      true
+      true,
     );
   });
 
@@ -354,7 +352,7 @@ describe("the acceptance-criteria snapshots", () => {
   // markup they were written for.
   const load = async (name: string): Promise<EntityMap> => {
     const raw = (await Bun.file(
-      `${import.meta.dir}/fixtures/entity-map/${name}.json`
+      `${import.meta.dir}/fixtures/entity-map/${name}.json`,
     ).json()) as EntityMap;
     // These predate three derived fields; the CLI's `--input` does the same.
     return {

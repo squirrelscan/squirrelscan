@@ -5,7 +5,11 @@ import { isAuditFailed } from "@squirrelscan/core-contracts";
 import type { AuditReport } from "../types";
 import { AUDIT_FAILURE_NEXT_STEP } from "@squirrelscan/core-contracts/failure-reason";
 import { cacheFreshnessLines, cacheReasonsLabel, cacheStatsSummaryLine } from "../cache-stats";
-import { javascriptPageSize, javascriptShipped, javascriptShippedSummary } from "../javascript-shipped";
+import {
+  javascriptPageSize,
+  javascriptShipped,
+  javascriptShippedSummary,
+} from "../javascript-shipped";
 import { refusedFetchLines, reportFailureReasonCode } from "../failure-notice";
 import { wafBlockedPagesLines, wafBlockedSeedCopy, wafSuspectLines } from "../waf-blocked";
 import { getScoreGrade } from "../scoring";
@@ -39,12 +43,7 @@ import {
   moreSourcePages,
   sourceRowText,
 } from "../item-sources";
-import {
-  checkPagesScopedAway,
-  checkScopeLine,
-  itemLabel,
-  regionScopeLine,
-} from "../region-scope";
+import { checkPagesScopedAway, checkScopeLine, itemLabel, regionScopeLine } from "../region-scope";
 import { entityMarkdownSection } from "../entities";
 import {
   structureChromeLine,
@@ -55,7 +54,13 @@ import {
   structureTotalsLine,
 } from "../structure";
 import { hostRows } from "../host";
-import { groupTechnologies, isLocalOnlyTech, TECH_LOCAL_MARK, techChangeSummary, techIconUrl } from "../technologies";
+import {
+  groupTechnologies,
+  isLocalOnlyTech,
+  TECH_LOCAL_MARK,
+  techChangeSummary,
+  techIconUrl,
+} from "../technologies";
 import { SITE_PROFILE_NOTE, siteProfileFlags, siteProfileRows } from "../site-metadata";
 import { EDITOR_SUMMARY_NOTE, editorSummaryView, priorityEffortLabel } from "../editor-summary";
 import { wcagLabel } from "@squirrelscan/core-contracts/wcag";
@@ -190,7 +195,6 @@ function siteProfileMarkdownValue(value: string, rawUrl?: string): string {
     return label;
   }
 }
-
 
 /**
  * Host list for a rate-limit line: names up to two, then counts the rest.
@@ -414,8 +418,12 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
       lines.push("");
       lines.push("To get a full audit:");
       lines.push("");
-      lines.push("- Set `[crawler] per_host_concurrency = 1` and `per_host_delay_ms = 500` in `squirrel.toml`.");
-      lines.push("- Raise `[crawler] max_backoff_ms` so the crawl waits longer for the host to recover.");
+      lines.push(
+        "- Set `[crawler] per_host_concurrency = 1` and `per_host_delay_ms = 500` in `squirrel.toml`.",
+      );
+      lines.push(
+        "- Raise `[crawler] max_backoff_ms` so the crawl waits longer for the host to recover.",
+      );
       lines.push("- Retry when the host is less busy.");
     } else if (blocked) {
       lines.push(
@@ -523,13 +531,17 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
   if (report.host) {
     lines.push("## Host");
     lines.push("");
-    for (const row of hostRows(report.host)) lines.push(`- **${row.label}:** ${escapeMarkdownText(row.value)}`);
+    for (const row of hostRows(report.host))
+      lines.push(`- **${row.label}:** ${escapeMarkdownText(row.value)}`);
     lines.push("");
   }
 
   // Technologies — report-only section, never part of the score. Logos embed
   // via inline <img> (GFM-supported); they degrade to alt text in plain terminals.
-  if (report.technologies && (report.technologies.items.length > 0 || report.technologies.truncated)) {
+  if (
+    report.technologies &&
+    (report.technologies.items.length > 0 || report.technologies.truncated)
+  ) {
     const tech = report.technologies;
     lines.push("## Technologies");
     lines.push("");
@@ -568,7 +580,9 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
   // repo#3397: the script weight the audit measured. Report-only, not scored.
   const javascript = javascriptShipped(report);
   if (javascript) {
-    lines.push(`- **JavaScript shipped:** ${javascriptShippedSummary(javascript, escapeMarkdownText)}`);
+    lines.push(
+      `- **JavaScript shipped:** ${javascriptShippedSummary(javascript, escapeMarkdownText)}`,
+    );
     if (javascript.heaviestPages.length > 0) {
       const pages = javascript.heaviestPages.map(
         (page) => `${escapeMarkdownText(page.url)} (${javascriptPageSize(page)})`,
@@ -757,9 +771,7 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
           );
           lines.push("");
           if (ap.count > materialized.length) {
-            lines.push(
-              `_Showing ${materialized.length} examples of ${ap.count} affected pages._`,
-            );
+            lines.push(`_Showing ${materialized.length} examples of ${ap.count} affected pages._`);
             lines.push("");
           }
           // #1135: per-URL provenance — carriedPages is the exact subset
@@ -830,7 +842,9 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
           lines.push("");
         } else if (coverage.mode !== "full" && itemsNotListed(check) > 0) {
           // A fully covered rule's groups already account for every item.
-          lines.push(`**${escapeMarkdownText(check.name)}:** ${itemsNotListedLine(itemsNotListed(check))}`);
+          lines.push(
+            `**${escapeMarkdownText(check.name)}:** ${itemsNotListedLine(itemsNotListed(check))}`,
+          );
           lines.push("");
         }
       }

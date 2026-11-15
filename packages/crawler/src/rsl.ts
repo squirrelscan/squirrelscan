@@ -1,10 +1,19 @@
 import { Effect } from "effect";
 import { truncateToBytes } from "@squirrelscan/utils/bytes";
-import { createHeaderScope, mergeHeaderRecords, type HeaderScope } from "@squirrelscan/utils/headers";
+import {
+  createHeaderScope,
+  mergeHeaderRecords,
+  type HeaderScope,
+} from "@squirrelscan/utils/headers";
 import { isHttpOrHttpsUrl } from "@squirrelscan/utils/safe-fetch";
 import { readBodyCapped } from "@squirrelscan/utils/response-body";
 
-import { optionalProbeTimeoutMs, safeFetchWithDeadline, skippedProbeError, ungated } from "./deadline";
+import {
+  optionalProbeTimeoutMs,
+  safeFetchWithDeadline,
+  skippedProbeError,
+  ungated,
+} from "./deadline";
 
 import type { PhaseBudget, ProbeGate } from "./deadline";
 import type { RslData, RslLicenseDoc } from "@squirrelscan/core-contracts";
@@ -75,7 +84,10 @@ async function fetchLicenseDoc(
       url,
       {
         headers: mergeHeaderRecords(
-          { "User-Agent": userAgent, Accept: "application/rsl+xml, application/xml, text/xml, */*" },
+          {
+            "User-Agent": userAgent,
+            Accept: "application/rsl+xml, application/xml, text/xml, */*",
+          },
           customHeaders,
         ),
       },
@@ -137,36 +149,37 @@ export function fetchRslLicensing(
     let linkHeader: string | null = robotsRead?.linkHeader ?? null;
     let robotsUnanswered = robotsRead ? !robotsRead.answered : false;
     // The crawl's own read stands in for a second request when it made one.
-    if (!robotsRead) await gate(robotsUrl, async () => {
-      const robotsTimeoutMs = optionalProbeTimeoutMs(budget, PROBE_TIMEOUT_MS);
-      if (robotsTimeoutMs === null) robotsUnanswered = true;
-      try {
-        if (robotsTimeoutMs !== null) {
-          await safeFetchWithDeadline(
-            robotsUrl,
-            {
-              headers: mergeHeaderRecords(
-                { "User-Agent": userAgent, Accept: "text/plain, */*" },
-                scope(robotsUrl) ? customHeaders : undefined,
-              ),
-            },
-            robotsTimeoutMs,
-            async (response) => {
-              if (response.ok) {
-                const raw = await readBodyCapped(response, ROBOTS_MAX_BYTES);
-                robotsBody = truncateToBytes(raw, ROBOTS_MAX_BYTES);
-                linkHeader = response.headers.get("link");
-              } else {
-                await response.body?.cancel().catch(() => {});
-              }
-            },
-            budget?.egress,
-          );
+    if (!robotsRead)
+      await gate(robotsUrl, async () => {
+        const robotsTimeoutMs = optionalProbeTimeoutMs(budget, PROBE_TIMEOUT_MS);
+        if (robotsTimeoutMs === null) robotsUnanswered = true;
+        try {
+          if (robotsTimeoutMs !== null) {
+            await safeFetchWithDeadline(
+              robotsUrl,
+              {
+                headers: mergeHeaderRecords(
+                  { "User-Agent": userAgent, Accept: "text/plain, */*" },
+                  scope(robotsUrl) ? customHeaders : undefined,
+                ),
+              },
+              robotsTimeoutMs,
+              async (response) => {
+                if (response.ok) {
+                  const raw = await readBodyCapped(response, ROBOTS_MAX_BYTES);
+                  robotsBody = truncateToBytes(raw, ROBOTS_MAX_BYTES);
+                  linkHeader = response.headers.get("link");
+                } else {
+                  await response.body?.cancel().catch(() => {});
+                }
+              },
+              budget?.egress,
+            );
+          }
+        } catch {
+          robotsUnanswered = true;
         }
-      } catch {
-        robotsUnanswered = true;
-      }
-    });
+      });
 
     if (robotsUnanswered) return null;
 

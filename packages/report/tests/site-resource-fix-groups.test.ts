@@ -62,7 +62,14 @@ const PAGES = [`${ORIGIN}/`, `${ORIGIN}/about`, `${ORIGIN}/pricing`];
 describe("a shared bundle is one unit", () => {
   test("every page carrying the same maps collapses to a single group", () => {
     const groups = siteResourceFixGroups(
-      rule(PAGES.map((page) => check(page, SHARED.map((key) => occurrence(page, key))))),
+      rule(
+        PAGES.map((page) =>
+          check(
+            page,
+            SHARED.map((key) => occurrence(page, key)),
+          ),
+        ),
+      ),
     );
     expect(groups).toHaveLength(1);
     expect(groups[0]!.resourceKeys).toEqual(SHARED);
@@ -75,7 +82,14 @@ describe("a shared bundle is one unit", () => {
     // count taken from a sample would come back smaller than 24.
     const pages = Array.from({ length: 24 }, (_, i) => `${ORIGIN}/p${i}`);
     const groups = siteResourceFixGroups(
-      rule(pages.map((page) => check(page, SHARED.map((key) => occurrence(page, key))))),
+      rule(
+        pages.map((page) =>
+          check(
+            page,
+            SHARED.map((key) => occurrence(page, key)),
+          ),
+        ),
+      ),
     );
     expect(groups).toHaveLength(1);
     expect(groups[0]!.affectedPageCount).toBe(24);
@@ -86,7 +100,10 @@ describe("a shared bundle is one unit", () => {
 describe("a section bundle is its own unit", () => {
   const sectionKey = `${ORIGIN}/assets/blog.js.map`;
   const checks = [
-    check(PAGES[0]!, SHARED.map((key) => occurrence(PAGES[0]!, key))),
+    check(
+      PAGES[0]!,
+      SHARED.map((key) => occurrence(PAGES[0]!, key)),
+    ),
     check(PAGES[1]!, [
       ...SHARED.map((key) => occurrence(PAGES[1]!, key)),
       occurrence(PAGES[1]!, sectionKey),
@@ -146,13 +163,23 @@ describe("a map on one page stays page-level", () => {
 describe("the grouping does not depend on arrival order", () => {
   test("reversing the pages and the keys yields identical groups", () => {
     const forward = siteResourceFixGroups(
-      rule(PAGES.map((page) => check(page, SHARED.map((key) => occurrence(page, key))))),
+      rule(
+        PAGES.map((page) =>
+          check(
+            page,
+            SHARED.map((key) => occurrence(page, key)),
+          ),
+        ),
+      ),
     );
     const reversed = siteResourceFixGroups(
       rule(
-        [...PAGES]
-          .reverse()
-          .map((page) => check(page, [...SHARED].reverse().map((key) => occurrence(page, key)))),
+        [...PAGES].reverse().map((page) =>
+          check(
+            page,
+            [...SHARED].reverse().map((key) => occurrence(page, key)),
+          ),
+        ),
       ),
     );
     expect(reversed).toEqual(forward);
@@ -166,12 +193,8 @@ describe("two origins are two builds", () => {
       rule([
         check(PAGES[0]!, [occurrence(PAGES[0]!, `${ORIGIN}/a.js.map`)]),
         check(PAGES[1]!, [occurrence(PAGES[1]!, `${ORIGIN}/a.js.map`)]),
-        check(`${other}/x`, [
-          occurrence(`${other}/x`, `${other}/a.js.map`, { siteOrigin: other }),
-        ]),
-        check(`${other}/y`, [
-          occurrence(`${other}/y`, `${other}/a.js.map`, { siteOrigin: other }),
-        ]),
+        check(`${other}/x`, [occurrence(`${other}/x`, `${other}/a.js.map`, { siteOrigin: other })]),
+        check(`${other}/y`, [occurrence(`${other}/y`, `${other}/a.js.map`, { siteOrigin: other })]),
       ]),
     );
     expect(groups).toHaveLength(2);
@@ -201,7 +224,12 @@ describe("a rule with no resource evidence", () => {
 describe("a second check on the same pages is not swallowed", () => {
   test("a page carrying an uncovered inline finding stays uncovered", () => {
     const withInline = rule([
-      ...PAGES.map((page) => check(page, SHARED.map((key) => occurrence(page, key)))),
+      ...PAGES.map((page) =>
+        check(
+          page,
+          SHARED.map((key) => occurrence(page, key)),
+        ),
+      ),
       {
         name: "source-maps-inline",
         status: "warn",

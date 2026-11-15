@@ -43,7 +43,11 @@ describe("script fetch bounds (#1255)", () => {
   test("the held-bytes cap stops requests and marks the rest memory-cap", async () => {
     hits.length = 0;
     const urls = Array.from({ length: 12 }, (_, i) => `${base}/m${i}.js`);
-    const results = await run(urls, { fetchAll: true, maxScripts: 12, maxTotalBytes: 3 * 1024 * 1024 });
+    const results = await run(urls, {
+      fetchAll: true,
+      maxScripts: 12,
+      maxTotalBytes: 3 * 1024 * 1024,
+    });
     const fetched = results.filter((r) => r.content !== null);
     const skipped = results.filter((r) => r.fetchSkipReason === "memory-cap");
     // each body is just over 1 MB: three reach the cap, the rest are never requested
@@ -61,7 +65,9 @@ describe("script fetch bounds (#1255)", () => {
     expect(skipped.length).toBeGreaterThan(0);
     expect(results.filter((r) => r.content !== null).length).toBeGreaterThan(0);
     expect(hits.filter((p) => p.startsWith("/t")).length).toBeLessThan(8);
-    expect(results.every((r) => r.content !== null || r.fetchSkipReason === "time-budget")).toBe(true);
+    expect(results.every((r) => r.content !== null || r.fetchSkipReason === "time-budget")).toBe(
+      true,
+    );
   });
 
   test("with neither bound set nothing is skipped", async () => {

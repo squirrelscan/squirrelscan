@@ -41,8 +41,12 @@ function rng(seed: number) {
 
 describe("HTML entities", () => {
   test("decodes named, decimal and hex references; leaves unknown names alone", () => {
-    expect(decodeHtmlEntities("a &quot;b&quot; &amp; &lt;c&gt; &#39;d&#x27; &nbsp;e")).toBe("a \"b\" & <c> 'd'  e");
-    expect(decodeHtmlEntities("&foo; &notanentity; &#; &#x; &")).toBe("&foo; &notanentity; &#; &#x; &");
+    expect(decodeHtmlEntities("a &quot;b&quot; &amp; &lt;c&gt; &#39;d&#x27; &nbsp;e")).toBe(
+      "a \"b\" & <c> 'd'  e",
+    );
+    expect(decodeHtmlEntities("&foo; &notanentity; &#; &#x; &")).toBe(
+      "&foo; &notanentity; &#; &#x; &",
+    );
     expect(decodeHtmlEntities("no entities here")).toBe("no entities here");
   });
 
@@ -63,7 +67,10 @@ describe("HTML entities", () => {
   test("a key whose own characters are entity-encoded is reported too", () => {
     const encoded = [...STRIPE].map((c) => `&#x${c.charCodeAt(0).toString(16)};`).join("");
     const html = `<!DOCTYPE html><html><head><title>x</title></head><body><p>${encoded}</p></body></html>`;
-    const found = scanPageForSecrets(parsePage(html, "https://a.test/").document!, "https://a.test/");
+    const found = scanPageForSecrets(
+      parsePage(html, "https://a.test/").document!,
+      "https://a.test/",
+    );
     expect(found.map((f) => f.type)).toEqual(["Stripe Live Key"]);
   });
 });
@@ -85,21 +92,38 @@ describe("JavaScript string escapes", () => {
   });
 
   test("a key written with escapes inside a script string reports at the script's location", () => {
-    const escaped = [...STRIPE].map((c, i) => (i % 2 ? `\\x${c.charCodeAt(0).toString(16)}` : `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`)).join("");
+    const escaped = [...STRIPE]
+      .map((c, i) =>
+        i % 2
+          ? `\\x${c.charCodeAt(0).toString(16)}`
+          : `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`,
+      )
+      .join("");
     const html = `<!DOCTYPE html><html><head><title>x</title></head><body><script>window.k="${escaped}";</script></body></html>`;
-    const found = scanPageForSecrets(parsePage(html, "https://a.test/").document!, "https://a.test/");
+    const found = scanPageForSecrets(
+      parsePage(html, "https://a.test/").document!,
+      "https://a.test/",
+    );
     // The script is decoded and scanned once, as itself; the serialized
     // document's pass reads the page with the script's text blanked (#1864).
     expect(found.map((f) => [f.type, f.location])).toEqual([["Stripe Live Key", "inline-script"]]);
-    expect(scanContent(`var k="${escaped}";`, "external-script", "https://a.test/app.js").map((f) => f.location)).toEqual(["external-script"]);
+    expect(
+      scanContent(`var k="${escaped}";`, "external-script", "https://a.test/app.js").map(
+        (f) => f.location,
+      ),
+    ).toEqual(["external-script"]);
   });
 });
 
 describe("percent-encoding", () => {
   test("decodes a URL-encoded document in place; a run needs three escapes", () => {
     const json = JSON.stringify({ key: STRIPE, currency: "usd" });
-    expect(decodePercentRuns(`<div data-settings="${encodeURIComponent(json)}"></div>`)).toBe(`<div data-settings="${json}"></div>`);
-    expect(decodePercentRuns("?q=hello%20world%20foo%20bar&x=1")).toBe("?q=hello world foo bar&x=1");
+    expect(decodePercentRuns(`<div data-settings="${encodeURIComponent(json)}"></div>`)).toBe(
+      `<div data-settings="${json}"></div>`,
+    );
+    expect(decodePercentRuns("?q=hello%20world%20foo%20bar&x=1")).toBe(
+      "?q=hello world foo bar&x=1",
+    );
     expect(decodePercentRuns("?q=hello%20world&x=1")).toBe("?q=hello%20world&x=1");
     expect(decodePercentRuns("no percent here")).toBe("no percent here");
   });
@@ -123,8 +147,17 @@ describe("percent-encoding", () => {
   test("a key inside URL-encoded JSON reports at the plain location", () => {
     const json = JSON.stringify({ apiKey: STRIPE, currency: "usd" });
     const html = `<!DOCTYPE html><html><head><title>x</title></head><body><div data-settings="${encodeURIComponent(json)}"></div></body></html>`;
-    expect(scanPageForSecrets(parsePage(html, "https://a.test/").document!, "https://a.test/").map((f) => [f.type, f.location])).toEqual([["Stripe Live Key", "html"]]);
-    expect(scanContent(`var s=JSON.parse(decodeURIComponent("${encodeURIComponent(json)}"));`, "external-script").map((f) => f.location)).toEqual(["external-script"]);
+    expect(
+      scanPageForSecrets(parsePage(html, "https://a.test/").document!, "https://a.test/").map(
+        (f) => [f.type, f.location],
+      ),
+    ).toEqual([["Stripe Live Key", "html"]]);
+    expect(
+      scanContent(
+        `var s=JSON.parse(decodeURIComponent("${encodeURIComponent(json)}"));`,
+        "external-script",
+      ).map((f) => f.location),
+    ).toEqual(["external-script"]);
   });
 
   test("a run is bounded by code punctuation, so minified code with many escapes stays linear", () => {
@@ -147,7 +180,8 @@ describe("percent-encoding", () => {
 
   test("runs are bounded and the pass is cheap without a percent sign", () => {
     let filler = "";
-    while (filler.length < 2_000_000) filler += `var ab${filler.length % 977}=function(a,b){return a+b};`;
+    while (filler.length < 2_000_000)
+      filler += `var ab${filler.length % 977}=function(a,b){return a+b};`;
     const started = performance.now();
     expect(decodePercentRuns(filler)).toBe(filler);
     expect(performance.now() - started).toBeLessThan(50);
@@ -180,7 +214,8 @@ describe("base64 run finder", () => {
     for (let t = 0; t < 3000; t++) {
       let s = "";
       const n = 40 + Math.floor(r() * 500);
-      for (let i = 0; i < n; i++) s += r() < 0.03 ? " =\"':;{}<"[Math.floor(r() * 10)] : ALPH[Math.floor(r() * ALPH.length)];
+      for (let i = 0; i < n; i++)
+        s += r() < 0.03 ? " =\"':;{}<"[Math.floor(r() * 10)] : ALPH[Math.floor(r() * ALPH.length)];
       expect(findBase64Runs(s)).toEqual(brute(s));
     }
   });
@@ -201,7 +236,8 @@ describe("base64 run finder", () => {
 
   test("is linear on identifier-dense code", () => {
     let filler = "";
-    while (filler.length < 2_000_000) filler += `var ab${filler.length % 977}=function(a,b){return a+b};`;
+    while (filler.length < 2_000_000)
+      filler += `var ab${filler.length % 977}=function(a,b){return a+b};`;
     const started = performance.now();
     expect(findBase64Runs(filler)).toEqual([]);
     expect(performance.now() - started).toBeLessThan(200);
@@ -210,34 +246,65 @@ describe("base64 run finder", () => {
 
 describe("base64 text decode", () => {
   test("decodes text and refuses binary, short and oversized input", () => {
-    const text = JSON.stringify({ apiKey: STRIPE, locale: "en-GB", theme: "dark", flags: [1, 2, 3] });
+    const text = JSON.stringify({
+      apiKey: STRIPE,
+      locale: "en-GB",
+      theme: "dark",
+      flags: [1, 2, 3],
+    });
     expect(decodeBase64Text(Buffer.from(text).toString("base64"))).toBe(text);
     expect(decodeBase64Text(Buffer.from(text).toString("base64url"))).toBe(text);
     const r = rng(2);
-    const binary = Buffer.from(Array.from({ length: 300 }, () => Math.floor(r() * 256))).toString("base64");
+    const binary = Buffer.from(Array.from({ length: 300 }, () => Math.floor(r() * 256))).toString(
+      "base64",
+    );
     expect(decodeBase64Text(binary)).toBeNull();
     expect(decodeBase64Text("A".repeat(63))).toBeNull();
     expect(decodeBase64Text("A".repeat(5 * 1024 * 1024))).toBeNull();
     // Latin-1 bytes above 0x7f that are not UTF-8.
-    expect(decodeBase64Text(Buffer.from("caf\xe9 ".repeat(20), "latin1").toString("base64"))).toBeNull();
-    expect(decodeBase64Text(Buffer.from("café ".repeat(20), "utf8").toString("base64"))).toBe("café ".repeat(20));
+    expect(
+      decodeBase64Text(Buffer.from("caf\xe9 ".repeat(20), "latin1").toString("base64")),
+    ).toBeNull();
+    expect(decodeBase64Text(Buffer.from("café ".repeat(20), "utf8").toString("base64"))).toBe(
+      "café ".repeat(20),
+    );
   });
 
   test("URL paths and single-case runs are rejected before anything is allocated", () => {
     // What a Shopify product page's 300 base64-shaped runs actually are.
-    expect(looksLikeBase64Text("com/cdn/shopifycloud/storefront/assets/storefront/original/1234567890abcdef")).toBe(false);
-    expect(looksLikeBase64Text("apps/pagefly-ai-page-builder/blocks/app-embed/8312/assets/app-embed-block")).toBe(false);
-    expect(looksLikeBase64Text("com/extensions/01a0a352-6f62-78ee-897f-0ae2860fdb47/assets/index-abc123def")).toBe(false);
+    expect(
+      looksLikeBase64Text(
+        "com/cdn/shopifycloud/storefront/assets/storefront/original/1234567890abcdef",
+      ),
+    ).toBe(false);
+    expect(
+      looksLikeBase64Text(
+        "apps/pagefly-ai-page-builder/blocks/app-embed/8312/assets/app-embed-block",
+      ),
+    ).toBe(false);
+    expect(
+      looksLikeBase64Text(
+        "com/extensions/01a0a352-6f62-78ee-897f-0ae2860fdb47/assets/index-abc123def",
+      ),
+    ).toBe(false);
     expect(looksLikeBase64Text("A".repeat(64))).toBe(false);
     expect(looksLikeBase64Text("0123456789abcdef".repeat(4))).toBe(false);
     // Real encodings of text pass, in both alphabets and with padding.
     const r = rng(4);
     for (let i = 0; i < 200; i++) {
-      const text = JSON.stringify({ k: STRIPE, v: Array.from({ length: 4 }, () => Math.floor(r() * 1e6)), s: "x".repeat(Math.floor(r() * 40)) });
+      const text = JSON.stringify({
+        k: STRIPE,
+        v: Array.from({ length: 4 }, () => Math.floor(r() * 1e6)),
+        s: "x".repeat(Math.floor(r() * 40)),
+      });
       expect(looksLikeBase64Text(Buffer.from(text).toString("base64"))).toBe(true);
       expect(looksLikeBase64Text(Buffer.from(text).toString("base64url"))).toBe(true);
     }
-    expect(decodeBase64Text("com/cdn/shopifycloud/storefront/assets/storefront/original/1234567890abcdef")).toBeNull();
+    expect(
+      decodeBase64Text(
+        "com/cdn/shopifycloud/storefront/assets/storefront/original/1234567890abcdef",
+      ),
+    ).toBeNull();
   });
 
   test("a control character anywhere rejects the blob", () => {
@@ -254,13 +321,18 @@ describe("base64 blobs through the scanner", () => {
   test("a key inside a base64 blob assigned to a global reports with the (base64) suffix", () => {
     const b = blob({ env: "prod", apiKey: STRIPE, features: { billing: true, sso: false } });
     const found = scanContent(`window.__CONFIG__="${b}";`, "inline-script", "https://a.test/");
-    expect(found.map((f) => [f.type, f.location, f.sourceUrl])).toEqual([["Stripe Live Key", "inline-script (base64)", "https://a.test/"]]);
+    expect(found.map((f) => [f.type, f.location, f.sourceUrl])).toEqual([
+      ["Stripe Live Key", "inline-script (base64)", "https://a.test/"],
+    ]);
   });
 
   test("a key inside a base64 blob in a data attribute reports at html (base64)", () => {
     const b = blob({ session: null, config: { apiKey: STRIPE, locale: "en" } });
     const html = `<!DOCTYPE html><html><head><title>x</title></head><body><div id="root" data-state="${b}"></div></body></html>`;
-    const found = scanPageForSecrets(parsePage(html, "https://a.test/").document!, "https://a.test/");
+    const found = scanPageForSecrets(
+      parsePage(html, "https://a.test/").document!,
+      "https://a.test/",
+    );
     expect(found.map((f) => [f.type, f.location])).toEqual([["Stripe Live Key", "html (base64)"]]);
   });
 
@@ -277,12 +349,16 @@ describe("base64 blobs through the scanner", () => {
   test("never decodes inside a data: image URI or an SRI hash", () => {
     const b = blob({ token: STRIPE, padding: "p".repeat(100) });
     const html = `<!DOCTYPE html><html><head><title>x</title><script src="/v.js" integrity="sha256-${blob({ t: STRIPE }).slice(0, 64)}"></script></head><body><img src="data:image/png;base64,${b}"></body></html>`;
-    expect(scanPageForSecrets(parsePage(html, "https://a.test/").document!, "https://a.test/")).toEqual([]);
+    expect(
+      scanPageForSecrets(parsePage(html, "https://a.test/").document!, "https://a.test/"),
+    ).toEqual([]);
   });
 
   test("a 200 KB base64 image data URI adds under 5 ms and reports nothing", () => {
     const r = rng(3);
-    const img = Buffer.from(Array.from({ length: 150_000 }, () => Math.floor(r() * 256))).toString("base64");
+    const img = Buffer.from(Array.from({ length: 150_000 }, () => Math.floor(r() * 256))).toString(
+      "base64",
+    );
     const html = `<!DOCTYPE html><html><head><title>x</title></head><body><img alt="" src="data:image/png;base64,${img}"></body></html>`;
     const serialized = parsePage(html, "https://a.test/").document!.toString();
     expect(serialized.length).toBeGreaterThan(200_000);
@@ -312,10 +388,22 @@ describe("base64 blobs through the scanner", () => {
     // scan itself costs, i.e. the decoded scan stays within 2x of a scan with
     // nothing to decode.
     const r = rng(9);
-    const font = () => Buffer.from(Array.from({ length: 360_000 }, () => Math.floor(r() * 256))).toString("base64");
-    const css = Array.from({ length: 6 }, (_, i) => `@font-face{font-family:F${i};src:url(data:font/woff2;base64,${font()}) format("woff2")}`).join("\n");
-    const entities = Array.from({ length: 2000 }, (_, i) => `<a href="/p?a=${i}&amp;b=2" title="&quot;q${i}&quot;">Item &#39;${i}&#39; &lt;b&gt;</a>`).join("");
-    const percents = Array.from({ length: 200 }, (_, i) => `<a href="/s?q=term%20${i}%20x%2Fy">s</a>`).join("");
+    const font = () =>
+      Buffer.from(Array.from({ length: 360_000 }, () => Math.floor(r() * 256))).toString("base64");
+    const css = Array.from(
+      { length: 6 },
+      (_, i) =>
+        `@font-face{font-family:F${i};src:url(data:font/woff2;base64,${font()}) format("woff2")}`,
+    ).join("\n");
+    const entities = Array.from(
+      { length: 2000 },
+      (_, i) =>
+        `<a href="/p?a=${i}&amp;b=2" title="&quot;q${i}&quot;">Item &#39;${i}&#39; &lt;b&gt;</a>`,
+    ).join("");
+    const percents = Array.from(
+      { length: 200 },
+      (_, i) => `<a href="/s?q=term%20${i}%20x%2Fy">s</a>`,
+    ).join("");
     const html = `<!DOCTYPE html><html><head><title>x</title><style>${css}</style></head><body>${entities}${percents}<p>${"lorem ipsum dolor ".repeat(20_000)}</p></body></html>`;
     const serialized = parsePage(html, "https://a.test/").document!.toString();
     expect(serialized.length).toBeGreaterThan(3_000_000);
@@ -352,7 +440,13 @@ describe("base64 blobs through the scanner", () => {
   });
 
   test("hostile blobs neither throw nor run away: a blob of `=`, all padding, a giant run", () => {
-    for (const text of ["=".repeat(100), `${"A".repeat(70)}${"=".repeat(50)}`, "A".repeat(3_000_000), "/".repeat(2000), "-_".repeat(500)]) {
+    for (const text of [
+      "=".repeat(100),
+      `${"A".repeat(70)}${"=".repeat(50)}`,
+      "A".repeat(3_000_000),
+      "/".repeat(2000),
+      "-_".repeat(500),
+    ]) {
       expect(() => scanContent(`x="${text}";`, "inline-script")).not.toThrow();
     }
   });

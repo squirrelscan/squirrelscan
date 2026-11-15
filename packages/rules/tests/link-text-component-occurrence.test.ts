@@ -19,9 +19,9 @@ async function run(html: string, pageUrl = "https://example.com/docs/") {
 
 describe("linkTextRule component occurrences", () => {
   test("keeps distinct elements and hashes resolved destinations without exposing them", async () => {
-    const [check] = (await run(
+    const [check] = await run(
       '<footer><a href="/pricing?token=private">Learn more</a><a href="/docs">Learn more</a></footer>',
-    ));
+    );
     expect(check?.message).toBe("2 link(s) with generic text");
     expect(check?.items).toEqual([{ id: "learn more" }]);
     expect(check?.componentOccurrences).toHaveLength(2);
@@ -33,12 +33,14 @@ describe("linkTextRule component occurrences", () => {
       nameSource: "text",
       normalizedText: "learn more",
     });
-    expect(check?.componentOccurrences?.[0]?.defect.valueHashes.destination).toMatch(/^s128:[0-9a-f]{32}$/);
+    expect(check?.componentOccurrences?.[0]?.defect.valueHashes.destination).toMatch(
+      /^s128:[0-9a-f]{32}$/,
+    );
     expect(JSON.stringify(check?.componentOccurrences)).not.toContain("token=private");
   });
 
   test("does not attribute an article header as site chrome", async () => {
-    const [check] = (await run('<article><header><a href="/docs">Learn more</a></header></article>'));
+    const [check] = await run('<article><header><a href="/docs">Learn more</a></header></article>');
     expect(check?.componentOccurrences?.[0]).toMatchObject({
       groupable: false,
       confidence: "uncertain",
@@ -71,8 +73,9 @@ describe("linkTextRule component occurrences", () => {
     // Size does not flatten identity either: two regions that differ only
     // beyond the old budget must still sign differently.
     const tail = async (marker: string) =>
-      (await run(`<footer>${huge}<${marker}></${marker}><a href="/docs">Learn more</a></footer>`))[0]!
-        .componentOccurrences?.[0]?.region.structuralSignature;
+      (
+        await run(`<footer>${huge}<${marker}></${marker}><a href="/docs">Learn more</a></footer>`)
+      )[0]!.componentOccurrences?.[0]?.region.structuralSignature;
     expect(await tail("aside")).not.toBe(await tail("section"));
 
     const clean = (await run('<footer><a href="/docs">Learn more</a></footer>'))[0]!;
@@ -82,14 +85,18 @@ describe("linkTextRule component occurrences", () => {
 
   test("per-page nav state and per-page footer text do not split one component", async () => {
     // Same footer, different active link and a per-page string in the text.
-    const pageA = (await run(
-      '<footer class="site-footer"><nav><a class="nav-link is-active" aria-current="page" href="/a">Home</a><a class="nav-link" href="/b">Docs</a></nav><p>Page 1 of 9</p><a href="/docs">Learn more</a></footer>',
-      "https://example.com/a/",
-    ))[0]!;
-    const pageB = (await run(
-      '<footer class="site-footer"><nav><a class="nav-link" href="/a">Home</a><a class="nav-link is-active" aria-current="page" href="/b">Docs</a></nav><p>Page 7 of 9</p><a href="/docs">Learn more</a></footer>',
-      "https://example.com/b/",
-    ))[0]!;
+    const pageA = (
+      await run(
+        '<footer class="site-footer"><nav><a class="nav-link is-active" aria-current="page" href="/a">Home</a><a class="nav-link" href="/b">Docs</a></nav><p>Page 1 of 9</p><a href="/docs">Learn more</a></footer>',
+        "https://example.com/a/",
+      )
+    )[0]!;
+    const pageB = (
+      await run(
+        '<footer class="site-footer"><nav><a class="nav-link" href="/a">Home</a><a class="nav-link is-active" aria-current="page" href="/b">Docs</a></nav><p>Page 7 of 9</p><a href="/docs">Learn more</a></footer>',
+        "https://example.com/b/",
+      )
+    )[0]!;
     const a = pageA.componentOccurrences!.at(-1)!;
     const b = pageB.componentOccurrences!.at(-1)!;
     expect(a.groupable).toBe(true);
@@ -102,34 +109,48 @@ describe("linkTextRule component occurrences", () => {
   });
 
   test("family is stricter than a bare tag match", async () => {
-    const plain = (await run('<footer><a href="/docs">Learn more</a></footer>', "https://example.com/a/"))[0]!;
-    const different = (await run(
-      '<footer><nav><span></span></nav><a href="/docs">Learn more</a></footer>',
-      "https://example.com/b/",
-    ))[0]!;
+    const plain = (
+      await run('<footer><a href="/docs">Learn more</a></footer>', "https://example.com/a/")
+    )[0]!;
+    const different = (
+      await run(
+        '<footer><nav><span></span></nav><a href="/docs">Learn more</a></footer>',
+        "https://example.com/b/",
+      )
+    )[0]!;
     expect(plain.componentOccurrences![0]!.family.key).not.toBe(
       different.componentOccurrences!.at(-1)!.family.key,
     );
   });
 
   test("a component does not span two origins", async () => {
-    const a = (await run('<footer><a href="/docs">Learn more</a></footer>', "https://example.com/a/"))[0]!;
-    const b = (await run('<footer><a href="/docs">Learn more</a></footer>', "https://other.example/a/"))[0]!;
+    const a = (
+      await run('<footer><a href="/docs">Learn more</a></footer>', "https://example.com/a/")
+    )[0]!;
+    const b = (
+      await run('<footer><a href="/docs">Learn more</a></footer>', "https://other.example/a/")
+    )[0]!;
     expect(a.componentOccurrences![0]!.family.key).not.toBe(b.componentOccurrences![0]!.family.key);
     expect(componentFixGroups("a11y/link-text", [a, b])).toHaveLength(2);
   });
 
   test("uses the first valid HTTP(S) base to hash the actual link destination", async () => {
-    const pageA = (await run(
-      '<base href="https://example.com/docs/"><base href="https://ignored.example/"><footer><a href="guide">Learn more</a></footer>',
-    ))[0]!;
-    const pageB = (await run(
-      '<base href="https://example.com/pricing/"><footer><a href="guide">Learn more</a></footer>',
-    ))[0]!;
-    const equivalent = (await run(
-      '<base href="/docs/"><footer><a href="guide">Learn more</a></footer>',
-      "https://example.com/another-page/",
-    ))[0]!;
+    const pageA = (
+      await run(
+        '<base href="https://example.com/docs/"><base href="https://ignored.example/"><footer><a href="guide">Learn more</a></footer>',
+      )
+    )[0]!;
+    const pageB = (
+      await run(
+        '<base href="https://example.com/pricing/"><footer><a href="guide">Learn more</a></footer>',
+      )
+    )[0]!;
+    const equivalent = (
+      await run(
+        '<base href="/docs/"><footer><a href="guide">Learn more</a></footer>',
+        "https://example.com/another-page/",
+      )
+    )[0]!;
     expect(pageA.componentOccurrences?.[0]?.defect.valueHashes.destination).not.toBe(
       pageB.componentOccurrences?.[0]?.defect.valueHashes.destination,
     );
@@ -139,22 +160,30 @@ describe("linkTextRule component occurrences", () => {
   });
 
   test("keeps responsive, locale, and semantic region variants separate", async () => {
-    const desktop = (await run(
-      '<footer class="desktop-only"><a href="/docs">Learn more</a></footer>',
-      "https://example.com/desktop/",
-    ))[0]!.componentOccurrences![0]!;
-    const mobile = (await run(
-      '<footer class="mobile-only"><a href="/docs">Learn more</a></footer>',
-      "https://example.com/mobile/",
-    ))[0]!.componentOccurrences![0]!;
-    const localized = (await run(
-      '<footer class="desktop-only" lang="fr" dir="ltr"><a href="/docs">Learn more</a></footer>',
-      "https://example.com/fr/",
-    ))[0]!.componentOccurrences![0]!;
-    const semantic = (await run(
-      '<footer class="desktop-only" aria-label="Secondary footer"><a href="/docs">Learn more</a></footer>',
-      "https://example.com/secondary/",
-    ))[0]!.componentOccurrences![0]!;
+    const desktop = (
+      await run(
+        '<footer class="desktop-only"><a href="/docs">Learn more</a></footer>',
+        "https://example.com/desktop/",
+      )
+    )[0]!.componentOccurrences![0]!;
+    const mobile = (
+      await run(
+        '<footer class="mobile-only"><a href="/docs">Learn more</a></footer>',
+        "https://example.com/mobile/",
+      )
+    )[0]!.componentOccurrences![0]!;
+    const localized = (
+      await run(
+        '<footer class="desktop-only" lang="fr" dir="ltr"><a href="/docs">Learn more</a></footer>',
+        "https://example.com/fr/",
+      )
+    )[0]!.componentOccurrences![0]!;
+    const semantic = (
+      await run(
+        '<footer class="desktop-only" aria-label="Secondary footer"><a href="/docs">Learn more</a></footer>',
+        "https://example.com/secondary/",
+      )
+    )[0]!.componentOccurrences![0]!;
     for (const variant of [mobile, localized, semantic]) {
       expect(variant.variant.key).not.toBe(desktop.variant.key);
       expect(variant.region.structuralSignature).not.toBe(desktop.region.structuralSignature);
@@ -315,22 +344,30 @@ describe("linkTextRule component occurrences", () => {
   });
 
   test("scopes navigation identity and slots to enclosing header or footer composition", async () => {
-    const headerA = (await run(
-      '<header><nav><a href="/docs">Learn more</a></nav></header>',
-      "https://example.com/header-a/",
-    ))[0]!;
-    const headerB = (await run(
-      '<header><nav><a href="/docs">Learn more</a></nav></header>',
-      "https://example.com/header-b/",
-    ))[0]!;
-    const footerOnly = (await run(
-      '<footer><nav><a href="/docs">Learn more</a></nav></footer>',
-      "https://example.com/footer/",
-    ))[0]!;
-    const footerAfterHeader = (await run(
-      '<header><nav><a href="/account">Learn more</a></nav></header><footer><nav><a href="/docs">Learn more</a></nav></footer>',
-      "https://example.com/layout/",
-    ))[0]!;
+    const headerA = (
+      await run(
+        '<header><nav><a href="/docs">Learn more</a></nav></header>',
+        "https://example.com/header-a/",
+      )
+    )[0]!;
+    const headerB = (
+      await run(
+        '<header><nav><a href="/docs">Learn more</a></nav></header>',
+        "https://example.com/header-b/",
+      )
+    )[0]!;
+    const footerOnly = (
+      await run(
+        '<footer><nav><a href="/docs">Learn more</a></nav></footer>',
+        "https://example.com/footer/",
+      )
+    )[0]!;
+    const footerAfterHeader = (
+      await run(
+        '<header><nav><a href="/account">Learn more</a></nav></header><footer><nav><a href="/docs">Learn more</a></nav></footer>',
+        "https://example.com/layout/",
+      )
+    )[0]!;
     const footerOccurrence = footerOnly.componentOccurrences![0]!;
     const footerAfterHeaderOccurrence = footerAfterHeader.componentOccurrences![1]!;
 

@@ -13,7 +13,15 @@ import type { PageData, Rule, RuleRunResult } from "@squirrelscan/rules/types";
 import { addChecksToTally, calculateHealthScore, emptyTally } from "../src/scoring";
 
 const probe: Rule = {
-  meta: { id: "test/probe", name: "Probe", description: "test rule", category: "core", scope: "page", severity: "error", weight: 3 },
+  meta: {
+    id: "test/probe",
+    name: "Probe",
+    description: "test rule",
+    category: "core",
+    scope: "page",
+    severity: "error",
+    weight: 3,
+  },
   run: (ctx) => {
     if (ctx.page.url.includes("/boom")) throw new Error(`cannot read ${"x".repeat(400)} of null`);
     return { checks: [{ name: "probe", status: "pass", message: "ok" }] };
@@ -28,17 +36,32 @@ const page = (path: string): PageData => ({
   headers: {},
 });
 
-async function audit(paths: string[]): Promise<{ checks: CheckResult[]; results: Map<string, RuleRunResult> }> {
+async function audit(
+  paths: string[],
+): Promise<{ checks: CheckResult[]; results: Map<string, RuleRunResult> }> {
   const ns: RuleNamespace = { name: "test", rules: [probe] };
-  const runner = new RuleRunner({ config: { rule_options: {}, rules: { enable: ["test/probe"] } }, additionalNamespaces: [ns] });
+  const runner = new RuleRunner({
+    config: { rule_options: {}, rules: { enable: ["test/probe"] } },
+    additionalNamespaces: [ns],
+  });
   const checks: CheckResult[] = [];
   const merged: RuleRunResult = { meta: probe.meta, checks: [] };
   for (const path of paths) {
-    const result = await runner.runPageRules(page(path), { baseUrl: "https://example.com", pages: [], robotsTxt: null, sitemaps: null });
+    const result = await runner.runPageRules(page(path), {
+      baseUrl: "https://example.com",
+      pages: [],
+      robotsTxt: null,
+      sitemaps: null,
+    });
     checks.push(...result.checks);
     merged.checks.push(...(result.ruleResults.get("test/probe")?.checks ?? []));
   }
-  const site = await runner.runSiteRules({ baseUrl: "https://example.com", pages: [], robotsTxt: null, sitemaps: null });
+  const site = await runner.runSiteRules({
+    baseUrl: "https://example.com",
+    pages: [],
+    robotsTxt: null,
+    sitemaps: null,
+  });
   checks.push(...site.checks);
   const summary = site.ruleResults.get("test/probe");
   if (summary) merged.checks.push(...summary.checks.filter((c) => c.name === "test/probe-errors"));
@@ -53,7 +76,12 @@ describe("a rule that throws is not evaluated, never a fail (#1291)", () => {
     const out = await audit([...fine, ...boom]);
     const errors = out.checks.filter((c) => c.name === "test/probe-error");
     expect(errors).toHaveLength(boom.length);
-    for (const c of errors) expect(c).toMatchObject({ status: "skipped", skipReason: "rule-timed-out", details: { errored: true } });
+    for (const c of errors)
+      expect(c).toMatchObject({
+        status: "skipped",
+        skipReason: "rule-timed-out",
+        details: { errored: true },
+      });
     expect(errors[0]!.message.startsWith("Rule error:")).toBe(true);
     expect((errors[0]!.details as { error: string }).error.length).toBeLessThan(260);
     // Identical rows but for the page: the report folds them into ONE check listing the pages.
@@ -61,7 +89,10 @@ describe("a rule that throws is not evaluated, never a fail (#1291)", () => {
     expect(out.checks.some((c) => c.status === "fail")).toBe(false);
     const summary = out.checks.filter((c) => c.name === "test/probe-errors");
     expect(summary).toHaveLength(1);
-    expect(summary[0]).toMatchObject({ status: "info", details: { errored: true, pagesNotChecked: boom.length } });
+    expect(summary[0]).toMatchObject({
+      status: "info",
+      details: { errored: true, pagesNotChecked: boom.length },
+    });
     expect(summary[0]!.message).toContain("defect in squirrelscan");
   });
 
@@ -73,19 +104,26 @@ describe("a rule that throws is not evaluated, never a fail (#1291)", () => {
     expect(tally.failed).toBe(0);
     expect(tally.failUnits).toBe(0);
     expect(tally.passed).toBe(fine.length);
-    expect(calculateHealthScore({ results: withThrows.results }).overall).toBe(calculateHealthScore({ results: without.results }).overall);
+    expect(calculateHealthScore({ results: withThrows.results }).overall).toBe(
+      calculateHealthScore({ results: without.results }).overall,
+    );
   });
 
   test("a second audit on the same runner starts its own count", async () => {
     const ns: RuleNamespace = { name: "test", rules: [probe] };
-    const runner = new RuleRunner({ config: { rule_options: {}, rules: { enable: ["test/probe"] } }, additionalNamespaces: [ns] });
+    const runner = new RuleRunner({
+      config: { rule_options: {}, rules: { enable: ["test/probe"] } },
+      additionalNamespaces: [ns],
+    });
     const site = { baseUrl: "https://example.com", pages: [], robotsTxt: null, sitemaps: null };
     await runner.runPageRules(page("boom1"), site);
     await runner.runPageRules(page("boom2"), site);
     await runner.runSiteRules(site);
     await runner.runPageRules(page("boom3"), site);
     const second = await runner.runSiteRules(site);
-    expect(second.checks.find((c) => c.name === "test/probe-errors")).toMatchObject({ details: { pagesNotChecked: 1 } });
+    expect(second.checks.find((c) => c.name === "test/probe-errors")).toMatchObject({
+      details: { pagesNotChecked: 1 },
+    });
   });
 
   test("a rule that throws on EVERY page it ran on: scores clean, but is named as not checked and gates --fail-on", async () => {
@@ -98,17 +136,39 @@ describe("a rule that throws is not evaluated, never a fail (#1291)", () => {
 
   test("a SITE rule that throws gets the same shape: one skipped row and one summary, no page count", async () => {
     const siteRule: Rule = {
-      meta: { id: "test/site", name: "Site rule", description: "d", category: "core", scope: "site", severity: "error", weight: 3 },
+      meta: {
+        id: "test/site",
+        name: "Site rule",
+        description: "d",
+        category: "core",
+        scope: "site",
+        severity: "error",
+        weight: 3,
+      },
       run: () => {
         throw new Error("site boom");
       },
     };
     const ns: RuleNamespace = { name: "test", rules: [siteRule] };
-    const runner = new RuleRunner({ config: { rule_options: {}, rules: { enable: ["test/site"] } }, additionalNamespaces: [ns] });
-    const site = await runner.runSiteRules({ baseUrl: "https://example.com", pages: [], robotsTxt: null, sitemaps: null });
+    const runner = new RuleRunner({
+      config: { rule_options: {}, rules: { enable: ["test/site"] } },
+      additionalNamespaces: [ns],
+    });
+    const site = await runner.runSiteRules({
+      baseUrl: "https://example.com",
+      pages: [],
+      robotsTxt: null,
+      sitemaps: null,
+    });
     const rows = site.checks.filter((c) => c.name === "test/site-error");
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ status: "skipped", details: { errored: true, error: "site boom" } });
-    expect(site.checks.find((c) => c.name === "test/site-errors")).toMatchObject({ status: "info", details: { errored: true, site: true } });
+    expect(rows[0]).toMatchObject({
+      status: "skipped",
+      details: { errored: true, error: "site boom" },
+    });
+    expect(site.checks.find((c) => c.name === "test/site-errors")).toMatchObject({
+      status: "info",
+      details: { errored: true, site: true },
+    });
   });
 });

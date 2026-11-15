@@ -53,7 +53,9 @@ export const keywordGapsRule: Rule = {
     const envelope = readCloudResult<KeywordGapsResponse>(ctx.cloudResults, "keyword-gaps");
     if (!envelope || envelope.status === "skipped" || !envelope.data) {
       const reason =
-        envelope?.status === "skipped" ? (envelope.skipReason ?? "not-prefetched") : "not-prefetched";
+        envelope?.status === "skipped"
+          ? (envelope.skipReason ?? "not-prefetched")
+          : "not-prefetched";
       checks.push({
         name: "keyword-gaps",
         status: "skipped",

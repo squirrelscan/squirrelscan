@@ -60,7 +60,7 @@ describe("reliability/js-errors pages without runtime data (#704)", () => {
     });
     expect(rule?.hint).toContain("no runtime data");
     expect(notCheckedLines(report())[0]).toStartWith(
-      "Not checked: JavaScript Errors and Failed Runtime Requests."
+      "Not checked: JavaScript Errors and Failed Runtime Requests.",
     );
   });
 

@@ -81,7 +81,14 @@ async function auditPaths(engine: "v1" | "v2", respectRobots: boolean): Promise<
       if (engine === "v1") {
         const stored = yield* storage.getPages(crawlId);
         const siteContext = yield* buildSiteContext(stored);
-        return yield* runRulesOnStorage(storage, crawlId, siteContext, config, preRules.assets, scope);
+        return yield* runRulesOnStorage(
+          storage,
+          crawlId,
+          siteContext,
+          config,
+          preRules.assets,
+          scope,
+        );
       }
       return yield* runStreamingRules(storage, crawlId, config, preRules.assets, scope);
     }) as unknown as Effect.Effect<unknown, never, never>,

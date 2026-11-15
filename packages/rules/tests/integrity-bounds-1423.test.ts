@@ -12,10 +12,18 @@ const url = "https://example.com/";
 function context(body: string, head = ""): RuleContext {
   const html = `<!doctype html><html><head><title>Fixture</title>${head}</head><body><main><h1>Fixture</h1>${body}</main></body></html>`;
   const parsed = parsePage(html, url);
-  return { page: { url, html, statusCode: 200, loadTime: 0, headers: {}, parsed }, parsed, options: {} };
+  return {
+    page: { url, html, statusCode: 200, loadTime: 0, headers: {}, parsed },
+    parsed,
+    options: {},
+  };
 }
-const brand = (body: string, head = ""): string | null => detectBrandImpersonation(context(body, head))?.brand ?? null;
-const details = (checks: Array<{ name?: string; details?: Record<string, unknown> }>, name: string) => checks.find((c) => c.name === name)?.details;
+const brand = (body: string, head = ""): string | null =>
+  detectBrandImpersonation(context(body, head))?.brand ?? null;
+const details = (
+  checks: Array<{ name?: string; details?: Record<string, unknown> }>,
+  name: string,
+) => checks.find((c) => c.name === name)?.details;
 
 const GEOM = "position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:99999";
 
@@ -23,7 +31,8 @@ const GEOM = "position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:99999
 
 test("a hidden decoy after more than 8,192 characters of style attribute is still read as hidden", () => {
   const filler = "a:b;".repeat(2_500); // 10,000 characters
-  const link = (style: string) => `<a href="${OFF}">Sign in with <span style="${style}">x</span>Google</a>`;
+  const link = (style: string) =>
+    `<a href="${OFF}">Sign in with <span style="${style}">x</span>Google</a>`;
   expect(brand(link(`${filler}display:none`))).toBe("Google");
   expect(brand(link(`${filler}visibility:hidden`))).toBe("Google");
   expect(brand(link(`${filler}font-size:0`))).toBe("Google");
@@ -35,10 +44,19 @@ test("a hidden decoy after more than 8,192 characters of style attribute is stil
 test("a style attribute past 1 MB reports the control as not read in full, and the read stays fast on hostile styles", async () => {
   const huge = `${"a:b;".repeat(280_000)}display:none`;
   const started = performance.now();
-  const { checks } = await run(`<a href="${OFF}" aria-label="Sign in">Sign in with <span style="${huge}">x</span>Google</a>`);
-  expect(details(checks, "brand-impersonation")).toMatchObject({ scanTruncated: true, controlsUnread: 1 });
+  const { checks } = await run(
+    `<a href="${OFF}" aria-label="Sign in">Sign in with <span style="${huge}">x</span>Google</a>`,
+  );
+  expect(details(checks, "brand-impersonation")).toMatchObject({
+    scanTruncated: true,
+    controlsUnread: 1,
+  });
   // semicolons followed by long runs of spaces, and a megabyte of separators: linear
-  for (const style of [`;${" ".repeat(900_000)}display:none`, ";".repeat(900_000), `${"; ".repeat(400_000)}display:none`]) {
+  for (const style of [
+    `;${" ".repeat(900_000)}display:none`,
+    ";".repeat(900_000),
+    `${"; ".repeat(400_000)}display:none`,
+  ]) {
     await run(`<a href="${OFF}">Sign in with <span style="${style}">x</span>Google</a>`);
   }
   expect(performance.now() - started).toBeLessThan(15_000);
@@ -66,13 +84,19 @@ test("a rule with a padded body (4,100 characters) is read for the overlay geome
 
 test("a selector of 300 to 2,048 characters is read", () => {
   const selector = `iframe${".cover".repeat(200)}`; // 1,206 characters
-  expect(detectFakeAuthOverlay(context(overlayFrame, `<style>${selector}{${GEOM}}</style>`))).not.toBeNull();
+  expect(
+    detectFakeAuthOverlay(context(overlayFrame, `<style>${selector}{${GEOM}}</style>`)),
+  ).not.toBeNull();
 });
 
 test("a rule past the bounds that could match an iframe on the page makes the CSS truncated, a rule for something else does not", async () => {
   const bigBody = `--p:${"a".repeat(300_000)};`;
   const bigSelector = `iframe${".cover".repeat(500)}`; // 3,006 characters
-  for (const head of [`<style>.cover{${bigBody}${GEOM}}</style>`, `<style>#google-auth{${bigBody}${GEOM}}</style>`, `<style>${bigSelector}{${GEOM}}</style>`]) {
+  for (const head of [
+    `<style>.cover{${bigBody}${GEOM}}</style>`,
+    `<style>#google-auth{${bigBody}${GEOM}}</style>`,
+    `<style>${bigSelector}{${GEOM}}</style>`,
+  ]) {
     const { checks } = await run(overlayFrame, head);
     expect(details(checks, "fake-auth-overlay")?.cssTruncated, head.slice(0, 40)).toBe(true);
   }
@@ -90,21 +114,43 @@ test("a link resolved against a <base href> on another host is judged by that ho
   const base = '<base href="https://evil.example/">';
   expect(brand('<a href="/signin">Sign in with Google</a>', base)).toBe("Google");
   expect(brand('<a href="signin">Sign in with Google</a>', base)).toBe("Google");
-  expect(brand('<a href="../x/login" aria-label="Sign in with Google"><svg></svg></a>', base)).toBe("Google");
-  expect(brand('<form action="/login" method="post"><button>Continue with Google</button></form>', base)).toBe("Google");
-  expect(brand('<form method="post"><button formaction="/go">Sign in with Google</button></form>', base)).toBe("Google");
+  expect(brand('<a href="../x/login" aria-label="Sign in with Google"><svg></svg></a>', base)).toBe(
+    "Google",
+  );
+  expect(
+    brand('<form action="/login" method="post"><button>Continue with Google</button></form>', base),
+  ).toBe("Google");
+  expect(
+    brand('<form method="post"><button formaction="/go">Sign in with Google</button></form>', base),
+  ).toBe("Google");
   // without the base, or with one that stays on the site, the same links are the site's own
   expect(brand('<a href="/signin">Sign in with Google</a>')).toBeNull();
-  for (const own of ['<base href="/app/">', '<base href="https://example.com/app/">', '<base href="https://www.example.com/">', "<base target=_blank>", '<base href="data:text/html,x">', '<base href="javascript:void(0)">']) {
+  for (const own of [
+    '<base href="/app/">',
+    '<base href="https://example.com/app/">',
+    '<base href="https://www.example.com/">',
+    "<base target=_blank>",
+    '<base href="data:text/html,x">',
+    '<base href="javascript:void(0)">',
+  ]) {
     expect([own, brand('<a href="/signin">Sign in with Google</a>', own)]).toEqual([own, null]);
   }
 });
 
 test("the first <base href> is the one a browser uses; an empty form action goes to the page, not to the base", () => {
   const link = '<a href="/signin">Sign in with Google</a>';
-  expect(brand(link, '<base href="https://evil.example/"><base href="https://example.com/">')).toBe("Google");
-  expect(brand(link, '<base href="https://example.com/"><base href="https://evil.example/">')).toBeNull();
-  expect(brand('<form method="post"><button>Sign in with Google</button></form>', '<base href="https://evil.example/">')).toBeNull();
+  expect(brand(link, '<base href="https://evil.example/"><base href="https://example.com/">')).toBe(
+    "Google",
+  );
+  expect(
+    brand(link, '<base href="https://example.com/"><base href="https://evil.example/">'),
+  ).toBeNull();
+  expect(
+    brand(
+      '<form method="post"><button>Sign in with Google</button></form>',
+      '<base href="https://evil.example/">',
+    ),
+  ).toBeNull();
 });
 
 test("a relative iframe src resolves against the base too", () => {
@@ -119,9 +165,13 @@ test("a plainly local link with no cue attribute is read when a <base href> move
   // with the base the label is the only cue and the link is not the site's own: found; without it the link is skipped unread
   const link = '<a href="/signin">Sign in with Google</a>';
   const moved = await run(link, '<base href="https://evil.example/">');
-  expect(moved.checks.some((c) => c.name === "brand-impersonation" && c.details?.brand === "Google")).toBe(true);
+  expect(
+    moved.checks.some((c) => c.name === "brand-impersonation" && c.details?.brand === "Google"),
+  ).toBe(true);
   const own = await run(link);
-  expect(own.checks.some((c) => c.name === "brand-impersonation" && c.details?.brand === "Google")).toBe(false);
+  expect(
+    own.checks.some((c) => c.name === "brand-impersonation" && c.details?.brand === "Google"),
+  ).toBe(false);
 }, 60_000);
 
 // ── review round on #1526: selector lists, hidden-class signal, rank under a moved base, <base> placement ──────────────────
@@ -129,8 +179,16 @@ test("a plainly local link with no cue attribute is read when a <base href> move
 test("a selector list over 2,048 characters of unrelated parts still reads the part that matches", () => {
   const unrelated = Array.from({ length: 400 }, (_, i) => `.unrelated-${i}-xxxxxxxx`).join(",");
   expect(unrelated.length).toBeGreaterThan(2_048);
-  expect(detectFakeAuthOverlay(context(overlayFrame, `<style>${unrelated},#google-auth{${GEOM}}</style>`))).not.toBeNull();
-  expect(detectFakeAuthOverlay(context(overlayFrame, `<style>#google-auth,${unrelated}{${GEOM}}</style>`))).not.toBeNull();
+  expect(
+    detectFakeAuthOverlay(
+      context(overlayFrame, `<style>${unrelated},#google-auth{${GEOM}}</style>`),
+    ),
+  ).not.toBeNull();
+  expect(
+    detectFakeAuthOverlay(
+      context(overlayFrame, `<style>#google-auth,${unrelated}{${GEOM}}</style>`),
+    ),
+  ).not.toBeNull();
 });
 
 test("an oversized part of a selector list, a rule body or a prelude is a signal when the page has an iframe", async () => {
@@ -163,7 +221,9 @@ test("under a moved <base>, a local link with no cue is still read when the page
       const body = `${"<b>x</b>".repeat(n)}<a href="${href}">Sign in with Google</a>`;
       const { checks } = await run(body, base);
       const d = details(checks, "brand-impersonation");
-      const found = checks.some((c) => c.name === "brand-impersonation" && c.details?.brand === "Google");
+      const found = checks.some(
+        (c) => c.name === "brand-impersonation" && c.details?.brand === "Google",
+      );
       // either the control is read and found, or the page says it was cut: never silent
       expect([href, n, found || d?.scanTruncated === true]).toEqual([href, n, true]);
     }
@@ -199,7 +259,9 @@ test("tens of thousands of <base> elements, flat in one svg or nested deep in an
   const base = '<base href="https://evil.example/">';
   const link = '<a href="/signin">Sign in with Google</a>';
   const started = performance.now();
-  await run(`<svg>${"<g>".repeat(4_000)}${base.repeat(16_000)}${"</g>".repeat(4_000)}</svg>${link}`);
+  await run(
+    `<svg>${"<g>".repeat(4_000)}${base.repeat(16_000)}${"</g>".repeat(4_000)}</svg>${link}`,
+  );
   await run(`<svg>${base.repeat(80_000)}</svg>${link}`);
   expect(performance.now() - started).toBeLessThan(10_000);
 }, 120_000);
@@ -211,42 +273,62 @@ test("a <base> inside <svg><foreignObject> is an HTML element and is honoured; o
   expect(brand(`<svg><g>${evil}</g></svg>${link}`)).toBeNull();
   expect(brand(`<math>${evil}</math>${link}`)).toBeNull();
   expect(brand(`<math><mrow>${evil}</mrow></math>${link}`)).toBeNull();
-  expect(brand(`<noscript><svg><foreignObject>${evil}</foreignObject></svg></noscript>${link}`)).toBeNull();
+  expect(
+    brand(`<noscript><svg><foreignObject>${evil}</foreignObject></svg></noscript>${link}`),
+  ).toBeNull();
 });
 
 test("under a moved <base>, a local link whose text read is cut is counted: it ranks like an off-site link", async () => {
   const body = `<a href="/go">${"<b>x</b>".repeat(6_000)}Sign in with Google</a>`;
   const moved = await run(body, '<base href="https://evil.example/">');
-  expect(details(moved.checks, "brand-impersonation")).toMatchObject({ scanTruncated: true, controlsUnread: 1 });
+  expect(details(moved.checks, "brand-impersonation")).toMatchObject({
+    scanTruncated: true,
+    controlsUnread: 1,
+  });
   // the same link without the base is the site's own and is not read
   const own = await run(body);
   // not a finding or a note: only the clean pass the rule now records (#1741)
-  expect(own.checks.some((c) => c.name === "brand-impersonation" && c.status !== "pass")).toBe(false);
+  expect(own.checks.some((c) => c.name === "brand-impersonation" && c.status !== "pass")).toBe(
+    false,
+  );
 }, 60_000);
 
 test("hiddenCssTruncated: not on a page with no control, and the note names the cause", async () => {
   const pad = `--p:${"a".repeat(300_000)};`;
   const none = await run("<p>no controls here</p>", `<style>.h{${pad}display:none}</style>`);
-  expect(none.checks.some((c) => c.name === "brand-impersonation" && c.status !== "pass")).toBe(false);
-  const clean = await run('<a href="/about" aria-label="Sign in">Sign in</a>', `<style>.h{${pad}display:none}</style>`);
-  const note = clean.checks.find((c) => c.name === "brand-impersonation" && c.status !== "pass") as { message?: string; details?: Record<string, unknown> } | undefined;
+  expect(none.checks.some((c) => c.name === "brand-impersonation" && c.status !== "pass")).toBe(
+    false,
+  );
+  const clean = await run(
+    '<a href="/about" aria-label="Sign in">Sign in</a>',
+    `<style>.h{${pad}display:none}</style>`,
+  );
+  const note = clean.checks.find((c) => c.name === "brand-impersonation" && c.status !== "pass") as
+    | { message?: string; details?: Record<string, unknown> }
+    | undefined;
   expect(note?.details).toMatchObject({ hiddenCssTruncated: true });
   expect(note?.message).toContain("a CSS rule too large to read may hide text in a sign-in label");
   // a finding carries the detail as well
   const hit = await run(REAL, `<style>.h{${pad}display:none}</style>`);
-  expect(details(hit.checks, "brand-impersonation")).toMatchObject({ brand: "Google", hiddenCssTruncated: true });
+  expect(details(hit.checks, "brand-impersonation")).toMatchObject({
+    brand: "Google",
+    hiddenCssTruncated: true,
+  });
 }, 60_000);
 
 test("a password form with an empty action under a moved <base> posts to the page itself, not to the base host", () => {
-  const form = '<form method="post"><input type="password"><button>Sign in with Google</button></form>';
+  const form =
+    '<form method="post"><input type="password"><button>Sign in with Google</button></form>';
   expect(brand(form, '<base href="https://evil.example/">')).toBeNull();
   // an explicit relative action does follow the base
-  const relative = '<form method="post" action="/login"><input type="password"><button>Sign in with Google</button></form>';
+  const relative =
+    '<form method="post" action="/login"><input type="password"><button>Sign in with Google</button></form>';
   expect(brand(relative, '<base href="https://evil.example/">')).toBe("Google");
 });
 
 test("the destinations named in a finding leave out a password form's own page: an empty action is not the base host", () => {
-  const body = '<form method="post"><input type="password"></form><a href="https://other.example/x">Sign in with Google</a>';
+  const body =
+    '<form method="post"><input type="password"></form><a href="https://other.example/x">Sign in with Google</a>';
   const hit = detectBrandImpersonation(context(body, '<base href="https://evil.example/">'));
   expect(hit?.brand).toBe("Google");
   expect(hit?.reason).toContain("other.example");
@@ -257,7 +339,8 @@ test("which <base> wins does not depend on how deeply it is nested (no depth cap
   const link = '<a href="/signin">Sign in with Google</a>';
   const evil = '<base href="https://evil.example/">';
   const local = '<base href="/">';
-  const wrap = (open: string, close: string, depth: number, inner: string) => `${open}${"<div>".repeat(depth)}${inner}${"</div>".repeat(depth)}${close}`;
+  const wrap = (open: string, close: string, depth: number, inner: string) =>
+    `${open}${"<div>".repeat(depth)}${inner}${"</div>".repeat(depth)}${close}`;
   for (const depth of [63, 64, 65, 200, 2_000]) {
     const ignoredHosts: Array<[string, (inner: string) => string]> = [
       ["noscript", (inner) => wrap("<noscript>", "</noscript>", depth, inner)],

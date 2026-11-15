@@ -237,7 +237,9 @@ export function devTierOf(host: string, apex: string): "high" | "low" | null {
   // reaches this function, and `getDomain` is the expensive half; almost none of
   // them carry a tier label, so this ordering is what keeps the scan cheap.
   const labels = name.split(".");
-  if (!labels.some((l) => HIGH_CONFIDENCE_TIER_LABELS.has(l) || LOW_CONFIDENCE_TIER_LABELS.has(l))) {
+  if (
+    !labels.some((l) => HIGH_CONFIDENCE_TIER_LABELS.has(l) || LOW_CONFIDENCE_TIER_LABELS.has(l))
+  ) {
     return null;
   }
   if (registrableDomain(name) !== apex) return null;
@@ -787,15 +789,12 @@ export const devLeakageRule: Rule = {
     // artifact is a broken reference a visitor can hit right now, so it fails. A
     // mention in copy is embarrassing rather than broken, and a preview host
     // that could belong to anyone is a judgement call, so both warn.
-    const broken = hits.some(
-      (h) => h.source === "attribute" && h.own,
-    );
+    const broken = hits.some((h) => h.source === "attribute" && h.own);
     const status = broken ? "fail" : "warn";
 
     // Lead with the row that decided the status, so the example line is the
     // clickable reference rather than whichever mention came first.
-    const leading =
-      rows.find((r) => r.inAttribute) ?? (rows[0] as DevLeakageSummaryRow);
+    const leading = rows.find((r) => r.inAttribute) ?? (rows[0] as DevLeakageSummaryRow);
 
     checks.push({
       name,

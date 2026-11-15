@@ -298,13 +298,16 @@ export function targetedCoverageFor(
     for (let offset = 0; ; offset += TARGETED_PAGE_BATCH) {
       const batch = yield* storage.getPages(crawlId, { limit: TARGETED_PAGE_BATCH, offset });
       if (batch.length === 0) break;
-      for (const page of batch) if (isRedirectSourcePage(page)) redirectSources.push(page.normalizedUrl);
+      for (const page of batch)
+        if (isRedirectSourcePage(page)) redirectSources.push(page.normalizedUrl);
       if (batch.length < TARGETED_PAGE_BATCH) break;
     }
     const stats = yield* storage.getStats(crawlId);
     return targetedCoverage(entries, redirectSources, stats?.targetsOverLimit ?? 0);
   }).pipe(
-    Effect.catchAll(() => Effect.succeed({ requested: 0, audited: 0, unaudited: [] } as ScanScopeTargeted)),
+    Effect.catchAll(() =>
+      Effect.succeed({ requested: 0, audited: 0, unaudited: [] } as ScanScopeTargeted),
+    ),
   );
 }
 
@@ -785,7 +788,9 @@ export function buildV1Report(
         const parsed = ruleResults.parsedPages.get(page.normalizedUrl) ?? null;
         const pageChecks = [
           ...(ruleResults.pageResults.get(page.normalizedUrl) ?? []),
-          ...(variantsOfCanonical.get(page.normalizedUrl) ?? []).flatMap((v) => ruleResults.pageResults.get(v) ?? []),
+          ...(variantsOfCanonical.get(page.normalizedUrl) ?? []).flatMap(
+            (v) => ruleResults.pageResults.get(v) ?? [],
+          ),
         ];
 
         if (parsed) {
@@ -928,7 +933,9 @@ export function buildV1Report(
       ...(variantPages > 0
         ? {
             canonicalVariants: variantPages,
-            canonicalVariantPages: [...variantOf].slice(0, 100).map(([page, canonical]) => ({ page, canonical })),
+            canonicalVariantPages: [...variantOf]
+              .slice(0, 100)
+              .map(([page, canonical]) => ({ page, canonical })),
           }
         : {}),
       // #1003: 500 matches the publish schema's siteChecks cap
@@ -1192,7 +1199,9 @@ export function buildV2Report(
     // Missing alt text — same source + order as v1 (getImages × appearances),
     // capped at maxSummaryItems. Batch query when available, else per-image.
     const imageAppearancesSpan = logger.traceStart("v2:imageAppearances");
-    const images = yield* storage.getImages(crawlId).pipe(Effect.catchAll(() => Effect.succeed([])));
+    const images = yield* storage
+      .getImages(crawlId)
+      .pipe(Effect.catchAll(() => Effect.succeed([])));
     const hasBatchImageMethod = "getAllImageAppearancesBySrc" in storage;
     const allImageAppearancesBySrc: Map<string, ImageAppearanceRecord[]> = hasBatchImageMethod
       ? yield* (storage as import("@squirrelscan/crawler").SQLiteStorage)

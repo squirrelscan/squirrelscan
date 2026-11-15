@@ -59,7 +59,8 @@ export const lcpHintsRule: Rule = {
         observation: {
           mode: "static",
           applicability: "applicable",
-          uncertainty: "The likely LCP candidate is inferred from markup; LCP was not measured in a browser or field data.",
+          uncertainty:
+            "The likely LCP candidate is inferred from markup; LCP was not measured in a browser or field data.",
         },
       });
     } else {

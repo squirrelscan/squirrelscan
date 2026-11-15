@@ -58,7 +58,7 @@ function unnamedDialogItems(
   dialogs: Iterable<Element>,
   describe: (el: Element) => string,
   isNamed: (el: Element) => boolean,
-  unnamed: UnnamedControls<CheckItem>
+  unnamed: UnnamedControls<CheckItem>,
 ): void {
   const seen = new Map<string, number>();
   const used = new Set<string>();
@@ -98,14 +98,12 @@ export const ariaDialogNameRule: Rule = {
     const checks: CheckResult[] = [];
 
     // ARIA dialogs: explicit role — require accessible name (fail)
-    const ariaDialogs = doc.querySelectorAll(
-      '[role="dialog"], [role="alertdialog"]'
-    );
+    const ariaDialogs = doc.querySelectorAll('[role="dialog"], [role="alertdialog"]');
 
     // Native <dialog> without explicit ARIA role — browsers auto-announce,
     // so missing name is a recommendation (warn), not a hard fail
     const nativeDialogs = doc.querySelectorAll(
-      'dialog:not([role="dialog"]):not([role="alertdialog"])'
+      'dialog:not([role="dialog"]):not([role="alertdialog"])',
     );
 
     if (ariaDialogs.length === 0 && nativeDialogs.length === 0) {
@@ -142,7 +140,7 @@ export const ariaDialogNameRule: Rule = {
         return describeDialog(dialog, role, `${dialog.tagName.toLowerCase()}[role="${role}"]`);
       },
       isNamed,
-      aria
+      aria,
     );
     const unnamed = aria.failures;
 
@@ -152,8 +150,7 @@ export const ariaDialogNameRule: Rule = {
         status: "fail",
         message: `${unnamed.length} ARIA dialog(s) without accessible names`,
         items: unnamed.slice(0, 10),
-        details:
-          unnamed.length > 10 ? { additional: unnamed.length - 10 } : undefined,
+        details: unnamed.length > 10 ? { additional: unnamed.length - 10 } : undefined,
       });
     }
     if (aria.unconfirmed.length > 0) {
@@ -161,8 +158,8 @@ export const ariaDialogNameRule: Rule = {
         unconfirmedRow(
           "aria-dialog-name",
           "ARIA dialog(s) without accessible names",
-          aria.unconfirmed
-        )
+          aria.unconfirmed,
+        ),
       );
     }
     if (unnamed.length === 0 && aria.unconfirmed.length === 0 && ariaDialogs.length > 0) {
@@ -187,7 +184,7 @@ export const ariaDialogNameRule: Rule = {
       nativeDialogs,
       (dialog) => describeDialog(dialog, "dialog", "dialog"),
       isNamed,
-      native
+      native,
     );
     const unnamedNative = native.failures;
 
@@ -197,10 +194,7 @@ export const ariaDialogNameRule: Rule = {
         status: "warn",
         message: `${unnamedNative.length} native <dialog>(s) without accessible names`,
         items: unnamedNative.slice(0, 10),
-        details:
-          unnamedNative.length > 10
-            ? { additional: unnamedNative.length - 10 }
-            : undefined,
+        details: unnamedNative.length > 10 ? { additional: unnamedNative.length - 10 } : undefined,
       });
     }
     if (native.unconfirmed.length > 0) {
@@ -208,8 +202,8 @@ export const ariaDialogNameRule: Rule = {
         unconfirmedRow(
           "dialog-name",
           "native <dialog>(s) without accessible names",
-          native.unconfirmed
-        )
+          native.unconfirmed,
+        ),
       );
     }
     if (unnamedNative.length === 0 && native.unconfirmed.length === 0 && nativeDialogs.length > 0) {

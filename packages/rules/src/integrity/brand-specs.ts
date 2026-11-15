@@ -75,20 +75,24 @@ export const BRAND_SPECS: BrandSpec[] = [
     ],
     // Azure AD B2C and Entra External ID tenants are tenant-owned: only the site's own tenant (by name), on an authorize path.
     legitEndpoints: [
-      { host: "b2clogin.com", suffix: true, path: /\/oauth2\/(?:v2\.0\/)?authorize(?:\/|$)/, tenant: /^\.b2clogin\.com$/ },
-      { host: "ciamlogin.com", suffix: true, path: /\/oauth2\/(?:v2\.0\/)?authorize(?:\/|$)/, tenant: /^\.ciamlogin\.com$/ },
+      {
+        host: "b2clogin.com",
+        suffix: true,
+        path: /\/oauth2\/(?:v2\.0\/)?authorize(?:\/|$)/,
+        tenant: /^\.b2clogin\.com$/,
+      },
+      {
+        host: "ciamlogin.com",
+        suffix: true,
+        path: /\/oauth2\/(?:v2\.0\/)?authorize(?:\/|$)/,
+        tenant: /^\.ciamlogin\.com$/,
+      },
     ],
   },
   {
     brand: "Calendly",
     lexicon: ["calendly"],
-    actionCues: [
-      "discovery call",
-      "book a call",
-      "schedule",
-      "sign in",
-      "log in",
-    ],
+    actionCues: ["discovery call", "book a call", "schedule", "sign in", "log in"],
     legitHosts: ["calendly.com"],
   },
   {

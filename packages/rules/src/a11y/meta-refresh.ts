@@ -37,10 +37,13 @@ export function parseRefreshHeader(raw: string): RefreshHeader | null {
 }
 
 /** The `Refresh` header, whatever its letter case. Null when absent or unparseable. */
-export function readRefreshHeader(headers: Record<string, string> | undefined): RefreshHeader | null {
+export function readRefreshHeader(
+  headers: Record<string, string> | undefined,
+): RefreshHeader | null {
   if (!headers) return null;
   for (const [name, value] of Object.entries(headers)) {
-    if (name.toLowerCase() === "refresh" && typeof value === "string") return parseRefreshHeader(value);
+    if (name.toLowerCase() === "refresh" && typeof value === "string")
+      return parseRefreshHeader(value);
   }
   return null;
 }
@@ -81,7 +84,10 @@ export function gradeRefreshHeader(h: RefreshHeader): {
     name: "refresh-header-reload",
     status: h.delay < 20 ? "fail" : "warn",
     message: `Page reloads every ${h.delay} seconds (Refresh header)`,
-    issue: h.delay < 20 ? "Frequent refresh disrupts screen reader users" : "Provide user control over refresh",
+    issue:
+      h.delay < 20
+        ? "Frequent refresh disrupts screen reader users"
+        : "Provide user control over refresh",
   };
 }
 

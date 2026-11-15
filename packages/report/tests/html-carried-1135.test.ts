@@ -98,7 +98,9 @@ describe("renderHtml carried-forward provenance (#1135/#1136)", () => {
         lastSeenAt: 1,
       },
     ];
-    const html = renderHtml(baseReport({ "legal/cookie-consent": rule("legal/cookie-consent", checks) }));
+    const html = renderHtml(
+      baseReport({ "legal/cookie-consent": rule("legal/cookie-consent", checks) }),
+    );
     expect(html).toContain("Fixed on all 5 pages checked this run; 1 page pending re-check.");
   });
 
@@ -162,7 +164,7 @@ describe("renderHtml carried-forward provenance (#1135/#1136)", () => {
     // plain text in the copy textarea, so each page URL appears at most
     // twice. Page #250 (well past the cap) must not appear anywhere.
     expect(html).not.toContain("https://example.com/p250");
-    const occurrencesOfP0 = html.split("https://example.com/p0\"").length - 1; // href="...p0"
+    const occurrencesOfP0 = html.split('https://example.com/p0"').length - 1; // href="...p0"
     expect(occurrencesOfP0).toBe(1);
     // Bound the total count of materialized page-URL occurrences: 200 as
     // hrefs + 200 as textarea plain text = 400, not ~2,086 (1,043 x 2).

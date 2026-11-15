@@ -259,7 +259,7 @@ export function redactUrlsInText(text: string): string {
     out.push(
       endsOpen
         ? token.slice(0, start) + URL_PLACEHOLDER
-        : token.slice(0, start) + redactTokenCore(token.slice(start, end)) + token.slice(end)
+        : token.slice(0, start) + redactTokenCore(token.slice(start, end)) + token.slice(end),
     );
   }
   return out.join("");

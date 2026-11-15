@@ -34,7 +34,10 @@ describe("addWafBlockedPage: the seed counts once", () => {
     summary = addWafBlockedPage(summary, blocked("https://example.com/a"), false);
     summary = addWafBlockedPage(summary, blocked("https://example.com/b"), false);
     expect(summary.total).toBe(3);
-    expect(summary.pages.map((p) => p.url)).toEqual(["https://example.com/a", "https://example.com/b"]);
+    expect(summary.pages.map((p) => p.url)).toEqual([
+      "https://example.com/a",
+      "https://example.com/b",
+    ]);
   });
 });
 
@@ -52,7 +55,10 @@ describe("addWafSuspectPage", () => {
     summary = addWafSuspectPage(summary, suspect("https://example.com/a"));
     summary = addWafSuspectPage(summary, suspect("https://example.com/b"));
     expect(summary.total).toBe(3);
-    expect(summary.pages.map((p) => p.url)).toEqual(["https://example.com/a", "https://example.com/b"]);
+    expect(summary.pages.map((p) => p.url)).toEqual([
+      "https://example.com/a",
+      "https://example.com/b",
+    ]);
     expect(summary.providers).toEqual(["Cloudflare"]);
   });
 

@@ -78,7 +78,9 @@ const MAP: EntityMap = {
 describe("reportUrl", () => {
   test("without it the report links to the reports host and has no canonical, as before", () => {
     const html = renderHtml(report(), { reportId: "01JREPORT" });
-    expect(html).toContain('<meta property="og:url" content="https://reports.squirrelscan.com/01JREPORT"/>');
+    expect(html).toContain(
+      '<meta property="og:url" content="https://reports.squirrelscan.com/01JREPORT"/>',
+    );
     expect(html).toContain('href="https://reports.squirrelscan.com/01JREPORT.md"');
     expect(html).not.toContain('rel="canonical"');
   });
@@ -153,14 +155,19 @@ describe("reportInlineScripts", () => {
     const reports = [
       report(),
       // The coverage notice carries its own dismiss script.
-      { ...report({ scanScope: scope }), sitemaps: { totalUrls: 900, missingPages: [] } } as AuditReport,
+      {
+        ...report({ scanScope: scope }),
+        sitemaps: { totalUrls: 900, missingPages: [] },
+      } as AuditReport,
       // The entity viewer carries its own script.
       report({ entityMap: MAP }),
     ];
     const known = new Set(reportInlineScripts());
     const seen = new Set<string>();
     for (const r of reports) {
-      for (const body of executableScripts(renderHtml(r, { reportId: "01JREPORT", offline: false }))) {
+      for (const body of executableScripts(
+        renderHtml(r, { reportId: "01JREPORT", offline: false }),
+      )) {
         expect(known.has(body)).toBe(true);
         seen.add(body);
       }

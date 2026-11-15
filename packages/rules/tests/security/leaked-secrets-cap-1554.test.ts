@@ -147,7 +147,9 @@ describe("the sink dedupes by value with the rule's precedence before it counts 
     const text = Array.from({ length: 1_600 }, () => `var k="${v2.stripe()}";`).join("");
     expect(scanContent(text, "inline-script", URL_).length).toBeGreaterThan(1_500);
     const blob = Buffer.from(text).toString("base64");
-    expect(scanContent(`var d="${blob}";`, "inline-script", URL_).length).toBeGreaterThan(PAGE_FINDINGS_CAP);
+    expect(scanContent(`var d="${blob}";`, "inline-script", URL_).length).toBeGreaterThan(
+      PAGE_FINDINGS_CAP,
+    );
   });
 
   test("the higher precedence wins a value, the last of equals, and it keeps the first place", () => {
@@ -304,7 +306,8 @@ describe("the rule: no spread, one cap with the report, and the omitted count is
       collectedSignals: { pages },
       ...extra,
     } as unknown as RuleContext);
-  const named = (r: Awaited<ReturnType<typeof run>>, name: string) => r.checks.find((c) => c.name === name);
+  const named = (r: Awaited<ReturnType<typeof run>>, name: string) =>
+    r.checks.find((c) => c.name === name);
 
   test("a page record with far more findings than an argument list can hold does not throw, and other pages still report", async () => {
     const hostile = signal("<html><body>x</body></html>", "https://shop.acme.test/dump");
@@ -314,7 +317,7 @@ describe("the rule: no spread, one cap with the report, and the omitted count is
       `<html><body><p>${v.stripe()}</p></body></html>`,
       "https://shop.acme.test/real",
     );
-    const result = (await run([hostile, normal]));
+    const result = await run([hostile, normal]);
     const high = named(result, "leaked-secrets-high");
     expect(high).toBeDefined();
     expect(high!.message).toContain("high-confidence");
@@ -324,13 +327,13 @@ describe("the rule: no spread, one cap with the report, and the omitted count is
   test("the same holds for the legacy site.pages path and for external scripts", async () => {
     const body = Array.from({ length: 2_500 }, () => `<p>${v.stripe()}</p>`).join("");
     const parsed = page(`<html><body>${body}</body></html>`);
-    const legacy = (await leakedSecretsRule.run({
+    const legacy = await leakedSecretsRule.run({
       site: {
         baseUrl: URL_,
         pages: [{ url: URL_, statusCode: 200, parsed }],
         scripts: [{ url: "https://shop.acme.test/a.js", content: body }],
       },
-    } as unknown as RuleContext));
+    } as unknown as RuleContext);
     expect(named(legacy, "leaked-secrets-omitted")).toBeDefined();
     expect(named(legacy, "leaked-secrets-omitted")!.items!.map((i) => i.id)).toContain(URL_);
     expect(named(legacy, "leaked-secrets-omitted")!.items!.map((i) => i.id)).toContain(
@@ -361,7 +364,12 @@ describe("the rule: no spread, one cap with the report, and the omitted count is
     const check = named(await run([hostile]), "leaked-secrets-omitted")!;
     expect(check.status).toBe("warn");
     expect(check.message).toContain(`${omittedCount} more`);
-    expect(check.details).toEqual({ omitted: omittedCount, perPageCap: PAGE_FINDINGS_CAP, siteCap: SITE_FINDINGS_CAP, atLeast: true });
+    expect(check.details).toEqual({
+      omitted: omittedCount,
+      perPageCap: PAGE_FINDINGS_CAP,
+      siteCap: SITE_FINDINGS_CAP,
+      atLeast: true,
+    });
     expect(check.items![0]).toEqual({
       id: "https://shop.acme.test/dump",
       label: `${omittedCount} finding(s) not kept`,
@@ -372,7 +380,7 @@ describe("the rule: no spread, one cap with the report, and the omitted count is
   test("a page under every cap: no omitted check, no details on the tiers, no extra field on the record", async () => {
     const small = signal(`<html><body><p>${v.stripe()}</p></body></html>`);
     expect("secretsOmitted" in small).toBe(false);
-    const result = (await run([small]));
+    const result = await run([small]);
     expect(named(result, "leaked-secrets-omitted")).toBeUndefined();
     expect(named(result, "leaked-secrets-high")!.details).toBeUndefined();
   });
@@ -431,7 +439,12 @@ describe("the rule's lists, from forged page records (#1554 review)", () => {
     });
     const check = (await run(pages)).checks.find((c) => c.name === "leaked-secrets-omitted")!;
     expect(check.items).toHaveLength(20);
-    expect(check.details).toEqual({ omitted: 150, perPageCap: PAGE_FINDINGS_CAP, siteCap: SITE_FINDINGS_CAP, atLeast: true });
+    expect(check.details).toEqual({
+      omitted: 150,
+      perPageCap: PAGE_FINDINGS_CAP,
+      siteCap: SITE_FINDINGS_CAP,
+      atLeast: true,
+    });
     expect(check.message).toContain("150 more");
     expect(check.message).toContain("30 source(s)");
   });

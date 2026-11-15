@@ -277,7 +277,11 @@ describe("brand colour (#3130)", () => {
 
   test("markdown and text ignore brandColor", () => {
     const b = { ...WL, brandColor: "#1d4ed8" };
-    expect(renderMarkdown(baseReport(), { branding: b })).toBe(renderMarkdown(baseReport(), { branding: WL }));
-    expect(renderText(baseReport(), { branding: b })).toBe(renderText(baseReport(), { branding: WL }));
+    expect(renderMarkdown(baseReport(), { branding: b })).toBe(
+      renderMarkdown(baseReport(), { branding: WL }),
+    );
+    expect(renderText(baseReport(), { branding: b })).toBe(
+      renderText(baseReport(), { branding: WL }),
+    );
   });
 });

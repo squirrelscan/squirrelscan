@@ -379,9 +379,7 @@ describe("sitemap walk progress window (squirrelscan/repo#1733)", () => {
     // what stops crawl/sitemap-exists reporting "No XML sitemap found".
     expect(result.truncated).toBe(true);
     expect(result.failed.length).toBeGreaterThanOrEqual(60);
-    expect(
-      result.failed.some((failure) => failure.error === SITEMAP_NOT_REACHED_ERROR),
-    ).toBe(true);
+    expect(result.failed.some((failure) => failure.error === SITEMAP_NOT_REACHED_ERROR)).toBe(true);
   }, 30_000);
 
   test("a fast 404 counts as progress, so a mixed level is not cut short", async () => {

@@ -41,7 +41,7 @@ export function hasAttrCI(el: Element, name: string): boolean {
 export function querySelectorAllByAttrCI(
   root: Element | Document,
   tag: string,
-  attr: string
+  attr: string,
 ): Element[] {
   const elements = root.querySelectorAll(tag);
   const results: Element[] = [];
@@ -59,7 +59,7 @@ export function querySelectorByAttrValueCI(
   root: Element | Document,
   tag: string,
   attr: string,
-  value: string
+  value: string,
 ): Element | null {
   const elements = root.querySelectorAll(tag);
   for (const el of elements) {
@@ -107,7 +107,7 @@ export function isInsideNoscript(el: TreeElement): boolean {
  */
 export function querySelectorAllOutsideNoscript<E extends TreeElement>(
   root: Queryable<E>,
-  selector: string
+  selector: string,
 ): E[] {
   const matches: E[] = [];
   for (const el of root.querySelectorAll(selector)) {

@@ -181,10 +181,7 @@ describe("foldOverflowChecks", () => {
     const freshAgg = folded.find((c) => c.provenance === undefined);
     expect(freshAgg!.details?.occurrences).toBe(2);
     expect(freshAgg!.lastSeenAt).toBeUndefined();
-    expect(freshAgg!.pages).toEqual([
-      "https://example.com/fresh-a",
-      "https://example.com/fresh-b",
-    ]);
+    expect(freshAgg!.pages).toEqual(["https://example.com/fresh-a", "https://example.com/fresh-b"]);
   });
 
   // #1652: folding must not launder "never rendered by any audit" into
@@ -861,7 +858,12 @@ describe("truncation is never silent (#1503)", () => {
       details: { aggregated: true, pagesTruncated: 600 },
     });
     const folded = foldOverflowChecks(
-      [alreadySampled, ...Array.from({ length: 3 }, (_, i) => failCheck({ pageUrl: `https://example.com/p/${i}` }))],
+      [
+        alreadySampled,
+        ...Array.from({ length: 3 }, (_, i) =>
+          failCheck({ pageUrl: `https://example.com/p/${i}` }),
+        ),
+      ],
       { ...SMALL, maxChecks: 2, maxPagesPerCheck: 100 },
     );
 

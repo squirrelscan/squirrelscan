@@ -68,9 +68,7 @@ export const filenameQualityRule: Rule = {
 
       const nameWithoutExt = filename.replace(/\.[^.]+$/, "");
 
-      const isPoor = poorPatterns.some((pattern) =>
-        pattern.test(nameWithoutExt)
-      );
+      const isPoor = poorPatterns.some((pattern) => pattern.test(nameWithoutExt));
 
       if (isPoor) {
         poorFilenames++;

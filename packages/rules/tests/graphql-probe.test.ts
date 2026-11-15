@@ -44,7 +44,14 @@ function urls(ctx: Parameters<typeof selectGraphqlCandidates>[0]): string[] {
 
 describe("isGraphqlPath / isStateChangingPath", () => {
   test("a graphql or gql path segment is GraphQL, a substring is not", () => {
-    for (const p of ["/graphql", "/api/graphql", "/v1/graphql", "/graphql/v2", "/gql", "/GraphQL"]) {
+    for (const p of [
+      "/graphql",
+      "/api/graphql",
+      "/v1/graphql",
+      "/graphql/v2",
+      "/gql",
+      "/GraphQL",
+    ]) {
       expect(isGraphqlPath(p)).toBe(true);
     }
     for (const p of ["/", "/api/users", "/graphqlish", "/my-graphql-guide", "/blog/gql-tips"]) {
@@ -89,7 +96,11 @@ describe("selectGraphqlCandidates", () => {
       surface: surface([
         candidate("/v1/graphql?op=Feed"),
         candidate("/v1/graphql", { method: "GET", discoveredVia: "string-literal" }),
-        candidate("/graphql", { source: "convention", discoveredVia: "convention:express", method: "GET" }),
+        candidate("/graphql", {
+          source: "convention",
+          discoveredVia: "convention:express",
+          method: "GET",
+        }),
         candidate("/api/users"),
       ]),
     });
@@ -140,7 +151,11 @@ describe("selectGraphqlCandidates", () => {
   });
 
   describe("reads robots.txt as the crawl's robots group (repo#3390)", () => {
-    const withAgent = (content: string, robotsUserAgent: string | undefined, level?: "aggressive") => {
+    const withAgent = (
+      content: string,
+      robotsUserAgent: string | undefined,
+      level?: "aggressive",
+    ) => {
       const ctx = ruleCtx({ robotsTxt: parseRobotsTxt(content, `${BASE}/robots.txt`), level });
       if (robotsUserAgent !== undefined) ctx.site!.robotsUserAgent = robotsUserAgent;
       return ctx;
@@ -218,7 +233,10 @@ describe("buildGraphqlProbe: the only requests that can be sent", () => {
   });
 
   test("introspection over POST sends only the read-only query as JSON", () => {
-    const { url, init } = buildGraphqlProbe(`${BASE}/graphql`, { op: "introspection", method: "POST" });
+    const { url, init } = buildGraphqlProbe(`${BASE}/graphql`, {
+      op: "introspection",
+      method: "POST",
+    });
     expect(url).toBe(`${BASE}/graphql`);
     expect(init.method).toBe("POST");
     expect(JSON.parse(init.body as string)).toEqual({ query: "{__schema{types{name}}}" });
@@ -226,12 +244,15 @@ describe("buildGraphqlProbe: the only requests that can be sent", () => {
   });
 
   test("the no-op mutation is GET only", () => {
-    const { url, init } = buildGraphqlProbe(`${BASE}/graphql`, { op: "noop-mutation", method: "GET" });
+    const { url, init } = buildGraphqlProbe(`${BASE}/graphql`, {
+      op: "noop-mutation",
+      method: "GET",
+    });
     expect(new URL(url).searchParams.get("query")).toBe("mutation{__typename}");
     expect(NOOP_MUTATION).toBe("mutation{__typename}");
     expect(init.body).toBeUndefined();
     expect(() =>
-      buildGraphqlProbe(`${BASE}/graphql`, { op: "noop-mutation", method: "POST" } as never)
+      buildGraphqlProbe(`${BASE}/graphql`, { op: "noop-mutation", method: "POST" } as never),
     ).toThrow();
   });
 });
@@ -242,22 +263,40 @@ describe("sendGraphqlProbe: the probe budget gate", () => {
     restore = stub.restore;
     const passive = createProbeBudget({ level: "passive", budgetMs: 60_000 });
     for (const probe of [passive, undefined]) {
-      const out = await sendGraphqlProbe(probe, `${BASE}/graphql`, { op: "introspection", method: "GET" });
+      const out = await sendGraphqlProbe(probe, `${BASE}/graphql`, {
+        op: "introspection",
+        method: "GET",
+      });
       expect(out).toEqual({ sent: false, reason: "not-allowed" });
     }
     expect(stub.sent).toHaveLength(0);
   });
 
   test("active sends a GET but never the POST; aggressive sends both", async () => {
-    const stub = stubFetch({ [`${BASE}/graphql`]: () => json({ data: null, errors: [{ message: "x" }] }) });
+    const stub = stubFetch({
+      [`${BASE}/graphql`]: () => json({ data: null, errors: [{ message: "x" }] }),
+    });
     restore = stub.restore;
     const active = createProbeBudget({ level: "active", budgetMs: 60_000 });
-    expect((await sendGraphqlProbe(active, `${BASE}/graphql`, { op: "introspection", method: "GET" })).sent).toBe(true);
-    expect((await sendGraphqlProbe(active, `${BASE}/graphql`, { op: "introspection", method: "POST" })).sent).toBe(false);
+    expect(
+      (await sendGraphqlProbe(active, `${BASE}/graphql`, { op: "introspection", method: "GET" }))
+        .sent,
+    ).toBe(true);
+    expect(
+      (await sendGraphqlProbe(active, `${BASE}/graphql`, { op: "introspection", method: "POST" }))
+        .sent,
+    ).toBe(false);
     expect(stub.sent.map((r) => r.method)).toEqual(["GET"]);
 
     const aggressive = createProbeBudget({ level: "aggressive", budgetMs: 60_000 });
-    expect((await sendGraphqlProbe(aggressive, `${BASE}/graphql`, { op: "introspection", method: "POST" })).sent).toBe(true);
+    expect(
+      (
+        await sendGraphqlProbe(aggressive, `${BASE}/graphql`, {
+          op: "introspection",
+          method: "POST",
+        })
+      ).sent,
+    ).toBe(true);
     expect(stub.sent.map((r) => r.method)).toEqual(["GET", "POST"]);
     expect(active.summary().requests).toBe(1);
     expect(aggressive.summary().requests).toBe(1);
@@ -268,9 +307,15 @@ describe("sendGraphqlProbe: the probe budget gate", () => {
     restore = stub.restore;
     let t = 0;
     const probe = createProbeBudget({ level: "active", budgetMs: 10, now: () => t });
-    expect((await sendGraphqlProbe(probe, `${BASE}/graphql`, { op: "introspection", method: "GET" })).sent).toBe(true);
+    expect(
+      (await sendGraphqlProbe(probe, `${BASE}/graphql`, { op: "introspection", method: "GET" }))
+        .sent,
+    ).toBe(true);
     t = 50;
-    expect((await sendGraphqlProbe(probe, `${BASE}/graphql`, { op: "introspection", method: "GET" })).sent).toBe(false);
+    expect(
+      (await sendGraphqlProbe(probe, `${BASE}/graphql`, { op: "introspection", method: "GET" }))
+        .sent,
+    ).toBe(false);
     expect(stub.sent).toHaveLength(1);
   });
 
@@ -278,14 +323,20 @@ describe("sendGraphqlProbe: the probe budget gate", () => {
     const cap = GRAPHQL_RESPONSE_CAPS["noop-mutation"];
     const big = `{"data":{"__typename":"Mutation"},"x":"${"a".repeat(cap)}"}`;
     const stub = stubFetch({
-      [`${BASE}/graphql`]: () => new Response(new Blob([big]).stream(), { headers: { "content-type": "application/json" } }),
+      [`${BASE}/graphql`]: () =>
+        new Response(new Blob([big]).stream(), { headers: { "content-type": "application/json" } }),
       [`${BASE}/declared`]: () =>
-        new Response(big, { headers: { "content-type": "application/json", "content-length": String(big.length) } }),
+        new Response(big, {
+          headers: { "content-type": "application/json", "content-length": String(big.length) },
+        }),
     });
     restore = stub.restore;
     const probe = createProbeBudget({ level: "active", budgetMs: 60_000 });
     for (const path of ["/graphql", "/declared"]) {
-      const out = await sendGraphqlProbe(probe, `${BASE}${path}`, { op: "noop-mutation", method: "GET" });
+      const out = await sendGraphqlProbe(probe, `${BASE}${path}`, {
+        op: "noop-mutation",
+        method: "GET",
+      });
       if (!out.sent || "error" in out) throw new Error("expected a response");
       expect(out.response.truncated).toBe(true);
       expect(out.response.body.length).toBeLessThanOrEqual(cap);
@@ -301,11 +352,15 @@ describe("sendGraphqlProbe: the probe budget gate", () => {
       },
     });
     const stub = stubFetch({
-      [`${BASE}/graphql`]: () => new Response(stream, { headers: { "content-type": "application/json" } }),
+      [`${BASE}/graphql`]: () =>
+        new Response(stream, { headers: { "content-type": "application/json" } }),
     });
     restore = stub.restore;
     const probe = createProbeBudget({ level: "active", budgetMs: 60_000 });
-    const out = await sendGraphqlProbe(probe, `${BASE}/graphql`, { op: "introspection", method: "GET" });
+    const out = await sendGraphqlProbe(probe, `${BASE}/graphql`, {
+      op: "introspection",
+      method: "GET",
+    });
     expect(out.sent).toBe(true);
     expect("error" in out).toBe(true);
   });
@@ -318,7 +373,10 @@ describe("sendGraphqlProbe: the probe budget gate", () => {
     });
     restore = stub.restore;
     const probe = createProbeBudget({ level: "active", budgetMs: 60_000 });
-    const out = await sendGraphqlProbe(probe, `${BASE}/graphql`, { op: "introspection", method: "GET" });
+    const out = await sendGraphqlProbe(probe, `${BASE}/graphql`, {
+      op: "introspection",
+      method: "GET",
+    });
     expect(out.sent).toBe(true);
     expect("error" in out).toBe(true);
   });
@@ -334,7 +392,9 @@ describe("truncatedSchemaTypeNames", () => {
 
   test("reads complete type names from the prefix of a cut introspection answer", () => {
     expect(
-      truncatedSchemaTypeNames(cut(`{"data":{"__schema":{"types":[{"name":"Query"},{"name":"User"},{"na`))
+      truncatedSchemaTypeNames(
+        cut(`{"data":{"__schema":{"types":[{"name":"Query"},{"name":"User"},{"na`),
+      ),
     ).toEqual(["Query", "User"]);
   });
 
@@ -344,9 +404,14 @@ describe("truncatedSchemaTypeNames", () => {
 
   test("anything else is null", () => {
     expect(truncatedSchemaTypeNames(cut(`{"items":[{"name":"a"}]`))).toBeNull();
-    expect(truncatedSchemaTypeNames(cut(`{"data":{"__schema":{"types":[{"name":"Q"}]`, "text/html"))).toBeNull();
     expect(
-      truncatedSchemaTypeNames({ ...cut(`{"data":{"__schema":{"types":[{"name":"Q"}]}}}`), truncated: false })
+      truncatedSchemaTypeNames(cut(`{"data":{"__schema":{"types":[{"name":"Q"}]`, "text/html")),
+    ).toBeNull();
+    expect(
+      truncatedSchemaTypeNames({
+        ...cut(`{"data":{"__schema":{"types":[{"name":"Q"}]}}}`),
+        truncated: false,
+      }),
     ).toBeNull();
   });
 });
@@ -365,9 +430,15 @@ describe("parseGraphqlBody: GraphQL-shaped responses only", () => {
       errors: [],
     });
     expect(
-      parseGraphqlBody(resp(`{"errors":[{"message":"Cannot query field","locations":[]}],"extensions":{}}`))
+      parseGraphqlBody(
+        resp(`{"errors":[{"message":"Cannot query field","locations":[]}],"extensions":{}}`),
+      ),
     ).toEqual({ data: undefined, errors: [{ message: "Cannot query field" }] });
-    expect(parseGraphqlBody(resp(`{"data":null,"errors":[{"message":"x"}]}`, "application/graphql-response+json"))).not.toBeNull();
+    expect(
+      parseGraphqlBody(
+        resp(`{"data":null,"errors":[{"message":"x"}]}`, "application/graphql-response+json"),
+      ),
+    ).not.toBeNull();
   });
 
   test("HTML, catch-all, REST and JSON:API bodies are not GraphQL", () => {

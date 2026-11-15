@@ -37,4 +37,3 @@ export function parseV6(ip: string): Uint8Array | null {
   }
   return out;
 }
-

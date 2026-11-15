@@ -159,11 +159,7 @@ const PURPOSES: PurposeEntry[] = [
     alternatives: [],
     group: "name",
     label: "full name",
-    seqs: [
-      ["full", "name"],
-      ["fullname"],
-      ["your", "name"],
-    ],
+    seqs: [["full", "name"], ["fullname"], ["your", "name"]],
   },
   {
     token: "address-line2",

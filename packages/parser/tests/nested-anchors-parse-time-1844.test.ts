@@ -28,42 +28,53 @@ const nestedAnchors = (n: number): string => {
 const MAX_PARSE_MS = 5_000;
 
 describe("nested anchors parse in linear time (#1844)", () => {
-  test(`20,000 nested anchors parse in under ${MAX_PARSE_MS} ms and keep every link`, () => {
-    const n = 20_000;
-    const html = nestedAnchors(n);
-    const start = performance.now();
-    const page = parsePage(html, URL);
-    const elapsed = performance.now() - start;
+  test(
+    `20,000 nested anchors parse in under ${MAX_PARSE_MS} ms and keep every link`,
+    () => {
+      const n = 20_000;
+      const html = nestedAnchors(n);
+      const start = performance.now();
+      const page = parsePage(html, URL);
+      const elapsed = performance.now() - start;
 
-    expect(elapsed).toBeLessThan(MAX_PARSE_MS);
-    // Not passing by returning nothing: every link is found, each with its own text.
-    expect(page.links).toHaveLength(n);
-    expect(page.links[0]).toMatchObject({ url: "https://example.com/p0", text: "l0" });
-    expect(page.links[n - 1]).toMatchObject({ url: `https://example.com/p${n - 1}`, text: `l${n - 1}` });
-    expect(page.links.every((link, i) => link.text === `l${i}`)).toBe(true);
-  }, { timeout: 60_000 });
+      expect(elapsed).toBeLessThan(MAX_PARSE_MS);
+      // Not passing by returning nothing: every link is found, each with its own text.
+      expect(page.links).toHaveLength(n);
+      expect(page.links[0]).toMatchObject({ url: "https://example.com/p0", text: "l0" });
+      expect(page.links[n - 1]).toMatchObject({
+        url: `https://example.com/p${n - 1}`,
+        text: `l${n - 1}`,
+      });
+      expect(page.links.every((link, i) => link.text === `l${i}`)).toBe(true);
+    },
+    { timeout: 60_000 },
+  );
 
-  test("extractors/links.ts finds every nested link with its own text", () => {
-    const n = 20_000;
-    const { document } = parseHTML(nestedAnchors(n));
-    const links = extractLinks(document as never, URL);
-    expect(links).toHaveLength(n);
-    expect(links.every((link, i) => link.text === `l${i}`)).toBe(true);
-  }, { timeout: 60_000 });
+  test(
+    "extractors/links.ts finds every nested link with its own text",
+    () => {
+      const n = 20_000;
+      const { document } = parseHTML(nestedAnchors(n));
+      const links = extractLinks(document as never, URL);
+      expect(links).toHaveLength(n);
+      expect(links.every((link, i) => link.text === `l${i}`)).toBe(true);
+    },
+    { timeout: 60_000 },
+  );
 });
 
 describe("a nested anchor's text is its own, as a browser reads it (#1844)", () => {
-  const texts = (html: string) => parsePage(`<html><body>${html}</body></html>`, URL).links.map((l) => l.text);
+  const texts = (html: string) =>
+    parsePage(`<html><body>${html}</body></html>`, URL).links.map((l) => l.text);
 
   test("directly nested anchors each read their own text", () => {
     expect(texts('<a href="/1">outer<a href="/2">inner</a></a>')).toEqual(["outer", "inner"]);
   });
 
   test("an anchor nested inside an element of the outer anchor is skipped too", () => {
-    expect(texts('<a href="/1"><span>outer <b>bold</b></span><div><a href="/2">inner</a></div></a>')).toEqual([
-      "outer bold",
-      "inner",
-    ]);
+    expect(
+      texts('<a href="/1"><span>outer <b>bold</b></span><div><a href="/2">inner</a></div></a>'),
+    ).toEqual(["outer bold", "inner"]);
   });
 
   test("an anchor without href still ends the outer anchor's text", () => {
@@ -71,7 +82,9 @@ describe("a nested anchor's text is its own, as a browser reads it (#1844)", () 
   });
 
   test("outer text on both sides of a nested anchor is not fused into one word", () => {
-    const { document } = parseHTML('<html><body><a href="/1">before<a href="/2">x</a>after</a></body></html>');
+    const { document } = parseHTML(
+      '<html><body><a href="/1">before<a href="/2">x</a>after</a></body></html>',
+    );
     const outer = document.querySelector("a") as never;
     expect(anchorTextResult(outer)).toEqual({ text: "before after", glued: false });
   });

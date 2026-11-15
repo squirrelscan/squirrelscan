@@ -4,7 +4,13 @@
 import type { Effect } from "effect";
 
 import type { AuditFailureDetail } from "./failure-reason";
-import type { ClassifiedPageType, LinkSection, LinkSectionCounts, ScanScope, SitemapReadState } from "./index";
+import type {
+  ClassifiedPageType,
+  LinkSection,
+  LinkSectionCounts,
+  ScanScope,
+  SitemapReadState,
+} from "./index";
 import type { JavascriptShipped } from "./javascript-shipped";
 import type { RefusedFetch } from "./refused-fetch";
 import type { WafBlockedSummary, WafSuspectSummary } from "./waf-block";
@@ -658,7 +664,9 @@ export type FrontierStatus = "pending" | "fetching" | "done" | "failed" | "skipp
  * pending   fetching       resetStaleFetching on resume
  * ```
  */
-export const FRONTIER_STATUS_TRANSITIONS: Readonly<Record<FrontierStatus, readonly FrontierStatus[]>> = {
+export const FRONTIER_STATUS_TRANSITIONS: Readonly<
+  Record<FrontierStatus, readonly FrontierStatus[]>
+> = {
   pending: ["fetching"],
   fetching: ["pending"],
   done: ["fetching"],
@@ -1472,7 +1480,13 @@ export type WellKnownPath = (typeof WELL_KNOWN_PATHS)[number];
  * no enabled rule reads is never sent. A probe that was not sent, or got no
  * answer, is reported "not checked" by its readers, never as a missing file.
  */
-export type DiscoveryProbe = "llms-txt" | "markdown" | "agent-access" | "rsl" | "configured-pages" | WellKnownPath;
+export type DiscoveryProbe =
+  | "llms-txt"
+  | "markdown"
+  | "agent-access"
+  | "rsl"
+  | "configured-pages"
+  | WellKnownPath;
 
 /** Every discovery probe, in the order the crawl preamble sends them. */
 export const DISCOVERY_PROBES: readonly DiscoveryProbe[] = [
@@ -1577,8 +1591,7 @@ export const AGENT_ACCESS_BOTS = [
   {
     id: "claude-user",
     token: "Claude-User",
-    userAgentString:
-      "Mozilla/5.0 (compatible; Claude-User/1.0; +Claude-User@anthropic.com)",
+    userAgentString: "Mozilla/5.0 (compatible; Claude-User/1.0; +Claude-User@anthropic.com)",
     userAction: true,
   },
   {
@@ -1605,8 +1618,7 @@ export const AGENT_ACCESS_BOTS = [
   {
     id: "ccbot",
     token: "CCBot",
-    userAgentString:
-      "CCBot/2.0 (https://commoncrawl.org/faq/)",
+    userAgentString: "CCBot/2.0 (https://commoncrawl.org/faq/)",
     userAction: false,
   },
   {
@@ -1640,8 +1652,7 @@ export const AGENT_ACCESS_BOTS = [
   {
     id: "duckassistbot",
     token: "DuckAssistBot",
-    userAgentString:
-      "DuckAssistBot/1.2; (+http://duckduckgo.com/duckassistbot.html)",
+    userAgentString: "DuckAssistBot/1.2; (+http://duckduckgo.com/duckassistbot.html)",
     userAction: false,
   },
   {
@@ -1654,8 +1665,7 @@ export const AGENT_ACCESS_BOTS = [
   {
     id: "ai2bot",
     token: "AI2Bot",
-    userAgentString:
-      "Mozilla/5.0 (compatible) AI2Bot (+https://www.allenai.org/crawler)",
+    userAgentString: "Mozilla/5.0 (compatible) AI2Bot (+https://www.allenai.org/crawler)",
     userAction: false,
   },
   {
@@ -1756,7 +1766,8 @@ export const SITEMAP_NOT_CHECKED_ERROR = "sitemap walk stopped before reaching t
  * squirrelscan/squirrelscan#819). Like {@link SITEMAP_NOT_CHECKED_ERROR}, nothing
  * was requested, so it is no evidence the sitemap is broken or absent.
  */
-export const SITEMAP_OFF_SITE_SKIPPED_ERROR = "sitemap on another site not requested (offline audit)";
+export const SITEMAP_OFF_SITE_SKIPPED_ERROR =
+  "sitemap on another site not requested (offline audit)";
 
 export interface RslLicenseDoc {
   url: string;
@@ -2007,9 +2018,7 @@ export interface CrawlStorage {
    * keyed by URL, for browser-like sub-resource cache reuse (#107). Each carries
    * the prior crawl's startedAt as `fetchedAt`. Empty when no prior crawl exists.
    */
-  getCachedResources(
-    crawlId: string,
-  ): Effect.Effect<CachedResourceRecord[], StorageError, never>;
+  getCachedResources(crawlId: string): Effect.Effect<CachedResourceRecord[], StorageError, never>;
   saveSitemapUrlStatuses(
     crawlId: string,
     statuses: SitemapUrlStatusRecord[],

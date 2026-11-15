@@ -96,11 +96,10 @@ export function requestTarget(url: string): string {
 export function didRedirect(
   url: string,
   finalUrl: string | undefined,
-  chain: RedirectChain | undefined
+  chain: RedirectChain | undefined,
 ): boolean {
   if (contradictsItself(chain)) return false;
-  const landedElsewhere =
-    finalUrl !== undefined && requestTarget(url) !== requestTarget(finalUrl);
+  const landedElsewhere = finalUrl !== undefined && requestTarget(url) !== requestTarget(finalUrl);
   return landedElsewhere || hasObservedRedirect(chain);
 }
 

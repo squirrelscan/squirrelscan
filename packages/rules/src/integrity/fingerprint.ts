@@ -87,10 +87,7 @@ export function resetFingerprintWalkCount(): void {
 }
 
 /** Build a template fingerprint for one parsed page. */
-export function fingerprintPage(
-  parsed: ParsedPage,
-  pageUrl: string
-): PageFingerprint | null {
+export function fingerprintPage(parsed: ParsedPage, pageUrl: string): PageFingerprint | null {
   const doc = parsed.document;
   if (!doc) return null;
   fingerprintWalks++;
@@ -177,27 +174,16 @@ function jaccard<T>(a: Set<T>, b: Set<T>): number {
  * common theme markers). 0 = nothing in common with the theme, 1 = full theme.
  * Weighted toward the most stable markers (stylesheets, asset hosts, chrome).
  */
-export function similarityToBaseline(
-  fp: PageFingerprint,
-  baseline: SiteBaseline
-): number {
+export function similarityToBaseline(fp: PageFingerprint, baseline: SiteBaseline): number {
   const stylesheetSim = jaccard(fp.stylesheetHrefs, baseline.stylesheetHrefs);
   const hostSim = jaccard(fp.assetHosts, baseline.assetHosts);
   const classSim = jaccard(fp.bodyClasses, baseline.bodyClasses);
   const varSim = jaccard(fp.cssVars, baseline.cssVars);
   const chromeSim =
-    ((fp.hasNav === baseline.hasNav ? 1 : 0) +
-      (fp.hasFooter === baseline.hasFooter ? 1 : 0)) /
-    2;
+    ((fp.hasNav === baseline.hasNav ? 1 : 0) + (fp.hasFooter === baseline.hasFooter ? 1 : 0)) / 2;
 
   // Weighted average; stylesheets + hosts are the strongest theme signal.
-  return (
-    0.35 * stylesheetSim +
-    0.25 * hostSim +
-    0.15 * classSim +
-    0.1 * varSim +
-    0.15 * chromeSim
-  );
+  return 0.35 * stylesheetSim + 0.25 * hostSim + 0.15 * classSim + 0.1 * varSim + 0.15 * chromeSim;
 }
 
 export interface SiteBaseline {

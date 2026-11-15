@@ -59,7 +59,7 @@ const DEVISE_ROW = {
 
 async function run(
   routes: Record<string, Route>,
-  ctxOpts: Parameters<typeof ruleCtx>[0] = {}
+  ctxOpts: Parameters<typeof ruleCtx>[0] = {},
 ): Promise<{ checks: CheckResult[]; sent: SentRequest[] }> {
   const stub = stubFetch(routes);
   restore = stub.restore;
@@ -96,7 +96,9 @@ describe("security/auth-endpoint-disclosure: activation", () => {
       expect(r.headers.cookie).toBeUndefined();
       expect(r.headers.authorization).toBeUndefined();
     }
-    expect(checks).toEqual([expect.objectContaining({ name: "auth-endpoint-clean", status: "pass" })]);
+    expect(checks).toEqual([
+      expect.objectContaining({ name: "auth-endpoint-clean", status: "pass" }),
+    ]);
   });
 });
 
@@ -111,7 +113,9 @@ describe("security/auth-endpoint-disclosure: findings", () => {
     expect(fail.message).toContain(ME);
     expect(fail.message).toContain("1 password hash (user.encrypted_password)");
     expect(fail.message).toContain("1 credential secret (user.reset_password_token)");
-    const byField = Object.fromEntries((fail.items ?? []).map((i) => [i.meta?.field, i.meta?.kind]));
+    const byField = Object.fromEntries(
+      (fail.items ?? []).map((i) => [i.meta?.field, i.meta?.kind]),
+    );
     expect(byField).toEqual({
       "user.encrypted_password": "password-hash",
       "user.reset_password_token": "secret",
@@ -120,7 +124,10 @@ describe("security/auth-endpoint-disclosure: findings", () => {
       "user.current_sign_in_ip": "internal-record",
       "user.last_sign_in_ip": "internal-record",
     });
-    expect(fail.details).toMatchObject({ endpoint: ME, kinds: ["password-hash", "secret", "internal-record"] });
+    expect(fail.details).toMatchObject({
+      endpoint: ME,
+      kinds: ["password-hash", "secret", "internal-record"],
+    });
     const text = JSON.stringify(checks);
     expect(text).not.toContain(BCRYPT);
     expect(text).not.toContain(RESET_TOKEN);
@@ -135,12 +142,17 @@ describe("security/auth-endpoint-disclosure: findings", () => {
       [`${BASE}/api/user`]: () => json([{ id: 1, password: DJANGO }]),
     });
     const fails = checks.filter((c) => c.status === "fail");
-    expect(fails.map((c) => c.details?.endpoint)).toEqual([`${BASE}/api/session`, `${BASE}/api/user`]);
+    expect(fails.map((c) => c.details?.endpoint)).toEqual([
+      `${BASE}/api/session`,
+      `${BASE}/api/user`,
+    ]);
     expect(fails[0]!.items?.map((i) => [i.meta?.field, i.meta?.kind])).toEqual([
       ["account.hash", "password-hash"],
       ["account.pwd", "password"],
     ]);
-    expect(fails[1]!.items?.map((i) => [i.meta?.field, i.meta?.kind])).toEqual([["[0].password", "password-hash"]]);
+    expect(fails[1]!.items?.map((i) => [i.meta?.field, i.meta?.kind])).toEqual([
+      ["[0].password", "password-hash"],
+    ]);
     expect(JSON.stringify(checks)).not.toContain("hunter2");
   });
 
@@ -157,7 +169,9 @@ describe("security/auth-endpoint-disclosure: findings", () => {
     ]) {
       const { checks } = await run({ [ME]: () => json(body) });
       expect(checks.filter((c) => c.status === "fail")).toEqual([]);
-      expect(checks).toEqual([expect.objectContaining({ status: "pass", name: "auth-endpoint-clean" })]);
+      expect(checks).toEqual([
+        expect.objectContaining({ status: "pass", name: "auth-endpoint-clean" }),
+      ]);
       expect(checks[0]!.message).toContain("1 answered with JSON");
       restore?.();
       restore = undefined;
@@ -198,7 +212,7 @@ describe("security/auth-endpoint-disclosure: what may be probed", () => {
           candidate("/api/products", { method: "GET" }),
           candidate("/api/v6/whoami", { method: undefined, discoveredVia: "axios.request" }),
         ]),
-      }
+      },
     );
     expect(paths(sent)).toEqual(["/api/v2/me", "/api/v6/whoami", ...AUTH_CONVENTION_PATHS]);
   });
@@ -208,11 +222,23 @@ describe("security/auth-endpoint-disclosure: what may be probed", () => {
       {},
       {
         surface: surface([
-          candidate("https://api.other.example/api/me", { method: "GET", sameOrigin: true, probeEligible: true }),
-          candidate("http://example.com/api/v2/me", { method: "GET", sameOrigin: true, probeEligible: true }),
-          candidate("https://example.com:8443/api/v3/me", { method: "GET", sameOrigin: true, probeEligible: true }),
+          candidate("https://api.other.example/api/me", {
+            method: "GET",
+            sameOrigin: true,
+            probeEligible: true,
+          }),
+          candidate("http://example.com/api/v2/me", {
+            method: "GET",
+            sameOrigin: true,
+            probeEligible: true,
+          }),
+          candidate("https://example.com:8443/api/v3/me", {
+            method: "GET",
+            sameOrigin: true,
+            probeEligible: true,
+          }),
         ]),
-      }
+      },
     );
     expect(sent.every((r) => new URL(r.url).origin === BASE)).toBe(true);
     expect(paths(sent)).toEqual([...AUTH_CONVENTION_PATHS]);
@@ -226,8 +252,14 @@ describe("security/auth-endpoint-disclosure: what may be probed", () => {
     const literal = await run(
       {},
       {
-        surface: surface([candidate("/me", { method: undefined, discoveredVia: "string-literal", source: "static-html" })]),
-      }
+        surface: surface([
+          candidate("/me", {
+            method: undefined,
+            discoveredVia: "string-literal",
+            source: "static-html",
+          }),
+        ]),
+      },
     );
     expect(paths(literal.sent)).not.toContain("/me");
   });
@@ -248,10 +280,14 @@ describe("security/auth-endpoint-disclosure: what may be probed", () => {
   });
 
   test(`at most ${MAX_AUTH_ENDPOINTS} endpoints are probed`, async () => {
-    const many = Array.from({ length: 10 }, (_, i) => candidate(`/api/v${i + 10}/me`, { method: "GET" }));
+    const many = Array.from({ length: 10 }, (_, i) =>
+      candidate(`/api/v${i + 10}/me`, { method: "GET" }),
+    );
     const { sent, checks } = await run({}, { surface: surface(many) });
     expect(sent).toHaveLength(MAX_AUTH_ENDPOINTS);
-    expect(checks[0]!.details).toMatchObject({ skippedCap: 10 + AUTH_CONVENTION_PATHS.length - MAX_AUTH_ENDPOINTS });
+    expect(checks[0]!.details).toMatchObject({
+      skippedCap: 10 + AUTH_CONVENTION_PATHS.length - MAX_AUTH_ENDPOINTS,
+    });
   });
 });
 
@@ -269,7 +305,11 @@ describe("security/auth-endpoint-disclosure: incomplete runs", () => {
     const { checks } = await authEndpointDisclosureRule.run(ruleCtx({ budgetMs: 5_000, now }));
     expect(stub.sent).toHaveLength(1);
     expect(checks).toEqual([
-      expect.objectContaining({ name: "auth-endpoint-not-checked", status: "skipped", skipReason: "probe-budget" }),
+      expect.objectContaining({
+        name: "auth-endpoint-not-checked",
+        status: "skipped",
+        skipReason: "probe-budget",
+      }),
     ]);
   });
 
@@ -281,10 +321,12 @@ describe("security/auth-endpoint-disclosure: incomplete runs", () => {
           () => {
             throw new TypeError("network down");
           },
-        ])
-      )
+        ]),
+      ),
     );
-    expect(checks).toEqual([expect.objectContaining({ status: "skipped", skipReason: "probe-errors" })]);
+    expect(checks).toEqual([
+      expect.objectContaining({ status: "skipped", skipReason: "probe-errors" }),
+    ]);
   });
 });
 

@@ -46,8 +46,9 @@ function sitemap(over: Partial<SitemapData>): SitemapData {
 }
 
 function sizeCheck(result: ReturnType<typeof sitemapValidRule.run>) {
-  const checks = (result as { checks: Array<{ name: string; status: string; items?: Array<{ id: string }> }> })
-    .checks;
+  const checks = (
+    result as { checks: Array<{ name: string; status: string; items?: Array<{ id: string }> }> }
+  ).checks;
   const check = checks.find((c) => c.name === "sitemap-size");
   expect(check).toBeDefined();
   return check as { name: string; status: string; items?: Array<{ id: string }> };

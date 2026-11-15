@@ -82,7 +82,7 @@ function site(pages: PageSpec[], sitemapUrls: { loc: string; lastmod?: string }[
 function ctx(
   pages: PageSpec[],
   sitemapUrls: { loc: string; lastmod?: string }[],
-  options: Record<string, unknown> = {}
+  options: Record<string, unknown> = {},
 ): RuleContext {
   return {
     page: { url: "https://example.com/", html: "", statusCode: 200, loadTime: 0, headers: {} },
@@ -95,23 +95,26 @@ function ctx(
 describe("crawl/sitemap-lastmod-drift", () => {
   test("no sitemap → skipped", async () => {
     const base = ctx([{ url: "https://example.com/a" }], []);
-    const { checks } = await sitemapLastmodDriftRule.run({
+    const { checks } = (await sitemapLastmodDriftRule.run({
       ...base,
       site: { ...base.site!, sitemaps: null },
-    } as RuleContext) as { checks: { status: string }[] };
+    } as RuleContext)) as { checks: { status: string }[] };
     expect(checks[0]?.status).toBe("skipped");
   });
 
   test("no pages → skipped", async () => {
-    const { checks } = await sitemapLastmodDriftRule.run(
-      ctx([], [{ loc: "https://example.com/a", lastmod: "2024-01-01" }])
-    ) as { checks: { status: string }[] };
+    const { checks } = (await sitemapLastmodDriftRule.run(
+      ctx([], [{ loc: "https://example.com/a", lastmod: "2024-01-01" }]),
+    )) as { checks: { status: string }[] };
     expect(checks[0]?.status).toBe("skipped");
   });
 
   test("page with no date signal at all → skipped, not warned (content/freshness territory)", async () => {
     const { checks } = await sitemapLastmodDriftRule.run(
-      ctx([{ url: "https://example.com/a" }], [{ loc: "https://example.com/a", lastmod: "2011-04-02" }])
+      ctx(
+        [{ url: "https://example.com/a" }],
+        [{ loc: "https://example.com/a", lastmod: "2011-04-02" }],
+      ),
     );
     expect(checks).toHaveLength(1);
     expect(checks[0]?.status).toBe("skipped");
@@ -130,8 +133,8 @@ describe("crawl/sitemap-lastmod-drift", () => {
           { loc: "https://example.com/a", lastmod: "2024-03-01" },
           { loc: "https://example.com/b", lastmod: "2024-06-14" },
           { loc: "https://example.com/c", lastmod: "2023-11-02" },
-        ]
-      )
+        ],
+      ),
     );
     expect(checks).toHaveLength(1);
     expect(checks[0]?.status).toBe("pass");
@@ -142,8 +145,8 @@ describe("crawl/sitemap-lastmod-drift", () => {
     const { checks } = await sitemapLastmodDriftRule.run(
       ctx(
         [{ url: "https://example.com/a", schemaDateModified: "2024-03-01T22:00:00Z" }],
-        [{ loc: "https://example.com/a", lastmod: "2024-03-01T06:00:00Z" }]
-      )
+        [{ loc: "https://example.com/a", lastmod: "2024-03-01T06:00:00Z" }],
+      ),
     );
     expect(checks[0]?.status).toBe("pass");
   });
@@ -152,8 +155,8 @@ describe("crawl/sitemap-lastmod-drift", () => {
     const { checks } = await sitemapLastmodDriftRule.run(
       ctx(
         [{ url: "https://example.com/a", schemaDateModified: "2024-03-01T00:00:00Z" }],
-        [{ loc: "https://example.com/a", lastmod: "2024-03-21" }]
-      )
+        [{ loc: "https://example.com/a", lastmod: "2024-03-21" }],
+      ),
     );
     expect(checks[0]?.status).toBe("pass");
   });
@@ -166,8 +169,8 @@ describe("crawl/sitemap-lastmod-drift", () => {
     const { checks } = await sitemapLastmodDriftRule.run(
       ctx(
         [{ url: "https://example.com/post", schemaDateModified: pageDate }],
-        [{ loc: "https://example.com/post", lastmod }]
-      )
+        [{ loc: "https://example.com/post", lastmod }],
+      ),
     );
     expect(checks).toHaveLength(1);
     const check = checks[0]!;
@@ -191,8 +194,8 @@ describe("crawl/sitemap-lastmod-drift", () => {
     const { checks } = await sitemapLastmodDriftRule.run(
       ctx(
         [{ url: "https://example.com/guide", schemaDateModified: pageDate }],
-        [{ loc: "https://example.com/guide", lastmod: plusDays(pageDate, -433) }]
-      )
+        [{ loc: "https://example.com/guide", lastmod: plusDays(pageDate, -433) }],
+      ),
     );
     expect(checks).toHaveLength(1);
     const check = checks[0]!;
@@ -209,16 +212,16 @@ describe("crawl/sitemap-lastmod-drift", () => {
     const ok = await sitemapLastmodDriftRule.run(
       ctx(
         [{ url: "https://example.com/a", schemaDateModified: "2024-03-06T00:00:00Z" }],
-        [{ loc: "https://example.com/a", lastmod: "2024-03-01" }]
-      )
+        [{ loc: "https://example.com/a", lastmod: "2024-03-01" }],
+      ),
     );
     expect(ok.checks[0]?.status).toBe("pass");
 
     const warned = await sitemapLastmodDriftRule.run(
       ctx(
         [{ url: "https://example.com/a", schemaDateModified: "2024-03-10T00:00:00Z" }],
-        [{ loc: "https://example.com/a", lastmod: "2024-03-01" }]
-      )
+        [{ loc: "https://example.com/a", lastmod: "2024-03-01" }],
+      ),
     );
     expect(warned.checks[0]?.status).toBe("warn");
     expect(warned.checks[0]?.name).toBe("sitemap-lastmod-behind-page");
@@ -236,18 +239,18 @@ describe("crawl/sitemap-lastmod-drift", () => {
             {
               url: "https://example.com/a",
               schemaDateModified: new Date(
-                new Date(lastmod).getTime() + hours * 3_600_000
+                new Date(lastmod).getTime() + hours * 3_600_000,
               ).toISOString(),
             },
           ],
-          [{ loc: "https://example.com/a", lastmod }]
-        )
+          [{ loc: "https://example.com/a", lastmod }],
+        ),
       );
 
     expect((await behindBy(7 * 24)).checks[0]?.status).toBe("pass"); // exactly 7 days
     expect((await behindBy(7 * 24 + 12)).checks[0]?.status).toBe("pass"); // 7.5 days
     expect((await behindBy(8 * 24 - 1)).checks[0]?.status).toBe("pass"); // just under 8
-    const warned = (await behindBy(8 * 24));
+    const warned = await behindBy(8 * 24);
     expect(warned.checks[0]?.status).toBe("warn");
     expect(warned.checks[0]?.items?.[0]?.meta?.deltaDays).toBe(8);
   });
@@ -257,8 +260,8 @@ describe("crawl/sitemap-lastmod-drift", () => {
       ctx(
         [{ url: "https://example.com/a", schemaDateModified: "2024-03-01T22:00:00Z" }],
         [{ loc: "https://example.com/a", lastmod: "2024-03-01T02:00:00Z" }],
-        { behind_days: 0 }
-      )
+        { behind_days: 0 },
+      ),
     );
     expect(checks[0]?.status).toBe("pass");
   });
@@ -273,8 +276,8 @@ describe("crawl/sitemap-lastmod-drift", () => {
         [
           { loc: "https://example.com/old", lastmod: "2026-08-01" },
           { loc: "https://example.com/revised", lastmod: "2024-03-25" },
-        ]
-      )
+        ],
+      ),
     );
     expect(checks.map((c) => c.name).sort()).toEqual([
       "sitemap-lastmod-ahead-of-page",
@@ -284,7 +287,9 @@ describe("crawl/sitemap-lastmod-drift", () => {
   });
 
   test("ahead threshold is configurable", async () => {
-    const pages: PageSpec[] = [{ url: "https://example.com/a", schemaDateModified: "2024-03-01T00:00:00Z" }];
+    const pages: PageSpec[] = [
+      { url: "https://example.com/a", schemaDateModified: "2024-03-01T00:00:00Z" },
+    ];
     const urls = [{ loc: "https://example.com/a", lastmod: "2024-03-21" }];
     expect((await sitemapLastmodDriftRule.run(ctx(pages, urls))).checks[0]?.status).toBe("pass");
     const tightened = await sitemapLastmodDriftRule.run(ctx(pages, urls, { ahead_days: 10 }));
@@ -296,16 +301,16 @@ describe("crawl/sitemap-lastmod-drift", () => {
     const viaMeta = await sitemapLastmodDriftRule.run(
       ctx(
         [{ url: "https://example.com/a", visibleDateModified: "2025-06-01" }],
-        [{ loc: "https://example.com/a", lastmod: "2024-03-25" }]
-      )
+        [{ loc: "https://example.com/a", lastmod: "2024-03-25" }],
+      ),
     );
     expect(viaMeta.checks[0]?.items?.[0]?.meta?.pageDateSource).toBe("meta");
 
     const viaVisible = await sitemapLastmodDriftRule.run(
       ctx(
         [{ url: "https://example.com/a", visibleDatePublished: "2025-06-01" }],
-        [{ loc: "https://example.com/a", lastmod: "2024-03-25" }]
-      )
+        [{ loc: "https://example.com/a", lastmod: "2024-03-25" }],
+      ),
     );
     expect(viaVisible.checks[0]?.items?.[0]?.meta?.pageDateSource).toBe("visible");
   });
@@ -321,8 +326,8 @@ describe("crawl/sitemap-lastmod-drift", () => {
             visibleDatePublished: "2011-04-02",
           },
         ],
-        [{ loc: "https://example.com/a", lastmod: "2024-03-01" }]
-      )
+        [{ loc: "https://example.com/a", lastmod: "2024-03-01" }],
+      ),
     );
     expect(checks[0]?.status).toBe("pass");
   });
@@ -337,8 +342,8 @@ describe("crawl/sitemap-lastmod-drift", () => {
         [
           { loc: "https://example.com/a", lastmod: "2024-03-01" },
           { loc: "https://example.com/b", lastmod: "not-a-date" },
-        ]
-      )
+        ],
+      ),
     );
     expect(checks[0]?.status).toBe("skipped");
     expect(checks[0]?.skipReason).toBe("No comparable dates");
@@ -351,8 +356,8 @@ describe("crawl/sitemap-lastmod-drift", () => {
           { url: "https://example.com/a", schemaDateModified: "2011-04-02T00:00:00Z" },
           { url: "https://example.com/b", schemaDateModified: "2024-03-01T00:00:00Z" },
         ],
-        [{ loc: "https://example.com/b", lastmod: "2024-03-01" }]
-      )
+        [{ loc: "https://example.com/b", lastmod: "2024-03-01" }],
+      ),
     );
     expect(checks[0]?.status).toBe("pass");
     expect(checks[0]?.details?.comparedPages).toBe(1);
@@ -368,8 +373,8 @@ describe("crawl/sitemap-lastmod-drift", () => {
         [
           { loc: "https://example.com/a", lastmod: "2025-01-01" },
           { loc: "https://example.com/b", lastmod: "2026-08-01" },
-        ]
-      )
+        ],
+      ),
     );
     expect(checks[0]?.items?.map((i) => i.id)).toEqual([
       "https://example.com/b",
@@ -396,20 +401,20 @@ describe("crawl/sitemap-lastmod-drift", () => {
     /** One page whose only date signals are the given JSON-LD, against an agreeing lastmod. */
     function runOn(raw: string, spec: Partial<PageSpec> = {}) {
       return sitemapLastmodDriftRule.run(
-        ctx([{ url: URL, schemaRaw: raw, ...spec }], [{ loc: URL, lastmod: LASTMOD }])
+        ctx([{ url: URL, schemaRaw: raw, ...spec }], [{ loc: URL, lastmod: LASTMOD }]),
       );
     }
 
     /** Same nodes, both orders — the verdict must not move. */
     async function bothOrders(sitewide: Record<string, unknown>, article: Record<string, unknown>) {
       return {
-        sitewideFirst: (await runOn(graph(sitewide, article))),
-        articleFirst: (await runOn(graph(article, sitewide))),
+        sitewideFirst: await runOn(graph(sitewide, article)),
+        articleFirst: await runOn(graph(article, sitewide)),
       };
     }
 
     test("sitewide WebSite dated 2020 ahead of an agreeing Article → pass, in either order", async () => {
-      const { sitewideFirst, articleFirst } = (await bothOrders(SITEWIDE, ARTICLE));
+      const { sitewideFirst, articleFirst } = await bothOrders(SITEWIDE, ARTICLE);
 
       expect((await sitewideFirst).checks[0]?.status).toBe("pass");
       expect((await articleFirst).checks[0]?.status).toBe("pass");
@@ -419,13 +424,15 @@ describe("crawl/sitemap-lastmod-drift", () => {
 
     test("real drift on the Article still warns, with the sitewide node present", async () => {
       const drifted = { "@type": "Article", dateModified: "2011-04-02T00:00:00.000Z" };
-      const { sitewideFirst, articleFirst } = (await bothOrders(SITEWIDE, drifted));
+      const { sitewideFirst, articleFirst } = await bothOrders(SITEWIDE, drifted);
 
       for (const result of [sitewideFirst, articleFirst]) {
         expect((await result).checks[0]?.status).toBe("warn");
         expect((await result).checks[0]?.name).toBe("sitemap-lastmod-ahead-of-page");
         // The Article's 2011 date, never the WebSite's 2020 one.
-        expect((await result).checks[0]?.items?.[0]?.meta?.pageDate).toBe("2011-04-02T00:00:00.000Z");
+        expect((await result).checks[0]?.items?.[0]?.meta?.pageDate).toBe(
+          "2011-04-02T00:00:00.000Z",
+        );
       }
       expect(JSON.stringify(sitewideFirst)).toBe(JSON.stringify(articleFirst));
     });
@@ -438,14 +445,14 @@ describe("crawl/sitemap-lastmod-drift", () => {
     test("sitewide nodes carrying dates raise no drift claim of their own", async () => {
       // Every one of these describes a thing the page mentions, not the page.
       // With no document node and no visible date, there is nothing to compare.
-      const { checks } = (await runOn(
+      const { checks } = await runOn(
         graph(
           SITEWIDE,
           { "@type": "Organization", dateModified: "2019-05-05" },
           { "@type": "SoftwareApplication", datePublished: "2026-01-01" },
-          { "@type": "Person", name: "Author" }
-        )
-      ));
+          { "@type": "Person", name: "Author" },
+        ),
+      );
       expect(checks).toHaveLength(1);
       expect(checks[0]?.status).toBe("skipped");
       expect(checks[0]?.skipReason).toBe("No comparable dates");
@@ -453,12 +460,12 @@ describe("crawl/sitemap-lastmod-drift", () => {
 
     test("with no document-typed date the page's own visible date is used, not the sitewide one", async () => {
       // The WebSite's 2020 date would have warned by 1,613 days.
-      const { checks } = (await runOn(graph(SITEWIDE), { visibleDateModified: AGREES }));
+      const { checks } = await runOn(graph(SITEWIDE), { visibleDateModified: AGREES });
       expect(checks[0]?.status).toBe("pass");
     });
 
     test("a WebPage node speaks for the document when there is no Article", async () => {
-      const { checks } = (await runOn(graph(SITEWIDE, { "@type": "WebPage", dateModified: AGREES })));
+      const { checks } = await runOn(graph(SITEWIDE, { "@type": "WebPage", dateModified: AGREES }));
       expect(checks[0]?.status).toBe("pass");
     });
 
@@ -470,12 +477,12 @@ describe("crawl/sitemap-lastmod-drift", () => {
     });
 
     test("array-wrapped @type and a {@value} date are still read", async () => {
-      const { checks } = (await runOn(
+      const { checks } = await runOn(
         graph(SITEWIDE, {
           "@type": ["WebPage", "BlogPosting"],
           dateModified: { "@value": "2011-04-02T00:00:00.000Z" },
-        })
-      ));
+        }),
+      );
       expect(checks[0]?.status).toBe("warn");
       expect(checks[0]?.items?.[0]?.meta?.pageDate).toBe("2011-04-02T00:00:00.000Z");
     });
@@ -484,29 +491,36 @@ describe("crawl/sitemap-lastmod-drift", () => {
       // `["WebPage","BlogPosting"]` and its reverse are the same claim, so the
       // dated WebPage must lose to this node either way round.
       const stalePage = { "@type": "WebPage", dateModified: "2011-04-02T00:00:00.000Z" };
-      for (const types of [["WebPage", "BlogPosting"], ["BlogPosting", "WebPage"]]) {
-        const { checks } = (await runOn(graph(stalePage, { "@type": types, dateModified: AGREES })));
+      for (const types of [
+        ["WebPage", "BlogPosting"],
+        ["BlogPosting", "WebPage"],
+      ]) {
+        const { checks } = await runOn(graph(stalePage, { "@type": types, dateModified: AGREES }));
         expect(checks[0]?.status).toBe("pass");
       }
     });
 
     test("full-IRI and schema:-prefixed @types are recognised", async () => {
-      for (const type of ["https://schema.org/Article", "http://schema.org/Article", "schema:Article"]) {
+      for (const type of [
+        "https://schema.org/Article",
+        "http://schema.org/Article",
+        "schema:Article",
+      ]) {
         // Recognised as the document node, so its agreeing date beats the sitewide one.
-        expect((await runOn(graph(SITEWIDE, { "@type": type, dateModified: AGREES }))).checks[0]?.status).toBe(
-          "pass"
-        );
+        expect(
+          (await runOn(graph(SITEWIDE, { "@type": type, dateModified: AGREES }))).checks[0]?.status,
+        ).toBe("pass");
       }
     });
 
     test("an unparseable date on one document node does not hide a later usable one", async () => {
-      const { checks } = (await runOn(
+      const { checks } = await runOn(
         graph(
           SITEWIDE,
           { "@type": "Article", dateModified: "last tuesday" },
-          { "@type": "BlogPosting", dateModified: AGREES }
-        )
-      ));
+          { "@type": "BlogPosting", dateModified: AGREES },
+        ),
+      );
       // Returning "last tuesday" would have failed to parse and dropped the page
       // to "no comparable dates", losing a comparison the page could support.
       expect(checks[0]?.status).toBe("pass");
@@ -514,9 +528,9 @@ describe("crawl/sitemap-lastmod-drift", () => {
     });
 
     test("an unparseable entry does not hide a later one in the same date list", async () => {
-      const { checks } = (await runOn(
-        graph(SITEWIDE, { "@type": "Article", dateModified: ["last tuesday", AGREES] })
-      ));
+      const { checks } = await runOn(
+        graph(SITEWIDE, { "@type": "Article", dateModified: ["last tuesday", AGREES] }),
+      );
       expect(checks[0]?.status).toBe("pass");
       expect(checks[0]?.details?.comparedPages).toBe(1);
     });
@@ -524,9 +538,9 @@ describe("crawl/sitemap-lastmod-drift", () => {
     test("a crafted IRI is not normalised twice into a type it does not name", async () => {
       // Stripping the IRI and then the prefix in sequence would reduce this to
       // `Article`; it names no schema.org type, so the node is not the document.
-      const { checks } = (await runOn(
-        graph({ "@type": "https://schema.org/schema:Article", dateModified: AGREES })
-      ));
+      const { checks } = await runOn(
+        graph({ "@type": "https://schema.org/schema:Article", dateModified: AGREES }),
+      );
       expect(checks[0]?.status).toBe("skipped");
       expect(checks[0]?.skipReason).toBe("No comparable dates");
     });
@@ -554,7 +568,7 @@ describe("crawl/sitemap-lastmod-drift", () => {
         "@context": "https://schema.org",
         "@type": "Article",
         dateModified: "2011-04-02T00:00:00.000Z",
-      })}</script></head><body><time datetime="2011-04-02">2 April 2011</time></body></html>`
+      })}</script></head><body><time datetime="2011-04-02">2 April 2011</time></body></html>`,
     ).document;
     for (const sitePage of legacyCtx.site!.pages) {
       (sitePage.parsed as unknown as { document: unknown }).document = document;
@@ -568,7 +582,7 @@ describe("crawl/sitemap-lastmod-drift", () => {
   test("a siteQuery on the context does not change the output", async () => {
     const base = ctx(
       [{ url: "https://example.com/post", schemaDateModified: "2011-04-02T00:00:00Z" }],
-      [{ loc: "https://example.com/post", lastmod: "2026-08-01T00:00:00Z" }]
+      [{ loc: "https://example.com/post", lastmod: "2026-08-01T00:00:00Z" }],
     );
     const legacy = await sitemapLastmodDriftRule.run(base);
     const streaming = await sitemapLastmodDriftRule.run({

@@ -24,10 +24,7 @@ export interface SitePageStoreUnderTest {
 
 const SITE = "web_contract";
 
-function page(
-  normalizedUrl: string,
-  over: Partial<SitePageRecord> = {},
-): SitePageRecord {
+function page(normalizedUrl: string, over: Partial<SitePageRecord> = {}): SitePageRecord {
   return {
     siteKey: SITE,
     normalizedUrl,

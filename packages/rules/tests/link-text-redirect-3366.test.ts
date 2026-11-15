@@ -8,19 +8,28 @@ import { parsePage } from "@squirrelscan/parser";
 import { linkTextRule } from "../src/a11y/link-text";
 import type { CheckResult, ParsedPage, RuleContext } from "../src/types";
 
-const BODY = '<main><a href="/docs">Read more</a></main><footer><a href="/terms">Click here</a></footer>';
+const BODY =
+  '<main><a href="/docs">Read more</a></main><footer><a href="/terms">Click here</a></footer>';
 
 async function run(requested: string, finalUrl?: string): Promise<CheckResult[]> {
   const html = `<!DOCTYPE html><html><head><title>t</title></head><body>${BODY}</body></html>`;
   const ctx = {
-    page: { url: requested, ...(finalUrl ? { finalUrl } : {}), html, statusCode: 200, loadTime: 0, headers: {} },
+    page: {
+      url: requested,
+      ...(finalUrl ? { finalUrl } : {}),
+      html,
+      statusCode: 200,
+      loadTime: 0,
+      headers: {},
+    },
     parsed: parsePage(html, finalUrl ?? requested) as ParsedPage,
     options: {},
   } as unknown as RuleContext;
   return (await linkTextRule.run(ctx)).checks as CheckResult[];
 }
 
-const sections = (checks: CheckResult[]) => JSON.stringify(checks.find((c) => c.name === "link-text-generic")?.items);
+const sections = (checks: CheckResult[]) =>
+  JSON.stringify(checks.find((c) => c.name === "link-text-generic")?.items);
 
 describe("a11y/link-text on a redirected page", () => {
   test("a relative footer link keeps the section the crawler assigned", async () => {

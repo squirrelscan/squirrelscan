@@ -19,8 +19,7 @@ import {
 } from "../src/output/markdown-escape";
 
 /** `new URL()` keeps `] ( ) ! [` unencoded in a path: the issue's repro. */
-const HOSTILE =
-  "https://example.com/a](https://evil.example/x)![i](https://evil.example/p.png)";
+const HOSTILE = "https://example.com/a](https://evil.example/x)![i](https://evil.example/p.png)";
 const PAYLOAD =
   "x](https://evil.example/y) [t](https://evil.example/z) ![i](https://evil.example/p.png) <img src=https://evil.example/q>";
 
@@ -71,12 +70,16 @@ describe("crawled text in the Markdown report is inert (#3522)", () => {
 
   test("a check's page list renders the hostile page as one link to itself", () => {
     const md = renderMarkdown(
-      baseReport({ ruleResults: rule([{ name: "broken", status: "warn", message: "m", pages: [HOSTILE] }]) }),
+      baseReport({
+        ruleResults: rule([{ name: "broken", status: "warn", message: "m", pages: [HOSTILE] }]),
+      }),
     );
     expect(hostileTargets(md)).toEqual([]);
     const html = Bun.markdown.html(md);
     // Still a working link to the audited page, its path shown as text.
-    expect(html).toContain('href="https://example.com/a%5D%28https://evil.example/x%29!%5Bi%5D%28https://evil.example/p.png%29"');
+    expect(html).toContain(
+      'href="https://example.com/a%5D%28https://evil.example/x%29!%5Bi%5D%28https://evil.example/p.png%29"',
+    );
   });
 
   test("item rows: a URL item, a plain label and its source pages", () => {
@@ -344,7 +347,12 @@ describe("line breaks inside raw HTML (#3522 review round 2)", () => {
   });
 
   test("the entity diff's property code span keeps its cell and its text", () => {
-    const side = { site: "https://example.com/", generatedAt: "2026-10-27T00:00:00.000Z", nodeCount: 1, pagesTotal: 1 };
+    const side = {
+      site: "https://example.com/",
+      generatedAt: "2026-10-27T00:00:00.000Z",
+      nodeCount: 1,
+      pagesTotal: 1,
+    };
     const md = renderEntityDiffMarkdown({
       format: "squirrelscan/entity-map-diff",
       version: 1,

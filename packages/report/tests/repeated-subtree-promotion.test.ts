@@ -149,7 +149,9 @@ describe("a block repeated inside <main> is promoted to one component", () => {
     const groups = groupsFor(pages.map((page) => blockLadder("div:1>a:1", page)));
     expect(groups[0]?.occurrences.every((item) => item.groupable === false)).toBe(true);
     expect(groups[0]?.occurrences.every((item) => item.confidence === "uncertain")).toBe(true);
-    expect(groups[0]?.occurrences.every((item) => item.uncertainReason === "region-main")).toBe(true);
+    expect(groups[0]?.occurrences.every((item) => item.uncertainReason === "region-main")).toBe(
+      true,
+    );
     // The region is still main, which is what a renderer phrases as a repeated
     // block in main content rather than a landmark component.
     expect(groups[0]?.region.role).toBe("main");
@@ -336,7 +338,9 @@ describe("componentRootKey identifies the block, not the slot inside it", () => 
     expect(new Set(groups.map((group) => group.semanticSlot)).size).toBe(7);
     // ...but one thing to go and look at.
     expect(new Set(groups.map((group) => group.componentRootKey)).size).toBe(1);
-    expect(groups.every((group) => group.componentRootKey.startsWith("component-root:"))).toBe(true);
+    expect(groups.every((group) => group.componentRootKey.startsWith("component-root:"))).toBe(
+      true,
+    );
     expect(groups.every((group) => group.affectedPageCount === 4)).toBe(true);
   });
 
@@ -355,9 +359,9 @@ describe("componentRootKey identifies the block, not the slot inside it", () => 
   test("the key is stable under page order", () => {
     const forward = installBlock(3);
     const reversed = [...forward].reverse();
-    const shuffled = forward.filter((_, index) => index % 2 === 0).concat(
-      forward.filter((_, index) => index % 2 === 1),
-    );
+    const shuffled = forward
+      .filter((_, index) => index % 2 === 0)
+      .concat(forward.filter((_, index) => index % 2 === 1));
     const keysFor = (order: typeof forward) =>
       groupsFor(order)
         .map((group) => `${group.componentRootKey}|${group.semanticSlot}`)
@@ -378,13 +382,15 @@ describe("componentRootKey identifies the block, not the slot inside it", () => 
       uncertainReason: undefined,
       region: { role: "footer", nestedIn: "none", structuralSignature: "s128:footer" },
       family: { key: "s128:footer-family", structuralSignature: "s128:ff" },
-      variant: { key: "s128:footer-variant", structuralSignature: "s128:fv", contentHash: "s128:fc" },
+      variant: {
+        key: "s128:footer-variant",
+        structuralSignature: "s128:fv",
+        contentHash: "s128:fc",
+      },
       element: { locator: `footer>${slot}`, structuralSignature: `s128:el-${slot}` },
       subtreeCandidates: undefined,
     });
-    const groups = groupsFor(
-      pages.flatMap((page) => [footer(page, "a:1"), footer(page, "a:2")]),
-    );
+    const groups = groupsFor(pages.flatMap((page) => [footer(page, "a:1"), footer(page, "a:2")]));
     expect(groups).toHaveLength(2);
     expect(groups.every((group) => group.attribution === "observed-component-evidence")).toBe(true);
     expect(new Set(groups.map((group) => group.componentRootKey)).size).toBe(1);
@@ -408,13 +414,27 @@ describe("componentFamilyKey rolls variants of one landmark together", () => {
   /** The same nav, rendered in two variants across page templates. */
   function navLink(page: string, variant: string, slot: string): ComponentOccurrence {
     return {
-      ...occurrence({ page, slot, destination: "login", text: "log in", ladder: [[1, "row", 0.05]] }),
+      ...occurrence({
+        page,
+        slot,
+        destination: "login",
+        text: "log in",
+        ladder: [[1, "row", 0.05]],
+      }),
       groupable: true,
       confidence: "observed",
       uncertainReason: undefined,
-      region: { role: "navigation", nestedIn: "none", structuralSignature: `s128:region-${variant}` },
+      region: {
+        role: "navigation",
+        nestedIn: "none",
+        structuralSignature: `s128:region-${variant}`,
+      },
       family: { key: "s128:nav-family", structuralSignature: "s128:nf" },
-      variant: { key: `s128:nav-variant-${variant}`, structuralSignature: `s128:nv-${variant}`, contentHash: `s128:nc-${variant}` },
+      variant: {
+        key: `s128:nav-variant-${variant}`,
+        structuralSignature: `s128:nv-${variant}`,
+        contentHash: `s128:nc-${variant}`,
+      },
       element: { locator: `nav>${slot}`, structuralSignature: "s128:el" },
       subtreeCandidates: undefined,
     };
@@ -432,7 +452,9 @@ describe("componentFamilyKey rolls variants of one landmark together", () => {
     expect(new Set(groups.map((group) => group.componentRootKey)).size).toBe(2);
     // One nav: one family key, which is what a "(2 variants)" line keys on.
     expect(new Set(groups.map((group) => group.componentFamilyKey)).size).toBe(1);
-    expect(groups.every((group) => group.componentFamilyKey.startsWith("component-family:"))).toBe(true);
+    expect(groups.every((group) => group.componentFamilyKey.startsWith("component-family:"))).toBe(
+      true,
+    );
   });
 
   test("a different landmark keeps a different family key", () => {
@@ -441,7 +463,11 @@ describe("componentFamilyKey rolls variants of one landmark together", () => {
         ...pages.map((page) => navLink(page, "wide", "a:1")),
         ...pages.map((page) => ({
           ...navLink(page, "wide", "a:1"),
-          region: { role: "footer" as const, nestedIn: "none" as const, structuralSignature: "s128:foot" },
+          region: {
+            role: "footer" as const,
+            nestedIn: "none" as const,
+            structuralSignature: "s128:foot",
+          },
           family: { key: "s128:footer-family", structuralSignature: "s128:ff" },
           element: { locator: "footer>a:1", structuralSignature: "s128:el2" },
         })),

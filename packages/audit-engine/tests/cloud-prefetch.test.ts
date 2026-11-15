@@ -736,7 +736,10 @@ describe("prefetchCloudData Stage 0 + Stage 1", () => {
         config: { ...config, max_credits_per_audit: 30 },
       }),
     );
-    expect(res.siteMetadata).toEqual({ ...METADATA_RESPONSE, cached: true } as typeof METADATA_RESPONSE);
+    expect(res.siteMetadata).toEqual({
+      ...METADATA_RESPONSE,
+      cached: true,
+    } as typeof METADATA_RESPONSE);
     // No spend line, and the envelope records 0 credits for the cached call.
     expect(res.spend.some((l) => l.service === "site-metadata")).toBe(false);
     expect(res.store.get("site-metadata")?.get(CLOUD_SITE_KEY)?.creditsSpent).toBe(0);
@@ -1340,7 +1343,12 @@ describe("archive-indexing and the non-public host gate (repo#2075)", () => {
       },
     });
     const res = await prefetchCloudData(
-      input({ client, rules: ARCHIVE_RULES, sitePayloads: ARCHIVE_PAYLOADS, hostUnreachableByCloud: true }),
+      input({
+        client,
+        rules: ARCHIVE_RULES,
+        sitePayloads: ARCHIVE_PAYLOADS,
+        hostUnreachableByCloud: true,
+      }),
     );
     expect(called).toBe(false);
     const archive = res.store.get("archive-indexing");
@@ -1356,7 +1364,9 @@ describe("archive-indexing and the non-public host gate (repo#2075)", () => {
         return {} as never;
       },
     });
-    await prefetchCloudData(input({ client, rules: ARCHIVE_RULES, sitePayloads: ARCHIVE_PAYLOADS }));
+    await prefetchCloudData(
+      input({ client, rules: ARCHIVE_RULES, sitePayloads: ARCHIVE_PAYLOADS }),
+    );
     expect(called).toBe(true);
   });
 });

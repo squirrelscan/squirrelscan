@@ -106,9 +106,9 @@ describe("findUnrenderedMarkup: escaped HTML and entities", () => {
   test("bare element names are documentation, not a leak", () => {
     // MDN's reference for the pre element, outside any code span: a breadcrumb
     // and a see-also list. No closing form, no attribute with a value.
-    expect(kinds("Elements <pre>\nThe <pre> element\n<meta name> and <meta http-equiv>")).not.toContain(
-      "escaped-html-tag",
-    );
+    expect(
+      kinds("Elements <pre>\nThe <pre> element\n<meta name> and <meta http-equiv>"),
+    ).not.toContain("escaped-html-tag");
     expect(kinds("Compose <header>, <main> and <footer> in the layout")).not.toContain(
       "escaped-html-tag",
     );
@@ -150,9 +150,7 @@ describe("findUnrenderedMarkup: escaped HTML and entities", () => {
   });
 
   test("a path in angle brackets is not a closing tag", () => {
-    expect(kinds("The config lives at </path/to/file> on disk")).not.toContain(
-      "escaped-html-tag",
-    );
+    expect(kinds("The config lives at </path/to/file> on disk")).not.toContain("escaped-html-tag");
   });
 
   test("the tag-name bound is derived from the tag sets, never a literal", () => {
@@ -234,8 +232,8 @@ describe("findUnrenderedMarkup: identifiers and arithmetic stay clean", () => {
 });
 
 describe("isCodeLikeElement", () => {
-  const el = (html: string) => parseHTML(`<body>${html}</body>`).document.querySelector("body")!
-    .firstElementChild!;
+  const el = (html: string) =>
+    parseHTML(`<body>${html}</body>`).document.querySelector("body")!.firstElementChild!;
 
   test("the code-like tags", () => {
     for (const tag of ["code", "pre", "samp", "kbd", "textarea", "script", "style", "noscript"]) {
@@ -301,7 +299,9 @@ describe("unrenderedMarkupRule", () => {
   });
 
   test("backticks corroborate once something real fires", async () => {
-    const checks = await run(page(`${NAV}<main><p>## Setup</p><p>Run \`vercel deploy\` to ship</p></main>`));
+    const checks = await run(
+      page(`${NAV}<main><p>## Setup</p><p>Run \`vercel deploy\` to ship</p></main>`),
+    );
     expect(checks[0]?.status).not.toBe("pass");
     const kindList = (checks[0]?.details as { kinds: { kind: string }[] }).kinds.map((k) => k.kind);
     expect(kindList).toContain("markdown-inline-code");
@@ -418,10 +418,13 @@ Some **bold** copy the author is still editing.</textarea>
     ],
   ];
 
-  test.each(containers)("%s is silent, and the same markup outside it is not", async (_, inside, outside) => {
-    expect((await run(page(inside)))[0]?.status).toBe("pass");
-    expect((await run(page(outside)))[0]?.status).not.toBe("pass");
-  });
+  test.each(containers)(
+    "%s is silent, and the same markup outside it is not",
+    async (_, inside, outside) => {
+      expect((await run(page(inside)))[0]?.status).toBe("pass");
+      expect((await run(page(outside)))[0]?.status).not.toBe("pass");
+    },
+  );
 
   test("a skipped subtree does not glue its neighbours into a match", async () => {
     // Without a boundary between excluded subtrees, `**` + `**` reads back as
@@ -512,9 +515,9 @@ describe("unrenderedMarkupRule: block boundaries on a real page shape", () => {
   });
 
   test("a leaked fence is found after the site chrome", async () => {
-    expect((await run(page(`${NAV}<main><p>\`\`\`js</p><p>const a = 1</p></main>`)))[0]?.status).toBe(
-      "warn",
-    );
+    expect(
+      (await run(page(`${NAV}<main><p>\`\`\`js</p><p>const a = 1</p></main>`)))[0]?.status,
+    ).toBe("warn");
   });
 
   test("emphasis in adjacent list items is not lost at the seam", async () => {
@@ -547,14 +550,15 @@ describe("unrenderedMarkupRule: block boundaries on a real page shape", () => {
   });
 
   test("a heading split across blocks does not invent a match", async () => {
-    expect((await run(page(`${NAV}<main><p>Rated ##</p><p>Pricing details</p></main>`)))[0]?.status).toBe(
-      "pass",
-    );
+    expect(
+      (await run(page(`${NAV}<main><p>Rated ##</p><p>Pricing details</p></main>`)))[0]?.status,
+    ).toBe("pass");
   });
 
   test("chrome itself is judged, not skipped", async () => {
     expect(
-      (await run(page(`<header><nav><p>## Menu</p></nav></header><main><p>Copy.</p></main>`)))[0]?.status,
+      (await run(page(`<header><nav><p>## Menu</p></nav></header><main><p>Copy.</p></main>`)))[0]
+        ?.status,
     ).toBe("warn");
   });
 });

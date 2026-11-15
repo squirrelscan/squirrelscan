@@ -55,7 +55,7 @@ const get = (path: string, over: Parameters<typeof candidate>[1] = {}) =>
 
 async function run(
   routes: Record<string, Route>,
-  ctxOpts: Parameters<typeof ruleCtx>[0] = {}
+  ctxOpts: Parameters<typeof ruleCtx>[0] = {},
 ): Promise<{ checks: CheckResult[]; sent: SentRequest[] }> {
   const stub = stubFetch(routes);
   restore = stub.restore;
@@ -68,11 +68,15 @@ describe("security/unauthenticated-api: activation", () => {
     for (const opts of [{ level: "passive" as const }, { noProbe: true }]) {
       const { checks, sent } = await run(
         { [USERS]: () => json(USER_ROWS) },
-        { ...opts, surface: surface([get("/api/users")]) }
+        { ...opts, surface: surface([get("/api/users")]) },
       );
       expect(sent).toHaveLength(0);
       expect(checks).toEqual([
-        expect.objectContaining({ name: "unauthenticated-api-unchecked", status: "skipped", skipReason: "probing-passive" }),
+        expect.objectContaining({
+          name: "unauthenticated-api-unchecked",
+          status: "skipped",
+          skipReason: "probing-passive",
+        }),
       ]);
     }
   });
@@ -84,15 +88,27 @@ describe("security/unauthenticated-api: activation", () => {
         surface: surface([
           candidate("https://api.other.com/users", { method: "GET" }),
           // Claims to be eligible, but is not the audited origin.
-          candidate("https://api.other.com/v2/users", { method: "GET", sameOrigin: true, probeEligible: true }),
-          candidate("http://example.com/api/users", { method: "GET", sameOrigin: true, probeEligible: true }),
+          candidate("https://api.other.com/v2/users", {
+            method: "GET",
+            sameOrigin: true,
+            probeEligible: true,
+          }),
+          candidate("http://example.com/api/users", {
+            method: "GET",
+            sameOrigin: true,
+            probeEligible: true,
+          }),
         ]),
-      }
+      },
     );
     expect(sent).toHaveLength(0);
     // Nothing eligible to probe is not checked, never a pass (#1920).
     expect(checks).toEqual([
-      expect.objectContaining({ name: "unauthenticated-api-unchecked", status: "skipped", skipReason: "no-endpoints" }),
+      expect.objectContaining({
+        name: "unauthenticated-api-unchecked",
+        status: "skipped",
+        skipReason: "no-endpoints",
+      }),
     ]);
   });
 });
@@ -101,7 +117,7 @@ describe("security/unauthenticated-api: what is sent", () => {
   test("one GET per endpoint, no cookies, no Authorization, no redirects, no query", async () => {
     const { sent } = await run(
       { [USERS]: () => json(USER_ROWS) },
-      { surface: surface([get("/api/users?token=abc&page=2#x")]) }
+      { surface: surface([get("/api/users?token=abc&page=2#x")]) },
     );
     expect(sent).toHaveLength(1);
     const req = sent[0]!;
@@ -121,7 +137,9 @@ describe("security/unauthenticated-api: what is sent", () => {
   });
 
   test("selection: methods, side-effect paths, owned paths, robots and the cap", () => {
-    const many = Array.from({ length: MAX_API_ENDPOINTS + 3 }, (_, i) => get(`/api/thing${"abcdefghijklmnop"[i]}`));
+    const many = Array.from({ length: MAX_API_ENDPOINTS + 3 }, (_, i) =>
+      get(`/api/thing${"abcdefghijklmnop"[i]}`),
+    );
     const sel = selectApiCandidates(
       ruleCtx({
         robotsTxt: robots(["/api/private"]),
@@ -142,11 +160,13 @@ describe("security/unauthenticated-api: what is sent", () => {
           get("/api/private/users"),
           ...many,
         ]),
-      })
+      }),
     );
     expect(sel.candidates[0]!.url).toBe(`${BASE}/api/orders`);
     expect(sel.candidates).toHaveLength(MAX_API_ENDPOINTS);
-    expect(sel.candidates.some((c) => c.url.includes("create-only") || c.url.includes("/items/"))).toBe(false);
+    expect(
+      sel.candidates.some((c) => c.url.includes("create-only") || c.url.includes("/items/")),
+    ).toBe(false);
     expect(sel.skippedMethod).toBe(2);
     expect(sel.skippedSideEffect).toBe(4);
     expect(sel.skippedOwned).toBe(4);
@@ -163,9 +183,12 @@ describe("security/unauthenticated-api: what is sent", () => {
           candidate("/api/literal", { method: undefined, discoveredVia: "string-literal" }),
           get("/api/private/users"),
         ]),
-      })
+      }),
     );
-    expect(sel.candidates.map((c) => c.url)).toEqual([`${BASE}/api/private/users`, `${BASE}/api/literal`]);
+    expect(sel.candidates.map((c) => c.url)).toEqual([
+      `${BASE}/api/private/users`,
+      `${BASE}/api/literal`,
+    ]);
   });
 });
 
@@ -173,7 +196,7 @@ describe("security/unauthenticated-api: findings", () => {
   test("user records with PII and internal fields fail, naming the endpoint, with no values", async () => {
     const { checks } = await run(
       { [USERS]: () => json({ data: USER_ROWS, total: 2 }) },
-      { surface: surface([get("/api/users")]) }
+      { surface: surface([get("/api/users")]) },
     );
     const fail = checks.find((c) => c.name === "unauthenticated-api-sensitive")!;
     expect(fail.status).toBe("fail");
@@ -195,22 +218,39 @@ describe("security/unauthenticated-api: findings", () => {
     });
     // Nothing the endpoint returned as a VALUE reaches the finding.
     const text = JSON.stringify(checks);
-    for (const value of ["alice@example.org", "bob@example.org", HASH_A, HASH_B, "Alice", "admin\""]) {
+    for (const value of [
+      "alice@example.org",
+      "bob@example.org",
+      HASH_A,
+      HASH_B,
+      "Alice",
+      'admin"',
+    ]) {
       expect(text).not.toContain(value);
     }
     expect(checks.some((c) => c.status === "pass")).toBe(false);
   });
 
   test("plainly public content is info, not a failure", async () => {
-    const { checks } = await run({ [POSTS]: () => json(POST_ROWS) }, { surface: surface([get("/api/posts")]) });
+    const { checks } = await run(
+      { [POSTS]: () => json(POST_ROWS) },
+      { surface: surface([get("/api/posts")]) },
+    );
     expect(checks).toHaveLength(1);
-    expect(checks[0]).toMatchObject({ name: "unauthenticated-api-public", status: "info", details: { severity: "low" } });
+    expect(checks[0]).toMatchObject({
+      name: "unauthenticated-api-public",
+      status: "info",
+      details: { severity: "low" },
+    });
     expect(checks[0]!.items![0]!.id).toBe(POSTS);
   });
 
   test("public content with an author email nested inside is sensitive", async () => {
     const rows = POST_ROWS.map((p) => ({ ...p, author: { name: "A", email: "a@example.org" } }));
-    const { checks } = await run({ [POSTS]: () => json(rows) }, { surface: surface([get("/api/posts")]) });
+    const { checks } = await run(
+      { [POSTS]: () => json(rows) },
+      { surface: surface([get("/api/posts")]) },
+    );
     const fail = checks.find((c) => c.status === "fail")!;
     expect(fail.items![0]!.meta).toMatchObject({ personal: ["author.email"] });
   });
@@ -221,7 +261,7 @@ describe("security/unauthenticated-api: findings", () => {
         [`${BASE}/api/orders`]: () => json({ results: [{ id: 1, total: 99, sku_count: 3 }] }),
         [`${BASE}/api/members/7`]: () => json({ id: 7, username: "x", plan_level: 2 }),
       },
-      { surface: surface([get("/api/orders"), get("/api/members/7")]) }
+      { surface: surface([get("/api/orders"), get("/api/members/7")]) },
     );
     const warn = checks.find((c) => c.name === "unauthenticated-api-data")!;
     expect(warn.status).toBe("warn");
@@ -233,12 +273,26 @@ describe("security/unauthenticated-api: findings", () => {
   test("the WordPress users endpoint enumerates accounts: warn, not public", async () => {
     const wpUsers = `${BASE}/wp-json/wp/v2/users`;
     const rows = [
-      { id: 1, name: "Site Admin", url: "", description: "", link: `${BASE}/author/admin/`, slug: "admin", avatar_urls: { "24": "https://secure.gravatar.com/avatar/x?s=24" } },
+      {
+        id: 1,
+        name: "Site Admin",
+        url: "",
+        description: "",
+        link: `${BASE}/author/admin/`,
+        slug: "admin",
+        avatar_urls: { "24": "https://secure.gravatar.com/avatar/x?s=24" },
+      },
     ];
-    const { checks } = await run({ [wpUsers]: () => json(rows) }, { surface: surface([get("/wp-json/wp/v2/users")]) });
+    const { checks } = await run(
+      { [wpUsers]: () => json(rows) },
+      { surface: surface([get("/wp-json/wp/v2/users")]) },
+    );
     expect(checks).toHaveLength(1);
     expect(checks[0]).toMatchObject({ name: "unauthenticated-api-data", status: "warn" });
-    expect(checks[0]!.items![0]!.meta).toMatchObject({ user: ["avatar_urls"], unreportableFields: 1 });
+    expect(checks[0]!.items![0]!.meta).toMatchObject({
+      user: ["avatar_urls"],
+      unreportableFields: 1,
+    });
     expect(JSON.stringify(checks)).not.toContain("gravatar");
   });
 
@@ -248,17 +302,22 @@ describe("security/unauthenticated-api: findings", () => {
       {
         [`${BASE}/api/a`]: () => json(USER_ROWS, 401),
         [`${BASE}/api/b`]: () => json(USER_ROWS, 403),
-        [`${BASE}/api/c`]: () => new Response(null, { status: 302, headers: { location: "/login" } }),
+        [`${BASE}/api/c`]: () =>
+          new Response(null, { status: 302, headers: { location: "/login" } }),
         [`${BASE}/api/d`]: () => html("<!doctype html><p>[{}]</p>", 200),
         [`${BASE}/api/e`]: () => json({ status: "ok", uptime: 123, version: "1.0" }),
         [`${BASE}/api/f`]: () => json({ error: "unauthorized", message: "Sign in", code: 401 }),
         [`${BASE}/api/g`]: () => json([1, 2, 3]),
       },
-      { surface: surface(paths.map((p) => get(p))) }
+      { surface: surface(paths.map((p) => get(p))) },
     );
     expect(sent).toHaveLength(paths.length);
     expect(checks).toEqual([
-      expect.objectContaining({ name: "unauthenticated-api", status: "pass", details: expect.objectContaining({ probed: 7 }) }),
+      expect.objectContaining({
+        name: "unauthenticated-api",
+        status: "pass",
+        details: expect.objectContaining({ probed: 7 }),
+      }),
     ]);
   });
 
@@ -267,7 +326,9 @@ describe("security/unauthenticated-api: findings", () => {
       status: 200,
       contentType: "application/json",
       truncated: false,
-      body: JSON.stringify([{ id: 1, "alice@example.org": true, "12345678": 1, d41d8cd98f00b204: 2, email: "x@y.z" }]),
+      body: JSON.stringify([
+        { id: 1, "alice@example.org": true, "12345678": 1, d41d8cd98f00b204: 2, email: "x@y.z" },
+      ]),
     });
     expect(verdict.kind).toBe("records");
     if (verdict.kind !== "records") return;
@@ -277,12 +338,24 @@ describe("security/unauthenticated-api: findings", () => {
   });
 
   test("an answer over the read cap is read from its prefix, with lower confidence", async () => {
-    const rows = Array.from({ length: 6000 }, (_, i) => ({ id: i, email: `u${i}@example.org`, padding: "x".repeat(40) }));
+    const rows = Array.from({ length: 6000 }, (_, i) => ({
+      id: i,
+      email: `u${i}@example.org`,
+      padding: "x".repeat(40),
+    }));
     const body = JSON.stringify(rows);
     expect(body.length).toBeGreaterThan(API_RESPONSE_CAP);
-    const { checks } = await run({ [USERS]: () => json(rows) }, { surface: surface([get("/api/users")]) });
+    const { checks } = await run(
+      { [USERS]: () => json(rows) },
+      { surface: surface([get("/api/users")]) },
+    );
     const fail = checks.find((c) => c.status === "fail")!;
-    expect(fail.items![0]!.meta).toMatchObject({ truncated: true, confidence: "lower", records: null, personal: ["email"] });
+    expect(fail.items![0]!.meta).toMatchObject({
+      truncated: true,
+      confidence: "lower",
+      records: null,
+      personal: ["email"],
+    });
     expect(fail.items![0]!.label).toContain("larger than 256 KB");
   });
 
@@ -295,7 +368,7 @@ describe("security/unauthenticated-api: findings", () => {
           return json(USER_ROWS);
         },
       },
-      { budgetMs: 5_000, now: () => t, surface: surface([get("/api/users"), get("/api/other")]) }
+      { budgetMs: 5_000, now: () => t, surface: surface([get("/api/users"), get("/api/other")]) },
     );
     expect(sent).toHaveLength(1);
     expect(checks.map((c) => `${c.name}/${c.status}`)).toEqual([
@@ -312,9 +385,11 @@ describe("security/unauthenticated-api: findings", () => {
           throw new TypeError("network down");
         },
       },
-      { surface: surface([get("/api/users")]) }
+      { surface: surface([get("/api/users")]) },
     );
-    expect(checks).toEqual([expect.objectContaining({ status: "skipped", skipReason: "probe-errors" })]);
+    expect(checks).toEqual([
+      expect.objectContaining({ status: "skipped", skipReason: "probe-errors" }),
+    ]);
   });
 });
 
@@ -336,8 +411,13 @@ describe("security/unauthenticated-api: classification", () => {
   test("record shapes", () => {
     expect(findRecords([{ a: 1 }])?.at).toBe("$");
     expect(findRecords({ data: { items: [{ a: 1 }] } })?.at).toBe("$.data.items");
-    expect(findRecords({ users: [{ a: 1 }, { a: 2 }], total: 2 })).toMatchObject({ at: "$.users", count: 2 });
-    expect(findRecords({ data: { id: "u1", type: "user", attributes: { email: "x" } } })?.at).toBe("$.data");
+    expect(findRecords({ users: [{ a: 1 }, { a: 2 }], total: 2 })).toMatchObject({
+      at: "$.users",
+      count: 2,
+    });
+    expect(findRecords({ data: { id: "u1", type: "user", attributes: { email: "x" } } })?.at).toBe(
+      "$.data",
+    );
     expect(findRecords({ id: 1, name: "x" })).toBeNull(); // too few fields for one record
     expect(findRecords({ status: "ok", code: 200, message: "fine" })).toBeNull();
     expect(findRecords([])).toBeNull();

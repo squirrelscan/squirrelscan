@@ -60,7 +60,7 @@ describe("well-known sniffing (SPA-fallback traps)", () => {
 
   test("looksLikeHtml catches doctype + html root, ignoring leading whitespace", () => {
     expect(looksLikeHtml("<!DOCTYPE html><html><head>")).toBe(true);
-    expect(looksLikeHtml("\n  <html lang=\"en\">")).toBe(true);
+    expect(looksLikeHtml('\n  <html lang="en">')).toBe(true);
     expect(looksLikeHtml('{"name":"x"}')).toBe(false);
     expect(looksLikeHtml("# Agents\n")).toBe(false);
   });
@@ -106,11 +106,13 @@ describe("well-known sniffing (SPA-fallback traps)", () => {
 describe("agent-access challenge + payment detection", () => {
   test("detectChallenge flags cf-mitigated header and body markers", () => {
     expect(detectChallenge(new Headers({ "cf-mitigated": "challenge" }), "")).toBe("cf-mitigated");
-    expect(detectChallenge(new Headers(), "<html><head><title>Just a moment...</title></head></html>")).toBe(
-      "just-a-moment",
-    );
+    expect(
+      detectChallenge(new Headers(), "<html><head><title>Just a moment...</title></head></html>"),
+    ).toBe("just-a-moment");
     expect(detectChallenge(new Headers(), "window.__cf_chl_opt = {}")).toBe("__cf_chl_");
-    expect(detectChallenge(new Headers(), "window._cf_chl_opt={cType:'managed'}")).toBe("__cf_chl_");
+    expect(detectChallenge(new Headers(), "window._cf_chl_opt={cType:'managed'}")).toBe(
+      "__cf_chl_",
+    );
     expect(
       detectChallenge(
         new Headers(),
@@ -127,7 +129,12 @@ describe("agent-access challenge + payment detection", () => {
       "d.innerHTML=\"window.__CF$cv$params={r:'8d1f2a3b4c5d6e7f',t:'MTcy'};var a=document.createElement('script');" +
       "a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';\"})();</script></body></html>";
     expect(detectChallenge(new Headers({ server: "cloudflare" }), jsd)).toBeNull();
-    expect(detectChallenge(new Headers(), "<html><body><p>Just a moment, the oven heats.</p></body></html>")).toBeNull();
+    expect(
+      detectChallenge(
+        new Headers(),
+        "<html><body><p>Just a moment, the oven heats.</p></body></html>",
+      ),
+    ).toBeNull();
   });
 
   test("a challenge whose scripts sit past the sample is still caught by its title", () => {

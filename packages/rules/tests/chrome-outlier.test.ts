@@ -112,7 +112,8 @@ function legacyCtx(specs: Spec[]): RuleContext {
 function streamCtx(specs: Spec[], withCollected = true): RuleContext {
   const parsed = specs.map((s, i) => parsePage(html(s.kind, i), u(s.path)));
   const rows = specs.map(
-    (s) => ({ normalizedUrl: u(s.path), status: s.status ?? 200, templateFp: s.kind }) as PageFeatureRow
+    (s) =>
+      ({ normalizedUrl: u(s.path), status: s.status ?? 200, templateFp: s.kind }) as PageFeatureRow,
   );
   const unused = (): never => {
     throw new Error("chrome-outlier must not use this SiteQuery method");
@@ -182,7 +183,11 @@ describe("integrity/chrome-outlier", () => {
   });
 
   test("a route-level CSS chunk or body class on top of the site chrome is not flagged", async () => {
-    const check = await bothPaths([...many("main", 20), ...many("chunk", 1), ...many("restyled", 2)]);
+    const check = await bothPaths([
+      ...many("main", 20),
+      ...many("chunk", 1),
+      ...many("restyled", 2),
+    ]);
     expect(check.status).toBe("pass");
   });
 

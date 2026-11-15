@@ -11,7 +11,12 @@ import { loadAllRules } from "@squirrelscan/rules";
 
 import type { FullAuditReport } from "@squirrelscan/audit-engine";
 
-import { canonicalFixtureDb, getGoldenBaselineConfig, run, runV1Pipeline } from "./helpers/golden-baseline";
+import {
+  canonicalFixtureDb,
+  getGoldenBaselineConfig,
+  run,
+  runV1Pipeline,
+} from "./helpers/golden-baseline";
 
 const CAPTURE_BUDGET_MS = 180_000;
 
@@ -32,7 +37,10 @@ function canonicalReport(): Promise<FullAuditReport> {
 }
 
 const wcagRules = () =>
-  [...loadAllRules({ includeOptIn: true }).values()].map((rule) => ({ id: rule.meta.id, wcag: rule.meta.wcag }));
+  [...loadAllRules({ includeOptIn: true }).values()].map((rule) => ({
+    id: rule.meta.id,
+    wcag: rule.meta.wcag,
+  }));
 
 describe("accessibility checklist on the canonical fixture (repo#3094)", () => {
   test(

@@ -24,7 +24,7 @@ const failing = (checks: CheckResult[]) => checks.find((c) => c.status === "fail
 describe("label-content-name-mismatch (#1876)", () => {
   test("two adjacent spans with a spaced aria-label pass", () => {
     const checks = run(
-      '<a href="/" aria-label="Saint John the Baptist Example Church"><span class="line1">Saint John the Baptist</span><span class="line2">Example Church</span></a>'
+      '<a href="/" aria-label="Saint John the Baptist Example Church"><span class="line1">Saint John the Baptist</span><span class="line2">Example Church</span></a>',
     );
     expect(failing(checks)).toBeUndefined();
   });
@@ -36,7 +36,7 @@ describe("label-content-name-mismatch (#1876)", () => {
 
   test("items sharing a 20 character prefix show where they differ", () => {
     const checks = run(
-      '<a href="/" aria-label="Saint John the Baptist Church">Saint John the Baptist Example Church</a>'
+      '<a href="/" aria-label="Saint John the Baptist Church">Saint John the Baptist Example Church</a>',
     );
     const item = failing(checks)?.items?.[0] as { id: string };
     expect(item.id).toContain('visible="saint john the baptist example church"');

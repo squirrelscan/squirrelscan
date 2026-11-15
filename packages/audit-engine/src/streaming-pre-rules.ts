@@ -235,7 +235,9 @@ export function runStreamingPreRules(
         }
       }
 
-      const ctx = yield* buildSiteContext(batch, undefined, { maxParseBytes: options?.maxParseBytes });
+      const ctx = yield* buildSiteContext(batch, undefined, {
+        maxParseBytes: options?.maxParseBytes,
+      });
       // Every absorb below runs with this batch's DOMs live; the batch is dropped
       // immediately after, which is the whole residency bound.
       assetCollector.absorb(ctx);
@@ -290,20 +292,20 @@ export function runStreamingPreRules(
         : undefined;
     const externalLinkResults =
       options?.externalLinks && externalLinksConfig && !lateBinding
-      ? yield* checkCollectedExternalLinks(
-          storage,
-          crawlId,
-          externalLinkOccurrences,
-          externalLinksConfig,
-          options.externalLinks.onProgress,
-          options.externalLinks.linkCache ?? null,
-          bulkChecker,
-          options.externalLinks.priorityHrefs,
-          options.resourceOverrides?.egressPinnedByTransport,
-          options.externalLinks.limits,
-          options.resourceOverrides?.resolveHost,
-        )
-      : [];
+        ? yield* checkCollectedExternalLinks(
+            storage,
+            crawlId,
+            externalLinkOccurrences,
+            externalLinksConfig,
+            options.externalLinks.onProgress,
+            options.externalLinks.linkCache ?? null,
+            bulkChecker,
+            options.externalLinks.priorityHrefs,
+            options.resourceOverrides?.egressPinnedByTransport,
+            options.externalLinks.limits,
+            options.resourceOverrides?.resolveHost,
+          )
+        : [];
 
     const assets = yield* fetchAssetsFromOccurrences(
       storage,

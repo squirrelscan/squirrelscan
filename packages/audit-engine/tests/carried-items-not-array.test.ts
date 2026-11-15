@@ -44,6 +44,8 @@ describe("carriedFindingToCheck with a malformed payload items (#504)", () => {
       carriedFindingToCheck(carried('{"items":3}'), "https://example.com/b"),
       carriedFindingToCheck(carried('{"items":{"length":3}}'), "https://example.com/c"),
     ];
-    expect(() => foldOverflowChecks(checks, { ...DEFAULT_FOLD_LIMITS, maxChecks: 1 })).not.toThrow();
+    expect(() =>
+      foldOverflowChecks(checks, { ...DEFAULT_FOLD_LIMITS, maxChecks: 1 }),
+    ).not.toThrow();
   });
 });

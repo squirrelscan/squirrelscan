@@ -107,12 +107,15 @@ function codePointToString(code: number): string | null {
  */
 export function decodeHtmlEntities(text: string): string {
   if (text.indexOf("&") === -1) return text;
-  return text.replace(ENTITY_RE, (whole, dec: string | undefined, hex: string | undefined, name: string | undefined) => {
-    if (dec !== undefined) return codePointToString(Number.parseInt(dec, 10)) ?? whole;
-    if (hex !== undefined) return codePointToString(Number.parseInt(hex, 16)) ?? whole;
-    if (name !== undefined) return NAMED_ENTITIES[name] ?? whole;
-    return whole;
-  });
+  return text.replace(
+    ENTITY_RE,
+    (whole, dec: string | undefined, hex: string | undefined, name: string | undefined) => {
+      if (dec !== undefined) return codePointToString(Number.parseInt(dec, 10)) ?? whole;
+      if (hex !== undefined) return codePointToString(Number.parseInt(hex, 16)) ?? whole;
+      if (name !== undefined) return NAMED_ENTITIES[name] ?? whole;
+      return whole;
+    },
+  );
 }
 
 // ── JavaScript string escapes ───────────────────────────────────────────────
@@ -133,7 +136,13 @@ export function unescapeJsStrings(text: string): string {
   if (text.indexOf("\\u") === -1 && text.indexOf("\\x") === -1) return text;
   return text.replace(
     JS_ESCAPE_RE,
-    (whole, braced: string | undefined, four: string | undefined, two: string | undefined, offset: number) => {
+    (
+      whole,
+      braced: string | undefined,
+      four: string | undefined,
+      two: string | undefined,
+      offset: number,
+    ) => {
       // An even run of backslashes before this one means the backslash that
       // opens the escape is itself escaped, and the `u` is a literal `u`.
       let slashes = 0;
@@ -162,7 +171,8 @@ const PERCENT_MIN_ESCAPES = 3;
  * those escapes (a `%26` after it is the next parameter), and it starts after a non-token character or after an escape that decodes to a delimiter (`%3D` `=`, `%22` `"`, `%27` `'`, `%26` `&`, `%3A` `:`: `key=token`), not in the middle
  * of a base64 payload (after a letter, a digit, `+`, `/`, `%2B`, `%2F`, or the `%2C` of a `data:` URL).
  */
-const TWITTER_BEARER_SHAPE_RE = /(?:(?<![A-Za-z0-9+/])|(?<=%(?:3[Dd]|22|27|26|3[Aa])))A{19}(?:[A-Za-z0-9]|%2[BbFf]|%3[Dd]){1,300}/g;
+const TWITTER_BEARER_SHAPE_RE =
+  /(?:(?<![A-Za-z0-9+/])|(?<=%(?:3[Dd]|22|27|26|3[Aa])))A{19}(?:[A-Za-z0-9]|%2[BbFf]|%3[Dd]){1,300}/g;
 /** Where the placeholder for the kept `%` is looked for: private-use code points not present in the run. */
 const KEPT_PERCENT_FIRST = 0xe000;
 const KEPT_PERCENT_COUNT = 256;
@@ -211,7 +221,9 @@ export function decodePercentRun(run: string): string | null {
     kept = freeKeptPercent(run);
     if (kept !== undefined) {
       const placeholder = kept;
-      run = run.replace(TWITTER_BEARER_SHAPE_RE, (token) => (token.includes("%") ? token.replaceAll("%", placeholder) : token));
+      run = run.replace(TWITTER_BEARER_SHAPE_RE, (token) =>
+        token.includes("%") ? token.replaceAll("%", placeholder) : token,
+      );
     }
   }
   const bytes: number[] = [];
@@ -325,7 +337,8 @@ function isTextByte(byte: number): boolean {
 
 // The base64 and base64url alphabets together, as a lookup on the code unit.
 const B64_CHAR = new Uint8Array(128);
-for (const ch of "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/-_") { // pragma: allowlist secret
+for (const ch of "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/-_") {
+  // pragma: allowlist secret
   B64_CHAR[ch.charCodeAt(0)] = 1;
 }
 
@@ -348,7 +361,10 @@ const SRI_HEAD_RE = /^sha(?:256|384|512)-/;
 
 /** Is the run at `start` the payload of a data: URI or an SRI hash? */
 export function isExcludedBase64Run(text: string, start: number): boolean {
-  if (start >= DATA_URI_LEAD.length && text.startsWith(DATA_URI_LEAD, start - DATA_URI_LEAD.length)) {
+  if (
+    start >= DATA_URI_LEAD.length &&
+    text.startsWith(DATA_URI_LEAD, start - DATA_URI_LEAD.length)
+  ) {
     return true;
   }
   if (SRI_HEAD_RE.test(text.slice(start, start + 7))) return true;

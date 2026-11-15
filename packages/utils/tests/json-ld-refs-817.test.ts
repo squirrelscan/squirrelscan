@@ -11,7 +11,10 @@ describe("indexJsonLdIds / resolveJsonLdRef (pub#817)", () => {
   test("a full node wins over a stub, whichever comes first", () => {
     const stub = { "@id": "#q", "@type": "Question" };
     const full = { "@id": "#q", "@type": "Question", name: "Q?" };
-    for (const nodes of [[stub, full], [full, stub]]) {
+    for (const nodes of [
+      [stub, full],
+      [full, stub],
+    ]) {
       const ids = indexJsonLdIds(nodes, BASE);
       expect(resolveJsonLdRef({ "@id": "#q" }, ids, BASE)).toBe(full);
     }
@@ -24,7 +27,13 @@ describe("indexJsonLdIds / resolveJsonLdRef (pub#817)", () => {
   });
 
   test("a non-string or empty @id is not indexed, and a non-reference value comes back as it was", () => {
-    const ids = indexJsonLdIds([{ "@id": 7, name: "x" }, { "@id": "", name: "y" }], BASE);
+    const ids = indexJsonLdIds(
+      [
+        { "@id": 7, name: "x" },
+        { "@id": "", name: "y" },
+      ],
+      BASE,
+    );
     expect(ids.size).toBe(0);
     for (const value of [null, "text", 3, [{ "@id": "#a" }], { "@id": "#a", name: "inline" }]) {
       expect(resolveJsonLdRef(value, ids, BASE)).toBe(value);

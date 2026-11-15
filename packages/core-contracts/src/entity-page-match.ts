@@ -64,7 +64,11 @@ export const ENTITY_PAGE_MATCH_CASES: ReadonlyArray<{
   { pattern: "https://example.com/blog", url: "https://example.com/blog/post", matches: true },
   { pattern: "https://example.com/blog", url: "https://example.com/blog", matches: true },
   { pattern: "https://example.com/blog", url: "https://example.com/tag/blog", matches: false },
-  { pattern: "https://example.com/blog", url: "https://other.example.com/blog/post", matches: false },
+  {
+    pattern: "https://example.com/blog",
+    url: "https://other.example.com/blog/post",
+    matches: false,
+  },
   { pattern: "https://example.com/blog", url: "http://example.com/blog/post", matches: false },
   { pattern: "HTTPS://example.com/blog", url: "HTTPS://example.com/blog/post", matches: true },
   // Leading slash: prefix of path and query.

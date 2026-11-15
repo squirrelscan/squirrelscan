@@ -44,7 +44,10 @@ const repeat = (n: number, html: (i: number) => string): string =>
 describe("rules that cap items record the remainder", () => {
   test("a11y/tabindex: 12 positive tabindex values list 10 and record 2 more", () => {
     const c = check(
-      run(tabindexRule, repeat(12, (i) => `<button id="b${i}" tabindex="${i + 1}">b</button>`)),
+      run(
+        tabindexRule,
+        repeat(12, (i) => `<button id="b${i}" tabindex="${i + 1}">b</button>`),
+      ),
       "tabindex-positive",
     );
     expect(c.status).toBe("warn");
@@ -54,7 +57,10 @@ describe("rules that cap items record the remainder", () => {
 
   test("a11y/tabindex: a list under the cap records no remainder", () => {
     const c = check(
-      run(tabindexRule, repeat(3, (i) => `<button id="b${i}" tabindex="${i + 1}">b</button>`)),
+      run(
+        tabindexRule,
+        repeat(3, (i) => `<button id="b${i}" tabindex="${i + 1}">b</button>`),
+      ),
       "tabindex-positive",
     );
     expect(c.items).toHaveLength(3);
@@ -63,7 +69,10 @@ describe("rules that cap items record the remainder", () => {
 
   test("a11y/tabindex: the very-high check records its own remainder", () => {
     const c = check(
-      run(tabindexRule, repeat(11, (i) => `<a id="a${i}" href="/" tabindex="${200 + i}">a</a>`)),
+      run(
+        tabindexRule,
+        repeat(11, (i) => `<a id="a${i}" href="/" tabindex="${200 + i}">a</a>`),
+      ),
       "tabindex-very-high",
     );
     expect(c.status).toBe("fail");

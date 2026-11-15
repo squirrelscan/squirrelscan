@@ -9,7 +9,11 @@ import type { CheckItem, CheckResult, Rule, RuleContext, RuleResult } from "../.
 import { UNCONFIRMED_CHECK_SUFFIX } from "@squirrelscan/core-contracts/resolution";
 import { getAttrCI, hasAttrCI } from "@squirrelscan/utils";
 
-import { createStaticVisibility, unconfirmedItem, unconfirmedMessage } from "../../../src/shared/static-hidden";
+import {
+  createStaticVisibility,
+  unconfirmedItem,
+  unconfirmedMessage,
+} from "../../../src/shared/static-hidden";
 
 // Natively focusable elements. `disabled`, `type="hidden"` and tabindex are
 // decided in isFocusable, case-insensitively, rather than in the selectors.

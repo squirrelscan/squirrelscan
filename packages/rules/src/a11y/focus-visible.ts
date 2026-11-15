@@ -33,9 +33,7 @@ export const focusVisibleRule: Rule = {
     const hasFocusWithin = focusWithinPattern.test(html);
 
     // Check inline styles and style blocks for outline removal
-    const dangerousOutlineRemoval = html.match(
-      /\*\s*\{[^}]*outline\s*:\s*(none|0)/i
-    );
+    const dangerousOutlineRemoval = html.match(/\*\s*\{[^}]*outline\s*:\s*(none|0)/i);
 
     if (dangerousOutlineRemoval) {
       checks.push({

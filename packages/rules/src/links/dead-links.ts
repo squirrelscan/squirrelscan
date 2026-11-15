@@ -38,7 +38,8 @@ export const deadLinksRule: Rule = {
       checks.push({
         name: "dead-links",
         status: "skipped",
-        message: "External link checking was off for this audit, so external links were not verified",
+        message:
+          "External link checking was off for this audit, so external links were not verified",
         skipReason: EXTERNAL_LINKS_NOT_CHECKED_SKIP_REASON,
       });
       return { checks };
@@ -49,7 +50,12 @@ export const deadLinksRule: Rule = {
     // repo#2759: links that look like actions or carry a token are never sent.
     const linkCheck = ctx.site?.externalLinkCheck;
     const notRequested = linkCheck?.notRequested ?? 0;
-    if (externalLinks.length === 0 && linkCheck && notRequested > 0 && notRequested >= linkCheck.found) {
+    if (
+      externalLinks.length === 0 &&
+      linkCheck &&
+      notRequested > 0 &&
+      notRequested >= linkCheck.found
+    ) {
       checks.push({
         name: "dead-links",
         status: "info",

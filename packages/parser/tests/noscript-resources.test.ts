@@ -37,11 +37,15 @@ describe("resource extractors skip <noscript> content (#434)", () => {
   });
 
   test("extractors/images (the rule-input ParsedPage), including picture sources", () => {
-    expect(extractImages(document, URL).map((i) => i.src)).toEqual(["https://example.com/live.jpg"]);
+    expect(extractImages(document, URL).map((i) => i.src)).toEqual([
+      "https://example.com/live.jpg",
+    ]);
   });
 
   test("extractScripts", () => {
-    expect(extractScripts(document, URL).map((s) => s.src)).toEqual(["https://example.com/live.js"]);
+    expect(extractScripts(document, URL).map((s) => s.src)).toEqual([
+      "https://example.com/live.js",
+    ]);
   });
 
   test("extractStylesheets", () => {

@@ -151,7 +151,11 @@ describe("#1510 — normalization never manufactures a hop (crawl → rule)", ()
     const site = serve((path) => {
       if (path !== "/" && !path.endsWith("/")) return movedTo(`${path}/`);
       if (!PAGES.includes(path)) return new Response("nope", { status: 404 });
-      return html(PAGES.filter((p) => p !== path).map(link).join(""));
+      return html(
+        PAGES.filter((p) => p !== path)
+          .map(link)
+          .join(""),
+      );
     });
 
     const { checks, crawled } = await audit(site.origin);
@@ -212,7 +216,9 @@ describe("#1510 — real redirects still report, with their real statuses", () =
 
     // The statuses, structurally — this is the assertion that would have caught
     // the reported `200 → 200`.
-    const chain = (redirectPages?.items?.[0]?.meta as { chain?: { hops: { url: string; statusCode: number }[] } }).chain;
+    const chain = (
+      redirectPages?.items?.[0]?.meta as { chain?: { hops: { url: string; statusCode: number }[] } }
+    ).chain;
     expect(chain?.hops.map((hop) => hop.statusCode)).toEqual([301, 301, 200]);
     expect(chain?.hops.map((hop) => hop.url)).toEqual([
       `${site.origin}/stary/`,
@@ -226,7 +232,9 @@ describe("#1510 — real redirects still report, with their real statuses", () =
     );
 
     // The page that linked the redirecting form is the one blamed.
-    expect(named(checks, "links-to-redirect")?.items?.[0]?.sourcePages).toEqual([`${site.origin}/`]);
+    expect(named(checks, "links-to-redirect")?.items?.[0]?.sourcePages).toEqual([
+      `${site.origin}/`,
+    ]);
   });
 
   test("(c) normalization plus one real 301 yields exactly one hop", async () => {
@@ -251,7 +259,11 @@ describe("#1510 — real redirects still report, with their real statuses", () =
     expect(redirectPages?.items).toHaveLength(1);
     expect(redirectPages?.items?.[0]?.id).toBe(`${site.origin}/stary/`);
 
-    const chain = (redirectPages?.items?.[0]?.meta as { chain?: { chainLength: number; hops: { statusCode: number }[] } }).chain;
+    const chain = (
+      redirectPages?.items?.[0]?.meta as {
+        chain?: { chainLength: number; hops: { statusCode: number }[] };
+      }
+    ).chain;
     expect(chain?.chainLength).toBe(1);
     expect(chain?.hops.map((hop) => hop.statusCode)).toEqual([301, 200]);
   });
@@ -273,7 +285,8 @@ describe("#1510 — real redirects still report, with their real statuses", () =
     expect(items.length).toBeGreaterThan(0);
     const nonFinalHops = items.flatMap(
       (item) =>
-        (item.meta as { chain?: { hops: { statusCode: number }[] } }).chain?.hops.slice(0, -1) ?? [],
+        (item.meta as { chain?: { hops: { statusCode: number }[] } }).chain?.hops.slice(0, -1) ??
+        [],
     );
     expect(nonFinalHops.length).toBeGreaterThan(0);
     for (const hop of nonFinalHops) {

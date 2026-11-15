@@ -49,10 +49,7 @@ interface OptionIssue {
  * One line per issue, naming the table and the option:
  * `[rule_options."core/meta-title"] min_length: Invalid input: expected number, received string`.
  */
-export function describeRuleOptionIssues(
-  ruleId: string,
-  issues: readonly OptionIssue[],
-): string[] {
+export function describeRuleOptionIssues(ruleId: string, issues: readonly OptionIssue[]): string[] {
   return issues.map((issue) => {
     const where = issue.path.map(String).join(".");
     return `${ruleOptionsTable(ruleId)}${where ? ` ${where}` : ""}: ${issue.message}`;
@@ -170,7 +167,8 @@ export function checkIgnoreEntries(
     const matching = [...rules.values()].filter((r) => matches(r.meta.id));
     if (matching.length === 0) {
       const similar = entry.rule.includes("*") ? [] : similarRuleIds(entry.rule, rules);
-      const hint = similar.length > 0 ? ` (did you mean ${similar.map((id) => `"${id}"`).join(" or ")}?)` : "";
+      const hint =
+        similar.length > 0 ? ` (did you mean ${similar.map((id) => `"${id}"`).join(" or ")}?)` : "";
       problems.push({
         kind: "ignore-entry",
         ruleId: entry.rule,
@@ -198,7 +196,10 @@ export function checkIgnoreEntries(
         kind: "ignore-entry",
         ruleId: entry.rule,
         key: "rule",
-        message: `${where(i, entry.rule)}: compromise detection cannot be ignored (${locked.map((r) => r.meta.id).slice(0, 3).join(", ")}), so the entry changes nothing`,
+        message: `${where(i, entry.rule)}: compromise detection cannot be ignored (${locked
+          .map((r) => r.meta.id)
+          .slice(0, 3)
+          .join(", ")}), so the entry changes nothing`,
       });
     }
   });
@@ -222,6 +223,11 @@ function capProblems(problems: RuleOptionsProblem[]): RuleOptionsProblem[] {
   const rest = problems.length - MAX_IGNORE_PROBLEMS;
   return [
     ...problems.slice(0, MAX_IGNORE_PROBLEMS),
-    { kind: "ignore-entry", ruleId: "", key: "rule", message: `[[ignore]]: and ${rest} more problem${rest === 1 ? "" : "s"} like these` },
+    {
+      kind: "ignore-entry",
+      ruleId: "",
+      key: "rule",
+      message: `[[ignore]]: and ${rest} more problem${rest === 1 ? "" : "s"} like these`,
+    },
   ];
 }

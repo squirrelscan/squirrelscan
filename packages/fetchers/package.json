@@ -11,11 +11,19 @@
   },
   "scripts": {
     "typecheck": "tsgo --noEmit",
-    "test": "bun test"
+    "test": "bun test",
+    "lint": "oxlint -c oxlint.config.mjs src/",
+    "format": "oxfmt src/ --write",
+    "format:check": "oxfmt src/ --check"
   },
   "devDependencies": {
     "@types/bun": "^1.4.0",
-    "@types/node": "^24.13.1"
+    "@types/node": "^24.13.1",
+    "eslint-plugin-github": "^6.0.0",
+    "eslint-plugin-sonarjs": "^4.1.0",
+    "oxfmt": "^0.21.0",
+    "oxlint": "1.73.0",
+    "ultracite": "7.9.2"
   },
   "private": true,
   "license": "MIT"

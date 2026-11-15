@@ -126,7 +126,8 @@ const HTTP_METHODS = new Set(["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "
 const API_PATH_RE =
   /^\/(?:api(?:[/?]|$)|graphql(?:[/?]|$)|rest\/v1\/|_next\/data\/|trpc\/|wp-json(?:[/?]|$)|actuator(?:[/?]|$)|openapi\.json)/i;
 const API_HOST_RE = /^(?:api|graphql|gql|gateway)\./i;
-const STATIC_ASSET_RE = /\.(?:js|mjs|css|map|png|jpe?g|gif|svg|webp|ico|woff2?|ttf|eot|mp4|webm|pdf)(?:[?#]|$)/i;
+const STATIC_ASSET_RE =
+  /\.(?:js|mjs|css|map|png|jpe?g|gif|svg|webp|ico|woff2?|ttf|eot|mp4|webm|pdf)(?:[?#]|$)/i;
 // Characters that mean the literal is a template, a pattern or prose, not a URL.
 const NOT_A_URL_RE = /[{}<>()*^$|\\]/;
 
@@ -189,27 +190,28 @@ const OBJ_BODY = "(?:[^{}]|\\{[^{}]{0,100}\\}){0,300}?";
 
 const FETCH_RE = new RegExp(
   `\\bfetch\\s*\\(\\s*${Q}${URL_LIT}${Q}(?:\\s*,\\s*\\{${OBJ_BODY}\\bmethod\\s*:\\s*${Q}([A-Za-z]{3,7})${Q})?`,
-  "g"
+  "g",
 );
 const AXIOS_RE = new RegExp(
   `\\baxios\\s*\\.\\s*(get|post|put|patch|delete|head|options|request)\\s*\\(\\s*${Q}${URL_LIT}${Q}`,
-  "g"
+  "g",
 );
 const XHR_RE = new RegExp(
   `\\.open\\s*\\(\\s*${Q}([A-Za-z]{3,7})${Q}\\s*,\\s*${Q}${URL_LIT}${Q}`,
-  "g"
+  "g",
 );
 const JQUERY_SHORT_RE = new RegExp(
   `(?:\\$|\\bjQuery)\\s*\\.\\s*(get|post|getJSON)\\s*\\(\\s*${Q}${URL_LIT}${Q}`,
-  "g"
+  "g",
 );
 const JQUERY_AJAX_RE = new RegExp(
   `(?:\\$|\\bjQuery)\\s*\\.\\s*ajax\\s*\\(\\s*\\{${OBJ_BODY}\\burl\\s*:\\s*${Q}${URL_LIT}${Q}(?:${OBJ_BODY}\\b(?:type|method)\\s*:\\s*${Q}([A-Za-z]{3,7})${Q})?`,
-  "g"
+  "g",
 );
 const LITERAL_RE = /(["'`])([^"'`\\\s]{2,512})\1/g;
 
-const SCAN_GATE_RE = /fetch|axios|\.open|\$|jQuery|api|graphql|gql|gateway|_next\/data|trpc|wp-json|actuator|openapi/i;
+const SCAN_GATE_RE =
+  /fetch|axios|\.open|\$|jQuery|api|graphql|gql|gateway|_next\/data|trpc|wp-json|actuator|openapi/i;
 
 type Push = (url: string, via: string, method?: string) => void;
 
@@ -264,7 +266,10 @@ function scanScriptText(text: string, base: string, push: Push): void {
  * Endpoint refs in one served JS file. `base` is the script's own URL, so a
  * root-relative literal resolves against the origin that served it.
  */
-export function extractEndpointRefsFromScript(content: string, scriptUrl: string): PageEndpointRef[] {
+export function extractEndpointRefsFromScript(
+  content: string,
+  scriptUrl: string,
+): PageEndpointRef[] {
   const refs: PageEndpointRef[] = [];
   scanScriptText(content, scriptUrl, (url, discoveredVia, method) => {
     if (refs.length < MAX_REFS_PER_SCRIPT) refs.push({ url, method, discoveredVia });
@@ -275,16 +280,14 @@ export function extractEndpointRefsFromScript(content: string, scriptUrl: string
 // ── page DOM extraction ────────────────────────────────────────────
 
 // Script types that are code. JSON data blocks (JSON-LD, __NEXT_DATA__) are not.
-const JS_TYPE_RE = /^(?:|module|text\/javascript|application\/javascript|text\/ecmascript|application\/ecmascript)$/i;
+const JS_TYPE_RE =
+  /^(?:|module|text\/javascript|application\/javascript|text\/ecmascript|application\/ecmascript)$/i;
 
 /**
  * Collect endpoint refs from a live page DOM: inline scripts, form actions, and
  * link or script URLs that point at an API host or path. Bounded, DOM-free output.
  */
-export function extractEndpointRefsFromDocument(
-  doc: Document,
-  pageUrl: string
-): PageEndpointRef[] {
+export function extractEndpointRefsFromDocument(doc: Document, pageUrl: string): PageEndpointRef[] {
   const refs: PageEndpointRef[] = [];
   const push: Push = (url, discoveredVia, method) => {
     if (refs.length < MAX_REFS_PER_PAGE) refs.push({ url, method, discoveredVia });
@@ -369,7 +372,7 @@ export function buildEndpointSurface(input: EndpointSurfaceInput): EndpointSurfa
     rawUrl: string,
     source: EndpointSource,
     discoveredVia: string,
-    method?: string
+    method?: string,
   ): void => {
     const href = resolveUrl(rawUrl, input.baseUrl);
     if (!href) return;
@@ -445,7 +448,7 @@ export function buildEndpointSurface(input: EndpointSurfaceInput): EndpointSurfa
     (a, b) =>
       SOURCE_RANK[a.source] - SOURCE_RANK[b.source] ||
       (a.url < b.url ? -1 : a.url > b.url ? 1 : 0) ||
-      (a.method ?? "").localeCompare(b.method ?? "")
+      (a.method ?? "").localeCompare(b.method ?? ""),
   );
 
   const candidates: EndpointCandidate[] = [];

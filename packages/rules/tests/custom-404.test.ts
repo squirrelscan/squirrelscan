@@ -33,7 +33,10 @@ afterEach(() => {
 beforeAll(() => setRequestAsync(() => Promise.reject(new Error("unused"))));
 afterAll(() => clearRequestAsync());
 
-function ctx(origin: string, opts: { level?: ProbeLevel; noProbe?: boolean; budgetMs?: number } = {}): RuleContext {
+function ctx(
+  origin: string,
+  opts: { level?: ProbeLevel; noProbe?: boolean; budgetMs?: number } = {},
+): RuleContext {
   return {
     page: { url: `${origin}/`, html: "", statusCode: 200, loadTime: 0, headers: {} },
     parsed: {} as RuleContext["parsed"],
@@ -46,8 +49,10 @@ function ctx(origin: string, opts: { level?: ProbeLevel; noProbe?: boolean; budg
 }
 
 const run = async (c: RuleContext): Promise<CheckResult[]> => (await custom404Rule.run(c)).checks;
-const html = (body: string, status = 404, headers: Record<string, string> = {}) => () =>
-  new Response(body, { status, headers: { "content-type": "text/html", ...headers } });
+const html =
+  (body: string, status = 404, headers: Record<string, string> = {}) =>
+  () =>
+    new Response(body, { status, headers: { "content-type": "text/html", ...headers } });
 
 const BRANDED = `<!doctype html><html><head><title>Not found | Acme</title>
   <meta name="robots" content="noindex"><link rel="stylesheet" href="/s.css"></head>
@@ -81,7 +86,8 @@ describe("crawl/custom-404", () => {
 
   test("redirect Location is stripped to origin and path (no query string)", async () => {
     const { origin } = serve(
-      () => new Response(null, { status: 302, headers: { location: "/login?token=secret&next=/x" } }),
+      () =>
+        new Response(null, { status: 302, headers: { location: "/login?token=secret&next=/x" } }),
     );
     const checks = await run(ctx(origin));
     expect(checks[0]!.message).toContain(`to ${origin}/login `.trim());
@@ -105,11 +111,17 @@ describe("crawl/custom-404", () => {
     };
 
     const abs = serve(
-      () => new Response(null, { status: 302, headers: { location: "https://example.com/login?token=SECRET#frag" } }),
+      () =>
+        new Response(null, {
+          status: 302,
+          headers: { location: "https://example.com/login?token=SECRET#frag" },
+        }),
     );
     assertRedacted((await run(ctx(abs.origin)))[0]!, "https://example.com/login");
 
-    const rel = serve(() => new Response(null, { status: 301, headers: { location: "/login?next=x" } }));
+    const rel = serve(
+      () => new Response(null, { status: 301, headers: { location: "/login?next=x" } }),
+    );
     assertRedacted((await run(ctx(rel.origin)))[0]!, `${rel.origin}/login`);
   });
 
@@ -157,7 +169,9 @@ describe("crawl/custom-404", () => {
     const { origin, seen } = serve(html(BRANDED));
     for (const c of [ctx(origin, { level: "passive" }), ctx(origin, { noProbe: true })]) {
       const checks = await run(c);
-      expect(checks.map((x) => [x.name, x.status])).toEqual([["custom-404-not-checked", "skipped"]]);
+      expect(checks.map((x) => [x.name, x.status])).toEqual([
+        ["custom-404-not-checked", "skipped"],
+      ]);
       expect(checks[0]!.message).toContain("--probe active");
     }
     expect(seen).toHaveLength(0);
@@ -187,7 +201,9 @@ describe("crawl/custom-404", () => {
     servers.splice(0).forEach((s) => s.stop());
     expect((await run(ctx(url))).map((x) => x.status)).toEqual(["skipped"]);
     const live = serve(html(BRANDED));
-    expect((await run(ctx(live.origin, { budgetMs: 0 }))).map((x) => x.status)).toEqual(["skipped"]);
+    expect((await run(ctx(live.origin, { budgetMs: 0 }))).map((x) => x.status)).toEqual([
+      "skipped",
+    ]);
     expect(live.seen).toHaveLength(0);
   });
 
@@ -202,15 +218,25 @@ describe("readErrorPage", () => {
   test("recognises stock pages", () => {
     const apache = "<h1>Not Found</h1><p>The requested URL /x was not found on this server.</p>";
     expect(readErrorPage(apache, "https://a.test", headers).defaultServer).toBe("Apache");
-    expect(readErrorPage("<pre>Cannot GET /x</pre>", "https://a.test", headers).defaultServer).toBe("Express");
+    expect(readErrorPage("<pre>Cannot GET /x</pre>", "https://a.test", headers).defaultServer).toBe(
+      "Express",
+    );
   });
   test("a branded page is not a default; same-origin absolute links count as routes", () => {
-    const r = readErrorPage(`<body><a href="https://a.test/about">About</a></body>`, "https://a.test", headers);
+    const r = readErrorPage(
+      `<body><a href="https://a.test/about">About</a></body>`,
+      "https://a.test",
+      headers,
+    );
     expect(r.siteLinks).toBe(1);
     expect(isDefaultErrorPage(readErrorPage(BRANDED, "https://a.test", headers))).toBe(false);
   });
   test("external and fragment links are not routes back", () => {
-    const r = readErrorPage(`<a href="#top">t</a><a href="https://other.test/">o</a>`, "https://a.test", headers);
+    const r = readErrorPage(
+      `<a href="#top">t</a><a href="https://other.test/">o</a>`,
+      "https://a.test",
+      headers,
+    );
     expect(r.siteLinks).toBe(0);
   });
 });

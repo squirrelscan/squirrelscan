@@ -129,7 +129,7 @@ describe("schema/article — ISO 8601 date validation (#1099)", () => {
       headline: "Headline",
       author: { "@type": "Person", name: "Author" },
     });
-    const checks = (await run(pageCtx(html)));
+    const checks = await run(pageCtx(html));
     expect(check(checks, "article-required")?.status).toBe("warn");
     expect(check(checks, "article-date-format")).toBeUndefined();
   });
@@ -141,7 +141,7 @@ describe("schema/article — ISO 8601 date validation (#1099)", () => {
       author: { "@type": "Person", name: "Author" },
       datePublished: "",
     });
-    const checks = (await run(pageCtx(html)));
+    const checks = await run(pageCtx(html));
     expect(check(checks, "article-required")?.status).toBe("warn");
     expect(check(checks, "article-required")?.items?.map((i) => i.id)).toContain("datePublished");
     expect(check(checks, "article-date-format")).toBeUndefined();
@@ -197,7 +197,7 @@ describe("schema/article — ISO 8601 date validation (#1099)", () => {
       </script>
       <script type="application/ld+json">${JSON.stringify({ "@type": "WebSite", name: "Site" })}</script>
       </head><body><p>content</p></body></html>`;
-    const checks = (await run(pageCtx(html)));
+    const checks = await run(pageCtx(html));
 
     expect(check(checks, "article-required")?.status).toBe("pass");
     expect(check(checks, "article-date-format")?.status).toBe("warn");

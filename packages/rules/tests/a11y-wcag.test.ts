@@ -32,8 +32,12 @@ describe("a11y rules declare WCAG criteria (repo#3093)", () => {
   });
 
   test("every a11y rule declares exactly one of wcag or wcagNone", () => {
-    const neither = a11y.filter((r) => !r.meta.wcag && r.meta.wcagNone === undefined).map((r) => r.meta.id);
-    const both = a11y.filter((r) => r.meta.wcag && r.meta.wcagNone !== undefined).map((r) => r.meta.id);
+    const neither = a11y
+      .filter((r) => !r.meta.wcag && r.meta.wcagNone === undefined)
+      .map((r) => r.meta.id);
+    const both = a11y
+      .filter((r) => r.meta.wcag && r.meta.wcagNone !== undefined)
+      .map((r) => r.meta.id);
     expect(neither).toEqual([]);
     expect(both).toEqual([]);
   });
@@ -100,7 +104,9 @@ describe("a11y rules declare WCAG criteria (repo#3093)", () => {
 
   test("images/alt-text cites 1.1.1 Non-text Content at A; viewport-zoom and meta-title cite none (repo#3094)", () => {
     const all = loadAllRules();
-    expect(all.get("images/alt-text")!.meta.wcag).toEqual([{ sc: "1.1.1", level: "A", version: "2.0" }]);
+    expect(all.get("images/alt-text")!.meta.wcag).toEqual([
+      { sc: "1.1.1", level: "A", version: "2.0" },
+    ]);
     expect(all.get("mobile/viewport-zoom")!.meta.wcag).toBeUndefined();
     expect(all.get("core/meta-title")!.meta.wcag).toBeUndefined();
   });
@@ -137,7 +143,9 @@ describe("meetsWcagTarget / wcagLevelDisablePatterns", () => {
 describe("images/alt-text under --wcag-level (repo#3094)", () => {
   test("is never in a level's disables, nor are untagged non-a11y rules: the level filters a11y rules only", () => {
     const metas = [...loadAllRules().values()].map((r) => r.meta);
-    expect(metas.find((m) => m.id === "images/alt-text")!.wcag).toEqual([{ sc: "1.1.1", level: "A", version: "2.0" }]);
+    expect(metas.find((m) => m.id === "images/alt-text")!.wcag).toEqual([
+      { sc: "1.1.1", level: "A", version: "2.0" },
+    ]);
     for (const level of ["A", "AA", "AAA"] as const) {
       const out = wcagLevelDisablePatterns(metas, level);
       expect(out, level).not.toContain("images/alt-text");

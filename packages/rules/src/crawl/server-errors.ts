@@ -13,7 +13,10 @@
 // `pages-not-fetched` for the same reason: the page it failed to fetch is the one that may still
 // answer 5xx. A targeted run never gets here (the runner skips site rules with `targeted-run`).
 
-import { CRAWL_CAPPED_SKIP_REASON, PAGES_NOT_FETCHED_SKIP_REASON } from "@squirrelscan/core-contracts";
+import {
+  CRAWL_CAPPED_SKIP_REASON,
+  PAGES_NOT_FETCHED_SKIP_REASON,
+} from "@squirrelscan/core-contracts";
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 

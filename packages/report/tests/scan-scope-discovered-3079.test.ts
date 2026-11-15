@@ -12,12 +12,22 @@ const report = (discovered?: unknown): AuditReport =>
     warnings: 0,
     failed: 0,
     ruleResults: {},
-    scanScope: { origin: "cli", maxPages: 2, pagesCrawled: 2, capped: true, ...(discovered ? { discovered } : {}) },
+    scanScope: {
+      origin: "cli",
+      maxPages: 2,
+      pagesCrawled: 2,
+      capped: true,
+      ...(discovered ? { discovered } : {}),
+    },
   }) as unknown as AuditReport;
 
 describe("scanScopeDiscovered", () => {
   test("reads the split and recomputes the total", () => {
-    expect(scanScopeDiscovered(report({ total: 99, sitemap: 3, links: 4 }))).toEqual({ total: 7, sitemap: 3, links: 4 });
+    expect(scanScopeDiscovered(report({ total: 99, sitemap: 3, links: 4 }))).toEqual({
+      total: 7,
+      sitemap: 3,
+      links: 4,
+    });
   });
   test("absent or malformed field is null so older reports still render", () => {
     expect(scanScopeDiscovered(report())).toBeNull();

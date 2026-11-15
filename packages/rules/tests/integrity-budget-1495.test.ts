@@ -8,12 +8,19 @@ import { rank, shortlist, urlText } from "../src/integrity/controls";
 import { OFF, finished, fired, foundOrNoted, run, url } from "./integrity-budget-fixture";
 
 const links = (hrefs: string[]) => {
-  const doc = parsePage(`<html><body>${hrefs.map((h) => `<a href="${h}">x</a>`).join("")}</body></html>`, url).document!;
+  const doc = parsePage(
+    `<html><body>${hrefs.map((h) => `<a href="${h}">x</a>`).join("")}</body></html>`,
+    url,
+  ).document!;
   return Array.from(doc.querySelectorAll("a"));
 };
 const order = (hrefs: string[]): string[] => {
   const found = links(hrefs);
-  return shortlist(found, () => null, () => false).chosen.map((c) => c.href);
+  return shortlist(
+    found,
+    () => null,
+    () => false,
+  ).chosen.map((c) => c.href);
 };
 
 test("the shortlist puts sign-in paths ahead of other off-site links, judged on the normalised text", () => {
@@ -30,7 +37,13 @@ test("the shortlist puts sign-in paths ahead of other off-site links, judged on 
 
 test("off-site links are NOT promoted in the shortlist: decoys cannot crowd out a control (#1495 blocker)", () => {
   // no sign-in path, no cue: document order among the second tier, whatever the host looks like
-  const hrefs = ["https://a.invalid/x", "//b.invalid/x", "\\\\c.invalid/x", "http:d.invalid/x", "https://e.invalid/x"];
+  const hrefs = [
+    "https://a.invalid/x",
+    "//b.invalid/x",
+    "\\\\c.invalid/x",
+    "http:d.invalid/x",
+    "https://e.invalid/x",
+  ];
   expect(order(hrefs)).toEqual(hrefs);
   // and a sign-in path is ahead of all of them
   expect(order([...hrefs, "https://f.invalid/login"])[0]).toBe("https://f.invalid/login");
@@ -75,7 +88,9 @@ test("60,500 off-site decoys before a real button or sign-in link: finished, fou
 
 test("a page of off-site links with a long padded query stays quick and is still read", async () => {
   const tabs = "\t".repeat(1_000_000);
-  const { ms, checks } = await run(`<a href="https://credential-fixture.invalid/${tabs}signin">Sign in with Google</a>`);
+  const { ms, checks } = await run(
+    `<a href="https://credential-fixture.invalid/${tabs}signin">Sign in with Google</a>`,
+  );
   expect(foundOrNoted(checks, "brand-impersonation")).toBe(true);
   expect(ms).toBeLessThan(5_000);
 }, 60_000);

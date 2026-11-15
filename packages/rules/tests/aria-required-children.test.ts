@@ -33,26 +33,53 @@ describe("a11y/aria-required-children: implicit roles satisfy the requirement (#
       missing(`<div role="radiogroup" aria-label="Size">
         <div><input type="radio" id="s" name="size" value="s"><label for="s">S</label></div>
         <div><input type="radio" id="m" name="size" value="m"><label for="m">M</label></div>
-      </div>`)
+      </div>`),
     ).toEqual([]);
   });
 
   test.each([
-    ["radiogroup > label > input[type=radio]", `<div role="radiogroup"><label><input type="radio" name="c"> Red</label></div>`],
-    ["listbox > optgroup (group) > option", `<div role="listbox"><optgroup label="Citrus"><option>Lemon</option></optgroup></div>`],
-    ["tree > fieldset > treeitem", `<div role="tree"><fieldset><legend>src</legend><div role="treeitem">a.ts</div></fieldset></div>`],
+    [
+      "radiogroup > label > input[type=radio]",
+      `<div role="radiogroup"><label><input type="radio" name="c"> Red</label></div>`,
+    ],
+    [
+      "listbox > optgroup (group) > option",
+      `<div role="listbox"><optgroup label="Citrus"><option>Lemon</option></optgroup></div>`,
+    ],
+    [
+      "tree > fieldset > treeitem",
+      `<div role="tree"><fieldset><legend>src</legend><div role="treeitem">a.ts</div></fieldset></div>`,
+    ],
     ["tree > explicit group, as before", `<div role="tree"><div role="group">files</div></div>`],
-    ["grid > table > thead (rowgroup)", `<div role="grid"><table><thead><tr><th>Name</th></tr></thead></table></div>`],
-    ["row > th[scope=row] (rowheader)", `<table><tr role="row"><th scope="row">Total</th></tr></table>`],
+    [
+      "grid > table > thead (rowgroup)",
+      `<div role="grid"><table><thead><tr><th>Name</th></tr></thead></table></div>`,
+    ],
+    [
+      "row > th[scope=row] (rowheader)",
+      `<table><tr role="row"><th scope="row">Total</th></tr></table>`,
+    ],
     ["row > td (cell)", `<table><tr role="row"><td>3</td></tr></table>`],
     ["row > td in a grid (gridcell)", `<table role="grid"><tr role="row"><td>3</td></tr></table>`],
     ["list > li (listitem)", `<div role="list"><li>one</li></div>`],
     ["table > tbody (rowgroup)", `<div role="table"><tbody><tr><td>1</td></tr></tbody></div>`],
     ["feed > article", `<div role="feed"><article>post</article></div>`],
-    ["explicit role in a fallback list, uppercase", `<div role="radiogroup"><span role="widget RADIO" aria-checked="false">A</span></div>`],
-    ["role=none is ignored on a focusable element", `<ul role="list"><li role="none" tabindex="0">Item</li></ul>`],
-    ["role=presentation is ignored with a global ARIA attribute", `<ul role="list"><li role="presentation" aria-label="Item">Item</li></ul>`],
-    ["role=none is ignored on an editing host", `<ul role="list"><li role="none" contenteditable="true">Item</li></ul>`],
+    [
+      "explicit role in a fallback list, uppercase",
+      `<div role="radiogroup"><span role="widget RADIO" aria-checked="false">A</span></div>`,
+    ],
+    [
+      "role=none is ignored on a focusable element",
+      `<ul role="list"><li role="none" tabindex="0">Item</li></ul>`,
+    ],
+    [
+      "role=presentation is ignored with a global ARIA attribute",
+      `<ul role="list"><li role="presentation" aria-label="Item">Item</li></ul>`,
+    ],
+    [
+      "role=none is ignored on an editing host",
+      `<ul role="list"><li role="none" contenteditable="true">Item</li></ul>`,
+    ],
   ])("%s", (_name, body) => {
     expect(missing(body)).toEqual([]);
   });
@@ -61,39 +88,93 @@ describe("a11y/aria-required-children: implicit roles satisfy the requirement (#
     expect(
       missing(`<div role="tree" aria-owns="g">Tree</div>
         <fieldset id="g" aria-owns="t"><legend>Group</legend></fieldset>
-        <div role="treeitem" id="t">Item</div>`)
+        <div role="treeitem" id="t">Item</div>`),
     ).toEqual([]);
   });
 
   test("an aria-owns cycle ends", () => {
     expect(
-      missing(`<div role="radiogroup" id="a" aria-owns="b">A</div><div id="b" aria-owns="a">B</div>`)
+      missing(
+        `<div role="radiogroup" id="a" aria-owns="b">A</div><div id="b" aria-owns="a">B</div>`,
+      ),
     ).toEqual([`div[role="radiogroup"]: needs child with role=radio`]);
   });
 
   test("aria-owns brings the required children in from elsewhere", () => {
     expect(
       missing(`<div role="radiogroup" aria-owns="a b"><span>Pick one</span></div>
-        <div><input type="radio" id="a" name="o"><input type="radio" id="b" name="o"></div>`)
+        <div><input type="radio" id="a" name="o"><input type="radio" id="b" name="o"></div>`),
     ).toEqual([]);
   });
 });
 
 describe("a11y/aria-required-children: groups missing their children still fail", () => {
   test.each([
-    ["radiogroup with labels only", `<div role="radiogroup"><div><label>S</label></div></div>`, `div[role="radiogroup"]: needs child with role=radio`],
-    ["radiogroup with checkboxes", `<div role="radiogroup"><label><input type="checkbox"> Wrong</label></div>`, `div[role="radiogroup"]: needs child with role=radio`],
-    ["an explicit role replaces the implicit one", `<div role="radiogroup"><input type="radio" role="menuitemradio"></div>`, `div[role="radiogroup"]: needs child with role=radio`],
-    ["role=none takes li out of the list", `<div role="list"><li role="none">not an item</li></div>`, `div[role="list"]: needs child with role=listitem`],
-    ["tablist of plain buttons", `<div role="tablist"><button type="button">One</button></div>`, `div[role="tablist"]: needs child with role=tab`],
-    ["menu of list items", `<ul role="menu"><li><a href="/a">A</a></li></ul>`, `ul[role="menu"]: needs child with role=menuitem|menuitemcheckbox|menuitemradio|group`],
-    ["aria-owns pointing at nothing", `<div role="radiogroup" aria-owns="nope"><span>Pick</span></div>`, `div[role="radiogroup"]: needs child with role=radio`],
-    ["a native group wraps items, it is not one", `<div role="tree"><fieldset><legend>src</legend>files</fieldset></div>`, `div[role="tree"]: needs child with role=treeitem|group`],
-    ["details with no treeitem inside", `<div role="tree"><details><summary>src</summary>files</details></div>`, `div[role="tree"]: needs child with role=treeitem|group`],
-    ["an empty tbody is no row", `<div role="table"><tbody></tbody></div>`, `div[role="table"]: needs child with role=row|rowgroup`],
-    ["a padded type is not radio", `<div role="radiogroup"><input type=" radio "></div>`, `div[role="radiogroup"]: needs child with role=radio`],
-    ["an invalid tabindex does not make role=none focusable", `<div role="list"><li role="none" tabindex="bogus">x</li></div>`, `div[role="list"]: needs child with role=listitem`],
-    ["radios inside <noscript> do not exist with scripting on", `<div role="radiogroup">Choose<noscript><input type="radio"></noscript></div>`, `div[role="radiogroup"]: needs child with role=radio`],
+    [
+      "radiogroup with labels only",
+      `<div role="radiogroup"><div><label>S</label></div></div>`,
+      `div[role="radiogroup"]: needs child with role=radio`,
+    ],
+    [
+      "radiogroup with checkboxes",
+      `<div role="radiogroup"><label><input type="checkbox"> Wrong</label></div>`,
+      `div[role="radiogroup"]: needs child with role=radio`,
+    ],
+    [
+      "an explicit role replaces the implicit one",
+      `<div role="radiogroup"><input type="radio" role="menuitemradio"></div>`,
+      `div[role="radiogroup"]: needs child with role=radio`,
+    ],
+    [
+      "role=none takes li out of the list",
+      `<div role="list"><li role="none">not an item</li></div>`,
+      `div[role="list"]: needs child with role=listitem`,
+    ],
+    [
+      "tablist of plain buttons",
+      `<div role="tablist"><button type="button">One</button></div>`,
+      `div[role="tablist"]: needs child with role=tab`,
+    ],
+    [
+      "menu of list items",
+      `<ul role="menu"><li><a href="/a">A</a></li></ul>`,
+      `ul[role="menu"]: needs child with role=menuitem|menuitemcheckbox|menuitemradio|group`,
+    ],
+    [
+      "aria-owns pointing at nothing",
+      `<div role="radiogroup" aria-owns="nope"><span>Pick</span></div>`,
+      `div[role="radiogroup"]: needs child with role=radio`,
+    ],
+    [
+      "a native group wraps items, it is not one",
+      `<div role="tree"><fieldset><legend>src</legend>files</fieldset></div>`,
+      `div[role="tree"]: needs child with role=treeitem|group`,
+    ],
+    [
+      "details with no treeitem inside",
+      `<div role="tree"><details><summary>src</summary>files</details></div>`,
+      `div[role="tree"]: needs child with role=treeitem|group`,
+    ],
+    [
+      "an empty tbody is no row",
+      `<div role="table"><tbody></tbody></div>`,
+      `div[role="table"]: needs child with role=row|rowgroup`,
+    ],
+    [
+      "a padded type is not radio",
+      `<div role="radiogroup"><input type=" radio "></div>`,
+      `div[role="radiogroup"]: needs child with role=radio`,
+    ],
+    [
+      "an invalid tabindex does not make role=none focusable",
+      `<div role="list"><li role="none" tabindex="bogus">x</li></div>`,
+      `div[role="list"]: needs child with role=listitem`,
+    ],
+    [
+      "radios inside <noscript> do not exist with scripting on",
+      `<div role="radiogroup">Choose<noscript><input type="radio"></noscript></div>`,
+      `div[role="radiogroup"]: needs child with role=radio`,
+    ],
   ])("%s", (_name, body, expected) => {
     expect(missing(body)).toEqual([expected]);
   });
@@ -103,7 +184,9 @@ describe("a11y/aria-required-children: groups missing their children still fail"
   });
 
   test("a container inside <noscript> is not checked", () => {
-    expect(missing(`<noscript><div role="radiogroup"><label>S</label></div></noscript>`)).toEqual([]);
+    expect(missing(`<noscript><div role="radiogroup"><label>S</label></div></noscript>`)).toEqual(
+      [],
+    );
   });
 });
 

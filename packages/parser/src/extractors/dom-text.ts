@@ -45,7 +45,7 @@ export function collectTextExcluding(
   root: Node,
   isExcluded: (el: Element) => boolean,
   separator = "",
-  isBoundary?: (el: Element) => boolean
+  isBoundary?: (el: Element) => boolean,
 ): string {
   const out: string[] = [];
   // Explicit stack of remaining child lists; index tracks position in each.

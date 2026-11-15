@@ -57,12 +57,7 @@ class MemStore implements SmartAuditStore {
   refuseWholeRead = false;
   upsertCalls = 0;
 
-  private key(f: {
-    normalizedUrl: string;
-    ruleId: string;
-    checkName: string;
-    locator: string;
-  }) {
+  private key(f: { normalizedUrl: string; ruleId: string; checkName: string; locator: string }) {
     return findingKey(f.normalizedUrl, f.ruleId, f.checkName, f.locator);
   }
   async getFindings(_siteKey: string, states?: FindingState[]): Promise<PageFindingRecord[]> {
@@ -262,11 +257,11 @@ function storeState(store: MemStore): Array<[string, string, string]> {
   return [...store.findings.values()]
     .map(
       (f) =>
-        [
-          findingKey(f.normalizedUrl, f.ruleId, f.checkName, f.locator),
-          f.state,
-          f.provenance,
-        ] as [string, string, string],
+        [findingKey(f.normalizedUrl, f.ruleId, f.checkName, f.locator), f.state, f.provenance] as [
+          string,
+          string,
+          string,
+        ],
     )
     .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
 }
@@ -322,10 +317,7 @@ describe("streamed carried merge == materialized carried merge (#1876)", () => {
       rows,
       pages: [...crawled, ...carriedPages, removed, overlap],
       crawled,
-      statuses: [
-        ...crawled.map((url) => ({ url, status: 200 })),
-        { url: removed, status: 404 },
-      ],
+      statuses: [...crawled.map((url) => ({ url, status: 200 })), { url: removed, status: 404 }],
     };
   }
 
@@ -543,7 +535,8 @@ describe("the report's carried side is bounded per rule (#1876)", () => {
         // Every replay stands for 2 findings; the LAST one — dropped, because the
         // sample is full by then — also reports 400 affected pages.
         payload: JSON.stringify({
-          details: i === backlog.length - 1 ? { occurrences: 2, pagesTruncated: 400 } : { occurrences: 2 },
+          details:
+            i === backlog.length - 1 ? { occurrences: 2, pagesTruncated: 400 } : { occurrences: 2 },
         }),
       })),
       pages: backlog,

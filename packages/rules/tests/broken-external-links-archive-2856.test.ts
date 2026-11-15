@@ -49,7 +49,11 @@ describe("web-archive suggestion (repo#2856)", () => {
   });
 
   test("an archive URL that is not https web.archive.org is never shown", async () => {
-    for (const url of ["http://web.archive.org/web/1/x", "https://evil.example/web/1/x", "not a url"]) {
+    for (const url of [
+      "http://web.archive.org/web/1/x",
+      "https://evil.example/web/1/x",
+      "not a url",
+    ]) {
       const i = await item(link({ archive: { url } }));
       expect(i?.label).not.toContain("archived copy");
       expect(i?.meta).not.toHaveProperty("archiveUrl");
@@ -63,11 +67,15 @@ describe("web-archive suggestion (repo#2856)", () => {
   });
 
   test("a dead host with a snapshot shows it", async () => {
-    const i = await item(link({ status: null, error: EXTERNAL_LINK_HOST_UNRESOLVED_ERROR, archive: { url: SNAP } }));
+    const i = await item(
+      link({ status: null, error: EXTERNAL_LINK_HOST_UNRESOLVED_ERROR, archive: { url: SNAP } }),
+    );
     expect(i?.label ?? "").toContain("archived copy");
   });
 
   test("solution text tells agents to swap only when a copy is named", () => {
-    expect(brokenExternalLinksRule.meta.solution).toContain("do not replace a link that has no archived copy");
+    expect(brokenExternalLinksRule.meta.solution).toContain(
+      "do not replace a link that has no archived copy",
+    );
   });
 });

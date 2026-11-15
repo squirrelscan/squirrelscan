@@ -123,7 +123,10 @@ describe("crawl/sitemap-domain (repo#2320)", () => {
   });
 
   test("a URL listed many times counts once as an affected page", () => {
-    const locs = [...Array.from({ length: 60 }, () => "https://other.example.net/same"), `${BASE}/`];
+    const locs = [
+      ...Array.from({ length: 60 }, () => "https://other.example.net/same"),
+      `${BASE}/`,
+    ];
     const c = check(sitemapDomainRule, sitemaps({ locs }), "sitemap-domain");
     expect(c.message).toBe("60 URL(s) point to different domain(s)");
     expect(c.items).toHaveLength(URL_ITEM_SAMPLE);
@@ -152,7 +155,7 @@ describe("sitemap-orphans (repo#2320)", () => {
     const c = check(
       sitemapCoverageRule,
       sitemaps({ orphanPages: cut, orphanPagesTotal: 250_000, totalUrls: 250_001 }),
-      "sitemap-orphans"
+      "sitemap-orphans",
     );
     expect(c.status).toBe("warn");
     expect(c.message).toBe("250000 sitemap URL(s) were not crawled");
@@ -168,7 +171,7 @@ describe("sitemap-orphans (repo#2320)", () => {
     const c = check(
       sitemapValidRule,
       sitemaps({ orphanPages: cut, orphanPagesTotal: 250_000 }),
-      "sitemap-orphans"
+      "sitemap-orphans",
     );
     expect(c.status).toBe("info");
     expect(c.message).toBe("250000 URL(s) in sitemap not found during crawl");
@@ -177,7 +180,11 @@ describe("sitemap-orphans (repo#2320)", () => {
   });
 
   test("without an engine total the list length is the count", () => {
-    const c = check(sitemapCoverageRule, sitemaps({ orphanPages: urls(2, BASE) }), "sitemap-orphans");
+    const c = check(
+      sitemapCoverageRule,
+      sitemaps({ orphanPages: urls(2, BASE) }),
+      "sitemap-orphans",
+    );
     expect(c.message).toBe("2 sitemap URL(s) were not crawled");
     expect(c.items).toHaveLength(2);
     expect(c.details).toEqual({ total: 2 });

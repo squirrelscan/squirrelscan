@@ -135,11 +135,11 @@ describe("per-page fetcherId persistence (#512)", () => {
     await run(
       store.upsertPage(
         crawlId,
-        page("https://example.com/a", { fetcherId: "fetch", fallbackReason: "render-block" })
-      )
+        page("https://example.com/a", { fetcherId: "fetch", fallbackReason: "render-block" }),
+      ),
     );
     await run(
-      store.upsertPage(crawlId, page("https://example.com/b", { fetcherId: "cloud-render" }))
+      store.upsertPage(crawlId, page("https://example.com/b", { fetcherId: "cloud-render" })),
     );
 
     const a = await run(store.getPage(crawlId, "https://example.com/a"));
@@ -202,8 +202,8 @@ describe("per-page fetcherId persistence (#512)", () => {
     await run(
       store.upsertPage(
         crawlId,
-        page("https://example.com/a", { fetcherId: "fetch", fallbackReason: "render-block" })
-      )
+        page("https://example.com/a", { fetcherId: "fetch", fallbackReason: "render-block" }),
+      ),
     );
     const a = await run(store.getPage(crawlId, "https://example.com/a"));
     expect(a?.fetcherId).toBe("fetch");

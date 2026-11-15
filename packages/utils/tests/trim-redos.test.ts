@@ -20,7 +20,12 @@ describe("trailing-run trims are linear", () => {
   });
 
   test("a 100k-dot host is judged in under 50 ms", () => {
-    const hosts = [".".repeat(100_000), "a" + ".".repeat(100_000), "x.test" + ".".repeat(100_000), "x." + ".".repeat(100_000) + "z"];
+    const hosts = [
+      ".".repeat(100_000),
+      "a" + ".".repeat(100_000),
+      "x.test" + ".".repeat(100_000),
+      "x." + ".".repeat(100_000) + "z",
+    ];
     for (const host of hosts) {
       const [, ms] = timed(() => isReservedUnresolvableHostname(host));
       expect(ms).toBeLessThan(50);

@@ -41,10 +41,10 @@ const STATUS_RANK: Record<string, number> = { pass: 0, info: 1, warn: 2, fail: 3
 
 describe("core/charset placement is advice (pub#659)", () => {
   test("viewport first, UTF-8 header and meta: info advice, not an encoding warning", async () => {
-    const check = (await run(doc(`${VIEWPORT}\n${CHARSET}`), UTF8_HEADER));
+    const check = await run(doc(`${VIEWPORT}\n${CHARSET}`), UTF8_HEADER);
     expect(check.status).toBe("info");
     expect(check.message).toBe(
-      "UTF-8 is declared correctly; consider placing the charset meta first in head (best practice)"
+      "UTF-8 is declared correctly; consider placing the charset meta first in head (best practice)",
     );
     expect(check.value).toBe("utf-8");
   });
@@ -54,27 +54,27 @@ describe("core/charset placement is advice (pub#659)", () => {
   });
 
   test("the advice ranks below the missing and conflicting cases", async () => {
-    const advice = (await run(doc(`${VIEWPORT}\n${CHARSET}`), UTF8_HEADER));
-    const missing = (await run(doc(VIEWPORT)));
-    const conflict = (await run(doc(CHARSET), "text/html; charset=iso-8859-1"));
+    const advice = await run(doc(`${VIEWPORT}\n${CHARSET}`), UTF8_HEADER);
+    const missing = await run(doc(VIEWPORT));
+    const conflict = await run(doc(CHARSET), "text/html; charset=iso-8859-1");
     expect(STATUS_RANK[advice.status]!).toBeLessThan(STATUS_RANK[missing.status]!);
     expect(STATUS_RANK[advice.status]!).toBeLessThan(STATUS_RANK[conflict.status]!);
   });
 
   test("charset meta first (the control) passes", async () => {
-    const check = (await run(doc(`${CHARSET}\n${VIEWPORT}`), UTF8_HEADER));
+    const check = await run(doc(`${CHARSET}\n${VIEWPORT}`), UTF8_HEADER);
     expect(check.status).toBe("pass");
     expect(check.message).toBe("UTF-8 charset declared early in head");
   });
 
   test("header only, no meta: passes via header", async () => {
-    const check = (await run(doc(VIEWPORT), UTF8_HEADER));
+    const check = await run(doc(VIEWPORT), UTF8_HEADER);
     expect(check.status).toBe("pass");
     expect(check.message).toBe("UTF-8 charset declared via header");
   });
 
   test("a quoted header charset is read as its value", async () => {
-    const check = (await run(doc(VIEWPORT), 'text/html; charset="UTF-8"'));
+    const check = await run(doc(VIEWPORT), 'text/html; charset="UTF-8"');
     expect(check.status).toBe("pass");
     expect(check.value).toBe("UTF-8");
   });
@@ -83,7 +83,7 @@ describe("core/charset placement is advice (pub#659)", () => {
 describe("core/charset declaration beyond the first 1024 bytes (pub#659)", () => {
   test("first in head but after a 2,000-byte comment, no header: a conformance warning", async () => {
     const html = doc(CHARSET, `<!-- ${"x".repeat(2000)} -->`);
-    const check = (await run(html));
+    const check = await run(html);
     expect(check.status).toBe("warn");
     expect(check.message).toBe("Charset meta is not within the first 1024 bytes");
   });
@@ -149,14 +149,14 @@ describe("core/charset declaration beyond the first 1024 bytes (pub#659)", () =>
 
 describe("core/charset header vs page conflicts (pub#659)", () => {
   test("header iso-8859-1, meta utf-8: the header decides, so it warns", async () => {
-    const check = (await run(doc(CHARSET), "text/html; charset=iso-8859-1"));
+    const check = await run(doc(CHARSET), "text/html; charset=iso-8859-1");
     expect(check.status).toBe("warn");
     expect(check.message).toBe("Conflicting charset declarations: header iso-8859-1, page utf-8");
     expect(check.value).toBe("iso-8859-1");
   });
 
   test("header utf-8, meta windows-1252: warns", async () => {
-    const check = (await run(doc(`<meta charset="windows-1252">`), UTF8_HEADER));
+    const check = await run(doc(`<meta charset="windows-1252">`), UTF8_HEADER);
     expect(check.status).toBe("warn");
     expect(check.message).toBe("Conflicting charset declarations: header utf-8, page windows-1252");
   });
@@ -164,16 +164,18 @@ describe("core/charset header vs page conflicts (pub#659)", () => {
   test("header and http-equiv disagree: warns", async () => {
     const equiv = `<meta http-equiv="Content-Type" content="text/html; charset=utf-8">`;
     expect((await run(doc(equiv), "text/html; charset=windows-1252")).message).toBe(
-      "Conflicting charset declarations: header windows-1252, page utf-8"
+      "Conflicting charset declarations: header windows-1252, page utf-8",
     );
   });
 
   test("utf8 and UTF-8 are one charset, not a conflict", async () => {
-    expect((await run(doc(`<meta charset="utf8">`), "text/html; charset=UTF-8")).status).toBe("pass");
+    expect((await run(doc(`<meta charset="utf8">`), "text/html; charset=UTF-8")).status).toBe(
+      "pass",
+    );
   });
 
   test("two non-UTF-8 labels keep the Non-UTF-8 warning, naming the header's", async () => {
-    const check = (await run(doc(`<meta charset="windows-1252">`), "text/html; charset=iso-8859-1"));
+    const check = await run(doc(`<meta charset="windows-1252">`), "text/html; charset=iso-8859-1");
     expect(check.status).toBe("warn");
     expect(check.message).toBe("Non-UTF-8 charset declared: iso-8859-1");
   });
@@ -181,13 +183,13 @@ describe("core/charset header vs page conflicts (pub#659)", () => {
 
 describe("core/charset unchanged cases", () => {
   test("no declaration anywhere still fails", async () => {
-    const check = (await run(doc(VIEWPORT), "text/html"));
+    const check = await run(doc(VIEWPORT), "text/html");
     expect(check.status).toBe("fail");
     expect(check.message).toBe("No charset declaration found");
   });
 
   test("a non-UTF-8 meta with no header still warns", async () => {
-    const check = (await run(doc(`<meta charset="iso-8859-1">`)));
+    const check = await run(doc(`<meta charset="iso-8859-1">`));
     expect(check.status).toBe("warn");
     expect(check.message).toBe("Non-UTF-8 charset declared: iso-8859-1");
   });
@@ -208,13 +210,17 @@ describe("core/charset late meta with an agreeing Content-Type header (pub#1220)
 
   test("the reporter's fixture with a UTF-8 header is info and says so", async () => {
     expect(FIXTURE.indexOf(CHARSET)).toBeGreaterThan(1024);
-    const check = (await run(FIXTURE, UTF8_HEADER));
+    const check = await run(FIXTURE, UTF8_HEADER);
     expect(check.status).toBe("info");
     expect(check.message).toBe(MESSAGE);
   });
 
   test("header labels the decoder treats alike agree: utf8, UTF-8, quoted", async () => {
-    for (const header of ["text/html; charset=utf8", "text/html; charset=UTF-8", 'text/html; charset="utf-8"']) {
+    for (const header of [
+      "text/html; charset=utf8",
+      "text/html; charset=UTF-8",
+      'text/html; charset="utf-8"',
+    ]) {
       expect([header, (await run(FIXTURE, header)).status]).toEqual([header, "info"]);
     }
   });
@@ -227,21 +233,21 @@ describe("core/charset late meta with an agreeing Content-Type header (pub#1220)
 
   test("the same page with no charset in the header still warns", async () => {
     for (const header of ["text/html", undefined]) {
-      const check = (await run(FIXTURE, header));
+      const check = await run(FIXTURE, header);
       expect(check.status).toBe("warn");
       expect(check.message).toBe("Charset meta is not within the first 1024 bytes");
     }
   });
 
   test("a conflicting header still gives the conflict warning, wherever the meta sits", async () => {
-    const check = (await run(FIXTURE, "text/html; charset=iso-8859-1"));
+    const check = await run(FIXTURE, "text/html; charset=iso-8859-1");
     expect(check.status).toBe("warn");
     expect(check.message).toBe("Conflicting charset declarations: header iso-8859-1, page utf-8");
   });
 
   test("a non-UTF-8 page keeps the non-UTF-8 warning", async () => {
     const late = FIXTURE.replace(CHARSET, `<meta charset="windows-1252">`);
-    const check = (await run(late, "text/html; charset=windows-1252"));
+    const check = await run(late, "text/html; charset=windows-1252");
     expect(check.status).toBe("warn");
     expect(check.message).toBe("Non-UTF-8 charset declared: windows-1252");
   });

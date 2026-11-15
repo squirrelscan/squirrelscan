@@ -69,7 +69,11 @@ export const ariaTooltipNameRule: Rule = {
     }
     if (unnamed.unconfirmed.length > 0) {
       checks.push(
-        unconfirmedRow("aria-tooltip-name", "tooltip(s) without accessible content", unnamed.unconfirmed),
+        unconfirmedRow(
+          "aria-tooltip-name",
+          "tooltip(s) without accessible content",
+          unnamed.unconfirmed,
+        ),
       );
     }
     if (missingNames.length === 0 && unnamed.unconfirmed.length === 0) {

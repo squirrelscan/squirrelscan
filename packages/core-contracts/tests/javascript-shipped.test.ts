@@ -13,7 +13,10 @@ describe("buildJavascriptShipped (squirrelscan/repo#3397)", () => {
   test("totals distinct measured scripts and ranks the heaviest pages", () => {
     const js = buildJavascriptShipped({
       sameSite: [
-        script("https://e.test/_next/static/chunks/main.js", 4000, ["https://e.test/", "https://e.test/a"]),
+        script("https://e.test/_next/static/chunks/main.js", 4000, [
+          "https://e.test/",
+          "https://e.test/a",
+        ]),
         script("https://e.test/_next/static/chunks/page.js", 2000, ["https://e.test/a"]),
         script("https://e.test/app.js", 1000, ["https://e.test/b"]),
         // Listed twice: counted once.

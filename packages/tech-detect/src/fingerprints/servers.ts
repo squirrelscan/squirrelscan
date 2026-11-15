@@ -7,9 +7,7 @@ export const SERVER_FINGERPRINTS: TechFingerprint[] = [
     category: "web-server",
     website: "https://nginx.org",
     icon: "nginx",
-    detectors: [
-      { type: "header", name: "server", pattern: /^nginx/i },
-    ],
+    detectors: [{ type: "header", name: "server", pattern: /^nginx/i }],
     versionPattern: /nginx\/([\d.]+)/i,
   },
   {
@@ -18,9 +16,7 @@ export const SERVER_FINGERPRINTS: TechFingerprint[] = [
     category: "web-server",
     website: "https://httpd.apache.org",
     icon: "apache",
-    detectors: [
-      { type: "header", name: "server", pattern: /^Apache/i },
-    ],
+    detectors: [{ type: "header", name: "server", pattern: /^Apache/i }],
     versionPattern: /Apache\/([\d.]+)/i,
   },
   {
@@ -29,9 +25,7 @@ export const SERVER_FINGERPRINTS: TechFingerprint[] = [
     category: "web-server",
     website: "https://iis.net",
     icon: "iis",
-    detectors: [
-      { type: "header", name: "server", pattern: /Microsoft-IIS/i },
-    ],
+    detectors: [{ type: "header", name: "server", pattern: /Microsoft-IIS/i }],
     versionPattern: /Microsoft-IIS\/([\d.]+)/i,
   },
   {
@@ -40,9 +34,7 @@ export const SERVER_FINGERPRINTS: TechFingerprint[] = [
     category: "web-server",
     website: "https://litespeedtech.com",
     icon: "litespeed",
-    detectors: [
-      { type: "header", name: "server", pattern: /LiteSpeed/i },
-    ],
+    detectors: [{ type: "header", name: "server", pattern: /LiteSpeed/i }],
     versionPattern: /LiteSpeed\/([\d.]+)/i,
   },
   {
@@ -51,9 +43,7 @@ export const SERVER_FINGERPRINTS: TechFingerprint[] = [
     category: "web-server",
     website: "https://caddyserver.com",
     icon: "caddy",
-    detectors: [
-      { type: "header", name: "server", pattern: /^Caddy/i },
-    ],
+    detectors: [{ type: "header", name: "server", pattern: /^Caddy/i }],
     versionPattern: /Caddy\/([\d.]+)/i,
   },
   {
@@ -62,8 +52,6 @@ export const SERVER_FINGERPRINTS: TechFingerprint[] = [
     category: "web-server",
     website: "https://envoyproxy.io",
     icon: "envoy",
-    detectors: [
-      { type: "header", name: "server", pattern: /^envoy/i },
-    ],
+    detectors: [{ type: "header", name: "server", pattern: /^envoy/i }],
   },
 ];

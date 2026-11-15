@@ -33,7 +33,9 @@ describe("createFetchDocumentFetcher decompression resilience #292", () => {
     server = Bun.serve({
       port: 0,
       fetch: () =>
-        new Response(html, { headers: { "Content-Encoding": "gzip", "Content-Type": "text/html" } }),
+        new Response(html, {
+          headers: { "Content-Encoding": "gzip", "Content-Type": "text/html" },
+        }),
     });
     const fetcher = createFetchDocumentFetcher();
     const res = await fetcher.fetch({ url: `http://localhost:${server.port}/` });
@@ -43,7 +45,10 @@ describe("createFetchDocumentFetcher decompression resilience #292", () => {
 
   it("returns valid bodies normally", async () => {
     const html = "<!doctype html><title>ok</title>";
-    server = Bun.serve({ port: 0, fetch: () => new Response(html, { headers: { "Content-Type": "text/html" } }) });
+    server = Bun.serve({
+      port: 0,
+      fetch: () => new Response(html, { headers: { "Content-Type": "text/html" } }),
+    });
     const fetcher = createFetchDocumentFetcher();
     const res = await fetcher.fetch({ url: `http://localhost:${server.port}/` });
     expect(res.body).toBe(html);
@@ -88,7 +93,9 @@ describe("createFetchDocumentFetcher undecoded fetches #2717", () => {
       { preconnect: real.preconnect },
     );
     try {
-      const res = await createFetchDocumentFetcher().fetch({ url: `http://localhost:${server.port}/a` });
+      const res = await createFetchDocumentFetcher().fetch({
+        url: `http://localhost:${server.port}/a`,
+      });
       expect(res.body).toBe(html);
       expect(res.headers["content-encoding"]).toBe("br");
     } finally {

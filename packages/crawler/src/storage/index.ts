@@ -35,11 +35,7 @@ export {
   type StoredScriptsSummary,
 } from "./sqlite";
 
-export function createTestStorage(): Effect.Effect<
-  CrawlStorage,
-  StorageError,
-  never
-> {
+export function createTestStorage(): Effect.Effect<CrawlStorage, StorageError, never> {
   return Effect.gen(function* () {
     const storage = new SQLiteStorage(":memory:");
     yield* storage.init();

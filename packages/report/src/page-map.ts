@@ -98,11 +98,11 @@ export interface PageMapFilters {
 export function hasPageMapFilters(filters: PageMapFilters): boolean {
   return Boolean(
     filters.missing?.length ||
-      filters.duplicate?.length ||
-      filters.tooLong ||
-      filters.orphan ||
-      filters.section ||
-      filters.page?.length,
+    filters.duplicate?.length ||
+    filters.tooLong ||
+    filters.orphan ||
+    filters.section ||
+    filters.page?.length,
   );
 }
 
@@ -164,7 +164,8 @@ export function filterPageMap(rows: readonly PageMapRow[], filters: PageMapFilte
       if (!hit) return false;
     }
     if (filters.duplicate?.length) {
-      if (!filters.duplicate.some((field) => row.flags.includes(`duplicate-${field}`))) return false;
+      if (!filters.duplicate.some((field) => row.flags.includes(`duplicate-${field}`)))
+        return false;
     }
     if (filters.tooLong) {
       if (
@@ -259,19 +260,21 @@ export function pageMapMeta(
 }
 
 export function renderPageMapJson(rows: readonly PageMapRow[], meta: PageMapMeta): string {
-  return `${escapeJsonUnsafe(JSON.stringify(
-    {
-      site: meta.site,
-      crawlId: meta.crawlId,
-      startedAt: new Date(meta.startedAt).toISOString(),
-      total: meta.total,
-      filtered: rows.length,
-      ...(meta.storeIntegrity ? { storeIntegrity: meta.storeIntegrity } : {}),
-      pages: rows,
-    },
-    null,
-    2,
-  ))}\n`;
+  return `${escapeJsonUnsafe(
+    JSON.stringify(
+      {
+        site: meta.site,
+        crawlId: meta.crawlId,
+        startedAt: new Date(meta.startedAt).toISOString(),
+        total: meta.total,
+        filtered: rows.length,
+        ...(meta.storeIntegrity ? { storeIntegrity: meta.storeIntegrity } : {}),
+        pages: rows,
+      },
+      null,
+      2,
+    ),
+  )}\n`;
 }
 
 /** One RFC 4180 table with a header row. List cells join with a space; every cell is spreadsheet-safe. */
@@ -317,7 +320,9 @@ export function renderPageMapMarkdown(rows: readonly PageMapRow[], meta: PageMap
       : `${rows.length} of ${meta.total} pages match, from audit ${markdownCodeSpan(meta.crawlId.slice(0, 8))}.`,
   );
   out.push("");
-  out.push("| URL | Status | Title | Len | Description | Len | H1 | Words | Schema | In | Out | Flags |");
+  out.push(
+    "| URL | Status | Title | Len | Description | Len | H1 | Words | Schema | In | Out | Flags |",
+  );
   out.push("|---|---|---|---|---|---|---|---|---|---|---|---|");
   for (const row of rows) {
     out.push(

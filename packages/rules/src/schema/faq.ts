@@ -24,9 +24,7 @@ export const faqSchemaRule: Rule = {
     const doc = ctx.parsed.document;
     if (!doc) return { checks: [] };
 
-    const schemaScripts = doc.querySelectorAll(
-      'script[type="application/ld+json"]'
-    );
+    const schemaScripts = doc.querySelectorAll('script[type="application/ld+json"]');
     let faqSchema: Record<string, unknown> | null = null;
     // pub#817: every node on the page, so a `mainEntity` reference to a
     // Question elsewhere in the `@graph`, or in another script, resolves.
@@ -43,10 +41,7 @@ export const faqSchemaRule: Rule = {
 
       for (const schema of schemas) {
         const type = schema["@type"];
-        if (
-          type === "FAQPage" ||
-          (Array.isArray(type) && type.includes("FAQPage"))
-        ) {
+        if (type === "FAQPage" || (Array.isArray(type) && type.includes("FAQPage"))) {
           faqSchema = schema;
           break;
         }
@@ -75,8 +70,8 @@ export const faqSchemaRule: Rule = {
     }
 
     const ids = indexJsonLdIds(pageNodes, ctx.page.url);
-    const questions: unknown[] = (Array.isArray(mainEntity) ? mainEntity : [mainEntity]).map(
-      (q) => resolveJsonLdRef(q, ids, ctx.page.url)
+    const questions: unknown[] = (Array.isArray(mainEntity) ? mainEntity : [mainEntity]).map((q) =>
+      resolveJsonLdRef(q, ids, ctx.page.url),
     );
 
     if (questions.length === 0) {

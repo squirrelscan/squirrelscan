@@ -46,7 +46,12 @@ afterAll(() => rmSync(tmpDir, { recursive: true, force: true }));
 const PAGE_COUNT = 60;
 
 function emptyAssets(): PreFetchedAssets {
-  return { resourceSizes: { css: [], images: [] }, scripts: [], pdfSizes: [], sitemapUrlStatuses: [] };
+  return {
+    resourceSizes: { css: [], images: [] },
+    scripts: [],
+    pdfSizes: [],
+    sitemapUrlStatuses: [],
+  };
 }
 
 /**
@@ -580,7 +585,10 @@ describe("per-page rule-result cache — replay parity", () => {
     const { dbPath, crawlId } = await buildCrawl("invalidate-version");
     const cache = memoryCacheStore();
     const first = await runOnce(dbPath, crawlId, { store: cache.store, engineVersion: "0.0.91" });
-    const upgraded = await runOnce(dbPath, crawlId, { store: cache.store, engineVersion: "0.0.92" });
+    const upgraded = await runOnce(dbPath, crawlId, {
+      store: cache.store,
+      engineVersion: "0.0.92",
+    });
     expect(upgraded.replayedPages).toBe(0);
     expect(upgraded.freshPages).toBe(first.freshPages);
   }, 120_000);

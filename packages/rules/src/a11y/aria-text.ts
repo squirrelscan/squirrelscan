@@ -4,13 +4,7 @@ import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { getAttrCI } from "@squirrelscan/utils";
 
-const NATIVE_FOCUSABLE_SELECTOR = [
-  "a[href]",
-  "button",
-  "input",
-  "select",
-  "textarea",
-].join(", ");
+const NATIVE_FOCUSABLE_SELECTOR = ["a[href]", "button", "input", "select", "textarea"].join(", ");
 
 function isFocusable(el: Element): boolean {
   if (el.matches(NATIVE_FOCUSABLE_SELECTOR)) return true;
@@ -69,13 +63,12 @@ export const ariaTextRule: Rule = {
   meta: {
     id: "a11y/aria-text",
     name: "ARIA Text",
-    description:
-      "Checks that elements with role='text' have no focusable descendants",
+    description: "Checks that elements with role='text' have no focusable descendants",
     solution:
       "Elements with role='text' tell screen readers to treat the content as a single text string. If focusable elements (links, buttons, inputs) are nested inside, screen reader users cannot interact with them properly. Remove role='text' from the parent, or restructure so focusable elements are outside the role='text' container.",
     category: "a11y",
     wcagNone:
-      "It flags focusable elements inside role=\"text\", a role that is not part of WAI-ARIA, so no WCAG success criterion covers it.",
+      'It flags focusable elements inside role="text", a role that is not part of WAI-ARIA, so no WCAG success criterion covers it.',
     scope: "page",
     findingScope: "page",
     verdictScope: "page",
@@ -108,9 +101,7 @@ export const ariaTextRule: Rule = {
         const id = el.getAttribute("id");
         const tag = el.tagName.toLowerCase();
         violations.push(
-          id
-            ? `${tag}#${id} (${focusable} focusable)`
-            : `${tag} (${focusable} focusable)`
+          id ? `${tag}#${id} (${focusable} focusable)` : `${tag} (${focusable} focusable)`,
         );
       }
     }
@@ -121,10 +112,7 @@ export const ariaTextRule: Rule = {
         status: "warn",
         message: `${violations.length} role="text" element(s) with focusable descendants`,
         items: violations.slice(0, 10).map((id) => ({ id })),
-        details:
-          violations.length > 10
-            ? { additional: violations.length - 10 }
-            : undefined,
+        details: violations.length > 10 ? { additional: violations.length - 10 } : undefined,
       });
     } else {
       checks.push({

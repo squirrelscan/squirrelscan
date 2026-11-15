@@ -35,7 +35,10 @@ describe("report cacheFreshness (#2032)", () => {
     expect(JSON.parse(renderJson(report({ cacheFreshness: note }))).cacheFreshness).toEqual(note);
   });
   test("text and markdown name the stale page and the fresh render", () => {
-    for (const out of [renderText(report({ cacheFreshness: note })), renderMarkdown(report({ cacheFreshness: note }))]) {
+    for (const out of [
+      renderText(report({ cacheFreshness: note })),
+      renderMarkdown(report({ cacheFreshness: note })),
+    ]) {
       expect(out).toContain("Cache-Control: no-cache");
       expect(out).toContain("https://example.com/a");
       expect(out).toContain("Age: 90");
@@ -44,7 +47,9 @@ describe("report cacheFreshness (#2032)", () => {
   });
   test("a clean no-cache crawl says no page looked cached", () => {
     const out = renderText(
-      report({ cacheFreshness: { noCache: true, freshRender: false, stalePageCount: 0, stalePages: [] } }),
+      report({
+        cacheFreshness: { noCache: true, freshRender: false, stalePageCount: 0, stalePages: [] },
+      }),
     );
     expect(out).toContain("No page response looked cached.");
     expect(out).not.toContain("rendered fresh");

@@ -53,9 +53,8 @@ export const fontLoadingRule: Rule = {
     const hasGoogleFontsPreconnect = hints.preconnectTags.some((url) =>
       hasHostname(url, ctx.page.url, ["fonts.googleapis.com", "fonts.gstatic.com"]),
     );
-    const usesGoogleFonts = (ctx.parsed.document
-      ? querySelectorAllOutsideNoscript(ctx.parsed.document, "link[href]")
-      : []
+    const usesGoogleFonts = (
+      ctx.parsed.document ? querySelectorAllOutsideNoscript(ctx.parsed.document, "link[href]") : []
     ).some((link) =>
       hasHostname(link.getAttribute("href") ?? "", ctx.page.url, ["fonts.googleapis.com"]),
     );

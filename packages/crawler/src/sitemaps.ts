@@ -10,7 +10,11 @@ import type {
   SitemapFetchFailure,
   SitemapUrl,
 } from "@squirrelscan/core-contracts";
-import { createHeaderScope, mergeHeaderRecords, type HeaderScope } from "@squirrelscan/utils/headers";
+import {
+  createHeaderScope,
+  mergeHeaderRecords,
+  type HeaderScope,
+} from "@squirrelscan/utils/headers";
 import {
   EGRESS_OFF_SITE_REFUSAL,
   EgressRefusedError,
@@ -236,10 +240,13 @@ function wellFormednessError(content: string): string | null {
   const at = (line: number, col: number) =>
     [line + lineOffset, line === 1 ? col + lastSkipped : col] as const;
   const { msg, line, col } = result.err;
-  const message = msg.replace(/opened in line (\d+), col (\d+)/g, (_match, l: string, c: string) => {
-    const [openLine, openCol] = at(Number(l), Number(c));
-    return `opened in line ${openLine}, col ${openCol}`;
-  });
+  const message = msg.replace(
+    /opened in line (\d+), col (\d+)/g,
+    (_match, l: string, c: string) => {
+      const [openLine, openCol] = at(Number(l), Number(c));
+      return `opened in line ${openLine}, col ${openCol}`;
+    },
+  );
   const [errLine, errCol] = at(line, col);
   return `${SITEMAP_NOT_WELL_FORMED_ERROR}: ${message} (line ${errLine}, column ${errCol})`;
 }
@@ -517,7 +524,10 @@ function inflateWithin(coding: string, bytes: Uint8Array): Uint8Array | string {
   try {
     return inflate(bytes, { maxOutputLength: SITEMAP_MAX_BYTES });
   } catch (error) {
-    if (error instanceof RangeError || (error as { code?: unknown }).code === "ERR_BUFFER_TOO_LARGE") {
+    if (
+      error instanceof RangeError ||
+      (error as { code?: unknown }).code === "ERR_BUFFER_TOO_LARGE"
+    ) {
       return SITEMAP_TOO_LARGE_ERROR;
     }
     const prefix = inflate === gunzipSync ? SITEMAP_CORRUPT_GZIP_ERROR : `Corrupt ${coding} body`;
@@ -558,7 +568,9 @@ export function decodeSitemapBody(
   // One coding at most: each layer can inflate to the full limit, and nothing
   // a real server sends stacks them.
   if (codings.length > 1) {
-    return { data: unreadableSitemap(url, `${SITEMAP_UNSUPPORTED_ENCODING_ERROR}: ${codings.join(", ")}`) };
+    return {
+      data: unreadableSitemap(url, `${SITEMAP_UNSUPPORTED_ENCODING_ERROR}: ${codings.join(", ")}`),
+    };
   }
   const coding = codings[0];
   if (coding) {
@@ -1249,7 +1261,9 @@ export function discoverSitemaps(
  * sitemap file before the cap is hit. Deduplicates by loc.
  */
 export function selectSitemapUrls(sitemaps: SitemapData[], cap: number): SitemapUrl[] {
-  const lists = sitemaps.filter((sitemap) => sitemap.urls.length > 0).map((sitemap) => sitemap.urls);
+  const lists = sitemaps
+    .filter((sitemap) => sitemap.urls.length > 0)
+    .map((sitemap) => sitemap.urls);
   const selected: SitemapUrl[] = [];
   const seen = new Set<string>();
   let offset = 0;

@@ -239,7 +239,7 @@ function candidateRank(c: EndpointCandidate): number {
  * the discovery pass's order. Deduped on origin plus path. Pure: sends nothing.
  */
 export function selectApiCandidates(
-  ctx: Pick<RuleContext, "site" | "endpointSurface" | "probe">
+  ctx: Pick<RuleContext, "site" | "endpointSurface" | "probe">,
 ): ApiCandidateSelection {
   const selection: ApiCandidateSelection = {
     candidates: [],
@@ -265,7 +265,8 @@ export function selectApiCandidates(
   // A path with a GET call site is probed even when other call sites POST to
   // it (a REST list and create share a path). A method-less literal is probed
   // only when no call site states another method for the same path.
-  const keyed: Array<{ c: EndpointCandidate; u: URL; url: string; method: string | undefined }> = [];
+  const keyed: Array<{ c: EndpointCandidate; u: URL; url: string; method: string | undefined }> =
+    [];
   const getPaths = new Set<string>();
   const otherPaths = new Set<string>();
   for (const { c } of ranked) {
@@ -348,7 +349,7 @@ export function buildApiProbe(endpointUrl: string): { url: string; init: Request
  */
 export function sendApiProbe(
   probe: ProbeBudget | undefined,
-  endpointUrl: string
+  endpointUrl: string,
 ): Promise<ApiProbeOutcome> {
   return sendAnonymousGet(probe, endpointUrl);
 }
@@ -380,7 +381,13 @@ const CREDENTIAL_EXACT = new Set([
 const CREDENTIAL_PARTS = ["password", "secret", "apikey", "accesskey", "privatekey"];
 const CREDENTIAL_SUFFIXES = ["token", "tokenhash"];
 // Pagination cursors end in "token" too, and are not credentials.
-const NOT_CREDENTIAL = new Set(["pagetoken", "nextpagetoken", "nexttoken", "continuationtoken", "cursortoken"]);
+const NOT_CREDENTIAL = new Set([
+  "pagetoken",
+  "nextpagetoken",
+  "nexttoken",
+  "continuationtoken",
+  "cursortoken",
+]);
 
 const PERSONAL_EXACT = new Set([
   "phone",
@@ -534,7 +541,7 @@ export function classifyField(name: string): FieldClass | null {
   if (
     !NOT_CREDENTIAL.has(n) &&
     (CREDENTIAL_EXACT.has(n) ||
-    CREDENTIAL_PARTS.some((p) => n.includes(p)) ||
+      CREDENTIAL_PARTS.some((p) => n.includes(p)) ||
       CREDENTIAL_SUFFIXES.some((s) => n.endsWith(s)))
   ) {
     return "credential";
@@ -745,7 +752,7 @@ export function summarizeFields(records: Record<string, unknown>[]): FieldSummar
 
 const TRUNCATED_LIST_RE = new RegExp(
   `^\\s*(?:\\[\\s*\\{|\\{\\s*"(?:${WRAPPER_KEYS.join("|")})"\\s*:\\s*\\[\\s*\\{)`,
-  "i"
+  "i",
 );
 const KEY_IN_PREFIX_RE = /[{,]\s*"([^"\\]{1,64})"\s*:/g;
 
@@ -868,7 +875,9 @@ function itemFor(f: Flagged): CheckItem {
       fieldCount: verdict.summary.fields.length,
       ...verdict.summary.sensitive,
       ...(verdict.summary.sample ? { sample: verdict.summary.sample } : {}),
-      ...(verdict.summary.unreportable > 0 ? { unreportableFields: verdict.summary.unreportable } : {}),
+      ...(verdict.summary.unreportable > 0
+        ? { unreportableFields: verdict.summary.unreportable }
+        : {}),
       ...(verdict.truncated ? { truncated: true, confidence: "lower" } : {}),
       source: candidate.source,
       discoveredVia: candidate.discoveredVia,
@@ -878,7 +887,12 @@ function itemFor(f: Flagged): CheckItem {
 
 const TIER_CHECKS: Record<
   Tier,
-  { name: string; status: CheckResult["status"]; severity: string; message: (n: number, first: Flagged) => string }
+  {
+    name: string;
+    status: CheckResult["status"];
+    severity: string;
+    message: (n: number, first: Flagged) => string;
+  }
 > = {
   sensitive: {
     name: CHECK_SENSITIVE,
@@ -966,7 +980,9 @@ export const unauthenticatedApiRule: Rule = {
     // this rule when the auth rule left it unread (squirrelscan#1886).
     // Undefined `ruleEnabled` means the default rule set.
     const authRuleOn = ctx.ruleEnabled?.(AUTH_ENDPOINT_DISCLOSURE_RULE_ID) ?? true;
-    const authUrls = new Set(authRuleOn ? selectAuthCandidates(ctx).candidates.map((c) => c.url) : []);
+    const authUrls = new Set(
+      authRuleOn ? selectAuthCandidates(ctx).candidates.map((c) => c.url) : [],
+    );
     let deferredToAuth = 0;
 
     let probed = 0;
@@ -1059,18 +1075,24 @@ export const unauthenticatedApiRule: Rule = {
       const why: string[] = [];
       if (pushback) {
         why.push(
-          `the site throttled the probes (HTTP 429) or answered with a bot challenge after ${probed} of ${total} endpoint(s), so no further request was sent`
+          `the site throttled the probes (HTTP 429) or answered with a bot challenge after ${probed} of ${total} endpoint(s), so no further request was sent`,
         );
       }
-      if (budgetStopped) why.push(`the probe budget ran out after ${probed} of ${total} endpoint(s)`);
+      if (budgetStopped)
+        why.push(`the probe budget ran out after ${probed} of ${total} endpoint(s)`);
       if (errored > 0) why.push(`${errored} probe(s) failed with a network error or timeout`);
-      if (serverErrors > 0) why.push(`${serverErrors} endpoint(s) answered with a server error (5xx)`);
+      if (serverErrors > 0)
+        why.push(`${serverErrors} endpoint(s) answered with a server error (5xx)`);
       const onlyBudget = budgetStopped && !pushback && errored === 0 && serverErrors === 0;
       const onlyErrors = !pushback && !budgetStopped && serverErrors === 0 && errored === probed;
       checks.push({
         name: CHECK_UNCHECKED,
         status: "skipped",
-        skipReason: onlyBudget ? "probe-budget" : onlyErrors ? "probe-errors" : PROBE_INCOMPLETE_SKIP_REASON,
+        skipReason: onlyBudget
+          ? "probe-budget"
+          : onlyErrors
+            ? "probe-errors"
+            : PROBE_INCOMPLETE_SKIP_REASON,
         message: `Unauthenticated API check incomplete: ${why.join("; ")}. ${unverified} of ${total} API endpoint(s) were not checked and may be exposed`,
         value: "not-checked",
         details: runDetails,

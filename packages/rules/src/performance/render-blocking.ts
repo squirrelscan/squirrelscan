@@ -60,7 +60,11 @@ export const renderBlockingRule: Rule = {
     // Check names by outcome class (#1741).
     checks: [
       { name: "render-blocking", outcome: "problem" },
-      { name: "render-blocking", outcome: "clean", clears: ["render-blocking", "slow-blocking-script"] },
+      {
+        name: "render-blocking",
+        outcome: "clean",
+        clears: ["render-blocking", "slow-blocking-script"],
+      },
       { name: "slow-blocking-script", outcome: "problem" },
     ],
   },

@@ -96,7 +96,9 @@ export function buildPageMap(
  * raised to the rows present, never lowered.
  */
 export function projectPageMap(map: PageMap): PageMap {
-  const kept = map.pages.slice(0, LIMITS.maxRows).map((row) => publishPageMapRow(row as PageMapRow));
+  const kept = map.pages
+    .slice(0, LIMITS.maxRows)
+    .map((row) => publishPageMapRow(row as PageMapRow));
   const total = Math.max(countOr0(map.total), map.pages.length);
   return {
     format: PAGE_MAP_FORMAT,

@@ -55,7 +55,9 @@ function legacyCtx(specs: Spec[]): RuleContext {
         url: u(s.path),
         statusCode: s.status ?? 200,
         parsed: parsePage(
-          s.noindex ? s.html.replace("<head>", '<head><meta name="robots" content="noindex">') : s.html,
+          s.noindex
+            ? s.html.replace("<head>", '<head><meta name="robots" content="noindex">')
+            : s.html,
           u(s.path),
         ),
         headers: {},
@@ -168,7 +170,10 @@ describe("content/voice-consistency", () => {
     expect(check.items?.[0]?.id).toBe(u("/odd"));
     expect(check.items?.[0]?.label).toContain("harder");
     expect(check.items?.[0]?.label).toContain("site norm of");
-    expect(check.items?.[0]?.meta).toMatchObject({ medianFlesch: expect.any(Number), fleschScore: expect.any(Number) });
+    expect(check.items?.[0]?.meta).toMatchObject({
+      medianFlesch: expect.any(Number),
+      fleschScore: expect.any(Number),
+    });
   });
 
   test("a much easier page is flagged too", async () => {
@@ -190,7 +195,10 @@ describe("content/voice-consistency", () => {
   });
 
   test("a stored page type of legal is excluded wherever the URL sits", async () => {
-    const specs = [...normals(14), { path: "/policies/page-7", html: html(HARD, 16), pageType: "legal" }];
+    const specs = [
+      ...normals(14),
+      { path: "/policies/page-7", html: html(HARD, 16), pageType: "legal" },
+    ];
     const check = (await run(streamCtx(specs)))[0]!;
     expect(check.status).toBe("pass");
     expect(check.details).toMatchObject({ excludedLegalPages: 1 });
@@ -203,7 +211,10 @@ describe("content/voice-consistency", () => {
   });
 
   test("too few scorable pages is skipped", async () => {
-    const short = Array.from({ length: 12 }, (_, i) => ({ path: `/s${i}`, html: html("Hi there. ", 2) }));
+    const short = Array.from({ length: 12 }, (_, i) => ({
+      path: `/s${i}`,
+      html: html("Hi there. ", 2),
+    }));
     const check = await bothPaths([...normals(VOICE_MIN_SAMPLE - 1), ...short]);
     expect(check.status).toBe("skipped");
     expect(check.message).toContain("enough text to score");

@@ -159,7 +159,7 @@ async function runBothWays(
   store: SQLiteStorage,
   rule: Rule,
   options: Record<string, unknown>,
-  crawlLimits?: { pagesCrawled: number; maxPages: number }
+  crawlLimits?: { pagesCrawled: number; maxPages: number },
 ) {
   const pages = await run(store.getPages(CRAWL));
   const sitePages = pages.map((p) => ({
@@ -292,10 +292,7 @@ describe("SiteQuery dual-path — links/weak-internal-links", () => {
         name: "weak-internal-links",
         status: "warn",
         message: "2 page(s) have only 1 internal link",
-        items: [
-          { id: "https://example.com/lonely" },
-          { id: "https://example.com/selfish" },
-        ],
+        items: [{ id: "https://example.com/lonely" }, { id: "https://example.com/selfish" }],
         details: { total: 2 },
         value: "/lonely\n/selfish",
       },
@@ -345,7 +342,7 @@ function legacyCounts(pages: PageRecord[]): {
   return {
     all: new Map(pages.map((p) => [p.normalizedUrl, all.get(normalizeUrl(p.normalizedUrl))!])),
     contextual: new Map(
-      pages.map((p) => [p.normalizedUrl, contextual.get(normalizeUrl(p.normalizedUrl))!])
+      pages.map((p) => [p.normalizedUrl, contextual.get(normalizeUrl(p.normalizedUrl))!]),
     ),
   };
 }
@@ -684,10 +681,32 @@ describe("createSiteQuery — page_features-backed aggregates", () => {
     const store = await freshStore();
     await run(
       store.upsertPageFeaturesBatch(CRAWL, [
-        feat({ normalizedUrl: "https://example.com/1", depth: 0, titleHash: "dup", pageType: "product", transferBytes: 100, secretHits: 1, templateFp: "T" }),
-        feat({ normalizedUrl: "https://example.com/2", titleHash: "dup", pageType: "product", transferBytes: 200, secretHits: 2, templateFp: "T" }),
-        feat({ normalizedUrl: "https://example.com/3", titleHash: "uniq", pageType: "article", transferBytes: 50, secretHits: 0, templateFp: "solo" }),
-      ])
+        feat({
+          normalizedUrl: "https://example.com/1",
+          depth: 0,
+          titleHash: "dup",
+          pageType: "product",
+          transferBytes: 100,
+          secretHits: 1,
+          templateFp: "T",
+        }),
+        feat({
+          normalizedUrl: "https://example.com/2",
+          titleHash: "dup",
+          pageType: "product",
+          transferBytes: 200,
+          secretHits: 2,
+          templateFp: "T",
+        }),
+        feat({
+          normalizedUrl: "https://example.com/3",
+          titleHash: "uniq",
+          pageType: "article",
+          transferBytes: 50,
+          secretHits: 0,
+          templateFp: "solo",
+        }),
+      ]),
     );
 
     const sq = await run(createSiteQuery(store, CRAWL));
@@ -696,15 +715,17 @@ describe("createSiteQuery — page_features-backed aggregates", () => {
     expect(sq.sumTransferBytes()).toBe(350);
     expect(sq.sumSecretHits()).toBe(3);
     expect(sq.homepage()?.normalizedUrl).toBe("https://example.com/1"); // depth 0
-    expect(sq.pagesByType("product")).toEqual([
-      "https://example.com/1",
-      "https://example.com/2",
-    ]);
+    expect(sq.pagesByType("product")).toEqual(["https://example.com/1", "https://example.com/2"]);
     expect(sq.pagesByType("unknown")).toEqual([]);
 
     const dup = sq.duplicateGroups("title");
     expect(dup).toEqual([
-      { hash: "dup", sample: "T", urls: ["https://example.com/1", "https://example.com/2"], count: 2 },
+      {
+        hash: "dup",
+        sample: "T",
+        urls: ["https://example.com/1", "https://example.com/2"],
+        count: 2,
+      },
     ]);
     expect(sq.templateClusters()).toEqual([
       { fp: "T", urls: ["https://example.com/1", "https://example.com/2"], count: 2 },
@@ -803,7 +824,7 @@ describe("SiteQuery dual-path: links/anchor-mismatch (#110)", () => {
     const { legacy, streamed } = await runBothWays(store, anchorMismatchRule, {});
     expect(streamed).toEqual(legacy);
     expect(legacy[0]?.status).toBe("pass");
-    expect((legacy[0]?.details as { judged: number; notJudged: number })).toMatchObject({
+    expect(legacy[0]?.details as { judged: number; notJudged: number }).toMatchObject({
       judged: 1,
       notJudged: 1,
     });
@@ -838,7 +859,8 @@ describe("SiteQuery dual-path: links/anchor-mismatch (#110)", () => {
     };
     const words = Array.from(
       { length: 70 },
-      (_, i) => `topic${String.fromCharCode(97 + (i % 26))}${String.fromCharCode(97 + Math.floor(i / 26))}`,
+      (_, i) =>
+        `topic${String.fromCharCode(97 + (i % 26))}${String.fromCharCode(97 + Math.floor(i / 26))}`,
     );
     const pdf = titled("https://example.com/guide.pdf", "Totally unrelated", []);
     pdf.contentType = "application/pdf";
@@ -898,7 +920,7 @@ describe("SiteQuery universe path - links/no-contextual-inbound (repo#1669)", ()
 
   async function runWith(
     store: SQLiteStorage,
-    siteQuery: RuleContext["siteQuery"]
+    siteQuery: RuleContext["siteQuery"],
   ): Promise<CheckResult[]> {
     const ctx = {
       page: { url: BASE, html: "", statusCode: 200, loadTime: 0, headers: {} },
@@ -915,7 +937,9 @@ describe("SiteQuery universe path - links/no-contextual-inbound (repo#1669)", ()
     await seedWithOutOfUniversePage(store);
 
     const sq = await run(createSiteQuery(store, CRAWL, { universe }));
-    expect([...sq.contextualIncomingLinkCounts().keys()]).toEqual([...sq.incomingLinkCounts().keys()]);
+    expect([...sq.contextualIncomingLinkCounts().keys()]).toEqual([
+      ...sq.incomingLinkCounts().keys(),
+    ]);
     expect(sq.contextualIncomingLinkCounts().get("https://example.com/pricing")).toBe(0);
 
     const checks = await runWith(store, sq);
@@ -986,8 +1010,17 @@ describe("SiteQuery dual-path - links/generic-anchor-density (repo#1387)", () =>
     const store = await freshStore();
     const generic = (text: string): LinkData => ({ url: "/a", text, isInternal: true });
     const rows = [
-      pageRow(BASE, [generic("click here"), generic("Read more"), generic("Pricing"), chrome("/a")]),
-      pageRow("https://example.com/a", [generic("Read more"), generic("Read more"), nofollow("/b")]),
+      pageRow(BASE, [
+        generic("click here"),
+        generic("Read more"),
+        generic("Pricing"),
+        chrome("/a"),
+      ]),
+      pageRow("https://example.com/a", [
+        generic("Read more"),
+        generic("Read more"),
+        nofollow("/b"),
+      ]),
       pageRow("https://example.com/b", [generic("Guide"), external("https://x.com/")]),
     ];
     for (const r of rows) await run(store.upsertPage(CRAWL, r));

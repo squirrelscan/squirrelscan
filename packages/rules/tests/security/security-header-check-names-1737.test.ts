@@ -23,23 +23,104 @@ const HTTPS = "https://example.com/";
 const HTTP = "http://example.com/";
 
 /** Every outcome of security/hsts: the input that produces it, and the name and status it must have. */
-const HSTS_OUTCOMES: Array<{ outcome: string; url: string; headers: Record<string, string>; pages?: boolean; name: string; status: string }> = [
-  { outcome: "no pages", url: HTTPS, headers: {}, pages: false, name: "hsts-no-pages", status: "skipped" },
-  { outcome: "not served over HTTPS", url: HTTP, headers: {}, name: "hsts-not-applicable", status: "info" },
+const HSTS_OUTCOMES: Array<{
+  outcome: string;
+  url: string;
+  headers: Record<string, string>;
+  pages?: boolean;
+  name: string;
+  status: string;
+}> = [
+  {
+    outcome: "no pages",
+    url: HTTPS,
+    headers: {},
+    pages: false,
+    name: "hsts-no-pages",
+    status: "skipped",
+  },
+  {
+    outcome: "not served over HTTPS",
+    url: HTTP,
+    headers: {},
+    name: "hsts-not-applicable",
+    status: "info",
+  },
   { outcome: "header missing", url: HTTPS, headers: {}, name: "hsts-missing", status: "warn" },
-  { outcome: "no valid max-age", url: HTTPS, headers: { "strict-transport-security": "includeSubDomains" }, name: "hsts-malformed", status: "warn" },
-  { outcome: "max-age=0", url: HTTPS, headers: { "strict-transport-security": "max-age=0" }, name: "hsts-disabled", status: "warn" },
-  { outcome: "max-age too short", url: HTTPS, headers: { "strict-transport-security": "max-age=3600" }, name: "hsts-max-age-short", status: "warn" },
-  { outcome: "present and adequate", url: HTTPS, headers: { "strict-transport-security": "max-age=31536000; includeSubDomains" }, name: "hsts", status: "pass" },
+  {
+    outcome: "no valid max-age",
+    url: HTTPS,
+    headers: { "strict-transport-security": "includeSubDomains" },
+    name: "hsts-malformed",
+    status: "warn",
+  },
+  {
+    outcome: "max-age=0",
+    url: HTTPS,
+    headers: { "strict-transport-security": "max-age=0" },
+    name: "hsts-disabled",
+    status: "warn",
+  },
+  {
+    outcome: "max-age too short",
+    url: HTTPS,
+    headers: { "strict-transport-security": "max-age=3600" },
+    name: "hsts-max-age-short",
+    status: "warn",
+  },
+  {
+    outcome: "present and adequate",
+    url: HTTPS,
+    headers: { "strict-transport-security": "max-age=31536000; includeSubDomains" },
+    name: "hsts",
+    status: "pass",
+  },
 ];
 
-const XFO_OUTCOMES: Array<{ outcome: string; headers: Record<string, string>; pages?: boolean; name: string; status: string }> = [
-  { outcome: "no pages", headers: {}, pages: false, name: "x-frame-options-no-pages", status: "skipped" },
-  { outcome: "no clickjacking protection", headers: {}, name: "x-frame-options-missing", status: "warn" },
-  { outcome: "protected by X-Frame-Options", headers: { "x-frame-options": "DENY" }, name: "x-frame-options", status: "pass" },
-  { outcome: "protected by CSP frame-ancestors", headers: { "content-security-policy": "frame-ancestors 'self'" }, name: "x-frame-options-csp-frame-ancestors", status: "pass" },
-  { outcome: "deprecated ALLOW-FROM", headers: { "x-frame-options": "ALLOW-FROM https://a.test" }, name: "x-frame-options-allow-from", status: "warn" },
-  { outcome: "present but invalid value", headers: { "x-frame-options": "ALLOWALL" }, name: "x-frame-options-invalid", status: "warn" },
+const XFO_OUTCOMES: Array<{
+  outcome: string;
+  headers: Record<string, string>;
+  pages?: boolean;
+  name: string;
+  status: string;
+}> = [
+  {
+    outcome: "no pages",
+    headers: {},
+    pages: false,
+    name: "x-frame-options-no-pages",
+    status: "skipped",
+  },
+  {
+    outcome: "no clickjacking protection",
+    headers: {},
+    name: "x-frame-options-missing",
+    status: "warn",
+  },
+  {
+    outcome: "protected by X-Frame-Options",
+    headers: { "x-frame-options": "DENY" },
+    name: "x-frame-options",
+    status: "pass",
+  },
+  {
+    outcome: "protected by CSP frame-ancestors",
+    headers: { "content-security-policy": "frame-ancestors 'self'" },
+    name: "x-frame-options-csp-frame-ancestors",
+    status: "pass",
+  },
+  {
+    outcome: "deprecated ALLOW-FROM",
+    headers: { "x-frame-options": "ALLOW-FROM https://a.test" },
+    name: "x-frame-options-allow-from",
+    status: "warn",
+  },
+  {
+    outcome: "present but invalid value",
+    headers: { "x-frame-options": "ALLOWALL" },
+    name: "x-frame-options-invalid",
+    status: "warn",
+  },
 ];
 
 describe("security/hsts check names (#1737)", () => {
@@ -73,12 +154,17 @@ describe("security/x-frame-options check names (#1737)", () => {
   test("a valid CSP frame-ancestors beside an unrecognised X-Frame-Options value is the CSP outcome", () => {
     const c = one(
       xFrameOptionsRule,
-      ctxFor("https://acme.test/", { "x-frame-options": "ALLOWALL", "content-security-policy": "frame-ancestors 'self'" }),
+      ctxFor("https://acme.test/", {
+        "x-frame-options": "ALLOWALL",
+        "content-security-policy": "frame-ancestors 'self'",
+      }),
     );
     expect(c.name).toBe("x-frame-options-csp-frame-ancestors");
   });
   test("no two outcomes share a check name", () => {
-    const names = XFO_OUTCOMES.map((o) => one(xFrameOptionsRule, ctxFor("https://acme.test/", o.headers, o.pages)).name);
+    const names = XFO_OUTCOMES.map(
+      (o) => one(xFrameOptionsRule, ctxFor("https://acme.test/", o.headers, o.pages)).name,
+    );
     expect(new Set(names).size).toBe(names.length);
   });
 });

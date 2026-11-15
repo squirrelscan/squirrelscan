@@ -49,10 +49,7 @@ function makeObservingRule(observations: Observation[]): Rule {
       // mutate any shared global) before we read our context back.
       await new Promise((r) => setTimeout(r, 5));
 
-      const cloud = readCloudResult<{ runId: string }>(
-        ctx.cloudResults,
-        "site-metadata"
-      );
+      const cloud = readCloudResult<{ runId: string }>(ctx.cloudResults, "site-metadata");
 
       observations.push({
         runId: (ctx.options.runId as string) ?? "?",
@@ -92,7 +89,7 @@ function makeRunner(
   rule: Rule,
   runId: string,
   siteMetadata: SiteMetadata,
-  cloudResults: CloudResultStore
+  cloudResults: CloudResultStore,
 ): RuleRunner {
   const config: RulesConfig = {
     rule_options: { [RULE_ID]: { runId } },
@@ -110,9 +107,7 @@ function makeRunner(
 function makeSiteData(): SiteData {
   return {
     baseUrl: "https://example.com",
-    pages: [
-      { url: "https://example.com/", statusCode: 200, parsed: {} as ParsedPage },
-    ],
+    pages: [{ url: "https://example.com/", statusCode: 200, parsed: {} as ParsedPage }],
     robotsTxt: null,
     sitemaps: null,
   };
@@ -129,20 +124,17 @@ describe("runner per-run state isolation (concurrent audits)", () => {
       rule,
       "A",
       meta({ siteType: "ecommerce", isLocalBusiness: true }),
-      makeCloudStore("A")
+      makeCloudStore("A"),
     );
     const runnerB = makeRunner(
       rule,
       "B",
       meta({ siteType: "blog", isLocalBusiness: false }),
-      makeCloudStore("B")
+      makeCloudStore("B"),
     );
 
     // Run them concurrently — rule bodies interleave on the awaits above.
-    await Promise.all([
-      runnerA.runSiteRules(makeSiteData()),
-      runnerB.runSiteRules(makeSiteData()),
-    ]);
+    await Promise.all([runnerA.runSiteRules(makeSiteData()), runnerB.runSiteRules(makeSiteData())]);
 
     expect(observations.length).toBe(2);
 
@@ -176,7 +168,7 @@ describe("runner per-run state isolation (concurrent audits)", () => {
           rule,
           id,
           meta({ siteType, isLocalBusiness: i % 2 === 0 }),
-          makeCloudStore(id)
+          makeCloudStore(id),
         ),
       };
     });

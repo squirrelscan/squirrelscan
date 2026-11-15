@@ -51,8 +51,7 @@ export const consentModeRule: Rule = {
     }
 
     // Check for Consent Mode v2 specific signals
-    const hasV2Signals =
-      html.includes("ad_user_data") || html.includes("ad_personalization");
+    const hasV2Signals = html.includes("ad_user_data") || html.includes("ad_personalization");
 
     if (hasConsentMode && hasV2Signals) {
       checks.push({

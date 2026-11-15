@@ -98,11 +98,11 @@ function kitPageHtml(): string {
 function doorwayPageHtml(): string {
   const stuffed = Array.from(
     { length: 40 },
-    () => "clickfunnels kajabi affiliate sales funnel"
+    () => "clickfunnels kajabi affiliate sales funnel",
   ).join(" ");
   return themed(
     "Calendly ClickFunnels 2.0 (5 HELPFUL TIPS) - Best Sales Funnel",
-    `<article><h1>Calendly ClickFunnels 2.0 affiliate review</h1><p>${stuffed}</p></article>`
+    `<article><h1>Calendly ClickFunnels 2.0 affiliate review</h1><p>${stuffed}</p></article>`,
   );
 }
 
@@ -114,25 +114,17 @@ function legitCalendlyPageHtml(): string {
     `<article><h1>Book a call via our Calendly integration</h1>
      <p>${CLEAN_BODY}</p>
      <p>We use <a href="https://calendly.com/sydneyav">Calendly</a> to schedule discovery calls. Click below to book a call.</p>
-     <a href="https://calendly.com/sydneyav/discovery">Schedule on Calendly</a></article>`
+     <a href="https://calendly.com/sydneyav/discovery">Schedule on Calendly</a></article>`,
   );
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
-function pageEntry(
-  url: string,
-  html: string,
-  statusCode = 200
-): SiteData["pages"][number] {
+function pageEntry(url: string, html: string, statusCode = 200): SiteData["pages"][number] {
   return { url, statusCode, parsed: parsePage(html, url) };
 }
 
-function pageCtx(
-  url: string,
-  html: string,
-  site?: SiteData
-): RuleContext {
+function pageCtx(url: string, html: string, site?: SiteData): RuleContext {
   const parsed = parsePage(html, url);
   return {
     page: { url, html, statusCode: 200, loadTime: 0, headers: {}, parsed },
@@ -142,12 +134,15 @@ function pageCtx(
   };
 }
 
-function siteCtx(pages: SiteData["pages"], opts?: {
-  sitemapLocs?: string[];
-  entryUrls?: string[];
-  options?: Record<string, unknown>;
-  crawlLimits?: { pagesCrawled: number; maxPages: number };
-}): RuleContext {
+function siteCtx(
+  pages: SiteData["pages"],
+  opts?: {
+    sitemapLocs?: string[];
+    entryUrls?: string[];
+    options?: Record<string, unknown>;
+    crawlLimits?: { pagesCrawled: number; maxPages: number };
+  },
+): RuleContext {
   const site: SiteData = {
     baseUrl: SITE,
     pages,
@@ -256,28 +251,25 @@ describe("integrity/signals — individual detectors", () => {
 
 describe("integrity/brand-impersonation", () => {
   test("kit page → fail (>=2 corroborating signals)", async () => {
-    const checks = (await run(
-      brandImpersonationRule,
-      pageCtx(`${SITE}/calendly`, kitPageHtml())
-    ));
+    const checks = await run(brandImpersonationRule, pageCtx(`${SITE}/calendly`, kitPageHtml()));
     const c = finding(checks, "brand-impersonation");
     expect(c?.status).toBe("fail");
     expect(c?.details?.escalated).toBe(true);
   });
 
   test("legit Calendly integration page → no finding", async () => {
-    const checks = (await run(
+    const checks = await run(
       brandImpersonationRule,
-      pageCtx(`${SITE}/integrations`, legitCalendlyPageHtml())
-    ));
+      pageCtx(`${SITE}/integrations`, legitCalendlyPageHtml()),
+    );
     expect(finding(checks, "brand-impersonation")).toBeUndefined();
   });
 
   test("clean themed page → no finding, and a clean check (#1741)", async () => {
-    const checks = (await run(
+    const checks = await run(
       brandImpersonationRule,
-      pageCtx(`${SITE}/about`, themed("About", CLEAN_BODY))
-    ));
+      pageCtx(`${SITE}/about`, themed("About", CLEAN_BODY)),
+    );
     expect(finding(checks, "brand-impersonation")).toBeUndefined();
     expect(checks.map((c) => [c.name, c.status])).toEqual([["brand-impersonation", "pass"]]);
   });
@@ -290,9 +282,12 @@ describe("integrity/brand-impersonation", () => {
       obfuscatedScriptRule,
       seoDoorwayRule,
     ]) {
-      const out = (await run(rule, ctx));
+      const out = await run(rule, ctx);
       expect(out.length, rule.meta.id).toBeGreaterThan(0);
-      expect(out.every((c) => c.status === "pass"), rule.meta.id).toBe(true);
+      expect(
+        out.every((c) => c.status === "pass"),
+        rule.meta.id,
+      ).toBe(true);
     }
   });
 
@@ -316,16 +311,16 @@ describe("integrity/brand-impersonation", () => {
 describe("integrity/obfuscated-script", () => {
   test("kit page → fail (corroborated)", async () => {
     const c = finding(
-      (await run(obfuscatedScriptRule, pageCtx(`${SITE}/calendly`, kitPageHtml()))),
-      "obfuscated-script"
+      await run(obfuscatedScriptRule, pageCtx(`${SITE}/calendly`, kitPageHtml())),
+      "obfuscated-script",
     );
     expect(c?.status).toBe("fail");
   });
 
   test("clean themed page with normal scripts → no finding", async () => {
     const c = finding(
-      (await run(obfuscatedScriptRule, pageCtx(`${SITE}/about`, themed("About", CLEAN_BODY)))),
-      "obfuscated-script"
+      await run(obfuscatedScriptRule, pageCtx(`${SITE}/about`, themed("About", CLEAN_BODY))),
+      "obfuscated-script",
     );
     expect(c).toBeUndefined();
   });
@@ -335,8 +330,8 @@ describe("integrity/obfuscated-script", () => {
       <script>${obfuscatedPayload()}</script></head>
       <body><p>${CLEAN_BODY}</p></body></html>`;
     const c = finding(
-      (await run(obfuscatedScriptRule, pageCtx(`${SITE}/x`, html))),
-      "obfuscated-script"
+      await run(obfuscatedScriptRule, pageCtx(`${SITE}/x`, html)),
+      "obfuscated-script",
     );
     expect(c?.status).toBe("info");
   });
@@ -347,8 +342,8 @@ describe("integrity/obfuscated-script", () => {
 describe("integrity/fake-auth-overlay", () => {
   test("kit page full-viewport #google-auth iframe → fail (corroborated)", async () => {
     const c = finding(
-      (await run(fakeAuthOverlayRule, pageCtx(`${SITE}/calendly`, kitPageHtml()))),
-      "fake-auth-overlay"
+      await run(fakeAuthOverlayRule, pageCtx(`${SITE}/calendly`, kitPageHtml())),
+      "fake-auth-overlay",
     );
     expect(c?.status).toBe("fail");
   });
@@ -356,11 +351,11 @@ describe("integrity/fake-auth-overlay", () => {
   test("normal fixed cookie-banner iframe → no finding", async () => {
     const html = themed(
       "Home",
-      `${CLEAN_BODY}<iframe style="position:fixed;bottom:0;left:0;width:100%;height:60px;z-index:5" src="https://cdn.sydneyav.com/cookie.html"></iframe>`
+      `${CLEAN_BODY}<iframe style="position:fixed;bottom:0;left:0;width:100%;height:60px;z-index:5" src="https://cdn.sydneyav.com/cookie.html"></iframe>`,
     );
     const c = finding(
-      (await run(fakeAuthOverlayRule, pageCtx(`${SITE}/`, html))),
-      "fake-auth-overlay"
+      await run(fakeAuthOverlayRule, pageCtx(`${SITE}/`, html)),
+      "fake-auth-overlay",
     );
     expect(c).toBeUndefined();
   });
@@ -371,16 +366,16 @@ describe("integrity/fake-auth-overlay", () => {
 describe("integrity/seo-doorway", () => {
   test("doorway page → finding", async () => {
     const c = finding(
-      (await run(seoDoorwayRule, pageCtx(`${SITE}/blog/x`, doorwayPageHtml()))),
-      "seo-doorway"
+      await run(seoDoorwayRule, pageCtx(`${SITE}/blog/x`, doorwayPageHtml())),
+      "seo-doorway",
     );
     expect(c).toBeDefined();
   });
 
   test("legit Calendly page → no doorway finding", async () => {
     const c = finding(
-      (await run(seoDoorwayRule, pageCtx(`${SITE}/integrations`, legitCalendlyPageHtml()))),
-      "seo-doorway"
+      await run(seoDoorwayRule, pageCtx(`${SITE}/integrations`, legitCalendlyPageHtml())),
+      "seo-doorway",
     );
     expect(c).toBeUndefined();
   });
@@ -389,11 +384,11 @@ describe("integrity/seo-doorway", () => {
     const html = themed(
       "Honest Audiovisual Gear Review",
       `<article><h1>AV gear review</h1><p>${CLEAN_BODY}</p>
-       <p>This post contains affiliate links (affiliate disclosure).</p></article>`
+       <p>This post contains affiliate links (affiliate disclosure).</p></article>`,
     );
     const c = finding(
-      (await run(seoDoorwayRule, pageCtx(`${SITE}/blog/review`, html))),
-      "seo-doorway"
+      await run(seoDoorwayRule, pageCtx(`${SITE}/blog/review`, html)),
+      "seo-doorway",
     );
     expect(c).toBeUndefined();
   });
@@ -437,11 +432,13 @@ describe("integrity/template-discontinuity", () => {
       pageEntry(`${SITE}/contact`, themed("Contact", CLEAN_BODY)),
       pageEntry(`${SITE}/account/items`, signedOut),
     ];
-    const checks = (await run(templateDiscontinuityRule, siteCtx(pages)));
+    const checks = await run(templateDiscontinuityRule, siteCtx(pages));
     expect(checks.find((c) => c.name === "template-discontinuity")).toBeUndefined();
     const review = find(checks, "template-discontinuity-review");
     expect(review?.status).toBe("info");
-    const outliers = (review?.details?.outliers as { url: string; loadsSiteAssets: boolean; signals: number }[]) ?? [];
+    const outliers =
+      (review?.details?.outliers as { url: string; loadsSiteAssets: boolean; signals: number }[]) ??
+      [];
     const page = outliers.find((o) => o.url.includes("/account/items"));
     // It carries a signal AND it is still not escalated: the assets are why.
     expect(page?.signals).toBeGreaterThanOrEqual(1);
@@ -473,7 +470,10 @@ describe("integrity/template-discontinuity", () => {
   });
 
   test("the finding does not assert that the page is injected", async () => {
-    const c = find(await run(templateDiscontinuityRule, siteCtx(fullSitePages())), "template-discontinuity");
+    const c = find(
+      await run(templateDiscontinuityRule, siteCtx(fullSitePages())),
+      "template-discontinuity",
+    );
     expect(c?.message).not.toMatch(/injected|compromise signals/i);
     expect(c?.message).toContain("share none of the site's assets");
   });
@@ -484,7 +484,7 @@ describe("integrity/template-discontinuity", () => {
     // the condition has to come first.
     expect(solution).toContain("confirming the page is one you published");
     expect(solution.indexOf("confirming the page is one you published")).toBeLessThan(
-      solution.indexOf("treat the site as compromised")
+      solution.indexOf("treat the site as compromised"),
     );
     expect(solution).toContain("only then");
   });
@@ -496,19 +496,13 @@ describe("integrity/template-discontinuity", () => {
       pageEntry(`${SITE}/about`, themed("About", CLEAN_BODY)),
       pageEntry(`${SITE}/contact`, themed("Contact", CLEAN_BODY)),
     ];
-    const c = find(
-      (await run(templateDiscontinuityRule, siteCtx(pages))),
-      "template-discontinuity"
-    );
+    const c = find(await run(templateDiscontinuityRule, siteCtx(pages)), "template-discontinuity");
     expect(c?.status).toBe("pass");
   });
 
   test("too few pages → skipped", async () => {
     const pages = [pageEntry(`${SITE}/`, themed("Home", CLEAN_BODY))];
-    const c = find(
-      (await run(templateDiscontinuityRule, siteCtx(pages))),
-      "template-discontinuity"
-    );
+    const c = find(await run(templateDiscontinuityRule, siteCtx(pages)), "template-discontinuity");
     expect(c?.status).toBe("skipped");
   });
 });
@@ -531,7 +525,7 @@ describe("integrity/orphan-page", () => {
     const control = find(await run(orphanPageRule, siteCtx(pages)), "orphan-page");
     expect(control?.status).toBe("fail");
     expect((control?.items ?? []).map((i) => i.id)).toEqual([landing]);
-    const result = (await run(orphanPageRule, siteCtx(pages, { entryUrls: [landing, `${SITE}/`] })));
+    const result = await run(orphanPageRule, siteCtx(pages, { entryUrls: [landing, `${SITE}/`] }));
     expect(find(result, "orphan-page")?.status).toBe("pass");
     expect(find(result, "orphan-page-review")).toBeUndefined();
   });
@@ -539,16 +533,8 @@ describe("integrity/orphan-page", () => {
   test("hidden kit page (no sitemap entry, no inbound links) + signals → fail", async () => {
     // Sitemap lists only the legit pages; kit page is absent + nothing links it.
     const pages = fullSitePages();
-    const sitemapLocs = [
-      `${SITE}/`,
-      `${SITE}/services`,
-      `${SITE}/about`,
-      `${SITE}/contact`,
-    ];
-    const c = find(
-      (await run(orphanPageRule, siteCtx(pages, { sitemapLocs }))),
-      "orphan-page"
-    );
+    const sitemapLocs = [`${SITE}/`, `${SITE}/services`, `${SITE}/about`, `${SITE}/contact`];
+    const c = find(await run(orphanPageRule, siteCtx(pages, { sitemapLocs })), "orphan-page");
     expect(c?.status).toBe("fail");
     const items = (c?.items ?? []).map((i) => i.id);
     expect(items.some((u) => u.includes("/calendly"))).toBe(true);
@@ -556,7 +542,11 @@ describe("integrity/orphan-page", () => {
 
   // #1760: a truncated or partly read sitemap cannot prove a page is unlisted, so the
   // hidden page is review-only, never escalated toward "likely injected".
-  for (const state of [{ truncated: true }, { readState: "partial" as const }, { readState: "unreadable" as const }]) {
+  for (const state of [
+    { truncated: true },
+    { readState: "partial" as const },
+    { readState: "unreadable" as const },
+  ]) {
     test(`incomplete sitemap corpus (${JSON.stringify(state)}) never escalates a hidden page`, async () => {
       const pages = fullSitePages();
       const sitemapLocs = [`${SITE}/`, `${SITE}/services`, `${SITE}/about`, `${SITE}/contact`];
@@ -584,7 +574,7 @@ describe("integrity/orphan-page", () => {
   test("all pages linked + in sitemap → pass", async () => {
     const home = themed(
       "Home",
-      `${CLEAN_BODY}<a href="/services">Services</a><a href="/about">About</a>`
+      `${CLEAN_BODY}<a href="/services">Services</a><a href="/about">About</a>`,
     );
     const pages = [
       pageEntry(`${SITE}/`, home),
@@ -592,10 +582,7 @@ describe("integrity/orphan-page", () => {
       pageEntry(`${SITE}/about`, themed("About", CLEAN_BODY)),
     ];
     const sitemapLocs = [`${SITE}/`, `${SITE}/services`, `${SITE}/about`];
-    const c = find(
-      (await run(orphanPageRule, siteCtx(pages, { sitemapLocs }))),
-      "orphan-page"
-    );
+    const c = find(await run(orphanPageRule, siteCtx(pages, { sitemapLocs })), "orphan-page");
     expect(c?.status).toBe("pass");
   });
 
@@ -605,7 +592,7 @@ describe("integrity/orphan-page", () => {
   test("no sitemap: hidden kit page (zero inbound) + signals → fail", async () => {
     const home = themed(
       "Home",
-      `${CLEAN_BODY}<a href="/services">Services</a><a href="/about">About</a>`
+      `${CLEAN_BODY}<a href="/services">Services</a><a href="/about">About</a>`,
     );
     const pages = [
       pageEntry(`${SITE}/`, home),
@@ -613,7 +600,7 @@ describe("integrity/orphan-page", () => {
       pageEntry(`${SITE}/about`, themed("About", CLEAN_BODY)),
       pageEntry(`${SITE}/calendly?token=ey4m`, kitPageHtml()), // hidden, signals
     ];
-    const checks = (await run(orphanPageRule, siteCtx(pages))); // no sitemapLocs → hasSitemap=false
+    const checks = await run(orphanPageRule, siteCtx(pages)); // no sitemapLocs → hasSitemap=false
     const c = find(checks, "orphan-page");
     expect(c?.status).toBe("fail");
     expect((c?.items ?? []).some((i) => i.id.includes("/calendly"))).toBe(true);
@@ -642,12 +629,9 @@ describe("integrity — incident corpus end-to-end", () => {
       sitemapLocs: [`${SITE}/`, `${SITE}/services`, `${SITE}/about`, `${SITE}/contact`],
     });
     expect(
-      find(await run(templateDiscontinuityRule, siteCtxFull), "template-discontinuity")
-        ?.status
+      find(await run(templateDiscontinuityRule, siteCtxFull), "template-discontinuity")?.status,
     ).toBe("warn"); // #2233: escalated, but a warning rather than a failure
-    expect(
-      find(await run(orphanPageRule, siteCtxFull), "orphan-page")?.status
-    ).toBe("fail");
+    expect(find(await run(orphanPageRule, siteCtxFull), "orphan-page")?.status).toBe("fail");
   });
 
   test("legit Calendly page + clean pages produce NO fail-level integrity findings", async () => {
@@ -680,13 +664,11 @@ describe("integrity — false-positive regressions", () => {
       `<article><h1>Sign in</h1><p>${CLEAN_BODY}</p>
        <a href="https://accounts.google.com/o/oauth2/v2/auth?client_id=x">Sign in with Google</a>
        <a href="https://twitter.com/sydneyav">Follow us on Twitter</a>
-       <a href="https://linkedin.com/company/sydneyav">LinkedIn</a></article>`
+       <a href="https://linkedin.com/company/sydneyav">LinkedIn</a></article>`,
     );
     const ctx = pageCtx(`${SITE}/login`, html);
     expect(detectBrandImpersonation(ctx)).toBeNull();
-    expect(
-      finding(await run(brandImpersonationRule, ctx), "brand-impersonation")
-    ).toBeUndefined();
+    expect(finding(await run(brandImpersonationRule, ctx), "brand-impersonation")).toBeUndefined();
   });
 
   // Finding 1c: a SaaS marketing page whose "Sign in" points at its OWN app
@@ -713,7 +695,7 @@ describe("integrity — false-positive regressions", () => {
          <input type="email" name="email"><input type="password" name="password">
          <button>Log in</button>
        </form>
-       <a href="https://accounts.google.com/o/oauth2/auth">Sign in with Google</a>`
+       <a href="https://accounts.google.com/o/oauth2/auth">Sign in with Google</a>`,
     );
     expect(detectBrandImpersonation(pageCtx(`${SITE}/login`, html))).toBeNull();
   });
@@ -723,13 +705,11 @@ describe("integrity — false-positive regressions", () => {
   test("legit full-page self-hosted app-shell iframe → no fake-auth-overlay", async () => {
     const html = themed(
       "App - Sydney AV",
-      `${CLEAN_BODY}<iframe id="app-shell" class="embed" style="position:fixed;top:0;left:0;width:100%;height:100%;z-index:1000;border:0" src="https://sydneyavspecialists.com.au/app/embed"></iframe>`
+      `${CLEAN_BODY}<iframe id="app-shell" class="embed" style="position:fixed;top:0;left:0;width:100%;height:100%;z-index:1000;border:0" src="https://sydneyavspecialists.com.au/app/embed"></iframe>`,
     );
     const ctx = pageCtx(`${SITE}/app`, html);
     expect(detectFakeAuthOverlay(ctx)).toBeNull();
-    expect(
-      finding(await run(fakeAuthOverlayRule, ctx), "fake-auth-overlay")
-    ).toBeUndefined();
+    expect(finding(await run(fakeAuthOverlayRule, ctx), "fake-auth-overlay")).toBeUndefined();
   });
 
   // Finding 2b: off-self full-page iframe WITHOUT page auth copy and WITHOUT an
@@ -737,7 +717,7 @@ describe("integrity — false-positive regressions", () => {
   test("off-self full-page embed without auth intent → no fake-auth-overlay", () => {
     const html = themed(
       "Virtual Tour - Sydney AV",
-      `${CLEAN_BODY}<iframe id="tour" style="position:fixed;top:0;left:0;width:100%;height:100%;z-index:9999;border:0" src="https://player.vimeo.com/video/12345"></iframe>`
+      `${CLEAN_BODY}<iframe id="tour" style="position:fixed;top:0;left:0;width:100%;height:100%;z-index:9999;border:0" src="https://player.vimeo.com/video/12345"></iframe>`,
     );
     expect(detectFakeAuthOverlay(pageCtx(`${SITE}/tour`, html))).toBeNull();
   });
@@ -757,7 +737,7 @@ describe("integrity — false-positive regressions", () => {
       pageEntry(`${SITE}/contact`, themed("Contact", CLEAN_BODY)),
       pageEntry(`${SITE}/promo`, landing),
     ];
-    const checks = (await run(templateDiscontinuityRule, siteCtx(pages)));
+    const checks = await run(templateDiscontinuityRule, siteCtx(pages));
     // No fail-level finding (the outlier carries no page-level signals).
     expect(checks.find((c) => c.name === "template-discontinuity")).toBeUndefined();
     const review = find(checks, "template-discontinuity-review");
@@ -774,7 +754,7 @@ describe("integrity — false-positive regressions", () => {
       pageEntry(`${SITE}/unlisted`, themed("Unlisted Page", CLEAN_BODY)), // hidden, clean
     ];
     const sitemapLocs = [`${SITE}/`, `${SITE}/about`];
-    const checks = (await run(orphanPageRule, siteCtx(pages, { sitemapLocs })));
+    const checks = await run(orphanPageRule, siteCtx(pages, { sitemapLocs }));
     expect(checks.find((c) => c.name === "orphan-page")).toBeUndefined();
     const review = find(checks, "orphan-page-review");
     expect(review?.status).toBe("info");
@@ -808,7 +788,7 @@ describe("integrity/brand-impersonation — multi-label TLDs (#144)", () => {
     // old code returned `com.au` for both → suppressed. Now flagged.
     const ctx = pageCtx(
       "https://victim.com.au/login",
-      offBrandPage("victim.com.au", "evil.com.au")
+      offBrandPage("victim.com.au", "evil.com.au"),
     );
     const hit = detectBrandImpersonation(ctx);
     expect(hit).not.toBeNull();
@@ -817,10 +797,7 @@ describe("integrity/brand-impersonation — multi-label TLDs (#144)", () => {
   });
 
   test(".co.uk site → off-brand .co.uk sign-in IS flagged", () => {
-    const ctx = pageCtx(
-      "https://victim.co.uk/login",
-      offBrandPage("victim.co.uk", "phish.co.uk")
-    );
+    const ctx = pageCtx("https://victim.co.uk/login", offBrandPage("victim.co.uk", "phish.co.uk"));
     const hit = detectBrandImpersonation(ctx);
     expect(hit).not.toBeNull();
     expect(hit?.reason).toContain("phish.co.uk");
@@ -831,7 +808,7 @@ describe("integrity/brand-impersonation — multi-label TLDs (#144)", () => {
     // pointing its Calendly "Sign in" at a different .com.au attacker host.
     const ctx = pageCtx(
       `${SITE}/calendly`,
-      offBrandPage("sydneyavspecialists.com.au", "calendly-secure.com.au")
+      offBrandPage("sydneyavspecialists.com.au", "calendly-secure.com.au"),
     );
     const hit = detectBrandImpersonation(ctx);
     expect(hit).not.toBeNull();
@@ -885,7 +862,7 @@ describe("integrity/brand-impersonation — multi-label TLDs (#144)", () => {
   test("trailing-dot FQDN hosts normalize → off-brand .com.au still flagged", () => {
     const ctx = pageCtx(
       "https://victim.com.au./login",
-      offBrandPage("victim.com.au.", "evil.com.au.")
+      offBrandPage("victim.com.au.", "evil.com.au."),
     );
     expect(detectBrandImpersonation(ctx)).not.toBeNull();
   });
@@ -895,7 +872,7 @@ describe("integrity/brand-impersonation — multi-label TLDs (#144)", () => {
   test("two-tier gov suffix (.gov.au) keeps unrelated domains distinct → flagged", () => {
     const ctx = pageCtx(
       "https://treasury.gov.au/login",
-      offBrandPage("treasury.gov.au", "health.gov.au")
+      offBrandPage("treasury.gov.au", "health.gov.au"),
     );
     expect(detectBrandImpersonation(ctx)).not.toBeNull();
     expect(detectBrandImpersonation(ctx)?.reason).toContain("health.gov.au");
@@ -909,7 +886,7 @@ describe("integrity/brand-impersonation — multi-label TLDs (#144)", () => {
   test("deeper three-tier suffix (.nsw.edu.au) → off-brand sibling IS flagged", () => {
     const ctx = pageCtx(
       "https://school-a.nsw.edu.au/login",
-      offBrandPage("school-a.nsw.edu.au", "school-b.nsw.edu.au")
+      offBrandPage("school-a.nsw.edu.au", "school-b.nsw.edu.au"),
     );
     const hit = detectBrandImpersonation(ctx);
     expect(hit).not.toBeNull();
@@ -922,7 +899,7 @@ describe("integrity/brand-impersonation — multi-label TLDs (#144)", () => {
   test("ccTLD absent from old curated table (.com.pl) → off-brand flagged", () => {
     const ctx = pageCtx(
       "https://victim.com.pl/login",
-      offBrandPage("victim.com.pl", "evil.com.pl")
+      offBrandPage("victim.com.pl", "evil.com.pl"),
     );
     const hit = detectBrandImpersonation(ctx);
     expect(hit).not.toBeNull();
@@ -948,7 +925,7 @@ describe("integrity/brand-impersonation — multi-label TLDs (#144)", () => {
   test("private-suffix tenants (.blogspot.com) → cross-tenant off-brand flagged", () => {
     const ctx = pageCtx(
       "https://victim.blogspot.com/login",
-      offBrandPage("victim.blogspot.com", "evil.blogspot.com")
+      offBrandPage("victim.blogspot.com", "evil.blogspot.com"),
     );
     const hit = detectBrandImpersonation(ctx);
     expect(hit).not.toBeNull();
@@ -960,10 +937,7 @@ describe("integrity/brand-impersonation — multi-label TLDs (#144)", () => {
   // normalized host. Two DIFFERENT IPs must stay distinct (not collapse to a
   // shared same-site value) — pins the fallback against a future tldts change.
   test("IP-literal hosts use host fallback → distinct IPs are off-brand (flagged)", () => {
-    const ctx = pageCtx(
-      "https://203.0.113.5/login",
-      offBrandPage("203.0.113.5", "203.0.113.9")
-    );
+    const ctx = pageCtx("https://203.0.113.5/login", offBrandPage("203.0.113.5", "203.0.113.9"));
     const hit = detectBrandImpersonation(ctx);
     expect(hit).not.toBeNull();
     expect(hit?.reason).toContain("203.0.113.9");
@@ -1102,19 +1076,17 @@ type ProbeOutlier = {
 async function probe(
   theme: (title: string) => string,
   oddHtml: string,
-  opts?: { crawlLimits?: { pagesCrawled: number; maxPages: number }; themedPages?: number }
+  opts?: { crawlLimits?: { pagesCrawled: number; maxPages: number }; themedPages?: number },
 ): Promise<ProbeOutlier | undefined> {
   const n = opts?.themedPages ?? 4;
   const pages = [
-    ...Array.from({ length: n }, (_, i) =>
-      pageEntry(`${PSITE}/p${i}`, theme(`Page ${i}`))
-    ),
+    ...Array.from({ length: n }, (_, i) => pageEntry(`${PSITE}/p${i}`, theme(`Page ${i}`))),
     pageEntry(`${PSITE}/odd`, oddHtml),
   ];
-  const checks = (await run(
+  const checks = await run(
     templateDiscontinuityRule,
-    siteCtx(pages, { crawlLimits: opts?.crawlLimits })
-  ));
+    siteCtx(pages, { crawlLimits: opts?.crawlLimits }),
+  );
   const rows = [
     ...((find(checks, "template-discontinuity")?.details?.outliers as ProbeOutlier[]) ?? []),
     ...((find(checks, "template-discontinuity-review")?.details?.outliers as ProbeOutlier[]) ?? []),
@@ -1124,12 +1096,12 @@ async function probe(
 
 describe("integrity/template-discontinuity: the site's own assets", () => {
   test("a stylesheet or script from a site resource host still vetoes escalation", async () => {
-    const row = (await probe(
+    const row = await probe(
       pThemed,
       oddPage(
-        `<link rel="stylesheet" href="https://kit-cdn.tk/lp.css"><script src="${PCDN}/theme/app.js"></script>`
-      )
-    ));
+        `<link rel="stylesheet" href="https://kit-cdn.tk/lp.css"><script src="${PCDN}/theme/app.js"></script>`,
+      ),
+    );
     expect(row).toBeDefined();
     expect(row?.signals).toBeGreaterThanOrEqual(1);
     expect(row?.loadsSiteAssets).toBe(true);
@@ -1137,73 +1109,73 @@ describe("integrity/template-discontinuity: the site's own assets", () => {
   });
 
   test("probe a: hotlinking one of the site's own stylesheets still vetoes", async () => {
-    const row = (await probe(
+    const row = await probe(
       pThemed,
       oddPage(
-        `<link rel="stylesheet" href="${PCDN}/theme/style.css"><link rel="stylesheet" href="https://kit-cdn.tk/lp.css">`
-      )
-    ));
+        `<link rel="stylesheet" href="${PCDN}/theme/style.css"><link rel="stylesheet" href="https://kit-cdn.tk/lp.css">`,
+      ),
+    );
     expect(row).toBeDefined();
     expect(row?.loadsSiteAssets).toBe(true);
     expect(row?.escalated).toBe(false);
   });
 
   test("probe a3: a font CDN both pages use is not the site's own asset", async () => {
-    const row = (await probe(
+    const row = await probe(
       pThemed,
       oddPage(
-        `<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto"><link rel="stylesheet" href="https://kit-cdn.tk/lp.css">`
-      )
-    ));
+        `<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto"><link rel="stylesheet" href="https://kit-cdn.tk/lp.css">`,
+      ),
+    );
     expect(row).toBeDefined();
     expect(row?.loadsSiteAssets).toBe(false);
     expect(row?.escalated).toBe(true);
   });
 
   test("probe a4: a canonical pointing at the site is not an asset", async () => {
-    const row = (await probe(
+    const row = await probe(
       pThemedSameOrigin,
       oddPage(
-        `<link rel="canonical" href="${PSITE}/odd"><link rel="stylesheet" href="https://kit-cdn.tk/lp.css">`
-      )
-    ));
+        `<link rel="canonical" href="${PSITE}/odd"><link rel="stylesheet" href="https://kit-cdn.tk/lp.css">`,
+      ),
+    );
     expect(row).toBeDefined();
     expect(row?.loadsSiteAssets).toBe(false);
     expect(row?.escalated).toBe(true);
   });
 
   test("probe a5: a favicon on the site's own host is not an asset", async () => {
-    const row = (await probe(
+    const row = await probe(
       pThemedSameOrigin,
       oddPage(
-        `<link rel="icon" href="/favicon.ico"><link rel="stylesheet" href="https://kit-cdn.tk/lp.css">`
-      )
-    ));
+        `<link rel="icon" href="/favicon.ico"><link rel="stylesheet" href="https://kit-cdn.tk/lp.css">`,
+      ),
+    );
     expect(row).toBeDefined();
     expect(row?.loadsSiteAssets).toBe(false);
     expect(row?.escalated).toBe(true);
   });
 
   test("a preconnect to the site's own host is not an asset either", async () => {
-    const row = (await probe(
+    const row = await probe(
       pThemedSameOrigin,
       oddPage(
-        `<link rel="preconnect" href="${PSITE}"><link rel="stylesheet" href="https://kit-cdn.tk/lp.css">`
-      )
-    ));
+        `<link rel="preconnect" href="${PSITE}"><link rel="stylesheet" href="https://kit-cdn.tk/lp.css">`,
+      ),
+    );
     expect(row).toBeDefined();
     expect(row?.loadsSiteAssets).toBe(false);
     expect(row?.escalated).toBe(true);
   });
 
   test("an image from a site resource host is not enough on its own", async () => {
-    const row = (await probe(
+    const row = await probe(
       pThemed,
       oddPage(
         `<link rel="stylesheet" href="https://kit-cdn.tk/lp.css">`,
-        `<img src="${PCDN}/logo.png" alt="logo">`
-      )
-    ));
+        `<img src="${PCDN}/logo.png" alt="logo">`,
+      ),
+    );
     expect(row).toBeDefined();
     expect(row?.loadsSiteAssets).toBe(false);
     expect(row?.escalated).toBe(true);
@@ -1214,10 +1186,10 @@ describe("integrity/template-discontinuity: the site's own assets", () => {
   // that it might connect to it; it never loaded a byte from it. A page loading
   // a script from there shares nothing the site actually serves.
   test("a host the site only preconnects to is not one of its asset hosts", async () => {
-    const row = (await probe(
+    const row = await probe(
       pThemedWithPreconnect,
-      oddPage(`<script src="https://preconnect-only.test/x.js"></script>`)
-    ));
+      oddPage(`<script src="https://preconnect-only.test/x.js"></script>`),
+    );
     expect(row).toBeDefined();
     expect(row?.loadsSiteAssets).toBe(false);
     expect(row?.escalated).toBe(true);
@@ -1227,10 +1199,10 @@ describe("integrity/template-discontinuity: the site's own assets", () => {
   // loads a DIFFERENT file from the site's CDN, so the exact-href arm cannot fire
   // and the host arm is the only thing that can veto it.
   test("a stylesheet from a site resource host vetoes on the host alone", async () => {
-    const row = (await probe(
+    const row = await probe(
       pThemed,
-      oddPage(`<link rel="stylesheet" href="${PCDN}/theme/checkout-only.css">`)
-    ));
+      oddPage(`<link rel="stylesheet" href="${PCDN}/theme/checkout-only.css">`),
+    );
     expect(row).toBeDefined();
     expect(row?.signals).toBeGreaterThanOrEqual(1);
     expect(row?.loadsSiteAssets).toBe(true);
@@ -1242,10 +1214,10 @@ describe("integrity/template-discontinuity: the site's own assets", () => {
   // is indistinguishable from a foreign one by asset evidence; the veto cannot
   // see the difference and neither can anything else this rule has.
   test("probe b: a first-party host the rest of the crawl never uses reads as foreign", async () => {
-    const row = (await probe(
+    const row = await probe(
       pThemed,
-      oddPage(`<link rel="stylesheet" href="https://assets2.example-site.test/lp.css">`)
-    ));
+      oddPage(`<link rel="stylesheet" href="https://assets2.example-site.test/lp.css">`),
+    );
     expect(row).toBeDefined();
     expect(row?.loadsSiteAssets).toBe(false);
     expect(row?.escalated).toBe(true);
@@ -1255,16 +1227,16 @@ describe("integrity/template-discontinuity: the site's own assets", () => {
   // public CDN, so it still counts as the site's: a page loading from it is
   // vetoed, and one that does not is escalated.
   test("probe d: a site's own third-party CDN still counts as the site's", async () => {
-    const shares = (await probe(
+    const shares = await probe(
       pThemedThirdParty,
-      oddPage(`<script src="${PTHIRD}/theme/app.js"></script>`)
-    ));
+      oddPage(`<script src="${PTHIRD}/theme/app.js"></script>`),
+    );
     expect(shares?.escalated).not.toBe(true);
 
-    const doesNot = (await probe(
+    const doesNot = await probe(
       pThemedThirdParty,
-      oddPage(`<link rel="stylesheet" href="https://kit-cdn.tk/lp.css">`)
-    ));
+      oddPage(`<link rel="stylesheet" href="https://kit-cdn.tk/lp.css">`),
+    );
     expect(doesNot).toBeDefined();
     expect(doesNot?.loadsSiteAssets).toBe(false);
     expect(doesNot?.escalated).toBe(true);
@@ -1274,10 +1246,10 @@ describe("integrity/template-discontinuity: the site's own assets", () => {
   // baseline's resource hosts. Sharing it must still not buy a veto, and the
   // list is matched on subdomains, not just the bare host.
   test("a subdomain of a shared public CDN is shared even when the theme uses it", async () => {
-    const row = (await probe(
+    const row = await probe(
       pThemedWithPublicCdn,
-      oddPage(`<script src="https://cdn.jsdelivr.net/npm/x/dist/x.js"></script>`)
-    ));
+      oddPage(`<script src="https://cdn.jsdelivr.net/npm/x/dist/x.js"></script>`),
+    );
     expect(row).toBeDefined();
     expect(row?.loadsSiteAssets).toBe(false);
     expect(row?.escalated).toBe(true);
@@ -1287,14 +1259,13 @@ describe("integrity/template-discontinuity: the site's own assets", () => {
 // ── template-discontinuity: a capped crawl cannot accuse (#2233 AC4) ─
 
 describe("integrity/template-discontinuity: capped crawls", () => {
-  const foreign = () =>
-    oddPage(`<link rel="stylesheet" href="https://kit-cdn.tk/lp.css">`);
+  const foreign = () => oddPage(`<link rel="stylesheet" href="https://kit-cdn.tk/lp.css">`);
 
   test("a crawl that stopped at its page limit with a thin baseline does not escalate", async () => {
-    const row = (await probe(pThemed, foreign(), {
+    const row = await probe(pThemed, foreign(), {
       themedPages: 9,
       crawlLimits: { pagesCrawled: 10, maxPages: 10 },
-    }));
+    });
     expect(row).toBeDefined();
     // Everything else about it says escalate; only the cap holds it back.
     expect(row?.signals).toBeGreaterThanOrEqual(1);
@@ -1307,10 +1278,10 @@ describe("integrity/template-discontinuity: capped crawls", () => {
       ...Array.from({ length: 9 }, (_, i) => pageEntry(`${PSITE}/p${i}`, pThemed(`Page ${i}`))),
       pageEntry(`${PSITE}/odd`, foreign()),
     ];
-    const checks = (await run(
+    const checks = await run(
       templateDiscontinuityRule,
-      siteCtx(pages, { crawlLimits: { pagesCrawled: 10, maxPages: 10 } })
-    ));
+      siteCtx(pages, { crawlLimits: { pagesCrawled: 10, maxPages: 10 } }),
+    );
     expect(find(checks, "template-discontinuity")).toBeUndefined();
     const review = find(checks, "template-discontinuity-review");
     expect(review?.status).toBe("info");
@@ -1318,23 +1289,23 @@ describe("integrity/template-discontinuity: capped crawls", () => {
   });
 
   test("the same page on an uncapped crawl of the same size IS escalated", async () => {
-    const row = (await probe(pThemed, foreign(), { themedPages: 9 }));
+    const row = await probe(pThemed, foreign(), { themedPages: 9 });
     expect(row?.escalated).toBe(true);
   });
 
   test("a crawl that stopped short of its limit is not capped", async () => {
-    const row = (await probe(pThemed, foreign(), {
+    const row = await probe(pThemed, foreign(), {
       themedPages: 9,
       crawlLimits: { pagesCrawled: 10, maxPages: 500 },
-    }));
+    });
     expect(row?.escalated).toBe(true);
   });
 
   test("a capped crawl with a baseline at the minimum escalates", async () => {
-    const row = (await probe(pThemed, foreign(), {
+    const row = await probe(pThemed, foreign(), {
       themedPages: 19,
       crawlLimits: { pagesCrawled: 20, maxPages: 20 },
-    }));
+    });
     expect(row?.escalated).toBe(true);
   });
 
@@ -1343,13 +1314,13 @@ describe("integrity/template-discontinuity: capped crawls", () => {
       ...Array.from({ length: 9 }, (_, i) => pageEntry(`${PSITE}/p${i}`, pThemed(`Page ${i}`))),
       pageEntry(`${PSITE}/odd`, foreign()),
     ];
-    const checks = (await run(
+    const checks = await run(
       templateDiscontinuityRule,
       siteCtx(pages, {
         crawlLimits: { pagesCrawled: 10, maxPages: 10 },
         options: { minBaselinePagesWhenCapped: 5 },
-      })
-    ));
+      }),
+    );
     expect(find(checks, "template-discontinuity")?.status).toBe("warn");
   });
 
@@ -1360,20 +1331,30 @@ describe("integrity/template-discontinuity: capped crawls", () => {
   });
 });
 
-
 // ── Attributes past the 64th are still read (#1462): padding a control with junk attributes is not a way past the rules ─────────
 
 describe("a credential control with its attributes pushed past the 64th", () => {
   const junk = (n: number) => Array.from({ length: n }, (_, i) => `d${i}="v"`).join(" ");
   const kitWith = (link: string) =>
-    kitPageHtml().replace('<a href="https://accounts-google.tk/oauth">Sign in with Google</a>', link);
+    kitPageHtml().replace(
+      '<a href="https://accounts-google.tk/oauth">Sign in with Google</a>',
+      link,
+    );
 
   test("the kit page stays a fail with the credential link's href at the 64th, 65th, 101st and 4,000th attribute", async () => {
     for (const n of [63, 64, 65, 101, 4_000]) {
-      const html = kitWith(`<a ${junk(n)} href="https://accounts-google.tk/oauth">Sign in with Google</a>`);
-      const brand = finding(await run(brandImpersonationRule, pageCtx(`${SITE}/calendly`, html)), "brand-impersonation");
+      const html = kitWith(
+        `<a ${junk(n)} href="https://accounts-google.tk/oauth">Sign in with Google</a>`,
+      );
+      const brand = finding(
+        await run(brandImpersonationRule, pageCtx(`${SITE}/calendly`, html)),
+        "brand-impersonation",
+      );
       expect([n, brand?.status, brand?.details?.escalated]).toEqual([n, "fail", true]);
-      const obf = finding(await run(obfuscatedScriptRule, pageCtx(`${SITE}/calendly`, html)), "obfuscated-script");
+      const obf = finding(
+        await run(obfuscatedScriptRule, pageCtx(`${SITE}/calendly`, html)),
+        "obfuscated-script",
+      );
       expect([n, obf?.status]).toEqual([n, "fail"]);
     }
   });
@@ -1386,8 +1367,14 @@ describe("a credential control with its attributes pushed past the 64th", () => 
   test("an input submit with its value, and an input image with its alt, past the 64th attribute in an off-site form", () => {
     const form = (input: string) =>
       `<!doctype html><html><head><title>Fixture</title></head><body><main><form action="https://evil-collector.tk/grab" method="post">${input}</form></main></body></html>`;
-    for (const input of [`<input type="submit" ${junk(70)} value="Sign in with Google">`, `<input type="image" ${junk(70)} alt="Sign in with Google" src="/g.png">`]) {
-      expect([input.slice(0, 30), detectBrandImpersonation(pageCtx(`${SITE}/x`, form(input)))?.brand]).toEqual([input.slice(0, 30), "Google"]);
+    for (const input of [
+      `<input type="submit" ${junk(70)} value="Sign in with Google">`,
+      `<input type="image" ${junk(70)} alt="Sign in with Google" src="/g.png">`,
+    ]) {
+      expect([
+        input.slice(0, 30),
+        detectBrandImpersonation(pageCtx(`${SITE}/x`, form(input)))?.brand,
+      ]).toEqual([input.slice(0, 30), "Google"]);
     }
   });
 });

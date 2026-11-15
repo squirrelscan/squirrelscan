@@ -41,9 +41,7 @@ export function expandGroupPatterns(patterns: readonly string[]): {
     }
     const id = pattern.slice(GROUP_PREFIX.length);
     if (!isValidGroup(id)) {
-      errors.push(
-        `unknown group "${id}" in "${pattern}". Valid groups: ${GROUP_CODES.join(", ")}`
-      );
+      errors.push(`unknown group "${id}" in "${pattern}". Valid groups: ${GROUP_CODES.join(", ")}`);
       continue;
     }
     for (const category of getCategoriesInGroup(id)) out.push(`${category}/*`);
@@ -83,9 +81,7 @@ export interface RuleFilterParseResult {
 
 /** Split repeated and/or comma-joined flag values into trimmed tokens.
  * Mirrors normalizeFailOnArgs / normalizeHeaderArgs. */
-export function normalizeRuleFilterArgs(
-  value: string | string[] | undefined
-): string[] {
+export function normalizeRuleFilterArgs(value: string | string[] | undefined): string[] {
   if (value == null) return [];
   const list = Array.isArray(value) ? value : [value];
   return list
@@ -97,7 +93,7 @@ export function normalizeRuleFilterArgs(
 function expandToken(
   token: string,
   flag: "--rule-include" | "--rule-exclude",
-  options: RuleFilterParseOptions = {}
+  options: RuleFilterParseOptions = {},
 ): { pattern: string; pending?: PendingRuleFilterToken } | { error: string } {
   if (token.startsWith(GROUP_PREFIX)) {
     const id = token.slice(GROUP_PREFIX.length);
@@ -156,7 +152,7 @@ function expandToken(
 export function parseRuleFilters(
   includeArgs: string | string[] | undefined,
   excludeArgs: string | string[] | undefined,
-  options: RuleFilterParseOptions = {}
+  options: RuleFilterParseOptions = {},
 ): RuleFilterParseResult {
   const errors: string[] = [];
   const enable: string[] = [];
@@ -195,18 +191,16 @@ export function parseRuleFilters(
  */
 export function resolvePendingRuleFilters(
   pending: readonly PendingRuleFilterToken[],
-  pluginNamespaces: ReadonlySet<string>
+  pluginNamespaces: ReadonlySet<string>,
 ): string[] {
   const suffix =
-    pluginNamespaces.size > 0
-      ? `; plugin namespaces: ${[...pluginNamespaces].join(", ")}`
-      : "";
+    pluginNamespaces.size > 0 ? `; plugin namespaces: ${[...pluginNamespaces].join(", ")}` : "";
   return pending
     .filter((p) => !pluginNamespaces.has(p.namespace))
     .map(
       (p) =>
         // Same text as expandToken's errors, so a run without plugins is unchanged.
-        `${p.flag} "${p.token}": unknown category${p.bare ? "" : ` "${p.namespace}"`}. Valid categories: ${RULE_CATEGORY_VALUES.join(", ")}${suffix}`
+        `${p.flag} "${p.token}": unknown category${p.bare ? "" : ` "${p.namespace}"`}. Valid categories: ${RULE_CATEGORY_VALUES.join(", ")}${suffix}`,
     );
 }
 
@@ -216,7 +210,7 @@ export function resolvePendingRuleFilters(
  * validation and mergeOptionsToConfig so both use identical resolution. */
 export function resolveRulesConfig(
   base: { enable: string[]; disable: string[] },
-  filter: { enable: string[]; disable: string[] }
+  filter: { enable: string[]; disable: string[] },
 ): { enable: string[]; disable: string[] } {
   return {
     enable: filter.enable.length > 0 ? filter.enable : base.enable,
@@ -231,7 +225,7 @@ export function resolveRulesConfig(
  * expanded/normalized by parseRuleFilters, so the category half is canonical. */
 export function filterResolvesToZeroCategories(
   enable: string[],
-  resolved: { enable: string[]; disable: string[] }
+  resolved: { enable: string[]; disable: string[] },
 ): boolean {
   if (enable.length === 0) return false;
   // An enable pattern is wiped by `*`, a whole-category disable, or an
@@ -246,7 +240,7 @@ export function filterResolvesToZeroCategories(
       (dp) =>
         dp === "*" ||
         (dp.endsWith("/*") && normalizeCategoryCode(dp.slice(0, -2)) === cat) ||
-        dp === ep
+        dp === ep,
     );
   };
   return enable.every(wiped);
@@ -260,7 +254,7 @@ export function filterResolvesToZeroCategories(
  * "matches nothing here" means "selects nothing at run time". */
 export function findUnmatchedRulePatterns(
   patterns: readonly string[],
-  ruleIds: Iterable<string>
+  ruleIds: Iterable<string>,
 ): string[] {
   const ids = [...ruleIds];
   return patterns.filter((p) => !ids.some((id) => matchesRulePattern(id, p)));

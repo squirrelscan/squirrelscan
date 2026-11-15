@@ -77,7 +77,10 @@ function canonicalizeUrl(raw: string): UrlKey | null {
 
 /** Lower-cased handle without a leading "@" / "/", or "" when absent. */
 function normalizeHandle(handle: string | null | undefined): string {
-  return (handle ?? "").trim().replace(/^[@/]+/, "").toLowerCase();
+  return (handle ?? "")
+    .trim()
+    .replace(/^[@/]+/, "")
+    .toLowerCase();
 }
 
 /**

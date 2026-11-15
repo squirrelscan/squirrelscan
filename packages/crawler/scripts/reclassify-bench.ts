@@ -72,32 +72,66 @@ const hook = (version: string): PageClassifierHook =>
   );
 
 const emptyStats = {
-  pagesTotal: 0, pagesFetched: 0, pagesFailed: 0, pagesSkipped: 0, pagesUnchanged: 0,
-  linksTotal: 0, imagesTotal: 0, bytesTotal: 0, avgLoadTimeMs: 0,
+  pagesTotal: 0,
+  pagesFetched: 0,
+  pagesFailed: 0,
+  pagesSkipped: 0,
+  pagesUnchanged: 0,
+  linksTotal: 0,
+  imagesTotal: 0,
+  bytesTotal: 0,
+  avgLoadTimeMs: 0,
 };
 
 const storage = await Effect.runPromise(createTestStorage());
 async function pass(label: string, incremental: boolean, classify?: PageClassifierHook) {
   const config = {
-    delayMs: 0, timeoutMs: 5000, userAgent: "bench", followRedirects: true, respectRobots: false,
-    include: [], exclude: [], allowQueryParams: [], dropQueryPrefixes: [], breadthFirst: false,
-    coverageMode: "full" as const, allowedDomains: ["127.0.0.1"], maxPages: PAGES + 10,
-    incremental, useCacheControl: true, maxStalenessSeconds: 999_999,
+    delayMs: 0,
+    timeoutMs: 5000,
+    userAgent: "bench",
+    followRedirects: true,
+    respectRobots: false,
+    include: [],
+    exclude: [],
+    allowQueryParams: [],
+    dropQueryPrefixes: [],
+    breadthFirst: false,
+    coverageMode: "full" as const,
+    allowedDomains: ["127.0.0.1"],
+    maxPages: PAGES + 10,
+    incremental,
+    useCacheControl: true,
+    maxStalenessSeconds: 999_999,
   };
   const crawlId = await Effect.runPromise(
     storage.createCrawl({
-      baseUrl: ORIGIN, seedUrl: `${ORIGIN}/p0`, originalUrl: `${ORIGIN}/p0`, startedAt: Date.now(),
-      status: "paused", config, stats: emptyStats,
+      baseUrl: ORIGIN,
+      seedUrl: `${ORIGIN}/p0`,
+      originalUrl: `${ORIGIN}/p0`,
+      startedAt: Date.now(),
+      status: "paused",
+      config,
+      stats: emptyStats,
     }),
   );
   await Effect.runPromise(
     storage.upsertFrontier(crawlId, {
-      normalizedUrl: `${ORIGIN}/p0`, rawUrl: `${ORIGIN}/p0`, depth: 0, priority: 1,
-      status: "pending" as const, source: "seed", enqueuedAt: Date.now(), retryCount: 0,
+      normalizedUrl: `${ORIGIN}/p0`,
+      rawUrl: `${ORIGIN}/p0`,
+      depth: 0,
+      priority: 1,
+      status: "pending" as const,
+      source: "seed",
+      enqueuedAt: Date.now(),
+      retryCount: 0,
     }),
   );
   const crawler = await Effect.runPromise(
-    createCrawler({ config: { ...config, documentFetcher: fetcher }, storage, ...(classify ? { classify } : {}) }),
+    createCrawler({
+      config: { ...config, documentFetcher: fetcher },
+      storage,
+      ...(classify ? { classify } : {}),
+    }),
   );
   requests = 0;
   const t0 = performance.now();

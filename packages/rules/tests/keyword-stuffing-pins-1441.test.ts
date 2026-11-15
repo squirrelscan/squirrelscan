@@ -20,9 +20,12 @@ function ctx(html: string): RuleContext {
     options: {},
   } as unknown as RuleContext;
 }
-const check = async (html: string) => (await keywordStuffingRule.run(ctx(html))).checks.find((c) => c.name === "keyword-stuffing")!;
-const flagged = async (html: string): Promise<string[]> => ((await check(html)).items ?? []).map((i) => i.id);
-const page = (lang: string, body: string) => `<html lang="${lang}"><head><title>t</title></head><body>${body}</body></html>`;
+const check = async (html: string) =>
+  (await keywordStuffingRule.run(ctx(html))).checks.find((c) => c.name === "keyword-stuffing")!;
+const flagged = async (html: string): Promise<string[]> =>
+  ((await check(html)).items ?? []).map((i) => i.id);
+const page = (lang: string, body: string) =>
+  `<html lang="${lang}"><head><title>t</title></head><body>${body}</body></html>`;
 
 // Distinct words, so a page's own copy never trips the density check.
 const letters = (i: number): string => {
@@ -34,33 +37,44 @@ const letters = (i: number): string => {
   } while (n >= 0);
   return out;
 };
-const copy = (n: number): string => Array.from({ length: n }, (_, i) => `zz${letters(i)}`).join(" ");
+const copy = (n: number): string =>
+  Array.from({ length: n }, (_, i) => `zz${letters(i)}`).join(" ");
 
 const deCard = (n: number) =>
   `<div class="card"><h3>Produkt ${letters(n)}</h3><span>Durchschnittliche Bewertung von 4.${n % 10} von 5 Sternen</span><div>Ab ${n},90 € zahlen in Raten, Versandkosten ab 4,90 €</div></div>`;
 const enCard = (n: number) =>
   `<div class="card"><h3>Item ${letters(n)}</h3><span>Average rating 4.${n % 10} of 5 stars</span><div>Shipping costs from $4.90, free returns</div></div>`;
-const grid = (card: (n: number) => string, cards: number) => `<div class="grid">${Array.from({ length: cards }, (_, i) => card(i)).join("")}</div>`;
+const grid = (card: (n: number) => string, cards: number) =>
+  `<div class="grid">${Array.from({ length: cards }, (_, i) => card(i)).join("")}</div>`;
 
 describe("a product grid next to ordinary copy is clean (the case the card deduction was built for)", () => {
   test("12 German cards and 6 English cards beside 400 words of copy raise nothing", async () => {
-    expect((await check(page("de", `<main>${grid(deCard, 12)}<p>${copy(400)}</p></main>`))).status).toBe("pass");
-    expect((await check(page("en", `<main>${grid(enCard, 6)}<p>${copy(400)}</p></main>`))).status).toBe("pass");
+    expect(
+      (await check(page("de", `<main>${grid(deCard, 12)}<p>${copy(400)}</p></main>`))).status,
+    ).toBe("pass");
+    expect(
+      (await check(page("en", `<main>${grid(enCard, 6)}<p>${copy(400)}</p></main>`))).status,
+    ).toBe("pass");
   });
   test("so does a 24-card grid in a long page (700 words): the cards stay under the 20% cap", async () => {
-    expect((await check(page("de", `<main>${grid(deCard, 24)}<p>${copy(700)}</p></main>`))).status).toBe("pass");
-    expect((await check(page("en", `<main>${grid(enCard, 24)}<p>${copy(700)}</p></main>`))).status).toBe("pass");
+    expect(
+      (await check(page("de", `<main>${grid(deCard, 24)}<p>${copy(700)}</p></main>`))).status,
+    ).toBe("pass");
+    expect(
+      (await check(page("en", `<main>${grid(enCard, 24)}<p>${copy(700)}</p></main>`))).status,
+    ).toBe("pass");
   });
 });
 
 describe("a card-dominated category page still counts the microcopy past the 20% cap (#1441)", () => {
   test("24 German cards beside 60 words of copy: the rating sentence and the installment note are flagged", async () => {
-    const out = (await flagged(page("de", `<main>${grid(deCard, 24)}<p>${copy(60)}</p></main>`)));
+    const out = await flagged(page("de", `<main>${grid(deCard, 24)}<p>${copy(60)}</p></main>`));
     // The cap on the deduction (20% of the page's words) leaves most of the cards' words counted.
-    for (const word of ["durchschnittliche", "bewertung", "sternen", "zahlen", "raten"]) expect(out).toContain(word);
+    for (const word of ["durchschnittliche", "bewertung", "sternen", "zahlen", "raten"])
+      expect(out).toContain(word);
   });
   test("24 English cards beside 60 words of copy: the identical shipping note is card microcopy too, but the 20% cap leaves it counted", async () => {
-    const out = (await flagged(page("en", `<main>${grid(enCard, 24)}<p>${copy(60)}</p></main>`)));
+    const out = await flagged(page("en", `<main>${grid(enCard, 24)}<p>${copy(60)}</p></main>`));
     // "Shipping costs from $4.90, free returns" is the same on every card. Since the #1441 relaxation an identical
     // price line on 5+ cards is deducted like a varying one, but the total deduction is capped at 20% of the page's
     // words and the largest texts go first, so on a page this dominated by cards most of the note still counts.
@@ -73,10 +87,12 @@ describe("a card-dominated category page still counts the microcopy past the 20%
 describe("a newsletter teaser is copy (#1441)", () => {
   const teaser = `<div class="newsletter"><p>Jetzt Abonnement abschliessen: Das Abonnement ist jederzeit kuendbar. Abonnement mit Gutschein, Abonnement ohne Risiko, Abonnement bestaetigen, Abonnement verschenken.</p><form><input placeholder="E-Mail"><button>Abonnement starten</button></form></div>`;
   test("six uses of one word in a teaser, in a form, beside 120 words of copy: counted and flagged", async () => {
-    expect(await flagged(page("de", `<main><p>${copy(120)}</p>${teaser}</main>`))).toEqual(["abonnement"]);
+    expect(await flagged(page("de", `<main><p>${copy(120)}</p>${teaser}</main>`))).toEqual([
+      "abonnement",
+    ]);
   });
   test("on a page with under 100 words in total the rule says the content is too short and flags nothing", async () => {
-    const c = (await check(page("de", `<main><p>${copy(60)}</p>${teaser}</main>`)));
+    const c = await check(page("de", `<main><p>${copy(60)}</p>${teaser}</main>`));
     expect(c.status).toBe("info");
     expect(c.items).toBeUndefined();
   });
@@ -86,7 +102,8 @@ describe("a menu of plain div links on a contact page (#1441)", () => {
   const cats = ["bademode", "curvy", "waesche", "kleider", "roecke", "hosen", "jacken", "schuhe"];
   const menu = (label: (i: number) => string) =>
     `<div id="menu">${Array.from({ length: 20 }, (_, i) => `<div><a href="/c/${i}">${label(i)}</a></div>`).join("")}</div>`;
-  const contact = (links: string, words: number) => page("de", `<body>${links}<main><h1>Kontakt</h1><p>${copy(words)}</p></main></body>`);
+  const contact = (links: string, words: number) =>
+    page("de", `<body>${links}<main><h1>Kontakt</h1><p>${copy(words)}</p></main></body>`);
 
   test("20 links with varied category words (the real mega menu's shape) and 90 words of copy raise nothing", async () => {
     const varied = menu((i) => `${cats[i % 8]} ${["neu", "sale", "alle", "top", "mehr"][i % 5]}`);
@@ -99,8 +116,22 @@ describe("a menu of plain div links on a contact page (#1441)", () => {
   test("a menu signal (role=menubar) leaves varied links out, but links that share one word are still counted", async () => {
     const signal = (label: (i: number) => string) =>
       `<div role="menubar">${Array.from({ length: 20 }, (_, i) => `<div><a href="/c/${i}">${label(i)}</a></div>`).join("")}</div>`;
-    expect(await flagged(contact(signal((i) => `${cats[i % 8]} ${["neu", "sale", "alle", "top", "mehr"][i % 5]}`), 90))).toEqual([]);
-    expect(await flagged(contact(signal((i) => `bademode ${["neu", "sale", "alle", "top", "mehr"][i % 5]}`), 90))).toContain("bademode");
+    expect(
+      await flagged(
+        contact(
+          signal((i) => `${cats[i % 8]} ${["neu", "sale", "alle", "top", "mehr"][i % 5]}`),
+          90,
+        ),
+      ),
+    ).toEqual([]);
+    expect(
+      await flagged(
+        contact(
+          signal((i) => `bademode ${["neu", "sale", "alle", "top", "mehr"][i % 5]}`),
+          90,
+        ),
+      ),
+    ).toContain("bademode");
   });
   test("under 100 words in total the page is too short to measure, menu or not", async () => {
     const shared = menu((i) => `bademode ${["neu", "sale", "alle", "top", "mehr"][i % 5]}`);
@@ -114,21 +145,37 @@ describe("an identical price or rating line repeated across 5+ cards is card mic
     `<div class="grid">${Array.from({ length: n }, (_, i) => `<div class="card"><h3>zq${letters(i)}</h3><span>${text}</span></div>`).join("")}</div>`;
 
   test("12 cards with the same shipping note beside 200 words of copy raise nothing (they were flagged before)", async () => {
-    const html = page("en", `<main>${cardsOf(12, "Shipping costs from $4.90")}<p>${copy(200)}</p></main>`);
+    const html = page(
+      "en",
+      `<main>${cardsOf(12, "Shipping costs from $4.90")}<p>${copy(200)}</p></main>`,
+    );
     expect(await flagged(html)).toEqual([]);
   });
   test("the bar is 5 wrappers: 5 identical notes are deducted, 4 are not", async () => {
-    expect((await check(page("en", `<main>${cardsOf(5, note)}<p>${copy(120)}</p></main>`))).status).toBe("pass");
-    expect(await flagged(page("en", `<main>${cardsOf(4, note)}<p>${copy(120)}</p></main>`))).toEqual(["shipping"]);
+    expect(
+      (await check(page("en", `<main>${cardsOf(5, note)}<p>${copy(120)}</p></main>`))).status,
+    ).toBe("pass");
+    expect(
+      await flagged(page("en", `<main>${cardsOf(4, note)}<p>${copy(120)}</p></main>`)),
+    ).toEqual(["shipping"]);
   });
   test("it stays bounded: a phrase dressed in one price is still flagged when it dominates the page", async () => {
     // Six cards of one stuffed phrase with a fixed price: the word is far past the raw-density limit, so the
     // deduction does not touch it (a spammer cannot launder a keyword through a price).
     const spam = "Plumber London from $49 plumber london plumber london plumber";
-    expect(await flagged(page("en", `<main>${cardsOf(6, spam)}<p>${copy(100)}</p></main>`))).toContain("plumber");
+    expect(
+      await flagged(page("en", `<main>${cardsOf(6, spam)}<p>${copy(100)}</p></main>`)),
+    ).toContain("plumber");
   });
   test("a price-less repeated line is never deducted, however many cards repeat it", async () => {
-    expect(await flagged(page("en", `<main>${cardsOf(12, "Shipping fee shipping costs shipping")}<p>${copy(100)}</p></main>`))).toContain("shipping");
+    expect(
+      await flagged(
+        page(
+          "en",
+          `<main>${cardsOf(12, "Shipping fee shipping costs shipping")}<p>${copy(100)}</p></main>`,
+        ),
+      ),
+    ).toContain("shipping");
   });
 });
 
@@ -136,7 +183,8 @@ describe("a short contact page with a large plain menu (#1441, pinned trade-off)
   const cats = ["bademode", "curvy", "waesche", "kleider"];
   const links = (label: (i: number) => string) =>
     `<div id="menu">${Array.from({ length: 20 }, (_, i) => `<div><a href="/c/${i}">${label(i)}</a></div>`).join("")}</div>`;
-  const contact = (menu: string, words: number) => page("de", `<body>${menu}<main><h1>Kontakt</h1><p>${copy(words)}</p></main></body>`);
+  const contact = (menu: string, words: number) =>
+    page("de", `<body>${menu}<main><h1>Kontakt</h1><p>${copy(words)}</p></main></body>`);
 
   test("under 100 words of copy, the menu's own words are measured with it: 60 words of copy plus 20 two-word links is 100 words, so a shared category word IS counted and flagged", async () => {
     // By design: with no landmark or menu signal a plain `div` menu is page copy (hidden stuffing looks the
@@ -146,8 +194,19 @@ describe("a short contact page with a large plain menu (#1441, pinned trade-off)
     expect(await flagged(contact(shared, 60))).toEqual(["bademode"]);
   });
   test("the same menu with varied category words raises nothing, and a page of 40 words of copy is too short to measure", async () => {
-    const varied = links((i) => `${cats[i % 4]}${letters(i)} ${["neu", "sale", "alle", "top", "mehr"][i % 5]}`);
+    const varied = links(
+      (i) => `${cats[i % 4]}${letters(i)} ${["neu", "sale", "alle", "top", "mehr"][i % 5]}`,
+    );
     expect((await check(contact(varied, 60))).status).toBe("pass");
-    expect((await check(contact(links((i) => `bademode ${["neu", "sale", "alle", "top", "mehr"][i % 5]}`), 40))).status).toBe("info");
+    expect(
+      (
+        await check(
+          contact(
+            links((i) => `bademode ${["neu", "sale", "alle", "top", "mehr"][i % 5]}`),
+            40,
+          ),
+        )
+      ).status,
+    ).toBe("info");
   });
 });

@@ -14,7 +14,10 @@ function a(text: string, extra: Partial<LinkData> = {}): LinkData {
   return { url: "/x", text, isInternal: true, isChrome: false, ...extra };
 }
 
-function ctx(pages: Record<string, LinkData[]>, options: Record<string, unknown> = {}): RuleContext {
+function ctx(
+  pages: Record<string, LinkData[]>,
+  options: Record<string, unknown> = {},
+): RuleContext {
   return {
     page: { url: BASE, html: "", statusCode: 200, loadTime: 0, headers: {} },
     parsed: {} as ParsedPage,
@@ -48,7 +51,7 @@ function mix(generic: number, descriptive: number): LinkData[] {
 describe("links/generic-anchor-density", () => {
   test("fail: a mostly generic site reports the ratio and the worst pages", async () => {
     const c = await run(
-      ctx({ [`${BASE}a`]: mix(30, 5), [`${BASE}b`]: mix(10, 15), [`${BASE}c`]: mix(0, 10) })
+      ctx({ [`${BASE}a`]: mix(30, 5), [`${BASE}b`]: mix(10, 15), [`${BASE}c`]: mix(0, 10) }),
     );
     expect(c.status).toBe("fail");
     expect(c.message).toContain("of internal anchors are generic (40 of 70)");

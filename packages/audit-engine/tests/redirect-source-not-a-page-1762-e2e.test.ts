@@ -18,7 +18,12 @@ import type { Config } from "@squirrelscan/config";
 import type { CheckResult } from "@squirrelscan/core-contracts";
 import { createCrawler, SQLiteStorage } from "@squirrelscan/crawler";
 
-import { buildSiteContext, generateReportFromStorage, runRulesOnStorage, runStreamingRules } from "../src/adapter";
+import {
+  buildSiteContext,
+  generateReportFromStorage,
+  runRulesOnStorage,
+  runStreamingRules,
+} from "../src/adapter";
 import { buildV2Report } from "../src/report-stream";
 import { runStreamingPreRules } from "../src/streaming-pre-rules";
 
@@ -161,7 +166,9 @@ async function run(
     Effect.gen(function* () {
       if (opts.legacy) {
         // A page stored by an older crawl: the destination's markup filed under the redirecting URL.
-        const [linked] = (yield* storage.getPages(crawlId)).filter((p) => p.normalizedUrl === `${origin}/linked`);
+        const [linked] = (yield* storage.getPages(crawlId)).filter(
+          (p) => p.normalizedUrl === `${origin}/linked`,
+        );
         const url = `${origin}/legacy`;
         yield* storage.upsertPage(crawlId, {
           ...linked!,
@@ -182,15 +189,33 @@ async function run(
       const preRules = yield* runStreamingPreRules(storage, crawlId, config, {});
       const pages = yield* storage.getPages(crawlId);
       const stored = new Map(
-        pages.map((p) => [p.normalizedUrl, { status: p.status, html: p.html, finalUrl: p.finalUrl }]),
+        pages.map((p) => [
+          p.normalizedUrl,
+          { status: p.status, html: p.html, finalUrl: p.finalUrl },
+        ]),
       );
       const ran =
         engine === "v1"
-          ? yield* runRulesOnStorage(storage, crawlId, yield* buildSiteContext(pages), config, preRules.assets)
+          ? yield* runRulesOnStorage(
+              storage,
+              crawlId,
+              yield* buildSiteContext(pages),
+              config,
+              preRules.assets,
+            )
           : yield* runStreamingRules(storage, crawlId, config, preRules.assets);
       const v1Report = yield* generateReportFromStorage(storage, crawlId, ran as never);
-      const v2Report = yield* buildV2Report(storage, crawlId, { ...(ran as object), tallies: (ran as { tallies?: Map<never, never> }).tallies ?? new Map() } as never);
-      return { origin, stored, rules: ran.ruleResultsMap as unknown as RuleChecks, v1Report, v2Report } as Outcome;
+      const v2Report = yield* buildV2Report(storage, crawlId, {
+        ...(ran as object),
+        tallies: (ran as { tallies?: Map<never, never> }).tallies ?? new Map(),
+      } as never);
+      return {
+        origin,
+        stored,
+        rules: ran.ruleResultsMap as unknown as RuleChecks,
+        v1Report,
+        v2Report,
+      } as Outcome;
     }) as Effect.Effect<Outcome, never, never>,
   );
 }
@@ -214,7 +239,15 @@ function pageUrlsOf(out: Outcome, ruleId: string): string[] {
 }
 
 const REDIRECTS = ["/r1", "/r3", "/gone", "/carried", "/slash", "/rslash/", "/sm"];
-const AUDITED = ["/linked", "/three", "/uncrawled", "/carried-dest", "/slash/", "/rslash", "/sm-dest"];
+const AUDITED = [
+  "/linked",
+  "/three",
+  "/uncrawled",
+  "/carried-dest",
+  "/slash/",
+  "/rslash",
+  "/sm-dest",
+];
 
 describe.each(["v1", "v2"] as const)("redirecting URLs are not pages (#1762, %s)", (engine) => {
   test("the crawler records redirects without a body (slash each way included) and queues destinations", async () => {
@@ -236,7 +269,9 @@ describe.each(["v1", "v2"] as const)("redirecting URLs are not pages (#1762, %s)
     for (const path of ["/trk", "/aq"]) {
       expect(stored.get(`${origin}${path}`)?.status, path).toBe(200);
       expect(stored.get(`${origin}${path}`)?.html, path).toBeTruthy();
-      expect(pageUrlsOf({ rules } as Outcome, "content/word-count"), path).toContain(`${origin}${path}`);
+      expect(pageUrlsOf({ rules } as Outcome, "content/word-count"), path).toContain(
+        `${origin}${path}`,
+      );
     }
   }, 60_000);
 
@@ -251,9 +286,13 @@ describe.each(["v1", "v2"] as const)("redirecting URLs are not pages (#1762, %s)
       }
     }
     const audited = pageUrlsOf(out, "content/word-count");
-    for (const path of [...REDIRECTS, "/out"]) expect(audited, path).not.toContain(`${out.origin}${path}`);
+    for (const path of [...REDIRECTS, "/out"])
+      expect(audited, path).not.toContain(`${out.origin}${path}`);
     for (const path of AUDITED) {
-      expect(audited.filter((u) => u === `${out.origin}${path}`), path).toHaveLength(1);
+      expect(
+        audited.filter((u) => u === `${out.origin}${path}`),
+        path,
+      ).toHaveLength(1);
     }
   }, 60_000);
 
@@ -274,7 +313,9 @@ describe.each(["v1", "v2"] as const)("redirecting URLs are not pages (#1762, %s)
 
   test("the report's page totals and page list leave redirecting URLs out, in both assemblers", async () => {
     const out = await run(engine);
-    const contentRows = [...out.stored.entries()].filter(([, row]) => row.status < 300 || row.status >= 400);
+    const contentRows = [...out.stored.entries()].filter(
+      ([, row]) => row.status < 300 || row.status >= 400,
+    );
     expect(out.v1Report.totalPages).toBe(contentRows.length);
     expect(out.v2Report.totalPages).toBe(contentRows.length);
     expect(out.v1Report.pages).toHaveLength(contentRows.length);
@@ -290,41 +331,47 @@ describe.each(["v1", "v2"] as const)("redirecting URLs are not pages (#1762, %s)
       links: `<a href="/r1">R1</a>`,
     });
     expect(out.stored.get(`${out.origin}/linked`)?.html).toBeTruthy();
-    expect(out.v1Report.pages.map((p) => p.url).sort()).toEqual([`${out.origin}/`, `${out.origin}/linked`].sort());
+    expect(out.v1Report.pages.map((p) => p.url).sort()).toEqual(
+      [`${out.origin}/`, `${out.origin}/linked`].sort(),
+    );
     expect(out.v1Report.totalPages).toBe(2);
   }, 60_000);
 
   test("a stored redirecting URL that still holds the destination's markup is not audited, and its hops are reported", async () => {
     const out = await run(engine, { legacy: true });
     expect(pageUrlsOf(out, "content/word-count")).not.toContain(`${out.origin}/legacy`);
-    expect(pageUrlsOf(out, "content/word-count").filter((u) => u === `${out.origin}/linked`)).toHaveLength(1);
+    expect(
+      pageUrlsOf(out, "content/word-count").filter((u) => u === `${out.origin}/linked`),
+    ).toHaveLength(1);
     expect(pageUrlsOf(out, "links/redirect-chains")).toContain(`${out.origin}/legacy`);
     expect(pageUrlsOf(out, "crawl/canonical-chain")).toContain(`${out.origin}/legacy`);
     expect(out.v1Report.pages.map((p) => p.url)).not.toContain(`${out.origin}/legacy`);
   }, 60_000);
 });
 
-describe.each(["v1", "v2"] as const)("a redirect that ends in an error or loops stays an ordinary row (#1762, %s)", (engine) => {
-  const links = `<a href="/linked">L</a><a href="/dead">D</a><a href="/loop-a">LA</a>`;
+describe.each(["v1", "v2"] as const)(
+  "a redirect that ends in an error or loops stays an ordinary row (#1762, %s)",
+  (engine) => {
+    const links = `<a href="/linked">L</a><a href="/dead">D</a><a href="/loop-a">LA</a>`;
 
-  test("/dead -> 301 -> /nowhere (404) is stored as the error it answered, and the link to it is still broken", async () => {
-    const out = await run(engine, { links, carried: false });
-    const dead = out.stored.get(`${out.origin}/dead`);
-    expect(dead).toBeDefined();
-    // Not a redirect marker (a 3xx that resolved): the row an error redirect always was.
-    expect(dead!.status).toBeGreaterThanOrEqual(400);
-    expect(pageUrlsOf(out, "links/broken-links")).toContain(`${out.origin}/dead`);
-    // It counts as a page row like any 404 page (not excluded as a redirect).
-    expect(out.v1Report.pages.some((p) => p.url === `${out.origin}/dead`)).toBe(true);
-  }, 60_000);
+    test("/dead -> 301 -> /nowhere (404) is stored as the error it answered, and the link to it is still broken", async () => {
+      const out = await run(engine, { links, carried: false });
+      const dead = out.stored.get(`${out.origin}/dead`);
+      expect(dead).toBeDefined();
+      // Not a redirect marker (a 3xx that resolved): the row an error redirect always was.
+      expect(dead!.status).toBeGreaterThanOrEqual(400);
+      expect(pageUrlsOf(out, "links/broken-links")).toContain(`${out.origin}/dead`);
+      // It counts as a page row like any 404 page (not excluded as a redirect).
+      expect(out.v1Report.pages.some((p) => p.url === `${out.origin}/dead`)).toBe(true);
+    }, 60_000);
 
-  test("/loop-a <-> /loop-b is not a redirect row either", async () => {
-    const out = await run(engine, { links, carried: false });
-    const loop = out.stored.get(`${out.origin}/loop-a`);
-    expect(loop).toBeDefined();
-    // A loop never resolved: it is not the 3xx marker with a resolved chain the engine reads as a redirect.
-    expect(loop!.html ?? "").toBe("");
-    expect(out.v1Report.pages.some((p) => p.url === `${out.origin}/loop-a`)).toBe(true);
-  }, 60_000);
-});
-
+    test("/loop-a <-> /loop-b is not a redirect row either", async () => {
+      const out = await run(engine, { links, carried: false });
+      const loop = out.stored.get(`${out.origin}/loop-a`);
+      expect(loop).toBeDefined();
+      // A loop never resolved: it is not the 3xx marker with a resolved chain the engine reads as a redirect.
+      expect(loop!.html ?? "").toBe("");
+      expect(out.v1Report.pages.some((p) => p.url === `${out.origin}/loop-a`)).toBe(true);
+    }, 60_000);
+  },
+);

@@ -47,7 +47,7 @@ function sharedLabel(map: FoundMap, siteUrl: string): string {
     .map((s) =>
       s.endsWith(HEADER_SOURCE)
         ? `${displayMapUrl(s.slice(0, -HEADER_SOURCE.length), siteUrl)}${HEADER_SOURCE}`
-        : displayMapUrl(s, siteUrl)
+        : displayMapUrl(s, siteUrl),
     );
   const more = sources.length - named.length;
   return `from ${named.join(", ")}${more > 0 ? `, and ${more} more` : ""}`;
@@ -250,9 +250,7 @@ export const sourceMapsRule: Rule = {
         const resolvedSrc = resolveUrl(src, baseUrl);
         if (resolvedSrc) {
           // Find this script in site.scripts to check its content
-          const scriptData = ctx.site.scripts.find(
-            (s) => s.url === resolvedSrc || s.url === src
-          );
+          const scriptData = ctx.site.scripts.find((s) => s.url === resolvedSrc || s.url === src);
           if (scriptData) {
             // A map more than one crawled page loads, through any script, is
             // reported once for all of them.
@@ -268,7 +266,7 @@ export const sourceMapsRule: Rule = {
             if (scriptData.sourceMapHeader) {
               const resolvedMapUrl = resolveUrl(
                 scriptData.sourceMapHeader,
-                scriptData.finalUrl || resolvedSrc
+                scriptData.finalUrl || resolvedSrc,
               );
               sourceMapsFound.push({
                 url: resolvedMapUrl || scriptData.sourceMapHeader,
@@ -281,10 +279,7 @@ export const sourceMapsRule: Rule = {
             if (scriptData.content) {
               jsSourceMapPattern.lastIndex = 0;
               let contentMatch: RegExpExecArray | null;
-              while (
-                (contentMatch = jsSourceMapPattern.exec(scriptData.content)) !==
-                null
-              ) {
+              while ((contentMatch = jsSourceMapPattern.exec(scriptData.content)) !== null) {
                 const mapUrl = contentMatch[1];
                 if (!mapUrl.startsWith("data:")) {
                   const resolvedMapUrl = resolveUrl(mapUrl, resolvedSrc);
@@ -329,8 +324,7 @@ export const sourceMapsRule: Rule = {
     // If CSS content fetching is added in the future, this can be extended.
 
     // Check for SourceMap header on the page response
-    const sourceMapHeader =
-      ctx.page.headers["sourcemap"] || ctx.page.headers["x-sourcemap"];
+    const sourceMapHeader = ctx.page.headers["sourcemap"] || ctx.page.headers["x-sourcemap"];
     if (sourceMapHeader) {
       const resolvedUrl = resolveUrl(sourceMapHeader, baseUrl);
       sourceMapsFound.push({
@@ -350,7 +344,7 @@ export const sourceMapsRule: Rule = {
         found.url,
         found.sharedPages || !prior?.sharedPages
           ? found
-          : { ...found, sharedPages: prior.sharedPages, sharedSources: prior.sharedSources }
+          : { ...found, sharedPages: prior.sharedPages, sharedSources: prior.sharedSources },
       );
     }
     const uniqueSourceMaps = [...byUrl.values()];

@@ -29,12 +29,10 @@ export const videoSchemaRule: Rule = {
 
     // Check if page has video content
     const hasVideoElement = doc.querySelector(
-      "video, iframe[src*='youtube'], iframe[src*='vimeo']"
+      "video, iframe[src*='youtube'], iframe[src*='vimeo']",
     );
 
-    const schemaScripts = doc.querySelectorAll(
-      'script[type="application/ld+json"]'
-    );
+    const schemaScripts = doc.querySelectorAll('script[type="application/ld+json"]');
     let videoSchema: Record<string, unknown> | null = null;
 
     for (const script of schemaScripts) {
@@ -47,10 +45,7 @@ export const videoSchemaRule: Rule = {
 
       for (const schema of schemas) {
         const type = schema["@type"];
-        if (
-          type === "VideoObject" ||
-          (Array.isArray(type) && type.includes("VideoObject"))
-        ) {
+        if (type === "VideoObject" || (Array.isArray(type) && type.includes("VideoObject"))) {
           videoSchema = schema;
           break;
         }
@@ -111,11 +106,7 @@ export const videoSchemaRule: Rule = {
 
     // Check duration format
     const duration = videoSchema["duration"];
-    if (
-      duration &&
-      typeof duration === "string" &&
-      !duration.startsWith("PT")
-    ) {
+    if (duration && typeof duration === "string" && !duration.startsWith("PT")) {
       checks.push({
         name: "video-duration",
         status: "warn",

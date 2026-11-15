@@ -125,7 +125,7 @@ function originOf(url: string): string | null {
  * Pure: sends nothing.
  */
 export function selectOpenRedirectCandidates(
-  ctx: Pick<RuleContext, "site" | "endpointSurface" | "probe">
+  ctx: Pick<RuleContext, "site" | "endpointSurface" | "probe">,
 ): OpenRedirectCandidateSelection {
   const selection: OpenRedirectCandidateSelection = {
     candidates: [],
@@ -199,7 +199,7 @@ export function selectOpenRedirectCandidates(
 /** The exact URL and init for one probe. Exported so tests can pin what is sent. */
 export function buildOpenRedirectProbe(
   candidate: Pick<OpenRedirectCandidate, "url" | "param">,
-  payload: string
+  payload: string,
 ): { url: string; init: RequestInit } {
   const u = new URL(candidate.url);
   u.hash = "";
@@ -229,7 +229,7 @@ export type OpenRedirectVerdict =
 export function classifyRedirect(
   status: number,
   location: string | null,
-  requestUrl: string
+  requestUrl: string,
 ): OpenRedirectVerdict {
   if (status < 300 || status > 399 || !location) return { kind: "no-redirect", status };
   let target: URL;
@@ -256,7 +256,7 @@ export type OpenRedirectProbeOutcome =
 export async function sendOpenRedirectProbe(
   probe: ProbeBudget | undefined,
   candidate: Pick<OpenRedirectCandidate, "url" | "param">,
-  payload: string
+  payload: string,
 ): Promise<OpenRedirectProbeOutcome> {
   if (!probe || !probe.allows("quiet")) return { sent: false };
   const { url, init } = buildOpenRedirectProbe(candidate, payload);
@@ -291,7 +291,7 @@ type CandidateVerdict =
 
 async function probeCandidate(
   ctx: RuleContext,
-  candidate: OpenRedirectCandidate
+  candidate: OpenRedirectCandidate,
 ): Promise<CandidateVerdict> {
   let sentAny = false;
   let answered = false;
@@ -319,7 +319,7 @@ export const openRedirectRule: Rule = {
     description:
       "Probes same-origin URLs whose query carries a redirect-shaped parameter (next, url, redirect, returnTo, continue and the like) with an off-site value, and flags a parameter the server redirects to whatever host it names. The redirect is never followed. Runs only when probing is active or aggressive.",
     solution:
-      "Never redirect to a URL taken from the request as it is. Accept only a relative path that starts with a single `/` (reject `//`, `/\\` and anything with a scheme), or map a short key to a fixed list of destinations, or check the parsed host against an allowlist of your own hosts. Resolve the value with a URL parser before you check it: string prefix checks such as `startsWith(\"/\")` let `//evil.example` through. Fall back to a safe default page when the value fails the check.",
+      'Never redirect to a URL taken from the request as it is. Accept only a relative path that starts with a single `/` (reject `//`, `/\\` and anything with a scheme), or map a short key to a fixed list of destinations, or check the parsed host against an allowlist of your own hosts. Resolve the value with a URL parser before you check it: string prefix checks such as `startsWith("/")` let `//evil.example` through. Fall back to a safe default page when the value fails the check.',
     category: "security",
     scope: "site",
     findingScope: "page",
@@ -365,8 +365,11 @@ export const openRedirectRule: Rule = {
     let probed = 0;
     let errored = 0;
     let budgetStopped = false;
-    const open: Array<{ candidate: OpenRedirectCandidate; payload: OpenRedirectPayloadKind; status: number }> =
-      [];
+    const open: Array<{
+      candidate: OpenRedirectCandidate;
+      payload: OpenRedirectPayloadKind;
+      status: number;
+    }> = [];
     for (const candidate of selection.candidates) {
       const verdict = await probeCandidate(ctx, candidate);
       if (verdict.kind === "not-sent") {
@@ -376,7 +379,8 @@ export const openRedirectRule: Rule = {
       probed++;
       if (verdict.kind !== "open" && verdict.cut) budgetStopped = true;
       if (verdict.kind === "errored") errored++;
-      if (verdict.kind === "open") open.push({ candidate, payload: verdict.payload, status: verdict.status });
+      if (verdict.kind === "open")
+        open.push({ candidate, payload: verdict.payload, status: verdict.status });
     }
 
     if (probed === 0) {
@@ -411,7 +415,13 @@ export const openRedirectRule: Rule = {
           {
             id: `${candidate.page}?${candidate.param}`,
             label: `${candidate.page} (?${candidate.param}=): ${status} to an off-site host`,
-            meta: { page: candidate.page, param: candidate.param, payload, status, foundVia: candidate.foundVia },
+            meta: {
+              page: candidate.page,
+              param: candidate.param,
+              payload,
+              status,
+              foundVia: candidate.foundVia,
+            },
           },
         ],
         details: { page: candidate.page, param: candidate.param, payload, status },

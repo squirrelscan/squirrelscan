@@ -100,7 +100,10 @@ function parseSignalValue(value: string): Omit<ParsedContentSignal, "userAgents"
       continue;
     }
     const key = token.slice(0, eq).trim().toLowerCase();
-    const val = token.slice(eq + 1).trim().toLowerCase();
+    const val = token
+      .slice(eq + 1)
+      .trim()
+      .toLowerCase();
     const auxValues = AUX_SIGNALS[key];
     if (auxValues) {
       if (auxValues.includes(val)) aux.push({ key, value: val });
@@ -150,7 +153,11 @@ export function findContradictions(
       );
       if (blockedInScope.length > 0) {
         seen.add(s.key);
-        out.push({ signal: s.key, crawlerClass: cls, blockedTokens: blockedInScope.map((b) => b.token) });
+        out.push({
+          signal: s.key,
+          crawlerClass: cls,
+          blockedTokens: blockedInScope.map((b) => b.token),
+        });
       }
     }
   }

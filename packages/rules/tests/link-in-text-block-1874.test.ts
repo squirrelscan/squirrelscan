@@ -49,9 +49,7 @@ describe("a11y/link-in-text-block (#1874)", async () => {
   });
 
   test("warned link without text is never reported as empty", async () => {
-    const c = await check(
-      `<p>See <a href="/x" style="text-decoration:none">x</a> and text</p>`,
-    );
+    const c = await check(`<p>See <a href="/x" style="text-decoration:none">x</a> and text</p>`);
     expect(c.items?.every((i: { id: string }) => i.id !== `""`)).toBe(true);
   });
 });

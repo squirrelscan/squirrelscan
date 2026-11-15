@@ -78,7 +78,7 @@ export const sitemapDomainRule: Rule = {
           meta: { host: u.host },
         })),
         crossDomainUrls.length,
-        new Set(crossDomainUrls.map((u) => u.url)).size
+        new Set(crossDomainUrls.map((u) => u.url)).size,
       );
       checks.push({
         name: "sitemap-domain",

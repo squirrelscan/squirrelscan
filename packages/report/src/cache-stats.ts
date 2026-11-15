@@ -44,10 +44,9 @@ export function cacheStatsSummaryLine(stats: CacheStats): string {
 
 /** Ordered, non-zero reason rows for breakdown rendering. */
 export function cacheReasonRows(
-  stats: CacheStats
+  stats: CacheStats,
 ): Array<{ reason: CacheHitReason; label: string; count: number }> {
-  const rows: Array<{ reason: CacheHitReason; label: string; count: number }> =
-    [];
+  const rows: Array<{ reason: CacheHitReason; label: string; count: number }> = [];
   for (const reason of REASON_ORDER) {
     const count = stats.hitsByReason[reason] ?? 0;
     if (count > 0) rows.push({ reason, label: REASON_LABELS[reason], count });
@@ -78,7 +77,7 @@ export function cacheFreshnessLines(note: CacheFreshness): string[] {
       lines.push("No page response looked cached.");
     } else {
       lines.push(
-        `${note.stalePageCount} page${note.stalePageCount === 1 ? "" : "s"} still looked cached (stale-cache note): the audit may describe a copy from before the deploy.`
+        `${note.stalePageCount} page${note.stalePageCount === 1 ? "" : "s"} still looked cached (stale-cache note): the audit may describe a copy from before the deploy.`,
       );
       for (const p of note.stalePages) lines.push(`  ${p.url} (${p.signal})`);
       if (note.stalePageCount > note.stalePages.length) {

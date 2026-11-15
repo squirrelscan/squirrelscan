@@ -35,7 +35,11 @@ import {
   ruleCarriedPageCount,
 } from "../affected-pages";
 import { cacheHitRatePercent, cacheReasonsLabel } from "../cache-stats";
-import { javascriptPageSize, javascriptShipped, javascriptShippedSummary } from "../javascript-shipped";
+import {
+  javascriptPageSize,
+  javascriptShipped,
+  javascriptShippedSummary,
+} from "../javascript-shipped";
 import {
   describeRoot,
   fixRollupLine,

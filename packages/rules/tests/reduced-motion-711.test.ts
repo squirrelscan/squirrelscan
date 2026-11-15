@@ -4,7 +4,12 @@ import { describe, expect, test } from "bun:test";
 
 import { parsePage } from "@squirrelscan/parser";
 
-import { DYNAMIC_PSEUDO, reducedMotionRule, staticSelector, stylesheetMotionOf } from "../src/a11y/reduced-motion";
+import {
+  DYNAMIC_PSEUDO,
+  reducedMotionRule,
+  staticSelector,
+  stylesheetMotionOf,
+} from "../src/a11y/reduced-motion";
 import type { CheckResult, RuleContext, StylesheetMotionData } from "../src/types";
 
 const URL_ = "https://example.com/";
@@ -13,7 +18,11 @@ function page(head: string, body = ""): string {
   return `<!DOCTYPE html><html lang="en"><head><title>t</title>${head}</head><body><main><h1>Page</h1>${body}</main></body></html>`;
 }
 
-function run(html: string, site?: Partial<NonNullable<RuleContext["site"]>>, url = URL_): CheckResult[] {
+function run(
+  html: string,
+  site?: Partial<NonNullable<RuleContext["site"]>>,
+  url = URL_,
+): CheckResult[] {
   const ctx = {
     page: { url, html, statusCode: 200, loadTime: 0, headers: {} },
     parsed: parsePage(html, url),
@@ -25,7 +34,11 @@ function run(html: string, site?: Partial<NonNullable<RuleContext["site"]>>, url
   return result.checks.filter((c) => c.status !== "pass");
 }
 
-function runAll(html: string, site?: Partial<NonNullable<RuleContext["site"]>>, url = URL_): CheckResult[] {
+function runAll(
+  html: string,
+  site?: Partial<NonNullable<RuleContext["site"]>>,
+  url = URL_,
+): CheckResult[] {
   const ctx = {
     page: { url, html, statusCode: 200, loadTime: 0, headers: {} },
     parsed: parsePage(html, url),
@@ -54,7 +67,11 @@ describe("a11y/reduced-motion", () => {
   test("AOS with no handling warns and names AOS", () => {
     const checks = run(
       page(`<script src="https://example.com/aos.js"></script>`, `<div data-aos="fade-up">x</div>`),
-      { scripts: [{ url: "https://example.com/aos.js", content: "x", sourcePages: [URL_] }] as never },
+      {
+        scripts: [
+          { url: "https://example.com/aos.js", content: "x", sourcePages: [URL_] },
+        ] as never,
+      },
     );
     expect(checks).toHaveLength(1);
     expect(checks[0]!.status).toBe("warn");
@@ -67,7 +84,10 @@ describe("a11y/reduced-motion", () => {
     const warn = run(page(`<style>${css}</style>`, `<i class="s"></i>`));
     expect(warn[0]!.status).toBe("warn");
     const clear = run(
-      page(`<style>${css} @media (prefers-reduced-motion: reduce){ * { animation: none } }</style>`, `<i class="s"></i>`),
+      page(
+        `<style>${css} @media (prefers-reduced-motion: reduce){ * { animation: none } }</style>`,
+        `<i class="s"></i>`,
+      ),
     );
     expect(clear).toHaveLength(0);
   });
@@ -77,13 +97,18 @@ describe("a11y/reduced-motion", () => {
       `<link rel="stylesheet" href="/app.css">`,
       `<video autoplay loop muted></video>`,
     );
-    expect(run(html, { stylesheetMotion: [sheet({ mentionsReducedMotion: true })] })).toHaveLength(0);
+    expect(run(html, { stylesheetMotion: [sheet({ mentionsReducedMotion: true })] })).toHaveLength(
+      0,
+    );
     // Without the stylesheet body it is unverified: info, never warn.
     const partial = run(html, { stylesheetMotion: [] });
     expect(partial[0]!.status).toBe("info");
     expect(partial[0]!.message).toContain("partial check");
     const third = run(
-      page(`<link rel="stylesheet" href="https://cdn.other.com/a.css">`, `<video autoplay loop></video>`),
+      page(
+        `<link rel="stylesheet" href="https://cdn.other.com/a.css">`,
+        `<video autoplay loop></video>`,
+      ),
       { stylesheetMotion: [] },
     );
     expect(third[0]!.status).toBe("info");
@@ -92,7 +117,14 @@ describe("a11y/reduced-motion", () => {
   test("a stylesheet href's query string never reaches the finding", () => {
     const href = "https://example.com/app.css?token=s3cr3t&email=a%40b.com";
     const checks = run(page(`<link rel="stylesheet" href="${href}">`), {
-      stylesheetMotion: [sheet({ url: href, hasInfiniteAnimation: true, hasSmoothScroll: true, smoothScrollSelectors: ["html"] })],
+      stylesheetMotion: [
+        sheet({
+          url: href,
+          hasInfiniteAnimation: true,
+          hasSmoothScroll: true,
+          smoothScrollSelectors: ["html"],
+        }),
+      ],
     });
     expect(checks.length).toBeGreaterThan(0);
     for (const c of checks) {
@@ -139,7 +171,11 @@ describe("a11y/reduced-motion", () => {
     expect(run(page(`<style>a{transition:color .2s} a:hover{color:red}</style>`))).toHaveLength(0);
     expect(run(page("", `<video autoplay controls></video>`))).toHaveLength(0);
     expect(
-      run(page(`<style>@media (prefers-reduced-motion: no-preference){.s{animation:spin 1s infinite}}</style>`)),
+      run(
+        page(
+          `<style>@media (prefers-reduced-motion: no-preference){.s{animation:spin 1s infinite}}</style>`,
+        ),
+      ),
     ).toHaveLength(0);
     expect(run(page(`<style>.s{animation: fade 1s 1}</style>`))).toHaveLength(0);
   });
@@ -155,14 +191,23 @@ describe("a11y/reduced-motion", () => {
     ] as never;
     expect(run(html, { scripts })).toHaveLength(0);
     expect(
-      run(page(`<script>if(!matchMedia("(prefers-reduced-motion: reduce)").matches){}</script>`, `<div data-aos="x"></div>`)),
+      run(
+        page(
+          `<script>if(!matchMedia("(prefers-reduced-motion: reduce)").matches){}</script>`,
+          `<div data-aos="x"></div>`,
+        ),
+      ),
     ).toHaveLength(0);
   });
 
   test("template pages share one check name so the report groups them", () => {
     const names = new Set<string>();
     for (let i = 0; i < 20; i++) {
-      for (const c of run(page("", `<div data-aos="fade">${i}</div>`), undefined, `https://example.com/p${i}`)) {
+      for (const c of run(
+        page("", `<div data-aos="fade">${i}</div>`),
+        undefined,
+        `https://example.com/p${i}`,
+      )) {
         names.add(c.name);
       }
     }
@@ -184,13 +229,16 @@ describe("a11y/reduced-motion", () => {
   test("stylesheetMotionOf reads smooth scroll and handling", () => {
     expect(stylesheetMotionOf("html{scroll-behavior:smooth}").hasSmoothScroll).toBe(true);
     expect(
-      stylesheetMotionOf("@media (prefers-reduced-motion: reduce){html{scroll-behavior:auto}}").mentionsReducedMotion,
+      stylesheetMotionOf("@media (prefers-reduced-motion: reduce){html{scroll-behavior:auto}}")
+        .mentionsReducedMotion,
     ).toBe(true);
   });
 
   // a: unread stylesheets never produce the clean pass
   test("an unread stylesheet with no motion gives the unverified skipped check, no pass", () => {
-    const checks = runAll(page(`<link rel="stylesheet" href="/app.css">`), { stylesheetMotion: [] });
+    const checks = runAll(page(`<link rel="stylesheet" href="/app.css">`), {
+      stylesheetMotion: [],
+    });
     expect(checks.some((c) => c.name === "reduced-motion" && c.status === "pass")).toBe(false);
     const u = checks.find((c) => c.name === "reduced-motion-unverified");
     expect(u?.status).toBe("skipped");
@@ -217,7 +265,10 @@ describe("a11y/reduced-motion", () => {
     expect(run(page(link, `<p>hi</p>`), { stylesheetMotion: [fa] })).toHaveLength(0);
     const hit = run(page(link, `<i class="fa-spin"></i>`), { stylesheetMotion: [fa] });
     expect(hit.map((c) => c.name)).toEqual(["reduced-motion-css-infinite-animation"]);
-    const pseudo = sheet({ hasInfiniteAnimation: true, infiniteAnimationSelectors: [".x:hover::before, .nope"] });
+    const pseudo = sheet({
+      hasInfiniteAnimation: true,
+      infiniteAnimationSelectors: [".x:hover::before, .nope"],
+    });
     expect(run(page(link, `<b class="x"></b>`), { stylesheetMotion: [pseudo] })).toHaveLength(1);
   });
 
@@ -237,13 +288,21 @@ describe("a11y/reduced-motion", () => {
   // c: library names only in script src and stylesheet/preload links
   test("library names in canonical and alternate links do not count; a script src does", () => {
     expect(
-      run(page(`<link rel="canonical" href="/team/lottie-smith"><link rel="alternate" hreflang="fr" href="/fr/parallax-guide">`)),
+      run(
+        page(
+          `<link rel="canonical" href="/team/lottie-smith"><link rel="alternate" hreflang="fr" href="/fr/parallax-guide">`,
+        ),
+      ),
     ).toHaveLength(0);
     const hit = run(page(`<script src="/js/lottie.min.js"></script>`), {
-      scripts: [{ url: "https://example.com/js/lottie.min.js", content: "x", sourcePages: [URL_] }] as never,
+      scripts: [
+        { url: "https://example.com/js/lottie.min.js", content: "x", sourcePages: [URL_] },
+      ] as never,
     });
     expect(hit.map((c) => c.name)).toEqual(["reduced-motion-lottie"]);
-    expect(run(page(`<script src="https://lottie.example.net/x.js?parallax=1"></script>`))).toHaveLength(0);
+    expect(
+      run(page(`<script src="https://lottie.example.net/x.js?parallax=1"></script>`)),
+    ).toHaveLength(0);
   });
 
   // d: autoplay
@@ -272,23 +331,48 @@ describe("a11y/reduced-motion", () => {
   test("body text and CSS comments mentioning prefers-reduced-motion are not handling", () => {
     const anim = `<div style="animation: spin 1s infinite"></div>`;
     expect(run(page("", `<p>We respect prefers-reduced-motion</p>${anim}`))).toHaveLength(1);
-    expect(run(page(`<style>/* prefers-reduced-motion */ .s{animation:a 1s infinite}</style>`, `<i class="s"></i>`))).toHaveLength(1);
+    expect(
+      run(
+        page(
+          `<style>/* prefers-reduced-motion */ .s{animation:a 1s infinite}</style>`,
+          `<i class="s"></i>`,
+        ),
+      ),
+    ).toHaveLength(1);
   });
 
   test("a script needs matchMedia and the query; GSAP matchMedia counts; the query alone does not", () => {
     const anim = `<div data-aos="x"></div>`;
-    expect(run(page(`<script>gsap.matchMedia().add("(prefers-reduced-motion: no-preference)", () => {})</script>`, anim))).toHaveLength(0);
-    expect(run(page(`<script>var note = "prefers-reduced-motion";</script>`, anim))).toHaveLength(1);
+    expect(
+      run(
+        page(
+          `<script>gsap.matchMedia().add("(prefers-reduced-motion: no-preference)", () => {})</script>`,
+          anim,
+        ),
+      ),
+    ).toHaveLength(0);
+    expect(run(page(`<script>var note = "prefers-reduced-motion";</script>`, anim))).toHaveLength(
+      1,
+    );
   });
 
   test("a stylesheet or style with a prefers-reduced-motion media attribute is handling and gated", () => {
     const anim = `<i class="s"></i>`;
     expect(
-      run(page(`<style media="(prefers-reduced-motion: no-preference)">.s{animation:a 1s infinite}</style>`, anim)),
+      run(
+        page(
+          `<style media="(prefers-reduced-motion: no-preference)">.s{animation:a 1s infinite}</style>`,
+          anim,
+        ),
+      ),
     ).toHaveLength(0);
     const l = `<link rel="stylesheet" media="(prefers-reduced-motion: no-preference)" href="/app.css">`;
     expect(
-      run(page(l, anim), { stylesheetMotion: [sheet({ hasInfiniteAnimation: true, infiniteAnimationSelectors: [".s"] })] }),
+      run(page(l, anim), {
+        stylesheetMotion: [
+          sheet({ hasInfiniteAnimation: true, infiniteAnimationSelectors: [".s"] }),
+        ],
+      }),
     ).toHaveLength(0);
   });
 
@@ -297,8 +381,12 @@ describe("a11y/reduced-motion", () => {
     expect(s.infiniteAnimationSelectors).toEqual([".fa-spin"]);
     const many = Array.from({ length: 300 }, (_, i) => `.c${i}{animation:a 1s infinite}`).join("");
     expect(stylesheetMotionOf(many).infiniteAnimationSelectors).toHaveLength(100);
-    expect(stylesheetMotionOf("/* prefers-reduced-motion */ a{color:red}").mentionsReducedMotion).toBe(false);
-    expect(stylesheetMotionOf("a{content:'prefers-reduced-motion'}").mentionsReducedMotion).toBe(false);
+    expect(
+      stylesheetMotionOf("/* prefers-reduced-motion */ a{color:red}").mentionsReducedMotion,
+    ).toBe(false);
+    expect(stylesheetMotionOf("a{content:'prefers-reduced-motion'}").mentionsReducedMotion).toBe(
+      false,
+    );
   });
 
   // pub#2050 round 2: known font hosts are not unread stylesheets
@@ -311,7 +399,9 @@ describe("a11y/reduced-motion", () => {
   test("a Google Fonts sheet does not turn a looping animation with no handling into info", () => {
     const head = `<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter"><style>.spin{animation:spin 1s infinite}</style>`;
     const checks = run(page(head, `<i class="spin"></i>`), { stylesheetMotion: [] });
-    expect(checks.map((c) => `${c.name}:${c.status}`)).toEqual(["reduced-motion-css-infinite-animation:warn"]);
+    expect(checks.map((c) => `${c.name}:${c.status}`)).toEqual([
+      "reduced-motion-css-infinite-animation:warn",
+    ]);
   });
 
   test("a third-party CDN stylesheet stays unverified", () => {
@@ -322,7 +412,9 @@ describe("a11y/reduced-motion", () => {
 
   test("use.fontawesome.com is not a font host", () => {
     const fa = `<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.15.4/css/all.css">`;
-    expect(runAll(page(fa), { stylesheetMotion: [] }).map((c) => c.name)).toEqual(["reduced-motion-unverified"]);
+    expect(runAll(page(fa), { stylesheetMotion: [] }).map((c) => c.name)).toEqual([
+      "reduced-motion-unverified",
+    ]);
   });
 
   // pub#2050 round 2: smooth scrolling needs a matching selector too
@@ -333,26 +425,39 @@ describe("a11y/reduced-motion", () => {
   test("html, :root, body and * smooth scrolling always warn", () => {
     for (const sel of ["html", ":root", "body", "*"]) {
       const checks = run(page(`<style>${sel}{scroll-behavior:smooth}</style>`));
-      expect(checks.map((c) => `${c.name}:${c.status}`)).toEqual(["reduced-motion-css-smooth-scroll:warn"]);
+      expect(checks.map((c) => `${c.name}:${c.status}`)).toEqual([
+        "reduced-motion-css-smooth-scroll:warn",
+      ]);
     }
   });
 
   test("a used .scroll-smooth rule warns, inline or in a read stylesheet", () => {
-    const used = run(page(`<style>.scroll-smooth{scroll-behavior:smooth}</style>`, `<div class="scroll-smooth"></div>`));
+    const used = run(
+      page(
+        `<style>.scroll-smooth{scroll-behavior:smooth}</style>`,
+        `<div class="scroll-smooth"></div>`,
+      ),
+    );
     expect(used.map((c) => c.name)).toEqual(["reduced-motion-css-smooth-scroll"]);
     const link = `<link rel="stylesheet" href="/app.css">`;
     const s = sheet({ hasSmoothScroll: true, smoothScrollSelectors: [".scroll-smooth"] });
     expect(run(page(link, `<p>x</p>`), { stylesheetMotion: [s] })).toHaveLength(0);
-    expect(run(page(link, `<div class="scroll-smooth"></div>`), { stylesheetMotion: [s] }).map((c) => c.name)).toEqual([
-      "reduced-motion-css-smooth-scroll",
+    expect(
+      run(page(link, `<div class="scroll-smooth"></div>`), { stylesheetMotion: [s] }).map(
+        (c) => c.name,
+      ),
+    ).toEqual(["reduced-motion-css-smooth-scroll"]);
+    expect(stylesheetMotionOf("html,.a{scroll-behavior:smooth}").smoothScrollSelectors).toEqual([
+      "html,.a",
     ]);
-    expect(stylesheetMotionOf("html,.a{scroll-behavior:smooth}").smoothScrollSelectors).toEqual(["html,.a"]);
   });
 
   // pub#2050 round 3: DYNAMIC_PSEUDO alternation order and name boundary
   test("an ungated html:focus-within smooth scroll warns", () => {
     const checks = run(page(`<style>html:focus-within{scroll-behavior:smooth}</style>`));
-    expect(checks.map((c) => `${c.name}:${c.status}`)).toEqual(["reduced-motion-css-smooth-scroll:warn"]);
+    expect(checks.map((c) => `${c.name}:${c.status}`)).toEqual([
+      "reduced-motion-css-smooth-scroll:warn",
+    ]);
   });
 
   test("a:focus-visible .x reduces to a .x", () => {

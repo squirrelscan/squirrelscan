@@ -62,13 +62,13 @@ const CASES: Array<[Rule, string, string]> = [
 describe("a :root block of custom properties leaves unnamed controls failing (pub#938)", () => {
   for (const [rule, check, control] of CASES) {
     test(`${rule.meta.id} ${check}: the issue's repro fails, not unconfirmed`, async () => {
-      const seen = (await statuses(rule, TOKENS, control));
+      const seen = await statuses(rule, TOKENS, control);
       expect(seen[check]).toBe("fail");
       expect(seen[`${check}-unconfirmed`]).toBeUndefined();
     });
 
     test(`${rule.meta.id} ${check}: the WordPress global styles shape fails, not unconfirmed`, async () => {
-      const seen = (await statuses(rule, WORDPRESS, control));
+      const seen = await statuses(rule, WORDPRESS, control);
       expect(seen[check]).toBe("fail");
       expect(seen[`${check}-unconfirmed`]).toBeUndefined();
     });
@@ -76,7 +76,11 @@ describe("a :root block of custom properties leaves unnamed controls failing (pu
 
   test("a control a <style> rule really hides is still unconfirmed beside the tokens", async () => {
     const head = `${WORDPRESS}<style>.drawer{display:none}</style>`;
-    const seen = (await statuses(buttonNameRule, head, '<div class="drawer"><button></button></div>'));
+    const seen = await statuses(
+      buttonNameRule,
+      head,
+      '<div class="drawer"><button></button></div>',
+    );
     expect(seen["button-name-unconfirmed"]).toBe("warn");
     expect(seen["button-name"]).not.toBe("fail");
   });
@@ -87,13 +91,13 @@ describe("a <style> show over a hidden control with an unread stylesheet (pub#93
   const show = "<style>button{display:inline-flex}</style>";
 
   test("button-name: unconfirmed, not a fail", async () => {
-    const seen = (await statuses(buttonNameRule, `${bootstrap}${show}`, "<button hidden></button>"));
+    const seen = await statuses(buttonNameRule, `${bootstrap}${show}`, "<button hidden></button>");
     expect(seen["button-name-unconfirmed"]).toBe("warn");
     expect(seen["button-name"]).not.toBe("fail");
   });
 
   test("button-name: with no external sheet the show is settled, and the button fails", async () => {
-    const seen = (await statuses(buttonNameRule, show, "<button hidden></button>"));
+    const seen = await statuses(buttonNameRule, show, "<button hidden></button>");
     expect(seen["button-name"]).toBe("fail");
   });
 
@@ -105,7 +109,7 @@ describe("a <style> show over a hidden control with an unread stylesheet (pub#93
   test("button-name: a button in a closed dialog a <style> rule shows is unconfirmed", async () => {
     const show = "<style>dialog{display:block}</style>";
     const body = "<dialog><button></button></dialog>";
-    const seen = (await statuses(buttonNameRule, `${bootstrap}${show}`, body));
+    const seen = await statuses(buttonNameRule, `${bootstrap}${show}`, body);
     expect(seen["button-name-unconfirmed"]).toBe("warn");
     expect(seen["button-name"]).not.toBe("fail");
     expect((await statuses(buttonNameRule, show, body))["button-name"]).toBe("fail");

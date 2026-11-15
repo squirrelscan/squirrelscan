@@ -20,22 +20,14 @@
 // instead. (#2094)
 
 export { buildEntityMap, createEntityMapBuilder } from "./build";
-export type {
-  BuildEntityMapOptions,
-  EntityMapBuilder,
-  EntityMapPageInput,
-} from "./build";
+export type { BuildEntityMapOptions, EntityMapBuilder, EntityMapPageInput } from "./build";
 export { foldEntityMapVariants } from "./fold-variants";
 export { diffEntityMaps } from "./diff";
 export type { DiffEntityMapsOptions } from "./diff";
 export { jsonLdGeneratedIds, toJsonLd } from "./jsonld";
 export { renderEntityMapHtml } from "./html";
 export { renderEntityMapMarkdown } from "./markdown";
-export {
-  projectEntityMap,
-  slimEntityMapForPublish,
-  slimEntityMapForViewer,
-} from "./slim";
+export { projectEntityMap, slimEntityMapForPublish, slimEntityMapForViewer } from "./slim";
 
 // Re-exported so a consumer of this subpath never has to reach for a second
 // package just to type the thing it was handed.

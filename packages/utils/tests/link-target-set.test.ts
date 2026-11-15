@@ -54,7 +54,10 @@ describe("encodeLinkTargetSet and decodeLinkTargetSet", () => {
   });
 
   test("past the cap, or from a partial list, a set is not complete", () => {
-    const many = Array.from({ length: LINK_TARGET_SET_MAX_HASHES + 5 }, (_, i) => `https://e.com/${i}`);
+    const many = Array.from(
+      { length: LINK_TARGET_SET_MAX_HASHES + 5 },
+      (_, i) => `https://e.com/${i}`,
+    );
     const capped = encodeLinkTargetSet(many);
     expect(capped).toMatchObject({ count: LINK_TARGET_SET_MAX_HASHES + 5, complete: false });
     expect(decodeLinkTargetSet(capped)?.size).toBe(LINK_TARGET_SET_MAX_HASHES);
@@ -63,7 +66,14 @@ describe("encodeLinkTargetSet and decodeLinkTargetSet", () => {
   });
 
   test("a value that is not a well-formed set decodes to null", () => {
-    for (const bad of [null, "x", {}, { hashes: 3 }, { hashes: "not base64!" }, { hashes: "AAAA" }]) {
+    for (const bad of [
+      null,
+      "x",
+      {},
+      { hashes: 3 },
+      { hashes: "not base64!" },
+      { hashes: "AAAA" },
+    ]) {
       expect(decodeLinkTargetSet(bad)).toBeNull();
     }
   });

@@ -10,7 +10,10 @@ import { calculateHealthScore } from "../src/scoring";
 
 const URL_ = "https://example.com/";
 
-function score(html: string, rules: Array<{ meta: RuleMeta; run: typeof images.dimensionsRule.run }>) {
+function score(
+  html: string,
+  rules: Array<{ meta: RuleMeta; run: typeof images.dimensionsRule.run }>,
+) {
   const parsed = parsePage(html, URL_);
   const map = new Map<string, RuleRunResult>();
   for (const r of rules) {

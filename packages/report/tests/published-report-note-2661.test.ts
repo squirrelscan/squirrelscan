@@ -71,10 +71,17 @@ function reportWithItems(listed: number, leftOut: number): AuditReport {
 const STAMP = {
   capped: true,
   tier: 0,
-  caps: { pagesPerClass: 10, itemsPerClass: 5, sourcePagesPerItem: 1, messageChars: 500, classesPerRule: 25 },
+  caps: {
+    pagesPerClass: 10,
+    itemsPerClass: 5,
+    sourcePagesPerItem: 1,
+    messageChars: 500,
+    classesPerRule: 25,
+  },
 } as const;
 
-const NOTE = "This published report is a summary: each issue lists up to 10 example pages and 5 items beside its true counts.";
+const NOTE =
+  "This published report is a summary: each issue lists up to 10 example pages and 5 items beside its true counts.";
 
 describe("publishedReportNote", () => {
   test("points a CLI audit at squirrel report on that machine", () => {
@@ -85,13 +92,17 @@ describe("publishedReportNote", () => {
 
   test("points a cloud audit at the CLI, not an unserved findings view", () => {
     for (const fullDetail of ["findings", undefined] as const) {
-      const note = publishedReportNote({ detail: { ...STAMP, ...(fullDetail ? { fullDetail } : {}) } });
+      const note = publishedReportNote({
+        detail: { ...STAMP, ...(fullDetail ? { fullDetail } : {}) },
+      });
       expect(note).toContain("audit the site with the squirrel CLI");
     }
   });
 
   test("says how many issues did not fit", () => {
-    expect(publishedReportNote({ detail: { ...STAMP, fullDetail: "local", classesDropped: 3 } })).toContain(
+    expect(
+      publishedReportNote({ detail: { ...STAMP, fullDetail: "local", classesDropped: 3 } }),
+    ).toContain(
       "beside its true counts. 3 more issues did not fit and are counted in the score only. The complete list",
     );
   });
@@ -150,7 +161,9 @@ describe("every renderer says it once on a capped report, never on an uncapped o
     const out = renderLlm(capped);
     const line = out.split("\n").find((l) => l.startsWith("<published-summary>"))!;
     expect(line).toEndWith("</published-summary>");
-    expect(line.slice("<published-summary>".length, -"</published-summary>".length)).not.toMatch(/[<>&]/);
+    expect(line.slice("<published-summary>".length, -"</published-summary>".length)).not.toMatch(
+      /[<>&]/,
+    );
   });
 
   // repo#2661: the hosted HTML, markdown and text said only how many items they

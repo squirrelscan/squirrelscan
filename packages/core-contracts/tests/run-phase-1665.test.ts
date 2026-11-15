@@ -77,7 +77,8 @@ describe("nextVisiblePhase", () => {
   }
 
   test("every phase is reachable from every other phase", () => {
-    for (const from of RUN_PHASES) for (const to of RUN_PHASES) expect(nextVisiblePhase(from, to)).toBe(to);
+    for (const from of RUN_PHASES)
+      for (const to of RUN_PHASES) expect(nextVisiblePhase(from, to)).toBe(to);
   });
 });
 
@@ -88,7 +89,14 @@ describe("visiblePhaseOf (#2077)", () => {
   });
 
   test("every raw publish stage maps to publishing", () => {
-    for (const raw of ["complete", "editor_summary", "publish-init", "publish-chunk", "publish-finalize", "publish-finalizing"]) {
+    for (const raw of [
+      "complete",
+      "editor_summary",
+      "publish-init",
+      "publish-chunk",
+      "publish-finalize",
+      "publish-finalizing",
+    ]) {
       expect(visiblePhaseOf(raw), raw).toBe("publishing");
     }
   });
@@ -96,7 +104,8 @@ describe("visiblePhaseOf (#2077)", () => {
   test("other phases map to themselves, crawl to crawling, unknowns to null", () => {
     expect(visiblePhaseOf("rules")).toBe("rules");
     expect(visiblePhaseOf("crawl")).toBe("crawling");
-    for (const v of ["memory_pressure", "", null, undefined, "nope"]) expect(visiblePhaseOf(v), String(v)).toBe(null);
+    for (const v of ["memory_pressure", "", null, undefined, "nope"])
+      expect(visiblePhaseOf(v), String(v)).toBe(null);
   });
 
   test("nextVisiblePhase moves to publishing", () => {

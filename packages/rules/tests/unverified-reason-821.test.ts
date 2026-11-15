@@ -17,7 +17,9 @@ async function unverifiedRow(links: ExternalLinkCheckData[]) {
     site: { baseUrl: BASE, pages: [], robotsTxt: null, sitemaps: null, externalLinks: links },
     options: {},
   } as unknown as RuleContext;
-  return (await brokenExternalLinksRule.run(ctx)).checks.find((c) => c.name === "waf-blocked-external-links")!;
+  return (await brokenExternalLinksRule.run(ctx)).checks.find(
+    (c) => c.name === "waf-blocked-external-links",
+  )!;
 }
 
 const link = (href: string, over: Partial<ExternalLinkCheckData>): ExternalLinkCheckData => ({
@@ -31,12 +33,12 @@ const link = (href: string, over: Partial<ExternalLinkCheckData>): ExternalLinkC
 
 describe("why an external link is unverifiable (pub#821)", () => {
   test("a link awaiting its confirming check says so; blocked and unreachable keep their labels", async () => {
-    const row = (await unverifiedRow([
+    const row = await unverifiedRow([
       link("https://walled.example/", { unverifiedReason: "blocked", wafProvider: "cloudflare" }),
       link("https://other-wall.example/", { unverifiedReason: "blocked", wafProvider: "unknown" }),
       link("https://stalls.example/", { unverifiedReason: "unreachable", wafProvider: "unknown" }),
       link("https://older-answer.example/", { wafProvider: "unknown" }),
-    ]));
+    ]);
     expect(row.items?.map((i) => i.label)).toEqual([
       "https://walled.example/ (unverified: cloudflare)",
       "https://other-wall.example/ (unverified)",
@@ -46,10 +48,10 @@ describe("why an external link is unverifiable (pub#821)", () => {
   });
 
   test("the reason is item data when known, and absent when not", async () => {
-    const row = (await unverifiedRow([
+    const row = await unverifiedRow([
       link("https://stalls.example/", { unverifiedReason: "unreachable" }),
       link("https://older-answer.example/", { wafProvider: "unknown" }),
-    ]));
+    ]);
     expect(row.items?.map((i) => i.meta)).toEqual([
       { wafProvider: undefined, unverifiedReason: "unreachable" },
       { wafProvider: "unknown" },

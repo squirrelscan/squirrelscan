@@ -72,7 +72,10 @@ export const SLOW_BLOCKING_SCRIPT_HARD_MS = 2000;
  * close the same issue: over 2000 ms always counts; over 1000 ms counts only when the script was not the
  * first one fetched from its host, since that request also pays for DNS and the TLS handshake.
  */
-export function isSlowBlockingScript(responseMs: number | undefined, hostFirst: boolean | undefined): boolean {
+export function isSlowBlockingScript(
+  responseMs: number | undefined,
+  hostFirst: boolean | undefined,
+): boolean {
   if (responseMs === undefined) return false;
   if (responseMs > SLOW_BLOCKING_SCRIPT_HARD_MS) return true;
   return responseMs > SLOW_BLOCKING_SCRIPT_MS && hostFirst !== true;

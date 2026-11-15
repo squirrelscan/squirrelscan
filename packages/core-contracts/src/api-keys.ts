@@ -99,7 +99,11 @@ export function parseKeyEnv(token: string): string | null {
   // because the generator's base62 alphabet (0-9a-zA-Z, see lib/api-keys.ts)
   // excludes `_`. If that alphabet ever gains `_`, this heuristic breaks.
   const underscoreIdx = rest.indexOf("_");
-  if (underscoreIdx > 0 && underscoreIdx <= 16 && /^[a-z0-9-]+$/.test(rest.slice(0, underscoreIdx))) {
+  if (
+    underscoreIdx > 0 &&
+    underscoreIdx <= 16 &&
+    /^[a-z0-9-]+$/.test(rest.slice(0, underscoreIdx))
+  ) {
     return rest.slice(0, underscoreIdx);
   }
   return "production";

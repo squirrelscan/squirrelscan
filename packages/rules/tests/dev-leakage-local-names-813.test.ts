@@ -20,7 +20,11 @@ import {
 } from "../src/content/dev-leakage";
 import type { CheckResult, ParsedPage, RuleContext, SiteData } from "../src/types";
 
-async function run(body: string, url = "https://example.com/about", baseUrl?: string): Promise<CheckResult> {
+async function run(
+  body: string,
+  url = "https://example.com/about",
+  baseUrl?: string,
+): Promise<CheckResult> {
   const html = `<html><head><title>t</title></head><body>${body}</body></html>`;
   const { document } = parseHTML(html);
   const ctx: RuleContext = {
@@ -29,7 +33,7 @@ async function run(body: string, url = "https://example.com/about", baseUrl?: st
     ...(baseUrl ? { site: { baseUrl } as unknown as SiteData } : {}),
     options: {},
   };
-  const { checks } = (await devLeakageRule.run(ctx));
+  const { checks } = await devLeakageRule.run(ctx);
   expect(checks).toHaveLength(1);
   return checks[0] as CheckResult;
 }
@@ -38,7 +42,7 @@ const site = siteOriginOf("https://example.com/") as SiteOrigin;
 
 describe("content/dev-leakage — links to local-only names (pub#813)", () => {
   test("a public page linking http://myapp.test/ warns and names the host", async () => {
-    const check = (await run('<p>See the <a href="http://myapp.test/">new design</a>.</p>'));
+    const check = await run('<p>See the <a href="http://myapp.test/">new design</a>.</p>');
     expect(check.status).toBe("warn");
     expect(check.message).toContain("local-name");
     expect(check.message).toContain("http://myapp.test/");
@@ -63,9 +67,13 @@ describe("content/dev-leakage — links to local-only names (pub#813)", () => {
   });
 
   test("an .onion or .alt link is not: those are reachable outside public DNS", async () => {
-    expect(classifyHost("duckduckgogg42xjoc72x3sjasowoarfbgcmvfimaftt6twagswzczad.onion", site)).toBeNull();
+    expect(
+      classifyHost("duckduckgogg42xjoc72x3sjasowoarfbgcmvfimaftt6twagswzczad.onion", site),
+    ).toBeNull();
     expect(classifyHost("example.alt", site)).toBeNull();
-    const check = (await run('<a href="http://duckduckgogg42xjoc72x3sjasowoarfbgcmvfimaftt6twagswzczad.onion/">Tor</a>'));
+    const check = await run(
+      '<a href="http://duckduckgogg42xjoc72x3sjasowoarfbgcmvfimaftt6twagswzczad.onion/">Tor</a>',
+    );
     expect(check.status).toBe("pass");
   });
 
@@ -76,38 +84,43 @@ describe("content/dev-leakage — links to local-only names (pub#813)", () => {
   });
 
   test("a `local` label left of the apex is a tier subdomain, not a local name (repo#1858)", () => {
-    expect(classifyHost("my.local.example.com", site)).toEqual({ kind: "dev-subdomain", own: true });
+    expect(classifyHost("my.local.example.com", site)).toEqual({
+      kind: "dev-subdomain",
+      own: true,
+    });
   });
 
   test("a single-label host: a link warns, a mention in copy cannot match (no dot)", async () => {
-    const check = (await run('<a href="http://intranet/tickets">File a ticket</a>'));
+    const check = await run('<a href="http://intranet/tickets">File a ticket</a>');
     expect(check.status).toBe("warn");
     expect(check.message).toContain("http://intranet/tickets");
     expect(findDevHostsInText("File it at http://intranet/tickets today.", site)).toEqual([]);
   });
 
   test("an images or script src on a local name is reported too", async () => {
-    const check = (await run('<img src="http://cms.test/uploads/a.png" alt="a">'));
+    const check = await run('<img src="http://cms.test/uploads/a.png" alt="a">');
     expect(check.status).toBe("warn");
     expect(check.items?.map((i) => i.id)).toEqual(["local-name"]);
   });
 
   test("in copy, only a URL with a scheme counts: a file name or a word is not a host", () => {
-    expect(findDevHostsInText("Preview it at http://myapp.test/admin first.", site).map((h) => h.kind)).toEqual([
-      "local-name",
-    ]);
-    expect(findDevHostsInText("Edit config.local and rerun app.test before you push.", site)).toEqual([]);
+    expect(
+      findDevHostsInText("Preview it at http://myapp.test/admin first.", site).map((h) => h.kind),
+    ).toEqual(["local-name"]);
+    expect(
+      findDevHostsInText("Edit config.local and rerun app.test before you push.", site),
+    ).toEqual([]);
   });
 
   test("an audit of a local site skips the rule, so its links to other local names are unaffected", async () => {
     expect(isNonProductionSeedHost("myapp.test")).toBe(true);
     expect(isNonProductionSeedHost("box.local")).toBe(true);
     expect(isNonProductionSeedHost("example.onion")).toBe(false);
-    const check = (await run(
+    const check = await run(
       '<a href="http://api.test/">API</a><a href="http://localhost:3000/">dev</a>',
       "http://myapp.test/",
       "http://myapp.test/",
-    ));
+    );
     expect(check.status).toBe("skipped");
     expect(check.skipReason).toBe("non-production-origin");
   });

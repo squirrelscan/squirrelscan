@@ -33,8 +33,7 @@ export interface Context {
   embed: (value: Generated, keyName: string) => Embedded;
 }
 
-const toEnvName = (keyName: string) =>
-  keyName.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toUpperCase();
+const toEnvName = (keyName: string) => keyName.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toUpperCase();
 const toKebab = (keyName: string) => keyName.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
 
 /** A JSON entry for the value under `keyName`, or the assignment's own entry. */
@@ -63,7 +62,9 @@ const escapeJsBody = (s: string) => {
   // A character after a backslash is an escape's own letter (`\n`), not a body character.
   return s.replace(/(?<!\\)[A-Za-z0-9]/g, (c) => {
     const code = c.charCodeAt(0);
-    return i++ % 2 === 0 ? `\\u${code.toString(16).padStart(4, "0")}` : `\\x${code.toString(16).padStart(2, "0")}`;
+    return i++ % 2 === 0
+      ? `\\u${code.toString(16).padStart(4, "0")}`
+      : `\\x${code.toString(16).padStart(2, "0")}`;
   });
 };
 
@@ -78,16 +79,18 @@ const escapedEntry = (v: Generated, keyName: string, tier: Tier) => {
 
 /** A config object as the page's bootstrap hands it to the client: base64 JSON. */
 const b64Config = (v: Generated, keyName: string, tier: Tier) =>
-  Buffer.from(`{"session":null,"config":{${jsonEntry(v, keyName, tier)},"locale":"en","flags":["beta"]}}`).toString("base64");
+  Buffer.from(
+    `{"session":null,"config":{${jsonEntry(v, keyName, tier)},"locale":"en","flags":["beta"]}}`,
+  ).toString("base64");
 
 export function page(head: string, body: string): string {
   return [
-    "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\">",
+    '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">',
     "<title>Acme Dashboard</title>",
-    "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">",
-    "<link rel=\"stylesheet\" href=\"/static/css/app.3f2a1c.css\">",
+    '<meta name="viewport" content="width=device-width, initial-scale=1">',
+    '<link rel="stylesheet" href="/static/css/app.3f2a1c.css">',
     head,
-    "</head><body><header><nav><a href=\"/\">Home</a><a href=\"/pricing\">Pricing</a></nav></header>",
+    '</head><body><header><nav><a href="/">Home</a><a href="/pricing">Pricing</a></nav></header>',
     "<main><h1>Welcome back</h1><p>Your workspace is ready.</p>",
     body,
     "</main><footer><p>&copy; 2026 Acme, Inc.</p></footer></body></html>",
@@ -117,12 +120,17 @@ const define = (
 });
 
 export const CONTEXTS = [
-  define("inline-config-object", "inline-script", ["prefixed", "keyed", "assignment"], (v, k, t) => ({
-    html: page(
-      "",
-      `<script>window.APP_CONFIG={env:"production",region:"us-east-1",${jsEntry(v, k, t)},features:{billing:true,sso:false}};</script>`,
-    ),
-  })),
+  define(
+    "inline-config-object",
+    "inline-script",
+    ["prefixed", "keyed", "assignment"],
+    (v, k, t) => ({
+      html: page(
+        "",
+        `<script>window.APP_CONFIG={env:"production",region:"us-east-1",${jsEntry(v, k, t)},features:{billing:true,sso:false}};</script>`,
+      ),
+    }),
+  ),
 
   define("window-env", "inline-script", ["prefixed", "keyed", "assignment"], (v, k, t) => ({
     html: page(
@@ -240,37 +248,63 @@ export const CONTEXTS = [
   // A string literal a minifier or an obfuscator wrote with `\u` / `\x`
   // escapes. The serialized HTML is not unescaped, so it reports at the
   // script's own location.
-  define("unicode-escaped-script-string", "inline-script", ["prefixed", "keyed", "assignment"], (v, k, t) => ({
-    html: page("", `<script>window.__CFG__={region:"eu-west-1",${escapedEntry(v, k, t)},debug:false};</script>`),
-  })),
+  define(
+    "unicode-escaped-script-string",
+    "inline-script",
+    ["prefixed", "keyed", "assignment"],
+    (v, k, t) => ({
+      html: page(
+        "",
+        `<script>window.__CFG__={region:"eu-west-1",${escapedEntry(v, k, t)},debug:false};</script>`,
+      ),
+    }),
+  ),
 
   // The whole config as one base64 string in a data attribute, decoded by the
   // app at boot. Read from the serialized document, so `html (base64)`.
-  define("base64-data-attribute", "html (base64)", ["prefixed", "keyed", "assignment"], (v, k, t) => ({
-    html: page("", `<div id="root" data-initial-state="${b64Config(v, k, t)}"></div>`),
-  })),
+  define(
+    "base64-data-attribute",
+    "html (base64)",
+    ["prefixed", "keyed", "assignment"],
+    (v, k, t) => ({
+      html: page("", `<div id="root" data-initial-state="${b64Config(v, k, t)}"></div>`),
+    }),
+  ),
 
   // The same blob assigned to a global. The inline script is scanned last, so
   // the rule's dedup keeps `inline-script (base64)`.
-  define("base64-global", "inline-script (base64)", ["prefixed", "keyed", "assignment"], (v, k, t) => ({
-    html: page(
-      "",
-      `<script>window.__CONFIG__="${b64Config(v, k, t)}";window.__CFG=JSON.parse(atob(window.__CONFIG__));</script>`,
-    ),
-  })),
+  define(
+    "base64-global",
+    "inline-script (base64)",
+    ["prefixed", "keyed", "assignment"],
+    (v, k, t) => ({
+      html: page(
+        "",
+        `<script>window.__CONFIG__="${b64Config(v, k, t)}";window.__CFG=JSON.parse(atob(window.__CONFIG__));</script>`,
+      ),
+    }),
+  ),
 
   // A settings object embedded URL-encoded (a WooCommerce payment-gateway
   // settings blob does this), decoded in place, so the location is the plain
   // one.
   define("url-encoded-data-attribute", "html", ["prefixed", "keyed", "assignment"], (v, k, t) => ({
-    html: page("", `<div id="checkout" data-settings="${encodeURIComponent(`{"currency":"usd","config":{${jsonEntry(v, k, t)}},"locale":"en"}`)}"></div>`),
-  })),
-  define("url-encoded-inline-settings", "inline-script", ["prefixed", "keyed", "assignment"], (v, k, t) => ({
     html: page(
       "",
-      `<script>var wc_settings=JSON.parse(decodeURIComponent("${encodeURIComponent(`{"currency":"usd","config":{${jsonEntry(v, k, t)}},"locale":"en"}`)}"));</script>`,
+      `<div id="checkout" data-settings="${encodeURIComponent(`{"currency":"usd","config":{${jsonEntry(v, k, t)}},"locale":"en"}`)}"></div>`,
     ),
   })),
+  define(
+    "url-encoded-inline-settings",
+    "inline-script",
+    ["prefixed", "keyed", "assignment"],
+    (v, k, t) => ({
+      html: page(
+        "",
+        `<script>var wc_settings=JSON.parse(decodeURIComponent("${encodeURIComponent(`{"currency":"usd","config":{${jsonEntry(v, k, t)}},"locale":"en"}`)}"));</script>`,
+      ),
+    }),
+  ),
 ];
 
 export type ContextDef = (typeof CONTEXTS)[number];

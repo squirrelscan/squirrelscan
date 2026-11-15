@@ -9,7 +9,16 @@ import { detectTechnologies, SEGMENT_SEPARATOR, sampleBundleExtras } from "../sr
 const SHELL = `<!doctype html><html><head><title>App</title></head><body><div id="root"></div></body></html>`;
 const WHOLE = { maxScriptChars: 32 * 1024 * 1024 };
 const ids = (content: string, options = WHOLE): string[] =>
-  detectTechnologies({ url: "https://example.com/", headers: {}, html: SHELL, scripts: [{ url: "https://example.com/assets/app.js", content }] }, undefined, options).map((t) => t.id);
+  detectTechnologies(
+    {
+      url: "https://example.com/",
+      headers: {},
+      html: SHELL,
+      scripts: [{ url: "https://example.com/assets/app.js", content }],
+    },
+    undefined,
+    options,
+  ).map((t) => t.id);
 const filler = (n: number): string => "var q=(a<<3)+b;if(q>9){q-=9}\n".repeat(n);
 
 const BODY =
@@ -27,8 +36,12 @@ describe("the snippet as the text of a script element", () => {
   });
   test("children first with the strategy after it, and a JSON-style string with escaped quotes and slashes", () => {
     expect(ids(`h(Script,{children:'${BODY}',strategy:"lazyOnload"});`)).toContain("clarity");
-    expect(ids(`h(Script,{id:"c",strategy:"afterInteractive",children:"${ESCAPED}"});`)).toContain("clarity");
-    expect(ids(`h("script",{"dangerouslySetInnerHTML":{"__html":"${ESCAPED}"}});`)).toContain("clarity");
+    expect(ids(`h(Script,{id:"c",strategy:"afterInteractive",children:"${ESCAPED}"});`)).toContain(
+      "clarity",
+    );
+    expect(ids(`h("script",{"dangerouslySetInnerHTML":{"__html":"${ESCAPED}"}});`)).toContain(
+      "clarity",
+    );
   });
 });
 
@@ -54,22 +67,33 @@ describe("the real shapes of the string-carried targets", () => {
     expect(ids(`${filler(40)}[${D04}]${filler(40)}`)).toContain("clarity");
   });
   test("the three shapes in a bundle too big to send whole: the sampled windows still detect them", () => {
-    for (const [name, code] of [["d55", D55], ["d49", D49], ["d04", D04]] as const) {
+    for (const [name, code] of [
+      ["d55", D55],
+      ["d49", D49],
+      ["d04", D04],
+    ] as const) {
       const body = `${filler(8_000)}\n[${code}]\n${filler(8_000)}`;
       const head = body.slice(0, 16 * 1024);
       const extras = sampleBundleExtras(body, head.length, 24 * 1024);
-      expect(ids(`${head}${SEGMENT_SEPARATOR}${extras}`, { maxScriptChars: 256 * 1024 }), name).toContain("clarity");
+      expect(
+        ids(`${head}${SEGMENT_SEPARATOR}${extras}`, { maxScriptChars: 256 * 1024 }),
+        name,
+      ).toContain("clarity");
     }
   });
 });
 
 describe("other script-shaped carriers", () => {
-  test("a \"script\" element tag, with or without a strategy; a script type; the loader pair instead of the signature", () => {
+  test('a "script" element tag, with or without a strategy; a script type; the loader pair instead of the signature', () => {
     expect(ids(`h("script",{children:'${BODY}'});`)).toContain("clarity");
     expect(ids(`(0,a.jsx)("script",{id:"x",children:\`${BODY}\`});`)).toContain("clarity");
     expect(ids(`h("script",{dangerouslySetInnerHTML:{__html:\`${BODY}\`}});`)).toContain("clarity");
     expect(ids(`h(Tag,{type:"text/javascript",children:'${BODY}'});`)).toContain("clarity");
-    expect(ids(`React.createElement("script",null);h(Script,{strategy:"lazyOnload",children:'var s=document.createElement("script");s.src="https://www.clarity.ms/tag/abc";'});`)).toContain("clarity");
+    expect(
+      ids(
+        `React.createElement("script",null);h(Script,{strategy:"lazyOnload",children:'var s=document.createElement("script");s.src="https://www.clarity.ms/tag/abc";'});`,
+      ),
+    ).toContain("clarity");
   });
 });
 
@@ -100,7 +124,9 @@ describe("any other string is still not the loader", () => {
   });
   test("a bare __html or children on a props object with only an id is not enough", () => {
     expect(ids(`h(Script,{id:"clarity",children:'${BODY}'});`)).not.toContain("clarity");
-    expect(ids(`h(Script,{id:"clarity",dangerouslySetInnerHTML:{__html:'${BODY}'}});`)).not.toContain("clarity");
+    expect(
+      ids(`h(Script,{id:"clarity",dangerouslySetInnerHTML:{__html:'${BODY}'}});`),
+    ).not.toContain("clarity");
   });
   test("docs strings, code samples, other keys, children without a script-shaped object", () => {
     for (const code of [
@@ -122,9 +148,18 @@ describe("any other string is still not the loader", () => {
     }
   });
   test("near misses inside a script-text string: scheme-less, another host, a dot that is not a dot, another path", () => {
-    for (const loader of ["www.clarity.ms/tag/", "https://clarity.ms.evil.invalid/tag/", "https://clarityXms/tag/", "https://www.clarity.ms/tags/", "https://www.clarity-ms/tag/"]) {
+    for (const loader of [
+      "www.clarity.ms/tag/",
+      "https://clarity.ms.evil.invalid/tag/",
+      "https://clarityXms/tag/",
+      "https://www.clarity.ms/tags/",
+      "https://www.clarity-ms/tag/",
+    ]) {
       const text = BODY.replace("https://www.clarity.ms/tag/", loader);
-      expect(ids(`h("script",{dangerouslySetInnerHTML:{__html:\`${text}\`}});`), loader).not.toContain("clarity");
+      expect(
+        ids(`h("script",{dangerouslySetInnerHTML:{__html:\`${text}\`}});`),
+        loader,
+      ).not.toContain("clarity");
     }
   });
 });
@@ -136,9 +171,15 @@ describe("distances read around a string (pinned)", () => {
   });
   test("the object's own keys are found up to 2,000 characters away, not further", () => {
     const pad = (n: number) => `pad:"${"x".repeat(n)}",`;
-    expect(ids(`h(Script,{${pad(1_200)}children:'${BODY}'${","}strategy:"lazyOnload"});`)).toContain("clarity");
-    expect(ids(`h(Script,{${pad(2_500)}children:'${BODY}',strategy:"lazyOnload"});`)).not.toContain("clarity");
-    expect(ids(`h(Script,{children:'${BODY}',${pad(2_500)}strategy:"lazyOnload"});`)).not.toContain("clarity");
+    expect(
+      ids(`h(Script,{${pad(1_200)}children:'${BODY}'${","}strategy:"lazyOnload"});`),
+    ).toContain("clarity");
+    expect(ids(`h(Script,{${pad(2_500)}children:'${BODY}',strategy:"lazyOnload"});`)).not.toContain(
+      "clarity",
+    );
+    expect(ids(`h(Script,{children:'${BODY}',${pad(2_500)}strategy:"lazyOnload"});`)).not.toContain(
+      "clarity",
+    );
   });
   test("a key right at the object's start or end is its own key; `restrategy:` is not `strategy:`", () => {
     expect(ids(`h(Script,{strategy:"lazyOnload",children:'${BODY}'});`)).toContain("clarity");
@@ -158,13 +199,17 @@ describe("bounds", () => {
     const hostile = `h(Code,{children:'${BODY}'});\n`.repeat(Math.ceil((8 * 1024 * 1024) / 400));
     const started = performance.now();
     expect(ids(hostile)).not.toContain("clarity");
-    expect(ids(`${hostile}h("script",{dangerouslySetInnerHTML:{__html:\`${BODY}\`}});`)).not.toContain("clarity"); // past the candidate bound
+    expect(
+      ids(`${hostile}h("script",{dangerouslySetInnerHTML:{__html:\`${BODY}\`}});`),
+    ).not.toContain("clarity"); // past the candidate bound
     expect(performance.now() - started).toBeLessThan(8_000);
   }, 60_000);
 
   test("a few thousand decoys before the real one: the real one is reached", () => {
     const decoys = `h(Code,{children:'${BODY}'});\n`.repeat(3_000);
-    expect(ids(`${decoys}h("script",{dangerouslySetInnerHTML:{__html:\`${BODY}\`}});`)).toContain("clarity");
+    expect(ids(`${decoys}h("script",{dangerouslySetInnerHTML:{__html:\`${BODY}\`}});`)).toContain(
+      "clarity",
+    );
   });
 
   test("8 MB of one string with the loader repeated inside it is one candidate", () => {
@@ -189,7 +234,9 @@ describe("in a bundle too big to send whole (the sampler)", () => {
     const head = body.slice(0, 16 * 1024);
     const extras = sampleBundleExtras(body, head.length, 24 * 1024);
     expect(extras).toContain('strategy:"afterInteractive"');
-    expect(ids(`${head}${SEGMENT_SEPARATOR}${extras}`, { maxScriptChars: 256 * 1024 })).toContain("clarity");
+    expect(ids(`${head}${SEGMENT_SEPARATOR}${extras}`, { maxScriptChars: 256 * 1024 })).toContain(
+      "clarity",
+    );
     expect(ids(head, { maxScriptChars: 256 * 1024 })).not.toContain("clarity");
   });
   test("a sibling after the string is kept in the window (the suffix), and a string past the carry is read whole only in a whole scan", () => {
@@ -198,7 +245,9 @@ describe("in a bundle too big to send whole (the sampler)", () => {
     const head = body.slice(0, 16 * 1024);
     const extras = sampleBundleExtras(body, head.length, 24 * 1024);
     expect(extras).toContain('strategy:"afterInteractive"');
-    expect(ids(`${head}${SEGMENT_SEPARATOR}${extras}`, { maxScriptChars: 256 * 1024 })).toContain("clarity");
+    expect(ids(`${head}${SEGMENT_SEPARATOR}${extras}`, { maxScriptChars: 256 * 1024 })).toContain(
+      "clarity",
+    );
     // 700 characters of text in the string: past the carry, so a window cannot keep the key; a whole scan still can
     const longString = `h(Script,{strategy:"afterInteractive",children:'${BODY}${" ".repeat(600)}'});`;
     expect(ids(`${filler(10)}${longString}${filler(10)}`)).toContain("clarity");
@@ -211,7 +260,10 @@ describe("in a bundle too big to send whole (the sampler)", () => {
       const body = `${filler(8_000)}\n${code}\n${filler(8_000)}`;
       const head = body.slice(0, 16 * 1024);
       const extras = sampleBundleExtras(body, head.length, 24 * 1024);
-      expect(ids(`${head}${SEGMENT_SEPARATOR}${extras}`, { maxScriptChars: 256 * 1024 }), code).toContain("clarity");
+      expect(
+        ids(`${head}${SEGMENT_SEPARATOR}${extras}`, { maxScriptChars: 256 * 1024 }),
+        code,
+      ).toContain("clarity");
     }
   });
 });
@@ -249,9 +301,15 @@ describe("string lengths, `type` values and the brace walk (pinned)", () => {
   });
 
   test("the walk back from a string stops at a `(` or `[` that is not closed: the string is then not a direct prop", () => {
-    expect(ids(`h(Wrap,{strategy:"lazyOnload",kids:g(children:'${BODY}')});`)).not.toContain("clarity");
-    expect(ids(`h(Wrap,{strategy:"lazyOnload",kids:[children:'${BODY}']});`)).not.toContain("clarity");
+    expect(ids(`h(Wrap,{strategy:"lazyOnload",kids:g(children:'${BODY}')});`)).not.toContain(
+      "clarity",
+    );
+    expect(ids(`h(Wrap,{strategy:"lazyOnload",kids:[children:'${BODY}']});`)).not.toContain(
+      "clarity",
+    );
     // a closed call or array before the key is skipped over
-    expect(ids(`h(Script,{kids:g(1),list:[1,2],strategy:"lazyOnload",children:'${BODY}'});`)).toContain("clarity");
+    expect(
+      ids(`h(Script,{kids:g(1),list:[1,2],strategy:"lazyOnload",children:'${BODY}'});`),
+    ).toContain("clarity");
   });
 });

@@ -109,11 +109,7 @@ function frontDoorSkip(ctx: RuleContext) {
  * so we require zero inbound links alone, but that is a weaker signal, so
  * we still gate severity via correlation with page signals.
  */
-function isHiddenPage(
-  hasSitemap: boolean,
-  inSitemap: boolean,
-  inboundCount: number,
-): boolean {
+function isHiddenPage(hasSitemap: boolean, inSitemap: boolean, inboundCount: number): boolean {
   return hasSitemap ? inboundCount === 0 && !inSitemap : inboundCount === 0;
 }
 
@@ -138,8 +134,10 @@ function buildChecks(
   const escalated = hidden.filter((h) => h.escalated);
   const reviewOnly = hidden.filter((h) => !h.escalated);
   const listOf = (items: typeof hidden) =>
-    items.slice(0, 5).map((h) => getPathname(h.url)).join("\n") +
-    (items.length > 5 ? `\n+${items.length - 5} more` : "");
+    items
+      .slice(0, 5)
+      .map((h) => getPathname(h.url))
+      .join("\n") + (items.length > 5 ? `\n+${items.length - 5} more` : "");
 
   if (escalated.length > 0) {
     checks.push({
@@ -161,7 +159,12 @@ function buildChecks(
         : `${reviewOnly.length} hidden page(s): in no sitemap and linked from nowhere (review)`,
       value: listOf(reviewOnly),
       items: reviewOnly.map((h) => ({ id: h.url })),
-      details: { total: reviewOnly.length, hasSitemap, escalated: false, ...(corpusIncomplete ? { sitemapIncomplete: true } : {}) },
+      details: {
+        total: reviewOnly.length,
+        hasSitemap,
+        escalated: false,
+        ...(corpusIncomplete ? { sitemapIncomplete: true } : {}),
+      },
     });
   }
 
@@ -273,7 +276,9 @@ async function runSiteQuery(ctx: RuleContext): Promise<RuleResult> {
   }
 
   const isFrontDoor = frontDoorSkip(ctx);
-  const signalCountByUrl = new Map(ctx.collectedSignals!.pages.map((r) => [r.url, r.signals.length]));
+  const signalCountByUrl = new Map(
+    ctx.collectedSignals!.pages.map((r) => [r.url, r.signals.length]),
+  );
 
   const hidden: HiddenPage[] = [];
   for (const url of universe) {

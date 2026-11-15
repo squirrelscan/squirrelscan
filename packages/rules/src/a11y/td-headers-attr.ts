@@ -39,7 +39,7 @@ export const tdHeadersAttrRule: Rule = {
       const cells = own.get(table)?.cells ?? [];
       // Get all th ids in this table
       const validIds = new Set(
-        cells.filter((cell) => isThWithId.has(cell)).map((th) => th.getAttribute("id"))
+        cells.filter((cell) => isThWithId.has(cell)).map((th) => th.getAttribute("id")),
       );
 
       // Check all td elements with headers attribute
@@ -71,9 +71,7 @@ export const tdHeadersAttrRule: Rule = {
           };
         }),
         details:
-          invalidReferences.length > 10
-            ? { additional: invalidReferences.length - 10 }
-            : undefined,
+          invalidReferences.length > 10 ? { additional: invalidReferences.length - 10 } : undefined,
       });
     } else if (tdWithHeadersCount > 0) {
       checks.push({

@@ -43,7 +43,12 @@ describe("ownSiteHostMatcher", () => {
   test("a project domain written with a port, a wildcard or in Unicode still means that host", () => {
     const matcher = ownSiteHostMatcher({
       baseUrl: "https://example.com/",
-      domains: ["shop.example.net:8443", "*.cdn.example.org", ".static.example.dev", "bücher.example"],
+      domains: [
+        "shop.example.net:8443",
+        "*.cdn.example.org",
+        ".static.example.dev",
+        "bücher.example",
+      ],
     });
     expect(matcher("shop.example.net")).toBe(true);
     expect(matcher("x.cdn.example.org")).toBe(true);

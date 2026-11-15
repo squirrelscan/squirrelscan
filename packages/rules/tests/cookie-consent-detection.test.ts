@@ -31,7 +31,10 @@ function pageCtx(html: string, siteMetadata?: SiteMetadata): RuleContext {
   };
 }
 
-async function status(html: string, meta?: SiteMetadata): Promise<CheckResult["status"] | undefined> {
+async function status(
+  html: string,
+  meta?: SiteMetadata,
+): Promise<CheckResult["status"] | undefined> {
   const checks = (await cookieConsentRule.run(pageCtx(html, meta))).checks;
   return checks.find((c) => c.name === "cookie-consent")?.status;
 }

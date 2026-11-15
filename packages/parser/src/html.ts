@@ -271,7 +271,10 @@ export function extractContactLinks(doc: Document, placeLink?: LinkPlacer): Cont
     if (isCloudflareEmailProtectionUrl(trimmed)) {
       if (obfuscated >= MAX_CONTACT_LINKS) continue;
       obfuscated++;
-      contacts.push({ ...cloudflareEmailContact(anchor as Element, trimmed), ...placedOf(anchor as Element) });
+      contacts.push({
+        ...cloudflareEmailContact(anchor as Element, trimmed),
+        ...placedOf(anchor as Element),
+      });
       continue;
     }
     if (plain >= MAX_CONTACT_LINKS) continue;

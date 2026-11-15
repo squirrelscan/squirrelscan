@@ -109,7 +109,11 @@ describe("domainStatRows", () => {
 
 describe("buildDomainStatsSummary", () => {
   test("joins the headline metrics into one line", () => {
-    const stats: DomainStats = { domain: "example.com", metrics, capturedAt: "2026-01-02T00:00:00Z" };
+    const stats: DomainStats = {
+      domain: "example.com",
+      metrics,
+      capturedAt: "2026-01-02T00:00:00Z",
+    };
     const line = buildDomainStatsSummary(stats);
     expect(line).toContain("example.com");
     expect(line).toContain("15.2k backlinks");

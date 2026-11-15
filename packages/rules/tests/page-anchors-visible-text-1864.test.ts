@@ -13,7 +13,8 @@ const URL_ = "https://example.com/";
 /** The measurement as it was written before #1864. */
 function materialised(body: Element): number {
   let visible = (body.textContent ?? "").length;
-  for (const el of body.querySelectorAll("script, style, noscript, template")) visible -= (el.textContent ?? "").length;
+  for (const el of body.querySelectorAll("script, style, noscript, template"))
+    visible -= (el.textContent ?? "").length;
   return visible;
 }
 

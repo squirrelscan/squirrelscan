@@ -4,8 +4,7 @@ import { wcag } from "@squirrelscan/core-contracts/wcag";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 /** Labelable elements, as HTML defines them (a label's first one is its control). */
-const LABELABLE =
-  'input:not([type="hidden"]), button, meter, output, progress, select, textarea';
+const LABELABLE = 'input:not([type="hidden"]), button, meter, output, progress, select, textarea';
 
 export const formFieldMultipleLabelsRule: Rule = {
   meta: {
@@ -29,7 +28,7 @@ export const formFieldMultipleLabelsRule: Rule = {
     const checks: CheckResult[] = [];
 
     const inputs = doc.querySelectorAll(
-      'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="reset"]), textarea, select'
+      'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="reset"]), textarea, select',
     );
 
     const multipleLabels: string[] = [];
@@ -63,8 +62,7 @@ export const formFieldMultipleLabelsRule: Rule = {
 
       const labelCount = labels.size;
       if (labelCount > 1) {
-        const name =
-          input.getAttribute("name") || id || input.tagName.toLowerCase();
+        const name = input.getAttribute("name") || id || input.tagName.toLowerCase();
         multipleLabels.push(`${name} (${labelCount} labels)`);
       }
     }

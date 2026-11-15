@@ -24,27 +24,27 @@ async function run(html: string) {
 
 describe("links/anchor-text", () => {
   test("descriptive standalone link passes", async () => {
-    const checks = (await run('<a href="/repairs">Commercial freezer repairs</a>'));
+    const checks = await run('<a href="/repairs">Commercial freezer repairs</a>');
     expect(checks).toHaveLength(1);
     expect(checks[0].name).toBe("anchor-text");
     expect(checks[0].status).toBe("pass");
   });
 
   test("card pattern: image link + descriptive headline + read-more, all to the same target — no findings", async () => {
-    const checks = (await run(`
+    const checks = await run(`
       <div class="card">
         <a href="/repairs"><img alt=""></a>
         <a href="/repairs">Commercial freezer repairs</a>
         <a href="/repairs">Read more</a>
       </div>
-    `));
+    `);
     expect(checks).toHaveLength(1);
     expect(checks[0].name).toBe("anchor-text");
     expect(checks[0].status).toBe("pass");
   });
 
   test("single empty-alt image link with no sibling to the same target — still reported", async () => {
-    const checks = (await run('<a href="/repairs"><img alt=""></a>'));
+    const checks = await run('<a href="/repairs"><img alt=""></a>');
     const empty = checks.find((c) => c.name === "empty-anchor");
     expect(empty).toBeDefined();
     expect(empty?.status).toBe("warn");
@@ -52,13 +52,13 @@ describe("links/anchor-text", () => {
   });
 
   test("card where every link is empty or generic — reported once, not three times", async () => {
-    const checks = (await run(`
+    const checks = await run(`
       <div class="card">
         <a href="/widgets"><img alt=""></a>
         <a href="/widgets">Read more</a>
         <a href="/widgets">Click here</a>
       </div>
-    `));
+    `);
     const generic = checks.find((c) => c.name === "generic-anchor");
     expect(generic).toBeDefined();
     expect(generic?.items).toHaveLength(1);
@@ -66,10 +66,10 @@ describe("links/anchor-text", () => {
   });
 
   test("different targets are evaluated independently", async () => {
-    const checks = (await run(`
+    const checks = await run(`
       <a href="/a"><img alt=""></a>
       <a href="/b">Read more</a>
-    `));
+    `);
     const empty = checks.find((c) => c.name === "empty-anchor");
     const generic = checks.find((c) => c.name === "generic-anchor");
     expect(empty?.items).toHaveLength(1);
@@ -77,16 +77,16 @@ describe("links/anchor-text", () => {
   });
 
   test("accessible name via aria-label counts toward the group", async () => {
-    const checks = (await run(`
+    const checks = await run(`
       <a href="/repairs" aria-label="Commercial freezer repairs"><img alt=""></a>
       <a href="/repairs">Read more</a>
-    `));
+    `);
     expect(checks).toHaveLength(1);
     expect(checks[0].name).toBe("anchor-text");
   });
 
   test("anchor-only links are ignored", async () => {
-    const checks = (await run('<a href="#section"></a>'));
+    const checks = await run('<a href="#section"></a>');
     expect(checks).toHaveLength(1);
     expect(checks[0].name).toBe("anchor-text");
   });
@@ -108,9 +108,9 @@ describe("links/anchor-text — link sections", () => {
   }
 
   test("an empty anchor says where it sits and carries meta.sections", async () => {
-    const { checks } = (await anchorTextRule.run(
-      sectioned('<footer><a href="/repairs"><img alt=""></a></footer>')
-    ));
+    const { checks } = await anchorTextRule.run(
+      sectioned('<footer><a href="/repairs"><img alt=""></a></footer>'),
+    );
     const empty = checks.find((c) => c.name === "empty-anchor");
 
     expect(empty?.items).toHaveLength(1);
@@ -122,9 +122,9 @@ describe("links/anchor-text — link sections", () => {
   });
 
   test("a generic anchor text names the sections of every link that uses it", async () => {
-    const { checks } = (await anchorTextRule.run(
-      sectioned('<nav><a href="/a">Read more</a></nav><main><a href="/b">Read more</a></main>')
-    ));
+    const { checks } = await anchorTextRule.run(
+      sectioned('<nav><a href="/a">Read more</a></nav><main><a href="/b">Read more</a></main>'),
+    );
     const generic = checks.find((c) => c.name === "generic-anchor");
 
     expect(generic?.items).toEqual([
@@ -140,9 +140,9 @@ describe("links/anchor-text — link sections", () => {
 
   test("a schemeless host is found where the parse stored it", async () => {
     // The DOM reads `www.example.org` as a relative path; the parse reads it as a host.
-    const { checks } = (await anchorTextRule.run(
-      sectioned('<footer><a href="www.example.org">click here</a></footer>')
-    ));
+    const { checks } = await anchorTextRule.run(
+      sectioned('<footer><a href="www.example.org">click here</a></footer>'),
+    );
 
     expect(checks.find((c) => c.name === "generic-anchor")?.items).toEqual([
       {
@@ -155,9 +155,9 @@ describe("links/anchor-text — link sections", () => {
   });
 
   test("without section data the items are as they were", async () => {
-    const { checks } = (await anchorTextRule.run(
-      sectioned('<footer><a href="/repairs"><img alt=""></a><a href="/x">here</a></footer>', true)
-    ));
+    const { checks } = await anchorTextRule.run(
+      sectioned('<footer><a href="/repairs"><img alt=""></a><a href="/x">here</a></footer>', true),
+    );
 
     const empty = checks.find((c) => c.name === "empty-anchor");
     expect(empty?.items?.[0]).toEqual({

@@ -47,26 +47,22 @@ function tallyFor(snapshot: EngineBaselineSnapshot, ruleId: string) {
 }
 
 describe("E-E2 collector rules — per-rule v1↔v2 byte-identity", () => {
-  test(
-    "each of the six DOM-scanner rules emits an identical finding set on both engines",
-    async () => {
-      // Captured once per process and shared with the other canonical golden files.
-      const v1 = await canonicalV1Snapshot();
-      const v2 = await canonicalV2Snapshot();
+  test("each of the six DOM-scanner rules emits an identical finding set on both engines", async () => {
+    // Captured once per process and shared with the other canonical golden files.
+    const v1 = await canonicalV1Snapshot();
+    const v2 = await canonicalV2Snapshot();
 
-      for (const ruleId of COLLECTOR_RULE_IDS) {
-        const v1Findings = findingsFor(v1, ruleId);
-        const v2Findings = findingsFor(v2, ruleId);
-        // Byte-identical finding set (already deterministically sorted in capture).
-        expect(v2Findings).toEqual(v1Findings);
-        // Per-rule tally (units the score is computed from) must match too.
-        expect(tallyFor(v2, ruleId)).toEqual(tallyFor(v1, ruleId));
+    for (const ruleId of COLLECTOR_RULE_IDS) {
+      const v1Findings = findingsFor(v1, ruleId);
+      const v2Findings = findingsFor(v2, ruleId);
+      // Byte-identical finding set (already deterministically sorted in capture).
+      expect(v2Findings).toEqual(v1Findings);
+      // Per-rule tally (units the score is computed from) must match too.
+      expect(tallyFor(v2, ruleId)).toEqual(tallyFor(v1, ruleId));
 
-        if (MUST_FIRE.has(ruleId)) {
-          expect(v1Findings.length).toBeGreaterThan(0);
-        }
+      if (MUST_FIRE.has(ruleId)) {
+        expect(v1Findings.length).toBeGreaterThan(0);
       }
-    },
-    180_000,
-  );
+    }
+  }, 180_000);
 });

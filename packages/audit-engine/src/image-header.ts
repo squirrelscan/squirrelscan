@@ -63,7 +63,7 @@ function info(
   format: ImageHeaderFormat,
   width: number,
   height: number,
-  animated: boolean | null
+  animated: boolean | null,
 ): ImageHeaderInfo | null {
   if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height)) return null;
   if (width <= 0 || height <= 0) return null;
@@ -365,9 +365,7 @@ function parseAvif(b: Uint8Array): ImageHeaderInfo | null {
 
 function isStartOfFrame(marker: number): boolean {
   // SOF0-SOF15, less DHT (c4), JPG (c8) and DAC (cc), which share the range.
-  return (
-    marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc
-  );
+  return marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc;
 }
 
 function parseJpeg(b: Uint8Array): ImageHeaderInfo | null {

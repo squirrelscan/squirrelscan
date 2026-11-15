@@ -41,13 +41,16 @@ beforeAll(() => {
         });
       }
       if (pathname === "/license.xml" || pathname === "/other-license.xml") {
-        return new Response('<?xml version="1.0"?><rsl xmlns="https://rslstandard.org/rsl"><content url="/"/></rsl>', {
-          headers: { "content-type": "application/rsl+xml" },
-        });
+        return new Response(
+          '<?xml version="1.0"?><rsl xmlns="https://rslstandard.org/rsl"><content url="/"/></rsl>',
+          {
+            headers: { "content-type": "application/rsl+xml" },
+          },
+        );
       }
       if (pathname === "/") {
         return new Response(
-          '<!doctype html><html><head><title>Fixture</title></head><body><p>hello</p></body></html>',
+          "<!doctype html><html><head><title>Fixture</title></head><body><p>hello</p></body></html>",
           { headers: { "content-type": "text/html" } },
         );
       }
@@ -67,7 +70,9 @@ describe("robots.txt is read once per crawl", () => {
       Effect.gen(function* () {
         yield* storage.init();
         const crawler = yield* createCrawler({ config: CONFIG, storage });
-        const events = Effect.runFork(Stream.runForEach(crawler.events, (_e: CrawlerEvent) => Effect.void));
+        const events = Effect.runFork(
+          Stream.runForEach(crawler.events, (_e: CrawlerEvent) => Effect.void),
+        );
         const crawlId = yield* crawler.start(`${base}/`, `${base}/`);
         const record = yield* storage.getRsl(crawlId);
         yield* Fiber.interrupt(events);
@@ -75,7 +80,9 @@ describe("robots.txt is read once per crawl", () => {
       }),
     );
     expect(robotsHits).toBe(1);
-    expect(rsl?.licenseUrls.sort()).toEqual([`${base}/license.xml`, `${base}/other-license.xml`].sort());
+    expect(rsl?.licenseUrls.sort()).toEqual(
+      [`${base}/license.xml`, `${base}/other-license.xml`].sort(),
+    );
     expect(rsl?.robotsHasLicense).toBe(true);
     expect(rsl?.linkHeaderPresent).toBe(true);
   });

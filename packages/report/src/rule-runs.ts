@@ -78,7 +78,9 @@ export function ruleRuns(report: RuleRunInput): RuleRun[] {
       continue;
     }
     const timedOut = checks.some((c) => c.skipReason === RULE_TIMED_OUT_SKIP_REASON);
-    const reason = timedOut ? RULE_TIMED_OUT_SKIP_REASON : checks.find((c) => c.skipReason)?.skipReason;
+    const reason = timedOut
+      ? RULE_TIMED_OUT_SKIP_REASON
+      : checks.find((c) => c.skipReason)?.skipReason;
     rows.push({
       ruleId,
       status: timedOut ? "timed_out" : "skipped",

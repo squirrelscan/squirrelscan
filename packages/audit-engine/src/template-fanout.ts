@@ -113,7 +113,9 @@ export const DEFAULT_MAX_CLUSTERS = 1_000;
  * Read per pass rather than at module load so a test (or a support session) can
  * flip it between runs in one process.
  */
-export function templateFanoutEnabled(env: Record<string, string | undefined> = process.env): boolean {
+export function templateFanoutEnabled(
+  env: Record<string, string | undefined> = process.env,
+): boolean {
   const raw = env.SQUIRREL_TEMPLATE_FANOUT;
   if (raw === undefined) return true;
   const v = raw.trim().toLowerCase();

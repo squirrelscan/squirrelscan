@@ -40,7 +40,10 @@ describe("buildReportHost country labelling (#10, edge requirement)", () => {
   });
 
   test("IPv6-only hosts are looked up too, and an unresolved host gives no section", async () => {
-    const host = await buildReportHost({ host: "v6.test", ipv4: [], ipv6: ["2001:4860:1c00::1"] }, []);
+    const host = await buildReportHost(
+      { host: "v6.test", ipv4: [], ipv6: ["2001:4860:1c00::1"] },
+      [],
+    );
     expect(host?.country?.code).toBe("US");
     expect(await buildReportHost({ host: "x", ipv4: [], ipv6: [] }, [])).toBeUndefined();
   });

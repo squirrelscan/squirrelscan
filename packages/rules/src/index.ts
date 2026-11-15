@@ -87,7 +87,11 @@ export * as social from "./social";
 export * as crawl from "./crawl";
 export * as url from "./url";
 export * as mobile from "./mobile";
-export { colorContrastRule, stylesheetBackgroundOf, stylesheetBackgroundSelectorsOf } from "./a11y/color-contrast";
+export {
+  colorContrastRule,
+  stylesheetBackgroundOf,
+  stylesheetBackgroundSelectorsOf,
+} from "./a11y/color-contrast";
 export { reducedMotionRule, stylesheetMotionOf } from "./a11y/reduced-motion";
 export { listWebAppManifestIconUrls, WEB_APP_MANIFEST_ICON_LIMIT } from "./mobile/web-app-manifest";
 export * as legal from "./legal";

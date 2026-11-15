@@ -19,7 +19,10 @@ import type {
   ResolutionSignal,
   SitePageRecord,
 } from "@squirrelscan/core-contracts";
-import { NOT_APPLICABLE_SKIP_REASON, PAGE_TYPE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
+import {
+  NOT_APPLICABLE_SKIP_REASON,
+  PAGE_TYPE_SKIP_REASON,
+} from "@squirrelscan/core-contracts/resolution";
 import { buildResolutionSignal } from "@squirrelscan/rules/resolution";
 import { normalizePageUrl } from "@squirrelscan/utils/url";
 

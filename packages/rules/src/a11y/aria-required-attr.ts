@@ -9,8 +9,7 @@ export const ariaRequiredAttrRule: Rule = {
   meta: {
     id: "a11y/aria-required-attr",
     name: "ARIA Required Attributes",
-    description:
-      "Checks that elements have required ARIA attributes for their roles",
+    description: "Checks that elements have required ARIA attributes for their roles",
     solution:
       "Some ARIA roles require specific attributes to be present. For example, role='checkbox' requires aria-checked, role='slider' requires aria-valuenow. Add the missing required attributes with appropriate values.",
     category: "a11y",
@@ -49,9 +48,7 @@ export const ariaRequiredAttrRule: Rule = {
 
         if (missing.length > 0) {
           const tagName = el.tagName.toLowerCase();
-          missingAttrs.push(
-            `${tagName}[role="${primaryRole}"]: missing ${missing.join(", ")}`
-          );
+          missingAttrs.push(`${tagName}[role="${primaryRole}"]: missing ${missing.join(", ")}`);
         }
       }
     }
@@ -62,10 +59,7 @@ export const ariaRequiredAttrRule: Rule = {
         status: "fail",
         message: `${missingAttrs.length} element(s) missing required ARIA attributes`,
         items: missingAttrs.slice(0, 10).map((id) => ({ id })),
-        details:
-          missingAttrs.length > 10
-            ? { additional: missingAttrs.length - 10 }
-            : undefined,
+        details: missingAttrs.length > 10 ? { additional: missingAttrs.length - 10 } : undefined,
       });
     } else if (elementsWithRole.length > 0) {
       checks.push({

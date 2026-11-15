@@ -10,11 +10,7 @@ import type { CheckResult } from "@squirrelscan/core-contracts";
 import type { RuleMeta, RuleRunResult } from "@squirrelscan/rules";
 
 import { buildScoringResultsFromMerged, calculateHealthScore } from "../src/scoring";
-import {
-  fingerprint,
-  findingKey,
-  flattenChecks,
-} from "../src/merge";
+import { fingerprint, findingKey, flattenChecks } from "../src/merge";
 import type { CarriedFinding } from "../src/scoring";
 
 const META: RuleMeta = {
@@ -169,9 +165,9 @@ describe("carried-clean passes are counted, not materialized (#918)", () => {
     const rule = union.get(META.id)!;
     // 70 clean carried pages (30..99) fold to a COUNT — not 70 pass objects.
     expect(rule.syntheticPassCount).toBe(70);
-    expect(
-      rule.checks.some((c) => c.status === "pass" && c.message === "carried (clean)"),
-    ).toBe(false);
+    expect(rule.checks.some((c) => c.status === "pass" && c.message === "carried (clean)")).toBe(
+      false,
+    );
     // checks = 10 fresh fails + 20 carried fails, zero synthetic pass rows.
     expect(rule.checks.length).toBe(30);
     expect(rule.checks.every((c) => c.status === "fail")).toBe(true);
@@ -229,7 +225,10 @@ describe("finding identity + fingerprint", () => {
     // c1 (pass) dropped; c2 → 1 finding (locator ""); c3 → 2 findings.
     expect(flat.length).toBe(3);
     expect(flat.filter((f) => f.checkName === "c2")[0].locator).toBe("");
-    const c3 = flat.filter((f) => f.checkName === "c3").map((f) => f.locator).sort();
+    const c3 = flat
+      .filter((f) => f.checkName === "c3")
+      .map((f) => f.locator)
+      .sort();
     expect(c3).toEqual(["i1", "i2"]);
   });
 });

@@ -9,10 +9,13 @@ import type { RobotsTxtData } from "@squirrelscan/core-contracts";
 
 import { isRobotsTxtDisallowed, parseRobotsTxt } from "../src/robots-txt";
 
-const robots = (content: string): RobotsTxtData => parseRobotsTxt(content, "https://example.com/robots.txt");
-const blocked = (path: string, content: string) => isRobotsTxtDisallowed(`https://example.com${path}`, robots(content));
+const robots = (content: string): RobotsTxtData =>
+  parseRobotsTxt(content, "https://example.com/robots.txt");
+const blocked = (path: string, content: string) =>
+  isRobotsTxtDisallowed(`https://example.com${path}`, robots(content));
 
-const FIXTURE = "User-agent: *\nDisallow: /blocked-\nDisallow: /dir/\nAllow: /dir/ok\nDisallow: /*.php\n";
+const FIXTURE =
+  "User-agent: *\nDisallow: /blocked-\nDisallow: /dir/\nAllow: /dir/ok\nDisallow: /*.php\n";
 
 describe("isRobotsTxtDisallowed (pub#556)", () => {
   test("the issue's fixture: prefixes, a longer Allow, and a wildcard", () => {

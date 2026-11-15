@@ -26,10 +26,7 @@
 
 import { hostname } from "node:os";
 
-import {
-  CRAWL_LEASE_PID_TRUST_MS,
-  CRAWL_LEASE_STALE_MS,
-} from "./types";
+import { CRAWL_LEASE_PID_TRUST_MS, CRAWL_LEASE_STALE_MS } from "./types";
 
 export interface LeaseEnv {
   readonly now: () => number;

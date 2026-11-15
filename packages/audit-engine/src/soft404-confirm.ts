@@ -158,7 +158,11 @@ function detectionInput(statusCode: number, parsed: ParsedPage) {
   };
 }
 
-function defaultConfirmFetch(timeoutMs: number, egress?: EgressPolicy, cancel?: AbortSignal): ConfirmFetch {
+function defaultConfirmFetch(
+  timeoutMs: number,
+  egress?: EgressPolicy,
+  cancel?: AbortSignal,
+): ConfirmFetch {
   return async (url, userAgent, headers) => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -174,11 +178,7 @@ function defaultConfirmFetch(timeoutMs: number, egress?: EgressPolicy, cancel?: 
       const reqHeaders = new Headers(mergeHeaderRecords(headers));
       applyBrowserHeaders(reqHeaders, userAgent);
       // Redirects by hand: custom headers never reach another origin (#2831).
-      const res = await probeFetch(
-        url,
-        { headers: reqHeaders, signal: controller.signal },
-        egress,
-      );
+      const res = await probeFetch(url, { headers: reqHeaders, signal: controller.signal }, egress);
       let body = "";
       try {
         body = await readBodyCapped(res, MAX_BODY_BYTES);
@@ -224,7 +224,11 @@ async function confirmOne(
 
   // #1502: a body over the parse cap is never parsed, here or anywhere else; it cannot be judged, so it is unconfirmed
   // (annotated, never dropped). The body is already decoded, so its size is the parser's.
-  if (opts.maxParseBytes !== undefined && decodedPageBytes(undefined, res.body) > opts.maxParseBytes) return "unconfirmed";
+  if (
+    opts.maxParseBytes !== undefined &&
+    decodedPageBytes(undefined, res.body) > opts.maxParseBytes
+  )
+    return "unconfirmed";
 
   // A WAF/bot-challenge served on re-fetch (e.g. a 200 interstitial to an
   // unexpected UA) is NOT real content — never call that "intermittent". Treat
@@ -256,9 +260,14 @@ async function mapPool<T, R>(items: T[], limit: number, fn: (item: T) => Promise
 }
 
 /** Whether a confirmation pass has anything to fetch: a candidate that is not rendered, with the pass enabled. */
-export function hasSoft404FetchWork(pages: Soft404ConfirmPage[], enabled: boolean | undefined): boolean {
+export function hasSoft404FetchWork(
+  pages: Soft404ConfirmPage[],
+  enabled: boolean | undefined,
+): boolean {
   if (enabled === false) return false;
-  return pages.some((p) => !p.rendered && detectSoft404(detectionInput(p.statusCode, p.parsed)).isSoft404);
+  return pages.some(
+    (p) => !p.rendered && detectSoft404(detectionInput(p.statusCode, p.parsed)).isSoft404,
+  );
 }
 
 /**

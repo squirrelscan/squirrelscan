@@ -14,10 +14,7 @@
 
 import { z } from "zod";
 
-import {
-  cacheControlLifetimeSeconds,
-  parseCacheControl,
-} from "@squirrelscan/utils/cache-control";
+import { cacheControlLifetimeSeconds, parseCacheControl } from "@squirrelscan/utils/cache-control";
 import { SUBRESOURCE_CACHING_LIMITS } from "@squirrelscan/utils/constants";
 import { detectCdnFromHeaders, hasJavaScriptDetections } from "@squirrelscan/utils/cdn";
 
@@ -66,13 +63,13 @@ export const optionsSchema = z.object({
     .number()
     .default(0.6)
     .describe(
-      "Minimum fraction of pages that should declare a caching policy, either a freshness lifetime (Cache-Control max-age or Expires) or a validator paired with no-cache or max-age=0, before this passes"
+      "Minimum fraction of pages that should declare a caching policy, either a freshness lifetime (Cache-Control max-age or Expires) or a validator paired with no-cache or max-age=0, before this passes",
     ),
   min_validator_ratio: z
     .number()
     .default(0.6)
     .describe(
-      "Minimum fraction of pages that should expose a validator (ETag or Last-Modified) for cheap revalidation"
+      "Minimum fraction of pages that should expose a validator (ETag or Last-Modified) for cheap revalidation",
     ),
   max_subresources: z
     .number()
@@ -80,14 +77,12 @@ export const optionsSchema = z.object({
     .min(1)
     .default(SUBRESOURCE_CACHING_LIMITS.MAX_SAMPLE)
     .describe(
-      "Most same-site sub-resources (CSS, scripts, fonts, images), taken in URL order, whose caching headers are judged for a freshness lifetime"
+      "Most same-site sub-resources (CSS, scripts, fonts, images), taken in URL order, whose caching headers are judged for a freshness lifetime",
     ),
   min_compression_ratio: z
     .number()
     .default(0.8)
-    .describe(
-      "Minimum fraction of compressible responses that should be gzip/Brotli compressed"
-    ),
+    .describe("Minimum fraction of compressible responses that should be gzip/Brotli compressed"),
 });
 
 function isCompressible(contentType: string): boolean {
@@ -116,7 +111,7 @@ type ExpiresVerdict = "lifetime" | "expired" | "unknown" | "absent";
 function judgeExpires(
   expires: string | undefined,
   date: string | undefined,
-  fetchedAt: number | undefined
+  fetchedAt: number | undefined,
 ): ExpiresVerdict {
   if (!expires) return "absent";
   // Every HTTP-date form names the month (RFC 9110 5.6.7). Date.parse alone is
@@ -160,7 +155,7 @@ function observedSubresources(ctx: RuleContext): SubresourceCaching[] {
   const sizes = site.resourceSizes;
   const fromSizes = (
     kind: SubresourceCaching["kind"],
-    list: NonNullable<typeof sizes>["css"] | undefined
+    list: NonNullable<typeof sizes>["css"] | undefined,
   ): SubresourceCaching[] =>
     (list ?? []).map((r) => ({
       url: r.url,
@@ -217,7 +212,7 @@ function observedSubresources(ctx: RuleContext): SubresourceCaching[] {
       r.status < 300 &&
       r.error === null &&
       ((r.cacheReason ?? null) === null || r.cacheReason === "304") &&
-      sameSite(r.url)
+      sameSite(r.url),
   );
 }
 
@@ -239,8 +234,13 @@ function judgeSubresources(ctx: RuleContext, maxSample: number): CheckResult | u
       continue;
     }
     const lifetime = cacheControlLifetimeSeconds(cc);
-    const verdict = judgeExpires(h.expires ?? undefined, h.date ?? undefined, ctx.site?.pages[0]?.fetchedAt);
-    const fresh = !cc.noCache && ((lifetime !== undefined && lifetime > 0) || verdict === "lifetime");
+    const verdict = judgeExpires(
+      h.expires ?? undefined,
+      h.date ?? undefined,
+      ctx.site?.pages[0]?.fetchedAt,
+    );
+    const fresh =
+      !cc.noCache && ((lifetime !== undefined && lifetime > 0) || verdict === "lifetime");
     if (fresh) withLifetime++;
     else if (!cc.noCache && lifetime === undefined && verdict === "unknown") unjudged++;
     else missing.push(r);
@@ -263,7 +263,8 @@ function judgeSubresources(ctx: RuleContext, maxSample: number): CheckResult | u
     status: "warn",
     message: `${missing.length}/${judged} sampled sub-resources (CSS, JS, fonts, images) have no freshness lifetime, so every repeat visit revalidates or re-downloads them${note}`,
     value: `${Math.round((withLifetime / judged) * 100)}%`,
-    expected: "Cache-Control max-age (long, with immutable, for fingerprinted assets) or Expires on every static sub-resource",
+    expected:
+      "Cache-Control max-age (long, with immutable, for fingerprinted assets) or Expires on every static sub-resource",
     items: missing.map((r) => ({
       id: r.url,
       sourcePages: r.sourcePages,
@@ -286,8 +287,7 @@ export const badCachingRule: Rule = {
   meta: {
     id: "perf/bad-caching",
     name: "Weak Caching (site-wide)",
-    description:
-      "Flags sites where most pages lack caching freshness, validators, or compression",
+    description: "Flags sites where most pages lack caching freshness, validators, or compression",
     solution:
       "Set Cache-Control with an appropriate max-age on every response (short for HTML, long + immutable for hashed static assets), expose an ETag or Last-Modified for cheap revalidation, and enable gzip/Brotli for text responses. Consistent caching across the whole site cuts repeat-visit load times and origin/CDN cost.",
     category: "perf",
@@ -307,7 +307,9 @@ export const badCachingRule: Rule = {
     // A page whose record carries no response headers (headersRecorded === false) says nothing about
     // what the response sent: it is not a page "without an ETag", so it is left out and reported as
     // not checked, never counted against the site (repo#4641).
-    const successful = (ctx.site?.pages ?? []).filter((p) => p.statusCode >= 200 && p.statusCode < 300);
+    const successful = (ctx.site?.pages ?? []).filter(
+      (p) => p.statusCode >= 200 && p.statusCode < 300,
+    );
     const unrecorded = successful.filter((p) => p.headersRecorded === false);
 
     // Only consider successful HTML responses we actually have headers for.
@@ -349,7 +351,9 @@ export const badCachingRule: Rule = {
     let noValidatorWithJsd = 0;
     // The marker per page: the streaming engine records it with the page's other signals, the
     // resident engine reads it off the live document (#605).
-    const markersByUrl = new Map((ctx.collectedSignals?.pages ?? []).map((rec) => [rec.url, rec.edgeMarkers ?? []]));
+    const markersByUrl = new Map(
+      (ctx.collectedSignals?.pages ?? []).map((rec) => [rec.url, rec.edgeMarkers ?? []]),
+    );
     let compressibleTotal = 0;
     let compressibleCompressed = 0;
     const noCacheExamples: string[] = [];
@@ -426,8 +430,7 @@ export const badCachingRule: Rule = {
           contentEncoding.includes("deflate") ||
           contentEncoding.includes("zstd");
         if (compressed) compressibleCompressed++;
-        else if (uncompressedExamples.length < 5)
-          uncompressedExamples.push(page.url);
+        else if (uncompressedExamples.length < 5) uncompressedExamples.push(page.url);
       }
     }
 
@@ -436,10 +439,10 @@ export const badCachingRule: Rule = {
     const judged = total - freshnessUnjudged;
     const cachePolicyRatio = judged > 0 ? withCachePolicy / judged : 1;
     const validatorRatio = withValidator / total;
-    const compressionRatio =
-      compressibleTotal > 0 ? compressibleCompressed / compressibleTotal : 1;
+    const compressionRatio = compressibleTotal > 0 ? compressibleCompressed / compressibleTotal : 1;
 
-    const unjudgedDetails = freshnessUnjudged > 0 ? { unjudgedExpiresPages: freshnessUnjudged } : {};
+    const unjudgedDetails =
+      freshnessUnjudged > 0 ? { unjudgedExpiresPages: freshnessUnjudged } : {};
     const unjudgedNote =
       freshnessUnjudged > 0
         ? ` (${freshnessUnjudged} more send only Expires with no Date or fetch time to judge it against)`
@@ -501,8 +504,7 @@ export const badCachingRule: Rule = {
       const missing = total - withValidator;
       const viaNoStore = noValidatorNoStore > 0 && noValidatorNoStore * 2 >= missing;
       const viaCloudflare =
-        !viaNoStore &&
-        noValidatorViaCloudflare > 0 && noValidatorViaCloudflare * 2 >= missing;
+        !viaNoStore && noValidatorViaCloudflare > 0 && noValidatorViaCloudflare * 2 >= missing;
       const viaJsd = !viaNoStore && noValidatorWithJsd > 0 && noValidatorWithJsd * 2 >= missing;
       checks.push({
         name: "bad-caching-validators",
@@ -512,10 +514,10 @@ export const badCachingRule: Rule = {
           (viaNoStore
             ? noStoreNote(noValidatorNoStore)
             : viaJsd
-            ? jsDetectionsNote(noValidatorWithJsd)
-            : viaCloudflare
-              ? cloudflareNote(noValidatorViaCloudflare)
-              : ""),
+              ? jsDetectionsNote(noValidatorWithJsd)
+              : viaCloudflare
+                ? cloudflareNote(noValidatorViaCloudflare)
+                : ""),
         value: `${Math.round(validatorRatio * 100)}%`,
         expected: `≥ ${Math.round(opts.min_validator_ratio * 100)}% with ETag or Last-Modified`,
         pages: noValidatorExamples,

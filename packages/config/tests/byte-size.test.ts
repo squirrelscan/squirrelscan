@@ -67,9 +67,9 @@ describe("[storage] content_store_max_bytes", () => {
   });
 
   test("normalizes a size string to bytes", () => {
-    expect(StorageConfigSchema.parse({ content_store_max_bytes: "4GB" }).content_store_max_bytes).toBe(
-      4 * GiB,
-    );
+    expect(
+      StorageConfigSchema.parse({ content_store_max_bytes: "4GB" }).content_store_max_bytes,
+    ).toBe(4 * GiB);
     expect(
       StorageConfigSchema.parse({ content_store_max_bytes: 2_000_000_000 }).content_store_max_bytes,
     ).toBe(2_000_000_000);

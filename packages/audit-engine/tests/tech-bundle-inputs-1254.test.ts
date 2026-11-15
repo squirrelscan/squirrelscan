@@ -19,7 +19,9 @@ describe("buildTechInputs", () => {
       [{ url: "https://example.com/a.js", content: body(500) }],
       LIMITS,
     );
-    expect(home?.scripts?.find((s) => s.url === "https://example.com/a.js")?.content).toHaveLength(100);
+    expect(home?.scripts?.find((s) => s.url === "https://example.com/a.js")?.content).toHaveLength(
+      100,
+    );
   });
 
   test("bundleBytes 0 attaches no bodies but keeps every script URL", () => {
@@ -46,7 +48,11 @@ describe("buildTechInputs", () => {
   });
 
   test("a bundle shared by pages carries its body once, on the first page", () => {
-    const shared = { url: "https://example.com/s.js", content: body(80), sourcePages: ["https://example.com/", "https://example.com/p2"] };
+    const shared = {
+      url: "https://example.com/s.js",
+      content: body(80),
+      sourcePages: ["https://example.com/", "https://example.com/p2"],
+    };
     const [home, second] = buildTechInputs(
       [page("https://example.com/"), page("https://example.com/p2", "/s.js")],
       [shared],
@@ -58,9 +64,16 @@ describe("buildTechInputs", () => {
   });
 
   test("a bundle belongs to the page that references it, matched by final or requested URL", () => {
-    const own = { url: "https://example.com/own.js", content: "OWN", sourcePages: ["https://example.com/old"] };
+    const own = {
+      url: "https://example.com/own.js",
+      content: "OWN",
+      sourcePages: ["https://example.com/old"],
+    };
     const [, second] = buildTechInputs(
-      [page("https://example.com/"), { ...page("https://example.com/new"), requestedUrl: "https://example.com/old" }],
+      [
+        page("https://example.com/"),
+        { ...page("https://example.com/new"), requestedUrl: "https://example.com/old" },
+      ],
       [own],
       LIMITS,
     );

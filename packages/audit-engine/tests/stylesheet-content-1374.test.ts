@@ -34,7 +34,10 @@ beforeAll(() => {
     fetch(req) {
       const { pathname } = new URL(req.url);
       if (pathname === "/big.css") {
-        return new Response(`.a{}${"x".repeat(STYLESHEET_FETCH_LIMITS.MAX_STYLESHEET_SIZE_BYTES)}`, { headers: CSS });
+        return new Response(
+          `.a{}${"x".repeat(STYLESHEET_FETCH_LIMITS.MAX_STYLESHEET_SIZE_BYTES)}`,
+          { headers: CSS },
+        );
       }
       if (pathname === "/boom.css") return new Response("boom", { status: 500 });
       return new Response(SECRET_BODY, { headers: CSS });
@@ -94,7 +97,10 @@ describe("ctx.site.stylesheets (repo#1374)", () => {
   });
 
   test("per-crawl cap: no more than the limit is requested", async () => {
-    const links = Array.from({ length: STYLESHEET_FETCH_LIMITS.MAX_STYLESHEETS_TO_FETCH + 5 }, (_, i) => `/n${i}.css`);
+    const links = Array.from(
+      { length: STYLESHEET_FETCH_LIMITS.MAX_STYLESHEETS_TO_FETCH + 5 },
+      (_, i) => `/n${i}.css`,
+    );
     const assets = await assetsFor(links);
     expect(assets.stylesheets).toHaveLength(STYLESHEET_FETCH_LIMITS.MAX_STYLESHEETS_TO_FETCH);
   });
@@ -114,7 +120,9 @@ describe("ctx.site.stylesheets (repo#1374)", () => {
   });
 
   test("content/color-sprawl alone fetches the bodies, not color-contrast's background summary (repo#1377)", async () => {
-    const sprawlOnly = { rules: { enable: ["*"], disable: ["a11y/color-contrast"] } } as unknown as Config;
+    const sprawlOnly = {
+      rules: { enable: ["*"], disable: ["a11y/color-contrast"] },
+    } as unknown as Config;
     const assets = await assetsFor(["/a.css"], sprawlOnly);
     expect(assets.stylesheets?.[0]?.content).toBe(SECRET_BODY);
     expect(assets.stylesheetBackgrounds).toBeUndefined();
@@ -138,9 +146,19 @@ describe("ctx.site.stylesheets (repo#1374)", () => {
   });
 
   test("budget exhausted: skipped stylesheets are entries with no content", async () => {
-    const budget = createFetchBudget({ totalBudgetMs: 1, now: (() => { let t = 0; return () => (t += 10); })() });
+    const budget = createFetchBudget({
+      totalBudgetMs: 1,
+      now: (() => {
+        let t = 0;
+        return () => (t += 10);
+      })(),
+    });
     const results = await Effect.runPromise(
-      fetchScriptContents([`${base}/a.css`, `${base}/b.css`], { anyContentType: true, fetchAll: true, budget }),
+      fetchScriptContents([`${base}/a.css`, `${base}/b.css`], {
+        anyContentType: true,
+        fetchAll: true,
+        budget,
+      }),
     );
     expect(results).toHaveLength(2);
     for (const r of results) expect(toStylesheetContentData(r)).toEqual({ url: r.url });
@@ -149,7 +167,10 @@ describe("ctx.site.stylesheets (repo#1374)", () => {
   test("a rule reading the body emits a derived signal, not the body", async () => {
     const assets = await assetsFor(["/a.css"]);
     // A stand-in rule: it reads ctx.site.stylesheets[].content and returns only a count.
-    const derived = (assets.stylesheets ?? []).map((s) => ({ url: s.url, bytes: s.content?.length ?? 0 }));
+    const derived = (assets.stylesheets ?? []).map((s) => ({
+      url: s.url,
+      bytes: s.content?.length ?? 0,
+    }));
     expect(derived[0]?.bytes).toBe(SECRET_BODY.length);
     expect(JSON.stringify(derived)).not.toContain("body-marker-1374");
   });

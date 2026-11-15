@@ -209,7 +209,9 @@ function noteSection(
  * reading every anchor in document order hands each repeat of a link its own entry. An anchor the
  * parse did not keep, or a parse without sections, has no section.
  */
-function linkPlacements(ctx: RuleContext): (anchor: Element, href: string) => LinkSection | undefined {
+function linkPlacements(
+  ctx: RuleContext,
+): (anchor: Element, href: string) => LinkSection | undefined {
   const placed = ctx.parsed.links ?? [];
   if (!placed.some((l) => l.section && l.section !== "unknown")) return () => undefined;
   const queues = new Map<string, Array<LinkSection | undefined>>();
@@ -333,7 +335,10 @@ export const linkTextRule: Rule = {
                 rendered: ctx.page.rendered === true,
                 element: link,
                 kind: "link-text-generic",
-                values: { nameSource: "accessible-name", normalizedText: normalizeLinkLabel(accessibleName) },
+                values: {
+                  nameSource: "accessible-name",
+                  normalizedText: normalizeLinkLabel(accessibleName),
+                },
                 sensitiveValues: { destination: resolvedHref(href) },
               },
               occurrenceCache,

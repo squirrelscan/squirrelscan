@@ -7,11 +7,7 @@ import { describe, expect, test } from "bun:test";
 
 import { parsePage } from "@squirrelscan/parser";
 
-import {
-  looksLikeEmail,
-  telMailtoRule,
-  withoutOptionalTrunkZero,
-} from "../src/links/tel-mailto";
+import { looksLikeEmail, telMailtoRule, withoutOptionalTrunkZero } from "../src/links/tel-mailto";
 import type { RuleContext } from "../src/types";
 
 function ctx(html: string): RuleContext {
@@ -34,37 +30,37 @@ function mismatchCheck(checks: Awaited<ReturnType<typeof telMailtoRule.run>>["ch
 describe("links/tel-mailto — phone number matching", () => {
   test("#694: E.164 href + AU national trunk-zero text is NOT a mismatch", async () => {
     const html = page(`<a href="tel:+61414007351">0414 007 351</a>`);
-    const { checks } = (await telMailtoRule.run(ctx(html)));
+    const { checks } = await telMailtoRule.run(ctx(html));
     expect(mismatchCheck(checks)).toBeUndefined();
   });
 
   test("UK: E.164 href + national trunk-zero text (020) is NOT a mismatch", async () => {
     const html = page(`<a href="tel:+442012345678">020 1234 5678</a>`);
-    const { checks } = (await telMailtoRule.run(ctx(html)));
+    const { checks } = await telMailtoRule.run(ctx(html));
     expect(mismatchCheck(checks)).toBeUndefined();
   });
 
   test("national trunk-zero href + E.164 text is NOT a mismatch (reverse order)", async () => {
     const html = page(`<a href="tel:0414007351">+61 414 007 351</a>`);
-    const { checks } = (await telMailtoRule.run(ctx(html)));
+    const { checks } = await telMailtoRule.run(ctx(html));
     expect(mismatchCheck(checks)).toBeUndefined();
   });
 
   test("existing behavior preserved: omitted country code still matches", async () => {
     const html = page(`<a href="tel:+15551234567">5551234567</a>`);
-    const { checks } = (await telMailtoRule.run(ctx(html)));
+    const { checks } = await telMailtoRule.run(ctx(html));
     expect(mismatchCheck(checks)).toBeUndefined();
   });
 
   test("exact same number still matches", async () => {
     const html = page(`<a href="tel:+15551234567">+15551234567</a>`);
-    const { checks } = (await telMailtoRule.run(ctx(html)));
+    const { checks } = await telMailtoRule.run(ctx(html));
     expect(mismatchCheck(checks)).toBeUndefined();
   });
 
   test("genuinely different numbers still flagged (true positive)", async () => {
     const html = page(`<a href="tel:+61414007351">0398765432</a>`);
-    const { checks } = (await telMailtoRule.run(ctx(html)));
+    const { checks } = await telMailtoRule.run(ctx(html));
     const mismatch = mismatchCheck(checks);
     expect(mismatch?.status).toBe("warn");
     expect(mismatch?.message).toContain("1 tel link(s)");
@@ -72,13 +68,13 @@ describe("links/tel-mailto — phone number matching", () => {
 
   test("different number in same national format still flagged", async () => {
     const html = page(`<a href="tel:0414007351">0398765432</a>`);
-    const { checks } = (await telMailtoRule.run(ctx(html)));
+    const { checks } = await telMailtoRule.run(ctx(html));
     expect(mismatchCheck(checks)?.status).toBe("warn");
   });
 
   test("codex regression: NANP (+1) href with spurious-leading-zero text is still flagged (1-digit calling codes don't use trunk 0)", async () => {
     const html = page(`<a href="tel:+15551234567">0555 123 4567</a>`);
-    const { checks } = (await telMailtoRule.run(ctx(html)));
+    const { checks } = await telMailtoRule.run(ctx(html));
     expect(mismatchCheck(checks)?.status).toBe("warn");
   });
 });
@@ -88,9 +84,25 @@ describe("links/tel-mailto — mailto display text", () => {
 
   test("looksLikeEmail agrees with the regex it replaced", () => {
     const cases = [
-      "a@b.co", "hello@example.com", "Email hello@example.com today", "@example.com",
-      "a@.c", "a@b.", "a@bc", "a@b.c", "a@@b.c", "a@..c", "a.b@c", "a@b\n.c",
-      "line one\nx@y.zz", "a@b\r\n.cd", "a@b\u2028c.d", "", "@", ".", "Contact us",
+      "a@b.co",
+      "hello@example.com",
+      "Email hello@example.com today",
+      "@example.com",
+      "a@.c",
+      "a@b.",
+      "a@bc",
+      "a@b.c",
+      "a@@b.c",
+      "a@..c",
+      "a.b@c",
+      "a@b\n.c",
+      "line one\nx@y.zz",
+      "a@b\r\n.cd",
+      "a@b\u2028c.d",
+      "",
+      "@",
+      ".",
+      "Contact us",
     ];
     for (const text of cases) expect(looksLikeEmail(text)).toBe(LEGACY_EMAIL_RE.test(text));
 
@@ -110,7 +122,7 @@ describe("links/tel-mailto — mailto display text", () => {
 
   test("a different address in the link text is still flagged", async () => {
     const html = page(`<a href="mailto:sales@example.com">support@example.com</a>`);
-    const { checks } = (await telMailtoRule.run(ctx(html)));
+    const { checks } = await telMailtoRule.run(ctx(html));
     expect(checks.find((c) => c.name === "mailto-mismatch")?.status).toBe("warn");
   });
 
@@ -122,7 +134,7 @@ describe("links/tel-mailto — mailto display text", () => {
     const context = ctx(html);
 
     const start = performance.now();
-    const { checks } = (await telMailtoRule.run(context));
+    const { checks } = await telMailtoRule.run(context);
     // A few ms in practice; generous so a loaded CI runner cannot flake it.
     expect(performance.now() - start).toBeLessThan(500);
     expect(checks.find((c) => c.name === "mailto-mismatch")).toBeUndefined();
@@ -140,27 +152,29 @@ describe("links/tel-mailto — optional trunk prefix (0) in the display (pub#663
 
   test("the German example is advice, not a mismatch, and the href is left alone", async () => {
     const html = page(`<a href="tel:+4960616309800">+49 (0)6061 630 980 0</a>`);
-    const { checks } = (await telMailtoRule.run(ctx(html)));
+    const { checks } = await telMailtoRule.run(ctx(html));
     expect(mismatchCheck(checks)).toBeUndefined();
     const advice = trunkCheck(checks);
     expect(advice?.status).toBe("info");
     expect(advice?.message).toBe(
-      "1 tel link(s) show the optional trunk prefix (0) in an international number; drop it (ITU-T E.123)"
+      "1 tel link(s) show the optional trunk prefix (0) in an international number; drop it (ITU-T E.123)",
     );
     expect(advice?.items?.[0]?.id).toBe("tel:+4960616309800");
-    expect(advice?.items?.[0]?.label).toBe(`text "+49 (0)6061 630 980 0": use "+49 6061 630 980 0"`);
+    expect(advice?.items?.[0]?.label).toBe(
+      `text "+49 (0)6061 630 980 0": use "+49 6061 630 980 0"`,
+    );
   });
 
   test("the control (no (0) in the display) has neither finding", async () => {
     const html = page(`<a href="tel:+4960616309800">+49 6061 630 980 0</a>`);
-    const { checks } = (await telMailtoRule.run(ctx(html)));
+    const { checks } = await telMailtoRule.run(ctx(html));
     expect(mismatchCheck(checks)).toBeUndefined();
     expect(trunkCheck(checks)).toBeUndefined();
   });
 
   test("a genuinely different German number still reports tel-mismatch", async () => {
     const html = page(`<a href="tel:+4960616309800">+49 (0)6061 630 980 1</a>`);
-    const { checks } = (await telMailtoRule.run(ctx(html)));
+    const { checks } = await telMailtoRule.run(ctx(html));
     expect(mismatchCheck(checks)?.status).toBe("warn");
     expect(trunkCheck(checks)).toBeUndefined();
   });
@@ -174,7 +188,7 @@ describe("links/tel-mailto — optional trunk prefix (0) in the display (pub#663
       ["tel:+35312345678", "Call +353 (0)1 234 5678"],
     ];
     for (const [href, text] of pairs) {
-      const { checks } = (await telMailtoRule.run(ctx(page(`<a href="${href}">${text}</a>`))));
+      const { checks } = await telMailtoRule.run(ctx(page(`<a href="${href}">${text}</a>`)));
       expect([href, mismatchCheck(checks)]).toEqual([href, undefined]);
       expect([href, trunkCheck(checks)?.status]).toEqual([href, "info"]);
     }
@@ -187,7 +201,7 @@ describe("links/tel-mailto — optional trunk prefix (0) in the display (pub#663
       // The raw digits already match a national href; the display is still advice.
       ["tel:060616309800", "+49 (0)6061 630 980 0"],
     ]) {
-      const { checks } = (await telMailtoRule.run(ctx(page(`<a href="${href}">${text}</a>`))));
+      const { checks } = await telMailtoRule.run(ctx(page(`<a href="${href}">${text}</a>`)));
       expect([href, mismatchCheck(checks)]).toEqual([href, undefined]);
       expect([href, trunkCheck(checks)?.status]).toEqual([href, "info"]);
     }
@@ -195,7 +209,7 @@ describe("links/tel-mailto — optional trunk prefix (0) in the display (pub#663
 
   test("a bare '+49 (0)' with no number after it is not read as one", async () => {
     const html = page(`<a href="tel:+4930123449">Call +49 (0)</a>`);
-    const { checks } = (await telMailtoRule.run(ctx(html)));
+    const { checks } = await telMailtoRule.run(ctx(html));
     expect(mismatchCheck(checks)).toBeUndefined();
     expect(trunkCheck(checks)).toBeUndefined();
   });
@@ -207,7 +221,7 @@ describe("links/tel-mailto — optional trunk prefix (0) in the display (pub#663
       ["tel:+3961234567", "+39 (0)6 1234 567"],
       ["tel:+34912345678", "+34 (0)91 234 5678"],
     ]) {
-      const { checks } = (await telMailtoRule.run(ctx(page(`<a href="${href}">${text}</a>`))));
+      const { checks } = await telMailtoRule.run(ctx(page(`<a href="${href}">${text}</a>`)));
       expect([href, mismatchCheck(checks)?.status]).toEqual([href, "warn"]);
       expect([href, trunkCheck(checks)]).toEqual([href, undefined]);
     }
@@ -228,11 +242,11 @@ describe("links/tel-mailto — optional trunk prefix (0) in the display (pub#663
 describe("links/tel-mailto — link sections", () => {
   const html = page(
     `<footer><a href="tel:+61414007351">0400 111 222</a></footer>` +
-      `<main><a href="mailto:sales@example.com">support@example.com</a></main>`
+      `<main><a href="mailto:sales@example.com">support@example.com</a></main>`,
   );
 
   test("mismatch items say where the link sits and carry meta.sections", async () => {
-    const { checks } = (await telMailtoRule.run(ctx(html)));
+    const { checks } = await telMailtoRule.run(ctx(html));
 
     expect(checks.find((c) => c.name === "tel-mismatch")?.items?.[0]).toMatchObject({
       label: 'href "+61414007351" ≠ text "0400 111 222", linked in the footer',
@@ -245,20 +259,25 @@ describe("links/tel-mailto — link sections", () => {
   });
 
   test("the trunk prefix advice says it too", async () => {
-    const { checks } = (await telMailtoRule.run(
-      ctx(page(`<header><a href="tel:+496061630980">+49 (0)6061 630 980</a></header>`))
-    ));
+    const { checks } = await telMailtoRule.run(
+      ctx(page(`<header><a href="tel:+496061630980">+49 (0)6061 630 980</a></header>`)),
+    );
 
     expect(checks.find((c) => c.name === "tel-trunk-prefix")?.items?.[0]?.label).toBe(
-      'text "+49 (0)6061 630 980": use "+49 6061 630 980", linked in the header'
+      'text "+49 (0)6061 630 980": use "+49 6061 630 980", linked in the header',
     );
   });
 
   test("a mismatch past the parse's contact cap still says where it sits (markup only)", async () => {
-    const phones = Array.from({ length: 32 }, (_, i) => `<p><a href="tel:+1555000${1000 + i}">call</a></p>`);
-    const { checks } = (await telMailtoRule.run(
-      ctx(page(`${phones.join("")}<footer><a href="mailto:a@example.com">b@example.com</a></footer>`))
-    ));
+    const phones = Array.from(
+      { length: 32 },
+      (_, i) => `<p><a href="tel:+1555000${1000 + i}">call</a></p>`,
+    );
+    const { checks } = await telMailtoRule.run(
+      ctx(
+        page(`${phones.join("")}<footer><a href="mailto:a@example.com">b@example.com</a></footer>`),
+      ),
+    );
 
     expect(checks.find((c) => c.name === "mailto-mismatch")?.items?.[0]).toMatchObject({
       label: 'href "a@example.com" ≠ text "b@example.com", linked in the footer',
@@ -269,7 +288,7 @@ describe("links/tel-mailto — link sections", () => {
   test("without section data the items are as they were", async () => {
     const c = ctx(html);
     for (const contact of c.parsed.contactLinks ?? []) delete contact.section;
-    const { checks } = (await telMailtoRule.run(c));
+    const { checks } = await telMailtoRule.run(c);
 
     expect(checks.find((x) => x.name === "tel-mismatch")?.items?.[0]).toEqual({
       id: "tel:+61414007351",

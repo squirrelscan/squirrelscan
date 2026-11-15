@@ -89,7 +89,10 @@ export function buildSiteContext(
 
     for (const page of pages) {
       // `--max-duration` (#1332): a page over the cap is stored but never parsed, here or anywhere else.
-      if (maxParseBytes !== undefined && decodedPageBytes(page.sizeBytes, page.html ?? "") > maxParseBytes) {
+      if (
+        maxParseBytes !== undefined &&
+        decodedPageBytes(page.sizeBytes, page.html ?? "") > maxParseBytes
+      ) {
         contextPages.push({ page, parsed: null });
         continue;
       }

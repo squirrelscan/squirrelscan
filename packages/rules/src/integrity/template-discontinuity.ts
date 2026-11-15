@@ -99,7 +99,7 @@ export const templateDiscontinuityRule: Rule = {
         .min(0)
         .default(20)
         .describe(
-          "When the crawl stopped at its page limit, escalate only if the baseline was built from at least this many pages; below it, outliers are still reported for review"
+          "When the crawl stopped at its page limit, escalate only if the baseline was built from at least this many pages; below it, outliers are still reported for review",
         ),
     }),
   },
@@ -116,8 +116,7 @@ export const templateDiscontinuityRule: Rule = {
     const pages = ctx.site?.pages ?? [];
     const minPages = ctx.options.minPages as number;
     const threshold = ctx.options.similarityThreshold as number;
-    const minBaselinePagesWhenCapped = ctx.options
-      .minBaselinePagesWhenCapped as number;
+    const minBaselinePagesWhenCapped = ctx.options.minBaselinePagesWhenCapped as number;
 
     // A crawl that stopped at its page limit did not see the site; it saw the
     // first N pages of it. The baseline is then whatever those N had in common,
@@ -170,8 +169,7 @@ export const templateDiscontinuityRule: Rule = {
 
     // If the baseline itself is empty (no shared theme markers — e.g. a site of
     // wholly unrelated pages), we can't reliably call anything an outlier.
-    const baselineEmpty =
-      baseline.stylesheetHrefs.size === 0 && baseline.assetHosts.size === 0;
+    const baselineEmpty = baseline.stylesheetHrefs.size === 0 && baseline.assetHosts.size === 0;
     if (baselineEmpty) {
       checks.push({
         name: "template-discontinuity",
@@ -186,13 +184,13 @@ export const templateDiscontinuityRule: Rule = {
     // from both: a host everybody loads from cannot distinguish the site's own
     // page from a page injected into it.
     const siteResourceHosts = new Set(
-      [...baseline.resourceHosts].filter((h) => !isSharedPublicAssetHost(h))
+      [...baseline.resourceHosts].filter((h) => !isSharedPublicAssetHost(h)),
     );
     const siteStylesheetHrefs = new Set(
       [...baseline.stylesheetHrefs].filter((href) => {
         const host = hrefHost(href);
         return host === null || !isSharedPublicAssetHost(host);
-      })
+      }),
     );
 
     // AC4: a capped crawl with a thin baseline can report, but not accuse.
@@ -300,8 +298,7 @@ export const templateDiscontinuityRule: Rule = {
         loadsSiteAssets,
         // template-discontinuity + >=1 page signal, nothing of the site's own,
         // and a baseline we actually trust.
-        escalated:
-          signalCount >= 1 && !loadsSiteAssets && !baselineTooSmallToEscalate,
+        escalated: signalCount >= 1 && !loadsSiteAssets && !baselineTooSmallToEscalate,
       });
     }
 

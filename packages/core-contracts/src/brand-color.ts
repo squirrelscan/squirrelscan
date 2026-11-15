@@ -44,7 +44,13 @@ export function pickTextOn(color: string): "#000000" | "#ffffff" {
 }
 
 export type BrandColorValidation =
-  | { ok: true; color: string; textColor: "#000000" | "#ffffff"; textContrast: number; pageContrast: number }
+  | {
+      ok: true;
+      color: string;
+      textColor: "#000000" | "#ffffff";
+      textContrast: number;
+      pageContrast: number;
+    }
   | {
       ok: false;
       reason: "invalid-format" | "text-contrast" | "page-contrast";
@@ -56,7 +62,11 @@ export type BrandColorValidation =
 export function validateBrandColor(input: unknown): BrandColorValidation {
   const color = normalizeBrandColor(input);
   if (!color) {
-    return { ok: false, reason: "invalid-format", message: "Brand colour must be a #rrggbb hex value." };
+    return {
+      ok: false,
+      reason: "invalid-format",
+      message: "Brand colour must be a #rrggbb hex value.",
+    };
   }
   const textColor = pickTextOn(color);
   const textContrast = contrastRatio(color, textColor);

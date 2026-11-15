@@ -110,7 +110,10 @@ export const ANALYTICS_FINGERPRINTS: TechFingerprint[] = [
       { type: "html", pattern: /clarity\(['"]set['"]/i },
       // The API call in a script, not only in inline HTML: `window.clarity("identify", ...)` or `clarity("set", ...)`
       // from a bundled first-party file (#1996). The call needs a known Clarity command as its first string argument.
-      { type: "script-content", pattern: /\bclarity\(\s*["'](?:set|identify|consent|event|upgrade|start|stop)["']/ },
+      {
+        type: "script-content",
+        pattern: /\bclarity\(\s*["'](?:set|identify|consent|event|upgrade|start|stop)["']/,
+      },
       // The standard loader bundled into a first-party script: `t.src="https://www.clarity.ms/tag/"+i`, the
       // `setAttribute("src", ...)` form or a template literal. The assignment is code, the URL after it is a string, so
       // the match starts in code and a docs string, comment or prose that only names the URL does not match (#1488).

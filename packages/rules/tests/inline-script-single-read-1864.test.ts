@@ -25,7 +25,10 @@ import { scanPageForMisspellings } from "../src/content/common-misspellings";
 import { fingerprintForPage } from "../src/content/duplicate-content";
 import { fingerprintPage } from "../src/integrity/fingerprint";
 import { detectPageSignals } from "../src/integrity/signals";
-import { hasCommercialOfferLink, matchSubprocessorLink } from "../src/legal/subprocessor-disclosure";
+import {
+  hasCommercialOfferLink,
+  matchSubprocessorLink,
+} from "../src/legal/subprocessor-disclosure";
 import { buildPageAnchorSignal } from "../src/links/page-anchors";
 import { loadAllRules } from "../src/loader";
 import { extractPageByteSignal } from "../src/performance/total-byte-weight";
@@ -37,7 +40,9 @@ import type { ParsedPage, RuleContext } from "../src/types";
 const URL_ = "https://store.example.com/products/insole";
 
 const bundle = (seed: string, kb: number) =>
-  Array.from({ length: kb * 20 }, (_, i) => `function ${seed}${i}(a,b){return a?b(a):null}`).join("");
+  Array.from({ length: kb * 20 }, (_, i) => `function ${seed}${i}(a,b){return a?b(a):null}`).join(
+    "",
+  );
 
 // Scripts in the head, the body, nested in containers, before the first heading,
 // a JSON-LD block and a JSON data block, an external script, and a Shopify-shaped
@@ -69,7 +74,7 @@ type Counter = { counts: Map<Element, number> };
 function instrument(doc: Document): Counter {
   const counts = new Map<Element, number>();
   const scripts = Array.from(doc.querySelectorAll("script")).filter(
-    (s) => !s.hasAttribute("src") && (s.textContent ?? "").trim() !== ""
+    (s) => !s.hasAttribute("src") && (s.textContent ?? "").trim() !== "",
   );
   let depth = 0;
   const bump = (root: Node) => {
@@ -136,15 +141,24 @@ describe("#1864: each inline script's text is read at most once per rule per pag
       if (rule.meta.scope !== "page") continue;
       const parsed = parsePage(PAGE, URL_) as ParsedPage;
       const counter = instrument(parsed.document!);
-      const options = rule.meta.optionsSchema ? (rule.meta.optionsSchema.parse({}) as Record<string, unknown>) : {};
+      const options = rule.meta.optionsSchema
+        ? (rule.meta.optionsSchema.parse({}) as Record<string, unknown>)
+        : {};
       const ctx: RuleContext = {
-        page: { url: URL_, html: PAGE, statusCode: 200, loadTime: 0, headers: { "content-type": "text/html" } },
+        page: {
+          url: URL_,
+          html: PAGE,
+          statusCode: 200,
+          loadTime: 0,
+          headers: { "content-type": "text/html" },
+        },
         parsed,
         options,
       };
       await rule.run(ctx);
       ran++;
-      if (worst(counter) > 1) offenders.push(`${rule.meta.id} read a script ${worst(counter)} times`);
+      if (worst(counter) > 1)
+        offenders.push(`${rule.meta.id} read a script ${worst(counter)} times`);
     }
     expect(ran).toBeGreaterThan(200);
     expect(offenders).toEqual([]);
@@ -157,7 +171,10 @@ describe("#1864: each inline script's text is read at most once per rule per pag
     "integrity/template-discontinuity": (p) => fingerprintPage(p, URL_),
     "integrity/orphan-page": (p) => [...detectPageSignals({ parsed: p, page: { url: URL_ } })],
     "adblock/blocked-links": (p) => pageScriptSrcs(p.document!),
-    "legal/subprocessor-disclosure": (p) => [matchSubprocessorLink(p.document!, URL_), hasCommercialOfferLink(p.document!)],
+    "legal/subprocessor-disclosure": (p) => [
+      matchSubprocessorLink(p.document!, URL_),
+      hasCommercialOfferLink(p.document!),
+    ],
     "links/broken-anchors": (p) => buildPageAnchorSignal({ parsed: p, rendered: false }),
     "eeat/about-page": (p) => buildInPageSectionSignal(p.document!),
     "content/common-misspellings": (p) => scanPageForMisspellings(p.document!),

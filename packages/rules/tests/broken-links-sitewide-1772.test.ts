@@ -23,7 +23,12 @@ function site(n: number, linksOf: (i: number) => L[]) {
     url: i === 0 ? `${BASE}/` : `${BASE}/p/${i}`,
     statusCode: 200,
     parsed: {
-      links: linksOf(i).map((l) => ({ url: l.url, text: "", isInternal: true, section: l.section })),
+      links: linksOf(i).map((l) => ({
+        url: l.url,
+        text: "",
+        isInternal: true,
+        section: l.section,
+      })),
     },
   }));
 }
@@ -38,14 +43,19 @@ function ctx(pages: ReturnType<typeof site>, statuses: Record<string, number> = 
       sitemaps: null,
       pages: [
         ...pages,
-        ...Object.entries(statuses).map(([url, statusCode]) => ({ url, statusCode, parsed: { links: [] } })),
+        ...Object.entries(statuses).map(([url, statusCode]) => ({
+          url,
+          statusCode,
+          parsed: { links: [] },
+        })),
       ],
     },
     options: {},
   } as unknown as RuleContext;
 }
 
-const run = async (c: RuleContext) => ((await brokenLinksRule.run(c)) as { checks: CheckResult[] }).checks;
+const run = async (c: RuleContext) =>
+  ((await brokenLinksRule.run(c)) as { checks: CheckResult[] }).checks;
 const named = (checks: CheckResult[], name: string) => checks.filter((c) => c.name === name);
 
 const STATUSES = { [footerGone]: 404, [bodyGone]: 404 };
@@ -56,7 +66,7 @@ describe("links/broken-links: site-wide chrome (#1772)", async () => {
     { url: footerGone, section: "footer" },
     ...(i === 5 ? [{ url: bodyGone, section: "content" }] : []),
   ]);
-  const checks = (await run(ctx(pages, STATUSES)));
+  const checks = await run(ctx(pages, STATUSES));
 
   test("the footer link is its own check, with the section and the page count in the message", () => {
     const [wide] = named(checks, "broken-links-sitewide");
@@ -80,20 +90,35 @@ describe("links/broken-links: site-wide chrome (#1772)", async () => {
   });
 
   test("only a site-wide link: one failing check and no pass row beside it, as before", async () => {
-    const only = (await run(ctx(site(70, () => [{ url: footerGone, section: "footer" }]), STATUSES)));
+    const only = await run(
+      ctx(
+        site(70, () => [{ url: footerGone, section: "footer" }]),
+        STATUSES,
+      ),
+    );
     expect(only.map((c) => `${c.name}:${c.status}`)).toEqual(["broken-links-sitewide:fail"]);
   });
 
   test("no site-wide link: the checks and messages are exactly as before", async () => {
-    const content = (await run(ctx(site(70, (i) => (i === 1 ? [{ url: bodyGone, section: "content" }] : [])), STATUSES)));
+    const content = await run(
+      ctx(
+        site(70, (i) => (i === 1 ? [{ url: bodyGone, section: "content" }] : [])),
+        STATUSES,
+      ),
+    );
     expect(named(content, "broken-links-sitewide")).toHaveLength(0);
     expect(named(content, "broken-links")[0]?.message).toBe("1 broken internal link(s) (4xx/5xx)");
-    const none = (await run(ctx(site(70, () => []), {})));
+    const none = await run(
+      ctx(
+        site(70, () => []),
+        {},
+      ),
+    );
     expect(named(none, "broken-links")[0]?.message).toBe("No broken internal links detected");
   });
 
   test("several links across several chrome sections say how many and where", async () => {
-    const wide = (await run(
+    const wide = await run(
       ctx(
         site(60, () => [
           { url: footerGone, section: "footer" },
@@ -101,7 +126,7 @@ describe("links/broken-links: site-wide chrome (#1772)", async () => {
         ]),
         STATUSES,
       ),
-    ));
+    );
     expect(named(wide, "broken-links-sitewide")[0]?.message).toBe(
       "2 broken internal links in the site-wide footer and navigation, each on at least 60 pages (4xx/5xx)",
     );
@@ -110,9 +135,12 @@ describe("links/broken-links: site-wide chrome (#1772)", async () => {
 
 describe("the threshold (#1772)", () => {
   const wideFor = async (n: number, carrying: number): Promise<number> => {
-    const c = ctx(site(n, (i) => (i < carrying ? [{ url: footerGone, section: "footer" }] : [])), {
-      [footerGone]: 404,
-    });
+    const c = ctx(
+      site(n, (i) => (i < carrying ? [{ url: footerGone, section: "footer" }] : [])),
+      {
+        [footerGone]: 404,
+      },
+    );
     return named(await run(c), "broken-links-sitewide").length;
   };
 
@@ -131,25 +159,34 @@ describe("the threshold (#1772)", () => {
     expect(await wideFor(10, 4)).toBe(0);
   });
   test("a link in the page content of every page is not chrome, so not site-wide", async () => {
-    const checks = (await run(
-      ctx(site(20, () => [{ url: bodyGone, section: "content" }]), { [bodyGone]: 404 }),
-    ));
+    const checks = await run(
+      ctx(
+        site(20, () => [{ url: bodyGone, section: "content" }]),
+        { [bodyGone]: 404 },
+      ),
+    );
     expect(named(checks, "broken-links-sitewide")).toHaveLength(0);
     expect(named(checks, "broken-links")[0]?.status).toBe("fail");
   });
 });
 
 describe("links/broken-external-links: site-wide chrome (#1772)", () => {
-  const external = (href: string, section: string, pages: number): ExternalLinkCheckData => ({
-    href,
-    status: 404,
-    error: null,
-    sourcePages: Array.from({ length: pages }, (_, i) => (i === 0 ? `${BASE}/` : `${BASE}/p/${i}`)),
-    // the section each page placed it in is read from the parsed links below
-    section,
-  } as unknown as ExternalLinkCheckData);
+  const external = (href: string, section: string, pages: number): ExternalLinkCheckData =>
+    ({
+      href,
+      status: 404,
+      error: null,
+      sourcePages: Array.from({ length: pages }, (_, i) =>
+        i === 0 ? `${BASE}/` : `${BASE}/p/${i}`,
+      ),
+      // the section each page placed it in is read from the parsed links below
+      section,
+    }) as unknown as ExternalLinkCheckData;
 
-  function externalCtx(total: number, links: Array<{ href: string; section: string; pages: number }>): RuleContext {
+  function externalCtx(
+    total: number,
+    links: Array<{ href: string; section: string; pages: number }>,
+  ): RuleContext {
     const pages = Array.from({ length: total }, (_, i) => ({
       url: i === 0 ? `${BASE}/` : `${BASE}/p/${i}`,
       statusCode: 200,
@@ -173,15 +210,16 @@ describe("links/broken-external-links: site-wide chrome (#1772)", () => {
     } as unknown as RuleContext;
   }
 
-  const checks = async (c: RuleContext) => ((await brokenExternalLinksRule.run(c)) as { checks: CheckResult[] }).checks;
+  const checks = async (c: RuleContext) =>
+    ((await brokenExternalLinksRule.run(c)) as { checks: CheckResult[] }).checks;
 
   test("a dead link in the footer of every page is its own check; a body link stays", async () => {
-    const out = (await checks(
+    const out = await checks(
       externalCtx(40, [
         { href: "https://dead.example-live.net/partner", section: "footer", pages: 40 },
         { href: "https://dead.example-live.net/post", section: "content", pages: 1 },
       ]),
-    ));
+    );
     const [wide] = named(out, "broken-external-links-sitewide");
     expect(wide?.status).toBe("fail");
     expect(wide?.message).toBe("1 broken external link in the footer of 40 pages: 1 with 404");
@@ -192,16 +230,21 @@ describe("links/broken-external-links: site-wide chrome (#1772)", () => {
   });
 
   test("without a site-wide link nothing changes", async () => {
-    const out = (await checks(
-      externalCtx(40, [{ href: "https://dead.example-live.net/post", section: "content", pages: 1 }]),
-    ));
+    const out = await checks(
+      externalCtx(40, [
+        { href: "https://dead.example-live.net/post", section: "content", pages: 1 },
+      ]),
+    );
     expect(named(out, "broken-external-links-sitewide")).toHaveLength(0);
-    expect(named(out, "broken-external-links")[0]?.message).toBe("1 broken external link(s): 1 with 404");
+    expect(named(out, "broken-external-links")[0]?.message).toBe(
+      "1 broken external link(s): 1 with 404",
+    );
   });
 });
 
 describe("what counts toward site-wide (#1772 review)", () => {
-  const run2 = async (c: RuleContext) => ((await brokenLinksRule.run(c)) as { checks: CheckResult[] }).checks;
+  const run2 = async (c: RuleContext) =>
+    ((await brokenLinksRule.run(c)) as { checks: CheckResult[] }).checks;
 
   test("redirect entries, error pages and files are not pages a footer is read on", async () => {
     // 10 real pages with the dead link in every footer, plus 12 redirect-source entries and a PDF.
@@ -243,16 +286,20 @@ describe("what counts toward site-wide (#1772 review)", () => {
     );
 
   test("a footer the markup named is chrome", async () => {
-    expect(named(await run2(withConfidence(undefined, undefined)), "broken-links-sitewide")).toHaveLength(1);
+    expect(
+      named(await run2(withConfidence(undefined, undefined)), "broken-links-sitewide"),
+    ).toHaveLength(1);
   });
 
   test("a footer only the classifier named, at low confidence, stays content", async () => {
-    const checks = (await run2(withConfidence("model", 0.5)));
+    const checks = await run2(withConfidence("model", 0.5));
     expect(named(checks, "broken-links-sitewide")).toHaveLength(0);
     expect(named(checks, "broken-links")[0]?.status).toBe("fail");
   });
 
   test("a footer the classifier named confidently is chrome", async () => {
-    expect(named(await run2(withConfidence("model", 0.9)), "broken-links-sitewide")).toHaveLength(1);
+    expect(named(await run2(withConfidence("model", 0.9)), "broken-links-sitewide")).toHaveLength(
+      1,
+    );
   });
 });

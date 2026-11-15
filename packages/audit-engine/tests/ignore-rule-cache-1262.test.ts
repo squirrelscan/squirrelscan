@@ -11,7 +11,11 @@ const COOKIE = "security/cookie-flags";
 const TITLE = "core/meta-title";
 
 function signature(ignore: IgnoreEntry[] | undefined) {
-  const config: RulesConfig = { rule_options: {}, rules: { enable: [COOKIE, TITLE] }, ...(ignore ? { ignore } : {}) };
+  const config: RulesConfig = {
+    rule_options: {},
+    rules: { enable: [COOKIE, TITLE] },
+    ...(ignore ? { ignore } : {}),
+  };
   return new RuleRunner({ config }).pageRuleSignature();
 }
 

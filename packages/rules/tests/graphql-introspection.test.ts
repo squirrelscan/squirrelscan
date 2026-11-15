@@ -47,7 +47,7 @@ const SCHEMA = {
 
 async function run(
   routes: Record<string, Route>,
-  ctxOpts: Parameters<typeof ruleCtx>[0] = {}
+  ctxOpts: Parameters<typeof ruleCtx>[0] = {},
 ): Promise<{ checks: CheckResult[]; sent: SentRequest[] }> {
   const stub = stubFetch(routes);
   restore = stub.restore;
@@ -75,20 +75,25 @@ describe("security/graphql-introspection", () => {
     expect(warn).toHaveLength(1);
     expect(warn[0]!.message).toContain(GQL);
     expect(warn[0]!.message).toContain("8 types, 4 of them defined by the API");
-    expect(warn[0]!.items?.[0]).toMatchObject({ id: GQL, meta: { method: "GET", types: 8, apiTypes: 4 } });
+    expect(warn[0]!.items?.[0]).toMatchObject({
+      id: GQL,
+      meta: { method: "GET", types: 8, apiTypes: 4 },
+    });
     // One GET per endpoint (the two conventional paths), and nothing else.
     expect(sent.map((r) => `${r.method} ${new URL(r.url).pathname}`)).toEqual([
       "GET /graphql",
       "GET /api/graphql",
     ]);
     expect(sent.every(introspectionGet)).toBe(true);
-    expect(sent.every((r) => r.body === null && r.credentials === "omit" && r.redirect === "manual")).toBe(true);
+    expect(
+      sent.every((r) => r.body === null && r.credentials === "omit" && r.redirect === "manual"),
+    ).toBe(true);
   });
 
   test("a discovered endpoint is probed and named", async () => {
     const { checks, sent } = await run(
       { [`${BASE}/v1/graphql`]: () => json(SCHEMA, 200, "application/graphql-response+json") },
-      { surface: surface([candidate("/v1/graphql")]) }
+      { surface: surface([candidate("/v1/graphql")]) },
     );
     expect(checks.find((c) => c.status === "warn")?.message).toContain(`${BASE}/v1/graphql`);
     expect(sent[0]!.url.startsWith(`${BASE}/v1/graphql?query=`)).toBe(true);
@@ -96,7 +101,17 @@ describe("security/graphql-introspection", () => {
 
   test("active: a GraphQL error without a schema sends no POST and is not flagged", async () => {
     const csrf = () =>
-      json({ errors: [{ message: "This operation has been blocked as a potential Cross-Site Request Forgery (CSRF)." }] }, 400);
+      json(
+        {
+          errors: [
+            {
+              message:
+                "This operation has been blocked as a potential Cross-Site Request Forgery (CSRF).",
+            },
+          ],
+        },
+        400,
+      );
     const { checks, sent } = await run({ [GQL]: csrf });
     expect(sent.some((r) => r.method === "POST")).toBe(false);
     expect(checks).toHaveLength(1);
@@ -126,7 +141,8 @@ describe("security/graphql-introspection", () => {
       () => html("<!doctype html><div id=app></div>", 200),
       () => json({ status: 404, error: "Not Found" }, 404),
       () => json({ errors: [{ status: "404", title: "Not Found" }] }, 404),
-      () => new Response(null, { status: 302, headers: { location: "https://login.example.com/" } }),
+      () =>
+        new Response(null, { status: 302, headers: { location: "https://login.example.com/" } }),
     ]) {
       const { checks, sent } = await run({ [GQL]: route }, { level: "aggressive" });
       expect(sent.filter((r) => r.method === "POST")).toHaveLength(0);
@@ -139,9 +155,19 @@ describe("security/graphql-introspection", () => {
     const { checks, sent } = await run(
       {
         [GQL]: () =>
-          json({ errors: [{ message: "GraphQL introspection is not allowed, but the query contained __schema or __type." }] }, 400),
+          json(
+            {
+              errors: [
+                {
+                  message:
+                    "GraphQL introspection is not allowed, but the query contained __schema or __type.",
+                },
+              ],
+            },
+            400,
+          ),
       },
-      { level: "aggressive" }
+      { level: "aggressive" },
     );
     expect(sent.filter((r) => r.method === "POST")).toHaveLength(0);
     expect(checks).toEqual([expect.objectContaining({ status: "pass" })]);
@@ -233,7 +259,7 @@ describe("security/graphql-introspection", () => {
           candidate("https://api.vendor.com/graphql"),
           candidate("https://other.example.org/graphql", { sameOrigin: true, probeEligible: true }),
         ]),
-      }
+      },
     );
     const paths = sent.map((r) => new URL(r.url));
     expect(paths.every((u) => u.origin === BASE)).toBe(true);
@@ -251,7 +277,9 @@ describe("security/graphql-introspection", () => {
     restore = stub.restore;
     const { checks } = await graphqlIntrospectionRule.run(ruleCtx({ budgetMs: 50, now: () => t }));
     expect(stub.sent.map((r) => new URL(r.url).pathname)).toEqual(["/graphql"]);
-    expect(checks).toEqual([expect.objectContaining({ status: "skipped", skipReason: "probe-budget" })]);
+    expect(checks).toEqual([
+      expect.objectContaining({ status: "skipped", skipReason: "probe-budget" }),
+    ]);
     expect(checks[0]!.message).toContain("after 1 of 2 GraphQL endpoint(s)");
     expect(checks[0]!.message).toContain("the rest were not checked");
   });
@@ -273,7 +301,9 @@ describe("security/graphql-introspection", () => {
     const first = await run({ [GQL]: () => json(SCHEMA) });
     expect(first.checks.some((c) => c.status === "warn")).toBe(true);
     restore?.();
-    const second = await run({ [GQL]: () => json({ errors: [{ message: "introspection disabled" }] }, 400) });
+    const second = await run({
+      [GQL]: () => json({ errors: [{ message: "introspection disabled" }] }, 400),
+    });
     expect(second.checks.every((c) => c.status === "pass")).toBe(true);
   });
 

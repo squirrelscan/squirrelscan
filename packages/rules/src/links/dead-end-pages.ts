@@ -10,8 +10,7 @@ export const deadEndPages: Rule = {
   meta: {
     id: "links/dead-end-pages",
     name: "Dead-End Pages",
-    description:
-      "Pages with no outgoing internal links, potentially trapping users",
+    description: "Pages with no outgoing internal links, potentially trapping users",
     solution:
       "Add navigation links or related content links to help users continue browsing. Internal links improve user experience and help search engines discover content.",
     category: "links",
@@ -23,19 +22,13 @@ export const deadEndPages: Rule = {
     optionsSchema: z.object({
       excludePatterns: z
         .array(z.string())
-        .default([
-          "/thank-you",
-          "/confirmation",
-          "/download",
-          "/success",
-          "/submitted",
-        ]),
+        .default(["/thank-you", "/confirmation", "/download", "/success", "/submitted"]),
       minLinks: z.number().default(MIN_INTERNAL_LINKS),
       countAnchorLinks: z
         .boolean()
         .default(false)
         .describe(
-          "Count anchor links (#section) as valid internal links (useful for single-page apps)"
+          "Count anchor links (#section) as valid internal links (useful for single-page apps)",
         ),
     }),
   },
@@ -96,11 +89,7 @@ export const deadEndPages: Rule = {
           const linkUrlObj = new URL(link.url, page.url);
 
           // Count if link has a hash and it's different from page hash
-          return (
-            linkUrlObj.hash &&
-            linkUrlObj.hash !== pageUrlObj.hash &&
-            linkUrlObj.hash !== "#"
-          );
+          return linkUrlObj.hash && linkUrlObj.hash !== pageUrlObj.hash && linkUrlObj.hash !== "#";
         } catch {
           return false;
         }

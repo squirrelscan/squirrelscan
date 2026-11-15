@@ -69,10 +69,7 @@ export function isPrivacyPath(pathOrUrl: string): boolean {
 // A crawled page counts as the privacy policy when its slug matches OR its
 // <title>/<h1> reads "privacy policy" — the slug-independent fallback. `paths`
 // are the site's own configured paths for it (eeat/privacy-policy, #1261).
-export function isPrivacyPage(
-  page: PrivacyCandidatePage,
-  paths: readonly string[] = []
-): boolean {
+export function isPrivacyPage(page: PrivacyCandidatePage, paths: readonly string[] = []): boolean {
   if (matchesConfiguredPaths(page.url, paths) || isPrivacyPath(page.url)) return true;
   const title = page.parsed?.meta?.title ?? "";
   if (isPrivacyHeading(title)) return true;
@@ -83,7 +80,7 @@ export function isPrivacyPage(
 // URL of the first crawled page that is the privacy policy, or null.
 export function findPrivacyPage(
   pages: PrivacyCandidatePage[],
-  paths: readonly string[] = []
+  paths: readonly string[] = [],
 ): string | null {
   for (const page of pages) {
     if (isPrivacyPage(page, paths)) return page.url;
@@ -96,7 +93,7 @@ export function findPrivacyPage(
 // metric so adopting the shared helper doesn't widen what eeat counts.
 export function pageLinksToPrivacyHref(
   page: PrivacyCandidatePage,
-  paths: readonly string[] = []
+  paths: readonly string[] = [],
 ): boolean {
   const links = page.parsed?.links ?? [];
   return links.some((l) => {

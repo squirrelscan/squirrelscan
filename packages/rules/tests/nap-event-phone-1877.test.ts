@@ -14,8 +14,7 @@ const BIZ = "+1 555 0199";
 const ORG = "+1 555 0100";
 const BIZ_KEY = napPhoneKey(BIZ)!;
 
-const ld = (obj: unknown) =>
-  `<script type="application/ld+json">${JSON.stringify(obj)}</script>`;
+const ld = (obj: unknown) => `<script type="application/ld+json">${JSON.stringify(obj)}</script>`;
 const business = ld({ "@type": "LocalBusiness", name: "Acme", telephone: BIZ });
 const event = ld({
   "@type": "Event",

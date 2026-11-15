@@ -29,7 +29,7 @@ function timed<T>(fn: () => T): { value: T; ms: number } {
 
 describe("framework payload analyzer on hostile pages", () => {
   test("one 5 MB script of brackets, quotes and escapes is sized, not scanned", () => {
-    const body = "[\"\\\\".repeat(Math.floor((5 * MB) / 4));
+    const body = '["\\\\'.repeat(Math.floor((5 * MB) / 4));
     const html = `<html><body><script id="__NEXT_DATA__" type="application/json">${body}</script></body></html>`;
     const { value, ms } = timed(() => findFrameworkPayloads(doc(html)));
     expect(value[0]?.kind).toBe("next-pages");
@@ -43,14 +43,22 @@ describe("framework payload analyzer on hostile pages", () => {
   });
 
   test("20,000 scripts are read to the cap of 2,000", () => {
-    const scripts = Array.from({ length: 20_000 }, () => `<script>self.__next_f.push([1,"a"])</script>`).join("");
-    const { value, ms } = timed(() => findFrameworkPayloads(doc(`<html><body>${scripts}</body></html>`)));
+    const scripts = Array.from(
+      { length: 20_000 },
+      () => `<script>self.__next_f.push([1,"a"])</script>`,
+    ).join("");
+    const { value, ms } = timed(() =>
+      findFrameworkPayloads(doc(`<html><body>${scripts}</body></html>`)),
+    );
     expect(value[0]?.count).toBe(2000);
     expect(ms).toBeLessThan(CEILING_MS);
   });
 
   test("5,000 astro islands are read to the cap of 500", () => {
-    const islands = Array.from({ length: 5000 }, () => `<astro-island props="{&quot;a&quot;:1}"></astro-island>`).join("");
+    const islands = Array.from(
+      { length: 5000 },
+      () => `<astro-island props="{&quot;a&quot;:1}"></astro-island>`,
+    ).join("");
     const [astro] = findFrameworkPayloads(doc(`<html><body>${islands}</body></html>`));
     expect(astro?.count).toBe(500);
   });
@@ -73,7 +81,10 @@ describe("framework payload analyzer on hostile pages", () => {
   });
 
   test("the rule on a page with all of it at once stays bounded", () => {
-    const scripts = Array.from({ length: 5000 }, () => `<script>self.__next_f.push([1,"${"a".repeat(500)}"])</script>`).join("");
+    const scripts = Array.from(
+      { length: 5000 },
+      () => `<script>self.__next_f.push([1,"${"a".repeat(500)}"])</script>`,
+    ).join("");
     const html = `<html><body><p>${"word ".repeat(400)}</p>${scripts}</body></html>`;
     const ctx = {
       page: { url: "https://example.com/", html: "", statusCode: 200, loadTime: 0, headers: {} },

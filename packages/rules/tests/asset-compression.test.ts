@@ -2,7 +2,11 @@
 
 import { describe, expect, test } from "bun:test";
 
-import type { CheckResult, ResourceSizeData, ScriptContentData } from "@squirrelscan/core-contracts";
+import type {
+  CheckResult,
+  ResourceSizeData,
+  ScriptContentData,
+} from "@squirrelscan/core-contracts";
 import { ASSET_COMPRESSION_LIMITS } from "@squirrelscan/utils/constants";
 
 import { assetCompressionRule } from "../src/performance/asset-compression";
@@ -39,11 +43,13 @@ function script(overrides: Partial<ScriptContentData> = {}): ScriptContentData {
   };
 }
 
-function ctx(site: Partial<SiteData["resourceSizes"]> & {
-  scripts?: ScriptContentData[];
-  css?: ResourceSizeData[];
-  images?: ResourceSizeData[];
-} = {}): RuleContext {
+function ctx(
+  site: Partial<SiteData["resourceSizes"]> & {
+    scripts?: ScriptContentData[];
+    css?: ResourceSizeData[];
+    images?: ResourceSizeData[];
+  } = {},
+): RuleContext {
   return {
     page: {
       url: "https://example.com/",
@@ -95,13 +101,11 @@ describe("perf/asset-compression — reports", () => {
 
   test("an SVG in the image pool is reported (image/svg+xml is text)", async () => {
     const check = only(
-      (await run(
+      await run(
         ctx({
-          images: [
-            css({ url: "https://example.com/hero.svg", contentType: "image/svg+xml" }),
-          ],
-        })
-      ))
+          images: [css({ url: "https://example.com/hero.svg", contentType: "image/svg+xml" })],
+        }),
+      ),
     );
     expect(check.status).toBe("warn");
     expect(itemIds(check)).toEqual(["https://example.com/hero.svg"]);
@@ -117,14 +121,14 @@ describe("perf/asset-compression — reports", () => {
 
   test("findings are sorted biggest-first and totalled", async () => {
     const check = only(
-      (await run(
+      await run(
         ctx({
           css: [
             css({ url: "https://example.com/small.css", sizeBytes: BIG }),
             css({ url: "https://example.com/huge.css", sizeBytes: BIG * 3 }),
           ],
-        })
-      ))
+        }),
+      ),
     );
     expect(itemIds(check)).toEqual([
       "https://example.com/huge.css",
@@ -155,7 +159,6 @@ describe("perf/asset-compression — stays silent", () => {
     expect(check.status).toBe("pass");
   });
 
-
   test("an all-identity coding list is still reported as uncompressed", async () => {
     // Content-Encoding is a LIST. The fetchers normalize a lone `identity` to
     // null, but they match one token, so `identity, identity` arrives verbatim
@@ -174,9 +177,7 @@ describe("perf/asset-compression — stays silent", () => {
     // The end of the chain the resource checker's capture tests start: an
     // unconfirmable ranged 206 records `undefined`, and the rule must stay
     // silent rather than report a possibly-gzipped asset as uncompressed.
-    const check = only(
-      (await run(ctx({ css: [css({ status: 206, contentEncoding: undefined })] })))
-    );
+    const check = only(await run(ctx({ css: [css({ status: 206, contentEncoding: undefined })] })));
     expect(check.status).toBe("skipped");
   });
 
@@ -187,7 +188,7 @@ describe("perf/asset-compression — stays silent", () => {
 
   test("an asset exactly at the threshold is not reported (strict >)", async () => {
     const check = only(
-      (await run(ctx({ css: [css({ sizeBytes: ASSET_COMPRESSION_LIMITS.MIN_BYTES })] })))
+      await run(ctx({ css: [css({ sizeBytes: ASSET_COMPRESSION_LIMITS.MIN_BYTES })] })),
     );
     expect(check.status).toBe("pass");
   });
@@ -229,9 +230,7 @@ describe("perf/asset-compression — stays silent", () => {
     // The script fetcher's "script too large" bail reports the byte it stopped
     // reading at, not the asset's real length — and this rule's finding names
     // that size out loud, so it must not speak for such a record.
-    const check = only(
-      (await run(ctx({ scripts: [script({ error: "script too large" })] })))
-    );
+    const check = only(await run(ctx({ scripts: [script({ error: "script too large" })] })));
     expect(check.status).toBe("skipped");
   });
 

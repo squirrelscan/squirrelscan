@@ -17,7 +17,11 @@ const origin: ReportHost = {
 };
 const edge: ReportHost = {
   ...origin,
-  country: { ...origin.country!, location: "edge", edge: { id: "cloudflare-cdn", name: "Cloudflare" } },
+  country: {
+    ...origin.country!,
+    location: "edge",
+    edge: { id: "cloudflare-cdn", name: "Cloudflare" },
+  },
 };
 
 describe("hostRows", () => {
@@ -72,26 +76,69 @@ describe("report output", () => {
 describe("edge and origin rows (#1807)", () => {
   const withEdge = (e: NonNullable<ReportHost["edge"]>): ReportHost => ({ ...origin, edge: e });
   test("an unknown origin says unknown and the edge is never shown as the origin", () => {
-    const rows = hostRows(withEdge({ id: "cloudflare", name: "Cloudflare", source: "header", matched: ["header", "ip-range"], edgeHosted: false, origin: { status: "unknown" } }));
-    expect(rows.find((r) => r.key === "edge")!.value).toContain("response headers, published IP range");
+    const rows = hostRows(
+      withEdge({
+        id: "cloudflare",
+        name: "Cloudflare",
+        source: "header",
+        matched: ["header", "ip-range"],
+        edgeHosted: false,
+        origin: { status: "unknown" },
+      }),
+    );
+    expect(rows.find((r) => r.key === "edge")!.value).toContain(
+      "response headers, published IP range",
+    );
     expect(rows.find((r) => r.key === "origin")!.value).toBe("unknown");
   });
   test("an edge hosted platform has no separate origin", () => {
-    const rows = hostRows(withEdge({ id: "vercel", name: "Vercel", source: "asn", asn: 922, matched: ["asn"], edgeHosted: true, origin: { status: "edge-hosted" } }));
+    const rows = hostRows(
+      withEdge({
+        id: "vercel",
+        name: "Vercel",
+        source: "asn",
+        asn: 922,
+        matched: ["asn"],
+        edgeHosted: true,
+        origin: { status: "edge-hosted" },
+      }),
+    );
     expect(rows.find((r) => r.key === "edge")!.value).toContain("AS922");
     expect(rows.find((r) => r.key === "origin")!.value).toContain("both edge and host");
   });
   test("JSON carries the edge beside the origin", () => {
-    const base = { baseUrl: "https://example.test", timestamp: "2026-11-12T00:00:00.000Z", totalPages: 1, passed: 0, warnings: 0, failed: 0, ruleResults: {} };
-    const e = { id: "fastly", name: "Fastly", source: "ip-range" as const, matched: ["ip-range" as const], edgeHosted: false, origin: { status: "identified" as const, id: "heroku", name: "Heroku" } };
+    const base = {
+      baseUrl: "https://example.test",
+      timestamp: "2026-11-12T00:00:00.000Z",
+      totalPages: 1,
+      passed: 0,
+      warnings: 0,
+      failed: 0,
+      ruleResults: {},
+    };
+    const e = {
+      id: "fastly",
+      name: "Fastly",
+      source: "ip-range" as const,
+      matched: ["ip-range" as const],
+      edgeHosted: false,
+      origin: { status: "identified" as const, id: "heroku", name: "Heroku" },
+    };
     const json = JSON.parse(renderJson({ ...base, host: withEdge(e) } as never));
-    expect(json.host.edge).toMatchObject({ id: "fastly", source: "ip-range", origin: { status: "identified", name: "Heroku" } });
+    expect(json.host.edge).toMatchObject({
+      id: "fastly",
+      source: "ip-range",
+      origin: { status: "identified", name: "Heroku" },
+    });
   });
   test("no edge, no edge rows", () => {
     expect(hostRows(origin).some((r) => r.key === "edge" || r.key === "origin")).toBe(false);
   });
   test("a whole-cloud range is a Cloud range row, never an Edge row or an edge country", () => {
-    const cloud = { ...origin, cloudRange: { id: "google-cloud", name: "Google Cloud", address: "8.8.8.8" } };
+    const cloud = {
+      ...origin,
+      cloudRange: { id: "google-cloud", name: "Google Cloud", address: "8.8.8.8" },
+    };
     const rows = hostRows(cloud);
     expect(rows.some((r) => r.key === "edge")).toBe(false);
     expect(rows.find((r) => r.key === "country")!.label).toBe("Hosting country");
@@ -101,9 +148,29 @@ describe("edge and origin rows (#1807)", () => {
     expect(row.value).toContain("not evidence of a CDN or edge");
   });
   test("JSON carries the cloud range and no edge", () => {
-    const base = { baseUrl: "https://example.test", timestamp: "2026-11-12T00:00:00.000Z", totalPages: 1, passed: 0, warnings: 0, failed: 0, ruleResults: {} };
-    const json = JSON.parse(renderJson({ ...base, host: { ...origin, cloudRange: { id: "google-cloud", name: "Google Cloud", address: "8.8.8.8" } } } as never));
-    expect(json.host.cloudRange).toEqual({ id: "google-cloud", name: "Google Cloud", address: "8.8.8.8" });
+    const base = {
+      baseUrl: "https://example.test",
+      timestamp: "2026-11-12T00:00:00.000Z",
+      totalPages: 1,
+      passed: 0,
+      warnings: 0,
+      failed: 0,
+      ruleResults: {},
+    };
+    const json = JSON.parse(
+      renderJson({
+        ...base,
+        host: {
+          ...origin,
+          cloudRange: { id: "google-cloud", name: "Google Cloud", address: "8.8.8.8" },
+        },
+      } as never),
+    );
+    expect(json.host.cloudRange).toEqual({
+      id: "google-cloud",
+      name: "Google Cloud",
+      address: "8.8.8.8",
+    });
     expect(json.host.edge).toBeUndefined();
     expect(json.host.country.location).toBe("origin");
   });

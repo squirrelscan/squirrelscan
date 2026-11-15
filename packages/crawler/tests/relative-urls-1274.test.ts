@@ -46,9 +46,12 @@ describe("parseSitemap with relative <loc> values", () => {
 });
 
 const html = (body: string) =>
-  new Response(`<!doctype html><html><head><title>Fixture</title></head><body>${body}</body></html>`, {
-    headers: { "content-type": "text/html; charset=utf-8" },
-  });
+  new Response(
+    `<!doctype html><html><head><title>Fixture</title></head><body>${body}</body></html>`,
+    {
+      headers: { "content-type": "text/html; charset=utf-8" },
+    },
+  );
 
 let site: ReturnType<typeof Bun.serve>;
 let base: string;

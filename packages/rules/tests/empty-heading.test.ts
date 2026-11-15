@@ -35,9 +35,12 @@ describe("a11y/empty-heading hidden headings", () => {
   test.each([
     ["hidden attribute", `<h1>Shop</h1><h2 hidden></h2>`],
     ["hidden ancestor", `<h1>Shop</h1><div hidden><h2></h2></div>`],
-    ["hidden=\"\" ancestor", `<h1>Shop</h1><div hidden=""><section><h2></h2></section></div>`],
+    ['hidden="" ancestor', `<h1>Shop</h1><div hidden=""><section><h2></h2></section></div>`],
     ["inline display:none", `<h1>Shop</h1><h2 style="display:none"></h2>`],
-    ["inline display: none !important", `<h1>Shop</h1><h2 style="color:red; display: none !important"></h2>`],
+    [
+      "inline display: none !important",
+      `<h1>Shop</h1><h2 style="color:red; display: none !important"></h2>`,
+    ],
     ["inline visibility:hidden", `<h1>Shop</h1><h2 style="visibility:hidden"></h2>`],
     ["display:none ancestor", `<h1>Shop</h1><div style="display:none"><h2></h2></div>`],
     ["visibility:hidden ancestor", `<h1>Shop</h1><div style="visibility:hidden"><h2></h2></div>`],
@@ -50,8 +53,8 @@ describe("a11y/empty-heading hidden headings", () => {
   });
 
   test.each([
-    ["hidden=\"until-found\" heading", `<h1>Shop</h1><h2 hidden="until-found"></h2>`],
-    ["hidden=\"until-found\" ancestor", `<h1>Shop</h1><div hidden="until-found"><h2></h2></div>`],
+    ['hidden="until-found" heading', `<h1>Shop</h1><h2 hidden="until-found"></h2>`],
+    ['hidden="until-found" ancestor', `<h1>Shop</h1><div hidden="until-found"><h2></h2></div>`],
   ])("%s: warns", async (_label, body) => {
     const result = await run(body);
     expect(result?.status).toBe("warn");

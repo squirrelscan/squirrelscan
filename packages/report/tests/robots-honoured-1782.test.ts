@@ -32,21 +32,29 @@ describe("robotsHonouredNote", () => {
   });
 
   test("a site that disallows /private/ reports the skipped count", () => {
-    expect(robotsHonouredNote(report({ respectRobots: true, robotsBlockedPages: 7 }))).toContain(HONOURED);
+    expect(robotsHonouredNote(report({ respectRobots: true, robotsBlockedPages: 7 }))).toContain(
+      HONOURED,
+    );
     expect(robotsHonouredNote(report({ respectRobots: true, robotsBlockedPages: 1 }))).toContain(
       "1 page it disallows was left out",
     );
   });
 
   test("honoured with nothing skipped says it kept no pages out", () => {
-    expect(robotsHonouredNote(report({ respectRobots: true, robotsBlockedPages: 0 }))).toContain("kept no pages out");
+    expect(robotsHonouredNote(report({ respectRobots: true, robotsBlockedPages: 0 }))).toContain(
+      "kept no pages out",
+    );
   });
 
   test("a report from before the field says nothing, and junk values are not trusted", () => {
     expect(robotsHonouredNote(report({}))).toBeNull();
     expect(robotsScope(report({ respectRobots: "yes" }))).toBeNull();
-    expect(robotsScope(report({ respectRobots: true, robotsBlockedPages: -3 }))?.robotsBlockedPages).toBe(0);
-    expect(robotsScope(report({ respectRobots: false, robotsBlockedPages: 9 }))?.robotsBlockedPages).toBe(0);
+    expect(
+      robotsScope(report({ respectRobots: true, robotsBlockedPages: -3 }))?.robotsBlockedPages,
+    ).toBe(0);
+    expect(
+      robotsScope(report({ respectRobots: false, robotsBlockedPages: 9 }))?.robotsBlockedPages,
+    ).toBe(0);
   });
 });
 
@@ -62,8 +70,13 @@ describe("renderers", () => {
   });
 
   test("json carries both fields in meta, and drops them on an old report", () => {
-    const meta = (r: AuditReport) => (JSON.parse(renderJson(r)) as { meta: Record<string, unknown> }).meta;
-    expect(meta(honoured)).toMatchObject({ schemaVersion: "1.29", respectRobots: true, robotsBlockedPages: 7 });
+    const meta = (r: AuditReport) =>
+      (JSON.parse(renderJson(r)) as { meta: Record<string, unknown> }).meta;
+    expect(meta(honoured)).toMatchObject({
+      schemaVersion: "1.29",
+      respectRobots: true,
+      robotsBlockedPages: 7,
+    });
     expect(meta(ignored)).toMatchObject({ respectRobots: false, robotsBlockedPages: 0 });
     expect(meta(report({}))).not.toHaveProperty("respectRobots");
   });

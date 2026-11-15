@@ -193,7 +193,7 @@ function originOf(url: string): string | null {
  * deduped on origin plus path. Pure: sends nothing.
  */
 export function selectAdminCandidates(
-  ctx: Pick<RuleContext, "site" | "endpointSurface" | "probe">
+  ctx: Pick<RuleContext, "site" | "endpointSurface" | "probe">,
 ): AdminCandidateSelection {
   const selection: AdminCandidateSelection = {
     candidates: [],
@@ -295,7 +295,7 @@ export function buildAdminProbe(endpointUrl: string): { url: string; init: Reque
 /** Send one GET, if the shared budget allows a quiet probe. */
 export async function sendAdminProbe(
   probe: ProbeBudget | undefined,
-  endpointUrl: string
+  endpointUrl: string,
 ): Promise<AdminProbeOutcome> {
   if (!probe || !probe.allows("quiet")) return { sent: false };
   const { url, init } = buildAdminProbe(endpointUrl);
@@ -465,7 +465,13 @@ const SENSITIVE_FIELD_RE =
 const DENIAL_RE =
   /\b(?:unauthori[sz]ed|unauthenticated|not authenticated|not authori[sz]ed|forbidden|access denied|permission denied|login required|not logged in|authentication required|sign in required|invalid token|missing token|no token)\b/i;
 
-const DENIAL_FLAG_KEYS = ["authenticated", "authorized", "loggedIn", "isLoggedIn", "isAuthenticated"];
+const DENIAL_FLAG_KEYS = [
+  "authenticated",
+  "authorized",
+  "loggedIn",
+  "isLoggedIn",
+  "isAuthenticated",
+];
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
@@ -526,7 +532,10 @@ export function readExposedData(json: unknown): ExposedData | null {
     }
   }
   const dataKeys = Object.keys(json).filter(
-    (k) => !ENVELOPE_KEYS.has(k.toLowerCase()) && !COLLECTION_KEYS.has(k.toLowerCase()) && isPopulated(json[k])
+    (k) =>
+      !ENVELOPE_KEYS.has(k.toLowerCase()) &&
+      !COLLECTION_KEYS.has(k.toLowerCase()) &&
+      isPopulated(json[k]),
   );
   if (dataKeys.length < 2) return null;
   const fields = dataKeys.slice(0, 12);
@@ -548,9 +557,13 @@ export function classifyAdminResponse(response: AdminProbeResponse): AdminVerdic
   if (response.truncated) {
     // Longer than the cap: not parseable, but a JSON list or object this large
     // is data. Lower confidence, since its contents were not read in full.
-    const jsonish = response.contentType.includes("json") && (text.startsWith("[") || text.startsWith("{"));
+    const jsonish =
+      response.contentType.includes("json") && (text.startsWith("[") || text.startsWith("{"));
     if (!jsonish || DENIAL_RE.test(text.slice(0, 500))) return { kind: "not-data" };
-    return { kind: "exposed", data: { records: 1, fields: [], sensitiveFields: [], truncated: true } };
+    return {
+      kind: "exposed",
+      data: { records: 1, fields: [], sensitiveFields: [], truncated: true },
+    };
   }
   if (!text.startsWith("[") && !text.startsWith("{")) return { kind: "not-data" };
   let json: unknown;
@@ -582,7 +595,8 @@ export function findClientRoleChecks(ctx: Pick<RuleContext, "site">): string[] {
     if (scanned >= MAX_ROLE_CHECK_SCRIPTS || hits.length >= 5) break;
     if (!script.content || originOf(script.url) !== siteOrigin) continue;
     scanned++;
-    if (ROLE_CHECK_RE.test(script.content.slice(0, MAX_ROLE_CHECK_SCAN_CHARS))) hits.push(script.url);
+    if (ROLE_CHECK_RE.test(script.content.slice(0, MAX_ROLE_CHECK_SCAN_CHARS)))
+      hits.push(script.url);
   }
   return hits;
 }
@@ -701,7 +715,9 @@ export const clientSideAuthzRule: Rule = {
     }
 
     const roleNote =
-      roleCheckScripts.length > 0 ? " The site's JavaScript also checks the user's role client-side." : "";
+      roleCheckScripts.length > 0
+        ? " The site's JavaScript also checks the user's role client-side."
+        : "";
     for (const { candidate, status, data } of exposed) {
       checks.push({
         name: CHECK,

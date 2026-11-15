@@ -11,10 +11,7 @@
 
 import { Effect } from "effect";
 
-import {
-  getRandomUserAgent,
-  isModernUserAgentString,
-} from "@squirrelscan/utils/user-agent";
+import { getRandomUserAgent, isModernUserAgentString } from "@squirrelscan/utils/user-agent";
 
 import type { CrawlStorage } from "./storage/types";
 
@@ -40,7 +37,7 @@ export interface StickyUserAgentResolution {
 export function resolveStickyUserAgent(
   configValue: string,
   storage: CrawlStorage,
-  options: { freshUa?: boolean } = {}
+  options: { freshUa?: boolean } = {},
 ): Effect.Effect<StickyUserAgentResolution, never, never> {
   return Effect.gen(function* () {
     if (configValue !== "") {

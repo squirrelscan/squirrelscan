@@ -26,7 +26,11 @@ const PAGE = "https://shop.test/account";
 const html = (inline = "") =>
   `<html><head><title>t</title></head><body><script>${inline}</script></body></html>`;
 
-async function run(inline: string, scripts: Array<{ url: string; content: string; sourcePages: string[] }> = [], url = PAGE) {
+async function run(
+  inline: string,
+  scripts: Array<{ url: string; content: string; sourcePages: string[] }> = [],
+  url = PAGE,
+) {
   const { document } = parseHTML(html(inline));
   const ctx = {
     page: { url, html: html(inline), statusCode: 200, loadTime: 0, headers: {} },
@@ -45,7 +49,8 @@ async function run(inline: string, scripts: Array<{ url: string; content: string
   return (await tokenStorageRule.run(ctx)).checks;
 }
 
-const keys = (text: string) => findTokenStorageWrites(text).map((w) => `${w.storage}:${w.key}:${w.reason}`);
+const keys = (text: string) =>
+  findTokenStorageWrites(text).map((w) => `${w.storage}:${w.key}:${w.reason}`);
 
 describe("jwt-and-auth-keys-flagged", () => {
   test.each([
@@ -74,13 +79,19 @@ describe("jwt-and-auth-keys-flagged", () => {
   });
 
   test("a JWT written under a computed key is flagged without a key", () => {
-    expect(keys(`localStorage.setItem(KEY + "_v", "${JWT}")`)).toEqual(["localStorage:null:jwt-value"]);
+    expect(keys(`localStorage.setItem(KEY + "_v", "${JWT}")`)).toEqual([
+      "localStorage:null:jwt-value",
+    ]);
   });
 
   test("an inline script and an external script are both read", async () => {
-    const checks = (await run('localStorage.setItem("token", t)', [
-      { url: "https://shop.test/app.js", content: 'sessionStorage.setItem("jwt", j)', sourcePages: [PAGE] },
-    ]));
+    const checks = await run('localStorage.setItem("token", t)', [
+      {
+        url: "https://shop.test/app.js",
+        content: 'sessionStorage.setItem("jwt", j)',
+        sourcePages: [PAGE],
+      },
+    ]);
     expect(checks).toHaveLength(2);
     expect(checks.every((c) => c.status === "warn")).toBe(true);
     expect(checks.map((c) => c.items!.map((i) => i.id))).toEqual([
@@ -122,9 +133,9 @@ describe("non-sensitive-storage-not-flagged", () => {
   test("reads, removals and comparisons are not writes", () => {
     expect(keys('localStorage.getItem("token")')).toEqual([]);
     expect(keys('localStorage.removeItem("token")')).toEqual([]);
-    expect(keys('if (localStorage.token == null) {}')).toEqual([]);
-    expect(keys('const f = () => localStorage.token => 1')).toEqual([]);
-    expect(keys('localStorage.clear()')).toEqual([]);
+    expect(keys("if (localStorage.token == null) {}")).toEqual([]);
+    expect(keys("const f = () => localStorage.token => 1")).toEqual([]);
+    expect(keys("localStorage.clear()")).toEqual([]);
   });
 
   test("clearing a token key writes no credential", () => {
@@ -135,26 +146,26 @@ describe("non-sensitive-storage-not-flagged", () => {
 
   test("another object's setItem and a lookalike name are ignored", () => {
     expect(keys('myStore.setItem("token", t)')).toEqual([]);
-    expect(keys('$localStorage.token = t')).toEqual([]);
+    expect(keys("$localStorage.token = t")).toEqual([]);
     expect(keys('mylocalStorage.setItem("token", t)')).toEqual([]);
   });
 
   test("a page with no web storage passes", async () => {
-    const checks = (await run("var theme = 'dark'; localStorage.setItem('theme', theme);"));
-    expect(checks).toEqual([
-      expect.objectContaining({ name: "token-storage", status: "pass" }),
-    ]);
+    const checks = await run("var theme = 'dark'; localStorage.setItem('theme', theme);");
+    expect(checks).toEqual([expect.objectContaining({ name: "token-storage", status: "pass" })]);
   });
 
   test("a JSON data block is not executed code", async () => {
     const { document } = parseHTML(
       `<html><body><script type="application/json">{"a":"localStorage.setItem('token', t)"}</script></body></html>`,
     );
-    const checks = (await tokenStorageRule.run({
-      page: { url: PAGE, html: "", statusCode: 200, loadTime: 0, headers: {} },
-      parsed: { document } as unknown as ParsedPage,
-      options: {},
-    } as unknown as RuleContext)).checks;
+    const checks = (
+      await tokenStorageRule.run({
+        page: { url: PAGE, html: "", statusCode: 200, loadTime: 0, headers: {} },
+        parsed: { document } as unknown as ParsedPage,
+        options: {},
+      } as unknown as RuleContext)
+    ).checks;
     expect(checks[0]!.status).toBe("pass");
   });
 });
@@ -173,16 +184,13 @@ describe("isTokenKey", () => {
 
 describe("finding-redacts-value", () => {
   test("names the script and the key and never prints the value", async () => {
-    const checks = (await run(
-      "",
-      [
-        {
-          url: "https://shop.test/static/app.js",
-          content: `localStorage.setItem("access_token", res.token); sessionStorage.setItem("u", "${JWT}");`,
-          sourcePages: [PAGE],
-        },
-      ],
-    ));
+    const checks = await run("", [
+      {
+        url: "https://shop.test/static/app.js",
+        content: `localStorage.setItem("access_token", res.token); sessionStorage.setItem("u", "${JWT}");`,
+        sourcePages: [PAGE],
+      },
+    ]);
     expect(checks).toHaveLength(1);
     const check = checks[0]!;
     expect(check.status).toBe("warn");
@@ -210,7 +218,7 @@ describe("third-party scripts", () => {
   };
 
   test("a script from another registrable domain is labelled third-party", async () => {
-    const checks = (await run("", [vendor]));
+    const checks = await run("", [vendor]);
     expect(checks[0]!.status).toBe("warn");
     expect(checks[0]!.message).toContain("third-party script https://cdn.vendor.test/sdk.js");
     expect((await checks[0]!.items!)[0]!.meta).toMatchObject({ thirdParty: true });
@@ -218,7 +226,7 @@ describe("third-party scripts", () => {
   });
 
   test("a first-party CDN subdomain is not labelled third-party", async () => {
-    const checks = (await run("", [{ ...vendor, url: "https://static.shop.test/app.js" }]));
+    const checks = await run("", [{ ...vendor, url: "https://static.shop.test/app.js" }]);
     expect(checks[0]!.message).not.toContain("third-party");
     expect((await checks[0]!.items!)[0]!.meta).not.toHaveProperty("thirdParty");
   });
@@ -232,7 +240,9 @@ describe("third-party scripts", () => {
 
 describe("namespaced keys", () => {
   test("only the last part after a namespace separator is judged", () => {
-    expect(keys('localStorage.setItem("app:token", t)')).toEqual(["localStorage:app:token:key-name"]);
+    expect(keys('localStorage.setItem("app:token", t)')).toEqual([
+      "localStorage:app:token:key-name",
+    ]);
     expect(keys('localStorage.setItem("auth:theme", t)')).toEqual([]);
     expect(keys('localStorage.setItem("token:foo", t)')).toEqual([]);
   });
@@ -258,7 +268,7 @@ describe("script index", () => {
   });
 
   test("a page listed twice for one script reports it once", async () => {
-    const checks = (await run("", [{ ...bundle, sourcePages: [PAGE, PAGE] }]));
+    const checks = await run("", [{ ...bundle, sourcePages: [PAGE, PAGE] }]);
     expect(checks).toHaveLength(1);
   });
 
@@ -283,18 +293,20 @@ describe("scan cap", () => {
   ];
 
   test("a write past the cap is not found, and the report says the script was cut short", async () => {
-    const checks = (await run("", external(big('localStorage.setItem("token", t)', "after"))));
+    const checks = await run("", external(big('localStorage.setItem("token", t)', "after")));
     expect(checks.map((c) => `${c.name}:${c.status}`)).toEqual([
       "token-storage-truncated:info",
       "token-storage:pass",
     ]);
     expect(checks[0]!.message).toContain("https://shop.test/big.js");
     expect(checks[0]!.message).toContain("first 6 MB");
-    expect(checks[0]!.details!.foldKey).toBe("security/token-storage:truncated:https://shop.test/big.js");
+    expect(checks[0]!.details!.foldKey).toBe(
+      "security/token-storage:truncated:https://shop.test/big.js",
+    );
   });
 
   test("a write before the cap is still found alongside the note", async () => {
-    const checks = (await run("", external(big('localStorage.setItem("token", t)', "before"))));
+    const checks = await run("", external(big('localStorage.setItem("token", t)', "before")));
     expect(checks.map((c) => `${c.name}:${c.status}`)).toEqual([
       "token-storage-truncated:info",
       "token-storage:warn",
@@ -302,7 +314,7 @@ describe("scan cap", () => {
   });
 
   test("a large script that never mentions web storage is not noted", async () => {
-    const checks = (await run("", external(pad(MAX_SCAN_CHARS + 10))));
+    const checks = await run("", external(pad(MAX_SCAN_CHARS + 10)));
     expect(checks.map((c) => `${c.name}:${c.status}`)).toEqual(["token-storage:pass"]);
   });
 
@@ -313,7 +325,13 @@ describe("scan cap", () => {
   });
 
   test("the same truncated script from two pages gives identical info checks", async () => {
-    const scripts = [{ url: "https://shop.test/big.js", content: big("localStorage.x=1", "after"), sourcePages: ["https://shop.test/a", "https://shop.test/b"] }];
+    const scripts = [
+      {
+        url: "https://shop.test/big.js",
+        content: big("localStorage.x=1", "after"),
+        sourcePages: ["https://shop.test/a", "https://shop.test/b"],
+      },
+    ];
     const a = (await run("", scripts, "https://shop.test/a"))[0]!;
     const b = (await run("", scripts, "https://shop.test/b"))[0]!;
     expect(b).toEqual(a);
@@ -322,7 +340,11 @@ describe("scan cap", () => {
 
 describe("third-party across domains", () => {
   test("the same script loaded from pages on two registrable domains is labelled per page", async () => {
-    const script = { url: "https://cdn.one.test/s.js", content: 'localStorage.setItem("session_id", s)', sourcePages: ["https://one.test/", "https://two.test/"] };
+    const script = {
+      url: "https://cdn.one.test/s.js",
+      content: 'localStorage.setItem("session_id", s)',
+      sourcePages: ["https://one.test/", "https://two.test/"],
+    };
     const onOne = (await run("", [script], "https://one.test/"))[0]!;
     const onTwo = (await run("", [script], "https://two.test/"))[0]!;
     expect(onOne.message).not.toContain("third-party");
@@ -332,7 +354,10 @@ describe("third-party across domains", () => {
 
 describe("write cap", () => {
   test("a script with thousands of token writes yields a bounded list", () => {
-    const code = Array.from({ length: 3000 }, (_, i) => `localStorage.setItem("k${i}_token", v);`).join("\n");
+    const code = Array.from(
+      { length: 3000 },
+      (_, i) => `localStorage.setItem("k${i}_token", v);`,
+    ).join("\n");
     expect(findTokenStorageWrites(code)).toHaveLength(25);
   });
 });
@@ -342,8 +367,8 @@ describe("shared bundles", () => {
   const pages = ["https://shop.test/a", "https://shop.test/b"];
 
   test("every page that loads a script reports it, with an identical check", async () => {
-    const onA = (await run("", [{ ...bundle, sourcePages: pages }], pages[0]));
-    const onB = (await run("", [{ ...bundle, sourcePages: pages }], pages[1]));
+    const onA = await run("", [{ ...bundle, sourcePages: pages }], pages[0]);
+    const onB = await run("", [{ ...bundle, sourcePages: pages }], pages[1]);
     expect(onA[0]!.status).toBe("warn");
     expect(onB).toEqual(onA);
     expect(onA[0]!.details!.foldKey).toBe("security/token-storage:https://shop.test/b.js");
@@ -351,12 +376,12 @@ describe("shared bundles", () => {
 
   test("a skipped first page does not hide the script from the others", async () => {
     // Only page b runs; page a (the lowest-sorted loader) is, say, a soft 404.
-    const onB = (await run("", [{ ...bundle, sourcePages: pages }], pages[1]));
+    const onB = await run("", [{ ...bundle, sourcePages: pages }], pages[1]);
     expect(onB[0]!.status).toBe("warn");
   });
 
   test("a page that does not load the script does not report it", async () => {
-    const other = (await run("", [{ ...bundle, sourcePages: pages }], "https://shop.test/c"));
+    const other = await run("", [{ ...bundle, sourcePages: pages }], "https://shop.test/c");
     expect(other[0]!.status).toBe("pass");
   });
 });

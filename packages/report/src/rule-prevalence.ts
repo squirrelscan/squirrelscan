@@ -33,10 +33,7 @@ export function rulePrevalence(
   return Object.hasOwn(source.prevalence, ruleId) ? source.prevalence[ruleId] : undefined;
 }
 
-export function isNearUniversal(
-  ruleId: string,
-  source: RulePrevalenceData = PREVALENCE,
-): boolean {
+export function isNearUniversal(ruleId: string, source: RulePrevalenceData = PREVALENCE): boolean {
   const p = rulePrevalence(ruleId, source);
   return p !== undefined && p > NEAR_UNIVERSAL_PREVALENCE;
 }

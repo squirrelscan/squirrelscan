@@ -189,7 +189,7 @@ function originOf(url: string): string | null {
  * Deduped on origin plus path. Pure: sends nothing.
  */
 export function selectGraphqlCandidates(
-  ctx: Pick<RuleContext, "site" | "endpointSurface" | "probe">
+  ctx: Pick<RuleContext, "site" | "endpointSurface" | "probe">,
 ): GraphqlCandidateSelection {
   const empty: GraphqlCandidateSelection = {
     candidates: [],
@@ -215,7 +215,7 @@ export function selectGraphqlCandidates(
     rawUrl: string,
     source: GraphqlCandidate["source"],
     discoveredVia: string,
-    method: string | undefined
+    method: string | undefined,
   ): void => {
     let u: URL;
     try {
@@ -279,7 +279,7 @@ export type GraphqlProbeOutcome =
 /** Build the exact URL and init for one probe. Exported so tests can pin what is sent. */
 export function buildGraphqlProbe(
   endpointUrl: string,
-  request: GraphqlProbeRequest
+  request: GraphqlProbeRequest,
 ): { url: string; init: RequestInit } {
   const query = QUERIES[request.op];
   const u = new URL(endpointUrl);
@@ -315,7 +315,7 @@ export function buildGraphqlProbe(
 export async function sendGraphqlProbe(
   probe: ProbeBudget | undefined,
   endpointUrl: string,
-  request: GraphqlProbeRequest
+  request: GraphqlProbeRequest,
 ): Promise<GraphqlProbeOutcome> {
   const kind = request.method === "GET" ? "quiet" : "loud";
   if (!probe || !probe.allows(kind)) return { sent: false, reason: "not-allowed" };
@@ -415,7 +415,8 @@ export function parseGraphqlBody(response: GraphqlProbeResponse): GraphqlBody | 
   return { data, errors };
 }
 
-const TRUNCATED_SCHEMA_PREFIX_RE = /^\s*\{\s*"data"\s*:\s*\{\s*"__schema"\s*:\s*\{\s*"types"\s*:\s*\[/;
+const TRUNCATED_SCHEMA_PREFIX_RE =
+  /^\s*\{\s*"data"\s*:\s*\{\s*"__schema"\s*:\s*\{\s*"types"\s*:\s*\[/;
 
 /**
  * The truncated verdict: type names seen in the first bytes of an introspection

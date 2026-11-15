@@ -51,11 +51,10 @@ function statusOf(value: unknown): AgentSignalStatus {
  * Presence of the three advisory agent files. Empty when none of the rules ran
  * (quick level), so renderers print nothing rather than three "unchecked".
  */
-export function getAgentSignals(
-  report: Pick<AuditReport, "ruleResults">,
-): AgentSignal[] {
+export function getAgentSignals(report: Pick<AuditReport, "ruleResults">): AgentSignal[] {
   const byRule = new Map<string, ReportRuleResult>();
-  for (const r of Object.values(report.ruleResults ?? {})) byRule.set(canonicalRuleId(r.meta.id), r);
+  for (const r of Object.values(report.ruleResults ?? {}))
+    byRule.set(canonicalRuleId(r.meta.id), r);
   if (!SIGNALS.some((s) => byRule.has(s.ruleId))) return [];
   return SIGNALS.map((s) => {
     const check = byRule.get(s.ruleId)?.checks.find((c) => c.name === s.check);
@@ -94,7 +93,8 @@ const CITABILITY_RULES: { ruleId: string; label: string }[] = [
  */
 export function getCitabilitySignals(report: Pick<AuditReport, "ruleResults">): CitabilitySignal[] {
   const byRule = new Map<string, ReportRuleResult>();
-  for (const r of Object.values(report.ruleResults ?? {})) byRule.set(canonicalRuleId(r.meta.id), r);
+  for (const r of Object.values(report.ruleResults ?? {}))
+    byRule.set(canonicalRuleId(r.meta.id), r);
   if (!CITABILITY_RULES.some((c) => byRule.has(c.ruleId))) return [];
   return CITABILITY_RULES.map(({ ruleId, label }) => {
     const checks = byRule.get(ruleId)?.checks ?? [];

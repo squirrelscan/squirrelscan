@@ -93,7 +93,9 @@ describe("canonicalJson", () => {
 describe("cache payload codec", () => {
   test("round-trips a Set, which plain JSON would empty", () => {
     const value = { assetHosts: new Set(["a.test", "b.test"]) };
-    const back = decodeCacheValue(JSON.parse(JSON.stringify(encodeCacheValue(value)))) as typeof value;
+    const back = decodeCacheValue(
+      JSON.parse(JSON.stringify(encodeCacheValue(value))),
+    ) as typeof value;
     expect(back.assetHosts).toBeInstanceOf(Set);
     expect([...back.assetHosts]).toEqual(["a.test", "b.test"]);
     // The failure this exists to stop: without tagging, the Set is `{}`.
@@ -107,7 +109,9 @@ describe("cache payload codec", () => {
       n: null,
       list: [1, "two", { three: undefined }],
     };
-    const back = decodeCacheValue(JSON.parse(JSON.stringify(encodeCacheValue(value)))) as typeof value;
+    const back = decodeCacheValue(
+      JSON.parse(JSON.stringify(encodeCacheValue(value))),
+    ) as typeof value;
     expect(back.m).toBeInstanceOf(Map);
     expect((back.m.get("k") as { deep: Set<number> }).deep).toBeInstanceOf(Set);
     expect("u" in back).toBe(true);
@@ -120,7 +124,9 @@ describe("cache payload codec", () => {
   // that collides with a tag. Escaping is what keeps that from decoding as a Set.
   test("survives a data object whose own key looks like a tag", () => {
     const value = { details: { $s: ["not-a-set"], $m: 1, $u: "text" } };
-    const back = decodeCacheValue(JSON.parse(JSON.stringify(encodeCacheValue(value)))) as typeof value;
+    const back = decodeCacheValue(
+      JSON.parse(JSON.stringify(encodeCacheValue(value))),
+    ) as typeof value;
     expect(back).toEqual(value);
     expect(back.details.$s).toEqual(["not-a-set"]);
   });
@@ -150,7 +156,9 @@ describe("cache payload codec", () => {
     // The number stays a number. `rule_results` cannot serve as this cache
     // precisely because it stores value through String().
     expect(back!.ruleResults[1]![1][0]!.value).toBe(42);
-    const signal = back!.signals["site-dom-signals"] as { fingerprint: { assetHosts: Set<string> } };
+    const signal = back!.signals["site-dom-signals"] as {
+      fingerprint: { assetHosts: Set<string> };
+    };
     expect(signal.fingerprint.assetHosts).toBeInstanceOf(Set);
   });
 
@@ -159,7 +167,9 @@ describe("cache payload codec", () => {
   // `Record<string, unknown>`, so a rule may put one there.
   test("round-trips a Date, which a plain-object walk would empty", () => {
     const value = { details: { when: new Date("2026-01-01T00:00:00.000Z") } };
-    const back = decodeCacheValue(JSON.parse(JSON.stringify(encodeCacheValue(value)))) as typeof value;
+    const back = decodeCacheValue(
+      JSON.parse(JSON.stringify(encodeCacheValue(value))),
+    ) as typeof value;
     expect(back.details.when).toBeInstanceOf(Date);
     expect(JSON.stringify(back)).toBe(JSON.stringify(value));
   });
@@ -170,7 +180,9 @@ describe("cache payload codec", () => {
     const value = JSON.parse('{"details":{"__proto__":"kept","other":1}}') as {
       details: Record<string, unknown>;
     };
-    const back = decodeCacheValue(JSON.parse(JSON.stringify(encodeCacheValue(value)))) as typeof value;
+    const back = decodeCacheValue(
+      JSON.parse(JSON.stringify(encodeCacheValue(value))),
+    ) as typeof value;
     expect(Object.hasOwn(back.details, "__proto__")).toBe(true);
     expect(JSON.stringify(back)).toBe(JSON.stringify(value));
   });
@@ -179,7 +191,9 @@ describe("cache payload codec", () => {
   // invalid Date and not the epoch.
   test("round-trips an invalid Date as invalid", () => {
     const value = { details: { when: new Date(NaN) } };
-    const back = decodeCacheValue(JSON.parse(JSON.stringify(encodeCacheValue(value)))) as typeof value;
+    const back = decodeCacheValue(
+      JSON.parse(JSON.stringify(encodeCacheValue(value))),
+    ) as typeof value;
     expect(back.details.when).toBeInstanceOf(Date);
     expect(Number.isNaN(back.details.when.getTime())).toBe(true);
     expect(JSON.stringify(back)).toBe(JSON.stringify(value));

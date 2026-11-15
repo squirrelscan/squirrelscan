@@ -27,8 +27,7 @@ export const videoSchemaPresenceRule: Rule = {
     const youtubeEmbeds = doc.querySelectorAll('iframe[src*="youtube"]');
     const vimeoEmbeds = doc.querySelectorAll('iframe[src*="vimeo"]');
 
-    const hasVideo =
-      videos.length > 0 || youtubeEmbeds.length > 0 || vimeoEmbeds.length > 0;
+    const hasVideo = videos.length > 0 || youtubeEmbeds.length > 0 || vimeoEmbeds.length > 0;
 
     if (!hasVideo) {
       checks.push({

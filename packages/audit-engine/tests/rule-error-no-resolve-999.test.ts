@@ -246,9 +246,12 @@ describe("prior rule errors are run-local (repo#1075)", () => {
     const store = new MemStore();
     await publish(store, "audit_1", [legacyTimeout(A)], [{ url: A, status: 200 }]);
 
-    const current = await publish(store, "audit_2", [legacyTimeout(A, 2000)], [
-      { url: A, status: 200 },
-    ]);
+    const current = await publish(
+      store,
+      "audit_2",
+      [legacyTimeout(A, 2000)],
+      [{ url: A, status: 200 }],
+    );
     const row = current.unionRuleResults
       .get(RULE)
       ?.checks.find((check) => check.name === `${RULE}-error`);
@@ -284,8 +287,9 @@ describe("prior rule errors are run-local (repo#1075)", () => {
       false,
     );
     expect(priorOpenFindings[0]).toMatchObject({ checkName: `${RULE}-error`, state: "open" });
-    expect([...store.findings.values()].find((finding) => finding.checkName === `${RULE}-error`))
-      .toMatchObject({ state: "resolved", lastSeenCrawlId: "audit_2" });
+    expect(
+      [...store.findings.values()].find((finding) => finding.checkName === `${RULE}-error`),
+    ).toMatchObject({ state: "resolved", lastSeenCrawlId: "audit_2" });
   });
 
   test("the untouched aggregate excludes rule-error rows from counts and samples", async () => {

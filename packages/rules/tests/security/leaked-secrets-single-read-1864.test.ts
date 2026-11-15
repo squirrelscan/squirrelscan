@@ -7,12 +7,16 @@
 import { describe, expect, test } from "bun:test";
 import { parsePage } from "@squirrelscan/parser";
 
-import { scanContent, scanPageForSecrets, type LeakedSecret } from "../../src/security/leaked-secrets";
+import {
+  scanContent,
+  scanPageForSecrets,
+  type LeakedSecret,
+} from "../../src/security/leaked-secrets";
 import { serializeChildren } from "../../src/shared/serialized-prefix";
 
 const URL_ = "https://shop.example.test/products/a";
 const ALNUM = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-const lcg = (seed: number) => () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32);
+const lcg = (seed: number) => () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32;
 const run = (next: () => number, n: number, alphabet = ALNUM): string =>
   Array.from({ length: n }, () => alphabet[Math.floor(next() * alphabet.length)]).join("");
 const j = (...parts: string[]): string => parts.join("");
@@ -20,7 +24,8 @@ const j = (...parts: string[]): string => parts.join("");
 /** Minified-looking code of about `n` characters, with JS escapes and a quoted URL or two in it. */
 function bundle(next: () => number, n: number): string {
   let out = "";
-  while (out.length < n) out += `function ${run(next, 3, "abcdefgh")}(a){return a?"\\u0041${run(next, 6)}":"//cdn.example.test/x.js"};`;
+  while (out.length < n)
+    out += `function ${run(next, 3, "abcdefgh")}(a){return a?"\\u0041${run(next, 6)}":"//cdn.example.test/x.js"};`;
   return out;
 }
 
@@ -50,12 +55,14 @@ describe("the HTML pass with scanned script bodies blanked and shortened (#1864)
       expect(fromHtml.length).toBeGreaterThanOrEqual(3);
 
       const scanned = Array.from(doc.querySelectorAll("script")).filter(
-        (s) => !s.hasAttribute("src") && (s.textContent ?? "").trim() !== ""
+        (s) => !s.hasAttribute("src") && (s.textContent ?? "").trim() !== "",
       );
       // Long enough that the HTML pass shortens at least one body.
       expect(scanned.some((s) => (s.textContent ?? "").length > 16_384)).toBe(true);
       const blanked = serializeChildren(doc, {
-        replaceText: new Map(scanned.map((s) => [s, " ".repeat((s.textContent ?? "").length)] as const)),
+        replaceText: new Map(
+          scanned.map((s) => [s, " ".repeat((s.textContent ?? "").length)] as const),
+        ),
       });
       const reference = scanContent(blanked, "html", URL_);
       expect(fromHtml.map(strip).sort()).toEqual(reference.map(strip).sort());
@@ -120,6 +127,8 @@ describe("the HTML pass with scanned script bodies blanked and shortened (#1864)
     const html = `<!doctype html><html><body><script>var awsId="${id}";</script><script>function f(a){return a+1}</script></body></html>`;
     const doc = parsePage(html, URL_).document!;
     const ids = awsIds(scanPageForSecrets(doc, URL_), id);
-    expect(ids.every((s) => s.confidence === "medium" && typeof s.extra?.pair === "string")).toBe(true);
+    expect(ids.every((s) => s.confidence === "medium" && typeof s.extra?.pair === "string")).toBe(
+      true,
+    );
   });
 });

@@ -67,7 +67,12 @@ describe("RefusalLog", () => {
 
     expect(noted).toBe(true);
     expect(log.list()).toEqual([
-      { url: "https://x.test/robots.txt", resource: "robots.txt", status: 403, provider: "Cloudflare" },
+      {
+        url: "https://x.test/robots.txt",
+        resource: "robots.txt",
+        status: 403,
+        provider: "Cloudflare",
+      },
     ]);
   });
 
@@ -82,9 +87,9 @@ describe("RefusalLog", () => {
 
   test("an answer is not recorded", () => {
     const log = new RefusalLog();
-    expect(log.note("https://x.test/robots.txt", "robots.txt", { status: 404, headers: headersOf({}) })).toBe(
-      false,
-    );
+    expect(
+      log.note("https://x.test/robots.txt", "robots.txt", { status: 404, headers: headersOf({}) }),
+    ).toBe(false);
     expect(log.list()).toEqual([]);
   });
 
@@ -107,7 +112,12 @@ describe("root probes against a site that refuses every request", () => {
     const origin = serveAll(403, WALL_HEADERS);
     const refusals = new RefusalLog();
     const llms = await Effect.runPromise(
-      fetchLlmsTxt(origin, "squirrel-test", undefined, createPhaseBudget(10_000, Date.now(), refusals)),
+      fetchLlmsTxt(
+        origin,
+        "squirrel-test",
+        undefined,
+        createPhaseBudget(10_000, Date.now(), refusals),
+      ),
     );
 
     // null is "nothing learned": no row is stored, so the rule says not checked.
@@ -122,7 +132,12 @@ describe("root probes against a site that refuses every request", () => {
     const origin = serveAll(404);
     const refusals = new RefusalLog();
     const llms = await Effect.runPromise(
-      fetchLlmsTxt(origin, "squirrel-test", undefined, createPhaseBudget(10_000, Date.now(), refusals)),
+      fetchLlmsTxt(
+        origin,
+        "squirrel-test",
+        undefined,
+        createPhaseBudget(10_000, Date.now(), refusals),
+      ),
     );
 
     expect(llms?.llmsTxt.exists).toBe(false);
@@ -133,7 +148,12 @@ describe("root probes against a site that refuses every request", () => {
     const origin = serveAll(403, WALL_HEADERS);
     const refusals = new RefusalLog();
     const markdown = await Effect.runPromise(
-      probeMarkdownResponse(origin, "squirrel-test", undefined, createPhaseBudget(10_000, Date.now(), refusals)),
+      probeMarkdownResponse(
+        origin,
+        "squirrel-test",
+        undefined,
+        createPhaseBudget(10_000, Date.now(), refusals),
+      ),
     );
 
     expect(markdown).toBeNull();
@@ -144,12 +164,20 @@ describe("root probes against a site that refuses every request", () => {
     const origin = serveAll(403, WALL_HEADERS);
     const refusals = new RefusalLog();
     const robots = await Effect.runPromise(
-      fetchRobotsEvaluator(origin, "squirrel-test", true, undefined, createPhaseBudget(10_000, Date.now(), refusals)),
+      fetchRobotsEvaluator(
+        origin,
+        "squirrel-test",
+        true,
+        undefined,
+        createPhaseBudget(10_000, Date.now(), refusals),
+      ),
     );
 
     expect(robots.data.exists).toBe(false);
     expect(robots.data.errors).toEqual(["HTTP 403"]);
-    expect(refusals.list()).toMatchObject([{ resource: "robots.txt", status: 403, provider: "Cloudflare" }]);
+    expect(refusals.list()).toMatchObject([
+      { resource: "robots.txt", status: 403, provider: "Cloudflare" },
+    ]);
   });
 
   test("sitemaps: every refused candidate location is recorded", async () => {

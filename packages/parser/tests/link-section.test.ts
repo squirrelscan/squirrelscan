@@ -112,7 +112,14 @@ describe("link section", () => {
       `</body></html>`;
     const out: Record<string, string | undefined> = {};
     for (const l of parsePage(html, URL).links) out[l.text] = l.section;
-    expect(out).toEqual({ h: "header", n: "navigation", c: "content", f: "footer", w: "unknown", r: "footer" });
+    expect(out).toEqual({
+      h: "header",
+      n: "navigation",
+      c: "content",
+      f: "footer",
+      w: "unknown",
+      r: "footer",
+    });
   });
 
   test("a page-state class such as no-breadcrumb or has-breadcrumbs is not a trail", () => {
@@ -128,7 +135,9 @@ describe("link section", () => {
   });
 
   test("a breadcrumb trail inside the site header stays header", () => {
-    expect(sections(`<header><nav aria-label="breadcrumb"><a href="/a">a</a></nav></header>`)).toEqual({
+    expect(
+      sections(`<header><nav aria-label="breadcrumb"><a href="/a">a</a></nav></header>`),
+    ).toEqual({
       a: "header",
     });
   });

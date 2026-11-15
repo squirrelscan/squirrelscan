@@ -4,10 +4,7 @@ import { z } from "zod";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
-import {
-  GOOGLEBOT_HTML_MAX_BYTES,
-  GOOGLEBOT_HTML_WARN_BYTES,
-} from "@squirrelscan/utils/constants";
+import { GOOGLEBOT_HTML_MAX_BYTES, GOOGLEBOT_HTML_WARN_BYTES } from "@squirrelscan/utils/constants";
 
 export const optionsSchema = z.object({
   warn_bytes: z

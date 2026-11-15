@@ -30,7 +30,11 @@ describe("discoveredCoverage", () => {
   });
 
   test("skipped and failed rows are not discovered pages", () => {
-    const entries = [row(1, "seed", "done"), row(2, "discovered", "skipped"), row(3, "sitemap", "failed")];
+    const entries = [
+      row(1, "seed", "done"),
+      row(2, "discovered", "skipped"),
+      row(3, "sitemap", "failed"),
+    ];
     expect(discoveredCoverage(entries)).toEqual({ total: 1, sitemap: 0, links: 1 });
   });
 });

@@ -129,7 +129,9 @@ describe("a report read back from JSON is escaped", () => {
     javascript: {
       ...JAVASCRIPT,
       framework: { id: 'x"><script>', name: "<b>Evil</b>", bytes: 1 },
-      heaviestPages: [{ url: 'https://example.com/"><script>alert(1)</script>', bytes: 10, scripts: 1 }],
+      heaviestPages: [
+        { url: 'https://example.com/"><script>alert(1)</script>', bytes: 10, scripts: 1 },
+      ],
     },
   });
 

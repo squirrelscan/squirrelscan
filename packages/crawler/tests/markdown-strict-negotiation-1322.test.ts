@@ -31,7 +31,8 @@ function serve(handler: Handler): { origin: string; accepts: string[] } {
 
 const isStrict = (req: Request): boolean => req.headers.get("accept") === "text/markdown";
 const notFound = (): Response => new Response("nope", { status: 404 });
-const html = (): Response => new Response("<html></html>", { headers: { "content-type": "text/html" } });
+const html = (): Response =>
+  new Response("<html></html>", { headers: { "content-type": "text/html" } });
 
 function home(onHome: Handler): Handler {
   return (req) => (new URL(req.url).pathname === "/" ? onHome(req) : notFound());
@@ -47,11 +48,7 @@ describe("strict Markdown negotiation probe (repo#1322)", () => {
 
   test("500 on strict, 200 HTML on lenient → strict status recorded", async () => {
     const { origin } = serve(
-      home((req) =>
-        isStrict(req)
-          ? Response.json({ error: "boom" }, { status: 500 })
-          : html(),
-      ),
+      home((req) => (isStrict(req) ? Response.json({ error: "boom" }, { status: 500 }) : html())),
     );
     const r = await Effect.runPromise(probeMarkdownResponse(origin, "squirrel-test"));
     expect(r).not.toBeNull();
@@ -83,7 +80,9 @@ describe("strict Markdown negotiation probe (repo#1322)", () => {
   test("Markdown served only on strict negotiation still counts as served", async () => {
     const { origin } = serve(
       home((req) =>
-        isStrict(req) ? new Response("# hi", { headers: { "content-type": "text/markdown" } }) : html(),
+        isStrict(req)
+          ? new Response("# hi", { headers: { "content-type": "text/markdown" } })
+          : html(),
       ),
     );
     const r = await Effect.runPromise(probeMarkdownResponse(origin, "squirrel-test"));
@@ -103,7 +102,9 @@ describe("strict Markdown negotiation probe (repo#1322)", () => {
     ["403 (refused)", 403],
   ] as const) {
     test(`strict ${label} while the lenient probe answered → strict unanswered, not clean`, async () => {
-      const { origin } = serve(home((req) => (isStrict(req) ? new Response("no", { status }) : html())));
+      const { origin } = serve(
+        home((req) => (isStrict(req) ? new Response("no", { status }) : html())),
+      );
       const r = await Effect.runPromise(probeMarkdownResponse(origin, "squirrel-test"));
       expect(r).not.toBeNull();
       expect(r?.negotiatedStatus).toBe(200);
@@ -130,7 +131,9 @@ describe("strict Markdown negotiation probe (repo#1322)", () => {
   }, 30_000);
 
   test("strict 406 Not Acceptable is a healthy answer, not an unanswered probe", async () => {
-    const { origin } = serve(home((req) => (isStrict(req) ? new Response("no", { status: 406 }) : html())));
+    const { origin } = serve(
+      home((req) => (isStrict(req) ? new Response("no", { status: 406 }) : html())),
+    );
     const r = await Effect.runPromise(probeMarkdownResponse(origin, "squirrel-test"));
     expect(r?.strictNegotiatedStatus).toBe(406);
     expect(r?.strictNegotiationAnswered).toBe(true);

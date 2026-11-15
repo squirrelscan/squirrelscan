@@ -79,7 +79,9 @@ describe("collectTextExcluding — block boundaries", () => {
   });
 
   test("an empty separator disables boundaries as well as skip markers", () => {
-    expect(collectTextExcluding(body("<tr><td>a</td><td>b</td></tr>"), isCode, "", isTd)).toBe("ab");
+    expect(collectTextExcluding(body("<tr><td>a</td><td>b</td></tr>"), isCode, "", isTd)).toBe(
+      "ab",
+    );
   });
 
   test("omitted, sibling blocks glue together", () => {

@@ -200,7 +200,7 @@ function generate(src: string, depth = 0): string {
       else if (inner.startsWith("?<") && !inner.startsWith("?<=") && !inner.startsWith("?<!"))
         inner = inner.slice(inner.indexOf(">") + 1);
       literal = generate(inner, depth + 1);
-    } else if (c === "." ) {
+    } else if (c === ".") {
       unit = [..."abcXYZ019-_."];
       i += 1;
     } else if (c === "^" || c === "$") {
@@ -294,7 +294,9 @@ describe("mandatoryLiterals is sound on every pattern the rules ship", () => {
         admittedAny = true;
         checked += 1;
         if (!admits(pattern, sample)) {
-          failures.push(`${label}: filter REJECTED a real match: ${JSON.stringify(sample.slice(0, 120))}`);
+          failures.push(
+            `${label}: filter REJECTED a real match: ${JSON.stringify(sample.slice(0, 120))}`,
+          );
           break;
         }
       }
@@ -385,7 +387,19 @@ describe("mandatoryLiterals extraction", () => {
       [],
     ],
     // an optional single-character class expands into variants
-    [/apikeys?[_-]?value/i, [["apikeyvalue", "apikey_value", "apikey-value", "apikeysvalue", "apikeys_value", "apikeys-value"]]],
+    [
+      /apikeys?[_-]?value/i,
+      [
+        [
+          "apikeyvalue",
+          "apikey_value",
+          "apikey-value",
+          "apikeysvalue",
+          "apikeys_value",
+          "apikeys-value",
+        ],
+      ],
+    ],
     // a `+` keeps its own character but ends the run after it
     [/abcde+fghij/, [["abcde"], ["fghij"]]],
     // `{0,3}` can repeat, so it ENDS the run: gluing the two sides would deny
@@ -464,7 +478,8 @@ describe("mandatoryLiterals extraction", () => {
         failures.push(`${pattern.source}: fixture does not match`);
         continue;
       }
-      if (!admits(pattern, subject)) failures.push(`${pattern.source}: filter REJECTED a real match`);
+      if (!admits(pattern, subject))
+        failures.push(`${pattern.source}: filter REJECTED a real match`);
     }
     expect(failures).toEqual([]);
   });

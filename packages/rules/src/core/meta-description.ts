@@ -10,7 +10,8 @@ import { pageTypeSkip, skippablePageType } from "../shared/page-type";
 const SHORT_OK_PAGE_TYPES = ["contact", "legal"] as const;
 
 /** Han, kana, Hangul and Thai: scripts where one character carries far more than a Latin letter (pub#1866). */
-const WIDE_SCRIPT = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Thai}]/gu;
+const WIDE_SCRIPT =
+  /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Thai}]/gu;
 const ANY_LETTER = /\p{L}/gu;
 
 /** True when most of the description's letters are in a CJK or Thai script. */
@@ -42,7 +43,9 @@ export const metaDescriptionRule: Rule = {
     weight: 7,
     optionsSchema,
     // The old name carried both directions (pub#1765).
-    supersededChecks: { "meta-description": ["meta-description-too-short", "meta-description-too-long"] },
+    supersededChecks: {
+      "meta-description": ["meta-description-too-short", "meta-description-too-long"],
+    },
   },
 
   run(ctx: RuleContext): RuleResult {
@@ -83,7 +86,9 @@ export const metaDescriptionRule: Rule = {
       });
     } else if (tooShort && skipType !== null) {
       // A contact or legal page is not a search target worth a long snippet (pub#841). Too long still applies.
-      checks.push(pageTypeSkip("meta-description-too-short", skipType, "The description length floor"));
+      checks.push(
+        pageTypeSkip("meta-description-too-short", skipType, "The description length floor"),
+      );
     } else if (tooShort) {
       checks.push({
         name: "meta-description-too-short",
@@ -94,7 +99,12 @@ export const metaDescriptionRule: Rule = {
         items: label("under", opts.min_length),
       });
     } else {
-      checks.push({ name: "meta-description-too-short", status: "pass", message: "Description is long enough", value: description });
+      checks.push({
+        name: "meta-description-too-short",
+        status: "pass",
+        message: "Description is long enough",
+        value: description,
+      });
     }
     if (tooLong) {
       checks.push({
@@ -106,7 +116,12 @@ export const metaDescriptionRule: Rule = {
         items: label("over", opts.max_length),
       });
     } else {
-      checks.push({ name: "meta-description-too-long", status: "pass", message: "Description is short enough", value: description });
+      checks.push({
+        name: "meta-description-too-long",
+        status: "pass",
+        message: "Description is short enough",
+        value: description,
+      });
     }
 
     return { checks };

@@ -25,12 +25,13 @@ export function tallySource(
   tally: SourceTally,
   page: string,
   section: LinkSection | undefined,
-  links = 1
+  links = 1,
 ): void {
   let entry = tally.get(page);
   if (!entry) tally.set(page, (entry = { links: 0, sections: {} }));
   entry.links += links;
-  if (section && section !== "unknown") entry.sections[section] = (entry.sections[section] ?? 0) + links;
+  if (section && section !== "unknown")
+    entry.sections[section] = (entry.sections[section] ?? 0) + links;
 }
 
 /**
@@ -71,7 +72,7 @@ export function regionsField(regions: SectionCounts | undefined): { regions?: Se
  * in each section (pub#846). Nothing when no element had a known section.
  */
 export function pageRegionsField(
-  sections: SectionCounts | Iterable<LinkSection | undefined> | undefined
+  sections: SectionCounts | Iterable<LinkSection | undefined> | undefined,
 ): { regions?: SectionCounts } {
   if (!sections) return {};
   const keys =
@@ -96,7 +97,7 @@ export function sectionMeta(counts: SectionCounts | undefined): { sections?: Sec
 export function addSection(
   byKey: Map<string, SectionCounts>,
   key: string,
-  section: LinkSection | undefined
+  section: LinkSection | undefined,
 ): void {
   if (!section || section === "unknown") return;
   let counts = byKey.get(key);
@@ -201,11 +202,15 @@ export function isSitewide(reach: ChromeReach, crawledPages: number): boolean {
  * "2 broken internal links in the site-wide header and footer, each on at least 49 pages". `kind` is "internal"
  * or "external". Counts only the links of this check.
  */
-export function sitewideMessageHead(kind: "internal" | "external", reaches: readonly ChromeReach[]): string {
+export function sitewideMessageHead(
+  kind: "internal" | "external",
+  reaches: readonly ChromeReach[],
+): string {
   const n = reaches.length;
   const totals = new Map<(typeof SITEWIDE_SECTIONS)[number], number>();
   for (const reach of reaches) {
-    for (const { section, pages } of reach.sections) totals.set(section, (totals.get(section) ?? 0) + pages);
+    for (const { section, pages } of reach.sections)
+      totals.set(section, (totals.get(section) ?? 0) + pages);
   }
   const places = [...totals]
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
@@ -232,7 +237,8 @@ export function chromeSectionOf(link: {
   sectionSource?: string;
   sectionConfidence?: number;
 }): LinkSection | undefined {
-  if (link.sectionSource === "model" && (link.sectionConfidence ?? 0) < CHROME_MIN_CONFIDENCE) return undefined;
+  if (link.sectionSource === "model" && (link.sectionConfidence ?? 0) < CHROME_MIN_CONFIDENCE)
+    return undefined;
   return link.section;
 }
 
@@ -246,7 +252,7 @@ export function htmlPageCount(
     statusCode: number;
     redirectSource?: boolean;
     headers?: Record<string, string>;
-  }>
+  }>,
 ): number {
   let n = 0;
   for (const p of pages) {

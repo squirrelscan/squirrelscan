@@ -5,17 +5,17 @@ A unit-test and benchmark harness for `security/leaked-secrets`
 
 ## Layout
 
-| File | What it is |
-|---|---|
-| `generators.ts` | One seeded generator per `FAST_PATTERNS` / `CONTEXT_PATTERNS` entry. Values are assembled at runtime from parts; no line is a token-shaped literal and nothing is a real credential. |
-| `contexts.ts` | Eighteen embedding contexts (inline config object, `window.__ENV`, `__NEXT_DATA__`, `__NUXT__`, HTML comment, `<meta content>`, `data-*`, JSON-LD, external bundle, `fetch()` Bearer header, `.env` dump in `<pre>`, sourcemap comment, and the six encoded forms of #360: entity-encoded attribute, `\u`/`\x`-escaped script string, base64 blob in a data attribute, base64 blob in a global, URL-encoded JSON in a data attribute, URL-encoded JSON in inline settings). Each declares the rule-level location it reports at, including the ` (base64)` suffix. |
-| `negatives.ts` | Hand-written look-alikes that must not fire, or must fire only as `public`. |
-| `cases.ts` | Every generator in every accepting context, plus the negatives and interaction probes. Each case states the exact `(pattern, check, location)` set the rule must report. `check` can also be `info` (the `leaked-secrets-info` check: expired and session tokens). |
-| `expected.json` | Snapshot of the raw `scanPageForSecrets` + external-script output per case (type, confidence, publicByDesign, location, masked value, and the decoded `extra` fields of #361). Any detector change diffs here. |
-| `../leaked-secrets.test.ts` | The suite. |
-| `../secrets-decode.test.ts` | Unit tests for the content decoders (`src/security/secrets/decode.ts`): entities, JS escapes, the base64 run finder against a brute-force definition, exclusions, depth, and the 200 KB data URI cost budget. |
-| `../secrets-confidence.test.ts` | Unit tests for the token decoders (`src/security/secrets/confidence.ts`): GitHub checksum against an independent CRC32 and a published expired token, AWS account id against an independent base32 decode, JWT tiers, Algolia restrictions, and a `fetch`-throws guard over the whole scan. |
-| `../../../scripts/bench-leaked-secrets.ts` | The benchmark. |
+| File                                       | What it is                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `generators.ts`                            | One seeded generator per `FAST_PATTERNS` / `CONTEXT_PATTERNS` entry. Values are assembled at runtime from parts; no line is a token-shaped literal and nothing is a real credential.                                                                                                                                                                                                                                                                                                                                                                               |
+| `contexts.ts`                              | Eighteen embedding contexts (inline config object, `window.__ENV`, `__NEXT_DATA__`, `__NUXT__`, HTML comment, `<meta content>`, `data-*`, JSON-LD, external bundle, `fetch()` Bearer header, `.env` dump in `<pre>`, sourcemap comment, and the six encoded forms of #360: entity-encoded attribute, `\u`/`\x`-escaped script string, base64 blob in a data attribute, base64 blob in a global, URL-encoded JSON in a data attribute, URL-encoded JSON in inline settings). Each declares the rule-level location it reports at, including the ` (base64)` suffix. |
+| `negatives.ts`                             | Hand-written look-alikes that must not fire, or must fire only as `public`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `cases.ts`                                 | Every generator in every accepting context, plus the negatives and interaction probes. Each case states the exact `(pattern, check, location)` set the rule must report. `check` can also be `info` (the `leaked-secrets-info` check: expired and session tokens).                                                                                                                                                                                                                                                                                                 |
+| `expected.json`                            | Snapshot of the raw `scanPageForSecrets` + external-script output per case (type, confidence, publicByDesign, location, masked value, and the decoded `extra` fields of #361). Any detector change diffs here.                                                                                                                                                                                                                                                                                                                                                     |
+| `../leaked-secrets.test.ts`                | The suite.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `../secrets-decode.test.ts`                | Unit tests for the content decoders (`src/security/secrets/decode.ts`): entities, JS escapes, the base64 run finder against a brute-force definition, exclusions, depth, and the 200 KB data URI cost budget.                                                                                                                                                                                                                                                                                                                                                      |
+| `../secrets-confidence.test.ts`            | Unit tests for the token decoders (`src/security/secrets/confidence.ts`): GitHub checksum against an independent CRC32 and a published expired token, AWS account id against an independent base32 decode, JWT tiers, Algolia restrictions, and a `fetch`-throws guard over the whole scan.                                                                                                                                                                                                                                                                        |
+| `../../../scripts/bench-leaked-secrets.ts` | The benchmark.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 
 Generators for GitHub tokens and AWS key ids produce values that pass the
 detector's own structural checks (a valid checksum, a base32 suffix that
@@ -161,13 +161,13 @@ best of N after one unmeasured warm-up pass.
 
 Apple M2, 16 GB, macOS 24.6.0, Bun 1.3.14, commit `10ef2e7`, 2026-09-16, seed 1, 3 iterations:
 
-| commit | iterations | best | mean | ms/MB | findings | peak RSS |
-|---|---|---|---|---|---|---|
-| `10ef2e7` (before pub#357), first baseline run | 3 | 946 ms | 991 ms | 14.2 | 145 | 383 MB |
-| `cd9f746` (origin/main, stashed detector), A/B run | 7 | 1247 ms | 1773 ms | 18.7 | 144 | 243 MB |
-| pub#357 + pub#363, same A/B run | 7 | 1081 ms | 1434 ms | 16.2 | 148 | 248 MB |
-| round 2 (+ #365 Discord bound, public tiers, tag-scoped look-behind) | 7 | 947 ms | 1049 ms | 14.2 | 146 | 486 MB |
-| round 3 (Shopify boot JSON, phc_, brand parents, URL-path drop, pinned leaks) | 7 | 948 ms | 1042 ms | 14.2 | 133 | 303 MB |
+| commit                                                                         | iterations | best    | mean    | ms/MB | findings | peak RSS |
+| ------------------------------------------------------------------------------ | ---------- | ------- | ------- | ----- | -------- | -------- |
+| `10ef2e7` (before pub#357), first baseline run                                 | 3          | 946 ms  | 991 ms  | 14.2  | 145      | 383 MB   |
+| `cd9f746` (origin/main, stashed detector), A/B run                             | 7          | 1247 ms | 1773 ms | 18.7  | 144      | 243 MB   |
+| pub#357 + pub#363, same A/B run                                                | 7          | 1081 ms | 1434 ms | 16.2  | 148      | 248 MB   |
+| round 2 (+ #365 Discord bound, public tiers, tag-scoped look-behind)           | 7          | 947 ms  | 1049 ms | 14.2  | 146      | 486 MB   |
+| round 3 (Shopify boot JSON, phc\_, brand parents, URL-path drop, pinned leaks) | 7          | 948 ms  | 1042 ms | 14.2  | 133      | 303 MB   |
 
 Round 5 was measured differently, because the machine was at load 7 on 8 cores
 and a single back-to-back pair drifted further than the effect. A reverting
@@ -175,10 +175,10 @@ harness alternated the two builds, benching each side once per alternation at 3
 timed iterations, and the statistic is the minimum per side. Two runs, the first
 of 4 alternations and the second of 5:
 
-| run | before, best / ms per MB | after, best / ms per MB | delta |
-|---|---|---|---|
-| 4 alternations, min per side | 998 ms / 14.97 | 1026 ms / 15.39 | +2.8% |
-| 5 alternations, min per side | 1208 ms / 18.11 | 1218 ms / 18.27 | +0.9% |
+| run                          | before, best / ms per MB | after, best / ms per MB | delta |
+| ---------------------------- | ------------------------ | ----------------------- | ----- |
+| 4 alternations, min per side | 998 ms / 14.97           | 1026 ms / 15.39         | +2.8% |
+| 5 alternations, min per side | 1208 ms / 18.11          | 1218 ms / 18.27         | +0.9% |
 
 Read this as **no measurable regression**, not as a point estimate. The two
 runs' absolute numbers differ by 21% while the effect is 1 to 3%, so the
@@ -203,18 +203,18 @@ Same machine, Bun 1.3.14, seed 1, 5 iterations, back to back on the
 pre-#357 detector (`cd9f746` vs the decoders on top of it; the corpus grew
 with the new cases, so the finding counts are not comparable):
 
-| build | best | ms/MB | findings |
-|---|---|---|---|
-| before, `cd9f746` | 931 ms | 13.97 | 148 |
-| after (entity, escape and percent decode as content enters, base64 blob pass, token decoders) | 990 ms | 14.85 | 137 |
+| build                                                                                         | best   | ms/MB | findings |
+| --------------------------------------------------------------------------------------------- | ------ | ----- | -------- |
+| before, `cd9f746`                                                                             | 931 ms | 13.97 | 148      |
+| after (entity, escape and percent decode as content enters, base64 blob pass, token decoders) | 990 ms | 14.85 | 137      |
 
 Rebased onto pub#357 / pub#363 round 2 (`f445a7d`), same machine and
 settings, back to back:
 
-| build | best | ms/MB | findings |
-|---|---|---|---|
-| `f445a7d` (precision lane) | 931 ms | 13.96 | 146 |
-| decoders on top of it | 975 ms | 14.62 | 139 |
+| build                      | best   | ms/MB | findings |
+| -------------------------- | ------ | ----- | -------- |
+| `f445a7d` (precision lane) | 931 ms | 13.96 | 146      |
+| decoders on top of it      | 975 ms | 14.62 | 139      |
 
 +4.7% ms/MB: the fixed cost of the three in-place decoders (three `indexOf`
 gates per body), the base64 sampler and the general JWT pattern.

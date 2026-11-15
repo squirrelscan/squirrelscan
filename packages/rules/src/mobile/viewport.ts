@@ -24,16 +24,14 @@ export const viewportRule: Rule = {
 
     // Handle both name="viewport" and name='viewport' attribute syntax
     const viewport =
-      doc.querySelector('meta[name="viewport"]') ||
-      doc.querySelector("meta[name='viewport']");
+      doc.querySelector('meta[name="viewport"]') || doc.querySelector("meta[name='viewport']");
 
     if (!viewport) {
       checks.push({
         name: "viewport",
         status: "fail",
         message: "Missing viewport meta tag",
-        value:
-          "Add: <meta name='viewport' content='width=device-width, initial-scale=1'>",
+        value: "Add: <meta name='viewport' content='width=device-width, initial-scale=1'>",
       });
       return { checks };
     }

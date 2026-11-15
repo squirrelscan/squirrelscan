@@ -39,7 +39,7 @@ function pad(i: number): string {
 function template(
   makePath: (i: number) => string,
   makeTitle: (i: number) => string,
-  count: number
+  count: number,
 ): PageSpec[] {
   return Array.from({ length: count }, (_, i) => ({ path: makePath(i), title: makeTitle(i) }));
 }
@@ -62,7 +62,9 @@ function legacyCtx(specs: PageSpec[], siteIndexable?: boolean): RuleContext {
         parsed: {
           meta: { title: spec.title ?? null, robots: spec.noindex ? "noindex,follow" : null },
         } as unknown as ParsedPage,
-        headers: spec.headerNoindex ? { "x-robots-tag": "noindex" } : ({} as Record<string, string>),
+        headers: spec.headerNoindex
+          ? { "x-robots-tag": "noindex" }
+          : ({} as Record<string, string>),
       })),
       robotsTxt: null,
       sitemaps: null,
@@ -162,7 +164,10 @@ async function bothPaths(specs: PageSpec[], siteIndexable?: boolean): Promise<Ch
 }
 
 /** The item for a deviation class, or undefined when it was not reported. */
-function itemFor(check: CheckResult, deviation: string): { meta: Record<string, unknown> } | undefined {
+function itemFor(
+  check: CheckResult,
+  deviation: string,
+): { meta: Record<string, unknown> } | undefined {
   return check.items?.find((i) => i.meta?.deviation === deviation) as
     | { meta: Record<string, unknown> }
     | undefined;
@@ -172,11 +177,15 @@ function itemFor(check: CheckResult, deviation: string): { meta: Record<string, 
 function uniformSite(count = 20): PageSpec[] {
   const half = Math.ceil(count / 2);
   return [
-    ...template((i) => `/deals/offer-${pad(i)}`, (i) => `Offer ${pad(i)} | Acme Deals`, half),
+    ...template(
+      (i) => `/deals/offer-${pad(i)}`,
+      (i) => `Offer ${pad(i)} | Acme Deals`,
+      half,
+    ),
     ...template(
       (i) => `/stores/store-${pad(i)}`,
       (i) => `Store ${pad(i)} | Acme Deals`,
-      count - half
+      count - half,
     ),
   ];
 }
@@ -191,7 +200,11 @@ describe("content/title-pattern-outlier — silence guards", () => {
   test("skips when too few pages carry a title", async () => {
     const specs = [
       ...uniformSite(8),
-      ...template((i) => `/misc/page-${pad(i)}`, () => "", 6),
+      ...template(
+        (i) => `/misc/page-${pad(i)}`,
+        () => "",
+        6,
+      ),
     ];
     const check = await bothPaths(specs);
     expect(check.status).toBe("skipped");
@@ -224,17 +237,23 @@ describe("content/title-pattern-outlier — silence guards", () => {
     ];
     const check = await bothPaths(specs);
     expect(check.status).toBe("skipped");
-    expect(check.message).toContain(
-      `${Math.round(TITLE_NORM_MIN_AGREEMENT * 100)}% agreement`
-    );
+    expect(check.message).toContain(`${Math.round(TITLE_NORM_MIN_AGREEMENT * 100)}% agreement`);
   });
 
   test("a section label is not mistaken for the brand", async () => {
     // 16 of 20 titles start with "Blog", but only inside /blog — a section label,
     // not a site brand, so the 4 shop pages are not accused of omitting it.
     const specs = [
-      ...template((i) => `/blog/post-${pad(i)}`, (i) => `Blog | Post ${pad(i)}`, 16),
-      ...template((i) => `/shop/item-${pad(i)}`, (i) => `Item ${pad(i)} for sale`, 4),
+      ...template(
+        (i) => `/blog/post-${pad(i)}`,
+        (i) => `Blog | Post ${pad(i)}`,
+        16,
+      ),
+      ...template(
+        (i) => `/shop/item-${pad(i)}`,
+        (i) => `Item ${pad(i)} for sale`,
+        4,
+      ),
     ];
     const check = await bothPaths(specs);
     expect(check.status).toBe("skipped");
@@ -256,7 +275,11 @@ describe("content/title-pattern-outlier — silence guards", () => {
   test("untitled pages are left to core/meta-title", async () => {
     const specs = [
       ...uniformSite(20),
-      ...template((i) => `/deals/untitled-${pad(i)}`, () => null as unknown as string, 3),
+      ...template(
+        (i) => `/deals/untitled-${pad(i)}`,
+        () => null as unknown as string,
+        3,
+      ),
     ];
     const check = await bothPaths(specs);
     expect(check.status).toBe("pass");
@@ -277,8 +300,16 @@ describe("content/title-pattern-outlier — the no-false-positive fixtures", () 
   test("a uniformly brand-first site stays clean", async () => {
     // The non-default order IS this site's order, so there is no minority to report.
     const specs = [
-      ...template((i) => `/deals/offer-${pad(i)}`, (i) => `Acme Deals - Offer ${pad(i)}`, 10),
-      ...template((i) => `/stores/store-${pad(i)}`, (i) => `Acme Deals - Store ${pad(i)}`, 10),
+      ...template(
+        (i) => `/deals/offer-${pad(i)}`,
+        (i) => `Acme Deals - Offer ${pad(i)}`,
+        10,
+      ),
+      ...template(
+        (i) => `/stores/store-${pad(i)}`,
+        (i) => `Acme Deals - Store ${pad(i)}`,
+        10,
+      ),
     ];
     const check = await bothPaths(specs);
     expect(check.status).toBe("pass");
@@ -313,12 +344,12 @@ describe("content/title-pattern-outlier — the no-false-positive fixtures", () 
       ...template(
         (i) => `/deals/offer-${pad(i)}`,
         (i) => `E-commerce deal ${pad(i)} at 10:30 | Acme Deals`,
-        10
+        10,
       ),
       ...template(
         (i) => `/stores/store-${pad(i)}`,
         (i) => `Store ${pad(i)} | Acme Deals`,
-        10
+        10,
       ),
     ];
     const check = await bothPaths(specs);
@@ -330,7 +361,11 @@ describe("content/title-pattern-outlier — findings", () => {
   test("warns on a pocket of pages missing the brand", async () => {
     const specs = [
       ...uniformSite(20),
-      ...template((i) => `/deals/legacy-${pad(i)}`, (i) => `Legacy offer ${pad(i)}`, 3),
+      ...template(
+        (i) => `/deals/legacy-${pad(i)}`,
+        (i) => `Legacy offer ${pad(i)}`,
+        3,
+      ),
     ];
     const check = await bothPaths(specs);
     expect(check.status).toBe("warn");
@@ -341,7 +376,11 @@ describe("content/title-pattern-outlier — findings", () => {
   test("warns on a different separator against the modal one", async () => {
     const specs = [
       ...uniformSite(20),
-      ...template((i) => `/deals/legacy-${pad(i)}`, (i) => `Legacy ${pad(i)} - Acme Deals`, 3),
+      ...template(
+        (i) => `/deals/legacy-${pad(i)}`,
+        (i) => `Legacy ${pad(i)} - Acme Deals`,
+        3,
+      ),
     ];
     const check = await bothPaths(specs);
     expect(check.status).toBe("warn");
@@ -354,7 +393,11 @@ describe("content/title-pattern-outlier — findings", () => {
   test("warns on an inverted brand order", async () => {
     const specs = [
       ...uniformSite(20),
-      ...template((i) => `/deals/legacy-${pad(i)}`, (i) => `Acme Deals | Legacy ${pad(i)}`, 3),
+      ...template(
+        (i) => `/deals/legacy-${pad(i)}`,
+        (i) => `Acme Deals | Legacy ${pad(i)}`,
+        3,
+      ),
     ];
     const check = await bothPaths(specs);
     expect(check.status).toBe("warn");
@@ -365,7 +408,11 @@ describe("content/title-pattern-outlier — findings", () => {
   test("warns on brand-only titles away from the homepage", async () => {
     const specs = [
       ...uniformSite(20),
-      ...template((i) => `/deals/dupe-${pad(i)}`, () => "Acme Deals", 3),
+      ...template(
+        (i) => `/deals/dupe-${pad(i)}`,
+        () => "Acme Deals",
+        3,
+      ),
     ];
     const check = await bothPaths(specs);
     expect(check.status).toBe("warn");
@@ -375,9 +422,21 @@ describe("content/title-pattern-outlier — findings", () => {
   test("exactly at the agreement threshold a norm still exists", async () => {
     // 14 of 20 titles carry the brand — the boundary, not a comfortable majority.
     const specs = [
-      ...template((i) => `/deals/offer-${pad(i)}`, (i) => `Offer ${pad(i)} | Acme Deals`, 7),
-      ...template((i) => `/stores/store-${pad(i)}`, (i) => `Store ${pad(i)} | Acme Deals`, 7),
-      ...template((i) => `/deals/legacy-${pad(i)}`, (i) => `Legacy offer ${pad(i)}`, 6),
+      ...template(
+        (i) => `/deals/offer-${pad(i)}`,
+        (i) => `Offer ${pad(i)} | Acme Deals`,
+        7,
+      ),
+      ...template(
+        (i) => `/stores/store-${pad(i)}`,
+        (i) => `Store ${pad(i)} | Acme Deals`,
+        7,
+      ),
+      ...template(
+        (i) => `/deals/legacy-${pad(i)}`,
+        (i) => `Legacy offer ${pad(i)}`,
+        6,
+      ),
     ];
     const check = await bothPaths(specs);
     expect(check.status).toBe("fail");
@@ -390,12 +449,20 @@ describe("content/title-pattern-outlier — findings", () => {
     // 3/20 = 15% warns; 4/20 = 20% is exactly the threshold and fails.
     const warned = await bothPaths([
       ...uniformSite(17),
-      ...template((i) => `/deals/legacy-${pad(i)}`, (i) => `Legacy offer ${pad(i)}`, 3),
+      ...template(
+        (i) => `/deals/legacy-${pad(i)}`,
+        (i) => `Legacy offer ${pad(i)}`,
+        3,
+      ),
     ]);
     expect(warned.status).toBe("warn");
     const failed = await bothPaths([
       ...uniformSite(16),
-      ...template((i) => `/deals/legacy-${pad(i)}`, (i) => `Legacy offer ${pad(i)}`, 4),
+      ...template(
+        (i) => `/deals/legacy-${pad(i)}`,
+        (i) => `Legacy offer ${pad(i)}`,
+        4,
+      ),
     ]);
     expect(failed.status).toBe("fail");
   });
@@ -404,9 +471,21 @@ describe("content/title-pattern-outlier — findings", () => {
     // Three internally uniform templates that use three separators for the same
     // brand: uniformity inside a template does not exempt it from the site's norm.
     const specs = [
-      ...template((i) => `/deals/offer-${pad(i)}`, (i) => `Offer ${pad(i)} :: Acme Deals`, 14),
-      ...template((i) => `/stores/store-${pad(i)}`, (i) => `Store ${pad(i)} | Acme Deals`, 4),
-      ...template((i) => `/blog/post-${pad(i)}`, (i) => `Post ${pad(i)} - Acme Deals`, 2),
+      ...template(
+        (i) => `/deals/offer-${pad(i)}`,
+        (i) => `Offer ${pad(i)} :: Acme Deals`,
+        14,
+      ),
+      ...template(
+        (i) => `/stores/store-${pad(i)}`,
+        (i) => `Store ${pad(i)} | Acme Deals`,
+        4,
+      ),
+      ...template(
+        (i) => `/blog/post-${pad(i)}`,
+        (i) => `Post ${pad(i)} - Acme Deals`,
+        2,
+      ),
     ];
     const check = await bothPaths(specs);
     expect(check.status).toBe("fail");
@@ -420,7 +499,11 @@ describe("content/title-pattern-outlier — findings", () => {
     // something outside its vocabulary is never accused of using the wrong one.
     const specs = [
       ...uniformSite(20),
-      ...template((i) => `/deals/legacy-${pad(i)}`, (i) => `Legacy ${pad(i)} ~ Acme Deals`, 3),
+      ...template(
+        (i) => `/deals/legacy-${pad(i)}`,
+        (i) => `Legacy ${pad(i)} ~ Acme Deals`,
+        3,
+      ),
     ];
     const check = await bothPaths(specs);
     expect(check.status).toBe("pass");
@@ -429,7 +512,11 @@ describe("content/title-pattern-outlier — findings", () => {
   test("fails once a fifth of the titled pages deviate", async () => {
     const specs = [
       ...uniformSite(20),
-      ...template((i) => `/deals/legacy-${pad(i)}`, (i) => `Legacy offer ${pad(i)}`, 6),
+      ...template(
+        (i) => `/deals/legacy-${pad(i)}`,
+        (i) => `Legacy offer ${pad(i)}`,
+        6,
+      ),
     ];
     const check = await bothPaths(specs);
     expect(check.status).toBe("fail");
@@ -442,7 +529,11 @@ describe("content/title-pattern-outlier — findings", () => {
     // brand is reported.
     const specs = [
       ...uniformSite(20),
-      ...template((i) => `/deals/legacy-${pad(i)}`, (i) => `Legacy ${pad(i)} - Old Site`, 3),
+      ...template(
+        (i) => `/deals/legacy-${pad(i)}`,
+        (i) => `Legacy ${pad(i)} - Old Site`,
+        3,
+      ),
     ];
     const check = await bothPaths(specs);
     expect(check.value).toBe(3);
@@ -454,7 +545,7 @@ describe("content/title-pattern-outlier — findings", () => {
     const deviants = template(
       (i) => `/deals/legacy-${pad(i)}`,
       (i) => `Legacy offer ${pad(i)}`,
-      3
+      3,
     );
     const majority = uniformSite(20);
     const first = await bothPaths([...majority, ...deviants]);
@@ -478,7 +569,7 @@ describe("content/title-pattern-outlier noindex pages (pub#488)", () => {
     ...template(
       (i) => `/p${i + 1}.html`,
       (i) => `Product number ${i + 1} in our catalogue | Brand`,
-      12
+      12,
     ),
   ];
   const shortTitles = (extra: Partial<PageSpec>): PageSpec[] => [
@@ -507,7 +598,7 @@ describe("content/title-pattern-outlier noindex pages (pub#488)", () => {
     const noisy = template(
       (i) => `/promo-${pad(i)}.html`,
       (i) => `Promo ${pad(i)} | Other`,
-      6
+      6,
     ).map((spec) => ({ ...spec, noindex: true }));
     const check = await bothPaths([...catalogue(), ...noisy], true);
     expect(check.status).toBe("pass");

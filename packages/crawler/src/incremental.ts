@@ -45,11 +45,7 @@ export type ChangeStatus =
   | { changed: false; reason: "etag_match" | "lastmod_match" | "hash_match" }
   | {
       changed: true;
-      reason:
-        | "new_page"
-        | "etag_mismatch"
-        | "lastmod_mismatch"
-        | "hash_mismatch";
+      reason: "new_page" | "etag_mismatch" | "lastmod_mismatch" | "hash_mismatch";
     };
 
 // ============================================
@@ -82,9 +78,7 @@ export function computeNormalizedContentHash(html: string): string {
  * Build conditional headers for an incremental fetch request
  * These headers tell the server to return 304 Not Modified if content hasn't changed
  */
-export function buildConditionalHeaders(
-  prev: ChangeDetectionMeta | null
-): ConditionalHeaders {
+export function buildConditionalHeaders(prev: ChangeDetectionMeta | null): ConditionalHeaders {
   if (!prev) return {};
 
   const headers: ConditionalHeaders = {};
@@ -117,7 +111,7 @@ export function hasConditionalHeaders(headers: ConditionalHeaders): boolean {
  */
 export function extractChangeDetection(
   headers: Headers | Record<string, string>,
-  body: string
+  body: string,
 ): ChangeDetectionMeta {
   const getHeader = (name: string): string | null => {
     if (headers instanceof Headers) {
@@ -139,7 +133,7 @@ export function extractChangeDetection(
  */
 export function extractChangeDetectionNormalized(
   headers: Headers | Record<string, string>,
-  html: string
+  html: string,
 ): ChangeDetectionMeta {
   const getHeader = (name: string): string | null => {
     if (headers instanceof Headers) {
@@ -165,7 +159,7 @@ export function extractChangeDetectionNormalized(
  */
 export function compareChangeDetection(
   prev: ChangeDetectionMeta | null,
-  current: ChangeDetectionMeta
+  current: ChangeDetectionMeta,
 ): ChangeStatus {
   // No previous data = new page
   if (!prev) {
@@ -208,7 +202,7 @@ export function compareChangeDetection(
  */
 export function hasContentChanged(
   prev: ChangeDetectionMeta | null,
-  current: ChangeDetectionMeta
+  current: ChangeDetectionMeta,
 ): boolean {
   return compareChangeDetection(prev, current).changed;
 }
@@ -227,10 +221,7 @@ export function isNotModifiedResponse(status: number): boolean {
 /**
  * Determine if we should skip re-parsing for a 304 response
  */
-export function shouldSkipParsing(
-  status: number,
-  prev: ChangeDetectionMeta | null
-): boolean {
+export function shouldSkipParsing(status: number, prev: ChangeDetectionMeta | null): boolean {
   // 304 means server says content hasn't changed
   if (status === 304 && prev) {
     return true;
@@ -315,7 +306,7 @@ const DEFAULT_MAX_STALENESS_SECONDS = 24 * 60 * 60;
  */
 export function calculateFreshness(
   input: FreshnessInput,
-  options: FreshnessOptions = {}
+  options: FreshnessOptions = {},
 ): FreshnessResult {
   const now = options.now ?? Date.now();
   const maxStaleness = options.maxStalenessSeconds ?? DEFAULT_MAX_STALENESS_SECONDS;
@@ -341,8 +332,7 @@ export function calculateFreshness(
   // s-maxage (shared cache) takes precedence over max-age, then max-age, then
   // Expires.
   const lifetime =
-    cacheControlLifetimeSeconds(cc) ??
-    expiresLifetimeSeconds(input.expires, input.fetchedAt);
+    cacheControlLifetimeSeconds(cc) ?? expiresLifetimeSeconds(input.expires, input.fetchedAt);
 
   if (lifetime === undefined) {
     // No usable freshness information — must revalidate.
@@ -394,13 +384,11 @@ export function calculateFreshness(
 export function isCacheFresh(
   fetchedAt: number,
   cacheControl: string | null,
-  now: number = Date.now()
+  now: number = Date.now(),
 ): boolean {
   return (
-    calculateFreshness(
-      { cacheControl, expires: null, age: null, fetchedAt },
-      { now }
-    ).state === "fresh"
+    calculateFreshness({ cacheControl, expires: null, age: null, fetchedAt }, { now }).state ===
+    "fresh"
   );
 }
 
@@ -437,7 +425,7 @@ export function parseVary(vary: string | null): string[] | "*" {
 export function varyMatches(
   vary: string | null,
   storedRequest: Record<string, string> | null,
-  currentRequest: Record<string, string>
+  currentRequest: Record<string, string>,
 ): boolean {
   const fields = parseVary(vary);
   if (fields === "*") return false;

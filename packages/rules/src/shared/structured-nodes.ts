@@ -65,7 +65,11 @@ export function htmlReadState(ctx: RuleContext): ReadState {
 /** The last segment of a type or property name: `https://schema.org/Product` and `schema:Product` give `Product`. */
 export function localName(name: string): string {
   const trimmed = name.trim();
-  const cut = Math.max(trimmed.lastIndexOf("/"), trimmed.lastIndexOf("#"), trimmed.lastIndexOf(":"));
+  const cut = Math.max(
+    trimmed.lastIndexOf("/"),
+    trimmed.lastIndexOf("#"),
+    trimmed.lastIndexOf(":"),
+  );
   return cut >= 0 ? trimmed.slice(cut + 1) : trimmed;
 }
 
@@ -125,7 +129,9 @@ export function makeRefResolver(
 export function isDanglingRef(value: unknown): boolean {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const node = value as StructuredNode;
-  return typeof node["@id"] === "string" && Object.keys(node).every((k) => k === "@id" || k === "@type");
+  return (
+    typeof node["@id"] === "string" && Object.keys(node).every((k) => k === "@id" || k === "@type")
+  );
 }
 
 // ── Microdata and RDFa ──────────────────────────────────────────────────────
@@ -145,7 +151,8 @@ interface ScopeSpec {
   unsupported?: (el: Element) => boolean;
 }
 
-const text = (el: Element): string => (el.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, MAX_TEXT);
+const text = (el: Element): string =>
+  (el.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, MAX_TEXT);
 const attr = (el: Element, name: string): string => (el.getAttribute(name) ?? "").trim();
 const tokens = (value: string | null): string[] => (value ?? "").split(/\s+/).filter(Boolean);
 
@@ -241,10 +248,7 @@ export function readMicrodata(doc: Document): MarkupRead {
     scopeSelector: "[itemscope]",
     scopeAttr: "itemscope",
     propsOf: (el) => tokens(el.getAttribute("itemprop")).map(localName),
-    typesOf: (el) =>
-      tokens(el.getAttribute("itemtype"))
-        .filter(isSchemaOrgType)
-        .map(localName),
+    typesOf: (el) => tokens(el.getAttribute("itemtype")).filter(isSchemaOrgType).map(localName),
     valueOf: microdataValue,
     unsupported: (el) => el.hasAttribute("itemref"),
   });
@@ -283,7 +287,10 @@ export function isFilled(value: unknown): boolean {
   if (Array.isArray(value)) return value.some(isFilled);
   if (value && typeof value === "object") {
     const node = value as StructuredNode;
-    return Object.entries(node).some(([k, v]) => !k.startsWith("@") && isFilled(v)) || typeof node["@id"] === "string";
+    return (
+      Object.entries(node).some(([k, v]) => !k.startsWith("@") && isFilled(v)) ||
+      typeof node["@id"] === "string"
+    );
   }
   return false;
 }
@@ -295,6 +302,7 @@ export function visibleText(doc: Document): string {
   const body = doc.body;
   if (!body) return "";
   const clone = body.cloneNode(true) as Element;
-  for (const el of Array.from(clone.querySelectorAll("script, style, noscript, template"))) el.remove();
+  for (const el of Array.from(clone.querySelectorAll("script, style, noscript, template")))
+    el.remove();
   return (clone.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, MAX_VISIBLE_CHARS);
 }

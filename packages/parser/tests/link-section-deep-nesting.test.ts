@@ -50,7 +50,9 @@ describe("link section on a very deep page", () => {
   test("the link extractor reads the deep anchor too", () => {
     const { doc } = deepDocument(200_000, "nav");
     const links = extractLinks(doc as never, URL);
-    expect(links.map((l) => [l.href, l.section])).toEqual([["https://example.com/deep", "navigation"]]);
+    expect(links.map((l) => [l.href, l.section])).toEqual([
+      ["https://example.com/deep", "navigation"],
+    ]);
   });
 });
 

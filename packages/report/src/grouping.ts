@@ -15,11 +15,7 @@ import type {
 import { KEY_SEPARATOR } from "./constants";
 import { prevalenceNote, type RulePrevalenceData } from "./rule-prevalence";
 import { checkOccurrences } from "./occurrences";
-import {
-  shapeOf,
-  renderMergedMessage,
-  type MessageShape,
-} from "./message-merge";
+import { shapeOf, renderMergedMessage, type MessageShape } from "./message-merge";
 import { checkAffectedPages } from "./affected-pages";
 import {
   componentFixGroups,
@@ -110,7 +106,8 @@ function recordLcpEvidence(
     const src = (candidate as { src?: unknown } | null)?.src;
     // The same page can arrive twice (a carried finding re-merged with its
     // fresh re-observation); a repeated image is one candidate, not two.
-    if (typeof src === "string" && kept.some((k) => (k as { src?: unknown })?.src === src)) continue;
+    if (typeof src === "string" && kept.some((k) => (k as { src?: unknown })?.src === src))
+      continue;
     kept.push(candidate);
   }
   byPage.set(page, kept);
@@ -266,7 +263,9 @@ function mergeItemOccurrence(
     const prior = out.sources?.find((source) => source.page === pageUrl);
     const row = { page: pageUrl, sections: { ...prior?.sections, ...fresh } };
     out.sources = prior
-      ? (out.sources ?? []).map((source) => (source.page === pageUrl ? { ...source, ...row } : source))
+      ? (out.sources ?? []).map((source) =>
+          source.page === pageUrl ? { ...source, ...row } : source,
+        )
       : [...(out.sources ?? []), row];
   }
   return out;
@@ -331,13 +330,10 @@ export function groupIssuesByCategory(
     | Map<string, ReportRuleResult>,
   checkTallies?: CheckTallies,
   /** Overrides the shipped corpus prevalence (#2491); tests only. */
-  prevalence?: RulePrevalenceData
+  prevalence?: RulePrevalenceData,
 ): GroupedCategory[] {
   const categoryMap = new Map<string, GroupedRule[]>();
-  const entries =
-    ruleResults instanceof Map
-      ? ruleResults.entries()
-      : Object.entries(ruleResults);
+  const entries = ruleResults instanceof Map ? ruleResults.entries() : Object.entries(ruleResults);
 
   for (const [ruleId, result] of entries) {
     const meta = result.meta as {
@@ -441,8 +437,7 @@ export function groupIssuesByCategory(
           ? { id: pageUrl, label: checkMessage }
           : undefined;
 
-      const tracksLcpEvidence =
-        ruleId === LCP_PRELOAD_RULE && checkName === LCP_PRELOAD_CHECK;
+      const tracksLcpEvidence = ruleId === LCP_PRELOAD_RULE && checkName === LCP_PRELOAD_CHECK;
 
       if (existing) {
         if (tracksLcpEvidence) {
@@ -456,10 +451,7 @@ export function groupIssuesByCategory(
         if (isCarried) {
           existing.carriedCount = (existing.carriedCount ?? 0) + occurrences;
           if (checkLastSeen !== undefined) {
-            existing.lastSeenAt = Math.max(
-              existing.lastSeenAt ?? 0,
-              checkLastSeen
-            );
+            existing.lastSeenAt = Math.max(existing.lastSeenAt ?? 0, checkLastSeen);
           }
         }
         // Same key means the same literal text and the same count positions,
@@ -539,7 +531,10 @@ export function groupIssuesByCategory(
         const itemById = new Map<string, CheckItem>();
         const itemSeen = new Map<string, ItemSightings>();
         for (const item of items ?? []) {
-          itemById.set(item.id, mergeItemOccurrence(itemById.get(item.id), item, pageUrl, itemSeen));
+          itemById.set(
+            item.id,
+            mergeItemOccurrence(itemById.get(item.id), item, pageUrl, itemSeen),
+          );
         }
         // Add auto-generated item if not already covered by explicit items
         if (autoItem && !itemById.has(autoItem.id)) itemById.set(autoItem.id, autoItem);
@@ -581,9 +576,10 @@ export function groupIssuesByCategory(
             : undefined,
           siteResourceEvidence,
           componentEvidence,
-          value: typeof (check as { value?: unknown }).value === "string"
-            ? (check as { value: string }).value
-            : undefined,
+          value:
+            typeof (check as { value?: unknown }).value === "string"
+              ? (check as { value: string }).value
+              : undefined,
           carriedCount: isCarried ? occurrences : undefined,
           lastSeenAt: isCarried ? checkLastSeen : undefined,
           unrenderedCount: isUnrendered ? occurrences : undefined,
@@ -612,13 +608,11 @@ export function groupIssuesByCategory(
         check.pages = [...check.pages].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
         if (itemById.size > 0) {
           check.items = [...itemById.values()].sort((a, b) =>
-            a.id < b.id ? -1 : a.id > b.id ? 1 : 0
+            a.id < b.id ? -1 : a.id > b.id ? 1 : 0,
           );
         }
         if (check.carriedPages) {
-          check.carriedPages = [...check.carriedPages].sort((a, b) =>
-            a < b ? -1 : a > b ? 1 : 0
-          );
+          check.carriedPages = [...check.carriedPages].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
         }
         if (check.componentOccurrences) {
           // Codepoint order over the canonical observation key. `localeCompare`
@@ -643,7 +637,7 @@ export function groupIssuesByCategory(
             .map((entry) => entry.occurrence);
         }
         return check;
-      }
+      },
     );
     // Order the checks themselves deterministically too: checkMap preserves
     // first-seen insertion order, which depends on rule-execution order (#114),
@@ -651,8 +645,7 @@ export function groupIssuesByCategory(
     checks.sort((a, b) => {
       const nameDiff = a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
       if (nameDiff !== 0) return nameDiff;
-      const statusDiff =
-        a.status < b.status ? -1 : a.status > b.status ? 1 : 0;
+      const statusDiff = a.status < b.status ? -1 : a.status > b.status ? 1 : 0;
       if (statusDiff !== 0) return statusDiff;
       return a.message < b.message ? -1 : a.message > b.message ? 1 : 0;
     });
@@ -723,8 +716,7 @@ export function groupIssuesByCategory(
         const prevDiff = prevalenceRank(a) - prevalenceRank(b);
         if (prevDiff !== 0) return prevDiff;
         const subDiff =
-          getSubcategoryPriority(b.subcategory ?? "") -
-          getSubcategoryPriority(a.subcategory ?? "");
+          getSubcategoryPriority(b.subcategory ?? "") - getSubcategoryPriority(a.subcategory ?? "");
         if (subDiff !== 0) return subDiff;
         const weightDiff = b.weight - a.weight;
         if (weightDiff !== 0) return weightDiff;
@@ -766,9 +758,7 @@ export function groupIssuesByCategory(
  * (severity-then-priority-sorted by {@link groupIssuesByCategory}, #1017).
  * Only groups with at least one category are returned.
  */
-export function groupCategoriesByGroup(
-  categories: GroupedCategory[]
-): GroupedGroup[] {
+export function groupCategoriesByGroup(categories: GroupedCategory[]): GroupedGroup[] {
   const byGroup = new Map<string, GroupedCategory[]>();
   for (const category of categories) {
     const list = byGroup.get(category.group) ?? [];
@@ -819,7 +809,7 @@ export function flattenIssuesBySeverity(categories: GroupedCategory[]): FlatIssu
       categoryCode: category.code,
       categoryName: category.name,
       group: category.group,
-    }))
+    })),
   );
 
   return flat.sort((a, b) => {
@@ -877,7 +867,7 @@ export function listPassedRules(
       meta: { name: string; category: string; weight: number; scope?: string };
       checks: ReadonlyArray<{ status: string; pageUrl?: string; pages?: string[] }>;
     }
-  >
+  >,
 ): PassedRule[] {
   const passed: Array<PassedRule & { weight: number }> = [];
   for (const [ruleId, result] of Object.entries(ruleResults)) {
@@ -932,7 +922,7 @@ export function listPassedRules(
  */
 export function reportPassedRules(
   report: { status?: AuditStatus; ruleResults: Parameters<typeof listPassedRules>[0] },
-  includePassed: boolean | undefined
+  includePassed: boolean | undefined,
 ): PassedRule[] {
   if (!includePassed || isAuditFailed(report.status)) return [];
   return listPassedRules(report.ruleResults);

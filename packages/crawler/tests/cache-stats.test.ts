@@ -59,7 +59,7 @@ describe("buildCacheStats", () => {
         pagesUnchanged: 4,
         bytesCacheSaved: 4096,
         cacheHitsByReason: { "max-age": 3, "304": 1 },
-      })
+      }),
     );
     expect(result).not.toBeNull();
     expect(result!.total).toBe(10); // fetched 6 + unchanged 4
@@ -96,7 +96,7 @@ describe("buildCacheStats", () => {
       [
         resource({ url: "a.css", cacheReason: "304", transferBytes: 0, sizeBytes: 300 }),
         resource({ url: "b.css", cacheReason: "max-age", transferBytes: 0, sizeBytes: 700 }),
-      ]
+      ],
     );
     expect(result!.total).toBe(6); // 4 pages + 2 resources
     expect(result!.hits).toBe(4); // 2 pages + 2 resources

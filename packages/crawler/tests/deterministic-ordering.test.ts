@@ -161,9 +161,7 @@ describe("deterministic read ordering (#150)", () => {
       await run(store.upsertPage(crawlId, page(`https://example.com/${s}`)));
     }
     const got = await run(store.getPages(crawlId));
-    expect(got.map((p) => p.normalizedUrl)).toEqual(
-      SORTED.map((s) => `https://example.com/${s}`)
-    );
+    expect(got.map((p) => p.normalizedUrl)).toEqual(SORTED.map((s) => `https://example.com/${s}`));
     await run(store.close());
   });
 
@@ -174,9 +172,7 @@ describe("deterministic read ordering (#150)", () => {
       await run(store.upsertLink(crawlId, link(`https://example.com/${s}`)));
     }
     const got = await run(store.getLinks(crawlId));
-    expect(got.map((l) => l.href)).toEqual(
-      SORTED.map((s) => `https://example.com/${s}`)
-    );
+    expect(got.map((l) => l.href)).toEqual(SORTED.map((s) => `https://example.com/${s}`));
     await run(store.close());
   });
 
@@ -187,9 +183,7 @@ describe("deterministic read ordering (#150)", () => {
       await run(store.upsertImage(crawlId, image(`https://example.com/${s}.png`)));
     }
     const got = await run(store.getImages(crawlId));
-    expect(got.map((i) => i.src)).toEqual(
-      SORTED.map((s) => `https://example.com/${s}.png`)
-    );
+    expect(got.map((i) => i.src)).toEqual(SORTED.map((s) => `https://example.com/${s}.png`));
     await run(store.close());
   });
 
@@ -203,7 +197,7 @@ describe("deterministic read ordering (#150)", () => {
         finding({ normalizedUrl: `${SITE}/a`, ruleId: "r1", locator: "b", fingerprint: "3" }),
         finding({ normalizedUrl: `${SITE}/a`, ruleId: "r1", locator: "a", fingerprint: "4" }),
         finding({ normalizedUrl: `${SITE}/b`, ruleId: "r1", locator: "a", fingerprint: "5" }),
-      ])
+      ]),
     );
     const key = (f: PageFindingRecord) =>
       `${f.normalizedUrl}|${f.ruleId}|${f.checkName}|${f.locator}`;
@@ -233,9 +227,7 @@ describe("deterministic read ordering (#150)", () => {
     }));
     await run(store.upsertSitePages(pages));
     const got = await run(store.getSitePages(SITE));
-    expect(got.map((p) => p.normalizedUrl)).toEqual(
-      SORTED.map((s) => `${SITE}/${s}`)
-    );
+    expect(got.map((p) => p.normalizedUrl)).toEqual(SORTED.map((s) => `${SITE}/${s}`));
     await run(store.close());
   });
 

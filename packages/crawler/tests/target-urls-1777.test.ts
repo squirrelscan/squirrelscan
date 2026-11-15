@@ -92,7 +92,9 @@ const page = (...paths: string[]): string =>
 
 /** A 20 page site: / links to /p/1 .. /p/19, and /redir redirects to /p/5. */
 function bigSite(): Site {
-  const site: Site = { [`${ORIGIN}/`]: { body: page(...Array.from({ length: 19 }, (_, i) => `/p/${i + 1}`)) } };
+  const site: Site = {
+    [`${ORIGIN}/`]: { body: page(...Array.from({ length: 19 }, (_, i) => `/p/${i + 1}`)) },
+  };
   for (let i = 1; i <= 19; i++) site[`${ORIGIN}/p/${i}`] = { body: page("/p/1", "/p/2") };
   site[`${ORIGIN}/redir`] = { redirectTo: `${ORIGIN}/p/5` };
   site[`${ORIGIN}/redir-away`] = { redirectTo: `${ORIGIN}/p/6` };
@@ -220,7 +222,9 @@ describe("targetUrls (#1777)", () => {
       other,
     );
     expect(r.fetched).toEqual([`${ORIGIN}/p/1`]);
-    const reasons = Object.fromEntries(r.frontier.filter((f) => f.status === "skipped").map((f) => [f.url, f.reason]));
+    const reasons = Object.fromEntries(
+      r.frontier.filter((f) => f.status === "skipped").map((f) => [f.url, f.reason]),
+    );
     expect(reasons[`${ORIGIN}/private/x`]).toBe("robots_disallowed");
     expect(Object.values(reasons)).toContain("invalid_url");
     // The off-site URL carries the scope reason.
@@ -249,10 +253,17 @@ describe("targetUrls (#1777)", () => {
   });
 
   test("the list is bounded: the excess is a count, not frontier rows, and an oversize raw URL is skipped unnormalised", async () => {
-    const targets = Array.from({ length: MAX_TARGET_URLS + 5 }, (_, i) => `${ORIGIN}/p/${(i % 19) + 1}?n=${i}`);
+    const targets = Array.from(
+      { length: MAX_TARGET_URLS + 5 },
+      (_, i) => `${ORIGIN}/p/${(i % 19) + 1}?n=${i}`,
+    );
     // The oversize value goes first so it is inside the bounded part.
     const huge = `${ORIGIN}/${"x".repeat(5000)}`;
-    const r = await run({ targetUrls: [huge, ...targets], maxPages: 3, allowQueryParams: ["n"] }, bigSite(), other);
+    const r = await run(
+      { targetUrls: [huge, ...targets], maxPages: 3, allowQueryParams: ["n"] },
+      bigSite(),
+      other,
+    );
     expect(r.stats.targetsOverLimit).toBe(6);
     // Rows: at most MAX_TARGET_URLS, and the oversize one is stored cut short with its reason.
     expect(r.frontier.length).toBeLessThanOrEqual(MAX_TARGET_URLS);
@@ -264,7 +275,11 @@ describe("targetUrls (#1777)", () => {
 
   test("two oversize targets with the same prefix are two rows, not one", async () => {
     const prefix = `${ORIGIN}/${"y".repeat(3000)}`;
-    const r = await run({ targetUrls: [`${prefix}a`, `${prefix}b`, `${ORIGIN}/p/1`] }, bigSite(), other);
+    const r = await run(
+      { targetUrls: [`${prefix}a`, `${prefix}b`, `${ORIGIN}/p/1`] },
+      bigSite(),
+      other,
+    );
     const tooLong = r.frontier.filter((f) => f.reason === "url_too_long");
     expect(tooLong).toHaveLength(2);
     expect(new Set(tooLong.map((f) => f.url)).size).toBe(2);

@@ -69,7 +69,9 @@ export function urlMatches(url: URL, signal: UrlSignal): boolean {
 
 const hasHost = (signals: PageSignals, hosts: readonly string[], pathPrefix?: string) =>
   signals.urls.some(
-    (u) => hosts.includes(u.hostname.toLowerCase()) && (!pathPrefix || u.pathname.startsWith(pathPrefix)),
+    (u) =>
+      hosts.includes(u.hostname.toLowerCase()) &&
+      (!pathPrefix || u.pathname.startsWith(pathPrefix)),
   );
 
 export function deriveFlags(signals: PageSignals): Set<VendorFlag> {
@@ -110,13 +112,23 @@ export const CSP_VENDORS: readonly CspVendor[] = [
     category: "analytics",
     lastVerified: "2026-10-08",
     detect: {
-      urls: [{ host: GOOGLE_TAG, pathPrefix: "/gtag/js", param: { name: "id", pattern: /^G-[A-Z0-9]{6,}$/i } }],
+      urls: [
+        {
+          host: GOOGLE_TAG,
+          pathPrefix: "/gtag/js",
+          param: { name: "id", pattern: /^G-[A-Z0-9]{6,}$/i },
+        },
+      ],
       code: [/gtag\(\s*['"]config['"]\s*,\s*['"]G-[A-Z0-9]{6,}['"]/i],
     },
     needs: [
       { directive: "connect", hosts: ["www.google-analytics.com", "analytics.google.com"] },
       // An Ads-linked property also reports through the Ads and Signals endpoints.
-      { directive: "connect", hosts: ["www.google.com", "stats.g.doubleclick.net"], when: "ads-link" },
+      {
+        directive: "connect",
+        hosts: ["www.google.com", "stats.g.doubleclick.net"],
+        when: "ads-link",
+      },
     ],
   },
   {
@@ -126,13 +138,20 @@ export const CSP_VENDORS: readonly CspVendor[] = [
     lastVerified: "2026-10-08",
     detect: {
       urls: [
-        { host: GOOGLE_TAG, pathPrefix: "/gtag/js", param: { name: "id", pattern: /^AW-\d{6,}$/i } },
+        {
+          host: GOOGLE_TAG,
+          pathPrefix: "/gtag/js",
+          param: { name: "id", pattern: /^AW-\d{6,}$/i },
+        },
         { host: "www.googleadservices.com", pathPrefix: "/pagead/conversion" },
       ],
       code: [/gtag\(\s*['"]config['"]\s*,\s*['"]AW-\d{6,}['"]/i],
     },
     needs: [
-      { directive: "script", hosts: ["googleads.g.doubleclick.net", "www.googleadservices.com", "www.google.com"] },
+      {
+        directive: "script",
+        hosts: ["googleads.g.doubleclick.net", "www.googleadservices.com", "www.google.com"],
+      },
       { directive: "frame", hosts: ["td.doubleclick.net"] },
     ],
   },
@@ -143,7 +162,11 @@ export const CSP_VENDORS: readonly CspVendor[] = [
     lastVerified: "2026-10-08",
     detect: {
       urls: [
-        { host: GOOGLE_TAG, pathPrefix: "/gtm.js", param: { name: "id", pattern: /^GTM-[A-Z0-9]+$/i } },
+        {
+          host: GOOGLE_TAG,
+          pathPrefix: "/gtm.js",
+          param: { name: "id", pattern: /^GTM-[A-Z0-9]+$/i },
+        },
         { host: GOOGLE_TAG, pathPrefix: "/ns.html", param: { name: "id", pattern: /^GTM-/i } },
       ],
     },

@@ -43,7 +43,7 @@ function buildChecks(blockedWithoutNoindex: string[]): CheckResult[] {
 // `isIndexable === reasons.length === 0`. robots.txt stays a run-time test.
 async function runViaSiteQuery(
   siteQuery: SiteQuery,
-  robotsTxt: RobotsTxtData
+  robotsTxt: RobotsTxtData,
 ): Promise<RuleResult> {
   const blocked: string[] = [];
   for await (const row of siteQuery.pagesMatching(() => true)) {
@@ -59,8 +59,7 @@ export const indexabilityConflicts: Rule = {
   meta: {
     id: "crawl/indexability-conflicts",
     name: "Indexability Conflicts",
-    description:
-      "Detects pages blocked by robots.txt that carry no noindex",
+    description: "Detects pages blocked by robots.txt that carry no noindex",
     solution:
       "Allowing a page in robots.txt and marking it noindex is the correct way to keep it out of search results, and is not reported. A page blocked in robots.txt without noindex is never fetched, so the URL can still be listed from links elsewhere. To remove it from results, allow the crawl and add noindex; to only save crawl budget, the Disallow alone is fine.",
     category: "crawl",

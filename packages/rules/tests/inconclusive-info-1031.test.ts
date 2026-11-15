@@ -13,11 +13,16 @@ import type { ParsedPage, Rule, RuleContext } from "../src/types";
 
 async function run(rule: Rule, html: string): Promise<CheckResult[]> {
   const url = "https://example.com/";
-  const ctx = { page: { url, html, statusCode: 200, loadTime: 0, headers: {} }, parsed: parsePage(html, url) as ParsedPage, options: {} } as RuleContext;
+  const ctx = {
+    page: { url, html, statusCode: 200, loadTime: 0, headers: {} },
+    parsed: parsePage(html, url) as ParsedPage,
+    options: {},
+  } as RuleContext;
   return (await rule.run(ctx)).checks as CheckResult[];
 }
 
-const page = (body: string) => `<!doctype html><html lang="en"><head><title>t</title></head><body><main>${body}</main></body></html>`;
+const page = (body: string) =>
+  `<!doctype html><html lang="en"><head><title>t</title></head><body><main>${body}</main></body></html>`;
 
 describe("inconclusive vs nothing-found infos (#1031)", () => {
   test("content too short to judge is inconclusive (keyword-stuffing, reading-level)", async () => {

@@ -116,42 +116,94 @@ const IMAGES = `<img src="/a.jpg"><img src="/b.jpg"><img src="/c.jpg"><img src="
 
 // One case per rule: a snippet that makes the rule fire as live markup.
 const CASES: Array<[Rule, Snippet]> = [
-  [frameTitleRule, { body: `<iframe src="https://www.googletagmanager.com/ns.html?id=GTM-X" height="0" width="0"></iframe>` }],
+  [
+    frameTitleRule,
+    {
+      body: `<iframe src="https://www.googletagmanager.com/ns.html?id=GTM-X" height="0" width="0"></iframe>`,
+    },
+  ],
   [metaRefreshRule, { head: `<meta http-equiv="refresh" content="0; url=/no-js.html">` }],
   [imageRedundantAltRule, { body: `<img src="/logo.png" alt="Image of the company logo">` }],
-  [altTextRule, { body: `<img height="1" width="1" src="https://www.facebook.com/tr?id=1&ev=PageView&noscript=1">` }],
+  [
+    altTextRule,
+    {
+      body: `<img height="1" width="1" src="https://www.facebook.com/tr?id=1&ev=PageView&noscript=1">`,
+    },
+  ],
   [dimensionsRule, { body: HERO }],
   [responsiveSizeRule, { body: `<img src="${AVATAR}" width="64" height="64" alt="Avatar">` }],
-  [aspectMismatchRule, { body: `<img src="/hero.jpg" width="800" height="600" style="width: 400px; height: 400px">` }],
+  [
+    aspectMismatchRule,
+    { body: `<img src="/hero.jpg" width="800" height="600" style="width: 400px; height: 400px">` },
+  ],
   [filenameQualityRule, { body: HERO }],
   [lazyLoadingRule, { body: IMAGES }],
   [modernFormatRule, { body: HERO }],
   [offscreenLazyRule, { body: IMAGES }],
   [optimizedRule, { body: HERO }],
-  [pictureElementRule, { body: `<picture><source srcset="/hero.webp" type="image/webp"></picture>` }],
+  [
+    pictureElementRule,
+    { body: `<picture><source srcset="/hero.webp" type="image/webp"></picture>` },
+  ],
   [srcsetRule, { body: `<img src="/hero.jpg" width="1200" height="800">` }],
   [lcpHintsRule, { body: HERO }],
   [clsHintsRule, { body: HERO }],
   [lcpFetchpriorityRule, { body: `<img src="/hero.jpg" width="1200" height="800">` }],
   [lazyAboveFoldRule, { body: `<img src="/hero.jpg" width="1200" height="800" loading="lazy">` }],
-  [carouselHiddenEagerRule, { body: `<div class="carousel"><div class="slide" hidden><img src="/slide-2.jpg"></div></div>` }],
+  [
+    carouselHiddenEagerRule,
+    {
+      body: `<div class="carousel"><div class="slide" hidden><img src="/slide-2.jpg"></div></div>`,
+    },
+  ],
   [animatedContentRule, { body: GIF }],
-  [renderBlockingRule, { head: `<link rel="stylesheet" href="/theme.css"><script src="/app.js"></script>` }],
+  [
+    renderBlockingRule,
+    { head: `<link rel="stylesheet" href="/theme.css"><script src="/app.js"></script>` },
+  ],
   [criticalRequestChainsRule, { head: `<link rel="stylesheet" href="/theme.css">` }],
-  [preconnectRule, { head: `<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter">` }],
-  [fontLoadingRule, { head: `<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter">` }],
-  [fontDeliveryRule, { head: `<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter">` }],
-  [inpHintsRule, { head: `<script src="https://www.googletagmanager.com/gtag/js?id=G-1"></script>` }],
+  [
+    preconnectRule,
+    { head: `<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter">` },
+  ],
+  [
+    fontLoadingRule,
+    { head: `<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter">` },
+  ],
+  [
+    fontDeliveryRule,
+    { head: `<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter">` },
+  ],
+  [
+    inpHintsRule,
+    { head: `<script src="https://www.googletagmanager.com/gtag/js?id=G-1"></script>` },
+  ],
   [unminifiedCssRule, { head: `<style>${LONG_CSS}</style>` }],
   [unminifiedJsRule, { body: `<script>${LONG_JS}</script>` }],
-  [duplicateJsRule, { body: `<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script><script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>` }],
-  [jsLibrariesRule, { body: `<script src="https://code.jquery.com/jquery-1.12.4.min.js"></script>` }],
+  [
+    duplicateJsRule,
+    {
+      body: `<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script><script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>`,
+    },
+  ],
+  [
+    jsLibrariesRule,
+    { body: `<script src="https://code.jquery.com/jquery-1.12.4.min.js"></script>` },
+  ],
   // Under 50 characters, so the rule reads it through its raw-HTML marker scan.
   [jsLibrariesRule, { body: `<script>/* jQuery 1.12.0 */ jQuery.fn.jquery;</script>` }],
-  [fontLoadingRule, { head: `<style>@font-face { font-family: Brand; src: url(/brand.woff2); }</style>` }],
+  [
+    fontLoadingRule,
+    { head: `<style>@font-face { font-family: Brand; src: url(/brand.woff2); }</style>` },
+  ],
   [legacyJsRule, { body: `<script src="https://polyfill.io/v3/polyfill.min.js"></script>` }],
   [sriRule, { body: `<script src="https://cdn.example.net/tracker.js"></script>` }],
-  [thirdPartyCookiesRule, { body: `<img height="1" width="1" src="https://www.facebook.com/tr?id=1&ev=PageView&noscript=1">` }],
+  [
+    thirdPartyCookiesRule,
+    {
+      body: `<img height="1" width="1" src="https://www.facebook.com/tr?id=1&ev=PageView&noscript=1">`,
+    },
+  ],
   [mixedContentRule, { body: `<img src="http://cdn.example.net/pixel.gif" alt="">` }],
 ];
 
@@ -180,7 +232,9 @@ describe("rules ignore <noscript> content (#434)", () => {
   });
 
   test("a <noscript> WebM source does not give a live video a modern codec", () => {
-    const live = page({ body: `<video controls><source src="/clip.mp4" type="video/mp4"></video>` });
+    const live = page({
+      body: `<video controls><source src="/clip.mp4" type="video/mp4"></video>`,
+    });
     const withNoscript = page({
       body: `<video controls><source src="/clip.mp4" type="video/mp4"><noscript><source src="/clip.webm" type="video/webm"></noscript></video>`,
     });
@@ -199,7 +253,9 @@ describe("rules ignore <noscript> content (#434)", () => {
 
 describe("noscript helpers", () => {
   test("stripNoscriptMarkup removes every <noscript> element, in any case, and nothing else", () => {
-    expect(stripNoscriptMarkup(`a<noscript><img src="/x"></noscript>b<NOSCRIPT >c</NoScript >d`)).toBe("abd");
+    expect(
+      stripNoscriptMarkup(`a<noscript><img src="/x"></noscript>b<NOSCRIPT >c</NoScript >d`),
+    ).toBe("abd");
     expect(stripNoscriptMarkup(`<noscripts>kept</noscripts>`)).toBe(`<noscripts>kept</noscripts>`);
     expect(stripNoscriptMarkup(`before<noscript>unclosed`)).toBe("before");
     const plain = "<p>no fallback here</p>";
@@ -221,12 +277,19 @@ describe("noscript helpers", () => {
     ["--!>", `<!-- c --!>`],
     ["an abrupt <!-->", `<!-->`],
     ["an abrupt <!--->", `<!--->`],
-  ])("stripNoscriptMarkup: a comment closed by %s does not hide the next <noscript>", (_name, comment) => {
-    expect(stripNoscriptMarkup(`${comment}a<noscript>x</noscript>b`)).toBe(`${comment}ab`);
-  });
+  ])(
+    "stripNoscriptMarkup: a comment closed by %s does not hide the next <noscript>",
+    (_name, comment) => {
+      expect(stripNoscriptMarkup(`${comment}a<noscript>x</noscript>b`)).toBe(`${comment}ab`);
+    },
+  );
 
   test("stripNoscriptMarkup: a quoted </noscript> in the start tag does not end it", () => {
-    expect(stripNoscriptMarkup(`a<noscript data-x="</noscript>"><script>jQuery.fn.jquery</script></noscript>b`)).toBe("ab");
+    expect(
+      stripNoscriptMarkup(
+        `a<noscript data-x="</noscript>"><script>jQuery.fn.jquery</script></noscript>b`,
+      ),
+    ).toBe("ab");
   });
 
   test("stripNoscriptMarkup: noscript content is raw text up to the first </noscript>", () => {
@@ -234,11 +297,13 @@ describe("noscript helpers", () => {
   });
 
   const { document } = parseHTML(
-    `<!DOCTYPE html><html><head><NOSCRIPT><link rel="stylesheet" href="/fallback.css"></NOSCRIPT><link rel="stylesheet" href="/live.css"></head><body><noscript><div><img src="/deep.png"></div></noscript><img src="/live.png"></body></html>`
+    `<!DOCTYPE html><html><head><NOSCRIPT><link rel="stylesheet" href="/fallback.css"></NOSCRIPT><link rel="stylesheet" href="/live.css"></head><body><noscript><div><img src="/deep.png"></div></noscript><img src="/live.png"></body></html>`,
   );
 
   test("querySelectorAllOutsideNoscript drops descendants of <noscript> at any depth, in any case", () => {
-    const hrefs = querySelectorAllOutsideNoscript(document, "link").map((l) => l.getAttribute("href"));
+    const hrefs = querySelectorAllOutsideNoscript(document, "link").map((l) =>
+      l.getAttribute("href"),
+    );
     expect(hrefs).toEqual(["/live.css"]);
     const srcs = querySelectorAllOutsideNoscript(document, "img").map((i) => i.getAttribute("src"));
     expect(srcs).toEqual(["/live.png"]);
@@ -287,7 +352,7 @@ describe("shared page signals ignore <noscript> content", () => {
       head: `<noscript><style>:root{--fallback:1} @font-face{font-family:Fallback;src:url(/f.woff2)}</style></noscript>`,
     });
     expect(fingerprintPage(parsePage(fallback, URL), URL)).toEqual(
-      fingerprintPage(parsePage(clean, URL), URL)
+      fingerprintPage(parsePage(clean, URL), URL),
     );
     expect(run(fontLoadingRule, fallback)).toBe(run(fontLoadingRule, clean));
   });
@@ -299,7 +364,7 @@ describe("shared page signals ignore <noscript> content", () => {
 
     const live = fingerprintPage(
       parsePage(page({ body: `<script src="https://cdn.example.net/tracker.js"></script>` }), URL),
-      URL
+      URL,
     );
     expect([...(live?.assetHosts ?? [])]).toEqual(["cdn.example.net"]);
   });

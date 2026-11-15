@@ -47,7 +47,9 @@ function domainHost(entry: string): string {
   const trimmed = entry.trim().replace(/^\*?\./, "");
   if (!trimmed) return "";
   try {
-    return normalizeHost(new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`).hostname);
+    return normalizeHost(
+      new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`).hostname,
+    );
   } catch {
     return "";
   }

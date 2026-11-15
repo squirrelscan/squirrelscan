@@ -96,9 +96,7 @@ export interface ProductSchema extends SchemaType {
   color?: string;
   material?: string;
   size?: string;
-  weight?:
-    | string
-    | { "@type": "QuantitativeValue"; value?: number; unitCode?: string };
+  weight?: string | { "@type": "QuantitativeValue"; value?: number; unitCode?: string };
   category?: string;
   manufacturer?: OrganizationSchema | string;
 }

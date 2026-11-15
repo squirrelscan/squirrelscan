@@ -25,7 +25,8 @@ function entry(body: string): string {
   });
 }
 
-const storedBody = (raw: string | undefined) => (raw === undefined ? undefined : (JSON.parse(raw) as { body: string }).body);
+const storedBody = (raw: string | undefined) =>
+  raw === undefined ? undefined : (JSON.parse(raw) as { body: string }).body;
 
 function memoryCache(): ScriptContentCache & { map: Map<string, string> } {
   const map = new Map<string, string>();
@@ -91,7 +92,8 @@ describe("script content cache (repo#1415)", () => {
     try {
       const contentCache = memoryCache();
       const url = `http://127.0.0.1:${gz.port}/g.js`;
-      const once = async () => (await Effect.runPromise(fetchScriptContents([url], { contentCache })))[0]!;
+      const once = async () =>
+        (await Effect.runPromise(fetchScriptContents([url], { contentCache })))[0]!;
       const first = await once();
       const second = await once();
       expect(hits).toEqual(["gz"]);
@@ -139,7 +141,9 @@ describe("script content cache (repo#1415)", () => {
     const contentCache = memoryCache();
     const bad = Bun.serve({ port: 0, fetch: () => new Response("nope", { status: 404 }) });
     try {
-      await Effect.runPromise(fetchScriptContents([`http://127.0.0.1:${bad.port}/x.js`], { contentCache }));
+      await Effect.runPromise(
+        fetchScriptContents([`http://127.0.0.1:${bad.port}/x.js`], { contentCache }),
+      );
       expect(contentCache.map.size).toBe(0);
     } finally {
       bad.stop(true);
@@ -179,7 +183,13 @@ describe("script content cache (repo#1415)", () => {
       contentCache.put(list[9]!, entry("var cached=1;"));
       const budget = createFetchBudget({ tarpitLatencyMs: 10, tarpitStrikes: 2 });
       const results = await Effect.runPromise(
-        fetchScriptContents(list, { concurrency: 1, fetchAll: true, maxScripts: 10, budget, contentCache }),
+        fetchScriptContents(list, {
+          concurrency: 1,
+          fetchAll: true,
+          maxScripts: 10,
+          budget,
+          contentCache,
+        }),
       );
       expect(budget.summary().skipped).toBeGreaterThan(0);
       expect(results[9]?.fromCache).toBe(true);
@@ -258,7 +268,8 @@ describe("script content cache (repo#1415)", () => {
     const rd = Bun.serve({
       port: 0,
       fetch(request) {
-        if (new URL(request.url).pathname === "/old.js") return Response.redirect(new URL("/new.js", request.url).href, 302);
+        if (new URL(request.url).pathname === "/old.js")
+          return Response.redirect(new URL("/new.js", request.url).href, 302);
         return new Response("var r=1;", { headers: { "content-type": "application/javascript" } });
       },
     });

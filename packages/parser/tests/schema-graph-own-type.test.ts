@@ -8,13 +8,11 @@ import { parsePage } from "../src/index";
 
 const page = (jsonLd: unknown): string =>
   `<!doctype html><html><head><title>t</title><script type="application/ld+json">${JSON.stringify(
-    jsonLd
+    jsonLd,
   )}</script></head><body><p>hi</p></body></html>`;
 
 const typesOf = (nodes: Record<string, unknown>[]): string[] =>
-  nodes.flatMap((n) =>
-    n["@type"] === undefined ? [] : [n["@type"]].flat()
-  ) as string[];
+  nodes.flatMap((n) => (n["@type"] === undefined ? [] : [n["@type"]].flat())) as string[];
 
 const wrapper = {
   "@context": "https://schema.org",
@@ -59,8 +57,6 @@ describe("extractSchemas with @graph and own @type", () => {
     };
     const parsed = parsePage(page(yoast), "https://example.com/");
     expect(parsed.schemas.types).toEqual(["WebPage", "Organization"]);
-    expect(parsed.schemas.types).toEqual(
-      typesOf(flattenJsonLdNodes(JSON.stringify(yoast)))
-    );
+    expect(parsed.schemas.types).toEqual(typesOf(flattenJsonLdNodes(JSON.stringify(yoast))));
   });
 });

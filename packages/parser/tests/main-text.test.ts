@@ -106,12 +106,19 @@ describe("markup fallback: furniture tokens", () => {
   });
 
   test("tokens that must match do match", () => {
-    for (const cls of ["ad", "ads", "ad-slot", "cookie-consent", "CybotCookiebotDialog", "tawk-widget", "sidebar"]) {
+    for (const cls of [
+      "ad",
+      "ads",
+      "ad-slot",
+      "cookie-consent",
+      "CybotCookiebotDialog",
+      "tawk-widget",
+      "sidebar",
+    ]) {
       const document = parseDocument(`<div class="${cls}">t</div>`);
-      expect([cls, hasFurnitureToken(document.querySelector("div") as unknown as Element)]).toEqual([
-        cls,
-        true,
-      ]);
+      expect([cls, hasFurnitureToken(document.querySelector("div") as unknown as Element)]).toEqual(
+        [cls, true],
+      );
     }
   });
 
@@ -169,12 +176,16 @@ describe("structure and markdown", () => {
   });
 
   test("a layout table is walked through, not flattened into one table block", () => {
-    const out = run(`<table role="presentation"><tr><td><h2>Heading</h2><p>Para</p></td></tr></table>`);
+    const out = run(
+      `<table role="presentation"><tr><td><h2>Heading</h2><p>Para</p></td></tr></table>`,
+    );
     expect(out.blocks.map((b) => b.kind)).toEqual(["heading", "paragraph"]);
   });
 
   test("blockquote and loose text become quote and paragraph blocks", () => {
-    const out = run(`<div>Loose <b>text</b> here<blockquote><p>Quoted words</p></blockquote>tail</div>`);
+    const out = run(
+      `<div>Loose <b>text</b> here<blockquote><p>Quoted words</p></blockquote>tail</div>`,
+    );
     expect(out.blocks.map((b) => [b.kind, b.text])).toEqual([
       ["paragraph", "Loose text here"],
       ["quote", "Quoted words"],
@@ -246,14 +257,13 @@ describe("with a placer", () => {
   });
   // Label by element id, inherited from the nearest labelled ancestor as elementPlacer does:
   // `region-x` / `section-x`; `trunc` fails closed; `boom` throws.
-  const byId =
-    (calls?: Element[]): ContentPlacer => {
-      const nodeIds = new Map<Element, number>();
-      const idOf = (node: Element): number => {
-        if (!nodeIds.has(node)) nodeIds.set(node, 7 + nodeIds.size);
-        return nodeIds.get(node)!;
-      };
-      return (el) => {
+  const byId = (calls?: Element[]): ContentPlacer => {
+    const nodeIds = new Map<Element, number>();
+    const idOf = (node: Element): number => {
+      if (!nodeIds.has(node)) nodeIds.set(node, 7 + nodeIds.size);
+      return nodeIds.get(node)!;
+    };
+    return (el) => {
       calls?.push(el);
       const out: ContentPlacement = { region: null, section: null };
       let hops = 0;
@@ -261,12 +271,14 @@ describe("with a placer", () => {
         const id = node.getAttribute("id") ?? "";
         if (id === "boom") throw new Error("placer exploded");
         if (id === "trunc") return { region: null, section: null, truncated: true };
-        if (!out.region && id.startsWith("region-")) out.region = { ...label(id.slice(7), idOf(node)), hops };
-        if (!out.section && id.startsWith("section-")) out.section = { ...label(id.slice(8), idOf(node)), hops };
+        if (!out.region && id.startsWith("region-"))
+          out.region = { ...label(id.slice(7), idOf(node)), hops };
+        if (!out.section && id.startsWith("section-"))
+          out.section = { ...label(id.slice(8), idOf(node)), hops };
       }
       return out.region || out.section ? out : null;
-      };
     };
+  };
 
   test("a section labelled cookie_consent or ad is dropped, with no markup hint", () => {
     const out = run(
@@ -364,7 +376,10 @@ describe("with a placer", () => {
   });
 
   test("an abstaining placer falls back to the markup rules", () => {
-    const out = run(`<nav><p>menu</p></nav><div class="cookie-banner"><p>c</p></div><p>body</p>`, () => null);
+    const out = run(
+      `<nav><p>menu</p></nav><div class="cookie-banner"><p>c</p></div><p>body</p>`,
+      () => null,
+    );
     expect(out.text).toBe("body");
     expect(out.placer).toBe("markup");
   });
@@ -386,7 +401,10 @@ describe("with a placer", () => {
   });
 
   test("a page-wide form that holds main is a wrapper, not a form", () => {
-    const out = run(`<form id="region-form"><main id="region-main_content"><p>asp.net page</p></main></form>`, byId());
+    const out = run(
+      `<form id="region-form"><main id="region-main_content"><p>asp.net page</p></main></form>`,
+      byId(),
+    );
     expect(out.text).toBe("asp.net page");
     const real = run(`<form id="region-form"><p>Your name</p></form>`, byId());
     expect(real.text).toBe("");

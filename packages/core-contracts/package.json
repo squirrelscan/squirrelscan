@@ -42,8 +42,18 @@
     "effect": "^3.21.3"
   },
   "scripts": {
-    "typecheck": "tsgo --noEmit"
+    "typecheck": "tsgo --noEmit",
+    "lint": "oxlint -c oxlint.config.mjs src/ tests/",
+    "format": "oxfmt src/ tests/ --write",
+    "format:check": "oxfmt src/ tests/ --check"
   },
   "private": true,
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "eslint-plugin-github": "^6.0.0",
+    "eslint-plugin-sonarjs": "^4.1.0",
+    "oxfmt": "^0.21.0",
+    "oxlint": "1.73.0",
+    "ultracite": "7.9.2"
+  }
 }

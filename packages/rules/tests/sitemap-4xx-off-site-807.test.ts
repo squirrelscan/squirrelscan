@@ -35,9 +35,9 @@ function ctx(statuses: SitemapUrlStatusData[], sitemapOffSiteSkipped?: number): 
 
 describe("crawl/sitemap-4xx and off-site sitemap URLs left unchecked (pub#807)", () => {
   test("the skipped count is reported as info beside the checked URLs' pass", async () => {
-    const { checks } = (await sitemap4xxRule.run(
+    const { checks } = await sitemap4xxRule.run(
       ctx([{ url: `${BASE}/a`, status: 200, error: null }], 3),
-    ));
+    );
     expect(checks.find((c) => c.name === "sitemap-4xx")?.status).toBe("pass");
     const offSite = checks.find((c) => c.name === "sitemap-off-site-not-checked");
     expect(offSite?.status).toBe("info");
@@ -46,7 +46,7 @@ describe("crawl/sitemap-4xx and off-site sitemap URLs left unchecked (pub#807)",
   });
 
   test("when every sitemap URL was off-site, sitemap-4xx is skipped, not passed", async () => {
-    const { checks } = (await sitemap4xxRule.run(ctx([], 2)));
+    const { checks } = await sitemap4xxRule.run(ctx([], 2));
     const main = checks.find((c) => c.name === "sitemap-4xx");
     expect(main?.status).toBe("skipped");
     expect(main?.message).toBe("No sitemap URL on the audited site to check");
@@ -54,16 +54,16 @@ describe("crawl/sitemap-4xx and off-site sitemap URLs left unchecked (pub#807)",
   });
 
   test("with nothing checked and nothing skipped it still passes, as before", async () => {
-    const { checks } = (await sitemap4xxRule.run(ctx([])));
+    const { checks } = await sitemap4xxRule.run(ctx([]));
     expect(checks.find((c) => c.name === "sitemap-4xx")?.status).toBe("pass");
     expect(checks.some((c) => c.name === "sitemap-off-site-not-checked")).toBe(false);
   });
 
   test("no row when nothing was skipped", async () => {
     for (const skipped of [undefined, 0]) {
-      const { checks } = (await sitemap4xxRule.run(
+      const { checks } = await sitemap4xxRule.run(
         ctx([{ url: `${BASE}/a`, status: 200, error: null }], skipped),
-      ));
+      );
       expect(checks.some((c) => c.name === "sitemap-off-site-not-checked")).toBe(false);
     }
   });

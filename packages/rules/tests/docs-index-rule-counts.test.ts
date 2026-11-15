@@ -185,7 +185,9 @@ describe("rules page category cards", () => {
         if (count === undefined) {
           wrong.push(`${file}: the /rules/${slug} card has no "(N rules)" count`);
         } else if (live === undefined) {
-          wrong.push(`${file}: /rules/${slug} maps to "${code}", which has no rules in the registry`);
+          wrong.push(
+            `${file}: /rules/${slug} maps to "${code}", which has no rules in the registry`,
+          );
         } else if (Number(count) !== live) {
           wrong.push(
             `${file}: /rules/${slug} (${code}/*) says ${count} rules, the registry has ${live}. Update that card.`,
@@ -241,7 +243,8 @@ describe("rule counts stated in prose", () => {
       const found = [...read(file).matchAll(new RegExp(re.source, "g"))];
       expect(`${file}: ${found.length} match(es) of ${re}`).toBe(`${file}: 1 match(es) of ${re}`);
       const live = expected(against);
-      if (live === undefined) throw new Error(`${file}: "${against}" is not a live category or "total"`);
+      if (live === undefined)
+        throw new Error(`${file}: "${against}" is not a live category or "total"`);
       expect(Number(found[0]![1])).toBe(live);
     });
   }

@@ -66,8 +66,7 @@ export const CATEGORIES = {
   integrity: {
     code: "integrity",
     name: "Site Integrity",
-    description:
-      "Signs of compromise: injected pages, phishing kits, malware, SEO spam",
+    description: "Signs of compromise: injected pages, phishing kits, malware, SEO spam",
     priority: 92, // surfaces at the top, ahead of security, so compromise is loud
     group: "security",
   },
@@ -179,8 +178,7 @@ export const CATEGORIES = {
   ax: {
     code: "ax",
     name: "Agent Experience",
-    description:
-      "How ready a site is for AI agents to read, discover, and operate on it",
+    description: "How ready a site is for AI agents to read, discover, and operate on it",
     priority: 20,
     group: "ai",
   },
@@ -194,8 +192,7 @@ export const CATEGORIES = {
   blocking: {
     code: "blocking",
     name: "Blocking",
-    description:
-      "Content, links, and trackers that ad blockers and privacy filters block",
+    description: "Content, links, and trackers that ad blockers and privacy filters block",
     priority: 10,
     group: "security",
   },
@@ -238,7 +235,7 @@ export const RULE_CATEGORY_VALUES = CATEGORY_CODES;
  * Code → display name lookup
  */
 export const CATEGORY_NAMES: Record<RuleCategory, string> = Object.fromEntries(
-  Object.values(CATEGORIES).map((c) => [c.code, c.name])
+  Object.values(CATEGORIES).map((c) => [c.code, c.name]),
 ) as Record<RuleCategory, string>;
 
 /**
@@ -273,9 +270,7 @@ export function getCategoryPriority(category: RuleCategory): number {
  * Get all categories sorted by priority (highest first)
  */
 export function getCategoriesSortedByPriority(): RuleCategory[] {
-  return [...CATEGORY_CODES].sort(
-    (a, b) => CATEGORIES[b].priority - CATEGORIES[a].priority
-  );
+  return [...CATEGORY_CODES].sort((a, b) => CATEGORIES[b].priority - CATEGORIES[a].priority);
 }
 
 /**
@@ -344,10 +339,7 @@ export function normalizeCategoryCode(code: string): string {
 export const SUBCATEGORIES = {
   ad: { code: "ad", name: "Ad blocking", priority: 20 },
   privacy: { code: "privacy", name: "Privacy blocking", priority: 10 },
-} as const satisfies Record<
-  string,
-  { code: string; name: string; priority: number }
->;
+} as const satisfies Record<string, { code: string; name: string; priority: number }>;
 
 export type SubcategoryCode = keyof typeof SUBCATEGORIES;
 
@@ -358,7 +350,5 @@ export function getSubcategoryName(code: string): string {
 
 /** Sort priority for a subcategory code (higher first); unknown → 0. */
 export function getSubcategoryPriority(code: string): number {
-  return (
-    (SUBCATEGORIES as Record<string, { priority: number }>)[code]?.priority ?? 0
-  );
+  return (SUBCATEGORIES as Record<string, { priority: number }>)[code]?.priority ?? 0;
 }

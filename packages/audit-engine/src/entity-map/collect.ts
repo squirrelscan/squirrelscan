@@ -16,11 +16,7 @@
 
 import type { EntityMap } from "@squirrelscan/core-contracts/entity-map";
 
-import {
-  createEntityMapBuilder,
-  type BuildEntityMapOptions,
-  type EntityMapBuilder,
-} from "./build";
+import { createEntityMapBuilder, type BuildEntityMapOptions, type EntityMapBuilder } from "./build";
 
 /**
  * The shape the collector needs from one crawled page.

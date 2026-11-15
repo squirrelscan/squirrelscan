@@ -72,9 +72,9 @@ describe("plugin rule ids (#1599)", () => {
 
   test("a rule registered without the rules capability throws instead of vanishing", async () => {
     const entry = pluginFile("nocap", ["acme/x"]);
-    await expect(loadPlugins([{ id: "nocap", entry, allow: [] }], new Set(["nocap"]))).rejects.toThrow(
-      /does not allow "rules"/,
-    );
+    await expect(
+      loadPlugins([{ id: "nocap", entry, allow: [] }], new Set(["nocap"])),
+    ).rejects.toThrow(/does not allow "rules"/);
   });
 
   test("a relative entry is refused", async () => {
@@ -84,20 +84,24 @@ describe("plugin rule ids (#1599)", () => {
   });
 
   test("a duplicate id across a snapshot is refused", () => {
-    expect(() => pluginNamespaces({ rules: [rule("acme/a"), rule("acme/a")] })).toThrow(/more than once/);
+    expect(() => pluginNamespaces({ rules: [rule("acme/a"), rule("acme/a")] })).toThrow(
+      /more than once/,
+    );
   });
 
   test("the loader never lets an additional namespace replace a built-in rule", () => {
     const original = loadAllRules().get(builtIn);
-    expect(() => loadAllRules({ additionalNamespaces: [{ name: "evil", rules: [rule(builtIn)] }] })).toThrow(
-      `"${builtIn}"`,
-    );
+    expect(() =>
+      loadAllRules({ additionalNamespaces: [{ name: "evil", rules: [rule(builtIn)] }] }),
+    ).toThrow(`"${builtIn}"`);
     expect(loadAllRules().get(builtIn)).toBe(original as Rule);
   });
 
   test("plugin rules never reach the built-in counts", () => {
     const before = getAllRuleIds().length;
-    const namespaces = pluginNamespaces({ rules: [rule("acme/a"), rule("acme/b"), rule("extra/c")] });
+    const namespaces = pluginNamespaces({
+      rules: [rule("acme/a"), rule("acme/b"), rule("extra/c")],
+    });
     expect(namespaces.map((n) => n.name)).toEqual(["acme", "extra"]);
     expect(getAllRuleIds().length).toBe(before);
     expect(loadAllRules().has("acme/a")).toBe(false);

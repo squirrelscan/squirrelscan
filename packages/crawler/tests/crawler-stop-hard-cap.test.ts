@@ -14,14 +14,31 @@ import type { CrawlerConfig, CrawlerEvent } from "../src/core/types";
 
 const ORIGIN = "https://example.com";
 const EMPTY_RESPONSE_HEADERS = {
-  contentType: null, contentEncoding: null, cacheControl: null, expires: null,
-  vary: null, etag: null, server: null, lastModified: null, link: null,
-  serverTiming: null, age: null, xCache: null, cfCacheStatus: null,
-  xVercelCache: null, altSvc: null, acceptRanges: null,
+  contentType: null,
+  contentEncoding: null,
+  cacheControl: null,
+  expires: null,
+  vary: null,
+  etag: null,
+  server: null,
+  lastModified: null,
+  link: null,
+  serverTiming: null,
+  age: null,
+  xCache: null,
+  cfCacheStatus: null,
+  xVercelCache: null,
+  altSvc: null,
+  acceptRanges: null,
 } as const;
 const EMPTY_SECURITY_HEADERS = {
-  hsts: null, csp: null, xFrameOptions: null, xContentTypeOptions: null,
-  referrerPolicy: null, permissionsPolicy: null, xRobotsTag: null,
+  hsts: null,
+  csp: null,
+  xFrameOptions: null,
+  xContentTypeOptions: null,
+  referrerPolicy: null,
+  permissionsPolicy: null,
+  xRobotsTag: null,
 } as const;
 
 // A fetcher whose fetch never returns on its own. `mode` selects how it hangs:
@@ -42,12 +59,29 @@ function wedgedFetcher(mode: "never" | "promise", onInterrupt: () => void): Craw
       }
       // Unreachable — present only to satisfy the return type.
       return {
-        url, finalUrl: url, status: 200, loadTime: 1, ttfb: 1, downloadTime: 1,
+        url,
+        finalUrl: url,
+        status: 200,
+        loadTime: 1,
+        ttfb: 1,
+        downloadTime: 1,
         headers: { ...EMPTY_RESPONSE_HEADERS, contentType: "text/html" },
-        securityHeaders: EMPTY_SECURITY_HEADERS, contentType: "text/html",
-        body: "<html></html>", sizeBytes: 13,
-        redirectChain: { sourceUrl: url, finalUrl: url, hops: [], chainLength: 0, isLoop: false, endsInError: false, httpsToHttp: false, httpToHttps: false },
-        fetcherId: undefined, fallbackReason: undefined,
+        securityHeaders: EMPTY_SECURITY_HEADERS,
+        contentType: "text/html",
+        body: "<html></html>",
+        sizeBytes: 13,
+        redirectChain: {
+          sourceUrl: url,
+          finalUrl: url,
+          hops: [],
+          chainLength: 0,
+          isLoop: false,
+          endsInError: false,
+          httpsToHttp: false,
+          httpToHttps: false,
+        },
+        fetcherId: undefined,
+        fallbackReason: undefined,
       };
     }).pipe(Effect.onInterrupt(() => Effect.sync(onInterrupt)));
 }
@@ -59,12 +93,29 @@ function healthyFetcher(site: Record<string, string>): CrawlFetcher {
       const status = site[url] !== undefined ? 200 : 404;
       yield* applyStatusGuards(url, status, new Headers(), body);
       return {
-        url, finalUrl: url, status, loadTime: 1, ttfb: 1, downloadTime: 1,
+        url,
+        finalUrl: url,
+        status,
+        loadTime: 1,
+        ttfb: 1,
+        downloadTime: 1,
         headers: { ...EMPTY_RESPONSE_HEADERS, contentType: "text/html" },
-        securityHeaders: EMPTY_SECURITY_HEADERS, contentType: "text/html",
-        body, sizeBytes: body.length,
-        redirectChain: { sourceUrl: url, finalUrl: url, hops: [], chainLength: 0, isLoop: false, endsInError: false, httpsToHttp: false, httpToHttps: false },
-        fetcherId: undefined, fallbackReason: undefined,
+        securityHeaders: EMPTY_SECURITY_HEADERS,
+        contentType: "text/html",
+        body,
+        sizeBytes: body.length,
+        redirectChain: {
+          sourceUrl: url,
+          finalUrl: url,
+          hops: [],
+          chainLength: 0,
+          isLoop: false,
+          endsInError: false,
+          httpsToHttp: false,
+          httpToHttps: false,
+        },
+        fetcherId: undefined,
+        fallbackReason: undefined,
       };
     });
 }
@@ -85,12 +136,29 @@ function serveRootHangChild(childUrl: string, onInterrupt: () => void): CrawlFet
       const status = url === `${ORIGIN}/` ? 200 : 404;
       yield* applyStatusGuards(url, status, new Headers(), body);
       return {
-        url, finalUrl: url, status, loadTime: 1, ttfb: 1, downloadTime: 1,
+        url,
+        finalUrl: url,
+        status,
+        loadTime: 1,
+        ttfb: 1,
+        downloadTime: 1,
         headers: { ...EMPTY_RESPONSE_HEADERS, contentType: "text/html" },
-        securityHeaders: EMPTY_SECURITY_HEADERS, contentType: "text/html",
-        body, sizeBytes: body.length,
-        redirectChain: { sourceUrl: url, finalUrl: url, hops: [], chainLength: 0, isLoop: false, endsInError: false, httpsToHttp: false, httpToHttps: false },
-        fetcherId: undefined, fallbackReason: undefined,
+        securityHeaders: EMPTY_SECURITY_HEADERS,
+        contentType: "text/html",
+        body,
+        sizeBytes: body.length,
+        redirectChain: {
+          sourceUrl: url,
+          finalUrl: url,
+          hops: [],
+          chainLength: 0,
+          isLoop: false,
+          endsInError: false,
+          httpsToHttp: false,
+          httpToHttps: false,
+        },
+        fetcherId: undefined,
+        fallbackReason: undefined,
       };
     }).pipe(Effect.onInterrupt(() => Effect.sync(onInterrupt)));
 }
@@ -103,16 +171,31 @@ const GRACE_MS = 300;
 const WATCHDOG_FLOOR_MS = 120_000;
 
 const CONFIG: Partial<CrawlerConfig> = {
-  concurrency: 1, perHostConcurrency: 1, delayMs: 0, perHostDelayMs: 0,
-  timeoutMs: 1000, userAgent: "test", respectRobots: false, incremental: false,
-  useCacheControl: false, breadthFirst: false, disableLinkDiscovery: false,
-  coverageMode: "full", maxPages: 100, stopGraceMs: GRACE_MS,
+  concurrency: 1,
+  perHostConcurrency: 1,
+  delayMs: 0,
+  perHostDelayMs: 0,
+  timeoutMs: 1000,
+  userAgent: "test",
+  respectRobots: false,
+  incremental: false,
+  useCacheControl: false,
+  breadthFirst: false,
+  disableLinkDiscovery: false,
+  coverageMode: "full",
+  maxPages: 100,
+  stopGraceMs: GRACE_MS,
 };
 
 function stubPreamble(): () => void {
   const original = globalThis.fetch;
   globalThis.fetch = ((input: Parameters<typeof fetch>[0]) => {
-    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url;
+    const url =
+      typeof input === "string"
+        ? input
+        : input instanceof URL
+          ? input.toString()
+          : (input as Request).url;
     const res = new Response("", { status: 404, headers: { "content-type": "text/plain" } });
     Object.defineProperty(res, "url", { value: url, configurable: true });
     return Promise.resolve(res);
@@ -150,7 +233,10 @@ function runWedgedThenStop(mode: "never" | "promise"): Promise<StopOutcome> {
 
     // Bounded well under the 120s watchdog: if the crawl only returns via the
     // watchdog this join times out and returnedCleanly is false.
-    const res = yield* Fiber.join(startFiber).pipe(Effect.timeout(Duration.seconds(10)), Effect.either);
+    const res = yield* Fiber.join(startFiber).pipe(
+      Effect.timeout(Duration.seconds(10)),
+      Effect.either,
+    );
     const sinceStopMs = Date.now() - stopAt;
 
     const crawlId = crawler.currentCrawlId;
@@ -218,7 +304,10 @@ describe("crawl-phase backstop stop() hard cap (#923)", () => {
       let completed = false;
       const collector = yield* Stream.runForEach(
         crawler.events.pipe(Stream.takeUntil((e) => e.type === "completed")),
-        (e: CrawlerEvent) => Effect.sync(() => { if (e.type === "completed") completed = true; }),
+        (e: CrawlerEvent) =>
+          Effect.sync(() => {
+            if (e.type === "completed") completed = true;
+          }),
       ).pipe(Effect.fork);
       yield* Effect.yieldNow();
 
@@ -259,15 +348,10 @@ describe("crawl-phase backstop stop() hard cap (#923)", () => {
         }),
         config: CONFIG,
       });
-      const startFiber = yield* crawlerA
-        .start(ORIGIN)
-        .pipe(Effect.either, Effect.fork);
+      const startFiber = yield* crawlerA.start(ORIGIN).pipe(Effect.either, Effect.fork);
       yield* Effect.sleep(Duration.millis(CAP_MS));
       yield* crawlerA.stop();
-      yield* Fiber.join(startFiber).pipe(
-        Effect.timeout(Duration.seconds(10)),
-        Effect.either,
-      );
+      yield* Fiber.join(startFiber).pipe(Effect.timeout(Duration.seconds(10)), Effect.either);
 
       const crawlId = crawlerA.currentCrawlId;
       if (!crawlId) throw new Error("crawl never started");

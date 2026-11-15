@@ -97,8 +97,7 @@ describe("Shopify cache-entry churn (#1899)", () => {
 });
 
 describe("what is deliberately NOT reordered", () => {
-  const ext = (n: string) =>
-    `<script src="https://cdn.shopify.com/extensions/${n}/a.js"></script>`;
+  const ext = (n: string) => `<script src="https://cdn.shopify.com/extensions/${n}/a.js"></script>`;
   const plain = (n: string) => `<script src="/assets/${n}.js"></script>`;
   const sheet = (n: string) => `<link rel="stylesheet" href="/assets/${n}.css">`;
 
@@ -197,8 +196,7 @@ describe("a block that contains a script", () => {
 // which is the failure mode that matters: it does not show up as a cache miss,
 // it shows up as two different pages sharing a render.
 describe("review counterexamples", () => {
-  const ext = (n: string) =>
-    `<script src="https://cdn.shopify.com/extensions/${n}/a.js"></script>`;
+  const ext = (n: string) => `<script src="https://cdn.shopify.com/extensions/${n}/a.js"></script>`;
 
   test("a close tag with a longer name does not end a raw-text element", () => {
     // `</textareaX>` is textarea TEXT in HTML. Ending the element there exposed

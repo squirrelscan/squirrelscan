@@ -45,7 +45,13 @@ function siteCtx(
     parsed: parsePage(p.html, p.url),
   }));
   return {
-    page: { url: pages[0]?.url ?? "https://example.com/", html: "", statusCode: 200, loadTime: 0, headers: {} },
+    page: {
+      url: pages[0]?.url ?? "https://example.com/",
+      html: "",
+      statusCode: 200,
+      loadTime: 0,
+      headers: {},
+    },
     parsed: pages[0]?.parsed ?? ({} as ParsedPage),
     site: { baseUrl: "https://example.com", pages, robotsTxt: null, sitemaps: null },
     siteMetadata,
@@ -74,7 +80,10 @@ function check(checks: CheckResult[], name: string): CheckResult | undefined {
 // ── Batch 1: privacy/legal by jurisdiction ──────────────────────────
 
 describe("Batch 1 — legal/privacy-policy escalation", () => {
-  const noPrivacyPage = { url: "https://example.com/", html: "<html><body><a href='/about'>About</a></body></html>" };
+  const noPrivacyPage = {
+    url: "https://example.com/",
+    html: "<html><body><a href='/about'>About</a></body></html>",
+  };
 
   test("(c) undefined metadata → warn (unchanged behaviour)", async () => {
     const checks = await run(privacyPolicyRule, siteCtx([noPrivacyPage], undefined));
@@ -84,14 +93,20 @@ describe("Batch 1 — legal/privacy-policy escalation", () => {
   });
 
   test("(b) GDPR audience + missing → escalates to fail", async () => {
-    const checks = await run(privacyPolicyRule, siteCtx([noPrivacyPage], meta({ primaryCountry: "DE" })));
+    const checks = await run(
+      privacyPolicyRule,
+      siteCtx([noPrivacyPage], meta({ primaryCountry: "DE" })),
+    );
     const c = check(checks, "privacy-policy");
     expect(c?.status).toBe("fail");
     expect(c?.message).toContain("GDPR");
   });
 
   test("(b) CCPA (US) audience + missing → escalates to fail", async () => {
-    const checks = await run(privacyPolicyRule, siteCtx([noPrivacyPage], meta({ primaryCountry: "US" })));
+    const checks = await run(
+      privacyPolicyRule,
+      siteCtx([noPrivacyPage], meta({ primaryCountry: "US" })),
+    );
     const c = check(checks, "privacy-policy");
     expect(c?.status).toBe("fail");
     expect(c?.message).toContain("CCPA");
@@ -116,14 +131,24 @@ describe("Batch 1 — legal/cookie-consent gating + escalation", () => {
   });
 
   test("(b) GDPR audience + no consent mechanism → escalates to warn", async () => {
-    const checks = await run(cookieConsentRule, pageCtx("https://example.com/", "<html><body>hi</body></html>", meta({ audienceScope: "global" })));
+    const checks = await run(
+      cookieConsentRule,
+      pageCtx(
+        "https://example.com/",
+        "<html><body>hi</body></html>",
+        meta({ audienceScope: "global" }),
+      ),
+    );
     const c = check(checks, "cookie-consent");
     expect(c?.status).toBe("warn");
     expect(c?.message).toContain("GDPR");
   });
 
   test("(c) undefined metadata + no consent → info (unchanged)", async () => {
-    const checks = await run(cookieConsentRule, pageCtx("https://example.com/", "<html><body>hi</body></html>", undefined));
+    const checks = await run(
+      cookieConsentRule,
+      pageCtx("https://example.com/", "<html><body>hi</body></html>", undefined),
+    );
     expect(check(checks, "cookie-consent")?.status).toBe("info");
   });
 });
@@ -156,14 +181,19 @@ describe("Batch 1 — legal/subprocessor-disclosure (new rule)", () => {
 
   test("DPA link present (by anchor text) → pass", async () => {
     const ctx = siteCtx([
-      { url: "https://saas.example.com/", html: "<a href='/legal/agreement'>Data Processing Agreement</a>" },
+      {
+        url: "https://saas.example.com/",
+        html: "<a href='/legal/agreement'>Data Processing Agreement</a>",
+      },
     ]);
     const c = check(await run(subprocessorDisclosureRule, ctx), "subprocessor-disclosure");
     expect(c?.status).toBe("pass");
   });
 
   test("disclosure absent on a site with a pricing link → warn", async () => {
-    const ctx = siteCtx([{ url: "https://saas.example.com/", html: "<a href='/pricing'>Pricing</a>" }]);
+    const ctx = siteCtx([
+      { url: "https://saas.example.com/", html: "<a href='/pricing'>Pricing</a>" },
+    ]);
     const c = check(await run(subprocessorDisclosureRule, ctx), "subprocessor-disclosure");
     expect(c?.status).toBe("warn");
   });
@@ -208,8 +238,14 @@ describe("Batch 1 — legal/subprocessor-disclosure (new rule)", () => {
       ctx.collectedSignals = {
         pages: [buildCollectedPageSignal({ url: p.url, parsed: ctx.site!.pages[0]!.parsed })],
       };
-      const collected = check(await run(subprocessorDisclosureRule, ctx), "subprocessor-disclosure");
-      const legacy = check(await run(subprocessorDisclosureRule, siteCtx([p])), "subprocessor-disclosure");
+      const collected = check(
+        await run(subprocessorDisclosureRule, ctx),
+        "subprocessor-disclosure",
+      );
+      const legacy = check(
+        await run(subprocessorDisclosureRule, siteCtx([p])),
+        "subprocessor-disclosure",
+      );
       expect(collected?.status).toBe(legacy?.status);
     }
   });
@@ -221,14 +257,22 @@ describe("Batch 2 — eeat gating declarations", () => {
   test("disclaimers gated to YMYL", () => {
     const { disclaimersRule } = require("../src/eeat/disclaimers");
     expect(disclaimersRule.meta.appliesWhen).toEqual({ requiresYMYL: true });
-    expect(ruleApplies(disclaimersRule.meta.appliesWhen, meta({ isYMYL: false })).applies).toBe(false);
-    expect(ruleApplies(disclaimersRule.meta.appliesWhen, meta({ isYMYL: true })).applies).toBe(true);
+    expect(ruleApplies(disclaimersRule.meta.appliesWhen, meta({ isYMYL: false })).applies).toBe(
+      false,
+    );
+    expect(ruleApplies(disclaimersRule.meta.appliesWhen, meta({ isYMYL: true })).applies).toBe(
+      true,
+    );
   });
 
   test("author-byline gated to content site types (skips saas, runs blog)", () => {
     const { authorBylineRule } = require("../src/eeat/author-byline");
-    expect(ruleApplies(authorBylineRule.meta.appliesWhen, meta({ siteType: "saas" })).applies).toBe(false);
-    expect(ruleApplies(authorBylineRule.meta.appliesWhen, meta({ siteType: "blog" })).applies).toBe(true);
+    expect(ruleApplies(authorBylineRule.meta.appliesWhen, meta({ siteType: "saas" })).applies).toBe(
+      false,
+    );
+    expect(ruleApplies(authorBylineRule.meta.appliesWhen, meta({ siteType: "blog" })).applies).toBe(
+      true,
+    );
   });
 
   test("(c) undefined metadata → all eeat-gated rules still apply", () => {
@@ -254,13 +298,21 @@ describe("Batch 3 — local-business gating", () => {
   });
 
   test("(a) global SaaS → gated out", () => {
-    expect(ruleApplies(napConsistencyRule.meta.appliesWhen, meta({ siteType: "saas", isLocalBusiness: false })).applies).toBe(false);
+    expect(
+      ruleApplies(
+        napConsistencyRule.meta.appliesWhen,
+        meta({ siteType: "saas", isLocalBusiness: false }),
+      ).applies,
+    ).toBe(false);
   });
 
   test("(b) local business → applicable + runs", async () => {
     const v = ruleApplies(napConsistencyRule.meta.appliesWhen, meta({ isLocalBusiness: true }));
     expect(v.applies).toBe(true);
-    const ctx = siteCtx([{ url: "https://shop.example.com/", html: "<a href='/contact'>Contact</a>" }], meta({ isLocalBusiness: true }));
+    const ctx = siteCtx(
+      [{ url: "https://shop.example.com/", html: "<a href='/contact'>Contact</a>" }],
+      meta({ isLocalBusiness: true }),
+    );
     const checks = await run(napConsistencyRule, ctx);
     expect(checks.length).toBeGreaterThan(0);
   });
@@ -291,8 +343,12 @@ describe("Batch 4 — social-presence cross-check", () => {
   });
 
   test("social-profiles gated to brand site types", () => {
-    expect(ruleApplies(socialProfilesRule.meta.appliesWhen, meta({ siteType: "corporate" })).applies).toBe(true);
-    expect(ruleApplies(socialProfilesRule.meta.appliesWhen, meta({ siteType: "docs" })).applies).toBe(false);
+    expect(
+      ruleApplies(socialProfilesRule.meta.appliesWhen, meta({ siteType: "corporate" })).applies,
+    ).toBe(true);
+    expect(
+      ruleApplies(socialProfilesRule.meta.appliesWhen, meta({ siteType: "docs" })).applies,
+    ).toBe(false);
   });
 
   test("(b) MISSING account → social-profiles-missing warn", async () => {

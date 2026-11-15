@@ -46,7 +46,7 @@ export const entitySplitIdentityRule: Rule = {
     splits.sort(
       (a, b) =>
         pageTotal(b.nodes[0]!) - pageTotal(a.nodes[0]!) ||
-        compareStrings(a.nodes[0]!.key, b.nodes[0]!.key)
+        compareStrings(a.nodes[0]!.key, b.nodes[0]!.key),
     );
 
     if (splits.length === 0) {
@@ -65,8 +65,8 @@ export const entitySplitIdentityRule: Rule = {
     // sides of each pair and can tell which to keep from the page counts.
     const { items, hidden } = cappedItems(
       splits.flatMap((split) =>
-        split.nodes.map((node) => entityItem(node, { sharesIdentityWith: split.ids }))
-      )
+        split.nodes.map((node) => entityItem(node, { sharesIdentityWith: split.ids })),
+      ),
     );
     const worst = splits[0]!;
 
@@ -76,7 +76,9 @@ export const entitySplitIdentityRule: Rule = {
           name: CHECK,
           status: "fail",
           message: `${splits.length} ${splits.length === 1 ? "entity is" : "entities are"} declared under more than one @id${moreSuffix(hidden, "declarations")}`,
-          value: clipValue(`${entityLabel(worst.nodes[0]!)} under ${worst.ids.length}: ${worst.ids.join(", ")}`),
+          value: clipValue(
+            `${entityLabel(worst.nodes[0]!)} under ${worst.ids.length}: ${worst.ids.join(", ")}`,
+          ),
           expected: "one @id per entity",
           items,
         },

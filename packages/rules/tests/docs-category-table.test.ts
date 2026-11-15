@@ -27,6 +27,7 @@ describe("configuration/rules.mdx category table (#172)", () => {
   });
 
   test("links each category to a rules page that exists", () => {
-    for (const row of rows) expect(existsSync(join(DOCS, "rules", row.page, "index.mdx"))).toBe(true);
+    for (const row of rows)
+      expect(existsSync(join(DOCS, "rules", row.page, "index.mdx"))).toBe(true);
   });
 });

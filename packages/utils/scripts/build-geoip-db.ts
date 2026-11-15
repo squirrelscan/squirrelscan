@@ -119,7 +119,9 @@ const dir = new URL("../geoip-db/", import.meta.url);
 const gz = gzipSync(buf, { level: 9 });
 await Bun.write(new URL("country.bin.gz", dir), gz);
 // keep the `edge` block that scripts/refresh-edge-data.ts owns
-const previous = await Bun.file(new URL("SNAPSHOT.json", dir)).json().catch(() => ({}));
+const previous = await Bun.file(new URL("SNAPSHOT.json", dir))
+  .json()
+  .catch(() => ({}));
 await Bun.write(
   new URL("SNAPSHOT.json", dir),
   `${JSON.stringify(

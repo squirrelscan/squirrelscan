@@ -32,10 +32,7 @@ export const gtmPresentRule: Rule = {
     }
 
     // Check for Google Analytics 4
-    if (
-      html.includes("gtag/js") ||
-      html.includes("googletagmanager.com/gtag")
-    ) {
+    if (html.includes("gtag/js") || html.includes("googletagmanager.com/gtag")) {
       analyticsFound.push("GA4");
     }
 
@@ -50,8 +47,7 @@ export const gtmPresentRule: Rule = {
       const src = script.getAttribute("src") || "";
       if (src.includes("plausible")) analyticsFound.push("Plausible");
       if (src.includes("fathom")) analyticsFound.push("Fathom");
-      if (src.includes("matomo") || src.includes("piwik"))
-        analyticsFound.push("Matomo");
+      if (src.includes("matomo") || src.includes("piwik")) analyticsFound.push("Matomo");
       if (src.includes("segment")) analyticsFound.push("Segment");
       if (src.includes("mixpanel")) analyticsFound.push("Mixpanel");
       if (src.includes("amplitude")) analyticsFound.push("Amplitude");

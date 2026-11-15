@@ -20,7 +20,7 @@ import type { RuleRunResult } from "./types";
 export function mergeRuleRunResult(
   map: Map<string, RuleRunResult>,
   ruleId: string,
-  result: RuleRunResult
+  result: RuleRunResult,
 ): void {
   const existing = map.get(ruleId);
   if (existing) {

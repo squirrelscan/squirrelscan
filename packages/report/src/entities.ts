@@ -45,9 +45,7 @@ export function entityLabel(node: EntityMapNode): string {
  * as deterministic.
  */
 export function entitiesByReach(map: EntityMap): EntityMapNode[] {
-  return [...map.nodes].sort(
-    (a, b) => b.occurrences - a.occurrences || byString(a.key, b.key),
-  );
+  return [...map.nodes].sort((a, b) => b.occurrences - a.occurrences || byString(a.key, b.key));
 }
 
 /**
@@ -85,9 +83,7 @@ export function danglingEdges(map: EntityMap): EntityMapEdge[] {
  * A single-page entity without an `@id` is ordinary and is not listed.
  */
 export function entitiesWithoutId(map: EntityMap): EntityMapNode[] {
-  return entitiesByReach(map).filter(
-    (node) => node.id === null && entityPageTotal(node) > 1,
-  );
+  return entitiesByReach(map).filter((node) => node.id === null && entityPageTotal(node) > 1);
 }
 
 /** The `@id` a dangling edge pointed at, with the map's key prefix removed. */

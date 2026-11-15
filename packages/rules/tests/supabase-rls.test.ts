@@ -95,7 +95,11 @@ const SECRET_BODY = JSON.stringify([
 let bodyPulls = 0;
 
 /** A response whose body is the secret JSON, counted if it is ever read. */
-function answer(status: number, contentRange?: string, extra: Record<string, string> = {}): Response {
+function answer(
+  status: number,
+  contentRange?: string,
+  extra: Record<string, string> = {},
+): Response {
   const bytes = new TextEncoder().encode(SECRET_BODY);
   const body = new ReadableStream<Uint8Array>(
     {
@@ -308,12 +312,12 @@ describe("discovery (sends nothing)", () => {
     expect(classifyTableResponse(404, null).kind).toBe("missing");
     // Pushback says nothing about the table: never protected.
     expect(classifyTableResponse(429, "*/0").kind).toBe("throttled");
-    expect(classifyTableResponse(403, null, new Headers({ "cf-mitigated": "challenge" })).kind).toBe(
-      "throttled",
-    );
-    expect(classifyTableResponse(200, "*/0", new Headers({ "cf-mitigated": "challenge" })).kind).toBe(
-      "throttled",
-    );
+    expect(
+      classifyTableResponse(403, null, new Headers({ "cf-mitigated": "challenge" })).kind,
+    ).toBe("throttled");
+    expect(
+      classifyTableResponse(200, "*/0", new Headers({ "cf-mitigated": "challenge" })).kind,
+    ).toBe("throttled");
     // A 2xx without a usable total, or any other status, is not checked.
     expect(classifyTableResponse(200, null).kind).toBe("other");
     expect(classifyTableResponse(200, "0-4/*").kind).toBe("other");
@@ -438,7 +442,11 @@ describe("security/supabase-rls", () => {
     ]);
     // The squirrel.toml entry the rule page documents: match the item id by table name.
     const waived = new IgnoreTable([
-      { rule: "security/supabase-rls", items: ["glob:*/rest/v1/public_posts"], reason: "public by design" },
+      {
+        rule: "security/supabase-rls",
+        items: ["glob:*/rest/v1/public_posts"],
+        reason: "public by design",
+      },
     ]).filterChecks("security/supabase-rls", undefined, checks);
     expect(waived[0]!.status).toBe("fail");
     expect(waived[0]!.items!.map((i) => i.id)).toEqual([`${HOST}/rest/v1/profiles`]);
@@ -463,7 +471,11 @@ describe("security/supabase-rls", () => {
     const result = await rule.run(
       ctx({
         scripts: [
-          script(bundle(`sb.from("a").select();sb.from("b").select();fetch("/rest/v1/c");fetch("/rest/v1/d")`)),
+          script(
+            bundle(
+              `sb.from("a").select();sb.from("b").select();fetch("/rest/v1/c");fetch("/rest/v1/d")`,
+            ),
+          ),
         ],
       }),
     );
@@ -607,7 +619,10 @@ describe("security/supabase-rls", () => {
     expect(checks.some((c) => c.status === "pass")).toBe(false);
     expect(checks[0]!.message).toContain(`${MAX_TABLES_PER_PROJECT} tables per project`);
     expect(checks[0]!.message).toContain(`1 of ${MAX_TABLES_PER_PROJECT + 1} table probe(s)`);
-    expect(checks[0]!.details).toMatchObject({ tablesProbed: MAX_TABLES_PER_PROJECT, tablesCapped: 1 });
+    expect(checks[0]!.details).toMatchObject({
+      tablesProbed: MAX_TABLES_PER_PROJECT,
+      tablesCapped: 1,
+    });
   });
 
   test("a 401 then 429s: the run stops at the first 429 and is not a pass", async () => {
@@ -620,7 +635,11 @@ describe("security/supabase-rls", () => {
     const checks = await run(
       ctx({
         scripts: [
-          script(bundle(`sb.from("a").select();sb.from("b").select();sb.from("c").select();sb.from("d").select()`)),
+          script(
+            bundle(
+              `sb.from("a").select();sb.from("b").select();sb.from("c").select();sb.from("d").select()`,
+            ),
+          ),
         ],
       }),
     );
@@ -646,7 +665,11 @@ describe("security/supabase-rls", () => {
       [`${HOST}/rest/v1/c`]: challenge,
     });
     const checks = await run(
-      ctx({ scripts: [script(bundle(`sb.from("a").select();sb.from("b").select();sb.from("c").select()`))] }),
+      ctx({
+        scripts: [
+          script(bundle(`sb.from("a").select();sb.from("b").select();sb.from("c").select()`)),
+        ],
+      }),
     );
     expect(sent).toHaveLength(1);
     expect(checks).toHaveLength(1);
@@ -670,7 +693,11 @@ describe("security/supabase-rls", () => {
         [`${HOST}/rest/v1/c`]: block,
       });
       const checks = await run(
-        ctx({ scripts: [script(bundle(`sb.from("a").select();sb.from("b").select();sb.from("c").select()`))] }),
+        ctx({
+          scripts: [
+            script(bundle(`sb.from("a").select();sb.from("b").select();sb.from("c").select()`)),
+          ],
+        }),
       );
       expect(sent).toHaveLength(3);
       expect(checks).toHaveLength(1);
@@ -687,7 +714,9 @@ describe("security/supabase-rls", () => {
       [`${HOST}/rest/v1/a`]: () => answer(403),
       [`${HOST}/rest/v1/b`]: () => answer(403, undefined, { "content-type": "text/html" }),
     });
-    const checks = await run(ctx({ scripts: [script(bundle(`sb.from("a").select();sb.from("b").select()`))] }));
+    const checks = await run(
+      ctx({ scripts: [script(bundle(`sb.from("a").select();sb.from("b").select()`))] }),
+    );
     expect(checks).toHaveLength(1);
     expect(checks[0]).toMatchObject({
       status: "skipped",
@@ -702,7 +731,9 @@ describe("security/supabase-rls", () => {
       [`${HOST}/rest/v1/a`]: () => answer(403),
       [`${HOST}/rest/v1/b`]: () => answer(404),
     });
-    const checks = await run(ctx({ scripts: [script(bundle(`sb.from("a").select();sb.from("b").select()`))] }));
+    const checks = await run(
+      ctx({ scripts: [script(bundle(`sb.from("a").select();sb.from("b").select()`))] }),
+    );
     expect(checks).toHaveLength(1);
     expect(checks[0]).toMatchObject({
       status: "pass",
@@ -736,7 +767,9 @@ describe("security/supabase-rls", () => {
     const result = await rule.run(
       ctx({
         scripts: [
-          script(`const sb=createClient("https://${HOST}","${secretKey}");sb.from("todos").select()`),
+          script(
+            `const sb=createClient("https://${HOST}","${secretKey}");sb.from("todos").select()`,
+          ),
         ],
       }),
     );

@@ -62,13 +62,7 @@ const AUTHOR_SELECTORS = [
 // `"article"` is intentionally absent: the `<article>` tag is matched directly,
 // and a bare `class="article"` is too often a styling hook on non-article CMS
 // pages.
-const ARTICLE_CONTAINER_CLASSES = [
-  "post",
-  "entry",
-  "entry-header",
-  "entry-meta",
-  "entry-content",
-];
+const ARTICLE_CONTAINER_CLASSES = ["post", "entry", "entry-header", "entry-meta", "entry-content"];
 
 // Class/id tokens that mark a non-article context where an `.author` is
 // unrelated to a byline: customer testimonials, comment threads, sidebar
@@ -190,9 +184,7 @@ function dateFromElement(el: Element): string | null {
 function findDateByItemprop(doc: Document, prop: string): string | null {
   let els: Element[];
   try {
-    els = Array.from(
-      doc.querySelectorAll(`[itemprop='${prop}']`)
-    ) as Element[];
+    els = Array.from(doc.querySelectorAll(`[itemprop='${prop}']`)) as Element[];
   } catch {
     return null;
   }

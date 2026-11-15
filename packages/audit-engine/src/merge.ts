@@ -67,9 +67,7 @@ export interface MergeInput {
  * {@link computeMerge}. The carry hot-path only needs OPEN findings — it never
  * scans resolved/stale history (which only grows; compaction is #197).
  */
-export function mergeFindings(
-  input: MergeInput
-): Effect.Effect<MergedState, StorageError, never> {
+export function mergeFindings(input: MergeInput): Effect.Effect<MergedState, StorageError, never> {
   const { store, siteKey, ...rest } = input;
   return Effect.gen(function* () {
     const priorFindings = yield* store.getFindings(siteKey, ["open"]);

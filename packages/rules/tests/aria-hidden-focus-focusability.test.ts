@@ -48,7 +48,7 @@ describe("a11y/aria-hidden-focus — focusability (pub#456)", () => {
 <form><label>Email <input type="email" name="email"></label>
 <div aria-hidden="true" inert role="presentation" class="honform"><input id="honey-name-field" name="hn" tabindex="-1" autocomplete="off"><input id="honey-mail-field" name="hm" tabindex="-1" autocomplete="off"></div>
 <button type="submit">Send</button></form></main></body></html>`;
-    const checks = (await run(html));
+    const checks = await run(html);
 
     expect(checks).toHaveLength(1);
     expect(checks[0]?.name).toBe("aria-hidden-focus");
@@ -57,192 +57,196 @@ describe("a11y/aria-hidden-focus — focusability (pub#456)", () => {
 
   test("a focusable link and button inside aria-hidden (no inert) still fail", async () => {
     expect(
-      (await failingItems(
+      await failingItems(
         body(
           `<div aria-hidden="true"><a href="/promo" id="promo">Promo</a><button id="go">Go</button></div>`,
         ),
-      )),
+      ),
     ).toEqual(["a#promo", "button#go"]);
   });
 
   test("a negative tabindex alone takes an element out of the tab order", async () => {
     for (const tabindex of ["-1", "-2", " -1", "-1abc"]) {
       expect(
-        (await failingItems(
+        await failingItems(
           body(`<div aria-hidden="true"><a href="/x" tabindex="${tabindex}">x</a></div>`),
-        )),
+        ),
       ).toEqual([]);
     }
   });
 
   test("React's camelCase tabIndex=-1 is read too", async () => {
     expect(
-      (await failingItems(body(`<div aria-hidden="true"><input name="q" tabIndex="-1"></div>`))),
+      await failingItems(body(`<div aria-hidden="true"><input name="q" tabIndex="-1"></div>`)),
     ).toEqual([]);
   });
 
   test("tabindex of 0 or more still makes an element focusable, an unparseable one is ignored", async () => {
     expect(
-      (await failingItems(
+      await failingItems(
         body(`<div aria-hidden="true">
           <div id="zero" tabindex="0">a</div>
           <span id="plus" tabindex="+2">b</span>
           <div id="junk" tabindex="abc">c</div>
           <a href="/y" id="junk-link" tabindex="abc">d</a>
         </div>`),
-      )),
+      ),
     ).toEqual(["div#zero", "span#plus", "a#junk-link"]);
   });
 
   test("inert on the aria-hidden container hides even natively focusable content", async () => {
     expect(
-      (await failingItems(
+      await failingItems(
         body(`<div aria-hidden="true" inert><a href="/x">x</a><button>b</button></div>`),
-      )),
+      ),
     ).toEqual([]);
   });
 
   test("inert on an ancestor of the container, or on a wrapper inside it, counts", async () => {
     expect(
-      (await failingItems(
+      await failingItems(
         body(`<section inert><div aria-hidden="true"><a href="/x">x</a></div></section>`),
-      )),
+      ),
     ).toEqual([]);
     expect(
-      (await failingItems(
+      await failingItems(
         body(
           `<div aria-hidden="true"><div inert><a href="/x">x</a></div><a href="/y" id="live">y</a></div>`,
         ),
-      )),
+      ),
     ).toEqual(["a#live"]);
   });
 
   test("an inert attribute in uppercase is still read", async () => {
-    expect(await failingItems(body(`<div aria-hidden="true" INERT><a href="/x">x</a></div>`))).toEqual(
-      [],
-    );
+    expect(
+      await failingItems(body(`<div aria-hidden="true" INERT><a href="/x">x</a></div>`)),
+    ).toEqual([]);
   });
 
   test("the hidden attribute removes a subtree from focus, hidden=until-found does not", async () => {
-    expect(await failingItems(body(`<div aria-hidden="true" hidden><a href="/x">x</a></div>`))).toEqual(
-      [],
-    );
     expect(
-      (await failingItems(
+      await failingItems(body(`<div aria-hidden="true" hidden><a href="/x">x</a></div>`)),
+    ).toEqual([]);
+    expect(
+      await failingItems(
         body(`<div aria-hidden="true" hidden="until-found"><a href="/x" id="found">x</a></div>`),
-      )),
+      ),
     ).toEqual(["a#found"]);
   });
 
   test("disabled form controls are not focusable, even with a tabindex", async () => {
     expect(
-      (await failingItems(
+      await failingItems(
         body(`<div aria-hidden="true">
           <button disabled tabindex="0">b</button>
           <input name="i" DISABLED>
           <select name="s" disabled></select>
           <textarea name="t" disabled></textarea>
         </div>`),
-      )),
+      ),
     ).toEqual([]);
   });
 
   test("disabled only applies to form controls", async () => {
     expect(
-      (await failingItems(body(`<div aria-hidden="true"><a href="/x" id="link" disabled>x</a></div>`))),
+      await failingItems(
+        body(`<div aria-hidden="true"><a href="/x" id="link" disabled>x</a></div>`),
+      ),
     ).toEqual(["a#link"]);
   });
 
   test("hidden inputs are never focusable, whatever the tabindex or type casing", async () => {
     expect(
-      (await failingItems(
+      await failingItems(
         body(
           `<div aria-hidden="true"><input type="hidden" name="a" tabindex="0"><input type="HIDDEN" name="b"></div>`,
         ),
-      )),
+      ),
     ).toEqual([]);
   });
 
   test("a focusable aria-hidden element is still reported, a tabindex=-1 one is not", async () => {
-    expect(await failingItems(body(`<div aria-hidden="true" tabindex="0"><p>x</p></div>`))).toEqual([
-      "div (self is focusable)",
-    ]);
-    expect(await failingItems(body(`<a href="/x" aria-hidden="true" tabindex="-1">x</a>`))).toEqual([]);
+    expect(await failingItems(body(`<div aria-hidden="true" tabindex="0"><p>x</p></div>`))).toEqual(
+      ["div (self is focusable)"],
+    );
+    expect(await failingItems(body(`<a href="/x" aria-hidden="true" tabindex="-1">x</a>`))).toEqual(
+      [],
+    );
   });
 
   test("only ASCII whitespace may precede a tabindex, as in the HTML integer rules", async () => {
     // A leading NBSP makes the value invalid: the link keeps native focusability
     // and the div gains none.
     expect(
-      (await failingItems(
+      await failingItems(
         body(
           `<div aria-hidden="true"><a href="/x" id="nbsp-link" tabindex="&#160;-1">x</a><div id="nbsp-div" tabindex="&#160;0">y</div><a href="/z" id="tab-ws" tabindex="&#9;-1">z</a></div>`,
         ),
-      )),
+      ),
     ).toEqual(["a#nbsp-link"]);
   });
 
   test("keyword attributes are matched without trimming", async () => {
     // type=" hidden " is not the hidden keyword, so the input is a text field.
     expect(
-      (await failingItems(body(`<div aria-hidden="true"><input id="padded" type=" hidden "></div>`))),
+      await failingItems(body(`<div aria-hidden="true"><input id="padded" type=" hidden "></div>`)),
     ).toEqual(["input#padded"]);
     // hidden=" until-found " is not until-found, so it hides the subtree.
     expect(
-      (await failingItems(
+      await failingItems(
         body(`<div aria-hidden="true" hidden=" until-found "><button id="b">b</button></div>`),
-      )),
+      ),
     ).toEqual([]);
     // UNTIL-FOUND in any case still leaves the subtree reachable.
     expect(
-      (await failingItems(
+      await failingItems(
         body(`<div aria-hidden="true" hidden="UNTIL-FOUND"><button id="b">b</button></div>`),
-      )),
+      ),
     ).toEqual(["button#b"]);
   });
 
   test("inert or hidden on the focusable element itself counts", async () => {
     expect(
-      (await failingItems(
+      await failingItems(
         body(`<div aria-hidden="true"><a href="/x" inert>x</a><button hidden>b</button></div>`),
-      )),
+      ),
     ).toEqual([]);
   });
 
   test("a nested aria-hidden region under an inert wrapper is skipped too", async () => {
     expect(
-      (await failingItems(
+      await failingItems(
         body(
           `<div aria-hidden="true"><div inert><div aria-hidden="true"><a href="/x">x</a></div></div></div>`,
         ),
-      )),
+      ),
     ).toEqual([]);
   });
 
   test("a negative tabindex on the container does not hide a reachable child", async () => {
     expect(
-      (await failingItems(
+      await failingItems(
         body(`<div aria-hidden="true" tabindex="-1"><a href="/x" id="child">x</a></div>`),
-      )),
+      ),
     ).toEqual(["a#child"]);
   });
 
   test("an excluded honeypot is neither an error nor a honeypot warning", async () => {
-    const checks = (await run(
+    const checks = await run(
       body(
         `<form><div aria-hidden="true" inert><input type="text" id="contact-hp" name="contact-hp"></div></form>`,
       ),
-    ));
+    );
     expect(checks).toHaveLength(1);
     expect(check(checks, "aria-hidden-focus")?.status).toBe("pass");
   });
 
   test("a honeypot that follows the remedy (tabindex=-1) is no longer reported at all", async () => {
-    const checks = (await run(
+    const checks = await run(
       body(
         `<form><div aria-hidden="true"><input type="text" id="pp-contact-hp" name="pp-contact-hp" tabindex="-1" autocomplete="off"></div></form>`,
       ),
-    ));
+    );
     expect(check(checks, "aria-hidden-focus-honeypot")).toBeUndefined();
     expect(check(checks, "aria-hidden-focus")?.status).toBe("pass");
   });

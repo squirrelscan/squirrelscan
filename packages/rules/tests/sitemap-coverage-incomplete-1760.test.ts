@@ -24,7 +24,14 @@ function ctx(over: Partial<SitemapDiscovery>, precomputed: boolean): RuleContext
       robotsTxt: null,
       sitemaps: {
         discovered: [
-          { url: "https://example.com/sitemap.xml", type: "urlset", urls, childSitemaps: [], errors: [], urlCount: 1 },
+          {
+            url: "https://example.com/sitemap.xml",
+            type: "urlset",
+            urls,
+            childSitemaps: [],
+            errors: [],
+            urlCount: 1,
+          },
         ],
         sources: { robotsTxt: [], commonLocations: [] },
         totalUrls: 1,
@@ -39,12 +46,19 @@ function ctx(over: Partial<SitemapDiscovery>, precomputed: boolean): RuleContext
 }
 
 const cov = async (c: RuleContext) =>
-  ((await sitemapCoverageRule.run(c)) as { checks: Array<{ name: string; status: string; skipReason?: string }> })
-    .checks.find((x) => x.name === "sitemap-coverage");
+  (
+    (await sitemapCoverageRule.run(c)) as {
+      checks: Array<{ name: string; status: string; skipReason?: string }>;
+    }
+  ).checks.find((x) => x.name === "sitemap-coverage");
 
 describe("crawl/sitemap-coverage with an incomplete sitemap corpus (#1760)", () => {
   for (const precomputed of [true, false]) {
-    for (const state of [{ truncated: true }, { readState: "partial" as const }, { readState: "unreadable" as const }]) {
+    for (const state of [
+      { truncated: true },
+      { readState: "partial" as const },
+      { readState: "unreadable" as const },
+    ]) {
       test(`${JSON.stringify(state)} (precomputed=${precomputed}) is not checked, not missing`, async () => {
         const c = await cov(ctx(state, precomputed));
         expect(c?.status).toBe("skipped");

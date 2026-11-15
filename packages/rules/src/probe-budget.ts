@@ -78,8 +78,7 @@ const LEVEL_RANK: Record<ProbeLevel, number> = { passive: 0, active: 1, aggressi
 export function createProbeBudget(options: ProbeBudgetOptions): ProbeBudget {
   const now = options.now ?? Date.now;
   const { level } = options;
-  const budgetMs =
-    Number.isFinite(options.budgetMs) && options.budgetMs > 0 ? options.budgetMs : 0;
+  const budgetMs = Number.isFinite(options.budgetMs) && options.budgetMs > 0 ? options.budgetMs : 0;
   let startedAt: number | undefined;
   let allowed = 0;
   let requests = 0;

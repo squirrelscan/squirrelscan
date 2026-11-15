@@ -61,16 +61,21 @@ export const obfuscatedScriptRule: Rule = {
 
     const signals = detectPageSignals(ctx);
     const escalate = shouldEscalate(signals, "obfuscated-script");
-    const corroborating = [...signals].filter(
-      (s) => s !== "obfuscated-script"
-    );
+    const corroborating = [...signals].filter((s) => s !== "obfuscated-script");
     const kb = (hit.sizeBytes / 1024).toFixed(1);
     // A scan cut by its work bounds may have missed a corroborating signal: say so, as brand-impersonation does (#784).
     const notes = escalate ? {} : integrityScanNotes(ctx);
     const cutParts: string[] = [];
-    if (notes.controlsUnread) cutParts.push(`${notes.controlsUnread} sign-in control${notes.controlsUnread === 1 ? "" : "s"} could not be read in full`);
-    if (notes.templatesUnread) cutParts.push(`${notes.templatesUnread} <template> element${notes.templatesUnread === 1 ? " was" : "s were"} past the template limit and not read`);
-    if (notes.hiddenCssTruncated) cutParts.push("a CSS rule too large to read may hide text in a sign-in label");
+    if (notes.controlsUnread)
+      cutParts.push(
+        `${notes.controlsUnread} sign-in control${notes.controlsUnread === 1 ? "" : "s"} could not be read in full`,
+      );
+    if (notes.templatesUnread)
+      cutParts.push(
+        `${notes.templatesUnread} <template> element${notes.templatesUnread === 1 ? " was" : "s were"} past the template limit and not read`,
+      );
+    if (notes.hiddenCssTruncated)
+      cutParts.push("a CSS rule too large to read may hide text in a sign-in label");
     const truncated = cutParts.length > 0;
 
     checks.push({

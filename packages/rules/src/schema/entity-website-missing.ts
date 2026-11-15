@@ -103,11 +103,11 @@ export const entityWebsiteMissingRule: Rule = {
     const linkedSources = new Set(
       map.edges
         .filter((edge) => edge.predicate === "isPartOf" && websiteKeys.has(edge.target))
-        .map((edge) => edge.source)
+        .map((edge) => edge.source),
     );
 
     const pageNodes = map.nodes.filter((node) =>
-      node.types.some((type) => PAGE_TYPES.includes(type))
+      node.types.some((type) => PAGE_TYPES.includes(type)),
     );
     if (pageNodes.length === 0) {
       return {
@@ -143,7 +143,7 @@ export const entityWebsiteMissingRule: Rule = {
         label: `${entityLabel(node)} (${node.types.join(", ")})`,
         sourcePages: node.pages.slice(0, 5),
         meta: { key: node.key },
-      }))
+      })),
     );
 
     return {

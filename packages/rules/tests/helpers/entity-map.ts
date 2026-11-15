@@ -88,9 +88,8 @@ export function entityMap(options: MapOptions = {}): EntityMap {
       nodesWithStableId: withId,
       stableIdShare: nodes.length === 0 ? 0 : withId / nodes.length,
       pageLocalCount: nodes.filter((n) => n.pageLocal).length,
-      nodesWithoutIdCount: nodes.filter(
-        (n) => n.id === null && n.pages.length + n.morePages > 1
-      ).length,
+      nodesWithoutIdCount: nodes.filter((n) => n.id === null && n.pages.length + n.morePages > 1)
+        .length,
       conflictCount: nodes.filter((n) => n.conflicts.length > 0).length,
       countsByType: {},
     },
@@ -142,7 +141,7 @@ export async function oneCheck(rule: Rule, map: EntityMap | undefined): Promise<
   const checks = await runRule(rule, map);
   if (checks.length !== 1) {
     throw new Error(
-      `${rule.meta.id} emitted ${checks.length} checks, expected exactly 1: ${JSON.stringify(checks)}`
+      `${rule.meta.id} emitted ${checks.length} checks, expected exactly 1: ${JSON.stringify(checks)}`,
     );
   }
   return checks[0]!;

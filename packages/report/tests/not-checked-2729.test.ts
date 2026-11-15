@@ -83,12 +83,18 @@ function quickReport(): AuditReport {
         {
           name: "dead-links",
           status: "skipped",
-          message: "External link checking was off for this audit, so external links were not verified",
+          message:
+            "External link checking was off for this audit, so external links were not verified",
           skipReason: EXTERNAL_LINKS_NOT_CHECKED_SKIP_REASON,
         },
       ]),
       "core/meta-title": rule("core/meta-title", "Meta Title", "error", [
-        { name: "meta-title", status: "pass", message: "Title OK", pageUrl: "https://example.com/" },
+        {
+          name: "meta-title",
+          status: "pass",
+          message: "Title OK",
+          pageUrl: "https://example.com/",
+        },
       ]),
     },
   };
@@ -111,15 +117,24 @@ describe("notCheckedRules / notCheckedLines", () => {
     const message =
       "40 of 240 external link(s) were not checked: over this audit's limit of 200, which checks the most-linked first";
     report.ruleResults = {
-      "links/broken-external-links": rule("links/broken-external-links", "Broken External Links", "warning", [
-        { name: "broken-external-links", status: "pass", message: "All 200 external link(s) are working" },
-        {
-          name: "broken-external-links",
-          status: "skipped",
-          message,
-          skipReason: EXTERNAL_LINKS_OVER_CAP_SKIP_REASON,
-        },
-      ]),
+      "links/broken-external-links": rule(
+        "links/broken-external-links",
+        "Broken External Links",
+        "warning",
+        [
+          {
+            name: "broken-external-links",
+            status: "pass",
+            message: "All 200 external link(s) are working",
+          },
+          {
+            name: "broken-external-links",
+            status: "skipped",
+            message,
+            skipReason: EXTERNAL_LINKS_OVER_CAP_SKIP_REASON,
+          },
+        ],
+      ),
     };
     expect(notCheckedLines(report)).toEqual([
       `Not checked: Broken External Links. ${message}. Raise the limit with external_links.max_links, or audit more pages, to check them.`,
@@ -127,7 +142,8 @@ describe("notCheckedRules / notCheckedLines", () => {
   });
 
   test("a crawl that stopped at its page cap leaves the inbound-link rules not checked (#1144)", () => {
-    const message = "Crawl stopped at its 100-page cap, so an inbound link may sit on a page not crawled";
+    const message =
+      "Crawl stopped at its 100-page cap, so an inbound link may sit on a page not crawled";
     const report = {
       ruleResults: {
         "links/orphan-pages": rule("links/orphan-pages", "Orphan Pages", "warning", [
@@ -196,7 +212,12 @@ describe("notCheckedRules / notCheckedLines", () => {
           message,
           skipReason: "rule-timed-out",
           pageUrl: "https://example.com/b",
-          details: { timedOut: true, ruleId: "security/leaked-secrets", budgetMs: 1000, elapsedMs: 1400 },
+          details: {
+            timedOut: true,
+            ruleId: "security/leaked-secrets",
+            budgetMs: 1000,
+            elapsedMs: 1400,
+          },
         },
       ]),
     };
@@ -210,7 +231,9 @@ describe("notCheckedRules / notCheckedLines", () => {
       message: "2 pages not checked",
       details: { timedOut: true, budgetMs: 1000, pagesNotChecked: 2 },
     });
-    expect(notCheckedLines(report)[0]).toContain("Leaked Secrets timed out on 2 pages (exceeded its 1000 ms time budget).");
+    expect(notCheckedLines(report)[0]).toContain(
+      "Leaked Secrets timed out on 2 pages (exceeded its 1000 ms time budget).",
+    );
     // Without the summary row (a published report may cut it) the folded skip's
     // own counts still say how many pages.
     const cut = quickReport();

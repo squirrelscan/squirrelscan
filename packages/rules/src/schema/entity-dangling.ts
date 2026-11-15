@@ -33,8 +33,7 @@ export const entityDanglingRule: Rule = {
   meta: {
     id: "schema/entity-dangling",
     name: "Dangling Entity References",
-    description:
-      "Finds a JSON-LD reference pointing at an @id that no crawled page declares",
+    description: "Finds a JSON-LD reference pointing at an @id that no crawled page declares",
     solution: `A node references another by { "@id": "…" } and no page in the crawl declares that id, so the reference resolves to nothing. The usual cause is a publisher or author declared in full on the homepage only while every article points at it: the article pages carry the pointer without the thing it points to, and a search engine reading one article in isolation cannot follow it. Declare the target in the @graph of every page that references it, which costs a few hundred bytes and is what Yoast and Rank Math already do. See ${ENTITY_FIX_DOCS}.`,
     category: "schema",
     scope: "site",
@@ -58,7 +57,7 @@ export const entityDanglingRule: Rule = {
     // `sameAs` names its Wikidata entity is doing the recommended thing, and
     // reporting that as a broken reference would be advice to stop.
     const dangling = map.edges.filter(
-      (edge) => edge.dangling && !EXTERNAL_BY_DESIGN.has(edge.predicate)
+      (edge) => edge.dangling && !EXTERNAL_BY_DESIGN.has(edge.predicate),
     );
 
     if (dangling.length === 0) {
@@ -77,7 +76,10 @@ export const entityDanglingRule: Rule = {
 
     // Grouped by TARGET, because one undeclared publisher referenced from 300
     // article pages is one thing to fix, not 300.
-    const byTarget = new Map<string, { predicates: Set<string>; sources: Set<string>; pages: string[] }>();
+    const byTarget = new Map<
+      string,
+      { predicates: Set<string>; sources: Set<string>; pages: string[] }
+    >();
     for (const edge of dangling) {
       const entry = byTarget.get(edge.target) ?? {
         predicates: new Set<string>(),

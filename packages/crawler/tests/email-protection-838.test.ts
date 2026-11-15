@@ -24,7 +24,12 @@ function html(...links: string[]): string {
 }
 
 const SITE: Record<string, string> = {
-  [`${ORIGIN}/`]: html("/listed", `${OBFUSCATION}#2a4f`, `${ORIGIN}${OBFUSCATION}`, "/cdn-cgi/image/width=80/pic.jpg"),
+  [`${ORIGIN}/`]: html(
+    "/listed",
+    `${OBFUSCATION}#2a4f`,
+    `${ORIGIN}${OBFUSCATION}`,
+    "/cdn-cgi/image/width=80/pic.jpg",
+  ),
   [`${ORIGIN}/listed`]: html(),
 };
 
@@ -88,7 +93,10 @@ const baseConfig = {
   maxPages: 50,
 };
 
-async function createCrawlRecord(storage: CrawlStorage, config: Record<string, unknown>): Promise<string> {
+async function createCrawlRecord(
+  storage: CrawlStorage,
+  config: Record<string, unknown>,
+): Promise<string> {
   return Effect.runPromise(
     storage.createCrawl({
       baseUrl: ORIGIN,
@@ -119,7 +127,12 @@ async function seedFrontier(storage: CrawlStorage, crawlId: string, paths: strin
   }
 }
 
-async function crawlOnce(storage: CrawlStorage, config: Record<string, unknown>, fetched: string[], paths: string[]) {
+async function crawlOnce(
+  storage: CrawlStorage,
+  config: Record<string, unknown>,
+  fetched: string[],
+  paths: string[],
+) {
   const crawlId = await createCrawlRecord(storage, config);
   await seedFrontier(storage, crawlId, paths);
   const crawler = await Effect.runPromise(
@@ -156,7 +169,12 @@ describe("the crawl never queues Cloudflare's email obfuscation link (pub#838)",
 
   test("a page reused from a cache written before the fix: the stale link is not queued", async () => {
     const storage = await Effect.runPromise(createTestStorage());
-    const pass1 = await crawlOnce(storage, { ...baseConfig, incremental: false, useCacheControl: false }, [], ["/"]);
+    const pass1 = await crawlOnce(
+      storage,
+      { ...baseConfig, incremental: false, useCacheControl: false },
+      [],
+      ["/"],
+    );
 
     // Make the stored page look like one cached by an older squirrel: the obfuscation path
     // is an internal link in its parsedData. `/off-map` is the control: it must be queued,
@@ -168,7 +186,9 @@ describe("the crawl never queues Cloudflare's email obfuscation link (pub#838)",
       { url: `${ORIGIN}${OBFUSCATION}#2a4f`, text: "[email protected]", isInternal: true },
       { url: `${ORIGIN}/off-map`, text: "control", isInternal: true },
     );
-    await Effect.runPromise(storage.upsertPage(pass1, { ...home!, parsedData: JSON.stringify(parsed) }));
+    await Effect.runPromise(
+      storage.upsertPage(pass1, { ...home!, parsedData: JSON.stringify(parsed) }),
+    );
 
     const fetched: string[] = [];
     const pass2 = await crawlOnce(
@@ -180,7 +200,9 @@ describe("the crawl never queues Cloudflare's email obfuscation link (pub#838)",
 
     // Nothing is re-fetched, and the one link the crawl follows is the control.
     expect(fetched).toEqual([`${ORIGIN}/off-map`]);
-    const frontier = (await Effect.runPromise(storage.getAllFrontierEntries(pass2))).map((e) => e.normalizedUrl);
+    const frontier = (await Effect.runPromise(storage.getAllFrontierEntries(pass2))).map(
+      (e) => e.normalizedUrl,
+    );
     expect(frontier).toContain(`${ORIGIN}/off-map`);
     expect(frontier.some((u) => u.includes("email-protection"))).toBe(false);
     await Effect.runPromise(storage.close());

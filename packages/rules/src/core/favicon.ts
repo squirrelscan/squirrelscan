@@ -81,10 +81,7 @@ export const faviconRule: Rule = {
     }
 
     // Check specifically for apple-touch-icon
-    if (
-      !uniqueFavicons.includes("apple-touch-icon") &&
-      uniqueFavicons.length > 0
-    ) {
+    if (!uniqueFavicons.includes("apple-touch-icon") && uniqueFavicons.length > 0) {
       checks.push({
         name: "apple-touch-icon",
         status: "info",

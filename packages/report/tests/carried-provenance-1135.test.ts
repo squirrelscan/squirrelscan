@@ -110,9 +110,7 @@ describe("carried-page provenance (#1135)", () => {
           message: "duplicate title across pages",
           // Site-scope check: no pageUrl/pages — affected pages live under
           // item.sourcePages (case 2 in affected-pages.ts).
-          items: [
-            { id: "Duplicate Title", sourcePages: ["https://e.com/a", "https://e.com/b"] },
-          ],
+          items: [{ id: "Duplicate Title", sourcePages: ["https://e.com/a", "https://e.com/b"] }],
           provenance: "carried",
           lastSeenAt: 1,
         },
@@ -322,11 +320,14 @@ describe("unrendered provenance (#1652)", () => {
   test("coverageLine reports the two counts separately", () => {
     expect(
       coverageLine({
-        coverage: { auditedPages: 100, knownPages: 100, carriedFindings: 0, unrenderedFindings: 4925 },
+        coverage: {
+          auditedPages: 100,
+          knownPages: 100,
+          carriedFindings: 0,
+          unrenderedFindings: 4925,
+        },
       } as never),
-    ).toBe(
-      "Coverage: audited 100 of 100 known pages (4925 findings on pages not yet rendered).",
-    );
+    ).toBe("Coverage: audited 100 of 100 known pages (4925 findings on pages not yet rendered).");
     expect(
       coverageLine({
         coverage: { auditedPages: 10, knownPages: 100, carriedFindings: 90 },

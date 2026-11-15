@@ -134,7 +134,8 @@ export function buildGramIndex(text: string): GramIndex | null {
   for (let i = 0; i < GRAM - 1; i++) {
     let c = text.charCodeAt(i);
     if (c >= 65 && c <= 90) c += 32;
-    else if (c > 0x7f && (c === LOWERCASE_ADDS_ASCII_I || c === LOWERCASE_ADDS_ASCII_K)) lowercaseAddsAscii = true;
+    else if (c > 0x7f && (c === LOWERCASE_ADDS_ASCII_I || c === LOWERCASE_ADDS_ASCII_K))
+      lowercaseAddsAscii = true;
     h = ((h << SHIFT) ^ c) & WINDOW_MASK;
   }
   for (let i = GRAM - 1; i < n; i++) {
@@ -205,8 +206,38 @@ export function mayMatch(index: GramIndex | null, literals: MandatoryLiterals): 
 const META = new Set([".", "*", "+", "?", "(", ")", "[", "]", "{", "}", "|", "^", "$", "\\"]);
 // Escapes that stand for a literal character rather than a class.
 const LITERAL_ESCAPE = new Set([
-  ".", "*", "+", "?", "(", ")", "[", "]", "{", "}", "|", "^", "$", "\\", "/", "-", "@", "#", "&",
-  "=", ":", ";", ",", "<", ">", "'", '"', "`", "~", "!", "%", "_",
+  ".",
+  "*",
+  "+",
+  "?",
+  "(",
+  ")",
+  "[",
+  "]",
+  "{",
+  "}",
+  "|",
+  "^",
+  "$",
+  "\\",
+  "/",
+  "-",
+  "@",
+  "#",
+  "&",
+  "=",
+  ":",
+  ";",
+  ",",
+  "<",
+  ">",
+  "'",
+  '"',
+  "`",
+  "~",
+  "!",
+  "%",
+  "_",
 ]);
 
 function isAscii(s: string): boolean {
@@ -298,7 +329,7 @@ function readEscape(src: string, i: number): { char: string | null; end: number 
  */
 function readQuantifier(
   src: string,
-  i: number
+  i: number,
 ): { end: number; min0: boolean; max1: boolean } | null {
   const c = src[i];
   if (c === "?") {
@@ -318,7 +349,8 @@ function readQuantifier(
     const [minText, maxText] = body.split(",");
     const min = Number(minText);
     // `{n}` is exactly n; `{n,}` is unbounded; `{n,m}` is at most m.
-    const max = maxText === undefined ? min : maxText === "" ? Number.POSITIVE_INFINITY : Number(maxText);
+    const max =
+      maxText === undefined ? min : maxText === "" ? Number.POSITIVE_INFINITY : Number(maxText);
     return {
       end: src[close + 1] === "?" ? close + 2 : close + 1,
       min0: min === 0,
@@ -628,7 +660,7 @@ function extractInto(source: string, out: string[][], depth: number): void {
  * be its own per-page cost.
  */
 export function withPrefilter<T extends { pattern: RegExp }>(
-  entries: readonly T[]
+  entries: readonly T[],
 ): Array<T & { literals: MandatoryLiterals }> {
   return entries.map((e) => ({ ...e, literals: mandatoryLiterals(e.pattern) }));
 }

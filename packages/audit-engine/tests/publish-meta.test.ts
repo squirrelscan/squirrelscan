@@ -146,9 +146,9 @@ describe("computeLockedRules", () => {
         { status: "skipped", skipReason: humanizeCloudSkip("not-authenticated") },
       ],
     ]) {
-      expect(computeLockedRules(reportWith({ "ax/content-without-js": { checks } }), rules)).toEqual(
-        [{ id: "ax/content-without-js", name: "Content Without JavaScript" }],
-      );
+      expect(
+        computeLockedRules(reportWith({ "ax/content-without-js": { checks } }), rules),
+      ).toEqual([{ id: "ax/content-without-js", name: "Content Without JavaScript" }]);
     }
   });
 

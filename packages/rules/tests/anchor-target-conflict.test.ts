@@ -70,10 +70,7 @@ describe("links/anchor-target-conflict: anchor to several URLs", () => {
     expect(c.items).toHaveLength(1);
     expect(c.items![0]!.label).toContain('"Pricing" points at 2 URLs');
     expect(c.items![0]!.label).toContain("/plans (2)");
-    expect(c.items![0]!.sourcePages).toEqual([
-      "https://example.com/a10",
-      "https://example.com/a9",
-    ]);
+    expect(c.items![0]!.sourcePages).toEqual(["https://example.com/a10", "https://example.com/a9"]);
   });
 
   test("an even split has no norm and is not reported", async () => {
@@ -85,11 +82,10 @@ describe("links/anchor-target-conflict: anchor to several URLs", () => {
 
   test("anchor text is compared case and whitespace insensitively", async () => {
     const c = await check(
-      site(
-        11,
-        (i) => [body(i < 9 ? "/pricing" : "/plans", i % 2 ? "Pricing" : "  pricing ")],
-        ["/pricing", "/plans"],
-      ),
+      site(11, (i) => [body(i < 9 ? "/pricing" : "/plans", i % 2 ? "Pricing" : "  pricing ")], [
+        "/pricing",
+        "/plans",
+      ]),
     );
     expect(c.status).toBe("warn");
   });
@@ -149,18 +145,17 @@ describe("links/anchor-target-conflict: no false positives", () => {
 
   test("chrome links are ignored", async () => {
     const c = await check(
-      site(
-        11,
-        (i) => [chrome(i < 5 ? "/pricing" : "/plans", "Pricing")],
-        ["/pricing", "/plans"],
-      ),
+      site(11, (i) => [chrome(i < 5 ? "/pricing" : "/plans", "Pricing")], ["/pricing", "/plans"]),
     );
     expect(c.status).toBe("skipped");
   });
 
   test("a consistent site passes", async () => {
     const c = await check(
-      site(12, (i) => [body("/pricing", "Pricing"), body("/about", `Team ${i % 2}`)], ["/pricing", "/about"]),
+      site(12, (i) => [body("/pricing", "Pricing"), body("/about", `Team ${i % 2}`)], [
+        "/pricing",
+        "/about",
+      ]),
     );
     expect(c.status).toBe("pass");
   });

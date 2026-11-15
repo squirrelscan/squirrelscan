@@ -47,7 +47,9 @@ function page(path: string): PageData {
 }
 
 /** One audit: every page through a fresh runner, results merged per rule. */
-async function audit(paths: string[]): Promise<{ checks: CheckResult[]; results: Map<string, RuleRunResult> }> {
+async function audit(
+  paths: string[],
+): Promise<{ checks: CheckResult[]; results: Map<string, RuleRunResult> }> {
   const ns: RuleNamespace = { name: "test", rules: [probe] };
   const runner = new RuleRunner({
     config: { rule_options: {}, rules: { enable: ["test/probe"] } },
@@ -66,7 +68,12 @@ async function audit(paths: string[]): Promise<{ checks: CheckResult[]; results:
     checks.push(...result.checks);
     merged.checks.push(...(result.ruleResults.get("test/probe")?.checks ?? []));
   }
-  const site = await runner.runSiteRules({ baseUrl: "https://example.com", pages: [], robotsTxt: null, sitemaps: null });
+  const site = await runner.runSiteRules({
+    baseUrl: "https://example.com",
+    pages: [],
+    robotsTxt: null,
+    sitemaps: null,
+  });
   checks.push(...site.checks);
   return { checks, results: new Map([["test/probe", merged]]) };
 }

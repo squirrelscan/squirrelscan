@@ -109,15 +109,16 @@ export function affectedPages(
   const sample = Array.from(checkAffectedPages(check));
   const truncated = check.details?.pagesTruncated;
   const count =
-    typeof truncated === "number" && truncated > sample.length ? Math.floor(truncated) : sample.length;
+    typeof truncated === "number" && truncated > sample.length
+      ? Math.floor(truncated)
+      : sample.length;
   return { sample, count, hasMore: count > sample.length };
 }
 
 /** Unique pages affected across every check of a rule. */
 export function ruleAffectedPages(checks: CheckResult[]): Set<string> {
   const acc = new Set<string>();
-  for (const check of checks)
-    for (const page of checkAffectedPages(check)) acc.add(page);
+  for (const check of checks) for (const page of checkAffectedPages(check)) acc.add(page);
   return acc;
 }
 

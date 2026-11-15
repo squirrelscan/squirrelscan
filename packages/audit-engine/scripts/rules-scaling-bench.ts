@@ -193,8 +193,18 @@ const TOP_RULES = Math.max(1, Number.parseInt(arg("top", "10"), 10));
 function child(mode: string, db: string): Record<string, number> | null {
   const proc = Bun.spawnSync({
     cmd: [
-      process.execPath, "run", import.meta.path, "--child",
-      "--mode", mode, "--db", db, "--batch", String(BATCH), "--disable", DISABLE.join(","),
+      process.execPath,
+      "run",
+      import.meta.path,
+      "--child",
+      "--mode",
+      mode,
+      "--db",
+      db,
+      "--batch",
+      String(BATCH),
+      "--disable",
+      DISABLE.join(","),
     ],
     // The profiler is read from the environment at module load, so it has to be
     // set here rather than passed as a flag the child would have to re-plumb.
@@ -208,12 +218,18 @@ function child(mode: string, db: string): Record<string, number> | null {
     return null;
   }
   if (PROFILE) recordProfile(mode, db, stderr);
-  const line = proc.stdout.toString().split("\n").find((l) => l.startsWith("CHILD "));
+  const line = proc.stdout
+    .toString()
+    .split("\n")
+    .find((l) => l.startsWith("CHILD "));
   return line ? (JSON.parse(line.slice(6)) as Record<string, number>) : null;
 }
 
 /** arm -> db -> ruleId -> summed ms, and the page/site split, per attempt. */
-const profiles = new Map<string, Map<string, { pageInvocations: number; site: number; rules: Map<string, number> }>>();
+const profiles = new Map<
+  string,
+  Map<string, { pageInvocations: number; site: number; rules: Map<string, number> }>
+>();
 
 function recordProfile(mode: string, db: string, stderr: string): void {
   const byDb = profiles.get(mode) ?? new Map();
@@ -225,7 +241,11 @@ function recordProfile(mode: string, db: string, stderr: string): void {
   for (const line of stderr.split("\n")) {
     if (!line.startsWith("[rule-profile]")) continue;
     try {
-      const d = JSON.parse(line.slice(14)) as { ruleId: string; pageUrl?: string; durationMs?: number };
+      const d = JSON.parse(line.slice(14)) as {
+        ruleId: string;
+        pageUrl?: string;
+        durationMs?: number;
+      };
       const ms = d.durationMs ?? 0;
       // A site-scope rule runs once per audit and carries no pageUrl; a page
       // rule emits one line per page.
@@ -279,16 +299,20 @@ const COLUMNS: Array<[string, string, string]> = [
 
 const rows = DBS.map((db) => {
   const perMode = results.get(db)!;
-  const pages = perMode.get("streamed")?.pages ?? perMode.get("v1")?.pages ?? perMode.get("parse")?.pages ?? 0;
+  const pages =
+    perMode.get("streamed")?.pages ?? perMode.get("v1")?.pages ?? perMode.get("parse")?.pages ?? 0;
   // `undefined`, not 0: an arm whose every attempt failed would otherwise print
   // "0ms / 0.00" and read as the fastest row in the table.
   const values = COLUMNS.map(([mode, key]) => perMode.get(mode)?.[key]);
   return { db, pages, values };
 }).filter((r) => r.pages > 0);
 
-console.log(`\nrules disabled: ${DISABLE.join(", ") || "(none)"}   repeats: ${REPEATS} (minimum shown)`);
 console.log(
-  `${"pages".padStart(6)} ` + COLUMNS.map(([, , label]) => `${label.padStart(16)} ${"/pg".padStart(6)}`).join(" "),
+  `\nrules disabled: ${DISABLE.join(", ") || "(none)"}   repeats: ${REPEATS} (minimum shown)`,
+);
+console.log(
+  `${"pages".padStart(6)} ` +
+    COLUMNS.map(([, , label]) => `${label.padStart(16)} ${"/pg".padStart(6)}`).join(" "),
 );
 for (const row of rows) {
   console.log(
@@ -324,10 +348,14 @@ if (PROFILE) {
         `  site-scope total       ${a.site.toFixed(0)}ms -> ${b.site.toFixed(0)}ms   ${k(a.site, b.site)}`,
     );
     const top = [...b.rules].sort((x, y) => y[1] - x[1]).slice(0, TOP_RULES);
-    console.log(`  ${"site rule".padEnd(36)} ${"first".padStart(8)} ${"last".padStart(8)} ${"slope".padStart(8)}`);
+    console.log(
+      `  ${"site rule".padEnd(36)} ${"first".padStart(8)} ${"last".padStart(8)} ${"slope".padStart(8)}`,
+    );
     for (const [rule, ms] of top) {
       const before = a.rules.get(rule) ?? 0;
-      console.log(`  ${rule.padEnd(36)} ${`${before.toFixed(0)}ms`.padStart(8)} ${`${ms.toFixed(0)}ms`.padStart(8)} ${k(before, ms).padStart(8)}`);
+      console.log(
+        `  ${rule.padEnd(36)} ${`${before.toFixed(0)}ms`.padStart(8)} ${`${ms.toFixed(0)}ms`.padStart(8)} ${k(before, ms).padStart(8)}`,
+      );
     }
   }
 }
@@ -343,13 +371,16 @@ if (rows.length >= 2) {
     console.log(`\nno slope: endpoint page counts are equal (${first.pages}).`);
   } else {
     const ratio = last.pages / first.pages;
-    console.log(`\nobserved slope across ${first.pages} -> ${last.pages} pages (${ratio.toFixed(1)}x), cost ~ n^k:`);
+    console.log(
+      `\nobserved slope across ${first.pages} -> ${last.pages} pages (${ratio.toFixed(1)}x), cost ~ n^k:`,
+    );
     COLUMNS.forEach(([, , label], i) => {
       const a = first.values[i];
       const b = last.values[i];
-      const k = a !== undefined && b !== undefined && a > 0 && b > 0
-        ? (Math.log(b / a) / Math.log(ratio)).toFixed(2)
-        : "n/a";
+      const k =
+        a !== undefined && b !== undefined && a > 0 && b > 0
+          ? (Math.log(b / a) / Math.log(ratio)).toFixed(2)
+          : "n/a";
       console.log(`  ${label.padEnd(16)} n^${k}`);
     });
   }

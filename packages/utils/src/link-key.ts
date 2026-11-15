@@ -18,10 +18,7 @@
  * the middle ground: keep the query, drop the tracking noise, sort the rest.
  */
 
-import {
-  carriesRedactedValue,
-  redactSecretText,
-} from "./secret-url-redaction";
+import { carriesRedactedValue, redactSecretText } from "./secret-url-redaction";
 
 /**
  * No host is the audited site's own, so only what the redactor removes from

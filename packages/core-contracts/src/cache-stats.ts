@@ -33,22 +33,14 @@ export const CACHE_HIT_REASONS: readonly CacheHitReason[] = [
 const CACHE_HIT_REASON_SET = new Set<string>(CACHE_HIT_REASONS);
 
 /** Type guard: is `value` a known CacheHitReason? */
-export function isCacheHitReason(
-  value: string | null | undefined
-): value is CacheHitReason {
+export function isCacheHitReason(value: string | null | undefined): value is CacheHitReason {
   return value != null && CACHE_HIT_REASON_SET.has(value);
 }
 
 /** Sum two hits-by-reason maps into a fresh object (no mutation). */
-function mergeHitsByReason(
-  a: CacheHitsByReason,
-  b: CacheHitsByReason
-): CacheHitsByReason {
+function mergeHitsByReason(a: CacheHitsByReason, b: CacheHitsByReason): CacheHitsByReason {
   const out: CacheHitsByReason = { ...a };
-  for (const [reason, count] of Object.entries(b) as [
-    CacheHitReason,
-    number,
-  ][]) {
+  for (const [reason, count] of Object.entries(b) as [CacheHitReason, number][]) {
     out[reason] = (out[reason] ?? 0) + (count ?? 0);
   }
   return out;
@@ -82,7 +74,7 @@ function sumReasons(byReason: CacheHitsByReason): number {
  */
 export function buildCacheStats(
   stats: CrawlStats | null | undefined,
-  resources: readonly ResourceSizeRecord[] = []
+  resources: readonly ResourceSizeRecord[] = [],
 ): CacheStats | null {
   const pageHitsByReason: CacheHitsByReason = stats?.cacheHitsByReason ?? {};
   const pageHits = stats?.pagesUnchanged ?? 0;
@@ -171,7 +163,7 @@ export function staleCacheSignal(
   headers:
     | Partial<Pick<ResponseHeaders, "age" | "xCache" | "cfCacheStatus" | "xVercelCache">>
     | null
-    | undefined
+    | undefined,
 ): string | null {
   if (!headers) return null;
   const age = Number.parseInt(headers.age ?? "", 10);
@@ -193,7 +185,7 @@ export function staleCacheSignal(
  */
 export function buildCacheFreshness(
   opts: { noCache: boolean; freshRender: boolean },
-  stalePages: readonly StaleCachePage[]
+  stalePages: readonly StaleCachePage[],
 ): CacheFreshness | null {
   if (!opts.noCache && !opts.freshRender) return null;
   const pages = opts.noCache ? stalePages : [];

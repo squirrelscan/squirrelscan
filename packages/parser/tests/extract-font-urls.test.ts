@@ -7,7 +7,10 @@ import { extractFontUrls } from "../src/extractors/fonts";
 
 const BASE = "https://example.com/blog/post";
 const fonts = (html: string): string[] =>
-  extractFontUrls(parseDocument(`<!doctype html><html><head>${html}</head><body></body></html>`), BASE);
+  extractFontUrls(
+    parseDocument(`<!doctype html><html><head>${html}</head><body></body></html>`),
+    BASE,
+  );
 
 describe("extractFontUrls", () => {
   test("finds a font preload and resolves it against the page", () => {

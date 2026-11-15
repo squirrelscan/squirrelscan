@@ -148,9 +148,7 @@ describe("getCachedPage rowid tie-break (#846)", () => {
     // before the copy is written). Inserted after crawl1's row, so it gets a
     // higher rowid.
     const crawl2 = await freshCrawl(store);
-    await run(
-      store.upsertPage(crawl2, page(url, { sourceHash: "fresh-normalized-source-hash" }))
-    );
+    await run(store.upsertPage(crawl2, page(url, { sourceHash: "fresh-normalized-source-hash" })));
 
     const cached = await run(store.getCachedPage(url));
     expect(cached).not.toBeNull();

@@ -3,11 +3,7 @@
 import { describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
-import type {
-  CrawlStorage,
-  PageRecord,
-  ResponseHeaders,
-} from "../src/storage/types";
+import type { CrawlStorage, PageRecord, ResponseHeaders } from "../src/storage/types";
 import { StorageCacheStore } from "../src/cache-store";
 
 const now = 1_000_000_000_000;
@@ -87,9 +83,7 @@ describe("StorageCacheStore.lookup", () => {
   test("miss when nothing stored", async () => {
     const { storage } = fakeStorage(null);
     const store = new StorageCacheStore(storage);
-    const res = await Effect.runPromise(
-      store.lookup("https://example.com/", ctx, { now })
-    );
+    const res = await Effect.runPromise(store.lookup("https://example.com/", ctx, { now }));
     expect(res.entry).toBeNull();
     expect(res.freshness).toBeUndefined();
   });
@@ -99,12 +93,10 @@ describe("StorageCacheStore.lookup", () => {
       page({
         fetchedAt: now - 60 * 1000,
         headers: headers({ cacheControl: "max-age=3600" }),
-      })
+      }),
     );
     const store = new StorageCacheStore(storage);
-    const res = await Effect.runPromise(
-      store.lookup("https://example.com/", ctx, { now })
-    );
+    const res = await Effect.runPromise(store.lookup("https://example.com/", ctx, { now }));
     expect(res.entry).not.toBeNull();
     expect(res.freshness?.state).toBe("fresh");
   });
@@ -114,12 +106,10 @@ describe("StorageCacheStore.lookup", () => {
       page({
         fetchedAt: now - 7200 * 1000,
         headers: headers({ cacheControl: "max-age=3600" }),
-      })
+      }),
     );
     const store = new StorageCacheStore(storage);
-    const res = await Effect.runPromise(
-      store.lookup("https://example.com/", ctx, { now })
-    );
+    const res = await Effect.runPromise(store.lookup("https://example.com/", ctx, { now }));
     expect(res.entry).not.toBeNull();
     expect(res.freshness?.state).toBe("stale");
   });
@@ -129,15 +119,15 @@ describe("StorageCacheStore.lookup", () => {
       page({
         headers: headers({ cacheControl: "max-age=3600", vary: "User-Agent" }),
         requestHeaders: { "user-agent": "SquirrelBot/1.0" },
-      })
+      }),
     );
     const store = new StorageCacheStore(storage);
     const res = await Effect.runPromise(
       store.lookup(
         "https://example.com/",
         { requestHeaders: { "user-agent": "SquirrelBot/2.0" } },
-        { now }
-      )
+        { now },
+      ),
     );
     expect(res.entry).toBeNull();
   });
@@ -148,15 +138,15 @@ describe("StorageCacheStore.lookup", () => {
         fetchedAt: now - 60 * 1000,
         headers: headers({ cacheControl: "max-age=3600", vary: "User-Agent" }),
         requestHeaders: { "user-agent": "SquirrelBot/1.0" },
-      })
+      }),
     );
     const store = new StorageCacheStore(storage);
     const res = await Effect.runPromise(
       store.lookup(
         "https://example.com/",
         { requestHeaders: { "user-agent": "SquirrelBot/1.0" } },
-        { now }
-      )
+        { now },
+      ),
     );
     expect(res.entry).not.toBeNull();
     expect(res.freshness?.state).toBe("fresh");
@@ -173,15 +163,15 @@ describe("StorageCacheStore.lookup", () => {
           vary: "Accept-Encoding",
         }),
         requestHeaders: { "accept-language": "en-US,en;q=0.9" },
-      })
+      }),
     );
     const store = new StorageCacheStore(storage);
     const res = await Effect.runPromise(
       store.lookup(
         "https://example.com/",
         { requestHeaders: { "accept-language": "en-US,en;q=0.9" } },
-        { now }
-      )
+        { now },
+      ),
     );
     expect(res.entry).not.toBeNull();
     expect(res.freshness?.state).toBe("fresh");
@@ -193,12 +183,10 @@ describe("StorageCacheStore.lookup", () => {
       page({
         fetchedAt: now - 120 * 1000,
         headers: headers({ cacheControl: "max-age=60, stale-while-revalidate=600" }),
-      })
+      }),
     );
     const store = new StorageCacheStore(storage);
-    const res = await Effect.runPromise(
-      store.lookup("https://example.com/", ctx, { now })
-    );
+    const res = await Effect.runPromise(store.lookup("https://example.com/", ctx, { now }));
     expect(res.entry).not.toBeNull();
     expect(res.freshness?.state).toBe("revalidate");
   });
@@ -209,15 +197,15 @@ describe("StorageCacheStore.lookup", () => {
       page({
         fetchedAt: now - 2 * 24 * 3600 * 1000, // 2 days old; max-age alone says fresh
         headers: headers({ cacheControl: `max-age=${10 * 365 * 24 * 3600}` }),
-      })
+      }),
     );
     const store = new StorageCacheStore(storage);
     const wideCap = await Effect.runPromise(
-      store.lookup("https://example.com/", ctx, { now, maxStalenessSeconds: 30 * 24 * 3600 })
+      store.lookup("https://example.com/", ctx, { now, maxStalenessSeconds: 30 * 24 * 3600 }),
     );
     expect(wideCap.freshness?.state).toBe("fresh");
     const tightCap = await Effect.runPromise(
-      store.lookup("https://example.com/", ctx, { now, maxStalenessSeconds: 3600 })
+      store.lookup("https://example.com/", ctx, { now, maxStalenessSeconds: 3600 }),
     );
     // No stale-while-revalidate directive → the cap surfaces "stale", not "revalidate".
     expect(tightCap.freshness?.state).toBe("stale");

@@ -28,7 +28,11 @@ export const WCAG_CRITERIA: Readonly<Record<string, WcagEntry>> = {
   "1.1.1": { title: "Non-text Content", level: "A", version: "2.0" },
   "1.2.1": { title: "Audio-only and Video-only (Prerecorded)", level: "A", version: "2.0" },
   "1.2.2": { title: "Captions (Prerecorded)", level: "A", version: "2.0" },
-  "1.2.3": { title: "Audio Description or Media Alternative (Prerecorded)", level: "A", version: "2.0" },
+  "1.2.3": {
+    title: "Audio Description or Media Alternative (Prerecorded)",
+    level: "A",
+    version: "2.0",
+  },
   "1.2.4": { title: "Captions (Live)", level: "AA", version: "2.0" },
   "1.2.5": { title: "Audio Description (Prerecorded)", level: "AA", version: "2.0" },
   "1.3.1": { title: "Info and Relationships", level: "A", version: "2.0" },
@@ -103,7 +107,9 @@ export function isWcagLevel(value: unknown): value is WcagLevel {
 }
 
 /** Lowest (easiest to meet) level among a rule's criteria; undefined when it declares none. */
-export function lowestWcagLevel(criteria: readonly WcagCriterion[] | undefined): WcagLevel | undefined {
+export function lowestWcagLevel(
+  criteria: readonly WcagCriterion[] | undefined,
+): WcagLevel | undefined {
   if (!criteria || criteria.length === 0) return undefined;
   return criteria.reduce<WcagLevel>(
     (low, c) => (LEVEL_RANK[c.level] < LEVEL_RANK[low] ? c.level : low),

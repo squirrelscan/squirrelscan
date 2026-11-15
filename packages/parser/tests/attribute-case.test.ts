@@ -66,9 +66,7 @@ describe("HTML attribute lookup ignores case (#1507)", () => {
     // insensitivity is ASCII only, so a browser leaves this name as authored.
     // Spelled as a code point: as a literal it is indistinguishable from "K".
     const kelvin = "\u212A";
-    const el = parse(`<div id="a" ${kelvin}="kelvin" ASCII-K="plain"></div>`).getElementById(
-      "a",
-    )!;
+    const el = parse(`<div id="a" ${kelvin}="kelvin" ASCII-K="plain"></div>`).getElementById("a")!;
 
     expect(el.getAttribute("k")).toBeNull();
     expect(el.getAttribute(kelvin)).toBe("kelvin");
@@ -379,7 +377,15 @@ function importsLinkedomAtRuntime(source: string): boolean {
 }
 
 // Bun.Glob brace expansion silently matches nothing, so scan one at a time.
-const SOURCE_GLOBS = ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts", "**/*.js", "**/*.mjs", "**/*.cjs"];
+const SOURCE_GLOBS = [
+  "**/*.ts",
+  "**/*.tsx",
+  "**/*.mts",
+  "**/*.cts",
+  "**/*.js",
+  "**/*.mjs",
+  "**/*.cjs",
+];
 
 // dom.ts is the door. This file describes the patterns it looks for, in
 // comments and in the two regexes above, so it cannot scan itself.
@@ -400,14 +406,38 @@ describe("linkedom is reachable through one door", () => {
     [true, "require", `const l = require("linkedom");`],
     [true, "a subpath", `import { DOMParser } from "linkedom/worker";`],
     [true, "a re-export", `export { parseHTML } from "linkedom";`],
-    [true, "a value import after a semicolonless type import", `import type { X } from "other"\nimport { parseHTML } from "linkedom"`],
-    [true, "require after a semicolonless type import", `import type { Y } from "other"\nconst l = require("linkedom")`],
-    [true, "an inline type specifier, which still emits the import", `import { type Document } from "linkedom";`],
+    [
+      true,
+      "a value import after a semicolonless type import",
+      `import type { X } from "other"\nimport { parseHTML } from "linkedom"`,
+    ],
+    [
+      true,
+      "require after a semicolonless type import",
+      `import type { Y } from "other"\nconst l = require("linkedom")`,
+    ],
+    [
+      true,
+      "an inline type specifier, which still emits the import",
+      `import { type Document } from "linkedom";`,
+    ],
     [false, "a type import", `import type { Document } from "linkedom";`],
-    [false, "a multiline type import", `import type {\n  Document,\n  Element,\n} from "linkedom";`],
-    [false, "a type import after another import", `import { a } from "b";\nimport type { Document } from "linkedom";`],
+    [
+      false,
+      "a multiline type import",
+      `import type {\n  Document,\n  Element,\n} from "linkedom";`,
+    ],
+    [
+      false,
+      "a type import after another import",
+      `import { a } from "b";\nimport type { Document } from "linkedom";`,
+    ],
     [false, "a type re-export", `export type { Document } from "linkedom";`],
-    [false, "a type import whose binding contains the word import", `import type { important } from "linkedom";`],
+    [
+      false,
+      "a type import whose binding contains the word import",
+      `import type { important } from "linkedom";`,
+    ],
   ])("flags %p: %s", (flagged, _label, source) => {
     expect(importsLinkedomAtRuntime(source)).toBe(flagged);
   });

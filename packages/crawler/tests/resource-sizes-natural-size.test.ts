@@ -58,12 +58,29 @@ function image(path: string, overrides: Partial<ResourceSizeRecord> = {}): Resou
 
 const RECORDS: ResourceSizeRecord[] = [
   image("photo.jpg", { naturalWidth: 1200, naturalHeight: 1200, animated: false }),
-  image("spin.webp", { contentType: "image/webp", naturalWidth: 100, naturalHeight: 100, animated: true }),
+  image("spin.webp", {
+    contentType: "image/webp",
+    naturalWidth: 100,
+    naturalHeight: 100,
+    animated: true,
+  }),
   image("exif.jpg", { naturalWidth: null, naturalHeight: null, animated: null }),
-  { type: "css", url: "http://x.test/app.css", status: 200, error: null, contentType: "text/css", sizeBytes: 900, sourcePages: [] },
+  {
+    type: "css",
+    url: "http://x.test/app.css",
+    status: 200,
+    error: null,
+    contentType: "text/css",
+    sizeBytes: 900,
+    sourcePages: [],
+  },
 ];
 
-function header(record: { naturalWidth?: number | null; naturalHeight?: number | null; animated?: boolean | null }) {
+function header(record: {
+  naturalWidth?: number | null;
+  naturalHeight?: number | null;
+  animated?: boolean | null;
+}) {
   return [record.naturalWidth, record.naturalHeight, record.animated];
 }
 
@@ -85,7 +102,9 @@ describe("natural size in resource_sizes (#470)", () => {
 
       // What the resource checker reuses on the next audit.
       const second = await run(storage.createCrawl(crawlMeta(2_000)));
-      const cached = new Map((await run(storage.getCachedResources(second))).map((r) => [r.url, r]));
+      const cached = new Map(
+        (await run(storage.getCachedResources(second))).map((r) => [r.url, r]),
+      );
       expect(header(cached.get("http://x.test/photo.jpg")!)).toEqual([1200, 1200, false]);
       expect(header(cached.get("http://x.test/spin.webp")!)).toEqual([100, 100, true]);
     } finally {
@@ -94,7 +113,9 @@ describe("natural size in resource_sizes (#470)", () => {
     }
   });
 
-  async function storeWithoutHeaderColumns(version: number): Promise<{ path: string; crawlId: string }> {
+  async function storeWithoutHeaderColumns(
+    version: number,
+  ): Promise<{ path: string; crawlId: string }> {
     const path = join(mkdtempSync(join(tmpdir(), "squirrelscan-rs-")), "store.sqlite");
     const storage = new SQLiteStorage(path);
     await run(storage.init());
@@ -106,7 +127,7 @@ describe("natural size in resource_sizes (#470)", () => {
     db.exec("ALTER TABLE resource_sizes DROP COLUMN natural_height");
     db.exec("ALTER TABLE resource_sizes DROP COLUMN animated");
     db.prepare(
-      "INSERT INTO resource_sizes (crawl_id, type, url, status, error, content_type, size_bytes, source_pages) VALUES (?, 'image', ?, 200, NULL, 'image/jpeg', 20480, '[]')"
+      "INSERT INTO resource_sizes (crawl_id, type, url, status, error, content_type, size_bytes, source_pages) VALUES (?, 'image', ?, 200, NULL, 'image/jpeg', 20480, '[]')",
     ).run(crawlId, "http://x.test/old.jpg");
     db.exec("DELETE FROM schema_version");
     db.prepare("INSERT INTO schema_version (version) VALUES (?)").run(version);
@@ -129,12 +150,16 @@ describe("natural size in resource_sizes (#470)", () => {
 
         // The write is what fails loudly on a missing column.
         await run(storage.saveResourceSizes(crawlId, RECORDS));
-        const after = new Map((await run(storage.getResourceSizes(crawlId))).map((r) => [r.url, r]));
+        const after = new Map(
+          (await run(storage.getResourceSizes(crawlId))).map((r) => [r.url, r]),
+        );
         expect(header(after.get("http://x.test/photo.jpg")!)).toEqual([1200, 1200, false]);
         expect(header(after.get("http://x.test/old.jpg")!)).toEqual([null, null, null]);
 
         const db = new Database(path, { readonly: true });
-        const version = db.prepare("SELECT version FROM schema_version").get() as { version: number };
+        const version = db.prepare("SELECT version FROM schema_version").get() as {
+          version: number;
+        };
         db.close();
         expect(version.version).toBe(SCHEMA_VERSION);
       } finally {

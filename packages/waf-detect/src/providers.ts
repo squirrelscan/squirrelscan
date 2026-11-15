@@ -88,7 +88,11 @@ export const COOKIE_PATTERNS: {
   { provider: "perimeterx", names: [/^_px(?:\d|vid|hd|de|ff_)/], confidence: "medium" },
   { provider: "kasada", names: [/^KP_UIDz(?:-ssn)?$/], confidence: "medium" },
   // Bot Manager's sensor and session cookies, not Akamai's CDN.
-  { provider: "akamai", names: [/^_abck$/, /^ak_bmsc$/, /^bm_sz$/, /^bm_sv$/], confidence: "medium" },
+  {
+    provider: "akamai",
+    names: [/^_abck$/, /^ak_bmsc$/, /^bm_sz$/, /^bm_sv$/],
+    confidence: "medium",
+  },
   {
     provider: "imperva",
     names: [/^incap_ses_/, /^visid_incap_/, /^nlbi_/, /^reese84$/],
@@ -124,7 +128,8 @@ export const PROVIDER_PRECEDENCE: readonly WafProvider[] = [
  * (`scripts/jsd/main.js`), so the bare directory says the site is on
  * Cloudflare, not that the page is a challenge (#666).
  */
-export const CLOUDFLARE_CHALLENGE_SCRIPT = /\/cdn-cgi\/challenge-platform\/(?:h\/[\w-]+\/)?orchestrate\//i;
+export const CLOUDFLARE_CHALLENGE_SCRIPT =
+  /\/cdn-cgi\/challenge-platform\/(?:h\/[\w-]+\/)?orchestrate\//i;
 
 /** Akamai's deny-page reference id, such as `Reference #18.9d367a83.1614887475.2b3c78d`. */
 export const AKAMAI_REFERENCE_ID = /reference\s*#\s*\d+\.[0-9a-f]+\.\d+\.[0-9a-f]+/i;
@@ -198,7 +203,10 @@ export const CONTENT_PATTERNS: {
     view: "text",
     // The block page's title and heading, in full.
     patterns: [
-      new RegExp(`sucuri website ?firewall\\s*${DASH}\\s*(?:cloudproxy\\s*${DASH}\\s*)?access denied`, "i"),
+      new RegExp(
+        `sucuri website ?firewall\\s*${DASH}\\s*(?:cloudproxy\\s*${DASH}\\s*)?access denied`,
+        "i",
+      ),
       new RegExp(`access denied\\s*${DASH}\\s*sucuri website ?firewall`, "i"),
     ],
     confidence: "high",
@@ -295,7 +303,10 @@ export const CHALLENGE_MARKUP_SIGNATURES: {
   // troubleshooting page can quote one. The gap between them stays bounded: each
   // "access denied" in the 10 KB sample costs at most a 2 KB scan.
   { view: "text", pattern: /reference&#32;&#35;\s*\d/i },
-  { view: "text", pattern: new RegExp(`access denied[\\s\\S]{0,2000}?${AKAMAI_REFERENCE_ID.source}`, "i") },
+  {
+    view: "text",
+    pattern: new RegExp(`access denied[\\s\\S]{0,2000}?${AKAMAI_REFERENCE_ID.source}`, "i"),
+  },
   // HUMAN's captcha mount point is classify.ts's rule, which also needs a refusal
   // status and its app id: a bare `px-captcha` is a widget a real page can embed.
 ];

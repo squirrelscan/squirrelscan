@@ -4,7 +4,11 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { buildTechInputs, DEFAULT_TECH_BUNDLE_LIMITS, type TechBundleLimits } from "../src/technologies";
+import {
+  buildTechInputs,
+  DEFAULT_TECH_BUNDLE_LIMITS,
+  type TechBundleLimits,
+} from "../src/technologies";
 
 const HOME = "https://example.com/";
 const BODY =
@@ -19,7 +23,8 @@ function filler(bytes: number, seed: number): string {
 function crowdedScript(seed: number, real: boolean): string {
   const padded = BODY + " ".repeat(1_100);
   const parts: string[] = [filler(20_000, seed)];
-  for (let k = 0; k < 8; k++) parts.push(`h(Code,{children:'${padded}'});\n`, filler(4_000, seed + k + 1));
+  for (let k = 0; k < 8; k++)
+    parts.push(`h(Code,{children:'${padded}'});\n`, filler(4_000, seed + k + 1));
   if (real) parts.push(`h(Script,{strategy:"lazyOnload",children:'${padded}'});\n`);
   parts.push(filler(10_000, seed + 99));
   return parts.join("");
@@ -29,7 +34,9 @@ function build(pages: number, perPage: number, limits: TechBundleLimits, realAt:
   const scripts = Array.from({ length: pages * perPage }, (_, i) => ({
     url: `https://example.com/p${Math.floor(i / perPage)}/s${i}.js`,
     content: crowdedScript(i + 1, i === realAt),
-    sourcePages: [pages === 1 || i < perPage ? HOME : `https://example.com/page${Math.floor(i / perPage)}`],
+    sourcePages: [
+      pages === 1 || i < perPage ? HOME : `https://example.com/page${Math.floor(i / perPage)}`,
+    ],
   }));
   const pageUrl = (p: number): string => (p === 0 ? HOME : `https://example.com/page${p}`);
   const sources = Array.from({ length: pages }, (_, p) => ({
@@ -51,7 +58,9 @@ describe("string-hint windows against the page, bundle and audit budgets (#1509)
     const inputs = build(1, 30, DEFAULT_TECH_BUNDLE_LIMITS, 25);
     expect(bytes(inputs[0]!)).toBeLessThanOrEqual(DEFAULT_TECH_BUNDLE_LIMITS.pageBytes);
     for (const s of inputs[0]!.scripts ?? []) {
-      expect(Buffer.byteLength(s.content ?? "")).toBeLessThanOrEqual(DEFAULT_TECH_BUNDLE_LIMITS.bundleBytes);
+      expect(Buffer.byteLength(s.content ?? "")).toBeLessThanOrEqual(
+        DEFAULT_TECH_BUNDLE_LIMITS.bundleBytes,
+      );
     }
     // Detection is not asserted: eight decoy windows per script share the page's room with the real one, by design.
   });

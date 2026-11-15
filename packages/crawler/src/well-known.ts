@@ -91,7 +91,12 @@ export function looksLikeMarkdown(body: string): boolean {
   return /\[[^\]]+\]\([^)]+\)/.test(trimmed.slice(0, 4_096));
 }
 
-function htmlWordCount(body: string, url: string, status: number, looksHtml: boolean): number | null {
+function htmlWordCount(
+  body: string,
+  url: string,
+  status: number,
+  looksHtml: boolean,
+): number | null {
   if (!looksHtml || status < 200 || status >= 300) return null;
   try {
     return parsePage(body, url).content.wordCount;
@@ -196,7 +201,17 @@ async function probeOne(
           oauthClientIdMetadataDocumentSupported: oauth.clientIdMetadataDocumentSupported,
           error: null,
           // A configured page (#1428) is judged on its content, so it carries the text's word count.
-          ...(countWords ? { wordCount: htmlWordCount(body, url, response.status, looksHtml || /html/i.test(contentType ?? "")), finalUrl: response.url || url } : {}),
+          ...(countWords
+            ? {
+                wordCount: htmlWordCount(
+                  body,
+                  url,
+                  response.status,
+                  looksHtml || /html/i.test(contentType ?? ""),
+                ),
+                finalUrl: response.url || url,
+              }
+            : {}),
         };
       },
       budget?.egress,
@@ -263,9 +278,15 @@ export function probeConfiguredPage(
   const url = new URL(path, baseUrl).toString();
   return Effect.promise(async () => {
     if (robotsAllows && !robotsAllows(url)) {
-      return { ...unreachableProbe(path, url, "disallowed by robots.txt"), configuredPage: true as const, blockedByRobots: true };
+      return {
+        ...unreachableProbe(path, url, "disallowed by robots.txt"),
+        configuredPage: true as const,
+        blockedByRobots: true,
+      };
     }
-    const probe = await gate(url, () => probeOne(baseUrl, path, userAgent, customHeaders, budget, true));
+    const probe = await gate(url, () =>
+      probeOne(baseUrl, path, userAgent, customHeaders, budget, true),
+    );
     return { ...probe, configuredPage: true as const, wordCount: probe.wordCount ?? null };
   });
 }

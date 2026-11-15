@@ -207,7 +207,10 @@ describe("ax/commerce-readiness never clears a finding it could not judge", () =
 
   async function signalFor(html: string) {
     const checks = (await run(html)).map((c) => ({ ...c, pageUrl: URL_ }));
-    return { checks, signal: buildResolutionSignal({ "ax/commerce-readiness": { checks } }, [URL_])! };
+    return {
+      checks,
+      signal: buildResolutionSignal({ "ax/commerce-readiness": { checks } }, [URL_])!,
+    };
   }
 
   test("a truncated read with fields not found keeps the stored finding open", async () => {
@@ -229,7 +232,9 @@ describe("ax/commerce-readiness never clears a finding it could not judge", () =
   test("a complete offer and a page read whole with no Product markup are verdicts", async () => {
     for (const html of [page(ld(fullProduct)), page("")]) {
       const { checks, signal } = await signalFor(html);
-      expect(checks.find((x) => x.name === "offer-completeness")?.details?.inconclusive).toBeUndefined();
+      expect(
+        checks.find((x) => x.name === "offer-completeness")?.details?.inconclusive,
+      ).toBeUndefined();
       expect(signal.failing[KEY]).toEqual([]);
       expect(signal.notEvaluated?.[KEY] ?? []).toHaveLength(0);
     }

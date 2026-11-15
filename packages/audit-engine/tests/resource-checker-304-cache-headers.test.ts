@@ -56,14 +56,24 @@ describe("a 304 keeps the revalidation's own Expires and Date (repo#4492)", () =
   test("HEAD path", async () => {
     const url = `${base}/a.css`;
     const [r] = await Effect.runPromise(checkResourceSizes([url], { priorByUrl: prior(url) }));
-    expect(r).toMatchObject({ cacheReason: "304", cacheControl: "max-age=0", expires: EXPIRES, date: DATE });
+    expect(r).toMatchObject({
+      cacheReason: "304",
+      cacheControl: "max-age=0",
+      expires: EXPIRES,
+      date: DATE,
+    });
   });
 
   test("ranged-GET path", async () => {
     const url = `${base}/b.png`;
     const [r] = await Effect.runPromise(
-      checkResourceSizes([url], { priorByUrl: prior(url), readImageHeader: true })
+      checkResourceSizes([url], { priorByUrl: prior(url), readImageHeader: true }),
     );
-    expect(r).toMatchObject({ cacheReason: "304", cacheControl: "max-age=0", expires: EXPIRES, date: DATE });
+    expect(r).toMatchObject({
+      cacheReason: "304",
+      cacheControl: "max-age=0",
+      expires: EXPIRES,
+      date: DATE,
+    });
   });
 });

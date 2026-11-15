@@ -673,7 +673,12 @@ describe("#2063 — a rule emptied by the filter still scores its crawled pages"
   const REAL_RULE = "core/meta-title";
   /** Every check this rule published is a replay, so the filter empties it. */
   const EMPTIED_RULE = "content/word-count";
-  const wordCountMeta = { ...pageMeta, id: "word-count", name: "Word Count", category: "content" as const };
+  const wordCountMeta = {
+    ...pageMeta,
+    id: "word-count",
+    name: "Word Count",
+    category: "content" as const,
+  };
   const CRAWLED = FRESH_PAGES[0]!;
 
   async function* noOpenPages(): AsyncGenerator<{
@@ -741,7 +746,12 @@ describe("#2063 — a rule emptied by the filter still scores its crawled pages"
 // producer fold through server merge, because neither half alone would catch it.
 describe("#2072 — a mixed group over the fold cap cannot launder its carried half", () => {
   const RULE = "ax/token-weight";
-  const tokenMeta = { ...pageMeta, id: "token-weight", name: "Token Weight", category: "ax" as const };
+  const tokenMeta = {
+    ...pageMeta,
+    id: "token-weight",
+    name: "Token Weight",
+    category: "ax" as const,
+  };
   const CRAWLED = Array.from({ length: 16 }, (_, i) => `https://x.test/p/${i}`);
   const REPLAYED = Array.from({ length: 481 }, (_, i) => `https://x.test/old/${i}?id=${i}`);
 

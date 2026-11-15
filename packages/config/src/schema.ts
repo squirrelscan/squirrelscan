@@ -5,7 +5,11 @@
 import { AUDIT_LEVELS, parseAuditLevel } from "@squirrelscan/core-contracts/audit-levels";
 import { SERVICE_LIMITS } from "@squirrelscan/core-contracts/limits";
 import { APPROVABLE_PROBE_PATHS } from "@squirrelscan/core-contracts/storage";
-import { isValidHeaderHost, isValidHeaderName, isValidHeaderValue } from "@squirrelscan/utils/headers";
+import {
+  isValidHeaderHost,
+  isValidHeaderName,
+  isValidHeaderValue,
+} from "@squirrelscan/utils/headers";
 import { z } from "zod";
 
 import { parseByteSize } from "./byte-size";
@@ -263,9 +267,11 @@ export const ClassifierConfigSchema = z.object({
 // (a Vite or Next.js app with an empty HTML shell) is still found. Unset =
 // the default (8 MB per bundle in the local scan, 64 KB in the payload to the cloud
 // detection service); 0 turns bundle matching off.
-export const TechDetectConfigSchema = z.object({
-  bundle_bytes: z.number().int().min(0).max(SERVICE_LIMITS.techDetectMaxBundleBytes).optional(),
-}).strict();
+export const TechDetectConfigSchema = z
+  .object({
+    bundle_bytes: z.number().int().min(0).max(SERVICE_LIMITS.techDetectMaxBundleBytes).optional(),
+  })
+  .strict();
 
 export const OutputConfigSchema = z.object({
   format: z.enum(["json", "html", "console"]).default("console"),
@@ -315,9 +321,7 @@ export const StorageConfigSchema = z.object({
         .int({ message: "keep_audits must be a whole number of audits" })
         .min(0, { message: "keep_audits must be 0 or more" }),
     ])
-    .transform((value) =>
-      typeof value === "boolean" ? (value ? DEFAULT_KEEP_AUDITS : 0) : value,
-    )
+    .transform((value) => (typeof value === "boolean" ? (value ? DEFAULT_KEEP_AUDITS : 0) : value))
     .default(DEFAULT_KEEP_AUDITS),
   /**
    * Directory holding verified evidence bundles (`squirrel evidence export -o
@@ -343,8 +347,7 @@ export const StorageConfigSchema = z.object({
       if (bytes === null) {
         ctx.addIssue({
           code: "custom",
-          message:
-            'content_store_max_bytes must be a positive size, such as 4294967296 or "4GB"',
+          message: 'content_store_max_bytes must be a positive size, such as 4294967296 or "4GB"',
         });
         return z.NEVER;
       }
@@ -481,9 +484,7 @@ export const IntelConfigSchema = z.object({
   /** Daily-pull feed cache TTL in hours. Default 24 (once per day). */
   feed_ttl_hours: z.number().int().min(1).default(24),
   /** Per-provider config keyed by provider id (safe-browsing, urlhaus, …). */
-  providers: z
-    .record(z.string(), IntelProviderConfigSchema)
-    .default({}),
+  providers: z.record(z.string(), IntelProviderConfigSchema).default({}),
 });
 
 // Differential cloaking probe (integrity Phase 3, #118) — opt-in, bounded. When
@@ -506,9 +507,7 @@ export const CloakingProbeConfigSchema = z.object({
   /** UA string sent for the cloaking comparison fetch. */
   googlebot_user_agent: z
     .string()
-    .default(
-      "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
-    ),
+    .default("Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"),
 });
 
 // Soft-404 confirmation re-fetch (#1177). Before crawl/soft-404 warns, each
@@ -528,12 +527,8 @@ export const Soft404ConfirmConfigSchema = z.object({
 // Site-integrity feature config (#115). Holds the opt-in cloaking probe (#118)
 // and the soft-404 confirmation pass (#1177); threat-intel lives under [intel].
 export const IntegrityConfigSchema = z.object({
-  cloaking_probe: CloakingProbeConfigSchema.default(
-    CloakingProbeConfigSchema.parse({}),
-  ),
-  soft404_confirm: Soft404ConfirmConfigSchema.default(
-    Soft404ConfirmConfigSchema.parse({}),
-  ),
+  cloaking_probe: CloakingProbeConfigSchema.default(CloakingProbeConfigSchema.parse({})),
+  soft404_confirm: Soft404ConfirmConfigSchema.default(Soft404ConfirmConfigSchema.parse({})),
 });
 
 // Probing intensity (see probe.ts): how hard each page is poked beyond what
@@ -552,8 +547,7 @@ export const SecurityConfigSchema = z.object({
   budget: z
     .union([z.number(), z.string()])
     .refine((value) => parseProbeBudget(value) !== null, {
-      message:
-        'budget must be a positive duration of at most 1h, such as "30s", "500ms" or "2m"',
+      message: 'budget must be a positive duration of at most 1h, such as "30s", "500ms" or "2m"',
     })
     .optional(),
 });

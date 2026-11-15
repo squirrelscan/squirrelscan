@@ -293,8 +293,7 @@ function inferBrand(samples: TitleSample[], multiSection: boolean): BrandNorm | 
       best === null ||
       candidate.count > best.count ||
       (candidate.count === best.count &&
-        candidateKey(candidate.position, candidate.key) <
-          candidateKey(best.position, best.key))
+        candidateKey(candidate.position, candidate.key) < candidateKey(best.position, best.key))
     ) {
       best = candidate;
     }
@@ -368,7 +367,7 @@ function brandPlacement(sample: TitleSample, brand: BrandNorm): BrandPosition | 
 function classify(
   sample: TitleSample,
   brand: BrandNorm,
-  separator: SeparatorNorm | null
+  separator: SeparatorNorm | null,
 ): Deviation | null {
   // The homepage legitimately has its own title: brand-only, brand-first and a
   // tagline separator are all normal there.
@@ -408,7 +407,7 @@ function classLabel(
   judged: number,
   brand: BrandNorm,
   separator: SeparatorNorm | null,
-  value: string
+  value: string,
 ): string {
   switch (deviation) {
     case "brand-only":
@@ -433,7 +432,7 @@ function buildChecks(rollup: TitleRollup, sitePageCount: number): CheckResult[] 
   if (sitePageCount < TITLE_NORM_MIN_PAGES) {
     return [
       skip(
-        `Only ${sitePageCount} page(s) crawled; ${TITLE_NORM_MIN_PAGES} needed to establish a title template`
+        `Only ${sitePageCount} page(s) crawled; ${TITLE_NORM_MIN_PAGES} needed to establish a title template`,
       ),
     ];
   }
@@ -442,7 +441,7 @@ function buildChecks(rollup: TitleRollup, sitePageCount: number): CheckResult[] 
   if (samples.length < TITLE_NORM_MIN_SAMPLE) {
     return [
       skip(
-        `Only ${samples.length} page(s) have a title; ${TITLE_NORM_MIN_SAMPLE} needed to establish a title template`
+        `Only ${samples.length} page(s) have a title; ${TITLE_NORM_MIN_SAMPLE} needed to establish a title template`,
       ),
     ];
   }
@@ -452,7 +451,7 @@ function buildChecks(rollup: TitleRollup, sitePageCount: number): CheckResult[] 
   if (brand === null) {
     return [
       skip(
-        `No title template reaches ${Math.round(TITLE_NORM_MIN_AGREEMENT * 100)}% agreement across the crawled titles`
+        `No title template reaches ${Math.round(TITLE_NORM_MIN_AGREEMENT * 100)}% agreement across the crawled titles`,
       ),
     ];
   }
@@ -529,7 +528,7 @@ function buildChecks(rollup: TitleRollup, sitePageCount: number): CheckResult[] 
     (a, b) =>
       b.urls.length - a.urls.length ||
       CLASSES.indexOf(a.class) - CLASSES.indexOf(b.class) ||
-      (a.value < b.value ? -1 : a.value > b.value ? 1 : 0)
+      (a.value < b.value ? -1 : a.value > b.value ? 1 : 0),
   );
 
   const items: CheckItem[] = ordered.slice(0, TITLE_NORM_MAX_ITEMS).map((group) => ({
@@ -540,7 +539,7 @@ function buildChecks(rollup: TitleRollup, sitePageCount: number): CheckResult[] 
       samples.length,
       brand,
       separator,
-      group.value
+      group.value,
     ),
     sourcePages: group.urls.sort().slice(0, TITLE_NORM_MAX_URLS),
     meta: {

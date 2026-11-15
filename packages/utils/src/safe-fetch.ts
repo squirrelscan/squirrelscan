@@ -109,7 +109,12 @@ export async function safeRedirectFetch(
     // A caller that vetoes the hop gets the 3xx back as the final response, unfollowed, with the
     // refused target named (#1655). The hook runs after the scheme check, so it only sees http(s).
     if (shouldFollow && !shouldFollow(currentUrl, nextUrl)) {
-      return { response, finalUrl: currentUrl, redirected: currentUrl !== url, unfollowed: nextUrl };
+      return {
+        response,
+        finalUrl: currentUrl,
+        redirected: currentUrl !== url,
+        unfollowed: nextUrl,
+      };
     }
 
     // Discard the 3xx body before the next hop so the socket can be reused.

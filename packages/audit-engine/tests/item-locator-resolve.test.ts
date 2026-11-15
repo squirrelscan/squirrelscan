@@ -338,9 +338,7 @@ describe("runCloudSmartAudits: a still-failing page's unlisted item (pub#474)", 
   });
 
   test("a list with a recorded remainder carries the items it does not show", async () => {
-    const rows = await publishTwice([
-      dialogCheck(["dialog.newsletter-popup"], { additional: 4 }),
-    ]);
+    const rows = await publishTwice([dialogCheck(["dialog.newsletter-popup"], { additional: 4 })]);
     expect(rows.get("dialog")?.state).toBe("open");
     expect(rows.get("dialog")?.provenance).toBe("carried");
     expect(rows.get("dialog.cart")?.state).toBe("open");

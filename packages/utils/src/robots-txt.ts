@@ -40,7 +40,7 @@ export function robotsGroupToken(agent: string): string {
 export function isRobotsTxtDisallowed(
   url: string,
   robotsTxt: RobotsTxtData | null,
-  userAgent = "Googlebot"
+  userAgent = "Googlebot",
 ): boolean {
   if (!robotsTxt?.exists) return false;
 
@@ -392,7 +392,12 @@ const SITEMAP_LOOKS_LIKE_HOST =
  * real domain such as `worldairops.com/sitemap.xml` as a path is the more
  * common failure, and the read is reported on `robotsTxt.errors`.
  */
-const RESERVED_HOST_TLDS: ReadonlySet<string> = new Set(["test", "example", "invalid", "localhost"]);
+const RESERVED_HOST_TLDS: ReadonlySet<string> = new Set([
+  "test",
+  "example",
+  "invalid",
+  "localhost",
+]);
 
 function hasPublicSuffixTld(hostSegment: string): boolean {
   const host = hostSegment.replace(/:\d+$/, "");
@@ -526,7 +531,7 @@ export interface ResolvedRobotsSitemaps {
 /** `resolveRobotsSitemapUrl` over a whole `Sitemap:` list. */
 export function resolveRobotsSitemapUrls(
   values: readonly unknown[],
-  baseUrl: string
+  baseUrl: string,
 ): ResolvedRobotsSitemaps {
   const urls: string[] = [];
   const issues: string[] = [];

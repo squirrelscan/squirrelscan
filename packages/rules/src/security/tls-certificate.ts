@@ -47,10 +47,34 @@ export const optionsSchema = z
       .array(z.enum(["rsa", "ecdsa", "ed25519", "dsa"]))
       .min(1)
       .default(["rsa", "ecdsa", "ed25519"])
-      .describe("Public key types the certificate may use; any other type warns (a DSA key warns by default)"),
-    rsa_min_bits: z.number().int().min(512).max(16384).default(2048).describe("Smallest RSA modulus, in bits, that does not warn"),
-    ecdsa_min_bits: z.number().int().min(112).max(1024).default(256).describe("Smallest elliptic curve, in bits (the curve size: 256 for P-256), that does not warn"),
-    dsa_min_bits: z.number().int().min(512).max(16384).default(2048).describe("Smallest DSA modulus, in bits, that does not warn; only meaningful when `dsa` is in key_types"),
+      .describe(
+        "Public key types the certificate may use; any other type warns (a DSA key warns by default)",
+      ),
+    rsa_min_bits: z
+      .number()
+      .int()
+      .min(512)
+      .max(16384)
+      .default(2048)
+      .describe("Smallest RSA modulus, in bits, that does not warn"),
+    ecdsa_min_bits: z
+      .number()
+      .int()
+      .min(112)
+      .max(1024)
+      .default(256)
+      .describe(
+        "Smallest elliptic curve, in bits (the curve size: 256 for P-256), that does not warn",
+      ),
+    dsa_min_bits: z
+      .number()
+      .int()
+      .min(512)
+      .max(16384)
+      .default(2048)
+      .describe(
+        "Smallest DSA modulus, in bits, that does not warn; only meaningful when `dsa` is in key_types",
+      ),
     reject_weak_signature: z
       .boolean()
       .default(true)
@@ -58,11 +82,15 @@ export const optionsSchema = z
     min_tls_version: z
       .enum(["TLSv1", "TLSv1.1", "TLSv1.2", "TLSv1.3"])
       .default("TLSv1.2")
-      .describe("Warn when the handshake negotiates a lower protocol version. squirrel's runtime refuses below TLS 1.2 (such a server is `not checked`), so only TLSv1.3 against a server that tops out at TLS 1.2 can warn"),
+      .describe(
+        "Warn when the handshake negotiates a lower protocol version. squirrel's runtime refuses below TLS 1.2 (such a server is `not checked`), so only TLSv1.3 against a server that tops out at TLS 1.2 can warn",
+      ),
     check_counterpart: z
       .boolean()
       .default(true)
-      .describe("Also handshake with the www or apex counterpart of the audited host; false skips that handshake"),
+      .describe(
+        "Also handshake with the www or apex counterpart of the audited host; false skips that handshake",
+      ),
   })
   // Otherwise the warning band is empty and every near expiry reads as an error.
   .refine(
@@ -135,7 +163,10 @@ export function expiryWindowFor(
   const known = Number.isFinite(lifetimeDays) && lifetimeDays > 0;
 
   const derivedError = known
-    ? Math.max(MIN_ERROR_DAYS, Math.min(DEFAULT_ERROR_DAYS, Math.floor(lifetimeDays * ERROR_LIFETIME_FRACTION)))
+    ? Math.max(
+        MIN_ERROR_DAYS,
+        Math.min(DEFAULT_ERROR_DAYS, Math.floor(lifetimeDays * ERROR_LIFETIME_FRACTION)),
+      )
     : DEFAULT_ERROR_DAYS;
   const errorDays = options.error_days ?? derivedError;
 
@@ -161,7 +192,6 @@ export function expiryWindowFor(
 
 const DAY_MS = 86_400_000;
 
-
 export type { TlsProbeFn };
 
 export interface TlsCertificateDeps {
@@ -170,7 +200,6 @@ export interface TlsCertificateDeps {
   /** A hosted audit: the not-checked wording carries no advice about networks, proxies or --offline (#3922). */
   hosted?: boolean;
 }
-
 
 export const tlsCertificateRule: Rule = {
   meta: {
@@ -283,7 +312,13 @@ export async function checkTlsCertificate(
   return { checks };
 }
 
-const KEY_TYPE_NAMES = { rsa: "RSA", ecdsa: "ECDSA", ed25519: "Ed25519", dsa: "DSA", other: "an unrecognised key type" } as const;
+const KEY_TYPE_NAMES = {
+  rsa: "RSA",
+  ecdsa: "ECDSA",
+  ed25519: "Ed25519",
+  dsa: "DSA",
+  other: "an unrecognised key type",
+} as const;
 
 /** The key as a person names it: `RSA 1024 bits`, `ECDSA P-256`, `Ed25519`, `DSA 1024 bits`. */
 export function describeKey(certificate: TlsCertificate): string | undefined {
@@ -304,7 +339,10 @@ export function describeKey(certificate: TlsCertificate): string | undefined {
 }
 
 /** Warns when the key type is not allowed or its size is below the minimum for its type; nothing when it is fine. */
-function keyCheck(certificate: TlsCertificate, options: TlsCertificateOptions): CheckResult | undefined {
+function keyCheck(
+  certificate: TlsCertificate,
+  options: TlsCertificateOptions,
+): CheckResult | undefined {
   const type = certificate.keyType ?? (certificate.rsaBits !== undefined ? "rsa" : undefined);
   const named = describeKey(certificate);
   if (!type || !named) return undefined;
@@ -321,7 +359,13 @@ function keyCheck(certificate: TlsCertificate, options: TlsCertificateOptions): 
   }
   const bits = certificate.keyBits ?? certificate.rsaBits;
   const minimum =
-    type === "rsa" ? options.rsa_min_bits : type === "ecdsa" ? options.ecdsa_min_bits : type === "dsa" ? options.dsa_min_bits : undefined;
+    type === "rsa"
+      ? options.rsa_min_bits
+      : type === "ecdsa"
+        ? options.ecdsa_min_bits
+        : type === "dsa"
+          ? options.dsa_min_bits
+          : undefined;
   if (minimum !== undefined && bits !== undefined && bits < minimum) {
     return {
       name: "tls-certificate-key",
@@ -338,9 +382,13 @@ function keyCheck(certificate: TlsCertificate, options: TlsCertificateOptions): 
 const WEAK_SIGNATURE = /(^|[^a-z0-9])(sha1|sha-1|md5|md4|md2)([^0-9]|$)/i;
 
 /** Warns when the leaf is signed with a broken hash. The leaf only: the probe cannot read the rest of the chain. */
-function signatureCheck(certificate: TlsCertificate, options: TlsCertificateOptions): CheckResult | undefined {
+function signatureCheck(
+  certificate: TlsCertificate,
+  options: TlsCertificateOptions,
+): CheckResult | undefined {
   const algorithm = certificate.signatureAlgorithm;
-  if (!options.reject_weak_signature || !algorithm || !WEAK_SIGNATURE.test(algorithm)) return undefined;
+  if (!options.reject_weak_signature || !algorithm || !WEAK_SIGNATURE.test(algorithm))
+    return undefined;
   return {
     name: "tls-certificate-signature",
     status: "warn",
@@ -353,7 +401,10 @@ function signatureCheck(certificate: TlsCertificate, options: TlsCertificateOpti
 const PROTOCOL_ORDER = ["SSLv3", "TLSv1", "TLSv1.1", "TLSv1.2", "TLSv1.3"];
 
 /** Warns when the server chose a protocol below `min_tls_version`. */
-function protocolCheck(protocol: string | undefined, options: TlsCertificateOptions): CheckResult | undefined {
+function protocolCheck(
+  protocol: string | undefined,
+  options: TlsCertificateOptions,
+): CheckResult | undefined {
   if (!protocol) return undefined;
   const got = PROTOCOL_ORDER.indexOf(protocol);
   const wanted = PROTOCOL_ORDER.indexOf(options.min_tls_version);

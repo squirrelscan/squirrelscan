@@ -4,7 +4,14 @@
 
 import { csvField } from "./entities-export";
 import { escapeMarkdownCell, escapeMarkdownText, markdownCodeSpan } from "./output/markdown-escape";
-import { cleanText, csvSafeText, escapeJsonUnsafe, urlCell, type PageMapMeta, type PageMapRow } from "./page-map";
+import {
+  cleanText,
+  csvSafeText,
+  escapeJsonUnsafe,
+  urlCell,
+  type PageMapMeta,
+  type PageMapRow,
+} from "./page-map";
 
 /** The fields a change is reported for. Counts that move with every crawl (links, word count, load time) are not among them. */
 export const PAGE_MAP_DIFF_FIELDS = [
@@ -55,7 +62,8 @@ export function diffPageMaps(
 ): PageMapDiff {
   const before = new Map(older.map((row) => [row.url, row]));
   const after = new Map(newer.map((row) => [row.url, row]));
-  const byUrl = (a: { url: string }, b: { url: string }) => (a.url < b.url ? -1 : a.url > b.url ? 1 : 0);
+  const byUrl = (a: { url: string }, b: { url: string }) =>
+    a.url < b.url ? -1 : a.url > b.url ? 1 : 0;
 
   const added = newer.filter((row) => !before.has(row.url)).sort(byUrl);
   const removed = older.filter((row) => !after.has(row.url)).sort(byUrl);
@@ -99,25 +107,27 @@ export function pageMapDiffScopeNote(meta: PageMapDiffMeta): string | null {
 export function renderPageMapDiffJson(diff: PageMapDiff, meta: PageMapDiffMeta): string {
   const iso = (ms: number) => new Date(ms).toISOString();
   const note = pageMapDiffScopeNote(meta);
-  return `${escapeJsonUnsafe(JSON.stringify(
-    {
-      site: meta.site,
-      older: { crawlId: meta.older.crawlId, startedAt: iso(meta.older.startedAt) },
-      newer: { crawlId: meta.newer.crawlId, startedAt: iso(meta.newer.startedAt) },
-      ...(note ? { scopeNote: note } : {}),
-      counts: {
-        added: diff.added.length,
-        removed: diff.removed.length,
-        changed: diff.changed.length,
-        unchanged: diff.unchanged,
+  return `${escapeJsonUnsafe(
+    JSON.stringify(
+      {
+        site: meta.site,
+        older: { crawlId: meta.older.crawlId, startedAt: iso(meta.older.startedAt) },
+        newer: { crawlId: meta.newer.crawlId, startedAt: iso(meta.newer.startedAt) },
+        ...(note ? { scopeNote: note } : {}),
+        counts: {
+          added: diff.added.length,
+          removed: diff.removed.length,
+          changed: diff.changed.length,
+          unchanged: diff.unchanged,
+        },
+        added: diff.added,
+        removed: diff.removed,
+        changed: diff.changed,
       },
-      added: diff.added,
-      removed: diff.removed,
-      changed: diff.changed,
-    },
-    null,
-    2,
-  ))}\n`;
+      null,
+      2,
+    ),
+  )}\n`;
 }
 
 /** A value from an audited page, as one short markdown-table-safe cell. */
@@ -140,7 +150,9 @@ export function renderPageMapDiffMarkdown(diff: PageMapDiff, meta: PageMapDiffMe
     out.push("## Changed", "", "| URL | Field | Before | After |", "|---|---|---|---|");
     for (const page of diff.changed) {
       for (const change of page.changes) {
-        out.push(`| ${urlCell(page.url)} | ${change.field} | ${cell(change.before)} | ${cell(change.after)} |`);
+        out.push(
+          `| ${urlCell(page.url)} | ${change.field} | ${cell(change.before)} | ${cell(change.after)} |`,
+        );
       }
     }
     out.push("");
@@ -151,7 +163,8 @@ export function renderPageMapDiffMarkdown(diff: PageMapDiff, meta: PageMapDiffMe
   ] as const) {
     if (rows.length === 0) continue;
     out.push(`## ${heading}`, "", "| URL | Status | Title |", "|---|---|---|");
-    for (const row of rows) out.push(`| ${urlCell(row.url)} | ${row.status} | ${cell(row.title ?? "")} |`);
+    for (const row of rows)
+      out.push(`| ${urlCell(row.url)} | ${row.status} | ${cell(row.title ?? "")} |`);
     out.push("");
   }
   if (diff.added.length + diff.removed.length + diff.changed.length === 0) {
@@ -166,7 +179,8 @@ export function renderPageMapDiffCsv(diff: PageMapDiff): string {
     cols.map((c) => csvField(typeof c === "string" ? csvSafeText(c) : c)).join(",");
   const lines = [line(["kind", "url", "field", "before", "after"])];
   for (const page of diff.changed) {
-    for (const change of page.changes) lines.push(line(["changed", page.url, change.field, change.before, change.after]));
+    for (const change of page.changes)
+      lines.push(line(["changed", page.url, change.field, change.before, change.after]));
   }
   for (const row of diff.added) lines.push(line(["added", row.url, "", "", ""]));
   for (const row of diff.removed) lines.push(line(["removed", row.url, "", "", ""]));

@@ -10,7 +10,8 @@ import { parseHTML } from "@squirrelscan/parser/dom";
 import { hiddenTextRule } from "../src/content/hidden-text";
 import type { ParsedPage, RuleContext } from "../src/types";
 
-const PAYLOAD = "Sixty or more characters of ordinary visible paragraph text go here, so the rule has something to flag.";
+const PAYLOAD =
+  "Sixty or more characters of ordinary visible paragraph text go here, so the rule has something to flag.";
 
 async function status(css: string, cls = "b", id?: string): Promise<string> {
   const html = `<html><head><style>${css}</style></head><body><p class="${cls}"${id ? ` id="${id}"` : ""}>${PAYLOAD}</p></body></html>`;

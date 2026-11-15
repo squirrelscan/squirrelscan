@@ -8,7 +8,9 @@ import { formatBytes } from "./utils";
 type JavascriptShipped = NonNullable<AuditReport["javascript"]>;
 
 /** The block, or undefined when the report has none or it measured nothing. */
-export function javascriptShipped(report: Pick<AuditReport, "javascript">): JavascriptShipped | undefined {
+export function javascriptShipped(
+  report: Pick<AuditReport, "javascript">,
+): JavascriptShipped | undefined {
   const js = report.javascript;
   return js && js.scripts > 0 && js.bytes > 0 ? js : undefined;
 }
@@ -76,7 +78,9 @@ export function javascriptPageLabel(page: JavascriptShipped["heaviestPages"][num
 }
 
 /** e.g. "Heaviest pages by script: https://example.com/a (980.0 KB, 12 scripts), ...". Null when none. */
-export function javascriptHeaviestPagesLine(report: Pick<AuditReport, "javascript">): string | null {
+export function javascriptHeaviestPagesLine(
+  report: Pick<AuditReport, "javascript">,
+): string | null {
   const js = javascriptShipped(report);
   if (!js || js.heaviestPages.length === 0) return null;
   return `Heaviest pages by script: ${js.heaviestPages.map(javascriptPageLabel).join(", ")}`;

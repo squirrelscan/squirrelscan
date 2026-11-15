@@ -232,30 +232,168 @@ const JS_VALUE_RE = /(?<![\w.\-])(?:undefined|null|NaN)(?![\w\-])/g;
  * These lists are the cheap first pass, not the guarantee.
  */
 const PROSE_BEFORE = new Set([
-  "a", "an", "the", "is", "was", "be", "been", "being", "are", "were", "if",
-  "unless", "when", "whether", "not", "non", "or", "and", "of", "any", "no",
-  "all", "some", "every", "returns", "return", "returning", "yields", "yield",
-  "produces", "equals", "equal", "becomes", "become", "than", "to", "from", "as",
-  "versus", "vs", "checks", "check", "checking", "against", "into", "with",
-  "without", "allow", "allows", "allowed", "permit", "permits", "treat",
-  "treats", "treated", "means", "meaning", "explicit", "implicit", "literal",
-  "nullable", "possibly", "always", "never", "either", "neither", "both",
+  "a",
+  "an",
+  "the",
+  "is",
+  "was",
+  "be",
+  "been",
+  "being",
+  "are",
+  "were",
+  "if",
+  "unless",
+  "when",
+  "whether",
+  "not",
+  "non",
+  "or",
+  "and",
+  "of",
+  "any",
+  "no",
+  "all",
+  "some",
+  "every",
+  "returns",
+  "return",
+  "returning",
+  "yields",
+  "yield",
+  "produces",
+  "equals",
+  "equal",
+  "becomes",
+  "become",
+  "than",
+  "to",
+  "from",
+  "as",
+  "versus",
+  "vs",
+  "checks",
+  "check",
+  "checking",
+  "against",
+  "into",
+  "with",
+  "without",
+  "allow",
+  "allows",
+  "allowed",
+  "permit",
+  "permits",
+  "treat",
+  "treats",
+  "treated",
+  "means",
+  "meaning",
+  "explicit",
+  "implicit",
+  "literal",
+  "nullable",
+  "possibly",
+  "always",
+  "never",
+  "either",
+  "neither",
+  "both",
 ]);
 
 const PROSE_AFTER = new Set([
-  "behavior", "behaviour", "behaviors", "behaviours", "variable", "variables",
-  "reference", "references", "function", "functions", "value", "values",
-  "property", "properties", "method", "methods", "symbol", "symbols", "index",
-  "indices", "state", "states", "term", "terms", "type", "types", "name",
-  "names", "error", "errors", "key", "keys", "result", "results", "field",
-  "fields", "column", "columns", "row", "rows", "entry", "entries", "case",
-  "cases", "check", "checks", "checking", "safety", "coalescing", "pointer",
-  "pointers", "hypothesis", "character", "characters", "byte", "bytes", "set",
-  "sets", "string", "strings", "island", "and", "or", "terminated",
-  "terminator", "default", "instead", "rather", "when", "if", "unless",
-  "because", "since", "means", "here", "in", "at", "for", "is", "was", "are",
-  "were", "has", "have", "had", "refers", "denotes", "indicates", "represents",
-  "behaves", "evaluates", "coerces",
+  "behavior",
+  "behaviour",
+  "behaviors",
+  "behaviours",
+  "variable",
+  "variables",
+  "reference",
+  "references",
+  "function",
+  "functions",
+  "value",
+  "values",
+  "property",
+  "properties",
+  "method",
+  "methods",
+  "symbol",
+  "symbols",
+  "index",
+  "indices",
+  "state",
+  "states",
+  "term",
+  "terms",
+  "type",
+  "types",
+  "name",
+  "names",
+  "error",
+  "errors",
+  "key",
+  "keys",
+  "result",
+  "results",
+  "field",
+  "fields",
+  "column",
+  "columns",
+  "row",
+  "rows",
+  "entry",
+  "entries",
+  "case",
+  "cases",
+  "check",
+  "checks",
+  "checking",
+  "safety",
+  "coalescing",
+  "pointer",
+  "pointers",
+  "hypothesis",
+  "character",
+  "characters",
+  "byte",
+  "bytes",
+  "set",
+  "sets",
+  "string",
+  "strings",
+  "island",
+  "and",
+  "or",
+  "terminated",
+  "terminator",
+  "default",
+  "instead",
+  "rather",
+  "when",
+  "if",
+  "unless",
+  "because",
+  "since",
+  "means",
+  "here",
+  "in",
+  "at",
+  "for",
+  "is",
+  "was",
+  "are",
+  "were",
+  "has",
+  "have",
+  "had",
+  "refers",
+  "denotes",
+  "indicates",
+  "represents",
+  "behaves",
+  "evaluates",
+  "coerces",
 ]);
 
 /**
@@ -264,7 +402,21 @@ const PROSE_AFTER = new Set([
  * quotation; neither is a value that leaked into the copy.
  */
 const QUOTE_CHARS = new Set([
-  '"', "'", "`", "[", "]", "(", ")", "{", "}", "\u201c", "\u201d", "\u2018", "\u2019", "\u00ab", "\u00bb",
+  '"',
+  "'",
+  "`",
+  "[",
+  "]",
+  "(",
+  ")",
+  "{",
+  "}",
+  "\u201c",
+  "\u201d",
+  "\u2018",
+  "\u2019",
+  "\u00ab",
+  "\u00bb",
 ]);
 
 /**
@@ -278,8 +430,6 @@ const QUOTE_CHARS = new Set([
  * in reverse, since `null/undefined has no properties` reads as "or".
  */
 const VALUE_INTRODUCER = /[:>\u2192$\u00a3\u20ac\u00a5#]/;
-
-
 
 /** Nearest non-space character before `index`, or "" at the start of the text. */
 function edgeBefore(text: string, index: number): string {
@@ -352,8 +502,10 @@ function findStringifiedObjects(text: string): PlaceholderFinding | undefined {
  * slot test alone cannot clear them. A missing number prints one bare word, so
  * an `Infinity` partner on the same or an adjacent line is the corroboration.
  */
-const FLOAT_PARTNER_AFTER = /^(?:[ \t]*[,;/|][ \t]*|[ \t]+(?:and|or)[ \t]+|[ \t]*\n[ \t]*)[+-]?Infinity\b/;
-const FLOAT_PARTNER_BEFORE = /\b[+-]?Infinity(?:[ \t]*[,;/|][ \t]*|[ \t]+(?:and|or)[ \t]+|[ \t]*\n[ \t]*)$/;
+const FLOAT_PARTNER_AFTER =
+  /^(?:[ \t]*[,;/|][ \t]*|[ \t]+(?:and|or)[ \t]+|[ \t]*\n[ \t]*)[+-]?Infinity\b/;
+const FLOAT_PARTNER_BEFORE =
+  /\b[+-]?Infinity(?:[ \t]*[,;/|][ \t]*|[ \t]+(?:and|or)[ \t]+|[ \t]*\n[ \t]*)$/;
 
 function hasFloatPartner(text: string, start: number, end: number): boolean {
   return (
@@ -412,8 +564,7 @@ function findJsArtifacts(text: string): PlaceholderFinding | undefined {
  * the next paragraph pose as the marker's sentence.
  */
 const MARKER_ANNOTATION_RE = /(?<![\w])(?:TODO|FIXME)(?![\w])(?=[ \t]{0,4}[:(]|[ \t]{1,4}[a-z])/g;
-const MARKER_COMMENT_RE =
-  /(?:(?:\/\/|\/\*)[ \t]{0,4}|#[ \t]{1,4})(TODO|FIXME|XXX)(?![\w])/g;
+const MARKER_COMMENT_RE = /(?:(?:\/\/|\/\*)[ \t]{0,4}|#[ \t]{1,4})(TODO|FIXME|XXX)(?![\w])/g;
 
 /**
  * `XXX` doubles as a redaction: `$XXX,XXX` and `555-XXX-XXXX` are censored

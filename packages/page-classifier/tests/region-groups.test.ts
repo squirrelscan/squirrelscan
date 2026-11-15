@@ -47,7 +47,6 @@ describe("chrome mass", () => {
   });
 });
 
-
 // A page whose furniture the head names with less than class-level confidence.
 const PAGE = `<!doctype html><html lang="en"><head><title>Home - Example Shop</title></head><body>
 <div class="top"><div class="logo">Example</div><ul class="links"><li><a href="/a">Shop</a></li><li><a href="/b">Sale</a></li></ul></div>
@@ -56,37 +55,34 @@ const PAGE = `<!doctype html><html lang="en"><head><title>Home - Example Shop</t
 <div class="bottom"><div class="cols"><ul><li><a href="/about">About</a></li><li><a href="/contact">Contact</a></li></ul><ul><li><a href="/terms">Terms</a></li><li><a href="/privacy">Privacy</a></li></ul></div><p>Copyright Example Shop 2026</p></div>
 </body></html>`;
 
-describe.if(existsSync(ARTIFACT))(
-  "site_chrome fallback with the real artifact",
-  () => {
-    const { model } = tryLoadModel(JSON.parse(readFileSync(ARTIFACT, "utf8")));
-    const url = "https://shop.example.org/";
+describe.if(existsSync(ARTIFACT))("site_chrome fallback with the real artifact", () => {
+  const { model } = tryLoadModel(JSON.parse(readFileSync(ARTIFACT, "utf8")));
+  const url = "https://shop.example.org/";
 
-    test("only turns unknown into site_chrome, at or above the threshold, and changes nothing else", () => {
-      const withFallback = classifyPage(PAGE, url, { model });
-      const without = classifyPage(PAGE, url, { model, groupFallback: false });
-      expect(withFallback.nodes.length).toBe(without.nodes.length);
-      for (let i = 0; i < without.nodes.length; i++) {
-        const a = withFallback.nodes[i]!;
-        const b = without.nodes[i]!;
-        if (a.label === b.label) {
-          expect(a).toEqual(b);
-        } else {
-          expect(b.label).toBe("unknown");
-          expect(a.label).toBe("site_chrome");
-          expect(a.confidence).toBeGreaterThanOrEqual(SITE_CHROME_THRESHOLD);
-          expect(a.source).toBe("model");
-        }
+  test("only turns unknown into site_chrome, at or above the threshold, and changes nothing else", () => {
+    const withFallback = classifyPage(PAGE, url, { model });
+    const without = classifyPage(PAGE, url, { model, groupFallback: false });
+    expect(withFallback.nodes.length).toBe(without.nodes.length);
+    for (let i = 0; i < without.nodes.length; i++) {
+      const a = withFallback.nodes[i]!;
+      const b = without.nodes[i]!;
+      if (a.label === b.label) {
+        expect(a).toEqual(b);
+      } else {
+        expect(b.label).toBe("unknown");
+        expect(a.label).toBe("site_chrome");
+        expect(a.confidence).toBeGreaterThanOrEqual(SITE_CHROME_THRESHOLD);
+        expect(a.source).toBe("model");
       }
-    });
+    }
+  });
 
-    test("a threshold override is a per-class evaluation: no fallback", () => {
-      const out = classifyPage(PAGE, url, { model, threshold: 0.5 });
-      expect(out.nodes.some((n) => n.label === "site_chrome")).toBe(false);
-    });
+  test("a threshold override is a per-class evaluation: no fallback", () => {
+    const out = classifyPage(PAGE, url, { model, threshold: 0.5 });
+    expect(out.nodes.some((n) => n.label === "site_chrome")).toBe(false);
+  });
 
-    test("the fallback never fires without a model", () => {
-      expect(classifyPage(PAGE, url).nodes.some((n) => n.label === "site_chrome")).toBe(false);
-    });
-  },
-);
+  test("the fallback never fires without a model", () => {
+    expect(classifyPage(PAGE, url).nodes.some((n) => n.label === "site_chrome")).toBe(false);
+  });
+});

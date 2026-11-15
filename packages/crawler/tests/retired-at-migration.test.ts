@@ -81,7 +81,7 @@ function seedWithoutColumn(path: string): string {
   db.query("INSERT INTO schema_version (version) VALUES (?)").run(SCHEMA_VERSION);
   const id = randomUUID();
   db.query(
-    "INSERT INTO crawls (id, base_url, started_at, status, config, stats) VALUES (?, ?, ?, ?, ?, ?)"
+    "INSERT INTO crawls (id, base_url, started_at, status, config, stats) VALUES (?, ?, ?, ?, ?, ?)",
   ).run(id, "https://e.test", 1_000, "completed", "{}", JSON.stringify(STATS));
   db.close();
   return id;
@@ -143,18 +143,22 @@ describe("crawls.retired_at (#1912)", () => {
     const path = tempDbPath();
     seedWithoutColumn(path);
     const before = new Database(path, { readonly: true });
-    const had = (before.query("PRAGMA table_info(crawls)").all() as Array<{
-      name: string;
-    }>).some((c) => c.name === "retired_at");
+    const had = (
+      before.query("PRAGMA table_info(crawls)").all() as Array<{
+        name: string;
+      }>
+    ).some((c) => c.name === "retired_at");
     before.close();
     expect(had).toBe(false);
 
     const store = new SQLiteStorage(path);
     Effect.runSync(Effect.orDie(store.init()));
     const after = new Database(path, { readonly: true });
-    const now = (after.query("PRAGMA table_info(crawls)").all() as Array<{
-      name: string;
-    }>).some((c) => c.name === "retired_at");
+    const now = (
+      after.query("PRAGMA table_info(crawls)").all() as Array<{
+        name: string;
+      }>
+    ).some((c) => c.name === "retired_at");
     after.close();
     expect(now).toBe(true);
     Effect.runSync(Effect.orDie(store.close()));

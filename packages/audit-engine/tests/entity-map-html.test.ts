@@ -73,9 +73,13 @@ describe("renderEntityMapHtml", () => {
   });
 
   test("renders an empty-state page for a site with no JSON-LD", () => {
-    const map = buildEntityMap([{ url: "https://example.com/", raw: null }], "https://example.com/", {
-      generatedAt: AT,
-    });
+    const map = buildEntityMap(
+      [{ url: "https://example.com/", raw: null }],
+      "https://example.com/",
+      {
+        generatedAt: AT,
+      },
+    );
     const html = renderEntityMapHtml(map);
     expect(html).toContain("This site declares no JSON-LD entities.");
     expect(html).toContain('"nodeCount":0');

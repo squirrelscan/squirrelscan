@@ -226,7 +226,12 @@ const LEAF_BLOCK_TAGS: ReadonlySet<string> = new Set([
   "li",
 ]);
 
-const ALWAYS_DROP_LANDMARK_TAGS: ReadonlySet<string> = new Set(["nav", "aside", "dialog", "search"]);
+const ALWAYS_DROP_LANDMARK_TAGS: ReadonlySet<string> = new Set([
+  "nav",
+  "aside",
+  "dialog",
+  "search",
+]);
 const ALWAYS_DROP_ROLES: ReadonlySet<string> = new Set([
   "navigation",
   "complementary",
@@ -338,7 +343,7 @@ const FURNITURE_TOKEN = new RegExp(
       "side[-_]bar",
       "widget[-_]area",
     ].join("|") +
-    ")$"
+    ")$",
 );
 
 const furnitureTokenCache = new Map<string, boolean>();
@@ -427,7 +432,10 @@ const MARKUP_COMMENTS: ContentLabel = {
 
 function deriveCtx(ctx: Ctx, tag: string, el: Element): Ctx {
   let next = ctx;
-  if (!ctx.inContent && (tag === "main" || tag === "article" || el.getAttribute("role") === "main")) {
+  if (
+    !ctx.inContent &&
+    (tag === "main" || tag === "article" || el.getAttribute("role") === "main")
+  ) {
     next = { inContent: true, region: MARKUP_MAIN, section: ctx.section };
   }
   if (next.section === null && isCommentsContainer(el)) {
@@ -739,7 +747,10 @@ export function extractMainText(doc: Document, options: MainTextOptions = {}): M
     const p = ask(el);
     if (!p) return null;
     if (p.truncated) return p;
-    if ((p.region && p.region.label !== "unknown") || (p.section && p.section.label !== "unknown")) {
+    if (
+      (p.region && p.region.label !== "unknown") ||
+      (p.section && p.section.label !== "unknown")
+    ) {
       return p;
     }
     return null;
@@ -747,7 +758,7 @@ export function extractMainText(doc: Document, options: MainTextOptions = {}): M
 
   const labelsOf = (
     answer: ContentPlacement | null,
-    ctx: Ctx
+    ctx: Ctx,
   ): { region: ContentLabel | null; section: ContentLabel | null } => {
     if (!answer) return { region: ctx.region, section: ctx.section };
     const id = answer.region?.nodeId;
@@ -764,7 +775,7 @@ export function extractMainText(doc: Document, options: MainTextOptions = {}): M
     tag: string,
     ctx: Ctx,
     depth: number,
-    inline: boolean
+    inline: boolean,
   ): ContentPlacement | "markup" | null => {
     if (!inline) {
       const answer = answerFor(el, depth);
@@ -780,7 +791,9 @@ export function extractMainText(doc: Document, options: MainTextOptions = {}): M
           if (LEAF_BLOCK_TAGS.has(tag) && !HEADING.test(tag)) return null;
         }
         const regionDrop =
-          region !== undefined && region !== "article_chrome" && MAIN_TEXT_DROPPED_REGIONS.has(region);
+          region !== undefined &&
+          region !== "article_chrome" &&
+          MAIN_TEXT_DROPPED_REGIONS.has(region);
         // An ASP.NET-style page-wide <form> is labelled `form` but holds the content: it is a wrapper,
         // not a form, when it contains the page's main landmark. Its children are judged on their own.
         const wrapper =
@@ -829,7 +842,8 @@ export function extractMainText(doc: Document, options: MainTextOptions = {}): M
   const withPlacedContext = (ctx: Ctx, verdict: ContentPlacement | "markup"): Ctx => {
     if (ctx.inContent || verdict === "markup") return ctx;
     const r = verdict.region;
-    if (r && r.hops === 0 && MAIN_TEXT_KEPT_REGIONS.has(r.label)) return { ...ctx, inContent: true };
+    if (r && r.hops === 0 && MAIN_TEXT_KEPT_REGIONS.has(r.label))
+      return { ...ctx, inContent: true };
     return ctx;
   };
 
@@ -878,7 +892,7 @@ export function extractMainText(doc: Document, options: MainTextOptions = {}): M
     serialised: { text: string; md: string },
     answer: ContentPlacement | "markup",
     ctx: Ctx,
-    extra: { level?: number; language?: string } = {}
+    extra: { level?: number; language?: string } = {},
   ): void => {
     const labels = labelsOf(answer === "markup" ? null : answer, ctx);
     blocks.push({
@@ -949,7 +963,12 @@ export function extractMainText(doc: Document, options: MainTextOptions = {}): M
       }
       const children = el.childNodes;
       for (let i = children.length - 1; i >= 0; i--) {
-        stack.push({ node: children[i] as Node, ctx: frame.ctx, depth: frame.depth, owner: frame.owner });
+        stack.push({
+          node: children[i] as Node,
+          ctx: frame.ctx,
+          depth: frame.depth,
+          owner: frame.owner,
+        });
       }
       continue;
     }
@@ -964,7 +983,10 @@ export function extractMainText(doc: Document, options: MainTextOptions = {}): M
       if (heading) {
         const level = Number(heading[1]);
         const s = inlineOf(el, false);
-        if (s.text) emit("heading", { text: s.text, md: `${"#".repeat(level)} ${s.md}` }, verdict, ctx, { level });
+        if (s.text)
+          emit("heading", { text: s.text, md: `${"#".repeat(level)} ${s.md}` }, verdict, ctx, {
+            level,
+          });
       } else if (tag === "pre") {
         const code = codeText(el);
         if (code.trim()) {
@@ -975,7 +997,7 @@ export function extractMainText(doc: Document, options: MainTextOptions = {}): M
             { text: code, md: `${fence}${language ?? ""}\n${code}\n${fence}` },
             verdict,
             ctx,
-            language ? { language } : {}
+            language ? { language } : {},
           );
         }
       } else if (tag === "ul" || tag === "ol") {

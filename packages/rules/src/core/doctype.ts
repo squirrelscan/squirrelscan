@@ -108,8 +108,7 @@ export const doctypeRule: Rule = {
           name: "doctype",
           status: "warn",
           message: `Non-HTML5 doctype found: ${isXhtml ? "XHTML" : isHtml4 ? "HTML4" : "legacy"}`,
-          value:
-            foundDoctype.slice(0, 50) + (foundDoctype.length > 50 ? "..." : ""),
+          value: foundDoctype.slice(0, 50) + (foundDoctype.length > 50 ? "..." : ""),
           expected: "<!DOCTYPE html>",
         });
       }

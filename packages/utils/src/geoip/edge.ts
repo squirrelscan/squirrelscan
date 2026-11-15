@@ -38,14 +38,22 @@ function toKey(ip: string): { v6: boolean; n: bigint } | null {
   const b = parseV6(bare);
   if (!b) return null;
   if (b.subarray(0, 10).every((x) => x === 0) && b[10] === 0xff && b[11] === 0xff) {
-    return { v6: false, n: (BigInt(b[12]!) << 24n) | (BigInt(b[13]!) << 16n) | (BigInt(b[14]!) << 8n) | BigInt(b[15]!) };
+    return {
+      v6: false,
+      n:
+        (BigInt(b[12]!) << 24n) | (BigInt(b[13]!) << 16n) | (BigInt(b[14]!) << 8n) | BigInt(b[15]!),
+    };
   }
   let n = 0n;
   for (const x of b) n = (n << 8n) | BigInt(x);
   return { v6: true, n };
 }
 
-interface Cidr { v6: boolean; lo: bigint; hi: bigint }
+interface Cidr {
+  v6: boolean;
+  lo: bigint;
+  hi: bigint;
+}
 
 function parseCidr(c: string): Cidr | null {
   const [addr, len] = c.split("/");
@@ -59,7 +67,9 @@ function parseCidr(c: string): Cidr | null {
   return { v6: k.v6, lo, hi: lo | host };
 }
 
-let rangeIndex: Array<{ provider: string; name: string; broad: boolean; cidrs: Cidr[] }> | undefined;
+let rangeIndex:
+  | Array<{ provider: string; name: string; broad: boolean; cidrs: Cidr[] }>
+  | undefined;
 function ranges() {
   return (rangeIndex ??= Object.entries(rangeData.providers).map(([provider, p]) => ({
     provider,
@@ -69,7 +79,13 @@ function ranges() {
   })));
 }
 
-let asnIndex: Array<{ provider: string; name: string; ranges: Array<{ v6: boolean; lo: bigint; hi: bigint; asn: number }> }> | undefined;
+let asnIndex:
+  | Array<{
+      provider: string;
+      name: string;
+      ranges: Array<{ v6: boolean; lo: bigint; hi: bigint; asn: number }>;
+    }>
+  | undefined;
 function asns() {
   return (asnIndex ??= Object.entries(asnData.providers).map(([provider, p]) => ({
     provider,

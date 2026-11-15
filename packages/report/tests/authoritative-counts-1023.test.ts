@@ -16,7 +16,11 @@ import { renderJson } from "../src/output/json";
 import { renderXml } from "../src/output/xml";
 import { renderHtml } from "../src/output/html";
 
-function reportWithCheck(id: string, severity: "error" | "warning", check: CheckResult): AuditReport {
+function reportWithCheck(
+  id: string,
+  severity: "error" | "warning",
+  check: CheckResult,
+): AuditReport {
   const rule: ReportRuleResult = {
     meta: {
       id,
@@ -139,7 +143,9 @@ describe("#1023 R-F: cap+1 overshoot proves display truncation is disclosed", ()
 
   test("markdown: 'Showing 200 examples of 201', last URL clipped", () => {
     const out = renderMarkdown(cappedReport);
-    expect(out).toContain(`_Showing ${REPORT_PAGES_HARD_CAP} examples of ${OVERSHOOT} affected pages._`);
+    expect(out).toContain(
+      `_Showing ${REPORT_PAGES_HARD_CAP} examples of ${OVERSHOOT} affected pages._`,
+    );
     expect(out).toContain("/p199");
     expect(out).not.toContain("/p200");
   });

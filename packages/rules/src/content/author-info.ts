@@ -23,9 +23,7 @@ export const authorInfoRule: Rule = {
     if (!doc) return { checks: [] };
 
     // Check for author in schema
-    const schemaScripts = doc.querySelectorAll(
-      'script[type="application/ld+json"]'
-    );
+    const schemaScripts = doc.querySelectorAll('script[type="application/ld+json"]');
     let hasAuthorSchema = false;
     let authorName: string | null = null;
 
@@ -75,7 +73,7 @@ export const authorInfoRule: Rule = {
 
     // Check for common author patterns in HTML
     const authorElements = doc.querySelectorAll(
-      '[class*="author"], [class*="byline"], [rel="author"]'
+      '[class*="author"], [class*="byline"], [rel="author"]',
     );
     const hasVisibleAuthor = authorElements.length > 0;
 
@@ -89,12 +87,7 @@ export const authorInfoRule: Rule = {
     }
 
     // Summary if nothing found
-    if (
-      !hasAuthorSchema &&
-      authorLinks.length === 0 &&
-      !articleAuthor &&
-      !hasVisibleAuthor
-    ) {
+    if (!hasAuthorSchema && authorLinks.length === 0 && !articleAuthor && !hasVisibleAuthor) {
       checks.push({
         name: "author-info",
         status: "info",

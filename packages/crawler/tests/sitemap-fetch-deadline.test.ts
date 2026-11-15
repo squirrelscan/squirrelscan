@@ -45,7 +45,9 @@ afterAll(() => {
 });
 
 const fetchWithin = (path: string) =>
-  Effect.runPromise(fetchSitemap(`${base}${path}`, "test-agent", undefined, undefined, DEADLINE_MS));
+  Effect.runPromise(
+    fetchSitemap(`${base}${path}`, "test-agent", undefined, undefined, DEADLINE_MS),
+  );
 
 describe("sitemap fetch deadline (#1729)", () => {
   test("a sitemap body that stalls after the headers ends at the deadline", async () => {
@@ -61,7 +63,8 @@ describe("sitemap fetch deadline (#1729)", () => {
   test("a sitemap that answers promptly is still parsed", async () => {
     const result = await fetchWithin("/sitemap.xml");
     expect(result.success).toBe(true);
-    if (result.success) expect(result.data.urls.map((u) => u.loc)).toEqual(["https://example.com/one"]);
+    if (result.success)
+      expect(result.data.urls.map((u) => u.loc)).toEqual(["https://example.com/one"]);
   });
 
   test("a stalled body, an HTTP error and a connect failure keep their own reasons", async () => {

@@ -76,7 +76,8 @@ describe("per-source detail follows the publish caps (pub#837)", () => {
         },
       },
     };
-    const item = capReportForPublish(report).ruleResults["links/broken-links"]!.checks[0]!.items![0]!;
+    const item =
+      capReportForPublish(report).ruleResults["links/broken-links"]!.checks[0]!.items![0]!;
     expect(item.sourcePages!.length).toBeLessThan(40);
     expect(item.sources).toHaveLength(item.sourcePages!.length);
     expectAligned(item);

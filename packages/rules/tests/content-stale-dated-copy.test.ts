@@ -11,7 +11,14 @@ const NOW = "2026-06-15";
 
 function run(
   body: string,
-  { url = "https://example.com/events/summit", head = "", title = "Summit", headers = {}, now = NOW, bodyClass = "" } = {},
+  {
+    url = "https://example.com/events/summit",
+    head = "",
+    title = "Summit",
+    headers = {},
+    now = NOW,
+    bodyClass = "",
+  } = {},
 ): CheckResult {
   const html = `<html><head><title>${title}</title>${head}</head><body class="${bodyClass}">${body}</body></html>`;
   const ctx: RuleContext = {
@@ -60,7 +67,9 @@ describe("content/stale-dated-copy", () => {
   });
 
   test("warn: past time element next to 'register now'", () => {
-    const c = run('<p>Register now for the summit on <time datetime="2025-03-04">March 4</time>.</p>');
+    const c = run(
+      '<p>Register now for the summit on <time datetime="2025-03-04">March 4</time>.</p>',
+    );
     expect(c.status).toBe("warn");
   });
 
@@ -80,7 +89,9 @@ describe("content/stale-dated-copy", () => {
   });
 
   test("future countdown is clean", () => {
-    expect(run('<div class="countdown" data-countdown-to="2027-01-01T00:00:00Z">9d</div>').status).toBe("pass");
+    expect(
+      run('<div class="countdown" data-countdown-to="2027-01-01T00:00:00Z">9d</div>').status,
+    ).toBe("pass");
   });
 
   test("fail: three stale claims on one page", () => {
@@ -114,7 +125,9 @@ describe("content/stale-dated-copy", () => {
 
   test("skipped: archive URL and archive body class", () => {
     const body = "<p>Register now! Join us on May 1, 2020.</p>";
-    expect(run(body, { url: "https://example.com/archive/2020/summit" }).skipReason).toBe("archival-page");
+    expect(run(body, { url: "https://example.com/archive/2020/summit" }).skipReason).toBe(
+      "archival-page",
+    );
     expect(run(body, { bodyClass: "archive date-archive" }).skipReason).toBe("archival-page");
   });
 

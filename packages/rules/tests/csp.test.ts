@@ -24,7 +24,10 @@ function checkNames(policy: string, header = "content-security-policy"): string[
 describe("security/csp csp-wildcard (#427)", () => {
   test.each([
     ["host wildcard", "script-src 'self' https://*.posthog.com"],
-    ["several host wildcards", "default-src 'self'; script-src 'self' https://*.posthog.com *.googletagmanager.com"],
+    [
+      "several host wildcards",
+      "default-src 'self'; script-src 'self' https://*.posthog.com *.googletagmanager.com",
+    ],
     ["host wildcard with a port wildcard", "script-src https://cdn.example.com:*"],
     ["host wildcard in default-src", "default-src 'self' https://*.example.com"],
   ])("%s: no csp-wildcard", (_name, policy) => {
@@ -48,12 +51,12 @@ describe("security/csp csp-wildcard (#427)", () => {
   test("report-only policies are matched the same way", () => {
     const hostWildcard = checkNames(
       "script-src 'self' https://*.posthog.com",
-      "content-security-policy-report-only"
+      "content-security-policy-report-only",
     );
     expect(hostWildcard).toContain("csp-report-only");
     expect(hostWildcard).not.toContain("csp-wildcard");
     expect(checkNames("script-src *", "content-security-policy-report-only")).toContain(
-      "csp-wildcard"
+      "csp-wildcard",
     );
   });
 });
@@ -65,18 +68,20 @@ describe("security/csp csp-unsafe-scripts", () => {
   });
 
   test("a comma-joined second policy does not hide the keyword", () => {
-    expect(checkNames("script-src 'unsafe-inline', img-src 'self'")).toContain("csp-unsafe-scripts");
+    expect(checkNames("script-src 'unsafe-inline', img-src 'self'")).toContain(
+      "csp-unsafe-scripts",
+    );
   });
 
   test("a keyword-like host is not the keyword", () => {
     expect(checkNames("script-src 'self' https://unsafe-inline.example.com")).not.toContain(
-      "csp-unsafe-scripts"
+      "csp-unsafe-scripts",
     );
   });
 
   test("unsafe keywords outside script-src are not script weaknesses", () => {
     expect(checkNames("script-src 'self'; style-src 'self' 'unsafe-inline'")).not.toContain(
-      "csp-unsafe-scripts"
+      "csp-unsafe-scripts",
     );
   });
 });
@@ -87,13 +92,18 @@ describe("security/csp sources a nonce, hash or 'strict-dynamic' neutralises (#4
     ["hash", "script-src 'sha256-abc123+/=' 'unsafe-inline'"],
     ["sha512 hash in default-src", "default-src 'self' 'SHA512-ABC' 'unsafe-inline'"],
     ["'strict-dynamic'", "script-src 'strict-dynamic' 'unsafe-inline'"],
-    ["the issue's strict policy", "script-src 'nonce-r4nd0m' 'strict-dynamic' https: 'unsafe-inline'; object-src 'none'; base-uri 'none'"],
+    [
+      "the issue's strict policy",
+      "script-src 'nonce-r4nd0m' 'strict-dynamic' https: 'unsafe-inline'; object-src 'none'; base-uri 'none'",
+    ],
   ])("%s: 'unsafe-inline' is ignored, no csp-unsafe-scripts", (_name, policy) => {
     expect(checkNames(policy)).not.toContain("csp-unsafe-scripts");
   });
 
   test("'strict-dynamic' ignores a bare * source", () => {
-    expect(checkNames("script-src 'nonce-x' 'strict-dynamic' https: *")).not.toContain("csp-wildcard");
+    expect(checkNames("script-src 'nonce-x' 'strict-dynamic' https: *")).not.toContain(
+      "csp-wildcard",
+    );
   });
 
   test("a nonce does not neutralise a bare * source", () => {
@@ -106,7 +116,9 @@ describe("security/csp sources a nonce, hash or 'strict-dynamic' neutralises (#4
     expect(checkNames("script-src 'nonce-' 'unsafe-inline'")).toContain("csp-unsafe-scripts");
     expect(checkNames("script-src 'nonce-=' 'unsafe-inline'")).toContain("csp-unsafe-scripts");
     expect(checkNames("script-src 'sha256-ab=c' 'unsafe-inline'")).toContain("csp-unsafe-scripts");
-    expect(checkNames("script-src 'unsafe-hashes' 'unsafe-inline'")).toContain("csp-unsafe-scripts");
+    expect(checkNames("script-src 'unsafe-hashes' 'unsafe-inline'")).toContain(
+      "csp-unsafe-scripts",
+    );
   });
 
   test("'unsafe-eval' warns next to a nonce, a hash or 'strict-dynamic'", () => {
@@ -115,7 +127,13 @@ describe("security/csp sources a nonce, hash or 'strict-dynamic' neutralises (#4
         page: { url: "https://example.com/", html: "", statusCode: 200, loadTime: 0, headers: {} },
         site: {
           baseUrl: "https://example.com",
-          pages: [{ url: "https://example.com/", statusCode: 200, headers: { "content-security-policy": policy } }],
+          pages: [
+            {
+              url: "https://example.com/",
+              statusCode: 200,
+              headers: { "content-security-policy": policy },
+            },
+          ],
         },
         options: {},
       } as unknown as RuleContext;
@@ -123,13 +141,19 @@ describe("security/csp sources a nonce, hash or 'strict-dynamic' neutralises (#4
       if (result instanceof Promise) throw new Error("rule is async");
       return result.checks.find((c) => c.name === "csp-unsafe-scripts")?.message;
     };
-    expect(messages("script-src 'nonce-x' 'unsafe-inline' 'unsafe-eval'")).toBe("CSP allows 'unsafe-eval'");
+    expect(messages("script-src 'nonce-x' 'unsafe-inline' 'unsafe-eval'")).toBe(
+      "CSP allows 'unsafe-eval'",
+    );
     expect(messages("script-src 'sha256-abc' 'unsafe-eval'")).toBe("CSP allows 'unsafe-eval'");
-    expect(messages("script-src 'nonce-x' 'strict-dynamic' 'unsafe-eval'")).toBe("CSP allows 'unsafe-eval'");
+    expect(messages("script-src 'nonce-x' 'strict-dynamic' 'unsafe-eval'")).toBe(
+      "CSP allows 'unsafe-eval'",
+    );
   });
 
   test("a nonce after a comma, in a second policy's other directive, does not count", () => {
-    expect(checkNames("script-src 'unsafe-inline', img-src 'nonce-x'")).toContain("csp-unsafe-scripts");
+    expect(checkNames("script-src 'unsafe-inline', img-src 'nonce-x'")).toContain(
+      "csp-unsafe-scripts",
+    );
     expect(checkNames("script-src *, style-src 'strict-dynamic'")).toContain("csp-wildcard");
   });
 });

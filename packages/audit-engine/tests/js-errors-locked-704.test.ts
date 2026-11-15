@@ -14,16 +14,15 @@ describe("reliability/js-errors locked-rules listing (#704)", () => {
           checks: [
             {
               status: "skipped",
-              skipReason:
-                "Cloud analysis skipped — run `squirrel auth login` to enable it.",
+              skipReason: "Cloud analysis skipped — run `squirrel auth login` to enable it.",
             },
           ],
         },
       },
     };
-    expect(
-      computeLockedRules(report, loadAllRules().values()).map((r) => r.id)
-    ).toContain("reliability/js-errors");
+    expect(computeLockedRules(report, loadAllRules().values()).map((r) => r.id)).toContain(
+      "reliability/js-errors",
+    );
   });
 
   test("a run that produced a verdict does not list it", () => {
@@ -32,8 +31,8 @@ describe("reliability/js-errors locked-rules listing (#704)", () => {
         "reliability/js-errors": { checks: [{ status: "pass" }] },
       },
     };
-    expect(
-      computeLockedRules(report, loadAllRules().values()).map((r) => r.id)
-    ).not.toContain("reliability/js-errors");
+    expect(computeLockedRules(report, loadAllRules().values()).map((r) => r.id)).not.toContain(
+      "reliability/js-errors",
+    );
   });
 });

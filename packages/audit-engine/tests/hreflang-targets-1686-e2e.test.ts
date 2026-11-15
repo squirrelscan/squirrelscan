@@ -105,7 +105,11 @@ async function audit(engine: "v1" | "v2") {
         return yield* runRulesOnStorage(storage, crawlId, siteContext, CONFIG, pre.assets);
       }
       return yield* runStreamingRules(storage, crawlId, CONFIG, pre.assets);
-    }) as unknown as Effect.Effect<{ ruleResultsMap: Map<string, { checks: CheckResult[] }> }, never, never>,
+    }) as unknown as Effect.Effect<
+      { ruleResultsMap: Map<string, { checks: CheckResult[] }> },
+      never,
+      never
+    >,
   );
   const checks = (ran.ruleResultsMap.get("i18n/hreflang-targets")?.checks ?? []) as CheckResult[];
   const ids = (name: string) =>

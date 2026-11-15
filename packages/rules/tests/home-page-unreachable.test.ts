@@ -3,7 +3,11 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { classifyRuleOutcome, NOT_CHECKED_SKIP_REASONS, type AuditFailureDetail } from "@squirrelscan/core-contracts";
+import {
+  classifyRuleOutcome,
+  NOT_CHECKED_SKIP_REASONS,
+  type AuditFailureDetail,
+} from "@squirrelscan/core-contracts";
 import { ENTRY_NOT_FETCHED_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
 
 import { homePageUnreachableRule } from "../src/crawl/home-page-unreachable";
@@ -61,17 +65,28 @@ describe("crawl/home-page-unreachable", () => {
 
   test("a home page that redirected passes on its redirect target's record", async () => {
     const ctx = ctxFor(undefined, [
-      { url: "https://example.com/", finalUrl: "https://example.com/en/", statusCode: 301, redirectSource: true },
+      {
+        url: "https://example.com/",
+        finalUrl: "https://example.com/en/",
+        statusCode: 301,
+        redirectSource: true,
+      },
       { url: "https://example.com/en/", statusCode: 200 },
     ]);
-    (ctx.site as { entryUrls: string[] }).entryUrls = ["https://example.com/en/", "https://example.com/"];
+    (ctx.site as { entryUrls: string[] }).entryUrls = [
+      "https://example.com/en/",
+      "https://example.com/",
+    ];
     const checks = (await homePageUnreachableRule.run(ctx)).checks;
     expect(checks.map((c) => c.status)).toEqual(["pass"]);
   });
 
-  test.each(["http_4xx", "robots", "redirect"] as const)("%s is an answer, not an outage: no finding", async (code) => {
-    expect(await run({ code, host: "example.com" }, [])).toEqual([]);
-  });
+  test.each(["http_4xx", "robots", "redirect"] as const)(
+    "%s is an answer, not an outage: no finding",
+    async (code) => {
+      expect(await run({ code, host: "example.com" }, [])).toEqual([]);
+    },
+  );
 
   test("a sitemap-sourced failure is not the home page", async () => {
     expect(await run({ code: "dns", host: "example.com", source: "sitemap" }, [])).toEqual([]);
@@ -81,7 +96,17 @@ describe("crawl/home-page-unreachable", () => {
   test.each([
     ["not among the fetched pages", [OTHER]],
     ["fetched with an error status", [{ url: "https://example.com/", statusCode: 500 }, OTHER]],
-    ["only a redirect hop, its target not fetched", [{ url: "https://example.com/", finalUrl: "https://example.com/en/", statusCode: 301, redirectSource: true }]],
+    [
+      "only a redirect hop, its target not fetched",
+      [
+        {
+          url: "https://example.com/",
+          finalUrl: "https://example.com/en/",
+          statusCode: 301,
+          redirectSource: true,
+        },
+      ],
+    ],
   ] as Array<[string, Page[]]>)("home page %s: not checked, not a pass", async (_label, pages) => {
     const checks = await run(undefined, pages);
     expect(checks).toHaveLength(1);
@@ -96,7 +121,9 @@ describe("crawl/home-page-unreachable", () => {
 
   test("an unknown failure code is not checked: not a finding, not a pass", async () => {
     const checks = await run({ code: "unknown", host: "example.com" }, [HOME]);
-    expect(checks.map((c) => [c.status, c.skipReason])).toEqual([["skipped", ENTRY_NOT_FETCHED_SKIP_REASON]]);
+    expect(checks.map((c) => [c.status, c.skipReason])).toEqual([
+      ["skipped", ENTRY_NOT_FETCHED_SKIP_REASON],
+    ]);
     expect(checks[0]!.message).toContain("could not classify");
   });
 
@@ -104,7 +131,9 @@ describe("crawl/home-page-unreachable", () => {
   // check (the merge carries it), where a pass would leave it absent from both failing and notEvaluated.
   test("a skip keeps a stored finding on the home page open in the resolution signal", async () => {
     const crawled = [HOME.url, OTHER.url];
-    const skipped = { [RULE]: { checks: await run(undefined, [{ url: HOME.url, statusCode: 500 }, OTHER]) } };
+    const skipped = {
+      [RULE]: { checks: await run(undefined, [{ url: HOME.url, statusCode: 500 }, OTHER]) },
+    };
     const signal = buildResolutionSignal(skipped, crawled)!;
     expect(signal.failing[KEY]).toEqual([]);
     expect(signal.notEvaluated?.[KEY]).toHaveLength(2);

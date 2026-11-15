@@ -13,7 +13,7 @@ import {
 describe("parseCacheControl", () => {
   test("parses max-age, s-maxage, swr, immutable", () => {
     const cc = parseCacheControl(
-      "public, max-age=600, s-maxage=1200, stale-while-revalidate=300, immutable"
+      "public, max-age=600, s-maxage=1200, stale-while-revalidate=300, immutable",
     );
     expect(cc.maxAge).toBe(600);
     expect(cc.sMaxAge).toBe(1200);
@@ -70,9 +70,7 @@ describe("parseCacheControl", () => {
 
 describe("cacheControlLifetimeSeconds", () => {
   test("s-maxage takes precedence over max-age", () => {
-    expect(
-      cacheControlLifetimeSeconds(parseCacheControl("max-age=10, s-maxage=1000"))
-    ).toBe(1000);
+    expect(cacheControlLifetimeSeconds(parseCacheControl("max-age=10, s-maxage=1000"))).toBe(1000);
   });
 
   test("falls back to max-age when no s-maxage", () => {
@@ -80,9 +78,7 @@ describe("cacheControlLifetimeSeconds", () => {
   });
 
   test("s-maxage=0 overrides max-age (no usable lifetime)", () => {
-    expect(
-      cacheControlLifetimeSeconds(parseCacheControl("max-age=3600, s-maxage=0"))
-    ).toBe(0);
+    expect(cacheControlLifetimeSeconds(parseCacheControl("max-age=3600, s-maxage=0"))).toBe(0);
   });
 
   test("undefined when neither present", () => {

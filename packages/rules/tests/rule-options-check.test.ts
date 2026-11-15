@@ -80,9 +80,9 @@ describe("checkRuleOptions", () => {
   });
 
   test("a disabled rule is still known: the CLI reads the gaps/* options", () => {
-    expect(checkRuleOptions({ "gaps/keywords": { country: "AU", competitors: ["a.com"] } })).toEqual(
-      [],
-    );
+    expect(
+      checkRuleOptions({ "gaps/keywords": { country: "AU", competitors: ["a.com"] } }),
+    ).toEqual([]);
   });
 
   test("problems come back in table order", () => {

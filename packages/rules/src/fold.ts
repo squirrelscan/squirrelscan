@@ -13,7 +13,11 @@ import {
   clampItemId,
   clampItemString,
 } from "@squirrelscan/core-contracts/clamp";
-import { addRegions, alignItemSources, pageRegions } from "@squirrelscan/core-contracts/item-sources";
+import {
+  addRegions,
+  alignItemSources,
+  pageRegions,
+} from "@squirrelscan/core-contracts/item-sources";
 import { PUBLISH_LIMITS, REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
 import { mergeCheckMessages, messageMergeKey } from "@squirrelscan/core-contracts/message-merge";
 
@@ -414,7 +418,6 @@ export function clipPageStatusesToBytes<
   return report;
 }
 
-
 export interface FoldLimits {
   /** Max checks per rule in the published report (REPORT_LIMITS.maxChecksPerRule). */
   maxChecks: number;
@@ -775,7 +778,9 @@ export function unfoldAggregateCheck(check: CheckResult): CheckResult[] {
       pageUrl: page,
       pages: undefined,
       items:
-        pageItems && pageItems.length > 0 ? pageItems.map((item) => itemOnPage(item, page)) : undefined,
+        pageItems && pageItems.length > 0
+          ? pageItems.map((item) => itemOnPage(item, page))
+          : undefined,
       details: Object.keys(details).length > 0 ? details : undefined,
       componentOccurrences: pageOccurrences,
       siteResourceOccurrences: siteResourcesByPage.get(page),
@@ -811,7 +816,8 @@ function messageVariantsOf(check: CheckResult): { message: string; count: number
   if (!Array.isArray(listed)) return null;
   const out: { message: string; count: number }[] = [];
   for (const v of listed) {
-    if (v && typeof v.message === "string" && typeof v.count === "number") out.push({ message: v.message, count: v.count });
+    if (v && typeof v.message === "string" && typeof v.count === "number")
+      out.push({ message: v.message, count: v.count });
   }
   return out.length > 0 ? out : null;
 }
@@ -861,7 +867,9 @@ function composeFoldedMessage(
   const shown = merged.slice(0, 3).map((g) => `${g.text} on ${pagesWord(g.count)}`);
   const rest = merged.slice(3);
   if (rest.length > 0) {
-    shown.push(`${rest.length} other messages on ${pagesWord(rest.reduce((n, g) => n + g.count, 0))}`);
+    shown.push(
+      `${rest.length} other messages on ${pagesWord(rest.reduce((n, g) => n + g.count, 0))}`,
+    );
   }
   return shown.join("; ");
 }
@@ -941,7 +949,8 @@ function foldGroup(group: CheckResult[], limits: FoldLimits): CheckResult {
       }
       let placed = placedSources.get(item.id);
       if (!placed) placedSources.set(item.id, (placed = new Map()));
-      for (const source of item.sources ?? []) if (!placed.has(source.page)) placed.set(source.page, source);
+      for (const source of item.sources ?? [])
+        if (!placed.has(source.page)) placed.set(source.page, source);
       if (check.pageUrl && item.regions) {
         // A per-page item's sections are where it sits on that page. One page counts once per
         // section, however many of its items share the id: the pairs already counted are kept
@@ -1066,7 +1075,8 @@ function foldGroup(group: CheckResult[], limits: FoldLimits): CheckResult {
   for (const check of group) {
     const weight = occurrencesOf(check);
     const listed = messageVariantsOf(check);
-    if (listed) for (const v of listed) variants.set(v.message, (variants.get(v.message) ?? 0) + v.count);
+    if (listed)
+      for (const v of listed) variants.set(v.message, (variants.get(v.message) ?? 0) + v.count);
     else variants.set(perPageMessage(check), (variants.get(perPageMessage(check)) ?? 0) + weight);
   }
   const message = composeFoldedMessage(variants, occurrences, distinctItems).slice(
@@ -1143,10 +1153,7 @@ function foldGroup(group: CheckResult[], limits: FoldLimits): CheckResult {
             : resourceMarkers.some((marker) => marker.reason === "page-sample-limit")
               ? ("page-sample-limit" as const)
               : ("sibling-row" as const),
-          occurrenceCount: resourceMarkers.reduce(
-            (sum, marker) => sum + marker.occurrenceCount,
-            0,
-          ),
+          occurrenceCount: resourceMarkers.reduce((sum, marker) => sum + marker.occurrenceCount, 0),
         }
       : undefined;
 

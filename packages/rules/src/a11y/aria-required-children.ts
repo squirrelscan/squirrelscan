@@ -57,8 +57,7 @@ export const ariaRequiredChildrenRule: Rule = {
   meta: {
     id: "a11y/aria-required-children",
     name: "ARIA Required Children",
-    description:
-      "Checks that elements with certain roles have required child roles",
+    description: "Checks that elements with certain roles have required child roles",
     solution:
       "Some ARIA roles require specific child roles. For example, role='list' must contain role='listitem', role='menu' must contain menu items. Add the required child elements with appropriate roles.",
     category: "a11y",
@@ -80,9 +79,7 @@ export const ariaRequiredChildrenRule: Rule = {
     // <noscript> content is inert text to a browser with scripting on, so
     // it neither needs nor supplies children (#434).
     const withRole = querySelectorAllOutsideNoscript(doc, "[role]");
-    for (const [parentRole, childRoles] of Object.entries(
-      requiredChildrenByRole
-    )) {
+    for (const [parentRole, childRoles] of Object.entries(requiredChildrenByRole)) {
       const required = new Set(childRoles);
       const elements = withRole.filter((el) => el.getAttribute("role") === parentRole);
 
@@ -97,7 +94,7 @@ export const ariaRequiredChildrenRule: Rule = {
         if (!hasValidChild && hasContent) {
           const tagName = el.tagName.toLowerCase();
           missingChildren.push(
-            `${tagName}[role="${parentRole}"]: needs child with role=${childRoles.join("|")}`
+            `${tagName}[role="${parentRole}"]: needs child with role=${childRoles.join("|")}`,
           );
         }
       }
@@ -110,9 +107,7 @@ export const ariaRequiredChildrenRule: Rule = {
         message: `${missingChildren.length} element(s) missing required child roles`,
         items: missingChildren.slice(0, 10).map((id) => ({ id })),
         details:
-          missingChildren.length > 10
-            ? { additional: missingChildren.length - 10 }
-            : undefined,
+          missingChildren.length > 10 ? { additional: missingChildren.length - 10 } : undefined,
       });
     } else {
       checks.push({

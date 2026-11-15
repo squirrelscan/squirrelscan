@@ -24,7 +24,8 @@ let table: Promise<Table> | undefined;
 async function load(): Promise<Table> {
   const buf = gunzipSync(new Uint8Array(await Bun.file(dbPath).arrayBuffer()));
   const view = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
-  if (new TextDecoder().decode(buf.subarray(0, 6)) !== "SQGEO1") throw new Error("bad geoip database");
+  if (new TextDecoder().decode(buf.subarray(0, 6)) !== "SQGEO1")
+    throw new Error("bad geoip database");
   let o = 6;
   const n = view.getUint16(o);
   o += 2;

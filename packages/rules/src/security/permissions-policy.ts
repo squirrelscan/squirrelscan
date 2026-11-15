@@ -39,9 +39,7 @@ export const permissionsPolicyRule: Rule = {
         name: "permissions-policy",
         status: "pass",
         message: "Permissions-Policy header present",
-        value:
-          permissionsPolicy.substring(0, 100) +
-          (permissionsPolicy.length > 100 ? "..." : ""),
+        value: permissionsPolicy.substring(0, 100) + (permissionsPolicy.length > 100 ? "..." : ""),
       });
     } else if (featurePolicy) {
       checks.push({

@@ -9,9 +9,7 @@ export interface BreadcrumbListItemSchema extends SchemaType {
   "@type": "ListItem";
   position?: number;
   name?: string;
-  item?:
-    | string
-    | { "@type": string; "@id"?: string; name?: string; url?: string };
+  item?: string | { "@type": string; "@id"?: string; name?: string; url?: string };
 }
 
 /**

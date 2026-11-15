@@ -41,7 +41,9 @@ const b64url = (s: string) => Buffer.from(s).toString("base64url");
 
 /** Base64-looking filler with a `/` every 20 chars, so it holds no 30-run of its own. */
 const b64Filler = (r: Rng, n: number) =>
-  Array.from({ length: Math.ceil(n / 21) }, () => runOf(r, ALNUM, 20)).join("/").slice(0, n);
+  Array.from({ length: Math.ceil(n / 21) }, () => runOf(r, ALNUM, 20))
+    .join("/")
+    .slice(0, n);
 
 export const NEGATIVES: Case[] = [
   neg("gtm-and-ga-ids", (r) =>
@@ -53,22 +55,35 @@ export const NEGATIVES: Case[] = [
 
   neg(
     "stripe-publishable-live",
-    (r) => page("", `<script>const stripe=Stripe(${JSON.stringify(["p", "k_li", "ve_"].join("") + runOf(r, ALNUM, 24))});</script>`),
+    (r) =>
+      page(
+        "",
+        `<script>const stripe=Stripe(${JSON.stringify(["p", "k_li", "ve_"].join("") + runOf(r, ALNUM, 24))});</script>`,
+      ),
     { expect: [{ pattern: "Stripe Publishable Key", check: "public", location: "inline-script" }] },
   ),
 
   neg("stripe-publishable-test", (r) =>
-    page("", `<script>const stripe=Stripe(${JSON.stringify(["p", "k_te", "st_"].join("") + runOf(r, ALNUM, 24))});</script>`),
+    page(
+      "",
+      `<script>const stripe=Stripe(${JSON.stringify(["p", "k_te", "st_"].join("") + runOf(r, ALNUM, 24))});</script>`,
+    ),
   ),
 
   neg(
     "stripe-publishable-test-under-apikey",
     (r) =>
-      page("", `<script>const cfg={apiKey:${JSON.stringify(["p", "k_te", "st_"].join("") + runOf(r, ALNUM, 24))},locale:"en"};</script>`),
+      page(
+        "",
+        `<script>const cfg={apiKey:${JSON.stringify(["p", "k_te", "st_"].join("") + runOf(r, ALNUM, 24))},locale:"en"};</script>`,
+      ),
     {
       // No Stripe pattern knows `pk_test_`, so the generic assignment gets it.
-      expect: [{ pattern: "Generic API Key Assignment", check: "medium", location: "inline-script" }],
-      knownGap: "Stripe `pk_test_` (public, test mode) has no pattern; under `apiKey:` the generic assignment reports a medium warning for it",
+      expect: [
+        { pattern: "Generic API Key Assignment", check: "medium", location: "inline-script" },
+      ],
+      knownGap:
+        "Stripe `pk_test_` (public, test mode) has no pattern; under `apiKey:` the generic assignment reports a medium warning for it",
     },
   ),
 
@@ -94,7 +109,11 @@ export const NEGATIVES: Case[] = [
 
   neg(
     "posthog-project-key",
-    (r) => page("", `<script>posthog.init(${JSON.stringify(["ph", "c_"].join("") + runOf(r, ALNUM, 43))},{api_host:"https://us.i.posthog.com"});</script>`),
+    (r) =>
+      page(
+        "",
+        `<script>posthog.init(${JSON.stringify(["ph", "c_"].join("") + runOf(r, ALNUM, 43))},{api_host:"https://us.i.posthog.com"});</script>`,
+      ),
     { expect: [{ pattern: "PostHog Project Key", check: "public", location: "inline-script" }] },
   ),
 
@@ -114,7 +133,13 @@ export const NEGATIVES: Case[] = [
       page(
         "",
         `<script>window.__SESSION__={session:"${b64url(JSON.stringify({ alg: "HS256", typ: "JWT" }))}.${b64url(
-          JSON.stringify({ iss: "https://auth.acme.test", sub: `usr_${runOf(r, ALNUM, 12)}`, aud: "acme-web", iat: 1700000000, exp: 1700003600 }),
+          JSON.stringify({
+            iss: "https://auth.acme.test",
+            sub: `usr_${runOf(r, ALNUM, 12)}`,
+            aud: "acme-web",
+            iat: 1700000000,
+            exp: 1700003600,
+          }),
         )}.${runOf(r, ALNUM + "-_", 43)}",expires:1700003600};</script>`,
       ),
     {
@@ -180,7 +205,7 @@ export const NEGATIVES: Case[] = [
     // concatenation form are how real code writes the header.
     page(
       "",
-      "<script>async function api(path,token){return fetch(path,{headers:{Authorization:`Bearer ${token}`,Accept:\"application/json\"}})}" +
+      '<script>async function api(path,token){return fetch(path,{headers:{Authorization:`Bearer ${token}`,Accept:"application/json"}})}' +
         'function legacy(t){return {Authorization:"Bearer "+t}}' +
         'function prefixed(t){return {Authorization:"Bearer acme_v2_0123456789"+t}}</script>',
     ),
@@ -197,19 +222,18 @@ export const NEGATIVES: Case[] = [
     ),
   ),
 
-  neg(
-    "sk-prefixed-identifier",
-    () =>
-      page(
-        "",
-        `<script>function skeletonLoaderComponentFactoryInstance42(){return null}window.skeletonLoaderComponentFactoryInstance42=skeletonLoaderComponentFactoryInstance42;</script>`,
-      ),
+  neg("sk-prefixed-identifier", () =>
+    page(
+      "",
+      `<script>function skeletonLoaderComponentFactoryInstance42(){return null}window.skeletonLoaderComponentFactoryInstance42=skeletonLoaderComponentFactoryInstance42;</script>`,
+    ),
   ),
 
-  neg(
-    "sk-prefixed-css-class",
-    () =>
-      page("", `<div class="card skeletonLoaderShimmerAnimatedRowVariant sk-loading"><span class="skeleton-row"></span></div>`),
+  neg("sk-prefixed-css-class", () =>
+    page(
+      "",
+      `<div class="card skeletonLoaderShimmerAnimatedRowVariant sk-loading"><span class="skeleton-row"></span></div>`,
+    ),
   ),
 
   neg("sk-prefixed-class-one-under-the-floor", () =>
@@ -224,10 +248,15 @@ export const NEGATIVES: Case[] = [
     ),
   ),
 
-  neg("password-seven-chars", (r) =>
-    // One under the generic secret pattern's 8-char floor; the empty string is
-    // the other end of the same edge.
-    page("", `<script>const form={username:"",password:"",remember:false};const seed={password:"${runOf(r, ALNUM, 7)}"};</script>`), // pragma: allowlist secret
+  neg(
+    "password-seven-chars",
+    (r) =>
+      // One under the generic secret pattern's 8-char floor; the empty string is
+      // the other end of the same edge.
+      page(
+        "",
+        `<script>const form={username:"",password:"",remember:false};const seed={password:"${runOf(r, ALNUM, 7)}"};</script>`,
+      ), // pragma: allowlist secret
   ),
 
   neg(
@@ -235,12 +264,18 @@ export const NEGATIVES: Case[] = [
     // The entropy floor scales with length (#357): eight distinct characters
     // is 3 bits/char, which is all eight characters can have, and it passes.
     (r) => page("", `<script>const seed={password:"${runOf(r, ALNUM, 8)}"};</script>`), // pragma: allowlist secret
-    { expect: [{ pattern: "Generic Secret Assignment", check: "medium", location: "inline-script" }] },
+    {
+      expect: [
+        { pattern: "Generic Secret Assignment", check: "medium", location: "inline-script" },
+      ],
+    },
   ),
 
-  neg("password-eight-chars-of-two-letters", () =>
-    // The same length with no entropy is a placeholder.
-    page("", `<script>const seed={password:"aabbaabb"};</script>`), // pragma: allowlist secret
+  neg(
+    "password-eight-chars-of-two-letters",
+    () =>
+      // The same length with no entropy is a placeholder.
+      page("", `<script>const seed={password:"aabbaabb"};</script>`), // pragma: allowlist secret
   ),
 
   neg(
@@ -251,7 +286,11 @@ export const NEGATIVES: Case[] = [
     // #1292 asked for plain words to be skipped; the maintainer chose to keep
     // reporting them under a credential-named key.
     () => page("", `<script>const seed={password:"changeme"};</script>`), // pragma: allowlist secret
-    { expect: [{ pattern: "Generic Secret Assignment", check: "medium", location: "inline-script" }] },
+    {
+      expect: [
+        { pattern: "Generic Secret Assignment", check: "medium", location: "inline-script" },
+      ],
+    },
   ),
 
   // Round 2 (codex): the label/public/percent guards must not eat these.
@@ -259,7 +298,11 @@ export const NEGATIVES: Case[] = [
     "password-near-a-public-brand-word-is-still-a-password",
     // A brand parent claims an API key or an access token (the SDK's client
     // credential), never a password or a secret: both of these stay leaks.
-    () => page("", `<script>window.__cfg={shopify:{password:"R7m!q2Z#v9L"},mixpanel:{secret:"Zq9#Lm2!vR7x"}};</script>`), // pragma: allowlist secret
+    () =>
+      page(
+        "",
+        `<script>window.__cfg={shopify:{password:"R7m!q2Z#v9L"},mixpanel:{secret:"Zq9#Lm2!vR7x"}};</script>`,
+      ), // pragma: allowlist secret
     {
       expect: [
         { pattern: "Generic Secret Assignment", check: "medium", location: "inline-script" },
@@ -277,8 +320,13 @@ export const NEGATIVES: Case[] = [
       ],
     },
   ),
-  neg("value-equal-to-its-key-is-a-label", () =>
-    page("", `<script>const l={password:"Password",passwd:"passwd",secret:"SECRET",secretKey:"secret-key"};</script>`), // pragma: allowlist secret
+  neg(
+    "value-equal-to-its-key-is-a-label",
+    () =>
+      page(
+        "",
+        `<script>const l={password:"Password",passwd:"passwd",secret:"SECRET",secretKey:"secret-key"};</script>`,
+      ), // pragma: allowlist secret
   ),
   neg(
     "password-with-a-percent-sign-is-still-a-password",
@@ -286,24 +334,38 @@ export const NEGATIVES: Case[] = [
     {
       // `%20` is read as a space wherever it appears, so the second one is a
       // documented casualty of the URL-encoded-label rule: one finding.
-      expect: [{ pattern: "Generic Secret Assignment", check: "medium", location: "inline-script" }],
+      expect: [
+        { pattern: "Generic Secret Assignment", check: "medium", location: "inline-script" },
+      ],
     },
   ),
 
   neg("quoted-instruction-string-under-a-credential-key", () =>
     // Quoted and under a credential key, but made of words with no digit:
     // the identifier heuristic still applies and drops it.
-    page("", `<script>window.__CFG__={cloudflare:{token:"paste_your_cloudflare_api_token_here_now"}};</script>`),
+    page(
+      "",
+      `<script>window.__CFG__={cloudflare:{token:"paste_your_cloudflare_api_token_here_now"}};</script>`,
+    ),
   ),
 
   neg(
     "password-sixteen-random-chars",
     (r) => page("", `<script>const seed={password:"${runOf(r, ALNUM, 16)}"};</script>`), // pragma: allowlist secret
-    { expect: [{ pattern: "Generic Secret Assignment", check: "medium", location: "inline-script" }] },
+    {
+      expect: [
+        { pattern: "Generic Secret Assignment", check: "medium", location: "inline-script" },
+      ],
+    },
   ),
 
-  neg("placeholder-api-key", () =>
-    page("", `<script>const client=new Client({apiKey:"YOUR_API_KEY_GOES_HERE_REPLACE_ME_NOW",timeout:3000});</script>`), // pragma: allowlist secret
+  neg(
+    "placeholder-api-key",
+    () =>
+      page(
+        "",
+        `<script>const client=new Client({apiKey:"YOUR_API_KEY_GOES_HERE_REPLACE_ME_NOW",timeout:3000});</script>`,
+      ), // pragma: allowlist secret
   ),
 
   neg(
@@ -313,21 +375,34 @@ export const NEGATIVES: Case[] = [
       // `dummy`. The placeholder list is anchored to the value's head and
       // tail now (#357), so a word in the middle of a token is not a verdict.
       // The checksum is valid (#361), so nothing else can drop it either.
-      page("", `<script>const t={${["gh", "p_"].join("")}:"${githubTokenFrom(["gh", "p_"].join(""), `${runOf(r, ALNUM, 12)}dummy${runOf(r, ALNUM, 13)}`)}"};</script>`),
-    { expect: [{ pattern: "GitHub Personal Access Token", check: "high", location: "inline-script" }] },
+      page(
+        "",
+        `<script>const t={${["gh", "p_"].join("")}:"${githubTokenFrom(["gh", "p_"].join(""), `${runOf(r, ALNUM, 12)}dummy${runOf(r, ALNUM, 13)}`)}"};</script>`,
+      ),
+    {
+      expect: [
+        { pattern: "GitHub Personal Access Token", check: "high", location: "inline-script" },
+      ],
+    },
   ),
 
   neg("url-query-string-with-only-percent-twenty", (r) =>
     // Three `%20`s make it a run the percent decoder reads, and it decodes to
     // spaces and a search phrase: nothing to find, and the page is unchanged
     // in every way that matters.
-    page("", `<a href="/search?q=${runOf(r, LOWER, 6)}%20${runOf(r, LOWER, 5)}%20${runOf(r, LOWER, 7)}%20${runOf(r, LOWER, 4)}&page=2">Next</a>`),
+    page(
+      "",
+      `<a href="/search?q=${runOf(r, LOWER, 6)}%20${runOf(r, LOWER, 5)}%20${runOf(r, LOWER, 7)}%20${runOf(r, LOWER, 4)}&page=2">Next</a>`,
+    ),
   ),
 
   neg("placeholder-shaped-token-at-the-head", (r) =>
     // `ghp_dummy…`: the word right after the prefix IS the value. The
     // checksum is valid, so the placeholder list is what keeps it silent.
-    page("", `<script>const t={${["gh", "p_"].join("")}:"${githubTokenFrom(["gh", "p_"].join(""), `dummy${runOf(r, ALNUM, 25)}`)}"};</script>`),
+    page(
+      "",
+      `<script>const t={${["gh", "p_"].join("")}:"${githubTokenFrom(["gh", "p_"].join(""), `dummy${runOf(r, ALNUM, 25)}`)}"};</script>`,
+    ),
   ),
 
   neg("css-class-soup", () =>
@@ -349,19 +424,31 @@ export const NEGATIVES: Case[] = [
 
   neg(
     "mapbox-public-token",
-    (r) => page("", `<script>mapboxgl.accessToken="pk.${b64url(JSON.stringify({ u: "acme-maps", a: `cm${runOf(r, LOWER + DIGIT, 24)}` })).replace(/[-_]/g, "x")}.${runOf(r, ALNUM, 22)}";new mapboxgl.Map({container:"map"});</script>`),
+    (r) =>
+      page(
+        "",
+        `<script>mapboxgl.accessToken="pk.${b64url(JSON.stringify({ u: "acme-maps", a: `cm${runOf(r, LOWER + DIGIT, 24)}` })).replace(/[-_]/g, "x")}.${runOf(r, ALNUM, 22)}";new mapboxgl.Map({container:"map"});</script>`,
+      ),
     { expect: [{ pattern: "Mapbox Access Token", check: "public", location: "inline-script" }] },
   ),
 
   neg(
     "paypal-client-id-lowercase",
-    (r) => page("", `<script>paypal.Buttons({clientId:"AZ${runOf(r, LOWER + DIGIT, 78)}"}).render("#paypal");</script>`),
+    (r) =>
+      page(
+        "",
+        `<script>paypal.Buttons({clientId:"AZ${runOf(r, LOWER + DIGIT, 78)}"}).render("#paypal");</script>`,
+      ),
     { expect: [{ pattern: "PayPal Client ID", check: "public", location: "inline-script" }] },
   ),
 
   neg(
     "paypal-client-id-mixed-case",
-    (r) => page("", `<script>paypal.Buttons({clientId:"AZ${mixedRun(r, 78)}"}).render("#paypal");</script>`),
+    (r) =>
+      page(
+        "",
+        `<script>paypal.Buttons({clientId:"AZ${mixedRun(r, 78)}"}).render("#paypal");</script>`,
+      ),
     {
       knownGap:
         "PayPal `[Aa][Zz][Aa-zZ0-9-_]{60,}`: the class omits uppercase B-Y, so a real mixed-case client id never fires",

@@ -66,10 +66,7 @@ export const socialProfilesRule: Rule = {
       if (href) pageHrefs.push(href);
 
       for (const platform of SOCIAL_PLATFORMS) {
-        if (
-          platform.pattern.test(href) &&
-          !foundProfiles.includes(platform.name)
-        ) {
+        if (platform.pattern.test(href) && !foundProfiles.includes(platform.name)) {
           foundProfiles.push(platform.name);
         }
       }

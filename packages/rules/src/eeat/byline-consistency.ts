@@ -228,9 +228,7 @@ function buildChecks(rollup: BylineRollup, sitePageCount: number): CheckResult[]
   if (verdict.kind === "skip") return [skip(verdict.message)];
 
   const { norms, judgedPages } = verdict;
-  const normSummary = norms
-    .map((n) => `${n.pageType} ${n.signal} ${pct(n.share)}%`)
-    .join(", ");
+  const normSummary = norms.map((n) => `${n.pageType} ${n.signal} ${pct(n.share)}%`).join(", ");
 
   const flagged = new Set<string>();
   for (const norm of norms) for (const url of norm.deviants) flagged.add(url);

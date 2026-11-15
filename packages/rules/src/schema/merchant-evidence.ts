@@ -24,7 +24,13 @@ import {
   type UnknownReason,
 } from "../shared/structured-nodes";
 
-export const ORGANIZATION_TYPES = ["Organization", "Corporation", "OnlineStore", "OnlineBusiness", "Store"];
+export const ORGANIZATION_TYPES = [
+  "Organization",
+  "Corporation",
+  "OnlineStore",
+  "OnlineBusiness",
+  "Store",
+];
 
 const IDENTIFIER_PROPS = [
   "vatID",
@@ -43,13 +49,22 @@ const IDENTIFIER_PROPS = [
 const LEGAL_PROPERTY_ID =
   /\b(?:vat|vatid|tax|taxid|ein|tin|abn|acn|crn|company|companyid|companynumber|registration|registered|siret|siren|kvk|duns|lei|gln|nip|cvr|orgnr|uid)\b|\b(?:company|business)\s*(?:no|number|id)\b/i;
 const ADDRESS_PROPS = ["address", "legalAddress"];
-const ADDRESS_PARTS = ["streetAddress", "addressLocality", "postalCode", "addressRegion", "addressCountry", "postOfficeBoxNumber"];
-const PLACEHOLDER_NAMES = /^(organi[sz]ation|company|store|shop|name|business|your (company|store|name)|example|test|untitled|n\/a|tbd)$/i;
+const ADDRESS_PARTS = [
+  "streetAddress",
+  "addressLocality",
+  "postalCode",
+  "addressRegion",
+  "addressCountry",
+  "postOfficeBoxNumber",
+];
+const PLACEHOLDER_NAMES =
+  /^(organi[sz]ation|company|store|shop|name|business|your (company|store|name)|example|test|untitled|n\/a|tbd)$/i;
 
 // Visible legal-notice wording: an identifier label followed by digits, or a legal-notice heading.
 const LEGAL_ID_TEXT =
   /\b(?:VAT|TVA|USt-?IdNr\.?|Umsatzsteuer-?ID|company\s*(?:no|number|reg(?:istration)?)\.?|ABN|ACN|SIRET|SIREN|KvK|tax\s*id|registered\s*(?:no|number))\b[^0-9]{0,30}[A-Z]{0,3}[\s:#.-]*\d[\d\s.-]{4,}/i;
-const LEGAL_NOTICE_TEXT = /\b(?:registered\s+office|impressum|legal\s+notice|mentions\s+l[ée]gales)\b/i;
+const LEGAL_NOTICE_TEXT =
+  /\b(?:registered\s+office|impressum|legal\s+notice|mentions\s+l[ée]gales)\b/i;
 
 export type MerchantStatus = "present" | "text-only" | "absent" | "unknown";
 
@@ -79,7 +94,9 @@ type Resolve = (value: unknown) => unknown;
 function nameOk(node: StructuredNode): boolean {
   const n = node["name"];
   const list = asList(n);
-  return list.some((v) => typeof v === "string" && v.trim() !== "" && !PLACEHOLDER_NAMES.test(v.trim()));
+  return list.some(
+    (v) => typeof v === "string" && v.trim() !== "" && !PLACEHOLDER_NAMES.test(v.trim()),
+  );
 }
 
 function addressOk(node: StructuredNode, resolve: Resolve): boolean {
@@ -101,7 +118,12 @@ function identifierOk(node: StructuredNode, resolve: Resolve): boolean {
     const v = resolve(raw);
     if (!v || typeof v !== "object" || isDanglingRef(v)) continue;
     const o = v as StructuredNode;
-    if (typeof o["propertyID"] === "string" && LEGAL_PROPERTY_ID.test(o["propertyID"]) && isFilled(o["value"])) return true;
+    if (
+      typeof o["propertyID"] === "string" &&
+      LEGAL_PROPERTY_ID.test(o["propertyID"]) &&
+      isFilled(o["value"])
+    )
+      return true;
   }
   for (const prop of IDENTIFIER_PROPS) {
     for (const raw of asList(node[prop])) {
@@ -109,7 +131,8 @@ function identifierOk(node: StructuredNode, resolve: Resolve): boolean {
       if (isDanglingRef(v)) continue;
       if (typeof v === "string" || typeof v === "number") {
         if (isFilled(v)) return true;
-      } else if (v && typeof v === "object" && isFilled((v as StructuredNode)["value"])) return true;
+      } else if (v && typeof v === "object" && isFilled((v as StructuredNode)["value"]))
+        return true;
     }
   }
   return false;
@@ -123,10 +146,14 @@ export function readOrganizations(
   const doc = ctx.parsed.document;
   const nested = collectNestedNodes(jsonLdNodes);
   const candidates: OrgCandidate[] = [];
-  for (const node of nested) if (hasType(node, ...ORGANIZATION_TYPES)) candidates.push({ source: "json-ld", node });
+  for (const node of nested)
+    if (hasType(node, ...ORGANIZATION_TYPES)) candidates.push({ source: "json-ld", node });
   const markup: StructuredNode[] = [];
   if (doc) {
-    for (const [source, read] of [["microdata", readMicrodata(doc)], ["rdfa", readRdfa(doc)]] as const) {
+    for (const [source, read] of [
+      ["microdata", readMicrodata(doc)],
+      ["rdfa", readRdfa(doc)],
+    ] as const) {
       for (const n of collectNestedNodes(read.nodes)) {
         markup.push(n);
         if (hasType(n, ...ORGANIZATION_TYPES)) candidates.push({ source, node: n });
@@ -134,7 +161,12 @@ export function readOrganizations(
     }
   }
   const allNodes = [...nested, ...markup];
-  return { candidates, resolve: makeRefResolver(allNodes, ctx.page.url), allNodes, read: htmlReadState(ctx) };
+  return {
+    candidates,
+    resolve: makeRefResolver(allNodes, ctx.page.url),
+    allNodes,
+    read: htmlReadState(ctx),
+  };
 }
 
 /** A confirmed shop: an ecommerce site profile, an OnlineStore, or product markup on the page. */
@@ -158,7 +190,13 @@ export function readMerchantIdentity(
     address: addressOk(c.node, resolve),
     identifier: identifierOk(c.node, resolve),
   }));
-  scored.sort((a, b) => Number(b.name) * 4 + Number(b.address) + Number(b.identifier) - (Number(a.name) * 4 + Number(a.address) + Number(a.identifier)));
+  scored.sort(
+    (a, b) =>
+      Number(b.name) * 4 +
+      Number(b.address) +
+      Number(b.identifier) -
+      (Number(a.name) * 4 + Number(a.address) + Number(a.identifier)),
+  );
   const best = scored[0];
 
   const text = doc && read !== "failed" ? visibleText(doc) : "";
@@ -176,7 +214,10 @@ export function readMerchantIdentity(
 
   let status: MerchantStatus;
   let reason: UnknownReason | undefined;
-  if (name.status === "present" && (address.status === "present" || identifier.status === "present")) {
+  if (
+    name.status === "present" &&
+    (address.status === "present" || identifier.status === "present")
+  ) {
     status = "present";
   } else if (legalText) {
     status = "text-only";

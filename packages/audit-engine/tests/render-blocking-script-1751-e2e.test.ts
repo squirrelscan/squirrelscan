@@ -85,11 +85,12 @@ async function audit(slowMs: number, warmFirst = false) {
     runStreamingPreRules(crawler.storage as SQLiteStorage, crawlId, config, {}),
   );
   const ran = await Effect.runPromise(
-    runStreamingRules(crawler.storage as SQLiteStorage, crawlId, config, preRules.assets) as Effect.Effect<
-      { pageRuleResults: Map<string, Map<string, CheckResult[]>> },
-      never,
-      never
-    >,
+    runStreamingRules(
+      crawler.storage as SQLiteStorage,
+      crawlId,
+      config,
+      preRules.assets,
+    ) as Effect.Effect<{ pageRuleResults: Map<string, Map<string, CheckResult[]>> }, never, never>,
   );
   const byPath = new Map<string, CheckResult[]>();
   for (const [url, rules] of ran.pageRuleResults) {

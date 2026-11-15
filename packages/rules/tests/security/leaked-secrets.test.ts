@@ -30,7 +30,13 @@ import {
   type LeakedSecret,
 } from "../../src/security/leaked-secrets";
 import type { RuleContext, RuleResult } from "../../src/types";
-import { CASES, HARNESS_ERRORS, type Case, type Check, type Expectation } from "./leaked-secrets/cases";
+import {
+  CASES,
+  HARNESS_ERRORS,
+  type Case,
+  type Check,
+  type Expectation,
+} from "./leaked-secrets/cases";
 import { CONTEXTS } from "./leaked-secrets/contexts";
 import { GENERATORS, GENERATORS_BY_PATTERN, seededRng } from "./leaked-secrets/generators";
 
@@ -71,7 +77,9 @@ const CHECK_NAMES: Record<Check, string> = {
 const LOCATION_RE = /^Found in ([a-z-]+(?: \(base64\))?)/;
 
 /** What the rule reported, in the same shape as a case's `expect`. */
-async function observed(c: Case): Promise<{ findings: Expectation[]; ids: string[]; passed: boolean }> {
+async function observed(
+  c: Case,
+): Promise<{ findings: Expectation[]; ids: string[]; passed: boolean }> {
   const { checks } = (await leakedSecretsRule.run(ctxFor(c))) as RuleResult;
   const findings: Expectation[] = [];
   const ids: string[] = [];
@@ -85,7 +93,11 @@ async function observed(c: Case): Promise<{ findings: Expectation[]; ids: string
       ids.push(item.id);
     }
   }
-  return { findings, ids, passed: checks.some((k) => k.name === "leaked-secrets" && k.status === "pass") };
+  return {
+    findings,
+    ids,
+    passed: checks.some((k) => k.name === "leaked-secrets" && k.status === "pass"),
+  };
 }
 
 const key = (e: Expectation) => `${e.pattern}|${e.check}|${e.location}`;
@@ -142,9 +154,13 @@ describe("security/leaked-secrets corpus: coverage", () => {
     for (const g of GENERATORS) {
       const v = g.make(seededRng(7));
       const keyName = g.keyName ?? "value";
-      const js = g.tier === "assignment" ? `var c={${v.text}};` : `var c={${keyName}:${JSON.stringify(v.text)}};`;
+      const js =
+        g.tier === "assignment"
+          ? `var c={${v.text}};`
+          : `var c={${keyName}:${JSON.stringify(v.text)}};`;
       const types = scanContent(js, "inline-script").map((f) => f.type);
-      const expected = g.pattern === "Clerk Secret Key" ? "Stripe Live Key" : (g.reportedAs ?? g.pattern);
+      const expected =
+        g.pattern === "Clerk Secret Key" ? "Stripe Live Key" : (g.reportedAs ?? g.pattern);
       if (!types.includes(expected)) {
         wrong.push(`${g.pattern}: got [${types.join(", ")}]`);
       }
@@ -167,7 +183,9 @@ describe("security/leaked-secrets corpus: meta (every pattern, derived from its 
 
   /** The bare embedding every generator fires in: `var c={key:"value"};`. */
   const bare = (g: (typeof GENERATORS)[number], text: string) =>
-    g.tier === "assignment" ? `var c={${text}};` : `var c={${g.keyName ?? "value"}:${JSON.stringify(text)}};`;
+    g.tier === "assignment"
+      ? `var c={${text}};`
+      : `var c={${g.keyName ?? "value"}:${JSON.stringify(text)}};`;
 
   /** The keywords the detector declares for a pattern, whichever tier. */
   const keywordsOf = (name: string): string[] => {
@@ -178,7 +196,9 @@ describe("security/leaked-secrets corpus: meta (every pattern, derived from its 
   };
 
   test("every FAST pattern declares at least one keyword, and none is an English word", () => {
-    const missing = FAST_PATTERNS.filter((p) => !p.keywords || p.keywords.length === 0).map((p) => p.name);
+    const missing = FAST_PATTERNS.filter((p) => !p.keywords || p.keywords.length === 0).map(
+      (p) => p.name,
+    );
     expect(missing).toEqual([]);
     const words = FAST_PATTERNS.flatMap((p) => p.keywords ?? []);
     expect(words.every((k) => k === k.toLowerCase())).toBe(true);
@@ -263,7 +283,9 @@ describe("security/leaked-secrets corpus: meta (every pattern, derived from its 
       // needs its keyword in front of BOTH), so the one finding is dedup's.
       const once = bare(g, value.text);
       expect(scanContent(once, "inline-script").filter((f) => f.type === expected)).toHaveLength(1);
-      const found = scanContent(`${once}\n${once}`, "inline-script").filter((f) => f.type === expected);
+      const found = scanContent(`${once}\n${once}`, "inline-script").filter(
+        (f) => f.type === expected,
+      );
       expect(found).toHaveLength(1);
     });
 
@@ -275,10 +297,17 @@ describe("security/leaked-secrets corpus: meta (every pattern, derived from its 
         `/* ${keyword} */${"x".repeat(gap - 3 - 1 - 'credential:"'.length)};credential:${JSON.stringify(value.text)}`;
       test(`${g.pattern}: keyword 30 before the value fires, 60 before does not, after does not`, () => {
         expect(scanContent(at(30), "inline-script").map((f) => f.type)).toEqual([g.pattern]);
-        expect(scanContent(at(CONTEXT_KEYWORD_GAP), "inline-script").map((f) => f.type)).toEqual([g.pattern]);
+        expect(scanContent(at(CONTEXT_KEYWORD_GAP), "inline-script").map((f) => f.type)).toEqual([
+          g.pattern,
+        ]);
         expect(scanContent(at(CONTEXT_KEYWORD_GAP + 1), "inline-script")).toEqual([]);
         expect(scanContent(at(60), "inline-script")).toEqual([]);
-        expect(scanContent(`credential:${JSON.stringify(value.text)}; /* ${keyword} */`, "inline-script")).toEqual([]);
+        expect(
+          scanContent(
+            `credential:${JSON.stringify(value.text)}; /* ${keyword} */`,
+            "inline-script",
+          ),
+        ).toEqual([]);
       });
     }
   }
@@ -287,7 +316,7 @@ describe("security/leaked-secrets corpus: meta (every pattern, derived from its 
 describe("security/leaked-secrets corpus: rule output", () => {
   for (const c of ok) {
     test(c.id, async () => {
-      const got = (await observed(c));
+      const got = await observed(c);
       expect(sorted(got.findings)).toEqual(sorted(c.expect));
       for (const pattern of c.mustNotFire ?? []) {
         expect(got.findings.map((f) => f.pattern)).not.toContain(pattern);
@@ -315,7 +344,7 @@ describe("security/leaked-secrets corpus: known gaps (asserting CURRENT behaviou
   for (const c of gaps) {
     // The 5 MB size-cap probe scans in full: an explicit budget under load.
     test(`${c.id} — today: ${c.expect.map((e) => `${e.pattern} (${e.check})`).join(", ") || "nothing"}`, async () => {
-      const got = (await observed(c));
+      const got = await observed(c);
       expect(sorted(got.findings)).toEqual(sorted(c.expect));
       for (const pattern of c.mustNotFire ?? []) {
         expect(got.findings.map((f) => f.pattern)).not.toContain(pattern);
@@ -335,7 +364,7 @@ describe("security/leaked-secrets corpus: invariants", () => {
     // scan with one value, then the inline script, then the external script.
     expect(raw.map((f) => f.location)).toEqual(["html", "inline-script", "external-script"]);
     expect(new Set(raw.map((f) => f.value)).size).toBe(1);
-    const got = (await observed(c));
+    const got = await observed(c);
     expect(got.findings).toHaveLength(1);
     expect(got.findings[0]?.location).toBe("external-script");
   });
@@ -439,7 +468,10 @@ describe("security/leaked-secrets corpus: snapshot", () => {
     if (UPDATE) {
       // One row per line: a detector change then diffs as one line per finding.
       const body = Object.entries(current)
-        .map(([id, rows]) => `  ${JSON.stringify(id)}: [${rows.length ? "\n" + rows.map((r) => `    ${JSON.stringify(r)}`).join(",\n") + "\n  " : ""}]`)
+        .map(
+          ([id, rows]) =>
+            `  ${JSON.stringify(id)}: [${rows.length ? "\n" + rows.map((r) => `    ${JSON.stringify(r)}`).join(",\n") + "\n  " : ""}]`,
+        )
         .join(",\n");
       writeFileSync(SNAPSHOT_PATH, `{\n${body}\n}\n`);
     }

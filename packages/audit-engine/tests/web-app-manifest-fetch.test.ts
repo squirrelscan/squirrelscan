@@ -66,7 +66,9 @@ beforeAll(() => {
         });
       }
       if (path === "/static/icon.png") {
-        return new Response(pngHeader(256, 256) as unknown as BodyInit, { headers: { "content-type": "image/png" } });
+        return new Response(pngHeader(256, 256) as unknown as BodyInit, {
+          headers: { "content-type": "image/png" },
+        });
       }
       // Same-site manifest paths that redirect off the site: to another host
       // (`localhost` reaches this server, but is not the site's host) and to

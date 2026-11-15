@@ -76,7 +76,7 @@ function seedCrawl(path: string, version: number): string {
   db.query("INSERT INTO schema_version (version) VALUES (?)").run(version);
   const id = randomUUID();
   db.query(
-    "INSERT INTO crawls (id, base_url, started_at, status, config, stats) VALUES (?, ?, ?, ?, ?, ?)"
+    "INSERT INTO crawls (id, base_url, started_at, status, config, stats) VALUES (?, ?, ?, ?, ?, ?)",
   ).run(id, "https://e.test", 1, "completed", "{}", JSON.stringify(STATS));
   db.close();
   return id;
@@ -86,7 +86,7 @@ function columnsOf(path: string): string[] {
   const db = new Database(path, { readonly: true });
   try {
     return (db.query("PRAGMA table_info(crawls)").all() as { name: string }[]).map(
-      (column) => column.name
+      (column) => column.name,
     );
   } finally {
     db.close();
@@ -132,7 +132,7 @@ describe("migration 44: stored JavaScript shipped block", () => {
 
     const db = new Database(path);
     db.query(
-      "INSERT INTO crawls (id, base_url, started_at, status, config, stats) VALUES (?, ?, ?, ?, ?, ?)"
+      "INSERT INTO crawls (id, base_url, started_at, status, config, stats) VALUES (?, ?, ?, ?, ?, ?)",
     ).run("old-cli", "https://e.test", 1, "completed", "{}", JSON.stringify(STATS));
     db.close();
 

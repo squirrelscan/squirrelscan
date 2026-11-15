@@ -3,11 +3,19 @@ import { byteLength, truncateToBytes } from "@squirrelscan/utils/bytes";
 import { readBodyCapped } from "@squirrelscan/utils/response-body";
 import { CLOUDFLARE_CHALLENGE_SCRIPT } from "@squirrelscan/utils/waf";
 
-import { optionalProbeTimeoutMs, safeFetchWithDeadline, skippedProbeError, ungated } from "./deadline";
+import {
+  optionalProbeTimeoutMs,
+  safeFetchWithDeadline,
+  skippedProbeError,
+  ungated,
+} from "./deadline";
 
 import type { PhaseBudget, ProbeGate } from "./deadline";
 import { mergeHeaderRecords } from "@squirrelscan/utils/headers";
-import { AGENT_ACCESS_BOTS, DEFAULT_AGENT_ACCESS_BOT_IDS } from "@squirrelscan/core-contracts/storage";
+import {
+  AGENT_ACCESS_BOTS,
+  DEFAULT_AGENT_ACCESS_BOT_IDS,
+} from "@squirrelscan/core-contracts/storage";
 import type {
   AgentAccessData,
   AgentAccessProbe,
@@ -83,11 +91,9 @@ async function probeOne(
       {
         // A configured custom User-Agent (any casing) must not replace the probe
         // identity — the whole point is fetching as browser/GPTBot/Claude-User.
-        headers: mergeHeaderRecords(
-          { Accept: "text/html,*/*" },
-          customHeaders,
-          { "User-Agent": identity.ua },
-        ),
+        headers: mergeHeaderRecords({ Accept: "text/html,*/*" }, customHeaders, {
+          "User-Agent": identity.ua,
+        }),
         redirect: "follow",
       },
       timeoutMs,
@@ -142,7 +148,9 @@ export function probeAgentAccess(
     // skip the others: it is noted after all of them ran, and stops the probes after this one (#1655).
     const seen: Response[] = [];
     const probes = await Promise.all(
-      identities.map((id) => gate(homeUrl, () => probeOne(homeUrl, id, customHeaders, budget, seen))),
+      identities.map((id) =>
+        gate(homeUrl, () => probeOne(homeUrl, id, customHeaders, budget, seen)),
+      ),
     );
     for (const response of seen) budget?.refusals?.observe(response, homeUrl);
     return { probes };

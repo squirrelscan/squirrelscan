@@ -85,7 +85,8 @@ export async function runCaseRules(
       const start = performance.now();
       const result = await rule.run(ctx);
       ruleMs += performance.now() - start;
-      for (const check of result.checks) checks[id].push({ ...check, pageUrl: check.pageUrl ?? url });
+      for (const check of result.checks)
+        checks[id].push({ ...check, pageUrl: check.pageUrl ?? url });
     }
   }
   return { checks, ruleMs, pagesRun };
@@ -218,9 +219,7 @@ function bestMs<T>(repeats: number, fn: () => T): { ms: number; value: T } {
   return { ms, value };
 }
 
-function scoreOf(
-  results: Record<string, ReportRuleResult>,
-): number | null {
+function scoreOf(results: Record<string, ReportRuleResult>): number | null {
   const map = new Map<string, RuleRunResult>();
   for (const [id, result] of Object.entries(results)) {
     map.set(id, result as unknown as RuleRunResult);
@@ -280,7 +279,9 @@ export async function evaluateCase(
           const nestedIn = occurrence.region.nestedIn;
           const label = labelOf(occurrence.pageUrl, id, occurrence.element.locator, nestedIn);
           if (!label) {
-            unlabeled.push(labelKey(pathOf(occurrence.pageUrl), id, occurrence.element.locator, nestedIn));
+            unlabeled.push(
+              labelKey(pathOf(occurrence.pageUrl), id, occurrence.element.locator, nestedIn),
+            );
           }
           observations.push({
             page: pathOf(occurrence.pageUrl),
@@ -294,10 +295,15 @@ export async function evaluateCase(
       }
     }
   }
-  const observationAt = new Map(observations.map((o) => [labelKey(o.page, o.rule, o.locator, o.nestedIn), o]));
+  const observationAt = new Map(
+    observations.map((o) => [labelKey(o.page, o.rule, o.locator, o.nestedIn), o]),
+  );
 
   const groups: GroupSummary[] = [];
-  const rawGroups: Array<{ rule: GroupedRule; group: NonNullable<GroupedRule["componentFixGroups"]>[number] }> = [];
+  const rawGroups: Array<{
+    rule: GroupedRule;
+    group: NonNullable<GroupedRule["componentFixGroups"]>[number];
+  }> = [];
   for (const rule of rulesOn) {
     for (const group of rule.componentFixGroups ?? []) rawGroups.push({ rule, group });
   }
@@ -316,7 +322,10 @@ export async function evaluateCase(
         observation.grouped = true;
         groupOfObservation.set(key, { id: group.id, attribution: group.attribution });
         if (observation.label) fixKeys.add(observation.label.fixKey);
-        if (group.attribution === "observed-component-evidence" && observation.label?.expectObserved === false) {
+        if (
+          group.attribution === "observed-component-evidence" &&
+          observation.label?.expectObserved === false
+        ) {
           overclaims++;
         }
       }
@@ -357,13 +366,15 @@ export async function evaluateCase(
   const detectionPages = new Set<string>();
   const coveredPages = new Set<string>();
   for (const group of groups) for (const page of group.pages) coveredPages.add(page);
-  for (const observation of observations) if (!observation.grouped) coveredPages.add(observation.page);
+  for (const observation of observations)
+    if (!observation.grouped) coveredPages.add(observation.page);
   for (const { id } of EVAL_RULES) {
     for (const check of checks[id]) {
       if (!isDetection(check) || !check.pageUrl) continue;
       const page = pathOf(check.pageUrl);
       detectionPages.add(page);
-      if (evalCase.legacy || (check.componentOccurrences?.length ?? 0) === 0) coveredPages.add(page);
+      if (evalCase.legacy || (check.componentOccurrences?.length ?? 0) === 0)
+        coveredPages.add(page);
     }
   }
   const pagesSkipped = [...detectionPages].filter((page) => !coveredPages.has(page)).sort();

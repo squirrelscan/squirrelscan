@@ -19,7 +19,8 @@ const MAX_CHILDREN_PER_INDEX = 50000;
  * The W3C Datetime forms the sitemap protocol allows for `<lastmod>`: a year, a
  * month, a day, or a datetime with a `T` and a zone (`Z` or `+hh:mm`).
  */
-const W3C_DATETIME = /^\d{4}(?:-\d{2}(?:-\d{2}(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2}))?)?)?$/;
+const W3C_DATETIME =
+  /^\d{4}(?:-\d{2}(?:-\d{2}(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2}))?)?)?$/;
 /** A W3C datetime with the zone left off, which the protocol does not allow. */
 const W3C_DATETIME_NO_ZONE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/;
 
@@ -209,7 +210,7 @@ export const sitemapValidRule: Rule = {
       const total = Math.max(sitemaps.orphanPagesTotal ?? 0, sitemaps.orphanPages.length);
       const { items, truncation } = sampleUrlItems(
         sitemaps.orphanPages.map((url) => ({ id: url })),
-        total
+        total,
       );
       checks.push({
         name: "sitemap-orphans",

@@ -30,9 +30,8 @@ import { compareRetention, expectDetached, MB } from "./helpers/retention";
  */
 function pageAndSlice(i: number, bytes: number): { page: string; slice: string } {
   const chunk = 20_000;
-  const body = Array.from(
-    { length: Math.max(1, Math.ceil(bytes / chunk)) },
-    (_, k) => `${i}-${k} `.padEnd(chunk, "abcdefghij"),
+  const body = Array.from({ length: Math.max(1, Math.ceil(bytes / chunk)) }, (_, k) =>
+    `${i}-${k} `.padEnd(chunk, "abcdefghij"),
   ).join("");
   const page = `<html><body>${body}</body></html>`;
   return { page, slice: page.slice(120, 180) };

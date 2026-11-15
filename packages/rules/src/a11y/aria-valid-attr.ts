@@ -53,10 +53,7 @@ export const ariaValidAttrRule: Rule = {
         status: "fail",
         message: `${invalidAttrs.length} invalid ARIA attribute(s) found`,
         items: invalidAttrs.slice(0, 10).map((id) => ({ id })),
-        details:
-          invalidAttrs.length > 10
-            ? { additional: invalidAttrs.length - 10 }
-            : undefined,
+        details: invalidAttrs.length > 10 ? { additional: invalidAttrs.length - 10 } : undefined,
       });
     } else {
       checks.push({

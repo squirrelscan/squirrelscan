@@ -23,7 +23,8 @@ function answer(href: string, extra: Partial<ExternalCheckResult>): ExternalChec
 /** A bulk checker that answers every url it is asked about, so no local fetch happens. */
 function bulk(answers: ExternalCheckResult[]) {
   const byHref = new Map(answers.map((a) => [a.href, a]));
-  return async (urls: string[]) => new Map(urls.flatMap((u) => (byHref.has(u) ? [[u, byHref.get(u)!] as const] : [])));
+  return async (urls: string[]) =>
+    new Map(urls.flatMap((u) => (byHref.has(u) ? [[u, byHref.get(u)!] as const] : [])));
 }
 
 async function run(
@@ -43,7 +44,9 @@ async function run(
 
 describe("bulk checker wall statuses (repo#2730)", () => {
   test("a bare 999, 401 or 406 is unverifiable, status kept", async () => {
-    const answers = [999, 401, 406].map((status) => answer(`https://example.com/${status}`, { status }));
+    const answers = [999, 401, 406].map((status) =>
+      answer(`https://example.com/${status}`, { status }),
+    );
     const byHref = await run(answers);
     for (const status of [999, 401, 406]) {
       expect(byHref.get(`https://example.com/${status}`)).toMatchObject({
@@ -69,7 +72,9 @@ describe("bulk checker wall statuses (repo#2730)", () => {
   });
 
   test("a 404 is unchanged", async () => {
-    const r = (await run([answer("https://example.com/404", { status: 404 })])).get("https://example.com/404")!;
+    const r = (await run([answer("https://example.com/404", { status: 404 })])).get(
+      "https://example.com/404",
+    )!;
     expect(r.status).toBe(404);
     expect(r.wafBlocked).toBeUndefined();
   });
@@ -85,7 +90,11 @@ describe("bulk checker wall statuses (repo#2730)", () => {
         }),
       ])
     ).get("https://example.com/406")!;
-    expect(r).toMatchObject({ wafBlocked: true, wafProvider: "cloudflare", unverifiedReason: "blocked" });
+    expect(r).toMatchObject({
+      wafBlocked: true,
+      wafProvider: "cloudflare",
+      unverifiedReason: "blocked",
+    });
   });
 
   test("the unverifiable answer is not cached, a 404 is", async () => {

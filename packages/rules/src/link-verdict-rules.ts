@@ -23,4 +23,3 @@ export const LINK_VERDICT_RULE_IDS: ReadonlySet<string> = new Set([
   // link check has not filled yet.
   "security/supabase-rls",
 ]);
-

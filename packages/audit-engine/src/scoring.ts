@@ -195,10 +195,7 @@ export interface MergedScoringInput {
  * inherits it without a second lookup — and deliberately WITHOUT `lastSeenAt`:
  * nothing has ever observed this finding, so there is no date to show.
  */
-export function carriedFindingToCheck(
-  f: CarriedFinding,
-  normalizedUrl: string
-): CheckResult {
+export function carriedFindingToCheck(f: CarriedFinding, normalizedUrl: string): CheckResult {
   const payload = parseCarriedPayload(f.payload);
   const carriedOccurrences = unpackComponentOccurrences(payload.componentOccurrences);
   const carriedResources = unpackSiteResourceOccurrences(payload.siteResourceOccurrences);
@@ -223,9 +220,7 @@ export function carriedFindingToCheck(
     ...(carriedOccurrences ? { componentOccurrences: carriedOccurrences } : {}),
     ...(payload.componentEvidence ? { componentEvidence: payload.componentEvidence } : {}),
     ...(carriedResources ? { siteResourceOccurrences: carriedResources } : {}),
-    ...(payload.siteResourceEvidence
-      ? { siteResourceEvidence: payload.siteResourceEvidence }
-      : {}),
+    ...(payload.siteResourceEvidence ? { siteResourceEvidence: payload.siteResourceEvidence } : {}),
     // Key ORDER matters: the sampled path's caller ASSIGNS provenance then
     // lastSeenAt after this returns, so stamping them last here serializes
     // identically to a check the caller tagged (#1876).
@@ -283,10 +278,9 @@ export function carriedCheckAsFailure(check: CheckResult): CheckResult {
 }
 
 export function buildScoringResultsFromMerged(
-  input: MergedScoringInput
+  input: MergedScoringInput,
 ): Map<string, RuleRunResult> {
-  const { freshResults, carriedFindings, carriedPageUrls, ruleMetaIndex, carriedSource } =
-    input;
+  const { freshResults, carriedFindings, carriedPageUrls, ruleMetaIndex, carriedSource } = input;
   const checksPerPage = input.carriedChecksPerPage;
 
   // Clone fresh results (don't mutate the caller's map / arrays). Preserve any
@@ -439,9 +433,7 @@ function parseCarriedPayload(payload?: string | null): CarriedPayload {
   }
 }
 
-function groupResultsByCategory(
-  results: Map<string, RuleRunResult>
-): Map<string, RuleRunResult[]> {
+function groupResultsByCategory(results: Map<string, RuleRunResult>): Map<string, RuleRunResult[]> {
   const groups = new Map<string, RuleRunResult[]>();
   for (const result of results.values()) {
     const category = result.meta.category;
@@ -547,9 +539,7 @@ export function emptyTally(): IssueTally {
 // checkName collisions).
 function checkAdditional(check: CheckResult): number {
   const extra = check.details?.additional;
-  return typeof extra === "number" && Number.isFinite(extra) && extra > 0
-    ? Math.floor(extra)
-    : 0;
+  return typeof extra === "number" && Number.isFinite(extra) && extra > 0 ? Math.floor(extra) : 0;
 }
 
 // `advisory` mirrors calculateRuleScore: warn checks in severity-"info" rules
@@ -559,7 +549,7 @@ export function addChecksToTally(
   tally: IssueTally,
   checks: CheckResult[],
   advisory = false,
-  syntheticPasses = 0
+  syntheticPasses = 0,
 ): void {
   const failUnitsByKey = new Map<string, number>();
   const failExtraByKey = new Map<string, number>();
@@ -581,10 +571,7 @@ export function addChecksToTally(
         failUnitsByKey.set(key, (failUnitsByKey.get(key) ?? 0) + units);
         const extra = checkAdditional(check);
         if (extra > 0) {
-          failExtraByKey.set(
-            key,
-            Math.max(failExtraByKey.get(key) ?? 0, extra)
-          );
+          failExtraByKey.set(key, Math.max(failExtraByKey.get(key) ?? 0, extra));
         }
       }
     }
@@ -592,10 +579,7 @@ export function addChecksToTally(
   }
   tally.warnUnits += warnKeys.size;
   for (const [key, units] of failUnitsByKey) {
-    tally.failUnits += Math.min(
-      units + (failExtraByKey.get(key) ?? 0),
-      ISSUE_PENALTY_ITEM_CAP
-    );
+    tally.failUnits += Math.min(units + (failExtraByKey.get(key) ?? 0), ISSUE_PENALTY_ITEM_CAP);
   }
   // Carried-clean synthetic passes (#918): each is one pass, so bump the pass
   // tally by the count — equivalent to N "carried (clean)" pass checks.
@@ -636,7 +620,7 @@ interface CategoryScoreResult {
 
 function calculateCategoryScoreFromResults(
   category: RuleCategory,
-  ruleResults: RuleRunResult[]
+  ruleResults: RuleRunResult[],
 ): CategoryScoreResult | null {
   let totalWeight = 0;
   let earnedWeight = 0;
@@ -670,7 +654,7 @@ function calculateCategoryScoreFromResults(
   const { multiplier } = calculateIssueDensityPenalty(
     tally.passed,
     tally.warnUnits,
-    tally.failUnits
+    tally.failUnits,
   );
   const score = Math.round(curved * multiplier);
 
@@ -704,20 +688,14 @@ function calculateCategoryScoreFromResults(
 // This function depends on rule implementation behavior:
 //   - robots-txt rule returns early when file is missing, creating only an 'exists' check
 //   - When robots.txt exists but blocks all, both 'exists' and 'disallow' checks are created
-function calculatePenaltyMultiplier(
-  results: Map<string, RuleRunResult>
-): number {
+function calculatePenaltyMultiplier(results: Map<string, RuleRunResult>): number {
   let multiplier = 1.0; // Start with no penalty
 
   // Check robots.txt rule - gracefully handles missing rule/checks
   const robotsRule = results.get(RULE_ID_ROBOTS_TXT);
   if (robotsRule) {
-    const disallowCheck = robotsRule.checks.find(
-      (c) => c.name === CHECK_NAME_ROBOTS_DISALLOW
-    );
-    const existsCheck = robotsRule.checks.find(
-      (c) => c.name === CHECK_NAME_ROBOTS_EXISTS
-    );
+    const disallowCheck = robotsRule.checks.find((c) => c.name === CHECK_NAME_ROBOTS_DISALLOW);
+    const existsCheck = robotsRule.checks.find((c) => c.name === CHECK_NAME_ROBOTS_EXISTS);
 
     // These are independent checks - both penalties can apply multiplicatively
     if (disallowCheck?.status === "fail") {
@@ -733,9 +711,7 @@ function calculatePenaltyMultiplier(
   // Check sitemap rule using constants to prevent silent failures
   const sitemapRule = results.get(RULE_ID_SITEMAP_EXISTS);
   if (sitemapRule) {
-    const existsCheck = sitemapRule.checks.find(
-      (c) => c.name === CHECK_NAME_SITEMAP_EXISTS
-    );
+    const existsCheck = sitemapRule.checks.find((c) => c.name === CHECK_NAME_SITEMAP_EXISTS);
     if (existsCheck?.status === "fail") {
       multiplier *= 1 - PENALTY_NO_SITEMAP; // Missing
     }
@@ -753,7 +729,7 @@ function calculatePenaltyMultiplier(
 function calculateIssueDensityPenalty(
   passed: number,
   warnUnits: number,
-  failUnits: number
+  failUnits: number,
 ): { multiplier: number; deduction: number } {
   const totalIssueUnits = warnUnits + failUnits;
   const totalUnits = passed + warnUnits + failUnits;
@@ -763,8 +739,7 @@ function calculateIssueDensityPenalty(
   }
 
   const weightedIssues =
-    failUnits * ISSUE_PENALTY_FAIL_WEIGHT +
-    warnUnits * ISSUE_PENALTY_WARNING_WEIGHT;
+    failUnits * ISSUE_PENALTY_FAIL_WEIGHT + warnUnits * ISSUE_PENALTY_WARNING_WEIGHT;
   const density = weightedIssues / totalUnits;
   const penalty = Math.min(ISSUE_PENALTY_MAX, density * ISSUE_PENALTY_SCALE);
 
@@ -849,8 +824,7 @@ export function deriveAuditStatus(s: AuditStatusSignals): {
   reason?: string;
   reasonCode?: AuditFailureReasonCode;
 } {
-  const BLOCKED_REASON =
-    "Site blocked the crawler (bot protection / auth / rate limit)";
+  const BLOCKED_REASON = "Site blocked the crawler (bot protection / auth / rate limit)";
   // A refusal shows up either as a stored 401/403 page OR as a 403 fetch that
   // failed before any page was stored (walled root, #792). Either means the
   // site actively blocked us, not that it was unreachable.
@@ -974,7 +948,7 @@ export function deriveAuditStatusFromPages(
   } = {},
   rootFailure?: AuditFailureDetail,
   undecodablePages = 0,
-  seedBlock?: WafBlockedPage
+  seedBlock?: WafBlockedPage,
 ): {
   status: AuditStatus;
   reason?: string;
@@ -1021,7 +995,7 @@ export function withoutUnobservedScores(healthScore: HealthScore): HealthScore {
  * it in; the dominant non-2xx status names the class.
  */
 function rootFailureFromPages(
-  pages: readonly { status: number }[]
+  pages: readonly { status: number }[],
 ): AuditFailureDetail | undefined {
   const errors = pages.filter((p) => p.status >= 400);
   if (errors.length === 0 || errors.length !== pages.length) return undefined;
@@ -1085,7 +1059,7 @@ export function calculateHealthScore(ctx: ScoringContext): HealthScore {
   for (const [category, ruleResultsInCategory] of categoryResults) {
     const result = calculateCategoryScoreFromResults(
       category as RuleCategory,
-      ruleResultsInCategory
+      ruleResultsInCategory,
     );
 
     // Skip non-applicable categories (no weight)
@@ -1105,9 +1079,7 @@ export function calculateHealthScore(ctx: ScoringContext): HealthScore {
 
     // Roll the same weights + item-aware tally up into the category's group.
     const group = getCategoryGroup(result.categoryScore.category);
-    const agg =
-      groupAgg.get(group) ??
-      { totalWeight: 0, earnedWeight: 0, tally: emptyTally() };
+    const agg = groupAgg.get(group) ?? { totalWeight: 0, earnedWeight: 0, tally: emptyTally() };
     agg.totalWeight += result.totalWeight;
     agg.earnedWeight += result.earnedWeight;
     addTally(agg.tally, result.tally);
@@ -1126,7 +1098,7 @@ export function calculateHealthScore(ctx: ScoringContext): HealthScore {
     const { multiplier: groupMultiplier } = calculateIssueDensityPenalty(
       agg.tally.passed,
       agg.tally.warnUnits,
-      agg.tally.failUnits
+      agg.tally.failUnits,
     );
     groups.push({
       group,
@@ -1167,8 +1139,7 @@ export function calculateHealthScore(ctx: ScoringContext): HealthScore {
   // skipped/info (an issue-free audit) ⇒ full score, as before. The genuine "no
   // audit happened" case (down/403/0-page) is caught by the empty-results guard
   // above (→ 0) and surfaced via AuditReport.status (#489).
-  const baseScore =
-    totalWeight > 0 ? (earnedWeight / totalWeight) * SCORE_SCALE : SCORE_SCALE;
+  const baseScore = totalWeight > 0 ? (earnedWeight / totalWeight) * SCORE_SCALE : SCORE_SCALE;
 
   // Apply curve to compress high scores
   const curvedScore = applyScoringCurve(baseScore);
@@ -1179,16 +1150,13 @@ export function calculateHealthScore(ctx: ScoringContext): HealthScore {
     calculateIssueDensityPenalty(
       overallTally.passed,
       overallTally.warnUnits,
-      overallTally.failUnits
+      overallTally.failUnits,
     );
 
-  const overall = Math.round(
-    curvedScore * penaltyMultiplier * issuePenaltyMultiplier
-  );
+  const overall = Math.round(curvedScore * penaltyMultiplier * issuePenaltyMultiplier);
 
   const penaltyFromCritical = curvedScore * (1 - penaltyMultiplier);
-  const penaltyFromIssues =
-    curvedScore * penaltyMultiplier * (1 - issuePenaltyMultiplier);
+  const penaltyFromIssues = curvedScore * penaltyMultiplier * (1 - issuePenaltyMultiplier);
 
   return {
     overall,
@@ -1226,7 +1194,7 @@ export interface RuleTally {
 export function foldRuleResultIntoTallies(
   tallies: Map<string, RuleTally>,
   ruleId: string,
-  result: RuleRunResult
+  result: RuleRunResult,
 ): void {
   let entry = tallies.get(ruleId);
   if (!entry) {
@@ -1234,12 +1202,7 @@ export function foldRuleResultIntoTallies(
     tallies.set(ruleId, entry);
   }
   const advisory = result.meta.severity === "info";
-  addChecksToTally(
-    entry.tally,
-    result.checks,
-    advisory,
-    result.syntheticPassCount ?? 0
-  );
+  addChecksToTally(entry.tally, result.checks, advisory, result.syntheticPassCount ?? 0);
 }
 
 /**
@@ -1260,7 +1223,7 @@ export function foldRuleResultIntoTallies(
  */
 export function calculateHealthScoreFromTallies(
   tallies: Map<string, RuleTally>,
-  penaltyResults: Map<string, RuleRunResult>
+  penaltyResults: Map<string, RuleRunResult>,
 ): HealthScore {
   if (tallies.size === 0) {
     return {
@@ -1312,7 +1275,7 @@ export function calculateHealthScoreFromTallies(
     const { multiplier } = calculateIssueDensityPenalty(
       catTally.passed,
       catTally.warnUnits,
-      catTally.failUnits
+      catTally.failUnits,
     );
     categories.push({
       category,
@@ -1329,9 +1292,7 @@ export function calculateHealthScoreFromTallies(
     addTally(overallTally, catTally);
 
     const group = getCategoryGroup(category);
-    const agg =
-      groupAgg.get(group) ??
-      { totalWeight: 0, earnedWeight: 0, tally: emptyTally() };
+    const agg = groupAgg.get(group) ?? { totalWeight: 0, earnedWeight: 0, tally: emptyTally() };
     agg.totalWeight += catTotalWeight;
     agg.earnedWeight += catEarnedWeight;
     addTally(agg.tally, catTally);
@@ -1347,7 +1308,7 @@ export function calculateHealthScoreFromTallies(
     const { multiplier: groupMultiplier } = calculateIssueDensityPenalty(
       agg.tally.passed,
       agg.tally.warnUnits,
-      agg.tally.failUnits
+      agg.tally.failUnits,
     );
     groups.push({
       group,
@@ -1370,23 +1331,19 @@ export function calculateHealthScoreFromTallies(
     return a.score - b.score;
   });
 
-  const baseScore =
-    totalWeight > 0 ? (earnedWeight / totalWeight) * SCORE_SCALE : SCORE_SCALE;
+  const baseScore = totalWeight > 0 ? (earnedWeight / totalWeight) * SCORE_SCALE : SCORE_SCALE;
   const curvedScore = applyScoringCurve(baseScore);
   const penaltyMultiplier = calculatePenaltyMultiplier(penaltyResults);
   const { multiplier: issuePenaltyMultiplier, deduction: issuePenalty } =
     calculateIssueDensityPenalty(
       overallTally.passed,
       overallTally.warnUnits,
-      overallTally.failUnits
+      overallTally.failUnits,
     );
 
-  const overall = Math.round(
-    curvedScore * penaltyMultiplier * issuePenaltyMultiplier
-  );
+  const overall = Math.round(curvedScore * penaltyMultiplier * issuePenaltyMultiplier);
   const penaltyFromCritical = curvedScore * (1 - penaltyMultiplier);
-  const penaltyFromIssues =
-    curvedScore * penaltyMultiplier * (1 - issuePenaltyMultiplier);
+  const penaltyFromIssues = curvedScore * penaltyMultiplier * (1 - issuePenaltyMultiplier);
 
   return {
     overall,
@@ -1417,7 +1374,7 @@ export function formatHealthScore(score: HealthScore): string {
   lines.push(
     score.overall === null
       ? "Health Score: N/A (no auditable pages)"
-      : `Health Score: ${score.overall}/100 (${getScoreGrade(score.overall)})`
+      : `Health Score: ${score.overall}/100 (${getScoreGrade(score.overall)})`,
   );
   lines.push("");
 
@@ -1427,19 +1384,16 @@ export function formatHealthScore(score: HealthScore): string {
 
     for (const cat of score.categories) {
       const bar =
-        "█".repeat(Math.floor(cat.score / 10)) +
-        "░".repeat(10 - Math.floor(cat.score / 10));
+        "█".repeat(Math.floor(cat.score / 10)) + "░".repeat(10 - Math.floor(cat.score / 10));
       lines.push(`${cat.name.padEnd(20)} ${bar} ${cat.score}%`);
-      lines.push(
-        `  Passed: ${cat.passed} | Warnings: ${cat.warnings} | Failed: ${cat.failed}`
-      );
+      lines.push(`  Passed: ${cat.passed} | Warnings: ${cat.warnings} | Failed: ${cat.failed}`);
     }
 
     lines.push("");
   }
 
   lines.push(
-    `Total: ${score.passedCount} passed, ${score.warningCount} warnings, ${score.errorCount} errors`
+    `Total: ${score.passedCount} passed, ${score.warningCount} warnings, ${score.errorCount} errors`,
   );
 
   return lines.join("\n");

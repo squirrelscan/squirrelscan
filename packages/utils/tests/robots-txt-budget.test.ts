@@ -63,8 +63,7 @@ describe("parseRobotsTxt stays bounded on adversarial files", () => {
 
   test("stacked agents over one very long rule stop at the character budget", () => {
     // ~290 KB: 2,000 copies of a 250,000-character rule would be 500 MB of rule text.
-    const content =
-      "User-agent: GPTBot\n".repeat(2_000) + `Disallow: /${"a".repeat(250_000)}\n`;
+    const content = "User-agent: GPTBot\n".repeat(2_000) + `Disallow: /${"a".repeat(250_000)}\n`;
     const { value, ms } = timed(() => parseRobotsTxt(content, URL_));
 
     expect(charsOf(value.rules)).toBeLessThanOrEqual(ROBOTS_MAX_RULE_CHARS);
@@ -117,12 +116,16 @@ describe("parseRobotsTxt stays bounded on adversarial files", () => {
     ["one 2 MB line with no line break", "User-agent: *" + " Disallow: /".repeat(170_000)],
     ["2 MB of CR-only line endings", "User-agent: a\rDisallow: /x\r".repeat(75_000)],
     ["2 MB of comments", "# x\n".repeat(500_000)],
-  ])("%s parses in bounded time", (_name, content) => {
-    const { value, ms } = timed(() => parseRobotsTxt(content, URL_));
+  ])(
+    "%s parses in bounded time",
+    (_name, content) => {
+      const { value, ms } = timed(() => parseRobotsTxt(content, URL_));
 
-    expect(entriesOf(value.rules)).toBeLessThanOrEqual(ROBOTS_MAX_DIRECTIVE_ENTRIES);
-    expect(ms).toBeLessThan(5_000);
-  }, 30_000);
+      expect(entriesOf(value.rules)).toBeLessThanOrEqual(ROBOTS_MAX_DIRECTIVE_ENTRIES);
+      expect(ms).toBeLessThan(5_000);
+    },
+    30_000,
+  );
 
   test("a rule of 100,000 wildcards matches in bounded time", () => {
     const pattern = `/${"*a".repeat(100_000)}$`;

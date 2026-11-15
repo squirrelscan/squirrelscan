@@ -82,7 +82,8 @@ export function classifyApiCatalog(p: WellKnownProbe | undefined): ApiCatalogSta
 
 const CATALOG_STATE_TEXT: Partial<Record<ApiCatalogState, string>> = {
   "empty-linkset": "the api-catalog at /.well-known/api-catalog has an empty linkset",
-  "invalid-linkset": "the api-catalog at /.well-known/api-catalog has a linkset that is not a list of link objects",
+  "invalid-linkset":
+    "the api-catalog at /.well-known/api-catalog has a linkset that is not a list of link objects",
   "not-a-catalog": "/.well-known/api-catalog is JSON without a linkset member",
   "openapi-document": "/.well-known/api-catalog serves an OpenAPI document, not a linkset catalog",
   "malformed-json": "/.well-known/api-catalog does not parse as JSON",

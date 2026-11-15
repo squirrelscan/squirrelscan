@@ -150,11 +150,7 @@ async function bothPaths(specs: PageSpec[]): Promise<CheckResult> {
 }
 
 /** `total` pages in the healthy form, except the last `drifted` in `other` form. */
-function mostly(
-  total: number,
-  drifted: number,
-  other: (i: number) => string
-): PageSpec[] {
+function mostly(total: number, drifted: number, other: (i: number) => string): PageSpec[] {
   return Array.from({ length: total }, (_, i) => ({
     canonical: i < total - drifted ? healthy(i) : other(i),
   }));
@@ -175,10 +171,7 @@ describe("core/canonical-form-drift — silence guards", () => {
   test("skips when too few pages carry a comparable canonical", async () => {
     // 20 pages crawled, but only 9 declare a canonical at all: no dimension
     // reaches its sample floor, so there is nothing to form a norm from.
-    const specs = [
-      ...uniform(9, healthy),
-      ...uniform(11, () => null),
-    ];
+    const specs = [...uniform(9, healthy), ...uniform(11, () => null)];
     const check = await bothPaths(specs);
     expect(check.status).toBe("skipped");
     expect(check.message).toContain(`${CANONICAL_FORM_MIN_SAMPLE} comparable pages`);
@@ -189,7 +182,7 @@ describe("core/canonical-form-drift — silence guards", () => {
     const specs = Array.from({ length: 20 }, (_, i) =>
       i % 2 === 0
         ? { canonical: url(i) }
-        : { canonical: `http://www.example.com/p${String(i).padStart(3, "0")}/?utm_source=x` }
+        : { canonical: `http://www.example.com/p${String(i).padStart(3, "0")}/?utm_source=x` },
     );
     const check = await bothPaths(specs);
     expect(check.status).toBe("skipped");
@@ -201,9 +194,11 @@ describe("core/canonical-form-drift — silence guards", () => {
     // The three axes the site IS consistent on are still judged, and pass.
     const check = await bothPaths(mostly(20, 7, (i) => `${url(i)}/`));
     expect(check.status).toBe("pass");
-    expect(
-      (check.details?.norms as { dimension: string }[]).map((n) => n.dimension)
-    ).toEqual(["scheme", "host", "tracking params"]);
+    expect((check.details?.norms as { dimension: string }[]).map((n) => n.dimension)).toEqual([
+      "scheme",
+      "host",
+      "tracking params",
+    ]);
   });
 
   test("non-2xx pages are excluded from the norm and never flagged", async () => {
@@ -278,7 +273,7 @@ describe("core/canonical-form-drift — template-uniform pages sit inside the no
 
   test("a consistently www + trailing-slash site is clean", async () => {
     const check = await bothPaths(
-      uniform(30, (i) => `https://www.example.com/p${String(i).padStart(3, "0")}/`)
+      uniform(30, (i) => `https://www.example.com/p${String(i).padStart(3, "0")}/`),
     );
     expect(check.status).toBe("pass");
     expect(check.message).toContain("host www");
@@ -296,7 +291,7 @@ describe("core/canonical-form-drift — template-uniform pages sit inside the no
     const check = await bothPaths(specs);
     expect(check.status).toBe("pass");
     const slashNorm = (check.details?.norms as { dimension: string; pages: number }[]).find(
-      (n) => n.dimension === "trailing slash"
+      (n) => n.dimension === "trailing slash",
     );
     expect(slashNorm?.pages).toBe(12);
   });
@@ -320,7 +315,7 @@ describe("core/canonical-form-drift — template-uniform pages sit inside the no
     expect(
       (check.details?.norms as { dimension: string; scope: string; form: string }[])
         .filter((n) => n.dimension === "trailing slash")
-        .map((n) => [n.scope, n.form])
+        .map((n) => [n.scope, n.form]),
     ).toEqual([
       ["/", "no trailing slash"],
       ["/blog", "trailing slash"],
@@ -340,7 +335,7 @@ describe("core/canonical-form-drift — template-uniform pages sit inside the no
     expect(
       (check.details?.norms as { dimension: string; scope: string }[])
         .filter((n) => n.dimension === "trailing slash")
-        .map((n) => n.scope)
+        .map((n) => n.scope),
     ).toEqual(["/"]);
   });
 
@@ -358,11 +353,11 @@ describe("core/canonical-form-drift — drift", () => {
     expect(check.status).toBe("warn");
     expect(check.value).toBe(4);
     expect(check.message).toContain(
-      "4 of 30 canonical(s) are declared in a different form than the rest of the site"
+      "4 of 30 canonical(s) are declared in a different form than the rest of the site",
     );
     expect(check.items).toHaveLength(1);
     expect(check.items?.[0]?.label).toBe(
-      "26 of 30 canonicals in / use no trailing slash, these 4 use trailing slash"
+      "26 of 30 canonicals in / use no trailing slash, these 4 use trailing slash",
     );
     expect(check.items?.[0]?.sourcePages).toHaveLength(4);
     expect(check.items?.[0]?.meta).toEqual({
@@ -378,7 +373,7 @@ describe("core/canonical-form-drift — drift", () => {
 
   test("catches www drift against an apex norm", async () => {
     const check = await bothPaths(
-      mostly(30, 4, (i) => `https://www.example.com/p${String(i).padStart(3, "0")}`)
+      mostly(30, 4, (i) => `https://www.example.com/p${String(i).padStart(3, "0")}`),
     );
     expect(check.status).toBe("warn");
     expect(check.items?.[0]?.meta?.dimension).toBe("host");
@@ -387,7 +382,7 @@ describe("core/canonical-form-drift — drift", () => {
 
   test("catches http drift against an https norm", async () => {
     const check = await bothPaths(
-      mostly(30, 4, (i) => `http://example.com/p${String(i).padStart(3, "0")}`)
+      mostly(30, 4, (i) => `http://example.com/p${String(i).padStart(3, "0")}`),
     );
     expect(check.status).toBe("warn");
     expect(check.items?.[0]?.meta?.dimension).toBe("scheme");
@@ -413,7 +408,7 @@ describe("core/canonical-form-drift — drift", () => {
     expect(check.status).toBe("warn");
     expect(check.items).toHaveLength(1);
     expect(check.items?.[0]?.label).toBe(
-      "12 of 14 canonicals in /blog use trailing slash, these 2 use no trailing slash"
+      "12 of 14 canonicals in /blog use trailing slash, these 2 use no trailing slash",
     );
     expect(check.items?.[0]?.meta?.scope).toBe("/blog");
   });
@@ -427,7 +422,7 @@ describe("core/canonical-form-drift — drift", () => {
 
   test("a page drifting on two axes counts once toward the drifted share", async () => {
     const check = await bothPaths(
-      mostly(30, 4, (i) => `http://www.example.com/p${String(i).padStart(3, "0")}`)
+      mostly(30, 4, (i) => `http://www.example.com/p${String(i).padStart(3, "0")}`),
     );
     // Two drifts reported (scheme + host), but 4 drifted pages, not 8.
     expect(check.items).toHaveLength(2);
@@ -442,10 +437,7 @@ describe("core/canonical-form-drift — drift", () => {
       return { canonical: healthy(i) };
     });
     const check = await bothPaths(specs);
-    expect(check.items?.map((item) => item.meta?.dimension)).toEqual([
-      "trailing slash",
-      "scheme",
-    ]);
+    expect(check.items?.map((item) => item.meta?.dimension)).toEqual(["trailing slash", "scheme"]);
   });
 });
 

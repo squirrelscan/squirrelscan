@@ -18,13 +18,7 @@ import type {
 
 export type { ClassifierSource, LinkSection };
 
-export type LinkPosition =
-  | "header"
-  | "footer"
-  | "nav"
-  | "content"
-  | "sidebar"
-  | "unknown";
+export type LinkPosition = "header" | "footer" | "nav" | "content" | "sidebar" | "unknown";
 
 // Re-export types for convenience
 export type {

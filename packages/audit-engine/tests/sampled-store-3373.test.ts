@@ -100,7 +100,8 @@ class MemStore implements SmartAuditStore {
     pages: Array<{ normalizedUrl: string; lastStatus: number }>,
     crawlId: string,
   ): Promise<void> {
-    for (const p of pages) await this.markPageRemoved(siteKey, p.normalizedUrl, crawlId, p.lastStatus);
+    for (const p of pages)
+      await this.markPageRemoved(siteKey, p.normalizedUrl, crawlId, p.lastStatus);
   }
   async compactFindings(): Promise<number> {
     return 0;
@@ -168,7 +169,12 @@ function fullReport(shapes: PageShape[]) {
                 sourcePages: [url(s.i)],
               })),
             }
-          : { name: "img-alt", status: "pass" as const, message: "All images have alt", pageUrl: url(s.i) },
+          : {
+              name: "img-alt",
+              status: "pass" as const,
+              message: "All images have alt",
+              pageUrl: url(s.i),
+            },
         {
           name: "img-alt-empty",
           status: s.emptyAlt ? ("warn" as const) : ("pass" as const),
@@ -198,7 +204,8 @@ function fullReport(shapes: PageShape[]) {
       checks: rows((s) => ({
         name: "ttfb",
         status: s.ttfb === "slow" ? "warn" : s.ttfb === "skipped" ? "skipped" : "pass",
-        message: s.ttfb === "slow" ? "Slow TTFB" : s.ttfb === "skipped" ? "No timing data" : "TTFB ok",
+        message:
+          s.ttfb === "slow" ? "Slow TTFB" : s.ttfb === "skipped" ? "No timing data" : "TTFB ok",
         pageUrl: url(s.i),
       })),
     },
@@ -298,7 +305,10 @@ function rescored(r: CloudSmartAuditsResult): {
 function comparable(s: ReturnType<typeof rescored>) {
   const byCategory = <T extends { category: string }>(list: T[]) =>
     [...list].sort((a, b) => (a.category < b.category ? -1 : a.category > b.category ? 1 : 0));
-  return { ...s, healthScore: { ...s.healthScore, categories: byCategory(s.healthScore.categories) } };
+  return {
+    ...s,
+    healthScore: { ...s.healthScore, categories: byCategory(s.healthScore.categories) },
+  };
 }
 
 /** The per-rule tallies a result is scored from. */
@@ -343,9 +353,21 @@ async function seed(
       });
     }
   }
-  await runCloudSmartAudits({ store: full, siteKey: "site", crawlId: "cli_1", now: FIRST, ...uncappedBody(report) });
+  await runCloudSmartAudits({
+    store: full,
+    siteKey: "site",
+    crawlId: "cli_1",
+    now: FIRST,
+    ...uncappedBody(report),
+  });
   const { body, rulePageCounts } = await cappedBody(report);
-  const first = await runCloudSmartAudits({ store: sampled, siteKey: "site", crawlId: "cli_1", now: FIRST, ...body });
+  const first = await runCloudSmartAudits({
+    store: sampled,
+    siteKey: "site",
+    crawlId: "cli_1",
+    now: FIRST,
+    ...body,
+  });
   const sampledPages = new Map<string, Set<string>>();
   for (const f of await sampled.getFindings("site", ["open"])) {
     let set = sampledPages.get(f.ruleId);
@@ -375,7 +397,13 @@ async function seed(
 async function reaudit(s: Seeded, shapes: PageShape[], opts: { capped?: boolean } = {}) {
   const report = fullReport(shapes);
   const body = opts.capped ? (await cappedBody(report)).body : uncappedBody(report);
-  const full = await runCloudSmartAudits({ store: s.full, siteKey: "site", crawlId: "cloud_2", now: SECOND, ...body });
+  const full = await runCloudSmartAudits({
+    store: s.full,
+    siteKey: "site",
+    crawlId: "cloud_2",
+    now: SECOND,
+    ...body,
+  });
   const estimated = await runCloudSmartAudits({
     store: s.sampled,
     siteKey: "site",
@@ -505,7 +533,11 @@ describe("partial re-audit over a sampled store (repo#3373)", () => {
           roll < 0.1
             ? { ...shape, status: 404 }
             : roll < 0.25
-              ? { ...shape, metaMissing: !shape.metaMissing, ttfb: rand() < 0.5 ? "skipped" : shape.ttfb }
+              ? {
+                  ...shape,
+                  metaMissing: !shape.metaMissing,
+                  ttfb: rand() < 0.5 ? "skipped" : shape.ttfb,
+                }
               : shape,
         );
       }
@@ -538,7 +570,11 @@ describe("partial re-audit over a sampled store (repo#3373)", () => {
         const unknown = [...rechecked].filter((u) => !sampled.has(u)).length;
         const names = Object.keys(s.marker.checkTallies[ruleId] ?? {}).length;
         const issues = (t: typeof refTally) => t.failed + t.warnings;
-        expect({ label, ruleId, ok: issues(estTally) - issues(refTally) <= unknown * names * ISSUE_PENALTY_ITEM_CAP }).toEqual({
+        expect({
+          label,
+          ruleId,
+          ok: issues(estTally) - issues(refTally) <= unknown * names * ISSUE_PENALTY_ITEM_CAP,
+        }).toEqual({
           label,
           ruleId,
           ok: true,
@@ -591,7 +627,13 @@ describe("partial re-audit over a sampled store (repo#3373)", () => {
       (c) => c.pageUrl === url(20),
     );
     const body = uncappedBody(report);
-    const full = await runCloudSmartAudits({ store: s.full, siteKey: "site", crawlId: "cloud_2", now: SECOND, ...body });
+    const full = await runCloudSmartAudits({
+      store: s.full,
+      siteKey: "site",
+      crawlId: "cloud_2",
+      now: SECOND,
+      ...body,
+    });
     const estimated = await runCloudSmartAudits({
       store: s.sampled,
       siteKey: "site",
@@ -600,8 +642,14 @@ describe("partial re-audit over a sampled store (repo#3373)", () => {
       ...body,
       sampledStore: s.marker,
     });
-    expect(tallies(full).get("a11y/img-alt")!.tally).toMatchObject({ failed: 15, failUnits: 45, passed: 24 });
-    expect(tallies(estimated).get("a11y/img-alt")!.tally).toEqual(tallies(full).get("a11y/img-alt")!.tally);
+    expect(tallies(full).get("a11y/img-alt")!.tally).toMatchObject({
+      failed: 15,
+      failUnits: 45,
+      passed: 24,
+    });
+    expect(tallies(estimated).get("a11y/img-alt")!.tally).toEqual(
+      tallies(full).get("a11y/img-alt")!.tally,
+    );
     expect(comparable(rescored(estimated))).toEqual(comparable(rescored(full)));
   }, 30_000);
 
@@ -634,7 +682,9 @@ describe("partial re-audit over a sampled store (repo#3373)", () => {
     expect(rescored(b.estimated).healthScore.overall!).toBeLessThanOrEqual(
       rescored(a.estimated).healthScore.overall!,
     );
-    expect(rescored(b.estimated).totals.warnings).toBeLessThan(rescored(a.estimated).totals.warnings);
+    expect(rescored(b.estimated).totals.warnings).toBeLessThan(
+      rescored(a.estimated).totals.warnings,
+    );
   }, 30_000);
 });
 
@@ -703,7 +753,12 @@ async function reauditChunked(
       if (isTouched(u, rows)) continue;
       expect(rows.every(isAggregatableCarriedRow)).toBe(true);
       const page = store.pages.get(u);
-      untouched.push({ normalizedUrl: u, rows, rendered: !!page, active: page?.state === "active" });
+      untouched.push({
+        normalizedUrl: u,
+        rows,
+        rendered: !!page,
+        active: page?.state === "active",
+      });
     }
     const { aggregate, sample } = aggregateUntouchedCarried(untouched);
     const sampleByUrl = new Map(sample.map((p) => [p.normalizedUrl, p]));
@@ -779,7 +834,11 @@ describe("chunked partial re-audit over a sampled store (repo#4626)", () => {
             roll < 0.1
               ? { ...shape, status: 404 }
               : roll < 0.25
-                ? { ...shape, metaMissing: !shape.metaMissing, ttfb: rand() < 0.5 ? "skipped" : shape.ttfb }
+                ? {
+                    ...shape,
+                    metaMissing: !shape.metaMissing,
+                    ttfb: rand() < 0.5 ? "skipped" : shape.ttfb,
+                  }
                 : shape,
           );
         }
@@ -828,7 +887,11 @@ describe("chunked partial re-audit over a sampled store (repo#4626)", () => {
 
 describe("one checks-per-page rule for the fold and the estimator (repo#3360)", () => {
   const perPage = {
-    "x/tri": { a: { passed: 2, failed: 0 }, b: { passed: 2, failed: 0 }, c: { passed: 1, failed: 0 } },
+    "x/tri": {
+      a: { passed: 2, failed: 0 },
+      b: { passed: 2, failed: 0 },
+      c: { passed: 1, failed: 0 },
+    },
   } as CheckTallies;
   const complete = { "x/tri": { a: { passed: 1, failed: 0 } } } as CheckTallies;
   test("complete-store reads the complete tallies (1 without), others the per-page tallies", () => {

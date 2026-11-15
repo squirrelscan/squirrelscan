@@ -13,12 +13,7 @@
 import type { EntityMap, EntityMapNode } from "./entity-map";
 
 /** Types whose identity a search engine is expected to reconcile site-wide. */
-export const IDENTITY_TYPES = [
-  "Organization",
-  "LocalBusiness",
-  "Person",
-  "WebSite",
-] as const;
+export const IDENTITY_TYPES = ["Organization", "LocalBusiness", "Person", "WebSite"] as const;
 
 /**
  * `@type` values that are a LocalBusiness or one of its subtypes.
@@ -178,12 +173,12 @@ export function normaliseName(name: string): string {
 export function primaryOrganization(map: EntityMap): EntityMapNode | null {
   const candidates = map.nodes.filter((node) =>
     node.types.some(
-      (type) => type === "Organization" || type === "Corporation" || isLocalBusinessType(type)
-    )
+      (type) => type === "Organization" || type === "Corporation" || isLocalBusinessType(type),
+    ),
   );
   if (candidates.length === 0) return null;
   return [...candidates].sort(
-    (a, b) => b.occurrences - a.occurrences || compareStrings(a.key, b.key)
+    (a, b) => b.occurrences - a.occurrences || compareStrings(a.key, b.key),
   )[0]!;
 }
 
@@ -430,9 +425,12 @@ export function isLocalBusinessPerPageNode(node: EntityMapNode, pagesCrawled: nu
 }
 
 /** How the site's publisher references split, heaviest first. Null with none. */
-export function publisherWeights(
-  map: EntityMap,
-): { ranked: Array<[string, number]>; canonical: string; outliers: Array<[string, number]>; looksLikeDrift: boolean } | null {
+export function publisherWeights(map: EntityMap): {
+  ranked: Array<[string, number]>;
+  canonical: string;
+  outliers: Array<[string, number]>;
+  looksLikeDrift: boolean;
+} | null {
   const publisherEdges = map.edges.filter((edge) => edge.predicate === "publisher");
   if (publisherEdges.length === 0) return null;
   // Counted by DECLARING WEIGHT, not by distinct target: one publisher named by

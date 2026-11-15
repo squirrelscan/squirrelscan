@@ -34,10 +34,7 @@ export function extractHeadings(doc: Document): HeadingHierarchy {
     // 400'd whole cloud publishes before the server-side clamp existed; capping
     // at the producer keeps every downstream consumer (dedup, outline, report)
     // on the same bounded text.
-    const text = clampItemString(
-      el.textContent?.trim() ?? "",
-      REPORT_LIMITS.maxMediumString
-    );
+    const text = clampItemString(el.textContent?.trim() ?? "", REPORT_LIMITS.maxMediumString);
 
     const heading: HeadingData = { level, text, order };
     // A placeholder the reader never sees is not an empty heading (#547).
@@ -58,7 +55,7 @@ export function extractHeadings(doc: Document): HeadingHierarchy {
 
   // Find duplicates
   const duplicateHeadings = headingTexts.filter(
-    (text, index) => headingTexts.indexOf(text) !== index && text !== ""
+    (text, index) => headingTexts.indexOf(text) !== index && text !== "",
   );
 
   // Build outline
@@ -105,5 +102,4 @@ export function analyzeHeadingIssues(doc: Document): HeadingIssues {
 }
 
 // Effect version for concurrent execution
-export const extractHeadingsEffect = (doc: Document) =>
-  Effect.sync(() => extractHeadings(doc));
+export const extractHeadingsEffect = (doc: Document) => Effect.sync(() => extractHeadings(doc));

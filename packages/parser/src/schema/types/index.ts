@@ -28,18 +28,11 @@ export type { FAQPageSchema, QuestionSchema } from "./faq";
 
 export type { EventSchema, PlaceSchema } from "./event";
 
-export type {
-  RecipeSchema,
-  NutritionInformationSchema,
-  HowToStepSchema,
-} from "./recipe";
+export type { RecipeSchema, NutritionInformationSchema, HowToStepSchema } from "./recipe";
 
 export type { VideoObjectSchema, AudioObjectSchema, ClipSchema } from "./video";
 
-export type {
-  BreadcrumbListSchema,
-  BreadcrumbListItemSchema,
-} from "./breadcrumb";
+export type { BreadcrumbListSchema, BreadcrumbListItemSchema } from "./breadcrumb";
 
 export type {
   WebSiteSchema,

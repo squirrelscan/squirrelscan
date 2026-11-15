@@ -20,10 +20,7 @@ function normalizedOrNull(url: string): string | null {
 // discovery stopped early) leaves URLs the site does list out of the corpus, so a crawled
 // page's absence from it is unknown, not a defect (#1760). An absent readState means the
 // read was never recorded, which is unknown too, not complete (#1869).
-function sitemapCorpusIncomplete(sitemaps: {
-  truncated?: boolean;
-  readState?: string;
-}): boolean {
+function sitemapCorpusIncomplete(sitemaps: { truncated?: boolean; readState?: string }): boolean {
   return sitemaps.truncated === true || sitemaps.readState !== "complete";
 }
 
@@ -149,7 +146,8 @@ const coverageRule: Rule = {
       checks.push({
         name: "sitemap-coverage",
         status: "skipped",
-        message: "Sitemap was not fully read (or its read state is unknown), so pages missing from it were not checked",
+        message:
+          "Sitemap was not fully read (or its read state is unknown), so pages missing from it were not checked",
         skipReason: "Sitemap incomplete (truncated, partly read or read state unknown)",
       });
     } else if (missingFromSitemap.length > 0) {
@@ -178,7 +176,10 @@ const coverageRule: Rule = {
     // whether it is linked or reachable is unknown (#1639). Those are moved to
     // their own info check, keeping the URLs and statuses as evidence, instead of
     // being dropped or reported as actionable.
-    const deniedByUrl = new Map<string, { status: number; reason: "rate_limited" | "waf_challenge" }>();
+    const deniedByUrl = new Map<
+      string,
+      { status: number; reason: "rate_limited" | "waf_challenge" }
+    >();
     for (const target of ctx.site?.fetchedTargets ?? []) {
       if (!target.rateLimited && !target.wafChallenge) continue;
       const key = normalizedOrNull(target.url);
@@ -199,7 +200,7 @@ const coverageRule: Rule = {
     // The engine's total counts every orphan, denied ones included.
     const orphanTotal = Math.max(
       (sitemaps.orphanPagesTotal ?? 0) - denied.length,
-      actionableOrphans.length
+      actionableOrphans.length,
     );
     if (denied.length > 0) {
       checks.push({
@@ -231,7 +232,7 @@ const coverageRule: Rule = {
       // thousands of items on a large sitemap (repo#2320).
       const { items, truncation } = sampleUrlItems(
         actionableOrphans.map((url) => ({ id: url })),
-        orphanTotal
+        orphanTotal,
       );
       // A crawl that stopped with URLs still queued (time limit, crawl-phase
       // backstop) may simply not have reached these: unknown, not an orphan.

@@ -4,12 +4,7 @@ import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 // Key CSP directives that should be present for XSS protection
 const _CRITICAL_DIRECTIVES = ["default-src", "script-src"];
-const _RECOMMENDED_DIRECTIVES = [
-  "style-src",
-  "img-src",
-  "frame-ancestors",
-  "object-src",
-];
+const _RECOMMENDED_DIRECTIVES = ["style-src", "img-src", "frame-ancestors", "object-src"];
 
 // Overly permissive source expressions that weaken CSP. Matched against whole
 // source tokens, never substrings (#427). `*` stands for every source whose
@@ -39,8 +34,7 @@ export const cspRule: Rule = {
   meta: {
     id: "security/csp",
     name: "Content Security Policy",
-    description:
-      "Checks for Content-Security-Policy header and validates directives",
+    description: "Checks for Content-Security-Policy header and validates directives",
     solution:
       "CSP prevents XSS attacks by restricting which resources can load. Start with a report-only policy to identify issues. Key directives: default-src 'self', script-src (avoid 'unsafe-inline'), img-src, style-src, frame-ancestors. Use nonces or hashes instead of 'unsafe-inline' for scripts. Test thoroughly as strict CSP can break functionality.",
     category: "security",
@@ -82,7 +76,8 @@ export const cspRule: Rule = {
     const cspReportOnly = headers["content-security-policy-report-only"];
     // #1735: every check names the page the header was read from and the header it read, as
     // structured evidence (`pages` is what affectedPages() counts; the header is what it says).
-    const headerName = csp || !cspReportOnly ? "content-security-policy" : "content-security-policy-report-only";
+    const headerName =
+      csp || !cspReportOnly ? "content-security-policy" : "content-security-policy-report-only";
     const evidence = (extra: Record<string, unknown> = {}) => ({
       pages: [firstPage.url],
       details: { pageUrl: firstPage.url, header: headerName, ...extra },
@@ -155,8 +150,7 @@ export const cspRule: Rule = {
     // is still judged from that chain. 'unsafe-eval' governs eval(), which no
     // element or attribute directive controls, so it stays on script-src /
     // default-src.
-    const scriptSrc =
-      directives.get("script-src") || directives.get("default-src") || "";
+    const scriptSrc = directives.get("script-src") || directives.get("default-src") || "";
     const elemSrc = directives.get("script-src-elem") ?? scriptSrc;
     const attrSrc = directives.get("script-src-attr") ?? scriptSrc;
     const weakValues = [
@@ -185,7 +179,7 @@ export const cspRule: Rule = {
           expected: "Use nonces or hashes instead of unsafe-inline",
           ...evidence({
             // The directive carrying 'unsafe-inline' (else 'unsafe-eval') and its value.
-            ...(carrier("'unsafe-inline'") ?? carrier("'unsafe-eval'")
+            ...((carrier("'unsafe-inline'") ?? carrier("'unsafe-eval'"))
               ? {
                   directive: (carrier("'unsafe-inline'") ?? carrier("'unsafe-eval'"))!.directive,
                   value: (carrier("'unsafe-inline'") ?? carrier("'unsafe-eval'"))!.value,
@@ -205,7 +199,9 @@ export const cspRule: Rule = {
           value: "Scripts can load from any domain",
           expected: "Restrict to specific trusted domains",
           ...evidence({
-            ...(carrier("*") ? { directive: carrier("*")!.directive, value: carrier("*")!.value } : {}),
+            ...(carrier("*")
+              ? { directive: carrier("*")!.directive, value: carrier("*")!.value }
+              : {}),
             directives: carriers,
           }),
         });
@@ -230,7 +226,8 @@ export const cspRule: Rule = {
           name: "csp-self-proxy-script",
           status: "info",
           message: `CSP 'self' allows a possible first-party proxy path ${paths.join(", ")}`,
-          value: "A same-origin path of this kind may proxy third-party code that runs under 'self'",
+          value:
+            "A same-origin path of this kind may proxy third-party code that runs under 'self'",
           expected: "Confirm the proxied script is trusted, or pin it with a nonce or hash",
           ...evidence({ paths }),
         });
@@ -283,7 +280,11 @@ function weakCarriers(
   scriptSrc: string,
 ): Array<{ directive: string; value: string; sources: string[] }> {
   const named = (specific: string) =>
-    directives.has(specific) ? specific : directives.has("script-src") ? "script-src" : "default-src";
+    directives.has(specific)
+      ? specific
+      : directives.has("script-src")
+        ? "script-src"
+        : "default-src";
   const rows = new Map<string, Set<string>>();
   const add = (directive: string, sources: string[]) => {
     if (sources.length === 0) return;
@@ -291,9 +292,18 @@ function weakCarriers(
     for (const source of sources) set.add(source);
     rows.set(directive, set);
   };
-  add(named("script-src-elem"), weakScriptSources(elemSrc).filter((v) => v !== "'unsafe-eval'"));
-  add(named("script-src-attr"), weakScriptSources(attrSrc).filter((v) => v === "'unsafe-inline'"));
-  add(named("script-src"), weakScriptSources(scriptSrc).filter((v) => v === "'unsafe-eval'"));
+  add(
+    named("script-src-elem"),
+    weakScriptSources(elemSrc).filter((v) => v !== "'unsafe-eval'"),
+  );
+  add(
+    named("script-src-attr"),
+    weakScriptSources(attrSrc).filter((v) => v === "'unsafe-inline'"),
+  );
+  add(
+    named("script-src"),
+    weakScriptSources(scriptSrc).filter((v) => v === "'unsafe-eval'"),
+  );
   return [...rows].map(([directive, sources]) => ({
     directive,
     value: (directives.get(directive) ?? "").slice(0, MAX_DIRECTIVE_VALUE),
@@ -359,7 +369,7 @@ function sourceTokens(value: string): Set<string> {
     value
       .toLowerCase()
       .split(/[\t\n\f\r ,]+/)
-      .filter(Boolean)
+      .filter(Boolean),
   );
 }
 

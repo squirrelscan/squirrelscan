@@ -62,7 +62,11 @@ function serveSite(): string {
 const HYDRATED_BODY = `<!doctype html><html lang="en"><head><title>Product</title></head><body><h1>Product</h1></body></html>`;
 
 /** A render that hydrated: the DOM comes back without the head scripts. `delayMs` is a slow render. */
-function hydratedRender(http: DocumentFetcher, delayMs: number, keepScripts: boolean): DocumentFetcher {
+function hydratedRender(
+  http: DocumentFetcher,
+  delayMs: number,
+  keepScripts: boolean,
+): DocumentFetcher {
   return {
     id: "cloud-render",
     capabilities: { jsRendering: true, cookies: false, screenshot: false },
@@ -115,7 +119,13 @@ async function audit(engine: "v1" | "v2", delayMs: number) {
       const preRules = yield* runStreamingPreRules(storage, crawlId, CONFIG, {});
       if (engine === "v1") {
         const siteContext = yield* buildSiteContext(stored);
-        const ran = yield* runRulesOnStorage(storage, crawlId, siteContext, CONFIG, preRules.assets);
+        const ran = yield* runRulesOnStorage(
+          storage,
+          crawlId,
+          siteContext,
+          CONFIG,
+          preRules.assets,
+        );
         return ran.siteRuleResults.get("security/leaked-secrets") ?? [];
       }
       const ran = yield* runStreamingRules(storage, crawlId, CONFIG, preRules.assets);
@@ -127,7 +137,10 @@ async function audit(engine: "v1" | "v2", delayMs: number) {
 
 describe("server-sent scripts that client code removed are still audited (#1769)", () => {
   for (const engine of ["v1", "v2"] as const) {
-    for (const [label, delayMs] of [["fast", 0], ["slow", 300]] as const) {
+    for (const [label, delayMs] of [
+      ["fast", 0],
+      ["slow", 300],
+    ] as const) {
       test(`${engine}, ${label} render: both scripts are read and the secrets name the page`, async () => {
         const run = await audit(engine, delayMs);
         // The stored page holds the union, the server-only scripts marked.

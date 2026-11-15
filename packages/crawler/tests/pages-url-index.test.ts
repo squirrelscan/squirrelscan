@@ -123,11 +123,7 @@ function page(url: string, fetchedAt: number, etag: string): PageRecord {
   } as PageRecord;
 }
 
-async function crawlWith(
-  store: SQLiteStorage,
-  index: number,
-  urls: string[]
-): Promise<string> {
+async function crawlWith(store: SQLiteStorage, index: number, urls: string[]): Promise<string> {
   const id = await run(
     store.createCrawl({
       baseUrl: "https://e.test",
@@ -135,7 +131,7 @@ async function crawlWith(
       status: "analyzed",
       config: {} as CrawlMetadata["config"],
       stats: STATS,
-    } as Omit<CrawlMetadata, "id">)
+    } as Omit<CrawlMetadata, "id">),
   );
   for (const url of urls) {
     await run(store.upsertPage(id, page(url, 1_000 + index, `v${index}`)));
@@ -222,8 +218,7 @@ describe("idx_pages_url_recency (#1912)", () => {
 
     // What the duplicated predicate says should go.
     const db = new Database(dbPath);
-    const expected = (db.prepare(SUPERSEDED).all(first) as Array<{ rowid: number }>)
-      .length;
+    const expected = (db.prepare(SUPERSEDED).all(first) as Array<{ rowid: number }>).length;
     db.close();
     // A url no later crawl saw is still the freshest record of it, so it stays:
     // 3 superseded, not 4.
@@ -244,7 +239,7 @@ describe("idx_pages_url_recency (#1912)", () => {
 
     const plan = planFor(
       "SELECT * FROM pages WHERE normalized_url = ? ORDER BY fetched_at DESC, rowid DESC LIMIT 1",
-      "https://e.test/a"
+      "https://e.test/a",
     );
     expect(plan).toContain("idx_pages_url_recency");
     expect(plan).not.toContain("SCAN pages");
@@ -256,13 +251,9 @@ describe("idx_pages_url_recency (#1912)", () => {
     // Same url, same fetched_at, two crawls. An index can reorder ties, so the
     // reader's explicit rowid tie-break has to be what decides it.
     const older = await crawlWith(store, 0, ["https://e.test/a"]);
-    await run(
-      store.upsertPage(older, page("https://e.test/a", 5_000, "older"))
-    );
+    await run(store.upsertPage(older, page("https://e.test/a", 5_000, "older")));
     const newer = await crawlWith(store, 0, []);
-    await run(
-      store.upsertPage(newer, page("https://e.test/a", 5_000, "newer"))
-    );
+    await run(store.upsertPage(newer, page("https://e.test/a", 5_000, "newer")));
 
     const cached = await run(store.getCachedPage("https://e.test/a"));
     expect(cached?.etag).toBe("newer");
@@ -295,7 +286,7 @@ describe("idx_pages_url_recency (#1912)", () => {
       )
       AND (SELECT retired_at FROM crawls c WHERE c.id = p.crawl_id) IS NOT NULL
     `,
-      first
+      first,
     );
     expect(plan).toContain("idx_pages_url_recency");
     // Nothing here may read a whole table.
@@ -309,19 +300,14 @@ describe("idx_pages_url_recency (#1912)", () => {
     await run(store.init());
     // A url only the first crawl saw: kept when that crawl is retired, because
     // it is still the freshest record of it.
-    const first = await crawlWith(store, 0, [
-      "https://e.test/a",
-      "https://e.test/only",
-    ]);
+    const first = await crawlWith(store, 0, ["https://e.test/a", "https://e.test/only"]);
     await crawlWith(store, 1, ["https://e.test/a"]);
     await run(store.retireCrawls([first]));
     expect(await run(store.getPageCount(first))).toBe(1);
     // Nothing has superseded it yet, so a sweep must not take it.
     const second = await crawlWith(store, 1, ["https://e.test/a"]);
     expect(await run(store.collectSupersededPages(second))).toBe(0);
-    expect(
-      (await run(store.getCachedPage("https://e.test/only")))?.etag
-    ).toBeDefined();
+    expect((await run(store.getCachedPage("https://e.test/only")))?.etag).toBeDefined();
 
     // A later crawl sees it again: now the kept row is dead and the sweep is
     // the only thing that will ever look at it.
@@ -377,7 +363,7 @@ describe("idx_pages_url_recency (#1912)", () => {
     raw.prepare("INSERT INTO schema_version (version) VALUES (25)").run();
     const stale = planFor(
       "SELECT * FROM pages WHERE normalized_url = ? ORDER BY fetched_at DESC, rowid DESC LIMIT 1",
-      "https://e.test/a"
+      "https://e.test/a",
     );
     raw.close();
     // Precondition: without the index this really is a scan, so the assertion
@@ -391,8 +377,8 @@ describe("idx_pages_url_recency (#1912)", () => {
     expect(
       planFor(
         "SELECT * FROM pages WHERE normalized_url = ? ORDER BY fetched_at DESC, rowid DESC LIMIT 1",
-        "https://e.test/a"
-      )
+        "https://e.test/a",
+      ),
     ).toContain("idx_pages_url_recency");
   });
 });

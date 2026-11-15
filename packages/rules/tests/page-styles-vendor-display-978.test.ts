@@ -12,17 +12,16 @@ import { buttonNameRule } from "../src/a11y/button-name";
 import { readDeclarations } from "../src/shared/page-styles";
 import type { ParsedPage, Rule, RuleContext } from "../src/types";
 
-async function statuses(
-  rule: Pick<Rule, "run">,
-  css: string,
-): Promise<Record<string, string>> {
+async function statuses(rule: Pick<Rule, "run">, css: string): Promise<Record<string, string>> {
   const url = "https://example.com/";
   const html = `<!doctype html><html lang="en"><head><title>t</title><style>${css}</style></head><body><main><div class="menu"><div class="item"><button type="button"></button></div></div></main></body></html>`;
-  const checks = (await rule.run({
-    page: { url, html, statusCode: 200, loadTime: 0, headers: {} },
-    parsed: parsePage(html, url) as ParsedPage,
-    options: {},
-  })).checks as CheckResult[];
+  const checks = (
+    await rule.run({
+      page: { url, html, statusCode: 200, loadTime: 0, headers: {} },
+      parsed: parsePage(html, url) as ParsedPage,
+      options: {},
+    })
+  ).checks as CheckResult[];
   return Object.fromEntries(checks.map((c) => [c.name, c.status]));
 }
 
@@ -121,8 +120,10 @@ describe("the issue's repro table: an unnamed button under the rule fails", () =
     expect(await statuses(buttonNameRule, ".item{display:-webkit-box;display:none}")).toEqual({
       "button-name": "pass",
     });
-    expect(await statuses(buttonNameRule, ".menu .item{display:-webkit-box;display:none}")).toEqual({
-      "button-name-unconfirmed": "warn",
-    });
+    expect(await statuses(buttonNameRule, ".menu .item{display:-webkit-box;display:none}")).toEqual(
+      {
+        "button-name-unconfirmed": "warn",
+      },
+    );
   });
 });

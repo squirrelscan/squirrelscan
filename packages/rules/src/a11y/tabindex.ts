@@ -46,11 +46,7 @@ export const tabindexRule: Rule = {
         const id = el.getAttribute("id");
         const cls = el.getAttribute("class")?.split(CLASS_SPLIT).find(Boolean);
 
-        const identifier = id
-          ? `${tagName}#${id}`
-          : cls
-            ? `${tagName}.${cls}`
-            : tagName;
+        const identifier = id ? `${tagName}#${id}` : cls ? `${tagName}.${cls}` : tagName;
 
         if (value > 100) {
           veryHighTabindex.push(`${identifier} (tabindex=${value})`);
@@ -68,9 +64,7 @@ export const tabindexRule: Rule = {
         items: veryHighTabindex.slice(0, 10).map((id) => ({ id })),
         details: {
           issue: "Very high tabindex values indicate misuse",
-          ...(veryHighTabindex.length > 10
-            ? { additional: veryHighTabindex.length - 10 }
-            : {}),
+          ...(veryHighTabindex.length > 10 ? { additional: veryHighTabindex.length - 10 } : {}),
         },
       });
     }
@@ -83,9 +77,7 @@ export const tabindexRule: Rule = {
         items: positiveTabindex.slice(0, 10).map((id) => ({ id })),
         details: {
           suggestion: "Use natural document order instead",
-          ...(positiveTabindex.length > 10
-            ? { additional: positiveTabindex.length - 10 }
-            : {}),
+          ...(positiveTabindex.length > 10 ? { additional: positiveTabindex.length - 10 } : {}),
         },
       });
     }

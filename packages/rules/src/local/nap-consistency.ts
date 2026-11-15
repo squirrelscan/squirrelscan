@@ -112,7 +112,7 @@ function accumulateSignal(
   rollup: NapSignalRollup,
   key: string | null,
   display: string | null,
-  url: string
+  url: string,
 ): void {
   if (!key || !display) return;
   rollup.sampleCount += 1;
@@ -166,13 +166,15 @@ function accumulatePage(rollup: NapRollup, record: NapPageRecord): void {
     rollup.phone,
     record.nap.phones[0] ?? null,
     record.nap.phoneFormats[0] ?? null,
-    record.url
+    record.url,
   );
   accumulateSignal(rollup.address, record.nap.address, record.nap.addressFormat, record.url);
 }
 
 /** Highest count wins; ties break on the key, so the pick never depends on order. */
-function modalEntry(byKey: Map<string, NapKeyBucket>): { key: string; bucket: NapKeyBucket } | null {
+function modalEntry(
+  byKey: Map<string, NapKeyBucket>,
+): { key: string; bucket: NapKeyBucket } | null {
   let best: { key: string; bucket: NapKeyBucket } | null = null;
   for (const [key, bucket] of byKey) {
     if (
@@ -209,7 +211,7 @@ function buildSignalCheck(name: string, label: string, rollup: NapSignalRollup):
   if (rollup.sampleCount < NAP_DRIFT_MIN_PAGES) {
     return skip(
       name,
-      `Only ${rollup.sampleCount} page(s) declare a ${label}; ${NAP_DRIFT_MIN_PAGES} needed to judge consistency`
+      `Only ${rollup.sampleCount} page(s) declare a ${label}; ${NAP_DRIFT_MIN_PAGES} needed to judge consistency`,
     );
   }
 
@@ -221,7 +223,7 @@ function buildSignalCheck(name: string, label: string, rollup: NapSignalRollup):
   if (agreement < NAP_MODAL_MIN_AGREEMENT) {
     return skip(
       name,
-      `No dominant ${label} across ${rollup.sampleCount} pages (the most common appears on ${agreementPct}%), so the site is too varied to judge`
+      `No dominant ${label} across ${rollup.sampleCount} pages (the most common appears on ${agreementPct}%), so the site is too varied to judge`,
     );
   }
 
@@ -258,7 +260,7 @@ function buildSignalCheck(name: string, label: string, rollup: NapSignalRollup):
   // One value, several renderings: the classic citation-hurting NAP drift.
   if (modal.bucket.formats.size > 1) {
     const variants = [...modal.bucket.formats.entries()].sort(
-      (a, b) => b[1].count - a[1].count || (a[0] < b[0] ? -1 : 1)
+      (a, b) => b[1].count - a[1].count || (a[0] < b[0] ? -1 : 1),
     );
     const items: CheckItem[] = variants.slice(0, NAP_MAX_ITEMS).map(([text, format]) => ({
       id: text,

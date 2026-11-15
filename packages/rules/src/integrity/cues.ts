@@ -6,7 +6,13 @@
 // widens the pattern and the prefilter together.
 
 /** Phrases that make a label a sign-in affordance by themselves. */
-export const AUTH_LABEL_PHRASES = ["sign in", "log in", "login", "continue with", "verify"] as const;
+export const AUTH_LABEL_PHRASES = [
+  "sign in",
+  "log in",
+  "login",
+  "continue with",
+  "verify",
+] as const;
 /** The subset that says the control is a sign-in, not only a continuation. */
 export const SIGN_IN_PHRASES = ["sign in", "log in", "login"] as const;
 /** Verbs of a provider's own button, `<verb> with <provider>`; a space may be missing inside one (`signin`). */

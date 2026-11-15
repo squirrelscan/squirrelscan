@@ -29,7 +29,12 @@
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "fast-xml-parser": "5.12.0",
-    "tailwindcss": "4.3.3"
+    "tailwindcss": "4.3.3",
+    "eslint-plugin-github": "^6.0.0",
+    "eslint-plugin-sonarjs": "^4.1.0",
+    "oxfmt": "^0.21.0",
+    "oxlint": "1.73.0",
+    "ultracite": "7.9.2"
   },
   "peerDependencies": {
     "react": "^19.2.7",
@@ -39,8 +44,10 @@
     "typecheck": "tsgo --noEmit",
     "build:css": "bun run scripts/build-css.ts",
     "build:css:check": "bun run scripts/build-css.ts --check",
-    "lint": "bun run build:css:check",
-    "preview": "bun run scripts/preview.ts"
+    "lint": "oxlint -c oxlint.config.mjs src/ tests/ scripts/",
+    "preview": "bun run scripts/preview.ts",
+    "format": "oxfmt src/ tests/ scripts/ --write",
+    "format:check": "oxfmt src/ tests/ scripts/ --check"
   },
   "private": true,
   "license": "MIT"

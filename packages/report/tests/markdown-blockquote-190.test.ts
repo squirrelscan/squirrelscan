@@ -135,9 +135,7 @@ describe("full-scan hint block boundary (#190)", () => {
     // The whole run is one hard-broken paragraph. A `>` anywhere in it opens a
     // quote that eats the remainder, which is how this bug happened; the
     // seed-redirect disclosure is a plain line for the same reason.
-    const block = metadataBlock(
-      renderMarkdown(partialScanReport(), { version: "1.2.3" })
-    );
+    const block = metadataBlock(renderMarkdown(partialScanReport(), { version: "1.2.3" }));
     expect(block.length).toBeGreaterThan(3);
     expect(block.filter(opensQuote)).toEqual([]);
 

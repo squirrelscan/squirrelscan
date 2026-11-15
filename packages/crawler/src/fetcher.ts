@@ -23,7 +23,11 @@ import {
   TECH_DETECT_HEADER_NAMES,
   TECH_DETECT_PRESENCE_HEADERS,
 } from "@squirrelscan/utils/constants";
-import { headersForRedirect, mergeHeaderRecords, techCookieNames } from "@squirrelscan/utils/headers";
+import {
+  headersForRedirect,
+  mergeHeaderRecords,
+  techCookieNames,
+} from "@squirrelscan/utils/headers";
 import {
   EgressRefusedError,
   egressGuardedSend,
@@ -128,12 +132,7 @@ export class CrawlError extends Error {
     return new CrawlError(url, "timeout", message);
   }
 
-  static network(
-    url: string,
-    message: string,
-    status?: number,
-    errorCode?: string,
-  ): CrawlError {
+  static network(url: string, message: string, status?: number, errorCode?: string): CrawlError {
     return new CrawlError(url, "network", message, undefined, status, errorCode);
   }
 
@@ -163,7 +162,16 @@ export class CrawlError extends Error {
     wafBlock?: WafBlockInfo,
     wafSuspect?: WafBlockInfo,
   ): CrawlError {
-    return new CrawlError(url, "blocked", message, undefined, status, undefined, wafBlock, wafSuspect);
+    return new CrawlError(
+      url,
+      "blocked",
+      message,
+      undefined,
+      status,
+      undefined,
+      wafBlock,
+      wafSuspect,
+    );
   }
 
   static rateLimit(url: string, retryAfterMs?: number, status?: number): CrawlError {
@@ -270,8 +278,7 @@ export function crawlErrorToFailureDetail(
         ...base,
         // The runtime code first, the message only when it names nothing we
         // recognize: the code is a stable contract, the prose is not.
-        code:
-          classifyFetchErrorCode(error.errorCode) ?? classifyAuditFailureReasonText(message),
+        code: classifyFetchErrorCode(error.errorCode) ?? classifyAuditFailureReasonText(message),
         detail: message,
       });
     }
@@ -735,7 +742,9 @@ function extractTechHeaders(headers: Headers, setCookies: string[]): Record<stri
   for (const name of TECH_DETECT_HEADER_NAMES) {
     const value = headers.get(name);
     if (value === null) continue;
-    out[name] = TECH_DETECT_PRESENCE_HEADERS.has(name) ? "1" : value.slice(0, TECH_DETECT_HEADER_MAX_CHARS);
+    out[name] = TECH_DETECT_PRESENCE_HEADERS.has(name)
+      ? "1"
+      : value.slice(0, TECH_DETECT_HEADER_MAX_CHARS);
     any = true;
   }
   const cookieNames = techCookieNames(setCookies);
@@ -876,7 +885,11 @@ export function applyWafGuard(
   return Effect.fail(wafBlockedError(url, status, challenge, servedAt));
 }
 
-function inspectWafBlock(status: number, headers: Headers, body?: string): WafChallengeDetail | null {
+function inspectWafBlock(
+  status: number,
+  headers: Headers,
+  body?: string,
+): WafChallengeDetail | null {
   // A 5xx other than 503 is the origin failing, not a perimeter provider
   // answering (a Cloudflare 502 page carries its ray id like a block page does).
   if (status >= 500 && status !== 503) return null;
@@ -970,7 +983,13 @@ export function applyStatusGuards(
 
   if (status === 403) {
     return Effect.fail(
-      CrawlError.blocked(url, undefined, 403, undefined, suspectWafBlock(status, headers, body) ?? undefined),
+      CrawlError.blocked(
+        url,
+        undefined,
+        403,
+        undefined,
+        suspectWafBlock(status, headers, body) ?? undefined,
+      ),
     );
   }
 
@@ -1282,49 +1301,50 @@ function fetchPageStandardOnce(
 
     const ttfb = finalTiming.responseTime - finalTiming.fetchStart;
 
-    const readBody = (maxBytes = DEFAULT_MAX_DOCUMENT_BODY_BYTES) => Effect.tryPromise({
-      // Race the body read against the interrupt signal so a stalled stream doesn't leak the host slot (#405).
-      try: async (signal) => {
-        let onAbort: (() => void) | undefined;
-        try {
-          return await Promise.race([
-            readBodyCapped(finalResponse, maxBytes),
-            new Promise<never>((_, reject) => {
-              // #1729: aborting the request as well as losing the race is what
-              // actually cancels the read. Rejecting alone only frees the FIBER
-              // — `readBodyCapped` would stay parked on `reader.read()` for the
-              // life of the process, holding the socket and its buffered chunks.
-              const giveUp = (): void => {
-                held?.abort();
-                reject(new Error("aborted"));
-              };
-              if (signal.aborted) return giveUp();
-              onAbort = giveUp;
-              signal.addEventListener("abort", onAbort, { once: true });
-            }),
-          ]);
-        } finally {
-          if (onAbort) signal.removeEventListener("abort", onAbort);
-        }
-      },
-      catch: (error) => {
-        // #1729: the deadline firing mid-body is a timeout, not a malformed
-        // response — report it as the same class as a headers-phase timeout so
-        // it is not miscounted as a parse failure.
-        if ((error as Error).name === "AbortError") return CrawlError.timeout(url);
-        // A body the runtime could not decompress is not a malformed response
-        // we can say nothing about: it is attributable to the declared
-        // encoding, and the crawl counts it so the report can say so.
-        if (isDecompressionError(error)) {
-          return CrawlError.decode(
-            url,
-            finalResponse.headers.get("content-encoding"),
-            (error as Error).message,
-          );
-        }
-        return CrawlError.parse(url, `Failed to read response: ${(error as Error).message}`);
-      },
-    });
+    const readBody = (maxBytes = DEFAULT_MAX_DOCUMENT_BODY_BYTES) =>
+      Effect.tryPromise({
+        // Race the body read against the interrupt signal so a stalled stream doesn't leak the host slot (#405).
+        try: async (signal) => {
+          let onAbort: (() => void) | undefined;
+          try {
+            return await Promise.race([
+              readBodyCapped(finalResponse, maxBytes),
+              new Promise<never>((_, reject) => {
+                // #1729: aborting the request as well as losing the race is what
+                // actually cancels the read. Rejecting alone only frees the FIBER
+                // — `readBodyCapped` would stay parked on `reader.read()` for the
+                // life of the process, holding the socket and its buffered chunks.
+                const giveUp = (): void => {
+                  held?.abort();
+                  reject(new Error("aborted"));
+                };
+                if (signal.aborted) return giveUp();
+                onAbort = giveUp;
+                signal.addEventListener("abort", onAbort, { once: true });
+              }),
+            ]);
+          } finally {
+            if (onAbort) signal.removeEventListener("abort", onAbort);
+          }
+        },
+        catch: (error) => {
+          // #1729: the deadline firing mid-body is a timeout, not a malformed
+          // response — report it as the same class as a headers-phase timeout so
+          // it is not miscounted as a parse failure.
+          if ((error as Error).name === "AbortError") return CrawlError.timeout(url);
+          // A body the runtime could not decompress is not a malformed response
+          // we can say nothing about: it is attributable to the declared
+          // encoding, and the crawl counts it so the report can say so.
+          if (isDecompressionError(error)) {
+            return CrawlError.decode(
+              url,
+              finalResponse.headers.get("content-encoding"),
+              (error as Error).message,
+            );
+          }
+          return CrawlError.parse(url, `Failed to read response: ${(error as Error).message}`);
+        },
+      });
 
     // A 403/503/429 needs a bounded body prefix to tell a bot-challenge
     // interstitial from an ordinary refusal/outage/throttle (#446/#802/#1253).
@@ -1350,16 +1370,20 @@ function fetchPageStandardOnce(
               // TIMEOUT. Swallowing it here would blame the origin with the
               // generic "Server error: 503" for what was actually our deadline.
               // Every other read failure still degrades to "no body".
-              return error.type === "timeout"
-                ? Effect.fail(error)
-                : Effect.succeed(undefined);
+              return error.type === "timeout" ? Effect.fail(error) : Effect.succeed(undefined);
             }),
           )
         : undefined;
 
     // Where the chain ended, so a challenge served after a redirect says so (#1258).
     const servedAt = hops.length > 0 ? hops[hops.length - 1]!.url : url;
-    yield* applyStatusGuards(url, finalResponse.status, finalResponse.headers, challengeBody, servedAt);
+    yield* applyStatusGuards(
+      url,
+      finalResponse.status,
+      finalResponse.headers,
+      challengeBody,
+      servedAt,
+    );
 
     const body = yield* readBody();
     // A challenge served as 200, 202 or 405 passes the status guards, so it is

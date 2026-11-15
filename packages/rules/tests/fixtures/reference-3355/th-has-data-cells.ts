@@ -78,9 +78,7 @@ export const referenceThHasDataCellsRule: Rule = {
     if (!doc) return { checks: [] };
     const checks: CheckResult[] = [];
 
-    const tables = doc.querySelectorAll(
-      "table:not([role='presentation']):not([role='none'])"
-    );
+    const tables = doc.querySelectorAll("table:not([role='presentation']):not([role='none'])");
 
     if (tables.length === 0) {
       checks.push({
@@ -122,9 +120,7 @@ export const referenceThHasDataCellsRule: Rule = {
           if (colHasTd) continue;
 
           reported.add(cell.el);
-          const text =
-            cell.el.textContent?.trim().slice(0, 30) ||
-            `row ${r + 1}, col ${c + 1}`;
+          const text = cell.el.textContent?.trim().slice(0, 30) || `row ${r + 1}, col ${c + 1}`;
           orphanedHeaders.push(text);
         }
       }
@@ -137,9 +133,7 @@ export const referenceThHasDataCellsRule: Rule = {
         message: `${orphanedHeaders.length} <th> element(s) without associated data cells`,
         items: orphanedHeaders.slice(0, 10).map((id) => ({ id })),
         details:
-          orphanedHeaders.length > 10
-            ? { additional: orphanedHeaders.length - 10 }
-            : undefined,
+          orphanedHeaders.length > 10 ? { additional: orphanedHeaders.length - 10 } : undefined,
       });
     } else {
       checks.push({

@@ -44,7 +44,17 @@ export const MAX_CHUNK_CHARS = 8 * 1024 * 1024;
 const CHROME_TAGS = new Set(["nav", "header", "footer", "aside", "form", "menu"]);
 const CHROME_ROLES = new Set(["navigation", "banner", "contentinfo", "complementary", "search"]);
 /** Elements whose text is not prose: code and markup the page carries. */
-const SKIP_TAGS = new Set(["script", "style", "template", "noscript", "pre", "code", "textarea", "svg", "math"]);
+const SKIP_TAGS = new Set([
+  "script",
+  "style",
+  "template",
+  "noscript",
+  "pre",
+  "code",
+  "textarea",
+  "svg",
+  "math",
+]);
 
 const collapse = (text: string): string => text.replace(/\s+/g, " ").trim();
 
@@ -67,7 +77,9 @@ export function extractContentSentences(doc: Doc): string[] {
   // Outermost landmarks only: `<main><article>` is one region, not two, and walking
   // both would collect every sentence twice.
   const found = Array.from(doc.querySelectorAll("main, article, [role=main]")).slice(0, 8);
-  const roots = found.filter((root) => !found.some((other) => other !== root && other.contains(root)));
+  const roots = found.filter(
+    (root) => !found.some((other) => other !== root && other.contains(root)),
+  );
   const body = documentBody(doc);
   if (roots.length === 0 && !body) return [];
 
@@ -80,10 +92,13 @@ export function extractContentSentences(doc: Doc): string[] {
     visited++;
     if (node.nodeType === 3) {
       const raw = node.textContent ?? "";
-      const text = collapse(raw.length > MAX_TEXT_NODE_CHARS ? raw.slice(0, MAX_TEXT_NODE_CHARS) : raw);
+      const text = collapse(
+        raw.length > MAX_TEXT_NODE_CHARS ? raw.slice(0, MAX_TEXT_NODE_CHARS) : raw,
+      );
       if (text.length >= MIN_SENTENCE_CHARS && candidates.length < MAX_CANDIDATES) {
         const words = text.split(" ").length;
-        if (words >= MIN_SENTENCE_WORDS) candidates.push({ text: text.slice(0, MAX_SENTENCE_CHARS), order: order++ });
+        if (words >= MIN_SENTENCE_WORDS)
+          candidates.push({ text: text.slice(0, MAX_SENTENCE_CHARS), order: order++ });
       }
     } else if (node.nodeType === 1) {
       const el = node as Element;
@@ -127,7 +142,15 @@ const hexValue = (c: number): number =>
   c >= 48 && c <= 57 ? c - 48 : c >= 65 && c <= 70 ? c - 55 : c >= 97 && c <= 102 ? c - 87 : -1;
 
 const isSpaceCode = (c: number): boolean =>
-  c === 32 || c === 10 || c === 13 || c === 9 || c === 12 || c === 11 || c === 160 || c === 0x2028 || c === 0x2029;
+  c === 32 ||
+  c === 10 ||
+  c === 13 ||
+  c === 9 ||
+  c === 12 ||
+  c === 11 ||
+  c === 160 ||
+  c === 0x2028 ||
+  c === 0x2029;
 
 /** A whole code point written as UTF-16 code units into `out` at `pos`; returns the new position. */
 function putCodePoint(out: Uint16Array, pos: number, value: number): number {
@@ -184,7 +207,8 @@ export function normalizeScriptText(content: string): string | null {
     if (c === 92 /* \ */ && i + 1 < n) {
       const e = content.charCodeAt(i + 1);
       let consumed = 2;
-      if (e === 110 || e === 114 || e === 116 || e === 102 || e === 118) put(32); // n r t f v
+      if (e === 110 || e === 114 || e === 116 || e === 102 || e === 118)
+        put(32); // n r t f v
       else if (e === 10 || e === 13) {
         // line continuation: nothing
       } else if (e === 117 /* u */) {
@@ -266,7 +290,12 @@ export function normalizeScriptText(content: string): string | null {
   // Back to a string in slices, so no argument list is larger than the engine allows.
   const pieces: string[] = [];
   for (let k = 0; k < pos; k += 8192) {
-    pieces.push(String.fromCharCode.apply(null, out.subarray(k, Math.min(pos, k + 8192)) as unknown as number[]));
+    pieces.push(
+      String.fromCharCode.apply(
+        null,
+        out.subarray(k, Math.min(pos, k + 8192)) as unknown as number[],
+      ),
+    );
   }
   return pieces.join("");
 }
@@ -331,7 +360,11 @@ export interface NeedleSearch {
  * Stops early once every needle is found, or at `deadlineMs` (a
  * `performance.now()` value; checked every 65 536 positions).
  */
-export function findNeedles(haystack: string, index: NeedleIndex, deadlineMs = Number.POSITIVE_INFINITY): NeedleSearch {
+export function findNeedles(
+  haystack: string,
+  index: NeedleIndex,
+  deadlineMs = Number.POSITIVE_INFINITY,
+): NeedleSearch {
   const found = new Set<string>();
   const result: NeedleSearch = { found, positions: 0, verifications: 0, truncated: false };
   const n = haystack.length;
@@ -361,7 +394,11 @@ export function findNeedles(haystack: string, index: NeedleIndex, deadlineMs = N
     }
     const next = start + WINDOW;
     if (next >= n) return result;
-    h = (Math.imul(h, HASH_BASE) + haystack.charCodeAt(next) - Math.imul(haystack.charCodeAt(start), power)) | 0;
+    h =
+      (Math.imul(h, HASH_BASE) +
+        haystack.charCodeAt(next) -
+        Math.imul(haystack.charCodeAt(start), power)) |
+      0;
     if ((start & 0xffff) === 0xffff && performance.now() > deadlineMs) {
       result.truncated = true;
       return result;
@@ -403,7 +440,8 @@ export function estimateProseShare(decoded: string): number {
   let spaces = 0;
   const closeRun = (end: number) => {
     const length = end - runStart;
-    if (length >= MIN_PROSE_RUN && spaces / length >= 0.1 && spaces / length <= 0.3) prose += length;
+    if (length >= MIN_PROSE_RUN && spaces / length >= 0.1 && spaces / length <= 0.3)
+      prose += length;
   };
   for (let i = 0; i < n; i++) {
     if (isProseChar(decoded.charCodeAt(i))) {

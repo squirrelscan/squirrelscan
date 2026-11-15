@@ -30,8 +30,8 @@ describe("renderJson resume outcome (#1658)", () => {
             reason: "crawl-finished",
             message: "previous crawl c1 finished (analyzed), nothing left to resume",
           },
-        })
-      )
+        }),
+      ),
     );
     expect(parsed.meta.resume).toEqual({
       requested: true,

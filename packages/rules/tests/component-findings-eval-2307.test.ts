@@ -117,7 +117,10 @@ describe("component findings evaluation (repo#2307)", () => {
         const { checks } = await runCaseRules(evalCase, "forward");
         const legacy = buildReport(evalCase, ruleResults(checks, true));
         const json = JSON.parse(renderJson(legacy)) as {
-          issues: Array<{ componentFixGroups?: unknown; checks: Array<{ componentOccurrences?: unknown }> }>;
+          issues: Array<{
+            componentFixGroups?: unknown;
+            checks: Array<{ componentOccurrences?: unknown }>;
+          }>;
         };
         expect(json.issues.length).toBeGreaterThan(0);
         for (const issue of json.issues) {

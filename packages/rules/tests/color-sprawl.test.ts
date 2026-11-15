@@ -30,7 +30,11 @@ function html(s: Spec): string {
 
 const parse = (s: Spec) => parsePage(html(s), s.url);
 
-function legacy(specs: Spec[], options: Record<string, unknown> = {}, stylesheets?: StylesheetContentData[]): RuleContext {
+function legacy(
+  specs: Spec[],
+  options: Record<string, unknown> = {},
+  stylesheets?: StylesheetContentData[],
+): RuleContext {
   return {
     ...BASE,
     options,
@@ -57,7 +61,11 @@ function streaming(
   } as unknown as RuleContext;
 }
 
-function both(specs: Spec[], options: Record<string, unknown> = {}, stylesheets?: StylesheetContentData[]) {
+function both(
+  specs: Spec[],
+  options: Record<string, unknown> = {},
+  stylesheets?: StylesheetContentData[],
+) {
   const a = colorSprawlRule.run(legacy(specs, options, stylesheets)) as { checks: any[] };
   const b = colorSprawlRule.run(streaming(specs, options, stylesheets)) as { checks: any[] };
   expect(b.checks).toEqual(a.checks);
@@ -100,7 +108,9 @@ describe("content/color-sprawl", () => {
   });
 
   test("pass: one palette used everywhere", () => {
-    const c = both(pages(12, () => ({ style: "p{color:#111111;background:#ffffff} a{color:#0057b8}" })));
+    const c = both(
+      pages(12, () => ({ style: "p{color:#111111;background:#ffffff} a{color:#0057b8}" })),
+    );
     expect(c).toHaveLength(1);
     expect(c[0].status).toBe("pass");
     expect(c[0].message).toContain("inline styles only");
@@ -109,7 +119,10 @@ describe("content/color-sprawl", () => {
   test("warn: near-duplicate grays are counted and named", () => {
     // Seven grays that collapse to two perceptual clusters, spread over every page.
     const grays = ["#303030", "#313131", "#323232", "#333333", "#343434", "#353535", "#363636"];
-    const c = both(pages(12, () => ({ style: grays.map((g, i) => `.g${i}{color:${g}}`).join("") })), { max_redundant: 3 });
+    const c = both(
+      pages(12, () => ({ style: grays.map((g, i) => `.g${i}{color:${g}}`).join("") })),
+      { max_redundant: 3 },
+    );
     const sprawl = c.find((x) => x.name === "color-sprawl")!;
     expect(sprawl.status).toBe("warn");
     expect(sprawl.value).toBe(5);
@@ -139,7 +152,9 @@ describe("content/color-sprawl", () => {
   });
 
   test("warn: a chromatic color used on one page only is a palette outlier", () => {
-    const specs = pages(12, (i) => ({ style: i === 7 ? "p{color:#111111} b{color:#e91e63}" : "p{color:#111111}" }));
+    const specs = pages(12, (i) => ({
+      style: i === 7 ? "p{color:#111111} b{color:#e91e63}" : "p{color:#111111}",
+    }));
     const c = both(specs);
     const out = c.find((x) => x.name === "palette-outlier")!;
     expect(out.status).toBe("warn");
@@ -149,8 +164,12 @@ describe("content/color-sprawl", () => {
 
   test("no false positive: a token-driven design system stays clean", () => {
     // A 40-step scale defined once in :root, referenced through var() everywhere.
-    const scale = Array.from({ length: 40 }, (_, i) => `--gray-${i}:#${(0x20 + i).toString(16).repeat(3)};`).join("");
-    const refs = "p{color:var(--gray-3)} a{color:var(--gray-4);border-color:var(--gray-5)} h1{background:var(--gray-1)}";
+    const scale = Array.from(
+      { length: 40 },
+      (_, i) => `--gray-${i}:#${(0x20 + i).toString(16).repeat(3)};`,
+    ).join("");
+    const refs =
+      "p{color:var(--gray-3)} a{color:var(--gray-4);border-color:var(--gray-5)} h1{background:var(--gray-1)}";
     const specs = pages(12, () => ({ style: `:root{${scale}}${refs}` }));
     const c = both(specs);
     expect(c).toHaveLength(1);
@@ -161,14 +180,20 @@ describe("content/color-sprawl", () => {
   });
 
   test("a custom property named like a color property is not read as one", () => {
-    const u = extractColorUsage(parse({ url: "https://example.com/", style: ":root{--x1color:red;--bg-color:#123456}" }).document);
+    const u = extractColorUsage(
+      parse({ url: "https://example.com/", style: ":root{--x1color:red;--bg-color:#123456}" })
+        .document,
+    );
     expect(u.colors).toEqual([]);
     expect(u.tokenColors).toBe(2);
   });
 
   describe("linked stylesheets define the palette (ctx.site.stylesheets)", () => {
     const outlierSpecs = () =>
-      pages(12, (i) => ({ link: true, style: i === 7 ? "p{color:#111111} b{color:#e91e63}" : "p{color:#111111}" }));
+      pages(12, (i) => ({
+        link: true,
+        style: i === 7 ? "p{color:#111111} b{color:#e91e63}" : "p{color:#111111}",
+      }));
 
     test("a brand color a read stylesheet uses on every page is not an outlier", () => {
       const sheets = [{ url: "https://example.com/a.css", content: ".brand{color:#e91e63}" }];
@@ -195,7 +220,9 @@ describe("content/color-sprawl", () => {
       const c = both(outlierSpecs(), {}, sheets);
       const out = c.find((x) => x.name === "palette-outlier")!;
       expect(out.status).toBe("warn");
-      expect(out.message).toContain("1 color(s) used inline on only one page and in no read stylesheet (");
+      expect(out.message).toContain(
+        "1 color(s) used inline on only one page and in no read stylesheet (",
+      );
       expect(out.message).toContain("1 linked stylesheet(s) read for the palette, 1 not read");
       expect(out.details.stylesheetsNotRead).toBe(1);
     });
@@ -203,7 +230,9 @@ describe("content/color-sprawl", () => {
     test("with no stylesheet body read the result still says inline styles only", () => {
       const c = both(outlierSpecs(), {}, [{ url: "https://example.com/a.css" }]);
       const out = c.find((x) => x.name === "palette-outlier")!;
-      expect(out.message).toContain("1 color(s) used inline on only one page (inline styles only; linked stylesheets are not read");
+      expect(out.message).toContain(
+        "1 color(s) used inline on only one page (inline styles only; linked stylesheets are not read",
+      );
       expect(out.details.coverage).toBe("inline-only");
     });
   });

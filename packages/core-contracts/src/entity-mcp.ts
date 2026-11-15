@@ -124,7 +124,7 @@ export const ENTITY_MCP_LIMITS = {
  * the gainedId matching rule is on compare_entities for exactly that reason.
  */
 export const ENTITY_MCP_LOOP =
-  "Fix-and-verify loop: call list_entities with problem=\"no-id\" to find entities declared on several pages with nothing to tie them together, give each one an absolute @id, re-run the audit with run_audit, then call compare_entities and check that gainedId contains the keys you fixed. gainedId is the only confirmation that the fix landed: an entity that gained an @id changes key, so it would otherwise look like one removal plus one addition. Check each entry's coverage field before calling it done: \"proven\" means the newer audit visited every page that declared the broken version AND found the replacement on all of them, \"partial\" means one of those could not be established.";
+  'Fix-and-verify loop: call list_entities with problem="no-id" to find entities declared on several pages with nothing to tie them together, give each one an absolute @id, re-run the audit with run_audit, then call compare_entities and check that gainedId contains the keys you fixed. gainedId is the only confirmation that the fix landed: an entity that gained an @id changes key, so it would otherwise look like one removal plus one addition. Check each entry\'s coverage field before calling it done: "proven" means the newer audit visited every page that declared the broken version AND found the replacement on all of them, "partial" means one of those could not be established.';
 
 /**
  * Tool descriptions, identical on both servers.
@@ -160,7 +160,8 @@ export const ENTITY_MCP_FIELD_DESCRIPTIONS = {
   common: {
     website_id:
       "The registered website to read, on the hosted server. Ignored by the local server, which reads the project store. When both this and run_id are given, run_id wins and this is ignored; naming a run of a different website is answered about the run.",
-    run_id: "A specific audit run to read. Defaults to the latest audit that stored at least one entity, which is NOT always the latest audit: an audit that stored none is passed over, because the store cannot tell a site that declares nothing from an audit that predates the entity map. When one is passed over, warnings names it. If you are checking whether a change landed, name the run.",
+    run_id:
+      "A specific audit run to read. Defaults to the latest audit that stored at least one entity, which is NOT always the latest audit: an audit that stored none is passed over, because the store cannot tell a site that declares nothing from an audit that predates the entity map. When one is passed over, warnings names it. If you are checking whether a change landed, name the run.",
     type: "Only entities carrying one of these @type values. Case-insensitive. Several values are an OR: an entity matching any one of them is kept.",
     page: `Only entities declared on a page matching one of these values. ${ENTITY_PAGE_MATCH_RULE} Several values are an OR.`,
     problem: `Only entities with one of these problems: ${ENTITY_MCP_PROBLEMS.join(", ")}. Several values are an OR.`,
@@ -168,17 +169,20 @@ export const ENTITY_MCP_FIELD_DESCRIPTIONS = {
     include_page_local:
       "Include entities that describe one page rather than the site's subject matter, such as a page's own WebPage or BreadcrumbList. False by default because they usually outnumber everything else.",
     limit: `Entities to return. Default ${ENTITY_MCP_LIMITS.defaultLimit}, maximum ${ENTITY_MCP_LIMITS.maxLimit}.`,
-    offset: "Entities to skip, for paging through a result larger than limit. Default 0. Ordering is by page count descending, then by key, and is stable across calls on one audit, so paging does not repeat or skip a row.",
+    offset:
+      "Entities to skip, for paging through a result larger than limit. Default 0. Ordering is by page count descending, then by key, and is stable across calls on one audit, so paging does not repeat or skip a row.",
   },
   get_entity: {
-    key: "The entity key, its @id, or its name. Resolved in that order of certainty: an exact @id match, then an exact key match, then the key formed by prefixing the value with \"id:\", then an exact case-insensitive name, and only then a case-insensitive substring of a name. The first match wins.",
+    key: 'The entity key, its @id, or its name. Resolved in that order of certainty: an exact @id match, then an exact key match, then the key formed by prefixing the value with "id:", then an exact case-insensitive name, and only then a case-insensitive substring of a name. The first match wins.',
   },
   get_entity_graph: {
     format: `How to render the graph: ${ENTITY_MCP_GRAPH_FORMATS.join(", ")}. Defaults to json.`,
   },
   compare_entities: {
-    from_run_id: "The older audit. Defaults to the one before the newer audit, for the same site. When both runs are named they are ordered chronologically whichever field named them, so a diff always reads forward in time; read fromRunId and toRunId on the result for the direction actually used.",
-    to_run_id: "The newer audit. Defaults to the latest audit that stored at least one entity. When both runs are named they are ordered chronologically whichever field named them.",
+    from_run_id:
+      "The older audit. Defaults to the one before the newer audit, for the same site. When both runs are named they are ordered chronologically whichever field named them, so a diff always reads forward in time; read fromRunId and toRunId on the result for the direction actually used.",
+    to_run_id:
+      "The newer audit. Defaults to the latest audit that stored at least one entity. When both runs are named they are ordered chronologically whichever field named them.",
     occurrence_threshold:
       "Smallest occurrence change worth reporting. Default 1, meaning every change. Raise it on a site that publishes constantly, where a site-wide entity moves by one on every audit and would otherwise fill the change set with noise. Affects occurrenceDeltas only: entities added, removed, or changing their @id are reported whatever this is set to.",
   },
@@ -407,7 +411,7 @@ export const EntityMcpGraphResultSchema = Type.Object({
       key: Type.String(),
       /** The placeholder this export used. The site does not publish it. */
       id: Type.String(),
-    })
+    }),
   ),
   truncation: EntityMcpTruncationSchema,
   warnings: EntityMcpWarningsSchema,
@@ -480,7 +484,12 @@ export type EntityMcpFindingsResult = Static<typeof EntityMcpFindingsResultSchem
 export const NO_TRUNCATION: EntityMcpTruncation = { truncated: false, notice: "" };
 
 /** Build a truncation notice that says what was cut and how to get the rest. */
-export function truncationNotice(shown: number, total: number, what: string, remedy: string): EntityMcpTruncation {
+export function truncationNotice(
+  shown: number,
+  total: number,
+  what: string,
+  remedy: string,
+): EntityMcpTruncation {
   if (shown >= total) return NO_TRUNCATION;
   return {
     truncated: true,

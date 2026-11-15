@@ -2,7 +2,12 @@
 
 import type { WellKnownPath, WellKnownProbe } from "@squirrelscan/core-contracts";
 
-import { NOT_CHECKED, answeredWellKnown, notApprovedPath, notCheckedCheck } from "../ax/discovery-probe-state";
+import {
+  NOT_CHECKED,
+  answeredWellKnown,
+  notApprovedPath,
+  notCheckedCheck,
+} from "../ax/discovery-probe-state";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 const CANONICAL_PATH: WellKnownPath = "/.well-known/security.txt";
@@ -208,7 +213,12 @@ export const securityTxtRule: Rule = {
     // Only 404 and 410 say the file is not there. A 401/403 (often a WAF or a
     // bot rule), a 429 or a 5xx says nothing about the file.
     // The legacy path stands in when the canonical one was not requested (not approved, not sent) (#1794).
-    const decisive = canonical && canonical.status > 0 ? canonical : notApprovedPath(wk, CANONICAL_PATH) ? legacy : canonical;
+    const decisive =
+      canonical && canonical.status > 0
+        ? canonical
+        : notApprovedPath(wk, CANONICAL_PATH)
+          ? legacy
+          : canonical;
     if (decisive && MISSING_STATUSES.has(decisive.status)) {
       checks.push({
         name: "security-txt",

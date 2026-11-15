@@ -106,7 +106,8 @@ async function audit(engine: "v1" | "streaming") {
         const siteContext = yield* buildSiteContext(stored);
         result = yield* runRulesOnStorage(storage, crawlId, siteContext, CONFIG, preRules.assets);
       }
-      const checks = (result.ruleResultsMap.get("links/broken-links")?.checks ?? []) as CheckResult[];
+      const checks = (result.ruleResultsMap.get("links/broken-links")?.checks ??
+        []) as CheckResult[];
       return { probe: preRules.assets.internalLinkProbe, checks };
     }).pipe(Effect.ensuring(storage.close().pipe(Effect.orDie))),
   );
@@ -121,7 +122,11 @@ for (const engine of ["v1", "streaming"] as const) {
       const rows = checks.filter((c) => c.name === "broken-links");
       expect(rows.map((c) => c.status)).toEqual(["pass"]);
       // /, /about and /pricing: nothing the 429 body links.
-      expect(rows[0]!.details).toMatchObject({ linkTargets: 3, unfetchedTargets: 0, notFetched: {} });
+      expect(rows[0]!.details).toMatchObject({
+        linkTargets: 3,
+        unfetchedTargets: 0,
+        notFetched: {},
+      });
     });
   });
 }

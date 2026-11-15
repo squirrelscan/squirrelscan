@@ -107,9 +107,9 @@ describe("clampAuditPages", () => {
     expect(clampAuditPages({ maxPages: 10, balance: minimumAuditCredits() - 1 }).maxPages).toBe(0);
     expect(clampAuditPages({ maxPages: 10, balance: minimumAuditCredits() }).maxPages).toBe(1);
     expect(minimumAuditCredits(true)).toBe(53);
-    expect(
-      clampAuditPages({ maxPages: 10, balance: 52, cloudExternalLinks: true }).maxPages,
-    ).toBe(0);
+    expect(clampAuditPages({ maxPages: 10, balance: 52, cloudExternalLinks: true }).maxPages).toBe(
+      0,
+    );
   });
 
   test("a customer cap clamps too, and the tighter of the two limits wins", () => {
@@ -194,7 +194,11 @@ describe("top-up bonus curve (repo#3888)", () => {
 
   test("at or below the floor a top-up is exactly 100 credits per $1 with no bonus", () => {
     for (let usd = CREDIT_TOPUP.minUsd; usd <= TOPUP_BONUS_CURVE.floorUsd; usd++) {
-      expect(topupQuote(usd)).toMatchObject({ baseCredits: usd * 100, bonusCredits: 0, totalCredits: usd * 100 });
+      expect(topupQuote(usd)).toMatchObject({
+        baseCredits: usd * 100,
+        bonusCredits: 0,
+        totalCredits: usd * 100,
+      });
     }
   });
 
@@ -202,7 +206,9 @@ describe("top-up bonus curve (repo#3888)", () => {
     for (const usd of [1_000, 1_001, 5_000, 1_000_000]) {
       const q = topupQuote(usd);
       expect(q.bonusPercent).toBeLessThanOrEqual(TOPUP_BONUS_CURVE.capPercent);
-      expect(q.bonusCredits).toBeLessThanOrEqual((q.baseCredits * TOPUP_BONUS_CURVE.capPercent) / 100);
+      expect(q.bonusCredits).toBeLessThanOrEqual(
+        (q.baseCredits * TOPUP_BONUS_CURVE.capPercent) / 100,
+      );
     }
     for (let usd = CREDIT_TOPUP.minUsd; usd <= CREDIT_TOPUP.maxUsd; usd++) {
       expect(topupBonusPercent(usd)).toBeLessThanOrEqual(TOPUP_BONUS_CURVE.capPercent);
@@ -248,7 +254,12 @@ describe("top-up bonus curve (repo#3888)", () => {
   });
 
   test("the curve numbers live in one object", () => {
-    expect(TOPUP_BONUS_CURVE).toEqual({ floorUsd: 100, endUsd: 1_000, capPercent: 20, exponent: 0.7 });
+    expect(TOPUP_BONUS_CURVE).toEqual({
+      floorUsd: 100,
+      endUsd: 1_000,
+      capPercent: 20,
+      exponent: 0.7,
+    });
     expect(CREDIT_TOPUP).toEqual({ minUsd: 10, maxUsd: 5_000, creditsPerUsd: 100 });
   });
 
@@ -257,18 +268,27 @@ describe("top-up bonus curve (repo#3888)", () => {
     expect(topupCreditsForUsd(1_000)).toBe(120_000);
     expect(topupCreditsForUsd(1_001)).toBe(120_120);
     expect(topupCreditsForUsd(5_000)).toBe(600_000);
-    expect(topupQuote(5_000)).toMatchObject({ baseCredits: 500_000, bonusCredits: 100_000, bonusPercent: 20 });
+    expect(topupQuote(5_000)).toMatchObject({
+      baseCredits: 500_000,
+      bonusCredits: 100_000,
+      bonusPercent: 20,
+    });
   });
 
   test("every whole dollar $1,001 to $5,000 is exactly 120 credits per $1 (flat 20% bonus)", () => {
     for (let usd = TOPUP_BONUS_CURVE.endUsd + 1; usd <= CREDIT_TOPUP.maxUsd; usd++) {
-      expect(topupQuote(usd)).toMatchObject({ baseCredits: usd * 100, bonusCredits: usd * 20, totalCredits: usd * 120 });
+      expect(topupQuote(usd)).toMatchObject({
+        baseCredits: usd * 100,
+        bonusCredits: usd * 20,
+        totalCredits: usd * 120,
+      });
       expect(topupBonusPercent(usd)).toBe(20);
     }
   });
 
   test("every whole dollar $1 to $9 (below the minimum) still quotes 100 per $1, as before", () => {
-    for (let usd = 1; usd < CREDIT_TOPUP.minUsd; usd++) expect(topupCreditsForUsd(usd)).toBe(usd * 100);
+    for (let usd = 1; usd < CREDIT_TOPUP.minUsd; usd++)
+      expect(topupCreditsForUsd(usd)).toBe(usd * 100);
   });
 
   test("$5,001 is outside the purchasable range; $10 and $5,000 are its ends", () => {
@@ -281,7 +301,15 @@ describe("top-up bonus curve (repo#3888)", () => {
 
   test("a non-finite or non-positive amount is a zero quote, never NaN or negative", () => {
     const zero = { usd: 0, baseCredits: 0, bonusCredits: 0, totalCredits: 0, bonusPercent: 0 };
-    for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, 0, -5, -0.5, 0.9]) {
+    for (const bad of [
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
+      0,
+      -5,
+      -0.5,
+      0.9,
+    ]) {
       expect(topupQuote(bad)).toEqual(zero);
       expect(topupCreditsForUsd(bad)).toBe(0);
       expect(topupBonusPercent(bad)).toBe(0);
@@ -295,7 +323,8 @@ describe("top-up bonus curve (repo#3888)", () => {
       readFileSync(new URL("./fixtures/topup-total-credits.json", import.meta.url), "utf8"),
     ) as Record<string, number>;
     const actual: Record<string, number> = {};
-    for (let usd = CREDIT_TOPUP.minUsd; usd <= CREDIT_TOPUP.maxUsd; usd++) actual[String(usd)] = topupCreditsForUsd(usd);
+    for (let usd = CREDIT_TOPUP.minUsd; usd <= CREDIT_TOPUP.maxUsd; usd++)
+      actual[String(usd)] = topupCreditsForUsd(usd);
     expect(Object.keys(pinned).length).toBe(4_991);
     expect(actual).toEqual(pinned);
   });

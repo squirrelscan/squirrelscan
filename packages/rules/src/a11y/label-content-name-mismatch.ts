@@ -12,10 +12,42 @@ import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 // Elements that render apart from their siblings, so text on either side is two words.
 const BLOCK_TAGS = new Set([
-  "address", "article", "aside", "blockquote", "br", "dd", "details", "div", "dl", "dt",
-  "fieldset", "figcaption", "figure", "footer", "form", "h1", "h2", "h3", "h4", "h5", "h6",
-  "header", "hr", "li", "main", "nav", "ol", "p", "pre", "section", "summary", "table",
-  "td", "th", "tr", "ul",
+  "address",
+  "article",
+  "aside",
+  "blockquote",
+  "br",
+  "dd",
+  "details",
+  "div",
+  "dl",
+  "dt",
+  "fieldset",
+  "figcaption",
+  "figure",
+  "footer",
+  "form",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "header",
+  "hr",
+  "li",
+  "main",
+  "nav",
+  "ol",
+  "p",
+  "pre",
+  "section",
+  "summary",
+  "table",
+  "td",
+  "th",
+  "tr",
+  "ul",
 ]);
 const INLINE_BLOCK_DISPLAY = /display\s*:\s*(?:block|flex|grid|table|list-item|flow-root)/i;
 
@@ -83,7 +115,7 @@ export const labelContentNameMismatchRule: Rule = {
 
     // Check elements with visible text and aria-label
     const elementsWithAriaLabel = doc.querySelectorAll(
-      "button[aria-label], a[aria-label], [role='button'][aria-label], [role='link'][aria-label], input[aria-label], select[aria-label]"
+      "button[aria-label], a[aria-label], [role='button'][aria-label], [role='link'][aria-label], input[aria-label], select[aria-label]",
     );
 
     const mismatches: Array<{ id: string; selector?: string }> = [];
@@ -92,8 +124,7 @@ export const labelContentNameMismatchRule: Rule = {
     const visibility = createStaticVisibility({ ariaHidden: true });
 
     for (const el of elementsWithAriaLabel) {
-      const ariaLabel =
-        el.getAttribute("aria-label")?.toLowerCase().trim() || "";
+      const ariaLabel = el.getAttribute("aria-label")?.toLowerCase().trim() || "";
       if (!ariaLabel) continue;
 
       const visibleText = getVisibleText(el);
@@ -118,7 +149,9 @@ export const labelContentNameMismatchRule: Rule = {
         const id = `${tagName}: visible="${clip(normalizedVisible)}" vs aria-label="${clip(normalizedAriaLabel)}"`;
         if (seen.state === "unknown") {
           const item = unconfirmedItem(id, seen) as Exclude<ControlItem, string>;
-          unconfirmed.push(ctx.wantsItemSelectors ? { ...item, selector: elementSelector(el) } : item);
+          unconfirmed.push(
+            ctx.wantsItemSelectors ? { ...item, selector: elementSelector(el) } : item,
+          );
           continue;
         }
         mismatches.push({
@@ -135,16 +168,19 @@ export const labelContentNameMismatchRule: Rule = {
         message: `${mismatches.length} element(s) where visible text doesn't match accessible name`,
         items: mismatches.slice(0, 10),
         details: {
-          issue:
-            "Voice control users may not be able to activate these controls",
-          ...(mismatches.length > 10
-            ? { additional: mismatches.length - 10 }
-            : {}),
+          issue: "Voice control users may not be able to activate these controls",
+          ...(mismatches.length > 10 ? { additional: mismatches.length - 10 } : {}),
         },
       });
     }
     if (unconfirmed.length > 0) {
-      checks.push(unconfirmedRow("label-content-name-mismatch", "control(s) with a mismatched name", unconfirmed));
+      checks.push(
+        unconfirmedRow(
+          "label-content-name-mismatch",
+          "control(s) with a mismatched name",
+          unconfirmed,
+        ),
+      );
     }
     if (mismatches.length === 0 && unconfirmed.length === 0 && elementsWithAriaLabel.length > 0) {
       checks.push({

@@ -54,7 +54,7 @@ export function stubFetch(routes: Record<string, Route>): {
     sent.push(req);
     const u = new URL(url);
     const route = routes[`${u.origin}${u.pathname}`];
-    return route ? (await route(req)) : html();
+    return route ? await route(req) : html();
   };
   globalThis.fetch = stub as typeof fetch;
   return {
@@ -68,10 +68,7 @@ export function stubFetch(routes: Record<string, Route>): {
 
 export const BASE = "https://example.com";
 
-export function candidate(
-  path: string,
-  over: Partial<EndpointCandidate> = {}
-): EndpointCandidate {
+export function candidate(path: string, over: Partial<EndpointCandidate> = {}): EndpointCandidate {
   const url = path.startsWith("http") ? path : `${BASE}${path}`;
   const sameOrigin = new URL(url).origin === BASE;
   return {
@@ -96,7 +93,9 @@ export function robots(disallow: string[]): RobotsTxtData {
     content: null,
     sizeBytes: 0,
     sitemaps: [],
-    rules: [{ userAgent: "*", rules: disallow.map((path) => ({ type: "disallow" as const, path })) }],
+    rules: [
+      { userAgent: "*", rules: disallow.map((path) => ({ type: "disallow" as const, path })) },
+    ],
     errors: [],
   };
 }

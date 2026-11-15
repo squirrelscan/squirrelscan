@@ -41,9 +41,7 @@ export const entityIdFormatRule: Rule = {
     // here is already absolute in the common case. What survives as non-
     // absolute is an `@id` that could not be resolved at all — a bare word, a
     // urn, a mailto — plus blank nodes the site wrote itself.
-    const offenders = map.nodes
-      .filter(isUnstableIdNode)
-      .sort(byReach);
+    const offenders = map.nodes.filter(isUnstableIdNode).sort(byReach);
 
     if (offenders.length === 0) {
       return {
@@ -58,7 +56,7 @@ export const entityIdFormatRule: Rule = {
     }
 
     const { items, hidden } = cappedItems(
-      offenders.map((node) => entityItem(node, { rawId: node.id }))
+      offenders.map((node) => entityItem(node, { rawId: node.id })),
     );
     const worst = offenders[0]!;
 

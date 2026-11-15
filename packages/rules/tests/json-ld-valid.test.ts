@@ -75,7 +75,7 @@ describe("image accepts a URL, an ImageObject, or an array of either", () => {
         datePublished: "2026-01-01",
         author: { "@type": "Person", name: "A" },
         publisher: { "@type": "Organization", name: "P" },
-      })
+      }),
     );
     // The page also lacks publisher.logo, which #469 stopped requiring.
     expect(check.status).toBe("pass");
@@ -133,8 +133,8 @@ describe("image accepts a URL, an ImageObject, or an array of either", () => {
           image: IMAGE_OBJECT,
           recipeIngredient: ["water"],
           recipeInstructions: ["boil"],
-        }
-      )
+        },
+      ),
     );
     expect(check.status).toBe("pass");
   });
@@ -147,7 +147,7 @@ describe("image accepts a URL, an ImageObject, or an array of either", () => {
         name: "P",
         url: "https://example.com/",
         logo: IMAGE_OBJECT,
-      })
+      }),
     );
     expect(check.status).toBe("pass");
   });
@@ -168,7 +168,7 @@ describe("image accepts a URL, an ImageObject, or an array of either", () => {
       const item = check.items?.find((i) => i.id === "Article:image");
       expect(item?.label).toBe("Article has an invalid image");
       expect(item?.meta?.message).toBe(
-        "Validation: Article.image must be a URL, an ImageObject, or an array of either"
+        "Validation: Article.image must be a URL, an ImageObject, or an array of either",
       );
     });
   }
@@ -187,7 +187,7 @@ describe("image accepts a URL, an ImageObject, or an array of either", () => {
         name: "P",
         url: "https://example.com/",
         logo: 1,
-      })
+      }),
     );
     expect(itemIds(check)).toEqual(["Organization:logo"]);
   });
@@ -273,8 +273,8 @@ describe("bare @id references resolve against the page's JSON-LD", () => {
     const check = await run(
       html(
         { "@context": "https://schema.org", "@graph": graph.slice(0, 3) },
-        { "@context": "https://schema.org", "@graph": graph.slice(3) }
-      )
+        { "@context": "https://schema.org", "@graph": graph.slice(3) },
+      ),
     );
     expect(check.status).toBe("pass");
   });
@@ -283,7 +283,7 @@ describe("bare @id references resolve against the page's JSON-LD", () => {
     const graph = UNHEAD_GRAPH["@graph"].map((node) =>
       node["@id"] === "https://example.com/#identity"
         ? { "@id": node["@id"], "@type": "Organization", url: "https://example.com" }
-        : node
+        : node,
     );
     const check = await run(html({ "@context": "https://schema.org", "@graph": graph }));
     // Article.publisher points at the identity, which has no name; the
@@ -296,7 +296,7 @@ describe("bare @id references resolve against the page's JSON-LD", () => {
       html({
         ...article("https://example.com/a.png"),
         publisher: { "@id": "https://elsewhere.example/#org" },
-      })
+      }),
     );
     expect(itemIds(check)).toEqual(["Article:publisher.name"]);
   });
@@ -336,7 +336,7 @@ describe("bare @id references resolve against the page's JSON-LD", () => {
             logo: "https://example.com/logo.png",
           },
         ],
-      })
+      }),
     );
     expect(check.status).toBe("pass");
   });
@@ -360,7 +360,7 @@ describe("bare @id references resolve against the page's JSON-LD", () => {
           },
           { "@id": "#a", "@type": "Person", name: "A" },
         ],
-      })
+      }),
     );
     expect(check.status).toBe("pass");
   });
@@ -369,7 +369,7 @@ describe("bare @id references resolve against the page's JSON-LD", () => {
 describe("parse errors and validation issues are reported once each", () => {
   test("a syntax error reads as a syntax error", async () => {
     const check = await run(
-      `<html><head><script type="application/ld+json">{ "@type": "Article", </script></head><body></body></html>`
+      `<html><head><script type="application/ld+json">{ "@type": "Article", </script></head><body></body></html>`,
     );
     expect(check.message).toBe("Invalid JSON-LD syntax");
     expect(itemIds(check)).toEqual(["parse-0"]);
@@ -402,7 +402,13 @@ describe("parsed data stored by an older release", () => {
       _errors: [stale],
       _raw: parsed.schemas.raw,
       _validationIssues: [
-        { type: "Article", property: "image", message: stale, severity: "invalid", path: ["image"] },
+        {
+          type: "Article",
+          property: "image",
+          message: stale,
+          severity: "invalid",
+          path: ["image"],
+        },
       ],
     });
     const result = await Promise.resolve(
@@ -414,7 +420,7 @@ describe("parsed data stored by an older release", () => {
           schema: { ...parsed.schema, valid: false, errors: [stale] },
         },
         options: {},
-      })
+      }),
     );
     expect(result.checks.map((c) => c.status)).toEqual(["pass"]);
   });
@@ -431,7 +437,7 @@ describe("parsed data stored by an older release", () => {
           schemas: { validationIssues: stored } as unknown as typeof parsed.schemas,
         },
         options: {},
-      })
+      }),
     );
     expect(result.checks[0]?.items?.map((i) => i.id)).toEqual(["Article:image"]);
 
@@ -448,7 +454,7 @@ describe("parsed data stored by an older release", () => {
           }),
         },
         options: {},
-      })
+      }),
     );
     expect(rehydrated.checks[0]?.items?.map((i) => i.id)).toEqual(["Article:image"]);
   });
@@ -492,7 +498,7 @@ describe("the validator follows schema.org and Google, not a stricter reading (#
     const check = await run(html(recipe({ recipeInstructions: 3 })));
     expect(itemIds(check)).toEqual(["Recipe:recipeInstructions"]);
     expect(check.items?.[0]?.meta?.message).toBe(
-      "Validation: Recipe.recipeInstructions must be text, an object, or an array of either"
+      "Validation: Recipe.recipeInstructions must be text, an object, or an array of either",
     );
   });
 
@@ -546,7 +552,7 @@ describe("the validator follows schema.org and Google, not a stricter reading (#
 
   test("BreadcrumbList: written last is not last when positions say otherwise", async () => {
     const check = await run(
-      html(breadcrumbs([crumb(2, { item: undefined }), crumb(1, { item: undefined })]))
+      html(breadcrumbs([crumb(2, { item: undefined }), crumb(1, { item: undefined })])),
     );
     // Position 1 is the first crumb, wherever it is written, so it needs an item.
     expect(itemIds(check)).toEqual(["BreadcrumbList:itemListElement.item"]);
@@ -565,7 +571,7 @@ describe("the validator follows schema.org and Google, not a stricter reading (#
           { "@id": "#second", "@type": "ListItem", position: 2, name: "This page" },
           { "@id": "#home", name: "Home" },
         ],
-      })
+      }),
     );
     expect(check.status).toBe("pass");
   });
@@ -573,12 +579,9 @@ describe("the validator follows schema.org and Google, not a stricter reading (#
   test("malformed values do not throw", async () => {
     const odd = await run(
       html(
-        breadcrumbs([
-          crumb(1, { position: { toString: "1" } }),
-          crumb(2, { position: "2" }),
-        ]),
-        product({ "@type": "constructor", price: "1", priceCurrency: "USD", availability: "x" })
-      )
+        breadcrumbs([crumb(1, { position: { toString: "1" } }), crumb(2, { position: "2" })]),
+        product({ "@type": "constructor", price: "1", priceCurrency: "USD", availability: "x" }),
+      ),
     );
     expect(odd.status).toBe("pass");
   });
@@ -611,15 +614,20 @@ describe("the validator follows schema.org and Google, not a stricter reading (#
   test("Product: an AggregateOffer with lowPrice and priceCurrency passes", async () => {
     const check = await run(
       html(
-        product({ "@type": "AggregateOffer", lowPrice: "10", highPrice: "20", priceCurrency: "USD" })
-      )
+        product({
+          "@type": "AggregateOffer",
+          lowPrice: "10",
+          highPrice: "20",
+          priceCurrency: "USD",
+        }),
+      ),
     );
     expect(check.status).toBe("pass");
   });
 
   test("Product: an AggregateOffer without lowPrice, and an Offer without price, are reported", async () => {
     const aggregate = await run(
-      html(product({ "@type": "AggregateOffer", highPrice: "20", priceCurrency: "USD" }))
+      html(product({ "@type": "AggregateOffer", highPrice: "20", priceCurrency: "USD" })),
     );
     expect(itemIds(aggregate)).toEqual(["Product:offers.lowPrice"]);
 
@@ -629,8 +637,8 @@ describe("the validator follows schema.org and Google, not a stricter reading (#
           "@type": "Offer",
           priceCurrency: "USD",
           availability: "https://schema.org/InStock",
-        })
-      )
+        }),
+      ),
     );
     expect(itemIds(offer)).toEqual(["Product:offers.price"]);
   });
@@ -648,7 +656,7 @@ describe("the validator follows schema.org and Google, not a stricter reading (#
 
   test("Article: a publisher given without a name is still reported", async () => {
     const check = await run(
-      html({ ...article("https://example.com/a.png"), publisher: { "@type": "Organization" } })
+      html({ ...article("https://example.com/a.png"), publisher: { "@type": "Organization" } }),
     );
     expect(itemIds(check)).toEqual(["Article:publisher.name"]);
   });
@@ -660,13 +668,13 @@ describe("the validator follows schema.org and Google, not a stricter reading (#
       author: { "@id": "#p" },
     };
     const inGraph = await run(
-      html({ "@context": "https://schema.org", "@graph": [post, { "@id": "#p", name: "A" }] })
+      html({ "@context": "https://schema.org", "@graph": [post, { "@id": "#p", name: "A" }] }),
     );
     expect(inGraph.status).toBe("pass");
 
     // The same node in its own script block.
     const separate = await run(
-      html({ ...post, "@context": "https://schema.org" }, { "@id": "#p", name: "A" })
+      html({ ...post, "@context": "https://schema.org" }, { "@id": "#p", name: "A" }),
     );
     expect(separate.status).toBe("pass");
 

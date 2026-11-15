@@ -30,7 +30,7 @@ function evaluate(
   perPage: Iterable<[string, GenericAnchorCount]>,
   minAnchors: number,
   warnRatio: number,
-  failRatio: number
+  failRatio: number,
 ): CheckResult {
   let generic = 0;
   let total = 0;
@@ -51,7 +51,11 @@ function evaluate(
   }
 
   const ratio = generic / total;
-  const details = { genericAnchors: generic, totalAnchors: total, ratio: Math.round(ratio * 1000) / 1000 };
+  const details = {
+    genericAnchors: generic,
+    totalAnchors: total,
+    ratio: Math.round(ratio * 1000) / 1000,
+  };
   if (ratio < warnRatio) {
     return {
       name: CHECK,
@@ -101,7 +105,9 @@ export const genericAnchorDensityRule: Rule = {
         .int()
         .min(1)
         .default(30)
-        .describe("Fewest internal content anchors needed to judge the ratio; below it the rule is skipped"),
+        .describe(
+          "Fewest internal content anchors needed to judge the ratio; below it the rule is skipped",
+        ),
       warnRatio: z
         .number()
         .min(0)

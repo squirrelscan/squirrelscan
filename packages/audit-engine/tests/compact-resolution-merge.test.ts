@@ -550,7 +550,9 @@ describe("what the byte budget gives up only ever keeps findings open", () => {
     const payload = samplePayload(full, urls, signal);
     const samples = (status: string) =>
       new Set(
-        payload.ruleResults.dual!.checks.filter((c) => c.status === status).flatMap((c) => c.pages ?? []),
+        payload.ruleResults
+          .dual!.checks.filter((c) => c.status === status)
+          .flatMap((c) => c.pages ?? []),
       );
     const passSample = samples("pass");
     const failSample = samples("fail");
@@ -644,8 +646,14 @@ describe("the audited count (billing input) under a clipped list", () => {
   };
   /** Every page named by the payload: two small per-page rules, kept whole. */
   const namingEveryPage = (full: Full, urls: string[]) => {
-    full.probeA = { meta: meta("probeA"), checks: urls.slice(0, 300).map((u) => check("a", u, "pass")) };
-    full.probeB = { meta: meta("probeB"), checks: urls.slice(300).map((u) => check("b", u, "pass")) };
+    full.probeA = {
+      meta: meta("probeA"),
+      checks: urls.slice(0, 300).map((u) => check("a", u, "pass")),
+    };
+    full.probeB = {
+      meta: meta("probeB"),
+      checks: urls.slice(300).map((u) => check("b", u, "pass")),
+    };
   };
 
   test("counts every crawled page, less the removed ones it cannot name", async () => {
@@ -658,7 +666,12 @@ describe("the audited count (billing input) under a clipped list", () => {
       rule.checks = rule.checks.filter((c) => !c.pageUrl || !goneSet.has(c.pageUrl));
     }
     const signal = await decodeResolutionSignal(
-      buildCompactResolutionSignal(full, urls, 8 * 1024, gone.map((url) => ({ url, status: 404 })))!,
+      buildCompactResolutionSignal(
+        full,
+        urls,
+        8 * 1024,
+        gone.map((url) => ({ url, status: 404 })),
+      )!,
     );
     expect(signal.crawledComplete).toBe(false);
     expect(signal.crawledCount).toBe(600);
@@ -670,18 +683,26 @@ describe("the audited count (billing input) under a clipped list", () => {
   test("a tiny claimed count never bills below the pages the payload names", async () => {
     const { urls, full } = await clippedListScenario();
     namingEveryPage(full, urls);
-    const signal = await decodeResolutionSignal(buildCompactResolutionSignal(full, urls, 8 * 1024)!);
+    const signal = await decodeResolutionSignal(
+      buildCompactResolutionSignal(full, urls, 8 * 1024)!,
+    );
     expect(await audited(full, urls, signal)).toBe(600);
     expect(await audited(full, urls, { ...signal, crawledCount: 1 })).toBe(600);
     expect(await audited(full, urls, { ...signal, crawledCount: 0, removedCount: 600 })).toBe(600);
-    expect(await audited(full, urls, { ...signal, crawledCount: 600, removedCount: 1e9 })).toBe(600);
+    expect(await audited(full, urls, { ...signal, crawledCount: 600, removedCount: 1e9 })).toBe(
+      600,
+    );
   });
 
   test("a huge claimed count is clamped to the crawl ceiling, and a malformed one ignored", async () => {
     const { urls, full } = await clippedListScenario();
     namingEveryPage(full, urls);
-    const signal = await decodeResolutionSignal(buildCompactResolutionSignal(full, urls, 8 * 1024)!);
-    expect(await audited(full, urls, { ...signal, crawledCount: 1e9 })).toBe(REPORT_LIMITS.maxPages);
+    const signal = await decodeResolutionSignal(
+      buildCompactResolutionSignal(full, urls, 8 * 1024)!,
+    );
+    expect(await audited(full, urls, { ...signal, crawledCount: 1e9 })).toBe(
+      REPORT_LIMITS.maxPages,
+    );
     for (const crawledCount of [-5, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
       expect(await audited(full, urls, { ...signal, crawledCount })).toBe(600);
     }
@@ -693,7 +714,9 @@ describe("the audited count (billing input) under a clipped list", () => {
     const baseline = await audited(full, urls, whole);
     expect(baseline).toBe(600);
     for (const crawledCount of [1, 1e9]) {
-      expect(await audited(full, urls, { ...whole, crawledCount, removedCount: 300 })).toBe(baseline);
+      expect(await audited(full, urls, { ...whole, crawledCount, removedCount: 300 })).toBe(
+        baseline,
+      );
     }
   });
 });

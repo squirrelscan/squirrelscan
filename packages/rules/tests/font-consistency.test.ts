@@ -84,8 +84,11 @@ describe("content/font-consistency", () => {
   });
 
   test("system stacks and generics are not families", () => {
-    const style = "body{font-family:system-ui,sans-serif} code{font-family:ui-monospace,monospace} p{font-family:var(--f)}";
-    expect(extractFontUsage(parse({ url: "https://example.com/", style }).document).families).toEqual([]);
+    const style =
+      "body{font-family:system-ui,sans-serif} code{font-family:ui-monospace,monospace} p{font-family:var(--f)}";
+    expect(
+      extractFontUsage(parse({ url: "https://example.com/", style }).document).families,
+    ).toEqual([]);
   });
 
   test("warn: more families than the ceiling", () => {
@@ -100,18 +103,27 @@ describe("content/font-consistency", () => {
 
   test("the ceiling is configurable", () => {
     const style = ".a{font-family:A}.b{font-family:B}.c{font-family:C}";
-    const checks = both(pages(12, () => ({ style })), { max_families: 2 });
+    const checks = both(
+      pages(12, () => ({ style })),
+      { max_families: 2 },
+    );
     expect(checks.find((x) => x.name === "font-sprawl")!.status).toBe("warn");
   });
 
   test("fail: far over the ceiling", () => {
-    const style = "ABCDEFGHI".split("").map((f) => `.${f}{font-family:${f}x}`).join("");
+    const style = "ABCDEFGHI"
+      .split("")
+      .map((f) => `.${f}{font-family:${f}x}`)
+      .join("");
     const checks = both(pages(12, () => ({ style })));
     expect(checks.find((x) => x.name === "font-sprawl")!.status).toBe("fail");
   });
 
   test("warn: a family on exactly one page is rogue, from style= too", () => {
-    const specs = pages(12, (i) => ({ style: BODY, ...(i === 7 ? { attr: "font-family: Papyrus" } : {}) }));
+    const specs = pages(12, (i) => ({
+      style: BODY,
+      ...(i === 7 ? { attr: "font-family: Papyrus" } : {}),
+    }));
     const checks = both(specs);
     const c = checks.find((x) => x.name === "rogue-font-family")!;
     expect(c.status).toBe("warn");
@@ -135,6 +147,8 @@ describe("content/font-consistency", () => {
 
   test("comments are ignored and an unclosed one is safe", () => {
     const style = "/* font-family: Hidden */ body{font-family:Real} /* unclosed font-family: Gone";
-    expect(extractFontUsage(parse({ url: "https://example.com/", style }).document).families).toEqual(["real"]);
+    expect(
+      extractFontUsage(parse({ url: "https://example.com/", style }).document).families,
+    ).toEqual(["real"]);
   });
 });

@@ -7,7 +7,10 @@ import { extractPreloadedScriptUrls } from "../src/extractors/scripts";
 
 const BASE = "https://example.com/blog/post";
 const preloaded = (html: string): string[] =>
-  extractPreloadedScriptUrls(parseDocument(`<!doctype html><html><head>${html}</head><body></body></html>`), BASE);
+  extractPreloadedScriptUrls(
+    parseDocument(`<!doctype html><html><head>${html}</head><body></body></html>`),
+    BASE,
+  );
 
 describe("extractPreloadedScriptUrls", () => {
   test("finds modulepreload and preload as=script, resolved and deduplicated", () => {

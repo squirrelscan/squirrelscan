@@ -66,8 +66,7 @@ export function buildDomainStatsSummary(stats: DomainStats): string {
   if (m.backlinks != null) parts.push(`${formatCompact(m.backlinks)} backlinks`);
   if (m.referringDomains != null)
     parts.push(`${formatCompact(m.referringDomains)} referring domains`);
-  if (m.organicKeywords != null)
-    parts.push(`${formatCompact(m.organicKeywords)} organic keywords`);
+  if (m.organicKeywords != null) parts.push(`${formatCompact(m.organicKeywords)} organic keywords`);
   if (m.organicTraffic != null)
     parts.push(`~${formatCompact(m.organicTraffic)} organic traffic/mo`);
   if (parts.length === 0) return `No domain stats available for ${stats.domain}.`;

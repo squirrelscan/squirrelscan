@@ -29,10 +29,7 @@ export type PageType =
  * 1. Schema.org types (definitive)
  * 2. URL patterns (hints)
  */
-export function detectPageType(
-  url: string,
-  schemas: SchemaCollection
-): PageType {
+export function detectPageType(url: string, schemas: SchemaCollection): PageType {
   // 1. Schema.org types (definitive)
   if (schemas.article) return "article";
   if (schemas.product) return "product";

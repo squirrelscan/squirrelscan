@@ -129,7 +129,8 @@ const B32 = UPPER + "234567";
 export function awsKeySuffix(r: Rng): string {
   for (;;) {
     let out = runOf(r, B32, 16);
-    while (out.includes("DO")) out = out.replace("DO", "D" + runOf(r, "ABCEFGHJKLMNPQRSTUVWXYZ", 1));
+    while (out.includes("DO"))
+      out = out.replace("DO", "D" + runOf(r, "ABCEFGHJKLMNPQRSTUVWXYZ", 1));
     if (decodeAwsAccountId(P.akia + out) !== null) return out;
   }
 }
@@ -201,7 +202,9 @@ export function issuerJwt(r: Rng, claims: Record<string, unknown>, alg = "HS256"
  */
 function mapboxToken(r: Rng, kind: "pk" | "sk"): string {
   for (;;) {
-    const claims = b64url(JSON.stringify({ u: "acme-maps", a: `cm${runOf(r, LOWER + DIGIT, 24)}` }));
+    const claims = b64url(
+      JSON.stringify({ u: "acme-maps", a: `cm${runOf(r, LOWER + DIGIT, 24)}` }),
+    );
     if (/^[a-zA-Z0-9]{60,}$/.test(claims)) return `${kind}.${claims}.${runOf(r, B64URL, 22)}`;
   }
 }
@@ -258,7 +261,8 @@ const P = {
   shpat: ["sh", "pat_"].join(""),
   gocspx: ["GOC", "SPX-"].join(""),
   eaac: ["EAACEd", "Eose0cBA"].join(""),
-  pem: (kind: string, suffix = "") => ["-----BEGIN ", kind, " PRIVATE KEY", suffix, "-----"].join(""),
+  pem: (kind: string, suffix = "") =>
+    ["-----BEGIN ", kind, " PRIVATE KEY", suffix, "-----"].join(""),
 };
 
 /**
@@ -311,7 +315,11 @@ export const GENERATORS: Generator[] = [
     tier: "prefixed",
     make: (r) => value("xai-" + runOf(r, ALNUM, 80)),
   },
-  { pattern: "HuggingFace Token", tier: "prefixed", make: (r) => value(P.hf + runOf(r, ALNUM, 34)) },
+  {
+    pattern: "HuggingFace Token",
+    tier: "prefixed",
+    make: (r) => value(P.hf + runOf(r, ALNUM, 34)),
+  },
   {
     pattern: "Replicate API Token",
     tier: "prefixed",
@@ -328,8 +336,16 @@ export const GENERATORS: Generator[] = [
     tier: "prefixed",
     make: (r) => value(P.skOr + runOf(r, HEX, 64)),
   },
-  { pattern: "Cerebras API Key", tier: "prefixed", make: (r) => value(P.csk + runOf(r, LOWER + DIGIT, 48)) },
-  { pattern: "NVIDIA API Key", tier: "prefixed", make: (r) => value(P.nvapi + mixedRun(r, 64, B64URL)) },
+  {
+    pattern: "Cerebras API Key",
+    tier: "prefixed",
+    make: (r) => value(P.csk + runOf(r, LOWER + DIGIT, 48)),
+  },
+  {
+    pattern: "NVIDIA API Key",
+    tier: "prefixed",
+    make: (r) => value(P.nvapi + mixedRun(r, 64, B64URL)),
+  },
   {
     pattern: "Fireworks AI API Key",
     tier: "prefixed",
@@ -371,7 +387,10 @@ export const GENERATORS: Generator[] = [
     notIn: NOT_A_BEARER,
     make: (r) => {
       const pw = runOf(r, ALNUM, 18);
-      return value(pw, `mongodb+srv://app_user:${pw}@cluster0.${runOf(r, LOWER, 5)}.mongodb.net/prod?retryWrites=true`);
+      return value(
+        pw,
+        `mongodb+srv://app_user:${pw}@cluster0.${runOf(r, LOWER, 5)}.mongodb.net/prod?retryWrites=true`,
+      );
     },
   },
   {
@@ -439,7 +458,11 @@ export const GENERATORS: Generator[] = [
     // the faithful one is pinned as a gap in cases.ts.
     make: (r) => value("AZ" + runOf(r, LOWER + DIGIT + "_-", 78)),
   },
-  { pattern: "Stripe Restricted Key", tier: "prefixed", make: (r) => value(P.rkLive + runOf(r, ALNUM, 24)) },
+  {
+    pattern: "Stripe Restricted Key",
+    tier: "prefixed",
+    make: (r) => value(P.rkLive + runOf(r, ALNUM, 24)),
+  },
   {
     pattern: "Shopify Admin API Token",
     tier: "prefixed",
@@ -467,7 +490,11 @@ export const GENERATORS: Generator[] = [
     make: (r) => value(P.sq0csp + runOf(r, B64URL, 43)),
   },
 
-  { pattern: "Google OAuth Client Secret", tier: "prefixed", make: (r) => value(P.gocspx + runOf(r, B64URL, 28)) },
+  {
+    pattern: "Google OAuth Client Secret",
+    tier: "prefixed",
+    make: (r) => value(P.gocspx + runOf(r, B64URL, 28)),
+  },
 
   // ── Cloud ─────────────────────────────────────────────────────────────
   {
@@ -523,7 +550,11 @@ export const GENERATORS: Generator[] = [
   },
 
   // ── Hosting ───────────────────────────────────────────────────────────
-  { pattern: "Vercel Token", tier: "prefixed", make: (r) => value("vercel_" + runOf(r, ALNUM, 24)) },
+  {
+    pattern: "Vercel Token",
+    tier: "prefixed",
+    make: (r) => value("vercel_" + runOf(r, ALNUM, 24)),
+  },
   { pattern: "Netlify Token", tier: "prefixed", make: (r) => value(P.nfp + runOf(r, ALNUM, 43)) },
   { pattern: "Render API Key", tier: "prefixed", make: (r) => value(P.rnd + runOf(r, ALNUM, 36)) },
   {
@@ -589,7 +620,8 @@ export const GENERATORS: Generator[] = [
     tier: "prefixed",
     // base64url(user snowflake).base64url(timestamp).hmac — the first part of
     // a real one decodes to a decimal id, which is what puts the `M` there.
-    make: (r) => value(`${b64url(`1${runOf(r, DIGIT, 17)}`)}.${runOf(r, B64URL, 6)}.${runOf(r, B64URL, 27)}`),
+    make: (r) =>
+      value(`${b64url(`1${runOf(r, DIGIT, 17)}`)}.${runOf(r, B64URL, 6)}.${runOf(r, B64URL, 27)}`),
   },
   {
     pattern: "Telegram Bot Token",
@@ -622,7 +654,9 @@ export const GENERATORS: Generator[] = [
     tier: "prefixed",
     notIn: NOT_A_BEARER,
     make: (r) =>
-      value(`https://${runOf(r, HEX, 32)}@o${runOf(r, DIGIT, 6)}.ingest.sentry.io/${runOf(r, DIGIT, 7)}`),
+      value(
+        `https://${runOf(r, HEX, 32)}@o${runOf(r, DIGIT, 6)}.ingest.sentry.io/${runOf(r, DIGIT, 7)}`,
+      ),
   },
   {
     pattern: "PostHog Project Key",
@@ -660,7 +694,6 @@ export const GENERATORS: Generator[] = [
     tier: "prefixed",
     make: (r) => value(mapboxToken(r, "sk")),
   },
-
 
   // ── Private keys ──────────────────────────────────────────────────────
   ...(["RSA", "DSA", "EC", "OpenSSH", "PGP"] as const).map(
@@ -719,35 +752,130 @@ export const GENERATORS: Generator[] = [
   {
     pattern: "Basic Auth Header",
     tier: "assignment",
-    make: (r) => entry("authorization", Buffer.from(`svc_dashboard:${runOf(r, ALNUM, 20)}`).toString("base64"), (s) => `Basic ${s}`),
+    make: (r) =>
+      entry(
+        "authorization",
+        Buffer.from(`svc_dashboard:${runOf(r, ALNUM, 20)}`).toString("base64"),
+        (s) => `Basic ${s}`,
+      ),
   },
 
   // ── Context tier (keyword window + credential key) ────────────────────
-  { pattern: "Cohere API Key", tier: "keyed", keyName: "cohereKey", make: (r) => value(keyedRun(r, ALNUM, 40)) },
-  { pattern: "Together AI Key", tier: "keyed", keyName: "togetherKey", make: (r) => value(keyedRun(r, HEX, 64)) },
-  { pattern: "Mistral API Key", tier: "keyed", keyName: "mistralKey", make: (r) => value(keyedRun(r, ALNUM, 32)) },
-  { pattern: "Pinecone API Key", tier: "keyed", keyName: "pineconeKey", make: (r) => value(uuid(r)) },
-  { pattern: "Cloudflare API Token", tier: "keyed", keyName: "cloudflareToken", make: (r) => value(keyedRun(r, ALNUM, 40)) },
+  {
+    pattern: "Cohere API Key",
+    tier: "keyed",
+    keyName: "cohereKey",
+    make: (r) => value(keyedRun(r, ALNUM, 40)),
+  },
+  {
+    pattern: "Together AI Key",
+    tier: "keyed",
+    keyName: "togetherKey",
+    make: (r) => value(keyedRun(r, HEX, 64)),
+  },
+  {
+    pattern: "Mistral API Key",
+    tier: "keyed",
+    keyName: "mistralKey",
+    make: (r) => value(keyedRun(r, ALNUM, 32)),
+  },
+  {
+    pattern: "Pinecone API Key",
+    tier: "keyed",
+    keyName: "pineconeKey",
+    make: (r) => value(uuid(r)),
+  },
+  {
+    pattern: "Cloudflare API Token",
+    tier: "keyed",
+    keyName: "cloudflareToken",
+    make: (r) => value(keyedRun(r, ALNUM, 40)),
+  },
   { pattern: "Heroku API Key", tier: "keyed", keyName: "herokuKey", make: (r) => value(uuid(r)) },
-  { pattern: "Twilio Auth Token", tier: "keyed", keyName: "twilioAuth", make: (r) => value(keyedRun(r, HEX, 32)) },
-  { pattern: "Postmark Server Token", tier: "keyed", keyName: "postmarkToken", make: (r) => value(uuid(r)) },
-  { pattern: "Datadog API Key", tier: "keyed", keyName: "datadogKey", make: (r) => value(keyedRun(r, HEX, 32)) },
-  { pattern: "Segment Write Key", tier: "keyed", keyName: "segmentKey", make: (r) => value(keyedRun(r, ALNUM, 32)) },
-  { pattern: "Mixpanel Token", tier: "keyed", keyName: "mixpanelToken", make: (r) => value(keyedRun(r, HEX, 32)) },
+  {
+    pattern: "Twilio Auth Token",
+    tier: "keyed",
+    keyName: "twilioAuth",
+    make: (r) => value(keyedRun(r, HEX, 32)),
+  },
+  {
+    pattern: "Postmark Server Token",
+    tier: "keyed",
+    keyName: "postmarkToken",
+    make: (r) => value(uuid(r)),
+  },
+  {
+    pattern: "Datadog API Key",
+    tier: "keyed",
+    keyName: "datadogKey",
+    make: (r) => value(keyedRun(r, HEX, 32)),
+  },
+  {
+    pattern: "Segment Write Key",
+    tier: "keyed",
+    keyName: "segmentKey",
+    make: (r) => value(keyedRun(r, ALNUM, 32)),
+  },
+  {
+    pattern: "Mixpanel Token",
+    tier: "keyed",
+    keyName: "mixpanelToken",
+    make: (r) => value(keyedRun(r, HEX, 32)),
+  },
   // Public tier, and keyed under a name the generic assignments would claim:
   // the generic defers to the public context pattern in front of it.
-  { pattern: "Shopify Storefront Access Token", tier: "keyed", keyName: "shopifyStorefrontAccessToken", make: (r) => value(keyedRun(r, HEX, 32)) },
-  { pattern: "Raygun API Key", tier: "keyed", keyName: "raygunApiKey", make: (r) => value(keyedRun(r, ALNUM, 28)) },
-  { pattern: "Amplitude API Key", tier: "keyed", keyName: "amplitudeKey", make: (r) => value(keyedRun(r, HEX, 32)) },
-  { pattern: "Auth0 Client Secret", tier: "keyed", keyName: "auth0Credential", make: (r) => value(keyedRun(r, ALNUM, 64)) },
-  { pattern: "Okta API Token", tier: "keyed", keyName: "oktaToken", make: (r) => value("00" + runOf(r, DIGIT, 1) + runOf(r, ALNUM, 39)) },
-  { pattern: "Contentful Access Token", tier: "keyed", keyName: "contentfulToken", make: (r) => value(keyedRun(r, ALNUM, 43)) },
+  {
+    pattern: "Shopify Storefront Access Token",
+    tier: "keyed",
+    keyName: "shopifyStorefrontAccessToken",
+    make: (r) => value(keyedRun(r, HEX, 32)),
+  },
+  {
+    pattern: "Raygun API Key",
+    tier: "keyed",
+    keyName: "raygunApiKey",
+    make: (r) => value(keyedRun(r, ALNUM, 28)),
+  },
+  {
+    pattern: "Amplitude API Key",
+    tier: "keyed",
+    keyName: "amplitudeKey",
+    make: (r) => value(keyedRun(r, HEX, 32)),
+  },
+  {
+    pattern: "Auth0 Client Secret",
+    tier: "keyed",
+    keyName: "auth0Credential",
+    make: (r) => value(keyedRun(r, ALNUM, 64)),
+  },
+  {
+    pattern: "Okta API Token",
+    tier: "keyed",
+    keyName: "oktaToken",
+    make: (r) => value("00" + runOf(r, DIGIT, 1) + runOf(r, ALNUM, 39)),
+  },
+  {
+    pattern: "Contentful Access Token",
+    tier: "keyed",
+    keyName: "contentfulToken",
+    make: (r) => value(keyedRun(r, ALNUM, 43)),
+  },
   // Sanity moved from the FAST tier (#357): `sk` + 30 alphanumerics needs the
   // brand word and a credential key like every other bare shape.
   // A digit after `sk` keeps looksLikeCodeIdentifier's camelCase test off a
   // value that would otherwise read as `skAbc…`; the gap is pinned in cases.ts.
-  { pattern: "Sanity Token", tier: "keyed", keyName: "sanityToken", make: (r) => value("sk" + runOf(r, DIGIT, 1) + runOf(r, ALNUM, 47)) },
-  { pattern: "Algolia API Key", tier: "keyed", keyName: "algoliaKey", make: (r) => value(keyedRun(r, HEX, 32)) },
+  {
+    pattern: "Sanity Token",
+    tier: "keyed",
+    keyName: "sanityToken",
+    make: (r) => value("sk" + runOf(r, DIGIT, 1) + runOf(r, ALNUM, 47)),
+  },
+  {
+    pattern: "Algolia API Key",
+    tier: "keyed",
+    keyName: "algoliaKey",
+    make: (r) => value(keyedRun(r, HEX, 32)),
+  },
   {
     // Decoded by the detector (#361): with restrictions it is a scoped search
     // key, reported public. The positive here carries an index restriction and
@@ -756,9 +884,20 @@ export const GENERATORS: Generator[] = [
     tier: "keyed",
     keyName: "algoliaSearchKey",
     check: "public",
-    make: (r) => value(algoliaSecuredKey(r, `restrictIndices=products_${runOf(r, LOWER, 4)}&validUntil=19${runOf(r, DIGIT, 8)}`)),
+    make: (r) =>
+      value(
+        algoliaSecuredKey(
+          r,
+          `restrictIndices=products_${runOf(r, LOWER, 4)}&validUntil=19${runOf(r, DIGIT, 8)}`,
+        ),
+      ),
   },
-  { pattern: "LinkedIn Client Secret", tier: "keyed", keyName: "linkedinCredential", make: (r) => value(keyedRun(r, ALNUM, 16)) },
+  {
+    pattern: "LinkedIn Client Secret",
+    tier: "keyed",
+    keyName: "linkedinCredential",
+    make: (r) => value(keyedRun(r, ALNUM, 16)),
+  },
 ];
 
 export const GENERATORS_BY_PATTERN = new Map(GENERATORS.map((g) => [g.pattern, g]));

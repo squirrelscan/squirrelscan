@@ -57,13 +57,11 @@ export const cssFileSizeRule: Rule = {
     }
 
     const errorFiles = resources.filter(
-      (r) => r.sizeBytes !== null && r.sizeBytes > opts.error_bytes
+      (r) => r.sizeBytes !== null && r.sizeBytes > opts.error_bytes,
     );
     const warnFiles = resources.filter(
       (r) =>
-        r.sizeBytes !== null &&
-        r.sizeBytes > opts.warn_bytes &&
-        r.sizeBytes <= opts.error_bytes
+        r.sizeBytes !== null && r.sizeBytes > opts.warn_bytes && r.sizeBytes <= opts.error_bytes,
     );
 
     if (errorFiles.length > 0) {

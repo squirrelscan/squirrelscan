@@ -18,17 +18,16 @@ import type { ParsedPage, Rule, RuleContext } from "../src/types";
 const BODY =
   '<div class="nav"><button type="button"></button></div><form><input type="text" id="q"></form>';
 
-async function statuses(
-  rule: Pick<Rule, "run">,
-  css: string,
-): Promise<Record<string, string>> {
+async function statuses(rule: Pick<Rule, "run">, css: string): Promise<Record<string, string>> {
   const url = "https://example.com/";
   const html = `<!doctype html><html lang="en"><head><title>t</title><style>${css}</style></head><body><main>${BODY}</main></body></html>`;
-  const checks = (await rule.run({
-    page: { url, html, statusCode: 200, loadTime: 0, headers: {} },
-    parsed: parsePage(html, url) as ParsedPage,
-    options: {},
-  })).checks as CheckResult[];
+  const checks = (
+    await rule.run({
+      page: { url, html, statusCode: 200, loadTime: 0, headers: {} },
+      parsed: parsePage(html, url) as ParsedPage,
+      options: {},
+    })
+  ).checks as CheckResult[];
   return Object.fromEntries(checks.map((c) => [c.name, c.status]));
 }
 
@@ -94,10 +93,10 @@ describe("the issue's repro table: nothing on the page can match", () => {
 
   test("the combined selector list with a plain id part", async () => {
     expect(
-      (await statuses(
+      await statuses(
         ariaCommandNameRule,
         '.is-x #drawer, .is-x [id$="-drawer"]{display:none !important}',
-      )),
+      ),
     ).toEqual({ "aria-command-name": "fail" });
   });
 });

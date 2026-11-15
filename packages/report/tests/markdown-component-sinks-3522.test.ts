@@ -11,9 +11,11 @@ import { renderMarkdown } from "../src/output/markdown";
 const EVIL_PATH = "/a](https://evil.example/x)![i](https://evil.example/p.png)";
 const PAYLOAD =
   "x](https://evil.example/y) [t](https://evil.example/z) ![i](https://evil.example/p.png) <img src=https://evil.example/q>";
-const PAGES = ["https://example.test/one", "https://example.test/two", "https://example.test/three"].map(
-  (page, i) => `${page}${EVIL_PATH}${i}`,
-);
+const PAGES = [
+  "https://example.test/one",
+  "https://example.test/two",
+  "https://example.test/three",
+].map((page, i) => `${page}${EVIL_PATH}${i}`);
 
 function occurrence(pageUrl: string): ComponentOccurrence {
   return {

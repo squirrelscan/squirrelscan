@@ -9,7 +9,8 @@ import { SQLiteStorage, type CrawlStorage } from "@squirrelscan/crawler";
 import { pageTypeCoverage, pageTypeCoverageFor } from "../src/report-stream";
 
 const B = "https://shop.example";
-const products = (n: number, from = 0) => Array.from({ length: n }, (_, i) => `${B}/products/p-${from + i}`);
+const products = (n: number, from = 0) =>
+  Array.from({ length: n }, (_, i) => `${B}/products/p-${from + i}`);
 
 describe("pageTypeCoverage", () => {
   test("a capped crawl with mixed types reports known above audited", () => {
@@ -40,13 +41,34 @@ describe("pageTypeCoverageFor", () => {
   test("only pending frontier rows of this crawl count as discovered-not-audited", async () => {
     const storage = new SQLiteStorage(":memory:");
     const stats = {
-      pagesTotal: 0, pagesFetched: 0, pagesFailed: 0, pagesSkipped: 0, pagesUnchanged: 0,
-      linksTotal: 0, imagesTotal: 0, bytesTotal: 0, avgLoadTimeMs: 0,
+      pagesTotal: 0,
+      pagesFetched: 0,
+      pagesFailed: 0,
+      pagesSkipped: 0,
+      pagesUnchanged: 0,
+      linksTotal: 0,
+      imagesTotal: 0,
+      bytesTotal: 0,
+      avgLoadTimeMs: 0,
     };
-    const mk = () => storage.createCrawl({ baseUrl: B, originalUrl: B, startedAt: 1, status: "completed", config: {} as never, stats });
+    const mk = () =>
+      storage.createCrawl({
+        baseUrl: B,
+        originalUrl: B,
+        startedAt: 1,
+        status: "completed",
+        config: {} as never,
+        stats,
+      });
     const row = (url: string, status: "pending" | "done" | "failed") => ({
-      normalizedUrl: url, rawUrl: url, depth: 1, priority: 0, status,
-      source: "sitemap" as const, enqueuedAt: 1, retryCount: 0,
+      normalizedUrl: url,
+      rawUrl: url,
+      depth: 1,
+      priority: 0,
+      status,
+      source: "sitemap" as const,
+      enqueuedAt: 1,
+      retryCount: 0,
     });
     const rows = await Effect.runPromise(
       Effect.gen(function* () {
@@ -65,7 +87,9 @@ describe("pageTypeCoverageFor", () => {
   });
 
   test("a failed read gives no rows instead of failing the report", async () => {
-    const broken = { getAllFrontierEntries: () => Effect.fail(new Error("gone")) } as unknown as CrawlStorage;
+    const broken = {
+      getAllFrontierEntries: () => Effect.fail(new Error("gone")),
+    } as unknown as CrawlStorage;
     expect(await Effect.runPromise(pageTypeCoverageFor(broken, "c", [`${B}/`]))).toEqual([]);
   });
 });

@@ -84,7 +84,7 @@ export function createSiteQuery(
      * `anchorGraph()` is then absent.
      */
     anchorGraph?: boolean;
-  }
+  },
 ): Effect.Effect<SiteQuery, StorageError, never> {
   return Effect.gen(function* () {
     // Incoming internal-link counts — reconstructed from parsed page links, NOT
@@ -189,7 +189,7 @@ function buildIncomingLinkCounts(
   crawlId: string,
   universe: readonly string[] | undefined,
   pageScanBatch: number,
-  collectAnchors: boolean
+  collectAnchors: boolean,
 ): Effect.Effect<
   {
     all: Map<string, number>;
@@ -309,7 +309,7 @@ function buildIncomingLinkCounts(
 /** Page-type index: normalized URLs per page_type, in normalized_url order. */
 function buildPagesByType(
   storage: SQLiteStorage,
-  crawlId: string
+  crawlId: string,
 ): Effect.Effect<Map<string, string[]>, StorageError, never> {
   return Effect.gen(function* () {
     const byType = new Map<string, string[]>();
@@ -350,7 +350,7 @@ function streamPageLinkRows(
   storage: SQLiteStorage,
   crawlId: string,
   batchSize: number,
-  onPage: (page: PageLinkRow) => void
+  onPage: (page: PageLinkRow) => void,
 ): Effect.Effect<void, StorageError, never> {
   return Effect.gen(function* () {
     let offset = 0;
@@ -393,7 +393,7 @@ function parseLinkPage(parsedData: string | null): {
 function extractEdges(
   parsedData: string | null,
   sourceUrl: string,
-  winnerByKey: ReadonlyMap<string, string>
+  winnerByKey: ReadonlyMap<string, string>,
 ): OutgoingEdge[] {
   const edges: OutgoingEdge[] = [];
   for (const link of parseLinkPage(parsedData).links) {
@@ -419,11 +419,11 @@ async function readRowsByUrls(
   crawlId: string,
   batchSize: number,
   urls: readonly string[],
-  onRow: (row: PageLinkRow) => void
+  onRow: (row: PageLinkRow) => void,
 ): Promise<void> {
   for (let i = 0; i < urls.length; i += batchSize) {
     const rows = await Effect.runPromise(
-      storage.getPageLinkRowsByUrls(crawlId, urls.slice(i, i + batchSize)).pipe(Effect.orDie)
+      storage.getPageLinkRowsByUrls(crawlId, urls.slice(i, i + batchSize)).pipe(Effect.orDie),
     );
     for (const row of rows) onRow(row);
   }
@@ -435,12 +435,12 @@ async function* iterateOutgoingEdges(
   crawlId: string,
   batchSize: number,
   winnerByKey: ReadonlyMap<string, string>,
-  universeSet: ReadonlySet<string> | null
+  universeSet: ReadonlySet<string> | null,
 ): AsyncIterable<PageOutgoingEdges> {
   let offset = 0;
   for (;;) {
     const batch = await Effect.runPromise(
-      storage.getPageLinkRows(crawlId, { limit: batchSize, offset }).pipe(Effect.orDie)
+      storage.getPageLinkRows(crawlId, { limit: batchSize, offset }).pipe(Effect.orDie),
     );
     for (const row of batch) {
       if (universeSet && !universeSet.has(row.normalizedUrl)) continue;
@@ -467,7 +467,7 @@ async function computeClickDepths(
   batchSize: number,
   winnerByKey: ReadonlyMap<string, string>,
   entryUrls: readonly string[],
-  opts: ClickDepthOptions
+  opts: ClickDepthOptions,
 ): Promise<ClickDepthResult> {
   const depths = new Map<string, ClickDepthNode>();
   const reached = new Set<string>();
@@ -507,26 +507,26 @@ async function computeClickDepths(
     let more = false;
     let denied = false;
     await readRowsByUrls(storage, crawlId, batchSize, winnerUrls(current), (row) => {
-        const key = normalizeUrl(row.normalizedUrl);
-        const node = depths.get(row.normalizedUrl)!;
-        node.status = row.status ?? null;
-        pending.delete(key);
-        if (detectOnly && more) return;
-        for (const edge of extractEdges(row.parsedData, row.normalizedUrl, winnerByKey)) {
-          if (edge.nofollow || edge.target === key || reached.has(edge.target)) continue;
-          if (detectOnly) {
-            more = true;
-            break;
-          }
-          if (depths.size >= maxNodes) {
-            denied = true;
-            continue;
-          }
-          reached.add(edge.target);
-          depths.set(winnerByKey.get(edge.target)!, { depth: depth + 1, status: null });
-          pending.add(edge.target);
-          next.add(edge.target);
+      const key = normalizeUrl(row.normalizedUrl);
+      const node = depths.get(row.normalizedUrl)!;
+      node.status = row.status ?? null;
+      pending.delete(key);
+      if (detectOnly && more) return;
+      for (const edge of extractEdges(row.parsedData, row.normalizedUrl, winnerByKey)) {
+        if (edge.nofollow || edge.target === key || reached.has(edge.target)) continue;
+        if (detectOnly) {
+          more = true;
+          break;
         }
+        if (depths.size >= maxNodes) {
+          denied = true;
+          continue;
+        }
+        reached.add(edge.target);
+        depths.set(winnerByKey.get(edge.target)!, { depth: depth + 1, status: null });
+        pending.add(edge.target);
+        next.add(edge.target);
+      }
     });
     if (detectOnly) {
       if (more) truncated = full ? "maxNodes" : "maxDepth";
@@ -548,7 +548,7 @@ async function computeClickDepths(
 async function* iteratePagesMatching(
   storage: SQLiteStorage,
   crawlId: string,
-  pred: (row: PageFeatureRow) => boolean
+  pred: (row: PageFeatureRow) => boolean,
 ): AsyncIterable<PageFeatureRow> {
   let after: string | undefined;
   for (;;) {
@@ -556,7 +556,7 @@ async function* iteratePagesMatching(
       storage
         .getPageFeaturesPage(crawlId, { after, limit: FEATURE_SCAN_BATCH })
         // A read failure mid-cursor is a hard error, not a silent truncation.
-        .pipe(Effect.orDie)
+        .pipe(Effect.orDie),
     );
     if (rows.length === 0) return;
     for (const row of rows) {

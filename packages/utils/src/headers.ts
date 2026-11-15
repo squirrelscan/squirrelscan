@@ -227,9 +227,7 @@ export function recordToHeaders(record: Record<string, string>): Headers {
  * says it is, while a PNG/WebP/AVIF/font/PDF in that same pool is already
  * entropy-coded and gains nothing.
  */
-export function isCompressibleContentType(
-  contentType: string | null | undefined
-): boolean {
+export function isCompressibleContentType(contentType: string | null | undefined): boolean {
   if (!contentType) return false;
   const t = contentType.toLowerCase();
   return (
@@ -258,7 +256,10 @@ interface NamedHeaderHost {
 function parseNamedHeaderHost(value: string): NamedHeaderHost | null {
   const raw = value.trim().toLowerCase();
   try {
-    const host = new URL(raw.includes("://") ? raw : `https://${raw}`).hostname.replace(/^\[|\]$/g, "");
+    const host = new URL(raw.includes("://") ? raw : `https://${raw}`).hostname.replace(
+      /^\[|\]$/g,
+      "",
+    );
     return host === "" ? null : { host, allowHttp: raw.startsWith("http://") };
   } catch {
     return null;

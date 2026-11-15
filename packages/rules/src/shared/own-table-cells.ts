@@ -14,7 +14,6 @@
 // what the rules queried before; the walk decides which table and row own them.
 import type { ChildrenParent } from "./attribute-lookup";
 
-
 export interface OwnRow {
   row: Element;
   /** The row's own `th` and `td` cells, in document order. */

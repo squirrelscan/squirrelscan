@@ -203,10 +203,7 @@ export const passwordFormGetRule: Rule = {
         return;
       }
       failing.push(
-        item(
-          `${position} (${action}) sends its password field by GET, in the URL`,
-          "get-method",
-        ),
+        item(`${position} (${action}) sends its password field by GET, in the URL`, "get-method"),
       );
     });
 

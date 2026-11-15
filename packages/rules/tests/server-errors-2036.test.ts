@@ -38,7 +38,11 @@ describe("crawl/server-errors", () => {
     ]).checks;
     expect(check.status).toBe("fail");
     expect(check.items).toEqual([
-      { id: "https://example.com/boom", label: "https://example.com/boom (500)", meta: { statusCode: 500 } },
+      {
+        id: "https://example.com/boom",
+        label: "https://example.com/boom (500)",
+        meta: { statusCode: 500 },
+      },
     ]);
   });
 
@@ -63,8 +67,9 @@ describe("crawl/server-errors", () => {
   });
 
   test("a redirect entry is not a page", () => {
-    const [check] = run([{ url: "https://example.com/r", statusCode: 500, redirectSource: true }])
-      .checks;
+    const [check] = run([
+      { url: "https://example.com/r", statusCode: 500, redirectSource: true },
+    ]).checks;
     expect(check.status).toBe("pass");
   });
 
@@ -105,8 +110,9 @@ describe("crawl/server-errors", () => {
   });
 
   test("a crawl with failed fetches still reports the 5xx pages it did fetch", () => {
-    const [check] = run([{ url: "https://example.com/boom", statusCode: 500 }], { failedFetches: 2 })
-      .checks;
+    const [check] = run([{ url: "https://example.com/boom", statusCode: 500 }], {
+      failedFetches: 2,
+    }).checks;
     expect(check.status).toBe("fail");
   });
 

@@ -55,11 +55,15 @@ beforeAll(() => {
         // Safe: an allowlist. Anything off it goes to the one partner host it trusts.
         case "/sso":
           return redirect(
-            q("returnTo") === "https://partner.example.org/" ? q("returnTo") : "https://partner.example.org/"
+            q("returnTo") === "https://partner.example.org/"
+              ? q("returnTo")
+              : "https://partner.example.org/",
           );
         // Safe: same-origin only. Keeps the path of the value and drops its host.
         case "/home":
-          return redirect(new URL(q("continue") || "/", "http://x.invalid").pathname.replace(/^\/+/, "/landing/"));
+          return redirect(
+            new URL(q("continue") || "/", "http://x.invalid").pathname.replace(/^\/+/, "/landing/"),
+          );
         // Rejects the value outright.
         case "/bounce":
           return new Response("bad redirect", { status: 400 });
@@ -110,9 +114,19 @@ function ctxFor(opts: {
   return {
     page: { url: `${BASE}/`, html: "", statusCode: 200, loadTime: 0, headers: {} },
     parsed: {} as RuleContext["parsed"],
-    site: { baseUrl: `${BASE}/`, pages: opts.pages, robotsTxt: opts.robotsTxt ?? null, sitemaps: null },
+    site: {
+      baseUrl: `${BASE}/`,
+      pages: opts.pages,
+      robotsTxt: opts.robotsTxt ?? null,
+      sitemaps: null,
+    },
     endpointSurface: opts.surface
-      ? { candidates: opts.surface, total: opts.surface.length, truncated: false, scriptsSkipped: 0 }
+      ? {
+          candidates: opts.surface,
+          total: opts.surface.length,
+          truncated: false,
+          scriptsSkipped: 0,
+        }
       : undefined,
     probe: opts.noProbe
       ? undefined
@@ -135,14 +149,22 @@ const warns = (checks: CheckResult[]) => checks.filter((c) => c.status === "warn
 
 describe("security/open-redirect", () => {
   test("a vulnerable param is flagged with the page and the param, from the absolute form", async () => {
-    const { checks, sent } = await run(ctxFor({ pages: [page("/", [link("/login?next=/account")])] }));
+    const { checks, sent } = await run(
+      ctxFor({ pages: [page("/", [link("/login?next=/account")])] }),
+    );
     const w = warns(checks);
     expect(w).toHaveLength(1);
     expect(w[0]!.message).toContain(`${BASE}/login`);
     expect(w[0]!.message).toContain("next parameter");
     expect(w[0]!.items?.[0]).toMatchObject({
       id: `${BASE}/login?next`,
-      meta: { page: `${BASE}/login`, param: "next", payload: "absolute", status: 302, foundVia: "link" },
+      meta: {
+        page: `${BASE}/login`,
+        param: "next",
+        payload: "absolute",
+        status: 302,
+        foundVia: "link",
+      },
     });
     // One request: the absolute form was enough, so the protocol-relative one is not sent.
     expect(sent.map((h) => `${h.method} ${h.path} ${h.params.get("next")}`)).toEqual([
@@ -154,7 +176,11 @@ describe("security/open-redirect", () => {
     const { checks, sent } = await run(ctxFor({ pages: [page("/go?url=/docs")] }));
     const w = warns(checks);
     expect(w).toHaveLength(1);
-    expect(w[0]!.items?.[0]?.meta).toMatchObject({ param: "url", payload: "protocol-relative", foundVia: "page-url" });
+    expect(w[0]!.items?.[0]?.meta).toMatchObject({
+      param: "url",
+      payload: "protocol-relative",
+      foundVia: "page-url",
+    });
     expect(sent.map((h) => h.params.get("url"))).toEqual([CANARY_ABSOLUTE, CANARY_RELATIVE]);
   });
 
@@ -169,18 +195,20 @@ describe("security/open-redirect", () => {
             link("/echo?dest=/y"),
           ]),
         ],
-      })
+      }),
     );
     expect(warns(checks)).toHaveLength(0);
     const pass = checks.find((c) => c.status === "pass");
-    expect(pass?.message).toBe("No redirect parameter sent visitors off-site (4 parameter(s) probed)");
+    expect(pass?.message).toBe(
+      "No redirect parameter sent visitors off-site (4 parameter(s) probed)",
+    );
     // Both forms were tried on every one of them.
     expect(sent).toHaveLength(8);
   });
 
   test("the redirect is never followed: same-origin and off-site Location targets are never requested", async () => {
     const { sent } = await run(
-      ctxFor({ pages: [page("/", [link("/home?continue=/dashboard"), link("/login?next=/a")])] })
+      ctxFor({ pages: [page("/", [link("/home?continue=/dashboard"), link("/login?next=/a")])] }),
     );
     // /home redirects to /landing/... on this same server; a followed redirect would show up here.
     expect(sent.some((h) => h.path.startsWith("/landing"))).toBe(false);
@@ -202,7 +230,7 @@ describe("security/open-redirect", () => {
             probeEligible: true,
           },
         ],
-      })
+      }),
     );
     expect(sent).toHaveLength(0);
     expect(checks).toHaveLength(1);
@@ -226,7 +254,9 @@ describe("security/open-redirect", () => {
   });
 
   test("probes are capped per run and the rest are counted", async () => {
-    const links = Array.from({ length: MAX_OPEN_REDIRECT_CANDIDATES + 3 }, (_, i) => link(`/p${i}?next=/`));
+    const links = Array.from({ length: MAX_OPEN_REDIRECT_CANDIDATES + 3 }, (_, i) =>
+      link(`/p${i}?next=/`),
+    );
     const { checks, sent } = await run(ctxFor({ pages: [page("/", links)] }));
     // Default route answers 200: each candidate costs both forms.
     expect(sent).toHaveLength(MAX_OPEN_REDIRECT_CANDIDATES * 2);
@@ -256,7 +286,11 @@ describe("security/open-redirect", () => {
 
   test("an unreachable server is not a pass", async () => {
     const ctx = ctxFor({ pages: [] });
-    ctx.site = { ...ctx.site!, baseUrl: "http://127.0.0.1:1/", pages: [{ ...page("/"), url: "http://127.0.0.1:1/login?next=/" }] };
+    ctx.site = {
+      ...ctx.site!,
+      baseUrl: "http://127.0.0.1:1/",
+      pages: [{ ...page("/"), url: "http://127.0.0.1:1/login?next=/" }],
+    };
     const { checks } = await run(ctx);
     expect(checks[0]).toMatchObject({ status: "skipped", skipReason: "probe-errors" });
   });
@@ -299,12 +333,21 @@ describe("open-redirect candidate selection", () => {
       skippedRobots: 1,
     });
     expect(
-      selectOpenRedirectCandidates(ctxFor({ pages, robotsTxt, level: "aggressive" })).candidates
+      selectOpenRedirectCandidates(ctxFor({ pages, robotsTxt, level: "aggressive" })).candidates,
     ).toHaveLength(1);
   });
 
   test("param names match without case, underscores or dashes", () => {
-    for (const name of ["next", "returnTo", "return_url", "redirect-to", "continue", "dest", "r", "url"]) {
+    for (const name of [
+      "next",
+      "returnTo",
+      "return_url",
+      "redirect-to",
+      "continue",
+      "dest",
+      "r",
+      "url",
+    ]) {
       expect(isRedirectParamName(name)).toBe(true);
     }
     for (const name of ["q", "page", "nextPage", "ref", "utm_source"]) {
@@ -322,7 +365,9 @@ describe("classifyRedirect", () => {
     expect(classifyRedirect(302, "/dashboard", req).kind).toBe("same-origin");
     expect(classifyRedirect(302, "https://example.com/x", req).kind).toBe("same-origin");
     expect(classifyRedirect(302, "https://partner.example.org/", req).kind).toBe("other-host");
-    expect(classifyRedirect(302, `https://example.com/?u=${CANARY_ABSOLUTE}`, req).kind).toBe("same-origin");
+    expect(classifyRedirect(302, `https://example.com/?u=${CANARY_ABSOLUTE}`, req).kind).toBe(
+      "same-origin",
+    );
     expect(classifyRedirect(200, CANARY_ABSOLUTE, req).kind).toBe("no-redirect");
     expect(classifyRedirect(302, null, req).kind).toBe("no-redirect");
   });

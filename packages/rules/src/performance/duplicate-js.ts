@@ -5,9 +5,7 @@ import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
 
 // Extract library name and version from script URL
-function extractLibraryInfo(
-  src: string
-): { name: string; version?: string } | null {
+function extractLibraryInfo(src: string): { name: string; version?: string } | null {
   // Try to extract from common CDN patterns
   const patterns = [
     // unpkg.com/react@18.2.0/umd/react.production.min.js
@@ -64,10 +62,7 @@ export const duplicateJsRule: Rule = {
     const checks: CheckResult[] = [];
 
     // Track loaded libraries
-    const libraries = new Map<
-      string,
-      Array<{ src: string; version?: string }>
-    >();
+    const libraries = new Map<string, Array<{ src: string; version?: string }>>();
 
     // Check external scripts
     const scripts = querySelectorAllOutsideNoscript(doc, "script[src]");
@@ -90,14 +85,10 @@ export const duplicateJsRule: Rule = {
     for (const [name, instances] of libraries) {
       if (instances.length > 1) {
         // Check if versions differ
-        const versions = new Set(
-          instances.map((i) => i.version).filter(Boolean)
-        );
+        const versions = new Set(instances.map((i) => i.version).filter(Boolean));
 
         if (versions.size > 1) {
-          versionMismatches.push(
-            `${name} (versions: ${Array.from(versions).join(", ")})`
-          );
+          versionMismatches.push(`${name} (versions: ${Array.from(versions).join(", ")})`);
         } else {
           duplicates.push(`${name} (${instances.length}x)`);
         }

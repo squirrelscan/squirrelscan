@@ -79,7 +79,6 @@ import {
   type RuleTally,
 } from "./scoring";
 
-
 /** Every page a check speaks for, normalized to the store's page identity. */
 function attributedPages(check: CheckResult): string[] {
   if (check.pageUrl) return [normalizePageUrl(check.pageUrl)];
@@ -174,10 +173,7 @@ export interface SmartAuditStore {
    *
    * Optional so an in-memory store (tests, fixtures) needs only `getFindings`.
    */
-  streamFindingPages?(
-    siteKey: string,
-    states?: FindingState[],
-  ): PriorFindingPageSource;
+  streamFindingPages?(siteKey: string, states?: FindingState[]): PriorFindingPageSource;
   getSitePages(siteKey: string): Promise<SitePageRecord[]>;
   upsertFindings(findings: PageFindingRecord[]): Promise<void>;
   /**
@@ -562,13 +558,11 @@ export async function runCloudSmartAudits(
   const completeStore = input.completeStore;
   // (repo#2657) A capped report: the score comes from its tallies, not its rows.
   // Needs the signal too, which is what says which pages the tallies cover.
-  const checkTallies =
-    !completeStore && input.resolutionSignal ? input.checkTallies : undefined;
+  const checkTallies = !completeStore && input.resolutionSignal ? input.checkTallies : undefined;
   // (repo#3348) The complete store's twin, on the same condition: the signal is
   // what says which carries the tallies already count (`tallySignal` below), and
   // without it a skip carried off the shell's checks would be scored twice.
-  const completeTallies =
-    completeStore && input.resolutionSignal ? input.checkTallies : undefined;
+  const completeTallies = completeStore && input.resolutionSignal ? input.checkTallies : undefined;
 
   // Rule meta + severity indexes from the report's ruleResults (both modes — the
   // shell always carries every rule that ran, so this is the meta source even in
@@ -618,7 +612,10 @@ export async function runCloudSmartAudits(
    * (repo#2078) The refused checks per rule, so the capped path can take them
    * back out of the producer's `checkTallies`, which counted them.
    */
-  const outsideCrawledChecks = new Map<string, { meta: RuleRunResult["meta"]; checks: CheckResult[] }>();
+  const outsideCrawledChecks = new Map<
+    string,
+    { meta: RuleRunResult["meta"]; checks: CheckResult[] }
+  >();
   const wholeCrawledSet: Set<string> | undefined =
     !completeStore && input.resolutionSignal?.crawledUrlsComplete === true
       ? new Set([
@@ -1182,7 +1179,10 @@ export async function runCloudSmartAudits(
   let outsideUnknown = false;
   const isCrawledPage = (url: string): boolean =>
     crawledUrls.has(url) || (resolution?.crawledUrls.has(url) ?? false);
-  const noteCarriedOutside = (finding: { normalizedUrl: string; neverRendered?: boolean }): void => {
+  const noteCarriedOutside = (finding: {
+    normalizedUrl: string;
+    neverRendered?: boolean;
+  }): void => {
     if (!finding.neverRendered && !isCrawledPage(finding.normalizedUrl)) {
       carriedOutside.add(finding.normalizedUrl);
     }
@@ -1190,7 +1190,10 @@ export async function runCloudSmartAudits(
   const staleCarryPages = new Set<string>();
   const noteStaleCarry = (finding: { normalizedUrl: string; lastSeenAt?: number }): void => {
     if ((finding.lastSeenAt ?? 0) >= now) return;
-    if (crawledUrls.has(finding.normalizedUrl) || (resolution?.crawledUrls.has(finding.normalizedUrl) ?? false)) {
+    if (
+      crawledUrls.has(finding.normalizedUrl) ||
+      (resolution?.crawledUrls.has(finding.normalizedUrl) ?? false)
+    ) {
       staleCarryPages.add(finding.normalizedUrl);
     }
   };
@@ -1408,12 +1411,18 @@ export async function runCloudSmartAudits(
   // and the per-page figure read them with those taken back out.
   const scoredTallies =
     checkTallies && outsideCrawledChecks.size > 0
-      ? subtractCheckTallies(checkTallies, buildCheckTallies(Object.fromEntries(outsideCrawledChecks)))
+      ? subtractCheckTallies(
+          checkTallies,
+          buildCheckTallies(Object.fromEntries(outsideCrawledChecks)),
+        )
       : checkTallies;
   const perPageTallies: CheckTallies =
     scoredTallies ?? buildCheckTallies(Object.fromEntries(freshForUnion));
   const carriedChecksPerPage = (ruleId: string): number =>
-    carriedChecksPerPageFor({ completeStore: !!completeStore, completeTallies, perPageTallies }, ruleId);
+    carriedChecksPerPageFor(
+      { completeStore: !!completeStore, completeTallies, perPageTallies },
+      ruleId,
+    );
   const unionRuleResults = buildScoringResultsFromMerged({
     freshResults: freshForUnion,
     carriedFindings: unionCarried,
@@ -1422,7 +1431,6 @@ export async function runCloudSmartAudits(
     carriedChecksPerPage,
     ...(carriedSource ? { carriedSource } : {}),
   });
-
 
   let reportTotals: CloudSmartAuditsResult["reportTotals"];
   let shownLastSeen = carriedLastSeen;
@@ -1485,10 +1493,11 @@ export async function runCloudSmartAudits(
   if (canonicalVariantOf.size > 0) {
     for (const url of auditedUrls) if (canonicalVariantOf.has(url)) auditedVariants += 1;
   }
-  const outsidePages = outsideUnknown || !input.countCarriedPagesOutsideCrawl
-    ? undefined
-    : new Set([...carriedOutside].map((u) => canonicalVariantOf.get(u) ?? u)).size +
-      untouchedOutsidePages;
+  const outsidePages =
+    outsideUnknown || !input.countCarriedPagesOutsideCrawl
+      ? undefined
+      : new Set([...carriedOutside].map((u) => canonicalVariantOf.get(u) ?? u)).size +
+        untouchedOutsidePages;
 
   return {
     canonicalVariantOf,
@@ -1604,7 +1613,8 @@ function makeCheckEvaluated(
   return (url, ruleId, checkName) => {
     const ruleKey = resolutionRuleKey(ruleId);
     const key = resolutionCheckKey(ruleId, checkName);
-    if (resolution.truncatedChecks.has(ruleKey) || resolution.truncatedChecks.has(key)) return false;
+    if (resolution.truncatedChecks.has(ruleKey) || resolution.truncatedChecks.has(key))
+      return false;
     const hashes = hashesOf(url);
     const ruleSkipped = resolution.notEvaluatedByCheck.get(ruleKey);
     if (ruleSkipped && hashes.all.some((h) => ruleSkipped.has(h))) return false;

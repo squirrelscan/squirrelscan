@@ -26,7 +26,12 @@ import {
 import type { CheckResult } from "@squirrelscan/core-contracts";
 import { Effect } from "effect";
 
-import { buildHeadersMap, buildSiteContext, isRenderedFetch, releaseSiteContextDocuments } from "../src/adapter";
+import {
+  buildHeadersMap,
+  buildSiteContext,
+  isRenderedFetch,
+  releaseSiteContextDocuments,
+} from "../src/adapter";
 import { collectDroppedBatch } from "../src/batch-gc";
 import { detachFromPage } from "../src/detach";
 import { isAuditablePage } from "../src/page-features";

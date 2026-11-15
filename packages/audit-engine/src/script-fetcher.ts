@@ -153,10 +153,7 @@ export function scriptRuleLimit(pageCount: number | undefined, maxScripts?: numb
   return calculateScriptLimit(pageCount, maxScripts ?? SCRIPT_FETCH_LIMITS.MAX_SCRIPTS_TO_FETCH);
 }
 
-function calculateScriptLimit(
-  pageCount: number | undefined,
-  defaultLimit: number
-): number {
+function calculateScriptLimit(pageCount: number | undefined, defaultLimit: number): number {
   if (!pageCount) return defaultLimit;
   return Math.min(defaultLimit, Math.max(10, Math.ceil(pageCount * 0.1)));
 }
@@ -194,7 +191,7 @@ function emptyScriptResult(url: string): ScriptFetchResult {
  */
 async function fetchScriptAttempt(
   url: string,
-  options: ScriptFetcherOptions
+  options: ScriptFetcherOptions,
 ): Promise<ScriptFetchResult> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), options.timeoutMs);
@@ -215,32 +212,29 @@ async function fetchScriptAttempt(
       {
         method: "GET",
         headers: mergeHeaderRecords(
-          { "User-Agent": options.userAgent, Accept: "application/javascript, text/javascript, */*" },
+          {
+            "User-Agent": options.userAgent,
+            Accept: "application/javascript, text/javascript, */*",
+          },
           customHeadersFor(url, options.customHeaders, options.headerScope),
         ),
         signal: controller.signal,
       },
       // #2717: undecoded on every hop; readBodyCapped decodes within its cap.
-      options.egress ? egressGuardedSend(fetchUndecoded, options.egress) : fetchUndecoded
+      options.egress ? egressGuardedSend(fetchUndecoded, options.egress) : fetchUndecoded,
     );
 
     const contentType = response.headers.get("content-type");
     const contentLength = response.headers.get("content-length");
-    const declaredSize = contentLength
-      ? Number.parseInt(contentLength, 10)
-      : null;
+    const declaredSize = contentLength ? Number.parseInt(contentLength, 10) : null;
 
     const sourceMapHeader =
-      response.headers.get("sourcemap") ||
-      response.headers.get("x-sourcemap") ||
-      undefined;
+      response.headers.get("sourcemap") || response.headers.get("x-sourcemap") || undefined;
 
     // #9: a transfer coding (gzip/br/…) or null for identity/absent. The body
     // is decoded as it is read but this header stays intact, so it remains
     // observable even though `sizeBytes` below measures the DECODED text.
-    const contentEncoding = normalizeEncoding(
-      response.headers.get("content-encoding")
-    );
+    const contentEncoding = normalizeEncoding(response.headers.get("content-encoding"));
 
     const cacheHeaders: ScriptCacheHeaders = {
       cacheControl: response.headers.get("cache-control"),
@@ -255,8 +249,7 @@ async function fetchScriptAttempt(
 
     if (
       declaredSize &&
-      declaredSize >
-        (options.maxSizeBytes ?? SCRIPT_FETCH_LIMITS.MAX_SCRIPT_SIZE_BYTES)
+      declaredSize > (options.maxSizeBytes ?? SCRIPT_FETCH_LIMITS.MAX_SCRIPT_SIZE_BYTES)
     ) {
       return {
         ...defaultResult,
@@ -352,7 +345,7 @@ async function fetchScriptAttempt(
 async function fetchSingleScriptAsync(
   url: string,
   options: ScriptFetcherOptions,
-  retryCount = 0
+  retryCount = 0,
 ): Promise<ScriptFetchResult> {
   try {
     if (options.egress && !isHttpOrHttpsUrl(url)) {
@@ -367,12 +360,8 @@ async function fetchSingleScriptAsync(
     // Retries live outside the attempt so each one arms its own deadline; a
     // retry started inside the attempt's `finally` would inherit an expired
     // timer, or keep the spent one alive for the length of the retry.
-    if (
-      retryCount < SCRIPT_FETCH_LIMITS.MAX_RETRIES &&
-      (error as Error).name !== "AbortError"
-    ) {
-      const delay =
-        SCRIPT_FETCH_LIMITS.RETRY_DELAY_MS * Math.pow(2, retryCount);
+    if (retryCount < SCRIPT_FETCH_LIMITS.MAX_RETRIES && (error as Error).name !== "AbortError") {
+      const delay = SCRIPT_FETCH_LIMITS.RETRY_DELAY_MS * Math.pow(2, retryCount);
       await new Promise((resolve) => setTimeout(resolve, delay));
       return fetchSingleScriptAsync(url, options, retryCount + 1);
     }
@@ -470,7 +459,7 @@ function readCache(cache: ScriptContentCache, url: string): ScriptCacheEntry | n
 
 function fetchSingleScript(
   url: string,
-  options: ScriptFetcherOptions
+  options: ScriptFetcherOptions,
 ): Effect.Effect<ScriptFetchResult, never, never> {
   const cache = options.anyContentType ? undefined : options.contentCache;
   return Effect.promise(async () => {
@@ -545,7 +534,7 @@ function fetchSingleScript(
 
 export function fetchScriptContents(
   urls: string[],
-  options?: Partial<ScriptFetcherOptions>
+  options?: Partial<ScriptFetcherOptions>,
 ): Effect.Effect<ScriptFetchResult[], never, never> {
   const opts = { ...DEFAULT_OPTIONS, ...options };
   opts.concurrency = Math.max(1, opts.concurrency);
@@ -555,15 +544,12 @@ export function fetchScriptContents(
 
     const uniqueUrls = [...new Set(urls)];
 
-    const configuredLimit =
-      opts.maxScripts ?? SCRIPT_FETCH_LIMITS.MAX_SCRIPTS_TO_FETCH;
+    const configuredLimit = opts.maxScripts ?? SCRIPT_FETCH_LIMITS.MAX_SCRIPTS_TO_FETCH;
     const dynamicLimit = opts.fetchAll
       ? configuredLimit
       : calculateScriptLimit(opts.pageCount, configuredLimit);
     const limitedUrls =
-      uniqueUrls.length > dynamicLimit
-        ? uniqueUrls.slice(0, dynamicLimit)
-        : uniqueUrls;
+      uniqueUrls.length > dynamicLimit ? uniqueUrls.slice(0, dynamicLimit) : uniqueUrls;
 
     const startedAt = Date.now();
     let heldBytes = 0;
@@ -578,10 +564,7 @@ export function fetchScriptContents(
             fetchSkipReason: "memory-cap",
           });
         }
-        if (
-          opts.totalTimeoutMs != null &&
-          Date.now() - startedAt >= opts.totalTimeoutMs
-        ) {
+        if (opts.totalTimeoutMs != null && Date.now() - startedAt >= opts.totalTimeoutMs) {
           return Effect.succeed<ScriptFetchResult>({
             ...emptyScriptResult(url),
             error: ASSET_FETCH_SKIPPED_ERROR,
@@ -592,10 +575,10 @@ export function fetchScriptContents(
           Effect.tap((result) =>
             Effect.sync(() => {
               heldBytes += result.content?.length ?? 0;
-            })
-          )
+            }),
+          ),
         );
-      })
+      }),
     );
 
     return yield* Effect.all(fetches, { concurrency: opts.concurrency });

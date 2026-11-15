@@ -106,54 +106,70 @@ describe("v1 golden baseline — 500-page canonical fixture", () => {
     CAPTURE_BUDGET_MS,
   );
 
-  test("diffBaselines reports zero divergences comparing a snapshot to itself", async () => {
-    const snapshot = await canonicalV1Snapshot();
+  test(
+    "diffBaselines reports zero divergences comparing a snapshot to itself",
+    async () => {
+      const snapshot = await canonicalV1Snapshot();
 
-    const diff = diffBaselines(snapshot, snapshot);
-    expect(diff).toEqual({ identical: true, divergences: [], totalDivergences: 0 });
-  }, CAPTURE_BUDGET_MS);
+      const diff = diffBaselines(snapshot, snapshot);
+      expect(diff).toEqual({ identical: true, divergences: [], totalDivergences: 0 });
+    },
+    CAPTURE_BUDGET_MS,
+  );
 
-  test("diffBaselines detects and reports an injected divergence, grouped by rule", async () => {
-    const original = await canonicalV1Snapshot();
+  test(
+    "diffBaselines detects and reports an injected divergence, grouped by rule",
+    async () => {
+      const original = await canonicalV1Snapshot();
 
-    // Deliberately corrupt a copy: drop one finding, and skew the overall score.
-    const mutated = structuredClone(original);
-    mutated.findings = mutated.findings.slice(1);
-    mutated.healthScore.overall = (mutated.healthScore.overall ?? 0) + 1;
-    mutated.healthScore.errorCount += 1;
+      // Deliberately corrupt a copy: drop one finding, and skew the overall score.
+      const mutated = structuredClone(original);
+      mutated.findings = mutated.findings.slice(1);
+      mutated.healthScore.overall = (mutated.healthScore.overall ?? 0) + 1;
+      mutated.healthScore.errorCount += 1;
 
-    const diff = diffBaselines(original, mutated, { maxDivergences: 10 });
-    expect(diff.identical).toBe(false);
-    expect(diff.totalDivergences).toBeGreaterThan(0);
-    expect(diff.divergences.some((d) => d.kind === "score-mismatch")).toBe(true);
-    expect(diff.divergences.some((d) => d.detail.startsWith("errorCount:"))).toBe(true);
-    expect(diff.divergences.some((d) => d.kind === "finding-only-in-a")).toBe(true);
-    // Sorted by ruleId — the report is actually readable, not insertion-order noise.
-    const ruleIds = diff.divergences.map((d) => d.ruleId);
-    expect(ruleIds).toEqual([...ruleIds].sort((a, b) => a.localeCompare(b)));
-  }, CAPTURE_BUDGET_MS);
+      const diff = diffBaselines(original, mutated, { maxDivergences: 10 });
+      expect(diff.identical).toBe(false);
+      expect(diff.totalDivergences).toBeGreaterThan(0);
+      expect(diff.divergences.some((d) => d.kind === "score-mismatch")).toBe(true);
+      expect(diff.divergences.some((d) => d.detail.startsWith("errorCount:"))).toBe(true);
+      expect(diff.divergences.some((d) => d.kind === "finding-only-in-a")).toBe(true);
+      // Sorted by ruleId — the report is actually readable, not insertion-order noise.
+      const ruleIds = diff.divergences.map((d) => d.ruleId);
+      expect(ruleIds).toEqual([...ruleIds].sort((a, b) => a.localeCompare(b)));
+    },
+    CAPTURE_BUDGET_MS,
+  );
 
-  test("diffBaselines caps the divergence list but reports the true total", async () => {
-    const original = await canonicalV1Snapshot();
+  test(
+    "diffBaselines caps the divergence list but reports the true total",
+    async () => {
+      const original = await canonicalV1Snapshot();
 
-    // Drop many findings — more divergences than the cap.
-    const mutated = structuredClone(original);
-    mutated.findings = mutated.findings.slice(20);
+      // Drop many findings — more divergences than the cap.
+      const mutated = structuredClone(original);
+      mutated.findings = mutated.findings.slice(20);
 
-    const diff = diffBaselines(original, mutated, { maxDivergences: 5 });
-    expect(diff.identical).toBe(false);
-    expect(diff.divergences.length).toBe(5);
-    expect(diff.totalDivergences).toBeGreaterThan(5);
-  }, CAPTURE_BUDGET_MS);
+      const diff = diffBaselines(original, mutated, { maxDivergences: 5 });
+      expect(diff.identical).toBe(false);
+      expect(diff.divergences.length).toBe(5);
+      expect(diff.totalDivergences).toBeGreaterThan(5);
+    },
+    CAPTURE_BUDGET_MS,
+  );
 
-  test("the shared canonical snapshot is deep-frozen: a mutation throws", async () => {
-    const snapshot = await canonicalV1Snapshot();
-    expect(Object.isFrozen(snapshot)).toBe(true);
-    expect(Object.isFrozen(snapshot.findings)).toBe(true);
-    expect(Object.isFrozen(snapshot.findings[0])).toBe(true);
-    expect(() => {
-      snapshot.healthScore.errorCount += 1;
-    }).toThrow();
-    expect(() => snapshot.findings.push(snapshot.findings[0]!)).toThrow();
-  }, CAPTURE_BUDGET_MS);
+  test(
+    "the shared canonical snapshot is deep-frozen: a mutation throws",
+    async () => {
+      const snapshot = await canonicalV1Snapshot();
+      expect(Object.isFrozen(snapshot)).toBe(true);
+      expect(Object.isFrozen(snapshot.findings)).toBe(true);
+      expect(Object.isFrozen(snapshot.findings[0])).toBe(true);
+      expect(() => {
+        snapshot.healthScore.errorCount += 1;
+      }).toThrow();
+      expect(() => snapshot.findings.push(snapshot.findings[0]!)).toThrow();
+    },
+    CAPTURE_BUDGET_MS,
+  );
 });

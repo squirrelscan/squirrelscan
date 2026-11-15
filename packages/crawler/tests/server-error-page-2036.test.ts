@@ -55,7 +55,6 @@ const BASE_CONFIG: Partial<CrawlerConfig> = {
   maxPages: 2,
 };
 
-
 /** A fetcher that answers every URL with one status and an optional body. */
 function statusFetcher(
   status: number,
@@ -121,7 +120,6 @@ function withStubbedRootProbes<T>(robotsBody: string, run: () => Promise<T>): Pr
   });
 }
 
-
 async function crawlStatus(fetcher: CrawlFetcher, path = "/"): Promise<number | null> {
   const program = Effect.gen(function* () {
     const storage = yield* createTestStorage();
@@ -137,27 +135,35 @@ async function crawlStatus(fetcher: CrawlFetcher, path = "/"): Promise<number | 
     yield* crawler.start(ORIGIN).pipe(Effect.timeout(Duration.seconds(10)), Effect.either);
     const crawlId = crawler.currentCrawlId!;
     yield* Effect.ignore(drain.await);
-    const page = yield* storage.getPage(crawlId, `${ORIGIN}${path}`).pipe(Effect.orElseSucceed(() => null));
+    const page = yield* storage
+      .getPage(crawlId, `${ORIGIN}${path}`)
+      .pipe(Effect.orElseSucceed(() => null));
     return page?.status ?? null;
   });
   return Effect.runPromise(program);
 }
 
 describe("a 5xx page is stored (#2036)", () => {
-  test.each([500, 503])("a %i page linked from a healthy seed is stored with its status", async (status) => {
-    const fetcher = statusFetcher(200, "", (url) =>
-      url === `${ORIGIN}/broken`
-        ? { status, body: "" }
-        : { status: 200, body: '<html><body><a href="/broken">b</a></body></html>' },
-    );
-    const stored = await withStubbedRootProbes("", () => crawlStatus(fetcher, "/broken"));
-    expect(stored).toBe(status);
-  });
+  test.each([500, 503])(
+    "a %i page linked from a healthy seed is stored with its status",
+    async (status) => {
+      const fetcher = statusFetcher(200, "", (url) =>
+        url === `${ORIGIN}/broken`
+          ? { status, body: "" }
+          : { status: 200, body: '<html><body><a href="/broken">b</a></body></html>' },
+      );
+      const stored = await withStubbedRootProbes("", () => crawlStatus(fetcher, "/broken"));
+      expect(stored).toBe(status);
+    },
+  );
 
-  test.each([500, 503])("a %i seed is not stored: a down site is a failed audit with no pages", async (status) => {
-    const stored = await withStubbedRootProbes("", () => crawlStatus(statusFetcher(status)));
-    expect(stored).toBeNull();
-  });
+  test.each([500, 503])(
+    "a %i seed is not stored: a down site is a failed audit with no pages",
+    async (status) => {
+      const stored = await withStubbedRootProbes("", () => crawlStatus(statusFetcher(status)));
+      expect(stored).toBeNull();
+    },
+  );
 
   test("a healthy page is stored as 200", async () => {
     const stored = await withStubbedRootProbes("", () =>

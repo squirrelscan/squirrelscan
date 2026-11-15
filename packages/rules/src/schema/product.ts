@@ -28,9 +28,7 @@ export const productSchemaRule: Rule = {
     const doc = ctx.parsed.document;
     if (!doc) return { checks: [] };
 
-    const schemaScripts = doc.querySelectorAll(
-      'script[type="application/ld+json"]'
-    );
+    const schemaScripts = doc.querySelectorAll('script[type="application/ld+json"]');
     let productSchema: Record<string, unknown> | null = null;
     // pub#817: every node on the page, so an `offers` reference resolves.
     const pageNodes: Record<string, unknown>[] = [];
@@ -68,7 +66,8 @@ export const productSchemaRule: Rule = {
       return { checks };
     }
 
-    const statusOf = (field: ProductField) => evidence.fields.find((f) => f.field === field)?.status;
+    const statusOf = (field: ProductField) =>
+      evidence.fields.find((f) => f.field === field)?.status;
 
     // Required properties. Only a field proven absent from a complete read
     // warns; an unchecked one (truncated read, rendered-only shell) does not.
@@ -120,8 +119,7 @@ export const productSchemaRule: Rule = {
     checks.push(fieldEvidenceCheck(evidence));
 
     // Check for reviews
-    const hasReview =
-      productSchema?.["review"] || productSchema?.["aggregateRating"];
+    const hasReview = productSchema?.["review"] || productSchema?.["aggregateRating"];
     if (hasReview) {
       checks.push({
         name: "product-reviews",

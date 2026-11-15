@@ -449,9 +449,14 @@ export class SampledStoreEstimator {
         const failMass = Math.min(carriedPages, Math.max(0, failed - knownFail));
         const warnHi = Math.min(carriedPages, Math.max(0, warnings - knownWarn));
         const warnLo = warnBound ? Math.min(warnHi, Math.max(0, warnings - offCarried)) : 0;
-        const failUnitHi = Math.min(carriedPages * ISSUE_PENALTY_ITEM_CAP, Math.max(0, failUnits - knownFail));
+        const failUnitHi = Math.min(
+          carriedPages * ISSUE_PENALTY_ITEM_CAP,
+          Math.max(0, failUnits - knownFail),
+        );
         const warnUnitHi = Math.min(carriedPages, Math.max(0, warnUnits - knownWarn));
-        const warnUnitLo = warnBound ? Math.min(warnUnitHi, Math.max(0, warnUnits - offCarried)) : 0;
+        const warnUnitLo = warnBound
+          ? Math.min(warnUnitHi, Math.max(0, warnUnits - offCarried))
+          : 0;
 
         estimate.warnings += warnLo;
         estimate.failed += failMass + (warnHi - warnLo);
@@ -491,11 +496,19 @@ export class SampledStoreEstimator {
 
       reportTotals.warnings = Math.max(
         0,
-        reportTotals.warnings - replaced.warnings - otherAsCounted.warnings + otherAsFailures.warnings + estimate.warnings,
+        reportTotals.warnings -
+          replaced.warnings -
+          otherAsCounted.warnings +
+          otherAsFailures.warnings +
+          estimate.warnings,
       );
       reportTotals.failed = Math.max(
         0,
-        reportTotals.failed - replaced.failed - otherAsCounted.failed + otherAsFailures.failed + estimate.failed,
+        reportTotals.failed -
+          replaced.failed -
+          otherAsCounted.failed +
+          otherAsFailures.failed +
+          estimate.failed,
       );
     }
   }

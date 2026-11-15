@@ -24,7 +24,11 @@ function report(overrides: Partial<AuditReport> = {}): AuditReport {
 }
 
 const llm = (r: AuditReport, version?: string) =>
-  renderLlm(r as Parameters<typeof renderLlm>[0], { version, includePassed: false, includeInfo: false });
+  renderLlm(r as Parameters<typeof renderLlm>[0], {
+    version,
+    includePassed: false,
+    includeInfo: false,
+  });
 
 describe("llm score labels", () => {
   test("group and category scores each say which they are", () => {
@@ -42,7 +46,9 @@ describe("llm audit version", () => {
   });
 
   test("the report's version wins over the renderer's", () => {
-    expect(llm(report({ generatorVersion: "1.2.3" } as Partial<AuditReport>), "9.9.9")).toContain('<audit version="1.2.3">');
+    expect(llm(report({ generatorVersion: "1.2.3" } as Partial<AuditReport>), "9.9.9")).toContain(
+      '<audit version="1.2.3">',
+    );
   });
 
   test("without either, the fallback is kept; with the option, the option", () => {

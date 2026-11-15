@@ -153,7 +153,10 @@ describe("only http(s) links reach the external check", () => {
     </body></html>`;
     const collected: ExternalLinkOccurrences = new Map();
     absorbExternalLinkOccurrences(collected, [
-      { page: { normalizedUrl: url, finalUrl: url, html } as never, parsed: parseHtmlForRules(html, url) },
+      {
+        page: { normalizedUrl: url, finalUrl: url, html } as never,
+        parsed: parseHtmlForRules(html, url),
+      },
     ] as unknown as SiteContextPage[]);
     expect([...collected.keys()].sort()).toEqual([
       "http://192.168.1.1/admin",

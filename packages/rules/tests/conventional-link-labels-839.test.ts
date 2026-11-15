@@ -7,7 +7,10 @@ import type { CheckResult } from "@squirrelscan/core-contracts";
 import { parsePage } from "@squirrelscan/parser";
 
 import { linkTextRule } from "../src/a11y/link-text";
-import { isConventionalLinkLabel, normalizeLinkLabel } from "../src/shared/conventional-link-labels";
+import {
+  isConventionalLinkLabel,
+  normalizeLinkLabel,
+} from "../src/shared/conventional-link-labels";
 import type { ParsedPage, RuleContext } from "../src/types";
 
 async function checks(links: string[]): Promise<CheckResult[]> {
@@ -15,11 +18,13 @@ async function checks(links: string[]): Promise<CheckResult[]> {
   const html = `<!doctype html><html lang="en"><head><title>t</title></head><body>${links
     .map((t, i) => `<a href="/p${i}">${t}</a>`)
     .join("")}</body></html>`;
-  return (await linkTextRule.run({
-    page: { url, html, statusCode: 200, loadTime: 0, headers: {} },
-    parsed: parsePage(html, url) as ParsedPage,
-    options: {},
-  } as RuleContext)).checks as CheckResult[];
+  return (
+    await linkTextRule.run({
+      page: { url, html, statusCode: 200, loadTime: 0, headers: {} },
+      parsed: parsePage(html, url) as ParsedPage,
+      options: {},
+    } as RuleContext)
+  ).checks as CheckResult[];
 }
 
 const flagged = async (text: string): Promise<boolean> =>
@@ -27,9 +32,25 @@ const flagged = async (text: string): Promise<boolean> =>
 
 describe("account labels are never generic", () => {
   test.each([
-    "Sign in", "Sign In", "signin", "Sign up", "signup", "Log in", "login", "Log out", "Logout",
-    "Sign out", "Register", "My account", "Sign in.", "Sign up!", "Sign in", "SIGN  IN",
-    "Ｓｉｇｎ ｉｎ", "Log in:", "Sign in！",
+    "Sign in",
+    "Sign In",
+    "signin",
+    "Sign up",
+    "signup",
+    "Log in",
+    "login",
+    "Log out",
+    "Logout",
+    "Sign out",
+    "Register",
+    "My account",
+    "Sign in.",
+    "Sign up!",
+    "Sign in",
+    "SIGN  IN",
+    "Ｓｉｇｎ ｉｎ",
+    "Log in:",
+    "Sign in！",
   ])("%s", async (text) => {
     expect(await flagged(text)).toBe(false);
     expect(isConventionalLinkLabel(text)).toBe(true);
@@ -38,9 +59,25 @@ describe("account labels are never generic", () => {
 
 describe("legal and utility labels are never generic", () => {
   test.each([
-    "Terms", "Terms of Service", "Terms and Conditions", "Privacy", "Privacy Policy", "Legal",
-    "Legal notice", "Imprint", "DMCA", "Cookies", "Cookie policy", "Accessibility", "Sitemap",
-    "Contact", "About", "Help", "FAQ", "Careers", "Contact us",
+    "Terms",
+    "Terms of Service",
+    "Terms and Conditions",
+    "Privacy",
+    "Privacy Policy",
+    "Legal",
+    "Legal notice",
+    "Imprint",
+    "DMCA",
+    "Cookies",
+    "Cookie policy",
+    "Accessibility",
+    "Sitemap",
+    "Contact",
+    "About",
+    "Help",
+    "FAQ",
+    "Careers",
+    "Contact us",
   ])("%s", async (text) => {
     expect(await flagged(text)).toBe(false);
     expect(isConventionalLinkLabel(text)).toBe(true);
@@ -74,13 +111,20 @@ describe("one test per language", () => {
 });
 
 describe("genuine generic links are still reported", () => {
-  test.each(["click here", "read more", "learn more", "here", "more", "link", "this", "go", "continue"])(
-    "%s",
-    async (text) => {
-      expect(await flagged(text)).toBe(true);
-      expect(isConventionalLinkLabel(text)).toBe(false);
-    },
-  );
+  test.each([
+    "click here",
+    "read more",
+    "learn more",
+    "here",
+    "more",
+    "link",
+    "this",
+    "go",
+    "continue",
+  ])("%s", async (text) => {
+    expect(await flagged(text)).toBe(true);
+    expect(isConventionalLinkLabel(text)).toBe(false);
+  });
 
   test("the whole text must match: 'Sign in to read more' is not exempt, 'Read more' still is flagged", () => {
     expect(isConventionalLinkLabel("Sign in to read more")).toBe(false);
@@ -88,12 +132,14 @@ describe("genuine generic links are still reported", () => {
   });
 
   test("a page with Sign in and Sign up in the header and one real generic link reports only the generic one", async () => {
-    const out = (await checks(["Sign in", "Sign up", "Pricing", "click here"]));
+    const out = await checks(["Sign in", "Sign up", "Pricing", "click here"]);
     const generic = out.find((c) => c.name === "link-text-generic");
     expect(generic?.message).toBe("1 link(s) with generic text");
   });
 
   test("sign in alone passes the rule", async () => {
-    expect((await checks(["Sign in", "Sign up"])).map((c) => [c.name, c.status])).toEqual([["link-text", "pass"]]);
+    expect((await checks(["Sign in", "Sign up"])).map((c) => [c.name, c.status])).toEqual([
+      ["link-text", "pass"],
+    ]);
   });
 });

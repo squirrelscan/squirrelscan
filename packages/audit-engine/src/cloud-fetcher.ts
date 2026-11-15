@@ -266,7 +266,9 @@ export function mapRenderItemToResponse(
     fetcherMethod: "cloud-render",
     // The server's own HTML, when the render service sent it (#1769): only then does the crawler merge the
     // scripts hydration removed. Absent, the response is exactly what it was.
-    ...(typeof item.serverHtml === "string" && item.serverHtml.length > 0 ? { serverHtml: item.serverHtml } : {}),
+    ...(typeof item.serverHtml === "string" && item.serverHtml.length > 0
+      ? { serverHtml: item.serverHtml }
+      : {}),
     // XHR and fetch requests the page issued, for endpoint discovery. Absent when the service sent none.
     ...(Array.isArray(item.requests) && item.requests.length > 0
       ? { renderedRequests: item.requests.slice(0, MAX_RENDERED_REQUESTS_PER_PAGE) }
@@ -633,8 +635,7 @@ export function createCloudDocumentFetcher(
     // to the deadline (#992 R-001). A RACING waiter is not retired (#2026): its
     // fallback is in flight but a render item can still win it, so the loop
     // keeps polling for it until one of the two settles it.
-    const allRetired = () =>
-      active.every((w) => w.state === "settled" || w.state === "dispatched");
+    const allRetired = () => active.every((w) => w.state === "settled" || w.state === "dispatched");
 
     // Shared cancellation: a single url's watchdog rejects just that waiter and
     // keeps the rest of the batch rendering; the cloud POLLING is abandoned only

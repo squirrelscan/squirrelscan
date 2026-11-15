@@ -25,7 +25,10 @@ const SCRIPT_CLOSE = "</script>";
  * cannot be placed is left in the HTML, which costs a second read of that one
  * script and nothing else.
  */
-export function scriptBodySpans(html: string, texts: readonly string[]): Array<[start: number, end: number]> {
+export function scriptBodySpans(
+  html: string,
+  texts: readonly string[],
+): Array<[start: number, end: number]> {
   const spans: Array<[number, number]> = [];
   let cursor = 0;
   for (const text of texts) {
@@ -65,7 +68,7 @@ export function scriptBodySpans(html: string, texts: readonly string[]): Array<[
 export function blankAndCutSpans(
   html: string,
   spans: ReadonlyArray<readonly [number, number]>,
-  keep: number
+  keep: number,
 ): { text: string; cut: number[] } {
   if (spans.length === 0) return { text: html, cut: [] };
   const parts: string[] = [];
@@ -96,7 +99,11 @@ export function blankAndCutSpans(
  * and `</script>`, in order. Null when they cannot all be found, which leaves
  * the offsets as they are.
  */
-export function blankedOffsets(text: string, cut: readonly number[], keep: number): ((offset: number) => number) | null {
+export function blankedOffsets(
+  text: string,
+  cut: readonly number[],
+  keep: number,
+): ((offset: number) => number) | null {
   if (cut.length === 0) return (offset) => offset;
   const needle = `>${" ".repeat(keep)}${SCRIPT_CLOSE}`;
   // After the i-th shortened span (at and past `ends[i]`), offsets move by `shift[i]`.

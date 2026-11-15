@@ -5,8 +5,10 @@ import { describe, expect, test } from "bun:test";
 
 import { detectTechnologies } from "../src";
 
-const page = (head: string, body = "") => `<!doctype html><html><head><title>t</title>${head}</head><body>${body}</body></html>`;
-const ids = (html: string): string[] => detectTechnologies({ url: "https://example.com/", headers: {}, html }).map((t) => t.id);
+const page = (head: string, body = "") =>
+  `<!doctype html><html><head><title>t</title>${head}</head><body>${body}</body></html>`;
+const ids = (html: string): string[] =>
+  detectTechnologies({ url: "https://example.com/", headers: {}, html }).map((t) => t.id);
 const MB = 1_048_576;
 const rep = (unit: string, bytes: number): string => unit.repeat(Math.ceil(bytes / unit.length));
 
@@ -21,19 +23,22 @@ const FAMILIES: Array<{ tag: string; id: string; lines: string; one: string }> =
   {
     tag: "link",
     id: "bulma",
-    lines: '<link\n  rel="stylesheet"\n  crossorigin\nhref="https://cdn.example.net/css/bulma.min.css"\n>',
+    lines:
+      '<link\n  rel="stylesheet"\n  crossorigin\nhref="https://cdn.example.net/css/bulma.min.css"\n>',
     one: '<link rel="stylesheet" href="https://cdn.example.net/css/bulma.min.css">',
   },
   {
     tag: "img",
     id: "linkedin-insight",
-    lines: '<img\n  height="1"\n  alt=""\n  hidden\nsrc="https://px.ads.linkedin.com/collect/?pid=1"\n>',
+    lines:
+      '<img\n  height="1"\n  alt=""\n  hidden\nsrc="https://px.ads.linkedin.com/collect/?pid=1"\n>',
     one: '<img src="https://px.ads.linkedin.com/collect/?pid=1">',
   },
   {
     tag: "iframe",
     id: "youtube-embed",
-    lines: '<iframe\n  width="560"\n  allowfullscreen\nsrc="https://www.youtube.com/embed/abc"\n></iframe>',
+    lines:
+      '<iframe\n  width="560"\n  allowfullscreen\nsrc="https://www.youtube.com/embed/abc"\n></iframe>',
     one: '<iframe src="https://www.youtube.com/embed/abc"></iframe>',
   },
 ];

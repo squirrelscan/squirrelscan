@@ -80,7 +80,9 @@ describe("getAgentSignals", () => {
   });
 
   test("legacy ai/ rule ids are read", () => {
-    const signals = getAgentSignals(report([rule("ai/llms-txt", "llms-txt-present", "absent")], agents));
+    const signals = getAgentSignals(
+      report([rule("ai/llms-txt", "llms-txt-present", "absent")], agents),
+    );
     expect(signals[0].status).toBe("missing");
   });
 
@@ -130,7 +132,11 @@ describe("citability cross-link (repo#3882)", () => {
 
   test("links existing rules by status without re-emitting their findings", () => {
     const r = report(
-      [rule("eeat/content-dates", "c", null), warnRule("eeat/author-byline"), warnRule("ax/answer-blocks")],
+      [
+        rule("eeat/content-dates", "c", null),
+        warnRule("eeat/author-byline"),
+        warnRule("ax/answer-blocks"),
+      ],
       agents,
     );
     const line = citabilityLine(getCitabilitySignals(r));

@@ -11,7 +11,15 @@ function run(policy: string, scriptUrls: string[], header = "content-security-po
     site: {
       baseUrl: "https://example.com",
       pages: [{ url: "https://example.com/", statusCode: 200, headers: { [header]: policy } }],
-      scripts: scriptUrls.map((url) => ({ url, status: 200, error: null, contentType: null, sizeBytes: 1, content: null, sourcePages: [] })),
+      scripts: scriptUrls.map((url) => ({
+        url,
+        status: 200,
+        error: null,
+        contentType: null,
+        sizeBytes: 1,
+        content: null,
+        sourcePages: [],
+      })),
     },
     options: {},
   } as unknown as RuleContext;
@@ -47,7 +55,13 @@ describe("security/csp first-party proxy paths (#1604)", () => {
   });
 
   test("ordinary first-party script paths get no check", () => {
-    expect(run(SELF, ["https://example.com/assets/app.js", "https://example.com/statsig/a.js", "https://example.com/ingestor.js"])).toBeUndefined();
+    expect(
+      run(SELF, [
+        "https://example.com/assets/app.js",
+        "https://example.com/statsig/a.js",
+        "https://example.com/ingestor.js",
+      ]),
+    ).toBeUndefined();
   });
 
   test("a third-party host with a proxy-looking path is not first-party", () => {
@@ -55,12 +69,18 @@ describe("security/csp first-party proxy paths (#1604)", () => {
   });
 
   test("no check when 'self' is not in the effective script list", () => {
-    expect(run("script-src https://example.com", ["https://example.com/ingest/a.js"])).toBeUndefined();
+    expect(
+      run("script-src https://example.com", ["https://example.com/ingest/a.js"]),
+    ).toBeUndefined();
   });
 
   test("script-src-elem decides over script-src", () => {
-    expect(run("script-src 'self'; script-src-elem https://x.test", ["https://example.com/ingest/a.js"])).toBeUndefined();
-    expect(run("script-src https://x.test; script-src-elem 'self'", ["https://example.com/ingest/a.js"])).toBeDefined();
+    expect(
+      run("script-src 'self'; script-src-elem https://x.test", ["https://example.com/ingest/a.js"]),
+    ).toBeUndefined();
+    expect(
+      run("script-src https://x.test; script-src-elem 'self'", ["https://example.com/ingest/a.js"]),
+    ).toBeDefined();
   });
 
   test("bounded: a script past the scan cap is not seen, the list stays short", () => {
