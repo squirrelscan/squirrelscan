@@ -311,29 +311,63 @@ describe("perf/bad-caching", () => {
     expect(check(checks, "bad-caching-validators")?.status).toBe("pass");
   });
 
-  // Documented gap, #2243. The rule reads `Boolean(expires)` and never parses
-  // the value, so an already-expired Expires counts as a lifetime even with no
-  // validator to fall back on. Pinned here so the fix has to flip it on
-  // purpose rather than change it by accident; docs state the same at
-  // docs/rules/perf/bad-caching.mdx.
-  test("an already-past Expires still counts as a lifetime (documented gap, #2243)", async () => {
+  // #2243: Expires is parsed. Only a future instant is a lifetime.
+  test("an already-past Expires is not a lifetime", async () => {
     const past = new Date(Date.now() - 3600 * 1000).toUTCString();
     const pages = Array.from({ length: 4 }, (_, i) => ({
       url: `https://example.com/p${i}`,
       headers: { expires: past, "content-encoding": "gzip" },
     }));
-    const checks = (await run(badCachingRule, siteCtx(pages)));
-    expect(verdict(checks, "bad-caching-freshness")).toBe("ok");
-    // No validator anywhere, so that check still reports the real gap.
+    const checks = await run(badCachingRule, siteCtx(pages));
+    expect(verdict(checks, "bad-caching-freshness")).toBe("flagged");
     expect(check(checks, "bad-caching-validators")?.status).toBe("warn");
   });
 
-  test("a literal `Expires: 0` still counts as a lifetime (documented gap, #2243)", async () => {
+  test("a literal `Expires: 0` is not a lifetime", async () => {
     const pages = Array.from({ length: 4 }, (_, i) => ({
       url: `https://example.com/p${i}`,
       headers: { expires: "0", "content-encoding": "gzip" },
     }));
-    const checks = (await run(badCachingRule, siteCtx(pages)));
+    const checks = await run(badCachingRule, siteCtx(pages));
+    expect(verdict(checks, "bad-caching-freshness")).toBe("flagged");
+  });
+
+  test("an unparsable Expires is not a lifetime", async () => {
+    const pages = Array.from({ length: 4 }, (_, i) => ({
+      url: `https://example.com/p${i}`,
+      headers: { expires: "never", "content-encoding": "gzip" },
+    }));
+    const checks = await run(badCachingRule, siteCtx(pages));
+    expect(verdict(checks, "bad-caching-freshness")).toBe("flagged");
+  });
+
+  test("Expires is compared against the response Date header when present", async () => {
+    // Expires is in the real past but ahead of the (old) Date: still a lifetime.
+    const date = new Date(Date.now() - 7200 * 1000).toUTCString();
+    const expires = new Date(Date.now() - 3600 * 1000).toUTCString();
+    const pages = Array.from({ length: 4 }, (_, i) => ({
+      url: `https://example.com/p${i}`,
+      headers: { expires, date, "content-encoding": "gzip" },
+    }));
+    const checks = await run(badCachingRule, siteCtx(pages));
+    expect(verdict(checks, "bad-caching-freshness")).toBe("ok");
+    // Expires in the future of now but behind Date: not a lifetime.
+    const futureDate = new Date(Date.now() + 7200 * 1000).toUTCString();
+    const soon = new Date(Date.now() + 3600 * 1000).toUTCString();
+    const pages2 = Array.from({ length: 4 }, (_, i) => ({
+      url: `https://example.com/q${i}`,
+      headers: { expires: soon, date: futureDate, "content-encoding": "gzip" },
+    }));
+    expect(verdict(await run(badCachingRule, siteCtx(pages2)), "bad-caching-freshness")).toBe("flagged");
+  });
+
+  test("a positive max-age wins over a past Expires", async () => {
+    const past = new Date(Date.now() - 3600 * 1000).toUTCString();
+    const pages = Array.from({ length: 4 }, (_, i) => ({
+      url: `https://example.com/p${i}`,
+      headers: { "cache-control": "max-age=600", expires: past, "content-encoding": "gzip" },
+    }));
+    const checks = await run(badCachingRule, siteCtx(pages));
     expect(verdict(checks, "bad-caching-freshness")).toBe("ok");
   });
 
