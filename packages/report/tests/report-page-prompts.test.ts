@@ -322,7 +322,9 @@ describe("fixPrompt / fixPlanPrompt: model text stays fenced, one line per field
     const capped = coverageGap({ scanned: 200, discovered: 200, capped: true, timeStopped: false });
     expect(capped).toMatchObject({ scanned: 200, discovered: 200, moreKnown: 0 });
     const none = fixPrompt(fix, ctxFor(report(), { gap: capped }));
-    expect(none).toContain("Coverage: this audit scanned 200 pages and may not cover the whole site,");
+    expect(none).toContain(
+      "Coverage: this audit scanned 200 pages and may not cover the whole site,",
+    );
     expect(none).not.toContain("0+");
     expect(none).not.toContain("200 of 200");
     const known = coverageGap({ scanned: 10, discovered: 40, capped: true, timeStopped: false });
@@ -441,5 +443,22 @@ describe("inlineJson and the page's prompt block", () => {
     expect(body).toContain("</script><img src=x onerror=alert(1)>");
     expect(body.split("\n").filter((l) => l === NOTE_TOKEN)).toHaveLength(1);
     expect(html).not.toContain("<img src=x");
+  });
+});
+
+describe("coverageGap on a credit stop (repo#2145)", () => {
+  test("a credit stop is a gap even when nothing more is known", () => {
+    expect(
+      coverageGap({ scanned: 10, discovered: 10, capped: false, timeStopped: false }),
+    ).toBeNull();
+    expect(
+      coverageGap({
+        scanned: 10,
+        discovered: 10,
+        capped: false,
+        timeStopped: false,
+        creditsStopped: true,
+      }),
+    ).not.toBeNull();
   });
 });

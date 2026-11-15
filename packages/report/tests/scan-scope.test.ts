@@ -248,7 +248,9 @@ describe("a reduced page limit (#1909)", () => {
 
   test("an uncapped clamped run still names both, without 'reached'", () => {
     expect(
-      scanScopeLine(baseReport({ scanScope: { ...clampedScope, capped: false, pagesCrawled: 900 } })),
+      scanScopeLine(
+        baseReport({ scanScope: { ...clampedScope, capped: false, pagesCrawled: 900 } }),
+      ),
     ).toBe("Scan: 900 pages crawled from squirrelscan cloud (page limit 4320 of 10000 requested).");
   });
 
@@ -262,9 +264,7 @@ describe("a reduced page limit (#1909)", () => {
     // A producer echoing the same number both ways must not render a clamp that
     // never happened, which is why this compares rather than trusting presence.
     expect(
-      scanScopeLine(
-        baseReport({ scanScope: { ...clampedScope, requestedMaxPages: 4320 } }),
-      ),
+      scanScopeLine(baseReport({ scanScope: { ...clampedScope, requestedMaxPages: 4320 } })),
     ).toBe("Scan: 4320 pages crawled from squirrelscan cloud (page limit 4320 reached).");
   });
 
@@ -339,7 +339,13 @@ describe("XML scan scope (#350)", () => {
     expect(uncapped).toContain('<scan-scope origin="cli" crawled="12" capped="false"/>');
     const timed = renderXml(
       baseReport({
-        scanScope: { origin: "ci", maxPages: 100, pagesCrawled: 40, capped: false, stopReason: "time" },
+        scanScope: {
+          origin: "ci",
+          maxPages: 100,
+          pagesCrawled: 40,
+          capped: false,
+          stopReason: "time",
+        },
       }),
     );
     expect(timed).toContain(
@@ -379,7 +385,9 @@ describe("targeted run note (#1777)", () => {
     });
 
   test("an ordinary audit has no note and its line is unchanged", () => {
-    expect(scanScopeLine(scope(undefined))).toBe("Scan: 3 pages crawled from the CLI (page limit 100).");
+    expect(scanScopeLine(scope(undefined))).toBe(
+      "Scan: 3 pages crawled from the CLI (page limit 100).",
+    );
   });
 
   test("says how many of the given URLs were audited and that site-wide rules did not run", () => {
@@ -404,14 +412,69 @@ describe("audit level line of a targeted run (#1777)", () => {
         level: "surface",
         basedOn: "surface",
         changes: [],
-        settings: { pages: 10, crawlStrategy: "pattern-sampled", cloudChecks: true, render: "auto", externalLinks: false, probe: "active" },
+        settings: {
+          pages: 10,
+          crawlStrategy: "pattern-sampled",
+          cloudChecks: true,
+          render: "auto",
+          externalLinks: false,
+          probe: "active",
+        },
         ...extra,
       } as never,
     });
   test("says only the listed URLs were audited and no links were checked", () => {
-    expect(auditLevelLine(level({ targeted: true }))).toContain("Targeted: only the listed URLs were audited, and no links were checked.");
+    expect(auditLevelLine(level({ targeted: true }))).toContain(
+      "Targeted: only the listed URLs were audited, and no links were checked.",
+    );
   });
   test("an ordinary run's line is unchanged", () => {
     expect(auditLevelLine(level({}))).toBe("Audit level: Surface.");
+  });
+});
+
+describe("credit-capped scans (repo#2145)", () => {
+  const scope = {
+    origin: "cloud" as const,
+    maxPages: 250,
+    pagesCrawled: 87,
+    capped: false,
+    stopReason: "credits" as const,
+  };
+  const credits = baseReport({ totalPages: 87, scanScope: scope });
+
+  test("scan line says capped by credits", () => {
+    expect(scanScopeLine(credits)).toBe(
+      "Scan: 87 pages crawled from squirrelscan cloud (page limit 250, capped by credits).",
+    );
+  });
+
+  test("hint says capped by credits, never partial, with pages audited vs known", () => {
+    const hint = fullScanHint(
+      baseReport({
+        scanScope: scope,
+        coverage: { auditedPages: 87, knownPages: 240, carriedFindings: 0 },
+      }),
+    );
+    expect(hint).toContain("Capped by credits");
+    expect(hint).toContain("87 of 240 known pages audited");
+    expect(hint).not.toContain("Partial");
+    expect(fullScanHint(credits)).toContain("Capped by credits");
+  });
+
+  test("every renderer carries the stop reason or the capped wording", () => {
+    expect(renderText(credits)).toContain("Capped by credits");
+    expect(renderMarkdown(credits)).toContain("Capped by credits");
+    expect(renderXml(credits)).toContain('stop-reason="credits"');
+    expect(renderLlm(credits)).toContain('stop-reason="credits"');
+    expect(renderHtml(credits, { reportId: "TESTID" })).toBeTruthy();
+  });
+
+  test("the JSON report keeps stopReason credits", async () => {
+    const { renderJson } = await import("../src/output/json");
+    const out = JSON.parse(renderJson(credits));
+    expect(out.meta.stopReason).toBe("credits");
+    const again = JSON.parse(JSON.stringify(out));
+    expect(again.meta.stopReason).toBe("credits");
   });
 });

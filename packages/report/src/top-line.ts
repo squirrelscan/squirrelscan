@@ -52,7 +52,7 @@ export function discoveredPages(report: PageCountSource): {
 export function discoveredCount(report: PageCountSource): { total: number; floor: boolean } {
   const found = discoveredPages(report);
   const floor =
-    (!!report.scanScope?.capped || report.scanScope?.stopReason === "time") &&
+    (!!report.scanScope?.capped || report.scanScope?.stopReason !== undefined) &&
     found.total > count(report.totalPages);
   return { total: found.total, floor };
 }
@@ -90,7 +90,9 @@ export interface SectionScoreRow {
  * An older report with no `groups`, or a group code this build does not know,
  * yields fewer rows (possibly none), never a placeholder.
  */
-export function sectionScoreRows(groups: readonly GroupScore[] | null | undefined): SectionScoreRow[] {
+export function sectionScoreRows(
+  groups: readonly GroupScore[] | null | undefined,
+): SectionScoreRow[] {
   const byGroup = new Map((groups ?? []).map((g) => [g.group, g]));
   const rows: SectionScoreRow[] = [];
   for (const code of GROUP_CODES) {
