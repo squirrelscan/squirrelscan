@@ -436,6 +436,12 @@ describe("eeat/byline-consistency: precedence through the real runner", () => {
   const deviant = url(19);
 
   let observed: boolean | undefined;
+  // Reset and read through functions so TS does not narrow `observed` to the
+  // reset value across the awaited runs that assign it from the probe.
+  const reset = (): void => {
+    observed = undefined;
+  };
+  const read = (): boolean | undefined => observed;
   const probe: Rule = {
     meta: {
       id: "test/rule-enabled-probe",
@@ -462,15 +468,15 @@ describe("eeat/byline-consistency: precedence through the real runner", () => {
 
   test("ctx.ruleEnabled reflects the run's resolved rule set", async () => {
     const site = legacyCtx(specs).site!;
-    observed = undefined;
+    reset();
     await runner(["test/*", BYLINE_CONSISTENCY_RULE_ID]).runSiteRules(site);
-    expect(observed).toBe(true);
-    observed = undefined;
+    expect(read()).toBe(true);
+    reset();
     await runner(["test/*"]).runSiteRules(site);
-    expect(observed).toBe(false);
-    observed = undefined;
+    expect(read()).toBe(false);
+    reset();
     await runner(["*"], [BYLINE_CONSISTENCY_RULE_ID]).runSiteRules(site);
-    expect(observed).toBe(false);
+    expect(read()).toBe(false);
   });
 
   test("a deviant page is reported once across the E-E-A-T rules", async () => {
