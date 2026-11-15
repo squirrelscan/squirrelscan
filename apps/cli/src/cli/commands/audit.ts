@@ -38,7 +38,7 @@ import { ownHostsPinned } from "@squirrelscan/utils/public-egress";
 import { defineCommand } from "citty";
 import { existsSync } from "node:fs";
 import { platform } from "node:os";
-import { dirname } from "node:path";
+import { dirname, resolve } from "node:path";
 
 import type { AuditFailureDetails, CrawlerEvent } from "@/controllers/audit";
 import type { PreflightBalance } from "@/lib/balance";
@@ -642,6 +642,15 @@ export function estimateBalanceAfter(opts: {
  * names the page count so the arithmetic is checkable at a glance. Exported for
  * tests. #279 #2290
  */
+/** One line on how many bodies came from the shared content store (#1914). */
+export function contentStoreLine(
+  stats: { stored: number; reused: number } | undefined
+): string | null {
+  if (!stats || stats.reused === 0) return null;
+  const total = stats.stored + stats.reused;
+  return `Content store: ${stats.reused.toLocaleString("en-US")} of ${total.toLocaleString("en-US")} page bodies were already stored (the store is shared by every project; use --content-store <path> for a cold run)`;
+}
+
 export function formatCloudSpendSummary(spend: {
   lines: Array<{
     service: string;
@@ -1213,6 +1222,11 @@ export const audit = defineCommand({
       alias: "r",
       description: "Ignore cache, fetch all pages fresh (full re-scan)",
     },
+    "content-store": {
+      type: "string",
+      description:
+        "Use this file as the content store for the run (same as SQUIRREL_CONTENT_STORE_PATH). The default store is shared by every project; point this at a new path for a cold run",
+    },
     "store-scripts": {
       type: "boolean",
       description:
@@ -1473,6 +1487,12 @@ export const audit = defineCommand({
       console.error(
         `${fmt.yellow("Note:")} credentials in the URL are ignored. Use --header "Authorization: Basic ..." for an authenticated crawl.`
       );
+    }
+
+    // --content-store (#1914): the one supported way to a cold or isolated run.
+    // Resolved before any store is opened; getContentStorePath() reads the env.
+    if (typeof args["content-store"] === "string" && args["content-store"]) {
+      process.env.SQUIRREL_CONTENT_STORE_PATH = resolve(args["content-store"]);
     }
 
     const commandStart = Date.now();
@@ -3318,6 +3338,8 @@ export const audit = defineCommand({
         const scanHint = fullScanHint(report);
         if (scanHint) log(fmt.yellow(`⚠ ${scanHint}`));
       }
+      const storeLine = contentStoreLine(report.contentStore);
+      if (storeLine) log(fmt.dim(storeLine));
       if (report.cloudSpend && report.cloudSpend.totalSpent > 0) {
         log(formatCloudSpendSummary(report.cloudSpend));
       }

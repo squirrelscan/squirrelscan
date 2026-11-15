@@ -666,6 +666,13 @@ export interface AuditReport {
   /** Fresh-fetch note (#2032). REPORT-ONLY. */
   cacheFreshness?: CacheFreshness;
   /**
+   * Content-store outcomes for this run (#1914) — DIAGNOSTIC / non-scoring.
+   * `stored` bodies were written fresh; `reused` were already in the global
+   * content store (shared by every project), so a high `reused` count means the
+   * run was not cold.
+   */
+  contentStore?: { stored: number; reused: number };
+  /**
    * Per-phase wall-clock breakdown in ms (#857) — DEBUG/DIAGNOSTIC ONLY, never
    * rendered in the report and never scoring. Keys are a fixed, low-cardinality
    * set (crawl, external_links, assets, cloud_prefetch, tech_detect, rules,

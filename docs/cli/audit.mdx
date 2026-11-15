@@ -39,6 +39,7 @@ squirrel audit <url> [options]
 | `--fresh-ua` | | Re-roll the project's pinned random user-agent (the new one is pinned for later runs) | `false` |
 | `--incremental` | | Re-scan only changed pages via conditional GET (the default; overrides `[crawler] incremental = false`) | `true` |
 | `--no-incremental` | | Fetch every page in full, disabling conditional GET | `false` |
+| `--content-store` | | Use this file as the content store for the run (same as `SQUIRREL_CONTENT_STORE_PATH`). Point it at a new path for a cold run, see [Storage](/configuration/storage) | `~/.squirrel/content-store.db` |
 | `--resume` | | Resume interrupted crawl for this domain | `false` |
 | `--verbose` | `-v` | Verbose output | `false` |
 | `--debug` | | Enable debug logging | `false` |
