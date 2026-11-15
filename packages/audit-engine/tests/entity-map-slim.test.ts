@@ -15,6 +15,7 @@ import {
 } from "@squirrelscan/core-contracts/entity-map";
 
 import { createEntityMapBuilder } from "../src/entity-map/build";
+import { diffEntityMaps } from "../src/entity-map/diff";
 import {
   projectEntityMap,
   slimEntityMapForPublish,
@@ -147,10 +148,18 @@ describe("slimEntityMapForPublish", () => {
     expect(slim.nodes[0]!.morePages).toBe(10 + 50 - ENTITY_MAP_PUBLISH_LIMITS.maxPages);
   });
 
-  test("always drops pages, even when nothing else is over the limit", () => {
+  test("keeps a compact page index, and the viewer still drops pages", () => {
     const withPages = map([node("a", 3)], [], 4);
+    withPages.pages[0]!.declares = ["a"];
+    withPages.pages[0]!.references = ["a"];
+    withPages.pages[0]!.entityCount = 9;
     const slim = slimEntityMapForPublish(withPages);
-    expect(slim.pages).toEqual([]);
+    expect(slim.pages).toHaveLength(4);
+    expect(slim.pages[0]).toEqual({
+      url: "https://example.com/0",
+      declares: ["a"],
+    });
+    expect(slimEntityMapForViewer(withPages).pages).toEqual([]);
     // The summary still describes the site, not the projection.
     expect(slim.summary.pagesTotal).toBe(4);
   });
@@ -219,7 +228,7 @@ describe("projection truncation", () => {
       reason: "publish",
       nodes: 40,
       edges: 1,
-      pages: 7,
+      pages: 0,
     });
     // And the counts really do reconcile against the full document.
     expect(slim.nodes.length + slim.truncated!.nodes).toBe(many.length);
@@ -227,11 +236,11 @@ describe("projection truncation", () => {
   });
 
   test("still marks a map that lost only its pages", () => {
-    // Nothing clipped but `pages`, which both projections always drop. Zero
-    // node loss must not read as "nothing was dropped".
-    const slim = slimEntityMapForPublish(map([node("a", 1)], [], 3));
+    // The viewer drops every page record. Zero node loss must not read as
+    // "nothing was dropped".
+    const slim = slimEntityMapForViewer(map([node("a", 1)], [], 3));
     expect(slim.pages).toEqual([]);
-    expect(slim.truncated).toEqual({ reason: "publish", nodes: 0, edges: 0, pages: 3 });
+    expect(slim.truncated).toEqual({ reason: "viewer", nodes: 0, edges: 0, pages: 3 });
   });
 
   test("names which projection clipped it", () => {
@@ -564,7 +573,10 @@ describe("publish sample tiers", () => {
     expect(bytes).toBeLessThanOrEqual(ENTITY_MAP_PUBLISH_LIMITS.maxBytes);
     // Halving lands on 375 nodes and roughly 265KB of a 512KB gate.
     expect(slim.nodes.length).toBeGreaterThan(450);
-    expect(bytes).toBeGreaterThan(ENTITY_MAP_PUBLISH_LIMITS.maxBytes * 0.9);
+    // The graph is fitted to the limit minus the page index's own budget.
+    const graphBudget =
+      ENTITY_MAP_PUBLISH_LIMITS.maxBytes - ENTITY_MAP_PUBLISH_LIMITS.maxPageIndexBytes;
+    expect(bytes).toBeGreaterThan(graphBudget * 0.9);
   });
 
   test("a one-off entity's inbound edges decide which of its type survives", () => {
@@ -911,5 +923,98 @@ describe("edges past maxEdges (#405)", () => {
     test("under the cap every edge is kept, in map order", () => {
     const slim = projectEntityMap(map(nodes, edges), ENTITY_MAP_PUBLISH_LIMITS, "publish");
     expect(pairs(slim)).toEqual(edges.map((e) => `${e.source}>${e.target}`));
+  });
+});
+
+// The per-page declares index (#2117): what lets the hosted diff prove a gained
+// `@id` reached every page that declared the broken entity.
+describe("publish page index", () => {
+  function indexed(pageCount: number, keysPerPage: number): EntityMap {
+    const nodes: EntityMapNode[] = [];
+    for (let k = 0; k < keysPerPage; k += 1) nodes.push(node(`k${k}`, k + 1));
+    const m = map(nodes, [], pageCount);
+    m.pages = m.pages.map((page) => ({
+      ...page,
+      declares: nodes.map((n) => n.key).sort(),
+    }));
+    return m;
+  }
+
+  test("stays complete and unflagged inside the budget", () => {
+    const slim = slimEntityMapForPublish(indexed(10, 3));
+    expect(slim.pages).toHaveLength(10);
+    expect(slim.pages[0]!.declares).toEqual(["k0", "k1", "k2"]);
+    expect(slim.truncated!.pagesTruncated).toBeUndefined();
+  });
+
+  test("drops lowest-occurrence keys first and flags the clip", () => {
+    const full = indexed(2_000, 40);
+    const slim = slimEntityMapForPublish(full);
+    expect(slim.truncated!.pagesTruncated).toBe(true);
+    expect(slim.pages).toHaveLength(2_000);
+    const kept = slim.pages[0]!.declares;
+    expect(kept.length).toBeLessThan(40);
+    // k39 occurs most; k0 least. Whatever survives is the high end.
+    expect(kept).toContain("k39");
+    expect(kept).not.toContain("k0");
+    expect(JSON.stringify(slim.pages).length).toBeLessThanOrEqual(
+      ENTITY_MAP_PUBLISH_LIMITS.maxPageIndexBytes,
+    );
+    expect(JSON.stringify(slim).length).toBeLessThanOrEqual(
+      ENTITY_MAP_PUBLISH_LIMITS.maxBytes + ENTITY_MAP_PUBLISH_LIMITS.maxPageIndexBytes,
+    );
+  });
+
+  test("drops trailing page records when the urls alone are over budget", () => {
+    const slim = slimEntityMapForPublish(indexed(8_000, 1));
+    expect(slim.truncated!.pagesTruncated).toBe(true);
+    expect(slim.pages.length).toBeLessThan(8_000);
+    expect(slim.truncated!.pages).toBe(8_000 - slim.pages.length);
+  });
+});
+
+describe("compare after publish projection", () => {
+  function pair(extra = 5) {
+    const anon = node("anon:org", 3, { name: "Acme", types: ["Organization"], pages: ["https://example.com/0"] });
+    const withId = node("id:https://example.com/#org", 3, {
+      id: "https://example.com/#org",
+      name: "Acme",
+      types: ["Organization"],
+      pages: ["https://example.com/0"],
+    });
+    const older = map([anon], [], 3 + extra);
+    const newer = map([withId], [], 3 + extra);
+    for (const page of older.pages) page.declares = ["anon:org"];
+    for (const page of newer.pages) page.declares = ["id:https://example.com/#org"];
+    anon.morePages = 0;
+    anon.occurrences = 3;
+    anon.pages = older.pages.map((p) => p.url);
+    withId.pages = newer.pages.map((p) => p.url);
+    return { older, newer };
+  }
+
+  test("proves a gained id from published copies", () => {
+    const { older, newer } = pair();
+    const diff = diffEntityMaps(
+      slimEntityMapForPublish(older),
+      slimEntityMapForPublish(newer),
+    );
+    expect(diff.gainedId).toHaveLength(1);
+    expect(diff.gainedId[0]!.coverage).toBe("proven");
+  });
+
+  test("matches the verdict on the uncapped maps when the index is complete", () => {
+    const { older, newer } = pair();
+    const full = diffEntityMaps(older, newer);
+    const published = diffEntityMaps(slimEntityMapForPublish(older), slimEntityMapForPublish(newer));
+    expect(published.gainedId).toEqual(full.gainedId);
+  });
+
+  test("does not prove it when the older index was clipped", () => {
+    const { older, newer } = pair();
+    const clipped = slimEntityMapForPublish(older);
+    clipped.truncated = { ...clipped.truncated!, pagesTruncated: true };
+    const diff = diffEntityMaps(clipped, slimEntityMapForPublish(newer));
+    expect(diff.gainedId[0]!.coverage).toBe("partial");
   });
 });

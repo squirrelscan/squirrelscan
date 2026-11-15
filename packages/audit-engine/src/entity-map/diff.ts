@@ -117,8 +117,12 @@ function buildDeclaringPages(
 ): (node: EntityMapNode) => string[] | null {
   // A clipped page list (a publish projection caps it) looks exactly like a
   // complete one, so compare it against the count the crawl reported.
+  // A projection that clipped its own index says so in `truncated`; dropped
+  // `declares` keys leave the page count intact, so the count alone would pass.
   const pageIndexIsComplete =
-    map.pages.length > 0 && map.pages.length >= map.summary.pagesTotal;
+    map.pages.length > 0 &&
+    map.pages.length >= map.summary.pagesTotal &&
+    map.truncated?.pagesTruncated !== true;
 
   const declaredOn = new Map<string, string[]>();
   if (pageIndexIsComplete) {

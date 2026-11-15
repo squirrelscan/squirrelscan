@@ -33,9 +33,9 @@ export function foldEntityMapVariants(map: EntityMap, variantOf: ReadonlyMap<str
     const url = variantOf.get(page.url) ?? page.url;
     const into = byUrl.get(url) ?? { declares: new Set<string>(), references: new Set<string>(), entityCount: 0 };
     for (const key of page.declares) into.declares.add(key);
-    for (const key of page.references) into.references.add(key);
+    for (const key of page.references ?? []) into.references.add(key);
     // The canonical page and its variants carry the same template's entities; the larger count is the page's.
-    into.entityCount = Math.max(into.entityCount, page.entityCount);
+    into.entityCount = Math.max(into.entityCount, page.entityCount ?? 0);
     byUrl.set(url, into);
   }
   const pages: EntityMapPage[] = [...byUrl]
