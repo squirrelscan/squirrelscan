@@ -2,6 +2,7 @@
  * robots.txt URL checking utilities
  */
 
+import { parse as parseTld } from "tldts";
 import type { RobotsTxtData, RobotsRule } from "@squirrelscan/core-contracts";
 
 import { stripControlChars } from "@squirrelscan/core-contracts/control-chars";
@@ -364,6 +365,30 @@ const SITEMAP_HAS_WHITESPACE = /\s/;
 const SITEMAP_LOOKS_LIKE_HOST =
   /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+(:\d+)?$/i;
 
+/**
+ * Decision for repo#2318: a host-shaped first segment is read as a host only
+ * when its last label is an ICANN public suffix (a real TLD, via `tldts`).
+ *
+ * `sitemap.xml/news`, `sitemap.php/posts` and `index.php/sitemap` are on-site
+ * path-info routes whose first segment looks like a filename. `xml`, `php` and
+ * `txt` are not TLDs, so they stay relative paths on the audited origin
+ * instead of becoming the foreign host `sitemap.xml`. No syntax separates the
+ * two cases, so this is a heuristic with a known edge: a filename whose
+ * extension is also a real TLD (`sitemap.pl/x`, `feed.rs/x`, `map.sh/x`,
+ * `data.zip/x`) is still read as a host. The RFC 2606 reserved
+ * names (`test`, `example`, `invalid`, `localhost`) also count as hosts. That is deliberate: wrongly reading a
+ * real domain such as `worldairops.com/sitemap.xml` as a path is the more
+ * common failure, and the read is reported on `robotsTxt.errors`.
+ */
+const RESERVED_HOST_TLDS: ReadonlySet<string> = new Set(["test", "example", "invalid", "localhost"]);
+
+function hasPublicSuffixTld(hostSegment: string): boolean {
+  const host = hostSegment.replace(/:\d+$/, "");
+  const label = host.slice(host.lastIndexOf(".") + 1).toLowerCase();
+  if (RESERVED_HOST_TLDS.has(label)) return true;
+  return parseTld(host, { allowPrivateDomains: false }).isIcann === true;
+}
+
 /** How much of a rejected value is quoted back in an errors entry. */
 const MAX_QUOTED_SITEMAP_VALUE = 200;
 
@@ -440,7 +465,9 @@ export function resolveRobotsSitemapUrl(value: unknown, baseUrl: string): Robots
 
   const firstSegment = trimmed.split("/", 1)[0] ?? "";
   const isHost =
-    firstSegment.length < trimmed.length && SITEMAP_LOOKS_LIKE_HOST.test(firstSegment);
+    firstSegment.length < trimmed.length &&
+    SITEMAP_LOOKS_LIKE_HOST.test(firstSegment) &&
+    hasPublicSuffixTld(firstSegment);
   const resolved = toHttpUrl(isHost ? `${base.protocol}//${trimmed}` : trimmed, base)?.href;
   if (resolved === undefined) return { raw, reading: "unresolvable", url: null };
   return { raw, reading: isHost ? "scheme-less-host" : "relative", url: resolved };
