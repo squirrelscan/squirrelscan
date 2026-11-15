@@ -23,7 +23,8 @@ export type CloudServiceId =
   | "domain-stats"
   | "archive-indexing"
   | "third-party-scan"
-  | "render";
+  | "render"
+  | "design-review";
 
 // Slim per-page payload sent from the CLI for AI analysis.
 // textExcerpt is capped client-side (~6KB).
@@ -666,4 +667,48 @@ export interface CloudServiceError {
     message: string;
     required?: number;
   };
+}
+
+// --- design-review --------------------------------------------------------
+// Opt-in LLM rule pack (llm_rules_page, 2cr per sampled page). A vision model
+// reviews screenshots of a bounded page sample, grounded in the site's own
+// fonts, colors and spacing, and reports concrete cross-page deviations.
+
+/** Most pages one audit's design review may sample. Bounds model cost and credits. */
+export const DESIGN_REVIEW_MAX_PAGES = 6;
+/** Most findings one design review may return. */
+export const DESIGN_REVIEW_MAX_FINDINGS = 10;
+
+/** The site's own design system, taken from the deterministic font and color findings. */
+export interface DesignReviewGrounding {
+  fonts: string[];
+  colors: string[];
+  /** Spacing grid the site mostly follows, in px (for example 8). */
+  spacingUnitPx?: number;
+}
+
+export interface DesignReviewRequest {
+  auditId?: string;
+  /** Sampled pages, at most DESIGN_REVIEW_MAX_PAGES. */
+  pages: { url: string; screenshotRef: string }[];
+  grounding: DesignReviewGrounding;
+}
+
+export interface DesignReviewFinding {
+  /** URL of the sampled page the deviation is on. */
+  page: string;
+  /** The specific element, for example "primary CTA button". */
+  element: string;
+  /** What is off, with a measured value, for example "sits 8px off the 8px grid". */
+  deviation: string;
+  /** What this site does elsewhere, for example "CTA padding is 16px on /about and /contact". */
+  siteNorm: string;
+  /** Other sampled pages that show the norm. At least one. */
+  referencePages: string[];
+}
+
+export interface DesignReviewResult {
+  /** Pages the model actually reviewed. */
+  sampledPages: string[];
+  findings: DesignReviewFinding[];
 }

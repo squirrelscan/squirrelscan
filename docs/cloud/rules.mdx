@@ -8,12 +8,13 @@ Cloud rules are regular audit rules that need data your machine doesn't have - A
 
 ## The rules
 
-Everything except the two opt-in gap rules is included in the audit's base charge, and a cloud audit's external link checks cost 1 credit per distinct link the cloud verifies - see [Credits & Pricing](/cloud/credits).
+Everything except the two opt-in gap rules and the opt-in design review is included in the audit's base charge, and a cloud audit's external link checks cost 1 credit per distinct link the cloud verifies - see [Credits & Pricing](/cloud/credits).
 
 | Rule | What it checks | Cost |
 |------|----------------|------|
 | [`ai/llm-parsability`](/rules/ai/llm-parsability) | How well LLMs can parse and understand each page | included in audit base |
 | [`ai/page-type-match`](/rules/ai/page-type-match) | AI-classified page type agrees with declared structured data | included in audit base (shared with parsability) |
+| [`ai/design-review`](/rules/ai/design-review) | A vision model reviews screenshots of a bounded page sample for cross-page design inconsistencies | 2 credits per sampled page, **opt-in** |
 | [`eeat/authority-signals`](/rules/eeat/authority-signals) | Per-page authorship, citations, and outbound references | included in audit base |
 | [`adblock/element-hiding`](/rules/adblock/element-hiding) | Elements hidden by EasyList cosmetic rules | included in audit base, shared |
 | [`adblock/blocked-links`](/rules/adblock/blocked-links) | Links and resources ad blockers would block | shared with above |

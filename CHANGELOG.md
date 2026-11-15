@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- New opt-in cloud rule `ai/design-review` (squirrelscan/repo#1382): a vision model reviews screenshots of a bounded sample of pages (at most 6) and reports cross-page design inconsistencies as concrete findings, each naming a sampled page, an element, a measured deviation and the site's own norm on another sampled page. Findings that are generic or cite no sampled reference page are dropped. It is off by default and billed through the `llm_rules_page` feature. The `design-review` cloud service and its request and result types are in core-contracts. That makes 337 rules, 18 of them in Agent Experience.
+
 ### Fixed
 
 - An incremental audit that refetches an unchanged page now reports the headers that response carried, not the ones stored with the page (squirrelscan/repo#4765). A site that dropped an `X-Robots-Tag: noindex`, or added HSTS, without changing its HTML kept the old header in every later audit, and `core/robots-meta` reported a noindex the site no longer sent. A 200 whose body matched and a reused render (the conditional-render gate's probe) now replace the stored headers; an origin's own 304 updates the headers it resends and keeps the ones it omits, as HTTP caches do.

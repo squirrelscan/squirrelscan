@@ -1,0 +1,99 @@
+---
+title: "Design review: cross-page inconsistencies a vision model finds"
+description: "An element that deviates from the rest of the site, such as a CTA 8px off the grid the other sampled pages use. An opt-in cloud rule."
+---
+
+<Note>**Cloud rule, opt-in** - requires login (`squirrel auth login`) and LLM rules turned on for the website. Off by default. It costs 2 credits per sampled page through the `llm_rules_page` feature, on top of the audited page charge. See [Cloud rules](/cloud/rules) and [Credits](/cloud/credits).</Note>
+
+## What a design inconsistency is
+
+A site has a design system whether or not anyone wrote it down: a spacing grid, a few fonts, a handful of colors, and components that look the same on every page. Drift is when one page quietly breaks it, such as a pricing page whose call to action has more padding than the same button everywhere else.
+
+Deterministic rules cannot judge that. A vision model can, so this is the one place squirrel asks one.
+
+## What squirrel checks
+
+A bounded sample of at most 6 pages is screenshotted and reviewed. The request is grounded with the site's own fonts, colors and spacing grid, so the model compares pages against your system and not against an outside design norm.
+
+The rule never calls a model itself. It reads the review result and keeps a finding only when it is concrete:
+
+- it names a sampled page and a specific element,
+- the deviation carries a measured value (`24px`, `#1a73e8`, `2 columns`), not an adjective,
+- it states what the site does elsewhere, and
+- it cites at least one other sampled page that shows that norm.
+
+Generic advice ("the layout feels cluttered") is dropped. At most 10 findings are reported.
+
+It emits these checks:
+
+- `design-review`, skipped when logged out, out of credits, not opted in, or the service was unavailable.
+- `design-review`, passing with `No cross-page design inconsistencies in 3 sampled pages`.
+- `design-review-deviation`, warning with a message such as `primary CTA button on https://example.com/pricing: padding is 24px, 8px off the 16px the other pages use (site norm: CTA padding is 16px)`.
+
+## How to fix it
+
+Make the element match the pages cited as the norm. Better, move it into a shared component or design token so it cannot drift again:
+
+```css
+.btn-primary { padding: var(--space-4); }
+```
+
+The model reads screenshots, so a deviation caused by a deliberate variant (a promo banner button) can be reported. Treat each finding as a pointer to look, then decide.
+
+| | |
+|---|---|
+| **Rule ID** | `ai/design-review` |
+| **Category** | [Agent Experience](/rules/ax) |
+| **Scope** | Site-wide |
+| **Severity** | info |
+| **Weight** | 0 (report only) |
+| **Default** | Off, opt-in per website |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["ai/design-review"]
+```
+
+### Disable all AI rules
+
+```toml squirrel.toml
+[rules]
+disable = ["ai/*"]
+```
+
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `design-review` | Not checked |  |
+| `design-review` | Clean |  |
+| `design-review-deviation` | Problem |  |
+
+{/* rule-checks:end */}
+
+## Related rules
+
+- [ai/llm-parsability](/rules/ai/llm-parsability): the other model-backed page review.
+- [a11y/color-contrast](/rules/a11y/color-contrast): the deterministic color check the review is grounded with.
+- [perf/font-delivery](/rules/perf/font-delivery): how the fonts the review compares against are delivered.
+
+## Check your site
+
+Turn on LLM rules for the website, then run `squirrel audit https://example.com` signed in and open the Agent Experience section of the report.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What a report looks like on a real site.
+  </Card>
+</CardGroup>

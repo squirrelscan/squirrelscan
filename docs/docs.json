@@ -682,6 +682,7 @@
               "rules/ax/archive-indexing",
               "rules/ax/pay-per-crawl",
               "rules/ai/llm-parsability",
+              "rules/ai/design-review",
               "rules/ai/page-type-match",
               "rules/ai/ai-content",
               "rules/ai/site-metadata"
