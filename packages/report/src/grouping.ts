@@ -48,6 +48,7 @@ export interface GroupedCheck {
   // Structured data (preferred)
   items?: CheckItem[];
   details?: Record<string, unknown>;
+  observation?: CheckResult["observation"];
   /** Complete raw occurrence evidence, including uncertain/page-scoped observations. */
   componentOccurrences?: ComponentOccurrence[];
   /** Complete raw shared-resource evidence, merged across this check's pages. */
@@ -558,6 +559,7 @@ export function groupIssuesByCategory(
           carriedPages: initialCarriedPages.length > 0 ? initialCarriedPages : undefined,
           carriedPageSet: initialCarriedPageSet,
           details: details ? { ...details } : undefined,
+          observation: (check as CheckResult).observation,
           lcpEvidence,
           componentOccurrences: componentOccurrences ? [...componentOccurrences] : undefined,
           siteResourceOccurrences: siteResourceOccurrences

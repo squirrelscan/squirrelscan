@@ -32,13 +32,16 @@ describe("perf/critical-request-chains @import counting", () => {
   test("the reporter's comment-only page has no import and passes", async () => {
     const c = (await run('/* @import url("/comment-only.css"); */ body { color: black; }'));
     expect(c.status).toBe("pass");
-    expect(c.message).toBe("No critical request chains detected");
+    expect(c.message).toBe("No render-blocking resource hints found in static HTML");
+    expect(c.observation).toMatchObject({ mode: "static", applicability: "applicable" });
   });
 
   test("a real @import still counts and warns", async () => {
     const c = (await run('@import url("/real-import.css");'));
     expect(c.status).toBe("warn");
     expect(c.details?.importCount).toBe(1);
+    expect(c.message).toContain("static HTML");
+    expect(c.observation?.uncertainty).toContain("not measured");
   });
 
   test("a style block with no import passes", async () => {

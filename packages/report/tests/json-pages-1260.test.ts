@@ -33,10 +33,10 @@ const parse = (options?: Parameters<typeof renderJson>[1]) =>
   };
 
 describe("meta.schemaVersion", () => {
-  test("is 1.21, the version that added `cacheStats`, on every JSON report", () => {
-    expect(JSON_REPORT_SCHEMA_VERSION).toBe("1.21");
-    expect(parse().meta.schemaVersion).toBe("1.21");
-    expect(parse({ pages: rows(1) }).meta.schemaVersion).toBe("1.21");
+  test("is 1.22, the version that added check observation metadata (after 1.21 `cacheStats`), on every JSON report", () => {
+    expect(JSON_REPORT_SCHEMA_VERSION).toBe("1.22");
+    expect(parse().meta.schemaVersion).toBe("1.22");
+    expect(parse({ pages: rows(1) }).meta.schemaVersion).toBe("1.22");
   });
 });
 

@@ -27,7 +27,7 @@ import { classifyRuleOutcome, type RuleOutcome } from "@squirrelscan/core-contra
 
 import type { LockedRuleReason } from "@squirrelscan/core-contracts";
 
-import type { ReportRuleResult } from "./types";
+import type { CheckResult, ReportRuleResult } from "./types";
 
 export interface NotCheckedRule {
   ruleId: string;
@@ -52,6 +52,7 @@ export interface NotCheckedRule {
   causeDetail?: string;
   /** For a rule that hit an internal error (#1291): the first pages it was not evaluated on (at most {@link MAX_NOT_CHECKED_PAGES}). */
   pages?: string[];
+  observation?: CheckResult["observation"];
 }
 
 /** Pages listed on a not-checked entry. */
@@ -313,6 +314,7 @@ export function notCheckedRules(report: NotCheckedReportShape): NotCheckedRule[]
       check: check.name,
       reason: check.skipReason,
       outcome: classifyRuleOutcome(check),
+      ...(check.observation ? { observation: check.observation } : {}),
       // A timeout names the rule and the pages it did not check.
       message: timedOut ? timedOutMessage(timedOut) : check.message,
       hint: hintFor(check),

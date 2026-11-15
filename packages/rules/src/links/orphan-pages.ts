@@ -16,6 +16,11 @@ const SKIP_CHECK: CheckResult = {
   name: "orphan-pages",
   status: "skipped",
   message: "Insufficient pages for orphan analysis",
+  observation: {
+    mode: "crawl",
+    applicability: "unknown",
+    uncertainty: "The observed crawl graph is incomplete, so missing inbound links cannot be established.",
+  },
 };
 
 // Shared result builder — both the legacy `site.pages` path and the streaming
@@ -36,6 +41,11 @@ function buildOrphanCheck(orphans: string[], minLinks: number): CheckResult {
       message: `${orphans.length} orphan page(s) with <${minLinks} incoming links`,
       items: orphans.map((url) => ({ id: url })),
       details: { total: orphans.length },
+      observation: {
+        mode: "crawl",
+        applicability: "applicable",
+        uncertainty: "Inbound links are counted only in the observed crawl graph.",
+      },
       value: pathList + suffix,
     };
   }
@@ -43,6 +53,11 @@ function buildOrphanCheck(orphans: string[], minLinks: number): CheckResult {
     name: "orphan-pages",
     status: "pass",
     message: "All pages have sufficient internal links pointing to them",
+    observation: {
+      mode: "crawl",
+      applicability: "applicable",
+      uncertainty: "Inbound links are counted only in the observed crawl graph.",
+    },
   };
 }
 
@@ -132,6 +147,11 @@ export const orphanPagesRule: Rule = {
         status: "skipped",
         message: `Crawl stopped at its ${limits.maxPages}-page cap, so an inbound link may sit on a page not crawled`,
         skipReason: CRAWL_CAPPED_SKIP_REASON,
+        observation: {
+          mode: "crawl",
+          applicability: "unknown",
+          uncertainty: "The observed crawl graph is incomplete, so missing inbound links cannot be established.",
+        },
       });
       return { checks };
     }

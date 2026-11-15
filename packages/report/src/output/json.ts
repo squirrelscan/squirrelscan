@@ -446,6 +446,11 @@ interface SlimJsonReport {
         CheckItem & { scope?: RegionScope; siteWide?: { pages: number; of: number } }
       >;
       details?: Record<string, unknown>;
+      observation?: {
+        mode: "static" | "crawl" | "browser" | "field";
+        applicability: "applicable" | "not-applicable" | "unknown";
+        uncertainty?: string;
+      };
       /**
        * Complete raw evidence, and the ONLY copy in this document: fix groups
        * above reference these entries by index instead of repeating them.
@@ -542,6 +547,11 @@ interface SlimJsonReport {
     /** Short free-text detail for `cause`. */
     causeDetail?: string;
     message: string;
+    observation?: {
+      mode: "static" | "crawl" | "browser" | "field";
+      applicability: "applicable" | "not-applicable" | "unknown";
+      uncertainty?: string;
+    };
     /** A rule that hit an internal error: the first pages it was not evaluated on (#1291). */
     pages?: string[];
   }>;
@@ -902,6 +912,7 @@ function buildSlimReport(
             return info ? { ...shown, siteWide: { pages: info.pages, of: info.of } } : shown;
           }),
           details: check.details,
+          ...(check.observation ? { observation: check.observation } : {}),
           ...(check.componentOccurrences?.length
             ? (() => {
                 const packed = packComponentOccurrences(check.componentOccurrences);
@@ -978,6 +989,7 @@ function buildSlimReport(
             check: r.check,
             reason: r.reason,
             outcome: r.outcome,
+            ...(r.observation ? { observation: r.observation } : {}),
             ...(r.cause ? { cause: r.cause } : {}),
             ...(r.causeDetail ? { causeDetail: r.causeDetail } : {}),
             message: notCheckedLine(r),

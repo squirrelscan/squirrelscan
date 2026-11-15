@@ -12,7 +12,7 @@ export const criticalRequestChainsRule: Rule = {
     id: "perf/critical-request-chains",
     name: "Critical Request Chains",
     description:
-      "Identifies chains of dependent resources that delay rendering",
+      "Finds static HTML hints for render-blocking resources; it does not measure browser request dependencies",
     solution:
       "Critical request chains are sequences of dependent network requests that must complete before the page can render. Reduce chain depth by: 1) Inlining critical CSS instead of linking external files. 2) Adding async or defer to non-critical scripts. 3) Avoiding CSS @import — use <link> tags instead. 4) Using <link rel='preload'> for critical resources. 5) Reducing the number of render-blocking resources in <head>.",
     category: "perf",
@@ -83,7 +83,7 @@ export const criticalRequestChainsRule: Rule = {
       checks.push({
         name: "critical-request-chains",
         status: "warn",
-        message: `${chainMembers.length} critical request chain(s) found`,
+        message: `${chainMembers.length} render-blocking resource hint(s) found in static HTML`,
         items: chainMembers.slice(0, 10).map((id) => ({ id })),
         details: {
           blockingCss: blockingCss.length,
@@ -94,13 +94,23 @@ export const criticalRequestChainsRule: Rule = {
             ? { additional: chainMembers.length - 10 }
             : {}),
         },
+        observation: {
+          mode: "static",
+          applicability: "applicable",
+          uncertainty: "Resource dependencies and actual browser request timing were not measured.",
+        },
       });
     } else {
       checks.push({
         name: "critical-request-chains",
         status: "pass",
-        message: "No critical request chains detected",
+        message: "No render-blocking resource hints found in static HTML",
         details: { preloads: preloads.length },
+        observation: {
+          mode: "static",
+          applicability: "applicable",
+          uncertainty: "Resource dependencies and actual browser request timing were not measured.",
+        },
       });
     }
 

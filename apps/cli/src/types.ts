@@ -270,6 +270,11 @@ export interface CheckResult {
   value?: string | number | null;
   expected?: string | number | null;
   skipReason?: string; // Why rule was skipped (e.g., "LLM unavailable")
+  observation?: {
+    mode: "static" | "crawl" | "browser" | "field";
+    applicability: "applicable" | "not-applicable" | "unknown";
+    uncertainty?: string;
+  };
 
   // #2307: additive DOM evidence for component-aware fix grouping. This
   // interface is a hand-maintained twin of the core-contracts CheckResult, so a

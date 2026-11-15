@@ -483,7 +483,8 @@ export const formCaptchaRule: Rule = {
   meta: {
     id: "security/form-captcha",
     name: "Form CAPTCHA",
-    description: "Checks for CAPTCHA protection on public forms",
+    description:
+      "Checks static markup for client-side CAPTCHA signals on public forms; server-side abuse controls are not observable",
     solution:
       "Add CAPTCHA protection (reCAPTCHA, Cloudflare Turnstile, hCaptcha, FormShield, etc.) to public-facing forms to prevent spam and bot submissions. Contact forms, comment forms, newsletter signups, and registration forms are common targets for automated abuse. Modern solutions like Turnstile and FormShield offer invisible protection with minimal user friction.",
     category: "security",
@@ -504,6 +505,7 @@ export const formCaptchaRule: Rule = {
         name: "form-captcha",
         status: "info",
         message: "No forms on page",
+        observation: { mode: "static", applicability: "not-applicable" },
       });
       return { checks };
     }
@@ -572,13 +574,19 @@ export const formCaptchaRule: Rule = {
         status: "info",
         message: "No public forms detected",
         details: { totalForms: forms.length },
+        observation: { mode: "static", applicability: "not-applicable" },
       });
     } else if (unprotectedForms.length > 0) {
       checks.push({
         name: "form-captcha",
         status: "warn",
-        message: `${unprotectedForms.length} public form(s) without CAPTCHA`,
+        message: `${unprotectedForms.length} public form(s) without detectable client-side CAPTCHA markup`,
         items: unprotectedForms.map((id) => ({ id })),
+        observation: {
+          mode: "static",
+          applicability: "applicable",
+          uncertainty: "Only client-side markup was inspected; this does not establish whether server-side abuse controls exist.",
+        },
       });
     } else {
       checks.push({
@@ -586,6 +594,11 @@ export const formCaptchaRule: Rule = {
         status: "pass",
         message: `All ${publicForms.length} public form(s) have CAPTCHA`,
         details: { publicForms: publicForms.length },
+        observation: {
+          mode: "static",
+          applicability: "applicable",
+          uncertainty: "A detected client-side signal does not verify that the control is enforced server-side.",
+        },
       });
     }
 

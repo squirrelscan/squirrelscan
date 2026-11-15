@@ -827,6 +827,11 @@ function printCategoryBreakdown(score: HealthScore, report: AuditReport): void {
   log(
     `Health Score: ${colorFn(`${score.overall}/100`)} ${fmt.dim(`(${getScoreGrade(score.overall)})`)}`
   );
+  log(
+    fmt.dim(
+      "Weighted audit score. Errors are failed checks; heuristic warnings are signals to review, not proof of a vulnerability. Info recommendations do not affect the score."
+    )
+  );
   log("");
 
   // The 4 top-level group scores (#1017), above the finer categories — mirrors

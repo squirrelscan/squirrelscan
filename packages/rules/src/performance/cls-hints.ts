@@ -16,7 +16,8 @@ export const clsHintsRule: Rule = {
   meta: {
     id: "perf/cls-hints",
     name: "CLS Optimization Hints",
-    description: "Checks for Cumulative Layout Shift prevention",
+    description:
+      "Finds static markup hints for layout shift risk; it does not measure browser or field CLS",
     solution:
       "CLS measures visual stability - how much content shifts during load. Prevent layout shifts by: 1) Always set width and height attributes on images and iframes. 2) Reserve space for ads and embeds with CSS min-height. 3) Use CSS aspect-ratio for responsive media. 4) Avoid inserting content above existing content. 5) Use transform animations instead of properties that trigger layout.",
     category: "perf",
@@ -40,14 +41,24 @@ export const clsHintsRule: Rule = {
       checks.push({
         name: "cls-images",
         status: "info",
-        message: `${urls.length} image(s) without width/height: reported by images/dimensions`,
+        message: `${urls.length} image(s) without width/height in static HTML: reported by images/dimensions`,
         items: urls.map((url) => ({ id: url })),
+        observation: {
+          mode: "static",
+          applicability: "applicable",
+          uncertainty: "Missing dimensions are a layout-shift risk hint, not a browser or field CLS measurement.",
+        },
       });
     } else {
       checks.push({
         name: "cls-images",
         status: "pass",
-        message: "All images have dimensions",
+        message: "All images have dimensions in static HTML",
+        observation: {
+          mode: "static",
+          applicability: "applicable",
+          uncertainty: "This markup check does not measure browser or field CLS.",
+        },
       });
     }
 
@@ -56,8 +67,13 @@ export const clsHintsRule: Rule = {
       checks.push({
         name: "cls-iframes",
         status: "warn",
-        message: `${hints.iframesWithoutDimensions.length} iframe(s) without dimensions`,
+        message: `${hints.iframesWithoutDimensions.length} iframe(s) without dimensions in static HTML`,
         items: hints.iframesWithoutDimensions.map((url) => ({ id: url })),
+        observation: {
+          mode: "static",
+          applicability: "applicable",
+          uncertainty: "Missing dimensions are a layout-shift risk hint, not a browser or field CLS measurement.",
+        },
       });
     }
 

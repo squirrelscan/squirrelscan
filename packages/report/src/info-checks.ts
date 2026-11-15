@@ -6,7 +6,7 @@
 // This lists them on their own, next to the skipped checks, and they never
 // change the score.
 
-import type { ReportRuleResult } from "./types";
+import type { CheckResult, ReportRuleResult } from "./types";
 
 /** Pages listed per info check; `pagesCount` is the true number. */
 export const INFO_CHECK_PAGES_LIMIT = 10;
@@ -34,6 +34,7 @@ export interface InfoCheck {
   pagesCount: number;
   /** `pagesCount` > `pages.length`. */
   pagesHasMore: boolean;
+  observation?: CheckResult["observation"];
 }
 
 /**
@@ -46,7 +47,15 @@ export function collectInfoChecks(ruleResults: Record<string, ReportRuleResult>)
   for (const ruleId of Object.keys(ruleResults).sort()) {
     const result = ruleResults[ruleId];
     if (!result) continue;
-    const groups = new Map<string, { message: string; pages: Set<string>; total: number }>();
+    const groups = new Map<
+      string,
+      {
+        message: string;
+        pages: Set<string>;
+        total: number;
+        observation?: CheckResult["observation"];
+      }
+    >();
     for (const check of result.checks) {
       if (check.status !== "info") continue;
       // The run-level summaries of a rule that timed out or threw (`<rule>-timeouts`,
@@ -55,7 +64,7 @@ export function collectInfoChecks(ruleResults: Record<string, ReportRuleResult>)
       if (check.name === `${ruleId}-errors` || check.name === `${ruleId}-timeouts`) continue;
       let group = groups.get(check.name);
       if (!group) {
-        group = { message: check.message, pages: new Set(), total: 0 };
+        group = { message: check.message, pages: new Set(), total: 0, observation: check.observation };
         groups.set(check.name, group);
       }
       const before = group.pages.size;
@@ -78,6 +87,7 @@ export function collectInfoChecks(ruleResults: Record<string, ReportRuleResult>)
         pages,
         pagesCount: total,
         pagesHasMore: total > pages.length,
+        ...(g.observation ? { observation: g.observation } : {}),
       });
     }
   }
