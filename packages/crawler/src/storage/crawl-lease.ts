@@ -133,9 +133,9 @@ export function startCrawlLease(options: CrawlLeaseOptions): CrawlLease {
           "SELECT owner_pid, owner_host, heartbeat_at FROM crawls WHERE id = ?"
         )
         .get(id) as {
-        owner_pid: unknown;
-        owner_host: unknown;
-        heartbeat_at: unknown;
+        owner_pid: number | null;
+        owner_host: string | null;
+        heartbeat_at: number | null;
       } | null;
       if (!owner) return { acquired: false };
 
