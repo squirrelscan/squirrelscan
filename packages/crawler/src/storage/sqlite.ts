@@ -1,4 +1,3 @@
-/// <reference path="../types/bun-sqlite.d.ts" />
 
 // SQLite storage implementation for the crawler
 // Best for medium to large sites (1000+ pages)
