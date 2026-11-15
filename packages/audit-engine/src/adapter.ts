@@ -18,6 +18,7 @@ import {
   isRuleEnabled,
   isSiteIndexable,
   mergeRuleRunResult,
+  LINK_VERDICT_RULE_IDS,
   pluginNamespaces,
   stylesheetBackgroundOf,
   stylesheetBackgroundSelectorsOf,
@@ -32,6 +33,7 @@ import {
   runAndDispose,
   SerialPageRuleExecutor,
 } from "./page-rule-executor";
+import type { LateLinkVerdicts, LinkVerdictSettlement } from "./late-link-verdicts";
 
 import type { Config, ExternalLinksConfig } from "@squirrelscan/config";
 import type {
@@ -73,6 +75,7 @@ import type {
   SiteQuery,
   UnverifiedReason,
 } from "@squirrelscan/core-contracts";
+import type { CrawlStats } from "@squirrelscan/core-contracts";
 import {
   CLOUD_RESOURCE_CHECK,
   LINK_CHECK_LIMITS,
@@ -140,7 +143,12 @@ import {
 import { maskLinkTokens } from "@squirrelscan/utils/link-actions";
 import { isCloudflareEmailProtectionUrl } from "@squirrelscan/utils/cloudflare-email";
 
-import { checkExternalLinks, type ExternalCheckResult, type LinkCache } from "./external-checker";
+import {
+  checkExternalLinks,
+  type ExternalCheckerOptions,
+  type ExternalCheckResult,
+  type LinkCache,
+} from "./external-checker";
 import { checkResourceSizes, type ResourceCheckResult } from "./resource-checker";
 import {
   linkTextLooksLikeAnAction,
@@ -292,7 +300,7 @@ export interface ResourceCheckOverrides {
    * resolves the names (`ownHostsPinned`).
    */
   pinOwnHosts?: boolean;
-  /** The resolver behind the asset phase's egress checks; the system's when unset (a test seam). */
+  /** The resolver behind the asset phase's and the external link check's egress checks; the system's when unset (a test seam). */
   resolveHost?: (hostname: string) => Promise<string[]>;
   /**
    * No request to any host outside the audited site and its subdomains
@@ -2696,47 +2704,29 @@ export async function withinDeadline<T>(
   }
 }
 
-function buildStreamingSiteData(
+/**
+ * The external-link verdicts the link rules read (repo#2144): this run's link
+ * rows with their appearances, and the crawl's coverage stat. Read once by the
+ * site-data build, and again by the late-binding view after the verdicts are
+ * persisted, so the two cannot disagree on what a verdict row is.
+ */
+export function readExternalLinkVerdicts(
   storage: SQLiteStorage,
   crawlId: string,
-  config: Config,
-  assets: PreFetchedAssets,
-  parsedPages: StreamParsedPage[],
-  pageDataMap: ParsedUniverse["pageDataMap"],
-  totalPageCount: number,
-  fetchedTargets: ParsedUniverse["fetchedTargets"],
-  egressPinnedByTransport?: boolean,
-  pinOwnHosts?: boolean,
-  ownSiteOnly?: boolean,
-  probes?: { deadlineAt?: number; onSkipped?: (probe: string) => void; maxParseBytes?: number },
+  knownCrawl?: Effect.Effect.Success<ReturnType<SQLiteStorage["getCrawl"]>> | null,
 ): Effect.Effect<
   {
-    siteDataForPageRules: SiteData;
-    soft404Map: Map<string, ParsedPage["soft404Confirmation"]>;
+    externalLinks: NonNullable<SiteData["externalLinks"]>;
+    externalLinkCheck: SiteData["externalLinkCheck"];
   },
   never,
   never
 > {
   return Effect.gen(function* () {
-    const robots = yield* storage
-      .getRobotsTxt(crawlId)
-      .pipe(Effect.catchAll(() => Effect.succeed(null)));
-    const llms = yield* storage.getLlmsTxt(crawlId).pipe(Effect.catchAll(() => Effect.succeed(null)));
-    const markdownProbe = yield* storage
-      .getMarkdownProbe(crawlId)
-      .pipe(Effect.catchAll(() => Effect.succeed(null)));
-    const wellKnownProbe = yield* storage
-      .getWellKnownProbe(crawlId)
-      .pipe(Effect.catchAll(() => Effect.succeed(null)));
-    const agentAccessProbe = yield* storage
-      .getAgentAccess(crawlId)
-      .pipe(Effect.catchAll(() => Effect.succeed(null)));
-    const rslProbe = yield* storage.getRsl(crawlId).pipe(Effect.catchAll(() => Effect.succeed(null)));
-    const sitemaps = yield* storage
-      .getSitemaps(crawlId)
-      .pipe(Effect.catchAll(() => Effect.succeed([])));
-    const crawl = yield* storage.getCrawl(crawlId).pipe(Effect.catchAll(() => Effect.succeed(null)));
-
+    const crawl =
+      knownCrawl !== undefined
+        ? knownCrawl
+        : yield* storage.getCrawl(crawlId).pipe(Effect.catchAll(() => Effect.succeed(null)));
     const allLinks = yield* storage
       .getLinks(crawlId)
       .pipe(Effect.catchAll(() => Effect.succeed([])));
@@ -2792,6 +2782,54 @@ function buildStreamingSiteData(
         });
       }
     }
+
+    return { externalLinks: externalLinksData, externalLinkCheck: crawl?.stats?.externalLinkCheck };
+  });
+}
+
+function buildStreamingSiteData(
+  storage: SQLiteStorage,
+  crawlId: string,
+  config: Config,
+  assets: PreFetchedAssets,
+  parsedPages: StreamParsedPage[],
+  pageDataMap: ParsedUniverse["pageDataMap"],
+  totalPageCount: number,
+  fetchedTargets: ParsedUniverse["fetchedTargets"],
+  egressPinnedByTransport?: boolean,
+  pinOwnHosts?: boolean,
+  ownSiteOnly?: boolean,
+  probes?: { deadlineAt?: number; onSkipped?: (probe: string) => void; maxParseBytes?: number },
+): Effect.Effect<
+  {
+    siteDataForPageRules: SiteData;
+    soft404Map: Map<string, ParsedPage["soft404Confirmation"]>;
+  },
+  never,
+  never
+> {
+  return Effect.gen(function* () {
+    const robots = yield* storage
+      .getRobotsTxt(crawlId)
+      .pipe(Effect.catchAll(() => Effect.succeed(null)));
+    const llms = yield* storage.getLlmsTxt(crawlId).pipe(Effect.catchAll(() => Effect.succeed(null)));
+    const markdownProbe = yield* storage
+      .getMarkdownProbe(crawlId)
+      .pipe(Effect.catchAll(() => Effect.succeed(null)));
+    const wellKnownProbe = yield* storage
+      .getWellKnownProbe(crawlId)
+      .pipe(Effect.catchAll(() => Effect.succeed(null)));
+    const agentAccessProbe = yield* storage
+      .getAgentAccess(crawlId)
+      .pipe(Effect.catchAll(() => Effect.succeed(null)));
+    const rslProbe = yield* storage.getRsl(crawlId).pipe(Effect.catchAll(() => Effect.succeed(null)));
+    const sitemaps = yield* storage
+      .getSitemaps(crawlId)
+      .pipe(Effect.catchAll(() => Effect.succeed([])));
+    const crawl = yield* storage.getCrawl(crawlId).pipe(Effect.catchAll(() => Effect.succeed(null)));
+
+    // repo#2144: the same reader the late-binding link view uses.
+    const { externalLinks: externalLinksData } = yield* readExternalLinkVerdicts(storage, crawlId, crawl);
 
     const robotsData = buildRobotsData(robots);
     const llmsData = buildLlmsTxtData(llms);
@@ -3039,6 +3077,8 @@ function runSitePass(
   collectedSignals: CollectedSiteSignals,
   siteQuery: SiteQuery,
   endpointSurface: EndpointSurface,
+  /** Run only these site rules, and add no crawl advisories (the late link pass, repo#2144). */
+  only?: (ruleId: string) => boolean,
 ): Effect.Effect<
   {
     siteResults: CheckResult[];
@@ -3055,7 +3095,7 @@ function runSitePass(
     // identical to v1: identical scalar universe, collectors reproduce the per-page
     // DOM signal, and siteQuery's universe is reconciled to v1's site.pages.
     const siteResult = yield* Effect.promise(() =>
-      runner.runSiteRules(siteData, siteQuery, collectedSignals, endpointSurface),
+      runner.runSiteRules(siteData, siteQuery, collectedSignals, endpointSurface, only ? { only } : undefined),
     );
 
     const siteRuleResults = new Map<string, CheckResult[]>();
@@ -3064,6 +3104,8 @@ function runSitePass(
       siteRuleResults.set(ruleId, ruleResult.checks);
       siteRuleRunResults.set(ruleId, ruleResult);
     }
+    // The crawl advisories below belong to the first site pass only.
+    if (only) return { siteResults: siteResult.checks, siteRuleResults, siteRuleRunResults };
 
     if (wafBlockedPages.length > 0) {
       const providers = Array.from(
@@ -3398,6 +3440,18 @@ export function runStreamingRules(
      * catalog's build, which says nothing about foreign rule code.
      */
     plugins?: PluginRegistrySnapshot;
+    /**
+     * Late-binding external-link verdicts (repo#2144), from
+     * `runStreamingPreRules`' late-binding mode. Set: every rule that does not
+     * read link verdicts runs without waiting on the check, and the rules that
+     * do (`LINK_VERDICT_RULE_IDS`, and every plugin rule, whose reads are not
+     * ours to know) run last, after `linkVerdicts.settle()` has bound the
+     * verdicts that arrived by its deadline. Unset: the verdicts are already in
+     * storage (the blocking mode) and every site rule runs in one pass.
+     */
+    linkVerdicts?: LateLinkVerdicts;
+    /** Called around the wait for the late-bound verdicts, with the settlement at "end". */
+    onLinkVerdicts?: (boundary: "start" | "end", settlement?: LinkVerdictSettlement) => void;
   },
 ): Effect.Effect<StreamingRuleExecutionResult, never, never> {
   return Effect.gen(function* () {
@@ -3613,17 +3667,58 @@ export function runStreamingRules(
     );
 
     // Step 5: site pass over the DOM-free scalar universe (no re-materialization).
+    // repo#2144: with late-bound link verdicts, the rules that read them are left
+    // out of this pass and run last, below.
+    const linkVerdicts = opts?.linkVerdicts;
+    const pluginRuleIds = new Set(plugins?.rules.map((rule) => rule.meta.id) ?? []);
+    const readsLinkVerdicts = (ruleId: string) =>
+      LINK_VERDICT_RULE_IDS.has(ruleId) || pluginRuleIds.has(ruleId);
     const sitePass = yield* phase("site-rules", () =>
-      runSitePass(
-        runner,
-        siteDataForPageRules,
-        assets,
-        wafBlockedPages,
-        rateLimitedPages,
-        collectedSignals,
-        siteQuery,
-        endpointCollector.finish(siteDataForPageRules),
-      ),
+      Effect.gen(function* () {
+        const endpointSurface = endpointCollector.finish(siteDataForPageRules);
+        const first = yield* runSitePass(
+          runner,
+          siteDataForPageRules,
+          assets,
+          wafBlockedPages,
+          rateLimitedPages,
+          collectedSignals,
+          siteQuery,
+          endpointSurface,
+          linkVerdicts ? (ruleId) => !readsLinkVerdicts(ruleId) : undefined,
+        );
+        if (!linkVerdicts) return first;
+
+        // The link rules, last: wait for the verdicts up to the deadline, then
+        // read them back through the same reader the site-data build uses.
+        opts?.onLinkVerdicts?.("start");
+        const settlement = yield* Effect.promise(() => linkVerdicts.settle());
+        opts?.onLinkVerdicts?.("end", settlement);
+        const bound = yield* readExternalLinkVerdicts(storage, crawlId);
+        const siteDataWithVerdicts: SiteData = {
+          ...siteDataForPageRules,
+          externalLinks: config.external_links?.enabled === false ? undefined : bound.externalLinks,
+          externalLinkCheck: bound.externalLinkCheck,
+        };
+        const late = yield* runSitePass(
+          runner,
+          siteDataWithVerdicts,
+          assets,
+          wafBlockedPages,
+          rateLimitedPages,
+          collectedSignals,
+          siteQuery,
+          endpointSurface,
+          readsLinkVerdicts,
+        );
+        for (const [ruleId, checks] of late.siteRuleResults) first.siteRuleResults.set(ruleId, checks);
+        for (const [ruleId, rr] of late.siteRuleRunResults) first.siteRuleRunResults.set(ruleId, rr);
+        return {
+          siteResults: [...first.siteResults, ...late.siteResults],
+          siteRuleResults: first.siteRuleResults,
+          siteRuleRunResults: first.siteRuleRunResults,
+        };
+      }),
     );
 
     // Step 6: assemble. Page rules were already merged + folded by streamPageRules;
@@ -3910,11 +4005,15 @@ export function probeEgress(
  * network, never link-local or cloud metadata; each hop pinned to the vetted
  * address unless the transport pins.
  */
-function externalLinkEgress(baseUrl: string, egressPinnedByTransport?: boolean): EgressPolicy {
+function externalLinkEgress(
+  baseUrl: string,
+  egressPinnedByTransport?: boolean,
+  resolveHost?: (hostname: string) => Promise<string[]>,
+): EgressPolicy {
   const siteHost = getHostname(baseUrl).replace(/^\[|\]$/g, "");
   return {
     allowPrivateNetwork: siteHost !== "" && isNonPublicHostname(siteHost),
-    resolve: memoizeResolveHost(resolveHostAddresses),
+    resolve: memoizeResolveHost(resolveHost ?? resolveHostAddresses),
     pin: egressPinnedByTransport !== true,
   };
 }
@@ -4066,14 +4165,99 @@ export function checkCollectedExternalLinks(
   /** The transport resolves once and connects to what it validated (the hosted container). */
   egressPinnedByTransport?: boolean,
   limits?: ExternalLinkCheckLimits,
+  /** The resolver behind the links' egress checks; the system's when unset (a test seam). */
+  resolveHost?: (hostname: string) => Promise<string[]>,
 ): Effect.Effect<ExternalCheckResult[], never, never> {
   return Effect.gen(function* () {
+    const plan = yield* planExternalLinkCheck(storage, crawlId, externalLinkOccurrences, config, {
+      linkCache,
+      priorityHrefs,
+      egressPinnedByTransport,
+      resolveHost,
+    });
+    if (!plan) return [];
+    yield* recordExternalLinkCoverage(storage, crawlId, plan.externalLinkCheck);
+
+    const results = yield* checkExternalLinks(
+      plan.hrefs,
+      plan.cache,
+      externalLinkCheckerOptions(plan, {
+        bulkChecker,
+        // repo#2613: a long check reports as it goes, and stops at its budget. A
+        // budget of zero or less, or not a number, is no budget, as elsewhere.
+        deadlineAt: externalLinkBudgetDeadline(limits, Date.now()),
+        maxWaitMs: limits?.maxWaitMs,
+        onProgress,
+      }),
+    );
+
+    yield* persistExternalLinkResults(storage, crawlId, externalLinkOccurrences, plan, results);
+
+    // Report progress
+    const fromCache = results.filter((r) => r.fromCache).length;
+    onProgress?.({
+      checked: results.length,
+      total: plan.hrefs.length,
+      fromCache,
+    });
+
+    return results;
+  });
+}
+
+/**
+ * What one audit's external link check asks for (repo#2144): the links it
+ * requests, in order, and the coverage stat it starts from. Split out of
+ * {@link checkCollectedExternalLinks} so the late-binding mode
+ * (`late-link-verdicts.ts`) plans, checks and persists through the SAME code,
+ * only at different times.
+ */
+export interface ExternalLinkCheckPlan {
+  /** The links requested, in the per-audit limit's order. */
+  hrefs: string[];
+  /** The coverage stat before any answer: found, checked (selected), cap, not requested. */
+  externalLinkCheck: NonNullable<CrawlStats["externalLinkCheck"]>;
+  refusedByUrl: string[];
+  notRequestedHrefs: string[];
+  egress: EgressPolicy;
+  cache: LinkCache | null;
+  ttlSeconds: number;
+  concurrency: number;
+  timeoutMs: number;
+}
+
+/** `limits.budgetMs` as an epoch-ms deadline from `now`; undefined when it is no budget. */
+export function externalLinkBudgetDeadline(
+  limits: ExternalLinkCheckLimits | undefined,
+  now: number,
+): number | undefined {
+  const budgetMs = limits?.budgetMs;
+  return budgetMs !== undefined && Number.isFinite(budgetMs) && budgetMs > 0 ? now + budgetMs : undefined;
+}
+
+/**
+ * Plan the check. Null when there is nothing to check: checking is off, or the
+ * pages link nowhere outside the site. Writes nothing.
+ */
+export function planExternalLinkCheck(
+  storage: CrawlStorage,
+  crawlId: string,
+  externalLinkOccurrences: ExternalLinkOccurrences,
+  config: ExternalLinksConfig,
+  options: {
+    linkCache?: LinkCache | null;
+    priorityHrefs?: readonly string[];
+    egressPinnedByTransport?: boolean;
+    resolveHost?: (hostname: string) => Promise<string[]>;
+  } = {},
+): Effect.Effect<ExternalLinkCheckPlan | null, never, never> {
+  return Effect.gen(function* () {
     if (!config.enabled) {
-      return [];
+      return null;
     }
 
     if (externalLinkOccurrences.size === 0) {
-      return [];
+      return null;
     }
 
     // An external link is the page's to name, so every local request and every
@@ -4082,11 +4266,11 @@ export function checkCollectedExternalLinks(
     // on a private network), never link-local or cloud metadata, and connected
     // to the address that was vetted. No custom headers ever go with it.
     const crawl = yield* storage.getCrawl(crawlId).pipe(Effect.catchAll(() => Effect.succeed(null)));
-    const egress = externalLinkEgress(crawl?.baseUrl ?? "", egressPinnedByTransport);
-
-    // Check external links using injected cache (or null for no caching)
-    const cache = linkCache ?? null;
-    const ttlSeconds = config.cache_ttl_days * 24 * 60 * 60;
+    const egress = externalLinkEgress(
+      crawl?.baseUrl ?? "",
+      options.egressPinnedByTransport,
+      options.resolveHost,
+    );
 
     // repo#2759: a link that looks like an action or carries a token (a
     // third-party unsubscribe or magic link, a signed download URL) is never
@@ -4112,7 +4296,7 @@ export function checkCollectedExternalLinks(
     // them: the most-linked first (nav and footer links every page shares),
     // then by URL so the choice is stable. The rest are counted and reported as
     // not checked.
-    const hrefs = selectExternalLinksToCheck(requestable, config.max_links, priorityHrefs);
+    const hrefs = selectExternalLinksToCheck(requestable, config.max_links, options.priorityHrefs);
     const externalLinkCheck = {
       found: externalLinkOccurrences.size,
       checked: hrefs.length,
@@ -4122,39 +4306,87 @@ export function checkCollectedExternalLinks(
         : {}),
       ...(refusedByUrl.length > 0 ? { refusedByUrl: refusedByUrl.length } : {}),
     };
-    yield* storage
-      .updateStats(crawlId, { externalLinkCheck })
-      .pipe(
-        // Without the stat the over-limit "Not checked" line cannot be shown,
-        // so say so rather than read as a complete check.
-        Effect.catchAll((error) =>
-          Effect.sync(() =>
-            logger.warn("could not record external link check coverage", { error: String(error) }),
-          ),
-        ),
-      );
 
-    const results = yield* checkExternalLinks(hrefs, cache, {
-      ttlSeconds,
+    return {
+      hrefs,
+      externalLinkCheck,
+      refusedByUrl,
+      notRequestedHrefs,
+      egress,
+      // Check external links using injected cache (or null for no caching)
+      cache: options.linkCache ?? null,
+      ttlSeconds: config.cache_ttl_days * 24 * 60 * 60,
       concurrency: config.concurrency,
       timeoutMs: config.timeout_ms,
-      userAgent: SQUIRRELSCAN_USER_AGENT,
-      bulkChecker,
-      egress,
-      // repo#2613: a long check reports as it goes, and stops at its budget. A
-      // budget of zero or less, or not a number, is no budget, as elsewhere.
-      ...(limits?.budgetMs !== undefined && Number.isFinite(limits.budgetMs) && limits.budgetMs > 0
-        ? { deadlineAt: Date.now() + limits.budgetMs }
-        : {}),
-      ...(limits?.maxWaitMs !== undefined ? { maxWaitMs: limits.maxWaitMs } : {}),
-      onProgress: (progress) =>
-        onProgress?.({ checked: progress.done, total: hrefs.length, fromCache: progress.fromCache }),
-    });
+    };
+  });
+}
+
+/** Record the plan's coverage stat on the crawl. */
+export function recordExternalLinkCoverage(
+  storage: CrawlStorage,
+  crawlId: string,
+  externalLinkCheck: ExternalLinkCheckPlan["externalLinkCheck"],
+): Effect.Effect<void, never, never> {
+  return storage
+    .updateStats(crawlId, { externalLinkCheck })
+    .pipe(
+      // Without the stat the over-limit "Not checked" line cannot be shown,
+      // so say so rather than read as a complete check.
+      Effect.catchAll((error) =>
+        Effect.sync(() =>
+          logger.warn("could not record external link check coverage", { error: String(error) }),
+        ),
+      ),
+    );
+}
+
+/** The checker options a plan runs with. */
+export function externalLinkCheckerOptions(
+  plan: ExternalLinkCheckPlan,
+  run: {
+    bulkChecker?: (urls: string[]) => Promise<Map<string, ExternalCheckResult>>;
+    deadlineAt?: number;
+    maxWaitMs?: number;
+    onProgress?: (progress: ExternalLinkCheckProgress) => void;
+    onVerdict?: (result: ExternalCheckResult) => void;
+  },
+): Partial<ExternalCheckerOptions> {
+  return {
+    ttlSeconds: plan.ttlSeconds,
+    concurrency: plan.concurrency,
+    timeoutMs: plan.timeoutMs,
+    userAgent: SQUIRRELSCAN_USER_AGENT,
+    bulkChecker: run.bulkChecker,
+    egress: plan.egress,
+    ...(run.deadlineAt !== undefined ? { deadlineAt: run.deadlineAt } : {}),
+    ...(run.maxWaitMs !== undefined ? { maxWaitMs: run.maxWaitMs } : {}),
+    ...(run.onVerdict ? { onVerdict: run.onVerdict } : {}),
+    onProgress: (progress) =>
+      run.onProgress?.({ checked: progress.done, total: plan.hrefs.length, fromCache: progress.fromCache }),
+  };
+}
+
+/**
+ * Store the verdicts this audit uses: the refused and unreached counts on the
+ * coverage stat, one row per answered link, and every link's appearances.
+ * `results` are the links that were answered; every planned link missing from
+ * them is counted as `outOfTime` (repo#2613): not checked, never broken.
+ */
+export function persistExternalLinkResults(
+  storage: CrawlStorage,
+  crawlId: string,
+  externalLinkOccurrences: ExternalLinkOccurrences,
+  plan: ExternalLinkCheckPlan,
+  results: readonly ExternalCheckResult[],
+): Effect.Effect<void, never, never> {
+  return Effect.gen(function* () {
+    const { externalLinkCheck, refusedByUrl, notRequestedHrefs } = plan;
 
     // repo#2613: the links the budget ran out on were never answered. They are
     // left out of the results (so out of the stored rows), counted here, and
     // reported as not checked, never as broken or as passing.
-    const outOfTime = hrefs.length - results.length;
+    const outOfTime = plan.hrefs.length - results.length;
 
     // pub#770: the links the egress policy refused (a private, link-local or
     // metadata address on a public site's page) were never requested. Counted
@@ -4254,16 +4486,6 @@ export function checkCollectedExternalLinks(
           ),
         );
     }
-
-    // Report progress
-    const fromCache = results.filter((r) => r.fromCache).length;
-    onProgress?.({
-      checked: results.length,
-      total: hrefs.length,
-      fromCache,
-    });
-
-    return results;
   });
 }
 

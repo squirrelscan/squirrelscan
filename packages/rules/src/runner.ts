@@ -965,18 +965,26 @@ export class RuleRunner {
   // threaded onto every site rule's `ctx.siteQuery` so the rule can read bounded
   // rollups instead of `siteData.pages`. Omit it (or pass undefined) and every
   // rule falls through to its legacy `site.pages` path — byte-identical to today.
+  //
+  // `options.only` runs a subset of the site rules (repo#2144): the engine runs
+  // the rules that read external-link verdicts in a second, later call, once the
+  // verdicts are bound. Each call reports (and then clears) the per-audit timeout
+  // and error summaries it has seen so far, so the page rules' summaries land in
+  // the first call and a late rule's own error in the call that ran it.
   async runSiteRules(
     siteData: SiteData,
     siteQuery?: SiteQuery,
     collectedSignals?: CollectedSiteSignals,
-    endpointSurface?: EndpointSurface
+    endpointSurface?: EndpointSurface,
+    options?: { only?: (ruleId: string) => boolean }
   ): Promise<SiteRunResult> {
     return logger.withTraceAsync(
       "runSiteRules:exec",
       async () => {
         // Filter to site-scope rules only
+        const only = options?.only;
         const siteRules = this.getEnabledRules().filter(
-          (r) => r.meta.scope === "site"
+          (r) => r.meta.scope === "site" && (only === undefined || only(r.meta.id))
         );
         const enabledIds = new Set(this.enabledRuleIds);
         const ruleEnabled = (ruleId: string): boolean => enabledIds.has(ruleId);
