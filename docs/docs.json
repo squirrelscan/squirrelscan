@@ -300,6 +300,7 @@
                   "rules/content/voice-consistency",
                   "rules/content/font-consistency",
                   "rules/content/title-pattern-outlier",
+                  "rules/content/truncation-artifacts",
                   "rules/content/date-agreement",
                   "rules/content/unrendered-markup",
                   "rules/content/dev-leakage"

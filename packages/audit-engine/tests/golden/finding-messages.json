@@ -712,6 +712,13 @@
    "title-pattern-outlier|skipped|No title template reaches #% agreement across the crawled titles||"
   ]
  },
+ "content/truncation-artifacts": {
+  "digest": "72842454939895",
+  "lines": [
+   "truncation-artifacts|pass|No title, description or body copy looks cut by a character limit||",
+   "truncation-artifacts|skipped|Page is noindex (robots meta tag); it never appears in a search result||"
+  ]
+ },
  "content/unrendered-markup": {
   "digest": "10147103181173",
   "lines": [
