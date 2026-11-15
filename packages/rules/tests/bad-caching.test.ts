@@ -13,7 +13,7 @@ import { badCachingRule } from "../src/performance/bad-caching";
 import type { ParsedPage, Rule, RuleContext, SiteData } from "../src/types";
 
 function siteCtx(
-  pages: { url: string; headers: Record<string, string> }[]
+  pages: { url: string; headers: Record<string, string>; fetchedAt?: number }[]
 ): RuleContext {
   const html = "<html><head><title>t</title></head><body></body></html>";
   const sitePages: SiteData["pages"] = pages.map((p) => ({
@@ -21,6 +21,7 @@ function siteCtx(
     statusCode: 200,
     parsed: parsePage(html, p.url),
     headers: { "content-type": "text/html", ...p.headers },
+    ...(p.fetchedAt !== undefined ? { fetchedAt: p.fetchedAt } : {}),
   }));
   return {
     page: {
@@ -300,23 +301,90 @@ describe("perf/bad-caching", () => {
     expect(verdict(checks, "bad-caching-compression")).toBe("flagged");
   });
 
+  // #2243: Expires is parsed and judged against the response Date, else the
+  // page's stored fetch time, never the wall clock. The crawl here is years
+  // old, so a re-analysis today must still see the lifetime it had then.
+  const FETCHED_AT = Date.parse("2020-03-01T12:00:00Z");
+  const hourAfterFetch = new Date(FETCHED_AT + 3600 * 1000).toUTCString();
+  const hourBeforeFetch = new Date(FETCHED_AT - 3600 * 1000).toUTCString();
+
   test("Expires header satisfies freshness", async () => {
-    const expires = new Date(Date.now() + 3600 * 1000).toUTCString();
     const pages = Array.from({ length: 4 }, (_, i) => ({
       url: `https://example.com/p${i}`,
-      headers: { expires, "last-modified": "x", "content-encoding": "gzip" },
+      headers: { expires: hourAfterFetch, "last-modified": "x", "content-encoding": "gzip" },
+      fetchedAt: FETCHED_AT,
     }));
     const checks = (await run(badCachingRule, siteCtx(pages)));
     expect(verdict(checks, "bad-caching-freshness")).toBe("ok");
     expect(check(checks, "bad-caching-validators")?.status).toBe("pass");
   });
 
-  // #2243: Expires is parsed. Only a future instant is a lifetime.
-  test("an already-past Expires is not a lifetime", async () => {
-    const past = new Date(Date.now() - 3600 * 1000).toUTCString();
+  test("an old crawl with no Date: Expires ahead of the fetch time is a lifetime", async () => {
+    // hourAfterFetch is long past today; the wall clock would call it expired.
     const pages = Array.from({ length: 4 }, (_, i) => ({
       url: `https://example.com/p${i}`,
-      headers: { expires: past, "content-encoding": "gzip" },
+      headers: { expires: hourAfterFetch, "content-encoding": "gzip" },
+      fetchedAt: FETCHED_AT,
+    }));
+    const checks = await run(badCachingRule, siteCtx(pages));
+    const freshness = check(checks, "bad-caching-freshness");
+    expect(verdict(checks, "bad-caching-freshness")).toBe("ok");
+    expect(freshness?.message).toBe("4/4 pages declare a caching policy");
+  });
+
+  test("an old crawl with no Date: Expires before the fetch time is not a lifetime", async () => {
+    const pages = Array.from({ length: 4 }, (_, i) => ({
+      url: `https://example.com/p${i}`,
+      headers: { expires: hourBeforeFetch, "content-encoding": "gzip" },
+      fetchedAt: FETCHED_AT,
+    }));
+    const checks = await run(badCachingRule, siteCtx(pages));
+    expect(verdict(checks, "bad-caching-freshness")).toBe("flagged");
+    expect(check(checks, "bad-caching-freshness")?.details?.pagesWithCachePolicy).toBe(0);
+    expect(check(checks, "bad-caching-validators")?.status).toBe("warn");
+  });
+
+  test("no Date and no fetch time: Expires is unjudged, neither a lifetime nor no policy", async () => {
+    const expiresPages = Array.from({ length: 2 }, (_, i) => ({
+      url: `https://example.com/e${i}`,
+      headers: { expires: hourAfterFetch, "content-encoding": "gzip" },
+    }));
+    const only = await run(badCachingRule, siteCtx(expiresPages));
+    const onlyFreshness = check(only, "bad-caching-freshness");
+    expect(onlyFreshness?.status).toBe("info");
+    expect(onlyFreshness?.message).toContain("freshness is unknown");
+    expect(onlyFreshness?.message).not.toContain("no caching policy");
+    expect(onlyFreshness?.details?.unjudgedExpiresPages).toBe(2);
+
+    // Mixed with judged pages the unjudged ones are left out of the share:
+    // two cached pages out of two judged is 100%, not 50%.
+    const cached = Array.from({ length: 2 }, (_, i) => ({
+      url: `https://example.com/c${i}`,
+      headers: goodHeaders,
+    }));
+    const mixed = await run(badCachingRule, siteCtx([...cached, ...expiresPages]));
+    const mixedFreshness = check(mixed, "bad-caching-freshness");
+    expect(verdict(mixed, "bad-caching-freshness")).toBe("ok");
+    expect(mixedFreshness?.value).toBe("100%");
+    expect(mixedFreshness?.details?.unjudgedExpiresPages).toBe(2);
+
+    // Same with no-policy pages present: they are counted, the unjudged are not.
+    const bare = Array.from({ length: 2 }, (_, i) => ({
+      url: `https://example.com/b${i}`,
+      headers: { "content-encoding": "gzip" },
+    }));
+    const withBare = await run(badCachingRule, siteCtx([...bare, ...expiresPages]));
+    const bareFreshness = check(withBare, "bad-caching-freshness");
+    expect(verdict(withBare, "bad-caching-freshness")).toBe("flagged");
+    expect(bareFreshness?.message).toStartWith("2/2 pages set no caching policy");
+    expect(bareFreshness?.pages).toEqual(bare.map((p) => p.url));
+  });
+
+  test("an already-past Expires is not a lifetime", async () => {
+    // A Date header is the reference; the fetch time is not needed.
+    const pages = Array.from({ length: 4 }, (_, i) => ({
+      url: `https://example.com/p${i}`,
+      headers: { expires: hourBeforeFetch, date: new Date(FETCHED_AT).toUTCString(), "content-encoding": "gzip" },
     }));
     const checks = await run(badCachingRule, siteCtx(pages));
     expect(verdict(checks, "bad-caching-freshness")).toBe("flagged");
@@ -362,10 +430,10 @@ describe("perf/bad-caching", () => {
   });
 
   test("a positive max-age wins over a past Expires", async () => {
-    const past = new Date(Date.now() - 3600 * 1000).toUTCString();
     const pages = Array.from({ length: 4 }, (_, i) => ({
       url: `https://example.com/p${i}`,
-      headers: { "cache-control": "max-age=600", expires: past, "content-encoding": "gzip" },
+      headers: { "cache-control": "max-age=600", expires: hourBeforeFetch, "content-encoding": "gzip" },
+      fetchedAt: FETCHED_AT,
     }));
     const checks = await run(badCachingRule, siteCtx(pages));
     expect(verdict(checks, "bad-caching-freshness")).toBe("ok");

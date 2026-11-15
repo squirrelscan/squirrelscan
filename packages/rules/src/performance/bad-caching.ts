@@ -91,16 +91,35 @@ function isCompressible(contentType: string): boolean {
 }
 
 // Expires is a freshness lifetime only while its instant is still ahead of the
-// response's own Date header (RFC 9110 5.6.7, 8.8.3), or of now when Date is
-// absent or unparsable. `0`, any other unparsable value and a past date mean
-// "already expired" (RFC 9111 5.3), so they are not a lifetime.
-function expiresInFuture(expires: string | undefined, date: string | undefined): boolean {
-  if (!expires) return false;
-  const expiresAt = Date.parse(expires);
-  if (Number.isNaN(expiresAt)) return false;
-  const parsedDate = date ? Date.parse(date) : Number.NaN;
-  const reference = Number.isNaN(parsedDate) ? Date.now() : parsedDate;
-  return expiresAt > reference;
+// response's own Date header (RFC 9110 5.6.7, 8.8.3), or, when Date is absent or
+// unparsable, of the time the crawler fetched the page. Never the wall clock:
+// re-analysing an old crawl would compare a then-future Expires against today
+// and call a lifetime "none". `0`, any other unparsable value and a date at or
+// before the reference mean "already expired" (RFC 9111 5.3), so not a lifetime.
+// With no reference at all the answer is "unknown": Expires neither grants a
+// lifetime nor, on its own, makes a page count as having no policy.
+const HTTP_DATE_MONTH = /\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b/;
+
+type ExpiresVerdict = "lifetime" | "expired" | "unknown" | "absent";
+
+function judgeExpires(
+  expires: string | undefined,
+  date: string | undefined,
+  fetchedAt: number | undefined
+): ExpiresVerdict {
+  if (!expires) return "absent";
+  // Every HTTP-date form names the month (RFC 9110 5.6.7). Date.parse alone is
+  // too lenient: it reads `0` as the year 2000.
+  const expiresAt = HTTP_DATE_MONTH.test(expires) ? Date.parse(expires) : Number.NaN;
+  if (Number.isNaN(expiresAt)) return "expired";
+  const parsedDate = date && HTTP_DATE_MONTH.test(date) ? Date.parse(date) : Number.NaN;
+  const reference = !Number.isNaN(parsedDate)
+    ? parsedDate
+    : fetchedAt !== undefined && Number.isFinite(fetchedAt) && fetchedAt > 0
+      ? fetchedAt
+      : undefined;
+  if (reference === undefined) return "unknown";
+  return expiresAt > reference ? "lifetime" : "expired";
 }
 
 export const badCachingRule: Rule = {
@@ -146,6 +165,7 @@ export const badCachingRule: Rule = {
     // Reusable without asking (a freshness lifetime) or cheap to ask about
     // (a validator behind `max-age=0` / `no-cache`). Either is a policy.
     let withCachePolicy = 0;
+    let freshnessUnjudged = 0; // only an Expires with no reference time to judge it against
     let withValidator = 0; // has ETag or Last-Modified
     let noValidatorViaCloudflare = 0;
     let noValidatorNoStore = 0;
@@ -175,10 +195,10 @@ export const badCachingRule: Rule = {
       const cc = parseCacheControl(cacheControl ?? null);
       const lifetime = cacheControlLifetimeSeconds(cc);
       // no-cache / no-store require revalidation before reuse → not "fresh".
+      const reusable = !cc.noStore && !cc.noCache;
+      const expiresVerdict = judgeExpires(expires, h["date"], page.fetchedAt);
       const hasFreshness =
-        !cc.noStore &&
-        !cc.noCache &&
-        ((lifetime !== undefined && lifetime > 0) || expiresInFuture(expires, h["date"]));
+        reusable && ((lifetime !== undefined && lifetime > 0) || expiresVerdict === "lifetime");
 
       // Any non-empty ETag counts, weak (`W/"..."`) included: If-None-Match
       // compares weakly (RFC 9110 13.1.2), so a weak tag still earns a 304,
@@ -212,7 +232,12 @@ export const badCachingRule: Rule = {
       // revalidate against: every request for one is a full transfer.
       const revalidates = !cc.noStore && hasValidator && (cc.noCache || lifetime === 0);
       if (hasFreshness || revalidates) withCachePolicy++;
-      else {
+      else if (reusable && lifetime === undefined && expiresVerdict === "unknown") {
+        // Only Expires could grant a lifetime here, and with no Date header and
+        // no fetch time there is nothing to measure it against: leave the page
+        // out of the freshness share rather than call it "no policy".
+        freshnessUnjudged++;
+      } else {
         if (cc.noStore) noPolicyNoStore++;
         if (noCacheExamples.length < 5) noCacheExamples.push(page.url);
       }
@@ -231,22 +256,37 @@ export const badCachingRule: Rule = {
     }
 
     const total = pages.length;
-    const cachePolicyRatio = withCachePolicy / total;
+    // Pages whose freshness could not be judged are left out of the share (see freshnessUnjudged).
+    const judged = total - freshnessUnjudged;
+    const cachePolicyRatio = judged > 0 ? withCachePolicy / judged : 1;
     const validatorRatio = withValidator / total;
     const compressionRatio =
       compressibleTotal > 0 ? compressibleCompressed / compressibleTotal : 1;
 
+    const unjudgedDetails = freshnessUnjudged > 0 ? { unjudgedExpiresPages: freshnessUnjudged } : {};
+    const unjudgedNote =
+      freshnessUnjudged > 0
+        ? ` (${freshnessUnjudged} more send only Expires with no Date or fetch time to judge it against)`
+        : "";
+
     // --- Freshness lifetime coverage (info: perf/cache-headers scores it) ---
-    if (cachePolicyRatio < opts.min_freshness_ratio) {
-      const noPolicy = total - withCachePolicy;
+    if (judged === 0) {
+      checks.push({
+        name: "bad-caching-freshness",
+        status: "info",
+        message: `${total}/${total} pages send only Expires with no Date or fetch time to judge it against, so their freshness is unknown`,
+        details: { totalPages: total, ...unjudgedDetails },
+      });
+    } else if (cachePolicyRatio < opts.min_freshness_ratio) {
+      const noPolicy = judged - withCachePolicy;
       // `no-store` is a policy (never keep this), just not a reusable one: say which pages chose it
       // and which sent nothing, instead of calling both "no policy" (#1754).
       const message =
         noPolicyNoStore === 0
-          ? `${noPolicy}/${total} pages set no caching policy (no freshness lifetime and no validator)`
+          ? `${noPolicy}/${judged} pages set no caching policy (no freshness lifetime and no validator)${unjudgedNote}`
           : noPolicyNoStore === noPolicy
-            ? `${noPolicy}/${total} pages send Cache-Control: no-store (a deliberate policy that forbids reuse, not a missing one)`
-            : `${noPolicy}/${total} pages have no reusable caching policy: ${noPolicyNoStore} send Cache-Control: no-store (deliberate) and ${noPolicy - noPolicyNoStore} set no caching policy (no freshness lifetime and no validator)`;
+            ? `${noPolicy}/${judged} pages send Cache-Control: no-store (a deliberate policy that forbids reuse, not a missing one)${unjudgedNote}`
+            : `${noPolicy}/${judged} pages have no reusable caching policy: ${noPolicyNoStore} send Cache-Control: no-store (deliberate) and ${noPolicy - noPolicyNoStore} set no caching policy (no freshness lifetime and no validator)${unjudgedNote}`;
       checks.push({
         name: "bad-caching-freshness",
         status: "info",
@@ -258,14 +298,16 @@ export const badCachingRule: Rule = {
           pagesWithCachePolicy: withCachePolicy,
           totalPages: total,
           ...(noPolicyNoStore > 0 ? { noStorePages: noPolicyNoStore } : {}),
+          ...unjudgedDetails,
         },
       });
     } else {
       checks.push({
         name: "bad-caching-freshness",
         status: "info",
-        message: `${withCachePolicy}/${total} pages declare a caching policy`,
+        message: `${withCachePolicy}/${judged} pages declare a caching policy${unjudgedNote}`,
         value: `${Math.round(cachePolicyRatio * 100)}%`,
+        ...(freshnessUnjudged > 0 ? { details: unjudgedDetails } : {}),
       });
     }
 

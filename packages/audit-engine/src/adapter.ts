@@ -1655,6 +1655,7 @@ export function runRulesOnStorage(
       headers?: Record<string, string>;
       redirectChain?: RedirectChain;
       sizeBytes?: number | null;
+      fetchedAt?: number;
       rendered?: boolean;
       versionHeadersRecorded?: boolean;
       redirectSource?: boolean;
@@ -1742,6 +1743,7 @@ export function runRulesOnStorage(
         headers,
         redirectChain: page.redirectChain,
         sizeBytes: page.sizeBytes,
+        fetchedAt: page.fetchedAt,
         rendered: isRenderedFetch(page.fetcherId),
         versionHeadersRecorded: recordsVersionHeaders(page),
       });
@@ -2396,6 +2398,7 @@ type StreamParsedPage = {
   headers?: Record<string, string>;
   redirectChain?: RedirectChain;
   sizeBytes?: number | null;
+  fetchedAt?: number;
   rendered?: boolean;
   versionHeadersRecorded?: boolean;
   /** A URL that redirected: in the list for its hops, not a page (#1762). */
@@ -2568,6 +2571,7 @@ function createParsedUniverseAccumulator(): {
           parsed: kept,
           headers,
           redirectChain: page.redirectChain,
+          fetchedAt: page.fetchedAt,
           rendered: isRenderedFetch(page.fetcherId),
           versionHeadersRecorded: recordsVersionHeaders(page),
         });
