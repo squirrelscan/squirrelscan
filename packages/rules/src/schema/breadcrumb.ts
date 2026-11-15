@@ -7,13 +7,13 @@ import { flattenJsonLdNodes, indexJsonLdIds, resolveJsonLdRef } from "@squirrels
 import { UNREADABLE_MESSAGE, jsonLdTypes, microdataAndRdfaTypes, typeNames } from "./markup-types";
 
 /**
- * Anchors the classifier must place in the breadcrumbs section before a missing
- * schema is a finding. One, not two: the current page is plain text in a trail, so
- * a short trail is a single link (`Docs / Security`). Measured on a small SaaS
- * site, every one of its 14 docs pages with a trail has exactly one such link, and
- * none has two.
+ * Markup-derived anchors in the breadcrumbs section before a missing schema is a
+ * finding. Two, not one: a single link is what one mislabelled anchor looks like,
+ * and a real trail (`Home / Docs / Security`) has at least a root link and a parent.
+ * Anchors the page classifier's model placed in the section (`sectionSource` of
+ * "model") never count: one model guess is not proof the page shows a trail (repo#3365).
  */
-const MIN_TRAIL_LINKS = 1;
+const MIN_TRAIL_LINKS = 2;
 
 export const breadcrumbSchemaRule: Rule = {
   meta: {
@@ -75,11 +75,13 @@ export const breadcrumbSchemaRule: Rule = {
     }
 
     if (!breadcrumbSchema) {
-      // The classifier's section head labels an anchor "breadcrumbs" only when it
-      // sits in a trail (a high-precision class, and never a markup-rules answer),
-      // so the page shows a trail that no structured data describes (#2307). With
-      // the classifier off no link carries a section and this stays the info check.
-      const trailLinks = (ctx.parsed.links ?? []).filter((link) => link.section === "breadcrumbs").length;
+      // Anchors the classifier's rules placed in the breadcrumbs section show a trail
+      // that no structured data describes (#2307). A model-only placement is not
+      // counted (repo#3365), and with the classifier off no link carries a section,
+      // so both stay the info check.
+      const trailLinks = (ctx.parsed.links ?? []).filter(
+        (link) => link.section === "breadcrumbs" && link.sectionSource !== "model",
+      ).length;
       if (trailLinks >= MIN_TRAIL_LINKS) {
         // A trail declared nested in another node (`WebPage.breadcrumb`), or marked
         // up as microdata or RDFa (older themes), is described, just not as a
