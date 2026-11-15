@@ -91,6 +91,7 @@ import type { CompactResolutionSignal, ResolutionSignal } from "./resolution";
 import { SKIP_REASON_CLASSES } from "./rule-outcome";
 import type { AuditStatusReasonCode } from "./failure-reason";
 import type { RefusedFetch } from "./refused-fetch";
+import type { UndecodableFetch } from "./storage";
 import type { WafBlockedSummary, WafSuspectSummary } from "./waf-block";
 import type { EntityMap } from "./entity-map";
 import type { PageMap } from "./page-map";
@@ -970,6 +971,13 @@ export interface AuditReport {
    * not checked and the renderers list them. Absent when nothing was refused.
    */
   refusedFetches?: RefusedFetch[];
+  /**
+   * Pages whose body could not be decoded (the server declared a
+   * `content-encoding` its bytes do not honour), by URL and encoding, capped at
+   * `MAX_UNDECODABLE_FETCHES` (repo#2557). The audit never saw them, so the
+   * run is `partial`. Absent when none failed.
+   */
+  undecodableFetches?: UndecodableFetch[];
   /**
    * Pages a WAF or bot manager answered with a challenge or block page
    * (#1253). A blocked `seed` is why a `blocked` run failed

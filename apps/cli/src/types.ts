@@ -553,6 +553,8 @@ export interface AuditReport {
    * it has to be declared in both.
    */
   refusedFetches?: RefusedFetch[];
+  /** Pages whose body could not be decoded, by URL and declared content-encoding (repo#2557). */
+  undecodableFetches?: { url: string; contentEncoding: string }[];
   /**
    * Pages a WAF or bot manager answered with a challenge or block page (#1253).
    * Mirrors the field on the engine's AuditReport; the two types are

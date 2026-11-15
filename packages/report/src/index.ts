@@ -450,6 +450,7 @@ export type { PageTypeScope, PageTypeScopeCheck } from "./page-type-scope";
 export {
   getAuditFailureNotice,
   refusedFetchLines,
+  undecodableFetchLines,
   reportFailureReasonCode,
   type AuditFailureNotice,
 } from "./failure-notice";

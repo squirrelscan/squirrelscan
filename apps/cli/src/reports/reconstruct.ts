@@ -1210,6 +1210,10 @@ export function reconstructReport(
       ...(crawl.stats?.refusedFetches?.length
         ? { refusedFetches: crawl.stats.refusedFetches }
         : {}),
+      // Pages whose body could not be decoded, named so the partial reason is actionable (repo#2557).
+      ...(crawl.stats?.undecodableFetches?.length
+        ? { undecodableFetches: crawl.stats.undecodableFetches }
+        : {}),
       ...(smartMerge ? { coverage: smartMerge.coverage } : {}),
       // The original audit stamps this after reconstruction and persists it on
       // the crawl (#1050). A later database report restores that exact scope;
