@@ -563,6 +563,48 @@ factor of four), and those figures should be read as the shape rather than to
 three digits. For a change worth tens or low hundreds of megabytes, measure the
 call in isolation against a retain-nothing control instead.
 
+## The report's checks, built compact
+
+After the single read above, `getRuleResultsGrouped` was still 96 of the 100 MB
+that `reconstructReport` retains on a stored 1,000-page crawl (223,132 rows,
+about 450 bytes per row). Each stored check became a 14-key object, most keys
+holding `undefined`, and every row carried its own copy of strings that repeat
+across the crawl: 1,474 distinct messages and 366 check names over those rows,
+and a page url once per check on its page. Checks now carry only their defined
+keys, repeated primitive strings are interned within the read, and the heavy
+query streams through `iterate()` (squirrelscan/repo#1920).
+
+Growth across the call on that stored crawl, forced collection at each end,
+same database for both arms:
+
+| | `getRuleResultsGrouped` heap | `reconstructReport` heap | external |
+|---|---|---|---|
+| before | +96 MB | +100 MB | +27 MB |
+| after | +63 MB | +67 MB | +8 MB |
+
+End of run, one audit per cell on the harness estate (synthetic ~840 KB base
+page, `--coverage full --http --offline`), exit `heapUsed` after a forced
+collection, and peak in-process RSS:
+
+| pages | heap before | heap after | peak RSS before | peak RSS after |
+|---|---|---|---|---|
+| 400 | 104 MiB | 91 MiB | 594 MiB | 628 MiB |
+| 1,000 | 161 MiB | 129 MiB | 1,057 MiB | 928 MiB |
+| 2,500 | 312 MiB | 230 MiB | 1,635 MiB | 1,297 MiB |
+
+Single runs, so read the end-of-run rows as the shape (see the variance note
+above); the isolated rows are the measurement. The slope fell from about 0.10
+to about 0.07 MiB per page. The full `AuditReport`, the capped publish body and
+every CLI format (console, text, json, json with `--include-pages`, markdown,
+xml, html, llm, llm with `--include-passed --include-info`) are byte-identical
+at 400 and 1,000 pages, rendered from the same stored crawl by both builds.
+
+Dropping the passing rows, the remaining lever, is not contract-neutral after
+all: the JSON body lists info checks (#669) and reads pass rows for the
+rules-run list, `--include-passed` and the editor summary, and the publish
+capper builds `checkTallies` and the resolution signal from them. On this crawl
+it would save about 32 MB more for pass rows and 33 MB for info rows.
+
 ## The report's per-page fields that nothing read
 
 `reconstructReport` built a full `PageAudit` per page: `meta`, `og`, `twitter`,
@@ -1786,9 +1828,9 @@ with the paths already in place instead of "retry".
   5,000-page audit finished in 359 s, less than that row attributes to site
   rules alone — so the issue needs re-measuring before it is worked.
 - Report reconstruction materializes every check, including the 83.7% that
-  pass and never reach the report: squirrelscan/repo#1920. Reading them once
-  rather than twice is done (above); dropping the passing rows needs a decision
-  about the publish payload first.
+  pass: squirrelscan/repo#1920. Reading them once rather than twice, and
+  building them compact, are done (above); dropping the passing rows means
+  feeding six readers from aggregates instead.
 - The page ceilings moved on the evidence above: #278 took `MAX_PAGES_CAP` and
   `REPORT_LIMITS.maxPages` to 10,000 and Team/Enterprise to a 10,000-page
   audit. What is still open is the hosted side actually being exercised there —
