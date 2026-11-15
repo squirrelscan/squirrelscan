@@ -1,0 +1,106 @@
+---
+title: "Custom 404 page: status, branding, navigation and noindex"
+description: "A missing URL should answer 404 with a branded page that leads back into the site. On an active run squirrel requests one URL that cannot exist and checks the status and the page."
+---
+
+## What a good 404 page is
+
+When a visitor, a crawler or an agent requests a URL that does not exist, the site decides what happens next. A good answer has four parts: a real `404` (or `410`) status, a page in the site's own template rather than the web server's stock text, a way back into the site, and a `noindex` signal.
+
+The failures are different in kind. A missing URL that answers `200` is a soft 404: crawlers keep requesting it, it eats crawl budget and it can be indexed as thin duplicate content. A redirect of every missing URL to the homepage reads the same way. A bare `404 Not Found` page from nginx or Apache is a dead end: no navigation, no search, nothing to click. A 404 template with no `noindex` is one misconfiguration away from being indexed.
+
+## What squirrel checks
+
+The crawl cannot judge this. It stores no body for a 4xx response, and it only meets a 404 where the site links to a dead page. So the rule asks the site directly, with one `GET` to a random path that cannot exist, such as `/squirrelscan-missing-page-3f9a1c0b2d7e4a68`. It is a quiet probe: it runs when [probing intensity](/configuration/security) is `active` or `aggressive`, which is the default for `surface` and `full` audits. The request goes to the audited origin only, carries no cookies, never follows a redirect, and reads at most 256 KB of the answer.
+
+[Soft 404](/rules/crawl/soft-404) covers the other half: pages the crawl fetched that show a "not found" body with a `200`. This rule covers the site's answer to a path that was never linked, and the quality of the real 404 page.
+
+### Results
+
+| Check | Status | When |
+|---|---|---|
+| `custom-404-soft` | fail | the missing URL answered 2xx |
+| `custom-404-redirect` | warn | the missing URL answered 3xx |
+| `custom-404-default` | warn | the 404 page is a stock server page (nginx, Apache, IIS, Express, Spring Boot, Tomcat), or a page with no navigation, no search, no site links, no stylesheet and almost no text |
+| `custom-404-no-route` | warn | the 404 page is styled but has no link to another page on the site |
+| `custom-404-indexable` | warn | the 404 page has no `noindex` in a robots or googlebot meta tag or an `X-Robots-Tag` header |
+| `custom-404-ok` | pass | a 404 or 410 with a page that has a route back and is noindex |
+| `custom-404-not-checked` | skipped | the 404 handling was not observed |
+
+A soft 404 or a redirect ends the check: there is no 404 page to judge. A bare default page is reported once, as a default page, not again as having no route back.
+
+### Not checked
+
+The rule reports skipped, never pass, when no 404 response was observed:
+
+- Probing is `passive`, with reason `probe-level-too-low`.
+- `squirrel analyze` re-reads stored data and sends nothing (`analyze-offline`).
+- The probe budget ran out, the request failed, or the site answered with throttling, a bot wall (401, 403, 429) or a server error (`probe-incomplete`).
+- The 404 body is not HTML, such as a JSON API error.
+
+A site whose error handling was never exercised is not credited.
+
+## How to fix it
+
+1. Return a real status for missing pages. In most frameworks that means throwing the framework's not-found error from the route, not rendering a "not found" component with a `200`.
+2. Replace the server's stock page. For nginx, `error_page 404 /404.html;` with a page in your template. For Apache, `ErrorDocument 404 /404.html`.
+3. Put the site header and navigation on the 404 page, add a search box if the site has search, and link to the homepage and the main sections.
+4. Add `<meta name="robots" content="noindex">` to the 404 template, or send `X-Robots-Tag: noindex`.
+5. Check it: `curl -I https://example.com/some-missing-page` should show `HTTP/2 404`.
+
+| | |
+|---|---|
+| **Rule ID** | `crawl/custom-404` |
+| **Category** | [Crawlability](/rules/crawl) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 4/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["crawl/custom-404"]
+```
+
+### Disable all Crawlability rules
+
+```toml squirrel.toml
+[rules]
+disable = ["crawl/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["crawl/custom-404"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `custom-404-soft` | Problem |  |
+| `custom-404-redirect` | Problem |  |
+| `custom-404-default` | Problem |  |
+| `custom-404-no-route` | Problem |  |
+| `custom-404-indexable` | Problem |  |
+| `custom-404-ok` | Clean | `custom-404-soft`, `custom-404-redirect`, `custom-404-default`, `custom-404-no-route`, `custom-404-indexable` |
+| `custom-404-not-checked` | Not checked |  |
+
+{/* rule-checks:end */}
+
+## Related rules
+
+- [crawl/soft-404](/rules/crawl/soft-404): crawled pages that serve error content with a 200.
+- [crawl/indexability](/rules/crawl/indexability): pages excluded from search by a robots directive.
+- [crawl/redirect-chain](/rules/crawl/redirect-chain): redirect hops and loops.
