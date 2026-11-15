@@ -304,6 +304,12 @@ export interface CheckResult {
   value?: string | number | null;
   expected?: string | number | null;
   skipReason?: string;
+  /** How this check gathered evidence and whether its subject could be judged. */
+  observation?: {
+    mode: "static" | "crawl" | "browser" | "field";
+    applicability: "applicable" | "not-applicable" | "unknown";
+    uncertainty?: string;
+  };
   /**
    * Complete, additive element evidence for component-aware report grouping.
    * It never replaces items, pages, or the original rule detection.

@@ -21,7 +21,7 @@ export const lcpHintsRule: Rule = {
     id: "perf/lcp-hints",
     name: "LCP Optimization Hints",
     description:
-      "Checks for Largest Contentful Paint optimization opportunities",
+      "Finds static HTML hints for likely LCP optimization; it does not measure browser or field LCP",
     solution:
       "LCP measures when the largest content element becomes visible. Optimize by: 1) Preload your LCP image with <link rel='preload' as='image'>. 2) Don't use loading='lazy' on above-fold images as it delays loading. 3) Minimize render-blocking CSS/JS in <head>. 4) Use modern image formats (WebP/AVIF) for faster loading. 5) Consider using fetchpriority='high' on the LCP image.",
     category: "perf",
@@ -44,7 +44,7 @@ export const lcpHintsRule: Rule = {
       checks.push({
         name: "lcp-preload",
         status: "warn",
-        message: "Likely-LCP image loaded without preload",
+        message: "Likely-LCP image lacks preload in static HTML",
         value: n, // always 1: one page, one LCP image
         details: {
           page: ctx.page.url,
@@ -55,12 +55,22 @@ export const lcpHintsRule: Rule = {
           preloads: preloadUrls.slice(0, MAX_REPORTED_PRELOAD_URLS).map(reportedUrl),
           additionalPreloads: Math.max(0, preloadUrls.length - MAX_REPORTED_PRELOAD_URLS),
         },
+        observation: {
+          mode: "static",
+          applicability: "applicable",
+          uncertainty: "The likely LCP candidate is inferred from markup; LCP was not measured in a browser or field data.",
+        },
       });
     } else {
       checks.push({
         name: "lcp-preload",
         status: "pass",
-        message: "LCP images appear to be optimized",
+        message: "LCP images appear optimized in static HTML",
+        observation: {
+          mode: "static",
+          applicability: "applicable",
+          uncertainty: "This is a markup heuristic, not a browser or field LCP measurement.",
+        },
       });
     }
 

@@ -66,7 +66,10 @@ describe("security/form-captcha — FormShield detection", () => {
     const html = page("", CONTACT_FORM);
     const { checks } = (await formCaptchaRule.run(ctx(html)));
     expect(formCaptchaCheck(checks)?.status).toBe("warn");
-    expect(formCaptchaCheck(checks)?.message).toContain("without CAPTCHA");
+    expect(formCaptchaCheck(checks)?.message).toContain("without detectable client-side CAPTCHA markup");
+    expect(formCaptchaCheck(checks)?.message).toContain("client-side");
+    expect(formCaptchaCheck(checks)?.observation?.uncertainty).toContain("server-side");
+    expect(formCaptchaCheck(checks)?.observation?.mode).toBe("static");
   });
 
   test("unrelated script src containing 'formshield' as a substring only (not the real host) still flags", async () => {

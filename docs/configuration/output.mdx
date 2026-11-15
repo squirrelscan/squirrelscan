@@ -682,6 +682,8 @@ Top-level keys. Keys marked optional are omitted when they do not apply.
 
 **Issues:** `issues` holds findings only. Every check in it has status `fail` or `warn`. `affectedPages` is a sample, and `affectedPagesCount` is the true total, so compare the two (or read `affectedPagesHasMore`) before treating the list as complete.
 
+Schema `1.21` adds optional `observation` metadata to issue checks. It records the evidence `mode`, whether the check was `applicable`, and any `uncertainty` that qualifies the result.
+
 **Skipped checks:** `skippedChecks` lists checks a rule could not finish evaluating, so an absence of issues on those pages does not mean they are clean. It appears only when at least one check was skipped. Skipped checks are never part of `issues`, and do not count toward `passed`, `warnings`, `failed` or the score.
 
 | Field | Meaning |
@@ -717,6 +719,8 @@ A rule that did not give a verdict on a page is one of these, and `outcome` on `
 A reason that is free text (a sentence such as `Parse error`) is `not_applicable`. `--fail-on` treats a timed-out security rule and a rule that threw as unchecked, and its note says which.
 
 **Info checks:** `infoChecks` lists the notes rules recorded with status `info`, for example `crawl/robots-meta-conflict`'s `redundant-noindex` ("2 page(s) blocked in robots.txt also have noindex") or "No dialog elements found". An info check is neither a finding nor a skip: it is never part of `issues`, and it never changes `passed`, `warnings`, `failed` or the score. It appears only when at least one was recorded.
+
+**Observation metadata:** a rule check may include `observation` with `mode` (`static`, `crawl`, `browser` or `field`), `applicability` (`applicable`, `not-applicable` or `unknown`) and an optional `uncertainty` explanation. This distinguishes markup heuristics from browser or field measurements and records when a check could not establish whether its subject applies. For example, `perf/critical-request-chains`, `perf/lcp-hints` and `perf/cls-hints` inspect static markup; they do not measure request dependencies, LCP or CLS. `security/form-captcha` can report that client-side CAPTCHA markup was not observed, but cannot establish whether server-side abuse controls exist. Link graph findings describe only the pages observed by the crawl.
 
 | Field | Meaning |
 |-------|---------|

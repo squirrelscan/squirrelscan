@@ -85,6 +85,11 @@ const SKIP_CHECK: CheckResult = {
   name: "no-contextual-inbound",
   status: "skipped",
   message: "Insufficient pages for contextual inbound link analysis",
+  observation: {
+    mode: "crawl",
+    applicability: "unknown",
+    uncertainty: "The observed crawl graph is incomplete, so missing contextual links cannot be established.",
+  },
 };
 
 // Sampled paths shown in `value`; `details.total` always carries the real count.
@@ -169,12 +174,22 @@ function buildCheck(
       }),
       details: { total: pages.length },
       value: pathList + suffix,
+      observation: {
+        mode: "crawl",
+        applicability: "applicable",
+        uncertainty: "Contextual inbound links are counted only in the observed crawl graph.",
+      },
     };
   }
   return {
     name: "no-contextual-inbound",
     status: "pass",
     message: "All pages have at least one contextual inbound link",
+    observation: {
+      mode: "crawl",
+      applicability: "applicable",
+      uncertainty: "Contextual inbound links are counted only in the observed crawl graph.",
+    },
   };
 }
 
@@ -363,6 +378,11 @@ export const noContextualInboundRule: Rule = {
         status: "skipped",
         message: `Crawl stopped at its ${limits.maxPages}-page cap, so a contextual link may sit on a page not crawled`,
         skipReason: CRAWL_CAPPED_SKIP_REASON,
+        observation: {
+          mode: "crawl",
+          applicability: "unknown",
+          uncertainty: "The observed crawl graph is incomplete, so missing contextual links cannot be established.",
+        },
       });
       return { checks };
     }

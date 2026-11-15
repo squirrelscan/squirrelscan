@@ -213,6 +213,9 @@ describe("links/no-contextual-inbound — a capped crawl", () => {
       expect(result.status).toBe("skipped");
       expect(result.skipReason).toBe(CRAWL_CAPPED_SKIP_REASON);
       expect(result.items).toBeUndefined();
+      if (rule !== weakInternalLinksRule) {
+        expect(result.observation).toMatchObject({ mode: "crawl", applicability: "unknown" });
+      }
     }
   });
 
@@ -225,6 +228,7 @@ describe("links/no-contextual-inbound — a capped crawl", () => {
     const result = await check(noContextualInboundRule, capped(4, 10));
     expect(result.status).toBe("warn");
     expect(ids(result)).toEqual(["https://example.com/pricing"]);
+    expect(result.observation?.uncertainty).toContain("observed crawl graph");
   });
 });
 

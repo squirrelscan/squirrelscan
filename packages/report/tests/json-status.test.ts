@@ -22,6 +22,86 @@ function baseReport(overrides: Partial<AuditReport> = {}): AuditReport {
 }
 
 describe("renderJson failed/blocked status (#801)", () => {
+  test("issue checks keep observation metadata for downstream filtering", () => {
+    const parsed = JSON.parse(
+      renderJson(
+        baseReport({
+          totalPages: 1,
+          warnings: 1,
+          ruleResults: {
+            "security/form-captcha": {
+              meta: {
+                id: "security/form-captcha",
+                name: "Form CAPTCHA",
+                description: "Static client-side form check",
+                category: "security",
+                scope: "page",
+                severity: "warning",
+                weight: 4,
+              },
+              checks: [
+                {
+                  name: "form-captcha",
+                  status: "warn",
+                  message: "Client-side markup not observed",
+                  observation: {
+                    mode: "static",
+                    applicability: "applicable",
+                    uncertainty: "Server-side controls are not observable.",
+                  },
+                },
+                {
+                  name: "no-public-form",
+                  status: "info",
+                  message: "No public forms were observed",
+                  observation: { mode: "static", applicability: "not-applicable" },
+                },
+              ],
+            },
+            "links/orphan-pages": {
+              meta: {
+                id: "links/orphan-pages",
+                name: "Orphan Pages",
+                description: "Inbound link coverage",
+                category: "links",
+                scope: "site",
+                severity: "warning",
+                weight: 5,
+              },
+              checks: [
+                {
+                  name: "orphan-pages",
+                  status: "skipped",
+                  message: "The crawl graph is incomplete",
+                  skipReason: "Crawl capped before the frontier was exhausted",
+                  observation: {
+                    mode: "crawl",
+                    applicability: "unknown",
+                    uncertainty: "Missing inbound links cannot be established.",
+                  },
+                },
+              ],
+            },
+          },
+        }),
+      ),
+    );
+    expect(parsed.issues[0].checks[0].observation).toEqual({
+      mode: "static",
+      applicability: "applicable",
+      uncertainty: "Server-side controls are not observable.",
+    });
+    expect(parsed.infoChecks[0].observation).toEqual({
+      mode: "static",
+      applicability: "not-applicable",
+    });
+    expect(parsed.notChecked[0].observation).toEqual({
+      mode: "crawl",
+      applicability: "unknown",
+      uncertainty: "Missing inbound links cannot be established.",
+    });
+  });
+
   test("blocked report serializes status + statusReason", () => {
     const parsed = JSON.parse(
       renderJson(
