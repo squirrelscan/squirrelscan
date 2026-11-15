@@ -1,0 +1,138 @@
+// repo#2078: the cloud merge refuses a published check naming a page outside the
+// run's crawled set, but only once the resolution signal says that set is whole.
+// An older producer publishes `fresh`-labelled checks for pages it never fetched,
+// and a label is the producer's own word. The signal's list is the only
+// independent evidence, and it is evidence only when it was not clipped.
+
+import { describe, expect, test } from "bun:test";
+
+import type {
+  CheckResult,
+  FindingState,
+  PageFindingRecord,
+  ResolutionSignal,
+  SitePageRecord,
+} from "@squirrelscan/core-contracts";
+
+import { findingKey } from "../src/merge-core";
+import { runCloudSmartAudits, type SmartAuditStore } from "../src/merge-promise";
+class MemStore implements SmartAuditStore {
+  findings = new Map<string, PageFindingRecord>();
+  pages = new Map<string, SitePageRecord>();
+
+  private key(f: { normalizedUrl: string; ruleId: string; checkName: string; locator: string }) {
+    return findingKey(f.normalizedUrl, f.ruleId, f.checkName, f.locator);
+  }
+
+  async getFindings(_siteKey: string, states?: FindingState[]): Promise<PageFindingRecord[]> {
+    const all = [...this.findings.values()];
+    return states ? all.filter((f) => states.includes(f.state)) : all;
+  }
+  async getSitePages(): Promise<SitePageRecord[]> {
+    return [...this.pages.values()];
+  }
+  async upsertFindings(findings: PageFindingRecord[]): Promise<void> {
+    for (const f of findings) this.findings.set(this.key(f), { ...f });
+  }
+  async upsertSitePages(pages: SitePageRecord[]): Promise<void> {
+    for (const p of pages) this.pages.set(p.normalizedUrl, { ...p });
+  }
+  async markPageRemoved(
+    siteKey: string,
+    normalizedUrl: string,
+    crawlId: string,
+    lastStatus: number,
+  ): Promise<void> {
+    this.pages.set(normalizedUrl, {
+      siteKey,
+      normalizedUrl,
+      lastStatus,
+      state: "removed",
+      lastSeenCrawlId: crawlId,
+      lastSeenAt: Date.now(),
+    });
+    for (const [k, f] of this.findings) {
+      if (f.normalizedUrl === normalizedUrl && f.state === "open") {
+        this.findings.set(k, { ...f, state: "stale", lastSeenCrawlId: crawlId });
+      }
+    }
+  }
+  async markPagesRemoved(
+    siteKey: string,
+    pages: Array<{ normalizedUrl: string; lastStatus: number }>,
+    crawlId: string,
+  ): Promise<void> {
+    for (const p of pages)
+      await this.markPageRemoved(siteKey, p.normalizedUrl, crawlId, p.lastStatus);
+  }
+  async compactFindings(): Promise<number> {
+    return 0;
+  }
+}
+
+const meta = {
+  id: "meta-title",
+  name: "Meta Title",
+  description: "Pages should have a title",
+  category: "core" as const,
+  scope: "page" as const,
+  severity: "warning" as const,
+  weight: 10,
+};
+const NOW = Date.UTC(2026, 8, 11, 17, 11, 27);
+
+const CRAWLED = Array.from({ length: 4 }, (_, i) => `https://x.test/p/${i}`);
+const NEVER = Array.from({ length: 6 }, (_, i) => `https://x.test/never/${i}`);
+
+const warn = (pageUrl: string): CheckResult => ({
+  name: "meta-title",
+  status: "warn",
+  message: "Title is too short",
+  pageUrl,
+  provenance: "fresh",
+});
+
+function run(signal: ResolutionSignal | undefined) {
+  const store = new MemStore();
+  return runCloudSmartAudits({
+    store,
+    siteKey: "web_1",
+    crawlId: "audit_1",
+    ruleResults: { "core/meta-title": { meta, checks: [...CRAWLED, ...NEVER].map(warn) } },
+    pageStatuses: [],
+    ...(signal ? { resolutionSignal: signal } : {}),
+    now: NOW,
+  }).then((r) => ({ r, store }));
+}
+
+const signal = (extra: Partial<ResolutionSignal>): ResolutionSignal => ({
+  crawledUrls: CRAWLED,
+  failing: {},
+  ...extra,
+});
+
+describe("repo#2078: refuse published checks outside a complete crawled set", () => {
+  test("a complete list audits only the listed pages", async () => {
+    const { r, store } = await run(signal({ crawledUrlsComplete: true }));
+    expect(r.coverage.auditedPages).toBe(4);
+    expect(r.outsideCrawledChecksDropped).toBe(6);
+    expect(r.outsideCrawledPages).toBe(6);
+    const pages = (await store.getFindings("web_1")).map((f) => f.normalizedUrl);
+    expect(pages.sort()).toEqual([...CRAWLED].sort());
+  });
+
+  test("the same publish with the list marked clipped audits the pre-#2078 set", async () => {
+    const { r } = await run(signal({ crawledUrlsComplete: false }));
+    expect(r.coverage.auditedPages).toBe(10);
+    expect(r.outsideCrawledChecksDropped).toBe(0);
+  });
+
+  test("no marker, or no signal, leaves behaviour unchanged", async () => {
+    for (const s of [signal({}), undefined]) {
+      const { r } = await run(s);
+      expect(r.coverage.auditedPages).toBe(10);
+      expect(r.outsideCrawledChecksDropped).toBe(0);
+      expect(r.outsideCrawledPages).toBe(0);
+    }
+  });
+});

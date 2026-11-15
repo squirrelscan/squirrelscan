@@ -136,6 +136,13 @@ describe("buildResolutionSignal", () => {
     expect(signal.crawledUrls.length).toBe(RESOLUTION_SIGNAL_LIMITS.maxCrawledUrls);
   });
 
+  test("crawledUrlsComplete (repo#2078) is true under the cap and false once clipped", () => {
+    const cap = RESOLUTION_SIGNAL_LIMITS.maxCrawledUrls;
+    const mk = (n: number) => Array.from({ length: n }, (_, i) => `https://x.test/p/${i}`);
+    expect(buildResolutionSignal({}, mk(cap))!.crawledUrlsComplete).toBe(true);
+    expect(buildResolutionSignal({}, mk(cap + 1))!.crawledUrlsComplete).toBe(false);
+  });
+
   test("a single check past maxHashesPerCheck is clipped to the cap and marked truncated", () => {
     const pages = Array.from(
       { length: RESOLUTION_SIGNAL_LIMITS.maxHashesPerCheck + 10 },

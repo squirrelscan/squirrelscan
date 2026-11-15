@@ -543,6 +543,7 @@ export function buildResolutionSignal(
   for (const [key, set] of failing) failingRecord[key] = [...set];
   return {
     crawledUrls: evidence.crawledRaw,
+    crawledUrlsComplete: !evidence.crawledOverCap,
     failing: failingRecord,
     ...(Object.keys(notEvaluated).length > 0 ? { notEvaluated } : {}),
     ...(truncated.size > 0 ? { truncated: [...truncated] } : {}),

@@ -513,6 +513,18 @@ export interface CloudSmartAuditsResult {
    */
   replayedUnknownPages: number;
   /**
+   * (repo#2078) Published page-attributed checks refused because the signal says
+   * its `crawledUrls` is the COMPLETE crawled set and the page they name is not
+   * in it, so this run never fetched it whatever the check is labelled. Zero
+   * when the signal is absent, clipped or sent no completeness marker. Sampled
+   * branch only (complete mode takes its crawled set from the store). An
+   * aggregate counts as the per-page checks it stood for, as for
+   * {@link replayedChecksDropped}.
+   */
+  outsideCrawledChecksDropped: number;
+  /** (repo#2078) Distinct pages those refused checks named. */
+  outsideCrawledPages: number;
+  /**
    * (#1023 R-D3) True when scoring ran off the reconstructed complete store
    * (freshResults from findings + `syntheticPassCount` for fresh clean pages, or,
    * repo#3348, the shell's `checkTallies` beside the store's carried side).
@@ -593,6 +605,25 @@ export async function runCloudSmartAudits(
   const sampledCheckPages = new Map<string, Set<string>>();
   /** (#2063) Producer-carried checks refused as this run's evidence. */
   let replayedChecksDropped = 0;
+  /**
+   * (repo#2078) Normalized pages this run provably fetched, ONLY when the signal
+   * marks its crawled list whole (`crawledUrlsComplete === true`); else undefined
+   * and nothing is refused. An absence is evidence only from a whole set.
+   */
+  let outsideCrawledChecksDropped = 0;
+  const outsideCrawledUrls = new Set<string>();
+  const wholeCrawledSet: Set<string> | undefined =
+    !completeStore && input.resolutionSignal?.crawledUrlsComplete === true
+      ? new Set([
+          ...input.resolutionSignal.crawledUrls.map(normalizePageUrl),
+          ...statusByUrl.keys(),
+        ])
+      : undefined;
+  const namesUncrawledPage = (c: CheckResult): boolean => {
+    if (!wholeCrawledSet) return false;
+    const pages = attributedPages(c);
+    return pages.length > 0 && pages.every((u) => !wholeCrawledSet.has(u));
+  };
   /**
    * (#2063) The pages those refused checks named. Bounded by PAGES, not checks,
    * and reduced after the merge to the ones this cloud site has never had — see
@@ -714,13 +745,18 @@ export async function runCloudSmartAudits(
             for (const u of attributedPages(c)) replayedUrls.add(u);
             continue;
           }
+          if (namesUncrawledPage(c)) {
+            outsideCrawledChecksDropped += 1;
+            for (const u of attributedPages(c)) outsideCrawledUrls.add(u);
+            continue;
+          }
           checks.push(c);
         }
       }
       freshResults.set(ruleId, { meta: r.meta, checks });
       talliedResults?.set(ruleId, {
         meta: r.meta,
-        checks: r.checks.filter((c) => !isReplayedCheck(c)),
+        checks: r.checks.filter((c) => !isReplayedCheck(c) && !namesUncrawledPage(c)),
       });
       if (r.checks.some((c) => typeof c.details?.checksTruncated === "number")) {
         rulesWithDroppedChecks.add(ruleId);
@@ -1465,6 +1501,8 @@ export async function runCloudSmartAudits(
     removedPages: removedUrls.size,
     replayedChecksDropped,
     replayedUnknownPages,
+    outsideCrawledChecksDropped,
+    outsideCrawledPages: outsideCrawledUrls.size,
     completeStore: !!completeStore,
     ...(sampledEstimator ? { sampledStoreScored: true as const } : {}),
   };
