@@ -108,6 +108,15 @@ export function extractContent(doc: Document, html: string): ContentAnalysis {
  * Get main content text (article, main, or body)
  */
 export function getMainContent(doc: Document): string {
+  return getMainContentWithRoot(doc).text;
+}
+
+/**
+ * The main content text and the element it was read from: the first main
+ * selector match with over 100 characters of text, else the body (`root` is
+ * null when there is no body). `getMainContent` is this without the root.
+ */
+export function getMainContentWithRoot(doc: Document): { text: string; root: Element | null } {
   // Try to find main content area
   const mainSelectors = [
     "article",
@@ -128,13 +137,16 @@ export function getMainContent(doc: Document): string {
       // removed. Output identical, no deep clone.
       const text = collectTextExcluding(element as Node, isMainExcluded).trim();
       if (text && text.length > 100) {
-        return text;
+        return { text, root: element as Element };
       }
     }
   }
 
   // Fall back to full body text
-  return getCleanTextContent(doc);
+  return {
+    text: getCleanTextContent(doc),
+    root: (doc.querySelector("body") as Element | null) ?? null,
+  };
 }
 
 /**

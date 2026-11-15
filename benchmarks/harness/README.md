@@ -15,6 +15,7 @@ of this repository with the workspace installed (`bun install` at the root).
 | `phases.ts` | Extracts per-phase timings from the CLI `--trace` output. |
 | `analyze.ts` | Turns a stage directory into the summary table rows. |
 | `encoding-bomb.ts` | Peak RSS of the page fetchers and root probes against gzip and brotli bombs served from a separate process, for [`../2026-10-content-encoding-bombs.md`](../2026-10-content-encoding-bombs.md). `--root` measures another checkout's packages, which is how the before column was taken. |
+| `content-language.ts` | Content-language detector benchmark (squirrelscan/repo#2360): `bun benchmarks/harness/content-language.ts <corpus-dir> [--out=report.json] [--table] [--target=0.95] [--detector=<module>]`. Runs franc (the production language list), franc-all and any `--detector` module over a labelled corpus and writes an aggregate-only report: per-detector accuracy, precision, macro F1, per-language F1 with sample counts, accuracy by text length, latency, a confidence histogram and a suggested abstention floor. It never writes page text, URLs, hosts, file names or per-sample labels, so it can run on a private corpus and the result can be published. Corpus layouts: `*.jsonl` lines of `{"lang","text"}` or `{"lang","html"}`, or `<lang>/*.txt` and `<lang>/*.html`. |
 
 Paths in `run-stage.sh` assume the harness runs from a monorepo checkout where
 this repository is the `repo-public` submodule; adjust `HERE`/the CLI path for a

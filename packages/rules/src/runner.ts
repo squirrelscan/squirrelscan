@@ -7,7 +7,12 @@ import {
   TARGETED_RUN_SKIP_REASON,
 } from "@squirrelscan/core-contracts";
 import { UNREAD_PAGE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
-import { auditedEmpty, detectSoft404, parsePage } from "@squirrelscan/parser";
+import {
+  auditedEmpty,
+  createContentLanguageView,
+  detectSoft404,
+  parsePage,
+} from "@squirrelscan/parser";
 import { stripShadowIdScopes } from "@squirrelscan/parser/dom";
 import { mapWithConcurrency } from "@squirrelscan/utils";
 import { nonPublicHostLabel } from "@squirrelscan/utils/non-public-host";
@@ -925,10 +930,14 @@ export class RuleRunner {
         const ruleResults = new Map<string, RuleRunResult>();
         const allChecks: CheckResult[] = [];
         const fannedChecks = opts?.fannedRuleChecks;
+        // One lazy view per page, shared by its rules: detection runs at most
+        // once, and only if a rule reads it (#2360).
+        const contentLanguage = createContentLanguageView(parsed);
         for (const rule of pageRules) {
           const ctx: RuleContext = {
             page,
             parsed,
+            contentLanguage,
             site: siteData, // Pass site data for rules that need scripts/resourceSizes
             siteMetadata,
             cloudResults,
