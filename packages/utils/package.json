@@ -6,6 +6,8 @@
     ".": "./src/index.ts",
     "./constants": "./src/constants.ts",
     "./url": "./src/url.ts",
+    "./link-key": "./src/link-key.ts",
+    "./secret-url-redaction": "./src/secret-url-redaction.ts",
     "./trim": "./src/trim.ts",
     "./non-public-host": "./src/non-public-host.ts",
     "./own-site": "./src/own-site.ts",
