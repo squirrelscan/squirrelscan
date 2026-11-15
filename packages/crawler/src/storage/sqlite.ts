@@ -2193,6 +2193,45 @@ export class SQLiteStorage implements CrawlStorage {
   }
 
   /**
+   * The `getPageLinkRows` columns for just the named pages (#1022), so a caller that needs a few
+   * pages' parses (a click-depth frontier) reads only those rows instead of the whole crawl. Same
+   * shape and `normalized_url ASC` order as `getPageLinkRows`; a URL with no stored page is simply
+   * absent. Statements are chunked at 500 URLs, and empty input runs no query.
+   */
+  getPageLinkRowsByUrls(
+    crawlId: string,
+    normalizedUrls: readonly string[]
+  ): Effect.Effect<PageLinkRow[], StorageError, never> {
+    return Effect.try({
+      try: () => {
+        if (normalizedUrls.length === 0) return [];
+        const db = this.getDb();
+        const out: PageLinkRow[] = [];
+        for (let i = 0; i < normalizedUrls.length; i += 500) {
+          const chunk = normalizedUrls.slice(i, i + 500);
+          const marks = chunk.map(() => "?").join(",");
+          const rows = db
+            .prepare(
+              `SELECT normalized_url, parsed_data, status, content_type FROM pages WHERE crawl_id = ? AND normalized_url IN (${marks}) ORDER BY normalized_url ASC`
+            )
+            .all(crawlId, ...chunk) as Record<string, unknown>[];
+          for (const row of rows) {
+            out.push({
+              normalizedUrl: row.normalized_url as string,
+              parsedData: row.parsed_data as string | null,
+              status: (row.status as number | null) ?? null,
+              contentType: (row.content_type as string | null) ?? null,
+            });
+          }
+        }
+        // Chunks are each sorted; sort the whole so the order holds across them.
+        return out.sort((a, b) => (a.normalizedUrl < b.normalizedUrl ? -1 : a.normalizedUrl > b.normalizedUrl ? 1 : 0));
+      },
+      catch: (e) => StorageError.read(e),
+    });
+  }
+
+  /**
    * Just the normalized URLs this crawl visited (#2092).
    *
    * One indexed column, no `parsed_data` and no HTML: `getPageLinkRows` exists

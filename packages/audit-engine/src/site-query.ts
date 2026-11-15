@@ -7,9 +7,12 @@
 // the rule-facing methods stay synchronous; `pagesMatching` is an async cursor so
 // a rare full scan never pins the whole page set.
 //
-// Nothing wires this into a production audit path yet — the streaming rule loop
-// (#1021, PR-E) will construct it and pass it to `runner.runSiteRules`. It is
-// exercised today only by the per-rule golden tests (dual-path parity gate).
+// EDGES AND CLICK DEPTH (#1022): `outgoingEdges` streams every universe page's internal links
+// (flags included) and `clickDepths` runs a bounded level-by-level BFS from given roots. Both
+// never hold an adjacency map: edges stream a page batch at a time, and each BFS level reads only
+// its frontier pages, so memory stays one batch plus the depth map.
+//
+// The streaming audit (`runStreamingRules` in adapter.ts) builds it and passes it to the site pass.
 
 import { Effect } from "effect";
 
@@ -20,12 +23,17 @@ import { normalizePageUrl } from "@squirrelscan/utils/url";
 import type { SQLiteStorage } from "@squirrelscan/crawler";
 import type {
   AnchorGraph,
+  ClickDepthNode,
+  ClickDepthOptions,
+  ClickDepthResult,
   DuplicateGroup,
   LinkData,
   LinkSectionCounts,
+  OutgoingEdge,
   PageFeatureDuplicateField,
   PageFeatureRow,
   PageLinkRow,
+  PageOutgoingEdges,
   SiteQuery,
   StorageError,
 } from "@squirrelscan/core-contracts";
@@ -103,6 +111,15 @@ export function createSiteQuery(
     const secretHits = yield* storage.sumPageFeatureSecretHits(crawlId);
     const byType = yield* buildPagesByType(storage, crawlId);
 
+    // Graph-key index over the audit universe (#1022): the first stored URL per key wins, like
+    // the legacy rules' `byUrl`. `universeSet` mirrors Pass B: sources outside it are skipped.
+    const winnerByKey = new Map<string, string>();
+    for (const url of incoming.orderedUrls) {
+      const key = normalizeUrl(url);
+      if (!winnerByKey.has(key)) winnerByKey.set(key, url);
+    }
+    const universeSet = opts?.universe ? new Set(opts.universe) : null;
+
     const duplicates: Record<PageFeatureDuplicateField, DuplicateGroup[]> = {
       title: dupTitle,
       description: dupDesc,
@@ -122,6 +139,10 @@ export function createSiteQuery(
       sumTransferBytes: () => transferBytes,
       sumSecretHits: () => secretHits,
       pagesMatching: (pred) => iteratePagesMatching(storage, crawlId, pred),
+      outgoingEdges: () =>
+        iterateOutgoingEdges(storage, crawlId, pageScanBatch, winnerByKey, universeSet),
+      clickDepths: (entryUrls, depthOpts) =>
+        computeClickDepths(storage, crawlId, pageScanBatch, winnerByKey, entryUrls, depthOpts),
     } satisfies SiteQuery;
   });
 }
@@ -174,6 +195,7 @@ function buildIncomingLinkCounts(
     contextual: Map<string, number>;
     sections: Map<string, LinkSectionCounts>;
     anchorGraph: AnchorGraph | null;
+    orderedUrls: string[];
   },
   StorageError,
   never
@@ -268,7 +290,13 @@ function buildIncomingLinkCounts(
       const placed = sectionBucket.get(key);
       if (placed) sections.set(url, placed);
     }
-    return { all, contextual, sections, anchorGraph: anchorBuilder ? anchorBuilder.build() : null };
+    return {
+      all,
+      contextual,
+      sections,
+      anchorGraph: anchorBuilder ? anchorBuilder.build() : null,
+      orderedUrls,
+    };
   });
 }
 
@@ -353,6 +381,161 @@ function parseLinkPage(parsedData: string | null): {
   } catch {
     return { links: [], title: null, h1: [] };
   }
+}
+
+/** Graph keys of the internal links of one page that land on a universe page, in document order. */
+function extractEdges(
+  parsedData: string | null,
+  sourceUrl: string,
+  winnerByKey: ReadonlyMap<string, string>
+): OutgoingEdge[] {
+  const edges: OutgoingEdge[] = [];
+  for (const link of parseLinkPage(parsedData).links) {
+    if (!link.isInternal || !link.url) continue;
+    try {
+      const target = normalizeUrl(new URL(link.url, sourceUrl).href);
+      if (winnerByKey.has(target)) {
+        edges.push({ target, nofollow: !!link.isNofollow, chrome: !!link.isChrome });
+      }
+    } catch {
+      // Invalid link URL: ignored, matching the legacy rules' try/catch.
+    }
+  }
+  return edges;
+}
+
+/**
+ * Read the stored rows of `urls` in chunks of `batchSize`, so one chunk of parses is resident at a
+ * time (#1022). A URL with no stored page is skipped.
+ */
+async function readRowsByUrls(
+  storage: SQLiteStorage,
+  crawlId: string,
+  batchSize: number,
+  urls: readonly string[],
+  onRow: (row: PageLinkRow) => void
+): Promise<void> {
+  for (let i = 0; i < urls.length; i += batchSize) {
+    const rows = await Effect.runPromise(
+      storage.getPageLinkRowsByUrls(crawlId, urls.slice(i, i + batchSize)).pipe(Effect.orDie)
+    );
+    for (const row of rows) onRow(row);
+  }
+}
+
+/** Async cursor over every universe page's outgoing edges, one page batch resident at a time. */
+async function* iterateOutgoingEdges(
+  storage: SQLiteStorage,
+  crawlId: string,
+  batchSize: number,
+  winnerByKey: ReadonlyMap<string, string>,
+  universeSet: ReadonlySet<string> | null
+): AsyncIterable<PageOutgoingEdges> {
+  let offset = 0;
+  for (;;) {
+    const batch = await Effect.runPromise(
+      storage.getPageLinkRows(crawlId, { limit: batchSize, offset }).pipe(Effect.orDie)
+    );
+    for (const row of batch) {
+      if (universeSet && !universeSet.has(row.normalizedUrl)) continue;
+      yield {
+        source: row.normalizedUrl,
+        sourceKey: normalizeUrl(row.normalizedUrl),
+        status: row.status ?? null,
+        edges: extractEdges(row.parsedData, row.normalizedUrl, winnerByKey),
+      };
+    }
+    if (batch.length < batchSize) return;
+    offset += batchSize;
+  }
+}
+
+/**
+ * Level-synchronous BFS over dofollow non-self internal links (#1022). Each level is one targeted
+ * read of the frontier pages, so no adjacency map is ever built. See
+ * `SiteQuery.clickDepths` for the limits.
+ */
+async function computeClickDepths(
+  storage: SQLiteStorage,
+  crawlId: string,
+  batchSize: number,
+  winnerByKey: ReadonlyMap<string, string>,
+  entryUrls: readonly string[],
+  opts: ClickDepthOptions
+): Promise<ClickDepthResult> {
+  const depths = new Map<string, ClickDepthNode>();
+  const reached = new Set<string>();
+  // Graph keys of nodes whose status has not been read from a row yet.
+  const pending = new Set<string>();
+  let truncated: ClickDepthResult["truncated"] = null;
+  const maxNodes = Math.max(0, Math.floor(opts.maxNodes));
+  const maxDepth = Math.max(0, Math.floor(opts.maxDepth));
+
+  let frontier = new Set<string>();
+  for (const entry of entryUrls) {
+    let key: string;
+    try {
+      key = normalizeUrl(entry);
+    } catch {
+      continue;
+    }
+    const winner = winnerByKey.get(key);
+    if (winner === undefined || reached.has(key)) continue;
+    if (depths.size >= maxNodes) {
+      truncated = "maxNodes";
+      break;
+    }
+    reached.add(key);
+    depths.set(winner, { depth: 0, status: null });
+    pending.add(key);
+    frontier.add(key);
+  }
+
+  const winnerUrls = (keys: ReadonlySet<string>) => [...keys].map((k) => winnerByKey.get(k)!);
+
+  for (let depth = 0; truncated === null && frontier.size > 0; depth++) {
+    const current = frontier;
+    const full = depths.size >= maxNodes;
+    const detectOnly = full || depth >= maxDepth;
+    const next = new Set<string>();
+    let more = false;
+    let denied = false;
+    await readRowsByUrls(storage, crawlId, batchSize, winnerUrls(current), (row) => {
+        const key = normalizeUrl(row.normalizedUrl);
+        const node = depths.get(row.normalizedUrl)!;
+        node.status = row.status ?? null;
+        pending.delete(key);
+        if (detectOnly && more) return;
+        for (const edge of extractEdges(row.parsedData, row.normalizedUrl, winnerByKey)) {
+          if (edge.nofollow || edge.target === key || reached.has(edge.target)) continue;
+          if (detectOnly) {
+            more = true;
+            break;
+          }
+          if (depths.size >= maxNodes) {
+            denied = true;
+            continue;
+          }
+          reached.add(edge.target);
+          depths.set(winnerByKey.get(edge.target)!, { depth: depth + 1, status: null });
+          pending.add(edge.target);
+          next.add(edge.target);
+        }
+    });
+    if (detectOnly) {
+      if (more) truncated = full ? "maxNodes" : "maxDepth";
+      break;
+    }
+    if (denied) truncated = "maxNodes";
+    frontier = next;
+  }
+
+  if (pending.size > 0) {
+    await readRowsByUrls(storage, crawlId, batchSize, winnerUrls(pending), (row) => {
+      depths.get(row.normalizedUrl)!.status = row.status ?? null;
+    });
+  }
+  return { depths, truncated };
 }
 
 /** Async cursor over page_features rows (normalized_url order), predicate-filtered. */

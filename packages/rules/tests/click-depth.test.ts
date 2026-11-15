@@ -189,6 +189,32 @@ describe("links/click-depth", () => {
     expect(c.details?.deepest).toBe(2001);
   }, 20_000);
 
+  test("a siteQuery search cut short by its depth bound is labelled a lower bound", async () => {
+    const urls = [BASE, P("a")];
+    const siteQuery = {
+      incomingLinkCounts: () => new Map(urls.map((u) => [u, 0])),
+      clickDepths: async () => ({
+        depths: new Map([
+          [BASE, { depth: 0, status: 200 }],
+          [P("a"), { depth: 5, status: 200 }],
+        ]),
+        truncated: "maxDepth" as const,
+      }),
+      // eslint-disable-next-line require-yield
+      pagesMatching: async function* () {},
+    } as unknown as RuleContext["siteQuery"];
+    const c = ctx([], {}, { entryUrls: [BASE] });
+    const result = (await clickDepthRule.run({ ...c, siteQuery })) as RuleResult;
+    const check = result.checks[0]!;
+    expect(check.status).toBe("warn");
+    expect(check.details).toMatchObject({
+      total: 1,
+      lowerBound: true,
+      searchTruncated: "maxDepth",
+    });
+    expect(check.message).toContain("click-depth search stopped at its 50-click limit");
+  });
+
   test("is registered, site scope, advisory weight", () => {
     const r = linkRules.find((x) => x.meta.id === "links/click-depth");
     expect(r).toBe(clickDepthRule);

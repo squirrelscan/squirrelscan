@@ -1198,6 +1198,45 @@ export interface AnchorGraph {
   droppedPairs: number;
 }
 
+/** One internal link out of a crawled page (#1022). */
+export interface OutgoingEdge {
+  /** Graph key of the target: `normalizeUrl` of the link resolved against its source page. Always a page of the audit universe. */
+  target: string;
+  /** The link carries rel=nofollow (`LinkData.isNofollow`). */
+  nofollow: boolean;
+  /** The link sat in sitewide chrome (`LinkData.isChrome`); undefined counts as false. */
+  chrome: boolean;
+}
+
+/** A crawled page's internal links to other pages of the audit universe. */
+export interface PageOutgoingEdges {
+  /** The source page's stored (normalized) URL, its identity in findings. */
+  source: string;
+  /** Graph key of the source, `normalizeUrl(source)`. Several stored URLs (query variants) can share one key. */
+  sourceKey: string;
+  /** HTTP status of the stored response, null when unknown. */
+  status: number | null;
+  /** Every internal link with a URL whose target is in the universe, in document order. Duplicates and self-links are kept; callers filter. */
+  edges: OutgoingEdge[];
+}
+
+export interface ClickDepthOptions {
+  maxDepth: number;
+  maxNodes: number;
+}
+
+export interface ClickDepthNode {
+  depth: number;
+  status: number | null;
+}
+
+export interface ClickDepthResult {
+  /** Reached pages keyed by the stored URL of the first universe page holding each graph key, roots at depth 0. Never more than maxNodes entries. */
+  depths: Map<string, ClickDepthNode>;
+  /** Why the search stopped early, or null when it ran to completion: "maxDepth" when a page at maxDepth+1 exists but was not assigned, "maxNodes" when the node cap was hit. */
+  truncated: "maxDepth" | "maxNodes" | null;
+}
+
 export interface SiteQuery {
   /** Number of accumulated page rows for the crawl. */
   pageCount(): number;
@@ -1233,6 +1272,31 @@ export interface SiteQuery {
    * paths hand the rule identical data.
    */
   anchorGraph?(): AnchorGraph;
+  /**
+   * Every crawled page's internal links to other pages of the audit universe (#1022), one page
+   * batch resident at a time, in stored normalized_url order. Sources are restricted to the audit
+   * universe, the same universe and filters as {@link incomingLinkCounts}, except that nofollow and
+   * chrome links are INCLUDED with their flags so a caller applies its own filter. Optional: an
+   * implementation without it omits it, and rules fall back to their legacy path.
+   */
+  outgoingEdges?(): AsyncIterable<PageOutgoingEdges>;
+  /**
+   * Shortest click depth over internal dofollow non-self links from `entryUrls` (#1022). Roots are
+   * normalized with `normalizeUrl` and ignored when not in the universe. Only the first stored URL
+   * per graph key is a link source, matching the legacy rule, which keeps the first page per key.
+   *
+   * Memory held is the depth map (at most `maxNodes` entries) and one frontier, plus the per-crawl
+   * key index the query already holds. It never builds an adjacency map: it makes one targeted
+   * read of the frontier pages per BFS level, parsing only those pages.
+   *
+   * Two limits, both integers >= 0. `maxDepth` caps how many levels (and so how many reads) run:
+   * pages deeper than `maxDepth` get no entry and `truncated` becomes "maxDepth" (determined by one
+   * extra scan of the last frontier). `maxNodes` caps the depth map size: the search stops as soon
+   * as it is full and `truncated` becomes "maxNodes". A `maxNodes` below 1 returns an empty map
+   * with `truncated` "maxNodes" when any root exists. Optional: rules fall back to their legacy
+   * path when absent.
+   */
+  clickDepths?(entryUrls: readonly string[], opts: ClickDepthOptions): Promise<ClickDepthResult>;
   /** Normalized URLs of pages classified as `type`. */
   pagesByType(type: string): string[];
   /** URL sets sharing one template fingerprint (count > 1). */
